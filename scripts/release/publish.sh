@@ -1,9 +1,10 @@
 #!/bin/bash
 # Publish jarvisd for anyone to install (docs/release.md「发布 jarvisd」): build the four binaries with the web client
-# inside (no skills in them: those live in each machine's ~/.jarvis/skills), check them for private values, write the
-# release manifest latest.json (every file's sha256, docs/hub-update.md「发布」), then deploy the site/ worker with dl/
-# and install.sh added, at the config's publish.site_url. Every hub of the release channel
-# updates itself to it. The worker also runs the push relay (/relay/*): it is deployed with it.
+# inside (no skills in them: those live in each machine's ~/.jarvis/skills), and the connector jarvis-link for the
+# same four (the node service, docs/link.md), check them for private values, write the release manifest latest.json
+# (every file's sha256, docs/hub-update.md「发布」), then deploy the site/ worker with dl/ and install.sh added, at the
+# config's publish.site_url. Every hub of the release channel updates itself to it. The worker also runs the push
+# relay (/relay/*): it is deployed with it.
 #
 #   curl -fsSL <publish.site_url>/install.sh | sh
 #
@@ -50,6 +51,8 @@ LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$B
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/jarvisd-${t%/*}-${t#*/}" ./cmd/jarvisd)
+  (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
+    -o "../$OUT/bin/jarvis-link-${t%/*}-${t#*/}" ./cmd/jarvis-link)
 done
 # The programs released with jarvisd (update.ProgramNames): built the same way, on the same platforms; a hub swaps
 # them with jarvisd (docs/plan-telegram.md「架构」). jarvisd-telegram is Telegram's connector, too big to go into jarvisd.
@@ -70,6 +73,8 @@ if strings "$OUT/bin/jarvisd-linux-amd64" | grep -q "name: lark-connector"; then
 fi
 host_bin="$OUT/bin/jarvisd-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 [ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built jarvisd does not report $VERSION" >&2; exit 1; }
+host_link="$OUT/bin/jarvis-link-${host_bin##*/jarvisd-}"
+[ "$("$host_link" version)" = "$VERSION" ] || { echo "the built jarvis-link does not report $VERSION" >&2; exit 1; }
 "$host_bin" version -v | grep -qx "channel release, build $BUILD" || { echo "the built jarvisd is not release build $BUILD" >&2; exit 1; }
 host_tg="$OUT/bin/jarvisd-telegram-${host_bin##*/jarvisd-}"
 [ "$("$host_tg" version -v)" = "$("$host_bin" version -v)" ] || { echo "jarvisd-telegram is not the same build as jarvisd" >&2; exit 1; }
@@ -79,10 +84,10 @@ curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/nul
 "$host_bin" release check-next "$OUT/served.json" --build "$BUILD" --commit "$COMMIT" || exit 1
 
 # 隐私扫描检查未压缩的原始二进制；只把压缩包发布到 Workers，避免单资源超过 25 MiB。
-for bin in "$OUT/bin"/jarvisd-*; do
+for bin in "$OUT/bin"/jarvisd-* "$OUT/bin"/jarvis-link-*; do
   gzip -n -9 -c "$bin" > "$bin.gz"
 done
-(cd "$OUT/bin" && shasum -a 256 jarvisd-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
+(cd "$OUT/bin" && shasum -a 256 jarvisd-*.gz jarvis-link-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 
 # The manifest hubs update from: version, build number, commit and every download's sha256 (not signed, the user's
 # call: it guards against a broken download over HTTPS, docs/hub-update.md「安全」).

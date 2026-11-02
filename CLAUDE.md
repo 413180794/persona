@@ -29,7 +29,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - **配置化，不写死个人的东西**：机器名、域名、账号、邮箱、路径、启动器、公司内部工具、个人偏好一律走配置
   （构建 / 部署：`~/.config/jarvis/config.json`；运行：hub 的 `~/.jarvis/hub.json`；见 `docs/config.md`），代码、脚本、
   界面文案、测试、文档、本文件里都不出现具体某个人的值（内网域名 / IP、主机名、内部项目名、个人账号、各种 key 的 ID 也算）；界面说「hub 所在的机器」「你的各台电脑」。本机的具体情况写 `CLAUDE.local.md`。
-- **不提交任何内网信息或个人信息**（`scripts/privacy_check.py` 自动查，见 `docs/testing.md`「隐私扫描」）：代码、测试数据、文档、截图、提交信息里都不能有内网域名 / IP / URL、
+- **公网直连**（2026-10-30 用户要求）：手机经公网直连 hub 要能通，优先探测和使用 IPv6；VPN 由用户自己配置。公网用 TLS，内网兼容现有客户端，见 `docs/network.md`。
+- **不提交任何内网信息或个人信息**（2026-10-28 用户要求；`scripts/privacy_check.py` 自动查，见 `docs/testing.md`「隐私扫描」）：代码、测试数据、文档、截图、提交信息里都不能有内网域名 / IP / URL、
   主机名、内部项目 / 仓库名、真实的公司或个人数据（消息、文档链接、人名），以及个人账号、邮箱、各种 key / 项目的 ID。示例一律用占位符
   （`<hub 地址>`、`me@example.com`）；具体值只写配置或 `CLAUDE.local.md`。Jarvis 支持的产品 / 工具名（飞书、TRAEX、removed 等）不算。
 - **密钥绝不入库**：hub token、数据库密码只存在 hub 机器的 `~/.jarvis/hub.json`（0600）；邮箱凭据 AES-GCM 加密后存 Postgres，密钥文件不进数据库。
@@ -52,8 +53,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - **不许直接改已有界面的样子**：
   换一种视觉风格（组件库、设计语言）一律做成新的**界面风格**（设置 › 外观 › 界面风格，`AppStyle`），换一套配色做成新的**主题色**（`ThemeColor`），
   只在选了它时生效，默认和其他选项的界面一像素都不变。修 bug、按用户明确要求改某个界面的不算。
-- **界面只用设计系统**：字号、间距、圆角、尺寸、动画、颜色、图标、品牌标志、风格一律取自设计系统，
-  页面里不写死数值、系统字号、SF Symbol 名字、十六进制颜色；缺什么先加 token。见下面「设计系统（iOS）」。
+  Android 2026-10-31 按用户要求整体重做成三套界面风格（玻璃默认、晨报、看板），页面只写一套，差别全在设计系统的组件和外壳里，见 `docs/android-design.md`。
+- **界面只用设计系统**（2026-10-31 用户要求：设计系统是仓库的约束）：字号、间距、圆角、尺寸、动画、颜色、图标、品牌标志、风格一律取自设计系统，
+  页面里不写死数值、系统字号、SF Symbol 名字、十六进制颜色；缺什么先加 token。见下面「设计系统（iOS）」；Android 见 `docs/android-design.md`。
 - **所有按钮的文字都不能换行**：按钮标签一律单行（`.lineLimit(1)`，空间紧时 `.minimumScaleFactor` 或缩短文案 / 改成图标），
   按键栏这类横排按钮用图标或短词，放不下就收进菜单 / 浮层，不能挤成两行。
 
@@ -82,9 +84,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - 服务端：`./scripts/test/test-server.sh`（在 hub 机器上连真实 Postgres 跑全部测试）；部署 `./scripts/deploy/deploy.sh [机器 id…]`（默认配置里的全部机器）。
 - iOS：`./scripts/app/sim.sh [-openSession <machine>/<session>]` 编译、装到配置里的模拟器、自动配对 hub；截图 `xcrun simctl io <udid> screenshot`。
   直接用 xcodegen / Xcode 前先 `python3 scripts/jarvis_config.py xcconfig`（生成 bundle id、团队）。
-- Android：`./scripts/app/android.sh [install|apk|test]`（`docs/android.md`）。
+- Android：`./scripts/app/android.sh [install|apk|test|lint]`（`docs/android.md`）。
 - 网页：`cd web && npm test && npm run build`；部署 `./scripts/deploy/deploy.sh web`（`docs/web.md`）。
-- 发布：`docs/release.md`。**每次发 TestFlight 都内部、外部两个一起发**：`release.sh` 上传后跑
+- 发布：`docs/release.md`。**每次发 TestFlight 都内部、外部两个一起发**（2026-10-30 用户要求）：`release.sh` 上传后跑
   `python3 scripts/release/asc_testflight.py wait 45 <构建号>`（进内部组），再跑 `python3 scripts/release/asc_testflight.py external`
   （挂到外部组、提交 Beta 审核、打印公开链接），两个都好了再告诉用户构建号和审核状态。
 
@@ -101,19 +103,20 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - DEBUG 启动参数的名字不能和任何 Swift 标识符（类型成员、存储属性）同名，否则 `release.sh` 的 strings 检查拦下 TestFlight；新开关用 `open…` / `show…` 并加进 release.sh 的列表。（`ios.md`）
 - App 和扩展共享的钥匙串组（灵动岛的形象、推送私钥）缺了就静默退回默认值、模拟器上却总是好的：发版的 ipa 要过 `scripts/release/entitlements.py check`，Info.plist 的组名用 `$(DEVELOPMENT_TEAM).` 不用 `$(AppIdentifierPrefix)`。（`release.md`）
 - 实时活动要画的东西放进 ContentState（hub 的推送里也带上），放不下的图放 App Group 容器的文件：实时活动的扩展在手机上读写不了钥匙串，模拟器上却可以（`live-activity.md`「为什么 build 103 的形象包还不对」）。
-- 常变的状态别写 UserDefaults：每写一次，App 里每个 `@AppStorage` 视图都重算（曾经每次推送都写，Agents 列表滚动中跟着重排、内容跳），放 `StateCache`。（`ios.md`）
+- 常变的状态别写 UserDefaults：每写一次，App 里每个 `@AppStorage` 视图都重算（2026-11-01，每次推送都写，Agents 列表滚动中跟着重排、内容跳），放 `StateCache`。（`ios.md`）
 - App 目标默认 MainActor 隔离：交给系统在别的队列上回调的闭包写成 `{ @Sendable … in`，否则运行时崩；`apple/Shared` 的纯数据类型标 `nonisolated`。（`ios.md`）
 - 轮询和上报已读只该在页面在前台时做：新外壳的两页和不摘窗的容器里，藏起来的页不会触发 `onDisappear`，用 `.tabActiveTask`、`.onTabVisibility`；消息订阅、听写、计时不用。（`ios.md`）
 - 截图验证用 DEBUG 启动参数 + `simctl io screenshot`，不用 computer-use；界面改动必须真的看到截图（看不到是网关丢图，见 `testing.md`）。
 - 共用页面里一直在动的 `TimelineView(.animation)` 在 Mac 上可能每帧整窗重新布局（实测：「需要你」圆点的呼吸圈让 Agents 页空闲占一个核的 14%）：Mac 上常驻动画交给 Core Animation（`MacBreathingRing`）。（`lessons/macos.md`）
 - hub 的内存状态随时会被别人重新部署清掉：跨请求的流程要自包含或落库。（`server.md`）
+- 按来源地址判断信任时：容器里经端口映射进来的连接常常都显示成网桥网关（私网地址，公网来的也是），同机反向代理让公网请求像回环；网关用 `containerGateway` 排除，转发头只用来收紧。（`server.md`「管理界面」）
 - Claude Code 的配置目录不一定是 `~/.claude`（`CLAUDE_CONFIG_DIR`），同一会话 id 可能在两个目录各有一份，按 id 找一律取最近修改的。（`agents.md`）
 - 改 transcript 解析或同步协议用真实语料验证；改了 item 结构把 App 的 `ChatCache` 目录版本号加一。（`transcript.md`）
 - **最低兼容编译器是 Xcode 26.0（Swift 6.2），固定不动**：master 必须能在 Xcode 26.0 上编过 iOS、Mac、手表和扩展，新 Xcode 能编不算数。
   只有新 SDK 才有的 API（`isDynamicIslandLimitedInWidth`、`toolbarVerticalEdge`、`ShowsSnippetView` / `view:` 都踩过）用 `#if compiler(>=6.3)` 包起来、`#else` 走旧行为；
   `#available` / `@available` 只管运行时，符号编译时找不到照样报错。合入前用 Xcode 26.0 编一遍（`DEVELOPER_DIR` 见 `jarvis_config.py env`），PR 里写明编过；
   要抬高最低版本是产品决定，先问用户，并同步改这一条和 `docs/lessons/ios.md`。（`ios.md`「最低兼容编译器」）
-- 手表 App 最低 watchOS 10（不少旧表停在 10.6，要求更高就装不上），`Shared/` 整个编进手表：里面只能用 watchOS 10 就有的 API，
+- 手表 App 最低 watchOS 10（不少旧表停在 10.6，2026-11-02 用户的表装不上），`Shared/` 整个编进手表：里面只能用 watchOS 10 就有的 API，
   新的要 `#available` 兜底（`Color.mix` 是 watchOS 11，用 `Color.blended`）。
 
 ## 设计系统（iOS）
@@ -142,8 +145,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   `TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；减少后删掉 `TokenBaseline.json` 重跑记下新基线）、
   `StyleSpecTests`（每种风格 × 每种主题色深浅色的对比度）。不许为了过测试加豁免或调高基线。
 - **全局**：滚动条隐藏（RootView 的 `.scrollIndicators(.hidden)`，UIKit 的滚动视图自己关）；字号跟随动态字体和设置里的小 / 标准 / 大（`TextSize`）。
-- **安卓**是同一套设计系统（`android/app/src/main/java/jarvis/android/ui/design`，`docs/android.md`「设计系统」）：页面只读 `JTheme` / `JSpace` / `JRadius` / `JSize` / `JIcons`，
-  `DesignTokensTest` 管写死数值的基线（同样只能减少）；界面改动用 `./scripts/app/android.sh shots` 截图（浅色 / 深色，不要模拟器）看。
+- **安卓**有自己的设计系统（`android/core/designsystem`，三套界面风格，`docs/android-design.md`）：页面只用它的组件和 token，不写死数值、颜色、字号，
+  `scripts/app/android_token_baseline.py` 管各模块写死数值的基线（只能减少，`docs/android.md`「设计 token 采用率基线」）；界面改动用
+  `./scripts/app/android.sh shots`（专用模拟器 + 假 hub）截图，三套风格 × 深浅色都看。
 - **逻辑层**：「加载 → 显示 → 编辑 → 保存」的页面用 MVVM，一个 `@Observable` 的 `XxxModel` 放在页面旁边，依赖从 `Deps` 传入，单元测试用 `FakeHub`；
   事件多的地方（对话页、分页）先把纯计算抽出来（`ChatLines`、`AgentListOrder`）。见 `docs/ios.md`「逻辑层的选型」。
 
@@ -153,7 +157,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | --- | --- |
 | `server/` | Go 服务端 `jarvisd`（hub / node / hook / mcp 四种模式），见 `docs/server.md` |
 | `apple/` | XcodeGen 工程：iOS App `Jarvis`、macOS App `JarvisMac`（`Mac/`，`docs/mac.md`）、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
-| `android/` | Android App（Kotlin + Compose），见 `docs/android.md` |
+| `android/` | Kotlin + Compose 多模块：`:app` 装配，`core` 承载协议 / 网络 / 存储 / 列表 / 设计系统，`feature` 承载页面，`platform` 承载通知和手机工具；部分扩展模块尚未接入 App，见 `docs/android.md` |
+| `mac/` | Mac 菜单栏 App「Jarvis Link」（和 `apple/` 里的 Mac App `JarvisMac` 是两个东西）：装着 jarvis-link（`server/cmd/jarvis-link`）和 jarvisd，这台 Mac 的 node 服务（主动连 hub 或让 hub 来连），见 `docs/link.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
 | `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md` |
 | `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 jarvisd（`deploy/publish.sh`、`deploy/install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock/mock_hub.py`） |
@@ -172,6 +177,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/config.md` | 配置：构建 / 部署配置（config.json）、hub 运行配置（hub.json），哪些值不能写进代码 |
 | `docs/architecture.md` | 整体架构、数据流、为什么这样设计（herdr + hooks + transcript） |
 | `docs/protocol.md` | hub HTTP / WebSocket API、hub↔node RPC、事件和交互模型（前后端契约） |
+| `docs/network.md` | 公网直连：TLS、公钥钉扎、IPv6 入站、配对、来源判断和限流 |
 
 ### 服务端和部署
 
@@ -185,6 +191,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/ports.md` | 端口转发：node 找出 Agent 在监听的端口、App 认出回答里的 localhost 链接，手机本地监听 + WebSocket 经 hub 转到那台机器，取舍和安全边界 |
 | `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、App 的「机器」页（Agent 和监控合在一起）和机器详情 |
+| `docs/admin.md` | hub 管理界面（`/admin`）：访问范围 `admin.access`（loopback / lan / cidrs / any）和来源判断、管理员密码 / 会话 / CSRF / 限流、改 hub.json、页面和接口、部署时怎么选 |
+| `docs/mesh.md` | hub 互联（单中心）：互联码配对、链路、中心和任期（加入组、设为中心、中心不可达）、成员把 App 请求和电脑交给中心、凭据交接、一台电脑多条路的去重和选路、kind service（hub 拨连接器）、ssh 迁移、管理接口和命令行、怎么验证 |
+| `docs/link.md` | 连接器 jarvis-link 和 node 服务：一条命令 / 一个 App 装好常驻 node + 连接器；主动模式（电脑连 hub 的链路）和被动模式（hub 连电脑：监听、配对码、接口、限流、安全边界）；Mac 菜单栏 App「Jarvis Link」；Linux headless 的 `jarvis-link install / status / mode / node / logs / uninstall` |
 
 ### Agent、运行时和终端
 
@@ -227,9 +236,11 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/siri.md` | Siri 深度集成：问 Jarvis（助手主对话）、让个人 Agent 去做、未读、控制中心 / 操作按钮、Spotlight 索引 |
 | `docs/live-activity.md` | 锁屏 / 灵动岛实时活动（Fleet）：显示什么、和其他 App 共用灵动岛（限宽 / 最小态）、ContentState、hub 的 liveactivity 推送和 push-to-start、怎么在模拟器上验证 |
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
+| `docs/multi-hub.md` | 一台设备连多组 hub：配对注册表和迁移、按 mesh 分组、每组一条连接和选路、按组的键（默认组不变）、合并显示和按组筛选、推送 / 实时活动 / 手表 / Siri 按组路由 |
 | `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`apple/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |
-| `docs/android.md` | Android App：已有的页面、不用推送服务的后台通知、构建安装、还没做的部分 |
-| `docs/web.md` | 网页版：hub 托管、登录换设备 token、各页面、连接与补洞、细节约定 |
+| `docs/android.md` | Android App：模块职责与依赖、入口接线、常驻连接通知、多 hub（分组、组后缀的会话键、组内换线路）、构建 / 测试 / 假 hub 截图命令 |
+| `docs/android-design.md` | Android 三套界面风格（玻璃 / 晨报 / 看板）、设计 token、组件清单和写页面的规矩、玻璃的降级 |
+| `docs/web.md` | 网页版：hub 托管、登录换设备 token、各页面（收件箱、终端 / 文件 / Git 的侧边面板、链接、互联的 hub 标注）、连接与补洞、细节约定、和手机端的差距表 |
 
 ### 测试和发布
 
@@ -245,6 +256,10 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | --- | --- |
 | `docs/plan-orca-support.md` | 计划：支持 Orca（进行中）：先把宿主（herdr、Orca）和 Agent 分开、抽出宿主接口，再接 Orca 来源；每一步的范围、Orca 能提供什么、风险 |
 | `docs/plan-connectors.md` | 计划：连接器（先接 GitHub 和 iMessage）：能力可选的 Connector 接口、内置 / 外部进程 / node 本地三种形态、飞书邮件的迁移步骤、隐私和拍板项 |
+| `docs/plan-hub-mesh.md` | 计划：hub 互联（探测、双向链路、组内电脑去重和选路、归属）、links、多 hub 客户端、hub 管理界面（访问范围）、网页对齐；各路之间的接口约定和分工 |
+| `docs/plan-hub-center.md` | 计划第二版：有且只有一台中心 hub（其余 hub 当成员、把电脑交给中心）、电脑经预装服务接入（连接器主动 / 被动两种模式，不用 SSH）、一台电脑多条路去重选路；两路分工和被动模式协议 |
+| `docs/redesign/android-p0-status.md` | Android P0 逐项状态、代码证据与剩余工作，注明核对日期和基准提交 |
+| `docs/redesign/android-p0-acceptance.md` | Android P0 第 4 轮联合验收清单：环境准备、真实场景、采样记录与状态表回填 |
 | `docs/plan-telegram.md` | 计划：Telegram 连接器（用户自己的账号，第一版只读）：gotd/td 选型、分步登录和加密存会话、收哪些会话和增量、收件箱、只读工具、设置的开关 / 删除 / 退出，要用户定的 |
 | `docs/plan-lark-cli.md` | 计划：没有 lark-connector 时用官方 lark-cli 接飞书：能力对照和降级、两种来源并存、做成连接器、闸门认 lark-cli、收件箱收什么、分步计划和已拍板项 |
-| `docs/lessons/` | 经验（踩坑）按主题分文件：协作、Agent、助手、服务端、transcript、飞书邮件、终端、iOS、macOS、测试，索引 `docs/lessons/README.md` |
+| `docs/lessons/` | 经验（踩坑）按主题分文件：协作、Agent、助手、服务端、transcript、飞书邮件、终端、iOS、Android、macOS、测试，索引 `docs/lessons/README.md` |

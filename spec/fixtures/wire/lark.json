@@ -1,0 +1,87 @@
+[
+  {
+    "name": "lark_message_parts",
+    "description": "飞书消息保留 parts 和嵌套键名，并将媒体地址改写到 hub。",
+    "source": [
+      "server/internal/hub/lark.go: Hub.larkRoutes",
+      "server/internal/lark/lark.go: Client.Messages, rawMessage.normalize, rewriteMedia",
+      "apple/Jarvis/Views/Inbox/Lark/LarkModels.swift: LarkMessage, LarkPart"
+    ],
+    "derived": true,
+    "decoder": "lark",
+    "input": {
+      "messages": [
+        {
+          "id": "message_example",
+          "position": "10",
+          "sender_id": "user_example",
+          "sender_name": "小王",
+          "is_mine": false,
+          "type": "POST",
+          "text": "示例消息",
+          "created_at": "2026-01-02T03:04:05Z",
+          "recalled": false,
+          "reply_count": 0,
+          "parts": [
+            {
+              "kind": "text",
+              "text": "示例消息"
+            },
+            {
+              "kind": "image",
+              "url": "/api/v1/lark/media/image_example",
+              "refId": "image_example",
+              "metadata": {
+                "width": 2,
+                "height": 1
+              }
+            },
+            {
+              "kind": "card",
+              "metadata": {
+                "custom_Key": {
+                  "keep_snake_case": true
+                }
+              }
+            }
+          ],
+          "reply_to": {
+            "id": "reply_example",
+            "sender_name": "小王",
+            "text": "示例引用",
+            "parts": [
+              {
+                "kind": "text",
+                "text": "示例引用"
+              }
+            ]
+          },
+          "reactions": [
+            {
+              "key": "THUMBSUP",
+              "count": 1,
+              "mine": true
+            }
+          ]
+        }
+      ],
+      "has_older": true,
+      "has_newer": false,
+      "older_cursor": "10",
+      "newer_cursor": "10"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/has_newer": false,
+        "/has_older": true,
+        "/messages/0/parts/0/kind": "text",
+        "/messages/0/parts/1/refId": "image_example",
+        "/messages/0/parts/1/url": "/api/v1/lark/media/image_example",
+        "/messages/0/parts/2/metadata/custom_Key/keep_snake_case": true,
+        "/newer_cursor": "10",
+        "/older_cursor": "10"
+      }
+    }
+  }
+]

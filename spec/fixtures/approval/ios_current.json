@@ -1,0 +1,1271 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "ios_current_conversation_plan_unlocked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "conversation",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_all",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "not_rejecting"
+            ],
+            "mode": "bypassPermissions"
+          },
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "not_rejecting"
+            ],
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_conversation_plan_locked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "conversation",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_all",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "not_rejecting"
+            ],
+            "mode": "bypassPermissions"
+          },
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "not_rejecting"
+            ],
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_conversation_permission_unlocked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "conversation",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": []
+          },
+          {
+            "id": "deny",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "always",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "session_present"
+            ]
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_conversation_permission_locked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "conversation",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": []
+          },
+          {
+            "id": "deny",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "always",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "session_present"
+            ]
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_conversation_question_unlocked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "conversation",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "answer",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_conversation_question_locked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "conversation",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "answer",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_conversation_screen_unlocked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "conversation",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "screen_answer",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_conversation_screen_locked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "conversation",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "screen_answer",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_notification_plan_unlocked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "notification",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "feedback"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "NotificationActionsTests.sayingYesNeedsUnlockSayingNoDoesNot"
+    },
+    {
+      "name": "ios_current_notification_plan_locked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "notification",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "input": "feedback"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "from_test": "NotificationActionsTests.sayingYesNeedsUnlockSayingNoDoesNot"
+    },
+    {
+      "name": "ios_current_notification_permission_unlocked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "notification",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "none"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "NotificationActionsTests.sayingYesNeedsUnlockSayingNoDoesNot"
+    },
+    {
+      "name": "ios_current_notification_permission_locked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "notification",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "none"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "from_test": "NotificationActionsTests.sayingYesNeedsUnlockSayingNoDoesNot"
+    },
+    {
+      "name": "ios_current_notification_question_unlocked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "notification",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "NotificationActionsTests.sayingYesNeedsUnlockSayingNoDoesNot"
+    },
+    {
+      "name": "ios_current_notification_question_locked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "notification",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "from_test": "NotificationActionsTests.sayingYesNeedsUnlockSayingNoDoesNot"
+    },
+    {
+      "name": "ios_current_notification_screen_unlocked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "notification",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "NotificationActionsTests.sayingYesNeedsUnlockSayingNoDoesNot"
+    },
+    {
+      "name": "ios_current_notification_screen_locked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "notification",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "from_test": "NotificationActionsTests.sayingYesNeedsUnlockSayingNoDoesNot"
+    },
+    {
+      "name": "ios_current_lock_screen_plan_unlocked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "lock_screen",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "FleetIntentsTests.sayingYesNeedsUnlock"
+    },
+    {
+      "name": "ios_current_lock_screen_plan_locked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "lock_screen",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "from_test": "FleetIntentsTests.sayingYesNeedsUnlock"
+    },
+    {
+      "name": "ios_current_lock_screen_permission_unlocked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "lock_screen",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "none"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "FleetIntentsTests.sayingYesNeedsUnlock"
+    },
+    {
+      "name": "ios_current_lock_screen_permission_locked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "lock_screen",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "none"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "from_test": "FleetIntentsTests.sayingYesNeedsUnlock"
+    },
+    {
+      "name": "ios_current_lock_screen_question_unlocked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "lock_screen",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_lock_screen_question_locked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "lock_screen",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_lock_screen_screen_unlocked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "lock_screen",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_lock_screen_screen_locked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "lock_screen",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_watch_plan_unlocked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "watch",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_all",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true,
+            "mode": "bypassPermissions"
+          },
+          {
+            "id": "reject",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_watch_plan_locked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "watch",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_all",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null,
+            "mode": "bypassPermissions"
+          },
+          {
+            "id": "reject",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_watch_permission_unlocked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "watch",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "deny",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_watch_permission_locked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "watch",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          },
+          {
+            "id": "deny",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_watch_question_unlocked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "watch",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "answer",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_watch_question_locked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "watch",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "answer",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_watch_screen_unlocked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "watch",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "screen_answer",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_watch_screen_locked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "watch",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "screen_answer",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ios_current_siri_shortcut_plan_unlocked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "siri_shortcut",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_all",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true,
+            "mode": "bypassPermissions"
+          }
+        ]
+      },
+      "from_test": "IntentsTests.onlyPermissionAndPlanCanBeResolvedFromSiri"
+    },
+    {
+      "name": "ios_current_siri_shortcut_plan_locked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "siri_shortcut",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_all",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null,
+            "mode": "bypassPermissions"
+          }
+        ]
+      },
+      "from_test": "IntentsTests.onlyPermissionAndPlanCanBeResolvedFromSiri"
+    },
+    {
+      "name": "ios_current_siri_shortcut_permission_unlocked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "siri_shortcut",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "IntentsTests.onlyPermissionAndPlanCanBeResolvedFromSiri"
+    },
+    {
+      "name": "ios_current_siri_shortcut_permission_locked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "siri_shortcut",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "from_test": "IntentsTests.onlyPermissionAndPlanCanBeResolvedFromSiri"
+    },
+    {
+      "name": "ios_current_siri_shortcut_question_unlocked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "siri_shortcut",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "IntentsTests.onlyPermissionAndPlanCanBeResolvedFromSiri"
+    },
+    {
+      "name": "ios_current_siri_shortcut_question_locked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "siri_shortcut",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "from_test": "IntentsTests.onlyPermissionAndPlanCanBeResolvedFromSiri"
+    },
+    {
+      "name": "ios_current_siri_shortcut_screen_unlocked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "siri_shortcut",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "from_test": "IntentsTests.onlyPermissionAndPlanCanBeResolvedFromSiri"
+    },
+    {
+      "name": "ios_current_siri_shortcut_screen_locked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "entry": "siri_shortcut",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "from_test": "IntentsTests.onlyPermissionAndPlanCanBeResolvedFromSiri"
+    }
+  ]
+}

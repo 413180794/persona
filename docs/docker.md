@@ -91,6 +91,7 @@ docker compose exec hub jarvisd hub tailcat-key          # NAS 上：hub 的公�
 | `JARVIS_PUBLIC_URL` | 手机访问 hub 的地址，配对二维码里的就是它 |
 | `JARVIS_LISTEN` | hub 监听的地址（默认 `:18660`；改它要同时改 compose 的端口映射和镜像的健康检查） |
 | `JARVIS_LOCAL_NODE=0` | 第一次启动不写「本机」那台机器（镜像里已设） |
+| `JARVIS_ADMIN_ACCESS`、`JARVIS_ADMIN_CIDRS` | 管理界面（`/admin`）谁能打开：`loopback` / `lan` / `cidrs`（网段逗号分隔）/ `any`，见下面「管理界面」。没设时入口脚本打印一行提醒，按 hub.json 的 `admin.access`（没写就是 `lan`） |
 | `JARVIS_NODE_BINARIES` | 「重新部署」用的 node 构建在哪（镜像里是 `/opt/jarvis/nodes`；原生方式是 `~/.jarvis/bin/nodes`） |
 | `PUID` / `PGID`、`TZ` | 见上 |
 | `JARVIS_IMAGE`、`JARVIS_POSTGRES_IMAGE`、`JARVIS_PORT` | compose 用：两个镜像从哪拉、hub 映射到宿主的哪个端口。`JARVIS_IMAGE` 也传进 hub 容器：hub 查它的标签，看有没有新镜像（见下「升级」） |
@@ -120,6 +121,24 @@ docker compose pull && docker compose up -d
 - 容器默认在 Docker 的桥接网络里：tailcat 打洞多隔了一层 NAT，大多数情况仍能直连，不行就走中继。想更容易直连可以给 hub 用
   `network_mode: host`（同时去掉 `ports`）。
 - hub 默认是 HTTP，只该在内网、VPN 或 HTTPS 反向代理后面访问，不要把 18660 直接暴露到公网。
+
+## 管理界面
+
+`<JARVIS_PUBLIC_URL>/admin` 是 hub 自带的管理界面（[admin.md](admin.md)）：第一次打开设管理员密码，之后在网页上加电脑、管设备、改网络。
+
+- **访问范围**：在 `.env` 里选（`.env.example` 写了四个选项的意思），设了就以它为准，网页里不能改。
+- **容器里的 `lan` 是「任何私网地址」，但网关除外**：桥接网络下容器只看得到 Docker 自己的网段（`172.x`），看不到 NAS 所在的局域网，
+  分不出「同一网段」，所以放宽成任何私网地址；而 Docker 的用户态代理（docker-proxy）转进来的连接一律显示成网关地址（`172.x.0.1`），
+  公网来的也一样（Docker 没开 IPv6 时的 IPv6 请求、宿主机上的反向代理转进来的），所以网关永远不算局域网。Linux 上局域网里的电脑经
+  iptables DNAT 进来，容器看到的是它的真实地址，照常能打开。App 的接口同理：网关来的请求按公网处理（不能用主 token、明文接口回 `403 tls_required`），
+  见 [network.md](network.md)「来源判断与反向代理」。
+- **Docker Desktop / OrbStack**：所有经端口映射的连接都来自网关，`lan` 下打不开管理界面（入口脚本会提示）。开发机上试用时：
+  端口只映射到 `127.0.0.1`，再在 `.env` 里 `JARVIS_ADMIN_ACCESS=cidrs`、`JARVIS_ADMIN_CIDRS=<网关地址>/32`（`docker network inspect`
+  里的 `Gateway`；这等于放行所有经映射进来的请求，只有端口只对本机开时才安全）。
+- **`loopback`** 在容器里是容器自己：`docker compose exec hub wget -qO- http://127.0.0.1:18660/admin` 这类用法，平时基本用不上。
+- **`any`** 要 hub 开 TLS（`data/hub.json` 的 `public.tls_listen`），并在 compose 里把 TLS 端口也映射出来。
+- 忘了密码：`docker compose exec hub jarvisd hub admin reset-password`。
+- 「重启 hub」按钮在容器里可用：hub 退出后由 `restart: unless-stopped` 拉起来。
 
 ## 从原生方式迁过来
 

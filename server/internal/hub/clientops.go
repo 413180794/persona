@@ -1,0 +1,267 @@
+package hub
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/db"
+)
+
+var clientOpUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// Body is encoded as bytes so JSONB cannot change whitespace or the original response bytes.
+type clientOpResult struct {
+	Status      int    `json:"status"`
+	Body        []byte `json:"body"`
+	ContentType string `json:"content_type,omitempty"`
+}
+
+func (h *Hub) withClientOp(kind string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Only clients that send X-Jarvis-Op-Id use receipts. Messages without it (today's iOS) are deduplicated by
+		// client_msg_id in sendMessage (sent_messages), so a non-UUID client_msg_id must still go through.
+		id := r.Header.Get("X-Jarvis-Op-Id")
+		if id == "" {
+			next(w, r)
+			return
+		}
+		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 32<<20))
+		_ = r.Body.Close()
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		params := normalizedOpParams(raw)
+		object, _ := params.(map[string]any)
+		if !clientOpUUID.MatchString(id) {
+			writeErr(w, http.StatusBadRequest, errors.New("operation id must be a UUID"))
+			return
+		}
+		id = strings.ToLower(id)
+		if kind == "message" && (object != nil || len(bytes.TrimSpace(raw)) == 0) {
+			if object == nil {
+				object = map[string]any{}
+			}
+			object["client_msg_id"] = id
+			params = object
+			raw, _ = json.Marshal(object)
+		}
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+		r.ContentLength = int64(len(raw))
+		if h.store == nil {
+			writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
+			return
+		}
+		target, _ := json.Marshal(map[string]string{"path": r.URL.Path, "query": r.URL.Query().Encode()})
+		valid := len(bytes.TrimSpace(raw)) == 0 || json.Valid(raw)
+		canonical, _ := json.Marshal([]any{kind, json.RawMessage(target), valid, params})
+		sum := sha256.Sum256(canonical)
+		op, claimed, err := h.store.BeginClientOp(r.Context(), db.ClientOp{
+			ID: id, DeviceID: principalOf(r.Context()).ID, Kind: kind, Target: target, Digest: hex.EncodeToString(sum[:]),
+		})
+		if err != nil || op == nil {
+			writeErr(w, http.StatusServiceUnavailable, errors.New("operation receipt unavailable"))
+			return
+		}
+		if op.Digest != hex.EncodeToString(sum[:]) || (principalOf(r.Context()).ID != "" && op.DeviceID != principalOf(r.Context()).ID) {
+			writeErrorBody(w, http.StatusConflict, map[string]any{"code": "op_id_reused"})
+			return
+		}
+		if !claimed {
+			h.waitClientOp(w, r, op)
+			return
+		}
+		h.executeClientOp(w, r, id, next)
+	}
+}
+
+func normalizedOpParams(raw []byte) any {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return map[string]any{}
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var value, extra any
+	if dec.Decode(&value) == nil && errors.Is(dec.Decode(&extra), io.EOF) {
+		return value
+	}
+	// Invalid JSON still gets a stable digest, allowing a deterministic 400 to be replayed.
+	return raw
+}
+
+type clientOpWriter struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (w *clientOpWriter) Header() http.Header { return w.header }
+func (w *clientOpWriter) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+}
+func (w *clientOpWriter) Write(b []byte) (int, error) {
+	w.WriteHeader(http.StatusOK)
+	return w.body.Write(b)
+}
+
+func (h *Hub) executeClientOp(w http.ResponseWriter, r *http.Request, id string, next http.HandlerFunc) {
+	state := "unknown"
+	var result json.RawMessage
+	finished := false
+	persist := func() error {
+		// A disconnected caller must not prevent the operation's outcome from being recorded.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return h.store.FinishClientOp(ctx, id, state, result)
+	}
+	defer func() {
+		if !finished {
+			_ = persist() // A panic may have happened after the side effect.
+		}
+	}()
+	capture := &clientOpWriter{header: make(http.Header)}
+	next(capture, r)
+	capture.WriteHeader(http.StatusOK)
+	state = clientOpState(capture.status, capture.body.Bytes())
+	saved := clientOpResult{Status: capture.status, Body: capture.body.Bytes(), ContentType: capture.header.Get("Content-Type")}
+	result, _ = json.Marshal(saved)
+	err := persist()
+	finished = true
+	if err != nil {
+		writeErrorBody(w, http.StatusServiceUnavailable, map[string]any{"state": "unknown"})
+		return
+	}
+	for key, values := range capture.header {
+		w.Header()[key] = values
+	}
+	writeClientOpResult(w, saved)
+}
+
+func clientOpState(status int, body []byte) string {
+	var reply struct {
+		Delivered string `json:"delivered"`
+	}
+	_ = json.Unmarshal(body, &reply)
+	if reply.Delivered == "unknown" || reply.Delivered == "yes" && status >= 400 {
+		return "unknown"
+	}
+	if status >= 200 && status < 300 {
+		return "done"
+	}
+	if status == http.StatusBadRequest || status == http.StatusConflict {
+		return "failed"
+	}
+	return "unknown"
+}
+
+func writeClientOpResult(w http.ResponseWriter, result clientOpResult) {
+	if result.ContentType != "" {
+		w.Header().Set("Content-Type", result.ContentType)
+	}
+	w.WriteHeader(result.Status)
+	_, _ = w.Write(result.Body)
+}
+
+func (h *Hub) waitClientOp(w http.ResponseWriter, r *http.Request, op *db.ClientOp) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		switch op.State {
+		case "done", "failed":
+			var result clientOpResult
+			if json.Unmarshal(op.Result, &result) != nil || result.Status < 200 || result.Status > 599 {
+				writeErrorBody(w, http.StatusServiceUnavailable, map[string]any{"state": "unknown"})
+				return
+			}
+			writeClientOpResult(w, result)
+			return
+		case "unknown":
+			// Start and reply retries must not repeat side effects or replace a recorded HTTP outcome.
+			// A recovered pending operation has no result and remains explicitly unknown.
+			if op.Kind == "start" || op.Kind == "lark_send" || op.Kind == "inbox_reply" || op.Kind == "lark_thread_reply" {
+				var result clientOpResult
+				if json.Unmarshal(op.Result, &result) == nil && result.Status >= 200 && result.Status <= 599 {
+					writeClientOpResult(w, result)
+					return
+				}
+			}
+			writeErrorBody(w, http.StatusAccepted, map[string]any{"state": "unknown"})
+			return
+		}
+		select {
+		case <-ctx.Done():
+			writeErrorBody(w, http.StatusAccepted, map[string]any{"state": "pending"})
+			return
+		case <-ticker.C:
+			fresh, err := h.store.ClientOp(ctx, op.ID)
+			if ctx.Err() != nil {
+				writeErrorBody(w, http.StatusAccepted, map[string]any{"state": "pending"})
+				return
+			}
+			if err != nil || fresh == nil {
+				writeErr(w, http.StatusServiceUnavailable, errors.New("operation receipt unavailable"))
+				return
+			}
+			op = fresh
+		}
+	}
+}
+
+func (h *Hub) getClientOp(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !clientOpUUID.MatchString(id) {
+		writeErr(w, http.StatusBadRequest, errors.New("operation id must be a UUID"))
+		return
+	}
+	if h.store == nil {
+		writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
+		return
+	}
+	op, err := h.store.ClientOp(r.Context(), strings.ToLower(id))
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	if op == nil || (principalOf(r.Context()).ID != "" && op.DeviceID != principalOf(r.Context()).ID) {
+		writeErr(w, http.StatusNotFound, errors.New("no such operation"))
+		return
+	}
+	writeJSON(w, op)
+}
+
+func (h *Hub) startClientOps(ctx context.Context) error {
+	if err := h.store.RecoverClientOps(ctx); err != nil {
+		return err
+	}
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			cleanCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			err := h.store.CleanupClientOps(cleanCtx, time.Now().AddDate(0, 0, -30))
+			cancel()
+			if err != nil && ctx.Err() == nil {
+				h.logf("clean client operations: %v", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	return nil
+}

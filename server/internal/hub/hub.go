@@ -30,6 +30,14 @@ import (
 )
 
 type Hub struct {
+	nodeWorkers   sync.WaitGroup
+	shutdown      *shutdownBudget
+	wsStopping    bool // guarded by mu; prevents new WaitGroup additions during shutdown
+	wsHandlers    sync.WaitGroup
+	wsConnections map[*client]struct{}  // includes connections still registering their device session
+	links         map[*hubLink]struct{} // live jarvis-link links (link.go), guarded by mu
+	linkPing      [2]time.Duration      // tests: heartbeat interval and timeout of new links
+
 	cfg      *Config
 	version  string
 	build    update.Build // channel, build number, where updates come from (docs/hub-update.md)
@@ -66,7 +74,7 @@ type Hub struct {
 	mu            sync.Mutex
 	clients       map[*client]struct{}
 	interactions  map[string]*pending
-	phoneTools    []proto.Tool
+	phoneTools    map[string]db.PhoneToolRegistration
 	calls         map[string]chan proto.ToolResult
 	seen          map[[2]string]time.Time // (machine, session) -> when the user last looked at it
 	stateSince    map[[2]string]stateMark // (machine, session) -> its state and when it entered it
@@ -74,7 +82,7 @@ type Hub struct {
 	snap          *prompts.Snapshot       // the assistant's last live snapshot (assistant_snapshot.go)
 	snapAt        time.Time
 	snapping      chan struct{}        // closed when the snapshot being taken is in
-	wokeAt        time.Time            // last silent push to wake the phone for a tool call
+	wokeAt        map[string]time.Time // device -> last silent push to wake it for a tool call
 	notified      map[string]time.Time // assistant conversation -> when it last pushed with notify_user
 	kbAgentLogged map[string]time.Time // agent -> when its result last went into a project timeline (kb.go)
 	turns         *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
@@ -100,10 +108,16 @@ type Hub struct {
 	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
 	launchers     launcherState
 	launchersSeen map[string][]proto.Launcher
-	devtok        devTokens // device token lookups (devicetokens.go)
-	sends         sendLog   // messages being / just sent, by client_msg_id (send.go)
-	plugins       *plugins  // processes that add to the app, relayed under /api/v1/plugins (plugins.go)
-	todos         todosState
+	devtok        devTokens   // device token lookups (devicetokens.go)
+	public        publicState // TLS identity, listener and advertised addresses (public.go)
+	sends         sendLog     // messages being / just sent, by client_msg_id (send.go)
+	plugins       *plugins    // processes that add to the app, relayed under /api/v1/plugins (plugins.go)
+	admin         adminState  // the admin UI (admin.go, docs/admin.md)
+
+	mesh  meshState // the other hubs of the mesh group (mesh.go)
+	fleet fleet     // the machines and their paths, the members' computers among them (mesh_paths.go)
+
+	todos todosState
 
 	connectors *connector.Registry // sources of the user's information (connectors.go)
 	// connectorsOff start switched off until the user turns them on (addConnectorOff).
@@ -130,10 +144,28 @@ var NewMail func(dataDir string, store Store, google GoogleConfig, microsoft Mic
 
 // Store is the hub's persistence (internal/db on Postgres).
 type Store interface {
+	CreateLockTest(ctx context.Context, t db.LockTest) error
+	LockTest(ctx context.Context, deviceID, testID string) (*db.LockTest, error)
+	DueLockTests(ctx context.Context, at time.Time) ([]db.LockTest, error)
+	AttemptLockTest(ctx context.Context, testID string, sessionID int64, at time.Time) (bool, error)
+	ReceiveLockTest(ctx context.Context, deviceID, testID string, shown *bool, at time.Time) (*db.LockTest, error)
+	RecoverLockTests(ctx context.Context, at time.Time) error
+	PruneLockTests(ctx context.Context, before time.Time) error
+	InsertDeviceSession(ctx context.Context, s db.DeviceSession) (int64, error)
+	UpdateDeviceSessionHeartbeat(ctx context.Context, id int64, interval int) error
+	FinishDeviceSession(ctx context.Context, id int64, at time.Time, reason string, interval int) error
+	StopDeviceSessions(ctx context.Context, at time.Time) error
+	PruneDeviceSessions(ctx context.Context, before time.Time) error
+	DeviceSessions(ctx context.Context, deviceID string, since, until time.Time) (db.DeviceSessionHistory, error)
+	BeginClientOp(ctx context.Context, op db.ClientOp) (*db.ClientOp, bool, error)
+	ClientOp(ctx context.Context, id string) (*db.ClientOp, error)
+	FinishClientOp(ctx context.Context, id, state string, result json.RawMessage) error
+	RecoverClientOps(ctx context.Context) error
+	CleanupClientOps(ctx context.Context, before time.Time) error
+	ReplacePhoneTools(ctx context.Context, registration db.PhoneToolRegistration) error
+	PhoneTools(ctx context.Context) ([]db.PhoneToolRegistration, error)
 	ClaimSend(ctx context.Context, id, machine, session string) (string, error)
 	SettleSend(ctx context.Context, id, state string) error
-	ReplacePhoneTools(ctx context.Context, tools []proto.Tool) error
-	PhoneTools(ctx context.Context) ([]proto.Tool, error)
 	UpsertDevice(ctx context.Context, d db.Device) error
 	Devices(ctx context.Context) ([]db.Device, error)
 	DeleteDevice(ctx context.Context, id string) error
@@ -160,6 +192,9 @@ type Store interface {
 	DeviceTokens(ctx context.Context) ([]db.DeviceToken, error)
 	RevokeDeviceToken(ctx context.Context, id string) (bool, error)
 	TouchDeviceToken(ctx context.Context, id string) error
+	CreatePairToken(ctx context.Context, hash string, expiresAt time.Time, machine string) error
+	PairTokenByHash(ctx context.Context, hash string) (*db.PairToken, error)
+	RedeemPairToken(ctx context.Context, pairHash string, device db.DeviceToken, tokenHash string) (bool, error)
 	PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error
 	InboxItems(ctx context.Context, doneSince time.Time) ([][]byte, error)
 	ListTodos(ctx context.Context) ([]db.TodoRow, error)
@@ -201,9 +236,24 @@ func Run(ctx context.Context, b update.Build) error {
 	if err != nil {
 		return err
 	}
-	version := b.Version
+	return runConfigured(ctx, b, cfg, updating)
+}
+
+// runConfigured runs the hub until ctx ends; updating: an update is under way, this process confirms it.
+func runConfigured(ctx context.Context, b update.Build, cfg *Config, updating bool) error {
+	budget := newShutdownBudget(cfg)
+	defer budget.close()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	return budget.run(ctx, func() error { return runHub(ctx, b, cfg, budget, updating) })
+}
+
+func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBudget, updating bool) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	h := &Hub{
-		cfg: cfg, version: version, build: b, logger: logger,
+		shutdown: budget, cfg: cfg, version: b.Version, build: b, logger: log.New(os.Stderr, "", log.LstdFlags),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 		todos: newTodosState(),
@@ -215,8 +265,21 @@ func Run(ctx context.Context, b update.Build) error {
 	if err != nil {
 		return err
 	}
-	defer database.Close()
+	defer func() {
+		cancel()
+		budget.step(h, "node connections", func(context.Context) error {
+			h.nodeWorkers.Wait()
+			return nil
+		})
+		budget.step(h, "close database", database.CloseContext)
+	}()
 	h.store = database
+	if err := h.startClientOps(ctx); err != nil {
+		return err
+	}
+	if err := h.initHubID(ctx); err != nil {
+		return err
+	}
 	if resumable, err := database.ExpireStaleInteractions(ctx); err != nil {
 		h.logf("expire stale interactions: %v", err)
 	} else {
@@ -248,6 +311,7 @@ func Run(ctx context.Context, b update.Build) error {
 	}
 	h.lark = lark.New(cfg.Lark)
 	h.inbox.larkAccount = h.lark.Account()
+	h.push.hubID = h.hubID
 	h.initAgents()
 	h.initTodos(ctx)
 	h.connectors = connector.NewRegistry(cfg.ConnectorGate)
@@ -255,7 +319,15 @@ func Run(ctx context.Context, b update.Build) error {
 		m := newMachine(h, mc)
 		h.machines = append(h.machines, m)
 		h.byID[mc.ID] = m
-		go m.run(ctx)
+	}
+	h.initMesh(ctx) // before the machines connect: a member leaves its computers to the center (mesh_group.go)
+	h.fleetRegroup()
+	for _, m := range h.machines {
+		h.nodeWorkers.Add(1)
+		go func() {
+			defer h.nodeWorkers.Done()
+			m.run(ctx)
+		}()
 	}
 	defer h.closeTailcat()
 	go h.expireLoop(ctx)
@@ -273,33 +345,20 @@ func Run(ctx context.Context, b update.Build) error {
 	h.startKB(ctx, cfg.KB, cfg.dir)
 	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
 	h.startPlugins(ctx)
-
-	srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}
-	go func() {
-		<-ctx.Done()
-		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(sctx)
-	}()
-	h.logf("jarvisd hub %s listening on %s (%s)", version, cfg.Listen, cfg.PublicURL)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	go h.adminStartup(ctx) // the admin UI's first-run setup code, while it has no password (admin_setupcode.go)
+	if err := h.startPublic(ctx); err != nil {
 		return err
 	}
-	return nil
+	h.startMesh(ctx)
+	go h.probeServices(ctx) // the connectors of the computers of kind service (service.go)
+	return h.serveHTTP(ctx)
 }
 
 func (h *Hub) logf(format string, args ...any) { h.logger.Printf(format, args...) }
 
-func (h *Hub) machineList() []proto.Machine {
-	out := make([]proto.Machine, 0, len(h.machines))
-	for _, m := range h.machines {
-		out = append(out, m.snapshot())
-	}
-	return out
-}
-
 func (h *Hub) broadcastMachines() {
 	h.broadcast(map[string]any{"type": "machines", "machines": h.machineList()})
+	h.meshTouch() // a member's record says which of its computers the center can reach through it
 }
 
 // decorated returns a machine's sessions with pending interaction counts filled in.
@@ -325,6 +384,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	titles, named := h.agentConversationTitles(), h.conversationTitles()
 	archived, relayed := h.archivedIDs(), h.queuedRelays()
 	for i := range list {
+		list[i].MachineID = m.cfg.ID
 		list[i].PendingInteractions = counts[list[i].SessionID]
 		list[i].Assistant = isAssistant(list[i].Cwd, dir)
 		if t := titles[list[i].SessionID]; t != "" && list[i].Assistant {
@@ -530,17 +590,17 @@ func trimScreen(s string) string {
 
 func (h *Hub) announce(ix proto.Interaction) {
 	h.broadcast(map[string]any{"type": "interaction", "interaction": ix})
-	if m := h.byID[ix.MachineID]; m != nil {
+	if m := h.localMachine(ix.MachineID); m != nil {
 		h.broadcastSessions(m, h.decorated(m))
 	}
 	if !h.muted(ix.MachineID, ix.SessionID) {
-		h.push.notifyInteraction(ix, h.machineName(ix.MachineID))
+		h.notifyInteraction(ix, h.machineName(ix.MachineID))
 	}
 	h.botInteraction(ix)
 }
 
 func (h *Hub) machineName(id string) string {
-	if m := h.byID[id]; m != nil {
+	if m := h.localMachine(id); m != nil {
 		return m.cfg.Name
 	}
 	return id
@@ -561,12 +621,18 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 				p.orphaned = nil
 			}
 			h.mu.Unlock()
+			if ix.Kind == proto.IxElicitation && !h.hasElicitationClient() {
+				_ = h.resolve(ix.ID, proto.Resolution{Dismiss: true})
+			}
 			return h.await(ctx, p)
 		}
 		h.mu.Unlock()
 		if r, ended := h.outcome(ix.ID); ended {
 			return r, nil
 		}
+	}
+	if ix.Kind == proto.IxElicitation && !h.hasElicitationClient() {
+		return proto.Resolution{Dismiss: true}, nil
 	}
 	p := &pending{ix: ix, done: make(chan proto.Resolution, 1)}
 	h.mu.Lock()
@@ -677,12 +743,18 @@ func (h *Hub) recordEnd(id, status string, r *proto.Resolution) {
 
 // errNotPending: the interaction was answered, withdrawn or expired already.
 var errNotPending = errors.New("no longer pending")
+var errInvalidElicitation = errors.New("elicitation requires action accept, decline or cancel")
 
 // resolve answers an interaction from the app. A screen card acts right away and its error comes back (the
 // dialog changed: nothing pressed, a new card follows).
 func (h *Hub) resolve(id string, r proto.Resolution) error {
 	h.mu.Lock()
 	p := h.interactions[id]
+	if p != nil && p.ix.Kind == proto.IxElicitation && !r.Dismiss &&
+		r.Action != "accept" && r.Action != "decline" && r.Action != "cancel" {
+		h.mu.Unlock()
+		return errInvalidElicitation
+	}
 	if p != nil && r.Allow != nil && *r.Allow {
 		for _, f := range p.ix.Fields {
 			if !f.Optional && strings.TrimSpace(r.Values[f.Key]) == "" {
@@ -767,7 +839,7 @@ func (h *Hub) finished(p *pending) {
 	id := p.ix.ID
 	h.botInteractionDone(p.ix, "已结束")
 	h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
-	if m := h.byID[p.ix.MachineID]; m != nil {
+	if m := h.localMachine(p.ix.MachineID); m != nil {
 		h.broadcastSessions(m, h.decorated(m))
 	}
 	h.push.clear(id)
@@ -813,7 +885,7 @@ func (h *Hub) expireLoop(ctx context.Context) {
 		seen := map[string]bool{}
 		for _, p := range h.interactions {
 			if p.ix.Kind == proto.IxPlan && !seen[p.ix.MachineID] {
-				if m := h.byID[p.ix.MachineID]; m != nil {
+				if m := h.localMachine(p.ix.MachineID); m != nil {
 					plans = append(plans, m)
 					seen[p.ix.MachineID] = true
 				}
@@ -849,19 +921,27 @@ func (h *Hub) loadPhoneTools() {
 		return
 	}
 	h.mu.Lock()
-	h.phoneTools = tools
+	h.phoneTools = make(map[string]db.PhoneToolRegistration, len(tools))
+	for _, r := range tools {
+		h.phoneTools[r.DeviceID] = r
+	}
 	h.mu.Unlock()
 }
 
-func (h *Hub) setPhoneTools(tools []proto.Tool) {
+func (h *Hub) setPhoneTools(registration db.PhoneToolRegistration) {
 	h.mu.Lock()
-	h.phoneTools = tools
-	h.mu.Unlock()
+	defer h.mu.Unlock()
 	if h.store != nil {
-		if err := h.store.ReplacePhoneTools(context.Background(), tools); err != nil {
+		if err := h.store.ReplacePhoneTools(context.Background(), registration); err != nil {
 			h.logf("save phone tools: %v", err)
+			return
 		}
 	}
+	if h.phoneTools == nil {
+		h.phoneTools = map[string]db.PhoneToolRegistration{}
+	}
+	registration.UpdatedAt = time.Now()
+	h.phoneTools[registration.DeviceID] = registration
 }
 
 // mcpTools are the tools of an assistant conversation or an agent: the phone's, then those of the connectors that
@@ -869,7 +949,26 @@ func (h *Hub) setPhoneTools(tools []proto.Tool) {
 // only it gets (Feishu, GitHub…).
 func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 	h.mu.Lock()
-	tools := append([]proto.Tool(nil), h.phoneTools...)
+	ids := make([]string, 0, len(h.phoneTools))
+	for id := range h.phoneTools {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	var tools []proto.Tool
+	byName := map[string]int{}
+	for _, id := range ids {
+		for _, tool := range h.phoneTools[id].Tools {
+			if i, ok := byName[tool.Name]; ok {
+				if len([]rune(tool.Description)) > len([]rune(tools[i].Description)) ||
+					(tool.Description == tools[i].Description && len(tool.InputSchema) > len(tools[i].InputSchema)) {
+					tools[i] = tool
+				}
+			} else {
+				byName[tool.Name] = len(tools)
+				tools = append(tools, tool)
+			}
+		}
+	}
 	h.mu.Unlock()
 	ctx := context.Background()
 	tools = append(tools, h.connectors.ToolsFor(ctx, true)...)
@@ -901,9 +1000,9 @@ func (h *Hub) approve(ctx context.Context, machineID, tool, summary string, inpu
 }
 
 func (h *Hub) callPhone(ctx context.Context, name string, args json.RawMessage) proto.ToolResult {
-	c := h.phoneClient()
+	c := h.phoneClient(name)
 	if c == nil {
-		c = h.wakePhone(ctx)
+		c = h.wakePhone(ctx, name)
 	}
 	if c == nil {
 		return proto.TextResult("The user's iPhone is not connected and did not wake up in the background: ask them to open the Jarvis app, then retry.", true)
@@ -930,18 +1029,54 @@ func (h *Hub) callPhone(ctx context.Context, name string, args json.RawMessage) 
 }
 
 // wakePhone asks iOS to wake the app in the background (silent push) and waits briefly for it to connect.
-func (h *Hub) wakePhone(ctx context.Context) *client {
+func (h *Hub) wakePhone(ctx context.Context, name string) *client {
 	if !h.push.ready() {
 		return nil
 	}
 	h.mu.Lock()
-	recent := time.Since(h.wokeAt) < 30*time.Second
-	if !recent {
-		h.wokeAt = time.Now()
+	var candidates []db.PhoneToolRegistration
+	for _, r := range h.phoneTools {
+		if r.Platform != "" && r.Platform != "ios" {
+			continue
+		}
+		for _, tool := range r.Tools {
+			if tool.Name == name {
+				candidates = append(candidates, r)
+				break
+			}
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].UpdatedAt.Equal(candidates[j].UpdatedAt) {
+			return candidates[i].DeviceID < candidates[j].DeviceID
+		}
+		return candidates[i].UpdatedAt.After(candidates[j].UpdatedAt)
+	})
+	if h.wokeAt == nil {
+		h.wokeAt = map[string]time.Time{}
+	}
+	wakeIDs := map[string]bool{}
+	for _, r := range candidates {
+		if time.Since(h.wokeAt[r.DeviceID]) < 30*time.Second {
+			break
+		}
+		h.wokeAt[r.DeviceID] = time.Now()
+		wakeIDs[r.DeviceID] = true
+		if r.CredentialID != "" {
+			wakeIDs[r.CredentialID] = true
+		}
+		// Old push registrations have no credential binding until the app next registers.
+		if r.Platform == "" {
+			wakeIDs["legacy"] = true
+		}
+		break
 	}
 	h.mu.Unlock()
-	if !recent {
-		h.push.wake("tool")
+	if len(candidates) == 0 {
+		return nil
+	}
+	if len(wakeIDs) > 0 {
+		h.push.wakeDevices("tool", wakeIDs)
 	}
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -949,7 +1084,7 @@ func (h *Hub) wakePhone(ctx context.Context) *client {
 	t := time.NewTicker(300 * time.Millisecond)
 	defer t.Stop()
 	for {
-		if c := h.phoneClient(); c != nil {
+		if c := h.phoneClient(name); c != nil {
 			h.logf("phone woke up for a tool call in %d ms", time.Since(start).Milliseconds())
 			return c
 		}

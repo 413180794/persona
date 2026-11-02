@@ -65,6 +65,52 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   等的过程中 node 没了（部署重启 hub / node）→ hook 重连下一个 node，手机上的卡片不丢（`docs/protocol.md`「交互挺过重启」）。
   hook 进程被杀（用户在电脑上 Esc）→ node 发现 socket 断开 → 通知 hub 撤销交互。
 
+## MCP elicitation hooks
+
+2026-10-31 在本机只读核对：`claude --version` 输出 **2.1.306（Claude Code）**，安装包的 `package.json` 版本同为 `2.1.306`。这是本次实际运行的版本，和本文其他章节此前记录的版本分开看。
+
+本机原生可执行文件中包含 `Elicitation`、`ElicitationResult` 事件的输入／输出 schema、`executeElicitationHooks`／`executeElicitationResultHooks` 和 `parseElicitationHookOutput`。输入构造按 MCP 服务器名匹配 hook；`Elicitation` 在终端对话框前执行，`ElicitationResult` 在答案回传前执行。当前版本具备接入入口，无需升级后才开发；更早版本的支持下限未核实。
+
+复核方法：运行 `claude --version`，解析 `command -v claude` 指向的安装目录，读取包元数据和原生可执行文件中的上述字符串。核对时未修改安装包、Claude 配置或真实会话，也未发起模型请求。以下格式来自本机包内的 schema 和输入构造，**尚未通过真实 MCP 服务器触发 hook 验证**。
+
+`Elicitation` 的 stdin 格式：
+
+```json
+{
+  "hook_event_name": "Elicitation",
+  "session_id": "<session id>",
+  "transcript_path": "<transcript path>",
+  "cwd": "<project path>",
+  "permission_mode": "default",
+  "mcp_server_name": "example-mcp",
+  "message": "请选择",
+  "mode": "form",
+  "requested_schema": {
+    "type": "object",
+    "properties": {"choice": {"type": "string", "enum": ["yes", "no"]}},
+    "required": ["choice"]
+  }
+}
+```
+
+`mode` 可省略，省略按 `form` 处理。URL 模式用 `"mode":"url"`、`"url":"https://example.com/confirm"` 和 `"elicitation_id":"request_example"` 代替 `requested_schema`。注意：MCP 请求中的 `requestedSchema`／`elicitationId` 到 hook 输入后变为 `requested_schema`／`elicitation_id`。公共字段还可包含 `agent_id`、`agent_type` 和 `prompt_id`。
+
+hook 以退出码 0 向 stdout 输出：
+
+```json
+{"hookSpecificOutput":{"hookEventName":"Elicitation","action":"accept","content":{"choice":"yes"}}}
+```
+
+拒绝、取消分别用 `"action":"decline"`、`"action":"cancel"`，不带 `content`。URL 模式接受也不带 `content`。`ElicitationResult` 输入包含 `mcp_server_name`、可选 `elicitation_id`／`mode`、`action`、可选 `content`，输出使用同名 `hookEventName`；Jarvis 只注册前置 `Elicitation`，避免把已作答的请求再问一遍。Claude 对特定服务器可能限制 hook 代答，最终行为由 Claude 自身决定。
+
+Jarvis 的接入约定：
+
+- node 生成的普通会话和无头助手配置均注册 `Elicitation`，matcher 为 `*`。已运行的 Claude 需重启才能读到新注册项。
+- node 将原始 schema／URL 放进 `Interaction.elicitation`，透传 MCP 服务器名和子 Agent 来源。`tool_name`／`tool_use_id` 已有可选字段继续保留；只有上游提供时才透传。本机此事件的输入构造**不提供工具名、工具调用 ID 或配置来源**，不能从最近一次调用或服务器名猜。其他工具权限 hook 的 `mcp_server:{name,source}` 可以提供配置来源。
+- hub 只给 `client_hello.features` 包含 `elicitation` 的连接发新类型；握手前不发，首次声明后补发仍待处理的请求。没有兼容连接时立即返回 dismiss，hook 不输出，Claude 按原终端流程处理。
+- 手机的 `accept`／`decline`／`cancel` 分别原样回传；`dismiss` 表示交回终端，与 MCP 的 `cancel` 不同。超时和 node／hub 中断沿用现有 hook 的终端兜底、重连和交互恢复逻辑。请求 ID 按 hook 进程的 attempt 区分，同一工具多次提问不会合成一个请求。
+- Android 已声明能力并可接收两种模式；本工作树的 `ElicitationFields.kt` 仍只支持 form 提交，URL 的打开后继续门禁需由界面车道补齐，本车道未改 `feature/chat`。真实 MCP 往返、URL 授权完成和旧 iOS 的设备验收尚未进行。
+
 ## 多选提问的屏幕卡（2026-11-02，2.1.316 实测）
 
 用户自己用启动器起的 claude（比如 profile 目录下的 `--settings <profile>/settings.json`）不加载 Jarvis 的 hooks（上一节只注入 Jarvis 启动的会话），

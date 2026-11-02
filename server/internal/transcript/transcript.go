@@ -33,6 +33,8 @@ type entry struct {
 	Type             string          `json:"type"`
 	Subtype          string          `json:"subtype"`
 	UUID             string          `json:"uuid"`
+	ParentUUID       string          `json:"parentUuid"`
+	DurationMS       json.RawMessage `json:"durationMs"`
 	Timestamp        time.Time       `json:"timestamp"`
 	IsSidechain      bool            `json:"isSidechain"`
 	IsMeta           bool            `json:"isMeta"`
@@ -137,7 +139,9 @@ type Meta struct {
 	// started after it. Unlike !TurnOpen it is false when the lines say nothing (a tail read from mid-turn).
 	TurnClosed bool
 	// codexSeen: newer rollouts record an item both as event_msg/item_completed and in history_mutation.
-	codexSeen map[string]bool
+	codexSeen   map[string]bool
+	codexTurnID string
+	codexUserID string
 	// LastTurnWake: the latest turn was started by a background task reporting back, not by a message (no
 	// "finished" push for it).
 	LastTurnWake bool
@@ -327,6 +331,14 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	case "system":
 		var text string
 		switch e.Subtype {
+		case "turn_duration":
+			ms, ok := recordedMilliseconds(e.DurationMS)
+			if !ok || strings.TrimSpace(e.ParentUUID) == "" {
+				return nil
+			}
+			it := mk(0, "system", "turn_duration")
+			it.TurnDuration = &proto.TurnDuration{DurationMS: ms, Source: "claude_turn_duration", ParentUUID: e.ParentUUID}
+			return []proto.Item{it}
 		case "compact_boundary":
 			text = "上下文已压缩"
 		case "api_error":

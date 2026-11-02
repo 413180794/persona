@@ -187,6 +187,12 @@ type inboxReply struct {
 // document's comments, a removed post, a reply to the newest mail of the thread, a GitHub comment… — and files the item
 // as done.
 func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocChange) (InboxItem, error) {
+	return h.replyInboxAs(ctx, id, text, "", changes...)
+}
+
+// replyInboxAs is replyInbox with the app's own id for the send (client_id): a retry of the same request is sent once.
+// Empty: one derived from the item and the text.
+func (h *Hub) replyInboxAs(ctx context.Context, id, text, clientID string, changes ...DocChange) (InboxItem, error) {
 	h.inbox.mu.Lock()
 	it, ok := h.inbox.items[id]
 	var c InboxItem
@@ -223,7 +229,7 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 	once := r.(*inboxReply)
 	once.mu.Lock()
 	defer once.mu.Unlock()
-	req := inboxReplyReq{id: id, live: it, item: c, text: text, changes: changes, once: once}
+	req := inboxReplyReq{id: id, live: it, item: c, text: text, clientID: clientID, changes: changes, once: once}
 	var already bool
 	var err error
 	switch own := h.ownInboxFor(c); {

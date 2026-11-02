@@ -1,0 +1,1181 @@
+{
+  "schema_version": 1,
+  "domain": "lines",
+  "cases": [
+    {
+      "name": "fold_counts_tools_and_thoughts",
+      "description": "折叠条目按其代表的工具数和思考数计数，保留结束时间。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/FoldedWorkTests.swift: aFoldCountsWhatItStandsFor"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "go",
+            "ts": "2026-01-01T00:00:01Z"
+          },
+          {
+            "id": "fold:2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "fold",
+            "ts": "2026-01-01T00:00:02Z",
+            "fold": {
+              "items": 7,
+              "tools": 3,
+              "thoughts": 1,
+              "until": "2026-01-01T00:00:08Z",
+              "through_seq": 8,
+              "through_id": "8#0"
+            }
+          },
+          {
+            "id": "9#0",
+            "seq": 9,
+            "role": "assistant",
+            "kind": "text",
+            "text": "done",
+            "ts": "2026-01-01T00:00:09Z"
+          }
+        ],
+        "open_work": [
+          "w-1#0"
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "go",
+            "type": "user"
+          },
+          {
+            "contains_fold": true,
+            "duration_text": "8 秒",
+            "elapsed_seconds": 8,
+            "end": "2026-01-01T00:00:09Z",
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": true,
+            "start": "2026-01-01T00:00:01Z",
+            "steps": [
+              {
+                "id": "fold:2#0",
+                "items": 7,
+                "thoughts": 1,
+                "through_id": "8#0",
+                "through_seq": 8,
+                "tools": 3,
+                "type": "fold",
+                "until": "2026-01-01T00:00:08Z"
+              }
+            ],
+            "summary_full": [
+              "工具 3",
+              "思考 1"
+            ],
+            "summary_short": [
+              "工具 3"
+            ],
+            "thoughts": 1,
+            "tools": 3,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "first": true,
+            "group_id": "w-1#0",
+            "id": "w-1#0/fold:2#0",
+            "is_input": false,
+            "separator_before": false,
+            "step": {
+              "id": "fold:2#0",
+              "items": 7,
+              "thoughts": 1,
+              "through_id": "8#0",
+              "through_seq": 8,
+              "tools": 3,
+              "type": "fold",
+              "until": "2026-01-01T00:00:08Z"
+            },
+            "type": "work_step"
+          },
+          {
+            "count": 4,
+            "group_id": "w-1#0",
+            "id": "w-1#0-end",
+            "is_input": false,
+            "separator_before": true,
+            "type": "work_end"
+          },
+          {
+            "id": "9#0",
+            "is_input": false,
+            "text": "done",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "9#0",
+            "end": "2026-01-01T00:00:09Z",
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "tools-fold:2#0",
+              "9#0"
+            ],
+            "process_ids": [
+              "tools-fold:2#0"
+            ],
+            "start": "2026-01-01T00:00:01Z",
+            "tail_ids": [],
+            "thought_count": 1,
+            "tool_count": 3,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "from_test": "aFoldCountsWhatItStandsFor"
+    },
+    {
+      "name": "fold_replaces_extends_and_unfolds",
+      "description": "重发折叠保持幂等，扩大范围替换旧步骤，展开恢复原顺序。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/FoldedWorkTests.swift: aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "go",
+            "ts": "2026-01-01T00:00:01Z"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "thinking",
+            "text": "plan",
+            "ts": "2026-01-01T00:00:02Z"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "a",
+            "tool_name": "Bash",
+            "ts": "2026-01-01T00:00:03Z"
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "user",
+            "kind": "tool_result",
+            "text": "ok",
+            "tool_use_id": "a",
+            "ts": "2026-01-01T00:00:04Z"
+          },
+          {
+            "id": "5#0",
+            "seq": 5,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "b",
+            "tool_name": "Bash",
+            "ts": "2026-01-01T00:00:05Z"
+          },
+          {
+            "id": "6#0",
+            "seq": 6,
+            "role": "user",
+            "kind": "tool_result",
+            "text": "ok",
+            "tool_use_id": "b",
+            "ts": "2026-01-01T00:00:06Z"
+          },
+          {
+            "id": "7#0",
+            "seq": 7,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "c",
+            "tool_name": "Bash",
+            "ts": "2026-01-01T00:00:07Z"
+          },
+          {
+            "id": "8#0",
+            "seq": 8,
+            "role": "user",
+            "kind": "tool_result",
+            "text": "ok",
+            "tool_use_id": "c",
+            "ts": "2026-01-01T00:00:08Z"
+          },
+          {
+            "id": "20#0",
+            "seq": 20,
+            "role": "assistant",
+            "kind": "text",
+            "text": "done",
+            "ts": "2026-01-01T00:00:20Z"
+          }
+        ],
+        "operations": [
+          {
+            "op": "merge",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "user",
+                "kind": "text",
+                "text": "go",
+                "ts": "2026-01-01T00:00:01Z"
+              },
+              {
+                "id": "fold:2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "fold",
+                "ts": "2026-01-01T00:00:02Z",
+                "fold": {
+                  "items": 7,
+                  "tools": 3,
+                  "thoughts": 1,
+                  "until": "2026-01-01T00:00:08Z",
+                  "through_seq": 8,
+                  "through_id": "8#0"
+                }
+              },
+              {
+                "id": "20#0",
+                "seq": 20,
+                "role": "assistant",
+                "kind": "text",
+                "text": "done",
+                "ts": "2026-01-01T00:00:20Z"
+              }
+            ]
+          },
+          {
+            "op": "merge",
+            "items": [
+              {
+                "id": "fold:2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "fold",
+                "ts": "2026-01-01T00:00:02Z",
+                "fold": {
+                  "items": 7,
+                  "tools": 3,
+                  "thoughts": 1,
+                  "until": "2026-01-01T00:00:08Z",
+                  "through_seq": 8,
+                  "through_id": "8#0"
+                }
+              }
+            ]
+          },
+          {
+            "op": "merge",
+            "items": [
+              {
+                "id": "9#0",
+                "seq": 9,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "d",
+                "tool_name": "Bash",
+                "ts": "2026-01-01T00:00:09Z"
+              },
+              {
+                "id": "10#0",
+                "seq": 10,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "x",
+                "tool_use_id": "d",
+                "ts": "2026-01-01T00:00:10Z"
+              }
+            ]
+          },
+          {
+            "op": "merge",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "user",
+                "kind": "text",
+                "text": "go",
+                "ts": "2026-01-01T00:00:01Z"
+              },
+              {
+                "id": "fold:2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "fold",
+                "ts": "2026-01-01T00:00:02Z",
+                "fold": {
+                  "items": 9,
+                  "tools": 4,
+                  "thoughts": 1,
+                  "until": "2026-01-01T00:00:10Z",
+                  "through_seq": 10,
+                  "through_id": "10#0"
+                }
+              },
+              {
+                "id": "20#0",
+                "seq": 20,
+                "role": "assistant",
+                "kind": "text",
+                "text": "done",
+                "ts": "2026-01-01T00:00:20Z"
+              }
+            ]
+          },
+          {
+            "op": "unfold",
+            "fold_id": "fold:2#0",
+            "items": [
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "thinking",
+                "text": "plan",
+                "ts": "2026-01-01T00:00:02Z"
+              },
+              {
+                "id": "3#0",
+                "seq": 3,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "a",
+                "tool_name": "Bash",
+                "ts": "2026-01-01T00:00:03Z"
+              },
+              {
+                "id": "4#0",
+                "seq": 4,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "ok",
+                "tool_use_id": "a",
+                "ts": "2026-01-01T00:00:04Z"
+              },
+              {
+                "id": "5#0",
+                "seq": 5,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "b",
+                "tool_name": "Bash",
+                "ts": "2026-01-01T00:00:05Z"
+              },
+              {
+                "id": "6#0",
+                "seq": 6,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "ok",
+                "tool_use_id": "b",
+                "ts": "2026-01-01T00:00:06Z"
+              },
+              {
+                "id": "7#0",
+                "seq": 7,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "c",
+                "tool_name": "Bash",
+                "ts": "2026-01-01T00:00:07Z"
+              },
+              {
+                "id": "8#0",
+                "seq": 8,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "ok",
+                "tool_use_id": "c",
+                "ts": "2026-01-01T00:00:08Z"
+              },
+              {
+                "id": "9#0",
+                "seq": 9,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "d",
+                "tool_name": "Bash",
+                "ts": "2026-01-01T00:00:09Z"
+              },
+              {
+                "id": "10#0",
+                "seq": 10,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "x",
+                "tool_use_id": "d",
+                "ts": "2026-01-01T00:00:10Z"
+              }
+            ],
+            "open_work": [
+              "w-1#0"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "checkpoints": [
+          {
+            "item_ids": [
+              "1#0",
+              "fold:2#0",
+              "20#0"
+            ],
+            "lines": [
+              {
+                "id": "1#0",
+                "is_input": true,
+                "text": "go",
+                "type": "user"
+              },
+              {
+                "contains_fold": true,
+                "duration_text": "19 秒",
+                "elapsed_seconds": 19,
+                "end": "2026-01-01T00:00:20Z",
+                "id": "w-1#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": false,
+                "start": "2026-01-01T00:00:01Z",
+                "steps": [
+                  {
+                    "id": "fold:2#0",
+                    "items": 7,
+                    "thoughts": 1,
+                    "through_id": "8#0",
+                    "through_seq": 8,
+                    "tools": 3,
+                    "type": "fold",
+                    "until": "2026-01-01T00:00:08Z"
+                  }
+                ],
+                "summary_full": [
+                  "工具 3",
+                  "思考 1"
+                ],
+                "summary_short": [
+                  "工具 3"
+                ],
+                "thoughts": 1,
+                "tools": 3,
+                "type": "work",
+                "unresolved_tools": 0
+              },
+              {
+                "id": "20#0",
+                "is_input": false,
+                "text": "done",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "20#0",
+                "end": "2026-01-01T00:00:20Z",
+                "id": "1#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "1#0",
+                  "tools-fold:2#0",
+                  "20#0"
+                ],
+                "process_ids": [
+                  "tools-fold:2#0"
+                ],
+                "start": "2026-01-01T00:00:01Z",
+                "tail_ids": [],
+                "thought_count": 1,
+                "tool_count": 3,
+                "trailing_ids": [],
+                "user_ids": [
+                  "1#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          },
+          {
+            "item_ids": [
+              "1#0",
+              "fold:2#0",
+              "20#0"
+            ],
+            "lines": [
+              {
+                "id": "1#0",
+                "is_input": true,
+                "text": "go",
+                "type": "user"
+              },
+              {
+                "contains_fold": true,
+                "duration_text": "19 秒",
+                "elapsed_seconds": 19,
+                "end": "2026-01-01T00:00:20Z",
+                "id": "w-1#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": false,
+                "start": "2026-01-01T00:00:01Z",
+                "steps": [
+                  {
+                    "id": "fold:2#0",
+                    "items": 7,
+                    "thoughts": 1,
+                    "through_id": "8#0",
+                    "through_seq": 8,
+                    "tools": 3,
+                    "type": "fold",
+                    "until": "2026-01-01T00:00:08Z"
+                  }
+                ],
+                "summary_full": [
+                  "工具 3",
+                  "思考 1"
+                ],
+                "summary_short": [
+                  "工具 3"
+                ],
+                "thoughts": 1,
+                "tools": 3,
+                "type": "work",
+                "unresolved_tools": 0
+              },
+              {
+                "id": "20#0",
+                "is_input": false,
+                "text": "done",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "20#0",
+                "end": "2026-01-01T00:00:20Z",
+                "id": "1#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "1#0",
+                  "tools-fold:2#0",
+                  "20#0"
+                ],
+                "process_ids": [
+                  "tools-fold:2#0"
+                ],
+                "start": "2026-01-01T00:00:01Z",
+                "tail_ids": [],
+                "thought_count": 1,
+                "tool_count": 3,
+                "trailing_ids": [],
+                "user_ids": [
+                  "1#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          },
+          {
+            "item_ids": [
+              "1#0",
+              "fold:2#0",
+              "9#0",
+              "10#0",
+              "20#0"
+            ],
+            "lines": [
+              {
+                "id": "1#0",
+                "is_input": true,
+                "text": "go",
+                "type": "user"
+              },
+              {
+                "contains_fold": true,
+                "duration_text": "19 秒",
+                "elapsed_seconds": 19,
+                "end": "2026-01-01T00:00:20Z",
+                "id": "w-1#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": false,
+                "start": "2026-01-01T00:00:01Z",
+                "steps": [
+                  {
+                    "id": "fold:2#0",
+                    "items": 7,
+                    "thoughts": 1,
+                    "through_id": "8#0",
+                    "through_seq": 8,
+                    "tools": 3,
+                    "type": "fold",
+                    "until": "2026-01-01T00:00:08Z"
+                  },
+                  {
+                    "call_id": "d",
+                    "failed": false,
+                    "id": "9#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": "10#0",
+                    "result_text": "x",
+                    "running": false,
+                    "type": "tool"
+                  }
+                ],
+                "summary_full": [
+                  "工具 4",
+                  "思考 1"
+                ],
+                "summary_short": [
+                  "工具 4"
+                ],
+                "thoughts": 1,
+                "tools": 4,
+                "type": "work",
+                "unresolved_tools": 0
+              },
+              {
+                "id": "20#0",
+                "is_input": false,
+                "text": "done",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "20#0",
+                "end": "2026-01-01T00:00:20Z",
+                "id": "1#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "1#0",
+                  "tools-fold:2#0",
+                  "20#0"
+                ],
+                "process_ids": [
+                  "tools-fold:2#0"
+                ],
+                "start": "2026-01-01T00:00:01Z",
+                "tail_ids": [],
+                "thought_count": 1,
+                "tool_count": 4,
+                "trailing_ids": [],
+                "user_ids": [
+                  "1#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          },
+          {
+            "item_ids": [
+              "1#0",
+              "fold:2#0",
+              "20#0"
+            ],
+            "lines": [
+              {
+                "id": "1#0",
+                "is_input": true,
+                "text": "go",
+                "type": "user"
+              },
+              {
+                "contains_fold": true,
+                "duration_text": "19 秒",
+                "elapsed_seconds": 19,
+                "end": "2026-01-01T00:00:20Z",
+                "id": "w-1#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": false,
+                "start": "2026-01-01T00:00:01Z",
+                "steps": [
+                  {
+                    "id": "fold:2#0",
+                    "items": 9,
+                    "thoughts": 1,
+                    "through_id": "10#0",
+                    "through_seq": 10,
+                    "tools": 4,
+                    "type": "fold",
+                    "until": "2026-01-01T00:00:10Z"
+                  }
+                ],
+                "summary_full": [
+                  "工具 4",
+                  "思考 1"
+                ],
+                "summary_short": [
+                  "工具 4"
+                ],
+                "thoughts": 1,
+                "tools": 4,
+                "type": "work",
+                "unresolved_tools": 0
+              },
+              {
+                "id": "20#0",
+                "is_input": false,
+                "text": "done",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "20#0",
+                "end": "2026-01-01T00:00:20Z",
+                "id": "1#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "1#0",
+                  "tools-fold:2#0",
+                  "20#0"
+                ],
+                "process_ids": [
+                  "tools-fold:2#0"
+                ],
+                "start": "2026-01-01T00:00:01Z",
+                "tail_ids": [],
+                "thought_count": 1,
+                "tool_count": 4,
+                "trailing_ids": [],
+                "user_ids": [
+                  "1#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          },
+          {
+            "item_ids": [
+              "1#0",
+              "2#0",
+              "3#0",
+              "4#0",
+              "5#0",
+              "6#0",
+              "7#0",
+              "8#0",
+              "9#0",
+              "10#0",
+              "20#0"
+            ],
+            "lines": [
+              {
+                "id": "1#0",
+                "is_input": true,
+                "text": "go",
+                "type": "user"
+              },
+              {
+                "contains_fold": false,
+                "duration_text": "19 秒",
+                "elapsed_seconds": 19,
+                "end": "2026-01-01T00:00:20Z",
+                "id": "w-1#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": true,
+                "start": "2026-01-01T00:00:01Z",
+                "steps": [
+                  {
+                    "id": "2#0",
+                    "text": "plan",
+                    "type": "thinking"
+                  },
+                  {
+                    "call_id": "a",
+                    "failed": false,
+                    "id": "3#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": "4#0",
+                    "result_text": "ok",
+                    "running": false,
+                    "type": "tool"
+                  },
+                  {
+                    "call_id": "b",
+                    "failed": false,
+                    "id": "5#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": "6#0",
+                    "result_text": "ok",
+                    "running": false,
+                    "type": "tool"
+                  },
+                  {
+                    "call_id": "c",
+                    "failed": false,
+                    "id": "7#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": "8#0",
+                    "result_text": "ok",
+                    "running": false,
+                    "type": "tool"
+                  },
+                  {
+                    "call_id": "d",
+                    "failed": false,
+                    "id": "9#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": "10#0",
+                    "result_text": "x",
+                    "running": false,
+                    "type": "tool"
+                  }
+                ],
+                "summary_full": [
+                  "工具 4",
+                  "思考 1"
+                ],
+                "summary_short": [
+                  "工具 4"
+                ],
+                "thoughts": 1,
+                "tools": 4,
+                "type": "work",
+                "unresolved_tools": 0
+              },
+              {
+                "first": true,
+                "group_id": "w-1#0",
+                "id": "w-1#0/2#0",
+                "is_input": false,
+                "separator_before": false,
+                "step": {
+                  "id": "2#0",
+                  "text": "plan",
+                  "type": "thinking"
+                },
+                "type": "work_step"
+              },
+              {
+                "first": false,
+                "group_id": "w-1#0",
+                "id": "w-1#0/3#0",
+                "is_input": false,
+                "separator_before": true,
+                "step": {
+                  "call_id": "a",
+                  "failed": false,
+                  "id": "3#0",
+                  "image_count": 0,
+                  "name": "Bash",
+                  "result_id": "4#0",
+                  "result_text": "ok",
+                  "running": false,
+                  "type": "tool"
+                },
+                "type": "work_step"
+              },
+              {
+                "first": false,
+                "group_id": "w-1#0",
+                "id": "w-1#0/5#0",
+                "is_input": false,
+                "separator_before": true,
+                "step": {
+                  "call_id": "b",
+                  "failed": false,
+                  "id": "5#0",
+                  "image_count": 0,
+                  "name": "Bash",
+                  "result_id": "6#0",
+                  "result_text": "ok",
+                  "running": false,
+                  "type": "tool"
+                },
+                "type": "work_step"
+              },
+              {
+                "first": false,
+                "group_id": "w-1#0",
+                "id": "w-1#0/7#0",
+                "is_input": false,
+                "separator_before": true,
+                "step": {
+                  "call_id": "c",
+                  "failed": false,
+                  "id": "7#0",
+                  "image_count": 0,
+                  "name": "Bash",
+                  "result_id": "8#0",
+                  "result_text": "ok",
+                  "running": false,
+                  "type": "tool"
+                },
+                "type": "work_step"
+              },
+              {
+                "first": false,
+                "group_id": "w-1#0",
+                "id": "w-1#0/9#0",
+                "is_input": false,
+                "separator_before": true,
+                "step": {
+                  "call_id": "d",
+                  "failed": false,
+                  "id": "9#0",
+                  "image_count": 0,
+                  "name": "Bash",
+                  "result_id": "10#0",
+                  "result_text": "x",
+                  "running": false,
+                  "type": "tool"
+                },
+                "type": "work_step"
+              },
+              {
+                "count": 5,
+                "group_id": "w-1#0",
+                "id": "w-1#0-end",
+                "is_input": false,
+                "separator_before": true,
+                "type": "work_end"
+              },
+              {
+                "id": "20#0",
+                "is_input": false,
+                "text": "done",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "20#0",
+                "end": "2026-01-01T00:00:20Z",
+                "id": "1#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "1#0",
+                  "2#0",
+                  "tools-3#0",
+                  "20#0"
+                ],
+                "process_ids": [
+                  "2#0",
+                  "tools-3#0"
+                ],
+                "start": "2026-01-01T00:00:01Z",
+                "tail_ids": [],
+                "thought_count": 1,
+                "tool_count": 4,
+                "trailing_ids": [],
+                "user_ids": [
+                  "1#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "from_test": "aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack"
+    },
+    {
+      "name": "outside_fold_tool_keeps_late_result",
+      "description": "折叠范围外的调用在结果补到后仍配成完整工具卡。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/FoldedWorkTests.swift: stepsOutsideAFoldStay"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "go",
+            "ts": "2026-01-01T00:00:01Z"
+          },
+          {
+            "id": "fold:2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "fold",
+            "ts": "2026-01-01T00:00:02Z",
+            "fold": {
+              "items": 5,
+              "tools": 2,
+              "thoughts": 1,
+              "until": "2026-01-01T00:00:06Z",
+              "through_seq": 6,
+              "through_id": "6#0"
+            }
+          },
+          {
+            "id": "7#0",
+            "seq": 7,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "c",
+            "tool_name": "Bash",
+            "ts": "2026-01-01T00:00:07Z"
+          }
+        ],
+        "operations": [
+          {
+            "op": "merge",
+            "items": [
+              {
+                "id": "8#0",
+                "seq": 8,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "ok",
+                "tool_use_id": "c",
+                "ts": "2026-01-01T00:00:08Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "checkpoints": [
+          {
+            "item_ids": [
+              "1#0",
+              "fold:2#0",
+              "7#0",
+              "8#0"
+            ],
+            "lines": [
+              {
+                "id": "1#0",
+                "is_input": true,
+                "text": "go",
+                "type": "user"
+              },
+              {
+                "contains_fold": true,
+                "duration_text": "7 秒",
+                "elapsed_seconds": 7,
+                "end": "2026-01-01T00:00:08Z",
+                "id": "w-1#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": false,
+                "start": "2026-01-01T00:00:01Z",
+                "steps": [
+                  {
+                    "id": "fold:2#0",
+                    "items": 5,
+                    "thoughts": 1,
+                    "through_id": "6#0",
+                    "through_seq": 6,
+                    "tools": 2,
+                    "type": "fold",
+                    "until": "2026-01-01T00:00:06Z"
+                  },
+                  {
+                    "call_id": "c",
+                    "failed": false,
+                    "id": "7#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": "8#0",
+                    "result_text": "ok",
+                    "running": false,
+                    "type": "tool"
+                  }
+                ],
+                "summary_full": [
+                  "工具 3",
+                  "思考 1"
+                ],
+                "summary_short": [
+                  "工具 3"
+                ],
+                "thoughts": 1,
+                "tools": 3,
+                "type": "work",
+                "unresolved_tools": 0
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": null,
+                "end": "2026-01-01T00:00:08Z",
+                "id": "1#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "1#0",
+                  "tools-fold:2#0"
+                ],
+                "process_ids": [
+                  "tools-fold:2#0"
+                ],
+                "start": "2026-01-01T00:00:01Z",
+                "tail_ids": [],
+                "thought_count": 1,
+                "tool_count": 3,
+                "trailing_ids": [],
+                "user_ids": [
+                  "1#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "from_test": "stepsOutsideAFoldStay"
+    }
+  ]
+}

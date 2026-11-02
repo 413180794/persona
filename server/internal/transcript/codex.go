@@ -27,7 +27,9 @@ type codexLine struct {
 }
 
 type codexPayload struct {
-	Type string `json:"type"`
+	Type       string          `json:"type"`
+	TurnID     string          `json:"turn_id"`
+	DurationMS json.RawMessage `json:"duration_ms"`
 	// session_meta
 	ID         string `json:"id"`
 	Cwd        string `json:"cwd"`
@@ -178,10 +180,17 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 		return nil
 	case "task_started":
 		meta.TurnOpen, meta.TurnClosed = true, false
+		meta.codexTurnID, meta.codexUserID = p.TurnID, ""
 		return nil
 	case "task_complete":
 		meta.TurnOpen, meta.TurnClosed = false, true
-		return nil
+		ms, ok := recordedMilliseconds(p.DurationMS)
+		if !ok || strings.TrimSpace(p.TurnID) == "" || (meta.codexTurnID != "" && meta.codexTurnID != p.TurnID) {
+			return nil
+		}
+		it := mk(0, "", "system", "turn_duration")
+		it.TurnDuration = &proto.TurnDuration{DurationMS: ms, Source: "codex_task_complete", TurnID: p.TurnID, UserItemID: meta.codexUserID}
+		return []proto.Item{it}
 	case "turn_aborted":
 		meta.TurnOpen, meta.TurnClosed = false, true
 		it := mk(0, "", "system", proto.KindNotice)
@@ -234,6 +243,9 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 		}
 		u := mk(0, it.ID, "user", proto.KindText)
 		u.Text = clip(text)
+		if meta.codexUserID == "" {
+			meta.codexUserID = u.ID
+		}
 		if meta.FirstUser == "" {
 			meta.FirstUser = u.Text
 		}

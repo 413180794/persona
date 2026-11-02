@@ -2,11 +2,14 @@ package prompts
 
 import "time"
 
-// AssistantMachine is one computer in the assistant's CLAUDE.md.
+// AssistantMachine is one computer in the assistant's CLAUDE.md, as seen from where the assistant runs.
 type AssistantMachine struct {
 	Name, ID string
 	Local    bool   // the machine the assistant runs on
 	SSHHost  string // "" uses ID
+	// AgentsOnly: no command reaches it from where the assistant runs (the ssh aliases are the hub machine's, and a
+	// link or tailcat machine has none), only the Agents tools do.
+	AgentsOnly bool
 }
 
 // AssistantClaudeMD is the assistant directory's CLAUDE.md (assistant/claude_md).

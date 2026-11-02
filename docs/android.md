@@ -1,282 +1,323 @@
 # Android App
 
 `android/`：Kotlin + Jetpack Compose 的 Android 客户端，连同一个 hub，接口和 iOS 一样（`docs/protocol.md`），服务端不用改。
-minSdk 26（Android 8），targetSdk 34。界面中文。
+minSdk 31（Android 12），compileSdk 37，targetSdk 36。界面中文。
 
 一句话描述：在 Android 手机上看各台电脑终端引擎（herdr、Herdr App 或 Orca，每台电脑选一个，`docs/engines.md`）里的 Agent、发消息、回答提问 / 审批计划 / 授权、按终端对话框的选项，
 不需要任何推送账号。
 
-## 现在有什么
+## 当前实现
 
-| 页面 | 内容 |
+本页按 2026-10-31 的提交 `f3a13fdb7672927197cb8ac38bccb9c65671677b` 核对。当前是多模块重设计版本；逐项状态见 [Android P0 状态](redesign/android-p0-status.md)，旧版验证记录留在后文，不能代替本版验收。
+
+| 入口 | 当前实现 |
 | --- | --- |
-| 配对 | 欢迎页（`PairScreen`，照 iOS 的欢迎 / 配对页）：Jarvis 的标志、名字和一句话，「扫码配对」大按钮和要在 hub 机器上跑的命令，下面「或者手动填写」一组地址 / token 输入框和「连接」；hub 不认这台手机时上面一张说明卡片。扫 `jarvisd hub pair` 的二维码（`jarvis://pair?url=…&token=…`，也能从链接打开），或手动填地址和 token；配对后立刻 `POST /api/v1/auth/tokens`（`kind: phone`）换这台手机自己的 token，旧 hub 没有这个接口时继续用配对 token；配对后先问一步「hub 所在的电脑用哪个引擎」（下面「引擎」） |
-| 外壳 | 和 iPhone 的新外壳一样（`docs/ios.md`「新外壳」，`ui/shell/`）：没有底部 tab 栏；顶栏是 ☰（收件箱有「需要你」时带红点）· 「助手 \| Agents」切换（Agents 上是等你的 Agent 数）· 右边的圆按钮（助手：新对话，新对话页上置灰；Agents：新建会话），浮在页面上、下面一层渐隐的雾。两页都一直建着（`ShellLayer`，切换不丢位置），藏起来的一页透明、不接触摸。再点一下选中的「助手」弹出知识库 / 认识 Jarvis / 语音对话 / 拷贝会话 ID；再点「Agents」弹出列表选项（分组、全部折叠 / 展开、机器、机器监控）。侧边栏（`Sidebar`）：页面在根部时任意位置横着拖就拉出来（页面成一张圆角卡片被推到右边，侧边栏贴着卡片左边一起走），点卡片、往左拖或返回键关上；内容是大字「Jarvis」和搜索、认识 Jarvis / 收件箱（带数）/ 定时任务 / 知识库 / 机器，然后对话历史（置顶：主对话在最前，长按可置顶别的，存在本机 `ui` 的 `assistant.pinned`；最近：先显示 30 个），底部「新对话」药丸 + 设置。收件箱、定时任务、知识库、机器、空间页从右边推进来；设置从下面升起铺满，右上角 ✕；对话页盖在最上面。Agents 页按返回键回到助手页。弱网时顶栏下面一个小药丸（等待网络 / 连接中…） |
-| Agents | 搜索框和快速筛选常驻在顶栏下（不随列表滚动）。筛选「全部 / 需要你 / 未读 / 工作中」带状态色圆点和数量。下面依次是「需要你处理」卡片（每件一行：红色的类型图标、计划等你审批 / Claude 在问你…、会话 · 机器、问题或计划标题；单选提问的选项直接是按钮，点了就答）、置顶的 Agent（只出现一次）、分组，最后是最近 7 天的 offline 会话；不含助手的对话；下拉刷新。分组、机器筛选、折叠在外壳的列表选项里改，记在手机上（`AgentsListOptions`，排序规则在 `data/Grouping.kt` 并有单测）。<br>按项目：置顶的空间 → 其他忙的空间 → 屏蔽但在跑的空间（弱化）→「空闲的空间」（默认折叠）；空间标题是小号灰字的名字、置顶图标、机器、各状态的彩色圆点和数，折叠箭头和 ⋯；空间里的 Agent 是一张圆角卡片，忙的、置顶的、待唤醒的在上，空闲的收成卡片最后一行「还有 N 个空闲」。<br>按状态：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看（「已看」默认折叠）。<br>按机器：按 hub 配置的顺序，标题带在线状态和状态计数。<br>每一行（`AgentRow`，iOS `SlotRow`）：状态圆点（需要你会呼吸、工作中带一圈环）、标题（需要你 / 完成未看加粗）和时间、最新一句、元信息「需要你 · Claude · 空间 › tab · 机器」（只有需要你写成红字）和循环 / 后台 / 子 Agent 的小标签。关闭在跑的 Agent 有三个入口，和 iOS 一样、同一个确认（`CloseAgentDialog`）：长按菜单的「关闭 Agent…」、行上左滑出红色「关闭」（松手后行弹回、弹出确认）、对话页 ⋯ 的「关闭 Agent…」；Agent 运行时（DSH 等）里只读的会话长按有「实时接入」，元信息那行写它从哪来 |
-| 空间操作 | 空间标题右边的 ⋯：打开空间、置顶空间、屏蔽这个空间（其中的 Agent 可以单独开启通知）、重命名空间（改 herdr workspace 名，hub 把置顶 / 屏蔽一起改到新名字上） |
-| 空间页 | 一个 herdr workspace 里在跑的 Agent，两列卡片按标签页顺序排；最后一张「在这个空间开新标签」，在同一个 workspace、同一个目录里起 claude（`POST /api/v1/sessions` 带 `workspace_id`）。右上角菜单多一个「全部标为已读」。从空间页打开的对话，返回时回到空间页 |
-| 搜索和筛选 | 右上角搜索（标题、目录、空间名、标签页名、最后一句，不分大小写）；快捷筛选「全部 / 需要你 / 未读 / 工作中」带数量，筛出来的 Agent 看过以后也留在原位，重新点筛选才刷新（和 iOS 一样）；「全部电脑 / 某一台」只看一台电脑，记住选择；完成未看的不止一个时有「全部标为已读」。搜索和筛选时所有折叠都展开 |
-| 对话 | 顶栏照 iOS：左边圆形返回，中间一个胶囊「● 空间 › tab」（状态圆点，需要你 / 工作中写出来），点了弹出「会话信息」，右边 ⋯（终端、文件、Git、拷贝目录、会话信息）。输入框：左边圆形的「+」，胶囊输入框（工作中是「补充说明（会排队发送）」），右边发送；没东西可发时那个位置是麦克风（听写），Agent 工作中、没打字时是红色的中断（麦克风在它左边）。历史分页（`turns=2`，滚到顶自动往前翻）、实时 items（WebSocket `subscribe`，按「items 的连续性」补洞）、图片按需取（`lazy_images`，内存 + 磁盘缓存）、Markdown；离开最新处时右下角「回到最新」；发出的消息马上作为气泡画出来、后台发送（`chat/Outbox.kt`，和 iOS `Outbox` 一样）：hub 连不上时不发请求，气泡带时钟和「连上后自动发送」，存在手机上（`files/outbox.json`，App 被杀也还在），连上并补完 backlog 后按写的顺序发出，每条始终同一个 `client_msg_id`（node 不会打两遍）；transcript 里出现了就收起气泡；点时钟可以「现在重试 / 不发了」。被拒（`dialog_open` / `input_draft`）时弹一次窗说明，单行草稿可以「清空并发送」，气泡上留红色感叹号（清空并发送 / 重发 / 删除）；`delivered: unknown` 说清可能已经送到，不自动重发。连接状态不弹横幅，标题下面那行换成「小转圈 + 等待网络 / 连接中… / 更新中…」（`chat/ConnectionWatch.kt`，`docs/ios.md`「连接状态」：没网 / 没连上或 ping 5 秒没回 / 刚连上在补拉打开着的对话，最多 8 秒；有问题持续 1.5 秒才显示，好了立刻换回）；中断（Esc）；Claude 给的下一条建议点一下填进输入框 |
-| 会话信息 | 点对话页标题或 ⋯ 菜单「会话信息」（iOS `SessionInfoSheet`，`GET …/info`）：运行（模型、启动器、Claude Code 版本、权限、思考强度）、用量（上下文、压缩次数、轮数、共生成、开始时间）、位置（目录、分支），「拷贝 session id」「拷贝恢复命令」（`cd <目录> && claude --resume <id>`，Codex / TRAEX 是各自的 resume） |
-| 语音输入 | 没东西可发时发送键的位置是麦克风（iOS 的听写；助手页 ChatGPT 式的输入框里麦克风常驻）：打开手机自带的语音输入界面（`RecognizerIntent`，有哪家识别就用哪家，小米的、Google 的都行），识别出的字放到输入框末尾，改完再发；手机上没有语音识别时不显示这个按钮。不需要 App 自己的录音权限 |
-| 快捷命令 | 和 iOS 同一组（`SlashCommand`）：「+」菜单里的 继续 / 压缩上下文 /compact / 查看上下文 /context / 提交并推送 / 汇报进展，点了直接发；输入框里打「/」在上方列出来，接着打字会筛（`/c` 只剩 /compact、/context、/clear），点一个把它的消息放进输入框。「清空上下文 /clear」先确认，再等窗格里出现新会话、跳过去（`Hub.clearContext`）；只给 herdr 里的 Claude（Jarvis、Codex / TRAEX 没有） |
-| API 报错卡片 | Claude Code 放弃时写的「API Error: 529 …」（回复）和 hub 重试时的「API 错误：…」（提示）画成一张卡（iOS `APIErrorCard`，`ui/chat/ApiError.kt`）：白话原因（过载、限流、登录过期、超时……，和 iOS 同一套文案）、状态码、「临时故障 / 要处理」、「连续 N 次」（同一个错误中间只隔着「继续」就合成一张）；点开是请求 ID、Session、时间、原文和「复制原文」。错误是最后一条、Agent 没在工作、重试有用（不是登录、参数错）时有「重试」，发一句「继续」 |
-| 排队中的消息 | Claude 工作时发的、还没被取走的消息列在对话最下面（iOS `QueueStrip`）：编号、每条点开「撤回编辑 / 拷贝 / 删除」。撤回和删除走 `POST …/queue {keep}`：node 把排队的全部拉回、清掉，再把要留的按顺序放回去；撤回的那条放进输入框（已有草稿就接在后面） |
-| 权限模式、思考强度和模型 | 对话页输入框上方的标签（iOS `SessionModeBar`）：当前的权限模式、思考强度，点开换（`POST …/modes`），在跑的会话不能选「全部放行」（只能新开时选），是别的模式时照样显示出来；Codex / TRAEX 的会话不显示。Jarvis 的对话也有，改的是它下一次请求起的值。herdr 里的 Claude 还有第三个标签「默认 / Opus / Sonnet / Haiku」（iOS `claudeModels`），点了发 `/model <别名>`；会话的模型名里没有这三个词时显示「默认」。Claude Code 会把选的模型存成新会话的默认（`~/.claude/settings.json` 的 `model`），对话太长时还会先问要不要换（在电脑上的对话框里，手机上会变成待处理的卡片） |
-| 交互卡片 | 和 iOS `InteractionPanel` 一样固定在输入框上方（最多半屏，打字时四分之一屏，可以滚），点标题收成一行（「Claude 在问你 · 问题」），⋯ 里「交回电脑处理」（`dismiss`）。提问：选项在一个分组框里，带编号、选中打勾、「推荐」标签，最后一行「其他回答…」；一个单选问题点一下就答，几个问题时「标题 · 1/2」翻页，上一题 / 下一题 / 提交。计划：批准并自动执行 / 自动接受编辑 / 打回修改（可写意见），右上角全屏看计划。授权：允许 / 拒绝（可写原因）/ 本会话总是允许。终端对话框：按 hub 解析出的 `option` 回答（编号选项、「Type something」输入），「改在对话里说」，「查看终端」看原始屏幕和按键；密码框只发一次不保存。`prompt_changed` 时提示看新的再答，别处已经答过（404 / 410）就安静收起 |
-| 对话里的工作过程 | 和 iOS 的 `chatLines` 一样（`docs/ios.md`「展示逻辑」，`ui/Rows.kt` 的 `buildRows` + `foldWork`，有单测）：每条你的消息下面，这一轮的工作收成一行「工具 N · 思考 N · 回复 N · 时长 ›」，只留最后一句回复在外面；正在跑的一轮是「正在工作 N 秒」并带终端按钮，跑着时回复后面还有工作就也算工作。点开就在原地一步一行地展开（每步是列表里单独的一行，几百步也不卡），最后一行「收起 N 步」。工具调用和结果合成一行（图标、动词、对象），点开看详情：Bash 是命令和输出，Edit / MultiEdit / Write 是 diff（只给 ± 号和行底色上色，长行左右滑，超过 40 行「展开全部」），Codex 的改动（Edit 带 `diff`）按 unified diff 画；输出超过 10 行折起、被 hub 截断的「看全文」全屏看；TodoWrite 直接画成待办清单；工具截的图在详情里。离开期间回顾（recap）是一行，点开看全文；后台任务的通知说清是什么完成 / 失败了。你的消息里的 `<jarvis-context>` 画成引用卡片，`<attached_images>` 画成缩略图（从那台电脑读），路径变成可点的文件标签，别的会话发来的消息在左边标明来自谁 |
-| 消息菜单 | 长按一条消息（你的或 Agent 的回复）在按住的地方弹出深色操作条：复制、选择（全屏可选中的纯文本）、引用（`> ` 放进输入框）、分享、交给 Jarvis（新开一段助手对话，消息作为 `<jarvis-context>`，和收件箱的「交给 Jarvis」同一条路）、作为上下文（输入框上方一个标签，随下一条消息作为 `<jarvis-context>` 发出，✕ 去掉）、编辑（只在你的消息上，内容放回输入框）。滑动列表就收起 |
-| 图片 | 点对话里的任何图片全屏看：左右滑看这段对话里的所有图片（「n / m」），双指 / 双击放大、拖动，单击显隐按钮，下拉关闭；保存到相册（`Pictures/Jarvis`，安卓 10 以下要存储权限）、分享、拷贝、编辑（框选 / 画笔、六种颜色、撤销、清除，完成后作为照片放进输入框，和「+ › 照片」一样随消息发出） |
-| 文件和 Git | 顶上「文件 · Git」分段切换，路径是一排可点的胶囊，列表都是圆角卡片；Git 的状态字母、领先 / 落后、± 行数用 diff 的颜色。对话页右上角 ⋯ ›「文件」「Git（改动数）」「拷贝目录」，消息里的文件标签和工具里的路径也能点开（`fs.list`、`file.read`、`git.status / diff / show / log`，只读）。文件：面包屑、目录在前、Git 改动的标记、隐藏文件开关；文件查看器：Markdown 渲染（可切源文件）、代码带行号两个方向滑、图片（点开全屏看）、PDF、2 MB 截断提示。Git：分支、领先 / 落后、上游、暂存数；改动列表（点开看 diff，部分暂存的可切「未暂存 / 已暂存」）；提交历史（30 条之后「加载更早的提交」），点开提交看说明和改了哪些文件，再点文件看这一部分的 diff |
-| 终端 | 对话页右上角，实时终端（`docs/terminal.md`）：`terminal_subscribe` 收 herdr 的帧，VT 子集画进格子（颜色、宽字符、框线逐格画、OSC 8 链接），断线后带 epoch / seq 续上，丢帧就从整帧重来。默认「手机尺寸」接管终端（`control`），Claude 按手机宽度排版；键盘打的字和键栏（Esc、Tab、Ctrl / Alt / ⇧、方向键、^C、⇧Tab、退格、回车）直接写进终端；Ctrl / Alt / ⇧ 和 iOS 一样：点一下只管下一个键，快速点两下锁住（再点一下松开），按住时一直按着，键盘上打的一个字带着它们变成按键（Ctrl 再打 c 就是 ctrl+c，⇧ 只是大写），上下拖是 herdr 的滚轮，点一下是在那一格单击；电脑上别的程序占着时问「接管 / 只看」，被抢走后顶栏有「接管」。可切「电脑尺寸」只看（按窗格原尺寸镜像，左右滑，键走 `/keys`）。右上角「手机尺寸 / 电脑尺寸」菜单里调字号（A− / A＋，7 – 20、每次 0.5，和 iOS 一样，默认 13，存在手机上）：接管时换字号就是换网格，窗格按新的列 × 行重排。顶栏的拷贝按钮打开「选择文本」：屏幕（接管时连同滚出屏幕顶的行）按行排成等宽、不折行的纯文本，可以左右滑，长按选一段拷贝，或「全部拷贝」（iOS 是直接在格子上选，这里借对话的选择页）。旧 hub / node 不能推流时退回每秒读一次 `/screen?format=ansi`。离开页面或 App 进后台立刻放手，窗格回到电脑上的尺寸 |
-| Agent 操作 | 长按一行：置顶 / 取消置顶（置顶的只在顶部「置顶」里出现一次）、屏蔽 / 开启通知（规则和 hub 一样：Agent 自己 → `allowed` → 它的空间；屏蔽的灰点加 🔕、不弹通知）、重命名（herdr 标签页名和 Claude 会话名一起改）、关闭 Agent（先说明会退出哪台电脑上的什么、关掉哪个标签页）。置顶 / 屏蔽存在 hub（`/api/v1/pins`、`/api/v1/mutes`），点了立刻生效，hub 拒绝时退回原样 |
-| 新开会话 | 列表右下角 +：选电脑、目录（家目录里列「最近用过」，点一下选中、再点进入）、启动器、权限模式（和 iOS 同一组，「默认」交给启动器）、可选的第一条消息。和 iOS 一样带 `async`：hub 马上回会话、对话页立刻打开，第一条消息不放进 `prompt`、进对话后当普通消息发（马上上屏，起名用 `name_hint`），在电脑上等 Claude 就绪再打进去；输入框上方「正在启动 Claude，消息会在它就绪后发出」，失败时是「没有启动起来：原因」（会话的 `starting` / `start_error`）。旧 hub 不认 `async` 时照旧等它启动完；那时 hub 说没启动起来但新窗格里其实起来了（停在对话框上，或者 node 不认识这个版本的输入框底栏），照样打开新会话 |
-| Jarvis（助手） | 外壳的「助手」页。Jarvis 是 hub 配置的那台机器上无头运行的 Claude（`docs/assistant.md`）：打开时进主对话（没有就进最近一段，`AssistantModel`）；历史对话在侧边栏。新对话页（`ShellHome`，iOS 同名）只有输入框，上面是现在要你处理的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」，没有就什么都不显示；发出第一句就显示气泡和「Jarvis 正在准备…」；第一段对话自动成为主对话。打开时 `POST /api/v1/assistant/warm`，第一句不用等 claude 启动。对话里自己的气泡是中性灰（`ShellColors.userBubble`，各风格都一样），输入框是 ChatGPT 式的（`ShellComposer`）：一行「[+] 问 Jarvis [麦克风] [语音对话]」，聚焦或有字时长成卡片，下面一排 [+] … [权限和思考强度] [麦克风] [发送]；麦克风是听写，「语音对话」是 hub 的语音插件（有的话才显示）。回复逐字显示（WebSocket `delta`），没有终端按钮。助手自己的提问不进 Agents 的「需要你处理」，通知标题是「Jarvis 在问你」，点开进助手页 |
-| Jarvis 的资料页 | 侧边栏「认识 Jarvis」（「定时任务」直接进定时任务），和 iOS `AssistantProfileView` 对应：接下来（开着的定时任务的下次运行和跟进，最近三件）；定时任务（列表、开关、编辑名称 / 提示词 / 时间 / 星期、删除、立即运行、新建，「Jarvis 建的」有标记）；跟进（现在做、取消）；运行记录（按天分组、新的在上，点开对应的对话）；关于我（编辑后新对话起生效，右上角保存）；记忆（看、改、删，删除先确认；MEMORY.md 是单独一行「索引」，能改不能删）。每一页都是推进来的一页，编辑定时任务 / 记忆在底部浮层里（七天的星期选择 + 每天 / 工作日 / 周末），删除定时任务先确认 |
-| 知识库 | 侧边栏「知识库」（或再点一下「助手」的菜单），和 iOS `KnowledgeView` 对应（`docs/knowledge.md`，`ui/knowledge/`、`data/Knowledge.kt`）：一排类型（项目 / 会话 / 人 / 文档 / 会议 / 日程，选中的带数量）；项目分「重点（P0 / P1）/ 其他进行中 / 已完成 / 不是项目（默认收起）」，其余按 hub 的重要级和相关性排序；右上角按标签筛选（hub 给的常用标签）；搜索框常驻、全文搜（档案、时间线、聊天记录，300 ms 防抖），结果按条目合并、搜索词的每个词各自加粗，点开进条目。每行是类型图块（人和会话是首字，颜色跟重要级）、名字、时间、一句话，再一行 P 级 / 长短期 / 相关性和放得下的标签（放不下的整个不显示，不截半个）。条目页：重要级、短期 / 长期、状态、相关性、标签；在做这个项目的 Agent（点开进对话）、时间线（新的在上，6 条以后「显示全部」）、档案（Markdown，去掉和头部重复的行）、关联的会话 / 人 / 文档…（每类 4 个以后「全部」，点开推下一层）、代码目录、最近 7 天的消息、知识库目录。「问 Jarvis」把档案和最近 10 条时间线作为 `<jarvis-context>` 发进主对话（没有主对话就新开一段作为主对话）；「开 Agent」（项目）打开新开会话面板，第一条消息预填这段上下文，电脑和目录预选项目的第一个代码目录；「打标」改重要级、相关性、标签和项目的类型 / 状态（`PUT /api/v1/kb/{kind}/{id}`，手动打的 hub 不再自动覆盖） |
-| 待办 | 侧边栏「待办」（带未完成数量角标）推进来的一页（`ui/TodosScreen.kt`，`docs/umbrella.final.md`）：搜索框常驻，未完成列表按状态排序（等你 → 待查看 → 进行中 → 待跟进 → 未开始，同状态按创建时间新的在前），每行带完成圆圈、标题、相对时间、状态点与挂着 Agent 状态点、第三行显示最要紧 Agent 动态；左滑或点圆圈完成。底部折叠「已完成 · N >」，展开后带删除线和完成时间，点圆圈重新打开。右上角「+」新建待办（标题与详细说明）。待办详情页（`ui/TodoDetailScreen.kt`）：标题与说明可直接编辑，展示状态和创建时间，当前为它干活的 Agents（状态点、标题、电脑·空间›tab、最后一句、时间，点进对话；启动失败展示原因并可移除；超出时间窗标已结束）；底部收起的「参与过 · N」展示历史 Agent 快照；右上角 ⋯ 菜单删除待办；底部固定栏「交给 Agent」和「完成 / 重新打开」。「交给 Agent」（`ui/TodoHandOffSheet.kt`）：分段选择「新开一个 / 交给已有的」，新开可自选电脑、目录、启动器和权限，要它做什么多行输入，下方预览拼装的待办引用卡片（`<jarvis-context>`），发送后带 `todo_id` 并跳转到会话。Agents 页分组菜单加「按待办」（`Grouping.Todo`，每个未完成待办一段，没挂待办的进「没有待办」），其他分组下挂了待办的行尾增加待办名药丸标签，Agent 长按菜单加「关联到待办… / 解除关联」。对话页 ⋯ 菜单和会话信息展示关联的「待办：X」，点击进入待办详情。hub 待办接口返回 404 时侧边栏不显示入口、不报错。 |
-| 收件箱 | 侧边栏「收件箱」推进来的一页（☰ 上的红点、侧边栏里的数都是需要你的件数），`docs/inbox.md` 的安卓版：搜索框常驻，飞书和邮件合成一个列表，hub 的 AI 分成需要你 / 知悉即可 / 已折叠，最后是已处理（没分拣的算需要你）。顶部筛选（全部 / 飞书 / 每个邮箱 / @我 / 私聊 / 群聊 / 邮件，只列有东西的），搜索标题、发件人、内容、摘要；左滑到底是已处理，已处理的可以移回；知悉即可「全部看过」、已折叠「全部清除」。AI 分身草拟好回复的那件，草稿直接画在行里（「AI 分身草拟的回复」小卡片，「修改」打开详情、「发送」确认后以本人身份发出）。点开一件：飞书会话和removed的那件推进来它自己的页面（下面「飞书」），其余是详情浮层：摘要、hub 给的原文（邮件见下面「邮件」）、AI 分身的草稿和依据；「AI 草拟 / AI 改」（`/draft`）、「发送」先确认再以本人身份发（`/reply`）、「交给 AI」（同 iOS）：选要它做什么（自己写或三个预设）和交给谁（Jarvis 新开一段对话，或最近活跃的 8 个在线 Agent 之一，作为一条消息发进它的会话并打开那个对话），可选同时标为已处理，消息是 iOS 同样格式的 `<jarvis-context>` 加要求；「已处理」。列表在 WebSocket `inbox` 事件、重连、下拉刷新时重新拉 |
-| 邮件 | 收件箱里的一封邮件点开就是这封信（iOS `MailDetailView`）：一个线程的每封信，较早的折成一行（谁、什么时候、第一行），最新一封展开：发件人、收件人、抄送、时间，HTML 在锁住的 WebView 里画（`MailWebView`：不跑脚本、不读文件、所有网络请求拦掉，「显示图片」后才放行图片，`MailHtml.sanitize` 再去掉 script / iframe / form / 事件属性 / `javascript:` 链接），没有 HTML 就是可选中的纯文本；附件只列名字和大小（hub 还不能下载）。打开就标已读，☆ 加星标（`/flags`）。「回复 / 回复全部 / 转发」打开写邮件（引用前 40 行，回复全部去掉自己、去重；转发带原信的头）；收件箱右上角也能写新邮件。写邮件是盖在一切之上的一页（一个全屏的窗口，也能盖住收件箱详情的浮层）：发件人（hub 的账户，多个时可选）、收件人 / 抄送 / 密送（逗号分隔，`名字 <地址>` 也行，格式不对标红、不能发）、主题、正文，有内容时返回要确认。信里的链接进 App 内的网页卡片，`mailto:` 打开写邮件。上面照旧是收件箱的摘要，下面照旧是「AI 草拟 / 发送（`/reply`）」「交给 AI」「已处理」 |
-| 连接器 | 设置 › 连接器（iOS `ConnectorsSection`）：「这台手机」（手机数据的开关，打开了几项）、「邮箱」（几个账户、有没有出错的）、「飞书」（hub 的 lark-connector：已连接时是登录的名字）。邮箱页：每个账户一行（Gmail 红、飞书蓝、其他 IMAP 主题色），出错的显示错误；⋯ 里「测试连接」「删除」（先确认）；「添加邮箱」：Gmail（使用 Google 账号登录）/ 飞书（邮箱 + 密码，服务器固定）/ 其他 IMAP（服务器可留空自动识别），hub 连上 IMAP 和 SMTP 才保存。「AI 一键添加」没有了（hub 删了 `/api/v1/ai/mail-account`），页面底下提示在 Jarvis 里说「帮我添加邮箱」。飞书页：连接状态、登录的名字、最近一条实时消息、出错原因，「Jarvis 用飞书做什么」和「/agent 模型」（跳到模型配置的 `lark.agent`） |
-| 附件 | 对话页输入框左边的「+」：照片（系统的照片选择器，一次最多 4 张，长边缩到 1600、JPEG 0.75，和 iOS 一样）；拍照（系统相机拍一张，写到 App 的 `cache/camera`（`ChatFileProvider`），读回来和选的照片一样处理，用完删掉；App 声明了 CAMERA（配对扫码用），所以第一次拍照要先给相机权限）；照片都作为 `images` 随消息发出，输入框上方是缩略图、可以移除；文件（系统的文件选择器，传到会话所在那台电脑的临时目录，`POST /api/v1/machines/{mid}/files`，超过 200 MB 不传，传完把路径插到输入框末尾、带空格或引号的用单引号包起来，**不自动发送**）。只有图片没有字时发「请看图片」 |
-| 手机数据工具 | 设置 › 连接器 › 这台手机：设备信息、剪贴板、通知、通讯录、日历、位置、健康、照片，默认都关着，打开时要对应的安卓权限。打开的才通过 `register_phone` 声明给 hub，Claude 调 `phone_*` 时 hub 发 `tool_call`，手机在本地查、`tool_result` 返回（`jarvis/android/phone/`）。工具名、说明和参数和 iOS（`apple/Jarvis/PhoneTools`）完全一样（`PhoneToolsTest` 拿 iOS 源码里的定义逐个比），因为 hub 只存一份工具列表，哪台手机最后连上就用哪台的，两台不一样的话一换手机 Claude 看到的工具就变了。会改数据的（新建日程）先在手机上问：App 里一张卡片，同时一条带「允许 / 拒绝」的通知，90 秒不答算拒绝；拒绝时 Claude 拿到 `The user declined on the phone.`。照片：`phone_photos_recent` 列系统相册（MediaStore）里最近的照片和视频，`phone_photo_get` 把一张缩到长边最多 2048、JPEG 0.7 交给 Claude 看；id 是 `image:<行号>` / `video:<行号>`，截图按 Screenshots 目录认；安卓不给照片的拍摄位置（要 `ACCESS_MEDIA_LOCATION`，没申请），所以没有 `location` 字段。健康：`phone_health_summary` 读 Health Connect 的每日汇总（`phone/Health.kt`，指标、单位、按本地自然日切分都照 iOS `HealthTool`），只读；权限走 Health Connect 自己的授权框（不是安卓运行时权限），打开开关时请求全部 7 种读权限，只给了一部分时缺的指标列在结果的 `not_granted` 里（Health Connect 和 HealthKit 不同，会告诉 App 授没授权）。Health Connect 要有一个说明页（`HealthRationaleActivity`）它的授权框才会弹出来。安卓 14 起它是系统的一部分，8–13 是 Play 商店里的一个 App，没装或要更新时设置里那一行变成「获取」、工具返回说明而不是报错（没有 Google 服务的手机通常装不上）。依赖固定在 `connect-client:1.1.0-alpha08`：之后的版本要 compileSdk 35 / 36。还没有：提醒事项（iOS 有） |
-| 界面风格 | 设置 › 外观 › 界面风格：液态玻璃（默认）、Claude、黏土、Island、飞书，和 iOS 同一组（`docs/ios.md`「设计语言」），浅色 / 深色跟系统。选择页上面是当前风格的一段对话示例，下面五张预览卡，点一下整个 App 立刻换；存在手机上（SharedPreferences `ui`，键 `ui.style`），断开 hub 也保留。见下面「界面风格」 |
-| 设置 | 从侧边栏打开，从下面升起铺满、右上角 ✕。iOS 设置那样一组组圆角卡片、行首彩色图标：hub 地址和连接状态；外观（界面风格）；「电脑」：机器（在线数，有 `node_mismatch` 的机器名）、Claude Code 设置、设备；「连接器」（见下面「邮件」）；后台通知（通知、电池优化、自启动）；存储空间；断开 hub。子页面是 `SettingsRoute` 的一个栈（Root 保存），从机器页打开的对话返回时回到机器页。「AI › 模型配置」见下面「模型配置」；宽窗口里是左右两栏（菜单 ‖ 子页面，见「折叠屏和大屏」） |
-| 机器 | 设置 › 机器，和 iOS `MachinesView` 对应：每台一张卡片（系统图标、在线、运行中 / 工作中 / 需要你、系统名和 herdr / claude 版本、`node_mismatch` 提示，离线时显示错误）。点开是机器页：卡片、运行中的 Claude（不含助手的对话，点开进对话）、系统与监控、启动器（名字和模型）、重新连接（最多等 15 秒看连没连上）；机器页有「引擎」一行（见「引擎」） |
-| 引擎 | 和 iOS「引擎选择」一样（`docs/ios.md`，给用户的说明见 `docs/engines.md`），逻辑在 `data/Engines.kt`（`EnginesTest`），页面是 `ui/machines/EngineScreen.kt`。配对成功（扫码、手动、配对链接）后先为 hub 所在的机器（`kind: local`，没有就第一台）选引擎：选项按 hub 回报的 `engines` 原样列出（名字、`note`），每项写「检测到可用 · 版本」/「没检测到」，离线或没有检测信息时写「离线，暂无检测信息」/「暂无检测信息」，不说成没装；必须选一个才能继续，没有「跳过」、返回键也不跳过：预选这台机器现在的引擎（没选过就是 herdr），「确认并继续」`PUT /api/v1/machines/{id}/engine`，保存失败显示原因、停在这一页重试（2026-11-01 用户要求）；hub 没回报 `engines`（旧 hub）时配对后不进这一步。机器页的「引擎」行显示现在的引擎，点开是同一个选择页，保存后用 PUT 返回的机器立刻更新，之后跟着 `machines` 推送；离线也能存（「机器离线，选择会在连接后生效」）。hub 没回报 `engines`（旧 hub / node）时列出已知的三个；已知引擎随时能选，不认识的只有 hub 说可用才能选。页面说明「只显示所选引擎里的会话」 |
-| 模型配置 | 设置 › AI › 模型配置（`ui/settings/ModelConfigurationScreen.kt`，逻辑 `settings/ModelConfiguration.kt`，`ModelConfigurationTest`）：对话、分拣、翻译和各项 AI 功能按用途统一选模型，hub 存（`/api/v1/model-config`）；新开 Agent 的面板在 hub 支持时改成「本次启动器：跟随模型配置 / 某个启动器」；语音页的模型也走这里（「模型配置」打开语音这个用途），配置不可用时页面说明原因并给「模型配置」「重试」。旧 hub 没有这个接口时照旧用启动器和手机上的语音模型 |
-| 系统与监控 | 机器页里点开，`docs/machines.md`「机器详情」的安卓版：系统名、在线时长；现在的 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换（偏高、过高标出来）；1 / 6 / 24 小时的 CPU、内存、网络、负载（虚线是核数）、磁盘曲线，hub 给的 `gap` 处断开不连线（`segments`），单调三次曲线不过冲；按住或横拖读某一刻，所有图一起跟；每个核心（Linux）；系统信息（内核、架构、机型、处理器、开机时间、herdr / Claude Code / node 版本）。页面在前台时 1 小时每 10 秒、其余每分钟刷新 |
-| Claude Code 设置 | 选一台在线的机器（默认 hub 所在的那台），列出 node 白名单里的 `~/.claude/settings.json` 项（开关、枚举、文本，没设过的标「默认」，文本清空就是回到默认）；「同时改所有在线机器」默认开，每台各写一次，失败的逐台列出来并重新读 |
-| 设备 | `GET /api/v1/auth/tokens`：每台设备的凭据（本机、手表「只能回答」），最近使用 / 撤销时间，已撤销的单独一组；撤销先确认，撤销的是这台手机自己就回到配对页 |
-| 通知 | 「需要你处理时」开关，「Agent 做完时」不推送 / 只推长任务 / 每次都推，系统里每类通知的设置入口。和 iOS 一样存在 hub 的 `devices/{id}/prefs`（只发 `input` / `done`，iPhone 的实时活动、灵动岛字段不动；id 是这台手机第一次用时生成的 `android-…`），每次连上 hub 时读回来，所以在别处改了也生效；改的时候 hub 连不上，下次连上先把这边的发上去。`Notifier` 按它决定弹不弹（见下面「通知」） |
-| 存储空间 | 这台手机上 Jarvis 占的空间按类分（对话、图片、网页、网络缓存……，没有的类不显示）、一条比例条，点一类单独清、或清除全部缓存；设置和配对信息不清 |
-| 飞书 | 收件箱里飞书会话的那件点开就是那个会话（iOS `InboxDetailView` + `LarkChatView`，照 lark-connector 渲染：富文本、@、链接、表情、图片、文件、语音、视频、贴纸、卡片（分栏、按钮、表格、图表、折叠面板）、合并转发、removed分享、表情回应、回复引用、话题、系统消息），顶上是那件的操作条（AI 的摘要、「AI 草拟回复 / 查看草稿」、「交给 AI」），标题栏「让 Jarvis 总结」和「已处理 / 移回」。没处理的从第一条新消息打开（`start_position`，取它周围的一页，「以下为新消息」在它上面；处理过的从最新打开），往下翻接着拉更新的一页、到顶拉更早的；「有人@你」跳到没看过的 @；「N 条新消息 · 回到最新」。只有真正上过屏的消息才上报已读（`/read`，停 0.4 秒合一次；只打开不报）。hub 的 `lark` 事件（lark-connector 实时事件）来了就刷新最新一页，开着时另有每分钟一次的兜底。长按消息：常用表情、表情回复（整个表情库）、拷贝、看资料；头像和名字打开资料卡（领导一行点进去再看他的）；卡片的回调按钮以本人身份按下。输入框以本人身份发到这个会话。最后一页存在 `cache/lark-chats`，再打开先画出来。removed的那件推进来是那个帖子和它的评论（`LarkMomentsPostView`），会话里分享的removed卡片点开是同样的浮层。宽窗口里这两种页面就是右栏。不做第二个飞书（`docs/feishu.md`）：没有会话列表、搜索、群资料这些页面，只有收件箱点进来的这一个会话 |
-| 链接 | 对话（Agents 和 Jarvis）、收件箱详情里的链接都在 App 内的卡片里打开，见下面「链接」 |
-
-## 链接
-
-CLAUDE.md「链接在 App 内打开」的安卓版（`ui/web/`，对应 iOS `Views/Link/LinkSheet.swift`）：
-
-- 打开即铺满屏幕；拖顶部的把手 / 标题栏下拉到 0.6 时，后面的页面挤到上面 40%（`LinkHost` 按卡片高度给内容让出底部），对话照常滚动、能点输入框打字；
-  再往下拉或点 ✕、返回键关闭。Jarvis tab 开着卡片时不显示底部 tab 栏（和打字时一样），输入框直接贴着卡片。
-- 网页来自 `WebViewPool`：最多 6 个、按最近使用淘汰；对话里 15 分钟内的回复，前三个链接一出现就在后台开始加载（`LinkText.toPreload`），
-  翻历史不预加载。不在屏幕上的页面 `onPause()`（预加载完、卡片关掉、App 进后台都会停掉声音和计时器），系统要内存时（`onTrimMemory`）销毁不在屏幕上的。
-  第一次打开用 `LOAD_CACHE_ELSE_NETWORK`，看过的页面从磁盘缓存直接出来。深色模式下页面跟着变暗（自带深色的页面用自己的，其余算法变暗）。
-- 页面里选中文字，菜单最前面是「AI 修改」「作为上下文」：「AI 修改」弹框写怎么改，选中内容和要求作为一条消息立刻发给这个对话的 Agent（或 Jarvis）；
-  「作为上下文」放进这个对话输入框上方的小条（可以点掉），随下一条消息发出。两种都是 iOS 的 `<jarvis-context kind="edit|context" title="…" url="…">` 标签（`ContextRef`）。
-  收件箱里没有对应的 Agent，菜单只有「交给 Jarvis」，新开一段助手对话。从收件箱详情打开链接时详情先让开（ModalBottomSheet 是单独的窗口，链接卡片盖不上去），关掉卡片后带着没发的草稿回来。
-- 安全（`LinkSafety`、`externalIntent`）：http(s) 进卡片；`jarvis://` 只做跳转（`session/<机器>/<会话>`、`tab/…`、`assistant`、`inbox`），
-  `jarvis://pair` 这种会改配对的不认；`mailto:` / `tel:` / `intent:` 交给系统，`intent:` 去掉 component、selector、clip data 和所有 URI 授权标志，
-  指向本 App、`jarvis:`、`content:` / `file:` 的一律丢掉；`javascript:` / `file:` / `content:` / `data:` 等不显示成链接、点了也不动。网页里的非 http 跳转只在用户真的点了、页面在屏幕上时才放行。
-  页面拿不到 hub 的 token（`loadUrl` 不带任何头，token 只在 OkHttp 的请求里）；不允许文件 / content 访问、不允许混合内容、不允许脚本开新窗口；
-  证书只认系统 CA（`network_security.xml` 的 `trust-anchors`，用户装的 CA 不认）。
-
-还没做（iOS 有）：飞书云文档那件的详情（`InboxDocDetailView`，现在是详情浮层里 hub 给的文字）、会话和邮件的译文（设置 › 翻译）、手机数据里的提醒事项、
-终端的配色和字体、电脑尺寸下按手机宽度折行、往上翻 `/screen/before` 的历史，手表。协议都在，后续按 iOS 的做法补。
-
-hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub）时不再无限重连，直接回到配对页并说明原因；已配对时打开配对链接也会回到配对页重新配。
+| 配对 | 扫码、手填、配对深链，临时 token 换设备 token；TLS 公钥钉扎、候选探测和重新配对；完成后进入准备清单 |
+| Jarvis | 首页、主对话、历史抽屉和共用对话页；主对话首句可先进入持久 outbox，恢复连接后解析目标；助手身份确定后保留在 Jarvis tab |
+| Agents | 页面最上面是搜索框，下面一排电脑芯片（全部机器 + 每台电脑，带在线状态和计数，可横滑），再下面是快速筛选；默认按电脑 → 空间（herdr workspace）→ 会话三层树，靠缩进、字号字重和细线分层，不给每层垫底板（`docs/android-design.md` 2.4 节），电脑和空间都能折叠、栏头带计数；全是已看会话的空闲空间留在所属电脑下面、排在有动静的空间后面，默认收起、样式弱一点，收起时标出会话数；也可按状态分组；置顶 / 屏蔽、请求卡和作答；会话重命名（标签名走 herdr，会话名走 Claude 的 /rename，入口在会话行菜单、空间页和对话页菜单）和空间重命名（空间栏头菜单）发出后列表、空间页、对话页标题立即更新，失败回滚；置顶、屏蔽、重命名、关闭由 App 的 `AgentsWiringModule` 接到 hub |
+| 对话 | 连续性补洞、历史分页、实时 delta、折叠工作过程、Markdown、diff、待办、图片缓存、阅读锚点、待发气泡及人工核对；附件和会话控制需要补齐服务注入 |
+| 收件箱 | 飞书和邮件事项统一列表、筛选持久化、AI 操作、回复日志；飞书有窗口缓存、事件刷新、可见已读和基础消息渲染；邮件正文页已有，但 MailTransport 尚未接到 App |
+| 设置 | 配对、准备清单、后台引导、关于和更新；连接诊断里可以手动添加 / 编辑 / 删除 hub 地址、停用候选、拖动排序（列表顺序就是尝试顺序）、逐条测试（见「连接地址」）；设备管理与通知偏好页已有，但 DeviceSettings 尚未注入 |
+| 扩展模块 | 终端、文件、机器监控、知识库、手机工具和体验模式已接入 App，入口见「外壳」一节；体验模式没有示例数据的页面显示说明，不连真实 hub |
+| 界面 | 三套界面风格：玻璃（默认）、晨报、看板，在设置 › 界面风格切换，立刻生效并存在本机；深浅色跟随系统。设计规范、组件和写页面的规矩见 [Android 界面风格与设计系统](android-design.md) |
 
 ## 通知（不用推送服务）
 
-国内卖的安卓手机大多没有 Google 服务（FCM 收不到），各家厂商推送又要开发者账号和实名认证，所以第一版不接推送：
+Android 使用 `:platform:notify` 的前台服务共用 hub WebSocket，不依赖 FCM 或厂商推送。通知渠道、开机恢复、网络重连、保活调度和国产系统准备清单已有实现。
 
-- App 开一个前台服务（`HubService`，类型 `specialUse`）一直连着 hub 的 WebSocket，通知栏常驻一条（下面「常驻通知」：有 Agent 需要你 / 在工作 / 做完未看时是汇总，没有时是「已连接 hub」，最低优先级，不响）。
-  网络变了马上重连，断线指数退避到 30 秒；开机后自动启动（`BootReceiver`）。
-- 收到 `interaction` 就弹「需要你处理」通知（高优先级），能直接在通知上点：授权「允许 / 拒绝」、计划「批准 / 打回（可输入反馈）」、
-  单选提问的前 3 个选项、终端对话框的前 3 个选项。`interaction_resolved` 时收回通知。
-- 设置 › 通知（`SettingsPrefs`）：「需要你处理时」关掉就不弹「需要你处理」；「Agent 做完时」不推送 / 每次都推 / 只推长任务（这一轮从开始干到做完超过 hub 的 `long_turn_seconds`，没看到开头的一轮算长）。
-- 一轮做完（工作中 → 完成未看）且 App 不在前台时弹「做完了」。对话页只在 App 真的在前台时才上报已看（`/seen`），
-  否则放在后台的对话页会把「做完了」吞掉。
-- 规则对照 hub 给 iPhone 的推送（`docs/server.md`「推送策略」），但时机在手机上算：需要你立即弹；做完了不等 `done_delay_seconds`。
-- 代价是耗电和被系统清理。小米 / 红米（MIUI、HyperOS）等要在系统设置里把这个 App 的省电策略设成「无限制」并打开「自启动」，
-  设置页有两个入口按钮（电池优化白名单、MIUI 的自启动管理页，找不到时退回应用详情页）。以后要接厂商推送时，hub 侧加一个和 APNs 并列的发送器即可。
+真机记录（2026-10-31，ColorOS 16 / Android 16，单次观察）：前台服务在跑，App 切到后台约 6 秒 WebSocket 仍被断开，回前台自动重连；要在系统设置里给 App 打开「允许后台运行」「自启动」并把电池设为不优化（准备清单「后台保活」会引导）。放开后后台能连多久、耗电多少按验收清单 V03 实测，现在未实测。
 
-## 常驻通知、小组件、快捷方式
+- 「做完了」由 hub 按与 iOS 相同的完成策略决定，经 `notify` 事件下发；客户端声明 `ws_notify` 后接收，不再自行推算完成。
+- 提问、计划、授权和屏幕选项可在通知作答；允许或批准要求解锁，拒绝或打回可输入原因。结果不明时提示待确认，不自动重复批准。
+- 点击通知和会话深链走同一个导航入口（冷启动和 App 已打开时相同）。通知链接写明 `tab` 时直接按它落到 Jarvis 或 Agents，不等会话元数据；没写时等元数据到达再分流。终端兜底动作（`target=terminal`）打开该会话的终端，返回落在原对话。
+- 准备清单提供通知权限、电池限制、自启动等系统入口，以及锁屏测试预约、展示和回报。各 ROM 的锁屏存活、通知展示、重启恢复和耗电均未实测。
 
-iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/intents.md`）在安卓上的对应，代码在 `fleet/`、`widget/`、`shortcuts/`。
-三处画的是同一份汇总 `FleetState`（`fleet/Fleet.kt`），规则照 hub 的 `buildFleet`：需要你（最早的请求在前）→ 工作中（跑得最久的在前）→
-做完未看（最新的在前），不算已看、离线、屏蔽的、`/loop` 等下次唤醒的，助手只在问你时算。手机自己从 WebSocket 的状态算（`FleetStore`，
-防抖 300 ms），最后一份存在手机上，小组件和磁贴在进程没跑时也有东西画。
+## 连接地址（设置 › 连接诊断）
 
-- 常驻通知：就是前台服务那一条（同一个 id），有东西时换到「实时状态」频道（低优先级、不响）：标题「2 个需要你」，副标题其余的数量，
-  展开是前三个 Agent（名字 · 在做什么（机器 · 空间 › 标签）），再多是「+N 个」；只剩工作中时计时从最久那一轮开始在手机上走。
-  第一个授权带「拒绝 / 允许」、第一个计划带「查看 / 批准」（批准用 `acceptEdits`，和「需要你处理」通知一样）；「允许 / 批准」要先解锁。
-  点通知：只有一个 Agent 时进它，否则进 Agents。只剩做完未看的 5 分钟后、全都处理完、hub 连不上时，退回原来那一行「已连接 hub / 正在连接 / 连不上」
-  （「后台连接」频道，最低优先级）。锁屏上只显示数量和「有个授权等你」（公开版本），系统「锁屏显示敏感内容」打开时才显示全部。
-  在系统设置里关掉「实时状态」频道，就只剩连接那一行；关掉通知权限，什么都不发。
-- Android 16：通知带 `android.requestPromotedOngoing` 和 `POST_PROMOTED_NOTIFICATIONS` 权限，申请成为 Live Update（状态栏上的胶囊）。
-  App 按 compileSdk 34 编，所以 extra 的名字是写死的字符串；更早的版本就是普通的常驻通知。
-- 按钮的 PendingIntent 一个（请求, 按钮）一个，用 data URI 区分、不可变，后来重画的通知改不了用户解锁时系统手里那一个；
-  打开 App 的 intent 也各带自己的 data URI（`jarvis-open://session/…`、`jarvis-open://tab/…`），只有 extras 不同的 intent 会被系统当成同一个。
-  `FleetActionReceiver` 用 `goAsync` 撑住广播等 hub 回复（最多 9 秒），只为这个广播拉起的进程否则 onReceive 一返回就被冻住、点击丢掉。
-- 主屏幕小组件（Glance，`widget/JarvisWidget.kt`）：「✦ Jarvis」、带状态色点的标题、其余数量，按高度画 0 / 2 / 3 个 Agent（名字、在做什么 · 机器），
-  再多是「+N 个」。点 Agent 进它，点别处进 Agents；只导航，不能在小组件上批准。数据在 `provideContent` 里面读（`collectAsState`）：
-  Glance 保留会话时 `updateAll()` 只重组，在外面读到的值会原样再画一遍。浅色 / 深色跟随系统。
-- 快速设置磁贴（`JarvisTileService`）：「Jarvis · 2 个需要你」，有需要你或工作中时亮；点了和点通知一样。没配对时不可用。
-- 长按图标的快捷方式（运行时发布，静态的 res/xml 要写死 application id）：问 Jarvis、批准待处理，后面跟着最近活跃的 2 个在线 Agent（点了直接进它的对话，对应 iOS 的 `OpenSessionIntent`；会话列表变了才重新发布，断开 hub 时一起去掉）。「问 Jarvis」进 Jarvis tab 并把光标放进输入框、弹出键盘
-  （主对话或首页，等 tab 选好了对话再聚焦）；「批准第一个待处理」弹一个对话框，先从 hub 现拉待处理列表、取最早的一条，
-  授权「允许」/ 计划「批准并自动执行」（`bypassPermissions`，和 iOS 的 intent 一样），提问和终端对话框说明要打开 App。
-  这个对话框的 Activity 不导出，只有启动器代我们启动的快捷方式能进来。
-- 进程在后台被拉起（磁贴、小组件更新、通知按钮）时，Android 12+ 不许开前台服务：`HubService.start` 吞掉这个异常，
-  App 下次回到前台（`MainActivity.onStart`）或开机时再开。以前直接崩，连带磁贴 / 小组件 / 按钮一起没了。
+2026-11-01 用户要求：「当前连接」和「候选地址」要能添加和编辑。hub 不一定发布自己的全部地址（比如 NAS 的网卡挂在虚拟交换机上，被 hub 当成虚拟网卡，它的 IPv6 和内网 https 地址就不会下发），这时在手机上手动补。语义和电脑链路的「手动加地址」一样（[link.md](link.md)），区别是 Android 上这些设置跟着配对走。
 
-## 语音对话
+候选地址有三个来源，列表里逐条标明：
 
-hub 有在跑的语音插件（`docs/plugins.md`）时，助手页的输入框多一个麦克风（再点一下「助手」的菜单里也有「语音对话」），进语音页（`ui/VoiceScreen.kt`、`voice/`）：
-全双工，一直在听（静音也照送，什么时候轮到谁说由模型决定），模型说话时直接开口就能打断；底下三个带字的圆按钮静音 / 打断 / 挂断；字幕按 id 原地替换，自己说的在气泡里、Jarvis 说的是正文。
-模型和音色在页面右上角的菜单里选，存在本机（每个插件一份），换了就重开一次对话。录音是 `VOICE_COMMUNICATION` 音源 + 系统回声消除 / 降噪，
-外放走扬声器（接了耳机 / 蓝牙就走它们）；对话期间屏幕常亮，离开页面就结束（不在后台录音）。
+- 配对时：配对链接里的 `url`、`alt` 和由 `url` + `tls` 拼出的 https 地址，以及配对时读到的 `/api/v1/endpoints`；
+- hub 下发：鉴权后的 `/api/v1/endpoints`、WS `hello` 和 `endpoints` 事件（[协议](protocol.md#候选地址)）。hub 的列表一到就替换配对时的那批；
+- 手动添加：只存在这台手机上，hub 的列表替换不到它们。
+
+能做的事：
+
+- 添加：`https://域名:端口`、`https://[IPv6]:端口`、`https://IPv4:端口`。没写协议按 https，端口必须写，路径、`?`、`#`、用户名都不收，IPv6 要加方括号。校验不查 DNS、不联网（`core:hub` 的 `checkEndpoint`），错误用中文显示在输入框下面，合法时预览将保存的规范写法（`scheme://host:port`，端口总是写出来）。每个配对最多手动加 10 条，和已有候选重复（按规范写法比较，`https://host:port/` 和 `https://HOST:port` 算同一个）的不收。
+- 安全规则不变：https 地址和配对时一样按配对时的公钥指纹钉扎；配对没有指纹（hub 没开 TLS）时不能加 https 地址。`http://` 只能是内网：IP 字面量要过 `LocalAddressPolicy`（回环、私网、链路本地、ULA），名字只认 `localhost` 和 `.local`；运行时 `HubHttpClient` 照旧再按解析出的对端地址拦一次（[network.md](network.md)）。
+- 手动加的可以编辑（位置和停用标记不变）、删除（要确认）；配对时的和 hub 下发的不能改，只能停用、重新启用；手动加的也能停用。至少要留一条启用的地址。「正在使用」显示当前连着的那条。
+- 每条都能「测试」：用新的连接池带钉扎请求 `GET /api/v1/health` 并核对 hub_id，显示结果和耗时。耗时包含建立连接，https 还包含 TLS 握手；是单次样本，界面标「单次」，不作为性能基线。结果只留在内存里。列表里每条还显示连接自己选路时的探测结果（标「自动探测」），两者显示较新的那个。
+
+**列表的顺序就是尝试的顺序**（2026-11-02 用户要求：「候选地址要支持用户拖动，显示顺序就是尝试的优先级」）。列表怎么排，连接就按什么顺序试，没有看不见的重排：原来的「优先使用」和「重连时先试上次在同一网络连上的那条」都去掉了。
+
+- 调顺序：按住行左边的手柄直接拖，或者长按一行拖；拖到列表上下边缘会自动滚动。行的菜单里有「上移」「下移」，无障碍服务里也有同名操作。手柄上的数字是这一条第几个尝试（停用的不编号）。
+- 没调过顺序时按默认规则排（`orderEndpoints`）：公网 IPv6 → 域名 → 内网 → 公网 IPv4 → 其他；同类里 https 在 http 前；再同类里手动添加的在配对时 / hub 下发的前；最后按原来的顺序（手动的按添加先后，其余按 hub 给的顺序）。
+- 调过以后以用户的顺序为准（`arrangeEndpoints`）：hub 新发来的地址和新加的手动地址排到最后；hub 不再提供的地址从列表里消失（IPv6 前缀变了的地址算新地址，排到最后）。「恢复默认顺序」（要确认）回到默认规则。
+- 停用的地址留在原位、变灰、标「已停用」，连接时跳过；仍然可以拖，重新启用后还在原来的位置。
+
+连接怎么试：只试启用的地址，严格按列表顺序起步。每一条等前一条失败、或者前一条开始满 1 秒（`HubRouteSelector.STEP_MILLIS`）再开始，谁先通过身份校验用谁；所以排在后面的只有在前面那条单独试过 1 秒以后才可能抢先。连上以后每 5 分钟（`OkHttpHubConnection.RECHECK_MILLIS`）看一次排在当前地址前面的那些地址，每条最多等 1 秒；有一条答上来就重新连接（这时整轮竞速选出第一个答上来的），连接自己从不往后换。拖动或恢复默认顺序只改顺序，不会马上探测或切换：连接在下一次重连或下一次 5 分钟复查时按新顺序走，拖动不会把正在用的连接断掉（2026-11-02 用户定）；只有在用的那条被停用、删除或改掉时才直接重连。1 秒和 5 分钟都是配置值，未实测。
+
+存储：手动地址、停用标记和用户的顺序按配对保存（`ScopedHubData.endpoints`，配对目录里的 `endpoints.enc`，和凭据一样用 Tink AEAD 加密），重启后还在；hub 下发新列表不改它们；退出、撤销、重新配对时随配对目录一起删除（`eraseScope`）。文件读不出来时按「默认顺序、没有手动地址」处理，不挡住整个配对（凭据文件读不出来则保留原文件并报错）。上一版存的「优先使用」读出来变成「这一条排第一，其余按默认规则」的顺序。
+
+代码：校验、规范写法、类型和顺序在 `core/hub/.../HubEndpoints.kt`；竞速在 `HubRouteSelector`，复查在 `OkHttpHubConnection`；设置页的控制器 `HubEndpointSettings`（实现 `core:contracts` 的 `ConnectionEndpoints`），由 `ConnectionRuntime.endpoints` 交给设置（`PairingModule`）；存储 `core/data/.../EndpointOverridesStore.kt`；页面 `feature/settings/.../EndpointsSection.kt`、`EndpointEditorState.kt` 和拖动 `EndpointDrag.kt`（候选行用 `JRow` 的插槽写法，三套风格的边距自动对齐）。体验模式没有这份服务，连接诊断保持只读。
+
+截图：`MOCK_ENDPOINTS=1 python3 scripts/mock/mock_hub.py --tls-port 0` 让假 hub 额外下发两条连不上的文档地址（`[2001:db8::10]` 和 `hub.example.com`），用来看失败的测试和停用；带指纹配对要用 `jarvis://pair?url=…&token=mock&hub=<hub_id>&fp=<fp>&tls=<TLS 端口>`，`hub_id` 读假 hub 的 `/api/v1/health`，`fp` 和端口看它启动时打印的「TLS 端口=… fp=…」（`debug.mockAddress` 只配明文地址，没有指纹就加不了 https 地址）。
+
+## 多 hub（同时连接多组 hub）
+
+#295，方案和各路的接口约定见 [plan-hub-mesh.md](plan-hub-mesh.md) 第 4 节和 2.6 节，iOS 是 #256。手机可以配对多台 hub：
+互相连通（hub 互联）的几台算一**组**，同组只保持一条连接、组内换线路；不同组（工作 / 生活这类要隔离的环境）各一条连接，互不影响。
+Agents、机器、要你处理的请求把各组合在一起显示；Jarvis、收件箱和 hub 相关的设置是每组自己的，用「选中的组」。
+
+### 原来默认只有一台 hub 的地方
+
+改之前（2026-11-02，集成分支 `679b227f`）App 处处假定只有一份配对。逐项和现在的做法：
+
+| 地方 | 原来 | 现在 |
+| --- | --- | --- |
+| `core:contracts` 的 `HubScope` | 一份配对一个 `hubId/generation`，数据目录 `hub-data/<hubId>/<generation>/` | 不变；每组的数据放在一个这样的目录（组的 storage），凭据和候选地址仍按配对存 |
+| `EncryptedCredentials` / `HubDataStore` | `active.enc` 指向唯一的配对；`pair()` 丢掉旧的再配新的；`restore()` 返回唯一的作用域 | 新的组注册表 `hub-data/groups.enc`（`HubGroupRegistry.kt`），同时打开每组的作用域（`openGroup` / `closeGroup`）；`restore()` 返回选中的组；`pair()` / `unpair()` 签名不变 |
+| 凭据、候选地址、钉扎指纹（`credentials.enc`、`endpoints.enc`） | 一份 | 每台已配对的 hub 一份（它自己的配对目录） |
+| `ConnectionRuntime` | 一条 `OkHttpHubConnection`、一份 `ScopedHubData`、一个兼容用的 `Hub` | 每组一个 `GroupRuntime`（`di/GroupRuntime.kt`）；原来的公开 API 不变，指向选中的组 |
+| `OkHttpHubConnection` / `HubHttpClient` | 一台 hub 的 id、指纹、token | 组内多台：`HubConnectionConfig.members`，每台自己的 id、指纹、token 和候选地址（`HubMembers.kt`） |
+| `PairingModule` | 配对就是替换 | 原来的配对页仍是替换；设置 › hub › 添加 hub 是 `WiredPairingService.addHub` |
+| `ChatDataOwner`、`AgentsWiringModule`、`AppServices` 的终端 / 文件 / 动作 / 机器监控 | 按唯一的作用域构造 | 每组一份（`GroupStacks`），再合并（`MergedServices.kt`） |
+| `InboxDataOwner`（收件箱、Jarvis 会话列表）、设备设置、检查更新、锁屏测试、分享、手机数据工具、知识库 | 唯一的 hub | 选中的组 |
+| 连接诊断的候选地址 | 唯一的配对 | 选中的组自己的 hub（组里第一台已配对的 hub）；同组别的 hub 的候选也参与选路，诊断里一起列出 |
+| `Notify.install(connection.events)`、前台服务 | 一条 WebSocket 的事件 | 各组事件合成一条流（ID 已加后缀，见下）；常驻通知的状态是选中组的，Agent 计数各组相加 |
+| `ScopedListPreferences`（Agents 列表设置）、对话阅读位置 | 唯一的作用域 | 第一组的作用域：切换选中组不会动它们 |
+
+### 分组和组 id
+
+- 组注册表（`GroupsDocument`）记每组的 id、名字（用户改的）、storage 作用域、已配对的 hub（`hubs`，第一台是这组连接自己的 hub）、
+  互联发现但没配对的 hub（`mesh`：地址、指纹、名字），以及 `primary`（主组）和 `selected`（选中组）。加密方式和凭据一样（Tink AEAD），读不出来时保留原文件并报错。
+- **分组**：鉴权后的 hello 带 `mesh.hubs`（plan 2.6），是这台 hub 所在连通分量的全部 hub。收到一次就更新各 hub 的 peers：列表里的互相列为 peers，列表外的去掉它们列过的列表成员（新的 hello 能纠正别的 hub 留下的旧信息）。
+  两台已配对的 hub 只要一方的 peers 里有另一方就是同一组，组就是连通分量（`learn` / `regroup`，纯函数，`HubGroupRegistryTest`）。没有 `mesh` 字段的 hub（L1 合并前的 hub）只更新名字，自成一组。
+- **组 id** 在手机上生成（`g` + 8 位十六进制），稳定：合并时保留最早的 id（含主组成员的一方优先拿主组 id），拆开时含原组第一台 hub 的一方保留 id，拿不到 id 的一方用新 id 和新的空作用域。
+- **合并不丢东西**（主持人 2026-11-02 要求）：被并掉的组的数据先不删，在注册表里记一条 `PendingMove`（它的作用域、并进了哪一组）。等它关掉、合并后的组打开，就把它**还没发出的消息**（除了已显示、已取消的都算；正在发送中被打断的记为「结果不明」，先向 hub 核对再决定重发）和**有内容的草稿**搬进合并后的组：消息保留原来的 `client_msg_id`（hub 按它去重，送达语义不变），机器和会话 id 不改（互联后机器 id 在组里稳定，plan 2.6），合并后的组里同一会话已经有内容的草稿不会被覆盖。搬完才删那个作用域（它的已配对 hub 保留凭据）；缓存不搬，重新拉。搬失败（比如数据库读不出来）就留着，下次注册表变化或下次启动再试，不会静默清掉；搬到一半崩了，重搬不会重复（消息按 `client_msg_id` 去重，草稿不覆盖）。用户自己断开的组和吊销的组不搬（断开时确认框写明会清除本地数据）。代码：`GroupMerge.kt`、`HubDataStore.unsentAt`、`ConnectionRuntime.moveUnsentLocked`。
+- 拆开（一组变两组）时，拆出去那一组用新的空作用域；还在原组待发队列里、属于拆出去那台 hub 的电脑的消息不搬，发送会失败并显示出来（不会静默消失）。
+- **配对一台已经在某组里的 hub**（它在某组的 `mesh` 里，或某台 hub 的 peers 里有它）自动并进那一组，不重复显示；同一台 hub 再配对只换它的凭据，组和数据都留着。
+- **迁移**：第一次启动新版本时，旧的单份配对原地变成主组：storage 和唯一的 hub 都是原来的配对目录，不搬文件。数据库表本来就按配对作用域分（`scope` 列）、每组一个目录，所以**没有 Room 的表结构迁移**，`ItemsDatabase` / `PersistentDatabase` 的版本号不变；迁移测的是注册表（`HubGroupRegistryTest`、仪器测试 `HubGroupsDataStoreTest`）。
+
+### 键：机器 id 的组后缀
+
+plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-11-02 定）：
+
+- **主组**（旧的单份配对迁移来的组，或第一次配对的组）的机器 id、会话键、路由、深链、通知和现在逐字节一样。**其余每组**的机器 id 在合并列表里带稳定的 `~<组 id>`（`GroupKeys`，如 `macbook~g0a1b2c3d`），会话键因此是「组 + 机器 + 会话」。后缀只认合法的组 id，hub 自己的撞名后缀 `@<hub>` 是机器 id 的一部分，照样保留。
+- 后缀**不跟选中组走**：切换 Jarvis / 收件箱用的组，任何键都不变，打开着的页面、返回栈、通知深链、草稿、置顶、缓存都不错位。主组断开后别的组保持原样，不提拔新主组；全部断开后，下一次配对的组重新成为主组。
+- 交互（要你定的事）的 id 是各台 hub 自己起的，两台 hub 可能用同一个（两个假 hub 的夹具就完全一样，列表因为 LazyColumn 的 key 重复直接崩过）：非主组的交互 id 也带同样的后缀，作答时去掉；`interaction_resolved`、`notify` 的 `interaction_id`、fleet 条目里的交互 id 一起改。
+- 每组自己的仓库、数据库、传输只用不带后缀的 id。门面（`GroupNames`、`MergedServices.kt`、`GroupTranslation.kt`）在往上给列表时加后缀，在把调用交给那一组时去掉。这样 `Session` / `Interaction` / `SessionKey` / `ChatActions` 的签名都不用改，feature 页面、路由、深链、通知几乎不用动。
+- 取舍：没有像 iOS 那样给 `SessionKey` 加字段。那样每个从路由、深链、通知构造键的地方都要带上组，漏一处就串组；后缀把组编进机器 id，经过哪里都不丢。代价是门面要逐个接口翻译（列表、事件、偏好路径、草稿键、创建会话的结果……），新增带机器 id 的接口时要记得在 `GroupNames` 里补上。
+
+### 连接和换线路
+
+- 每组一条 `OkHttpHubConnection`。组里第一台已配对的 hub 是它自己的 hub，其余已配对的和互联发现的 hub 是 `members`：它们的候选地址排在自己的后面，一起走现有的选路规则（严格按顺序、1 秒步进，5 分钟复查只会往前换，`HubRouteSelector`）。连着的那台掉了，下一轮选路就落到组里别的 hub；它恢复后，复查把连接换回去。
+- 每个候选按它那台 hub 的指纹钉扎、核对 hub_id；成员的指纹来自鉴权后的 hello（可信），组里别的 hub 的证书冒充不了这一台（握手时按 host:port 核对，OkHttp 对自签证书不给 `handshake.peerCertificates`）。请求和 WebSocket 用当前线路那台 hub 的凭据：配对过的用自己的，互联发现的借用组凭据（plan 2.6「凭据在组里通用」）。
+- 一台 hub 拒绝自己的凭据（401）：只把它从这组里去掉（注册表里删掉它的配对、重开这一组），别的 hub 照用；一台都不剩才算这组失效。只拒绝借用的组凭据的 hub 只是不再尝试，不删任何东西。最后一组失效时和原来只有一份配对时一样：清掉全部数据，状态是「配对失效」。
+- 不同组各一条连接，前台服务一直开着的是这几条。断开一组只关它的连接、清它的数据，别的组不受影响。
+
+### 界面
+
+- **只有一组时界面一像素不变**，唯一的例外是设置首页「连接」一节多了一行「hub」（要从这里添加第二台，主持人 2026-11-02 定）。三套风格 × 深浅色逐像素比过，见下面的验证。
+- 多于一组时：Agents 的电脑栏头多一个组标签（`AgentTreeHeader(tag)`）；会话行的机器、请求卡、电脑芯片的名字写成「MacBook（家里）」；搜索框下面多一排组筛选（全部 hub + 每组，带在线点和会话数），筛选同时作用于列表和「等你定」。组筛选只在这次打开的页面里有效，不存。
+- 设置 › hub（`HubsScreen`）：每组一节，列出组的状态和每台 hub（已配对的、经互联发现的、正在使用哪台）；组的菜单里「用于 Jarvis 和收件箱」（选中组）、改名（只在这台手机上）、断开这一组；同组有两台以上已配对的 hub 时可以单独断开一台；「添加 hub」走原来的配对页（跳过欢迎页，完成后回到 hub 列表），配对成功的 hub 按 mesh 并进已有的组或成为新的一组。
+- Jarvis 的「在哪运行」只列选中组的机器。机器监控的总览把各组拼在一起（每台机器 id 带后缀），详情按机器的组取。
+- 切换选中组时，外壳按新组重建（和以前换配对一样，各 tab 回到首页）：hub 级页面换成新组的，合并列表里的键一个都不变，各组的连接也不重连。
+- 一组在页面开着时没了（并进别的组、被断开）：那一组先从列表里拿掉、等各页面不再用它的数据再关（`GroupStacks.awaitDropped`）；还在路上的调用当作「连接已切换」的取消，不当失败报；开着的对话页换到同一会话的新 id（合并后机器 id 去掉了后缀），找不到就返回。
+- 对话页、终端、文件、分享到某个会话、会话里上传附件都按会话所在的组走（`ChatWiringSource.bindingsFor`、`ShellChat`、`ShareQueue`）；以前它们直接用唯一配对的服务，多组时会把别组的会话发到选中组的 hub 上（实测踩过：对话页的草稿版本拿选中组的仓库去读别组会话，选中组的 hub 收到了带后缀的请求）。
+
+### 还没做 / 已知限制
+
+- hub 互联（L1，#294）没合进来时，真实 hub 的 hello 没有 `mesh`，每台 hub 自成一组；组内换线路只在单测和下面的假 hub 包装上验证过。
+- 设备设置（通知偏好、设备列表）、检查更新、手机数据工具、锁屏测试、分享只对选中的组；设备记录在组里第一台 hub 上，连着别的 hub 时这些页面可能读不到。
+- `platform/shortcuts`（port/surfaces 的小组件、磁贴）按配对存的快照在多 hub 时怎么处理：后续。
+- 通知按 merged id 发出，点开和作答都按组路由；常驻通知的连接状态只反映选中组。
+
+### 验证
+
+- 合并时搬待发消息和草稿：`HubGroupRegistryTest`（合并记 `PendingMove` 不删数据、搬完才删、搬动跟着再次合并的组走、断开组时一起删；哪些消息和草稿要搬、改作用域、打断的发送变「结果不明」、不覆盖已有草稿），仪器测试 `HubGroupsDataStoreTest`（真实 Room：b 组有一条没发的消息和一段草稿，合并后搬进 a 组的待发队列和草稿，`client_msg_id` 不变；再搬一次不重复；搬完才删 b 的数据、保留 b 的凭据）。
+- 单测：`GroupKeysTest`（后缀、主组不变、hello 的 mesh）、`HubGroupConnectionTest`（组内换 hub、各用各的 token、借用凭据、复查切回、成员 401 只排除它、最后一台 401 才失效、成员的地址答成别的 hub 不用、成员的候选只进 `memberEndpoints`、TLS 指纹不能冒充）、`HubGroupRegistryTest`（迁移、learn 的合并 / 拆分 / 名字、id 稳定、主组不提拔、添加的三种去向、断开的擦除清单、选中组的去向）、`GroupRoutingTest`（ID 进出、草稿键、创建会话、合并的置顶只写变了的组且不覆盖读不到的组、fleet 相加）、`AgentGroupsTest`（一组不标、多组标组、筛选）。仪器测试 `HubGroupsDataStoreTest`（迁移 + 同时开两个组作用域）。
+- 截图：只有一组时，三套风格 × 深浅色各 36 张逐像素比对（`SHOTS_STYLE=… SHOTS_MOCK_PORT=18771 SHOTS_FROZEN=2026-11-02T04:00:00+00:00 SHOTS_SETTLE=3`），每套只有设置首页深浅色两张不同（新加的「hub」一行，下面的内容整体下移），其余 34 张逐像素相同（连接诊断里实测耗时那一行按上面的办法忽略）。
+- 多组（模拟器，下面的假 hub 包装，2026-11-02）：
+  - 两组（家里、公司，两个假 hub 数据完全一样）：列表合在一起，组筛选、电脑栏头的组标签、「MacBook（公司）」都对；在「公司」的请求卡上点「允许」，只有公司那台假 hub 收到 `POST /api/v1/interactions/ix_tests_build/resolve`（不带后缀），家里那台什么都没收到；打开公司的会话，只有公司那台收到 `/items` 和 `/seen`（不带后缀）。
+  - 把「公司」设为 Jarvis 和收件箱用的组：`/api/v1/assistant`、`/api/v1/inbox`、设备偏好改向公司那台，家里那台的 WebSocket 没有重连，列表里的键不变。
+  - 断开「公司」：它的数据目录被删掉，列表回到只有一组的样子（没有组筛选和组标签），家里那台的 WebSocket 没有重连。
+  - 两组合并（先各自成组，公司那台停掉时在公司的会话里发一条、再写一段草稿，然后两台的 mesh 互相列出对方）：合并后对话页没有崩，草稿出现在合并后的同一会话里；那条消息在一次运行里由公司那台在合并前发出，在另一次（合并时 App 崩过、重启后补搬）里搬进合并后的组、带原来的 `client_msg_id` 发给了家里那台，都只发了一次。
+  - 同组两台（家里 A、家里 B 的 mesh 互相列出对方，只配对了 A）：hub 列表里 B 显示「经互联发现」；停掉 A，连接换到 B（B 收到 health 和 WebSocket，hub 列表里 B「正在使用」，单次观察约 2 秒，未实测）。A 恢复后靠 5 分钟一次的复查换回，没有等。
+  - 通知的点开和作答没有在模拟器上点过（逻辑上走的是合并后的 id，见上）。
+- 假 hub 的互联字段由 iOS 那一路加进 `scripts/mock/mock_hub.py`；在那之前用一个不改它的包装：照 `android.sh shots` 的做法 exec 它的源码，换掉 `identity()`（health 和 hello 都用它），加上固定的 `hub_id`、`hub_name` 和 `mesh`。
+  两组：两个假 hub（端口各一，不带 mesh），一个用 `debug.mockAddress` 配对，另一个用 `--es debug.addMockAddress http://<回环地址>:<端口>`（debug 包才有，等于设置里的「添加 hub」）。同组两台：两个假 hub 的 mesh 互相列出对方，只配对一台；停掉它，连接换到另一台。
 
 ## 构建和安装
 
 ```sh
 ./scripts/app/android.sh          # 编译 debug 包、装到连着的手机 / 模拟器并打开
 ./scripts/app/android.sh apk      # 只出 APK：android/app/build/outputs/apk/debug/app-debug.apk
-./scripts/app/android.sh test     # 单元测试（模型解码、行合并、Markdown、设计系统的基线）
-./scripts/app/android.sh shots    # 各页面的截图（浅色 / 深色，mock_hub.py 的数据）→ android/app/build/shots/<名字>.png
-./scripts/app/android.sh shots Shots   # 只跑一个截图类
+./scripts/app/android.sh test     # 全部模块的单元测试（含共享夹具入口）
+./scripts/app/android.sh lint     # Android lint
 ```
 
-- 需要 Android SDK（`$ANDROID_HOME`，默认 `~/Library/Android/sdk`）和 JDK 17；没有 JDK 17 时脚本用 Android Studio 自带的。
+- 需要 Android SDK（`$ANDROID_HOME`，默认 `~/Library/Android/sdk`），安装 API 37 平台和对应 build-tools；需要 JDK 21，可用 Android Studio 自带的 JBR 21。
+- 工具链为 Gradle 9.8.2、AGP 9.5.0、Kotlin 2.4.21、Compose BOM 2026.09.00。版本集中在 `android/gradle/libs.versions.toml`；wrapper 与 daemon 配置也提交进仓库。
+- AGP 9 使用内置 Kotlin，不再 apply `org.jetbrains.kotlin.android`。`build-logic/convention` 提供 `jarvis.android.application`、`jarvis.android.library`、`jarvis.jvm.library`、`jarvis.compose`，统一 SDK 和 JVM 配置；JVM 字节码仍为 17。
+- 脚本会检查启动 JVM；`JAVA_HOME` 指向 JDK 8 等旧版本时，回退到 Android Studio 的 JBR。`gradle/gradle-daemon-jvm.properties` 另将 daemon 固定在 JDK 21，IDE 也应选同一版本。
+- `test` 用 Gradle 的任务选择器执行各模块单测；`lint` 只跑 Android lint，尚未引入 ktlint / detekt。构建缓存和配置缓存已开启。
+- `app/lint-baseline.xml` 只记录两处原有的通知权限误报：调用前已有 `allowed()` 检查，调用本身在 `runCatching` 内。保留原通知代码，其余错误仍阻断构建，已有 warning 继续显示。
+- target 暂停在 36，本轮不申请 Android 17 的本地网络权限；配对与连接流程补齐权限处理后再升到 37。
 - Application ID 走配置：`~/.config/jarvis/config.json` 的 `android.application_id`，没写就用 `app.bundle_id`，再没有就是 `com.example.jarvis`。
-- Gmail 的「使用 Google 账号登录」要接 Google 的回调：`config.json` 的 `android.google_oauth_scheme`（hub `google.client_id` 的反向 client ID，
-  `docs/mail.md`「Android」），`android.sh` 传给 gradle，进 `OAuthRedirectActivity` 的 intent filter。没配时那个 scheme 是占位的，添加 Gmail 会提示改用应用专用密码。
+- 同一台手机上并排装两个版本（比如主线和新版对比）：直接调 Gradle，给不同的 `-PjarvisApplicationId` 和应用名 `-PjarvisAppLabel`（默认「Jarvis」），例如 `./gradlew -PjarvisApplicationId=<包名>.next -PjarvisAppLabel="Jarvis 新版" :app:assembleDebug`。两个版本都注册 `jarvis://` 深链，扫配对码时系统会问用哪个 App 打开。85 MB 左右的 debug 包经 USB 流式安装时，个别手机会中途断开 adb，重装一次即可。
+- 明文 HTTP 仅用于本地或受信任网络；公网使用 HTTPS / WSS 和配对指纹钉扎，优先 IPv6。实际目标由 `HubHttpClient` 校验，见 [network.md](network.md)。
 - App 图标和 iOS 是同一张（`apple/Jarvis/Resources/Assets.xcassets/AppIcon.appiconset/icon.png`）：自适应图标的前景是这张图缩进到 108 dp 画布中间的 72 dp 安全区
   （`drawable/ic_launcher_fg.xml` 内缩 18 dp，图在 `drawable-nodpi/ic_launcher_art.png`），背景是图边缘的深棕 `#1B110D`，桌面裁成圆形还是圆角方形都不会切到圆环；
   主题图标（Android 13+）用 iOS 的 tinted 版当遮罩。通知栏小图标 `ic_stat` 是同一个标志（圆环 + 四角星）的白色剪影。iOS 换图标时这两张 PNG 要重新导出。
-- hub 默认是 HTTP（内网 / VPN），`network_security.xml` 放开了明文流量；不要把 hub 暴露到公网。
 - 装到真机：手机开 USB 调试连上电脑跑 `./scripts/app/android.sh`，或者把 APK 发到手机上直接装。
 
-## 界面风格
+## 缓存体积预算
 
-- token 在 `ui/Theme.kt`：`AppStyle`（五种风格、圆角、阴影、是否圆体）和 `JarvisPalette`（主色、页面、卡片、描边、文字三级、填充、自己的气泡、
-  danger / positive / caution / ai / brand / loop、浮在页面上的控件底色 `floating`），数值抄 `apple/Shared/Design/Styles/`。`schemeOf` 把它映射成 Material 的
-  ColorScheme，Material 自己的组件（菜单、对话框、开关）跟着走；页面读 `JTheme.colors` / `JTheme.type` / `JTheme.style`，不要 `when (style)`。
-- 映射约定：`primary` 主色（白字）、`primaryContainer` 自己的气泡、`tertiary` 是 ai（✦ / AI 分身那行）、`surfaceContainerHighest`（Material Card 的底）是风格的卡片、
-  `onSurfaceVariant` 是不透明的次要灰（iOS 的半透明 secondaryLabel 在灰页面上只有 3.3:1，`JarvisPalette.secondaryText` 同一个值）、`outline` 加深过。
-- 黏土用 Nunito（SIL OFL，`res/font/nunito_variable.ttf`，许可在 `assets/licenses/nunito-OFL.txt`），只有拉丁字母，中文仍是系统字体；字号级别（`JTypeScale`）整套换成它。
-- 表面画法（`Modifier.surface`，iOS `.surface(…)`）：液态玻璃 / Claude 是白卡片（深色是抬高的灰）+ 发丝描边，浮在页面上的控件再带一层柔和阴影（安卓不模糊背后，
-  没有真正的玻璃）；黏土是软块 + 彩色阴影 + 白边；Island 是大而柔的阴影；飞书是灰色发丝描边、无阴影。展开的工作过程：液态玻璃是时间线（左边一条细线，
-  工具的圆形图标坐在线上，工作中间的话是小一号的灰字），其他风格是卡片，同 iOS `StyleSpec.workList`。
-- 外壳的中性色（`ShellColors`：助手对话的灰气泡、切换按钮的选中块、输入框、发送键的墨色、侧边栏底色、「新对话」药丸）各风格都一样，同 iOS `Theme.Shell`。
-- 可读性底线由 `StylesTest` 查（五种 × 深浅）：主色上的白字 ≥ 3.5:1（飞书深色 `#4C88FF` 是飞书自己的蓝，3.35:1，和 iOS 一样放过）、
-  自己气泡的字 ≥ 4.5:1、主色当链接对页面和卡片 ≥ 3:1、正文 / 次要文字在页面、卡片、浅底、错误底上 ≥ 4.5:1。
-- 还没做：字号档位（小 / 标准 / 大，iOS `TextSize`；安卓跟随系统字体大小）、形象（persona）。
+`HubDataStore` 的 `cacheBudgets = CacheBudgets(...)` 可分别配置 items、对话图片和收件箱文件的预算，单位为字节。默认依次为 32 MiB、128 MiB、128 MiB；这些值是初始策略，**未实测**，不代表实际内存占用或设备容量评估结果。
 
-## 折叠屏和大屏
+- items 仍保留末两轮，去掉图片内嵌原始字节，按数据库中 JSON 的 UTF-8 字节数计费。超过预算时，按最近读写时间整段淘汰会话，同时删除游标，避免留下虚假的连续性记录。页面订阅期间保护该会话；受保护的数据单独超额时暂缓淘汰，最后一个订阅释放后补清理。SQLite 页、索引和 WAL 不计入 JSON 预算，数据库文件可能保留可复用的空闲页；这不是数据库文件长度的硬上限。
+- 对话图片按 Coil 的显示尺寸等比降采样，经方向校正后编码成 PNG，再原子写入配对作用域。缓存键包含会话、图片 ID 和目标尺寸，避免复用不合适的缩略图；没有明确尺寸时用当前屏幕尺寸。图片按文件实际字节数计费，读取更新 LRU，整段可见会话的图片都受保护。单图或受保护文件导致无法容纳新图时，拒绝写入并由现有图片失败提示反馈。
+- 收件箱文件按实际落盘字节数计费，命中直接复用，超额淘汰最久未用的文件。系统查看器通过 FileProvider 打开的文件描述符持有保护引用，关闭后解除；单个文件超过预算，或已打开文件占满预算时，下载返回错误。附件保持原始内容，不把文件下载改成缩略图。
 
-2026-11-01 用户的安卓机是折叠屏（书本式，内屏接近正方形）；同一天用户又要求两栏中间能拖、右栏别太小，并且「别只针对我的机型」。
-所以按窗口宽度和系统报的折痕排版，不看机型（同 iOS 的 iPhone Duo / iPad，`docs/ios.md`「iPhone Duo」）：
+预算不涉及 outbox、草稿和持久偏好。飞书行内图片沿用已有编码字节内存缓存，不新增原图磁盘副本。图片解码峰值、SQLite 物理占用、冷启动及滚动性能均未实测，仍需真机验收。
 
-- **单栏**（宽度 < 600dp：手机、折叠屏的外屏、窄的分屏 / 小窗）：上面「外壳」那一套。
-- **两栏**（≥ 600dp：展开的书本式折叠屏、三折屏、平板、横放的手机、宽的分屏 / 桌面窗口）：顶栏铺满整个宽度（实心，下面一条发丝线），下面左右两栏。
-  - 助手：左栏是侧边栏（认识 Jarvis、收件箱、定时任务、知识库、机器、对话历史），右栏是对话或新对话页。
-  - Agents：左栏是列表（打开的那个 Agent 那一行灰底），右栏是它的对话（没有返回键，旁边就是列表），没打开时是「选一个 Agent」。
-    通知、链接打开的 Agent 对话也落在右栏（自动切到 Agents）。返回键先关掉右栏的对话。
-  - Agents 列表里点空间，空间页也在右栏打开；空间页里点的对话压在它上面，返回回到空间页。
-  - 收件箱：左栏列表、右栏是点开的那件（详情和回复，和手机上的底部浮层同一份内容，最宽 760dp）；选中的那行灰底。
-  - 设置：左栏菜单（右上角 ✕）、右栏是点开的那一页，那一页里再进的页面在右栏里压栈。
-  - 左栏点的替换右栏，右栏里点的压栈；右栏的第一页没有返回键（旁边就是列表，`LocalPaneRoot`），压上去的页照常有。
-    系统返回一层层退右栏（对话 → 空间页 / 设置子页 → 占位），退到底才离开。右栏空着时是安静的占位：「选一个 Agent」「选一件事」「选一项设置」。
-  - ☰ 收起 / 展开左栏（右栏铺满，对话最宽 760dp 居中）；Agents 什么都没打开时列表一直在。没有可拖出的抽屉。
-  - 知识库、机器、Jarvis 资料页这些推进来的页面照样盖住整个窗口，内容最宽 760dp 居中（`readableColumn`）。
-  - 开合时打开的东西跟着走：收件箱打开的那件、设置的页、空间页（窄屏是推进来的一页，宽屏在右栏）都在外壳里存着（`rememberSaveable`），换布局不丢。
-- **中间的分隔条能拖**（`ui/shell/Panes.kt`，同 Material 的 pane expansion、iPad 的分栏）：一条发丝线，中间一颗小药丸；线两边各 12dp 都能按住拖
-  （鼠标 / 触控板悬停时是左右箭头光标，TalkBack 有「左栏变宽 / 左栏变窄 / 收起左栏」）。
-  - 拖的时候左栏跟手（位置只在排版阶段读，两栏只重排不重组），经过折痕轻震一下。
-  - 松手：离平放的折痕 28dp 以内就吸到折痕上，否则停在松手处（弹簧接着手指的速度）；往左拖过左栏最窄宽度 64dp 以上（列表跟着变淡）松手就收起左栏，
-    ☰ 再打开。Agents 没打开对话时列表不能收，停在最窄。
-  - 位置按「占窗口宽度的比例」每处（助手、Agents、收件箱、设置）各记一份（SharedPreferences `ui` 的 `ui.split.assistant` 等），
-    窗口宽度变了（转屏、开合、分屏、平板）照比例换算，再夹回两栏的最窄宽度。
-- **默认分在哪里**（`ui/shell/Fold.kt` 的 `paneSplit` / `settleDivider`，`FoldTest`）：
-  - 两栏都有最窄宽度，怎么拖都不会更窄：左栏 280dp，右栏 320dp（手机的宽度）。
-  - 没拖过：左栏约占 38%，夹在 320–420dp 之间，右栏（对话）能留 400dp 就留 400dp。展开的内屏 771dp → 320 / 451（以前对半分是 385 / 385，
-    用户嫌右边小）；Z Fold 那种 700dp → 300 / 400；三折屏全展开 1061dp → 403 / 658；平板横放 1280dp → 420 / 860；横放的手机 800dp → 320 / 480；
-    最窄的两栏 600dp → 280 / 320。
-  - **平放的折痕**（Jetpack WindowManager 的 `FoldingFeature`，`isSeparating == false`）只当吸附点：两栏可以跨过它（平放时折痕几乎看不见），
-    默认位置离它 28dp 以内也吸过去（三折屏的折痕在 1/3、2/3，有的分辨率下默认位置正好落在第一条上）。
-  - **分开的折痕**（`isSeparating`：书本式半折成「书」的姿势、两块屏中间有缝的双屏机）：两栏都不跨过它，固定分在折痕处（有缝就空出缝），
-    不显示药丸、不能拖；有两条（三折屏半折）取离默认位置近的那条。放平后回到用户拖的位置。
-  - 折痕离边太近（某一栏会窄过最窄宽度，比如窗口只盖住屏幕的一部分）就不管它；横向的折痕（翻盖机、书本式横放）不分栏。
-  - 系统报不出折痕时（有的厂商没接 WindowManager 的扩展）效果一样，只是少了吸附。
-- **开合不重建**：`MainActivity` 自己接 `orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|navigation`，
-  开合时只是重新排版：打开的对话、终端（按新的列 × 行重排接管的窗格）、链接卡片都还在。以前每次开合都重建 Activity：打开着的对话关掉、
-  从通知进来的那个对话又被打开一次、通知权限又问一次。输入框里没发的字存在 `Drafts`（进程内，按会话），所以对话从单栏挪到右栏（或反过来）字也不丢。
-  别的原因重建时（换主题之类）打开的对话存在 `onSaveInstanceState` 里，启动的 intent 只处理一次。
-- 横放时侧边的摄像头挖孔、三键导航条：整个外壳按 `WindowInsets.safeDrawing` 的左右留白，折痕位置减掉左边的留白再换成 dp。
-- 窄的左栏里，空间标题行先给空间名，剩下的才给置顶图标和机器名（以前机器名和状态数挤掉了空间名，只剩「…」）。
-- 为什么不用 Material 3 adaptive 的 `ListDetailPaneScaffold`：它自己管一个导航栈，而这个 App 的导航是外壳里几个状态（通知、小组件、快捷方式、链接都直接改它们），
-  没有 NavHost；接进去要么两套栈同步，要么把所有入口改成它的 navigator。这里要的是「按宽度二选一 + 折痕位置 + 能拖的分隔条」，两栏容器（`Panes`）
-  和纯函数的分栏规则（`Fold.kt`，能单测）都不大，只多一个 `androidx.window` 依赖（adaptive 库底下也是它）。
-- 截图（`FoldShots.kt`，`LocalHingeOverride` 模拟折痕、`ShellRoot(startShares = …)` 模拟拖过的位置）：书本式内屏 2312 × 2504（平放、半折、拖到最右）、
-  内屏横放、外屏 1120 × 2528、窄长的内屏 700 × 840dp、三折屏 3184 × 2232（两条折痕）、平板横放 1280 × 800dp、横放的手机 800 × 360dp。
-  拖的过程截不了（Paparazzi 只出一帧），松手后落在哪由 `FoldTest` 测。
-- 还没做 / 没在真机上看：拖动的手感（这台机器没有 KVM，跑不了模拟器，只有逻辑测试和静态截图）、半折成帐篷 / 笔记本时（横向折痕）的上下分屏、
-  开合时的过渡动画。系统设置里如果把这个 App 设成了「原比例」之类的兼容显示，要改回全屏。
+## 设计 token 采用率基线
 
-## 设计系统
+在仓库根目录运行独立检查，无需 Android SDK：
 
-2026-11-01 用户要求「全面升级安卓的交互体验，和 iPhone 版差了很多」：照 iOS 的设计系统（`CLAUDE.md`「设计系统（iOS）」、`docs/ios.md`「设计语言」）
-在安卓建了同一套，页面全部改用它。代码在 `ui/design/`：
+```sh
+python3 scripts/app/android_token_baseline.py
+python3 scripts/app/android_token_baseline.py --report /tmp/android-token-report.json
+python3 scripts/app/test_android_token_baseline.py
+```
 
-| 要什么 | 用什么 |
-| --- | --- |
-| 字号 | `JTheme.type` 的级别（display 28 粗 / title 22 / heading 17 半粗 / body 17 / secondary 15 / caption 13 / sectionHeader 13 半粗 / label 12 / code 13 等宽）和强调（`bodyStrong`、`secondaryMedium`、`captionStrong`、`labelMedium`…），`Type.kt`。单位 sp，跟随系统字体大小；每级带 iOS 的行高，首行顶和末行底裁掉，单行就是字的高度。同一套也映射到 Material 的 Typography |
-| 间距 | `JSpace`：4dp 网格 xxs 2 · xs 4 · sm 6 · s 8 · m 12 · l 16 · xl 24 · xxl 32；页面离屏幕边 16（`JSpace.page`） |
-| 圆角 | `JRadius`：badge 6 · control 10 · card 14 · bubble 20 · panel 22 · page 32；分组卡片用风格自己的（`JTheme.style.corner`） |
-| 尺寸 | `JSize`：线 / 点 / 图标 / 图标框 / 头像 / 点按区域（44）/ 盒子，名字和 iOS `Theme.Size` 一样 |
-| 动画 | `JMotion`：state 0.25 s、layout 0.3 s、reveal / conceal、侧边栏的无回弹弹簧 |
-| 颜色 | `JTheme.colors` 的角色色；状态色只有一张表 `StatusPalette`（需要你红、工作中琥珀、完成未看绿、已看灰，和 iOS、小组件、通知一样，不随风格变），页面用 `JTheme.tone(state)`；`JTheme.diff`、`JTheme.hue`、`JTheme.shell` |
-| 图标 | `JIcons`（`Icons.kt`）：一个意思一个 Material 圆角图标，名字对着 iOS `Theme.Icon`；Jarvis 自己的标志 `JarvisMark`（App 图标同款：夜色底、珊瑚光环、四角星） |
-| 组件 | `Modifier.surface`、`Modifier.cardSlice`（长列表逐行画的卡片，只描外沿）、`GroupCard`、`GroupFooter`、`SectionHeader`、`RowDivider`、`GroupRow`、`StatusDot`、`Chip`、`CountBadge`、`ChoiceChip`、`PillButton`（Prominent / Tinted / Neutral / Destructive）、`CircleButton`、`IconAction`、`IconTile`、`EmptyState`、`Monogram`、`LetterTile`、`SearchField`、`JTextField`、`SegmentedControl`、`JSlider`、`RoundControl`、`FittingRow`、`ErrorLine`、`PageLoading`、`PageHeader` / `PageScaffold`、`JSheet`、`TopFog`、`Haptics`（`Components.kt`、`Controls.kt`、`Chrome.kt`、`Surfaces.kt`）；设置类页面用 `ui/settings/SettingsKit.kt`（`KitPage` / `KitGroup` / `KitRow`…，也在设计系统上） |
+基线保存在 `android/core/designsystem/tools/token-baseline.json`。脚本遍历 `android/feature/*/src/` 的生产 Kotlin 源码，跳过测试目录，忽略注释、字符串和 import 声明，并识别显式导入及别名。按模块统计颜色、字号和 dp 三类的硬编码次数、token 次数与采用率；采用率为 `token / (token + 硬编码)`，没有用量时为 `null`。
 
-- 页面里不写死字号、间距、圆角、颜色、图标名，缺什么先在 `ui/design/` 加一个有名字的 token 或组件。`DesignTokensTest` 扫 `ui/` 的源码（`ui/design/`、`Theme.kt` 除外），
-  每个文件写死的字号（`fontSize =`、`MaterialTheme.typography`）、`Color(0x…)`、dp 数值、`Icons.…` 只能减少；减少后删掉 `src/test/resources/design-baseline.json`
-  重跑一次（`-PrecordDesignBaseline`）记下新的基线，新文件必须是 0。不许为了过测试调高基线。终端（`terminal/`）、图片查看 / 编辑器、图表这类按自己几何画的地方是例外，按基线管着。
-- 页面的骨架：推进来的页面用 `PageHeader`（左边圆形返回、标题居中、右边圆按钮）；列表是一组组圆角卡片（`GroupCard` + `SectionHeader`，长列表每行自己画卡片的一段 `CardSlice`）；
-  按钮一律 `PillButton`（单行，`maxLines = 1`）；输入框 `JTextField`；浮层 `JSheet`；空状态 `EmptyState`；Material 的 `DropdownMenu`、`AlertDialog`、`Switch`（`jSwitchColors()`）照用。
-- 提示（`Toasts.show`）：App 在前台时是外壳里的胶囊（`ToastHost`，iOS 的 toast：状态栏下、带成功 / 出错 / 信息的图标），在后台时退回系统 Toast。
+颜色统计数值 `Color(...)`、命名常量和 `parseColor(...)`，字号统计数值 `.sp`，dp 统计所有数值 `.dp`，包含间距、尺寸和圆角。token 包括相应的 `Tokens`、`JarvisTheme.colors`、`JarvisTypography` 和主题映射下的 `MaterialTheme` 引用。这是源码引用计数，不是运行时样式覆盖率；变量传递、通配成员导入、字符串模板内的表达式与自定义包装函数不做完整语义分析。
 
-## 代码
+2026-10-31 界面重做后，`JarvisTheme.palette` / `type` / `shapes` 也算 token；feature 里的颜色和字号已经全部走 token，页面之间的间距仍是 dp 数值（各风格的内边距在设计系统组件里），基线按重做后的代码更新过一次。
 
-| 文件 | 内容 |
-| --- | --- |
-| `data/Models.kt` | 线上类型（字段全可选，未知字段忽略，Go 的零时间当空） |
-| `data/ApiClient.kt` | REST；错误统一成 `HubException(status, message, code, fields)` |
-| `data/Engines.kt` | 引擎选择：选项、预选、能不能选、检测说明（`Engines`），选择页的状态和保存（`EngineSelection`），配对后那一步要问的机器（`PairingEngine`） |
-| `data/Hub.kt` | WebSocket、重连、machines / sessions / interactions 的状态和事件流 |
-| `data/ChatStore.kt` | 一个会话的 items：`covered`、`history`、补洞（`after_seq`）、往前翻页 |
-| `service/HubService.kt`、`Notifier.kt`、`ActionReceiver.kt` | 前台服务、通知、通知上的按钮 |
-| `chat/` | `Outbox`（发出去还没进 transcript 的消息、离线时存盘排队，连上后按顺序发）、`ConnectionWatch`（标题位的「等待网络 / 连接中… / 更新中…」，看网络回调、OkHttp 的 ping / pong 计数和打开着的对话的 backlog） |
-| `terminal/` | 实时终端：`TerminalGrid`（VT 子集，移植自 iOS 的 `TerminalGrid.swift`）、`TerminalFeed`（帧按序应用、接管时自己攒滚出屏幕的行）、`TerminalLink`（订阅 / 续传 / 接管 / 轮询降级）、`TerminalKeys`（键名 → 终端字节）、`BoxDrawing`、`TerminalScreen` |
-| `ui/design/` | 设计系统：`Tokens`（JSpace / JRadius / JSize / JMotion）、`Type`（字号级别）、`Colors`（状态色、外壳 / diff / 类别色）、`Icons`（JIcons）、`Surfaces`、`Components`、`Controls`（分段、滑块、通话按钮、错误行…）、`Chrome`（页头、搜索框、浮层、输入框、触感）、`JarvisMark` |
-| `ui/shell/` | 外壳：`Shell`（两页、页面栈、设置浮层、路由；宽窗口的两栏 `Panes`）、`Fold`（折痕、分栏规则）、`TopBar`（☰ · 助手 \| Agents · 圆按钮）、`Drawer`（拖出侧边栏）、`Sidebar`、`AssistantModel`（助手的对话列表、当前对话、主对话、置顶）、`AssistantPane`（对话或新对话页 `ShellHome`） |
-| `ui/` | Compose 页面：`AgentsScreen`（含 `AgentsListOptions`）、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`StylePicker`、`Markdown`（段落、列表悬挂缩进、表格、代码块）；`Theme` 是界面风格的 token；`Rows.kt` 是对话的行模型（工具合并、按轮折叠、消息里的标签） |
-| `lark/`、`ui/lark/` | 飞书：线上类型和接口（`LarkModels`、`LarkApi`，`ApiClient` 的扩展）、纯逻辑（`LarkLogic`：位置比较、续行、日期线、已读上报、合并分页；`LarkText`：飞书色板、富文本 / 卡片 Markdown 的行内片段；`LarkCardModel`：卡片元素、分栏宽度；`LarkMarkdown`、`LarkSyntax`，`LarkLogicTest` 等覆盖）、最后一页的缓存（`LarkCache`）；页面（`LarkItemPage`：收件箱一件点开的页面，`LarkTarget` 决定开哪种；`LarkChatView` + `LarkChatModel`；`LarkMessageRow`、`LarkContent`、`LarkCard`、`LarkSummaryCards`、`LarkMoments`、`LarkSheets`：资料卡、表情回复、话题、合并转发、播放器）、图片和表情（`LarkMedia`，`cache/lark-media`）。飞书自己的颜色、尺寸、图标在 `ui/design/Lark.kt` |
-| `ui/InboxActions.kt` | 收件箱一件点开成页面时顶上的操作条（`InboxActionBar`）和回复浮层（`InboxDraftSheet`，草稿、重写、确认后以本人身份发） |
-| `data/Knowledge.kt`、`ui/knowledge/` | 知识库：线上类型、项目分组、搜索结果合并、时间线解析、「问 Jarvis / 开 Agent」带的上下文（`KnowledgeTest`）；列表页和条目页、打标 |
-| `fleet/`、`widget/`、`shortcuts/` | 常驻汇总通知和它的按钮、主屏幕小组件、快速设置磁贴、长按图标的快捷方式 |
-| `settings/` | 设置和机器的线上类型、REST（`SettingsApi.kt`，`ApiClient.raw` 上的扩展）、图表的数学（`ChartMath`：刻度、按字节的整数刻度、单调曲线）、通知设置（`SettingsPrefs`）、存储空间统计（`Storage.kt`） |
-| `ui/settings/`、`ui/machines/` | 设置的子页面和它们共用的分组、行（`SettingsKit.kt`，颜色取自 MaterialTheme）；机器列表、机器页、监控页和曲线（`MetricCharts.kt`） |
-| `ui/shell/` | 外壳（`Shell.kt`）、顶栏、侧边栏、抽屉、助手页；宽窗口的两栏（`Panes.kt`：能拖的分隔条、每处记住的比例）和分栏规则（`Fold.kt`：折痕、默认位置、松手吸附，`FoldTest`） |
-| `ui/web/` | 链接卡片：`LinkSheet`（`Links`、`LinkHost`、卡片、上下文小条）、`WebViewPool`（预加载、选中菜单、`externalIntent`）、`LinkRules`（纯逻辑，`LinksTest` 覆盖） |
-| `ui/chat/` | 对话的行（`ChatViews`、`ToolViews`：工作行、工具详情、diff、待办）、输入框（`Composer`：Agents 的 `ChatComposer`、助手的 `ShellComposer`）、消息菜单、提示（`Toasts`、`ToastHost`）、`ChatEnv`（行要用的：打开文件 / 图片、当前目录、整段对话的图片） |
-| `ui/media/` | 图片：按需加载和缓存（`ChatImageLoader`）、全屏查看器、编辑器、保存 / 分享 / 拷贝（`MediaShare`，分享走自己的 `ChatFileProvider`） |
-| `mail/`、`ui/mail/` | 邮件：线上类型和接口（`MailApi`，`ApiClient` 的扩展）、写信的逻辑（`MailCompose`：地址解析、回复 / 转发的草稿）、HTML 的第二道防线（`MailHtml`）、添加邮箱的表单（`MailAccountForm`）、连接器每行的字（`ConnectorText`）、Google 登录（`GoogleSignIn` + `OAuthRedirectActivity`）、进程里共用的账户 / 飞书状态 / 读过的信（`MailStore`）；读信（`MailThread`、`MailWebView`）、写信（`ComposeMail`）、邮箱和添加邮箱（`MailAccountsScreens`）、连接器和飞书页（`Connectors`）。`MailComposeTest`、`MailHtmlTest`、`MailAccountFormTest`，截图 `MailShots`（`MOCK_MAIL=1`） |
-| `ui/files/` | 文件和 Git：接口（`FilesApi`）、浏览器、文件查看器、Git 页面、diff 解析（`DiffText`，对话里的 diff 也用它） |
+每个文件、每类硬编码数量都不能超过基线，新文件从零开始。终端等允许固定尺寸的现有代码也计入基线，新增用量同样受检查。减少另一个文件的硬编码不会抵消本文件的新增。确需接受变更时，运行 `python3 scripts/app/android_token_baseline.py --update-baseline`，在评审中检查基线差异；普通检查不会重写基线。多车道合并后先运行检查，优先修正新增硬编码，再决定是否更新基线。Swift 出口不在本次范围内。
+
+## 模块与代码
+
+模块以 `android/settings.gradle.kts` 为准，仓库内直接依赖以各模块的 `build.gradle.kts` 为准。下表箭头从使用方指向被依赖方，只列生产代码的 `project(...)` 依赖；外部库与测试依赖不列入。
+
+| 模块 | 职责 | 直接依赖 |
+| --- | --- | --- |
+| `:app` | 应用入口、四 tab、Hilt 装配、配对生命周期、作用域桥接、系统分享和锁屏测试 | `:core:contracts`、`:core:domain`、`:core:terminal`、`:core:navigation`、`:core:hub`、`:core:data`、`:core:chatlist`、`:core:designsystem`、`:core:demo`、`:feature:chat`、`:feature:agents`、`:feature:assistant`、`:feature:inbox`、`:feature:settings`、`:feature:terminal`、`:feature:machines`、`:feature:files`、`:feature:knowledge`、`:platform:notify`、`:platform:phonetools` |
+| `:core:chatlist` | 倒置聊天列表、冻结、回最新、阅读锚点及分页效果；当前主要由 Agent / 助手对话消费 | 无仓库内模块依赖 |
+| `:core:contracts` | 纯 JVM：线上模型、事件解码、HubScope、仓储和传输接口 | 无仓库内模块依赖 |
+| `:core:data` | Room items / outbox / 草稿、DataStore / Tink 凭据、作用域、缓存及真实仓储 | `:core:contracts`、`:core:domain`、`:feature:inbox` |
+| `:core:demo` | 本地演示数据和 DemoHub，使用 assets 中的示例夹具 | `:core:contracts`、`:core:hub` |
+| `:core:designsystem` | 三套界面风格的 token（色板、字体、形状、动效）、组件皮肤（页面脚手架、列表、按钮、要你定的事、对话、收件箱）、外壳导航组件、玻璃（Haze）；打包字体（OFL）和 Phosphor 图标 | `:core:domain`、`:core:hub` |
+| `:core:domain` | 纯 JVM：连续性 reducer、chatLines、排序、收件箱分段、作答策略和配对解析 | `:core:contracts` |
+| `:core:hub` | 纯 JVM：OkHttp HTTP / WS、TLS 钉扎、选路、心跳、配对及各业务传输实现 | `:core:contracts` |
+| `:core:navigation` | Navigation 3 路由类型、Navigator、通知和机器页面路由 | 无仓库内模块依赖 |
+| `:core:terminal` | 纯 JVM：VT 网格、Unicode 宽度、折行和终端输入编码 | 无仓库内模块依赖 |
+| `:feature:agents` | 电脑 → 空间 → 会话的列表、请求卡、新建与关闭确认、空间页、会话和空间的重命名（本地立即生效） | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
+| `:feature:assistant` | 首页、历史抽屉、主对话发送、资料与定时任务页；管理服务和专用聊天样式仍待装配 | `:core:contracts`、`:core:data`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
+| `:feature:chat` | 共用对话、Markdown、工具 / diff / 待办、交互面板、附件组件和应用内链接阅读 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:chatlist`、`:core:navigation` |
+| `:feature:files` | 文件树、文本 / 图片预览和路径插入；从 Agent 对话 ⋯ 菜单进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
+| `:feature:inbox` | 统一收件箱、飞书会话、邮件详情、AI 操作和回复组件；邮件传输仍待装配 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
+| `:feature:knowledge` | 知识库列表、阅读和导航；从 Jarvis 抽屉进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
+| `:feature:machines` | 机器 Dashboard、详情和指标图；从 Agents 机器菜单进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
+| `:feature:settings` | 配对、准备清单、诊断、设备与通知偏好、关于和 APK 安装；设备设置服务仍待装配 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
+| `:feature:terminal` | 终端 Canvas、流式帧消费、接管和输入；从对话页和通知的终端兜底进入 | `:core:contracts`、`:core:terminal`、`:core:designsystem`、`:core:navigation` |
+| `:platform:notify` | 前台服务、通知策略和按钮、操作日志、开机接收与连接保活 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
+| `:platform:phonetools` | 手机工具目录、注册、权限与写入确认，通讯录 / 日历 / 照片 / 位置等实现；设置 › 手机数据进入 | `:core:contracts`、`:core:navigation`、`:core:designsystem` |
+
+依赖的主要方向为 `:app → feature / platform / core`，功能层通过 `:core:contracts` 使用接口，由 App 的 Hilt 模块装配真实实现。当前仍有两处跨层依赖：`:core:data → :feature:inbox`、`:feature:assistant → :core:data`，这是现有构建图，尚未完全符合设计中的单向分层。`:core:domain → :core:contracts`，`:core:hub → :core:contracts`；`:core:terminal` 不依赖其他项目模块。
+
+`build-logic/convention` 通过 `includeBuild("build-logic")` 引入，不是应用模块。它提供 application、library、JVM、Compose、Hilt 约定插件；Hilt 已接入，Room / KSP、DataStore 和 Tink 在 data 模块。版本见 `gradle/libs.versions.toml`。
+
+`app/di/ConnectionRuntime.kt` 持有连接与配对作用域；`ChatDataModule`、`InboxModule` 装配真实仓储。HTTP 与 WS 共用当前候选和凭据，重配时整体切换 `HubScope(hub_id, pairingGeneration)`，关闭旧协程并删除旧作用域数据。普通与助手输入框尚未接上 `DraftStore`，不能把存储类存在写成草稿已持久化。
+
+### 构建、测试和截图
+
+在仓库根目录运行：
+
+```sh
+./scripts/app/android.sh install  # 与不传参数相同：构建、安装并打开
+./scripts/app/android.sh apk      # 只构建 debug APK
+./scripts/app/android.sh test     # 各模块单元测试
+./scripts/app/android.sh lint     # Android lint
+```
+
+脚本支持 `install|apk|test|lint|shots`（`shots` 见下文「假 hub 批量截图」），不透传任意 Gradle 任务。只验证有关模块时直接调用 wrapper，例如：
+
+```sh
+cd android
+./gradlew :core:domain:test :core:hub:test
+./gradlew :feature:chat:testDebugUnitTest
+```
+
+`core:designsystem` 有按像素检查组件的单测（`EnabledStateTest`），用 Robolectric 原生渲染（`@GraphicsMode(NATIVE)`），第一次跑会从 Maven Central 下载 Robolectric 的 Android 运行库（SDK 35）。共享规格在 `spec/fixtures/`，相关测试按连续性、行、作答、排序、收件箱和终端读取。约定插件传入仓库根目录，也可用 `-PjarvisRepoRoot=<仓库根>` 指定。本页未运行这些命令，不据此声明测试通过。
+
+截图使用专用模拟器、假 hub 和 adb；先在单独终端运行 `python3 scripts/mock/mock_hub.py`，再执行以下命令。包名与 `scripts/app/android.sh` 的配置一致；替换占位符，不连接线上 hub。
+
+```sh
+./scripts/app/android.sh apk
+export ANDROID_SERIAL='<专用模拟器序列号>'
+JARVIS_PACKAGE='<配置中的 application_id>'
+ADB="${ANDROID_HOME}/platform-tools/adb"
+"$ADB" install -r android/app/build/outputs/apk/debug/app-debug.apk
+"$ADB" reverse tcp:18760 tcp:18760
+"$ADB" shell "am start -a android.intent.action.VIEW -d 'jarvis://pair?url=http%3A%2F%2Flocalhost%3A18760&token=mock' $JARVIS_PACKAGE"
+```
+
+在配对页确认连接、处理权限和准备清单后，切换到要检查的页面。深浅色各截一张；直接跳转会话时，使用假 hub 的机器和会话 ID：
+
+```sh
+"$ADB" shell cmd uimode night no
+"$ADB" shell am force-stop "$JARVIS_PACKAGE"
+"$ADB" shell "am start -a android.intent.action.VIEW -d 'jarvis://open?machine=<示例机器ID>&session=<示例会话ID>' $JARVIS_PACKAGE"
+"$ADB" exec-out screencap -p > /tmp/jarvis-android-light.png
+"$ADB" shell cmd uimode night yes
+"$ADB" shell am force-stop "$JARVIS_PACKAGE"
+"$ADB" shell "am start -a android.intent.action.VIEW -d 'jarvis://open?machine=<示例机器ID>&session=<示例会话ID>' $JARVIS_PACKAGE"
+"$ADB" exec-out screencap -p > /tmp/jarvis-android-dark.png
+```
+
+页面就绪后再截图。批量截图用 `./scripts/app/android.sh shots`，debug 直达参数见下文；它们都不连线上 hub。滚动性能见「界面风格的性能」。
+
+## 界面风格的性能
+
+2026-10-31 在测试手机（Android，ColorOS，连真实 hub）上用 `scripts/diag/android_scroll_perf.py` 实测：debug 包，经调试入口打开页面
+（`debug.style` 切风格，`debug.automation` 关掉掉帧降级，量的是玻璃本身的开销），等 3.5 秒后清零 `dumpsys gfxinfo`，上下各滑两次，
+读 framestats。帧时间 = `FrameCompleted − IntendedVsync`，每次取 framestats 里最后约 120 帧（未完成和异常的行剔除），每个场景 10 次。
+卡顿帧占比是 gfxinfo 自己的「Janky frames ÷ Total frames」，10 次合计，括号里是单次的 min / p50 / max。
+对话场景是手机上最长的一个 Agent 会话（transcript 最大）；第一轮用的 Jarvis 主对话每次只渲染约 20 帧（没滚动起来），不作数。
+
+模糊输入是 Haze 默认分辨率（约 0.78）时：
+
+| 场景 | 风格 | 样本帧 | min | p50 | p90 | max | mean（ms） | 卡顿帧占比 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Agents 列表 | 晨报 | 874 | 2.6 | 8.5 | 16.7 | 33.6 | 9.45 | 4.46%（3.4 / 4.5 / 6.1） |
+| Agents 列表 | 看板 | 993 | 2.8 | 7.1 | 10.3 | 32.2 | 8.03 | 1.02%（0.2 / 2.3 / 4.6） |
+| Agents 列表 | 玻璃 | 988 | 5.2 | 10.9 | 15.5 | 51.1 | 11.31 | 1.75%（0.3 / 2.3 / 4.4） |
+| 收件箱 | 晨报 | 763 | 2.6 | 8.6 | 17.7 | 54.0 | 10.46 | 7.08%（4.1 / 6.8 / 9.2） |
+| 收件箱 | 看板 | 992 | 2.6 | 7.0 | 10.9 | 43.5 | 8.34 | 1.38%（0.0 / 3.1 / 5.3） |
+| 收件箱 | 玻璃 | 772 | 4.6 | 11.2 | 18.8 | 54.2 | 12.99 | 6.59%（5.1 / 6.4 / 7.9） |
+| 对话 | 晨报 | 1183 | 2.8 | 8.2 | 12.5 | 83.3 | 9.27 | 5.53%（3.6 / 5.5 / 8.4） |
+| 对话 | 看板 | 1182 | 2.4 | 8.1 | 13.7 | 90.5 | 9.39 | 5.32%（3.9 / 5.1 / 9.2） |
+| 对话 | 玻璃 | 1186 | 7.3 | 16.3 | 22.3 | 60.2 | 17.46 | 4.39%（2.0 / 4.9 / 8.8） |
+
+结论：列表页玻璃的帧时间中位数比另外两套多 2–4 ms，卡顿帧占比和晨报相当；对话页浮层最多（顶栏、任务条、状态行、输入框和两条滚动边缘），
+玻璃的帧时间中位数是另外两套的两倍。于是把模糊的输入降到四分之一分辨率（`LocalHazePerformanceMode` = `Performance`，`JarvisTheme`），
+截图对比看不出差别。降分辨率之后的手机数据：未实测（手机中途断开 adb）。
+
+模拟器只作参考（GPU 是模拟的，RenderEffect 很慢）：玻璃的帧时间中位数 Agents 166 ms、对话 261 ms，晨报和看板约 17 ms；
+降到四分之一分辨率后玻璃是 103 / 126 ms。这种机器上平时会由下面的降级接手。
+
+降级：`GlassFrameMonitor` 在滑动时连续掉帧（240 帧里超过 30% 超过 1.5 倍帧预算）就本次运行降一级（折射 → 模糊 → 不透明）；
+省电模式和「减少透明」直接用不透明面板（模拟器上拔电开省电模式验证过：悬浮坞和顶栏变成不透明，滚动边缘换成渐变）。耗电：未实测。
 
 ## 验证记录
 
-截图（`./scripts/app/android.sh shots`，2026-11-01，开发机没有 KVM、跑不了模拟器时就靠它）：Paparazzi 在 JVM 上用 layoutlib 画 Compose，连一个本地起的
-`scripts/mock/mock_hub.py`（`shots/MockHub.kt`，随测试进程起停；文件和 Git 的页面另起一个 `MOCK_FILES=1` 的），外壳（助手主对话、新对话页、Agents、侧边栏）、
-对话页（提问、计划、工作中、展开的工作过程：液态玻璃的时间线和黏土的卡片）、收件箱、机器、空间页、设置、知识库（列表、条目、搜索、打标）、
-Jarvis 资料页（定时任务和编辑、跟进、运行记录、关于我、记忆）、配对、界面风格、语音、文件和 Git、全屏查看器、链接卡片、图标、
-对话里的小部件（API 报错卡片、排队中的消息、「/」快捷命令，`ChatPartsShots`）、配对后的选引擎、模型配置、
-设置 › 手机数据的「健康」一行（`HealthShots`：关、开且全部授权、部分授权、都没授权、没有 Health Connect 的「获取」；Health Connect 在 Paparazzi 里问不了，状态作为参数传进去）、
-折叠屏和大屏（`FoldShots`：两栏的 Agents / 空间页 / 收件箱 / 设置，见「折叠屏和大屏」），各拍浅色 / 深色；
-Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍，逐张看过（共 165 张）。底部浮层（ModalBottomSheet）是单独的窗口，Paparazzi 画不出来，
-测试把浮层的内容画在页面上的一个浮层框里（「会话信息」「关闭 Agent」的确认只看了代码，它们和别的浮层一样是分组卡片 / 按钮）。手势（侧边栏拖动、拖分隔条、左滑已处理、左滑关闭）、
-键盘、拍照、听写、真实网络、通知没在这条路上验证，要真机或模拟器。
+以下是旧版 App 的历史记录，本次文档核对未复测。
 
 模拟器（Android 14）连真实 hub，一台 Linux 跑 hub、一台 Mac 经 SSH 接入：
 
@@ -284,32 +325,92 @@ Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍�
 - 手机发消息到 Mac 上 herdr 里的 claude；claude 的 AskUserQuestion 变成卡片（hook 拦下的走 `question`，TUI 里的走 `screen`），在手机上选择后 claude 收到
 - 计划模式下 ExitPlanMode 的对话框在手机上批准，claude 继续执行改了文件
 - App 在后台：提问通知上直接点选项，claude 收到；一轮做完弹「做完了」
-- 实时终端：打开 Mac 上 Claude 的窗格，接管成 46×39（herdr `session control`），打字、退格、^C 写进终端，上下拖滚 Claude 的对话；
-  电脑上另一个程序占着时弹「接管 / 只看」；切「电脑尺寸」改成按 120 列镜像；关掉页面后 control 进程退出、窗格回到电脑尺寸
 - hub 重启后几秒内自动重连；长会话往前翻到两天前的内容；深色模式截图检查
-- 界面风格：模拟器连 `scripts/mock/mock_hub.py`，五种风格 × 浅色 / 深色截了 Agents、两种交互卡片、Jarvis 主对话和抽屉、资料页、收件箱、设置、风格选择页、配对页（切风格可以直接写 `shared_prefs/ui.xml` 后重启 App）
 
 真机（Redmi K60 Pro，Android 16，澎湃 OS 3，没有 Google 服务），手机经 USB（`adb reverse tcp:18660 tcp:18660`）连 hub：
 
 - 配对、列表、对话页正常；claude 的提问在手机上回答，电脑上的 claude 收到
 - 「需要你处理」的通知系统里有（channel `input`，重要级别最高），但默认不在通知栏显示：澎湃 OS 给新装的 App 关掉了悬浮 / 锁屏通知，
   要在「设置 › 通知与控制中心 › 通知管理 › Jarvis」里打开。锁屏后长时间的后台连接还没在真机上测
-- 2026-10-31 复测（最新版）：「需要你处理」的通知弹出来了（通知栏里一条「android-demo · 请选择 A 或 B？」，常驻那条变成「1 个需要你」），
-  点开进对话、在交互卡片上选 A，电脑上的 Claude 收到，通知随之收回
-- 实时终端：接管成 54×50；搜狗输入法打拼音时拼音留在输入法自己的候选栏，选「你好」后电脑上的窗格里出现「你好」，退格一次删一个字；关掉后窗格放回电脑
 
-收件箱「交给 AI」（模拟器连真实 hub，hub 库里临时放一件假邮件，测完删掉）：交给 Mac 上的 Agent，对话页打开、Claude 收到并回复，消息显示成上下文卡片；交给 Jarvis 新开对话并回复；件标为已处理。
+## 助手设置（设置 › 助手）
 
-常驻通知、小组件、磁贴、快捷方式（模拟器 Android 16 base 镜像，连 `scripts/mock/mock_hub.py`）：
+用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。代码在 `feature/assistant/…/settings/`：页面 `AssistantSettingsScreen`，状态和请求 `AssistantSettingsState`，接口用 `AssistantManagement` 的 `config` / `updateConfig` / `launchers`（`GET` / `PUT /api/v1/assistant`、`GET /api/v1/machines/{id}/launchers`）和原有的记忆接口。
 
-- 通知展开是汇总和「查看 / 批准」，点「批准」hub 收到 `{approve:true, mode:"acceptEdits"}`，点「查看」进那个会话；深色 / 浅色截图检查
-- 小组件放到主屏幕、点 Agent 进会话；磁贴加进快速设置、显示「2 个需要你」、点了进 App
-- 「批准第一个待处理」弹框后批准，hub 收到 `bypassPermissions`；「问 Jarvis」在冷启动和 App 已经开着时都进 Jarvis 并弹出键盘
-- 没验证：通知上的「允许 / 拒绝」（假 hub 没有授权请求，代码和「批准」同一条路）；Live Update——这个镜像上通知没有被提升（flags 里没有 PROMOTED_ONGOING），
-  要在 Android 16 QPR1 以后的真机上看；真机上的锁屏表现
+- 入口：设置列表「助手 › Jarvis」（`SettingsPage.Assistant`，深链 `jarvis://open?target=settings&page=assistant`；宽窗口在设置列表右栏打开，页内的子页也在右栏）。Jarvis tab 标题菜单的「助手设置」、右上角头像、抽屉里的「资料页」「启动器」在 Jarvis tab 里原地打开同一页。体验模式没有这页，显示说明。
+- 在哪运行：机器（在线状态；`kind: local` 的写「hub 所在的机器」）、启动器和模型、工作目录（按那台机器的 home 缩成 `~/.jarvis/assistant`）。启动器列表取那台机器的 launchers，只列 Claude 类型：助手是无头的 `claude -p`，Codex / TRAEX 的启动器起不了它。保存的启动器不在那台机器的列表里时提示换一个，否则新对话起不来。
+- 换机器：先确认，确认框写明「记忆和会话记录在原来那台机器上，不会跟过去」，目标离线时另外写明；确认后 `PUT {"machine_id":…,"main":"-"}`。主对话是原来那台机器上的 transcript，换过去接不上，所以一起清掉，下一条消息在新机器上开新的主对话；原来的会话和记忆留在那台机器上，换回来还在（原来的主对话成了普通会话）。换完刷新 Jarvis 的会话列表，重新读启动器和记忆。
+- 数据存在哪里：会话记录和记忆在助手所在的机器；关于我、定时任务和设置在 hub；知识库在 hub 所在的机器（`~/.jarvis/data`）。
+- 了解你：「关于我」编辑 `notes`。还没在 App 里保存过时打开的是 hub.json 的内容，并说明保存后以这里为准；清空也照样保存（告诉助手什么都不写）。记忆列出 `memory/*.md`，新的在前，标题先取 `MEMORY.md` 索引行，其次 front matter 的 name，类型标成用户 / 反馈 / 项目 / 参考；点开看正文，可以编辑整个文件（含 front matter）或删除（hub 同时删索引行）。`MEMORY.md` 只能看。
+- 时区：默认「跟随手机」，和 iOS 一样：打开 Jarvis tab 或这一页时，hub 的 `timezone` 和手机不同就 `PUT timezone`。关掉以后从列表里挑（当前的和手机的排在最前，可搜城市名、中文名、UTC 偏移），之后不再自动同步。这个选择存在本机（SharedPreferences `jarvis-assistant`），不跟 hub 走。
+- 主动做事：「在哪运行」下面一节，一行「定时任务、跟进和运行记录」打开 `AssistantProactiveScreen`（在这一页里原地打开，返回回到这一页），见下文「主动做事」。Jarvis 抽屉的「定时任务」在 Jarvis tab 里原地打开同一页；旧的资料页 `AssistantProfile` 已删掉。
+- 截图：`debug.assistantSettings` 直达页内一部分（notes、memory、memory-file、memory-edit、memory-delete、machine、launcher、timezone、move 即换机器确认框，proactive 即主动做事），和 `debug.openLink 'jarvis://open?target=settings&page=assistant'` 一起传。假 hub 支持 `PUT /api/v1/assistant` 和 `PUT` / `DELETE /api/v1/assistant/memory/{name}`；`MOCK_MACHINES=1` 多一台离线机器，可以看离线的样子。
+- 单测：`AssistantSettingsStateTest`（读写配置、换机器的提示和清主对话、启动器缺失、跟随手机的时区、关于我、记忆的读取 / 修改 / 删除）、`AssistantConfigTest`（`PUT` 只带改了的字段，空的关于我也发）。
 
 ## 经验
 
+- 传输层不能在主线程读响应体：配对页在主线程的协程里发起请求，读 body 时 StrictMode 直接抛 `NetworkOnMainThreadException`，
+  界面上只看到笼统的「连接失败」「连接没有完成」（logcat 的 `JarvisPairing` 有原因）。JVM 单测测不出来；有没有触发还要看 body
+  是否和响应头一起到达：经 `adb reverse` 的 127.0.0.1 常常分两段到，所以失败，模拟器经宿主机别名地址（Android 模拟器文档里的固定地址）连过去的小响应侥幸能过。
+  现在 `awaitResponse()` 默认在 OkHttp 的线程里把 body 读完，只有 APK 下载传 `buffered = false`，并在 `Dispatchers.IO` 里流式读。
+- 模拟器截图检查（深浅色都要，`docs/testing.md`「界面检查清单」）：
+  - 用专用的 AVD，固定端口（`emulator -avd <名字> -port 5600`），所有 adb 命令都带 `-s emulator-5600`，别动别的模拟器。
+  - 数据用 `scripts/mock/mock_hub.py`，配对用深链。URL 里的 `&` 会被设备上的 shell 截断，要整条命令再套一层引号：
+    `adb shell "am start -a android.intent.action.VIEW -d 'jarvis://pair?url=...&token=mock' <包名>"`，然后在确认页点「连接」。
+  - 每张图前先 `am force-stop` 再冷启动，否则各 tab 自己的返回栈会留着上一步推进去的页面；对话页用 `jarvis://open?machine=&session=` 直达。
+  - 按文字点控件用 `uiautomator dump` 找节点坐标。同名的文字（「设置」既是底部 tab，也是 Agents 顶栏齿轮的说明）要按坐标点。
+- `adb shell input swipe` 从屏幕最上方往下滑会拉出系统的快捷设置，测试翻历史时从屏幕中间开始滑。
+- 新建的 AVD 第一次开机偶尔没有网络（`ip addr` 里 eth0 是 DOWN，`dumpsys connectivity` 里没有任何 NetworkAgent），App 配对后一直显示「显示的是本机缓存」：关掉模拟器再开一次就好。
+- 一次按键（TAB、BACK、`input text`）会让屏幕退出触摸模式，之后冷启动的 App 会把键盘焦点放在第一个能拿焦点的控件上（手机上是 Agents 顶栏的「新建会话」，截图里多一个焦点框）。截图脚本在冷启动前点一下桌面的状态栏，回到触摸模式。
+- `HubService` 是用 `startForegroundService` 拉起的。它在调 `startForeground` 之前被停掉（自己 `stopSelf` 或外面 `stopService`），系统就让 App 崩在 `ForegroundServiceDidNotStartInTimeException`（logcat 先有「Bringing down service while still waiting for start foreground」）。截图机负载很高时配对后常崩就是这个（2026-11-02 查实）。以前有三条路会这样：没配对或用户停过时 `onStartCommand` 一上来就 `stopSelf`；我们发出的启动还没进前台，`NotificationRuntime` 因为 `isPaired` 一真一假就 `stopService`；系统发起的启动（新进程里重启服务、`am start-foreground-service`）还没进前台，`Application.onCreate` 里先跑了停止。现在服务一律先进前台再决定去留，用 `stopSelf(startId)` 不误停更新的启动；`HubService.stop()` 只在服务已经在前台时 `stopService`，我们发的启动还没进前台就把停止记下交给它（`ForegroundStarts`），其余交给服务自己判断。复现：模拟器 `adb root` 后在没配对的 App 上跑 `am start-foreground-service -n <包名>/jarvis.platform.notify.HubService`，修复前必崩，修复后服务进前台再自己停。
+- herdr server 继承启动它的 shell 的环境：在带代理变量的 shell 里起 herdr，里面的 claude 也会走那个代理。联调时用干净的登录 shell 起 herdr。
+- Claude Code 设置里放开了的工具（allow 规则、bypass 模式）不会触发 PermissionRequest，测授权卡片要在没放开的会话里。
+- `JsonCodec` 的 `encodeDefaults = false` 会把等于默认值的字段省掉不发，而 hub 把缺的字段当成空 / false：定时任务的 `enabled = true`、
+  `time = "09:00"` 被省掉，保存时被关掉或者 400。发给 hub、hub 又按「缺了就是空」处理的字段，要加 `@EncodeDefault`（`SetRoutinesTest` 逐字检查请求）。
+- OkHttp 不会在一条死掉的连接上重试 WebSocket 升级：hub 前面的转发（adb reverse、ssh -L）断过一次后，每次重连都报 `unexpected end of stream`，直到重启 App。
+  WebSocket 失败时要清空连接池（`connectionPool.evictAll()`）。
+- 倒置的聊天列表（`reverseLayout`）在前面插入新行时保持第一个可见项不动：回复变长、新回复进来时人在最新处也会被留在原地。人在最新处（或刚发了消息）时要主动滚回 0。
+- 列表里拖动排序（连接诊断的候选地址，`EndpointDrag.kt`）：行被拿起时不能改变 `JGroupItem` 的 `separate`，看板风格的 separate 走另一个 `Column` 分支，切换会重建整行，手指下的拖动手势随之断掉（只改分组位置）。要长按拖动的行，`JRow` 的 `onLongClick` 传 null，长按检测放在插槽里：插槽是行的点击的子节点，按下先到这里；手柄自己消费按下，所以手柄和长按不会同时生效。同一条拖动别同时挂两个手势（会走双倍距离）。
+- 会变的透明度不要用 `Modifier.alpha`（2026-11-02 查明 `JButton` 先禁用、后来变成可用时只剩一行字的根因）：`alpha(1f)` 不加图层，别的值加一层 graphicsLayer，于是按钮从禁用（0.4）变可用（1）时，修饰符链中间的这一层被删掉。它前面是 `clip` 和 `background`（按钮的底色、输入框的底和边框、决定选项的底），删层之后 Compose UI 1.12.1 不再画这段背景，直到背景自己再变一次才补上；文字在子节点里，照画。在模拟器和 Robolectric 上逐项试过：去掉 `clip`、或者让这层一直在（`graphicsLayer { alpha = … }`，或者 alpha 用 0.999）都不再丢；去掉 `clickable` 照样丢；按住时 `scale` 那层在链头增删不受影响。设计系统里禁用变淡一律用 `Modifier.stableAlpha`（层一直在，只改 alpha）：`JButton`、`JIconButton`、`JTextField`、`JSwitch`、`JCheckbox`、`JRadio`、`JRow`、`DecisionOption` 和 `JActionSheet` 的行；页面上不用再 `key(enabled) { JButton(…) }`。`core:designsystem` 的 `EnabledStateTest` 用 Robolectric 原生渲染按像素查底色和边框，在旧代码上会失败。Agents 的会话行（`AgentRow`）屏蔽时的变淡也换成了 `stableAlpha`（看板样式在 `clip` + `background` 后面原来是 `alpha(if (muted) 0.75f else 1f)`）。`AgentRowTest` 守着取消屏蔽后底、色块和细线都在、和屏蔽前逐像素一样。不过旧写法在 Agents 行上没有复现丢底：2026-11-02 在模拟器上从列表菜单屏蔽再取消屏蔽（看板、玻璃，深浅色），取消屏蔽后的行和屏蔽前逐像素一样；Robolectric 上包括只有变淡在变、状态色不变的情况也一样。所以这个测试在旧写法上也能过，只是守住取消屏蔽之后的样子。
+- 双栏时左栏的高亮以前从来没亮过（点左栏、深链、调试入口都一样）：外壳用 `paneMetadata(key) == ListDetailSceneStrategy.detailPane()` 判断「这一页是不是详情」，而 `detailPane()` 每次新建一个没有 `equals` 的 `DetailMetadata`，两边永远不相等，`LocalDetailKey` 一直是 null。现在按路由判断（`app/…/navigation/ShellPanes.kt` 的 `isDetailDestination` / `detailOf`；`PairingRoute`、`PhoneToolsRoute` 换成对应的设置页），`ShellPanesTest` 覆盖深链、点击、返回和别的 tab。别拿 Navigation 3 / adaptive 的 metadata 做相等比较。晨报的行没有左右边距，选中的底板和左边那道墨线以前会压在图标上：晨报里底板往两边各伸出 12dp（`selectedRow`）。
+- 新开会话时 node 靠输入框底栏的字样判断 claude 起来了（`server/internal/node/control.go` 的 `inputBoxVisible`）。有的 Claude Code 版本在手动确认模式下底栏是
+  `⏸ manual mode on · ← for agents`，node 认不出，等满 1 分钟报「did not become ready」，其实会话已经能用：App 按「启动前没有、启动后在这个目录里的窗格」找到它并打开。
+- 小米 / 红米：`adb install` 要先在开发者选项里打开「USB 安装」（要登录小米账号），手机上还会弹「通过 USB 安装」的确认框，几秒内不点就自动拒绝
+  （`INSTALL_FAILED_USER_RESTRICTED`）。`adb shell input` 代点屏幕要再打开「USB 调试（安全设置）」，否则报 `INJECT_EVENTS`。
+- 手机没法直接访问 hub 时（hub 在内网、手机在流量上），联调可以走 USB：电脑上把本机 18660 转到 hub，再 `adb reverse tcp:18660 tcp:18660`，
+  手机配对时用 `http://127.0.0.1:18660`。
+- 两栏布局（material3-adaptive 的 `ThreePaneScaffold`）默认在当前窗格变化时把焦点移进那个窗格（`PaneScaffoldDirective.shouldAutoFocusCurrentDestination`），焦点落到窗格里第一个能拿焦点的东西上：Agents 和收件箱是搜索框，带硬件键盘的平板 / 折叠屏一打开就弹出输入法条，第一次按返回只收起输入法（触摸模式下也会，手机单栏没有这个问题）。`Root.kt` 用完整的构造函数把它关掉；`PaneScaffoldDirective.copy()` 没有这个参数，复制出来的又是默认的 true。查焦点从哪来：在文本框上挂 `onFocusChanged` 打 `Throwable()` 的栈，拿焦点是同步发生的，栈里就是发起者。
+
+### 主线旧 App 的经验
+
+2026-11-02 合并主线时并入：这些是主线那个单模块旧 App 踩过的坑，提到的类名、文件名是旧 App 的（读原文用 `git show origin/master:docs/android.md`，代码在合并前的主线历史里）。新架构写同类功能时对照。
+
+- 折叠屏开合会改 `screenSize` / `smallestScreenSize`，没声明 `configChanges` 时 Activity 整个重建：Compose 的 `rememberSaveable` 能恢复，
+  但放在 Activity 字段里的状态（`MainActivity.openSession`，通知打开的对话）不会，开合一次对话就关了；重建时还会把启动 intent 再处理一遍，
+  重新打开用户已经关掉的通知会话。现在声明了 `configChanges`，打开的对话也写进 `onSaveInstanceState`，启动 intent 只在第一次 `onCreate` 处理。
+- 自己画的面板（双栏的右栏、占位、Jarvis 的左栏）底色要用 `Surface(color = …)`，不能用 `Modifier.background`：只有 Surface 会设 `LocalContentColor`，
+  没写颜色的 `Text` 默认是黑的，深色模式下标题、正文黑字压在黑底上看不见（原来的底部浮层、Scaffold 自带 Surface，所以单栏没这个问题）。
+- 同一个页面在两种布局里处在 Compose 树的不同位置，位置决定的 `rememberSaveable` 会丢（草稿、Jarvis 正在看的对话）：按页面用 `SaveableStateHolder.SaveableStateProvider(key)` 包住，
+  不再画的页面 `removeState`，否则关掉再开的对话会回到上次的滚动位置，而不是最新处。
+- 全屏看图别放进 Compose 的 `Dialog`：对话框窗口停在状态栏和导航栏之间（`decorFitsSystemWindows = false`、`FLAG_LAYOUT_NO_LIMITS` 都试过，上下照样露出底下的页面），
+  直接画在对话页上面（`ImageViewerOverlay`），状态栏图标打开时改成浅色、关掉时还原。
+- `Markdown` 默认包在 `SelectionContainer` 里，长按会变成系统的选中文字，消息菜单弹不出来：对话里的回复传 `selectable = false`，要选文字用菜单的「选择」。
+- 倒置列表（`reverseLayout`）的 `verticalArrangement` 写成 `spacedBy(x)` 会顶着上边排，内容少时消息浮在顶上：要 `spacedBy(x, Alignment.Bottom)`。
+- 对话页验证用 `scripts/mock/mock_hub.py`：`MOCK_CHAT_IMAGES=1` 给「博客迁移」那段对话加两张截图（查看器、编辑器），文件和 Git 是编出来的 `~/code/weather`。
+- 小米 / 澎湃 OS 上 `adb shell input` 要开「开发者选项 › USB 调试（安全设置）」，开完要重连一次 adb（`adb reconnect`）才生效；
+  之后偶尔连着几次 `SecurityException: Injecting input events requires … INJECT_EVENTS`，隔几秒再发就好，测试脚本里每次点击被拒就等 3 秒重试。
+- 终端里打字：安卓输入法对每个英文词也走 composition（为了联想），等 commit 再发的话一个词要到空格才出现；所以输入框里的文字（含正在拼的）
+  每次变化只发和上次的差（新字，或若干个退格）。按这个规则，拼音选字时终端里先出现拼音，选好后退格换成汉字（模拟器没有中文输入法，还没在真机上试）。安卓的 emoji 字体会把 ⏺ ⏸ ⏵ 画成两格宽的彩色图标，
+  加 U+FE0E 也没用，这几个按形状自己画。
+- hub 前面的转发断过以后，hub 那边可能还以为 node 在线，但每个调用都回 `rpc: connection closed`（/screen 也一样）。重启常驻 node
+  （`launchctl kickstart -k gui/$UID/com.jarvis.node`）再让 hub 重连这台机器就好了，App 这边不用动。
+- `adb shell am start` 启动一个和当前任务根 intent 一样的 intent 时只是把任务拉到前台（「Activity not started」），onNewIntent 不来；
+  验证快捷方式要从启动器长按图标点，或者让 App 先停在别的页面。
+- WebView 用 application context 建出来时页面永远是浅色：application context 没有 App 的主题（`isLightTheme` 读成 true），WebView 只在外面的主题是深色时才给页面
+  `prefers-color-scheme: dark` / 算法变暗。池里的 WebView 包一层 `ContextThemeWrapper(app, Theme.Jarvis)`，`values-night` 里的 `Theme.Jarvis` 是深色并写明 `isLightTheme=false`。
+- 往 WebView 的选中菜单加项：Chromium 在 `onPrepareActionMode` 里（每次选区变化）填菜单，它的项都要求显示成按钮，浮动工具栏先排这种；
+  自己的项也要 `SHOW_AS_ACTION_ALWAYS`、order 比它小，才排在 Copy 前面。点了以后先 `evaluateJavascript` 读到选区再 `mode.finish()`，先 finish 的话选区已经清掉，读到空字符串。
+- `scripts/mock/mock_hub.py` 带 `MOCK_RICH=1 MOCK_LINKS=1` 时给对话、Jarvis 主对话、收件箱各放了几个链接。
 - 截图测试（Paparazzi）只画一帧：`LaunchedEffect` 里同步改的状态画得出来，要等网络或 `delay` 的画不出来。所以页面要能先装好数据再画：hub 的状态在 `Hub` 的
   StateFlow 里（测试里先 `refresh()`），对话在 `hub.chat(key)`（先等它 `loading = false`），助手的状态在 `AssistantModel`（测试里先 `reload()` 再传给 `ShellRoot`）。
   对话页离开时会 `hub.release(key)` 把对话还掉，同一个测试拍第二张（深色）前要再装一次。页面自己的网络请求有时又会在拍之前回来，盖掉装进去的数据：
@@ -327,53 +428,164 @@ Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍�
   要放在从窗口顶部开始的窗格里；用 `statusBarsPadding()` 的页面（`PageHeader`、对话的顶栏）放在只让开了外壳顶栏高度的窗格里，状态栏的那一截它自己补。
 - 页面在组合树里换了位置（单栏 ↔ 两栏），`remember` / `rememberSaveable` 的状态都跟着丢：要跨布局留下的东西（草稿）放在页面外面。
 
-- 折叠屏开合会改 `screenSize` / `smallestScreenSize`，没声明 `configChanges` 时 Activity 整个重建：Compose 的 `rememberSaveable` 能恢复，
-  但放在 Activity 字段里的状态（`MainActivity.openSession`，通知打开的对话）不会，开合一次对话就关了；重建时还会把启动 intent 再处理一遍，
-  重新打开用户已经关掉的通知会话。现在声明了 `configChanges`，打开的对话也写进 `onSaveInstanceState`，启动 intent 只在第一次 `onCreate` 处理。
-- 自己画的面板（双栏的右栏、占位、Jarvis 的左栏）底色要用 `Surface(color = …)`，不能用 `Modifier.background`：只有 Surface 会设 `LocalContentColor`，
-  没写颜色的 `Text` 默认是黑的，深色模式下标题、正文黑字压在黑底上看不见（原来的底部浮层、Scaffold 自带 Surface，所以单栏没这个问题）。
-- 全屏看图别放进 Compose 的 `Dialog`：对话框窗口停在状态栏和导航栏之间（`decorFitsSystemWindows = false`、`FLAG_LAYOUT_NO_LIMITS` 都试过，上下照样露出底下的页面），
-  直接画在对话页上面（`ImageViewerOverlay`），状态栏图标打开时改成浅色、关掉时还原。
-- `Markdown` 默认包在 `SelectionContainer` 里，长按会变成系统的选中文字，消息菜单弹不出来：对话里的回复传 `selectable = false`，要选文字用菜单的「选择」。
-- 倒置列表（`reverseLayout`）的 `verticalArrangement` 写成 `spacedBy(x)` 会顶着上边排，内容少时消息浮在顶上：要 `spacedBy(x, Alignment.Bottom)`。
-- 对话页验证用 `scripts/mock/mock_hub.py`：`MOCK_CHAT_IMAGES=1` 给「博客迁移」那段对话加两张截图（查看器、编辑器），文件和 Git 是编出来的 `~/code/weather`。
-- `adb shell input swipe` 从屏幕最上方往下滑会拉出系统的快捷设置，测试翻历史时从屏幕中间开始滑。
-- 小米 / 澎湃 OS 上 `adb shell input` 要开「开发者选项 › USB 调试（安全设置）」，开完要重连一次 adb（`adb reconnect`）才生效；
-  之后偶尔连着几次 `SecurityException: Injecting input events requires … INJECT_EVENTS`，隔几秒再发就好，测试脚本里每次点击被拒就等 3 秒重试。
-- herdr server 继承启动它的 shell 的环境：在带代理变量的 shell 里起 herdr，里面的 claude 也会走那个代理。联调时用干净的登录 shell 起 herdr。
-- Claude Code 设置里放开了的工具（allow 规则、bypass 模式）不会触发 PermissionRequest，测授权卡片要在没放开的会话里。
 - hub 只存一份 phone_* 工具列表（`setPhoneTools`），每台手机 `register_phone` 时整个替换，调用发给最后注册的那台（`phoneClient`）。
   所以安卓声明的工具要和 iOS 一模一样，不能多也不能改参数。安卓 10 以后只有在前台的 App 能读剪贴板，后台调 `phone_clipboard_get` 读到的是空，结果里会说明。
 - 两台手机同时连着 hub 时，phone_* 调用发给最后注册的那台：测模拟器上的工具时要关掉真机上的 Jarvis，不然调用发到真机、它那边没开这个数据源就超时。
   Claude Code 只在启动时读一次工具列表，新加的工具要新开会话才看得到。
 - 模拟器默认没有能写的日历账号，`phone_calendar_create_event` 会报「no writable calendar」；测的时候用 `content insert` 建一个 LOCAL 日历。
 - 已配对时打开配对链接：配对页要等配对做完再清掉 `pendingPair`。先清掉的话 Root 立刻换回正常页面，配对页和它的协程一起被丢掉，链接等于没点。
-- `JsonCodec` 的 `encodeDefaults = false` 会把等于默认值的字段省掉不发，而 hub 把缺的字段当成空 / false：定时任务的 `enabled = true`、
-  `time = "09:00"` 被省掉，保存时被关掉或者 400。发给 hub、hub 又按「缺了就是空」处理的字段，要加 `@EncodeDefault`（`SetRoutinesTest` 逐字检查请求）。
-- OkHttp 不会在一条死掉的连接上重试 WebSocket 升级：hub 前面的转发（adb reverse、ssh -L）断过一次后，每次重连都报 `unexpected end of stream`，直到重启 App。
-  WebSocket 失败时要清空连接池（`connectionPool.evictAll()`）。
-- 倒置的聊天列表（`reverseLayout`）在前面插入新行时保持第一个可见项不动：回复变长、新回复进来时人在最新处也会被留在原地。人在最新处（或刚发了消息）时要主动滚回 0。
-- 新开会话时 node 靠输入框底栏的字样判断 claude 起来了（`server/internal/node/control.go` 的 `inputBoxVisible`）。有的 Claude Code 版本在手动确认模式下底栏是
-  `⏸ manual mode on · ← for agents`，node 认不出，等满 1 分钟报「did not become ready」，其实会话已经能用：App 按「启动前没有、启动后在这个目录里的窗格」找到它并打开。
-- 小米 / 红米：`adb install` 要先在开发者选项里打开「USB 安装」（要登录小米账号），手机上还会弹「通过 USB 安装」的确认框，几秒内不点就自动拒绝
-  （`INSTALL_FAILED_USER_RESTRICTED`）。`adb shell input` 代点屏幕要再打开「USB 调试（安全设置）」，否则报 `INJECT_EVENTS`。
 - 无窗口（`-no-window`）的模拟器上 `adb exec-out screencap` 有时拿到的是上一帧：点完马上截图像是没反应，其实已经跳过去了。截两次、中间等一秒。
 - 只读地连真实 hub 看界面：配对页会 `POST /api/v1/auth/tokens` 在 hub 上多出一台设备。debug 包可以 `run-as` 直接写 `shared_prefs/pairing.xml`（`url`、`token`）再启动，看完 `pm clear`；别点会写 hub 的开关（Claude Code 设置、通知、手机数据）。
 - 曲线的纵轴按字节时要按 1024 取整（`ChartMath.yTicks(binary = true)`），按十进制取整的刻度显示出来是「1.91 MB/s」「3.81 MB/s」；数值标签的宽度按最宽的那个量，固定宽度会被裁掉。
-- 手机没法直接访问 hub 时（hub 在内网、手机在流量上），联调可以走 USB：电脑上把本机 18660 转到 hub，再 `adb reverse tcp:18660 tcp:18660`，
-  手机配对时用 `http://127.0.0.1:18660`。
-- 终端里打字：安卓输入法对每个英文词也走 composition（为了联想），等 commit 再发的话一个词要到空格才出现；所以输入框里的文字（含正在拼的）
-  每次变化只发和上次的差（新字，或若干个退格）。按这个规则，拼音选字时终端里先出现拼音，选好后退格换成汉字（模拟器没有中文输入法，还没在真机上试）。安卓的 emoji 字体会把 ⏺ ⏸ ⏵ 画成两格宽的彩色图标，
-  加 U+FE0E 也没用，这几个按形状自己画。
-- hub 前面的转发断过以后，hub 那边可能还以为 node 在线，但每个调用都回 `rpc: connection closed`（/screen 也一样）。重启常驻 node
-  （`launchctl kickstart -k gui/$UID/com.jarvis.node`）再让 hub 重连这台机器就好了，App 这边不用动。
 - 假 hub（`scripts/mock/mock_hub.py`）的 WebSocket 连上时不推待处理的交互：进 App 后下拉刷新一次才拿到交互。
 - 飞书页面的截图（`LarkShots`）要 `MOCK_LARK=1` 的假 hub（会话里各种消息、表情库、图片）：图片在后台解码，第一帧拍不到。先用同一个名字拍一次让页面把要的图都发出去，等 `LarkMedia.settle()`（没有在下载的图），再拍真的；链接预览这种「拿回来的东西里还有图」的要来回两三次。默认的假 hub 里 f2、f3 是另一份数据（iOS 的截图、TranslationTests 和 f3 那段画全了的会话用），`MOCK_LARK=1` 时这几个会话换成这一份，两份互不影响。
 - 收件箱的详情是 `JSheet`（ModalBottomSheet，单独的窗口），链接卡片和看图盖不上去：会话这种要点链接、看图的页面推成页面画在列表上面，不放进浮层；浮层里的资料卡、话题、removed帖子点链接或图片时先关掉自己（`LarkActions.closing`）。
-- `adb shell am start` 启动一个和当前任务根 intent 一样的 intent 时只是把任务拉到前台（「Activity not started」），onNewIntent 不来；
-  验证快捷方式要从启动器长按图标点，或者让 App 先停在别的页面。
-- WebView 用 application context 建出来时页面永远是浅色：application context 没有 App 的主题（`isLightTheme` 读成 true），WebView 只在外面的主题是深色时才给页面
-  `prefers-color-scheme: dark` / 算法变暗。池里的 WebView 包一层 `ContextThemeWrapper(app, Theme.Jarvis)`，`values-night` 里的 `Theme.Jarvis` 是深色并写明 `isLightTheme=false`。
-- 往 WebView 的选中菜单加项：Chromium 在 `onPrepareActionMode` 里（每次选区变化）填菜单，它的项都要求显示成按钮，浮动工具栏先排这种；
-  自己的项也要 `SHOW_AS_ACTION_ALWAYS`、order 比它小，才排在 Copy 前面。点了以后先 `evaluateJavascript` 读到选区再 `mode.finish()`，先 finish 的话选区已经清掉，读到空字符串。
-- `scripts/mock/mock_hub.py` 带 `MOCK_RICH=1 MOCK_LINKS=1` 时给对话、Jarvis 主对话、收件箱各放了几个链接。
+
+## App 外壳与页面直达
+
+当前组合根使用 `:core:designsystem` 的 `JarvisTheme`，风格来自 `AppStyleStore`（设置 › 界面风格）。底部固定四个 tab：Jarvis / Agents / 收件箱 / 设置，三套风格顺序相同、都带文字，样子各按各的风格（玻璃是悬浮坞，晨报和看板是底栏）；dock 属于每个 tab 的第一页，推进去的页面（对话、文档、二级设置）盖住它；访问过的 tab 保持组合，切回来不重建（详见 `docs/android-design.md` 第 3 节）。平板和折叠屏按窗口宽度分布局：expanded 时四个 tab 进左侧导航栏，列表和详情分两栏，桌面姿态把对话放上半屏、输入框放下半屏（第 3.1 节）。四个 tab 各自保留返回栈，Agents 角标统计普通 Agent 的待处理交互数，并按 hub 的会话／空间屏蔽及例外规则过滤；Jarvis 角标统计助手待处理交互数，同一会话的多个请求分别计数。收件箱角标统计「需要你」分组中的未处理事项和未屏蔽请求。当前 tab、Agents 机器筛选及各 tab 打开的会话保存在配对目录内，正常冷启动恢复；退出、撤销或重新配对时一并删除，已退出的写入者不能重建位置文件。旧版外部 shell 偏好及准备清单等兼容全局记录在退出配对时清除。
+
+连接状态显示在各页自己的标题位（Agents、收件箱、Jarvis 和对话页），外壳不再在页面上方另加横幅，避免重复和顶部多出空白。轻量刷新失败不另弹提示；用户操作失败由统一出口处理，断网提示共用 4 秒去重窗口。这是提示策略配置，性能未实测。操作结果未知时仍保留会话内的核对入口。
+
+第二批模块入口：
+
+- 对话页终端按钮进入完整终端；助手对话隐藏该按钮。通知的终端兜底（`jarvis://open?target=terminal&machine=…&session=…`）打开同一页面，下面垫着原对话。
+- 收件箱事项和飞书会话深链（`target=inbox&item=…`、`target=lark&chat=…`）先等事项列表刷新，再换成收件箱列表会打开的飞书或邮件页面；事项已不在列表时显示说明。
+- Agents「列表设置」面板里的「机器监控」进入机器列表；树里每台电脑栏头右边的仪表按钮直接进这台电脑的详情。
+- Agents 操作和对话页菜单确认关闭成功后，从所有 tab 移除该会话的聊天、请求和终端页面；结果未知时保留页面供核对。分享目标与 Agents 共用 `agentRank`，同状态再按时间和稳定标识排序。
+- Agent 对话页 ⋯ 菜单进入文件；确认是仓库后显示 Git 和改动数。文件和 Git 在原会话内切换，插入路径保留草稿和有效选区，并返回输入框。
+- Jarvis 抽屉的「知识库」进入档案、搜索及详情，链接在应用内打开。
+- 设置 › 手机数据进入工具权限和开关。应用前台状态与常驻服务实际运行状态共同决定工具可用性；定位和剪贴板仍要求前台。旧配对若没有设备标识，须重新配对。
+- 设置 › 助手（`SettingsPage.Assistant`）是 Jarvis 的设置页，Jarvis tab 的标题菜单「助手设置」、右上角头像也打开它，见上文「助手设置」。
+- 未配对时可选「没有 hub？先体验一下」。体验模式使用独立数据、缓存及待发队列，设置中可退出；缺少演示数据的终端、机器监控和知识库显示说明，不调用真实 hub。
+
+Debug 直达入口及启动参数解析适配器只存在于 `src/debug/`，复用 `:core:navigation` 的 debug 解析，Release 不注册开发入口。示例中的包名替换为实际构建使用的 Application ID：
+
+```sh
+adb -s emulator-5600 shell am start -W -n com.example.jarvis/jarvis.android.debug.DebugEntryActivity --es debug.openTab Agents
+adb -s emulator-5600 shell am start -W -n com.example.jarvis/jarvis.android.debug.DebugEntryActivity --es debug.openSession machine/session --es debug.conversationKind agent
+adb -s emulator-5600 shell am start -W -n com.example.jarvis/jarvis.android.debug.DebugEntryActivity --es debug.openRequest request --es debug.session machine/session --es debug.conversationKind agent
+adb -s emulator-5600 shell am start -W -n com.example.jarvis/jarvis.android.debug.DebugEntryActivity --es debug.openPairing true
+adb -s emulator-5600 shell am start -W -n com.example.jarvis/jarvis.android.debug.DebugEntryActivity --es debug.openDiagnostics true
+```
+
+每次只传一种 `debug.open…` 目标。`debug.openTab` 可选 Jarvis、Agents、Inbox、Settings；`debug.conversationKind` 可选 agent 或 assistant；`debug.openCatalog true` 打开设计系统组件目录；`debug.openLink '<jarvis:// 链接>'` 按 MainActivity 的规则打开任意深链（终端兜底、通知 tab、收件箱事项、设置子页）；`debug.openPage` 可选 machines、knowledge、phone、catalog，直达没有公开深链的页面。链接里有 `&` 时要再套一层单引号，adb shell 会把整条命令交给设备上的 shell。`debug.theme` 可选 light 或 dark，只影响本应用（含各页面自己套的 JarvisTheme），不更改模拟器系统主题。`debug.style` 可选 glass、brief、board，切换界面风格并保存（和在设置里选一样）。`debug.posture` 可选 tabletop、book，在窗口正中假装有一条半折的铰链（只给截图用：android-35 的 Pixel Fold 模拟器不给 App 报 FoldingFeature）。
+
+状态预览使用 `debug.state`，只在 debug 包解析。请使用未配对的独立测试包；入口会自动进入本地体验模式并跳过准备清单，不访问真实 hub。已配对时不自动退出或替换配对，需要改用独立测试包。状态固定，刷新不会结束预览；不传该参数重新启动即可回到普通体验模式。可同时传 `debug.openTab`、`debug.openSession` 和 `debug.theme` 等既有目标及主题参数，每次仍只选一个目标，不能与 `debug.mockAddress` 同传。
+
+| `debug.state` | 默认目标 | 可截图状态 |
+| --- | --- | --- |
+| `offline` | Agents | 等待网络，保留演示列表 |
+| `connecting` | Agents | 正在连接 |
+| `updating` | Agents | 正在更新 |
+| `pairing-expired` | Agents | 配对失效提示，保留缓存示例 |
+| `certificate-mismatch` | Agents | 证书变化提示 |
+| `local-permission` | Agents | 本地网络权限提示 |
+| `empty` | Agents | 空会话列表；可指定 Inbox 查看空收件箱 |
+| `loading` | Inbox | 持续加载；也可指定会话目标 |
+| `load-failed` | Inbox | 加载失败及重试入口；也可指定会话目标 |
+
+```sh
+adb -s emulator-5600 shell am force-stop com.example.jarvis
+adb -s emulator-5600 shell am start -W -n com.example.jarvis/jarvis.android.debug.DebugEntryActivity --es debug.state offline --es debug.theme dark
+adb -s emulator-5600 exec-out screencap -p > /tmp/jarvis-state-offline-dark.png
+```
+
+状态夹具及参数名都在 `app/src/debug/`，正式构建不注册状态入口。截图前等待目标页面出现；这些固定状态不用于测量连接或加载性能，性能未实测。
+
+本轮验证：`./gradlew --no-daemon -q :app:assembleDebug :app:testDebugUnitTest` 通过，App 单测共 14 项。进程内 Kotlin 编译复核及独立包构建也通过。在专用模拟器上完成以上 9 个状态的深浅色截图，共 18 张，输出 `/tmp/jarvis-p5-root-shots/`；抽查离线、空列表、配对失效和加载失败页面。Release 产物检查、真实关闭会话和退出配对仍待集成验收。
+
+Debug 包的设置页底部另有一行「组件目录（调试版）」，自动化启动（`debug.automation`）时隐藏。组件目录的路由和页面只在 `src/debug/` 编译，Release 包里没有。兼容 `--es openSession machine/session`。通知、公开深链和 debug 参数最终汇入同一个路由器；旧通知需要等待会话元数据加载后再分流。
+
+## 假 hub 批量截图
+
+先启动专用 Android 模拟器，再指定序列号和输出目录：
+
+```sh
+./scripts/app/android.sh shots -s emulator-5600 --out /tmp/jarvis-android-shots
+```
+
+命令构建并安装独立测试包 `com.example.jarvis.shots`，只清理该包的数据。随后用 `scripts/mock/mock_hub.py` 在自动分配的本地端口启动假 hub，通过指定设备的 `adb reverse` 自动配对，逐页冷启动并输出深浅色 PNG。覆盖四个 tab、Agent 对话、助手对话（落在 Jarvis 首页的内嵌对话）、请求、终端、飞书会话、邮件详情、配对、连接诊断、通知和准备清单两个设置子页、机器监控、知识库、手机数据及组件目录。假 hub 为这些页面提供了飞书窗口 / 话题 / 文档、邮件正文、知识库、会话文件和 Git 的示例数据。自动化启动从各 tab 根页开始、不恢复上一张的位置，也不弹准备清单；脚本以配对目录里的 `shell-position.json` 判断外壳已起来。浮层、菜单和表单（状态浮层、搜索、任务页、全文、完整请求页、文件 / Git、筛选、细列表、空间页、长按菜单、新建、历史、飞书话题和文档、设备、机器详情、知识库详情、体验模式）仍要在页面上点开再截。示例联系人在启动假 hub 前统一匿名化；实际截图内容来自假数据。
+
+测试不读取用户的 hub 配对，也不连接用户 hub；自动化入口不声明可用手机工具。结束或失败时停止本次假 hub、停止测试包并移除本次端口转发。输出目录还包含假 hub 日志和夹具标识，便于排查缺页。截图等待时间只是脚本配置，不代表页面加载性能；性能未实测。手机权限、国产系统后台存活和真实终端输入法仍需真机验证。
+
+### 改前改后逐像素比对
+
+只挪代码、不许改样子的重构（比如 2026-11-02 把 Agents 树的组件挪进 designsystem），用改前、改后两个包在同一台模拟器上按同样的步骤截图，逐像素比。要比得准，先把会自己变的东西都定住：
+
+- 动画：`settings put global animator_duration_scale 0`（App 据此进入减少动效，转圈和呼吸光都画成静止的样子）。
+- 时间：假 hub 的「现在」和模拟器的时钟固定在同一时刻（hub 里的 `datetime.now()` 返回固定值；模拟器 `adb root`、`settings put global auto_time 0`，冷启动时和每次截图前用 `date -u` 设一次）。晨报的问候、循环的「下次 HH:MM」、「N 分钟前」都跟着时钟走，不定住就会在改前改后之间变。
+- 状态栏：每轮截图前重新进 SystemUI 演示模式（先 `exit` 再 `enter`），只留时钟和电量；不退出就重复进入会留着上一次的图标（实测前一轮两个 Wi-Fi 图标，后一轮一个）。
+- 比对：别用 Pillow 的 `ImageChops.difference(a, b).getbbox()` 判断相同。RGBA 图的 `getbbox()` 只看 alpha 通道，截图的 alpha 全是 255，永远报「相同」（踩过）。直接比 `tobytes()`，差异按通道算。
+
+`android.sh shots` 可以把这些都做掉（2026-11-02，多 hub 那次加的；不设变量时行为不变）：
+
+```sh
+SHOTS_STYLE=glass SHOTS_MOCK_PORT=<端口> SHOTS_FROZEN=2026-11-02T04:00:00+00:00 SHOTS_SETTLE=3 \
+  ./scripts/app/android.sh shots -s <模拟器> --out /tmp/shots-before-glass
+python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-after-glass --diff /tmp/shots-diff-glass
+```
+
+- `SHOTS_STYLE`：每次启动都带 `debug.style`；`SHOTS_MOCK_PORT`：假 hub 用固定端口（地址会写进配对，改前改后必须同一个端口）；`SHOTS_SETTLE`：冷启动后等几秒再截（之后还会等到连续 3 帧相同，最多 20 秒）。
+- `SHOTS_FROZEN`：假 hub 的 `datetime` 和 `time` 换成定住的时钟、`uuid4` 用固定种子（hub_id 每次一样），都在 `android.sh` 的包装里做，不改 `mock_hub.py`；模拟器 `adb root`、关自动时间，整个运行期间每 0.1 秒设一次时钟（机器页的图按秒取时间）。动画倍率设 0，状态栏进演示模式；结束时恢复。
+- 比对脚本直接比像素，给出差异像素数、外接矩形，`--diff` 输出差异图；`--tolerance` / `--ignore '<文件名通配>=x0,y0,x1,y1'` 默认关。
+- 同一个包连拍两次，仍会不同的只有两处：连接诊断里「已通过身份校验，N 毫秒」（App 实测的探测耗时，单次样本）和玻璃浅色飞书页底部 49 行差 1 的像素（原因未查明）。比对时这两处用 `--tolerance 1 --ignore '*-diagnostics.png=0,Y0,1079,Y1'` 去掉（Y 按风格：玻璃 1385–1425，晨报 1360–1410，看板 1305–1355）。
+
+## 主动做事（设置 › 助手 › 主动做事）
+
+用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。「设置 › 助手」拆成两块，这一块管 Jarvis 自己主动做的事：定时任务、它替自己安排的跟进、运行记录（iOS 的同名页面在 `ios/Jarvis/Views/Settings/AssistantProactiveViews.swift`）。代码在 `feature/assistant/…/proactive/`，对外只有 `AssistantProactiveScreen(onBack, onOpenConversation)`：`onOpenConversation` 打开一段助手对话（运行开出来的、跟进接着的、立即运行新开的）；接口和协程作用域默认取 Jarvis tab 宿主（`LocalAssistantHost`）里当前配对的。子页面（某个定时任务、新建、全部跟进、运行记录）和返回在页面里自己管，转场和 App 的页面一样从右边推入。
+
+- 入口：设置 › 助手的「主动做事」一节（在助手设置页里原地打开，打开的对话经 `ChatRoute(kind = Assistant)` 落到 Jarvis tab）；Jarvis 抽屉的「定时任务」在 Jarvis tab 里原地打开同一页，打开的对话直接显示在 Jarvis 首页。
+- 首页：Jarvis 的一句话（几个定时任务开着、下一件在什么时候）；「接下来」时间线（左边大号时刻，定时任务的下次运行和跟进混排，最多 4 件）；定时任务（规则的人话「每个工作日 上午 9:00」、下次、上次结果和开关；`created_by: "assistant"` 的头像角上有火花并写明「Jarvis 在对话里建的」，上次没跑起来的角上是红色警告）；已安排的跟进（时间、在哪台机器、接着原对话还是开新对话，⋯ 里立即运行 / 打开原对话 / 取消，取消要确认）；最近 3 次运行。右上角 ＋ 从模板新建（会前准备、周报、下班前盘点，和 iOS 同一套）或空白。长按定时任务：立即运行、编辑、删除。
+- 定时任务页：名称、开关、时间（时和分两个滚轮，24 小时，TalkBack 可以像滑块一样调）、周几（一 … 日，快捷「每天 / 工作日 / 周末」，最后一天关不掉）、提示词；已有的还有立即运行（有改动先保存）、查看上次结果、历史记录（最近 5 次，更多进运行记录）、删除（要确认）。改了没保存就返回会先问。
+- 运行记录：新的在前，按天分组；已运行 / 没跑起来 / 已跳过，准时或晚了多久、手动运行、原因（hub 常见的英文错误译成中文，其余原样显示）；开出过对话的点开就是那段对话。一个定时任务的历史按 `ref_id` 过滤：`Run` 加了 `ref_id`、`due` 两个字段（hub 本来就返回）。「上次」以运行记录里最新的一次为准：hub 的立即运行不更新 `last_run`，只看定时任务自己的字段会把上一次定时运行的时间和这次手动运行的结果拼在一起。
+- 写入：`PUT /api/v1/assistant/routines` 是整表替换。每次改动（开关、编辑、新建、删除）在写之前重读整表，只改这一个定时任务，其余定时任务（包括 Jarvis 在这期间新建的）和 hub 自己的字段原样带回；编辑只写用户改过的字段，Jarvis 在这期间从对话里改的（比如时间）留着。新建的 id 在 App 里生成（`rt_` + 8 位十六进制，hub 只给空 id 分配），回包丢了再点「添加」不会建出第二个。读和写排队、一次一个，开始了的写不会因为离开页面被打断；开关先在界面上动，写失败按 hub 上的值恢复。写入或取消跟进失败先重读核对，hub 上已经是想要的样子就不算失败；正在编辑的定时任务在这期间被删了，提示「已经不在了」，不会把它写回去。
+- 立即运行：定时任务 `POST …/routines/{id}/run`、跟进 `POST …/followups/{id}/run`，hub 要等对话开起来才回（它自己最多等 2 分钟），所以这两个请求的读超时是 130 秒（`HttpAssistantManagement`，和新建 Agent 一样；其他请求仍是 15 秒）。成功后打开新对话；跟进跑了就从列表里拿掉（hub 是先拿掉再跑，所以失败后也重读）。运行和取消挂在配对的作用域上，离开页面不会中断。
+- 失败提示：用户操作的失败交给 App 的统一出口（`LocalAppFeedback.notice`），没有时（调试入口）显示在页面底部；传输层在配对或线路变了时抛的取消算这次请求失败（「连接刚换过，请再试一次」），页面不会卡在「正在保存」。读取失败显示在对应的区块里，可以重试，已经读到的内容留着。相对时间每 30 秒刷新，最近的一件到点 5 秒后自动重读（按上次读取的时刻算，时钟跳动不会把这次重读取消）。
+- 时间：hub 的 `next_run` 按用户时区写、带偏移（`+08:00`）；Android 12 / 13 的 `Instant.parse` 只认 `Z`，这一页统一用 `instantOf`（先 `Instant`，再 `OffsetDateTime`）。`core:contracts` 的 `parseTime` 还是只用 `Instant.parse`，别的页面遇到带偏移的时间在这两个版本上会读不出来。hub 也接受 `9:00` 这样的一位小时，编辑页按 `09:00` 显示和写回。数字一律按 `Locale.ROOT` 格式化。
+- 调试入口（只在 debug 包里，`app/src/debug/…/ProactiveDebugActivity.kt`）：直接连假 hub，不读 App 自己的配对，只接受本机回环地址：
+
+  ```sh
+  PORT=0 python3 scripts/mock/mock_hub.py        # 打印 mock hub on <回环地址>:<端口>
+  adb -s <模拟器> reverse tcp:<端口> tcp:<端口>
+  adb -s <模拟器> shell am start -n <包名>/jarvis.android.debug.ProactiveDebugActivity \
+    --es debug.mockAddress http://<回环地址>:<端口> --es debug.theme dark --es debug.style board --es debug.page routine:morning
+  ```
+
+  `debug.page` 可选 `routine:<id>`、`new`、`new:<模板序号>`、`followups`、`runs`、`runs:<定时任务 id>`，不传是首页；`debug.theme`、`debug.style` 和 App 的调试参数一样。点到要打开对话的地方，调试入口只弹框说明会打开哪段对话。接进设置以后，也可以在真实外壳里直达：配对假 hub 后 `--es debug.openLink 'jarvis://open?target=settings&page=assistant' --es debug.assistantSettings proactive`。
+- 假 hub：示例数据按 UTC+8 的规则排（上次运行就是规则的上一次，截图用的模拟器设成这个时区），`next_run` 和 hub 一样带 `+08:00`；`MOCK_SCHEDULE=empty` 什么都没有（空状态）；`PUT` 和 hub 一样校验名称、提示词和 HH:MM，按 id 保留 hub 的字段、算下次运行；立即运行和取消对不存在的 id 回 404，每次立即运行记一条手动运行、更新定时任务的上次状态（不动 `last_run`）；`GET /mock/schedule` 看立即运行了哪些，`GET /mock/schedule/reset` 恢复初始数据。
+- 验证（2026-11-02）：单测 `ProactiveStoreTest`（整表 PUT 带回其他定时任务和 hub 字段、开关立即生效和失败恢复、回包丢失不算失败、编辑只写改过的字段、新建重试不重复、被删的不写回、删除、取消跟进和失败、立即运行跟进和定时任务、读取失败保留旧数据、传输层的取消算失败）、`ProactiveTextTest`（规则、时刻和偏移、倒计时、晚了多久、错误、上次运行、跟进去向、时间线和那句话、页面键）。模拟器上连假 hub 把开关、编辑保存、长按立即运行、取消跟进、立即运行跟进、模板新建、删除、未保存返回都点了一遍，hub 收到的内容都对；真实外壳里点过设置 › 助手 › 主动做事、返回、运行记录打开对话（落到 Jarvis tab）、Jarvis 抽屉「定时任务」打开和返回；三套风格 × 深浅色、手机和平板都截图看过。真机和真实 hub 没有测；页面性能未实测。
+- 设计系统里没有时间选择和周几选择的组件：这两个件写在 `proactive/ProactiveComponents.kt` 里，只用 token（色板、字体、`shapes.chipShape` / `controlShape`、`Tokens.Space`），不按风格分支；以后设计系统有了对应组件再换过去。
+
+## 主线旧 App 新增、待移植到新架构
+
+主线（`origin/master`）在 `81dc6928` 之后给旧单模块 App 加的功能和改动。本分支已经用多模块新架构重做了 Android，下面这些新架构还没有对应实现，逐项待移植，不混进上面的新架构描述。PR 号来自 `git log 81dc6928..origin/master --format='%h %s' -- android docs/android.md`。
+
+- 待办（todos，#427）：侧边栏「待办」（带未完成数）、待办列表和详情、「交给 Agent」（新开或交给已有的，带 `todo_id`）、Agents 的「按待办」分组和关联 / 解除关联、对话和会话信息里显示关联的待办；hub 没有待办接口时入口隐藏。
+- 邮件阅读和写信、设置 › 连接器（#320）：邮件详情（线程、锁住的 WebView 渲染 HTML、显示图片后才放行、打开即已读、加星标）、写信（回复 / 回复全部 / 转发、收件人校验、有内容返回要确认）、「交给 AI」和 AI 草拟回复；设置 › 连接器（这台手机、邮箱的添加 / 测试 / 删除、飞书的 lark-connector 状态）；Gmail 用 Google 账号登录，要 `config.json` 的 `android.google_oauth_scheme`（`OAuthRedirectActivity`），没配时提示改用应用专用密码。
+- 飞书会话和removed，收件箱里点开进页面（#365）：飞书会话页（富文本、卡片、合并转发、回复、表情回应、话题、`start_position` 分页、已读上报、缓存最后一页）、removed帖子页、图片和表情缓存（`LarkMedia`）、飞书自己的色板和尺寸。
+- 手机数据：Health Connect 的 `phone_health_summary`（#278）：读每日汇总（七种指标，按本地自然日切分），权限走 Health Connect 授权框，缺的指标列在结果的 `not_granted` 里；依赖 `connect-client:1.1.0-alpha08`，Android 8–13 要装 Health Connect App。
+- 收件箱：在别处已经读过的事项不再标成 @all / 未读（#246）。
+- 脚本目录调整（#505）：`scripts/` 按用途分了子目录，本文档统一写成 `scripts/app/android.sh`、`scripts/mock/mock_hub.py`。
+
+### 旧版已有、新架构文档还没逐项写的
+
+这些在主线旧 App 里已经有（PR 号这里没有逐个核对，要查就看 `git show origin/master:docs/android.md` 的对应小节）：
+
+- 配对欢迎页：扫 `jarvisd hub pair` 的二维码（`jarvis://pair?url=…&token=…`）或手填地址和 token；配对后用 `POST /api/v1/auth/tokens`（`kind: phone`）换这台手机自己的 token，旧 hub 没有时沿用配对 token。
+- 外壳：顶栏 ☰ ·「助手 | Agents」切换 · 圆按钮；侧边栏（横向拖出、对话历史置顶 / 最近、「新对话」药丸）；弱网时顶栏下的小药丸（等待网络 / 连接中…）。
+- Agents 列表：需要你卡片、按项目 / 状态 / 机器分组、置顶和屏蔽、左滑关闭、长按菜单、搜索和「全部 / 需要你 / 未读 / 工作中」筛选；空间页（在同一个空间开新标签）；空间标题的 ⋯（置顶、屏蔽、重命名）。
+- 对话：顶栏胶囊「空间 › tab」和会话信息（`GET …/info`，拷贝 session id 和恢复命令）；麦克风（系统语音识别器，`RecognizerIntent`，手机没有语音识别时不显示）；快捷命令（/compact、/context、/clear 等，`/clear` 先确认）；API 报错卡片（白话原因、连续计数、「重试」）；排队中的消息（撤回编辑 / 删除，`POST …/queue {keep}`）；权限模式、思考强度和 herdr 里 Claude 的模型标签（`POST …/modes`、`/model <别名>`）。
+- 对话：工作过程折叠（每轮「工具 · 思考 · 回复 · 时长」，点开逐步展开）、消息长按菜单（复制、选择、引用、分享、交给 Jarvis、作为上下文、编辑）；图片全屏查看、左右滑、保存相册、框选和画笔编辑；附件（照片、拍照、文件；文件不自动发送）。
+- 对话里的实时终端：VT 子集、手机尺寸接管、键栏和 Ctrl / Alt / ⇧ 锁定、电脑尺寸只看、字号、选择文本拷贝（`docs/terminal.md`）；文件和 Git（只读：目录、查看器、分支、改动、diff、提交历史）。
+- 新开会话：选电脑、目录（最近用过）、启动器、权限模式、可选第一条消息；`async` 立即打开对话，在电脑上等 Claude 就绪再发。
+- 引擎选择（配对后为 hub 所在的机器选，`PUT /api/v1/machines/{id}/engine`，机器页的「引擎」行）；机器列表、机器页和重新连接。
+- Jarvis：资料页（定时任务、跟进、运行记录、关于我、记忆）；知识库（类型、项目分组、标签筛选、全文搜索、条目页、「问 Jarvis / 开 Agent」、打标）。
+- 链接卡片（`ui/web/`）：铺满屏幕、下拉到 0.6 时后面的页面挤到上面 40%、`WebViewPool` 预加载、选中文字「AI 修改」「作为上下文」（`<jarvis-context kind="edit|context">`）、`LinkSafety` 的 scheme 规则、证书只认系统 CA。
+- 设置 › AI › 模型配置（按用途选模型，`/api/v1/model-config`）；语音对话（主线 `docs/android.md` 的「语音对话」一节）。
+- 系统与监控：1 / 6 / 24 小时曲线、按住读数、每个核心、系统信息；Claude Code 设置（`~/.claude/settings.json` 的白名单，同时改所有在线机器）；设备列表（撤销 token）；通知偏好（需要你时 / 做完时，`devices/{id}/prefs`）；存储空间（按类清理）。
+- 界面风格：旧版是五种（液态玻璃、Claude、黏土、Island、飞书，和 iOS 同一组，`SharedPreferences` 的 `ui.style`），新架构是三种（玻璃、晨报、看板）。两边是否对齐，待定。
+- 常驻通知、小组件、磁贴、快捷方式（`fleet/`、`widget/`、`shortcuts/`，排序规则照 hub 的 `buildFleet`）。旧版验证过：通知展开的「批准」hub 收到 `{approve:true, mode:"acceptEdits"}`，小组件和磁贴，「批准第一个待处理」，「问 Jarvis」冷启动也能进去；没验证：通知上的「允许 / 拒绝」、Live Update、真机锁屏。
+- 折叠屏和大屏：两栏（Agents / 空间页 / 收件箱 / 设置），`Fold.kt` 的折痕和分栏规则，`Panes.kt` 可拖的分隔条（新架构有 expanded 布局，细节待对）。
+- 界面风格的截图（旧版，2026-11-01 之后）：模拟器连 `scripts/mock/mock_hub.py`，五种风格 × 浅色 / 深色截了 Agents、两种交互卡片、Jarvis 主对话和抽屉、资料页、收件箱、设置、风格选择页、配对页（切风格可以直接写 `shared_prefs/ui.xml` 后重启 App）。
+- 旧版截图验证（2026-11-01）：Paparazzi 在 JVM 上用 layoutlib 画 Compose，连 `scripts/mock/mock_hub.py`，命令 `./scripts/app/android.sh shots`（`scripts/app/android_shots.py`）。覆盖外壳、对话、收件箱、机器、空间页、设置、知识库、Jarvis 资料页、配对、风格、语音、文件和 Git、小组件等，深浅色各拍一遍。手势、键盘、拍照、听写、真实网络、通知没在这条路上验证。

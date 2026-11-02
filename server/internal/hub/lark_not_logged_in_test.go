@@ -53,8 +53,9 @@ func TestLarkRoutesNotLoggedInCode(t *testing.T) {
 			if code != http.StatusBadGateway {
 				t.Fatalf("%s: %s %s = %d %v, want 502", c.name, rt.method, rt.path, code, out)
 			}
+			// Any other failure carries the generic code every error has (errors.go), never lark_not_logged_in.
 			got, has := out["code"]
-			if c.code == "" && has || c.code != "" && got != c.code {
+			if c.code == "" && has && got != "internal" || c.code != "" && got != c.code {
 				t.Fatalf("%s: %s %s code = %v, want %q", c.name, rt.method, rt.path, got, c.code)
 			}
 			if msg, _ := out["error"].(string); msg == "" || c.code != "" && !strings.Contains(msg, lark.ErrNotLoggedIn.Error()) {

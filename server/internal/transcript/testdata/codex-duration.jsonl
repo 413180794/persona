@@ -1,0 +1,13 @@
+{"type":"session_meta","timestamp":"2026-01-01T00:00:00Z","payload":{"id":"example-session"}}
+{"type":"event_msg","timestamp":"2026-01-01T00:00:01Z","payload":{"type":"task_started","turn_id":"turn-one"}}
+{"type":"event_msg","timestamp":"2026-01-01T00:00:02Z","payload":{"type":"item_completed","item":{"id":"prompt-one","type":"UserMessage","content":[{"type":"text","text":"检查示例"}]}}}
+{"type":"event_msg","timestamp":"2026-01-01T00:00:03Z","payload":{"type":"item_completed","item":{"id":"thought-one","type":"Reasoning","summary_text":["检查文件"]}}}
+{"type":"event_msg","timestamp":"2026-01-01T00:00:04Z","payload":{"type":"item_completed","item":{"id":"reply-one","type":"AgentMessage","content":[{"type":"text","text":"已检查"}]}}}
+{"type":"event_msg","timestamp":"2026-01-01T00:00:05Z","payload":{"type":"task_complete","turn_id":"turn-one","duration_ms":12345}}
+{"type":"event_msg","timestamp":"2026-01-01T00:01:00Z","payload":{"type":"task_started","turn_id":"turn-two"}}
+{"type":"event_msg","timestamp":"2026-01-01T00:01:01Z","payload":{"type":"item_completed","item":{"id":"prompt-two","type":"UserMessage","content":[{"type":"text","text":"继续检查"}]}}}
+{"type":"event_msg","timestamp":"2026-01-01T00:01:02Z","payload":{"type":"item_completed","item":{"id":"reply-two","type":"AgentMessage","content":[{"type":"text","text":"已完成"}]}}}
+{"type":"event_msg","timestamp":"2026-01-01T00:01:03Z","payload":{"type":"task_complete","turn_id":"turn-two","duration_ms":0}}
+{"type":"event_msg","timestamp":"2026-01-01T00:02:00Z","payload":{"type":"task_started","turn_id":"turn-three"}}
+{"type":"event_msg","timestamp":"2026-01-01T00:02:01Z","payload":{"type":"item_completed","item":{"id":"prompt-three","type":"UserMessage","content":[{"type":"text","text":"没有耗时记录"}]}}}
+{"type":"event_msg","timestamp":"2026-01-01T00:02:02Z","payload":{"type":"task_complete","turn_id":"turn-three"}}

@@ -172,7 +172,7 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		_, err := n.start(ctx, cwd, launcher, prompt, "", workspaceID, mode, effort, tabName, id, execution)
+		_, err := n.start(ctx, cwd, launcher, prompt, "", workspaceID, mode, effort, tabName, id, "", execution)
 		if err != nil {
 			log.Printf("start %s: %v", id, err)
 		}

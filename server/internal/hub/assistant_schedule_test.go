@@ -3,10 +3,12 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -388,7 +390,10 @@ func TestScheduleRoutineTool(t *testing.T) {
 	if !strings.Contains(h.describeSchedule(context.Background()), r.ID) {
 		t.Fatal("list_followups shows task ids")
 	}
-	if !h.deleteTask(context.Background(), r.ID) || h.deleteTask(context.Background(), r.ID) {
+	if ok, err := h.deleteTask(context.Background(), r.ID); !ok || err != nil {
+		t.Fatalf("delete: %v, %v", ok, err)
+	}
+	if ok, _ := h.deleteTask(context.Background(), r.ID); ok {
 		t.Fatal("delete once")
 	}
 }
@@ -554,5 +559,134 @@ func TestScheduleAcrossHubRestart(t *testing.T) {
 	}
 	if next := h3.nextDue(context.Background(), at(11, 46)); !next.Equal(at(9, 0).Add(24 * time.Hour)) {
 		t.Fatalf("next due %v, want tomorrow 09:00", next)
+	}
+}
+
+// flakyScheduleStore keeps settings in memory; reads fail while failRead is set.
+type flakyScheduleStore struct {
+	Store
+	mu       sync.Mutex
+	failRead bool
+	data     map[string][]byte
+	puts     int
+}
+
+func (s *flakyScheduleStore) Setting(_ context.Context, key string, out any) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failRead {
+		return false, errors.New("database unavailable")
+	}
+	b, ok := s.data[key]
+	if !ok {
+		return false, nil
+	}
+	return true, json.Unmarshal(b, out)
+}
+
+func (s *flakyScheduleStore) PutSetting(_ context.Context, key string, v any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	s.data[key] = b
+	s.puts++
+	return nil
+}
+
+// A failed read used to mark the schedule loaded with the two default routines, and the next save wrote them over
+// the stored routines and follow-ups (found in review, 2026-11-02). Now nothing is written, and nothing is changed in
+// memory either, until a read succeeds: the tools and the app get an error, the scheduler skips its turn.
+func TestScheduleReadFailureNeverOverwrites(t *testing.T) {
+	ctx := context.Background()
+	store := &flakyScheduleStore{data: map[string][]byte{}}
+	// Lists from before tasks were one: the first successful read moves them over (and writes).
+	_ = store.PutSetting(ctx, routinesKey, []Routine{{ID: "rt_mine", Title: "我的", Prompt: "p", Time: "08:00", Enabled: true}})
+	_ = store.PutSetting(ctx, followupsKey, []Followup{{ID: "fu_mine", At: time.Now().Add(time.Hour).UTC(), Prompt: "q"}})
+	before := map[string]string{}
+	for k, v := range store.data {
+		before[k] = string(v)
+	}
+	store.puts, store.failRead = 0, true
+	h := newTestHub(t)
+	h.store = store
+	m := &Machine{cfg: MachineConfig{ID: "server"}}
+
+	if _, err := h.toolScheduleRoutine(ctx, json.RawMessage(`{"title":"x","prompt":"y","time":"09:00"}`)); !errors.Is(err, errScheduleUnavailable) {
+		t.Fatalf("schedule_routine while unreadable: %v", err)
+	}
+	if _, err := h.toolScheduleFollowup(ctx, m, "s1", json.RawMessage(`{"at":"30m","prompt":"y"}`)); !errors.Is(err, errScheduleUnavailable) {
+		t.Fatalf("schedule_followup while unreadable: %v", err)
+	}
+	if _, err := h.deleteTask(ctx, "rt_mine"); !errors.Is(err, errScheduleUnavailable) {
+		t.Fatalf("delete while unreadable: %v", err)
+	}
+	if got := h.describeSchedule(ctx); got != errScheduleUnavailable.Error() {
+		t.Fatalf("list_followups while unreadable: %q", got)
+	}
+	h.recordRun(ScheduleRun{Kind: "routine", RefID: "rt_mine", Status: "ok", At: time.Now().UTC()})
+	h.runDue(ctx, time.Now())
+	if next := h.nextDue(ctx, time.Now()); !next.IsZero() {
+		t.Fatalf("next due while unreadable: %v", next)
+	}
+	mux := http.NewServeMux()
+	h.scheduleRoutes(mux)
+	for _, req := range []struct{ method, path, body string }{
+		{"GET", "/api/v1/assistant/tasks", ""},
+		{"GET", "/api/v1/assistant/routines", ""},
+		{"GET", "/api/v1/assistant/followups", ""},
+		{"GET", "/api/v1/assistant/runs", ""},
+		{"POST", "/api/v1/assistant/tasks", `{"title":"喝水","prompt":"提醒我喝水","repeat":"once","at":"2099-01-01T09:00:00Z","enabled":true}`},
+		{"PUT", "/api/v1/assistant/tasks/rt_mine", `{"title":"我的","prompt":"p","repeat":"daily","time":"08:00","enabled":false}`},
+		{"PUT", "/api/v1/assistant/routines", `{"routines":[]}`},
+		{"POST", "/api/v1/assistant/tasks/rt_mine/run", ""},
+		{"POST", "/api/v1/assistant/tasks/rt_mine/fresh", ""},
+		{"DELETE", "/api/v1/assistant/tasks/fu_mine", ""},
+		{"DELETE", "/api/v1/assistant/followups/fu_mine", ""},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(req.method, req.path, strings.NewReader(req.body)))
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s %s while unreadable: %d %s", req.method, req.path, rec.Code, rec.Body)
+		}
+	}
+	if store.puts != 0 {
+		t.Fatalf("%d writes while the schedule could not be read", store.puts)
+	}
+	for k, v := range store.data {
+		if before[k] != string(v) {
+			t.Fatalf("%s changed while unreadable: %s", k, v)
+		}
+	}
+
+	// Once the database answers, the stored lists come back (not the defaults) and changes are saved again.
+	store.mu.Lock()
+	store.failRead = false
+	store.mu.Unlock()
+	tasks := h.tasksView(ctx, nil)
+	if len(tasks) != 2 || tasks[0].ID != "rt_mine" || tasks[1].ID != "fu_mine" {
+		t.Fatalf("tasks after recovery: %+v", tasks)
+	}
+	puts := store.puts
+	if ok, err := h.deleteTask(ctx, "fu_mine"); !ok || err != nil {
+		t.Fatalf("delete after recovery: %v, %v", ok, err)
+	}
+	if store.puts == puts {
+		t.Fatal("a change after recovery is saved")
+	}
+}
+
+// With nothing stored yet (a new hub), the defaults are the schedule and saving them is fine.
+func TestScheduleDefaultsWhenNothingStored(t *testing.T) {
+	ctx := context.Background()
+	h := newTestHub(t)
+	h.store = &flakyScheduleStore{data: map[string][]byte{}}
+	if err := h.scheduleReadable(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if tasks := h.tasksView(ctx, nil); len(tasks) != len(defaultRoutines()) {
+		t.Fatalf("defaults: %+v", tasks)
 	}
 }

@@ -131,6 +131,12 @@ type Control interface {
 	Close()
 }
 
+// Redrawer is a Control that can be asked for a whole frame of the screen as it is, the programs seeing no change
+// (herdr: a resize to the size it has). The node asks when a slow link falls behind (node/terminal.go frameGate).
+type Redrawer interface {
+	Redraw() error
+}
+
 // Errors a host marks its own errors with (errors.Is); the error text stays the host's.
 var (
 	// ErrNoAgent: Prompt found no agent the host knows in the pane.

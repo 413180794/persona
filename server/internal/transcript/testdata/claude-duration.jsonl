@@ -1,0 +1,10 @@
+{"type":"user","uuid":"prompt-one","timestamp":"2026-01-01T00:00:00Z","message":{"content":"检查示例"}}
+{"type":"assistant","uuid":"thought-one","timestamp":"2026-01-01T00:00:01Z","message":{"content":[{"type":"thinking","thinking":"检查文件"}]}}
+{"type":"assistant","uuid":"reply-one","timestamp":"2026-01-01T00:00:02Z","message":{"content":[{"type":"text","text":"已检查"}]}}
+{"type":"system","subtype":"turn_duration","uuid":"duration-one","parentUuid":"reply-one","durationMs":12345,"timestamp":"2026-01-01T00:00:03Z"}
+{"type":"user","uuid":"prompt-two","timestamp":"2026-01-01T00:01:00Z","message":{"content":"继续检查"}}
+{"type":"assistant","uuid":"thought-two","timestamp":"2026-01-01T00:01:01Z","message":{"content":[{"type":"thinking","thinking":"再检查一次"}]}}
+{"type":"assistant","uuid":"reply-two","timestamp":"2026-01-01T00:01:02Z","message":{"content":[{"type":"text","text":"已完成"}]}}
+{"type":"system","subtype":"turn_duration","uuid":"duration-two","parentUuid":"reply-two","durationMs":0,"timestamp":"2026-01-01T00:01:03Z"}
+{"type":"user","uuid":"prompt-three","timestamp":"2026-01-01T00:02:00Z","message":{"content":"没有耗时记录"}}
+{"type":"assistant","uuid":"reply-three","timestamp":"2026-01-01T00:03:00Z","message":{"content":[{"type":"text","text":"结束"}]}}

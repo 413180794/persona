@@ -23,10 +23,12 @@ const (
 // folded: the app pairs them with what comes later or earlier, and a fold hides them from that.
 func FoldWork(items []proto.Item) []proto.Item {
 	uses, results := map[string]bool{}, map[string]bool{}
+	taskUses := map[string]proto.Item{}
 	for _, it := range items {
 		switch it.Kind {
 		case proto.KindToolUse:
 			uses[it.ToolUseID] = true
+			taskUses[it.ToolUseID] = it
 		case proto.KindToolResult:
 			results[it.ToolUseID] = true
 		}
@@ -55,7 +57,9 @@ func FoldWork(items []proto.Item) []proto.Item {
 		if j-i < foldMinItems && size < foldMinBytes {
 			out = append(out, items[i:j]...)
 		} else {
-			out = append(out, fold(items[i:j]))
+			it := fold(items[i:j])
+			it.Fold.Tasks = foldTaskSnapshots(items[i:j], taskUses)
+			out = append(out, it)
 		}
 		i = j
 	}

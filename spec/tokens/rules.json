@@ -1,0 +1,261 @@
+{
+  "$description": "所有规则在六种风格 × 深浅色下展开。level 为 error 的是 docs/ios.md 写明的可读性底线，--check 不达标就失败（已知的例外记在 known-failures.json，只许减少）；warn 是按 WCAG AA 补的建议，只报告不阻断，iOS 现在的取值有不少达不到，改色要两端一起改。",
+  "$extensions": {
+    "jarvis": {
+      "styles": [
+        "glass",
+        "claude",
+        "clay",
+        "island",
+        "lark",
+        "native"
+      ],
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "contrast": [
+        {
+          "id": "onAccent",
+          "foreground": "semantic.{style}.{mode}.onAccent",
+          "background": "semantic.{style}.{mode}.accent",
+          "minimum": 3.5,
+          "description": "docs/ios.md：实心按钮与选中胶囊",
+          "level": "error"
+        },
+        {
+          "id": "bubble",
+          "foreground": "semantic.{style}.{mode}.userBubbleText",
+          "background": "semantic.{style}.{mode}.userBubble",
+          "minimum": 4.5,
+          "description": "docs/ios.md：用户气泡正文",
+          "level": "error"
+        },
+        {
+          "id": "link",
+          "foreground": "semantic.{style}.{mode}.accent",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 3,
+          "description": "docs/ios.md：主色链接；正文链接须另按 4.5 检查",
+          "level": "error"
+        },
+        {
+          "id": "bodyPage",
+          "foreground": "semantic.{style}.{mode}.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "WCAG AA 正文",
+          "level": "warn"
+        },
+        {
+          "id": "bodyCard",
+          "foreground": "semantic.{style}.{mode}.text",
+          "background": "semantic.{style}.{mode}.card",
+          "minimum": 4.5,
+          "description": "WCAG AA 卡片正文",
+          "level": "warn"
+        },
+        {
+          "id": "secondaryPage",
+          "foreground": "semantic.{style}.{mode}.secondaryText",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "WCAG AA 次要小字",
+          "level": "warn"
+        },
+        {
+          "id": "secondaryCard",
+          "foreground": "semantic.{style}.{mode}.secondaryText",
+          "background": "semantic.{style}.{mode}.card",
+          "minimum": 4.5,
+          "description": "WCAG AA 卡片次要小字",
+          "level": "warn"
+        },
+        {
+          "id": "largeTitle",
+          "foreground": "semantic.{style}.{mode}.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 3,
+          "description": "WCAG AA 大字；不足大字尺寸仍按正文规则",
+          "level": "warn"
+        },
+        {
+          "id": "status-needsYou",
+          "foreground": "status.{mode}.needsYou.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "ux.md 第 7 节：所有状态小字对页面",
+          "level": "warn"
+        },
+        {
+          "id": "status-working",
+          "foreground": "status.{mode}.working.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "ux.md 第 7 节：所有状态小字对页面",
+          "level": "warn"
+        },
+        {
+          "id": "status-unread",
+          "foreground": "status.{mode}.unread.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "ux.md 第 7 节：所有状态小字对页面",
+          "level": "warn"
+        },
+        {
+          "id": "status-idle",
+          "foreground": "status.{mode}.idle.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "ux.md 第 7 节：所有状态小字对页面",
+          "level": "warn"
+        },
+        {
+          "id": "status-offline",
+          "foreground": "status.{mode}.offline.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "ux.md 第 7 节：所有状态小字对页面",
+          "level": "warn"
+        },
+        {
+          "id": "status-waiting",
+          "foreground": "status.{mode}.waiting.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "ux.md 第 7 节：所有状态小字对页面",
+          "level": "warn"
+        },
+        {
+          "id": "status-muted",
+          "foreground": "status.{mode}.muted.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "ux.md 第 7 节：所有状态小字对页面",
+          "level": "warn"
+        },
+        {
+          "id": "status-unknown",
+          "foreground": "status.{mode}.unknown.text",
+          "background": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "ux.md 第 7 节：所有状态小字对页面",
+          "level": "warn"
+        },
+        {
+          "id": "countBadge",
+          "foreground": "common.{mode}.onCountBadge",
+          "background": "common.{mode}.countBadge",
+          "minimum": 4.5,
+          "description": "Theme.countBadge：白字",
+          "level": "warn"
+        },
+        {
+          "id": "diff-add",
+          "foreground": "common.{mode}.diff.add",
+          "background": "common.{mode}.codeBackground",
+          "minimum": 4.5,
+          "description": "Theme.Diff：符号与计数小字",
+          "level": "warn"
+        },
+        {
+          "id": "diff-del",
+          "foreground": "common.{mode}.diff.del",
+          "background": "common.{mode}.codeBackground",
+          "minimum": 4.5,
+          "description": "Theme.Diff：符号与计数小字",
+          "level": "warn"
+        },
+        {
+          "id": "diff-changed",
+          "foreground": "common.{mode}.diff.changed",
+          "background": "common.{mode}.codeBackground",
+          "minimum": 4.5,
+          "description": "Theme.Diff：符号与计数小字",
+          "level": "warn"
+        },
+        {
+          "id": "terminal",
+          "foreground": "common.{mode}.terminalText",
+          "background": "common.{mode}.terminalBackground",
+          "minimum": 4.5,
+          "description": "终端正文",
+          "level": "warn"
+        },
+        {
+          "id": "status-needsYou-tint",
+          "foreground": "status.{mode}.needsYou.text",
+          "background": "status.{mode}.needsYou.tint",
+          "canvas": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "状态标签小字：透明浅底先叠在页面，再检查正文对比度",
+          "level": "warn"
+        },
+        {
+          "id": "status-working-tint",
+          "foreground": "status.{mode}.working.text",
+          "background": "status.{mode}.working.tint",
+          "canvas": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "状态标签小字：透明浅底先叠在页面，再检查正文对比度",
+          "level": "warn"
+        },
+        {
+          "id": "status-unread-tint",
+          "foreground": "status.{mode}.unread.text",
+          "background": "status.{mode}.unread.tint",
+          "canvas": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "状态标签小字：透明浅底先叠在页面，再检查正文对比度",
+          "level": "warn"
+        },
+        {
+          "id": "status-idle-tint",
+          "foreground": "status.{mode}.idle.text",
+          "background": "status.{mode}.idle.tint",
+          "canvas": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "状态标签小字：透明浅底先叠在页面，再检查正文对比度",
+          "level": "warn"
+        },
+        {
+          "id": "status-offline-tint",
+          "foreground": "status.{mode}.offline.text",
+          "background": "status.{mode}.offline.tint",
+          "canvas": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "状态标签小字：透明浅底先叠在页面，再检查正文对比度",
+          "level": "warn"
+        },
+        {
+          "id": "status-waiting-tint",
+          "foreground": "status.{mode}.waiting.text",
+          "background": "status.{mode}.waiting.tint",
+          "canvas": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "状态标签小字：透明浅底先叠在页面，再检查正文对比度",
+          "level": "warn"
+        },
+        {
+          "id": "status-muted-tint",
+          "foreground": "status.{mode}.muted.text",
+          "background": "status.{mode}.muted.tint",
+          "canvas": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "状态标签小字：透明浅底先叠在页面，再检查正文对比度",
+          "level": "warn"
+        },
+        {
+          "id": "status-unknown-tint",
+          "foreground": "status.{mode}.unknown.text",
+          "background": "status.{mode}.unknown.tint",
+          "canvas": "semantic.{style}.{mode}.pageBackground",
+          "minimum": 4.5,
+          "description": "状态标签小字：透明浅底先叠在页面，再检查正文对比度",
+          "level": "warn"
+        }
+      ]
+    }
+  }
+}

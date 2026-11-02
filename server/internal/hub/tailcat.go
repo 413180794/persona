@@ -56,11 +56,16 @@ func (m *Machine) noteDirectFailed() {
 	m.switchedBack = time.Time{}
 }
 
-// transports are the ways to try, in order.
+// transports are the ways to try, in order. A link machine is only reached through its jarvis-link (link.go; tests
+// give it a node command instead, run like ssh's).
 func (m *Machine) transports() []string {
 	switch {
 	case m.cfg.Kind == "local":
 		return []string{"local"}
+	case m.cfg.Kind == kindLink && m.nodeCmd == nil:
+		return []string{"link"}
+	case m.cfg.Kind == kindService && m.nodeCmd == nil:
+		return []string{kindService}
 	case m.cfg.TailcatAddr == "":
 		return []string{"ssh"}
 	case m.cfg.Kind == "tailcat":

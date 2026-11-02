@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -115,7 +116,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, page)
 	})
-	api.HandleFunc("POST /api/v1/lark/conversations/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/v1/lark/conversations/{id}/messages", h.withReplyReceipt("lark_send", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Text     string         `json:"text"`
 			ClientID string         `json:"client_id"` // the app's idempotency key; a retry with the same one posts once
@@ -143,9 +144,10 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			out["message_id"] = id
 		}
 		writeJSON(w, out)
-	})
+	}))
 	// Replies to one message: quoted in its chat, or with thread=true inside its thread (a topic group's topic).
-	api.HandleFunc("POST /api/v1/lark/messages/{id}/replies", func(w http.ResponseWriter, r *http.Request) {
+	// Both the integration branch's always-thread route and master's thread flag live here as one registration.
+	api.HandleFunc("POST /api/v1/lark/messages/{id}/replies", h.withReplyReceipt("lark_thread_reply", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Text     string         `json:"text"`
 			Thread   bool           `json:"thread"`
@@ -173,7 +175,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			out["message_id"] = id
 		}
 		writeJSON(w, out)
-	})
+	}))
 	// The chat's members for the @ picker: all of them (up to limit), or with q the ones matching it.
 	api.HandleFunc("GET /api/v1/lark/conversations/{id}/members", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -295,6 +297,14 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+}
+
+// larkInboxClientID derives one send ID per persisted inbox item, including AI drafts.
+// It survives retries and restarts without depending on mutable item fields.
+func larkInboxClientID(itemID string) string {
+	b := sha256.Sum256([]byte("jarvis:inbox_reply:" + itemID))
+	b[6], b[8] = b[6]&0x0f|0x80, b[8]&0x3f|0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // checkMentions rejects what lark-connector would: more than lark.MaxMentions, or one without a user id or name. The text

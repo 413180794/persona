@@ -1,6 +1,6 @@
 # 架构
 
-![Jarvis 架构](architecture.svg)
+手机直连 hub：公网走 HTTPS / WSS（TLS + 公钥钉扎），内网 / VPN 保留 HTTP / WS。公网优先 IPv6，VPN 由用户自行配置，见 [网络文档](network.md)。
 
 ## 目标
 
@@ -14,8 +14,9 @@
 ## 组件
 
 ```
- iPhone App ──┐  HTTPS/WS (Bearer token)
- Watch App ───┤ ───────────────────────────►  jarvisd hub (hub 机器 :18660)
+ 手机 / 手表 ─┐  HTTPS/WSS（公网，支持钉扎的客户端）
+              ┤  HTTP/WS（内网 / VPN，兼容旧 App）
+              ┤ ───────────────────────────►  jarvisd hub（HTTP + 可选 TLS）
               │                                   │  ├─ mail（IMAP/SMTP，凭据加密）
               │  WS: tool.call ◄──────────────────┤  ├─ 交互队列（问题 / 计划 / 权限）
               │      (手机数据工具)                │  └─ 会话索引、事件扇出
@@ -32,6 +33,10 @@
                                ├─ unix socket ~/.jarvis/runtime.sock ◄── runtime：没有终端的 Agent 运行时（DSH 的 Web 插件，docs/runtimes.md）
                                └─ 启动器列表：zsh -ic（`_claude_launchers` + 调用 claude 的 alias）
 ```
+
+hub 保留 `listen`（默认 HTTP `:18660`），TLS 用 `public.tls_listen` 单独开启，端口由用户选择。两个监听共用 API 和来源鉴权规则。主 token 仅允许回环 / 内网来源，公网使用临时配对 token 或设备 token；`health` 的公网响应不含版本、能力和候选地址。
+
+候选地址来自配置和本机网卡，按 IPv6、域名、内网、公网 IPv4 排序。鉴权后经 `/api/v1/endpoints` 和 WS `hello` 下发；地址变化事件仅发给声明 `endpoints` 能力的连接。网卡上有地址不代表光猫、防火墙已放行，仍需从外部验证。现有 iOS / Watch 不改代码时继续使用原内网 / VPN 地址。
 
 单一二进制 `jarvisd`，四种模式：
 

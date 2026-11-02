@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -16,7 +17,7 @@ func (h *Hub) importLegacy(ctx context.Context) {
 		if err := json.Unmarshal(b, &tools); err != nil {
 			return err
 		}
-		return h.store.ReplacePhoneTools(ctx, tools)
+		return h.store.ReplacePhoneTools(ctx, db.PhoneToolRegistration{DeviceID: "legacy", Tools: tools})
 	})
 	h.importFile("devices.json", func(b []byte) error {
 		var devices map[string]Device

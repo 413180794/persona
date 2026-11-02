@@ -1,0 +1,87 @@
+{
+  "items": [
+    {
+      "id": "prompt-one#0",
+      "seq": 3,
+      "ts": "2026-01-01T00:00:02Z",
+      "role": "user",
+      "kind": "text",
+      "text": "检查示例"
+    },
+    {
+      "id": "thought-one#0",
+      "seq": 4,
+      "ts": "2026-01-01T00:00:03Z",
+      "role": "assistant",
+      "kind": "thinking",
+      "text": "检查文件"
+    },
+    {
+      "id": "reply-one#0",
+      "seq": 5,
+      "ts": "2026-01-01T00:00:04Z",
+      "role": "assistant",
+      "kind": "text",
+      "text": "已检查"
+    },
+    {
+      "id": "line6#0",
+      "seq": 6,
+      "ts": "2026-01-01T00:00:05Z",
+      "role": "system",
+      "kind": "turn_duration",
+      "turn_duration": {
+        "duration_ms": 12345,
+        "source": "codex_task_complete",
+        "turn_id": "turn-one",
+        "user_item_id": "prompt-one#0"
+      }
+    },
+    {
+      "id": "prompt-two#0",
+      "seq": 8,
+      "ts": "2026-01-01T00:01:01Z",
+      "role": "user",
+      "kind": "text",
+      "text": "继续检查"
+    },
+    {
+      "id": "reply-two#0",
+      "seq": 9,
+      "ts": "2026-01-01T00:01:02Z",
+      "role": "assistant",
+      "kind": "text",
+      "text": "已完成"
+    },
+    {
+      "id": "line10#0",
+      "seq": 10,
+      "ts": "2026-01-01T00:01:03Z",
+      "role": "system",
+      "kind": "turn_duration",
+      "turn_duration": {
+        "duration_ms": 0,
+        "source": "codex_task_complete",
+        "turn_id": "turn-two",
+        "user_item_id": "prompt-two#0"
+      }
+    },
+    {
+      "id": "prompt-three#0",
+      "seq": 12,
+      "ts": "2026-01-01T00:02:01Z",
+      "role": "user",
+      "kind": "text",
+      "text": "没有耗时记录"
+    }
+  ],
+  "meta": {
+    "first_user": "检查示例",
+    "last_text": "已完成",
+    "turns": 3,
+    "compactions": 0,
+    "context_tokens": 0,
+    "output_tokens": 0,
+    "last_activity": "2026-01-01T00:02:01Z"
+  }
+}

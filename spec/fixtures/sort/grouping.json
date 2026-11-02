@@ -1,0 +1,1138 @@
+{
+  "schema_version": 1,
+  "operation": "agents_list",
+  "cases": [
+    {
+      "name": "machine_uses_registry_order",
+      "description": "机器分组遵循机器列表顺序，缺少机器记录的会话不生成分组。",
+      "source": [
+        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Shared/Models.swift: Session.sortDate",
+        "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
+        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-b",
+            "session_id": "a",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "working",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "b",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          },
+          {
+            "machine_id": "machine-missing",
+            "session_id": "orphan",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "needs_you",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          }
+        ],
+        "machines": [
+          {
+            "id": "machine-b",
+            "name": "机器乙"
+          },
+          {
+            "id": "machine-a",
+            "name": "机器甲"
+          }
+        ],
+        "pins": {
+          "spaces": [],
+          "sessions": []
+        },
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "grouping": "machine",
+          "quick": "all",
+          "query": "",
+          "machine_filter": "",
+          "kept": [],
+          "folded": [],
+          "expanded_idle": [],
+          "expanded_quiet": [],
+          "compact": false
+        }
+      },
+      "expected": {
+        "counts": {
+          "needsYou": 1,
+          "unread": 1,
+          "working": 1
+        },
+        "groups": [
+          {
+            "id": "machine/machine-b",
+            "title": "机器乙",
+            "rows": [
+              "machine-b/a"
+            ],
+            "visible_rows": [
+              "machine-b/a"
+            ],
+            "folded": false
+          },
+          {
+            "id": "machine/machine-a",
+            "title": "机器甲",
+            "rows": [
+              "machine-a/b"
+            ],
+            "visible_rows": [
+              "machine-a/b"
+            ],
+            "folded": false
+          }
+        ],
+        "unread_shown": [
+          "machine-a/b"
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "space_header_counts",
+      "description": "空间标题朗读需要你、未读和空闲数量。",
+      "source": [
+        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Shared/Models.swift: Session.sortDate",
+        "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
+        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/JarvisTests/AgentFilterTests.swift: foldedHeaderSpeaksItsCounts"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "a",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "needs_you",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 3
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "b",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 2
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "c",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 1
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "d",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 0
+          }
+        ],
+        "machines": [
+          {
+            "id": "machine-a",
+            "name": "机器甲"
+          },
+          {
+            "id": "machine-b",
+            "name": "机器乙"
+          }
+        ],
+        "pins": {
+          "spaces": [],
+          "sessions": []
+        },
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "grouping": "space",
+          "quick": "all",
+          "query": "",
+          "machine_filter": "",
+          "kept": [],
+          "folded": [],
+          "expanded_idle": [],
+          "expanded_quiet": [],
+          "compact": false
+        }
+      },
+      "expected": {
+        "counts": {
+          "needsYou": 1,
+          "unread": 2,
+          "working": 0
+        },
+        "groups": [
+          {
+            "id": "machine-a/space-a",
+            "title": "示例项目",
+            "rows": [
+              "machine-a/a",
+              "machine-a/b",
+              "machine-a/c",
+              "machine-a/d"
+            ],
+            "visible_rows": [
+              "machine-a/a",
+              "machine-a/b",
+              "machine-a/c"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 1,
+              "working": 0,
+              "unread": 2,
+              "idle": 1,
+              "unknown": 0
+            },
+            "spoken": "1 个需要你，2 个完成未看，1 个空闲"
+          }
+        ],
+        "unread_shown": [
+          "machine-a/b",
+          "machine-a/c"
+        ],
+        "quiet_title": null
+      },
+      "from_test": "foldedHeaderSpeaksItsCounts"
+    },
+    {
+      "name": "space_time_tie",
+      "description": "空间同时间按机器与空间标识排序。",
+      "source": [
+        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Shared/Models.swift: Session.sortDate",
+        "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
+        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/JarvisTests/AgentFilterTests.swift: spacesWithTheSameTimeKeepTheirOrder"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "a",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "b",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "space-b",
+            "space_name": "另一项目",
+            "updated_at": "2026-01-01T00:00:10Z"
+          }
+        ],
+        "machines": [
+          {
+            "id": "machine-a",
+            "name": "机器甲"
+          },
+          {
+            "id": "machine-b",
+            "name": "机器乙"
+          }
+        ],
+        "pins": {
+          "spaces": [],
+          "sessions": []
+        },
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "grouping": "space",
+          "quick": "all",
+          "query": "",
+          "machine_filter": "",
+          "kept": [],
+          "folded": [],
+          "expanded_idle": [],
+          "expanded_quiet": [],
+          "compact": false
+        }
+      },
+      "expected": {
+        "counts": {
+          "needsYou": 0,
+          "unread": 2,
+          "working": 0
+        },
+        "groups": [
+          {
+            "id": "machine-a/space-a",
+            "title": "示例项目",
+            "rows": [
+              "machine-a/a"
+            ],
+            "visible_rows": [
+              "machine-a/a"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 1,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个完成未看"
+          },
+          {
+            "id": "machine-a/space-b",
+            "title": "另一项目",
+            "rows": [
+              "machine-a/b"
+            ],
+            "visible_rows": [
+              "machine-a/b"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 1,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个完成未看"
+          }
+        ],
+        "unread_shown": [
+          "machine-a/a",
+          "machine-a/b"
+        ],
+        "quiet_title": null
+      },
+      "from_test": "spacesWithTheSameTimeKeepTheirOrder"
+    },
+    {
+      "name": "space_time_tie_reversed",
+      "description": "空间同时间按机器与空间标识排序。",
+      "source": [
+        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Shared/Models.swift: Session.sortDate",
+        "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
+        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/JarvisTests/AgentFilterTests.swift: spacesWithTheSameTimeKeepTheirOrder"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "b",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "space-b",
+            "space_name": "另一项目",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "a",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "updated_at": "2026-01-01T00:00:10Z"
+          }
+        ],
+        "machines": [
+          {
+            "id": "machine-a",
+            "name": "机器甲"
+          },
+          {
+            "id": "machine-b",
+            "name": "机器乙"
+          }
+        ],
+        "pins": {
+          "spaces": [],
+          "sessions": []
+        },
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "grouping": "space",
+          "quick": "all",
+          "query": "",
+          "machine_filter": "",
+          "kept": [],
+          "folded": [],
+          "expanded_idle": [],
+          "expanded_quiet": [],
+          "compact": false
+        }
+      },
+      "expected": {
+        "counts": {
+          "needsYou": 0,
+          "unread": 2,
+          "working": 0
+        },
+        "groups": [
+          {
+            "id": "machine-a/space-a",
+            "title": "示例项目",
+            "rows": [
+              "machine-a/a"
+            ],
+            "visible_rows": [
+              "machine-a/a"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 1,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个完成未看"
+          },
+          {
+            "id": "machine-a/space-b",
+            "title": "另一项目",
+            "rows": [
+              "machine-a/b"
+            ],
+            "visible_rows": [
+              "machine-a/b"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 1,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个完成未看"
+          }
+        ],
+        "unread_shown": [
+          "machine-a/b",
+          "machine-a/a"
+        ],
+        "quiet_title": null
+      },
+      "from_test": "spacesWithTheSameTimeKeepTheirOrder"
+    },
+    {
+      "name": "spaces_pin_busy_muted_quiet",
+      "description": "项目依次显示置顶、活跃、屏蔽和空闲空间，空闲空间展开后保留槽位顺序。",
+      "source": [
+        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Shared/Models.swift: Session.sortDate",
+        "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
+        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "unread",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "unread",
+            "space_name": "未读项目",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "working",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "working",
+            "space_id": "working",
+            "space_name": "工作项目",
+            "updated_at": "2026-01-01T00:00:50Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "pin",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "pin",
+            "space_name": "置顶项目"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "mute",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "needs_you",
+            "space_id": "mute",
+            "space_name": "屏蔽项目"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "quiet-b",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 2
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "quiet-a",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 1
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "unknown",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unknown",
+            "space_id": "unknown",
+            "space_name": "未知项目"
+          }
+        ],
+        "machines": [
+          {
+            "id": "machine-a",
+            "name": "机器甲"
+          },
+          {
+            "id": "machine-b",
+            "name": "机器乙"
+          }
+        ],
+        "pins": {
+          "spaces": [
+            "machine-a/置顶项目",
+            "machine-a/屏蔽项目"
+          ],
+          "sessions": []
+        },
+        "mutes": {
+          "spaces": [
+            "machine-a/屏蔽项目"
+          ],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "grouping": "space",
+          "quick": "all",
+          "query": "",
+          "machine_filter": "",
+          "kept": [],
+          "folded": [],
+          "expanded_idle": [],
+          "expanded_quiet": [
+            "machine-a/space-a"
+          ],
+          "compact": false
+        }
+      },
+      "expected": {
+        "counts": {
+          "needsYou": 1,
+          "unread": 1,
+          "working": 1
+        },
+        "groups": [
+          {
+            "id": "machine-a/pin",
+            "title": "置顶项目",
+            "rows": [
+              "machine-a/pin"
+            ],
+            "visible_rows": [],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 0,
+              "idle": 1,
+              "unknown": 0
+            },
+            "spoken": "1 个空闲"
+          },
+          {
+            "id": "machine-a/unread",
+            "title": "未读项目",
+            "rows": [
+              "machine-a/unread"
+            ],
+            "visible_rows": [
+              "machine-a/unread"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 1,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个完成未看"
+          },
+          {
+            "id": "machine-a/working",
+            "title": "工作项目",
+            "rows": [
+              "machine-a/working"
+            ],
+            "visible_rows": [
+              "machine-a/working"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 1,
+              "unread": 0,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个工作中"
+          },
+          {
+            "id": "machine-a/mute",
+            "title": "屏蔽项目",
+            "rows": [
+              "machine-a/mute"
+            ],
+            "visible_rows": [
+              "machine-a/mute"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 1,
+              "working": 0,
+              "unread": 0,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个需要你"
+          },
+          {
+            "id": "machine-a/space-a",
+            "title": "示例项目",
+            "rows": [
+              "machine-a/quiet-a",
+              "machine-a/quiet-b"
+            ],
+            "visible_rows": [
+              "machine-a/quiet-a",
+              "machine-a/quiet-b"
+            ],
+            "folded": false,
+            "parent": "quiet",
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 0,
+              "idle": 2,
+              "unknown": 0
+            },
+            "spoken": "2 个空闲"
+          },
+          {
+            "id": "machine-a/unknown",
+            "title": "未知项目",
+            "rows": [
+              "machine-a/unknown"
+            ],
+            "visible_rows": [],
+            "folded": true,
+            "parent": "quiet",
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 0,
+              "idle": 0,
+              "unknown": 1
+            },
+            "spoken": "1 个空闲"
+          }
+        ],
+        "unread_shown": [
+          "machine-a/unread"
+        ],
+        "quiet_title": "空闲的空间"
+      },
+      "derived": true
+    },
+    {
+      "name": "quick_spaces_use_updated_time",
+      "description": "快速筛选下置顶空间领先，其余空间按更新时间排序且不收进空闲空间。",
+      "source": [
+        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Shared/Models.swift: Session.sortDate",
+        "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
+        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "unread",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "unread",
+            "space_name": "未读项目",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "working",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "working",
+            "space_id": "working",
+            "space_name": "工作项目",
+            "updated_at": "2026-01-01T00:00:50Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "pin",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "pin",
+            "space_name": "置顶项目"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "mute",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "needs_you",
+            "space_id": "mute",
+            "space_name": "屏蔽项目"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "quiet-b",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 2
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "quiet-a",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 1
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "unknown",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unknown",
+            "space_id": "unknown",
+            "space_name": "未知项目"
+          }
+        ],
+        "machines": [
+          {
+            "id": "machine-a",
+            "name": "机器甲"
+          },
+          {
+            "id": "machine-b",
+            "name": "机器乙"
+          }
+        ],
+        "pins": {
+          "spaces": [
+            "machine-a/置顶项目",
+            "machine-a/屏蔽项目"
+          ],
+          "sessions": []
+        },
+        "mutes": {
+          "spaces": [
+            "machine-a/屏蔽项目"
+          ],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "grouping": "space",
+          "quick": "unread",
+          "query": "",
+          "machine_filter": "",
+          "kept": [
+            "machine-a/unread",
+            "machine-a/working",
+            "machine-a/pin",
+            "machine-a/mute",
+            "machine-a/quiet-b",
+            "machine-a/quiet-a",
+            "machine-a/unknown"
+          ],
+          "folded": [],
+          "expanded_idle": [],
+          "expanded_quiet": [
+            "machine-a/space-a"
+          ],
+          "compact": false
+        }
+      },
+      "expected": {
+        "counts": {
+          "needsYou": 1,
+          "unread": 1,
+          "working": 1
+        },
+        "groups": [
+          {
+            "id": "machine-a/pin",
+            "title": "置顶项目",
+            "rows": [
+              "machine-a/pin"
+            ],
+            "visible_rows": [
+              "machine-a/pin"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 0,
+              "idle": 1,
+              "unknown": 0
+            },
+            "spoken": "1 个空闲"
+          },
+          {
+            "id": "machine-a/working",
+            "title": "工作项目",
+            "rows": [
+              "machine-a/working"
+            ],
+            "visible_rows": [
+              "machine-a/working"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 1,
+              "unread": 0,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个工作中"
+          },
+          {
+            "id": "machine-a/unread",
+            "title": "未读项目",
+            "rows": [
+              "machine-a/unread"
+            ],
+            "visible_rows": [
+              "machine-a/unread"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 1,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个完成未看"
+          },
+          {
+            "id": "machine-a/mute",
+            "title": "屏蔽项目",
+            "rows": [
+              "machine-a/mute"
+            ],
+            "visible_rows": [
+              "machine-a/mute"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 1,
+              "working": 0,
+              "unread": 0,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个需要你"
+          },
+          {
+            "id": "machine-a/space-a",
+            "title": "示例项目",
+            "rows": [
+              "machine-a/quiet-a",
+              "machine-a/quiet-b"
+            ],
+            "visible_rows": [
+              "machine-a/quiet-a",
+              "machine-a/quiet-b"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 0,
+              "idle": 2,
+              "unknown": 0
+            },
+            "spoken": "2 个空闲"
+          },
+          {
+            "id": "machine-a/unknown",
+            "title": "未知项目",
+            "rows": [
+              "machine-a/unknown"
+            ],
+            "visible_rows": [
+              "machine-a/unknown"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 0,
+              "unread": 0,
+              "idle": 0,
+              "unknown": 1
+            },
+            "spoken": "1 个空闲"
+          }
+        ],
+        "unread_shown": [
+          "machine-a/unread"
+        ],
+        "quiet_title": null
+      },
+      "derived": true
+    },
+    {
+      "name": "active_space_uses_rank_not_slots",
+      "description": "活跃空间内按状态排序，缺少空间时使用占位标识和目录名。",
+      "source": [
+        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Shared/Models.swift: Session.sortDate",
+        "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
+        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "late-slot",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "needs_you",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 9
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "first-slot",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "working",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 1
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "quiet",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "slot_index": 0
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "no-space",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "working",
+            "space_id": null
+          }
+        ],
+        "machines": [
+          {
+            "id": "machine-a",
+            "name": "机器甲"
+          },
+          {
+            "id": "machine-b",
+            "name": "机器乙"
+          }
+        ],
+        "pins": {
+          "spaces": [],
+          "sessions": []
+        },
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "grouping": "space",
+          "quick": "all",
+          "query": "",
+          "machine_filter": "",
+          "kept": [],
+          "folded": [],
+          "expanded_idle": [],
+          "expanded_quiet": [],
+          "compact": false
+        }
+      },
+      "expected": {
+        "counts": {
+          "needsYou": 1,
+          "unread": 0,
+          "working": 2
+        },
+        "groups": [
+          {
+            "id": "machine-a/space-a",
+            "title": "示例项目",
+            "rows": [
+              "machine-a/late-slot",
+              "machine-a/first-slot",
+              "machine-a/quiet"
+            ],
+            "visible_rows": [
+              "machine-a/late-slot",
+              "machine-a/first-slot"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 1,
+              "working": 1,
+              "unread": 0,
+              "idle": 1,
+              "unknown": 0
+            },
+            "spoken": "1 个需要你，1 个工作中，1 个空闲"
+          },
+          {
+            "id": "machine-a/-",
+            "title": "project",
+            "rows": [
+              "machine-a/no-space"
+            ],
+            "visible_rows": [
+              "machine-a/no-space"
+            ],
+            "folded": false,
+            "state_counts": {
+              "needs_you": 0,
+              "working": 1,
+              "unread": 0,
+              "idle": 0,
+              "unknown": 0
+            },
+            "spoken": "1 个工作中"
+          }
+        ],
+        "unread_shown": [],
+        "quiet_title": null
+      },
+      "derived": true
+    }
+  ]
+}

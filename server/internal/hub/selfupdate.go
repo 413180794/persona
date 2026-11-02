@@ -291,7 +291,7 @@ func (u *updater) confirm(ctx context.Context, p update.Pending) {
 func (u *updater) offline(ids []string) []string {
 	var out []string
 	for _, id := range ids {
-		m := u.h.byID[id]
+		m := u.h.localMachine(id)
 		if m == nil {
 			continue // gone from the config: nothing to wait for
 		}
@@ -338,7 +338,7 @@ func (u *updater) updateNodes(ctx context.Context, staged string) {
 			}
 		}
 	}
-	for _, m := range u.h.machines {
+	for _, m := range u.h.machinesNow() {
 		m.mu.Lock()
 		need := m.cfg.Kind != "local" && m.online && nodeMismatch(u.h.version, m.info.Version)
 		m.mu.Unlock()
@@ -639,7 +639,7 @@ func (u *updater) install(ctx context.Context, auto bool) {
 // nodePlatforms are the os-arch of the machines the hub reaches (not its own: that one runs the hub's binary).
 func (u *updater) nodePlatforms() []string {
 	var out []string
-	for _, m := range u.h.machines {
+	for _, m := range u.h.machinesNow() {
 		m.mu.Lock()
 		plat := m.info.OS + "-" + m.info.Arch
 		local := m.cfg.Kind == "local"
@@ -654,7 +654,7 @@ func (u *updater) nodePlatforms() []string {
 
 func (u *updater) onlineIDs() []string {
 	var out []string
-	for _, m := range u.h.machines {
+	for _, m := range u.h.machinesNow() {
 		m.mu.Lock()
 		if m.online {
 			out = append(out, m.cfg.ID)
@@ -679,7 +679,7 @@ func (u *updater) healthURL() string {
 // and every agent's), and a machine being redeployed.
 func (h *Hub) updateBusy() []busyItem {
 	var out []busyItem
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		m.mu.Lock()
 		deploying := m.deploying
 		m.mu.Unlock()

@@ -40,27 +40,48 @@ const (
 // at once (typing echoes are not held back).
 var termMinGap = 30 * time.Millisecond
 
-// frameGate merges frames that come within termMinGap of the last one sent: the diffs' bytes run on (they are VT
-// output, applied in order), a whole frame drops the diffs before it. What is held goes out when the gap is up.
+// frameGate merges frames that come within termMinGap of the last one sent, or while one is still being written:
+// the diffs' bytes run on (they are VT output, applied in order), a whole frame drops the diffs before it. What is
+// held goes out when the gap is up and the link has taken the frame before it.
+//
+// Sending runs off the caller (the host's reader): a slow link (a computer the hub reaches through a proxy, ~160 ms
+// and a few hundred KB/s, 2026-11-01) used to block the reader on every write, so frames queued behind each other and
+// the phone kept drawing the past while the user scrolled. Now they merge while the link is busy, and when what waits
+// outgrows a whole screen, refresh (control streams of a host that can redraw) asks for a whole frame to replace it:
+// a slow link carries the latest screen, not every step on the way there.
 type frameGate struct {
 	mu      sync.Mutex
+	idle    *sync.Cond
 	send    func(host.Frame)
+	refresh func() // optional: ask the host for a whole frame of the screen as it is now
 	last    time.Time
+	busy    bool // a send is being written
 	pending *host.Frame
 	timer   *time.Timer
+	whole   int  // bytes of the last whole frame: what a screen costs on the wire
+	asked   bool // refresh asked, no whole frame since
 }
+
+// gateBudget: waiting diffs past this (or past a whole screen, when that is larger) ask for a whole frame instead.
+const gateBudget = 16 << 10
 
 func (g *frameGate) put(f host.Frame) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if f.Full {
+		g.whole, g.asked = len(f.Data), false
+	}
 	if g.pending == nil {
+		if g.busy {
+			g.pending = &f
+			return
+		}
 		if wait := termMinGap - time.Since(g.last); wait > 0 {
 			g.pending = &f
 			g.timer = time.AfterFunc(wait, g.flush)
 			return
 		}
-		g.last = time.Now()
-		g.send(f)
+		g.start(f)
 		return
 	}
 	if f.Full {
@@ -69,21 +90,69 @@ func (g *frameGate) put(f host.Frame) {
 	}
 	g.pending.Data = joinFrameData(g.pending.Data, f.Data)
 	g.pending.Width, g.pending.Height = f.Width, f.Height
+	if g.busy && g.refresh != nil && !g.asked && !g.pending.Full && len(g.pending.Data) > max(g.whole, gateBudget) {
+		g.asked = true
+		go g.refresh()
+	}
 }
 
-// flush sends what is held (when the gap is up, and when the stream ends).
+// start sends f on a goroutine of its own and keeps sending what waited meanwhile. Called with g.mu held.
+func (g *frameGate) start(f host.Frame) {
+	g.busy, g.last = true, time.Now()
+	go g.deliver(f)
+}
+
+func (g *frameGate) deliver(f host.Frame) {
+	for {
+		g.send(f)
+		g.mu.Lock()
+		if g.pending == nil {
+			g.done()
+			return
+		}
+		if wait := termMinGap - time.Since(g.last); wait > 0 {
+			if g.timer == nil {
+				g.timer = time.AfterFunc(wait, g.flush)
+			}
+			g.done()
+			return
+		}
+		f, g.pending, g.last = *g.pending, nil, time.Now()
+		g.mu.Unlock()
+	}
+}
+
+// done ends a run of sends. Called with g.mu held; releases it.
+func (g *frameGate) done() {
+	g.busy = false
+	if g.idle != nil {
+		g.idle.Broadcast()
+	}
+	g.mu.Unlock()
+}
+
+// flush sends what is held: when the gap is up, and when the stream ends (it waits for a send under way, so the last
+// frame is out before the caller goes on to say the stream ended).
 func (g *frameGate) flush() {
 	g.mu.Lock()
-	defer g.mu.Unlock()
+	if g.idle == nil {
+		g.idle = sync.NewCond(&g.mu)
+	}
+	for g.busy {
+		g.idle.Wait()
+	}
 	if g.timer != nil {
 		g.timer.Stop()
 		g.timer = nil
 	}
-	if g.pending != nil {
-		g.last = time.Now()
-		g.send(*g.pending)
-		g.pending = nil
+	if g.pending == nil {
+		g.mu.Unlock()
+		return
 	}
+	f := *g.pending
+	g.pending, g.busy, g.last = nil, true, time.Now()
+	g.mu.Unlock()
+	g.deliver(f)
 }
 
 func joinFrameData(a, b string) string {
@@ -241,6 +310,10 @@ func (n *Node) terminalControl(ctx context.Context, id string, ctlr host.Control
 			if c := s.control(); c != nil {
 				go func() { _ = c.Resize(f.Width, f.Height) }()
 			}
+		}
+	}, refresh: func() {
+		if r, ok := s.control().(host.Redrawer); ok {
+			_ = r.Redraw()
 		}
 	}}
 	c, err := ctlr.Control(sctx, pane, p.Cols, p.Rows, p.Takeover, gate.put)
@@ -439,8 +512,8 @@ func (n *Node) observeOnce(ctx context.Context, id string) (int, error) {
 		}
 	}}
 	err = st.Observe(octx, ref, cols, rows, gate.put)
-	gate.flush()
-	gate.mu.Lock() // a flush the timer started may still be sending
+	gate.flush() // waits for a send under way, then sends what is held
+	gate.mu.Lock()
 	sent := frames
 	gate.mu.Unlock()
 	return sent, err

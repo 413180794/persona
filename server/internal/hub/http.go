@@ -5,25 +5,25 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
 
+	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/chyroc/jarvis/server/internal/link"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
 func (h *Hub) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"ok": true, "version": h.version, "features": proto.Features, "channel": h.build.Channel,
-			"build": h.build.Number, "protocol": proto.Protocol, "min_app_build": proto.MinAppBuild,
-			"update": map[string]any{"confirmed": h.upd == nil || h.upd.isConfirmed()}}) // the watchdog waits for this
-	})
+	mux.HandleFunc("GET /api/v1/health", h.health)
 	api := http.NewServeMux()
 	if h.upd != nil {
 		h.upd.routes(api)
@@ -43,16 +43,7 @@ func (h *Hub) routes() http.Handler {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	}))
-	api.HandleFunc("GET /api/v1/machines/{mid}/launchers", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-		defer cancel()
-		ls, err := h.machineLaunchers(ctx, m)
-		if err != nil {
-			callErr(w, err)
-			return
-		}
-		writeJSON(w, map[string]any{"launchers": ls})
-	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/launchers", h.withMachine(h.listLaunchers))
 	h.launcherRoutes(api)
 	h.modelConfigRoutes(api)
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
@@ -95,17 +86,17 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines/{mid}/codex-settings", h.proxy("codex.settings", nil))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/codex-settings", h.proxyBody("codex.settings.set"))
 	api.HandleFunc("GET /api/v1/sessions", h.listSessions)
-	api.HandleFunc("POST /api/v1/sessions", h.startSession)
+	api.HandleFunc("POST /api/v1/sessions", h.withClientOp("start", h.startSession))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items", h.withMachine(h.sessionItems))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items/{iid}/image", h.withMachine(h.sessionImage))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items/{iid}/full", h.withMachine(h.sessionItemFull))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/messages", h.withMachine(h.sendMessage))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/messages", h.withClientOp("message", h.withMachine(h.sendMessage)))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/attach", h.proxyBody("session.attach"))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.proxyBody("session.interrupt"))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.withClientOp("interrupt", h.proxyBody("session.interrupt")))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.proxyBody("session.close"))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.withClientOp("close", h.proxyBody("session.close")))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.withMachine(h.renameSession))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.withClientOp("rename", h.withMachine(h.renameSession)))
 	// {"dry_run": true, "all": false}: rename the tabs of running agents nobody named after their task (tabname.go).
 	api.HandleFunc("POST /api/v1/tabs/autoname", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -118,7 +109,7 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"tabs": h.autonameTabs(ctx, in.DryRun, in.All)})
 	})
 	// {"permission_mode": …, "effort": …}: either may be left out (node/modes.go).
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/modes", h.proxyBody("session.modes"))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/modes", h.withClientOp("modes", h.proxyBody("session.modes")))
 	api.HandleFunc("POST /api/v1/machines/{mid}/spaces/{wid}/rename", h.withMachine(h.renameSpace))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/info", h.proxy("session.info", func(r *http.Request) any {
 		return map[string]any{"session_id": r.PathValue("sid")}
@@ -133,9 +124,10 @@ func (h *Hub) routes() http.Handler {
 		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(q.Get("lines")), "source": q.Get("source"), "format": q.Get("format")}
 	}))
 	api.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"interactions": h.pendingInteractions()})
+		writeJSON(w, map[string]any{"interactions": visibleInteractions(h.pendingInteractions(), h.requestHasElicitation(r))})
 	})
-	api.HandleFunc("POST /api/v1/interactions/{id}/resolve", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/v1/ops/{id}", h.getClientOp)
+	api.HandleFunc("POST /api/v1/interactions/{id}/resolve", h.withClientOp("resolve", func(w http.ResponseWriter, r *http.Request) {
 		var res proto.Resolution
 		if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -144,26 +136,33 @@ func (h *Hub) routes() http.Handler {
 		if err := h.resolve(r.PathValue("id"), res); err != nil {
 			if errors.Is(err, errNotPending) {
 				writeErr(w, http.StatusGone, err)
+			} else if errors.Is(err, errInvalidElicitation) {
+				writeErr(w, http.StatusBadRequest, err)
 			} else {
 				callErr(w, err) // prompt_changed: 409, nothing pressed
 			}
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
-	})
+	}))
 	api.HandleFunc("POST /api/v1/devices", func(w http.ResponseWriter, r *http.Request) {
 		var d Device
 		if err := json.NewDecoder(r.Body).Decode(&d); err != nil || d.DeviceID == "" {
 			writeErr(w, http.StatusBadRequest, errors.New("device_id is required"))
 			return
 		}
-		d.Credential = principalOf(r.Context()).ID // revoking it stops the pushes (Pusher.signedOut)
+		// Both name the device token that registered it: credential_id picks the phone a tool call or wake goes to,
+		// credential stops the pushes when it is revoked (Pusher.signedOut).
+		d.CredentialID = principalOf(r.Context()).ID
+		d.Credential = d.CredentialID
 		h.push.register(d)
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	h.live.routes(api)
 	h.usageRoutes(api)
 	h.metricsRoutes(api)
+	api.HandleFunc("GET /api/v1/devices/{id}/sessions", h.serveDeviceSessions)
+	h.lockTestRoutes(api)
 	// Which pushes this device wants (notify.go NotifyPrefs); the app's 设置 › 通知.
 	api.HandleFunc("GET /api/v1/devices/{id}/prefs", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, h.prefsView(h.push.prefs(r.PathValue("id"))))
@@ -189,10 +188,23 @@ func (h *Hub) routes() http.Handler {
 			return
 		}
 		q := r.URL.Query()
-		recs, err := h.store.Interactions(r.Context(), q.Get("machine_id"), q.Get("session_id"), atoi(q.Get("limit")))
+		mid := q.Get("machine_id")
+		if m := h.localMachine(mid); m != nil {
+			mid = m.cfg.ID
+		}
+		recs, err := h.store.Interactions(r.Context(), mid, q.Get("session_id"), atoi(q.Get("limit")))
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
+		}
+		if !h.requestHasElicitation(r) {
+			filtered := make([]db.InteractionRecord, 0, len(recs))
+			for _, rec := range recs {
+				if rec.Interaction.Kind != proto.IxElicitation {
+					filtered = append(filtered, rec)
+				}
+			}
+			recs = filtered
 		}
 		writeJSON(w, map[string]any{"interactions": recs})
 	})
@@ -214,28 +226,69 @@ func (h *Hub) routes() http.Handler {
 	}
 	h.tokenRoutes(api)
 	h.portRoutes(api)
+	h.pairRoutes(api)
+	h.linkRoutes(api)
+	h.publicRoutes(api)
+	h.androidAppRoutes(api)
+	h.peerRoutes(api)
 	h.runtimeCLIRoutes(api)
-	mux.Handle("/api/", h.auth(api))
-	mux.Handle("/", webApp(filepath.Join(h.cfg.dir, "web")))
-	return logRequests(h, mux)
+	// What the center serves: its own apps' requests and those the members pass on (peer_http.go), whose source the
+	// member judged (no gate here for them). A member passes everything but its own few routes on (memberForward).
+	centerAPI := h.auth(jsonRouteErrors(api))
+	h.mesh.centerAPI.Store(centerAPI)
+	appAPI := h.gate(h.memberForward(centerAPI))
+	mux.Handle("/api/", appAPI)
+	mux.Handle("/", h.adminRoutes(mux, appAPI, webApp(filepath.Join(h.cfg.dir, "web"))))
+	return logRequests(h, jsonRouteErrors(mux))
 }
 
 func (h *Hub) auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		public := h.sourceOf(r) == sourcePublic
+		limited := public
+		if _, fwd := forwardedOf(r); fwd {
+			limited = false // the member that passed it on keeps the count (peer_http.go memberForward)
+		}
+		if limited {
+			if retry := h.devtok.failures.retry(authSourceKey(r), time.Now(), h.cfg.Security); retry > 0 {
+				retryAfter(w, retry)
+				h.securityError(w, r, http.StatusTooManyRequests, "rate_limited", 0)
+				return
+			}
+		}
 		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if tok == "" {
 			tok = r.URL.Query().Get("token")
 		}
 		p, ok := h.authenticate(r.Context(), tok)
 		if !ok {
-			writeErr(w, http.StatusUnauthorized, errors.New("invalid token"))
+			failures := 0
+			if limited {
+				failures = h.devtok.failures.fail(authSourceKey(r), time.Now(), h.cfg.Security)
+			}
+			h.securityError(w, r, http.StatusUnauthorized, "", failures)
+			return
+		}
+		if public && p.ID == "" {
+			h.securityError(w, r, http.StatusForbidden, "master_token_local_only", 0)
 			return
 		}
 		if !allowed(p, r.Method, r.URL.Path) {
-			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+			msg := "this device can only read and answer"
+			if p.Role == roleLink || p.Role == roleLinkPair {
+				msg = "a jarvis-link credential only opens its machine's link"
+			} else if p.Role == rolePeer || p.Role == rolePeerPair {
+				msg = "a peer credential only opens the mesh link"
+			}
+			writeErr(w, http.StatusForbidden, errors.New(msg))
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, p))
+		if p.PairHash != "" && r.URL.Path == "/api/v1/ws" {
+			ctx, cancel := h.pairContext(r.Context(), p)
+			defer cancel()
+			r = r.WithContext(ctx)
+		}
 		// API answers are live data: without this the phone's URLCache kept a copy of every page it pulled (megabytes,
 		// never read again). Images and media that may be cached set their own Cache-Control.
 		w.Header().Set("Cache-Control", "no-store")
@@ -245,7 +298,8 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 
 type statusWriter struct {
 	http.ResponseWriter
-	status int
+	status          int
+	securityFailure bool
 }
 
 func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
@@ -259,16 +313,28 @@ func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 func logRequests(h *Hub, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		client := parseRequestClient(r.Header.Get("X-Jarvis-Client"))
+		r = r.WithContext(context.WithValue(r.Context(), requestClientKey{}, client))
 		id := requestID(r.Header.Get("X-Client-Request-Id"))
 		w.Header().Set("X-Request-Id", id)
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
-		// A plugin's sockets and streams, a forwarded port's connections (ports.go).
-		long := strings.HasPrefix(r.URL.Path, "/api/v1/plugins/") || strings.HasSuffix(r.URL.Path, "/connect")
-		if r.URL.Path != "/api/v1/ws" && (sw.status >= 400 || (!long && time.Since(start) > 2*time.Second)) {
-			h.logf("[%s] %s %s -> %d (%s)", id, r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
+		// Auth and ingress refusals are logged by securityError (masked, rate limited), WebSocket ones included.
+		if !sw.securityFailure && (sw.status >= 400 || (!longLived(r.URL.Path) && time.Since(start) > 2*time.Second)) {
+			if client.Platform != "" {
+				h.logf("[%s] %s %s -> %d (%s) client=%q", id, r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond), client.Platform+"/"+client.Version)
+			} else {
+				h.logf("[%s] %s %s -> %d (%s)", id, r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
+			}
 		}
 	})
+}
+
+// longLived requests (WebSockets, a plugin's sockets and streams, a forwarded port's connections: ports.go) are not
+// slow requests however long they last.
+func longLived(path string) bool {
+	return path == "/api/v1/ws" || path == link.Path || path == link.StreamPath ||
+		strings.HasPrefix(path, "/api/v1/plugins/") || strings.HasSuffix(path, "/connect")
 }
 
 // requestID keeps a client's id if it is a short token (it lands in logs), else makes one.
@@ -284,12 +350,6 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeErr(w http.ResponseWriter, code int, err error) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
-}
-
 func atoi(s string) int {
 	n := 0
 	for _, c := range s {
@@ -303,7 +363,7 @@ func atoi(s string) int {
 
 func (h *Hub) withMachine(fn func(http.ResponseWriter, *http.Request, *Machine)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		m := h.byID[r.PathValue("mid")]
+		m := h.localMachine(r.PathValue("mid"))
 		if m == nil {
 			writeErr(w, http.StatusNotFound, errors.New("unknown machine"))
 			return
@@ -313,26 +373,46 @@ func (h *Hub) withMachine(fn func(http.ResponseWriter, *http.Request, *Machine))
 }
 
 func callErr(w http.ResponseWriter, err error) {
-	code := http.StatusBadGateway
+	status := http.StatusBadGateway
 	if errors.Is(err, errOffline) {
-		code = http.StatusServiceUnavailable
+		status = http.StatusServiceUnavailable
 	}
-	// A node error with a code (a refused send: dialog_open, input_draft) is a 409 the app acts on; its data
-	// (delivered, draft…) goes along as top-level fields next to error.
+	code := nodeErrorCode(err)
 	var re *rpc.Error
-	if errors.As(err, &re) && (re.Code != "" || len(re.Data) > 0) {
-		body := map[string]any{}
-		_ = json.Unmarshal(re.Data, &body)
-		body["error"] = re.Message
-		if re.Code != "" {
-			body["code"], code = re.Code, http.StatusConflict
+	if errors.As(err, &re) && re.Code != "" {
+		code = re.Code
+		switch code {
+		case "internal", "node_unreachable", "timeout":
+			status = http.StatusBadGateway
+		default:
+			status = http.StatusConflict
 		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(code)
-		_ = json.NewEncoder(w).Encode(body)
-		return
 	}
-	writeErr(w, code, err)
+	body := errorBody(status, code, err)
+	// delivered stays what the node said (sendsafe.go): the iOS app treats "unknown" as "maybe typed" and stops
+	// retrying by itself, so a bare timeout must not claim it. Newer clients read code (timeout, node_unreachable).
+	if re != nil {
+		// Keep refusal details flat for existing clients, including draft and clearable.
+		var data map[string]any
+		if json.Unmarshal(re.Data, &data) == nil {
+			for key, value := range data {
+				if key == "retryable" {
+					if _, ok := value.(bool); !ok {
+						continue
+					}
+				}
+				if key == "delivered" && value != "none" && value != "unknown" && value != "yes" {
+					continue
+				}
+				body[key] = value
+			}
+		}
+		if re.Code != "" || len(re.Data) > 0 {
+			body["error"] = re.Message
+		}
+		body["code"] = code
+	}
+	writeErrorBody(w, status, body)
 }
 
 // proxy forwards a GET to the machine's node and returns its result verbatim.
@@ -454,7 +534,7 @@ var errEOF = errors.New("EOF")
 func (h *Hub) listSessions(w http.ResponseWriter, r *http.Request) {
 	mid := r.URL.Query().Get("machine_id")
 	out := []proto.Session{}
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		if mid != "" && m.cfg.ID != mid {
 			continue
 		}
@@ -468,6 +548,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		MachineID       string `json:"machine_id"`
 		Cwd             string `json:"cwd"`
 		Launcher        string `json:"launcher"`
+		AgentType       string `json:"agent_type,omitempty"`
 		Prompt          string `json:"prompt"`
 		ResumeSessionID string `json:"resume_session_id"`
 		WorkspaceID     string `json:"workspace_id"`
@@ -482,7 +563,11 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		NameHint string `json:"name_hint,omitempty"`
 		TodoID   string `json:"todo_id,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<20))
+	if err == nil {
+		err = json.Unmarshal(body, &p)
+	}
+	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
@@ -505,9 +590,21 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	m := h.byID[p.MachineID]
+	m := h.localMachine(p.MachineID)
 	if m == nil {
 		writeErr(w, http.StatusNotFound, errors.New("unknown machine"))
+		return
+	}
+	if p.AgentType == "" {
+		for _, launcher := range m.cfg.Launchers {
+			if launcher.Name == p.Launcher {
+				p.AgentType = launcher.AgentType
+				break
+			}
+		}
+	}
+	if p.AgentType != "" && !agentTypeRe.MatchString(p.AgentType) {
+		writeErr(w, http.StatusBadRequest, errors.New("unsupported agent type"))
 		return
 	}
 	p.TabName = strings.TrimSpace(p.TabName)
@@ -516,10 +613,15 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		nameFrom = p.NameHint
 	}
 	async := p.Async && p.ResumeSessionID == ""
-	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
+	parent := r.Context()
+	if r.Header.Get("X-Jarvis-Op-Id") != "" {
+		// Finish an accepted start even if its HTTP response is lost; client_ops records the outcome.
+		parent = context.WithoutCancel(parent)
+	}
+	ctx, cancel := context.WithTimeout(parent, 100*time.Second)
 	defer cancel()
 	if async {
-		ctx, cancel = context.WithTimeout(r.Context(), 15*time.Second)
+		ctx, cancel = context.WithTimeout(parent, 15*time.Second)
 		defer cancel()
 	} else if p.TabName == "" && p.ResumeSessionID == "" {
 		p.TabName = h.autoTabName(ctx, nameFrom)
@@ -574,13 +676,19 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 // ---- WebSocket ----
 
 type client struct {
-	hub   *Hub
-	conn  *websocket.Conn
-	out   chan []byte
-	mu    sync.Mutex
-	subs  map[[2]string]bool
-	phone bool
-	sim   bool // a simulator registered as phone: only used when no real iPhone is connected
+	cancel   context.CancelFunc
+	stopping atomic.Bool
+
+	hub            *Hub
+	conn           *websocket.Conn
+	out            chan []byte
+	mu             sync.Mutex
+	subs           map[[2]string]bool
+	phone          bool
+	phoneID        string
+	phoneToolNames map[string]bool
+	activeAt       time.Time
+	sim            bool // a simulator registered as phone: only used when no real iPhone is connected
 	// runtimeCLI: the phone's DEBUG app offers its runtime CLI (runtime_cli.go); never one of the phone's tools.
 	runtimeCLI bool
 	// desktop: a desktop app (the Mac app, register_desktop); never the phone (desktops.go).
@@ -596,11 +704,13 @@ type client struct {
 	delta bool
 	have  map[string]map[string][]byte
 	// clean: the app closed the connection itself (gone to the background), rather than the network dropping it.
-	clean bool
-	lazy  bool // asked for items without image data (subscribe with lazy_images)
-	fold  bool // asked for backlogs with the agent's work folded (subscribe with fold_work)
-	name  string
-	since time.Time
+	clean           bool
+	lazy            bool // asked for items without image data (subscribe with lazy_images)
+	fold            bool // asked for backlogs with the agent's work folded (subscribe with fold_work)
+	name            string
+	since           time.Time
+	meta            clientMeta // what it said about itself in client_hello (clientmeta.go)
+	deviceSessionID int64      // immutable after registration in Hub.clients
 }
 
 func (c *client) sendJSON(v any) {
@@ -612,21 +722,32 @@ func (c *client) sendJSON(v any) {
 	case c.out <- b:
 	default:
 		// Slow consumer: drop the connection; the app reconnects and resyncs.
-		c.conn.Close(websocket.StatusPolicyViolation, "too slow")
+		if c.conn != nil {
+			c.conn.Close(websocket.StatusPolicyViolation, "too slow")
+		}
 	}
 }
 
 func (h *Hub) broadcast(v any) {
+	m, _ := v.(map[string]any)
 	b, err := json.Marshal(v)
 	if err != nil {
 		return
 	}
-	typ, _ := v.(map[string]any)["type"].(string)
-	h.broadcastRaw(typ, b)
+	typ, _ := m["type"].(string)
+	var elicitation bool
+	if ix, ok := m["interaction"].(proto.Interaction); ok {
+		elicitation = ix.Kind == proto.IxElicitation
+	}
+	h.broadcastTo(typ, b, elicitation)
 }
 
 // broadcastRaw sends every app the message b (of type typ).
-func (h *Hub) broadcastRaw(typ string, b []byte) {
+func (h *Hub) broadcastRaw(typ string, b []byte) { h.broadcastTo(typ, b, false) }
+
+// broadcastTo sends every app the message b (of type typ); an MCP form or URL request (elicitation) only goes to the
+// apps that said they can answer one.
+func (h *Hub) broadcastTo(typ string, b []byte, elicitation bool) {
 	switch typ {
 	case "sessions", "interaction", "interaction_resolved": // what the Fleet activity is made of
 		h.live.changed()
@@ -634,6 +755,9 @@ func (h *Hub) broadcastRaw(typ string, b []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for c := range h.clients {
+		if elicitation && !c.has("elicitation") {
+			continue
+		}
 		c.queue(b)
 	}
 }
@@ -698,16 +822,17 @@ func (h *Hub) itemsToSubscribers(machineID, sessionID string, items []proto.Item
 	}
 }
 
-func (h *Hub) phoneClient() *client {
+func (h *Hub) phoneClient(tool ...string) *client {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	// Prefer a real iPhone over a simulator, then the most recently registered.
+	// Only connected providers of the requested tool are eligible; prefer real devices, then recent activity.
 	var best *client
 	for c := range h.clients {
-		if !c.phone {
+		if !c.phone || (len(tool) > 0 && !c.phoneToolNames[tool[0]]) {
 			continue
 		}
-		if best == nil || (best.sim && !c.sim) || (best.sim == c.sim && c.since.After(best.since)) {
+		if best == nil || (best.sim && !c.sim) || (best.sim == c.sim &&
+			(c.activeAt.After(best.activeAt) || (c.activeAt.Equal(best.activeAt) && c.since.After(best.since)))) {
 			best = c
 		}
 	}
@@ -715,80 +840,104 @@ func (h *Hub) phoneClient() *client {
 }
 
 func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	h.mu.Lock()
+	if h.wsStopping {
+		h.mu.Unlock()
+		http.Error(w, "hub stopping", http.StatusServiceUnavailable)
+		return
+	}
+	h.wsHandlers.Add(1)
+	h.mu.Unlock()
+	defer h.wsHandlers.Done()
+	upgrade := &wsUpgrade{ResponseWriter: w}
+	conn, err := websocket.Accept(upgrade, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		return
 	}
 	conn.SetReadLimit(64 << 20)
-	who := principalOf(r.Context())
-	c := &client{hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now(),
-		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), have: map[string]map[string][]byte{}}
-	h.mu.Lock()
-	h.clients[c] = struct{}{}
-	h.mu.Unlock()
 	ctx, cancel := context.WithCancel(r.Context())
+	who := principalOf(r.Context())
+	c := &client{cancel: cancel, hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now(),
+		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), have: map[string]map[string][]byte{},
+		meta: clientMeta{updates: make(chan heartbeatConfig, 512), done: ctx.Done()}}
+	h.mu.Lock()
+	if h.wsStopping {
+		h.mu.Unlock()
+		cancel()
+		_ = conn.CloseNow()
+		return
+	}
+	if h.wsConnections == nil {
+		h.wsConnections = map[*client]struct{}{}
+	}
+	h.wsConnections[c] = struct{}{}
+	h.mu.Unlock()
+	var session *deviceSessionConnection
+	var writerDone chan struct{}
 	defer func() {
 		cancel()
+		_ = conn.CloseNow()
+		if writerDone != nil {
+			<-writerDone
+		}
+		session.disconnected(err)
 		h.dropClient(c)
 		c.mu.Lock()
 		subs := c.subs
 		c.subs = map[[2]string]bool{}
 		c.mu.Unlock()
 		for k := range subs {
-			if m := h.byID[k[0]]; m != nil {
+			if m := h.localMachine(k[0]); m != nil {
 				m.removeWatcher(k[1])
 			}
 		}
 		h.terminalDrop(c)
-		conn.CloseNow()
 	}()
 
+	// Track registration too: shutdown must not miss a newly hijacked connection.
+	session = h.deviceSessionConnected(r.WithContext(ctx), c)
+	if session != nil {
+		// Normal client cancellation is not a hub shutdown.
+		session.ctx = r.Context()
+		c.deviceSessionID = session.id
+	}
+	h.mu.Lock()
+	if h.wsStopping {
+		h.mu.Unlock()
+		return
+	}
+	h.clients[c] = struct{}{}
+	h.mu.Unlock()
+
+	writerDone = make(chan struct{})
 	go func() {
-		ping := time.NewTicker(20 * time.Second)
-		defer ping.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case b := <-c.out:
-				wctx, wcancel := context.WithTimeout(ctx, 20*time.Second)
-				err := conn.Write(wctx, websocket.MessageText, b)
-				wcancel()
-				if err != nil {
-					cancel()
-					return
-				}
-			case <-ping.C:
-				pctx, pcancel := context.WithTimeout(ctx, 15*time.Second)
-				err := conn.Ping(pctx)
-				pcancel()
-				if err != nil {
-					cancel()
-					return
-				}
+		defer close(writerDone)
+		defer cancel()
+		session.writerStopped(c.writeWS(ctx, conn, func(hb heartbeatConfig) {
+			session.heartbeat(hb)
+			if err := setHeartbeatKeepAlive(upgrade.conn, hb); err != nil {
+				h.logf("websocket keepalive: %v", err)
 			}
-		}
+		}))
 	}()
 
-	c.sendJSON(map[string]any{"type": "hello", "server_version": h.version, "client_id": randomHex(6), "features": proto.Features,
-		"channel": h.build.Channel, "build": h.build.Number, "protocol": proto.Protocol, "min_app_build": proto.MinAppBuild})
+	c.sendJSON(h.hello())
 	c.sendJSON(map[string]any{"type": "machines", "machines": h.machineList()})
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		if c.delta {
 			h.snapshotSessions(c, m)
 		} else {
 			c.sendJSON(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
 		}
 	}
-	for _, ix := range h.pendingInteractions() {
-		c.sendJSON(map[string]any{"type": "interaction", "interaction": ix})
-	}
-	h.sendDesktops(c) // under the hub lock, so a desktop registering meanwhile cannot be overtaken by this older list
+	h.sendPendingInteractions(c, false)
+	h.sendDesktops(c)
 
 	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			s := websocket.CloseStatus(err)
+		_, data, readErr := conn.Read(ctx)
+		if readErr != nil {
+			err = readErr
+			s := websocket.CloseStatus(readErr)
 			c.clean = s == websocket.StatusNormalClosure || s == websocket.StatusGoingAway
 			return
 		}
@@ -806,6 +955,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		FoldWork   bool            `json:"fold_work"`
 		DeviceName string          `json:"device_name"`
 		DeviceID   string          `json:"device_id"` // register_phone / register_desktop: the app's id for pushes
+		Platform   string          `json:"platform"`
 		Simulator  bool            `json:"simulator"`
 		Tools      []proto.Tool    `json:"tools"`
 		CallID     string          `json:"call_id"`
@@ -827,7 +977,14 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	if json.Unmarshal(data, &msg) != nil {
 		return
 	}
+	h.mu.Lock()
+	c.activeAt = time.Now()
+	h.mu.Unlock()
 	switch msg.Type {
+	case "client_hello":
+		h.onClientHello(c, data)
+	case "ping":
+		h.onAppPing(c, data)
 	case "terminal_subscribe":
 		h.terminalSubscribe(ctx, c, msg.MachineID, msg.SessionID, msg.Epoch, msg.AfterSeq, msg.Control, msg.Takeover)
 	case "terminal_input":
@@ -838,7 +995,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	case "terminal_unsubscribe":
 		h.terminalUnsubscribe(c, msg.MachineID, msg.SessionID)
 	case "subscribe":
-		m := h.byID[msg.MachineID]
+		m := h.localMachine(msg.MachineID)
 		if m == nil {
 			return
 		}
@@ -863,7 +1020,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		had := c.subs[key]
 		delete(c.subs, key)
 		c.mu.Unlock()
-		if m := h.byID[msg.MachineID]; m != nil && had {
+		if m := h.localMachine(msg.MachineID); m != nil && had {
 			m.removeWatcher(msg.SessionID)
 		}
 	case "register_phone":
@@ -879,18 +1036,33 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 			h.mu.Unlock()
 			return
 		}
+		deviceID := msg.DeviceID
+		if deviceID == "" {
+			deviceID = c.device
+		}
+		if deviceID == "" {
+			deviceID = "legacy"
+		}
 		h.mu.Lock()
 		c.phone, c.sim, c.name, c.since, c.pushDevice = true, msg.Simulator, msg.DeviceName, time.Now(), msg.DeviceID
 		c.runtimeCLI = cli
-		h.mu.Unlock()
-		if len(tools) > 0 {
-			h.setPhoneTools(tools)
+		c.phoneID = deviceID
+		c.phoneToolNames = map[string]bool{}
+		for _, tool := range tools {
+			c.phoneToolNames[tool.Name] = true
 		}
+		h.mu.Unlock()
+		if strings.HasPrefix(c.device, "pair_") {
+			// A pairing token is traded for a device token within seconds and the phone registers again under it:
+			// calls still reach this connection, but nothing is saved under a credential about to disappear.
+			return
+		}
+		h.setPhoneTools(db.PhoneToolRegistration{DeviceID: deviceID, Platform: msg.Platform, CredentialID: c.device, Tools: tools})
 	case "register_desktop":
 		h.registerDesktop(c, msg.DeviceName, msg.DeviceID)
 	case "seen":
-		if h.byID[msg.MachineID] != nil && msg.SessionID != "" {
-			h.markSeen(msg.MachineID, msg.SessionID)
+		if m := h.localMachine(msg.MachineID); m != nil && msg.SessionID != "" {
+			h.markSeen(m.cfg.ID, msg.SessionID)
 		}
 	case "tool_result":
 		if c.role != roleFull {

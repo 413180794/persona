@@ -378,7 +378,7 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 		h.todos.mu.Unlock()
 
 		for _, mid := range affectedMachines {
-			if m := h.byID[mid]; m != nil {
+			if m := h.localMachine(mid); m != nil {
 				h.sessionsChanged(m)
 			}
 		}
@@ -430,7 +430,7 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 		h.todos.mu.Unlock()
 
 		for _, mid := range affectedMachines {
-			if m := h.byID[mid]; m != nil {
+			if m := h.localMachine(mid); m != nil {
 				h.sessionsChanged(m)
 			}
 		}
@@ -467,7 +467,7 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 		}
 
 		var title, cwd, agent string
-		if m := h.byID[mid]; m != nil {
+		if m := h.localMachine(mid); m != nil {
 			if s, ok := m.session(sid); ok {
 				title = s.Title
 				cwd = s.Cwd
@@ -546,7 +546,7 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 		h.todos.mu.Unlock()
 
 		if wasActive {
-			if m := h.byID[mid]; m != nil {
+			if m := h.localMachine(mid); m != nil {
 				h.sessionsChanged(m)
 			}
 		}
@@ -642,7 +642,7 @@ func (h *Hub) linkTodoAgent(ctx context.Context, todoID, mid, sid, title, cwd, a
 	}
 	h.todos.mu.Unlock()
 
-	if m := h.byID[mid]; m != nil {
+	if m := h.localMachine(mid); m != nil {
 		h.sessionsChanged(m)
 	}
 	h.broadcast(map[string]any{"type": "todos"})

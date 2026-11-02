@@ -247,15 +247,15 @@ func (h *Hub) runLarkAgent(ctx context.Context, cfg LarkAgentConfig, feedID stri
 func (h *Hub) startLarkAgent(ctx context.Context, cfg LarkAgentConfig, machineID, sessionID, prompt string) (string, string, error) {
 	ac := h.assistantConfig(ctx)
 	switch {
-	case machineID != "" && h.byID[machineID] != nil:
+	case machineID != "" && h.localMachine(machineID) != nil:
 		ac.MachineID = machineID
-	case h.byID[cfg.Machine] != nil:
+	case h.localMachine(cfg.Machine) != nil:
 		ac.MachineID = cfg.Machine
 	}
 	if cfg.Launcher != "" {
 		ac.Launcher = cfg.Launcher
 	}
-	m := h.byID[ac.MachineID]
+	m := h.localMachine(ac.MachineID)
 	if m == nil {
 		return "", "", errors.New("no machine for the agent")
 	}
@@ -449,7 +449,7 @@ func (h *Hub) larkAgentLoop(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		if !h.larkAgentCfg().Enabled {
+		if !h.larkAgentCfg().Enabled || h.isMember() {
 			continue
 		}
 		h.sweepLarkAgents(ctx, time.Now())
@@ -470,7 +470,7 @@ func (h *Hub) sweepLarkAgents(ctx context.Context, now time.Time) {
 	}
 	h.larkAgent.mu.Unlock()
 	for _, r := range running {
-		m := h.byID[r.MachineID]
+		m := h.localMachine(r.MachineID)
 		if m == nil {
 			continue
 		}

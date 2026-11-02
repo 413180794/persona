@@ -1,0 +1,480 @@
+[
+  {
+    "name": "interaction_question",
+    "description": "交互卡携带对应类型的提问、计划、权限或屏幕信息。",
+    "source": [
+      "server/internal/proto/proto.go: Interaction",
+      "server/internal/hub/http.go: Hub.serveWS",
+      "apple/Shared/Models.swift: Interaction, ScreenDialog",
+      "docs/protocol.md: 终端对话框（screen 交互）"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "interaction": {
+        "id": "ix_question",
+        "machine_id": "m1",
+        "session_id": "s1",
+        "session_title": "示例任务",
+        "cwd": "/home/user/project",
+        "kind": "question",
+        "created_at": "2026-01-02T03:04:05Z",
+        "expires_at": "2026-01-02T04:04:05Z",
+        "tool_name": "AskUserQuestion",
+        "questions": [
+          {
+            "question": "选择示例颜色",
+            "header": "颜色",
+            "multi_select": false,
+            "options": [
+              {
+                "label": "蓝色",
+                "description": "示例选项"
+              },
+              {
+                "label": "绿色"
+              }
+            ]
+          },
+          {
+            "question": "选择检查项",
+            "multi_select": true,
+            "options": [
+              {
+                "label": "格式"
+              },
+              {
+                "label": "内容"
+              }
+            ]
+          }
+        ],
+        "resumable": true
+      },
+      "type": "interaction"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/interaction/id": "ix_question",
+        "/interaction/kind": "question",
+        "/type": "interaction"
+      }
+    }
+  },
+  {
+    "name": "interaction_plan",
+    "description": "交互卡携带对应类型的提问、计划、权限或屏幕信息。",
+    "source": [
+      "server/internal/proto/proto.go: Interaction",
+      "server/internal/hub/http.go: Hub.serveWS",
+      "apple/Shared/Models.swift: Interaction, ScreenDialog",
+      "docs/protocol.md: 终端对话框（screen 交互）"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "interaction": {
+        "id": "ix_plan",
+        "machine_id": "m1",
+        "session_id": "s1",
+        "session_title": "示例任务",
+        "cwd": "/home/user/project",
+        "kind": "plan",
+        "created_at": "2026-01-02T03:04:05Z",
+        "expires_at": "2026-01-02T04:04:05Z",
+        "tool_name": "ExitPlanMode",
+        "plan": "## 示例计划\n\n读取文件后汇报结果。"
+      },
+      "type": "interaction"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/interaction/id": "ix_plan",
+        "/interaction/kind": "plan",
+        "/type": "interaction"
+      }
+    }
+  },
+  {
+    "name": "interaction_permission",
+    "description": "交互卡携带对应类型的提问、计划、权限或屏幕信息。",
+    "source": [
+      "server/internal/proto/proto.go: Interaction",
+      "server/internal/hub/http.go: Hub.serveWS",
+      "apple/Shared/Models.swift: Interaction, ScreenDialog",
+      "docs/protocol.md: 终端对话框（screen 交互）"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "interaction": {
+        "id": "ix_permission",
+        "machine_id": "m1",
+        "session_id": "s1",
+        "session_title": "示例任务",
+        "cwd": "/home/user/project",
+        "kind": "permission",
+        "created_at": "2026-01-02T03:04:05Z",
+        "expires_at": "2026-01-02T04:04:05Z",
+        "tool_name": "Bash",
+        "tool_use_id": "call_permission",
+        "tool_input": {
+          "command": "pwd"
+        },
+        "summary": "查看当前目录"
+      },
+      "type": "interaction"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/interaction/id": "ix_permission",
+        "/interaction/kind": "permission",
+        "/type": "interaction"
+      }
+    }
+  },
+  {
+    "name": "interaction_screen",
+    "description": "交互卡携带对应类型的提问、计划、权限或屏幕信息。",
+    "source": [
+      "server/internal/proto/proto.go: Interaction",
+      "server/internal/hub/http.go: Hub.serveWS",
+      "apple/Shared/Models.swift: Interaction, ScreenDialog",
+      "docs/protocol.md: 终端对话框（screen 交互）"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "interaction": {
+        "id": "ix_screen",
+        "machine_id": "m1",
+        "session_id": "s1",
+        "session_title": "示例任务",
+        "cwd": "/home/user/project",
+        "kind": "screen",
+        "created_at": "2026-01-02T03:04:05Z",
+        "expires_at": "2026-01-02T04:04:05Z",
+        "screen": "请选择示例操作\n❯ 1. Continue\n  2. Type something.\nEnter to confirm · Esc to cancel",
+        "dialog": {
+          "question": "请选择示例操作",
+          "options": [
+            {
+              "key": "1",
+              "label": "Continue",
+              "keys": [
+                "1"
+              ]
+            },
+            {
+              "key": "2",
+              "label": "Type something.",
+              "kind": "type_something",
+              "keys": [
+                "2"
+              ]
+            }
+          ],
+          "rev": "a40a48169c96"
+        }
+      },
+      "type": "interaction"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/interaction/dialog/options/0/key": "1",
+        "/interaction/dialog/options/1/kind": "type_something",
+        "/interaction/id": "ix_screen",
+        "/interaction/kind": "screen",
+        "/type": "interaction"
+      }
+    }
+  },
+  {
+    "name": "interaction_elicitation_form",
+    "description": "仅向声明 elicitation 能力的连接下发，旧 iOS 不接收此样本。",
+    "source": [
+      "server/internal/hub/http.go: Hub.broadcast",
+      "server/internal/proto/proto.go: Elicitation",
+      "android/core/contracts/src/main/kotlin/jarvis/core/contracts/Elicitation.kt"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "interaction": {
+        "id": "ix_elicitation_form",
+        "machine_id": "m1",
+        "session_id": "s1",
+        "kind": "elicitation",
+        "created_at": "2026-01-02T03:04:05Z",
+        "expires_at": "2026-01-02T04:04:05Z",
+        "agent_id": "agent_example",
+        "agent_type": "worker",
+        "mcp_server_name": "example-mcp",
+        "elicitation": {
+          "mode": "form",
+          "message": "请确认示例请求",
+          "requested_schema": {
+            "type": "object",
+            "properties": {
+              "choice": {
+                "type": "string",
+                "enum": [
+                  "yes",
+                  "no"
+                ]
+              }
+            },
+            "required": [
+              "choice"
+            ]
+          }
+        }
+      },
+      "type": "interaction"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/interaction/elicitation/mode": "form",
+        "/interaction/elicitation/requested_schema/properties/choice/type": "string",
+        "/interaction/kind": "elicitation",
+        "/interaction/mcp_server_name": "example-mcp",
+        "/interaction/tool_use_id": null
+      }
+    }
+  },
+  {
+    "name": "interaction_elicitation_url",
+    "description": "仅向声明 elicitation 能力的连接下发，旧 iOS 不接收此样本。",
+    "source": [
+      "server/internal/hub/http.go: Hub.broadcast",
+      "server/internal/proto/proto.go: Elicitation",
+      "android/core/contracts/src/main/kotlin/jarvis/core/contracts/Elicitation.kt"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "interaction": {
+        "id": "ix_elicitation_url",
+        "machine_id": "m1",
+        "session_id": "s1",
+        "kind": "elicitation",
+        "created_at": "2026-01-02T03:04:05Z",
+        "expires_at": "2026-01-02T04:04:05Z",
+        "agent_id": "agent_example",
+        "agent_type": "worker",
+        "mcp_server_name": "example-mcp",
+        "elicitation": {
+          "mode": "url",
+          "message": "请确认示例请求",
+          "url": "https://example.com/confirm",
+          "elicitation_id": "request_example"
+        }
+      },
+      "type": "interaction"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/interaction/elicitation/elicitation_id": "request_example",
+        "/interaction/elicitation/mode": "url",
+        "/interaction/elicitation/url": "https://example.com/confirm",
+        "/interaction/kind": "elicitation",
+        "/interaction/mcp_server_name": "example-mcp",
+        "/interaction/tool_use_id": null
+      }
+    }
+  },
+  {
+    "name": "interaction_secret",
+    "description": "密码提示只携带密码框标记，不携带用户输入。",
+    "source": [
+      "server/internal/screen/secret.go: SecretPrompt",
+      "apple/Shared/Models.swift: Interaction.secret"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "interaction": {
+        "id": "ix_secret",
+        "machine_id": "m1",
+        "session_id": "s1",
+        "session_title": "示例任务",
+        "cwd": "/home/user/project",
+        "kind": "screen",
+        "created_at": "2026-01-02T03:04:05Z",
+        "expires_at": "2026-01-02T04:04:05Z",
+        "screen": "Password:",
+        "secret": true
+      },
+      "type": "interaction"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/interaction/dialog": null,
+        "/interaction/kind": "screen",
+        "/interaction/secret": true
+      }
+    }
+  },
+  {
+    "name": "interactions_list",
+    "description": "待处理列表使用与事件相同的交互类型。",
+    "source": [
+      "server/internal/hub/http.go: Hub.routes",
+      "apple/Shared/Models.swift: Interaction"
+    ],
+    "derived": true,
+    "decoder": "interactions",
+    "input": {
+      "interactions": [
+        {
+          "id": "ix_question",
+          "machine_id": "m1",
+          "session_id": "s1",
+          "session_title": "示例任务",
+          "cwd": "/home/user/project",
+          "kind": "question",
+          "created_at": "2026-01-02T03:04:05Z",
+          "expires_at": "2026-01-02T04:04:05Z",
+          "tool_name": "AskUserQuestion",
+          "questions": [
+            {
+              "question": "选择示例颜色",
+              "header": "颜色",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "蓝色",
+                  "description": "示例选项"
+                },
+                {
+                  "label": "绿色"
+                }
+              ]
+            },
+            {
+              "question": "选择检查项",
+              "multi_select": true,
+              "options": [
+                {
+                  "label": "格式"
+                },
+                {
+                  "label": "内容"
+                }
+              ]
+            }
+          ],
+          "resumable": true
+        },
+        {
+          "id": "ix_plan",
+          "machine_id": "m1",
+          "session_id": "s1",
+          "session_title": "示例任务",
+          "cwd": "/home/user/project",
+          "kind": "plan",
+          "created_at": "2026-01-02T03:04:05Z",
+          "expires_at": "2026-01-02T04:04:05Z",
+          "tool_name": "ExitPlanMode",
+          "plan": "## 示例计划\n\n读取文件后汇报结果。"
+        },
+        {
+          "id": "ix_permission",
+          "machine_id": "m1",
+          "session_id": "s1",
+          "session_title": "示例任务",
+          "cwd": "/home/user/project",
+          "kind": "permission",
+          "created_at": "2026-01-02T03:04:05Z",
+          "expires_at": "2026-01-02T04:04:05Z",
+          "tool_name": "Bash",
+          "tool_use_id": "call_permission",
+          "tool_input": {
+            "command": "pwd"
+          },
+          "summary": "查看当前目录"
+        },
+        {
+          "id": "ix_screen",
+          "machine_id": "m1",
+          "session_id": "s1",
+          "session_title": "示例任务",
+          "cwd": "/home/user/project",
+          "kind": "screen",
+          "created_at": "2026-01-02T03:04:05Z",
+          "expires_at": "2026-01-02T04:04:05Z",
+          "screen": "请选择示例操作\n❯ 1. Continue\n  2. Type something.\nEnter to confirm · Esc to cancel",
+          "dialog": {
+            "question": "请选择示例操作",
+            "options": [
+              {
+                "key": "1",
+                "label": "Continue",
+                "keys": [
+                  "1"
+                ]
+              },
+              {
+                "key": "2",
+                "label": "Type something.",
+                "kind": "type_something",
+                "keys": [
+                  "2"
+                ]
+              }
+            ],
+            "rev": "a40a48169c96"
+          }
+        },
+        {
+          "id": "ix_secret",
+          "machine_id": "m1",
+          "session_id": "s1",
+          "session_title": "示例任务",
+          "cwd": "/home/user/project",
+          "kind": "screen",
+          "created_at": "2026-01-02T03:04:05Z",
+          "expires_at": "2026-01-02T04:04:05Z",
+          "screen": "Password:",
+          "secret": true
+        }
+      ]
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/interactions/0/kind": "question",
+        "/interactions/0/questions/1/multi_select": true,
+        "/interactions/4/secret": true
+      }
+    }
+  },
+  {
+    "name": "interaction_resolved",
+    "description": "已处理事件仅用交互标识撤回卡片。",
+    "source": [
+      "server/internal/hub/hub.go: Hub.resolve",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "id": "ix_question",
+      "type": "interaction_resolved"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/id": "ix_question",
+        "/type": "interaction_resolved"
+      }
+    }
+  }
+]

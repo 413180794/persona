@@ -75,7 +75,7 @@ func (h *Hub) takeSnapshot(done chan struct{}) {
 		defer wg.Done()
 		snap.Calendar = h.snapshotCalendar(ctx, now)
 	}()
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		snap.Machines = append(snap.Machines, prompts.SnapshotMachine{Name: m.cfg.Name, ID: m.cfg.ID, Online: m.snapshot().Online})
 	}
 	snap.Needs, snap.Unread, snap.Working = h.snapshotAgents()
@@ -95,7 +95,7 @@ func (h *Hub) takeSnapshot(done chan struct{}) {
 func (h *Hub) forgetSnapshotLocked() { h.snap, h.snapAt = nil, time.Time{} }
 
 func (h *Hub) snapshotAgents() (needs, unread []prompts.SnapshotAgent, working []string) {
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		for _, s := range h.decorated(m) {
 			if s.Assistant {
 				continue
@@ -182,8 +182,10 @@ func (h *Hub) snapshotCalendar(ctx context.Context, now time.Time) *prompts.Snap
 }
 
 func (h *Hub) snapshotSchedule(ctx context.Context, loc *time.Location) []prompts.SnapshotFollowup {
-	s := h.loadSchedule(ctx)
-	s.mu.Lock()
+	s, err := h.lockedSchedule(ctx)
+	if err != nil {
+		return nil
+	}
 	defer s.mu.Unlock()
 	var out []prompts.SnapshotFollowup
 	for _, t := range s.tasks {

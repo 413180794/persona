@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -46,6 +47,8 @@ type Pusher struct {
 	now    func() time.Time
 	// desktopOnline: a desktop app is connected (Hub.desktopOnline), for 手机静音.
 	desktopOnline func() bool
+	// hubID is this hub's hub_id: every push says which hub sent it, so the app knows the group (plan 2.6「推送」).
+	hubID func() string
 	// desktopOpen: the desktop app with this push device id is connected (Hub.desktopOpen); it posts its own
 	// notifications for agents then (the Mac's MacAttentionWatcher).
 	desktopOpen func(device string) bool
@@ -411,16 +414,18 @@ func (p *Pusher) prefs(id string) NotifyPrefs {
 func (p *Pusher) setPrefs(id string, prefs NotifyPrefs) error {
 	raw, _ := json.Marshal(prefs)
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.store != nil {
+		if err := p.store.SetDevicePrefs(context.Background(), id, raw); err != nil {
+			return err
+		}
+	}
 	d, ok := p.devices[id]
 	if !ok {
 		d = Device{DeviceID: id}
 	}
 	d.Prefs = raw
 	p.devices[id] = d
-	p.mu.Unlock()
-	if p.store != nil {
-		return p.store.SetDevicePrefs(context.Background(), id, raw)
-	}
 	return nil
 }
 
@@ -464,6 +469,26 @@ func (p *Pusher) wake(reason string) {
 		func(d Device) bool { return d.Kind != kindMac })
 }
 
+// wakeDevices preserves the iOS background push payload while limiting its recipients (the phone_* tools' wake).
+func (p *Pusher) wakeDevices(reason string, ids map[string]bool) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	bound := false
+	for _, d := range p.devices {
+		if p.reachable(d) && (ids[d.DeviceID] || (d.CredentialID != "" && ids[d.CredentialID])) {
+			bound = true
+			break
+		}
+	}
+	p.mu.Unlock()
+	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "jarvis_wake": reason}, "", "background", "5",
+		func(d Device) bool {
+			return d.Kind != kindMac && (ids[d.DeviceID] || (d.CredentialID != "" && ids[d.CredentialID]) || (!bound && ids["legacy"] && d.CredentialID == "" && d.Kind != "watch"))
+		})
+}
+
 // sendAs pushes to every reachable device that to picks (nil: all of them). to runs outside p.mu: it may ask the hub.
 func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority string, to func(Device) bool) {
 	if p == nil {
@@ -485,6 +510,10 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 	}
 	if len(devices) == 0 {
 		return
+	}
+	if p.hubID != nil {
+		payload = maps.Clone(payload)
+		payload["hub_id"] = p.hubID()
 	}
 	body, _ := json.Marshal(payload)
 	for _, d := range devices {
@@ -533,7 +562,8 @@ func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
 // buttons answer `interaction_id` through the resolve API.
 func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	title := map[string]string{
-		proto.IxQuestion: "Claude 在问你", proto.IxPlan: "计划等你审批", proto.IxPermission: "需要你授权", proto.IxScreen: "终端等你处理",
+		proto.IxElicitation: "MCP 请求等你处理",
+		proto.IxQuestion:    "Claude 在问你", proto.IxPlan: "计划等你审批", proto.IxPermission: "需要你授权", proto.IxScreen: "终端等你处理",
 	}[ix.Kind]
 	if ix.ToolName == "ask_user" {
 		title = "Jarvis 在问你"
@@ -579,17 +609,21 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 }
 
 func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string, wants func(NotifyPrefs) bool) {
+	p.send(donePayload(machineID, machine, sessionID, title, text), "", wants)
+}
+
+func donePayload(machineID, machine, sessionID, title, text string) map[string]any {
 	if text == "" {
 		text = "已完成"
 	}
-	p.send(map[string]any{
+	return map[string]any{
 		"aps": map[string]any{
 			"alert":     map[string]any{"title": title, "subtitle": machine, "body": text},
 			"sound":     "default",
 			"thread-id": sessionID,
 		},
 		"machine_id": machineID, "session_id": sessionID,
-	}, "", wants)
+	}
 }
 
 func (p *Pusher) clear(string) {}

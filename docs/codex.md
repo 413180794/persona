@@ -12,6 +12,10 @@ herdr 里跑的 Codex（`codex` CLI）和 Claude 一样出现在「Agents」tab�
   同名的有几个时优先 herdr / 启动时记的那个，否则取最近写过的。标题能说明的窗格先认，标题里没有线程名（新线程）的最后才按
   「同一工作目录下最新、还没被认领的 rollout」猜（`codexSession`）。2026-10-31 以前只靠猜：一台机器同目录 5 个 Codex 认错 4 个，
   正在跑的那个显示成别的会话、灰点、新一轮的消息一条都看不到（整个机器 26 个 Codex 窗格认错 9 个）。
+- **子 Agent 的 rollout 不算会话**：Codex 的 thread_spawn 子 Agent（TRAEX 还有审核工具调用的 guardian，见下）各写一份自己的 rollout，
+  和主对话在同一个目录、同一个 cwd，而且更新。认法只看 `session_meta`：`thread_source` 是 `subagent`，或 `source` 是 `{"subagent": …}`；
+  它属于哪个对话看 `session_id`（没有就看 `parent_thread_id`）。猜会话时跳过它们，herdr 报来的 id 如果是子 Agent，换成它的主对话
+  （`rolloutMeta`、`mainThread`）。2026-11-01 扫了一台 Mac 的 435 份 Codex rollout，203 份是子 Agent，全都带 `thread_source` 和 `session_id`。
 - rollout 放在线程**开始那天**的目录（`sessions/YYYY/MM/DD`），之后一直往里写：六周前开的线程今天还在用。列 rollout 时近两周的目录
   每 5 秒扫一次，更早的目录每分钟扫一次，只留两周内写过的（`rollouts`）。
 - herdr 的终端标题是「dots | codex | Ready」，不能当标题：标题用 Codex 自己起的线程名（`~/.codex/session_index.jsonl`
@@ -203,6 +207,11 @@ TRAEX（`traex`，公司内部基于 Codex 的分支）2026-10-28 起支持，�
   node 自己找：`~/.trae/cli/thread-writer-locks/<会话 id>.owner.json` 写着正在写这个会话的 pid；pid 的环境变量里有 herdr 的
   `HERDR_PANE_ID`（Linux 读 `/proc/<pid>/environ`，macOS 用 `ps -E`），于是 窗格 → pid → 会话 是精确的，不靠目录猜。窗格信息来自
   `herdr api snapshot` 的 `panes`。
+- **一个进程会写好几个 thread**：TRAEX 执行工具前，会把这一步交给审核模型做自动批准评估（guardian，`session_meta` 里
+  `source: {"subagent": {"other": "guardian"}}`、`thread_source: subagent`、`session_id` 和 `forked_from_id` 都是主对话）。
+  这个审核对话由同一个进程来写，也有自己的 owner 文件，而且比主对话的新。按「每个 pid 取最新的 owner 文件」认，App 里显示的就是审核对话
+  （审核请求和评估结果的 JSON），和终端里看到的不一样（2026-11-01 用户反馈）。现在同一个 pid 取最新的非子 Agent thread；只有子 Agent 的就取它的主对话；
+  `session_meta` 里没有这些字段的旧版本还按最新的 owner 文件（`traexOwners`）。
 - **状态自己判断**：终端标题前面有盲文转圈字符（`terminal_title`，不是 stripped 的那个）或屏幕上有「esc to interrupt」= 工作中；
   屏幕上有「› 1.」这样的编号选择 = 等你（走「终端在问你」卡片）；其余报 `done`，hub 按看没看过算「完成未看 / 已看」。屏幕最多 2 秒读一次。
 - **文件布局和 Codex 一样**，只是根目录是 `~/.trae/cli`：`sessions/YYYY/MM/DD/rollout-*.jsonl`、`session_index.jsonl`（线程名，做标题）。

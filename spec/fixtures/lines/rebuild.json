@@ -1,0 +1,583 @@
+{
+  "schema_version": 1,
+  "domain": "lines",
+  "cases": [
+    {
+      "name": "incremental_with_late_result_and_older_page",
+      "description": "逐项重建与全量重建一致，前插历史后也能重建正确行。",
+      "source": [
+        "ios/Shared/ChatStore.swift: rebuild / standsAlone",
+        "ios/JarvisTests/RebuildTests.swift: incrementalRebuildEqualsAFullOne"
+      ],
+      "input": {
+        "items": [],
+        "check_prefixes": true,
+        "operations": [
+          {
+            "op": "merge",
+            "items": [
+              {
+                "id": "10#0",
+                "seq": 10,
+                "role": "user",
+                "kind": "text",
+                "text": "当前提问"
+              },
+              {
+                "id": "11#0",
+                "seq": 11,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_a",
+                "tool_name": "Bash"
+              },
+              {
+                "id": "12#0",
+                "seq": 12,
+                "role": "assistant",
+                "kind": "text",
+                "text": "检查完成"
+              }
+            ]
+          },
+          {
+            "op": "merge",
+            "items": [
+              {
+                "id": "13#0",
+                "seq": 13,
+                "role": "user",
+                "kind": "text",
+                "text": "下一项"
+              },
+              {
+                "id": "14#0",
+                "seq": 14,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "ok",
+                "tool_use_id": "call_a"
+              },
+              {
+                "id": "15#0",
+                "seq": 15,
+                "role": "assistant",
+                "kind": "text",
+                "text": "检查完成"
+              }
+            ]
+          },
+          {
+            "op": "merge",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "user",
+                "kind": "text",
+                "text": "更早提问"
+              },
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "text",
+                "text": "更早回复"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "checkpoints": [
+          {
+            "item_ids": [
+              "10#0",
+              "11#0",
+              "12#0"
+            ],
+            "lines": [
+              {
+                "id": "10#0",
+                "is_input": true,
+                "text": "当前提问",
+                "type": "user"
+              },
+              {
+                "contains_fold": false,
+                "duration_text": "",
+                "elapsed_seconds": null,
+                "end": null,
+                "id": "w-10#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": false,
+                "start": null,
+                "steps": [
+                  {
+                    "call_id": "call_a",
+                    "failed": false,
+                    "id": "11#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": null,
+                    "result_text": null,
+                    "running": true,
+                    "type": "tool"
+                  }
+                ],
+                "summary_full": [
+                  "工具 1"
+                ],
+                "summary_short": [
+                  "工具 1"
+                ],
+                "thoughts": 0,
+                "tools": 1,
+                "type": "work",
+                "unresolved_tools": 1
+              },
+              {
+                "id": "12#0",
+                "is_input": false,
+                "text": "检查完成",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "12#0",
+                "end": null,
+                "id": "10#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "10#0",
+                  "tools-11#0",
+                  "12#0"
+                ],
+                "process_ids": [
+                  "tools-11#0"
+                ],
+                "start": null,
+                "tail_ids": [],
+                "thought_count": 0,
+                "tool_count": 1,
+                "trailing_ids": [],
+                "user_ids": [
+                  "10#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          },
+          {
+            "item_ids": [
+              "10#0",
+              "11#0",
+              "12#0",
+              "13#0",
+              "14#0",
+              "15#0"
+            ],
+            "lines": [
+              {
+                "id": "10#0",
+                "is_input": true,
+                "text": "当前提问",
+                "type": "user"
+              },
+              {
+                "contains_fold": false,
+                "duration_text": "",
+                "elapsed_seconds": null,
+                "end": null,
+                "id": "w-10#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": false,
+                "start": null,
+                "steps": [
+                  {
+                    "call_id": "call_a",
+                    "failed": false,
+                    "id": "11#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": "14#0",
+                    "result_text": "ok",
+                    "running": false,
+                    "type": "tool"
+                  }
+                ],
+                "summary_full": [
+                  "工具 1"
+                ],
+                "summary_short": [
+                  "工具 1"
+                ],
+                "thoughts": 0,
+                "tools": 1,
+                "type": "work",
+                "unresolved_tools": 0
+              },
+              {
+                "id": "12#0",
+                "is_input": false,
+                "text": "检查完成",
+                "type": "reply"
+              },
+              {
+                "id": "13#0",
+                "is_input": true,
+                "text": "下一项",
+                "type": "user"
+              },
+              {
+                "id": "15#0",
+                "is_input": false,
+                "text": "检查完成",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "12#0",
+                "end": null,
+                "id": "10#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "10#0",
+                  "tools-11#0",
+                  "12#0"
+                ],
+                "process_ids": [
+                  "tools-11#0"
+                ],
+                "start": null,
+                "tail_ids": [],
+                "thought_count": 0,
+                "tool_count": 1,
+                "trailing_ids": [],
+                "user_ids": [
+                  "10#0"
+                ],
+                "wake_ids": []
+              },
+              {
+                "after_wake_ids": [],
+                "answer_id": "15#0",
+                "end": null,
+                "id": "13#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "13#0",
+                  "15#0"
+                ],
+                "process_ids": [],
+                "start": null,
+                "tail_ids": [],
+                "thought_count": 0,
+                "tool_count": 0,
+                "trailing_ids": [],
+                "user_ids": [
+                  "13#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          },
+          {
+            "item_ids": [
+              "1#0",
+              "2#0",
+              "10#0",
+              "11#0",
+              "12#0",
+              "13#0",
+              "14#0",
+              "15#0"
+            ],
+            "lines": [
+              {
+                "id": "1#0",
+                "is_input": true,
+                "text": "更早提问",
+                "type": "user"
+              },
+              {
+                "id": "2#0",
+                "is_input": false,
+                "text": "更早回复",
+                "type": "reply"
+              },
+              {
+                "id": "10#0",
+                "is_input": true,
+                "text": "当前提问",
+                "type": "user"
+              },
+              {
+                "contains_fold": false,
+                "duration_text": "",
+                "elapsed_seconds": null,
+                "end": null,
+                "id": "w-10#0",
+                "is_input": false,
+                "known_failed_tools": 0,
+                "live": false,
+                "open": false,
+                "start": null,
+                "steps": [
+                  {
+                    "call_id": "call_a",
+                    "failed": false,
+                    "id": "11#0",
+                    "image_count": 0,
+                    "name": "Bash",
+                    "result_id": "14#0",
+                    "result_text": "ok",
+                    "running": false,
+                    "type": "tool"
+                  }
+                ],
+                "summary_full": [
+                  "工具 1"
+                ],
+                "summary_short": [
+                  "工具 1"
+                ],
+                "thoughts": 0,
+                "tools": 1,
+                "type": "work",
+                "unresolved_tools": 0
+              },
+              {
+                "id": "12#0",
+                "is_input": false,
+                "text": "检查完成",
+                "type": "reply"
+              },
+              {
+                "id": "13#0",
+                "is_input": true,
+                "text": "下一项",
+                "type": "user"
+              },
+              {
+                "id": "15#0",
+                "is_input": false,
+                "text": "检查完成",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "2#0",
+                "end": null,
+                "id": "1#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "1#0",
+                  "2#0"
+                ],
+                "process_ids": [],
+                "start": null,
+                "tail_ids": [],
+                "thought_count": 0,
+                "tool_count": 0,
+                "trailing_ids": [],
+                "user_ids": [
+                  "1#0"
+                ],
+                "wake_ids": []
+              },
+              {
+                "after_wake_ids": [],
+                "answer_id": "12#0",
+                "end": null,
+                "id": "10#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "10#0",
+                  "tools-11#0",
+                  "12#0"
+                ],
+                "process_ids": [
+                  "tools-11#0"
+                ],
+                "start": null,
+                "tail_ids": [],
+                "thought_count": 0,
+                "tool_count": 1,
+                "trailing_ids": [],
+                "user_ids": [
+                  "10#0"
+                ],
+                "wake_ids": []
+              },
+              {
+                "after_wake_ids": [],
+                "answer_id": "15#0",
+                "end": null,
+                "id": "13#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "13#0",
+                  "15#0"
+                ],
+                "process_ids": [],
+                "start": null,
+                "tail_ids": [],
+                "thought_count": 0,
+                "tool_count": 0,
+                "trailing_ids": [],
+                "user_ids": [
+                  "13#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "background_bursts_and_replacement",
+      "description": "突发消息后替换整段记录，后台重建收敛到替换后的行。",
+      "source": [
+        "ios/Shared/ChatStore.swift: scheduleRebuild / replace",
+        "ios/JarvisTests/RebuildTests.swift: backgroundRebuildConvergesAfterBurstsAndReplacement"
+      ],
+      "input": {
+        "items": [],
+        "operations": [
+          {
+            "op": "burst_replace",
+            "batches": [
+              [
+                {
+                  "id": "1#0",
+                  "seq": 1,
+                  "role": "user",
+                  "kind": "text",
+                  "text": "请检查示例项目"
+                },
+                {
+                  "id": "2#0",
+                  "seq": 2,
+                  "role": "assistant",
+                  "kind": "tool_use",
+                  "tool_use_id": "call_a",
+                  "tool_name": "Bash"
+                },
+                {
+                  "id": "3#0",
+                  "seq": 3,
+                  "role": "user",
+                  "kind": "text",
+                  "text": "补充",
+                  "queued": true
+                }
+              ],
+              [
+                {
+                  "id": "4#0",
+                  "seq": 4,
+                  "role": "user",
+                  "kind": "tool_result",
+                  "text": "ok",
+                  "tool_use_id": "call_a"
+                },
+                {
+                  "id": "5#0",
+                  "seq": 5,
+                  "role": "assistant",
+                  "kind": "thinking",
+                  "text": "先读取配置再检查"
+                },
+                {
+                  "id": "6#0",
+                  "seq": 6,
+                  "role": "assistant",
+                  "kind": "text",
+                  "text": "检查完成"
+                }
+              ]
+            ],
+            "items": [
+              {
+                "id": "replacement-1#0",
+                "seq": 1,
+                "role": "user",
+                "kind": "text",
+                "text": "替换后的提问"
+              },
+              {
+                "id": "replacement-2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "text",
+                "text": "替换后的回复"
+              }
+            ]
+          }
+        ],
+        "check_prefixes": true
+      },
+      "expected": {
+        "checkpoints": [
+          {
+            "item_ids": [
+              "replacement-1#0",
+              "replacement-2#0"
+            ],
+            "lines": [
+              {
+                "id": "replacement-1#0",
+                "is_input": true,
+                "text": "替换后的提问",
+                "type": "user"
+              },
+              {
+                "id": "replacement-2#0",
+                "is_input": false,
+                "text": "替换后的回复",
+                "type": "reply"
+              }
+            ],
+            "turns": [
+              {
+                "after_wake_ids": [],
+                "answer_id": "replacement-2#0",
+                "end": null,
+                "id": "replacement-1#0",
+                "interim_count": 0,
+                "ordered_ids": [
+                  "replacement-1#0",
+                  "replacement-2#0"
+                ],
+                "process_ids": [],
+                "start": null,
+                "tail_ids": [],
+                "thought_count": 0,
+                "tool_count": 0,
+                "trailing_ids": [],
+                "user_ids": [
+                  "replacement-1#0"
+                ],
+                "wake_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

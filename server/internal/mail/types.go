@@ -112,6 +112,7 @@ type MailSummary struct {
 
 // Attachment is attachment metadata; the body is not downloaded.
 type Attachment struct {
+	ID       string `json:"id"`
 	Filename string `json:"filename"`
 	Mime     string `json:"mime"`
 	Size     int64  `json:"size"`

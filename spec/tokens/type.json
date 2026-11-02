@@ -1,0 +1,367 @@
+{
+  "type": {
+    "panelTitle": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 20,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.panelTitle 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 600,
+        "$description": "Theme.Font.panelTitle 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 25,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "title3",
+        "$description": "Theme.Font.panelTitle 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "rowTitle": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 17,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.rowTitle 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 600,
+        "$description": "Theme.Font.rowTitle 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 22,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "headline",
+        "$description": "Theme.Font.rowTitle 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "body": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 17,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.body 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 400,
+        "$description": "Theme.Font.body 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 22,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "body",
+        "$description": "Theme.Font.body 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "cardBody": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 16,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.cardBody 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 400,
+        "$description": "Theme.Font.cardBody 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 21,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "callout",
+        "$description": "Theme.Font.cardBody 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "preview": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 15,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.preview 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 400,
+        "$description": "Theme.Font.preview 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 20,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "subheadline",
+        "$description": "Theme.Font.preview 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "meta": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 13,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.meta 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 400,
+        "$description": "Theme.Font.meta 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 18,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "footnote",
+        "$description": "Theme.Font.meta 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "chip": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 12,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.chip 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 500,
+        "$description": "Theme.Font.chip 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 16,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "caption",
+        "$description": "Theme.Font.chip 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "micro": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 11,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.micro 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 400,
+        "$description": "Theme.Font.micro 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 13,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "caption2",
+        "$description": "Theme.Font.micro 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "code": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 13,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.code 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 400,
+        "$description": "Theme.Font.code 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 18,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "footnote",
+        "$description": "Theme.Font.code 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "monospace",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "codeSmall": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 12,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.codeSmall 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 400,
+        "$description": "Theme.Font.codeSmall 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 16,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "caption",
+        "$description": "Theme.Font.codeSmall 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "monospace",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    },
+    "greeting": {
+      "size": {
+        "$type": "dimension",
+        "$value": {
+          "value": 34,
+          "unit": "px"
+        },
+        "$description": "Theme.Font.greeting 的默认字号；Android 用 sp，跟随字体缩放"
+      },
+      "weight": {
+        "$type": "fontWeight",
+        "$value": 700,
+        "$description": "Theme.Font.greeting 的字重"
+      },
+      "lineHeight": {
+        "$type": "dimension",
+        "$value": {
+          "value": 41,
+          "unit": "px"
+        },
+        "$description": "跨端默认行高，按文本角色补齐；Theme.Font 未固定行高，非设备采样"
+      },
+      "iosTextStyle": {
+        "$type": "string",
+        "$value": "largeTitle",
+        "$description": "Theme.Font.greeting 的动态文本样式；string 为仓库扩展"
+      },
+      "family": {
+        "$type": "string",
+        "$value": "system",
+        "$description": "Theme.Font 等宽角色；黏土使用圆体设计，平台选择实际字体"
+      }
+    }
+  }
+}

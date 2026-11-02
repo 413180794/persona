@@ -81,9 +81,15 @@ jobs:
           done
           docker compose logs hub | tail -40
           [ -n "$ok" ] || { echo "the hub never answered /api/v1/health"; exit 1; }
-          docker compose exec -T hub jarvisd hub pair | grep -q 'Token:'
+          docker compose exec -T hub jarvisd hub pair | grep -q 'jarvis://pair?'
           docker compose exec -T hub jarvisd hub tailcat-key | grep -q '^nodekey:'
           curl -fsS http://127.0.0.1:18660/ | grep -qi '<html'
+          # The admin UI (docs/admin.md): there inside the container (loopback); from the runner through the port
+          # mapping the container sees the bridge's gateway, which is never LAN, so it is not there.
+          docker compose exec -T hub wget -qO- http://127.0.0.1:18660/admin | grep -q 'Jarvis 管理'
+          docker compose exec -T hub wget -qO- http://127.0.0.1:18660/api/v1/admin/state | grep -q '"password_set":false'
+          ! curl -fsS http://127.0.0.1:18660/admin | grep -q 'Jarvis 管理'
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18660/api/v1/admin/state)" = "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18660/api/v1/machines)" ]
           [ "$(stat -c %u data/hub.json)" = "$(id -u)" ] || { echo "hub.json is not owned by PUID"; exit 1; }
           [ "$(stat -c %a data/hub.json)" = 600 ] || { echo "hub.json is not 0600"; exit 1; }
           docker compose down

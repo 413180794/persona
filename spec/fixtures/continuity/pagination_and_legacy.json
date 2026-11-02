@@ -1,0 +1,1605 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "catch_up_cannot_end_history",
+      "description": "新消息补发的 false 或缺失字段都不能关闭已有历史入口。",
+      "source": [
+        "ios/JarvisTests/ChatStoreTests.swift: catchUpNeverEndsTheHistory",
+        "ios/Shared/ChatStore.swift: apply, merge",
+        "docs/protocol.md：items 的连续性",
+        "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "100#0",
+              "seq": 100,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 100"
+            },
+            {
+              "id": "101#0",
+              "seq": 101,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 101"
+            },
+            {
+              "id": "102#0",
+              "seq": 102,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 102"
+            },
+            {
+              "id": "103#0",
+              "seq": 103,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 103"
+            },
+            {
+              "id": "104#0",
+              "seq": 104,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 104"
+            },
+            {
+              "id": "105#0",
+              "seq": 105,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 105"
+            },
+            {
+              "id": "106#0",
+              "seq": 106,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 106"
+            },
+            {
+              "id": "107#0",
+              "seq": 107,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 107"
+            },
+            {
+              "id": "108#0",
+              "seq": 108,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 108"
+            },
+            {
+              "id": "109#0",
+              "seq": 109,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 109"
+            },
+            {
+              "id": "110#0",
+              "seq": 110,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 110"
+            }
+          ],
+          "covered": 110,
+          "history": null,
+          "has_more": true,
+          "loaded_once": true
+        },
+        "events": [
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "111#0",
+                "seq": 111,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 111"
+              },
+              {
+                "id": "112#0",
+                "seq": 112,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 112"
+              }
+            ],
+            "backlog": true,
+            "has_more": false
+          },
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "113#0",
+                "seq": 113,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 113"
+              }
+            ],
+            "backlog": true
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "100#0",
+              "seq": 100,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 100"
+            },
+            {
+              "id": "101#0",
+              "seq": 101,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 101"
+            },
+            {
+              "id": "102#0",
+              "seq": 102,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 102"
+            },
+            {
+              "id": "103#0",
+              "seq": 103,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 103"
+            },
+            {
+              "id": "104#0",
+              "seq": 104,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 104"
+            },
+            {
+              "id": "105#0",
+              "seq": 105,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 105"
+            },
+            {
+              "id": "106#0",
+              "seq": 106,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 106"
+            },
+            {
+              "id": "107#0",
+              "seq": 107,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 107"
+            },
+            {
+              "id": "108#0",
+              "seq": 108,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 108"
+            },
+            {
+              "id": "109#0",
+              "seq": 109,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 109"
+            },
+            {
+              "id": "110#0",
+              "seq": 110,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 110"
+            },
+            {
+              "id": "111#0",
+              "seq": 111,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 111"
+            },
+            {
+              "id": "112#0",
+              "seq": 112,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 112"
+            }
+          ],
+          "item_ids": [
+            "100#0",
+            "101#0",
+            "102#0",
+            "103#0",
+            "104#0",
+            "105#0",
+            "106#0",
+            "107#0",
+            "108#0",
+            "109#0",
+            "110#0",
+            "111#0",
+            "112#0"
+          ],
+          "covered": 112,
+          "history": null,
+          "has_more": true,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        },
+        {
+          "items": [
+            {
+              "id": "100#0",
+              "seq": 100,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 100"
+            },
+            {
+              "id": "101#0",
+              "seq": 101,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 101"
+            },
+            {
+              "id": "102#0",
+              "seq": 102,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 102"
+            },
+            {
+              "id": "103#0",
+              "seq": 103,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 103"
+            },
+            {
+              "id": "104#0",
+              "seq": 104,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 104"
+            },
+            {
+              "id": "105#0",
+              "seq": 105,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 105"
+            },
+            {
+              "id": "106#0",
+              "seq": 106,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 106"
+            },
+            {
+              "id": "107#0",
+              "seq": 107,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 107"
+            },
+            {
+              "id": "108#0",
+              "seq": 108,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 108"
+            },
+            {
+              "id": "109#0",
+              "seq": 109,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 109"
+            },
+            {
+              "id": "110#0",
+              "seq": 110,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 110"
+            },
+            {
+              "id": "111#0",
+              "seq": 111,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 111"
+            },
+            {
+              "id": "112#0",
+              "seq": 112,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 112"
+            },
+            {
+              "id": "113#0",
+              "seq": 113,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 113"
+            }
+          ],
+          "item_ids": [
+            "100#0",
+            "101#0",
+            "102#0",
+            "103#0",
+            "104#0",
+            "105#0",
+            "106#0",
+            "107#0",
+            "108#0",
+            "109#0",
+            "110#0",
+            "111#0",
+            "112#0",
+            "113#0"
+          ],
+          "covered": 113,
+          "history": null,
+          "has_more": true,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "from_test": "catchUpNeverEndsTheHistory"
+    },
+    {
+      "name": "first_catch_up_does_not_override_cached_history",
+      "description": "首页前的补发没有覆盖缓存最早消息时也不能写入 false。",
+      "source": [
+        "ios/Shared/ChatStore.swift: apply, merge",
+        "docs/protocol.md：items 的连续性",
+        "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 6"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 7"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 8"
+            },
+            {
+              "id": "9#0",
+              "seq": 9,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 9"
+            },
+            {
+              "id": "10#0",
+              "seq": 10,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 10"
+            }
+          ],
+          "covered": 10,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": false
+        },
+        "events": [
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "11#0",
+                "seq": 11,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 11"
+              },
+              {
+                "id": "12#0",
+                "seq": 12,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 12"
+              }
+            ],
+            "backlog": true,
+            "has_more": false,
+            "history": "h",
+            "from_seq": 10,
+            "to_seq": 12
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 6"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 7"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 8"
+            },
+            {
+              "id": "9#0",
+              "seq": 9,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 9"
+            },
+            {
+              "id": "10#0",
+              "seq": 10,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 10"
+            },
+            {
+              "id": "11#0",
+              "seq": 11,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 11"
+            },
+            {
+              "id": "12#0",
+              "seq": 12,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 12"
+            }
+          ],
+          "item_ids": [
+            "5#0",
+            "6#0",
+            "7#0",
+            "8#0",
+            "9#0",
+            "10#0",
+            "11#0",
+            "12#0"
+          ],
+          "covered": 12,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "derived": true
+    },
+    {
+      "name": "missing_has_more_stays_unknown",
+      "description": "没有历史分页信息时保留未知，随后首页建立明确判断。",
+      "source": [
+        "ios/Shared/ChatStore.swift: apply, merge",
+        "docs/protocol.md：items 的连续性",
+        "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
+      ],
+      "input": {
+        "initial": {
+          "items": [],
+          "covered": 0,
+          "history": null,
+          "has_more": null,
+          "loaded_once": false
+        },
+        "events": [
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "4#0",
+                "seq": 4,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 4"
+              },
+              {
+                "id": "5#0",
+                "seq": 5,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 5"
+              }
+            ],
+            "backlog": true,
+            "history": "h",
+            "from_seq": 3,
+            "to_seq": 5
+          },
+          {
+            "kind": "http_reload",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 1"
+              },
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 2"
+              },
+              {
+                "id": "3#0",
+                "seq": 3,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 3"
+              },
+              {
+                "id": "4#0",
+                "seq": 4,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 4"
+              },
+              {
+                "id": "5#0",
+                "seq": 5,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 5"
+              }
+            ],
+            "has_more": false,
+            "history": "h",
+            "to_seq": 5
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 4"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            }
+          ],
+          "item_ids": [
+            "4#0",
+            "5#0"
+          ],
+          "covered": 0,
+          "history": "h",
+          "has_more": null,
+          "loaded_once": true,
+          "gap": "reload",
+          "actions": [
+            {
+              "kind": "fetch_latest",
+              "fold_work": true
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 4"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "4#0",
+            "5#0"
+          ],
+          "covered": 5,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "derived": true
+    },
+    {
+      "name": "page_reaching_oldest_can_end_history",
+      "description": "覆盖现有最早消息的完整首页可以把 has_more 改为 false。",
+      "source": [
+        "ios/Shared/ChatStore.swift: apply, merge",
+        "docs/protocol.md：items 的连续性",
+        "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 4"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            }
+          ],
+          "covered": 5,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": true
+        },
+        "events": [
+          {
+            "kind": "http_latest",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 1"
+              },
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 2"
+              },
+              {
+                "id": "3#0",
+                "seq": 3,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 3"
+              },
+              {
+                "id": "4#0",
+                "seq": 4,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 4"
+              },
+              {
+                "id": "5#0",
+                "seq": 5,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 5"
+              }
+            ],
+            "has_more": false,
+            "history": "h",
+            "to_seq": 5
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 4"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "4#0",
+            "5#0"
+          ],
+          "covered": 5,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "derived": true
+    },
+    {
+      "name": "smaller_page_cannot_overwrite_history_flag",
+      "description": "已加载首页后较小的一页即使覆盖最早消息也不能改历史判断。",
+      "source": [
+        "ios/Shared/ChatStore.swift: apply, merge",
+        "docs/protocol.md：items 的连续性",
+        "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 4"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            }
+          ],
+          "covered": 5,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": true
+        },
+        "events": [
+          {
+            "kind": "http_latest",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 1"
+              },
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 2"
+              }
+            ],
+            "has_more": false,
+            "history": "h",
+            "to_seq": 2
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 4"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "4#0",
+            "5#0"
+          ],
+          "covered": 5,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "derived": true
+    },
+    {
+      "name": "older_page_sets_has_more_without_moving_covered",
+      "description": "历史分页直接更新 has_more，忽略该页的连续性元数据。",
+      "source": [
+        "ios/Shared/ChatStore.swift: prepend",
+        "ios/Jarvis/App/AppModel.swift: loadOlder"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 6"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 7"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 8"
+            }
+          ],
+          "covered": 10,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": true
+        },
+        "events": [
+          {
+            "kind": "load_older"
+          },
+          {
+            "kind": "http_older",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 1"
+              },
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 2"
+              },
+              {
+                "id": "3#0",
+                "seq": 3,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 3"
+              },
+              {
+                "id": "4#0",
+                "seq": 4,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 4"
+              }
+            ],
+            "has_more": false,
+            "history": "ignored",
+            "to_seq": 4
+          },
+          {
+            "kind": "load_older"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 6"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 7"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 8"
+            }
+          ],
+          "item_ids": [
+            "5#0",
+            "6#0",
+            "7#0",
+            "8#0"
+          ],
+          "covered": 10,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": [
+            {
+              "kind": "fetch_older",
+              "before_seq": 5,
+              "fold_work": true
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 4"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 6"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 7"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 8"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "4#0",
+            "5#0",
+            "6#0",
+            "7#0",
+            "8#0"
+          ],
+          "covered": 10,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 4"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 5"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 6"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 7"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 8"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "4#0",
+            "5#0",
+            "6#0",
+            "7#0",
+            "8#0"
+          ],
+          "covered": 10,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "derived": true
+    },
+    {
+      "name": "legacy_batches_merge_without_gap_detection",
+      "description": "老 hub 缺少范围时按 id 合并，more_after 只能触发重取。",
+      "source": [
+        "ios/JarvisTests/ChatStoreTests.swift: olderHubsWithoutSpansWorkAsBefore",
+        "ios/Shared/ChatStore.swift: apply, merge",
+        "docs/protocol.md：items 的连续性",
+        "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
+      ],
+      "input": {
+        "initial": {
+          "items": [],
+          "covered": 0,
+          "history": null,
+          "has_more": null,
+          "loaded_once": false
+        },
+        "events": [
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 1"
+              },
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 2"
+              },
+              {
+                "id": "3#0",
+                "seq": 3,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 3"
+              }
+            ],
+            "backlog": true,
+            "has_more": false
+          },
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "7#0",
+                "seq": 7,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 7"
+              },
+              {
+                "id": "8#0",
+                "seq": 8,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 8"
+              }
+            ]
+          },
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "9#0",
+                "seq": 9,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例 9"
+              }
+            ],
+            "more_after": true
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0"
+          ],
+          "covered": 3,
+          "history": null,
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 7"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 8"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "7#0",
+            "8#0"
+          ],
+          "covered": 8,
+          "history": null,
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 1"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 2"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 3"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 7"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 8"
+            },
+            {
+              "id": "9#0",
+              "seq": 9,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例 9"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "7#0",
+            "8#0",
+            "9#0"
+          ],
+          "covered": 9,
+          "history": null,
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "reload",
+          "actions": [
+            {
+              "kind": "fetch_latest",
+              "fold_work": true
+            }
+          ]
+        }
+      ],
+      "from_test": "olderHubsWithoutSpansWorkAsBefore"
+    },
+    {
+      "name": "same_id_plain_item_keeps_original",
+      "description": "普通 item 同 id 的新版内容被忽略，保持当前 iOS 的去重行为。",
+      "source": [
+        "ios/Shared/ChatStore.swift: merge",
+        "CLAUDE.md：缓存里的旧 item 不会被新页覆盖"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "旧版示例"
+            }
+          ],
+          "covered": 1,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": false
+        },
+        "events": [
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "assistant",
+                "kind": "text",
+                "text": "新版示例"
+              }
+            ],
+            "history": "h",
+            "from_seq": 0,
+            "to_seq": 1
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "assistant",
+              "kind": "text",
+              "text": "旧版示例"
+            }
+          ],
+          "item_ids": [
+            "1#0"
+          ],
+          "covered": 1,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": false,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "derived": true
+    }
+  ]
+}

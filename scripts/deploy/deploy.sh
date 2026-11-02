@@ -4,8 +4,31 @@
 #   ./scripts/deploy/deploy.sh <hub machine>   # only the hub
 #   ./scripts/deploy/deploy.sh <machine id>    # only one machine (node binary; the hub restarts its connection)
 #   ./scripts/deploy/deploy.sh web             # only the web client (web/, docs/web.md): no restart
+# Who may open the hub's admin UI (docs/admin.md): --admin-access <loopback|lan|cidrs|any> [--admin-cidrs a,b] (or
+# JARVIS_ADMIN_ACCESS / JARVIS_ADMIN_CIDRS) sets it on the hub; without them a hub that never had one chosen asks on
+# a terminal, else keeps the default (lan) and says so.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# The question and its explanations live in install.sh (the public installer asks the same).
+eval "$(sed -n '/^# >>> admin access/,/^# <<< admin access/p' scripts/deploy/install.sh)"
+ADMIN_ACCESS="${JARVIS_ADMIN_ACCESS:-}"
+ADMIN_CIDRS="${JARVIS_ADMIN_CIDRS:-}"
+ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --admin-access) ADMIN_ACCESS="${2:-}"; shift ;;
+    --admin-access=*) ADMIN_ACCESS="${1#*=}" ;;
+    --admin-cidrs) ADMIN_CIDRS="${2:-}"; shift ;;
+    --admin-cidrs=*) ADMIN_CIDRS="${1#*=}" ;;
+    *) ARGS+=("$1") ;;
+  esac
+  shift
+done
+if [ -n "$ADMIN_ACCESS" ] && ! admin_access_valid "$ADMIN_ACCESS" "$ADMIN_CIDRS"; then
+  echo "--admin-access must be loopback, lan, cidrs (with --admin-cidrs a,b) or any" >&2
+  exit 2
+fi
+set -- ${ARGS[@]+"${ARGS[@]}"}
 eval "$(python3 scripts/jarvis_config.py env)"
 cd server
 # Straight from master, for when a change cannot wait for a release: the build number is the build time (UTC), so an
@@ -108,6 +131,26 @@ ensure_herdr() { # machine-id
 # A resident node (scripts/deploy/node-launchd.sh, Mac or Linux) keeps the old binary until it restarts.
 restart_resident() { ../scripts/deploy/node-launchd.sh restart || true; }
 
+# The admin UI's scope on the hub (its new binary is in place, the hub restarts right after): what was given, else a
+# question when it was never chosen and there is a terminal, else the default and one line about it.
+hub_admin_access() {
+  local current out cmd
+  if [ -z "$ADMIN_ACCESS" ]; then
+    current=$(ssh "$JARVIS_HUB_SSH" '.jarvis/bin/jarvisd hub admin access --get' 2>/dev/null || true)
+    [ -n "$current" ] && return 0
+    ask_admin_access || { admin_access_reminder; return 0; }
+  fi
+  # Both were checked against fixed shapes (admin_access_valid) before they get into a remote command line.
+  cmd=".jarvis/bin/jarvisd hub admin access '$ADMIN_ACCESS'"
+  [ "$ADMIN_ACCESS" = cidrs ] && cmd=".jarvis/bin/jarvisd hub admin access cidrs --cidrs '$ADMIN_CIDRS'"
+  # shellcheck disable=SC2029
+  if out=$(ssh "$JARVIS_HUB_SSH" "$cmd" 2>/dev/null); then
+    echo "hub: ${out%%$'\n'*}"
+  else
+    echo "hub: could not set the admin UI's scope (jarvisd hub admin access on the hub machine)" >&2
+  fi
+}
+
 for t in "${TARGETS[@]}"; do
   case "$t" in
     "$HUB")
@@ -120,6 +163,7 @@ for t in "${TARGETS[@]}"; do
       install_bin "$t" "bin/jarvisd-$hub_plat"
       install_telegram "$t" "$hub_plat"
       ensure_herdr "$t"
+      hub_admin_access
       ssh "$JARVIS_HUB_SSH" 'bash -s' <<'EOF'
 set -e
 mkdir -p ~/.config/systemd/user

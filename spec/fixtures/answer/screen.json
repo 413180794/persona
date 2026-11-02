@@ -1,0 +1,560 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "hub_screen_choice",
+      "description": "终端普通选项按 hub 能力构造回答。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "────────────────────────────────\n ☐ 展示方式\n\n请选择展示方式？\n\n❯ 1. 简洁 (Recommended)\n  2. 完整\n  3. Type something.\n────────────────────────────────\n  4. Chat about this\n",
+          "dialog": {
+            "header": "展示方式",
+            "question": "请选择展示方式？",
+            "options": [
+              {
+                "key": "1",
+                "label": "简洁 (Recommended)",
+                "keys": [
+                  "1"
+                ]
+              },
+              {
+                "key": "2",
+                "label": "完整",
+                "keys": [
+                  "2"
+                ]
+              },
+              {
+                "key": "3",
+                "label": "Type something.",
+                "kind": "type_something",
+                "keys": [
+                  "3"
+                ]
+              },
+              {
+                "key": "4",
+                "label": "Chat about this",
+                "kind": "chat",
+                "keys": [
+                  "4"
+                ]
+              }
+            ],
+            "rev": "95c795756a34"
+          }
+        },
+        "operation": {
+          "action": "screen_option",
+          "option": "1",
+          "text": null
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "option": "1"
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_screen_custom",
+      "description": "终端自填选项按 hub 能力构造回答。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "────────────────────────────────\n ☐ 展示方式\n\n请选择展示方式？\n\n❯ 1. 简洁 (Recommended)\n  2. 完整\n  3. Type something.\n────────────────────────────────\n  4. Chat about this\n",
+          "dialog": {
+            "header": "展示方式",
+            "question": "请选择展示方式？",
+            "options": [
+              {
+                "key": "1",
+                "label": "简洁 (Recommended)",
+                "keys": [
+                  "1"
+                ]
+              },
+              {
+                "key": "2",
+                "label": "完整",
+                "keys": [
+                  "2"
+                ]
+              },
+              {
+                "key": "3",
+                "label": "Type something.",
+                "kind": "type_something",
+                "keys": [
+                  "3"
+                ]
+              },
+              {
+                "key": "4",
+                "label": "Chat about this",
+                "kind": "chat",
+                "keys": [
+                  "4"
+                ]
+              }
+            ],
+            "rev": "95c795756a34"
+          }
+        },
+        "operation": {
+          "action": "screen_option",
+          "option": "3",
+          "text": "  自定义展示 \n"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "option": "3",
+          "text": "自定义展示"
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_screen_chat",
+      "description": "终端转回对话选项按 hub 能力构造回答。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "────────────────────────────────\n ☐ 展示方式\n\n请选择展示方式？\n\n❯ 1. 简洁 (Recommended)\n  2. 完整\n  3. Type something.\n────────────────────────────────\n  4. Chat about this\n",
+          "dialog": {
+            "header": "展示方式",
+            "question": "请选择展示方式？",
+            "options": [
+              {
+                "key": "1",
+                "label": "简洁 (Recommended)",
+                "keys": [
+                  "1"
+                ]
+              },
+              {
+                "key": "2",
+                "label": "完整",
+                "keys": [
+                  "2"
+                ]
+              },
+              {
+                "key": "3",
+                "label": "Type something.",
+                "kind": "type_something",
+                "keys": [
+                  "3"
+                ]
+              },
+              {
+                "key": "4",
+                "label": "Chat about this",
+                "kind": "chat",
+                "keys": [
+                  "4"
+                ]
+              }
+            ],
+            "rev": "95c795756a34"
+          }
+        },
+        "operation": {
+          "action": "screen_option",
+          "option": "4",
+          "text": null
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "option": "4"
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "legacy_screen_choice",
+      "description": "终端普通选项按 hub 能力构造回答。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "────────────────────────────────\n ☐ 展示方式\n\n请选择展示方式？\n\n❯ 1. 简洁 (Recommended)\n  2. 完整\n  3. Type something.\n────────────────────────────────\n  4. Chat about this\n"
+        },
+        "operation": {
+          "action": "screen_option",
+          "option": "1",
+          "text": null
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "keys": [
+            "1"
+          ]
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "legacy_screen_custom",
+      "description": "终端自填选项按 hub 能力构造回答。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "────────────────────────────────\n ☐ 展示方式\n\n请选择展示方式？\n\n❯ 1. 简洁 (Recommended)\n  2. 完整\n  3. Type something.\n────────────────────────────────\n  4. Chat about this\n"
+        },
+        "operation": {
+          "action": "screen_option",
+          "option": "3",
+          "text": "  自定义展示 \n"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "pre_keys": [
+            "3"
+          ],
+          "text": "自定义展示",
+          "keys": [
+            "enter"
+          ]
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "legacy_screen_chat",
+      "description": "终端转回对话选项按 hub 能力构造回答。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "────────────────────────────────\n ☐ 展示方式\n\n请选择展示方式？\n\n❯ 1. 简洁 (Recommended)\n  2. 完整\n  3. Type something.\n────────────────────────────────\n  4. Chat about this\n"
+        },
+        "operation": {
+          "action": "screen_option",
+          "option": "4",
+          "text": null
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "keys": [
+            "4"
+          ]
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "screen_custom_blank_blocked",
+      "description": "自填选项只有空白时不可发送。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.typeRow"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "────────────────────────────────\n ☐ 展示方式\n\n请选择展示方式？\n\n❯ 1. 简洁 (Recommended)\n  2. 完整\n  3. Type something.\n────────────────────────────────\n  4. Chat about this\n",
+          "dialog": {
+            "header": "展示方式",
+            "question": "请选择展示方式？",
+            "options": [
+              {
+                "key": "1",
+                "label": "简洁 (Recommended)",
+                "keys": [
+                  "1"
+                ]
+              },
+              {
+                "key": "2",
+                "label": "完整",
+                "keys": [
+                  "2"
+                ]
+              },
+              {
+                "key": "3",
+                "label": "Type something.",
+                "kind": "type_something",
+                "keys": [
+                  "3"
+                ]
+              },
+              {
+                "key": "4",
+                "label": "Chat about this",
+                "kind": "chat",
+                "keys": [
+                  "4"
+                ]
+              }
+            ],
+            "rev": "95c795756a34"
+          }
+        },
+        "operation": {
+          "action": "screen_option",
+          "option": "3",
+          "text": " \n"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "resolution": null
+      },
+      "derived": true
+    },
+    {
+      "name": "raw_terminal_text",
+      "description": "原始终端输入按原文发送，仅空字符串禁用。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": ">"
+        },
+        "operation": {
+          "action": "terminal_text",
+          "text": "  示例输入 \n"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "text": "  示例输入 \n",
+          "keys": [
+            "enter"
+          ]
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "raw_terminal_empty",
+      "description": "原始终端输入按原文发送，仅空字符串禁用。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": ">"
+        },
+        "operation": {
+          "action": "terminal_text",
+          "text": ""
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "resolution": null
+      },
+      "derived": true
+    },
+    {
+      "name": "raw_terminal_whitespace",
+      "description": "原始终端输入按原文发送，仅空字符串禁用。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": ">"
+        },
+        "operation": {
+          "action": "terminal_text",
+          "text": " "
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "text": " ",
+          "keys": [
+            "enter"
+          ]
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "raw_terminal_keys",
+      "description": "原始终端按键按给定顺序发送。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": ">"
+        },
+        "operation": {
+          "action": "terminal_keys",
+          "keys": [
+            "down",
+            "enter"
+          ]
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "keys": [
+            "down",
+            "enter"
+          ]
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "screen_question_steps",
+      "description": "终端多题标签栏解析为步骤并保留选项原文。",
+      "source": [
+        "ios/Shared/ChatStore.swift：ScreenParser.dialog、steps",
+        "ios/JarvisTests/ScreenDialogTests.swift：readsTheTabBarOfSeveralQuestions"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "────────────────────────────────────────────────\n ←  ☐ 审核策略  ☒ 推送代码  ✔ Submit  →\n\n这次「发布」想怎么处理审核？\n\n❯ 1. 回复问题 (Recommended)\n     先起草回复，确认后才发送。\n  2. 直接重新提交\n  3. Type something.\n────────────────────────────────────────────────\n  4. Chat about this\n"
+        },
+        "operation": {
+          "action": "inspect_dialog"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": null,
+        "dialog": {
+          "question": "这次「发布」想怎么处理审核？",
+          "detail": null,
+          "steps": [
+            {
+              "label": "审核策略",
+              "done": false
+            },
+            {
+              "label": "推送代码",
+              "done": true
+            }
+          ]
+        }
+      },
+      "from_test": "ScreenDialogTests.readsTheTabBarOfSeveralQuestions"
+    },
+    {
+      "name": "screen_without_numbered_options",
+      "description": "没有编号选项时不解析成对话框。",
+      "source": [
+        "ios/Shared/ChatStore.swift：ScreenParser.dialog",
+        "ios/JarvisTests/ScreenDialogTests.swift：noDialogWithoutNumberedOptions"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen",
+          "screen": "> hello\n  some output"
+        },
+        "operation": {
+          "action": "inspect_dialog"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": null,
+        "dialog": null
+      },
+      "from_test": "ScreenDialogTests.noDialogWithoutNumberedOptions"
+    }
+  ]
+}

@@ -19,7 +19,7 @@
 
 | 机器 | 要有 |
 | --- | --- |
-| hub 机器（Linux） | docker（Postgres 容器；不想装 Docker 就用系统自带的 Postgres，见 `docs/server.md`「数据库」）、systemd 用户服务、herdr；手机能访问它的 18660 端口（同一个网络或 VPN）。放在 NAS 上、或只当 hub 不跑 Agent 时，也可以整个用 Docker 跑（`docs/docker.md`），下面的第 1、2 步只用来往各台电脑装 `jarvisd` |
+| hub 机器（Linux） | docker（Postgres 容器；不想装 Docker 就用系统自带的 Postgres，见 `docs/server.md`「数据库」）、systemd 用户服务、herdr；手机能访问 hub：同一网络、用户自配 VPN，或公网直连（优先 IPv6，放行 TLS 端口）。放在 NAS 上、或只当 hub 不跑 Agent 时，也可以整个用 Docker 跑（`docs/docker.md`），下面的第 1、2 步只用来往各台电脑装 `jarvisd` |
 | 每台要接入的电脑 | Claude Code（或 Codex）；`~/.jarvis/bin/jarvisd` 和 herdr（第 2 步部署脚本会拷过去；herdr 没有的话用它的官方安装器装到 `~/.local/bin`，用别的引擎不想装就 `JARVIS_SKIP_HERDR=1`） |
 | SSH | hub 机器能**免密码**登录每台电脑（hub 用 `BatchMode=yes`，只能用密钥），在 hub 机器的 `~/.ssh/config` 里给每台起个别名；开发机也要能 SSH 到每台（部署用） |
 
@@ -60,16 +60,26 @@
 
    `ssh_host` 是 **hub 机器** SSH 到这台的主机名（两边各自的 `~/.ssh/config`，可以和第 1 步的 `ssh` 不同）；`id` 最好和第 1 步一致；
    `name` 是 App 里显示的名字；`icon` 取 `server` / `laptop` / `desktop`。`jarvisd` 不在 `~/.jarvis/bin/jarvisd` 时用 `remote_bin` 指定。
-   顺便可以填 `assistant`（见下文 hub.json 一节）。
+   顺便可以填 `assistant`（见下文 hub.json 一节）。公网直连另加 `public.tls_listen`、`public.advertise`，按 [网络文档](network.md) 放行 TLS 端口；`public_url` 保留旧 App 能用的地址。
 
 4. **重启 hub 让它读到新配置**：`./scripts/deploy/deploy.sh <hub 机器 id>`（或在 hub 机器上 `systemctl --user restart jarvisd`）。
 
-5. **配对手机**：在 hub 机器上跑 `~/.jarvis/bin/jarvisd hub pair`，用 App 扫二维码（或手动填地址和 token）。
+5. **配对手机**：在 hub 机器上跑 `~/.jarvis/bin/jarvisd hub pair`，用 App 扫二维码。命令通过本机运行中的 hub 生成临时 token；有效期 10 分钟，只能兑换一次设备 token，兑换后最多宽限 2 分钟供配对中的请求使用。`--legacy` 才会打印主 token。
 
 6. **检查**：App「设置 › 机器」每台显示在线；「Agents」tab 里能看到每台电脑上 herdr 里的会话。某台不在线时先在 hub 机器上手动跑
    `ssh -o BatchMode=yes <ssh_host> '~/.jarvis/bin/jarvisd node --stdio'`，看是 SSH 不通还是二进制不在。
 
 之后加一台电脑：两份配置的 `machines` 各加一行，跑 `./scripts/deploy/deploy.sh <新机器 id> <hub 机器 id>`。
+
+**推荐：其他电脑装 node 服务**（2026-11-02，[plan-hub-center.md](plan-hub-center.md) 第 0 节）：全家只装一台 hub，其他电脑不走 SSH，
+装常驻 node 加连接器 jarvis-link，一条命令或一个 App 装好，见 [link.md](link.md)「装 node 服务」：
+
+- Linux：`curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<jarvisd hub pair --machine <id> 给的链接>'`（这台去连 hub，`machines` 里是
+  `{"id":"laptop","name":"笔记本","kind":"link","icon":"laptop"}`，hub 要开 `public.tls_listen`），或者 `… --node --listen`（让 hub 来连，
+  打印的链接粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」，`machines` 里是 kind `service`）。
+- Mac：装菜单栏 App「Jarvis Link」（`./scripts/app/mac-link.sh install`），它带着 jarvisd，第一次运行就装好常驻 node；配对在它的菜单里。
+
+不写 `ssh_host`，也不用给 hub 配 SSH。上面 1–6 步的 SSH 接入还能用，以后只当兼容。
 
 ### 目前的限制
 
@@ -107,7 +117,7 @@
 | `app.push_relay` | 推送中继的地址（比如 `https://<中继域名>/relay`），写进 `Config.xcconfig` 的 `JARVIS_PUSH_RELAY`、Info.plist 的 `JarvisPushRelay`：App 向它登记，没有 APNs key 的 hub 经它推送（`docs/push-relay.md`）。不写就不登记，只有带 `apns.json` 的 hub 能推 |
 | `app_store.*` | `release.sh` / `asc*.py`：API key（`key_id`、`issuer_id`、`key_path`）、App 记录的数字 ID、内部测试员、TestFlight 反馈邮箱；`external` 是外部测试（群组名、公开链接开关和人数上限、隐私政策地址、另外按邮箱邀请的测试员、Beta App Review 联系人和备注，`docs/release.md`）。环境变量 `ASC_KEY_ID` 等仍可覆盖 |
 | `hub.machine` | hub 跑在哪台机器（`machines` 里的 id）：`deploy.sh` 在它上面起 Postgres 和 systemd 服务，`test-server.sh` 在它上面跑测试，`sim.sh` 从它上面读 token |
-| `hub.url` | 手机访问 hub 的地址（`sim.sh` 配对模拟器用） |
+| `hub.url` | `sim.sh` 配对模拟器用的地址；示例中的 HTTP 仅用于内网 / VPN，公网入口另配 `hub.json` 的 `public` |
 | `machines[]` | `deploy.sh` 要装 `jarvisd` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh） |
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
 | `publish.site_url` | `publish.sh` 把 `jarvisd` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 jarvisd」）；不写就不发布 |
@@ -143,6 +153,15 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 {
   "listen": ":18660",
   "public_url": "http://hub.example.com:18660",
+  "public": {
+    "tls_listen": ":18662",
+    "advertise": ["https://hub.example.com:18662"],
+    "advertise_ipv6": true,
+    "advertise_lan": true
+  },
+  "security": { "allow_public_plaintext": false, "trusted_cidrs": [] },
+  "name": "家里",
+  "admin": { "access": "lan" },
   "token": "…",
   "database_url": "…",
   "machines": [
@@ -161,11 +180,30 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 }
 ```
 
-- 第一次运行只写本机一台（`kind: local`，id 是主机名），对外地址是 `http://<主机名>:18660`；其他机器、域名自己加。
+- 第一次运行只写本机一台（`kind: local`，id 是主机名），生成的 `public_url` 是本机主机名对应的 HTTP 地址；这只是内网兼容入口。TLS 默认不开启，上例显式开启 `:18662`（示例端口，可改），其他机器和域名自己配置。
+- `listen` 是保留的 HTTP 监听，默认 `:18660`；`public_url` 会进入二维码的 `url`，也会进入候选列表。现有 iOS / Watch 仍需它指向可访问的内网 / VPN 地址。
+- `public` 和 `security` 的逐项说明、默认值及放行方法见 [网络配置](network.md#hubjson-网络配置)。候选地址只在鉴权后下发。
+- `name`（可选）：这台 hub 给人看的名字（比如「家里」），电脑的 jarvis-link（Mac 菜单栏）和以后的互联、多 hub 客户端都显示它。
+  不写时用 hub 机器主机名的短名；主机名是 Docker 容器 id 或者 `JARVIS_LOCAL_NODE=0` 时用 `hub-<hub_id 前 6 位>`。手改文件要重启 hub；
+  在管理界面「概览」里改的立刻生效（[admin.md](admin.md)）。
+- `admin`（可选）：hub 管理界面（`<hub 地址>/admin`，[admin.md](admin.md)）。`access` 是谁能打开：`loopback` / `lan`（默认）/ `cidrs` / `any`
+  （必须 TLS）；`cidrs` 是 `access: cidrs` 时放进来的网段；`session_hours` 是登录多久过期（默认 12）。放宽只能在 hub 机器上
+  `jarvisd hub admin access <范围>`（或部署脚本），网页里只能收窄；环境变量 `JARVIS_ADMIN_ACCESS` / `JARVIS_ADMIN_CIDRS` 优先于它。
+  管理界面改 hub.json 时原子写、保留不认识的字段（[admin.md](admin.md)「改 hub.json」）。
+- `mesh`（可选，hub 互联，[mesh.md](mesh.md)）：`discovery`（默认 true：在局域网里用 mDNS 广播自己、列出发现的 hub；Docker 桥接网络里收不到）、
+  `path_switch_seconds`（默认 60：一台电脑有更好的路时，要一直更好这么久中心才换过去；断了的路马上换，不等）。互联的对端、组的中心和任期存在
+  Postgres，不在这里。第一版的 `takeover_seconds` 不再用。
+- `machines[].kind`：`local`（hub 自己这台）、`service`（hub 拨这台连接器的被动端口，「hub 来连」，见下一条）、`link`（这台的 jarvis-link
+  主动连 hub，「电脑来连」，[link.md](link.md)）；`ssh`（hub 经 `ssh_host` 连过去）、`tailcat`（只走 tailcat，见下下一条）只为已有的配置保留，
+  管理界面不再添加，迁移步骤见 [mesh.md](mesh.md)「SSH / tailcat：兼容」。同一台电脑可以配几项（比如 service 和 link 各一项），hub 按
+  machine_uid 认出是同一台，只列一次、用最好的那条（[mesh.md](mesh.md)「一台电脑多条路」）。
+- `machines[].address`、`machines[].proxy`（kind `service`）：连接器的 `主机:端口`（`jarvis-link pair --listen` 的链接里带着，管理界面「添加电脑 ›
+  hub 来连」粘贴链接就填好）；`proxy` 可选，`socks5://[用户:密码@]主机:端口`，hub 经这个 SOCKS 代理去连（这台只能从某台机器后面到达时）。
+  连接器的公钥指纹和 hub 给它的凭据不在 hub.json：配对时存进 Postgres（凭据用 `~/.jarvis/secret.key` 加密）。
 - `machines[].tailcat_addr`（可选）：那台电脑 `jarvisd node tailcat init` 打印的 `tc…` 地址，hub ssh 不过去时经 tailcat 连
   （`docs/server.md`「tailcat 打洞」）。地址是密钥（带 WireGuard 的预共享密钥），和 token 一样只放 hub.json。`kind: "tailcat"` 表示
   只走 tailcat、不试 ssh（没有 `ssh_host`）；`kind: "ssh"` 加 `tailcat_addr` 是先 ssh、不行再 tailcat。
-- 环境变量 `JARVIS_DATABASE_URL`、`JARVIS_PUBLIC_URL`、`JARVIS_LISTEN` 覆盖同名的设置（不写回文件），Docker 部署靠它们
+- 环境变量 `JARVIS_DATABASE_URL`、`JARVIS_PUBLIC_URL`、`JARVIS_LISTEN`、`JARVIS_ADMIN_ACCESS` 覆盖同名的设置（不写回文件），Docker 部署靠它们
   （`docs/docker.md`「环境变量」）；`JARVIS_LOCAL_NODE=0` 时第一次运行不写本机那台。
 - `tailcat.derp_map_url`（可选）：用自建的 DERP 中继（derper，做法见 `docs/server.md`「自建中继」）代替 Tailscale 的公共中继时，它的 DERP map 地址；各台电脑
   `init` 时要带同一个 `--derp-map-url`。
@@ -246,6 +284,30 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   给不想在 App 里填的人用；App 里（设置 › 连接器 › 飞书机器人）存过的优先，开关、配对、各项功能都在 App 里（`docs/bots.md`）。
 - `plugins`：hub 跑起来、转发给 App 的插件（语音对话等），`id`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的插件）、`config`（插件自己的设置），见 `docs/plugins.md`；
   jarvisd 自带的语音插件（GPT-Live）写 `"command": "jarvisd", "args": ["voice"]`，上游放 `config.providers`（`docs/plugins.md`「内置语音插件」）。
+
+## DDNS（public.ddns）
+
+拨号重连换了 IPv6 前缀后，用一个固定域名找回 hub（`docs/network.md`）。不写 `public.ddns` 就不开启。
+
+```json
+"public": {
+  "tls_listen": ":18662",
+  "advertise": ["https://hub.example.com:18662"],
+  "ddns": {"provider": "cloudflare", "record": "hub.example.com", "zone_id": "<zone id>", "token_file": "<hub 机器上的 token 文件>"}
+}
+```
+
+- `provider`：
+  - `cloudflare`：更新 AAAA / A 记录，必须有 `zone_id` 和 `token_file`；`ttl` 是 1（自动，默认）或 30–86400。
+  - `webhook`：向 `webhook_url` POST `{"record","ipv6","ipv4"}`；有 `token_file` 时作为 `Authorization: Bearer` 发送。
+  - 阿里云 DNS、DNSPod 还没做。
+- `record`：完整域名。
+- `token_file`：只放 token 的文件，必须是普通文件、权限 0600。token 不写进 hub.json。
+- **发布什么地址**：
+  - IPv6 和候选列表用同一套规则：只发本机稳定的全局 IPv6，已经发布的地址只要还稳定就不换。
+  - IPv4 只在 `public.advertise` 里显式写了公网 IPv4 时才发：本机看到的 IPv4 证明不了公网能连进来。
+- **什么时候更新**：启动时更新一次，之后地址变化时再更新。失败从 1 秒开始翻倍退避，最长 5 分钟。日志只写失败原因，不写 token、URL 和响应内容。
+- **它只更新 DNS**：不开监听、不放行防火墙。要让 App 用上这个域名，还要把带 TLS 端口的 HTTPS URL 写进 `public.advertise`，候选列表和二维码的 `alt` 里才有它。
 
 ## 给写代码的人
 

@@ -47,6 +47,9 @@ func (m *memStore) InteractionOutcome(_ context.Context, id string) (string, *pr
 
 func (m *memStore) Setting(context.Context, string, any) (bool, error) { return false, nil }
 
+// PutSetting keeps nothing, like Setting finds nothing: loading the schedule writes its one-time task list.
+func (m *memStore) PutSetting(context.Context, string, any) error { return nil }
+
 func waitPending(t *testing.T, h *Hub, n int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)

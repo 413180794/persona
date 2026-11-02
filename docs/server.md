@@ -13,6 +13,7 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 | `internal/herdrcore` | herdr-core（Herdr 桌面版背后的 `hc`）的 JSON-RPC 客户端和事件订阅，见 `docs/plan-orca-support.md`「herdr-core 宿主」 |
 | `internal/node` | node：会话列表、启动、发送、屏幕采样、hook / mcp 的 unix socket、runtime 的 `runtime.sock`（`runtimes.go`，`docs/runtimes.md`） |
 | `internal/hub` | hub：HTTP / WebSocket、机器连接、交互队列、手机工具转发、APNs |
+| `internal/netaddr` | 本机地址、Linux netlink 标志和地址变化通知；不证明公网可达 |
 | `internal/db` | Postgres：连接池、内嵌 SQL 迁移（`migrations/NNNN_*.sql`）、各表读写 |
 | `internal/mail` | IMAP/SMTP、加密账号存储、邮件 HTTP 接口和 MCP 工具（`docs/mail.md`） |
 | `internal/mcpserver` | `jarvisd mcp`：给 claude 的 stdio MCP server |
@@ -64,10 +65,14 @@ hub 有两种部署方式，功能一样：**原生二进制**（下面，`syste
 ```
 
 - 二进制：每台机器 `~/.jarvis/bin/jarvisd`。node 由 hub 经 `ssh <别名> ~/.jarvis/bin/jarvisd node --stdio` 拉起，Mac 上不用常驻服务。
-- hub：hub 机器上的 `systemd --user` 服务 `jarvisd`，监听 `:18660`。`journalctl --user -u jarvisd -f` 看日志。
+- hub：hub 机器上的 `systemd --user` 服务 `jarvisd`，HTTP `listen` 默认 `:18660`，另用 `public.tls_listen` 开启 TLS（如 `:18662`）。公网只放行 TLS 端口，IPv6 入站、主机防火墙和 TUN 回包排查见 [网络文档](network.md)。`journalctl --user -u jarvisd -f` 看日志。
   Docker 部署的 hub 不归 `deploy.sh` 管（它的配置里别把 hub 机器写进 `machines`，或只部署各台电脑：`deploy.sh <机器 id>`），
   升级是拉新镜像；「重新部署」用镜像里带的 node 构建。
 - 换了 node 二进制后 hub 不会自动重连旧连接；`deploy.sh <hub 机器 id>` 会重启 hub，或在 App「机器」页点「重新连接」。
+- 管理界面（`<hub 地址>/admin`，[admin.md](admin.md)）的访问范围：`deploy.sh --admin-access <loopback|lan|cidrs|any>`（`cidrs` 加
+  `--admin-cidrs a,b`）设到 hub 上；不给时，hub 上从没选过就在终端里问，没终端用默认的 `lan` 并打印一行提醒。之后在 hub 机器上
+  `jarvisd hub admin access` 看 / 改，`jarvisd hub admin reset-password` 重设管理员密码；在 hub 机器本机上做首次设置要的一次性设置码在
+  hub 日志里（`admin: first-run setup code …`），或 `jarvisd hub admin setup-code` 现取（[admin.md](admin.md)「首次设置」）。
 
 ### 轻量 hub 与部署前检查
 
@@ -88,6 +93,202 @@ Linux 的 systemd 用户服务要在退出 SSH 后持续运行，需由管理员
 
 Windows PowerShell 通过管道传 shell 脚本时，末尾可能额外带 CR，导致远端报 `$'\r': command not found`；
 使用 UTF-8 文件上传，或先编码为 base64 再在远端解码执行，避免依赖管道的换行编码。
+
+## NAS（docker）部署与升级
+
+另一种装法是 `deploy/docker` 的 compose（[docker.md](docker.md)）；这里记的是现在这台 NAS 上手工跑的两个容器。
+
+Synology DSM 上 `deploy.sh` 用不了（没有 `systemd --user`，docker 要 sudo），hub 和 Postgres 都跑在 docker 里。
+`<nas>` 是开发机 SSH 到 NAS 的别名，`<内网地址>` 是 NAS 的内网 IPv4，`<提交>` 是要部署的提交；NAS 上的命令都以运行 hub 的用户执行（需要免密 sudo）。
+
+DSM 上的坑：docker 要写全路径 `sudo /usr/local/bin/docker`（非交互 SSH 的 PATH 里没有）；`/tmp` 是 noexec，二进制别放那里；
+系统自带的 `pg_dump` 是 11 版，导不了 18 的库，备份在容器里做；没开 SFTP 时 `scp` 会失败，用 `ssh … 'cat > 文件'` 上传。
+
+### 构建并上传（开发机，在仓库里）
+
+```sh
+git worktree add --detach /tmp/jarvis-build <提交>
+(cd /tmp/jarvis-build/server && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
+  -ldflags "-s -w -X main.version=$(git describe --always)-$(date +%Y%m%d%H%M)" -o /tmp/jarvisd-linux-amd64 ./cmd/jarvisd)
+git worktree remove /tmp/jarvis-build
+ssh <nas> 'umask 077; mkdir -p ~/.jarvis/bin && cat > ~/.jarvis/bin/jarvisd.new && chmod 755 ~/.jarvis/bin/jarvisd.new' < /tmp/jarvisd-linux-amd64
+```
+
+### 首次部署（NAS 上）
+
+1. Postgres：容器 `jarvis-postgres`，数据卷 `jarvis-pgdata`，只发布到 `127.0.0.1:18661`。建容器用的密码只管初始化，
+   真正的密码另外随机生成，用 `ALTER ROLE` 设置，只写进 `hub.json`。
+
+   ```sh
+   D="sudo /usr/local/bin/docker"
+   $D volume create jarvis-pgdata
+   $D run -d --name jarvis-postgres --restart unless-stopped -p 127.0.0.1:18661:5432 \
+     -v jarvis-pgdata:/var/lib/postgresql -e POSTGRES_USER=jarvis -e POSTGRES_DB=jarvis \
+     -e POSTGRES_PASSWORD="$(python3 -c 'import secrets;print(secrets.token_hex(24))')" \
+     --log-driver json-file --log-opt max-size=20m --log-opt max-file=3 postgres:18-alpine
+   until $D exec jarvis-postgres pg_isready -h 127.0.0.1 -U jarvis -d jarvis >/dev/null; do sleep 1; done
+   export PW=$(python3 -c 'import secrets;print(secrets.token_hex(24))')
+   echo "ALTER ROLE jarvis WITH PASSWORD '$PW';" | $D exec -i jarvis-postgres psql -U jarvis -d jarvis -q
+   ```
+
+2. `~/.jarvis/hub.json`（0600，`machines` 先留空，以后按 `docs/config.md` 补）：
+
+   ```sh
+   python3 - <<'PY'
+   import json, os, secrets
+   cfg = {
+       "listen": ":18660",
+       "token": secrets.token_hex(24),
+       "public_url": "http://<内网地址>:18660",
+       "hook_timeout_minutes": 30,
+       "database_url": "postgres://jarvis:%s@127.0.0.1:18661/jarvis?sslmode=disable" % os.environ["PW"],
+       "machines": [],
+       "public": {"tls_listen": ":18662", "advertise_ipv6": True, "advertise_lan": True},
+       "security": {"trusted_cidrs": [], "allow_public_plaintext": False},
+   }
+   fd = os.open(os.path.expanduser("~/.jarvis/hub.json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+   with open(fd, "w") as f:
+       json.dump(cfg, f, indent=2)
+   PY
+   unset PW
+   ```
+
+3. 运行镜像 `jarvisd-runtime:alpine3.22`：不含 jarvisd（二进制从 `~/.jarvis/bin` 挂进去），带 ssh 客户端（hub 经 ssh 连各台电脑），
+   以及 `netcat-openbsd`（经 SOCKS 代理连电脑时给 ssh 的 ProxyCommand 用，见下面第 7 步；busybox 的 `nc` 不支持代理）。
+   `~/.jarvis/docker/Dockerfile`：
+
+   ```dockerfile
+   FROM alpine:3.22
+   ARG UID
+   ARG GID=100
+   ARG USER_NAME
+   ARG HOME_DIR
+   RUN apk add --no-cache openssh-client ca-certificates tzdata netcat-openbsd \
+    && adduser -D -H -u "$UID" -G users -h "$HOME_DIR" -s /bin/sh "$USER_NAME" \
+    && mkdir -p "$HOME_DIR" && chown "$UID:$GID" "$HOME_DIR"
+   ENV HOME=$HOME_DIR
+   WORKDIR $HOME_DIR
+   USER $UID:$GID
+   ENTRYPOINT ["/opt/jarvis/bin/jarvisd"]
+   CMD ["hub"]
+   ```
+
+   ```sh
+   cd ~/.jarvis/docker && $D build --network host --build-arg UID=$(id -u) --build-arg GID=$(id -g) \
+     --build-arg USER_NAME=$(id -un) --build-arg HOME_DIR=$HOME -t jarvisd-runtime:alpine3.22 .
+   ```
+
+4. 容器 `jarvisd`（这条命令存成 `~/.jarvis/docker/run-jarvisd.sh`，重建容器时再跑）：host 网络、`--init`、本用户的 uid；
+   `~/.jarvis` 读写挂载，`~/.jarvis/bin` 只读挂到 `/opt/jarvis/bin`，`~/.ssh` 挂进去。容器里的 HOME 和 NAS 上一样。
+
+   ```sh
+   mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd
+   REAL_HOME=$(readlink -f "$HOME")
+   $D run -d --name jarvisd --restart unless-stopped --network host --init \
+     --user "$(id -u):$(id -g)" -e TZ="$(readlink /etc/localtime | sed 's#.*/zoneinfo/##')" \
+     --log-driver json-file --log-opt max-size=20m --log-opt max-file=5 \
+     -v "$REAL_HOME/.jarvis:$HOME/.jarvis" -v "$REAL_HOME/.jarvis/bin:/opt/jarvis/bin:ro" \
+     -v "$REAL_HOME/.ssh:$HOME/.ssh" \
+     jarvisd-runtime:alpine3.22 hub
+   ```
+
+5. 检查：
+
+   ```sh
+   $D exec jarvis-postgres psql -U jarvis -d jarvis -tAc "select max(version), count(*) from schema_migrations"
+   curl -s http://127.0.0.1:18660/api/v1/health    # ok、version、fp
+   openssl s_client -connect 127.0.0.1:18662 </dev/null 2>/dev/null | openssl x509 -pubkey -noout |
+     openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '='   # 应等于 fp
+   (umask 077; $D exec jarvisd /opt/jarvis/bin/jarvisd hub pair > ~/.jarvis/pair-$(date +%Y%m%d-%H%M%S).txt)  # 含 token，10 分钟内有效
+   ```
+
+6. 公网直连：DSM 防火墙放行 `18662/tcp`（`18660` 不放行），路由器放行 IPv6 入站，见 [网络文档](network.md)。
+
+7. 只能经代理到达的电脑（比如公司内网里的开发机，NAS 上另有一个 SOCKS5 代理能进去）：照常用 `kind: ssh`，代理写在 NAS 的
+   `~/.ssh/config` 里（容器挂的就是它），hub.json 只写别名。地址、账号和代理端口都是个人配置，只写在 NAS 上：
+
+   ```
+   Host <别名>
+     HostName <电脑的内网地址>
+     User <账号>
+     HostKeyAlias <别名>
+     IdentityFile ~/.ssh/<hub 专用密钥>
+     IdentitiesOnly yes
+     ProxyCommand nc -X 5 -x 127.0.0.1:<SOCKS 端口> %h %p
+   ```
+
+   - 这个 `nc` 是容器里的 netcat-openbsd；NAS 系统自带的 `nc` 未必认 `-X`，所以手动测试也在容器里跑，比如用同一个镜像起一个
+     `--entrypoint sh` 的临时容器，执行和 hub 一样的 `ssh -T -o BatchMode=yes … <别名> '~/.jarvis/bin/jarvisd node --stdio'`。
+   - hub 用 `BatchMode=yes`，主机密钥要先写进 `~/.ssh/known_hosts`。最好从一台已经可信地连过这台电脑的机器拿到它的公钥，
+     按 `HostKeyAlias` 的别名写进去，不要首次连接就盲目接受。
+   - 电脑那边的 `authorized_keys` 里，这把钥匙限制成只能启动 node：`restrict,command="~/.jarvis/bin/jarvisd node --stdio" ssh-ed25519 …`。
+   - 改了 Dockerfile 要重建镜像和容器：先给旧镜像打一个带时间的标签留着回滚，再 build，然后 `$D stop jarvisd && $D rm jarvisd &&
+     ~/.jarvis/docker/run-jarvisd.sh`。`docker restart` 用的还是旧镜像。
+
+### 升级
+
+按「构建并上传」把新二进制传成 `~/.jarvis/bin/jarvisd.new`，然后在 NAS 上：
+
+```sh
+~/.jarvis/docker/upgrade.sh ~/.jarvis/bin/jarvisd.new
+```
+
+脚本的步骤：
+
+1. 确认新二进制能在 NAS 上跑（`version`）。
+2. 停容器。
+3. 把当前二进制复制成 `~/.jarvis/bin/jarvisd.bak-<时间>`。
+4. 在容器里 `pg_dump -Fc` 导出到 `~/.jarvis/backups/jarvis-<时间>.dump`（0600）。停服后再导出，和旧二进制留下的状态一致。
+5. 用 `mv` 换上新二进制，启动容器。
+6. 等 `/api/v1/health`，核对版本号是新的、TLS 公钥指纹没变。
+7. 打印最新三条迁移和启动以来的日志（隐藏已知的 lark-connector 报错）。
+8. 打印对应的回滚命令。健康检查不过、版本不对或指纹变了时，退出码非零。
+
+### 回滚
+
+```sh
+~/.jarvis/docker/rollback.sh --check ~/.jarvis/bin/jarvisd.bak-<时间> ~/.jarvis/backups/jarvis-<时间>.dump   # 只验证，不动 hub
+~/.jarvis/docker/rollback.sh ~/.jarvis/bin/jarvisd.bak-<时间> ~/.jarvis/backups/jarvis-<时间>.dump
+sudo /usr/local/bin/docker exec jarvis-postgres dropdb -U jarvis jarvis_before_rollback_<时间>   # 确认回滚没问题以后
+```
+
+脚本的步骤：
+
+1. 把 dump 恢复进一个新库。恢复失败就什么都不改。
+2. 停容器。
+3. 原库改名为 `jarvis_before_rollback_<时间>` 保留，dump 之后的写入只在这个库里。
+4. 新库改名为 `jarvis`。
+5. 换回旧二进制，启动容器，等健康检查。
+
+### 日志
+
+```sh
+sudo /usr/local/bin/docker logs -f jarvisd
+sudo /usr/local/bin/docker restart jarvisd    # 改了 hub.json 以后
+```
+
+`hub.json` 没配 `lark` 时，日志里会一直有 `read lark-connector token …` 报错，不影响运行。要接 lark-connector，得先在 lark-connector 那边开启 agent API，
+再在 `lark` 里填 `base_url` 和 `token`。hub 的容器里没有 docker CLI，读不了别的容器的环境变量。
+
+## hub 连不进去的电脑（jarvis-link）
+
+笔记本这类网络经常变的电脑，hub.json 里 kind 写 `link`：hub 不 ssh 它，等它上面的 jarvis-link（Mac 上是菜单栏 App「Jarvis Link」）
+主动连上 TLS 端口，再在这条链路上开流连它的常驻 node（所以这台要装常驻 node，见下一节）。配对：`jarvisd hub pair --machine <id>`，
+NAS 上是 `sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine <id>`。全部细节见 [link.md](link.md)。
+
+## hub 来连（kind service）
+
+服务器、example-machine 这类地址固定、hub 连得到的电脑，hub.json 里 kind 写 `service`：电脑上的连接器（jarvis-link 的被动模式，`jarvis-link pair --listen`）
+在本机开一个 TLS 端口，hub 按配对时的指纹钉扎拨过去，开流连常驻 node，不用 ssh（可选经 `socks5://` 代理）。在管理界面「电脑 › 添加电脑 ›
+hub 来连」粘贴它打印的链接即可，加完立刻生效。凭据加密存 Postgres。细节见 [mesh.md](mesh.md)「kind service」和 [link.md](link.md)「被动模式」。
+ssh 电脑照常能用，但不再推荐、管理界面不再添加，迁移见 [mesh.md](mesh.md)「SSH / tailcat：兼容」。
+
+## hub 互联
+
+推荐只装一台 hub，其他电脑装 node 服务。确实要几台 hub 时，配对后连成一组（`jarvisd hub pair --peer` / `jarvisd hub peer add`，或管理界面
+「高级 › 互联」）：组里有且只有一台**中心**，服务所有 App、连所有电脑；其余是**成员**，把 App 的请求转给中心、把自己的电脑交给中心连
+（`jarvisd hub peer list` 看谁是中心，`jarvisd hub peer center` 换中心）。同一台电脑只出现一次，用最好的那条路。互联只走 TLS 端口。
+设计、协议和怎么验证见 [mesh.md](mesh.md)。
 
 ## 常驻 node（Mac，`scripts/deploy/node-launchd.sh`）
 
@@ -178,7 +379,8 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | `node_sessions` | 每台机器上 Jarvis 启动过的会话：pane、启动器、目录（node 经 hub RPC `state.load` / `state.put` 读写，Mac 不直连数据库） |
 | `mail_accounts` | 邮箱账号：非敏感字段 jsonb + AES-GCM 密文；密钥 `~/.jarvis/secret.key` 不进数据库 |
 | `interactions` | 每次提问 / 计划 / 授权 / 终端交互及结局（resolved / dismissed / expired / cancelled）；hub 重启时把残留的 pending 标成 cancelled |
-| `settings` | App 里改的全局设置（如助手的启动器） |
+| `settings` | App 里改的全局设置（如助手的启动器），以及持久化的 `hub_id` |
+| `pair_tokens` | 临时配对 token 的哈希、到期和兑换记录，重启后仍有效 |
 
 连库：`ssh <hub 机器> 'docker exec -it jarvis-postgres psql -U jarvis -d jarvis'`。
 测试：`./scripts/test/test-server.sh`（同步代码到 hub 机器跑全部测试；本机没有 docker，DB 测试在本机会 skip）。`JARVIS_TEST_DATABASE_URL`
@@ -191,13 +393,14 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 | 文件 | 内容 |
 | --- | --- |
-| `hub.json` | `listen`、`token`、`public_url`、`hook_timeout_minutes`、`database_url`、`machines`、`google.client_id`（Gmail 用 Google 账号登录的 iOS OAuth 客户端）、`google.proxy`（Gmail 流量走的 HTTP 代理，如 `http://127.0.0.1:<端口>`），见 `docs/mail.md`；`notify`（推送时机，`docs/config.md`） |
+| `hub.json` | `listen`、`token`、`public_url`、`public`（TLS / 候选地址）、`security`（来源信任 / 鉴权限流，逐项见 [network.md](network.md#hubjson-网络配置)）、`name`（hub 的显示名）、`admin`（管理界面的访问范围，[admin.md](admin.md)）、`hook_timeout_minutes`、`database_url`、`machines`、`google.client_id`（Gmail 用 Google 账号登录的 iOS OAuth 客户端）、`google.proxy`（Gmail 流量走的 HTTP 代理，如 `http://127.0.0.1:<端口>`），见 `docs/mail.md`；`notify`（推送时机，`docs/config.md`） |
+| `tls/hub.key`、`tls/hub.crt` | 自动管理的 ECDSA P-256 身份密钥和自签证书；目录 0700，文件 0600，私钥不进数据库；换密钥后设备重新配对 |
 | `secret.key` | 邮箱凭据的加密密钥（32 字节） |
 | `apns.json`、`apns_key.p8` | 推送配置和 key；有就直连 APNs，没有就经每台手机登记的推送中继（`docs/push-relay.md`），手机也没登记中继就不推 |
 
 每台机器 `~/.jarvis/` 下还有 node 生成的 `claude-settings.json`（hooks）、`mcp.json`、`node.sock`、`uploads/`。
 
-配对：hub 机器上 `~/.jarvis/bin/jarvisd hub pair` 打印地址、token 和二维码（`jarvis://pair?url=…&token=…`）。
+配对：hub 机器上 `~/.jarvis/bin/jarvisd hub pair` 通过 HTTP 回环调用运行中的 hub，打印临时配对链接、二维码、到期时间，以及已开启 TLS 时的公钥指纹。`listen` 必须能接受 IPv4 回环连接。临时 token 有效期 10 分钟，只能兑换一次设备 token，兑换后最多宽限 2 分钟（均为协议策略）。`--legacy` 离线打印主 token 和旧格式二维码，不用于公网。二维码新参数见 [协议](protocol.md#临时配对)。
 
 ## 推送策略（`hub/push.go`、`hub/notify.go`）
 
@@ -210,6 +413,29 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
   - 一轮的时长 = 第一次进入 working 到最后一次结束；每台设备按自己的设置（`prefs.done`：`off` / `long` / `always`）决定收不收，
     `long` 只收不短于 `long_turn_seconds` 的；`prefs.input` 关掉就不收「需要你」。
   - 屏蔽的 Agent、助手这一轮已经用 `notify_user` 推过的，都不推。hub 重启后进行中的轮次从重启后第一次看到它算起。
+
+## 关停（`hub/shutdown.go`）
+
+本次确认了退出路径的缺陷，尚不能确认 NAS 当时的数据库等待原因。旧代码虽然通过 BaseContext 将取消传给了 WebSocket，但 HTTP Shutdown 不等待已经 hijack 的连接；设备会话收尾与 WebSocket 处理协程之间也没有等待关系。最后的 pgxpool.Close 会等待所有借出的连接归还，原先没有上限。空闲 WebSocket 不会一直借用数据库连接，不能仅凭在线手机和超时日志认定存在行锁或连接泄漏。
+
+现在先关闭明文和 TLS 监听，再向已登记的 WebSocket 发送 1001 going away。关闭握手最多留 500 毫秒，随后取消连接 context、强制关闭未响应的连接，并等待处理协程和写循环退出。正在登记设备会话的连接也纳入跟踪，停止接收后不再增加等待对象。然后收尾 HTTP、设备会话和锁屏测试，等待 node 连接退出，最后关闭连接池。hub 关停导致的设备断开记为 hub_stopped，不计入手机断线次数。
+
+配置项 shutdown_timeout_seconds 指定整个关停的总预算，缺省或非正值使用 8 秒。单阶段预算为 2 秒，受总预算约束；握手预算为 500 毫秒。这些数字是退出策略：总预算允许最多消耗四份完整的阶段预算，避免各阶段最坏等待时间不断累加。它们不是性能估计，NAS 和真实手机网络尚未实测。部署方应让外部终止器的宽限覆盖配置的总预算。
+
+阶段超时会记录阶段名和错误，然后继续后续收尾。即使某个清理操作不响应取消，总预算到期后 Run 也会记录错误并返回，现有命令入口据此退出进程。连接池没有强制回收借出连接的 API；CloseContext 超时后，后台关闭仍可等待借用者，但不会再阻止命令退出。
+
+SSH 一侧没有数据库连接池。hub 已通过 CommandContext 在取消时终止本地 node 或 SSH 子进程；本次增加退出等待和管道等待上限，没有修改 node 协议或远端模块。应用消息和能力协商保持原格式，现有 iOS 无需修改。
+
+测试使用专用测试库、临时配置目录和本地假飞书服务，调用真实 Run。客户端收到 hello 后保持连接，再取消 hub context。断言覆盖关停返回、设备停止记录、1001 关闭码，以及返回后没有 WebSocket 处理或写循环协程残留；不响应关闭握手的客户端另测。连接池测试持有一条借出连接，验证 CloseContext 超时返回，归还后关闭完成。总预算测试模拟不响应取消的清理操作。
+
+2026-10-31 本地测量，从取消 context 到 Run 返回，单位为毫秒。每种场景各 5 个样本，少于 10 个，不能作为性能基线；分位数采用最近秩法。
+
+| 客户端 | 样本数 | min | p50 | p90 | max | mean |
+| --- | --- | --- | --- | --- | --- | --- |
+| 正常读取并回应关闭 | 5 | 3.063 | 3.868 | 7.107 | 7.107 | 4.441 |
+| 不读取、不回应关闭 | 5 | 506.592 | 508.780 | 510.670 | 510.670 | 508.478 |
+
+验证已通过：服务端编译、hub 与 db 的相关测试，以及 hub 全包测试。沙箱内 Go 无法取得工作树的 VCS 状态，执行时设置了 GOFLAGS=-buildvcs=false，仅关闭构建版本信息嵌入。首轮测试意外触发既有飞书逻辑的容器只读探测，随后已改为本地假服务隔离，容器未作修改。
 
 ## 推送给 App 的量（2026-11-02，耗电排查）
 
@@ -242,7 +468,11 @@ App 开着时连着 hub 的 WebSocket，hub 把各种变化广播给它；真实
 - 机器显示在线但所有任务立即报 `rpc: connection closed`：检查启动器和助手接口是否同时返回 502。
   关闭 RPC 不会自动关闭 SSH 的 stdout；连接循环必须同时等待 `peer.Done()`，随后取消旧 SSH 子进程并重连，
   否则会一直保留已关闭的 peer 和过期的在线状态。`TestMachineReconnectReplacesClosedPeer` 用真实子进程覆盖此场景。
-- 手动调接口：`curl -H "Authorization: Bearer $TOKEN" http://<hub 地址>:18660/api/v1/machines`。
+- 手动调接口：内网可用 `curl -H "Authorization: Bearer $TOKEN" http://<hub 地址>:18660/api/v1/machines`；公网使用设备 token、HTTPS 和公钥钉扎，完整命令见 [网络文档](network.md#命令行验证)。
+- 公网鉴权失败含 WS 握手失败，单独记 `auth source=… path=… status=… code=… failures=… suppressed=…`；来源按 IPv4 /24、IPv6 /64 打码，日志路径只保留固定 API 路径，不记录 token。限流返回 429 和 `Retry-After`；日志节流由 `security.auth_log_interval_seconds` 控制。
+- 网络问题先在 hub 机器上跑 `jarvisd hub doctor`（只读不改），见 [网络排查](network.md#网络排查)。
+- 管理界面登录失败记一行 `admin: wrong password from <打码的来源>`；设密码、改密码、改访问范围、加删电脑、撤销设备、生成配对码各记一行 `admin: …`，
+  不记密码和配对码。管理界面的 401 / 404 也按上面的规则记请求 ID。
 - 请求 ID：每个响应带 `X-Request-Id`（App 发了 `X-Client-Request-Id` 就沿用它）。hub 只记失败（≥400）和慢（>2 秒）的请求，
   一行 `[<id>] 方法 路径 -> 状态码 (耗时)`，不记 query、body、token。App 的 5xx 错误提示后面带「（请求 <id>）」，拿它在
   `journalctl --user -u jarvisd` 里搜那一行。

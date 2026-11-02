@@ -92,7 +92,7 @@ func (r *termRelay) replay(epoch string, after int) []termFrame {
 // terminalSubscribe adds an app to a session's terminal. ctl: the app wants to drive it at that grid (the phone's
 // size); takeover: even if another program holds the terminal's attach slot (after the app asked its user).
 func (h *Hub) terminalSubscribe(ctx context.Context, c *client, machineID, sessionID, epoch string, after int, ctl *termCtl, takeover bool) {
-	m := h.byID[machineID]
+	m := h.localMachine(machineID)
 	if m == nil {
 		c.sendJSON(map[string]any{"type": "terminal", "machine_id": machineID, "session_id": sessionID, "error": "unknown machine"})
 		return
@@ -240,7 +240,7 @@ func (h *Hub) terminalNotify(m *Machine, event string, params map[string]any) {
 // > 0 back in history) over a cell of its screen, at ([column, row]; older apps do not say, the node takes the middle).
 // From an app that does not drive it, nothing.
 func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *termCtl, scroll int, at []int) {
-	m := h.byID[machineID]
+	m := h.localMachine(machineID)
 	if m == nil {
 		return
 	}
@@ -283,7 +283,7 @@ func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *t
 
 // terminalClick is a tap on a terminal the app drives, to its node in order with the keys (the driver's only).
 func (h *Hub) terminalClick(c *client, machineID, sessionID string, column, row int) {
-	m := h.byID[machineID]
+	m := h.localMachine(machineID)
 	if m == nil || column < 0 || row < 0 {
 		return
 	}
@@ -318,7 +318,7 @@ func (h *Hub) terminalKeepalive(ctx context.Context) {
 		}
 		t.mu.Unlock()
 		for mid, ids := range byMachine {
-			if m := h.byID[mid]; m != nil {
+			if m := h.localMachine(mid); m != nil {
 				_ = m.notify("terminal.keepalive", map[string]any{"session_ids": ids})
 			}
 		}
@@ -344,7 +344,7 @@ func (h *Hub) terminalUnsubscribe(c *client, machineID, sessionID string) {
 		r.controller = nil // the pane goes back to its size; whoever still watches sees it there
 	}
 	t.mu.Unlock()
-	m := h.byID[machineID]
+	m := h.localMachine(machineID)
 	if m == nil {
 		return
 	}
@@ -447,7 +447,7 @@ func (h *Hub) terminalControlEnded(machineID, sessionID, why string, taken bool)
 	r.controller, r.synced, r.observing = nil, nil, false
 	t.mu.Unlock()
 	h.logf("[%s] terminal %s: control ended: %s", machineID, sessionID, why)
-	if m := h.byID[machineID]; m != nil {
+	if m := h.localMachine(machineID); m != nil {
 		go h.terminalSync(context.Background(), m, key, r)
 	}
 }
@@ -465,7 +465,7 @@ func (h *Hub) terminalEnded(machineID, sessionID, why string, only *termRelay) {
 	}
 	delete(t.relays, key)
 	t.mu.Unlock()
-	if m := h.byID[machineID]; m != nil && r.synced != nil {
+	if m := h.localMachine(machineID); m != nil && r.synced != nil {
 		go h.terminalUnwatch(m, key) // the node may still drive it (a watch that timed out here but started there)
 	}
 	msg := map[string]any{"type": "terminal", "machine_id": machineID, "session_id": sessionID, "error": why,
@@ -486,7 +486,9 @@ func (c *client) sendTerm(v any) {
 	select {
 	case c.out <- b:
 	default:
-		go c.conn.Close(websocket.StatusPolicyViolation, "too slow")
+		if c.conn != nil {
+			go c.conn.Close(websocket.StatusPolicyViolation, "too slow")
+		}
 	}
 }
 

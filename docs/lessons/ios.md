@@ -364,8 +364,24 @@
   再打开另一个，后者那条显示成了前者的（网页版没有这层缓存，所以正常；服务端推送和分页都对）。现在 key 是「机器/会话 + id」（`MemoScope`），
   聊天页用 environment `rowMemoScope` 往下传、挂在 body 最外层（它弹出的 sheet 也在里面），预热按同一个 key 填。新加按 id 的缓存照此办理。
 
-
 ## `APIClient.get` 的路径里不能带 `?`（2026-11-03，连接器迁移 M6）
 
 `get("/api/v1/connectors?all=1")` 发出去的是 `/api/v1/connectors%3Fall=1`：路径整个按路径编码，`?` 被转义，hub 回 404，`try?` 吞掉错误，列表就空了（设置 › 连接器 少了 GitHub、信息，编译和单元测试都看不出来）。
 查询参数一律走 `get(_:query:)`。是 UI 测试截图对比时看 mock 日志（`MISSING GET …%3F…`）才发现的。
+
+## 多 hub（docs/multi-hub.md）
+
+- 给线上类型（`Session`、`Machine`、`Interaction`、`SessionKey`）加客户端自己的字段：合成的 `Decodable` 对**有默认值的非可选属性**也要求 JSON 里有这个键，
+  旧数据和 hub 的 JSON 一解就失败。存成可选（`hubGroup: String?`）再给一个非可选的计算属性（`group`），nil 时合成的 `Encodable` 也不写这个键：
+  默认组的快照、草稿、待发消息的 JSON 和以前逐字节一样。
+- `apple/Shared` 里给数据类型写的 `extension` 默认也是 MainActor：`APIClient`、解码路径这些非隔离的地方一用就报「main actor-isolated」，写成 `nonisolated extension`。
+- `apple/Shared` 整个编进手表（`JarvisWatch` 的 sources 是 `Shared`）：那里的代码不能用只在 App 里的类型（`IntentFailure` 在 `Jarvis/Intents`），
+  改了 Shared 要连手表一起编（`Jarvis` scheme 会带上）。Mac 目标也编 `Jarvis/` 下的大部分文件：只有 UIKit 有的属性（`UIScrollView.isTracking`）在 Mac 上要有兼容
+  （`Mac/Compat`），#243 之后 Mac 就因为这个编不过，到 #256 才发现——改了共用代码顺手编一下 `JarvisMac`。
+- 组的名字不能跟着「socket 当前连着哪台」走：选路每次可能挑组里另一台，名字就在「公司」「公司 2」之间来回跳；按用户起的名字 → 组里第一台的 `hub_name` → 连着那台的。
+- 「只有一组时一像素不变」：多组才出现的工具栏项要在 `.toolbar` 里按条件生成整个 `ToolbarItem`（`if model.isMultiHub { ToolbarItem … }`），
+  不要放一个在一组时返回空视图的 `ToolbarItem`——空的项也可能占位、画出玻璃底。列表里的组名靠 `Machine.groupLabel`（一组时为 nil，`title == name`），页面不用各自判断。
+- 几台假 hub 各自按自己的启动时间算相对时间：同样的交互在两组里排序不同，UI 测试别按列表位置找另一组的卡片，先用 Agents 的「hub」筛选只看那一组（`MultiHubTests`）。
+- 钥匙串读失败不等于没有：`SecItemCopyMatching` 在开机后第一次解锁前返回 `errSecInteractionNotAllowed`（后台推送唤醒、通知扩展都可能遇到），
+  以前 `Keychain.load` 把它和 `errSecItemNotFound` 一样当 nil。存配对这类丢了就要重新扫码的东西，要分开「没有」和「读不出」，读不出时别写回、
+  更别因为「空」去删；迁移旧项先写新的、读回确认再删旧的（`HubStore`，`HubStoreTests` 用假钥匙串测写失败和读出错）。

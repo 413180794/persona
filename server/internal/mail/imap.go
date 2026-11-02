@@ -660,13 +660,10 @@ func parseMessage(raw []byte, msg *MailMessage) {
 				htmlBody = body
 			}
 		case *gomail.AttachmentHeader:
-			name, _ := h.Filename()
-			ct, _, _ := h.ContentType()
-			msg.Attachments = append(msg.Attachments, Attachment{
-				Filename: name,
-				Mime:     ct,
-				Size:     partSize(h.Header.Get("Content-Transfer-Encoding"), part.Body),
-			})
+			attachment, err := attachmentMetadata(h, part.Body, len(msg.Attachments)+1, io.Discard)
+			if err == nil {
+				msg.Attachments = append(msg.Attachments, attachment)
+			}
 		}
 	}
 	if htmlBody != "" {

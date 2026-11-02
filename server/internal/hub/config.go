@@ -1,15 +1,21 @@
 package hub
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mdp/qrterminal/v3"
 
@@ -22,10 +28,17 @@ import (
 )
 
 type MachineConfig struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Kind    string `json:"kind"` // local | ssh | tailcat (tailcat only, no ssh)
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Kind: local | service (the hub dials the computer's connector, service.go) | link (the computer's jarvis-link
+	// dials the hub, link.go) | ssh | tailcat (tailcat only, no ssh). ssh and tailcat are kept for hub.json files that
+	// have them (docs/plan-hub-center.md 4).
+	Kind    string `json:"kind"`
 	SSHHost string `json:"ssh_host,omitempty"`
+	// Address is a service computer's connector, host:port (its pin and credential are in Postgres); Proxy an optional
+	// socks5://host:port the hub dials it through (a computer reachable only from behind another machine).
+	Address string `json:"address,omitempty"`
+	Proxy   string `json:"proxy,omitempty"`
 	// TailcatAddr is the machine's tailcat address (`jarvisd node tailcat init` there): the way in when ssh does not
 	// work, e.g. a computer behind NAT (tailcat.go, docs/server.md「tailcat 打洞」). A secret, like the token.
 	TailcatAddr string `json:"tailcat_addr,omitempty"`
@@ -38,6 +51,8 @@ type MachineConfig struct {
 	CodexDiscovery   *bool               `json:"codex_discovery,omitempty"`
 	CodexHomes       []string            `json:"codex_homes,omitempty"`
 	CodexServers     []proto.CodexServer `json:"codex_servers,omitempty"`
+	// Launchers adds configured wrappers or overrides the type reported by the node.
+	Launchers []sessionLauncher `json:"launchers,omitempty"`
 }
 
 // GoogleConfig is a Google Cloud OAuth client of type iOS (no secret: the client ID is public), plus the proxy
@@ -70,10 +85,14 @@ type MicrosoftConfig struct {
 }
 
 type Config struct {
-	Listen             string `json:"listen"`
-	Token              string `json:"token"`
-	PublicURL          string `json:"public_url"`
-	HookTimeoutMinutes int    `json:"hook_timeout_minutes"`
+	// Name is what people see this hub as (hubName); empty: its machine's host name.
+	Name string `json:"name,omitempty"`
+	// ShutdownTimeoutSeconds bounds the entire shutdown, including pool closure (default 8; policy, not a latency measurement).
+	ShutdownTimeoutSeconds int    `json:"shutdown_timeout_seconds,omitempty"`
+	Listen                 string `json:"listen"`
+	Token                  string `json:"token"`
+	PublicURL              string `json:"public_url"`
+	HookTimeoutMinutes     int    `json:"hook_timeout_minutes"`
 	// DatabaseURL points at the Postgres container (scripts/deploy/deploy.sh creates it and fills this in).
 	DatabaseURL string `json:"database_url"`
 	// AI configures the Messages API used for in-app AI helpers (defaults to the launcher's gateway on the hub machine).
@@ -106,6 +125,12 @@ type Config struct {
 	Notify NotifyConfig `json:"notify,omitempty"`
 	// KB is the knowledge base under ~/.jarvis/data: chat archives, compressed context, projects, tags (docs/knowledge.md).
 	KB KBConfig `json:"kb,omitempty"`
+	// Public is how the hub is reached from outside its LAN: TLS, the addresses it hands out (config_public.go).
+	Public PublicConfig `json:"public,omitempty"`
+
+	Security SecurityConfig `json:"security,omitempty"`
+	// Admin is who may open the admin UI (docs/admin.md).
+	Admin AdminConfig `json:"admin,omitempty"`
 	// Plugins are processes the hub runs to add things to the app, e.g. the voice conversation (docs/plugins.md).
 	Plugins []PluginConfig `json:"plugins,omitempty"`
 	// LarkAgent: a message of the user's starting with /agent anywhere in Feishu starts an agent with the context of
@@ -115,6 +140,8 @@ type Config struct {
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
 	// Bots: talking to Jarvis through a chat app's bot (bots.go, docs/bots.md); switched on in the app.
 	Bots BotsConfig `json:"bots,omitempty"`
+	// Mesh tunes the links to other hubs (docs/mesh.md, config_mesh.go).
+	Mesh MeshConfig `json:"mesh,omitempty"`
 
 	dir string
 }
@@ -225,13 +252,106 @@ func (c *Config) PairURL() string {
 	return "jarvis://pair?" + url.Values{"url": {c.PublicURL}, "token": {c.Token}}.Encode()
 }
 
-func Pair() error {
+func Pair(legacy bool, android ...bool) error {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
 	}
-	writePair(os.Stdout, cfg)
+	return cfg.printPair(context.Background(), legacy, os.Stdout, android...)
+}
+
+func (c *Config) printPair(ctx context.Context, legacy bool, out io.Writer, android ...bool) error {
+	withAndroid := len(android) > 0 && android[0]
+	if legacy && withAndroid {
+		return fmt.Errorf("--android 需要临时 token，不能与 --legacy 同时使用")
+	}
+	if legacy {
+		writePair(out, c)
+		return nil
+	}
+	p, err := c.requestPairCode(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "地址：%s\n配对链接：%s\n\n用 Jarvis App 扫码配对：\n\n", p.URL, p.PairURL)
+	qrterminal.GenerateHalfBlock(p.PairURL, qrterminal.L, out)
+	fmt.Fprintf(out, "\n有效期至：%s\n", p.ExpiresAt.UTC().Format(time.RFC3339))
+	if p.FP != "" {
+		fmt.Fprintf(out, "公钥指纹：%s\n", p.FP)
+	}
+	if withAndroid {
+		fmt.Fprintf(out, "Android 安装包：%s/api/v1/app/android/apk?%s\n", strings.TrimRight(c.PublicURL, "/"), url.Values{"token": {p.Token}}.Encode())
+	}
 	return nil
+}
+
+// PairMachine prints a pairing link for one link machine's jarvis-link (docs/link.md): the link alone on stdout,
+// so it can be piped (`… | jarvis-link pair -`), what to do with it on stderr.
+func PairMachine(machine string) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	return cfg.printLinkPair(context.Background(), machine, os.Stdout, os.Stderr)
+}
+
+func (c *Config) printLinkPair(ctx context.Context, machine string, out, help io.Writer) error {
+	p, err := c.requestPairCodeFor(ctx, machine)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(out, p.PairURL)
+	fmt.Fprintf(help, "\n这是给「%s」的 jarvis-link 用的配对链接，%d 分钟内有效，只能用一次。\n"+
+		"在那台电脑上：菜单栏的 Jarvis Link › 配对 / 修改连接… 里粘贴；或者运行 jarvis-link pair '<链接>'。\n",
+		machine, max(1, int(time.Until(p.ExpiresAt).Round(time.Minute).Minutes())))
+	return nil
+}
+
+func (c *Config) requestPairCode(ctx context.Context) (*pairCode, error) {
+	return c.requestPairCodeFor(ctx, "")
+}
+
+func (c *Config) requestPairCodeFor(ctx context.Context, machine string) (*pairCode, error) {
+	_, port, err := net.SplitHostPort(c.Listen)
+	if n, parseErr := strconv.Atoi(port); err != nil || parseErr != nil || n <= 0 || n > 65535 {
+		return nil, fmt.Errorf("hub listen 配置没有有效端口；请检查配置，或用 --legacy 打印旧格式二维码")
+	}
+	endpoint := "http://" + net.JoinHostPort("127.0.0.1", port) + "/api/v1/auth/pair-codes"
+	var body io.Reader
+	if machine != "" {
+		b, _ := json.Marshal(map[string]string{"machine": machine})
+		body = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	transport := &http.Transport{Proxy: nil}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Timeout: 5 * time.Second, Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("无法连接本机 hub：hub 可能未运行，或未监听回环地址；请先启动 hub，或用 --legacy 打印旧格式二维码")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		if machine != "" {
+			var e struct {
+				Error string `json:"error"`
+			}
+			_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&e)
+			return nil, fmt.Errorf("本机 hub 没有生成配对链接（HTTP %d）：%s", resp.StatusCode, e.Error)
+		}
+		return nil, fmt.Errorf("本机 hub 生成临时 token 失败（HTTP %d）；请确认 hub 已升级且配置一致，或用 --legacy 打印旧格式二维码", resp.StatusCode)
+	}
+	var p pairCode
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&p); err != nil || p.Token == "" || p.URL == "" || !time.Now().Before(p.ExpiresAt) {
+		return nil, fmt.Errorf("本机 hub 返回了无效的配对信息；请升级 hub，或用 --legacy 打印旧格式二维码")
+	}
+	p.PairURL = p.pairURL()
+	return &p, nil
 }
 
 // writePair prints the server, token, the pairing QR code for the iPhone and the same link for the Mac (no camera:

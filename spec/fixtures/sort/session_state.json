@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "operation": "session_state",
+  "cases": [
+    {
+      "name": "client_state_precedence",
+      "description": "客户端优先使用 state，缺失时只按 status 回退。",
+      "source": [
+        "ios/Shared/Models.swift: Session.init(from:), AgentState.init(status:)",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "fallback-blocked",
+            "status": "blocked"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "fallback-working",
+            "status": "working"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "fallback-done",
+            "status": "done"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "fallback-idle",
+            "status": "idle"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "fallback-offline",
+            "status": "offline"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "fallback-unknown",
+            "status": "unknown"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "fallback-future",
+            "status": "future"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "explicit-idle",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "done",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "seen_at": "2026-01-01T00:00:10Z",
+            "updated_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "explicit-unread",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unread",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "seen_at": "2026-01-01T00:00:30Z",
+            "updated_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "explicit-unknown",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "working",
+            "state": "future",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "legacy-seen",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "done",
+            "state": null,
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "seen_at": "2026-01-01T00:00:30Z",
+            "updated_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "legacy-pending",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": null,
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "pending_interactions": 2
+          }
+        ]
+      },
+      "expected": {
+        "sessions": [
+          {
+            "id": "machine-a/fallback-blocked",
+            "state": "needs_you",
+            "is_live": true,
+            "is_quiet": false,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/fallback-working",
+            "state": "working",
+            "is_live": true,
+            "is_quiet": false,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/fallback-done",
+            "state": "unread",
+            "is_live": true,
+            "is_quiet": false,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/fallback-idle",
+            "state": "idle",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/fallback-offline",
+            "state": "offline",
+            "is_live": false,
+            "is_quiet": false,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/fallback-unknown",
+            "state": "unknown",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/fallback-future",
+            "state": "unknown",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/explicit-idle",
+            "state": "idle",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": false,
+            "sort_date": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "machine-a/explicit-unread",
+            "state": "unread",
+            "is_live": true,
+            "is_quiet": false,
+            "is_waiting": false,
+            "sort_date": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "machine-a/explicit-unknown",
+            "state": "unknown",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/legacy-seen",
+            "state": "unread",
+            "is_live": true,
+            "is_quiet": false,
+            "is_waiting": false,
+            "sort_date": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "machine-a/legacy-pending",
+            "state": "idle",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": false,
+            "sort_date": null
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "waiting_requires_quiet_state",
+      "description": "循环、后台任务或运行中的子代理只让空闲状态派生为待唤醒。",
+      "source": [
+        "ios/Shared/Models.swift: Session.isQuiet",
+        "ios/Jarvis/Views/Chats/ChatsView.swift: Session.isWaiting"
+      ],
+      "input": {
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "loop",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "loop": {
+              "kind": "wakeup"
+            }
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "background",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "background": [
+              {
+                "id": "task-a",
+                "kind": "shell"
+              }
+            ]
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "subagent",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "subagents": [
+              {
+                "id": "child-a",
+                "session_id": "child-session",
+                "running": true
+              }
+            ]
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "finished-child",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "subagents": [
+              {
+                "id": "child-b",
+                "session_id": "child-session-b",
+                "running": false
+              }
+            ]
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "unknown-loop",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "unknown",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "loop": {
+              "kind": "cron"
+            }
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "working-loop",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "working",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "loop": {
+              "kind": "cron"
+            }
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "offline-loop",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "offline",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "loop": {
+              "kind": "cron"
+            }
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "empty-background",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "background": []
+          }
+        ]
+      },
+      "expected": {
+        "sessions": [
+          {
+            "id": "machine-a/loop",
+            "state": "idle",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": true,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/background",
+            "state": "idle",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": true,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/subagent",
+            "state": "idle",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": true,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/finished-child",
+            "state": "idle",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/unknown-loop",
+            "state": "unknown",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": true,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/working-loop",
+            "state": "working",
+            "is_live": true,
+            "is_quiet": false,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/offline-loop",
+            "state": "offline",
+            "is_live": false,
+            "is_quiet": false,
+            "is_waiting": false,
+            "sort_date": null
+          },
+          {
+            "id": "machine-a/empty-background",
+            "state": "idle",
+            "is_live": true,
+            "is_quiet": true,
+            "is_waiting": false,
+            "sort_date": null
+          }
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

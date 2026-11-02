@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "kind": "grid",
+  "cases": [
+    {
+      "name": "sgr_flags_and_resets",
+      "description": "SGR 设置和关闭各样式，重置后字符恢复默认样式。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr"
+      ],
+      "input": {
+        "cols": 8,
+        "rows": 1,
+        "frames": [
+          {
+            "vt": "\u001b[1;2;3;4;7;8;9mA"
+          },
+          {
+            "vt": "\u001b[22;23;24;27;28;29mB"
+          },
+          {
+            "vt": "\u001b[1;2mC\u001b[21mD\u001b[mE"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 8,
+            "cursor": {
+              "col": 1,
+              "row": 0,
+              "visible": true
+            },
+            "row_lengths": [
+              1
+            ],
+            "rows": 1,
+            "scrolled": 0,
+            "style_runs": [
+              {
+                "from": 0,
+                "row": 0,
+                "style": {
+                  "bold": true,
+                  "dim": true,
+                  "hidden": true,
+                  "inverse": true,
+                  "italic": true,
+                  "strike": true,
+                  "underline": true
+                },
+                "to": 1
+              }
+            ],
+            "text": [
+              "A       "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 8,
+            "cursor": {
+              "col": 2,
+              "row": 0,
+              "visible": true
+            },
+            "row_lengths": [
+              2
+            ],
+            "rows": 1,
+            "scrolled": 0,
+            "style_runs": [
+              {
+                "from": 0,
+                "row": 0,
+                "style": {
+                  "bold": true,
+                  "dim": true,
+                  "hidden": true,
+                  "inverse": true,
+                  "italic": true,
+                  "strike": true,
+                  "underline": true
+                },
+                "to": 1
+              }
+            ],
+            "text": [
+              "AB      "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 8,
+            "cursor": {
+              "col": 5,
+              "row": 0,
+              "visible": true
+            },
+            "row_lengths": [
+              5
+            ],
+            "rows": 1,
+            "scrolled": 0,
+            "style_runs": [
+              {
+                "from": 0,
+                "row": 0,
+                "style": {
+                  "bold": true,
+                  "dim": true,
+                  "hidden": true,
+                  "inverse": true,
+                  "italic": true,
+                  "strike": true,
+                  "underline": true
+                },
+                "to": 1
+              },
+              {
+                "from": 2,
+                "row": 0,
+                "style": {
+                  "bold": true,
+                  "dim": true
+                },
+                "to": 3
+              }
+            ],
+            "text": [
+              "ABCDE   "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "sgr_color_modes",
+      "description": "保留基本色、亮色、索引色和真彩色，并支持默认色复位。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr"
+      ],
+      "input": {
+        "cols": 8,
+        "rows": 1,
+        "frames": [
+          {
+            "vt": "\u001b[31;44mA\u001b[91;104mB\u001b[38;5;208;48;5;17mC\u001b[38;2;80;160;255;48;2;55;55;55mD\u001b[39;49mE"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 8,
+            "cursor": {
+              "col": 5,
+              "row": 0,
+              "visible": true
+            },
+            "row_lengths": [
+              5
+            ],
+            "rows": 1,
+            "scrolled": 0,
+            "style_runs": [
+              {
+                "from": 0,
+                "row": 0,
+                "style": {
+                  "bg": {
+                    "indexed": 4
+                  },
+                  "fg": {
+                    "indexed": 1
+                  }
+                },
+                "to": 1
+              },
+              {
+                "from": 1,
+                "row": 0,
+                "style": {
+                  "bg": {
+                    "indexed": 12
+                  },
+                  "fg": {
+                    "indexed": 9
+                  }
+                },
+                "to": 2
+              },
+              {
+                "from": 2,
+                "row": 0,
+                "style": {
+                  "bg": {
+                    "indexed": 17
+                  },
+                  "fg": {
+                    "indexed": 208
+                  }
+                },
+                "to": 3
+              },
+              {
+                "from": 3,
+                "row": 0,
+                "style": {
+                  "bg": {
+                    "rgb": [
+                      55,
+                      55,
+                      55
+                    ]
+                  },
+                  "fg": {
+                    "rgb": [
+                      80,
+                      160,
+                      255
+                    ]
+                  }
+                },
+                "to": 4
+              }
+            ],
+            "text": [
+              "ABCDE   "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "sgr_colon_and_clamp",
+      "description": "冒号参数按分号处理，颜色分量限制在字节范围。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr / Parser.step"
+      ],
+      "input": {
+        "cols": 4,
+        "rows": 1,
+        "frames": [
+          {
+            "vt": "\u001b[38:2:300:10:20;48:5:999mA"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 4,
+            "cursor": {
+              "col": 1,
+              "row": 0,
+              "visible": true
+            },
+            "row_lengths": [
+              1
+            ],
+            "rows": 1,
+            "scrolled": 0,
+            "style_runs": [
+              {
+                "from": 0,
+                "row": 0,
+                "style": {
+                  "bg": {
+                    "indexed": 255
+                  },
+                  "fg": {
+                    "rgb": [
+                      255,
+                      10,
+                      20
+                    ]
+                  }
+                },
+                "to": 1
+              }
+            ],
+            "text": [
+              "A   "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "sgr_link_survives_reset",
+      "description": "SGR 复位保留 OSC 链接，关闭链接后新字符不再关联。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.osc / sgr"
+      ],
+      "input": {
+        "cols": 8,
+        "rows": 1,
+        "frames": [
+          {
+            "vt": "\u001b]8;;https://example.com/docs\u001b\\\u001b[1;31m中\u001b[0mA\u001b]8;;\u001b\\B"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 8,
+            "cursor": {
+              "col": 4,
+              "row": 0,
+              "visible": true
+            },
+            "row_lengths": [
+              4
+            ],
+            "rows": 1,
+            "scrolled": 0,
+            "style_runs": [
+              {
+                "from": 0,
+                "row": 0,
+                "style": {
+                  "bold": true,
+                  "fg": {
+                    "indexed": 1
+                  },
+                  "link": "https://example.com/docs"
+                },
+                "to": 2
+              },
+              {
+                "from": 2,
+                "row": 0,
+                "style": {
+                  "link": "https://example.com/docs"
+                },
+                "to": 3
+              }
+            ],
+            "text": [
+              "中\ufff0AB    "
+            ],
+            "wide_cells": [
+              [
+                0,
+                0,
+                2
+              ],
+              [
+                0,
+                1,
+                0
+              ]
+            ]
+          }
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

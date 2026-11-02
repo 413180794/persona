@@ -130,10 +130,12 @@ func (h *Hub) registerDesktop(c *client, name, pushDevice string) {
 	h.logf("desktop %q connected (device %s)", name, c.device)
 }
 
-// dropClient forgets a client whose connection ended; a desktop's going is announced.
+// dropClient forgets a client whose connection ended (also as one the shutdown has to close); a desktop's going is
+// announced.
 func (h *Hub) dropClient(c *client) {
 	h.mu.Lock()
 	delete(h.clients, c)
+	delete(h.wsConnections, c)
 	desktop := c.desktop
 	if desktop {
 		h.announceDesktopsLocked()

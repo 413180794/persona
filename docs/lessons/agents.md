@@ -104,3 +104,6 @@
   列成「未运行」，从手机发消息就去 herdr 里 `claude --resume`：装了 herdr 会起第二个进程同时写同一个会话，没装就报
   「herdr is not running on this machine: herdr workspace list: exec: "herdr"…」。现在恢复前先看有没有活着的 claude 在 `sessions/<pid>.json` 里开着这个会话，
   有就拒绝（`open_elsewhere`，说是在哪开着）；引擎起不来时拒绝的话也换成人话（`engine_missing`）。列表里仍显示「未运行」，还没有「在别处开着」的状态。
+- Codex / TRAEX 的子 Agent 会在主对话旁边写自己的 rollout，同一个目录、同一个 cwd，而且更新；TRAEX 执行工具前的自动批准评估（guardian）
+  由同一个进程写，还有自己的 owner 文件。按「最新的 rollout / 最新的 owner 文件」认会话，App 显示的是审核对话，和终端里看到的不一样（2026-11-01）。
+  认会话一律看 `session_meta` 的 `thread_source` / `source.subagent`，子 Agent 用 `session_id` 换成它的主对话（`docs/codex.md`）。

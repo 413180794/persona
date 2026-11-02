@@ -34,6 +34,14 @@
 | 关于我 | App 里编辑后存 settings `assistant.notes`，覆盖 hub.json 的 `assistant.notes`，进 CLAUDE.md 末尾 |
 | 手机不在前台 | `phone_*` 调用时没有手机连着 → hub 发静默推送（`content-available`，`jarvis_wake`）→ App 在后台连上 WS 执行，25 秒后断开；等最多 20 秒。App 进后台时主动断开 WS，否则挂起的 socket 让 hub 以为手机在线、调用干等 2 分钟；断开后在后台什么都不会再把它打开（网络恢复、刷新结束、重连退避，`LiveConnection.suspended`，2026-11-02），只有这条静默推送（`wake()`）能连 |
 
+说明（`~/.jarvis/assistant/CLAUDE.md`）里「他的电脑本身」那一段按助手**实际所在的机器**写（2026-10-31 修，原来只认 kind local）：
+- 助手所在的那台，不管什么 kind，都写「就是你所在的这台机器，直接执行命令」。
+- `ssh_host` 是 hub 那台机器的 ssh 别名，所以只有助手跑在 hub 本机（kind local）上时，才给其他 ssh 机器写 `ssh <别名> '<命令>'`。
+- 其余情况（助手在别的电脑上，或目标是 link 机器，根本没有 ssh），不给执行不了的命令，写明不能直接执行，要做事用 `agent_start` / `agent_send`。
+
+这份说明在 hub 准备助手时写进那台机器（`assistant.prepare`：新对话、App 打开新对话页的预热、AI 分身）。已经在跑的 claude 进程
+用的是它启动时读到的那份，要等它下次启动才读新的：闲置 20 分钟被回收后、或那台 node 的连接重建以后，下一条消息会起新进程。
+
 只有助手能拿到这些工具：node 给助手进程的 MCP 配置是内联 JSON，带 `JARVIS_ASSISTANT=1`、`JARVIS_SESSION_ID=<对话 id>`；
 `jarvisd mcp` 把这两个值带给 hub，hub 只在 assistant 为真时列出、执行这些工具（`hub/assistant_tools.go`）。herdr 里的普通 Agent 看不到。
 
@@ -116,6 +124,8 @@
 - 模型会把 ask_user 和别的工具**并行**调用（实测：ask_user 和 schedule_followup 同一毫秒发出），所以 ask_user 不能当「先确认再做」的唯一闸门；
   真正有副作用的工具（`lark_send`、`mail_send`）自己在 hub 里要批准。
 - 定时任务错过太久不补跑：hub 停了一上午，不会中午才发早报（晚于计划 30 分钟就跳过，只记录）。
+- 定时任务、跟进、运行记录只有从库里读成功才算加载完：读失败时不会退回默认的两条定时任务，相关接口回 503，工具报错，调度这一轮跳过，什么都不写，
+  下次调用再读。以前读失败也算加载完，下一次保存就把库里真实的定时任务和跟进覆盖掉了（2026-11-02 评审发现，`TestScheduleReadFailureNeverOverwrites`）。
 - 静默推送会被系统限流，强制退出的 App 收不到；唤醒失败时工具结果会告诉模型「请他打开 App」。
 - 快照以前放在 `--append-system-prompt`，以为每次重启都会换成新的；其实 Claude Code 续聊时一直用对话第一次启动时记下的系统提示（见下节），
   助手看到的一直是那段对话第一天的时间和未读。现在每条消息都带。
@@ -359,6 +369,12 @@ DSH 的细节（权限预设的对应、要常驻 `dsh web`）见 `docs/dsh.md`�
   没放进消息旁边（助手的回复是整宽的正文，加头像要让出一列）和通知里（要做 Notification Service Extension + communication notification，另做）。
 - 2026-10-31 起头像和名字可以换成别的形象（设置 › 外观 › 形象，`docs/persona.md`；形象带的配色在主题色里选「跟随形象」才用）。面罩是默认形象，汇流在形象里紧跟其后，可以选。两个都在顶栏按状态动：
   空闲时眨眼，思考中抬眼加思考气泡，工作中面罩的眼睛左右看、汇流的信号沿三条走线流进核心，等你处理时外圈红色呼吸，离线时变灰。
+
+## Android 的入口（2026-11-02）
+
+Android 的管理都在「设置 › 助手」（`docs/android.md`「助手设置」）：设置列表里的「助手 › Jarvis」，Jarvis tab 标题菜单的「助手设置」、右上角头像、抽屉的「资料页」也打开它。内容：在哪运行（机器、启动器、工作目录，可以换机器和启动器）、数据存在哪里、了解你（关于我、记忆）、时区（默认跟随手机）、能访问；主动做事（定时任务、跟进、运行记录）另做，接好后放进这一页。
+
+和 iOS 不同，Android 能换助手所在的机器。换的时候提示「记忆和会话记录在原来那台机器上，不会跟过去」，并在同一个 `PUT /api/v1/assistant` 里带 `"main":"-"` 清掉主对话：hub 换机器时不动 `main`，而主对话的 transcript 在原来那台机器上，不清的话 App 会把 `main` 拼到新机器上，去找一个不存在的会话。
 
 ## 验证
 

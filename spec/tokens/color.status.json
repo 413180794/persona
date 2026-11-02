@@ -1,0 +1,504 @@
+{
+  "status": {
+    "light": {
+      "needsYou": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8980392156862745,
+              0.2823529411764706,
+              0.30196078431372547
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.needsYou.dot"
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.7764705882352941,
+              0.16862745098039217,
+              0.2
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.needsYou.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8980392156862745,
+              0.2823529411764706,
+              0.30196078431372547
+            ],
+            "alpha": 0.14
+          },
+          "$description": "StatusPalette.needsYou.tint"
+        }
+      },
+      "working": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9098039215686274,
+              0.5372549019607843,
+              0.047058823529411764
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.working.dot"
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.6392156862745098,
+              0.35294117647058826,
+              0.0
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.working.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9098039215686274,
+              0.5372549019607843,
+              0.047058823529411764
+            ],
+            "alpha": 0.14
+          },
+          "$description": "StatusPalette.working.tint"
+        }
+      },
+      "unread": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.18823529411764706,
+              0.6431372549019608,
+              0.4235294117647059
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.unread.dot"
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.11372549019607843,
+              0.47843137254901963,
+              0.2980392156862745
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.unread.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.18823529411764706,
+              0.6431372549019608,
+              0.4235294117647059
+            ],
+            "alpha": 0.14
+          },
+          "$description": "StatusPalette.unread.tint"
+        }
+      },
+      "idle": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.23529411764705882,
+              0.23529411764705882,
+              0.2627450980392157
+            ],
+            "alpha": 0.33
+          },
+          "$description": "StatusPalette.idle：secondary 的 alpha 0.6 × 0.55；非设备采样"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.light.secondary}",
+          "$description": "StatusPalette.idle.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.23529411764705882,
+              0.23529411764705882,
+              0.2627450980392157
+            ],
+            "alpha": 0.072
+          },
+          "$description": "StatusPalette.idle：secondary 的 alpha 0.6 × 0.12；非设备采样"
+        }
+      },
+      "offline": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.23529411764705882,
+              0.23529411764705882,
+              0.2627450980392157
+            ],
+            "alpha": 0.18
+          },
+          "$description": "StatusPalette.offline：secondary 的 alpha 0.6 × 0.3；非设备采样"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.light.secondary}",
+          "$description": "StatusPalette.offline.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.23529411764705882,
+              0.23529411764705882,
+              0.2627450980392157
+            ],
+            "alpha": 0.048
+          },
+          "$description": "StatusPalette.offline：secondary 的 alpha 0.6 × 0.08；非设备采样"
+        }
+      },
+      "waiting": {
+        "dot": {
+          "$type": "color",
+          "$value": "{common.light.loop}",
+          "$description": "ChatsView 分组：StatusTone(dot: Theme.loop, text: Theme.loop)"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{common.light.loop}",
+          "$description": "ChatsView 分组：Theme.loop"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.1803921568627451,
+              0.43529411764705883,
+              0.8156862745098039
+            ],
+            "alpha": 0.14
+          },
+          "$description": "StatusTone 默认 dot.opacity(0.14)"
+        }
+      },
+      "muted": {
+        "dot": {
+          "$type": "color",
+          "$value": "{status.light.idle.dot}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{status.light.idle.text}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": "{status.light.idle.tint}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        }
+      },
+      "unknown": {
+        "dot": {
+          "$type": "color",
+          "$value": "{status.light.idle.dot}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{status.light.idle.text}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": "{status.light.idle.tint}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        }
+      }
+    },
+    "dark": {
+      "needsYou": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.38823529411764707,
+              0.4117647058823529
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.needsYou.dot"
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.38823529411764707,
+              0.4117647058823529
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.needsYou.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.38823529411764707,
+              0.4117647058823529
+            ],
+            "alpha": 0.14
+          },
+          "$description": "StatusPalette.needsYou.tint"
+        }
+      },
+      "working": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.6980392156862745,
+              0.1411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.working.dot"
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.6980392156862745,
+              0.1411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.working.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.6980392156862745,
+              0.1411764705882353
+            ],
+            "alpha": 0.14
+          },
+          "$description": "StatusPalette.working.tint"
+        }
+      },
+      "unread": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2980392156862745,
+              0.7647058823529411,
+              0.5411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.unread.dot"
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2980392156862745,
+              0.7647058823529411,
+              0.5411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "StatusPalette.unread.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2980392156862745,
+              0.7647058823529411,
+              0.5411764705882353
+            ],
+            "alpha": 0.14
+          },
+          "$description": "StatusPalette.unread.tint"
+        }
+      },
+      "idle": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9215686274509803,
+              0.9215686274509803,
+              0.9607843137254902
+            ],
+            "alpha": 0.33
+          },
+          "$description": "StatusPalette.idle：secondary 的 alpha 0.6 × 0.55；非设备采样"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.dark.secondary}",
+          "$description": "StatusPalette.idle.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9215686274509803,
+              0.9215686274509803,
+              0.9607843137254902
+            ],
+            "alpha": 0.072
+          },
+          "$description": "StatusPalette.idle：secondary 的 alpha 0.6 × 0.12；非设备采样"
+        }
+      },
+      "offline": {
+        "dot": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9215686274509803,
+              0.9215686274509803,
+              0.9607843137254902
+            ],
+            "alpha": 0.18
+          },
+          "$description": "StatusPalette.offline：secondary 的 alpha 0.6 × 0.3；非设备采样"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.dark.secondary}",
+          "$description": "StatusPalette.offline.text"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9215686274509803,
+              0.9215686274509803,
+              0.9607843137254902
+            ],
+            "alpha": 0.048
+          },
+          "$description": "StatusPalette.offline：secondary 的 alpha 0.6 × 0.08；非设备采样"
+        }
+      },
+      "waiting": {
+        "dot": {
+          "$type": "color",
+          "$value": "{common.dark.loop}",
+          "$description": "ChatsView 分组：StatusTone(dot: Theme.loop, text: Theme.loop)"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{common.dark.loop}",
+          "$description": "ChatsView 分组：Theme.loop"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.3568627450980392,
+              0.6078431372549019,
+              1.0
+            ],
+            "alpha": 0.14
+          },
+          "$description": "StatusTone 默认 dot.opacity(0.14)"
+        }
+      },
+      "muted": {
+        "dot": {
+          "$type": "color",
+          "$value": "{status.dark.idle.dot}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{status.dark.idle.text}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": "{status.dark.idle.tint}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        }
+      },
+      "unknown": {
+        "dot": {
+          "$type": "color",
+          "$value": "{status.dark.idle.dot}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{status.dark.idle.text}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        },
+        "tint": {
+          "$type": "color",
+          "$value": "{status.dark.idle.tint}",
+          "$description": "ChatsView 已屏蔽 / AgentState.unknown 复用 StatusPalette.idle"
+        }
+      }
+    }
+  }
+}

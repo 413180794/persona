@@ -15,6 +15,7 @@ Gmail 用「使用 Google 账号登录」（OAuth2 + XOAUTH2），额外支持�
 | 摘要 | 只取 2048 字节正文片段，不下载整封信；摘要取正文前 160 个字符 |
 | 合并收件箱 | 不传 `account_id` 时并发拉取所有账号的 INBOX，按日期倒序合并 |
 | 读信 | `BODY.PEEK` 取全文，go-message 解析纯文本 / HTML / 附件元数据；**不会**自动标记已读 |
+| 附件下载 | 稳定 ID 绑定 MIME 顺序、元数据和解码内容；按账号、邮箱、UID 鉴权读取，普通 `BODY.PEEK` 流式解码到临时文件，支持 HTTP Range，不标已读、不要求额外 IMAP 扩展 |
 | 已读 / 星标 | 只改 `\Seen`、`\Flagged` 两个 flag |
 | 发信 | go-message 生成 MIME，UTF-8，中文主题和中文姓名都按 RFC 2047 编码；支持 `in_reply_to` / `references` 串线程 |
 | 发件箱留存 | 非 Gmail 账号（SMTP 不会自动保存副本）发完后 `APPEND` 到 `\Sent`；失败只记日志，不影响发信结果 |
@@ -52,6 +53,7 @@ App                         hub                                Google
 - state 不存内存：PKCE verifier 和创建时间用 `secret.key` 加密（AES-GCM）后整个放进 state，hub 在用户停留在 Google 页面期间重启 / 重新部署也不影响
   （2026-10-25 实测踩过：别的 agent 连着部署了三次，内存里的 state 全丢，回调报「start again」）。同一个 state 在进程内只能用一次。
 - 客户端类型是 **iOS**：没有 client secret，回调用反向 client ID 的自定义 scheme（Google 对 Android / Chrome 应用停了自定义 scheme，iOS 仍然支持）。
+  所以网页版加不了 Gmail（回调只有 App 接得住），设置 › 连接器里选 Gmail 时提示在手机上添加；IMAP / 飞书邮箱网页上能加。
   换 token 时只带 `client_id` + `code_verifier`，所以换 token 可以放在 hub 上做，refresh token 不经过手机。
   ASWebAuthenticationSession 拦截回调 scheme，不需要在 Info.plist 里注册 URL scheme，client ID 换了 App 也不用重新发版。
 - id_token 是 hub 直接从 Google token 接口（TLS）拿到的，按 OIDC 规范不用再验签，只读 `email` / `email_verified`。
@@ -228,7 +230,7 @@ API 响应里只有 `status` / `error`，永远拿不到密码或 refresh token�
 ## 已知限制
 
 - **没有 IDLE 推送**：新邮件要等 App 主动刷新（后续可加轮询或 IMAP IDLE）。
-- **不收发附件**：附件只能看到文件名 / 类型 / 大小，不能下载，也不能在发信时带附件。
+- **发信暂不支持附件**：来信附件可以查看元数据并下载，发信仍不能携带附件。
 - **不能删除 / 移动 / 归档**：目前只能改已读和星标。
 - **摘要只取前 2 KB 正文**：如果正文开头是超长 base64 内嵌图片，摘要可能是空的或没意义。
 - **gzip 压缩的正文**不支持（`Content-Encoding: gzip`），这类信件的正文会缺失。

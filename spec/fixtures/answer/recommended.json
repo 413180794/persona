@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "recommended_spaced",
+      "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
+      "source": [
+        "ios/Shared/Models.swift：QuestionOption.display",
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question",
+          "questions": [
+            {
+              "question": "选择展示方式？",
+              "header": "展示",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "简洁 (Recommended)"
+                }
+              ]
+            }
+          ]
+        },
+        "operation": {
+          "action": "pick_option",
+          "option_index": 0,
+          "page": 0,
+          "picks": {},
+          "other": {},
+          "sending": false
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "answers": {
+            "选择展示方式？": "简洁 (Recommended)"
+          }
+        },
+        "display": {
+          "text": "简洁",
+          "recommended": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "recommended_unspaced",
+      "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
+      "source": [
+        "ios/Shared/Models.swift：QuestionOption.display",
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question",
+          "questions": [
+            {
+              "question": "选择展示方式？",
+              "header": "展示",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "简洁(Recommended)"
+                }
+              ]
+            }
+          ]
+        },
+        "operation": {
+          "action": "pick_option",
+          "option_index": 0,
+          "page": 0,
+          "picks": {},
+          "other": {},
+          "sending": false
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "answers": {
+            "选择展示方式？": "简洁(Recommended)"
+          }
+        },
+        "display": {
+          "text": "简洁",
+          "recommended": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "recommended_chinese_fullwidth",
+      "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
+      "source": [
+        "ios/Shared/Models.swift：QuestionOption.display",
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question",
+          "questions": [
+            {
+              "question": "选择展示方式？",
+              "header": "展示",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "简洁（推荐）"
+                }
+              ]
+            }
+          ]
+        },
+        "operation": {
+          "action": "pick_option",
+          "option_index": 0,
+          "page": 0,
+          "picks": {},
+          "other": {},
+          "sending": false
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "answers": {
+            "选择展示方式？": "简洁（推荐）"
+          }
+        },
+        "display": {
+          "text": "简洁",
+          "recommended": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "recommended_chinese_ascii",
+      "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
+      "source": [
+        "ios/Shared/Models.swift：QuestionOption.display",
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question",
+          "questions": [
+            {
+              "question": "选择展示方式？",
+              "header": "展示",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "简洁(推荐)"
+                }
+              ]
+            }
+          ]
+        },
+        "operation": {
+          "action": "pick_option",
+          "option_index": 0,
+          "page": 0,
+          "picks": {},
+          "other": {},
+          "sending": false
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "answers": {
+            "选择展示方式？": "简洁(推荐)"
+          }
+        },
+        "display": {
+          "text": "简洁",
+          "recommended": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "recommended_trims_prefix_space",
+      "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
+      "source": [
+        "ios/Shared/Models.swift：QuestionOption.display",
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question",
+          "questions": [
+            {
+              "question": "选择展示方式？",
+              "header": "展示",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "  简洁  (Recommended)"
+                }
+              ]
+            }
+          ]
+        },
+        "operation": {
+          "action": "pick_option",
+          "option_index": 0,
+          "page": 0,
+          "picks": {},
+          "other": {},
+          "sending": false
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "answers": {
+            "选择展示方式？": "  简洁  (Recommended)"
+          }
+        },
+        "display": {
+          "text": "简洁",
+          "recommended": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "recommended_case_sensitive",
+      "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
+      "source": [
+        "ios/Shared/Models.swift：QuestionOption.display",
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question",
+          "questions": [
+            {
+              "question": "选择展示方式？",
+              "header": "展示",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "简洁 (recommended)"
+                }
+              ]
+            }
+          ]
+        },
+        "operation": {
+          "action": "pick_option",
+          "option_index": 0,
+          "page": 0,
+          "picks": {},
+          "other": {},
+          "sending": false
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "answers": {
+            "选择展示方式？": "简洁 (recommended)"
+          }
+        },
+        "display": {
+          "text": "简洁 (recommended)",
+          "recommended": false
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "recommended_suffix_only",
+      "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
+      "source": [
+        "ios/Shared/Models.swift：QuestionOption.display",
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question",
+          "questions": [
+            {
+              "question": "选择展示方式？",
+              "header": "展示",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "简洁 (Recommended) 补充"
+                }
+              ]
+            }
+          ]
+        },
+        "operation": {
+          "action": "pick_option",
+          "option_index": 0,
+          "page": 0,
+          "picks": {},
+          "other": {},
+          "sending": false
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "answers": {
+            "选择展示方式？": "简洁 (Recommended) 补充"
+          }
+        },
+        "display": {
+          "text": "简洁 (Recommended) 补充",
+          "recommended": false
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "recommended_trailing_space",
+      "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
+      "source": [
+        "ios/Shared/Models.swift：QuestionOption.display",
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question",
+          "questions": [
+            {
+              "question": "选择展示方式？",
+              "header": "展示",
+              "multi_select": false,
+              "options": [
+                {
+                  "label": "简洁 (Recommended) "
+                }
+              ]
+            }
+          ]
+        },
+        "operation": {
+          "action": "pick_option",
+          "option_index": 0,
+          "page": 0,
+          "picks": {},
+          "other": {},
+          "sending": false
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "answers": {
+            "选择展示方式？": "简洁 (Recommended) "
+          }
+        },
+        "display": {
+          "text": "简洁 (Recommended) ",
+          "recommended": false
+        }
+      },
+      "derived": true
+    }
+  ]
+}

@@ -1,0 +1,544 @@
+{
+  "schema_version": 1,
+  "kind": "modifiers",
+  "cases": [
+    {
+      "name": "modifier_once",
+      "description": "按点击、按住和发送事件更新修饰键状态。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/JarvisTests/TerminalTests.swift — tapArmsForOneKey"
+      ],
+      "input": {
+        "probe_key": "c",
+        "actions": [
+          {
+            "op": "tap",
+            "modifier": "ctrl",
+            "quick": false
+          },
+          {
+            "op": "pressed"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+c",
+            "ctrl": "once",
+            "shift": "off"
+          },
+          {
+            "active": false,
+            "alt": "off",
+            "applied": "c",
+            "ctrl": "off",
+            "shift": "off"
+          }
+        ]
+      },
+      "from_test": "tapArmsForOneKey"
+    },
+    {
+      "name": "modifier_lock",
+      "description": "按点击、按住和发送事件更新修饰键状态。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/JarvisTests/TerminalTests.swift — doubleTapLocksUntilTappedAgain"
+      ],
+      "input": {
+        "probe_key": "c",
+        "actions": [
+          {
+            "op": "tap",
+            "modifier": "ctrl",
+            "quick": false
+          },
+          {
+            "op": "tap",
+            "modifier": "ctrl",
+            "quick": true
+          },
+          {
+            "op": "pressed"
+          },
+          {
+            "op": "pressed"
+          },
+          {
+            "op": "tap",
+            "modifier": "ctrl",
+            "quick": false
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+c",
+            "ctrl": "once",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+c",
+            "ctrl": "locked",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+c",
+            "ctrl": "locked",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+c",
+            "ctrl": "locked",
+            "shift": "off"
+          },
+          {
+            "active": false,
+            "alt": "off",
+            "applied": "c",
+            "ctrl": "off",
+            "shift": "off"
+          }
+        ]
+      },
+      "from_test": "doubleTapLocksUntilTappedAgain"
+    },
+    {
+      "name": "modifier_slow_second_tap",
+      "description": "按点击、按住和发送事件更新修饰键状态。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/JarvisTests/TerminalTests.swift — slowSecondTapDisarms"
+      ],
+      "input": {
+        "probe_key": "x",
+        "actions": [
+          {
+            "op": "tap",
+            "modifier": "alt",
+            "quick": false
+          },
+          {
+            "op": "tap",
+            "modifier": "alt",
+            "quick": false
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "once",
+            "applied": "alt+x",
+            "ctrl": "off",
+            "shift": "off"
+          },
+          {
+            "active": false,
+            "alt": "off",
+            "applied": "x",
+            "ctrl": "off",
+            "shift": "off"
+          }
+        ]
+      },
+      "from_test": "slowSecondTapDisarms"
+    },
+    {
+      "name": "modifier_hold_used",
+      "description": "按点击、按住和发送事件更新修饰键状态。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/JarvisTests/TerminalTests.swift — holdingKeepsItDownUntilLetGo"
+      ],
+      "input": {
+        "probe_key": "c",
+        "actions": [
+          {
+            "op": "hold",
+            "modifier": "ctrl"
+          },
+          {
+            "op": "pressed"
+          },
+          {
+            "op": "pressed"
+          },
+          {
+            "op": "release",
+            "modifier": "ctrl"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+c",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+c",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+c",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": false,
+            "alt": "off",
+            "applied": "c",
+            "ctrl": "off",
+            "shift": "off"
+          }
+        ]
+      },
+      "from_test": "holdingKeepsItDownUntilLetGo"
+    },
+    {
+      "name": "modifier_hold_unused",
+      "description": "按点击、按住和发送事件更新修饰键状态。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/JarvisTests/TerminalTests.swift — holdingKeepsItDownUntilLetGo"
+      ],
+      "input": {
+        "probe_key": "a",
+        "actions": [
+          {
+            "op": "hold",
+            "modifier": "shift"
+          },
+          {
+            "op": "release",
+            "modifier": "shift"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "shift+a",
+            "ctrl": "off",
+            "shift": "held"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "shift+a",
+            "ctrl": "off",
+            "shift": "once"
+          }
+        ]
+      },
+      "from_test": "holdingKeepsItDownUntilLetGo"
+    },
+    {
+      "name": "modifier_order",
+      "description": "按点击、按住和发送事件更新修饰键状态。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/JarvisTests/TerminalTests.swift — combinesInHerdrOrder"
+      ],
+      "input": {
+        "probe_key": "x",
+        "actions": [
+          {
+            "op": "tap",
+            "modifier": "shift",
+            "quick": false
+          },
+          {
+            "op": "tap",
+            "modifier": "ctrl",
+            "quick": false
+          },
+          {
+            "op": "tap",
+            "modifier": "alt",
+            "quick": false
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "shift+x",
+            "ctrl": "off",
+            "shift": "once"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+shift+x",
+            "ctrl": "once",
+            "shift": "once"
+          },
+          {
+            "active": true,
+            "alt": "once",
+            "applied": "ctrl+alt+shift+x",
+            "ctrl": "once",
+            "shift": "once"
+          }
+        ]
+      },
+      "from_test": "combinesInHerdrOrder"
+    },
+    {
+      "name": "modifier_escape",
+      "description": "按点击、按住和发送事件更新修饰键状态。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests"
+      ],
+      "input": {
+        "probe_key": "esc",
+        "actions": [
+          {
+            "op": "tap",
+            "modifier": "shift",
+            "quick": false
+          },
+          {
+            "op": "tap",
+            "modifier": "ctrl",
+            "quick": false
+          },
+          {
+            "op": "tap",
+            "modifier": "alt",
+            "quick": false
+          },
+          {
+            "op": "pressed"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "esc",
+            "ctrl": "off",
+            "shift": "once"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "esc",
+            "ctrl": "once",
+            "shift": "once"
+          },
+          {
+            "active": true,
+            "alt": "once",
+            "applied": "esc",
+            "ctrl": "once",
+            "shift": "once"
+          },
+          {
+            "active": false,
+            "alt": "off",
+            "applied": "esc",
+            "ctrl": "off",
+            "shift": "off"
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "modifier_mixed_states",
+      "description": "按点击、按住和发送事件更新修饰键状态。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests"
+      ],
+      "input": {
+        "probe_key": "x",
+        "actions": [
+          {
+            "op": "hold",
+            "modifier": "ctrl"
+          },
+          {
+            "op": "tap",
+            "modifier": "alt",
+            "quick": false
+          },
+          {
+            "op": "tap",
+            "modifier": "alt",
+            "quick": true
+          },
+          {
+            "op": "tap",
+            "modifier": "shift",
+            "quick": false
+          },
+          {
+            "op": "pressed"
+          },
+          {
+            "op": "release",
+            "modifier": "ctrl"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+x",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "once",
+            "applied": "ctrl+alt+x",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "locked",
+            "applied": "ctrl+alt+x",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "locked",
+            "applied": "ctrl+alt+shift+x",
+            "ctrl": "held",
+            "shift": "once"
+          },
+          {
+            "active": true,
+            "alt": "locked",
+            "applied": "ctrl+alt+x",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "locked",
+            "applied": "alt+x",
+            "ctrl": "off",
+            "shift": "off"
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "modifier_shared_hold_usage",
+      "description": "第二个按住事件重置共用使用标志，保留两个键释放后都粘滞的现状。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests"
+      ],
+      "input": {
+        "probe_key": "x",
+        "actions": [
+          {
+            "op": "hold",
+            "modifier": "ctrl"
+          },
+          {
+            "op": "pressed"
+          },
+          {
+            "op": "hold",
+            "modifier": "alt"
+          },
+          {
+            "op": "release",
+            "modifier": "ctrl"
+          },
+          {
+            "op": "release",
+            "modifier": "alt"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+x",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "off",
+            "applied": "ctrl+x",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "held",
+            "applied": "ctrl+alt+x",
+            "ctrl": "held",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "held",
+            "applied": "ctrl+alt+x",
+            "ctrl": "once",
+            "shift": "off"
+          },
+          {
+            "active": true,
+            "alt": "once",
+            "applied": "ctrl+alt+x",
+            "ctrl": "once",
+            "shift": "off"
+          }
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

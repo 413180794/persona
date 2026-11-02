@@ -154,7 +154,7 @@ func (h *Hub) runByID(id string) (*botRun, *botProgress) {
 // in the app) for the progress card, which is posted after a few seconds and rewritten every few.
 func (h *Hub) watchRun(r *botRun) {
 	b := &h.bots
-	m := h.byID[r.Target.MachineID]
+	m := h.localMachine(r.Target.MachineID)
 	if m == nil { // the machine left the configuration: nothing will answer it
 		b.mu.Lock()
 		b.st.Runs = slices.DeleteFunc(b.st.Runs, func(o *botRun) bool { return o == r })
@@ -209,7 +209,7 @@ func (h *Hub) progressTick(id string) {
 	}
 	defer prog.mu.Unlock()
 	working := false
-	if m := h.byID[r.Target.MachineID]; m != nil {
+	if m := h.localMachine(r.Target.MachineID); m != nil {
 		s, _ := m.session(r.Target.SessionID)
 		working = s.Status == proto.StatusWorking || s.Starting
 	}
@@ -393,7 +393,7 @@ func (h *Hub) checkRun(id string) {
 	if r == nil || prog == nil {
 		return
 	}
-	m := h.byID[r.Target.MachineID]
+	m := h.localMachine(r.Target.MachineID)
 	if m == nil {
 		return
 	}

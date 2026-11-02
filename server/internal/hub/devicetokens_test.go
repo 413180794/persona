@@ -66,6 +66,7 @@ func (s *tokenStore) TouchDeviceToken(context.Context, string) error { return ni
 func call(t *testing.T, h http.Handler, method, path, token, body string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)

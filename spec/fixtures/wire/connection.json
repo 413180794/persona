@@ -1,0 +1,226 @@
+[
+  {
+    "name": "hello_features",
+    "description": "握手携带当前分支的能力列表。",
+    "source": [
+      "server/internal/hub/hello.go: Hub.hello",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode",
+      "docs/protocol.md: 鉴权"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "build": 0,
+      "channel": "",
+      "client_id": "000000000001",
+      "endpoints": [],
+      "features": [
+        "android_update",
+        "error_codes",
+        "client_hello",
+        "heartbeat",
+        "app_ping",
+        "ws_notify",
+        "elicitation",
+        "lock_test",
+        "model_configuration",
+        "client_msg_id",
+        "client_ops",
+        "send_refusals",
+        "screen_dialog",
+        "resumable_interactions",
+        "secret_prompts",
+        "request_id",
+        "terminal_stream",
+        "terminal_control",
+        "terminal_scroll",
+        "terminal_click",
+        "file_upload",
+        "tls",
+        "endpoints",
+        "plugins",
+        "desktops",
+        "sessions_delta",
+        "connectors",
+        "runtime_cli"
+      ],
+      "fp": "",
+      "hub_id": "00000000-0000-4000-8000-000000000001",
+      "hub_name": "家里",
+      "mesh": {
+        "hubs": [
+          {
+            "hub_id": "00000000-0000-4000-8000-000000000001",
+            "name": "家里",
+            "online": true,
+            "self": true,
+            "center": true,
+            "endpoints": []
+          }
+        ]
+      },
+      "min_app_build": 0,
+      "protocol": 1,
+      "server_version": "fixture-version",
+      "tls_port": 0,
+      "type": "hello"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/features": [
+          "android_update",
+          "error_codes",
+          "client_hello",
+          "heartbeat",
+          "app_ping",
+          "ws_notify",
+          "elicitation",
+          "lock_test",
+          "model_configuration",
+          "client_msg_id",
+          "client_ops",
+          "send_refusals",
+          "screen_dialog",
+          "resumable_interactions",
+          "secret_prompts",
+          "request_id",
+          "terminal_stream",
+          "terminal_control",
+          "terminal_scroll",
+          "terminal_click",
+          "file_upload",
+          "tls",
+          "endpoints",
+          "plugins",
+          "desktops",
+          "sessions_delta",
+          "connectors",
+          "runtime_cli"
+        ],
+        "/type": "hello"
+      }
+    }
+  },
+  {
+    "name": "health_features",
+    "description": "健康检查与握手使用同一份能力列表。",
+    "source": [
+      "server/internal/hub/hello.go: Hub.health",
+      "docs/protocol.md: 鉴权"
+    ],
+    "derived": true,
+    "decoder": "health",
+    "input": {
+      "build": 0,
+      "channel": "",
+      "features": [
+        "android_update",
+        "error_codes",
+        "client_hello",
+        "heartbeat",
+        "app_ping",
+        "ws_notify",
+        "elicitation",
+        "lock_test",
+        "model_configuration",
+        "client_msg_id",
+        "client_ops",
+        "send_refusals",
+        "screen_dialog",
+        "resumable_interactions",
+        "secret_prompts",
+        "request_id",
+        "terminal_stream",
+        "terminal_control",
+        "terminal_scroll",
+        "terminal_click",
+        "file_upload",
+        "tls",
+        "endpoints",
+        "plugins",
+        "desktops",
+        "sessions_delta",
+        "connectors",
+        "runtime_cli"
+      ],
+      "fp": "",
+      "hub_id": "00000000-0000-4000-8000-000000000001",
+      "hub_name": "家里",
+      "min_app_build": 0,
+      "ok": true,
+      "protocol": 1,
+      "tls_port": 0,
+      "update": {
+        "confirmed": true
+      },
+      "version": "fixture-version"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/features": [
+          "android_update",
+          "error_codes",
+          "client_hello",
+          "heartbeat",
+          "app_ping",
+          "ws_notify",
+          "elicitation",
+          "lock_test",
+          "model_configuration",
+          "client_msg_id",
+          "client_ops",
+          "send_refusals",
+          "screen_dialog",
+          "resumable_interactions",
+          "secret_prompts",
+          "request_id",
+          "terminal_stream",
+          "terminal_control",
+          "terminal_scroll",
+          "terminal_click",
+          "file_upload",
+          "tls",
+          "endpoints",
+          "plugins",
+          "desktops",
+          "sessions_delta",
+          "connectors",
+          "runtime_cli"
+        ],
+        "/ok": true,
+        "/version": "fixture-version"
+      }
+    }
+  },
+  {
+    "name": "revs_changed_sessions",
+    "description": "版本事件只携带发生变化的会话及其版本。",
+    "source": [
+      "server/internal/hub/machine.go: Machine.onEvent",
+      "apple/JarvisTests/SyncEventTests.swift: decodesRevs"
+    ],
+    "from_test": "SyncEventTests.decodesRevs",
+    "decoder": "event",
+    "input": {
+      "machine_id": "m1",
+      "revs": {
+        "s1": 120,
+        "s2": 7
+      },
+      "type": "revs"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/machine_id": "m1",
+        "/revs": {
+          "s1": 120,
+          "s2": 7
+        },
+        "/type": "revs"
+      }
+    }
+  }
+]

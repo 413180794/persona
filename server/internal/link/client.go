@@ -1,0 +1,865 @@
+package link
+
+import (
+	"bytes"
+	"cmp"
+	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math/rand/v2"
+	"net"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+	"unicode"
+
+	"github.com/coder/websocket"
+)
+
+// These are settings, not measurements.
+const (
+	stagger     = 300 * time.Millisecond // between starting one candidate and the next (docs/link.md「选路」)
+	dialTimeout = 8 * time.Second        // one candidate: TCP, TLS and the WebSocket handshake
+	checkPing   = 3 * time.Second        // a ping after the network changed
+	refusedWait = 5 * time.Minute        // after the hub refused the credential, unless link.json changes
+	replaceWait = 30 * time.Second       // after another jarvis-link of this machine took over
+)
+
+var (
+	errPin    = errors.New("TLS 公钥指纹和配对时的不一样，不是那台 hub")
+	errRedial = errors.New("手动重连")
+)
+
+// Status is what jarvis-link reports: Run hands one to Options.Status every time something changes, and
+// cmd/jarvis-link prints each as a JSON line for the menu bar app.
+type Status struct {
+	// State: unpaired | connecting | connected | waiting | refused; passive mode: unpaired | listening (paired, no
+	// stream from the hub open) | connected (one is) | waiting (cannot listen).
+	State string `json:"state"`
+	// Mode: active (this computer dials the hub) | passive (the hub dials it).
+	Mode    string `json:"mode,omitempty"`
+	Machine string `json:"machine,omitempty"`
+	// HubName: what the hub calls itself, once a hub that says it has (link.json keeps it). MeshHubs, while
+	// connected: how many hubs its mesh has, itself included. Both missing with older hubs.
+	HubName  string `json:"hub_name,omitempty"`
+	MeshHubs int    `json:"mesh_hubs,omitempty"`
+	// connected: the hub URL in use, its kind (lan | ipv6 | name | ipv4) and since when.
+	Address string     `json:"address,omitempty"`
+	Kind    string     `json:"kind,omitempty"`
+	Since   *time.Time `json:"since,omitempty"`
+	// connected: whether the hub got through to the resident node (online | offline | unknown), and why not.
+	Node      string `json:"node,omitempty"`
+	NodeError string `json:"node_error,omitempty"`
+	// waiting, refused: why the last attempt or link failed, and when the next attempt is.
+	Error string     `json:"error,omitempty"`
+	Retry *time.Time `json:"retry,omitempty"`
+	// The candidates, best first; never the credential.
+	Endpoints []Endpoint `json:"endpoints,omitempty"`
+	// Passive mode: where it listens; this computer's addresses the hub may use (best first, host:port); when the hub
+	// last came in and from where; until when a pairing code from `pair --listen` is good. Connected: Address is the
+	// hub's address and Since when its stream opened.
+	Listen      string     `json:"listen,omitempty"`
+	Addrs       []string   `json:"addrs,omitempty"`
+	LastSeen    *time.Time `json:"last_seen,omitempty"`
+	From        string     `json:"from,omitempty"`
+	CodeExpires *time.Time `json:"code_expires,omitempty"`
+}
+
+// Options are what Run needs from its caller.
+type Options struct {
+	Path    string // link.json
+	Target  string // the resident node's socket
+	Version string
+	Status  func(Status)
+	// Check: look at the link now (the network changed). Redial: drop it and connect again.
+	Check, Redial <-chan struct{}
+	Logf          func(string, ...any)
+	// PingEvery, PingTimeout replace the defaults (tests).
+	PingEvery, PingTimeout time.Duration
+	// limiter replaces passive mode's (tests).
+	limiter *authLimiter
+}
+
+// httpError is a refused handshake: 401 / 403 mean the credential is no good, 429 that the hub wants a pause.
+type httpError struct {
+	status int
+	retry  time.Duration
+}
+
+func (e *httpError) Error() string { return "HTTP " + strconv.Itoa(e.status) }
+
+func handshakeError(resp *http.Response, err error) error {
+	if resp == nil || resp.StatusCode == http.StatusSwitchingProtocols {
+		return err
+	}
+	he := &httpError{status: resp.StatusCode}
+	if s, perr := strconv.Atoi(resp.Header.Get("Retry-After")); perr == nil {
+		he.retry = time.Duration(s) * time.Second
+	}
+	return he
+}
+
+// pinned is an HTTP/1.1 client that only talks to the hub whose TLS key hashes to fp. onConn sees each new
+// connection (the link keeps its local address, to tell when the network under it is gone).
+func pinned(fp string, onConn func(net.Conn)) *http.Client {
+	d := &net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: nil,
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				raw, err := d.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				host, _, _ := net.SplitHostPort(addr)
+				cfg := &tls.Config{MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"},
+					InsecureSkipVerify: true, // the pin below is the check
+					VerifyConnection: func(cs tls.ConnectionState) error {
+						if len(cs.PeerCertificates) == 0 {
+							return errPin
+						}
+						sum := sha256.Sum256(cs.PeerCertificates[0].RawSubjectPublicKeyInfo)
+						if base64.RawURLEncoding.EncodeToString(sum[:]) != fp {
+							return errPin
+						}
+						return nil
+					}}
+				if net.ParseIP(host) == nil {
+					cfg.ServerName = host
+				}
+				c := tls.Client(raw, cfg)
+				if err := c.HandshakeContext(ctx); err != nil {
+					raw.Close()
+					return nil, err
+				}
+				if onConn != nil {
+					onConn(raw)
+				}
+				return c, nil
+			},
+			ResponseHeaderTimeout: dialTimeout,
+			MaxIdleConns:          1,
+			IdleConnTimeout:       30 * time.Second,
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
+func wsURL(base, path string) string {
+	return "wss" + strings.TrimPrefix(base, "https") + path
+}
+
+func bearer(token string) http.Header { return http.Header{"Authorization": {"Bearer " + token}} }
+
+// race tries the candidates best first, starting the next one stagger after the previous, and keeps the first that
+// works; drop closes any that succeed after it.
+func race[T any](ctx context.Context, eps []Endpoint, try func(context.Context, Endpoint) (T, error), drop func(T)) (T, Endpoint, error) {
+	eps = ranked(eps)
+	var zero T
+	if len(eps) == 0 {
+		return zero, Endpoint{}, errors.New("没有 hub 的候选地址：重新配对，或用 jarvis-link address add 加一个")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	type result struct {
+		v   T
+		ep  Endpoint
+		err error
+	}
+	results := make(chan result, len(eps))
+	for i, ep := range eps {
+		go func() {
+			select {
+			case <-time.After(time.Duration(i) * stagger):
+			case <-ctx.Done():
+				results <- result{ep: ep, err: ctx.Err()}
+				return
+			}
+			actx, acancel := context.WithTimeout(ctx, dialTimeout)
+			defer acancel()
+			v, err := try(actx, ep)
+			results <- result{v, ep, err}
+		}()
+	}
+	var errs []error
+	for left := len(eps); left > 0; left-- {
+		r := <-results
+		if r.err == nil {
+			go func(n int) {
+				for ; n > 0; n-- {
+					if late := <-results; late.err == nil {
+						drop(late.v)
+					}
+				}
+			}(left - 1)
+			return r.v, r.ep, nil
+		}
+		if !errors.Is(r.err, context.Canceled) {
+			errs = append(errs, &attemptError{r.ep, r.err})
+		}
+	}
+	if len(errs) == 0 { // every attempt was called off: ctx ended (errors.Join of nothing would be no error)
+		return zero, Endpoint{}, cmp.Or(ctx.Err(), context.Canceled)
+	}
+	return zero, Endpoint{}, errors.Join(errs...)
+}
+
+// parsePairLink reads what `jarvisd hub pair` printed: jarvis://link?… (made for one machine) or jarvis://pair?…
+// (the apps' link; then the machine is named on the command line).
+func parsePairLink(raw string) (token string, c Config, err error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "jarvis" || (u.Host != "link" && u.Host != "pair") {
+		return "", c, errors.New("这不是 jarvisd hub pair 给的配对链接（jarvis://link?… 或 jarvis://pair?…）")
+	}
+	q := u.Query()
+	token, c.Hub, c.FP, c.Machine = q.Get("token"), q.Get("hub"), q.Get("fp"), q.Get("machine")
+	if token == "" {
+		return "", c, errors.New("配对链接里没有 token")
+	}
+	port := q.Get("tls")
+	if c.FP == "" || port == "" {
+		return "", c, errors.New("这台 hub 没开 TLS（hub.json 的 public.tls_listen）：电脑链路只走 TLS")
+	}
+	if base, err := url.Parse(q.Get("url")); err == nil && base.Hostname() != "" {
+		u := "https://" + net.JoinHostPort(base.Hostname(), port)
+		c.Endpoints = append(c.Endpoints, Endpoint{URL: u, Kind: kindOf(u)})
+	}
+	for _, alt := range q["alt"] {
+		if e, err := normalize(alt, nil); err == nil {
+			e.Manual = false
+			c.Endpoints = append(c.Endpoints, e)
+		}
+	}
+	if len(c.Endpoints) == 0 {
+		return "", c, errors.New("配对链接里没有 hub 的地址")
+	}
+	return token, c, nil
+}
+
+// Pair redeems a pairing link for this computer's credential and writes link.json. machine names the computer in
+// the hub's hub.json when the link does not carry it; name is how the hub lists the credential.
+func Pair(ctx context.Context, raw, machine, name, path string) (*Config, error) {
+	token, c, err := parsePairLink(raw)
+	if err != nil {
+		return nil, err
+	}
+	if c.Machine != "" && machine != "" && machine != c.Machine {
+		return nil, fmt.Errorf("这条配对链接是给 %q 的，不是 %q", c.Machine, machine)
+	}
+	if c.Machine == "" {
+		c.Machine = machine
+	}
+	if c.Machine == "" {
+		return nil, errors.New("要填这台电脑在 hub 里的机器 id（hub.json 里 kind 为 link 的那台）")
+	}
+	body, _ := json.Marshal(map[string]string{"name": name, "kind": "link", "machine": c.Machine})
+	client := pinned(c.FP, nil)
+	defer client.CloseIdleConnections()
+	type redeemed struct {
+		Token string `json:"token"`
+		Role  string `json:"role"`
+	}
+	got, _, err := race(ctx, c.Endpoints, func(ctx context.Context, ep Endpoint) (redeemed, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep.URL+"/api/v1/auth/tokens", bytes.NewReader(body))
+		if err != nil {
+			return redeemed{}, err
+		}
+		req.Header = bearer(token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			return redeemed{}, err
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		if resp.StatusCode != http.StatusOK {
+			var e struct {
+				Error string `json:"error"`
+			}
+			_ = json.Unmarshal(b, &e)
+			if e.Error == "" {
+				e.Error = resp.Status
+			}
+			return redeemed{}, fmt.Errorf("hub 拒绝了：%s", e.Error)
+		}
+		var out redeemed
+		if err := json.Unmarshal(b, &out); err != nil || out.Token == "" || out.Role != "link" {
+			return redeemed{}, errors.New("hub 没给出链路凭据：升级 hub")
+		}
+		return out, nil
+	}, func(redeemed) {})
+	if err != nil {
+		return nil, fmt.Errorf("配对失败：%w", err)
+	}
+	c.Token = got.Token
+	err = Update(path, func(old *Config) error {
+		var manual []Endpoint
+		if old.Hub == c.Hub {
+			for _, e := range old.Endpoints {
+				if e.Manual {
+					manual = append(manual, e)
+				}
+			}
+		}
+		keep := c
+		keep.Endpoints = append(manual, c.Endpoints...)
+		// Pairing with a hub's link means dialing it; what passive mode had stays for switching back.
+		keep.Mode, keep.Passive = ModeActive, old.Passive
+		*old = keep
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// AddAddress adds a candidate typed on this computer (a domain name, say); RemoveAddress takes one out again.
+func AddAddress(path, raw string) (Endpoint, error) {
+	var added Endpoint
+	err := Update(path, func(c *Config) error {
+		if c.Token == "" {
+			return errors.New("还没配对")
+		}
+		e, err := normalize(raw, c.Endpoints)
+		if err != nil {
+			return err
+		}
+		added = e
+		c.Endpoints = append([]Endpoint{e}, slicesDelete(c.Endpoints, e.URL)...)
+		return nil
+	})
+	return added, err
+}
+
+func RemoveAddress(path, raw string) error {
+	return Update(path, func(c *Config) error {
+		e, err := normalize(raw, c.Endpoints)
+		if err != nil {
+			return err
+		}
+		c.Endpoints = slicesDelete(c.Endpoints, e.URL)
+		return nil
+	})
+}
+
+func slicesDelete(eps []Endpoint, u string) []Endpoint {
+	out := eps[:0:0]
+	for _, e := range eps {
+		if e.URL != u {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// backoff: exponential from 1 s to a minute, each wait randomized down to half so links that broke together do not
+// come back together.
+type backoff struct{ n int }
+
+func (b *backoff) next() time.Duration {
+	d := min(time.Second<<b.n, time.Minute)
+	if d < time.Minute {
+		b.n++
+	}
+	return d/2 + rand.N(d/2+1)
+}
+
+// reporter keeps the status and hands every change to Options.Status, saying which mode it is about.
+type reporter struct {
+	mu   sync.Mutex
+	st   Status
+	out  func(Status)
+	mode string
+}
+
+// switchTo starts reporting about mode.
+func (r *reporter) switchTo(mode string) {
+	r.mu.Lock()
+	r.mode = mode
+	r.mu.Unlock()
+}
+
+func (r *reporter) set(change func(*Status)) {
+	r.mu.Lock()
+	change(&r.st)
+	r.st.Mode = r.mode
+	st := r.st
+	r.mu.Unlock()
+	if r.out != nil {
+		r.out(st)
+	}
+}
+
+// Run keeps this computer reachable from the hub until ctx ends: in active mode by keeping the link to the hub up,
+// in passive mode by listening for it (listen.go). It follows link.json: switched to the other mode (jarvis-link
+// mode, pair, pair --listen), it changes over within a second or two.
+func Run(ctx context.Context, o Options) error {
+	if o.Logf == nil {
+		o.Logf = func(string, ...any) {}
+	}
+	if o.PingEvery <= 0 || o.PingTimeout <= 0 {
+		o.PingEvery, o.PingTimeout = PingEvery, PingTimeout
+	}
+	rep := &reporter{out: o.Status}
+	for ctx.Err() == nil {
+		mode := currentMode(o.Path)
+		mctx, cancel := context.WithCancel(ctx)
+		go watchMode(mctx, o.Path, mode, cancel)
+		if mode == ModePassive {
+			runPassive(mctx, o, rep)
+		} else {
+			runActive(mctx, o, rep)
+		}
+		cancel()
+		if ctx.Err() == nil {
+			o.Logf("mode: %s → %s", mode, currentMode(o.Path))
+		}
+	}
+	return nil
+}
+
+func currentMode(path string) string {
+	c, err := Read(path)
+	if err != nil {
+		return ModeActive
+	}
+	return c.CurrentMode()
+}
+
+// modeCheck is how often Run looks whether link.json switched modes (a setting).
+const modeCheck = time.Second
+
+// watchMode ends the mode being run (cancel) once link.json says another.
+func watchMode(ctx context.Context, path, mode string, cancel context.CancelFunc) {
+	stamp := func() time.Time {
+		if fi, err := os.Stat(path); err == nil {
+			return fi.ModTime()
+		}
+		return time.Time{}
+	}
+	was := stamp()
+	t := time.NewTicker(modeCheck)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			now := stamp()
+			if now.Equal(was) {
+				continue
+			}
+			was = now
+			if currentMode(path) != mode {
+				cancel()
+				return
+			}
+		}
+	}
+}
+
+// runActive keeps the link to the hub up until ctx ends.
+func runActive(ctx context.Context, o Options, rep *reporter) {
+	rep.switchTo(ModeActive)
+	var b backoff
+	for ctx.Err() == nil {
+		c, err := Load(o.Path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				rep.set(func(s *Status) { *s = Status{State: "unpaired"} })
+			} else {
+				rep.set(func(s *Status) { *s = Status{State: "waiting", Error: err.Error()} })
+			}
+			o.wait(ctx, time.Hour)
+			continue
+		}
+		rep.set(func(s *Status) {
+			*s = Status{State: "connecting", Machine: c.Machine, HubName: c.HubName, Endpoints: ranked(c.Endpoints)}
+		})
+		l, err := dial(ctx, c)
+		var end error
+		state := "waiting"
+		if err != nil {
+			end = err
+		} else {
+			start := time.Now()
+			end = l.serve(ctx, c, o, rep)
+			if time.Since(start) > time.Minute {
+				b = backoff{}
+			}
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		wait := b.next()
+		var he *httpError
+		switch {
+		case errors.Is(end, errRedial):
+			b, wait = backoff{}, 0
+		case errors.As(end, &he) && (he.status == http.StatusUnauthorized || he.status == http.StatusForbidden):
+			state, wait = "refused", refusedWait
+			end = errors.New("hub 不认这台的凭据（可能撤销了）：重新配对")
+		case errors.As(end, &he) && he.status == http.StatusTooManyRequests:
+			wait = max(wait, he.retry)
+		case websocket.CloseStatus(end) == CloseReplaced:
+			wait = replaceWait
+			end = errors.New("这台电脑在别处又连了一条链路（同一个凭据开了两个 jarvis-link？）")
+		case websocket.CloseStatus(end) == CloseRevoked:
+			state, wait = "refused", refusedWait
+			end = errors.New("凭据被撤销了：重新配对")
+		}
+		retry := time.Now().Add(wait)
+		o.Logf("link: %v; next attempt in %s", end, wait.Round(time.Second))
+		rep.set(func(s *Status) {
+			*s = Status{State: state, Machine: c.Machine, HubName: c.HubName, Error: summary(end), Retry: &retry,
+				Endpoints: ranked(c.Endpoints)}
+		})
+		o.wait(ctx, wait)
+	}
+}
+
+// wait sleeps up to d, less if the network changed, a reconnect was asked for or link.json changed (paired again,
+// an address added).
+func (o Options) wait(ctx context.Context, d time.Duration) {
+	stamp := func() time.Time {
+		if fi, err := os.Stat(o.Path); err == nil {
+			return fi.ModTime()
+		}
+		return time.Time{}
+	}
+	was := stamp()
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	poll := time.NewTicker(2 * time.Second)
+	defer poll.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			return
+		case <-o.Check:
+			return
+		case <-o.Redial:
+			return
+		case <-poll.C:
+			if !stamp().Equal(was) {
+				return
+			}
+		}
+	}
+}
+
+// attemptError is how one candidate failed in a race.
+type attemptError struct {
+	ep  Endpoint
+	err error
+}
+
+func (e *attemptError) Error() string { return e.ep.URL + ": " + e.err.Error() }
+func (e *attemptError) Unwrap() error { return e.err }
+
+var kindNames = map[string]string{"lan": "内网", "ipv6": "公网 IPv6", "name": "域名", "ipv4": "公网 IPv4"}
+
+// summary says in one line why the link failed, for the menu bar app: per candidate when no candidate worked.
+func summary(err error) string {
+	if err == nil {
+		return ""
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		var parts []string
+		for _, e := range joined.Unwrap() {
+			parts = append(parts, summary(e))
+		}
+		return strings.Join(parts, "；")
+	}
+	var ae *attemptError
+	if errors.As(err, &ae) {
+		host := ae.ep.URL
+		if u, err := url.Parse(ae.ep.URL); err == nil {
+			host = u.Host
+		}
+		return kindNames[ae.ep.Kind] + " " + host + "：" + describe(ae.err)
+	}
+	switch websocket.CloseStatus(err) {
+	case websocket.StatusGoingAway:
+		return "hub 重启了"
+	case CloseRefused:
+		return "hub 不认这台的 hello（机器 id 和凭据对不上）"
+	}
+	return err.Error()
+}
+
+func describe(err error) string {
+	var he *httpError
+	var ne net.Error
+	switch {
+	case errors.As(err, &he):
+		return "hub 回了 " + he.Error()
+	case errors.Is(err, errPin):
+		return errPin.Error()
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &ne) && ne.Timeout():
+		return "超时"
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return "拒绝连接"
+	case errors.Is(err, syscall.EHOSTUNREACH), errors.Is(err, syscall.ENETUNREACH), errors.Is(err, syscall.EADDRNOTAVAIL):
+		return "不可达"
+	}
+	var dns *net.DNSError
+	if errors.As(err, &dns) {
+		return "域名解析不了"
+	}
+	return err.Error()
+}
+
+// link is one live link to the hub.
+type link struct {
+	conn    *websocket.Conn
+	ep      Endpoint
+	local   netip.Addr   // this side's address of the link's TCP connection
+	streams *http.Client // pinned the same way; streams go where the link went
+	token   string
+}
+
+func dial(ctx context.Context, c *Config) (*link, error) {
+	l, ep, err := race(ctx, c.Endpoints, func(ctx context.Context, ep Endpoint) (*link, error) {
+		var local netip.Addr
+		client := pinned(c.FP, func(raw net.Conn) {
+			if a, err := netip.ParseAddrPort(raw.LocalAddr().String()); err == nil {
+				local = a.Addr().Unmap()
+			}
+		})
+		conn, resp, err := websocket.Dial(ctx, wsURL(ep.URL, Path), &websocket.DialOptions{HTTPClient: client, HTTPHeader: bearer(c.Token)})
+		if err != nil {
+			return nil, handshakeError(resp, err)
+		}
+		conn.SetReadLimit(1 << 20)
+		return &link{conn: conn, local: local, streams: pinned(c.FP, nil), token: c.Token}, nil
+	}, func(l *link) { l.conn.CloseNow() })
+	if err != nil {
+		return nil, err
+	}
+	l.ep = ep
+	return l, nil
+}
+
+var streamID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// serve runs the link until it ends and says why.
+func (l *link) serve(ctx context.Context, c *Config, o Options, rep *reporter) error {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	defer l.conn.CloseNow()
+	defer l.streams.CloseIdleConnections()
+	if err := l.send(ctx, Message{Type: "hello", Machine: c.Machine, Version: o.Version, Address: l.ep.URL}); err != nil {
+		return err
+	}
+	since := time.Now()
+	rep.set(func(s *Status) {
+		*s = Status{State: "connected", Machine: c.Machine, HubName: c.HubName, Address: l.ep.URL, Kind: l.ep.Kind, Since: &since,
+			Node: "unknown", Endpoints: ranked(c.Endpoints)}
+	})
+	o.Logf("link: connected to %s (%s)", l.ep.URL, l.ep.Kind)
+	drop := func(err error) {
+		cancel(err)
+		l.conn.CloseNow()
+	}
+	go func() {
+		t := time.NewTicker(o.PingEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if err := l.ping(ctx, o.PingTimeout); err != nil && ctx.Err() == nil {
+					drop(fmt.Errorf("hub 没有回应心跳：%w", err))
+					return
+				}
+			case <-o.Check:
+				if l.localGone() {
+					drop(errors.New("网络变了，原来的地址已经不在"))
+					return
+				}
+				if err := l.ping(ctx, checkPing); err != nil && ctx.Err() == nil {
+					drop(fmt.Errorf("网络变了以后 hub 没有回应：%w", err))
+					return
+				}
+			case <-o.Redial:
+				cancel(errRedial)
+				_ = l.conn.Close(websocket.StatusNormalClosure, "reconnect")
+				return
+			}
+		}
+	}()
+	for {
+		_, data, err := l.conn.Read(ctx)
+		if err != nil {
+			if cause := context.Cause(ctx); cause != nil && !errors.Is(cause, context.Canceled) {
+				return cause
+			}
+			return err
+		}
+		var m Message
+		if json.Unmarshal(data, &m) != nil {
+			continue
+		}
+		switch m.Type {
+		case "endpoints":
+			l.endpoints(m, c, o, rep)
+		case "node":
+			rep.set(func(s *Status) {
+				s.Node, s.NodeError = "offline", m.Error
+				if m.Online {
+					s.Node, s.NodeError = "online", ""
+				}
+			})
+		case "open":
+			if !streamID.MatchString(m.ID) {
+				continue
+			}
+			go func(id string) {
+				if err := l.forward(ctx, id, o.Target); err != nil {
+					o.Logf("link: stream %s: %v", id, err)
+					_ = l.send(ctx, Message{Type: "open_failed", ID: id, Error: err.Error()})
+					rep.set(func(s *Status) { s.Node, s.NodeError = "offline", err.Error() })
+				}
+			}(m.ID)
+		}
+	}
+}
+
+// endpoints takes in what the hub says about where it is and who it is: link.json keeps the candidates (the ones added
+// here stay) and the hub's name; the mesh size is only shown while connected.
+func (l *link) endpoints(m Message, c *Config, o Options, rep *reporter) {
+	name := clipName(m.HubName)
+	if len(m.Endpoints) > 0 || (name != "" && name != c.HubName) {
+		var eps []Endpoint
+		err := Update(o.Path, func(f *Config) error {
+			if f.Token != c.Token {
+				return errors.New("paired again meanwhile")
+			}
+			if name != "" {
+				f.HubName = name
+			}
+			if len(m.Endpoints) > 0 {
+				var manual []Endpoint
+				for _, e := range f.Endpoints {
+					if e.Manual {
+						manual = append(manual, e)
+					}
+				}
+				hub := make([]Endpoint, 0, len(m.Endpoints))
+				for _, e := range m.Endpoints {
+					if strings.HasPrefix(e.URL, "https://") {
+						hub = append(hub, Endpoint{URL: e.URL, Kind: e.Kind})
+					}
+				}
+				f.Endpoints = append(manual, hub...)
+			}
+			eps = f.Endpoints
+			return nil
+		})
+		if err != nil {
+			return
+		}
+		c.Endpoints = eps
+		if name != "" {
+			c.HubName = name
+		}
+	}
+	rep.set(func(s *Status) {
+		s.Endpoints = ranked(c.Endpoints)
+		s.HubName = c.HubName
+		if m.MeshHubs > 0 {
+			s.MeshHubs = min(m.MeshHubs, 999)
+		}
+	})
+}
+
+// clipName keeps a hub's name to one short line of printable text: it is shown in a menu and a terminal.
+func clipName(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > 80 {
+		s = string(r[:80])
+	}
+	return s
+}
+
+func (l *link) send(ctx context.Context, m Message) error {
+	b, _ := json.Marshal(m)
+	ctx, cancel := context.WithTimeout(ctx, PingTimeout)
+	defer cancel()
+	return l.conn.Write(ctx, websocket.MessageText, b)
+}
+
+func (l *link) ping(ctx context.Context, d time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, d)
+	defer cancel()
+	return l.conn.Ping(ctx)
+}
+
+// localGone: the address the link's TCP connection left from is no longer on this computer (another network).
+func (l *link) localGone() bool {
+	if !l.local.IsValid() {
+		return false
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, a := range addrs {
+		if p, err := netip.ParsePrefix(a.String()); err == nil && p.Addr().Unmap().WithZone("") == l.local.WithZone("") {
+			return false
+		}
+	}
+	return true
+}
+
+// forward joins stream id to the resident node: nothing else, and nowhere else (docs/link.md「转发」). It returns an
+// error only when the stream could not be opened; once bytes flow, its end is the node's or the hub's business.
+func (l *link) forward(ctx context.Context, id, target string) error {
+	node, err := net.DialTimeout("unix", target, 2*time.Second)
+	if err != nil {
+		return fmt.Errorf("本机的常驻 node 没在运行（%s 连不上）：让 jarvisd node --attach 一直跑（scripts/node-launchd.sh install）", target)
+	}
+	defer node.Close()
+	dctx, dcancel := context.WithTimeout(ctx, dialTimeout) // the handshake only: the stream lives as long as the link
+	defer dcancel()
+	ws, resp, err := websocket.Dial(dctx, wsURL(l.ep.URL, StreamPath+"?id="+id), &websocket.DialOptions{
+		HTTPClient: l.streams, HTTPHeader: bearer(l.token), CompressionMode: websocket.CompressionContextTakeover})
+	if err != nil {
+		return fmt.Errorf("开不了流：%w", handshakeError(resp, err))
+	}
+	nc := websocket.NetConn(ctx, ws, websocket.MessageBinary)
+	defer nc.Close()
+	// hub -> node: when the hub ends the stream, half-close so the node sees EOF and finishes. node -> hub decides
+	// when the stream is over, as node.Relay does: everything the node wrote must reach the hub.
+	go func() {
+		_, _ = io.Copy(node, nc)
+		if u, ok := node.(*net.UnixConn); ok {
+			_ = u.CloseWrite()
+		}
+	}()
+	_, _ = io.Copy(nc, node)
+	return nil
+}

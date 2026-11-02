@@ -21,14 +21,25 @@ import (
 // the thread's name in the terminal title ("<name> | <directory>"), which says which thread the pane shows now; the
 // newest unclaimed rollout in the pane's directory is only the last resort (2026-10-31: five Codex panes in one
 // repository, four of them showed another pane's thread, and the one at work looked idle).
+//
+// Subagents write rollouts of their own next to the conversation, in the same directory: Codex's thread_spawn helpers
+// and TRAEX's guardian, which reviews each tool call before it runs. A pane never shows one: they are skipped when
+// guessing, and a subagent's id maps to the conversation it belongs to (rolloutMeta).
 
 const codexWindow = 14 * 24 * time.Hour
 
 type codexRollout struct {
 	id    string
 	path  string
-	cwd   string
 	mtime time.Time
+	rolloutMeta
+}
+
+// rolloutMeta is what a rollout's first line (session_meta) says about its thread.
+type rolloutMeta struct {
+	cwd  string
+	sub  bool   // a subagent: thread_source "subagent", or a source of {"subagent": …}
+	root string // the conversation a subagent belongs to (session_id, else parent_thread_id); "" when not given
 }
 
 // rolloutCache is one rollout home's scan (Codex: ~/.codex, TRAEX: ~/.trae/cli — the same layout).
@@ -37,7 +48,7 @@ type rolloutCache struct {
 	rollouts []codexRollout
 	older    []string // rollouts in day directories before the window, listed once a minute
 	olderAt  time.Time
-	cwds     map[string]string // path → cwd (never changes once written)
+	metas    map[string]rolloutMeta // path → its session_meta (never changes once written)
 	titles   map[string]string
 	titlesAt time.Time
 }
@@ -52,13 +63,23 @@ var rolloutIDRe = regexp.MustCompile(`([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 func (n *Node) codexHome() string { return filepath.Join(n.home, ".codex") }
 
 func (n *Node) codexRollouts() []codexRollout { return rollouts(n.codexHome()) }
-func (n *Node) codexPath(id string) string { if s,ok:=n.codexSource(id);ok{return rolloutPath(s.home,s.thread)};return rolloutPath(n.codexHome(),id) }
-func (n *Node) codexTitle(id string) string { if s,ok:=n.codexSource(id);ok{return threadTitle(s.home,s.thread)};return threadTitle(n.codexHome(),id) }
+func (n *Node) codexPath(id string) string {
+	if s, ok := n.codexSource(id); ok {
+		return rolloutPath(s.home, s.thread)
+	}
+	return rolloutPath(n.codexHome(), id)
+}
+func (n *Node) codexTitle(id string) string {
+	if s, ok := n.codexSource(id); ok {
+		return threadTitle(s.home, s.thread)
+	}
+	return threadTitle(n.codexHome(), id)
+}
 
 func cacheFor(home string) *rolloutCache {
 	c := rolloutCaches.byHome[home]
 	if c == nil {
-		c = &rolloutCache{cwds: map[string]string{}}
+		c = &rolloutCache{metas: map[string]rolloutMeta{}}
 		rolloutCaches.byHome[home] = c
 	}
 	return c
@@ -87,7 +108,7 @@ func rollouts(home string) []codexRollout {
 	}
 	if now.Sub(c.olderAt) > time.Minute {
 		all, _ := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*.jsonl"))
-		archived, _ := filepath.Glob(filepath.Join(home,"archived_sessions","rollout-*.jsonl"))
+		archived, _ := filepath.Glob(filepath.Join(home, "archived_sessions", "rollout-*.jsonl"))
 		all = append(all, archived...)
 		c.older = c.older[:0]
 		for _, p := range all {
@@ -106,23 +127,23 @@ func rollouts(home string) []codexRollout {
 		if m == nil || err != nil || (i >= firstOlder && now.Sub(st.ModTime()) > codexWindow) {
 			continue
 		}
-		cwd, ok := c.cwds[p]
+		meta, ok := c.metas[p]
 		if !ok {
-			cwd = rolloutCwd(p)
-			c.cwds[p] = cwd
+			meta = readRolloutMeta(p)
+			c.metas[p] = meta
 		}
-		out = append(out, codexRollout{id: m[1], path: p, cwd: cwd, mtime: st.ModTime()})
+		out = append(out, codexRollout{id: m[1], path: p, mtime: st.ModTime(), rolloutMeta: meta})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].mtime.After(out[j].mtime) })
 	c.rollouts, c.at = out, now
 	return out
 }
 
-// rolloutCwd reads the working directory from a rollout's first line (session_meta, tens of KB of instructions).
-func rolloutCwd(path string) string {
+// readRolloutMeta reads a rollout's first line (session_meta, tens of KB of instructions).
+func readRolloutMeta(path string) rolloutMeta {
 	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return rolloutMeta{}
 	}
 	defer f.Close()
 	r := bufio.NewReaderSize(f, 256<<10)
@@ -130,13 +151,57 @@ func rolloutCwd(path string) string {
 	var l struct {
 		Type    string `json:"type"`
 		Payload struct {
-			Cwd string `json:"cwd"`
+			ID           string          `json:"id"`
+			Cwd          string          `json:"cwd"`
+			SessionID    string          `json:"session_id"`
+			ParentThread string          `json:"parent_thread_id"`
+			ThreadSource string          `json:"thread_source"`
+			Source       json.RawMessage `json:"source"`
 		} `json:"payload"`
 	}
 	if json.Unmarshal(line, &l) != nil || l.Type != "session_meta" {
-		return ""
+		return rolloutMeta{}
 	}
-	return l.Payload.Cwd
+	p := l.Payload
+	m := rolloutMeta{cwd: p.Cwd}
+	var source map[string]json.RawMessage
+	m.sub = p.ThreadSource == "subagent" || (json.Unmarshal(p.Source, &source) == nil && source["subagent"] != nil)
+	if m.sub {
+		for _, id := range []string{p.SessionID, p.ParentThread} {
+			if id != "" && id != p.ID {
+				m.root = id
+				break
+			}
+		}
+	}
+	return m
+}
+
+// metaOf is a rollout's session_meta, read once (rollouts older than the scan window are read on demand).
+func metaOf(home, path string) rolloutMeta {
+	rolloutCaches.Lock()
+	m, ok := cacheFor(home).metas[path]
+	rolloutCaches.Unlock()
+	if ok {
+		return m
+	}
+	m = readRolloutMeta(path)
+	rolloutCaches.Lock()
+	cacheFor(home).metas[path] = m
+	rolloutCaches.Unlock()
+	return m
+}
+
+// mainThread maps a subagent's thread to the conversation it belongs to; any other thread maps to itself.
+func mainThread(home, id string) string {
+	p := rolloutPath(home, id)
+	if p == "" {
+		return id
+	}
+	if m := metaOf(home, p); m.sub && m.root != "" && rolloutPath(home, m.root) != "" {
+		return m.root
+	}
+	return id
 }
 
 // rolloutPath finds a session's rollout under a home by id.
@@ -150,14 +215,17 @@ func rolloutPath(home, id string) string {
 		return ""
 	}
 	matches, _ := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
-	if len(matches) == 0 { matches,_ = filepath.Glob(filepath.Join(home,"archived_sessions","rollout-*-"+id+".jsonl")) }
+	if len(matches) == 0 {
+		matches, _ = filepath.Glob(filepath.Join(home, "archived_sessions", "rollout-*-"+id+".jsonl"))
+	}
 	if len(matches) == 0 {
 		return ""
 	}
 	return newestFirst(matches)[0]
 }
 
-// codexSession picks the rollout of a Codex pane herdr could not identify: the newest in its directory not taken.
+// codexSession picks the rollout of a Codex pane herdr could not identify: the newest conversation in its directory
+// not taken (a subagent's rollout there is newer than its conversation's, but never what the pane runs).
 func (n *Node) codexSession(a host.Agent, taken map[string]host.Agent) string {
 	cwd := a.ForegroundCwd
 	if cwd == "" {
@@ -165,8 +233,8 @@ func (n *Node) codexSession(a host.Agent, taken map[string]host.Agent) string {
 	}
 	home := n.codexPaneHome(a.PaneID)
 	for _, r := range rollouts(home) {
-		id := n.codexPublicID(home,r.id)
-		if _, used := taken[id]; !used && r.cwd != "" && (r.cwd == cwd || r.cwd == a.Cwd) {
+		id := n.codexPublicID(home, r.id)
+		if _, used := taken[id]; !used && !r.sub && r.cwd != "" && (r.cwd == cwd || r.cwd == a.Cwd) {
 			return id
 		}
 	}
@@ -187,13 +255,16 @@ func (n *Node) codexByTitle(a host.Agent, prefer string, taken map[string]host.A
 	var best string
 	var bestAt time.Time
 	for _, id := range threadsNamed(home, func(t string) bool { return t == name || (cut != name && strings.HasPrefix(t, cut)) }) {
-		if _, used := taken[n.codexPublicID(home,id)]; used {
+		if _, used := taken[n.codexPublicID(home, id)]; used {
 			continue
+		}
+		p := rolloutPath(home, id)
+		if p != "" && metaOf(home, p).sub {
+			continue // a pane shows its conversation, never a subagent's thread
 		}
 		if id == prefer {
 			return id
 		}
-		p := rolloutPath(home, id)
 		if p == "" {
 			continue
 		}

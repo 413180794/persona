@@ -413,7 +413,7 @@ func (h *Hub) drainRelays(m *Machine, list []proto.Session) {
 // assistantConversation finds an assistant conversation by full id or prefix on the assistant's machine.
 func (h *Hub) assistantConversation(ctx context.Context, id string) (*Machine, proto.Session, error) {
 	cfg := h.assistantConfig(ctx)
-	m := h.byID[cfg.MachineID]
+	m := h.localMachine(cfg.MachineID)
 	if m == nil {
 		return nil, proto.Session{}, errors.New("the assistant's machine is not configured")
 	}

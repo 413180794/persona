@@ -1,0 +1,1209 @@
+{
+  "schema_version": 1,
+  "domain": "lines",
+  "cases": [
+    {
+      "name": "task_notices_find_calls",
+      "description": "通知通过调用标识或后台任务标识回配调用，并生成中文结果和徽标。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/TaskNoteTests.swift: noticesFindTheirCalls"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "b",
+            "tool_name": "Bash",
+            "ts": "2026-01-01T00:01:00Z",
+            "tool_input": {
+              "command": "example-test",
+              "description": "跑单元测试"
+            }
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "user",
+            "kind": "tool_result",
+            "text": "Command running in background with ID: background_a. Output is being written to: /home/user/project/output.txt",
+            "tool_use_id": "b"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "m",
+            "tool_name": "Monitor",
+            "ts": "2026-01-01T00:03:00Z",
+            "tool_input": {
+              "command": "example-check",
+              "description": "等 CI"
+            }
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "user",
+            "kind": "tool_result",
+            "text": "Monitor started (task monitor_a, timeout 600000ms). You will be notified.",
+            "tool_use_id": "m"
+          },
+          {
+            "id": "5#0",
+            "seq": 5,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "q",
+            "tool_name": "Bash",
+            "ts": "2026-01-01T00:05:00Z"
+          },
+          {
+            "id": "6#0",
+            "seq": 6,
+            "role": "user",
+            "kind": "tool_result",
+            "text": "ok",
+            "tool_use_id": "q"
+          },
+          {
+            "id": "7#0",
+            "seq": 7,
+            "role": "system",
+            "kind": "notice",
+            "text": "示例进度",
+            "ts": "2026-01-01T00:07:00Z",
+            "task": {
+              "kind": "monitor",
+              "status": "event",
+              "title": "t",
+              "task_id": "monitor_a",
+              "detail": "3/5"
+            }
+          },
+          {
+            "id": "8#0",
+            "seq": 8,
+            "role": "system",
+            "kind": "notice",
+            "text": "示例任务失败",
+            "ts": "2026-01-01T00:08:00Z",
+            "task": {
+              "kind": "shell",
+              "status": "failed",
+              "title": "t",
+              "tool_use_id": "b",
+              "exit_code": 1
+            }
+          },
+          {
+            "id": "9#0",
+            "seq": 9,
+            "role": "system",
+            "kind": "notice",
+            "text": "示例监控结束",
+            "ts": "2026-01-01T00:09:00Z",
+            "task": {
+              "kind": "monitor",
+              "status": "ended",
+              "title": "t",
+              "task_id": "monitor_a"
+            }
+          }
+        ],
+        "open_work": [
+          "w-tools-1#0"
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "contains_fold": false,
+            "duration_text": "8 分",
+            "elapsed_seconds": 480,
+            "end": "2026-01-01T00:09:00Z",
+            "id": "w-tools-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": true,
+            "start": "2026-01-01T00:01:00Z",
+            "steps": [
+              {
+                "background_badge": {
+                  "failed": true,
+                  "text": "后台 · 失败"
+                },
+                "call_id": "b",
+                "failed": false,
+                "id": "1#0",
+                "image_count": 0,
+                "name": "Bash",
+                "result_id": "2#0",
+                "result_text": "Command running in background with ID: background_a. Output is being written to: /home/user/project/output.txt",
+                "running": false,
+                "type": "tool"
+              },
+              {
+                "background_badge": {
+                  "failed": false,
+                  "text": "后台 · 已结束 · 1 个事件"
+                },
+                "call_id": "m",
+                "failed": false,
+                "id": "3#0",
+                "image_count": 0,
+                "name": "Monitor",
+                "result_id": "4#0",
+                "result_text": "Monitor started (task monitor_a, timeout 600000ms). You will be notified.",
+                "running": false,
+                "type": "tool"
+              },
+              {
+                "call_id": "q",
+                "failed": false,
+                "id": "5#0",
+                "image_count": 0,
+                "name": "Bash",
+                "result_id": "6#0",
+                "result_text": "ok",
+                "running": false,
+                "type": "tool"
+              },
+              {
+                "id": "7#0",
+                "task_note": {
+                  "call_id": "m",
+                  "failed": false,
+                  "label": "Monitor 事件",
+                  "outcome": null,
+                  "subject": "3/5"
+                },
+                "text": "示例进度",
+                "type": "task_note"
+              },
+              {
+                "id": "8#0",
+                "task_note": {
+                  "call_id": "b",
+                  "failed": true,
+                  "label": "后台命令",
+                  "outcome": "✗ 退出码 1 · 7 分",
+                  "subject": "跑单元测试"
+                },
+                "text": "示例任务失败",
+                "type": "task_note"
+              },
+              {
+                "id": "9#0",
+                "task_note": {
+                  "call_id": "m",
+                  "failed": false,
+                  "label": "Monitor 结束",
+                  "outcome": "✓ · 6 分",
+                  "subject": "等 CI"
+                },
+                "text": "示例监控结束",
+                "type": "task_note"
+              }
+            ],
+            "summary_full": [
+              "工具 3"
+            ],
+            "summary_short": [
+              "工具 3"
+            ],
+            "thoughts": 0,
+            "tools": 3,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "first": true,
+            "group_id": "w-tools-1#0",
+            "id": "w-tools-1#0/1#0",
+            "is_input": false,
+            "separator_before": false,
+            "step": {
+              "background_badge": {
+                "failed": true,
+                "text": "后台 · 失败"
+              },
+              "call_id": "b",
+              "failed": false,
+              "id": "1#0",
+              "image_count": 0,
+              "name": "Bash",
+              "result_id": "2#0",
+              "result_text": "Command running in background with ID: background_a. Output is being written to: /home/user/project/output.txt",
+              "running": false,
+              "type": "tool"
+            },
+            "type": "work_step"
+          },
+          {
+            "first": false,
+            "group_id": "w-tools-1#0",
+            "id": "w-tools-1#0/3#0",
+            "is_input": false,
+            "separator_before": true,
+            "step": {
+              "background_badge": {
+                "failed": false,
+                "text": "后台 · 已结束 · 1 个事件"
+              },
+              "call_id": "m",
+              "failed": false,
+              "id": "3#0",
+              "image_count": 0,
+              "name": "Monitor",
+              "result_id": "4#0",
+              "result_text": "Monitor started (task monitor_a, timeout 600000ms). You will be notified.",
+              "running": false,
+              "type": "tool"
+            },
+            "type": "work_step"
+          },
+          {
+            "first": false,
+            "group_id": "w-tools-1#0",
+            "id": "w-tools-1#0/5#0",
+            "is_input": false,
+            "separator_before": true,
+            "step": {
+              "call_id": "q",
+              "failed": false,
+              "id": "5#0",
+              "image_count": 0,
+              "name": "Bash",
+              "result_id": "6#0",
+              "result_text": "ok",
+              "running": false,
+              "type": "tool"
+            },
+            "type": "work_step"
+          },
+          {
+            "first": false,
+            "group_id": "w-tools-1#0",
+            "id": "w-tools-1#0/7#0",
+            "is_input": false,
+            "separator_before": true,
+            "step": {
+              "id": "7#0",
+              "task_note": {
+                "call_id": "m",
+                "failed": false,
+                "label": "Monitor 事件",
+                "outcome": null,
+                "subject": "3/5"
+              },
+              "text": "示例进度",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "first": false,
+            "group_id": "w-tools-1#0",
+            "id": "w-tools-1#0/8#0",
+            "is_input": false,
+            "separator_before": true,
+            "step": {
+              "id": "8#0",
+              "task_note": {
+                "call_id": "b",
+                "failed": true,
+                "label": "后台命令",
+                "outcome": "✗ 退出码 1 · 7 分",
+                "subject": "跑单元测试"
+              },
+              "text": "示例任务失败",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "first": false,
+            "group_id": "w-tools-1#0",
+            "id": "w-tools-1#0/9#0",
+            "is_input": false,
+            "separator_before": true,
+            "step": {
+              "id": "9#0",
+              "task_note": {
+                "call_id": "m",
+                "failed": false,
+                "label": "Monitor 结束",
+                "outcome": "✓ · 6 分",
+                "subject": "等 CI"
+              },
+              "text": "示例监控结束",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "count": 6,
+            "group_id": "w-tools-1#0",
+            "id": "w-tools-1#0-end",
+            "is_input": false,
+            "separator_before": true,
+            "type": "work_end"
+          }
+        ],
+        "task_index": {
+          "calls": {
+            "7#0": "m",
+            "8#0": "b",
+            "9#0": "m"
+          },
+          "descriptions": {
+            "b": "跑单元测试",
+            "m": "等 CI"
+          },
+          "started": [
+            "b",
+            "m"
+          ],
+          "started_at": {
+            "b": "2026-01-01T00:01:00Z",
+            "m": "2026-01-01T00:03:00Z"
+          },
+          "statuses": {
+            "b": [
+              "failed"
+            ],
+            "m": [
+              "event",
+              "ended"
+            ]
+          }
+        },
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": null,
+            "end": "2026-01-01T00:09:00Z",
+            "id": "tools-1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "tools-1#0",
+              "7#0",
+              "8#0",
+              "9#0"
+            ],
+            "process_ids": [
+              "tools-1#0",
+              "7#0",
+              "8#0",
+              "9#0"
+            ],
+            "start": "2026-01-01T00:01:00Z",
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 3,
+            "trailing_ids": [],
+            "user_ids": [],
+            "wake_ids": []
+          }
+        ]
+      },
+      "from_test": "noticesFindTheirCalls"
+    },
+    {
+      "name": "task_title_containing_interrupt_is_not_interrupt",
+      "description": "任务标题含中断字样也不作为用户中断通知。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/TaskNoteTests.swift: aNoticeAboutAnInterruptIsNotTheInterrupt"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "go"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "system",
+            "kind": "notice",
+            "text": "后台命令完成 · 检查中断恢复",
+            "task": {
+              "kind": "shell",
+              "status": "completed",
+              "title": "检查中断恢复"
+            }
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "assistant",
+            "kind": "text",
+            "text": "done"
+          }
+        ],
+        "open_work": [
+          "w-1#0"
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "go",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": true,
+            "start": null,
+            "steps": [
+              {
+                "id": "3#0",
+                "task_note": {
+                  "call_id": null,
+                  "failed": false,
+                  "label": "后台命令",
+                  "outcome": "✓",
+                  "subject": "检查中断恢复"
+                },
+                "text": "后台命令完成 · 检查中断恢复",
+                "type": "task_note"
+              }
+            ],
+            "summary_full": [
+              "后台通知 1"
+            ],
+            "summary_short": [
+              "后台通知 1"
+            ],
+            "thoughts": 0,
+            "tools": 0,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "first": true,
+            "group_id": "w-1#0",
+            "id": "w-1#0/3#0",
+            "is_input": false,
+            "separator_before": false,
+            "step": {
+              "id": "3#0",
+              "task_note": {
+                "call_id": null,
+                "failed": false,
+                "label": "后台命令",
+                "outcome": "✓",
+                "subject": "检查中断恢复"
+              },
+              "text": "后台命令完成 · 检查中断恢复",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "count": 1,
+            "group_id": "w-1#0",
+            "id": "w-1#0-end",
+            "is_input": false,
+            "separator_before": true,
+            "type": "work_end"
+          },
+          {
+            "id": "4#0",
+            "is_input": false,
+            "text": "done",
+            "type": "reply"
+          }
+        ],
+        "task_index": {
+          "calls": {},
+          "descriptions": {},
+          "started": [],
+          "started_at": {},
+          "statuses": {}
+        },
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "4#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "3#0",
+              "4#0"
+            ],
+            "process_ids": [
+              "3#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "from_test": "aNoticeAboutAnInterruptIsNotTheInterrupt"
+    },
+    {
+      "name": "monitor_event_uses_first_detail_line",
+      "description": "监控事件优先用详情首个非空行作主题。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TaskNoteRow.swift: TaskNoteText.subject / TaskNoteRow",
+        "ios/JarvisTests/TaskNoteTests.swift: noticesFindTheirCalls"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "system",
+            "kind": "notice",
+            "text": "示例进度",
+            "task": {
+              "kind": "monitor",
+              "status": "event",
+              "title": "等 CI",
+              "detail": "\nbuild: 3/5 passed\nmore"
+            }
+          }
+        ],
+        "open_work": [
+          "w-1#0"
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": true,
+            "start": null,
+            "steps": [
+              {
+                "id": "1#0",
+                "task_note": {
+                  "call_id": null,
+                  "failed": false,
+                  "label": "Monitor 事件",
+                  "outcome": null,
+                  "subject": "build: 3/5 passed"
+                },
+                "text": "示例进度",
+                "type": "task_note"
+              }
+            ],
+            "summary_full": [
+              "后台通知 1"
+            ],
+            "summary_short": [
+              "后台通知 1"
+            ],
+            "thoughts": 0,
+            "tools": 0,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "first": true,
+            "group_id": "w-1#0",
+            "id": "w-1#0/1#0",
+            "is_input": false,
+            "separator_before": false,
+            "step": {
+              "id": "1#0",
+              "task_note": {
+                "call_id": null,
+                "failed": false,
+                "label": "Monitor 事件",
+                "outcome": null,
+                "subject": "build: 3/5 passed"
+              },
+              "text": "示例进度",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "count": 1,
+            "group_id": "w-1#0",
+            "id": "w-1#0-end",
+            "is_input": false,
+            "separator_before": true,
+            "type": "work_end"
+          }
+        ],
+        "task_index": {
+          "calls": {},
+          "descriptions": {},
+          "started": [],
+          "started_at": {},
+          "statuses": {}
+        },
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": null,
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0"
+            ],
+            "process_ids": [
+              "1#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "task_without_loaded_call_uses_title",
+      "description": "发起调用不在窗口时，任务通知使用自身标题且不推断耗时。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "system",
+            "kind": "notice",
+            "text": "示例后台任务失败",
+            "task": {
+              "kind": "shell",
+              "status": "failed",
+              "title": "example-test --unit",
+              "tool_use_id": "not_loaded",
+              "exit_code": 2
+            }
+          }
+        ],
+        "open_work": [
+          "w-1#0"
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": true,
+            "start": null,
+            "steps": [
+              {
+                "id": "1#0",
+                "task_note": {
+                  "call_id": "not_loaded",
+                  "failed": true,
+                  "label": "后台命令",
+                  "outcome": "✗ 退出码 2",
+                  "subject": "example-test --unit"
+                },
+                "text": "示例后台任务失败",
+                "type": "task_note"
+              }
+            ],
+            "summary_full": [
+              "后台通知 1"
+            ],
+            "summary_short": [
+              "后台通知 1"
+            ],
+            "thoughts": 0,
+            "tools": 0,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "first": true,
+            "group_id": "w-1#0",
+            "id": "w-1#0/1#0",
+            "is_input": false,
+            "separator_before": false,
+            "step": {
+              "id": "1#0",
+              "task_note": {
+                "call_id": "not_loaded",
+                "failed": true,
+                "label": "后台命令",
+                "outcome": "✗ 退出码 2",
+                "subject": "example-test --unit"
+              },
+              "text": "示例后台任务失败",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "count": 1,
+            "group_id": "w-1#0",
+            "id": "w-1#0-end",
+            "is_input": false,
+            "separator_before": true,
+            "type": "work_end"
+          }
+        ],
+        "task_index": {
+          "calls": {
+            "1#0": "not_loaded"
+          },
+          "descriptions": {},
+          "started": [],
+          "started_at": {},
+          "statuses": {
+            "not_loaded": [
+              "failed"
+            ]
+          }
+        },
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": null,
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0"
+            ],
+            "process_ids": [
+              "1#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "background_running_badge",
+      "description": "后台调用尚未收到通知时保留运行中徽标。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "call_a",
+            "tool_name": "Bash",
+            "tool_input": {
+              "description": "检查示例文件"
+            }
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "user",
+            "kind": "tool_result",
+            "text": "Command running in background with ID: background_a. Output is being written to: /home/user/project/output.txt",
+            "tool_use_id": "call_a"
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": false,
+            "start": null,
+            "steps": [
+              {
+                "background_badge": {
+                  "failed": false,
+                  "text": "后台 · 运行中"
+                },
+                "call_id": "call_a",
+                "failed": false,
+                "id": "2#0",
+                "image_count": 0,
+                "name": "Bash",
+                "result_id": "3#0",
+                "result_text": "Command running in background with ID: background_a. Output is being written to: /home/user/project/output.txt",
+                "running": false,
+                "type": "tool"
+              }
+            ],
+            "summary_full": [
+              "工具 1"
+            ],
+            "summary_short": [
+              "工具 1"
+            ],
+            "thoughts": 0,
+            "tools": 1,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "id": "4#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "4#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "tools-2#0",
+              "4#0"
+            ],
+            "process_ids": [
+              "tools-2#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 1,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "task_status_outcomes",
+      "description": "后台任务的停止、等待和非零退出码使用各自结果文案。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "system",
+            "kind": "notice",
+            "text": "已停止",
+            "task": {
+              "kind": "shell",
+              "status": "killed",
+              "title": "示例任务甲"
+            }
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "system",
+            "kind": "notice",
+            "text": "等待中",
+            "task": {
+              "kind": "task",
+              "status": "waiting",
+              "title": "示例任务乙"
+            }
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "system",
+            "kind": "notice",
+            "text": "退出",
+            "task": {
+              "kind": "agent",
+              "title": "示例子任务",
+              "exit_code": 2
+            }
+          },
+          {
+            "id": "5#0",
+            "seq": 5,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          }
+        ],
+        "open_work": [
+          "w-1#0"
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": true,
+            "start": null,
+            "steps": [
+              {
+                "id": "2#0",
+                "task_note": {
+                  "call_id": null,
+                  "failed": false,
+                  "label": "后台命令",
+                  "outcome": "已停止",
+                  "subject": "示例任务甲"
+                },
+                "text": "已停止",
+                "type": "task_note"
+              },
+              {
+                "id": "3#0",
+                "task_note": {
+                  "call_id": null,
+                  "failed": false,
+                  "label": "后台任务",
+                  "outcome": "等待中",
+                  "subject": "示例任务乙"
+                },
+                "text": "等待中",
+                "type": "task_note"
+              },
+              {
+                "id": "4#0",
+                "task_note": {
+                  "call_id": null,
+                  "failed": true,
+                  "label": "子 Agent",
+                  "outcome": "✗ 退出码 2",
+                  "subject": "示例子任务"
+                },
+                "text": "退出",
+                "type": "task_note"
+              }
+            ],
+            "summary_full": [
+              "后台通知 3"
+            ],
+            "summary_short": [
+              "后台通知 3"
+            ],
+            "thoughts": 0,
+            "tools": 0,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "first": true,
+            "group_id": "w-1#0",
+            "id": "w-1#0/2#0",
+            "is_input": false,
+            "separator_before": false,
+            "step": {
+              "id": "2#0",
+              "task_note": {
+                "call_id": null,
+                "failed": false,
+                "label": "后台命令",
+                "outcome": "已停止",
+                "subject": "示例任务甲"
+              },
+              "text": "已停止",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "first": false,
+            "group_id": "w-1#0",
+            "id": "w-1#0/3#0",
+            "is_input": false,
+            "separator_before": true,
+            "step": {
+              "id": "3#0",
+              "task_note": {
+                "call_id": null,
+                "failed": false,
+                "label": "后台任务",
+                "outcome": "等待中",
+                "subject": "示例任务乙"
+              },
+              "text": "等待中",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "first": false,
+            "group_id": "w-1#0",
+            "id": "w-1#0/4#0",
+            "is_input": false,
+            "separator_before": true,
+            "step": {
+              "id": "4#0",
+              "task_note": {
+                "call_id": null,
+                "failed": true,
+                "label": "子 Agent",
+                "outcome": "✗ 退出码 2",
+                "subject": "示例子任务"
+              },
+              "text": "退出",
+              "type": "task_note"
+            },
+            "type": "work_step"
+          },
+          {
+            "count": 3,
+            "group_id": "w-1#0",
+            "id": "w-1#0-end",
+            "is_input": false,
+            "separator_before": true,
+            "type": "work_end"
+          },
+          {
+            "id": "5#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          }
+        ],
+        "task_index": {
+          "calls": {},
+          "descriptions": {},
+          "started": [],
+          "started_at": {},
+          "statuses": {}
+        },
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "5#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "2#0",
+              "3#0",
+              "4#0",
+              "5#0"
+            ],
+            "process_ids": [
+              "2#0",
+              "3#0",
+              "4#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

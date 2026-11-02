@@ -885,7 +885,11 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	// thread, the newest rollout in the directory nobody else has.
 	var unnamed []host.Agent
 	for _, a := range codex {
+		home := n.codexPaneHome(a.PaneID)
 		id := a.SessionID()
+		if id != "" {
+			id = mainThread(home, id) // a subagent's id stands for its conversation
+		}
 		if id == "" {
 			n.mu.Lock()
 			id = n.panes[a.PaneID]
@@ -895,7 +899,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			id = named
 		}
 		if id != "" {
-			id = n.codexPublicID(n.codexPaneHome(a.PaneID), id)
+			id = n.codexPublicID(home, id)
 		}
 		if _, taken := m[id]; id == "" || taken {
 			unnamed = append(unnamed, a)
@@ -1146,7 +1150,8 @@ var launcherCache struct {
 
 // launcherScript lists the login shell's launchers in one go (sourcing ~/.zshrc takes a while): what the
 // `_claude_launchers` helper prints when ~/.zshrc has one, a GS byte, then every alias as its name and its words
-// as zsh itself splits and unquotes them (name US word US … RS), so quoting never has to be parsed here.
+// as zsh itself splits and unquotes them (name US word US … RS), so quoting never has to be parsed here; then, each
+// after a GS byte, where codex and traex are on the PATH.
 const launcherScript = `_claude_launchers 2>/dev/null || true
 printf '\035'
 if [ -n "$ZSH_VERSION" ]; then
@@ -1157,7 +1162,9 @@ if [ -n "$ZSH_VERSION" ]; then
   done
 fi
 printf '\035'
-if [ -n "$ZSH_VERSION" ]; then whence -p codex 2>/dev/null; else command -v codex 2>/dev/null; fi`
+if [ -n "$ZSH_VERSION" ]; then whence -p codex 2>/dev/null; else command -v codex 2>/dev/null; fi
+printf '\035'
+if [ -n "$ZSH_VERSION" ]; then whence -p traex 2>/dev/null; else command -v traex 2>/dev/null; fi`
 
 // launchers lists the launchers of this machine's login shell: the `_claude_launchers` helper's (claude wrapper
 // functions), then every alias that runs claude (`alias dmcc="ANTHROPIC_BASE_URL=… claude …"`), by name. A name
@@ -1187,11 +1194,13 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 
 // mergeLaunchers is launcherScript's output as the launcher list: the helper's, then the aliases it does not name
 // (nothing at all: plain claude), then Codex's — plain codex when it is on the PATH, and the aliases that run it (how
-// each runs: codex). settings: the claude aliases' own --settings, by name (launcher_settings.go); an alias is what
-// the shell runs for its name even when the helper lists the name too.
+// each runs: codex) — then plain traex when it is on the PATH (started without Claude's flags, start_agent.go).
+// settings: the claude aliases' own --settings, by name (launcher_settings.go); an alias is what the shell runs for
+// its name even when the helper lists the name too.
 func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string, settings map[string]string) {
 	helper, rest, _ := strings.Cut(out, "\x1d")
-	aliases, codexPath, _ := strings.Cut(rest, "\x1d")
+	aliases, rest, _ := strings.Cut(rest, "\x1d")
+	codexPath, traexPath, _ := strings.Cut(rest, "\x1d")
 	list = parseLaunchers(helper)
 	seen := map[string]bool{}
 	for _, l := range list {
@@ -1217,6 +1226,9 @@ func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]strin
 			list = append(list, l)
 			codex[l.Name] = words[l.Name]
 		}
+	}
+	if strings.TrimSpace(traexPath) != "" && !seen[traexAgent] && codex[traexAgent] == nil {
+		list = append(list, proto.Launcher{Name: traexAgent, Model: "默认", Agent: traexAgent, Source: "zshrc"})
 	}
 	return list, codex, settings
 }

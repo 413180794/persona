@@ -14,6 +14,7 @@
 | `lark-mail.md` | 改飞书（lark-connector）和邮件（IMAP / SMTP / Gmail）、云文档通知 |
 | `terminal.md` | 改终端 tab：herdr 读屏 / observe / 接管、滚动、键盘输入、宽字符 |
 | `ios.md` | 改 iOS 界面：聊天列表与滚动、导航、布局与组件、Swift 与编译、系统能力与页面约定 |
+| `android.md` | 改 Android App：Compose 与玻璃（Haze）、切页面闪烁、平板 / 折叠屏、深浅色、前台服务、模拟器和真机调试 |
 | `macos.md` | 改 Mac App：兼容层、分栏、截图 |
-| `web.md` | 改网页界面：React 事件、弹出菜单、窄屏布局、浏览器交互回归 |
+| `web.md` | 改网页界面：React 事件、弹出菜单、窄屏布局、浏览器交互回归、xterm、加 npm 依赖、Playwright 验证 |
 | `testing.md` | 跑 UI 测试、截图、量帧率 / 跳动；模拟器和 XCUITest 的怪行为 |

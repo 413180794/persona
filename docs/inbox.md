@@ -165,6 +165,7 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
   第三行是红字的「Claude 在问你 / 计划等你审批」+ 机器。类型标签不跟在标题后面，标题能占满整行），点开跳到那个 Agent 的对话（助手的在「对话」tab）。只在 App 端合并，
   hub 的收件箱不存它们；Agents tab 照旧。筛选里的「Agent」只看它们；选了某个来源时不显示。
 - 点开：飞书会话停在这件事的第一条新消息（`LarkChatView`，focus = start_position），邮件打开最新一封；右上角「已处理」。
+  看过的飞书消息按可见即读上报飞书已读，从收件箱打开时的第一屏也算（2026-10-31 用户确认，门禁见 `docs/redesign/ux.md` 3.5 / 3.6）；「已处理」只记在 Jarvis，不回写飞书。
   导航栏下面是操作条（`InboxActionBar`）：✦ 摘要 +「AI 草拟回复」「交给 AI」。
 - DEBUG：`-tab mail`（打开收件箱）、`-openInboxFirst YES`（打开第一件未处理的）、`-showInboxAction draft|handoff`（再打开那个浮层）。
 

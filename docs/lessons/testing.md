@@ -147,6 +147,7 @@
   对话页曾经有两个「返回」：看得见的那层，和看不见的那层（折起后全开的那层滑进状态栏那一条，`isHittable` 也是真，点了不返回），取第一个点得到的会一直点错。
   2026-11-02 起看不见的那层不在树上，任何时候只有一个「返回」，就是屏幕上那个（`ChatHeaderTests`）；折起的细条本身一直在状态栏下面，两种风格都是，
   「标题栏在状态栏那一条」其实是那个看不见的「返回」的 frame。
+  BeautifulUI 的新外壳里要知道对话是否开着，用 `probe.chat`（page `agents`），不靠「返回」按钮。
 - 看对话内容的 UI 测试一律带 `-openChatsFresh YES`（清掉磁盘上的对话缓存）：mock 每次重置，对话都从同一个 seq 重新开始，前面测试 churn 出来的步骤
   还在 App 的缓存里，占着这次 `/mock/say` 拿到的 seq，新回复「已经有了」就不显示，屏幕上是上一次的「工具 21 · 回复 5」。
   2026-11-02 `ChatFollowTests.testJarvisChatFollows` 在跑过 `ScrollUnderPushTests` / `ScreenTruthTests` 的模拟器上挂，看着像新外壳的 Jarvis 对话不显示回复，其实是测试环境；真实 hub 的 seq 是 transcript 里的位置，只增不重用。
@@ -186,3 +187,10 @@
   验收单里写明，否则执行者会报「不通过」。
 - cua 里 sheet 自己的 window_id 读不到树（`ax_window_unresolved`），也不能对它定点投递；用主窗口的 window_id 读（sheet 在树里是 `AXSheet`），
   拿到框的 token 再 `type_text` 前台投递。前台投递完 cua 会把前台还给原来的 App，之后别往桌面（`scope: desktop`）发键，会落到别的 App 上。
+
+## 逐像素比对（「只有一组时界面不变」，docs/testing.md「多 hub」）
+
+- 同一个包连拍两次也不会完全一样：液态玻璃按钮、输入栏、卡片的边缘高光每次启动随机（同一次启动内不变），「正在工作」前的系统菊花一直在转，
+  Reduce Motion 管不住它们。先用改动前的包连拍三四次当噪声，比较时排除落在噪声里的像素，剩下的差异逐张放大看（2026-11-02，#256；做法写在 testing.md「多 hub」）。
+- 要比得稳：固定状态栏时间、冻结 mock 的时钟、每次卸载重装 App、mock 每次重启（相对时间一致），等画面停下再截（不要固定睡几秒：这台机器负载高时 7 秒还可能是白屏）。
+

@@ -270,6 +270,7 @@ func newTestHub(t *testing.T) *Hub {
 		todos: newTodosState(),
 	}
 	h.live = newLiveActivities(h)
+	h.push.hubID = h.hubID
 	h.upd = newUpdater(h)
 	h.upd.dir = filepath.Join(cfg.dir, "update")
 	h.upd.exec = func(string) error { return errors.New("exec is not run in tests") }
@@ -593,7 +594,7 @@ func TestPhoneToolsPersist(t *testing.T) {
 	h := newTestHub(t)
 	h.store = database
 	tools := []proto.Tool{{Name: "phone_device_info", Description: "info", InputSchema: json.RawMessage(`{"type":"object"}`)}}
-	h.setPhoneTools(tools)
+	h.setPhoneTools(db.PhoneToolRegistration{DeviceID: "legacy", Tools: tools})
 	if got := h.mcpTools(false); len(got) != 1 || got[0].Name != "phone_device_info" {
 		t.Fatalf("tools = %+v", got)
 	}
@@ -665,5 +666,90 @@ func TestMarkStates(t *testing.T) {
 	h.markStates("m", list, t0.Add(2*time.Minute))
 	if !list[0].StateSince.Equal(t0.Add(2 * time.Minute)) {
 		t.Fatalf("state change kept old time: %v", list[0].StateSince)
+	}
+}
+
+func TestPhoneToolsDeviceRouting(t *testing.T) {
+	h := newTestHub(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	iphone := &client{hub: h, device: "credential-ios", role: roleFull, out: make(chan []byte, 8)}
+	android := &client{hub: h, device: "credential-android", role: roleFull, out: make(chan []byte, 8)}
+	h.clients[iphone], h.clients[android] = struct{}{}, struct{}{}
+	// Existing iOS omits both new fields; Android supplies its own device ID.
+	h.onClientMessage(ctx, iphone, []byte(`{"type":"register_phone","tools":[{"name":"phone_reminders_list"},{"name":"phone_device_info","description":"Detailed device information"}]}`))
+	h.onClientMessage(ctx, android, []byte(`{"type":"register_phone","device_id":"android-device","platform":"android","simulator":true,"tools":[{"name":"phone_notifications_list"},{"name":"phone_device_info","description":"Info"}]}`))
+	if iphone.phoneID != iphone.device || android.phoneID != "android-device" {
+		t.Fatalf("device IDs: %q, %q", iphone.phoneID, android.phoneID)
+	}
+	tools := h.mcpTools(false)
+	if len(tools) != 3 {
+		t.Fatalf("merged tools = %+v", tools)
+	}
+	for _, tool := range tools {
+		if tool.Name == "phone_device_info" && tool.Description != "Detailed device information" {
+			t.Fatalf("incomplete description: %+v", tool)
+		}
+	}
+	for _, tc := range []struct {
+		name string
+		want *client
+	}{
+		{"phone_reminders_list", iphone},
+		{"phone_notifications_list", android},
+		{"phone_device_info", iphone},
+	} {
+		done := make(chan proto.ToolResult, 1)
+		go func() { done <- h.callPhone(ctx, tc.name, json.RawMessage(`{}`)) }()
+		var data []byte
+		select {
+		case data = <-iphone.out:
+			if tc.want != iphone {
+				t.Fatalf("%s routed to iOS", tc.name)
+			}
+		case data = <-android.out:
+			if tc.want != android {
+				t.Fatalf("%s routed to Android", tc.name)
+			}
+		case <-ctx.Done():
+			t.Fatal("tool call was not routed")
+		}
+		var call struct {
+			Name   string `json:"name"`
+			CallID string `json:"call_id"`
+		}
+		if err := json.Unmarshal(data, &call); err != nil || call.Name != tc.name {
+			t.Fatalf("tool call = %s, %v", data, err)
+		}
+		reply, _ := json.Marshal(map[string]any{"type": "tool_result", "call_id": call.CallID, "content": []proto.Content{{Type: "text", Text: tc.name}}})
+		h.onClientMessage(ctx, tc.want, reply)
+		select {
+		case result := <-done:
+			if result.IsError || textOf(result) != tc.name {
+				t.Fatalf("result = %+v", result)
+			}
+		case <-ctx.Done():
+			t.Fatal("tool result was not delivered")
+		}
+	}
+	// With both devices real, the last active eligible connection wins.
+	h.mu.Lock()
+	android.sim = false
+	h.mu.Unlock()
+	h.onClientMessage(ctx, android, []byte(`{"type":"ping"}`))
+	if got := h.phoneClient("phone_device_info"); got != android {
+		t.Fatal("recently active device was not selected")
+	}
+	// An empty registration removes only this device's capabilities.
+	h.onClientMessage(ctx, android, []byte(`{"type":"register_phone","device_id":"android-device","platform":"android","tools":[]}`))
+	if h.phoneClient("phone_notifications_list") != nil || len(h.mcpTools(false)) != 2 {
+		t.Fatal("empty registration did not remove Android tools")
+	}
+	h.mu.Lock()
+	delete(h.clients, iphone)
+	h.mu.Unlock()
+	h.revoked(iphone.device)
+	if len(h.mcpTools(false)) != 0 {
+		t.Fatal("revoked credential retained tools")
 	}
 }

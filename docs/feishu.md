@@ -101,3 +101,14 @@ raw 代理不透传客户端的 `x-lark-connector-account` 请求头，默认使
 ### 会话
 - `conversations/:feedId/settings`（公告）、`/pins`、`/resources?kind=docs|files|media`、`/todos`、`/members`；`favorites`；`threads/feed`。
 - 会话列表的坑见 `docs/lessons/lark-mail.md`（`isDone` 不可靠、置顶看 `onTopRankAt`、未知 scope 被当成 inbox）。
+
+### 话题分页限制（H06）
+
+2026-10-31 只读核对 lark-connector 源码，版本 `2da814b1da1fd2ddd0cb9df05c419f7c87421739`：
+`GET /agent/v1/messages/:messageId/thread` 支持最新页和 `beforePosition` 前翻，**不支持向后读取更新的一页**。依据如下：
+
+- `src/server/routes/api.ts` 的话题路由只读取 `beforePosition`、`limit`，将前者传给 `hydrateThread` 和 `threadPage`；传入 `afterPosition` 会被忽略，无 `beforePosition` 时仍按最新页处理。
+- `src/server/lark/domains/im-domain.ts` 的 `pullThread` 只接收 `beforePosition`，从话题末尾或指定位置之前拉取回复；`src/server/services/messenger-service.ts` 的话题读取链路也只传递这个方向。
+- `src/server/repositories/messenger-repository.ts` 的 `threadPage` 按 `threadPosition < beforeThreadPosition` 查更早回复，先倒序取页再反转；返回 `items`、`hasOlder`、`nextOlderCursor`，没有 `hasNewer` 或 `nextNewerCursor`。
+
+因此 hub 的话题路由暂不增加 `after`。普通会话消息接口支持 `afterPosition`，但话题回复使用独立的 `threadPosition`，不能借用普通会话游标或把最新页追加成连续页。Android 保留「↓ 最新回复」重新读取最新页并替换当前窗口；前翻与回复后的刷新维持原行为。待上游补齐更新方向的拉取、查询及游标契约后，再接向后分页。本次未连接真实飞书或线上 hub，结论来自上述源码核对。

@@ -1,0 +1,115 @@
+[
+  {
+    "name": "fleet_snapshot",
+    "description": "Fleet 使用驼峰字段和 Unix 秒时间。",
+    "source": [
+      "server/internal/hub/liveactivity.go: buildFleet, FleetState",
+      "apple/Shared/FleetState.swift: FleetState"
+    ],
+    "derived": true,
+    "decoder": "fleet",
+    "input": {
+      "fleet": {
+        "phase": "needsYou",
+        "needsYou": 1,
+        "working": 1,
+        "unread": 1,
+        "items": [
+          {
+            "id": "m1/s1",
+            "title": "示例任务",
+            "place": "示例电脑 · 示例空间 › 示例任务",
+            "kind": "question",
+            "detail": "选择示例颜色",
+            "interaction": "ix_question",
+            "since": 1767323045
+          },
+          {
+            "id": "m1/s_working",
+            "title": "示例任务",
+            "place": "示例电脑 · 示例空间 › 示例任务",
+            "kind": "working",
+            "detail": "",
+            "since": 1767323045
+          },
+          {
+            "id": "m1/s_unread",
+            "title": "示例任务",
+            "place": "示例电脑 · 示例空间 › 示例任务",
+            "kind": "unread",
+            "detail": "",
+            "since": 1767323045
+          }
+        ],
+        "workingSince": 1767323045,
+        "details": true
+      }
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/fleet/needsYou": 1,
+        "/fleet/phase": "needsYou",
+        "/fleet/unread": 1,
+        "/fleet/working": 1,
+        "/fleet/workingSince": 1767323045
+      }
+    }
+  },
+  {
+    "name": "fleet_event",
+    "description": "Fleet 事件沿用快照结构。",
+    "source": [
+      "server/internal/hub/liveactivity.go: liveActivities",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "fleet": {
+        "phase": "needsYou",
+        "needsYou": 1,
+        "working": 1,
+        "unread": 1,
+        "items": [
+          {
+            "id": "m1/s1",
+            "title": "示例任务",
+            "place": "示例电脑 · 示例空间 › 示例任务",
+            "kind": "question",
+            "detail": "选择示例颜色",
+            "interaction": "ix_question",
+            "since": 1767323045
+          },
+          {
+            "id": "m1/s_working",
+            "title": "示例任务",
+            "place": "示例电脑 · 示例空间 › 示例任务",
+            "kind": "working",
+            "detail": "",
+            "since": 1767323045
+          },
+          {
+            "id": "m1/s_unread",
+            "title": "示例任务",
+            "place": "示例电脑 · 示例空间 › 示例任务",
+            "kind": "unread",
+            "detail": "",
+            "since": 1767323045
+          }
+        ],
+        "workingSince": 1767323045,
+        "details": true
+      },
+      "type": "fleet"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/fleet/items/0/interaction": "ix_question",
+        "/fleet/items/0/kind": "question",
+        "/type": "fleet"
+      }
+    }
+  }
+]

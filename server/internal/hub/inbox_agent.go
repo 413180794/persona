@@ -204,13 +204,13 @@ func (h *Hub) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 // the inbox agent's launcher.
 func (h *Hub) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, prompt string) (machineID, sessionID string, err error) {
 	ac := h.assistantConfig(ctx)
-	if h.byID[cfg.Machine] != nil {
+	if h.localMachine(cfg.Machine) != nil {
 		ac.MachineID = cfg.Machine
 	}
 	if cfg.Launcher != "" {
 		ac.Launcher = cfg.Launcher
 	}
-	m := h.byID[ac.MachineID]
+	m := h.localMachine(ac.MachineID)
 	if m == nil {
 		return "", "", errors.New("no machine for the inbox agent")
 	}
@@ -251,7 +251,7 @@ func (h *Hub) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, now ti
 		reason := ""
 		if a.StartedAt != nil && now.Sub(*a.StartedAt) > cfg.timeout() {
 			reason = "超时，没有给出草稿"
-		} else if m := h.byID[a.MachineID]; m != nil && a.StartedAt != nil && now.Sub(*a.StartedAt) > time.Minute {
+		} else if m := h.localMachine(a.MachineID); m != nil && a.StartedAt != nil && now.Sub(*a.StartedAt) > time.Minute {
 			if s, ok := m.session(a.SessionID); ok && s.Status != proto.StatusWorking {
 				reason = "做完了但没有给出草稿"
 			}

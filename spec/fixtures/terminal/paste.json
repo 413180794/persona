@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "kind": "paste",
+  "cases": [
+    {
+      "name": "paste_plain",
+      "description": "多行文本使用括号粘贴，CRLF 和 LF 转成 CR。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.text",
+        "ios/JarvisTests/TerminalWrapTests.swift — aPasteWithLinesIsOnePiece"
+      ],
+      "input": {
+        "text": "ls -la"
+      },
+      "expected": {
+        "bytes": "ls -la",
+        "utf8": [
+          108,
+          115,
+          32,
+          45,
+          108,
+          97
+        ]
+      },
+      "from_test": "aPasteWithLinesIsOnePiece"
+    },
+    {
+      "name": "paste_multiline",
+      "description": "多行文本使用括号粘贴，CRLF 和 LF 转成 CR。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.text",
+        "ios/JarvisTests/TerminalWrapTests.swift — aPasteWithLinesIsOnePiece"
+      ],
+      "input": {
+        "text": "a\nb\r\nc"
+      },
+      "expected": {
+        "bytes": "\u001b[200~a\rb\rc\u001b[201~",
+        "utf8": [
+          27,
+          91,
+          50,
+          48,
+          48,
+          126,
+          97,
+          13,
+          98,
+          13,
+          99,
+          27,
+          91,
+          50,
+          48,
+          49,
+          126
+        ]
+      },
+      "from_test": "aPasteWithLinesIsOnePiece"
+    },
+    {
+      "name": "paste_cr",
+      "description": "多行文本使用括号粘贴，CRLF 和 LF 转成 CR。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.text"
+      ],
+      "input": {
+        "text": "a\rb"
+      },
+      "expected": {
+        "bytes": "\u001b[200~a\rb\u001b[201~",
+        "utf8": [
+          27,
+          91,
+          50,
+          48,
+          48,
+          126,
+          97,
+          13,
+          98,
+          27,
+          91,
+          50,
+          48,
+          49,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "paste_empty",
+      "description": "多行文本使用括号粘贴，CRLF 和 LF 转成 CR。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.text"
+      ],
+      "input": {
+        "text": ""
+      },
+      "expected": {
+        "bytes": "",
+        "utf8": []
+      },
+      "derived": true
+    },
+    {
+      "name": "paste_unicode_separator",
+      "description": "多行文本使用括号粘贴，CRLF 和 LF 转成 CR。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.text"
+      ],
+      "input": {
+        "text": "甲 乙"
+      },
+      "expected": {
+        "bytes": "\u001b[200~甲 乙\u001b[201~",
+        "utf8": [
+          27,
+          91,
+          50,
+          48,
+          48,
+          126,
+          231,
+          148,
+          178,
+          226,
+          128,
+          168,
+          228,
+          185,
+          153,
+          27,
+          91,
+          50,
+          48,
+          49,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "paste_tab",
+      "description": "多行文本使用括号粘贴，CRLF 和 LF 转成 CR。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.text"
+      ],
+      "input": {
+        "text": "a\tb"
+      },
+      "expected": {
+        "bytes": "a\tb",
+        "utf8": [
+          97,
+          9,
+          98
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "paste_cjk",
+      "description": "多行文本使用括号粘贴，CRLF 和 LF 转成 CR。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.text"
+      ],
+      "input": {
+        "text": "中文"
+      },
+      "expected": {
+        "bytes": "中文",
+        "utf8": [
+          228,
+          184,
+          173,
+          230,
+          150,
+          135
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,7 +47,11 @@ type traexState struct {
 	at     time.Time
 }
 
-// traexOwners maps the live TRAEX processes to the thread each writes (the newest owner file per pid).
+// traexOwners maps the live TRAEX processes to the conversation each runs. A process holds an owner file for every
+// thread it writes, its subagents included: the guardian that reviews tool calls before they run gets a thread (and
+// an owner file) newer than the conversation's, and taking the newest file showed the review instead of the
+// conversation (2026-11-01). So: the newest thread that is not a subagent, else the conversation of the newest
+// subagent, else the newest thread (TRAEX versions without thread_source / source in session_meta).
 func (n *Node) traexOwners() map[int]string {
 	dir := filepath.Join(n.traexHome(), "thread-writer-locks")
 	files, _ := filepath.Glob(filepath.Join(dir, "*.owner.json"))
@@ -54,7 +59,7 @@ func (n *Node) traexOwners() map[int]string {
 		thread string
 		mtime  time.Time
 	}
-	best := map[int]owner{}
+	byPID := map[int][]owner{}
 	for _, f := range files {
 		st, err := os.Stat(f)
 		if err != nil {
@@ -70,14 +75,19 @@ func (n *Node) traexOwners() map[int]string {
 		if json.Unmarshal(b, &o) != nil || o.PID <= 0 || !alive(o.PID) {
 			continue
 		}
-		thread := strings.TrimSuffix(filepath.Base(f), ".owner.json")
-		if cur, ok := best[o.PID]; !ok || st.ModTime().After(cur.mtime) {
-			best[o.PID] = owner{thread, st.ModTime()}
-		}
+		byPID[o.PID] = append(byPID[o.PID], owner{strings.TrimSuffix(filepath.Base(f), ".owner.json"), st.ModTime()})
 	}
-	out := make(map[int]string, len(best))
-	for pid, o := range best {
-		out[pid] = o.thread
+	home := n.traexHome()
+	out := make(map[int]string, len(byPID))
+	for pid, owners := range byPID {
+		sort.Slice(owners, func(i, j int) bool { return owners[i].mtime.After(owners[j].mtime) })
+		out[pid] = mainThread(home, owners[0].thread)
+		for _, o := range owners {
+			if p := rolloutPath(home, o.thread); p != "" && !metaOf(home, p).sub {
+				out[pid] = o.thread
+				break
+			}
+		}
 	}
 	return out
 }

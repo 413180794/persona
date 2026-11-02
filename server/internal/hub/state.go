@@ -91,7 +91,7 @@ func (h *Hub) markSeen(machine, session string) {
 			h.logf("mark seen: %v", err)
 		}
 	}
-	if m := h.byID[machine]; m != nil {
+	if m := h.localMachine(machine); m != nil {
 		h.broadcastSessions(m, h.decorated(m))
 	}
 }

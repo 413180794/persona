@@ -24,7 +24,7 @@ const imessageAIKey = "imessage.ai"
 
 func (h *Hub) addIMessage(cfg imessage.Config) error {
 	name := cfg.Machine
-	if m := h.byID[cfg.Machine]; m != nil {
+	if m := h.localMachine(cfg.Machine); m != nil {
 		name = m.cfg.Name
 	}
 	c := imessage.NewRemote(cfg, name, h.imessageCall(cfg.Machine))
@@ -50,7 +50,7 @@ var errNotAMachine = errors.New("imessage.machine is not a machine in hub.json")
 // imessageCall asks the Mac's node, turning its failures into the connector's errors.
 func (h *Hub) imessageCall(machine string) imessage.Caller {
 	return func(ctx context.Context, method string, params, out any) error {
-		m := h.byID[machine]
+		m := h.localMachine(machine)
 		if m == nil {
 			return errNotAMachine
 		}

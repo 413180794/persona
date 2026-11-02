@@ -1,0 +1,1214 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "fold_replaces_work_and_expands_in_pages",
+      "description": "fold 替换工作片段，同 id 的更长 fold 覆盖旧版后分页展开。",
+      "source": [
+        "ios/JarvisTests/FoldedWorkTests.swift: aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack",
+        "ios/Shared/ChatStore.swift: dropFolded, unfold",
+        "ios/Shared/APIClient.swift: foldedWork",
+        "docs/protocol.md：折叠的工作"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking",
+              "text": "示例思考"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_3",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_3"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_5",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_5"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_7",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_7"
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true
+        },
+        "events": [
+          {
+            "kind": "http_latest",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "user",
+                "kind": "text",
+                "text": "示例请求"
+              },
+              {
+                "id": "fold:2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "fold",
+                "fold": {
+                  "items": 7,
+                  "tools": 3,
+                  "thoughts": 1,
+                  "until": "2026-01-01T00:00:00Z",
+                  "through_seq": 8,
+                  "through_id": "8#0"
+                }
+              },
+              {
+                "id": "20#0",
+                "seq": 20,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例回复"
+              }
+            ],
+            "has_more": false,
+            "history": "h",
+            "to_seq": 20
+          },
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "fold:2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "fold",
+                "fold": {
+                  "items": 7,
+                  "tools": 3,
+                  "thoughts": 1,
+                  "until": "2026-01-01T00:00:00Z",
+                  "through_seq": 8,
+                  "through_id": "8#0"
+                }
+              }
+            ],
+            "history": "h",
+            "from_seq": 20,
+            "to_seq": 20
+          },
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "9#0",
+                "seq": 9,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_9",
+                "tool_name": "ExampleTool"
+              },
+              {
+                "id": "10#0",
+                "seq": 10,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_9"
+              }
+            ],
+            "history": "h",
+            "from_seq": 20,
+            "to_seq": 20
+          },
+          {
+            "kind": "http_latest",
+            "items": [
+              {
+                "id": "1#0",
+                "seq": 1,
+                "role": "user",
+                "kind": "text",
+                "text": "示例请求"
+              },
+              {
+                "id": "fold:2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "fold",
+                "fold": {
+                  "items": 9,
+                  "tools": 4,
+                  "thoughts": 1,
+                  "until": "2026-01-01T00:00:00Z",
+                  "through_seq": 10,
+                  "through_id": "10#0"
+                }
+              },
+              {
+                "id": "20#0",
+                "seq": 20,
+                "role": "assistant",
+                "kind": "text",
+                "text": "示例回复"
+              }
+            ],
+            "has_more": false,
+            "history": "h",
+            "to_seq": 20
+          },
+          {
+            "kind": "open_fold",
+            "fold_id": "fold:2#0"
+          },
+          {
+            "kind": "http_range",
+            "items": [
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "thinking",
+                "text": "示例思考"
+              },
+              {
+                "id": "3#0",
+                "seq": 3,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_3",
+                "tool_name": "ExampleTool"
+              },
+              {
+                "id": "4#0",
+                "seq": 4,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_3"
+              },
+              {
+                "id": "5#0",
+                "seq": 5,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_5",
+                "tool_name": "ExampleTool"
+              },
+              {
+                "id": "6#0",
+                "seq": 6,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_5"
+              },
+              {
+                "id": "7#0",
+                "seq": 7,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_7",
+                "tool_name": "ExampleTool"
+              },
+              {
+                "id": "8#0",
+                "seq": 8,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_7"
+              }
+            ],
+            "more": true
+          },
+          {
+            "kind": "http_range",
+            "items": [
+              {
+                "id": "9#0",
+                "seq": 9,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_9",
+                "tool_name": "ExampleTool"
+              },
+              {
+                "id": "10#0",
+                "seq": 10,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_9"
+              }
+            ],
+            "more": false
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 7,
+                "tools": 3,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 8,
+                "through_id": "8#0"
+              }
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "fold:2#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 7,
+                "tools": 3,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 8,
+                "through_id": "8#0"
+              }
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "fold:2#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 7,
+                "tools": 3,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 8,
+                "through_id": "8#0"
+              }
+            },
+            {
+              "id": "9#0",
+              "seq": 9,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_9",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "10#0",
+              "seq": 10,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_9"
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "fold:2#0",
+            "9#0",
+            "10#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 9,
+                "tools": 4,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 10,
+                "through_id": "10#0"
+              }
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "fold:2#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 9,
+                "tools": 4,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 10,
+                "through_id": "10#0"
+              }
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "fold:2#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": [
+            {
+              "kind": "fetch_range",
+              "from_seq": 2,
+              "through_seq": 10
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 9,
+                "tools": 4,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 10,
+                "through_id": "10#0"
+              }
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "fold:2#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": [
+            {
+              "kind": "fetch_range",
+              "from_seq": 9,
+              "through_seq": 10
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking",
+              "text": "示例思考"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_3",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_3"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_5",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_5"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_7",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_7"
+            },
+            {
+              "id": "9#0",
+              "seq": 9,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_9",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "10#0",
+              "seq": 10,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_9"
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "4#0",
+            "5#0",
+            "6#0",
+            "7#0",
+            "8#0",
+            "9#0",
+            "10#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": false,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "from_test": "aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack"
+    },
+    {
+      "name": "fold_preserves_steps_outside_range",
+      "description": "折叠范围之外的工具调用继续接收结果。",
+      "source": [
+        "ios/JarvisTests/FoldedWorkTests.swift: stepsOutsideAFoldStay",
+        "ios/Shared/ChatStore.swift: merge, dropFolded"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 5,
+                "tools": 2,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 6,
+                "through_id": "6#0"
+              }
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_7",
+              "tool_name": "ExampleTool"
+            }
+          ],
+          "covered": 7,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": true
+        },
+        "events": [
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "8#0",
+                "seq": 8,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_7"
+              }
+            ],
+            "history": "h",
+            "from_seq": 7,
+            "to_seq": 8
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 5,
+                "tools": 2,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 6,
+                "through_id": "6#0"
+              }
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_7",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_7"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "fold:2#0",
+            "7#0",
+            "8#0"
+          ],
+          "covered": 8,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": true,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "from_test": "stepsOutsideAFoldStay"
+    },
+    {
+      "name": "fold_range_uses_numeric_block_bounds",
+      "description": "折叠按行号和数字块序号判范围，同时保留范围内的正文。",
+      "source": [
+        "ios/Shared/ChatStore.swift: Item.part, Item.folds, Item.isWork, dropFolded"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "2#1",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking"
+            },
+            {
+              "id": "2#2",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking"
+            },
+            {
+              "id": "2#3",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "保留正文"
+            },
+            {
+              "id": "2#10",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking"
+            },
+            {
+              "id": "2#11",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking"
+            }
+          ],
+          "covered": 2,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": false
+        },
+        "events": [
+          {
+            "kind": "ws_items",
+            "items": [
+              {
+                "id": "fold:2#2",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "fold",
+                "fold": {
+                  "items": 3,
+                  "tools": 0,
+                  "thoughts": 3,
+                  "until": "2026-01-01T00:00:00Z",
+                  "through_seq": 2,
+                  "through_id": "2#10"
+                }
+              }
+            ],
+            "history": "h",
+            "from_seq": 2,
+            "to_seq": 2
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "2#1",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking"
+            },
+            {
+              "id": "fold:2#2",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 3,
+                "tools": 0,
+                "thoughts": 3,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 2,
+                "through_id": "2#10"
+              }
+            },
+            {
+              "id": "2#3",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "text",
+              "text": "保留正文"
+            },
+            {
+              "id": "2#11",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking"
+            }
+          ],
+          "item_ids": [
+            "2#1",
+            "fold:2#2",
+            "2#3",
+            "2#11"
+          ],
+          "covered": 2,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": false,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "derived": true
+    },
+    {
+      "name": "unfold_discards_fold_items_in_response",
+      "description": "展开响应里的 fold 被过滤，只有真实工作替换占位项。",
+      "source": [
+        "ios/Shared/ChatStore.swift: unfold",
+        "ios/Shared/APIClient.swift: foldedWork"
+      ],
+      "input": {
+        "initial": {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 7,
+                "tools": 3,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 8,
+                "through_id": "8#0"
+              }
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": false
+        },
+        "events": [
+          {
+            "kind": "open_fold",
+            "fold_id": "fold:2#0"
+          },
+          {
+            "kind": "http_range",
+            "items": [
+              {
+                "id": "fold:2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "fold",
+                "fold": {
+                  "items": 7,
+                  "tools": 3,
+                  "thoughts": 1,
+                  "until": "2026-01-01T00:00:00Z",
+                  "through_seq": 8,
+                  "through_id": "8#0"
+                }
+              },
+              {
+                "id": "2#0",
+                "seq": 2,
+                "role": "assistant",
+                "kind": "thinking",
+                "text": "示例思考"
+              },
+              {
+                "id": "3#0",
+                "seq": 3,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_3",
+                "tool_name": "ExampleTool"
+              },
+              {
+                "id": "4#0",
+                "seq": 4,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_3"
+              },
+              {
+                "id": "5#0",
+                "seq": 5,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_5",
+                "tool_name": "ExampleTool"
+              },
+              {
+                "id": "6#0",
+                "seq": 6,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_5"
+              },
+              {
+                "id": "7#0",
+                "seq": 7,
+                "role": "assistant",
+                "kind": "tool_use",
+                "tool_use_id": "call_7",
+                "tool_name": "ExampleTool"
+              },
+              {
+                "id": "8#0",
+                "seq": 8,
+                "role": "user",
+                "kind": "tool_result",
+                "text": "示例结果",
+                "tool_use_id": "call_7"
+              }
+            ],
+            "more": false
+          }
+        ]
+      },
+      "expected": [
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "fold:2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "fold",
+              "fold": {
+                "items": 7,
+                "tools": 3,
+                "thoughts": 1,
+                "until": "2026-01-01T00:00:00Z",
+                "through_seq": 8,
+                "through_id": "8#0"
+              }
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "fold:2#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": false,
+          "gap": "none",
+          "actions": [
+            {
+              "kind": "fetch_range",
+              "from_seq": 2,
+              "through_seq": 8
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "id": "1#0",
+              "seq": 1,
+              "role": "user",
+              "kind": "text",
+              "text": "示例请求"
+            },
+            {
+              "id": "2#0",
+              "seq": 2,
+              "role": "assistant",
+              "kind": "thinking",
+              "text": "示例思考"
+            },
+            {
+              "id": "3#0",
+              "seq": 3,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_3",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "4#0",
+              "seq": 4,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_3"
+            },
+            {
+              "id": "5#0",
+              "seq": 5,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_5",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "6#0",
+              "seq": 6,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_5"
+            },
+            {
+              "id": "7#0",
+              "seq": 7,
+              "role": "assistant",
+              "kind": "tool_use",
+              "tool_use_id": "call_7",
+              "tool_name": "ExampleTool"
+            },
+            {
+              "id": "8#0",
+              "seq": 8,
+              "role": "user",
+              "kind": "tool_result",
+              "text": "示例结果",
+              "tool_use_id": "call_7"
+            },
+            {
+              "id": "20#0",
+              "seq": 20,
+              "role": "assistant",
+              "kind": "text",
+              "text": "示例回复"
+            }
+          ],
+          "item_ids": [
+            "1#0",
+            "2#0",
+            "3#0",
+            "4#0",
+            "5#0",
+            "6#0",
+            "7#0",
+            "8#0",
+            "20#0"
+          ],
+          "covered": 20,
+          "history": "h",
+          "has_more": true,
+          "loaded_once": false,
+          "gap": "none",
+          "actions": []
+        }
+      ],
+      "derived": true
+    }
+  ]
+}

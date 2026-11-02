@@ -50,3 +50,14 @@
 - 提交前用 `git var GIT_AUTHOR_IDENT` 确认作者是 GitHub 身份（比如 noreply 邮箱，仓库级 `git config --local` 设）：全局 git 身份如果是公司的真名和邮箱，
   它会留在 PR 的提交记录里（`refs/pull/<n>/head`，PR 合并后改不掉、删不了，只有 GitHub 支持能清），
   而且 squash 合并时 GitHub 会把和合并人不同的作者写成 `Co-authored-by` 带进 master 的提交信息（2026-11-02）。worktree 共用仓库级配置。
+
+## 把长期的集成分支合进 master
+
+- 一次大合并（#606，集成分支落后 master 一百多个提交）按模块拆 PR：在合并用的工作树里解完冲突、`git add`，按路径出补丁
+  `git diff --cached --binary MERGE_HEAD -- <路径>`，再在**最新的** `origin/master` 上新开 worktree `git apply -3 --index`。合并期间 master 还在动，
+  解冲突时又可能顺手抄进了更新的 master 代码（引用了合并基准里还没有的函数），所以每个模块都在最新 master 上编译、测试，不在合并工作树里。
+- 一边重构了公共的查找方式，另一边新写的代码还按老办法：集成分支把 `h.byID[…]` / `range h.machines` 换成了 `localMachine` / `machinesNow`
+  （成员 hub 交来的电脑、管理界面新加的电脑都在里面），master 新加的待办、连接器、飞书机器人、自更新都还直接读 `h.byID`。合完 grep 一遍。
+- 两边的测试各自带着对方不知道的前提：`httptest.NewRequest` 的来源 192.0.2.1 是公网地址，集成分支的入口会拦明文和主 token（403），
+  master 的测试要改成从回环来；集成分支的错误都带 `code`；新配对会给已有设备推一条「有新设备配对」。别为了过测试改实现，先弄清是哪边的前提。
+- 两个模块共用的东西跟着读它的测试走：`spec/fixtures` 是服务端测试的 golden，跟服务端模块一起合，不放在 Android 模块里。

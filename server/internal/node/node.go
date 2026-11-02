@@ -30,6 +30,7 @@ type Node struct {
 	home string
 	dir  string // ~/.jarvis
 	bin  string // absolute path of this executable
+	uid  string // the computer's own id (machineuid.go); empty when it could not be read or made
 	// managed: launchers kept by the hub (managed.go)
 	managed managedLaunchers
 	hosts   *host.Registry // the terminal hosts, by kind (hosts.go): the one of the machine's engine
@@ -156,6 +157,9 @@ func New(version string) (*Node, error) {
 		codices:  newCodexRegistry(),
 		runtimes: newRuntimeRegistry(),
 	}
+	if n.uid, err = LoadMachineUID(dir); err != nil {
+		n.logger.Printf("machine uid: %v", err) // the hubs then treat this computer as theirs alone
+	}
 	n.configureCodex(proto.CodexConfig{})
 	n.hosts = host.NewRegistry(engineHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
 	n.state = newState()
@@ -262,6 +266,7 @@ func (n *Node) writeClaudeConfig() error {
 	settings := map[string]any{"hooks": map[string]any{
 		"PreToolUse":        []any{blocking("AskUserQuestion")},
 		"PermissionRequest": []any{blocking("*")},
+		"Elicitation":       []any{blocking("*")},
 		"Notification":      []any{notify},
 		"Stop":              []any{notify},
 		"UserPromptSubmit":  []any{notify},
@@ -287,6 +292,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		SessionID        string          `json:"session_id"`
 		Cwd              string          `json:"cwd"`
 		Launcher         string          `json:"launcher"`
+		AgentType        string          `json:"agent_type"`
 		Model            string          `json:"model"`
 		ModelFingerprint string          `json:"model_fingerprint"`
 		Prompt           string          `json:"prompt"`
@@ -421,7 +427,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			// launcher is not (the shell's runs: runtimeStart).
 			ls, err = append(append([]proto.Launcher(nil), ls...), n.runtimes.besideShell(bl, ls)...), nil
 		}
-		return map[string]any{"launchers": ls}, err
+		return map[string]any{"launchers": typedLaunchers(ls)}, err
 	case "launchers.managed":
 		var c struct {
 			Launchers []proto.ManagedLauncher `json:"launchers"`
@@ -459,11 +465,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 				return map[string]any{"session": s}, err
 			}
 		}
-		if p.Async && p.ResumeSessionID == "" {
+		// Only Claude Code has a session id before it starts; another agent picks its own (start_agent.go).
+		if p.Async && p.ResumeSessionID == "" && (p.AgentType == "" || p.AgentType == "claude") {
 			s, err := n.startAsync(p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 			return map[string]any{"session": s}, err
 		}
-		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
+		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "", p.AgentType, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 		return map[string]any{"session": s}, err
 	case "assistant.send":
 		if p.ResumeOnly && !n.assistantResumable(p.SessionID) {
@@ -818,6 +825,7 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		System:             n.system(ctx),
 		Engine:             n.engine(),
 		Engines:            n.engines(ctx, hv),
+		MachineUID:         n.uid,
 	}
 }
 

@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "kind": "typed",
+  "cases": [
+    {
+      "name": "typed_ctrl_upper",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed",
+        "ios/JarvisTests/TerminalTests.swift — typedCharacters"
+      ],
+      "input": {
+        "character": "C",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "key": "ctrl+c",
+        "text": null
+      },
+      "from_test": "typedCharacters"
+    },
+    {
+      "name": "typed_ctrl_space",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed",
+        "ios/JarvisTests/TerminalTests.swift — typedCharacters"
+      ],
+      "input": {
+        "character": " ",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "key": "ctrl+space",
+        "text": null
+      },
+      "from_test": "typedCharacters"
+    },
+    {
+      "name": "typed_ctrl_bracket",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed",
+        "ios/JarvisTests/TerminalTests.swift — typedCharacters"
+      ],
+      "input": {
+        "character": "[",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "key": "ctrl+[",
+        "text": null
+      },
+      "from_test": "typedCharacters"
+    },
+    {
+      "name": "typed_ctrl_chinese",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed",
+        "ios/JarvisTests/TerminalTests.swift — typedCharacters"
+      ],
+      "input": {
+        "character": "中",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "key": null,
+        "text": "中"
+      },
+      "from_test": "typedCharacters"
+    },
+    {
+      "name": "typed_shift_lower",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed",
+        "ios/JarvisTests/TerminalTests.swift — typedCharacters"
+      ],
+      "input": {
+        "character": "a",
+        "modifiers": [
+          "shift"
+        ]
+      },
+      "expected": {
+        "key": null,
+        "text": "A"
+      },
+      "from_test": "typedCharacters"
+    },
+    {
+      "name": "typed_alt_tab",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed"
+      ],
+      "input": {
+        "character": "\t",
+        "modifiers": [
+          "alt"
+        ]
+      },
+      "expected": {
+        "key": "alt+tab",
+        "text": null
+      },
+      "derived": true
+    },
+    {
+      "name": "typed_ctrl_newline",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed"
+      ],
+      "input": {
+        "character": "\n",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "key": null,
+        "text": "\n"
+      },
+      "derived": true
+    },
+    {
+      "name": "typed_all_ascii",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed"
+      ],
+      "input": {
+        "character": "X",
+        "modifiers": [
+          "shift",
+          "alt",
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "key": "ctrl+alt+shift+x",
+        "text": null
+      },
+      "derived": true
+    },
+    {
+      "name": "typed_shift_nonascii",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed"
+      ],
+      "input": {
+        "character": "ß",
+        "modifiers": [
+          "shift"
+        ]
+      },
+      "expected": {
+        "key": null,
+        "text": "SS"
+      },
+      "derived": true
+    },
+    {
+      "name": "typed_plain_emoji",
+      "description": "输入字符按修饰键转换为键事件或文本事件。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.typed"
+      ],
+      "input": {
+        "character": "👍🏽",
+        "modifiers": []
+      },
+      "expected": {
+        "key": null,
+        "text": "👍🏽"
+      },
+      "derived": true
+    }
+  ]
+}

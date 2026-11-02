@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "operation": "hub_inbox_order",
+  "cases": [
+    {
+      "name": "hub_orders_by_update",
+      "description": "hub 列表按更新时间倒序，分拣档位不影响列表排序。",
+      "source": [
+        "server/internal/hub/inbox.go: Hub.inboxList",
+        "docs/inbox.md: App"
+      ],
+      "derived": true,
+      "input": {
+        "items": [
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "id": "item-b",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise",
+            "updated_at": "2026-01-01T00:00:20Z"
+          }
+        ]
+      },
+      "expected": {
+        "ids": [
+          "item-b",
+          "item-a"
+        ]
+      }
+    },
+    {
+      "name": "hub_order_reversed_input",
+      "description": "hub 列表按更新时间倒序，分拣档位不影响列表排序。",
+      "source": [
+        "server/internal/hub/inbox.go: Hub.inboxList",
+        "docs/inbox.md: App"
+      ],
+      "derived": true,
+      "input": {
+        "items": [
+          {
+            "id": "item-b",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise",
+            "updated_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:10Z"
+          }
+        ]
+      },
+      "expected": {
+        "ids": [
+          "item-b",
+          "item-a"
+        ]
+      }
+    },
+    {
+      "name": "hub_order_empty",
+      "description": "hub 列表按更新时间倒序，分拣档位不影响列表排序。",
+      "source": [
+        "server/internal/hub/inbox.go: Hub.inboxList",
+        "docs/inbox.md: App"
+      ],
+      "derived": true,
+      "input": {
+        "items": []
+      },
+      "expected": {
+        "ids": []
+      }
+    }
+  ]
+}

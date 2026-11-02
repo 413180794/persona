@@ -53,6 +53,10 @@ func (m *Machine) startDeploy() error {
 	if m.cfg.Kind == "local" {
 		return errors.New("hub 所在的机器跟着 hub 一起部署")
 	}
+	switch {
+	case m.cfg.Kind == kindLink, m.cfg.Kind == kindService, m.derived: // no ssh to it: its links only carry node streams
+		return errors.New("hub 没法给这台电脑装 node：到这台电脑上更新 node 服务（~/.jarvis/bin/jarvisd），再重启常驻 node")
+	}
 	if !online {
 		return errors.New("这台电脑不在线，连上以后再部署")
 	}

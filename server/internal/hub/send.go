@@ -154,7 +154,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if external && h.store == nil {
-		f.status, f.body = errorBody(&rpc.Error{Code: "codex_send_guard", Message: "无法记录消息标识，未向 app-server 发送", Data: json.RawMessage(`{"delivered":"none"}`)})
+		f.status, f.body = callErrBytes(&rpc.Error{Code: "codex_send_guard", Message: "无法记录消息标识，未向 app-server 发送", Data: json.RawMessage(`{"delivered":"none"}`)})
 		close(f.done)
 		h.sends.forget(id, f)
 		writeRaw(w, f.status, f.body)
@@ -165,7 +165,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		var err error
 		if state, err = h.store.ClaimSend(ctx, id, m.cfg.ID, sid); err != nil {
 			if external {
-				f.status, f.body = errorBody(&rpc.Error{Code: "codex_send_guard", Message: "无法记录消息标识，未向 app-server 发送", Data: json.RawMessage(`{"delivered":"none"}`)})
+				f.status, f.body = callErrBytes(&rpc.Error{Code: "codex_send_guard", Message: "无法记录消息标识，未向 app-server 发送", Data: json.RawMessage(`{"delivered":"none"}`)})
 				close(f.done)
 				h.sends.forget(id, f)
 				writeRaw(w, f.status, f.body)
@@ -178,7 +178,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	case sendDelivered:
 		f.status, f.body = http.StatusOK, []byte("{}\n")
 	case sendSending, sendUnknown: // an earlier hub or connection was sending it and never learned the outcome
-		f.status, f.body = errorBody(unknownDelivery("这条消息之前发送时连接断了"))
+		f.status, f.body = callErrBytes(unknownDelivery("这条消息之前发送时连接断了"))
 	default:
 		var outcome string
 		f.status, f.body, outcome = h.deliverOnce(ctx, m, p)
@@ -216,10 +216,10 @@ func (h *Hub) deliverOnce(ctx context.Context, m *Machine, p map[string]any) (in
 		}
 		return http.StatusOK, append(out, '\n'), outcome
 	case outcome == sendUnknown && !hasDelivered(err):
-		status, body := errorBody(unknownDelivery("发送途中和电脑的连接断了"))
+		status, body := callErrBytes(unknownDelivery("发送途中和电脑的连接断了"))
 		return status, body, outcome
 	default:
-		status, body := errorBody(err)
+		status, body := callErrBytes(err)
 		return status, body, outcome
 	}
 }
@@ -261,8 +261,8 @@ func unknownDelivery(why string) error {
 	return &rpc.Error{Message: why + "：它可能已经送到电脑上了，先看看对话里有没有，再决定要不要重发", Data: json.RawMessage(`{"delivered":"unknown"}`)}
 }
 
-// errorBody is callErr's response as bytes, so waiting retries can get the same one.
-func errorBody(err error) (int, []byte) {
+// callErrBytes is callErr's response as bytes, so waiting retries can get the same one.
+func callErrBytes(err error) (int, []byte) {
 	rec := &bufferedResponse{header: http.Header{}}
 	callErr(rec, err)
 	return rec.status, rec.body.Bytes()

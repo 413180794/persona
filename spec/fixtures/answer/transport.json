@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "resolve_no_client",
+      "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
+      "source": [
+        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "docs/redesign/ux.md §3.4、§5.3"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "action": "resolve",
+          "api_available": false,
+          "network_up": true,
+          "outcome": "success",
+          "resolution": {
+            "allow": true
+          }
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "resolution": null,
+        "card_present": true
+      },
+      "derived": true
+    },
+    {
+      "name": "resolve_network_down",
+      "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
+      "source": [
+        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "docs/redesign/ux.md §3.4、§5.3"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "action": "resolve",
+          "api_available": true,
+          "network_up": false,
+          "outcome": "success",
+          "resolution": {
+            "allow": true
+          }
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "resolution": null,
+        "card_present": true
+      },
+      "derived": true
+    },
+    {
+      "name": "resolve_success",
+      "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
+      "source": [
+        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "docs/redesign/ux.md §3.4、§5.3"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "action": "resolve",
+          "api_available": true,
+          "network_up": true,
+          "outcome": "success",
+          "resolution": {
+            "allow": true
+          }
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true
+        },
+        "card_present": false
+      },
+      "derived": true
+    },
+    {
+      "name": "resolve_gone",
+      "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
+      "source": [
+        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "docs/redesign/ux.md §3.4、§5.3"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "action": "resolve",
+          "api_available": true,
+          "network_up": true,
+          "outcome": "gone",
+          "resolution": {
+            "allow": true
+          }
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true
+        },
+        "card_present": false
+      },
+      "derived": true
+    },
+    {
+      "name": "resolve_prompt_changed",
+      "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
+      "source": [
+        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "docs/redesign/ux.md §3.4、§5.3"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "action": "resolve",
+          "api_available": true,
+          "network_up": true,
+          "outcome": "prompt_changed",
+          "resolution": {
+            "allow": true
+          }
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true
+        },
+        "card_present": false
+      },
+      "derived": true
+    },
+    {
+      "name": "resolve_error_restores_card",
+      "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
+      "source": [
+        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "docs/redesign/ux.md §3.4、§5.3"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "action": "resolve",
+          "api_available": true,
+          "network_up": true,
+          "outcome": "error",
+          "resolution": {
+            "allow": true
+          }
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true
+        },
+        "card_present": true
+      },
+      "derived": true
+    }
+  ]
+}

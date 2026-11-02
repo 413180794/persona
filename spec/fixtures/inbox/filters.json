@@ -1,0 +1,1089 @@
+{
+  "schema_version": 1,
+  "operation": "inbox_list",
+  "cases": [
+    {
+      "name": "inbox_filter_feishu",
+      "description": "来源与类型条件取交集，群聊类型兼容机器人。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "mention",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "dm",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "group",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "bot",
+            "source": "lark",
+            "kind": "bot",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-a",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-a",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-b",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-b",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "feishu",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 4,
+            "rows": [
+              {
+                "type": "item",
+                "id": "mention"
+              },
+              {
+                "type": "item",
+                "id": "dm"
+              },
+              {
+                "type": "item",
+                "id": "group"
+              },
+              {
+                "type": "item",
+                "id": "bot"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "mention"
+              },
+              {
+                "type": "item",
+                "id": "dm"
+              },
+              {
+                "type": "item",
+                "id": "group"
+              },
+              {
+                "type": "item",
+                "id": "bot"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 6,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "inbox_filter_mail_account",
+      "description": "来源与类型条件取交集，群聊类型兼容机器人。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "mention",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "dm",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "group",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "bot",
+            "source": "lark",
+            "kind": "bot",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-a",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-a",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-b",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-b",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "mail-a",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "mail-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "mail-a"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 6,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "inbox_filter_group_includes_bot",
+      "description": "来源与类型条件取交集，群聊类型兼容机器人。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "mention",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "dm",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "group",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "bot",
+            "source": "lark",
+            "kind": "bot",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-a",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-a",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-b",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-b",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "group",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "group"
+              },
+              {
+                "type": "item",
+                "id": "bot"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "group"
+              },
+              {
+                "type": "item",
+                "id": "bot"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 6,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "inbox_filter_dm_excludes_bot",
+      "description": "来源与类型条件取交集，群聊类型兼容机器人。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "mention",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "dm",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "group",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "bot",
+            "source": "lark",
+            "kind": "bot",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-a",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-a",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-b",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-b",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "dm",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "dm"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "dm"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 6,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "inbox_filter_mail_kind",
+      "description": "来源与类型条件取交集，群聊类型兼容机器人。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "mention",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "dm",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "group",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "bot",
+            "source": "lark",
+            "kind": "bot",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-a",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-a",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-b",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-b",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "mail",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "mail-a"
+              },
+              {
+                "type": "item",
+                "id": "mail-b"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "mail-a"
+              },
+              {
+                "type": "item",
+                "id": "mail-b"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 6,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "inbox_filter_mention",
+      "description": "来源与类型条件取交集，群聊类型兼容机器人。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "mention",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "dm",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "group",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "bot",
+            "source": "lark",
+            "kind": "bot",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-a",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-a",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-b",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-b",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "mention",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "mention"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "mention"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 6,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "inbox_filter_incompatible_source_kind",
+      "description": "来源与类型条件取交集，群聊类型兼容机器人。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "mention",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "dm",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "group",
+            "source": "lark",
+            "kind": "group",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "bot",
+            "source": "lark",
+            "kind": "bot",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-a",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-a",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "mail-b",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-b",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "feishu",
+          "kind": "mail",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [],
+        "action_count": 6,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "search_four_fields_only",
+      "description": "搜索标题、发件人、预览和摘要，不搜索上下文或分拣理由。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "title",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "NEEDLE",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "sender",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "sender": "NEEDLE"
+          },
+          {
+            "id": "preview",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "NEEDLE",
+            "count": 1,
+            "tier": "action"
+          },
+          {
+            "id": "summary",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "summary": "NEEDLE"
+          },
+          {
+            "id": "context",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "context": "needle"
+          },
+          {
+            "id": "reason",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "reason": "needle"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "needle",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 4,
+            "rows": [
+              {
+                "type": "item",
+                "id": "title"
+              },
+              {
+                "type": "item",
+                "id": "sender"
+              },
+              {
+                "type": "item",
+                "id": "preview"
+              },
+              {
+                "type": "item",
+                "id": "summary"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "title"
+              },
+              {
+                "type": "item",
+                "id": "sender"
+              },
+              {
+                "type": "item",
+                "id": "preview"
+              },
+              {
+                "type": "item",
+                "id": "summary"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 6,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "source_filter_compares_account",
+      "description": "来源筛选比较 account 字段而非 source 字段。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "source-mismatch",
+            "source": "mail",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "feishu",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "source-mismatch"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "source-mismatch"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    }
+  ]
+}

@@ -211,7 +211,7 @@ func (h *Hub) machineMetrics(ctx context.Context, ids []string, span time.Durati
 	}
 	out := make([]MachineMetrics, 0, len(ids))
 	for _, id := range ids {
-		m := h.byID[id]
+		m := h.localMachine(id)
 		if m == nil {
 			continue
 		}
@@ -224,8 +224,9 @@ func (h *Hub) machineMetrics(ctx context.Context, ids []string, span time.Durati
 func (h *Hub) metricsRoutes(api *http.ServeMux) {
 	// The dashboard: every machine's latest sample and its last hour by minute (the sparklines).
 	api.HandleFunc("GET /api/v1/metrics", func(w http.ResponseWriter, r *http.Request) {
-		ids := make([]string, 0, len(h.machines))
-		for _, m := range h.machines {
+		machines := h.machinesNow()
+		ids := make([]string, 0, len(machines))
+		for _, m := range machines {
 			ids = append(ids, m.cfg.ID)
 		}
 		list, err := h.machineMetrics(r.Context(), ids, time.Hour, 60, time.Now())
@@ -236,11 +237,12 @@ func (h *Hub) metricsRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"machines": list, "step": 60})
 	})
 	api.HandleFunc("GET /api/v1/machines/{id}/metrics", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		if h.byID[id] == nil {
+		m := h.localMachine(r.PathValue("id"))
+		if m == nil {
 			writeErr(w, http.StatusNotFound, errors.New("no such machine"))
 			return
 		}
+		id := m.cfg.ID
 		name := r.URL.Query().Get("range")
 		if name == "" {
 			name = "1h"

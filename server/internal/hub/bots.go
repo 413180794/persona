@@ -234,8 +234,10 @@ func (h *Hub) startBots(ctx context.Context) {
 	go h.botLoop(ctx)
 }
 
-// restartBot drops the connection and, if the bot is on and configured, opens a new one.
+// restartBot drops the connection and, if the bot is on and configured, opens a new one. A member hub keeps it closed:
+// Feishu hands each event to one of the connections, and the center's bot serves the group (mesh_group.go).
 func (h *Hub) restartBot() {
+	member := h.isMember()
 	b := &h.bots
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -243,7 +245,7 @@ func (h *Hub) restartBot() {
 		b.stop()
 		b.stop, b.conn = nil, nil
 	}
-	if !b.set.Enabled || b.base == nil {
+	if !b.set.Enabled || b.base == nil || member {
 		b.api = nil
 		return
 	}

@@ -185,6 +185,15 @@ func (s *Control) Resize(cols, rows int) error {
 	return s.send(map[string]any{"type": "terminal.resize", "cols": cols, "rows": rows})
 }
 
+// Redraw asks for a whole frame of the screen as it is: a resize to the size it has, which herdr answers with a whole
+// frame while the programs see no change (no SIGWINCH).
+func (s *Control) Redraw() error {
+	s.mu.Lock()
+	cols, rows := s.cols, s.rows
+	s.mu.Unlock()
+	return s.Resize(cols, rows)
+}
+
 // maxWheel bounds the wheel events one Scroll sends (a fling is a few dozen rows; a phone sends a few at a time).
 const maxWheel = 120
 

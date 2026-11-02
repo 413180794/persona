@@ -96,10 +96,10 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 				p.MachineID = h.assistantConfigLegacy(ctx).MachineID
 			}
 			if h.cfg != nil {
-				if p.ID == "lark.agent" && h.byID[h.cfg.LarkAgent.Machine] != nil {
+				if p.ID == "lark.agent" && h.localMachine(h.cfg.LarkAgent.Machine) != nil {
 					p.MachineID = h.cfg.LarkAgent.Machine
 				}
-				if p.ID == "inbox.agent" && h.byID[h.cfg.Inbox.Agent.Machine] != nil {
+				if p.ID == "inbox.agent" && h.localMachine(h.cfg.Inbox.Agent.Machine) != nil {
 					p.MachineID = h.cfg.Inbox.Agent.Machine
 				}
 			}
@@ -477,7 +477,7 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 			}
 		}
 	} else if p.Kind == "launcher" && p.MachineID != "" {
-		if m := h.byID[p.MachineID]; m != nil {
+		if m := h.localMachine(p.MachineID); m != nil {
 			m.mu.Lock()
 			online, info := m.online, m.info
 			m.mu.Unlock()
@@ -604,9 +604,9 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 			return errors.New("运行这个用途的电脑没有该启动器")
 		}
 		if b.Model != "" {
-			m := h.byID[p.MachineID]
+			m := h.localMachine(p.MachineID)
 			if m == nil && len(provider.Machines) > 0 {
-				m = h.byID[provider.Machines[0]]
+				m = h.localMachine(provider.Machines[0])
 			}
 			if m != nil {
 				var result struct {

@@ -1,0 +1,1970 @@
+{
+  "system": {
+    "light": {
+      "page": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "alpha": 1
+        },
+        "$description": "Theme.systemPage；systemBackground 的普通对比度回退值，非设备采样"
+      },
+      "card": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9490196078431372,
+            0.9490196078431372,
+            0.9686274509803922
+          ],
+          "alpha": 1
+        },
+        "$description": "Theme.systemCard；secondarySystemBackground 的普通对比度回退值，非设备采样"
+      },
+      "primary": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "alpha": 1
+        },
+        "$description": "Color.primary 的普通对比度回退值，非设备采样"
+      },
+      "secondary": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.23529411764705882,
+            0.23529411764705882,
+            0.2627450980392157
+          ],
+          "alpha": 0.6
+        },
+        "$description": "Color.secondary 的跨端回退，按 secondaryLabel 的 RGB 和 0.6 alpha 表达；非设备采样"
+      },
+      "well": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.4549019607843137,
+            0.4549019607843137,
+            0.5019607843137255
+          ],
+          "alpha": 0.08
+        },
+        "$description": "Theme.Fill.well；quaternarySystemFill 普通对比度回退，非设备采样"
+      },
+      "chip": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.4627450980392157,
+            0.4627450980392157,
+            0.5019607843137255
+          ],
+          "alpha": 0.12
+        },
+        "$description": "Theme.Fill.chip；tertiarySystemFill 普通对比度回退，非设备采样"
+      },
+      "pressed": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.47058823529411764,
+            0.47058823529411764,
+            0.5019607843137255
+          ],
+          "alpha": 0.16
+        },
+        "$description": "Theme.Fill.pressed；secondarySystemFill 普通对比度回退，非设备采样"
+      }
+    },
+    "dark": {
+      "page": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "alpha": 1
+        },
+        "$description": "Theme.systemPage；systemBackground 的普通对比度回退值，非设备采样"
+      },
+      "card": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.10980392156862745,
+            0.10980392156862745,
+            0.11764705882352941
+          ],
+          "alpha": 1
+        },
+        "$description": "Theme.systemCard；secondarySystemBackground 的普通对比度回退值，非设备采样"
+      },
+      "primary": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "alpha": 1
+        },
+        "$description": "Color.primary 的普通对比度回退值，非设备采样"
+      },
+      "secondary": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9215686274509803,
+            0.9215686274509803,
+            0.9607843137254902
+          ],
+          "alpha": 0.6
+        },
+        "$description": "Color.secondary 的跨端回退，按 secondaryLabel 的 RGB 和 0.6 alpha 表达；非设备采样"
+      },
+      "well": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.4627450980392157,
+            0.4627450980392157,
+            0.5019607843137255
+          ],
+          "alpha": 0.18
+        },
+        "$description": "Theme.Fill.well；quaternarySystemFill 普通对比度回退，非设备采样"
+      },
+      "chip": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.4627450980392157,
+            0.4627450980392157,
+            0.5019607843137255
+          ],
+          "alpha": 0.24
+        },
+        "$description": "Theme.Fill.chip；tertiarySystemFill 普通对比度回退，非设备采样"
+      },
+      "pressed": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.47058823529411764,
+            0.47058823529411764,
+            0.5019607843137255
+          ],
+          "alpha": 0.32
+        },
+        "$description": "Theme.Fill.pressed；secondarySystemFill 普通对比度回退，非设备采样"
+      }
+    }
+  },
+  "common": {
+    "light": {
+      "brand": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.8313725490196079,
+            0.40784313725490196,
+            0.24705882352941178
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.brand"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.8509803921568627,
+            0.22745098039215686,
+            0.22745098039215686
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.danger"
+      },
+      "positive": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.1411764705882353,
+            0.5411764705882353,
+            0.23921568627450981
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.positive"
+      },
+      "caution": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9411764705882353,
+            0.5411764705882353,
+            0.0
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.caution"
+      },
+      "cautionText": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.7019607843137254,
+            0.32941176470588235,
+            0.0
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.cautionText"
+      },
+      "ai": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.3568627450980392,
+            0.30980392156862746,
+            0.8392156862745098
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.ai"
+      },
+      "loop": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.1803921568627451,
+            0.43529411764705883,
+            0.8156862745098039
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.loop"
+      },
+      "countBadge": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.38823529411764707,
+            0.38823529411764707,
+            0.4
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.countBadge"
+      },
+      "codeBackground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9529411764705882,
+            0.9450980392156862,
+            0.9254901960784314
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.codeBackground"
+      },
+      "terminalBackground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.08627450980392157,
+            0.09019607843137255,
+            0.10588235294117647
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.terminalBackground"
+      },
+      "terminalText": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9019607843137255,
+            0.8901960784313725,
+            0.8549019607843137
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.terminalText"
+      },
+      "onCountBadge": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "alpha": 1
+        },
+        "$description": "Theme.countBadge 注释规定白字"
+      },
+      "fill": {
+        "well": {
+          "$type": "color",
+          "$value": "{system.light.well}",
+          "$description": "Theme.Fill.well"
+        },
+        "chip": {
+          "$type": "color",
+          "$value": "{system.light.chip}",
+          "$description": "Theme.Fill.chip"
+        },
+        "pressed": {
+          "$type": "color",
+          "$value": "{system.light.pressed}",
+          "$description": "Theme.Fill.pressed"
+        }
+      },
+      "diff": {
+        "add": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.11372549019607843,
+              0.47843137254901963,
+              0.2980392156862745
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Diff.add"
+        },
+        "del": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.7764705882352941,
+              0.16862745098039217,
+              0.2
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Diff.del"
+        },
+        "changed": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.5411764705882353,
+              0.41568627450980394,
+              0.0
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Diff.changed"
+        },
+        "addFill": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.18823529411764706,
+              0.6431372549019608,
+              0.4235294117647059
+            ],
+            "alpha": 0.14
+          },
+          "$description": "Theme.Diff.addFill"
+        },
+        "delFill": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8980392156862745,
+              0.2823529411764706,
+              0.30196078431372547
+            ],
+            "alpha": 0.12
+          },
+          "$description": "Theme.Diff.delFill"
+        }
+      },
+      "hue": {
+        "blue": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.1803921568627451,
+              0.43529411764705883,
+              0.8156862745098039
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Hue.blue"
+        },
+        "orange": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.7019607843137254,
+              0.32941176470588235,
+              0.0
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Hue.orange"
+        },
+        "green": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.11372549019607843,
+              0.47843137254901963,
+              0.2980392156862745
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Hue.green"
+        },
+        "purple": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.47843137254901963,
+              0.35294117647058826,
+              0.9725490196078431
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Hue.purple"
+        }
+      }
+    },
+    "dark": {
+      "brand": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9098039215686274,
+            0.5137254901960784,
+            0.3607843137254902
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.brand"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            0.37254901960784315,
+            0.3411764705882353
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.danger"
+      },
+      "positive": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.18823529411764706,
+            0.8196078431372549,
+            0.34509803921568627
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.positive"
+      },
+      "caution": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            0.6235294117647059,
+            0.0392156862745098
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.caution"
+      },
+      "cautionText": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            0.6235294117647059,
+            0.0392156862745098
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.cautionText"
+      },
+      "ai": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.611764705882353,
+            0.5803921568627451,
+            1.0
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.ai"
+      },
+      "loop": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.3568627450980392,
+            0.6078431372549019,
+            1.0
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.loop"
+      },
+      "countBadge": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.38823529411764707,
+            0.38823529411764707,
+            0.4
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.countBadge"
+      },
+      "codeBackground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.10980392156862745,
+            0.11372549019607843,
+            0.12941176470588237
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.codeBackground"
+      },
+      "terminalBackground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.054901960784313725,
+            0.058823529411764705,
+            0.07058823529411765
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.terminalBackground"
+      },
+      "terminalText": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9019607843137255,
+            0.8901960784313725,
+            0.8549019607843137
+          ],
+          "alpha": 1
+        },
+        "$description": "ios/Shared/Theme.swift：Theme.terminalText"
+      },
+      "onCountBadge": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "alpha": 1
+        },
+        "$description": "Theme.countBadge 注释规定白字"
+      },
+      "fill": {
+        "well": {
+          "$type": "color",
+          "$value": "{system.dark.well}",
+          "$description": "Theme.Fill.well"
+        },
+        "chip": {
+          "$type": "color",
+          "$value": "{system.dark.chip}",
+          "$description": "Theme.Fill.chip"
+        },
+        "pressed": {
+          "$type": "color",
+          "$value": "{system.dark.pressed}",
+          "$description": "Theme.Fill.pressed"
+        }
+      },
+      "diff": {
+        "add": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2980392156862745,
+              0.7647058823529411,
+              0.5411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Diff.add"
+        },
+        "del": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.38823529411764707,
+              0.4117647058823529
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Diff.del"
+        },
+        "changed": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8901960784313725,
+              0.7019607843137254,
+              0.2549019607843137
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Diff.changed"
+        },
+        "addFill": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2980392156862745,
+              0.7647058823529411,
+              0.5411764705882353
+            ],
+            "alpha": 0.14
+          },
+          "$description": "Theme.Diff.addFill"
+        },
+        "delFill": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.38823529411764707,
+              0.4117647058823529
+            ],
+            "alpha": 0.12
+          },
+          "$description": "Theme.Diff.delFill"
+        }
+      },
+      "hue": {
+        "blue": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.3568627450980392,
+              0.6078431372549019,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Hue.blue"
+        },
+        "orange": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.6235294117647059,
+              0.0392156862745098
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Hue.orange"
+        },
+        "green": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2980392156862745,
+              0.7647058823529411,
+              0.5411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Hue.green"
+        },
+        "purple": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.615686274509804,
+              0.5450980392156862,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.Hue.purple"
+        }
+      }
+    }
+  },
+  "semantic": {
+    "glass": {
+      "light": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0,
+              0.47843137254901963,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8627450980392157,
+              0.9176470588235294,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": "{system.light.primary}",
+          "$description": "Theme.userBubbleText 使用系统语义色"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": "{system.light.page}",
+          "$description": "Theme.pageBackground 使用系统语义色"
+        },
+        "card": {
+          "$type": "color",
+          "$value": "{system.light.card}",
+          "$description": "Theme.card 使用系统语义色"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.light.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.light.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "alpha": 0.08
+          },
+          "$description": "Theme.cardStroke：Color.primary.opacity(0.08)"
+        }
+      },
+      "dark": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0392156862745098,
+              0.5176470588235295,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.11372549019607843,
+              0.20784313725490197,
+              0.3411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": "{system.dark.primary}",
+          "$description": "Theme.userBubbleText 使用系统语义色"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": "{system.dark.page}",
+          "$description": "Theme.pageBackground 使用系统语义色"
+        },
+        "card": {
+          "$type": "color",
+          "$value": "{system.dark.card}",
+          "$description": "Theme.card 使用系统语义色"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.dark.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.dark.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 0.08
+          },
+          "$description": "Theme.cardStroke：Color.primary.opacity(0.08)"
+        }
+      }
+    },
+    "claude": {
+      "light": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8313725490196079,
+              0.40784313725490196,
+              0.24705882352941178
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.6980392156862745,
+              0.2980392156862745,
+              0.1450980392156863
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubbleText"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": "{system.light.page}",
+          "$description": "Theme.pageBackground 使用系统语义色"
+        },
+        "card": {
+          "$type": "color",
+          "$value": "{system.light.card}",
+          "$description": "Theme.card 使用系统语义色"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.light.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.light.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "alpha": 0.08
+          },
+          "$description": "Theme.cardStroke：Color.primary.opacity(0.08)"
+        }
+      },
+      "dark": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.803921568627451,
+              0.43137254901960786,
+              0.27058823529411763
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.6862745098039216,
+              0.2980392156862745,
+              0.1568627450980392
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubbleText"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": "{system.dark.page}",
+          "$description": "Theme.pageBackground 使用系统语义色"
+        },
+        "card": {
+          "$type": "color",
+          "$value": "{system.dark.card}",
+          "$description": "Theme.card 使用系统语义色"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.dark.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.dark.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 0.08
+          },
+          "$description": "Theme.cardStroke：Color.primary.opacity(0.08)"
+        }
+      }
+    },
+    "clay": {
+      "light": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.47843137254901963,
+              0.35294117647058826,
+              0.9725490196078431
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.403921568627451,
+              0.34901960784313724,
+              0.8274509803921568
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubbleText"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9372549019607843,
+              0.9176470588235294,
+              0.9686274509803922
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.pageBackground"
+        },
+        "card": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9725490196078431,
+              0.9607843137254902,
+              0.9921568627450981
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.card"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.light.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.light.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "alpha": 0.08
+          },
+          "$description": "Theme.cardStroke：Color.primary.opacity(0.08)"
+        }
+      },
+      "dark": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.5372549019607843,
+              0.4745098039215686,
+              0.9215686274509803
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.403921568627451,
+              0.33725490196078434,
+              0.8509803921568627
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubbleText"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0392156862745098,
+              0.0196078431372549,
+              0.06274509803921569
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.pageBackground"
+        },
+        "card": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.16470588235294117,
+              0.1450980392156863,
+              0.2
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.card"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.dark.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.dark.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 0.08
+          },
+          "$description": "Theme.cardStroke：Color.primary.opacity(0.08)"
+        }
+      }
+    },
+    "island": {
+      "light": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.15294117647058825,
+              0.4549019607843137,
+              0.4980392156862745
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0784313725490196,
+              0.12549019607843137,
+              0.11764705882352941
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubbleText"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9019607843137255,
+              0.9450980392156862,
+              0.9372549019607843
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.pageBackground"
+        },
+        "card": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.card"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.light.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.light.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "alpha": 0.08
+          },
+          "$description": "Theme.cardStroke：Color.primary.opacity(0.08)"
+        }
+      },
+      "dark": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.16470588235294117,
+              0.592156862745098,
+              0.596078431372549
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9098039215686274,
+              0.9529411764705882,
+              0.9450980392156862
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.043137254901960784,
+              0.07058823529411765,
+              0.06666666666666667
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubbleText"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0392156862745098,
+              0.06666666666666667,
+              0.06274509803921569
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.pageBackground"
+        },
+        "card": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.08627450980392157,
+              0.12549019607843137,
+              0.11764705882352941
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.card"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.dark.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.dark.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 0.08
+          },
+          "$description": "Theme.cardStroke：Color.primary.opacity(0.08)"
+        }
+      }
+    },
+    "lark": {
+      "light": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2,
+              0.4392156862745098,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8196078431372549,
+              0.8901960784313725,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": "{system.light.primary}",
+          "$description": "Theme.userBubbleText 使用系统语义色"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9607843137254902,
+              0.9647058823529412,
+              0.9686274509803922
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.pageBackground"
+        },
+        "card": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.card"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.light.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.light.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8705882352941177,
+              0.8784313725490196,
+              0.8901960784313725
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.cardStroke 飞书分支"
+        }
+      },
+      "dark": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2980392156862745,
+              0.5333333333333333,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.07450980392156863,
+              0.18823529411764706,
+              0.38823529411764707
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": "{system.dark.primary}",
+          "$description": "Theme.userBubbleText 使用系统语义色"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0784313725490196,
+              0.0784313725490196,
+              0.0784313725490196
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.pageBackground"
+        },
+        "card": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.12156862745098039,
+              0.12156862745098039,
+              0.12156862745098039
+            ],
+            "alpha": 1
+          },
+          "$description": "ios/Shared/Theme.swift：Theme.card"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{system.dark.primary}",
+          "$description": "SwiftUI Color.primary"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": "{system.dark.secondary}",
+          "$description": "SwiftUI Color.secondary；见 system 回退说明"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.21568627450980393,
+              0.22745098039215686,
+              0.25098039215686274
+            ],
+            "alpha": 1
+          },
+          "$description": "Theme.cardStroke 飞书分支"
+        }
+      }
+    },
+    "native": {
+      "light": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.24705882352941178,
+              0.37254901960784315,
+              0.5647058823529412
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8431372549019608,
+              0.8901960784313725,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0,
+              0.10588235294117647,
+              0.24313725490196078
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；userBubbleText"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9764705882352941,
+              0.9764705882352941,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；pageBackground"
+        },
+        "card": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9294117647058824,
+              0.9294117647058824,
+              0.9568627450980393
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；card"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.10196078431372549,
+              0.10588235294117647,
+              0.12549019607843137
+            ],
+            "alpha": 1
+          },
+          "$description": "原型 --on-surface"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.26666666666666666,
+              0.2784313725490196,
+              0.3058823529411765
+            ],
+            "alpha": 1
+          },
+          "$description": "原型 --on-surface-var"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.7686274509803922,
+              0.7764705882352941,
+              0.8156862745098039
+            ],
+            "alpha": 1
+          },
+          "$description": "原型 --outline-var"
+        }
+      },
+      "dark": {
+        "accent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.6588235294117647,
+              0.7843137254901961,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；accent"
+        },
+        "userBubble": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.1450980392156863,
+              0.2784313725490196,
+              0.4666666666666667
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；userBubble"
+        },
+        "userBubbleText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8392156862745098,
+              0.8901960784313725,
+              1.0
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；userBubbleText"
+        },
+        "pageBackground": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.06666666666666667,
+              0.07450980392156863,
+              0.09411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；pageBackground"
+        },
+        "card": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.11372549019607843,
+              0.12549019607843137,
+              0.1411764705882353
+            ],
+            "alpha": 1
+          },
+          "$description": "prototypes/android/style.css：原生静态回退，非动态取色；card"
+        },
+        "onAccent": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.03137254901960784,
+              0.18823529411764706,
+              0.37254901960784315
+            ],
+            "alpha": 1
+          },
+          "$description": "原生取 --on-primary；其余取 iOS 实心按钮白字"
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8862745098039215,
+              0.8862745098039215,
+              0.9137254901960784
+            ],
+            "alpha": 1
+          },
+          "$description": "原型 --on-surface"
+        },
+        "secondaryText": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.7686274509803922,
+              0.7764705882352941,
+              0.8156862745098039
+            ],
+            "alpha": 1
+          },
+          "$description": "原型 --on-surface-var"
+        },
+        "cardStroke": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.26666666666666666,
+              0.2784313725490196,
+              0.3058823529411765
+            ],
+            "alpha": 1
+          },
+          "$description": "原型 --outline-var"
+        }
+      }
+    }
+  }
+}

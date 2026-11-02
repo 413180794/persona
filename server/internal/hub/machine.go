@@ -25,7 +25,9 @@ import (
 
 var errOffline = errors.New("machine is offline")
 
-// Machine is the hub's connection to one node (local subprocess or `ssh host jarvisd node --stdio`).
+// Machine is the hub's connection to one node: a local subprocess, `ssh host jarvisd node --stdio`, a tailcat
+// connection to its resident node, or a stream on the link the computer's jarvis-link keeps to the hub (kind link,
+// link.go).
 type Machine struct {
 	cfg MachineConfig
 	hub *Hub
@@ -53,16 +55,41 @@ type Machine struct {
 	timings                    tailcatTimings
 	// engineMu: one engine.use to the node at a time (engine.go).
 	engineMu sync.Mutex
+	link     *hubLink      // kind link: the link jarvis-link keeps open, nil while there is none
+	linkDown error         // why the last link went away
+	linkUp   chan struct{} // a link arrived
 	// nodeCmd replaces the node command (tests).
 	nodeCmd func(context.Context) *exec.Cmd
 	// dialTailcat replaces dialing the node over tailcat, probeDirect checking that ssh works (tests).
 	dialTailcat func(context.Context) (net.Conn, error)
 	probeDirect func(context.Context) error
+	// dialNode replaces every way to the node with a connection to an in-process one (tests).
+	dialNode func(context.Context) (net.Conn, error)
+
+	// derived: a computer only a member hub has in hub.json; the center reaches it through that hub (mesh_paths.go).
+	derived bool
+	// active: the path the connection runs over (nil while offline); transport: the way it took (ssh may fall back to
+	// tailcat); uid: the machine_uid the node said; next: a connection made through a better path, to take over from
+	// the one in use (machine_conn.go).
+	active    *nodePath
+	transport string
+	uid       string
+	next      *nodeConn
+	parked    string // why the run loop does not connect now (mesh_paths.go parkReason)
+	// svc: the connector of a computer of kind service (service.go).
+	svc serviceState
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {
-	return &Machine{cfg: cfg, hub: h, watchers: map[string]int{}, lastSeq: map[string]int{}, kick: make(chan struct{}, 1),
-		timings: defaultTailcatTimings}
+	m := &Machine{cfg: cfg, hub: h, watchers: map[string]int{}, lastSeq: map[string]int{}, kick: make(chan struct{}, 1),
+		timings: defaultTailcatTimings, linkUp: make(chan struct{}, 1)}
+	switch cfg.Kind {
+	case kindLink:
+		m.err = "waiting for jarvis-link"
+	case kindService:
+		m.err = "waiting for the connector"
+	}
+	return m
 }
 
 func (m *Machine) snapshot() proto.Machine {
@@ -85,29 +112,15 @@ func (m *Machine) snapshot() proto.Machine {
 		Deploying: m.deploying, DeployError: m.deployErr,
 		System:    m.hub.metrics.system(m.cfg.ID),
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
-		Engine: engine, Engines: engines,
+		Engine: engine, Engines: engines, Link: linkInfo(m.link),
 	}
 }
 
-// run keeps the node connection alive with exponential backoff.
-func (m *Machine) run(ctx context.Context) {
-	backoff := 2 * time.Second
-	for ctx.Err() == nil {
-		start := time.Now()
-		err := m.connect(ctx)
-		m.setOffline(err)
-		if time.Since(start) > time.Minute {
-			backoff = 2 * time.Second
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(backoff):
-		case <-m.kick:
-			backoff = 2 * time.Second
-		}
-		backoff = min(backoff*2, 60*time.Second)
+func linkInfo(l *hubLink) *proto.MachineLink {
+	if l == nil {
+		return nil
 	}
+	return l.info()
 }
 
 func (m *Machine) reconnect() {
@@ -146,29 +159,10 @@ func (m *Machine) command(ctx context.Context) *exec.Cmd {
 		"-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", host, bin+" node --stdio")
 }
 
-// connect makes one connection to the node and serves it until it ends. Each way the machine can be reached is tried
-// in order (transports): ssh first when it can be, tailcat when not (tailcat.go).
-func (m *Machine) connect(ctx context.Context) error {
-	var failed []string
-	for _, via := range m.transports() {
-		online, err := m.connectVia(ctx, via)
-		if online || ctx.Err() != nil {
-			return err
-		}
-		failed = append(failed, via+"："+err.Error())
-		if via == "ssh" && m.cfg.TailcatAddr != "" {
-			m.noteDirectFailed()
-		}
-	}
-	if len(failed) == 1 {
-		_, msg, _ := strings.Cut(failed[0], "：")
-		return errors.New(msg)
-	}
-	return errors.New(strings.Join(failed, "；"))
-}
-
-// link is one way to a node: what it says, where to write, and why it failed (ssh's last stderr line).
-type link struct {
+// nodePipe is one way to a node: what it says, where to write, and why it failed (ssh's last stderr line). It is an
+// ssh (or local) process's stdout and stdin, a tailcat connection, or a stream on a jarvis-link (dialLink); connectVia
+// speaks the node protocol over each the same way.
+type nodePipe struct {
 	r       io.Reader
 	w       io.Writer
 	lastErr func() string
@@ -177,7 +171,20 @@ type link struct {
 	activity *activityConn
 }
 
-func (m *Machine) open(ctx context.Context, via string) (*link, error) {
+func (m *Machine) open(ctx context.Context, via string) (*nodePipe, error) {
+	if m.dialNode != nil {
+		c, err := m.dialNode(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &nodePipe{r: c, w: c, lastErr: func() string { return "" }, close: func() { _ = c.Close() }}, nil
+	}
+	if via == "link" {
+		return m.dialLink(ctx)
+	}
+	if via == kindService {
+		return m.dialService(ctx)
+	}
 	if via == "tailcat" {
 		dctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		defer cancel()
@@ -187,10 +194,12 @@ func (m *Machine) open(ctx context.Context, via string) (*link, error) {
 		}
 		ac := &activityConn{Conn: c}
 		ac.touch()
-		return &link{r: ac, w: ac, lastErr: func() string { return "" }, close: func() { _ = c.Close() }, activity: ac}, nil
+		return &nodePipe{r: ac, w: ac, lastErr: func() string { return "" }, close: func() { _ = c.Close() }, activity: ac}, nil
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	cmd := m.command(ctx)
+	// Bound pipe draining if a node descendant inherits stdout or stderr.
+	cmd.WaitDelay = shutdownStepTimeout
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
@@ -225,7 +234,7 @@ func (m *Machine) open(ctx context.Context, via string) (*link, error) {
 			errMu.Unlock()
 		}
 	}()
-	return &link{r: stdout, w: stdin,
+	return &nodePipe{r: stdout, w: stdin,
 		// Asked once the link has failed: stdout can close before ssh's last stderr line is read, so give the reader a
 		// moment to finish (TestBothWaysFailing lost "ssh: connect to host …" that way on a loaded machine).
 		lastErr: func() string {
@@ -239,134 +248,6 @@ func (m *Machine) open(ctx context.Context, via string) (*link, error) {
 		},
 		close: func() { cancel(); _ = cmd.Wait() },
 	}, nil
-}
-
-// connectVia connects one way and serves the connection until it ends. online: the node answered, so the machine
-// was up (a failure before that lets connect try the next way).
-func (m *Machine) connectVia(ctx context.Context, via string) (online bool, err error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	l, err := m.open(ctx, via)
-	if err != nil {
-		if via == "tailcat" {
-			m.tailcatReset()
-		}
-		return false, err
-	}
-	defer l.close()
-	defer cancel()
-
-	peer := rpc.New("h", l.w)
-	mux := streams.New(peer.Notify) // forwarded ports (ports.go)
-	defer mux.CloseAll()
-	peer.OnEvent = func(event string, params json.RawMessage) {
-		if !mux.Event(event, params) {
-			m.onEvent(event, params)
-		}
-	}
-	peer.OnRequest = m.onRequest
-	served := make(chan error, 1)
-	go func() { served <- peer.Serve(ctx, l.r) }()
-
-	ictx, icancel := context.WithTimeout(ctx, 40*time.Second)
-	// The engine first, before anything else the node is asked: it then never lists or watches the wrong one.
-	m.useEngine(ictx, peer)
-	var info proto.NodeInfo
-	err = peer.Call(ictx, "node.info", map[string]any{}, &info)
-	icancel()
-	if err != nil {
-		peer.Close(err)
-		if via == "tailcat" {
-			m.tailcatReset()
-		}
-		if msg := l.lastErr(); msg != "" {
-			return false, fmt.Errorf("%s", msg)
-		}
-		return false, err
-	}
-
-	m.mu.Lock()
-	m.peer, m.info, m.online, m.err, m.lastSeen = peer, info, true, "", time.Now().UTC()
-	m.streams = mux
-	m.via, m.path = via, ""
-	if via == "ssh" {
-		m.directFailed = time.Time{}
-	}
-	onlineAt := time.Now()
-	rewatch := map[string]int{}
-	for id, n := range m.watchers {
-		if n > 0 {
-			rewatch[id] = m.lastSeq[id]
-		}
-	}
-	m.mu.Unlock()
-	m.hub.logf("[%s] connected over %s: %s %s/%s herdr %s claude %s", m.cfg.ID, via, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
-	m.hub.onSystem(m.cfg.ID, info.System)
-	if nodeMismatch(m.hub.version, info.Version) {
-		m.hub.logf("[%s] node %s is not the hub's build %s: deploy it (scripts/deploy/deploy.sh %s)", m.cfg.ID, info.Version, m.hub.version, m.cfg.ID)
-	}
-	m.hub.broadcastMachines()
-	m.hub.connectors.MachineOnline(m.cfg.ID)
-	if via == "tailcat" {
-		go m.watchTailcat(ctx, peer, l.activity)
-	}
-
-	m.configureNode(ctx, peer)
-	var list struct {
-		Sessions []proto.Session `json:"sessions"`
-	}
-	if err := peer.Call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
-		m.setSessions(list.Sessions)
-	}
-	for id, since := range rewatch {
-		_ = peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil)
-	}
-
-	// The connection ends when the node's output does, or when the peer is closed (reconnect): then the ssh process
-	// is still there and its output never ends — waiting only for it left the machine "online" with every call
-	// failing (rpc: connection closed) until the hub restarted. Returning cancels ctx, which kills the process.
-	select {
-	case err = <-served:
-	case <-peer.Done():
-		if err = peer.Err(); err == nil {
-			err = errors.New("reconnect requested")
-		}
-	case <-ctx.Done():
-		err = ctx.Err()
-	}
-	if via == "ssh" && time.Since(onlineAt) > 10*time.Minute { // ssh held: going back to it worked
-		m.mu.Lock()
-		m.flaps, m.switchedBack = 0, time.Time{}
-		m.mu.Unlock()
-	}
-	if errors.Is(err, io.EOF) {
-		if msg := l.lastErr(); msg != "" {
-			err = fmt.Errorf("node exited: %s", msg)
-		} else {
-			err = errors.New("node exited")
-		}
-	}
-	return true, err
-}
-
-func (m *Machine) setOffline(err error) {
-	m.hub.terminalsOffline(m.cfg.ID)
-	m.mu.Lock()
-	m.peer, m.streams = nil, nil
-	m.online = false
-	m.via, m.path = "", ""
-	if err != nil {
-		m.err = err.Error()
-	}
-	for i := range m.sessions {
-		if m.sessions[i].Status != proto.StatusOffline {
-			m.sessions[i].Status = proto.StatusUnknown
-		}
-	}
-	m.mu.Unlock()
-	m.hub.logf("[%s] offline: %v", m.cfg.ID, err)
-	m.hub.broadcastMachines()
-	m.hub.cancelMachineInteractions(m.cfg.ID)
 }
 
 func (m *Machine) call(ctx context.Context, method string, params any, out any) error {
@@ -732,7 +613,7 @@ func (m *Machine) notifyFinished(id string, gen int) {
 		text = "完成了"
 	}
 	long := ncfg.longTurn()
-	m.hub.push.notifyDone(m.cfg.ID, place, id, "✅ "+title, text, func(p NotifyPrefs) bool { return p.wantsDone(took, long) })
+	m.hub.notifyDone("done", m.cfg.ID, place, id, "✅ "+title, text, pushWants{Kind: "done", Took: took, Long: long})
 }
 
 // nodeMismatch: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>

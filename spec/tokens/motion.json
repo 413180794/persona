@@ -1,0 +1,28 @@
+{
+  "motion": {
+    "state": {
+      "$type": "duration",
+      "$value": {
+        "value": 250,
+        "unit": "ms"
+      },
+      "$description": "Theme.Motion.state：snappy 配置时长，非性能实测"
+    },
+    "layout": {
+      "$type": "duration",
+      "$value": {
+        "value": 300,
+        "unit": "ms"
+      },
+      "$description": "Theme.Motion.layout：smooth 配置时长，非性能实测"
+    },
+    "reduced": {
+      "$type": "duration",
+      "$value": {
+        "value": 0,
+        "unit": "ms"
+      },
+      "$description": "减少动态效果时统一用零时长，组件还须停止循环动效"
+    }
+  }
+}

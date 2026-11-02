@@ -1,0 +1,334 @@
+// Command jarvis-link keeps this computer reachable from the Jarvis hub when the hub cannot reach it — a laptop on
+// whatever network it is on, a server or NAS behind NAT (docs/link.md). It finds the hub, says which machine it is and
+// hands each stream the hub opens on the link to this computer's resident node. Nothing else: everything a node does
+// stays in jarvisd. On a Mac the menu bar app runs it; on Linux `jarvis-link install` makes it a systemd user service.
+package main
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/chyroc/jarvis/server/internal/netaddr"
+)
+
+var version = "dev"
+
+const usage = `用法：
+  jarvis-link pair [--machine <id>] [<配对链接>|-]  主动模式（我去连 hub）：用 jarvisd hub pair 给的链接配对，凭据写进
+                                                 ~/.jarvis/link.json；不给链接或给 - 时从标准输入读（终端里会提示粘贴）；
+                                                 链接里没带机器 id 时用 --machine 指定
+  jarvis-link pair --listen [<监听地址>] [--addr <地址>]…
+                                                 被动模式（让 hub 来连）：在本机监听（默认 :18663），打印给 hub 管理界面
+                                                 粘贴的链接（10 分钟内有效，只能用一次）；--addr 指定链接里给 hub 的地址
+  jarvis-link mode [active|passive] [--listen <监听地址>]
+                                                 看 / 切换模式：active 我去连 hub，passive 让 hub 来连；
+                                                 两种模式的配对各自留着，切回去不用重新配对
+  jarvis-link install [--pair <链接>|-] [--machine <id>] [--listen [<监听地址>]] [--addr <地址>]…
+                    [--jarvisd <路径>] [--no-node]
+                                                 Linux：装成 systemd 用户服务并启动，等它连上 hub（被动模式：等它开始监听）；
+                                                 --pair 先配对（主动），--listen 改成被动模式、还没配对时打印配对链接；
+                                                 常驻 node 的服务没装时一起装上（--no-node 不装）。
+                                                 没有 systemd 时告诉你别的办法
+  jarvis-link node install [--jarvisd <路径>] | status [--json] | uninstall
+                                                 常驻 node（jarvisd node --attach）的服务：Linux systemd 用户服务
+                                                 jarvisd-node，Mac launchd 的 com.jarvis.node；已经装了的保持原样；
+                                                 没有 ~/.jarvis/bin/jarvisd 时从 --jarvisd 复制
+  jarvis-link discover [--wait <秒>] [--json]    局域网里有哪些 hub（mDNS）；听到了退出码 0，否则 1
+  jarvis-link status [--json]                    模式、链路、hub、本机 node、后台服务的状态；连着（被动模式：在监听）时
+                                                 退出码 0，否则 1
+  jarvis-link logs [-f] [-n <行数>]              看日志（~/.jarvis/link.log）；-f 一直跟着
+  jarvis-link uninstall [--purge]                停掉并删掉 systemd 用户服务；--purge 连凭据、状态、日志、
+                                                 连接器的 TLS 身份和 ~/.jarvis/bin/jarvis-link 一起删
+  jarvis-link run [--parent] [--log <文件>]      保持链路（前台），状态一行一个 JSON 打到标准输出；
+                                                 --parent：标准输入关掉就退出（菜单栏 App 这样启动它）；
+                                                 --log：日志写进这个文件（满 1 MB 换一个），不写标准错误
+  jarvis-link address add <地址>                 手动加一个 hub 的候选地址（https://域名:端口，或 域名）
+  jarvis-link address remove <地址>              去掉手动加的地址
+  jarvis-link version
+
+信号（Linux、Mac）：SIGUSR1 网络变了，马上看一眼链路；SIGUSR2 断开重连。`
+
+// exitCode ends the program with a code and nothing printed: what it had to say is already out.
+type exitCode int
+
+func (e exitCode) Error() string { return fmt.Sprintf("exit %d", int(e)) }
+
+func main() {
+	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
+	log.SetPrefix("jarvis-link: ")
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, usage)
+		os.Exit(2)
+	}
+	e := newEnv()
+	var err error
+	switch args := os.Args[2:]; os.Args[1] {
+	case "pair":
+		err = pairCmd(e, args)
+	case "mode":
+		err = modeCmd(e, args)
+	case "node":
+		err = nodeCmd(e, args)
+	case "discover":
+		err = discover(e, args)
+	case "install":
+		err = install(e, args)
+	case "uninstall":
+		err = uninstall(e, args)
+	case "status":
+		err = status(e, args)
+	case "logs", "log":
+		err = logs(e, args)
+	case "run":
+		err = run(args)
+	case "address":
+		err = address(args)
+	case "version", "--version", "-v":
+		fmt.Println(version)
+	case "help", "--help", "-h":
+		fmt.Println(usage)
+	default:
+		fmt.Fprintln(os.Stderr, usage)
+		os.Exit(2)
+	}
+	var code exitCode
+	switch {
+	case errors.As(err, &code):
+		os.Exit(int(code))
+	case errors.Is(err, errUsage):
+		fmt.Fprintln(os.Stderr, usage)
+		os.Exit(2)
+	case err != nil:
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+var errUsage = errors.New("usage")
+
+// flagValue reads `--name value` or `--name=value` at args[i]; ok says it was that flag, next is where to go on.
+func flagValue(args []string, i int, name string) (value string, next int, ok bool, err error) {
+	a := args[i]
+	if v, found := strings.CutPrefix(a, name+"="); found {
+		return v, i, true, nil
+	}
+	if a != name {
+		return "", i, false, nil
+	}
+	if i+1 >= len(args) {
+		return "", i, true, fmt.Errorf("%s 后面要跟一个值", name)
+	}
+	return args[i+1], i + 1, true, nil
+}
+
+// optionalValue reads `--name`, `--name value` or `--name=value` at args[i], the value being optional: the next
+// argument is taken unless it is another flag.
+func optionalValue(args []string, i int, name string) (value string, next int, ok bool) {
+	a := args[i]
+	if v, found := strings.CutPrefix(a, name+"="); found {
+		return v, i, true
+	}
+	if a != name {
+		return "", i, false
+	}
+	if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+		return args[i+1], i + 1, true
+	}
+	return "", i, true
+}
+
+func pairCmd(e *env, args []string) error {
+	var machine, raw, listen string
+	var addrs []string
+	seen, passive := false, false
+	for i := 0; i < len(args); i++ {
+		if v, next, ok := optionalValue(args, i, "--listen"); ok {
+			passive, listen, i = true, v, next
+			continue
+		}
+		v, next, ok, err := flagValue(args, i, "--machine")
+		if !ok && err == nil {
+			if v, next, ok, err = flagValue(args, i, "--addr"); ok && err == nil {
+				addrs, i = append(addrs, v), next
+				continue
+			}
+		}
+		switch {
+		case err != nil:
+			return err
+		case ok:
+			machine, i = v, next
+		case !seen:
+			raw, seen = args[i], true
+		default:
+			return errUsage
+		}
+	}
+	if passive || len(addrs) > 0 {
+		if seen || machine != "" {
+			return errors.New("pair --listen 不要配对链接和 --machine：被动模式的链接是这台电脑给 hub 的，机器 id 由 hub 定")
+		}
+		return pairListen(e, listen, addrs)
+	}
+	c, err := pair(e, raw, machine)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(e.stdout, "配对好了：这台是 hub 上的「%s」，凭据存在 %s。\n", c.Machine, e.configPath())
+	switch {
+	case link.Running(e.configPath()):
+		fmt.Fprintln(e.stdout, "在运行的 jarvis-link 几秒内就会用上新凭据，不用重启。")
+	case e.goos == "linux":
+		fmt.Fprintln(e.stdout, "接下来：jarvis-link install（装成 systemd 用户服务，一直连着）。")
+	}
+	return nil
+}
+
+// pair redeems a pairing link: raw, or read from stdin when raw is "" or "-" (with a prompt on a terminal).
+func pair(e *env, raw, machine string) (*link.Config, error) {
+	if raw == "" || raw == "-" {
+		in := bufio.NewReader(io.LimitReader(e.stdin, 16<<10))
+		if e.stdinIsTerminal() {
+			// One pasted line, then Enter: not waiting for the end of input.
+			fmt.Fprint(e.stderr, "粘贴 jarvisd hub pair 给的配对链接，回车：")
+			line, err := in.ReadString('\n')
+			if err != nil && line == "" {
+				return nil, err
+			}
+			raw = line
+		} else {
+			b, err := io.ReadAll(in)
+			if err != nil {
+				return nil, err
+			}
+			raw = string(b)
+		}
+		raw = strings.TrimSpace(raw)
+	}
+	if strings.TrimSpace(raw) == "" {
+		return nil, errors.New("没有配对链接：在 hub 机器上运行 jarvisd hub pair --machine <这台的 id>，把它打印的链接给我")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	return link.Pair(ctx, raw, strings.TrimSpace(machine), "", e.configPath())
+}
+
+func address(args []string) error {
+	if len(args) != 2 || (args[0] != "add" && args[0] != "remove") {
+		return errUsage
+	}
+	if args[0] == "remove" {
+		return link.RemoveAddress(link.DefaultPath(), args[1])
+	}
+	e, err := link.AddAddress(link.DefaultPath(), args[1])
+	if err == nil {
+		fmt.Printf("加好了：%s\n", e.URL)
+	}
+	return err
+}
+
+func run(args []string) error {
+	var parent bool
+	var logPath string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--parent" {
+			parent = true
+			continue
+		}
+		v, next, ok, err := flagValue(args, i, "--log")
+		switch {
+		case err != nil:
+			return err
+		case !ok:
+			return errUsage
+		}
+		logPath, i = v, next
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if parent { // the menu bar app went away, however it did
+		go func() {
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			stop()
+		}()
+	}
+	return keepLink(ctx, link.DefaultPath(), logPath, os.Stdout)
+}
+
+// keepLink is `jarvis-link run`: the link for the link.json at path until ctx ends. Every status goes to stdout as a
+// JSON line and to link.status.json for `jarvis-link status`; the log to logPath when there is one.
+func keepLink(ctx context.Context, path, logPath string, stdout io.Writer) error {
+	release, err := link.LockRun(path)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if logPath != "" {
+		lf, err := openRotating(logPath, logMax)
+		if err != nil {
+			return err
+		}
+		defer lf.Close()
+		log.SetOutput(lf)
+		defer log.SetOutput(os.Stderr)
+	}
+	check, redial := make(chan struct{}, 1), make(chan struct{}, 1)
+	poke := func(ch chan struct{}) {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+	notifySignals(func() { poke(check) }, func() { poke(redial) })
+	// Address changes: netlink on Linux; elsewhere a slow poll, and the menu bar app signals as soon as it sees one.
+	go func() {
+		first := true
+		for range netaddr.Watch(ctx) {
+			if !first {
+				poke(check)
+			}
+			first = false
+		}
+	}()
+	var mu sync.Mutex
+	out := json.NewEncoder(stdout)
+	var last link.Status
+	ended := false // a stream ending late must not write over "stopped"
+	save := func(s link.Status) {
+		if err := link.WriteStatus(path, link.SavedStatus{Status: s, PID: os.Getpid(), Version: version, Updated: time.Now()}); err != nil {
+			log.Printf("status: %v", err)
+		}
+	}
+	log.Printf("jarvis-link %s started", version)
+	err = link.Run(ctx, link.Options{Path: path, Target: link.AttachSocket(), Version: version,
+		Status: func(s link.Status) {
+			mu.Lock()
+			defer mu.Unlock()
+			if ended {
+				return
+			}
+			_ = out.Encode(s)
+			last = s
+			save(s)
+		},
+		Check: check, Redial: redial, Logf: log.Printf})
+	mu.Lock()
+	defer mu.Unlock()
+	ended = true
+	save(link.Status{State: "stopped", Mode: last.Mode, Machine: last.Machine, HubName: last.HubName, Endpoints: last.Endpoints,
+		Listen: last.Listen, LastSeen: last.LastSeen, From: last.From})
+	log.Printf("jarvis-link stopped")
+	return err
+}

@@ -1,0 +1,107 @@
+[
+  {
+    "name": "unauthorized",
+    "description": "未鉴权响应保持字符串 error 字段。",
+    "source": [
+      "server/internal/hub/http.go: Hub.auth",
+      "apple/Shared/APIClient.swift: APIError.fields(in:)"
+    ],
+    "derived": true,
+    "decoder": "error",
+    "http_status": 401,
+    "input": {
+      "code": "invalid_token",
+      "delivered": "none",
+      "error": "invalid token",
+      "retryable": false
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/error": "invalid token"
+      }
+    }
+  },
+  {
+    "name": "conflict_input_draft",
+    "description": "拒绝操作的错误字段与 error 平铺在同一层。",
+    "source": [
+      "server/internal/hub/http.go: callErr",
+      "apple/Shared/APIClient.swift: APIError.fields(in:)",
+      "docs/protocol.md: 发消息 / 终端对话框"
+    ],
+    "derived": true,
+    "decoder": "error",
+    "http_status": 409,
+    "input": {
+      "clearable": "示例草稿",
+      "code": "input_draft",
+      "delivered": "none",
+      "draft": "❯ 示例草稿",
+      "error": "请先处理示例终端状态。",
+      "retryable": false
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/clearable": "示例草稿",
+        "/code": "input_draft",
+        "/delivered": "none",
+        "/draft": "❯ 示例草稿",
+        "/error": "请先处理示例终端状态。"
+      }
+    }
+  },
+  {
+    "name": "conflict_dialog_open",
+    "description": "拒绝操作的错误字段与 error 平铺在同一层。",
+    "source": [
+      "server/internal/hub/http.go: callErr",
+      "apple/Shared/APIClient.swift: APIError.fields(in:)",
+      "docs/protocol.md: 发消息 / 终端对话框"
+    ],
+    "derived": true,
+    "decoder": "error",
+    "http_status": 409,
+    "input": {
+      "code": "dialog_open",
+      "delivered": "none",
+      "error": "请先处理示例终端状态。",
+      "retryable": false
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/code": "dialog_open",
+        "/delivered": "none",
+        "/error": "请先处理示例终端状态。"
+      }
+    }
+  },
+  {
+    "name": "conflict_prompt_changed",
+    "description": "拒绝操作的错误字段与 error 平铺在同一层。",
+    "source": [
+      "server/internal/hub/http.go: callErr",
+      "apple/Shared/APIClient.swift: APIError.fields(in:)",
+      "docs/protocol.md: 发消息 / 终端对话框"
+    ],
+    "derived": true,
+    "decoder": "error",
+    "http_status": 409,
+    "input": {
+      "code": "prompt_changed",
+      "delivered": "none",
+      "error": "请先处理示例终端状态。",
+      "retryable": false
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/code": "prompt_changed",
+        "/delivered": "none",
+        "/error": "请先处理示例终端状态。"
+      }
+    }
+  }
+]

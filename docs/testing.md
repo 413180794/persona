@@ -39,12 +39,9 @@ transcript 解析用真实样本做 golden 测试（`server/internal/transcript/
 
 ## 安卓截图
 
-`./scripts/app/android.sh shots [类名]`：Paparazzi（JVM 上的 layoutlib，不要模拟器）画 `android/app/src/test/java/jarvis/android/shots/` 里的页面，
-数据来自测试自己起的 `scripts/mock/mock_hub.py`（随机端口，`MockHub.kt`），每页浅色、深色各一张，按名字放在 `android/app/build/shots/<名字>.png`
-（`scripts/app/android_shots.py` 从 Paparazzi 的报告里按名字拷出来）。改了界面就跑一遍、逐张看，改前改后对比；它们只给人看，不跟基准图比。
-平时的 `./scripts/app/android.sh test` 不跑它们（`-Pshots` 才跑）。新页面加一个 `XxxShots.kt`，用 `ShotHost(dark) { … }` 包起来；
-要网络数据的页面先把数据装好再画（`docs/android.md`「经验」）。折叠屏（内屏平放 / 半折 / 拖过分隔条、外屏、内屏横放）、三折屏、平板、横放的手机是 `FoldShots.kt`（改了外壳、对话页都要看）。
-飞书会话和removed的页面是 `LarkShots.kt`（假 hub 带 `MOCK_LARK=1`：会话里各种消息、表情库、图片）。
+`./scripts/app/android.sh shots -s emulator-<端口> --out <目录>`：在专用模拟器上装独立的测试包，用匿名化的 `scripts/mock/mock_hub.py` 自动配对，
+四个 tab 和主要页面按浅色、深色各截一张（`docs/android.md`「假 hub 批量截图」；只挪代码不改样子的重构用同一节的「改前改后逐像素比对」，比对用 `scripts/app/android_shots_diff.py`）。
+改了界面还要在三套界面风格（玻璃 / 晨报 / 看板）下看（`docs/android-design.md`），平板 / 折叠屏的截图办法见 `docs/lessons/android.md`。
 手势、键盘、通知、真实网络要在真机或模拟器上看。
 
 ## 用 mock 数据截图（README / 宣传图）
@@ -283,6 +280,45 @@ Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock
 - 列表行被快速筛选条（`safeAreaBar`）盖住时 XCUITest 仍说它 `isHittable`，点下去点到的是筛选条（「需要你」被选上）：点行之前把它滚到筛选条以下、tab 栏以上，
   而且一次只拖三分之一屏（`swipeUp` 会甩过头）。
 - 对话页有两个「终端」按钮（展开的页头在时钟下面、折叠后的小页头里），取 `frame.minY > 40` 且能点的那个。
+
+### 多 hub（`MultiHubTests`，[multi-hub.md](multi-hub.md)）
+
+三台假 hub 模拟「两组、其中一组两台」：A 单独一组（家里）；B、C 互联成一组（公司），C 拥有 MacBook。两组都有同 id 的机器、会话和交互，
+发错 hub 一眼就能看出来。`scripts/mock/mock_hub.py` 的互联字段（`MOCK_HUB_ID`、`MOCK_HUB_NAME`、`MOCK_MESH_PEERS`、`MOCK_MACHINE_OWNER`、
+`MOCK_MACHINE_NAMES`、`MOCK_MACHINES_KEEP`，`GET /mock/mesh`）见文件头的注释，不设时 mock 的输出和以前完全一样（`scripts/mock/test_mock_hub_mesh.py`）。
+
+```sh
+PORT=18760 MOCK_HUB_ID=hub-a MOCK_HUB_NAME=家里 python3 scripts/mock/mock_hub.py &
+PORT=18761 MOCK_HUB_ID=hub-b MOCK_HUB_NAME=公司 \
+  MOCK_MESH_PEERS='[{"hub_id":"hub-c","name":"公司 2","endpoints":["http://127.0.0.1:18762"]}]' \
+  MOCK_MACHINE_OWNER='{"macbook":"hub-c"}' MOCK_MACHINES_KEEP=server,macbook \
+  MOCK_MACHINE_NAMES='{"server":"工作服务器","macbook":"工作 MacBook"}' python3 scripts/mock/mock_hub.py &
+PORT=18762 MOCK_HUB_ID=hub-c MOCK_HUB_NAME="公司 2" \
+  MOCK_MESH_PEERS='[{"hub_id":"hub-b","name":"公司","endpoints":["http://127.0.0.1:18761"]}]' \
+  MOCK_MACHINE_OWNER='{"server":"hub-b"}' MOCK_MACHINES_KEEP=server,macbook \
+  MOCK_MACHINE_NAMES='{"server":"工作服务器","macbook":"工作 MacBook"}' python3 scripts/mock/mock_hub.py &
+TEST_RUNNER_JARVIS_HUB_A=http://127.0.0.1:18760 TEST_RUNNER_JARVIS_HUB_B=http://127.0.0.1:18761 \
+  TEST_RUNNER_JARVIS_HUB_C=http://127.0.0.1:18762 xcodebuild test … -only-testing:JarvisUITests/MultiHubTests
+```
+
+- 截图：`-pairURL <A> -pairURL2 <B> -pairURL3 <C>` 配三台（DEBUG；同一地址和凭据的 hub 重启后保持原来的组 id），再加页面参数：
+  `-tab dev`（合并的 Agents）、`-tab settings -openHubs YES`（设置 › hub）、`-tab settings -openMachines YES`（按组分块的机器页）、
+  `-openHub <组 id 或序号>`（当前 hub）。`-openSession` 可以写 `组 id|机器/会话`，不写组时按会话找。
+- 同组换 hub：在设置 › hub 看哪台标「在用」，对它 `GET /mock/down?s=40`（或按端口停掉它），十几秒内「在用」换到组里另一台，标题不变。
+- 只有一组时零变化：改动前在 `git worktree add --detach` 的副本里编一份 DEBUG 包，用同一份 mock（同一组启动参数、固定状态栏和时钟）拍 14 个界面 × 深浅色，
+  改动后再拍一遍逐像素比；同一个包连拍几次得到噪声（系统菊花、液态玻璃的边缘高光每次启动都不一样），比较时排除噪声，剩下的差异要逐张看。
+  设置首页「服务器」一节多出的「hub」一行是唯一允许的变化。
+
+## iOS 兼容验证（App 不改代码，验 hub 的改动）
+
+改 hub 的配对、鉴权、WebSocket 时，用当前的 iOS App 原样连一个本机测试 hub 验一遍（2026-10-31 P0 这样验过，`docs/redesign/ios-p0-verification.md`）：
+
+- 构建按模拟器 id 来（`-destination id=<udid>`，和 `scripts/sim.sh` 一样）。别加 `-sdk iphonesimulator`：它会把手表 target 也按 iPhone 模拟器编，
+  两个产物都叫 `Jarvis.app`，报「Multiple commands produce」。没有签名团队时加 `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`。
+- DEBUG 版带 `-pairURL` 启动会跳过「用配对 token 换设备 token」（`DeviceCredentials.swift`）。要验换凭据：先带 `-pairURL` 启动一次
+  （配置写进 Keychain），再不带参数冷启动，App 就走真实的 `upgradeCredentials()`；查 hub 库里 `device_tokens` 有没有新行、`pair_tokens.used_at` 有没有填。
+- iOS 27 上 `simctl openurl jarvis://pair?...` 会弹「在 Jarvis 中打开？」确认框，脚本点不了，别用这条路配对。
+- 模拟器的 Keychain 卸载 App 后还在：同一台模拟器上前后两次配对，第二次 App 可能先拿到上一次的凭据，要么换一台新模拟器，要么先在 App 里断开。
 
 ## herdr 联调
 

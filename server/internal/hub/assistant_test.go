@@ -90,3 +90,54 @@ func TestCompactJSONPrunes(t *testing.T) {
 		t.Fatalf("got %s", out)
 	}
 }
+
+// The assistant's instructions said 「就是你所在的这台」 only of the hub's own machine and gave everything else an
+// `ssh <alias>` command, but the aliases are the hub machine's and a link machine has no ssh: an assistant on a laptop
+// was told to ssh into itself through a name only the hub knows (2026-10-31).
+func TestAssistantMachinesFromWhereItRuns(t *testing.T) {
+	machines := []MachineConfig{
+		{ID: "server", Name: "服务器", Kind: "local"},
+		{ID: "box", Name: "台式机", Kind: "ssh", SSHHost: "box-alias"},
+		{ID: "laptop", Name: "笔记本", Kind: "link"},
+	}
+	lines := func(at string) map[string]string {
+		h := newTestHub(t)
+		h.cfg.Assistant.Machine = at
+		for _, mc := range machines {
+			m := newMachine(h, mc)
+			h.machines = append(h.machines, m)
+			h.byID[mc.ID] = m
+		}
+		out := map[string]string{}
+		for _, line := range strings.Split(h.assistantClaudeMD(context.Background(), false), "\n") {
+			for _, mc := range machines {
+				if strings.HasPrefix(line, "  - "+mc.Name) {
+					out[mc.ID] = line
+				}
+			}
+		}
+		if len(out) != len(machines) {
+			t.Fatalf("the instructions leave out machines: %v", out)
+		}
+		return out
+	}
+	here, ssh, noCommand := "就是你所在的这台机器", "`ssh box-alias '<命令>'`", "不能直接在它上面执行命令"
+	for _, tc := range []struct {
+		at   string
+		want map[string]string
+	}{
+		{"server", map[string]string{"server": here, "box": ssh, "laptop": noCommand}},
+		{"box", map[string]string{"server": noCommand, "box": here, "laptop": noCommand}},
+		{"laptop", map[string]string{"server": noCommand, "box": noCommand, "laptop": here}},
+	} {
+		got := lines(tc.at)
+		for id, want := range tc.want {
+			if !strings.Contains(got[id], want) {
+				t.Errorf("assistant on %s, line for %s = %q, want %q", tc.at, id, got[id], want)
+			}
+			if tc.at != "server" && strings.Contains(got[id], "ssh ") {
+				t.Errorf("assistant on %s is told to ssh: %q", tc.at, got[id])
+			}
+		}
+	}
+}

@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -143,6 +144,11 @@ func (it *InboxItem) listed() InboxItem {
 		a := *it.Agent
 		c.Agent = &a
 	}
+	if it.Mail != nil {
+		m := *it.Mail
+		m.UIDs = append([]uint32(nil), m.UIDs...)
+		c.Mail = &m
+	}
 	if it.Doc != nil {
 		d := *it.Doc
 		c.Doc = &d
@@ -200,7 +206,9 @@ func (h *Hub) kickInbox() {
 func (h *Hub) inboxLoop(ctx context.Context) {
 	h.inbox.init()
 	h.loadInbox(ctx)
-	h.collectInbox(ctx, true)
+	if !h.isMember() {
+		h.collectInbox(ctx, true)
+	}
 	lastMail := time.Now()
 	t := time.NewTicker(inboxPoll)
 	defer t.Stop()
@@ -215,6 +223,9 @@ func (h *Hub) inboxLoop(ctx context.Context) {
 				return
 			case <-time.After(inboxDebounce):
 			}
+		}
+		if h.isMember() { // the center keeps the group's inbox; this one's stays as it was (mesh_group.go)
+			continue
 		}
 		withMail := time.Since(lastMail) >= inboxMailPoll
 		if withMail {
@@ -771,7 +782,10 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusNotFound, errNoInboxItem)
 			return
 		}
-		writeJSON(w, c)
+		writeJSON(w, struct {
+			InboxItem
+			ReplyTarget *inboxMailTarget `json:"reply_target,omitempty"`
+		}{c, mailTarget(c)})
 	})
 	api.HandleFunc("POST /api/v1/inbox/{id}/done", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -803,17 +817,22 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 			writeJSON(w, map[string]any{"text": text})
 		}
 	})
-	api.HandleFunc("POST /api/v1/inbox/{id}/reply", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/v1/inbox/{id}/reply", h.withReplyReceipt("inbox_reply", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Text    string      `json:"text"`
-			Changes []DocChange `json:"changes"` // documents: status moves to make with the reply
+			Text            string      `json:"text"`
+			Changes         []DocChange `json:"changes"` // documents: status moves to make with the reply
+			ClientID        string      `json:"client_id"`
+			ExpectedUID     *uint32     `json:"expected_uid"`
+			ExpectedVersion *string     `json:"expected_version"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" && len(in.Changes) == 0 {
 			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
 			return
 		}
-		it, err := h.replyInbox(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.Changes...)
+		it, err := h.replyInboxChecked(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.ClientID, in.ExpectedUID, in.ExpectedVersion, in.Changes...)
 		switch {
+		case errors.Is(err, errMailReplyTargetChanged):
+			writeErrorBody(w, http.StatusConflict, map[string]any{"code": "mail_reply_target_changed", "error": "邮件回复对象已变化，请查看最新邮件后确认发送", "retryable": false, "delivered": "none"})
 		case errors.Is(err, errNoInboxItem):
 			writeErr(w, http.StatusNotFound, err)
 		case err != nil:
@@ -821,7 +840,7 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 		default:
 			writeJSON(w, it)
 		}
-	})
+	}))
 	api.HandleFunc("POST /api/v1/inbox/{id}/doc/status", func(w http.ResponseWriter, r *http.Request) {
 		var in DocChange
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Ref == "" || in.Field == "" || in.Value == "" {
@@ -844,6 +863,46 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 		h.collectInbox(r.Context(), true)
 		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all")})
 	})
+}
+
+type inboxMailTarget struct {
+	UID     uint32 `json:"uid"`
+	Version string `json:"version"`
+}
+
+var errMailReplyTargetChanged = errors.New("mail reply target changed")
+
+func mailTarget(it InboxItem) *inboxMailTarget {
+	if it.Mail == nil || len(it.Mail.UIDs) == 0 {
+		return nil
+	}
+	// Bind the version to the account, mailbox, message and recipient, not read/triage state.
+	raw, _ := json.Marshal(it.Mail)
+	sum := sha256.Sum256(raw)
+	return &inboxMailTarget{UID: it.Mail.UIDs[len(it.Mail.UIDs)-1], Version: hex.EncodeToString(sum[:])}
+}
+
+func (h *Hub) replyInboxChecked(ctx context.Context, id, text, clientID string, uid *uint32, version *string, changes ...DocChange) (InboxItem, error) {
+	if uid == nil && version == nil {
+		return h.replyInboxAs(ctx, id, text, clientID, changes...)
+	}
+	// Collection and checked sends must not change the target between validation and sending.
+	h.inbox.running.Lock()
+	defer h.inbox.running.Unlock()
+	h.inbox.mu.Lock()
+	it := h.inbox.items[id]
+	var target *inboxMailTarget
+	if it != nil {
+		target = mailTarget(*it)
+	}
+	h.inbox.mu.Unlock()
+	if it == nil {
+		return InboxItem{}, errNoInboxItem
+	}
+	if target == nil || uid != nil && *uid != target.UID || version != nil && *version != target.Version {
+		return InboxItem{}, errMailReplyTargetChanged
+	}
+	return h.replyInboxAs(ctx, id, text, clientID, changes...)
 }
 
 // inboxList is every open item and the recently done ones, newest first; connectors' only when all (rows stored

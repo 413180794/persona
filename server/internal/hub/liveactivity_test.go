@@ -162,6 +162,7 @@ type fakeAPNs struct {
 type apnsCall struct {
 	Token, Topic, Type, Priority, Event string
 	State                               FleetState
+	Body                                []byte
 }
 
 func (f *fakeAPNs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +176,7 @@ func (f *fakeAPNs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(b, &body)
 	token := strings.TrimPrefix(r.URL.Path, "/3/device/")
 	f.mu.Lock()
-	f.got = append(f.got, apnsCall{token, r.Header.Get("apns-topic"), r.Header.Get("apns-push-type"), r.Header.Get("apns-priority"), body.APS.Event, body.APS.State})
+	f.got = append(f.got, apnsCall{token, r.Header.Get("apns-topic"), r.Header.Get("apns-push-type"), r.Header.Get("apns-priority"), body.APS.Event, body.APS.State, b})
 	gone := f.gone[token]
 	f.mu.Unlock()
 	if gone {

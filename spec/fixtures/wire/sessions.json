@@ -1,0 +1,198 @@
+[
+  {
+    "name": "sessions_list",
+    "description": "会话列表保留状态、模式和后台任务信息。",
+    "source": [
+      "server/internal/proto/proto.go: Session",
+      "server/internal/hub/http.go: Hub.listSessions",
+      "apple/Shared/Models.swift: Session.init(from:)"
+    ],
+    "derived": true,
+    "decoder": "sessions",
+    "input": {
+      "sessions": [
+        {
+          "machine_id": "m1",
+          "session_id": "s1",
+          "title": "示例任务",
+          "cwd": "/home/user/project",
+          "status": "blocked",
+          "pane_id": "w1:p1",
+          "tab_id": "w1:t1",
+          "workspace_id": "w1",
+          "agent": "claude",
+          "launcher": "example",
+          "model": "example-model",
+          "permission_mode": "plan",
+          "effort": "high",
+          "started_by_jarvis": true,
+          "assistant": false,
+          "space_kind": "herdr",
+          "space_id": "w1",
+          "space_name": "示例空间",
+          "space_index": 1,
+          "slot_id": "t1",
+          "slot_name": "示例任务",
+          "slot_index": 1,
+          "state": "needs_you",
+          "seen_at": "0001-01-01T00:00:00Z",
+          "state_since": "2026-01-02T03:04:05Z",
+          "queued": [
+            "请补充示例。"
+          ],
+          "background": [
+            {
+              "id": "task_example",
+              "kind": "shell",
+              "description": "检查示例",
+              "command": "pwd",
+              "started_at": "2026-01-02T03:04:05Z"
+            }
+          ],
+          "subagents": [
+            {
+              "id": "agent_example",
+              "session_id": "s1@agent_example",
+              "type": "Explore",
+              "running": true,
+              "started_at": "2026-01-02T03:04:05Z",
+              "updated_at": "0001-01-01T00:00:00Z"
+            }
+          ],
+          "loop": {
+            "kind": "wakeup",
+            "prompt": "检查示例状态",
+            "next_at": "2026-01-02T04:04:05Z",
+            "ticks": 1
+          },
+          "updated_at": "2026-01-02T03:04:05Z",
+          "rev": 120,
+          "pending_interactions": 1,
+          "suggestion": "继续检查示例"
+        },
+        {
+          "machine_id": "m1",
+          "session_id": "s2",
+          "title": "离线示例",
+          "cwd": "/home/user/project",
+          "status": "offline",
+          "started_by_jarvis": false,
+          "assistant": false,
+          "state": "offline",
+          "seen_at": "0001-01-01T00:00:00Z",
+          "state_since": "2026-01-02T03:04:05Z",
+          "updated_at": "2026-01-02T03:04:05Z",
+          "pending_interactions": 0
+        }
+      ]
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/sessions/0/background/0/kind": "shell",
+        "/sessions/0/permission_mode": "plan",
+        "/sessions/0/rev": 120,
+        "/sessions/0/state": "needs_you",
+        "/sessions/1/state": "offline"
+      }
+    }
+  },
+  {
+    "name": "sessions_event",
+    "description": "会话事件以信封中的机器标识为准。",
+    "source": [
+      "server/internal/hub/http.go: Hub.serveWS",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "machine_id": "m1",
+      "sessions": [
+        {
+          "machine_id": "m1",
+          "session_id": "s1",
+          "title": "示例任务",
+          "cwd": "/home/user/project",
+          "status": "blocked",
+          "pane_id": "w1:p1",
+          "tab_id": "w1:t1",
+          "workspace_id": "w1",
+          "agent": "claude",
+          "launcher": "example",
+          "model": "example-model",
+          "permission_mode": "plan",
+          "effort": "high",
+          "started_by_jarvis": true,
+          "assistant": false,
+          "space_kind": "herdr",
+          "space_id": "w1",
+          "space_name": "示例空间",
+          "space_index": 1,
+          "slot_id": "t1",
+          "slot_name": "示例任务",
+          "slot_index": 1,
+          "state": "needs_you",
+          "seen_at": "0001-01-01T00:00:00Z",
+          "state_since": "2026-01-02T03:04:05Z",
+          "queued": [
+            "请补充示例。"
+          ],
+          "background": [
+            {
+              "id": "task_example",
+              "kind": "shell",
+              "description": "检查示例",
+              "command": "pwd",
+              "started_at": "2026-01-02T03:04:05Z"
+            }
+          ],
+          "subagents": [
+            {
+              "id": "agent_example",
+              "session_id": "s1@agent_example",
+              "type": "Explore",
+              "running": true,
+              "started_at": "2026-01-02T03:04:05Z",
+              "updated_at": "0001-01-01T00:00:00Z"
+            }
+          ],
+          "loop": {
+            "kind": "wakeup",
+            "prompt": "检查示例状态",
+            "next_at": "2026-01-02T04:04:05Z",
+            "ticks": 1
+          },
+          "updated_at": "2026-01-02T03:04:05Z",
+          "rev": 120,
+          "pending_interactions": 1,
+          "suggestion": "继续检查示例"
+        },
+        {
+          "machine_id": "m1",
+          "session_id": "s2",
+          "title": "离线示例",
+          "cwd": "/home/user/project",
+          "status": "offline",
+          "started_by_jarvis": false,
+          "assistant": false,
+          "state": "offline",
+          "seen_at": "0001-01-01T00:00:00Z",
+          "state_since": "2026-01-02T03:04:05Z",
+          "updated_at": "2026-01-02T03:04:05Z",
+          "pending_interactions": 0
+        }
+      ],
+      "type": "sessions"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/machine_id": "m1",
+        "/sessions/0/machine_id": "m1",
+        "/sessions/1/status": "offline",
+        "/type": "sessions"
+      }
+    }
+  }
+]

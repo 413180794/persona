@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "kind": "width",
+  "cases": [
+    {
+      "name": "width_ascii",
+      "description": "字符 a 按 iOS 字素规则占 1 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width",
+        "ios/JarvisTests/TerminalGridTests.swift — widths"
+      ],
+      "input": {
+        "character": "a"
+      },
+      "expected": {
+        "width": 1
+      },
+      "from_test": "widths"
+    },
+    {
+      "name": "width_rule",
+      "description": "字符 ─ 按 iOS 字素规则占 1 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width",
+        "ios/JarvisTests/TerminalGridTests.swift — widths"
+      ],
+      "input": {
+        "character": "─"
+      },
+      "expected": {
+        "width": 1
+      },
+      "from_test": "widths"
+    },
+    {
+      "name": "width_text_symbol",
+      "description": "字符 ⏺ 按 iOS 字素规则占 1 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width",
+        "ios/JarvisTests/TerminalGridTests.swift — widths"
+      ],
+      "input": {
+        "character": "⏺"
+      },
+      "expected": {
+        "width": 1
+      },
+      "from_test": "widths"
+    },
+    {
+      "name": "width_cjk",
+      "description": "字符 中 按 iOS 字素规则占 2 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width",
+        "ios/JarvisTests/TerminalGridTests.swift — widths"
+      ],
+      "input": {
+        "character": "中"
+      },
+      "expected": {
+        "width": 2
+      },
+      "from_test": "widths"
+    },
+    {
+      "name": "width_fullwidth",
+      "description": "字符 ， 按 iOS 字素规则占 2 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width",
+        "ios/JarvisTests/TerminalGridTests.swift — widths"
+      ],
+      "input": {
+        "character": "，"
+      },
+      "expected": {
+        "width": 2
+      },
+      "from_test": "widths"
+    },
+    {
+      "name": "width_emoji",
+      "description": "字符 😀 按 iOS 字素规则占 2 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width",
+        "ios/JarvisTests/TerminalGridTests.swift — widths"
+      ],
+      "input": {
+        "character": "😀"
+      },
+      "expected": {
+        "width": 2
+      },
+      "from_test": "widths"
+    },
+    {
+      "name": "width_skin_tone",
+      "description": "字符 👍🏽 按 iOS 字素规则占 2 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width",
+        "ios/JarvisTests/TerminalGridTests.swift — widths"
+      ],
+      "input": {
+        "character": "👍🏽"
+      },
+      "expected": {
+        "width": 2
+      },
+      "from_test": "widths"
+    },
+    {
+      "name": "width_variation",
+      "description": "字符 ❤️ 按 iOS 字素规则占 2 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width",
+        "ios/JarvisTests/TerminalGridTests.swift — widths"
+      ],
+      "input": {
+        "character": "❤️"
+      },
+      "expected": {
+        "width": 2
+      },
+      "from_test": "widths"
+    },
+    {
+      "name": "width_combining",
+      "description": "字符 ́ 按 iOS 字素规则占 0 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width"
+      ],
+      "input": {
+        "character": "́"
+      },
+      "expected": {
+        "width": 0
+      },
+      "derived": true
+    },
+    {
+      "name": "width_combined_latin",
+      "description": "字符 é 按 iOS 字素规则占 1 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width"
+      ],
+      "input": {
+        "character": "é"
+      },
+      "expected": {
+        "width": 1
+      },
+      "derived": true
+    },
+    {
+      "name": "width_zwj",
+      "description": "字符 👩‍💻 按 iOS 字素规则占 2 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width"
+      ],
+      "input": {
+        "character": "👩‍💻"
+      },
+      "expected": {
+        "width": 2
+      },
+      "derived": true
+    },
+    {
+      "name": "width_flag",
+      "description": "字符 🇨🇳 按 iOS 字素规则占 2 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width"
+      ],
+      "input": {
+        "character": "🇨🇳"
+      },
+      "expected": {
+        "width": 2
+      },
+      "derived": true
+    },
+    {
+      "name": "width_ascii_keycap",
+      "description": "字符 1️⃣ 按 iOS 字素规则占 1 格。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — width"
+      ],
+      "input": {
+        "character": "1️⃣"
+      },
+      "expected": {
+        "width": 1
+      },
+      "derived": true
+    }
+  ]
+}

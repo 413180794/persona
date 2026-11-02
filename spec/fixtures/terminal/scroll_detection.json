@@ -1,0 +1,1209 @@
+{
+  "schema_version": 1,
+  "kind": "grid",
+  "cases": [
+    {
+      "name": "scroll_up_two",
+      "description": "顶部连续匹配三行正文时检测到向上滚动两行。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
+        "ios/JarvisTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 8,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Hone\u001b[2;1Htwo\u001b[3;1Hthree\u001b[4;1Hfour\u001b[5;1Hfive\u001b[6;1H────\u001b[7;1H> \u001b[8;1H────"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hthree\u001b[2;1Hfour\u001b[3;1Hfive\u001b[4;1Hsix\u001b[5;1Hseven\u001b[6;1H────\u001b[7;1H> x\u001b[8;1H────"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 4,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              3,
+              3,
+              5,
+              4,
+              4,
+              4,
+              2,
+              4
+            ],
+            "rows": 8,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "one         ",
+              "two         ",
+              "three       ",
+              "four        ",
+              "five        ",
+              "────        ",
+              ">           ",
+              "────        "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 4,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              5,
+              4,
+              4,
+              3,
+              5,
+              4,
+              3,
+              4
+            ],
+            "rows": 8,
+            "scrolled": 2,
+            "style_runs": [],
+            "text": [
+              "three       ",
+              "four        ",
+              "five        ",
+              "six         ",
+              "seven       ",
+              "────        ",
+              "> x         ",
+              "────        "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "from_test": "onlyAMoveUpIsAScroll"
+    },
+    {
+      "name": "scroll_growth_in_place",
+      "description": "第一行未改变时，屏幕原地增长不算上滚。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
+        "ios/JarvisTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 8,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Hone\u001b[2;1Htwo\u001b[3;1Hthree\u001b[4;1Hfour\u001b[5;1Hfive\u001b[6;1H────\u001b[7;1H> \u001b[8;1H────"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hone\u001b[2;1Htwo\u001b[3;1Hthree\u001b[4;1Hfour\u001b[5;1Hfive\u001b[6;1Hsix\u001b[7;1H────\u001b[8;1H> "
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 4,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              3,
+              3,
+              5,
+              4,
+              4,
+              4,
+              2,
+              4
+            ],
+            "rows": 8,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "one         ",
+              "two         ",
+              "three       ",
+              "four        ",
+              "five        ",
+              "────        ",
+              ">           ",
+              "────        "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 2,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              3,
+              3,
+              5,
+              4,
+              4,
+              3,
+              4,
+              2
+            ],
+            "rows": 8,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "one         ",
+              "two         ",
+              "three       ",
+              "four        ",
+              "five        ",
+              "six         ",
+              "────        ",
+              ">           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "from_test": "onlyAMoveUpIsAScroll"
+    },
+    {
+      "name": "scroll_clear_is_not_scroll",
+      "description": "清屏后的新内容没有旧屏连续匹配，不算上滚。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
+        "ios/JarvisTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 8,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Hone\u001b[2;1Htwo\u001b[3;1Hthree\u001b[4;1Hfour\u001b[5;1Hfive\u001b[6;1H────\u001b[7;1H> \u001b[8;1H────"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hnew\u001b[2;1Hscreen\u001b[3;1H\u001b[4;1H\u001b[5;1H\u001b[6;1H────\u001b[7;1H> \u001b[8;1H────"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 4,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              3,
+              3,
+              5,
+              4,
+              4,
+              4,
+              2,
+              4
+            ],
+            "rows": 8,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "one         ",
+              "two         ",
+              "three       ",
+              "four        ",
+              "five        ",
+              "────        ",
+              ">           ",
+              "────        "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 4,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              3,
+              6,
+              0,
+              0,
+              0,
+              4,
+              2,
+              4
+            ],
+            "rows": 8,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "new         ",
+              "screen      ",
+              "            ",
+              "            ",
+              "            ",
+              "────        ",
+              ">           ",
+              "────        "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "from_test": "onlyAMoveUpIsAScroll"
+    },
+    {
+      "name": "scroll_filler_not_evidence",
+      "description": "只对上空行和分隔线不能证明上滚。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
+        "ios/JarvisTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 8,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1H\u001b[2;1H────\u001b[3;1H\u001b[4;1H────\u001b[5;1Ha\u001b[6;1Hb\u001b[7;1Hc\u001b[8;1Hd"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1H────\u001b[2;1H\u001b[3;1H────\u001b[4;1Hx\u001b[5;1Hy\u001b[6;1Hz\u001b[7;1Hw\u001b[8;1Hv"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              0,
+              4,
+              0,
+              4,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 8,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "            ",
+              "────        ",
+              "            ",
+              "────        ",
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              4,
+              0,
+              4,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 8,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "────        ",
+              "            ",
+              "────        ",
+              "x           ",
+              "y           ",
+              "z           ",
+              "w           ",
+              "v           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "from_test": "onlyAMoveUpIsAScroll"
+    },
+    {
+      "name": "scroll_small_screen",
+      "description": "少于四行的屏幕不做上滚检测。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 3,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1Hb\u001b[3;1Hc"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hb\u001b[2;1Hc\u001b[3;1Hd"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 2,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1
+            ],
+            "rows": 3,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "a           ",
+              "b           ",
+              "c           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 2,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1
+            ],
+            "rows": 3,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "b           ",
+              "c           ",
+              "d           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_needs_three_matches",
+      "description": "只连续匹配两行正文不能证明上滚。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 5,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1Hb\u001b[3;1Hc\u001b[4;1Hd\u001b[5;1He"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hc\u001b[2;1Hd\u001b[3;1Hx\u001b[4;1Hy\u001b[5;1Hz"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 4,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 5,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           ",
+              "e           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 4,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 5,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "c           ",
+              "d           ",
+              "x           ",
+              "y           ",
+              "z           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_one_telling_line",
+      "description": "连续匹配三行但只有一行正文时不算上滚。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 6,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1H────\u001b[3;1H\u001b[4;1Hb\u001b[5;1Hc\u001b[6;1Hd"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1H────\u001b[2;1H\u001b[3;1Hb\u001b[4;1Hx\u001b[5;1Hy\u001b[6;1Hz"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 5,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              4,
+              0,
+              1,
+              1,
+              1
+            ],
+            "rows": 6,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "a           ",
+              "────        ",
+              "            ",
+              "b           ",
+              "c           ",
+              "d           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 5,
+              "visible": true
+            },
+            "row_lengths": [
+              4,
+              0,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 6,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "────        ",
+              "            ",
+              "b           ",
+              "x           ",
+              "y           ",
+              "z           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_style_change",
+      "description": "文字相同而样式不同的行不参与滚动匹配。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 5,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1H\u001b[31mb\u001b[0m\u001b[3;1Hc\u001b[4;1Hd\u001b[5;1He"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hb\u001b[2;1Hc\u001b[3;1Hd\u001b[4;1He\u001b[5;1Hf"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 4,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 5,
+            "scrolled": 0,
+            "style_runs": [
+              {
+                "from": 0,
+                "row": 1,
+                "style": {
+                  "fg": {
+                    "indexed": 1
+                  }
+                },
+                "to": 1
+              }
+            ],
+            "text": [
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           ",
+              "e           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 4,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 5,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "b           ",
+              "c           ",
+              "d           ",
+              "e           ",
+              "f           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_down_is_not_up",
+      "description": "向下移动屏幕不会检测为上滚。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 5,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1Hb\u001b[3;1Hc\u001b[4;1Hd\u001b[5;1He"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hz\u001b[2;1Ha\u001b[3;1Hb\u001b[4;1Hc\u001b[5;1Hd"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 4,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 5,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           ",
+              "e           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 4,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 5,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "z           ",
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_threshold_floor",
+      "description": "剩余十二行至少要匹配四行，匹配三行不能证明上滚。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 13,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Hrow0\u001b[2;1Hrow1\u001b[3;1Hrow2\u001b[4;1Hrow3\u001b[5;1Hrow4\u001b[6;1Hrow5\u001b[7;1Hrow6\u001b[8;1Hrow7\u001b[9;1Hrow8\u001b[10;1Hrow9\u001b[11;1Hrow10\u001b[12;1Hrow11\u001b[13;1Hrow12"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hrow1\u001b[2;1Hrow2\u001b[3;1Hrow3\u001b[4;1Hx\u001b[5;1Hy\u001b[6;1Hz\u001b[7;1Ha\u001b[8;1Hb\u001b[9;1Hc\u001b[10;1Hd\u001b[11;1He\u001b[12;1Hf\u001b[13;1Hg"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 5,
+              "row": 12,
+              "visible": true
+            },
+            "row_lengths": [
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              5,
+              5,
+              5
+            ],
+            "rows": 13,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "row0        ",
+              "row1        ",
+              "row2        ",
+              "row3        ",
+              "row4        ",
+              "row5        ",
+              "row6        ",
+              "row7        ",
+              "row8        ",
+              "row9        ",
+              "row10       ",
+              "row11       ",
+              "row12       "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 12,
+              "visible": true
+            },
+            "row_lengths": [
+              4,
+              4,
+              4,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 13,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "row1        ",
+              "row2        ",
+              "row3        ",
+              "x           ",
+              "y           ",
+              "z           ",
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           ",
+              "e           ",
+              "f           ",
+              "g           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_threshold_four",
+      "description": "剩余十二行匹配四行正文时检测到上滚。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 13,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Hrow0\u001b[2;1Hrow1\u001b[3;1Hrow2\u001b[4;1Hrow3\u001b[5;1Hrow4\u001b[6;1Hrow5\u001b[7;1Hrow6\u001b[8;1Hrow7\u001b[9;1Hrow8\u001b[10;1Hrow9\u001b[11;1Hrow10\u001b[12;1Hrow11\u001b[13;1Hrow12"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hrow1\u001b[2;1Hrow2\u001b[3;1Hrow3\u001b[4;1Hrow4\u001b[5;1Hx\u001b[6;1Hy\u001b[7;1Hz\u001b[8;1Ha\u001b[9;1Hb\u001b[10;1Hc\u001b[11;1Hd\u001b[12;1He\u001b[13;1Hf"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 5,
+              "row": 12,
+              "visible": true
+            },
+            "row_lengths": [
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              5,
+              5,
+              5
+            ],
+            "rows": 13,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "row0        ",
+              "row1        ",
+              "row2        ",
+              "row3        ",
+              "row4        ",
+              "row5        ",
+              "row6        ",
+              "row7        ",
+              "row8        ",
+              "row9        ",
+              "row10       ",
+              "row11       ",
+              "row12       "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 12,
+              "visible": true
+            },
+            "row_lengths": [
+              4,
+              4,
+              4,
+              4,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 13,
+            "scrolled": 1,
+            "style_runs": [],
+            "text": [
+              "row1        ",
+              "row2        ",
+              "row3        ",
+              "row4        ",
+              "x           ",
+              "y           ",
+              "z           ",
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           ",
+              "e           ",
+              "f           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_first_row_equal",
+      "description": "即使后面存在可匹配位移，第一行完全相同时仍返回零。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 6,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1Hb\u001b[3;1Ha\u001b[4;1Hb\u001b[5;1Hc\u001b[6;1Hd"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1Hb\u001b[3;1Hc\u001b[4;1Hd\u001b[5;1Hx\u001b[6;1Hy"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 5,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 6,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "a           ",
+              "b           ",
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 5,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 6,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           ",
+              "x           ",
+              "y           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_sparse_row_difference",
+      "description": "显式尾空格与未存储空格不相等，不能只按去尾空白文本匹配。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 5,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1Hb \u001b[3;1Hc\u001b[4;1Hd\u001b[5;1He"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Hb\u001b[2;1Hc\u001b[3;1Hd\u001b[4;1He\u001b[5;1Hf"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 4,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              2,
+              1,
+              1,
+              1
+            ],
+            "rows": 5,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "a           ",
+              "b           ",
+              "c           ",
+              "d           ",
+              "e           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 4,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 5,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "b           ",
+              "c           ",
+              "d           ",
+              "e           ",
+              "f           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "scroll_smallest_matching_shift",
+      "description": "重复正文满足多个位移时返回最小的匹配位移。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+      ],
+      "input": {
+        "cols": 12,
+        "rows": 8,
+        "frames": [
+          {
+            "vt": "\u001b[2J\u001b[1;1Hz\u001b[2;1Ha\u001b[3;1Hb\u001b[4;1Ha\u001b[5;1Hb\u001b[6;1Ha\u001b[7;1Hb\u001b[8;1Hx"
+          },
+          {
+            "vt": "\u001b[2J\u001b[1;1Ha\u001b[2;1Hb\u001b[3;1Ha\u001b[4;1Hb\u001b[5;1Ha\u001b[6;1Hb\u001b[7;1Hx\u001b[8;1Hy"
+          }
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 8,
+            "scrolled": 0,
+            "style_runs": [],
+            "text": [
+              "z           ",
+              "a           ",
+              "b           ",
+              "a           ",
+              "b           ",
+              "a           ",
+              "b           ",
+              "x           "
+            ],
+            "wide_cells": []
+          },
+          {
+            "cols": 12,
+            "cursor": {
+              "col": 1,
+              "row": 7,
+              "visible": true
+            },
+            "row_lengths": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "rows": 8,
+            "scrolled": 1,
+            "style_runs": [],
+            "text": [
+              "a           ",
+              "b           ",
+              "a           ",
+              "b           ",
+              "a           ",
+              "b           ",
+              "x           ",
+              "y           "
+            ],
+            "wide_cells": []
+          }
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

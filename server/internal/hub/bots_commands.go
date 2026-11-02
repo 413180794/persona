@@ -150,7 +150,7 @@ func (h *Hub) agentsCard(query string) *feishubot.Card {
 	}
 	var rows []row
 	q := strings.ToLower(query)
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		for _, s := range h.decorated(m) {
 			if s.Assistant || s.State == proto.StateOffline || s.State == proto.StateUnknown {
 				continue
@@ -196,7 +196,7 @@ func (h *Hub) agentsCard(query string) *feishubot.Card {
 // startAgentCard is a form to start a coding agent on a machine.
 func (h *Hub) startAgentCard(prompt string) *feishubot.Card {
 	var opts []feishubot.Option
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		if m.snapshot().Online {
 			opts = append(opts, feishubot.Option{Label: m.cfg.Name, Value: m.cfg.ID})
 		}

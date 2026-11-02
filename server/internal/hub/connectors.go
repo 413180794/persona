@@ -389,7 +389,7 @@ func (h *Hub) registerConnectors() {
 	}
 	if gh := h.cfg.GitHub; gh.Configured() {
 		name := gh.Auth.FromMachine
-		if m := h.byID[name]; m != nil {
+		if m := h.localMachine(name); m != nil {
 			name = m.cfg.Name
 		}
 		if err := h.addConnector(github.New(*gh, name, h.ghToken(gh.Auth.FromMachine))); err != nil {
@@ -446,7 +446,7 @@ func (h *Hub) telegramSettings() json.RawMessage {
 // ghToken reads the token of machine's gh login (credential.gh_token); it never goes to a log.
 func (h *Hub) ghToken(machine string) github.TokenSource {
 	return func(ctx context.Context, host string) (string, error) {
-		m := h.byID[machine]
+		m := h.localMachine(machine)
 		if m == nil {
 			return "", github.ErrNoMachine
 		}

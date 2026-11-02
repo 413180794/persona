@@ -40,6 +40,17 @@ func (h *Hub) loadMutes(ctx context.Context) Pins {
 
 // muted reports whether pushes about this session are off (the agent or its space is muted).
 func (h *Hub) muted(machineID, sessionID string) bool {
+	space := ""
+	if m := h.localMachine(machineID); m != nil {
+		if s, ok := m.session(sessionID); ok {
+			space = s.SpaceName
+		}
+	}
+	return h.mutedAs(machineID, sessionID, space)
+}
+
+// mutedAs is muted for a machine under the id the apps know, its session in space (empty: none known).
+func (h *Hub) mutedAs(machineID, sessionID, space string) bool {
 	p := h.loadMutes(context.Background())
 	key := machineID + "/" + sessionID
 	if slices.Contains(p.Sessions, key) {
@@ -48,12 +59,7 @@ func (h *Hub) muted(machineID, sessionID string) bool {
 	if slices.Contains(p.Allowed, key) { // turned back on inside a muted space
 		return false
 	}
-	if m := h.byID[machineID]; m != nil {
-		if s, ok := m.session(sessionID); ok && s.SpaceName != "" {
-			return slices.Contains(p.Spaces, machineID+"/"+s.SpaceName)
-		}
-	}
-	return false
+	return space != "" && slices.Contains(p.Spaces, machineID+"/"+space)
 }
 
 func (h *Hub) pinRoutes(api *http.ServeMux) {

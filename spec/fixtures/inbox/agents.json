@@ -1,0 +1,855 @@
+{
+  "schema_version": 1,
+  "operation": "inbox_list",
+  "cases": [
+    {
+      "name": "waiting_agents_before_items",
+      "description": "未屏蔽的交互按创建时间升序放在需要你段最前，并包含助手。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:50Z"
+          }
+        ],
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "assistant": true
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          }
+        ],
+        "interactions": [
+          {
+            "id": "late",
+            "machine_id": "machine-a",
+            "session_id": "late",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:30Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "early",
+            "machine_id": "machine-a",
+            "session_id": "early",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "assistant",
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:20Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "muted",
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:05Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          }
+        ],
+        "mutes": {
+          "spaces": [],
+          "sessions": [
+            "machine-a/muted"
+          ],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 4,
+            "rows": [
+              {
+                "type": "interaction",
+                "id": "early"
+              },
+              {
+                "type": "interaction",
+                "id": "assistant"
+              },
+              {
+                "type": "interaction",
+                "id": "late"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "interaction",
+                "id": "early"
+              },
+              {
+                "type": "interaction",
+                "id": "assistant"
+              },
+              {
+                "type": "interaction",
+                "id": "late"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "agent_only",
+      "description": "Agent 入口遵循来源、类型和搜索限制。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:50Z"
+          }
+        ],
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "assistant": true
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          }
+        ],
+        "interactions": [
+          {
+            "id": "late",
+            "machine_id": "machine-a",
+            "session_id": "late",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:30Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "early",
+            "machine_id": "machine-a",
+            "session_id": "early",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "assistant",
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:20Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "muted",
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:05Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          }
+        ],
+        "mutes": {
+          "spaces": [],
+          "sessions": [
+            "machine-a/muted"
+          ],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "agent",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 3,
+            "rows": [
+              {
+                "type": "interaction",
+                "id": "early"
+              },
+              {
+                "type": "interaction",
+                "id": "assistant"
+              },
+              {
+                "type": "interaction",
+                "id": "late"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "interaction",
+                "id": "early"
+              },
+              {
+                "type": "interaction",
+                "id": "assistant"
+              },
+              {
+                "type": "interaction",
+                "id": "late"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "source_hides_agents",
+      "description": "Agent 入口遵循来源、类型和搜索限制。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:50Z"
+          }
+        ],
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "assistant": true
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          }
+        ],
+        "interactions": [
+          {
+            "id": "late",
+            "machine_id": "machine-a",
+            "session_id": "late",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:30Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "early",
+            "machine_id": "machine-a",
+            "session_id": "early",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "assistant",
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:20Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "muted",
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:05Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          }
+        ],
+        "mutes": {
+          "spaces": [],
+          "sessions": [
+            "machine-a/muted"
+          ],
+          "allowed": []
+        },
+        "settings": {
+          "source": "feishu",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "kind_hides_agents",
+      "description": "Agent 入口遵循来源、类型和搜索限制。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:50Z"
+          }
+        ],
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "assistant": true
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          }
+        ],
+        "interactions": [
+          {
+            "id": "late",
+            "machine_id": "machine-a",
+            "session_id": "late",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:30Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "early",
+            "machine_id": "machine-a",
+            "session_id": "early",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "assistant",
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:20Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "muted",
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:05Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          }
+        ],
+        "mutes": {
+          "spaces": [],
+          "sessions": [
+            "machine-a/muted"
+          ],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "dm",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "search_agents",
+      "description": "Agent 入口遵循来源、类型和搜索限制。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:50Z"
+          }
+        ],
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目",
+            "assistant": true
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          }
+        ],
+        "interactions": [
+          {
+            "id": "late",
+            "machine_id": "machine-a",
+            "session_id": "late",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:30Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "early",
+            "machine_id": "machine-a",
+            "session_id": "early",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "assistant",
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:20Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "muted",
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:05Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          }
+        ],
+        "mutes": {
+          "spaces": [],
+          "sessions": [
+            "machine-a/muted"
+          ],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "示例会话",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 3,
+            "rows": [
+              {
+                "type": "interaction",
+                "id": "early"
+              },
+              {
+                "type": "interaction",
+                "id": "assistant"
+              },
+              {
+                "type": "interaction",
+                "id": "late"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "interaction",
+                "id": "early"
+              },
+              {
+                "type": "interaction",
+                "id": "assistant"
+              },
+              {
+                "type": "interaction",
+                "id": "late"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "agent_mute_allow_override",
+      "description": "空间屏蔽排除待处理交互，单会话允许可保留交互。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:50Z"
+          }
+        ],
+        "sessions": [
+          {
+            "machine_id": "machine-a",
+            "session_id": "early",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          },
+          {
+            "machine_id": "machine-a",
+            "session_id": "late",
+            "title": "示例会话",
+            "cwd": "/home/user/project",
+            "status": "idle",
+            "state": "idle",
+            "space_id": "space-a",
+            "space_name": "示例项目"
+          }
+        ],
+        "interactions": [
+          {
+            "id": "late",
+            "machine_id": "machine-a",
+            "session_id": "late",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:30Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "early",
+            "machine_id": "machine-a",
+            "session_id": "early",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "assistant",
+            "machine_id": "machine-a",
+            "session_id": "assistant",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:20Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "muted",
+            "machine_id": "machine-a",
+            "session_id": "muted",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:05Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          }
+        ],
+        "mutes": {
+          "spaces": [
+            "machine-a/示例项目"
+          ],
+          "sessions": [],
+          "allowed": [
+            "machine-a/early"
+          ]
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 4,
+            "rows": [
+              {
+                "type": "interaction",
+                "id": "muted"
+              },
+              {
+                "type": "interaction",
+                "id": "early"
+              },
+              {
+                "type": "interaction",
+                "id": "assistant"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "interaction",
+                "id": "muted"
+              },
+              {
+                "type": "interaction",
+                "id": "early"
+              },
+              {
+                "type": "interaction",
+                "id": "assistant"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    }
+  ]
+}

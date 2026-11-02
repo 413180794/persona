@@ -17,7 +17,7 @@ import (
 type Machine struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
-	Kind          string    `json:"kind"` // local | ssh | tailcat
+	Kind          string    `json:"kind"` // local | ssh | tailcat | link
 	Icon          string    `json:"icon"` // server | laptop | desktop
 	SSHHost       string    `json:"ssh_host,omitempty"`
 	Online        bool      `json:"online"`
@@ -38,7 +38,9 @@ type Machine struct {
 	DeployError string `json:"deploy_error,omitempty"`
 	// System: OS and hardware, from the node's last connection (kept across hub restarts).
 	System *System `json:"system,omitempty"`
-	// Transport is how the hub reaches it now: local | ssh | tailcat (empty while offline); Tailcat: it can be
+	// Link: kind link, while the computer's jarvis-link is connected (docs/link.md).
+	Link *MachineLink `json:"link,omitempty"`
+	// Transport is how the hub reaches it now: local | ssh | tailcat | link (empty while offline); Tailcat: it can be
 	// reached over tailcat (an address is set); TailcatPath, over tailcat: direct (NAT traversal worked) | relay.
 	Transport   string `json:"transport,omitempty"`
 	Tailcat     bool   `json:"tailcat,omitempty"`
@@ -47,6 +49,42 @@ type Machine struct {
 	// found on the machine (empty while offline). docs/protocol.md「引擎」.
 	Engine  string   `json:"engine"`
 	Engines []Engine `json:"engines"`
+	// Hub mesh (docs/mesh.md): the hub that connects to this machine (its owner), its name, the machine's own id
+	// (~/.jarvis/machine-uid, empty for an old node or one never reached) and how the hub the client talks to gets
+	// there. A hub without peers fills them in for its own machines too.
+	HubID      string        `json:"hub_id,omitempty"`
+	HubName    string        `json:"hub_name,omitempty"`
+	MachineUID string        `json:"machine_uid,omitempty"`
+	Route      *MachineRoute `json:"route,omitempty"`
+	// Paths: every way the center has to this computer (docs/plan-hub-center.md 5), when there is more than one or it
+	// is a member hub's; the machine detail and the admin page show them.
+	Paths []MachinePath `json:"paths,omitempty"`
+}
+
+// MachineRoute is how the center reaches a machine now (docs/plan-hub-center.md 5): via one of its own ways (local |
+// service | link | ssh | tailcat, hops 0) or through a member hub (hub, hops 1); RTTMS is the node's round trip
+// when it was measured.
+type MachineRoute struct {
+	Via   string `json:"via"`
+	Hops  int    `json:"hops"`
+	RTTMS *int   `json:"rtt_ms,omitempty"`
+}
+
+// MachinePath is one way to a machine: how, through which hub (the center itself for its own), whether it can be used
+// now, its last round trip, and whether it is the one in use.
+type MachinePath struct {
+	Via    string `json:"via"`
+	HubID  string `json:"hub_id"`
+	OK     bool   `json:"ok"`
+	RTTMS  int    `json:"rtt_ms,omitempty"`
+	Active bool   `json:"active,omitempty"`
+}
+
+// MachineLink is a live jarvis-link: its build, the hub URL it went to and since when.
+type MachineLink struct {
+	Version string    `json:"version,omitempty"`
+	Address string    `json:"address,omitempty"`
+	Since   time.Time `json:"since"`
 }
 
 // Terminal engines: the one terminal host a machine's node drives, chosen per machine.
@@ -80,8 +118,17 @@ const (
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
 // clients that need to know before they try (docs/protocol.md).
 var Features = []string{
+	"android_update",         // authenticated Android release metadata and APK downloads
+	"error_codes",            // stable HTTP error codes and optional delivery information
+	"client_hello",           // client platform, version and capabilities
+	"heartbeat",              // per-connection heartbeat negotiation
+	"app_ping",               // application ping/pong with a string id
+	"ws_notify",              // notification alerts for capable connected clients
+	"elicitation",            // MCP forms and URLs for opted-in clients
+	"lock_test",              // scheduled device notification tests with durable receipts
 	"model_configuration",    // unified per-purpose models and provider selection
 	"client_msg_id",          // session.send dedupes retries
+	"client_ops",             // durable operation receipts and read-only status queries
 	"send_refusals",          // 409 dialog_open / input_draft, clear_draft
 	"screen_dialog",          // interaction.dialog, Resolution.option, 409 prompt_changed
 	"resumable_interactions", // hook questions survive hub / node restarts
@@ -92,6 +139,8 @@ var Features = []string{
 	"terminal_scroll",        // terminal_input with scroll: the wheel over a terminal the app drives, to herdr (docs/terminal.md)
 	"terminal_click",         // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
+	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
+	"endpoints",              // authenticated address discovery and capability-gated updates
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/plugins.md)
 	"desktops",               // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
 	"sessions_delta",         // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
@@ -142,6 +191,9 @@ type NodeInfo struct {
 	// both out.
 	Engine  string   `json:"engine,omitempty"`
 	Engines []Engine `json:"engines,omitempty"`
+	// MachineUID is the computer's own id (~/.jarvis/machine-uid, a UUIDv4 made on the node's first run): hubs that
+	// both reach it tell it is the same computer (docs/mesh.md). Older nodes leave it out.
+	MachineUID string `json:"machine_uid,omitempty"`
 }
 
 // System is what a machine is: OS, hardware, since when it runs (sysmon; docs/machines.md). Read once when the node
@@ -434,12 +486,31 @@ const (
 // named after ("fold:" + its id, at its seq and time) through ThroughID. A chat shows the run folded into counts;
 // opening it fetches the run (session.items with from_seq / through_seq), which replaces the fold.
 type Fold struct {
-	Items      int       `json:"items"`
-	Tools      int       `json:"tools"`
-	Thoughts   int       `json:"thoughts"` // thoughts with words (blank ones are not shown)
-	Until      time.Time `json:"until"`
-	ThroughSeq int       `json:"through_seq"`
-	ThroughID  string    `json:"through_id"`
+	Items      int                `json:"items"`
+	Tools      int                `json:"tools"`
+	Thoughts   int                `json:"thoughts"` // thoughts with words (blank ones are not shown)
+	Until      time.Time          `json:"until"`
+	ThroughSeq int                `json:"through_seq"`
+	ThroughID  string             `json:"through_id"`
+	Tasks      []FoldTaskSnapshot `json:"tasks,omitempty"`
+}
+
+// FoldTaskSnapshot preserves a successful task result without its raw tool payload.
+// Replacement boundaries stay ordered so partial updates can inherit older loaded tasks.
+type FoldTaskSnapshot struct {
+	Replace         string     `json:"replace,omitempty"`
+	FallbackStatus  string     `json:"fallback_status,omitempty"`
+	Entries         []FoldTask `json:"entries"`
+	SourceItemID    string     `json:"source_item_id"`
+	SourceToolUseID string     `json:"source_tool_use_id"`
+	SourceSeq       int        `json:"source_seq"`
+}
+
+type FoldTask struct {
+	ID          string  `json:"id"`
+	Subject     *string `json:"subject,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Status      *string `json:"status,omitempty"`
 }
 
 type Image struct {
@@ -510,7 +581,17 @@ type Item struct {
 	From string `json:"from,omitempty"`
 	Fold *Fold  `json:"fold,omitempty"`
 	// Task: this notice is a background task reporting back (a command, a Monitor, a subagent).
-	Task *TaskNote `json:"task,omitempty"`
+	Task         *TaskNote     `json:"task,omitempty"`
+	TurnDuration *TurnDuration `json:"turn_duration,omitempty"`
+}
+
+// TurnDuration preserves a recorded whole-turn duration and its native association.
+type TurnDuration struct {
+	DurationMS int64  `json:"duration_ms"`
+	Source     string `json:"source"`
+	TurnID     string `json:"turn_id,omitempty"`
+	ParentUUID string `json:"parent_uuid,omitempty"`
+	UserItemID string `json:"user_item_id,omitempty"`
 }
 
 // TaskNote is what a <task-notification> says, read from the notification alone (the call it came from is found by
@@ -531,10 +612,11 @@ type TaskNote struct {
 
 // Interaction kinds.
 const (
-	IxQuestion   = "question"
-	IxPlan       = "plan"
-	IxPermission = "permission"
-	IxScreen     = "screen"
+	IxQuestion    = "question"
+	IxPlan        = "plan"
+	IxPermission  = "permission"
+	IxScreen      = "screen"
+	IxElicitation = "elicitation"
 )
 
 type QuestionOption struct {
@@ -550,21 +632,26 @@ type Question struct {
 }
 
 type Interaction struct {
-	ID           string          `json:"id"`
-	MachineID    string          `json:"machine_id"`
-	SessionID    string          `json:"session_id"`
-	SessionTitle string          `json:"session_title,omitempty"`
-	Cwd          string          `json:"cwd,omitempty"`
-	Kind         string          `json:"kind"`
-	CreatedAt    time.Time       `json:"created_at"`
-	ExpiresAt    time.Time       `json:"expires_at"`
-	ToolName     string          `json:"tool_name,omitempty"`
-	ToolUseID    string          `json:"tool_use_id,omitempty"`
-	Questions    []Question      `json:"questions,omitempty"`
-	Plan         string          `json:"plan,omitempty"`
-	ToolInput    json.RawMessage `json:"tool_input,omitempty"`
-	Summary      string          `json:"summary,omitempty"`
-	Screen       string          `json:"screen,omitempty"`
+	ID              string          `json:"id"`
+	MachineID       string          `json:"machine_id"`
+	SessionID       string          `json:"session_id"`
+	SessionTitle    string          `json:"session_title,omitempty"`
+	Cwd             string          `json:"cwd,omitempty"`
+	Kind            string          `json:"kind"`
+	CreatedAt       time.Time       `json:"created_at"`
+	ExpiresAt       time.Time       `json:"expires_at"`
+	ToolName        string          `json:"tool_name,omitempty"`
+	ToolUseID       string          `json:"tool_use_id,omitempty"`
+	Questions       []Question      `json:"questions,omitempty"`
+	Plan            string          `json:"plan,omitempty"`
+	ToolInput       json.RawMessage `json:"tool_input,omitempty"`
+	Summary         string          `json:"summary,omitempty"`
+	Screen          string          `json:"screen,omitempty"`
+	AgentID         string          `json:"agent_id,omitempty"`
+	AgentType       string          `json:"agent_type,omitempty"`
+	MCPServerName   string          `json:"mcp_server_name,omitempty"`
+	MCPConfigSource string          `json:"mcp_config_source,omitempty"`
+	Elicitation     *Elicitation    `json:"elicitation,omitempty"`
 	// Dialog is the screen's dialog read on the hub (screen interactions); answers name an option and are checked
 	// against Dialog.Rev before any key is pressed. Absent when the screen shows no dialog it could read.
 	Dialog *screen.Dialog `json:"dialog,omitempty"`
@@ -600,7 +687,18 @@ type Field struct {
 	Optional    bool   `json:"optional,omitempty"`
 }
 
+// Elicitation carries the hook's original schema or URL without interpreting its fields.
+type Elicitation struct {
+	Mode            string          `json:"mode"`
+	Message         string          `json:"message"`
+	RequestedSchema json.RawMessage `json:"requested_schema,omitempty"`
+	URL             string          `json:"url,omitempty"`
+	ID              string          `json:"elicitation_id,omitempty"`
+}
+
 type Resolution struct {
+	Action   string            `json:"action,omitempty"`
+	Content  map[string]any    `json:"content,omitempty"`
 	Answers  map[string]string `json:"answers,omitempty"`
 	Approve  *bool             `json:"approve,omitempty"`
 	Mode     string            `json:"mode,omitempty"`

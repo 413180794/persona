@@ -105,7 +105,7 @@ func (h *Hub) quotaMachine(ctx context.Context, has []string, want string) *Mach
 		if id == "" || !slices.Contains(has, id) {
 			continue
 		}
-		if m := h.byID[id]; m != nil && m.isOnline() {
+		if m := h.localMachine(id); m != nil && m.isOnline() {
 			return m
 		}
 	}
@@ -114,7 +114,7 @@ func (h *Hub) quotaMachine(ctx context.Context, has []string, want string) *Mach
 
 // localMachineID is the machine the hub runs on (kind local), "" when none is configured.
 func (h *Hub) localMachineID() string {
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		if m.cfg.Kind == "local" {
 			return m.cfg.ID
 		}

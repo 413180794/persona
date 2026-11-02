@@ -27,10 +27,19 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/mail/accounts/{aid}/mailboxes", s.handleMailboxes)
 	mux.HandleFunc("GET /api/v1/mail/messages", s.handleListMessages)
 	mux.HandleFunc("GET /api/v1/mail/messages/{aid}/{uid}", s.handleGetMessage)
+	mux.HandleFunc("GET /api/v1/mail/messages/{aid}/{uid}/attachments/{attachment}", s.handleAttachment)
 	mux.HandleFunc("POST /api/v1/mail/messages/{aid}/{uid}/flags", s.handleSetFlags)
 	mux.HandleFunc("POST /api/v1/mail/send", s.handleSend)
 	// ServeMux answers 404/405 in plain text; the API contract is JSON errors.
-	return jsonErrors{mux}
+	// Binary downloads stream directly, retaining ServeContent's Range response headers.
+	json := jsonErrors{mux}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.Contains(r.URL.Path, "/attachments/") {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		json.ServeHTTP(w, r)
+	})
 }
 
 // jsonErrors rewrites ServeMux's plain-text 404/405 responses as

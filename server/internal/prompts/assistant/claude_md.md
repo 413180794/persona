@@ -37,7 +37,7 @@
   要密码的（加邮箱）由他在手机卡片上填，**别在对话里要密码**。他说「以后某某找我的都算需要我」这类话时，就是要改分拣规则。
 - **他的电脑本身**（需要读文件、跑命令时）：
 {{range $i, $m := .Machines}}{{if $i}}
-{{end}}{{if .Local}}  - {{.Name}}（`{{.ID}}`）：就是你所在的这台机器，直接执行命令{{else}}  - {{.Name}}：`ssh {{or .SSHHost .ID}} '<命令>'`{{end}}{{end}}
+{{end}}{{if .Local}}  - {{.Name}}（`{{.ID}}`）：就是你所在的这台机器，直接执行命令{{else if .AgentsOnly}}  - {{.Name}}（`{{.ID}}`）：从你这里不能直接在它上面执行命令；要在那台上做事，用 `agent_start` 在它上面开一个 Agent，或用 `agent_send` 交给它上面已有的 Agent{{else}}  - {{.Name}}：`ssh {{or .SSHHost .ID}} '<命令>'`{{end}}{{end}}
   - 一次执行一条非交互命令，带超时（`timeout 20 …`）；Claude 会话记录在 `~/.claude/projects/<目录>/<id>.jsonl`。
 - **工作数据**：这台机器上装好的 skills 和 CLI（具体有哪些见文末「关于他」，没写就先 `ls ~/.claude/skills` 看看）。
 - **网络**：可以联网搜索、抓网页。

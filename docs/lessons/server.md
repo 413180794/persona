@@ -50,6 +50,40 @@
   到期后连不上中继，所以要自己生成一张长期的。
   derper 不发 DERP map，`--derp-map-url` 是 tailcat 用 HTTP GET 取的，要另起静态服务。以 root 跑、没给 `-c` 时，derper 把私钥写到 `/var/lib/derper/derper.key`。
   换 map 后 `init` 会重新选区域，地址跟着变（密钥不变）。
+- hub 关停别指望 `http.Server.Shutdown` 收尾 WebSocket：它不等已经 hijack 的连接，而 `pgxpool.Close` 会一直等所有借出的连接归还、没有上限。2026-10-31 一次 NAS 升级，旧 hub 收到 SIGTERM 后卡到被 SIGKILL，停机约 46 秒（平时约 1 秒）。现在先关监听、给 WebSocket 发 1001 并限时排空，每一步有超时、整个关停有总预算（`shutdown_timeout_seconds`，默认 8 秒），见 `docs/server.md`「关停」；外部的 `docker stop -t` 要比总预算长。
+- coder/websocket 的读、写、ping 只要用的 context 结束，就直接关掉整条连接（`context.AfterFunc`），不发关闭帧。
+  要带关闭码收尾的连接（jarvis-link 被顶掉 4001、撤销 4002），别用会先被取消的 context 去写或读：hub 的链路先 cancel 自己的 ctx 再 Close，
+  正在写的一条消息就把连接掐了，客户端收到 -1 而不是 4002（`hub/link.go` 的 `send`、`keepAlive`，`TestLinkReplacedAndRevoked`）。
+
+## jarvis-link 在 Linux 上（docs/link.md「Linux（headless）」，2026-11-02）
+
+- `errors.Join()` 什么都没给时返回 nil：jarvis-link 选路的 `race` 在所有候选都被取消（停服务时正好在拨号）时回了「没赢家、也没错误」，
+  调用方拿着 nil 链路就崩了。全部被取消时要明确返回 `ctx.Err()`（`TestRaceCalledOffIsAnError`）。
+- `su`、`sudo -u`、`docker exec -u` 进来的会话没有 `XDG_RUNTIME_DIR`，`systemctl --user` 报 `Failed to connect to bus`：
+  用户实例其实在跑（开了 linger），补上 `/run/user/<uid>` 就能连。用户实例本身不在（没开 linger 又没人登录）时补也没用；
+  关掉 linger 的那一刻没有会话的用户实例就停了。
+- 用户实例里没有 `network-online.target`，用户 unit 写 `After=/Wants=network-online.target` 什么也不等；靠程序自己重试。
+- journal 不持久（`/run/log/journal`）时普通用户 `journalctl --user` 看不到自己服务的日志：jarvis-link 的日志写自己的文件、自己轮转，
+  `jarvis-link logs` 读文件，journal 只是兜底。
+- 判断常驻 node 在不在，**不能**去连 `~/.jarvis/node-attach.sock` 试试：每条连接都是一次新的 attach，会把 hub 正在用的那条顶掉。只看 hub 报的。
+- 在 Docker Desktop（Mac）里跑带 systemd 的容器：`--privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock`，
+  PID 1 是 `/lib/systemd/systemd`；镜像里要有 `libpam-systemd`，没有时 `user@<uid>.service` 起不来（日志是
+  「Trying to run as user instance, but $XDG_RUNTIME_DIR is not set」）。宿主只听 127.0.0.1 的服务，容器经 `host.docker.internal` 就连得到，
+  测试 hub 不用开到局域网。
+- `docker pull --platform linux/amd64 <镜像>` 会把本地同名标签换成 amd64 的，之后不带 `--platform` 的 `docker run` 都在模拟里跑；
+  测完 `docker pull --platform linux/arm64 <镜像>` 换回来。
+
+## jarvis-link 被动模式和 node 服务（docs/link.md「被动模式」「装 node 服务」，2026-11-02）
+
+- **launchd 的 label 不跟着 HOME 走**：测 `jarvis-link node install` 时换了临时 HOME 也没用，`launchctl bootout gui/<uid>/com.jarvis.node` 停的就是这台 Mac
+  上真实在用的常驻 node。Mac 上的服务安装只在假命令（`env.command`）里测，绝不在开发机上真的跑；要真跑就换一个 label。
+- Docker 容器里的 `eth0` 在 sysfs 里是 `/sys/devices/virtual/net/eth0`，netaddr 把它当虚拟网卡：按「不要虚拟网卡」挑配对链接里的地址，容器里一个都挑不出来，
+  `install --listen` 直接失败（NAS 的网卡挂在虚拟交换机上也一样）。没有别的地址时退一步用虚拟网卡，隧道和桥接（`docker0`、`veth`、`utun`、`tailscale`……）照样不要；
+  挑不出地址也只是不打印链接，服务照装。
+- 被动模式的流要带关闭码结束（换 hub 时 4002、停止时 1001），和主动模式一样不能先取消 `websocket.NetConn` 的 context：它用 `context.Background()`，
+  结束时直接 `ws.Close(code, …)`，再关 node 的 socket。
+- `docker build` 的 `FROM <镜像 id>` 会去 registry 找名叫这个 id 的镜像（报 `registry-1.docker.io … EOF`）：先 `docker tag <id> <名字>` 再 `FROM <名字>`。
+  注意给悬空镜像打的标签删掉时镜像也跟着删了。
 
 ## Cloudflare Tunnel 推送中继（2026-11-02）
 
@@ -108,6 +142,49 @@
   测试里自己写的 WebSocket 客户端 / 服务端也一样，否则大一点的 HMR 消息报的错像是转发坏了。
 - dev server 第一次请求可能要编译好几秒（next dev）：探测「是不是 HTTP」时，连上了却超时没回话的不能当成「不是 HTTP」，先列出来再问。
 
+## 管理界面（docs/admin.md）
+
+- **来源地址别当真两次**：Docker 的用户态代理（docker-proxy）把经端口映射进来的连接都换成网桥网关的地址（`172.x.0.1`，私网）：
+  宿主机自己连的、Docker 没开 IPv6 时所有 IPv6 的、Docker Desktop / OrbStack 上所有的，公网来的也在里面。按「私网 = 局域网」判断，
+  公网请求就成了局域网，刚部署的 hub 会被抢先设管理员密码。容器里网关一律不算局域网（`containerGateway`）；Linux 上局域网电脑经
+  iptables DNAT 进来，地址是真的，不受影响。同机反向代理（nginx 默认不加转发头）让公网请求看起来来自 `127.0.0.1`，所以回环来源做
+  首次设置要日志里的一次性设置码。2026-11-02 在本机 Docker Desktop 实测：Mac 经映射进来是网关、同网桥的容器是自己的地址、`docker exec` 是回环。
+- **转发头只能用来收紧**：不读 `X-Forwarded-For` 放行任何人；带了就要求里面每个地址也在范围内，只说是代理（`Via`、
+  `X-Forwarded-Proto` …）不说替谁转的算范围外。
+- **范围外要像不存在**：返回 404 反而暴露「这里有个特殊路径」（别的 `/api/` 路径没 token 是 401、页面路径回网页的 `index.html`）。
+  范围外的请求原样交给普通网页和 App 的接口去答。页面路径按小写匹配 `/admin`：大小写不敏感的文件系统（macOS）上 `/ADMIN/index.html`
+  会被普通网页的静态文件服务直接读出来。
+- **改 hub.json 别经过 map**：`map[string]any` 重新序列化会把键按字母排序；用保留键顺序的对象只改要改的键。原子写的锁加在目录上，
+  别在 hub.json 旁边留锁文件（`rename` 换掉的是文件本身，锁 hub.json 的 fd 锁不住下一个写者）。
+- **`sync.Once` 懒加载的状态**：测试在第一次读之前直接改字段，会被随后的 `Once` 覆盖回配置值；测试先调一次初始化再改。
+- **测试里的私网地址**：`privacy_check.py` 拦私网 IPv4 字面量（文档网段 192.0.2.0/24 等除外）；要测私网行为就用数字拼
+  （`netip.AddrFrom4`，见 `ingress_test.go`、`admin_test.go` 的 `ip4`），注释里也别写。
+- **`curl … | sh` 也能问问题**：标准输入是脚本本身，从 `/dev/tty` 读（`(: </dev/tty) 2>/dev/null` 判断有没有终端，CI 和 cron 里没有）。
+  本机验证交互分支用 `script -q /dev/null <命令>` 给它一个 pty，把答案从标准输入喂进去。
+
+## hub 互联（docs/mesh.md，2026-11-02）
+
+- （第一版，对等互联时的）给 App 的机器 id 要在**序列化之前**换：`Hub.broadcast` 原来先 `json.Marshal` 再看消息，换了 map 却没换已经编好的字节。
+  第二版（单中心）里中心的机器对象的 id 就是给 App 的 id（成员的电脑在中心建一个 kind `hub` 的机器），这层翻译整个删掉了。
+- `httptest.NewTLSServer` 起的所有服务器用的是同一张内置测试证书：测试里几台 hub 的指纹一样，钉扎测不出「连错了 hub」，要靠 hello 里核对 hub_id。
+- 同一台常驻 node 有两条路（两项配置、或中心一条经成员一条）时，第一次（还不知道 uid）两条都会去连，node 只留一个 attach、后连的顶掉先连的。
+  第二版只有中心连，按 uid 把路合成一台以后只用一条；路 → uid 落库（`mesh.path_uids`），重启后不用再顶一次。测试「不抖」要等连接数稳定一段、
+  再看几秒内没有新的连接，不能看到一瞬间对了就算数。
+- 有对端的 hub 重启后，在链路上来之前它不知道自己是不是已经被换成成员（任期在别人那里）：先等 10 秒或第一条链路（`meshSettling`）再去连自己的电脑，
+  否则一个被换下来的旧中心回来时会抢一下它的电脑。
+- 链路上的 RPC 事件在读循环里处理：收到更大任期的记录时角色切换（断开 App、停掉自己的电脑）都只是关连接、入队，不在读循环里等 node。
+- 经成员开 node 流时，成员打开 ssh 用的 context 不能是「打开的那一步」的超时 context：ssh 进程跟着 context 活，那一步一结束进程就被杀了；
+  用一个跟着这条流走的 context。HTTP handler 劫持连接以后，请求的 context 也别再当这条流的寿命。
+- 本机同时测两台 hub 的管理界面（都在 127.0.0.1、不同端口）：cookie 不分端口，两台的 `jarvis_admin` 会互相覆盖，无头浏览器要一台一台地登录、截图。
+- 连接器（jarvis-link 被动模式）按来源计失败、一分钟 10 次封 15 分钟：hub 拿着坏凭据按普通退避重试再加上每 30 秒的探测，会把自己的地址封掉；
+  401 之后整条路（拨号和探测）停 5 分钟。
+- 两边同时拨号时，被拒的那一条在拨的一方看到的可能是 4011，也可能是 hello 的 `rpc: connection closed`（对方先完成了自己的 hello 再关）：两种都只是「已有链路」，
+  拨号循环回到开头等那条断了再说，别当成错误刷日志。
+- 管理界面的 `/api/v1/admin/` 写操作只收 `Content-Type: application/json`（CSRF 防护），不带 body 的 DELETE 也要带这个头，命令行走 `/api/v1/admin/cli/` 时同样。
+- 本机测互联用两台临时 hub（各自的临时 HOME、端口、测试库里各自的 schema：`database_url` 加 `&search_path=<schema>`）：回环地址不进候选地址，
+  互联码里会没有地址，要在 hub.json 的 `public.advertise` 写 `https://localhost:<TLS 端口>`。
+- **只该有一份的状态要按 hub_id 存**（2026-11-03）：`mesh_group` 起初是单行表，hub 的测试和 db 的测试共用一个测试库，db 测试写进去的「中心是 hub-a」让后面一台毫不相干的测试 hub 以为自己是成员，客户端全部拿到 `503 center_unreachable`。改成以 hub_id 为主键：恢复到别的机器的备份同理。共用库的测试写完要清掉自己写的行。
+- **只监听回环的 hub 别在局域网广播**：mDNS 的 A / AAAA 是本机所有网卡的地址，TLS 只听 127.0.0.1 时，别的 hub 听到的全是连不上的地址。
 ## 异步结果晚到（2026-11-03，#556）
 
 - 定时任务的一次运行在结束时才记结果（`recordRun`），而运行是异步的：一个慢的失败（助手要一会儿才放弃）可能在下一次运行或「错过了」的跳过之后才记，

@@ -168,6 +168,18 @@ type hookInput struct {
 	Message              string          `json:"message"`
 	LastAssistantMessage string          `json:"last_assistant_message"`
 	Prompt               string          `json:"prompt"`
+	AgentID              string          `json:"agent_id"`
+	AgentType            string          `json:"agent_type"`
+	MCPServerName        string          `json:"mcp_server_name"`
+	MCPConfigSource      string          `json:"mcp_config_source"`
+	MCPServer            *struct {
+		Name   string `json:"name"`
+		Source string `json:"source"`
+	} `json:"mcp_server"`
+	Mode            string          `json:"mode"`
+	URL             string          `json:"url"`
+	ElicitationID   string          `json:"elicitation_id"`
+	RequestedSchema json.RawMessage `json:"requested_schema"`
 }
 
 // errNodeGone: the hub connection ended while a hook waited (the node is going away).
@@ -178,6 +190,12 @@ var errNodeGone = errors.New("node going away")
 func interactionID(in hookInput, attempt string) string {
 	key := in.SessionID + "\x00" + in.HookEventName + "\x00" + in.ToolName + "\x00"
 	switch {
+	case in.HookEventName == "Elicitation":
+		// One tool can ask multiple questions; only this hook attempt identifies a form request.
+		if attempt == "" {
+			return "ix_" + newUUID()[:12]
+		}
+		key += in.MCPServerName + "\x00" + in.ElicitationID + "\x00attempt:" + attempt
 	case in.ToolUseID != "":
 		key += in.ToolUseID
 	case attempt != "":
@@ -218,6 +236,10 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 		ID: interactionID(in, req.Attempt), SessionID: in.SessionID, Cwd: in.Cwd, CreatedAt: time.Now().UTC(),
 		ExpiresAt: time.Now().Add(HookTimeout).UTC(), ToolName: in.ToolName, ToolUseID: in.ToolUseID, ToolInput: in.ToolInput,
 		Resumable: req.Attempt != "",
+		AgentID:   in.AgentID, AgentType: in.AgentType, MCPServerName: in.MCPServerName, MCPConfigSource: in.MCPConfigSource,
+	}
+	if in.MCPServer != nil {
+		ix.MCPServerName, ix.MCPConfigSource = in.MCPServer.Name, in.MCPServer.Source
 	}
 	if p := n.transcriptPath(in.SessionID); p != "" {
 		if st, err := os.Stat(p); err == nil {
@@ -229,6 +251,16 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	}
 
 	switch {
+	case in.HookEventName == "Elicitation":
+		if !elicitationInteraction(in, &ix) {
+			return nil, nil
+		}
+		res, ok, err := n.ask(ctx, ix)
+		if err != nil || !ok {
+			return nil, err
+		}
+		return elicitationOutput(ix, res), nil
+
 	case in.HookEventName == "PreToolUse" && in.ToolName == "Bash":
 		if !n.isAssistantSession(in.SessionID) {
 			return nil, nil

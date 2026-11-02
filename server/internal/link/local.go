@@ -1,0 +1,101 @@
+package link
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// What jarvis-link keeps next to link.json besides the credential: the lock that says one is running, the status it
+// last reported (for `jarvis-link status`, which cannot ask it) and its log.
+
+var errBusy = errors.New("locked")
+
+// ErrRunning: another jarvis-link holds the run lock of this link.json.
+var ErrRunning = errors.New("这台电脑上已经有一个 jarvis-link 在运行")
+
+// LockRun takes the run lock of the link.json at path: one jarvis-link per computer, or two would keep taking the
+// link from each other. ErrRunning when another one has it; release gives it back (exiting does too).
+func LockRun(path string) (release func(), err error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(path+".run", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := lockFile(f, false); err != nil {
+		f.Close()
+		if errors.Is(err, errBusy) {
+			return nil, ErrRunning
+		}
+		return nil, err
+	}
+	return func() { f.Close() }, nil
+}
+
+// Running says whether a jarvis-link is running with the link.json at path: whether its run lock is held. It takes the
+// lock for an instant to find out, so a jarvis-link starting in that instant fails and is restarted by whatever runs it.
+func Running(path string) bool {
+	f, err := os.OpenFile(path+".run", os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	return errors.Is(lockFile(f, false), errBusy)
+}
+
+// SavedStatus is the last Status a running jarvis-link reported, as it keeps it on disk for `jarvis-link status`.
+// State is also "stopped" there once it has exited by itself.
+type SavedStatus struct {
+	Status
+	PID     int       `json:"pid"`
+	Version string    `json:"version,omitempty"`
+	Updated time.Time `json:"updated"`
+}
+
+// StatusPath is where the jarvis-link of the link.json at path keeps its status: link.status.json beside it.
+func StatusPath(path string) string {
+	return strings.TrimSuffix(path, ".json") + ".status.json"
+}
+
+// LogPath is jarvis-link's log beside the link.json at path: the menu bar app sends the helper's there too.
+func LogPath(path string) string {
+	return filepath.Join(filepath.Dir(path), "link.log")
+}
+
+// WriteStatus replaces the saved status at once (another process may read it any time). It holds no credential.
+func WriteStatus(path string, s SavedStatus) error {
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	file := StatusPath(path)
+	tmp := file + ".tmp"
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, file)
+}
+
+// ReadStatus reads the saved status; the error wraps fs.ErrNotExist when no jarvis-link has run here yet.
+func ReadStatus(path string) (*SavedStatus, error) {
+	b, err := os.ReadFile(StatusPath(path))
+	if err != nil {
+		return nil, err
+	}
+	var s SavedStatus
+	if err := json.Unmarshal(b, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// Ranked is the order jarvis-link tries the candidates in.
+func Ranked(eps []Endpoint) []Endpoint { return ranked(eps) }
+
+// KindOf says what kind of address a URL is: lan | ipv6 | name | ipv4.
+func KindOf(raw string) string { return kindOf(raw) }

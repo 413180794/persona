@@ -180,7 +180,7 @@ func (h *Hub) ixWhere(ix proto.Interaction) string {
 	if where == "" {
 		where = "Jarvis"
 	}
-	if m := h.byID[ix.MachineID]; m != nil && where != "Jarvis" {
+	if m := h.localMachine(ix.MachineID); m != nil && where != "Jarvis" {
 		where += " · " + m.cfg.Name
 	}
 	return where
@@ -354,7 +354,7 @@ func (h *Hub) openButton(machine, session string) feishubot.Button {
 	web := strings.TrimRight(h.cfg.PublicURL, "/")
 	if session != "" {
 		// A Jarvis conversation has its own page (/j/<id>, web/src/lib/router.ts); an agent is /s/<machine>/<id>.
-		if m := h.byID[machine]; m != nil && isAssistant(sessionCwd(m, session), m.assistantCwd()) {
+		if m := h.localMachine(machine); m != nil && isAssistant(sessionCwd(m, session), m.assistantCwd()) {
 			web += "/j/" + url.PathEscape(session)
 		} else {
 			web += "/s/" + url.PathEscape(machine) + "/" + url.PathEscape(session)
@@ -527,7 +527,7 @@ func (h *Hub) botStartAgent(machine, cwd, prompt, cardID string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	m := h.byID[machine]
+	m := h.localMachine(machine)
 	say := func(text string) {
 		if _, err := api.Send(ctx, "chat_id", set.Owner.ChatID, feishubot.TypeText, feishubot.TextContent(text), ""); err != nil {
 			h.logf("bots: start agent note: %v", err)
@@ -630,7 +630,7 @@ func (h *Hub) botMirror(machine, session string) {
 	if pushed && set.Features.Pushes {
 		return // its notify_user already went to Feishu
 	}
-	m := h.byID[machine]
+	m := h.localMachine(machine)
 	if m == nil {
 		return
 	}

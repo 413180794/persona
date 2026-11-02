@@ -1,0 +1,352 @@
+[
+  {
+    "name": "unknown_event_ignored",
+    "description": "未知事件被当前 iOS 忽略。",
+    "source": [
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode default",
+      "docs/redesign/README.md: D5"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "extra": true,
+      "type": "future_event"
+    },
+    "expected": {
+      "accepted": false,
+      "fields": {}
+    }
+  },
+  {
+    "name": "hello_unknown_field",
+    "description": "握手中的未知键不会影响已知字段。",
+    "source": [
+      "apple/Shared/LiveConnection.swift: ServerEvent.Envelope, ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "features": [
+        "future_feature"
+      ],
+      "future_field": {
+        "enabled": true
+      },
+      "type": "hello"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/features": [
+          "future_feature"
+        ],
+        "/type": "hello"
+      }
+    }
+  },
+  {
+    "name": "hello_missing_features",
+    "description": "旧握手缺少能力列表时按空列表处理。",
+    "source": [
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "type": "hello"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/features": []
+      }
+    }
+  },
+  {
+    "name": "items_legacy_null",
+    "description": "旧事件的空 items 按空数组处理，连续性字段保持缺省。",
+    "source": [
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode",
+      "docs/protocol.md: items 的连续性"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "items": null,
+      "machine_id": "m1",
+      "session_id": "s1",
+      "type": "items"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/backlog": false,
+        "/from_seq": null,
+        "/history": null,
+        "/items": [],
+        "/more_after": false,
+        "/to_seq": null
+      }
+    }
+  },
+  {
+    "name": "session_unknown_enums",
+    "description": "未知会话状态降级为 unknown。",
+    "source": [
+      "apple/Shared/Models.swift: SessionStatus.init(from:), AgentState.init(from:)",
+      "docs/redesign/README.md: D5"
+    ],
+    "derived": true,
+    "decoder": "compat_session",
+    "input": {
+      "machine_id": "",
+      "session_id": "s1",
+      "title": "",
+      "cwd": "",
+      "status": "future_status",
+      "started_by_jarvis": false,
+      "assistant": false,
+      "state": "future_state",
+      "seen_at": "0001-01-01T00:00:00Z",
+      "state_since": "0001-01-01T00:00:00Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "pending_interactions": 0
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/state": "unknown",
+        "/status": "unknown"
+      }
+    }
+  },
+  {
+    "name": "session_missing_fields",
+    "description": "旧会话缺字段时使用当前 iOS 的默认值。",
+    "source": [
+      "apple/Shared/Models.swift: Session.init(from:)"
+    ],
+    "derived": true,
+    "decoder": "compat_session",
+    "input": {
+      "session_id": "s1",
+      "status": "blocked"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/assistant": false,
+        "/machine_id": "",
+        "/pending_interactions": 0,
+        "/state": "needs_you",
+        "/title": ""
+      }
+    }
+  },
+  {
+    "name": "item_unknown_kind",
+    "description": "未知内容块类型降级为 unknown。",
+    "source": [
+      "apple/Shared/Models.swift: ItemKind.init(from:)"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "items": [
+        {
+          "id": "entry_future#0",
+          "seq": 1,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "future_kind"
+        }
+      ],
+      "machine_id": "m1",
+      "session_id": "s1",
+      "type": "items"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/0/kind": "unknown"
+      }
+    }
+  },
+  {
+    "name": "fleet_bad_optional_stats",
+    "description": "Fleet 的可选统计字段类型错误时只丢弃统计字段。",
+    "source": [
+      "apple/Shared/FleetState.swift: FleetState.init(from:)"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "fleet": {
+        "phase": "working",
+        "stats": "invalid",
+        "working": 1
+      },
+      "type": "fleet"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/fleet/phase": "working",
+        "/fleet/stats": null,
+        "/fleet/working": 1
+      }
+    }
+  },
+  {
+    "name": "fleet_unknown_values",
+    "description": "未知 Fleet 阶段变为空阶段，未知条目类型变为 screen。",
+    "source": [
+      "apple/JarvisTests/FleetStateTests.swift: lenientDecoding"
+    ],
+    "from_test": "FleetStateTests.lenientDecoding",
+    "decoder": "compat_event",
+    "input": {
+      "fleet": {
+        "items": [
+          {
+            "id": "a/b",
+            "kind": "teleport"
+          }
+        ],
+        "phase": "later"
+      },
+      "type": "fleet"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/fleet/items/0/kind": "screen",
+        "/fleet/phase": ""
+      }
+    }
+  },
+  {
+    "name": "hello_wrong_known_type",
+    "description": "已知信封键类型错误会让整条握手被丢弃。",
+    "source": [
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode",
+      "apple/Shared/Models.swift: InteractionKind, Session.init(from:)",
+      "docs/redesign/README.md: D5（现状差异）"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "features": [],
+      "state": {
+        "enabled": true
+      },
+      "type": "hello"
+    },
+    "expected": {
+      "accepted": false,
+      "fields": {}
+    }
+  },
+  {
+    "name": "session_bad_optional_field",
+    "description": "当前 iOS 不会单独忽略类型错误的会话增强字段。",
+    "source": [
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode",
+      "apple/Shared/Models.swift: InteractionKind, Session.init(from:)",
+      "docs/redesign/README.md: D5（现状差异）"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "machine_id": "m1",
+      "sessions": [
+        {
+          "background": "invalid",
+          "session_id": "s1"
+        }
+      ],
+      "type": "sessions"
+    },
+    "expected": {
+      "accepted": false,
+      "fields": {}
+    }
+  },
+  {
+    "name": "interaction_unknown_kind",
+    "description": "当前 iOS 不支持未知交互类型的降级解码。",
+    "source": [
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode",
+      "apple/Shared/Models.swift: InteractionKind, Session.init(from:)",
+      "docs/redesign/README.md: D5（现状差异）"
+    ],
+    "derived": true,
+    "decoder": "compat_event",
+    "input": {
+      "interaction": {
+        "id": "ix_future",
+        "machine_id": "m1",
+        "session_id": "s1",
+        "kind": "future_kind",
+        "created_at": "2026-01-02T03:04:05Z",
+        "expires_at": "2026-01-02T03:04:05Z"
+      },
+      "type": "interaction"
+    },
+    "expected": {
+      "accepted": false,
+      "fields": {}
+    }
+  },
+  {
+    "name": "session_zero_time",
+    "description": "Go 零时间能解码，但不算有意义的日期。",
+    "source": [
+      "server/internal/proto/proto.go: Session",
+      "apple/Shared/JSONValue.swift: JSON.decoder, Date.isMeaningful"
+    ],
+    "derived": true,
+    "decoder": "compat_session",
+    "input": {
+      "machine_id": "",
+      "session_id": "s1",
+      "title": "",
+      "cwd": "",
+      "status": "",
+      "started_by_jarvis": false,
+      "assistant": false,
+      "state": "",
+      "seen_at": "0001-01-01T00:00:00Z",
+      "state_since": "0001-01-01T00:00:00Z",
+      "updated_at": "0001-01-01T00:00:00Z",
+      "pending_interactions": 0
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/seen_at_meaningful": false,
+        "/updated_at_meaningful": false
+      }
+    }
+  },
+  {
+    "name": "date_at_cutoff",
+    "description": "当前 iOS 将 2000 年起点本身也判为无意义日期。",
+    "source": [
+      "apple/Shared/JSONValue.swift: Date.isMeaningful",
+      "docs/redesign/README.md: D5（现状差异）"
+    ],
+    "derived": true,
+    "decoder": "compat_session",
+    "input": {
+      "session_id": "s1",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/updated_at_meaningful": false
+      }
+    }
+  }
+]

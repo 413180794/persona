@@ -1,0 +1,122 @@
+[
+  {
+    "name": "machines_list",
+    "description": "机器列表同时包含在线信息和离线机器的零时间。",
+    "source": [
+      "server/internal/hub/machine.go: Machine.snapshot",
+      "apple/Shared/Models.swift: Machine",
+      "apple/Shared/MachineMetrics.swift: MachineSystem"
+    ],
+    "derived": true,
+    "decoder": "machines",
+    "input": {
+      "machines": [
+        {
+          "id": "m1",
+          "name": "示例电脑",
+          "kind": "ssh",
+          "icon": "laptop",
+          "ssh_host": "example.com",
+          "online": true,
+          "hostname": "example.com",
+          "os": "linux",
+          "arch": "arm64",
+          "home": "/home/user",
+          "last_seen": "2026-01-02T03:04:05Z",
+          "node_version": "fixture-version",
+          "system": {
+            "os": "linux",
+            "distro": "linux",
+            "name": "示例系统",
+            "version": "1",
+            "kernel": "example",
+            "arch": "arm64",
+            "cores": 2,
+            "memory": 1073741824
+          },
+          "engine": "herdr",
+          "engines": []
+        },
+        {
+          "id": "m2",
+          "name": "离线电脑",
+          "kind": "ssh",
+          "icon": "laptop",
+          "ssh_host": "example.com",
+          "online": false,
+          "last_seen": "0001-01-01T00:00:00Z",
+          "engine": "herdr",
+          "engines": []
+        }
+      ]
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/machines/0/online": true,
+        "/machines/0/system/arch": "arm64",
+        "/machines/1/online": false
+      }
+    }
+  },
+  {
+    "name": "machines_event",
+    "description": "机器事件使用与列表一致的机器类型。",
+    "source": [
+      "server/internal/hub/http.go: Hub.serveWS",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "machines": [
+        {
+          "id": "m1",
+          "name": "示例电脑",
+          "kind": "ssh",
+          "icon": "laptop",
+          "ssh_host": "example.com",
+          "online": true,
+          "hostname": "example.com",
+          "os": "linux",
+          "arch": "arm64",
+          "home": "/home/user",
+          "last_seen": "2026-01-02T03:04:05Z",
+          "node_version": "fixture-version",
+          "system": {
+            "os": "linux",
+            "distro": "linux",
+            "name": "示例系统",
+            "version": "1",
+            "kernel": "example",
+            "arch": "arm64",
+            "cores": 2,
+            "memory": 1073741824
+          },
+          "engine": "herdr",
+          "engines": []
+        },
+        {
+          "id": "m2",
+          "name": "离线电脑",
+          "kind": "ssh",
+          "icon": "laptop",
+          "ssh_host": "example.com",
+          "online": false,
+          "last_seen": "0001-01-01T00:00:00Z",
+          "engine": "herdr",
+          "engines": []
+        }
+      ],
+      "type": "machines"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/machines/0/id": "m1",
+        "/machines/1/id": "m2",
+        "/type": "machines"
+      }
+    }
+  }
+]

@@ -1,0 +1,485 @@
+[
+  {
+    "name": "items_all_kinds",
+    "description": "历史页覆盖文本、工具、图片占位、通知和任务通知。",
+    "source": [
+      "server/internal/proto/proto.go: Item, WithoutImageData",
+      "server/internal/hub/http.go: Hub.sessionItems",
+      "apple/Shared/Models.swift: Item, ImagePayload, TaskNote"
+    ],
+    "derived": true,
+    "decoder": "items",
+    "input": {
+      "has_more": false,
+      "history": "history_example",
+      "items": [
+        {
+          "id": "entry_text#0",
+          "seq": 1,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "text",
+          "text": "请检查示例。"
+        },
+        {
+          "id": "entry_thinking#0",
+          "seq": 2,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "thinking",
+          "text": "先读取示例文件。"
+        },
+        {
+          "id": "entry_tool#0",
+          "seq": 3,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "tool_use",
+          "tool_use_id": "call_example",
+          "tool_name": "Read",
+          "tool_input": {
+            "file_path": "/home/user/project/example.txt",
+            "custom_Key": {
+              "keep_snake_case": true
+            }
+          }
+        },
+        {
+          "id": "entry_result#0",
+          "seq": 4,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "tool_result",
+          "text": "示例内容",
+          "tool_use_id": "call_example"
+        },
+        {
+          "id": "entry_failed#0",
+          "seq": 5,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "tool_result",
+          "text": "示例文件不存在",
+          "tool_use_id": "call_missing",
+          "is_error": true
+        },
+        {
+          "id": "entry_notice#0",
+          "seq": 6,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "system",
+          "kind": "notice",
+          "text": "示例上下文已整理。"
+        },
+        {
+          "id": "entry_recap#0",
+          "seq": 7,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "recap",
+          "text": "已完成示例检查。"
+        },
+        {
+          "id": "entry_image#0",
+          "seq": 8,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "image",
+          "image": {
+            "mime": "image/png",
+            "data": "",
+            "lazy": true,
+            "size": 81,
+            "width": 2,
+            "height": 1
+          }
+        },
+        {
+          "id": "entry_task#0",
+          "seq": 9,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "system",
+          "kind": "notice",
+          "text": "示例后台任务完成。",
+          "wake": true,
+          "task": {
+            "kind": "shell",
+            "status": "completed",
+            "title": "检查示例",
+            "task_id": "task_example",
+            "tool_use_id": "call_example",
+            "exit_code": 0,
+            "output_file": "/home/user/project/output.txt",
+            "detail": "检查完成。"
+          }
+        },
+        {
+          "id": "entry_queued#0",
+          "seq": 10,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "text",
+          "text": "再检查一次。",
+          "queued": true
+        }
+      ],
+      "to_seq": 10
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/0/kind": "text",
+        "/items/1/kind": "thinking",
+        "/items/2/tool_input/custom_Key/keep_snake_case": true,
+        "/items/3/tool_use_id": "call_example",
+        "/items/4/is_error": true,
+        "/items/5/kind": "notice",
+        "/items/6/kind": "recap",
+        "/items/7/image/data": "",
+        "/items/7/image/lazy": true,
+        "/items/7/image/width": 2,
+        "/items/8/task/exit_code": 0,
+        "/items/8/wake": true,
+        "/items/9/queued": true
+      }
+    }
+  },
+  {
+    "name": "items_folded_work",
+    "description": "折叠条目由真实折叠函数生成计数及范围。",
+    "source": [
+      "server/internal/transcript/fold.go: FoldWork",
+      "apple/Shared/Models.swift: Fold",
+      "docs/protocol.md: 折叠的工作"
+    ],
+    "derived": true,
+    "decoder": "items",
+    "input": {
+      "has_more": true,
+      "items": [
+        {
+          "id": "entry_text#0",
+          "seq": 1,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "text",
+          "text": "请检查示例。"
+        },
+        {
+          "id": "fold:entry_thinking#0",
+          "seq": 2,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "fold",
+          "fold": {
+            "items": 3,
+            "tools": 1,
+            "thoughts": 1,
+            "until": "2026-01-02T03:04:05Z",
+            "through_seq": 4,
+            "through_id": "entry_result#0"
+          }
+        },
+        {
+          "id": "entry_recap#0",
+          "seq": 7,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "recap",
+          "text": "已完成示例检查。"
+        }
+      ]
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/has_more": true,
+        "/items/1/fold/items": 3,
+        "/items/1/fold/thoughts": 1,
+        "/items/1/fold/through_seq": 4,
+        "/items/1/fold/tools": 1,
+        "/items/1/kind": "fold"
+      }
+    }
+  },
+  {
+    "name": "items_folded_tasks",
+    "description": "折叠的任务快照保留成功结果与原调用位置，旧 iOS 忽略新增字段。",
+    "source": [
+      "server/internal/transcript/fold.go: FoldWork",
+      "server/internal/proto/proto.go: FoldTaskSnapshot",
+      "apple/Shared/Models.swift: Fold",
+      "docs/protocol.md: 折叠的工作"
+    ],
+    "derived": true,
+    "decoder": "items",
+    "input": {
+      "has_more": true,
+      "items": [
+        {
+          "id": "entry_text#0",
+          "seq": 1,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "text",
+          "text": "请检查示例。"
+        },
+        {
+          "id": "fold:entry_thinking#0",
+          "seq": 2,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "fold",
+          "fold": {
+            "items": 3,
+            "tools": 1,
+            "thoughts": 1,
+            "until": "2026-01-02T03:04:05Z",
+            "through_seq": 4,
+            "through_id": "entry_result#0",
+            "tasks": [
+              {
+                "replace": "todo",
+                "entries": [
+                  {
+                    "id": "todo:0",
+                    "subject": "检查表单",
+                    "description": "检查中",
+                    "status": "in_progress"
+                  }
+                ],
+                "source_item_id": "entry_tool#0",
+                "source_tool_use_id": "call_example",
+                "source_seq": 3
+              }
+            ]
+          }
+        },
+        {
+          "id": "entry_recap#0",
+          "seq": 7,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "recap",
+          "text": "已完成示例检查。"
+        }
+      ]
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/1/fold/items": 3,
+        "/items/1/fold/through_seq": 4,
+        "/items/1/fold/tools": 1,
+        "/items/1/kind": "fold"
+      }
+    }
+  },
+  {
+    "name": "items_inline_image",
+    "description": "未启用懒加载时图片保留内联数据。",
+    "source": [
+      "server/internal/proto/proto.go: Image",
+      "apple/Shared/Models.swift: ImagePayload"
+    ],
+    "derived": true,
+    "decoder": "items",
+    "input": {
+      "has_more": false,
+      "items": [
+        {
+          "id": "entry_image#0",
+          "seq": 8,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "image",
+          "image": {
+            "mime": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAFklEQVR4nAAJAPb/AgAAAAAAAAAAAwAAGwADK+C1DwAAAABJRU5ErkJggg=="
+          }
+        }
+      ]
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/0/image/data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAFklEQVR4nAAJAPb/AgAAAAAAAAAAAwAAGwADK+C1DwAAAABJRU5ErkJggg==",
+        "/items/0/image/lazy": null,
+        "/items/0/image/mime": "image/png"
+      }
+    }
+  },
+  {
+    "name": "items_task_notifications",
+    "description": "监控事件和子任务结果都作为带 task 的 notice 传输。",
+    "source": [
+      "server/internal/proto/proto.go: TaskNote",
+      "apple/Shared/Models.swift: TaskNote"
+    ],
+    "derived": true,
+    "decoder": "items",
+    "input": {
+      "has_more": false,
+      "items": [
+        {
+          "id": "entry_monitor#0",
+          "seq": 11,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "system",
+          "kind": "notice",
+          "text": "示例后台任务完成。",
+          "wake": true,
+          "task": {
+            "kind": "monitor",
+            "status": "event",
+            "title": "示例监控",
+            "task_id": "monitor_example",
+            "detail": "示例值 \u003e 0 \u0026 \u003c 10"
+          }
+        },
+        {
+          "id": "entry_agent#0",
+          "seq": 12,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "system",
+          "kind": "notice",
+          "text": "示例后台任务完成。",
+          "wake": true,
+          "task": {
+            "kind": "agent",
+            "status": "completed",
+            "title": "示例子任务",
+            "task_id": "agent_example",
+            "detail": "子任务已完成。"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/0/kind": "notice",
+        "/items/0/task/detail": "示例值 \u003e 0 \u0026 \u003c 10",
+        "/items/0/task/kind": "monitor",
+        "/items/1/task/kind": "agent"
+      }
+    }
+  },
+  {
+    "name": "items_http_after",
+    "description": "HTTP 增量页保留连续性、后续页标记和图片占位。",
+    "source": [
+      "server/internal/hub/http.go: Hub.sessionItems",
+      "apple/Shared/APIClient.swift: APIClient.ItemsResponse, APIClient.NewerResponse"
+    ],
+    "derived": true,
+    "decoder": "items_after",
+    "input": {
+      "items": [
+        {
+          "id": "entry_text#0",
+          "seq": 1,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "text",
+          "text": "请检查示例。"
+        },
+        {
+          "id": "entry_image#0",
+          "seq": 8,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "image",
+          "image": {
+            "mime": "image/png",
+            "data": "",
+            "lazy": true,
+            "size": 81,
+            "width": 2,
+            "height": 1
+          }
+        }
+      ],
+      "has_more": false,
+      "more_after": true,
+      "history": "history_example",
+      "from_seq": 0,
+      "to_seq": 8
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/from_seq": 0,
+        "/items/1/image/lazy": true,
+        "/more_after": true,
+        "/to_seq": 8
+      }
+    }
+  },
+  {
+    "name": "items_fold_range",
+    "description": "展开折叠的分页使用 more 表示范围尚未读完。",
+    "source": [
+      "server/internal/hub/http.go: Hub.sessionItems",
+      "apple/Shared/APIClient.swift: APIClient.foldedWork.Range"
+    ],
+    "derived": true,
+    "decoder": "items_range",
+    "input": {
+      "items": [
+        {
+          "id": "entry_text#0",
+          "seq": 1,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "text",
+          "text": "请检查示例。"
+        }
+      ],
+      "has_more": false,
+      "more": true
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/0/id": "entry_text#0",
+        "/more": true
+      }
+    }
+  },
+  {
+    "name": "items_recorded_turn_duration",
+    "description": "轮次耗时保留来源及原生关联；旧客户端忽略未知内容类型和可选字段。",
+    "source": [
+      "server/internal/transcript/transcript.go: ParseLine",
+      "server/internal/proto/proto.go: TurnDuration",
+      "apple/Shared/Models.swift: ItemKind.init"
+    ],
+    "derived": true,
+    "decoder": "items",
+    "input": {
+      "has_more": false,
+      "items": [
+        {
+          "id": "duration_example#0",
+          "seq": 9,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "system",
+          "kind": "turn_duration",
+          "turn_duration": {
+            "duration_ms": 12345,
+            "source": "claude_turn_duration",
+            "parent_uuid": "entry_text"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/0/id": "duration_example#0",
+        "/items/0/role": "system"
+      }
+    }
+  }
+]

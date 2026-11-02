@@ -132,6 +132,10 @@ func TestRelayInteractionIsSealed(t *testing.T) {
 	if iat, _ := p["iat"].(float64); time.Since(time.Unix(int64(iat), 0)) > time.Minute {
 		t.Fatalf("iat %v", p["iat"])
 	}
+	// Which hub sent it (its group, for an app paired with several): inside the sealed payload, not before the relay.
+	if p["hub_id"] != h.hubID() || bytes.Contains(r.Body, []byte(h.hubID())) {
+		t.Fatalf("hub_id %v in %v", p["hub_id"], p)
+	}
 }
 
 func TestRelayDoneAndWake(t *testing.T) {
@@ -211,6 +215,9 @@ func TestDirectKeyWinsOverRelay(t *testing.T) {
 	c := direct.calls(t, 1)
 	if c[0].Token != "a1b2c3d4e5f60718a1b2c3d4e5f60718" || c[0].Type != "alert" {
 		t.Fatalf("direct %+v", c[0])
+	}
+	if !strings.Contains(string(c[0].Body), `"hub_id":"`+h.hubID()+`"`) {
+		t.Fatalf("direct push without the hub's hub_id: %s", c[0].Body)
 	}
 	time.Sleep(100 * time.Millisecond)
 	if len(relayed.got) != 0 {

@@ -363,3 +363,104 @@ func TestTerminalControlEndsWhenTakenOrForgotten(t *testing.T) {
 	// until it has said so (the directory cannot be removed under it).
 	waitFor(t, "the fake herdr to let go", func() bool { return strings.Contains(readLog(log), "released") })
 }
+
+// A slow link: while a frame is being written, herdr's reader is not held up; what comes meanwhile merges and goes
+// next, in order, and once it outgrows a whole screen a whole frame is asked for instead.
+func TestFrameGateWhileTheLinkIsBusy(t *testing.T) {
+	old := termMinGap
+	termMinGap = time.Millisecond
+	t.Cleanup(func() { termMinGap = old })
+	b := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	release := make(chan struct{})
+	var mu sync.Mutex
+	var sent []string
+	refreshes := 0
+	g := &frameGate{send: func(f host.Frame) {
+		d, _ := base64.StdEncoding.DecodeString(f.Data)
+		mu.Lock()
+		first := len(sent) == 0
+		sent = append(sent, fmt.Sprintf("%v:%d:%.6s", f.Full, len(d), d))
+		mu.Unlock()
+		if first {
+			<-release // the link takes its time over the first one
+		}
+	}, refresh: func() { mu.Lock(); refreshes++; mu.Unlock() }}
+
+	g.put(host.Frame{Full: true, Data: b("FIRST")})
+	done := make(chan struct{})
+	go func() {
+		// None of these may wait for the link.
+		g.put(host.Frame{Data: b("ab")})
+		g.put(host.Frame{Data: b("cd")})
+		big := strings.Repeat("x", gateBudget)
+		g.put(host.Frame{Data: b(big)}) // past the budget: one refresh
+		g.put(host.Frame{Data: b(big)})
+		g.put(host.Frame{Full: true, Data: b("WHOLE")}) // herdr's answer drops the diffs it covers
+		g.put(host.Frame{Data: b("ef")})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("put waited for the link")
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) { // refresh runs on its own goroutine
+		mu.Lock()
+		r := refreshes
+		mu.Unlock()
+		if r >= 1 || time.Now().After(deadline) {
+			break
+		}
+	}
+	close(release)
+	g.flush()
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"true:5:FIRST", "true:7:WHOLEe"}; fmt.Sprint(sent) != fmt.Sprint(want) {
+		t.Fatalf("sent %v, want %v", sent, want)
+	}
+	if refreshes != 1 {
+		t.Fatalf("refreshes = %d, want 1", refreshes)
+	}
+}
+
+// The stream's end waits for the frame on the wire and sends what is held before the caller says the stream ended.
+func TestFrameGateFlushWaitsForTheLink(t *testing.T) {
+	old := termMinGap
+	termMinGap = time.Hour // nothing goes out on a timer here
+	t.Cleanup(func() { termMinGap = old })
+	b := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	release := make(chan struct{})
+	var mu sync.Mutex
+	var sent []string
+	g := &frameGate{send: func(f host.Frame) {
+		d, _ := base64.StdEncoding.DecodeString(f.Data)
+		mu.Lock()
+		first := len(sent) == 0
+		sent = append(sent, string(d))
+		mu.Unlock()
+		if first {
+			<-release
+		}
+	}}
+	g.put(host.Frame{Full: true, Data: b("A")})
+	g.put(host.Frame{Data: b("b")})
+	flushed := make(chan struct{})
+	go func() { g.flush(); close(flushed) }()
+	select {
+	case <-flushed:
+		t.Fatal("flush returned while a frame was still on the wire")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-flushed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("flush never returned")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if fmt.Sprint(sent) != fmt.Sprint([]string{"A", "b"}) {
+		t.Fatalf("sent %v", sent)
+	}
+}

@@ -242,7 +242,7 @@ func (h *Hub) setAssistantNotes(ctx context.Context, v json.RawMessage) (*selfCh
 }
 
 func (h *Hub) assistantLaunchers(ctx context.Context) ([]proto.Launcher, error) {
-	m := h.byID[h.assistantConfig(ctx).MachineID]
+	m := h.localMachine(h.assistantConfig(ctx).MachineID)
 	if m == nil {
 		return nil, errors.New("the assistant's machine is not configured")
 	}

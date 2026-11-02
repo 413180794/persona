@@ -1,0 +1,1320 @@
+{
+  "schema_version": 1,
+  "domain": "lines",
+  "cases": [
+    {
+      "name": "closed_work_identity",
+      "description": "收起工作行保留用户、工作标题和回复的稳定标识。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/ChatLineTests.swift: workExpansionKeepsExistingIdentities"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "question"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "call",
+            "tool_name": "Bash"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "assistant",
+            "kind": "text",
+            "text": "answer"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "question",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": false,
+            "start": null,
+            "steps": [
+              {
+                "call_id": "call",
+                "failed": false,
+                "id": "2#0",
+                "image_count": 0,
+                "name": "Bash",
+                "result_id": null,
+                "result_text": null,
+                "running": true,
+                "type": "tool"
+              }
+            ],
+            "summary_full": [
+              "工具 1"
+            ],
+            "summary_short": [
+              "工具 1"
+            ],
+            "thoughts": 0,
+            "tools": 1,
+            "type": "work",
+            "unresolved_tools": 1
+          },
+          {
+            "id": "3#0",
+            "is_input": false,
+            "text": "answer",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "3#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "tools-2#0",
+              "3#0"
+            ],
+            "process_ids": [
+              "tools-2#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 1,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "from_test": "workExpansionKeepsExistingIdentities"
+    },
+    {
+      "name": "open_work_identity",
+      "description": "展开增加独立步骤和收起行，原有行标识保持不变。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/ChatLineTests.swift: workExpansionKeepsExistingIdentities"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "question"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "call",
+            "tool_name": "Bash"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "assistant",
+            "kind": "text",
+            "text": "answer"
+          }
+        ],
+        "open_work": [
+          "w-1#0"
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "question",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": true,
+            "start": null,
+            "steps": [
+              {
+                "call_id": "call",
+                "failed": false,
+                "id": "2#0",
+                "image_count": 0,
+                "name": "Bash",
+                "result_id": null,
+                "result_text": null,
+                "running": true,
+                "type": "tool"
+              }
+            ],
+            "summary_full": [
+              "工具 1"
+            ],
+            "summary_short": [
+              "工具 1"
+            ],
+            "thoughts": 0,
+            "tools": 1,
+            "type": "work",
+            "unresolved_tools": 1
+          },
+          {
+            "first": true,
+            "group_id": "w-1#0",
+            "id": "w-1#0/2#0",
+            "is_input": false,
+            "separator_before": false,
+            "step": {
+              "call_id": "call",
+              "failed": false,
+              "id": "2#0",
+              "image_count": 0,
+              "name": "Bash",
+              "result_id": null,
+              "result_text": null,
+              "running": true,
+              "type": "tool"
+            },
+            "type": "work_step"
+          },
+          {
+            "count": 1,
+            "group_id": "w-1#0",
+            "id": "w-1#0-end",
+            "is_input": false,
+            "separator_before": true,
+            "type": "work_end"
+          },
+          {
+            "id": "3#0",
+            "is_input": false,
+            "text": "answer",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "3#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "tools-2#0",
+              "3#0"
+            ],
+            "process_ids": [
+              "tools-2#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 1,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "from_test": "workExpansionKeepsExistingIdentities"
+    },
+    {
+      "name": "menu_owner_in_merged_messages",
+      "description": "合并消息的菜单只归属于第一条原消息。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/ChatLineTests.swift: messageMenuStillBelongsToItsOriginalRow"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "first"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "user",
+            "kind": "text",
+            "text": "second",
+            "queued": true
+          }
+        ],
+        "menu_queries": [
+          "1#0",
+          "2#0",
+          null
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "holds": [
+              true,
+              false,
+              false
+            ],
+            "id": "mu-1#0",
+            "is_input": true,
+            "item_ids": [
+              "1#0",
+              "2#0"
+            ],
+            "type": "merged_users"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "holds": [
+              false,
+              false,
+              false
+            ],
+            "id": "wt-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": false,
+            "start": null,
+            "steps": [],
+            "summary_full": [],
+            "summary_short": [],
+            "thoughts": 0,
+            "tools": 0,
+            "type": "work",
+            "unresolved_tools": 0
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": null,
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "2#0"
+            ],
+            "process_ids": [],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0",
+              "2#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "from_test": "messageMenuStillBelongsToItsOriginalRow"
+    },
+    {
+      "name": "split_header_identity",
+      "description": "展开多消息轮后用独立标题标识保留分段结构。",
+      "source": [
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / ChatLine.Content.id",
+        "ios/JarvisTests/ChatLineTests.swift: messageMenuStillBelongsToItsOriginalRow"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "user",
+            "kind": "text",
+            "text": "补充检查范围",
+            "queued": true
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          }
+        ],
+        "open_work": [
+          "wt-1#0"
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "count": 2,
+            "id": "wt-1#0-h",
+            "is_input": false,
+            "type": "split_header"
+          },
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "id": "2#0",
+            "is_input": true,
+            "text": "补充检查范围",
+            "type": "user"
+          },
+          {
+            "id": "3#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "3#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "2#0",
+              "3#0"
+            ],
+            "process_ids": [],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0",
+              "2#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "empty_session",
+      "description": "没有条目时不产生对话行。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": []
+      },
+      "expected": {
+        "lines": [],
+        "turns": []
+      },
+      "derived": true
+    },
+    {
+      "name": "plain_exchange",
+      "description": "纯问答不额外生成空工作行。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "id": "2#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "2#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "2#0"
+            ],
+            "process_ids": [],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "live_empty_work",
+      "description": "进行中的轮即使没有步骤也保留工作行。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目",
+            "ts": "2026-01-01T00:00:01Z"
+          }
+        ],
+        "live_turn_id": "1#0",
+        "now": "2026-01-01T00:00:31Z"
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "30 秒",
+            "elapsed_seconds": 30,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": true,
+            "open": false,
+            "start": "2026-01-01T00:00:01Z",
+            "steps": [],
+            "summary_full": [],
+            "summary_short": [],
+            "thoughts": 0,
+            "tools": 0,
+            "type": "work",
+            "unresolved_tools": 0
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": null,
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0"
+            ],
+            "process_ids": [],
+            "start": "2026-01-01T00:00:01Z",
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "live_reply_stays_after_work",
+      "description": "已有回复的进行中轮仍保留空的工作行。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          }
+        ],
+        "live_turn_id": "1#0"
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": true,
+            "open": false,
+            "start": null,
+            "steps": [],
+            "summary_full": [],
+            "summary_short": [],
+            "thoughts": 0,
+            "tools": 0,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "id": "2#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "2#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "2#0"
+            ],
+            "process_ids": [],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "orphan_assistant",
+      "description": "窗口从助手内容开始时仍可生成工作行和回复。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "thinking",
+            "text": "先读取配置再检查"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "call_a",
+            "tool_name": "Bash"
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-2#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": false,
+            "start": null,
+            "steps": [
+              {
+                "id": "2#0",
+                "text": "先读取配置再检查",
+                "type": "thinking"
+              },
+              {
+                "call_id": "call_a",
+                "failed": false,
+                "id": "3#0",
+                "image_count": 0,
+                "name": "Bash",
+                "result_id": null,
+                "result_text": null,
+                "running": true,
+                "type": "tool"
+              }
+            ],
+            "summary_full": [
+              "工具 1",
+              "思考 1"
+            ],
+            "summary_short": [
+              "工具 1"
+            ],
+            "thoughts": 1,
+            "tools": 1,
+            "type": "work",
+            "unresolved_tools": 1
+          },
+          {
+            "id": "4#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "4#0",
+            "end": null,
+            "id": "2#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "2#0",
+              "tools-3#0",
+              "4#0"
+            ],
+            "process_ids": [
+              "2#0",
+              "tools-3#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 1,
+            "tool_count": 1,
+            "trailing_ids": [],
+            "user_ids": [],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "ordinary_user_starts_next_turn",
+      "description": "普通用户消息开启新轮，只有被吸收的消息加入原轮。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "text",
+            "text": "第一轮完成"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "user",
+            "kind": "text",
+            "text": "下一轮"
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "assistant",
+            "kind": "text",
+            "text": "第二轮完成"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "id": "2#0",
+            "is_input": false,
+            "text": "第一轮完成",
+            "type": "reply"
+          },
+          {
+            "id": "3#0",
+            "is_input": true,
+            "text": "下一轮",
+            "type": "user"
+          },
+          {
+            "id": "4#0",
+            "is_input": false,
+            "text": "第二轮完成",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "2#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "2#0"
+            ],
+            "process_ids": [],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          },
+          {
+            "after_wake_ids": [],
+            "answer_id": "4#0",
+            "end": null,
+            "id": "3#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "3#0",
+              "4#0"
+            ],
+            "process_ids": [],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "3#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "recap_separates_turns",
+      "description": "回顾作为独立标记保留在两轮之间。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "system",
+            "kind": "recap",
+            "text": "离开期间回顾"
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "user",
+            "kind": "text",
+            "text": "继续"
+          },
+          {
+            "id": "5#0",
+            "seq": 5,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "id": "2#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          },
+          {
+            "id": "3#0",
+            "is_input": false,
+            "text": "离开期间回顾",
+            "type": "recap"
+          },
+          {
+            "id": "4#0",
+            "is_input": true,
+            "text": "继续",
+            "type": "user"
+          },
+          {
+            "id": "5#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "2#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "2#0"
+            ],
+            "process_ids": [],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          },
+          {
+            "after_wake_ids": [],
+            "answer_id": "5#0",
+            "end": null,
+            "id": "4#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "4#0",
+              "5#0"
+            ],
+            "process_ids": [],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 0,
+            "trailing_ids": [],
+            "user_ids": [
+              "4#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "interrupt_is_trailing_notice",
+      "description": "没有任务字段的中断通知保留在本轮末尾。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "请检查示例项目"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "call_a",
+            "tool_name": "Bash"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "system",
+            "kind": "notice",
+            "text": "已中断"
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "assistant",
+            "kind": "text",
+            "text": "检查完成"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "请检查示例项目",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": false,
+            "start": null,
+            "steps": [
+              {
+                "call_id": "call_a",
+                "failed": false,
+                "id": "2#0",
+                "image_count": 0,
+                "name": "Bash",
+                "result_id": null,
+                "result_text": null,
+                "running": true,
+                "type": "tool"
+              }
+            ],
+            "summary_full": [
+              "工具 1"
+            ],
+            "summary_short": [
+              "工具 1"
+            ],
+            "thoughts": 0,
+            "tools": 1,
+            "type": "work",
+            "unresolved_tools": 1
+          },
+          {
+            "id": "4#0",
+            "is_input": false,
+            "text": "检查完成",
+            "type": "reply"
+          },
+          {
+            "id": "3#0",
+            "is_input": false,
+            "text": "已中断",
+            "type": "notice"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "4#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "tools-2#0",
+              "4#0"
+            ],
+            "process_ids": [
+              "tools-2#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 1,
+            "trailing_ids": [
+              "3#0"
+            ],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "compaction_stays_inside_work",
+      "description": "中途压缩上下文只加入工作过程，不拆成新轮。",
+      "source": [
+        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
+        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/JarvisTests/ChatStoreTests.swift: compactionMidTurnDoesNotSplitIt"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "1#0",
+            "seq": 1,
+            "role": "user",
+            "kind": "text",
+            "text": "do it"
+          },
+          {
+            "id": "2#0",
+            "seq": 2,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "a",
+            "tool_name": "Bash"
+          },
+          {
+            "id": "3#0",
+            "seq": 3,
+            "role": "system",
+            "kind": "notice",
+            "text": "上下文已压缩"
+          },
+          {
+            "id": "4#0",
+            "seq": 4,
+            "role": "assistant",
+            "kind": "tool_use",
+            "tool_use_id": "b",
+            "tool_name": "Read"
+          },
+          {
+            "id": "5#0",
+            "seq": 5,
+            "role": "assistant",
+            "kind": "text",
+            "text": "done"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "id": "1#0",
+            "is_input": true,
+            "text": "do it",
+            "type": "user"
+          },
+          {
+            "contains_fold": false,
+            "duration_text": "",
+            "elapsed_seconds": null,
+            "end": null,
+            "id": "w-1#0",
+            "is_input": false,
+            "known_failed_tools": 0,
+            "live": false,
+            "open": false,
+            "start": null,
+            "steps": [
+              {
+                "call_id": "a",
+                "failed": false,
+                "id": "2#0",
+                "image_count": 0,
+                "name": "Bash",
+                "result_id": null,
+                "result_text": null,
+                "running": true,
+                "type": "tool"
+              },
+              {
+                "id": "3#0",
+                "text": "上下文已压缩",
+                "type": "notice"
+              },
+              {
+                "call_id": "b",
+                "failed": false,
+                "id": "4#0",
+                "image_count": 0,
+                "name": "Read",
+                "result_id": null,
+                "result_text": null,
+                "running": true,
+                "type": "tool"
+              }
+            ],
+            "summary_full": [
+              "工具 2"
+            ],
+            "summary_short": [
+              "工具 2"
+            ],
+            "thoughts": 0,
+            "tools": 2,
+            "type": "work",
+            "unresolved_tools": 2
+          },
+          {
+            "id": "5#0",
+            "is_input": false,
+            "text": "done",
+            "type": "reply"
+          }
+        ],
+        "turns": [
+          {
+            "after_wake_ids": [],
+            "answer_id": "5#0",
+            "end": null,
+            "id": "1#0",
+            "interim_count": 0,
+            "ordered_ids": [
+              "1#0",
+              "tools-2#0",
+              "3#0",
+              "tools-4#0",
+              "5#0"
+            ],
+            "process_ids": [
+              "tools-2#0",
+              "3#0",
+              "tools-4#0"
+            ],
+            "start": null,
+            "tail_ids": [],
+            "thought_count": 0,
+            "tool_count": 2,
+            "trailing_ids": [],
+            "user_ids": [
+              "1#0"
+            ],
+            "wake_ids": []
+          }
+        ]
+      },
+      "from_test": "compactionMidTurnDoesNotSplitIt"
+    }
+  ]
+}

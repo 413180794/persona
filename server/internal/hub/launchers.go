@@ -181,7 +181,7 @@ func (m *Machine) sendManaged(ctx context.Context, call func(context.Context, st
 // pushManaged gives every online node the managed launchers (after a change).
 func (h *Hub) pushManaged(ctx context.Context) {
 	list := h.managedForNodes(ctx)
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		_ = m.call(cctx, "launchers.managed", map[string]any{"launchers": list}, nil)
 		cancel()
@@ -198,7 +198,7 @@ func (h *Hub) zshrcLaunchers(ctx context.Context) map[string][]proto.Launcher {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	changed := false
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		wg.Add(1)
 		go func(m *Machine) {
 			defer wg.Done()
@@ -236,7 +236,7 @@ func (h *Hub) launcherViews(ctx context.Context) []LauncherView {
 	hidden := h.hiddenLaunchers(ctx)
 	byName := map[string]*LauncherView{}
 	var names []string
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		for _, l := range h.zshrcLaunchersOf(ctx, m.cfg.ID) {
 			if managed[l.Name] || l.Name == "claude" || (l.Source != "" && l.Source != "zshrc") {
 				continue // a runtime's launcher (DSH, node/runtimes.go) is not a model to configure here
@@ -378,7 +378,7 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 				var mu sync.Mutex
 				var wg sync.WaitGroup
 				for _, id := range v.Machines {
-					m := h.byID[id]
+					m := h.localMachine(id)
 					if m == nil {
 						continue
 					}
@@ -505,9 +505,9 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		m := h.byID[r.URL.Query().Get("machine")]
+		m := h.localMachine(r.URL.Query().Get("machine")) // the id the app knows (mesh_ids.go)
 		if m == nil {
-			m = h.byID[h.assistantConfig(ctx).MachineID]
+			m = h.localMachine(h.assistantConfig(ctx).MachineID)
 		}
 		if m == nil {
 			writeErr(w, http.StatusBadRequest, errors.New("no machine to test on"))
@@ -564,4 +564,74 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 	h.pushManaged(ctx)
 	writeJSON(w, map[string]any{"launcher": LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model,
 		SmallModel: s.SmallModel, Args: s.Args, HasKey: s.KeySealed != ""}})
+}
+
+// --- the new-agent picker's launchers, with the agent each starts ---
+
+// sessionLauncher is a launcher as GET /api/v1/machines/{mid}/launchers lists it: what machineLaunchers found, plus the
+// agent it starts (agent_type: claude, codex, traex, or a runtime's agent such as dsh), for the clients that pick an
+// agent first (Android).
+type sessionLauncher struct {
+	proto.Launcher
+	AgentType string `json:"agent_type,omitempty"`
+}
+
+// agentTypeRe is what POST /api/v1/sessions takes as agent_type: claude, codex, traex, or a runtime's agent as the
+// launcher list says (a runtime's launcher starts through its runtime, whatever the type); the node checks the rest.
+var agentTypeRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+
+// sessionLaunchers is the machine's launchers with the configured ones (hub.json machines[].launchers) applied: a
+// configured launcher overrides the type, base URL and model of the one with its name, or adds a wrapper the node
+// does not list. A launcher without a type gets the agent it was found to start, else one by its name.
+func sessionLaunchers(discovered, configured []sessionLauncher) []sessionLauncher {
+	list := append([]sessionLauncher{}, discovered...)
+	for _, override := range configured {
+		found := false
+		for i := range list {
+			if list[i].Name == override.Name {
+				if override.AgentType != "" {
+					list[i].AgentType = override.AgentType
+				}
+				if override.BaseURL != "" {
+					list[i].BaseURL = override.BaseURL
+				}
+				if override.Model != "" {
+					list[i].Model = override.Model
+				}
+				found = true
+				break
+			}
+		}
+		if !found && override.Name != "" {
+			list = append(list, override)
+		}
+	}
+	for i := range list {
+		if list[i].AgentType == "" {
+			switch {
+			case list[i].Agent != "":
+				list[i].AgentType = list[i].Agent
+			case list[i].Name == "codex" || list[i].Name == "traex":
+				list[i].AgentType = list[i].Name
+			default:
+				list[i].AgentType = "claude"
+			}
+		}
+	}
+	return list
+}
+
+func (h *Hub) listLaunchers(w http.ResponseWriter, r *http.Request, m *Machine) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	ls, err := h.machineLaunchers(ctx, m)
+	if err != nil {
+		callErr(w, err)
+		return
+	}
+	discovered := make([]sessionLauncher, 0, len(ls))
+	for _, l := range ls {
+		discovered = append(discovered, sessionLauncher{Launcher: l})
+	}
+	writeJSON(w, map[string]any{"launchers": sessionLaunchers(discovered, m.cfg.Launchers)})
 }

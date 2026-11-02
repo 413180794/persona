@@ -73,7 +73,7 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Title+a.Body) == "" {
 			return "", fmt.Errorf("title and body are required")
 		}
-		h.push.notifyDone(m.cfg.ID, "Jarvis", sessionID, a.Title, a.Body, nil) // asked for explicitly: every device
+		h.notifyDone("assistant", m.cfg.ID, "Jarvis", sessionID, a.Title, a.Body, pushWants{}) // asked for explicitly: every device
 		h.botPush(m.cfg.ID, sessionID, a.Title, a.Body)
 		h.mu.Lock()
 		h.notified[sessionID] = time.Now()
@@ -88,14 +88,22 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 	case "delete_routine":
 		var a struct{ ID string }
 		_ = json.Unmarshal(args, &a)
-		if !h.deleteTask(ctx, a.ID) {
+		ok, err := h.deleteTask(ctx, a.ID)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
 			return "", fmt.Errorf("no task %q", a.ID)
 		}
 		return "Deleted.", nil
 	case "cancel_followup":
 		var a struct{ ID string }
 		_ = json.Unmarshal(args, &a)
-		if !h.deleteTask(ctx, a.ID) {
+		ok, err := h.deleteTask(ctx, a.ID)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
 			return "", fmt.Errorf("no task %q", a.ID)
 		}
 		return "Cancelled.", nil
@@ -232,10 +240,10 @@ func (h *Hub) toolAskUser(ctx context.Context, m *Machine, sessionID string, arg
 // ---- agents ----
 
 func (h *Hub) machineByName(id string) *Machine {
-	if m := h.byID[id]; m != nil {
+	if m := h.localMachine(id); m != nil {
 		return m
 	}
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		if strings.EqualFold(m.cfg.Name, id) || strings.EqualFold(m.cfg.SSHHost, id) {
 			return m
 		}
@@ -244,8 +252,8 @@ func (h *Hub) machineByName(id string) *Machine {
 }
 
 func (h *Hub) machineIDs() string {
-	ids := make([]string, 0, len(h.machines))
-	for _, m := range h.machines {
+	ids := make([]string, 0, len(h.machinesNow()))
+	for _, m := range h.machinesNow() {
 		ids = append(ids, m.cfg.ID)
 	}
 	return strings.Join(ids, ", ")
@@ -259,7 +267,7 @@ func (h *Hub) findAgent(machine, id string) (*Machine, proto.Session, error) {
 	}
 	var found *Machine
 	var session proto.Session
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		if machine != "" && h.machineByName(machine) != m {
 			continue
 		}
@@ -323,7 +331,7 @@ func (h *Hub) describeAgents(state, machine, query string) string {
 	}
 	var rows []row
 	var offline []string
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		if machine != "" && h.machineByName(machine) != m {
 			continue
 		}

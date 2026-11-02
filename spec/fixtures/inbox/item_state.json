@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "operation": "inbox_item_state",
+  "cases": [
+    {
+      "name": "inbox_decode_triage_assertions",
+      "description": "事项的分拣状态与完成状态分别派生。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/JarvisTests/InboxTests.swift: decodesItemsAndOpensThem"
+      ],
+      "input": {
+        "sessions": [],
+        "items": [
+          {
+            "id": "untriaged",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1
+          },
+          {
+            "id": "done",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "done_at": "2026-01-01T00:00:30Z"
+          }
+        ]
+      },
+      "expected": {
+        "items": [
+          {
+            "id": "untriaged",
+            "triage": "action",
+            "is_triaged": false,
+            "is_done": false
+          },
+          {
+            "id": "done",
+            "triage": "fyi",
+            "is_triaged": true,
+            "is_done": true
+          }
+        ]
+      },
+      "from_test": "decodesItemsAndOpensThem"
+    },
+    {
+      "name": "unknown_tier_is_triaged_action",
+      "description": "事项的分拣状态与完成状态分别派生。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone"
+      ],
+      "input": {
+        "sessions": [],
+        "items": [
+          {
+            "id": "empty",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": ""
+          },
+          {
+            "id": "future",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "future"
+          },
+          {
+            "id": "noise",
+            "source": "lark",
+            "kind": "mention",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise"
+          }
+        ]
+      },
+      "expected": {
+        "items": [
+          {
+            "id": "empty",
+            "triage": "action",
+            "is_triaged": false,
+            "is_done": false
+          },
+          {
+            "id": "future",
+            "triage": "action",
+            "is_triaged": true,
+            "is_done": false
+          },
+          {
+            "id": "noise",
+            "triage": "noise",
+            "is_triaged": true,
+            "is_done": false
+          }
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

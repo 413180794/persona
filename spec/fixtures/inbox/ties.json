@@ -1,0 +1,500 @@
+{
+  "schema_version": 1,
+  "operation": "inbox_list",
+  "cases": [
+    {
+      "name": "equal_times_use_id_extension",
+      "description": "同时间按标识排序是本任务补充规则，并单列 iOS 当前次序。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-z",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "id": "done-z",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "done_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "done-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "done_at": "2026-01-01T00:00:20Z"
+          }
+        ],
+        "sessions": [],
+        "interactions": [
+          {
+            "id": "interaction-z",
+            "machine_id": "machine-a",
+            "session_id": "interaction-z",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "interaction-a",
+            "machine_id": "machine-a",
+            "session_id": "interaction-a",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          }
+        ],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "done"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 4,
+            "rows": [
+              {
+                "type": "interaction",
+                "id": "interaction-a"
+              },
+              {
+                "type": "interaction",
+                "id": "interaction-z"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              },
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "interaction",
+                "id": "interaction-a"
+              },
+              {
+                "type": "interaction",
+                "id": "interaction-z"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              },
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "done",
+            "title": "已处理",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "done-a"
+              },
+              {
+                "type": "item",
+                "id": "done-z"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "done-a"
+              },
+              {
+                "type": "item",
+                "id": "done-z"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 2,
+        "filter_counts": {}
+      },
+      "derived": true,
+      "ios_expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 4,
+            "rows": [
+              {
+                "type": "interaction",
+                "id": "interaction-z"
+              },
+              {
+                "type": "interaction",
+                "id": "interaction-a"
+              },
+              {
+                "type": "item",
+                "id": "item-z"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "interaction",
+                "id": "interaction-z"
+              },
+              {
+                "type": "interaction",
+                "id": "interaction-a"
+              },
+              {
+                "type": "item",
+                "id": "item-z"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "done",
+            "title": "已处理",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "done-z"
+              },
+              {
+                "type": "item",
+                "id": "done-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "done-z"
+              },
+              {
+                "type": "item",
+                "id": "done-a"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 2,
+        "filter_counts": {}
+      },
+      "compatibility": "id_tiebreak_extension"
+    },
+    {
+      "name": "equal_times_reversed_input",
+      "description": "补充的同时间标识排序不随输入顺序变化。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "done-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "done_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "done-z",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "done_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "id": "item-z",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:10Z"
+          }
+        ],
+        "sessions": [],
+        "interactions": [
+          {
+            "id": "interaction-a",
+            "machine_id": "machine-a",
+            "session_id": "interaction-a",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          },
+          {
+            "id": "interaction-z",
+            "machine_id": "machine-a",
+            "session_id": "interaction-z",
+            "kind": "question",
+            "created_at": "2026-01-01T00:00:10Z",
+            "session_title": "示例会话",
+            "title": "Claude 在问你"
+          }
+        ],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "done"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 4,
+            "rows": [
+              {
+                "type": "interaction",
+                "id": "interaction-a"
+              },
+              {
+                "type": "interaction",
+                "id": "interaction-z"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              },
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "interaction",
+                "id": "interaction-a"
+              },
+              {
+                "type": "interaction",
+                "id": "interaction-z"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              },
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "done",
+            "title": "已处理",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "done-a"
+              },
+              {
+                "type": "item",
+                "id": "done-z"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "done-a"
+              },
+              {
+                "type": "item",
+                "id": "done-z"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 2,
+        "filter_counts": {}
+      },
+      "derived": true,
+      "ios_expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 4,
+            "rows": [
+              {
+                "type": "interaction",
+                "id": "interaction-a"
+              },
+              {
+                "type": "interaction",
+                "id": "interaction-z"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              },
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "interaction",
+                "id": "interaction-a"
+              },
+              {
+                "type": "interaction",
+                "id": "interaction-z"
+              },
+              {
+                "type": "item",
+                "id": "item-a"
+              },
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "done",
+            "title": "已处理",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "done-a"
+              },
+              {
+                "type": "item",
+                "id": "done-z"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "done-a"
+              },
+              {
+                "type": "item",
+                "id": "done-z"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 2,
+        "filter_counts": {}
+      },
+      "compatibility": "id_tiebreak_extension"
+    }
+  ]
+}

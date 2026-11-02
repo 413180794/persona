@@ -362,3 +362,29 @@ Claude 能滚是因为它在哪一行都接滚轮（第 0 行、输入框上都�
   那台开发机上钉着提问的 Codex（0.9.3）、hub 机器上的 Codex（0.9.5）、本机 lab 的 Claude 都过。
 
 还剩的差别（和 Moshi、真终端一样）：手指从 Codex 的输入框 / 状态栏或钉住的提问上开始滑，Codex 不滚（它只在对话区接滚轮）；Claude 在哪都滚。
+
+## 十七、慢链路上接管很卡（2026-11-01，用户反馈）
+
+用户：一台经 hub 机器本机 SOCKS5 代理接入的开发机（`docs/server.md` NAS 一节第 7 步），接管它的终端后滑动和操作都很卡。
+
+**链路实测**（在 hub 机器本机请求 hub，不含手机到 hub 这一段；`fs.list` 一个小目录代表 hub → node → hub 的往返，读一个文件的前 512 KB 代表吞吐）：
+
+| 机器 | 往返（ms，n=11） | 吞吐（KB/s，n=5，不够 10 个，不作基线） |
+| --- | --- | --- |
+| 经代理的开发机 | min 158 / p50 159 / p90 198 / max 210 / mean 167 | min 75 / p50 520 / max 626 / mean 443 |
+| 同一局域网的 Mac（jarvis-link） | min 6 / p50 7 / p90 9 / max 10 / mean 8 | min 1477 / p50 1999 / max 2432 / mean 1916 |
+
+接管时每个按键、每一下滚动都要等这一个往返才看得到回显，这部分是链路本身，省不掉。另外三处是我们自己加的：
+
+1. **node 发帧是同步的**：`frameGate` 拿着锁调 `peer.Notify`，它直接往 stdout 写。链路一慢写就卡住，herdr 的读取也跟着停，
+   帧一帧接一帧排着队过去，手机一直在画过去的画面。30 ms 的合并只按时间算，只是把差分字节拼起来，字节数一个没少。
+   现在发送在单独的 goroutine 上：正在写的时候新来的帧先合并，写完马上发合并后的；等着的差分超过一整屏（上一个整帧的大小，至少 16 KB），
+   就让 herdr 重画一整帧（`Control.Redraw`：同尺寸 resize，程序看不到变化）来顶替，慢链路上传的是最新的一屏，而不是中间的每一步。
+   流结束时 `flush` 先等正在写的帧写完、再发剩下的，然后才报 `terminal.end`（`TestFrameGateWhileTheLinkIsBusy`、`TestFrameGateFlushWaitsForTheLink`）。
+2. **App 滑过 N 行发 N 条消息**：`TerminalWheel` 每行回调一次，`wheel` 又每行发一条 `terminal_input`。hub 和 node 本来就收 `scroll: N`，
+   node 在 herdr 旁边拆成 N 个滚轮事件（第十六节）。现在一次移动只发一条。
+3. **玻璃压在终端上**：玻璃风格里终端是模糊的采样源，顶栏、键栏和上下两条边缘四块模糊，终端每变一帧都要重算。
+   终端页现在任何风格都用不透明面板（`LocalGlassLevel provides GlassLevel.Solid`）。终端画布也不再给默认背景上的空格画背景矩形和字形，
+   一帧的绘制量只和看得见的字有关。
+
+手机上的渲染（`dumpsys gfxinfo`）和真实会话里按键 / 滚动的往返没有实测：前者要用户的手机连着 adb，后者要往用户正在用的会话里发键。

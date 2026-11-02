@@ -25,12 +25,14 @@ type ownInbox interface {
 // inboxReplyReq is one reply: the item as it is in the inbox (live, under h.inbox.mu) and a copy taken for the
 // reply, the text, the documents' status moves, and the item's replies (held for the whole reply).
 type inboxReplyReq struct {
-	id      string
-	live    *InboxItem
-	item    InboxItem
-	text    string
-	changes []DocChange
-	once    *inboxReply
+	id   string
+	live *InboxItem
+	item InboxItem
+	text string
+	// clientID: the app's id for the send (POST …/reply client_id); empty for one derived from the item and the text.
+	clientID string
+	changes  []DocChange
+	once     *inboxReply
 }
 
 // ownInboxFor is the connector an item of the hub's own belongs to, by its block (older stored items may have no
@@ -89,7 +91,10 @@ func (c larkConnector) replyInbox(ctx context.Context, r inboxReplyReq) (bool, e
 		return false, errors.New("only document items have a status to change")
 	case it.Lark != nil:
 		// The id only depends on the item and the text, so lark-connector drops a repeat even after a hub restart.
-		clientID := lark.NamedClientID(r.id + "\n" + r.text)
+		clientID := r.clientID
+		if !lark.ValidClientID(clientID) { // lark-connector takes a UUID only
+			clientID = lark.NamedClientID(r.id + "\n" + r.text)
+		}
 		h.inbox.mu.Lock()
 		sent := r.live.DoneBy == "replied" && r.once.clientID == clientID
 		h.inbox.mu.Unlock()

@@ -1,0 +1,362 @@
+{
+  "surface": {
+    "glass": {
+      "material": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "Styling.swift Surface；原生用 Material 3 表面，string 为仓库扩展"
+      },
+      "strokeWidth": {
+        "$type": "dimension",
+        "$value": {
+          "value": 0,
+          "unit": "px"
+        },
+        "$description": "Styling.swift Surface 描边；原生静态回退无描边"
+      }
+    },
+    "claude": {
+      "material": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "Styling.swift Surface；原生用 Material 3 表面，string 为仓库扩展"
+      },
+      "strokeWidth": {
+        "$type": "dimension",
+        "$value": {
+          "value": 0,
+          "unit": "px"
+        },
+        "$description": "Styling.swift Surface 描边；原生静态回退无描边"
+      }
+    },
+    "clay": {
+      "material": {
+        "$type": "string",
+        "$value": "soft",
+        "$description": "Styling.swift Surface；原生用 Material 3 表面，string 为仓库扩展"
+      },
+      "strokeWidth": {
+        "$type": "dimension",
+        "$value": {
+          "value": 1,
+          "unit": "px"
+        },
+        "$description": "Styling.swift Surface 描边；原生静态回退无描边"
+      },
+      "light": {
+        "highlight": {
+          "color": {
+            "$type": "color",
+            "$value": {
+              "colorSpace": "srgb",
+              "components": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "alpha": 0.8
+            },
+            "$description": "Styling.swift Surface.clay"
+          },
+          "blur": {
+            "$type": "dimension",
+            "$value": {
+              "value": 6,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 阴影半径"
+          },
+          "offsetX": {
+            "$type": "dimension",
+            "$value": {
+              "value": -4,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 水平偏移"
+          },
+          "offsetY": {
+            "$type": "dimension",
+            "$value": {
+              "value": -4,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 垂直偏移"
+          }
+        },
+        "shadow": {
+          "color": {
+            "$type": "color",
+            "$value": {
+              "colorSpace": "srgb",
+              "components": [
+                0.4196078431372549,
+                0.32941176470588235,
+                0.8392156862745098
+              ],
+              "alpha": 0.22
+            },
+            "$description": "Styling.swift Surface.clay"
+          },
+          "blur": {
+            "$type": "dimension",
+            "$value": {
+              "value": 12,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 阴影半径"
+          },
+          "offsetX": {
+            "$type": "dimension",
+            "$value": {
+              "value": 5,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 水平偏移"
+          },
+          "offsetY": {
+            "$type": "dimension",
+            "$value": {
+              "value": 8,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 垂直偏移"
+          }
+        },
+        "strokeColor": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1,
+              1,
+              1
+            ],
+            "alpha": 0.45
+          },
+          "$description": "Styling.swift Surface.clay：Color.white.opacity(0.45)"
+        }
+      },
+      "dark": {
+        "highlight": {
+          "color": {
+            "$type": "color",
+            "$value": {
+              "colorSpace": "srgb",
+              "components": [
+                0.22745098039215686,
+                0.20392156862745098,
+                0.27058823529411763
+              ],
+              "alpha": 0.8
+            },
+            "$description": "Styling.swift Surface.clay"
+          },
+          "blur": {
+            "$type": "dimension",
+            "$value": {
+              "value": 6,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 阴影半径"
+          },
+          "offsetX": {
+            "$type": "dimension",
+            "$value": {
+              "value": -4,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 水平偏移"
+          },
+          "offsetY": {
+            "$type": "dimension",
+            "$value": {
+              "value": -4,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 垂直偏移"
+          }
+        },
+        "shadow": {
+          "color": {
+            "$type": "color",
+            "$value": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "alpha": 0.22
+            },
+            "$description": "Styling.swift Surface.clay"
+          },
+          "blur": {
+            "$type": "dimension",
+            "$value": {
+              "value": 12,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 阴影半径"
+          },
+          "offsetX": {
+            "$type": "dimension",
+            "$value": {
+              "value": 5,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 水平偏移"
+          },
+          "offsetY": {
+            "$type": "dimension",
+            "$value": {
+              "value": 8,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 垂直偏移"
+          }
+        },
+        "strokeColor": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              1,
+              1,
+              1
+            ],
+            "alpha": 0.45
+          },
+          "$description": "Styling.swift Surface.clay：Color.white.opacity(0.45)"
+        }
+      }
+    },
+    "island": {
+      "material": {
+        "$type": "string",
+        "$value": "solid",
+        "$description": "Styling.swift Surface；原生用 Material 3 表面，string 为仓库扩展"
+      },
+      "strokeWidth": {
+        "$type": "dimension",
+        "$value": {
+          "value": 0,
+          "unit": "px"
+        },
+        "$description": "Styling.swift Surface 描边；原生静态回退无描边"
+      },
+      "light": {
+        "shadow": {
+          "color": {
+            "$type": "color",
+            "$value": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "alpha": 0.13
+            },
+            "$description": "Styling.swift Surface.island"
+          },
+          "blur": {
+            "$type": "dimension",
+            "$value": {
+              "value": 20,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 阴影半径"
+          },
+          "offsetX": {
+            "$type": "dimension",
+            "$value": {
+              "value": 0,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 水平偏移"
+          },
+          "offsetY": {
+            "$type": "dimension",
+            "$value": {
+              "value": 10,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 垂直偏移"
+          }
+        }
+      },
+      "dark": {
+        "shadow": {
+          "color": {
+            "$type": "color",
+            "$value": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "alpha": 0.13
+            },
+            "$description": "Styling.swift Surface.island"
+          },
+          "blur": {
+            "$type": "dimension",
+            "$value": {
+              "value": 20,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 阴影半径"
+          },
+          "offsetX": {
+            "$type": "dimension",
+            "$value": {
+              "value": 0,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 水平偏移"
+          },
+          "offsetY": {
+            "$type": "dimension",
+            "$value": {
+              "value": 10,
+              "unit": "px"
+            },
+            "$description": "Styling.swift Surface 垂直偏移"
+          }
+        }
+      }
+    },
+    "lark": {
+      "material": {
+        "$type": "string",
+        "$value": "hairline",
+        "$description": "Styling.swift Surface；原生用 Material 3 表面，string 为仓库扩展"
+      },
+      "strokeWidth": {
+        "$type": "dimension",
+        "$value": {
+          "value": 0.5,
+          "unit": "px"
+        },
+        "$description": "Styling.swift Surface 描边；原生静态回退无描边"
+      }
+    },
+    "native": {
+      "material": {
+        "$type": "string",
+        "$value": "solid",
+        "$description": "Styling.swift Surface；原生用 Material 3 表面，string 为仓库扩展"
+      },
+      "strokeWidth": {
+        "$type": "dimension",
+        "$value": {
+          "value": 0,
+          "unit": "px"
+        },
+        "$description": "Styling.swift Surface 描边；原生静态回退无描边"
+      }
+    }
+  }
+}

@@ -6,10 +6,120 @@
 #
 # Puts the binary for this system at ~/.jarvis/bin/jarvisd (where the hub looks for it on every computer it reaches
 # over ssh), after checking it against the published SHA256SUMS. JARVIS_DL=<url> installs from somewhere else.
+#
+# One hub is enough for a home (docs/plan-hub-center.md section 0); every other computer gets the node service: the
+# resident node and the connector jarvis-link, paired with the hub (docs/link.md「装 node 服务」):
+#
+#   curl -fsSL <site>/install.sh | sh -s -- --node --pair '<jarvisd hub pair --machine <id> 的链接>'   # 这台去连 hub
+#   curl -fsSL <site>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 连这台用的地址>]         # 让 hub 来连
+#
+# --pair and --listen imply --node (JARVIS_ROLE=node, JARVIS_PAIR, JARVIS_LISTEN do the same). Without a role and with
+# a terminal it asks, and says so when it hears a hub on this LAN already (mDNS). --hub is the machine that runs the hub.
+#
+# On the machine that runs the hub it also asks who may open the hub's admin UI (docs/admin.md): with a terminal it
+# asks; without one, give it as `sh -s -- --admin-access lan` (or JARVIS_ADMIN_ACCESS=lan), else lan applies and a
+# line says so. --admin-cidrs a,b (JARVIS_ADMIN_CIDRS) goes with cidrs.
 # Then herdr (the default engine, docs/engines.md) if this computer has none: herdr's own installer puts it in
 # ~/.local/bin, where the node looks. JARVIS_SKIP_HERDR=1 leaves it out (Orca / Herdr App machines); a failed herdr
 # install only warns. scripts/deploy/ensure-herdr.sh does the same for deploy.sh: keep the two in step.
 set -eu
+
+# >>> admin access (scripts/deploy.sh reads this block from here: keep it POSIX sh and self-contained)
+admin_access_help() {
+	cat <<'HELP'
+hub 管理界面（<hub 地址>/admin：加电脑、管设备、改网络）谁能打开？
+  1) loopback  只有 hub 这台机器自己（Docker 里是容器自己），别的电脑要用 ssh 隧道。最安全，用着最麻烦
+  2) lan       本机 + 和 hub 同一网段的局域网（默认）。家里 / 办公室的局域网里都能打开，公网和别的网段打不开
+  3) cidrs     本机 + 你列出的网段，例如 VPN 的网段；其中的公网网段也只能经 TLS
+  4) any       任何地方经 TLS 端口都能打开（局域网照旧）。暴露在公网上，只靠管理员密码和登录限流挡着；没开 TLS 时等于 lan
+以后在 hub 机器上用 jarvisd hub admin access <范围> 改；网页里只能收窄，不能放宽。
+HELP
+}
+
+# admin_access_valid <access> <cidrs>: the scope is one of the four, and the networks look like networks.
+admin_access_valid() {
+	case "$1" in loopback | lan | any) [ -z "$2" ] ;; cidrs) [ -n "$2" ] && case "$2" in *[!0-9A-Fa-f.:/,]*) false ;; *) true ;; esac ;; *) false ;; esac
+}
+
+# ask_admin_access: ADMIN_ACCESS (and ADMIN_CIDRS) from the terminal; returns 1 when there is none (curl | sh still has
+# /dev/tty when run by a person; CI and cron do not).
+ask_admin_access() {
+	(: </dev/tty) 2>/dev/null || return 1
+	admin_access_help >/dev/tty
+	while :; do
+		printf '选哪个？[1-4，回车 = 2 lan] ' >/dev/tty
+		read -r answer </dev/tty || return 1
+		case "$answer" in
+		'' | 2 | lan) ADMIN_ACCESS=lan ;;
+		1 | loopback) ADMIN_ACCESS=loopback ;;
+		3 | cidrs) ADMIN_ACCESS=cidrs ;;
+		4 | any) ADMIN_ACCESS=any ;;
+		*) echo "请输入 1 到 4" >/dev/tty && continue ;;
+		esac
+		break
+	done
+	ADMIN_CIDRS=
+	while [ "$ADMIN_ACCESS" = cidrs ] && ! admin_access_valid cidrs "$ADMIN_CIDRS"; do
+		printf '网段，逗号分隔（例如 100.64.0.0/10,192.0.2.0/24）：' >/dev/tty
+		read -r ADMIN_CIDRS </dev/tty || return 1
+		ADMIN_CIDRS=$(printf '%s' "$ADMIN_CIDRS" | tr -d ' ')
+	done
+	if [ "$ADMIN_ACCESS" = any ]; then
+		printf '管理界面会对公网开放。输入 any 确认，别的改用 lan：' >/dev/tty
+		read -r confirm </dev/tty || return 1
+		[ "$confirm" = any ] || { echo "没有确认，改用 lan" >/dev/tty && ADMIN_ACCESS=lan; }
+	fi
+	return 0
+}
+
+# admin_access_reminder [if-hub]: the one line printed when nobody chose (no terminal, no option).
+admin_access_reminder() {
+	echo "提醒：${1:+如果这台跑 hub，}hub 管理界面（/admin）的访问范围没有选，用默认的 lan（hub 本机和同一局域网）；要改在 hub 机器上运行 jarvisd hub admin access <loopback|lan|cidrs|any>" >&2
+}
+# <<< admin access
+
+ADMIN_ACCESS="${JARVIS_ADMIN_ACCESS:-}"
+ADMIN_CIDRS="${JARVIS_ADMIN_CIDRS:-}"
+ROLE="${JARVIS_ROLE:-}"
+PAIR="${JARVIS_PAIR:-}"
+MACHINE="${JARVIS_MACHINE:-}"
+LISTEN="${JARVIS_LISTEN:-}"
+LISTEN_SET="${JARVIS_LISTEN:+1}"
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--admin-access) ADMIN_ACCESS="${2:-}" && shift ;;
+	--admin-access=*) ADMIN_ACCESS="${1#*=}" ;;
+	--admin-cidrs) ADMIN_CIDRS="${2:-}" && shift ;;
+	--admin-cidrs=*) ADMIN_CIDRS="${1#*=}" ;;
+	--node) ROLE=node ;;
+	--hub) ROLE=hub ;;
+	--pair) PAIR="${2:-}" && shift ;;
+	--pair=*) PAIR="${1#*=}" ;;
+	--machine) MACHINE="${2:-}" && shift ;;
+	--machine=*) MACHINE="${1#*=}" ;;
+	--listen)
+		LISTEN_SET=1
+		case "${2:-}" in '' | -*) ;; *) LISTEN="$2" && shift ;; esac ;;
+	--listen=*) LISTEN_SET=1 && LISTEN="${1#*=}" ;;
+	--addr) ADDRS="${ADDRS:-} ${2:-}" && LISTEN_SET=1 && shift ;;
+	--addr=*) ADDRS="${ADDRS:-} ${1#*=}" && LISTEN_SET=1 ;;
+	*) echo "jarvisd: unknown option $1 (--node [--pair <link> [--machine <id>] | --listen [addr] [--addr <host>]], --hub, --admin-access <loopback|lan|cidrs|any>, --admin-cidrs a,b)" >&2 && exit 2 ;;
+	esac
+	shift
+done
+if [ -n "$PAIR" ] || [ -n "$LISTEN_SET" ]; then
+	[ "$ROLE" != hub ] || { echo "jarvisd: --pair / --listen are for the node service, not --hub" >&2 && exit 2; }
+	ROLE=node
+fi
+if [ -n "$PAIR" ] && [ -n "$LISTEN_SET" ]; then
+	echo "jarvisd: --pair (this computer dials the hub) or --listen (the hub dials it), not both" >&2
+	exit 2
+fi
+case "$ROLE" in '' | hub | node) ;; *) echo "jarvisd: JARVIS_ROLE must be hub or node" >&2 && exit 2 ;; esac
+if [ -n "$ADMIN_ACCESS" ] && ! admin_access_valid "$ADMIN_ACCESS" "$ADMIN_CIDRS"; then
+	echo "jarvisd: --admin-access must be loopback, lan, cidrs (with --admin-cidrs) or any" >&2
+	exit 2
+fi
 
 DL="${JARVIS_DL:-@JARVIS_DL@}"
 HERDR_INSTALL="${JARVIS_HERDR_INSTALL:-https://herdr.dev/install.sh}"
@@ -105,6 +215,112 @@ else
 		echo "jarvisd: warning: could not install herdr; install it yourself (https://herdr.dev) before using Agents on this computer" >&2
 	fi
 fi
+# fetch_link puts jarvis-link (the connector) at $DEST/jarvis-link, checked against SHA256SUMS like jarvisd.
+fetch_link() {
+	[ -z "${LINK_FETCHED:-}" ] || return 0
+	lname="jarvis-link-$os-$arch"
+	larchive="$lname.gz"
+	fetch "$DL/$larchive" "$tmp/$larchive" || { echo "jarvisd: could not download $DL/$larchive" >&2 && return 1; }
+	lwant="$(awk -v n="$larchive" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")"
+	[ -n "$lwant" ] || { echo "jarvisd: $larchive is not in SHA256SUMS" >&2 && return 1; }
+	[ "$(sum "$tmp/$larchive")" = "$lwant" ] || { echo "jarvisd: checksum mismatch for $larchive: not installed" >&2 && return 1; }
+	gzip -dc "$tmp/$larchive" > "$tmp/$lname" && [ -s "$tmp/$lname" ] || { echo "jarvisd: could not unpack $larchive: not installed" >&2 && return 1; }
+	chmod 755 "$tmp/$lname"
+	mv "$tmp/$lname" "$DEST/jarvis-link"
+	LINK_FETCHED=1
+	echo "jarvis-link $("$DEST/jarvis-link" version 2>/dev/null || echo unknown) installed at $DEST/jarvis-link"
+}
+
+# install_node makes this computer the node service: the resident node and the connector, paired with the hub
+# (docs/link.md). jarvis-link does the work; this only picks how it pairs.
+install_node() {
+	fetch_link || fail "the node service needs jarvis-link"
+	if [ -z "$PAIR" ] && [ -z "$LISTEN_SET" ] && (: </dev/tty) 2>/dev/null; then
+		cat >/dev/tty <<'ASK'
+这台电脑怎么和 hub 连？
+  1) 我去连 hub：在 hub 机器上运行 jarvisd hub pair --machine <这台的 id>，把它打印的链接粘贴过来（笔记本、在 NAT 后面的电脑）
+  2) 让 hub 来连：这台监听一个端口，打印一条链接粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」（服务器、地址固定的电脑）
+ASK
+		printf '选哪个？[1-2，回车 = 1] ' >/dev/tty
+		read -r how </dev/tty || how=
+		case "$how" in
+		2) LISTEN_SET=1 ;;
+		*)
+			printf '粘贴配对链接（回车跳过，以后再 jarvis-link pair）：' >/dev/tty
+			read -r PAIR </dev/tty || PAIR=
+			;;
+		esac
+	fi
+	set --
+	if [ -n "$PAIR" ]; then
+		set -- --pair "$PAIR"
+		[ -z "$MACHINE" ] || set -- "$@" --machine "$MACHINE"
+	elif [ -n "$LISTEN_SET" ]; then
+		set -- --listen
+		[ -z "$LISTEN" ] || set -- "$@" "$LISTEN"
+		for a in ${ADDRS:-}; do set -- "$@" --addr "$a"; done # addresses have no spaces
+	fi
+	if [ "$os" = darwin ]; then
+		# On a Mac the connector is the menu bar app (Jarvis Link, docs/link.md); here: the resident node and the pairing.
+		"$DEST/jarvis-link" node install || return 1
+		case "${1:-}" in
+		--pair) "$DEST/jarvis-link" pair "$PAIR" ${MACHINE:+--machine "$MACHINE"} || return 1 ;;
+		--listen) shift && "$DEST/jarvis-link" pair --listen "$@" || return 1 ;;
+		esac
+		echo "Mac 上的连接器是菜单栏 App「Jarvis Link」：装上它（它带着 jarvis-link 和 jarvisd，配对也在它的菜单里）；没有 App 时先前台跑 $DEST/jarvis-link run。"
+		return 0
+	fi
+	"$DEST/jarvis-link" install "$@"
+}
+
+# Who may open the admin UI, on the machine that runs the hub (one with a hub.json, or one the person says is).
+set_admin_access() {
+	if [ "$ADMIN_ACCESS" = cidrs ]; then
+		"$DEST/jarvisd" hub admin access cidrs --cidrs "$ADMIN_CIDRS"
+	else
+		"$DEST/jarvisd" hub admin access "$ADMIN_ACCESS"
+	fi
+}
+if [ "$ROLE" = node ]; then
+	install_node
+	exit $?
+fi
+if [ -n "$ADMIN_ACCESS" ]; then
+	set_admin_access
+elif [ -f "$HOME/.jarvis/hub.json" ]; then
+	if [ -z "$("$DEST/jarvisd" hub admin access --get 2>/dev/null || true)" ]; then
+		if ask_admin_access; then set_admin_access; else admin_access_reminder; fi
+	fi
+elif [ "$ROLE" = hub ]; then
+	if ask_admin_access; then set_admin_access; else admin_access_reminder; fi
+elif (: </dev/tty) 2>/dev/null; then
+	# A hub on this LAN already: this computer only needs the node service (docs/plan-hub-center.md section 0).
+	found=
+	if fetch_link 2>/dev/null; then found="$("$DEST/jarvis-link" discover --wait 3 2>/dev/null || true)"; fi
+	if [ -n "$found" ]; then
+		{
+			echo "局域网里已经有 hub："
+			echo "$found" | sed 's/^/  /'
+			echo "全家只要一台 hub；这台装 node 服务（常驻 node + 连接器）就够了。"
+		} >/dev/tty
+		printf '装成 node 服务？[Y/n] ' >/dev/tty
+		read -r as_node </dev/tty || as_node=
+		case "$as_node" in n | N | no) ;; *) install_node && exit 0 || exit 1 ;; esac
+	fi
+	printf '这台电脑要跑 hub 吗？[y/N] ' >/dev/tty
+	read -r is_hub </dev/tty || is_hub=
+	case "$is_hub" in
+	y | Y | yes) if ask_admin_access; then set_admin_access; else admin_access_reminder; fi ;;
+	*)
+		printf '装成 node 服务、连到你的 hub？[Y/n] ' >/dev/tty
+		read -r as_node </dev/tty || as_node=
+		case "$as_node" in n | N | no) ;; *) install_node && exit 0 || exit 1 ;; esac
+		;;
+	esac
+else
+	admin_access_reminder if-hub
+fi
+
 echo "On the machine that runs the hub: jarvisd hub run (the first run writes ~/.jarvis/hub.json), then jarvisd hub pair."
 echo "(With JARVIS_WITH=telegram there it also installs the Telegram connector.)"
-echo "Other computers only need the binary: the hub reaches them over ssh."
+echo "Other computers: the node service, sh -s -- --node --pair '<jarvisd hub pair --machine <id> link>' (or --listen: the hub dials in)."

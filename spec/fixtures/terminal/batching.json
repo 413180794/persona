@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "kind": "batch",
+  "cases": [
+    {
+      "name": "batch_text_then_keys",
+      "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests",
+        "ios/JarvisTests/TerminalWrapTests.swift — textThenKeysGoInOneRequest"
+      ],
+      "input": {
+        "events": [
+          {
+            "text": "l"
+          },
+          {
+            "text": "s"
+          },
+          {
+            "key": "enter"
+          },
+          {
+            "key": "up"
+          }
+        ]
+      },
+      "expected": {
+        "empty": true,
+        "requests": [
+          {
+            "keys": [
+              "enter",
+              "up"
+            ],
+            "text": "ls"
+          }
+        ]
+      },
+      "from_test": "textThenKeysGoInOneRequest"
+    },
+    {
+      "name": "batch_text_after_key",
+      "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests",
+        "ios/JarvisTests/TerminalWrapTests.swift — textAfterAKeyWaitsForTheNextRequest"
+      ],
+      "input": {
+        "events": [
+          {
+            "key": "esc"
+          },
+          {
+            "text": "a"
+          },
+          {
+            "key": "tab"
+          },
+          {
+            "text": "b"
+          }
+        ]
+      },
+      "expected": {
+        "empty": true,
+        "requests": [
+          {
+            "keys": [
+              "esc"
+            ],
+            "text": ""
+          },
+          {
+            "keys": [
+              "tab"
+            ],
+            "text": "a"
+          },
+          {
+            "keys": [],
+            "text": "b"
+          }
+        ]
+      },
+      "from_test": "textAfterAKeyWaitsForTheNextRequest"
+    },
+    {
+      "name": "batch_pending_backspace",
+      "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests",
+        "ios/JarvisTests/TerminalWrapTests.swift — backspaceTakesBackWhatHasNotGoneOut"
+      ],
+      "input": {
+        "events": [
+          {
+            "text": "gti"
+          },
+          {
+            "key": "backspace"
+          },
+          {
+            "key": "backspace"
+          },
+          {
+            "text": "it"
+          }
+        ]
+      },
+      "expected": {
+        "empty": true,
+        "requests": [
+          {
+            "keys": [],
+            "text": "git"
+          }
+        ]
+      },
+      "from_test": "backspaceTakesBackWhatHasNotGoneOut"
+    },
+    {
+      "name": "batch_backspace_after_empty",
+      "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests",
+        "ios/JarvisTests/TerminalWrapTests.swift — backspaceTakesBackWhatHasNotGoneOut"
+      ],
+      "input": {
+        "events": [
+          {
+            "text": "x"
+          },
+          {
+            "key": "backspace"
+          },
+          {
+            "key": "backspace"
+          }
+        ]
+      },
+      "expected": {
+        "empty": true,
+        "requests": [
+          {
+            "keys": [
+              "backspace"
+            ],
+            "text": ""
+          }
+        ]
+      },
+      "from_test": "backspaceTakesBackWhatHasNotGoneOut"
+    },
+    {
+      "name": "batch_grapheme_backspace",
+      "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests"
+      ],
+      "input": {
+        "events": [
+          {
+            "text": "中👍🏽"
+          },
+          {
+            "key": "backspace"
+          }
+        ]
+      },
+      "expected": {
+        "empty": true,
+        "requests": [
+          {
+            "keys": [],
+            "text": "中"
+          }
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "batch_empty_text",
+      "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests"
+      ],
+      "input": {
+        "events": [
+          {
+            "text": ""
+          },
+          {
+            "key": "backspace"
+          }
+        ]
+      },
+      "expected": {
+        "empty": true,
+        "requests": [
+          {
+            "keys": [
+              "backspace"
+            ],
+            "text": ""
+          }
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

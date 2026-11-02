@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,7 +28,9 @@ func open(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.Close)
-	if err := d.TruncateForTest(context.Background()); err != nil {
+	// Union of the integration branch's list and master's TruncateForTest: TruncateForTest alone
+	// does not clear lock_tests, client_ops, pair_tokens or device_sessions.
+	if _, err := d.pool.Exec(context.Background(), `TRUNCATE lock_tests, client_ops, devices, device_tokens, pair_tokens, device_sessions, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, connector_secrets, machine_systems, machine_metrics, sent_messages, todos, todo_agents CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -37,6 +40,148 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	d := open(t)
 	if err := d.migrate(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDeviceSessions(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	base := time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
+	insert := func(device string, start, end time.Duration, reason string) int64 {
+		t.Helper()
+		id, err := d.InsertDeviceSession(ctx, DeviceSession{DeviceID: device, ConnectedAt: base.Add(start),
+			Source: "192.0.2.0/24", HeartbeatInterval: 20})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reason != "" {
+			if err := d.FinishDeviceSession(ctx, id, base.Add(end), reason, 20); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return id
+	}
+	insert("device-a", -2*time.Hour, -30*time.Minute, "closed")
+	a := insert("device-a", 10*time.Minute, 20*time.Minute, "pong_timeout")
+	insert("device-a", 25*time.Minute, 30*time.Minute, "hub_stopped")
+	insert("device-a", 50*time.Minute, 55*time.Minute, "closed")
+	insert("device-a", 52*time.Minute, 58*time.Minute, "error")
+	insert("device-b", 0, 0, "")
+	history, err := d.DeviceSessions(ctx, "device-a", base, base.Add(time.Hour))
+	if err != nil || len(history.Sessions) != 4 || history.Summary.Disconnects != 3 || history.Summary.LongestGapSeconds != 600 {
+		t.Fatalf("history = %+v, %v", history, err)
+	}
+	if s := history.Sessions[0]; s.ID != a || s.Source != "192.0.2.0/24" || s.HeartbeatInterval != 20 || s.Reason != "pong_timeout" {
+		t.Fatalf("session = %+v", s)
+	}
+	// The restart gap is excluded, overlapping sessions stay online, and the trailing gap is included.
+	history, err = d.DeviceSessions(ctx, "device-a", base.Add(26*time.Minute), base.Add(time.Hour))
+	if err != nil || len(history.Sessions) != 3 || history.Summary.Disconnects != 2 || history.Summary.LongestGapSeconds != 120 {
+		t.Fatalf("window history = %+v, %v", history, err)
+	}
+	live := insert("device-a", 59*time.Minute, 0, "")
+	if err := d.UpdateDeviceSessionHeartbeat(ctx, live, 240); err != nil {
+		t.Fatal(err)
+	}
+	history, err = d.DeviceSessions(ctx, "device-a", base.Add(58*time.Minute), base.Add(time.Hour))
+	if err != nil || len(history.Sessions) != 2 || history.Summary.Disconnects != 1 || history.Summary.LongestGapSeconds != 60 {
+		t.Fatalf("live history = %+v, %v", history, err)
+	}
+	if s := history.Sessions[1]; s.DisconnectedAt != nil || s.HeartbeatInterval != 240 {
+		t.Fatalf("live session = %+v", s)
+	}
+	if err := d.StopDeviceSessions(ctx, base.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.FinishDeviceSession(ctx, live, base.Add(2*time.Hour), "error", 20); err != nil {
+		t.Fatal(err)
+	}
+	history, err = d.DeviceSessions(ctx, "device-a", base.Add(59*time.Minute), base.Add(2*time.Hour))
+	if err != nil || len(history.Sessions) != 1 || history.Sessions[0].Reason != "hub_stopped" ||
+		history.Sessions[0].HeartbeatInterval != 240 || history.Summary.Disconnects != 0 || history.Summary.LongestGapSeconds != 0 {
+		t.Fatalf("recovered history = %+v, %v", history, err)
+	}
+	old := insert("device-a", -16*24*time.Hour, -15*24*time.Hour, "replaced")
+	if err := d.PruneDeviceSessions(ctx, base.Add(-14*24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := d.pool.QueryRow(ctx, `SELECT count(*) FROM device_sessions WHERE id = $1`, old).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("pruned count = %d, %v", count, err)
+	}
+	history, err = d.DeviceSessions(ctx, "missing", base, base.Add(time.Hour))
+	if err != nil || history.Sessions == nil || len(history.Sessions) != 0 || history.Summary != (DeviceSessionSummary{}) {
+		t.Fatalf("empty history = %+v, %v", history, err)
+	}
+}
+
+func TestClientOps(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	op := ClientOp{ID: "00000000-0000-4000-8000-000000000001", DeviceID: "device", Kind: "message",
+		Target: json.RawMessage(`{"path":"/api/v1/sessions/m/s/messages"}`), Digest: "digest"}
+	var wg sync.WaitGroup
+	claims := make(chan bool, 8)
+	for i := 0; i < cap(claims); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			stored, claimed, err := d.BeginClientOp(ctx, op)
+			if err != nil || stored == nil || stored.State != "pending" || stored.Digest != op.Digest {
+				t.Errorf("claim = %+v, %v", stored, err)
+			}
+			claims <- claimed
+		}()
+	}
+	wg.Wait()
+	close(claims)
+	count := 0
+	for claimed := range claims {
+		if claimed {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("executors = %d", count)
+	}
+	result := json.RawMessage(`{"status":201,"body":"eyAib2siOiB0cnVlIH0K"}`)
+	if err := d.FinishClientOp(ctx, op.ID, "done", result); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.FinishClientOp(ctx, op.ID, "unknown", nil); err != nil {
+		t.Fatal(err)
+	}
+	op.Digest = "changed"
+	stored, claimed, err := d.BeginClientOp(ctx, op)
+	if err != nil || claimed || stored.State != "done" || stored.Digest != "digest" {
+		t.Fatalf("existing = %+v, claimed = %v, err = %v", stored, claimed, err)
+	}
+	var saved struct {
+		Status int
+		Body   []byte
+	}
+	if err := json.Unmarshal(stored.Result, &saved); err != nil || saved.Status != 201 || string(saved.Body) != "{ \"ok\": true }\n" {
+		t.Fatalf("saved result = %s, %v", stored.Result, err)
+	}
+	op.ID = "00000000-0000-4000-8000-000000000002"
+	if _, _, err := d.BeginClientOp(ctx, op); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.RecoverClientOps(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if stored, err := d.ClientOp(ctx, op.ID); err != nil || stored.State != "unknown" {
+		t.Fatalf("recovered = %+v, %v", stored, err)
+	}
+	if _, err := d.pool.Exec(ctx, `UPDATE client_ops SET created_at = now() - interval '31 days' WHERE id = $1`, op.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CleanupClientOps(ctx, time.Now().AddDate(0, 0, -30)); err != nil {
+		t.Fatal(err)
+	}
+	if stored, err := d.ClientOp(ctx, op.ID); err != nil || stored != nil {
+		t.Fatalf("expired = %+v, %v", stored, err)
+	}
+	if stored, err := d.ClientOp(ctx, "00000000-0000-4000-8000-000000000001"); err != nil || stored == nil {
+		t.Fatalf("recent receipt removed: %+v, %v", stored, err)
 	}
 }
 
@@ -112,10 +257,10 @@ func mustDevices(t *testing.T, d *DB) []Device {
 
 func TestPhoneToolsReplace(t *testing.T) {
 	d, ctx := open(t), context.Background()
-	_ = d.ReplacePhoneTools(ctx, []proto.Tool{{Name: "b"}, {Name: "a", InputSchema: json.RawMessage(`{"type":"object"}`)}})
-	_ = d.ReplacePhoneTools(ctx, []proto.Tool{{Name: "z"}, {Name: "a"}})
+	_ = d.ReplacePhoneTools(ctx, PhoneToolRegistration{DeviceID: "legacy", Tools: []proto.Tool{{Name: "b"}, {Name: "a", InputSchema: json.RawMessage(`{"type":"object"}`)}}})
+	_ = d.ReplacePhoneTools(ctx, PhoneToolRegistration{DeviceID: "legacy", Tools: []proto.Tool{{Name: "z"}, {Name: "a"}}})
 	tools, err := d.PhoneTools(ctx)
-	if err != nil || len(tools) != 2 || tools[0].Name != "z" || tools[1].Name != "a" {
+	if err != nil || len(tools) != 1 || len(tools[0].Tools) != 2 || tools[0].Tools[0].Name != "z" || tools[0].Tools[1].Name != "a" {
 		t.Fatalf("tools = %+v, %v", tools, err)
 	}
 }
@@ -383,6 +528,53 @@ func TestMachineMetrics(t *testing.T) {
 
 	if n, err := d.PruneMetrics(ctx, base.Add(30*time.Minute)); err != nil || n != 31 {
 		t.Fatalf("pruned %d, %v", n, err)
+	}
+}
+
+func TestPhoneToolsDevicePersistence(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	for _, id := range []string{"credential-ios", "credential-android"} {
+		if err := d.CreateDeviceToken(ctx, DeviceToken{ID: id, Name: "Device", Kind: "phone", Role: "full"}, "hash-"+id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	iphone := PhoneToolRegistration{DeviceID: "ios-device", Platform: "ios", CredentialID: "credential-ios", Tools: []proto.Tool{{Name: "phone_reminders_list"}, {Name: "phone_device_info"}}}
+	android := PhoneToolRegistration{DeviceID: "android-device", Platform: "android", CredentialID: "credential-android", Tools: []proto.Tool{{Name: "phone_notifications_list"}}}
+	for _, r := range []PhoneToolRegistration{iphone, android} {
+		if err := d.ReplacePhoneTools(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	iphone.Tools = iphone.Tools[:1]
+	if err := d.ReplacePhoneTools(ctx, iphone); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.PhoneTools(ctx)
+	if err != nil || len(got) != 2 || len(got[0].Tools) != 1 || len(got[1].Tools) != 1 || got[0].Platform != "android" || got[1].CredentialID != iphone.CredentialID {
+		t.Fatalf("registrations = %+v, %v", got, err)
+	}
+	if err := d.UpsertDevice(ctx, Device{DeviceID: "push-ios", CredentialID: iphone.CredentialID}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := d.RevokeDeviceToken(ctx, iphone.CredentialID); err != nil || !ok {
+		t.Fatalf("revoke = %v, %v", ok, err)
+	}
+	got, err = d.PhoneTools(ctx)
+	if err != nil || len(got) != 1 || got[0].DeviceID != android.DeviceID {
+		t.Fatalf("registrations after revoke = %+v, %v", got, err)
+	}
+	if devices, err := d.Devices(ctx); err != nil || len(devices) != 0 {
+		t.Fatalf("push registrations after revoke = %+v, %v", devices, err)
+	}
+	if err := d.ReplacePhoneTools(ctx, iphone); err == nil {
+		t.Fatal("revoked device registered tools again")
+	}
+	android.Tools = nil
+	if err := d.ReplacePhoneTools(ctx, android); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := d.PhoneTools(ctx); err != nil || len(got) != 0 {
+		t.Fatalf("registrations after empty update = %+v, %v", got, err)
 	}
 }
 

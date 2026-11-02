@@ -1,0 +1,1443 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "unified_conversation_plan_unlocked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "conversation",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_all",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "full_plan_read",
+              "feedback_empty"
+            ],
+            "mode": "bypassPermissions"
+          },
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "feedback_empty"
+            ],
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_conversation_plan_locked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "conversation",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_all",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "full_plan_read",
+              "feedback_empty"
+            ],
+            "mode": "bypassPermissions"
+          },
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "feedback_empty"
+            ],
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_conversation_permission_unlocked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "conversation",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "reason_empty"
+            ]
+          },
+          {
+            "id": "deny",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "always",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "session_present",
+              "reason_empty"
+            ]
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_conversation_permission_locked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "conversation",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "reason_empty"
+            ]
+          },
+          {
+            "id": "deny",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "always",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "session_present",
+              "reason_empty"
+            ]
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_conversation_question_unlocked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "conversation",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "answer",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_conversation_question_locked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "conversation",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "answer",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_conversation_screen_unlocked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "conversation",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "screen_answer",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_conversation_screen_locked",
+      "description": "核对对话页的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "conversation",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "screen_answer",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "dismiss",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_notification_plan_unlocked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "notification",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "feedback"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_notification_plan_locked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "notification",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "feedback"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_notification_permission_unlocked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "notification",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "message"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_notification_permission_locked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "notification",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "message"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_notification_question_unlocked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "docs/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "notification",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "choose_option",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "single_question_single_choice"
+            ],
+            "max_options": 3
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_notification_question_locked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "docs/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "notification",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "choose_option",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "single_question_single_choice"
+            ],
+            "max_options": 3
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_notification_screen_unlocked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "docs/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "notification",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "choose_option",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "plain_dialog_option"
+            ],
+            "max_options": 3
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_notification_screen_locked",
+      "description": "核对通知的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：categories、resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "docs/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "notification",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "choose_option",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "plain_dialog_option"
+            ],
+            "max_options": 3
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_lock_screen_plan_unlocked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "lock_screen",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_lock_screen_plan_locked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "lock_screen",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_lock_screen_permission_unlocked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "lock_screen",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "none"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_lock_screen_permission_locked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "lock_screen",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true,
+            "input": "none"
+          },
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_lock_screen_question_unlocked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "lock_screen",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_lock_screen_question_locked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "lock_screen",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_lock_screen_screen_unlocked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "lock_screen",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_lock_screen_screen_locked",
+      "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
+        "ios/Jarvis/App/FleetActions.swift：resolution",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2",
+        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "lock_screen",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_watch_plan_unlocked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "watch",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_watch_plan_locked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "watch",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "mode": "acceptEdits"
+          },
+          {
+            "id": "reject",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_watch_permission_unlocked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "watch",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_watch_permission_locked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "watch",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          },
+          {
+            "id": "deny",
+            "authentication": "none",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_watch_question_unlocked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "watch",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "answer",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_watch_question_locked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "watch",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "answer",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_watch_screen_unlocked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "watch",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "screen_answer",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_watch_screen_locked",
+      "description": "核对手表的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "watch",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "screen_answer",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          },
+          {
+            "id": "dismiss",
+            "authentication": "platform_default",
+            "requires_unlock": null,
+            "available_now": null
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_siri_shortcut_plan_unlocked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "siri_shortcut",
+        "kind": "plan",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "mode": "acceptEdits"
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_siri_shortcut_plan_locked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "siri_shortcut",
+        "kind": "plan",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "approve_edits",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "mode": "acceptEdits"
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_siri_shortcut_permission_unlocked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "siri_shortcut",
+        "kind": "permission",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_siri_shortcut_permission_locked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "siri_shortcut",
+        "kind": "permission",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "allow",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_siri_shortcut_question_unlocked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "siri_shortcut",
+        "kind": "question",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_siri_shortcut_question_locked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "siri_shortcut",
+        "kind": "question",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_siri_shortcut_screen_unlocked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "siri_shortcut",
+        "kind": "screen",
+        "locked": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true
+          }
+        ]
+      },
+      "design_change": true
+    },
+    {
+      "name": "unified_siri_shortcut_screen_locked",
+      "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
+      "source": [
+        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
+        "docs/redesign/ux.md §3.4、§5.3",
+        "docs/redesign/android.md §5.8",
+        "docs/redesign/README.md §2.3、§4.2"
+      ],
+      "input": {
+        "profile": "unified",
+        "entry": "siri_shortcut",
+        "kind": "screen",
+        "locked": true
+      },
+      "expected": {
+        "actions": [
+          {
+            "id": "open_app",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false
+          }
+        ]
+      },
+      "design_change": true
+    }
+  ]
+}

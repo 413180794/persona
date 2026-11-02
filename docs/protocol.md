@@ -1,27 +1,216 @@
 # 协议（前后端契约）
 
-所有 JSON 字段 snake_case。时间为 RFC3339（UTC）。hub 默认监听 `:18660`。
+本轮核对：2026-10-31，基于提交 `f3a13fdb7672927197cb8ac38bccb9c65671677b` 的 `server/internal/hub/` 路由、事件发送和数据库记录。以下超时、保留期和数量限制均为协议或配置，实际性能未实测。
+
+所有 JSON 字段 snake_case。时间为 RFC3339（UTC）。HTTP `listen` 默认 `:18660`；TLS 通过 `public.tls_listen` 显式开启，提供 HTTPS / WSS。公网优先 IPv6，配置和放行方法见 [network.md](network.md)。
 
 ## 鉴权
 
-- `Authorization: Bearer <token>`；WebSocket 也可用 `?token=`。token 在 hub 机器 `~/.jarvis/hub.json` 的 `token`，
-  `jarvisd hub pair` 打印 URL + token（以及终端二维码，App 扫码配对）。
-- **每台设备自己的凭据**：配对用的 token（hub.json）什么都能做，留给 CLI 和旧 App。新 App 配对后立刻
-  `POST /api/v1/auth/tokens {"name","kind":"phone"}` 换一个自己的 token（`jd_…`，hub 只存哈希），之后只用它；再给配对的手表换一个
-  `kind: watch` 的，手表只拿到这个。角色：`full`（手机）什么都能做；`answer`（手表）能读（所有 GET、WebSocket）、回答交互、发消息、
-  标已读 / 中断、收件箱回复和完成、注册推送，别的写操作一律 403，WebSocket 上也不能注册成手机执行 `phone_*` 工具。
-  `GET /api/v1/auth/tokens` 列出（`current` 是本机），`DELETE /api/v1/auth/tokens/{id}` 撤销：立即失效（查询结果缓存 30 秒，撤销时清掉）
-  并断开它的 WebSocket。App 在「设置 › 设备」里管理。旧 hub 没有这个接口时 App 继续用配对 token，下次启动再试。
-- `GET /api/v1/health` 不需要鉴权，返回 `{"ok":true,"version":"...","channel":"release|docker|dev","build":202611021530,"protocol":1,"min_app_build":0,"features":[…]}`：
-  `channel` 和 `build`（UTC `YYYYMMDDHHMM`，没有是 0）是这个 hub 怎么构建、能不能自己更新；`update.confirmed` 是这个进程有没有确认完一次更新（没有更新要确认时为真，看门狗等它）；`protocol` 是 App ↔ hub 的大版本号，`min_app_build` 是它能配的最老的 App（`docs/hub-update.md`「兼容」）。
-- 功能协商：`/api/v1/health` 和 WebSocket 的 `hello` 带 `features`（`proto.Features`：`client_msg_id`、`send_refusals`、
-  `screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`）。新字段都是可选的，App 目前靠字段在不在判断；
-  以后有「旧 hub 会误解」的新请求时先查这里。机器列表里的 `node_version` / `node_mismatch`：那台电脑上的 jarvisd 不是 hub 这次部署的
-  （`deploy.sh` 只部署了一部分），App 在「设置 › 机器」里提示并给一个「重新部署」按钮，hub 连上时也记一行日志。
-  `POST /api/v1/machines/{id}/deploy`：hub 把自己这次部署的 node（`deploy.sh` 留在 hub 机器的 `~/.jarvis/bin/nodes/jarvisd-<os>-<arch>`）
-  经 ssh 装到那台电脑（正走 tailcat 时经 tailcat 发给常驻 node，它换掉自己后退出、由 launchd / systemd 重启），杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，
-  立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。
+- 优先使用 `Authorization: Bearer <token>`。当前实现未收紧 URL token：没有 Authorization 值时，所有鉴权 API（含 WebSocket）仍可回退到 `?token=`，不只限回环或 WS。客户端应使用请求头，避免凭据进入 URL。
+- hub.json 的 `token` 是主 token，只接受回环 / 内网等受信任来源；公网即使用 TLS 也返回 `403 master_token_local_only`。公网应使用临时配对 token 或设备 token。默认拒绝公网明文 API，返回 `403 tls_required`，仅 `GET /api/v1/health` 例外。
+- 每台设备自己的凭据：`POST /api/v1/auth/tokens {"name":"<设备名称>","kind":"phone"}` → `{id,token,role,name}`。设备 token 以 `jd_` 开头，hub 只存哈希；`kind: watch` 得到 `answer`，其他 kind 得到 `full`。`full` 可以创建设备 token；`answer` 能读、回答交互、发消息、标已读 / 中断、处理收件箱和注册推送，不能改设置或注册手机工具，其余写操作一律 403，WebSocket 上也不能注册成手机执行 `phone_*` 工具。新 App 配对后立刻换一个自己的 token，之后只用它；配对的手表再换一个 `kind: watch` 的，手表只拿到这个。
+- `GET /api/v1/auth/tokens` 返回 `{tokens,current}`，`DELETE /api/v1/auth/tokens/{id}` 撤销凭据、清缓存（认证结果缓存 30 秒，撤销时清掉）并断开该设备的 WebSocket；App 在「设置 › 设备」里管理。旧 hub 无此接口时，旧客户端仍按原配对流程使用凭据。
+- 电脑链路的凭据（[link.md](link.md)）：`POST /api/v1/auth/tokens {"kind":"link","machine":"<hub.json 里 kind 为 link 的机器>"}` → `role: link`，
+  只能开 `/api/v1/link` 和 `/api/v1/link/stream`，其他接口 403；列表里带 `machine_id`。用给这台生成的配对码（下文 `{"machine"}`）兑换时，
+  kind 和 machine 由配对码决定，请求里写别的机器返回 403。
+- hub 互联（[mesh.md](mesh.md)）：另一台 hub 的凭据 kind / role 都是 `peer`（`machine_id` 是对方的 hub_id），只能开 `GET /api/v1/peer`；
+  互联码 `jx_…` 只能 `POST /api/v1/peer/pair`；别的接口一律 403。组里只有**中心 hub** 认 App 的凭据：成员把 App 的请求原样（带 `Authorization`）
+  转给中心，成员加入时把它签过的凭据（hash）交给中心，所以配对在成员上的设备照常能用。中心连不上时成员回
+  `503 {"code":"center_unreachable","center":{"hub_id","name"}}`。
+- 公网鉴权失败按 IPv4 单地址、IPv6 /64 计数，封禁检查在查库前；`429 rate_limited` 带秒数形式的 `Retry-After`。内网 / VPN 不计数，参数见 [网络配置](network.md#hubjson-网络配置)。
 - 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
+
+### 健康检查与能力位
+
+`GET /api/v1/health` 不需要鉴权。公网来源只返回：
+
+```json
+{"ok":true,"hub_id":"<hub UUID>","hub_name":"家里","tls_port":18662,"fp":"<SPKI SHA-256 base64url>"}
+```
+
+内网 / 回环等受信任来源另外返回 `version` 和 `features`。来源按连接地址判断，与是否带 token 无关；公网 HTTPS health 也会裁剪。所有来源都不返回候选地址。未启用 TLS 时 `tls_port` 为 `0`，`fp` 为空字符串。
+
+受信任来源的健康检查还返回 `channel`（`release` / `docker` / `dev`）、`build`（UTC `YYYYMMDDHHMM`，没有是 0）、`protocol`（App ↔ hub 的大版本号）、`min_app_build`（它能配的最老的 App，`docs/hub-update.md`「兼容」），以及 `update.confirmed`（进程是否已确认完一次更新：没有更新要确认时为真，看门狗等它）。`channel` 和 `build` 说明这个 hub 怎么构建、能不能自己更新；WS `hello` 带同样的字段。
+
+`hub_name` 是这台 hub 给人看的名字（hub.json 的 `name`，[config.md](config.md)）。`hub_id` 是持久化在数据库 `settings` 的 UUID。客户端用它区分 hub，并核对切换候选后仍连接到同一实例；`fp` 必须来自可信扫码或已鉴权的可信通道，不能信任任意公网 health 回包来建立钉扎。
+
+鉴权后的 WS `hello.features` 总是提供服务端能力。当前 `proto.Features` 包括：
+
+- P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
+- 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`file_upload`。
+- 另有：`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](plugins.md)）、`desktops`（桌面端登记，见下文 `register_desktop`）。
+
+能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 jarvisd 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
+
+`POST /api/v1/machines/{id}/deploy`：hub 把自己这次部署的 node（`deploy.sh` 留在 hub 机器的 `~/.jarvis/bin/nodes/jarvisd-<os>-<arch>`）经 ssh 装到那台电脑（正走 tailcat 时经 tailcat 发给常驻 node，它换掉自己后退出、由 launchd / systemd 重启），杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。App 在「设置 › 机器」里提示并给一个「重新部署」按钮。
+
+### 临时配对
+
+`POST /api/v1/auth/pair-codes` 只接受**回环来源 + 主 token**，无须请求体；请求体 `{"machine":"<id>"}` 生成给这台 link 机器的
+jarvis-link 用的配对码（返回多一个 `machine`，`pair_url` 是 `jarvis://link?…&machine=<id>`，只能兑换成这台的链路凭据，别的请求都 403；
+机器不存在或不是 link 返回 400，hub 没开 TLS 返回 409）。设备 token、临时配对 token 或非回环来源均不能创建配对码。成功为 HTTP 200，返回：
+
+```json
+{
+  "token":"<临时 token>",
+  "expires_at":"<RFC3339 UTC>",
+  "url":"http://hub.example.com:18660",
+  "hub_id":"<hub UUID>",
+  "fp":"<SPKI SHA-256 base64url>",
+  "tls_port":18662,
+  "alt":["https://hub.example.com:18662"],
+  "pair_url":"jarvis://pair?..."
+}
+```
+
+响应带 `Cache-Control: no-store`。临时 token 为 `jp_` 加 32 字节随机值的十六进制编码，数据库只存哈希。有效期 10 分钟，可作为完整的 `full` Bearer 访问 API / WS，以兼容旧 iOS 先读机器、连 WS、注册推送再换凭据的流程。
+
+它只能通过 `POST /api/v1/auth/tokens` **兑换一次**设备 token，重复兑换返回 `401 invalid_token`。兑换后其他 API 仍可使用至 `min(原到期时间, 兑换时间 + 2 分钟)`；到期后失效，已建立的临时 token WS 也会被取消。有效期与宽限均为协议策略，不是性能实测。新设备配对成功后，hub 尝试发配对通知；推送不可用时记日志。
+
+`jarvisd hub pair` 调用上述本机接口，打印临时链接和二维码；运行中的 hub 必须可经 IPv4 回环 HTTP 访问。`--legacy` 才离线打印主 token 的旧格式。现有 iOS 忽略新参数，可继续在内网扫默认临时码，不必改用 `--legacy`。
+
+二维码保持 `url` / `token`，附加字段遵循 redesign/hub-changes.md 1.3：
+
+```text
+jarvis://pair?url=<兼容地址>&token=<临时 token>&hub=<hub_id>&fp=<指纹>&tls=<TLS 端口>&alt=<HTTPS 候选>&alt=<HTTPS 候选>
+```
+
+这是结构示意，实际参数值逐项 URL 编码，顺序不重要。
+
+| 参数 | 格式 |
+| --- | --- |
+| `url` | `public_url`；旧 App 继续使用它，因此应保留可达的内网 / VPN 地址 |
+| `token` | 临时 Bearer token；`--legacy` 时为主 token |
+| `hub` | hub UUID |
+| `fp` | SHA-256(SubjectPublicKeyInfo DER)，base64url 无填充，43 字符；非整张证书的哈希 |
+| `tls` | TLS 监听端口，十进制 |
+| `alt` | 完整 HTTPS URL，可重复；当前最多两个，按候选顺序选取并排除 `lan` |
+
+未启用 TLS 时二维码省略 `fp` / `tls`；无合适候选时省略 `alt`。API 响应仍有对应字段（空字符串、0 或空数组）。换证书保留同一把密钥不改变 `fp`；换密钥需要重启 hub 并让设备重新可信配对，当前没有 `fp_next`。
+
+### 候选地址
+
+`GET /api/v1/endpoints` 需要鉴权，返回 `{hub_id,tls_port,fp,endpoints}`。每个 endpoint：
+
+```json
+{"url":"https://[2001:db8::1234]:18662","kind":"ipv6","port":18662,"scheme":"https","seen_at":"<RFC3339 UTC>"}
+```
+
+地址为文档示例。`kind` 为 `ipv6` / `name` / `lan` / `ipv4`，按此顺序排列；同类 HTTPS 优先。`scheme` 为 `https` / `http`，`seen_at` 是采集时间，不是可达性证明。候选合并 `public_url`、`public.advertise` 和符合条件的本机地址；公网 IPv4 只从显式配置发布。TLS 关闭时自动候选使用 HTTP，客户端不得因此向公网明文发送 token。
+
+WS `hello` 同样携带候选。地址列表变化时发送 `{"type":"endpoints","endpoints":[...]}`，只发给本连接在 `client_hello.features` 声明了 `endpoints` 的客户端；仅 `seen_at` 改变不会触发事件。事件是完整候选列表，可为空，客户端应替换旧列表。
+
+### 错误体
+
+主 API 的公共错误处理保留 `error` 文本，新增稳定的 `code`；`retryable` 和 `delivered` **可选**，只有能判断时才给出。主路由的 404 / 405 也返回 JSON；邮件等独立子处理器和流式响应仍按各自协议处理，不能假设它们全部带新字段。
+
+```json
+{"error":"invalid token","code":"invalid_token","retryable":false,"delivered":"none"}
+```
+
+`delivered` 为 `none` / `unknown` / `yes`，缺省不等于未执行；尤其普通超时不会凭空补 `none`。`retryable` 缺省也不表示可以自动重试。node 返回的 409 细节继续平铺（如 `draft`、`clearable`），不包进新的 `data`。
+
+| code | 常见 HTTP 状态 | 含义 |
+| --- | --- | --- |
+| `tls_required` | 403 | 公网明文 API 被拒；`delivered: none` |
+| `master_token_local_only` | 403 | 公网不能用主 token；`delivered: none` |
+| `invalid_token` | 401 | 凭据无效、过期、撤销或临时 token 重复兑换；`retryable: false`、`delivered: none` |
+| `forbidden` | 403 | 权限或配对码来源不满足要求；`retryable: false`、`delivered: none` |
+| `rate_limited` | 429 | 鉴权失败来源被封禁，按 `Retry-After` 等待 |
+| `bad_request` | 400 | 参数 / JSON 错误；`retryable: false` |
+| `not_found` / `method_not_allowed` | 404 / 405 | 资源不存在 / 方法不支持；`retryable: false` |
+| `gone` | 410 | 交互已不再待处理等；`retryable: false` |
+| `conflict` | 409 | 未指定更具体错误码的冲突 |
+| `input_draft` / `dialog_open` / `prompt_changed` | 409 | 发送或回答被明确拒绝；`retryable: false`、`delivered: none`，见下文 |
+| `op_id_reused` | 409 | 操作 ID 已用于不同设备、目标或参数；不得换 ID 盲目重试 |
+| `node_outdated` | 409 | node 不支持请求的功能，如文件上传 |
+| `too_large` | 413，或 node RPC 映射的 409 | 请求 / 文件超过限制 |
+| `timeout` | 408 / 504，node 调用常为 502 | 超时；执行结果不能仅靠这个码判断 |
+| `node_unreachable` | 502 / 503 | node 离线或连接中断；明确离线时 `retryable: true`、`delivered: none`，连接中断未必如此 |
+| `center_unreachable` | 503 | 连的是互联组里的成员 hub，组的中心 hub 现在连不上（带 `center: {hub_id, name}`）；成员不会自己接管，换一台或等中心回来（[mesh.md](mesh.md)「中心」） |
+| `internal` | 5xx | 其他内部错误 |
+
+表格列出公共处理器和主要业务码；node 的其他明确 RPC 错误码也会透传，通常映射为 409。客户端应以 `code` 分支，未知码保留 `error` 展示，旧 hub 只有 `error` 时按旧行为处理。
+
+## 操作回执（client_ops）
+
+服务端声明 `client_ops` 后，客户端可在以下写请求带 `X-Jarvis-Op-Id: <UUID>`：
+
+| 操作种类 | 路径 |
+| --- | --- |
+| `message` | `POST /api/v1/sessions/{mid}/{sid}/messages` |
+| `start` | `POST /api/v1/sessions` |
+| `resolve` | `POST /api/v1/interactions/{id}/resolve` |
+| `interrupt` / `close` / `rename` / `modes` | `POST /api/v1/sessions/{mid}/{sid}/interrupt`、`/close`、`/rename`、`/modes` |
+
+UUID 忽略大小写。hub 将操作种类、路径、规范化查询参数和 JSON 参数生成摘要，再原子认领 ID；重复请求只有同一设备、目标和参数才复用回执，冲突返回 `409 {"code":"op_id_reused"}`。消息请求会把 `client_msg_id` 设为操作 UUID，覆盖原 body 的同名值。没有该请求头时保留旧行为，包括旧 iOS 的非 UUID `client_msg_id` 和 `sent_messages` 去重。
+
+`GET /api/v1/ops/{id}` 返回记录 `{id,device_id,kind,target,digest,state,result,created_at,updated_at}`。`target` 含 `path` / `query`；`result` 已记录时为 `{status,body,content_type?}`，其中 `body` 是原 HTTP 响应字节的 base64。不存在或当前设备凭据不属于该记录时返回 404；主 token 没有设备 ID，查询不受设备归属过滤。
+
+| `state` | 含义与重试行为 |
+| --- | --- |
+| `pending` | 认领后执行尚未完成；重复写请求等待回执，等待配置到期后返回 `202 {"state":"pending"}` |
+| `done` | 成功回执已落库；重复写请求重放原 HTTP 状态和正文，不再执行 |
+| `failed` | 已确定失败并保存回执；重复写请求仍重放原结果 |
+| `unknown` | 执行结果不明；普通操作重复请求返回 `202 {"state":"unknown"}`，需查询或人工核对，不能认作成功或自动重发 |
+
+普通操作的 HTTP 400 / 409 通常记录为 `failed`，其他错误若不能证明未执行则记录为 `unknown`。hub 启动会将遗留 `pending` 标为 `unknown`，不重新执行。完成后即使 HTTP 调用方已断开仍尝试落库；落库失败返回 503 和 `state: unknown`。回执按创建时间保留 30 天，这是保留策略，不能保证超出窗口仍可去重。
+
+飞书发送和收件箱回复另以 body 的 `client_id` 派生回执，见下文「飞书 API」；同样复用 `client_ops`，但已有上游错误响应会原样重放。不要将这种响应处理规则套到所有普通操作。
+
+新建会话带操作 ID 时，hub 会在调用方断开后继续完成已受理的启动并保存回执。同 ID 重放不会再次启动；已有 HTTP 结果即使标为 `unknown` 也原样返回，没有结果的遗留操作仍返回 `202 {"state":"unknown"}`。Android 在发请求前持久保存 ID 和参数，响应丢失时查询该 ID；404 或结果不明均不能证明未启动，继续保留待确认记录，不再 POST。只有明确失败的回执才允许修改表单后新建操作。未带请求头的客户端沿用原行为。
+
+## 设备连接与锁屏测试
+
+### 连接记录
+
+`GET /api/v1/devices/{id}/sessions?since=<RFC3339 UTC>` 返回 `{sessions,summary}`，默认查最近 24 小时，最早裁到最近 14 天；未来或非法时间返回 400。`{id}` 使用设备凭据 ID，与推送注册 ID、客户端自报的 `client_hello.device_id` 区分。该查询走现有通用鉴权，当前未额外限制只能查本机；锁屏测试接口则严格校验当前设备。
+
+每条 session 为 `{id,device_id,connected_at,disconnected_at,reason,source,heartbeat_interval}`。`id` 是数据库数字 ID，仅用于 HTTP；连接尚未断开时 `disconnected_at` 为 null、`reason` 为空。`source` 只保存 IPv4 /24 或 IPv6 /64 前缀，心跳间隔为当前协议配置，不能当作实测发包频率。
+
+- 只有设备 token 的 WS 建立连接记录；主 token 和临时配对 token 不记录。
+- `reason` 为 `closed`、`pong_timeout`、`error`、`replaced` 或 `hub_stopped`。hub 启停修复未结束记录时标 `hub_stopped`，不假定能恢复准确崩溃时间。
+- `summary.disconnects` 统计窗口内非 `hub_stopped` 的断开记录数；并行连接可分别计数。`summary.longest_gap_seconds` 对重叠连接区间合并后计算最长离线，含截至查询时仍未恢复的间隔，排除 hub 停止造成的间隔；首次已知连接之前的未知时段不推算。
+- 记录保留 14 天。连接汇总反映 hub 的观测，不能单独证明手机锁屏或系统杀进程。
+
+### 锁屏测试
+
+服务端能力为 `lock_test`。下列接口的 `{id}` 必须等于当前设备凭据 ID；主 token、临时配对 token 和其他设备凭据均不能代操作。
+
+| 方法 | 路径 | 请求与响应 |
+| --- | --- | --- |
+| POST | `/api/v1/devices/{id}/lock-tests` | `{delay_seconds?}`，默认 30，允许 1–3600 秒；可不带 body。返回测试记录 |
+| GET | `/api/v1/devices/{id}/lock-tests/{test_id}` | 返回当前测试记录，不存在时 404 |
+| POST | `/api/v1/devices/{id}/lock-tests/{test_id}/receipt` | `{notification_shown?}`，可不带 body；首次回报后返回记录，重复回报保留首次结果，未发送或无对应测试时 409 |
+
+记录为 `{test_id,device_id,created_at,due_at,status,device_session_id?,sent_at?,received_at?,notification_shown?}`。`device_session_id` 为实际选择的连接记录数字 ID。到期后只选择本设备已声明 `client_hello.features: ["lock_test"]`、有连接记录且最近建立的一条连接，发独立事件：
+
+```json
+{"type":"lock_test","lock_test_id":"<测试 ID>","lock_test_due_at":"<RFC3339 UTC>","lock_test_sent_at":"<RFC3339 UTC>","lock_test_title":"锁屏测试","lock_test_body":"已收到测试通知，请回到应用查看结果。"}
+```
+
+新增 payload 字段均带 `lock_test_` 前缀，避免与旧 iOS Envelope 类型冲突。客户端展示本地通知后主动回报；`notification_shown` 缺省表示未知，true 也不能证明用户看到了通知或设备当时锁屏。测试由用户主动预约，不受普通通知偏好控制，不要求 `ws_notify` 能力。
+
+| `status` | 含义 |
+| --- | --- |
+| `scheduled` | 已落库，等待预约到期 |
+| `sent` | 记录了发送尝试，尚无设备回报，不能视为送达 |
+| `received` | hub 已收到设备回报 |
+| `unavailable` | 到期没有符合条件的连接，不再补发 |
+| `interrupted` | hub 重启时预约已过期，不补发 |
+
+hub 重启保留未来预约；发送记录与 WS 写入无法原子完成，所以 `sent` 且无回报也可能是中断或写入失败，不会自动重发。记录保留 14 天，连接记录清理后关联可为空。预约延迟是配置，调度精度、后台存活、通知实际展示均未实测。
+
+## Android 安装包
+
+两条接口都需要鉴权，能力位为 `android_update`：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/app/android/latest` | 原样返回已发布 `latest.json`；发布脚本写入 `{version_code,version_name,min_sdk,notes,sha256,size}` |
+| GET | `/api/v1/app/android/apk` | 按清单 `sha256` 读取 APK；MIME 为 `application/vnd.android.package-archive`，附件名 `jarvis.apk`，ETag 为带引号的摘要，支持 ServeContent 的范围与条件请求 |
+
+发布文件位于 hub 配置目录的 `apps/android/`，APK 按 `<sha256>.apk` 命名。未发布返回 404，清单摘要无效返回 500。客户端应校验大小与摘要、保持同源下载，安装交给系统确认；同包名同签名升级仍需发布产物后真机验收。
 
 ## Codex 来源与能力
 
@@ -49,9 +238,9 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 ## 数据类型
 
 ```jsonc
-// Machine
-{"id":"laptop","name":"笔记本","kind":"ssh","ssh_host":"laptop","online":true,"error":"",
- "hostname":"example-machine","os":"darwin","arch":"arm64","herdr_version":"0.8.0","claude_version":"2.1.310",
+// Machine。kind：local | ssh | link；link 的机器在 jarvis-link 连着时多一个 "link":{"version","address","since"}（docs/link.md）
+{"id":"laptop","name":"笔记本","kind":"ssh","ssh_host":"<SSH 配置别名>","online":true,"error":"",
+ "hostname":"<机器主机名>","os":"darwin","arch":"arm64","herdr_version":"0.8.0","claude_version":"2.1.310",
  "last_seen":"...",
  // 怎么连的（docs/server.md「tailcat 打洞」）：transport 是 local | ssh | tailcat（离线时没有）；tailcat：配了 tailcat 地址；
  // tailcat_path 只在走 tailcat 时有：direct（打洞成功，点对点）| relay（经 DERP 中继）。旧 hub 没有这几个字段
@@ -64,7 +253,14 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  // 系统信息（docs/machines.md）：node 最近一次连上时报的，存在 hub 的数据库里，离线也有；旧 node 没有这个字段
  "system":{"os":"darwin","distro":"macos","like":"","name":"macOS 26.1","version":"26.1","build":"25B78",
            "kernel":"Darwin 25.1.0","arch":"arm64","model":"MacBook Pro","cpu":"Apple M4 Pro","cores":14,
-           "memory":51539607552,"boot_time":1790000000}}
+           "memory":51539607552,"boot_time":1790000000},
+ // 中心怎么连这台（docs/mesh.md「一台电脑多条路」，plan-hub-center.md 5）：hub_id / hub_name 是现在经过的 hub（直接连的是中心自己，
+ // 经成员的是那台成员）；machine_uid 是电脑自己的 uid（旧 node 没有）；route.via 是 local | service | link | ssh | tailcat（hops 0）或
+ // hub（经成员，hops 1），rtt_ms 没测到时省略。没有互联时也有（都是本 hub）。id：中心 hub.json 里有它就用中心的 id，只在成员上配的用成员的
+ // id，撞名的加 @<成员名>。kind 是 hub 的：只在成员上配的电脑。旧 hub 没有这几个字段
+ "hub_id":"<hub UUID>","hub_name":"家里","machine_uid":"<UUID>","route":{"via":"service","hops":0,"rtt_ms":12},
+ // 可选：不止一条路（或只能经成员）时，每条路一项：方式、经哪台 hub（中心自己的路是中心的 hub_id）、现在能不能用、最近的 RTT、是不是在用的那条
+ "paths":[{"via":"service","hub_id":"<hub UUID>","ok":true,"rtt_ms":12,"active":true},{"via":"hub","hub_id":"<成员 hub UUID>","ok":true,"rtt_ms":40}]}
 
 // MetricSample：一次读数（每 10 秒）。没测到的字段缺省（第一次读数没有 cpu / net_*），不是 0；cores 只有 Linux 有
 {"t":1790003600,"cpu":42.5,"cores":[40,45],"load":3.1,"mem_used":34359738368,"mem_total":68719476736,
@@ -74,13 +270,18 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 {"t":1790000000,"cpu":10.2,"load":1.25,"mem":34359738368,"swap":0,"rx":2048,"tx":512,"disk":10737418240}
 {"t":1790000240,"gap":true}
 
-// Launcher（来自 zsh：_claude_launchers 列出的函数，以及调用 claude 的 alias；docs/launchers.md）
-{"name":"cc_ds","base_url":"http://<模型网关>","model":"<模型名>"}
+// Launcher（来自 zsh：_claude_launchers 列出的函数，以及调用 claude 的 alias；docs/launchers.md）。GET …/launchers 每项另带 agent_type
+// （claude / codex / traex / runtime 的 agent，旧 hub 没有时按 Claude 处理）：没写的按 agent、再按名字（codex、traex）推断，hub.json 的
+// machines[].launchers 可以添加包装函数或覆盖类型，例如 [{"name":"example_wrapper","agent_type":"codex"}]，同名配置保留未覆盖的模型和网关字段
+// （hub/launchers.go 的 sessionLaunchers）。Android 按类型筛选启动器。
+{"name":"example_launcher","base_url":"https://example.com","model":"<模型名>","agent_type":"claude"}
 // Codex 的启动器（PATH 上的 codex、跑 codex 的 alias）带 agent，新建时必须带 prompt、不能 async（docs/codex.md「从手机新建」）
-{"name":"codex","model":"默认","agent":"codex"}
+{"name":"codex","model":"默认","agent":"codex","agent_type":"codex"}
+// 新建请求可带 agent_type，包装函数按声明的类型启动：Claude 沿用原参数，Codex／TRAEX 不带 Claude 专用参数，并通过已有 herdr／进程识别
+// 取得真实会话 ID；首句按单个参数传给启动器。权限模式和思考强度暂只适用于 Claude，Android 的新建表单选择其他类型时隐藏这两项。
 
 // Session：(machine_id, session_id) 唯一。session_id 就是 Claude Code 的 session uuid。
-{"machine_id":"server","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"/home/x/code/foo",
+{"machine_id":"server","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"<项目目录>",
  "status":"idle|working|blocked|done|unknown|offline",   // offline = 不在 herdr 里运行，只有 transcript，可恢复
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
  "agent":"claude","agent_label":"",   // agent_label 只在 App 不认识的 Agent 上有：runtime 的叫法（「DSH」，见「Runtime ↔ node」）
@@ -106,7 +307,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 // Item：transcript 规范化后的一条（一个内容块一条）
 {"id":"<entry uuid>#<block idx>","seq":123,            // seq = transcript 行号，单调递增，用于增量和分页
  "ts":"...","role":"user|assistant|system",
- "kind":"text|thinking|tool_use|tool_result|notice|image|fold",
+ "kind":"text|thinking|tool_use|tool_result|notice|image|fold|turn_duration",
  "text":"…",                                           // text / thinking / notice / tool_result 的文本
  "tool_use_id":"toolu_…",                             // tool_use 与 tool_result 共用，App 据此合并成一张卡片
  "tool_name":"Bash", "tool_input":{...},              // 仅 tool_use
@@ -126,7 +327,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 
 // Interaction：需要人处理的事
 {"id":"ix_…","machine_id":"server","session_id":"uuid","session_title":"…","cwd":"…",
- "kind":"question|plan|permission|screen",
+ "kind":"question|plan|permission|screen|elicitation",
  "created_at":"…","expires_at":"…","tool_name":"AskUserQuestion","tool_use_id":"…",
  "questions":[{"question":"…","header":"…","multi_select":false,
                "options":[{"label":"…","description":"…"}]}],   // question
@@ -144,6 +345,40 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 {"dismiss":true}                                                            // 任意：放弃，交回电脑 TUI 处理
 ```
 
+### MCP elicitation
+
+`hello.features` 新增 `elicitation`。客户端需在 `client_hello.features` 明确声明，Android 默认声明。现有 `interaction` 事件的 `interaction` 对象新增以下可选字段，信封顶层不增加键：
+
+```json
+{
+  "kind": "elicitation",
+  "mcp_server_name": "example-mcp",
+  "agent_id": "agent_example",
+  "agent_type": "worker",
+  "elicitation": {
+    "mode": "form",
+    "message": "请选择",
+    "requested_schema": {
+      "type": "object",
+      "properties": {"choice": {"type": "string", "enum": ["yes", "no"]}}
+    }
+  }
+}
+```
+
+URL 模式的 `elicitation` 为 `{"mode":"url","message":"请打开链接完成确认","url":"https://example.com/confirm","elicitation_id":"request_example"}`。`mcp_config_source`、`tool_name`、`tool_use_id` 均可选，只有来源提供时才有；Claude Code 2.1.306 的 Elicitation 输入不提供工具关联和配置来源，缺失时不推断。
+
+Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"choice":"yes"}}` 提交 form；URL 接受只带 `{"action":"accept"}`；拒绝和取消分别为 `{"action":"decline"}`、`{"action":"cancel"}`。`{"dismiss":true}` 仍表示放弃手机接管、交给终端。缺少合法 action 的答复返回 400，请求保持待处理。
+
+下发和降级规则：
+
+- 广播和连接初始化都过滤未声明能力的连接。首次声明能力后补发仍待处理的 elicitation，重复 hello 不重复补发。
+- REST 待处理列表及历史列表也过滤。只有相同认证凭据、相同 `X-Jarvis-Client` 平台／版本存在已声明能力的活动连接，才返回该类型；HTTP 请求头本身不能声明能力。
+- 创建时没有兼容连接，立即交回终端，不留下等待手机作答的请求。已有交互的超时、撤销及重启恢复规则保持适用。
+- elicitation 通知只走同时声明 `ws_notify` 和 `elicitation` 的连接，不发旧 iOS 的 APNs 交互类别；共享 Fleet 继续使用现有终端提示，不传入新 kind。
+
+新字段随现有交互 JSON payload 存储，无需数据库迁移。包内协议核对和未验收项见 [Claude 集成文档](claude-integration.md#mcp-elicitation-hooks)。
+
 ## REST（App → hub）
 
 | 方法 | 路径 | 说明 |
@@ -160,12 +395,15 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 解除关联（删掉这一行） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
-| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","prompt"?,"resume_session_id"?,"workspace_id"?,"tab_name"?,"todo_id"?}` → `{"session":Session}`。`todo_id` 可选：新建成功后在同一请求内挂上（不存在 404、已完成 409、只读设备 403）。`tab_name` 是 herdr 标签页的名字；不给时 hub 用小任务模型按 `prompt` 起一个短英文名（`hub/tabname.go`，约 2 秒，失败就不起），node 再兜底成 `agent-<n>`，同一空间里重名加 `-2`、`-3`（`node.tabLabel`）。新建空间时它的第一个标签页也用这个名字。助手的 `agent_start` 同样自动起名。`"async": true`（App 都带）：立刻回会话（新会话 id、目录、启动器，`starting: true`），开标签页、等 Claude 就绪在后台做，见下面「新建会话」；这时 hub 不等起名，标签页先叫 `agent-<n>`，名字出来后再 `session.rename`。`name_hint`：App 把第一条消息当普通消息发（马上上屏）时，用它起名、不进 `prompt` |
+| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","agent_type"?,"prompt"?,"resume_session_id"?,"workspace_id"?,"permission_mode"?,"effort"?,"tab_name"?,"async"?,"name_hint"?,"todo_id"?}` → `{"session":Session}`。可选 `X-Jarvis-Op-Id` 接入 `start` 持久回执。`todo_id` 可选：新建成功后在同一请求内挂上（不存在 404、已完成 409、只读设备 403）。`tab_name` 是 herdr 标签页的名字；不给时 hub 用小任务模型按 `prompt` 起一个短英文名（`hub/tabname.go`，约 2 秒，失败就不起），node 再兜底成 `agent-<n>`，同一空间里重名加 `-2`、`-3`（`node.tabLabel`）。新建空间时它的第一个标签页也用这个名字。助手的 `agent_start` 同样自动起名。`"async": true`（App 都带）：立刻回会话（新会话 id、目录、启动器，`starting: true`），开标签页、等 Claude 就绪在后台做，见下面「新建会话」；这时 hub 不等起名，标签页先叫 `agent-<n>`，名字出来后再 `session.rename`。`name_hint`：App 把第一条消息当普通消息发（马上上屏）时，用它起名、不进 `prompt` |
 | POST | `/api/v1/tabs/autoname` | `{"dry_run"?,"all"?}` → `{"tabs":[{machine_id,session_id,space,title,from,to,error?}]}`：把在跑的 Agent 里「没人起过名」的标签页（`jarvis`、`jarvis-N`、herdr 的数字、`agent-N`）按会话标题改成短英文名，规则同新建；`dry_run` 只列出会改成什么，`all` 连用户起过名的也改。模型偶尔回空，会再问一次，仍没有就留原名（`error`）。2026-10-31 在两台机器上跑过一次：61 个标签页里改了 39 个，用户自己起的 21 个没动 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条；一轮特别长、往前要解析几十 MB 时这一页会短一些，`has_more: true`，再往前翻接着取；但只要前面还有内容，一页至少带一条，空页加 `has_more: true` 会让 App 没有 seq 可以接着往前取）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的新内容（后台同步用，约 500 条一页，从不切开同一行的多个 item；`more_after: true` 表示后面还有，接着用最后一条的 seq 再取，或改取最新一页）。带 `fold_work=1` 时从末尾往前的页把工作折叠起来；带 `from_seq=&through_seq=` 时返回这几行的 items（展开折叠用，约 1000 条一页，`more: true` 表示还没到 `through_seq`）。见「折叠的工作」 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | 一条 item 的图片原始字节（Content-Type 为图片类型，可永久缓存）；item id 含 `#`，要百分号编码 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/full` | 一条 item 的全文（`Item`，不带图片、没有 `full_size`；最多 1 MB）：App 点「看全文」时取。node 重新读那一行解析 |
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?,"client_msg_id"?,"clear_draft"?,"todo_id"?}`；`todo_id` 可选：发送成功后挂上（不存在 404、已完成 409、只读设备 403）；会话 offline 时先用原启动器 `--resume` 拉起；被拒见下面「发消息」 |
+| GET | `/api/v1/sessions/{mid}/{sid}/info` | 会话信息：`{session_id,transcript_path,cwd,model,launcher,git_branch,version,permission_mode,effort,context_tokens,output_tokens,compactions,turns,started_at,last_activity}` |
+| POST | `/api/v1/sessions/{mid}/{sid}/queue` | `{keep:[索引]}`：取回原排队输入并仅保留指定项，返回 `{queue}`，用于编辑或删除；不走 client_ops |
+| POST | `/api/v1/sessions/{mid}/{sid}/seen` | 标记会话已看，返回 `{ok:true}`；WS 也可发 `seen` |
 | POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | 发 Esc |
 | POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
 | GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60&source=visible` | `{"text":"…","status":"working"}`；`source=recent` 连同窗格滚动缓冲一起读（lines 最多 20000，返回行数少于 lines 说明到头了）；`format=ansi` 带颜色（SGR，行尾 `\r\n`；旧 node 不认，照旧回纯文本） |
@@ -189,8 +427,8 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
 | GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
 | POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（herdr 里的任何 Agent，手动启动的也行；分屏的 tab 只关它自己的窗格） |
-| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes_effective","conversations":[Session]}`；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`） |
-| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?}`，存 Postgres settings（`docs/assistant.md`） |
+| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`） |
+| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?}`，存 Postgres settings（`docs/assistant.md`）；只改带了的字段，`notes` 为空串也算改；`main` 为 `"-"` 时清掉主对话（换机器时 App 一起发） |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话 |
 | POST | `/api/v1/assistant/conversations/{id}/archive` | 归档助手的一段对话（只是不在列表里，数据保留）→ `{"ok","archived":true}`；主对话 400。会话列表（`sessions` 推送）里它带 `archived: true`，App 收在「已归档」；用户再给它发消息（`POST …/messages`）自动取消归档（`docs/assistant.md`「管理自己的对话」） |
 | POST | `/api/v1/assistant/conversations/{id}/unarchive` | 取消归档 → `{"ok","archived":false}` |
@@ -211,7 +449,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
 | POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution |
-| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?}`；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
+| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?}`；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。互联组里只有中心推送：连成员时这条也被转给中心；推送的 payload（直推的和经中继密封的）顶层带 `hub_id`：中心的（[mesh.md](mesh.md)「凭据和推送」）。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
 | POST | `/api/v1/devices/{id}/live-activity` | 实时活动的 token：`{"push_to_start_token"}`、`{"activity_id","push_token"}`（会轮换，重复发）、`{"activity_id","ended":true}`（`docs/live-activity.md`） |
 | GET | `/api/v1/fleet` | `{"fleet": FleetState}`：当前的实时活动内容（App 回到前台时拉），`stats` 带全部数字和每台机器的负载 |
 | GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| 无, points: [MetricPoint]}], "step": 60}`：App「机器」页每张卡片上的现在值和走势，按配置顺序的每台机器，`points` 是最近 1 小时、每分钟一个点；`latest` 只在 30 秒内收到过样本时有（`docs/machines.md`） |
@@ -227,7 +465,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | POST | `/api/v1/phone/runtime-cli` | `{cmd, args, timeout}`：让手机上的 DEBUG 包执行一条 Runtime CLI 命令（`docs/runtime-cli.md`「经 hub 连真机」），回 App 的原样回答 `{"ok": …}`。只给 `full` 设备凭据（只读设备 403）；没有登记了 `phone_runtime_cli` 的 App 在线 503 `phone_offline`（不唤醒）；`timeout` 秒内（最多 120）没回答 504；App 说这次调用失败 502。每次调用 hub 记一行日志（命令、调用方设备 id、状态、耗时），不记参数和回答 |
 | 任意 | `/api/v1/plugins/{id}/{path…}` | 原样转发给插件的 `/{path…}`（WebSocket 也是），去掉 `Authorization` 和 `token`；只读设备 403。语音插件的契约见 `docs/plugins.md`「语音」 |
 
-邮件见下文「邮件 API」。错误统一 `{"error":"…"}` + 4xx/5xx。
+邮件见下文「邮件 API」。HTTP 错误格式和可选字段见上文「错误体」。
 
 ## WebSocket `/api/v1/ws`
 
@@ -238,13 +476,14 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | type | 字段 |
 | --- | --- |
 | `hub_update` | `update`（同 `GET /api/v1/hub/update`）：检查、下载、等空闲、重启、确认、回滚，状态一变就推；`restarting` 之后连接会断一会儿，是预期的 |
-| `hello` | `server_version`, `client_id`, `features`, `channel`, `build`, `protocol`, `min_app_build`（同 `/api/v1/health`） |
+| `hello` | `server_version`, `client_id`, `features`, `hub_id`, `hub_name`, `endpoints`, `tls_port`, `fp`, `mesh`, `channel`, `build`, `protocol`, `min_app_build`（后四个同 `/api/v1/health`）；每条 WS 首条消息，尚不含协商后的心跳。`mesh`：`{"hubs":[{hub_id,name,online,self,center,endpoints,tls_port,fp}]}`，互联组里所有 hub（含自己，`self: true`；配过对但现在到不了的 `online: false`；`center: true` 是组里的中心，客户端在同组的几台里优先连它），没有互联时只有自己。连成员时 hello 来自中心（`hub_id` 是中心的）（[mesh.md](mesh.md)） |
+| `endpoints` | `endpoints`（完整候选列表，仅发给声明同名能力的连接） |
+| `client_hello_ack` | `heartbeat: {interval, pong_timeout}`（本次协商后实际采用的秒数） |
 | `machines` | `machines` |
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`） |
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
 | `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话；hub 跟随 lark-connector 的实时事件 `/agent/v1/events`，每 400ms 最多发一次，推给所有客户端） |
-| `session` | `session`（单个状态变化） |
 | `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束）。约每 80 ms 一条；App 每个对话最多每秒画 5 次，停顿后的第一条立刻画、之后画最新的，空串立刻画，消息落进 transcript 或重连时丢掉还没画的（`DeltaPacer`） |
 | `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（node 已不再随订阅采样屏幕：终端页自己按需读 `/screen`，旧 App 收不到这条也不影响） |
@@ -252,23 +491,68 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
 | `interaction_resolved` | `id` |
-| `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 的 iPhone） |
+| `fleet` | `fleet`（实时活动汇总，与 HTTP `/api/v1/fleet` 的内容对应） |
+| `hook_event` | node hook 事件的原字段，hub 补 `machine_id` 并置 `type: hook_event`；用于刷新会话运行状态 |
+| `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 且提供该工具的手机） |
 | `desktops` | `desktops`：连着的桌面端（Mac App），`[{"device","name","since"}]`，`device` 是它的设备凭据 id（用配对凭据连的为空，不能单独退出）。连上时发一次，之后有桌面端连上 / 断开就推给所有客户端（feature `desktops`）。iPhone 据此显示「Mac 上的 Jarvis 已登录」 |
-| `ping` | — |
+| `notify` | `kind: interaction / done / assistant`、`machine_id`、`session_id`、`title`、`subtitle`、`body`，交互另带 `interaction_id`；只发给声明 `ws_notify` 的连接，见下文 |
+| `lock_test` | `lock_test_id`、`lock_test_due_at`、`lock_test_sent_at`、`lock_test_title`、`lock_test_body`；只发给本设备声明 `lock_test` 的选定连接，见「锁屏测试」 |
+| `inbox` | 无内容载荷；列表变化提示，客户端重新拉取收件箱 |
+| `error` | `machine_id`、`session_id`、`error`；例如订阅补发失败，客户端据此核对会话 |
+| `pong` | `id`（字符串，原样回应客户端应用层 ping） |
 
 客户端 → 服务端：
 
 | type | 字段 |
 | --- | --- |
 | `subscribe` | `machine_id`, `session_id`, `since_seq`（可选，App 传本地的 `covered`；有则补发其后的全部 items——每页一条 `items`（`backlog: true`），最多 8 页 / 4000 条，超出时最后一条带 `more_after: true`；否则补发最后两轮），`lazy_images`（可选；true 后这个连接收到的 items 都不带图片数据），`fold_work`（可选；true 后这个连接从末尾补发的最后两轮折叠工作，`since_seq` 的补发不折叠） |
+| `seen` | `machine_id`, `session_id`；与 HTTP `/seen` 同义 |
 | `unsubscribe` | `machine_id`, `session_id` |
 | `terminal_subscribe` | `machine_id`, `session_id`, `epoch`（可选）, `after_seq`（可选）：开始收这个会话终端的实时帧（hub `features` 里有 `terminal_stream` 才发）；`control: {cols, rows}`（可选，`terminal_control`）：手机按这个尺寸接管终端，`takeover: true` 连别的程序占着的也抢 |
 | `terminal_input` | `machine_id`, `session_id`, `text`（终端字节，原样写进去）, `control: {cols, rows}`（可选，新尺寸）, `scroll`（可选，滚轮的行数，> 0 往回、< 0 往新，feature `terminal_scroll`）, `at`（可选，`[column, row]` 从 0 起，滚轮落在屏幕的哪一格：手指按下的地方；不带时 node 用屏幕正中间）, `click`（可选，`[column, row]` 从 0 起，屏幕上那一格左键单击，feature `terminal_click`）：只有正在接管的那个连接发的才转给 node |
 | `terminal_unsubscribe` | `machine_id`, `session_id` |
-| `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用）, `device_id`（推送用的设备 id，同 `POST /api/v1/devices`：连着的这段时间 hub 不给这台设备的实时活动推 APNs，App 自己画，`docs/live-activity.md`「推送节奏」；老 App 不带）。`tools` 里的 `phone_runtime_cli`（DEBUG 包打开了经 hub 的 Runtime CLI）不算手机的工具：hub 把它拿出来，不进 Agent 的工具列表、Agent 调不到，只给 `POST /api/v1/phone/runtime-cli`；只登记了它一个（脚本驱动的模拟器）时这条连接不算手机 |
+| `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用）；可选 `device_id`、`platform`。按设备替换注册，空工具列表只清除该设备的供给；缺少 `device_id` 时用鉴权设备 ID，再回退到 `legacy`。调用先筛选提供该工具的在线手机，再优先真机、最近活跃连接。iPhone 的 `device_id` 是推送用的设备 id（同 `POST /api/v1/devices`）：连着的这段时间 hub 不给这台设备的实时活动推 APNs，App 自己画，`docs/live-activity.md`「推送节奏」；老 App 不带。`tools` 里的 `phone_runtime_cli`（DEBUG 包打开了经 hub 的 Runtime CLI）不算手机的工具：hub 把它拿出来，不进 Agent 的工具列表、Agent 调不到，只给 `POST /api/v1/phone/runtime-cli`；只登记了它一个（脚本驱动的模拟器）时这条连接不算手机。 |
 | `register_desktop` | `device_name`：Mac App 登记成桌面端，不是手机——不接 `phone_*`，也不挡 hub 推送唤醒 iPhone（`hub/desktops.go`）；`device_id`（推送用的设备 id，同 `POST /api/v1/devices`：连着的这段时间 hub 不给这台 Mac 推「需要你处理」「Agent 做完」，它自己发本地通知；老 App 不带）。退出它就是吊销它的设备凭据（`DELETE /api/v1/auth/tokens/{id}`，hub 随即断开它的连接、删掉它登记的推送） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
-| `pong` | — |
+| `client_hello` | `device_id`, `platform`, `version`, `build`, `os: {name, version, sdk}`, `features`, `heartbeat: {interval?, pong_timeout?}`，均可省略，见下文 |
+| `ping` | 必须带字符串 `id`，允许空字符串；缺失、null 或非字符串时不回复 |
+
+### 常驻连接通知（ws_notify）
+
+`notify` 是事件名，`ws_notify` 是双方声明的能力名。hub 复用 APNs 的提问和完成决策、屏蔽规则与设备偏好，在 `c.has("ws_notify")` 时才发给该连接。即使没有 APNs token 或密钥也能收到；旧 iOS 不声明就不会收到新事件。
+
+`interaction` 表示需要处理的交互，`done` 表示 Agent 完成，`assistant` 表示助手完成。偏好按鉴权设备 ID 读取 `/api/v1/devices/{id}/prefs`：交互看 `input`，完成看原有完成策略；机器与空间屏蔽沿用已有判断。完成事件由 hub 决策，Android 不应根据 sessions 状态变化再次生成一条。原始 `interaction` 与 `interaction_resolved` 事件照旧发送，用于请求卡和撤回通知，不能把它们都当成新的提醒。
+
+事件不持久回放，也不证明通知实际展示；断线后客户端仍须拉交互和会话核对。通知可靠性、锁屏展示和耗电未实测。
+
+### 客户端能力与心跳
+
+客户端看到服务端支持 `client_hello` 后可发送：
+
+```json
+{"type":"client_hello","device_id":"<设备 id>","platform":"android","version":"<版本>","build":1,"os":{"name":"Android","version":"<系统版本>","sdk":36},"features":["endpoints"],"heartbeat":{"interval":240,"pong_timeout":15}}
+```
+
+这份元数据只记录在当前连接，不改变已鉴权的设备身份或权限。`build` 当前接收任意 JSON。每次 `client_hello` 替换客户端的能力集合，省略 `features` 等于清空集合；不要用服务端能力列表代替客户端自己支持的能力。
+
+下面的秒数均为代码中的协商边界和定时器配置，**未实测网络延迟、实际发包频率、耗电或运营商空闲超时**。
+
+- 未协商时维持旧行为：hub 发 WebSocket 协议 ping 的间隔配置为 20 秒，等待协议 pong 的超时配置为 15 秒；不改变旧连接的 TCP keepalive 设置。
+- `heartbeat.interval` 为整数秒，先夹到 10–900，再仅向下抖动：减去 `0..min(interval-10, floor(interval/10))` 的随机整数。每次协商只抽取一次，`client_hello_ack` 返回实际采用的值。
+- `heartbeat.pong_timeout` 为整数秒，夹到 5–60；省略某项时保留上一值或默认值。提供空 `heartbeat` 对象也会标记已协商；整个字段缺省则保留原协商状态。
+- 写协程应用新配置后返回 `{"type":"client_hello_ack","heartbeat":{"interval":<实际值>,"pong_timeout":<实际值>}}`。客户端重复发送可再次协商；即使只发送元数据、不带 heartbeat，也会收到当前值的 ack。
+- 协商后同步尝试调整 TCP keepalive：Idle 用 interval、Interval 用 pong_timeout、Count 为 3；取决于底层连接是否支持。协议 pong 超时会关闭连接。同一时刻只等一个协议 ping，不阻塞应用层回复。
+
+应用层探测另用客户端发起的 JSON 消息：
+
+```json
+{"type":"ping","id":"probe-1"}
+{"type":"pong","id":"probe-1"}
+```
+
+第一条是客户端发，第二条是 hub 回，`id` 原样回显。先检查服务端的 `app_ping` 能力；它与 WebSocket 协议控制帧的 ping / pong 独立，不能互相替代。hub 不会主动发送 JSON `ping`，也不处理客户端 JSON `pong`。旧客户端不发 `client_hello` 时不会收到新增的 `endpoints` 事件或协商回执。
+
+新字段必须可选，且不能与现有 iOS `Envelope` 的同名键使用冲突类型；例如 `id` 保持字符串，不能为了新协议改成对象。
 
 ### Codex 的提问和审批
 
@@ -311,7 +595,6 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
 - 密码：屏幕最后一行是密码提示（`[sudo] password for …:`、`Password:`、ssh 口令…，规则刻意收窄，正文里提到 password 不算）时卡片带
   `secret: true`，App 用密码框（不进草稿）。不管是不是密码，终端卡回答里的 `text` 在数据库里一律存成 `<redacted>`；
   终端面板的按键接口（`/keys`）本来就不落库，hub 的请求日志也只记路径和状态码。
-
 
 ### 会话增量（`sessions_delta`，2026-11-02）
 
@@ -401,6 +684,23 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
   稍等 1.5 秒（订阅时的补发可能还在路上）再用 `after_seq=covered` 补齐，超过 8 页改取最新一页。重连订阅带 `since_seq=covered`。
 - 老 hub 不带这些字段：App 照旧按 id 合并。新 hub 的字段对老 App 只是多出来的键。
 
+### 真实记录的轮次用时
+
+轮次结束记录可生成一条 `role: system`、`kind: turn_duration` 的元数据 item。它不带展示文本，沿用现有 HTTP 历史／增量页、WebSocket `items` 和会话缓存路径，不新增事件或 Envelope 顶层字段。`turn_duration` 字段可选；旧 iOS 将未知 kind 解为 `unknown` 并跳过展示，其余内容照常解码。
+
+```json
+{"id":"duration_example#0","seq":9,"ts":"2026-01-01T00:00:00Z","role":"system","kind":"turn_duration","turn_duration":{"duration_ms":12345,"source":"claude_turn_duration","parent_uuid":"reply_example"}}
+```
+
+| 来源 | 原始记录 | 关联字段 |
+| --- | --- | --- |
+| `claude_turn_duration` | Claude Code 的 `type: system`、`subtype: turn_duration` 行中的 `durationMs` | `parent_uuid` 原样保留 `parentUuid`，指向该轮收尾消息的 UUID（对应 item id 中 `#` 之前的部分） |
+| `codex_task_complete` | Codex／兼容 rollout 的 `event_msg`、`payload.type: task_complete` 中的 `duration_ms` | `turn_id` 原样保留原生轮次 ID；同轮已解析到用户输入时，另带 `user_item_id`，指向该输入的规范化 item id |
+
+仅接受明确记录的非负整数毫秒数及有效关联标识；缺失、负值、非整数、溢出或已知轮次 ID 不匹配时不生成耗时 item。`0` 是有效记录值。不会用时间戳、`started_at`／`completed_at` 的差值或 timeout 补值，也不将压缩、思考、工具或子任务的耗时当作整轮耗时。
+
+Android 按关联消息定位已加载历史中的用户轮次或后台唤醒段，工作行显示「用时 N 秒」（毫秒向下取整）。关联消息未加载、关联跨过了新用户轮次／唤醒／回顾边界时先隐藏；翻页补齐后重新关联。新轮次没有自己的记录时，状态行留空，不沿用上一轮用时。字段／item 缺失表示没有可用的真实记录，不代表零耗时；旧 node 或旧缓存也可能没有该信息。折叠工作保留耗时元数据 item；展开折叠、重连补发和缓存恢复沿用同一关联规则。
+
 ### 折叠的工作
 
 对话里一轮的工具调用和思考平时折叠成一行（「工具 502 · 思考 81」），可一个很长的 Codex 会话，最后两轮这一页有 1412 条、1.08 MB，
@@ -410,6 +710,20 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 
 - `id` 是 `fold:` + 这段第一条的 id，`seq` / `ts` 也是第一条的；`fold.through_seq` / `through_id` 是最后一条，`until` 是最后一条的时间；
   `items` 条数，`tools` 工具调用数，`thoughts` 有字的思考数（空的思考 App 本来就不显示）。
+- `fold.tasks` 是可选的有序任务清单快照数组，仅收录本段中成功的 TodoWrite / TaskCreate / TaskUpdate / TaskList 结果，
+  不携带原始工具输入和输出；无可用快照时省略。没有结果、`is_error: true`、结果中 `success: false` 或非 null 的 `error` 都不计入；
+  格式错误的清单不会清空之前的任务。旧 iOS 忽略这个嵌套字段，fold 原有计数、范围和展开方式不变。
+  每次成功结果保留一个快照及其替换边界，按结果在 transcript 中的顺序应用，避免部分更新丢掉已加载的任务状态：
+  - `entries`：任务数组，每项有 `id`（`todo:<下标>` 或 `task:<工具任务 ID>`），可选 `subject`、`description`、`status`。
+    状态为 `pending` / `in_progress` / `completed` / `unknown`；`deleted` 表示删除该任务。
+  - `replace: "todo"`：TodoWrite 的完整清单，先移除旧的 `todo:` 项；空数组表示清空。
+    `replace: "task"`：TaskList 的完整清单，移除不在新清单内的 `task:` 项，已有项保留未提供的说明和状态；空数组表示清空。
+    省略 `replace` 表示 TaskCreate / TaskUpdate 的增量结果，未提供的字段沿用旧值；无旧值的标题显示「任务 #ID」、状态为未知。
+    TaskCreate 另带 `fallback_status: "pending"`，仅在结果和旧任务都没有状态时使用。
+  - `source_item_id`、`source_tool_use_id`、`source_seq`：原始工具调用的 item ID、工具调用 ID 和 seq，供「查看相关记录」定位。
+    Android 不展开即可重建进度；查看记录时先展开所属工作行，再按范围取回原记录并定位，后续真实结果按原规则继续更新。
+
+  例如：`"tasks":[{"replace":"todo","entries":[{"id":"todo:0","subject":"检查表单","status":"in_progress"}],"source_item_id":"entry_tool#0","source_tool_use_id":"call_example","source_seq":3}]`。
 - 不折叠：用户消息、回复（text）、通知、recap；结果不在这一页的 tool_use（还在跑）和 tool_use 不在这一页的 tool_result
   （App 要把它们和后来 / 之前的另一半配对）；不到 3 条且不到 4 KB 的短段（展开还要一次往返，不值）。
 - App 展开工作行时用 `from_seq=<fold.seq>&through_seq=<fold.through_seq>` 取回这一段（一页约 1000 条，`more` 时从最后一条的 seq + 1 接着取），
@@ -466,7 +780,7 @@ hub → node 请求：
 | `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.jarvis/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
 | `dirs.list` | `{path}` → 同 REST |
 | `sessions.list` | → `{sessions}` |
-| `session.start` | `{cwd, launcher, prompt?, resume_session_id?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`）；Codex 启动器同步、必须带 `prompt`（`node/codex_start.go`） |
+| `session.start` | `{cwd, launcher, agent_type?, prompt?, resume_session_id?, workspace_id?, permission_mode?, effort?, tab_name?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`）；Codex 启动器同步、必须带 `prompt`（`node/codex_start.go`） |
 | `session.send` | `{session_id, text, images?}` |
 | `session.keys` | `{session_id, keys, text}` |
 | `session.interrupt` | `{session_id}` |
@@ -511,6 +825,44 @@ node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows,
 node → hub 请求：
 - `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）
 - `mcp.tools {}` → `{tools}`；`mcp.call {name, args, session_id}` → `{content, is_error}`
+
+### 电脑链路（jarvis-link，kind link）
+
+hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS 端口，hub 在这条链路上开流，流里就是上面这套 RPC（字节原样转给那台的常驻 node）。
+细节见 [link.md](link.md)，这里只列线上的东西：
+
+- `GET /api/v1/link`（WebSocket，`role: link` 的凭据，只走 TLS，回环例外）。文本消息，每条一个 JSON：
+  - jarvis-link → hub：`{"type":"hello","machine","version","address"}`（第一条，10 秒内）、`{"type":"open_failed","id","error"}`；
+  - hub → jarvis-link：`{"type":"endpoints","endpoints":[{"url","kind"}]}`（只有 https 的候选）、`{"type":"open","id"}`、
+    `{"type":"node","online","error"}`。
+  - 关闭码：4001 被同一台的新链路顶掉、4002 凭据被撤销、4003 hello 和凭据对不上、1001 hub 停机。两边每 10 秒 ping，5 秒没 pong 断开（配置值）。
+- `GET /api/v1/link/stream?id=<open 的 id>`（WebSocket，同一凭据，permessage-deflate）：二进制消息，内容是 RPC 的字节流；
+  hub 15 秒内没等到就当失败。链路断了，链路上的流一起断。
+
+## hub ↔ hub（互联，[mesh.md](mesh.md)）
+
+- `POST /api/v1/peer/pair`（`Authorization: Bearer jx_…`，对方的互联码）：`{hub_id,name,version,fp,tls_port,endpoints,token,center,term}` →
+  同样几项（`token` 是回给对方的互联凭据，`center` / `term` 是发码方所在组的中心和任期：用码的一方并入这一组）。码无效 / 用过 / 过期 401；本 hub 没开 TLS 409。
+- `GET /api/v1/peer`（WebSocket，只走 TLS，`role: peer` 的凭据，permessage-deflate）：二进制消息，内容是上面 hub ↔ node 那套 JSON 行 RPC 的字节流：
+  - 调用：`hello {hub_id,name,version,epoch}`（两边各一次）、`stream.open {id}`（流上是一条到对方 peer 服务器的 HTTP/1.1 连接）、
+    `relay {to,from,ttl,method,params}`（`creds.import {tokens:[{id,name,kind,role,created_at,last_seen,hash}]}` → `{added}`：成员把凭据交给中心；
+    `pair.code {}` → 配对码：成员上的 `jarvisd hub pair`）、`unpair {}`；
+  - 单向：`rec`（hub 的记录：链路、`center`、`term`、hub.json 里的电脑）、`stream.data` / `stream.ack` / `stream.close`。
+  - 关闭码：4011 重复的链路、4012 断开了互联、4013 发不过来、1001 hub 停机。两边每 10 秒 ping，5 秒没 pong 断开（配置值）。
+- 流上的 HTTP 都带 `X-Jarvis-Peer-Ttl`（8 起，每跳减一，到 0 回 `508 mesh_loop`），一跳一跳转到要去的 hub：
+  - 成员转给中心的 App 请求：原样（含 `Authorization`），加 `X-Jarvis-Peer-Source: <lan|public> <客户端地址> <tls|plain>`（成员对来源的判断）。
+    转不过去 `503 center_unreachable`，转发失败 `502 hub_unreachable`。
+  - 中心经成员开的 node 流：`GET /api/v1/peer/node`，`Upgrade: jarvis-node`、`X-Jarvis-Peer-Node: <成员 hub_id>/<机器 id>`、`X-Jarvis-Peer-From: <中心 hub_id>`；
+    成员回 `101`，之后是 node 的字节流；不是它的中心来要 403，hub.json 里没有 404，打不开 502（`error` 是原因）。
+- 管理接口（管理界面登录后，[admin.md](admin.md)）：`GET /api/v1/admin/mesh`、`GET /api/v1/admin/peers`、`POST /api/v1/admin/peers/code`、`POST /api/v1/admin/peers`、
+  `POST /api/v1/admin/peers/probe`、`DELETE /api/v1/admin/peers/{hub_id}`、`POST /api/v1/admin/peers/{hub_id}/center`、`GET /api/v1/admin/routes`；
+  同一套在 `/api/v1/admin/cli/…` 下给 hub 机器上的命令行用（回环 + 主 token）。
+
+## hub → 连接器（kind service，[link.md](link.md)「被动模式」、[mesh.md](mesh.md)「kind service」）
+
+- hub 按配对链接里的 `fp` 钉扎连 `<address>`（可经 `socks5://` 代理）：`POST /api/v1/connector/pair {code,token,machine,hub_id,hub_name}` 一次；
+  之后 `GET /api/v1/connector/info`（每 30 秒，探活和 RTT）、`GET /api/v1/connector/stream`（WebSocket，node 的字节流），都带 `Authorization: Bearer <凭据>`。
+- 401：5 分钟内不再拨；429：按 `Retry-After`；503 `node_unavailable`：显示原因、照常退避；流以 4002 关：要重新配对，不再试；1001：照常退避。
 
 ## hook / mcp ↔ node（unix socket `~/.jarvis/node.sock`）
 
@@ -642,19 +994,22 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | GET | `/api/v1/mail/accounts/{aid}/mailboxes` | `{"mailboxes":[{"name","role","unseen","total"}]}`，role ∈ inbox/sent/drafts/trash/archive/junk/"" |
 | GET | `/api/v1/mail/messages?account_id=&mailbox=INBOX&limit=50&before_uid=&q=` | `{"messages":[MailSummary],"has_more"}`；`account_id` 为空 = 所有账号收件箱合并（按日期倒序） |
 | GET | `/api/v1/mail/messages/{aid}/{uid}?mailbox=INBOX` | `{"message":MailMessage}` |
+| GET | `/api/v1/mail/messages/{aid}/{uid}/attachments/{attachment_id}?mailbox=INBOX` | 按账号、邮箱、UID 和详情中的稳定附件 ID 下载；Bearer 鉴权与邮件读取一致；支持 `Range`／`If-Range`，返回 `Accept-Ranges`／`Content-Range`、206 或 416 |
 | POST | `/api/v1/mail/messages/{aid}/{uid}/flags` | `{"mailbox","seen"?,"flagged"?}` |
 | POST | `/api/v1/mail/send` | `{"account_id","to":[],"cc":[],"bcc":[],"subject","text","html"?,"in_reply_to"?,"references"?}`；`references` 是空格分隔的 Message-ID 字符串，也收字符串数组（旧版 iOS 这样发，hub 用空格拼起来） |
 
+邮件详情页先读取正文和附件清单，再用 `/flags` 提交 `{"mailbox":"INBOX","seen":true}`。详情 GET 使用 `BODY.PEEK`，保留旧客户端的行为，不自动标已读。附件包含稳定的 `id`、文件名、MIME 类型和解码后大小；ID 绑定 MIME 顺序、文件元数据与解码内容，同名附件可以区分。下载同样使用只读 `BODY.PEEK`，不依赖 BINARY 等扩展；服务端将解码内容流式写入临时文件，再按 HTTP Range 返回解码后的字节区间。未知账号、附件或内容变化返回 404。
+
 ```jsonc
 // MailAccount
-{"id":"acc_…","name":"Gmail","email":"x@gmail.com","provider":"gmail|feishu|imap","auth":"password|oauth2",
+{"id":"acc_…","name":"Gmail","email":"me@example.com","provider":"gmail|feishu|imap","auth":"password|oauth2",
  "username":"…","imap_host":"imap.gmail.com","imap_port":993,"smtp_host":"smtp.gmail.com","smtp_port":465,
  "smtp_security":"tls|starttls","status":"ok|error","error":""}
 // 新增时额外字段：password。provider 为 feishu 时服务器固定为 imap/smtp.larkoffice.com（993 / 465，SSL）
 // MailSummary
 {"account_id","mailbox","uid":123,"message_id","subject","from":{"name","email"},"to":[{"name","email"}],
  "date","snippet","seen":false,"flagged":false,"has_attachments":false}
-// MailMessage = MailSummary + {"cc":[…],"text":"…","html":"…","attachments":[{"filename","mime","size"}],
+// MailMessage = MailSummary + {"cc":[…],"text":"…","html":"…","attachments":[{"id","filename","mime","size"}],
 //                               "in_reply_to","references":[…]}
 ```
 
@@ -665,14 +1020,16 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/inbox` | `{items:[InboxItem]}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context`。默认只有飞书和邮件；带 `?sources=all` 才有连接器（GitHub…）的条目（带 `connector` 块的），旧 App、手表、Android 不带，所以不会把 PR 当邮件画 |
-| GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用） |
+| GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用）；邮件额外带 `reply_target:{uid,version}` |
 | POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
-| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发；`clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
+| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。提供 `client_id` 时保存回执，飞书原样透传为上游 `clientId`；不提供时 `clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
 | POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
 | POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表（`?sources=all` 同上） |
 | POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`，顺序不变，模型没给的是空串；target 是 BCP 47（zh-Hans、en、ja…，`docs/ios.md`「翻译」） |
 | POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?}`：hub 读这封信自己翻，正文最多 12000 字 |
+
+邮件回复可带详情返回的 `expected_uid` 和／或 `expected_version`。版本绑定账号、邮箱、线程中的 UID、消息标识及发件人；目标变化返回 HTTP 409，`code=mail_reply_target_changed`、`delivered=none`、`retryable=false`，此次没有发送。App 保留草稿，加载最新邮件并让用户确认新收件人后，用新的 `client_id` 发起新请求。网络结果不明时沿用原请求、原目标和原 `client_id` 核对回执。省略校验字段时沿用旧行为，现有 iOS 无需修改；持久回执规则不变。
 
 `InboxItem`：`id`、`source`（lark / mail，或连接器的 id：github）、`kind`（dm / mention / group / bot / mail；连接器的是它自己的：review_requested / mention / team_mention / author / ci_failed / assign）、`account`（`feishu` 或邮箱账号 id）、
 `account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
@@ -687,6 +1044,17 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 ## 飞书机器人
 
 `/api/v1/bots/feishu`（读状态 / 改凭证、开关和功能）、`…/pair`（配对码）、`…/owner`（DELETE 解除配对）、`…/test`（测试消息），字段见 `docs/bots.md`「配置和接口」。
+
+## 知识库 API
+
+知识库未启用时返回 503；`kind` 支持 `projects`、`chats`、`people`、`docs`、`meetings`、`events`。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/kb/{kind}?tag=` | `{items,tags}`；可按标签筛选 |
+| GET | `/api/v1/kb/{kind}/{id}` | `{detail,agents?}`；项目可额外返回相关在线 Agent |
+| PUT | `/api/v1/kb/{kind}/{id}` | body 为 `kb.Update`，可更新名称、标签、重要性、摘要及项目属性；返回 `{id}`，字段见 [knowledge.md](knowledge.md) |
+| GET | `/api/v1/kb-search?q=&messages=0` | `{hits}`；默认包含消息，`messages=0` 排除消息 |
 
 ## 飞书 API（lark-connector）
 
@@ -706,9 +1074,9 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | POST | `/api/v1/lark/conversations/{id}/settings` | `{"done"?,"pinned"?,"flagged"?,"muted"?,"label_ids"?}` → lark-connector `PATCH settings`（isArchived / isShortcut / isFlagged / isMuted / labelIds，labelIds 是全量） |
 | POST | `/api/v1/lark/conversations/{id}/unread` | `{"unread":true}` 标为未读 / `false` 清除未读 |
 | GET | `/api/v1/lark/conversations/{id}/messages?before=&after=&around=&limit=&topic=` | `{"messages":[LarkMessage],"has_older","has_newer","older_cursor","newer_cursor"}`，旧→新；不带游标 = 最新一页；`around=<读到的位置+1>` 从第一条未读打开；`topic=1` 时取话题群的话题列表（只能往前翻） |
-| GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | 话题 / 回复串里的消息，格式同上 |
-| POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?,"mentions"?}` 以本人身份发送，回 `{"ok":true,"message_id"?}`。`client_id` 是 App 生成的 UUID，原样交给 lark-connector 的 `clientId`：同一条消息重发时带同一个，只会发出一条；不传或不是 UUID 时 hub 自己生成。`mentions` 是 `[{"user_id","name"}]`（最多 100 个，超过或缺 `user_id` / `name` 回 400），`text` 里要有字面的 `@name`，hub 不改写文字，原样交给 lark-connector 的 `mentions`；@所有人是 `{"user_id":"all","name":"所有人"}` |
-| POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?,"mentions"?}` 以本人身份回复这条消息，回 `{"ok":true,"message_id"?}`。`thread=false`（默认）在原会话里引用这条；`thread=true` 发进这条所在的话题（是普通群里的顶层消息时以它为根开一个话题；话题群里落进它的话题）。`client_id`、`mentions` 同上一行；`text` 为空 400 |
+| GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | 话题 / 回复串里的消息，格式同上；只支持 `before` 前翻，无游标时读取最新页；不支持 `after`，上游未提供更新方向分页与游标，见 [话题分页限制](feishu.md#话题分页限制h06) |
+| POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?,"mentions"?}` 以本人身份发送，回 `{"ok":true,"message_id"?}`。`client_id` 是 App 生成的 UUID，原样交给 lark-connector 的 `clientId` 并在 hub 保存回执：同一条消息重发时带同一个，只会发出一条；不传或不是 UUID 时 hub 自己生成。`mentions` 是 `[{"user_id","name"}]`（最多 100 个，超过或缺 `user_id` / `name` 回 400），`text` 里要有字面的 `@name`，hub 不改写文字，原样交给 lark-connector 的 `mentions`；@所有人是 `{"user_id":"all","name":"所有人"}` |
+| POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?,"mentions"?}` 以本人身份回复这条消息，回 `{"ok":true,"message_id"?}`。`thread=false`（默认）在原会话里引用这条；`thread=true` 发进这条所在的话题（是普通群里的顶层消息时以它为根开一个话题；话题群里落进它的话题）。代理 lark-connector `POST /messages/{id}/replies`，`client_id` 原样透传为 `clientId` 并保存回执，`mentions` 同上一行；目标可以是根消息或话题中的回复，由上游解析话题归属。`text` 为空 400 |
 | GET | `/api/v1/lark/conversations/{id}/members?q=&limit=` | @人用的成员：`{"members":[{"user_id","name","avatar"?}]}`。`q` 为空列出成员，不为空按名字 / 群昵称 / 拼音搜；`limit` 默认 50，最多 200；`name` 群昵称优先，没有时用显示名 |
 | POST | `/api/v1/lark/conversations/{id}/read` | `{"position","badge_count"?,"message_ids"?}`：上报看到的消息（最高位置、该条的 badge_count、其间别人发的未读消息 id），只在消息真正上屏后发 |
 | POST | `/api/v1/lark/conversations/{id}/read-states` | `{"message_ids":[…]}`（最多 100 个，超过 400）：这些消息的已读回执，回 `{"states":[{"message_id","read_count","unread_count"}]}`。lark-connector 没给回执的（还在发送、不认识的）不出现在 `states` 里；旧 hub 没有这条路由时 App 不显示回执 |
@@ -716,6 +1084,20 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | GET | `/api/v1/lark/messages/{id}/media/{key}` | 消息作用域的媒体（同上） |
 | GET | `/api/v1/lark/emojis` | `{"emojis":{"<小写 key>":{"label","url"}}}`，含肤色变体 key；hub 缓存一天 |
 | POST | `/api/v1/lark/messages/{id}/card-actions/{actionId}` | 以本人身份按下卡片回调按钮（body 原样转给 lark-connector） |
+| GET / POST | `/api/v1/lark/raw/{path...}` | lark-connector `/agent/v1/<path>` 的只读代理，转发查询与允许的只读 POST；不作为通用写接口 |
+| GET | `/api/v1/lark/reactions/quick` | `{keys}`：快捷表情 |
+| POST | `/api/v1/lark/messages/{id}/reactions` | `{key,remove?}`：添加或撤销表情，返回 `{ok:true}` |
+| GET | `/api/v1/lark/users/{id}?feed_id=` | 用户资料，原样转发上游 JSON |
+| POST | `/api/v1/lark/users/{id}/chat` | 打开私聊，返回 `{feed_id}` |
+| GET | `/api/v1/lark/messages/{id}/url-preview?url=` | 消息内链接预览，原样转发上游 JSON |
+| GET | `/api/v1/lark/moments/posts/{id}` | 单帖内容，原样转发上游 JSON |
+| GET | `/api/v1/lark/moments/posts/{id}/comments` | 单帖评论，原样转发上游 JSON |
+
+飞书发送、话题回复和收件箱回复的可选 `client_id` 可直接用于重试，不要求额外请求头。hub 按操作种类和原始 ID 派生内部回执 UUID，复用 Postgres `client_ops`；同 ID、同目标与参数返回原 HTTP 状态和响应正文，不再发送，即使收件箱事项已变化或 hub 已重启。同 ID 换参数、目标或鉴权设备返回 `409 {"code":"op_id_reused"}`。已记录的上游错误也原样返回，避免结果不明时重复发送；执行尚未完成返回 `202 {"state":"pending"}`，重启时遗留的执行没有结果则返回 `202 {"state":"unknown"}`，客户端需核对。回执沿用 `client_ops` 的保留策略。请求同时携带 `client_id` 和 `X-Jarvis-Op-Id` 时，以 `client_id` 派生的回执为准。
+
+话题回复使用独立的操作种类 `lark_thread_reply`，沿用上述回执规则。Android 发送前持久保存话题草稿及原请求；收到 `202` 或丢失回执时保留待确认状态，再次提交相同目标、文本和 `client_id` 核对原结果，不能生成新 ID 重发。`ok:true` 表示上游已接受，话题列表随后重新读取。
+
+不提供 `client_id` 的旧客户端维持原行为：飞书会话发送由上游客户端生成 ID，收件箱飞书回复由 hub 按事项生成稳定 ID。HTTP 响应结构不变，不增加 WebSocket 事件。
 
 ```jsonc
 // LarkConversation
@@ -728,7 +1110,7 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
  "recalled","edited","reply_count","thread_reply_count","badge_count","at_me","is_read",
  "parts":[MessagePart],                       // lark-connector 原样（见下），媒体 URL 已改写到 /api/v1/lark/
  "reply_to":{"id","sender_name","text","recalled","parts"},
- "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["张三","李四"]}]}
+ "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["示例成员甲","示例成员乙"]}]}
 // MessagePart（lark-connector 的 MessagePart，不改字段名）
 {"kind":"text|at|link|image|file|code|emotion|media|card|docs|interactive|table",
  "text","url","refId","metadata":{…}}   // 卡片的整棵元素树在 metadata.body / header；富文本块祖先在 metadata.blocks

@@ -172,6 +172,15 @@ func (h *Hub) kbLoop(ctx context.Context) {
 	t := time.NewTicker(kbPoll)
 	defer t.Stop()
 	for {
+		if h.isMember() { // the center's knowledge base is the group's; this one's is kept as it was (mesh_group.go)
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			case <-h.kb.kick:
+			}
+			continue
+		}
 		run(ctx, func() {
 			h.rezoneKB(e.Store)
 			if _, err := e.Archive(ctx); err != nil {
@@ -688,7 +697,7 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 		if d.Kind == kb.KindProject {
 			if p, ok := e.Store.Project(d.ID); ok && len(p.Dirs) > 0 {
 				var agents []any
-				for _, m := range h.machines {
+				for _, m := range h.machinesNow() {
 					for _, s := range h.decorated(m) {
 						if s.Assistant || s.Status == proto.StatusOffline {
 							continue

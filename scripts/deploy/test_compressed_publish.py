@@ -136,6 +136,106 @@ class InstallCompressedTests(InstallTestCase):
         self.assert_keeps_previous(self.run_install(), "could not download")
 
 
+class InstallNodeServiceTests(unittest.TestCase):
+    """install.sh --node: jarvisd and jarvis-link downloaded and checked, then jarvis-link sets the node service up."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="jarvis-install-node-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.home = self.root / "home"
+        self.downloads = self.root / "downloads"
+        self.tools = self.root / "tools"
+        for directory in (self.home, self.downloads, self.tools):
+            directory.mkdir()
+        tool = self.tools / "curl"
+        tool.write_text('#!/bin/sh\n[ "$1" = "-fsSL" ] || exit 1\n[ -f "$TEST_DOWNLOADS/${2##*/}" ] || exit 22\ncp "$TEST_DOWNLOADS/${2##*/}" "$4"\n')
+        tool.chmod(0o755)
+        tool = self.tools / "uname"
+        tool.write_text('#!/bin/sh\ncase "$1" in -s) printf "%s\\n" "$TEST_OS";; -m) printf "%s\\n" "$TEST_ARCH";; *) exit 1;; esac\n')
+        tool.chmod(0o755)
+        self.env = {"PATH": str(self.tools) + os.pathsep + os.defpath, "HOME": str(self.home),
+                    "TEST_DOWNLOADS": str(self.downloads), "TEST_OS": "Linux", "TEST_ARCH": "x86_64",
+                    "JARVIS_DL": "https://example.invalid/dl", "JARVIS_SKIP_HERDR": "1"}
+        self.calls = self.home / "link-calls"
+
+    def publish(self, suffix="linux-amd64", link=True):
+        sums = []
+        binaries = {"jarvisd": b"#!/bin/sh\nprintf '%s\\n' test-version\n"}
+        if link:  # a fake jarvis-link: says its version, writes down everything else it is asked
+            binaries["jarvis-link"] = b'#!/bin/sh\n[ "$1" = version ] && { echo test-link; exit 0; }\necho "$*" >> "$HOME/link-calls"\n'
+        for name, data in binaries.items():
+            archive = name + "-" + suffix + ".gz"
+            packed = gzip.compress(data, mtime=0)
+            (self.downloads / archive).write_bytes(packed)
+            sums.append(hashlib.sha256(packed).hexdigest() + "  " + archive)
+        (self.downloads / "SHA256SUMS").write_text("\n".join(sums) + "\n")
+
+    def run_install(self, *args):
+        # A session of its own: no /dev/tty, as under CI (nothing to ask).
+        return subprocess.run(["/bin/sh", str(SCRIPTS / "install.sh"), *args], env=self.env, cwd=self.root,
+                              capture_output=True, text=True, timeout=30, start_new_session=True)
+
+    def calls_made(self):
+        return self.calls.read_text().splitlines() if self.calls.exists() else []
+
+    def test_listen_installs_both_and_listens(self):
+        self.publish()
+        result = self.run_install("--node", "--listen")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(os.access(self.home / ".jarvis/bin/jarvisd", os.X_OK))
+        self.assertTrue(os.access(self.home / ".jarvis/bin/jarvis-link", os.X_OK))
+        self.assertIn("jarvis-link test-link installed", result.stdout)
+        self.assertEqual(self.calls_made(), ["install --listen"])
+
+    def test_pair_and_listen_imply_the_node_service(self):
+        self.publish()
+        result = self.run_install("--pair", "jarvis://link?token=x&machine=pi", "--machine", "pi")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.calls_made(), ["install --pair jarvis://link?token=x&machine=pi --machine pi"])
+        self.calls.unlink()
+        result = self.run_install("--listen", ":18700")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.calls_made(), ["install --listen :18700"])
+        self.calls.unlink()
+        result = self.run_install("--addr", "example-machine.example.com", "--addr=[2001:db8::7]")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.calls_made(), ["install --listen --addr example-machine.example.com --addr [2001:db8::7]"])
+
+    def test_both_ways_at_once_is_refused(self):
+        self.publish()
+        result = self.run_install("--pair", "x", "--listen")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("not both", result.stderr)
+        result = self.run_install("--hub", "--listen")
+        self.assertEqual(result.returncode, 2)
+
+    def test_mac_sets_up_the_node_and_points_at_the_app(self):
+        self.env.update({"TEST_OS": "Darwin", "TEST_ARCH": "arm64"})
+        self.publish("darwin-arm64")
+        result = self.run_install("--node", "--listen")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.calls_made(), ["node install", "pair --listen"])
+        self.calls.unlink()
+        result = self.run_install("--listen", ":18700", "--addr", "mac.example.com")
+        self.assertEqual(self.calls_made(), ["node install", "pair --listen :18700 --addr mac.example.com"])
+        self.assertIn("Jarvis Link", result.stdout)
+
+    def test_without_jarvis_link_published_the_node_service_fails_loudly(self):
+        self.publish(link=False)
+        result = self.run_install("--node", "--listen")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("jarvis-link-linux-amd64.gz", result.stderr)
+        self.assertTrue(os.access(self.home / ".jarvis/bin/jarvisd", os.X_OK))
+
+    def test_without_a_role_or_terminal_only_jarvisd(self):
+        self.publish()
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse((self.home / ".jarvis/bin/jarvis-link").exists())
+        self.assertEqual(self.calls_made(), [])
+        self.assertIn("--node --pair", result.stdout)
+
 class InstallHerdrTests(InstallTestCase):
     """install.sh and ensure-herdr.sh add herdr when the computer has none; a failed herdr install only warns."""
 

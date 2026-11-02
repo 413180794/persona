@@ -21,7 +21,7 @@ Claude Code 始终跑在你自己的电脑上（[herdr](https://herdr.dev) 里�
   </tr>
 </table>
 
-![Jarvis 架构](docs/architecture.svg)
+架构图和连接方式见 [整体架构](docs/architecture.md#组件)：公网用 HTTPS / WSS，内网保留 HTTP / WS。
 
 ## 能做什么
 
@@ -50,8 +50,8 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 
 | 东西 | 要求 |
 | --- | --- |
-| hub 机器 | 一台常开的机器，手机能访问它的 18660 端口（同一个网络或 VPN）。两种装法：Linux 上用原生二进制（docker 跑数据库 + systemd），或任何能跑 Docker 的机器（NAS 等）用 compose 跑 hub 和数据库（[docs/docker.md](docs/docker.md)） |
-| 电脑 | 装好 Claude Code（或 Codex）的 Mac / Linux；hub 机器要能用 SSH 密钥免密码登录它们。[herdr](https://herdr.dev) 没装的话，部署 / 安装时会一起装上（`JARVIS_SKIP_HERDR=1` 跳过） |
+| hub 机器 | 一台常开的机器，手机能访问 hub：同一网络、用户自配 VPN，或公网直连（优先 IPv6，放行 TLS 端口）。两种装法：Linux 上用原生二进制（docker 跑数据库 + systemd），或任何能跑 Docker 的机器（NAS 等）用 compose 跑 hub 和数据库（[docs/docker.md](docs/docker.md)） |
+| 电脑 | 装好 Claude Code（或 Codex）的 Mac / Linux。经 SSH 接入的电脑，hub 机器要能用 SSH 密钥免密码登录它们（用连接器 jarvis-link 接入的不需要 SSH）。[herdr](https://herdr.dev) 没装的话，部署 / 安装时会一起装上（`JARVIS_SKIP_HERDR=1` 跳过） |
 | iPhone | iOS 26；Apple Watch 需要 watchOS 26（可选） |
 | 开发机 | 一台装了 Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 的 Mac、Go 1.23+，用来编译服务端和 App |
 | Apple 开发者账号 | 自己编译安装 App 用；推送和 HealthKit 需要付费账号 |
@@ -66,10 +66,10 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
    要接入哪些电脑。仓库里没有写死任何人的机器和账号，所有个人设置都在这份配置和 hub 的 `~/.jarvis/hub.json` 里。
 2. **部署服务端**：`./scripts/deploy/deploy.sh`。它会编译 `jarvisd`，装到每台电脑上（没有 herdr 的顺便装上），在 hub 机器上启动 Postgres 和 hub 服务。
    hub 想放在 NAS 上的话改用 Docker：`deploy/docker/compose.yaml`（[docs/docker.md](docs/docker.md)），`deploy.sh` 只用来往各台电脑装 `jarvisd`。
-3. **告诉 hub 接入哪些电脑**：在 hub 机器的 `~/.jarvis/hub.json` 里填上各台电脑和手机访问用的地址，然后重启 hub。
+3. **告诉 hub 接入哪些电脑**：在 hub 机器的 `~/.jarvis/hub.json` 里填上各台电脑和手机访问用的地址：`public_url` 保留旧 App 可访问的地址，公网入口配置 `public.tls_listen` 和 `public.advertise`，然后重启 hub（[网络配置](docs/network.md)）。
 4. **安装 App**：模拟器上跑 `./scripts/app/sim.sh`；装到真机就用 Xcode 打开生成的工程，或者用 `./scripts/release/release.sh` 发到你自己的
    TestFlight（[docs/release.md](docs/release.md)）。
-5. **配对**：在 hub 机器上运行 `~/.jarvis/bin/jarvisd hub pair`，用 App 扫描它打印的二维码。
+5. **配对**：在 hub 机器上运行 `~/.jarvis/bin/jarvisd hub pair`，用 App 扫描它打印的二维码。默认是有效期 10 分钟、只能兑换一次设备凭据的临时 token；hub 必须正在运行。现有 iOS 可在内网照常扫码，`--legacy` 仅供确需主 token 的场景。
 
 配好以后，在「设置 › 机器」里每台电脑都应该显示在线，「Agents」里能看到它们 herdr 里的会话。
 
@@ -77,7 +77,8 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 
 - 手机只和你自己的 hub 通信，中间没有别的服务器；只有通知经过 Apple 的推送服务（APNs）。
 - hub 的 token、数据库密码只在 hub 机器的 `~/.jarvis/hub.json` 里（权限 0600）；邮箱凭据加密后存进数据库。
-- hub 默认是 HTTP，只该放在内网或 VPN 里访问，不要直接暴露到公网。
+- 公网入口使用显式配置的 TLS 端口（自签证书 + 支持钉扎的客户端），优先 IPv6。旧 HTTP 监听保留给内网 / VPN；默认拒绝公网明文 API，健康检查除外。公网鉴权失败会限流，主 token 仅接受本地来源。
+- 现有 iOS / Watch 继续使用内网 / VPN 地址；服务端支持 TLS 不代表旧 App 已支持自签证书钉扎。放行端口和配对方法见 [公网直连](docs/network.md)。
 - Jarvis 只给自己启动的 Claude 会话注入 hooks，不改你的全局 Claude Code 设置；你自己开的会话也能在手机上看、发消息。
 
 ## 目前的限制
@@ -93,6 +94,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 | --- | --- |
 | [docs/config.md](docs/config.md) | 两份配置怎么写、接入多台机器 |
 | [docs/architecture.md](docs/architecture.md) | 架构和设计取舍 |
+| [docs/network.md](docs/network.md) | 公网直连、IPv6 放行、TLS 和配对 |
 | [docs/server.md](docs/server.md) | 服务端的几种模式、部署和运维 |
 | [docs/ios.md](docs/ios.md) | App 的界面和交互 |
 | [docs/android.md](docs/android.md) | Android App（Agents、交互卡片、不用推送的后台通知） |

@@ -1,0 +1,555 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "plan_approve_all",
+      "description": "对话页全部放行使用 bypassPermissions。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan",
+          "plan": "# 示例计划\n补充单元测试。"
+        },
+        "operation": {
+          "action": "approve_all",
+          "entry": "conversation",
+          "rejecting": false,
+          "feedback": ""
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "approve": true,
+          "mode": "bypassPermissions"
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "plan_approve_edits",
+      "description": "对话页只接受编辑使用 acceptEdits。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan",
+          "plan": "# 示例计划\n补充单元测试。"
+        },
+        "operation": {
+          "action": "approve_edits",
+          "entry": "conversation",
+          "rejecting": false,
+          "feedback": ""
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "approve": true,
+          "mode": "acceptEdits"
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "plan_reject_preserves_whitespace",
+      "description": "对话页打回保留意见的首尾空白。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan",
+          "plan": "# 示例计划\n补充单元测试。"
+        },
+        "operation": {
+          "action": "reject",
+          "entry": "conversation",
+          "rejecting": true,
+          "feedback": "  先补测试 \n"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "approve": false,
+          "feedback": "  先补测试 \n"
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "plan_reject_empty",
+      "description": "对话页允许不填意见直接打回。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan",
+          "plan": "# 示例计划\n补充单元测试。"
+        },
+        "operation": {
+          "action": "reject",
+          "entry": "conversation",
+          "rejecting": true,
+          "feedback": ""
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "approve": false,
+          "feedback": ""
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "permission_allow",
+      "description": "允许一次只发送 allow。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission",
+          "tool_name": "Bash",
+          "summary": "检查项目状态"
+        },
+        "operation": {
+          "action": "allow",
+          "entry": "conversation"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "permission_deny",
+      "description": "当前授权面板拒绝不附带原因。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission",
+          "tool_name": "Bash",
+          "summary": "检查项目状态"
+        },
+        "operation": {
+          "action": "deny",
+          "entry": "conversation"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": false
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "permission_always",
+      "description": "本会话总是允许附带 always。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission",
+          "tool_name": "Bash",
+          "summary": "检查项目状态"
+        },
+        "operation": {
+          "action": "always",
+          "entry": "conversation"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true,
+          "always": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "permission_always_without_session",
+      "description": "没有会话标识时不提供总是允许。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "",
+          "kind": "permission"
+        },
+        "operation": {
+          "action": "always",
+          "entry": "conversation"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "resolution": null
+      },
+      "derived": true
+    },
+    {
+      "name": "plan_rejecting_hides_approve",
+      "description": "打回编辑状态下批准按钮不显示。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm.body"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan",
+          "plan": "示例计划"
+        },
+        "operation": {
+          "action": "approve_all",
+          "entry": "conversation",
+          "rejecting": true,
+          "feedback": "补充测试"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "resolution": null
+      },
+      "derived": true
+    },
+    {
+      "name": "plan_cancel_retains_feedback_allows_approve",
+      "description": "取消打回后旧意见仍保留且现有批准按钮可用。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm.body（取消只改 rejecting）"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan",
+          "plan": "示例计划"
+        },
+        "operation": {
+          "action": "approve_all",
+          "entry": "conversation",
+          "rejecting": false,
+          "feedback": "补充测试"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "approve": true,
+          "mode": "bypassPermissions"
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "notification_ix_allow",
+      "description": "通知动作映射为现有 Resolution。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "entry": "notification",
+          "action": "IX_ALLOW",
+          "text": null
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true
+        }
+      },
+      "from_test": "NotificationActionsTests.buttonsMapToResolutions"
+    },
+    {
+      "name": "notification_ix_deny",
+      "description": "通知动作映射为现有 Resolution。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "entry": "notification",
+          "action": "IX_DENY",
+          "text": null
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": false
+        }
+      },
+      "from_test": "NotificationActionsTests.buttonsMapToResolutions"
+    },
+    {
+      "name": "notification_ix_approve_plan",
+      "description": "通知动作映射为现有 Resolution。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan"
+        },
+        "operation": {
+          "entry": "notification",
+          "action": "IX_APPROVE_PLAN",
+          "text": null
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "approve": true,
+          "mode": "acceptEdits"
+        }
+      },
+      "from_test": "NotificationActionsTests.buttonsMapToResolutions"
+    },
+    {
+      "name": "notification_ix_reject_plan",
+      "description": "通知动作映射为现有 Resolution。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan"
+        },
+        "operation": {
+          "entry": "notification",
+          "action": "IX_REJECT_PLAN",
+          "text": "  先写测试 \n"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "approve": false,
+          "feedback": "先写测试"
+        }
+      },
+      "from_test": "NotificationActionsTests.buttonsMapToResolutions"
+    },
+    {
+      "name": "notification_reject_without_text",
+      "description": "通知打回缺少文字时发送空意见。",
+      "source": [
+        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan"
+        },
+        "operation": {
+          "entry": "notification",
+          "action": "IX_REJECT_PLAN"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "approve": false,
+          "feedback": ""
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "dismiss_question",
+      "description": "交给电脑处理发送 dismiss 而不表示拒绝。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
+        "ios/Shared/Models.swift：Resolution.dismissed"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "question"
+        },
+        "operation": {
+          "action": "dismiss",
+          "entry": "conversation"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "dismiss": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "dismiss_plan",
+      "description": "交给电脑处理发送 dismiss 而不表示拒绝。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
+        "ios/Shared/Models.swift：Resolution.dismissed"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "plan"
+        },
+        "operation": {
+          "action": "dismiss",
+          "entry": "conversation"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "dismiss": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "dismiss_permission",
+      "description": "交给电脑处理发送 dismiss 而不表示拒绝。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
+        "ios/Shared/Models.swift：Resolution.dismissed"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission"
+        },
+        "operation": {
+          "action": "dismiss",
+          "entry": "conversation"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "dismiss": true
+        }
+      },
+      "derived": true
+    },
+    {
+      "name": "dismiss_screen",
+      "description": "交给电脑处理发送 dismiss 而不表示拒绝。",
+      "source": [
+        "ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
+        "ios/Shared/Models.swift：Resolution.dismissed"
+      ],
+      "input": {
+        "profile": "ios_current",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "screen"
+        },
+        "operation": {
+          "action": "dismiss",
+          "entry": "conversation"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "dismiss": true
+        }
+      },
+      "derived": true
+    }
+  ]
+}

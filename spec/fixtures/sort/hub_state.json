@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "operation": "hub_state",
+  "cases": [
+    {
+      "name": "hub_blocked",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "blocked",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": null
+      },
+      "expected": {
+        "state": "needs_you"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_pending_offline",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "offline",
+          "pending_interactions": 1,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": null
+      },
+      "expected": {
+        "state": "needs_you"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_working_seen",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "working",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": "2026-01-01T00:00:30Z"
+      },
+      "expected": {
+        "state": "working"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_done_unseen",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "done",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": null
+      },
+      "expected": {
+        "state": "unread"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_done_seen_before_tolerance",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "done",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": "2026-01-01T00:00:17Z"
+      },
+      "expected": {
+        "state": "unread"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_done_seen_at_tolerance",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "done",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": "2026-01-01T00:00:18Z"
+      },
+      "expected": {
+        "state": "idle"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_done_seen_equal",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "done",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": "2026-01-01T00:00:20Z"
+      },
+      "expected": {
+        "state": "idle"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_done_seen_after",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "done",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": "2026-01-01T00:00:30Z"
+      },
+      "expected": {
+        "state": "idle"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_idle",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "idle",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": null
+      },
+      "expected": {
+        "state": "idle"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_offline",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "offline",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": null
+      },
+      "expected": {
+        "state": "offline"
+      },
+      "derived": true
+    },
+    {
+      "name": "hub_unknown",
+      "description": "按宿主状态、交互和看过时间派生统一状态。",
+      "source": [
+        "server/internal/hub/state.go: agentState",
+        "docs/agent-states.md: 统一状态、看过"
+      ],
+      "input": {
+        "session": {
+          "session_id": "session-a",
+          "status": "future",
+          "pending_interactions": 0,
+          "updated_at": "2026-01-01T00:00:20Z"
+        },
+        "seen_at": null
+      },
+      "expected": {
+        "state": "unknown"
+      },
+      "derived": true
+    }
+  ]
+}

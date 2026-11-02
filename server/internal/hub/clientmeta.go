@@ -1,0 +1,107 @@
+package hub
+
+import (
+	"encoding/json"
+	"math/rand/v2"
+)
+
+// clientMeta is what a client says about itself in client_hello. A zero value is a legacy iOS client.
+// All access is protected by client.mu; identity here never replaces the authenticated device or role.
+type clientMeta struct {
+	DeviceID string          `json:"device_id"`
+	Platform string          `json:"platform"`
+	Version  string          `json:"version"`
+	Build    json.RawMessage `json:"build"`
+	OS       struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		SDK     int    `json:"sdk"`
+	} `json:"os"`
+	features  map[string]bool
+	heartbeat heartbeatConfig
+	updates   chan heartbeatConfig
+	done      <-chan struct{}
+}
+
+type heartbeatConfig struct {
+	Interval    int `json:"interval"`
+	PongTimeout int `json:"pong_timeout"`
+	negotiated  bool
+}
+
+func defaultHeartbeat() heartbeatConfig {
+	return heartbeatConfig{Interval: 20, PongTimeout: 15}
+}
+
+// has reports whether the client declared a capability in client_hello.
+func (c *client) has(feature string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.meta.features[feature]
+}
+
+func (h *Hub) onClientHello(c *client, data []byte) {
+	var msg struct {
+		clientMeta
+		Features  []string `json:"features"`
+		Heartbeat *struct {
+			Interval    *int `json:"interval"`
+			PongTimeout *int `json:"pong_timeout"`
+		} `json:"heartbeat"`
+	}
+	if json.Unmarshal(data, &msg) != nil {
+		return
+	}
+	wasElicitation := c.has("elicitation")
+	c.mu.Lock()
+	hb := c.meta.heartbeat
+	if hb.Interval == 0 {
+		hb = defaultHeartbeat()
+	}
+	if msg.Heartbeat != nil {
+		if msg.Heartbeat.Interval != nil {
+			interval := max(10, min(900, *msg.Heartbeat.Interval))
+			// Choose once per negotiation so the ack is the exact timer interval, in whole seconds.
+			spread := min(interval-10, interval/10)
+			hb.Interval = interval - rand.IntN(spread+1)
+		}
+		if msg.Heartbeat.PongTimeout != nil {
+			hb.PongTimeout = max(5, min(60, *msg.Heartbeat.PongTimeout))
+		}
+		hb.negotiated = true
+	}
+	msg.features = make(map[string]bool, len(msg.Features))
+	for _, f := range msg.Features {
+		msg.features[f] = true
+	}
+	msg.heartbeat, msg.updates, msg.done = hb, c.meta.updates, c.meta.done
+	c.meta = msg.clientMeta
+	updates, done := c.meta.updates, c.meta.done
+	c.mu.Unlock()
+	if !wasElicitation && c.has("elicitation") {
+		defer h.sendPendingInteractions(c, true)
+	}
+	if updates == nil {
+		c.helloAck(hb)
+		return
+	}
+	select {
+	case updates <- hb:
+	case <-done:
+	}
+}
+
+func (c *client) helloAck(hb heartbeatConfig) {
+	c.sendJSON(map[string]any{"type": "client_hello_ack", "heartbeat": hb})
+}
+
+// onAppPing echoes a string id, including an empty string, without interpreting it.
+func (h *Hub) onAppPing(c *client, data []byte) {
+	var msg struct {
+		ID *string `json:"id"`
+	}
+	if json.Unmarshal(data, &msg) != nil || msg.ID == nil {
+		return
+	}
+	c.sendJSON(map[string]any{"type": "pong", "id": *msg.ID})
+}

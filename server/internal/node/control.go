@@ -26,12 +26,15 @@ func newUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// start launches `<launcher> --session-id …` (or --resume) in a new herdr tab and waits until claude is ready.
+// start launches the selected agent in a new herdr tab and waits for its session: `<launcher> --session-id …` (or
+// --resume) for Claude Code, waiting until claude is ready; a Codex launcher of the login shell with the first message
+// (codex_start.go); a TRAEX, or a launcher the user says runs another agent, without Claude's flags (start_agent.go).
 // workspaceID puts the tab into an existing space (e.g. "new tab next to this agent"); otherwise the workspace named
 // after the directory is reused or created.
 // tabName names the herdr tab (hub picks one from the first message when the user gave none); empty: agent-<n>.
 // newID is the id a new session gets (startAsync picked it already); empty: a fresh one.
-func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort, tabName, newID string, options ...modelExecution) (*proto.Session, error) {
+// agentType is the agent the user picked for the launcher (claude, codex, traex); empty: what the launcher runs.
+func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort, tabName, newID, agentType string, options ...modelExecution) (*proto.Session, error) {
 	execution := executionOption(options)
 	if err := execution.check(); err != nil {
 		return nil, err
@@ -42,6 +45,13 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	cwd, launcher, err := n.checkStart(cwd, launcher, resume, mode, effort)
 	if err != nil {
 		return nil, err
+	}
+	kind := agentType
+	if kind == "" {
+		kind = launcherAgentType(launcher)
+	}
+	if kind != "claude" && kind != "codex" && kind != traexAgent {
+		return nil, fmt.Errorf("unsupported agent type %q", kind)
 	}
 	if execution.Model != "" {
 		agent, err := n.launcherModelCheck(ctx, launcher, execution.Model)
@@ -71,7 +81,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 			return nil, err
 		}
 	}
-	if argv, ok := n.codexLauncher(ctx, launcher); ok { // codex_start.go
+	if argv, ok := n.codexLauncher(ctx, launcher); ok && kind != traexAgent { // codex_start.go
 		if resume != "" {
 			return nil, refusal("codex_resume", "Codex 会话请在电脑上恢复（codex resume）：从手机只能新建。", nil)
 		}
@@ -82,6 +92,12 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 			return nil, errors.New("新建 Codex 的思考强度由其启动器管理，请将此用途的思考强度恢复继承")
 		}
 		return n.startCodex(ctx, launch, cwd, launcher, argv, prompt, ws, tabName)
+	}
+	if kind != "claude" { // start_agent.go
+		if mode != "" || effort != "" {
+			return nil, fmt.Errorf("permission mode and effort are only supported for Claude starts")
+		}
+		return n.startOtherAgent(ctx, launch, cwd, launcher, kind, prompt, resume, ws, tabName)
 	}
 	if err := n.codexFunctionLauncher(ctx, launcher, true); err != nil {
 		return nil, err
@@ -325,7 +341,7 @@ func lastLines(s string, n int) string {
 func (n *Node) sessionFor(id string, a host.Agent) *proto.Session {
 	s := &proto.Session{
 		SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
-		WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, UpdatedAt: time.Now().UTC(), // just started
+		WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, Agent: a.Agent, UpdatedAt: time.Now().UTC(), // just started
 	}
 	_ = n.refreshHosts(context.Background())
 	n.placeIn(s, a)
@@ -394,7 +410,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			}
 		}
 		mode, effort := n.modesOf(id) // resume with what it ran with
-		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, "", "")
+		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, "", "", "")
 		if err != nil {
 			return err
 		}

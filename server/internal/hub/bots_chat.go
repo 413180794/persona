@@ -313,7 +313,7 @@ func (h *Hub) resolveBotTarget(ctx context.Context, t botTarget) (resolvedTarget
 		return resolvedTarget{m: m, session: s, label: agentLabel(s) + " · " + m.cfg.Name}, nil
 	default:
 		cfg := h.assistantConfig(ctx)
-		m := h.byID[cfg.MachineID]
+		m := h.localMachine(cfg.MachineID)
 		if m == nil {
 			return resolvedTarget{}, errors.New("助手所在的机器没有配置")
 		}

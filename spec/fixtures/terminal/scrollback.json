@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "kind": "ansi_rows",
+  "cases": [
+    {
+      "name": "scrollback_colored_rows",
+      "description": "解析 ANSI 历史行并保留内部空行和样式。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
+        "ios/JarvisTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
+      ],
+      "input": {
+        "text": "\u001b[0m\u001b[31mred\u001b[0m plain\r\n\r\nnext 中\r\n"
+      },
+      "expected": {
+        "row_lengths": [
+          9,
+          0,
+          7
+        ],
+        "style_runs": [
+          {
+            "from": 0,
+            "row": 0,
+            "style": {
+              "fg": {
+                "indexed": 1
+              }
+            },
+            "to": 3
+          }
+        ],
+        "text": [
+          "red plain",
+          "",
+          "next 中\ufff0"
+        ],
+        "wide_cells": [
+          [
+            2,
+            5,
+            2
+          ],
+          [
+            2,
+            6,
+            0
+          ]
+        ]
+      },
+      "from_test": "scrollbackPagesAreRowsOfColoredText"
+    },
+    {
+      "name": "scrollback_plain",
+      "description": "解析 ANSI 历史行并保留内部空行和样式。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
+        "ios/JarvisTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
+      ],
+      "input": {
+        "text": "plain only"
+      },
+      "expected": {
+        "row_lengths": [
+          10
+        ],
+        "style_runs": [],
+        "text": [
+          "plain only"
+        ],
+        "wide_cells": []
+      },
+      "from_test": "scrollbackPagesAreRowsOfColoredText"
+    },
+    {
+      "name": "scrollback_empty",
+      "description": "解析 ANSI 历史行并保留内部空行和样式。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
+        "ios/JarvisTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
+      ],
+      "input": {
+        "text": ""
+      },
+      "expected": {
+        "row_lengths": [],
+        "style_runs": [],
+        "text": [],
+        "wide_cells": []
+      },
+      "from_test": "scrollbackPagesAreRowsOfColoredText"
+    },
+    {
+      "name": "scrollback_final_empty_line",
+      "description": "解析 ANSI 历史行并保留内部空行和样式。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain"
+      ],
+      "input": {
+        "text": "a\n\n"
+      },
+      "expected": {
+        "row_lengths": [
+          1,
+          0
+        ],
+        "style_runs": [],
+        "text": [
+          "a",
+          ""
+        ],
+        "wide_cells": []
+      },
+      "derived": true
+    },
+    {
+      "name": "scrollback_lf_resets_column",
+      "description": "解析 ANSI 历史行并保留内部空行和样式。",
+      "source": [
+        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain"
+      ],
+      "input": {
+        "text": "ab\n中"
+      },
+      "expected": {
+        "row_lengths": [
+          2,
+          2
+        ],
+        "style_runs": [],
+        "text": [
+          "ab",
+          "中\ufff0"
+        ],
+        "wide_cells": [
+          [
+            1,
+            0,
+            2
+          ],
+          [
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

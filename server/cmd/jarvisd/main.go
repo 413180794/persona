@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -46,7 +47,16 @@ func buildInfo() update.Build {
 const usage = `usage:
   jarvisd launch <name> …   run claude with a launcher kept in 设置 › 模型 (from the local node)
   jarvisd hub [run]        run the hub (config ~/.jarvis/hub.json)
-  jarvisd hub pair         print the pairing URL, token and QR code
+  jarvisd hub pair [--legacy] [--android] print a pairing QR code and optional Android download link
+  jarvisd hub pair --machine <id>          print a pairing link for that link machine's jarvis-link (docs/link.md)
+  jarvisd hub pair --peer  print a code another hub pairs with this one by (hub mesh, docs/mesh.md)
+  jarvisd hub peer add <code>|-   pair this hub with the hub whose code it is
+  jarvisd hub peer list           the paired hubs and the ones found on the LAN
+  jarvisd hub peer remove <hub_id>
+  jarvisd hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
+                           unpair a hub (its credential is revoked on both sides)
+  jarvisd hub doctor       只读检查 hub 配置、网络和证书
+  jarvisd hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/admin.md)
   jarvisd hub tailcat-key  print the hub's tailcat key (created the first time), for "node tailcat init --hub"
   jarvisd node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
                            node running on this machine, relay to it instead
@@ -58,6 +68,8 @@ const usage = `usage:
                            for hub.json (docs/server.md「tailcat 打洞」)
   jarvisd node tailcat addr
                            print this machine's tailcat address again
+  jarvisd node reset-uid   give this computer a new machine uid (~/.jarvis/machine-uid): for a virtual machine cloned
+                           with another's home directory, which hubs would take for that one (docs/mesh.md)
   jarvisd hook             Claude Code hook entry (reads hook JSON on stdin)
   jarvisd mcp              Claude Code MCP server (stdio)
   jarvisd codex-start <file>
@@ -100,8 +112,38 @@ func main() {
 		switch sub {
 		case "run":
 			err = hub.Run(ctx, buildInfo())
+		case "doctor":
+			if len(os.Args) != 3 {
+				err = fmt.Errorf("hub doctor 不接受额外参数")
+			} else {
+				err = hub.Doctor(ctx, os.Stdout)
+			}
 		case "pair":
-			err = hub.Pair()
+			flags := flag.NewFlagSet("hub pair", flag.ContinueOnError)
+			legacy := flags.Bool("legacy", false, "使用主 token 打印旧格式二维码")
+			android := flags.Bool("android", false, "同时打印 Android 安装包的临时下载链接")
+			machine := flags.String("machine", "", "给 hub.json 里这台 kind 为 link 的电脑的 jarvis-link 配对")
+			peer := flags.Bool("peer", false, "生成和另一台 hub 互联的互联码（docs/mesh.md）")
+			if err = flags.Parse(os.Args[3:]); err == nil {
+				switch {
+				case flags.NArg() != 0:
+					err = fmt.Errorf("hub pair 不接受位置参数")
+				case *peer && (*machine != "" || *legacy || *android):
+					err = fmt.Errorf("--peer 不能和 --machine、--legacy、--android 一起用")
+				case *peer:
+					err = hub.PairPeer()
+				case *machine != "" && (*legacy || *android):
+					err = fmt.Errorf("--machine 不能和 --legacy、--android 一起用")
+				case *machine != "":
+					err = hub.PairMachine(*machine)
+				default:
+					err = hub.Pair(*legacy, *android)
+				}
+			}
+		case "admin":
+			err = hub.AdminCommand(ctx, os.Args[3:], os.Stdin, os.Stdout, os.Stderr)
+		case "peer":
+			err = hub.PeerCommand(os.Args[3:], os.Stdin, os.Stdout)
 		case "tailcat-key":
 			var k *tunnel.HubKey
 			if k, err = tunnel.LoadOrCreateHubKey(tunnel.HubKeyPath()); err == nil {
@@ -117,6 +159,10 @@ func main() {
 		}
 		if len(os.Args) > 2 && os.Args[2] == "tailcat" {
 			err = runNodeTailcat(ctx, os.Args[3:])
+			break
+		}
+		if len(os.Args) > 2 && os.Args[2] == "reset-uid" {
+			err = resetMachineUID()
 			break
 		}
 		var relayed bool
@@ -274,4 +320,19 @@ func runSysmon(ctx context.Context, n int) {
 	fmt.Printf("%d samples: %v each; jarvisd CPU %v over %v (%.3f%%), not counting iostat / vm_stat on macOS\n",
 		n+1, (took / time.Duration(n+1)).Round(time.Microsecond), cpu.Round(time.Millisecond), wall.Round(time.Second),
 		100*cpu.Seconds()/wall.Seconds())
+}
+
+// resetMachineUID makes a new ~/.jarvis/machine-uid; the node picks it up when it starts again.
+func resetMachineUID() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	uid, err := node.ResetMachineUID(filepath.Join(home, ".jarvis"))
+	if err != nil {
+		return err
+	}
+	fmt.Println(uid)
+	fmt.Fprintln(os.Stderr, "已换成新的机器 uid。重启这台电脑上的常驻 node（scripts/node-launchd.sh install 会重启它），hub 下次连上时就用新的。")
+	return nil
 }

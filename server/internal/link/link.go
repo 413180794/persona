@@ -1,0 +1,275 @@
+// Package link is jarvis-link, the small program that keeps a computer reachable from the hub when the hub cannot
+// reach it (a laptop on whatever network it is on), and the protocol it speaks with the hub. jarvis-link finds the
+// hub, tells it which machine it is, keeps the link up and hands each stream the hub opens on it to the computer's
+// resident node (`jarvisd node --attach`), byte for byte. It does nothing else: what a node does stays in jarvisd
+// (docs/link.md).
+package link
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"net/netip"
+	"net/url"
+	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/coder/websocket"
+)
+
+// The link is a WebSocket on the hub's TLS port; each node connection the hub opens on it is another WebSocket.
+const (
+	Path       = "/api/v1/link"
+	StreamPath = "/api/v1/link/stream"
+)
+
+// Close codes on the link besides the standard ones (1001: the hub is stopping).
+const (
+	CloseReplaced websocket.StatusCode = 4001 // a newer link of the same machine took over
+	CloseRevoked  websocket.StatusCode = 4002 // its credential was revoked
+	CloseRefused  websocket.StatusCode = 4003 // the hello did not match the credential
+)
+
+// Both ends ping every PingEvery and drop the link after PingTimeout without a pong, so a dead link is noticed
+// within about PingEvery+PingTimeout. These are settings, not measurements.
+const (
+	PingEvery   = 10 * time.Second
+	PingTimeout = 5 * time.Second
+)
+
+// Message is one JSON message on the link.
+type Message struct {
+	Type string `json:"type"` // hello | endpoints | node | open | open_failed
+	// hello (jarvis-link → hub, the first message): which machine, which build, and the hub URL it went to.
+	Machine string `json:"machine,omitempty"`
+	Version string `json:"version,omitempty"`
+	Address string `json:"address,omitempty"`
+	// endpoints (hub → jarvis-link): where else to look for the hub; and, from hubs that know (hub mesh, #293),
+	// what the hub is called and how many hubs its mesh has, itself included. Older hubs send neither.
+	Endpoints []Endpoint `json:"endpoints,omitempty"`
+	HubName   string     `json:"hub_name,omitempty"`
+	MeshHubs  int        `json:"mesh_hubs,omitempty"`
+	// node (hub → jarvis-link): whether the hub got through to the resident node.
+	Online bool `json:"online,omitempty"`
+	// open (hub → jarvis-link) asks for stream ID; open_failed answers that it could not be opened.
+	ID string `json:"id,omitempty"`
+	// open_failed, node: why not.
+	Error string `json:"error,omitempty"`
+}
+
+// Endpoint is a hub URL on its TLS port and what kind of address it is.
+type Endpoint struct {
+	URL  string `json:"url"`
+	Kind string `json:"kind"` // lan | ipv6 | name | ipv4
+	// Manual: added on this computer (jarvis-link address add); kept when the hub sends its own list.
+	Manual bool `json:"manual,omitempty"`
+}
+
+// Config is ~/.jarvis/link.json (0600), written by `jarvis-link pair`. The fields at the top are active mode's (this
+// computer dials the hub); Passive is passive mode's (the hub dials this computer), kept apart so either mode can be
+// switched back to without pairing again.
+type Config struct {
+	Hub     string `json:"hub"`     // the hub's id
+	Machine string `json:"machine"` // this computer in the hub's hub.json
+	// HubName is what the hub calls itself, as it last said (endpoints); empty until a hub that says it.
+	HubName string `json:"hub_name,omitempty"`
+	// FP pins the hub: SHA-256 of its TLS SubjectPublicKeyInfo, base64url (the hub's certificate is self-signed).
+	FP        string     `json:"fp"`
+	Token     string     `json:"token"`
+	Endpoints []Endpoint `json:"endpoints"`
+	// Mode is ModeActive (also when empty: files from before passive mode) or ModePassive.
+	Mode    string   `json:"mode,omitempty"`
+	Passive *Passive `json:"passive,omitempty"`
+}
+
+// The two modes (docs/link.md「被动模式」).
+const (
+	ModeActive  = "active"  // jarvis-link dials the hub's /api/v1/link
+	ModePassive = "passive" // the hub dials the TLS port jarvis-link listens on
+)
+
+// CurrentMode is the mode c is in.
+func (c *Config) CurrentMode() string {
+	if c != nil && c.Mode == ModePassive {
+		return ModePassive
+	}
+	return ModeActive
+}
+
+// ErrUnpaired: link.json has no credential for active mode (never paired, or only for passive mode). It is an
+// fs.ErrNotExist, as a missing file is.
+var ErrUnpaired = fmt.Errorf("not paired for this mode: %w", os.ErrNotExist)
+
+// DefaultPath is where the credential lives.
+func DefaultPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".jarvis", "link.json")
+}
+
+// AttachSocket is the resident node's socket (internal/node/attach.go), the one place streams go.
+func AttachSocket() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".jarvis", "node-attach.sock")
+}
+
+// Load reads active mode's credential; the error wraps fs.ErrNotExist before pairing (ErrUnpaired when the file only
+// has passive mode's).
+func Load(path string) (*Config, error) {
+	c, err := Read(path)
+	if err != nil {
+		return nil, err
+	}
+	if c.Token == "" && c.FP == "" && c.Machine == "" {
+		return nil, ErrUnpaired
+	}
+	if c.Token == "" || c.FP == "" || c.Machine == "" {
+		return nil, fmt.Errorf("%s is incomplete: pair again (jarvis-link pair)", path)
+	}
+	return c, nil
+}
+
+// Read reads link.json as it is, whichever mode it is in and paired or not; the error wraps fs.ErrNotExist when there
+// is none.
+func Read(path string) (*Config, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var c Config
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return &c, nil
+}
+
+// Update changes the file under a lock: the running link (new endpoints from the hub) and `jarvis-link address`
+// may write it at the same time.
+func Update(path string, change func(*Config) error) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := lockFile(lock, true); err != nil {
+		return err
+	}
+	var c Config
+	if b, err := os.ReadFile(path); err == nil {
+		if err := json.Unmarshal(b, &c); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := change(&c); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// kindOf says what kind of address a hub URL is: the link tries lan first (docs/link.md「选路」).
+func kindOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "name"
+	}
+	ip, err := netip.ParseAddr(u.Hostname())
+	if err != nil {
+		return "name"
+	}
+	switch ip = ip.Unmap(); {
+	case ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback():
+		return "lan"
+	case ip.Is6():
+		return "ipv6"
+	default:
+		return "ipv4"
+	}
+}
+
+func rank(kind string) int {
+	switch kind {
+	case "lan":
+		return 0
+	case "ipv6":
+		return 1
+	case "name":
+		return 2
+	}
+	return 3
+}
+
+// ranked orders candidates for a race: LAN first, then public IPv6, names, IPv4; manual ones before the hub's of the
+// same kind; duplicates dropped.
+func ranked(eps []Endpoint) []Endpoint {
+	out := make([]Endpoint, 0, len(eps))
+	seen := map[string]bool{}
+	for _, e := range eps {
+		if !seen[e.URL] {
+			seen[e.URL] = true
+			out = append(out, e)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b Endpoint) int {
+		if d := rank(a.Kind) - rank(b.Kind); d != 0 {
+			return d
+		}
+		switch {
+		case a.Manual && !b.Manual:
+			return -1
+		case b.Manual && !a.Manual:
+			return 1
+		}
+		return 0
+	})
+	return out
+}
+
+// normalize turns what a person types into a candidate: an https URL, or a host / host:port on the hub's TLS port
+// (taken from the candidates there are).
+func normalize(raw string, have []Endpoint) (Endpoint, error) {
+	raw = strings.TrimSpace(raw)
+	if !strings.Contains(raw, "://") {
+		host, port := raw, ""
+		if h, p, err := net.SplitHostPort(raw); err == nil {
+			host, port = h, p
+		}
+		if port == "" {
+			for _, e := range have {
+				if u, err := url.Parse(e.URL); err == nil && u.Port() != "" {
+					port = u.Port()
+					break
+				}
+			}
+		}
+		if port == "" {
+			return Endpoint{}, fmt.Errorf("%q 没有端口：写成 https://地址:端口", raw)
+		}
+		raw = "https://" + net.JoinHostPort(strings.Trim(host, "[]"), port)
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return Endpoint{}, fmt.Errorf("%q 不是 https 地址：链路只走 hub 的 TLS 端口", raw)
+	}
+	if n, err := strconv.Atoi(u.Port()); u.Port() != "" && (err != nil || n < 1 || n > 65535) {
+		return Endpoint{}, fmt.Errorf("%q 的端口不对", raw)
+	}
+	u.Path = strings.TrimRight(u.Path, "/")
+	return Endpoint{URL: u.String(), Kind: kindOf(u.String()), Manual: true}, nil
+}

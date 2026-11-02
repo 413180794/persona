@@ -13,3 +13,110 @@
 - 统一默认启动器可能是 Codex，不能按启动器名字猜 Agent。仅在创建明确返回 `codex_needs_prompt` 时走原来的文字同步创建；首条附件不能偷偷变成后续 steer 或伪造初始化消息。失败内容要可修改、移除附件并重试。
 - 图片单个 8 MB 仍可能多张累计超过 `/messages` 的 32 MiB JSON 上限；发送前考虑 base64 膨胀检查总量。乐观气泡需要把图一起带过真实会话跳转，收到 transcript 的文字和图片后再清理。
 - 浏览器回归用延后返回的创建 / 发送请求，证明弹窗已关闭、本地会话已打开但后端尚未完成；图片选择、移除、草稿冲突同 ID 重试、切页不抢焦点都要检查。截图里的图片不能用透明像素占位；验证 `naturalWidth` 并用可见的演示图。
+
+## 管理界面的独立入口（web/admin，docs/admin.md）
+
+- Vite 多页面：`build.rollupOptions.input` 加 `admin/index.html` 后，dev server 的 SPA 回退仍然给根 `index.html`，`/admin/machines`
+  这类前端路由会打开普通网页；`vite.config.ts` 里一个只在 dev 生效的小插件把 `/admin/*` 改写到 `/admin/index.html`。
+- 只给管理界面用的代码要输出到 `admin/assets/`（`entryFileNames` / `chunkFileNames` 按模块路径分），hub 才能整个前缀按访问范围拦；
+  构建后检查 `dist/assets/` 里没有 `/api/v1/admin` 之类的字符串。
+- 无头 Chrome（`--headless=new`）的窗口最小 500 宽，拍 390 宽的窄屏用 CDP 的 `Emulation.setDeviceMetricsOverride`；深色用
+  `Emulation.setEmulatedMedia` 设 `prefers-color-scheme`。
+
+## 对齐手机端这一轮（#297，2026-11-02）
+
+### 依赖和开发环境
+
+- 这台开发机的 npm 默认源是公司内部的镜像：`npm i` 会把内部域名写进 `package-lock.json` 的 `resolved`（隐私扫描要拦的东西）。加依赖一律带
+  `--registry=https://registry.npmjs.org/`，加完 `grep -o '"resolved": "https://[^/]*' web/package-lock.json | sort | uniq -c` 只能有 registry.npmjs.org。
+- xterm 只在打开终端时动态 import：Vite dev 第一次遇到它时才预构建依赖、重新载入页面，那一次面板卡在「正在连接终端」。`vite.config.ts` 的 `optimizeDeps.include` 先把它预构建好（只影响 dev，构建产物没事）。
+
+### xterm.js
+
+- 回滚行数为 0 时 xterm 把滚轮翻成 ↑ / ↓ 经 `onData` 发出去：要 `attachCustomWheelEventHandler` 自己处理滚轮，而且接管、只看都返回 false。
+- 自定义按键处理返回 false 时 xterm 不阻止冒泡，要自己 `preventDefault` + `stopPropagation`（Shift+Enter）；xterm 自己处理的键（含 Esc）已经阻止冒泡，
+  所以终端里按 Esc 不会触发对话页的「Esc 中断」。
+- xterm 6 的滚动层把画面裁成外层元素的大小：只看时把 `.xterm` 的宽高设成 `.xterm-screen` 的，外层 `overflow:auto` 才能横向滚；FitAddon 量父元素，父元素保持面板大小，接管时算出的行列才对。
+- DOM 渲染器不会把中文字撑满两格，中文字之间有空隙。
+
+### 渲染和组件
+
+- react-markdown 不渲染原始 HTML（README 里的 `<img>`、飞书导出表格里的 `<br>` 会原样显示成字），默认的 URL 过滤会把 `data:` / `blob:` / `jarvis:` 链接清成空：
+  先把 HTML 转成 Markdown / 占位字符，自定义 `urlTransform` 放行需要的协议。
+- `pop-in` 这类关键帧动画的是 `transform`，会盖掉行内的 `transform: translate(...)`：浮层定位用 CSS 的 `translate` 属性。
+- 只渲染看得见的行的列表，行数变少（JSON 从格式化切回原文）时窗口会落后一帧：先把窗口截到行数以内，否则越界。
+- 只在悬停时出现的行内按钮在触屏上要整个藏掉（`@media (hover:hover)`），否则是看不见、一碰就触发的区域。
+- 两栏的页（收件箱、知识库）按页面自己的宽度切单栏（Tailwind v4 的 `@container` / `@4xl:`），不按窗口：右侧面板一开，主区变窄，按窗口判断会挤坏。
+- SVG 曲线按真实像素宽度画（ResizeObserver），不用 `preserveAspectRatio="none"`：坐标轴上的字会被拉伸。
+- 订阅模块级 store、第一次拉取要放 `useEffect`，不能在 render 里做：React 会报「渲染中更新别的组件」。
+- `JSON.parse` 会把像整数的键排到最前、让 64 位数字丢精度：只是给人看的格式化，就只重新缩进，不解析值。
+
+### 和 hub 打交道
+
+- `api()` 没显式传 token 时任何 401 都会把浏览器登出；lark-connector 掉了飞书登录也回 401。`/lark/raw`、`/lark/moments` 这类代理的请求显式传 `token: getToken()`。
+- `PUT /assistant/tasks/{id}` 整体替换字段（不带 `session_id` 就清空），连只切开关也要带完整任务；Go 的零时间是 `0001-01-01T00:00:00Z`，`at` 没有就省掉，不能发空串。
+- 文件分页：后续页用最初请求的 `path` + `cwd` 取，不能用服务端规范化后的 `path`；第一页的 `truncated` 一直是 true，「只显示了开头」看第一页有没有 `next`。
+- 收件箱的件 id 含 `:`；「飞书」筛选看 `source`，不看 `account`（真实 hub 的飞书条目 account 是 `feishu`，假 hub 是 `lark`）。
+- 邮件 HTML 的 iframe：`sandbox="allow-same-origin"`、不给 `allow-scripts`，能量高度、拦链接，脚本跑不了。
+- 知识库打标传空的标签数组 hub 不改（`omitempty`），清不空标签，iOS 一样。
+- 别的页面写的 `<jarvis-context>` 属性按 `kind`、`title`、`url` 的顺序：iOS 的解析正则要求三个都在、按这个顺序。
+
+### 浏览器里验证
+
+- 截图和点按用 Playwright（`playwright-core` + 本机 Chrome，`channel: "chrome"`），脚本放仓库外。`page.routeWebSocket` 能改 WS 消息：
+  假 hub 没有互联字段时，把 `machines` 推送和 `/machines` 加上两个 `hub_id` 就能看互联的样子，不用改 `mock_hub.py`。
+- 多人共用一个假 hub 时，写接口（`/reply`、`/doc/status`、`/reconnect`、改 Claude 设置、打标）会改共享状态：用 `page.route` 拦下来验证请求体，或者测完改回去。
+  假 hub 的 `/reconnect` 会真的把离线机器改成在线。
+- `page.evaluate(() => import("/src/lib/x.ts"))` 拿到的不一定是页面在用的模块实例（改过文件后 Vite 给导入方加 `?t=`）：从 `performance.getEntriesByType("resource")` 找带 `?t=` 的地址。
+
+## 补齐差距第二轮（#433，2026-11-03）
+
+六条车道并行（对话展示、消息操作、Agents 列表和机器页、终端、助手、收件箱和翻译），合进一个分支后统一在浏览器里验证。
+
+### 合并和验证
+
+- 并行改同一个对话页，冲突集中在 `ChatView.tsx` 的几处：发送中的气泡（本地 `pending`、排队消息要藏掉的、跨页的 `outbox`）各车道各加了一份判断。合并时统一成一个
+  「还在路上的」数（`outgoing` = 没进队列的本地气泡 + 没失败的 outbox），「最后一行是不是 live」「能不能重试」都看它，不然排队消息会让最后一段一直转圈。
+- 新建 Agent 带预设打开时，「当前电脑不在线就选第一台在线的」那个 effect 和预设的 `setMid` 在同一次提交里先后执行，后一个赢：预设没生效、还看不出来（默认就是第一台）。
+  预设待生效时那个 effect 要让路。
+- 查看器里的图按 `max-w-full max-h-full` 放，小图（截图缩略、36 px 的图标）就比对话里的缩略图还小：按容器大小算适配尺寸（`fitRect`，允许放大），双击才看原始大小。
+- 浏览器验证用 Playwright 的 `locator.click({ button: "right" })` 能测右键菜单；`text=` 选择器会先命中侧边栏里同名的会话（「韩梅梅」），限定在 `main` 里找。
+- 假 hub 的终端推送线程在浏览器关掉后写已关闭的 socket 会打一段 `Bad file descriptor` 的栈，同一时刻代理过去的请求可能回 500：看到偶发的 500 先看是不是这个，不是网页的问题。
+
+### 对话页
+
+- 闭包里改的 `let` 变量，TypeScript 在外面的循环里仍按初值收窄（`let x: T | null = null` 在循环里一直是 `null`，`x.id` 报 `never`）：放进一个对象（`const last = { raw: null as T | null }`）。
+- `encodeURIComponent` 会把子 Agent 会话 id 里的 `@` 编成 `%40`：真实 hub（Go 的 `PathValue`）会解码，假 hub 的路由要自己 `unquote`。
+- 列表每行都传同一个 `now` / `streaming` 会让每秒 / 每个 delta 所有行的 `memo` 都失效：只给正在进行的那一行传。
+- 触屏长按要自己计时（iOS Safari 长按不发 `contextmenu`，安卓约 500 ms 后再发一个）：`pointerType === "touch"` 的 `pointerdown` 起 450 ms 计时，移动超过 8 px 取消，开过之后 1 秒内的
+  `contextmenu` 只 `preventDefault`。消息加 `select-none` + `-webkit-touch-callout:none`，所以菜单里要有「选择文本」。
+- `Menu` 只认元素做锚点：在点击处临时放一个 `position:fixed`、0×0 的 span，关的时候删掉（别在 setState 的更新器里做删除这种副作用）。
+- 自己的消息气泡下面原来没有操作行，加一行会改整段对话的间距：悬停条用 `absolute right-full` 放在气泡左边（本来就有 12% 的留白）。
+- 浏览器不让顶层导航到 `data:` 地址：先 `fetch(dataURL).blob()` 再 `URL.createObjectURL`。写图片到剪贴板（`ClipboardItem`）只在安全上下文里可用，明文 HTTP 的 hub 上要藏掉按钮。
+- 查看器、编辑器里的 Esc 要在 window 的捕获阶段处理并 `stopPropagation`，否则对话页的「Esc 中断」会一起触发。
+
+### 侧边栏、机器页
+
+- 链接行里不能嵌按钮：行的 ⋯ 做成 `<a>` 的兄弟节点，绝对定位、`group-hover/row:flex`（Tailwind v4 的 `group-hover` 本来就只在 `@media (hover:hover)` 生效）；悬停时行尾的提示和角标
+  `group-hover/row:invisible` 让开，否则被 ⋯ 盖住一半。右键 / 菜单键走 `<a>` 的 `onContextMenu`。
+- `Icon` 是 `aria-hidden` 的、不收 `aria-label`（TS 不检查带连字符的 JSX 属性，传了也不报错）：要读出来就在外面包 `<span title>` + `sr-only` 文字。
+- 侧边栏宽约 280 px，四个筛选胶囊（带圆点和件数）按 `px-2 gap-1` 会折成两行：收紧到 `px-[7px] gap-0.5`。
+- 曲线图上的参考线标签（负载图的「N 核」）画在线条下面会被数据线穿过：画在线条之后，加一圈页面底色的描边（`paint-order: stroke`）。
+
+### 终端（xterm.js）
+
+- DOM 渲染器的中文空隙来自 `DomRendererRowFactory`：`spacing = width * cellWidth - 量出来的字宽`，写成 `letter-spacing`。让中文字体量出来正好两格就没有空隙：`FontFace` 的 `size-adjust`
+  只缩放这一个回退字体，`unicode-range` 限定中日韩，不影响英文的格宽。
+- xterm 6 的公开 API 没有「光标是否隐藏」（DECTCEM）：页面自己画屏幕时从 `_core.coreService.isCursorHidden` 读，读不到就不画光标。
+- 读历史时要停住画面就不能往 xterm 写（没法「先不显示」），帧要自己攒着；`FrameOrder` 照常前进，攒太多就丢掉、回来时不带 epoch 整帧重订，否则会从没画过的 seq 往后接。
+- 在 xterm 上方插入历史后要自己保持滚动位置，并关掉浏览器的滚动锚定（`overflow-anchor: none`），否则两边都加一次会跳。
+
+### 助手、收件箱
+
+- 动的形象就是 APNG：`<img>` 自己会播，但 `prefers-reduced-motion` 管不到它（不是 CSS 动画），要停只能画到 canvas 上（`drawImage` 取第一帧）。
+- 别的页面替会话发消息，等 HTTP 返回再跳的话，跳过去以后要等记录推回来才看到这条：先跳，气泡放 store 里（按 `mid/sid`）。新开的助手对话 `POST /assistant/conversations`
+  要等对话起来才返回（hub 超时 110 秒），这一段只能在原页面转圈；返回后把提示词记成「已送达」的气泡再跳。
+- hub 的 `/mail/send` 的 `references` 是**字符串**（`mail.SendRequest`），iOS 的 `SendMail.references` 是 `[String]`：iOS 带 References 的手动回复会被 hub 以 400 拒掉（看代码推断，没实测）。网页按字符串发。
+- 可见即读要有「重新看一眼」的时机：IntersectionObserver 只在交叉比例跨过阈值时回调，页面在后台 / 有对话框时进来的消息，回到前台、对话框关掉后不会再回调。记下当前在视口里的位置，
+  `visibilitychange`、`<body>` 子节点变化（对话框是 portal 进 body 的）时再按门禁看一遍；阈值要密（每 0.1），比列表还高的消息才能达到「占列表一半高」。
+- 话题回复（展开的 thread）里的消息位置不是会话的位置：只给列表顶层的消息加 `data-seen-pos`。

@@ -8,7 +8,7 @@ It serves machines, agents, conversations, interactions and the inbox, enough fo
 does not know are logged to stderr as MISSING. Timestamps are relative to when it starts. See docs/testing.md.
 """
 import base64, unicodedata
-import copy, hashlib, json, os, re, struct, sys, threading, time, uuid
+import argparse, copy, hashlib, json, os, re, shutil, signal, socket, ssl, struct, subprocess, sys, tempfile, threading, time, uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
@@ -16,6 +16,220 @@ from urllib.parse import urlparse, parse_qs, unquote
 PORT = int(os.environ.get("PORT", "18760"))
 NOW = datetime.now(timezone.utc)
 LOG = sys.stderr
+HUB_ID = os.environ.get("MOCK_HUB_ID") or str(uuid.uuid4())
+TLS = {"port": 0, "fp": "", "server": None}
+ENDPOINTS = []
+CLIENTS = {}
+FAULT_LOCK = threading.Lock()
+LOST_RECEIPT = False
+
+
+def features():
+    # Match proto.Features, retaining the existing terminal fixture switches.
+    return ["error_codes", "client_hello", "heartbeat", "app_ping", "client_msg_id", "send_refusals",
+            "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
+            "tls", "endpoints", "connectors"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
+                ["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])
+
+
+def identity():
+    return {"hub_id": HUB_ID, "tls_port": TLS["port"], "fp": TLS["fp"]}
+
+
+# ---------- hub mesh (docs/plan-hub-mesh.md 2.6) ----------
+# Optional: this mock as one hub of a mesh group, so a client can be tried against several fake hubs (two groups, one
+# of them two hubs). With none of these set every answer is exactly what it was before.
+#   MOCK_HUB_ID=hub-b                    a fixed hub_id (otherwise a random uuid each run)
+#   MOCK_HUB_NAME=公司                    the mesh fields: hub_name in health / endpoints / hello, mesh in hello, and
+#                                        hub_id / hub_name / machine_uid / route on every machine
+#   MOCK_MESH_PEERS='[{"hub_id":"hub-c","name":"公司 2","endpoints":["http://127.0.0.1:18762"]}]'
+#                                        the group's other hubs, after this one in mesh.hubs (missing fields: defaults)
+#   MOCK_MACHINE_OWNER='{"macbook":"hub-c"}'   machines another hub of the group owns: its hub_id / hub_name,
+#                                        route via peer, 1 hop (the hub_id must be one of the peers)
+#   MOCK_MACHINE_NAMES='{"server":"工作服务器"}'   machines' display names (works without MOCK_HUB_NAME too)
+#   MOCK_MACHINES_KEEP=server,macbook     only these machines, and only their sessions and interactions (works alone too)
+# GET /mock/mesh: {hub_id, hub_name, peers, owners}; GET /mock/mesh?peers=<url-encoded JSON array> replaces the peers
+# (the next WebSocket's hello carries them; machines owned by a hub no longer among them drop out).
+def mesh_peers(raw, self_id):
+    """The group's other hubs from a JSON array, each with every field of a mesh.hubs entry. ValueError otherwise."""
+    peers = json.loads(raw)
+    if not isinstance(peers, list):
+        raise ValueError("peers 必须是 JSON 数组")
+    out, seen = [], {self_id}
+    for p in peers:
+        hid = p.get("hub_id") if isinstance(p, dict) else None
+        if not isinstance(hid, str) or not hid:
+            raise ValueError("peers 的每一项都必须是带 hub_id 字符串的对象")
+        if hid in seen:
+            raise ValueError("peers 里的 hub_id 重复，或者和本 hub 相同：%s" % hid)
+        seen.add(hid)
+        entry = {"hub_id": hid, "name": hid, "online": True, "self": False, "endpoints": [], "tls_port": 0, "fp": ""}
+        entry.update({k: v for k, v in p.items() if k != "self"})
+        if not isinstance(entry["name"], str) or not isinstance(entry["online"], bool) or \
+                not isinstance(entry["endpoints"], list) or not all(isinstance(e, str) for e in entry["endpoints"]):
+            raise ValueError("peer %s 的字段类型不对：name 字符串、online 布尔、endpoints 字符串数组" % hid)
+        out.append(entry)
+    return out
+
+
+def json_strings(raw, what):
+    """A JSON object of strings to strings (MOCK_MACHINE_OWNER, MOCK_MACHINE_NAMES). ValueError otherwise."""
+    obj = json.loads(raw)
+    if not isinstance(obj, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in obj.items()):
+        raise ValueError("%s 必须是字符串到字符串的 JSON 对象" % what)
+    return obj
+
+
+try:
+    MESH = {"name": os.environ.get("MOCK_HUB_NAME", ""), "peers": mesh_peers(os.environ.get("MOCK_MESH_PEERS") or "[]", HUB_ID)}
+    MESH["owners"] = json_strings(os.environ.get("MOCK_MACHINE_OWNER") or "{}", "MOCK_MACHINE_OWNER")
+    _strays = sorted(set(MESH["owners"].values()) - {p["hub_id"] for p in MESH["peers"]})
+    if _strays:
+        raise ValueError("MOCK_MACHINE_OWNER 里的 hub_id 不在 MOCK_MESH_PEERS 里：%s" % ", ".join(_strays))
+    MACHINE_NAMES = json_strings(os.environ.get("MOCK_MACHINE_NAMES") or "{}", "MOCK_MACHINE_NAMES")
+except ValueError as _e:
+    sys.exit("mock hub 配置错误：%s" % _e)
+MACHINES_KEEP = {x.strip() for x in os.environ.get("MOCK_MACHINES_KEEP", "").split(",") if x.strip()} or None
+
+
+def mesh_on():
+    return bool(MESH["name"])
+
+
+def hub_name_field():
+    """hub_name for health, endpoints and the hello, in mesh mode only."""
+    return {"hub_name": MESH["name"]} if mesh_on() else {}
+
+
+def mesh_hello():
+    """The hello's extra fields in mesh mode: hub_name, and the group's hubs with this one first."""
+    if not mesh_on():
+        return {}
+    me = {"hub_id": HUB_ID, "name": MESH["name"], "online": True, "self": True,
+          "endpoints": ["http://127.0.0.1:%d" % PORT], "tls_port": TLS["port"], "fp": TLS["fp"]}
+    return {"hub_name": MESH["name"], "mesh": {"hubs": [me] + [dict(p) for p in MESH["peers"]]}}
+
+
+def mesh_state():
+    """GET /mock/mesh."""
+    return {"hub_id": HUB_ID, "hub_name": MESH["name"] or None, "peers": MESH["peers"], "owners": MESH["owners"]}
+
+
+def reshaped():
+    """Whether any of the variables above changes what machines, sessions or interactions are served."""
+    return mesh_on() or bool(MACHINE_NAMES) or MACHINES_KEEP is not None or bool(MESH["owners"])
+
+
+def kept(mid):
+    """Whether a machine (and its sessions and interactions) is served: MOCK_MACHINES_KEEP, and its owner still a peer."""
+    owner = MESH["owners"].get(mid)
+    return (MACHINES_KEEP is None or mid in MACHINES_KEEP) and (owner is None or any(p["hub_id"] == owner for p in MESH["peers"]))
+
+
+def machine_uid(mid):
+    # Derived from the machine id alone: two fake hubs that list the same machine id list the same computer.
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "jarvis-mock-machine:" + mid))
+
+
+def mesh_machine(m):
+    """The four mesh fields of a machine: who owns it, its stable uid and the route to it (rtt_ms only when online)."""
+    uid = machine_uid(m["id"])
+    owner = MESH["owners"].get(m["id"])
+    if owner:
+        peer = next((p for p in MESH["peers"] if p["hub_id"] == owner), {"name": owner})  # gone: /mock/mesh?peers=
+        hub_id, name, route, rtt = owner, peer["name"], {"via": "peer", "hops": 1}, 20 + uuid.UUID(uid).int % 30
+    else:
+        via = m.get("kind") if m.get("kind") in ("local", "ssh", "tailcat", "link") else "ssh"
+        rtt = 1 + uuid.UUID(uid).int % 3 if via == "local" else 6 + uuid.UUID(uid).int % 20
+        hub_id, name, route = HUB_ID, MESH["name"], {"via": via, "hops": 0}
+    if m.get("online"):
+        route["rtt_ms"] = rtt
+    return {"hub_id": hub_id, "hub_name": name, "machine_uid": uid, "route": route}
+
+
+def out_machine(m):
+    """One machine as the hub serves it (the fixture itself when nothing reshapes it)."""
+    name = MACHINE_NAMES.get(m["id"])
+    if name is None and not mesh_on():
+        return m
+    m = dict(m)
+    if name is not None:
+        m["name"] = name
+    if mesh_on():
+        m.update(mesh_machine(m))
+    return m
+
+
+def out_machines():
+    """MACHINES as GET /api/v1/machines and the machines push serve them."""
+    if not reshaped():
+        return MACHINES
+    return [out_machine(m) for m in MACHINES if kept(m["id"])]
+
+
+def out_by_machine(rows):
+    """Sessions or interactions of the machines served only (each row has machine_id)."""
+    if not reshaped():
+        return rows
+    return [x for x in rows if kept(x.get("machine_id"))]
+
+
+def endpoint(host, port, scheme, kind):
+    return {"url": "%s://%s:%d" % (scheme, host, port), "kind": kind, "port": port,
+            "scheme": scheme, "seen_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+
+
+def tls_context(context=None):
+    openssl = shutil.which("openssl")
+    if not openssl:
+        raise RuntimeError("启用 TLS 需要 openssl，未找到该命令")
+    with tempfile.TemporaryDirectory(prefix="mock-hub-tls-") as directory:
+        key, cert = os.path.join(directory, "key.pem"), os.path.join(directory, "cert.pem")
+        subprocess.run([openssl, "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+                        "-nodes", "-keyout", key, "-out", cert, "-days", "1", "-subj", "/CN=example.com"],
+                       check=True, capture_output=True, timeout=15)
+        os.chmod(key, 0o600)
+        public = subprocess.run([openssl, "x509", "-in", cert, "-pubkey", "-noout"],
+                                check=True, capture_output=True, timeout=15).stdout
+        spki = subprocess.run([openssl, "pkey", "-pubin", "-outform", "DER"], input=public,
+                              check=True, capture_output=True, timeout=15).stdout
+        fp = base64.urlsafe_b64encode(hashlib.sha256(spki).digest()).decode().rstrip("=")
+        context = context or ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert, key)
+    return context, fp
+
+
+def fault(name, enabled=True):
+    """POST /mock/fault {"fault":"lost_receipt|endpoint_change|cert_mismatch","enabled":true}.
+
+    Lost receipts affect the next successful API mutation. Other faults fire once per request.
+    Certificate mismatch deliberately retains the advertised pin while changing the served key.
+    """
+    global LOST_RECEIPT
+    with FAULT_LOCK:
+        if name == "lost_receipt":
+            LOST_RECEIPT = enabled
+        elif name == "endpoint_change":
+            if enabled:
+                port = TLS["port"] or PORT
+                scheme = "https" if TLS["port"] else "http"
+                ENDPOINTS[:] = [endpoint("[2001:db8::%x]" % (uuid.uuid4().int & 0xffff or 1),
+                                        port, scheme, "ipv6")] + [e for e in ENDPOINTS if e["kind"] != "ipv6"]
+                event = {"type": "endpoints", "endpoints": list(ENDPOINTS)}
+                clients = list(CLIENTS.values())
+        elif name == "cert_mismatch":
+            if enabled:
+                if TLS["server"] is None:
+                    raise ValueError("cert_mismatch 需要先启用 --tls-port")
+                _, fp = tls_context(TLS["server"].socket.context)
+                print("TLS 已更换证书，当前 fp=%s（保留原公告指纹）" % fp, flush=True)
+        else:
+            raise ValueError("未知故障：%s" % name)
+    if name == "endpoint_change" and enabled:
+        for client in clients:
+            if "endpoints" in client["features"]:
+                try: client["send"](event)
+                except OSError: pass
 
 
 def ago(minutes=0, hours=0, days=0):
@@ -241,8 +455,33 @@ if os.environ.get("MOCK_AGENTS"):
                                      status, state, proj, sidx, "t%d" % slot, slot, n * 3,
                                      "第 %d 个 Agent 的最新一句话，看看细列表和卡片里会不会挤在一起。" % n,
                                      pending=1 if state == "needs_you" else 0))
+# MOCK_TREE=1: a mid-size Agents tree for screenshots of 电脑 → 空间 → 会话: every online machine gets quiet spaces
+# (all finished and seen) that sit folded at the bottom of their machine, and one muted agent (GET /api/v1/mutes).
+# (Read straight from the environment: the module's MOCK_TREE is the files tree further down.)
+TREE_MUTED = []
+if os.environ.get("MOCK_TREE"):
+    n = 0
+    for mid, home, proj, sidx, rows in (
+            ("macbook", "/Users/me", "notes-app", 4, (("idle", "笔记同步的冲突合并", 180), ("idle", "导出 PDF 的分页", 300))),
+            ("macbook", "/Users/me", "dotfiles", 5, (("idle", "整理 zsh 启动脚本", 60 * 20),)),
+            ("studio", "/Users/me", "ml-train", 6, (("working", "调学习率预热", 3), ("idle", "清理旧的检查点", 140),
+                                                   ("idle", "画损失曲线", 200))),
+            ("studio", "/Users/me", "archive", 7, (("idle", "旧项目归档", 60 * 30), ("idle", "迁移老照片库", 60 * 40),
+                                                  ("idle", "压缩历史日志", 60 * 50))),
+            ("server", "/home/me", "infra", 8, (("idle", "续期证书", 400), ("idle", "备份脚本加校验", 500))),
+            ("server", "/home/me", "monitoring", 9, (("unread", "告警规则去重", 25),))):
+        for slot, (state, title, minutes) in enumerate(rows, 1):
+            n += 1
+            sid = "d4e6f8a0-0000-4000-8000-%012d" % n
+            status = {"working": "working", "idle": "idle", "unread": "done"}[state]
+            extra = {"seen_at": ago(minutes=minutes - 1)} if state == "idle" else {}
+            SESSIONS.append(sess(mid, sid, title, "%s/code/%s" % (home, proj), status, state, proj, sidx, "t%d" % slot, slot,
+                                 minutes, "「%s」这一步做完了，结果写在最后一条回复里。" % title, **extra))
+            if title == "调学习率预热":
+                TREE_MUTED.append("%s/%s" % (mid, sid))
 ORIG_STATE = {s["session_id"]: (s["state"], s["status"]) for s in SESSIONS}
 SEEN = []  # session ids marked seen (GET /mock/seen)
+PINS = {"spaces": ["macbook/weather"], "sessions": []}  # GET / PUT /api/v1/pins: what the Agents list keeps on top
 
 
 def mark_seen(sid):
@@ -287,6 +526,16 @@ ASSISTANT = [
     assistant_sess(ASK4, "整理这个季度的读书笔记", 60 * 50, "第 30 本整理好了。"),
 ]
 
+# ---------- the assistant's schedule (设置 › 助手 › 主动做事; Jarvis › 资料 › 定时任务) ----------
+# One list, like the hub's (assistant_schedule.go): every day at a time, every N minutes, or once. GET
+# /api/v1/assistant/tasks serves it whole; the routines (the daily tasks) and follow-ups (the enabled once / interval
+# ones, by their next run) are the hub's two older views of the same list, which the Android app reads and writes.
+# Times follow the rules in UTC+8 (the screenshot simulators' zone): a routine's last run is its last scheduled time.
+# MOCK_SCHEDULE=empty serves no tasks or runs (the empty pages); GET /mock/schedule/reset restores them.
+SCHEDULE_TZ = timezone(timedelta(hours=8))
+WEEKDAYS = [1, 2, 3, 4, 5]
+
+
 # MOCK_ASSISTANT_SIDEBAR=1: the Jarvis sidebar's 最近 holds more than the 30 it shows before 查看全部
 # (`AssistantSidebar.recentCount`), and one row in each state it marks at the end: waiting for you (red dot), unread
 # (blue dot), working (spinner).
@@ -298,39 +547,64 @@ if os.environ.get("MOCK_ASSISTANT_SIDEBAR") == "1":
                   pending_interactions=1 if _state == "needs_you" else 0)
         ASSISTANT.append(_s)
 
-# ---------- the assistant's schedule (Jarvis › 资料 › 定时任务) ----------
 def next_at(hhmm, weekdays):
-    """The routine's next run after NOW, in UTC+8 (the screenshot simulators' zone)."""
-    tz = timezone(timedelta(hours=8))
+    """The routine's next run after NOW, in UTC+8 (the screenshot simulators' zone). Like the hub, it is written in
+    the user's zone with its offset (+08:00), not in UTC."""
+    tz = SCHEDULE_TZ
     h, m = map(int, hhmm.split(":"))
     local = NOW.astimezone(tz)
     for i in range(8):
         d = (local + timedelta(days=i)).replace(hour=h, minute=m, second=0, microsecond=0)
         if d > local and (not weekdays or d.isoweekday() in weekdays):
-            return d.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            return d.isoformat()
 
 
-# One list, like the hub's (assistant_schedule.go): every day at a time, every N minutes, or once.
+def prev_at(hhmm, weekdays, back=0, late=timedelta()):
+    """The routine's scheduled times before NOW, newest first (back=0 is the last one), plus how late it ran."""
+    h, m = map(int, hhmm.split(":"))
+    local = NOW.astimezone(SCHEDULE_TZ)
+    found = []
+    for i in range(60):
+        d = (local - timedelta(days=i)).replace(hour=h, minute=m, second=0, microsecond=0)
+        if d < local and (not weekdays or d.isoweekday() in weekdays):
+            found.append(d)
+    return (found[back] + late).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+# The fields of a routine the user edits; a PUT of the routines keeps the rest of each daily task (the hub's own fields,
+# where its runs go) by id.
+ROUTINE_FIELDS = ("title", "prompt", "time", "weekdays", "enabled")
 SCHEDULE = [
     {"id": "morning", "title": "早报", "prompt": "给我今天的早报，一屏以内，结论先行。", "repeat": "daily", "time": "09:00",
-     "weekdays": [1, 2, 3, 4, 5], "enabled": True, "last_run": ago(hours=3), "last_session_id": ASK2, "last_status": "ok",
+     "weekdays": WEEKDAYS, "enabled": True, "last_run": prev_at("09:00", WEEKDAYS, late=timedelta(minutes=3)),
+     "last_session_id": ASK2, "last_status": "ok",
      "run_machine_id": "server", "run_session_id": ASK2, "run_launcher": "claude",  # its own conversation (早报 · 周三)
-     "next_run": next_at("09:00", [1, 2, 3, 4, 5])},
+     "next_run": next_at("09:00", WEEKDAYS)},
     {"id": "fu_patrol", "title": "Agent 巡检", "prompt": "看看各台电脑上的 Agent：哪些在等我、哪些卡住了，有要我处理的就列出来；都正常就回一句。",
      "repeat": "interval", "every_minutes": 30, "at": later(minutes=12), "enabled": True, "created_by": "assistant",
      "permission_mode": "auto", "effort": "low", "machine_id": "server", "last_run": ago(minutes=18), "last_status": "ok", "last_session_id": ASK1,
-     "next_run": later(minutes=12)},
+     "next_run": later(minutes=12), "created_at": ago(days=2)},
     {"id": "rt_weekly", "title": "周报", "prompt": "帮我起草这周的周报，先给我草稿。", "repeat": "daily", "time": "17:00", "weekdays": [5],
-     "enabled": True, "created_by": "assistant", "last_run": ago(days=7), "last_status": "failed",
+     "enabled": True, "created_by": "assistant", "last_run": prev_at("17:00", [5]), "last_status": "failed",
      "last_error": "assistant machine is offline", "next_run": next_at("17:00", [5])},
-    {"id": "evening", "title": "晚间回顾", "prompt": "今天的晚间回顾。", "repeat": "daily", "time": "21:30", "weekdays": [1, 2, 3, 4, 5],
-     "enabled": False, "last_run": ago(days=2), "last_status": "skipped"},
+    {"id": "rt_patrol", "title": "项目巡检", "prompt": "看看各台电脑上的 Agent 和昨晚的 CI，有卡住的就告诉我。", "repeat": "daily",
+     "time": "22:00", "weekdays": [], "enabled": True, "created_by": "assistant", "last_run": prev_at("22:00", []),
+     "last_session_id": ASK4, "last_status": "ok", "next_run": next_at("22:00", [])},
+    {"id": "evening", "title": "晚间回顾", "prompt": "今天的晚间回顾。", "repeat": "daily", "time": "21:30", "weekdays": WEEKDAYS,
+     "enabled": False, "last_run": prev_at("21:30", WEEKDAYS, back=1, late=timedelta(minutes=45)), "last_status": "skipped",
+     "last_error": "Jarvis 停机，错过了时间"},
     {"id": "fu_review", "repeat": "once", "at": later(minutes=40), "next_run": later(minutes=40), "title": "会前准备 · 产品评审",
      "prompt": "产品评审前 10 分钟：整理上次纪要和要点。", "enabled": True, "created_by": "assistant", "machine_id": "server",
      "session_id": ASK1, "created_at": ago(hours=1)},
     {"id": "fu_ci", "repeat": "once", "at": later(hours=2), "next_run": later(hours=2), "title": "看看 CI 跑完没有",
      "prompt": "看一下 weather-app 的 CI，跑完把结果告诉我。", "enabled": True, "created_by": "assistant", "machine_id": "server",
      "created_at": ago(minutes=20)},
+    {"id": "fu_call", "repeat": "once", "at": later(hours=9), "next_run": later(hours=9), "title": "提醒回电话",
+     "prompt": "提醒我给物业回电话，问一下周末停水的安排。", "enabled": True, "created_by": "assistant", "machine_id": "server",
+     "session_id": ASK3, "created_at": ago(hours=2)},
+    {"id": "fu_data", "title": "", "repeat": "once", "at": later(hours=70), "next_run": later(hours=70),  # untitled: 定时跟进
+     "prompt": "周五发周报前，把这周的数据再核对一遍，有对不上的列出来。", "enabled": True, "created_by": "assistant",
+     "machine_id": "macbook", "created_at": ago(hours=5)},
 ]
 TASK_FIELDS = ("title", "prompt", "repeat", "at", "time", "weekdays", "every_minutes", "enabled", "launcher", "permission_mode", "effort")
 
@@ -353,18 +627,76 @@ def save_task(old, new):
     return t
 
 
-RUNS = [
-    {"id": "run_1", "kind": "routine", "ref_id": "morning", "title": "早报", "due": ago(hours=3), "at": ago(hours=3), "status": "ok",
-     "machine_id": "server", "session_id": ASK2},
-    {"id": "run_2", "kind": "followup", "ref_id": "fu_lunch", "title": "订午饭提醒", "due": ago(hours=5), "at": ago(hours=5),
-     "status": "ok", "machine_id": "server", "session_id": ASK1},
-    {"id": "run_3", "kind": "routine", "ref_id": "evening", "title": "晚间回顾", "due": ago(days=2), "at": ago(days=2, minutes=-45),
-     "status": "skipped", "error": "Jarvis 停机，错过了时间"},
-    {"id": "run_4", "kind": "routine", "ref_id": "morning", "title": "早报", "due": ago(days=1, hours=3), "at": ago(days=1, hours=3),
-     "status": "ok", "machine_id": "server", "session_id": ASK2},
-    {"id": "run_5", "kind": "routine", "ref_id": "rt_weekly", "title": "周报", "due": ago(days=7), "at": ago(days=7), "status": "failed",
-     "error": "assistant machine is offline"},
-]
+def run(rid, kind, ref, title, due, status, at=None, **more):
+    return {"id": rid, "kind": kind, "ref_id": ref, "title": title, "due": due, "at": at or due, "status": status, **more}
+
+
+RUNS = sorted([
+    run("run_patrol_0", "routine", "rt_patrol", "项目巡检", prev_at("22:00", []), "ok", prev_at("22:00", [], late=timedelta(seconds=1)),
+        machine_id="server", session_id=ASK4),
+    run("run_lunch", "followup", "fu_lunch", "订午饭提醒", ago(hours=14), "ok", machine_id="server", session_id=ASK1),
+    run("run_manual", "routine", "morning", "早报", ago(hours=16), "ok", manual=True, machine_id="server", session_id=ASK2),
+    run("run_morning_0", "routine", "morning", "早报", prev_at("09:00", WEEKDAYS), "ok",
+        prev_at("09:00", WEEKDAYS, late=timedelta(minutes=3)), machine_id="server", session_id=ASK2),
+    run("run_patrol_1", "routine", "rt_patrol", "项目巡检", prev_at("22:00", [], back=1), "ok", machine_id="server", session_id=ASK4),
+    run("run_evening", "routine", "evening", "晚间回顾", prev_at("21:30", WEEKDAYS, back=1), "skipped",
+        prev_at("21:30", WEEKDAYS, back=1, late=timedelta(minutes=45)), error="Jarvis 停机，错过了时间"),
+    run("run_morning_1", "routine", "morning", "早报", prev_at("09:00", WEEKDAYS, back=1), "ok", machine_id="server", session_id=ASK2),
+    run("run_weekly", "routine", "rt_weekly", "周报", prev_at("17:00", [5]), "failed", error="assistant machine is offline"),
+    run("run_morning_2", "routine", "morning", "早报", prev_at("09:00", WEEKDAYS, back=2), "ok", machine_id="server", session_id=ASK2),
+    run("run_morning_3", "routine", "morning", "早报", prev_at("09:00", WEEKDAYS, back=3), "ok", machine_id="server", session_id=ASK2),
+    run("run_morning_4", "routine", "morning", "早报", prev_at("09:00", WEEKDAYS, back=4), "ok", machine_id="server", session_id=ASK2),
+], key=lambda r: r["at"], reverse=True)
+if os.environ.get("MOCK_SCHEDULE") == "empty":
+    SCHEDULE[:], RUNS[:] = [], []
+SCHEDULE_START = copy.deepcopy({"schedule": SCHEDULE, "runs": RUNS})  # a dict, so scripts/android.sh anonymises it too
+HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def schedule_routines():
+    """GET /api/v1/assistant/routines: the daily tasks."""
+    return [t for t in SCHEDULE if t.get("repeat") == "daily"]
+
+
+def schedule_followups():
+    """GET /api/v1/assistant/followups: the enabled once and interval tasks, `at` their next run, soonest first."""
+    due = [dict(t, at=t.get("next_run") or t.get("at")) for t in SCHEDULE if t.get("repeat") != "daily" and t.get("enabled")]
+    return sorted(due, key=lambda t: t["at"] or "")
+
+
+def task_label(t):
+    """What the history calls a task (the hub's Task.label)."""
+    if t.get("title"):
+        return t["title"]
+    return "定时跟进" if t.get("repeat") == "once" else " ".join(t.get("prompt", "").split())[:30]
+
+
+def record_run(kind, ref, title, session, due=None, machine="server"):
+    """A manual run, newest first, as the hub records 立即运行."""
+    at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    RUNS.insert(0, {"id": "run_" + uuid.uuid4().hex[:8], "kind": kind, "ref_id": ref, "title": title, "due": due or at, "at": at,
+                    "status": "ok", "manual": True, "machine_id": machine, "session_id": session})
+
+
+def put_routines(body):
+    """PUT replaces the daily tasks; like the hub it reads only what the user edits, keeps the rest of each task by id
+    and works out the next run of the enabled ones. The once and interval tasks stay as they are."""
+    old = {t["id"]: t for t in schedule_routines()}
+    new = []
+    for r in body.get("routines", []):
+        if not HHMM.match(str(r.get("time", ""))) or not str(r.get("prompt", "")).strip() or not str(r.get("title", "")).strip():
+            return None, "routine %s needs a title, a prompt and a time HH:MM" % json.dumps(r.get("title", ""), ensure_ascii=False)
+        rid = r.get("id") or "rt_" + uuid.uuid4().hex[:8]
+        kept = {k: v for k, v in old.get(rid, {}).items() if k not in ROUTINE_FIELDS + ("next_run",)}
+        routine = {**kept, "id": rid, "repeat": "daily", "title": r["title"], "prompt": r["prompt"], "time": r["time"],
+                   "weekdays": r.get("weekdays") or [], "enabled": bool(r.get("enabled"))}
+        if routine["enabled"]:
+            routine["next_run"] = next_at(routine["time"], routine["weekdays"])
+        new.append(routine)
+    SCHEDULE[:] = [t for t in SCHEDULE if t.get("repeat") != "daily"] + new
+    return schedule_routines(), None
+
+
 MEMORY = [
     {"name": "MEMORY.md", "content": "- [早报格式](morning-format.md) — 一屏以内，结论先行", "updated_at": ago(days=1)},
     {"name": "morning-format.md", "content": "---\nname: morning-format\ndescription: 早报一屏以内\nmetadata:\n  type: feedback\n---\n\n早报一屏以内，结论先行。",
@@ -373,6 +705,27 @@ MEMORY = [
      "updated_at": ago(days=3)},
 ]
 SCHEDULE_RAN = []  # what 立即运行 started (UI tests read it back at /mock/schedule)
+
+# ---------- where the assistant runs (设置 › 助手) ----------
+# What hub.json's assistant.notes says; the app's 关于我 replaces it once saved there (notes stops being None).
+ASSISTANT_HUB_NOTES = "代码都在 ~/code 下，平时用 MacBook 开发。\n周报每周五下班前先给我草稿，不要直接发。\n服务器上的 /srv 目录不要动。"
+ASSISTANT_CONFIG = {"machine_id": "server", "launcher": "claude", "timezone": "Asia/Shanghai", "notes": None, "main": ASK1}
+
+
+def assistant_state():
+    """GET /api/v1/assistant: the conversations are the ones on the machine the assistant runs on."""
+    cfg = ASSISTANT_CONFIG
+    home = next((m.get("home") for m in MACHINES if m["id"] == cfg["machine_id"]), None)
+    notes = cfg["notes"] if cfg["notes"] is not None else ASSISTANT_HUB_NOTES
+    out = {"machine_id": cfg["machine_id"], "launcher": cfg["launcher"], "cwd": home + "/.jarvis/assistant" if home else "",
+           "timezone": cfg["timezone"], "notes_effective": notes.strip(),
+           "conversations": [s for s in ASSISTANT if s["machine_id"] == cfg["machine_id"]]}
+    if cfg["notes"] is not None:
+        out["notes"] = cfg["notes"]
+    if cfg["main"]:
+        out["main"] = cfg["main"]
+    return out
+
 
 # ---------- todos (待办, docs/todos.md) ----------
 TODOS_INIT = [
@@ -600,11 +953,14 @@ def is_read_only(h):
         return True
     return False
 
+
 # ---------- the knowledge base (Jarvis › 知识库, docs/knowledge.md) ----------
 KB = {
     "projects": [
         {"kind": "projects", "id": "weather-app", "name": "天气 App", "one_line": "小组件时间线已按小时刷新，等中号布局的降雨条",
          "importance": "P0", "relevance": 92, "tags": ["iOS", "小组件"], "updated": ago(minutes=20), "extra": "short · active"},
+        {"kind": "projects", "id": "photo-sync", "name": "照片同步脚本", "one_line": "HEIC 转 JPEG 后同步到相册",
+         "importance": "P2", "relevance": 60, "tags": ["脚本"], "updated": ago(days=1), "extra": "short · active"},
         {"kind": "projects", "id": "blog", "name": "个人博客迁移到 Astro", "one_line": "32 篇文章迁完，旧链接都加了 301",
          "importance": "P2", "relevance": 55, "tags": ["前端"], "updated": ago(days=1), "extra": "short · done"},
         {"kind": "projects", "id": "reading", "name": "读书笔记", "one_line": "每季度整理一次", "importance": "P3",
@@ -613,9 +969,13 @@ KB = {
          "extra": "short · ignored"},
     ],
     "people": [{"kind": "people", "id": "p_han", "name": "韩梅梅", "one_line": "产品经理，周五约了午饭", "importance": "P1",
-                "relevance": 70, "tags": ["同事"], "updated": ago(hours=28)}],
+                "relevance": 70, "tags": ["同事"], "updated": ago(hours=28)},
+               {"kind": "people", "id": "lilei", "name": "李雷", "one_line": "设计，负责图标和视觉", "importance": "P2", "relevance": 70, "tags": ["同事"],
+                "updated": ago(hours=3)}],
     "chats": [{"kind": "chats", "id": "oc_team", "name": "天气 App 项目群", "one_line": "今天在讨论降雨条的样式", "importance": "P1",
-               "relevance": 64, "updated": ago(hours=2), "extra": "group"}],
+               "relevance": 64, "updated": ago(hours=2), "extra": "group"},
+              {"kind": "chats", "id": "design-review", "name": "设计评审", "one_line": "每周三下午的设计评审群", "importance": "P2", "relevance": 60,
+               "tags": ["工作"], "updated": ago(hours=1), "extra": "group"}],
     "docs": [{"kind": "docs", "id": "doc_widget", "name": "小组件设计稿 v3", "one_line": "小号、中号两种布局", "importance": "P2",
               "relevance": 60, "tags": ["iOS"], "updated": ago(days=2)}],
     "meetings": [{"kind": "meetings", "id": "m_review", "name": "小组件评审", "one_line": "降雨条改成逐小时柱状", "importance": "P1",
@@ -666,6 +1026,26 @@ def kb_messages(cid):
 
 def kb_match(text, q):
     return all(w in text.lower() for w in q.lower().split())
+
+
+def kb_tags(kind):
+    """The tags a kind offers (the hub's KindTags, from all its entries, not the filtered list): KB_TAGS first."""
+    first = KB_TAGS.get(kind, [])
+    return first + sorted({t for e in KB.get(kind, []) for t in e.get("tags") or []} - set(first))
+
+
+def kb_link(kind, eid):
+    """An entry as a detail links it (the whole entry)."""
+    return dict(next(x for x in KB[kind] if x["id"] == eid))
+
+
+# The entries the Android captures add: a summary under its name, a line of timeline, what it is about now, two links.
+for _kind, _id, _links in (("projects", "photo-sync", (("people", "lilei"), ("projects", "weather-app"))),
+                           ("people", "lilei", (("chats", "design-review"), ("projects", "weather-app"))),
+                           ("chats", "design-review", (("people", "lilei"), ("people", "p_han")))):
+    _e = next(x for x in KB[_kind] if x["id"] == _id)
+    KB_DETAIL[(_kind, _id)] = {"summary": "## %s\n\n%s" % (_e["name"], _e["one_line"]), "log": ["%s 更新了进展" % _e["updated"][:10]],
+                               "recent": _e["one_line"], "links": [kb_link(k, i) for k, i in _links]}
 
 
 # ---------- items ----------
@@ -778,6 +1158,11 @@ ITEMS[ASK4] = [x for n in range(1, 31) for x in (
     it("user", "text", 60 * 50 + 61 - 2 * n, text=f"第 {n} 本也整理一下"),
     it("assistant", "text", 60 * 50 + 60 - 2 * n, text=f"第 {n} 本整理好了：\n\n- 三个主要观点\n- 两段摘抄\n- 一条和上一本的联系\n\n要接着整理第 {n + 1} 本吗？"))]
 
+INTERACTION_HISTORY = [  # GET /api/v1/interactions/history: requests already answered
+    {"id": "ix_blog_done", "machine_id": "studio", "session_id": BLOG, "session_title": "博客迁移到 Astro",
+     "cwd": "/Users/me/code/blog", "kind": "permission", "created_at": ago(hours=6), "tool_name": "Bash",
+     "tool_input": {"command": "npm run build", "description": "构建站点"}, "resolution": "allow", "resolved_at": ago(hours=6)},
+]
 INTERACTIONS = [
     {"id": "ix_tests", "machine_id": "macbook", "session_id": TESTS, "session_title": "补齐网络层的单元测试",
      "cwd": "/Users/me/code/weather", "kind": "question", "created_at": ago(minutes=2), "expires_at": later(minutes=28),
@@ -875,6 +1260,43 @@ if os.environ.get("MOCK_SCREEN_SECRET"):
          "cwd": "/Users/me/code/weather", "kind": "screen", "created_at": ago(minutes=1), "expires_at": later(hours=24),
          "secret": True, "screen": "⏺ Bash(sudo make install)\n  ⎿  Running…\n\n[sudo] password for me:"})
 
+# Keep the exported demo fixtures unchanged; only the HTTP mock serves the expanded request inbox.
+MOCK_INTERACTIONS = INTERACTIONS + [
+    {"id": "ix_tests_build", "machine_id": "macbook", "session_id": TESTS, "session_title": "补齐网络层的单元测试",
+     "cwd": "/Users/me/code/weather", "kind": "permission", "created_at": ago(minutes=4), "expires_at": later(minutes=6),
+     "tool_name": "Bash", "tool_use_id": "toolu_build",
+     "tool_input": {"command": "swift test", "description": "运行网络层测试"}},
+    {"id": "ix_photos_format", "machine_id": "studio", "session_id": PHOTOS, "session_title": "照片同步脚本支持 HEIC",
+     "cwd": "/Users/me/code/photo-sync", "kind": "question", "created_at": ago(minutes=3), "expires_at": later(minutes=12),
+     "tool_name": "AskUserQuestion", "tool_use_id": "toolu_format",
+     "questions": [{"question": "转换后的照片保存为哪种格式？", "header": "输出格式", "multi_select": False, "options": [
+         {"label": "JPEG", "description": "兼容现有导出流程"},
+         {"label": "PNG", "description": "保留透明背景"}]}]},
+    {"id": "ix_photos_check", "machine_id": "studio", "session_id": PHOTOS, "session_title": "照片同步脚本支持 HEIC",
+     "cwd": "/Users/me/code/photo-sync", "kind": "permission", "created_at": ago(minutes=1), "expires_at": later(minutes=45),
+     "tool_name": "Bash", "tool_use_id": "toolu_check",
+     "tool_input": {"command": "python3 -m unittest discover", "description": "验证格式转换与元数据保留"}},
+]
+REQUEST_LOCK = threading.Lock()
+
+
+def mock_interactions():
+    # INTERACTIONS is the list the churn and bump switches change; MOCK_INTERACTIONS adds the expanded inbox. Both served.
+    with REQUEST_LOCK:
+        seen = {x["id"] for x in INTERACTIONS}
+        return list(INTERACTIONS) + [x for x in MOCK_INTERACTIONS if x["id"] not in seen]
+
+
+def resolve_mock_interaction(request_id, resolution):
+    with REQUEST_LOCK:
+        request = next((r for r in mock_interactions() if r["id"] == request_id), None)
+        if request is not None:
+            for lst in (MOCK_INTERACTIONS, INTERACTIONS):
+                lst[:] = [x for x in lst if x["id"] != request_id]
+            INTERACTION_HISTORY.insert(0, dict(request, resolution=resolution.get("action", "answered"),
+                resolved_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")))
+
+
 # The terminal tab (GET …/screen): a made-up shell. MOCK_SCREEN_FAIL_AFTER=N: N seconds after the first read every
 # read fails (503) — the stale bar over the terminal; MOCK_SCREEN_FAIL_AFTER=N:M recovers M seconds later.
 TERMINAL = "\n".join(
@@ -888,6 +1310,34 @@ TERMINAL = "\n".join(
      "\t Executed 3 tests, with 0 failures (0 unexpected) in 0.449 (0.455) seconds", "$ git status --short",
      " M Sources/Weather/Client.swift", " M Tests/WeatherTests/NetworkTests.swift", "$ "])
 SCREEN_FIRST = []
+
+# The pane's scrollback above the screen (POST …/screen/before, a page at a time): about 430 made-up lines, oldest
+# first — commands, colored output, Chinese, a row longer than the pane — ending with what was there before the screen.
+def scrollback_lines():
+    E = "\x1b["
+    out = []
+    for n in range(1, 16):
+        out += ["$ swift test --filter Step%dTests" % n, "Building for debugging...",
+                "[1/3] Compiling Weather Step%d.swift" % n, "[2/3] Emitting module Weather", "[3/3] Linking WeatherPackageTests",
+                E + "32mBuild complete!" + E + "0m (%d.%02ds)" % (3 + n % 5, n * 7 % 100),
+                "Test Suite 'Step%dTests' started at 2026-10-29 09:%02d:11.204" % (n, n),
+                "Test Case '-[Step%dTests testDecodesForecastWithMissingHumidityAndFallsBackToTheLastKnownValueWithoutCrashingTheTimeline]' passed (0.0%d seconds)." % (n, n % 10),
+                "Test Case '-[Step%dTests testRetriesOnTimeout]' " % n + (E + "31mfailed" + E + "0m" if n % 4 == 0 else E + "32mpassed" + E + "0m") + " (0.412 seconds).",
+                "  第 %d 步：把小组件的时间线改成每小时一条，温度按当地单位显示，中文和数字之间不留多余的空格。" % n,
+                "  ⎿  " + E + "2m" + "Read WeatherWidget/Provider.swift (84 lines)" + E + "0m",
+                E + "38;5;209m⏺" + E + "0m 这一步做完了，接着跑下一组测试。",
+                "─" * 60, "", "$ git diff --stat",
+                " WeatherWidget/Provider.swift | %d ++++++++--" % (10 + n),
+                " WeatherWidget/Timeline.swift |  %d +++--" % (3 + n % 6),
+                " 2 files changed, %d insertions(+), %d deletions(-)" % (12 + n, 4 + n % 3), ""]
+        out += ["  %2d. 第 %d 处：%s" % (k, n, w) for k, w in enumerate(["温度", "湿度", "风速", "降水概率", "体感温度", "紫外线", "日出日落", "空气质量"], 1)]
+        out += [""]
+    return out + ["$ git log --oneline -3", E + "33m3f9a1c2" + E + "0m Widget: hourly timeline",
+                  E + "33m8b20e7d" + E + "0m Widget: small and medium sizes", E + "33m1c4d5a9" + E + "0m Forecast client",
+                  "$ swift build", E + "32mBuild complete!" + E + "0m (8.31s)"]
+
+
+SCROLLBACK = scrollback_lines()
 
 # MOCK_TERMINAL_STREAM=1: the hub says terminal_stream and answers terminal_subscribe with frames of a made-up Claude
 # Code screen (96×24) as herdr's observer sends them: a whole frame, then the spinner ticking once a second
@@ -1028,6 +1478,23 @@ CODEX_SETTINGS = {}
 KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /mock/keys)
 UPLOADS = []  # files received (GET /mock/uploads)
 SENT = []  # bodies of sends, one per client_msg_id (GET /mock/sent)
+LARK_READS = []  # Feishu read reports, {"feed", **body} (GET /mock/lark_reads): what a chat page saw
+MAIL_SENT = []  # POST /api/v1/mail/send bodies (GET /mock/mail_sent): 写邮件 / 回复
+MAIL_FLAGS = []  # POST …/mail/messages/{aid}/{uid}/flags, {"account_id", "uid", **body} (GET /mock/mail_flags)
+QUEUE_EDITS = []  # bodies of …/queue (撤回编辑 / 删除 of a queued message; GET /mock/queue_edits)
+
+
+def queue_messages(text=None, clear=False):
+    """GET /mock/queue: messages typed while the first working agent works, not taken yet (Session.queued): `text`
+    adds one (none: two samples), `clear` empties it. Pushed like the real hub's sessions update."""
+    working = [s for s in SESSIONS if s["state"] == "working" and not s.get("assistant")]
+    if not working: return {"error": "no working agent"}
+    s = working[0]
+    if clear: s["queued"] = []
+    elif text: s["queued"] = (s.get("queued") or []) + [text]
+    else: s["queued"] = (s.get("queued") or []) + ["测试跑完之后把截图也更新一下", "顺便检查一下深色模式下小组件的对比度\n不够的话调一下文字颜色"]
+    push_machine(s["machine_id"])
+    return {"key": s["machine_id"] + "/" + s["session_id"], "queue": s["queued"]}
 
 INBOX = [
     {"id": "lark:f1:100", "source": "lark", "kind": "dm", "account": "lark", "account_name": "飞书", "title": "韩梅梅",
@@ -1235,11 +1702,19 @@ IMESSAGE_MESSAGES = {
 
 if os.environ.get("MOCK_INBOX") == "empty":
     INBOX.clear()
+MAIL_MESSAGES = {  # whole messages; the others are made from their inbox item and MAIL_BODIES
+    501: {"account_id": "acc1", "mailbox": "INBOX", "uid": 501, "message_id": "<m501@example.com>", "references": [],
+          "subject": "下周的分享能不能提前到周二？",
+          "from": {"name": "Lucy Wang", "email": "lucy@example.com"}, "to": [{"name": "我", "email": "me@example.com"}],
+          "cc": [{"name": "Tom", "email": "tom@example.com"}], "date": ago(hours=3), "seen": False,
+          "text": "Hi，\n\n周四我临时要出差，分享能不能挪到周二下午？三点以后都可以。\n\n议程见附件，有问题随时说。\n\nLucy",
+          "html": "<p>Hi，</p><p>周四我临时要出差，分享能不能挪到<b>周二下午</b>？三点以后都可以。</p><p>议程见附件，有问题随时说。</p><p>Lucy</p>",
+          "attachments": [{"filename": "分享议程.pdf", "mime": "application/pdf", "size": 182400}]},
+}
 MAIL_BODIES = {
     504: ("Hi,\n\nI'm travelling on Thursday, so I won't make the design review. Could we move it to Tuesday afternoon, "
           "say 3 pm? I've put the new icon set in the shared folder; the two open questions are the tab bar and the empty states.\n\n"
           "Thanks,\nLucy"),
-    501: "Hi，周四我临时要出差，分享能不能挪到周二下午？\n\nLucy",
 }
 MAIL_TRANSLATIONS = {
     504: {"subject": "设计评审能改期吗？",
@@ -1247,7 +1722,7 @@ MAIL_TRANSLATIONS = {
                   "还没定的两个问题是标签栏和空状态。\n\n谢谢，\nLucy"},
 }
 
-# The 设计评审 chat (inbox f2): a few messages, some in English (设置 › 翻译 picks chats to translate).
+# The Feishu chats (GET /api/v1/lark/conversations; 设置 › 翻译 picks chats to translate from them).
 LARK_CHATS = [{"id": "f2", "name": "设计评审", "is_group": True, "unread": 3, "at_me": True, "muted": False, "preview": "@你 新版图标放在这里了",
                "updated_at": ago(minutes=55)},
               {"id": "f3", "name": "周末徒步群", "is_group": True, "unread": 12, "at_me": False, "muted": False, "preview": "周六早上 8 点地铁站集合",
@@ -1263,6 +1738,15 @@ LARK_MESSAGES = {"f2": [
     _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
     _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
 ]}
+LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {"copy": True}, "content": {"type": "doc", "content": [
+    {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "新版图标评审"}]},
+    {"type": "paragraph", "content": [{"type": "text", "text": "这一版统一了圆角和描边，深色模式单独调了对比度。"}]},
+    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "待确认"}]},
+    {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
+    {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
+]}}
 
 # The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
 # one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
@@ -2089,6 +2573,61 @@ if os.environ.get("MOCK_WAKES") == "1":
     ITEMS[WAKES] = _k
 
 
+# MOCK_CHAT_LINES=1: a chat that shows the rest of the app's display logic (ChatLines) on one page: a finished exchange
+# of two messages (one typed while it worked) drawn as one, a message another Claude session sent, a /loop wakeup, two
+# subagents (one done, one still running in the background: their transcripts are "<session>@<agent>"), an
+# interrupted exchange, then a recap; the session has a /loop and a background task too.
+LINES = "a1f3c2d4-0000-4000-8000-0000000c1e01"
+if os.environ.get("MOCK_CHAT_LINES") == "1":
+    _l = [it("user", "text", 90, text="把首页的图片都换成懒加载")]
+    _l += tool("Grep", {"pattern": "<img", "path": "src/pages"}, "src/pages/Home.tsx:12\nsrc/pages/Home.tsx:40", 89)
+    _l.append(it("user", "text", 88, text="顺便把占位图也换成骨架屏", queued=True))
+    _l += tool("Edit", {"file_path": "/Users/me/code/shop-web/src/pages/Home.tsx", "old_string": "<img src={src} />",
+                        "new_string": "<img src={src} loading=\"lazy\" />"}, "ok", 87)
+    _l.append(it("assistant", "text", 87, text="图片改成懒加载了，接着做骨架屏。"))
+    _l += tool("Write", {"file_path": "/Users/me/code/shop-web/src/ui/Skeleton.tsx", "content": "export function Skeleton() {\n  return <div className=\"skeleton\" />;\n}"}, "ok", 86)
+    _l.append(it("assistant", "text", 85, text="两件都做好了：首页 12 张图都是懒加载，加载前显示骨架屏。"))
+    _l.append(it("user", "text", 70, text="发版分支已经切好了，可以开始回归。", **{"from": "release-bot"}))
+    _l.append(it("assistant", "text", 69, text="收到，开始跑回归。"))
+    _l.append(it("user", "text", 60, text="/loop 每 30 分钟检查 CI，红了就修"))
+    _l += tool("Bash", {"command": "gh run list --limit 3", "description": "看 CI"}, "completed  success  main", 60)
+    _l.append(it("assistant", "text", 59, text="CI 是绿的，30 分钟后再看。"))
+    _l.append(it("user", "text", 40, text="全量回归拆给两个子 Agent 并行跑"))
+    _l += tool("Agent", {"description": "回归：结算流程", "subagent_type": "general-purpose", "prompt": "跑结算流程的回归用例，失败的列出来"},
+               "结算流程 42 个用例全部通过。\nagentId: sa1checkout (use SendMessage with to: 'sa1checkout' to continue this agent)", 38)
+    _sa1 = _l[-2]["tool_use_id"]
+    _l += tool("Agent", {"description": "回归：搜索和筛选", "subagent_type": "general-purpose", "prompt": "跑搜索和筛选的回归用例", "run_in_background": True},
+               "Async agent launched successfully.\nagentId: sa2search (This is an internal ID for your use)", 37)
+    _sa2 = _l[-2]["tool_use_id"]
+    _l.append(it("assistant", "text", 36, text="结算流程的回归全过了；搜索和筛选的那个还在后台跑，结束了告诉你。"))
+    _l.append(it("user", "text", 20, text="先把首页的埋点也补上"))
+    _l += tool("Read", {"file_path": "/Users/me/code/shop-web/src/pages/Home.tsx"}, "export function Home() {}", 19)
+    _l.append(it("system", "notice", 19, text="已中断"))
+    _l.append(it("system", "recap", 5, text="首页的懒加载和骨架屏做完了；结算流程回归全过，搜索和筛选的回归还在后台子 Agent 里跑。埋点改到一半被中断，还没动代码。"))
+    ITEMS[LINES] = _l
+    ITEMS[LINES + "@sa1checkout"] = (
+        [it("user", "text", 38, text="跑结算流程的回归用例，失败的列出来")]
+        + tool("Bash", {"command": "npm run test:e2e -- checkout", "description": "跑结算流程的用例"}, "42 passed (1.8m)", 38)
+        + [it("assistant", "text", 38, text="结算流程 42 个用例全部通过。")])
+    ITEMS[LINES + "@sa2search"] = (
+        [it("user", "text", 37, text="跑搜索和筛选的回归用例")]
+        + tool("Bash", {"command": "npm run test:e2e -- search", "description": "跑搜索的用例"}, "31 passed, 2 failed", 30)
+        + [it("assistant", "thinking", 29, text="两个失败都在价格筛选，看一下是不是数据的问题。")]
+        + tool("Read", {"file_path": "/Users/me/code/shop-web/e2e/search.spec.ts"}, "test('price filter', …)", 28))
+    SESSIONS.append(sess("macbook", LINES, "首页性能和回归", "/Users/me/code/shop-web", "done", "unread", "shop-web", 15, "perf", 1, 5,
+                         "首页的懒加载和骨架屏做完了。",
+                         loop={"kind": "wakeup", "prompt": "/loop 每 30 分钟检查 CI，红了就修", "interval_seconds": 1800,
+                               "reason": "等下一轮 CI", "next_at": (datetime.now(timezone.utc) + timedelta(minutes=12)).isoformat().replace("+00:00", "Z")},
+                         background=[{"id": "bkshot", "kind": "shell", "description": "跑首页截图对比", "command": "npm run test:visual -- home",
+                                      "output_file": "/tmp/claude/bkshot.output", "started_at": ago(minutes=3)}],
+                         subagents=[{"id": "sa1checkout", "session_id": LINES + "@sa1checkout", "type": "general-purpose",
+                                     "description": "回归：结算流程", "tool_use_id": _sa1, "running": False, "started_at": ago(minutes=38),
+                                     "last_text": "结算流程 42 个用例全部通过。"},
+                                    {"id": "sa2search", "session_id": LINES + "@sa2search", "type": "general-purpose",
+                                     "description": "回归：搜索和筛选", "tool_use_id": _sa2, "running": True, "background": True,
+                                     "started_at": ago(minutes=37)}]))
+
+
 # MOCK_API_ERRORS=1: model API errors as Claude Code writes them when it gives up. The home conversation ends with the
 # same 502 three times (the user said 继续 twice in between); an idle Agent's last answer is a login error. The texts
 # follow real ones with every id, host and region replaced.
@@ -2276,6 +2815,39 @@ if os.environ.get("MOCK_LINKS") == "1":
                      "summary": "评审材料的链接：https://example.org/", "read": False})
 
 
+def fold_task_snapshots(items):
+    """Capture successful TodoWrite snapshots used by the conversation fixtures."""
+    uses = {x.get("tool_use_id"): x for x in items if x["kind"] == "tool_use"}
+    snapshots = []
+    for result in items:
+        if result["kind"] != "tool_result" or result.get("is_error"):
+            continue
+        use = uses.get(result.get("tool_use_id"))
+        if not use or use.get("tool_name") != "TodoWrite":
+            continue
+        try:
+            output = json.loads(result.get("text") or "")
+        except (ValueError, TypeError):
+            output = None
+        if isinstance(output, dict) and (output.get("success") is False or output.get("error") is not None):
+            continue
+        inp = use.get("tool_input")
+        todos = inp.get("todos") if isinstance(inp, dict) else None
+        if not isinstance(todos, list) or any(
+                not isinstance(todo, dict) or not isinstance(todo.get("content"), str) or not todo["content"].strip()
+                or todo.get("status") not in ("pending", "in_progress", "completed", "unknown") for todo in todos):
+            continue
+        entries = []
+        for index, todo in enumerate(todos):
+            entry = {"id": "todo:%d" % index, "subject": todo["content"], "status": todo["status"]}
+            if isinstance(todo.get("activeForm"), str) and todo["activeForm"].strip():
+                entry["description"] = todo["activeForm"]
+            entries.append(entry)
+        snapshots.append({"replace": "todo", "entries": entries, "source_item_id": use["id"],
+                          "source_tool_use_id": use["tool_use_id"], "source_seq": use["seq"]})
+    return snapshots
+
+
 def fold_work(items):
     """transcript.FoldWork: each run of tool calls (with their results) and thoughts becomes one fold item."""
     uses = {x.get("tool_use_id") for x in items if x["kind"] == "tool_use"}
@@ -2297,10 +2869,12 @@ def fold_work(items):
         if len(run) < 3 and sum(len(x.get("text") or "") + len(json.dumps(x.get("tool_input") or "")) for x in run) < 4096:
             out += run
         else:
+            tasks = fold_task_snapshots(run)
             out.append({"id": "fold:" + run[0]["id"], "seq": run[0]["seq"], "ts": run[0]["ts"], "role": "assistant", "kind": "fold",
                         "fold": {"items": len(run), "tools": sum(x["kind"] == "tool_use" for x in run),
                                  "thoughts": sum(x["kind"] == "thinking" and bool((x.get("text") or "").strip()) for x in run),
-                                 "until": run[-1]["ts"], "through_seq": run[-1]["seq"], "through_id": run[-1]["id"]}})
+                                 "until": run[-1]["ts"], "through_seq": run[-1]["seq"], "through_id": run[-1]["id"],
+                                 **({"tasks": tasks} if tasks else {})}})
         i = j
     return out
 
@@ -2580,16 +3154,31 @@ if os.environ.get("MOCK_CHAT_IMAGES"):
         it("user", "image", 13, tool_use_id=_shot, image={"mime": "image/png", "data": MOCK_PNG, "width": 48, "height": 32}),
         it("assistant", "image", 12, image={"mime": "image/png", "data": MOCK_PNG, "width": 48, "height": 32}),
     ] + ITEMS[BLOG][-1:]
+    if os.environ.get("MOCK_CHAT_IMAGES") == "many":  # and a tall one you sent, for paging through different pictures
+        ITEMS[BLOG] = ITEMS[BLOG][:1] + [
+            it("user", "text", 14, text="首页在手机上是这样的，标题被挤到两行了"),
+            it("user", "image", 14, image={"mime": "image/png", "data": mock_png(36, 72), "width": 36, "height": 72}),
+        ] + ITEMS[BLOG][1:]
     for _i, _x in enumerate(ITEMS[BLOG]): _x["seq"] = ITEMS[BLOG][0]["seq"] + _i
 MOCK_TREE = {
     "code/": None,
     "code/weather/": None,
     "code/weather/.gitignore": ".build/\n",
-    "code/weather/README.md": "# Weather\n\nA small sample app.\n\n<p align=\"center\"><img src=\"docs/icon.png\" alt=\"icon\"></p>\n\n- 今天的天气\n- `swift build`\n",
+    "code/weather/README.md": "# Weather\n\nA small sample app: 当前温度、逐小时预报和主屏幕小组件。\n\n"
+                              "<p align=\"center\"><img src=\"docs/icon.png\" alt=\"icon\"></p>\n\n- 今天的天气\n- `swift build`\n\n"
+                              "## 开发\n\n```sh\nswift build\nswift test\n```\n",
     "code/weather/Package.swift": "// swift-tools-version:6.0\nimport PackageDescription\n\nlet package = Package(\n    name: \"Weather\",\n    targets: [.executableTarget(name: \"App\")]\n)\n",
     "code/weather/Sources/": None,
     "code/weather/Sources/App/": None,
     "code/weather/Sources/App/main.swift": "import Foundation\n\nlet city = CommandLine.arguments.dropFirst().first ?? \"Paris\"\nprint(\"Weather for \\(city): sunny, 21°C\")\n",
+    "code/weather/Tests/": None,
+    # The widget the weather conversation is building: Provider.swift holds its Edit (unstaged), WidgetView.swift is new
+    # and staged (git/status below).
+    "code/weather/WeatherWidget/": None,
+    "code/weather/WeatherWidget/Provider.swift": "import WidgetKit\n\nstruct Provider: TimelineProvider {\n    func placeholder(in context: Context) -> WeatherEntry {\n"
+                                                 "        WeatherEntry(date: .now, temperature: 21, rain: [])\n    }\n\n" + EDIT_NEW + "\n}\n",
+    "code/weather/WeatherWidget/WidgetView.swift": "import SwiftUI\nimport WidgetKit\n\nstruct WidgetView: View {\n    let entry: WeatherEntry\n\n"
+                                                   "    var body: some View {\n        Text(\"\\(entry.temperature)°\")\n            .font(.largeTitle)\n    }\n}\n",
     "code/weather/docs/": None,
     "code/weather/docs/icon.png": ("image/png", MOCK_PNG),
     "notes.txt": "Remember to water the plants.\n",
@@ -2606,6 +3195,25 @@ MOCK_DIFFS = {
     "README.md": "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1,2 +1,4 @@\n # Weather\n \n+A small sample app.\n+",
     "docs/icon.png": "diff --git a/docs/icon.png b/docs/icon.png\nnew file mode 100644\nBinary files /dev/null and b/docs/icon.png differ",
 }
+
+
+def mock_diff(rel, old, new):
+    """A Git diff of one text file, from old to new ("" = a new file)."""
+    import difflib
+    lines = difflib.unified_diff(old.splitlines(True), new.splitlines(True), "a/" + rel if old else "/dev/null", "b/" + rel)
+    return ("diff --git a/%s b/%s\n%s" % (rel, rel, "" if old else "new file mode 100644\n") + "".join(lines)).rstrip("\n")
+
+
+def diff_counts(diff):
+    """The added and deleted lines of a diff, as git/status counts them."""
+    body = [l for l in diff.split("\n") if not l.startswith(("+++", "---"))]
+    return {"added": sum(l.startswith("+") for l in body), "deleted": sum(l.startswith("-") for l in body)}
+
+
+_widget = MOCK_TREE[MOCK_REPO + "/WeatherWidget/Provider.swift"]
+MOCK_DIFFS["WeatherWidget/Provider.swift"] = mock_diff("WeatherWidget/Provider.swift", _widget.replace(EDIT_NEW, EDIT_OLD), _widget)
+MOCK_DIFFS["WeatherWidget/WidgetView.swift"] = mock_diff("WeatherWidget/WidgetView.swift", "",
+                                                         MOCK_TREE[MOCK_REPO + "/WeatherWidget/WidgetView.swift"])
 
 
 def mock_home(mid):
@@ -2677,12 +3285,16 @@ def mock_files(p, q):
                 "ahead": 1, "behind": 0, "stashes": 1, "commits": MOCK_COMMITS[:30], "files": [
                     {"path": "Sources/App/main.swift", "index": "M", "worktree": "M", "added": 2, "deleted": 1, "binary": False},
                     {"path": "README.md", "index": ".", "worktree": "M", "added": 2, "deleted": 0, "binary": False},
+                    {"path": "WeatherWidget/Provider.swift", "index": ".", "worktree": "M",
+                     **diff_counts(MOCK_DIFFS["WeatherWidget/Provider.swift"]), "binary": False},
+                    {"path": "WeatherWidget/WidgetView.swift", "index": "A", "worktree": ".",
+                     **diff_counts(MOCK_DIFFS["WeatherWidget/WidgetView.swift"]), "binary": False},
                     {"path": "docs/icon.png", "index": "?", "worktree": "?", "added": 0, "deleted": 0, "binary": True}]}, 200
     if what == "git/diff":
         return {"path": arg("path"), "diff": MOCK_DIFFS.get(arg("path"), ""), "truncated": False}, 200
     if what == "git/log":
         skip, limit = int(arg("skip") or 0), int(arg("limit") or 50)
-        return {"commits": MOCK_COMMITS[skip:skip + limit]}, 200
+        return {"commits": MOCK_COMMITS[skip:skip + limit], "has_more": skip + limit < len(MOCK_COMMITS)}, 200
     c = next((c for c in MOCK_COMMITS if c["hash"] == arg("hash")), None)
     if not c: return {"error": "unknown revision"}, 502
     return {"commit": dict(c, body="Made-up commit for the mock hub."),
@@ -2841,17 +3453,18 @@ def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False, real=Fal
             INTERACTIONS[:] = [x for x in INTERACTIONS if x["id"] != "ix_churn"]
             if k % 2 == 0: INTERACTIONS.append(dict(INTERACTIONS[0], id="ix_churn", created_at=now))
         by = {}
-        for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
+        for s in out_by_machine(all_sessions()): by.setdefault(s["machine_id"], []).append(s)
         for send, subscribed in list(LIVE):
             try:
-                send({"type": "machines", "machines": MACHINES})
+                send({"type": "machines", "machines": out_machines()})
                 for m, ss in by.items(): send({"type": "sessions", "machine_id": m, "sessions": ss})
+                pending = out_by_machine(mock_interactions())  # what GET /api/v1/interactions serves: answered ones are gone
                 if inbox:
                     send({"type": "inbox"})
-                    for ix in INTERACTIONS: send({"type": "interaction", "interaction": ix})
-                if waiting and INTERACTIONS:  # another agent starts waiting, then is answered elsewhere
+                    for ix in pending: send({"type": "interaction", "interaction": ix})
+                if waiting and pending:  # another agent starts waiting, then is answered elsewhere
                     if k % 2 == 0:
-                        send({"type": "interaction", "interaction": dict(INTERACTIONS[0], id="ix_churn", created_at=now)})
+                        send({"type": "interaction", "interaction": dict(pending[0], id="ix_churn", created_at=now)})
                     else:
                         send({"type": "interaction_resolved", "id": "ix_churn"})
                 for sid in list(subscribed):
@@ -2875,7 +3488,7 @@ def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False, real=Fal
             if s["state"] == "working":
                 s.update(state="unread", status="done", last_text="都看完了，改动已经提交。")
         by = {}
-        for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
+        for s in out_by_machine(all_sessions()): by.setdefault(s["machine_id"], []).append(s)
         for send, subscribed in list(LIVE):
             try:
                 for sid in list(subscribed):
@@ -2902,7 +3515,7 @@ BUMPED = {"asks": [], "n": 0}
 
 
 def truth():
-    agents = [s for s in all_sessions() if not s.get("assistant")]
+    agents = [s for s in out_by_machine(all_sessions()) if not s.get("assistant")]
     keys = {s["session_id"]: s["machine_id"] + "/" + s["session_id"] for s in agents}
     return {"states": {keys[s["session_id"]]: s["state"] for s in agents},
             "last": {keys[s["session_id"]]: s.get("last_text") or "" for s in agents},
@@ -2911,6 +3524,7 @@ def truth():
 
 
 def push_machine(mid):
+    if not kept(mid): return
     ss = [s for s in all_sessions() if s["machine_id"] == mid]
     for send, _ in list(LIVE):
         try: send({"type": "sessions", "machine_id": mid, "sessions": ss})
@@ -2938,6 +3552,7 @@ def bump(what):
         INTERACTIONS.append(ix)
         BUMPED["asks"].append(ix["id"])
         for send, _ in list(LIVE):
+            if not kept(ix["machine_id"]): break  # a machine not served (MOCK_MACHINES_KEEP): nothing pushed
             try: send({"type": "interaction", "interaction": ix})
             except Exception: pass
         return {"ask": ix["id"]}
@@ -3022,6 +3637,18 @@ class H(BaseHTTPRequestHandler):
         LOG.write("%s %s\n" % (self.command, self.path)); LOG.flush()
 
     def send_json(self, obj, status=200):
+        global LOST_RECEIPT
+        if 200 <= status < 300 and self.command in ("POST", "PUT", "PATCH", "DELETE") and self.path.startswith("/api/v1/"):
+            with FAULT_LOCK:
+                if LOST_RECEIPT:
+                    LOST_RECEIPT = False
+                    status, obj = 502, {"error": "操作回执丢失，请核对执行结果", "code": "lost_receipt",
+                                        "delivered": "unknown", "retryable": False}
+        if status >= 400 and isinstance(obj, dict):
+            obj = dict(obj)
+            obj.setdefault("code", {400: "invalid", 401: "unauthorized", 403: "forbidden", 404: "not_found",
+                                    405: "method_not_allowed", 409: "conflict", 502: "upstream_error",
+                                    503: "node_offline"}.get(status, "internal"))
         body = json.dumps(obj, ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -3033,6 +3660,10 @@ class H(BaseHTTPRequestHandler):
     def body(self):
         n = int(self.headers.get("Content-Length") or 0)
         return self.rfile.read(n) if n else b""
+
+    def send_error(self, code, message=None, explain=None):
+        self.close_connection = True
+        self.send_json({"error": message or self.responses.get(code, ("请求失败",))[0]}, code)
 
     def do_GET(self):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
@@ -3065,31 +3696,42 @@ class H(BaseHTTPRequestHandler):
             port = int(parts[6]) if parts[6].isdigit() else 0
             if len(parts) == 8 and parts[7] == "connect": return self.port_connect(parts[4], port)
             return self.send_json({"port": port, "listening": port_listening(port), "http": port_listening(port)})
-        if p == "/api/v1/health": return self.send_json({"ok": True, "version": "mock", "channel": "release", "build": 202611021500, "protocol": 1, "min_app_build": 0})
+        if p == "/api/v1/health":
+            return self.send_json({"ok": True, "version": "mock", "channel": "release", "build": 202611021500, "protocol": 1,
+                                   "min_app_build": 0, "features": features(), **identity(), **hub_name_field()})
+        if p == "/api/v1/endpoints": return self.send_json({**identity(), **hub_name_field(), "endpoints": list(ENDPOINTS)})
         if p == "/api/v1/hub/update":
             return self.send_json(hub_update_state()) if HUB_UPDATE_MODE else self.send_json({"error": "not found"}, 404)
         if p == "/api/v1/hub/update/history": return self.send_json({"history": hub_update_history()})
         if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
-        if p == "/api/v1/machines": return self.send_json({"machines": MACHINES})
+        if p == "/api/v1/machines": return self.send_json({"machines": out_machines()})
         if p == "/api/v1/metrics":
-            return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES], "step": 60})
+            return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES if kept(m["id"])], "step": 60})
         if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):
             r = q.get("range", ["1h"])[0]
             secs, step = {"1h": (3600, 10), "6h": (6 * 3600, 60), "24h": (86400, 240)}.get(r, (3600, 10))
             return self.send_json({"metrics": machine_metrics(p.split("/")[4], secs, step), "range": r, "step": step})
-        if p == "/api/v1/sessions": return self.send_json({"sessions": all_sessions()})
+        if p == "/api/v1/sessions": return self.send_json({"sessions": out_by_machine(all_sessions())})
         if p == "/api/v1/todos": return self.send_json({"todos": sorted_todos()})
         if p.startswith("/api/v1/todos/") and p.count("/") == 4:
             tid = p.split("/")[4]
             t = next((x for x in TODOS if x["id"] == tid), None)
             if not t: return self.send_json({"error": "待办不存在"}, 404)
             return self.send_json({"todo": format_todo(t)})
-        if p == "/api/v1/interactions": return self.send_json({"interactions": INTERACTIONS})
-        if p == "/api/v1/interactions/history": return self.send_json({"interactions": []})
+        if p == "/api/v1/interactions": return self.send_json({"interactions": out_by_machine(mock_interactions())})
+        if p == "/api/v1/interactions/history": return self.send_json({"interactions": out_by_machine(INTERACTION_HISTORY)})
         if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
         if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
+        if p == "/mock/lark_reads": return self.send_json({"reads": LARK_READS})
+        if p == "/mock/mail_sent": return self.send_json({"sent": MAIL_SENT})
+        if p == "/mock/mail_flags": return self.send_json({"flags": MAIL_FLAGS})
         if p == "/mock/hits": return self.send_json({"hits": HITS})
+        if p == "/mock/mesh":  # the mesh fields (MOCK_HUB_NAME…); ?peers=<JSON array> replaces the peers
+            if "peers" in q:
+                try: MESH["peers"] = mesh_peers(q["peers"][0], HUB_ID)
+                except ValueError as e: return self.send_json({"error": str(e)}, 400)
+            return self.send_json(mesh_state())
         if p == "/mock/hub_update":  # HubNoticeUITests: ?mode=<a MOCK_HUB_UPDATE mode>, from the start
             set_hub_update_mode((q.get("mode") or [""])[0])
             return self.send_json({"ok": True})
@@ -3101,6 +3743,7 @@ class H(BaseHTTPRequestHandler):
                     m.update(online=False, error="ssh: connect to host lab port 22: Connection refused")
             SESSIONS[:] = [x for x in SESSIONS if not x["session_id"].startswith("d4e6f8a0-")]
             del RECONNECTS[:], STARTED[:], SEEN[:]
+            PINS.update(spaces=["macbook/weather"], sessions=[])
             for sid, items in CHURN_ITEMS.items(): ITEMS[sid] = list(items)  # LiveUpdateTests, ChatFollowTests: what churn / say added goes
             if CHURN_INBOX: INBOX[:] = copy.deepcopy(CHURN_INBOX)
             for x in SESSIONS:
@@ -3115,15 +3758,14 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/started": return self.send_json({"started": STARTED})
         if p == "/mock/uploads": return self.send_json({"uploads": UPLOADS})
         if p == "/mock/keys": return self.send_json({"keys": KEYS})
+        if p == "/mock/queue": return self.send_json(queue_messages(q.get("text", [None])[0], "clear" in q))
+        if p == "/mock/queue_edits": return self.send_json({"edits": QUEUE_EDITS})
         if p == "/mock/terminal_input": return self.send_json({"input": TERMINAL_INPUT})
         if p == "/mock/kb_updates": return self.send_json({"updates": KB_UPDATES})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
-        if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
-        if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": [], "allowed": []})
-        if p == "/api/v1/assistant":
-            return self.send_json({"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.jarvis/assistant",
-                                   "timezone": "Asia/Shanghai", "notes_effective": "", "conversations": ASSISTANT,
-                                   "main": ASK1})
+        if p == "/api/v1/pins": return self.send_json(PINS)
+        if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": TREE_MUTED, "allowed": []})
+        if p == "/api/v1/assistant": return self.send_json(assistant_state())
         if p == "/api/v1/model-config": return self.send_json(model_configuration())
         if p.startswith("/api/v1/model-config/purposes/"):
             catalog = model_configuration()
@@ -3131,12 +3773,8 @@ class H(BaseHTTPRequestHandler):
             if not purpose: return self.send_json({"error": "模型用途不存在"}, 404)
             return self.send_json({"purpose": purpose, "providers": catalog["providers"]})
         if p == "/api/v1/assistant/tasks": return self.send_json({"tasks": SCHEDULE})
-        # The two lists the Android app still reads (the hub's views of the same tasks, assistant_schedule.go):
-        # routines are the daily tasks, follow-ups the enabled once / interval ones by their next run.
-        if p == "/api/v1/assistant/routines": return self.send_json({"routines": [t for t in SCHEDULE if t.get("repeat") == "daily"]})
-        if p == "/api/v1/assistant/followups":
-            due = [{**t, "at": t.get("next_run")} for t in SCHEDULE if t.get("repeat") != "daily" and t.get("enabled")]
-            return self.send_json({"followups": sorted(due, key=lambda t: t["at"] or "")})
+        if p == "/api/v1/assistant/routines": return self.send_json({"routines": schedule_routines()})
+        if p == "/api/v1/assistant/followups": return self.send_json({"followups": schedule_followups()})
         if p.startswith("/api/v1/machines/") and p.endswith("/stat"):
             cwd = q.get("cwd", [""])[0]
             paths = q.get("path", []) + [x for x in q.get("paths", [""])[0].split("\n") if x]
@@ -3161,6 +3799,11 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"runs": [r for r in RUNS if not ref or r["ref_id"] == ref]})
         if p == "/api/v1/assistant/memory": return self.send_json({"files": MEMORY, "dir": "/home/me/.jarvis/assistant/memory"})
         if p == "/mock/schedule": return self.send_json({"ran": SCHEDULE_RAN})
+        if p == "/mock/schedule/reset":  # back to the starting schedule (captures that ran or cancelled something)
+            start = copy.deepcopy(SCHEDULE_START)
+            SCHEDULE[:], RUNS[:] = start["schedule"], start["runs"]
+            del SCHEDULE_RAN[:]
+            return self.send_json({"ok": True})
         if p == "/mock/renamed": return self.send_json({"renamed": RENAMED})
         if p == "/mock/served": return self.send_json({"served": SERVED})
         if p == "/api/v1/inbox": return self.send_json({"items": inbox_for(q)})
@@ -3172,12 +3815,14 @@ class H(BaseHTTPRequestHandler):
                 if x["id"] == iid: return self.send_json(dict(x, context=x.get("context") or x["preview"]))
         if mail_area(self, "GET", p, q): return
         if p == "/api/v1/mail/accounts": return self.send_json({"accounts": MAIL_ACCOUNTS})
-        if p.startswith("/api/v1/mail/messages/") and p.count("/") == 6:
-            uid = int(p.rsplit("/", 1)[1])
-            it = next((x for x in INBOX if (x.get("mail") or {}).get("uids") == [uid]), None)
-            if it: return self.send_json({"message": {"account_id": "acc1", "mailbox": "INBOX", "uid": uid, "subject": it["title"],
-                "from": it["mail"]["from"], "to": [{"name": "Me", "email": "me@example.com"}], "date": it["updated_at"],
-                "text": MAIL_BODIES.get(uid, it["preview"]), "seen": False}})
+        if p.startswith("/api/v1/mail/messages/") and p.count("/") == 6:  # …/{aid}/{uid}
+            uid = int(p.rsplit("/", 1)[1]) if p.rsplit("/", 1)[1].isdigit() else -1
+            if uid in MAIL_MESSAGES: return self.send_json({"message": MAIL_MESSAGES[uid]})
+            item = next((x for x in INBOX if (x.get("mail") or {}).get("uids") == [uid]), None)
+            if item: return self.send_json({"message": {"account_id": item["mail"]["account_id"], "mailbox": "INBOX", "uid": uid,
+                "subject": item["title"], "from": item["mail"]["from"], "to": [{"name": "Me", "email": "me@example.com"}],
+                "date": item["updated_at"], "text": MAIL_BODIES.get(uid, item["preview"]), "seen": False}})
+            return self.send_json({"error": "邮件不存在"}, 404)
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
         if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
@@ -3212,6 +3857,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(lark_window(LARK_MESSAGES.get(p.split("/")[5], []), q))
         if p.startswith("/api/v1/lark/messages/") and p.endswith("/thread"):
             return self.send_json(lark_window(LARK_THREADS.get(p.split("/")[5], []), q))
+        if p == "/api/v1/lark/raw/documents/read": return self.send_json(LARK_DOCUMENT)
         if p.startswith("/api/v1/lark/media/") and p.split("/")[5] in LARK_MEDIA:
             key = p.split("/")[5]
             body = fs_media(key) if key.startswith("emoji-") else base64.b64decode(mock_png(*LARK_MEDIA[key]))
@@ -3249,7 +3895,7 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/machines/") and p.endswith("/codex-settings"):
             return self.send_json({"settings": CODEX_SETTINGS.setdefault(p.split("/")[4], _codex_settings())})
         if p.startswith("/api/v1/sessions/") and p.endswith("/items"):
-            sid = p.split("/")[5]
+            sid = unquote(p.split("/")[5])  # a subagent's is "<session>@<agent>" (the web app sends %40)
             items = find_items(sid)
             last = items[-1]["seq"] if items else 0
             if "after_seq" in q:
@@ -3293,7 +3939,7 @@ class H(BaseHTTPRequestHandler):
             if len(parts) == 1:
                 tag = (q.get("tag") or [""])[0]
                 items = [e for e in KB.get(kind, []) if not tag or tag in (e.get("tags") or [])]
-                return self.send_json({"items": items, "tags": KB_TAGS.get(kind, [])})
+                return self.send_json({"items": items, "tags": kb_tags(kind)})
             if kind == "moments" and len(parts) == 2:  # one archived removed post
                 return self.send_json({"post": {"id": parts[1]}, "markdown": "# removed · 帖子\n\n王五 · 2026-10-30 10:00 · 评论 2\n\n有人在用天气小组件吗？中号的降雨条看不太清\n\n## 评论（2）\n\n- 赵六: 同感，颜色太浅\n- 我: 在改了"})
             if kind == "chats" and len(parts) == 4 and parts[2] == "days":
@@ -3304,8 +3950,9 @@ class H(BaseHTTPRequestHandler):
                                        "prev": days[i - 1] if i else "", "next": days[i + 1] if i + 1 < len(days) else ""})
             e = next((e for e in KB.get(kind, []) if e["id"] == parts[1]), None)
             if e is None: return self.send_json({"error": "not found"}, 404)
-            d = dict({"kind": kind, "id": e["id"], "path": "/home/me/.jarvis/data/%s/%s" % (kind, e["id"]), "summary": e.get("one_line")},
-                     **KB_DETAIL.get((kind, e["id"]), {}))
+            # Like the hub's Detail, meta is always there (the entry's own fields unless KB_DETAIL has more).
+            d = dict({"kind": kind, "id": e["id"], "path": "/home/me/.jarvis/data/%s/%s" % (kind, e["id"]), "meta": e,
+                      "summary": e.get("one_line")}, **KB_DETAIL.get((kind, e["id"]), {}))
             out = {"detail": d}
             word = (q.get("q") or [""])[0]
             if word:
@@ -3372,6 +4019,24 @@ class H(BaseHTTPRequestHandler):
             return self.upload()
         self.last_body = self.body()
         p = urlparse(self.path).path
+        if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades its token for a device token
+            req = json.loads(self.last_body or b"{}")
+            kind = req.get("kind") if req.get("kind") in ("phone", "watch") else "other"
+            t = {"id": "dev_mock_%d" % (len(TOKENS) + 1), "name": req.get("name") or "设备", "kind": kind,
+                 "role": "answer" if kind == "watch" else "full", "created_at": ago(), "last_seen": ago()}
+            TOKENS.append(t)
+            return self.send_json({"id": t["id"], "token": "mock", "role": t["role"], "name": t["name"]})
+        if p == "/mock/fault" and self.command == "POST":
+            try:
+                body = json.loads(self.last_body or b"{}")
+                if not isinstance(body, dict) or not isinstance(body.get("fault"), str) or not isinstance(body.get("enabled", True), bool):
+                    raise ValueError("需要 fault 字符串及可选的 enabled 布尔值")
+                fault(body["fault"], body.get("enabled", True))
+            except (ValueError, RuntimeError) as e:
+                return self.send_json({"error": str(e), "code": "invalid"}, 400)
+            except (OSError, subprocess.SubprocessError):
+                return self.send_json({"error": "无法生成 TLS 证书", "code": "internal"}, 500)
+            return self.send_json({"ok": True})
         if self.bad_network(): return
         if p.startswith("/api/v1/hub/update") and HUB_UPDATE_MODE:
             s, body = hub_update_state(), json.loads(self.last_body or b"{}")
@@ -3524,9 +4189,9 @@ class H(BaseHTTPRequestHandler):
             if os.environ.get("MOCK_ENGINE_ERROR"): return self.send_json({"error": "暂时无法保存"}, 503)
             machine["engine"] = engine
             for send, _ in list(LIVE):
-                try: send({"type": "machines", "machines": MACHINES})
+                try: send({"type": "machines", "machines": out_machines()})
                 except Exception: pass
-            return self.send_json(machine)
+            return self.send_json(out_machine(machine))
         if self.command == "PUT" and p.startswith("/api/v1/kb/"):  # 打标: kept over the automatic tagging
             kind, eid = p.split("/")[4:6]
             body = json.loads(self.last_body or b"{}")
@@ -3596,13 +4261,14 @@ class H(BaseHTTPRequestHandler):
             time.sleep(float(os.environ.get("MOCK_ASSISTANT_START_SECONDS", "0")))
             body = json.loads(self.last_body or b"{}")
             prompt = body.get("prompt", "")
-            SENT.append({"text": prompt, "images": body.get("images")})
+            SENT.append({"text": prompt, "images": body.get("images"), **({"launcher": body["launcher"]} if body.get("launcher") else {})})
             now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             sid = str(uuid.uuid4())
             session = assistant_sess(sid, "", 0, "")  # what the hub returns: no title, model or transcript rev yet
             for k in ("model", "rev", "seen_at", "agent"): session.pop(k)  # the hub sends agent only when not Claude Code
             session.update(status="working", state="working", updated_at=now, launcher=body.get("launcher") or "claude",
                            permission_mode=body.get("permission_mode") or "", effort=body.get("effort") or "")
+            session["main"] = bool(body.get("main"))
             ASSISTANT.append(session)
             push_machine("server")
 
@@ -3656,6 +4322,27 @@ class H(BaseHTTPRequestHandler):
                 SENT.append(body)
             return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": inbox_for(parse_qs(urlparse(self.path).query))})
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read"):  # 可见即读: the positions a page saw
+            body = json.loads(self.last_body or b"{}")
+            if not body.get("position"): return self.send_json({"error": "position is required"}, 400)
+            LARK_READS.append(dict(body, feed=p.split("/")[5]))
+            return self.send_json({"ok": True})
+        if p == "/api/v1/mail/send":
+            body = json.loads(self.last_body or b"{}")
+            if not body.get("to"): return self.send_json({"error": "no recipients"}, 400)
+            if not isinstance(body.get("references", ""), str):  # mail.SendRequest takes References as one string
+                return self.send_json({"error": "json: cannot unmarshal array into Go struct field SendRequest.references of type string"}, 400)
+            MAIL_SENT.append(body)
+            return self.send_json({"ok": True})
+        if p.startswith("/api/v1/mail/messages/") and p.endswith("/flags"):
+            parts = p.split("/")
+            body = json.loads(self.last_body or b"{}")
+            MAIL_FLAGS.append(dict(body, account_id=parts[5], uid=int(parts[6]) if parts[6].isdigit() else parts[6]))
+            for x in INBOX:
+                if (x.get("mail") or {}).get("account_id") == parts[5] and str(((x.get("mail") or {}).get("uids") or [None])[-1]) == parts[6] \
+                        and body.get("seen") is not None:
+                    x["read"] = bool(body["seen"])
+            return self.send_json({"ok": True})
         if p == "/api/v1/translate/mail":
             body = json.loads(self.last_body or b"{}")
             t = MAIL_TRANSLATIONS.get(body.get("uid"))
@@ -3689,33 +4376,46 @@ class H(BaseHTTPRequestHandler):
             t = save_task({"id": "task_" + uuid.uuid4().hex[:8], "created_at": ago()}, json.loads(self.last_body or b"{}"))
             SCHEDULE.append(t)
             return self.send_json({"task": t})
+        if p == "/api/v1/assistant/routines" and self.command == "PUT":  # the Android app saves all its routines at once
+            saved, error = put_routines(json.loads(self.last_body or b"{}"))
+            if error: return self.send_json({"error": error}, 400)
+            return self.send_json({"routines": saved})
+        # 立即运行 behaves like the hub, whichever list it comes from: an unknown id is a 404, every run lands in the
+        # history (manual), a one-off is done (it leaves the list), a repeating task's run updates its last status and
+        # conversation but not last_run, and the first run of one that has no conversation starts its own.
+        if p.startswith(("/api/v1/assistant/tasks/", "/api/v1/assistant/routines/", "/api/v1/assistant/followups/")) \
+                and p.endswith("/run"):
+            tid = p.split("/")[5]
+            t = next((t for t in SCHEDULE if t["id"] == tid), None)
+            if t is None: return self.send_json({"error": "这个定时任务已经不在了"}, 404)
+            SCHEDULE_RAN.append(tid)
+            once = t.get("repeat") == "once"
+            if once: SCHEDULE[:] = [x for x in SCHEDULE if x["id"] != tid]
+            elif not t.get("session_id") and not t.get("run_session_id"):  # the run starts the task's own conversation
+                t.update({"run_machine_id": "server", "run_session_id": ASK2, "run_launcher": "claude"})
+            session = t.get("session_id") or t.get("run_session_id") or (ASK1 if once else ASK2)
+            machine = (t.get("machine_id") if t.get("session_id") else t.get("run_machine_id")) or "server"
+            record_run("followup" if once else "routine", tid, task_label(t), session, due=t.get("at") if once else None,
+                       machine=machine)
+            if not once:
+                t.update(last_status="ok", last_session_id=session)
+                t.pop("last_error", None)
+            return self.send_json({"session_id": session, "machine_id": machine})
         if p.startswith("/api/v1/assistant/tasks/") and p.endswith("/fresh"):  # 下次开新对话
             t = next((t for t in SCHEDULE if t["id"] == p.split("/")[5]), None)
             if t is None: return self.send_json({"error": "这个定时任务已经不在了"}, 404)
             for k in ("run_machine_id", "run_session_id", "run_launcher"): t.pop(k, None)
             return self.send_json({"task": t})
-        if p == "/api/v1/assistant/routines" and self.command == "PUT":  # the Android app replaces the daily ones
-            old = {t["id"]: t for t in SCHEDULE if t.get("repeat") == "daily"}
-            new = [save_task(old.get(r.get("id")) or {"id": "rt_" + uuid.uuid4().hex[:8], "created_at": ago()}, {**r, "repeat": "daily"})
-                   for r in json.loads(self.last_body or b"{}").get("routines") or []]
-            SCHEDULE[:] = [t for t in SCHEDULE if t.get("repeat") != "daily"] + new
-            return self.send_json({"routines": new})
-        if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":
-            SCHEDULE[:] = [t for t in SCHEDULE if t["id"] != p.split("/")[5]]
-            return self.send_json({"ok": True})
-        if p.startswith(("/api/v1/assistant/tasks/", "/api/v1/assistant/routines/", "/api/v1/assistant/followups/")) and p.endswith("/run"):
-            tid = p.split("/")[5]
-            SCHEDULE_RAN.append(tid)
-            t = next((t for t in SCHEDULE if t["id"] == tid), {})
-            if t.get("repeat") == "once": SCHEDULE[:] = [x for x in SCHEDULE if x["id"] != tid]
-            elif not t.get("session_id") and not t.get("run_session_id"):  # the run starts the task's own conversation
-                t.update({"run_machine_id": "server", "run_session_id": ASK2, "run_launcher": "claude"})
-            return self.send_json({"session_id": t.get("session_id") or t.get("run_session_id") or ASK2, "machine_id": "server"})
         if p.startswith("/api/v1/launchers/") and (self.command == "DELETE" or p.endswith("/restore")):  # hide / bring back
             l = next((l for l in LAUNCHERS if l["name"] == p.split("/")[4]), None)
             if l is None: return self.send_json({"error": "没有这个启动器"}, 404)
             if l["source"] == "jarvis" and self.command == "DELETE": LAUNCHERS.remove(l)  # a Jarvis one is deleted
             else: l["hidden"] = self.command == "DELETE"
+            return self.send_json({"ok": True})
+        if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":  # the Android app's 取消
+            fid = p.split("/")[5]
+            if not any(t["id"] == fid for t in SCHEDULE): return self.send_json({"error": "这个定时任务已经不在了"}, 404)
+            SCHEDULE[:] = [t for t in SCHEDULE if t["id"] != fid]
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/assistant/tasks/"):
             tid = p.split("/")[5]
@@ -3736,6 +4436,35 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/sessions/") and p.endswith("/seen"):
             mark_seen(p.split("/")[5])
             return self.send_json({"ok": True})
+        if p == "/api/v1/pins" and self.command == "PUT":  # the hub keeps them (the reply is what it kept)
+            body = json.loads(self.last_body or b"{}")
+            PINS.update(spaces=list(body.get("spaces") or []), sessions=list(body.get("sessions") or []))
+            return self.send_json(PINS)
+        if p == "/api/v1/assistant" and self.command == "PUT":  # 设置 › 助手: only the fields sent change
+            body = json.loads(self.last_body or b"{}")
+            if body.get("machine_id"):
+                if not any(m["id"] == body["machine_id"] for m in MACHINES):
+                    return self.send_json({"error": "unknown machine"}, 400)
+                ASSISTANT_CONFIG["machine_id"] = body["machine_id"]
+            for key in ("launcher", "timezone"):
+                if body.get(key):
+                    ASSISTANT_CONFIG[key] = body[key]
+            if body.get("notes") is not None:
+                ASSISTANT_CONFIG["notes"] = body["notes"]
+            if body.get("main"):
+                ASSISTANT_CONFIG["main"] = "" if body["main"] == "-" else body["main"]
+            return self.send_json(assistant_state())
+        if p.startswith("/api/v1/assistant/memory/") and self.command in ("PUT", "DELETE"):
+            name = unquote(p.rsplit("/", 1)[1])
+            if self.command == "PUT":
+                content = json.loads(self.last_body or b"{}").get("content", "")
+                MEMORY[:] = [f for f in MEMORY if f["name"] != name] + [{"name": name, "content": content, "updated_at": ago()}]
+            else:  # like the hub, deleting a memory also drops its line from the index
+                MEMORY[:] = [f for f in MEMORY if f["name"] != name]
+                for f in MEMORY:
+                    if f["name"] == "MEMORY.md":
+                        f["content"] = "\n".join(line for line in f["content"].split("\n") if "(%s)" % name not in line)
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/machines/") and p.endswith("/deploy"):  # 重新部署: deploying for 3 s, then the hub's build
             mid = p.split("/")[4]
             m = next((m for m in MACHINES if m["id"] == mid), None)
@@ -3746,11 +4475,11 @@ class H(BaseHTTPRequestHandler):
                 time.sleep(3)
                 m.pop("deploying", None); m.pop("node_mismatch", None)
                 for send, _ in list(LIVE):
-                    try: send({"type": "machines", "machines": MACHINES})
+                    try: send({"type": "machines", "machines": out_machines()})
                     except Exception: pass
             threading.Thread(target=done, daemon=True).start()
             for send, _ in list(LIVE):
-                try: send({"type": "machines", "machines": MACHINES})
+                try: send({"type": "machines", "machines": out_machines()})
                 except Exception: pass
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/machines/") and p.endswith("/reconnect"):
@@ -3803,12 +4532,6 @@ class H(BaseHTTPRequestHandler):
                     push_machine(s["machine_id"])
                     push_todos()
             return self.send_json({"session": decorated_session(s)})
-        if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades the token for the device's own
-            body = json.loads(self.last_body or b"{}")
-            t = {"id": "dev_" + uuid.uuid4().hex[:6], "name": body.get("name", ""), "kind": body.get("kind", "phone"),
-                 "role": "full", "created_at": ago(), "last_seen": ago()}
-            TOKENS.append(t)
-            return self.send_json({"id": t["id"], "token": "mock", "role": "full", "name": t["name"]})
         if p.startswith("/api/v1/auth/tokens/") and self.command == "DELETE":
             for t in TOKENS:
                 if t["id"] == p.split("/")[-1]:
@@ -3839,6 +4562,7 @@ class H(BaseHTTPRequestHandler):
             if os.environ.get("MOCK_PROMPT_CHANGED") and p.split("/")[4].startswith("scr_"):
                 return self.send_json({"error": "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。",
                                        "code": "prompt_changed", "delivered": "none"}, 409)
+            resolve_mock_interaction(p.split("/")[4], json.loads(self.last_body or b"{}"))
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/machines/") and (p.endswith("/claude-settings") or p.endswith("/codex-settings")) and self.command == "PUT":
             body, mid = json.loads(self.last_body or b"{}"), p.split("/")[4]
@@ -3867,14 +4591,36 @@ class H(BaseHTTPRequestHandler):
                                    "code": "input_draft", "delivered": "none", "draft": "顺便把 README 也更新一下",
                                    "clearable": "顺便把 README 也更新一下"}, 409)
         if p.startswith("/api/v1/sessions/") and p.endswith("/screen/before"):  # the terminal's scrollback, one page
-            E = "\x1b["
-            return self.send_json({"has_more": False, "at_limit": False, "text": "\r\n".join(
-                ["$ git log --oneline -3", E + "33m3f9a1c2" + E + "0m Widget: hourly timeline",
-                 E + "33m8b20e7d" + E + "0m Widget: small and medium sizes", E + "33m1c4d5a9" + E + "0m Forecast client",
-                 "$ swift build", E + "32mBuild complete!" + E + "0m (8.31s)"])})
+            # As the node does (screenBefore): the page right before the anchor (the first lines the app shows), found
+            # by content; an anchor that is not in the history is the screen, so the page is the history's end.
+            body = json.loads(self.last_body or b"{}")
+            want = int(body.get("lines") or 200)
+            anchor = [a.rstrip() for a in (body.get("anchor") or [])][:3]
+            plain = [re.sub(r"\x1b\[[0-9;:]*m", "", l).rstrip() for l in SCROLLBACK]
+            end = len(SCROLLBACK)
+            if anchor and any(anchor):
+                for i in range(len(plain) - len(anchor), -1, -1):
+                    if plain[i:i + len(anchor)] == anchor:
+                        end = i
+                        break
+            start = max(0, end - want)
+            page = SCROLLBACK[start:end]
+            if body.get("format") != "ansi":
+                page = [re.sub(r"\x1b\[[0-9;:]*m", "", l) for l in page]
+            return self.send_json({"text": "\r\n".join(page), "has_more": start > 0,
+                                   "at_limit": start == 0 and len(SCROLLBACK) >= 400})
         if p.startswith("/api/v1/sessions/") and p.endswith("/keys"):
             KEYS.append(json.loads(self.last_body or b"{}"))
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/sessions/") and p.endswith("/queue"):  # node editQueue: pull every queued message back, re-queue `keep`
+            body = json.loads(self.last_body or b"{}")
+            QUEUE_EDITS.append(body)
+            s = next((x for x in all_sessions() if x["session_id"] == p.split("/")[5]), None)
+            pulled = list((s or {}).get("queued") or [])
+            if not pulled: return self.send_json({"error": "nothing is queued"}, 502)
+            s["queued"] = [pulled[k] for k in body.get("keep") or [] if 0 <= k < len(pulled)]
+            push_machine(s["machine_id"])
+            return self.send_json({"queue": pulled})
         if p.startswith("/api/v1/sessions/") and p.endswith("/modes"):  # permission mode / effort chips
             body = json.loads(self.last_body or b"{}")
             for s in all_sessions():
@@ -3948,8 +4694,8 @@ class H(BaseHTTPRequestHandler):
     def websocket(self):
         # An app that asks for sessions_delta (?features=) gets each machine's list once, then deltas, like the hub
         # (hub/sessions_push.go); MOCK_WHOLE_LISTS=1 is an older hub that ignores the question.
-        features = parse_qs(urlparse(self.path).query).get("features", [""])[0].split(",")
-        delta = "sessions_delta" in features and not os.environ.get("MOCK_WHOLE_LISTS")
+        asked = parse_qs(urlparse(self.path).query).get("features", [""])[0].split(",")
+        delta = "sessions_delta" in asked and not os.environ.get("MOCK_WHOLE_LISTS")
         have = {}  # machine -> {session id: its JSON}: what this app has
         key = self.headers.get("Sec-WebSocket-Key", "")
         accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
@@ -3959,6 +4705,8 @@ class H(BaseHTTPRequestHandler):
         lock = threading.Lock()
 
         def send(obj):
+            if obj.get("error") and "code" not in obj:
+                obj = {**obj, "code": "terminal_busy" if obj.get("state") == "busy" else "internal"}
             with lock:
                 if delta and obj.get("type") == "sessions":
                     obj = sessions_for_delta_app(obj, have)
@@ -3973,13 +4721,50 @@ class H(BaseHTTPRequestHandler):
         LIVE.append((send, subscribed))
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8], "channel": "release",
               "build": 202611021500, "protocol": 1, "min_app_build": 0,
-              "features": ["file_upload", "connectors"] + (["sessions_delta"] if delta else []) + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])})
+              **identity(), "endpoints": list(ENDPOINTS), **mesh_hello(),
+              "features": features() + (["sessions_delta"] if delta else [])})
+        client = {"send": send, "features": set()}
+        heartbeat = {"interval": 20, "pong_timeout": 15}
+        hb_condition = threading.Condition()
+        hb_state = {"next": None, "pending": None, "sent": 0, "closed": False}
+
+        def heartbeats():
+            # Legacy clients keep the original passive mock behavior.
+            try:
+                with hb_condition:
+                    while not hb_state["closed"]:
+                        if hb_state["next"] is None:
+                            hb_condition.wait()
+                            continue
+                        deadline = (hb_state["sent"] + heartbeat["pong_timeout"]
+                                    if hb_state["pending"] is not None else hb_state["next"])
+                        remaining = deadline - time.monotonic()
+                        if remaining > 0:
+                            hb_condition.wait(remaining)
+                            continue
+                        if hb_state["pending"] is not None:
+                            self.connection.shutdown(socket.SHUT_RDWR)
+                            return
+                        ping = os.urandom(8)
+                        hb_state.update(pending=ping, sent=time.monotonic())
+                        with lock:
+                            self.wfile.write(bytes([0x89, len(ping)]) + ping)
+                            self.wfile.flush()
+                        hb_state["next"] = hb_state["sent"] + heartbeat["interval"]
+            except OSError:
+                pass
+
+        threading.Thread(target=heartbeats, daemon=True).start()
+        with FAULT_LOCK:
+            CLIENTS[self.connection] = client
         drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
-        send({"type": "machines", "machines": MACHINES})
+        send({"type": "machines", "machines": out_machines()})
         by = {}
-        for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
+        for s in out_by_machine(all_sessions()): by.setdefault(s["machine_id"], []).append(s)
         for m, ss in by.items(): send({"type": "sessions", "machine_id": m, "sessions": ss})
-        for ix in INTERACTIONS: send({"type": "interaction", "interaction": ix})  # as the real hub does on connect
+        # The pending interactions, as the real hub does on connect (what GET /api/v1/interactions serves: answered ones
+        # are gone, so they do not come back with the next connection).
+        for ix in out_by_machine(mock_interactions()): send({"type": "interaction", "interaction": ix})
         r = self.rfile
         try:
             while True:
@@ -3995,9 +4780,37 @@ class H(BaseHTTPRequestHandler):
                     if NET["delay"] > 0: time.sleep(NET["delay"])
                     with lock: self.wfile.write(bytes([0x8A, len(payload)]) + payload); self.wfile.flush()
                     continue
+                if op == 10:
+                    with hb_condition:
+                        if payload == hb_state["pending"]:
+                            hb_state["pending"] = None
+                            hb_condition.notify()
+                    continue
                 if op != 1: continue
                 msg = json.loads(payload or b"{}")
                 LOG.write("  WS %s\n" % msg.get("type")); LOG.flush()
+                if msg.get("type") == "client_hello":
+                    declared, requested = msg.get("features", []), msg.get("heartbeat")
+                    if not isinstance(declared, list) or not all(isinstance(f, str) for f in declared):
+                        continue
+                    if requested is not None:
+                        if not isinstance(requested, dict) or any(type(requested[k]) is not int
+                                                                 for k in ("interval", "pong_timeout") if k in requested):
+                            continue
+                        with hb_condition:
+                            heartbeat.update(interval=max(10, min(900, requested.get("interval", heartbeat["interval"]))),
+                                             pong_timeout=max(5, min(60, requested.get("pong_timeout", heartbeat["pong_timeout"]))))
+                            hb_state["next"] = time.monotonic() + heartbeat["interval"]
+                            hb_condition.notify()
+                    with FAULT_LOCK:
+                        client["features"] = set(declared)
+                    send({"type": "client_hello_ack", "heartbeat": dict(heartbeat)})
+                    continue
+                if msg.get("type") == "ping":
+                    if isinstance(msg.get("id"), str):
+                        if NET["delay"] > 0: time.sleep(NET["delay"])
+                        send({"type": "pong", "id": msg["id"]})
+                    continue
                 if msg.get("type") == "seen":
                     mark_seen(msg.get("session_id"))
                     continue
@@ -4114,12 +4927,54 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             LOG.write("  WS closed %r\n" % e); LOG.flush()
         SOCKETS.discard(self.connection)
+        with hb_condition:
+            hb_state["closed"] = True
+            hb_condition.notify()
+        with FAULT_LOCK:
+            CLIENTS.pop(self.connection, None)
         LIVE[:] = [x for x in LIVE if x[0] is not send]
         self.close_connection = True
 
 
 if __name__ == "__main__":
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
-    srv.daemon_threads = True
-    print("mock hub on 127.0.0.1:%d" % PORT, flush=True)
-    srv.serve_forever()
+    parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")
+    parser.add_argument("--tls-port", type=int, help="额外的 TLS 监听端口；0 表示自动分配")
+    args = parser.parse_args()
+    if args.tls_port is not None and not 0 <= args.tls_port <= 65535:
+        parser.error("--tls-port 必须在 0–65535 之间")
+    servers = []
+    try:
+        context, fp = tls_context() if args.tls_port is not None else (None, "")
+        loopback = socket.inet_ntoa(bytes((127, 0, 0, 1)))
+        srv = ThreadingHTTPServer((loopback, PORT), H)
+        servers.append(srv)
+        srv.daemon_threads = True
+        PORT = srv.server_port
+        ENDPOINTS.append(endpoint(loopback, PORT, "http", "lan"))
+        if context is not None:
+            secure = ThreadingHTTPServer((loopback, args.tls_port), H)
+            servers.append(secure)
+            secure.daemon_threads = True
+            secure.socket = context.wrap_socket(secure.socket, server_side=True)
+            TLS.update(port=secure.server_port, fp=fp, server=secure)
+            ENDPOINTS.insert(0, endpoint(loopback, secure.server_port, "https", "lan"))
+            threading.Thread(target=secure.serve_forever, daemon=True).start()
+            print("TLS 端口=%d fp=%s" % (secure.server_port, fp), flush=True)
+        if os.environ.get("MOCK_ENDPOINTS"):
+            # Documentation addresses nobody can reach, for Android 设置 › 连接诊断 (failed probes, disabling).
+            port, scheme = (TLS["port"], "https") if TLS["port"] else (PORT, "http")
+            ENDPOINTS.insert(0, endpoint("[2001:db8::10]", port, scheme, "ipv6"))
+            ENDPOINTS.insert(1, endpoint("hub.example.com", port, scheme, "name"))
+        def stop(signum, frame):
+            raise KeyboardInterrupt
+        signal.signal(signal.SIGTERM, stop)
+        print("mock hub on %s:%d" % (loopback, PORT), flush=True)
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    except (OSError, RuntimeError, subprocess.SubprocessError) as e:
+        print("mock hub 启动失败：%s" % e, file=sys.stderr)
+        sys.exit(1)
+    finally:
+        for server in servers:
+            server.server_close()

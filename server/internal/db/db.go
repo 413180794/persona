@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,7 +24,9 @@ import (
 var migrations embed.FS
 
 type DB struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	closeOnce sync.Once
+	closeDone chan struct{}
 }
 
 // Open connects and applies pending migrations. It retries for a while so the hub can start alongside the container.
@@ -62,10 +65,42 @@ func Open(ctx context.Context, url string) (*DB, error) {
 	return d, nil
 }
 
-func (d *DB) Close() { d.pool.Close() }
+func (d *DB) Close() { _ = d.CloseContext(context.Background()) }
+
+// CloseContext stops new acquisitions and bounds waiting for borrowed connections.
+// pgxpool has no forced close: outstanding borrowers may finish after ctx expires.
+func (d *DB) CloseContext(ctx context.Context) error {
+	d.closeOnce.Do(func() {
+		d.closeDone = make(chan struct{})
+		go func() {
+			d.pool.Close()
+			close(d.closeDone)
+		}()
+	})
+	select {
+	case <-d.closeDone:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 // migrate runs migrations/NNNN_*.sql in order, each in its own transaction, recording them in schema_migrations.
 func (d *DB) migrate(ctx context.Context) error {
+	return d.migrateFrom(ctx, migrations)
+}
+
+// renumbered are migrations a database may have recorded under the number they had before a merge gave them another
+// one (two lines of work picked the same number). Such a record would make migrate skip the migration that has the old
+// number now, and run the renumbered one again; so it is moved to the new number first, or dropped when the new number
+// is recorded too. The renumbered migrations are idempotent; the ones that took over the old numbers never ran there.
+var renumbered = []struct{ from, to string }{
+	{"0071_pair_tokens.sql", "0111_pair_tokens.sql"},             // 0071 is sent_messages
+	{"0081_device_push_relay.sql", "0141_device_push_relay.sql"}, // 0081 is device_sessions
+}
+
+// migrateFrom is migrate over the migrations/ directory of fsys (tests start from a database at an older state).
+func (d *DB) migrateFrom(ctx context.Context, fsys fs.FS) error {
 	if _, err := d.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version int PRIMARY KEY, name text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		return fmt.Errorf("create schema_migrations: %w", err)
@@ -81,16 +116,21 @@ func (d *DB) migrate(ctx context.Context) error {
 	}
 	defer conn.Exec(context.Background(), `SELECT pg_advisory_unlock(424242)`) //nolint:errcheck
 
-	entries, err := fs.ReadDir(migrations, "migrations")
+	for _, r := range renumbered {
+		if err := renumberMigration(ctx, conn, r.from, r.to); err != nil {
+			return fmt.Errorf("renumber migration %s: %w", r.from, err)
+		}
+	}
+	entries, err := fs.ReadDir(fsys, "migrations")
 	if err != nil {
 		return err
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	for _, e := range entries {
 		name := e.Name()
-		version, err := strconv.Atoi(strings.SplitN(name, "_", 2)[0])
+		version, err := migrationVersion(name)
 		if err != nil {
-			return fmt.Errorf("bad migration name %s", name)
+			return err
 		}
 		var done bool
 		if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`, version).Scan(&done); err != nil {
@@ -99,7 +139,7 @@ func (d *DB) migrate(ctx context.Context) error {
 		if done {
 			continue
 		}
-		sql, err := migrations.ReadFile("migrations/" + name)
+		sql, err := fs.ReadFile(fsys, "migrations/"+name)
 		if err != nil {
 			return err
 		}
@@ -117,15 +157,42 @@ func (d *DB) migrate(ctx context.Context) error {
 	return nil
 }
 
+// migrationVersion is the number a migration file name starts with.
+func migrationVersion(name string) (int, error) {
+	version, err := strconv.Atoi(strings.SplitN(name, "_", 2)[0])
+	if err != nil {
+		return 0, fmt.Errorf("bad migration name %s", name)
+	}
+	return version, nil
+}
+
+// renumberMigration moves a database's record of migration from (applied under its old number) to to's name and
+// number; when to is recorded already, the old record only goes away.
+func renumberMigration(ctx context.Context, conn *pgxpool.Conn, from, to string) error {
+	version, err := migrationVersion(to)
+	if err != nil {
+		return err
+	}
+	return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM schema_migrations WHERE name = $1
+			AND EXISTS (SELECT 1 FROM schema_migrations WHERE version = $2)`, from, version); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE schema_migrations SET version = $2, name = $3 WHERE name = $1`, from, version, to)
+		return err
+	})
+}
+
 // ---- devices ----
 
 type Device struct {
-	DeviceID  string `json:"device_id"`
-	Name      string `json:"name"`
-	Kind      string `json:"kind"`
-	APNSToken string `json:"apns_token,omitempty"`
-	APNSEnv   string `json:"apns_env,omitempty"`
-	Topic     string `json:"topic,omitempty"`
+	DeviceID     string `json:"device_id"`
+	CredentialID string `json:"-"`
+	Name         string `json:"name"`
+	Kind         string `json:"kind"`
+	APNSToken    string `json:"apns_token,omitempty"`
+	APNSEnv      string `json:"apns_env,omitempty"`
+	Topic        string `json:"topic,omitempty"`
 	// Pushing through the relay (docs/push-relay.md): the phone's public key (base64 X9.63), the relay's URL and the
 	// grant it gave the phone.
 	PushKey    string `json:"push_key,omitempty"`
@@ -141,23 +208,23 @@ type Device struct {
 }
 
 func (d *DB) UpsertDevice(ctx context.Context, v Device) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at, credential_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), $11)
 		ON CONFLICT (device_id) DO UPDATE SET name = $2, kind = $3, apns_token = $4, apns_env = $5, topic = $6,
-			push_key = $7, relay_url = $8, relay_grant = $9, credential = $10, updated_at = now()`,
-		v.DeviceID, v.Name, v.Kind, v.APNSToken, v.APNSEnv, v.Topic, v.PushKey, v.RelayURL, v.RelayGrant, v.Credential)
+			push_key = $7, relay_url = $8, relay_grant = $9, credential = $10, updated_at = now(), credential_id = $11`,
+		v.DeviceID, v.Name, v.Kind, v.APNSToken, v.APNSEnv, v.Topic, v.PushKey, v.RelayURL, v.RelayGrant, v.Credential, v.CredentialID)
 	return err
 }
 
 func (d *DB) Devices(ctx context.Context) ([]Device, error) {
-	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at, prefs FROM devices ORDER BY updated_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at, prefs, credential_id FROM devices ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Device, error) {
 		var v Device
 		var prefs []byte
-		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.PushKey, &v.RelayURL, &v.RelayGrant, &v.Credential, &v.UpdatedAt, &prefs)
+		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.PushKey, &v.RelayURL, &v.RelayGrant, &v.Credential, &v.UpdatedAt, &prefs, &v.CredentialID)
 		if len(prefs) > 0 {
 			v.Prefs = prefs
 		}
@@ -220,20 +287,36 @@ func (d *DB) SaveLiveActivity(ctx context.Context, v LiveActivity) error {
 
 // ---- phone tools ----
 
-// ReplacePhoneTools stores the iPhone's current tool list, dropping tools it no longer offers.
-func (d *DB) ReplacePhoneTools(ctx context.Context, tools []proto.Tool) error {
+// PhoneToolRegistration is one device's most recently announced tool list.
+type PhoneToolRegistration struct {
+	DeviceID     string
+	Platform     string
+	CredentialID string
+	UpdatedAt    time.Time
+	Tools        []proto.Tool
+}
+
+// ReplacePhoneTools replaces only this device's tools, including an empty list.
+func (d *DB) ReplacePhoneTools(ctx context.Context, registration PhoneToolRegistration) error {
 	return pgx.BeginFunc(ctx, d.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `DELETE FROM phone_tools`); err != nil {
+		if registration.CredentialID != "" {
+			var id string
+			if err := tx.QueryRow(ctx, `SELECT id FROM device_tokens WHERE id = $1 AND revoked_at IS NULL FOR UPDATE`, registration.CredentialID).Scan(&id); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM phone_tools WHERE device_id = $1`, registration.DeviceID); err != nil {
 			return err
 		}
-		for i, t := range tools {
+		for i, t := range registration.Tools {
 			schema := t.InputSchema
 			if len(schema) == 0 {
 				schema = json.RawMessage(`{}`)
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO phone_tools (name, description, input_schema, position) VALUES ($1, $2, $3, $4)
-				ON CONFLICT (name) DO UPDATE SET description = $2, input_schema = $3, position = $4, updated_at = now()`,
-				t.Name, t.Description, []byte(schema), i); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO phone_tools (device_id, platform, credential_id, name, description, input_schema, position)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+				ON CONFLICT (device_id, name) DO UPDATE SET description = $5, input_schema = $6, position = $7, updated_at = now()`,
+				registration.DeviceID, registration.Platform, registration.CredentialID, t.Name, t.Description, []byte(schema), i); err != nil {
 				return err
 			}
 		}
@@ -241,18 +324,30 @@ func (d *DB) ReplacePhoneTools(ctx context.Context, tools []proto.Tool) error {
 	})
 }
 
-func (d *DB) PhoneTools(ctx context.Context) ([]proto.Tool, error) {
-	rows, err := d.pool.Query(ctx, `SELECT name, description, input_schema FROM phone_tools ORDER BY position, name`)
+func (d *DB) PhoneTools(ctx context.Context) ([]PhoneToolRegistration, error) {
+	rows, err := d.pool.Query(ctx, `SELECT device_id, platform, credential_id, updated_at, name, description, input_schema
+		FROM phone_tools ORDER BY device_id, position, name`)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (proto.Tool, error) {
+	defer rows.Close()
+	var registrations []PhoneToolRegistration
+	for rows.Next() {
+		var r PhoneToolRegistration
 		var t proto.Tool
-		var schema []byte
-		err := r.Scan(&t.Name, &t.Description, &schema)
-		t.InputSchema = schema
-		return t, err
-	})
+		if err := rows.Scan(&r.DeviceID, &r.Platform, &r.CredentialID, &r.UpdatedAt, &t.Name, &t.Description, &t.InputSchema); err != nil {
+			return nil, err
+		}
+		if len(registrations) == 0 || registrations[len(registrations)-1].DeviceID != r.DeviceID {
+			registrations = append(registrations, r)
+		}
+		last := &registrations[len(registrations)-1]
+		last.Tools = append(last.Tools, t)
+		if r.UpdatedAt.After(last.UpdatedAt) {
+			last.UpdatedAt = r.UpdatedAt
+		}
+	}
+	return registrations, rows.Err()
 }
 
 // ---- node sessions ----
@@ -663,19 +758,21 @@ type DeviceToken struct {
 	CreatedAt time.Time  `json:"created_at"`
 	LastSeen  *time.Time `json:"last_seen,omitempty"`
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	// MachineID binds a jarvis-link credential (kind link) to its machine in hub.json; empty for every other kind.
+	MachineID string `json:"machine_id,omitempty"`
 }
 
 func (d *DB) CreateDeviceToken(ctx context.Context, t DeviceToken, hash string) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO device_tokens (id, name, kind, role, token_hash) VALUES ($1, $2, $3, $4, $5)`,
-		t.ID, t.Name, t.Kind, t.Role, hash)
+	_, err := d.pool.Exec(ctx, `INSERT INTO device_tokens (id, name, kind, role, token_hash, machine_id)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))`, t.ID, t.Name, t.Kind, t.Role, hash, t.MachineID)
 	return err
 }
 
 // DeviceTokenByHash finds a token that is not revoked; nil when there is none.
 func (d *DB) DeviceTokenByHash(ctx context.Context, hash string) (*DeviceToken, error) {
 	var t DeviceToken
-	err := d.pool.QueryRow(ctx, `SELECT id, name, kind, role, created_at, last_seen FROM device_tokens
-		WHERE token_hash = $1 AND revoked_at IS NULL`, hash).Scan(&t.ID, &t.Name, &t.Kind, &t.Role, &t.CreatedAt, &t.LastSeen)
+	err := d.pool.QueryRow(ctx, `SELECT id, name, kind, role, created_at, last_seen, COALESCE(machine_id, '') FROM device_tokens
+		WHERE token_hash = $1 AND revoked_at IS NULL`, hash).Scan(&t.ID, &t.Name, &t.Kind, &t.Role, &t.CreatedAt, &t.LastSeen, &t.MachineID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -686,22 +783,37 @@ func (d *DB) DeviceTokenByHash(ctx context.Context, hash string) (*DeviceToken, 
 }
 
 func (d *DB) DeviceTokens(ctx context.Context) ([]DeviceToken, error) {
-	rows, err := d.pool.Query(ctx, `SELECT id, name, kind, role, created_at, last_seen, revoked_at FROM device_tokens
-		ORDER BY revoked_at IS NOT NULL, created_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT id, name, kind, role, created_at, last_seen, revoked_at, COALESCE(machine_id, '')
+		FROM device_tokens ORDER BY revoked_at IS NOT NULL, created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (DeviceToken, error) {
 		var t DeviceToken
-		err := r.Scan(&t.ID, &t.Name, &t.Kind, &t.Role, &t.CreatedAt, &t.LastSeen, &t.RevokedAt)
+		err := r.Scan(&t.ID, &t.Name, &t.Kind, &t.Role, &t.CreatedAt, &t.LastSeen, &t.RevokedAt, &t.MachineID)
 		return t, err
 	})
 }
 
 // RevokeDeviceToken reports whether a live token was revoked.
 func (d *DB) RevokeDeviceToken(ctx context.Context, id string) (bool, error) {
-	tag, err := d.pool.Exec(ctx, `UPDATE device_tokens SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL`, id)
-	return tag.RowsAffected() > 0, err
+	var revoked bool
+	err := pgx.BeginFunc(ctx, d.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE device_tokens SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL`, id)
+		if err != nil {
+			return err
+		}
+		revoked = tag.RowsAffected() > 0
+		if revoked {
+			_, err = tx.Exec(ctx, `DELETE FROM devices WHERE credential_id = $1 OR device_id = $1`, id)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(ctx, `DELETE FROM phone_tools WHERE credential_id = $1 OR device_id = $1`, id)
+		}
+		return err
+	})
+	return revoked, err
 }
 
 func (d *DB) TouchDeviceToken(ctx context.Context, id string) error {

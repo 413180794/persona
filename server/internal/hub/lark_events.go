@@ -34,6 +34,9 @@ func (h *Hub) larkEvents(ctx context.Context) {
 		h.kbKick()
 	}
 	h.lark.Events(ctx, func(ev lark.Event) {
+		if h.isMember() {
+			return // the center's own Feishu connection serves the group (mesh_group.go)
+		}
 		h.larkLastEvent.Store(time.Now().Unix())
 		if ev.Type == "agent-bridge.updated" { // personal agents: refresh just those sessions, not the Feishu inbox
 			if h.agents != nil {

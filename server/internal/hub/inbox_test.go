@@ -1,14 +1,85 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
+
+func TestInboxMailReplyTargetConflict(t *testing.T) {
+	h := newTestHub(t)
+	mux := http.NewServeMux()
+	h.inboxRoutes(mux)
+	item := &InboxItem{ID: "mail-item", Mail: &InboxMail{AccountID: "account", Mailbox: "INBOX", UIDs: []uint32{7}, MessageID: "original@example.com", From: mail.Address{Email: "sender@example.com"}}}
+	h.inbox.items[item.ID] = item
+	get := httptest.NewRecorder()
+	mux.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/v1/inbox/mail-item", nil))
+	var detail struct {
+		ReplyTarget inboxMailTarget `json:"reply_target"`
+	}
+	if err := json.Unmarshal(get.Body.Bytes(), &detail); err != nil || detail.ReplyTarget.UID != 7 || detail.ReplyTarget.Version == "" {
+		t.Fatalf("target: %s %v", get.Body, err)
+	}
+	version := detail.ReplyTarget.Version
+	item.Mail.UIDs = append(item.Mail.UIDs, 8)
+	for _, body := range []string{
+		`{"text":"reply","expected_uid":7}`,
+		`{"text":"reply","expected_version":"` + version + `"}`,
+	} {
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/inbox/mail-item/reply", strings.NewReader(body)))
+		if response.Code != 409 || !strings.Contains(response.Body.String(), `"code":"mail_reply_target_changed"`) || !strings.Contains(response.Body.String(), `"delivered":"none"`) || item.DoneAt != nil {
+			t.Fatalf("conflict: %d %s", response.Code, response.Body)
+		}
+	}
+	// Changing the recipient without changing the UID must invalidate the version too.
+	item.Mail.UIDs = []uint32{7}
+	item.Mail.From.Email = "other@example.com"
+	if mailTarget(*item).Version == version {
+		t.Fatal("recipient change retained version")
+	}
+	upstream := &mailReplyTargetStub{}
+	h.mail = upstream
+	h.connectors = connector.NewRegistry(nil) // replies go to the connector the item belongs to (inbox_own.go)
+	h.registerConnectors()
+	current := mailTarget(*item)
+	body, _ := json.Marshal(map[string]any{"text": "reply", "expected_uid": current.UID, "expected_version": current.Version})
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/inbox/mail-item/reply", strings.NewReader(string(body))))
+	if response.Code != http.StatusOK || upstream.sends != 1 || item.DoneBy != "replied" {
+		t.Fatalf("confirmed reply: %d %s, sends=%d", response.Code, response.Body, upstream.sends)
+	}
+	// Legacy callers continue to send without target validation.
+	response = httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/inbox/mail-item/reply", strings.NewReader(`{"text":"legacy"}`)))
+	if response.Code != http.StatusOK || upstream.sends != 2 {
+		t.Fatalf("legacy reply: %d %s", response.Code, response.Body)
+	}
+}
+
+type mailReplyTargetStub struct {
+	Mail
+	sends int
+}
+
+func (m *mailReplyTargetStub) Tools() []proto.Tool { return nil } // registering the mail connector lists them
+
+func (m *mailReplyTargetStub) GetMessage(_ context.Context, account string, uid uint32, mailbox string) (*mail.MailMessage, error) {
+	return &mail.MailMessage{MailSummary: mail.MailSummary{AccountID: account, Mailbox: mailbox, UID: uid, From: mail.Address{Email: "other@example.com"}}}, nil
+}
+func (m *mailReplyTargetStub) Send(_ context.Context, _ mail.SendRequest) error {
+	m.sends++
+	return nil
+}
 
 func newInbox() *inbox {
 	b := &inbox{}

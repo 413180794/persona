@@ -27,3 +27,5 @@
   build 21 用转圈顶替了视图，已连上 hub 时点「终端」永远转圈；UI 测试用 `-openPane terminal` 直接开时先走了 HTTP 读屏，测不出来
   （`TerminalTypingTests/testOpeningTheTerminalWhenConnectedDrivesIt` 先进会话、连上后再点「终端」）。
 - herdr 的 observe 流要按窗格本身的尺寸开（`--cols/--rows` 小了是裁左上角，不是重排），窗格变尺寸后要重开；`terminal attach` 会改窗格尺寸、占唯一槽位，别用（`docs/terminal.md`）。
+- node 往 hub 写帧和回包共用一个同步写（`rpc.Peer.write` 拿着锁写 stdout）：链路慢时写会卡住，卡住的地方不能拿着别的锁、不能堵住 herdr 的读取。
+  慢链路上该合并的是「正在写的时候来的帧」，不只是「30 ms 内来的帧」（`docs/terminal.md` 第十七节）。

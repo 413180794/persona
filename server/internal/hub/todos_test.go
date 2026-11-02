@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -36,6 +37,14 @@ func setupTestDB(t *testing.T) *db.DB {
 	return database
 }
 
+// todoRequest is httptest.NewRequest from the hub's own machine: from httptest's default address (192.0.2.1, public)
+// the gate would refuse plaintext and the master token (gate.go).
+func todoRequest(method, target string, body io.Reader) *http.Request {
+	r := httptest.NewRequest(method, target, body)
+	r.RemoteAddr = "127.0.0.1:1234"
+	return r
+}
+
 func TestTodosCRUDAndPatch(t *testing.T) {
 	database := setupTestDB(t)
 	h := newTestHub(t)
@@ -44,7 +53,7 @@ func TestTodosCRUDAndPatch(t *testing.T) {
 	handler := h.routes()
 
 	// 1. POST /api/v1/todos - empty title should fail with 400
-	req := httptest.NewRequest("POST", "/api/v1/todos", strings.NewReader(`{"title":""}`))
+	req := todoRequest("POST", "/api/v1/todos", strings.NewReader(`{"title":""}`))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -54,7 +63,7 @@ func TestTodosCRUDAndPatch(t *testing.T) {
 
 	// 2. POST /api/v1/todos - success (S9: status code 200, S4: "agents":[])
 	body, _ := json.Marshal(map[string]any{"title": "天气 App 发 1.3 版", "notes": "测试说明"})
-	req = httptest.NewRequest("POST", "/api/v1/todos", bytes.NewReader(body))
+	req = todoRequest("POST", "/api/v1/todos", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -77,7 +86,7 @@ func TestTodosCRUDAndPatch(t *testing.T) {
 	todoID := created.Todo.ID
 
 	// 3. GET /api/v1/todos - S4: "agents":[]
-	req = httptest.NewRequest("GET", "/api/v1/todos", nil)
+	req = todoRequest("GET", "/api/v1/todos", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -97,7 +106,7 @@ func TestTodosCRUDAndPatch(t *testing.T) {
 
 	// 4. PATCH /api/v1/todos/{id} - only update title (S4: "agents":[])
 	patchBody, _ := json.Marshal(map[string]any{"title": "新标题"})
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(patchBody))
+	req = todoRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(patchBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -117,7 +126,7 @@ func TestTodosCRUDAndPatch(t *testing.T) {
 
 	// PATCH done = true
 	patchBody, _ = json.Marshal(map[string]any{"done": true})
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(patchBody))
+	req = todoRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(patchBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -131,7 +140,7 @@ func TestTodosCRUDAndPatch(t *testing.T) {
 
 	// PATCH done = false (reopen)
 	patchBody, _ = json.Marshal(map[string]any{"done": false})
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(patchBody))
+	req = todoRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(patchBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -144,7 +153,7 @@ func TestTodosCRUDAndPatch(t *testing.T) {
 	}
 
 	// 5. DELETE /api/v1/todos/{id}
-	req = httptest.NewRequest("DELETE", "/api/v1/todos/"+todoID, nil)
+	req = todoRequest("DELETE", "/api/v1/todos/"+todoID, nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -153,7 +162,7 @@ func TestTodosCRUDAndPatch(t *testing.T) {
 	}
 
 	// Subsequent PATCH should fail with 404
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(patchBody))
+	req = todoRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(patchBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -177,7 +186,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 
 	// Create 2 todos
 	b1, _ := json.Marshal(map[string]any{"title": "待办 1"})
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewReader(b1))
+	req := todoRequest("POST", "/api/v1/todos", bytes.NewReader(b1))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -186,7 +195,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 	todo1ID := r1.Todo.ID
 
 	b2, _ := json.Marshal(map[string]any{"title": "待办 2"})
-	req = httptest.NewRequest("POST", "/api/v1/todos", bytes.NewReader(b2))
+	req = todoRequest("POST", "/api/v1/todos", bytes.NewReader(b2))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -195,7 +204,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 	todo2ID := r2.Todo.ID
 
 	// 1. Link agent s1 to todo1
-	req = httptest.NewRequest("PUT", "/api/v1/todos/"+todo1ID+"/agents/macbook/s1", nil)
+	req = todoRequest("PUT", "/api/v1/todos/"+todo1ID+"/agents/macbook/s1", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -210,7 +219,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 	}
 
 	// 2. Transfer agent s1 to todo2: todo1's link should become released
-	req = httptest.NewRequest("PUT", "/api/v1/todos/"+todo2ID+"/agents/macbook/s1", nil)
+	req = todoRequest("PUT", "/api/v1/todos/"+todo2ID+"/agents/macbook/s1", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -225,7 +234,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 	}
 
 	// Check todo1's agents in GET /api/v1/todos: s1 is now released
-	req = httptest.NewRequest("GET", "/api/v1/todos", nil)
+	req = todoRequest("GET", "/api/v1/todos", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -245,7 +254,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 
 	// 3. Mark todo2 done: session Todo field disappears
 	doneBody, _ := json.Marshal(map[string]any{"done": true})
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/"+todo2ID, bytes.NewReader(doneBody))
+	req = todoRequest("PATCH", "/api/v1/todos/"+todo2ID, bytes.NewReader(doneBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -259,7 +268,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 	}
 
 	// Attempting to link agent to completed todo should fail with 409
-	req = httptest.NewRequest("PUT", "/api/v1/todos/"+todo2ID+"/agents/macbook/s2", nil)
+	req = todoRequest("PUT", "/api/v1/todos/"+todo2ID+"/agents/macbook/s2", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -269,7 +278,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 
 	// Reopen todo2: session Todo reappears
 	reopenBody, _ := json.Marshal(map[string]any{"done": false})
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/"+todo2ID, bytes.NewReader(reopenBody))
+	req = todoRequest("PATCH", "/api/v1/todos/"+todo2ID, bytes.NewReader(reopenBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -282,7 +291,7 @@ func TestTodoAgentLinkTransferAndUnlink(t *testing.T) {
 	}
 
 	// 4. DELETE /api/v1/todos/{id}/agents/{mid}/{sid} - manual unlink
-	req = httptest.NewRequest("DELETE", "/api/v1/todos/"+todo2ID+"/agents/macbook/s1", nil)
+	req = todoRequest("DELETE", "/api/v1/todos/"+todo2ID+"/agents/macbook/s1", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -323,7 +332,7 @@ func TestTodoSnapshotAsyncUpdateAndDedupe(t *testing.T) {
 
 	// Create todo
 	b, _ := json.Marshal(map[string]any{"title": "待办 A"})
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewReader(b))
+	req := todoRequest("POST", "/api/v1/todos", bytes.NewReader(b))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -332,7 +341,7 @@ func TestTodoSnapshotAsyncUpdateAndDedupe(t *testing.T) {
 	todoID := r.Todo.ID
 
 	// Link agent
-	req = httptest.NewRequest("PUT", "/api/v1/todos/"+todoID+"/agents/macbook/s1", nil)
+	req = todoRequest("PUT", "/api/v1/todos/"+todoID+"/agents/macbook/s1", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -398,7 +407,7 @@ func TestReadOnlyRoleForbidden(t *testing.T) {
 	handler := h.routes()
 
 	// 1. POST /api/v1/todos with watch token -> 403
-	req := httptest.NewRequest("POST", "/api/v1/todos", strings.NewReader(`{"title":"手表写待办"}`))
+	req := todoRequest("POST", "/api/v1/todos", strings.NewReader(`{"title":"手表写待办"}`))
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -407,7 +416,7 @@ func TestReadOnlyRoleForbidden(t *testing.T) {
 	}
 
 	// 2. PATCH /api/v1/todos/{id} -> 403
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/any_id", strings.NewReader(`{"title":"改"}`))
+	req = todoRequest("PATCH", "/api/v1/todos/any_id", strings.NewReader(`{"title":"改"}`))
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -416,7 +425,7 @@ func TestReadOnlyRoleForbidden(t *testing.T) {
 	}
 
 	// 3. DELETE /api/v1/todos/{id} -> 403
-	req = httptest.NewRequest("DELETE", "/api/v1/todos/any_id", nil)
+	req = todoRequest("DELETE", "/api/v1/todos/any_id", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -425,7 +434,7 @@ func TestReadOnlyRoleForbidden(t *testing.T) {
 	}
 
 	// 4. PUT /api/v1/todos/{id}/agents/... -> 403
-	req = httptest.NewRequest("PUT", "/api/v1/todos/any_id/agents/m/s", nil)
+	req = todoRequest("PUT", "/api/v1/todos/any_id/agents/m/s", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -438,7 +447,7 @@ func TestReadOnlyRoleForbidden(t *testing.T) {
 	h.machines = append(h.machines, m)
 	h.byID["macbook"] = m
 	msgBody, _ := json.Marshal(map[string]any{"text": "hello", "todo_id": "any_id"})
-	req = httptest.NewRequest("POST", "/api/v1/sessions/macbook/s1/messages", bytes.NewReader(msgBody))
+	req = todoRequest("POST", "/api/v1/sessions/macbook/s1/messages", bytes.NewReader(msgBody))
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -448,7 +457,7 @@ func TestReadOnlyRoleForbidden(t *testing.T) {
 
 	// 6. Start session with todo_id using watch token -> 403
 	startBody, _ := json.Marshal(map[string]any{"machine_id": "macbook", "cwd": "/code", "todo_id": "any_id"})
-	req = httptest.NewRequest("POST", "/api/v1/sessions", bytes.NewReader(startBody))
+	req = todoRequest("POST", "/api/v1/sessions", bytes.NewReader(startBody))
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -488,7 +497,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 
 	// 1. Create an active todo and complete another todo
 	b, _ := json.Marshal(map[string]any{"title": "有效待办"})
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewReader(b))
+	req := todoRequest("POST", "/api/v1/todos", bytes.NewReader(b))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -497,7 +506,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 	activeTodoID := tr.Todo.ID
 
 	b, _ = json.Marshal(map[string]any{"title": "已完成待办"})
-	req = httptest.NewRequest("POST", "/api/v1/todos", bytes.NewReader(b))
+	req = todoRequest("POST", "/api/v1/todos", bytes.NewReader(b))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -506,7 +515,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 	doneTodoID := trDone.Todo.ID
 
 	patchDone, _ := json.Marshal(map[string]any{"done": true})
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/"+doneTodoID, bytes.NewReader(patchDone))
+	req = todoRequest("PATCH", "/api/v1/todos/"+doneTodoID, bytes.NewReader(patchDone))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -514,7 +523,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 	// 2. startSession validations
 	// Not found todo -> 404
 	startBody, _ := json.Marshal(map[string]any{"machine_id": "macbook", "cwd": "/code", "todo_id": "non_existent"})
-	req = httptest.NewRequest("POST", "/api/v1/sessions", bytes.NewReader(startBody))
+	req = todoRequest("POST", "/api/v1/sessions", bytes.NewReader(startBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -524,7 +533,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 
 	// Completed todo -> 409
 	startBody, _ = json.Marshal(map[string]any{"machine_id": "macbook", "cwd": "/code", "todo_id": doneTodoID})
-	req = httptest.NewRequest("POST", "/api/v1/sessions", bytes.NewReader(startBody))
+	req = todoRequest("POST", "/api/v1/sessions", bytes.NewReader(startBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -534,7 +543,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 
 	// Active todo -> 200, session returned with Todo, and todo has agent linked
 	startBody, _ = json.Marshal(map[string]any{"machine_id": "macbook", "cwd": "/code", "todo_id": activeTodoID})
-	req = httptest.NewRequest("POST", "/api/v1/sessions", bytes.NewReader(startBody))
+	req = todoRequest("POST", "/api/v1/sessions", bytes.NewReader(startBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -552,7 +561,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 
 	// Send message with unknown todo_id -> 404
 	msgBody, _ := json.Marshal(map[string]any{"text": "hi", "todo_id": "non_existent"})
-	req = httptest.NewRequest("POST", "/api/v1/sessions/macbook/s2/messages", bytes.NewReader(msgBody))
+	req = todoRequest("POST", "/api/v1/sessions/macbook/s2/messages", bytes.NewReader(msgBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -562,7 +571,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 
 	// Send message with done todo_id -> 409
 	msgBody, _ = json.Marshal(map[string]any{"text": "hi", "todo_id": doneTodoID})
-	req = httptest.NewRequest("POST", "/api/v1/sessions/macbook/s2/messages", bytes.NewReader(msgBody))
+	req = todoRequest("POST", "/api/v1/sessions/macbook/s2/messages", bytes.NewReader(msgBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -572,7 +581,7 @@ func TestStartSessionAndSendMessageWithTodoID(t *testing.T) {
 
 	// Send message with active todo_id -> 200, agent linked
 	msgBody, _ = json.Marshal(map[string]any{"text": "hi", "todo_id": activeTodoID})
-	req = httptest.NewRequest("POST", "/api/v1/sessions/macbook/s2/messages", bytes.NewReader(msgBody))
+	req = todoRequest("POST", "/api/v1/sessions/macbook/s2/messages", bytes.NewReader(msgBody))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -692,7 +701,7 @@ func TestTodosCacheReliability(t *testing.T) {
 	handler := h.routes()
 
 	// Calling GET /api/v1/todos while failing should return 503, NOT empty list 200
-	req := httptest.NewRequest("GET", "/api/v1/todos", nil)
+	req := todoRequest("GET", "/api/v1/todos", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -701,7 +710,7 @@ func TestTodosCacheReliability(t *testing.T) {
 	}
 
 	// Calling PATCH while failing should return 503, NOT 404
-	req = httptest.NewRequest("PATCH", "/api/v1/todos/t_exist", strings.NewReader(`{"title":"改"}`))
+	req = todoRequest("PATCH", "/api/v1/todos/t_exist", strings.NewReader(`{"title":"改"}`))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -713,7 +722,7 @@ func TestTodosCacheReliability(t *testing.T) {
 	fStore.failLoad.Store(false)
 
 	// Next call to GET should succeed and reload cache
-	req = httptest.NewRequest("GET", "/api/v1/todos", nil)
+	req = todoRequest("GET", "/api/v1/todos", nil)
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -749,7 +758,7 @@ func TestTodosConcurrencyRace(t *testing.T) {
 
 	// Create test todo
 	b, _ := json.Marshal(map[string]any{"title": "并发测试待办"})
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewReader(b))
+	req := todoRequest("POST", "/api/v1/todos", bytes.NewReader(b))
 	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -772,7 +781,7 @@ func TestTodosConcurrencyRace(t *testing.T) {
 			default:
 				done = !done
 				body, _ := json.Marshal(map[string]any{"done": done})
-				r := httptest.NewRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(body))
+				r := todoRequest("PATCH", "/api/v1/todos/"+todoID, bytes.NewReader(body))
 				r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 				rec := httptest.NewRecorder()
 				handler.ServeHTTP(rec, r)
@@ -791,12 +800,12 @@ func TestTodosConcurrencyRace(t *testing.T) {
 				return
 			default:
 				sid := fmt.Sprintf("s_%d", i%5)
-				r := httptest.NewRequest("PUT", fmt.Sprintf("/api/v1/todos/%s/agents/macbook/%s", todoID, sid), nil)
+				r := todoRequest("PUT", fmt.Sprintf("/api/v1/todos/%s/agents/macbook/%s", todoID, sid), nil)
 				r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 				rec := httptest.NewRecorder()
 				handler.ServeHTTP(rec, r)
 
-				rDel := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/todos/%s/agents/macbook/%s", todoID, sid), nil)
+				rDel := todoRequest("DELETE", fmt.Sprintf("/api/v1/todos/%s/agents/macbook/%s", todoID, sid), nil)
 				rDel.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 				recDel := httptest.NewRecorder()
 				handler.ServeHTTP(recDel, rDel)
@@ -814,7 +823,7 @@ func TestTodosConcurrencyRace(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				r := httptest.NewRequest("GET", "/api/v1/todos", nil)
+				r := todoRequest("GET", "/api/v1/todos", nil)
 				r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 				rec := httptest.NewRecorder()
 				handler.ServeHTTP(rec, r)

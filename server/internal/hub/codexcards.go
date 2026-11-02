@@ -126,7 +126,7 @@ func (h *Hub) codexPending(m *Machine, ix proto.Interaction) *pending {
 // show puts a card on every app without a push (one they were told about already).
 func (h *Hub) show(ix proto.Interaction) {
 	h.broadcast(map[string]any{"type": "interaction", "interaction": ix})
-	if m := h.byID[ix.MachineID]; m != nil {
+	if m := h.localMachine(ix.MachineID); m != nil {
 		h.broadcastSessions(m, h.decorated(m))
 	}
 }

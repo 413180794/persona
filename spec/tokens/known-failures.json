@@ -1,0 +1,12 @@
+{
+  "$description": "level 为 error 的规则里，iOS 现在的取值就达不到的组合。token 必须和 iOS 一致，所以先记在这里；这些组合以后达标了要从这里删掉（--check 会提示），新增的不达标一律失败。",
+  "failures": [
+    {
+      "style": "lark",
+      "mode": "dark",
+      "rule": "onAccent",
+      "ratio": 3.3477,
+      "reason": "飞书风格深色主色 #4C88FF（ios/Shared/Theme.swift Theme.accent）上的白字只有约 3.35:1，低于 docs/ios.md 写的 3.5；iOS 这一轮只读不改，改色要两端一起改"
+    }
+  ]
+}

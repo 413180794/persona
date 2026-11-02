@@ -110,7 +110,7 @@ func (h *Hub) fleetStats() FleetStats {
 	st := FleetStats{TPM: round2(u.TPM), Tokens: round2(u.Tokens), Requests: int(round2(int64(u.Requests)))}
 	for _, m := range u.Machines {
 		name := m.ID
-		if mm := h.byID[m.ID]; mm != nil && mm.cfg.Name != "" {
+		if mm := h.localMachine(m.ID); mm != nil && mm.cfg.Name != "" {
 			name = mm.cfg.Name
 		}
 		st.Loads = append(st.Loads, FleetLoad{ID: m.ID, Name: name, Percent: int(math.Round(m.Load*20)) * 5})
@@ -220,6 +220,10 @@ func buildFleet(agents []fleetInput, ixs []proto.Interaction) FleetState {
 	var needs, working, unread []FleetItem
 	asked := map[string]bool{}
 	for _, ix := range ixs { // already oldest first
+		// Fleet is shared with legacy clients; its existing terminal fallback stays available.
+		if ix.Kind == proto.IxElicitation {
+			continue
+		}
 		key := ix.MachineID + "/" + ix.SessionID
 		a, ok := byKey[key]
 		if !ok || a.Muted {
@@ -434,7 +438,7 @@ func (la *liveActivities) settingsChanged() {
 func (la *liveActivities) snapshot() FleetState {
 	h := la.h
 	var agents []fleetInput
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		for _, s := range h.decorated(m) {
 			agents = append(agents, fleetInput{
 				Machine: m.cfg.Name, Session: s, Muted: h.muted(m.cfg.ID, s.SessionID),
@@ -511,6 +515,9 @@ func (la *liveActivities) broadcast(st FleetState) {
 
 // tick: end an activity that has been over for a while, refresh one about to go stale, update the numbers.
 func (la *liveActivities) tick() {
+	if la.h.isMember() { // the center's Live Activity is the group's (mesh_group.go)
+		return
+	}
 	now := la.now()
 	la.mu.Lock()
 	over := !la.emptyAt.IsZero() && now.Sub(la.emptyAt) >= fleetEndAfter
@@ -613,6 +620,9 @@ func (la *liveActivities) markSent(device string, dst FleetState, now time.Time,
 // whose app is open is not pushed (it draws the activity itself); one pushed less than fleetMinGap ago gets an ordinary
 // change later: next is when the first of those is due (zero: none).
 func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Time) {
+	if la.h.isMember() { // the center pushes the group's Live Activity; a member's devices are the center's now
+		return time.Time{}
+	}
 	la.coal.sentState(st)
 	now := la.now()
 	la.mu.Lock()

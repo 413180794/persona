@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "domain": "lines",
+  "cases": [
+    {
+      "name": "single_interaction_in_footer",
+      "description": "一个待处理交互放在正文外、输入框上方。",
+      "source": [
+        "ios/Jarvis/Views/Chat/ChatView.swift: mainFooter / chatScroll",
+        "docs/redesign/ux.md: 3.2 / 3.4 / 3.5"
+      ],
+      "derived": true,
+      "verification": "view_source_order",
+      "input": {
+        "items": [],
+        "pending_interaction_ids": [
+          "request_a"
+        ]
+      },
+      "expected": {
+        "lines": [],
+        "turns": [],
+        "footer": {
+          "interaction_ids": [
+            "request_a"
+          ],
+          "placement": "above_composer",
+          "part_of_transcript": false
+        }
+      }
+    },
+    {
+      "name": "multiple_interactions_in_footer",
+      "description": "多个待处理交互按输入顺序放在输入框上方。",
+      "source": [
+        "ios/Jarvis/Views/Chat/ChatView.swift: mainFooter / chatScroll",
+        "docs/redesign/ux.md: 3.2 / 3.4 / 3.5"
+      ],
+      "derived": true,
+      "verification": "view_source_order",
+      "input": {
+        "items": [],
+        "pending_interaction_ids": [
+          "request_a",
+          "request_b"
+        ]
+      },
+      "expected": {
+        "lines": [],
+        "turns": [],
+        "footer": {
+          "interaction_ids": [
+            "request_a",
+            "request_b"
+          ],
+          "placement": "above_composer",
+          "part_of_transcript": false
+        }
+      }
+    }
+  ]
+}

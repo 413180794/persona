@@ -44,22 +44,22 @@ func (h *Hub) assistantConfigLegacy(ctx context.Context) AssistantConfig {
 	if cfg.Launcher == "" {
 		cfg.Launcher = "claude"
 	}
-	if h.byID[cfg.MachineID] == nil {
+	if h.localMachine(cfg.MachineID) == nil {
 		cfg.MachineID = ""
-		for _, m := range h.machines { // the hub's own machine, else the first one
+		for _, m := range h.machinesNow() { // the hub's own machine, else the first one
 			if m.cfg.Kind == "local" {
 				cfg.MachineID = m.cfg.ID
 				break
 			}
 		}
-		if cfg.MachineID == "" && len(h.machines) > 0 {
-			cfg.MachineID = h.machines[0].cfg.ID
+		if cfg.MachineID == "" && len(h.machinesNow()) > 0 {
+			cfg.MachineID = h.machinesNow()[0].cfg.ID
 		}
 	}
 	if h.store != nil {
 		var saved AssistantConfig
 		if ok, err := h.store.Setting(ctx, "assistant", &saved); err == nil && ok {
-			if saved.MachineID != "" && h.byID[saved.MachineID] != nil {
+			if saved.MachineID != "" && h.localMachine(saved.MachineID) != nil {
 				cfg.MachineID = saved.MachineID
 			}
 			if saved.Launcher != "" {
@@ -98,7 +98,10 @@ func isAssistant(cwd, dir string) bool {
 }
 
 // assistantClaudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md); lark-connector: the assistant's
-// machine has the lark-connector skill (assistantSkills).
+// machine has the lark-connector skill (assistantSkills). Its machine list is written from where the assistant actually
+// runs: the ssh_host names are the hub machine's ssh aliases, which work only for an assistant on the hub's own
+// machine, and a link (or tailcat) machine has no ssh at all; from anywhere else there is no command to give, only the
+// Agents tools.
 func (h *Hub) assistantClaudeMD(ctx context.Context, lark-connector bool) string {
 	lc := h.cfg.Lark
 	if lc.CLI != nil && !lc.lark-connectorConfigured() {
@@ -108,8 +111,12 @@ func (h *Hub) assistantClaudeMD(ctx context.Context, lark-connector bool) string
 	}
 	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(h.cfg.Assistant.Owner), Notes: h.assistantNotes(ctx), ExtraDirs: h.kb.cfg.ExtraDirs,
 		lark-connector: lark-connector, LarkCLI: lc.CLI != nil, lark-connectorConfigured: lc.lark-connectorConfigured(), LarkPrefer: lc.Prefer}
-	for _, m := range h.machines {
-		d.Machines = append(d.Machines, prompts.AssistantMachine{Name: m.cfg.Name, ID: m.cfg.ID, Local: m.cfg.Kind == "local", SSHHost: m.cfg.SSHHost})
+	here := h.assistantConfig(ctx).MachineID
+	onHub := h.localMachine(here) != nil && h.localMachine(here).cfg.Kind == "local"
+	for _, m := range h.machinesNow() {
+		local := m.cfg.ID == here
+		d.Machines = append(d.Machines, prompts.AssistantMachine{Name: m.cfg.Name, ID: m.cfg.ID, Local: local, SSHHost: m.cfg.SSHHost,
+			AgentsOnly: !local && !(onHub && m.cfg.Kind == "ssh")})
 	}
 	return prompts.RenderAssistantClaudeMD(d)
 }
@@ -125,7 +132,7 @@ type assistantView struct {
 func (h *Hub) assistantState(ctx context.Context, withArchived bool) assistantView {
 	cfg := h.assistantConfig(ctx)
 	v := assistantView{AssistantConfig: cfg, Conversations: []proto.Session{}, NotesEffective: h.assistantNotes(ctx)}
-	if m := h.byID[cfg.MachineID]; m != nil {
+	if m := h.localMachine(cfg.MachineID); m != nil {
 		v.Cwd = m.assistantCwd()
 		for _, s := range h.decorated(m) {
 			if s.Assistant && (withArchived || !s.Archived) {
@@ -150,7 +157,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		}
 		cfg := h.assistantConfig(r.Context())
 		if in.MachineID != "" {
-			if h.byID[in.MachineID] == nil {
+			if h.localMachine(in.MachineID) == nil {
 				writeErr(w, http.StatusBadRequest, errors.New("unknown machine"))
 				return
 			}
@@ -159,7 +166,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		if in.Launcher != "" {
 			// The assistant runs Claude Code (claude -p), Codex (codex app-server) or an agent runtime that says it can
 			// (its launcher has assistant: docs/runtimes.md「助手」); anything else would fail every message.
-			if m := h.byID[cfg.MachineID]; m != nil && in.Launcher != "claude" && !h.runtimeAssistantLauncher(r.Context(), m, in.Launcher) {
+			if m := h.localMachine(cfg.MachineID); m != nil && in.Launcher != "claude" && !h.runtimeAssistantLauncher(r.Context(), m, in.Launcher) {
 				var res struct {
 					Detail proto.LauncherDetail `json:"detail"`
 				}
@@ -298,7 +305,7 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	if launcher != "" {
 		cfg.Launcher = launcher // one-off choice from the app; the saved default stays
 	}
-	m := h.byID[cfg.MachineID]
+	m := h.localMachine(cfg.MachineID)
 	if m == nil {
 		return nil, errors.New("assistant machine is not configured")
 	}
@@ -339,7 +346,7 @@ func (h *Hub) warmAssistant(launcher string) {
 	if launcher == "" {
 		launcher = cfg.Launcher
 	}
-	m := h.byID[cfg.MachineID]
+	m := h.localMachine(cfg.MachineID)
 	if m == nil {
 		return
 	}
@@ -361,7 +368,7 @@ func (h *Hub) warmAssistant(launcher string) {
 
 // assistantMemory runs one memory operation (node/memory.go) on the assistant's machine.
 func (h *Hub) assistantMemory(ctx context.Context, op map[string]any, out any) error {
-	m := h.byID[h.assistantConfig(ctx).MachineID]
+	m := h.localMachine(h.assistantConfig(ctx).MachineID)
 	if m == nil {
 		return errors.New("assistant machine is not configured")
 	}
@@ -398,7 +405,7 @@ func (h *Hub) keptSessions(ctx context.Context, machine string) []string {
 // keepMain tells the assistant's node the main conversation changed.
 func (h *Hub) keepMain(ctx context.Context) {
 	cfg := h.assistantConfig(ctx)
-	m := h.byID[cfg.MachineID]
+	m := h.localMachine(cfg.MachineID)
 	if m == nil {
 		return
 	}

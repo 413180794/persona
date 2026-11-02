@@ -1,0 +1,751 @@
+{
+  "schema_version": 1,
+  "operation": "inbox_list",
+  "cases": [
+    {
+      "name": "untriaged_and_done_test_assertions",
+      "description": "未分拣事项按需要你显示，已处理事项保留分拣档位。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions",
+        "ios/JarvisTests/InboxTests.swift: decodesItemsAndOpensThem"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 3,
+            "tier": null
+          },
+          {
+            "id": "item-b",
+            "source": "mail",
+            "kind": "mail",
+            "account": "mail-a",
+            "account_name": "me@example.com",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "done_at": "2026-01-01T00:00:40Z",
+            "updated_at": "2026-01-01T00:00:30Z"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "item-a"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "done",
+            "title": "已处理",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-b"
+              }
+            ],
+            "visible_rows": [],
+            "folded": true
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "tiers_and_done_sections",
+      "description": "分段固定为需要你、知悉即可、已折叠、已处理，已处理按处理时间倒序。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-z",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise",
+            "updated_at": "2026-01-01T00:00:50Z"
+          },
+          {
+            "id": "item-b",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "updated_at": "2026-01-01T00:00:40Z"
+          },
+          {
+            "id": "item-c",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": null,
+            "updated_at": "2026-01-01T00:00:30Z"
+          },
+          {
+            "id": "item-d",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "item-e",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "future",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "id": "done-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "done_at": "2026-01-01T00:00:05Z"
+          },
+          {
+            "id": "done-b",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise",
+            "done_at": "2026-01-01T00:00:55Z"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 3,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-c"
+              },
+              {
+                "type": "item",
+                "id": "item-d"
+              },
+              {
+                "type": "item",
+                "id": "item-e"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "item-c"
+              },
+              {
+                "type": "item",
+                "id": "item-d"
+              },
+              {
+                "type": "item",
+                "id": "item-e"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "fyi",
+            "title": "知悉即可",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-b"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "item-b"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "noise",
+            "title": "已折叠",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "visible_rows": [],
+            "folded": true
+          },
+          {
+            "id": "done",
+            "title": "已处理",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "done-b"
+              },
+              {
+                "type": "item",
+                "id": "done-a"
+              }
+            ],
+            "visible_rows": [],
+            "folded": true
+          }
+        ],
+        "action_count": 3,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "expanded_noise_and_done",
+      "description": "展开集合控制段内可见行，折叠不影响计数。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "item-z",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise",
+            "updated_at": "2026-01-01T00:00:50Z"
+          },
+          {
+            "id": "item-b",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "updated_at": "2026-01-01T00:00:40Z"
+          },
+          {
+            "id": "item-c",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": null,
+            "updated_at": "2026-01-01T00:00:30Z"
+          },
+          {
+            "id": "item-d",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:20Z"
+          },
+          {
+            "id": "item-e",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "future",
+            "updated_at": "2026-01-01T00:00:10Z"
+          },
+          {
+            "id": "done-a",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "done_at": "2026-01-01T00:00:05Z"
+          },
+          {
+            "id": "done-b",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise",
+            "done_at": "2026-01-01T00:00:55Z"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "noise",
+            "done"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 3,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-c"
+              },
+              {
+                "type": "item",
+                "id": "item-d"
+              },
+              {
+                "type": "item",
+                "id": "item-e"
+              }
+            ],
+            "visible_rows": [],
+            "folded": true
+          },
+          {
+            "id": "fyi",
+            "title": "知悉即可",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-b"
+              }
+            ],
+            "visible_rows": [],
+            "folded": true
+          },
+          {
+            "id": "noise",
+            "title": "已折叠",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "item-z"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "done",
+            "title": "已处理",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "done-b"
+              },
+              {
+                "type": "item",
+                "id": "done-a"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "done-b"
+              },
+              {
+                "type": "item",
+                "id": "done-a"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 3,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "empty_inbox",
+      "description": "空收件箱不生成空段。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [],
+        "action_count": 0,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "input_order_is_authoritative",
+      "description": "未处理事项保留输入顺序，界面不重新按更新时间排序。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "old",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:01Z"
+          },
+          {
+            "id": "new",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "updated_at": "2026-01-01T00:00:59Z"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 2,
+            "rows": [
+              {
+                "type": "item",
+                "id": "old"
+              },
+              {
+                "type": "item",
+                "id": "new"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "old"
+              },
+              {
+                "type": "item",
+                "id": "new"
+              }
+            ],
+            "folded": false
+          }
+        ],
+        "action_count": 2,
+        "filter_counts": {}
+      },
+      "derived": true
+    },
+    {
+      "name": "read_and_agent_do_not_change_tier",
+      "description": "外部已读或 AI 处理状态不改变分段，只有 done_at 决定已处理。",
+      "source": [
+        "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
+        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Jarvis/App/InboxStore.swift: actionCount",
+        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+      ],
+      "input": {
+        "items": [
+          {
+            "id": "read",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "action",
+            "read": true,
+            "done_by": "read"
+          },
+          {
+            "id": "running",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "fyi",
+            "agent": {
+              "state": "running"
+            }
+          },
+          {
+            "id": "draft",
+            "source": "lark",
+            "kind": "dm",
+            "account": "feishu",
+            "account_name": "飞书",
+            "title": "示例事项",
+            "preview": "示例内容",
+            "count": 1,
+            "tier": "noise",
+            "agent": {
+              "state": "drafted",
+              "draft": "示例草稿"
+            }
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "mutes": {
+          "spaces": [],
+          "sessions": [],
+          "allowed": []
+        },
+        "settings": {
+          "source": "",
+          "kind": "",
+          "query": "",
+          "expanded": [
+            "action",
+            "fyi"
+          ]
+        }
+      },
+      "expected": {
+        "groups": [
+          {
+            "id": "action",
+            "title": "需要你",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "read"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "read"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "fyi",
+            "title": "知悉即可",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "running"
+              }
+            ],
+            "visible_rows": [
+              {
+                "type": "item",
+                "id": "running"
+              }
+            ],
+            "folded": false
+          },
+          {
+            "id": "noise",
+            "title": "已折叠",
+            "count": 1,
+            "rows": [
+              {
+                "type": "item",
+                "id": "draft"
+              }
+            ],
+            "visible_rows": [],
+            "folded": true
+          }
+        ],
+        "action_count": 1,
+        "filter_counts": {}
+      },
+      "derived": true
+    }
+  ]
+}

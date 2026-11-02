@@ -28,4 +28,22 @@ elif ! id -un >/dev/null 2>&1; then
   echo "warning: running as uid $(id -u), which has no user in the image: PUID / PGID are ignored and ssh will" \
     "not work. Start the container as root (no user:) and set PUID / PGID instead." >&2
 fi
+# Who may open the admin UI (docs/admin.md): the deployment's choice, or a reminder that nobody made one.
+case "${JARVIS_ADMIN_ACCESS:-}" in '' | lan)
+  # Docker Desktop and OrbStack relay every port-mapped connection from the bridge's gateway, which is never LAN.
+  if getent hosts host.docker.internal >/dev/null 2>&1; then
+    echo "note: this looks like Docker Desktop / OrbStack: every browser reaches the hub from the bridge's gateway," \
+      "which the admin UI never counts as LAN. Publish the port on 127.0.0.1 only and list the gateway in" \
+      "JARVIS_ADMIN_CIDRS (docs/admin.md), or manage the hub with docker compose exec hub jarvisd hub admin." >&2
+  fi ;;
+esac
+case "${JARVIS_ADMIN_ACCESS:-}" in
+'') echo "reminder: JARVIS_ADMIN_ACCESS is not set in .env: the admin UI (/admin) follows hub.json's admin.access," \
+  "lan (private addresses) unless set there. Choose loopback, lan, cidrs or any (docs/admin.md)." >&2 ;;
+loopback | lan | any) ;;
+cidrs) [ -n "${JARVIS_ADMIN_CIDRS:-}" ] || echo "warning: JARVIS_ADMIN_ACCESS=cidrs without JARVIS_ADMIN_CIDRS: the" \
+  "admin UI is reachable from this container only" >&2 ;;
+*) echo "warning: JARVIS_ADMIN_ACCESS=$JARVIS_ADMIN_ACCESS is not loopback, lan, cidrs or any: the admin UI is limited" \
+  "to this container until it is fixed" >&2 ;;
+esac
 exec jarvisd "$@"

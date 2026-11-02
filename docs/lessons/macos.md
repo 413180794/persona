@@ -11,6 +11,8 @@
   深浅色用 `-macAppearance`，`-AppleInterfaceStyle Dark` 当启动参数不生效。
 - 直接跑 `Jarvis.app/Contents/MacOS/Jarvis` 能带启动参数（`-demo.on YES -tab dev`…），未签名的 Debug 构建不进沙盒，写 `/tmp` 没问题；`open` 要写成 `open -n Jarvis.app --args -demo.on YES …` 才带得上参数（不带 `--args` 就没有，2026-11-02 实测）。
 - Mac 锁屏时 `xcodebuild test -scheme JarvisMac` 报「The test runner hung before establishing connection」（2026-11-01）：测试宿主 Jarvis.app 启动时读钥匙串（`Keychain.serverConfig` → `SecItemCopyMatching`），读别的未签名构建写的条目会一直卡在 securityd。Mac 的 DEBUG 构建在 XCTest 下（有 `XCTestConfigurationFilePath`）和截图模式一样不读钥匙串（`Shared/Keychain.swift`）。
+- 这台开发机上 `swift build` 默认的构建系统报「Could not determine path to developer directory」，换 `xcodebuild -scheme … -destination 'generic/platform=macOS'`
+  编 Swift 包就好（`scripts/app/mac-link.sh`）。菜单栏 App 的截图不靠屏幕录制：App 带 `--snapshot <目录>`，把自己的视图放进离屏窗口用 `cacheDisplay` 画成 PNG。
 - Mac 的推送 entitlement 叫 `com.apple.developer.aps-environment`，不是 iOS 的 `aps-environment`。App ID 开过推送就够（iPhone 和 Mac 同一个 UNIVERSAL 的 App ID），归档里写 `development`，App Store 导出时变成 `production`；本机不签名编的版本签名里没有任何 entitlement，收不到远程推送，只有本地通知（2026-11-02，`docs/mac.md`「远程推送（Mac）」）。
 - 要和扩展共用钥匙串条目，macOS 上的 `SecItem` 查询得加 `kSecUseDataProtectionKeychain: true`：不加时走老式的文件钥匙串，`kSecAttrAccessGroup` 不起作用，条目只属于创建它的那个 App，扩展读不到（iOS 一直是 data protection 钥匙串，同样的代码在手机上是好的）。Mac 的推送私钥就是这样（`PushCrypto`，#432）；App 自己用的 `Keychain.swift` 还在文件钥匙串里，没动。
 - 共用页面里碰到 `pin.list` 这类滚动视图时，iOS 上是 `UIScrollView`、Mac 上是 `NSScrollView`（`ChatPin+Mac.swift`），`isTracking`、`isDragging`、`isDecelerating` 这些 Mac 没有：用 `#if os(iOS)` 隔开，或者在 `Mac/Compat/` 补等价的。

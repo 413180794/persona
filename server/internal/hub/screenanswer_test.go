@@ -64,6 +64,7 @@ func TestResolveScreenChanged(t *testing.T) {
 	mux := h.routes()
 	for _, want := range []int{http.StatusConflict, http.StatusGone} {
 		req := httptest.NewRequest("POST", "/api/v1/interactions/scr_b/resolve", strings.NewReader(`{"option":"1"}`))
+		req.RemoteAddr = "127.0.0.1:12345"
 		req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)

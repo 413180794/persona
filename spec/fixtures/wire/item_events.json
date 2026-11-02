@@ -1,0 +1,247 @@
+[
+  {
+    "name": "items_live_lazy",
+    "description": "实时事件保留起点零值，并按订阅要求移除图片数据。",
+    "source": [
+      "server/internal/hub/http.go: Hub.itemsToSubscribers",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "from_seq": 0,
+      "history": "history_example",
+      "items": [
+        {
+          "id": "entry_text#0",
+          "seq": 1,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "text",
+          "text": "请检查示例。"
+        },
+        {
+          "id": "entry_image#0",
+          "seq": 8,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "user",
+          "kind": "image",
+          "image": {
+            "mime": "image/png",
+            "data": "",
+            "lazy": true,
+            "size": 81,
+            "width": 2,
+            "height": 1
+          }
+        }
+      ],
+      "machine_id": "m1",
+      "session_id": "s1",
+      "to_seq": 8,
+      "type": "items"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/backlog": false,
+        "/from_seq": 0,
+        "/has_more": null,
+        "/items/1/image/data": "",
+        "/items/1/image/lazy": true,
+        "/more_after": false,
+        "/to_seq": 8,
+        "/type": "items"
+      }
+    }
+  },
+  {
+    "name": "items_empty_advance",
+    "description": "没有内容块的行仍发送空数组和连续性范围。",
+    "source": [
+      "server/internal/hub/http.go: Hub.itemsToSubscribers",
+      "docs/protocol.md: items 的连续性",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "from_seq": 8,
+      "history": "history_example",
+      "items": [],
+      "machine_id": "m1",
+      "session_id": "s1",
+      "to_seq": 10,
+      "type": "items"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/from_seq": 8,
+        "/items": [],
+        "/to_seq": 10
+      }
+    }
+  },
+  {
+    "name": "items_backlog_latest",
+    "description": "订阅补发按最新页、接续补发或补发上限设置分页字段。",
+    "source": [
+      "server/internal/hub/http.go: Hub.sendBacklog",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode",
+      "docs/protocol.md: WebSocket / items 的连续性"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "backlog": true,
+      "has_more": true,
+      "history": "history_example",
+      "items": [
+        {
+          "id": "entry_1#0",
+          "seq": 1,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "text",
+          "text": "示例回复。"
+        }
+      ],
+      "machine_id": "m1",
+      "session_id": "s1",
+      "to_seq": 1,
+      "type": "items"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/backlog": true,
+        "/from_seq": null,
+        "/has_more": true,
+        "/history": "history_example",
+        "/more_after": false,
+        "/to_seq": 1
+      }
+    }
+  },
+  {
+    "name": "items_backlog_catchup",
+    "description": "订阅补发按最新页、接续补发或补发上限设置分页字段。",
+    "source": [
+      "server/internal/hub/http.go: Hub.sendBacklog",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode",
+      "docs/protocol.md: WebSocket / items 的连续性"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "backlog": true,
+      "from_seq": 10,
+      "history": "history_example",
+      "items": [
+        {
+          "id": "entry_11#0",
+          "seq": 11,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "text",
+          "text": "示例回复。"
+        }
+      ],
+      "machine_id": "m1",
+      "session_id": "s1",
+      "to_seq": 11,
+      "type": "items"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/backlog": true,
+        "/from_seq": 10,
+        "/has_more": null,
+        "/history": "history_example",
+        "/more_after": false,
+        "/to_seq": 11
+      }
+    }
+  },
+  {
+    "name": "items_backlog_capped",
+    "description": "订阅补发按最新页、接续补发或补发上限设置分页字段。",
+    "source": [
+      "server/internal/hub/http.go: Hub.sendBacklog",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode",
+      "docs/protocol.md: WebSocket / items 的连续性"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "backlog": true,
+      "from_seq": 17,
+      "history": "history_example",
+      "items": [
+        {
+          "id": "entry_18#0",
+          "seq": 18,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "assistant",
+          "kind": "text",
+          "text": "示例回复。"
+        }
+      ],
+      "machine_id": "m1",
+      "more_after": true,
+      "session_id": "s1",
+      "to_seq": 18,
+      "type": "items"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/backlog": true,
+        "/from_seq": 17,
+        "/has_more": null,
+        "/history": "history_example",
+        "/more_after": true,
+        "/to_seq": 18
+      }
+    }
+  },
+  {
+    "name": "items_live_recorded_turn_duration",
+    "description": "轮次耗时沿用订阅 items 事件，不新增事件或顶层字段。",
+    "source": [
+      "server/internal/hub/http.go: Hub.itemsToSubscribers",
+      "apple/Shared/LiveConnection.swift: ServerEvent.decode"
+    ],
+    "derived": true,
+    "decoder": "event",
+    "input": {
+      "history": "history_example",
+      "items": [
+        {
+          "id": "duration_example#0",
+          "seq": 9,
+          "ts": "2026-01-02T03:04:05Z",
+          "role": "system",
+          "kind": "turn_duration",
+          "turn_duration": {
+            "duration_ms": 12345,
+            "source": "claude_turn_duration",
+            "parent_uuid": "entry_text"
+          }
+        }
+      ],
+      "machine_id": "m1",
+      "session_id": "s1",
+      "type": "items"
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/0/id": "duration_example#0",
+        "/type": "items"
+      }
+    }
+  }
+]

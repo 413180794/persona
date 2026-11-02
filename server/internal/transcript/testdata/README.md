@@ -2,14 +2,15 @@
 
 | 文件 | 来源 | 覆盖 |
 | --- | --- | --- |
-| `claude-session.jsonl` | 真实 Claude Code 2.1.3xx 会话的几段 | 会话开头（`/clear`、`local_command`、各种 attachment）、并行工具、带图片的用户消息、away_summary、排队消息（queue-operation + queued_command）、中断、带图片的工具结果 |
+| `claude-session.jsonl` | 真实 Claude Code 2.1.3xx 会话的几段 | 会话开头（`/clear`、`local_command`、各种 attachment）、并行工具、带图片的用户消息、away_summary、排队消息（queue-operation + queued_command）、中断、带图片的工具结果、`system/turn_duration.durationMs` 及 `parentUuid` |
 | `claude-compact.jsonl` | 真实会话的两段 | 后台任务通知、上下文压缩（compact_boundary、isCompactSummary、informational） |
 | `claude-notifications.jsonl` | 真实会话 | 同一个后台任务的三次通知（内容不同，都是真事件，不能按 task-id 去重） |
 | `claude-subagent.jsonl` | 真实 subagent transcript 的开头 | 全是 sidechain 的行 |
-| `codex-0.163.jsonl` | 真实 Codex 0.163 rollout 的几段 | session_meta、response_item（跳过）、Extension（web.search）、McpToolCall、12 个文件的 FileChange、ImageView、compacted / ContextCompaction、turn_aborted |
+| `codex-0.163.jsonl` | 真实 Codex 0.163 rollout 的几段 | session_meta、response_item（跳过）、Extension（web.search）、McpToolCall、12 个文件的 FileChange、ImageView、compacted / ContextCompaction、turn_aborted、`task_complete.duration_ms` 及 `turn_id` |
 | `claude-queued-images.jsonl` | 真实会话的 6 行 | Claude 工作中从 App 发的带图消息：queue-operation + `attachment/queued_command`，prompt 是 [text, image] 块（图片以前被丢掉，气泡里看不到） |
 | `claude-background.jsonl` | 两个真实会话的 10 行 | 没写 description 的后台 heredoc 命令（通知里是整条命令、带 `&gt;` `&lt;`）、Monitor 启动（`Monitor started (task …`）、Monitor 事件（只有 task-id）、Monitor 结束（带最后几行） |
 | `claude-synthetic.jsonl` | 手写（照真实行的结构） | 本机样本里没有的：api_error 重试、/loop 到点（scheduled_task_fire）、同一通知的两处记录、`/model` 的 local_command、continued-in |
+| `claude-duration.jsonl` / `codex-duration.jsonl` | 手写结构夹具；两种字段均已对照上面的真实脱敏 fixture，Codex 另核对了本机只读 rollout | 显式轮次耗时、原生关联、零值和缺失值；时间戳差故意与记录耗时不同，禁止推算 |
 
 `*.golden.json` 是解析结果（全部 item + 会话级 Meta），`fixtures_test.go` 比对；改了解析就
 `go test ./internal/transcript -run Fixture -update`，把 golden 的 diff 当成评审内容逐条看。

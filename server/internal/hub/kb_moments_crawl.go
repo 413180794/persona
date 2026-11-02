@@ -84,6 +84,14 @@ type MomentsRound struct {
 func (h *Hub) momentsCrawlLoop(ctx context.Context, st *kb.Store, cfg MomentsCrawl, textDays int) {
 	var lastPrune time.Time
 	for {
+		if h.isMember() { // the center crawls for the group
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(cfg.interval()):
+			}
+			continue
+		}
 		r := h.crawlMoments(ctx, st, cfg, textDays)
 		h.logf("kb: removed round: %d tab(s) %d page(s) %d request(s) in %s; %d seen, %d new, %d changed, %d past max_days (%d tab(s) ended there), comments of %d (%d left); %d archived, %.1f MB%s",
 			r.Tabs, r.Pages, r.Requests, r.Took.Round(time.Second), r.Seen, r.New, r.Changed, r.Old, r.TabsEnded, r.Comments, r.CommentsLeft, r.Total,

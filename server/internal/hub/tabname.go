@@ -87,7 +87,7 @@ func (h *Hub) autonameTabs(ctx context.Context, dryRun, all bool) []TabRename {
 	}
 	var todo []tab
 	taken := map[string]map[string]bool{} // machine/workspace → names in use
-	for _, m := range h.machines {
+	for _, m := range h.machinesNow() {
 		seen := map[string]bool{}
 		for _, s := range h.decorated(m) {
 			if s.Assistant || s.SpaceKind != "herdr" || s.TabID == "" || s.Status == proto.StatusOffline || seen[s.TabID] {

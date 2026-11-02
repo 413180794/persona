@@ -268,7 +268,7 @@ func (h *Hub) titleAfterTurn(m *Machine, id string) {
 
 // retitled pushes the machine's list again so the apps show the new title now.
 func (h *Hub) retitled(machine string) {
-	if m := h.byID[machine]; m != nil {
+	if m := h.localMachine(machine); m != nil {
 		h.sessionsChanged(m)
 	}
 }

@@ -216,6 +216,8 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 
 type Message struct {
 	ID               string          `json:"id"`
+	ClientID         string          `json:"client_id,omitempty"`
+	LocalState       string          `json:"local_state,omitempty"`
 	Position         string          `json:"position"`
 	SenderID         string          `json:"sender_id,omitempty"`
 	SenderName       string          `json:"sender_name"`
@@ -259,6 +261,8 @@ type Reaction struct {
 
 type rawMessage struct {
 	ID                string          `json:"id"`
+	ClientID          string          `json:"clientId"`
+	LocalState        string          `json:"localState"`
 	Position          string          `json:"position"`
 	SenderID          string          `json:"senderId"`
 	SenderName        string          `json:"senderName"`
@@ -297,6 +301,7 @@ type rawMessage struct {
 
 func (m rawMessage) normalize() Message {
 	out := Message{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
+		ClientID: m.ClientID, LocalState: m.LocalState,
 		SenderAvatar: MediaURL(m.SenderAvatarURL), SenderType: m.SenderType, IsMine: m.IsMine,
 		Type: m.MessageTypeName, Text: m.TextPreview, CreatedAt: m.CreatedAt, Recalled: m.IsRecalled, Edited: m.IsEdited,
 		ReplyCount: m.ReplyCount, ThreadReplyCount: m.ThreadReplyCount, BadgeCount: m.BadgeCount, AtMe: m.IsAtMe || m.IsAtAll,
@@ -346,6 +351,7 @@ type Window struct {
 // Page is a slice of a chat, oldest first, with the cursors to read further either way.
 type Page struct {
 	Messages    []Message `json:"messages"`
+	SyncState   string    `json:"sync_state,omitempty"`
 	HasOlder    bool      `json:"has_older"`
 	HasNewer    bool      `json:"has_newer"`
 	OlderCursor string    `json:"older_cursor,omitempty"`
@@ -388,12 +394,13 @@ func (c *Client) page(ctx context.Context, path string, w Window, limit int) (Pa
 		HasNewer        bool         `json:"hasNewer"`
 		NextOlderCursor string       `json:"nextOlderCursor"`
 		NextNewerCursor string       `json:"nextNewerCursor"`
+		SyncState       string       `json:"syncState"`
 	}
 	if err := c.do(ctx, "GET", path, q, nil, &res); err != nil {
 		return Page{}, err
 	}
 	p := Page{Messages: make([]Message, 0, len(res.Items)), HasOlder: res.HasOlder, HasNewer: res.HasNewer,
-		OlderCursor: res.NextOlderCursor, NewerCursor: res.NextNewerCursor}
+		OlderCursor: res.NextOlderCursor, NewerCursor: res.NextNewerCursor, SyncState: res.SyncState}
 	for _, m := range res.Items {
 		if m.IsDeleted {
 			continue
@@ -594,6 +601,12 @@ func (c *Client) CardAction(ctx context.Context, messageID, actionID string, par
 		body = params
 	}
 	return c.do(ctx, "POST", "/messages/"+url.PathEscape(messageID)+"/card-actions/"+url.PathEscape(actionID), nil, body, nil)
+}
+
+// ReplyInThread lets lark-connector resolve the target message's thread or topic.
+func (c *Client) ReplyInThread(ctx context.Context, messageID, text, clientID string) error {
+	_, err := c.post(ctx, "/messages/"+url.PathEscape(messageID)+"/replies", map[string]any{"text": text, "replyMode": "thread"}, clientID)
+	return err
 }
 
 // Mention is one person @-mentioned in a sent message; the text must carry "@"+Name literally. UserID "all" with

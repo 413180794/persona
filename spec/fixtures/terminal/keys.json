@@ -1,0 +1,1681 @@
+{
+  "schema_version": 1,
+  "kind": "key",
+  "cases": [
+    {
+      "name": "key_enter",
+      "description": "键 enter 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "enter",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\r",
+        "name": "enter",
+        "utf8": [
+          13
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_shift_enter",
+      "description": "键 enter 与修饰键 shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "enter",
+        "modifiers": [
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b\r",
+        "name": "shift+enter",
+        "utf8": [
+          27,
+          13
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_tab",
+      "description": "键 tab 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "tab",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\t",
+        "name": "tab",
+        "utf8": [
+          9
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_shift_tab",
+      "description": "键 tab 与修饰键 shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "tab",
+        "modifiers": [
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b[Z",
+        "name": "shift+tab",
+        "utf8": [
+          27,
+          91,
+          90
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_esc",
+      "description": "键 esc 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "esc",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b",
+        "name": "esc",
+        "utf8": [
+          27
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_backspace",
+      "description": "键 backspace 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "backspace",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "",
+        "name": "backspace",
+        "utf8": [
+          127
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_ctrl_c",
+      "description": "键 c 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "c",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u0003",
+        "name": "ctrl+c",
+        "utf8": [
+          3
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_ctrl_a",
+      "description": "键 a 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "a",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u0001",
+        "name": "ctrl+a",
+        "utf8": [
+          1
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_ctrl_bracket_open",
+      "description": "键 [ 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "[",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b",
+        "name": "ctrl+[",
+        "utf8": [
+          27
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_ctrl_backslash",
+      "description": "键 \\ 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "\\",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001c",
+        "name": "ctrl+\\",
+        "utf8": [
+          28
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_up",
+      "description": "键 up 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "up",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[A",
+        "name": "up",
+        "utf8": [
+          27,
+          91,
+          65
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_left",
+      "description": "键 left 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "left",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[D",
+        "name": "left",
+        "utf8": [
+          27,
+          91,
+          68
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_ctrl_up",
+      "description": "键 up 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "up",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b[1;5A",
+        "name": "ctrl+up",
+        "utf8": [
+          27,
+          91,
+          49,
+          59,
+          53,
+          65
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_alt_left",
+      "description": "键 left 与修饰键 alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "left",
+        "modifiers": [
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b[1;3D",
+        "name": "alt+left",
+        "utf8": [
+          27,
+          91,
+          49,
+          59,
+          51,
+          68
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_shift_right",
+      "description": "键 right 与修饰键 shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "right",
+        "modifiers": [
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b[1;2C",
+        "name": "shift+right",
+        "utf8": [
+          27,
+          91,
+          49,
+          59,
+          50,
+          67
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_alt_x",
+      "description": "键 x 与修饰键 alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "x",
+        "modifiers": [
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001bx",
+        "name": "alt+x",
+        "utf8": [
+          27,
+          120
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_ctrl_alt_c",
+      "description": "键 c 与修饰键 ctrl、alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "c",
+        "modifiers": [
+          "ctrl",
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b\u0003",
+        "name": "ctrl+alt+c",
+        "utf8": [
+          27,
+          3
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_shift_a",
+      "description": "键 a 与修饰键 shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "a",
+        "modifiers": [
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "A",
+        "name": "shift+a",
+        "utf8": [
+          65
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_space",
+      "description": "键 space 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "space",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": " ",
+        "name": "space",
+        "utf8": [
+          32
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_pagedown",
+      "description": "键 pagedown 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "pagedown",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[6~",
+        "name": "pagedown",
+        "utf8": [
+          27,
+          91,
+          54,
+          126
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_f1",
+      "description": "键 f1 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "f1",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001bOP",
+        "name": "f1",
+        "utf8": [
+          27,
+          79,
+          80
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_home",
+      "description": "键 home 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "home",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[H",
+        "name": "home",
+        "utf8": [
+          27,
+          91,
+          72
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_delete",
+      "description": "键 delete 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+      ],
+      "input": {
+        "key": "delete",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[3~",
+        "name": "delete",
+        "utf8": [
+          27,
+          91,
+          51,
+          126
+        ]
+      },
+      "from_test": "keysAreWhatATerminalSends"
+    },
+    {
+      "name": "key_down",
+      "description": "键 down 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "down",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[B",
+        "name": "down",
+        "utf8": [
+          27,
+          91,
+          66
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_right",
+      "description": "键 right 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "right",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[C",
+        "name": "right",
+        "utf8": [
+          27,
+          91,
+          67
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_end",
+      "description": "键 end 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "end",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[F",
+        "name": "end",
+        "utf8": [
+          27,
+          91,
+          70
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_insert",
+      "description": "键 insert 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "insert",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[2~",
+        "name": "insert",
+        "utf8": [
+          27,
+          91,
+          50,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_pageup",
+      "description": "键 pageup 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "pageup",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[5~",
+        "name": "pageup",
+        "utf8": [
+          27,
+          91,
+          53,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f2",
+      "description": "键 f2 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f2",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001bOQ",
+        "name": "f2",
+        "utf8": [
+          27,
+          79,
+          81
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f3",
+      "description": "键 f3 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f3",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001bOR",
+        "name": "f3",
+        "utf8": [
+          27,
+          79,
+          82
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f4",
+      "description": "键 f4 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f4",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001bOS",
+        "name": "f4",
+        "utf8": [
+          27,
+          79,
+          83
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f5",
+      "description": "键 f5 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f5",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[15~",
+        "name": "f5",
+        "utf8": [
+          27,
+          91,
+          49,
+          53,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f6",
+      "description": "键 f6 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f6",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[17~",
+        "name": "f6",
+        "utf8": [
+          27,
+          91,
+          49,
+          55,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f7",
+      "description": "键 f7 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f7",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[18~",
+        "name": "f7",
+        "utf8": [
+          27,
+          91,
+          49,
+          56,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f8",
+      "description": "键 f8 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f8",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[19~",
+        "name": "f8",
+        "utf8": [
+          27,
+          91,
+          49,
+          57,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f9",
+      "description": "键 f9 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f9",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[20~",
+        "name": "f9",
+        "utf8": [
+          27,
+          91,
+          50,
+          48,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f10",
+      "description": "键 f10 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f10",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[21~",
+        "name": "f10",
+        "utf8": [
+          27,
+          91,
+          50,
+          49,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f11",
+      "description": "键 f11 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f11",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[23~",
+        "name": "f11",
+        "utf8": [
+          27,
+          91,
+          50,
+          51,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_f12",
+      "description": "键 f12 与修饰键 空集 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f12",
+        "modifiers": []
+      },
+      "expected": {
+        "bytes": "\u001b[24~",
+        "name": "f12",
+        "utf8": [
+          27,
+          91,
+          50,
+          52,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_alt_shift_up",
+      "description": "键 up 与修饰键 ctrl、alt、shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "up",
+        "modifiers": [
+          "ctrl",
+          "alt",
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b[1;8A",
+        "name": "ctrl+alt+shift+up",
+        "utf8": [
+          27,
+          91,
+          49,
+          59,
+          56,
+          65
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_alt_shift_delete",
+      "description": "键 delete 与修饰键 ctrl、alt、shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "delete",
+        "modifiers": [
+          "ctrl",
+          "alt",
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b[3;8~",
+        "name": "ctrl+alt+shift+delete",
+        "utf8": [
+          27,
+          91,
+          51,
+          59,
+          56,
+          126
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_alt_shift_f1",
+      "description": "键 f1 与修饰键 ctrl、alt、shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "f1",
+        "modifiers": [
+          "ctrl",
+          "alt",
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b[1;8P",
+        "name": "ctrl+alt+shift+f1",
+        "utf8": [
+          27,
+          91,
+          49,
+          59,
+          56,
+          80
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_alt_enter",
+      "description": "键 enter 与修饰键 alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "enter",
+        "modifiers": [
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b\r",
+        "name": "alt+enter",
+        "utf8": [
+          27,
+          13
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_enter",
+      "description": "键 enter 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "enter",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\r",
+        "name": "ctrl+enter",
+        "utf8": [
+          13
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_alt_shift_enter",
+      "description": "键 enter 与修饰键 ctrl、alt、shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "enter",
+        "modifiers": [
+          "ctrl",
+          "alt",
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b\r",
+        "name": "ctrl+alt+shift+enter",
+        "utf8": [
+          27,
+          13
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_alt_tab",
+      "description": "键 tab 与修饰键 alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "tab",
+        "modifiers": [
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b\t",
+        "name": "alt+tab",
+        "utf8": [
+          27,
+          9
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_alt_shift_tab",
+      "description": "键 tab 与修饰键 alt、shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "tab",
+        "modifiers": [
+          "alt",
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b[Z",
+        "name": "alt+shift+tab",
+        "utf8": [
+          27,
+          91,
+          90
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_backspace",
+      "description": "键 backspace 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "backspace",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\b",
+        "name": "ctrl+backspace",
+        "utf8": [
+          8
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_alt_backspace",
+      "description": "键 backspace 与修饰键 alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "backspace",
+        "modifiers": [
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b",
+        "name": "alt+backspace",
+        "utf8": [
+          27,
+          127
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_alt_backspace",
+      "description": "键 backspace 与修饰键 ctrl、alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "backspace",
+        "modifiers": [
+          "ctrl",
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b\b",
+        "name": "ctrl+alt+backspace",
+        "utf8": [
+          27,
+          8
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_space",
+      "description": "键 space 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "space",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u0000",
+        "name": "ctrl+space",
+        "utf8": [
+          0
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_alt_space",
+      "description": "键 space 与修饰键 alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "space",
+        "modifiers": [
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b ",
+        "name": "alt+space",
+        "utf8": [
+          27,
+          32
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_alt_bracket_open",
+      "description": "键 [ 与修饰键 ctrl、alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "[",
+        "modifiers": [
+          "ctrl",
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b",
+        "name": "ctrl+alt+[",
+        "utf8": [
+          27
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_at",
+      "description": "键 @ 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "@",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u0000",
+        "name": "ctrl+@",
+        "utf8": [
+          0
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_2",
+      "description": "键 2 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "2",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u0000",
+        "name": "ctrl+2",
+        "utf8": [
+          0
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_3",
+      "description": "键 3 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "3",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b",
+        "name": "ctrl+3",
+        "utf8": [
+          27
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_4",
+      "description": "键 4 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "4",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001c",
+        "name": "ctrl+4",
+        "utf8": [
+          28
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_bracket_close",
+      "description": "键 ] 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "]",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001d",
+        "name": "ctrl+]",
+        "utf8": [
+          29
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_5",
+      "description": "键 5 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "5",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001d",
+        "name": "ctrl+5",
+        "utf8": [
+          29
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_caret",
+      "description": "键 ^ 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "^",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001e",
+        "name": "ctrl+^",
+        "utf8": [
+          30
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_6",
+      "description": "键 6 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "6",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001e",
+        "name": "ctrl+6",
+        "utf8": [
+          30
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_underscore",
+      "description": "键 _ 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "_",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001f",
+        "name": "ctrl+_",
+        "utf8": [
+          31
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_minus",
+      "description": "键 - 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "-",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001f",
+        "name": "ctrl+-",
+        "utf8": [
+          31
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_7",
+      "description": "键 7 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "7",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001f",
+        "name": "ctrl+7",
+        "utf8": [
+          31
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_slash",
+      "description": "键 / 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "/",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001f",
+        "name": "ctrl+/",
+        "utf8": [
+          31
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_question",
+      "description": "键 ? 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "?",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "",
+        "name": "ctrl+?",
+        "utf8": [
+          127
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_8",
+      "description": "键 8 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "8",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "",
+        "name": "ctrl+8",
+        "utf8": [
+          127
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_9",
+      "description": "键 9 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "9",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "9",
+        "name": "ctrl+9",
+        "utf8": [
+          57
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_plus",
+      "description": "键 + 与修饰键 ctrl 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "+",
+        "modifiers": [
+          "ctrl"
+        ]
+      },
+      "expected": {
+        "bytes": "+",
+        "name": "ctrl++",
+        "utf8": [
+          43
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_alt_plus",
+      "description": "键 + 与修饰键 alt 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "+",
+        "modifiers": [
+          "alt"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b+",
+        "name": "alt++",
+        "utf8": [
+          27,
+          43
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_shift_1",
+      "description": "键 1 与修饰键 shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "1",
+        "modifiers": [
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "1",
+        "name": "shift+1",
+        "utf8": [
+          49
+        ]
+      },
+      "derived": true
+    },
+    {
+      "name": "key_ctrl_alt_shift_esc",
+      "description": "键 esc 与修饰键 ctrl、alt、shift 编码为指定终端字节。",
+      "source": [
+        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.apply",
+        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+      ],
+      "input": {
+        "key": "esc",
+        "modifiers": [
+          "ctrl",
+          "alt",
+          "shift"
+        ]
+      },
+      "expected": {
+        "bytes": "\u001b",
+        "name": "esc",
+        "utf8": [
+          27
+        ]
+      },
+      "derived": true
+    }
+  ]
+}

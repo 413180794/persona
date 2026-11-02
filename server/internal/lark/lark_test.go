@@ -11,6 +11,56 @@ import (
 	"testing"
 )
 
+func TestMessagePageSyncMetadata(t *testing.T) {
+	for _, state := range []string{"complete", "local", "gap", ""} {
+		t.Run("state="+state, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				message := map[string]any{"id": "message", "position": "1"}
+				body := map[string]any{"items": []any{message}}
+				if state != "" {
+					body["syncState"] = state
+					message["clientId"] = "outgoing-1"
+					message["localState"] = "failed"
+				}
+				_ = json.NewEncoder(w).Encode(body)
+			}))
+			defer srv.Close()
+			c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "test-token"})
+			for _, kind := range []string{"chat", "topic", "thread"} {
+				var page Page
+				var err error
+				if kind == "thread" {
+					page, err = c.Thread(context.Background(), "message", "", 10)
+				} else {
+					page, err = c.Messages(context.Background(), "chat", Window{}, 10, kind == "topic")
+				}
+				if err != nil || len(page.Messages) != 1 || page.SyncState != state {
+					t.Fatalf("%s: page = %+v, err = %v", kind, page, err)
+				}
+				raw, err := json.Marshal(page)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var projected struct {
+					SyncState *string          `json:"sync_state"`
+					Messages  []map[string]any `json:"messages"`
+				}
+				if err := json.Unmarshal(raw, &projected); err != nil {
+					t.Fatal(err)
+				}
+				m := projected.Messages[0]
+				if state == "" {
+					if projected.SyncState != nil || m["client_id"] != nil || m["local_state"] != nil {
+						t.Fatalf("%s: optional fields not omitted: %s", kind, raw)
+					}
+				} else if projected.SyncState == nil || *projected.SyncState != state || m["client_id"] != "outgoing-1" || m["local_state"] != "failed" {
+					t.Fatalf("%s: metadata lost: %s", kind, raw)
+				}
+			}
+		})
+	}
+}
+
 func TestConversationsAndMessages(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer tok" {
