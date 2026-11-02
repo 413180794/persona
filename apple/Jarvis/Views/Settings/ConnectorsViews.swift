@@ -77,7 +77,7 @@ nonisolated struct LarkStatus: Codable, Hashable, Sendable {
 }
 
 /// One of GET /api/v1/connectors: a source the hub reads (GitHub…) and how it is doing (docs/protocol.md「连接器 API」).
-/// Feishu and mail are not in it yet: they keep their own rows.
+/// Feishu and mail are in it too when asked for (`all`): `ConnectorRow` draws them as the rows they always had.
 nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     var id: String
     var name: String
@@ -85,6 +85,8 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     var account: String?
     var via: String?
     var error: String?
+    /// How to fix it, a step a sentence, when the user can.
+    var guide: [String]?
     var lastSync: Date?
     var lastEvent: Date?
     var capabilities: [String]?
@@ -93,7 +95,7 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     var options: JSONValue?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, status, account, via, error, capabilities, hosts, options
+        case id, name, status, account, via, error, guide, capabilities, hosts, options
         case lastSync = "last_sync"
         case lastEvent = "last_event"
     }
@@ -102,10 +104,34 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
 extension APIClient {
     func larkStatus() async throws -> LarkStatus { try await get("/api/v1/lark/status") }
 
-    func connectors() async throws -> [HubConnector] {
+    /// The hub's connectors; `all` takes Feishu and mail too (a hub from before M6 leaves them out anyway).
+    func connectors(all: Bool = false) async throws -> [HubConnector] {
         struct List: Decodable { var connectors: [HubConnector] }
-        let list: List = try await get("/api/v1/connectors")
+        let list: List = try await get("/api/v1/connectors", query: all ? ["all": "1"] : [:])
         return list.connectors
+    }
+}
+
+/// A row of 设置 › 连接器 after this device's, from the hub's list (GET /api/v1/connectors?all=1): mail and Feishu
+/// first and drawn as they always were (their own pages, their own status), then the rest in the hub's order.
+nonisolated enum ConnectorRow: Hashable, Identifiable {
+    case mail, lark
+    case hub(HubConnector)
+
+    var id: String {
+        switch self {
+        case .mail: "mail"
+        case .lark: "lark"
+        case .hub(let c): c.id
+        }
+    }
+
+    /// A hub that lists Feishu (it always has it) says whether it has mail; one that does not (from before M6, or no
+    /// list yet) gets both rows, as before.
+    static func rows(_ list: [HubConnector]) -> [ConnectorRow] {
+        let listed = list.contains { $0.id == "lark" }
+        let legacy: [ConnectorRow] = listed ? (list.contains { $0.id == "mail" } ? [.mail, .lark] : [.lark]) : [.mail, .lark]
+        return legacy + list.filter { $0.id != "mail" && $0.id != "lark" }.map(ConnectorRow.hub)
     }
 }
 
@@ -123,71 +149,27 @@ struct ConnectorsSection: View {
                 #if os(iOS)
                 // A Mac is a desktop, not the phone: the hub never calls its tools (AppModel.registration).
                 NavigationLink(value: SettingsPage.phoneData) {
-                    if AppStyle.current.usesBeautifulUI {
-                        SettingsRow(title: ConnectorText.device, symbol: Theme.Icon.thisDevice, tint: Theme.accent, value: ConnectorText.deviceSummary())
-                    } else {
-                        LabeledContent {
-                            Text(ConnectorText.deviceSummary()).lineLimit(1)
-                        } label: {
-                            Label(ConnectorText.device, systemImage: Theme.Icon.thisDevice)
-                        }
-                    }
+                    ConnectorRowLabel(title: ConnectorText.device, symbol: Theme.Icon.thisDevice, value: ConnectorText.deviceSummary())
                 }
                 #endif
-                NavigationLink(value: SettingsPage.mail) {
-                    if AppStyle.current.usesBeautifulUI {
-                        SettingsRow(title: "邮箱", symbol: Theme.Icon.mailAccounts, tint: Theme.accent, value: ConnectorText.mailSummary(accounts))
-                    } else {
-                        LabeledContent {
-                            Text(ConnectorText.mailSummary(accounts)).lineLimit(1)
-                        } label: {
-                            Label("邮箱", systemImage: Theme.Icon.mailAccounts)
+                ForEach(ConnectorRow.rows(hubConnectors)) { row in
+                    switch row {
+                    case .mail:
+                        NavigationLink(value: SettingsPage.mail) {
+                            ConnectorRowLabel(title: "邮箱", symbol: Theme.Icon.mailAccounts, value: ConnectorText.mailSummary(accounts))
                         }
-                    }
-                }
-                NavigationLink(value: SettingsPage.feishu) {
-                    if AppStyle.current.usesBeautifulUI {
-                        SettingsRow(title: "飞书", symbol: Theme.Icon.mailAccounts, tint: Theme.accent, value: ConnectorText.larkSummary(lark), brand: Theme.Brand.lark)
-                    } else {
-                        LabeledContent {
-                            Text(ConnectorText.larkSummary(lark)).lineLimit(1)
-                        } label: {
-                            Label { Text("飞书") } icon: { Image(Theme.Brand.lark).resizable().scaledToFit() }
+                    case .lark:
+                        NavigationLink(value: SettingsPage.feishu) {
+                            ConnectorRowLabel(title: "飞书", symbol: Theme.Icon.mailAccounts, brand: Theme.Brand.lark, value: ConnectorText.larkSummary(lark))
                         }
-                    }
-                }
-                ForEach(hubConnectors) { c in
-                    NavigationLink(value: SettingsPage.connector(c.id)) {
-                        if AppStyle.current.usesBeautifulUI {
-                            SettingsRow(title: c.name, symbol: ConnectorText.symbol(c.id), tint: Theme.accent, value: ConnectorText.summary(c),
-                                        brand: ConnectorText.brand(c.id))
-                        } else {
-                            LabeledContent {
-                                Text(ConnectorText.summary(c)).lineLimit(1)
-                            } label: {
-                                Label {
-                                    Text(c.name)
-                                } icon: {
-                                    if let brand = ConnectorText.brand(c.id) {
-                                        Image(brand).resizable().scaledToFit()
-                                    } else {
-                                        Image(systemName: ConnectorText.symbol(c.id))
-                                    }
-                                }
-                            }
+                    case .hub(let c):
+                        NavigationLink(value: SettingsPage.connector(c.id)) {
+                            ConnectorRowLabel(title: c.name, symbol: ConnectorText.symbol(c.id), brand: ConnectorText.brand(c.id), value: ConnectorText.summary(c))
                         }
                     }
                 }
                 NavigationLink(value: SettingsPage.feishuBot) {
-                    if AppStyle.current.usesBeautifulUI {
-                        SettingsRow(title: "飞书机器人", symbol: Theme.Icon.chatBot, tint: Theme.accent, value: FeishuBotModel.summary(bot))
-                    } else {
-                        LabeledContent {
-                            Text(FeishuBotModel.summary(bot)).lineLimit(1)
-                        } label: {
-                            Label("飞书机器人", systemImage: Theme.Icon.chatBot)
-                        }
-                    }
+                    ConnectorRowLabel(title: "飞书机器人", symbol: Theme.Icon.chatBot, value: FeishuBotModel.summary(bot))
                 }
             }
             .bareListRow()
@@ -204,13 +186,41 @@ struct ConnectorsSection: View {
         async let a = try? api.mailAccounts()
         async let l = try? api.larkStatus()
         // An older hub has no connectors (feature "connectors"): its list stays as it was.
-        async let c = model.hubFeatures.contains("connectors") ? try? api.connectors() : nil
+        async let c = model.hubFeatures.contains("connectors") ? try? api.connectors(all: true) : nil
         async let b = try? api.feishuBot()
         let (accs, st, list, bs) = await (a, l, c, b)
         if let accs { accounts = accs }
         if let st { lark = st }
         if let list { hubConnectors = list }
         if let bs { bot = bs }
+    }
+}
+
+/// One row of the 连接器 section: the connector's mark (its brand's, or a symbol) and name, what it has now on the right.
+private struct ConnectorRowLabel: View {
+    var title: String
+    var symbol: String
+    var brand: String? = nil
+    var value: String
+
+    var body: some View {
+        if AppStyle.current.usesBeautifulUI {
+            SettingsRow(title: title, symbol: symbol, tint: Theme.accent, value: value, brand: brand)
+        } else {
+            LabeledContent {
+                Text(value).lineLimit(1)
+            } label: {
+                Label {
+                    Text(title)
+                } icon: {
+                    if let brand {
+                        Image(brand).resizable().scaledToFit()
+                    } else {
+                        Image(systemName: symbol)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -344,6 +354,22 @@ struct HubConnectorView: View {
                 }
             } footer: {
                 Text("登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。")
+            }
+            if connector?.status != "ok", let guide = connector?.guide, !guide.isEmpty {
+                Section {
+                    ForEach(Array(guide.enumerated()), id: \.offset) { i, step in
+                        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
+                            Text("\(i + 1)").font(Theme.Font.labelStrong).monospacedDigit().foregroundStyle(Theme.accent)
+                            Text(step).font(Theme.Font.body).textSelection(.enabled)
+                        }
+                    }
+                    Button { Task { await load() } } label: {
+                        Label("重新检查", systemImage: Theme.Icon.retry).lineLimit(1)
+                    }
+                    .disabled(loading)
+                } header: {
+                    SettingsHeading("怎么修好")
+                }
             }
             if id == "github", let connector, let options = GitHubInboxOptions(connector.options) {
                 GitHubInboxSettings(options: options) { connector in self.connector = connector }

@@ -44,7 +44,9 @@ type Status struct {
 	// Via says where the sign-in comes from (「来自 <机器> 的 gh 登录」).
 	Via string
 	// Error is one sentence for people when State is not ok (「<机器> 上的 gh 登录失效了…」); never a secret.
-	Error     string
+	Error string
+	// Guide is how to fix it, a step a sentence, when the user can (「打开系统设置 › …」); shown under Error.
+	Guide     []string
 	LastSync  time.Time
 	LastEvent time.Time
 }

@@ -260,6 +260,7 @@ type Info struct {
 	Account      string     `json:"account,omitempty"`
 	Via          string     `json:"via,omitempty"`
 	Error        string     `json:"error,omitempty"`
+	Guide        []string   `json:"guide,omitempty"`
 	LastSync     *time.Time `json:"last_sync,omitempty"`
 	LastEvent    *time.Time `json:"last_event,omitempty"`
 	Capabilities []string   `json:"capabilities"`
@@ -284,7 +285,7 @@ func (r *Registry) Infos(ctx context.Context) []Info {
 	out := []Info{}
 	for _, c := range r.All() {
 		st := StatusOf(ctx, c)
-		info := Info{ID: c.ID(), Name: c.Name(), Status: st.State, Account: st.Account, Via: st.Via, Error: st.Error,
+		info := Info{ID: c.ID(), Name: c.Name(), Status: st.State, Account: st.Account, Via: st.Via, Error: st.Error, Guide: st.Guide,
 			LastSync: when(st.LastSync), LastEvent: when(st.LastEvent), Capabilities: Capabilities(c), Enabled: r.Enabled(c.ID())}
 		if h, ok := c.(Hosts); ok {
 			info.Hosts = h.Hosts()

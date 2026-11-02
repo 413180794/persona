@@ -66,7 +66,7 @@ func (h *Hub) callConnector(ctx context.Context, machineID, name string, args js
 
 func (h *Hub) connectorRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/connectors", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"connectors": h.listedConnectors(r.Context())})
+		writeJSON(w, map[string]any{"connectors": h.listedConnectors(r.Context(), r.URL.Query().Get("all") == "1")})
 	})
 	// Signing in, a step at a time (connector.Login): the app shows each Prompt's fields and sends them back. The
 	// values (a phone number, a code, a password) go to the connector only: never into a log or a response.

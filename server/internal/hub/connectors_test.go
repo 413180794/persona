@@ -58,7 +58,7 @@ func (c toolConnector) Tools() []proto.Tool {
 func (toolConnector) Call(context.Context, string, json.RawMessage) (string, error) { return "", nil }
 
 // A connector may not offer a tool the hub has itself; one only named like them ("lark") is fine, does not take
-// the hub's lark_* calls (lark_agent_reply stays the hub's), and is not listed while it has its own row in the app.
+// the hub's lark_* calls (lark_agent_reply stays the hub's), and is listed only to an app that asks for all (?all=1).
 func TestConnectorsShadowNoBuiltinTool(t *testing.T) {
 	h := newTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
@@ -80,6 +80,11 @@ func TestConnectorsShadowNoBuiltinTool(t *testing.T) {
 	_, out := call(t, h.routes(), "GET", "/api/v1/connectors", h.cfg.Token, "")
 	if list := out["connectors"].([]any); len(list) != 1 || list[0].(map[string]any)["id"] != "example" {
 		t.Fatalf("listed %v", list)
+	}
+	// An app that draws Feishu's row from the list asks for all of them.
+	_, out = call(t, h.routes(), "GET", "/api/v1/connectors?all=1", h.cfg.Token, "")
+	if list := out["connectors"].([]any); len(list) != 2 || list[1].(map[string]any)["id"] != "lark" {
+		t.Fatalf("listed with all=1: %v", list)
 	}
 }
 

@@ -184,10 +184,13 @@ func TestInfos(t *testing.T) {
 	r := NewRegistry(nil)
 	_ = r.Add(&fake{id: "example", status: Status{State: StateOK, Account: "alice", LastSync: at}})
 	_ = r.Add(plain{})
+	_ = r.Add(&fake{id: "broken", status: Status{State: StateNoPermission, Error: "不让读", Guide: []string{"打开设置", "打开开关"}}})
 	b, _ := json.Marshal(r.Infos(context.Background()))
 	want := `[{"id":"example","name":"Example","status":"ok","account":"alice","last_sync":"2026-01-02T03:04:05Z",` +
 		`"capabilities":["status","tools","actions","events","hosts"],"hosts":["example.com"],"enabled":true},` +
-		`{"id":"plain","name":"Plain","status":"ok","capabilities":[],"enabled":true}]`
+		`{"id":"plain","name":"Plain","status":"ok","capabilities":[],"enabled":true},` +
+		`{"id":"broken","name":"Example","status":"no_permission","error":"不让读","guide":["打开设置","打开开关"],` +
+		`"capabilities":["status","tools","actions","events","hosts"],"hosts":["example.com"],"enabled":true}]`
 	if string(b) != want {
 		t.Fatalf("infos\n%s\nwant\n%s", b, want)
 	}

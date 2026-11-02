@@ -11,7 +11,8 @@ import (
 
 // larkConnector is Feishu (with removed) as a connector (docs/plan-connectors.md「三、迁移」): its chats and removed posts
 // for the knowledge base, its documents, meetings and events as items, its inbox (inbox_own.go) and its read tools.
-// The gate's rules and 设置 › 连接器's row move to it in M5–M6. The realtime events stay with the hub
+// Its write rules are connector_gate's of connector "lark" (connector.LarkRules); 设置 › 连接器 draws its row from
+// the connectors list (?all=1) and its status from /api/v1/lark/status. The realtime events stay with the hub
 // (lark_events.go): they also refresh the app's 信息 tab and personal agents, and start /agent at once.
 type larkConnector struct{ h *Hub }
 
@@ -27,14 +28,15 @@ func (c larkConnector) ItemSource() kb.ItemSource {
 	return &larkItems{c: c.h.lark, loc: c.h.userLocation()}
 }
 
-// legacyConnectors have their own rows in 设置 › 连接器 (FeishuConnectorView, the mail page) until M6: GET
-// /api/v1/connectors leaves them out, or the app would show them twice.
+// legacyConnectors had rows of their own in 设置 › 连接器 before the app drew them from GET /api/v1/connectors
+// (migration M6): an app from before draws every connector listed as a row of its own, so they are listed only when
+// asked for (?all=1), or it would show them twice.
 var legacyConnectors = map[string]bool{"lark": true, "mail": true}
 
-func (h *Hub) listedConnectors(ctx context.Context) []connector.Info {
+func (h *Hub) listedConnectors(ctx context.Context, all bool) []connector.Info {
 	out := []connector.Info{}
 	for _, info := range h.connectors.Infos(ctx) {
-		if !legacyConnectors[info.ID] {
+		if all || !legacyConnectors[info.ID] {
 			out = append(out, info)
 		}
 	}

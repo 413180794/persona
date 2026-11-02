@@ -364,3 +364,8 @@
   再打开另一个，后者那条显示成了前者的（网页版没有这层缓存，所以正常；服务端推送和分页都对）。现在 key 是「机器/会话 + id」（`MemoScope`），
   聊天页用 environment `rowMemoScope` 往下传、挂在 body 最外层（它弹出的 sheet 也在里面），预热按同一个 key 填。新加按 id 的缓存照此办理。
 
+
+## `APIClient.get` 的路径里不能带 `?`（2026-11-03，连接器迁移 M6）
+
+`get("/api/v1/connectors?all=1")` 发出去的是 `/api/v1/connectors%3Fall=1`：路径整个按路径编码，`?` 被转义，hub 回 404，`try?` 吞掉错误，列表就空了（设置 › 连接器 少了 GitHub、信息，编译和单元测试都看不出来）。
+查询参数一律走 `get(_:query:)`。是 UI 测试截图对比时看 mock 日志（`MISSING GET …%3F…`）才发现的。

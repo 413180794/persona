@@ -70,6 +70,7 @@ func (c *Remote) Status(context.Context) connector.Status {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	st := c.status
+	st.Guide = c.guide
 	st.Account = c.machine
 	st.Via = c.machine + " 上的「信息」"
 	return st

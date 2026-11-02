@@ -1150,6 +1150,14 @@ if os.environ.get("MOCK_GITHUB") == "signed_out":
     GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "not_signed_in", "via": "来自 MacBook 的 gh 登录",
                         "error": "MacBook 上的 gh 登录失效了：在那台机器上运行 gh auth login",
                         "capabilities": ["status", "hosts"], "hosts": ["github.com"]}
+if os.environ.get("MOCK_GITHUB") == "guide":  # a status with the steps to fix it (guide), as a connector may give them
+    GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "not_signed_in", "via": "来自 MacBook 的 gh 登录",
+                        "error": "MacBook 上的 gh 没有登录 github.com",
+                        "guide": ["在 MacBook 上打开终端", "运行 gh auth login --insecure-storage，按提示登录", "回到 Jarvis 点「重新检查」"],
+                        "capabilities": ["status", "hosts"], "hosts": ["github.com"]}
+# Feishu and mail as connectors (GET /api/v1/connectors?all=1, migration M6): the app draws them as their own rows.
+LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilities": ["tools", "inbox", "archive"], "enabled": True},
+                     {"id": "mail", "name": "邮件", "status": "ok", "capabilities": ["tools", "actions", "inbox", "archive"], "enabled": True}]
 
 # 信息 (GET /api/v1/imessage…, docs/plan-connectors.md「五」): one Mac's Messages, read for the user's own eyes. Every
 # name, number (+1 555 01xx) and text is made up. MOCK_IMESSAGE=denied: that Mac's node has no Full Disk Access.
@@ -3161,7 +3169,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
         if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
-            return self.send_json({"connectors": [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}]})
+            listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}]
+            return self.send_json({"connectors": (LEGACY_CONNECTORS if q.get("all") == ["1"] else []) + listed})
         if p == "/api/v1/imessage":  # 设置 › 连接器 › 信息; MOCK_IMESSAGE=denied: no Full Disk Access on the Mac
             return self.send_json(IMESSAGE_STATUS)
         if p == "/api/v1/imessage/chats" or p.startswith("/api/v1/imessage/chats/") and p.endswith("/messages"):
