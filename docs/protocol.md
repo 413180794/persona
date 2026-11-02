@@ -610,6 +610,9 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
+| GET | `/api/v1/imessage` | `{machine, status, error?, guide?:[…], via?}`：信息连接器（hub.json `imessage.machine`）的状态，当场问那台 Mac（刚开了权限，刷新就是新的）；没有完全磁盘访问权限时 `guide` 是在那台 Mac 上一步步怎么开，`via` 是那台 Mac 的 node 怎么跑（`ssh` / `launchd`，两种开法不一样）。没设置是 404 `not_configured` |
+| GET | `/api/v1/imessage/chats?limit=&before=` | 那台 Mac 的会话，新的在前（node 的 `connector.chats`，字段见下面「hub ↔ node」）。只读、不存、不交给模型。没权限 403 `no_permission`，Mac 不在线 503 `offline`，node 太旧 409 `node_outdated` |
+| GET | `/api/v1/imessage/chats/{id}/messages?limit=&before=` | 一个会话的一页消息，旧的在前（node 的 `connector.older`）；`id` 不像会话 id（`imessage-<12 位十六进制>`）的不发给 Mac，404 `no_chat` |
 | GET | `/api/v1/connectors` | `{"connectors":[{id, name, status, account?, via?, error?, last_sync?, last_event?, capabilities:[…], hosts?:[…]}]}`：hub 上注册的连接器（不含飞书和邮箱，它们还走自己的接口）。`status` 是 `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error`；`via` 说登录从哪来（「来自 <机器> 的 gh 登录」）；`error` 是给人看的一句话，不含密钥；`capabilities` 取 `status` / `tools` / `actions` / `events` / `hosts`；`hosts` 是这个连接器的链接所在的主机名（App 用来认链接） |
 
 ## 邮件 API

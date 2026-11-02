@@ -60,6 +60,7 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/connectors", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"connectors": h.connectors.Infos(r.Context())})
 	})
+	h.imessageRoutes(api)
 }
 
 // startConnectors registers the connectors hub.json sets up and runs them.
@@ -71,6 +72,11 @@ func (h *Hub) startConnectors(ctx context.Context) {
 		}
 		if err := h.addConnector(github.New(*gh, name, h.ghToken(gh.Auth.FromMachine))); err != nil {
 			h.logf("github connector: %v", err)
+		}
+	}
+	if im := h.cfg.IMessage; im.Configured() {
+		if err := h.addIMessage(*im); err != nil {
+			h.logf("imessage connector: %v", err)
 		}
 	}
 	h.connectors.Start(ctx, h.connectorChanged, h.logf)

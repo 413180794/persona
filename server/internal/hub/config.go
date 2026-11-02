@@ -16,6 +16,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/github"
+	"github.com/chyroc/jarvis/server/internal/connector/imessage"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -81,6 +82,9 @@ type Config struct {
 	ConnectorGate []connector.Rule `json:"connector_gate,omitempty"`
 	// GitHub is the GitHub connector: whose gh login it reads (connector/github, docs/plan-connectors.md).
 	GitHub *github.Config `json:"github,omitempty"`
+	// IMessage is the Messages connector: which Mac's Messages the app may read (connector/imessage). The messages
+	// are not given to any model.
+	IMessage *imessage.Config `json:"imessage,omitempty"`
 	// Google is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
 	Google   GoogleConfig    `json:"google"`
 	Machines []MachineConfig `json:"machines"`
