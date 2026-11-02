@@ -83,6 +83,46 @@ final class ShellTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["服务器"].exists)
     }
 
+    /// The drawer's rows keep their size however often it comes out. The shell's "a size up" (`shellScaled`) is one
+    /// Dynamic Type step on the app's text size; the drawer lives in a hosting controller whose environment took that
+    /// step back in on every refresh (收件箱's row 59 → 78 → 80 pt after a few trips to 收件箱 and back).
+    @MainActor private func inboxRowHeight(_ entry: Int, _ via: String) -> CGFloat {
+        let row = see(button("sidebar-inbox"), "收件箱 in the drawer, entry \(entry) \(via)")
+        sleep(1)
+        print("SIDEBAR-ROW-HEIGHT \(via) entry \(entry): \(row.frame.height)")
+        return row.frame.height
+    }
+
+    @MainActor func testDrawerRowsKeepTheirSizeWhenReentered() {
+        launch()
+        let toggle = see(button("assistant-sidebar-button"), "☰", timeout: 15)
+        var heights: [CGFloat] = []
+        // From 助手: out, push 收件箱, back, out again.
+        for entry in 1...5 {
+            toggle.tapCenter()
+            heights.append(inboxRowHeight(entry, "from 助手"))
+            button("sidebar-inbox").tap()
+            let inbox = see(app.navigationBars["收件箱"], "the inbox pushed")
+            sleep(2)
+            inbox.buttons["BackButton"].tap()
+            see(toggle, "☰ again after the inbox")
+        }
+        // From Agents' avatar: out and closed with a tap beside it.
+        see(button("shell-agents"), "Agents").tap()
+        let work = see(button("work-sidebar-button"), "Agents' avatar")
+        for entry in 1...3 {
+            work.tapCenter()
+            heights.append(inboxRowHeight(entry, "from Agents"))
+            let row = button("sidebar-inbox")
+            app.descendants(matching: .any)["assistant-drawer-close"].firstMatch.tap()
+            let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: row)
+            XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "the drawer did not close, entry \(entry)")
+        }
+        for (i, h) in heights.enumerated() {
+            XCTAssertEqual(h, heights[0], accuracy: 0.5, "收件箱's height on entry \(i + 1) differs from the first: \(heights)")
+        }
+    }
+
     @MainActor func testComposerGrowsWhileTyping() {
         launch()
         let field = see(app.textViews["shell-composer-field"].firstMatch.exists ? app.textViews["shell-composer-field"].firstMatch

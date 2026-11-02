@@ -38,6 +38,7 @@ struct RootView: View {
         .tint(Theme.accent)
         .fontDesign(model.style.fontDesign)
         .dynamicTypeSize(model.textSize.applied(to: systemTypeSize))
+        .environment(\.shellBaseTypeSize, model.textSize.applied(to: systemTypeSize))
         .buiTheme(.jarvis())
         // No scroll bars anywhere (2026-10-31, the user: they look bad); the environment reaches every ScrollView,
         // List and sheet below. UIKit scroll views (MonoTextView, the terminal, web views) turn theirs off themselves.

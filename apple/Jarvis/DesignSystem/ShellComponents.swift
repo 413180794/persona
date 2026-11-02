@@ -291,12 +291,28 @@ struct ShellNavigationClearance: ViewModifier {
     }
 }
 
+/// The text size the app settled on (the system's, moved by 小 / 标准 / 大), set once at the root. `shellScaled` goes one
+/// step up from this, not from the environment's own size: that one is not always what the page has. The drawer's
+/// sidebar lives in a hosting controller whose environment follows its UIKit trait collection, which takes up the
+/// step set inside it, so reading the environment there added a step on every refresh (收件箱's row 59 → 78 → 80 pt).
+private struct ShellBaseTypeSizeKey: EnvironmentKey {
+    static let defaultValue: DynamicTypeSize? = nil
+}
+
+extension EnvironmentValues {
+    var shellBaseTypeSize: DynamicTypeSize? {
+        get { self[ShellBaseTypeSizeKey.self] }
+        set { self[ShellBaseTypeSizeKey.self] = newValue }
+    }
+}
+
 private struct ShellScaled: ViewModifier {
     @Environment(\.dynamicTypeSize) private var size
+    @Environment(\.shellBaseTypeSize) private var base
 
     func body(content: Content) -> some View {
         let all = DynamicTypeSize.allCases
-        let i = all.firstIndex(of: size) ?? 0
+        let i = all.firstIndex(of: base ?? size) ?? 0
         content.dynamicTypeSize(all[min(i + 1, all.count - 1)])
     }
 }
