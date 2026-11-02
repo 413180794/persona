@@ -77,6 +77,27 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	}
 	sid := r.PathValue("sid")
 	p["session_id"] = sid
+	todoID, _ := p["todo_id"].(string)
+	delete(p, "todo_id")
+	if todoID != "" {
+		if principalOf(r.Context()).Role != roleFull {
+			writeErr(w, http.StatusForbidden, errors.New("read-only role cannot modify todos"))
+			return
+		}
+		t, err := h.getTodoForLink(r.Context(), todoID)
+		if err != nil {
+			writeErr(w, http.StatusServiceUnavailable, err)
+			return
+		}
+		if t == nil {
+			writeErr(w, http.StatusNotFound, errors.New("todo not found"))
+			return
+		}
+		if t.DoneAt != nil {
+			writeErr(w, http.StatusConflict, errors.New("todo is already completed"))
+			return
+		}
+	}
 	if s, ok := m.session(sid); ok && isAssistant(s.Cwd, m.assistantCwd()) {
 		h.unarchiveOnSend(m.cfg.ID, sid) // the user is talking in it again: back in the list
 		h.userSpoke(sid)                 // and it works for them, not for a chain of conversations
@@ -111,6 +132,15 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	}
 	if id == "" {
 		status, body := h.deliver(ctx, m, p)
+		if status == http.StatusOK && todoID != "" {
+			var title, cwd, agent string
+			if s, ok := m.session(sid); ok {
+				title, cwd, agent = s.Title, s.Cwd, s.Agent
+			}
+			if err := h.linkTodoAgent(r.Context(), todoID, m.cfg.ID, sid, title, cwd, agent, ""); err != nil {
+				h.logf("sendMessage: link todo %s for %s/%s failed: %v", todoID, m.cfg.ID, sid, err)
+			}
+		}
 		writeRaw(w, status, body)
 		return
 	}
@@ -162,6 +192,15 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		}
 	}
 	close(f.done)
+	if f.status == http.StatusOK && todoID != "" {
+		var title, cwd, agent string
+		if s, ok := m.session(sid); ok {
+			title, cwd, agent = s.Title, s.Cwd, s.Agent
+		}
+		if err := h.linkTodoAgent(r.Context(), todoID, m.cfg.ID, sid, title, cwd, agent, ""); err != nil {
+			h.logf("sendMessage: link todo %s for %s/%s failed: %v", todoID, m.cfg.ID, sid, err)
+		}
+	}
 	writeRaw(w, f.status, f.body)
 }
 

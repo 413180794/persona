@@ -667,3 +667,9 @@ func (d *DB) TouchDeviceToken(ctx context.Context, id string) error {
 	_, err := d.pool.Exec(ctx, `UPDATE device_tokens SET last_seen = now() WHERE id = $1`, id)
 	return err
 }
+
+// TruncateForTest clears tables in tests.
+func (d *DB) TruncateForTest(ctx context.Context) error {
+	_, err := d.pool.Exec(ctx, `TRUNCATE devices, device_tokens, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, machine_systems, machine_metrics, sent_messages, todos, todo_agents CASCADE`)
+	return err
+}

@@ -101,6 +101,7 @@ type Hub struct {
 	devtok        devTokens // device token lookups (devicetokens.go)
 	sends         sendLog   // messages being / just sent, by client_msg_id (send.go)
 	plugins       *plugins  // processes that add to the app, relayed under /api/v1/plugins (plugins.go)
+	todos         todosState
 
 	connectors *connector.Registry // sources of the user's information (connectors.go)
 }
@@ -154,6 +155,15 @@ type Store interface {
 	TouchDeviceToken(ctx context.Context, id string) error
 	PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error
 	InboxItems(ctx context.Context, doneSince time.Time) ([][]byte, error)
+	ListTodos(ctx context.Context) ([]db.TodoRow, error)
+	ListAllTodoAgents(ctx context.Context) ([]db.TodoAgentRow, error)
+	GetTodo(ctx context.Context, id string) (*db.TodoRow, error)
+	CreateTodo(ctx context.Context, t db.TodoRow) error
+	UpdateTodo(ctx context.Context, id string, title *string, notes *string, done *bool, updatedAt time.Time) (*db.TodoRow, error)
+	DeleteTodo(ctx context.Context, id string) error
+	LinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError string, linkedAt time.Time) ([]string, error)
+	UnlinkTodoAgent(ctx context.Context, todoID, machineID, sessionID string) error
+	UpdateTodoAgentSnapshot(ctx context.Context, machineID, sessionID, title, startError string) error
 }
 
 type pending struct {
@@ -189,6 +199,7 @@ func Run(ctx context.Context, b update.Build) error {
 		cfg: cfg, version: version, build: b, logger: logger,
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
+		todos: newTodosState(),
 	}
 	h.live = newLiveActivities(h)
 	h.upd = newUpdater(h)
@@ -231,6 +242,7 @@ func Run(ctx context.Context, b update.Build) error {
 	h.lark = lark.New(cfg.Lark)
 	h.inbox.larkAccount = h.lark.Account()
 	h.initAgents()
+	h.initTodos(ctx)
 	h.connectors = connector.NewRegistry(cfg.ConnectorGate)
 	for _, mc := range cfg.Machines {
 		m := newMachine(h, mc)
@@ -322,12 +334,24 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		list[i].SeenAt = seen[list[i].SessionID]
 		list[i].State = agentState(list[i], list[i].SeenAt)
 	}
+	h.todos.mu.RLock()
+	if h.todos.loaded {
+		for i := range list {
+			if tid, ok := h.todos.activeBySession[[2]string{m.cfg.ID, list[i].SessionID}]; ok {
+				if t, ok := h.todos.todos[tid]; ok && t.DoneAt == nil {
+					list[i].Todo = &proto.TodoRef{ID: t.ID, Title: t.Title}
+				}
+			}
+		}
+	}
+	h.todos.mu.RUnlock()
 	h.markStates(m.cfg.ID, list, time.Now())
 	return list
 }
 
 func (h *Hub) sessionsChanged(m *Machine) {
 	list := h.decorated(m)
+	h.checkAndUpdateTodoSnapshots(m, list)
 	h.broadcastSessions(m, list)
 	h.syncScreenInteractions(m, list)
 	h.syncPlanInteractions(m)

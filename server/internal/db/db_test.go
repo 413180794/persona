@@ -23,7 +23,7 @@ func open(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.Close)
-	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, machine_systems, machine_metrics, sent_messages`); err != nil {
+	if err := d.TruncateForTest(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	return d

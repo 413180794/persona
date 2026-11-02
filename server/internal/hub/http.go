@@ -203,6 +203,7 @@ func (h *Hub) routes() http.Handler {
 	h.larkRoutes(api)
 	h.agentRoutes(api)
 	h.inboxRoutes(api)
+	h.todoRoutes(api)
 	h.connectorRoutes(api)
 	h.translateRoutes(api)
 	h.pluginRoutes(api)
@@ -477,10 +478,30 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		// app sends the first message itself (so it shows as a message right away) instead of as prompt.
 		Async    bool   `json:"async,omitempty"`
 		NameHint string `json:"name_hint,omitempty"`
+		TodoID   string `json:"todo_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
+	}
+	if p.TodoID != "" {
+		if principalOf(r.Context()).Role != roleFull {
+			writeErr(w, http.StatusForbidden, errors.New("read-only role cannot modify todos"))
+			return
+		}
+		t, err := h.getTodoForLink(r.Context(), p.TodoID)
+		if err != nil {
+			writeErr(w, http.StatusServiceUnavailable, err)
+			return
+		}
+		if t == nil {
+			writeErr(w, http.StatusNotFound, errors.New("todo not found"))
+			return
+		}
+		if t.DoneAt != nil {
+			writeErr(w, http.StatusConflict, errors.New("todo is already completed"))
+			return
+		}
 	}
 	m := h.byID[p.MachineID]
 	if m == nil {
@@ -519,6 +540,20 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	}
 	res.Session.MachineID = m.cfg.ID
 	res.Session.State = agentState(res.Session, time.Time{})
+	if p.TodoID != "" {
+		title := res.Session.Title
+		if title == "" {
+			title = cleanPromptTitle(nameFrom)
+		}
+		if err := h.linkTodoAgent(r.Context(), p.TodoID, m.cfg.ID, res.Session.SessionID, title, res.Session.Cwd, res.Session.Agent, ""); err != nil {
+			h.logf("startSession: link todo %s for %s/%s failed: %v", p.TodoID, m.cfg.ID, res.Session.SessionID, err)
+		} else {
+			res.Session.Todo = &proto.TodoRef{ID: p.TodoID, Title: title}
+			if t, err := h.getTodoForLink(r.Context(), p.TodoID); err == nil && t != nil {
+				res.Session.Todo.Title = t.Title
+			}
+		}
+	}
 	writeJSON(w, res)
 	if async && p.TabName == "" {
 		// The name takes a model call (seconds): the tab opens as agent-<n> and is renamed when it comes.

@@ -378,6 +378,14 @@ type Session struct {
 	// ready. StartError: the start failed (shown in the chat for a while).
 	Starting   bool   `json:"starting,omitempty"`
 	StartError string `json:"start_error,omitempty"`
+	// Todo is the active (uncompleted, unreleased) todo this session is linked to (hub/todos.go).
+	Todo *TodoRef `json:"todo,omitempty"`
+}
+
+// TodoRef is a session's link to an active todo (docs/todos.md).
+type TodoRef struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 // SourceRuntime is the source_kind of a session an agent runtime lists (docs/runtimes.md): source_instance_id names

@@ -162,6 +162,7 @@ ORDERS = "a1f3c2d4-0000-4000-8000-000000000004"
 PHOTOS = "a1f3c2d4-0000-4000-8000-000000000005"
 REVIEW = "a1f3c2d4-0000-4000-8000-000000000006"
 RECIPE = "a1f3c2d4-0000-4000-8000-000000000007"
+RELEASE = "a1f3c2d4-0000-4000-8000-000000000008"
 ASK1 = "b2e4d6f8-0000-4000-8000-000000000001"
 ASK2 = "b2e4d6f8-0000-4000-8000-000000000002"
 ASK3 = "b2e4d6f8-0000-4000-8000-000000000003"
@@ -179,6 +180,8 @@ SESSIONS = [
          "开始写测试前想确认一下用哪个测试框架。", pending=1),
     sess("macbook", REVIEW, "检查 PR #42 的改动", "/Users/me/code/weather", "idle", "idle", "weather", 1, "review", 3, 95,
          "PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。", seen_at=ago(minutes=80)),
+    sess("macbook", RELEASE, "整理发布说明", "/Users/me/code/weather", "done", "unread", "weather", 1, "release", 4, 3,
+         "发布说明整理好了，按功能分了三段，中英文各一份。"),
     sess("studio", BLOG, "博客迁移到 Astro", "/Users/me/code/blog", "done", "unread", "blog", 2, "1", 1, 12,
          "迁移完成：32 篇文章都能正常构建，旧链接全部加了 301 跳转，Lighthouse 性能分从 71 提到 98。"),
     sess("studio", PHOTOS, "照片同步脚本支持 HEIC", "/Users/me/code/photo-sync", "blocked", "needs_you", "photo-sync", 3, "1", 1, 6,
@@ -356,6 +359,232 @@ MEMORY = [
      "updated_at": ago(days=3)},
 ]
 SCHEDULE_RAN = []  # what 立即运行 started (UI tests read it back at /mock/schedule)
+
+# ---------- todos (待办, docs/todos.md) ----------
+TODOS_INIT = [
+    {
+        "id": "todo_weather",
+        "title": "天气 App 发 1.3 版",
+        "notes": "1.3 的内容：主屏幕小组件、网络层补测试、发布说明。周五前提交审核。",
+        "done_at": None,
+        "created_at": ago(hours=2),
+        "updated_at": ago(minutes=2),
+        "agents": [
+            {
+                "machine_id": "macbook",
+                "session_id": TESTS,
+                "linked_at": ago(minutes=45),
+                "released_at": None,
+                "title": "补齐网络层的单元测试",
+                "cwd": "/Users/me/code/weather",
+                "agent": "claude",
+                "start_error": "",
+            },
+            {
+                "machine_id": "macbook",
+                "session_id": RELEASE,
+                "linked_at": ago(minutes=50),
+                "released_at": None,
+                "title": "整理发布说明",
+                "cwd": "/Users/me/code/weather",
+                "agent": "claude",
+                "start_error": "",
+            },
+            {
+                "machine_id": "macbook",
+                "session_id": WIDGET,
+                "linked_at": ago(minutes=60),
+                "released_at": None,
+                "title": "给天气 App 加主屏幕小组件",
+                "cwd": "/Users/me/code/weather",
+                "agent": "claude",
+                "start_error": "",
+            },
+            {
+                "machine_id": "macbook",
+                "session_id": "a1f3c2d4-0000-4000-8000-000000000009",
+                "linked_at": ago(hours=2),
+                "released_at": ago(hours=1),
+                "title": "初步调研 WidgetKit API",
+                "cwd": "/Users/me/code/weather",
+                "agent": "claude",
+                "start_error": "",
+            },
+        ],
+    },
+    {
+        "id": "todo_photos",
+        "title": "照片同步脚本支持 HEIC",
+        "notes": "计划写好了，等你批准后开始改。",
+        "done_at": None,
+        "created_at": ago(hours=3),
+        "updated_at": ago(minutes=6),
+        "agents": [
+            {
+                "machine_id": "studio",
+                "session_id": PHOTOS,
+                "linked_at": ago(minutes=30),
+                "released_at": None,
+                "title": "照片同步脚本支持 HEIC",
+                "cwd": "/Users/me/code/photo-sync",
+                "agent": "claude",
+                "start_error": "",
+            },
+        ],
+    },
+    {
+        "id": "todo_blog",
+        "title": "博客迁移到 Astro",
+        "notes": "32 篇文章都能正常构建，旧链接全部加了 301 跳转。",
+        "done_at": None,
+        "created_at": ago(hours=5),
+        "updated_at": ago(minutes=12),
+        "agents": [
+            {
+                "machine_id": "studio",
+                "session_id": BLOG,
+                "linked_at": ago(hours=2),
+                "released_at": None,
+                "title": "博客迁移到 Astro",
+                "cwd": "/Users/me/code/blog",
+                "agent": "claude",
+                "start_error": "",
+            },
+        ],
+    },
+    {
+        "id": "todo_orders",
+        "title": "排查 /orders 接口变慢",
+        "notes": "慢在订单列表的 N+1 查询，正在改成一次 JOIN 并补索引。",
+        "done_at": None,
+        "created_at": ago(hours=6),
+        "updated_at": ago(minutes=1),
+        "agents": [
+            {
+                "machine_id": "server",
+                "session_id": ORDERS,
+                "linked_at": ago(hours=1),
+                "released_at": None,
+                "title": "排查 /orders 接口变慢",
+                "cwd": "/home/me/code/shop-api",
+                "agent": "codex",
+                "start_error": "",
+            },
+        ],
+    },
+    {
+        "id": "todo_review",
+        "title": "检查 PR #42",
+        "notes": "PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。",
+        "done_at": None,
+        "created_at": ago(hours=8),
+        "updated_at": ago(minutes=95),
+        "agents": [
+            {
+                "machine_id": "macbook",
+                "session_id": REVIEW,
+                "linked_at": ago(hours=3),
+                "released_at": None,
+                "title": "检查 PR #42 的改动",
+                "cwd": "/Users/me/code/weather",
+                "agent": "claude",
+                "start_error": "",
+            },
+        ],
+    },
+    {
+        "id": "todo_nas",
+        "title": "给 NAS 配自动备份",
+        "notes": "配置 NAS 的定期备份任务。",
+        "done_at": None,
+        "created_at": ago(days=1),
+        "updated_at": ago(days=1),
+        "agents": [],
+    },
+    {
+        "id": "todo_done_1",
+        "title": "重构邮件解析模块",
+        "notes": "支持多部分邮件与附件提取。",
+        "done_at": ago(days=1),
+        "created_at": ago(days=3),
+        "updated_at": ago(days=1),
+        "agents": [],
+    },
+    {
+        "id": "todo_done_2",
+        "title": "修复登录页在 Safari 上的样式问题",
+        "notes": "兼容 Safari 17 的 flex 布局。",
+        "done_at": ago(days=2),
+        "created_at": ago(days=4),
+        "updated_at": ago(days=2),
+        "agents": [],
+    },
+    {
+        "id": "todo_done_3",
+        "title": "升级 Tailwind CSS 到 4.0",
+        "notes": "升级依赖并调整样式引用。",
+        "done_at": ago(days=3),
+        "created_at": ago(days=6),
+        "updated_at": ago(days=3),
+        "agents": [],
+    },
+]
+TODOS = copy.deepcopy(TODOS_INIT)
+
+
+def active_todo_for_session(mid, sid):
+    for t in TODOS:
+        if t.get("done_at"):
+            continue
+        for a in t.get("agents", []):
+            if a.get("machine_id") == mid and a.get("session_id") == sid and not a.get("released_at"):
+                return {"id": t["id"], "title": t["title"]}
+    return None
+
+
+def decorated_session(s):
+    s_copy = dict(s)
+    todo = active_todo_for_session(s.get("machine_id"), s.get("session_id"))
+    if todo:
+        s_copy["todo"] = todo
+    else:
+        s_copy.pop("todo", None)
+    return s_copy
+
+
+def format_todo(t):
+    t_copy = copy.deepcopy(t)
+    curr = [a for a in t_copy.get("agents", []) if not a.get("released_at")]
+    curr.sort(key=lambda a: a.get("linked_at") or "", reverse=True)
+    past = [a for a in t_copy.get("agents", []) if a.get("released_at")]
+    past.sort(key=lambda a: a.get("released_at") or "", reverse=True)
+    t_copy["agents"] = curr + past
+    return t_copy
+
+
+def sorted_todos():
+    tds = copy.deepcopy(TODOS)
+    tds.sort(key=lambda t: t.get("created_at") or "", reverse=True)
+    return [format_todo(t) for t in tds]
+
+
+def push_todos():
+    for send, _ in list(LIVE):
+        try:
+            send({"type": "todos"})
+        except Exception:
+            pass
+
+
+def is_read_only(h):
+    auth = h.headers.get("Authorization", "")
+    token_str = auth.replace("Bearer ", "").strip()
+    tok = next((t for t in TOKENS if t.get("token") == token_str or t.get("id") == token_str), None)
+    if tok and tok.get("role") in ("answer", "watch", "readonly"):
+        return True
+    if h.headers.get("X-Mock-Role") in ("answer", "watch", "readonly"):
+        return True
+    return False
 
 # ---------- the knowledge base (Jarvis › 知识库, docs/knowledge.md) ----------
 KB = {
@@ -1827,7 +2056,7 @@ def served(sid, via, payload):
 
 
 def all_sessions():
-    return SESSIONS + ASSISTANT
+    return [decorated_session(s) for s in (SESSIONS + ASSISTANT)]
 
 
 def find_items(sid):
@@ -2581,6 +2810,12 @@ class H(BaseHTTPRequestHandler):
             secs, step = {"1h": (3600, 10), "6h": (6 * 3600, 60), "24h": (86400, 240)}.get(r, (3600, 10))
             return self.send_json({"metrics": machine_metrics(p.split("/")[4], secs, step), "range": r, "step": step})
         if p == "/api/v1/sessions": return self.send_json({"sessions": all_sessions()})
+        if p == "/api/v1/todos": return self.send_json({"todos": sorted_todos()})
+        if p.startswith("/api/v1/todos/") and p.count("/") == 4:
+            tid = p.split("/")[4]
+            t = next((x for x in TODOS if x["id"] == tid), None)
+            if not t: return self.send_json({"error": "待办不存在"}, 404)
+            return self.send_json({"todo": format_todo(t)})
         if p == "/api/v1/interactions": return self.send_json({"interactions": INTERACTIONS})
         if p == "/api/v1/interactions/history": return self.send_json({"interactions": []})
         if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
@@ -2605,6 +2840,7 @@ class H(BaseHTTPRequestHandler):
                     x["state"], x["status"] = ORIG_STATE[x["session_id"]]
             INTERACTIONS[:] = [x for x in INTERACTIONS if not x["id"].startswith(("ix_bump_", "ix_churn"))]
             BUMPED["asks"].clear()
+            TODOS[:] = copy.deepcopy(TODOS_INIT)
             return self.send_json({"ok": True})
         if p == "/mock/seen": return self.send_json({"seen": SEEN})
         if p == "/mock/reconnects": return self.send_json({"reconnects": RECONNECTS})
@@ -2853,6 +3089,98 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(s)
         if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
         if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page
+        if p == "/api/v1/todos" and self.command == "POST":
+            if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
+            body = json.loads(self.last_body or b"{}")
+            title = (body.get("title") or "").strip()
+            if not title: return self.send_json({"error": "title 不能为空"}, 400)
+            now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            new_todo = {
+                "id": "todo_" + uuid.uuid4().hex[:8],
+                "title": title,
+                "notes": body.get("notes") or "",
+                "done_at": None,
+                "created_at": now_str,
+                "updated_at": now_str,
+                "agents": [],
+            }
+            TODOS.insert(0, new_todo)
+            push_todos()
+            return self.send_json({"todo": new_todo})
+        if p.startswith("/api/v1/todos/") and "/agents/" in p:
+            if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
+            parts = p.split("/")  # ['', 'api', 'v1', 'todos', id, 'agents', mid, sid]
+            if len(parts) >= 8:
+                tid, mid, sid = parts[4], parts[6], parts[7]
+                t = next((x for x in TODOS if x["id"] == tid), None)
+                if not t: return self.send_json({"error": "待办不存在"}, 404)
+                if self.command == "PUT":
+                    if t.get("done_at"): return self.send_json({"error": "待办已完成"}, 409)
+                    now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                    for other in TODOS:
+                        if other["id"] != tid:
+                            for a in other.get("agents", []):
+                                if a["machine_id"] == mid and a["session_id"] == sid and not a.get("released_at"):
+                                    a["released_at"] = now_str
+                                    other["updated_at"] = now_str
+                    target = next((a for a in t.get("agents", []) if a["machine_id"] == mid and a["session_id"] == sid), None)
+                    s_obj = next((x for x in SESSIONS + ASSISTANT if x["machine_id"] == mid and x["session_id"] == sid), None)
+                    s_title = s_obj.get("title", "") if s_obj else ""
+                    s_cwd = s_obj.get("cwd", "") if s_obj else ""
+                    s_agent = s_obj.get("agent", "claude") if s_obj else "claude"
+                    if target:
+                        target["released_at"] = None
+                        target["linked_at"] = now_str
+                        if s_title: target["title"] = s_title
+                        if s_cwd: target["cwd"] = s_cwd
+                        if s_agent: target["agent"] = s_agent
+                    else:
+                        t.setdefault("agents", []).append({
+                            "machine_id": mid, "session_id": sid, "linked_at": now_str, "released_at": None,
+                            "title": s_title, "cwd": s_cwd, "agent": s_agent, "start_error": "",
+                        })
+                    t["updated_at"] = now_str
+                    push_machine(mid)
+                    push_todos()
+                    return self.send_json({"ok": True})
+                elif self.command == "DELETE":
+                    agent = next((a for a in t.get("agents", []) if a["machine_id"] == mid and a["session_id"] == sid), None)
+                    if agent:
+                        t["agents"].remove(agent)
+                        t["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                        push_machine(mid)
+                        push_todos()
+                    return self.send_json({"ok": True})
+        if p.startswith("/api/v1/todos/") and p.count("/") == 4:
+            if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
+            tid = p.split("/")[4]
+            t = next((x for x in TODOS if x["id"] == tid), None)
+            if not t: return self.send_json({"error": "待办不存在"}, 404)
+            if self.command == "PATCH":
+                body = json.loads(self.last_body or b"{}")
+                now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                aff = set(a["machine_id"] for a in t.get("agents", []) if not a.get("released_at"))
+                if "title" in body:
+                    title = (body["title"] or "").strip()
+                    if not title: return self.send_json({"error": "title 不能为空"}, 400)
+                    t["title"] = title
+                if "notes" in body:
+                    t["notes"] = body["notes"] or ""
+                if "done" in body:
+                    if body["done"]:
+                        if not t.get("done_at"): t["done_at"] = now_str
+                    else:
+                        t["done_at"] = None
+                t["updated_at"] = now_str
+                for mid in aff: push_machine(mid)
+                push_todos()
+                return self.send_json({"todo": format_todo(t)})
+            elif self.command == "DELETE":
+                aff = set(a["machine_id"] for a in t.get("agents", []) if not a.get("released_at"))
+                TODOS.remove(t)
+                for mid in aff: push_machine(mid)
+                push_todos()
+                return self.send_json({"ok": True})
         if p.startswith("/api/v1/model-config/purposes/") and self.command == "PATCH":
             pid, body = unquote(p.rsplit("/", 1)[1]), json.loads(self.last_body or b"{}")
             with MODEL_CONFIG_LOCK:
@@ -2952,6 +3280,41 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"session": session})
         if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
             body = json.loads(self.last_body or b"{}")
+            todo_id = body.get("todo_id")
+            if todo_id:
+                if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
+                t = next((x for x in TODOS if x["id"] == todo_id), None)
+                if not t: return self.send_json({"error": "待办不存在"}, 404)
+                if t.get("done_at"): return self.send_json({"error": "待办已完成"}, 409)
+                parts = p.split("/")  # ['', 'api', 'v1', 'sessions', mid, sid, 'messages']
+                if len(parts) >= 7:
+                    mid, sid = parts[4], parts[5]
+                    now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                    for other in TODOS:
+                        if other["id"] != todo_id:
+                            for a in other.get("agents", []):
+                                if a["machine_id"] == mid and a["session_id"] == sid and not a.get("released_at"):
+                                    a["released_at"] = now_str
+                                    other["updated_at"] = now_str
+                    target = next((a for a in t.get("agents", []) if a["machine_id"] == mid and a["session_id"] == sid), None)
+                    s_obj = next((x for x in SESSIONS + ASSISTANT if x["machine_id"] == mid and x["session_id"] == sid), None)
+                    s_title = s_obj.get("title", "") if s_obj else ""
+                    s_cwd = s_obj.get("cwd", "") if s_obj else ""
+                    s_agent = s_obj.get("agent", "claude") if s_obj else "claude"
+                    if target:
+                        target["released_at"] = None
+                        target["linked_at"] = now_str
+                        if s_title: target["title"] = s_title
+                        if s_cwd: target["cwd"] = s_cwd
+                        if s_agent: target["agent"] = s_agent
+                    else:
+                        t.setdefault("agents", []).append({
+                            "machine_id": mid, "session_id": sid, "linked_at": now_str, "released_at": None,
+                            "title": s_title, "cwd": s_cwd, "agent": s_agent, "start_error": "",
+                        })
+                    t["updated_at"] = now_str
+                    push_machine(mid)
+                    push_todos()
             if not any(m.get("client_msg_id") and m.get("client_msg_id") == body.get("client_msg_id") for m in SENT):
                 SENT.append(body)
             return self.send_json({"ok": True})
@@ -3061,6 +3424,12 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if p == "/api/v1/sessions" and self.command == "POST":  # 新建会话
             body = json.loads(self.last_body or b"{}")
+            todo_id = body.get("todo_id")
+            if todo_id:
+                if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
+                t = next((x for x in TODOS if x["id"] == todo_id), None)
+                if not t: return self.send_json({"error": "待办不存在"}, 404)
+                if t.get("done_at"): return self.send_json({"error": "待办已完成"}, 409)
             STARTED.append(body)
             if not machine_online(body.get("machine_id", "")):
                 return self.send_json({"error": "machine is offline"}, 503)
@@ -3083,7 +3452,18 @@ class H(BaseHTTPRequestHandler):
                     s.pop("starting", None)
                 threading.Timer(float(os.environ.get("MOCK_START_SECONDS", "6")), started).start()
             SESSIONS.append(s)
-            return self.send_json({"session": s})
+            if todo_id:
+                now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                t = next((x for x in TODOS if x["id"] == todo_id), None)
+                if t:
+                    t.setdefault("agents", []).append({
+                        "machine_id": s["machine_id"], "session_id": s["session_id"], "linked_at": now_str, "released_at": None,
+                        "title": s["title"], "cwd": s["cwd"], "agent": s["agent"], "start_error": "",
+                    })
+                    t["updated_at"] = now_str
+                    push_machine(s["machine_id"])
+                    push_todos()
+            return self.send_json({"session": decorated_session(s)})
         if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades the token for the device's own
             body = json.loads(self.last_body or b"{}")
             t = {"id": "dev_" + uuid.uuid4().hex[:6], "name": body.get("name", ""), "kind": body.get("kind", "phone"),
