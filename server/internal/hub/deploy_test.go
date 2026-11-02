@@ -11,7 +11,7 @@ import (
 )
 
 // The script the hub runs over ssh installs the gzipped binary from stdin at the node's path (~ expanded, a path
-// with a quote kept whole) and leaves no .new file behind.
+// with a quote kept whole), leaves no .new file behind, and restarts the machine's resident node.
 func TestDeployScriptInstallsTheBinary(t *testing.T) {
 	for _, bin := range []string{"~/.jarvis/bin/jarvisd", "~/odd 'dir'/jarvisd"} {
 		home := t.TempDir()
@@ -19,11 +19,15 @@ func TestDeployScriptInstallsTheBinary(t *testing.T) {
 		zw := gzip.NewWriter(&gz)
 		_, _ = zw.Write([]byte("#!/bin/sh\necho new\n"))
 		_ = zw.Close()
+		pkilled := fakePkill(t)
 		cmd := exec.Command("bash", "-c", deployScript(bin))
-		cmd.Env = append(os.Environ(), "HOME="+home)
+		cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+filepath.Dir(pkilled)+string(os.PathListSeparator)+os.Getenv("PATH"))
 		cmd.Stdin = &gz
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s: %v: %s", bin, err, out)
+		}
+		if got, _ := os.ReadFile(pkilled); string(got) != "-f [j]arvisd node --attach\n" {
+			t.Errorf("%s: the resident node is not restarted: pkill got %q", bin, got)
 		}
 		path := filepath.Join(home, strings.TrimPrefix(bin, "~/"))
 		got, err := os.ReadFile(path)
@@ -54,4 +58,19 @@ func TestNodeBinaryMissing(t *testing.T) {
 	if p, err := nodeBinary("darwin", "arm64"); err != nil || filepath.Base(p) != "jarvisd-darwin-arm64" {
 		t.Fatalf("%s %v", p, err)
 	}
+}
+
+// fakePkill puts a pkill first on PATH that only records its arguments (the returned file) and kills nothing. The
+// deploy script ends with `pkill -f '[j]arvisd node --attach'`; run for real on a developer's machine it stops the
+// resident node serving that machine (it did, every time the hub tests ran on a Mac with one: the machine went offline
+// for a minute and a half).
+func fakePkill(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	calls := filepath.Join(dir, "pkill.calls")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + shellQuote(calls) + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "pkill"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return calls
 }
