@@ -3,6 +3,7 @@ import ActivityKit
 #endif
 import Foundation
 import OSLog
+import Security
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -118,12 +119,13 @@ final class LiveActivityController {
     /// ways (docs/live-activity.md「形象」):
     ///   - into the running activity's content now, which also makes the system draw it again;
     ///   - to the hub, which puts it in this device's pushes (`look` in the device's prefs);
-    ///   - into the keychain group shared with the widget extension, with a package's pictures (`FleetLook.save`).
+    ///   - into the App Group container shared with the widget extension, with a package's pictures (`FleetLook.save`).
     /// `force` (灵动岛诊断): written anew everywhere and redrawn even when nothing changed.
     func look(_ look: FleetLook, force: Bool = false, faces: () -> FleetFaces?) {
+        _ = Self.forgetKeychainLook
         if force {
-            _ = FleetLookStore.keychain.write(nil, FleetLookStore.lookAccount)
-            _ = FleetLookStore.keychain.write(nil, FleetLookStore.facesAccount)
+            _ = FleetLookStore.shared.write(nil, FleetLookStore.lookFile)
+            _ = FleetLookStore.shared.save(nil)
             toldHub = nil
         }
         let saved = FleetLook.save(look, faces: faces)
@@ -154,10 +156,18 @@ final class LiveActivityController {
                 guard !Task.isCancelled else { return }
                 self?.toldHub = look
             } catch {
-                FleetKeychain.log.error("telling the hub the look: \(error.localizedDescription, privacy: .public)")
+                FleetLookStore.log.error("telling the hub the look: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
+
+    /// Builds 92–103 left the look and the package's pictures in a keychain group the extension could not read on a
+    /// phone; keychain items outlive the app, so they go once a launch (the group stays in the app's entitlements
+    /// for this).
+    private static let forgetKeychainLook: Void = {
+        let status = SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "jarvis.look"] as CFDictionary)
+        if status == errSecSuccess { FleetLookStore.log.notice("deleted the keychain look of an older build") }
+    }()
 
     func endAll() {
         endTask?.cancel()
@@ -318,15 +328,15 @@ nonisolated extension FleetLook {
 }
 
 extension FleetFaces {
-    /// A package's faces for the activity: each state's first frame (what the top bar's dot holds still), the avatar
-    /// for the rest. Nil for a built-in, or a package not on the phone.
+    /// A package's faces for the activity: one picture a state, its first frame (what the top bar's dot holds still),
+    /// and the avatar only for states without one. Nil for a built-in, or a package not on the phone.
     @MainActor init?(persona p: Persona, personas: PersonaStore) {
         guard let m = p.manifest, personas.isOnPhone(p) else { return nil }
         var states: [String: Data] = [:]
         for s in PersonaState.allCases where m.dot.states[s.rawValue] != nil {
             if let first = personas.frames(p, s)?.images.first, let png = Self.png(first) { states[s.rawValue] = png }
         }
-        let avatar = personas.avatar(p, points: Self.points, scale: 3).flatMap(Self.png)
+        let avatar = states.count == PersonaState.allCases.count ? nil : personas.avatar(p, points: Self.points, scale: 3).flatMap(Self.png)
         guard !states.isEmpty || avatar != nil else { return nil }
         self.init(package: "\(p.id)/\(p.rev)", states: states, avatar: avatar)
     }

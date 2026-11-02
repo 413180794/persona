@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Each bundle's entitlements in a release build: sign an unsigned archive with them, check a built one has them.
 
-The app shares keychain items with its extensions (the Live Activity's persona with JarvisWidgets, the push key with
-JarvisNotify; docs/release.md「entitlements」), which only works when every bundle is signed with its target's
-keychain groups. An archive built unsigned (CODE_SIGNING_ALLOWED=NO, for a cloud-signed export on a Mac without an
+The app shares keychain items with JarvisNotify (the push key) and files with JarvisWidgets (the Live Activity's
+persona, in an App Group; docs/release.md「entitlements」), which only works when every bundle is signed with its
+target's keychain groups and App Groups. An archive built unsigned (CODE_SIGNING_ALLOWED=NO, for a cloud-signed export on a Mac without an
 Apple Distribution certificate) carries none, and the export signs each bundle with what it finds in it: build 92
 shipped the widget extension without any (the island drew the default persona whatever was chosen) and the app with
 groups whose bundle id was empty (2026-11-02).
 
   scripts/entitlements.py sign <unsigned .xcarchive>      # ad hoc, inside out, each bundle with its target's file
-  scripts/entitlements.py check <.ipa | .xcarchive | .app>  # every target's keychain groups are in its signature
+  scripts/entitlements.py check <.ipa | .xcarchive | .app>  # every target's groups are in its signature
 
 Both read the targets from the Xcode project (`xcodebuild -showBuildSettings`, after xcodegen) and expand the build
 settings in each entitlements file; `$(AppIdentifierPrefix)` is the team's (the signature's own, when checking). A
@@ -27,6 +27,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(ROOT, "apple", "Jarvis.xcodeproj")
 VAR = re.compile(r"\$[({](\w+)[)}]")
+APP_GROUPS = "com.apple.security.application-groups"
 
 
 def targets():
@@ -137,10 +138,16 @@ def check(path):
             for g in ents.get("keychain-access-groups", []):
                 if g not in groups:
                     problems.append("%s: keychain group %s missing (signed with %s)" % (name, g, groups or "none"))
-            # The groups the code is told to use (Info.plist, e.g. JarvisLookKeychainGroup) must be ones it has.
+            app_groups = have.get(APP_GROUPS, [])
+            for g in ents.get(APP_GROUPS, []):
+                if g not in app_groups:
+                    problems.append("%s: App Group %s missing (signed with %s)" % (name, g, app_groups or "none"))
+            # The groups the code is told to use (Info.plist: JarvisPushKeychainGroup, JarvisAppGroup) must be ones it has.
             for k, v in sorted(info.items()):
                 if k.endswith("KeychainGroup") and v not in groups:
                     problems.append("%s: Info.plist %s = %s is not one of its keychain groups" % (name, k, v))
+                if k.endswith("AppGroup") and v not in app_groups:
+                    problems.append("%s: Info.plist %s = %s is not one of its App Groups" % (name, k, v))
         for p in problems:
             print(p)
         if problems:

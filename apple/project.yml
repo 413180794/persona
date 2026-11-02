@@ -62,8 +62,13 @@ targets:
         com.apple.developer.healthkit.access: []
         # The app's own group first (stays the default, where the existing items are), then the one the notification
         # service extension shares for the push key (docs/push-relay.md).
-        # Last, the one the widget extension reads the Live Activity's persona from (docs/live-activity.md「形象」).
+        # Last, the one builds 92–103 left the Live Activity's persona in, only so the app can delete what is still
+        # there (LiveActivityController.forgetKeychainLook): the extension could never read it on a phone.
         keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look"]
+        # Shared with the widget extension: the persona the Live Activity draws and a package's pictures, as files
+        # (docs/live-activity.md「形象」). group.<bundle id> unless config.json app.app_group says otherwise; registered in
+        # the developer account and put on both App IDs (docs/release.md「App Group」).
+        com.apple.security.application-groups: ["$(JARVIS_APP_GROUP)"]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
@@ -118,8 +123,9 @@ targets:
         # archive built unsigned for a cloud-signed export left it empty (scripts/entitlements.py, 2026-11-02).
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
         JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
-        # Where the app leaves the persona the Live Activity draws for the widget extension (FleetLook).
-        JarvisLookKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).look
+        # Where the app leaves the persona the Live Activity draws for the widget extension (FleetLookStore). An App
+        # Group's id has no team prefix: the same in an archive built unsigned.
+        JarvisAppGroup: $(JARVIS_APP_GROUP)
         # The Fleet activity on the lock screen / Dynamic Island (docs/live-activity.md).
         NSSupportsLiveActivities: true
         # The hub is usually reached over plain HTTP inside a private network (docs/config.md).
@@ -229,11 +235,12 @@ targets:
     entitlements:
       path: JarvisWidgets/JarvisWidgets.entitlements
       properties:
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look"]
+        # Not the keychain: a Live Activity's extension cannot read it on a phone (build 103, 2026-11-02).
+        com.apple.security.application-groups: ["$(JARVIS_APP_GROUP)"]
     info:
       path: JarvisWidgets/Info.plist
       properties:
-        JarvisLookKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).look
+        JarvisAppGroup: $(JARVIS_APP_GROUP)
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

@@ -10,7 +10,7 @@ TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及�
 | 项目 | 说明 |
 | --- | --- |
 | Bundle ID | iOS `<bundle_id>`、手表 `<bundle_id>.watchkitapp`、Live Activity `<bundle_id>.liveactivity`、通知服务扩展 `<bundle_id>.notify`（推送中继，`docs/push-relay.md`），用 `scripts/asc_signing.py` 注册 |
-| App ID 能力 | iOS：`PUSH_NOTIFICATIONS`、`HEALTHKIT`；手表：无 |
+| App ID 能力 | iOS：`PUSH_NOTIFICATIONS`、`HEALTHKIT`、`APP_GROUPS`；Live Activity：`APP_GROUPS`；手表：无。App Group 本身只能在网站上建、挂到 App ID 上（下面「App Group」） |
 | 描述文件 | 「Jarvis App Store」「Jarvis Watch App Store」（`IOS_APP_STORE`）；`asc_signing.py` 会删了重建并装到 `~/Library/MobileDevice/Provisioning Profiles/` |
 | 签名身份 | 登录钥匙串里的 `Apple Distribution: …（team_id）` |
 | App Store Connect App ID | 网页建好 App 记录后填进配置的 `app_store.app_id` |
@@ -74,8 +74,9 @@ App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed
 
 ## entitlements（2026-11-02）
 
-App 和扩展靠共享的钥匙串组交东西：灵动岛的形象（`<team>.<bundle id>.look`，App → JarvisWidgets）、推送中继的私钥（`.push`，App → JarvisNotify）。
-每个 bundle 的签名里都得有它 target 的 `keychain-access-groups`，Info.plist 里告诉代码用哪个组（`JarvisLookKeychainGroup`、`JarvisPushKeychainGroup`）也得是其中之一，缺一样就静默退回默认值。
+App 和扩展靠共享的组交东西：推送中继的私钥走钥匙串组（`<team>.<bundle id>.push`，App → JarvisNotify），灵动岛的形象和形象包的图走 App Group（`group.<bundle id>`，App → JarvisWidgets，下一节）。
+每个 bundle 的签名里都得有它 target 的 `keychain-access-groups` 和 `com.apple.security.application-groups`，Info.plist 里告诉代码用哪个组（`JarvisPushKeychainGroup`、`JarvisAppGroup`）也得是其中之一，缺一样就静默退回默认值。
+App Group 的 ID 本身不带团队前缀，Info.plist 里直接写 `$(JARVIS_APP_GROUP)`，无签名归档里也有值。
 
 - **Info.plist 的组名用 `$(DEVELOPMENT_TEAM).`，不用 `$(AppIdentifierPrefix)`**：后者只在 Xcode 签名时才有值，无签名归档里是空的。entitlements 文件里照旧写 `$(AppIdentifierPrefix)`。
 - **无签名归档（`CODE_SIGNING_ALLOWED=NO`，这台 Mac 没有发布证书、导出时云签名）**：归档里的 bundle 没有 entitlements，导出按 bundle 里有什么来签。
@@ -83,6 +84,28 @@ App 和扩展靠共享的钥匙串组交东西：灵动岛的形象（`<team>.<b
   构建变量展开，`$(AppIdentifierPrefix)` 是团队的；展不开就报错，不留空）。只对 App 用 `codesign --entitlements <原始文件>`、扩展不带的话，
   导出会把 App 的 `$(JARVIS_BUNDLE_ID)` 展成空、扩展一个组都没有（build 92 就是这样，灵动岛的形象不跟随设置，`docs/live-activity.md`）。
 - **导出后查**：`python3 scripts/entitlements.py check <ipa>`，有问题逐条列出并非零退出；对 build 92 的 ipa 报 9 处。
+  App Group 同样查：每个 bundle 的签名里有它 target 的组，Info.plist 的 `JarvisAppGroup` 是其中之一。
+
+## App Group（2026-11-02）
+
+App 和灵动岛扩展（JarvisWidgets）靠 App Group 容器里的文件交形象和形象包的图（`docs/live-activity.md`「形象」；实时活动的扩展在手机上读不了钥匙串）。
+组名默认 `group.<bundle id>`，配置的 `app.app_group` 可以改（`docs/config.md`），写进两个 target 的 entitlements（`com.apple.security.application-groups`）和 Info.plist 的 `JarvisAppGroup`。
+2026-11-02 已在开发者网站上注册，挂到了 App 和灵动岛扩展的 App ID 上；之后发 TestFlight 的流程（无签名归档 → `entitlements.py sign` → API key 云签名导出）导出的 ipa 里两个 bundle 都带着这个组。
+
+**API key 注册不了 App Group**（2026-11-02 查过）：
+- App Store Connect API 没有 App Group 的接口（`GET /v1/appGroups` 是 404）。`bundleIdCapabilities` 只能打开 `APP_GROUPS` 这个能力，挂不上具体的组（settings 只认三个键，见下面「踩坑」）。
+  fastlane 的 `produce group` / `associate_group` 走的是 Apple ID 登录（网页的 cookie），不是 API key。
+- 导出时的 API key + `-allowProvisioningUpdates` 云签名按 App ID 现有的能力重新生成描述文件，但建不了组、也挂不上组；没挂上就导出失败。
+- 所以换一个账号或 bundle id 时，**先在网站上做完，再构建带 App Group entitlements 的包**。
+
+开发者网站上的步骤（developer.apple.com › Account › Certificates, IDs & Profiles，账户持有人或管理员）：
+1. Identifiers › 「+」› 选 **App Groups** › Continue › Description 填 `Jarvis`，Identifier 填 `group.<bundle id>`（和配置的 `app.app_group` 一致）› Continue › Register。
+2. Identifiers › 右上角的筛选换回 App IDs › 点 `<bundle id>` › Capabilities 里勾 **App Groups** › 点它旁边的 Configure（已经勾过的是 Edit）›
+   勾上 `group.<bundle id>` › Continue › Save › 弹窗里 Confirm（改了能力，这个 App ID 现有的描述文件会失效）。
+3. 对灵动岛扩展的 App ID `<bundle id>.liveactivity` 同样做第 2 步。手表和通知扩展不用。
+4. 描述文件：云签名的导出（自动签名）会自己重新生成；`release.sh` 的手动签名要重跑 `python3 scripts/asc_signing.py`，
+   它检查每个描述文件里有没有这个组，没有就打印上面的步骤并非零退出。
+5. 发版导出后 `scripts/entitlements.py check` 查 ipa 里 App 和 JarvisWidgets 的签名都带着这个组。
 
 ## 踩坑
 

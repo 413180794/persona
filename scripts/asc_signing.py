@@ -2,7 +2,7 @@
 """Prepares App Store signing through the App Store Connect API (idempotent).
 
 - registers the iPhone, Apple Watch, Live Activity and notification service extension bundle ids,
-- enables PUSH_NOTIFICATIONS and HEALTHKIT on the iPhone App ID,
+- enables PUSH_NOTIFICATIONS and HEALTHKIT on the iPhone App ID, APP_GROUPS on it and the Live Activity's,
 - creates (or rebuilds) the "Jarvis App Store" / "Jarvis Watch App Store" / "Jarvis Live Activity App Store" /
   "Jarvis Notify App Store" profiles
   with the team's distribution certificate and installs them where Xcode looks.
@@ -14,13 +14,21 @@ the "Apple Distribution" identity in the login keychain (see docs/release.md).
   python3 scripts/asc_signing.py --dev           # also development profiles for registered devices
   python3 scripts/asc_signing.py --check         # only report what is there, change nothing
   python3 scripts/asc_signing.py --only <bundle id>  # just that target (the others' profiles stay untouched)
+
+The App Group itself (group.<bundle id>, or config.json app.app_group) can't be made or put on an App ID through the
+API, only on the developer website (docs/release.md「App Group」): each profile is checked for it, and a missing one
+prints those steps.
 """
 import base64
 import os
+import plistlib
+import subprocess
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
-from asc import BUNDLE_ID, APIError, create, get_all, request  # noqa: E402
+from asc import BUNDLE_ID, CONFIG, APIError, create, get_all, request  # noqa: E402
+import jarvis_config  # noqa: E402
 
 APP = BUNDLE_ID
 WATCH = APP + ".watchkitapp"
@@ -28,11 +36,13 @@ LIVE = APP + ".liveactivity"  # the widget extension drawing the lock screen / D
 NOTIFY = APP + ".notify"  # the notification service extension opening relayed pushes (docs/push-relay.md)
 # bundle identifier -> (App ID name, profile name, capabilities)
 TARGETS = {
-    APP: ("Jarvis", "Jarvis App Store", ["PUSH_NOTIFICATIONS", "HEALTHKIT"]),
+    APP: ("Jarvis", "Jarvis App Store", ["PUSH_NOTIFICATIONS", "HEALTHKIT", "APP_GROUPS"]),
     WATCH: ("Jarvis Watch", "Jarvis Watch App Store", []),
-    LIVE: ("Jarvis Live Activity", "Jarvis Live Activity App Store", []),
+    LIVE: ("Jarvis Live Activity", "Jarvis Live Activity App Store", ["APP_GROUPS"]),
     NOTIFY: ("Jarvis Notify", "Jarvis Notify App Store", []),
 }
+# The App Group the app shares the Live Activity's persona with the widget extension through (docs/live-activity.md).
+GROUP = jarvis_config.app_group(CONFIG)
 PROFILE_DIR = os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles")
 
 
@@ -77,13 +87,29 @@ def certificate(kind: str) -> str:
     return max(certs, key=lambda c: c["attributes"]["expirationDate"])["id"]
 
 
-def profile(bid: str, name: str, cert: str, kind: str = "IOS_APP_STORE", check_only: bool = False):
+def groups(content: str) -> list:
+    """The App Groups a profile (its base64 profileContent) allows."""
+    with tempfile.NamedTemporaryFile(suffix=".mobileprovision") as f:
+        f.write(base64.b64decode(content))
+        f.flush()
+        out = subprocess.run(["security", "cms", "-D", "-i", f.name], capture_output=True, check=True).stdout
+    return plistlib.loads(out).get("Entitlements", {}).get("com.apple.security.application-groups", [])
+
+
+MISSING_GROUP = []  # profiles without GROUP although their App ID should have it
+
+
+def profile(bid: str, name: str, cert: str, kind: str = "IOS_APP_STORE", check_only: bool = False,
+            group: bool = False):
     # Includes INVALID ones: changing the App ID's capabilities invalidates profiles, and a stale profile with the
     # same name blocks creating the new one. Recreating is cheap and keeps it in sync with the App ID.
     existing = get_all("/v1/profiles", {"filter[name]": name})
     current = [p for p in existing if p["attributes"]["profileState"] == "ACTIVE"]
     if check_only:
         print("  profile", name, "ACTIVE" if current else "missing or invalid")
+        if current and group and GROUP not in groups(current[0]["attributes"]["profileContent"]):
+            print("  profile", name, "lacks the App Group", GROUP)
+            MISSING_GROUP.append(name)
         return
     for p in existing:
         request("DELETE", f"/v1/profiles/{p['id']}")
@@ -103,6 +129,9 @@ def profile(bid: str, name: str, cert: str, kind: str = "IOS_APP_STORE", check_o
     with open(path, "wb") as f:
         f.write(base64.b64decode(created["attributes"]["profileContent"]))
     print("  installed", path)
+    if group and GROUP not in groups(created["attributes"]["profileContent"]):
+        print("  but it lacks the App Group", GROUP)
+        MISSING_GROUP.append(name)
 
 
 def main():
@@ -119,14 +148,22 @@ def main():
         ids[identifier] = bid
         for capability in capabilities:
             ensure_capability(bid, capability, check_only)
-        profile(bid, profile_name, cert, check_only=check_only)
+        profile(bid, profile_name, cert, check_only=check_only, group="APP_GROUPS" in capabilities)
     if "--dev" in sys.argv:
         dev = certificate("dev")
-        for identifier, (name, profile_name, _) in TARGETS.items():
+        for identifier, (name, profile_name, capabilities) in TARGETS.items():
             if identifier not in ids:
                 continue
             profile(ids[identifier], profile_name.replace("App Store", "Development"), dev,
-                    "IOS_APP_DEVELOPMENT", check_only)
+                    "IOS_APP_DEVELOPMENT", check_only, group="APP_GROUPS" in capabilities)
+    if MISSING_GROUP:
+        sys.exit(f"""
+{len(MISSING_GROUP)} profile(s) without the App Group {GROUP}: {", ".join(MISSING_GROUP)}.
+The API can't make an App Group or put one on an App ID. On developer.apple.com › Certificates, Identifiers & Profiles:
+  1. Identifiers › + › App Groups: description Jarvis, identifier {GROUP}.
+  2. Identifiers › {APP} › App Groups › Configure (Edit): tick {GROUP}, Continue, Save, Confirm.
+  3. The same for {LIVE}.
+Then run this again (docs/release.md「App Group」).""")
     if not check_only:
         print("\nDone. Release builds sign with these profiles (release.sh generates the export options from the config).")
 

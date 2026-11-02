@@ -1,6 +1,5 @@
 import Foundation
 import OSLog
-import Security
 import SwiftUI
 import UIKit
 
@@ -28,49 +27,48 @@ nonisolated extension FleetLook {
     /// What the app saved last; `standard` when nothing is readable. Cheap enough to call on every render. The widget
     /// extension tells what it read (`FleetLookReport`).
     static var saved: FleetLook {
-        let (data, status) = FleetKeychain.read(FleetLookStore.lookAccount)
+        let store = FleetLookStore.shared
+        let data = store.read(FleetLookStore.lookFile)
         let look = data.flatMap { try? JSONDecoder().decode(FleetLook.self, from: $0) }
-        FleetLookReport.note { $0.look(status, look, bytes: data?.count) }
+        FleetLookReport.note { $0.saved(store.root != nil, look) }
         return look ?? standard
     }
 
     static func load(_ store: FleetLookStore) -> FleetLook {
-        store.read(FleetLookStore.lookAccount).flatMap { try? JSONDecoder().decode(FleetLook.self, from: $0) } ?? standard
+        store.read(FleetLookStore.lookFile).flatMap { try? JSONDecoder().decode(FleetLook.self, from: $0) } ?? standard
     }
 
-    /// The package's faces as saved, when they are this look's.
-    func faces() -> FleetFaces? {
-        guard package != nil else { return nil }
-        let (data, status) = FleetKeychain.read(FleetLookStore.facesAccount)
-        let faces = data.flatMap { try? PropertyListDecoder().decode(FleetFaces.self, from: $0) }
-        FleetLookReport.note { $0.faces(status, faces?.package, bytes: data?.count) }
-        return faces?.package == package ? faces : nil
+    /// The package's picture for a state as saved, when this look is a package's; read on its own, the one the
+    /// activity is about to draw.
+    func face(_ state: PersonaState) -> (png: Data, own: Bool)? {
+        guard let package else { return nil }
+        let face = FleetLookStore.shared.face(package, state)
+        FleetLookReport.note { $0.face(package, face.map { ($0.file, $0.png.count) }) }
+        return face.map { ($0.png, $0.own) }
     }
 
     func faces(_ store: FleetLookStore) -> FleetFaces? {
-        guard let package, let data = store.read(FleetLookStore.facesAccount),
-              let faces = try? PropertyListDecoder().decode(FleetFaces.self, from: data), faces.package == package else { return nil }
-        return faces
+        package.flatMap { store.faces($0) }
     }
 
     /// Saves it for the extension, with a package's faces (made only when the saved ones are not this package's). True
     /// when what the extension reads changed. Faces that cannot be made leave the package drawn in its color.
     @discardableResult
-    static func save(_ look: FleetLook, faces: () -> FleetFaces?, to store: FleetLookStore = .keychain) -> Bool {
+    static func save(_ look: FleetLook, faces: () -> FleetFaces?, to store: FleetLookStore = .shared) -> Bool {
         var changed = false
         if let package = look.package {
             // The faces before the look; a look is drawn only with faces of its own package, never another's.
-            if look.faces(store) == nil {
-                if let made = faces(), made.package == package, let data = try? PropertyListEncoder().encode(made) {
-                    changed = store.write(data, FleetLookStore.facesAccount)
+            if !store.hasFaces(package) {
+                if let made = faces(), made.package == package {
+                    changed = store.save(made)
                 } else {
-                    FleetKeychain.log.error("no faces for \(package, privacy: .public): drawn in its color")
+                    FleetLookStore.log.error("no faces for \(package, privacy: .public): drawn in its color")
                 }
             }
         } else {
-            _ = store.write(nil, FleetLookStore.facesAccount) // a built-in: no picture of the user's left behind
+            _ = store.save(nil) // a built-in: no picture of the user's left behind
         }
-        if look != load(store), let data = try? JSONEncoder().encode(look), store.write(data, FleetLookStore.lookAccount) {
+        if look != load(store), let data = try? JSONEncoder().encode(look), store.write(data, FleetLookStore.lookFile) {
             changed = true
         }
         return changed
@@ -79,8 +77,7 @@ nonisolated extension FleetLook {
 
 nonisolated extension FleetState {
     /// The persona to draw: the one the content carries (the app's updates, the hub's pushes), else — an older hub —
-    /// what the app left in the keychain. The keychain is read either way, so the extension's report says whether it
-    /// can be.
+    /// what the app saved. The saved one is read either way, so the extension's report says whether it can be.
     var drawnLook: FleetLook {
         let kept = FleetLook.saved
         FleetLookReport.note { $0.content(look) }
@@ -89,11 +86,11 @@ nonisolated extension FleetState {
 }
 
 /// A hub package's faces on the activity (its pictures are the user's and stay on the hub and the phone, never in the
-/// repository): the first frame of each state's dot, the one the app holds still with Reduce Motion, and the avatar
-/// for a state the package has no frames for. PNGs as large as the activity's largest face, drawn at its size, and
-/// small: a phone may not draw a Live Activity whose picture is larger than where it shows (an image decoded at 1× is
-/// as many points as it has pixels), and Live Activity libraries keep each picture under 4 KB; the simulator draws
-/// anything (docs/live-activity.md「为什么 build 98 还不对」).
+/// repository): one picture a state, the first frame of its dot (the one the app holds still with Reduce Motion), and
+/// the avatar only when a state has none. PNGs as large as the activity's largest face, drawn at its size, and small:
+/// a phone may not draw a Live Activity whose picture is larger than where it shows (an image decoded at 1× is as many
+/// points as it has pixels), and Live Activity libraries keep each picture under 4 KB; the simulator draws anything
+/// (docs/live-activity.md「为什么 build 98 还不对」). Each is a file of its own, read only when drawn.
 nonisolated struct FleetFaces: Codable, Hashable, Sendable {
     var package: String
     /// PersonaState raw value → PNG, only the states the package draws itself.
@@ -139,133 +136,192 @@ nonisolated struct FleetFaces: Codable, Hashable, Sendable {
     }
 }
 
-/// Where the app leaves the look for the extension: a keychain item in a group they share (Info.plist
-/// `JarvisLookKeychainGroup`), the same way the push key is shared with JarvisNotify. Readable on the lock screen once
-/// the phone was unlocked after boot. Tests pass one of their own.
+/// Where the app leaves the look and a package's pictures for the widget extension: files in the App Group container
+/// they share (Info.plist `JarvisAppGroup`), under `Fleet/`. On a phone a Live Activity's extension cannot use the
+/// keychain (build 103's 灵动岛诊断, 2026-11-02: the app wrote and read back both items, the extension never reported),
+/// so nothing goes there any more. Readable on the lock screen once the phone was unlocked after boot. Tests pass a
+/// directory of their own.
+///
+///     Fleet/look.json                    the look, for content without one (an older hub)
+///     Fleet/faces/<package>/<state>.png  one picture a state, avatar.png for the states without one; one package
+///     Fleet/seen.json                    what the extension last read (FleetLookReport)
 nonisolated struct FleetLookStore: Sendable {
-    static let lookAccount = "fleet-look"
-    static let facesAccount = "fleet-faces"
-    /// What the widget extension last read (`FleetLookReport`), written by the extension.
-    static let seenAccount = "fleet-seen"
+    static let lookFile = "look.json"
+    static let seenFile = "seen.json"
+    static let facesDir = "faces"
+    static let avatarName = "avatar"
 
-    var read: @Sendable (String) -> Data?
-    /// Nil deletes. False when it could not be saved.
-    var write: @Sendable (Data?, String) -> Bool
-
-    static let keychain = FleetLookStore(read: { FleetKeychain.read($0).data }, write: { FleetKeychain.write($0, $1) == errSecSuccess })
-}
-
-/// The shared keychain group itself. Both sides use the group by name, so the app compares what it saves with the very
-/// item the extension reads (not one of its other groups'), and every answer is logged and kept for 灵动岛诊断.
-nonisolated enum FleetKeychain {
-    static let service = "jarvis.look"
-    /// The island's log (Console: subsystem `jarvis`, category `island`): every keychain answer on either side, so a
-    /// phone that draws the wrong persona says which step failed (docs/live-activity.md「诊断」).
+    /// The island's log (Console: subsystem `jarvis`, category `island`): every write on either side and every read
+    /// that fails, so a phone that draws the wrong persona says which step failed (docs/live-activity.md「诊断」).
     static let log = Logger(subsystem: "jarvis", category: "island")
 
-    /// `<team>.<bundle id>.look`, in both bundles' Info.plist; nil without a team (an empty one leaves just the dot).
+    /// `Fleet/` in the container; nil when this bundle has none (not signed with the group: nothing is saved, and the
+    /// extension draws the content's look, a package in its color).
+    var root: URL?
+
+    static var shared: FleetLookStore { FleetLookStore(root: container?.appending(path: "Fleet", directoryHint: .isDirectory)) }
+
+    /// The group's id, `group.<bundle id>` unless the config says otherwise, in both bundles' Info.plist.
     static var group: String? {
-        (Bundle.main.object(forInfoDictionaryKey: "JarvisLookKeychainGroup") as? String).flatMap { $0.isEmpty || $0.hasPrefix(".") ? nil : $0 }
+        (Bundle.main.object(forInfoDictionaryKey: "JarvisAppGroup") as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    /// The item and the keychain's answer. In the group by name; a bundle not signed with it (errSecMissingEntitlement)
-    /// looks in the groups it has.
-    static func read(_ account: String) -> (data: Data?, status: OSStatus) {
-        func copy(_ group: String?) -> (Data?, OSStatus) {
-            var q = query(account, group: group)
-            q[kSecReturnData as String] = true
-            q[kSecMatchLimit as String] = kSecMatchLimitOne
-            var out: AnyObject?
-            let status = SecItemCopyMatching(q as CFDictionary, &out)
-            return (out as? Data, status)
-        }
-        var (data, status) = copy(group)
-        if status == errSecMissingEntitlement, group != nil { (data, status) = copy(nil) }
-        if status != errSecSuccess && status != errSecItemNotFound {
-            log.error("read \(account, privacy: .public) in \(group ?? "-", privacy: .public): \(status)")
-        }
-        return (data, status)
+    static var container: URL? {
+        group.flatMap { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
     }
 
-    /// Saves (nil deletes) and reads it back. Signed without the shared group (a free personal team, or a build that
-    /// lost it: scripts/entitlements.py), nothing is saved and the extension draws `standard`.
-    static func write(_ data: Data?, _ account: String) -> OSStatus {
-        guard let group else {
-            log.error("write \(account, privacy: .public): no keychain group in Info.plist")
-            return remember(account, errSecMissingEntitlement, bytes: data?.count)
+    func read(_ name: String) -> Data? {
+        guard let url = root?.appending(path: name) else { return nil }
+        do {
+            return try Data(contentsOf: url)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
+        } catch {
+            Self.log.error("read \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
         }
-        let deleted = SecItemDelete(query(account, group: group) as CFDictionary)
-        guard let data else { return remember(account, deleted == errSecItemNotFound ? errSecSuccess : deleted, bytes: nil) }
-        var add = query(account, group: group)
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        var status = SecItemAdd(add as CFDictionary, nil)
-        if status == errSecSuccess, read(account).data != data { status = errSecDataNotAvailable }
-        if status == errSecSuccess {
-            log.notice("wrote \(account, privacy: .public), \(data.count) bytes, in \(group, privacy: .public)")
-        } else {
-            log.error("write \(account, privacy: .public), \(data.count) bytes, in \(group, privacy: .public): \(status)")
-        }
-        return remember(account, status, bytes: data.count)
     }
 
-    /// The last write of each account in this process: account → (when, answer, bytes).
-    nonisolated(unsafe) private static var writes: [String: (at: Date, status: OSStatus, bytes: Int?)] = [:]
-    private static let lock = NSLock()
-
-    static var lastWrites: [String: (at: Date, status: OSStatus, bytes: Int?)] { lock.withLock { writes } }
-
-    private static func remember(_ account: String, _ status: OSStatus, bytes: Int?) -> OSStatus {
-        lock.withLock { writes[account] = (.now, status, bytes) }
-        return status
+    /// Saves (nil deletes) a file, whole or not at all. False when it could not be.
+    func write(_ data: Data?, _ name: String) -> Bool {
+        let error: Error?
+        do {
+            guard let root else { throw CocoaError(.fileNoSuchFile) }
+            let url = root.appending(path: name)
+            if let data {
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            } else if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                try FileManager.default.removeItem(at: url)
+            }
+            error = nil
+        } catch let e {
+            error = e
+        }
+        Self.wrote(name, error, bytes: data?.count)
+        return error == nil
     }
 
-    /// One item of the service as the keychain lists it.
-    struct Item: Hashable, Sendable {
-        var account: String
-        var group: String
+    /// The package's directory: its id and rev with anything but letters, digits, `.`, `-` and `_` as `_`.
+    static func folder(_ package: String) -> String {
+        String(package.map { $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) ? $0 : "_" })
+    }
+
+    func hasFaces(_ package: String) -> Bool {
+        guard let dir = root?.appending(path: Self.facesDir).appending(path: Self.folder(package)) else { return false }
+        return FileManager.default.fileExists(atPath: dir.path(percentEncoded: false))
+    }
+
+    /// One state's picture, its file and whether it is the state's own (else the avatar, else the idle frame).
+    func face(_ package: String, _ state: PersonaState) -> (png: Data, own: Bool, file: String)? {
+        let dir = Self.facesDir + "/" + Self.folder(package) + "/"
+        for (name, own) in [(state.rawValue, true), (Self.avatarName, false), (PersonaState.idle.rawValue, false)] {
+            if let png = read(dir + name + ".png") { return (png, own, name + ".png") }
+        }
+        return nil
+    }
+
+    /// All of a package's pictures (灵动岛诊断, tests).
+    func faces(_ package: String) -> FleetFaces? {
+        let dir = Self.facesDir + "/" + Self.folder(package) + "/"
+        var states: [String: Data] = [:]
+        for s in PersonaState.allCases { states[s.rawValue] = read(dir + s.rawValue + ".png") }
+        let avatar = read(dir + Self.avatarName + ".png")
+        return states.isEmpty && avatar == nil ? nil : FleetFaces(package: package, states: states, avatar: avatar)
+    }
+
+    /// Replaces the saved faces with these (nil: none), whole: written beside the old ones, then moved in, so the
+    /// extension never reads half of one package and half of another. True when they were.
+    func save(_ faces: FleetFaces?) -> Bool {
+        let name = Self.facesDir + (faces.map { "/" + Self.folder($0.package) } ?? "")
+        let fm = FileManager.default
+        let error: Error?
+        do {
+            guard let root else { throw CocoaError(.fileNoSuchFile) }
+            let all = root.appending(path: Self.facesDir, directoryHint: .isDirectory)
+            try fm.createDirectory(at: all, withIntermediateDirectories: true)
+            var keep: String?
+            if let faces {
+                let folder = Self.folder(faces.package)
+                let new = all.appending(path: ".new-" + folder, directoryHint: .isDirectory)
+                try? fm.removeItem(at: new)
+                try fm.createDirectory(at: new, withIntermediateDirectories: true)
+                var files = faces.states.map { ($0.key, $0.value) }
+                if let avatar = faces.avatar { files.append((Self.avatarName, avatar)) }
+                for (file, png) in files {
+                    try png.write(to: new.appending(path: file + ".png"), options: .completeFileProtectionUntilFirstUserAuthentication)
+                }
+                let dest = all.appending(path: folder, directoryHint: .isDirectory)
+                if fm.fileExists(atPath: dest.path(percentEncoded: false)) { try fm.removeItem(at: dest) }
+                try fm.moveItem(at: new, to: dest)
+                keep = folder
+            }
+            for other in try fm.contentsOfDirectory(atPath: all.path(percentEncoded: false)) where other != keep {
+                try fm.removeItem(at: all.appending(path: other))
+            }
+            error = nil
+        } catch let e {
+            error = e
+        }
+        Self.wrote(name, error, bytes: faces.map { $0.states.values.reduce($0.avatar?.count ?? 0) { $0 + $1.count } })
+        return error == nil
+    }
+
+    /// One file as the container lists it.
+    struct File: Hashable, Sendable {
+        var name: String
         var bytes: Int
         var modified: Date?
     }
 
-    /// Every item of the service this bundle can see, in any of its groups, and the keychain's answer.
-    static func items() -> ([Item], OSStatus) {
-        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                kSecReturnAttributes as String: true, kSecReturnData as String: true,
-                                kSecMatchLimit as String: kSecMatchLimitAll]
-        q[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
-        var out: AnyObject?
-        let status = SecItemCopyMatching(q as CFDictionary, &out)
-        let found = (out as? [[String: Any]] ?? []).map { a in
-            Item(account: a[kSecAttrAccount as String] as? String ?? "?", group: a[kSecAttrAccessGroup as String] as? String ?? "?",
-                 bytes: (a[kSecValueData as String] as? Data)?.count ?? 0, modified: a[kSecAttrModificationDate as String] as? Date)
+    /// Every file under `Fleet/`, by path; nil without a container.
+    func files() -> [File]? {
+        guard let root, let walk = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]) else {
+            return root == nil ? nil : []
         }
-        return (found.sorted { ($0.account, $0.group) < ($1.account, $1.group) }, status)
+        let base = root.standardizedFileURL.path(percentEncoded: false)
+        var found: [File] = []
+        for case let url as URL in walk {
+            guard let v = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]), v.isRegularFile == true else { continue }
+            let path = url.standardizedFileURL.path(percentEncoded: false)
+            found.append(File(name: path.hasPrefix(base) ? String(path.dropFirst(base.count)).trimmingCharacters(in: ["/"]) : url.lastPathComponent,
+                              bytes: v.fileSize ?? 0, modified: v.contentModificationDate))
+        }
+        return found.sorted { $0.name < $1.name }
     }
 
-    private static func query(_ account: String, group: String?) -> [String: Any] {
-        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                kSecAttrAccount as String: account]
-        if let group { q[kSecAttrAccessGroup as String] = group }
-        return q
+    /// The last write of each file in this process: name → (when, the error or nil, bytes).
+    nonisolated(unsafe) private static var writes: [String: (at: Date, error: String?, bytes: Int?)] = [:]
+    private static let lock = NSLock()
+
+    static var lastWrites: [String: (at: Date, error: String?, bytes: Int?)] { lock.withLock { writes } }
+
+    private static func wrote(_ name: String, _ error: Error?, bytes: Int?) {
+        if let error {
+            log.error("write \(name, privacy: .public), \(bytes ?? 0) bytes: \(error.localizedDescription, privacy: .public)")
+        } else {
+            log.notice("wrote \(name, privacy: .public), \(bytes ?? 0) bytes")
+        }
+        lock.withLock { writes[name] = (.now, error?.localizedDescription, bytes) }
     }
 }
 
-/// What the widget extension last drew from, written by it into the shared group (`fleet-seen`) and shown on 灵动岛诊断:
-/// the keychain's answer for the look and the faces, and what they held. Written only when it changes or ten minutes
-/// on, never on every render. An extension that cannot use the keychain cannot write it either: then only its log
-/// says so.
+/// What the widget extension last drew from, written by it into the container (`seen.json`) and shown on 灵动岛诊断:
+/// whether it has the container, the look saved there, and the package picture it read. Written only when it changes
+/// or ten minutes on, never on every render.
 nonisolated struct FleetLookReport: Codable, Hashable, Sendable {
     var at = Date.distantPast
     /// The look in the activity's content ("design" or "design · package"), nil when it carried none.
     var content: String?
-    var lookStatus: Int32?
-    var design: String?
-    var package: String?
-    var lookBytes: Int?
-    var facesStatus: Int32?
+    /// Whether the extension has the App Group container.
+    var container: Bool?
+    /// The look saved there, nil when there is none it can read.
+    var saved: String?
+    /// The package whose picture it looked for last (nil: a built-in, none looked for), the file it read (nil: none
+    /// there) and its size.
     var facesPackage: String?
-    var facesBytes: Int?
+    var faceFile: String?
+    var faceBytes: Int?
 
     mutating func content(_ look: FleetLook?) {
         content = look.map { Self.describe($0) }
@@ -273,12 +329,12 @@ nonisolated struct FleetLookReport: Codable, Hashable, Sendable {
 
     static func describe(_ look: FleetLook) -> String { [look.design, look.package].compactMap { $0 }.joined(separator: " · ") }
 
-    mutating func look(_ status: OSStatus, _ look: FleetLook?, bytes: Int?) {
-        (lookStatus, design, package, lookBytes) = (status, look?.design, look?.package, bytes)
+    mutating func saved(_ container: Bool, _ look: FleetLook?) {
+        (self.container, saved) = (container, look.map { Self.describe($0) })
     }
 
-    mutating func faces(_ status: OSStatus, _ package: String?, bytes: Int?) {
-        (facesStatus, facesPackage, facesBytes) = (status, package, bytes)
+    mutating func face(_ package: String, _ read: (file: String, bytes: Int)?) {
+        (facesPackage, faceFile, faceBytes) = (package, read?.file, read?.bytes)
     }
 
     /// The same reading, whenever it was.
@@ -290,7 +346,7 @@ nonisolated struct FleetLookReport: Codable, Hashable, Sendable {
 
     /// What the extension wrote last; nil when it never did (or this bundle cannot read it).
     static var seen: FleetLookReport? {
-        FleetKeychain.read(FleetLookStore.seenAccount).data.flatMap { try? JSONDecoder().decode(FleetLookReport.self, from: $0) }
+        FleetLookStore.shared.read(FleetLookStore.seenFile).flatMap { try? JSONDecoder().decode(FleetLookReport.self, from: $0) }
     }
 
     nonisolated(unsafe) private static var current = FleetLookReport()
@@ -310,8 +366,8 @@ nonisolated struct FleetLookReport: Codable, Hashable, Sendable {
             return current
         }
         guard let due else { return }
-        FleetKeychain.log.notice("extension drew \(due.content ?? "no look in the content", privacy: .public); keychain look \(due.lookStatus ?? 1) \(due.design ?? "-", privacy: .public) \(due.package ?? "-", privacy: .public), faces \(due.facesStatus ?? 1) \(due.facesBytes ?? 0) bytes")
-        if let data = try? JSONEncoder().encode(due) { _ = FleetKeychain.write(data, FleetLookStore.seenAccount) }
+        FleetLookStore.log.notice("extension drew \(due.content ?? "no look in the content", privacy: .public); container \(due.container == true ? "yes" : "no", privacy: .public), saved \(due.saved ?? "-", privacy: .public), face \(due.facesPackage ?? "-", privacy: .public) \(due.faceFile ?? "none", privacy: .public) \(due.faceBytes ?? 0) bytes")
+        if let data = try? JSONEncoder().encode(due) { _ = FleetLookStore.shared.write(data, FleetLookStore.seenFile) }
     }
 }
 
@@ -339,12 +395,12 @@ struct FleetFace: View {
     var size: CGFloat
     var state: PersonaState
     var look: FleetLook = .saved
-    /// The package's faces; read from where the app left them when not given.
+    /// The package's faces; the state's picture is read from where the app left it when not given.
     var faces: FleetFaces?
 
     var body: some View {
         Group {
-            if let face = (faces ?? look.faces())?.face(state), let image = FleetFaces.image(face.png) {
+            if let face = faces?.face(state) ?? look.face(state), let image = FleetFaces.image(face.png) {
                 Image(uiImage: image)
                     .resizable()
                     .interpolation(.high)

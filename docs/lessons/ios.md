@@ -297,12 +297,15 @@
   和别的 App 的活动共用灵动岛时，iPhone 18 Pro 上两个都是限宽 28pt 的紧凑态（左右两块挤在一起，第二块被截），17 Pro 等是最小态：
   限宽靠 iOS 27 的 `isDynamicIslandLimitedInWidth` 知道，其余（哪种呈现、有没有别的 App）App 都感知不到；紧凑 / 最小态不给宽度，`ViewThatFits` 没用。
   两种机型都要拍（`scripts/island_peer.sh` + `LiveActivityShots`，`docs/live-activity.md`「和其他 App 共用灵动岛」）。
-- App 和扩展共享的钥匙串组（灵动岛的形象 `.look`、推送中继的私钥 `.push`）读不到时一律静默退回默认值，模拟器上又总是好的：
+- App 和扩展共享的钥匙串组（推送中继的私钥 `.push`；灵动岛的形象 build 92–103 也放过 `.look`）读不到时一律静默退回默认值，模拟器上又总是好的：
   build 92 的扩展签名里一个组都没有（无签名归档 + ad hoc 签名没带 entitlements，`$(AppIdentifierPrefix)` 为空），灵动岛永远是默认形象 + 系统蓝。
   Info.plist 里的组名用 `$(DEVELOPMENT_TEAM).`；动了 entitlements 或签名流程，对导出的 ipa 跑 `scripts/entitlements.py check`（`docs/release.md`「entitlements」）。
 - 实时活动在模拟器上画得出来不算数（2026-11-02，build 98 签名对了，手机上还是默认形象，换成内置形象也一样；`docs/live-activity.md`「为什么 build 98 还不对」）：
-  - 实时活动要画的东西放进它的内容（ContentState），别指望扩展在实时活动里读得到钥匙串：Apple 说实时活动跑在自己的沙盒里，模拟器上读得到，手机上没读到
-    （是沙盒挡住还是重画没发生，没有真机分不开）。内容不变的 update 系统可能不重画：要它重画，就让内容真的变。
+  - 实时活动要画的东西放进它的内容（ContentState），内容里放不下的（图片）放 App Group 容器里的文件。**实时活动的扩展在手机上读写不了钥匙串**：
+    build 103 的诊断里 App 写进共享组、读回都成功，扩展一次报告都没写出来（模拟器上读写都行；Apple 只说实时活动跑在自己的沙盒里）。
+    内容不变的 update 系统可能不重画：要它重画，就让内容真的变。
+  - App Group 要先在开发者网站上注册、加到 App ID 上，API key 做不了（没有这个接口，`-allowProvisioningUpdates` 的导出也不会替你建），
+    没注册就加 entitlements 会让导出失败（`docs/release.md`「App Group」）。
   - 模拟器不管实时活动的图片限制。图不能比它所在的呈现大：`UIImage(data:)` 按 1× 解码，78px 就是 78pt。按显示尺寸给 scale，单张也控制在 4 KB 以内（`FleetFaces`）。
   - 测试数据要和真实的一样复杂：纯色占位图只有几百字节，任何大小限制都碰不到。拿真实形象包在本机测，包不进仓库。
   - 手机上扩展读到了什么，只能靠它自己报：日志（`category:island`）加 设置 › 通知 › 灵动岛 长按预览打开的诊断页（`docs/live-activity.md`「诊断」）。

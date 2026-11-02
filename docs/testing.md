@@ -100,6 +100,9 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 断档自愈（`docs/protocol.md`「items 的连续性」）：`MOCK_GAP=1` 启动 mock 并卸载重装 App，`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`。
   这个会话先只有前 8 行，2 秒后「写入」后 6 条，但只推最后 2 条（`from_seq` 12）；日志里应在约 1.5 秒后出现 `items after_seq=8`，
   对话页的工作过程显示「工具 5」。等日志用带超时的脚本，别写只等成功的 `until grep`。
+- 飞书会话页：`-tab mail -openInboxItem lark:f3:300`（收件箱的「周末徒步群」）打开一个画全了的会话：三天的消息（日期分隔）、第一条未读前不止一页（往上翻、`has_older`）、
+  图片、引用回复、表情回复、机器人、一个 75 条回复的话题（话题浮层翻页）；从第 300 条起 12 条未读，已读到 299（`read_position`）。
+  `MOCK_LARK_LOGGED_OUT=1` 启动 mock 时会话列表、会话和话题都回 502「lark-connector 未登录飞书」，看错误态。数据全是编的，在 `mock_hub.py` 的 `_lark_f3`。
 
 ## UI 测试（`scripts/ui-test.sh`）
 

@@ -72,12 +72,18 @@ def env(cfg: dict) -> dict:
     return out
 
 
+def app_group(cfg: dict) -> str:
+    return get(cfg, "app.app_group", "") or "group." + get(cfg, "app.bundle_id", "")
+
+
 def xcconfig(cfg: dict):
     # Generated, git-ignored: the committed project only says $(JARVIS_BUNDLE_ID).
     out = os.path.join(ROOT, "apple", "Config.xcconfig")
     with open(out, "w") as f:
         f.write("// Generated from %s by scripts/jarvis_config.py; do not edit or commit.\n" % path())
         f.write("JARVIS_BUNDLE_ID = %s\n" % get(cfg, "app.bundle_id", ""))
+        # The App Group the app shares files with the widget extension (docs/release.md「App Group」).
+        f.write("JARVIS_APP_GROUP = %s\n" % app_group(cfg))
         f.write("DEVELOPMENT_TEAM = %s\n" % get(cfg, "app.team_id", ""))
         # The push relay the app registers with (docs/push-relay.md); "//" starts a comment in xcconfig, hence $().
         f.write("JARVIS_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))

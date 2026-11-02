@@ -784,7 +784,7 @@ INBOX = [
     {"id": "lark:f3:300", "source": "lark", "kind": "group", "account": "lark", "account_name": "飞书", "title": "周末徒步群",
      "sender": "Tom", "preview": "周六早上 8 点地铁站集合，记得带水", "count": 12, "started_at": ago(hours=2),
      "updated_at": ago(minutes=30), "tier": "fyi", "summary": "周六 8 点地铁站集合", "read": False,
-     "lark": {"feed_id": "f3", "is_group": True, "start_position": "300"}},
+     "lark": {"feed_id": "f3", "is_group": True, "start_position": "300", "read_position": "299"}},
     {"id": "mail:acc1:t2:502", "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
      "title": "你的订单已发货", "sender": "示例商城", "preview": "订单 2026102800123 已由快递揽收，预计周五送达",
      "count": 1, "started_at": ago(hours=5), "updated_at": ago(hours=5), "tier": "fyi", "summary": "订单已发货，周五送达",
@@ -859,7 +859,7 @@ MAIL_TRANSLATIONS = {
 LARK_CHATS = [{"id": "f2", "name": "设计评审", "is_group": True, "unread": 3, "at_me": True, "muted": False, "preview": "@你 新版图标放在这里了",
                "updated_at": ago(minutes=55)},
               {"id": "f3", "name": "周末徒步群", "is_group": True, "unread": 12, "at_me": False, "muted": False, "preview": "周六早上 8 点地铁站集合",
-               "updated_at": ago(minutes=30)}]
+               "preview_sender": "Tom", "read_position": "299", "updated_at": ago(minutes=30)}]
 def _lm(pos, who, text, mine=False, mins=60):
     return {"id": "m" + pos, "position": pos, "sender_id": "u-" + who, "sender_name": who, "is_mine": mine, "type": "TEXT", "text": text,
             "created_at": ago(minutes=mins), "recalled": False, "reply_count": 0}
@@ -869,6 +869,75 @@ LARK_MESSAGES = {"f2": [
     _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
     _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
 ]}
+
+# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
+# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
+# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
+# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 like a hub whose lark-connector lost its Feishu session.
+LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
+LARK_EMOJIS = {k: {"label": label, "url": "/api/v1/lark/media/emoji-" + k}
+               for k, label in (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"))}
+LARK_MEDIA = {"trail-photo": (480, 320), "emoji-THUMBSUP": (32, 32), "emoji-OK": (32, 32), "emoji-JIAYI": (32, 32)}
+
+
+def _lark_f3():
+    chatter = ["这周六还去吗", "去，天气预报说是晴天", "我带两个登山杖，谁要可以借", "上次那条线下山有点滑", "这次走北边那条，缓一点",
+               "几点集合？", "八点吧，早点出发人少", "我开车，能带三个人", "我要一个位置", "+1", "记得带够水，山上没有小卖部",
+               "要不要中午在山顶吃", "可以，我带点水果", "我带三明治", "有人有防晒霜吗", "我有", "下雨的话改期吗", "小雨照走，大雨改期"]
+    who = ["Tom", "小周", "阿杰", "Mia", "老王"]
+    out, pos = [], 240
+    for day in (2, 1):  # 30 messages around this time 2 days ago, 30 around this time yesterday
+        for i in range(30):
+            out.append(_lm(str(pos), who[i % len(who)], chatter[i % len(chatter)], mins=day * 1440 + 90 - i * 3))
+            pos += 1
+    # pos is 300 now: the 12 unread, today.
+    photo = _lm("300", "Tom", "", mins=50)
+    photo.update(type="IMAGE", parts=[{"kind": "image", "url": "/api/v1/lark/media/trail-photo",
+                                       "metadata": {"width": 480, "height": 320}}])
+    route = _lm("301", "Tom", "这是这次的路线，北坡上去、南坡下来，全程大约 12 公里", mins=49)
+    route["reactions"] = [{"key": "THUMBSUP", "count": 4, "mine": True, "users": ["小周", "阿杰", "Mia", "我"]},
+                          {"key": "OK", "count": 1, "users": ["老王"]}]
+    asked = [m for m in out if m["text"] == chatter[2]][-1]  # yesterday's, quoted below
+    reply = _lm("302", "Mia", "那我也带一个，上次没带膝盖疼了两天", mins=47)
+    reply["reply_to"] = {"id": asked["id"], "sender_name": asked["sender_name"], "text": asked["text"]}
+    bot = _lm("303", "天气助手", "周六 08:00–14:00 晴，12–21℃，西北风 3 级，紫外线强，注意防晒", mins=45)
+    bot.update(sender_id="bot-weather", sender_type="bot")
+    thread = _lm("304", "阿杰", "集合地点和拼车在这个话题里报名，按顺序排", mins=44)
+    thread.update(reply_count=75, thread_reply_count=75)
+    rest = [_lm("305", "小周", "我报名拼车", mins=40), _lm("306", "我", "我也去，带两瓶水", mine=True, mins=38),
+            _lm("307", "老王", "我可能晚到半小时，你们先走", mins=35), _lm("308", "Mia", "好的，到了在群里说一声", mins=34),
+            _lm("309", "Tom", "装备清单：水、午饭、外套、头灯", mins=33), _lm("310", "阿杰", "头灯也要带？", mins=32),
+            _lm("311", "Tom", "周六早上 8 点地铁站集合，记得带水", mins=30)]
+    rest[-2]["reactions"] = [{"key": "JIAYI", "count": 2, "users": ["小周", "Mia"]}]
+    out += [photo, route, reply, bot, thread] + rest
+    replies = [_lm(str(n), who[n % len(who)], "报名 %d：%s" % (n, ["拼车", "自己去", "坐地铁"][n % 3]), mins=43 - n * 0.4)
+               for n in range(1, 76)]
+    for r in replies:
+        r["id"] = "m304-" + r["position"]
+    return out, {"m304": replies}
+
+
+LARK_MESSAGES["f3"], LARK_THREADS = _lark_f3()
+
+
+def lark_window(msgs, q, default_limit=40):
+    """A page of a chat or thread the way the hub answers: oldest first, before / after / around a position."""
+    msgs = sorted(msgs, key=lambda m: int(m["position"]))
+    arg = lambda k: (q.get(k) or [""])[0]
+    limit = int(arg("limit") or 0)
+    limit = default_limit if limit <= 0 or limit > 100 else limit
+    pos = [int(m["position"]) for m in msgs]
+    if arg("before"):
+        end = sum(1 for p in pos if p < int(arg("before"))); start = max(0, end - limit)
+    elif arg("after"):
+        start = sum(1 for p in pos if p <= int(arg("after"))); end = min(len(msgs), start + limit)
+    elif arg("around"):
+        mid = sum(1 for p in pos if p < int(arg("around"))); start = max(0, mid - limit // 2); end = min(len(msgs), start + limit)
+    else:
+        end = len(msgs); start = max(0, end - limit)
+    page = msgs[start:end]
+    return {"messages": page, "has_older": start > 0, "has_newer": end < len(msgs),
+            "older_cursor": page[0]["position"] if page else "", "newer_cursor": page[-1]["position"] if page else ""}
 
 # Unified model configuration uses only made-up providers and purposes.
 MODEL_BINDINGS = {}
@@ -2099,13 +2168,24 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
+        lark_read = p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") or (
+            p.startswith(("/api/v1/lark/conversations/", "/api/v1/lark/messages/")) and p.endswith(("/messages", "/thread")))
+        if lark_read and os.environ.get("MOCK_LARK_LOGGED_OUT"):
+            return self.send_json({"error": LARK_LOGGED_OUT}, 502)
         if p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned"):
             return self.send_json({"conversations": LARK_CHATS if p.endswith("conversations") else [], "next_cursor": ""})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):
-            return self.send_json({"messages": LARK_MESSAGES.get(p.split("/")[5], []), "has_older": False, "has_newer": False})
+            return self.send_json(lark_window(LARK_MESSAGES.get(p.split("/")[5], []), q))
+        if p.startswith("/api/v1/lark/messages/") and p.endswith("/thread"):
+            return self.send_json(lark_window(LARK_THREADS.get(p.split("/")[5], []), q))
+        if p.startswith("/api/v1/lark/media/") and p.split("/")[5] in LARK_MEDIA:
+            body = base64.b64decode(mock_png(*LARK_MEDIA[p.split("/")[5]]))
+            self.send_response(200); self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+            return
         if p == "/api/v1/lark/labels": return self.send_json({"labels": []})
         if p == "/api/v1/lark/flags": return self.send_json({"conversations": [], "messages": []})
-        if p == "/api/v1/lark/emojis": return self.send_json({"emojis": {}})
+        if p == "/api/v1/lark/emojis": return self.send_json({"emojis": LARK_EMOJIS})
         if p.startswith("/api/v1/machines/") and not machine_online(p.split("/")[4]) and p.split("/")[5] in ("launchers", "dirs"):
             return self.send_json({"error": "%s: machine is offline" % p.split("/")[4]}, 503)
         if p.startswith("/api/v1/machines/") and p.endswith("/dirs"):

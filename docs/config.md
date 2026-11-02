@@ -103,6 +103,7 @@
 | --- | --- |
 | `app.bundle_id` | iPhone App 的 bundle id；手表是 `<id>.watchkitapp`，测试是 `<id>.tests`。写进 `apple/Config.xcconfig` 的 `JARVIS_BUNDLE_ID` |
 | `app.team_id` | 开发者团队，写进 `Config.xcconfig` 的 `DEVELOPMENT_TEAM`；导出时的 ExportOptions 也用它 |
+| `app.app_group` | App 和灵动岛扩展共享文件的 App Group（形象和形象包的图，`docs/live-activity.md`「形象」），写进 `Config.xcconfig` 的 `JARVIS_APP_GROUP`。不写就是 `group.<app.bundle_id>`；要先在开发者网站上注册（`docs/release.md`「App Group」） |
 | `app.push_relay` | 推送中继的地址（比如 `https://<中继域名>/relay`），写进 `Config.xcconfig` 的 `JARVIS_PUSH_RELAY`、Info.plist 的 `JarvisPushRelay`：App 向它登记，没有 APNs key 的 hub 经它推送（`docs/push-relay.md`）。不写就不登记，只有带 `apns.json` 的 hub 能推 |
 | `app_store.*` | `release.sh` / `asc*.py`：API key（`key_id`、`issuer_id`、`key_path`）、App 记录的数字 ID、内部测试员、TestFlight 反馈邮箱；`external` 是外部测试（群组名、公开链接开关和人数上限、隐私政策地址、另外按邮箱邀请的测试员、Beta App Review 联系人和备注，`docs/release.md`）。环境变量 `ASC_KEY_ID` 等仍可覆盖 |
 | `hub.machine` | hub 跑在哪台机器（`machines` 里的 id）：`deploy.sh` 在它上面起 Postgres 和 systemd 服务，`test-server.sh` 在它上面跑测试，`sim.sh` 从它上面读 token |

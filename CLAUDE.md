@@ -15,6 +15,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - **所有改动都走「issue → 认领 → PR → 自行合并」**（步骤见下面「开发工作流」）：需求和 fix 都先有 issue，
   代码、文档、配置等仓库内的所有改动一律在独立分支 / worktree 上 commit，只 push 到该分支，再提 PR 关联 issue。禁止在主分支上直接 commit 或 push。
   本约定取代 `CLAUDE.local.md` 等文件中直接提交、推送到主分支的旧流程；自动提交和发布仍按原约定执行，但必须先通过 PR 合并。
+- **先认领 issue 再动手**（多人和各自的 Agent 同时在改，出现过两人修同一个 bug）：开工前查同一件事的 open issue / PR，
+  别人认领了、24 小时内有更新就不碰（可以补充信息）；认领写成 issue 评论，谁在做以评论的 GitHub 账号为准，不用 assign；
+  PR 不关联 issue 会被 Action 关闭。流程、评论模板和 gh 命令见 `docs/collaboration.md`。
 - **所有 commit 必须用英文**：commit 的标题和正文，以及 PR 的标题和正文都用英文，
   因为 squash 合并直接把 PR 标题和正文当成 master 上的 commit 信息。代码注释也用英文；文档、issue 用中文；App 界面文案用中文。
 - **随时沉淀经验**：踩坑、怪异行为当场写进 `docs/lessons/<主题>.md`（索引 `docs/lessons/README.md`），设计取舍写进 `docs/<主题>.md`；
@@ -56,19 +59,21 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 ## 开发工作流
 
-人和 Agent 都按这个流程做。所有 Agent 共用同一个 GitHub 账号，assignee 分不出是谁，**以 issue 里最新的「认领」评论为准**。
+人和 Agent 都按这个流程做。每个人和自己的 Agent 用自己的 GitHub 账号，**谁在做以 issue 里的认领评论为准（评论作者即负责人），不用 assign**。
+认领的细节、评论模板和可以照抄的 gh 命令见 `docs/collaboration.md`。
 
-1. **先找 issue**：`gh issue list --state all --search "<关键词>"`（连已关闭的一起看，别重复做已经做完的）。
+1. **先查重**：`gh issue list --state all --search "<关键词>"` / `gh pr list --state all --search "<关键词>"`，搜同一件事的 issue 和 PR
+   （连已关闭的、已合并的一起看，别重复做已经做完的）。
 2. **已有就直接认领，没有才建**：查到同样意思的 issue（不管谁建的）就在它上面认领（第 3 步；别人认领着的按第 4 步），不另建一个；
    确实没有才 `gh issue create`，写清楚要做什么、为什么；需求加 `enhancement` 标签，fix 加 `bug`。
-3. **动手前认领**：`gh issue edit <号> --add-assignee @me`，再评论 `认领：<机器 id> / <会话或分支>，<时间>`。
+3. **动手前认领**：在 issue 里评论「认领：在做什么 / 打算：怎么改 / 预计：多久」，Agent 加一行「Agent：是（<机器 id> / <分支或会话>）」。
    机器 id 用配置里给机器起的 id，不写主机名。
-4. **已经被别人认领**（最新的认领评论不是你）：
-   - 不碰这个 issue，先做别的或等。
-   - 从认领时间起最多等 **12 小时**；这期间认领人有新进展（issue 评论、关联 PR 的推送）就从最后一次进展重新算。
-   - 超过 12 小时没动静就接手：评论 `接手：<机器 id> / <会话或分支>，<时间>，原认领 <时间> 已超过 12 小时`，assign 给自己，接着做。
-5. **做**：在独立分支 / worktree 上改，分支名带 issue 号（如 `fix/123-xxx`）。做不下去要放弃时，在 issue 里说明做到哪一步，取消 assign。
-6. **提 PR**：一个 PR 对应一个 issue，标题和正文用英文（会变成 master 上的 commit），正文写 `Closes #<号>`（fix 写 `Fixes #<号>`），合并时 GitHub 自动关闭 issue。
+4. **已经被别人认领**（最新的认领 / 接手评论不是你，也没有放弃）：
+   - 负责人 24 小时内有更新（issue 里的新评论、关联 PR 的推送或评论）就不碰，可以在下面补充信息、复现、线索。
+   - 超过 24 小时没有任何更新视为放弃：评论「接手：」写明原因后接着做。自己还在做的，发一条「进展：」续期。
+5. **做**：在独立分支 / worktree 上改，分支名带 issue 号（如 `fix/123-xxx`）。做不下去要放弃时，在 issue 里评论「放弃：」说明做到哪一步。
+6. **提 PR**：一个 PR 对应一个 issue，标题和正文用英文（会变成 master 上的 commit），正文写 `Closes #<号>`（fix 写 `Fixes #<号>`，只关联不关闭写 `Refs #<号>`），
+   合并时 GitHub 自动关闭 issue。描述里没有关联 issue 的 PR 会被 Action（`.github/workflows/pr-needs-issue.yml`）评论并关闭，补上后自动重新打开。
 7. **自行合并**：不需要别人 review，**质量自己保证**：按「构建与验证」跑过测试，界面改动看过截图，CI 通过后
    `gh pr merge <号> --squash --delete-branch`，确认 issue 已经关闭。
 
@@ -95,7 +100,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - UI 测试一律 `app.launchPinned()` 启动：固定风格（默认液态玻璃，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 整套换），布局同 `launchJarvis()`。（`testing.md`）
 - DEBUG 启动参数的名字不能和任何 Swift 标识符（类型成员、存储属性）同名，否则 `release.sh` 的 strings 检查拦下 TestFlight；新开关用 `open…` / `show…` 并加进 release.sh 的列表。（`ios.md`）
 - App 和扩展共享的钥匙串组（灵动岛的形象、推送私钥）缺了就静默退回默认值、模拟器上却总是好的：发版的 ipa 要过 `scripts/entitlements.py check`，Info.plist 的组名用 `$(DEVELOPMENT_TEAM).` 不用 `$(AppIdentifierPrefix)`。（`release.md`）
-- 实时活动要画的东西放进 ContentState（hub 的推送里也带上），别靠扩展在实时活动里读钥匙串：模拟器上读得到，手机上没读到（`live-activity.md`「为什么 build 98 还不对」）。
+- 实时活动要画的东西放进 ContentState（hub 的推送里也带上），放不下的图放 App Group 容器的文件：实时活动的扩展在手机上读写不了钥匙串，模拟器上却可以（`live-activity.md`「为什么 build 103 的形象包还不对」）。
 - 常变的状态别写 UserDefaults：每写一次，App 里每个 `@AppStorage` 视图都重算（曾经每次推送都写，Agents 列表滚动中跟着重排、内容跳），放 `StateCache`。（`ios.md`）
 - App 目标默认 MainActor 隔离：交给系统在别的队列上回调的闭包写成 `{ @Sendable … in`，否则运行时崩；`apple/Shared` 的纯数据类型标 `nonisolated`。（`ios.md`）
 - 轮询和上报已读只该在页面在前台时做：新外壳的两页和不摘窗的容器里，藏起来的页不会触发 `onDisappear`，用 `.tabActiveTask`、`.onTabVisibility`；消息订阅、听写、计时不用。（`ios.md`）
@@ -158,6 +163,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 | 文档 | 内容 |
 | --- | --- |
+| `docs/collaboration.md` | 多人 / 多 Agent 协作：开工前查重、在 issue 里认领再动手、24 小时没更新视为放弃（续期 / 接手 / 放弃）、PR 必须关联 issue（Action 自动关闭没关联的），评论模板和 gh 命令 |
 | `docs/config.md` | 配置：构建 / 部署配置（config.json）、hub 运行配置（hub.json），哪些值不能写进代码 |
 | `docs/architecture.md` | 整体架构、数据流、为什么这样设计（herdr + hooks + transcript） |
 | `docs/protocol.md` | hub HTTP / WebSocket API、hub↔node RPC、事件和交互模型（前后端契约） |

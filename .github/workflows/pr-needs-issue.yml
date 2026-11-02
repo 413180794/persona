@@ -1,0 +1,133 @@
+# Every pull request links an issue (docs/collaboration.md): its description has `Fixes #N`, `Closes #N`, `Refs #N`
+# (or another closing keyword, any case) or a link to an issue of this repository. Without one the PR gets a comment
+# explaining the rule and is closed; when the author edits the description to add a link, the next run reopens it.
+# Pull requests from bot accounts (dependabot …) are exempt.
+#
+# Security: pull_request_target runs this file as it is on the default branch, with a write token. It only reads the
+# PR's metadata through the API: it never checks out or runs the PR's code, and the PR's text never goes through
+# ${{ }} (the script reads it as data from the API).
+#
+# Test: node scripts/pr_needs_issue_test.mjs runs the script below against sample PR descriptions and flows.
+name: pr needs issue
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pr-needs-issue-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const MARKER = '<!-- pr-needs-issue -->';
+            const ACTIONS_BOT = 'github-actions[bot]';
+
+            // Drops what GitHub does not read references from: fenced code blocks (an unclosed fence runs to the
+            // end), HTML comments (PR templates) and inline code spans.
+            function stripCode(text) {
+              const kept = [];
+              let fence = null;
+              for (const line of text.split(/\r?\n/)) {
+                const m = line.match(/^[ \t>]*(`{3,}|~{3,})(.*)$/);
+                if (fence) {
+                  if (m && m[1][0] === fence[0] && m[1].length >= fence.length && m[2].trim() === '') fence = null;
+                  continue;
+                }
+                if (m && !(m[1][0] === '`' && m[2].includes('`'))) {
+                  fence = m[1];
+                  continue;
+                }
+                kept.push(line);
+              }
+              return kept.join('\n')
+                .replace(/<!--[\s\S]*?-->/g, ' ')
+                .replace(/(?<!`)(`+)(?!`)((?:(?!\n[ \t]*\n)[\s\S])*?[^`])\1(?!`)/g, ' ');
+            }
+
+            // The issue numbers the description links: a keyword (fix, fixes, fixed, close, closes, closed, resolve,
+            // resolves, resolved, ref, refs) then `#N` or `owner/repo#N` of this repository, or a link to one of its
+            // issues. Case-insensitive.
+            function linkedIssues(body, owner, repo) {
+              const text = stripCode(body || '');
+              const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const self = `${esc(owner)}/${esc(repo)}`;
+              const keyword = new RegExp(
+                `\\b(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?|refs?)(?::\\s*|\\s+)(?:${self})?#(\\d+)\\b`, 'gi');
+              const link = new RegExp(`\\bhttps?://(?:www\\.)?github\\.com/${self}/issues/(\\d+)\\b`, 'gi');
+              const found = new Set();
+              for (const m of text.matchAll(keyword)) found.add(Number(m[1]));
+              for (const m of text.matchAll(link)) found.add(Number(m[1]));
+              return [...found].sort((a, b) => a - b);
+            }
+
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+            // Read the PR again: a later edit may already have changed what the event carried.
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            if (pr.user.type === 'Bot' || pr.user.login.endsWith('[bot]')) {
+              core.info(`#${number}: opened by a bot, exempt`);
+              return;
+            }
+            if (pr.merged) {
+              core.info(`#${number}: already merged`);
+              return;
+            }
+
+            const issues = linkedIssues(pr.body, owner, repo);
+            const comments = await github.paginate(github.rest.issues.listComments,
+              { owner, repo, issue_number: number, per_page: 100 });
+            const ours = comments.filter((c) => c.user?.login === ACTIONS_BOT && c.body?.includes(MARKER)).pop();
+
+            if (issues.length > 0) {
+              const refs = issues.map((n) => `#${n}`).join('、');
+              core.info(`#${number}: links ${refs}`);
+              if (pr.state !== 'closed' || !ours) return;
+              // Reopen only what this workflow closed; a PR a person closed stays closed.
+              const { data: asIssue } = await github.rest.issues.get({ owner, repo, issue_number: number });
+              if (asIssue.closed_by?.login !== ACTIONS_BOT) {
+                core.info(`#${number}: closed by ${asIssue.closed_by?.login ?? 'someone'}, not reopening`);
+                return;
+              }
+              try {
+                await github.rest.pulls.update({ owner, repo, pull_number: number, state: 'open' });
+              } catch (e) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: number,
+                  body: `${MARKER}\n描述里已经关联了 ${refs}，但自动重新打开失败（${e.message}），请手动 Reopen。` });
+                core.warning(`#${number}: reopen failed: ${e.message}`);
+                return;
+              }
+              await github.rest.issues.updateComment({ owner, repo, comment_id: ours.id,
+                body: `${MARKER}\n描述里已经关联了 ${refs}，这个 PR 已自动重新打开。` });
+              core.info(`#${number}: reopened`);
+              return;
+            }
+
+            // Already closed (by this workflow after an earlier run, or by a person): nothing to add.
+            if (pr.state === 'closed') {
+              core.info(`#${number}: no linked issue, already closed`);
+              return;
+            }
+            const doc = `${context.serverUrl}/${owner}/${repo}/blob/${context.payload.repository.default_branch}/docs/collaboration.md`;
+            await github.rest.issues.createComment({ owner, repo, issue_number: number, body: [
+              MARKER,
+              `这个 PR 的描述里没有关联 issue，按仓库的协作规则（[docs/collaboration.md](${doc})）先关闭。`,
+              '',
+              '在描述里加一行 `Fixes #<号>`、`Closes #<号>` 或 `Refs #<号>`（也可以贴本仓库 issue 的链接；写在代码块和注释里的不算），' +
+                '保存后会自动重新打开；没有自动打开的话，补上后手动 Reopen。',
+              '还没有 issue 的话先建一个，在 issue 里发一条认领评论再接着做。',
+            ].join('\n') });
+            await github.rest.pulls.update({ owner, repo, pull_number: number, state: 'closed' });
+            core.info(`#${number}: no linked issue, closed`);
