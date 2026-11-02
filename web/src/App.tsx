@@ -10,6 +10,7 @@ import { Jarvis } from "./views/Jarvis";
 import { Login } from "./views/Login";
 import { Machines } from "./views/Machines";
 import { NewAgent } from "./views/NewAgent";
+import { StartingAgent } from "./views/StartingAgent";
 import { Palette } from "./views/Palette";
 import { Settings } from "./views/Settings";
 import { Sidebar } from "./views/Sidebar";
@@ -69,6 +70,8 @@ export function App() {
 function Shell() {
   const route = useRoute();
   const conn = useStore((s) => s.conn);
+  const launch = useStore((s) => route.name === "session" ? s.launches[route.sid] : undefined);
+  const starting = useStore((s) => route.name === "session" ? (s.sessions[route.mid] ?? []).find((session) => session.session_id === route.sid)?.starting : undefined);
   const [palette, setPalette] = useState(false);
   const [newAgent, setNewAgent] = useState(false);
   const [drawer, setDrawer] = useState(false);
@@ -96,7 +99,7 @@ function Shell() {
   let main: React.ReactNode;
   switch (route.name) {
     case "session":
-      main = <ChatView key={`${route.mid}/${route.sid}`} mid={route.mid} sid={route.sid} onToggleSidebar={toggle} />;
+      main = launch ? <StartingAgent launch={launch} onToggleSidebar={toggle} /> : <ChatView key={`${route.mid}/${route.sid}`} mid={route.mid} sid={route.sid} starting={starting} onToggleSidebar={toggle} />;
       break;
     case "jarvis":
       main = <Jarvis sid={route.sid} onToggleSidebar={toggle} />;

@@ -1,11 +1,13 @@
 // Start an agent on one of your computers: machine, folder (recent ones first), launcher, the first message.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText } from "../lib/api";
+import { pickAttachment, releaseAttachments, type LocalAttachment } from "../lib/attachments";
+import { launchAgent } from "../lib/new-agent";
+import { AttachmentTray } from "../ui/AttachmentTray";
 import { modelPurpose, modelSummary } from "../lib/model-config";
 import { baseName, shortPath } from "../lib/format";
-import { navigate } from "../lib/router";
 import { useStore } from "../lib/store";
-import type { Launcher, Session } from "../lib/types";
+import type { Launcher } from "../lib/types";
 import { Button, cx, Dialog, Spinner, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 
@@ -29,8 +31,29 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
   const [dirs, setDirs] = useState<Dirs | null>(null);
   const [browse, setBrowse] = useState("");
   const [loadingDirs, setLoadingDirs] = useState(false);
-  const [prompt, setPrompt] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [prompt, setPrompt] = useState(() => localStorage.getItem("draft:new-agent") ?? "");
+  const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const submitted = useRef(false);
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+
+  useEffect(() => { if (open) submitted.current = false; }, [open]);
+  useEffect(() => {
+    if (prompt) localStorage.setItem("draft:new-agent", prompt);
+    else localStorage.removeItem("draft:new-agent");
+  }, [prompt]);
+  useEffect(() => () => releaseAttachments(attachmentsRef.current), []);
+
+  const addFiles = (files: FileList | File[]) => {
+    const picked: LocalAttachment[] = [];
+    for (const file of Array.from(files)) {
+      try { picked.push(pickAttachment(file)); }
+      catch (e) { toast(errorText(e), "error"); }
+    }
+    setAttachments((current) => [...current, ...picked]);
+  };
 
   useEffect(() => {
     if (open && (!mid || !online.some((m) => m.id === mid)) && online[0]) setMid(online[0].id);
@@ -80,22 +103,16 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
       .finally(() => setLoadingDirs(false));
   }, [open, mid, browse]);
 
-  const start = async () => {
-    if (busy || loadingModels || !mid || !cwd.trim()) return;
-    setBusy(true);
-    try {
-      const r = await api<{ session: Session }>("/sessions", { method: "POST", json: { machine_id: mid, cwd: cwd.trim(), launcher: launcher || undefined, prompt: prompt.trim() || undefined } });
-      localStorage.setItem(`new.cwd.${mid}`, cwd.trim());
-      if (launcher && !unified) localStorage.setItem(`new.launcher.${mid}`, launcher);
-      setPrompt("");
-      onClose();
-      navigate({ name: "session", mid, sid: r.session.session_id });
-      toast("Agent 已启动", "ok");
-    } catch (e) {
-      toast(`没启动起来：${errorText(e)}`, "error");
-    } finally {
-      setBusy(false);
-    }
+  const start = () => {
+    if (submitted.current || loadingModels || !online.some((m) => m.id === mid) || !cwd.trim()) return;
+    submitted.current = true;
+    localStorage.setItem(`new.cwd.${mid}`, cwd.trim());
+    if (launcher && !unified) localStorage.setItem(`new.launcher.${mid}`, launcher);
+    launchAgent({ machineId: mid, cwd: cwd.trim(), launcher, text: prompt.trim(), attachments });
+    attachmentsRef.current = [];
+    setAttachments([]);
+    setPrompt("");
+    onClose();
   };
 
   return (
@@ -110,7 +127,7 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
           <Button tone="quiet" onClick={onClose}>
             取消
           </Button>
-          <Button tone="primary" busy={busy} disabled={loadingModels || !mid || !cwd.trim()} onClick={start}>
+          <Button tone="primary" disabled={loadingModels || !online.some((m) => m.id === mid) || !cwd.trim()} onClick={start}>
             启动
           </Button>
         </>
@@ -193,14 +210,33 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
         )}
 
         <Field label="第一条消息（可选）">
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && (e.metaKey || e.ctrlKey) && void start()}
-            rows={3}
-            placeholder="要它做什么…（⌘↵ 启动）"
-            className="w-full resize-none rounded-control bg-inset px-3 py-2 text-[13px] leading-relaxed text-ink shadow-hairline outline-none placeholder:text-ink-3 focus:shadow-[0_0_0_1px_var(--line-strong)]"
-          />
+          <div className={cx("flex flex-col gap-2 rounded-control bg-inset shadow-hairline focus-within:shadow-[0_0_0_1px_var(--line-strong)]", dragging && "outline-2 outline-accent")}
+            onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}>
+            {attachments.length > 0 && <div className="px-3 pt-2"><AttachmentTray attachments={attachments} onRemove={(id) => {
+              releaseAttachments(attachments.filter((a) => a.id === id));
+              setAttachments((current) => current.filter((a) => a.id !== id));
+            }} /></div>}
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); start(); }
+              }}
+              rows={3}
+              aria-label="第一条消息"
+              placeholder="要它做什么…（⌘↵ 启动）"
+              className="w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-3"
+            />
+            <div className="flex items-center gap-2 px-2 pb-2">
+              <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.currentTarget.files) addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
+              <button type="button" aria-label="添加图片或文件" title="添加图片或文件" onClick={() => fileInput.current?.click()} className="flex size-7 shrink-0 items-center justify-center rounded-control text-ink-3 hover:bg-hover hover:text-ink"><Icon name="plus" size={16} stroke={2} /></button>
+              <span className="min-w-0 text-[11.5px] text-ink-3">粘贴、拖入图片或文件 · 启动后在后台发送</span>
+            </div>
+          </div>
         </Field>
       </div>
     </Dialog>

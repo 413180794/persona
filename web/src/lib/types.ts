@@ -40,6 +40,8 @@ export interface Session {
   title: string;
   cwd: string;
   status: string;
+  starting?: boolean;
+  start_error?: string;
   state?: AgentState;
   state_since?: string;
   agent?: string;

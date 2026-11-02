@@ -1,0 +1,135 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./store", () => {
+  const state = { launches: {} as Record<string, import("./new-agent").AgentLaunch> };
+  return { getState: () => state, putLaunch: (launch: import("./new-agent").AgentLaunch) => { state.launches[launch.id] = launch; }, upsertSession: vi.fn() };
+});
+vi.mock("./router", () => ({ href: (r: { mid: string; sid: string }) => `/s/${r.mid}/${r.sid}`, navigate: vi.fn() }));
+
+import { acknowledgeLaunch, deliverLaunch, launchAgent } from "./new-agent";
+import { getState, upsertSession } from "./store";
+import { navigate } from "./router";
+import { pickAttachment } from "./attachments";
+
+const session = { machine_id: "desktop", session_id: "remote-id", title: "示例", cwd: "/workspace/project", status: "idle" };
+const input = { machineId: "desktop", cwd: "/workspace/project", launcher: "", text: "看一下附件", attachments: [] };
+function response(body: unknown, status = 200) {
+  return { ok: status < 400, status, text: async () => JSON.stringify(body) };
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal("localStorage", { getItem: () => "test" });
+  vi.stubGlobal("location", { pathname: "/other" });
+  vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:preview"), revokeObjectURL: vi.fn() });
+  getState().launches = {};
+  vi.clearAllMocks();
+});
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+describe("本地优先启动", () => {
+  it("opens the local conversation before any request and submits the prompt only once", async () => {
+    let resolveCreate!: (value: unknown) => void;
+    const fetcher = vi.fn().mockReturnValueOnce(new Promise((resolve) => { resolveCreate = resolve; })).mockResolvedValueOnce(response({ ok: true }));
+    vi.stubGlobal("fetch", fetcher);
+    const id = launchAgent(input);
+    expect(navigate).toHaveBeenCalledWith({ name: "session", mid: "desktop", sid: id });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(getState().launches[id].text).toBe(input.text);
+    vi.advanceTimersByTime(0);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ machine_id: "desktop", cwd: input.cwd, async: true, name_hint: input.text });
+    const job = deliverLaunch(id);
+    await job;
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    resolveCreate(response({ session }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(upsertSession).toHaveBeenCalledWith(session);
+    expect(fetcher.mock.calls[1][0]).toBe("/api/v1/sessions/desktop/remote-id/messages");
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ text: input.text, images: [], client_msg_id: id });
+    expect(getState().launches[id].phase).toBe("ready");
+    expect(navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends images and uploaded file paths together after creation", async () => {
+    const image = pickAttachment(new File([new Uint8Array([1, 2, 3])], "figure.png", { type: "image/png" }));
+    const file = pickAttachment(new File(["report"], "report.txt", { type: "text/plain" }));
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({ path: "/uploads/my report.txt" })).mockResolvedValueOnce(response({}));
+    vi.stubGlobal("fetch", fetcher);
+    const id = launchAgent({ ...input, attachments: [image, file] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().launches[id].phase).toBe("ready");
+    expect(fetcher.mock.calls[1][0]).toBe("/api/v1/machines/desktop/files?name=report.txt");
+    expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({ text: "看一下附件\n'/uploads/my report.txt'", images: [{ mime: "image/png", data: "AQID" }], client_msg_id: id });
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
+  });
+
+  it("keeps the real session, attachments and stable message id on send failure", async () => {
+    const image = pickAttachment(new File(["image"], "figure.png", { type: "image/png" }));
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({ code: "input_draft", error: "draft", delivered: "none", clearable: "existing" }, 409)).mockResolvedValueOnce(response({}));
+    vi.stubGlobal("fetch", fetcher);
+    const id = launchAgent({ ...input, attachments: [image] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().launches[id]).toMatchObject({ phase: "failed", session, clearable: "existing", uncertain: false });
+    expect(getState().launches[id].attachments).toEqual([image]);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    await deliverLaunch(id, "existing");
+    expect(fetcher.mock.calls.filter((c) => c[0] === "/api/v1/sessions")).toHaveLength(1);
+    expect(JSON.parse(fetcher.mock.calls[2][1].body)).toMatchObject({ client_msg_id: id, clear_draft: "existing" });
+  });
+
+  it("never navigates away from another conversation when startup finishes", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({})));
+    const id = launchAgent(input);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().launches[id].phase).toBe("ready");
+    expect(navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks a lost create response uncertain without automatically creating again", async () => {
+    const fetcher = vi.fn().mockRejectedValue(new TypeError("network"));
+    vi.stubGlobal("fetch", fetcher);
+    const id = launchAgent(input);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().launches[id]).toMatchObject({ phase: "failed", uncertain: true });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears optimistic images only after matching transcript content arrives", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({})));
+    const id = launchAgent({ ...input, attachments: [pickAttachment(new File(["image"], "figure.png", { type: "image/png" }))] });
+    await vi.advanceTimersByTimeAsync(0);
+    acknowledgeLaunch("desktop", "remote-id", { text: input.text, images: [] });
+    expect(getState().launches[id].outgoing).toBeDefined();
+    acknowledgeLaunch("desktop", "remote-id", { text: input.text, images: [{}] });
+    expect(getState().launches[id].outgoing).toBeUndefined();
+  });
+
+  it("starts without a first message and never calls messages", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ session }));
+    vi.stubGlobal("fetch", fetcher);
+    const id = launchAgent({ ...input, text: "" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().launches[id].phase).toBe("ready");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves Codex text startup with no duplicate first message", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ error: "needs prompt", code: "codex_needs_prompt" }, 409)).mockResolvedValueOnce(response({ session: { ...session, agent: "codex" } }));
+    vi.stubGlobal("fetch", fetcher);
+    const id = launchAgent(input);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().launches[id].phase).toBe("ready");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({ prompt: input.text });
+  });
+
+  it("does not replace a Codex multimodal first message with a fake initialization prompt", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ error: "needs prompt", code: "codex_needs_prompt" }, 409));
+    vi.stubGlobal("fetch", fetcher);
+    const id = launchAgent({ ...input, attachments: [pickAttachment(new File(["image"], "figure.png", { type: "image/png" }))] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().launches[id]).toMatchObject({ phase: "failed", uncertain: false });
+    expect(getState().launches[id].error).toContain("暂不支持首条消息带附件");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});

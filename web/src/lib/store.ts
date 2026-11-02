@@ -5,6 +5,8 @@ import { useRef, useSyncExternalStore } from "react";
 import { api, getToken } from "./api";
 import type { AgentMutes } from "./agent-groups";
 import type { AssistantInfo, Interaction, Item, Machine, Session } from "./types";
+import type { AgentLaunch } from "./new-agent";
+import { releaseAttachments } from "./attachments";
 
 export type Conn = "connecting" | "online" | "offline";
 
@@ -17,6 +19,7 @@ export interface State {
   assistant: AssistantInfo | null;
   mutes: AgentMutes;
   loaded: boolean;
+  launches: Record<string, AgentLaunch>;
 }
 
 let state: State = {
@@ -28,6 +31,7 @@ let state: State = {
   assistant: null,
   mutes: { spaces: [], sessions: [], allowed: [] },
   loaded: false,
+  launches: {},
 };
 
 const listeners = new Set<() => void>();
@@ -208,7 +212,11 @@ function onMessage(msg: Record<string, unknown>) {
   }
 }
 
-function upsertSession(s: Session) {
+export function putLaunch(launch: AgentLaunch) {
+  set({ launches: { ...state.launches, [launch.id]: launch } });
+}
+
+export function upsertSession(s: Session) {
   const list = state.sessions[s.machine_id] ?? [];
   const i = list.findIndex((x) => x.session_id === s.session_id);
   const next = i < 0 ? [...list, s] : list.map((x, j) => (j === i ? { ...x, ...s } : x));
@@ -262,5 +270,6 @@ export function markSeenLocally(mid: string, sid: string) {
 
 export function reset() {
   disconnect();
-  set({ machines: [], sessions: {}, interactions: [], assistant: null, mutes: { spaces: [], sessions: [], allowed: [] }, loaded: false, conn: "connecting" });
+  Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
+  set({ machines: [], sessions: {}, interactions: [], assistant: null, launches: {}, mutes: { spaces: [], sessions: [], allowed: [] }, loaded: false, conn: "connecting" });
 }

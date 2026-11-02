@@ -33,6 +33,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const { spaces, loose, recent } = useSpaces();
   const all = useAgentSessions();
   const mutes = useStore((s) => s.mutes);
+  const launches = useStore((s) => Object.values(s.launches).filter((launch) => launch.phase !== "ready"));
   const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("jarvis.agentGrouping")));
   const groupingMenu = useMenu();
   const groups = useMemo(() => grouping === "space" ? [] : buildAgentGroups(all, machines, grouping, mutes), [all, machines, grouping, mutes]);
@@ -140,6 +141,10 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
             onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); setHovered(null); },
           }))} />
         )}
+
+        {launches.length > 0 && <Section title="正在启动">
+          {launches.map((launch) => <NavRow key={launch.id} k={`s:${launch.machineId}/${launch.id}`} reg={reg} hover={setHovered} active={activeKey === `s:${launch.machineId}/${launch.id}`} to={{ name: "session", mid: launch.machineId, sid: launch.id }} go={go} icon={launch.phase === "failed" ? "retry" : "agent"} label={launch.text || baseName(launch.cwd) || "新 Agent"} hint={launch.phase === "failed" ? "启动失败" : "后台启动中"} />)}
+        </Section>}
 
         {grouping === "space" ? <>
         {active.map((sp) => (

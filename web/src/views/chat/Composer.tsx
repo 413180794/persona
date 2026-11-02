@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api, enc, errorText } from "../../lib/api";
 import { uuid } from "../../lib/format";
+import { imagePayload, MAX_IMAGE, quotePath } from "../../lib/attachments";
+import { AttachmentTray } from "../../ui/AttachmentTray";
 import { cx, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
@@ -36,23 +38,13 @@ export const AGENT_COMMANDS: Command[] = [
   { word: "/clear", desc: "清空对话，从头开始", text: "/clear", confirm: "清空这个 Agent 的对话？它会忘掉之前的上下文。" },
 ];
 
-const MAX_IMAGE = 8 * 1024 * 1024;
-
 function parseSlash(draft: string) {
   const m = /^\/(\S*)$/.exec(draft);
   return m ? m[1].toLowerCase() : null;
 }
 
 async function readImage(file: File): Promise<Attachment> {
-  const buf = await file.arrayBuffer();
-  let bin = "";
-  const bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return { id: uuid(), name: file.name || "image.png", mime: file.type || "image/png", data: btoa(bin), url: URL.createObjectURL(file) };
-}
-
-function quotePath(p: string) {
-  return /[\s'"\\$`]/.test(p) ? `'${p.replace(/'/g, `'\\''`)}'` : p;
+  return { ...await imagePayload(file), id: uuid(), name: file.name || "image.png", url: URL.createObjectURL(file) };
 }
 
 export function Composer({
@@ -238,23 +230,12 @@ export function Composer({
         )}
       >
         {atts.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 px-0.5 pt-0.5">
-            {atts.map((a) => (
-              <span key={a.id} className="group/att relative size-14 overflow-hidden rounded-[8px] bg-field shadow-hairline" style={{ animation: `pop-in 200ms ${EASE} both` }}>
-                <img src={a.url} alt={a.name} className="size-full object-cover" />
-                <button
-                  type="button"
-                  aria-label={`移除 ${a.name}`}
-                  onClick={() => {
-                    URL.revokeObjectURL(a.url);
-                    setAtts((cur) => cur.filter((x) => x.id !== a.id));
-                  }}
-                  className="absolute top-0.5 right-0.5 flex size-4.5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover/att:opacity-100 focus-visible:opacity-100"
-                >
-                  <Icon name="x" size={10} stroke={2.6} />
-                </button>
-              </span>
-            ))}
+          <div className="px-0.5 pt-0.5">
+            <AttachmentTray attachments={atts} onRemove={(id) => {
+              const att = atts.find((a) => a.id === id);
+              if (att) URL.revokeObjectURL(att.url);
+              setAtts((cur) => cur.filter((a) => a.id !== id));
+            }} />
           </div>
         )}
         <textarea

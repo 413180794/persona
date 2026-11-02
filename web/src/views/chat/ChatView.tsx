@@ -3,8 +3,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
 import { ago, resumeCommand, sessionCan, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { getSession, markSeenLocally, refresh, useStore } from "../../lib/store";
-import { segments, type UserMessage } from "../../lib/turns";
+import { acknowledgeLaunch } from "../../lib/new-agent";
+import { getSession, getState, markSeenLocally, refresh, useStore } from "../../lib/store";
+import { parseUserText, segments, type UserMessage } from "../../lib/turns";
 import type { Session } from "../../lib/types";
 import { Button, copyText, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -25,7 +26,12 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
   const siblings = useStore((s) => (session?.space_id ? (s.sessions[mid] ?? []).filter((x) => x.space_id === session.space_id && stateOf(x) !== "offline") : []));
   const interactions = useStore((s) => s.interactions.filter((i) => i.machine_id === mid && i.session_id === sid));
   const tr = useTranscript(mid, sid, { starting });
-  const [pending, setPending] = useState<Pending[]>([]);
+  const [pending, setPending] = useState<Pending[]>(() => {
+    const launch = Object.values(getState().launches).find((l) => l.phase === "ready" && l.machineId === mid && l.session?.session_id === sid);
+    const out = launch?.outgoing;
+    if (!launch || !out || (!out.text && !out.images.length)) return [];
+    return [{ id: launch.id, at: Date.now(), msg: { id: `pending:${launch.id}`, text: out.text, images: out.images.map((image, i) => ({ id: `pending:${launch.id}#${i}`, seq: 0, role: "user", kind: "image", image })), contexts: [] } }];
+  });
   const [draftRefusal, setDraftRefusal] = useState<{ out: Outgoing; id: string; draft: string; clearable?: string } | null>(null);
   const state = session ? stateOf(session) : "unknown";
   const working = state === "working" || Boolean(tr.streaming) || pending.length > 0;
@@ -35,9 +41,10 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
 
   // a sent message stays as a "sending" bubble until the transcript has it
   useEffect(() => {
+    const users = segs.slice(-4).flatMap((seg) => seg.user ? [seg.user] : []);
+    users.forEach((user) => acknowledgeLaunch(mid, sid, user));
     if (!pending.length) return;
-    const texts = new Set(segs.slice(-4).map((s) => s.user?.text));
-    setPending((ps) => ps.filter((p) => !texts.has(p.msg.text) && Date.now() - p.at < 30_000));
+    setPending((ps) => ps.filter((p) => !users.some((user) => user.text === parseUserText(p.msg.text).text && user.images.length >= p.msg.images.length) && Date.now() - p.at < 30_000));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segs]);
 
@@ -177,6 +184,8 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto [overflow-anchor:none]">
           <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
+            {session?.start_error && <div role="alert" className="rounded-control bg-inset px-3 py-2 text-[13px] text-red">启动失败：{session.start_error}</div>}
+            {starting && !tr.loading && !pending.length && <Loading label="正在启动 Agent" />}
             {tr.loadingEarlier && (
               <div className="flex justify-center py-2">
                 <Loading label="加载更早的消息" />
