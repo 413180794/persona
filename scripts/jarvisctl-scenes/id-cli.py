@@ -61,6 +61,8 @@ def main():
                 c.call("freeze", on=False)  # a transition must end: navigate first, freeze before the shot
             c.navigate(**dict(nav, defaults=flags, coldChats=os.environ.get("COLD", "1") == "1"))
             c.idle()  # the page's data in (machines' metrics come after the page)
+            if "session" in nav:
+                c.call("wait-loaded", timeout=15)  # the chat's history from the hub, not only the disk cache's
             time.sleep(max(0.0, AT_LEAST.get(name, 0) - (time.time() - s)))
             if freeze:
                 c.call("freeze")

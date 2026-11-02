@@ -39,6 +39,7 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 | `wait` | 元素过滤、`gone`、`timeout`（10 s） | 每 100 ms 查一次，等到有（或没了）；超时报错 |
 | `perf` | | `counts`：各视图 body 次数、事件数、主线程耗时（要 `-perfCounts YES` 启动，`LiveUpdateTests` 读的同一份） |
 | `refresh` | | 向 hub 拉一次（下拉刷新做的事） |
+| `wait-loaded` | `session`（`<机器>/<会话>`，不给就是屏幕上的：Agents 页打开的对话或助手的那个；只等，不会去打开它）、`timeout`（15 s） | 等这个对话第一次从 hub 拿到历史（或报错），行也重建完（300 ms 不变）；`items`、`rows`、`error`、`waited`（ms）。超时报错 |
 | `activate` | 元素过滤 | 对找到的元素做 VoiceOver 双击做的事（按钮的动作、打开菜单）；`activated` 为 false 说明它不吃（菜单项） |
 | `scroll` | `pages`（屏数，负数往上，每屏 0.8 个高度）或 `to`（top / bottom） | 屏幕上最大的那个滚动视图直接设偏移量，没有惯性；`offset`、`contentHeight` |
 | `type` | `text`，可带元素过滤（先激活它拿焦点） | 往有焦点的输入框里打字 |
@@ -104,6 +105,8 @@ scripts/jarvisctl.py idle && scripts/jarvisctl.py screenshot out.png
 - **新的界面树**：在原树上导航，Agents 页推进去的对话、收件箱顶栏的玻璃底都留着。
 - **对话冷加载**（`coldChats`）：已在内存里的对话打开时内容一次到位，冷启动是先出页面、内容后到，两者滚动不一样。
   只清内存不清磁盘：启动本来就读磁盘缓存。
+- **等历史从 hub 到**（`wait-loaded`）：冷加载的对话先画磁盘缓存里的，hub 的历史后到；画面这时已经是静止的，`settle`
+  以为好了，`idle`（mock 0.8 s 没新请求）也会在历史请求发出前就判断为空闲。`id-cli.py` 的 chat 和 error 场景 `navigate` 后先 `wait-loaded`。
 - **按页面自己的计时等**：对话的顶栏闲置 3 s 自己折叠（`ChatView.chromeIdleSeconds`），老方法 7 s 后截一定是折叠的；
   `settle` 1–2 s 就停了，所以对话场景至少等 3.6 s（`id-cli.py` 的 `AT_LEAST`）。
 

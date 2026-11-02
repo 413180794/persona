@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// Reading the app (docs/runtime-cli.md「读状态」): the accessibility tree XCUITest sees (`tree`, `find`, `wait`), the
-/// view-body counts (`perf`), a pull from the hub (`refresh`).
+/// view-body counts (`perf`), a pull from the hub (`refresh`), a chat's history in (`wait-loaded`).
 extension RuntimeCLI {
     static let elementCommands: [String: Command] = [
         "tree": { a in ["elements": elements(matching: a).map(\.json)] },
@@ -11,6 +11,7 @@ extension RuntimeCLI {
         "wait": { a in await wait(a) },
         "perf": { _ in perf() },
         "refresh": { _ in await AppModel.shared.refresh(); return [:] },
+        "wait-loaded": { a in await waitLoaded(a) },
     ]
 
     /// What XCUITest turns on: with no assistive technology running SwiftUI builds no accessibility elements. Called
@@ -114,6 +115,32 @@ extension RuntimeCLI {
             if Date.now > deadline { return fail(gone ? "still there" : "not found") }
             try? await Task.sleep(for: .milliseconds(100))
         }
+    }
+
+    /// Waits until the chat on screen (`session` <machine>/<id>, else the open Agents chat or the assistant's) has
+    /// had its history from the hub once (`ChatStore.loadedOnce`) or an error, and its lines are built (`version`
+    /// unchanged for 300 ms). What a cold launch's fixed sleep waited for: a chat laid out from the disk cache, before
+    /// the hub's history came in, looks settled to `settle`.
+    private static func waitLoaded(_ a: Args) async -> Reply {
+        let m = AppModel.shared
+        let started = Date.now, deadline = started.addingTimeInterval(a["timeout"] as? Double ?? 15)
+        // The shell keeps the assistant's page (and its chat) shown behind Agents: on Agents, only a chat pushed there.
+        let pushed = m.openChat ?? (m.visibleSession != m.assistantCurrent ? m.visibleSession : nil)
+        guard let k = key(a["session"] as? String) ?? (m.selectedTab == .chats ? pushed : m.assistantCurrent) else {
+            return fail("no chat on screen")
+        }
+        var store: ChatStore? { m.chats[k] }
+        while !(store?.loadedOnce ?? false) && store?.error == nil {
+            if Date.now > deadline { return fail("\(name(k)) not loaded: \(store.map { "\($0.items.count) items" } ?? "no chat")") }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        var version = store?.version ?? 0, quiet = Date.now
+        while Date.now.timeIntervalSince(quiet) < 0.3, Date.now < deadline {
+            try? await Task.sleep(for: .milliseconds(50))
+            if let v = store?.version, v != version { version = v; quiet = Date.now }
+        }
+        return ["session": name(k), "items": store?.items.count ?? 0, "rows": store?.rows.count ?? 0,
+                "error": store?.error ?? NSNull(), "waited": Int(Date.now.timeIntervalSince(started) * 1000)]
     }
 
     /// View bodies evaluated, events, main-thread time (PerfCount; the app launched with `-perfCounts YES`).

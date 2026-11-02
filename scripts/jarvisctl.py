@@ -17,6 +17,7 @@
   jarvisctl.py defaults [--set k=v …] [--remove k …] [--get k …]              this run's switches, saved keys
   jarvisctl.py tree [filters] | find [filters]                                the accessibility tree (what XCUITest sees)
   jarvisctl.py wait [filters] [--gone] [--timeout s]                          until an element is there (or gone)
+  jarvisctl.py wait-loaded [--session m/s] [--timeout s]                      the chat on screen has its history from the hub
   jarvisctl.py tap [filters] [--hid]                                          activate it; a real touch (idb) if it does not take that
   jarvisctl.py scroll [--pages n | --to top|bottom]                           the largest scroll view, no fling
   jarvisctl.py type --text T [filters] | dismiss-keyboard                     into the focused field (filters: focus that first)
@@ -317,6 +318,8 @@ def main(argv):
         if a.cmd == "wait":
             f.update(timeout=a.timeout, gone=a.gone or None)
         r = c.call(a.cmd, **f)
+    elif a.cmd == "wait-loaded":
+        r = c.call("wait-loaded", session=a.session, timeout=a.timeout)
     elif a.cmd == "scenario":
         r = c.scenario(a.rest[0] if a.rest else None, a.env, a.control)
     elif a.cmd == "tap":
