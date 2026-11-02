@@ -78,7 +78,8 @@ runtime 之间共用、但不属于协议的，也在 SDK 里，各 runtime 直�
 ## 内容
 
 - **seq**：每个会话一条单调递增的序号，从 1 开始（0 表示「还没有」）；一条 item 的 seq 是产生它的那条记录的序号，同一条记录可以出好几个 item，
-  id 用 `<seq>#<序号>`。DSH 的事件 seq 从 0 开始，所以映射成 seq + 1。
+  id 用 `<seq>#<序号>`。DSH 的事件 seq 从 0 开始，所以映射成 seq + 1。**id 只在会话内唯一**：不同会话、尤其是同一个会话分出来的
+  两个分支，同一个 id 是不同的内容。客户端按 id 缓存的东西（渲染结果、解析结果）要连会话一起做 key（#372）。
 - **history**：会话内容的身份（`docs/protocol.md`「items 的连续性」）。内容被重写（分支、重置）时换一个，App 会整页重取；只追加时不变。
 - **item 种类**照 App 已有的：`text`（user / assistant）、`thinking`、`tool_use`（`tool_name`、`tool_input`、`tool_use_id`）、`tool_result`
   （`tool_use_id`、`is_error`）、`image`（`lazy: true` 占位，数据走 `image`）、`notice`（system：中断、出错、压缩）。

@@ -328,3 +328,9 @@
 
 - 手动配对成功会替换 RootView 中承载配对 sheet 的根页面；旧 sheet 不能再调用 dismiss，否则新引擎页可能可见却点不动（XCUITest 的 hit point 为 -1）。
   只有原本已配对、没有进入引擎步骤、外观根标识也没变化时，原来的 sheet 宿主仍在，才需要显式 dismiss。
+- **按 item id 做 key 的全局缓存会串会话**（2026-11-02，#372）：`RowMemo`（用户 / 助手消息的解析结果）和 `ToolTextMemo.input` 是所有聊天共用的，
+  原来只按 `item.id` 做 key，前提是「同一个 id 下文本不变」。Claude 的 id 是记录行的 uuid，全局唯一，一直没出事；DSH / pi 的 id 是 `<seq>#<块>`，
+  Codex 没有 id 的行是 `line<seq>#n`，只在会话内唯一。DSH 里从同一处分出的两个分支，第一条分叉的消息序号相同、id 相同：iPad 先看了一个分支，
+  再打开另一个，后者那条显示成了前者的（网页版没有这层缓存，所以正常；服务端推送和分页都对）。现在 key 是「机器/会话 + id」（`MemoScope`），
+  聊天页用 environment `rowMemoScope` 往下传、挂在 body 最外层（它弹出的 sheet 也在里面），预热按同一个 key 填。新加按 id 的缓存照此办理。
+

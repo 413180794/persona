@@ -92,6 +92,13 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
     private val _backlogs = MutableSharedFlow<SessionKey>(extraBufferCapacity = 64)
     val backlogs: SharedFlow<SessionKey> = _backlogs.asSharedFlow()
 
+    /**
+     * Feishu chats that changed (the hub relays lark-connector's realtime events as `{"type":"lark","feed_ids":[…]}`); an
+     * empty set after a reconnect means "anything may have changed while away". An open chat refreshes on it.
+     */
+    private val _larkChanges = MutableSharedFlow<Set<String>>(extraBufferCapacity = 32)
+    val larkChanges: SharedFlow<Set<String>> = _larkChanges.asSharedFlow()
+
     /** The open socket, if any (the chat title's weak-link check reads OkHttp's ping / pong counters). */
     val socket: WebSocket? get() = ws
 
@@ -191,6 +198,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 synchronized(chats) { chats.values.toList() }.forEach { it.resubscribe() }
                 // Pins and mutes have no WebSocket event: read them on every (re)connect; the inbox too.
                 scope.launch { loadPins(); loadInbox() }
+                _larkChanges.tryEmit(emptySet())
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -321,6 +329,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 chat(SessionKey(mid, sid), create = false)?.onDelta(msg["text"]?.jsonPrimitive?.content.orEmpty())
             }
             "inbox" -> scope.launch { loadInbox() } // no content: the app pulls the list
+            "lark" -> _larkChanges.tryEmit((msg["feed_ids"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }?.toSet().orEmpty())
             "tool_call" -> {
                 val id = msg["call_id"]?.jsonPrimitive?.content ?: return
                 val name = msg["name"]?.jsonPrimitive?.content ?: return

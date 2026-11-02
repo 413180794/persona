@@ -4,4 +4,6 @@
     <cache-path name="shared" path="shared/" />
     <!-- 拍照 in the composer: the system camera writes the photo here, it is read back and sent like a picked one. -->
     <cache-path name="camera" path="camera/" />
+    <!-- A Feishu file from a chat (ui/lark/LarkMedia.file), handed to the app that opens it. -->
+    <cache-path name="lark" path="lark-files/" />
 </paths>

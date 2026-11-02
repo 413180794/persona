@@ -44,6 +44,7 @@ transcript 解析用真实样本做 golden 测试（`server/internal/transcript/
 （`scripts/android_shots.py` 从 Paparazzi 的报告里按名字拷出来）。改了界面就跑一遍、逐张看，改前改后对比；它们只给人看，不跟基准图比。
 平时的 `./scripts/android.sh test` 不跑它们（`-Pshots` 才跑）。新页面加一个 `XxxShots.kt`，用 `ShotHost(dark) { … }` 包起来；
 要网络数据的页面先把数据装好再画（`docs/android.md`「经验」）。折叠屏（内屏平放 / 半折 / 拖过分隔条、外屏、内屏横放）、三折屏、平板、横放的手机是 `FoldShots.kt`（改了外壳、对话页都要看）。
+飞书会话和removed的页面是 `LarkShots.kt`（假 hub 带 `MOCK_LARK=1`：会话里各种消息、表情库、图片）。
 手势、键盘、通知、真实网络要在真机或模拟器上看。
 
 ## 用 mock 数据截图（README / 宣传图）

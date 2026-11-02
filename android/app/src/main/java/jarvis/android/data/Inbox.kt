@@ -30,6 +30,7 @@ data class InboxItem(
     @SerialName("done_by") val doneBy: String? = null,
     val lark: InboxLark? = null,
     val mail: InboxMail? = null,
+    val moment: InboxMoment? = null,
     val agent: InboxAgent? = null,
     /** Only in GET /inbox/{id}: this thing as plain text (the conversation, the mail), for 交给 AI. */
     val context: String? = null,
@@ -55,17 +56,39 @@ data class InboxItem(
             "group" -> "群聊"
             "bot" -> "机器人"
             "mail" -> if (mail?.direct == true) "邮件" else "抄送"
+            "moment" -> if (moment?.notice?.startsWith("atIn") == true) "@我" else "removed"
             else -> kind
         }
     val sourceLabel: String get() = if (source == "lark") "飞书" else accountName.ifBlank { "邮件" }
+
+    /**
+     * Where its Feishu chat opens (iOS `larkConversation.focus`): at the first new message while it is not done,
+     * otherwise at the latest. Null when it is not a Feishu chat (a removed post, a document, mail).
+     */
+    val larkFocus: String? get() = if (isDone) null else lark?.startPosition?.takeIf { it.isNotBlank() }
 }
 
 @Serializable
 data class InboxLark(
     @SerialName("feed_id") val feedId: String = "",
     @SerialName("is_group") val isGroup: Boolean = false,
+    @SerialName("is_topic") val isTopic: Boolean = false,
+    /** The first new message: the chat opens there (around this position). */
     @SerialName("start_position") val startPosition: String? = null,
+    /** The unread @me: 有人@你 jumps to it. */
+    @SerialName("mention_position") val mentionPosition: String? = null,
     @SerialName("at_all") val atAll: Boolean = false,
+)
+
+/** A removed post where someone commented on, replied to or @ed the user (docs/inbox.md「removed」). */
+@Serializable
+data class InboxMoment(
+    @SerialName("post_id") val postId: String = "",
+    /** comment | reply | atInPost | atInComment (the newest). */
+    val notice: String? = null,
+    @SerialName("reply_to") val replyTo: String? = null,
+    @SerialName("my_post") val myPost: Boolean = false,
+    @SerialName("post_text") val postText: String? = null,
 )
 
 @Serializable

@@ -938,6 +938,336 @@ def lark_window(msgs, q, default_limit=40):
     page = msgs[start:end]
     return {"messages": page, "has_older": start > 0, "has_newer": end < len(msgs),
             "older_cursor": page[0]["position"] if page else "", "newer_cursor": page[-1]["position"] if page else ""}
+# ---------- area: feishu chat page (Android's Feishu chat and removed pages; made-up data only) ----------
+# MOCK_LARK=1: the chats behind the inbox's Feishu items (f1 / f2 / f3) have messages covering every kind of part the
+# chat page draws (rich post, mentions, links, emoji, pictures, a file, voice, video, a sticker, cards with columns and
+# buttons, a table and a chart, merge-forward, a removed share, reactions, replies, a thread, system lines), with paging
+# (before / after / around), people's cards, the emoji catalogue and the media (made-up PNGs, Range answered). Off by
+# default: the iOS screenshots and TranslationTests read the plainer f2 above. What the app sends is kept: GET
+# /mock/lark (sent / reads / reactions / card actions); POST /mock/lark/incoming?feed=f1 adds a message from someone
+# else and pushes {"type":"lark"} to every socket.
+import zlib as _fs_zlib
+MOCK_LARK = bool(os.environ.get("MOCK_LARK"))
+FS_LOG = {"sent": [], "reads": [], "reactions": [], "actions": []}
+FS_EMOJI_KEYS = ["THUMBSUP", "OK", "DONE", "HEART", "SMILE", "LAUGH", "SURPRISED", "CLAP", "FIRE", "PARTY", "THINKING", "MUSCLE", "SOB", "WAVE"]
+FS_EMOJI_LABELS = ["赞", "OK", "完成", "爱心", "微笑", "大笑", "惊讶", "鼓掌", "火", "庆祝", "思考", "加油", "流泪", "再见"]
+
+
+def _fs_png(w, h, rgb, rgb2=None):
+    """A tiny PNG: a flat colour, or a vertical gradient to rgb2."""
+    raw = bytearray()
+    for y in range(h):
+        raw.append(0)
+        t = y / max(h - 1, 1)
+        c = rgb if rgb2 is None else tuple(int(a + (b - a) * t) for a, b in zip(rgb, rgb2))
+        raw.extend(bytes(c) * w)
+
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", _fs_zlib.crc32(tag + data) & 0xffffffff)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", _fs_zlib.compress(bytes(raw), 9)) + chunk(b"IEND", b""))
+
+
+def fs_media(key):
+    """Bytes for /api/v1/lark/media/<key>: emoji, avatars, pictures (made-up colours)."""
+    h = int(hashlib.md5(key.encode()).hexdigest()[:6], 16)
+    rgb = ((h >> 16) & 0xff, (h >> 8) & 0xff, h & 0xff)
+    if key.startswith("emoji-"): return _fs_png(48, 48, rgb)
+    if key.startswith("avatar-"): return _fs_png(96, 96, rgb)
+    if key.startswith("wide-"): return _fs_png(320, 180, rgb, (40, 40, 60))
+    if key.startswith("tall-"): return _fs_png(180, 320, rgb, (250, 250, 250))
+    if key.startswith("sticker-"): return _fs_png(160, 120, rgb)
+    return _fs_png(240, 240, rgb, (255, 255, 255))
+
+
+FS_USERS = {"韩梅梅": "u_hmm", "李雷": "u_ll", "Tom": "u_tom", "我": "u_me", "构建机器人": "u_bot"}
+
+
+def _fsm(feed, pos, sender, text, minutes, parts=None, mine=False, kind="TEXT", **kw):
+    sid = FS_USERS.get(sender, "u_x")
+    m = {"id": "lm_%s_%d" % (feed, pos), "position": str(pos), "sender_id": sid, "sender_name": sender,
+         "sender_avatar": "/api/v1/lark/media/avatar-" + sid, "sender_type": "bot" if sid == "u_bot" else "user",
+         "is_mine": mine, "type": kind, "text": text, "created_at": ago(minutes=minutes), "recalled": False,
+         "reply_count": 0, "parts": parts if parts is not None else [{"kind": "text", "text": text}]}
+    m.update(kw)
+    return m
+
+
+def _fst(text, **meta):
+    return {"kind": "text", "text": text, **({"metadata": meta} if meta else {})}
+
+
+def _fsblk(*chain):
+    return [{"id": i, "type": t, **({"listType": 0, "start": 1} if t.endswith("-list") else {})} for i, t in chain]
+
+
+def _fsmd(text, **style):
+    return {"tag": "markdown", "children": [{"tag": "plain_text", "text": text, **({"style": style} if style else {})}]}
+
+
+def _fscol(label, value, color=None):
+    return {"tag": "column", "style": {"weight": 1, "backgroundStyle": "grey"}, "children": [
+        _fsmd(label, textColor="grey-600"),
+        _fsmd(value, textAttributes=["bold"], textSize="large", **({"textColor": color} if color else {}))]}
+
+
+FS_CARD = {"kind": "card", "text": "发布检查", "metadata": {
+    "theme": "green",
+    "header": {"tag": "card_header", "children": [
+        {"tag": "standard_icon", "token": "succeed_filled"},
+        {"tag": "plain_text", "text": "v2.3 发布检查通过"},
+        {"tag": "text_tag", "text": "已通过", "style": {"color": "green"}},
+        {"tag": "plain_text", "text": "构建 #1842 · 用时 6 分 12 秒"}]},
+    "body": {"tag": "body", "children": [
+        {"tag": "markdown", "children": [{"tag": "plain_text", "text": "所有检查都过了，<font color='green'>可以发布</font>。详情见 "},
+                                         {"tag": "link", "url": "https://example.com/builds/1842", "text": "构建记录"}]},
+        {"tag": "column_set", "style": {"flexMode": "none", "horizontalSpacingValue": 8}, "children": [
+            _fscol("单元测试", "1,204 / 1,204"), _fscol("覆盖率", "82.4%", "green"), _fscol("包大小", "+0.3 MB", "orange")]},
+        {"tag": "hr"},
+        {"tag": "collapsible_panel", "expanded": False, "header": _fsmd("变更（3）"), "children": [{"tag": "list", "items": [
+            {"type": "ul", "level": 0, "children": [{"tag": "plain_text", "text": "天气卡片支持深色模式"}]},
+            {"type": "ul", "level": 0, "children": [{"tag": "plain_text", "text": "修复定位权限弹窗重复出现"}]},
+            {"type": "ul", "level": 1, "children": [{"tag": "code_span", "text": "LocationManager"}, {"tag": "plain_text", "text": " 只请求一次"}]}]}]},
+        {"tag": "action", "children": [
+            {"tag": "button", "style": {"type": "primary"}, "actionId": "approve", "actionMethod": 2, "children": [{"tag": "plain_text", "text": "批准发布"}]},
+            {"tag": "button", "style": {"type": "default"}, "url": "https://example.com/builds/1842", "children": [{"tag": "plain_text", "text": "查看详情"}]},
+            {"tag": "overflow", "options": [{"text": "重新构建", "actionId": "rebuild", "actionMethod": 2}, {"text": "打开流水线", "url": "https://example.com/pipeline"}]}]},
+        {"tag": "note", "children": [{"tag": "standard_icon", "token": "time_outlined"}, {"tag": "plain_text", "text": "由构建机器人发送"}]}]}}}
+
+FS_TABLE_CARD = {"kind": "card", "text": "本周值班", "metadata": {
+    "theme": "blue", "title": "本周值班",
+    "body": {"tag": "body", "children": [
+        {"tag": "table", "children": [
+            {"tag": "markdown_table_row", "children": [{"tag": "markdown_table_header", "text": "日期"}, {"tag": "markdown_table_header", "text": "值班"}, {"tag": "markdown_table_header", "text": "备份"}]},
+            {"tag": "markdown_table_row", "children": [{"tag": "markdown_table_cell", "text": "周一"}, {"tag": "markdown_table_cell", "text": "李雷"}, {"tag": "markdown_table_cell", "text": "Tom"}]},
+            {"tag": "markdown_table_row", "children": [{"tag": "markdown_table_cell", "text": "周二"}, {"tag": "markdown_table_cell", "text": "韩梅梅"}, {"tag": "markdown_table_cell", "text": "李雷"}]}]},
+        {"tag": "chart", "chart": {"type": "bar", "title": {"text": "告警数"}, "xField": "d", "yField": "n",
+                                   "data": {"values": [{"d": "周一", "n": 4}, {"d": "周二", "n": 7}, {"d": "周三", "n": 2}, {"d": "周四", "n": 5}]}}}]}}}
+
+FS_FORWARD = {"kind": "card", "text": "聊天记录", "metadata": {
+    "variant": "merge-forward", "title": "李雷和韩梅梅的聊天记录", "messageCount": 3,
+    "previews": [{"senderName": "李雷", "text": "图标的圆角再小一点"}, {"senderName": "韩梅梅", "text": "**好的**，下午给你新版"}],
+    "messages": [
+        {"id": "fw1", "senderName": "李雷", "senderAvatarUrl": "/api/media/avatar-u_ll", "createdAt": ago(days=1),
+         "parts": [{"kind": "text", "text": "图标的圆角再小一点"}]},
+        {"id": "fw2", "senderName": "韩梅梅", "senderAvatarUrl": "/api/media/avatar-u_hmm", "createdAt": ago(days=1),
+         "parts": [{"kind": "text", "text": "好的，下午给你新版"}, {"kind": "emotion", "refId": "OK", "text": "[OK]"}]},
+        {"id": "fw3", "senderName": "李雷", "createdAt": ago(days=1),
+         "parts": [{"kind": "image", "url": "/api/v1/lark/media/img-fw3", "metadata": {"width": 400, "height": 400}}]}]}}
+
+FS_MEETING = {"kind": "card", "text": "视频会议", "metadata": {
+    "variant": "video-chat", "title": "设计评审", "eyebrow": "视频会议", "status": "进行中",
+    "fields": [{"label": "时间", "value": later(minutes=30)}, {"label": "发起人", "value": "李雷"}],
+    "actions": [{"type": "copyMeetingNumber", "value": "123 456 789"}]}}
+
+FS_MOMENTS_LINK = "https://applink.example.com/client/moments/detail?postId=7000000000000000001"
+
+FS_MESSAGES = {
+    "f1": [
+        _fsm("f1", 90, "韩梅梅", "早，周五的发布还按计划吗？", 300),
+        _fsm("f1", 91, "我", "按计划，今天把最后两个问题合进去", 290, mine=True),
+        _fsm("f1", 92, "韩梅梅", "好的", 289, reactions=[{"key": "THUMBSUP", "count": 1, "mine": True, "users": ["我"]}]),
+        _fsm("f1", 93, "韩梅梅", "[文件]", 120, kind="FILE", parts=[{"kind": "file", "text": "发布计划.pdf", "url": "/api/v1/lark/media/file-plan",
+                                                                "metadata": {"size": "245760", "extension": "pdf"}}]),
+        _fsm("f1", 94, "韩梅梅", "[语音]", 60, kind="MEDIA",
+             parts=[{"kind": "media", "url": "/api/v1/lark/media/voice-1", "metadata": {"mime": "audio/opus", "duration": 9000}}]),
+        _fsm("f1", 95, "韩梅梅", "[removed]", 40, parts=[{"kind": "link", "text": "removed动态", "url": FS_MOMENTS_LINK}]),
+        _fsm("f1", 100, "韩梅梅", "周五的发布能赶上吗？下午我要和客户确认时间", 20,
+             reply_to={"id": "lm_f1_91", "sender_name": "我", "text": "按计划，今天把最后两个问题合进去"}),
+        _fsm("f1", 101, "韩梅梅", "顺便看一下这个", 18, parts=[_fst("顺便看一下 "), {"kind": "docs", "text": "客户沟通记录", "url": "https://example.com/docx/abc"},
+                                                           _fst(" 和 "), {"kind": "link", "text": "这篇文章", "url": "https://example.com/blog/1"}]),
+    ],
+    "f2": [
+        _fsm("f2", 180, "李雷", "新版图标的方向", 400, kind="POST", parts=[
+            {"kind": "text", "text": "新版图标的方向", "metadata": {"blocks": _fsblk(("h", "heading-2"))}},
+            {"kind": "text", "text": "保留现在的配色", "metadata": {"blocks": _fsblk(("l", "ordered-list"), ("i1", "list-item"))}},
+            {"kind": "text", "text": "深色模式单独出一套", "metadata": {"blocks": _fsblk(("l", "ordered-list"), ("l2", "unordered-list"), ("i3", "list-item"))}},
+            {"kind": "text", "text": "圆角统一成 ", "metadata": {"blocks": _fsblk(("l", "ordered-list"), ("i2", "list-item"))}},
+            {"kind": "text", "text": "22pt", "metadata": {"inlineCode": True, "blocks": _fsblk(("l", "ordered-list"), ("i2", "list-item"))}},
+            {"kind": "text", "text": "细节以设计稿为准", "metadata": {"marks": ["italic"], "blocks": _fsblk(("q", "quote"))}}]),
+        _fsm("f2", 181, "韩梅梅", "收到 [OK] 我先出一版", 398, parts=[_fst("收到 "), {"kind": "emotion", "refId": "OK", "text": "[OK]"}, _fst(" 我先出一版")],
+             reactions=[{"key": "OK", "count": 2, "mine": False, "users": ["李雷", "Tom"]}]),
+        _fsm("f2", 182, "韩梅梅", "[图片]", 395, kind="IMAGE", parts=[{"kind": "image", "url": "/api/v1/lark/media/wide-icon1", "metadata": {"width": 1280, "height": 720}}]),
+        _fsm("f2", 183, "韩梅梅", "[图片]", 395, kind="IMAGE", parts=[{"kind": "image", "url": "/api/v1/lark/media/tall-icon2", "metadata": {"width": 720, "height": 1280}}]),
+        _fsm("f2", 184, "", "韩梅梅 把群名改成了「设计评审」", 300, kind="SYSTEM", parts=[{"kind": "text", "text": "韩梅梅 把群名改成了「设计评审」",
+             "metadata": {"system": True, "systemTemplate": "{from_user} 把群名改成了「设计评审」", "systemHolders": [{"key": "from_user", "text": "韩梅梅"}]}}]),
+        _fsm("f2", 185, "构建机器人", "v2.3 发布检查通过", 200, kind="CARD", parts=[FS_CARD]),
+        _fsm("f2", 186, "Tom", "这段配置有问题吗", 190, kind="POST", parts=[_fst("这段配置有问题吗"),
+             {"kind": "code", "text": "# 发布配置\nversion: \"2.3.0\"\nchannels: [beta, stable]\nretry: 3", "metadata": {"language": "yaml"}}]),
+        _fsm("f2", 187, "李雷", "没问题", 188, thread_reply_count=2, reply_count=2),
+        _fsm("f2", 188, "构建机器人", "本周值班", 150, kind="CARD", parts=[FS_TABLE_CARD]),
+        _fsm("f2", 189, "李雷", "[聊天记录]", 140, kind="MERGE_FORWARD", parts=[FS_FORWARD]),
+        _fsm("f2", 190, "Tom", "[贴纸]", 130, kind="STICKER", parts=[{"kind": "emotion", "url": "/api/v1/lark/media/sticker-cat", "text": "贴纸"}]),
+        _fsm("f2", 191, "我", "我去看看", 125, mine=True, edited=True),
+        _fsm("f2", 192, "韩梅梅", "[视频]", 120, kind="MEDIA", parts=[{"kind": "media", "url": "/api/v1/lark/media/video-demo", "text": "演示.mp4",
+             "metadata": {"mime": "video/mp4", "duration": 19000, "posterUrl": "/api/v1/lark/media/wide-poster", "posterWidth": 1280, "posterHeight": 720}}]),
+        _fsm("f2", 193, "李雷", "[视频会议]", 100, kind="CARD", parts=[FS_MEETING]),
+        _fsm("f2", 194, "Tom", "", 95, recalled=True, parts=[]),
+        _fsm("f2", 200, "李雷", "@韩梅梅 新版图标放在这里了 设计稿", 60, kind="POST", parts=[{"kind": "at", "text": "@韩梅梅", "refId": "u_hmm"},
+             _fst(" 新版图标放在这里了 "), {"kind": "link", "text": "设计稿", "url": "https://example.com/design/icons"}]),
+        _fsm("f2", 201, "李雷", "这次改了配色，联调好了", 59, parts=[_fst("这次改了配色，联调好了", lingo=[{"start": 9, "end": 11}])]),
+        _fsm("f2", 202, "李雷", "@我 下午评审前看一眼？", 55, at_me=True, parts=[{"kind": "at", "text": "@我", "refId": "u_me"}, _fst(" 下午评审前看一眼？")]),
+        _fsm("f2", 203, "韩梅梅", "我也看看", 50, reply_to={"id": "lm_f2_200", "sender_name": "李雷", "text": "新版图标放在这里了"}),
+    ],
+    "f3": [_fsm("f3", 290 + i, ["Tom", "李雷", "韩梅梅"][i % 3], t, 600 - i * 30) for i, t in enumerate(
+        ["这周六去爬山吗", "去！", "几点集合", "早上 8 点？", "可以", "地铁站见", "记得带水", "我带零食", "天气预报说晴", "那就定了"])]
+    + [_fsm("f3", 300, "Tom", "周六早上 8 点地铁站集合，记得带水", 30)],
+}
+FS_THREADS = {"lm_f2_187": [_fsm("f2", 1871, "Tom", "那我直接合了", 185), _fsm("f2", 1872, "李雷", "合吧", 184)]}
+FS_CONVS = [
+    {"id": "f1", "name": "韩梅梅", "avatar": "/api/v1/lark/media/avatar-u_hmm", "is_group": False, "unread": 2, "preview": "顺便看一下这个",
+     "updated_at": ago(minutes=18), "read_position": "99"},
+    {"id": "f2", "name": "设计评审", "is_group": True, "unread": 4, "at_me": True, "preview": "我也看看", "updated_at": ago(minutes=50),
+     "read_position": "199", "mention_position": "202"},
+    {"id": "f3", "name": "周末徒步群", "is_group": True, "unread": 1, "preview": "周六早上 8 点地铁站集合", "updated_at": ago(minutes=30),
+     "read_position": "299"},
+]
+
+
+def fs_page(feed, q):
+    msgs = sorted(FS_MESSAGES.get(feed, []), key=lambda m: int(m["position"]))
+    limit = int((q.get("limit") or ["40"])[0] or 40)
+    before, after, around = [(q.get(k) or [""])[0] for k in ("before", "after", "around")]
+    if before:
+        page = [m for m in msgs if int(m["position"]) < int(before)][-limit:]
+    elif after:
+        page = [m for m in msgs if int(m["position"]) > int(after)][:limit]
+    elif around:
+        a = int(around)
+        lo = [m for m in msgs if int(m["position"]) < a][-(limit // 2):]
+        page = lo + [m for m in msgs if int(m["position"]) >= a][:limit - len(lo)]
+    else:
+        page = msgs[-limit:]
+    first = int(page[0]["position"]) if page else 0
+    last = int(page[-1]["position"]) if page else 0
+    return {"messages": page, "has_older": any(int(m["position"]) < first for m in msgs),
+            "has_newer": any(int(m["position"]) > last for m in msgs),
+            "older_cursor": page[0]["position"] if page else None, "newer_cursor": page[-1]["position"] if page else None}
+
+
+def fs_push(feed):
+    """{"type":"lark"} to every open socket (the hub relays lark-connector's realtime events like this)."""
+    for send, _ in list(LIVE):
+        try: send({"type": "lark", "feed_ids": [feed]})
+        except Exception: pass
+
+
+def fs_find(mid):
+    for ms in list(FS_MESSAGES.values()) + list(FS_THREADS.values()):
+        for m in ms:
+            if m["id"] == mid: return m
+    return None
+
+
+def fs_get(h, p, q):
+    """GET /api/v1/lark/… and /mock/lark with MOCK_LARK (True when handled; the rest falls through)."""
+    if p == "/mock/lark":
+        h.send_json(FS_LOG); return True
+    if p.startswith("/api/v1/lark/media/"):
+        key = p.rsplit("/", 1)[-1]
+        if key.startswith("video-") or key.startswith("voice-"):
+            h.send_json({"error": "no media in the fake hub"}, 404); return True
+        data = b"%PDF-1.4\n% made-up file\n" if key.startswith("file-") else fs_media(key)
+        status, extra = 200, {}
+        rng = h.headers.get("Range")
+        if rng and rng.startswith("bytes="):
+            a, _, b = rng[6:].partition("-")
+            a = int(a or 0); b = min(int(b) if b else len(data) - 1, len(data) - 1)
+            extra["Content-Range"] = "bytes %d-%d/%d" % (a, b, len(data))
+            data, status = data[a:b + 1], 206
+        h.send_response(status)
+        h.send_header("Content-Type", "application/pdf" if key.startswith("file-") else "image/png")
+        h.send_header("Content-Length", str(len(data))); h.send_header("Accept-Ranges", "bytes")
+        for k, v in extra.items(): h.send_header(k, v)
+        h.end_headers(); h.wfile.write(data)
+        return True
+    if p == "/api/v1/lark/conversations":
+        h.send_json({"conversations": FS_CONVS, "next_cursor": ""}); return True
+    if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):
+        h.send_json(fs_page(p.split("/")[5], q)); return True
+    if p.startswith("/api/v1/lark/messages/") and p.endswith("/thread"):
+        mid = p.split("/")[5]
+        root = fs_find(mid)
+        h.send_json({"messages": ([root] if root else []) + FS_THREADS.get(mid, []), "has_older": False}); return True
+    if p.startswith("/api/v1/lark/messages/") and p.endswith("/url-preview"):
+        h.send_json({"title": "removed", "card": {"author": "Tom", "avatarUrl": "/api/v1/lark/media/avatar-u_tom", "subtitle": "工程效率",
+                                                 "body": "周末徒步回来，顺手整理了一份新人上手清单，欢迎补充。", "footer": "12 赞 · 1 评论"}})
+        return True
+    # The inbox's own post (mp1) is the plainer one above; a post shared in a chat is this one.
+    if p.startswith("/api/v1/lark/moments/posts/") and "/mp1" not in p:
+        if p.endswith("/comments"):
+            h.send_json({"comments": [{"id": "c1", "userName": "李雷", "userId": "u_ll", "userAvatarUrl": "/api/v1/lark/media/avatar-u_ll",
+                                       "content": {"segments": [{"kind": "text", "text": "很有用 "}, {"kind": "emoji", "key": "THUMBSUP", "text": "[赞]"}]},
+                                       "createTime": time.time() * 1000 - 3600e3}]})
+            return True
+        h.send_json({"id": p.split("/")[-1], "userName": "Tom", "userId": "u_tom", "userAvatarUrl": "/api/v1/lark/media/avatar-u_tom",
+                     "content": {"segments": [{"kind": "text", "text": "周末徒步回来，顺手整理了一份新人上手清单，欢迎补充。"},
+                                              {"kind": "emoji", "key": "SMILE", "text": "[微笑]"}]},
+                     "images": [{"url": "/api/v1/lark/media/img-m%d" % i, "width": 600, "height": 600} for i in range(1, 4)],
+                     "reactionGroups": [{"type": "THUMBSUP", "count": 12, "selfInvolved": True}],
+                     "commentCount": 1, "createTime": time.time() * 1000 - 86400e3})
+        return True
+    if p.startswith("/api/v1/lark/users/"):
+        uid = p.split("/")[-1]
+        name = {v: k for k, v in FS_USERS.items()}.get(uid, "同事")
+        h.send_json({"displayName": name, "enName": {"u_hmm": "Meimei Han", "u_ll": "Lei Li"}.get(uid),
+                     "avatarUrl": "/api/v1/lark/media/avatar-" + uid, "description": "做设计，也写一点代码",
+                     "userType": "bot" if uid == "u_bot" else "user", "customStatus": {"title": "专注中"}, "timezone": "Europe/London",
+                     "fields": [{"key": "B-DEPARTMENT", "value": "设计部"}, {"key": "B-LEADER", "value": "李雷", "url": "lark://client/profile?uid=u_ll"},
+                                {"key": "email", "label": "邮箱", "value": "me@example.com"}]})
+        return True
+    if p == "/api/v1/lark/reactions/quick":
+        h.send_json({"keys": FS_EMOJI_KEYS[:7]}); return True
+    if p == "/api/v1/lark/emojis":
+        h.send_json({"emojis": {k.lower(): {"label": l, "url": "/api/v1/lark/media/emoji-" + k.lower()} for k, l in zip(FS_EMOJI_KEYS, FS_EMOJI_LABELS)},
+                     "groups": [{"title": "默认表情", "keys": FS_EMOJI_KEYS}]})
+        return True
+    return False
+
+
+def fs_post(h, p, q, body):
+    """POST /api/v1/lark/… and /mock/lark/… with MOCK_LARK (True when handled)."""
+    if p == "/mock/lark/incoming":
+        feed = (q.get("feed") or ["f1"])[0]
+        msgs = FS_MESSAGES.setdefault(feed, [])
+        pos = max([int(m["position"]) for m in msgs] or [0]) + 1
+        msgs.append(_fsm(feed, pos, "韩梅梅", (q.get("text") or ["新消息 %d" % pos])[0], 0))
+        fs_push(feed)
+        h.send_json({"ok": True, "position": str(pos)}); return True
+    if not p.startswith("/api/v1/lark/"): return False
+    b = json.loads(body or b"{}")
+    if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):
+        feed = p.split("/")[5]
+        FS_LOG["sent"].append({"feed": feed, **b})
+        msgs = FS_MESSAGES.setdefault(feed, [])
+        pos = max([int(m["position"]) for m in msgs] or [0]) + 1
+        msgs.append(_fsm(feed, pos, "我", b.get("text", ""), 0, mine=True))
+        fs_push(feed)
+        h.send_json({"ok": True}); return True
+    if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read"):
+        FS_LOG["reads"].append({"feed": p.split("/")[5], **b})
+        h.send_json({"ok": True}); return True
+    if p.startswith("/api/v1/lark/messages/") and p.endswith("/reactions"):
+        mid = p.split("/")[5]
+        FS_LOG["reactions"].append({"message": mid, **b})
+        m = fs_find(mid)
+        if m is not None:
+            rs = m.setdefault("reactions", [])
+            r = next((x for x in rs if x["key"].lower() == b.get("key", "").lower()), None)
+            if b.get("remove"):
+                if r and r.get("mine"):
+                    r["count"] -= 1; r["mine"] = False; r["users"] = [u for u in r.get("users", []) if u != "我"]
+                    if r["count"] <= 0: rs.remove(r)
+            elif r is None:
+                rs.append({"key": b.get("key"), "count": 1, "mine": True, "users": ["我"]})
+            elif not r.get("mine"):
+                r["count"] += 1; r["mine"] = True; r.setdefault("users", []).append("我")
+        h.send_json({"ok": True}); return True
+    if "/card-actions/" in p:
+        FS_LOG["actions"].append({"message": p.split("/")[5], "action": p.split("/")[-1]})
+        h.send_json({"ok": True}); return True
+    return False
+# ---------- end of area: feishu chat page ----------
 
 # Unified model configuration uses only made-up providers and purposes.
 MODEL_BINDINGS = {}
@@ -2204,6 +2534,7 @@ class H(BaseHTTPRequestHandler):
                     int(q.get("steps", ["10"])[0]), int(q.get("ms", ["300"])[0]))
             threading.Thread(target=say, args=args, daemon=True).start()
             return self.send_json({"ok": True})
+        if MOCK_LARK and (p.startswith("/api/v1/lark/") or p == "/mock/lark") and fs_get(self, p, q): return  # area: feishu chat page
         if not p.startswith("/mock/") and self.bad_network(): return
         if p == "/api/v1/ws":
             return self.websocket()
@@ -2497,6 +2828,7 @@ class H(BaseHTTPRequestHandler):
                 s.update(state="restarting" if body.get("now") else "waiting_idle")
             return self.send_json(s)
         if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
+        if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page
         if p.startswith("/api/v1/model-config/purposes/") and self.command == "PATCH":
             pid, body = unquote(p.rsplit("/", 1)[1]), json.loads(self.last_body or b"{}")
             with MODEL_CONFIG_LOCK:

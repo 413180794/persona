@@ -443,6 +443,7 @@ struct ToolCallRow: View {
 }
 
 struct ToolDetail: View {
+    @Environment(\.rowMemoScope) private var memoScope
     var call: ToolCall
     @Environment(\.openFile) private var openFile
 
@@ -478,7 +479,7 @@ struct ToolDetail: View {
             case "Task", "Agent":
                 Text(i["prompt"]?.string ?? "").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(8)
             default:
-                if i != .object([:]) { CodeBlock(text: ToolTextMemo.input(call.use), maxLines: 14) }
+                if i != .object([:]) { CodeBlock(text: ToolTextMemo.input(call.use, scope: memoScope), maxLines: 14) }
             }
             if let result = call.result, base != "Edit" || result.isError == true {
                 ResultBlock(text: result.cutText, isError: result.isError ?? false, cut: result.fullSize.map { (result.id, $0) })
@@ -543,20 +544,21 @@ nonisolated enum ToolTextMemo {
     private static let inputs = TextMemo<String>(limit: 512)
     private static let lines = TextMemo<[String]>(limit: 256)
 
-    static func input(_ item: Item) -> String {
-        inputs(item.id) { _ in (item.toolInput ?? .object([:])).pretty }
+    /// The call's input as shown, once per call — keyed by its chat and id, as `RowMemo` is (ids repeat across chats).
+    static func input(_ item: Item, scope: String) -> String {
+        inputs(RowMemo.key(scope, item.id)) { _ in (item.toolInput ?? .object([:])).pretty }
     }
 
     static func codeLines(_ text: String) -> [String] { lines(text) { $0.components(separatedBy: "\n") } }
 
-    static func prewarm(_ item: Item) {
+    static func prewarm(_ item: Item, scope: String) {
         if item.kind == .toolResult { _ = codeLines(item.cutText); return }
         let input = item.toolInput ?? .object([:])
         switch ToolPresentation.baseName(item.toolName ?? "") {
         case "Bash": _ = codeLines("$ " + (input["command"]?.string ?? ""))
         case "ExitPlanMode": _ = MarkdownMemo.content(input["plan"]?.string ?? "")
         case "Edit", "MultiEdit", "Write", "Read", "NotebookEdit", "AskUserQuestion", "Task", "Agent": break
-        default: _ = codeLines(self.input(item))
+        default: _ = codeLines(self.input(item, scope: scope))
         }
     }
 }

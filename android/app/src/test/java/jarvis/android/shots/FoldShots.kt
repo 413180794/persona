@@ -99,6 +99,9 @@ class FoldInnerShots : FoldShotsBase(INNER) {
     @Test fun inboxItem() = shell("fold-inbox-item", ShellPage.Assistant, routes = listOf("inbox"), hinges = fold,
         inbox = hub.inbox.value.first { it.agent?.draft != null }.id)
 
+    /** A Feishu item in the right pane: its chat as its page, no back button (the list is beside it). */
+    @Test fun inboxFeishu() = shell("fold-inbox-feishu", ShellPage.Assistant, routes = listOf("inbox"), hinges = fold, inbox = "lark:f2:200")
+
     /** 设置 as two panes: the menu, and the page it opened (no back button: the menu is beside it). */
     @Test fun settings() = shell("fold-settings", ShellPage.Assistant, hinges = fold, settings = listOf("machines"))
 
@@ -120,6 +123,9 @@ class FoldLandscapeShots : FoldShotsBase(INNER_LANDSCAPE) {
 
 class FoldCoverShots : FoldShotsBase(COVER) {
     @Test fun agents() = shell("fold-cover-agents", ShellPage.Agents)
+
+    /** A phone's width: the Feishu item's chat pushed over the inbox list. */
+    @Test fun inboxFeishu() = shell("fold-cover-inbox-feishu", ShellPage.Assistant, routes = listOf("inbox"), inbox = "lark:f2:200")
 }
 
 class FoldTallShots : FoldShotsBase(TALL_INNER) {

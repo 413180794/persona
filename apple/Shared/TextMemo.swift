@@ -22,3 +22,14 @@ nonisolated final class TextMemo<Value>: @unchecked Sendable {
         return v
     }
 }
+
+/// Keys for memos of a chat's items. An item id is only unique within its session — a runtime's are "<seq>#<block>",
+/// and two branches of one DSH session share theirs up to where they part — so a memo shared by every chat keys an
+/// item by its chat and its id (#372). Outside a chat (an empty scope) the id alone, as before.
+nonisolated enum MemoScope {
+    /// The scope of the chat of machine `machine`, session `session`.
+    static func of(machine: String, session: String) -> String { machine + "/" + session }
+
+    /// The memo key of item `id` in the chat of `scope`.
+    static func key(_ scope: String, _ id: String) -> String { scope.isEmpty ? id : scope + "\u{0}" + id }
+}

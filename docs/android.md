@@ -34,7 +34,7 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | Jarvis（助手） | 外壳的「助手」页。Jarvis 是 hub 配置的那台机器上无头运行的 Claude（`docs/assistant.md`）：打开时进主对话（没有就进最近一段，`AssistantModel`）；历史对话在侧边栏。新对话页（`ShellHome`，iOS 同名）只有输入框，上面是现在要你处理的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」，没有就什么都不显示；发出第一句就显示气泡和「Jarvis 正在准备…」；第一段对话自动成为主对话。打开时 `POST /api/v1/assistant/warm`，第一句不用等 claude 启动。对话里自己的气泡是中性灰（`ShellColors.userBubble`，各风格都一样），输入框是 ChatGPT 式的（`ShellComposer`）：一行「[+] 问 Jarvis [麦克风] [语音对话]」，聚焦或有字时长成卡片，下面一排 [+] … [权限和思考强度] [麦克风] [发送]；麦克风是听写，「语音对话」是 hub 的语音插件（有的话才显示）。回复逐字显示（WebSocket `delta`），没有终端按钮。助手自己的提问不进 Agents 的「需要你处理」，通知标题是「Jarvis 在问你」，点开进助手页 |
 | Jarvis 的资料页 | 侧边栏「认识 Jarvis」（「定时任务」直接进定时任务），和 iOS `AssistantProfileView` 对应：接下来（开着的定时任务的下次运行和跟进，最近三件）；定时任务（列表、开关、编辑名称 / 提示词 / 时间 / 星期、删除、立即运行、新建，「Jarvis 建的」有标记）；跟进（现在做、取消）；运行记录（按天分组、新的在上，点开对应的对话）；关于我（编辑后新对话起生效，右上角保存）；记忆（看、改、删，删除先确认；MEMORY.md 是单独一行「索引」，能改不能删）。每一页都是推进来的一页，编辑定时任务 / 记忆在底部浮层里（七天的星期选择 + 每天 / 工作日 / 周末），删除定时任务先确认 |
 | 知识库 | 侧边栏「知识库」（或再点一下「助手」的菜单），和 iOS `KnowledgeView` 对应（`docs/knowledge.md`，`ui/knowledge/`、`data/Knowledge.kt`）：一排类型（项目 / 会话 / 人 / 文档 / 会议 / 日程，选中的带数量）；项目分「重点（P0 / P1）/ 其他进行中 / 已完成 / 不是项目（默认收起）」，其余按 hub 的重要级和相关性排序；右上角按标签筛选（hub 给的常用标签）；搜索框常驻、全文搜（档案、时间线、聊天记录，300 ms 防抖），结果按条目合并、搜索词的每个词各自加粗，点开进条目。每行是类型图块（人和会话是首字，颜色跟重要级）、名字、时间、一句话，再一行 P 级 / 长短期 / 相关性和放得下的标签（放不下的整个不显示，不截半个）。条目页：重要级、短期 / 长期、状态、相关性、标签；在做这个项目的 Agent（点开进对话）、时间线（新的在上，6 条以后「显示全部」）、档案（Markdown，去掉和头部重复的行）、关联的会话 / 人 / 文档…（每类 4 个以后「全部」，点开推下一层）、代码目录、最近 7 天的消息、知识库目录。「问 Jarvis」把档案和最近 10 条时间线作为 `<jarvis-context>` 发进主对话（没有主对话就新开一段作为主对话）；「开 Agent」（项目）打开新开会话面板，第一条消息预填这段上下文，电脑和目录预选项目的第一个代码目录；「打标」改重要级、相关性、标签和项目的类型 / 状态（`PUT /api/v1/kb/{kind}/{id}`，手动打的 hub 不再自动覆盖） |
-| 收件箱 | 侧边栏「收件箱」推进来的一页（☰ 上的红点、侧边栏里的数都是需要你的件数），`docs/inbox.md` 的安卓版：搜索框常驻，飞书和邮件合成一个列表，hub 的 AI 分成需要你 / 知悉即可 / 已折叠，最后是已处理（没分拣的算需要你）。顶部筛选（全部 / 飞书 / 每个邮箱 / @我 / 私聊 / 群聊 / 邮件，只列有东西的），搜索标题、发件人、内容、摘要；左滑到底是已处理，已处理的可以移回；知悉即可「全部看过」、已折叠「全部清除」。AI 分身草拟好回复的那件，草稿直接画在行里（「AI 分身草拟的回复」小卡片，「修改」打开详情、「发送」确认后以本人身份发出）。点开一件：摘要、hub 给的原文（不打开飞书页面；邮件见下面「邮件」）、AI 分身的草稿和依据；「AI 草拟 / AI 改」（`/draft`）、「发送」先确认再以本人身份发（`/reply`）、「交给 AI」（同 iOS）：选要它做什么（自己写或三个预设）和交给谁（Jarvis 新开一段对话，或最近活跃的 8 个在线 Agent 之一，作为一条消息发进它的会话并打开那个对话），可选同时标为已处理，消息是 iOS 同样格式的 `<jarvis-context>` 加要求；「已处理」。列表在 WebSocket `inbox` 事件、重连、下拉刷新时重新拉 |
+| 收件箱 | 侧边栏「收件箱」推进来的一页（☰ 上的红点、侧边栏里的数都是需要你的件数），`docs/inbox.md` 的安卓版：搜索框常驻，飞书和邮件合成一个列表，hub 的 AI 分成需要你 / 知悉即可 / 已折叠，最后是已处理（没分拣的算需要你）。顶部筛选（全部 / 飞书 / 每个邮箱 / @我 / 私聊 / 群聊 / 邮件，只列有东西的），搜索标题、发件人、内容、摘要；左滑到底是已处理，已处理的可以移回；知悉即可「全部看过」、已折叠「全部清除」。AI 分身草拟好回复的那件，草稿直接画在行里（「AI 分身草拟的回复」小卡片，「修改」打开详情、「发送」确认后以本人身份发出）。点开一件：飞书会话和removed的那件推进来它自己的页面（下面「飞书」），其余是详情浮层：摘要、hub 给的原文（邮件见下面「邮件」）、AI 分身的草稿和依据；「AI 草拟 / AI 改」（`/draft`）、「发送」先确认再以本人身份发（`/reply`）、「交给 AI」（同 iOS）：选要它做什么（自己写或三个预设）和交给谁（Jarvis 新开一段对话，或最近活跃的 8 个在线 Agent 之一，作为一条消息发进它的会话并打开那个对话），可选同时标为已处理，消息是 iOS 同样格式的 `<jarvis-context>` 加要求；「已处理」。列表在 WebSocket `inbox` 事件、重连、下拉刷新时重新拉 |
 | 邮件 | 收件箱里的一封邮件点开就是这封信（iOS `MailDetailView`）：一个线程的每封信，较早的折成一行（谁、什么时候、第一行），最新一封展开：发件人、收件人、抄送、时间，HTML 在锁住的 WebView 里画（`MailWebView`：不跑脚本、不读文件、所有网络请求拦掉，「显示图片」后才放行图片，`MailHtml.sanitize` 再去掉 script / iframe / form / 事件属性 / `javascript:` 链接），没有 HTML 就是可选中的纯文本；附件只列名字和大小（hub 还不能下载）。打开就标已读，☆ 加星标（`/flags`）。「回复 / 回复全部 / 转发」打开写邮件（引用前 40 行，回复全部去掉自己、去重；转发带原信的头）；收件箱右上角也能写新邮件。写邮件是盖在一切之上的一页（一个全屏的窗口，也能盖住收件箱详情的浮层）：发件人（hub 的账户，多个时可选）、收件人 / 抄送 / 密送（逗号分隔，`名字 <地址>` 也行，格式不对标红、不能发）、主题、正文，有内容时返回要确认。信里的链接进 App 内的网页卡片，`mailto:` 打开写邮件。上面照旧是收件箱的摘要，下面照旧是「AI 草拟 / 发送（`/reply`）」「交给 AI」「已处理」 |
 | 连接器 | 设置 › 连接器（iOS `ConnectorsSection`）：「这台手机」（手机数据的开关，打开了几项）、「邮箱」（几个账户、有没有出错的）、「飞书」（hub 的 lark-connector：已连接时是登录的名字）。邮箱页：每个账户一行（Gmail 红、飞书蓝、其他 IMAP 主题色），出错的显示错误；⋯ 里「测试连接」「删除」（先确认）；「添加邮箱」：Gmail（使用 Google 账号登录）/ 飞书（邮箱 + 密码，服务器固定）/ 其他 IMAP（服务器可留空自动识别），hub 连上 IMAP 和 SMTP 才保存。「AI 一键添加」没有了（hub 删了 `/api/v1/ai/mail-account`），页面底下提示在 Jarvis 里说「帮我添加邮箱」。飞书页：连接状态、登录的名字、最近一条实时消息、出错原因，「Jarvis 用飞书做什么」和「/agent 模型」（跳到模型配置的 `lark.agent`） |
 | 附件 | 对话页输入框左边的「+」：照片（系统的照片选择器，一次最多 4 张，长边缩到 1600、JPEG 0.75，和 iOS 一样）；拍照（系统相机拍一张，写到 App 的 `cache/camera`（`ChatFileProvider`），读回来和选的照片一样处理，用完删掉；App 声明了 CAMERA（配对扫码用），所以第一次拍照要先给相机权限）；照片都作为 `images` 随消息发出，输入框上方是缩略图、可以移除；文件（系统的文件选择器，传到会话所在那台电脑的临时目录，`POST /api/v1/machines/{mid}/files`，超过 200 MB 不传，传完把路径插到输入框末尾、带空格或引号的用单引号包起来，**不自动发送**）。只有图片没有字时发「请看图片」 |
@@ -49,6 +49,7 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | 设备 | `GET /api/v1/auth/tokens`：每台设备的凭据（本机、手表「只能回答」），最近使用 / 撤销时间，已撤销的单独一组；撤销先确认，撤销的是这台手机自己就回到配对页 |
 | 通知 | 「需要你处理时」开关，「Agent 做完时」不推送 / 只推长任务 / 每次都推，系统里每类通知的设置入口。和 iOS 一样存在 hub 的 `devices/{id}/prefs`（只发 `input` / `done`，iPhone 的实时活动、灵动岛字段不动；id 是这台手机第一次用时生成的 `android-…`），每次连上 hub 时读回来，所以在别处改了也生效；改的时候 hub 连不上，下次连上先把这边的发上去。`Notifier` 按它决定弹不弹（见下面「通知」） |
 | 存储空间 | 这台手机上 Jarvis 占的空间按类分（对话、图片、网页、网络缓存……，没有的类不显示）、一条比例条，点一类单独清、或清除全部缓存；设置和配对信息不清 |
+| 飞书 | 收件箱里飞书会话的那件点开就是那个会话（iOS `InboxDetailView` + `LarkChatView`，照 lark-connector 渲染：富文本、@、链接、表情、图片、文件、语音、视频、贴纸、卡片（分栏、按钮、表格、图表、折叠面板）、合并转发、removed分享、表情回应、回复引用、话题、系统消息），顶上是那件的操作条（AI 的摘要、「AI 草拟回复 / 查看草稿」、「交给 AI」），标题栏「让 Jarvis 总结」和「已处理 / 移回」。没处理的从第一条新消息打开（`start_position`，取它周围的一页，「以下为新消息」在它上面；处理过的从最新打开），往下翻接着拉更新的一页、到顶拉更早的；「有人@你」跳到没看过的 @；「N 条新消息 · 回到最新」。只有真正上过屏的消息才上报已读（`/read`，停 0.4 秒合一次；只打开不报）。hub 的 `lark` 事件（lark-connector 实时事件）来了就刷新最新一页，开着时另有每分钟一次的兜底。长按消息：常用表情、表情回复（整个表情库）、拷贝、看资料；头像和名字打开资料卡（领导一行点进去再看他的）；卡片的回调按钮以本人身份按下。输入框以本人身份发到这个会话。最后一页存在 `cache/lark-chats`，再打开先画出来。removed的那件推进来是那个帖子和它的评论（`LarkMomentsPostView`），会话里分享的removed卡片点开是同样的浮层。宽窗口里这两种页面就是右栏。不做第二个飞书（`docs/feishu.md`）：没有会话列表、搜索、群资料这些页面，只有收件箱点进来的这一个会话 |
 | 链接 | 对话（Agents 和 Jarvis）、收件箱详情里的链接都在 App 内的卡片里打开，见下面「链接」 |
 
 ## 链接
@@ -69,7 +70,7 @@ CLAUDE.md「链接在 App 内打开」的安卓版（`ui/web/`，对应 iOS `Vie
   页面拿不到 hub 的 token（`loadUrl` 不带任何头，token 只在 OkHttp 的请求里）；不允许文件 / content 访问、不允许混合内容、不允许脚本开新窗口；
   证书只认系统 CA（`network_security.xml` 的 `trust-anchors`，用户装的 CA 不认）。
 
-还没做（iOS 有）：飞书的会话页（收件箱里的飞书消息仍只看 hub 给的原文）、邮件的翻译（设置 › 翻译）、手机数据里的提醒事项、
+还没做（iOS 有）：飞书云文档那件的详情（`InboxDocDetailView`，现在是详情浮层里 hub 给的文字）、会话和邮件的译文（设置 › 翻译）、手机数据里的提醒事项、
 终端的配色和字体、电脑尺寸下按手机宽度折行、往上翻 `/screen/before` 的历史，手表。协议都在，后续按 iOS 的做法补。
 
 hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub）时不再无限重连，直接回到配对页并说明原因；已配对时打开配对链接也会回到配对页重新配。
@@ -250,6 +251,8 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，助手页的输入框�
 | `ui/design/` | 设计系统：`Tokens`（JSpace / JRadius / JSize / JMotion）、`Type`（字号级别）、`Colors`（状态色、外壳 / diff / 类别色）、`Icons`（JIcons）、`Surfaces`、`Components`、`Controls`（分段、滑块、通话按钮、错误行…）、`Chrome`（页头、搜索框、浮层、输入框、触感）、`JarvisMark` |
 | `ui/shell/` | 外壳：`Shell`（两页、页面栈、设置浮层、路由；宽窗口的两栏 `Panes`）、`Fold`（折痕、分栏规则）、`TopBar`（☰ · 助手 \| Agents · 圆按钮）、`Drawer`（拖出侧边栏）、`Sidebar`、`AssistantModel`（助手的对话列表、当前对话、主对话、置顶）、`AssistantPane`（对话或新对话页 `ShellHome`） |
 | `ui/` | Compose 页面：`AgentsScreen`（含 `AgentsListOptions`）、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`StylePicker`、`Markdown`（段落、列表悬挂缩进、表格、代码块）；`Theme` 是界面风格的 token；`Rows.kt` 是对话的行模型（工具合并、按轮折叠、消息里的标签） |
+| `lark/`、`ui/lark/` | 飞书：线上类型和接口（`LarkModels`、`LarkApi`，`ApiClient` 的扩展）、纯逻辑（`LarkLogic`：位置比较、续行、日期线、已读上报、合并分页；`LarkText`：飞书色板、富文本 / 卡片 Markdown 的行内片段；`LarkCardModel`：卡片元素、分栏宽度；`LarkMarkdown`、`LarkSyntax`，`LarkLogicTest` 等覆盖）、最后一页的缓存（`LarkCache`）；页面（`LarkItemPage`：收件箱一件点开的页面，`LarkTarget` 决定开哪种；`LarkChatView` + `LarkChatModel`；`LarkMessageRow`、`LarkContent`、`LarkCard`、`LarkSummaryCards`、`LarkMoments`、`LarkSheets`：资料卡、表情回复、话题、合并转发、播放器）、图片和表情（`LarkMedia`，`cache/lark-media`）。飞书自己的颜色、尺寸、图标在 `ui/design/Lark.kt` |
+| `ui/InboxActions.kt` | 收件箱一件点开成页面时顶上的操作条（`InboxActionBar`）和回复浮层（`InboxDraftSheet`，草稿、重写、确认后以本人身份发） |
 | `data/Knowledge.kt`、`ui/knowledge/` | 知识库：线上类型、项目分组、搜索结果合并、时间线解析、「问 Jarvis / 开 Agent」带的上下文（`KnowledgeTest`）；列表页和条目页、打标 |
 | `fleet/`、`widget/`、`shortcuts/` | 常驻汇总通知和它的按钮、主屏幕小组件、快速设置磁贴、长按图标的快捷方式 |
 | `settings/` | 设置和机器的线上类型、REST（`SettingsApi.kt`，`ApiClient.raw` 上的扩展）、图表的数学（`ChartMath`：刻度、按字节的整数刻度、单调曲线）、通知设置（`SettingsPrefs`）、存储空间统计（`Storage.kt`） |
@@ -364,6 +367,8 @@ Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍�
 - hub 前面的转发断过以后，hub 那边可能还以为 node 在线，但每个调用都回 `rpc: connection closed`（/screen 也一样）。重启常驻 node
   （`launchctl kickstart -k gui/$UID/com.jarvis.node`）再让 hub 重连这台机器就好了，App 这边不用动。
 - 假 hub（`scripts/mock_hub.py`）的 WebSocket 连上时不推待处理的交互：进 App 后下拉刷新一次才拿到交互。
+- 飞书页面的截图（`LarkShots`）要 `MOCK_LARK=1` 的假 hub（会话里各种消息、表情库、图片）：图片在后台解码，第一帧拍不到。先用同一个名字拍一次让页面把要的图都发出去，等 `LarkMedia.settle()`（没有在下载的图），再拍真的；链接预览这种「拿回来的东西里还有图」的要来回两三次。默认的假 hub 里 f2、f3 是另一份数据（iOS 的截图、TranslationTests 和 f3 那段画全了的会话用），`MOCK_LARK=1` 时这几个会话换成这一份，两份互不影响。
+- 收件箱的详情是 `JSheet`（ModalBottomSheet，单独的窗口），链接卡片和看图盖不上去：会话这种要点链接、看图的页面推成页面画在列表上面，不放进浮层；浮层里的资料卡、话题、removed帖子点链接或图片时先关掉自己（`LarkActions.closing`）。
 - `adb shell am start` 启动一个和当前任务根 intent 一样的 intent 时只是把任务拉到前台（「Activity not started」），onNewIntent 不来；
   验证快捷方式要从启动器长按图标点，或者让 App 先停在别的页面。
 - WebView 用 application context 建出来时页面永远是浅色：application context 没有 App 的主题（`isLightTheme` 读成 true），WebView 只在外面的主题是深色时才给页面

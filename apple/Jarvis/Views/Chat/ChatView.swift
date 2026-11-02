@@ -135,6 +135,12 @@ struct ChatView: View {
     }
 
     var body: some View {
+        // Every row's memo below (RowMemo) is this chat's: item ids repeat across chats (#372). Outermost, so the
+        // sheets this page presents (a tool's detail) are inside it too.
+        chatPage.environment(\.rowMemoScope, RowMemo.scope(shownKey))
+    }
+
+    @ViewBuilder private var chatPage: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("ChatView")
         #endif
@@ -1247,7 +1253,8 @@ struct ChatView: View {
         }
         let items = store.items.filter { !scratch.prewarmedIDs.contains($0.id) }
         guard !items.isEmpty else { return }
-        let warm = Task.detached(priority: .utility) { RowMemo.prewarm(items) }
+        let scope = RowMemo.scope(shownKey)
+        let warm = Task.detached(priority: .utility) { RowMemo.prewarm(items, scope: scope) }
         await withTaskCancellationHandler {
             await warm.value
         } onCancel: {

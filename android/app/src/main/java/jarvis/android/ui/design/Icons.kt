@@ -6,6 +6,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.automirrored.rounded.ShortText
 import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Add
@@ -181,6 +182,10 @@ object JIcons {
     val send: ImageVector = Icons.Rounded.ArrowUpward
     val sendMail: ImageVector = Icons.AutoMirrored.Rounded.Send
     val reply: ImageVector = Icons.AutoMirrored.Rounded.Reply
+    /** Put a done thing back (an inbox item to 需要你). */
+    val undo: ImageVector = Icons.AutoMirrored.Rounded.Undo
+    /** AI 草拟回复 / 查看草稿. */
+    val draftReply: ImageVector = Icons.Rounded.EditNote
     val options: ImageVector = Icons.Rounded.Tune
     val filter: ImageVector = Icons.Rounded.FilterList
     val settings: ImageVector = Icons.Rounded.Settings
@@ -316,5 +321,4 @@ object JIcons {
     val starred: ImageVector = Icons.Rounded.Star
     val testConnection: ImageVector = Icons.Rounded.NetworkCheck
     val addFilled: ImageVector = Icons.Rounded.AddCircle
-    val undo: ImageVector = Icons.AutoMirrored.Rounded.Undo
 }

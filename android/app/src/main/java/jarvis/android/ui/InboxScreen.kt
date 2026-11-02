@@ -87,6 +87,8 @@ import jarvis.android.ui.design.RowDivider
 import jarvis.android.ui.design.SearchField
 import jarvis.android.ui.design.SectionHeader
 import jarvis.android.ui.design.surface
+import jarvis.android.ui.lark.LarkItemPage
+import jarvis.android.ui.lark.LarkTarget
 import kotlinx.coroutines.launch
 
 /**
@@ -117,6 +119,8 @@ fun InboxScreen(
     val opened = openedItem?.takeIf { it.id == openedId }
     var sending by remember { mutableStateOf<InboxItem?>(null) }
     var composing by remember { mutableStateOf<jarvis.android.mail.MailDraft?>(null) }
+    var handingOff by remember { mutableStateOf<InboxItem?>(null) }
+    var drafting by remember { mutableStateOf<InboxItem?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { hub.loadInbox() }
 
@@ -124,6 +128,9 @@ fun InboxScreen(
         JarvisApp.instance.scope.launch { runCatching { hub.setInboxDone(it, d) }.onFailure { e -> Toasts.show("没改成：${e.message}", ToastStyle.ERROR) } }
     }
 
+    // A Feishu chat or a removed post opens as a page over the list (iOS pushes InboxDetailView); its links open in the
+    // link sheet over it.
+    val page = if (detailInPane) null else opened?.let { item -> LarkTarget.of(item)?.let { item to it } }
     Column(Modifier.fillMaxSize().background(JTheme.colors.page)) {
         // 写邮件 (iOS: the ⋯ menu); mail accounts themselves are in 设置 › 连接器 › 邮箱.
         val mailAccounts by jarvis.android.mail.MailStore.accounts.collectAsState()
@@ -207,7 +214,9 @@ fun InboxScreen(
                                 },
                             ) {
                                 CardSlice(first, last, dividerStart = InboxTextColumn) {
-                                    InboxRow(item, onClick = { openId.value = item.id }, onEditDraft = { openId.value = item.id }, onSendDraft = { sending = item },
+                                    // 修改 opens the reply sheet on the draft (iOS); items without a page open their detail.
+                                    InboxRow(item, onClick = { openId.value = item.id }, onEditDraft = { if (LarkTarget.of(item) != null) drafting = item else openId.value = item.id },
+                                        onSendDraft = { sending = item },
                                         selected = detailInPane && item.id == openedId)
                                 }
                             }
@@ -217,10 +226,25 @@ fun InboxScreen(
             }
         }
     }
+    if (page != null) {
+        val (item, target) = page
+        androidx.activity.compose.BackHandler { openId.value = null }
+        androidx.compose.runtime.key(item.id) {
+            LarkItemPage(
+                hub, item, target, onBack = { openId.value = null },
+                onDone = { it, d -> done(it, d); if (d) openId.value = null },
+                onHandOff = { handingOff = item }, onAskJarvis = { jarvis.android.ui.web.Links.handToJarvis?.invoke(it) },
+            )
+        }
+    }
+    drafting?.let { item -> InboxDraftSheet(hub, item, onDismiss = { drafting = null }) }
+    handingOff?.let { item ->
+        HandOffFor(hub, item, onDismiss = { handingOff = null }) { h -> handingOff = null; if (h.markDone) done(item, true); openId.value = null; onHandOff(h) }
+    }
     // A link tapped in the detail opens the link sheet, which can't float over this modal sheet: the detail steps
     // aside while the page is open and comes back, with what was typed, when it closes.
     val details = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
-    if (!detailInPane) opened?.takeIf { jarvis.android.ui.web.Links.current.value == null }?.let { item ->
+    if (!detailInPane && page == null) opened?.takeIf { jarvis.android.ui.web.Links.current.value == null }?.let { item ->
         details.SaveableStateProvider(item.id) {
             InboxDetail(
                 hub, item, onDismiss = { openId.value = null },
@@ -252,6 +276,29 @@ fun InboxDetailPane(hub: Hub, id: String?, onClose: () -> Unit, onHandOff: (Hand
     var last by remember(id) { mutableStateOf<InboxItem?>(null) }
     items.firstOrNull { it.id == id }?.let { last = it }
     val item = last
+    // A Feishu chat or a removed post fills the pane as its page (its own header, no back: the list is beside it).
+    val target = item?.let(LarkTarget::of)
+    if (item != null && target != null) {
+        var handingOff by remember(item.id) { mutableStateOf(false) }
+        Box(Modifier.fillMaxSize().background(JTheme.colors.page), contentAlignment = Alignment.TopCenter) {
+            androidx.compose.runtime.CompositionLocalProvider(jarvis.android.ui.design.LocalPaneRoot provides true) {
+                androidx.compose.runtime.key(item.id) {
+                    LarkItemPage(
+                        hub, item, target, onBack = onClose,
+                        onDone = { it, d -> JarvisApp.instance.scope.launch { runCatching { hub.setInboxDone(it, d) } }; if (d) onClose() },
+                        onHandOff = { handingOff = true }, onAskJarvis = { jarvis.android.ui.web.Links.handToJarvis?.invoke(it) },
+                        modifier = Modifier.widthIn(max = JSize.readable),
+                    )
+                }
+            }
+        }
+        if (handingOff) HandOffFor(hub, item, onDismiss = { handingOff = false }) { h ->
+            handingOff = false
+            if (h.markDone) JarvisApp.instance.scope.launch { runCatching { hub.setInboxDone(item, true) } }
+            onClose(); onHandOff(h)
+        }
+        return
+    }
     Box(Modifier.fillMaxSize().background(JTheme.colors.page).statusBarsPadding().padding(top = JSize.shellBar), contentAlignment = Alignment.TopCenter) {
         if (item == null) {
             EmptyState(JIcons.inbox, "选一件事", "左边点一件事，详情和回复在这里。", Modifier.align(Alignment.Center))
@@ -374,7 +421,7 @@ private fun DraftCard(draft: String, onEdit: () -> Unit, onSend: () -> Unit) {
 
 /** Sending as the user always asks first: where it goes and what it says. */
 @Composable
-private fun ConfirmSend(item: InboxItem, text: String, onDismiss: () -> Unit, onSend: () -> Unit) {
+internal fun ConfirmSend(item: InboxItem, text: String, onDismiss: () -> Unit, onSend: () -> Unit) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("以你的身份发送？") },
@@ -468,6 +515,14 @@ private fun InboxDetailBody(hub: Hub, item: InboxItem, modifier: Modifier, onDis
             runCatching { hub.api.inboxReply(item.id, draft.trim()) }.onSuccess { hub.loadInbox(); onDismiss() }.onFailure { error = "没发出去：${it.message}"; busy = false }
         }
     }
+}
+
+/** 交给 AI for an item opened as a page: its whole text (GET /inbox/{id}) goes along once read. */
+@Composable
+private fun HandOffFor(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onSend: (HandOff) -> Unit) {
+    var full by remember(item.id) { mutableStateOf<InboxItem?>(null) }
+    LaunchedEffect(item.id) { runCatching { full = hub.api.inboxItem(item.id) } }
+    HandOffSheet(hub, full ?: item, onDismiss = onDismiss, onSend = onSend)
 }
 
 /** 交给 AI: the item as context (docs/protocol.md「消息里的标签」), plus what to do — iOS InboxHandOffSheet.message. */

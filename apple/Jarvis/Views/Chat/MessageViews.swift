@@ -109,6 +109,7 @@ struct ImageViewing: Identifiable {
 
 struct UserBubble: View, Equatable {
     @Environment(\.shellChat) private var shellChat
+    @Environment(\.rowMemoScope) private var memoScope
     var item: Item
     /// Only the message itself: the chat page re-evaluates its body on every hub push, and without this every row on
     /// screen (and in the lazy list's buffer) ran its body again too (about 45 a push on a long Jarvis conversation).
@@ -120,7 +121,7 @@ struct UserBubble: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("UserBubble")
         #endif
-        let d = RowMemo.user(item.id) { _ in UserRowText(item.text ?? "") } // once per message, keyed by its short id
+        let d = RowMemo.user(RowMemo.key(memoScope, item.id)) { _ in UserRowText(item.text ?? "") } // once per message
         let parsed = (refs: d.refs, rest: d.text)
         let shown = d.shown
         let images = d.images
@@ -424,7 +425,7 @@ struct AssistantText: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("AssistantText")
         #endif
-        let d = RowMemo.assistant(item.id) { _ in AssistantRowText(item.text ?? "") } // once per message
+        let d = RowMemo.assistant(RowMemo.key(memoScope, item.id)) { _ in AssistantRowText(item.text ?? "") } // once per message
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Markdown(d.markdown)
                 .task(id: item.id) { await Self.preloadLinks(item) }
@@ -930,24 +931,39 @@ nonisolated enum MarkdownMemo {
 }
 
 /// What a chat row derives from its message (parsed Markdown, paths, links, the shown text), computed once per
-/// message and keyed by the item's short id: rows redraw constantly, and hashing a long text on every redraw
-/// was itself measurable. Items never change their text under the same id.
+/// message and keyed by its session and its id (`key`): rows redraw constantly, and hashing a long text on every
+/// redraw was itself measurable. An item never changes its text under the same id — within its session. Ids are not
+/// unique across sessions: a runtime's are "<seq>#<block>" (DSH, pi), Codex lines without one are "line<seq>#<n>",
+/// and two branches of one DSH session share theirs up to where they part — keyed by the id alone, a branch showed
+/// the other branch's message in its place (#372).
 nonisolated enum RowMemo {
     static let assistant = TextMemo<AssistantRowText>(limit: 20_000) // a very long session's worth of messages
     static let user = TextMemo<UserRowText>(limit: 20_000)
 
-    /// Fills both memos off the main thread for messages just loaded, so a row scrolling into view only lays out.
-    static func prewarm(_ items: [Item]) {
+    /// The memo key of item `id` in the chat of `scope` (`scope(_:)`; "" outside a chat: the id alone).
+    static func key(_ scope: String, _ id: String) -> String { MemoScope.key(scope, id) }
+
+    /// A chat's scope: its machine and session.
+    static func scope(_ key: SessionKey) -> String { MemoScope.of(machine: key.machineID, session: key.sessionID) }
+
+    /// Fills both memos off the main thread for messages just loaded (of the chat of `scope`), so a row scrolling
+    /// into view only lays out.
+    static func prewarm(_ items: [Item], scope: String) {
         for it in items {
             if Task.isCancelled { return }
             if it.kind == .toolUse { ToolDiffMemo.prewarm(it) }
-            if it.kind == .toolUse || it.kind == .toolResult { ToolTextMemo.prewarm(it) }
+            if it.kind == .toolUse || it.kind == .toolResult { ToolTextMemo.prewarm(it, scope: scope) }
             guard it.kind == .text else { continue }
             guard let text = it.text, !text.isEmpty else { continue }
-            if it.role == "assistant" { _ = assistant(it.id) { _ in AssistantRowText(text) } }
-            if it.role == "user" { _ = user(it.id) { _ in UserRowText(text) } }
+            if it.role == "assistant" { _ = assistant(key(scope, it.id)) { _ in AssistantRowText(text) } }
+            if it.role == "user" { _ = user(key(scope, it.id)) { _ in UserRowText(text) } }
         }
     }
+}
+
+extension EnvironmentValues {
+    /// The chat the rows below belong to (`RowMemo.scope`): what their per-message memos are keyed by, with the id.
+    @Entry var rowMemoScope: String = ""
 }
 
 nonisolated struct AssistantRowText {
