@@ -38,6 +38,8 @@ type Status struct {
 	State string
 	// Account is the account it reads as, for display (a GitHub login, 「这台 Mac 上的信息」).
 	Account string
+	// Via says where the sign-in comes from (「来自 <机器> 的 gh 登录」).
+	Via string
 	// Error is one sentence for people when State is not ok (「<机器> 上的 gh 登录失效了…」); never a secret.
 	Error     string
 	LastSync  time.Time
@@ -86,6 +88,17 @@ const (
 	ScopeItems = "items"
 	ScopeInbox = "inbox"
 )
+
+// Runner is a connector with work of its own (checking its sign-in, polling): the hub runs it until ctx ends.
+type Runner interface {
+	Run(ctx context.Context)
+}
+
+// Machines is a connector that depends on one of the user's computers (a token read there, data on its disk): the
+// hub tells it when one connects.
+type Machines interface {
+	MachineOnline(id string)
+}
 
 // Hosts are the web hosts a connector's links live on (github.com, or an Enterprise host only the config knows):
 // the app uses them for the link card's icon and 「在 GitHub 打开」.

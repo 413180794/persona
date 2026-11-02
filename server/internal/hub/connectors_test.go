@@ -3,12 +3,14 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/chyroc/jarvis/server/internal/connector/github"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -128,5 +130,17 @@ func TestConnectorsEndpoint(t *testing.T) {
 	list := out["connectors"].([]any)
 	if len(list) != 1 || list[0].(map[string]any)["account"] != "alice" || list[0].(map[string]any)["status"] != "ok" {
 		t.Fatalf("%v", out)
+	}
+}
+
+func TestGhTokenFromAMachine(t *testing.T) {
+	h := newTestHub(t)
+	m := newMachine(h, MachineConfig{ID: "mac", Name: "Mac", Kind: "local"})
+	h.byID["mac"] = m
+	if _, err := h.ghToken("mac")(context.Background(), "github.com"); !errors.Is(err, github.ErrOffline) {
+		t.Fatalf("offline: %v", err)
+	}
+	if _, err := h.ghToken("nope")(context.Background(), "github.com"); !errors.Is(err, github.ErrNoMachine) {
+		t.Fatalf("unknown machine: %v", err)
 	}
 }

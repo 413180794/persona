@@ -485,6 +485,7 @@ hub → node 请求：
 | `interaction.resolve` | `{id, resolution}` |
 | `port.probe` | `{port}` → `{port, listening, http, title?}`：GET / 一次（Host 是 `localhost:端口`） |
 | `port.dial` | `{id, port}` → `{}`：连上本机这个端口（扫描时它绑的地址，否则 127.0.0.1 再 ::1，只连本机），开一条流 `id`；没在听时报错 `code: port_gone`。之后两边用下面的 `stream.*` 事件传字节 |
+| `credential.gh_token` | `{host}` → `{token}`：这台机器上非交互地跑 `gh auth token --hostname <host>`，给 GitHub 连接器（`github.auth.from_machine`）。只有 hub 能调（hook / MCP 的 `node.sock` 不认）；token 不写日志。没装 gh 报 `code: no_gh`，没登录（或登录在钥匙串里、经 ssh 读不到）报 `code: not_signed_in`；旧 node 报 unknown method |
 | `codex.answer` | `{session_id, id, resolution}`：回答 node 列出的 Codex 卡片（`docs/codex.md`「提问和审批」）；拒绝时是带 `code` 的错误，什么都没输入 |
 
 流（`internal/streams`，两个方向都有）：`stream.data {id, data}`（data 是 base64，一次最多 32 KB）、`stream.ack {id, n}`（写出去了 n 字节；
@@ -605,7 +606,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/v1/connectors` | `{"connectors":[{id, name, status, account?, error?, last_sync?, last_event?, capabilities:[…], hosts?:[…]}]}`：hub 上注册的连接器（不含飞书和邮箱，它们还走自己的接口）。`status` 是 `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error`；`error` 是给人看的一句话，不含密钥；`capabilities` 取 `status` / `tools` / `actions` / `events` / `hosts`；`hosts` 是这个连接器的链接所在的主机名（App 用来认链接） |
+| GET | `/api/v1/connectors` | `{"connectors":[{id, name, status, account?, via?, error?, last_sync?, last_event?, capabilities:[…], hosts?:[…]}]}`：hub 上注册的连接器（不含飞书和邮箱，它们还走自己的接口）。`status` 是 `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error`；`via` 说登录从哪来（「来自 <机器> 的 gh 登录」）；`error` 是给人看的一句话，不含密钥；`capabilities` 取 `status` / `tools` / `actions` / `events` / `hosts`；`hosts` 是这个连接器的链接所在的主机名（App 用来认链接） |
 
 ## 邮件 API
 

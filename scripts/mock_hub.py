@@ -1089,6 +1089,15 @@ INBOX.insert(next(i for i, x in enumerate(INBOX) if x["kind"] == "mail"), {"id":
      # Translated by the hub as it came in (设置 › 翻译 on this device).
      "translations": {"zh-Hans": {"subject": "设计评审能改期吗？", "preview": "你好，我周四要出差，赶不上设计评审了。能不能改到周二下午？"}}})
 # MOCK_INBOX=empty: nothing in the inbox (the shell's persona button without its inbox mark).
+# The hub's GitHub connector (GET /api/v1/connectors), signed in with the gh login of a machine, or not.
+GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "ok", "account": "alice", "via": "来自 MacBook 的 gh 登录",
+                    "last_sync": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "capabilities": ["status", "hosts"], "hosts": ["github.com"]}
+if os.environ.get("MOCK_GITHUB") == "signed_out":
+    GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "not_signed_in", "via": "来自 MacBook 的 gh 登录",
+                        "error": "MacBook 上的 gh 登录失效了：在那台机器上运行 gh auth login",
+                        "capabilities": ["status", "hosts"], "hosts": ["github.com"]}
+
 if os.environ.get("MOCK_INBOX") == "empty":
     INBOX.clear()
 MAIL_BODIES = {
@@ -2912,6 +2921,8 @@ class H(BaseHTTPRequestHandler):
                 "text": MAIL_BODIES.get(uid, it["preview"]), "seen": False}})
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
+        if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
+            return self.send_json({"connectors": [GITHUB_CONNECTOR]})
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
         lark_read = p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") or (
@@ -3618,7 +3629,7 @@ class H(BaseHTTPRequestHandler):
         LIVE.append((send, subscribed))
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8], "channel": "release",
               "build": 202611021500, "protocol": 1, "min_app_build": 0,
-              "features": ["file_upload"] + (["sessions_delta"] if delta else []) + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])})
+              "features": ["file_upload", "connectors"] + (["sessions_delta"] if delta else []) + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])})
         drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
         send({"type": "machines", "machines": MACHINES})
         by = {}

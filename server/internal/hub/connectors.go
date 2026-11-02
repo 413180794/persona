@@ -3,12 +3,15 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/chyroc/jarvis/server/internal/connector/github"
 	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
 // Connectors: each source of the user's information plugs in as a connector, and the hub's pipes pick up what it
@@ -57,4 +60,48 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/connectors", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"connectors": h.connectors.Infos(r.Context())})
 	})
+}
+
+// startConnectors registers the connectors hub.json sets up and runs them.
+func (h *Hub) startConnectors(ctx context.Context) {
+	if gh := h.cfg.GitHub; gh.Configured() {
+		name := gh.Auth.FromMachine
+		if m := h.byID[name]; m != nil {
+			name = m.cfg.Name
+		}
+		if err := h.addConnector(github.New(*gh, name, h.ghToken(gh.Auth.FromMachine))); err != nil {
+			h.logf("github connector: %v", err)
+		}
+	}
+	h.connectors.Start(ctx, h.connectorChanged, h.logf)
+}
+
+// ghToken reads the token of machine's gh login (credential.gh_token); it never goes to a log.
+func (h *Hub) ghToken(machine string) github.TokenSource {
+	return func(ctx context.Context, host string) (string, error) {
+		m := h.byID[machine]
+		if m == nil {
+			return "", github.ErrNoMachine
+		}
+		var out struct {
+			Token string `json:"token"`
+		}
+		err := m.call(ctx, "credential.gh_token", map[string]any{"host": host}, &out)
+		var re *rpc.Error
+		switch {
+		case errors.Is(err, errOffline):
+			return "", github.ErrOffline
+		case errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method"):
+			return "", github.ErrNodeTooOld
+		case errors.As(err, &re) && re.Code == proto.CodeNoGh:
+			return "", github.ErrNoGh
+		case errors.As(err, &re) && re.Code == proto.CodeNotSignedIn:
+			return "", github.ErrNotSignedIn
+		case err != nil:
+			return "", fmt.Errorf("%s: %s", m.cfg.Name, github.Scrub(err.Error()))
+		case out.Token == "":
+			return "", github.ErrNotSignedIn
+		}
+		return out.Token, nil
+	}
 }

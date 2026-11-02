@@ -207,6 +207,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
         else if d.bool(forKey: "openConnectorMail") || d.bool(forKey: "addMail") { p.append(SettingsPage.mail) }
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
+        else if d.bool(forKey: "openConnectorGitHub") { p.append(SettingsPage.connector("github")) }
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
         else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | icon | layout
@@ -258,6 +259,8 @@ struct SettingsView: View {
 enum SettingsPage: Hashable {
     case persona, themeColor, style, appIcon, layout, assistant, claude, codex, devices, phoneData, mail, feishu, notifications, storage, translation, modelConfiguration
     case hub, skills
+    /// A connector of the hub's by its id (GET /api/v1/connectors): GitHub…
+    case connector(String)
 
 }
 
@@ -297,6 +300,7 @@ private struct SettingsDestinations: ViewModifier {
         case .phoneData: PhoneDataView()
         case .mail: MailAccountsView(inSheet: false)
         case .feishu: FeishuConnectorView()
+        case .connector(let id): HubConnectorView(id: id)
         case .notifications: NotificationSettingsView()
         case .storage: StorageView()
         case .translation: TranslationSettingsView()

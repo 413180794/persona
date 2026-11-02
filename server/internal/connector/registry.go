@@ -161,6 +161,7 @@ type Info struct {
 	Name         string     `json:"name"`
 	Status       string     `json:"status"`
 	Account      string     `json:"account,omitempty"`
+	Via          string     `json:"via,omitempty"`
 	Error        string     `json:"error,omitempty"`
 	LastSync     *time.Time `json:"last_sync,omitempty"`
 	LastEvent    *time.Time `json:"last_event,omitempty"`
@@ -168,12 +169,21 @@ type Info struct {
 	Hosts        []string   `json:"hosts,omitempty"`
 }
 
+// MachineOnline tells every connector that depends on a computer that machine id just connected.
+func (r *Registry) MachineOnline(id string) {
+	for _, c := range r.All() {
+		if m, ok := c.(Machines); ok {
+			m.MachineOnline(id)
+		}
+	}
+}
+
 // Infos lists every connector with its status and what it can do.
 func (r *Registry) Infos(ctx context.Context) []Info {
 	out := []Info{}
 	for _, c := range r.All() {
 		st := StatusOf(ctx, c)
-		info := Info{ID: c.ID(), Name: c.Name(), Status: st.State, Account: st.Account, Error: st.Error,
+		info := Info{ID: c.ID(), Name: c.Name(), Status: st.State, Account: st.Account, Via: st.Via, Error: st.Error,
 			LastSync: when(st.LastSync), LastEvent: when(st.LastEvent), Capabilities: Capabilities(c)}
 		if h, ok := c.(Hosts); ok {
 			info.Hosts = h.Hosts()

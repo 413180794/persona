@@ -121,6 +121,9 @@
   不能把它算作成功，需检查导出内容并确认导入退出码为 0。重新导入后，原来无法创建的设备成功创建、启动并运行 App。
   验收按「创建独立设备 → boot / bootstatus → 安装 App → 启动 → 截图」走完；若需运行测试，再确认 Xcode 能启动测试宿主。
   Swift Testing 可能先打印 XCTest 的 `Executed 0 tests`，再实际运行 Swift 测试；以末尾 `Test run with N tests ... passed` 的数量为准，不把前一行当成空跑。
+- **`List` 里的 `LabeledContent` 在无障碍树里是一个元素**（2026-11-02）：标签和值合成一个 label（「登录, 来自 MacBook 的 gh 登录」），
+  `app.staticTexts["来自 MacBook 的 gh 登录"]` 找不到，测试报失败、截图上却明明有这行字。按值找要用
+  `descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", 值))`；同一页里单独的 `Text`（账号、状态）照常是 staticText。
 - 模拟器和 Mac 共用回环：App 在模拟器里监听 `127.0.0.1:<端口>` 时，Mac 上已有程序占着这个号就会冲突（端口转发会退到随机端口，正好测到这条路径）。
 - **测试里执行的脚本会在开发机上真的跑**（2026-11-01）：`TestDeployScriptInstallsTheBinary` 执行 hub 的部署脚本，脚本最后一句
   `pkill -f '[j]arvisd node --attach'` 把跑测试的那台机器上真在服务的常驻 node 杀了：装了常驻 node 的 Mac 上每跑一次 hub 测试就掉线一次

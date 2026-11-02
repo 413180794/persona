@@ -107,6 +107,12 @@ const (
 	CodeNodeOutdated = "node_outdated"
 )
 
+// Codes of a failed credential.gh_token (hub → node, node/credential.go).
+const (
+	CodeNoGh        = "no_gh"
+	CodeNotSignedIn = "not_signed_in"
+)
+
 // UploadedFile is where an upload landed on the machine.
 type UploadedFile struct {
 	Path string `json:"path"` // absolute

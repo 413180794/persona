@@ -182,7 +182,7 @@ func TestWatchRestartsAfterAFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	kicks := make(chan string, 10)
-	r.Watch(ctx, func(id, scope string) { kicks <- id + " " + scope }, func(string, ...any) {})
+	r.Start(ctx, func(id, scope string) { kicks <- id + " " + scope }, func(string, ...any) {})
 	for i := 0; i < 3; i++ {
 		select {
 		case k := <-kicks:

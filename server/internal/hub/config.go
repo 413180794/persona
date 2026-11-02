@@ -15,6 +15,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/chyroc/jarvis/server/internal/connector/github"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -78,6 +79,8 @@ type Config struct {
 	// allows each write on the phone (internal/connector/gate.go; e.g. {"connector":"github","action":"github_comment",
 	// "match":{"repo":"example-org/*"},"decision":"allow"}).
 	ConnectorGate []connector.Rule `json:"connector_gate,omitempty"`
+	// GitHub is the GitHub connector: whose gh login it reads (connector/github, docs/plan-connectors.md).
+	GitHub *github.Config `json:"github,omitempty"`
 	// Google is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
 	Google   GoogleConfig    `json:"google"`
 	Machines []MachineConfig `json:"machines"`

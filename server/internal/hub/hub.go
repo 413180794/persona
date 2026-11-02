@@ -260,7 +260,7 @@ func Run(ctx context.Context, b update.Build) error {
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
-	h.connectors.Watch(ctx, h.connectorChanged, h.logf)
+	h.startConnectors(ctx)
 	h.upd.start(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
 	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)

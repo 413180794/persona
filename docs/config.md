@@ -189,6 +189,10 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
   （`connector`、`action` 可用 `*` 通配；`match` 按工具参数的顶层字段匹配，字符串也可以通配；`decision` 是 `allow` / `confirm` / `deny`，
   写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。
+- `github`（可选）：GitHub 连接器。`{"auth": {"from_machine": "<机器 id>"}}`：用那台机器上 `gh` 的登录（hub 经 node 跑 `gh auth token`，
+  token 只在 hub 内存里，不落库、不写日志、不给 App 和助手）。那台机器要保持 `gh` 登录，而且登录存在 `~/.config/gh/hosts.yml`
+  （钥匙串里的经 ssh 读不到：`gh auth login --insecure-storage`）。`auth.host` 默认 `github.com`，GitHub Enterprise 的主机名写这里（还没做）。
+  状态看 设置 › 连接器 › GitHub。
 - `assistant.owner`：「对话」tab 的助手称呼你什么；`assistant.notes`：附在助手说明（`~/.jarvis/assistant/CLAUDE.md`）最后的
   Markdown，写只有你这套环境才有的东西：代码在哪、用哪些 skills / CLI 访问工作数据、哪些目录不能碰。
 - 模型设置的日常入口是 **设置 › 模型供应商 / 模型配置**（`docs/model-config.md`）：前者管理连接和凭据，后者管理对话、分类、翻译、知识处理、`/agent`、定时任务等用途。旧 `ai`、`inbox.*_ai`、`kb.ai`、各启动器默认作为兼容基线保留；统一用途覆盖存 Postgres，不写回 `hub.json`。没有覆盖时保持原模型，不会因为打开设置而迁移成其他供应商。

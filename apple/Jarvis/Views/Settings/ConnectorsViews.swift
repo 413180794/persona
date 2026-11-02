@@ -31,6 +31,30 @@ enum ConnectorText {
         if !st.configured { return "未配置" }
         return st.connected ? (st.name ?? "已连接") : "连不上"
     }
+
+    /// A hub connector's state in a word or two (its row, its page).
+    static func state(_ c: HubConnector) -> String {
+        switch c.status {
+        case "ok": "已连接"
+        case "not_configured": "未配置"
+        case "not_signed_in": "未登录"
+        case "no_permission": "没有权限"
+        case "rate_limited": "请求太多，暂停中"
+        default: "出错了"
+        }
+    }
+
+    static func summary(_ c: HubConnector) -> String {
+        c.status == "ok" ? (c.account ?? state(c)) : state(c)
+    }
+
+    /// The connector's own mark (`Theme.Brand`), nil for one the app has none for.
+    static func brand(_ id: String) -> String? {
+        switch id {
+        case "github": Theme.Brand.github
+        default: nil
+        }
+    }
 }
 
 /// GET /api/v1/lark/status.
@@ -47,8 +71,35 @@ nonisolated struct LarkStatus: Codable, Hashable, Sendable {
     }
 }
 
+/// One of GET /api/v1/connectors: a source the hub reads (GitHub…) and how it is doing (docs/protocol.md「连接器 API」).
+/// Feishu and mail are not in it yet: they keep their own rows.
+nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
+    var id: String
+    var name: String
+    var status: String
+    var account: String?
+    var via: String?
+    var error: String?
+    var lastSync: Date?
+    var lastEvent: Date?
+    var capabilities: [String]?
+    var hosts: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, status, account, via, error, capabilities, hosts
+        case lastSync = "last_sync"
+        case lastEvent = "last_event"
+    }
+}
+
 extension APIClient {
     func larkStatus() async throws -> LarkStatus { try await get("/api/v1/lark/status") }
+
+    func connectors() async throws -> [HubConnector] {
+        struct List: Decodable { var connectors: [HubConnector] }
+        let list: List = try await get("/api/v1/connectors")
+        return list.connectors
+    }
 }
 
 /// The 连接器 section of 设置: one row per connector with what it has now.
@@ -56,6 +107,7 @@ struct ConnectorsSection: View {
     @Environment(AppModel.self) private var model
     @State private var accounts: [MailAccount]?
     @State private var lark: LarkStatus?
+    @State private var hubConnectors: [HubConnector] = []
 
     var body: some View {
         Section {
@@ -96,6 +148,28 @@ struct ConnectorsSection: View {
                         }
                     }
                 }
+                ForEach(hubConnectors) { c in
+                    NavigationLink(value: SettingsPage.connector(c.id)) {
+                        if AppStyle.current.usesBeautifulUI {
+                            SettingsRow(title: c.name, symbol: Theme.Icon.connectors, tint: Theme.accent, value: ConnectorText.summary(c),
+                                        brand: ConnectorText.brand(c.id))
+                        } else {
+                            LabeledContent {
+                                Text(ConnectorText.summary(c)).lineLimit(1)
+                            } label: {
+                                Label {
+                                    Text(c.name)
+                                } icon: {
+                                    if let brand = ConnectorText.brand(c.id) {
+                                        Image(brand).resizable().scaledToFit()
+                                    } else {
+                                        Image(systemName: Theme.Icon.connectors)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             .bareListRow()
         } header: {
@@ -110,9 +184,12 @@ struct ConnectorsSection: View {
         guard let api = model.api else { return }
         async let a = try? api.mailAccounts()
         async let l = try? api.larkStatus()
-        let (accs, st) = await (a, l)
+        // An older hub has no connectors (feature "connectors"): its list stays as it was.
+        async let c = model.hubFeatures.contains("connectors") ? try? api.connectors() : nil
+        let (accs, st, list) = await (a, l, c)
         if let accs { accounts = accs }
         if let st { lark = st }
+        if let list { hubConnectors = list }
     }
 }
 
@@ -202,6 +279,92 @@ struct FeishuConnectorView: View {
             failure = nil
         } catch {
             failure = error.shown.map { "读不到飞书的状态：\($0)" }
+        }
+    }
+}
+
+/// 设置 › 连接器 › GitHub (any connector of the hub's, GET /api/v1/connectors): whether it is signed in, as whom, where
+/// the sign-in comes from, what is wrong. The sign-in itself is set up on the hub's side (docs/config.md), not here.
+struct HubConnectorView: View {
+    var id: String
+    @Environment(AppModel.self) private var model
+    @State private var connector: HubConnector?
+    @State private var loading = true
+    @State private var failure: String?
+
+    var body: some View {
+        List {
+            Section {
+                HStack(spacing: Theme.Space.m) {
+                    mark.scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        Text(connector?.account ?? title).font(Theme.Font.heading).lineLimit(1)
+                        HStack(spacing: Theme.Space.sm) {
+                            Circle().fill(tint).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
+                            Text(stateText).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
+                    Spacer(minLength: Theme.Space.s)
+                    if loading { ProgressView() }
+                }
+                .padding(.vertical, Theme.Space.xs)
+                if let via = connector?.via, !via.isEmpty {
+                    LabeledContent("登录") { Text(via).lineLimit(2).multilineTextAlignment(.trailing) }
+                }
+                if let at = connector?.lastSync {
+                    LabeledContent("最近一次同步") {
+                        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                            Text(Fmt.relative(at, now: ctx.date)).lineLimit(1)
+                        }
+                    }
+                }
+                if let e = connector?.error ?? failure, !e.isEmpty {
+                    Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled)
+                }
+            } footer: {
+                Text("登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。")
+            }
+        }
+        .themedPage()
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private var title: String { connector?.name ?? (id == "github" ? "GitHub" : id) }
+
+    @ViewBuilder private var mark: some View {
+        if let brand = ConnectorText.brand(id) {
+            Image(brand).resizable().scaledToFit()
+        } else {
+            Image(systemName: Theme.Icon.connectors).resizable().scaledToFit().foregroundStyle(Theme.accent)
+        }
+    }
+
+    private var tint: Color {
+        switch connector?.status {
+        case nil: .secondary
+        case "ok": Theme.positive
+        case "not_configured": .secondary
+        case "rate_limited": Theme.caution
+        default: Theme.danger
+        }
+    }
+
+    private var stateText: String {
+        guard let connector else { return loading ? "正在检查…" : "读不到状态" }
+        return ConnectorText.state(connector)
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            connector = try await model.api?.connectors().first { $0.id == id }
+            failure = connector == nil ? "hub 上没有这个连接器" : nil
+        } catch {
+            failure = error.shown.map { "读不到连接器的状态：\($0)" }
         }
     }
 }

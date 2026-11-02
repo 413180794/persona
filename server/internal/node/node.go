@@ -364,6 +364,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{}, nil
 	case "node.info":
 		return n.info(ctx), nil
+	case "credential.gh_token": // the GitHub connector's token from this machine's gh login (credential.go)
+		var c struct {
+			Host string `json:"host"`
+		}
+		_ = json.Unmarshal(params, &c)
+		return ghToken(ctx, c.Host)
 	case "engine.use": // the engine the user chose for this machine (engine.go)
 		var e struct {
 			Engine string `json:"engine"`

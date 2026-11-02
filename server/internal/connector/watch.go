@@ -13,11 +13,14 @@ var (
 	watchHealthy      = time.Minute
 )
 
-// Watch runs the Events of every connector registered so far until ctx ends, calling changed with the connector's
-// id and the scope; a Watch that returns is started again after a backoff (logged without the error's details
-// beyond what the connector put in it — connectors keep secrets out of their errors).
-func (r *Registry) Watch(ctx context.Context, changed func(id, scope string), logf func(string, ...any)) {
+// Start runs every connector registered so far until ctx ends: its Run, and its Watch, calling changed with the
+// connector's id and the scope; a Watch that returns is started again after a backoff (its error is logged as the
+// connector wrote it — connectors keep secrets out of their errors).
+func (r *Registry) Start(ctx context.Context, changed func(id, scope string), logf func(string, ...any)) {
 	for _, c := range r.All() {
+		if run, ok := c.(Runner); ok {
+			go run.Run(ctx)
+		}
 		if e, ok := c.(Events); ok {
 			go watchOne(ctx, c.ID(), e, changed, logf)
 		}

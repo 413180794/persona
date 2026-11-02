@@ -1,7 +1,7 @@
 import XCTest
 
-/// 设置 › 连接器: this device's data, the mail accounts (moved here from the inbox's ⋯ menu) and 飞书 open from the
-/// settings list. Against scripts/mock_hub.py (JARVIS_MOCK_HUB).
+/// 设置 › 连接器: this device's data, the mail accounts (moved here from the inbox's ⋯ menu), 飞书 and the hub's own
+/// connectors (GitHub) open from the settings list. Against scripts/mock_hub.py (JARVIS_MOCK_HUB).
 final class ConnectorsTests: XCTestCase {
     @MainActor func testEachConnectorOpens() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
@@ -33,6 +33,17 @@ final class ConnectorsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["已连接"].waitForExistence(timeout: 10), "飞书 page shows no connection:\n\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["/agent"].exists)
         shot("feishu")
+        back()
+
+        // A connector of the hub's (GET /api/v1/connectors): GitHub, signed in with a machine's gh login.
+        let github = row("GitHub")
+        shot("list-github")
+        github.tap()
+        XCTAssertTrue(app.staticTexts["alice"].waitForExistence(timeout: 10), "GitHub page shows no account:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["已连接"].exists)
+        // A LabeledContent row reads as one element, 登录 and its value together.
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "来自 MacBook 的 gh 登录")).firstMatch.exists)
+        shot("github")
         back()
 
         row("邮箱").tap()
