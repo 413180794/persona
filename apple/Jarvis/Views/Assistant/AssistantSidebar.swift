@@ -26,7 +26,7 @@ import UIKit
     @ObservationIgnored weak var tabBar: UITabBar? {
         didSet { applyToUIKit() }
     }
-    /// The sidebar's own hosting view (`DrawerSidebarHost`): moved and faded here, hidden while closed.
+    /// The sidebar's own hosting view (`DrawerSidebarHost`): lifted vertically here, hidden while closed.
     @ObservationIgnored weak var sidebarView: UIView? {
         didSet { applyToUIKit() }
     }
@@ -37,8 +37,8 @@ import UIKit
 
     var isOpen: Bool { isOut }
 
-    /// The UIKit side of the progress: the tab bar's fade, the sidebar's slide and fade. Inside `settle` these
-    /// animate with UIKit, on the same spring as the page.
+    /// The UIKit side of the progress: the tab bar fades and the stationary sidebar lifts slightly. Inside `settle`
+    /// they animate with UIKit, on the same spring as the page.
     func applyToUIKit() {
         if let tabBar {
             // The bar's own container, when it holds only the bar: the tab bar controller sets the bar's alpha back to
@@ -50,10 +50,9 @@ import UIKit
             tabBar.accessibilityElementsHidden = progress > 0
         }
         if let sidebarView {
-            // Joined to the page's left edge, opaque, like ChatGPT (2026-11-01 user request): the page and the
-            // sidebar are one strip under the finger. It used to come out at 30% of the page's speed while fading
-            // in from 40%, so the sidebar trailed the finger and a gap opened between it and the card.
-            sidebarView.transform = CGAffineTransform(translationX: -(1 - progress) * width, y: 0)
+            // The page is the upper sheet: sliding it away uncovers a sidebar that is already underneath.
+            // Keep every horizontal position and the text size fixed; only a subtle vertical lift adds depth.
+            sidebarView.transform = CGAffineTransform(translationX: 0, y: (1 - progress) * Theme.Motion.drawerLift)
             let hidden = progress == 0 && !settling
             sidebarView.alpha = hidden ? 0 : 1
             sidebarView.isHidden = hidden
@@ -127,8 +126,8 @@ import UIKit
     }
 }
 
-/// The sidebar beside the page, ChatGPT-style: it comes out from the left and pushes the page to the right, where
-/// the page stays as a rounded card at the edge (a tap on it, or a drag back, closes). Dragging to the right
+/// The sidebar under the page: the foreground page slides to the right, uncovering the stationary sidebar with a slight
+/// vertical lift. The page stays as a rounded card at the edge (a tap on it, or a drag back, closes). Dragging to the right
 /// anywhere on the page opens it (`DrawerPan`).
 ///
 /// The sidebar stays built while closed (hidden): building it on the first frame of a drag was most of that frame.

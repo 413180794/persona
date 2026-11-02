@@ -1160,7 +1160,8 @@ LARK_MESSAGES = {"f2": [
 # The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
 # one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
 # thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
-# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 like a hub whose lark-connector lost its Feishu session.
+# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose lark-connector
+# lost its Feishu session.
 LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
 LARK_EMOJIS = {k: {"label": label, "url": "/api/v1/lark/media/emoji-" + k}
                for k, label in (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"))}
@@ -3047,7 +3048,7 @@ class H(BaseHTTPRequestHandler):
         lark_read = p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") or (
             p.startswith(("/api/v1/lark/conversations/", "/api/v1/lark/messages/")) and p.endswith(("/messages", "/thread")))
         if lark_read and os.environ.get("MOCK_LARK_LOGGED_OUT"):
-            return self.send_json({"error": LARK_LOGGED_OUT}, 502)
+            return self.send_json({"error": LARK_LOGGED_OUT, "code": "lark_not_logged_in"}, 502)
         if p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned"):
             return self.send_json({"conversations": LARK_CHATS if p.endswith("conversations") else [], "next_cursor": ""})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):

@@ -337,6 +337,8 @@ nonisolated enum Theme {
         static func drawer(velocity: Double = 0) -> Animation {
             .interpolatingSpring(duration: 0.32, bounce: 0, initialVelocity: velocity)
         }
+        /// The stationary sidebar rises only this far as the page slides off it; no horizontal parallax or zoom.
+        static let drawerLift = Theme.Space.s
     }
 
     /// Categories with no meaning beyond telling them apart (memory types).

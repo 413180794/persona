@@ -84,6 +84,9 @@
 
 ## 导航
 
+- 侧边栏的「主页面盖在上面」和「两页相邻一起滑」是不同的空间关系（2026-11-02，#341）：底层侧栏横向应完全固定，只有很轻的纵向上浮；居中缩放会连文字的横向位置一起改变，强淡入又像侧栏刚被创建，不用它们代替上浮。动画验收看拖动的中间帧，完全打开的截图两种做法一样；单测同时守住 x 位移为 0、缩放为 1、透明度为 1。保留侧栏独立 hosting controller，进度只改 transform，不让每帧重新布局列表。
+  抽帧拼图也要检查产物：`ffmpeg` 的 `-t` 与 `tile` 组合可能退出 0 却没写出 PNG；用 `-ss` 定位、`-frames:v 1` 限制拼图数量，并确认文件存在、真的读到图，不能把命令成功当成截图验收。
+
 - NavigationStack 根视图上的 `.task` / `onAppear` 在 push 子页面再返回时会重新跑：别在里面无条件写回保存的默认值，否则会覆盖刚在子页面选的值（新对话选了启动器又被改回上次的）。
 - SwiftUI：给 NavigationStack 推出页面用的环境值（如 `feishuOpen`）要挂在 NavigationStack 本身上，挂在栈根内容上推出的页面拿不到。
 - 隐藏系统导航栏（`.toolbarVisibility(.hidden, for: .navigationBar)`）会顺带关掉边缘右滑返回，要自己把 `interactivePopGestureRecognizer` 打开。

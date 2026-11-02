@@ -107,7 +107,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   对话页的工作过程显示「工具 5」。等日志用带超时的脚本，别写只等成功的 `until grep`。
 - 飞书会话页：`-tab mail -openInboxItem lark:f3:300`（收件箱的「周末徒步群」）打开一个画全了的会话：三天的消息（日期分隔）、第一条未读前不止一页（往上翻、`has_older`）、
   图片、引用回复、表情回复、机器人、一个 75 条回复的话题（话题浮层翻页）；从第 300 条起 12 条未读，已读到 299（`read_position`）。
-  `MOCK_LARK_LOGGED_OUT=1` 启动 mock 时会话列表、会话和话题都回 502「lark-connector 未登录飞书」，看错误态。数据全是编的，在 `mock_hub.py` 的 `_lark_f3`。
+  `MOCK_LARK_LOGGED_OUT=1` 启动 mock 时会话列表、会话和话题都回 502「lark-connector 未登录飞书」（带 `code: lark_not_logged_in`，和 hub 一样），看错误态。数据全是编的，在 `mock_hub.py` 的 `_lark_f3`。
   已读回执（`POST …/read-states`）：f3 里我的消息 282 全部已读、296 部分已读、306 都未读；私聊 f1「韩梅梅」（`-openInboxItem lark:f1:100`）里我的消息有已读、未读（103）和没有回执（104）三种，mock 运行中新发的消息算都未读。
   @人：f2、f3 有成员（`GET …/members`，Tom 和 Mia 有头像，阿杰的群昵称是「杰哥」）；带 `mentions` 发送或回复时，mock 把文字里的 `@name` 存成 `at` 片段。
 

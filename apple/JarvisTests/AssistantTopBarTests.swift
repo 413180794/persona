@@ -31,6 +31,47 @@ struct AssistantTopBarTests {
         #expect(!AssistantDrawer.settlesOpen(progress: 0.25, velocity: 212, width: 360)) // half way, let go slowly: back
     }
 
+    /// The sidebar waits underneath the page: only a small vertical lift, never a horizontal slide, zoom or fade.
+    @Test @MainActor func sidebarStaysInPlaceWhileThePageSlidesOff() {
+        let drawer = AssistantDrawer()
+        let sidebar = UIView(frame: CGRect(x: 0, y: 0, width: 300, height: 800))
+        drawer.sidebarView = sidebar
+        for width in [CGFloat(250), 300, 380] {
+            drawer.width = width
+            for progress in [CGFloat(0.01), 0.25, 0.5, 0.75, 1] {
+                drawer.progress = progress
+                #expect(sidebar.transform.tx == 0)
+                #expect(sidebar.transform.ty == (1 - progress) * Theme.Motion.drawerLift)
+                #expect(sidebar.transform.a == 1 && sidebar.transform.d == 1)
+                #expect(sidebar.transform.b == 0 && sidebar.transform.c == 0)
+                #expect(sidebar.alpha == 1)
+                #expect(!sidebar.isHidden && !sidebar.accessibilityElementsHidden)
+            }
+        }
+        #expect(sidebar.transform == .identity)
+    }
+
+    /// Dragging back retraces the same lift and completely removes the closed sidebar from VoiceOver.
+    @Test @MainActor func closingSidebarRetracesItsLiftAndHidesIt() {
+        let drawer = AssistantDrawer()
+        let sidebar = UIView()
+        drawer.sidebarView = sidebar
+        drawer.progress = 1
+        drawer.dragBegan()
+        drawer.drag(-drawer.width / 2)
+        #expect(drawer.progress == 0.5)
+        #expect(sidebar.transform.tx == 0)
+        #expect(sidebar.transform.ty == Theme.Motion.drawerLift / 2)
+        #expect(sidebar.alpha == 1 && !sidebar.isHidden)
+        drawer.drag(-drawer.width)
+        #expect(drawer.progress == 0 && !drawer.isOut)
+        #expect(sidebar.isHidden && sidebar.accessibilityElementsHidden)
+        drawer.dragBegan()
+        drawer.drag(drawer.width / 2)
+        #expect(sidebar.transform.ty == Theme.Motion.drawerLift / 2)
+        #expect(!sidebar.isHidden && !sidebar.accessibilityElementsHidden)
+    }
+
     /// The drawer takes a touch within 45° of horizontal — a thumb's slant — and while closed only to the right.
     @Test func dragDirection() {
         #expect(AssistantDrawer.takes(dx: 11, dy: 6, isOpen: false)) // 30°: the drag that did nothing before

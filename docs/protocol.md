@@ -676,6 +676,8 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 
 hub 经 hub 机器上 lark-connector 的 agent 接口（`/agent/v1`，token 从容器环境变量读）代理飞书数据，见 `server/internal/lark`。
 
+lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 自己丢了飞书登录（`AUTH_*`，`lark.ErrNotLoggedIn`）的，回 `{"error","code":"lark_not_logged_in"}`，App 据此提示去 lark-connector 重新登录飞书。`/raw/…` 例外，原样转发 lark-connector 自己的回答。
+
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured = hub.json 有 lark；connected 每次现问 lark-connector 的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
