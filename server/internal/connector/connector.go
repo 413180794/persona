@@ -79,6 +79,14 @@ type Actions interface {
 	Do(ctx context.Context, name string, args json.RawMessage) (string, error)
 }
 
+// Options is a connector with settings of its own the user changes in the app (GitHub's: which CI failures, muted
+// repositories): JSON both ways, shown in GET /api/v1/connectors, set with PUT …/{id}/settings {"options": …}.
+// SetOptions refuses what it cannot use; the hub keeps what it accepted and gives it back at the next start.
+type Options interface {
+	Options() json.RawMessage
+	SetOptions(json.RawMessage) error
+}
+
 // AgentTools is a connector whose tools also go to the coding agents (mail), not only to the assistant.
 type AgentTools interface {
 	ForAgents() bool

@@ -34,9 +34,12 @@ type InboxThing struct {
 	// CanReply: Reply works for this thread.
 	ReplyTo  string
 	CanReply bool
-	// Tier is what triage falls back to without a model ("action" for a review request); "" is noise.
+	// Tier is the tier the connector's rules decide (action, fyi, noise): the item gets it without a model. "" leaves it
+	// to the model (a human's ordinary comment). Why says which rule, for people (「规则：真人 @ 你」).
 	Tier string
-	// Done ends the open item (DoneRead, DoneReplied): the thread is over.
+	Why  string
+	// Done ends the open item (DoneRead, DoneReplied): the thread is over; Why says how when it is not obvious
+	// (「GitHub：后来成功了」).
 	Done string
 	// Read: seen somewhere else (the notification read on GitHub); an item that does not need the user is done.
 	Read bool
@@ -62,4 +65,11 @@ type InboxReply struct {
 // the hub uses it instead of Inbox.Reply when a connector has it.
 type InboxReplier interface {
 	ReplyItem(ctx context.Context, r InboxReply) error
+}
+
+// InboxSettler is an inbox whose rules can close items the hub still has open (made under older rules, or of a
+// thread the connector no longer brings in): Settle gets the open items' threads and returns, for each that is
+// over, why. Nothing is deleted: the hub files them as done (read).
+type InboxSettler interface {
+	Settle(ctx context.Context, threads []string) map[string]string
 }

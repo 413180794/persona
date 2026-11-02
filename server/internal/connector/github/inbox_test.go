@@ -108,37 +108,30 @@ func TestNotificationsBecomeThings(t *testing.T) {
 	f.notifications = "[" + strings.Join([]string{
 		note("1", "review_requested", "PullRequest", "https://api.github.com"+api12, t1),
 		note("2", "assign", "Issue", "https://api.github.com"+api7, t1),
-		note("3", "ci_activity", "CheckSuite", "", t1),
 		note("4", "subscribed", "Issue", "https://api.github.com/repos/example-org/example-repo/issues/8", t1),
-		note("5", "ci_activity", "CheckSuite", "", t1), // a run that passed
-	}, ",") + "]"
+	}, ",") + "]" // CI: ci_test.go
 	c := f.server(t)
-	// the passed CI run's title
-	f.notifications = strings.Replace(f.notifications, `"title":"Subject 3"`, `"title":"CI workflow run failed for main branch"`, 1)
 
 	wait, moved, err := c.poll(context.Background())
 	if err != nil || !moved || wait != 90*time.Second {
 		t.Fatalf("poll: %v %v %v", wait, moved, err)
 	}
 	got := things(t, c)
-	if len(got) != 3 {
+	if len(got) != 2 {
 		t.Fatalf("%d things: %+v", len(got), got)
 	}
 	pr := got["example-org/example-repo#12"]
 	if pr.Kind != "review_requested" || pr.Label != "请你 review" || pr.Tier != "action" || pr.Done != "" || !pr.CanReply ||
 		pr.Sender != "bob" || pr.Preview != "请看一下示例" || pr.URL != "https://github.com/example-org/example-repo/pull/12" ||
-		pr.ReplyTo != "评论到 example-org/example-repo#12（仓库可见的人都能看到）" || pr.Last != t1 {
+		pr.ReplyTo != "评论到 example-org/example-repo#12（仓库可见的人都能看到）" || pr.Last != t1 || pr.Why != "规则：请你 review" {
 		t.Errorf("review request: %+v", pr)
 	}
 	if !strings.Contains(pr.Context, "GitHub PR example-org/example-repo#12：Add the example") || !strings.Contains(pr.Context, "等这些人 review：me") ||
 		!strings.Contains(pr.Context, "bob：\n请看一下示例") {
 		t.Errorf("context:\n%s", pr.Context)
 	}
-	if is := got["example-org/example-repo#7"]; is.Kind != "assign" || is.Sender != "bob" || is.Preview != "出错了" {
+	if is := got["example-org/example-repo#7"]; is.Kind != "assign" || is.Sender != "bob" || is.Preview != "出错了" || is.Tier != "action" {
 		t.Errorf("assignment: %+v", is)
-	}
-	if ci := got["notification:3"]; ci.Kind != "ci_failed" || ci.CanReply || ci.URL != "https://github.com/example-org/example-repo/actions" {
-		t.Errorf("CI: %+v", ci)
 	}
 
 	// Nothing changed: GitHub answers 304 to If-Modified-Since, nothing is read.
@@ -160,7 +153,7 @@ func TestNotificationsBecomeThings(t *testing.T) {
 	if got["example-org/example-repo#12"].Done != connector.DoneReplied {
 		t.Errorf("answered: %+v", got["example-org/example-repo#12"])
 	}
-	if !got["example-org/example-repo#7"].Read || !got["notification:3"].Read {
+	if !got["example-org/example-repo#7"].Read {
 		t.Errorf("no longer unread: %+v", got)
 	}
 }

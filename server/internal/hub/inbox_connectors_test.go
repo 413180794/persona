@@ -2,6 +2,9 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,10 +106,11 @@ func TestConnectorThingReadElsewhere(t *testing.T) {
 	h.inbox.init()
 	now := time.Now()
 	h.inbox.mu.Lock()
-	h.inbox.applyConnector("example", "Example", []connector.InboxThing{thing("a", now)}, now)
+	fyi := thing("a", now)
+	fyi.Tier = TierFYI // the rules make it FYI
+	h.inbox.applyConnector("example", "Example", []connector.InboxThing{fyi}, now)
 	it := openItems(h)[0]
-	it.Tier = TierFYI
-	read := thing("a", now)
+	read := fyi
 	read.Read = true
 	h.inbox.applyConnector("example", "Example", []connector.InboxThing{read}, now)
 	h.inbox.mu.Unlock()
@@ -151,5 +155,81 @@ func TestConnectorItemsListAndReply(t *testing.T) {
 	}
 	if len(c.replies) != 1 || c.replies[0] != "example-org/example-repo#12: 看过了" {
 		t.Fatalf("replies %v", c.replies)
+	}
+}
+
+// settlingConnector settles every "old:" thread and keeps options.
+type settlingConnector struct {
+	inboxConnector
+	opts json.RawMessage
+}
+
+func (*settlingConnector) Settle(_ context.Context, threads []string) map[string]string {
+	out := map[string]string{}
+	for _, t := range threads {
+		if strings.HasPrefix(t, "old:") {
+			out[t] = "示例：按新规则合并"
+		}
+	}
+	return out
+}
+func (c *settlingConnector) Options() json.RawMessage { return c.opts }
+func (c *settlingConnector) SetOptions(raw json.RawMessage) error {
+	if !json.Valid(raw) || strings.Contains(string(raw), "bad") {
+		return errors.New("bad options")
+	}
+	c.opts = raw
+	return nil
+}
+
+// Items made under older rules are filed as done with why (not deleted); a rule's tier wins over the model's, also
+// for an item already open; options go to the connector and come back in the list.
+func TestConnectorRulesSettleAndTier(t *testing.T) {
+	h := newTestHub(t)
+	h.inbox.init()
+	h.connectors = connector.NewRegistry(nil)
+	now := time.Now()
+	c := &settlingConnector{opts: json.RawMessage(`{"ci":"mine"}`)}
+	if err := h.addConnector(c); err != nil {
+		t.Fatal(err)
+	}
+	old := thing("a", now)
+	old.Thread, old.Tier = "old:1", ""
+	h.inbox.mu.Lock()
+	h.inbox.applyConnector("example", "Example", []connector.InboxThing{old}, now)
+	h.inbox.mu.Unlock()
+	modelTiered := openItems(h)[0]
+	modelTiered.Tier, modelTiered.TriagedAt = TierAction, "a" // what the model said before
+
+	c.things = []connector.InboxThing{thing("b", now)}
+	c.things[0].Tier, c.things[0].Why = TierFYI, "示例规则：知悉即可"
+	h.collectConnectors(context.Background())
+	if modelTiered.open() || modelTiered.DoneBy != "read" || modelTiered.Reason != "示例：按新规则合并" {
+		t.Fatalf("old item: %+v", modelTiered)
+	}
+	if _, ok := h.inbox.items[modelTiered.ID]; !ok {
+		t.Fatal("the old item was deleted")
+	}
+	var fresh *InboxItem
+	for _, it := range openItems(h) {
+		fresh = it
+	}
+	if fresh == nil || fresh.Tier != TierFYI || fresh.Reason != "示例规则：知悉即可" || fresh.TriagedAt != fresh.Last {
+		t.Fatalf("rule tier: %+v", fresh)
+	}
+	// Same move, the rule now says otherwise (other options): the open item follows.
+	c.things[0].Tier, c.things[0].Why = TierAction, "示例规则：需要你"
+	h.collectConnectors(context.Background())
+	if fresh.Tier != TierAction || fresh.Reason != "示例规则：需要你" {
+		t.Fatalf("re-tiered: %+v", fresh)
+	}
+
+	mux := h.routes()
+	if code, _ := call(t, mux, "PUT", "/api/v1/connectors/example/settings", h.cfg.Token, `{"options":{"ci":"bad"}}`); code != 400 {
+		t.Fatalf("bad options: %d", code)
+	}
+	code, out := call(t, mux, "PUT", "/api/v1/connectors/example/settings", h.cfg.Token, `{"options":{"ci":"all"}}`)
+	if code != 200 || out["options"].(map[string]any)["ci"] != "all" {
+		t.Fatalf("%d %v", code, out)
 	}
 }

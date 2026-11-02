@@ -89,9 +89,11 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     var lastEvent: Date?
     var capabilities: [String]?
     var hosts: [String]?
+    /// Its own settings (GitHub's: GitHubInboxOptions), as the hub gives them.
+    var options: JSONValue?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, status, account, via, error, capabilities, hosts
+        case id, name, status, account, via, error, capabilities, hosts, options
         case lastSync = "last_sync"
         case lastEvent = "last_event"
     }
@@ -328,6 +330,9 @@ struct HubConnectorView: View {
                 }
             } footer: {
                 Text("登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。")
+            }
+            if id == "github", let connector, let options = GitHubInboxOptions(connector.options) {
+                GitHubInboxSettings(options: options) { connector in self.connector = connector }
             }
         }
         .themedPage()

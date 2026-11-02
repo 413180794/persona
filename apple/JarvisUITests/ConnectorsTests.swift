@@ -44,6 +44,19 @@ final class ConnectorsTests: XCTestCase {
         // A LabeledContent row reads as one element, 登录 and its value together.
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "来自 MacBook 的 gh 登录")).firstMatch.exists)
         shot("github")
+        // GitHub's inbox options (docs/inbox.md「连接器：GitHub」): the CI choice and the muted repositories.
+        let mode = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "CI 失败")).firstMatch
+        for _ in 0..<4 where !(mode.exists && mode.isHittable) { app.swipeUp() }
+        XCTAssertTrue(mode.waitForExistence(timeout: 5), "no CI choice:\n\(app.debugDescription)")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "example-org/noisy-repo")).firstMatch.exists,
+                      "no muted repository")
+        shot("github-inbox")
+        mode.tap()
+        let all = app.buttons["全部"].firstMatch
+        XCTAssertTrue(all.waitForExistence(timeout: 5), "no CI choices menu")
+        all.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "所有分支的 CI 失败都算")).firstMatch
+            .waitForExistence(timeout: 5), "the choice did not stick")
         back()
 
         row("邮箱").tap()

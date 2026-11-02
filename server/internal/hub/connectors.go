@@ -109,11 +109,18 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 			return
 		}
 		var body struct {
-			Enabled *bool `json:"enabled"`
+			Enabled *bool           `json:"enabled"`
+			Options json.RawMessage `json:"options"` // the connector's own settings (connector.Options)
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
+		}
+		if len(body.Options) > 0 && string(body.Options) != "null" {
+			if err := h.setConnectorOptions(r.Context(), id, body.Options); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
 		}
 		if body.Enabled != nil {
 			if err := h.setConnectorEnabled(r.Context(), id, *body.Enabled); err != nil {
@@ -146,11 +153,40 @@ func (h *Hub) connectorLogin(w http.ResponseWriter, id string) (connector.Login,
 	return l, true
 }
 
-// connectorSettingsKey holds the user's switch per connector: {"switch": {"telegram": true}}.
+// connectorSettingsKey holds the user's switch per connector and their own settings: {"switch": {"telegram":
+// true}, "options": {"github": {"ci": "mine"}}}.
 const connectorSettingsKey = "connectors"
 
 type connectorSettings struct {
-	Switch map[string]bool `json:"switch,omitempty"`
+	Switch  map[string]bool            `json:"switch,omitempty"`
+	Options map[string]json.RawMessage `json:"options,omitempty"`
+}
+
+// setConnectorOptions gives a connector the user's settings and keeps them for the next start; the inbox is
+// collected again under them.
+func (h *Hub) setConnectorOptions(ctx context.Context, id string, raw json.RawMessage) error {
+	o, ok := h.connectors.Get(id).(connector.Options)
+	if !ok {
+		return fmt.Errorf("%s has no settings", id)
+	}
+	if err := o.SetOptions(raw); err != nil {
+		return err
+	}
+	if h.store != nil {
+		var cs connectorSettings
+		if _, err := h.store.Setting(ctx, connectorSettingsKey, &cs); err != nil {
+			return err
+		}
+		if cs.Options == nil {
+			cs.Options = map[string]json.RawMessage{}
+		}
+		cs.Options[id] = o.Options()
+		if err := h.store.PutSetting(ctx, connectorSettingsKey, cs); err != nil {
+			return err
+		}
+	}
+	h.kickInbox()
+	return nil
 }
 
 // setConnectorEnabled switches a connector and keeps the choice for the next start.
@@ -182,6 +218,13 @@ func (h *Hub) restoreConnectorSwitches(ctx context.Context) {
 		}
 	}
 	for _, c := range h.connectors.All() {
+		if raw, ok := cs.Options[c.ID()]; ok {
+			if o, ok := c.(connector.Options); ok {
+				if err := o.SetOptions(raw); err != nil {
+					h.logf("connectors: %s settings: %v", c.ID(), err)
+				}
+			}
+		}
 		on, chosen := cs.Switch[c.ID()]
 		if !chosen {
 			on = !h.connectorsOff[c.ID()]

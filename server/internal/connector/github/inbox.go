@@ -25,6 +25,8 @@ type inboxState struct {
 	seen         map[string]string                // notification id -> the updated_at already read
 	lastModified string                           // of the last notifications answer, for If-Modified-Since
 	fullAt       time.Time                        // the last read without If-Modified-Since
+	ci           map[string]*ciMeta               // CI items, by thread (rules.go)
+	repos        map[string]repoMeta              // repositories' default branches (rules.go)
 }
 
 var (
@@ -105,7 +107,11 @@ func (c *Connector) poll(ctx context.Context) (time.Duration, bool, error) {
 		st.fullAt = time.Now()
 	}
 	st.mu.Unlock()
-	return wait, c.applyNotifications(ctx, ns, time.Now()), nil
+	moved := c.applyNotifications(ctx, ns, time.Now())
+	if c.followUpCI(ctx) {
+		moved = true
+	}
+	return wait, moved, nil
 }
 
 // applyNotifications reads the threads that moved (at most maxDetails, none while requests run low) and marks
@@ -119,12 +125,24 @@ func (c *Connector) applyNotifications(ctx context.Context, ns []notification, n
 	}
 	unread := map[string]bool{}
 	moved := false
+	o := c.options()
 	for _, n := range ns {
-		kind, label, tier := classify(n)
+		if o.muted(n.Repository.FullName) {
+			continue
+		}
+		kind, label := classify(n)
 		if kind == "" {
 			continue
 		}
 		thread := threadOf(n)
+		var run ciRun
+		if kind == "ci_failed" {
+			var ok bool
+			if run, ok = parseCI(n.Subject.Title); !ok || o.ignoredBranch(run.branch) || o.ci() == CIOff {
+				continue
+			}
+			thread = ciThread(n.Repository.FullName, run.branch)
+		}
 		unread[thread] = true
 		stamp := n.UpdatedAt.UTC().Format(time.RFC3339)
 		st.mu.Lock()
@@ -134,11 +152,34 @@ func (c *Connector) applyNotifications(ctx context.Context, ns []notification, n
 			continue
 		}
 		budget--
-		thing, err := c.describe(ctx, n, me)
+		var thing connector.InboxThing
+		var err error
+		switch {
+		case kind == "ci_failed" && !run.failed():
+			// A run of the branch that did not fail (succeeded, cancelled): a failure item of it is over if it succeeded.
+			st.mu.Lock()
+			st.seen[n.ID] = stamp
+			if t := st.things[thread]; t != nil && t.Done == "" && run.status == "succeeded" {
+				t.Done, t.Why, moved = connector.DoneRead, "GitHub：后来成功了", true
+			}
+			st.mu.Unlock()
+			continue
+		case kind == "ci_failed":
+			var ok bool
+			thing, ok, err = c.describeCI(ctx, n, run, me, o)
+			if err == nil && !ok {
+				st.mu.Lock()
+				st.seen[n.ID] = stamp
+				st.mu.Unlock()
+				continue
+			}
+		default:
+			thing, err = c.describe(ctx, n, me)
+		}
 		if err != nil {
 			continue // read again next time
 		}
-		thing.Thread, thing.Kind, thing.Label, thing.Tier, thing.Last = thread, kind, label, tier, stamp
+		thing.Thread, thing.Kind, thing.Label, thing.Last = thread, kind, label, stamp
 		st.mu.Lock()
 		st.seen[n.ID] = stamp
 		st.things[thread] = &thing
@@ -158,31 +199,31 @@ func (c *Connector) applyNotifications(ctx context.Context, ns []notification, n
 	return moved
 }
 
-// classify says whether a notification is for the inbox: its kind, its tag and the tier without a model.
-func classify(n notification) (kind, label, tier string) {
-	const action, fyi = "action", "fyi"
+// classify says whether a notification is for the inbox: its kind and its tag. The tier is the rules' (describe,
+// describeCI).
+func classify(n notification) (kind, label string) {
 	switch n.Reason {
 	case "review_requested":
-		return "review_requested", "请你 review", action
+		return "review_requested", "请你 review"
 	case "mention":
-		return "mention", "@我", action
+		return "mention", "@我"
 	case "team_mention":
-		return "team_mention", "@了你的团队", fyi
+		return "team_mention", "@了你的团队"
 	case "assign":
-		return "assign", "分配给你", action
+		return "assign", "分配给你"
 	case "author":
 		if n.Subject.Type == "PullRequest" {
-			return "author", "你的 PR 有新动静", fyi
+			return "author", "你的 PR 有新动静"
 		}
 		if n.Subject.Type == "Issue" {
-			return "author", "你的 issue 有新动静", fyi
+			return "author", "你的 issue 有新动静"
 		}
 	case "ci_activity":
-		if strings.Contains(strings.ToLower(n.Subject.Title), "fail") {
-			return "ci_failed", "CI 失败", action
+		if n.Subject.Type == "CheckSuite" || n.Subject.URL == "" {
+			return "ci_failed", "CI 失败"
 		}
 	}
-	return "", "", ""
+	return "", ""
 }
 
 var subjectURL = regexp.MustCompile(`/repos/([^/]+/[^/]+)/(?:issues|pulls)/(\d+)$`)
@@ -200,7 +241,12 @@ func threadOf(n notification) string {
 type move struct {
 	who, verb, text string
 	at              time.Time
+	bot             bool
+	state           string // a review's: APPROVED, CHANGES_REQUESTED, COMMENTED
 }
+
+// isBot: an app's account (dependabot[bot], a CI bot).
+func isBot(u user) bool { return u.Type == "Bot" || strings.HasSuffix(u.Login, "[bot]") }
 
 // describe reads what the notification is about: the PR / issue, its newest comments and reviews, whether it is
 // over (merged, closed, the review request withdrawn) or the user has answered.
@@ -251,7 +297,7 @@ func (c *Connector) describe(ctx context.Context, n notification, me string) (co
 		return t, err
 	}
 	for _, cm := range cs {
-		moves = append(moves, move{who(cm.User), "", strings.TrimSpace(cm.Body), cm.CreatedAt})
+		moves = append(moves, move{who: who(cm.User), text: strings.TrimSpace(cm.Body), at: cm.CreatedAt, bot: isBot(cm.User)})
 	}
 	reviewed := false
 	if pr {
@@ -267,7 +313,7 @@ func (c *Connector) describe(ctx context.Context, n notification, me string) (co
 			if strings.EqualFold(r.User.Login, me) {
 				reviewed = true
 			}
-			moves = append(moves, move{who(r.User), verb, strings.TrimSpace(r.Body), r.SubmittedAt})
+			moves = append(moves, move{who: who(r.User), verb: verb, text: strings.TrimSpace(r.Body), at: r.SubmittedAt, bot: isBot(r.User), state: r.State})
 		}
 	}
 	sort.SliceStable(moves, func(i, j int) bool { return moves[i].at.Before(moves[j].at) })
@@ -298,6 +344,8 @@ func (c *Connector) describe(ctx context.Context, n notification, me string) (co
 			t.Done = connector.DoneRead
 		}
 	}
+
+	t.Tier, t.Why = tierOf(n.Reason, it.User, moves)
 
 	var b strings.Builder
 	state := it.State
@@ -378,4 +426,45 @@ func (c *Connector) Reply(ctx context.Context, thread, text string) error {
 	}
 	st.mu.Unlock()
 	return nil
+}
+
+// tierOf is the tier the rules give a PR / issue notification (reason) by who made the newest move, "" when they
+// cannot tell (a person's ordinary comment on my PR: the model decides).
+func tierOf(reason string, author user, moves []move) (tier, why string) {
+	var last *move
+	if len(moves) > 0 {
+		last = &moves[len(moves)-1]
+	}
+	byBot := isBot(author)
+	if last != nil {
+		byBot = last.bot
+	}
+	switch reason {
+	case "review_requested":
+		if isBot(author) {
+			return "fyi", "规则：机器人的 PR 请你 review"
+		}
+		return "action", "规则：请你 review"
+	case "mention":
+		if byBot {
+			return "fyi", "规则：机器人 @ 了你"
+		}
+		return "action", "规则：真人 @ 了你"
+	case "assign":
+		return "action", "规则：分配给你"
+	case "team_mention":
+		return "fyi", "规则：@ 的是你所在的团队"
+	case "author":
+		switch {
+		case last == nil:
+			return "", ""
+		case last.bot:
+			return "fyi", "规则：机器人在你的 PR / issue 上留言"
+		case last.state == "CHANGES_REQUESTED":
+			return "action", "规则：要求修改"
+		case last.state == "APPROVED":
+			return "fyi", "规则：批准了"
+		}
+	}
+	return "", ""
 }

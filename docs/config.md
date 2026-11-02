@@ -204,6 +204,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   token 只在 hub 内存里，不落库、不写日志、不给 App 和助手）。那台机器要保持 `gh` 登录，而且登录存在 `~/.config/gh/hosts.yml`
   （钥匙串里的经 ssh 读不到：`gh auth login --insecure-storage`）。`auth.host` 默认 `github.com`，GitHub Enterprise 的主机名写这里（还没做）。
   状态看 设置 › 连接器 › GitHub。
+  `github.inbox`（可选）是收件箱的默认规则（App 里改过以 App 为准，`docs/inbox.md`「降噪」）：`ci`（`off` / `default_branch` / `mine`（默认）/ `all`）、
+  `muted_repos`（`["owner/name"]`）、`ignore_branches`（不提醒的分支，`path.Match` 模式，默认 `["train/*"]`）。
 - `imessage`（可选）：信息连接器。`{"machine": "<机器 id>"}`：App 里能看哪台 Mac 的「信息」（经那台 Mac 的 node 只读 `~/Library/Messages/chat.db`，
   要给它完全磁盘访问权限，App 的 设置 › 连接器 › 信息 会说怎么开）。只写一台（同一个 Apple ID 的几台 Mac 消息是同一份）。
   App 里能看所有会话。开关「交给 Jarvis」（设置 › 连接器 › 信息，默认开，存在 hub）开着时，真正的会话（成员里有通讯录里的人、或者你说过话的）

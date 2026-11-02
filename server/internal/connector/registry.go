@@ -275,6 +275,8 @@ type Info struct {
 	Hosts        []string   `json:"hosts,omitempty"`
 	// Enabled: switched on (SetEnabled); off, Status is "disabled".
 	Enabled bool `json:"enabled"`
+	// Options are its own settings (Options), as it gives them.
+	Options json.RawMessage `json:"options,omitempty"`
 }
 
 // MachineOnline tells every connector that depends on a computer that machine id just connected.
@@ -295,6 +297,9 @@ func (r *Registry) Infos(ctx context.Context) []Info {
 			LastSync: when(st.LastSync), LastEvent: when(st.LastEvent), Capabilities: Capabilities(c), Enabled: r.Enabled(c.ID())}
 		if h, ok := c.(Hosts); ok {
 			info.Hosts = h.Hosts()
+		}
+		if o, ok := c.(Options); ok {
+			info.Options = o.Options()
 		}
 		out = append(out, info)
 	}
@@ -339,5 +344,7 @@ func Capabilities(c Connector) []string {
 	add("chats", chats)
 	add("items", items)
 	add("login", login)
+	_, options := c.(Options)
+	add("options", options)
 	return out
 }

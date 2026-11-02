@@ -88,8 +88,27 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 - **GitHub**（`server/internal/connector/github/inbox.go`）：hub 没有公网入口收不到 webhook，所以轮询 `/notifications`（只看未读），间隔按 `X-Poll-Interval`（一般 60 秒），
   带 `If-Modified-Since`，304 不读任何详情；每 10 分钟不带条件读一次全量（在 GitHub 上读过的通知可能不改 Last-Modified）。有变化的线程再读 PR / issue、评论和 review（每轮最多 30 个）。
   请求额度剩不到一成时只轮询通知，状态显示「请求额度快用完了」。
-- 收哪些（`reason`）：等我 review 的 PR（`review_requested`）、@ 我（`mention`）、@ 了我的团队（`team_mention`，默认知悉即可）、我的 PR / issue 有别人的新评论或 review（`author`，默认知悉即可，模型判断）、
-  我触发的 CI 失败（`ci_activity` 且标题里有 fail）、分配给我（`assign`）。其余（`subscribed`、`comment`、`state_change`…）不进来。一个 PR / issue 一件（`example-org/example-repo#12`）。
+- 收哪些（`reason`）：等我 review 的 PR（`review_requested`）、@ 我（`mention`）、@ 了我的团队（`team_mention`）、我的 PR / issue 有别人的新评论或 review（`author`）、
+  CI 结果（`ci_activity`）、分配给我（`assign`）。其余（`subscribed`、`comment`、`state_change`…）不进来。PR / issue 一个一件（`example-org/example-repo#12`）。
+- **降噪（2026-11-03，#577）**：用户嫌太吵——hub 上一次只读统计，GitHub 打开的 52 件全是「需要你」，其中 42 件是功能分支、自动分支上的 CI 失败（很多是 Agent 用用户的账号推的），
+  同一个分支好几件、重跑也另算一件。原因：CI 一条通知一件；分级全交给模型，提示词里说 CI 失败、review 请求一般需要用户，模型就全给了「需要你」。改成：
+  - **分级由规则定**（`InboxThing.Tier` + `Why`，条目的 `reason` 写是哪条规则），规则判断不了的才交给模型：
+    - 真人请你 review、真人 @ 你、要求修改（`CHANGES_REQUESTED`）、分配给你：需要你；
+    - 机器人的 PR 请你 review、机器人 @ 你或在我的 PR 上留言、批准了、@ 的是我所在的团队：知悉即可；
+    - 我的 PR 上真人的普通评论：交给模型（提示词说「要你改、回答问题的需要你」）。
+  - **CI 失败按（仓库，分支）合成一件**（线程 `ci:<owner>/<repo>@<分支>`），分支从通知标题读（`<workflow> workflow run[, Attempt #N] failed for <分支> branch`，
+    这类通知没有 URL），重跑、后来的失败都并进去：
+    - 默认分支的、我自己开着的 PR 的：需要你；其他分支：知悉即可；自动分支（`train/*`，可配置）：完全不进来。
+    - 自动处理掉（不删，`done_by=read`，`reason` 写原因）：这个 workflow 在这个分支上后来跑成功了（「GitHub：后来成功了」，收到 succeeded 的通知时立刻，
+      否则每 10 分钟查一次 Actions 的 runs）、分支删了、PR 合了或关了。
+  - **可配置**（设置 › 连接器 › GitHub › 收件箱；hub.json `github.inbox` 给默认值；存在 settings 表 `connectors.options.github`）：
+    - 「CI 失败」：关闭 / 只看默认分支 / 加上我的 PR（默认）/ 全部（都算需要你）；
+    - 静音仓库：这些仓库什么都不进来，已有的也处理掉；
+    - `ignore_branches`：不提醒的分支（`path.Match` 模式，默认 `["train/*"]`，只在 hub.json 里改）。
+  - **积压**：hub 每轮采集后把 GitHub 还开着的条目交给连接器的 `Settle`（`connector.InboxSettler`）：一条通知一件的旧 CI 条目（「GitHub 降噪：CI 失败改为按分支合并成一条」）、
+    静音仓库的、自动分支的、CI 设为关闭时的 CI 条目都标成已处理，不删；还在未读通知里的按新规则重新分级。
+  - 2026-11-03 用 hub 上的真实数据只读对比（只看数量）：需要你从 52 件降到 13 件（旧 CI 42 件处理掉；剩 6 件真人 @、2 件请 review、
+    4 件默认分支 / 自己开着的 PR 的 CI、1 件 PR 上的评论），7 件功能分支 CI 和 1 件机器人 PR 的 review 降为知悉即可。
 - 结束：合了 / 关了 → read；线程最新一条是我 → replied；review 请求撤了（我不在 reviewers 里了）→ 我 review 过是 replied，否则 read。已处理**不回写** GitHub 的已读。
 - 上下文：标题、状态、作者、等谁 review、描述（截 1500 字）、最近 8 条评论和 review（旧的在前，每条截 600 字）。提示词里的「类型」行在 `prompts/inbox/kinds/github.md`。
 - **发送** = 在 PR / issue 下评论（`POST /repos/{o}/{r}/issues/{n}/comments`），「发送」按钮本身就是确认；`reply_to` 写「评论到 …（仓库可见的人都能看到）」。CI 失败不能回复（只有「交给 AI」）。

@@ -40,6 +40,44 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 		h.inbox.mu.Lock()
 		changed = append(changed, h.inbox.applyConnector(c.ID(), c.Name(), things, time.Now())...)
 		h.inbox.mu.Unlock()
+		if s, ok := c.(connector.InboxSettler); ok {
+			changed = append(changed, h.settleConnector(ctx, c.ID(), s)...)
+		}
+	}
+	return changed
+}
+
+// settleConnector files the connector's open items its rules now leave out (made under older rules, a muted
+// source…) as done, with why; nothing is deleted.
+func (h *Hub) settleConnector(ctx context.Context, id string, s connector.InboxSettler) []*InboxItem {
+	h.inbox.mu.Lock()
+	var threads []string
+	for _, it := range h.inbox.items {
+		if it.Source == id && it.Connector != nil && it.open() {
+			threads = append(threads, it.Connector.Thread)
+		}
+	}
+	h.inbox.mu.Unlock()
+	if len(threads) == 0 {
+		return nil
+	}
+	over := s.Settle(ctx, threads)
+	if len(over) == 0 {
+		return nil
+	}
+	now := time.Now()
+	var changed []*InboxItem
+	h.inbox.mu.Lock()
+	defer h.inbox.mu.Unlock()
+	for _, it := range h.inbox.items {
+		if it.Source != id || it.Connector == nil || !it.open() {
+			continue
+		}
+		if why, ok := over[it.Connector.Thread]; ok {
+			it.done(now, "read")
+			it.Reason = why
+			changed = append(changed, it)
+		}
 	}
 	return changed
 }
@@ -55,6 +93,9 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 		if t.Done != "" {
 			if open != nil {
 				open.done(now, t.Done)
+				if t.Why != "" {
+					open.Reason = t.Why
+				}
 				changed = append(changed, open)
 			}
 			continue
@@ -63,6 +104,10 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 			if open.Last != t.Last {
 				open.Count++
 				fillConnectorItem(open, t)
+				changed = append(changed, open)
+			} else if t.Tier != "" && (open.Tier != t.Tier || open.Reason != t.Why) {
+				// The rules decide this one now (an item tiered before, or under other options).
+				setRuleTier(open, t)
 				changed = append(changed, open)
 			}
 			if t.Read && !open.Read {
@@ -94,6 +139,18 @@ func fillConnectorItem(it *InboxItem, t connector.InboxThing) {
 	it.Kind, it.Title, it.Sender, it.Preview, it.Context = t.Kind, t.Title, t.Sender, t.Preview, t.Context
 	it.UpdatedAt, it.Last = t.At, t.Last
 	it.Connector = &InboxConnector{Thread: t.Thread, Label: t.Label, URL: t.URL, OpenURL: t.OpenURL, ReplyTo: t.ReplyTo, CanReply: t.CanReply, RuleTier: t.Tier}
+	if t.Tier != "" {
+		setRuleTier(it, t)
+	}
+}
+
+// setRuleTier gives an item the tier its connector's rules decided: triage leaves it alone (it is triaged at this
+// move), the reason is the rule.
+func setRuleTier(it *InboxItem, t connector.InboxThing) {
+	it.Tier, it.Reason, it.TriagedAt = t.Tier, t.Why, it.Last
+	if it.Connector != nil {
+		it.Connector.RuleTier = t.Tier
+	}
 }
 
 func containsItem(list []*InboxItem, it *InboxItem) bool {

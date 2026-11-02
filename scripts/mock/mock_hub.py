@@ -1120,7 +1120,8 @@ INBOX.insert(next(i for i, x in enumerate(INBOX) if x["kind"] == "mail"), {"id":
 # The hub's GitHub connector (GET /api/v1/connectors), signed in with the gh login of a machine, or not.
 GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "ok", "account": "alice", "via": "来自 MacBook 的 gh 登录",
                     "last_sync": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                    "capabilities": ["status", "hosts"], "hosts": ["github.com"]}
+                    "capabilities": ["status", "hosts", "inbox", "options"], "hosts": ["github.com"],
+                    "options": {"ci": "mine", "muted_repos": ["example-org/noisy-repo"], "ignore_branches": ["train/*"]}}
 if os.environ.get("MOCK_GITHUB") == "signed_out":
     GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "not_signed_in", "via": "来自 MacBook 的 gh 登录",
                         "error": "MacBook 上的 gh 登录失效了：在那台机器上运行 gh auth login",
@@ -3443,6 +3444,13 @@ class H(BaseHTTPRequestHandler):
             port = int(p.split("/")[6])
             if not port_listening(port): return self.send_json({"error": "nothing is listening on port %d" % port}, 404)
             return self.send_json({"port": port, "listening": True, "http": True})
+        if self.command == "PUT" and p == "/api/v1/connectors/github/settings":  # GitHub's inbox options
+            body = json.loads(self.last_body or b"{}")
+            o = body.get("options") or {}
+            if o.get("ci") not in (None, "off", "default_branch", "mine", "all") or any("/" not in r for r in o.get("muted_repos") or []):
+                return self.send_json({"error": "bad options"}, 400)
+            GITHUB_CONNECTOR.setdefault("options", {}).update({k: v for k, v in o.items() if v is not None})
+            return self.send_json(GITHUB_CONNECTOR)
         if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/engine"):
             mid = p.split("/")[4]
             machine = next((m for m in MACHINES if m["id"] == mid), None)

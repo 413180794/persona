@@ -622,7 +622,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | GET | `/api/v1/connectors` | `{"connectors":[{id, name, status, account?, via?, error?, last_sync?, last_event?, capabilities:[…], hosts?:[…], enabled}]}`：hub 上注册的连接器（不含飞书和邮箱，它们还走自己的接口）。`status` 是 `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error` / `disabled`（用户在设置里关掉了，`enabled` 为 false）；`via` 说登录从哪来（「来自 <机器> 的 gh 登录」）；`error` 是给人看的一句话，不含密钥；`capabilities` 取 `status` / `tools` / `actions` / `events` / `hosts` / `inbox` / `archive` / `login`；`hosts` 是这个连接器的链接所在的主机名（App 用来认链接） |
 | POST | `/api/v1/connectors/{id}/login` | 分步登录（有 `login` 能力的，`docs/plan-telegram.md`）：`{"step": "", "values": {}}`，`step` 为空是从头开始，之后带上一步的 `step` 和填的字段 → `{step?, fields?:[{name, label, secret?, placeholder?}], hint?, error?, done?, account?}`：下一步要填的，或 `done`。填错了（验证码不对）是同一步带 `error`，表单留着重填；别的错 502。填的值只给连接器，不进日志和任何响应；登录得到的会话加密存 hub（`connector_secrets`） |
 | POST | `/api/v1/connectors/{id}/logout` | 退出登录：连接器那边结束会话，hub 删掉存着的会话 → `{"ok": true}` |
-| PUT | `/api/v1/connectors/{id}/settings` | `{"enabled": bool}`：设置 › 连接器 的开关。关掉的连接器不跑、不给工具、不收收件箱、不进知识库，状态是 `disabled`，登录和退出照常；选择存在 hub 的设置里，重启后照旧；没动过开关的连接器是开着的，Telegram 这种要用户自己填凭据的默认关着 → 这个连接器的一项（同 `GET`） |
+| PUT | `/api/v1/connectors/{id}/settings` | `{"enabled"?: bool, "options"?: {…}}`：`options` 是连接器自己的设置（有 `options` 能力的，GET 里也带着；GitHub 的是 `{ci, muted_repos, ignore_branches}`，`docs/inbox.md`「降噪」），不合法 400，存 hub、重启照旧，改完立刻按新设置收一轮收件箱。`enabled` 是设置 › 连接器 的开关。关掉的连接器不跑、不给工具、不收收件箱、不进知识库，状态是 `disabled`，登录和退出照常；选择存在 hub 的设置里，重启后照旧；没动过开关的连接器是开着的，Telegram 这种要用户自己填凭据的默认关着 → 这个连接器的一项（同 `GET`） |
 
 ## 邮件 API
 

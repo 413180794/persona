@@ -25,6 +25,8 @@ import (
 // Config is hub.json's "github".
 type Config struct {
 	Auth AuthConfig `json:"auth"`
+	// Inbox: the defaults of what comes into the inbox until the user chooses in the app (rules.go).
+	Inbox InboxOptions `json:"inbox,omitempty"`
 }
 
 // AuthConfig: whose gh login the hub reads, and for which host. Host is github.com when empty; a GitHub Enterprise
@@ -73,7 +75,8 @@ type Connector struct {
 	rateLow   bool
 	rateReset time.Time
 
-	inbox inboxState // inbox.go
+	inbox inboxState   // inbox.go
+	opts  InboxOptions // rules.go
 }
 
 // noteRate records how many requests GitHub still allows this hour.
@@ -102,7 +105,7 @@ func New(cfg Config, machine string, fetch TokenSource) *Connector {
 	if h := cfg.host(); h != "github.com" {
 		api = "https://" + h + "/api/v3"
 	}
-	return &Connector{cfg: cfg, machine: machine, fetch: fetch, api: api, client: &http.Client{Timeout: 30 * time.Second},
+	return &Connector{cfg: cfg, machine: machine, fetch: fetch, api: api, client: &http.Client{Timeout: 30 * time.Second}, opts: cfg.Inbox,
 		status: connector.Status{State: connector.StateNotSignedIn, Error: "正在读取 " + machine + " 上的 gh 登录…"}, poke: make(chan struct{}, 1)}
 }
 
