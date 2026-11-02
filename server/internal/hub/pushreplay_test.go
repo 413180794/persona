@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sort"
 	"testing"
@@ -79,7 +80,9 @@ func TestPushReplay(t *testing.T) {
 	// broadcastSessions (the same list again is not sent).
 	h := newTestHub(t)
 	app := &client{out: make(chan []byte, 1<<16), subs: map[[2]string]bool{}, role: roleFull}
-	h.clients[app] = struct{}{}
+	// An app on the delta protocol (sessions_delta): its first message per machine stands for its snapshot.
+	deltaApp := &client{out: make(chan []byte, 1<<16), subs: map[[2]string]bool{}, role: roleFull, delta: true, have: map[string]map[string][]byte{}}
+	h.clients[app], h.clients[deltaApp] = struct{}{}, struct{}{}
 	machines := map[string]*Machine{}
 	machine := func(id string) *Machine {
 		if machines[id] == nil {
@@ -88,7 +91,7 @@ func TestPushReplay(t *testing.T) {
 		return machines[id]
 	}
 	type tally struct{ n, bytes int }
-	before, after := map[string]*tally{}, map[string]*tally{}
+	before, after, delta := map[string]*tally{}, map[string]*tally{}, map[string]*tally{}
 	add := func(m map[string]*tally, typ string, size int) {
 		if m[typ] == nil {
 			m[typ] = &tally{}
@@ -104,6 +107,16 @@ func TestPushReplay(t *testing.T) {
 			for len(app.out) > 0 {
 				<-app.out
 				sent = true
+			}
+			for len(deltaApp.out) > 0 {
+				if b := <-deltaApp.out; i >= first {
+					add(delta, "sessions", len(b))
+				} else {
+					add(delta, "snapshot", len(b))
+				}
+			}
+			if i < first {
+				add(before, "snapshot", len(r.raw))
 			}
 			// The decision on the decoded list must be the one on the recorded bytes: nothing lost in decoding.
 			if same := bytes.Equal(lastRaw[r.machine], r.raw); same == sent && i >= first {
@@ -121,6 +134,7 @@ func TestPushReplay(t *testing.T) {
 		if i >= first {
 			add(before, r.typ, len(r.raw))
 			add(after, r.typ, len(r.raw))
+			add(delta, r.typ, len(r.raw))
 		}
 	}
 	total := func(m map[string]*tally) (n, b int) {
@@ -129,18 +143,26 @@ func TestPushReplay(t *testing.T) {
 		}
 		return
 	}
+	rate := func(v *tally) string {
+		if v == nil {
+			v = &tally{}
+		}
+		return fmt.Sprintf("%6.1f/min %7.1f KB/min", float64(v.n)/span, float64(v.bytes)/1024/span)
+	}
 	for _, typ := range []string{"sessions", "revs", "fleet", "lark", "inbox", "hook_event"} {
-		b, a := before[typ], after[typ]
-		if b == nil {
+		if before[typ] == nil {
 			continue
 		}
-		t.Logf("%-10s before %6.1f/min %7.1f KB/min | after %6.1f/min %7.1f KB/min", typ,
-			float64(b.n)/span, float64(b.bytes)/1024/span, float64(a.n)/span, float64(a.bytes)/1024/span)
+		t.Logf("%-10s before %s | whole lists %s | delta app %s", typ, rate(before[typ]), rate(after[typ]), rate(delta[typ]))
 	}
+	t.Logf("connecting: whole lists %.0f KB, delta snapshot (no Codex history) %.0f KB", float64(before["snapshot"].bytes)/1024,
+		float64(delta["snapshot"].bytes)/1024)
+	delete(before, "snapshot")
+	delete(delta, "snapshot")
 	bn, bb := total(before)
 	an, ab := total(after)
-	t.Logf("all        before %6.1f/min %7.1f KB/min | after %6.1f/min %7.1f KB/min", float64(bn)/span,
-		float64(bb)/1024/span, float64(an)/span, float64(ab)/1024/span)
+	dn, db := total(delta)
+	t.Logf("all        before %s | whole lists %s | delta app %s", rate(&tally{bn, bb}), rate(&tally{an, ab}), rate(&tally{dn, db}))
 
 	// The Live Activity of a phone whose app is closed: the recorded fleet changes through the coalescer and flush,
 	// on a clock that follows the recording; before: no gap; after: fleetMinGap. (An open app gets none: it draws

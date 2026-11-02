@@ -705,9 +705,17 @@ final class AppModel {
         sessionsFlushScheduled = false
         let pending = pendingSessions
         pendingSessions = [:]
+        applySessions(pending)
+    }
+
+    /// Machines' new session lists, whether they came whole (`sessions`) or as a delta (`sessions_delta`): the pages
+    /// update once for the lot, and only when a list really changed; the notifications, the watch and the chats kept
+    /// current in the background (`AgentSync`) follow them. The one place the lists land (msg-render's SessionStore
+    /// replaces its inside, docs/ios-state.md).
+    func applySessions(_ byMachine: [String: [Session]]) {
         var lists = sessionsByMachine
         var olds: [(old: [Session], new: [Session])] = []
-        for (machineID, list) in pending {
+        for (machineID, list) in byMachine {
             let old = lists[machineID] ?? []
             if old != list { lists[machineID] = list }
             olds.append((old, list))
@@ -718,6 +726,12 @@ final class AppModel {
             notifyTransitions(old: old, new: new)
             AgentSync.shared.sessions(new)
         }
+    }
+
+    private func scheduleSessionsFlush() {
+        guard !sessionsFlushScheduled else { return }
+        sessionsFlushScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.sessionsCoalesce) { [weak self] in self?.applyPendingSessions() }
     }
 
     private func handle(_ ev: ServerEvent) {
@@ -751,11 +765,14 @@ final class AppModel {
         case .sessions(let machineID, let list):
             // A busy hub sends each machine's list on its own, one after another: they are applied together a moment
             // later, so the pages that read the sessions update once for the lot (one SwiftUI pass, not one a machine).
-            pendingSessions[machineID] = list
-            if !sessionsFlushScheduled {
-                sessionsFlushScheduled = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.sessionsCoalesce) { [weak self] in self?.applyPendingSessions() }
-            }
+            let old = pendingSessions[machineID] ?? sessionsByMachine[machineID] ?? []
+            pendingSessions[machineID] = SessionPatch.snapshot(list, over: old, deltaHub: hubFeatures.contains(SessionPatch.feature))
+            scheduleSessionsFlush()
+        case .sessionsDelta(let machineID, let upsert, let remove):
+            // Over the newest the app has: a list still waiting for the flush, or what is shown.
+            let base = pendingSessions[machineID] ?? sessionsByMachine[machineID] ?? []
+            pendingSessions[machineID] = SessionPatch.apply(base, upsert: upsert, remove: remove)
+            scheduleSessionsFlush()
         case .revs(let machineID, let revs):
             AgentSync.shared.revs(machine: machineID, revs)
         case .lark(let feedIDs):
@@ -816,6 +833,7 @@ final class AppModel {
         case .hello: "hello"
         case .machines: "machines"
         case .sessions: "sessions"
+        case .sessionsDelta: "sessions_delta"
         case .items: "items"
         case .screen: "screen"
         case .delta: "delta"
@@ -1302,7 +1320,18 @@ final class AppModel {
             async let i = api.interactions()
             let (machines, sessions, ixs) = try await (m, s, i)
             self.machines = machines
-            sessionsByMachine = Dictionary(grouping: sessions, by: \.machineID)
+            let rest = Dictionary(grouping: sessions, by: \.machineID)
+            if live.state == .connected && hubFeatures.contains(SessionPatch.feature) {
+                // What the socket pushed is newer than this answer: only the Codex history comes from it.
+                var lists = sessionsByMachine
+                for (m, list) in rest {
+                    lists[m] = SessionPatch.refreshed(list, over: lists[m] ?? [], connectedToDeltaHub: true)
+                    if let p = pendingSessions[m] { pendingSessions[m] = SessionPatch.refreshed(list, over: p, connectedToDeltaHub: true) }
+                }
+                if lists != sessionsByMachine { sessionsByMachine = lists }
+            } else {
+                sessionsByMachine = rest
+            }
             interactions = Dictionary(ixs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             live.ensureConnected()
         } catch {

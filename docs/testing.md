@@ -426,14 +426,17 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
    不注册成手机 / 桌面、不打开对话，每条消息一行 `{"t": 毫秒, "msg": 原文}`。文件里是真实的会话（标题、最后一句），0600，**只留在那台机器上**，不拷走、不进仓库。
 2. 回放：`JARVIS_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`。打印每种消息改前（录到的）和改后（这份代码会发的）
    每分钟的条数和字节；实时活动按录到的时间把每次变化喂给合并和节流，打印 App 不开时每小时推几条、灵动岛和 hub 不一致连续最长多久，超过上限就失败。
-3. 会话列表用真的 `broadcastSessions` 决定发不发，并核对和「按录到的字节比」一致（解码不丢字段）。
+3. 会话列表用真的 `broadcastSessions` 决定发不发，并核对和「按录到的字节比」一致（解码不丢字段）；同时挂一个收增量的 App（`sessions_delta`），数它收到的。
+4. App 后台拉对话（`AgentSync`）的次数：`python3 scripts/agentsync_replay.py ~/push.jsonl`，按录到的 `rev` 变化和当时的状态算（每分钟 45 次 → 9 次，见 `docs/ios.md`「后台同步」）。
 
 2026-11-02 录的 19 分钟（耗电排查，`docs/live-activity.md`「推送节奏」、`docs/server.md`「推送给 App 的量」）：
 
 | | 改前 | 改后 |
 | --- | --- | --- |
-| `sessions` | 36.9 条 / 分钟，2605 KB / 分钟 | 29.7 条，2452 KB |
-| 全部消息 | 104.9 条 / 分钟，2616 KB / 分钟 | 97.7 条，2462 KB |
+| `sessions`（老 App：整表，一样的不发） | 36.9 条 / 分钟，2605 KB / 分钟 | 29.7 条，2452 KB |
+| `sessions`（新 App：增量） | 同上 | 29.7 条，79 KB |
+| 全部消息（新 App） | 104.9 条 / 分钟，2616 KB / 分钟 | 97.7 条，90 KB |
+| 连上时的会话快照 | 602 KB | 227 KB（不带 Codex 历史） |
 | 实时活动（App 不开） | 188 条 / 小时，不一致最长 2.5 秒 | 115 条，最长 29.2 秒（60 秒节流：60 条，58.8 秒） |
 | 实时活动（App 开着） | 同上 | 0 |
 

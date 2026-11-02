@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -544,6 +543,10 @@ type client struct {
 	// pushDevice: the phone's id for pushes (register_phone's device_id, PushRegistrar.deviceID in the app): while it is
 	// connected its app is open, and draws its Live Activity itself (liveactivity.go). Empty for an older app.
 	pushDevice string
+	// delta: the app asked for sessions_delta (sessions_push.go); have is, by machine, each session it has (id -> its
+	// JSON as sent), under the hub's sessionsMu.
+	delta bool
+	have  map[string]map[string][]byte
 	// clean: the app closed the connection itself (gone to the background), rather than the network dropping it.
 	clean bool
 	lazy  bool // asked for items without image data (subscribe with lazy_images)
@@ -583,37 +586,8 @@ func (h *Hub) broadcastRaw(typ string, b []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for c := range h.clients {
-		select {
-		case c.out <- b:
-		default:
-			// 512 messages behind. Skipping this one would leave the app wrong for good (a session list is not sent
-			// again while it stays the same): drop the connection like sendJSON; the app reconnects and resyncs.
-			if c.conn != nil {
-				go c.conn.Close(websocket.StatusPolicyViolation, "too slow")
-			}
-		}
+		c.queue(b)
 	}
-}
-
-// broadcastSessions sends every app a machine's session list, unless it is the list they last got. A third of the
-// lists the hub sent were the same again (an interaction shown, a session seen, a node pass that changed nothing the
-// app reads), each up to ~150 KB for the phone to download and decode (docs/server.md「推送给 App 的量」). The lock
-// is held until the message is queued, so what was recorded is what the apps got last.
-func (h *Hub) broadcastSessions(m *Machine, list []proto.Session) {
-	b, err := json.Marshal(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": list})
-	if err != nil {
-		return
-	}
-	h.sessionsMu.Lock()
-	defer h.sessionsMu.Unlock()
-	if bytes.Equal(h.sessionsSent[m.cfg.ID], b) {
-		return
-	}
-	if h.sessionsSent == nil {
-		h.sessionsSent = map[string][]byte{}
-	}
-	h.sessionsSent[m.cfg.ID] = b
-	h.broadcastRaw("sessions", b)
 }
 
 func (h *Hub) toSubscribers(machineID, sessionID string, v any) {
@@ -700,7 +674,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadLimit(64 << 20)
 	who := principalOf(r.Context())
 	c := &client{hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now(),
-		device: who.ID, role: who.Role}
+		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), have: map[string]map[string][]byte{}}
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
@@ -751,7 +725,11 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	c.sendJSON(map[string]any{"type": "hello", "server_version": h.version, "client_id": randomHex(6), "features": proto.Features})
 	c.sendJSON(map[string]any{"type": "machines", "machines": h.machineList()})
 	for _, m := range h.machines {
-		c.sendJSON(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
+		if c.delta {
+			h.snapshotSessions(c, m)
+		} else {
+			c.sendJSON(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
+		}
 	}
 	for _, ix := range h.pendingInteractions() {
 		c.sendJSON(map[string]any{"type": "interaction", "interaction": ix})

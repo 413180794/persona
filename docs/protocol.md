@@ -282,6 +282,22 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
   终端面板的按键接口（`/keys`）本来就不落库，hub 的请求日志也只记路径和状态码。
 
 
+### 会话增量（`sessions_delta`，2026-11-02）
+
+一台机器的会话列表有上百个会话、每个约 1 KB，一次推送通常只变一个会话；整表推送让手机每分钟下载、解码约 2.6 MB（`docs/server.md`「推送给 App 的量」）。
+
+- App 连 WebSocket 时在 URL 上带 `?features=sessions_delta`。hub 有这个能力（`hello.features` 里有 `sessions_delta`）就：
+  1. 连上时每台机器发一次整表 `sessions` 当快照，**不带 Codex 历史会话**（`source_kind: codex_history`，App 从 `GET /api/v1/sessions` 拿）；
+  2. 之后只发 `{"type":"sessions_delta","machine_id","upsert":[Session…],"remove":[session_id…]}`：新的或变了的会话（整个对象，不是半个），和没了的 id；
+     什么都没变就不发。Codex 历史会话只有 App 已经有它时才在增量里（实时的 Codex 会话结束、同一个 id 变成历史）。
+- hub 按连接记着每个 App 手里每台机器的每个会话（`client.have`），快照和增量在同一把锁里算、入队，所以增量永远对着 App 真有的东西算。
+- 断线重连就是新的快照，漏掉的变化靠它补齐。
+- App（`SessionPatch`、`AppModel.applySessions`）：快照替换这台机器的列表，但留着已有的 Codex 历史；增量在原位换掉变了的、新的放在后面、删掉没了的；
+  socket 连着时 `GET /api/v1/sessions` 的回答比推送旧，只从它拿 Codex 历史（历史里没了的删掉），不覆盖推送来的会话。
+- 兼容：老 App 不带 `features`，照旧收整表（一模一样的不发）；老 hub 不认 `features`，照旧发整表，App 的 `hello.features` 里没有 `sessions_delta`，按整表处理。
+  mock（`scripts/mock_hub.py`）同样支持，`MOCK_WHOLE_LISTS=1` 当老 hub。
+- 回放（真实 hub 录的 19 分钟）：会话推送每分钟 2605 KB → 79 KB，连上时的快照 602 KB → 227 KB（`docs/testing.md`「推送回放」）。
+
 ### 新建会话
 
 开 herdr 标签页、跑启动器、等 Claude 的输入框出来要几秒到一分钟（`~/.zshrc` 慢、信任目录对话框），以前 App 的「开始对话」按钮一直转到 Claude 就绪，

@@ -19,6 +19,9 @@ nonisolated enum ServerEvent: Sendable {
     case hello(features: [String])
     case machines([Machine])
     case sessions(machineID: String, [Session])
+    /// What changed in a machine's list since the last (a hub that has `sessions_delta`, asked for on connect): the
+    /// sessions new or different, whole, and the ids gone (docs/protocol.md「会话增量」).
+    case sessionsDelta(machineID: String, upsert: [Session], remove: [String])
     /// hasMore is nil when the event cannot know (a catch-up after since_seq): only pages from the end tell. moreAfter:
     /// the hub capped a catch-up, more came after these.
     case items(SessionKey, [Item], backlog: Bool, hasMore: Bool?, span: ItemSpan, moreAfter: Bool)
@@ -47,6 +50,8 @@ nonisolated enum ServerEvent: Sendable {
         var sessionID: String?
         var machines: [Machine]?
         var sessions: [Session]?
+        var upsert: [Session]?
+        var remove: [String]?
         var items: [Item]?
         var backlog: Bool?
         var hasMore: Bool?
@@ -80,7 +85,7 @@ nonisolated enum ServerEvent: Sendable {
         var state: String?
 
         enum CodingKeys: String, CodingKey {
-            case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
+            case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
@@ -97,6 +102,9 @@ nonisolated enum ServerEvent: Sendable {
         case "sessions":
             guard let m = e.machineID else { return nil }
             return .sessions(machineID: m, (e.sessions ?? []).map { var s = $0; s.machineID = m; return s })
+        case "sessions_delta":
+            guard let m = e.machineID else { return nil }
+            return .sessionsDelta(machineID: m, upsert: (e.upsert ?? []).map { var s = $0; s.machineID = m; return s }, remove: e.remove ?? [])
         case "items":
             guard let key else { return nil }
             return .items(key, e.items ?? [], backlog: e.backlog ?? false, hasMore: e.hasMore,
@@ -247,6 +255,8 @@ final class LiveConnection {
         }
         var comps = URLComponents(url: config.url.appending(path: "/api/v1/ws"), resolvingAgainstBaseURL: false)!
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
+        // A hub that has it sends session lists as deltas (an older one ignores the question and sends whole lists).
+        comps.queryItems = [URLQueryItem(name: "features", value: "sessions_delta")]
         var req = URLRequest(url: comps.url!)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         req.timeoutInterval = 15

@@ -1714,6 +1714,23 @@ def net_control(path, q):
 # and one of them finishes and starts again every three rounds (its space changes rank). ScrollUnderPushTests.
 # MOCK_CHURN=1 also puts a screenshot (a tool result image) in the middle of the first conversation's work.
 LIVE = []  # (send, subscribed session ids) of each open WebSocket
+
+
+def sessions_for_delta_app(obj, have):
+    """A machine's whole list as an app on the delta protocol gets it (hub/sessions_push.go): the first one whole,
+    without the Codex history; then the sessions new or different and the ids gone; None when nothing changed."""
+    m = obj["machine_id"]
+    old = have.get(m)
+    shown = [s for s in obj["sessions"] if s.get("source_kind") != "codex_history" or (old is not None and s["session_id"] in old)]
+    enc = {s["session_id"]: json.dumps(s, sort_keys=True, ensure_ascii=False) for s in shown}
+    have[m] = enc
+    if old is None:
+        return dict(obj, sessions=shown)
+    upsert = [s for s in shown if old.get(s["session_id"]) != enc[s["session_id"]]]
+    remove = sorted(i for i in old if i not in enc)
+    if not upsert and not remove:
+        return None
+    return {"type": "sessions_delta", "machine_id": m, "upsert": upsert, "remove": remove}
 CHURN = {"rounds": 0}
 CHURN_ITEMS = {}  # each conversation's items before churn added to them (/mock/reset puts them back)
 CHURN_INBOX = []  # the inbox before churn changed it (/mock/reset puts it back)
@@ -2568,6 +2585,11 @@ class H(BaseHTTPRequestHandler):
         self.close_connection = True
 
     def websocket(self):
+        # An app that asks for sessions_delta (?features=) gets each machine's list once, then deltas, like the hub
+        # (hub/sessions_push.go); MOCK_WHOLE_LISTS=1 is an older hub that ignores the question.
+        features = parse_qs(urlparse(self.path).query).get("features", [""])[0].split(",")
+        delta = "sessions_delta" in features and not os.environ.get("MOCK_WHOLE_LISTS")
+        have = {}  # machine -> {session id: its JSON}: what this app has
         key = self.headers.get("Sec-WebSocket-Key", "")
         accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
         self.send_response(101, "Switching Protocols")
@@ -2576,17 +2598,20 @@ class H(BaseHTTPRequestHandler):
         lock = threading.Lock()
 
         def send(obj):
-            data = json.dumps(obj, ensure_ascii=False).encode()
-            n = len(data)
-            hdr = bytes([0x81]) + (bytes([n]) if n < 126 else bytes([126]) + struct.pack(">H", n) if n < 65536 else bytes([127]) + struct.pack(">Q", n))
             with lock:
+                if delta and obj.get("type") == "sessions":
+                    obj = sessions_for_delta_app(obj, have)
+                    if obj is None: return
+                data = json.dumps(obj, ensure_ascii=False).encode()
+                n = len(data)
+                hdr = bytes([0x81]) + (bytes([n]) if n < 126 else bytes([126]) + struct.pack(">H", n) if n < 65536 else bytes([127]) + struct.pack(">Q", n))
                 self.wfile.write(hdr + data); self.wfile.flush()
 
         SOCKETS.add(self.connection)
         subscribed = set()
         LIVE.append((send, subscribed))
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8],
-              "features": ["file_upload"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])})
+              "features": ["file_upload"] + (["sessions_delta"] if delta else []) + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])})
         drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
         send({"type": "machines", "machines": MACHINES})
         by = {}

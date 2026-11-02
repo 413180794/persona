@@ -13,6 +13,11 @@ final class AgentSync {
     static let recentWindow: TimeInterval = 24 * 3600
     static let maxSessions = 40
     static let concurrency = 3
+    /// A working agent's chat is pulled at most this often: its transcript grows every second or two, and each pull is
+    /// a request, a decode of the chat's whole disk cache and a write of it again. The moment its turn ends or it
+    /// needs the user (when it is likely to be opened) it is pulled at once. Opening it brings the rest over its own
+    /// subscription (docs/ios.md「后台同步」).
+    nonisolated static let workingGap: TimeInterval = 60
 
     private var known: [SessionKey: Int64] = [:]
     /// What has been pulled, by rev ("<machine>/<session>" → rev); kept across launches, beside the chats' disk cache it
@@ -23,6 +28,9 @@ final class AgentSync {
     private var queue: [SessionKey] = []
     private var running = Set<SessionKey>()
     private var scheduled = false
+    private var lastPull: [SessionKey: Date] = [:]
+    /// When a plan is due for the working agents held back by `workingGap` (nil: none waiting).
+    private var replanAt: Date?
     private let saver = Debouncer(.seconds(2))
     private static let stateName = "agent-sync"
 
@@ -71,17 +79,42 @@ final class AgentSync {
             .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
             .prefix(Self.maxSessions)
         var due: [SessionKey] = []
+        var later: Date?
+        let now = Date.now
         for s in recent {
             guard let rev = known[s.key] ?? s.rev, synced[s.id] != rev else { continue }
             if model.isSubscribed(s.key) {
                 synced[s.id] = rev // on screen: its subscription already brings everything
             } else if !running.contains(s.key) {
-                due.append(s.key)
+                if let at = Self.heldUntil(working: s.state == .working, lastPull: lastPull[s.key], now: now) {
+                    later = min(later ?? at, at)
+                } else {
+                    due.append(s.key)
+                }
             }
         }
         queue = due // newest first; replaces an older plan
         pump()
         save()
+        if let later { replan(at: later) }
+    }
+
+    /// When a chat with news is pulled: now (nil), or once `workingGap` has passed since its last pull while its
+    /// agent is still working.
+    nonisolated static func heldUntil(working: Bool, lastPull: Date?, now: Date) -> Date? {
+        guard working, let lastPull, now.timeIntervalSince(lastPull) < workingGap else { return nil }
+        return lastPull.addingTimeInterval(workingGap)
+    }
+
+    private func replan(at date: Date) {
+        if let replanAt, replanAt <= date { return }
+        replanAt = date
+        Task {
+            try? await Task.sleep(for: .seconds(max(date.timeIntervalSinceNow, 0.05)))
+            guard replanAt == date else { return }
+            replanAt = nil
+            plan()
+        }
     }
 
     private func pump() {
@@ -89,6 +122,7 @@ final class AgentSync {
             let key = queue.removeFirst()
             guard let rev = known[key] else { continue }
             running.insert(key)
+            lastPull[key] = .now
             Task {
                 let ok = await pull(key)
                 running.remove(key)
