@@ -221,7 +221,6 @@ targets:
       - path: Shared/FleetState.swift
       - path: Shared/StatusPalette.swift
       - path: Shared/Design/Palette.swift
-      - path: Shared/Design/ColorBlend.swift
       - path: Shared/Design/IslandMetrics.swift
       # The persona's face (the app's JarvisAvatar draws it too), on the activity's leading side.
       - path: Shared/Design/PersonaFace.swift
