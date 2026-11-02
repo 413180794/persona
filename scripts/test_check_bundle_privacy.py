@@ -205,6 +205,28 @@ class BundleScanIntegrationTests(unittest.TestCase):
         for relay in (None, [], {}):
             self.assertEqual(cbp.remove_public_relay_url("private-placeholder", relay), "private-placeholder")
 
+    def test_published_binary_accepts_only_the_exact_public_download_url(self):
+        site = "https://site.example.test"
+        url = site + "/dl"
+        words = ("site.example.test", site)
+        for config in ({"publish": {"site_url": site}}, {"publish": {"site_url": site + "/"}}):
+            code, output = self.scan(url, words=words, config=config)
+            self.assertEqual(code, 0, output)
+        config = {"publish": {"site_url": site}}
+        for text in (site, url + "/private", url + "?token=placeholder", url + ".other", "site.example.test",
+                     "person@site.example.test", "https://user@site.example.test/dl", url + "\nsite.example.test"):
+            with self.subTest(text=text):
+                code, output = self.scan(text, words=words, config=config)
+                self.assertNotEqual(code, 0)
+                self.assertIn("private value", output)
+                self.assertNotIn("site.example.test", output)
+        code, _ = self.scan(url, words=words, public=False, config=config)  # app bundles do not carry it
+        self.assertNotEqual(code, 0)
+        for bad in ("http://site.example.test", "https://203.0.113.17", "https://site.example.test:8443"):
+            with self.subTest(site=bad):
+                code, _ = self.scan(bad + "/dl", words=(bad + "/dl",), config={"publish": {"site_url": bad}})
+                self.assertNotEqual(code, 0)
+
     def test_app_mode_stays_strict(self):
         code, output = self.scan(CONTACT + "\n" + str(NETWORKS[0]), public=False)
         self.assertNotEqual(code, 0)

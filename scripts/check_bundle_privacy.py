@@ -7,8 +7,9 @@
 The values are scripts/privacy_check.py's (config, private-words.txt, CLAUDE.local.md, the home directory), plus private
 IPv4 addresses and emails outside placeholder domains, looked for in every file's printable strings (like `strings`,
 after decompressing lzfse files) and in binary plists. The bundle id and team id are in every signed build on purpose
-and are removed before matching. App mode also recognizes only the exact configured public HTTPS /relay endpoint;
-its host in any other context, related paths, credentials, and the public Go build remain subject to private-value checks.
+and are removed before matching. App mode also recognizes only the exact configured public HTTPS /relay endpoint, and
+--whole-short only the exact public download address (publish.site_url + /dl, the hub's update URL, docs/hub-update.md);
+their host in any other context, related paths and credentials remain subject to private-value checks.
 Signing data is Apple's and is skipped: embedded.mobileprovision, _CodeSignature, and the code signature at the end of
 each Mach-O (certificate names; the archive's development profile lists device ids, which export replaces anyway).
 Values match as written or lowercased, not in any case: Swift's mangled symbol names are full of short fragments
@@ -149,8 +150,9 @@ def texts(path: str):
         yield subprocess.run(["plutil", "-convert", "xml1", "-o", "-", path], capture_output=True, text=True).stdout
 
 
-def remove_public_relay_url(text, configured_url):
-    """The app intentionally ships this exact public HTTPS endpoint, not its entire host or other URLs."""
+def remove_public_relay_url(text, configured_url, path="/relay"):
+    """The app intentionally ships this exact public HTTPS endpoint, not its entire host or other URLs. path: the one
+    path the endpoint may have (/relay for the push relay, /dl for the hub's update URL in a published jarvisd)."""
     if not isinstance(configured_url, str):
         return text
     url = configured_url.rstrip("/")
@@ -158,7 +160,7 @@ def remove_public_relay_url(text, configured_url):
         parsed = urlsplit(url)
         if (parsed.scheme != "https" or not parsed.hostname or "." not in parsed.hostname
                 or parsed.username or parsed.password or parsed.query or parsed.fragment
-                or parsed.port is not None or parsed.path != "/relay"):
+                or parsed.port is not None or parsed.path != path):
             return text
         try:
             ipaddress.ip_address(parsed.hostname)
@@ -170,6 +172,11 @@ def remove_public_relay_url(text, configured_url):
     # Do not remove a prefix of another URL, a credential URL, or an extended path/query.
     boundary = r"[A-Za-z0-9._~:/?#@!$&()*+,;=%-]"
     return re.sub(r"(?<!" + boundary + ")" + re.escape(url) + r"(?!" + boundary + ")", "", text)
+
+
+def public_download_url(cfg):
+    site = jarvis_config.get(cfg, "publish.site_url", "")
+    return site.rstrip("/") + "/dl" if isinstance(site, str) and site else ""
 
 
 def main():
@@ -196,6 +203,8 @@ def main():
             for t in texts(path):
                 if not whole_short:
                     t = remove_public_relay_url(t, jarvis_config.get(cfg, "app.push_relay", ""))
+                else:  # the update URL every published jarvisd carries (-X main.updateURL, scripts/publish.sh)
+                    t = remove_public_relay_url(t, public_download_url(cfg), "/dl")
                 for v in inherent:
                     t = t.replace(v, "")
                 if modules:
