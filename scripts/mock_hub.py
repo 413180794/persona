@@ -1239,6 +1239,49 @@ def lark_read_states(feed, ids):
     return out
 
 
+# Members of f2 / f3 for the @ picker (GET …/members?q=&limit=); user ids are the senders' ids in the chats. Two have
+# an avatar, the rest none (the app draws their initial).
+LARK_MEMBERS = {
+    "f2": [("Lucy Wang", "Lucy"), ("李雷", ""), ("韩梅梅", ""), ("Tom", ""), ("小周", ""), ("我", "")],
+    "f3": [("Tom", ""), ("小周", ""), ("阿杰", "杰哥"), ("Mia", ""), ("老王", ""), ("我", ""), ("天气助手", "")],
+}
+LARK_MEDIA.update({"avatar-tom": (96, 96), "avatar-mia": (96, 96)})
+
+
+def lark_members(feed, q, limit):
+    """A chat's members the way the hub answers: the group nickname first, else the name; q filters by either."""
+    out = []
+    for who, nick in LARK_MEMBERS.get(feed, []):
+        if q and q.lower() not in (who + " " + nick).lower(): continue
+        m = {"user_id": "bot-weather" if who == "天气助手" else "u-" + who, "name": nick or who}
+        if who in ("Tom", "Mia"): m["avatar"] = "/api/v1/lark/media/avatar-" + who.lower()
+        out.append(m)
+    return out[:limit]
+
+
+def lark_mention_parts(text, mentions):
+    """The parts of a sent message: each mention's literal "@name" becomes an at part, the rest text parts."""
+    parts, rest = [], text
+    while mentions:
+        hits = [(rest.find("@" + m["name"]), m) for m in mentions if "@" + m["name"] in rest]
+        if not hits: break
+        i, m = min(hits, key=lambda h: h[0])
+        if i: parts.append({"kind": "text", "text": rest[:i]})
+        parts.append({"kind": "at", "text": "@" + m["name"], "refId": m["user_id"]})
+        rest = rest[i + len(m["name"]) + 1:]
+    if rest: parts.append({"kind": "text", "text": rest})
+    return parts
+
+
+def lark_check_mentions(body):
+    """The hub's 400 for mentions: more than 100, or one without user_id / name; None when fine."""
+    ms = body.get("mentions") or []
+    if len(ms) > 100: return "at most 100 mentions"
+    if any(not (m.get("user_id") or "").strip() or not (m.get("name") or "").strip() for m in ms):
+        return "a mention needs user_id and name"
+    return None
+
+
 def lark_window(msgs, q, default_limit=40):
     """A page of a chat or thread the way the hub answers: oldest first, before / after / around a position."""
     msgs = sorted(msgs, key=lambda m: int(m["position"]))
@@ -3015,6 +3058,11 @@ class H(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "image/png")
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
             return
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/members"):  # the @ picker
+            arg = lambda k: (q.get(k) or [""])[0]
+            limit = int(arg("limit") or 0)
+            limit = 50 if limit <= 0 else min(limit, 200)
+            return self.send_json({"members": lark_members(p.split("/")[5], arg("q").strip(), limit)})
         if p == "/api/v1/lark/labels": return self.send_json({"labels": []})
         if p == "/api/v1/lark/flags": return self.send_json({"conversations": [], "messages": []})
         if p == "/api/v1/lark/emojis": return self.send_json({"emojis": LARK_EMOJIS})
@@ -3321,12 +3369,14 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # 飞书发消息: lark-connector takes a moment
             body, feed = json.loads(self.last_body or b"{}"), p.split("/")[5]
+            if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
             time.sleep(float(os.environ.get("MOCK_LARK_SEND_SECONDS", "2")))
             if "#fail" in body.get("text", ""):
                 return self.send_json({"error": "lark-connector: send timed out"}, 502)
             msgs = LARK_MESSAGES.setdefault(feed, [])
             pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
             m = _lm(pos, "我", body.get("text", ""), mine=True, mins=0)
+            if body.get("mentions"): m["parts"] = lark_mention_parts(m["text"], body["mentions"])
             m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # now, not the mock's start
             msgs.append(m)
             return self.send_json({"ok": True})
@@ -3336,6 +3386,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"states": lark_read_states(p.split("/")[5], ids)})
         if p.startswith("/api/v1/lark/messages/") and p.endswith("/replies"):  # 飞书回复: in the thread or quoted in the chat
             body, mid = json.loads(self.last_body or b"{}"), p.split("/")[5]
+            if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
             time.sleep(float(os.environ.get("MOCK_LARK_SEND_SECONDS", "2")))
             if "#fail" in body.get("text", ""):
                 return self.send_json({"error": "lark-connector: reply timed out"}, 502)
@@ -3358,6 +3409,7 @@ class H(BaseHTTPRequestHandler):
                 msgs.append(m)
             else:
                 return self.send_json({"error": "no such message"}, 404)
+            if body.get("mentions"): m["parts"] = lark_mention_parts(m["text"], body["mentions"])
             return self.send_json({"ok": True, "message_id": m["id"]})
         if p == "/api/v1/assistant/conversations" and self.command == "POST":
             body = json.loads(self.last_body or b"{}")

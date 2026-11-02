@@ -33,6 +33,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>JarvisPushKeychainGroup</key>
+	<string>$(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push</string>
+	<key>JarvisPushRelay</key>
+	<string>$(JARVIS_PUSH_RELAY)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>

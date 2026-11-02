@@ -180,6 +180,8 @@ Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store 
   麦克风 / 摄像头（`project.yml` 的 entitlements）。
 - **推送**（2026-11-02 起，`docs/mac.md`「远程推送（Mac）」）：`com.apple.developer.aps-environment`（macOS 上的名字，iOS 是 `aps-environment`）。
   App ID 是 UNIVERSAL、早就开着 Push Notifications，开发者账号不用改；归档里是 `development`，App Store 导出时云签名改成 `production`。
+  包里另有通知服务扩展 `JarvisNotify.appex`（target `JarvisMacNotify`，`Contents/PlugIns/`，沙盒 + `.push` 钥匙串组，#432），
+  bundle id 和 iPhone 的扩展同一个（UNIVERSAL 的 App ID），导出时云签名给它建 Mac 的描述文件；`entitlements.py sign / check` 一起签、一起查。
 - **发布前检查**和 iPhone 一样：权限说明（`check_bundle_strings.py`）、隐私扫描（`check_bundle_privacy.py`，认 Mac 的
   `Contents/` 结构，跳过 `embedded.provisionprofile`，通用二进制整个扫）、Release 里没有 DEBUG 开关；另外查分类和图标里有 512 / 512@2x。
 - 导出是 `.pkg`（ExportOptions 的 `method` 同样是 `app-store-connect`），和 iPhone 一样云签名：App 是 Apple Distribution，

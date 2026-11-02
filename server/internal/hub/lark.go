@@ -117,18 +117,23 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/lark/conversations/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Text     string `json:"text"`
-			ClientID string `json:"client_id"` // the app's idempotency key; a retry with the same one posts once
+			Text     string         `json:"text"`
+			ClientID string         `json:"client_id"` // the app's idempotency key; a retry with the same one posts once
+			Mentions []lark.Mention `json:"mentions"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" {
 			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
+			return
+		}
+		if err := checkMentions(in.Mentions); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		// A missing or malformed client_id is not an error: Send makes one up, as it did before apps sent it.
 		if !lark.ValidClientID(in.ClientID) {
 			in.ClientID = ""
 		}
-		id, err := h.lark.Send(r.Context(), r.PathValue("id"), in.Text, in.ClientID)
+		id, err := h.lark.Send(r.Context(), r.PathValue("id"), in.Text, in.ClientID, in.Mentions...)
 		if err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 			return
@@ -142,18 +147,23 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	// Replies to one message: quoted in its chat, or with thread=true inside its thread (a topic group's topic).
 	api.HandleFunc("POST /api/v1/lark/messages/{id}/replies", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Text     string `json:"text"`
-			Thread   bool   `json:"thread"`
-			ClientID string `json:"client_id"`
+			Text     string         `json:"text"`
+			Thread   bool           `json:"thread"`
+			ClientID string         `json:"client_id"`
+			Mentions []lark.Mention `json:"mentions"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" {
 			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
 			return
 		}
+		if err := checkMentions(in.Mentions); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
 		if !lark.ValidClientID(in.ClientID) {
 			in.ClientID = ""
 		}
-		id, err := h.lark.Reply(r.Context(), r.PathValue("id"), in.Text, in.Thread, false, in.ClientID)
+		id, err := h.lark.Reply(r.Context(), r.PathValue("id"), in.Text, in.Thread, false, in.ClientID, in.Mentions...)
 		if err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 			return
@@ -163,6 +173,16 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			out["message_id"] = id
 		}
 		writeJSON(w, out)
+	})
+	// The chat's members for the @ picker: all of them (up to limit), or with q the ones matching it.
+	api.HandleFunc("GET /api/v1/lark/conversations/{id}/members", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		members, err := h.lark.Members(r.Context(), r.PathValue("id"), q.Get("q"), atoi(q.Get("limit")))
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, map[string]any{"members": members})
 	})
 	api.HandleFunc("POST /api/v1/lark/conversations/{id}/read", func(w http.ResponseWriter, r *http.Request) {
 		var in lark.Read
@@ -275,6 +295,20 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+}
+
+// checkMentions rejects what lark-connector would: more than lark.MaxMentions, or one without a user id or name. The text
+// is not checked for the literal "@name"; lark-connector decides what a mention without it means.
+func checkMentions(ms []lark.Mention) error {
+	if len(ms) > lark.MaxMentions {
+		return fmt.Errorf("at most %d mentions", lark.MaxMentions)
+	}
+	for _, m := range ms {
+		if strings.TrimSpace(m.UserID) == "" || strings.TrimSpace(m.Name) == "" {
+			return errors.New("a mention needs user_id and name")
+		}
+	}
+	return nil
 }
 
 // rawPath is the lark-connector path behind /api/v1/lark/raw, still percent-encoded: ids with "/" (mail threads) must

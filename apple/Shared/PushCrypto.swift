@@ -28,6 +28,11 @@ nonisolated enum PushCrypto {
         var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecAttrAccount as String: account]
         if let group { q[kSecAttrAccessGroup as String] = group }
+        #if os(macOS)
+        // A Mac's default is the old file keychain, where access groups do nothing and an item belongs to the app that
+        // made it: JarvisMacNotify could not read the key. The data protection keychain shares it like on a phone.
+        q[kSecUseDataProtectionKeychain as String] = true
+        #endif
         return q
     }
 

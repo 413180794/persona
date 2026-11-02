@@ -219,8 +219,12 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
   提问和终端没有按钮，点开到对话。点按钮、点通知都走 `MacAppDelegate`，和本地通知一样。
 - **退出**：在 iPhone 上退出这台 Mac（或 设置 › 设备 里撤销）时，hub 连它登记的推送设备一起删掉（登记时记下了是哪个设备凭据），之后不再推；
   它的通知设置也跟着没了，重新配对从默认值开始。iPhone 的撤销也一样。
-- **推送中继还不支持 Mac**：没有自己 APNs key 的 hub 走中继，正文是密文，要靠通知服务扩展解密（`docs/push-relay.md`）。Mac 还没有这个扩展，
-  登记了也只能显示「有新消息」，所以 Mac 不向中继登记：这样的 hub 照旧推不到 Mac，App 开着时仍是本地通知。要做的事见 #432。
+- **推送中继**（2026-11-02 起，#432）：没有自己 APNs key 的 hub 走中继，正文是密文（`docs/push-relay.md`），由 Mac 的通知服务扩展
+  `JarvisMacNotify` 解密后再显示（和 iPhone 的 `JarvisNotify` 同一份代码、同一个 Info.plist、同一个 bundle id `<bundle id>.notify`，App ID 是 UNIVERSAL）。
+  - 为什么不在 App 里解密：hub 不给连着的 Mac 推提醒，中继推来的只会在 App 关着或断开时到，系统直接显示，App 改不了内容。
+  - 私钥在 App 和扩展共用的钥匙串组 `<team>.<bundle id>.push`（两边的 `keychain-access-groups`）。macOS 上 `PushCrypto` 要加
+    `kSecUseDataProtectionKeychain`：默认的老式文件钥匙串不认访问组，条目只属于创建它的 App，扩展读不到，只能显示「有新消息」。
+  - Mac 的扩展必须开沙盒；本机不签名编的版本没有这些 entitlement，拿不到 data protection 钥匙串，不向中继登记（照旧只有本地通知）。
 
 ## 侧边栏的「知识库」「机器」（Mac）
 
@@ -719,7 +723,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 18. Notifications & notification actions
 - [ ] Request permission + APNs registration, POST /devices — App/PushRegistrar.swift (registerIfPossible；iOS 和 Mac 共用)
-  - Mac（2026-11-02）：`com.apple.developer.aps-environment`，`MacAppDelegate` 收 token，以 kind `mac` 登记（「远程推送（Mac）」）；还不走推送中继。要用 TestFlight 包在真 Mac 上验证。
+  - Mac（2026-11-02）：`com.apple.developer.aps-environment`，`MacAppDelegate` 收 token，以 kind `mac` 登记（「远程推送（Mac）」）；也登记推送中继，`JarvisMacNotify` 解密（#432）。要用 TestFlight 包在真 Mac 上验证。
 - [x] Categories INTERACTION_PERMISSION (允许 auth-required / 拒绝) and INTERACTION_PLAN (批准 / 打回修改 text input) — App/NotificationActions.swift
 - [ ] Background resolve from action, failure local notification — App/JarvisApp.swift (resolveFromNotification)
   - 要到 Mac 前看：有 Agent 等授权时，悬停系统通知 › 选项 › 允许，hub 处理掉、窗口不出来；hub 断开时再来一次，应出一条失败通知。读代码：`MacAppDelegate` 走和 iOS 一样的 `NotificationActions.resolution` / `reportFailure`，`NotificationActionsTests` 在 Mac 上通过。

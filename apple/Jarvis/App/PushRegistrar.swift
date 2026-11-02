@@ -7,8 +7,9 @@ import UIKit
 #endif
 
 /// Registers for APNs and tells the hub where to push (interactions, finished turns). The iPhone and the Mac app the
-/// same way, as kind `iphone` / `mac`: same bundle id, so the same APNs topic. While the Mac app is connected the hub
-/// leaves the agents' alerts to it (MacAttentionWatcher posts them); a Mac never gets the phone's wake pushes.
+/// same way, as kind `iphone` / `mac`: same bundle id, so the same APNs topic, and both through the relay for a hub
+/// without the app's key. While the Mac app is connected the hub leaves the agents' alerts to it (MacAttentionWatcher
+/// posts them); a Mac never gets the phone's wake pushes.
 final class PushRegistrar {
     static let shared = PushRegistrar()
 
@@ -51,11 +52,10 @@ final class PushRegistrar {
         }
     }
 
-    /// A hub without the app's APNs key pushes through the relay, sealed to this key (docs/push-relay.md). The hub
-    /// decides: with its own key it ignores these and pushes directly, as before. Not on the Mac yet (#432): it has no
-    /// notification service extension to open the sealed payload, so it would only ever show 「有新消息」.
+    /// A hub without the app's APNs key pushes through the relay, sealed to this key (docs/push-relay.md); the
+    /// notification service extension (JarvisNotify, on a Mac JarvisMacNotify) opens it. The hub decides: with its own
+    /// key it ignores these and pushes directly, as before.
     private static func withRelay(_ body: APIClient.DeviceBody, token: String, env: String) async -> APIClient.DeviceBody {
-        #if os(iOS)
         var body = body
         if let relay = PushRelay.url, let key = PushCrypto.ensureKey(), let topic = body.topic {
             do {
@@ -66,7 +66,6 @@ final class PushRegistrar {
                 PushRelay.log.error("relay registration: \(error.localizedDescription, privacy: .public)")
             }
         }
-        #endif
         return body
     }
 

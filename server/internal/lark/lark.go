@@ -576,17 +576,28 @@ func (c *Client) CardAction(ctx context.Context, messageID, actionID string, par
 	return c.do(ctx, "POST", "/messages/"+url.PathEscape(messageID)+"/card-actions/"+url.PathEscape(actionID), nil, body, nil)
 }
 
+// Mention is one person @-mentioned in a sent message; the text must carry "@"+Name literally. UserID "all" with
+// Name "所有人" is @all.
+type Mention struct {
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
+}
+
+// MaxMentions is how many mentions one message may carry (lark-connector's cap).
+const MaxMentions = 100
+
 // Send posts text to a conversation as the user and returns lark-connector's message id (empty if it gave none).
 // clientID is the idempotency key: resending the same one never posts twice. Empty generates a fresh one.
-func (c *Client) Send(ctx context.Context, feedID, text, clientID string) (string, error) {
-	return c.post(ctx, "/conversations/"+url.PathEscape(feedID)+"/messages", map[string]any{"text": text}, clientID)
+// mentions turn the matching "@name" in text into real @-mentions.
+func (c *Client) Send(ctx context.Context, feedID, text, clientID string, mentions ...Mention) (string, error) {
+	return c.post(ctx, "/conversations/"+url.PathEscape(feedID)+"/messages", withMentions(map[string]any{"text": text}, mentions), clientID)
 }
 
 // Reply answers a message as the user, quoting it; `thread` posts into its thread (lark-connector finds the root; in a
-// topic group it lands in the message's topic). `markdown` sends rich text (bold, lists, code, links), else plain
-// text. It returns lark-connector's message id; clientID works as in Send.
-func (c *Client) Reply(ctx context.Context, messageID, text string, thread, markdown bool, clientID string) (string, error) {
-	body := map[string]any{"text": text}
+// topic group it lands in the message's topic). `markdown` sends rich text (bold, lists, code, links;
+// lark-connector ignores mentions then), else plain text. It returns lark-connector's message id; clientID and mentions work as in Send.
+func (c *Client) Reply(ctx context.Context, messageID, text string, thread, markdown bool, clientID string, mentions ...Mention) (string, error) {
+	body := withMentions(map[string]any{"text": text}, mentions)
 	if thread {
 		body["replyMode"] = "thread"
 	}
@@ -594,6 +605,19 @@ func (c *Client) Reply(ctx context.Context, messageID, text string, thread, mark
 		body["editorType"] = "markdown"
 	}
 	return c.post(ctx, "/messages/"+url.PathEscape(messageID)+"/replies", body, clientID)
+}
+
+// withMentions adds lark-connector's mentions ([{userId, name}]) to a message body; none leaves the body as it was.
+func withMentions(body map[string]any, mentions []Mention) map[string]any {
+	if len(mentions) == 0 {
+		return body
+	}
+	out := make([]map[string]string, len(mentions))
+	for i, m := range mentions {
+		out[i] = map[string]string{"userId": m.UserID, "name": m.Name}
+	}
+	body["mentions"] = out
+	return body
 }
 
 // post sends a message body to path with clientID (generated if empty) and returns lark-connector's message id.
@@ -805,6 +829,50 @@ func (c *Client) ReadStates(ctx context.Context, feedID string, messageIDs []str
 		if it.MessageID != "" {
 			out = append(out, ReadState{MessageID: it.MessageID, ReadCount: it.ReadCount, UnreadCount: it.UnreadCount})
 		}
+	}
+	return out, nil
+}
+
+// Member is one person in a chat, as the @ picker shows them: the group nickname if they have one, else their name.
+type Member struct {
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
+	Avatar string `json:"avatar,omitempty"`
+}
+
+// Members lists a chat's members, or with q the members matching it (name, nickname, pinyin). limit defaults to 50
+// and is capped at 200.
+func (c *Client) Members(ctx context.Context, feedID, q string, limit int) ([]Member, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	limit = min(limit, 200)
+	path, query := "/conversations/"+url.PathEscape(feedID)+"/members", url.Values{"limit": {strconv.Itoa(limit)}}
+	if q = strings.TrimSpace(q); q != "" {
+		path += "/search"
+		query.Set("q", q)
+	}
+	var res struct {
+		Items []struct {
+			UserID        string `json:"userId"`
+			DisplayName   string `json:"displayName"`
+			GroupNickname string `json:"groupNickname"`
+			AvatarURL     string `json:"avatarUrl"`
+		} `json:"items"`
+	}
+	if err := c.do(ctx, "GET", path, query, nil, &res); err != nil {
+		return nil, err
+	}
+	out := []Member{}
+	for _, it := range res.Items {
+		if it.UserID == "" {
+			continue
+		}
+		name := it.GroupNickname
+		if name == "" {
+			name = it.DisplayName
+		}
+		out = append(out, Member{UserID: it.UserID, Name: name, Avatar: MediaURL(it.AvatarURL)})
 	}
 	return out, nil
 }

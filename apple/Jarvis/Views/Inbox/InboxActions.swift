@@ -108,9 +108,7 @@ struct InboxDraftSheet: View {
                 .padding(.vertical, Theme.Space.m)
             }
             .themedPage()
-            .navigationTitle(item.moment != nil ? "评论removed" : item.doc != nil ? "评论 " + item.title
-                             : item.connector != nil ? "评论 " + (item.connector?.reference?.split(separator: "/").last.map(String.init) ?? item.title)
-                             : item.isLark ? "回复 " + item.title : "回复邮件")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
@@ -151,6 +149,16 @@ struct InboxDraftSheet: View {
         .padding(.horizontal, Theme.Space.l)
         .padding(.vertical, Theme.Space.m)
         .background(Theme.accent.opacity(0.06))
+    }
+
+    // Spelled out instead of one nested ternary: Swift 6.2 (Xcode 26.0) cannot type-check that in reasonable time.
+    private var title: String {
+        if item.moment != nil { return "评论removed" }
+        if item.doc != nil { return "评论 " + item.title }
+        if let connector = item.connector {
+            return "评论 " + (connector.reference?.split(separator: "/").last.map(String.init) ?? item.title)
+        }
+        return item.isLark ? "回复 " + item.title : "回复邮件"
     }
 
     private var keptChanges: [InboxItem.DocChange] { proposed.filter { (kept ?? Set(proposed)).contains($0) } }

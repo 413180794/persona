@@ -108,6 +108,9 @@ targets:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleURLSchemes: [jarvis]
         ITSAppUsesNonExemptEncryption: false
+        # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
+        JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
         LSApplicationCategoryType: public.app-category.productivity
         UILaunchScreen:
           UIColorName: LaunchBackground
@@ -157,6 +160,7 @@ targets:
       - path: Jarvis
         excludes: ["**/*.md", "App/JarvisApp.swift", "App/LiveActivityController.swift", "Resources/Info.plist", "Resources/Jarvis.entitlements"]
     dependencies:
+      - target: JarvisMacNotify
       - package: MarkdownUI
       - package: BeautifulUI
     entitlements:
@@ -165,6 +169,9 @@ targets:
         # Remote push (PushRegistrar; macOS's name for iOS's aps-environment). The archive says development; the App
         # Store export signs it production (checked by scripts/entitlements.py check on the .pkg).
         com.apple.developer.aps-environment: development
+        # The relay's push key, shared with JarvisMacNotify (PushCrypto, in the data protection keychain on a Mac).
+        # The app's own group first: it stays the default.
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         # A machine's port forwarded to this Mac's loopback for the in-app browser (docs/ports.md).
@@ -207,6 +214,9 @@ targets:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleURLSchemes: [jarvis]
         ITSAppUsesNonExemptEncryption: false
+        # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
+        JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "26.0"
         NSAppTransportSecurity:
@@ -285,6 +295,31 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
+  # The Mac's JarvisNotify (#432): opens pushes that came through the relay before they are shown. Same code, Info.plist
+  # and bundle id as the iPhone's (one UNIVERSAL App ID); a Mac extension must be sandboxed.
+  JarvisMacNotify:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: JarvisNotify
+        excludes: ["*.plist", "*.entitlements"]
+      - path: Shared/PushCrypto.swift
+    entitlements:
+      path: JarvisNotify/JarvisMacNotify.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).notify
+        PRODUCT_NAME: JarvisNotify
+        INFOPLIST_FILE: JarvisNotify/Info.plist
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        ENABLE_HARDENED_RUNTIME: YES
   JarvisWatch:
     type: application
     platform: watchOS
@@ -340,6 +375,7 @@ targets:
       - path: JarvisTests/MachineMetricsTests.swift
       - path: JarvisTests/NotificationActionsTests.swift
       - path: JarvisTests/NotifyPrefsTests.swift
+      - path: JarvisTests/PushCryptoTests.swift
     dependencies:
       - target: JarvisMac
     settings:
