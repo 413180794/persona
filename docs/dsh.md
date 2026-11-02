@@ -39,7 +39,8 @@ DSH 这边是一个装进 `dsh web` 的插件，用的是 Web GUI 自己用的�
           interactions: auto
   ```
 
-插件只在 web profile 里有用（要 `sessionController`）；没有 node 在听时它每隔几秒重试一次（最长 30 秒），不影响 DSH。
+插件只在 web profile 里有用（要 `sessionController`）；没有 node 在听时它会一直重试（socket 文件在就每秒一次，不在就最长 30 秒一次），不影响 DSH。
+常驻 node 的 `runtime.sock` 不跟 hub 连接走：hub 重连时插件不断开，hub 不在时提问直接给 Web GUI。
 
 ### 配置
 

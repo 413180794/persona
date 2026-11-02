@@ -484,13 +484,20 @@ SDK 和验收清单见 `docs/runtimes.md`；这里是线上的协议（`server/i
 
 runtime 连 node 的 `~/.jarvis/runtime.sock`（0600，所以必须和 node 是同一个系统用户），一条长连接，帧格式和 hub ↔ node 完全一样（`internal/rpc`：
 每行一个 JSON，请求 / 应答 / 单向事件，两边都能发请求）。hub 和 App 不知道有 runtime：看到的就是普通会话、items 和交互卡片。
-node 断开（hub 重连、重新部署）时 runtime 自己重连；node 不在（没有 hub 连着这台机器）时 runtime 什么都不做。
+**socket 跟着谁**：常驻 node（`jarvisd node --attach`）一启动就开着 `runtime.sock`，hub 的每条连接共用它（`node/runtimehost.go`）：
+runtime 不用等 hub，hub 重连期间连接也不断，下一条连接的第一份会话列表里就有它的会话。没有常驻 node、由 `--stdio` 自己服务时，socket
+只在这条 hub 连接期间存在，和以前一样。
+
+**没有 hub 时**：runtime 照样连得上、hello 照样回（`hub: false`），列表照收；推给手机的内容丢掉（hub 回来后会按手机的进度重新 watch）；
+`interaction.create` 回错误 `code: node_gone`，runtime 等 hub 回来后用同一个 id 再问。hub 来了、走了 node 都推一次 `runtime.hub`，runtime 据此
+不去等一个答不了的手机（SDK：没有 hub 时一律先给本地界面）。node 进程自己没了（重启、换二进制）时 runtime 重连：socket 文件还在就每秒
+试一次，文件不在就退避到最长 30 秒。
 
 runtime → node：
 
 | 消息 | 说明 |
 | --- | --- |
-| 请求 `runtime.hello {runtime, name?, agent?, version?, launcher?, launcher_model?, caps: {start, send, interrupt, rename, close}}` → `{protocol, node_version}` | 必须第一个发；之前的事件 node 一律丢掉。`runtime` 是 id（`[A-Za-z0-9][A-Za-z0-9_.-]*`，如 `dsh`），也是会话的 `space_kind`；`agent` 是它的会话跑的 Agent，不填就是 `runtime` 自己；`name` 是 App 里的叫法（`DSH`），这种会话带 `agent_label: name`，App 不用为新 runtime 发版。`caps` 说明支持哪些操作，没声明的 node 直接回 `unsupported`。`launcher` 非空且 `caps.start` 时，node 的 `launchers.list` 多一项 `{name: launcher, model: launcher_model, source: runtime}`，新建会话选它就交给这个 runtime |
+| 请求 `runtime.hello {runtime, name?, agent?, version?, launcher?, launcher_model?, caps: {start, send, interrupt, rename, close}}` → `{protocol, node_version, hub}` | 必须第一个发；`hub` 是 node 现在有没有连着 hub（旧 node 不带，当作有）；之前的事件 node 一律丢掉。`runtime` 是 id（`[A-Za-z0-9][A-Za-z0-9_.-]*`，如 `dsh`），也是会话的 `space_kind`；`agent` 是它的会话跑的 Agent，不填就是 `runtime` 自己；`name` 是 App 里的叫法（`DSH`），这种会话带 `agent_label: name`，App 不用为新 runtime 发版。`caps` 说明支持哪些操作，没声明的 node 直接回 `unsupported`。`launcher` 非空且 `caps.start` 时，node 的 `launchers.list` 多一项 `{name: launcher, model: launcher_model, source: runtime}`，新建会话选它就交给这个 runtime |
 | 事件 `runtime.sessions {sessions: [Session]}` | 它的全部会话，变化时推全量。字段是 `Session` 的子集：`session_id`（`[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`，比 Claude 的 uuid 宽，DSH 是 `session-<uuid>`）、`title`、`cwd`、`status`（`working / blocked / done / idle / offline`，别的当 `unknown`）、`agent`、`model`、`updated_at`、`last_text`、`rev`（变了 App 就拉新内容）、`space_*`。node 清掉 `machine_id`、`state` 这些 hub 算的字段，补 `agent` / `agent_label` / `space_kind`，并按「Codex 来源与能力」的同一套字段标来源：`source_kind: "runtime"`、`source_instance_id` 是 runtime id、`capabilities` = `{read: true, send: caps.send, interrupt: caps.interrupt, approve: true, terminal: false, attach: false}`（没声明 `send` 的带 `read_only_reason`），App 和 hub 按它们开关按钮、守发送；合并进 `sessions.list` 立刻推 `sessions.changed`；同一个 id 两条连接都报时以新的为准。连接断开，它的会话就从列表里消失。**列表只是「现在给 App 看哪些」，不是归属**：runtime 只列它最近的会话（DSH 是几千个里最近的 80 个），node 记着每个会话是哪个 runtime 列过的（按 runtime id，重连后还是它），对一个不在列表里的老会话的调用照样交给它；这台机器上什么都没有（没有 Agent、没有 transcript）的会话，`session.send` / `items` / `watch` 这类调用先用 `session.items {session_id, limit: 1}` 问一遍连着的 runtime，答得上来的就归它（问不到的一分钟内不再问）。属于某个 runtime、它却没连着时，回错误 `code: runtime_away`（`delivered: none`），不会当成 Claude 会话去终端里恢复 |
 | 事件 `session.items {session_id, items, history, from_seq, to_seq}` | 被看着的会话的新内容，原样转给 hub（形状同 node → hub 的 `session.items`，连续性规则见「items 的连续性」）。它没列出的会话不转 |
 | 事件 `session.delta {session_id, text}` | 正在生成的整段文字，空串表示这段结束；原样转给 hub，App 画成逐字输出 |
@@ -498,7 +505,9 @@ runtime → node：
 | 事件 `interaction.cancel {id}` | runtime 那边这次交互没了（工具调用被取消）：撤掉手机上的卡 |
 | 请求 `mcp.tools` / `mcp.call` | 原样转给 hub（手机工具，留给以后） |
 
-node → runtime（只发给列出了这个会话的那条连接；hub 对这些会话的 `session.*` 调用都走这里）：
+node → runtime 的事件：`runtime.hub {connected}`，hub 连上 / 断开时发给每个 runtime。
+
+node → runtime 的请求（只发给这个会话所属的那条连接；hub 对这些会话的 `session.*` 调用都走这里）：
 
 | 请求 | 说明 |
 | --- | --- |

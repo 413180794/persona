@@ -32,3 +32,8 @@
   `origin: "subagent"` 或带 `parentSession`），顶层会话只有几十个，7 天内只有个位数。插件本来就不列子会话，80 的上限远没碰到；
   当时手机上「发不出去的 dsh 会话」其实是 `DSH-Claw` 目录下一个**开在 Claude 桌面版里的 Claude 会话**（`docs/lessons/agents.md`）。
   查「某个会话为什么怎样」先拿到它的 id 和来源，别从总数推。会话头是 zstd 压缩的 jsonl 第一行（`session.v4.jsonl.zstd`，老的是 `v2` / 无版本号）。
+- **`runtime.sock` 跟着 hub 连接，一次掉线就要一分半**（2026-11-01，#224）：常驻 node 为每条 hub 连接新建一个 Node，`runtime.sock` 和 runtime 的连接
+  也跟着它建、跟着它没。node 重启或 hub 重连时：launchd 约 10 秒拉起 node，hub 经 tailcat 重连几十秒，插件要等 hub 连上 socket 才出现，
+  它的重试又退避到 30 秒，合计一分半，期间打开 DSH 会话报 transcript not found。现在 socket 和 runtime 连接归常驻 node 进程（`RuntimeHost`），
+  hub 换连接时不断；SDK 在 socket 文件还在时每秒重试。端到端 `runtime-sdk/e2e/resident.mjs`（真的 `--attach`，断开再连 hub、重启常驻 node）。
+

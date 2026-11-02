@@ -8,13 +8,15 @@ import { Peer } from '../lib/wire.js'
 
 /**
  * @param {{ after?: (fn: () => void) => void }} [t] - a node:test context (cleans up after the test), or nothing.
+ * @param {{ path?: string, hub?: boolean }} [opts] - the socket path (default: a fresh temp one); whether hello says a
+ *   hub is connected (default true; setHub changes it and tells the runtime).
  * @returns {Promise<{ path: string, ready: Promise<void>, hello: any, peer: Peer, events: {event: string, params: any}[],
  *   last(event: string): any, all(event: string): any[], asked: any[], resolve: (ix: any) => any, close(): void }>}
  */
-export async function startFakeNode(t) {
-  const dir = mkdtempSync('/tmp/jrt-') // unix socket paths are short on macOS: not under $TMPDIR
-  const path = join(dir, 'runtime.sock')
-  const n = { path, events: [], hello: undefined, peer: undefined, asked: [], resolve: () => ({ dismiss: true }) }
+export async function startFakeNode(t, opts = {}) {
+  const dir = opts.path ? undefined : mkdtempSync('/tmp/jrt-') // unix socket paths are short on macOS: not under $TMPDIR
+  const path = opts.path ?? join(dir, 'runtime.sock')
+  const n = { path, events: [], hello: undefined, peer: undefined, asked: [], resolve: () => ({ dismiss: true }), hub: opts.hub ?? true }
   let connected
   n.ready = new Promise((r) => { connected = r })
   const server = createServer((socket) => {
@@ -25,7 +27,7 @@ export async function startFakeNode(t) {
           n.hello = params
           n.peer = p
           setImmediate(connected)
-          return { protocol: 1, node_version: 'fake' }
+          return { protocol: 1, node_version: 'fake', hub: n.hub }
         }
         if (method === 'interaction.create') {
           n.asked.push(params.interaction)
@@ -39,9 +41,14 @@ export async function startFakeNode(t) {
   await new Promise((r) => server.listen(path, r))
   n.last = (event) => n.events.filter((e) => e.event === event).at(-1)?.params
   n.all = (event) => n.events.filter((e) => e.event === event).map((e) => e.params)
+  /** The hub comes or goes: the runtime is told, as a resident node tells it. */
+  n.setHub = (connected) => {
+    n.hub = connected
+    n.peer?.notify('runtime.hub', { connected })
+  }
   n.close = () => {
     server.close()
-    rmSync(dir, { recursive: true, force: true })
+    if (dir) rmSync(dir, { recursive: true, force: true })
   }
   t?.after?.(n.close)
   return n

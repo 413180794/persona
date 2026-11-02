@@ -4,6 +4,7 @@
 // the "who answers first" policy. A runtime supplies a driver with what only it knows: its sessions, their pages, and
 // how to send to them; it calls back append / stream / ask / sessionsChanged as things happen.
 
+import { existsSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -16,6 +17,8 @@ const PHONE_DRIVEN_FOR = 6 * 60 * 60 * 1000 // a session the phone sent to or st
 const RESUME_WAIT = 2 * 60 * 1000 // how long a pending ask waits for the next node (jarvisd node.ResumeWait)
 const APPEND_WINDOW = 80 // ms: committed content within this window goes out as one batch
 const STREAM_EVERY = 120 // ms: live text at most this often (the whole text so far each time)
+const RETRY_PRESENT = 1000 // ms: retry this often while the socket file is there (a node is, or is restarting)
+const RETRY_MAX = 30_000 // ms: the longest wait while there is no socket file (no node on this machine yet)
 
 /** The node's runtime socket for the user this process runs as. */
 export function defaultSocketPath() {
@@ -70,6 +73,8 @@ export function createRuntime(driver, options) {
   const streams = new Map() // session id -> { text, timer, sentAt }
   const pending = new Map() // session id -> interactions waiting on the phone
   const phoneDriven = new Map() // session id -> when the phone last sent to it or started it
+  // Whether the node has a hub connected (runtime.hello's hub, then runtime.hub). Older nodes do not say: assume so.
+  let hubConnected = true
 
   // ---- connection ----
 
@@ -80,10 +85,24 @@ export function createRuntime(driver, options) {
     retryTimer.unref?.()
   }
 
+  // The wait before the next try. A socket file means a node is there or coming back (a resident node keeps it while
+  // it restarts): try again soon. No file: no node on this machine yet, back off.
   function backoff() {
+    if (socketPresent()) {
+      retryMs = baseRetry
+      return Math.min(baseRetry, RETRY_PRESENT)
+    }
     const d = retryMs
-    retryMs = Math.min(retryMs * 2, 30_000)
+    retryMs = Math.min(retryMs * 2, RETRY_MAX)
     return d
+  }
+
+  function socketPresent() {
+    try {
+      return existsSync(socketPath)
+    } catch {
+      return false
+    }
   }
 
   function hello() {
@@ -114,13 +133,16 @@ export function createRuntime(driver, options) {
     }
     socket.once('error', () => {}) // handled by close
     socket.once('connect', async () => {
-      const p = new Peer(socket, { prefix: 'd', onRequest: (m, params) => request(m, params), onEvent: () => {} })
+      const p = new Peer(socket, { prefix: 'd', onRequest: (m, params) => request(m, params), onEvent: (event, params) => {
+        if (event === 'runtime.hub' && peer === p) setHub(params?.connected !== false)
+      } })
       for (const w of watched.values()) clearTimeout(w.timer)
       watched.clear() // a new node asks again for what the phone watches
       listed.clear()
       peer = p // bound before hello: the node may call back the moment it has answered
       try {
-        await p.call('runtime.hello', hello(), { timeoutMs: 10_000 })
+        const res = await p.call('runtime.hello', hello(), { timeoutMs: 10_000 })
+        setHub(res?.hub !== false)
       } catch (err) {
         log(`jarvis: hello failed: ${err.message}`)
         if (peer === p) peer = undefined
@@ -312,8 +334,15 @@ export function createRuntime(driver, options) {
    * Whether the phone answers this session's approvals and questions first ('auto': the phone drove the session in
    * the last 6 hours, or the runtime's own UI is not open).
    */
+  function setHub(connected) {
+    if (connected === hubConnected) return
+    hubConnected = connected
+    log(`jarvis: the node's hub ${connected ? 'is back' : 'is gone'}`)
+  }
+
   function phoneFirst(sessionId) {
-    if (!peer || !listed.has(sessionId)) return false
+    // No hub: nobody can answer on the phone now. The local UI asks (a card already on the phone waits for the hub).
+    if (!peer || !hubConnected || !listed.has(sessionId)) return false
     if (answerFirst === 'phone') return true
     if (answerFirst === 'local') return false
     const at = phoneDriven.get(sessionId)
@@ -442,6 +471,10 @@ export function createRuntime(driver, options) {
     /** Whether a node is connected. */
     get connected() {
       return peer !== undefined
+    },
+    /** Whether that node has a hub connected (the phone can be asked). */
+    get hubConnected() {
+      return peer !== undefined && hubConnected
     },
     /** Push the list now (tests). */
     pushNow: pushSessions,

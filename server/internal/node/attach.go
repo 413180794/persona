@@ -51,8 +51,10 @@ func Relay(ctx context.Context, r io.Reader, w io.Writer) (ok bool, err error) {
 // by `jarvisd node --stdio`, or arriving on extra (the hub dialing in over tailcat, tailcat.go; nil: none). A new
 // connection replaces the one being served whichever way either came (the hub reconnected, maybe the other way; the
 // old one may not have noticed yet), as a new ssh-started node used to replace the old one. newNode makes the Node
-// for a connection.
-func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net.Conn) error {
+// for a connection. runtimes, when set, is the runtime socket (runtimehost.go): opened here, once this is the one
+// resident node, and shared by every connection's Node, so runtimes connect before the hub does and stay connected
+// while it reconnects.
+func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net.Conn, runtimes *RuntimeHost) error {
 	path := AttachSocketPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -70,6 +72,12 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 	_ = os.Chmod(path, 0o600)
 	ln.(*net.UnixListener).SetUnlinkOnClose(false) // a replacement may already own the path (hooks.go has the same trap)
 	go func() { <-ctx.Done(); ln.Close() }()
+	if runtimes != nil {
+		if err := runtimes.Listen(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "node: runtime socket: %v\n", err)
+			runtimes = nil // each connection's Node opens its own, as without a resident node
+		}
+	}
 	relayed := make(chan net.Conn)
 	go func() {
 		defer close(relayed)
@@ -123,6 +131,9 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "node: %v\n", err)
 				return
+			}
+			if runtimes != nil {
+				n.runtimeHost = runtimes // Serve attaches it for this connection
 			}
 			go func() { <-cctx.Done(); c.Close() }() // a replaced connection stops reading at once
 			if err := n.Serve(cctx, c, c); err != nil && !errors.Is(err, io.EOF) && cctx.Err() == nil {

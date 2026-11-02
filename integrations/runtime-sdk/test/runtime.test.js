@@ -134,3 +134,38 @@ test('the echo example is a complete runtime: start, send, stream, ask, page', a
   const batches = n.all('session.items')
   assert.deepEqual(batches.slice(1).filter((b, i) => b.from_seq !== batches[i].to_seq), [])
 })
+
+test('without a hub on the node the phone is not asked first; it is again once the hub is back', async (t) => {
+  const n = await startFakeNode(t, { hub: false })
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: n.path, retryMs: 20, pushDelayMs: 5, answerFirst: 'phone' })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions'))
+  assert.equal(rt.hubConnected, false)
+  assert.equal(rt.phoneFirst('s1'), false, 'no hub: the local UI asks, even with answerFirst phone')
+  n.setHub(true)
+  await until('hub back', () => rt.hubConnected)
+  assert.equal(rt.phoneFirst('s1'), true)
+  n.setHub(false)
+  await until('hub gone', () => !rt.hubConnected)
+  assert.equal(rt.phoneFirst('s1'), false)
+})
+
+test('while the socket file is there (a node restarting) it retries every second, not on the long back-off', async (t) => {
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync('/tmp/jrt-')
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const path = join(dir, 'runtime.sock')
+  writeFileSync(path, '') // what a node that went away leaves: the file, nobody listening
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: path, retryMs: 8000 }) // a long back-off otherwise
+  t.after(() => rt.stop())
+  rt.start()
+  await new Promise((r) => setTimeout(r, 300))
+  rmSync(path)
+  const started = Date.now()
+  const n = await startFakeNode(t, { path }) // the node is back
+  await n.ready
+  assert.ok(Date.now() - started < 2000, `reconnected after ${Date.now() - started} ms`)
+})

@@ -150,7 +150,9 @@ func runResident(ctx context.Context) error {
 	if err != nil {
 		logger.Printf("tailcat: %v (serving relays over ssh only)", err) // a broken key file must not stop the node
 	}
-	err = node.Attach(ctx, func() (*node.Node, error) { return node.New(version) }, conns)
+	// The runtime socket is the resident node's, not one connection's: runtimes (DSH…) stay connected while the hub
+	// reconnects, and connect before it does (node/runtimehost.go).
+	err = node.Attach(ctx, func() (*node.Node, error) { return node.New(version) }, conns, node.NewRuntimeHost(version, ""))
 	tstop()
 	<-stopped
 	return err

@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -241,6 +240,35 @@ func (b *runtimeRegistry) unclaim(id string) {
 	b.unclaimed[id] = time.Now().Add(time.Minute)
 }
 
+// ready are the connections that said hello.
+func (b *runtimeRegistry) ready() []*runtimeConn {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []*runtimeConn
+	for _, h := range b.conns {
+		h.mu.Lock()
+		if h.ready {
+			out = append(out, h)
+		}
+		h.mu.Unlock()
+	}
+	return out
+}
+
+// resetWatches forgets what the hub watched (another hub connection, or none, from now on). Runtimes are not asked to
+// stop: an unwatch could reach one after the next hub has watched the session again, and what they push meanwhile is
+// harmless (the hub drops items nobody subscribed to).
+func (b *runtimeRegistry) resetWatches() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.watching = map[string]int{}
+	for _, h := range b.conns {
+		h.mu.Lock()
+		h.watched = map[string]bool{}
+		h.mu.Unlock()
+	}
+}
+
 func (b *runtimeRegistry) add(peer *rpc.Peer) *runtimeConn {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -404,31 +432,18 @@ func (b *runtimeRegistry) pushed(id string, seq int) {
 	}
 }
 
-// listenRuntimeSocket serves runtimes on runtime.sock until ctx ends, re-creating the socket file if something
-// removes it (an older node shutting down), as the hook socket does.
-func (n *Node) listenRuntimeSocket(ctx context.Context) (net.Listener, error) {
-	ln, err := n.listenRuntimeOnce(ctx)
-	if err != nil {
+// listenRuntimeSocket gives n a runtime socket of its own, at runtimePath, for the connection it serves itself
+// (`--stdio` with no resident node: runtimehost.go). A resident node's Nodes share one instead.
+func (n *Node) listenRuntimeSocket(ctx context.Context) (*RuntimeHost, error) {
+	rh := &RuntimeHost{reg: n.runtimes, path: n.runtimePath(), version: n.Version, logger: n.logger}
+	if rh.reg == nil {
+		rh.reg = newRuntimeRegistry()
+	}
+	if err := rh.Listen(ctx); err != nil {
 		return nil, err
 	}
-	go func() {
-		t := time.NewTicker(15 * time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-			}
-			if _, err := os.Stat(n.runtimePath()); os.IsNotExist(err) {
-				n.logger.Printf("runtime socket vanished, re-creating")
-				if _, err := n.listenRuntimeOnce(ctx); err != nil {
-					n.logger.Printf("runtime socket: %v", err)
-				}
-			}
-		}
-	}()
-	return ln, nil
+	rh.attach(n)
+	return rh, nil
 }
 
 func (n *Node) runtimePath() string {
@@ -438,95 +453,7 @@ func (n *Node) runtimePath() string {
 	return RuntimeSocketPath()
 }
 
-func (n *Node) listenRuntimeOnce(ctx context.Context) (net.Listener, error) {
-	path := n.runtimePath()
-	_ = os.Remove(path)
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		return nil, err
-	}
-	ln.(*net.UnixListener).SetUnlinkOnClose(false) // by then the path may belong to a newer node
-	_ = os.Chmod(path, 0o600)
-	go func() {
-		<-ctx.Done()
-		ln.Close()
-	}()
-	go func() {
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			go n.serveRuntime(ctx, c)
-		}
-	}()
-	return ln, nil
-}
-
-// serveRuntime runs one runtime's connection until it ends; its sessions leave the list with it.
-func (n *Node) serveRuntime(ctx context.Context, c net.Conn) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
-	defer stop()
-	defer c.Close()
-	peer := rpc.New("r", c)
-	h := n.runtimes.add(peer)
-	peer.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
-		return n.runtimeRequest(ctx, h, method, params)
-	}
-	peer.OnEvent = func(event string, params json.RawMessage) { n.runtimeEvent(h, event, params) }
-	err := peer.Serve(ctx, c)
-	peer.Close(err)
-	n.runtimes.remove(h)
-	if id := h.id(); id != "" {
-		n.logger.Printf("runtime %s #%d left: %v", id, h.serial, err)
-	}
-	n.notifySessions()
-}
-
-// runtimeRequest answers a runtime's call.
-func (n *Node) runtimeRequest(ctx context.Context, h *runtimeConn, method string, params json.RawMessage) (any, error) {
-	switch method {
-	case "runtime.hello":
-		var hello runtimeHello
-		if err := json.Unmarshal(params, &hello); err != nil {
-			return nil, fmt.Errorf("bad runtime.hello: %w", err)
-		}
-		hello.Runtime = strings.TrimSpace(hello.Runtime)
-		if hello.Runtime == "" || !runtimeIDRe.MatchString(hello.Runtime) {
-			return nil, errors.New("runtime.hello needs a runtime id ([A-Za-z0-9][A-Za-z0-9_.-]*)")
-		}
-		hello.Name = strings.TrimSpace(hello.Name)
-		if hello.Agent = strings.TrimSpace(hello.Agent); hello.Agent != "" && !runtimeIDRe.MatchString(hello.Agent) {
-			return nil, fmt.Errorf("runtime.hello: bad agent %q", hello.Agent)
-		}
-		h.mu.Lock()
-		h.hello, h.ready = hello, true
-		h.mu.Unlock()
-		n.logger.Printf("runtime %s %s #%d connected", hello.Runtime, hello.Version, h.serial)
-		return map[string]any{"protocol": RuntimeProtocol, "node_version": n.Version}, nil
-	case "interaction.create":
-		return n.runtimeAsk(ctx, h, params)
-	case "mcp.tools":
-		if n.peer == nil {
-			return map[string]any{"tools": []proto.Tool{}}, nil
-		}
-		var res json.RawMessage
-		err := n.peer.Call(ctx, "mcp.tools", map[string]any{}, &res)
-		return res, err
-	case "mcp.call":
-		if n.peer == nil {
-			return proto.TextResult("Jarvis hub is not connected", true), nil
-		}
-		var res json.RawMessage
-		err := n.peer.Call(ctx, "mcp.call", json.RawMessage(params), &res)
-		return res, err
-	}
-	return nil, fmt.Errorf("unknown method %s", method)
-}
-
-// runtimeEvent takes a runtime's push.
+// runtimeEvent takes a runtime's push for the hub (its list is the host's: RuntimeHost.event).
 func (n *Node) runtimeEvent(h *runtimeConn, event string, params json.RawMessage) {
 	h.mu.Lock()
 	ready := h.ready
@@ -535,18 +462,6 @@ func (n *Node) runtimeEvent(h *runtimeConn, event string, params json.RawMessage
 		return // hello first
 	}
 	switch event {
-	case "runtime.sessions":
-		var p struct {
-			Sessions []proto.Session `json:"sessions"`
-		}
-		if json.Unmarshal(params, &p) != nil {
-			return
-		}
-		list := n.normalizeRuntimeSessions(h, p.Sessions)
-		for id, since := range n.runtimes.setSessions(h, list) {
-			go n.runtimeWatch(h, id, since)
-		}
-		n.publish(n.sessionList(context.Background(), false))
 	case "session.items":
 		var p struct {
 			SessionID string       `json:"session_id"`
@@ -584,7 +499,7 @@ func (n *Node) runtimeEvent(h *runtimeConn, event string, params json.RawMessage
 
 // normalizeRuntimeSessions keeps the sessions a runtime may list (valid ids, once each) and fills what the apps expect:
 // the agent and its label, the space kind (the runtime's id).
-func (n *Node) normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Session {
+func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Session {
 	h.mu.Lock()
 	rt, agent, label, caps := h.hello.Runtime, h.hello.Agent, h.hello.Name, h.hello.Caps
 	h.mu.Unlock()
@@ -953,7 +868,7 @@ func (n *Node) runtimeStart(ctx context.Context, launcher, cwd, prompt string) (
 	if err := h.peer.Call(ctx, "session.start", map[string]any{"cwd": cwd, "prompt": prompt}, &res); err != nil {
 		return nil, err, true
 	}
-	list := n.normalizeRuntimeSessions(h, []proto.Session{res.Session})
+	list := normalizeRuntimeSessions(h, []proto.Session{res.Session})
 	if len(list) == 0 {
 		return nil, fmt.Errorf("%s started a session without a valid id", h.label()), true
 	}

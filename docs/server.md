@@ -101,6 +101,8 @@ claude（`apiKeyHelper` 用 `security find-generic-password` 取）在助手里�
 - 没有常驻 node（没装、退出了、socket 是残留的）时 `--stdio` 自己处理连接，和以前一样。
 - 一次只服务一条连接：新连接进来（hub 重连）时旧的那条的 node 退出，等着的 hook 会去问新的（同 ssh 起的 node 被替换时）。同时只能有一个常驻 node。
 - `deploy.sh` 换了二进制后会 `node-launchd.sh restart`（ssh 进来也能操作登录会话的 launchd）；hub 要重连一次才会用上新的 node（重启 hub，或 App 里「重新连接」）。
+- Agent 运行时的 `~/.jarvis/runtime.sock` 是常驻 node 进程的，不是某一条 hub 连接的（`node/runtimehost.go`）：常驻 node 一起来就开着，
+  DSH 插件这类 runtime 不用等 hub；hub 换连接时它们不断开，新的连接一上来就列出它们的会话（`docs/protocol.md`「Runtime ↔ node」）。
 - `scripts/node-launchd.sh uninstall` 回到 ssh 起 node。日志：`~/.jarvis/node-attach.log`。
 
 ## tailcat 打洞（`internal/tunnel`，`hub/tailcat.go`）

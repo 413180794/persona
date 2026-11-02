@@ -3,16 +3,18 @@
 // hub. The runtime under test connects to `runtimeSocket`. Nothing outside the temp directory is touched.
 
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Peer } from '../lib/wire.js'
+import { until } from './fake-node.js'
 
 /**
- * @param {{ jarvisd: string, keep?: boolean }} opts
+ * @param {{ jarvisd: string, keep?: boolean, home?: string }} opts - home: an existing HOME to use (a resident node's,
+ *   startResident): `jarvisd node --stdio` then relays to the resident node, as the hub's ssh does. Left in place.
  */
-export async function startNode({ jarvisd, keep = false }) {
-  const root = mkdtempSync(join('/tmp', 'jrt-e2e-'))
-  const home = join(root, 'home')
+export async function startNode({ jarvisd, keep = false, home: given }) {
+  const root = given ? undefined : mkdtempSync(join('/tmp', 'jrt-e2e-'))
+  const home = given ?? join(root, 'home')
   mkdirSync(home, { recursive: true })
   const child = spawn(jarvisd, ['node', '--stdio'], { env: { PATH: '/usr/bin:/bin', HOME: home }, stdio: ['pipe', 'pipe', 'pipe'] })
   const log = []
@@ -63,9 +65,35 @@ export async function startNode({ jarvisd, keep = false }) {
     try {
       child.kill('SIGTERM')
     } catch {}
-    if (!keep) rmSync(root, { recursive: true, force: true })
+    if (!keep && root) rmSync(root, { recursive: true, force: true })
   }
   return h
+}
+
+/**
+ * A resident node (`jarvisd node --attach`, what launchd keeps running on a Mac) in a fresh HOME; hub connections
+ * reach it through startNode({ home }). stop ends it (the HOME stays until removeHome).
+ * @param {{ jarvisd: string, home?: string }} opts
+ */
+export async function startResident({ jarvisd, home: given }) {
+  const root = given ? undefined : mkdtempSync(join('/tmp', 'jrt-res-'))
+  const home = given ?? join(root, 'home')
+  mkdirSync(join(home, '.jarvis'), { recursive: true })
+  const child = spawn(jarvisd, ['node', '--attach'], { env: { PATH: '/usr/bin:/bin', HOME: home }, stdio: ['ignore', 'ignore', 'pipe'] })
+  const log = []
+  child.stderr.on('data', (d) => log.push(String(d)))
+  const r = { home, runtimeSocket: join(home, '.jarvis', 'runtime.sock'), log, child }
+  await until('the resident node listening', () => existsSync(join(home, '.jarvis', 'node-attach.sock')) && existsSync(r.runtimeSocket), 20_000)
+  r.stop = async () => {
+    if (child.exitCode !== null) return
+    const exited = new Promise((res) => child.once('exit', res))
+    child.kill('SIGTERM')
+    await Promise.race([exited, new Promise((res) => setTimeout(res, 10_000))])
+  }
+  r.removeHome = () => {
+    if (root) rmSync(root, { recursive: true, force: true })
+  }
+  return r
 }
 
 /** A minimal check reporter: PASS / FAIL lines and a summary; exit code 1 when any failed. */

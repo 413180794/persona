@@ -77,7 +77,7 @@ func TestAttachIsSingle(t *testing.T) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err = Attach(ctx, func() (*Node, error) { t.Fatal("served a connection"); return nil, nil }, nil)
+	err = Attach(ctx, func() (*Node, error) { t.Fatal("served a connection"); return nil, nil }, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "already listening") {
 		t.Fatalf("want 'already listening', got %v", err)
 	}
@@ -94,7 +94,7 @@ func TestAttachReplacesStaleSocket(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- Attach(ctx, func() (*Node, error) { return nil, io.EOF }, nil) }()
+	go func() { done <- Attach(ctx, func() (*Node, error) { return nil, io.EOF }, nil, nil) }()
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		if c, err := net.Dial("unix", AttachSocketPath()); err == nil {
@@ -124,7 +124,7 @@ func TestAttachServesExtraConnections(t *testing.T) {
 	extra := make(chan net.Conn)
 	done := make(chan error, 1)
 	go func() {
-		done <- Attach(ctx, func() (*Node, error) { served <- struct{}{}; return nil, io.EOF }, extra)
+		done <- Attach(ctx, func() (*Node, error) { served <- struct{}{}; return nil, io.EOF }, extra, nil)
 	}()
 	wait := func(what string) {
 		t.Helper()

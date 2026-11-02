@@ -79,6 +79,9 @@ type Node struct {
 	// socket path (tests).
 	runtimes    *runtimeRegistry
 	runtimeSock string
+	// runtimeHost: the runtime socket this Node lists runtimes from — the resident node's, shared by its Nodes
+	// (attach.go), or its own for the one connection it serves (runtimehost.go).
+	runtimeHost *RuntimeHost
 
 	// codexStarting: panes a Codex start is opening (codex_start.go): no thread is guessed for them meanwhile.
 	codexStarting map[string]bool
@@ -188,10 +191,13 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	} else {
 		defer ln.Close()
 	}
-	if bl, err := n.listenRuntimeSocket(ctx); err != nil { // runtimes (runtimes.go): beside the engine, whichever it is
+	if rh := n.runtimeHost; rh != nil { // a resident node's: runtimes stay connected across hub connections
+		rh.attach(n)
+		defer rh.detach(n)
+	} else if rh, err := n.listenRuntimeSocket(ctx); err != nil { // runtimes (runtimes.go): beside the engine, whichever it is
 		n.logger.Printf("runtime socket: %v", err)
 	} else {
-		defer bl.Close()
+		defer rh.detach(n)
 	}
 	go n.startWhenConfigured(ctx) // polling and the engine's events, once the hub said which engine (engine.go)
 	go n.warmTranscripts(ctx)

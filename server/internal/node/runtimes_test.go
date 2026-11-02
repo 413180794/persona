@@ -43,6 +43,12 @@ func (b *runtimeHub) lastList() []proto.Session {
 // runtimeNode is a node with a runtime socket in a short temp dir (unix socket paths are short on macOS) and a fake hub.
 func runtimeNode(t *testing.T) (*Node, *runtimeHub) {
 	t.Helper()
+	return runtimeNodeOn(t, nil)
+}
+
+// runtimeNodeOn is runtimeNode serving a hub connection on a resident node's shared runtime host (nil: its own socket).
+func runtimeNodeOn(t *testing.T, shared *RuntimeHost) (*Node, *runtimeHub) {
+	t.Helper()
 	dir, err := os.MkdirTemp("/tmp", "jb")
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +111,10 @@ func runtimeNode(t *testing.T) (*Node, *runtimeHub) {
 	}
 	go func() { _ = hub.Serve(ctx, n2hR) }()
 	go func() { _ = n.peer.Serve(ctx, h2nR) }()
-	if _, err := n.listenRuntimeSocket(ctx); err != nil {
+	if shared != nil {
+		n.runtimeSock = shared.path
+		shared.attach(n)
+	} else if _, err := n.listenRuntimeSocket(ctx); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
@@ -120,6 +129,9 @@ type fakeRuntime struct {
 	calls  []string
 	params map[string][]json.RawMessage
 	answer func(method string, params json.RawMessage) (any, error)
+	events []string       // event names the node pushed, in order
+	hubs   []bool         // runtime.hub pushes: whether a hub is connected
+	helloR map[string]any // what runtime.hello answered
 }
 
 func (f *fakeRuntime) got(method string) []json.RawMessage {
@@ -130,7 +142,13 @@ func (f *fakeRuntime) got(method string) []json.RawMessage {
 
 func dialRuntime(t *testing.T, n *Node, hello map[string]any) *fakeRuntime {
 	t.Helper()
-	c, err := net.Dial("unix", n.runtimeSock)
+	return dialRuntimeAt(t, n.runtimeSock, hello)
+}
+
+// dialRuntimeAt connects a fake runtime to the runtime socket at path and says hello.
+func dialRuntimeAt(t *testing.T, path string, hello map[string]any) *fakeRuntime {
+	t.Helper()
+	c, err := net.Dial("unix", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,20 +165,31 @@ func dialRuntime(t *testing.T, n *Node, hello map[string]any) *fakeRuntime {
 		}
 		return map[string]any{"ok": true}, nil
 	}
+	f.peer.OnEvent = func(event string, params json.RawMessage) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.events = append(f.events, event)
+		if event == "runtime.hub" {
+			var p struct {
+				Connected bool `json:"connected"`
+			}
+			_ = json.Unmarshal(params, &p)
+			f.hubs = append(f.hubs, p.Connected)
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() { _ = f.peer.Serve(ctx, c) }()
 	t.Cleanup(func() { cancel(); _ = c.Close() })
-	var res struct {
-		Protocol int `json:"protocol"`
-	}
+	var res map[string]any
 	cctx, ccancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer ccancel()
 	if err := f.peer.Call(cctx, "runtime.hello", hello, &res); err != nil {
 		t.Fatal(err)
 	}
-	if res.Protocol != RuntimeProtocol {
-		t.Fatalf("protocol %d", res.Protocol)
+	if p, _ := res["protocol"].(float64); int(p) != RuntimeProtocol {
+		t.Fatalf("protocol %v", res["protocol"])
 	}
+	f.helloR = res
 	return f
 }
 
