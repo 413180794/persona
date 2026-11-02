@@ -134,6 +134,23 @@ rt.start()
 // 要人决定时：const res = await rt.ask({ id, kind: 'permission', session_id, tool_name, tool_input })
 ```
 
+## 子 Agent 和后台任务（可选）
+
+Agent 把活交出去再结束这一轮（后台子 Agent、workflow、后台跑的命令）时，这一轮结束后会话是「完成」，事情还没完。runtime 在会话行上报它们，
+字段和 Claude 会话的一样（`docs/protocol.md` 的 `Session.subagents` / `background`），App 和 hub 已经认：
+
+- `subagents`：`[{id, description, type, running, tool_use_id, started_at, updated_at, last_text}]`。`id` 是子 Agent 在 runtime 里的 id（同样的字符集），
+  **它的内容按会话 id `<会话>@<id>` 读**：node 把这个 id 的 `session.items` / `item` / `image` / `watch` 交给父会话所属的 runtime，
+  runtime 推 `session.items` / `session.delta` 也用这个 id；node 一律把 `session_id` 改写成 `<会话>@<id>`，runtime 写什么都不算。
+  `tool_use_id` 是启动它的那次工具调用，App 从那条调用点进去看它（调用名要对成 `Agent`，参数 `{description, prompt}`）。子 Agent 不单列成会话。
+- `background`：还在跑、这一轮结束后会回来的任务 `[{id, kind, description, command, started_at}]`，`kind` 是 `shell`（`command` 是命令）或 `agent`；
+  `output_file` 是本机文件，runtime 的不给（node 清掉）。前台正在等结果的调用不算。
+- 有在跑的时：会话进 App 的「待唤醒」，hub 的「完成」推送等它们跑完、会话被叫醒的那一轮结束后再发。开始、结束时重推 `runtime.sessions`。
+- 每行最多 50 个子 Agent、50 个后台任务，文字截到 500 字；不合法的 id 去掉。daemon 的子 Agent id 同样带前缀：`<daemon>.<会话>@<id>`。
+- 对子 Agent 发消息、改名这类控制：runtime 不支持就回 `unsupported`（DSH 不支持：子 Agent 归父会话管）。
+
+DSH 的做法见 `docs/dsh.md`「子 Agent 和后台任务」。
+
 ## 验收
 
 一个 runtime 接好，要能过这些（`integrations/runtime-sdk/e2e/echo.mjs` 是模板：真的 `jarvisd node`，脚本当 hub；
@@ -146,6 +163,7 @@ rt.start()
 - [ ] 逐字输出
 - [ ] 授权 / 提问 / 计划到手机，回答回到 Agent；手机交回时本地界面照常弹
 - [ ] 终端类调用回 `unsupported`；runtime 退出后它的会话从列表里消失
+- [ ] （有子 Agent / 后台任务的）这一轮结束、它们还在跑时，会话行的 `subagents` / `background` 列着它们；`<会话>@<子 Agent>` 能翻页、watch；跑完后行上说完了
 
 这些检查就是 `testing/conformance.mjs`：DSH（`integrations/dsh/e2e/run.mjs`，真的 `dsh web`）、pi（`integrations/pi/e2e/run.mjs`、
 `herdr.mjs`）的端到端都是「起宿主 + 开会话 + `conformance()` + 自己特有的几项」。

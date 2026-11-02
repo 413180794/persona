@@ -4,6 +4,7 @@
 //
 //   const model = await scriptedModel(process.env.DSH_CHECKOUT)
 //   await model.script({ sequence: ['success'], successText: 'Hello' })   // llm-mock-server's options
+//   await model.scriptWhen('MARKER', { … })   // the turns of an agent whose own prompt says MARKER (a subagent)
 //   … the runtime's provider points at model.url (append /v1 where the client wants it) …
 //   await model.close()
 
@@ -20,6 +21,7 @@ export async function scriptedModel(dshCheckout) {
   const { startMockLlmServer } = await import(pathToFileURL(join(dshCheckout, 'packages/test-support/llm-mock-server/lib/index.js')).href)
   const side = await startMockLlmServer({ sequence: ['success'], repeatLast: true, successText: 'E2E title' })
   let main = await startMockLlmServer({ sequence: ['success'], repeatLast: true, successText: 'unscripted' })
+  const routes = new Map() // marker -> the server for agents whose prompt says it
   const proxy = createServer((req, res) => {
     const chunks = []
     req.on('data', (c) => chunks.push(c))
@@ -27,7 +29,12 @@ export async function scriptedModel(dshCheckout) {
       const body = Buffer.concat(chunks)
       let target = side
       try {
-        if (Array.isArray(JSON.parse(body.toString()).tools)) target = main
+        const req = JSON.parse(body.toString())
+        if (Array.isArray(req.tools)) {
+          target = main
+          const said = userText(req)
+          for (const [marker, server] of routes) if (said.includes(marker)) target = server
+        }
       } catch {}
       const url = new URL(req.url, target.baseURL.endsWith('/') ? target.baseURL : `${target.baseURL}/`)
       const out = httpRequest(url, { method: req.method, headers: { ...req.headers, host: url.host } }, (r) => {
@@ -48,10 +55,32 @@ export async function scriptedModel(dshCheckout) {
       main = next
       await old?.close?.()
     },
+    /**
+     * The turns of an agent whose own messages (a user's text, not a tool's output nor another agent's call) say
+     * marker: a subagent the main agent starts, whose requests interleave with its parent's.
+     */
+    async scriptWhen(marker, opts) {
+      const next = await startMockLlmServer({ repeatLast: true, ...opts })
+      const old = routes.get(marker)
+      routes.set(marker, next)
+      await old?.close?.()
+    },
     async close() {
+      for (const r of routes.values()) await r.close?.()
       await main?.close?.()
       await side.close?.()
       proxy.close()
     },
   }
+}
+
+/** The text of a request's user messages: what the agent was told, without tool results. */
+function userText(req) {
+  const out = []
+  for (const m of Array.isArray(req.messages) ? req.messages : []) {
+    if (m?.role !== 'user') continue
+    if (typeof m.content === 'string') out.push(m.content)
+    else for (const b of Array.isArray(m.content) ? m.content : []) if (b?.type === 'text' && typeof b.text === 'string') out.push(b.text)
+  }
+  return out.join('\n')
 }

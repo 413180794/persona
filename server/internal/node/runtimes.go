@@ -298,10 +298,14 @@ func (b *runtimeRegistry) byRuntime(rt string) *runtimeConn {
 }
 
 // belongs is the runtime a session belongs to: the connection listing it, else the connected runtime that listed it
-// before; known: it belongs to a runtime (connected or not), with that runtime's name.
+// before; known: it belongs to a runtime (connected or not), with that runtime's name. A subagent of a runtime's
+// session ("<parent>@<child>", splitRuntimeChild) belongs to the parent's runtime, which answers for it.
 func (b *runtimeRegistry) belongs(id string) (h *runtimeConn, label string, known bool) {
 	if b == nil || id == "" {
 		return nil, "", false
+	}
+	if parent, _, ok := splitRuntimeChild(id); ok {
+		id = parent
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -313,6 +317,62 @@ func (b *runtimeRegistry) belongs(id string) (h *runtimeConn, label string, know
 		return nil, "", false
 	}
 	return b.byRuntime(k.runtime), k.label, true
+}
+
+// splitRuntimeChild splits the id of a runtime session's subagent, "<parent>@<child>" (the id Claude's subagents have
+// too: docs/protocol.md「Runtime ↔ node」); false for any other id.
+func splitRuntimeChild(id string) (parent, child string, ok bool) {
+	parent, child, ok = strings.Cut(id, "@")
+	return parent, child, ok && runtimeIDRe.MatchString(parent) && runtimeIDRe.MatchString(child)
+}
+
+// Bounds on what one runtime row may carry about the work it left running.
+const (
+	maxRuntimeSubagents  = 50
+	maxRuntimeBackground = 50
+	maxRuntimeTaskText   = 500
+)
+
+// runtimeWork keeps a row's subagents and background tasks to what the apps can use: subagents with a valid id, each
+// readable as "<session>@<id>" (whatever the runtime wrote there), background tasks with an id; text clipped, the
+// lists bounded. A runtime's background task has no output file of this machine's to open.
+func runtimeWork(s *proto.Session) {
+	clip := func(t string) string {
+		if r := []rune(t); len(r) > maxRuntimeTaskText {
+			return string(r[:maxRuntimeTaskText]) + "…"
+		}
+		return t
+	}
+	subs := s.Subagents[:0:0]
+	seen := map[string]bool{}
+	for _, a := range s.Subagents {
+		if len(subs) == maxRuntimeSubagents || !runtimeIDRe.MatchString(a.ID) || seen[a.ID] {
+			continue
+		}
+		seen[a.ID] = true
+		a.SessionID = s.SessionID + "@" + a.ID
+		a.Description, a.LastText, a.Type = clip(a.Description), clip(a.LastText), clip(a.Type)
+		subs = append(subs, a)
+	}
+	s.Subagents = subs
+	if len(s.Subagents) == 0 {
+		s.Subagents = nil
+	}
+	bg := s.Background[:0:0]
+	for _, t := range s.Background {
+		if len(bg) == maxRuntimeBackground || strings.TrimSpace(t.ID) == "" {
+			continue
+		}
+		if t.Kind != "agent" {
+			t.Kind = "shell"
+		}
+		t.ID, t.Description, t.Command, t.OutputFile = clip(t.ID), clip(t.Description), clip(t.Command), ""
+		bg = append(bg, t)
+	}
+	s.Background = bg
+	if len(s.Background) == 0 {
+		s.Background = nil
+	}
 }
 
 // owns: the session's calls and pushes are h's (it lists the session, or listed or claimed it before).
@@ -735,6 +795,7 @@ func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Sess
 			s.UpdatedAt = time.Now().UTC()
 		}
 		s.UpdatedAt = s.UpdatedAt.UTC()
+		runtimeWork(&s)
 		out = append(out, s)
 	}
 	return out

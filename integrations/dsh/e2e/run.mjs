@@ -161,6 +161,52 @@ try {
     await until('the reply after the phone tool', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
   }
 
+  // A background subagent (docs/dsh.md「子 Agent 和后台任务」): the parent's turn ends while it runs; the parent's row
+  // lists it running (the apps' 待唤醒), the phone reads and watches it as "<parent>@<child>", and when it finishes the
+  // parent is woken. (DSH pins a delegated child's approvals to never: it runs within the scope it was given and asks
+  // nobody, so no card comes from it here; the unit tests cover the cards of a child whose policy was switched back.)
+  await until('idle before the subagent', async () => node.status(sid) === 'done', 30_000).catch(() => {})
+  const rowNow = async () => ((await node.call('sessions.list')).sessions ?? []).find((s) => s.session_id === sid)
+  node.resolve = (ix) => (ix.kind === 'permission' ? { allow: true } : { dismiss: true })
+  await model.scriptWhen('JARVIS_E2E_CHILD', { sequence: ['tool_call_success', 'success'], toolName: 'bash',
+    toolArguments: JSON.stringify({ command: 'sleep 8; echo E2E_SUBAGENT_OUTPUT', description: 'e2e' }), successText: 'The child mapped it' })
+  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'subagent',
+    toolArguments: JSON.stringify({ description: 'E2E child', prompt: 'JARVIS_E2E_CHILD map the workspace' }), successText: 'The child is on it' })
+  await node.call('session.send', { session_id: sid, text: 'hand it to a subagent', client_msg_id: randomUUID() })
+  const waiting = await until('the parent done while its subagent runs', async () => {
+    const r = await rowNow()
+    return r?.status === 'done' && r.subagents?.some((a) => a.running) ? r : undefined
+  }, 90_000)
+  await model.script({ sequence: ['success'], successText: 'The parent woke up' })
+  const sub = waiting.subagents.find((a) => a.running)
+  check('a background subagent: the parent\'s turn ends, its row lists the subagent running', sub.description === 'E2E child' && sub.session_id === `${sid}@${sub.id}`, JSON.stringify(sub))
+  check('the subagent answers the parent\'s tool call (the chat opens it from there)', node.items(sid).some((i) => i.kind === 'tool_use' && i.tool_use_id === sub.tool_use_id), sub.tool_use_id)
+  const listedNow = (await node.call('sessions.list')).sessions ?? []
+  check('the subagent is not a session of its own in the list', !listedNow.some((s) => s.session_id.endsWith(sub.id)))
+  const childPage = await node.call('session.items', { session_id: sub.session_id, turns: 2 })
+  check('the phone reads the subagent as "<parent>@<child>"', childPage.items.some((i) => i.role === 'user' && /JARVIS_E2E_CHILD/.test(i.text ?? '')), JSON.stringify(childPage.items.map((i) => i.kind)))
+  await node.call('session.watch', { session_id: sub.session_id, since_seq: childPage.to_seq })
+  await until('the subagent\'s command output, pushed live', () => node.items(sub.session_id).some((i) => i.kind === 'tool_result' && /E2E_SUBAGENT_OUTPUT/.test(i.text ?? '')), 60_000)
+  check('its new content is pushed live under its own id', true)
+  await until('the subagent finished', async () => (await rowNow())?.subagents?.every((a) => !a.running), 60_000)
+  check('when it finishes the row says so', true)
+  await until('the parent woken', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The parent woke up'), 60_000)
+  check('and the parent is woken with its result', node.items(sid).some((i) => i.kind === 'notice' && /子 Agent 完成/.test(i.text ?? '')))
+  check('pushed batches stay continuous', node.gaps(sid).length === 0 && node.gaps(sub.session_id).length === 0)
+
+  // A shell run in the background: the turn ends, the row lists it until it exits.
+  await until('idle before the background shell', async () => node.status(sid) === 'done', 30_000).catch(() => {})
+  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'bash',
+    toolArguments: JSON.stringify({ command: 'sleep 6', description: 'e2e background', run_in_background: true }), successText: 'Started it' })
+  await node.call('session.send', { session_id: sid, text: 'run it in the background', client_msg_id: randomUUID() })
+  const bg = await until('the turn done, the shell still running', async () => {
+    const r = await rowNow()
+    return r?.status === 'done' && r.background?.length ? r.background : undefined
+  }, 60_000)
+  check('a background shell is listed while the turn is done', bg[0].kind === 'shell' && bg[0].command === 'sleep 6', JSON.stringify(bg))
+  await until('the shell exited', async () => !(await rowNow())?.background?.length, 60_000)
+  check('and leaves the row when it exits', true)
+
   // Closing from the phone archives the session in DSH: it leaves the list, and DSH's archive set has it.
   await until('idle before closing', async () => node.status(sid) === 'done', 30_000).catch(() => {})
   await node.call('session.close', { session_id: sid })

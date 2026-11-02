@@ -499,7 +499,12 @@ type daemonLink struct {
 }
 
 // outer is the id the hub sees for the daemon's session id: "<daemon>.<id>"; false when either is not a valid id.
+// A subagent of one of its sessions, "<id>@<child>", becomes "<daemon>.<id>@<child>".
 func (l *daemonLink) outer(id string) (string, bool) {
+	if parent, child, ok := splitRuntimeChild(id); ok {
+		out, ok := l.outer(parent)
+		return out + "@" + child, ok
+	}
 	if !runtimeIDRe.MatchString(id) {
 		return "", false
 	}
@@ -509,6 +514,10 @@ func (l *daemonLink) outer(id string) (string, bool) {
 
 // inner is the daemon's own id for a session id the hub uses; false when it is not this daemon's.
 func (l *daemonLink) inner(id string) (string, bool) {
+	if parent, child, ok := splitRuntimeChild(id); ok {
+		in, ok := l.inner(parent)
+		return in + "@" + child, ok
+	}
 	rest, ok := strings.CutPrefix(id, l.cfg.ID+".")
 	if !ok || !runtimeIDRe.MatchString(rest) {
 		return "", false

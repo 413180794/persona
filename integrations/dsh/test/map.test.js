@@ -110,3 +110,9 @@ test('the assistant\'s live snapshot is not shown; a quoted context (with attrib
   const items = eventItems(ev)
   assert.deepEqual(items.map((i) => i.text), ['<jarvis-context kind="context" title="t">quoted</jarvis-context> hi'])
 })
+
+test('a subagent call is the apps\' Agent, with its description', () => {
+  assert.equal(toolName('subagent'), 'Agent')
+  assert.equal(toolName('subagent_fork'), 'Agent')
+  assert.equal(toolName('bash'), 'Bash')
+})

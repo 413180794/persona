@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -596,4 +597,85 @@ func TestPollAgentsPublishesWithoutHerdr(t *testing.T) {
 		}
 		return false
 	})
+}
+
+// A runtime's session can list the subagents and background tasks it left running (DSH's subagents, workflows,
+// background shells): the rows keep the valid ones, each subagent readable as "<session>@<child>"; the calls and
+// pushes about a subagent go to (and come from) the runtime of its parent, whatever it is not.
+func TestRuntimeSubagentsAndBackground(t *testing.T) {
+	n, hub := runtimeNode(t)
+	host := dialRuntime(t, n, dshHello())
+	host.answer = func(method string, params json.RawMessage) (any, error) {
+		if method == "session.items" {
+			return map[string]any{"items": []proto.Item{{ID: "1#0", Seq: 1, Role: "assistant", Kind: proto.KindText, Text: "from the child"}},
+				"has_more": false, "history": "dsh:session-7@child-1", "to_seq": 1}, nil
+		}
+		return map[string]any{"ok": true}, nil
+	}
+	started := time.Now().Add(-time.Minute).UTC().Truncate(time.Second)
+	_ = host.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{
+		"session_id": "session-7", "status": "done",
+		"subagents": []map[string]any{
+			{"id": "child-1", "session_id": "whatever", "description": "Map the code", "running": true, "tool_use_id": "call-1", "started_at": started},
+			{"id": "../bad", "description": "not a valid id", "running": true},
+			{"id": "child-1", "description": "the same child twice"},
+			{"id": "child-2", "description": "done already", "running": false},
+		},
+		"background": []map[string]any{
+			{"id": "workflow-1", "kind": "agent", "description": "review", "output_file": "/etc/passwd", "started_at": started},
+			{"id": "bash-1", "kind": "anything", "command": "sleep 60"},
+			{"id": " ", "kind": "shell"},
+		},
+	}}})
+	waitFor(t, "listed", func() bool { _, ok := listed(t, n)["session-7"]; return ok })
+	s := listed(t, n)["session-7"]
+	if len(s.Subagents) != 2 || s.Subagents[0].SessionID != "session-7@child-1" || !s.Subagents[0].Running ||
+		s.Subagents[0].ToolUseID != "call-1" || !s.Subagents[0].StartedAt.Equal(started) || s.Subagents[1].SessionID != "session-7@child-2" {
+		t.Fatalf("subagents %+v", s.Subagents)
+	}
+	if len(s.Background) != 2 || s.Background[0].Kind != "agent" || s.Background[0].OutputFile != "" || s.Background[1].Kind != "shell" {
+		t.Fatalf("background %+v", s.Background)
+	}
+
+	// Paging and watching the subagent go to the parent's runtime with the subagent's id.
+	raw, err := nodeCall(t, n, "session.items", map[string]any{"session_id": "session-7@child-1", "turns": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "from the child") {
+		t.Fatalf("page %s", raw)
+	}
+	var p struct {
+		SessionID string `json:"session_id"`
+	}
+	_ = json.Unmarshal(host.got("session.items")[0], &p)
+	if p.SessionID != "session-7@child-1" {
+		t.Fatalf("asked the runtime about %q", p.SessionID)
+	}
+	if _, err := nodeCall(t, n, "session.watch", map[string]any{"session_id": "session-7@child-1", "since_seq": 0}); err != nil {
+		t.Fatal(err)
+	}
+	_ = host.peer.Notify("session.items", map[string]any{"session_id": "session-7@child-1", "from_seq": 1, "to_seq": 2, "history": "h",
+		"items": []proto.Item{{ID: "2#0", Seq: 2, Role: "assistant", Kind: proto.KindText, Text: "more"}}})
+	_ = host.peer.Notify("session.delta", map[string]any{"session_id": "session-7@child-1", "text": "mo"})
+	_ = host.peer.Notify("session.items", map[string]any{"session_id": "session-8@child-1", "to_seq": 1}) // not its session
+	waitFor(t, "the subagent's items and live text at the hub", func() bool {
+		hub.mu.Lock()
+		defer hub.mu.Unlock()
+		return len(hub.items) == 1 && len(hub.deltas) == 1
+	})
+	time.Sleep(50 * time.Millisecond)
+	hub.mu.Lock()
+	got := len(hub.items)
+	hub.mu.Unlock()
+	if got != 1 {
+		t.Fatalf("pushes for a subagent of a session the runtime does not list went through: %d", got)
+	}
+
+	// An id that only looks like a subagent's is no runtime's.
+	for _, id := range []string{"session-7@", "@child-1", "session-7@a/b"} {
+		if h, _, _ := n.runtimes.belongs(id); h != nil {
+			t.Fatalf("%q belongs to a runtime", id)
+		}
+	}
 }

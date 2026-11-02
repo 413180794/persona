@@ -84,6 +84,7 @@ export function apply(ctx, config = {}) {
       },
       agents: optional(scope, 'agents'),
       permissionPresets: optional(scope, 'permissionPresets'),
+      jobs: optional(scope, 'jobs'),
       hasLiveClient: () => {
         const gateway = optional(scope, 'typertGateway')
         return typeof gateway?.hasLiveClient === 'function' ? gateway.hasLiveClient() : true

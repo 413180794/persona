@@ -84,10 +84,10 @@ node <Jarvis 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录�
 
 | Jarvis | DSH |
 | --- | --- |
-| 会话列表 | `sessionController.list`；去掉子 Agent 的会话、已归档的（`workspaceRegistry.archivedSessionIds`）和还没开始的空会话（手机上新建的除外）。标题用 `title` 投影，没有就用目录名；空间 = 目录 |
+| 会话列表 | `sessionController.list`；去掉已归档的（`workspaceRegistry.archivedSessionIds`）和还没开始的空会话（手机上新建的除外）。子 Agent 的会话不单列，挂在父会话的 `subagents` 里（见「子 Agent 和后台任务」）。标题用 `title` 投影，没有就用目录名；空间 = 目录 |
 | 状态 | 有授权 / 提问等着（插件挂着的，或 `userQuestions` 投影里还开着的）→ `blocked`；在跑 → `working`；其余 `done`（hub 按看没看过分「完成未看 / 已看」） |
 | 对话内容 | `sessionController.page`（不会激活冷会话）。`user/message` 只取 `source.kind = user` 的（DSH 注入的时间、技能、指令上下文不显示）；`assistant/message` 的 `reasoning` → 思考、`text` → 回复、`tool-call` → 工具调用；`tool/result` → 结果（compaction 重新挂出来的不重复显示）；中断 / 出错 / 输出上限的轮次、上下文压缩 → 提示。seq = DSH 的 seq + 1，`history` = `dsh:<会话 id>` |
-| 工具名 | `bash` → `Bash`、`read` → `Read`、`edit` → `Edit`、`write` → `Write`、`grep`、`glob`、`web_fetch`、`web_search`、`todo_write`、`ask_user_question` 同理；参数名本来就和 Claude 一样（`command`、`file_path`、`old_string`…），App 照常画命令、diff、文件。其他工具原名显示 |
+| 工具名 | `bash` → `Bash`、`read` → `Read`、`edit` → `Edit`、`write` → `Write`、`grep`、`glob`、`web_fetch`、`web_search`、`todo_write`、`ask_user_question` 同理；`subagent` / `subagent_fork` → `Agent`（参数 `{description, prompt}`，App 画成子任务，点开看它启动的子 Agent）。参数名本来就和 Claude 一样（`command`、`file_path`、`old_string`…），App 照常画命令、diff、文件。其他工具原名显示 |
 | 逐字 | `agent/assistant-stream` 的 `text-delta`，第一段立刻发，之后最多 120 ms 一次（整段文字） |
 | 发消息 | `sessionController.prompt`：`requestId` = App 的 `client_msg_id`（DSH 按它去重，重发不会进两遍）；空闲时 `queue`（开新一轮），工作中 `steer`（插进这一轮，像 Claude 的排队输入）。图片直接带 base64 |
 | 中断 | `sessionController.cancel` |
@@ -144,23 +144,40 @@ hub 连着时（hello 之后、`runtime.hub` 说 hub 回来时，之后每 5 分
 | 指令 | DSH 读助手目录的 `AGENTS.md` / `CLAUDE.md`（`assistant.prepare` 两份都写，内容一样时只加载一份），加上用户自己的 `$DSH_HOME/AGENTS.md` |
 | lark-connector skill | 助手目录的 `.agents/skills/`（DSH 读这里），飞书经 `lark-connector` 工具 |
 | 记忆 | 和 Claude、Codex **同一份**：新对话的第一条消息前面带上记忆目录、格式和当前索引（`prompts/assistant/runtime_instructions.md`），改那个目录里的文件在非计划模式下不问 |
-| 后台任务 | DSH 自己的后台任务（`job_*`）；跑完会不会叫醒对话照 DSH 的规则，node 不另记 |
+| 后台任务 | DSH 自己的后台任务（`job_*`），在跑的列在会话的 `background` 里（见「子 Agent 和后台任务」）；跑完会不会叫醒对话照 DSH 的规则，node 不另记 |
 | 预热 | 不需要：`dsh web` 常驻，新对话直接 `sessionController.create` |
 | 实时快照 | 和 Claude、Codex 一样随每条消息带（`<jarvis-context>`，只带变了的节），聊天里不显示（`map.js` 去掉不带属性的 `<jarvis-context>` 块） |
 
 和 Claude 版的差别：要常驻 `dsh web`，`dsh web` 重启会打断正在跑的那一轮；助手的对话也出现在 DSH 的 Web GUI 里（可以在电脑上接着看）；
 DSH 的授权只有「允许一次」，飞书闸门的「本会话总是允许」照旧由 node 记；拒绝时写的理由 steer 给模型；一段对话换成 Claude / Codex 要新建对话。
 
-## 子 Agent
+## 子 Agent 和后台任务
 
-DSH 委派子 Agent 时把子 Agent 的授权策略钉成 `never`（DSH 的 `captureDelegatedPolicyOverrides`）：子 Agent 要授权的操作直接被拒，`ask_user_question` 以
-`DELEGATED_CALLER` 失败，这些请求不经过任何应答链，手机和 Web GUI 都收不到，所以没有需要转给手机的东西，也不会卡住等人。子 Agent 的会话不单独列出：
-它被调用的过程和结果在父会话里，完成时有一条「子 Agent 完成」的提示（`map.js`）。
+DSH 的 Agent 常把活交出去再结束这一轮：后台子 Agent（`subagent` 工具，跑完把结果送回父会话叫醒它）、workflow、后台跑的命令。
+这一轮结束后父会话本身是「完成」，但事情还没完。插件把这些挂在父会话那一行上，用 Claude 会话同样的字段（`docs/runtimes.md`「子 Agent 和后台任务」）：
+
+| Jarvis | DSH |
+| --- | --- |
+| `subagents` | 父会话的子会话：`sessionController.list` 里 `parentSessionId` 是它的（子 Agent、workflow 派出的 Agent）。`id` = 子会话 id，`running` = 子会话在跑（列表的 `running`、`api-session/status`），`description` = 委派时的 `description`（父会话的 `subagent/catalog`，workflow 的是 `tool-workflow/agent-start` 的 `label`），`tool_use_id` = 启动它的那次 `subagent` 调用（结果「started subagent <id>」），`started_at` / `updated_at`、`last_text`。在跑的全列，其余列最近的，最多 20 个。插件启动前就有的子 Agent，名字和调用从父会话的 `subagentCatalog` 投影和事件里补（每个父会话 5 分钟最多读一次） |
+| `background` | 父会话名下还在跑的 DSH 后台任务：`job/registered` / `job/settled` 事件，插件启动前就有的从 `ctx.jobs.list(会话)` 补。工具调用还在等结果的不算（那是前台在跑）；`kind`：`bash` → `shell`（`command` 是命令），其余（workflow…）→ `agent` |
+| 子 Agent 的内容 | id `<父会话>@<子会话>`：翻页用 DSH 的子 Agent 地址 `{kind: "subagent", parentSessionId, childSessionId, mode: "unknown"}`（DSH 不让按普通会话读子会话），`history` = `dsh:<父>@<子>`；watch、逐字也按这个 id 推 |
+| 状态变化 | 子 Agent 开始 / 结束、后台任务登记 / 结束都会重推列表 |
+
+于是：父会话这一轮结束、子 Agent 还在跑时，App 把它放在 Agents 的「待唤醒」，点开父会话能看到子 Agent 和后台任务，从那次调用点进去看子 Agent 的过程；
+hub 的「完成」推送等这些跑完、父会话被叫醒的那一轮结束后再发（`notify.go` 的 `backgroundRunning`）。子 Agent 完成时父会话里有一条「子 Agent 完成」的提示（`map.js`）。
+
+子 Agent 只能看，不能发消息、改名（回 `unsupported`）：它归父会话管，要它干什么在父会话里说。
+
+授权和提问：DSH 委派子 Agent 时把子 Agent 的授权策略钉成 `never`（DSH 的 `captureDelegatedPolicyOverrides`）：子 Agent 要授权的操作直接被拒，`ask_user_question` 以
+`DELEGATED_CALLER` 失败，这些请求不经过任何应答链，手机和 Web GUI 都收不到，也不会卡住等人。如果在 DSH 里把某个子 Agent 的策略改回 `ask`，
+它的授权卡片挂在**父会话**上给手机（手机列的是父会话），`reason` 前面写明是哪个子 Agent（「子 Agent「<名字>」：…」）；拒绝时写的话不 steer（子 Agent 不收插话）。
+
+伴随进程（DSH 没在运行时）列的离线会话不带子 Agent 和后台任务：DSH 不在，它们也不会在跑。
 
 ## 限制
 
 - 没有终端（DSH 没有 TUI），App 不显示终端入口。
-- 子 Agent 不能单独打开、不能给它发消息（见上一节）。
+- 子 Agent 只能看，不能给它发消息、改名（见「子 Agent 和后台任务」）；早于 DSH 给子 Agent 写 `subagent/descriptor` 的老子会话翻不了页（DSH 不认它的地址），列表里照样有。
 - 工具结果里的图片不交给 DSH 的 Agent；伴随进程列出的离线会话里的图片，要等 DSH 跑起来才看得到。
 
 ## 验证
@@ -168,11 +185,15 @@ DSH 委派子 Agent 时把子 Agent 的授权策略钉成 `never`（DSH 的 `cap
 - `go test ./internal/node -run 'TestBridge|TestPollAgentsPublishesWithoutHerdr'`、`./internal/hub -run TestBridgeLauncher`。
 - `cd integrations/dsh && npm test`：映射、分页、发送、watch 的连续性、逐字、授权 / 提问 / 计划 / 迟到的回答、重连；归档和关闭、改名后的 hello / 卡片 id、
   手机工具的注册和调用（`dsh.test.js`）；伴随进程的离线列表、翻页、唤醒和交回、旧 node 上不连（`files.test.js`）。
-- node：`go test ./internal/node -run 'TestRuntime'`（含 runtime id 冲突、同一进程重连、启动器只有一个主人、交回的三种结果：`runtimes_identity_test.go`）。
+- node：`go test ./internal/node -run 'TestRuntime'`（含 runtime id 冲突、同一进程重连、启动器只有一个主人、交回的三种结果：`runtimes_identity_test.go`；
+  子 Agent 和后台任务的行、`<会话>@<子>` 的调用和推送归父会话的 runtime：`TestRuntimeSubagentsAndBackground`；daemon 前缀：`TestDaemonSubagentIDs`）。
+  插件这边：子 Agent / workflow / 后台任务进行、结束，按父会话地址翻页和 watch，子 Agent 的授权和提问挂在父会话上，插件之前就有的从目录和任务表补（`dsh.test.js` 最后三个）。
 - 端到端：`DSH_CHECKOUT=<编译过的 dsh 源码> JARVISD=<jarvisd> node integrations/dsh/e2e/run.mjs`。在一个临时目录里起真的 `dsh web`
   （独立的 `DSH_HOME`，模型由 DSH 自带的 `llm-mock-server` 扮演）、真的 `jarvisd node --stdio`，脚本自己当 hub：从「手机」新建会话、发消息、
   看思考和回复、翻历史、批准一条命令（真的执行）、回答一个提问、看逐字、中断，核对推送的连续性，再让 DSH 的 Agent 调一个手机工具（hub 收到调用和会话、
-  结果回到 Agent）、从手机关闭会话（离开列表、DSH 的归档里有它）。2026-11-02 实测 21/21 通过。
+  结果回到 Agent）、交给一个后台子 Agent（父会话这一轮结束、它在 `subagents` 里在跑且带着启动它的调用、不单列、按 `<父>@<子>` 翻页和 watch、
+  跑完后列表说它完了、父会话被叫醒）、后台跑一条命令（这一轮结束后列在 `background` 里，退出后离开），最后从手机关闭会话（离开列表、DSH 的归档里有它）。
+  子 Agent 的请求和父会话的交错，假模型按提示里的标记分开（`scriptedModel().scriptWhen`）。2026-11-02 实测 31/31 通过，daemon 模式（`JARVIS_E2E_DAEMON=1`）31/31。
   脚本给 DSH 装了一个只在测试里用的规则（含 `JARVIS_E2E_ASK` 的命令要授权）和一个「不沙箱但要授权」的权限预设：
   在别的沙箱里（比如 Agent 的 shell）起不了 DSH 自己的沙箱。
 - 掉出列表的老会话：`node integrations/dsh/e2e/older-session.mjs`（同样两个环境变量）。插件只列 1 个会话，建 A、B 两个，

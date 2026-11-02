@@ -9,7 +9,7 @@ import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { createRuntime, interactionId, RpcError, summaryOf } from '../../runtime-sdk/index.js'
 import { attachmentOf, dshSeq, eventItems, itemsOf, jarvisSeq, lastText, streamText, toolInput, toolName } from './map.js'
 
-export const RUNTIME_VERSION = '0.3.0'
+export const RUNTIME_VERSION = '0.4.0'
 
 // The DSH permission preset for each Jarvis permission mode of an assistant conversation (config presets overrides):
 // Codex's mapping, in DSH's presets (docs/dsh.md「助手」). DSH has no auto mode: as the default.
@@ -37,12 +37,26 @@ function assistantDir(cwd) {
  * @property {{ get(id: string): { session: object } | undefined } | undefined} [agents] - ctx.agents: a live session,
  *   to set an assistant conversation's permission preset on.
  * @property {{ set(session: object, name: string): void } | undefined} [permissionPresets] - ctx.permissionPresets.
+ * @property {{ list(caller?: string): object[] } | undefined} [jobs] - ctx.jobs: a session's background jobs (workflows,
+ *   shells run in the background) that started before the plugin saw them.
  * @property {() => boolean} [hasLiveClient] - whether a DSH Web GUI is connected.
  * @property {(msg: string) => void} [log]
  * @property {(path: string) => import('node:net').Socket} [connect] - tests.
  */
 
 const TOOLS_EVERY = 5 * 60_000 // ms: look at the hub's tools this often (the phone registers its tools when it connects)
+const MAX_SUBAGENTS = 20 // a session's subagents listed: every running one, then the latest finished ones
+const LEARN_EVERY = 5 * 60_000 // ms: read a parent's subagent catalog again at most this often (labels, tool calls)
+const STARTED_SUBAGENT = /^started subagent (\S+)/ // DSH's subagent tool result: the child it started
+
+/**
+ * A subagent's id as Jarvis sees it, "<parent>@<child>" (docs/runtimes.md「子 Agent」), split; undefined for another id.
+ * @param {string} id
+ */
+export function splitChild(id) {
+  const at = typeof id === 'string' ? id.indexOf('@') : -1
+  return at > 0 && at < id.length - 1 ? { parent: id.slice(0, at), child: id.slice(at + 1) } : undefined
+}
 
 /**
  * @param {DshDeps} deps
@@ -64,6 +78,12 @@ export function createDshRuntime(deps, options = {}) {
   const known = new Map() // session id -> { lastSeq (DSH), lastText, running }
   const calls = new Map() // session id -> Map(callId -> { name, args }): recent tool calls, for approval cards
   const texts = new Map() // session id -> the assistant text being generated
+  // Subagents (DSH's child sessions: subagent tool, workflows) and background jobs (docs/dsh.md「子 Agent 和后台任务」).
+  const parents = new Map() // child session id -> its parent session id
+  const children = new Map() // child session id -> { label, callId, createdAt }
+  const learned = new Map() // parent session id -> when its catalog was last read
+  const jobs = new Map() // owner session id -> Map(jobId -> { kind, label, startedAt, callId })
+  const openCalls = new Map() // session id -> Set(callId): tool calls still waiting for their result
   const disposers = []
   const tools = { key: '', disposers: [], refreshing: false, timer: undefined }
   // The Jarvis assistant's conversations (their directory is the assistant's): id -> { memoryDir, mode }.
@@ -96,9 +116,18 @@ export function createDshRuntime(deps, options = {}) {
     const { items } = await withTimeout(20_000, (signal) => deps.controller.list({}, signal))
     const archived = archivedIDs()
     const rows = []
+    const kids = new Map() // parent id -> its children's summaries
     for (const s of items ?? []) {
       const id = String(s.sessionId)
-      if (s.origin === 'subagent' || s.parentSessionId) continue // a subagent's or a workflow's: its parent shows it
+      if (s.origin === 'subagent' || s.parentSessionId) { // a subagent's or a workflow's: its parent shows it
+        if (s.parentSessionId) {
+          const parent = String(s.parentSessionId)
+          parents.set(id, parent)
+          if (!kids.has(parent)) kids.set(parent, [])
+          kids.get(parent).push(s)
+        }
+        continue
+      }
       if (archived.has(id)) continue // archived in DSH (or closed from the phone): DSH hides it too
       if (options.assistant && assistantDir(s.cwd) && !assistants.has(id)) assistants.set(id, {})
       const st = known.get(id)
@@ -107,10 +136,16 @@ export function createDshRuntime(deps, options = {}) {
       if (s.blank && !rt.touched(id)) continue // before its first prompt, only one the phone started
       rows.push({ s, id, running, waiting })
     }
-    // Running and waiting ones always, those the phone touched always, the rest by age and count (the SDK's rule).
-    const chosen = rt.recent(rows, { days: listDays, max: maxSessions, pinned: (r) => r.running || r.waiting, id: (r) => r.id,
-      updatedAt: (r) => r.s.updatedAt ?? 0 })
-    return chosen.map(({ s, id, running, waiting }) => {
+    for (const r of rows) {
+      r.subagents = subagentsOf(r.id, kids.get(r.id) ?? [])
+      r.background = backgroundOf(r.id)
+      r.busy = r.subagents.some((a) => a.running) || r.background.length > 0
+    }
+    // Running and waiting ones always, those with work still running and those the phone touched always, the rest by
+    // age and count (the SDK's rule).
+    const chosen = rt.recent(rows, { days: listDays, max: maxSessions, pinned: (r) => r.running || r.waiting || r.busy,
+      id: (r) => r.id, updatedAt: (r) => r.s.updatedAt ?? 0 })
+    return chosen.map(({ s, id, running, waiting, subagents, background }) => {
       const st = known.get(id)
       const hints = s.projections
       const title = typeof hints?.values?.title === 'string' ? hints.values.title : ''
@@ -129,8 +164,115 @@ export function createDshRuntime(deps, options = {}) {
       }
       if (seq >= 0) row.rev = jarvisSeq(seq)
       if (st?.lastText) row.last_text = st.lastText
+      if (subagents.length > 0) row.subagents = subagents
+      if (background.length > 0) row.background = background
       return row
     })
+  }
+
+  /**
+   * A session's subagents as Jarvis lists them: every running one, then the latest finished, MAX_SUBAGENTS in all.
+   * Their labels and the tool calls that started them come from the parent's events (live) or its catalog (read once).
+   */
+  function subagentsOf(parent, summaries) {
+    if (summaries.length === 0) return []
+    const rows = summaries.map((s) => {
+      const id = String(s.sessionId)
+      const info = children.get(id) ?? {}
+      const values = s.projections?.values ?? {}
+      const running = s.running === true || known.get(id)?.running === true
+      const since = values.subagentTiming?.active?.since
+      const a = { id, description: info.label || values.subagent?.label || '子 Agent', type: 'subagent', running }
+      if (info.callId) a.tool_use_id = info.callId
+      const started = info.createdAt ?? (typeof since === 'number' ? since : undefined)
+      if (typeof started === 'number') a.started_at = new Date(started).toISOString()
+      if (typeof s.updatedAt === 'number') a.updated_at = new Date(s.updatedAt).toISOString()
+      const last = known.get(id)?.lastText
+      if (last) a.last_text = last
+      return { a, at: s.updatedAt ?? 0 }
+    })
+    rows.sort((x, y) => Number(y.a.running) - Number(x.a.running) || y.at - x.at)
+    const out = rows.slice(0, MAX_SUBAGENTS).map((r) => r.a)
+    if (out.some((a) => a.running && (!a.tool_use_id || a.description === '子 Agent'))) void learnChildren(parent)
+    return out
+  }
+
+  /**
+   * Reads a parent's subagent catalog (labels, start times) and the tool results that started its children (which
+   * call each one answers, so the chat opens it from the call): for children the plugin did not see start.
+   */
+  async function learnChildren(parent) {
+    const at = learned.get(parent) ?? 0
+    if (Date.now() - at < LEARN_EVERY) return
+    learned.set(parent, Date.now())
+    try {
+      await withTimeout(20_000, async (signal) => {
+        const base = await deps.controller.projections({ sessionId: parent }, signal)
+        for (const e of Array.isArray(base?.values?.subagentCatalog) ? base.values.subagentCatalog : []) {
+          if (e?.childId) noteChild(parent, String(e.childId), { label: e.label, createdAt: e.childCreatedAt })
+        }
+        if (typeof base?.asOfSeq !== 'number') return
+        const { events } = await pageEvents(parent, base.asOfSeq, undefined, 400, undefined, signal)
+        for (const e of events) noteStarted(parent, e)
+      })
+      rt.sessionsChanged()
+    } catch (err) {
+      log(`jarvis: subagents of ${parent}: ${err.message}`)
+    }
+  }
+
+  function noteChild(parent, child, { label, createdAt, callId } = {}) {
+    parents.set(child, parent)
+    const info = children.get(child) ?? {}
+    if (typeof label === 'string' && label) info.label = label
+    if (typeof createdAt === 'number') info.createdAt = createdAt
+    if (typeof callId === 'string' && callId) info.callId = callId
+    children.set(child, info)
+    while (children.size > 2000) children.delete(children.keys().next().value)
+  }
+
+  /** A parent's tool result saying which child its subagent call started. */
+  function noteStarted(parent, event) {
+    if (event?.type !== 'tool/result') return false
+    const m = event.data?.message
+    const text = (m?.content ?? []).find((b) => b?.type === 'text')?.text
+    const found = typeof text === 'string' ? STARTED_SUBAGENT.exec(text) : null
+    if (!found || !m?.toolCallId) return false
+    noteChild(parent, found[1], { callId: String(m.toolCallId) })
+    return true
+  }
+
+  /**
+   * A session's background tasks: its DSH jobs still running (workflows, shells run in the background) — not one whose
+   * tool call is still waiting for its result (that call is in the foreground). From the job events the plugin saw,
+   * and DSH's job registry for those that started before it.
+   */
+  function backgroundOf(id) {
+    const open = openCalls.get(id) ?? new Set()
+    const tracked = jobs.get(id) ?? new Map()
+    const out = new Map()
+    for (const [jobId, j] of tracked) {
+      if (j.callId && open.has(j.callId)) continue
+      out.set(jobId, task(jobId, j))
+    }
+    try {
+      for (const j of typeof deps.jobs?.list === 'function' ? deps.jobs.list(id) ?? [] : []) {
+        if (String(j.owner ?? '') !== id || !['running', 'stopping'].includes(j.status) || out.has(String(j.id))) continue
+        const t = tracked.get(String(j.id))
+        if (t?.callId && open.has(t.callId)) continue
+        out.set(String(j.id), task(String(j.id), { kind: j.kind, label: j.label, startedAt: j.startedAt }))
+      }
+    } catch (err) {
+      log(`jarvis: jobs of ${id}: ${err.message}`)
+    }
+    return [...out.values()]
+  }
+
+  function task(id, j) {
+    const t = { id, kind: j.kind === 'bash' ? 'shell' : 'agent', description: String(j.label ?? j.kind ?? '') }
+    if (j.kind === 'bash' && j.label) t.command = String(j.label)
+    if (typeof j.startedAt === 'number') t.started_at = new Date(j.startedAt).toISOString()
+    return t
   }
 
   function activeQuestions(summary) {
@@ -224,8 +366,19 @@ export function createDshRuntime(deps, options = {}) {
     tools.key = ''
   }
 
+  /** DSH's own session id for a Jarvis id (a subagent's "<parent>@<child>" is the child's). */
+  function dshID(id) {
+    return splitChild(id)?.child ?? id
+  }
+
+  /** The address DSH pages a session by: a subagent's through its parent (DSH refuses a child's plain address). */
+  function addressOf(id) {
+    const sub = splitChild(id)
+    return sub ? { kind: 'subagent', parentSessionId: sub.parent, childSessionId: sub.child, mode: 'unknown' } : { kind: 'session', sessionId: id }
+  }
+
   async function cursorOf(sessionId, signal) {
-    const base = await deps.controller.projections({ sessionId }, signal)
+    const base = await deps.controller.projections({ sessionId: dshID(sessionId) }, signal)
     if (base === null || base === undefined) throw new RpcError(`DSH 里没有会话 ${sessionId}`, 'not_found')
     return base.asOfSeq
   }
@@ -233,7 +386,7 @@ export function createDshRuntime(deps, options = {}) {
   /** Events of a backwards page (oldest first), with has_more. */
   async function pageEvents(sessionId, throughSeq, beforeSeq, maxMessages, turnWindow, signal) {
     if (throughSeq < 0) return { events: [], hasMore: false }
-    const req = { address: { kind: 'session', sessionId }, throughSeq, maxMessages }
+    const req = { address: addressOf(sessionId), throughSeq, maxMessages }
     if (beforeSeq !== undefined) req.beforeSeq = beforeSeq
     if (turnWindow) req.turnWindow = turnWindow
     const page = await deps.controller.page(req, signal)
@@ -318,7 +471,7 @@ export function createDshRuntime(deps, options = {}) {
       // A tool result's images sit after its text item: block i is item i + 1.
       const attachmentId = attachmentOf(event, event?.type === 'tool/result' ? idx - 1 : idx)
       if (!attachmentId) throw new RpcError(`no image ${params.item_id}`, 'not_found')
-      const res = await deps.controller.attachment({ sessionId: params.session_id, attachmentId })
+      const res = await deps.controller.attachment({ sessionId: dshID(params.session_id), attachmentId })
       return { mime: res.attachment?.mediaType ?? 'image/png', data: res.data }
     })
   }
@@ -334,6 +487,7 @@ export function createDshRuntime(deps, options = {}) {
   }
 
   async function send(params) {
+    if (splitChild(params.session_id)) throw new RpcError('unsupported: 子 Agent 由它的父会话管理，请在父会话里说', 'unsupported')
     const content = []
     const assistant = options.assistant === true && params.assistant === true // the node says so only for its assistant conversations
     if (assistant) {
@@ -394,9 +548,12 @@ export function createDshRuntime(deps, options = {}) {
     image,
     item,
     send,
-    interrupt: (params) => deps.controller.cancel({ sessionId: params.session_id }),
+    interrupt: (params) => deps.controller.cancel({ sessionId: dshID(params.session_id) }),
     start,
-    rename: (params) => deps.controller.rename({ sessionId: params.session_id, title: params.title }),
+    rename: (params) => {
+      if (splitChild(params.session_id)) throw new RpcError('unsupported: 子 Agent 不能改名', 'unsupported')
+      return deps.controller.rename({ sessionId: params.session_id, title: params.title })
+    },
     close: typeof deps.workspace?.archiveSession === 'function' ? close : undefined,
     hasLocalClient: typeof deps.hasLiveClient === 'function' ? deps.hasLiveClient : undefined,
   }, {
@@ -419,24 +576,83 @@ export function createDshRuntime(deps, options = {}) {
 
   // ---- DSH's events ----
 
+  /** A DSH session's parent, when it is a subagent (known from the list, the parent's events, or its header). */
+  function parentOf(id, session) {
+    const header = session?.header
+    if (header?.parentSession && (header.origin === 'subagent' || !parents.has(id))) parents.set(id, String(header.parentSession))
+    return parents.get(id)
+  }
+
+  /** The id Jarvis knows a DSH session by: a subagent's is "<parent>@<child>". */
+  function jarvisID(id, session) {
+    const parent = parentOf(id, session)
+    return parent ? `${parent}@${id}` : id
+  }
+
   function onSessionEvent(session, event) {
     const id = String(session?.id ?? '')
     if (!id || typeof event?.seq !== 'number') return
     const st = state(id)
     if (event.seq > st.lastSeq) st.lastSeq = event.seq
-    if (event.type === 'assistant/message') {
-      const t = lastText([event])
-      if (t) st.lastText = t
-      rememberCalls(id, event)
-    } else if (event.type === 'turn/start') {
-      st.running = true
-      rt.sessionsChanged()
-    } else if (event.type === 'turn/end') {
-      st.running = false
-      rt.sessionsChanged()
+    const d = event.data ?? {}
+    switch (event.type) {
+      case 'assistant/message': {
+        const t = lastText([event])
+        if (t) st.lastText = t
+        rememberCalls(id, event)
+        break
+      }
+      case 'turn/start':
+        st.running = true
+        rt.sessionsChanged()
+        break
+      case 'turn/end':
+        st.running = false
+        rt.sessionsChanged()
+        break
+      case 'tool/call':
+        if (d.callId) callsOpen(id).add(String(d.callId))
+        break
+      case 'tool/result':
+        if (d.message?.toolCallId) callsOpen(id).delete(String(d.message.toolCallId))
+        if (noteStarted(id, event)) rt.sessionsChanged()
+        if (jobs.get(id)?.size) rt.sessionsChanged() // a background job's call answered: it shows now
+        break
+      case 'subagent/catalog':
+        if (d.childId) noteChild(id, String(d.childId), { label: d.label, createdAt: d.childCreatedAt })
+        rt.sessionsChanged()
+        break
+      case 'tool-workflow/agent-start': // a workflow's agent: its child session, named by the workflow's label
+        if (d.childId) noteChild(id, String(d.childId), { label: d.label, createdAt: event.time })
+        rt.sessionsChanged()
+        break
+      case 'tool-workflow/agent-end':
+      case 'tool-workflow/run-end':
+        rt.sessionsChanged()
+        break
+      case 'job/registered':
+      case 'job/settled': {
+        const owner = String(d.owner ?? id)
+        let m = jobs.get(owner)
+        if (!m) jobs.set(owner, (m = new Map()))
+        if (event.type === 'job/registered' && d.jobId) {
+          m.set(String(d.jobId), { kind: d.kind, label: d.label, startedAt: d.startedAt, callId: d.toolCall?.callId })
+          while (m.size > 200) m.delete(m.keys().next().value)
+        } else if (d.jobId) m.delete(String(d.jobId))
+        rt.sessionsChanged()
+        break
+      }
     }
-    // Every event moves the seq, even one the chat does not show.
-    rt.append(id, { items: rt.watching(id) ? eventItems(event) : [], fromSeq: event.seq, toSeq: jarvisSeq(event.seq), history: history(id) })
+    // Every event moves the seq, even one the chat does not show. A subagent's go to "<parent>@<child>".
+    const jid = jarvisID(id, session)
+    rt.append(jid, { items: rt.watching(jid) ? eventItems(event) : [], fromSeq: event.seq, toSeq: jarvisSeq(event.seq), history: history(jid) })
+  }
+
+  function callsOpen(id) {
+    let s = openCalls.get(id)
+    if (!s) openCalls.set(id, (s = new Set()))
+    while (s.size > 200) s.delete(s.values().next().value)
+    return s
   }
 
   function rememberCalls(id, event) {
@@ -452,8 +668,9 @@ export function createDshRuntime(deps, options = {}) {
   }
 
   function onAssistantStream({ agent, frame }) {
-    const id = String(agent?.session?.id ?? agent?.id ?? '')
-    if (!id) return
+    const own = String(agent?.session?.id ?? agent?.id ?? '')
+    if (!own) return
+    const id = jarvisID(own, agent?.session)
     if (frame?.type === 'start') {
       texts.set(id, '')
       return
@@ -492,10 +709,21 @@ export function createDshRuntime(deps, options = {}) {
     return next()
   }
 
+  /**
+   * Where an agent's card goes: its own session, or for a subagent its parent's (the phone lists the parent; the card
+   * says which subagent asks).
+   */
+  function askFor(agent) {
+    const sessionId = String(agent?.session?.id ?? agent?.id ?? '')
+    const parent = sessionId ? parentOf(sessionId, agent?.session) : undefined
+    const label = parent ? children.get(sessionId)?.label || '子 Agent' : ''
+    return { sessionId, on: parent ?? sessionId, child: parent ? label : '' }
+  }
+
   async function onApproval(req, next) {
     const agent = req?.agent
-    const sessionId = String(agent?.session?.id ?? agent?.id ?? '')
-    if (!sessionId || !(isAssistant(sessionId) ? rt.hubConnected : rt.phoneFirst(sessionId))) return next()
+    const { sessionId, on, child } = askFor(agent)
+    if (!sessionId || !(isAssistant(on) ? rt.hubConnected : rt.phoneFirst(on))) return next()
     const call = req.callId ? calls.get(sessionId)?.get(req.callId) : undefined
     const name = call?.name ?? req.toolName
     const input = call ? toolInput(call.name, call.args) : undefined
@@ -503,12 +731,14 @@ export function createDshRuntime(deps, options = {}) {
     const ix = {
       id: interactionId(runtimeID, sessionId, 'permission', req.callId ?? randomUUID()),
       kind: 'permission',
-      session_id: sessionId,
+      session_id: on,
       tool_name: toolName(name),
       tool_use_id: req.callId,
       summary: summaryOf(name, input), // what it will run; DSH's own words on why go in reason, as on a Codex card
     }
-    if (typeof req.reason === 'string' && req.reason.trim() !== '') ix.reason = req.reason
+    const why = typeof req.reason === 'string' ? req.reason.trim() : ''
+    if (child) ix.reason = why ? `子 Agent「${child}」：${why}` : `子 Agent「${child}」`
+    else if (why) ix.reason = req.reason
     if (input) ix.tool_input = input
     let res
     try {
@@ -518,7 +748,7 @@ export function createDshRuntime(deps, options = {}) {
       throw err
     }
     if (res?.dismiss || typeof res?.allow !== 'boolean') return next() // handed back: the Web GUI asks
-    if (!res.allow) steerReason(sessionId, ix.id, ix.tool_name, res.message)
+    if (!res.allow && !child) steerReason(sessionId, ix.id, ix.tool_name, res.message) // a subagent takes no steering
     return res.allow ? 'allowed-once' : 'rejected'
   }
 
@@ -541,15 +771,15 @@ export function createDshRuntime(deps, options = {}) {
 
   async function onQuestion(request, next) {
     const agent = request?.agent
-    const sessionId = String(agent?.session?.id ?? agent?.id ?? '')
+    const { sessionId, on, child } = askFor(agent)
     const questions = request?.questions ?? []
-    if (!sessionId || questions.length === 0 || !(isAssistant(sessionId) ? rt.hubConnected : rt.phoneFirst(sessionId))) return next()
+    if (!sessionId || questions.length === 0 || !(isAssistant(on) ? rt.hubConnected : rt.phoneFirst(on))) return next()
     const callId = request.wait?.callId
     const plan = questions.length === 1 && questions[0].intent?.kind === 'plan-review' ? questions[0] : undefined
     const ix = {
       id: interactionId(runtimeID, sessionId, plan ? 'plan' : 'question', callId ?? questions.map((q) => q.id).join(',')),
       kind: plan ? 'plan' : 'question',
-      session_id: sessionId,
+      session_id: on,
     }
     if (callId) ix.tool_use_id = callId
     if (plan) {
@@ -559,7 +789,7 @@ export function createDshRuntime(deps, options = {}) {
       ix.tool_name = 'AskUserQuestion'
       ix.questions = questions.map((q) => ({
         question: q.question,
-        header: q.header ?? '',
+        header: child ? `子 Agent「${child}」${q.header ? ` · ${q.header}` : ''}` : q.header ?? '',
         multi_select: q.multiSelect === true,
         options: (q.options ?? []).map((o) => ({ label: o.label, description: o.description ?? '' })),
       }))

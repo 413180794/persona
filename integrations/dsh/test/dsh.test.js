@@ -33,18 +33,24 @@ function controller() {
     prompts: [],
     cancels: [],
     renames: [],
-    add(id, summary, events = []) {
-      sessions.set(id, { summary: { sessionId: id, updatedAt: Date.now(), running: false, blank: false, agentAvailable: true, ...summary }, events })
+    add(id, summary, events = [], values = {}) {
+      sessions.set(id, { summary: { sessionId: id, updatedAt: Date.now(), running: false, blank: false, agentAvailable: true, ...summary }, events, values })
     },
     async list() {
       return { items: [...sessions.values()].map((s) => s.summary) }
     },
     async projections({ sessionId }) {
       const s = sessions.get(sessionId)
-      return s ? { asOfSeq: s.events.at(-1)?.seq ?? -1, values: {} } : null
+      return s ? { asOfSeq: s.events.at(-1)?.seq ?? -1, values: s.values ?? {} } : null
     },
+    pages: [],
     async page({ address, throughSeq, beforeSeq, maxMessages }) {
-      const s = sessions.get(address.sessionId)
+      c.pages.push(address)
+      // DSH pages a subagent only through its parent's address, and refuses its plain one.
+      const id = address.kind === 'subagent' ? address.childSessionId : address.sessionId
+      const s = sessions.get(id)
+      if (address.kind === 'subagent' && s?.summary.parentSessionId !== address.parentSessionId) throw new Error('subagent/unauthorized')
+      if (address.kind === 'session' && s?.summary.origin === 'subagent') throw new Error('session/agent-busy')
       const inRange = s.events.filter((e) => e.seq <= throughSeq && (beforeSeq === undefined || e.seq < beforeSeq))
       const page = inRange.slice(-maxMessages)
       return { records: page.map((event) => ({ type: 'event', event })), hasMore: page.length < inRange.length }
@@ -90,6 +96,7 @@ async function setup(t, opts = {}) {
     registerTool: opts.registerTool,
     agents: opts.agents,
     permissionPresets: opts.permissionPresets,
+    jobs: opts.jobs,
   }, { socketPath: n.path, pushDelayMs: 5, retryMs: 20, interactions: opts.interactions, maxSessions: opts.maxSessions,
     runtime: opts.runtime, name: opts.name, launcher: opts.launcher, assistant: opts.assistant, presets: opts.presets })
   t.after(() => rt.stop())
@@ -483,4 +490,121 @@ test('the assistant\'s own tools are only for its conversations, called as the a
   assert.deepEqual(n.toolCalls.at(-1), { name: 'ask_user', args: {}, session_id: 'session-asst', assistant: true })
   await registered.get('mcp__jarvis__phone_contacts').def.execute({}, { agent: { session: { id: 'session-other' } } })
   assert.equal(n.toolCalls.at(-1).assistant, undefined)
+})
+
+// ---- subagents and background work (docs/dsh.md「子 Agent 和后台任务」) ----
+
+const ev2 = (seq, type, data) => ({ type, seq, time: 1_700_000_000_000 + seq, data })
+const toolCall = (seq, callId, name) => ev2(seq, 'tool/call', { callId, name, arguments: '{}' })
+const toolResult = (seq, callId, body) => ev2(seq, 'tool/result', { message: { role: 'tool', toolCallId: callId, content: [{ type: 'text', text: body }] } })
+
+/** Emits events on a session as DSH does (its log grows, then session/event). */
+function emitOn(ctl, ev, id, events, header) {
+  for (const e of events) {
+    ctl.sessions.get(id).events.push(e)
+    ev.emit('session/event', { id, header }, e)
+  }
+}
+
+const rowOf = (n, id) => n.last('runtime.sessions')?.sessions.find((s) => s.session_id === id)
+
+test('a session lists the subagents and background jobs it left running, and they finish', async (t) => {
+  const { n, ctl, ev, rt } = await setup(t)
+  ctl.add('session-p', { cwd: '/w/app' })
+  rt.start()
+  await n.ready
+  await until('listed', () => rowOf(n, 'session-p'))
+  emitOn(ctl, ev, 'session-p', [
+    ev2(0, 'turn/start', {}),
+    toolCall(1, 'call_sub', 'subagent'),
+    ev2(2, 'subagent/catalog', { version: 0, childId: 'child-1', childCreatedAt: 1_700_000_000_000, mode: 'continuable', label: 'Map the code' }),
+    toolResult(3, 'call_sub', 'started subagent child-1'),
+    toolCall(4, 'call_wf', 'workflow'),
+    ev2(5, 'job/registered', { jobId: 'workflow-1', owner: 'session-p', kind: 'workflow', label: 'review', startedAt: 1_700_000_000_005, toolCall: { callId: 'call_wf' } }),
+    toolResult(6, 'call_wf', 'started workflow workflow-1'),
+    toolCall(7, 'call_fg', 'bash'),
+    ev2(8, 'job/registered', { jobId: 'bash-1', owner: 'session-p', kind: 'bash', label: 'make test', startedAt: 1_700_000_000_008, toolCall: { callId: 'call_fg' } }),
+  ])
+  ctl.add('child-1', { cwd: '/w/app', origin: 'subagent', parentSessionId: 'session-p', running: true })
+  emitOn(ctl, ev, 'session-p', [ev2(9, 'job/settled', { jobId: 'bash-1', owner: 'session-p', kind: 'bash' }), toolResult(10, 'call_fg', 'ok'), ev2(11, 'turn/end', { kind: 'completed' })])
+
+  await until('the turn done, its subagent and workflow still running', () => {
+    const r = rowOf(n, 'session-p')
+    return r?.status === 'done' && r.subagents?.length === 1 && r.background?.length === 1
+  })
+  const row = rowOf(n, 'session-p')
+  assert.deepEqual(row.subagents[0], { id: 'child-1', description: 'Map the code', type: 'subagent', running: true, tool_use_id: 'call_sub',
+    started_at: new Date(1_700_000_000_000).toISOString(), updated_at: row.subagents[0].updated_at })
+  assert.deepEqual(row.background, [{ id: 'workflow-1', kind: 'agent', description: 'review', started_at: new Date(1_700_000_000_005).toISOString() }])
+  assert.ok(!n.last('runtime.sessions').sessions.some((s) => s.session_id === 'child-1'), 'a subagent is not a session of its own in the list')
+
+  // The subagent stops and the workflow settles: nothing left running.
+  ev.emit('api-session/status', 'child-1', false)
+  ctl.sessions.get('child-1').summary.running = false
+  emitOn(ctl, ev, 'session-p', [ev2(12, 'job/settled', { jobId: 'workflow-1', owner: 'session-p', kind: 'workflow' })])
+  await until('all done', () => {
+    const r = rowOf(n, 'session-p')
+    return r?.subagents?.[0]?.running === false && r.background === undefined
+  })
+})
+
+test('a subagent reads, watches and asks as "<parent>@<child>", through its parent', async (t) => {
+  const { n, ctl, ev, rt } = await setup(t, { interactions: 'phone' })
+  ctl.add('session-p', { cwd: '/w/app' }, [toolResult(0, 'call_sub', 'started subagent child-1')])
+  ctl.add('child-1', { cwd: '/w/app', origin: 'subagent', parentSessionId: 'session-p', running: true }, [text(0, 'user', 'map it'), text(1, 'assistant', 'mapping')])
+  rt.start()
+  await n.ready
+  await until('listed', () => rowOf(n, 'session-p')?.subagents?.length === 1)
+
+  const page = await n.peer.call('session.items', { session_id: 'session-p@child-1', turns: 1 })
+  assert.deepEqual(page.items.map((i) => i.text), ['map it', 'mapping'])
+  assert.equal(page.history, 'dsh:session-p@child-1')
+  assert.deepEqual(ctl.pages.at(-1), { kind: 'subagent', parentSessionId: 'session-p', childSessionId: 'child-1', mode: 'unknown' })
+
+  await n.peer.call('session.watch', { session_id: 'session-p@child-1', since_seq: 2 })
+  emitOn(ctl, ev, 'child-1', [text(2, 'assistant', 'found it')], { parentSession: 'session-p', origin: 'subagent' })
+  await until('the subagent\'s live batch', () => n.all('session.items').some((b) => b.session_id === 'session-p@child-1'))
+  const batch = n.all('session.items').find((b) => b.session_id === 'session-p@child-1')
+  assert.deepEqual(batch.items.map((i) => i.text), ['found it'])
+  assert.ok(!n.all('session.items').some((b) => b.session_id === 'child-1'), 'nothing under the child\'s own id')
+
+  // Its approval goes on the parent's card, saying which subagent asks.
+  n.resolve = () => ({ allow: true })
+  const agent = { session: { id: 'child-1', header: { parentSession: 'session-p', origin: 'subagent' } } }
+  emitOn(ctl, ev, 'child-1', [{ type: 'assistant/message', seq: 3, time: 0, data: { message: { role: 'assistant', content: [{ type: 'tool-call', id: 'call_rm', name: 'bash', arguments: '{"command":"rm -rf out"}' }] } } }],
+    { parentSession: 'session-p', origin: 'subagent' })
+  assert.equal(await ev.waterfall('approval/request', { agent, toolName: 'bash', callId: 'call_rm', reason: 'deletes files' }, () => 'rejected'), 'allowed-once')
+  const card = n.asked.at(-1)
+  assert.equal(card.session_id, 'session-p')
+  assert.equal(card.summary, 'rm -rf out')
+  assert.match(card.reason, /^子 Agent「.+」：deletes files$/)
+
+  // Its question too.
+  n.resolve = () => ({ answers: { 'Which one?': 'A' } })
+  const res = await ev.waterfall('user-questions/request', { agent, questions: [{ id: 'q', question: 'Which one?', options: [{ label: 'A' }, { label: 'B' }] }] }, () => { throw new Error('no answerer') })
+  assert.deepEqual(res, { answers: [{ id: 'q', selected: ['A'] }] })
+  assert.equal(n.asked.at(-1).session_id, 'session-p')
+  assert.match(n.asked.at(-1).questions[0].header, /^子 Agent「/)
+
+  // Its parent manages it: no sending to or renaming a subagent from the phone.
+  await assert.rejects(n.peer.call('session.send', { session_id: 'session-p@child-1', text: 'hi' }), /unsupported/)
+  await assert.rejects(n.peer.call('session.rename', { session_id: 'session-p@child-1', title: 'x' }), /unsupported/)
+})
+
+test('subagents started before the plugin are named from the parent\'s catalog; older jobs come from the registry', async (t) => {
+  const jobs = { list: (caller) => caller === 'session-r' ? [
+    { id: 'workflow-old', owner: 'session-r', kind: 'workflow', label: 'nightly review', status: 'running', startedAt: 1_700_000_000_000 },
+    { id: 'bash-old', owner: 'session-r', kind: 'bash', label: 'sleep 600', status: 'running', startedAt: 1_700_000_000_001 },
+    { id: 'bash-done', owner: 'session-r', kind: 'bash', label: 'ls', status: 'completed', startedAt: 1_700_000_000_002 },
+  ] : [] }
+  const { n, ctl, rt } = await setup(t, { jobs })
+  ctl.add('session-r', { cwd: '/w/app' }, [toolResult(0, 'call_old', 'started subagent child-9')],
+    { subagentCatalog: [{ childId: 'child-9', childCreatedAt: 1_700_000_000_000, mode: 'continuable', label: 'Old one' }] })
+  ctl.add('child-9', { cwd: '/w/app', origin: 'subagent', parentSessionId: 'session-r', running: true })
+  rt.start()
+  await n.ready
+  await until('named from the catalog', () => rowOf(n, 'session-r')?.subagents?.[0]?.description === 'Old one')
+  const row = rowOf(n, 'session-r')
+  assert.equal(row.subagents[0].tool_use_id, 'call_old')
+  assert.deepEqual(row.background.map((b) => [b.id, b.kind, b.command]), [['workflow-old', 'agent', undefined], ['bash-old', 'shell', 'sleep 600']])
 })

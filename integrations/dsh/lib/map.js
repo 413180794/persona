@@ -15,7 +15,9 @@ export const dshSeq = (seq) => seq - 1
 
 // DSH's tools under the names the apps draw (the SDK's common ones, plus DSH's own); DSH's arguments are already the
 // apps' (command, file_path, old_string, pattern…), so the chat draws a command, a diff or a file read as for Claude.
-const OWN_TOOLS = { read_image: 'Read', ask_user_question: 'AskUserQuestion' }
+// A subagent call ({description, prompt}) is Claude's Agent: the chat draws it as a subtask and opens the subagent it
+// started (the session's subagents carry the call's id).
+const OWN_TOOLS = { read_image: 'Read', ask_user_question: 'AskUserQuestion', subagent: 'Agent', subagent_fork: 'Agent' }
 
 /** Tool name the apps render. */
 export function toolName(name) {

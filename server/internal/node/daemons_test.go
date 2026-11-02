@@ -631,3 +631,35 @@ func TestDaemonStreamFramesLines(t *testing.T) {
 		t.Fatalf("read after close: %v", err)
 	}
 }
+
+// A daemon's subagents carry the hub's ids too: "<daemon>.<session>@<child>" outside, "<session>@<child>" inside.
+func TestDaemonSubagentIDs(t *testing.T) {
+	d := startFakeDaemon(t, "tok", map[string]any{"runtime": "x", "caps": map[string]any{"send": true}})
+	rh, _ := daemonHost(t, map[string]any{"id": "acme", "url": d.url(), "token": "tok"})
+	n, hub := runtimeNodeOn(t, rh)
+	d.push(t, "runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": "s1", "subagents": []map[string]any{{"id": "c1", "running": true}}}}})
+	waitFor(t, "listed", func() bool { _, ok := listed(t, n)["acme.s1"]; return ok })
+	if subs := listed(t, n)["acme.s1"].Subagents; len(subs) != 1 || subs[0].SessionID != "acme.s1@c1" {
+		t.Fatalf("subagents %+v", subs)
+	}
+	if _, err := nodeCall(t, n, "session.watch", map[string]any{"session_id": "acme.s1@c1", "since_seq": 0}); err != nil {
+		t.Fatal(err)
+	}
+	var watch map[string]any
+	_ = json.Unmarshal(d.got("session.watch")[0], &watch)
+	if watch["session_id"] != "s1@c1" {
+		t.Fatalf("watch %v", watch)
+	}
+	d.push(t, "session.items", map[string]any{"session_id": "s1@c1", "items": []any{}, "from_seq": 0, "to_seq": 1})
+	waitFor(t, "the subagent's items at the hub", func() bool {
+		hub.mu.Lock()
+		defer hub.mu.Unlock()
+		return len(hub.items) == 1 && strings.Contains(string(hub.items[0]), `"session_id":"acme.s1@c1"`)
+	})
+	link := &daemonLink{cfg: daemonConfig{ID: "acme"}}
+	for _, id := range []string{"other.s1@c1", "acme.s1@", "acme.@c1"} {
+		if in, ok := link.inner(id); ok {
+			t.Fatalf("%q is the daemon's %q", id, in)
+		}
+	}
+}
