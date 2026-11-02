@@ -2,6 +2,7 @@ from contextlib import redirect_stdout
 import io
 import ipaddress
 from pathlib import Path
+import struct
 import subprocess
 import sys
 import tempfile
@@ -247,8 +248,7 @@ class MacBundleTests(unittest.TestCase):
             with patch.object(sys, "argv", ["check_bundle_privacy.py", str(Path(directory) / "Jarvis.app")]), \
                     patch.object(cbp.pc, "module_paths", return_value=None), \
                     patch.object(cbp.pc, "terms", return_value=(words, set())), \
-                    patch.object(cbp.jarvis_config, "load", return_value={}), \
-                    patch.object(cbp, "signature_offset", return_value=8), redirect_stdout(output):
+                    patch.object(cbp.jarvis_config, "load", return_value={}), redirect_stdout(output):
                 try:
                     cbp.main()
                 except SystemExit as error:
@@ -269,6 +269,109 @@ class MacBundleTests(unittest.TestCase):
         fat = b"\xca\xfe\xba\xbe" + b"\0" * 60 + b"second slice " + value.encode()
         code, output = self.scan({"MacOS/Jarvis": fat}, (value,))
         self.assertNotEqual(code, 0, output)
+
+
+class MachOSignatureTests(unittest.TestCase):
+    @staticmethod
+    def thin(body=b"visible-code", signature=b"certificate-placeholder", *, wide=True, endian="<", tail=b""):
+        magic = 0xFEEDFACF if wide else 0xFEEDFACE
+        header = struct.pack(endian + "7I", magic, 0, 0, 2, 1, 16, 0)
+        if wide:
+            header += struct.pack(endian + "I", 0)
+        blob = struct.pack(">II", 0xFADE0B01, 8 + len(signature)) + signature
+        superblob = struct.pack(">IIIII", 0xFADE0CC0, 20 + len(blob), 1, 0x10000, 20) + blob
+        offset = len(header) + 16 + len(body)
+        command = struct.pack(endian + "4I", 0x1D, 16, offset, len(superblob))
+        return header + command + body + superblob + tail
+
+    @staticmethod
+    def fat(slices, *, wide=False, endian=">"):
+        count = len(slices)
+        entry_size = 32 if wide else 20
+        offset = 8 + entry_size * count
+        entries = []
+        for slice_data in slices:
+            fields = (0, 0, offset, len(slice_data), 0)
+            entries.append(struct.pack(endian + ("IIQQII" if wide else "5I"), *(fields + (0,) if wide else fields)))
+            offset += len(slice_data)
+        header = struct.pack(endian + "II", 0xCAFEBABF if wide else 0xCAFEBABE, count)
+        return header + b"".join(entries) + b"".join(slices)
+
+    def read_texts(self, data):
+        with tempfile.TemporaryDirectory(prefix="macho-signature-test-") as directory:
+            path = Path(directory) / "binary"
+            path.write_bytes(data)
+            return list(cbp.texts(str(path)))
+
+    def test_thin_32_and_64_bit_signatures_both_byte_orders(self):
+        for wide in (False, True):
+            for endian in ("<", ">"):
+                with self.subTest(wide=wide, endian=endian):
+                    texts = self.read_texts(self.thin(wide=wide, endian=endian))
+                    self.assertTrue(any("visible-code" in text for text in texts))
+                    self.assertFalse(any("certificate-placeholder" in text for text in texts))
+
+    def test_each_universal_slice_is_scanned_without_its_signature(self):
+        for wide in (False, True):
+            for endian in ("<", ">"):
+                with self.subTest(wide=wide, endian=endian):
+                    data = self.fat([self.thin(b"first-private-value"), self.thin(b"second-private-value", wide=False)],
+                                    wide=wide, endian=endian)
+                    texts = self.read_texts(data)
+                    self.assertIn("first-private-value", texts)
+                    self.assertIn("second-private-value", texts)
+                    self.assertFalse(any("certificate-placeholder" in text for text in texts))
+
+    def test_trailing_slice_and_file_data_is_not_hidden(self):
+        data = self.fat([self.thin(tail=b"slice-private-value"), self.thin(wide=False)]) + b"file-private-value"
+        texts = self.read_texts(data)
+        self.assertIn("slice-private-value", texts)
+        self.assertIn("file-private-value", texts)
+
+    def test_signature_padding_is_still_scanned(self):
+        data = bytearray(self.thin(tail=b"padding-private-value"))
+        signature_size = struct.unpack_from("<I", data, 44)[0]
+        struct.pack_into("<I", data, 44, signature_size + len(b"padding-private-value"))
+        self.assertIn("padding-private-value", self.read_texts(bytes(data)))
+
+    def test_bad_signature_commands_are_not_excluded(self):
+        original = self.thin(signature=b"private-signature-value")
+        mutations = ((36, 8), (40, 0), (40, len(original) + 1), (44, len(original) + 1))
+        for offset, value in mutations:
+            with self.subTest(offset=offset, value=value):
+                data = bytearray(original)
+                struct.pack_into("<I", data, offset, value)
+                self.assertFalse(cbp.signature_ranges(bytes(data)))
+                self.assertTrue(any("private-signature-value" in text for text in self.read_texts(bytes(data))))
+
+    def test_bad_superblob_is_not_excluded(self):
+        original = self.thin(signature=b"private-signature-value")
+        start = struct.unpack_from("<I", original, 40)[0]
+        for offset, value in ((start, 0), (start + 4, len(original) + 1), (start + 8, 100),
+                              (start + 16, 0), (start + 24, len(original) + 1)):
+            with self.subTest(offset=offset):
+                data = bytearray(original)
+                struct.pack_into(">I", data, offset, value)
+                self.assertFalse(cbp.signature_ranges(bytes(data)))
+                self.assertTrue(any("private-signature-value" in text for text in self.read_texts(bytes(data))))
+
+    def test_overlapping_or_out_of_bounds_slices_are_not_excluded(self):
+        original = self.fat([self.thin(signature=b"first-private-signature"), self.thin(signature=b"second-private-signature")])
+        first_offset = struct.unpack_from(">I", original, 16)[0]
+        for offset, value in ((16, 0), (20, len(original) + 1), (36, first_offset)):
+            with self.subTest(offset=offset):
+                data = bytearray(original)
+                struct.pack_into(">I", data, offset, value)
+                self.assertFalse(cbp.signature_ranges(bytes(data)))
+                texts = self.read_texts(bytes(data))
+                self.assertTrue(any("first-private-signature" in text for text in texts))
+                self.assertTrue(any("second-private-signature" in text for text in texts))
+
+    def test_truncated_inputs_never_skip_or_crash(self):
+        data = self.fat([self.thin(), self.thin(wide=False)])
+        for length in range(len(data)):
+            with self.subTest(length=length):
+                self.assertEqual(cbp.signature_ranges(data[:length]), [])
 
 
 if __name__ == "__main__":

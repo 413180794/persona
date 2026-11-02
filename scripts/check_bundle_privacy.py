@@ -12,9 +12,9 @@ and are removed before matching. App mode also recognizes only the exact configu
 --whole-short only the exact public download address (publish.site_url + /dl, the hub's update URL, docs/hub-update.md);
 their host in any other context, related paths and credentials remain subject to private-value checks.
 Signing data is Apple's and is skipped: embedded.mobileprovision (embedded.provisionprofile on the Mac), _CodeSignature,
-and the code signature at the end of each thin Mach-O (certificate names; the archive's development profile lists device
-ids, which export replaces anyway). A universal (fat) binary is scanned whole: its slices' signature offsets are each
-relative to their slice, and cutting at the first would skip the rest of the file.
+and each Mach-O slice's validated embedded-signature blob (certificate names; the archive's development profile lists
+device ids, which export replaces anyway). A universal (fat) binary's remaining bytes are scanned across every slice;
+its signature offsets are relative to its slice, and cutting at the first would skip the rest of the file.
 Values match as written or lowercased, not in any case: Swift's mangled symbol names are full of short fragments
 that equal a value in another case.
 The repo's own Go module path (it names the GitHub owner) is in every Go binary's imports and is removed too, as
@@ -28,6 +28,7 @@ unreplaced dependencies whose build-info checksums match server/go.sum; register
 import ipaddress
 import os
 import re
+import struct
 import subprocess
 import sys
 from urllib.parse import urlsplit
@@ -131,11 +132,102 @@ def text_kinds(text, words, whole_short=False, dependencies=frozenset()):
     return kinds
 
 
-def signature_offset(path: str):
-    """Where a Mach-O's code signature starts (LC_CODE_SIGNATURE dataoff), or None for other files."""
-    out = subprocess.run(["otool", "-l", path], capture_output=True, text=True).stdout
-    m = re.search(r"cmd LC_CODE_SIGNATURE\s+cmdsize \d+\s+dataoff (\d+)", out)
-    return int(m.group(1)) if m else None
+THIN_HEADERS = {b"\xce\xfa\xed\xfe": ("<", 28), b"\xfe\xed\xfa\xce": (">", 28),
+                b"\xcf\xfa\xed\xfe": ("<", 32), b"\xfe\xed\xfa\xcf": (">", 32)}
+FAT_HEADERS = {b"\xca\xfe\xba\xbe": (">", False), b"\xbe\xba\xfe\xca": ("<", False),
+               b"\xca\xfe\xba\xbf": (">", True), b"\xbf\xba\xfe\xca": ("<", True)}
+
+
+def signature_blob_length(data, start, size):
+    """Accept only a bounded embedded-signature SuperBlob; its padding is still scanned."""
+    if size < 12:
+        return None
+    magic, length, count = struct.unpack_from(">III", data, start)
+    if magic != 0xFADE0CC0 or not 12 <= length <= size or not 0 < count <= (length - 12) // 8:
+        return None
+    table_end = 12 + count * 8
+    blobs = []
+    for i in range(count):
+        _, offset = struct.unpack_from(">II", data, start + 12 + i * 8)
+        if offset < table_end or offset + 8 > length:
+            return None
+        blob_magic, blob_size = struct.unpack_from(">II", data, start + offset)
+        if blob_magic not in (0xFADE0C01, 0xFADE0C02, 0xFADE0B01, 0xFADE7171, 0xFADE7172):
+            return None
+        if blob_size < 8 or offset + blob_size > length:
+            return None
+        blobs.append((offset, offset + blob_size))
+    blobs.sort()
+    if any(a[1] > b[0] for a, b in zip(blobs, blobs[1:])):
+        return None
+    return length
+
+
+def thin_signature_ranges(data, base, size):
+    """Read slice-relative load commands. None means malformed: do not exclude any bytes."""
+    spec = THIN_HEADERS.get(data[base:base + 4])
+    if spec is None:
+        return None
+    endian, header_size = spec
+    if size < header_size:
+        return None
+    commands, command_bytes = struct.unpack_from(endian + "II", data, base + 16)
+    commands_end = base + header_size + command_bytes
+    if commands > command_bytes // 8 or commands_end > base + size:
+        return None
+    cursor = base + header_size
+    ranges = []
+    for _ in range(commands):
+        if cursor + 8 > commands_end:
+            return None
+        command, command_size = struct.unpack_from(endian + "II", data, cursor)
+        if command_size < 8 or command_size % 4 or cursor + command_size > commands_end:
+            return None
+        if command == 0x1D:  # LC_CODE_SIGNATURE
+            if command_size != 16 or ranges:
+                return None
+            offset, signature_size = struct.unpack_from(endian + "II", data, cursor + 8)
+            start = base + offset
+            if start < commands_end or signature_size > base + size - start:
+                return None
+            length = signature_blob_length(data, start, signature_size)
+            if length is None:
+                return None
+            ranges.append((start, start + length))
+        cursor += command_size
+    return ranges if cursor == commands_end else None
+
+
+def signature_ranges(data):
+    """Validated signature ranges of every thin / universal 32- or 64-bit Mach-O slice."""
+    if data[:4] in THIN_HEADERS:
+        return thin_signature_ranges(data, 0, len(data)) or []
+    spec = FAT_HEADERS.get(data[:4])
+    if spec is None or len(data) < 8:
+        return []
+    endian, wide = spec
+    count = struct.unpack_from(endian + "I", data, 4)[0]
+    arch_size = 32 if wide else 20
+    if not 0 < count <= (len(data) - 8) // arch_size:
+        return []
+    table_end = 8 + count * arch_size
+    slices = []
+    for i in range(count):
+        entry = 8 + i * arch_size
+        offset, size = struct.unpack_from(endian + ("QQ" if wide else "II"), data, entry + 8)
+        if offset < table_end or size < 28 or offset + size > len(data):
+            return []
+        slices.append((offset, offset + size))
+    slices.sort()
+    if any(a[1] > b[0] for a, b in zip(slices, slices[1:])):
+        return []
+    ranges = []
+    for start, end in slices:
+        found = thin_signature_ranges(data, start, end - start)
+        if found is None:
+            return []
+        ranges.extend(found)
+    return ranges
 
 
 def texts(path: str):
@@ -144,11 +236,11 @@ def texts(path: str):
     if data[:3] == b"bvx":  # lzfse (App Intents metadata): compressed, values would be split across matches
         data = subprocess.run(["compression_tool", "-decode", "-a", "lzfse", "-i", path, "-o", "/dev/stdout"],
                               capture_output=True).stdout
-    if data[:4] == b"\xcf\xfa\xed\xfe":  # thin Mach-O (a fat one is scanned whole, see above)
-        off = signature_offset(path)
-        if off:
-            data = data[:off]
-    yield from (m.group(0).decode("ascii") for m in PRINTABLE.finditer(data))
+    # Do not truncate at the first slice's signature: later slices and trailing bytes must remain visible.
+    cursor = 0
+    for start, end in signature_ranges(data) + [(len(data), len(data))]:
+        yield from (m.group(0).decode("ascii") for m in PRINTABLE.finditer(data[cursor:start]))
+        cursor = end
     if data[:6] == b"bplist":
         yield subprocess.run(["plutil", "-convert", "xml1", "-o", "-", path], capture_output=True, text=True).stdout
 
