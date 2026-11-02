@@ -121,6 +121,25 @@ export interface DialogOption {
   label: string;
   detail?: string;
   kind?: string;
+  /** Ticked at the computer (a multi-select box), or an answered question's pick. */
+  checked?: boolean;
+  /** What is typed into the free-text field (kind "type_something"). */
+  text?: string;
+}
+
+/** A terminal dialog as the hub reads it. A multi-select question (multi) is sent whole by its submit row ("Submit",
+ *  or "Next" when another question follows); steps are the questions of its tab bar, review the tab that submits them. */
+export interface ScreenDialog {
+  header?: string;
+  question?: string;
+  detail?: string;
+  options?: DialogOption[];
+  rev?: string;
+  multi?: boolean;
+  submit?: string;
+  steps?: { label: string; done: boolean }[];
+  review?: boolean;
+  incomplete?: boolean;
 }
 
 export interface Interaction {
@@ -138,7 +157,7 @@ export interface Interaction {
   summary?: string;
   screen?: string;
   secret?: boolean;
-  dialog?: { header?: string; question?: string; detail?: string; options?: DialogOption[]; rev?: string };
+  dialog?: ScreenDialog;
   /** Who asks when it is not Claude Code: "codex", "traex", or an agent runtime's agent ("dsh"; docs/runtimes.md). */
   agent?: string;
   /** What "always allow" allows here; another agent's card offers it only with this. */

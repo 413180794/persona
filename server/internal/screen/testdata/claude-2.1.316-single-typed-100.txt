@@ -1,0 +1,40 @@
+❯ Call the AskUserQuestion tool exactly once with this input, verbatim, and nothing else; after the
+  answer, reply with the answer text only:
+  {"questions":[{"question":"示例一：先发哪个环境？","header":"环境","multiSelect":false,"options":
+  [{"label":"预览","description":"先在预览环境看一眼。"},{"label":"正式","description":"直接发正式
+  环境。"}]},{"question":"示例二：哪些平台要一起发？","header":"平台","multiSelect":true,"options":
+  [{"label":"手机","description":"iPhone 版本。"},{"label":"手表","description":"Watch
+  版本。"},{"label":"电脑","description":"Mac 版本。"}]},{"question":"示例三：发完通知谁？","header
+  ":"通知","multiSelect":true,"options":[{"label":"测试组","description":"跑回归的同事。"},{"label"
+  :"设计组","description":"看截图的同事。"}]}]}
+
+⏺ User answered Claude's questions:
+  ⎿  · 示例一：先发哪个环境？ → 预览
+     · 示例二：哪些平台要一起发？ → 手机, 电脑
+     · 示例三：发完通知谁？ → 测试组
+
+⏺ 示例一：先发哪个环境？＝预览
+  示例二：哪些平台要一起发？＝手机, 电脑
+  示例三：发完通知谁？＝测试组
+
+✻ Cogitated for 13s · done 1:47 pm
+
+❯ Call the AskUserQuestion tool exactly once with this input, verbatim, and nothing else; after the
+  answer, reply with the answer text only:
+  {"questions":[{"question":"示例：先发哪个环境？","header":"环境","multiSelect":false,"options":[{
+  "label":"预览","description":"先在预览环境看一眼。"},{"label":"正式","description":"直接发正式环
+  境。"}]}]}
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ 环境
+
+示例：先发哪个环境？
+
+  1. 预览
+     先在预览环境看一眼。
+  2. 正式
+     直接发正式环境。
+❯ 3. 示例文字
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · ctrl+g to edit in Vim · Esc to cancel

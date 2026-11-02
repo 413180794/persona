@@ -285,6 +285,13 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
 - 屏幕卡的回答是同步的：hub 等 node 按完才回 App（以前是先回成功再在后台按）。
 - `rev` 由 hub 和 node 各自用同一份解析代码算：改了 `internal/screen` 的解析就要 hub 和所有 node 一起部署，否则新卡永远对不上（每次都 `prompt_changed`）。
 - 手表有 `dialog` 时也按 `option` 回答（Siri「批准第一个待处理」不处理屏幕卡）。
+- **多选**（Claude Code 2.1.316 的 AskUserQuestion `multiSelect`，`docs/claude-integration.md`「多选提问的屏幕卡」）：`dialog` 多带
+  `multi: true`、`submit`（`Submit`，后面还有题时是 `Next`），选项多带 `checked`（电脑上已经勾了）、`text`（自由回答框里已经写的字）；
+  多个问题时 `steps[{label,done}]` 是顶上的标签栏；提交前的确认页是 `review: true`（`incomplete: true`：还有题没答），选项是「Submit answers / Cancel」。
+  `checked`、光标、写的字、标签的勾都不进 `rev`。
+  App 回答带 `options`（要勾上的选项的 key，没列的会被取消）和 `text`（自由回答，空就不勾它）。hub 交给 node 的 `session.keys`
+  （`multi: true`、`options`、`free_text`），node 一次按一个键、每按一次重读屏幕，最后按 Submit / Next；确认页上所有题都答了就再按「Submit answers」。
+  旧 App 对多选卡只发一个 `option`：当成只勾这一项。
 - 密码：屏幕最后一行是密码提示（`[sudo] password for …:`、`Password:`、ssh 口令…，规则刻意收窄，正文里提到 password 不算）时卡片带
   `secret: true`，App 用密码框（不进草稿）。不管是不是密码，终端卡回答里的 `text` 在数据库里一律存成 `<redacted>`；
   终端面板的按键接口（`/keys`）本来就不落库，hub 的请求日志也只记路径和状态码。

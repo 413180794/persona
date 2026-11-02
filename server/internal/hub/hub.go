@@ -447,6 +447,25 @@ func screenAnswer(session string, d *screen.Dialog, r proto.Resolution) (map[str
 		return params, nil
 	}
 	params["rev"] = d.Rev
+	if picked := d.Option(r.Option); d.Multi && !(len(r.Options) == 0 && picked != nil && picked.Kind == screen.KindChat) {
+		// Checked and sent by the node one key at a time (node/dialogmulti.go); "Chat about this" is pressed as it is.
+		// An app from before multi-select cards names one option: that one alone (the free-text field: the text alone).
+		options := r.Options
+		if len(options) == 0 && r.Option != "" {
+			if o := d.Option(r.Option); o != nil && o.Kind == "" {
+				options = []string{o.Key}
+			}
+		}
+		for _, k := range options {
+			if o := d.Option(k); o == nil || o.Kind != "" {
+				return nil, fmt.Errorf("the dialog has no option %q to check", k)
+			}
+		}
+		if len(options) == 0 && strings.TrimSpace(r.Text) == "" {
+			return nil, fmt.Errorf("至少勾一项，或者写上自己的回答")
+		}
+		return map[string]any{"session_id": session, "rev": d.Rev, "multi": true, "options": options, "free_text": r.Text}, nil
+	}
 	if r.Option == "" {
 		return params, nil
 	}

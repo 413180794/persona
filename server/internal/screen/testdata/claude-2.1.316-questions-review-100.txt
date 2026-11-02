@@ -1,0 +1,40 @@
+  环境。"}]},{"question":"示例二：哪些平台要一起发？","header":"平台","multiSelect":true,"options":
+  [{"label":"手机","description":"iPhone 版本。"},{"label":"手表","description":"Watch
+  版本。"},{"label":"电脑","description":"Mac 版本。"}]},{"question":"示例三：发完通知谁？","header
+  ":"通知","multiSelect":true,"options":[{"label":"测试组"},{"label":"设计组"}]}]}
+  ⎿  Invalid tool parameters
+
+⏺ 我没拿到回答：这次调用没通过参数校验，弹窗没有出来。示例三的两个选项（「测试组」「设计组」）都缺了
+  必填的 description 字段。
+
+  你要求原样调用、只调一次，所以我没有自己补上字段再调一遍。你可以给这两个选项加上 description
+  后重发，或者告诉我可以由我来补。
+
+✻ Churned for 16s · done 1:43 pm
+
+❯ Call the AskUserQuestion tool exactly once with this input, verbatim, and nothing else; after the
+  answer, reply with the answer text only:
+  {"questions":[{"question":"示例一：先发哪个环境？","header":"环境","multiSelect":false,"options":
+  [{"label":"预览","description":"先在预览环境看一眼。"},{"label":"正式","description":"直接发正式
+  环境。"}]},{"question":"示例二：哪些平台要一起发？","header":"平台","multiSelect":true,"options":
+  [{"label":"手机","description":"iPhone 版本。"},{"label":"手表","description":"Watch
+  版本。"},{"label":"电脑","description":"Mac 版本。"}]},{"question":"示例三：发完通知谁？","header
+  ":"通知","multiSelect":true,"options":[{"label":"测试组","description":"跑回归的同事。"},{"label"
+  :"设计组","description":"看截图的同事。"}]}]}
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ 环境  ☒ 平台  ☒ 通知  ✔ Submit  →
+
+Review your answers
+
+ ● 示例一：先发哪个环境？
+   → 预览
+ ● 示例二：哪些平台要一起发？
+   → 手机, 电脑
+ ● 示例三：发完通知谁？
+   → 设计组
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel

@@ -290,6 +290,7 @@ function ScreenCard({ ix }: { ix: Interaction }) {
     await resolve(ix, body);
     setBusy(null);
   };
+  if (d?.multi) return <MultiScreenCard ix={ix} />;
   return (
     <Card
       kicker={d?.header || "终端里的对话框"}
@@ -354,6 +355,86 @@ function ScreenCard({ ix }: { ix: Interaction }) {
       ) : (
         <pre className="max-h-56 overflow-auto rounded-[8px] bg-[#1b1c1f] px-3 py-2 font-mono text-[11.5px] leading-[1.5] whitespace-pre text-[#e6e7e9]">{ix.screen}</pre>
       )}
+    </Card>
+  );
+}
+
+/** A multi-select terminal question: ticks (starting from what the computer shows) and the free text, sent together;
+ *  the computer's boxes end up as here, one key at a time (node/dialogmulti.go). */
+function MultiScreenCard({ ix }: { ix: Interaction }) {
+  const d = ix.dialog!;
+  const options = d.options ?? [];
+  const field = options.find((o) => o.kind === "type_something");
+  const [picked, setPicked] = useState(() => new Set(options.filter((o) => !o.kind && o.checked).map((o) => o.key)));
+  const [text, setText] = useState(field?.text ?? "");
+  const [busy, setBusy] = useState<string | null>(null);
+  const go = async (body: Record<string, unknown>, key: string) => {
+    setBusy(key);
+    await resolve(ix, body);
+    setBusy(null);
+  };
+  const toggle = (key: string) => setPicked((p) => {
+    const next = new Set(p);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const chat = options.find((o) => o.kind === "chat");
+  const answer = text.trim();
+  return (
+    <Card
+      kicker={[d.header, "可多选"].filter(Boolean).join(" · ")}
+      title={d.question || "电脑上的 Agent 停在一个多选题上"}
+      onDismiss={() => go({ dismiss: true }, "dismiss")}
+      footer={
+        <>
+          {chat && (
+            <Button busy={busy === chat.key} onClick={() => go({ option: chat.key }, chat.key)}>
+              改在对话里说
+            </Button>
+          )}
+          <span className="flex-1" />
+          <Button
+            tone="primary"
+            busy={busy === "multi"}
+            disabled={busy !== null || (picked.size === 0 && !answer)}
+            onClick={() => go({ options: options.map((o) => o.key).filter((k) => picked.has(k)), text: answer || undefined }, "multi")}
+          >
+            {d.submit === "Next" ? "下一题" : "提交"}
+          </Button>
+        </>
+      }
+    >
+      {d.detail && <p className="mb-2 text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink-2">{d.detail}</p>}
+      <div className="flex flex-col gap-0.5">
+        {options.filter((o) => !o.kind).map((o) => (
+          <button
+            key={o.key}
+            type="button"
+            role="checkbox"
+            aria-checked={picked.has(o.key)}
+            disabled={busy !== null}
+            onClick={() => toggle(o.key)}
+            className="-mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors hover:bg-hover disabled:opacity-60"
+          >
+            <span className={`mt-[1px] flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-[5px] px-1 font-mono text-[10.5px] shadow-hairline ${picked.has(o.key) ? "bg-accent text-white" : "bg-field text-ink-2"}`}>
+              {picked.has(o.key) ? "✓" : o.key}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[13px] text-ink">{o.label}</span>
+              {o.detail && <span className="block text-[12px] text-ink-3">{o.detail}</span>}
+            </span>
+          </button>
+        ))}
+        {field && (
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="其他回答（可不填）"
+            disabled={busy !== null}
+            className="mt-1 h-8 min-w-0 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
+          />
+        )}
+      </div>
     </Card>
   );
 }

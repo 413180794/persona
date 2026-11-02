@@ -5,7 +5,9 @@ package node
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
 	"github.com/chyroc/jarvis/server/internal/host"
@@ -59,5 +61,43 @@ func TestLiveAnswerDialog(t *testing.T) {
 	t.Logf("keys %v pre %v", keys, pre)
 	if err := n.sendKeys(ctx, pane, keys...); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// JARVIS_LIVE_PANE=<pane> JARVIS_LIVE_CHECK=<keys, comma-separated> [JARVIS_LIVE_TEXT=<free text>]: answers the
+// multi-select question on the pane the way a card does (dialogmulti.go) — rev checked, one key at a time from
+// whatever the terminal shows — and checks the question is gone afterwards (submitted, or the next one shown).
+func TestLiveMultiSelect(t *testing.T) {
+	pane, check := os.Getenv("JARVIS_LIVE_PANE"), os.Getenv("JARVIS_LIVE_CHECK")
+	if pane == "" {
+		t.Skip("JARVIS_LIVE_PANE not set")
+	}
+	n := &Node{hosts: herdrHosts(herdr.New()), agents: map[string]host.Agent{"live": {PaneID: pane}}}
+	ctx := context.Background()
+	text, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := screen.ParseDialog(text)
+	if d == nil || !d.Multi {
+		t.Fatalf("no multi-select question on\n%s", text)
+	}
+	t.Logf("question %q rev %s cursor %s steps %+v", d.Question, d.Rev, d.Cursor, d.Steps)
+	var want []string
+	if check != "" {
+		want = strings.Split(check, ",")
+	}
+	if err := n.dialogMulti(ctx, "live", "000000000000", want, ""); err == nil {
+		t.Fatal("a wrong revision must refuse")
+	}
+	start := time.Now()
+	if err := n.dialogMulti(ctx, "live", d.Rev, want, os.Getenv("JARVIS_LIVE_TEXT")); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("answered in %s", time.Since(start).Round(time.Millisecond))
+	time.Sleep(time.Second)
+	text, _ = n.readPane(ctx, pane, "visible", screen.DialogLines)
+	if after := screen.ParseDialog(text); after != nil && after.Rev == d.Rev {
+		t.Fatalf("the question is still there:\n%s", text)
 	}
 }

@@ -389,7 +389,28 @@ struct WatchInteractionView: View {
                     Button { act(Resolution(allow: false)) } label: { Text("拒绝").lineLimit(1) }
                 case .screen:
                     Text(interaction.screen ?? "").font(.caption2.monospaced())
-                    if let d = interaction.dialog { // the hub's reading: answered by option, checked on the computer first
+                    if let d = interaction.dialog, d.multi == true { // check boxes: ticked here, sent together
+                        let ticked = picks[d.rev] ?? Set(d.options.filter { $0.kind == nil && $0.checked == true }.map(\.key))
+                        ForEach(d.options.filter { $0.kind == nil }, id: \.key) { opt in
+                            Button {
+                                var set = ticked
+                                if set.contains(opt.key) { set.remove(opt.key) } else { set.insert(opt.key) }
+                                picks[d.rev] = set
+                            } label: {
+                                HStack(spacing: Theme.Space.sm) {
+                                    Text("\(opt.key). \(opt.label)").lineLimit(1).minimumScaleFactor(0.8)
+                                    Spacer(minLength: 0)
+                                    if ticked.contains(opt.key) { Image(systemName: Theme.Icon.done) }
+                                }
+                            }
+                            .font(.caption2)
+                        }
+                        Button(d.submit == "Next" ? "下一题" : "提交") {
+                            act(Resolution(options: d.options.map(\.key).filter(ticked.contains)))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(ticked.isEmpty)
+                    } else if let d = interaction.dialog { // the hub's reading: answered by option, checked on the computer first
                         ForEach(d.options.filter { $0.kind == nil }, id: \.key) { opt in
                             Button { act(Resolution(option: opt.key)) } label: {
                                 Text("\(opt.key). \(opt.label)").lineLimit(1).minimumScaleFactor(0.8)

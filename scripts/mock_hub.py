@@ -596,6 +596,25 @@ if os.environ.get("MOCK_SCREEN_DIALOG"):
                         {"key": "2", "label": "Yes, and don't ask again for git push commands in /Users/me/code/weather", "keys": ["2"]},
                         {"key": "3", "label": "No, and tell Claude what to do differently (esc)", "keys": ["3"]}]}})
 
+# MOCK_SCREEN_MULTI=1: a multi-select AskUserQuestion read off the terminal (Claude Code 2.1.316), the second of
+# three questions: two boxes already ticked at the computer, a few words in its free-text field, "Next" to send it.
+if os.environ.get("MOCK_SCREEN_MULTI"):
+    INTERACTIONS.append(
+        {"id": "scr_macbook_review_5c1d2e3f4a5b", "machine_id": "macbook", "session_id": REVIEW, "session_title": "检查 PR #42 的改动",
+         "cwd": "/Users/me/code/weather", "kind": "screen", "created_at": ago(minutes=1), "expires_at": later(hours=24),
+         "screen": "←  ☒ 环境  ☐ 平台  ☐ 通知  ✔ Submit  →\n哪些平台要一起发？\n❯ 1. [✔] 手机\n     iPhone 版本。\n"
+                   "  2. [ ] 手表\n     Watch 版本。\n  3. [✔] 电脑\n     Mac 版本。\n  4. [✔] 平板也看一眼\n     Next\n"
+                   "──────\n  5. Chat about this",
+         "dialog": {"question": "哪些平台要一起发？", "rev": "5c1d2e3f4a5b", "multi": True, "submit": "Next",
+                    "steps": [{"label": "环境", "done": True}, {"label": "平台", "done": False}, {"label": "通知", "done": False}],
+                    "options": [
+                        {"key": "1", "label": "手机", "detail": "iPhone 版本。", "keys": ["1"], "checked": True},
+                        {"key": "2", "label": "手表", "detail": "Watch 版本。", "keys": ["2"]},
+                        {"key": "3", "label": "电脑 (Recommended)", "detail": "Mac 版本。", "keys": ["3"], "checked": True},
+                        {"key": "4", "label": "Type something", "kind": "type_something", "keys": ["4"], "checked": True,
+                         "text": "平板也看一眼"},
+                        {"key": "5", "label": "Chat about this", "kind": "chat", "keys": ["5"]}]}})
+
 # MOCK_SCREEN_RAW=1: a terminal waiting with no dialog to read, only tool output above the input box (its tree
 # glyphs must not show on the Agents card).
 if os.environ.get("MOCK_SCREEN_RAW"):

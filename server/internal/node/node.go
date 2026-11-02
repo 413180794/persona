@@ -483,8 +483,15 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		var dl struct {
 			Rev    string `json:"rev"`
 			Option string `json:"option"`
+			// A multi-select question (dialogmulti.go): the options to have checked, the free-text field's text.
+			Multi    bool     `json:"multi"`
+			Options  []string `json:"options"`
+			FreeText string   `json:"free_text"`
 		}
 		_ = json.Unmarshal(params, &dl)
+		if dl.Multi {
+			return ok(n.dialogMulti(ctx, p.SessionID, dl.Rev, dl.Options, dl.FreeText))
+		}
 		if dl.Rev != "" { // an answer to a dialog card: only into that same dialog (sendsafe.go)
 			keys, pre, err := n.dialogKeys(ctx, p.SessionID, dl.Rev, dl.Option)
 			if err != nil {
@@ -503,7 +510,14 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			}
 			time.Sleep(150 * time.Millisecond) // the TUI opens the field the keys picked before the text arrives
 		}
-		return ok(n.keys(ctx, p.SessionID, p.Keys, p.Text))
+		if err := n.keys(ctx, p.SessionID, p.Keys, p.Text); err != nil || dl.Option == "" {
+			return ok(err)
+		}
+		// The last question of several answered: the review tab that follows is submitted (dialogmulti.go).
+		if pane, err := n.paneFor(ctx, p.SessionID); err == nil {
+			return ok(n.submitReview(ctx, pane))
+		}
+		return ok(nil)
 	case "codex.answer": // the phone's answer to a Codex question or approval card (codexask.go)
 		var a struct {
 			ID         string           `json:"id"`

@@ -593,6 +593,9 @@ type Resolution struct {
 	// Option answers a screen dialog by its option's key (Interaction.Dialog): the keys are worked out where they are
 	// pressed, from the screen as it is then (Text goes with a type_something option).
 	Option string `json:"option,omitempty"`
+	// Options answer a multi-select screen dialog (Dialog.Multi): the keys of the options to have checked when it is
+	// sent, the rest unchecked; Text is its free-text field (empty: left unchecked).
+	Options []string `json:"options,omitempty"`
 	// Values are the card's Fields as filled in on the phone, by key.
 	Values map[string]string `json:"values,omitempty"`
 }

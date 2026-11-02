@@ -85,4 +85,28 @@ struct ScreenDialogTests {
     @Test func noDialogWithoutNumberedOptions() {
         #expect(ScreenParser.dialog("> hello\n  some output") == nil)
     }
+
+    /// A multi-select question as the hub reads it (Claude Code 2.1.316): boxes ticked at the computer, the free text,
+    /// the Submit / Next row, the tab bar's questions; an older hub's JSON without them still decodes.
+    @Test func decodesAMultiSelectDialog() throws {
+        let json = #"""
+        {"header":"","question":"哪些平台要一起发？","options":[
+          {"key":"1","label":"手机","detail":"iPhone 版本。","keys":["1"],"checked":true},
+          {"key":"2","label":"手表","keys":["2"]},
+          {"key":"3","label":"Type something","kind":"type_something","keys":["3"],"checked":true,"text":"电脑"},
+          {"key":"4","label":"Chat about this","kind":"chat","keys":["4"]}],
+         "multi":true,"submit":"Next","steps":[{"label":"环境","done":true},{"label":"平台","done":false}],"rev":"abc"}
+        """#
+        let d = try JSONDecoder().decode(ScreenDialog.self, from: Data(json.utf8)).parsed
+        #expect(d.multi && d.submit == "Next" && !d.review)
+        #expect(d.steps == [.init(label: "环境", done: true), .init(label: "平台", done: false)])
+        #expect(d.options.map(\.checked) == [true, false, true, false])
+        #expect(d.options[2].kind == .typeSomething && d.options[2].text == "电脑")
+        #expect(ScreenForm.eyebrow(d) == "可多选")
+        let old = try JSONDecoder().decode(ScreenDialog.self, from: Data(#"{"question":"q","options":[{"key":"1","label":"a"}],"rev":"x"}"#.utf8)).parsed
+        #expect(!old.multi && old.submit == nil && !old.options[0].checked)
+        // What the card sends: the ticks by key, the text beside them.
+        let r = try JSONSerialization.jsonObject(with: JSONEncoder().encode(Resolution(text: "电脑", options: ["1"]))) as? [String: Any]
+        #expect(r?["options"] as? [String] == ["1"] && r?["text"] as? String == "电脑")
+    }
 }

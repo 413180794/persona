@@ -1,0 +1,41 @@
+import XCTest
+
+/// A multi-select question read off the terminal (docs/protocol.md「终端对话框」「多选」): the card starts from what the
+/// computer shows and sends every tick and the free text together. Against scripts/mock_hub.py started with
+/// MOCK_SCREEN_MULTI=1 (TEST_RUNNER_JARVIS_MULTI_HUB=http://127.0.0.1:<port>); both styles
+/// (TEST_RUNNER_JARVIS_UI_STYLE=beautiful).
+final class MultiSelectCardTests: XCTestCase {
+    private let review = "a1f3c2d4-0000-4000-8000-000000000006"
+
+    @MainActor func testTicksAndTextGoTogether() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MULTI_HUB"] else {
+            throw XCTSkip("needs scripts/mock_hub.py with MOCK_SCREEN_MULTI=1 (JARVIS_MULTI_HUB)")
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + review]
+        app.launchPinned()
+        // 手机 and 电脑 are ticked at the computer; 手表 is ticked here.
+        let watch = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "手表")).firstMatch
+        XCTAssertTrue(watch.waitForExistence(timeout: 15), "no multi-select card:\n\(app.debugDescription)")
+        watch.tap()
+        let next = app.buttons["下一题"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5), "no 下一题:\n\(app.debugDescription)")
+        next.tap()
+        var resolution: [String: Any]?
+        let deadline = Date.now.addingTimeInterval(10)
+        while resolution == nil && Date.now < deadline {
+            if let data = try? Data(contentsOf: URL(string: hub + "/mock/resolved")!),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let list = obj["resolved"] as? [[String: Any]] {
+                resolution = list.last { ($0["id"] as? String)?.hasPrefix("scr_") == true }?["resolution"] as? [String: Any]
+            }
+            if resolution == nil { usleep(300_000) }
+        }
+        let r = try XCTUnwrap(resolution, "the hub got no answer")
+        XCTAssertEqual(r["options"] as? [String], ["1", "2", "3"], "the computer's ticks and the new one, in the options' order")
+        XCTAssertEqual(r["text"] as? String, "平板也看一眼", "the free text the computer shows goes along")
+        XCTAssertNil(r["option"])
+        XCTAssertNil(r["keys"], "keys are worked out on the computer, from the screen as it is then")
+    }
+}

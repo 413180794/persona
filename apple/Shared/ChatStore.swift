@@ -782,6 +782,10 @@ nonisolated enum ScreenParser {
             var label: String
             var detail: String?
             var kind: Kind = .plain
+            /// Ticked at the computer (a multi-select box), or an answered question's pick.
+            var checked = false
+            /// What is typed into the free-text field.
+            var text: String?
         }
         /// A step of a multi-question AskUserQuestion: the TUI's tab bar "←  ☐ 审核策略  ✔ 推送代码  ✔ Submit  →".
         struct Step: Equatable, Sendable {
@@ -795,6 +799,12 @@ nonisolated enum ScreenParser {
         var options: [Option]
         /// The questions of a multi-question dialog, from its tab bar (taken out of `detail`, where it read as text).
         var steps: [Step] = []
+        /// A multi-select question (the hub's reading): boxes sent together by the `submit` row ("Submit" / "Next").
+        var multi = false
+        var submit: String?
+        /// The tab that submits every answer ("Review your answers"); incomplete: a question has none yet.
+        var review = false
+        var incomplete = false
 
         init(header: String?, question: String, detail: String?, options: [Option]) {
             self.header = header

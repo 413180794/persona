@@ -112,3 +112,100 @@ func TestParseFixtures(t *testing.T) {
 		t.Fatal("no options, no dialog")
 	}
 }
+
+// Claude Code 2.1.316's AskUserQuestion with multiSelect, and with several questions (recorded in herdr at 100 and 56
+// columns, the text replaced by placeholders): check boxes are state, not label; the free-text field keeps its
+// label with the typed text beside it; the Submit / Next row, the tab bar and the review tab are read; and none of
+// what changes while answering (boxes, cursor, typed text, answered tabs) changes the revision.
+func TestParseMultiSelect(t *testing.T) {
+	parse := func(name string) *Dialog {
+		t.Helper()
+		d := ParseDialog(fixture(t, "claude-2.1.316-"+name+".txt"))
+		if d == nil {
+			t.Fatalf("%s: no dialog", name)
+		}
+		return d
+	}
+	checked := func(d *Dialog) []string {
+		var keys []string
+		for _, o := range d.Options {
+			if o.Checked {
+				keys = append(keys, o.Key)
+			}
+		}
+		return keys
+	}
+	fresh := parse("multiselect-100")
+	if !fresh.Multi || fresh.Submit != "Submit" || fresh.Header != "示例修复" || fresh.Question != "示例清单里哪些现在就做？" || fresh.Steps != nil {
+		t.Fatalf("fresh %+v", fresh)
+	}
+	if len(fresh.Options) != 6 || fresh.Options[0].Label != "甲 低风险（推荐）" || fresh.Options[0].Detail != "示例说明一：只改服务端的推送频率，界面不变。" {
+		t.Fatalf("options %+v", fresh.Options)
+	}
+	if o := fresh.Options[4]; o.Kind != KindTypeSomething || o.Label != "Type something" || o.Text != "" || o.Checked {
+		t.Fatalf("free text %+v", o)
+	}
+	if o := fresh.Options[5]; o.Kind != KindChat || fresh.Cursor != "1" || len(checked(fresh)) != 0 {
+		t.Fatalf("chat %+v, cursor %q, checked %v", o, fresh.Cursor, checked(fresh))
+	}
+
+	typed := parse("multiselect-typed-100")
+	if !slices.Equal(checked(typed), []string{"1", "3", "5"}) || typed.Cursor != "5" {
+		t.Fatalf("typed: checked %v cursor %q", checked(typed), typed.Cursor)
+	}
+	if o := typed.Options[4]; o.Kind != KindTypeSomething || o.Label != "Type something" || o.Text != "示例自由回答" {
+		t.Fatalf("typed field %+v", o)
+	}
+	onSubmit := parse("multiselect-on-submit-100")
+	if onSubmit.Cursor != CursorSubmit || !slices.Equal(checked(onSubmit), []string{"1", "3"}) {
+		t.Fatalf("on submit: cursor %q checked %v", onSubmit.Cursor, checked(onSubmit))
+	}
+	if typed.Rev != fresh.Rev || onSubmit.Rev != fresh.Rev {
+		t.Fatalf("answering moved the revision: %s %s %s", fresh.Rev, typed.Rev, onSubmit.Rev)
+	}
+	narrow := parse("multiselect-checked-56")
+	if !narrow.Multi || !slices.Equal(checked(narrow), []string{"1", "3"}) || narrow.Cursor != "1" || narrow.Options[4].Kind != KindTypeSomething {
+		t.Fatalf("56 columns %+v", narrow)
+	}
+
+	review := parse("multiselect-review-100")
+	if !review.Review || review.Incomplete || review.Question != "Ready to submit your answers?" || len(review.Options) != 2 ||
+		review.Options[0].Label != "Submit answers" || !strings.Contains(review.Detail, "→ 甲 低风险（推荐）, 丙 中等风险, 新的回答") {
+		t.Fatalf("review %+v", review)
+	}
+
+	single := parse("questions-single-100")
+	want := []Step{{"环境", false}, {"平台", false}, {"通知", false}}
+	if single.Multi || single.Header != "" || !slices.Equal(single.Steps, want) || single.Question != "示例一：先发哪个环境？" {
+		t.Fatalf("questions, single %+v", single)
+	}
+	if o := single.Options[2]; o.Kind != KindTypeSomething || len(single.Options) != 4 {
+		t.Fatalf("questions, single: %+v", single.Options)
+	}
+	next := parse("questions-multi-next-100")
+	if !next.Multi || next.Submit != "Next" || !slices.Equal(next.Steps, []Step{{"环境", true}, {"平台", true}, {"通知", false}}) ||
+		!slices.Equal(checked(next), []string{"1", "3"}) || next.Cursor != "1" {
+		t.Fatalf("questions, next %+v", next)
+	}
+	last := parse("questions-multi-last-100")
+	if last.Submit != "Submit" || last.Cursor != CursorSubmit || !slices.Equal(checked(last), []string{"2"}) {
+		t.Fatalf("questions, last %+v", last)
+	}
+	picked := parse("questions-picked-100")
+	if picked.Options[0].Label != "预览" || !picked.Options[0].Checked || picked.Rev != single.Rev {
+		t.Fatalf("questions, picked %+v (rev %s, unanswered %s)", picked.Options[0], picked.Rev, single.Rev)
+	}
+	incomplete := parse("questions-review-incomplete-100")
+	if !incomplete.Review || !incomplete.Incomplete || !strings.Contains(incomplete.Detail, "● 示例二：哪些平台要一起发？") {
+		t.Fatalf("questions, incomplete review %+v", incomplete)
+	}
+	if done := parse("questions-review-100"); !done.Review || done.Incomplete {
+		t.Fatalf("questions, review %+v", done)
+	}
+
+	one := parse("single-100")
+	oneTyped := parse("single-typed-100")
+	if one.Header != "环境" || one.Multi || oneTyped.Options[2].Text != "示例文字" || oneTyped.Options[2].Label != "Type something." || oneTyped.Rev != one.Rev {
+		t.Fatalf("single %+v / typed %+v", one, oneTyped.Options[2])
+	}
+}

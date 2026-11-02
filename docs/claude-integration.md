@@ -65,6 +65,37 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   等的过程中 node 没了（部署重启 hub / node）→ hook 重连下一个 node，手机上的卡片不丢（`docs/protocol.md`「交互挺过重启」）。
   hook 进程被杀（用户在电脑上 Esc）→ node 发现 socket 断开 → 通知 hub 撤销交互。
 
+## 多选提问的屏幕卡（2026-11-02，2.1.316 实测）
+
+用户自己用启动器起的 claude（比如 profile 目录下的 `--settings <profile>/settings.json`）不加载 Jarvis 的 hooks（上一节只注入 Jarvis 启动的会话），
+AskUserQuestion 就弹在终端里，手机上只有屏幕卡。以前屏幕卡不认多选，把 `[ ] 甲` 当成选项文字、按数字只是勾一下、也找不到提交，所以「提交不了」。
+不替用户往他自己的配置目录里装 hooks（那是用户的文件）；改成屏幕卡认得多选、答得了。
+
+多选的样子（`server/internal/screen/testdata/claude-2.1.316-*`，在隔离的 herdr 里录的，文字换成了占位符）：
+
+```
+←  ☒ 环境  ☐ 平台  ✔ Submit  →          标签栏：每个问题一个标签，☒ 答过；当前是哪个只有颜色能看出来
+示例二：哪些平台要一起发？
+❯ 1. [✔] 手机                            [ ] / [✔] 是勾选状态，不是文字
+  2. [ ] 手表
+  3. [ ] Type something                    自由回答：写了字就显示写的字并自动勾上，清空就取消勾
+     Next                                 只有一个问题或最后一个问题时是 Submit
+──────
+  4. Chat about this
+```
+
+- 数字键（或 enter）只勾 / 取消勾，光标不动；**光标在自由回答那一行时按数字会被当成文字写进去，在 Submit 行上按数字没反应**（要先挪回选项上）。
+- ↓ 从最后一个选项到 Submit 行，再往下是 Chat about this；在 Submit 行按 enter（或按 →）进确认页「Review your answers」：
+  每题的回答、「Ready to submit your answers?」、`1. Submit answers` / `2. Cancel`；有题没答时多一行 `⚠ You have not answered all questions`。
+- 回答是选项按原顺序用 `, ` 连起来，自由回答放最后。
+- 几个键一次发过去会丢键（`send-keys 1 3` 只勾上一个）：一次一个键，按完等它画好。
+- 多个问题里的单选题：没有勾选框，`Type something.` 带句号，按数字就选中并跳到下一题；回头看答过的题，选中的后面有 ` ✔`。
+- 只有一个单选问题时没有标签栏，顶上是 ` ☐ 环境`；写了字的 `Type something.` 那行显示写的字，enter 就提交。
+
+node 的答法（`node/dialogmulti.go`）：每一步重读屏幕，算下一步只按一个键——先把勾选和想要的不一样的选项按它的数字（光标在自由回答或 Submit 行上就先 ↑ 回到选项上），
+再到自由回答那行清空（`ctrl+e` `ctrl+u`）、写字，最后挪到 Submit / Next 按 enter；确认页上所有题都答了就按「Submit answers」并确认确认页关了。
+电脑上已经勾了的、光标停在中间或停在 Submit 上，都按当时的样子算。多个问题时单选题照旧按数字，答完最后一题出现的确认页也会提交。
+
 ## 发消息、中断、按键
 
 - 发消息：`agent prompt <pane> <text>`（原子地粘贴 + 回车，尊重 bracketed paste）。claude 正在工作时发，会进入它的排队输入。

@@ -10,6 +10,7 @@
   `--settings`、凭据在那个文件的 `env` 里时，Jarvis 再追加一个 `--settings` 就把它顶掉，从手机起的会话和助手每条消息都回
   `Not logged in · Please run /login`（transcript 里是 `isApiErrorMessage` + `authentication_failed`），在 herdr 里自己敲同一个 alias 却正常。
   node 现在把两份合成一个文件再传（`docs/launchers.md`「~/.zshrc 里怎么认」）。
+- 用户自己起的 claude（启动器、profile 目录）没有 Jarvis 的 hooks，AskUserQuestion 只能靠读屏幕的卡片答。读屏卡得认得 2.1.316 的多选：`[ ]`/`[✔]` 是状态不是文字，数字只勾不交，要挪到 Submit 行按 enter 再在确认页按 1；光标在自由回答行上按数字会写进去，在 Submit 行上按数字没反应；几个键一次发会丢，一次一个（`docs/claude-integration.md`「多选提问的屏幕卡」）。
 - AskUserQuestion：PreToolUse hook 返回 `permissionDecision: allow` + `updatedInput.answers` 即可代答（2.1.310 实测）。
 - ExitPlanMode：走 PermissionRequest（不走 PreToolUse）。`allow` 必须带 `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
   才生效，单纯 `{behavior:allow}` 仍会弹 TUI 对话框；`deny` + `message` 会把反馈作为 tool_result 交给模型。

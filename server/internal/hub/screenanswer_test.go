@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -91,5 +92,38 @@ func TestScreenAnswerTextNotStored(t *testing.T) {
 	}
 	if _, res, _ := st.InteractionOutcome(nil, "scr_p"); res == nil || res.Text != "<redacted>" {
 		t.Fatalf("stored %+v", res)
+	}
+}
+
+// A multi-select question (Claude Code 2.1.316, screen/testdata): the checked options and the free text go to the
+// node, which ticks and sends them one key at a time; nothing is typed as is. An app from before multi-select cards
+// names one option: that one alone.
+func TestScreenAnswerMulti(t *testing.T) {
+	b, err := os.ReadFile("../screen/testdata/claude-2.1.316-multiselect-100.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := screen.ParseDialog(string(b))
+	if d == nil || !d.Multi {
+		t.Fatalf("not a multi-select dialog: %+v", d)
+	}
+	p, err := screenAnswer("s1", d, proto.Resolution{Options: []string{"1", "3"}, Text: "自己的回答"})
+	if err != nil || p["multi"] != true || p["rev"] != d.Rev || !slices.Equal(p["options"].([]string), []string{"1", "3"}) ||
+		p["free_text"] != "自己的回答" || p["keys"] != nil || p["text"] != nil {
+		t.Fatalf("%v %v", p, err)
+	}
+	if p, err := screenAnswer("s1", d, proto.Resolution{Option: "2"}); err != nil || !slices.Equal(p["options"].([]string), []string{"2"}) {
+		t.Fatalf("an older app's one option: %v %v", p, err)
+	}
+	if p, err := screenAnswer("s1", d, proto.Resolution{Option: "5", Text: "只写这个"}); err != nil || len(p["options"].([]string)) != 0 || p["free_text"] != "只写这个" {
+		t.Fatalf("an older app's free text: %v %v", p, err)
+	}
+	if p, err := screenAnswer("s1", d, proto.Resolution{Option: "6"}); err != nil || p["multi"] != nil || !slices.Equal(p["keys"].([]string), []string{"6"}) {
+		t.Fatalf("chat about this: %v %v", p, err)
+	}
+	for _, r := range []proto.Resolution{{}, {Options: []string{"5"}}, {Options: []string{"9"}}, {Options: []string{"6"}}} {
+		if _, err := screenAnswer("s1", d, r); err == nil {
+			t.Fatalf("%+v accepted", r)
+		}
 	}
 }

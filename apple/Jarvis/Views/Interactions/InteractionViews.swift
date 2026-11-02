@@ -161,7 +161,7 @@ struct InteractionPreviewCard: View {
                 // Short ones only ("Yes"): a long label ("Yes, and don't ask again for … in /path") is cut off in a
                 // card; it and the rest are one tap away in the chat.
                 let plain = d.options.filter { $0.kind == .plain && $0.label.count <= 24 }
-                if (1...4).contains(plain.count) {
+                if !d.multi, (1...4).contains(plain.count) { // several ticks go together: in the full card
                     FlowButtons(labels: plain.map(\.label)) { label in
                         guard let opt = plain.first(where: { $0.label == label }) else { return }
                         Task { await model.resolve(interaction, Resolution(option: opt.key)) }
@@ -757,6 +757,9 @@ struct ScreenForm: View {
     @State private var text = ""
     @State private var writing = false
     @State private var sending: String?
+    /// A multi-select question's ticks and free text on the card; nil until changed here (what the computer shows).
+    @State private var picks: Set<String>?
+    @State private var freeText: String?
     @State private var showTerminal = false
     @FocusState private var focused: Bool
 
@@ -777,8 +780,9 @@ struct ScreenForm: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             if !d.steps.isEmpty {
                 ScreenSteps(steps: d.steps)
-            } else if let h = d.header, !h.isEmpty {
-                Text(h).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
+            }
+            if let eyebrow = Self.eyebrow(d) {
+                Text(eyebrow).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
             }
             if !d.question.isEmpty {
                 Text(d.question).font(Theme.Font.heading).fixedSize(horizontal: false, vertical: true)
@@ -791,14 +795,25 @@ struct ScreenForm: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             }
+            if d.review && d.incomplete {
+                Label("还有题没回答", systemImage: Theme.Icon.error)
+                    .font(Theme.Font.captionMedium)
+                    .foregroundStyle(Theme.caution)
+            }
             let choices = d.options.filter { $0.kind != .chat }
             VStack(spacing: 0) {
                 ForEach(Array(choices.enumerated()), id: \.element.key) { i, opt in
                     if i > 0 { Divider().padding(.leading, 50) }
-                    if opt.kind == .typeSomething { typeRow(opt) } else { choice(opt) }
+                    switch (opt.kind, d.multi) {
+                    case (.typeSomething, true): freeTextRow(opt)
+                    case (.typeSomething, false): typeRow(opt)
+                    case (_, true): check(opt, d)
+                    default: choice(opt)
+                    }
                 }
             }
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            if d.multi { multiFooter(d) }
             HStack(spacing: Theme.Space.l) {
                 if let chat = d.options.first(where: { $0.kind == .chat }) {
                     Button { send(chat.key, answer(chat)) } label: {
@@ -850,6 +865,103 @@ struct ScreenForm: View {
         .buttonStyle(.plain)
         .disabled(sending != nil)
         .accessibilityLabel(label + (recommended ? "，推荐" : ""))
+    }
+
+    /// The header, and 可多选 for a multi-select question.
+    nonisolated static func eyebrow(_ d: ScreenParser.Dialog) -> String? {
+        let parts = [d.steps.isEmpty ? d.header.flatMap { $0.isEmpty ? nil : $0 } : nil, d.multi ? "可多选" : nil].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    // MARK: Multi-select (the terminal's check boxes, sent together)
+
+    /// What is ticked: as changed on the card, else what the computer shows.
+    private func picked(_ d: ScreenParser.Dialog) -> Set<String> {
+        picks ?? Set(d.options.filter { $0.kind == .plain && $0.checked }.map(\.key))
+    }
+
+    private func typed(_ d: ScreenParser.Dialog) -> String {
+        (freeText ?? d.options.first { $0.kind == .typeSomething }?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func check(_ opt: ScreenParser.Dialog.Option, _ d: ScreenParser.Dialog) -> some View {
+        let on = picked(d).contains(opt.key)
+        let (label, recommended) = QuestionForm.display(opt.label)
+        return Button {
+            Haptics.tap()
+            var set = picked(d)
+            if on { set.remove(opt.key) } else { set.insert(opt.key) }
+            withAnimation(Theme.Motion.standard) { picks = set }
+        } label: {
+            HStack(alignment: .top, spacing: Theme.Space.m) {
+                ZStack {
+                    Circle().fill(on ? Theme.accent : Theme.Fill.chip)
+                    if on {
+                        Image(systemName: Theme.Icon.done).font(Theme.Font.labelHeavy).dynamicTypeSize(...DynamicTypeSize.xxLarge).foregroundStyle(.white)
+                    } else {
+                        Text(opt.key).font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+                .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    HStack(spacing: Theme.Space.sm) {
+                        Text(label).font(Theme.Font.heading).foregroundStyle(.primary)
+                        if recommended { RecommendedTag() }
+                    }
+                    if let detail = opt.detail {
+                        Text(detail).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
+            .background(on ? Theme.accent.opacity(0.08) : .clear)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(sending != nil)
+        .accessibilityLabel(label + (recommended ? "，推荐" : "") + (on ? "，已选" : ""))
+    }
+
+    /// The free-text field of a multi-select question: sent with the ticks, checked when it holds something.
+    private func freeTextRow(_ opt: ScreenParser.Dialog.Option) -> some View {
+        HStack(alignment: .center, spacing: Theme.Space.m) {
+            Image(systemName: Theme.Icon.edit)
+                .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                .foregroundStyle(.secondary)
+                .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+                .background(Theme.Fill.chip, in: .circle)
+            TextField("其他回答（可不填）", text: Binding(get: { freeText ?? opt.text ?? "" }, set: { freeText = $0 }), axis: .vertical)
+                .lineLimit(1...4)
+                .focused($focused)
+                .disabled(sending != nil)
+        }
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
+    }
+
+    /// 提交 (下一题 when another question follows): the ticks and the free text go to the terminal together.
+    private func multiFooter(_ d: ScreenParser.Dialog) -> some View {
+        HStack(spacing: Theme.Space.m) {
+            Spacer(minLength: 0)
+            Button {
+                focused = false
+                let set = picked(d)
+                let t = typed(d)
+                send("multi", Resolution(text: t.isEmpty ? nil : t, options: d.options.map(\.key).filter(set.contains)))
+            } label: {
+                HStack(spacing: Theme.Space.sm) {
+                    if sending == "multi" { ProgressView().controlSize(.small).tint(.white) }
+                    Text(d.submit == "Next" ? "下一题" : "提交").lineLimit(1)
+                }
+                .padding(.horizontal, Theme.Space.s)
+            }
+            .themedButton(prominent: true)
+            .disabled(sending != nil || (picked(d).isEmpty && typed(d).isEmpty))
+        }
+        .controlSize(.regular)
     }
 
     /// "Type something.": a quiet row that turns into a field; sending picks the option, types, presses enter.
@@ -1284,27 +1396,42 @@ struct BUIScreenForm: View {
     private func dialog(_ d: ScreenParser.Dialog, screen: String) -> some View {
         let choices = d.options.filter { $0.kind != .chat && $0.kind != .typeSomething }
         let typing = d.options.first { $0.kind == .typeSomething }
+        // A multi-select question starts from what the computer shows: its ticks and its free text.
+        let shown = d.multi
+            ? ApprovalAnswers(picks: [0: choices.indices.filter { choices[$0].checked }], custom: typing?.text.map { [0: $0] } ?? [:])
+            : ApprovalAnswers()
         return VStack(alignment: .leading, spacing: Theme.Space.m) {
             if !d.steps.isEmpty { BUIScreenSteps(steps: d.steps) }
             ApprovalCard(
                 questions: [ApprovalQuestion(
-                    d.question.isEmpty ? (d.header ?? "") : d.question,
+                    d.question.isEmpty ? (d.header ?? "") : d.question, kind: d.multi ? .multiple : .single,
                     choices: choices.map { o in
                         let (label, recommended) = QuestionForm.display(o.label)
                         return ApprovalQuestion.Choice(label, detail: o.detail, tag: recommended ? "推荐" : nil)
                     },
-                    eyebrow: d.steps.isEmpty && !d.question.isEmpty ? d.header : nil,
+                    eyebrow: d.question.isEmpty ? nil : ScreenForm.eyebrow(d),
                     allowsCustom: typing != nil, customPlaceholder: "其他回答…")],
-                skipLabel: nil, sendLabel: "发送", sentMessage: "已发送",
+                answers: shown,
+                skipLabel: nil, sendLabel: d.multi ? (d.submit == "Next" ? "下一题" : "提交") : "发送", sentMessage: "已发送",
                 options: .panel(sending: sending != nil)
             ) { answers in
                 let text = (answers.custom[0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if let typing, !text.isEmpty {
+                if d.multi {
+                    // The card holds the whole answer: what is not picked here is unticked at the computer.
+                    let picked = Set(answers.picks[0] ?? [])
+                    let keys = choices.enumerated().filter { picked.contains($0.offset) }.map(\.element.key)
+                    send("multi", Resolution(text: text.isEmpty ? nil : text, options: keys))
+                } else if let typing, !text.isEmpty {
                     send(typing.key, answer(typing, text: text))
                 } else if let n = answers.picks[0]?.first, choices.indices.contains(n) {
                     send(choices[n].key, answer(choices[n]))
                 }
             } context: { _ in
+                if d.review && d.incomplete {
+                    Label("还有题没回答", systemImage: Theme.Icon.error)
+                        .font(Theme.Font.captionMedium)
+                        .foregroundStyle(Theme.caution)
+                }
                 if let detail = d.detail {
                     Text(detail)
                         .font(Theme.Font.code)

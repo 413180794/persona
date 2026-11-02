@@ -754,10 +754,12 @@ nonisolated struct Resolution: Codable, Sendable {
     var preKeys: [String]?
     /// A screen dialog's option (Interaction.dialog): the node works out its keys, after checking the dialog is unchanged.
     var option: String?
+    /// A multi-select screen dialog: the options to have checked when it is sent (`text`: its free-text field).
+    var options: [String]?
     var values: [String: String]?
 
     enum CodingKeys: String, CodingKey {
-        case answers, approve, mode, feedback, allow, always, message, keys, text, dismiss, option, values
+        case answers, approve, mode, feedback, allow, always, message, keys, text, dismiss, option, options, values
         case preKeys = "pre_keys"
     }
 
@@ -998,20 +1000,43 @@ nonisolated struct ScreenDialog: Codable, Hashable, Sendable {
         var label: String
         var detail: String?
         var kind: String?
+        /// Ticked at the computer (a multi-select box), or an answered question's pick.
+        var checked: Bool?
+        /// What is typed into the free-text field (`type_something`).
+        var text: String?
+    }
+    struct Step: Codable, Hashable, Sendable {
+        var label: String
+        var done: Bool
     }
     var header: String?
     var question: String
     var detail: String?
     var options: [Option]
     var rev: String
+    /// A multi-select question: check boxes, sent together by its `submit` row ("Submit", or "Next" when another
+    /// question follows). Steps are the questions of its tab bar; review is the tab that submits them all
+    /// (incomplete: one has no answer).
+    var multi: Bool?
+    var submit: String?
+    var steps: [Step]?
+    var review: Bool?
+    var incomplete: Bool?
 
     var parsed: ScreenParser.Dialog {
-        ScreenParser.Dialog(
+        var d = ScreenParser.Dialog(
             header: header.flatMap { $0.isEmpty ? nil : $0 }, question: question, detail: detail.flatMap { $0.isEmpty ? nil : $0 },
             options: options.map { o in
                 let kind: ScreenParser.Dialog.Kind = o.kind == "type_something" ? .typeSomething : o.kind == "chat" ? .chat : .plain
-                return .init(key: o.key, label: o.label, detail: o.detail.flatMap { $0.isEmpty ? nil : $0 }, kind: kind)
+                return .init(key: o.key, label: o.label, detail: o.detail.flatMap { $0.isEmpty ? nil : $0 }, kind: kind,
+                             checked: o.checked ?? false, text: o.text.flatMap { $0.isEmpty ? nil : $0 })
             })
+        if let steps, !steps.isEmpty { d.steps = steps.map { .init(label: $0.label, done: $0.done) } }
+        d.multi = multi ?? false
+        d.submit = submit
+        d.review = review ?? false
+        d.incomplete = incomplete ?? false
+        return d
     }
 }
 

@@ -18,8 +18,31 @@ type Dialog struct {
 	Question string   `json:"question"`
 	Detail   string   `json:"detail,omitempty"` // lines above the question that belong to it (the command asked about)
 	Options  []Option `json:"options"`
-	Rev      string   `json:"rev"`
+	// Multi: a multi-select question (AskUserQuestion's multiSelect, Claude Code 2.1.316): its options are check
+	// boxes ("[ ]" / "[✔]") that enter or their number toggles, and the row under them sends what is checked —
+	// Submit, which opens the review tab, or Next when another question follows.
+	Multi  bool   `json:"multi,omitempty"`
+	Submit string `json:"submit,omitempty"` // that row's label: "Submit" or "Next"
+	// Steps are the questions of a multi-question AskUserQuestion, from its tab bar ("←  ☒ 环境  ☐ 平台  ✔ Submit  →",
+	// the Submit tab left out). A single question's one tab is its Header.
+	Steps []Step `json:"steps,omitempty"`
+	// Review is the Submit tab ("Review your answers", "1. Submit answers / 2. Cancel"); Incomplete when it warns
+	// that a question has no answer yet.
+	Review     bool   `json:"review,omitempty"`
+	Incomplete bool   `json:"incomplete,omitempty"`
+	Rev        string `json:"rev"`
+	// Cursor is where the dialog's ❯ is: an option's key, CursorSubmit on the Submit / Next row, "" when unseen.
+	Cursor string `json:"-"`
 }
+
+// Step is a question of a multi-question dialog: its header, and whether it has an answer.
+type Step struct {
+	Label string `json:"label"`
+	Done  bool   `json:"done"`
+}
+
+// CursorSubmit is Dialog.Cursor on a multi-select question's Submit / Next row.
+const CursorSubmit = "submit"
 
 // Option kinds besides a plain choice.
 const (
@@ -33,8 +56,12 @@ type Option struct {
 	Detail string `json:"detail,omitempty"`
 	Kind   string `json:"kind,omitempty"`
 	// Keys pick it: its number, or arrow moves from the cursor plus enter for an unnumbered dialog. A type_something
-	// option takes them before its text, and enter after.
+	// option takes them before its text, and enter after. A multi-select option's number only toggles it.
 	Keys []string `json:"keys"`
+	// Checked: a multi-select option's box is ticked, or the ✔ after the option an answered question had picked.
+	Checked bool `json:"checked,omitempty"`
+	// Text is what is typed into a type_something option: the terminal shows it in place of the label.
+	Text string `json:"text,omitempty"`
 }
 
 // DialogLines is how much of the screen a dialog is read from, the same when the card is made (hub) and when its
@@ -45,6 +72,12 @@ var numberedRE = regexp.MustCompile(`^(\s*)(?:([❯›>])\s*)?(\d)\.\s+(\S.*)$`)
 
 // cursorRE is the selected row of an unnumbered list: `❯ No, exit`.
 var cursorRE = regexp.MustCompile(`^(\s*)❯\s+(\S.*)$`)
+
+// boxRE is a multi-select option's check box before its label: `[ ] 手机`, `[✔] 电脑`.
+var boxRE = regexp.MustCompile(`^\[([ ✔✓xX])\]\s*(.*)$`)
+
+// submitRE is the row under a multi-select question's options that sends them, maybe under the cursor.
+var submitRE = regexp.MustCompile(`^\s*(❯)?\s*(Submit|Next)$`)
 
 // ParseDialog reads the dialog at the bottom of a plain screen, or nil when there is none.
 func ParseDialog(plain string) *Dialog {
@@ -61,7 +94,8 @@ func ParseDialog(plain string) *Dialog {
 type row struct {
 	i, n   int
 	label  string
-	indent int // column where the label starts
+	indent int  // column where the label starts
+	cursor bool // the ❯ is on it
 }
 
 func numbered(lines []string) *Dialog {
@@ -75,7 +109,7 @@ func numbered(lines []string) *Dialog {
 		if n < 1 {
 			continue
 		}
-		rows = append(rows, row{i: i, n: n, label: strings.TrimSpace(l[m[8]:m[9]]), indent: len([]rune(l[:m[8]]))})
+		rows = append(rows, row{i: i, n: n, label: strings.TrimSpace(l[m[8]:m[9]]), indent: len([]rune(l[:m[8]])), cursor: m[4] >= 0})
 	}
 	// The last run 1, 2, 3… is the live dialog.
 	start := -1
@@ -103,8 +137,25 @@ func numbered(lines []string) *Dialog {
 		if k+1 < len(block) {
 			end = block[k+1].i
 		}
+		o := Option{Key: strconv.Itoa(r.n), Label: r.label, Keys: []string{strconv.Itoa(r.n)}}
+		if m := boxRE.FindStringSubmatch(r.label); m != nil {
+			d.Multi = true
+			o.Label, o.Checked = strings.TrimSpace(m[2]), m[1] != " "
+		} else if l, ok := strings.CutSuffix(r.label, " ✔"); ok { // the pick of an answered question, shown again
+			o.Label, o.Checked = strings.TrimSpace(l), true
+		}
+		if r.cursor {
+			d.Cursor = o.Key
+		}
 		var detail []string
 		for _, l := range lines[r.i+1 : end] {
+			if m := submitRE.FindStringSubmatch(l); m != nil && d.Multi {
+				d.Submit = m[2]
+				if m[1] != "" {
+					d.Cursor = CursorSubmit
+				}
+				break
+			}
 			lead := len(l) - len(strings.TrimLeft(l, " "))
 			t := strings.TrimSpace(l)
 			if t == "" || isRule(t) || lead < r.indent-1 {
@@ -115,8 +166,8 @@ func numbered(lines []string) *Dialog {
 			}
 			detail = append(detail, t)
 		}
-		o := Option{Key: strconv.Itoa(r.n), Label: r.label, Detail: joinWrapped(detail), Keys: []string{strconv.Itoa(r.n)}}
-		switch lower := strings.ToLower(r.label); {
+		o.Detail = joinWrapped(detail)
+		switch lower := strings.ToLower(o.Label); {
 		case strings.HasPrefix(lower, "type something"):
 			o.Kind = KindTypeSomething
 		case strings.HasPrefix(lower, "chat about this"):
@@ -124,8 +175,28 @@ func numbered(lines []string) *Dialog {
 		}
 		d.Options = append(d.Options, o)
 	}
+	d.typedOption()
 	d.describe(lines, block[0].i)
 	return d
+}
+
+// typedOption: text typed into AskUserQuestion's free-text field shows in place of its "Type something" label (and
+// checks it, in a multi-select question). The field is the option above "Chat about this": it keeps its label and
+// kind, the text goes in Text, so the dialog's revision does not change with what is typed.
+func (d *Dialog) typedOption() {
+	for k, o := range d.Options {
+		if o.Kind != KindChat || k == 0 {
+			continue
+		}
+		if f := &d.Options[k-1]; f.Kind == "" {
+			// As Claude labels it when empty: "Type something." under a single choice.
+			label := "Type something"
+			if !d.Multi {
+				label += "."
+			}
+			f.Text, f.Label, f.Kind = f.Label, label, KindTypeSomething
+		}
+	}
 }
 
 // unnumbered reads a list without numbers whose cursor row is `❯ label` and whose other rows line up with it, under
@@ -175,6 +246,35 @@ func unnumbered(lines []string) *Dialog {
 	return d
 }
 
+// tabsRE is AskUserQuestion's tab bar: "←  ☒ 环境  ☐ 平台  ✔ Submit  →" (a multi-select or multi-question dialog).
+var tabsRE = regexp.MustCompile(`^←\s+(.*?)\s+→$`)
+
+// gapRE parts the tab bar's tabs (two spaces or more; a header may have one).
+var gapRE = regexp.MustCompile(`\s{2,}`)
+
+// The review tab's lines (Claude Code 2.1.316).
+const (
+	reviewTitle      = "Review your answers"
+	reviewIncomplete = "You have not answered all questions"
+)
+
+// steps reads the tab bar: each question's header and whether it is answered (☒), the Submit tab left out.
+func steps(bar string) []Step {
+	var out []Step
+	for _, f := range gapRE.Split(bar, -1) {
+		r := []rune(strings.TrimSpace(f))
+		if len(r) < 2 || !strings.ContainsRune("☐☒✔", r[0]) {
+			continue
+		}
+		label := strings.TrimSpace(string(r[1:]))
+		if r[0] == '✔' && label == "Submit" {
+			continue
+		}
+		out = append(out, Step{Label: label, Done: r[0] == '☒'})
+	}
+	return out
+}
+
 // describe fills header, question and detail from the lines above the options, up to the rule that opens the dialog.
 func (d *Dialog) describe(lines []string, first int) {
 	top := 0
@@ -187,8 +287,21 @@ func (d *Dialog) describe(lines []string, first int) {
 	var quoted, plain []string
 	for _, l := range lines[top:first] {
 		t := strings.TrimSpace(l)
+		m := tabsRE.FindStringSubmatch(t)
 		switch {
 		case t == "":
+		case m != nil:
+			// One question: its tab is the header. Several: which one is shown is only told by color, so no header;
+			// the steps say which are answered.
+			if st := steps(m[1]); len(st) == 1 {
+				d.Header = st[0].Label
+			} else {
+				d.Steps = st
+			}
+		case t == reviewTitle:
+			d.Review = true
+		case strings.HasSuffix(t, reviewIncomplete):
+			d.Incomplete = true
 		case strings.ContainsRune("☐□☒✔◻■", []rune(t)[0]):
 			d.Header = strings.TrimSpace(string([]rune(t)[1:]))
 		case strings.HasPrefix(t, "│") || strings.HasPrefix(t, "|"):
@@ -218,7 +331,11 @@ func (d *Dialog) describe(lines []string, first int) {
 	h := sha256.New()
 	h.Write([]byte(d.Header + "\x00" + d.Question + "\x00" + d.Detail))
 	for _, o := range d.Options {
-		h.Write([]byte("\x00" + o.Key + "\x00" + o.Label + "\x00" + o.Detail))
+		label := o.Label
+		if o.Kind == KindTypeSomething { // its label is what is typed into it until it is read back as Text
+			label = o.Kind
+		}
+		h.Write([]byte("\x00" + o.Key + "\x00" + label + "\x00" + o.Detail))
 	}
 	d.Rev = hex.EncodeToString(h.Sum(nil))[:12]
 }
