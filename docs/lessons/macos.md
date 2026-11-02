@@ -20,6 +20,9 @@
 - 窗口的 sheet 不继承主窗口的 `.formStyle(.grouped)`（`macLook` 里设的那个）：iOS 的 Form 在 sheet 里退回 Mac 默认的两栏，
   标题贴着 sheet 左边、输入框拉满右边（2026-11-02「连接 hub」）。sheet 的内容自己加 `macSheet()`。分组表单里 `TextField` 的标题在左、
   输入在右且没有框，要给 `prompt:` 才看得出能输入。
+- sheet 里的 `NavigationStack`：最小尺寸（`macSheet()`）要加在栈上，不能加在栈的根内容上。加在根上时，推入的页面（新对话的启动器 / 目录）
+  按自己的高度撑 sheet，`List` 还没量出行高就是 0：从 Agents 列表的「新建会话」打开时，一点启动器 sheet 缩成只剩标题和搜索框的一条，
+  看上去像选不了（#303，2026-11-02）。⌘N 那条外面还套了一层带 `macSheet()` 的栈，所以没坏。
 - Mac 上的 `Menu` 画成带下拉箭头的按钮：iOS 那种 `.themedButton().clipShape(.circle)` 的圆形 + 菜单被裁成半个图形；`.buttonStyle(.glass)`
   也不给 `Menu` 画底，`.glassProminent` 裁成圆后连填充都没了。输入栏的圆钮在 Mac 上用 `.menuStyle(.button).menuIndicator(.hidden)`，
   圆底自己画（`Mac/Design/MacRoundButton.swift`）。放在 `.surface` 胶囊里的 `TextField` 要 `.textFieldStyle(.plain)`，否则 Mac 自带的边框在里面再画一层。

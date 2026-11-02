@@ -227,11 +227,13 @@ struct NewChatView: View {
             }
             .onChange(of: model.machines) { _, _ in if preset == nil { pickDefaultMachine() } }
             .interactiveDismissDisabled(starting)
-            #if os(macOS)
-            // Also opened from 知识库 › 开 Agent, whose sheets did not pick up macLook's grouped form (cause unknown).
-            .macSheet()
-            #endif
         }
+        #if os(macOS)
+        // On the stack, not its root: with the minimum size on the form, pushing 启动器 / 目录 shrank a sheet opened
+        // from Agents' 新建会话 to the pushed list's own height, zero (#303). Also gives the grouped form to sheets
+        // that miss macLook's (知识库 › 开 Agent).
+        .macSheet()
+        #endif
     }
 
     /// Remember the last machine, but fall back to the first online one (machines may arrive after the sheet opens).
