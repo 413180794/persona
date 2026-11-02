@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash, randomBytes } from 'node:crypto'
-import { createServer } from 'node:http'
+import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
 import { createRuntime, Peer, SUBPROTOCOL } from '../index.js'
 import { until } from '../testing/fake-node.js'
@@ -35,6 +35,34 @@ function dialNode(url, { token, protocols = [SUBPROTOCOL] } = {}) {
   })
   n.last = (event) => n.events.filter((e) => e.event === event).at(-1)?.params
   return n
+}
+
+// Read the HTTP refusal itself: Node 22's WebSocket reports a failed handshake as 'error', not 'close'.
+function refusedStatus(url, { token, protocols = [SUBPROTOCOL] } = {}) {
+  return new Promise((resolve, reject) => {
+    const endpoint = new URL(url)
+    endpoint.protocol = 'http:'
+    const headers = {
+      connection: 'Upgrade', upgrade: 'websocket',
+      'sec-websocket-version': '13', 'sec-websocket-key': randomBytes(16).toString('base64'),
+    }
+    if (token) headers.authorization = `Bearer ${token}`
+    if (protocols.length) headers['sec-websocket-protocol'] = protocols.join(', ')
+    const req = request(endpoint, { headers })
+    const deadline = setTimeout(() => req.destroy(new Error('timed out waiting for the HTTP refusal')), 3000)
+    const done = (error, status) => {
+      clearTimeout(deadline)
+      if (error) reject(error)
+      else resolve(status)
+    }
+    req.on('response', (res) => { res.resume(); done(null, res.statusCode) })
+    req.on('upgrade', (_res, socket) => {
+      socket.destroy()
+      done(new Error('a refused handshake unexpectedly upgraded'))
+    })
+    req.on('error', (error) => done(error))
+    req.end()
+  })
 }
 
 function toy(extra = {}) {
@@ -75,16 +103,15 @@ test('a wrong token, a missing subprotocol or another path is refused before the
   const rt = createRuntime(driver, { runtime: 'toy', listen: { port: 0, token: 'tok-R4ND0M' }, refreshMs: 0, log: (m) => logs.push(m) })
   t.after(() => rt.stop())
   const { port } = await rt.start()
-  for (const [url, opts] of [
-    [`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'wrong-fixture-token' }],
-    [`ws://127.0.0.1:${port}/jarvis/runtime`, {}],
-    [`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'tok-R4ND0M', protocols: ['something-else'] }],
-    [`ws://127.0.0.1:${port}/elsewhere`, { token: 'tok-R4ND0M' }],
+  for (const [url, opts, status] of [
+    [`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'wrong-fixture-token' }, 401],
+    [`ws://127.0.0.1:${port}/jarvis/runtime`, {}, 401],
+    [`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'tok-R4ND0M', protocols: [] }, 400],
+    [`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'tok-R4ND0M', protocols: ['something-else'] }, 400],
+    [`ws://127.0.0.1:${port}/elsewhere`, { token: 'tok-R4ND0M' }, 404],
   ]) {
-    const n = dialNode(url, opts)
-    await until('refused', () => n.closed, 3000)
-    assert.equal(n.opened, false, `${url} ${JSON.stringify(opts)}`)
-    assert.equal(n.hello, undefined)
+    assert.equal(await refusedStatus(url, opts), status)
+    assert.equal(rt.connected, false)
   }
   assert.ok(logs.some((l) => /refused a connection/.test(l)))
   assert.ok(!logs.some((l) => l.includes('tok-')), 'no token in the log')
@@ -121,9 +148,8 @@ test('mounted on the runtime\'s own HTTP server through accept(), with a token r
   t.after(() => server.close())
   const url = `ws://127.0.0.1:${server.address().port}/api/jarvis`
   current = 'two' // rotated
-  const old = dialNode(url, { token: 'one' })
-  await until('refused', () => old.closed, 3000)
-  assert.equal(old.hello, undefined)
+  assert.equal(await refusedStatus(url, { token: 'one' }), 401)
+  assert.equal(rt.connected, false)
   const n = dialNode(url, { token: 'two' })
   t.after(() => n.ws.close())
   await until('hello', () => n.hello, 3000)

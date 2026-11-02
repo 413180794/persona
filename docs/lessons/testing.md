@@ -91,6 +91,12 @@
 - CSS 的 `grid-template-rows: 0fr` 和 opacity 只把折叠内容藏起来，不会让链接退出键盘焦点和无障碍树；侧边栏折叠容器加 `inert`。组标题内的状态圆点已有同义文字，要 `aria-hidden`，否则按钮会被读成两遍「工作中」。
 - 网页截图要先等菜单项真正渲染，不要在点开菜单的同一帧直接截图（可能只拍到外壳）；深浅色验证把主题偏好也存进 localStorage，单独改根节点 class 在 reload 后会回到旧主题。
 
+## WebSocket 握手测试
+
+- Node 22 的内置 `WebSocket` 在握手被 HTTP 401 / 400 拒绝时可能只触发 `error`，不触发 `close`，`readyState` 仍是 CONNECTING。
+  拒绝测试不要等 `close`，更不能把任意网络错误当成鉴权正确；用 HTTP upgrade 请求直接断言拒绝状态（错误 / 缺失 token 为 401、
+  缺失 / 错误子协议为 400、错误路径为 404），意外收到 101 或连接错误均失败，设置总超时并回收 socket。成功握手仍用真实 WebSocket 验证。
+
 ## 新加的 UI 测试
 
 - DEBUG 启动参数触发的动作（发一条消息、打开某页）不要写在 `onAppear` 里每次都跑（2026-11-02）：带 `-openSession` 启动时对话页 0.2 秒内出现、消失、再出现三次，
