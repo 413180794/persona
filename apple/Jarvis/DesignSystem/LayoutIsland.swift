@@ -10,6 +10,9 @@ import UIKit
 /// when its height changes (a new line, a chip above the field): the content measures itself and reports the height,
 /// which the page keeps as the island's fixed height.
 ///
+/// What the content draws outside its own frame (a menu hanging above it) shows but takes no touches: the hosting
+/// view only hit-tests inside its bounds, and taps there land on the page below. Such content stays out of an island.
+///
 /// `Content` is Equatable: the page hands it in again on every update, and only a different value reaches the island.
 /// The page's environment goes in whole (`\.self`), the way `DrawerSidebarHost` does it.
 struct LayoutIsland<Content: View & Equatable>: View {

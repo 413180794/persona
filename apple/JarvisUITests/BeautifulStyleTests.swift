@@ -14,11 +14,11 @@ final class BeautifulStyleTests: XCTestCase {
         self.hub = hub
     }
 
-    @MainActor private func launch(style: String) -> XCUIApplication {
+    @MainActor private func launch(style: String, session: String = "macbook/a1f3c2d4-0000-4000-8000-000000000006") -> XCUIApplication {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-ui.style", style, "-tab", "dev",
-                               "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006"]
+                               "-openSession", session]
         app.launchJarvis()
         return app
     }
@@ -46,6 +46,40 @@ final class BeautifulStyleTests: XCTestCase {
         // The prompt bar's toolbar: @ is there only in this style.
         XCTAssertTrue(app.buttons["提及文件或会话"].waitForExistence(timeout: 20), "not the prompt bar:\n\(app.debugDescription)")
         sendWorks(app, "BeautifulUI 发送 \(Int.random(in: 1000...9999))")
+    }
+
+    /// The "/" menu hangs above the composer, outside the composer's own frame. A tap on a row picks it; it once fell
+    /// through to the chat below (the composer sat in its own hosting controller, which only takes touches inside
+    /// its bounds). Another chat than the send tests': the draft it leaves stays with its chat.
+    @MainActor func testCommandMenuTakesTaps() {
+        let app = launch(style: "beautiful", session: "studio/a1f3c2d4-0000-4000-8000-000000000003")
+        XCTAssertTrue(app.buttons["提及文件或会话"].waitForExistence(timeout: 20), "not the prompt bar:\n\(app.debugDescription)")
+        let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
+        clear(field) // drafts are kept across runs: a "/" after old text opens no menu
+        field.typeText("/")
+        let row = app.buttons["/汇报"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "no / menu:\n\(app.debugDescription)")
+        shot(app, "menu")
+        row.tap()
+        let picked = "简要汇报一下目前的进展、还剩什么"
+        let deadline = Date.now.addingTimeInterval(5)
+        while (field.value as? String) != picked, Date.now < deadline { usleep(200_000) }
+        shot(app, "picked")
+        XCTAssertEqual(field.value as? String, picked, "the tap on /汇报 did not reach the menu")
+        clear(field)
+    }
+
+    /// Empties the draft: a tap at the field's end puts the caret there (a pick leaves it elsewhere), then deletes.
+    @MainActor private func clear(_ field: XCUIElement) {
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+        guard let v = field.value as? String, !v.isEmpty, v != field.placeholderValue else { return }
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: v.count + 2))
+    }
+
+    /// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps a screenshot of each step.
+    @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
+        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("slash-\(name).png"))
     }
 
     @MainActor func testDefaultStyleKeepsTheOriginalComposerAndSends() {

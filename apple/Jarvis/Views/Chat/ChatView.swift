@@ -1036,7 +1036,9 @@ struct ChatView: View {
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
                          onCleared: { switchTo($0) })
-                    .layoutIsland(enabled: !shellChat) // the shell's expanding field stays in the page's layout graph
+                    // The shell's expanding field stays in the page's layout graph; so does BeautifulUI's prompt bar,
+                    // whose menus hang above it: an island's hosting view takes no touches outside its bounds.
+                    .layoutIsland(enabled: !shellChat && !AppStyle.current.usesBeautifulUI)
             }
             .padding(.horizontal, Theme.Space.m)
             .padding(.bottom, Theme.Space.s)
