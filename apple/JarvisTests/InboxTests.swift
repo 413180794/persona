@@ -36,6 +36,26 @@ struct InboxTests {
         #expect(mail.larkConversation == nil && chat.mailSummary == nil)
     }
 
+    @Test func aLarkItemCarriesItsReadPosition() throws {
+        let item = try JSON.decoder.decode(InboxItem.self, from: Data("""
+        {"id":"lark:f2:20","source":"lark","kind":"dm","account":"feishu","account_name":"飞书","title":"t","preview":"p","count":2,
+         "lark":{"feed_id":"f2","is_group":false,"start_position":"20","read_position":"18"}}
+        """.utf8))
+        #expect(item.lark?.readPosition == "18")
+        let conv = try #require(item.larkConversation)
+        #expect(conv.focus == "20" && conv.readPosition == "18")
+    }
+
+    @Test func anOlderHubWithoutReadPositionStillDecodes() throws {
+        let item = try JSON.decoder.decode(InboxItem.self, from: Data("""
+        {"id":"lark:f3:30","source":"lark","kind":"dm","account":"feishu","account_name":"飞书","title":"t","preview":"p","count":1,
+         "lark":{"feed_id":"f3","is_group":false,"start_position":"30"}}
+        """.utf8))
+        #expect(item.lark?.readPosition == nil)
+        let conv = try #require(item.larkConversation)
+        #expect(conv.focus == "30" && conv.readPosition == nil)
+    }
+
     @Test func decodesTheAgentsDraft() throws {
         let drafted = try JSON.decoder.decode(InboxItem.self, from: Data("""
         {"id":"x","source":"lark","kind":"dm","account":"feishu","account_name":"飞书","title":"t","preview":"p","count":1,

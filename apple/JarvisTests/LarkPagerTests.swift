@@ -74,4 +74,42 @@ import Testing
         let after = p.readReport()
         #expect(after == nil, "nothing new since")
     }
+
+    @Test func openedAtAMessageTheCursorSitsBeforeIt() {
+        var p = LarkPager()
+        p.replace(with: page([10, 11, 12, 13]))
+        p.openRead(at: "11", readPosition: nil) // an older hub: no read position
+        #expect(p.readCursor == "10")
+        _ = p.see(p.messages[1])
+        _ = p.see(p.messages[2])
+        let r = p.readReport()
+        #expect(r?.position == "12")
+        #expect(r?.messageIDs == ["m11", "m12"], "the message it opened at is reported too")
+    }
+
+    @Test func openedAtAMessageTheReadPositionWins() {
+        var p = LarkPager()
+        p.replace(with: page([8, 9, 10, 11, 12]))
+        p.openRead(at: "11", readPosition: "8")
+        #expect(p.readCursor == "8")
+        _ = p.see(p.messages[1])
+        #expect(p.readReport()?.messageIDs == ["m9"])
+    }
+
+    @Test func aReadPositionPastTheMessageDoesNotSkipIt() {
+        var p = LarkPager()
+        p.replace(with: page([10, 11, 12]))
+        p.openRead(at: "11", readPosition: "12")
+        #expect(p.readCursor == "10")
+        p.openRead(at: "11", readPosition: "11")
+        #expect(p.readCursor == "10", "the message itself is not read yet")
+    }
+
+    @Test func openingAgainDoesNotMoveTheCursorBack() {
+        var p = LarkPager()
+        p.replace(with: page([10, 11, 12]))
+        p.readCursor = "12"
+        p.openRead(at: "11", readPosition: "9")
+        #expect(p.readCursor == "12")
+    }
 }

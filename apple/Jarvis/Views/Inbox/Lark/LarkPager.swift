@@ -61,6 +61,15 @@ struct LarkPager: Equatable {
         newerCursor = messages.last?.position
     }
 
+    /// Opened at a message (an inbox item's first new one): reporting starts at the read position when it is before
+    /// the message, else just before it, so the message and what follows are reported once on screen. Never moves
+    /// the cursor back within a visit.
+    mutating func openRead(at focus: String, readPosition: String?) {
+        let start = readPosition.flatMap { LarkPosition.less($0, focus) ? $0 : nil } ?? LarkPosition.prev(focus)
+        if let readCursor, !LarkPosition.less(readCursor, start) { return }
+        readCursor = start
+    }
+
     /// A message reached the screen; false if it had already.
     mutating func see(_ m: LarkMessage) -> Bool { seen.insert(m.position).inserted }
 

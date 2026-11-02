@@ -15,6 +15,11 @@ nonisolated enum LarkPosition {
         if let n = Int64(p) { return String(n + 1) }
         return p
     }
+
+    static func prev(_ p: String) -> String {
+        if let n = Int64(p) { return String(n - 1) }
+        return p
+    }
 }
 
 /// One Feishu chat, opened like Feishu: at the oldest unread message under a 以下为新消息 line (or at the latest
@@ -260,7 +265,7 @@ struct LarkChatView: View {
         do {
             if let focus = conversation.focus {
                 apply(try await api.larkMessages(conversation.id, around: focus))
-                pager.readCursor = pager.messages.last?.position
+                pager.openRead(at: focus, readPosition: conversation.readPosition)
                 if let m = pager.messages.first(where: { $0.position == focus }) { await scroll(to: m.id) }
             } else if opensAtMessage {
                 // Feishu opens an unread chat at its read position: the page around the first unread message.

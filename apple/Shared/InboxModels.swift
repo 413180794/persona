@@ -86,12 +86,14 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         var isGroup: Bool
         var isTopic: Bool?
         var startPosition: String?
+        /// The chat's read position in Feishu when collected; older hubs leave it out.
+        var readPosition: String?
         var mentionPosition: String?
         var atAll: Bool?
 
         enum CodingKeys: String, CodingKey {
             case feedID = "feed_id", isGroup = "is_group", isTopic = "is_topic", startPosition = "start_position"
-            case mentionPosition = "mention_position", atAll = "at_all"
+            case readPosition = "read_position", mentionPosition = "mention_position", atAll = "at_all"
         }
     }
 

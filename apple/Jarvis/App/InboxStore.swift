@@ -180,6 +180,7 @@ extension InboxItem {
         var c = LarkConversation(id: l.feedID, name: title, avatar: avatar, isGroup: l.isGroup, isTopic: l.isTopic,
                                  unread: isDone ? 0 : count, atMe: kind == "mention")
         c.updatedAt = updatedAt
+        c.readPosition = l.readPosition
         if !isDone, let p = l.startPosition { c.focus = p }
         return c
     }
