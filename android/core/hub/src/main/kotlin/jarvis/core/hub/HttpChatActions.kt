@@ -1,0 +1,118 @@
+package jarvis.core.hub
+
+import jarvis.core.contracts.*
+import jarvis.core.contracts.api.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.*
+import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+
+class HttpChatActions internal constructor(
+    private val request: suspend (String, String, RequestBody?) -> Response,
+) : ChatActions {
+    constructor(connection: OkHttpHubConnection) : this(connection::request)
+
+    private val lock = Mutex()
+    private val uncertain = mutableMapOf<Pair<SessionKey, String>, ChatAction>()
+
+    override suspend fun isMuted(session: Session): Boolean = muted(getMutes(), session)
+
+    override suspend fun execute(session: Session, action: ChatAction): ChatActionResult = lock.withLock {
+        val key = session.key to kind(action)
+        uncertain[key]?.let { previous ->
+            if (verifyLocked(session, previous) != ChatActionResult.Done) return@withLock ChatActionResult.Unknown
+            if (previous == action) return@withLock ChatActionResult.Done
+        }
+        var sent = false
+        try {
+            val payload = when (action) {
+                is ChatAction.Mute -> {
+                    val mutes = getMutes()
+                    val id = session.key.path
+                    val sessions = strings(mutes, "sessions").toMutableSet()
+                    val allowed = strings(mutes, "allowed").toMutableSet()
+                    if (action.muted) { sessions.add(id); allowed.remove(id) }
+                    else { sessions.remove(id); allowed.add(id) }
+                    JsonObject(mutes + mapOf("sessions" to JsonArray(sessions.map(::JsonPrimitive)),
+                        "allowed" to JsonArray(allowed.map(::JsonPrimitive))))
+                }
+                is ChatAction.Rename -> buildJsonObject { put("title", action.title.trim()) }
+                is ChatAction.Modes -> buildJsonObject {
+                    action.permissionMode?.let { put("permission_mode", it) }
+                    action.effort?.let { put("effort", it) }
+                }
+                else -> buildJsonObject { }
+            }
+            val path = if (action is ChatAction.Mute) api("mutes")
+                else api("sessions", session.machineId, session.sessionId, kind(action))
+            sent = true
+            request(path, if (action is ChatAction.Mute) "PUT" else "POST",
+                payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())).use {
+                if (!it.isSuccessful) throw HubFailure.from(it)
+            }
+            ChatActionResult.Done
+        } catch (error: CancellationException) {
+            if (sent) uncertain[key] = action
+            throw error
+        } catch (error: Exception) {
+            val failure = error as? HubFailure
+            val rejected = !sent || failure?.delivered == "none" ||
+                (failure?.status in listOf(400, 401, 403, 404, 409, 410, 422, 429) && failure?.delivered != "unknown") ||
+                failure?.kind in listOf(HubError.NoNetwork, HubError.PairingExpired)
+            if (rejected) ChatActionResult.Failed(if (failure?.kind == HubError.PairingExpired) "配对已失效，请重新扫码" else "操作未完成，请检查连接或会话状态后重试", cause = error)
+            else { uncertain[key] = action; ChatActionResult.Unknown }
+        }
+    }
+
+    override suspend fun verify(session: Session, action: ChatAction): ChatActionResult = lock.withLock {
+        verifyLocked(session, uncertain[session.key to kind(action)] ?: action)
+    }
+
+    private suspend fun verifyLocked(session: Session, action: ChatAction): ChatActionResult {
+        val confirmed = try {
+            if (action is ChatAction.Mute) isMuted(session) == action.muted
+            else {
+                val all = request(api("sessions"), "GET", null).use {
+                    JsonCodec.decodeFromString<SessionsResponse>(it.body!!.string()).sessions
+                }
+                val current = all.firstOrNull { it.key == session.key }
+                when (action) {
+                    is ChatAction.Rename -> current?.title == action.title.trim()
+                    is ChatAction.Modes -> current != null &&
+                        (action.permissionMode == null || current.permissionMode == action.permissionMode) &&
+                        (action.effort == null || current.effort == action.effort)
+                    ChatAction.Close -> current == null || !current.isLive
+                    ChatAction.Interrupt -> current != null && current.status in listOf("idle", "done", "offline")
+                    else -> false
+                }
+            }
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) { false }
+        return if (confirmed) {
+            uncertain.remove(session.key to kind(action))
+            ChatActionResult.Done
+        } else ChatActionResult.Unknown
+    }
+
+    private suspend fun getMutes(): JsonObject = request(api("mutes"), "GET", null).use {
+        JsonCodec.parseToJsonElement(it.body!!.string()).jsonObject
+    }
+    private fun strings(value: JsonObject, name: String) = (value[name] as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull }
+    private fun muted(value: JsonObject, session: Session): Boolean = session.key.path in strings(value, "sessions") ||
+        (session.key.path !in strings(value, "allowed") && !session.spaceName.isNullOrBlank() &&
+            "${session.machineId}/${session.spaceName}" in strings(value, "spaces"))
+    private fun kind(action: ChatAction) = when (action) {
+        ChatAction.Interrupt -> "interrupt"
+        is ChatAction.Rename -> "rename"
+        is ChatAction.Mute -> "mutes"
+        is ChatAction.Modes -> "modes"
+        ChatAction.Close -> "close"
+    }
+    private fun api(vararg segments: String) = HttpUrl.Builder().scheme("https").host("example.com")
+        .addPathSegment("api").addPathSegment("v1").apply { segments.forEach(::addPathSegment) }.build().encodedPath
+}

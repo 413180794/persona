@@ -1,0 +1,60 @@
+package jarvis.feature.machines
+
+import jarvis.core.contracts.*
+import jarvis.core.contracts.api.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.*
+import org.junit.Assert.*
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class MachinesTest {
+    @Test fun historyPreservesGapsAndPollingStopsWithThePage() = runTest {
+        val points = listOf(MetricPoint(100, cpu = 20.0), MetricPoint(110, cpu = 30.0),
+            MetricPoint(120, gap = true), MetricPoint(200, cpu = 95.0), MetricPoint(210), MetricPoint(220, cpu = 0.0))
+        assertEquals(listOf(listOf(100L, 110L), listOf(200L), listOf(220L)), segments(points, 10) { it.cpu }.map { run -> run.map { it.t } })
+        assertNull(selectedPoint(points, 180, 10))
+        assertNull(selectedPoint(points, 120, 10))
+        assertEquals(200L, selectedPoint(points, 200, 10)?.t)
+        val sample = MetricSample(200, cpu = 95.0, memUsed = 80, memTotal = 100, load = 8.0)
+        val metric = MachineMetrics("machine", true, latest = sample, points = points)
+        assertNull(metric.current(231))
+        assertNull(metric.copy(online = false).current(200))
+        assertEquals(3, alerts(sample, 4).size)
+        assertEquals(80.0, percent(sample.memUsed, sample.memTotal)!!, 0.0)
+        assertNull(percent(1, 0))
+        assertEquals(listOf("agent"), machineSessions(listOf(
+            Session("machine", "assistant", assistant = true), Session("machine", "agent"),
+            Session("other", "foreign"), Session("machine", "ended", status = "offline")), "machine").map { it.sessionId })
+
+        val calls = mutableListOf<MetricRange>()
+        val api = object : MachineMetricsApi {
+            override suspend fun dashboard() = MetricsDashboard(listOf(metric))
+            override suspend fun history(machineId: String, range: MetricRange): MetricsHistory {
+                calls += range
+                return MetricsHistory(metric, range.wire, range.step)
+            }
+        }
+        val sessions = object : SessionsRepository {
+            override val machines = MutableStateFlow(emptyList<Machine>())
+            override val sessions = MutableStateFlow(emptyList<Session>())
+            override suspend fun refresh() = Unit
+        }
+        val model = MachinesViewModel(api, sessions, "machine") { 200 }
+        val job = backgroundScope.launch { model.poll() }
+        runCurrent()
+        assertEquals(listOf(MetricRange.Hour), calls)
+        model.selectRange(MetricRange.Day)
+        runCurrent()
+        assertEquals(MetricRange.Day, calls.last())
+        assertEquals("24h", model.state.value.history?.range)
+        advanceTimeBy(MetricRange.Day.pollMillis)
+        runCurrent()
+        assertEquals(3, calls.size)
+        job.cancelAndJoin()
+        advanceTimeBy(MetricRange.Day.pollMillis * 2)
+        runCurrent()
+        assertEquals(3, calls.size)
+    }
+}

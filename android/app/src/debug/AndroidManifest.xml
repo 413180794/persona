@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="jarvis.android.MainActivity">
+            <meta-data android:name="jarvis.launchAdapter" android:value="jarvis.android.debug.DebugLaunchAdapter" />
+        </activity>
+        <activity android:name="jarvis.android.debug.DebugEntryActivity" android:exported="true" />
+        <!-- 主动做事 against a fake hub, for captures (ProactiveDebugActivity.kt). -->
+        <activity android:name="jarvis.android.debug.ProactiveDebugActivity" android:exported="true" />
+    </application>
+</manifest>

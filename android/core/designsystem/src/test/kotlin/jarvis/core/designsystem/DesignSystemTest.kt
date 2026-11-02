@@ -1,0 +1,69 @@
+package jarvis.core.designsystem
+
+import androidx.compose.ui.unit.dp
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class DesignSystemTest {
+    @Test
+    fun statusLineUsesPriorityAndHidesInactiveSessions() {
+        var state = StatusLineState(ended = true, machineOffline = true, submitting = true,
+            unconfirmed = true, pendingRequests = 3, stopping = true, working = true, waiting = true)
+        assertEquals(StatusLineKind.Ended, resolveStatusLine(state)?.kind)
+        state = state.copy(ended = false)
+        assertEquals(StatusLineKind.MachineOffline, resolveStatusLine(state)?.kind)
+        state = state.copy(machineOffline = false)
+        assertEquals(StatusLineKind.Submitting, resolveStatusLine(state)?.kind)
+        assertFalse(resolveStatusLine(state)!!.actionable)
+        state = state.copy(submitting = false)
+        assertEquals(StatusLineKind.Unconfirmed, resolveStatusLine(state)?.kind)
+        state = state.copy(unconfirmed = false)
+        assertEquals("等你处理 3 件", resolveStatusLine(state)?.text)
+        state = state.copy(pendingRequests = 0)
+        assertEquals(StatusLineKind.Stopping, resolveStatusLine(state)?.kind)
+        assertFalse(resolveStatusLine(state)!!.actionable)
+        state = state.copy(stopping = false)
+        assertEquals(StatusLineKind.Working, resolveStatusLine(state)?.kind)
+        state = state.copy(working = false)
+        assertEquals(StatusLineKind.Waiting, resolveStatusLine(state)?.kind)
+        assertNull(resolveStatusLine(state.copy(waiting = false)))
+        assertEquals("已换成新会话", resolveStatusLine(StatusLineState(replaced = true, working = true))?.text)
+        assertEquals("正在回传你的选择…", resolveStatusLine(StatusLineState(answering = true, blocked = true))?.text)
+    }
+
+    @Test
+    fun everyStyleKeepsTheStatusesApart() {
+        for (style in AppStyle.entries) for (dark in listOf(false, true)) {
+            val palette = Palettes.of(style, dark)
+            val dots = listOf(Status.NeedsYou, Status.Working, Status.Unread, Status.Offline).map { palette.status(it).dot }
+            assertEquals("$style dark=$dark", dots.size, dots.toSet().size)
+            assertEquals(palette.status(Status.Idle), palette.status(Status.Unknown))
+            assertEquals(palette.status(Status.Idle), palette.status(Status.Muted))
+            assertEquals(dark, palette.dark)
+        }
+    }
+
+    @Test
+    fun styleKeysRoundTripAndDefaultToGlass() {
+        AppStyle.entries.forEach { assertEquals(it, AppStyle.fromKey(it.key)) }
+        assertEquals(AppStyle.Glass, AppStyle.fromKey(null))
+        assertEquals(AppStyle.Glass, AppStyle.fromKey("material"))
+        assertEquals(GlassPreference.Auto, GlassPreference.fromKey(null))
+    }
+
+    @Test
+    fun legacyStatusToneFollowsTheActiveStyle() {
+        ActiveStyle.value = AppStyle.Board
+        assertEquals(Palettes.BoardLight.needsYou.dot, statusTone(Status.NeedsYou, false).dot)
+        ActiveStyle.value = AppStyle.Brief
+        assertEquals(Palettes.BriefDark.needsYou.dot, statusTone(Status.NeedsYou, true).dot)
+        ActiveStyle.value = AppStyle.Default
+    }
+
+    @Test fun wideTextIsCentredAtTheReadingWidth() {
+        assertEquals(0f, readingInset(360.dp).value, 0f)
+        assertEquals(0f, readingInset(ReadingWidth).value, 0f)
+        assertEquals(120f, readingInset(ReadingWidth + 240.dp).value, 0.01f)
+    }
+}

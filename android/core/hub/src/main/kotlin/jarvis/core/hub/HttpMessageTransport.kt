@@ -1,0 +1,146 @@
+package jarvis.core.hub
+
+import jarvis.core.contracts.Hello
+import jarvis.core.contracts.HubScope
+import jarvis.core.contracts.JsonCodec
+import jarvis.core.contracts.api.ItemsQuery
+import jarvis.core.contracts.api.MessageEvidence
+import jarvis.core.contracts.api.ConnectionState
+import jarvis.core.contracts.api.MessageRequest
+import jarvis.core.contracts.api.MessageTransport
+import jarvis.core.contracts.api.MessageTransportResult
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.*
+import java.time.Instant
+import java.util.Base64
+import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+
+/** A transport belongs to exactly one pairing generation and its pinned connection. */
+class HttpMessageTransport(
+    private val hubScope: HubScope,
+    private val connection: OkHttpHubConnection,
+    scope: CoroutineScope,
+    private val onPairingExpired: () -> Unit = {},
+) : MessageTransport {
+    /** Credentials always come from the live connection, including in compatibility tests. */
+    internal constructor(
+        hubScope: HubScope, connection: OkHttpHubConnection, @Suppress("UNUSED_PARAMETER") token: String,
+        scope: CoroutineScope, onPairingExpired: () -> Unit = {},
+    ) : this(hubScope, connection, scope, onPairingExpired)
+
+    private class ReadyRoute(val route: HubRoute?)
+    private val caughtUp = MutableStateFlow<ReadyRoute?>(null)
+    override val readyToSend = combine(connection.state, connection.route, caughtUp) { state, route, ready ->
+        state == ConnectionState.Online && route != null && route === ready?.route
+    }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+    @Volatile override var supportsClientOps = false
+        private set
+
+    init {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            connection.events.collect { event ->
+                if (event is Hello) supportsClientOps = "client_ops" in event.features
+            }
+        }
+    }
+
+    /** Call at the end of the connection's onReady hook, after authoritative catch-up. */
+    fun onReady() { caughtUp.value = ReadyRoute(connection.route.value) }
+
+    override suspend fun reconcile(request: MessageRequest, createdAt: Long, allowTextMatch: Boolean): MessageEvidence? {
+        require(request.scope == hubScope) { "Message belongs to another pairing" }
+        if (supportsClientOps) {
+            val path = HttpUrl.Builder().scheme("https").host("example.com")
+                .addPathSegments("api/v1/ops").addPathSegment(request.clientMessageId).build().encodedPath
+            val receipt = try {
+                connection.request(path).use { JsonCodec.parseToJsonElement(it.body!!.string()).jsonObject }
+            } catch (failure: HubFailure) {
+                if (failure.status == 404) null else throw failure
+            }
+            if (receipt?.get("state")?.jsonPrimitive?.content in setOf("done", "failed", "unknown")) {
+                val saved = receipt?.get("result") as? JsonObject
+                val status = saved?.get("status")?.jsonPrimitive?.intOrNull
+                val body = saved?.get("body")?.jsonPrimitive?.contentOrNull
+                if (status != null && body != null) {
+                    val result = decodeResult(status, String(Base64.getDecoder().decode(body), Charsets.UTF_8))
+                    if (result != MessageTransportResult.Accepted) return MessageEvidence.Receipt(result)
+                    // A successful receipt still needs the transcript to replace the local bubble.
+                    val shown = transcriptEvidence(request, createdAt, allowTextMatch = false)
+                    return shown ?: MessageEvidence.Receipt(result)
+                }
+            }
+        }
+        return transcriptEvidence(request, createdAt, allowTextMatch && !supportsClientOps)
+    }
+
+    private suspend fun transcriptEvidence(request: MessageRequest, createdAt: Long, allowTextMatch: Boolean): MessageEvidence? {
+        val items = HubChatTransport(connection).items(request.session, ItemsQuery()).items
+        val shown = items.any { item ->
+            item.role == "user" && item.kind == "text" && (item.id == request.clientMessageId ||
+                allowTextMatch && item.text == request.text && item.ts?.let {
+                    runCatching { Instant.parse(it).toEpochMilli() >= createdAt }.getOrDefault(false)
+                } == true)
+        }
+        return MessageEvidence.Shown.takeIf { shown }
+    }
+
+    private fun decodeResult(status: Int, body: String): MessageTransportResult {
+        val reply = runCatching { JsonCodec.parseToJsonElement(body).jsonObject }.getOrNull()
+        if (reply?.get("state")?.jsonPrimitive?.contentOrNull in setOf("pending", "unknown"))
+            return MessageTransportResult.NoReceipt
+        if (status in 200..299) return MessageTransportResult.Accepted
+        return MessageTransportResult.HubError(
+            reply?.get("code")?.jsonPrimitive?.contentOrNull,
+            reply?.get("delivered")?.jsonPrimitive?.contentOrNull,
+            reply?.get("error")?.jsonPrimitive?.contentOrNull,
+            reply?.get("retryable")?.jsonPrimitive?.booleanOrNull ?: false)
+    }
+
+    override suspend fun send(request: MessageRequest): MessageTransportResult {
+        require(request.scope == hubScope) { "Message belongs to another pairing" }
+        if (!readyToSend.value) return MessageTransportResult.NotSent
+        val route = connection.route.value ?: return MessageTransportResult.NotSent
+        if (route !== caughtUp.value?.route) return MessageTransportResult.NotSent
+        val url = route.endpoint.baseUrl().newBuilder()
+            .addPathSegments("api/v1/sessions")
+            .addPathSegment(request.session.machineId)
+            .addPathSegment(request.session.sessionId)
+            .addPathSegment("messages").build()
+        val body = buildJsonObject {
+            put("text", request.text)
+            put("client_msg_id", request.clientMessageId)
+            request.clearDraft?.let { put("clear_draft", it) }
+        }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        return try {
+            // Non-2xx replies throw HubFailure (handled below); a 2xx body may still be a pending receipt.
+            connection.request(url.encodedPath, "POST", body, request.headers, expectedRoute = route).use { response ->
+                decodeResult(response.code, response.body?.string().orEmpty())
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            val failure = HubFailure.from(error)
+            if (failure.kind == HubError.PairingExpired) onPairingExpired()
+            if (failure.status != null || failure.kind == HubError.PairingExpired) {
+                return MessageTransportResult.HubError(failure.code, failure.delivered, failure.message, failure.retryable)
+            }
+            when (failure.kind) {
+                HubError.AddressNotFound, HubError.ConnectionRefused, HubError.Unreachable,
+                HubError.NoNetwork -> MessageTransportResult.NotSent
+                HubError.CertificateMismatch, HubError.HubMismatch, HubError.TlsRequired ->
+                    MessageTransportResult.HubError(failure.code, "none", failure.message, false)
+                else -> MessageTransportResult.NoReceipt
+            }
+        }
+    }
+}

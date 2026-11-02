@@ -1,0 +1,300 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
+package jarvis.core.contracts
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.KeepGeneratedSerializer
+import kotlinx.serialization.json.JsonElement
+
+@KeepGeneratedSerializer
+@Serializable(with = MachineSystemSerializer::class)
+data class MachineSystem(
+    val os: String = "", val distro: String = "", val like: String = "", val name: String = "",
+    val version: String = "", val build: String = "", val kernel: String = "", val arch: String = "",
+    val model: String = "", val cpu: String = "", val cores: Int = 0, val memory: Long = 0,
+    @WireTime(unixSeconds = true) @SerialName("boot_time") val bootTime: Double? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = SubagentSerializer::class)
+data class Subagent(
+    val id: String,
+    @SerialName("session_id") val sessionId: String = "",
+    val type: String = "", val description: String? = null,
+    @SerialName("tool_use_id") val toolUseId: String? = null,
+    val running: Boolean = false, val background: Boolean = false,
+    @WireTime @SerialName("started_at") val startedAt: String? = null,
+    @WireTime @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("last_text") val lastText: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = TaskNoteSerializer::class)
+data class TaskNote(
+    @WireEnum("shell", "monitor", "agent", "task", "unknown") val kind: String = "unknown",
+    @WireEnum("completed", "failed", "killed", "stopped", "event", "ended", "waiting", "unknown") val status: String = "unknown",
+    val title: String = "",
+    @SerialName("task_id") val taskId: String? = null,
+    @SerialName("tool_use_id") val toolUseId: String? = null,
+    @SerialName("exit_code") val exitCode: Int? = null,
+    @SerialName("output_file") val outputFile: String? = null,
+    val detail: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = FoldSerializer::class)
+data class Fold(
+    val items: Int = 0, val tools: Int = 0, val thoughts: Int = 0,
+    @WireTime val until: String? = null,
+    @SerialName("through_seq") val throughSeq: Int = 0,
+    @SerialName("through_id") val throughId: String = "",
+    val tasks: List<FoldTaskSnapshot> = emptyList(),
+)
+
+@Serializable
+data class FoldTaskSnapshot(
+    val replace: String? = null,
+    @SerialName("fallback_status") val fallbackStatus: String? = null,
+    val entries: List<FoldTask> = emptyList(),
+    @SerialName("source_item_id") val sourceItemId: String,
+    @SerialName("source_tool_use_id") val sourceToolUseId: String,
+    @SerialName("source_seq") val sourceSeq: Int,
+)
+
+@Serializable
+data class FoldTask(
+    val id: String,
+    val subject: String? = null,
+    val description: String? = null,
+    val status: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = ItemsResponseSerializer::class)
+data class ItemsResponse(
+    val items: List<Item> = emptyList(),
+    @SerialName("has_more") val hasMore: Boolean = false,
+    val history: String? = null,
+    @SerialName("from_seq") val fromSeq: Int? = null,
+    @SerialName("to_seq") val toSeq: Int? = null,
+    @SerialName("more_after") val moreAfter: Boolean = false,
+    val more: Boolean = false,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = SessionsResponseSerializer::class)
+data class SessionsResponse(val sessions: List<Session> = emptyList())
+@KeepGeneratedSerializer
+@Serializable(with = MachinesResponseSerializer::class)
+data class MachinesResponse(val machines: List<Machine> = emptyList())
+@KeepGeneratedSerializer
+@Serializable(with = InteractionsResponseSerializer::class)
+data class InteractionsResponse(val interactions: List<Interaction> = emptyList())
+@KeepGeneratedSerializer
+@Serializable(with = FleetResponseSerializer::class)
+data class FleetResponse(val fleet: FleetState)
+
+/** Fleet deliberately uses camelCase, unlike the other hub models. */
+@KeepGeneratedSerializer
+@Serializable(with = FleetStateSerializer::class)
+data class FleetState(
+    @WireEnum("needsYou", "working", "done", "", "unknown") val phase: String = "",
+    val needsYou: Int = 0, val working: Int = 0, val unread: Int = 0,
+    val items: List<FleetItem> = emptyList(),
+    @WireTime(unixSeconds = true) val workingSince: Double? = null,
+    val details: Boolean = false, val assistant: Boolean = false,
+    @WireEnum("status", "tpm", "tokens", "requests", "assistant", "load", "timer", "none", "unknown") val left: String = "status",
+    @WireEnum("status", "tpm", "tokens", "requests", "assistant", "load", "timer", "none", "unknown") val right: String = "status",
+    val stats: FleetStats? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = FleetItemSerializer::class)
+data class FleetItem(
+    val id: String, val title: String = "", val place: String = "",
+    @WireEnum("permission", "plan", "question", "screen", "working", "unread", "unknown") val kind: String = "unknown",
+    val detail: String = "", val interaction: String? = null,
+    @WireTime(unixSeconds = true) val since: Double? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = FleetStatsSerializer::class)
+data class FleetStats(val tpm: Long = 0, val tokens: Long = 0, val requests: Long = 0, val loads: List<FleetLoad> = emptyList())
+@KeepGeneratedSerializer
+@Serializable(with = FleetLoadSerializer::class)
+data class FleetLoad(val id: String, val name: String = "", val percent: Int = 0)
+
+@KeepGeneratedSerializer
+@Serializable(with = InboxResponseSerializer::class)
+data class InboxResponse(val items: List<InboxItem> = emptyList())
+@KeepGeneratedSerializer
+@Serializable(with = InboxItemSerializer::class)
+data class InboxItem(
+    val id: String,
+    @WireEnum("lark", "mail", "unknown") val source: String = "unknown",
+    @WireEnum("dm", "mention", "group", "bot", "mail", "unknown") val kind: String = "unknown",
+    val account: String = "",
+    @SerialName("account_name") val accountName: String = "",
+    val title: String = "", val sender: String? = null, val avatar: String? = null,
+    val preview: String = "", val count: Int = 0,
+    @WireTime @SerialName("started_at") val startedAt: String? = null,
+    @WireTime @SerialName("updated_at") val updatedAt: String? = null,
+    @WireEnum("action", "fyi", "noise", "unknown") val tier: String? = null,
+    val summary: String? = null, val reason: String? = null, val read: Boolean? = null,
+    @WireTime @SerialName("done_at") val doneAt: String? = null,
+    @SerialName("done_by") val doneBy: String? = null,
+    val lark: InboxLark? = null, val mail: InboxMail? = null, val agent: InboxAgent? = null,
+    val context: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = InboxLarkSerializer::class)
+data class InboxLark(
+    @SerialName("feed_id") val feedId: String,
+    @SerialName("is_group") val isGroup: Boolean = false,
+    @SerialName("is_topic") val isTopic: Boolean? = null,
+    @SerialName("start_position") val startPosition: String? = null,
+    @SerialName("mention_position") val mentionPosition: String? = null,
+    @SerialName("at_all") val atAll: Boolean? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = InboxMailSerializer::class)
+data class InboxMail(
+    @SerialName("account_id") val accountId: String,
+    val mailbox: String = "", val uids: List<Long> = emptyList(),
+    @SerialName("message_id") val messageId: String? = null,
+    val from: MailAddress? = null, val direct: Boolean? = null, val thread: String? = null,
+)
+@KeepGeneratedSerializer
+@Serializable(with = MailAddressSerializer::class)
+data class MailAddress(val name: String = "", val email: String = "")
+
+@KeepGeneratedSerializer
+@Serializable(with = InboxAgentSerializer::class)
+data class InboxAgent(
+    @WireEnum("skipped", "queued", "running", "drafted", "failed", "unknown") val state: String = "unknown",
+    val task: String? = null, val reason: String? = null,
+    @SerialName("machine_id") val machineId: String? = null,
+    @SerialName("session_id") val sessionId: String? = null,
+    val draft: String? = null, val note: String? = null, val error: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkMessagesSerializer::class)
+data class LarkMessages(
+    val messages: List<LarkMessage> = emptyList(),
+    @SerialName("has_older") val hasOlder: Boolean = false,
+    @SerialName("has_newer") val hasNewer: Boolean = false,
+    @SerialName("older_cursor") val olderCursor: String? = null,
+    @SerialName("newer_cursor") val newerCursor: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkMessageSerializer::class)
+data class LarkMessage(
+    val id: String, val position: String = "",
+    @SerialName("sender_id") val senderId: String? = null,
+    @SerialName("sender_name") val senderName: String = "",
+    @SerialName("sender_avatar") val senderAvatar: String? = null,
+    @SerialName("sender_type") val senderType: String? = null,
+    @SerialName("is_mine") val isMine: Boolean = false,
+    val type: String = "", val text: String = "",
+    @WireTime @SerialName("created_at") val createdAt: String? = null,
+    val recalled: Boolean = false, val edited: Boolean? = null,
+    @SerialName("reply_count") val replyCount: Int = 0,
+    @SerialName("thread_reply_count") val threadReplyCount: Int? = null,
+    @SerialName("badge_count") val badgeCount: Int? = null,
+    @SerialName("at_me") val atMe: Boolean? = null,
+    @SerialName("is_read") val isRead: Boolean? = null,
+    val parts: List<LarkPart>? = null,
+    @SerialName("reply_to") val replyTo: LarkReplyTo? = null,
+    val reactions: List<LarkReaction>? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkPartSerializer::class)
+data class LarkPart(
+    val kind: String, val text: String? = null, val url: String? = null,
+    val refId: String? = null, val metadata: JsonElement? = null,
+)
+@KeepGeneratedSerializer
+@Serializable(with = LarkReplyToSerializer::class)
+data class LarkReplyTo(
+    val id: String, @SerialName("sender_name") val senderName: String = "", val text: String = "",
+    val recalled: Boolean? = null, val parts: List<LarkPart>? = null,
+)
+@KeepGeneratedSerializer
+@Serializable(with = LarkReactionSerializer::class)
+data class LarkReaction(val key: String, val count: Int = 0, val mine: Boolean? = null, val users: List<String>? = null)
+
+@KeepGeneratedSerializer
+@Serializable(with = EndpointSerializer::class)
+data class Endpoint(
+    val url: String,
+    @WireEnum("ipv6", "name", "lan", "ipv4", "unknown") val kind: String = "unknown",
+    val port: Int? = null,
+    @WireEnum("https", "http", "unknown") val scheme: String? = null,
+    @WireTime @SerialName("seen_at") val seenAt: String? = null,
+)
+@KeepGeneratedSerializer
+@Serializable(with = EndpointsResponseSerializer::class)
+data class EndpointsResponse(
+    @SerialName("hub_id") val hubId: String? = null,
+    @SerialName("tls_port") val tlsPort: Int? = null,
+    val fp: String? = null, val endpoints: List<Endpoint> = emptyList(),
+)
+@KeepGeneratedSerializer
+@Serializable(with = HealthSerializer::class)
+data class Health(
+    val ok: Boolean,
+    val version: String? = null, val features: List<String> = emptyList(),
+    @SerialName("hub_id") val hubId: String? = null,
+    @SerialName("tls_port") val tlsPort: Int? = null,
+    val fp: String? = null,
+    @SerialName("hub_name") val hubName: String? = null,
+)
+@KeepGeneratedSerializer
+@Serializable(with = HeartbeatSerializer::class)
+data class Heartbeat(val interval: Int, @SerialName("pong_timeout") val pongTimeout: Int)
+
+/** Keep refusal details flat and preserve absent delivery/retry information as null. */
+@KeepGeneratedSerializer
+@Serializable(with = ErrorBodySerializer::class)
+data class ErrorBody(
+    val error: String,
+    val code: String? = null, val retryable: Boolean? = null,
+    @WireEnum("none", "unknown", "yes") val delivered: String? = null,
+    val draft: String? = null, val clearable: String? = null,
+)
+
+object MachineSystemSerializer : WireSerializer<MachineSystem>(MachineSystem.generatedSerializer())
+object SubagentSerializer : WireSerializer<Subagent>(Subagent.generatedSerializer())
+object TaskNoteSerializer : WireSerializer<TaskNote>(TaskNote.generatedSerializer())
+object FoldSerializer : WireSerializer<Fold>(Fold.generatedSerializer())
+object ItemsResponseSerializer : WireSerializer<ItemsResponse>(ItemsResponse.generatedSerializer())
+object SessionsResponseSerializer : WireSerializer<SessionsResponse>(SessionsResponse.generatedSerializer())
+object MachinesResponseSerializer : WireSerializer<MachinesResponse>(MachinesResponse.generatedSerializer())
+object InteractionsResponseSerializer : WireSerializer<InteractionsResponse>(InteractionsResponse.generatedSerializer())
+object FleetResponseSerializer : WireSerializer<FleetResponse>(FleetResponse.generatedSerializer())
+object FleetStateSerializer : WireSerializer<FleetState>(FleetState.generatedSerializer())
+object FleetItemSerializer : WireSerializer<FleetItem>(FleetItem.generatedSerializer())
+object FleetStatsSerializer : WireSerializer<FleetStats>(FleetStats.generatedSerializer())
+object FleetLoadSerializer : WireSerializer<FleetLoad>(FleetLoad.generatedSerializer())
+object InboxResponseSerializer : WireSerializer<InboxResponse>(InboxResponse.generatedSerializer())
+object InboxItemSerializer : WireSerializer<InboxItem>(InboxItem.generatedSerializer())
+object InboxLarkSerializer : WireSerializer<InboxLark>(InboxLark.generatedSerializer())
+object InboxMailSerializer : WireSerializer<InboxMail>(InboxMail.generatedSerializer())
+object MailAddressSerializer : WireSerializer<MailAddress>(MailAddress.generatedSerializer())
+object InboxAgentSerializer : WireSerializer<InboxAgent>(InboxAgent.generatedSerializer())
+object LarkMessagesSerializer : WireSerializer<LarkMessages>(LarkMessages.generatedSerializer())
+object LarkMessageSerializer : WireSerializer<LarkMessage>(LarkMessage.generatedSerializer())
+object LarkPartSerializer : WireSerializer<LarkPart>(LarkPart.generatedSerializer())
+object LarkReplyToSerializer : WireSerializer<LarkReplyTo>(LarkReplyTo.generatedSerializer())
+object LarkReactionSerializer : WireSerializer<LarkReaction>(LarkReaction.generatedSerializer())
+object EndpointSerializer : WireSerializer<Endpoint>(Endpoint.generatedSerializer())
+object EndpointsResponseSerializer : WireSerializer<EndpointsResponse>(EndpointsResponse.generatedSerializer())
+object HealthSerializer : WireSerializer<Health>(Health.generatedSerializer())
+object HeartbeatSerializer : WireSerializer<Heartbeat>(Heartbeat.generatedSerializer())
+object ErrorBodySerializer : WireSerializer<ErrorBody>(ErrorBody.generatedSerializer())

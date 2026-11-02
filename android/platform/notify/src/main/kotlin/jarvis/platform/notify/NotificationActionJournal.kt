@@ -1,0 +1,26 @@
+package jarvis.platform.notify
+
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.security.MessageDigest
+import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** Stores only request digests and operation IDs, never answers or rejection reasons. */
+@Singleton
+class NotificationActionJournal @Inject constructor(@ApplicationContext context: Context) {
+    private val preferences = context.getSharedPreferences("notification_actions", Context.MODE_PRIVATE)
+
+    @Synchronized
+    internal fun claim(id: String): Boolean {
+        val digest = MessageDigest.getInstance("SHA-256").digest(id.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        if (preferences.contains(digest)) return false
+        // Commit before the HTTP write so process death cannot turn a second tap into a replay.
+        check(preferences.edit().putString(digest, UUID.randomUUID().toString()).commit()) {
+            "Could not persist notification operation"
+        }
+        return true
+    }
+}

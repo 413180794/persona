@@ -1,0 +1,215 @@
+package jarvis.android.di
+
+import jarvis.core.contracts.*
+import jarvis.core.contracts.api.*
+import jarvis.core.hub.HubError
+import jarvis.core.hub.HubFailure
+import jarvis.feature.agents.AgentsDraftSource
+import jarvis.feature.agents.AgentsOperationsBindings
+import jarvis.feature.agents.AgentsWiringState
+import jarvis.feature.chat.ChatLocalStorage
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
+
+/*
+ * The services the pages use, over every hub group (docs/android.md「多 hub」). Lists are concatenated in the
+ * registry's order with each group's machine ids as GroupKeys shows them; a call goes to the group its id names and
+ * reaches that group's own services with plain ids. With one group every list is that group's own flow and every
+ * call goes straight to it, so a phone paired with a single hub behaves as before groups existed.
+ */
+
+private fun <T> GroupStack.mapped(flow: Flow<T>, transform: GroupNames.(T) -> T): Flow<T> =
+    if (names.plain) flow else flow.map { names.transform(it) }
+
+internal fun mergedSessions(stacks: GroupStacks): SessionsRepository = object : SessionsRepository {
+    override val machines = stacks.merged(emptyList<Machine>(), { s ->
+        s.mapped(s.repositories.sessions.machines) { list -> list.map(::machine) }
+    }) { it.flatten() }
+    override val sessions = stacks.merged(emptyList<Session>(), { s ->
+        s.mapped(s.repositories.sessions.sessions) { list -> list.map(::session) }
+    }) { it.flatten() }
+    override suspend fun refresh() = stacks.forEach { it.repositories.sessions.refresh() }
+}
+
+internal fun mergedInteractions(stacks: GroupStacks): InteractionCenter = object : InteractionCenter {
+    override val pending = stacks.merged(emptyList<Interaction>(), { s ->
+        s.mapped(s.repositories.interactions.pending) { list -> list.map(::interaction) }
+    }) { it.flatten() }
+    override suspend fun refresh() = stacks.forEach { it.repositories.interactions.refresh() }
+    override suspend fun resolve(id: String, resolution: Resolution) {
+        // Merged interaction ids carry their group's suffix like machine ids (GroupNames.interactionId).
+        stacks.use(GroupKeys.namespaceOf(id)) { it.repositories.interactions.resolve(GroupKeys.raw(id), resolution) }
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun mergedChats(stacks: GroupStacks, storage: ChatLocalStorage): ChatRepository =
+    object : ChatRepository, ChatLocalStorage by storage {
+        override fun observe(session: SessionKey) = stacks.stacks
+            .map { list -> list.firstOrNull { it.names.owns(session.machineId) } }
+            .distinctUntilChanged()
+            .flatMapLatest { stack ->
+                stack?.repositories?.chats?.observe(stack.names.raw(session))
+                    // A group that closed under the page (merged or disconnected) just stops; its own failures surface.
+                    ?.catch { failure -> if (stack.current) throw failure }
+                    ?: flowOf(ChatSnapshot(loading = false, verified = false))
+            }
+        override suspend fun loadOlder(session: SessionKey) = stacks.use(session) { it.repositories.chats.loadOlder(it.names.raw(session)) }
+        override suspend fun expandFold(session: SessionKey, fromSeq: Int, toSeq: Int) =
+            stacks.use(session) { it.repositories.chats.expandFold(it.names.raw(session), fromSeq, toSeq) }
+        override suspend fun loadImage(session: SessionKey, itemId: String) =
+            stacks.use(session) { it.repositories.chats.loadImage(it.names.raw(session), itemId) }
+        override suspend fun fullText(session: SessionKey, itemId: String) =
+            stacks.use(session) { it.repositories.chats.fullText(it.names.raw(session), itemId) }
+        override suspend fun markSeen(session: SessionKey, itemId: String) =
+            stacks.use(session) { it.repositories.chats.markSeen(it.names.raw(session), itemId) }
+    }
+
+internal fun mergedPreferences(stacks: GroupStacks): HubPreferences = object : HubPreferences {
+    override val preferences = stacks.merged(HubPreferencesSnapshot(), { s ->
+        val source = s.repositories.preferences?.preferences ?: flowOf(HubPreferencesSnapshot())
+        s.mapped(source) { preferences(it) }
+    }) { list ->
+        fun union(sets: List<HubPreferenceSet>) = HubPreferenceSet(sets.flatMap { it.spaces }.distinct(),
+            sets.flatMap { it.sessions }.distinct(), sets.flatMapTo(LinkedHashSet()) { it.allowed })
+        HubPreferencesSnapshot(union(list.map { it.pins }), union(list.map { it.mutes }),
+            list.fold(emptyMap()) { seen, snapshot -> seen + snapshot.seen })
+    }
+    private suspend fun <T> withPreferences(namespace: String?, block: suspend (HubPreferences) -> T) =
+        stacks.use(namespace) { block(requireNotNull(it.repositories.preferences)) }
+    override suspend fun refresh() = stacks.forEach { requireNotNull(it.repositories.preferences).refresh() }
+    override suspend fun togglePin(path: String, space: Boolean) =
+        withPreferences(GroupKeys.pathNamespace(path)) { it.togglePin(GroupKeys.rawPath(path), space) }
+    override suspend fun toggleMute(path: String, space: Boolean) =
+        withPreferences(GroupKeys.pathNamespace(path)) { it.toggleMute(GroupKeys.rawPath(path), space) }
+    override suspend fun markSeen(session: SessionKey, version: String) =
+        withPreferences(GroupKeys.namespaceOf(session.machineId)) { it.markSeen(GroupKeys.rawKey(session), version) }
+}
+
+/** Terminal, files, chat actions and machine metrics for the shell: each call goes to its machine's group. */
+internal class MergedShellServices(private val stacks: GroupStacks) {
+    private fun stack(machineId: String) = stacks.of(machineId) ?: throw IllegalStateException("终端暂不可用")
+
+    fun terminal(key: SessionKey): TerminalTransport = stack(key.machineId).terminal
+
+    val files: SessionFiles = object : SessionFiles {
+        private fun of(machineId: String) = stacks.of(machineId)?.files ?: throw HubFailure(HubError.NoNetwork)
+        override suspend fun directory(machineId: String, cwd: String, path: String) = of(machineId).directory(machineId, cwd, path)
+        override suspend fun file(machineId: String, cwd: String, path: String) = of(machineId).file(machineId, cwd, path)
+        override suspend fun status(machineId: String, cwd: String) = of(machineId).status(machineId, cwd)
+        override suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean) = of(machineId).diff(machineId, cwd, path, staged)
+        override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int) = of(machineId).log(machineId, cwd, skip, limit)
+        override suspend fun show(machineId: String, cwd: String, hash: String) = of(machineId).show(machineId, cwd, hash)
+    }
+
+    val actions: ChatActions = object : ChatActions {
+        private fun of(session: Session) = stacks.of(session.machineId)?.actions ?: throw HubFailure(HubError.NoNetwork)
+        override suspend fun isMuted(session: Session) = of(session).isMuted(session)
+        override suspend fun execute(session: Session, action: ChatAction) = of(session).execute(session, action)
+        override suspend fun verify(session: Session, action: ChatAction) = of(session).verify(session, action)
+    }
+
+    /** Every group's dashboard in one; [plain] builds the API of one group's connection (null while it has no route). */
+    fun metrics(plain: (GroupStack) -> MachineMetricsApi?): MachineMetricsApi = object : MachineMetricsApi {
+        private fun of(stack: GroupStack) = plain(stack) ?: throw HubFailure(HubError.NoNetwork)
+        override suspend fun dashboard(): MetricsDashboard {
+            val list = stacks.stacks.value
+            if (list.size == 1) return of(list.single()).dashboard().let { it.copy(machines = it.machines.map(list.single().names::metrics)) }
+            var failure: Exception? = null
+            val parts = list.mapNotNull { stack ->
+                try { of(stack).dashboard().let { it.copy(machines = it.machines.map(stack.names::metrics)) } }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (error: Exception) { if (failure == null) failure = error; null }
+            }
+            if (parts.isEmpty()) throw failure ?: HubFailure(HubError.NoNetwork)
+            return MetricsDashboard(parts.flatMap { it.machines }, parts.first().step)
+        }
+        override suspend fun history(machineId: String, range: MetricRange): MetricsHistory {
+            val stack = stacks.of(machineId) ?: throw HubFailure(HubError.NoNetwork)
+            val history = of(stack).history(GroupKeys.raw(machineId), range)
+            return history.copy(metrics = stack.names.metrics(history.metrics))
+        }
+    }
+}
+
+/**
+ * The Agents page's pairing-owned operations over every group. Pins and mutes are one list per hub: a merged save
+ * writes only the groups whose part changed, so a group that cannot be reached is never overwritten with nothing.
+ */
+internal fun mergedAgentsState(list: List<GroupNames>, states: List<AgentsWiringState>, chosen: Int): AgentsWiringState {
+    fun stateFor(machineId: String) = list.indexOfFirst { it.owns(machineId) }.takeIf { it >= 0 }?.let(states::get)
+    val scope = states.joinToString("+") { it.scope }
+    val known = ConcurrentHashMap<Int, Pair<AgentOperationPreferences?, AgentOperationPreferences?>>()
+    fun owned(value: AgentOperationPreferences, names: GroupNames) = AgentOperationPreferences(
+        value.spaces.filter { names.owns(it.substringBefore('/')) },
+        value.sessions.filter { names.owns(it.substringBefore('/')) },
+        value.allowed.filterTo(LinkedHashSet()) { names.owns(it.substringBefore('/')) })
+    fun union(values: List<AgentOperationPreferences>) = AgentOperationPreferences(values.flatMap { it.spaces },
+        values.flatMap { it.sessions }, values.flatMapTo(LinkedHashSet()) { it.allowed })
+    fun operations(index: Int) = states[index].operations?.operations ?: throw HubFailure(HubError.NoNetwork)
+    fun operationsFor(machineId: String) = stateFor(machineId)?.operations?.operations ?: throw HubFailure(HubError.NoNetwork)
+    val operations = object : AgentOperations {
+        override val scope = scope
+        private suspend fun read(pins: Boolean): AgentOperationPreferences = union(list.indices.map { index ->
+            try {
+                val value = if (pins) operations(index).pins() else operations(index).mutes()
+                known.compute(index) { _, old -> if (pins) value to old?.second else old?.first to value }
+                value
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                val old = known[index]
+                (if (pins) old?.first else old?.second) ?: AgentOperationPreferences()
+            }
+        })
+        private suspend fun write(pins: Boolean, value: AgentOperationPreferences) {
+            list.forEachIndexed { index, names ->
+                val part = owned(value, names)
+                val old = known[index]?.let { if (pins) it.first else it.second }
+                if (old == part) return@forEachIndexed
+                // A group never read (unreachable) is only left alone: writing it would drop what it already has.
+                if (old == null) {
+                    if (part == AgentOperationPreferences()) return@forEachIndexed
+                    throw HubFailure(HubError.NoNetwork)
+                }
+                if (pins) operations(index).savePins(part) else operations(index).saveMutes(part)
+                known.compute(index) { _, previous -> if (pins) part to previous?.second else previous?.first to part }
+            }
+        }
+        override suspend fun pins() = read(true)
+        override suspend fun mutes() = read(false)
+        override suspend fun savePins(value: AgentOperationPreferences) = write(true, value)
+        override suspend fun saveMutes(value: AgentOperationPreferences) = write(false, value)
+        override suspend fun renameSession(key: SessionKey, title: String?, tabName: String?) =
+            operationsFor(key.machineId).renameSession(key, title, tabName)
+        override suspend fun renameSpace(machineId: String, workspaceId: String, name: String) =
+            operationsFor(machineId).renameSpace(machineId, workspaceId, name)
+        override suspend fun closeSession(key: SessionKey) = operationsFor(key.machineId).closeSession(key)
+    }
+    val assistant = states[chosen].operations?.assistant ?: states.firstNotNullOfOrNull { it.operations?.assistant }
+    val creations = states.map { it.creation }
+    val started = ConcurrentHashMap<String, Int>()
+    val creation = if (creations.all { it == null }) null else object : AgentCreationService {
+        override val scope = scope
+        private fun of(machineId: String) = list.indexOfFirst { it.owns(machineId) }.takeIf { it >= 0 }
+        private fun creation(index: Int?) = index?.let { creations[it] } ?: throw HubFailure(HubError.NoNetwork)
+        override suspend fun launchers(machineId: String) = creation(of(machineId)).launchers(machineId)
+        override suspend fun directories(machineId: String, path: String) = creation(of(machineId)).directories(machineId, path)
+        override suspend fun start(request: AgentStartRequest, operationId: String): AgentStartResult {
+            val index = of(request.machineId)
+            index?.let { started[operationId] = it }
+            return creation(index).start(request, operationId)
+        }
+        override suspend fun operation(operationId: String) = creation(started[operationId] ?: chosen).operation(operationId)
+    }
+    return AgentsWiringState(
+        scope = scope,
+        operations = assistant?.let { conversations ->
+            AgentsOperationsBindings(operations, conversations) { key -> stateFor(key.machineId)?.operations?.onSessionClosed?.invoke(key) }
+        },
+        creation = creation,
+        drafts = AgentsDraftSource { key -> stateFor(key.machineId)?.drafts?.observe(key) ?: emptyFlow() },
+        mainSender = states[chosen].mainSender,
+        creationPreferences = states.firstNotNullOfOrNull { it.creationPreferences },
+    )
+}

@@ -1,0 +1,413 @@
+package jarvis.core.designsystem
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import jarvis.core.designsystem.icons.PhIcon
+import jarvis.core.designsystem.icons.PhIcons
+
+// The Agents list (docs/android-design.md 2.4): computer chips over a tree of 电脑 → 空间 → 会话. The tree is told
+// apart by indentation, type and hairlines, not by plates: the page background stays whole and only business cards
+// (requests, notices; the board's agent strips) sit on it. Lazy lists give every heading and row its own item.
+
+/** A small mark on a row or a space: pinned, muted, a draft, messages waiting to send. */
+@Immutable
+data class RowFlag(val label: String, val icon: PhIcon, val caution: Boolean = false)
+
+/** A short fact under a session row: where it runs, a loop, background work, a draft, messages waiting to go out. */
+@Immutable
+data class RowFact(val text: String, val caution: Boolean = false)
+
+// ------------------------------------------------------------------ measures
+
+private val Step = 22.dp
+private val Caret = 14.dp
+private val Hairline = 1.dp
+private val Action = 40.dp
+private val Dot = 7.dp
+private val Holder = 26.dp
+private val None = 0.dp
+
+/** Width of [JStatusMark] in the active style, so a row's mark can sit centred under its space's caret. */
+private val markSize: Dp @Composable get() = when (JarvisTheme.style) { AppStyle.Glass -> 28.dp; AppStyle.Brief -> 36.dp; AppStyle.Board -> 22.dp }
+
+// ------------------------------------------------------------------ computer chips
+
+/**
+ * A computer in the strip above the Agents tree, as a filter chip of the active style: [icon] is the device (server,
+ * desktop, laptop) and its corner dot says whether the computer is [online]. 全部机器 passes neither. [count] is how
+ * many sessions the list shows while the chip is selected.
+ */
+@Composable
+fun MachineChip(
+    name: String,
+    count: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: PhIcon? = null,
+    online: Boolean? = null,
+) {
+    val palette = JarvisTheme.palette
+    val style = JarvisTheme.style
+    val shape = RoundedCornerShape(JarvisTheme.shapes.chip)
+    val fill = when {
+        selected && style == AppStyle.Board -> palette.accentSoft
+        selected -> palette.action
+        style == AppStyle.Glass -> palette.surfaceStrong
+        else -> palette.surface
+    }
+    val ink = if (selected && style != AppStyle.Board) palette.onAction else palette.ink
+    val border = when (style) {
+        AppStyle.Glass -> palette.strokeBottom.takeIf { !selected }
+        AppStyle.Brief -> null
+        AppStyle.Board -> if (selected) palette.accent else palette.line
+    }
+    val spoken = listOfNotNull(online?.let { if (it) "在线" else "离线" }, "$count 个会话").joinToString("，")
+    Row(
+        modifier.heightIn(min = Action).clip(shape).background(fill).then(if (border != null) Modifier.border(Hairline, border, shape) else Modifier)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = name; stateDescription = spoken; this.selected = selected }
+            .padding(horizontal = Tokens.Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Box {
+                JIcon(icon, null, size = Tokens.Space.l, tint = if (online == false && !selected) palette.ink3 else ink)
+                if (online != null) Box(
+                    Modifier.align(Alignment.BottomEnd).offset(Tokens.Space.xxs, Tokens.Space.xxs).size(Dot).clip(CircleShape).background(fill)
+                        .padding(Hairline).clip(CircleShape).background(if (online) palette.positive else palette.offline.dot),
+                )
+            }
+            Spacer(Modifier.width(Tokens.Space.s))
+        }
+        Text(name, style = JarvisTheme.type.labelSmall.copy(fontWeight = FontWeight.Medium), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.width(Tokens.Space.xs + Hairline))
+        Text("$count", style = JarvisTheme.type.micro, color = if (selected && style != AppStyle.Board) ink else palette.ink3, maxLines = 1)
+    }
+}
+
+// ------------------------------------------------------------------ headings
+
+/** The rule above a computer (or a top-level section): a hairline, a heavier ink rule on the board. */
+@Composable
+private fun SectionRule() {
+    val palette = JarvisTheme.palette
+    if (JarvisTheme.style == AppStyle.Board) Box(Modifier.fillMaxWidth().height(Tokens.Space.xxs).background(palette.ink))
+    else Box(Modifier.fillMaxWidth().height(Hairline).background(palette.line))
+}
+
+/** Status counts after a heading: a dot and a number for each state that has any. */
+@Composable
+private fun StateCounts(counts: List<Pair<Status, Int>>) {
+    counts.filter { it.second > 0 }.forEach { (status, count) ->
+        Spacer(Modifier.width(Tokens.Space.s + Tokens.Space.xxs))
+        JStatusDot(status, size = Dot)
+        Spacer(Modifier.width(Tokens.Space.xs))
+        Text("$count", style = JarvisTheme.type.micro, color = JarvisTheme.palette.ink2, maxLines = 1)
+    }
+}
+
+/** A compact icon button for list headings (a computer's gauge, a space's ⋯); bars keep the larger [JIconButton]. */
+@Composable
+fun HeadingAction(icon: PhIcon, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(Action).clip(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { JIcon(icon, null, size = Tokens.Space.xl, tint = JarvisTheme.palette.ink2) }
+}
+
+/**
+ * The first level of the Agents tree: a computer, or a top-level section (置顶, a state, a history project). The
+ * largest type of the tree with a rule above it ([first] has none); no plate. [icon] is the device or the section's
+ * mark, [online] adds the connection dot (离线 is also written), [detail] is the line under the name, [counts] the
+ * sessions that need the user / work / are unread, [onMonitor] the gauge button to the computer's page. [tag] names
+ * the hub group the computer belongs to, only when the phone has more than one (docs/android.md「多 hub」).
+ */
+@Composable
+fun AgentTreeHeader(
+    title: String,
+    folded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    first: Boolean = false,
+    icon: PhIcon? = null,
+    online: Boolean? = null,
+    detail: String? = null,
+    counts: List<Pair<Status, Int>> = emptyList(),
+    onMonitor: (() -> Unit)? = null,
+    tag: String? = null,
+) {
+    val palette = JarvisTheme.palette
+    val type = JarvisTheme.type
+    Column(modifier.fillMaxWidth().padding(top = if (first) Tokens.Space.xs else Tokens.Space.xxl)) {
+        if (!first) SectionRule()
+        Row(
+            Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onToggle).semantics { heading() }
+                .padding(top = Tokens.Space.m, bottom = Tokens.Space.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, if (folded) "展开分组" else "折叠分组", size = Tokens.Space.l, tint = palette.ink3)
+            Spacer(Modifier.width(Tokens.Space.s - Tokens.Space.xxs))
+            icon?.let { JIcon(it, null, size = Tokens.Space.xl, tint = palette.ink); Spacer(Modifier.width(Tokens.Space.s)) }
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, style = type.title.copy(fontWeight = FontWeight.Bold), color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false))
+                    tag?.let { Spacer(Modifier.width(Tokens.Space.s)); JTag(it) }
+                    online?.let {
+                        Spacer(Modifier.width(Tokens.Space.s))
+                        Box(Modifier.size(Dot).clip(CircleShape).background(if (it) palette.positive else palette.offline.dot)
+                            .semantics { contentDescription = if (it) "在线" else "离线" })
+                        if (!it) { Spacer(Modifier.width(Tokens.Space.xs)); Text("离线", style = type.micro, color = palette.ink3, maxLines = 1) }
+                    }
+                }
+                detail?.let { Text(it, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+            StateCounts(counts)
+            if (onMonitor != null) { Spacer(Modifier.width(Tokens.Space.xs)); HeadingAction(PhIcons.Gauge, "机器监控", onMonitor) }
+        }
+    }
+}
+
+/**
+ * The second level: a herdr workspace under its computer, indented [depth] steps (0 when the list shows one
+ * computer and drops its heading) and smaller than the computer. A [quiet] space (all finished and seen) is lighter
+ * and says how many [sessions] it holds instead of [counts]. [menu] is the space's ⋯ (a [HeadingAction] and its sheet).
+ */
+@Composable
+fun AgentSpaceHeader(
+    title: String,
+    folded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    depth: Int = 1,
+    first: Boolean = false,
+    quiet: Boolean = false,
+    sessions: Int = 0,
+    counts: List<Pair<Status, Int>> = emptyList(),
+    flags: List<RowFlag> = emptyList(),
+    menu: (@Composable () -> Unit)? = null,
+) {
+    val palette = JarvisTheme.palette
+    val type = JarvisTheme.type
+    Row(
+        modifier.fillMaxWidth().padding(top = if (first) Tokens.Space.xxs else Tokens.Space.s).heightIn(min = Action)
+            .clickable(role = Role.Button, onClick = onToggle).semantics { heading() }.padding(start = Step * depth),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, if (folded) "展开空间" else "折叠空间", size = Caret, tint = palette.ink3)
+        Spacer(Modifier.width(Tokens.Space.s - Tokens.Space.xxs))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title, style = if (quiet) type.callout else type.label, color = if (quiet) palette.ink2 else palette.ink,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+            )
+            flags.forEach { Spacer(Modifier.width(Tokens.Space.xs)); JIcon(it.icon, it.label, size = Caret, tint = palette.ink3) }
+        }
+        if (quiet) Text("$sessions 个会话", style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1)
+        else StateCounts(counts)
+        menu?.invoke()
+    }
+}
+
+/** 还有 N 个空闲: opens the finished sessions an active space keeps tucked away. [depth] is the space's. */
+@Composable
+fun AgentIdleRow(hidden: Int, onClick: () -> Unit, modifier: Modifier = Modifier, depth: Int = 1) {
+    val start = Step * depth + (Caret - markSize) / 2
+    Row(
+        modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)
+            .padding(start = start.coerceAtLeast(None) + markSize + Tokens.Space.s - Tokens.Space.xxs, top = Tokens.Space.s, bottom = Tokens.Space.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("还有 $hidden 个空闲", style = JarvisTheme.type.caption, color = JarvisTheme.palette.ink2, maxLines = 1)
+        Spacer(Modifier.width(Tokens.Space.xs))
+        JIcon(PhIcons.CaretDown, null, size = Caret, tint = JarvisTheme.palette.ink3)
+    }
+}
+
+// ------------------------------------------------------------------ rows
+
+/**
+ * A session: its mark, title and time on the first line, the state and latest message on the second, [facts] only
+ * when there are any ([compact] keeps the first line alone). [depth] is that of the heading it sits under, so the
+ * mark lines up with the heading's caret. Glass and brief draw a plain row with a hairline above it unless it is
+ * first in its group ([position]); the board keeps its agent strip, compacted, because each strip is the agent itself.
+ * Long-pressing (or a secondary click) opens the row's actions ([onLongClick]). [muted] fades the row with
+ * [stableAlpha], like every dimmed control: a toggled `Modifier.alpha` after clip + background can lose them.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun AgentRow(
+    title: String,
+    status: Status,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    depth: Int = 0,
+    position: GroupPosition = GroupPosition.Single,
+    preview: String? = null,
+    time: String? = null,
+    agent: String? = null,
+    statusText: String? = null,
+    facts: List<RowFact> = emptyList(),
+    flags: List<RowFlag> = emptyList(),
+    compact: Boolean = false,
+    muted: Boolean = false,
+    selected: Boolean = false,
+) {
+    val palette = JarvisTheme.palette
+    val type = JarvisTheme.type
+    val board = JarvisTheme.style == AppStyle.Board
+    val shown = if (muted) Status.Muted else status
+    val tone = palette.status(shown)
+    val strong = !muted && (status == Status.NeedsYou || status == Status.Unread)
+    val mark = markSize
+    val start = if (board) Step * depth else (Step * depth + (Caret - mark) / 2).coerceAtLeast(None)
+    val gap = Tokens.Space.s - Tokens.Space.xxs
+    val click = Modifier.selectedRow(selected).onSecondaryClick(onLongClick).combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onLongClick)
+    val text: @Composable ColumnScope.() -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title, style = type.label.copy(fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium),
+                    color = if (muted) palette.ink2 else palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
+                flags.forEach { flag ->
+                    Spacer(Modifier.width(Tokens.Space.xs))
+                    JIcon(flag.icon, flag.label, size = Caret, tint = if (flag.caution) palette.cautionText else palette.ink3)
+                }
+            }
+            agent?.let { Spacer(Modifier.width(Tokens.Space.s)); Text(it, style = type.micro, color = palette.ink2, maxLines = 1) }
+            time?.takeIf { it.isNotEmpty() }?.let { Spacer(Modifier.width(Tokens.Space.s)); Text(it, style = type.micro, color = palette.ink3, maxLines = 1) }
+        }
+        if (!compact) {
+            val line = buildAnnotatedString {
+                statusText?.let { withStyle(SpanStyle(color = if (JarvisTheme.style == AppStyle.Brief && status == Status.Working) palette.ink else tone.text, fontWeight = FontWeight.Medium)) { append(it) } }
+                if (statusText != null && !preview.isNullOrBlank()) append("  ")
+                preview?.takeIf { it.isNotBlank() }?.let { append(it.replace('\n', ' ')) }
+            }
+            if (line.isNotEmpty()) Text(line, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (facts.isNotEmpty()) Text(
+                buildAnnotatedString {
+                    facts.forEachIndexed { index, fact ->
+                        if (index > 0) append("   ")
+                        withStyle(SpanStyle(color = if (fact.caution) palette.cautionText else palette.ink3)) { append(fact.text) }
+                    }
+                },
+                style = type.caption.copy(fontWeight = FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+    if (board) {
+        val shape = RoundedCornerShape(JarvisTheme.shapes.card)
+        Row(
+            modifier.fillMaxWidth().padding(start = start, bottom = if (position.last) None else Tokens.Space.s - Tokens.Space.xxs).clip(shape)
+                .background(palette.surface).drawBehind { drawRect(tone.dot, size = size.copy(width = Holder.toPx())) }
+                .border(Hairline, palette.line, shape).then(click).stableAlpha(if (muted) 0.75f else 1f),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.width(Holder), contentAlignment = Alignment.Center) { HolderGlyph(shown) }
+            Column(Modifier.weight(1f).padding(horizontal = Tokens.Space.m - Tokens.Space.xxs, vertical = Tokens.Space.s - Tokens.Space.xxs), content = text)
+        }
+        return
+    }
+    Row(
+        modifier.fillMaxWidth().then(click)
+            .drawBehind {
+                if (!position.first) drawLine(palette.line, Offset((start + mark + gap).toPx(), 0f), Offset(size.width, 0f), Hairline.toPx())
+            }
+            .stableAlpha(if (muted) 0.72f else 1f).padding(start = start, top = Tokens.Space.s, bottom = Tokens.Space.s),
+        verticalAlignment = if (compact) Alignment.CenterVertically else Alignment.Top,
+    ) {
+        Box(Modifier.size(mark), contentAlignment = Alignment.Center) { JStatusMark(shown) }
+        Spacer(Modifier.width(gap))
+        Column(Modifier.weight(1f).padding(top = if (compact) None else Tokens.Space.xxs), content = text)
+    }
+}
+
+/** The glyph in a board strip's holder, in the status's ink. */
+@Composable
+private fun HolderGlyph(status: Status) {
+    val ink = JarvisTheme.palette.status(status).onDot
+    when (status) {
+        Status.Working, Status.Waiting -> if (JarvisTheme.reduceMotion) JIcon(PhIcons.Play, null, size = Caret, tint = ink, selected = true)
+            else JSpinner(Modifier.size(Caret), color = ink, stroke = Tokens.Space.xxs)
+        Status.NeedsYou -> JIcon(PhIcons.Hand, null, size = Caret, tint = ink, selected = true)
+        Status.Unread -> JIcon(PhIcons.Check, null, size = Caret, tint = ink)
+        Status.Offline -> JIcon(PhIcons.Power, null, size = Caret, tint = ink)
+        else -> JIcon(PhIcons.Checks, null, size = Caret, tint = ink)
+    }
+}
+
+// ------------------------------------------------------------------ quick filters
+
+/** One quick filter: a label, its count, and the status it filters by. */
+@Immutable
+data class Bay(val label: String, val count: Int? = null, val status: Status? = null)
+
+/**
+ * The quick filters of a list. Glass shows glass chips; brief underlined tabs; the board a counter board with
+ * one big number per bay — tapping a cell filters to it.
+ */
+@Composable
+fun QuickFilterBar(bays: List<Bay>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val palette = JarvisTheme.palette
+    val type = JarvisTheme.type
+    when (JarvisTheme.style) {
+        AppStyle.Glass -> Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            bays.forEachIndexed { index, bay -> JChip(bay.label, selected = index == selected, onClick = { onSelect(index) }, status = bay.status, count = bay.count) }
+        }
+        AppStyle.Brief -> JSegmented(bays.map { JSegment(it.label, it.count) }, selected, onSelect, modifier)
+        AppStyle.Board -> {
+            val shape = RoundedCornerShape(10.dp)
+            Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(palette.surface).border(1.dp, palette.line, shape)) {
+                bays.forEachIndexed { index, bay ->
+                    if (index > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(palette.line))
+                    val on = index == selected
+                    val color = bay.status?.let { palette.status(it).dot } ?: palette.ink
+                    Box(Modifier.weight(1f).clickable(role = Role.Tab) { onSelect(index) }.semantics { this.selected = on }) {
+                        Column(Modifier.padding(start = 12.dp, top = 10.dp, bottom = 12.dp, end = 6.dp)) {
+                            Text("${bay.count ?: "—"}", style = type.number, color = if ((bay.count ?: 0) == 0) palette.ink3 else palette.ink, maxLines = 1)
+                            Spacer(Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (bay.status != null) { Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color)); Spacer(Modifier.width(5.dp)) }
+                                Text(bay.label, style = type.caption.copy(fontSize = androidx.compose.ui.unit.TextUnit(12f, androidx.compose.ui.unit.TextUnitType.Sp)), color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        if (on) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(color))
+                    }
+                }
+            }
+        }
+    }
+}

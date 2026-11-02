@@ -1,0 +1,138 @@
+package jarvis.android.di
+
+import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import jarvis.core.contracts.SessionKey
+import jarvis.core.contracts.api.*
+import jarvis.core.data.ChatDataRepositories
+import jarvis.core.data.ScopedHubData
+import jarvis.core.data.PersistentChatRecoveryService
+import jarvis.core.hub.*
+import jarvis.feature.chat.ChatAppBindings
+import jarvis.feature.chat.ChatWiringSource
+import jarvis.feature.chat.ChatDestination
+import jarvis.feature.chat.ChatRenderStyle
+import jarvis.feature.assistant.*
+import jarvis.android.ui.AppServices
+import jarvis.core.navigation.ChatRoute
+import jarvis.core.navigation.ConversationKind
+import jarvis.core.navigation.Navigator
+import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+
+@Module
+@InstallIn(SingletonComponent::class)
+object ChatWiringModule {
+    @Provides @Singleton
+    fun chatWiring(application: android.app.Application, owner: ChatDataOwner, stacks: GroupStacks): ChatWiringSource = object : ChatWiringSource {
+        override val current = owner.wiring
+        private val byGroup = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.flow.StateFlow<ChatAppBindings?>>()
+        /** The chat services of the session's group (docs/android.md「多 hub」); with one group, [current]'s. */
+        override fun bindingsFor(session: SessionKey): kotlinx.coroutines.flow.StateFlow<ChatAppBindings?> {
+            val namespace = jarvis.core.contracts.GroupKeys.namespaceOf(session.machineId)
+            return byGroup.getOrPut(namespace.orEmpty()) {
+                stacks.stacks.map { list -> list.firstOrNull { it.namespace == namespace }?.bindings }
+                    .stateIn((application as jarvis.android.JarvisApp).scope, kotlinx.coroutines.flow.SharingStarted.Eagerly,
+                        stacks.stacks.value.firstOrNull { it.namespace == namespace }?.bindings)
+            }
+        }
+    }
+
+    @Provides @Singleton
+    fun assistantWiring(owner: ChatDataOwner, services: AppServices, stacks: GroupStacks): AssistantAppWiring = object : AssistantAppWiring {
+        @Composable
+        override fun Host(navigator: Navigator, content: @Composable () -> Unit) {
+            val wiring by owner.wiring.collectAsStateWithLifecycle()
+            val session by services.session.collectAsStateWithLifecycle()
+            val active = wiring?.takeIf { it.scope.path == session?.identity }
+            if (active == null) {
+                if (session?.demo != null) content() else androidx.compose.material3.CircularProgressIndicator()
+                return
+            }
+            val phone = session?.phone
+            val enabled = phone?.settings?.enabled?.collectAsStateWithLifecycle()?.value
+            val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+            val connection by active.connection.state.collectAsStateWithLifecycle()
+            val available = remember(phone, enabled, lifecycle, connection) { phone?.registry?.enabledSpecs()?.isNotEmpty() }
+            val allMachines by requireNotNull(session).sessions.machines.collectAsStateWithLifecycle()
+            // The assistant runs on a machine of the selected group only.
+            val selectedNamespace = stacks.selected.collectAsStateWithLifecycle().value?.namespace
+            val machines = remember(allMachines, selectedNamespace) {
+                allMachines.filter { jarvis.core.contracts.GroupKeys.namespaceOf(it.id) == selectedNamespace }
+            }
+            val host = AssistantHostBindings(active.scope.path, active.assistantManagement, active.drafts,
+                active.coroutineScope, available, machines, active.mainSender) { key, options ->
+                ChatDestination(ChatRoute(key.machineId, key.sessionId,
+                    kind = if (options.assistant) ConversationKind.Assistant else ConversationKind.Agent), navigator,
+                    renderStyle = if (options.assistant) ChatRenderStyle.Assistant else ChatRenderStyle.Agent,
+                    embedded = options.embedded, showTopBar = options.showTopBar)
+            }
+            CompositionLocalProvider(LocalAssistantHost provides host) { key(active.scope.path) { content() } }
+        }
+    }
+}
+
+/** One group's chat services with its plain ids; [group] is the group's connection as the pages see it. */
+internal suspend fun createChatWiring(
+    data: ScopedHubData, repositories: ChatDataRepositories,
+    connection: OkHttpHubConnection, group: jarvis.core.contracts.api.HubConnection, isCurrent: () -> Boolean,
+): ChatAppBindings {
+    fun current() = isCurrent()
+    val composer = data.messages.connectComposer { transport ->
+        HttpChatComposerService(data.scope, transport, connection, data.credentials.deviceToken,
+            onRetryDelivery = data.messages::recordComposerDelivery,
+            onPairingExpired = { if (current()) connection.revoke() }, isCurrent = ::current)
+    }
+    return ChatAppBindings(data.scope, data.coroutineScope, data.drafts, group,
+        repositories.chats.trackActions(HttpChatActions(connection)), repositories.chats.trackComposer(composer),
+        PersistentChatRecoveryService(HttpChatRecoveryService(connection), data.operations, HubChatTransport(connection)),
+        RoutedAssistantManagement(data, connection, ::current), data.messages,
+        draftVersions = { key -> combine(repositories.chats.observe(key), repositories.sessions.sessions) { chat, sessions ->
+            val session = sessions.firstOrNull { it.key == key }
+            DraftSessionVersion(chat.history, session?.let {
+                listOfNotNull(it.paneId, it.tabId).takeIf { ids -> ids.isNotEmpty() }?.joinToString("|")
+            }, replaced = chat.replaced)
+        }.distinctUntilChanged() })
+}
+
+/** Resolve each operation against the current route and reject late replies from a previous route. */
+private class RoutedAssistantManagement(
+    private val data: ScopedHubData,
+    private val connection: OkHttpHubConnection,
+    private val isCurrent: () -> Boolean,
+) : AssistantManagement {
+    private fun api(): AssistantManagement {
+        if (!isCurrent()) throw CancellationException("Pairing changed")
+        val route = connection.route.value ?: throw HubFailure(HubError.NoNetwork)
+        return HttpAssistantManagement(route.endpoint.url, connection.token, connection.http.client) {
+            isCurrent() && connection.route.value === route
+        }
+    }
+    override suspend fun warm() = api().warm()
+    override suspend fun config() = api().config()
+    override suspend fun updateConfig(update: AssistantConfigUpdate) = api().updateConfig(update)
+    override suspend fun launchers(machineId: String) = api().launchers(machineId)
+    override suspend fun endConversation(session: SessionKey) = api().endConversation(session)
+    override suspend fun routines() = api().routines()
+    override suspend fun setRoutines(list: List<Routine>) = api().setRoutines(list)
+    override suspend fun runRoutine(id: String) = api().runRoutine(id)
+    override suspend fun followups() = api().followups()
+    override suspend fun cancelFollowup(id: String) = api().cancelFollowup(id)
+    override suspend fun runFollowup(id: String) = api().runFollowup(id)
+    override suspend fun runs() = api().runs()
+    override suspend fun notes() = api().notes()
+    override suspend fun setNotes(text: String) = api().setNotes(text)
+    override suspend fun memory() = api().memory()
+    override suspend fun saveMemory(name: String, content: String) = api().saveMemory(name, content)
+    override suspend fun deleteMemory(name: String) = api().deleteMemory(name)
+}

@@ -1,0 +1,6 @@
+[
+  {"type":"terminal","machine_id":"m1","session_id":"s1","epoch":"epoch_example","seq":1,"full":true,"cols":80,"rows":24,"data":"G1sySk9L"},
+  {"type":"terminal_control","machine_id":"m1","session_id":"s1","state":"active","cols":80,"rows":24},
+  {"type":"terminal_control","machine_id":"m1","session_id":"s1","state":"taken","error":"接管已结束"},
+  {"type":"terminal","machine_id":"m1","session_id":"s1","error":"流已停止","unsupported":true}
+]

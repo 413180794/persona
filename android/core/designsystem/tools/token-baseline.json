@@ -1,0 +1,1980 @@
+{
+  "files": {
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentCreationPreferences.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentHandoff.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentHistory.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentOperationDialogs.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentOperationsState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentRequests.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 10
+      },
+      "dp": {
+        "hardcoded": 8,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 10
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentSelection.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentsEntries.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentsListInfo.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentsScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 4
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 2
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentsSessionRenamer.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentsState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentsTree.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 5
+      },
+      "dp": {
+        "hardcoded": 10,
+        "token": 52
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 4
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentsViewModel.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/AgentsWiring.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/NewAgentDialog.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 8
+      },
+      "dp": {
+        "hardcoded": 5,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 8
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/NewAgentViewModel.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/agents/src/main/kotlin/jarvis/feature/agents/SpaceScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/assistant/src/main/kotlin/jarvis/feature/assistant/AssistantData.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/assistant/src/main/kotlin/jarvis/feature/assistant/AssistantEntries.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/assistant/src/main/kotlin/jarvis/feature/assistant/AssistantInjection.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/assistant/src/main/kotlin/jarvis/feature/assistant/AssistantPendingConversation.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 4,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/assistant/src/main/kotlin/jarvis/feature/assistant/AssistantProfile.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 2
+      },
+      "dp": {
+        "hardcoded": 17,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/assistant/src/main/kotlin/jarvis/feature/assistant/AssistantScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 11
+      },
+      "dp": {
+        "hardcoded": 25,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 7
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatChrome.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 3
+      },
+      "dp": {
+        "hardcoded": 6,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 3
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatChromeBindings.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatChromeState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatCompletionFeedback.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatComposer.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 5
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 4
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatComposerState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatContent.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 11
+      },
+      "dp": {
+        "hardcoded": 7,
+        "token": 6
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 6
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatDeliveryState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatEntries.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatLinkHost.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 7
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 10
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatLinkText.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 5
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 4
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatLinks.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatLocalStorage.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 6
+      },
+      "dp": {
+        "hardcoded": 7,
+        "token": 4
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 3
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatSearch.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatSearchScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 7
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 7
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatSearchState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatStatusBindings.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatStatusPanel.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 2
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatStatusRecovery.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatStatusSheet.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 14
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 9
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 14
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatTaskNavigation.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatTasks.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 3
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 6
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 3
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ChatWebViewPool.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ComposerAttachments.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 4
+      },
+      "dp": {
+        "hardcoded": 2,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 2
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ComposerRefusalActions.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 3
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 2
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 4
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ContentPresentation.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ElicitationFields.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 7
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 3
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 9
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/FullTextReader.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 3
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 3
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/InteractionPanel.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 10
+      },
+      "dp": {
+        "hardcoded": 2,
+        "token": 2
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 14
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/InteractionSubmission.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/PermissionRequestSummary.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 2
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ReadOnlyMessageSender.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ReaderNavigation.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/ReaderSnapshot.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/RequestDraftJournal.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/RequestEditor.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/chat/src/main/kotlin/jarvis/feature/chat/StructuredContent.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 18
+      },
+      "dp": {
+        "hardcoded": 8,
+        "token": 8
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 17
+      }
+    },
+    "android/feature/files/src/main/kotlin/jarvis/feature/files/FilePreview.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 2,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/files/src/main/kotlin/jarvis/feature/files/FileText.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 7,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/files/src/main/kotlin/jarvis/feature/files/FilesScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 4
+      },
+      "dp": {
+        "hardcoded": 6,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 4
+      }
+    },
+    "android/feature/files/src/main/kotlin/jarvis/feature/files/FilesState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/files/src/main/kotlin/jarvis/feature/files/PathInsertion.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/AgentDraftCard.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxAiActions.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 3
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxConnectionTitle.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxEntries.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxExperienceRepository.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxInjection.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxJarvisContext.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxLocalState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxRepository.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 2
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 2
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/InboxTopBar.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkCardContent.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkCardView.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 3
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 7
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 2
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkDocument.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkDocumentReader.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 9
+      },
+      "dp": {
+        "hardcoded": 2,
+        "token": 14
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 8
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkInboxRepository.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkListNavigation.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkMessageMapping.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkReadingStore.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 5
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 8
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 5
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkThread.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkThreadReply.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkThreadSheet.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 4
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkVisibility.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/LarkWindowCache.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/MailAttachmentDownload.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/MailAttachmentRow.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/MailHtml.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/MailScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 9
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 7
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 9
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/ReplyComposer.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/inbox/src/main/kotlin/jarvis/feature/inbox/ReplyPendingStatus.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/knowledge/src/main/kotlin/jarvis/feature/knowledge/KnowledgeEntries.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/knowledge/src/main/kotlin/jarvis/feature/knowledge/KnowledgePresentation.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/knowledge/src/main/kotlin/jarvis/feature/knowledge/KnowledgeScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 11
+      },
+      "dp": {
+        "hardcoded": 10,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 11
+      }
+    },
+    "android/feature/knowledge/src/main/kotlin/jarvis/feature/knowledge/KnowledgeViewModel.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/machines/src/main/kotlin/jarvis/feature/machines/MachinesEntries.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/machines/src/main/kotlin/jarvis/feature/machines/MachinesScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 19
+      },
+      "dp": {
+        "hardcoded": 16,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 17
+      }
+    },
+    "android/feature/machines/src/main/kotlin/jarvis/feature/machines/MachinesViewModel.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/machines/src/main/kotlin/jarvis/feature/machines/MetricCharts.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 8
+      },
+      "dp": {
+        "hardcoded": 13,
+        "token": 1
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 7
+      }
+    },
+    "android/feature/machines/src/main/kotlin/jarvis/feature/machines/MetricsPresentation.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/AppInstaller.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/AppearanceSettings.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 24,
+        "token": 1
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 5
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/DeviceSettingsPages.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 9
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/DeviceSettingsState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/DiagnosticsScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 2
+      },
+      "dp": {
+        "hardcoded": 1,
+        "token": 6
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 2
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/DiagnosticsState.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/LockScreenTestSection.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 2
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 2
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 2
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/PairingInput.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/PairingLocalNetwork.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/PairingScanActivity.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/PairingScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 4
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 16
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 4
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/PhoneReadiness.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/ReadinessRecords.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/SettingsDemo.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/SettingsEntries.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/SettingsHubApi.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/settings/src/main/kotlin/jarvis/feature/settings/SettingsScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 5
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 21
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 5
+      }
+    },
+    "android/feature/terminal/src/main/kotlin/jarvis/feature/terminal/TerminalCanvasView.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/terminal/src/main/kotlin/jarvis/feature/terminal/TerminalEntries.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/terminal/src/main/kotlin/jarvis/feature/terminal/TerminalFrames.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    },
+    "android/feature/terminal/src/main/kotlin/jarvis/feature/terminal/TerminalScreen.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1
+      },
+      "dp": {
+        "hardcoded": 5,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1
+      }
+    },
+    "android/feature/terminal/src/main/kotlin/jarvis/feature/terminal/TerminalViewModel.kt": {
+      "color": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "dp": {
+        "hardcoded": 0,
+        "token": 0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 0
+      }
+    }
+  },
+  "modules": {
+    "agents": {
+      "color": {
+        "hardcoded": 0,
+        "token": 24,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 26,
+        "token": 56,
+        "token_ratio": 0.682927
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 24,
+        "token_ratio": 1.0
+      }
+    },
+    "assistant": {
+      "color": {
+        "hardcoded": 0,
+        "token": 13,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 46,
+        "token": 0,
+        "token_ratio": 0.0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 8,
+        "token_ratio": 1.0
+      }
+    },
+    "chat": {
+      "color": {
+        "hardcoded": 0,
+        "token": 101,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 36,
+        "token": 63,
+        "token_ratio": 0.636364
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 99,
+        "token_ratio": 1.0
+      }
+    },
+    "files": {
+      "color": {
+        "hardcoded": 0,
+        "token": 5,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 15,
+        "token": 0,
+        "token_ratio": 0.0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 6,
+        "token_ratio": 1.0
+      }
+    },
+    "inbox": {
+      "color": {
+        "hardcoded": 0,
+        "token": 31,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 4,
+        "token": 47,
+        "token_ratio": 0.921569
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 28,
+        "token_ratio": 1.0
+      }
+    },
+    "knowledge": {
+      "color": {
+        "hardcoded": 0,
+        "token": 11,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 10,
+        "token": 0,
+        "token_ratio": 0.0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 11,
+        "token_ratio": 1.0
+      }
+    },
+    "machines": {
+      "color": {
+        "hardcoded": 0,
+        "token": 27,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 29,
+        "token": 1,
+        "token_ratio": 0.033333
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 24,
+        "token_ratio": 1.0
+      }
+    },
+    "settings": {
+      "color": {
+        "hardcoded": 0,
+        "token": 14,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 25,
+        "token": 55,
+        "token_ratio": 0.6875
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 19,
+        "token_ratio": 1.0
+      }
+    },
+    "terminal": {
+      "color": {
+        "hardcoded": 0,
+        "token": 1,
+        "token_ratio": 1.0
+      },
+      "dp": {
+        "hardcoded": 5,
+        "token": 0,
+        "token_ratio": 0.0
+      },
+      "font": {
+        "hardcoded": 0,
+        "token": 1,
+        "token_ratio": 1.0
+      }
+    }
+  },
+  "version": 1
+}

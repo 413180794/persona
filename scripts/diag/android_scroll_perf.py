@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""android_scroll_perf.py <serial> <package> <out.json> [styles...]: scroll the Agents list, a conversation and the
+inbox in each interface style (glass / brief / board) on a debug build, 10 runs per scenario, and record
+dumpsys gfxinfo for every run (docs/android.md, "界面风格的性能").
+
+Each run: open the page through the debug entry (debug.style, debug.automation: no frame-drop fallback), wait, reset
+gfxinfo, fling up and down twice, then read the summary (total / janky frames, percentiles) and the framestats rows
+(frame time = FrameCompleted - IntendedVsync). The conversation is the Jarvis tab unless CHAT=<machine>/<session>; ONLY=chat,inbox limits the scenarios.
+The last style passed stays selected in the app: end with the one the phone should keep."""
+import json, re, statistics, subprocess, sys, time
+
+serial, package, out = sys.argv[1:4]
+styles = sys.argv[4:] or ["glass", "brief", "board"]
+RUNS = 10
+
+def adb(*args, capture=False):
+    cmd = ["adb", "-s", serial, *args]
+    if capture:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=60).stdout
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+
+size = adb("shell", "wm", "size", capture=True)
+w, h = map(int, re.findall(r"(\d+)x(\d+)", size)[-1])
+x = w // 2
+
+def launch(style, extras):
+    adb("shell", "am", "force-stop", package)
+    args = ["shell", "am", "start", "-W", "-n", f"{package}/jarvis.android.debug.DebugEntryActivity",
+            "--es", "debug.automation", "true", "--es", "debug.style", style]
+    for i in range(0, len(extras), 2):
+        args += ["--es", extras[i], extras[i + 1]]
+    adb(*args)
+
+def fling(up=True):
+    y1, y2 = (int(h * 0.78), int(h * 0.28)) if up else (int(h * 0.28), int(h * 0.78))
+    adb("shell", "input", "swipe", str(x), str(y1), str(x), str(y2), "180")
+
+def summary():
+    text = adb("shell", "dumpsys", "gfxinfo", package, "framestats", capture=True)
+    def num(pattern, cast=float):
+        m = re.search(pattern, text)
+        return cast(m.group(1)) if m else None
+    frames = []
+    block = text.split("---PROFILEDATA---")
+    if len(block) >= 3:
+        lines = block[1].strip().splitlines()
+        header = lines[0].split(",")
+        iv, fc, flags = header.index("IntendedVsync"), header.index("FrameCompleted"), header.index("Flags")
+        for line in lines[1:]:
+            cols = line.split(",")
+            if len(cols) <= fc or cols[flags] != "0":
+                continue
+            start, done = int(cols[iv]), int(cols[fc])
+            if start <= 0 or done <= start or done - start > 5e9:  # unfinished or bogus rows
+                continue
+            frames.append((done - start) / 1e6)
+    return {
+        "total": num(r"Total frames rendered: (\d+)", int),
+        "janky": num(r"Janky frames: (\d+)", int),
+        "p50": num(r"50th percentile: (\d+)ms"), "p90": num(r"90th percentile: (\d+)ms"),
+        "p95": num(r"95th percentile: (\d+)ms"), "p99": num(r"99th percentile: (\d+)ms"),
+        "frames": frames,
+    }
+
+SCENARIOS = {
+    "agents": ["debug.openTab", "Agents"],
+    "inbox": ["debug.openTab", "Inbox"],
+    "chat": None,  # filled from argv env: a long conversation path
+}
+
+def run_scenario(style, name, extras):
+    runs = []
+    for i in range(RUNS):
+        launch(style, extras)
+        time.sleep(3.5)
+        adb("shell", "dumpsys", "gfxinfo", package, "reset")
+        for _ in range(2):
+            fling(up=True); time.sleep(0.9)
+            fling(up=False); time.sleep(0.9)
+        runs.append(summary())
+        print(style, name, i, runs[-1]["total"], runs[-1]["janky"], flush=True)
+    return runs
+
+def stats(values):
+    values = sorted(v for v in values if v is not None)
+    if not values:
+        return None
+    q = lambda p: values[min(len(values) - 1, int(round(p * (len(values) - 1))))]
+    return {"n": len(values), "min": values[0], "p50": q(0.5), "p90": q(0.9), "max": values[-1], "mean": round(statistics.fmean(values), 2)}
+
+if __name__ == "__main__":
+    import os
+    chat = os.environ.get("CHAT")
+    result = {}
+    for style in styles:
+        for name, extras in SCENARIOS.items():
+            if os.environ.get("ONLY") and name not in os.environ["ONLY"].split(","):
+                continue
+            if name == "chat":
+                # Without a session path, the Jarvis tab: the assistant's long-running main conversation.
+                extras = ["debug.openSession", chat, "debug.conversationKind", "agent"] if chat else ["debug.openTab", "Jarvis"]
+            runs = run_scenario(style, name, extras)
+            frames = [f for r in runs for f in r["frames"]]
+            jank = [100.0 * r["janky"] / r["total"] for r in runs if r["total"]]
+            result[f"{style}/{name}"] = {
+                "frame_ms": stats(frames),
+                "janky_percent_per_run": stats(jank),
+                "janky_percent_total": round(100.0 * sum(r["janky"] or 0 for r in runs) / max(1, sum(r["total"] or 0 for r in runs)), 2),
+                "frames_total": sum(r["total"] or 0 for r in runs),
+                "gfx_p90_ms_per_run": stats([r["p90"] for r in runs]),
+                "runs": [{k: v for k, v in r.items() if k != "frames"} for r in runs],
+            }
+            json.dump(result, open(out, "w"), ensure_ascii=False, indent=1)
+    print(json.dumps({k: {"frame_ms": v["frame_ms"], "janky_total": v["janky_percent_total"]} for k, v in result.items()}, ensure_ascii=False, indent=1))

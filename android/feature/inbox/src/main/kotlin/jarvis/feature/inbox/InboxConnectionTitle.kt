@@ -1,0 +1,26 @@
+package jarvis.feature.inbox
+
+import androidx.compose.foundation.clickable
+import jarvis.core.navigation.ConnectionSettingsRoute
+import jarvis.core.designsystem.JarvisTheme
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import jarvis.core.contracts.api.ConnectionState
+import jarvis.core.designsystem.ConnectionTitle
+
+@Composable
+internal fun InboxConnectionTitle(repository: InboxRepository, title: String, modifier: Modifier = Modifier) {
+    val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
+    val navigator = LocalInboxNavigator.current
+    val action = if (connection != ConnectionState.Online && navigator != null)
+        Modifier.clickable { navigator.navigate(ConnectionSettingsRoute) } else Modifier
+    CompositionLocalProvider(LocalTextStyle provides JarvisTheme.type.headline, LocalContentColor provides JarvisTheme.palette.ink) {
+        ConnectionTitle(if (connection == ConnectionState.Online) title else inboxTitle(connection),
+        connection in setOf(ConnectionState.Connecting, ConnectionState.Updating), modifier.then(action))
+    }
+}

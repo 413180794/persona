@@ -1,13 +1,15 @@
 package jarvis.android
 
 import android.app.Application
+import dagger.hilt.android.HiltAndroidApp
 import android.os.Build
-import jarvis.android.data.ApiClient
 import jarvis.android.data.Hub
-import jarvis.android.data.Pairing
 import jarvis.android.data.PairingStore
-import jarvis.android.service.HubService
-import jarvis.android.service.Notifier
+import jarvis.android.di.ConnectionRuntime
+import jarvis.android.di.WiredPairingService
+import jarvis.core.contracts.api.HubConnection
+import jarvis.platform.notify.Notify
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,90 +17,49 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 
 /** Holds the one hub connection for the process: the activity and the foreground service share it. */
+@HiltAndroidApp
 class JarvisApp : Application() {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     lateinit var pairings: PairingStore
         private set
-    lateinit var notifier: Notifier
-        private set
-    lateinit var phoneTools: jarvis.android.phone.PhoneToolRunner
-        private set
+    @Inject lateinit var runtime: ConnectionRuntime
+    @Inject lateinit var connection: HubConnection
+    @Inject lateinit var pairingService: WiredPairingService
+    @Inject lateinit var platform: jarvis.android.platform.PlatformRuntime
+    val pairingReady = MutableStateFlow(false)
+    val pairingRestoreError = MutableStateFlow(false)
+
+    /** 设置 › 界面风格; device-wide, kept across pairings. */
+    val appearance: jarvis.core.designsystem.AppStyleStore by lazy { jarvis.core.designsystem.AppStyleStore(this) }
 
     private val _hub = MutableStateFlow<Hub?>(null)
     val hub: StateFlow<Hub?> = _hub.asStateFlow()
 
     override fun onCreate() {
         super.onCreate()
-        instance = this
-        jarvis.android.settings.SettingsPrefs.init(this)
         pairings = PairingStore(this)
-        notifier = Notifier(this)
-        phoneTools = jarvis.android.phone.PhoneToolRunner(this)
-        jarvis.android.shortcuts.Shortcuts.publish(this)
-        jarvis.android.chat.Outbox.init(this) // messages written offline, kept on disk
-        jarvis.android.chat.ConnectionWatch.init(this)
-        pairings.load()?.let { connect(it) }
-    }
-
-    /** Pooled link pages are live renderers: give them back when the system asks for memory (docs/android.md「链接」). */
-    override fun onTrimMemory(level: Int) {
-        super.onTrimMemory(level)
-        if (level >= TRIM_MEMORY_UI_HIDDEN) android.os.Handler(mainLooper).post { jarvis.android.ui.web.WebViewPool.trimMemory() }
+        Notify.install(this, connection.events)
+        runtime.start()
+        platform.start()
+        restorePairing()
     }
 
     val deviceName: String get() = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
 
-    fun connect(p: Pairing) {
-        _hub.value?.stop()
-        val hub = Hub(ApiClient(p.url, p.token), scope, deviceName)
-        _hub.value = hub
-        notifier.attach(hub)
-        phoneTools.attach(hub) // before start: the first connect declares the tools
-        jarvis.android.chat.ConnectionWatch.attach(hub)
-        hub.start()
-        HubService.start(this)
-        // The ongoing notification, widget and tile follow the same summary (fleet/).
-        jarvis.android.fleet.FleetStore.follow(this, hub) { refreshFleetViews() }
-        // Long-press shortcuts to the recently active agents follow the session list (only when the pick changes).
-        recentShortcuts?.cancel()
-        recentShortcuts = scope.launch {
-            hub.sessions
-                .map { m -> jarvis.android.shortcuts.Shortcuts.recent(m.values.flatten()).map { Triple(it.key, it.displayTitle, it.isLive) } }
-                .distinctUntilChanged()
-                .collect { picks ->
-                    val all = hub.sessions.value.values.flatten()
-                    jarvis.android.shortcuts.Shortcuts.publish(this@JarvisApp, picks.mapNotNull { (k, _, _) -> all.firstOrNull { it.key == k } })
-                }
+    /** Picks up what the runtime restored or migrated, for first-run routing and the settings screens. */
+    fun restorePairing() {
+        scope.launch {
+            pairingRestoreError.value = false
+            try {
+                pairingService.restore()
+                pairingReady.value = true
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (_: Exception) { pairingRestoreError.value = true }
         }
     }
 
-    private var recentShortcuts: kotlinx.coroutines.Job? = null
+    internal fun showHub(value: Hub?) { _hub.value = value }
 
-    fun unpair() {
-        recentShortcuts?.cancel(); recentShortcuts = null
-        jarvis.android.shortcuts.Shortcuts.publish(this, emptyList()) // the agents' shortcuts go with the hub
-        _hub.value?.stop()
-        _hub.value = null
-        jarvis.android.chat.ConnectionWatch.detach()
-        jarvis.android.chat.Outbox.clear()
-        pairings.clear()
-        jarvis.android.settings.SettingsPrefs.forgetHub()
-        HubService.stop(this)
-        jarvis.android.fleet.FleetStore.clear(this)
-        scope.launch { refreshFleetViews() }
-    }
-
-    private suspend fun refreshFleetViews() {
-        jarvis.android.widget.JarvisWidget.refresh(this)
-        jarvis.android.shortcuts.JarvisTileService.refresh(this)
-    }
-
-    companion object {
-        lateinit var instance: JarvisApp
-            private set
-    }
 }

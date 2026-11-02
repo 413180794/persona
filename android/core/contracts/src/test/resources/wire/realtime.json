@@ -1,0 +1,10 @@
+[
+  {"type":"delta","machine_id":"m1","session_id":"s1","text":"示例回复"},
+  {"type":"delta","machine_id":"m1","session_id":"s1","text":""},
+  {"type":"screen","machine_id":"m1","session_id":"s1","text":"示例屏幕","status":"working","ts":"2026-01-02T03:04:05Z"},
+  {"type":"tool_call","call_id":"call_example","name":"phone_example","args":{"custom_Key":{"keep_snake_case":true}}},
+  {"type":"hook_event","machine_id":"m1","session_id":"s1","event":"Stop","message":"示例事件","last_assistant_message":"示例回复","tool_name":"Example","cwd":"/example"},
+  {"type":"lark","feed_ids":["feed_example"]},
+  {"type":"inbox"},
+  {"type":"error","machine_id":"m1","session_id":"s1","error":"结果待确认","code":"example","delivered":"unknown","retryable":false,"draft":"示例草稿","clearable":"示例草稿"}
+]

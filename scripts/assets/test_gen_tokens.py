@@ -1,0 +1,339 @@
+#!/usr/bin/env python3
+"""Standard-library tests for token validation, contrast and reproducible output."""
+
+import contextlib
+import copy
+import io
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gen_tokens as gen
+
+
+def color(hex_value, alpha=1):
+    return {"colorSpace": "srgb", "components": [int(hex_value[i:i + 2], 16) / 255 for i in (0, 2, 4)], "alpha": alpha}
+
+
+def token(kind, value):
+    return {"$type": kind, "$value": value, "$description": "测试用例"}
+
+
+class ContrastTests(unittest.TestCase):
+    def test_known_pairs(self):
+        for fg, bg, expected in (("000000", "FFFFFF", 21), ("FFFFFF", "FFFFFF", 1), ("777777", "FFFFFF", 4.478089453577214), ("FF0000", "FFFFFF", 3.9984767707539985)):
+            with self.subTest(foreground=fg, background=bg):
+                self.assertAlmostEqual(gen.contrast_ratio(color(fg), color(bg)), expected, places=10)
+                self.assertAlmostEqual(gen.contrast_ratio(color(bg), color(fg)), expected, places=10)
+
+    def test_alpha_compositing(self):
+        fg, bg = color("000000", .5), color("FFFFFF")
+        self.assertEqual(gen.composite(fg, bg)["components"], [.5, .5, .5])
+        self.assertAlmostEqual(gen.contrast_ratio(fg, bg), 3.976653024912438, places=10)
+        transparent = color("FF0000", 0)
+        self.assertEqual(gen.contrast_ratio(transparent, bg), 1)
+        self.assertAlmostEqual(gen.contrast_ratio(color("000000"), fg, bg), 5.280822809644651, places=10)
+        with self.assertRaises(gen.TokenError):
+            gen.contrast_ratio(color("000000"), fg)
+        with self.assertRaises(gen.TokenError):
+            gen.contrast_ratio(color("000000"), fg, color("FFFFFF", .5))
+
+    def test_srgb_low_branch_and_threshold_not_rounded(self):
+        self.assertAlmostEqual(gen.luminance(color("0A0A0A")), 10 / 255 / 12.92)
+        self.assertFalse(gen.ContrastResult("native", "light", "x", "f", "b", 4.49999, 4.5).passed)
+        self.assertTrue(gen.ContrastResult("native", "light", "x", "f", "b", 4.5, 4.5).passed)
+
+
+class GeneratorTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.source = self.root / "source"
+        self.source.mkdir()
+        self.data = {
+            "semantic": {s: {m: {"text": token("color", color("000000")), "page": token("color", color("FFFFFF"))} for m in gen.MODES} for s in gen.STYLES},
+            "status": {m: {"dot": token("color", color("E5484D", .14))} for m in gen.MODES},
+            "radius": {"card": token("dimension", {"value": 14, "unit": "px"})},
+            "type": {"body": {"size": token("dimension", {"value": 17, "unit": "px"}), "weight": token("fontWeight", 400)}},
+            "motion": {"state": token("duration", {"value": .25, "unit": "s"}), "layout": token("duration", {"value": 300, "unit": "ms"}), "reduced": token("duration", {"value": 0, "unit": "ms"})},
+            "sample": {"alias": token("color", "{semantic.native.light.text}"), "number": token("number", 50), "name": token("string", 'system "$font"')},
+        }
+        self.rules = {"$description": "测试规则", "$extensions": {"jarvis": {"styles": sorted(gen.STYLES), "modes": sorted(gen.MODES), "contrast": [{"id": "body", "foreground": "semantic.{style}.{mode}.text", "background": "semantic.{style}.{mode}.page", "minimum": 4.5, "description": "正文", "level": "error"}]}}}
+        self.save()
+
+    def save(self):
+        (self.source / "tokens.json").write_text(json.dumps(self.data, ensure_ascii=False), encoding="utf-8")
+        (self.source / "rules.json").write_text(json.dumps(self.rules, ensure_ascii=False), encoding="utf-8")
+
+    def run_cli(self, *args):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            code = gen.main(["--source", str(self.source), *map(str, args)])
+        return code, output.getvalue()
+
+    def test_stable_output_and_package(self):
+        args = ["--kotlin", self.root / "Tokens.kt", "--css", self.root / "tokens.css", "--md", self.root / "palette.md", "--package", "example.design"]
+        self.assertEqual(self.run_cli(*args)[0], 0)
+        first = {p: p.read_bytes() for p in self.root.iterdir() if p.is_file()}
+        self.assertEqual(self.run_cli(*args)[0], 0)
+        self.assertEqual(first, {p: p.read_bytes() for p in first})
+        code, log = self.run_cli("--check", *args)
+        self.assertEqual(code, 0, log)
+        kt = (self.root / "Tokens.kt").read_text()
+        self.assertIn("package example.design", kt)
+        self.assertIn("val card: Dp = 14.dp", kt)
+        self.assertIn("val size: TextUnit = 17.sp", kt)
+        self.assertIn("val weight: FontWeight = FontWeight(400)", kt)
+        self.assertIn("const val state: Int = 250", kt)
+        self.assertIn("0.14f)", kt)
+        self.assertIn('\\$font', kt)
+        css = (self.root / "tokens.css").read_text()
+        self.assertIn("--type-body-size: 1.0625rem", css)
+        self.assertIn("prefers-reduced-motion: reduce", css)
+        self.assertIn('[data-style="native"][data-theme="dark"]', css)
+        self.assertIn("/ 0.14)", css)
+        md = (self.root / "palette.md").read_text()
+        self.assertIn("21.0000 | 4.5 | 通过", md)
+
+    def test_reordering_json_keys_does_not_change_output(self):
+        catalog = gen.Catalog(self.source)
+        before = gen.render_kotlin(catalog, "example.design")
+        self.data = dict(reversed(list(self.data.items())))
+        self.save()
+        self.assertEqual(before, gen.render_kotlin(gen.Catalog(self.source), "example.design"))
+
+    def test_check_detects_stale_files_without_writing(self):
+        path = self.root / "Tokens.kt"
+        self.assertEqual(self.run_cli("--kotlin", path)[0], 0)
+        before = path.read_bytes()
+        self.data["radius"]["card"]["$value"]["value"] = 16
+        self.save()
+        code, log = self.run_cli("--check", "--kotlin", path)
+        self.assertEqual(code, 1)
+        self.assertIn("生成文件缺失或过期", log)
+        self.assertEqual(before, path.read_bytes())
+        self.assertEqual(self.run_cli("--kotlin", path)[0], 0)
+        self.assertEqual(self.run_cli("--check", "--kotlin", path)[0], 0)
+        path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+        self.assertEqual(self.run_cli("--check", "--kotlin", path)[0], 1)
+
+    def test_check_all_outputs_and_missing_output(self):
+        paths = [self.root / name for name in ("Tokens.kt", "tokens.css", "palette.md")]
+        args = [part for option, path in zip(("--kotlin", "--css", "--md"), paths) for part in (option, path)]
+        self.assertEqual(self.run_cli(*args)[0], 0)
+        for path in paths:
+            original = path.read_bytes()
+            path.unlink()
+            code, log = self.run_cli("--check", *args)
+            self.assertEqual(code, 1)
+            self.assertIn(str(path), log)
+            self.assertFalse(path.exists())
+            path.write_bytes(original)
+        self.assertEqual(self.run_cli("--check", *args)[0], 0)
+
+    def test_check_detects_contrast_failure_and_checks_outputs_too(self):
+        path = self.root / "Tokens.kt"
+        self.assertEqual(self.run_cli("--kotlin", path)[0], 0)
+        self.data["semantic"]["clay"]["dark"]["text"]["$value"] = color("FFFFFF")
+        self.save()
+        code, log = self.run_cli("--check", "--kotlin", path)
+        self.assertEqual(code, 1)
+        self.assertIn("clay/dark body", log)
+        self.assertIn("1.0000:1 < 4.5:1", log)
+        self.assertIn("生成文件缺失或过期", log)
+        catalog = gen.Catalog(self.source)
+        failures = [r for r in catalog.contrast_results() if not r.passed]
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(len(catalog.contrast_results()), 12)
+
+    def test_warn_level_reports_without_failing(self):
+        self.rules["$extensions"]["jarvis"]["contrast"][0]["level"] = "warn"
+        self.data["semantic"]["clay"]["dark"]["text"]["$value"] = color("FFFFFF")
+        self.save()
+        code, log = self.run_cli("--check")
+        self.assertEqual(code, 0, log)
+        self.assertIn("建议项不达标 1 项", log)
+
+    def test_known_failures_pass_until_fixed(self):
+        self.data["semantic"]["clay"]["dark"]["text"]["$value"] = color("FFFFFF")
+        self.save()
+        known = {"failures": [{"style": "clay", "mode": "dark", "rule": "body", "reason": "测试"}]}
+        (self.source / gen.KNOWN_FAILURES).write_text(json.dumps(known, ensure_ascii=False), encoding="utf-8")
+        code, log = self.run_cli("--check")
+        self.assertEqual(code, 0, log)
+        self.assertIn("已知例外 1 项", log)
+        # Fixed: the stale entry has to go, so the list only shrinks.
+        self.data["semantic"]["clay"]["dark"]["text"]["$value"] = color("000000")
+        self.save()
+        code, log = self.run_cli("--check")
+        self.assertEqual(code, 1)
+        self.assertIn("请从列表里删掉", log)
+
+    def test_rule_level_is_required(self):
+        del self.rules["$extensions"]["jarvis"]["contrast"][0]["level"]
+        self.save()
+        code, log = self.run_cli("--check")
+        self.assertEqual(code, 1)
+        self.assertIn("字段不完整", log)
+
+    def test_transparent_rule_background_requires_canvas(self):
+        self.data["semantic"]["native"]["dark"]["page"]["$value"]["alpha"] = .5
+        self.save()
+        code, log = self.run_cli("--check")
+        self.assertEqual(code, 1)
+        self.assertIn("canvas", log)
+        self.rules["$extensions"]["jarvis"]["contrast"][0]["canvas"] = "semantic.native.light.page"
+        self.save()
+        self.assertEqual(self.run_cli("--check")[0], 0)
+
+    def test_bad_json_and_duplicates(self):
+        for raw in ('{"a":', '{"a": {}, "a": {}}', '[]', '{"sample":{"number":{"$type":"number","$value":NaN,"$description":"测试"}}}'):
+            with self.subTest(raw=raw):
+                (self.source / "tokens.json").write_text(raw)
+                code, log = self.run_cli("--check")
+                self.assertEqual(code, 1)
+                self.assertIn("token 检查失败", log)
+
+    def test_invalid_values_rejected(self):
+        original = copy.deepcopy(self.data)
+        bad = [("color", color("000000", 1.1)), ("color", {"colorSpace": "srgb", "components": [0, 0], "alpha": 1}), ("color", "#FFFFFF"), ("dimension", {"value": True, "unit": "px"}), ("dimension", {"value": -1, "unit": "px"}), ("dimension", {"value": 1, "unit": "sp"}), ("duration", {"value": .1, "unit": "ms"}), ("duration", {"value": 2**32, "unit": "ms"}), ("number", float("inf")), ("fontWeight", 1001), ("fontWeight", 500.5), ("string", "prefix {missing.token}"), ("unknown", 0)]
+        for kind, value in bad:
+            with self.subTest(kind=kind, value=value):
+                self.data = copy.deepcopy(original)
+                self.data["sample"]["bad"] = token(kind, value)
+                self.save()
+                self.assertEqual(self.run_cli("--check")[0], 1)
+
+    def test_reference_validation(self):
+        for alias in ("{missing.token}", "{sample.alias}", "{radius.card}"):
+            with self.subTest(alias=alias):
+                self.data["sample"]["alias"]["$value"] = alias
+                self.save()
+                self.assertEqual(self.run_cli("--check")[0], 1)
+        self.data["sample"]["alias"]["$value"] = "{sample.second}"
+        self.data["sample"]["second"] = token("color", "{sample.alias}")
+        self.save()
+        self.assertIn("循环引用", self.run_cli("--check")[1])
+
+    def test_validation_of_matrix_names_and_rules(self):
+        original = copy.deepcopy(self.data)
+        del self.data["semantic"]["native"]["dark"]
+        self.save()
+        self.assertEqual(self.run_cli("--check")[0], 1)
+        self.data = original
+        self.data["bad-name"] = token("number", 1)
+        self.save()
+        self.assertEqual(self.run_cli("--check")[0], 1)
+        del self.data["bad-name"]
+        self.rules["$extensions"]["jarvis"]["contrast"] = []
+        self.save()
+        self.assertEqual(self.run_cli("--check")[0], 1)
+
+    def test_output_name_collisions(self):
+        self.data["sample"]["someColor"] = token("number", 1)
+        self.data["sample"]["some"] = {"color": token("number", 2)}
+        self.save()
+        code, log = self.run_cli("--check")
+        self.assertEqual(code, 1)
+        self.assertIn("生成名称冲突", log)
+
+    def test_cli_does_not_overwrite_inputs_or_collide_outputs(self):
+        source = self.source / "tokens.json"
+        before = source.read_bytes()
+        self.assertEqual(self.run_cli("--css", source)[0], 1)
+        self.assertEqual(source.read_bytes(), before)
+        path = self.root / "same"
+        self.assertEqual(self.run_cli("--css", path, "--md", path)[0], 1)
+        self.assertFalse(path.exists())
+        self.assertEqual(self.run_cli("--kotlin", path, "--package", "bad.package")[0], 1)
+        self.assertFalse(path.exists())
+
+    def test_cli_from_another_working_directory(self):
+        result = subprocess.run([sys.executable, str(Path(gen.__file__)), "--source", str(self.source), "--check"], cwd=self.root, capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("12 个对比度组合", result.stdout)
+
+
+class RepositoryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.catalog = gen.Catalog()
+
+    def test_ios_explicit_status_colors_and_opacity_match(self):
+        swift = (gen.ROOT / "apple/Shared/StatusPalette.swift").read_text()
+        pattern = r'static let (needsYou|working|unread) = StatusTone\(dot: Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\), text: Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)\)'
+        matches = re.findall(pattern, swift)
+        self.assertEqual(len(matches), 3)
+        alpha = float(re.search(r'tint \?\? dot.opacity\(([0-9.]+)\)', swift)[1])
+        for state, dot_light, dot_dark, text_light, text_dark in matches:
+            for mode, dot, text in (("light", dot_light, text_light), ("dark", dot_dark, text_dark)):
+                self.assertEqual(self.catalog.values[f"status.{mode}.{state}.dot"], color(dot))
+                self.assertEqual(self.catalog.values[f"status.{mode}.{state}.text"], color(text))
+                self.assertEqual(self.catalog.values[f"status.{mode}.{state}.tint"], color(dot, alpha))
+        for state in ("idle", "offline"):
+            dot_alpha, tint_alpha = map(float, re.search(rf'static let {state} = StatusTone\(dot: Color.secondary.opacity\(([0-9.]+)\), text: .secondary, tint: Color.secondary.opacity\(([0-9.]+)\)', swift).groups())
+            for mode in gen.MODES:
+                base = self.catalog.values[f"system.{mode}.secondary"]
+                self.assertEqual(self.catalog.values[f"status.{mode}.{state}.text"], base)
+                for part, opacity in (("dot", dot_alpha), ("tint", tint_alpha)):
+                    self.assertEqual(self.catalog.values[f"status.{mode}.{state}.{part}"], {**base, "alpha": base["alpha"] * opacity})
+
+    def test_ios_theme_explicit_colors_match(self):
+        # Since 2026-11-01 iOS keeps a look as 界面风格 × 主题色 (apple/Shared/Design): each catalog style is its component
+        # with the colors it came with, and Claude is Liquid Glass in coral.
+        design = gen.ROOT / "apple/Shared/Design"
+        styles = "".join(p.read_text() for p in sorted((design / "Styles").glob("*.swift")))
+
+        def pair(text, label):
+            return re.search(rf'{label}: (?:Pair|Color)\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)', text).groups()
+
+        def colors(name):
+            return re.search(rf'static let {name} = ColorSpec\((.*?)\n\}}', styles, re.S)[1]
+
+        # The system canvas is systemBackground under secondarySystemBackground cards.
+        system = {"pageBackground": ("FFFFFF", "000000"), "card": ("F2F2F7", "1C1C1E")}
+        clay, teal = colors("lavender"), colors("teal")
+        island_page = re.search(r'w\.page = Pair\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)', teal).groups()
+        island_card = ("FFFFFF", re.search(r'w\.card\.dark = 0x([A-F0-9]+)', teal)[1])  # white islands; the wash's cards in dark
+        lark = re.search(r'canvas: \.neutral\((.*?)\),\n', styles, re.S)[1]
+        canvas = {
+            "glass": system, "claude": system,
+            "clay": {"pageBackground": pair(clay, "page"), "card": pair(clay, "card")},
+            "island": {"pageBackground": island_page, "card": island_card},
+            "lark": {"pageBackground": pair(lark, "page"), "card": pair(lark, "card")},
+        }
+        for style, name in {"glass": "blue", "claude": "coral", "clay": "lavender", "island": "teal", "lark": "lark"}.items():
+            spec = colors(name)
+            expected = {"accent": pair(spec, "accent"), "userBubble": pair(spec, "bubble"), **canvas[style]}
+            for token, (light, dark) in expected.items():
+                for mode, h in (("light", light), ("dark", dark)):
+                    self.assertEqual(self.catalog.values[f"semantic.{style}.{mode}.{token}"], color(h), f"{style} {mode} {token}")
+        swift = (design / "Theme.swift").read_text()
+        palette = (design / "Palette.swift").read_text()
+        for name in ("brand", "danger", "positive", "caution", "cautionText", "ai", "loop", "countBadge", "codeBackground", "terminalBackground", "terminalText"):
+            found = re.search(rf'static let {name} = Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)', swift)
+            if found is None:  # a palette color by name (brand = Palette.coral)
+                ref = re.search(rf'static let {name} = Palette\.(\w+)', swift)[1]
+                found = re.search(rf'static let {ref} = Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)', palette)
+            light, dark = found.groups()
+            for mode, h in (("light", light), ("dark", dark)):
+                self.assertEqual(self.catalog.values[f"common.{mode}.{name}"], color(h), f"{name} {mode}")
+                self.assertEqual(self.catalog.values[f"status.{mode}.waiting.text"], self.catalog.values[f"common.{mode}.loop"])
+                self.assertEqual(self.catalog.values[f"status.{mode}.muted.text"], self.catalog.values[f"status.{mode}.idle.text"])
+
+    def test_existing_contrast_conflicts_are_not_silenced(self):
+        failures = {(r.style, r.mode, r.rule) for r in self.catalog.contrast_results() if not r.passed}
+        self.assertIn(("lark", "dark", "onAccent"), failures)
+        self.assertIn(("clay", "light", "status-working"), failures)
+        self.assertIn(("island", "light", "status-waiting"), failures)
+        self.assertEqual(len(self.catalog.contrast_results()), 12 * len(self.catalog.rules["contrast"]))
+
+
+if __name__ == "__main__":
+    unittest.main()

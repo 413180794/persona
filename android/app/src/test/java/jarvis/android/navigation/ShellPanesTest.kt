@@ -1,0 +1,72 @@
+package jarvis.android.navigation
+
+import androidx.navigation3.runtime.NavKey
+import jarvis.core.navigation.*
+import jarvis.feature.inbox.LarkRoute
+import jarvis.feature.inbox.MailRoute
+import jarvis.platform.phonetools.PhoneToolsRoute
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+/** The list beside a detail pane marks the row of the page the detail shows, whichever way the page was opened. */
+class ShellPanesTest {
+    private val stacks = mapOf<AppTab, MutableList<NavKey>>(
+        AppTab.Jarvis to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
+        AppTab.Inbox to mutableListOf(InboxRoute), AppTab.Settings to mutableListOf(SettingsRoute),
+    )
+    private var selected = AppTab.Jarvis
+    private val navigator = AppNavigator(stacks, { selected }, { selected = it })
+    private fun marked(tab: AppTab) = detailOf(stacks.getValue(tab))
+
+    @Test fun deepLinkedSettingsPagesAreMarkedInTheList() {
+        for (page in SettingsPage.entries) {
+            stacks.getValue(AppTab.Settings).retainAll { it == SettingsRoute }
+            val link = "jarvis://open?target=settings&page=" + page.name.lowercase()
+            selected = Router().parse(RouteInput.DeepLink(link))!!.open(stacks)
+            assertEquals(AppTab.Settings, selected)
+            // The settings list compares its rows with exactly this key.
+            assertEquals(link, SettingsPageRoute(page), marked(AppTab.Settings))
+        }
+    }
+
+    @Test fun theMarkFollowsTapsBackAndOtherTabs() {
+        assertNull("nothing open beside the list", marked(AppTab.Settings))
+        navigator.navigate(SettingsPageRoute(SettingsPage.About))
+        assertEquals(SettingsPageRoute(SettingsPage.About), marked(AppTab.Settings))
+        navigator.navigate(SettingsPageRoute(SettingsPage.Devices))
+        assertEquals(SettingsPageRoute(SettingsPage.Devices), marked(AppTab.Settings))
+        navigator.back()
+        assertEquals(SettingsPageRoute(SettingsPage.About), marked(AppTab.Settings))
+        navigator.back()
+        assertNull(marked(AppTab.Settings))
+
+        // A notification opens a conversation in Agents; the settings tab keeps its own mark.
+        navigator.navigate(SettingsPageRoute(SettingsPage.Notifications))
+        val chat = ChatRoute("machine", "session", ConversationKind.Agent)
+        navigator.navigate(chat)
+        assertEquals(AppTab.Agents, selected)
+        assertEquals(chat, marked(AppTab.Agents))
+        assertEquals(SettingsPageRoute(SettingsPage.Notifications), marked(AppTab.Settings))
+    }
+
+    @Test fun pagesOpenedUnderAnotherKeyMarkTheirSettingsRow() {
+        // debug.openPairing, pairing links and debug.openPage phone push these keys, not SettingsPageRoute.
+        assertEquals(SettingsPageRoute(SettingsPage.Pairing), detailOf(listOf(SettingsRoute, PairingRoute)))
+        assertEquals(SettingsPageRoute(SettingsPage.PhoneData), detailOf(listOf(SettingsRoute, PhoneToolsRoute)))
+        selected = Router().parse(RouteInput.Internal(ConnectionSettingsRoute))!!.open(stacks)
+        assertEquals(SettingsPageRoute(SettingsPage.Diagnostics), marked(AppTab.Settings))
+    }
+
+    @Test fun onlyDetailsAreMarked() {
+        val chat = ChatRoute("machine", "session")
+        listOf(
+            chat, InteractionRoute(chat, "request"), TerminalRoute("machine", "session"), MachinesRoute, MachineDetailRoute("machine"),
+            LarkRoute("chat", "item", 1), MailRoute("item"), InboxItemRoute("item"), LarkChatRoute("chat"),
+        ).forEach { key -> assertEquals(key.toString(), key, detailOf(listOf(AgentsRoute, key))) }
+        // Lists and pages that never sit beside a list mark nothing.
+        listOf(AssistantRoute, AgentsRoute, InboxRoute, SettingsRoute).forEach { assertNull(detailOf(listOf(it))) }
+        assertNull(detailOf(emptyList()))
+        assertNull(detailOf(listOf(AssistantRoute, ConnectionSettingsRoute)))
+    }
+}

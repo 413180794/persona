@@ -3,73 +3,32 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- The voice conversation with the hub's voice plugin (docs/plugins.md): asked for when it is first opened. -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- Phone data tools (docs/android.md「手机数据工具」): each is off until the user turns it on and grants it. -->
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <!-- phone_photos_recent / phone_photo_get (设置 › 手机数据 › 照片): 13+ asks for images and videos apart. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <!-- phone_health_summary (设置 › 手机数据 › 健康): read only, granted in Health Connect's own dialog. -->
-    <uses-permission android:name="android.permission.health.READ_STEPS" />
-    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
-    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
-    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
-    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
-    <uses-permission android:name="android.permission.health.READ_SLEEP" />
-    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Android 16: the ongoing fleet notification may become a Live Update (fleet/FleetNotification.kt). -->
-    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
-    <!-- Saving a chat picture to the gallery on Android 8-9 (10+ use MediaStore without a permission). -->
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
-
-    <!-- 语音输入 in the composer asks the system's speech recognizer (RecognizerIntent); 11+ hides it unless declared. -->
-    <queries>
-        <intent>
-            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
-        </intent>
-        <!-- Health Connect is an app on Android 8-13: without this its status always reads as missing. -->
-        <package android:name="com.google.android.apps.healthdata" />
-    </queries>
 
     <application
         android:name=".JarvisApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="Jarvis"
+        android:label="${appLabel}"
         android:networkSecurityConfig="@xml/network_security"
         android:supportsRtl="true"
         android:theme="@style/Theme.Jarvis">
 
-        <!-- Folding and unfolding (and rotating, resizing a split screen) changes the window, not the activity:
-             Compose lays out again for the new size, so what is open (a chat, the terminal) stays open. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
             android:launchMode="singleTop"
-            android:resizeableActivity="true"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|navigation"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize|stateAlwaysHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -80,21 +39,21 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="jarvis" android:host="pair" />
+                <data android:scheme="jarvis" android:host="open" />
             </intent-filter>
         </activity>
 
-        <!-- Google's OAuth redirect for Gmail sign-in (docs/mail.md「Android」); the scheme comes from the build (app/build.gradle.kts). -->
         <activity
-            android:name=".ui.mail.OAuthRedirectActivity"
+            android:name=".ShareActivity"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:windowSoftInputMode="adjustResize|stateAlwaysHidden">
             <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="${googleOAuthScheme}" android:path="/oauth2redirect" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
 
@@ -103,77 +62,5 @@
             android:screenOrientation="fullSensor"
             tools:replace="screenOrientation" />
 
-        <service
-            android:name=".service.HubService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the connection to the user's own server open to show agent questions as notifications without a push service." />
-        </service>
-
-        <!-- Pictures shared / copied from the chat's image viewer (ui/media/MediaShare.kt): cache/shared only. -->
-        <provider
-            android:name=".ui.media.ChatFileProvider"
-            android:authorities="${applicationId}.chatfiles"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/chat_file_paths" />
-        </provider>
-
-        <!-- Health Connect's permission dialog needs a rationale page (phone/HealthRationaleActivity.kt): the action on
-             Android 13 and older, the alias guarded by START_VIEW_PERMISSION_USAGE from 14. -->
-        <activity
-            android:name=".phone.HealthRationaleActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
-            </intent-filter>
-        </activity>
-        <activity-alias
-            android:name="ViewPermissionUsageActivity"
-            android:exported="true"
-            android:targetActivity=".phone.HealthRationaleActivity"
-            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
-                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
-            </intent-filter>
-        </activity-alias>
-
-        <receiver android:name=".service.ActionReceiver" android:exported="false" />
-        <receiver android:name=".phone.AskReceiver" android:exported="false" />
-        <!-- Fleet notification buttons, widget, tile, shortcuts (docs/android.md「常驻通知、小组件、快捷方式」) -->
-        <receiver android:name=".fleet.FleetActionReceiver" android:exported="false" />
-        <receiver android:name=".widget.JarvisWidgetReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/jarvis_widget_info" />
-        </receiver>
-        <service
-            android:name=".shortcuts.JarvisTileService"
-            android:exported="true"
-            android:icon="@drawable/ic_stat"
-            android:label="@string/tile_label"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-        <!-- Not exported: only the launcher's own shortcut (published on our behalf) starts it. -->
-        <activity
-            android:name=".shortcuts.ShortcutActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:taskAffinity=""
-            android:theme="@style/Theme.Jarvis.Dialog" />
-        <receiver android:name=".service.BootReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
     </application>
 </manifest>

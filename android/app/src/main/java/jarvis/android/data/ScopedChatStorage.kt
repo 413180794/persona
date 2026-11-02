@@ -1,0 +1,85 @@
+package jarvis.android.data
+
+import android.util.Base64
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import jarvis.android.di.ConnectionRuntime
+import jarvis.core.contracts.GroupKeys
+import jarvis.core.chatlist.*
+import jarvis.core.contracts.Item
+import jarvis.core.contracts.JsonCodec
+import jarvis.core.contracts.SessionKey
+import jarvis.core.data.ScopedHubData
+import jarvis.core.hub.HubChatTransport
+import jarvis.feature.chat.ChatLocalStorage
+import jarvis.feature.chat.ChatStorageSnapshot
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.*
+import kotlinx.serialization.json.*
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class ScopedChatStorage(private val runtime: ConnectionRuntime, scope: CoroutineScope) : ChatLocalStorage {
+    /** Reading positions live with the first group (its data outlives a change of the selected group). */
+    override val localStorage = runtime.groups.map { groups -> groups.firstOrNull()?.data }.distinctUntilChanged().mapLatest { data ->
+        data?.let { ChatStorageSnapshot(it.scope.path, ScopedChatAnchors.open(it)) }
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** Images are cached with the group the session belongs to. */
+    override suspend fun imageFile(session: SessionKey, item: Item, width: Int, height: Int): File {
+        val group = runtime.groupOf(session.machineId)
+        val data = checkNotNull(group?.data) { "请先配对 hub" }
+        val connection = runtime.connectionFor(data)
+        val plain = GroupKeys.rawKey(session)
+        return data.coroutineScope.async(Dispatchers.IO) {
+            check(group.data === data && group.active) { "连接已切换" }
+            data.cachedImage(plain, item.id, width, height) {
+                item.image?.data?.takeIf(String::isNotBlank)?.let { Base64.decode(it, Base64.DEFAULT) }
+                    ?: HubChatTransport(connection).image(plain, item.id)
+            }
+        }.await()
+    }
+}
+
+/** Read from memory during first layout; serialize writes in the pairing's lifetime. */
+private class ScopedChatAnchors(private val data: ScopedHubData, initial: Map<String, ChatReadingPosition>) : ChatAnchorStore {
+    private val positions = ConcurrentHashMap(initial)
+    private val writes = Channel<Pair<String, ChatReadingPosition>>(Channel.UNLIMITED)
+    init {
+        data.coroutineScope.launch {
+            for ((conversation, position) in writes) {
+                data.readingPositions.edit { it[stringPreferencesKey(conversation)] = encode(position) }
+            }
+        }
+    }
+    override fun read(key: ChatReadingKey) = positions[key.conversation].takeIf { key.scope == data.scope.path }
+    override fun write(key: ChatReadingKey, position: ChatReadingPosition) {
+        if (key.scope != data.scope.path || data.coroutineScope.coroutineContext[Job]?.isActive != true) return
+        positions[key.conversation] = position
+        writes.trySend(key.conversation to position)
+    }
+    companion object {
+        suspend fun open(data: ScopedHubData): ScopedChatAnchors {
+            val initial = data.readingPositions.data.first().asMap().mapNotNull { (key, value) ->
+                (value as? String)?.let { raw ->
+                    try { key.name to decode(raw) } catch (_: IllegalArgumentException) { null }
+                }
+            }.toMap()
+            return ScopedChatAnchors(data, initial)
+        }
+        private fun encode(position: ChatReadingPosition) = buildJsonObject {
+            position.rowId?.let { put("row", it) }
+            put("offset", position.offsetPx); put("end", position.followsEnd)
+            put("expanded", JsonArray(position.expanded.map(::JsonPrimitive)))
+        }.toString()
+        private fun decode(raw: String): ChatReadingPosition {
+            val value = JsonCodec.parseToJsonElement(raw).jsonObject
+            return ChatReadingPosition(value["row"]?.jsonPrimitive?.contentOrNull,
+                value["offset"]?.jsonPrimitive?.intOrNull ?: 0,
+                value["end"]?.jsonPrimitive?.booleanOrNull ?: true,
+                (value["expanded"] as? JsonArray).orEmpty().map { it.jsonPrimitive.content }.toSet())
+        }
+    }
+}

@@ -1,0 +1,83 @@
+package jarvis.android.platform
+
+import android.app.Application
+import jarvis.android.JarvisApp
+import jarvis.android.data.Hub
+import jarvis.android.di.ConnectionRuntime
+import jarvis.core.data.AssistantMainConversationResolver
+import jarvis.core.data.ScopedHubData
+import jarvis.core.hub.HttpInboxAssistantTransport
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import javax.inject.Inject
+import javax.inject.Singleton
+
+internal data class PlatformSession(val hub: Hub, val data: ScopedHubData) {
+    val directory get() = File(data.noBackupDirectory, "platform")
+    fun active() = data.coroutineScope.coroutineContext.ensureActive()
+    suspend fun <T> io(block: suspend () -> T): T = data.coroutineScope.async(Dispatchers.IO) {
+        active()
+        block()
+    }.await()
+}
+
+@Singleton
+class PlatformSessions @Inject constructor(application: Application) {
+    private val app = application as JarvisApp
+    internal val current = MutableStateFlow<PlatformSession?>(null)
+    internal suspend fun requireSession(): PlatformSession {
+        combine(app.pairingReady, app.pairingRestoreError) { ready, failed -> ready || failed }.first { it }
+        check(app.hub.value != null) { "请先打开 Jarvis 完成配对" }
+        return withTimeout(10_000) { current.filterNotNull().first { it.hub === app.hub.value } }
+    }
+}
+
+@Singleton
+class PlatformRuntime @Inject constructor(
+    application: Application,
+    private val runtime: ConnectionRuntime,
+    private val sessions: PlatformSessions,
+    private val tests: LockScreenTests,
+    private val shares: ShareQueue,
+) {
+    private val app = application as JarvisApp
+    private var started = false
+    fun start() {
+        if (started) return
+        started = true
+        app.scope.launch {
+            app.hub.collectLatest { hub ->
+                sessions.current.value = null
+                if (hub == null) return@collectLatest
+                val data = runtime.dataStore.restore() ?: return@collectLatest
+                if (data.credentials.deviceToken != hub.api.token) return@collectLatest
+                data.messages.connectMainConversation(AssistantMainConversationResolver(
+                    HttpInboxAssistantTransport(data.scope.path, hub.connection) { app.hub.value === hub }))
+                val session = PlatformSession(hub, data)
+                sessions.current.value = session
+                try {
+                    coroutineScope {
+                        launch { tests.observe(session) }
+                        launch { shares.observe(session) }
+                    }
+                } finally {
+                    sessions.current.compareAndSet(session, null)
+                }
+            }
+        }
+    }
+}
+
+/** Rename only after flushing the complete document; a partial write never replaces committed work. */
+internal fun writePlatformFile(file: File, text: String) {
+    check(file.parentFile!!.isDirectory || file.parentFile!!.mkdirs())
+    val pending = File(file.parentFile, file.name + ".partial")
+    pending.outputStream().use { stream ->
+        stream.write(text.toByteArray(Charsets.UTF_8))
+        stream.fd.sync()
+    }
+    Files.move(pending.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+}

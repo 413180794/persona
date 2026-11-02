@@ -1,0 +1,83 @@
+package jarvis.feature.chat
+
+import jarvis.core.chatlist.ChatReadingPosition
+import jarvis.core.contracts.Item
+import jarvis.core.contracts.SessionKey
+import jarvis.core.contracts.api.ChatRepository
+import jarvis.core.contracts.api.ChatSnapshot
+import jarvis.core.domain.lines.chatLines
+import jarvis.core.domain.lines.LineOptions
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import org.junit.Assert.*
+import org.junit.Test
+
+class ChatSearchTest {
+    @Test fun searchesNestedStringsAndAllReadingCategoriesWithLiteralHighlightsAndLimit() = runTest {
+        val items = listOf(
+            Item("text", kind = "text", text = "正文 Needle"),
+            Item("thought", kind = "thinking", text = "思考 needle"),
+            Item("call", kind = "tool_use", toolName = "NeedleTool", toolInput =
+                Json.parseToJsonElement("""{"nested":[{"value":"前文 NEEdle 后文"}],"number":123,"flag":true}""")),
+            Item("result", kind = "tool_result", text = "输出 needle"),
+            Item("notice", kind = "notice", text = "事件 needle"),
+        )
+        val results = searchChat(items, " needle ")
+        assertEquals(setOf("正文", "思考", "工具名", "工具输入", "工具输出", "系统事件"), results.hits.map { it.category }.toSet())
+        results.hits.forEach { hit -> hit.ranges.forEach { range -> assertEquals("needle", hit.snippet.substring(range).lowercase()) } }
+        assertTrue(searchChat(items, "123").hits.isEmpty())
+        assertTrue(searchChat(items, "true").hits.isEmpty())
+        assertTrue(searchChat(items, " ").hits.isEmpty())
+        val literal = searchChat(listOf(Item("literal", kind = "text", text = "😀前文 a.* a.*")), "a.*").hits.single()
+        assertEquals(2, literal.ranges.size)
+        val capped = searchChat((1..101).map { Item("item-$it", it, kind = "text", text = "needle") }, "needle")
+        assertEquals(100, capped.hits.size)
+        assertTrue(capped.truncated)
+        assertEquals("item-101", capped.hits.first().itemId)
+        assertFalse(searchChat((1..100).map { Item("item-$it", it, kind = "text", text = "needle") }, "needle").truncated)
+    }
+
+    @Test fun resolvesFoldedTargetsAndLoadsOnlyContinuousBoundedPagesWithoutLosingReturnAnchor() = runTest {
+        val items = listOf(
+            Item("user", 30, role = "user", kind = "text", text = "开始"),
+            Item("call", 31, kind = "tool_use", toolUseId = "tool", toolName = "Read"),
+            Item("result", 32, kind = "tool_result", toolUseId = "tool", text = "结果"),
+            Item("reply", 33, role = "assistant", kind = "text", text = "完成"),
+        )
+        val lines = chatLines(items.map(Item::asLineItem)).lines
+        val target = searchTarget(lines, "result")!!
+        assertEquals(setOf("w-user"), target.expand)
+        val opened = chatLines(items.map(Item::asLineItem), LineOptions(openWork = target.expand)).lines
+        assertEquals(target.rowId, searchTarget(opened, "result")?.rowId)
+        assertTrue(opened.any { it.id == target.rowId })
+        val state = ChatSearchState()
+        val origin = ChatReadingPosition("reply", -75, false, setOf("existing"))
+        state.origin = origin
+        state.choose(ChatSearchHit("result", "工具输出", "结果", emptyList()))
+        state.choose(ChatSearchHit("user", "正文", "开始", emptyList()))
+        assertEquals(origin, state.origin)
+        val key = SessionKey("machine", "session")
+        val snapshot = MutableStateFlow(ChatSnapshot(items = items, loading = false, hasOlder = true))
+        var calls = 0
+        var fail = false
+        val repository = object : ChatRepository {
+            override fun observe(session: SessionKey) = snapshot
+            override suspend fun expandFold(session: SessionKey, fromSeq: Int, toSeq: Int) = emptyList<Item>()
+            override suspend fun loadOlder(session: SessionKey) {
+                calls++
+                if (fail) { snapshot.value = snapshot.value.copy(error = "失败"); return }
+                val seq = snapshot.value.items.minOf { it.seq } - 1
+                snapshot.value = snapshot.value.copy(items = listOf(Item("older-$seq", seq, kind = "text")) + snapshot.value.items)
+            }
+        }
+        val pages = mutableListOf<Int>()
+        assertNotNull(loadEarlierForSearch(repository, key, pages::add))
+        assertEquals((1..20).toList(), pages)
+        assertEquals(20, calls)
+        assertEquals(10, snapshot.value.items.minOf { it.seq })
+        fail = true
+        assertNotNull(loadEarlierForSearch(repository, key) { org.junit.Assert.fail("Failed page must not advance progress") })
+        assertEquals(21, calls)
+    }
+}

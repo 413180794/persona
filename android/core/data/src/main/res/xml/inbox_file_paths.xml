@@ -1,0 +1,4 @@
+<paths>
+    <cache-path name="inbox_files" path="inbox-downloads/" />
+    <cache-path name="scoped_inbox_files" path="hub-data/" />
+</paths>

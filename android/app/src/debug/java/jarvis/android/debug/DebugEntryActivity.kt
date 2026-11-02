@@ -1,0 +1,50 @@
+package jarvis.android.debug
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import jarvis.android.JarvisApp
+import jarvis.android.MainActivity
+import jarvis.core.contracts.api.PairingRequest
+import java.net.URI
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+
+/** This exported development entry is absent from the release manifest and bytecode. */
+class DebugEntryActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        forward(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        forward(intent)
+    }
+
+    private fun forward(source: Intent) {
+        // Captures of several hub groups: `--es debug.addMockAddress http://<loopback>:<port>` pairs one more mock hub
+        // next to the existing ones (settings › hub › 添加 hub does the same with a real pairing link).
+        source.getStringExtra("debug.addMockAddress")?.let { address ->
+            source.removeExtra("debug.addMockAddress")
+            val uri = URI(address)
+            val loopback = byteArrayOf(127, 0, 0, 1).joinToString(".") { byte -> byte.toString() }
+            require(uri.scheme == "http" && uri.host == loopback && uri.userInfo == null &&
+                uri.rawPath in listOf("", "/") && uri.query == null && uri.fragment == null && uri.port in 1..65535) {
+                "debug.addMockAddress 只能是本机回环地址上的假 hub"
+            }
+            val app = application as JarvisApp
+            app.scope.launch {
+                try { app.pairingService.addHub(PairingRequest(address, "mock")) { android.util.Log.i("DebugEntry", "add hub: ${it.stage}") } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (error: Exception) { android.util.Log.w("DebugEntry", "Cannot add mock hub", error) }
+            }
+        }
+        startActivity(Intent(this, MainActivity::class.java).apply {
+            source.extras?.let { putExtras(it) }
+            data = source.data
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        })
+        finish()
+    }
+}

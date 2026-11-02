@@ -1,0 +1,166 @@
+package jarvis.feature.chat
+
+import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalContext
+import androidx.navigation3.runtime.EntryProviderScope
+import androidx.navigation3.runtime.NavKey
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import jarvis.core.contracts.SessionKey
+import jarvis.core.contracts.HubScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import jarvis.core.contracts.api.*
+import jarvis.core.navigation.SettingsPageRoute
+import jarvis.core.navigation.SettingsPage
+import jarvis.core.navigation.ChatRoute
+import jarvis.core.navigation.Navigator
+import jarvis.core.navigation.TerminalRoute
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface ChatServices {
+    fun chats(): ChatRepository
+    fun messages(): MessageSender
+    fun interactions(): InteractionCenter
+    fun sessions(): SessionsRepository
+    fun chatWiring(): ChatWiringSource
+}
+
+/** Every service in a binding belongs to the same pairing generation. */
+data class ChatAppBindings(
+    val scope: HubScope,
+    val coroutineScope: CoroutineScope,
+    val drafts: DraftRepository,
+    val connection: HubConnection,
+    val actions: ChatActions,
+    val composer: ChatComposerService,
+    val recovery: ChatRecoveryService,
+    val assistantManagement: AssistantManagement,
+    val mainSender: MainConversationSender,
+    val draftVersions: (SessionKey) -> Flow<DraftSessionVersion> = { emptyFlow() },
+)
+
+interface ChatWiringSource {
+    val current: StateFlow<ChatAppBindings?>
+    /** The services of the hub group [session] belongs to (docs/android.md「多 hub」); a single hub has only [current]. */
+    fun bindingsFor(session: SessionKey): StateFlow<ChatAppBindings?> = current
+}
+
+@Composable
+fun chatWiringSource(): ChatWiringSource {
+    val context = LocalContext.current.applicationContext
+    return remember(context) { EntryPointAccessors.fromApplication(context, ChatServices::class.java).chatWiring() }
+}
+
+/** Writes drain in the pairing scope even when navigation disposes the editor. */
+class ChatDraftEditor(
+    repository: DraftRepository, scope: CoroutineScope, key: DraftKey,
+    sessionVersions: Flow<DraftSessionVersion>? = null,
+) {
+    constructor(bindings: ChatAppBindings, session: SessionKey) :
+        this(bindings.drafts, bindings.coroutineScope, DraftKey.Chat(session), bindings.draftVersions(session))
+
+    val composer = MutableStateFlow<ChatComposerState?>(null)
+    val error = MutableStateFlow<String?>(null)
+    private val changes = Channel<ChatComposerDraft>(Channel.CONFLATED)
+    init {
+        scope.launch {
+            var saved: DraftSnapshot? = null
+            try {
+                saved = repository.read(key)
+                composer.value = if (saved.attachments.isEmpty()) ChatComposerState().apply {
+                    editMessage(saved.text)
+                    sessionVersion = saved.sessionVersion
+                } else ChatComposerState(saved.composerDraft())
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { error.value = "草稿未能读取，输入会暂留在当前页面" }
+            if (composer.value == null) composer.value = ChatComposerState()
+            val versions = sessionVersions?.let { flow -> launch {
+                flow.collect { version ->
+                    composer.value?.let { state ->
+                        state.currentSessionVersion = version
+                        if (state.sessionVersion == null) state.sessionVersion = version
+                        else if (!state.hasContent) state.sessionVersion = version
+                        else if (!state.oldVersion) state.sessionVersion = DraftSessionVersion(
+                            state.sessionVersion?.history ?: version.history,
+                            state.sessionVersion?.instance ?: version.instance)
+                    }
+                }
+            } }
+            try { for (draft in changes) try {
+                val previous = saved ?: repository.read(key)
+                // Text-only stores keep uploaded attachments as message tags; structured stores keep them as fields.
+                val attachments = if (repository.structured) draft.storedAttachments() else emptyList()
+                val text = if (repository.structured) draft.text
+                    else ChatComposerState(draft).let { if (it.ready) it.message() else draft.text }
+                val version = draft.sessionVersion.takeIf { repository.structured && (text.isNotEmpty() || attachments.isNotEmpty()) }
+                if (text != previous.text || attachments != previous.attachments || version != previous.sessionVersion)
+                    saved = repository.save(key, text, previous.version, attachments, version)
+                error.value = null
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { error.value = "草稿未能保存，输入仍在当前页面，请勿退出 App" }
+            } finally { versions?.cancel() }
+        }
+    }
+    fun changed(draft: ChatComposerDraft) { changes.trySend(draft) }
+    fun close() { composer.value?.draft?.let(::changed); changes.close() }
+}
+
+@Composable
+fun rememberChatDraftEditor(bindings: ChatAppBindings?, session: SessionKey): ChatDraftEditor? {
+    val editor = remember(bindings?.scope, session) { bindings?.let { ChatDraftEditor(it, session) } }
+    DisposableEffect(editor) { onDispose { editor?.close() } }
+    return editor
+}
+
+/** Remove the shell's legacy content override to use this destination with existing Hilt bindings. */
+fun EntryProviderScope<NavKey>.chatEntries(
+    navigator: Navigator,
+    content: @Composable (ChatRoute) -> Unit = { route -> ChatDestination(route, navigator) },
+) {
+    entry<ChatRoute> { route -> content(route) }
+}
+
+@Composable
+fun ChatDestination(
+    route: ChatRoute, navigator: Navigator, onTerminal: ((SessionKey) -> Unit)? = null,
+    renderStyle: ChatRenderStyle? = null, embedded: Boolean = false, showTopBar: Boolean = true,
+    historyReadOnly: Boolean = false, onHistoryBack: (() -> Unit)? = null,
+    historyFooter: (@Composable () -> Unit)? = null,
+) {
+    val context = LocalContext.current.applicationContext
+    val services = remember(context) { EntryPointAccessors.fromApplication(context, ChatServices::class.java) }
+    val session = SessionKey(route.machineId, route.sessionId)
+    val wiring by remember(services, session) { services.chatWiring().bindingsFor(session) }.collectAsStateWithLifecycle()
+    if (wiring == null) { androidx.compose.material3.CircularProgressIndicator(); return }
+    val metadata by services.sessions().sessions.collectAsStateWithLifecycle()
+    val style = renderStyle ?: if (route.kind == jarvis.core.navigation.ConversationKind.Assistant ||
+        metadata.any { it.key == session && it.assistant }) ChatRenderStyle.Assistant else ChatRenderStyle.Agent
+    val editor = rememberChatDraftEditor(if (historyReadOnly) null else wiring, session)
+    val composer by (editor?.composer ?: remember { MutableStateFlow<ChatComposerState?>(null) }).collectAsStateWithLifecycle()
+    val error by (editor?.error ?: remember { MutableStateFlow<String?>(null) }).collectAsStateWithLifecycle()
+    if (editor != null && composer == null) return
+    ChatScreen(session, services.chats(), services.messages(),
+        services.interactions(), services.sessions(), onBack = onHistoryBack ?: navigator::back,
+        onTerminal = onTerminal ?: { navigator.navigate(TerminalRoute(it.machineId, it.sessionId)) },
+        chrome = ChatChromeBindings(actions = wiring?.actions.takeUnless { historyReadOnly }, connection = wiring?.connection,
+            onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
+            onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) }),
+        renderStyle = style,
+        embedded = embedded, showTopBar = showTopBar,
+        historyReadOnly = historyReadOnly, historyFooter = historyFooter,
+        composerState = composer, onDraftChanged = editor?.let { it::changed },
+        composerService = wiring?.composer.takeUnless { historyReadOnly },
+        statusBindings = ChatStatusBindings(recovery = wiring?.recovery.takeUnless { historyReadOnly }, draftSaveError = error),
+        onContextCleared = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) })
+}
