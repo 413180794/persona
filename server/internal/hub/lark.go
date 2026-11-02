@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -174,6 +175,26 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
+	})
+	// Read receipts of the user's messages in one chat; messages lark-connector has none for are left out.
+	api.HandleFunc("POST /api/v1/lark/conversations/{id}/read-states", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			MessageIDs []string `json:"message_ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if len(in.MessageIDs) > lark.MaxReadStates {
+			writeErr(w, http.StatusBadRequest, fmt.Errorf("at most %d message_ids", lark.MaxReadStates))
+			return
+		}
+		states, err := h.lark.ReadStates(r.Context(), r.PathValue("id"), in.MessageIDs)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, map[string]any{"states": states})
 	})
 	// Images, stickers, avatars, video and files inside messages; the URLs in message parts already point here.
 	api.HandleFunc("GET /api/v1/lark/media/{key}", func(w http.ResponseWriter, r *http.Request) {

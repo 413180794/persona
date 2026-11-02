@@ -1,0 +1,64 @@
+import SwiftUI
+
+/// Where a Feishu chat (or thread) breaks its messages up, like Feishu's own client: no time under each message;
+/// a centred time separator when a new day starts or the chat was quiet for `separatorGap`; one avatar and name
+/// for a run of messages from the same person, a run never reaching across a separator.
+nonisolated enum LarkChatLayout {
+    /// Quiet this long before a message: a time separator above it. Five minutes is what Feishu (and WeChat) use:
+    /// a back-and-forth stays one block, a reply after a coffee gets its own time.
+    static let separatorGap: TimeInterval = 5 * 60
+
+    /// Space above a message: tight under the same sender's previous one.
+    static let groupedGap: CGFloat = 3
+
+    /// Same sender as the message before, both timed, with no separator between them: no second avatar / name.
+    /// Senders compare by id; by name only when either has no id. All of mine are one sender (a message on its
+    /// way has no id and is called 我 until the chat has one of mine to copy).
+    static func continues(_ m: LarkMessage, after prev: LarkMessage?, calendar: Calendar = .current) -> Bool {
+        guard let prev, !m.isSystem, !prev.isSystem, sameSender(m, prev), prev.createdAt != nil, m.createdAt != nil,
+              !showsTimeSeparator(m, after: prev, calendar: calendar) else { return false }
+        return true
+    }
+
+    static func sameSender(_ a: LarkMessage, _ b: LarkMessage) -> Bool {
+        if a.isMine || b.isMine { return a.isMine == b.isMine }
+        if let x = a.senderID, let y = b.senderID, !x.isEmpty, !y.isEmpty { return x == y }
+        return a.senderName == b.senderName
+    }
+
+    /// The first message, or the first of a new calendar day.
+    static func startsDay(_ m: LarkMessage, after prev: LarkMessage?, calendar: Calendar = .current) -> Bool {
+        guard let d = m.createdAt else { return false }
+        guard let p = prev?.createdAt else { return true }
+        return !calendar.isDate(d, inSameDayAs: p)
+    }
+
+    /// A time separator above `m`: a new day, or `separatorGap` or more since the message before.
+    /// A message without a time gets none.
+    static func showsTimeSeparator(_ m: LarkMessage, after prev: LarkMessage?, calendar: Calendar = .current) -> Bool {
+        guard let d = m.createdAt else { return false }
+        guard let p = prev?.createdAt else { return true }
+        return startsDay(m, after: prev, calendar: calendar) || d.timeIntervalSince(p) >= separatorGap
+    }
+
+    /// The separator's words, tiered like the list's times (`LarkTime.tier`): 14:32, 昨天 14:32, 星期三 14:32,
+    /// 10月21日 14:32, 2025年10月21日 14:32. Fixed wording: the App speaks Chinese whatever the phone's region.
+    static func dayLabel(_ d: Date?, now: Date = .now, calendar cal: Calendar = .current) -> String {
+        guard let d else { return "" }
+        let c = cal.dateComponents([.year, .month, .day, .weekday, .hour, .minute], from: d)
+        let time = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+        return switch LarkTime.tier(of: d, now: now, calendar: cal) {
+        case .today: time
+        case .yesterday: "昨天 " + time
+        case .thisWeek: weekdays[((c.weekday ?? 1) - 1 + 7) % 7] + " " + time
+        case .thisYear: "\(c.month ?? 0)月\(c.day ?? 0)日 " + time
+        case .older: "\(c.year ?? 0)年\(c.month ?? 0)月\(c.day ?? 0)日 " + time
+        }
+    }
+
+    /// Gregorian weekday 1 is Sunday.
+    private static let weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
+
+    /// Space above a message.
+    static func gap(grouped: Bool) -> CGFloat { grouped ? groupedGap : Theme.Space.m }
+}

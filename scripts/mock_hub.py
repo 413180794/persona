@@ -1144,7 +1144,9 @@ MAIL_TRANSLATIONS = {
 LARK_CHATS = [{"id": "f2", "name": "设计评审", "is_group": True, "unread": 3, "at_me": True, "muted": False, "preview": "@你 新版图标放在这里了",
                "updated_at": ago(minutes=55)},
               {"id": "f3", "name": "周末徒步群", "is_group": True, "unread": 12, "at_me": False, "muted": False, "preview": "周六早上 8 点地铁站集合",
-               "preview_sender": "Tom", "read_position": "299", "updated_at": ago(minutes=30)}]
+               "preview_sender": "Tom", "read_position": "299", "updated_at": ago(minutes=30)},
+              {"id": "f1", "name": "韩梅梅", "is_group": False, "unread": 2, "at_me": False, "muted": False, "preview": "新包发你了",
+               "read_position": "99", "updated_at": ago(minutes=2)}]
 def _lm(pos, who, text, mine=False, mins=60):
     return {"id": "m" + pos, "position": pos, "sender_id": "u-" + who, "sender_name": who, "is_mine": mine, "type": "TEXT", "text": text,
             "created_at": ago(minutes=mins), "recalled": False, "reply_count": 0}
@@ -1203,6 +1205,38 @@ def _lark_f3():
 
 
 LARK_MESSAGES["f3"], LARK_THREADS = _lark_f3()
+
+# The direct chat with 韩梅梅 (inbox f1): unread from 100, then my answers with each kind of read receipt.
+LARK_MESSAGES["f1"] = [_lm(str(pos), who, text, mine=who == "我", mins=mins) for pos, who, text, mins in (
+    (90, "韩梅梅", "早，周五的发布还按计划吗？", 300), (91, "我", "按计划，今天把最后两个问题合进去", 298),
+    (92, "韩梅梅", "好的，合完和我说一声", 296), (93, "我", "两个都合进去了，晚上出包", 180), (94, "韩梅梅", "收到", 178),
+    (95, "我", "安装包在测试群里，装好了帮忙点一下登录", 120), (96, "韩梅梅", "登录没问题，首页加载有点慢", 100),
+    (97, "我", "我看一下，可能是图片没走缓存", 95), (98, "我", "找到了，缓存的 key 每次都变，已经修了", 70),
+    (99, "韩梅梅", "👍", 66), (100, "韩梅梅", "周五的发布能赶上吗？下午我要和客户确认时间", 22), (101, "韩梅梅", "顺便看一下这个", 20),
+    (102, "我", "能赶上，下午三点前给你确认", 8), (103, "我", "文档我晚上看", 5), (104, "我", "新包发你了", 2))]
+
+# Read receipts of my messages (POST /api/v1/lark/conversations/{id}/read-states): (read, unread) by message id; None is
+# a message lark-connector has no receipt for (left out of the answer). My messages not listed here, e.g. ones sent while
+# the mock runs, are unread by everyone else in the chat (LARK_MEMBER_COUNT - 1).
+LARK_MEMBER_COUNT = {"f1": 2, "f2": 6, "f3": 6}
+LARK_READ_STATES = {
+    "m91": (1, 0), "m93": (1, 0), "m95": (1, 0), "m97": (1, 0), "m98": (1, 0), "m102": (1, 0), "m103": (0, 1), "m104": None,
+    "m282": (5, 0), "m296": (3, 2), "m306": (0, 5), "m203": (4, 1),
+}
+for _pos in (282, 296):  # two of mine in f3's history, next to the one from today (306)
+    next(m for m in LARK_MESSAGES["f3"] if m["position"] == str(_pos)).update(sender_id="u-我", sender_name="我", is_mine=True)
+
+
+def lark_read_states(feed, ids):
+    """The read-states answer for my messages among ids in feed; others' and unknown ids are left out."""
+    mine = {m["id"]: m for m in LARK_MESSAGES.get(feed, []) if m.get("is_mine")}
+    out = []
+    for mid in ids:
+        if mid not in mine: continue
+        state = LARK_READ_STATES.get(mid, (0, LARK_MEMBER_COUNT.get(feed, 2) - 1))
+        if state is not None:
+            out.append({"message_id": mid, "read_count": state[0], "unread_count": state[1]})
+    return out
 
 
 def lark_window(msgs, q, default_limit=40):
@@ -3296,6 +3330,10 @@ class H(BaseHTTPRequestHandler):
             m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # now, not the mock's start
             msgs.append(m)
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read-states"):  # 飞书已读回执 of my messages
+            ids = json.loads(self.last_body or b"{}").get("message_ids") or []
+            if len(ids) > 100: return self.send_json({"error": "at most 100 message_ids"}, 400)
+            return self.send_json({"states": lark_read_states(p.split("/")[5], ids)})
         if p.startswith("/api/v1/lark/messages/") and p.endswith("/replies"):  # 飞书回复: in the thread or quoted in the chat
             body, mid = json.loads(self.last_body or b"{}"), p.split("/")[5]
             time.sleep(float(os.environ.get("MOCK_LARK_SEND_SECONDS", "2")))

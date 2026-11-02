@@ -32,6 +32,7 @@ struct LarkThreadView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    LarkTimeSeparator(date: root.createdAt)
                     LarkMessageRow(message: root, grouped: false, isGroup: isGroup, feedID: feedID, inThread: true)
                     HStack {
                         Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(Theme.Font.labelMedium).foregroundStyle(.secondary)
@@ -43,9 +44,12 @@ struct LarkThreadView: View {
                         LarkLoadOlderButton(title: "加载更早的回复", loading: loadingOlder) { Task { await loadOlder() } }
                     }
                     ForEach(Array(replies.enumerated()), id: \.element.id) { i, m in
-                        let prev = i > 0 ? replies[i - 1] : nil
-                        LarkMessageRow(message: m, grouped: LarkChatView.continues(m, after: prev), isGroup: isGroup, feedID: feedID, inThread: true)
-                            .padding(.top, LarkChatView.gap(grouped: LarkChatView.continues(m, after: prev)))
+                        // The first loaded reply's time counts from the root's (under the 条回复 line).
+                        let prev = i > 0 ? replies[i - 1] : root
+                        let grouped = i > 0 && LarkChatLayout.continues(m, after: prev)
+                        if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
+                        LarkMessageRow(message: m, grouped: grouped, isGroup: isGroup, feedID: feedID, inThread: true)
+                            .padding(.top, LarkChatLayout.gap(grouped: grouped))
                     }
                     outgoingRows
                 }
@@ -104,12 +108,14 @@ struct LarkThreadView: View {
         let mine = (replies + [root]).last(where: \.isMine)
         ForEach(Array(outgoing.enumerated()), id: \.element.id) { i, o in
             let m = o.message(like: mine)
-            let prev = i > 0 ? outgoing[i - 1].message(like: mine) : replies.last
-            LarkOutgoingRow(outgoing: o, message: m, grouped: LarkChatView.continues(m, after: prev), isGroup: isGroup,
+            let prev = i > 0 ? outgoing[i - 1].message(like: mine) : (replies.last ?? root)
+            let grouped = LarkChatLayout.continues(m, after: prev)
+            if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
+            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
                             retry: { resend(o.id) },
                             edit: { discard(o.id); text = text.isEmpty ? o.text : text + "\n" + o.text },
                             discard: { discard(o.id) })
-                .padding(.top, LarkChatView.gap(grouped: LarkChatView.continues(m, after: prev)))
+                .padding(.top, LarkChatLayout.gap(grouped: grouped))
                 .id(o.id)
         }
     }

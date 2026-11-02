@@ -21,16 +21,32 @@ struct LarkNameTag: View {
     }
 }
 
-/// Feishu's list times, used by the inbox rows and the doc reader.
+/// Feishu's time tiers and list times, used by the inbox rows, the doc reader and the chat's time separators.
 nonisolated enum LarkTime {
+    /// How far back a time is, as Feishu tiers it: the list and the chat's separators word each tier their own way.
+    enum Tier: Equatable { case today, yesterday, thisWeek, thisYear, older }
+
+    /// Today, yesterday, two to six days back (a weekday), earlier this year, or before that. Days are calendar
+    /// days in `calendar`'s time zone; a time after today counts as this year or older.
+    static func tier(of d: Date, now: Date = .now, calendar cal: Calendar = .current) -> Tier {
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: d), to: cal.startOfDay(for: now)).day ?? 0
+        switch days {
+        case 0: return .today
+        case 1: return .yesterday
+        case 2...6: return .thisWeek
+        default: return cal.component(.year, from: d) == cal.component(.year, from: now) ? .thisYear : .older
+        }
+    }
+
     /// Feishu's feed times: 05:59, 昨天, 星期三, 10月21日, 2025/10/21.
-    static func short(_ d: Date?, now: Date = .now) -> String {
+    static func short(_ d: Date?, now: Date = .now, calendar: Calendar = .current) -> String {
         guard let d, d.isMeaningful else { return "" }
-        let cal = Calendar.current
-        if cal.isDateInToday(d) { return d.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)) }
-        if cal.isDateInYesterday(d) { return "昨天" }
-        if now.timeIntervalSince(d) < 6 * 86400 { return d.formatted(.dateTime.weekday(.wide)) }
-        if cal.isDate(d, equalTo: now, toGranularity: .year) { return d.formatted(.dateTime.month().day()) }
-        return d.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))
+        return switch tier(of: d, now: now, calendar: calendar) {
+        case .today: d.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+        case .yesterday: "昨天"
+        case .thisWeek: d.formatted(.dateTime.weekday(.wide))
+        case .thisYear: d.formatted(.dateTime.month().day())
+        case .older: d.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))
+        }
     }
 }

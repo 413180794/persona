@@ -68,12 +68,10 @@ struct LarkChatView: View {
                     let prev = i > 0 ? pager.messages[i - 1] : nil
                     VStack(alignment: .leading, spacing: 0) {
                         if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
-                        if Self.startsDay(m, after: prev) {
-                            Text(Self.dayLabel(m.createdAt)).font(Theme.Font.labelMedium).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity).padding(.vertical, Theme.Space.m)
-                        }
-                        LarkMessageRow(message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup, feedID: conversation.id)
-                            .padding(.top, Self.gap(grouped: Self.continues(m, after: prev)))
+                        if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
+                        let grouped = LarkChatLayout.continues(m, after: prev)
+                        LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id)
+                            .padding(.top, LarkChatLayout.gap(grouped: grouped))
                     }
                     .onAppear { markSeen(m) }
                 }
@@ -212,32 +210,6 @@ struct LarkChatView: View {
     #else
     static let debugTop = false
     #endif
-
-    /// Space above a message: tight under the same sender's previous one.
-    static func gap(grouped: Bool) -> CGFloat { grouped ? 3 : Theme.Space.m }
-
-    /// Same sender within five minutes: no second avatar / name.
-    static func continues(_ m: LarkMessage, after prev: LarkMessage?) -> Bool {
-        guard let prev, !m.isSystem, !prev.isSystem, prev.senderName == m.senderName, prev.isMine == m.isMine,
-              let a = prev.createdAt, let b = m.createdAt else { return false }
-        return b.timeIntervalSince(a) < 300
-    }
-
-    static func startsDay(_ m: LarkMessage, after prev: LarkMessage?) -> Bool {
-        guard let d = m.createdAt else { return false }
-        guard let p = prev?.createdAt else { return true }
-        return !Calendar.current.isDate(d, inSameDayAs: p) || d.timeIntervalSince(p) > 3 * 3600
-    }
-
-    static func dayLabel(_ d: Date?) -> String {
-        guard let d else { return "" }
-        let cal = Calendar.current
-        let time = d.formatted(date: .omitted, time: .shortened)
-        if cal.isDateInToday(d) { return time }
-        if cal.isDateInYesterday(d) { return "昨天 " + time }
-        if cal.isDate(d, equalTo: .now, toGranularity: .year) { return d.formatted(.dateTime.month().day()) + " " + time }
-        return d.formatted(.dateTime.year().month().day()) + " " + time
-    }
 
     // MARK: Loading
 
@@ -389,7 +361,9 @@ struct LarkChatView: View {
         ForEach(Array(outgoing.enumerated()), id: \.element.id) { i, o in
             let m = o.message(like: mine)
             let prev = i > 0 ? outgoing[i - 1].message(like: mine) : pager.messages.last
-            LarkOutgoingRow(outgoing: o, message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup,
+            let grouped = LarkChatLayout.continues(m, after: prev)
+            if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
+            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: conversation.isGroup,
                             retry: { resend(o.id) },
                             edit: {
                                 discard(o.id)
@@ -397,7 +371,7 @@ struct LarkChatView: View {
                                 if replyTo == nil { replyTo = o.replyTo }
                             },
                             discard: { discard(o.id) })
-                .padding(.top, Self.gap(grouped: Self.continues(m, after: prev)))
+                .padding(.top, LarkChatLayout.gap(grouped: grouped))
                 .id(o.id)
         }
     }
@@ -502,6 +476,17 @@ struct LarkNewMessagesDivider: View {
         }
         .padding(.vertical, Theme.Space.m)
         .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A centred time between messages (LarkChatLayout.showsTimeSeparator): a new day, or a pause in the chat.
+struct LarkTimeSeparator: View {
+    var date: Date?
+
+    var body: some View {
+        Text(LarkChatLayout.dayLabel(date)).font(Theme.Font.labelMedium).foregroundStyle(.secondary).lineLimit(1)
+            .frame(maxWidth: .infinity).padding(.vertical, Theme.Space.m)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -705,7 +690,8 @@ struct LarkMessageRow: View {
             .scaledFrame(maxWidth: Theme.Size.box300, alignment: .leading)
         }
         let replies = max(m.threadReplyCount ?? 0, m.replyCount)
-        if replies > 0 || m.edited == true || !LarkChatView.continues(m, after: nil) {
+        // No time here: it is in the separators above (LarkChatLayout).
+        if replies > 0 || m.edited == true {
             HStack(spacing: Theme.Space.s) {
                 if replies > 0 && !inThread {
                     Button { showThread = true } label: {
@@ -714,7 +700,6 @@ struct LarkMessageRow: View {
                     .buttonStyle(.plain)
                 }
                 if m.edited == true { Text("已编辑") }
-                if let d = m.createdAt { Text(d.formatted(date: .omitted, time: .shortened)) }
             }
             .font(Theme.Font.label)
             .foregroundStyle(.secondary)

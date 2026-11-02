@@ -766,3 +766,45 @@ func (c *Client) MarkRead(ctx context.Context, feedID string, r Read) error {
 	}
 	return c.do(ctx, "POST", "/conversations/"+url.PathEscape(feedID)+"/read-position", nil, body, nil)
 }
+
+// MaxReadStates is how many messages one ReadStates call may ask about (lark-connector's own cap per batch).
+const MaxReadStates = 100
+
+// ReadState is a message's read receipt: how many members have read it and how many have not.
+type ReadState struct {
+	MessageID   string `json:"message_id"`
+	ReadCount   int    `json:"read_count"`
+	UnreadCount int    `json:"unread_count"`
+}
+
+// ReadStates returns the read receipts of messages in one chat. A message lark-connector has no receipt for (still
+// sending, unknown, rejected by Feishu) is simply missing from the result. At most MaxReadStates ids.
+func (c *Client) ReadStates(ctx context.Context, feedID string, messageIDs []string) ([]ReadState, error) {
+	if len(messageIDs) > MaxReadStates {
+		return nil, fmt.Errorf("lark: at most %d messages per read-states call", MaxReadStates)
+	}
+	out := []ReadState{}
+	if len(messageIDs) == 0 {
+		return out, nil
+	}
+	pairs := make([]map[string]string, len(messageIDs))
+	for i, id := range messageIDs {
+		pairs[i] = map[string]string{"feedId": feedID, "messageId": id}
+	}
+	var res struct {
+		Items []struct {
+			MessageID   string `json:"messageId"`
+			ReadCount   int    `json:"readCount"`
+			UnreadCount int    `json:"unreadCount"`
+		} `json:"items"`
+	}
+	if err := c.do(ctx, "POST", "/messages/read-states", nil, map[string]any{"pairs": pairs}, &res); err != nil {
+		return nil, err
+	}
+	for _, it := range res.Items {
+		if it.MessageID != "" {
+			out = append(out, ReadState{MessageID: it.MessageID, ReadCount: it.ReadCount, UnreadCount: it.UnreadCount})
+		}
+	}
+	return out, nil
+}
