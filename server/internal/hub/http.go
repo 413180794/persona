@@ -213,6 +213,7 @@ func (h *Hub) routes() http.Handler {
 	}
 	h.tokenRoutes(api)
 	h.portRoutes(api)
+	h.runtimeCLIRoutes(api)
 	mux.Handle("/api/", h.auth(api))
 	mux.Handle("/", webApp(filepath.Join(h.cfg.dir, "web")))
 	return logRequests(h, mux)
@@ -579,6 +580,8 @@ type client struct {
 	subs  map[[2]string]bool
 	phone bool
 	sim   bool // a simulator registered as phone: only used when no real iPhone is connected
+	// runtimeCLI: the phone's DEBUG app offers its runtime CLI (runtime_cli.go); never one of the phone's tools.
+	runtimeCLI bool
 	// desktop: a desktop app (the Mac app, register_desktop); never the phone (desktops.go).
 	desktop bool
 	// device and role: whose credential opened the connection (devicetokens.go); device is empty for the pairing token.
@@ -866,11 +869,21 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		if c.role != roleFull { // runs tools on behalf of claude: not for an answer-only device
 			return
 		}
+		tools, cli := splitRuntimeCLI(msg.Tools)
+		if cli && len(tools) == 0 {
+			// Only the runtime CLI: a simulator driven by a script (docs/runtime-cli.md「经 hub 连真机」). Not the
+			// phone: it takes no phone_* call and changes nothing about pushes.
+			h.mu.Lock()
+			c.runtimeCLI, c.sim, c.name, c.since = true, msg.Simulator, msg.DeviceName, time.Now()
+			h.mu.Unlock()
+			return
+		}
 		h.mu.Lock()
 		c.phone, c.sim, c.name, c.since, c.pushDevice = true, msg.Simulator, msg.DeviceName, time.Now(), msg.DeviceID
+		c.runtimeCLI = cli
 		h.mu.Unlock()
-		if len(msg.Tools) > 0 {
-			h.setPhoneTools(msg.Tools)
+		if len(tools) > 0 {
+			h.setPhoneTools(tools)
 		}
 	case "register_desktop":
 		h.registerDesktop(c, msg.DeviceName, msg.DeviceID)

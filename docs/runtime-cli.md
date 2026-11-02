@@ -190,6 +190,18 @@ mock 自己的 `/mock/reset`、`/mock/seen`、`/mock/churn` 照旧直接请求 h
 重新拉起来，记下时间、退出码、场景（`offline` 场景和切场景都不算）。`GET /scenario` 的 `restarts` 是这些记录，`jarvisctl.py online`
 回答里的 `mockRestarts` 是同一份，`id-cli.py` 跑完有重启就打一行 WARNING（那前后的截图要重拍）。实测 `kill -9` 子进程后 0.6 s hub 又能应答。
 
+## 经 hub 连真机
+
+模拟器上的 App 和脚本在同一台 Mac 的回环端口上说话；真机上跑着的 DEBUG 包要经 hub：hub 的
+`POST /api/v1/phone/runtime-cli {cmd, args, timeout}` 把命令转给登记了 `phone_runtime_cli` 的 App，App 走和本地端口同一份命令分发，
+回答原样回来（`docs/protocol.md`）。
+
+- **只给你自己的脚本**：只认 `full` 设备凭据（手表等只读设备 403）；`phone_runtime_cli` 不是手机的工具，不进 Agent 的工具列表，
+  Agent 调不到。**真机的界面上有邮件、消息、健康数据：截图和界面树只落在你自己的机器上，不发进任何 Agent 对话。**
+- hub 每次调用记一行日志：命令、调用方设备 id、状态、耗时；不记参数（打进 App 的文字）和回答（截图、屏幕上的内容）。
+- 有真机登记时模拟器不接（和手机工具同一规则）；没有 App 在线 503 `phone_offline`，hub 不为它唤醒手机。
+- hub 在 hello 的 `features` 里带 `runtime_cli`；App 只在看到它时才登记 `phone_runtime_cli`（老 hub 会把它当成普通的手机工具交给 Agent）。
+
 ## 协议和安全
 
 - 只在 DEBUG 构建里：`apple/Jarvis/Debug/` 下的文件整个包在 `#if DEBUG && os(iOS)` 里，入口是 `AppDelegate` 原有

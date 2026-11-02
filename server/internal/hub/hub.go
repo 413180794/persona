@@ -876,6 +876,8 @@ func (h *Hub) mcpBuiltinTools(assistant bool) []proto.Tool {
 
 func (h *Hub) callTool(ctx context.Context, machineID, name string, args json.RawMessage) proto.ToolResult {
 	switch {
+	case name == runtimeCLITool: // the DEBUG app's own channel, for the user's scripts only (runtime_cli.go)
+		return proto.TextResult("unknown tool "+name, true)
 	case strings.HasPrefix(name, "phone_"):
 		return h.callPhone(ctx, name, args)
 	case strings.HasPrefix(name, "mail_") && h.mail != nil:

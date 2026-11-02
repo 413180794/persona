@@ -78,6 +78,24 @@ struct InboxTests {
         #expect(FeishuLinks.route(post) == .momentsPost(id: "7000000000000000001"))
         #expect(FeishuLinks.route(minutes) == nil) // a web page in the link sheet
     }
+
+    @Test func feishuLinkTargets() throws {
+        func target(_ s: String) throws -> FeishuLinks.Target { FeishuLinks.target(try #require(URL(string: s))) }
+        // Feishu docs and removed posts: the native views.
+        #expect(try target("https://open.feishu.cn/docx/ExampleDocument == .route(.doc(url: "https://open.feishu.cn/docx/ExampleDocument title: nil)))
+        #expect(try target("https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001") == .route(.momentsPost(id: "7000000000000000001")))
+        // Any other web page, Feishu's own included: the in-app link sheet.
+        #expect(try target("https://example.com/a?b=1") == .sheet)
+        #expect(try target("HTTP://Example.com") == .sheet)
+        #expect(try target("https://open.feishu.cn/docx/ExampleDocument == .sheet)
+        // Not a web page: the system.
+        #expect(try target("mailto:me@example.com") == .system)
+        #expect(try target("tel:10086") == .system)
+        #expect(try target("lark://client/profile?uid=u1") == .system)
+        #expect(try target("/docs/a") == .system) // relative path
+        #expect(try target("https:///no-host") == .system)
+        #expect(try target("http:") == .system)
+    }
 }
 
 @MainActor

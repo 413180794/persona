@@ -648,11 +648,16 @@ struct InboxDetailView: View {
 /// The pages the inbox opens, in either layout (`SplitNavigation`).
 struct InboxDestinations: ViewModifier {
     var accounts: [MailAccount]
+    @Environment(\.feishuOpen) private var feishuOpen
 
+    // Links on these pages open in the app (feishuHandlesLinks) wherever the stack is: the shell pushes them onto its
+    // own stack, where the inbox page's handler does not reach.
     func body(content: Content) -> some View {
         content
-            .navigationDestination(for: InboxItem.self) { InboxDetailView(item: $0, accounts: accounts).splitDetailPage() }
-            .navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0).splitDetailPage() }
+            .navigationDestination(for: InboxItem.self) {
+                InboxDetailView(item: $0, accounts: accounts).splitDetailPage().feishuHandlesLinks(feishuOpen)
+            }
+            .navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0).splitDetailPage().feishuHandlesLinks(feishuOpen) }
     }
 }
 

@@ -46,20 +46,57 @@ extension View {
         navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0) }
     }
 
-    /// Feishu doc / wiki links open in the native reader and removed links as the post, instead of Safari.
+    /// Links inside Feishu views stay in the app (CLAUDE.md「链接在 App 内打开」): doc / wiki links open in the native
+    /// reader and removed links as the post, other web pages in the link sheet; mailto, tel and the like go to the system.
     func feishuHandlesLinks(_ open: ((FeishuRoute) -> Void)?) -> some View {
-        environment(\.openURL, OpenURLAction { url in
-            if let open, let route = FeishuLinks.route(url) {
+        modifier(FeishuLinkHandling(open: open))
+    }
+}
+
+private struct FeishuLinkHandling: ViewModifier {
+    @Environment(AppModel.self) private var model
+    var open: ((FeishuRoute) -> Void)?
+    @State private var link: LinkTarget?
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        content.environment(\.openURL, OpenURLAction { url in
+            if let open, case .route(let route) = FeishuLinks.target(url) {
                 open(route)
                 return .handled
             }
-            #if os(macOS)
             return LinkPolicy.system(url) // NSWorkspace would run any scheme it names
-            #else
-            return .systemAction
-            #endif
         })
+        #else
+        content
+            .environment(\.openURL, OpenURLAction { url in
+                switch FeishuLinks.target(url) {
+                case .route(let route) where open != nil:
+                    open?(route)
+                    return .handled
+                case .route, .sheet:
+                    // The sheet's AI 修改 / 作为上下文 go to the assistant, whose config loads with its page: opened
+                    // straight into the inbox it is not there yet. With no assistant at all, the system opens the link.
+                    if assistant != nil {
+                        link = LinkTarget(url: url)
+                        return .handled
+                    }
+                    Task {
+                        await model.refreshAssistant()
+                        if assistant != nil { link = LinkTarget(url: url) } else { await UIApplication.shared.open(url) }
+                    }
+                    return .handled
+                case .system:
+                    return .systemAction
+                }
+            })
+            .sheet(item: $link) { t in
+                if let assistant { LinkSheet(target: t, key: assistant) }
+            }
+        #endif
     }
+
+    private var assistant: SessionKey? { model.assistantMain ?? model.assistantCurrent }
 }
 
 nonisolated enum FeishuLinks {
@@ -77,6 +114,23 @@ nonisolated enum FeishuLinks {
         if let id = LarkMoments.postID(url.absoluteString) { return .momentsPost(id: id) }
         return nil
     }
+
+    typealias Target = FeishuLinkTarget
+
+    static func target(_ url: URL) -> Target {
+        if let route = route(url) { return .route(route) }
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), !(url.host ?? "").isEmpty else { return .system }
+        return .sheet
+    }
+}
+
+/// Where a tapped link opens (`FeishuLinks.target`): a native Feishu view, the in-app link sheet (any other web page),
+/// or the system (mailto, tel, other schemes, and what is not a web address at all: relative paths, a scheme without a
+/// host). Main-actor like `FeishuRoute`, whose conformances it uses.
+enum FeishuLinkTarget: Hashable {
+    case route(FeishuRoute)
+    case sheet
+    case system
 }
 
 struct FeishuRouteView: View {
