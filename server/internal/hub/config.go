@@ -14,6 +14,7 @@ import (
 	"github.com/mdp/qrterminal/v3"
 
 	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -73,6 +74,10 @@ type Config struct {
 	// LarkGate: extra rules for the assistant's Feishu writes through the lark-connector skill, before the built-in ones
 	// (node/larkgate.go; e.g. {"method":"POST","path":"/conversations/*/messages","action":"allow"}).
 	LarkGate []proto.LarkRule `json:"lark_gate,omitempty"`
+	// ConnectorGate: rules for connectors' writes (github_comment…), the first match decides; without one the user
+	// allows each write on the phone (internal/connector/gate.go; e.g. {"connector":"github","action":"github_comment",
+	// "match":{"repo":"example-org/*"},"decision":"allow"}).
+	ConnectorGate []connector.Rule `json:"connector_gate,omitempty"`
 	// Google is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
 	Google   GoogleConfig    `json:"google"`
 	Machines []MachineConfig `json:"machines"`
@@ -179,6 +184,9 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("%s: token is empty", path)
 	}
 	if err := cfg.Lark.Validate(); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if err := connector.ValidateRules(cfg.ConnectorGate); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if cfg.HookTimeoutMinutes <= 0 {

@@ -1,6 +1,7 @@
 # 计划：连接器（先接 GitHub 和 iMessage）
 
-状态：计划，未动代码。用户 2026-11-01：「派个车道先写连接器的计划，先接 GitHub 和 iMessage」。
+状态：进行中。用户 2026-11-01：「派个车道先写连接器的计划，先接 GitHub 和 iMessage」；2026-11-02 开始做：先做框架（C1），再接 GitHub，再接 iMessage，
+飞书和邮件的迁移（M0–M6）放后面。还没拍板的两项先按保守的默认值做，留好开关（见「需要用户拍板」2、7）。
 用户对本计划点头后按「分步计划」做，做完的步骤打勾；全部做完后把设计部分并进 `docs/connectors.md`（新）、`docs/knowledge.md`、`docs/inbox.md`，删掉这份计划。
 
 ## 背景：现在各接各的
@@ -453,7 +454,7 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 - **GitHub**：token 加密存 hub，不回给任何客户端；只收和我有关的线程；写操作全部过闸门。
 - **iMessage 是最敏感的个人数据**，默认关，打开时在设置里逐项选：
   - **哪些进知识库**：默认只收**通讯录里有的人**的私聊和群（验证码、银行、快递、营销这类短号码自动排除）；可以改成「全部」或「只收白名单」。
-    hub.json / 设置里的 `imessage: {machine, mode: contacts|all|allowlist, include: [], exclude: [], text_days, attachments: false, model: true}`；
+    hub.json / 设置里的 `imessage: {machine, mode: contacts|all|allowlist, include: [], exclude: [], text_days, attachments: false, model: false}`（`model` 默认关，见拍板 7）；
     排除列表按会话（App 里在收件箱详情点「不再收这个会话」也加进去），**加进排除时立刻删掉已归档的内容**。
   - **验证码**：即使在收的会话里，像验证码的消息（「验证码」「code」附近的 4–8 位数字）把数字换成「••••」再存。
   - **保留多久**：文字默认跟 `kb.text_days`（365 天），可以单独设短（建议 90 天，见拍板）；附件第一期不存。
@@ -466,6 +467,7 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 | 步 | 内容 | 验收 |
 | --- | --- | --- |
 | P0 | 本计划 | 用户点头；拍板项有结论 |
+| C1 ✓ | 框架（#414）：`connector` 包（`Connector` 和可选能力 `Accounts` / `ReadTools` / `Actions` / `Events` / `Hosts`、`Registry`、闸门 `connector_gate`）；hub 持有 Registry，`GET /api/v1/connectors`、特性 `connectors`，连接器的工具只给助手、按前缀分发，写操作过闸门、默认走手机卡片；`Events` 踢收件箱 / 知识库。`Inbox`、`StreamSource`、凭据、`Poller` 随第一个用到它们的连接器（G1–G4）一起加 | 不注册连接器时 MCP golden 逐字节不变；假连接器的单元测试（工具只来自 `ok` 的、写操作等卡片、闸门 allow / deny、Watch 退避重启） |
 | M0–M6 | 迁移（第三节） | 每步：现有测试 + golden 逐字节 + 合成对照 + 真实数据对照一致；部署后一天日志同量级 |
 | G1 | GitHub：`credential.gh_token` RPC、`from_machine` 取 token（内存）、粘贴备选、状态、`/api/v1/connectors`、设置页的 GitHub 行 | 设置页显示「来自 <机器> 的 gh 登录 · 账号」；那台机器离线时用内存里的、hub 重启后离线报「未授权（<机器> 离线）」、连上自动恢复；401 重新取一次；旧 node 报太旧；token 不出现在数据库、日志、响应、助手环境里（grep 验证）；粘贴假 token 报错；设置页深浅色截图 |
 | G2 | 只读工具 `github_search/read/diff/checks` | golden；对 mock GitHub（合成 JSON）的单元测试；用户的真 token 在 hub 上读一个自己的 PR（只看结果条数和截断是否生效） |
@@ -486,12 +488,14 @@ GitHub 和迁移可以并行（G1、G2 只依赖 M1、M4）；iMessage 依赖 M1
 
 1. ~~**GitHub token 怎么给**~~：已定（2026-11-01）——从 `github.auth.from_machine` 那台机器的 gh 登录读，只留在 hub 内存；手动粘贴作备选（见「四 · 凭据」）。
 2. **GitHub 是 github.com 还是公司自建的 GHE**（或者两个都要）？自建的地址只写配置。
+   暂按默认（2026-11-02 主会话）：先接 github.com；`github.auth.host` 留成配置项，GHE 现在不做。
 3. **GitHub 进知识库的范围**：只收和我有关的线程（推荐），还是指定仓库全部 PR / issue？
 4. **已处理要不要回写 GitHub 的已读**：现在飞书、邮件都不回写（推荐保持一致）。
 5. **iMessage 读哪台 Mac**：数据一致的两台里选一台常开的（推荐），另一台不读。
 6. **权限**：第一期用现成的「ssh 有完全磁盘访问权限」（推荐，代价是任何 ssh 会话都有这个权限，现在已经如此），还是一开始就做独立帮手、把 ssh 那个开关关掉？
 7. **iMessage 收哪些**：只收通讯录里的人（推荐）/ 全部 / 白名单；SMS（验证码、通知）要不要收；文字保留多久（推荐 90 天）；
    **能不能把信息的文字发给模型**（压缩、分拣、AI 分身；不能的话只归档和搜索）。
+   暂按默认（2026-11-02 主会话）：读取放在 Mac 的 node 本地；**默认不把消息文字交给 AI**，只在 App 里给用户自己看；`imessage.model` 是开关，默认关。
 8. **联系人名字**：Mac 通讯录为主、手机补（推荐），还是只用手机的 `phone_contacts`？
 9. **iMessage 回复第一期**：用 `sms:` 打开系统「信息」由你按发送（推荐），还是直接做从 Mac 发（要「自动化」权限，必须过闸门）？
 10. **外部进程连接器**：同意「MCP 管工具 + `/sync/*` 管增量」的方向，并且等有第一个外部连接器再实现？

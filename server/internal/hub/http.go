@@ -202,6 +202,7 @@ func (h *Hub) routes() http.Handler {
 	h.larkRoutes(api)
 	h.agentRoutes(api)
 	h.inboxRoutes(api)
+	h.connectorRoutes(api)
 	h.translateRoutes(api)
 	h.pluginRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)

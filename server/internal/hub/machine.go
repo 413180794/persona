@@ -661,6 +661,9 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, err
 		}
+		if p.Assistant && m.hub.connectors.Owner(p.Name) != nil {
+			return m.hub.callConnector(ctx, m.cfg.ID, p.Name, p.Args), nil
+		}
 		if p.Assistant && isAssistantTool(p.Name) {
 			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil
 		}

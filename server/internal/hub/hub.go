@@ -18,6 +18,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/agents"
 	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
@@ -100,6 +101,8 @@ type Hub struct {
 	devtok        devTokens // device token lookups (devicetokens.go)
 	sends         sendLog   // messages being / just sent, by client_msg_id (send.go)
 	plugins       *plugins  // processes that add to the app, relayed under /api/v1/plugins (plugins.go)
+
+	connectors *connector.Registry // sources of the user's information (connectors.go)
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -227,6 +230,7 @@ func Run(ctx context.Context, b update.Build) error {
 	h.lark = lark.New(cfg.Lark)
 	h.inbox.larkAccount = h.lark.Account()
 	h.initAgents()
+	h.connectors = connector.NewRegistry(cfg.ConnectorGate)
 	for _, mc := range cfg.Machines {
 		m := newMachine(h, mc)
 		h.machines = append(h.machines, m)
@@ -243,6 +247,7 @@ func Run(ctx context.Context, b update.Build) error {
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
+	h.connectors.Watch(ctx, h.connectorChanged, h.logf)
 	h.upd.start(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
 	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
@@ -816,7 +821,17 @@ func (h *Hub) setPhoneTools(tools []proto.Tool) {
 	}
 }
 
+// mcpTools are the tools of an assistant conversation or an agent: the hub's own, then (the assistant's only) those
+// of every connector that is ok.
 func (h *Hub) mcpTools(assistant bool) []proto.Tool {
+	tools := h.mcpBuiltinTools(assistant)
+	if assistant {
+		tools = append(tools, h.connectors.Tools(context.Background())...)
+	}
+	return tools
+}
+
+func (h *Hub) mcpBuiltinTools(assistant bool) []proto.Tool {
 	h.mu.Lock()
 	tools := append([]proto.Tool(nil), h.phoneTools...)
 	h.mu.Unlock()

@@ -582,6 +582,15 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | `phone_*` | iPhone App | 由 App `register_phone` 声明（通讯录、日历、提醒、位置、健康、照片、剪贴板、设备信息、通知……） |
 | `mail_accounts` / `mail_search` / `mail_read` | hub | 只读 |
 | `mail_send` | hub | 发送前创建 `permission` 交互，手机批准后才发 |
+| `<连接器 id>_*` | hub（连接器） | 只给助手、只给状态是 `ok` 的连接器。只读工具直接执行；写操作先过 hub.json 的 `connector_gate`，默认创建 `permission` 交互（卡片上写明谁会看到），手机批准后才执行（`server/internal/connector`） |
+
+## 连接器 API
+
+特性 `connectors`（`/health` 和 WebSocket hello 的 `features`），旧 hub 没有这个接口。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/connectors` | `{"connectors":[{id, name, status, account?, error?, last_sync?, last_event?, capabilities:[…], hosts?:[…]}]}`：hub 上注册的连接器（不含飞书和邮箱，它们还走自己的接口）。`status` 是 `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error`；`error` 是给人看的一句话，不含密钥；`capabilities` 取 `status` / `tools` / `actions` / `events` / `hosts`；`hosts` 是这个连接器的链接所在的主机名（App 用来认链接） |
 
 ## 邮件 API
 
