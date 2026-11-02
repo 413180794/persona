@@ -173,6 +173,11 @@ runtime 是**装在别的程序里的插件**时（DSH 的插件），那个程�
 - **安全**：只有经本机 `runtime.sock` 连进来的 runtime 拿得到包（和 node 同一个用户）；daemon 拿不到（link 不转 `package`，
   `runtime.package` 回 `unsupported`），daemon 模式的 DSH 插件默认也不接受更新（`autoUpdate`），要换版本就重启它。
 - **第一次**：在没有加载器的老插件上，要在宿主里手动重新加载一次，换成加载器；之后都是「发布 → hub → node → 插件」。加载器自己要改时同样要手动一次，所以它要尽量薄。
+- **另一种宿主：自己会重新加载的（pi）**：pi 重新加载扩展时从磁盘读、不缓存模块，所以不用加载器那一层：扩展从存放目录的固定路径
+  `<store>/current/…` 装（`current` 是指向 `<哈希>` 的符号链接，`installCurrent` 改名替换），收到提议后取包、装成新的 `current`，
+  等空闲时让宿主重新加载（pi 用扩展自己注册的命令），新版本的宿主用同一个进程标识（`createRuntime` 的 `instance`）连上 node 顶替旧的。
+  常驻的独立进程（pi 的伴随进程）装好后退出，交给 launchd / systemd 拉起。`selfPackage(import.meta.url, name)` 告诉一个模块它跑的是哪个包、
+  在不在存放目录里（不在就不更新）。细节见 `docs/pi.md`「自动更新」。
 - 要换版本的实现模块导出 `api`（`LOADER_API`，现在是 1）和 `start(host)`，返回 `{stop, busy, fetchPackage}`（就是 `createRuntime` 的同名方法），
   `host` 里有加载器的 `context`（DSH 是 `{ctx, config}`）和要传给 `createRuntime` 的 `package`、`onUpdate`。加一个这样的 runtime：在两份清单里登记它的文件，
   宿主加载的入口改成 `createLoader`。

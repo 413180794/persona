@@ -2,14 +2,23 @@
 // host, or pi-web's server — into the Jarvis apps through the jarvisd node on this machine
 // (~/.jarvis/runtime.sock, docs/runtimes.md). It does nothing visible until a node listens.
 //
-// Configuration (optional): <agent dir>/jarvis.json — { "approve": ["bash"], "askUser": true, "answerFirst": "auto" }.
+// Configuration (optional): <agent dir>/jarvis.json — { "approve": ["bash"], "askUser": true, "answerFirst": "auto",
+// "autoUpdate": true }.
+//
+// Updates (docs/pi.md「自动更新」): installed from a store (pi's settings name <store>/current/pi), this extension takes
+// the version the node carries — installs it as current and, once its sessions are idle, has each of them reload
+// (pi reads extensions afresh on reload), so the new code runs in this same process. Installed from anywhere else (a
+// checkout), it never updates itself.
 
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
+import { selfPackage } from '../runtime-sdk/index.js'
 import { createPiHost, piWebOf } from './lib/pi.js'
+
+const SELF = selfPackage(import.meta.url, 'jarvis-pi-runtime')
 
 function config() {
   const dir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent')
@@ -20,25 +29,40 @@ function config() {
   }
 }
 
-// One host per process: pi loads this module once and calls the factory once per session.
+// One host per process and version: pi loads this module once and calls the factory once per session; a reload
+// that brings a new version loads it again, and that version's host takes the process over from the one before.
 function host() {
-  if (!globalThis.__jarvisPiHost) {
-    const c = config()
-    const web = piWebOf()
-    globalThis.__jarvisPiHost = createPiHost({
-      SessionManager,
-      web,
-      // A pi in a herdr pane: the node shows it as herdr's session (pi-web's server may run in a pane too: not it).
-      paneId: web ? undefined : process.env.HERDR_PANE_ID || undefined,
-      log: (m) => { if (process.env.JARVIS_PI_DEBUG) console.error(m) },
-    }, {
-      socketPath: typeof c.socket === 'string' && c.socket ? c.socket : undefined,
-      answerFirst: ['auto', 'phone', 'local'].includes(c.answerFirst) ? c.answerFirst : 'auto',
-      approve: Array.isArray(c.approve) ? c.approve.filter((t) => typeof t === 'string') : [],
-    })
-    globalThis.__jarvisPiAskUser = c.askUser !== false
+  const slot = (globalThis.__jarvisPi ??= {})
+  if (slot.host && slot.hash === SELF.hash) {
+    if (slot.host.retired) slot.host.revive() // a switch that brought this same version back
+    return slot.host
   }
-  return globalThis.__jarvisPiHost
+  slot.host?.stop() // an older version's: its sessions are reloading onto this one
+  if (globalThis.__jarvisPiHost) { // the host of a version from before self-update
+    try {
+      globalThis.__jarvisPiHost.stop()
+    } catch {}
+    delete globalThis.__jarvisPiHost
+  }
+  const c = config()
+  const web = piWebOf()
+  slot.hash = SELF.hash
+  slot.host = createPiHost({
+    SessionManager,
+    web,
+    // A pi in a herdr pane: the node shows it as herdr's session (pi-web's server may run in a pane too: not it).
+    paneId: web ? undefined : process.env.HERDR_PANE_ID || undefined,
+    log: (m) => { if (process.env.JARVIS_PI_DEBUG) console.error(m) },
+  }, {
+    socketPath: typeof c.socket === 'string' && c.socket ? c.socket : undefined,
+    answerFirst: ['auto', 'phone', 'local'].includes(c.answerFirst) ? c.answerFirst : 'auto',
+    approve: Array.isArray(c.approve) ? c.approve.filter((t) => typeof t === 'string') : [],
+    // The same process to the node across versions: the next version's host replaces this connection.
+    instance: `pi-${process.pid}`,
+    update: SELF.store && c.autoUpdate !== false ? { name: SELF.name, hash: SELF.hash, store: SELF.store } : undefined,
+  })
+  globalThis.__jarvisPiAskUser = c.askUser !== false
+  return slot.host
 }
 
 export default function jarvis(pi) {

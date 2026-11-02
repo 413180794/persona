@@ -3,8 +3,9 @@
 // node sends in a store and checks every one before it runs it.
 
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { join, relative, sep } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join, relative, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /**
  * The packages and the files each is made of, relative to the integrations directory (`*` only in the last segment).
@@ -13,6 +14,7 @@ import { join, relative, sep } from 'node:path'
  */
 export const PACKAGES = {
   'jarvis-dsh-runtime': ['dsh/package.json', 'dsh/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
+  'jarvis-pi-runtime': ['pi/package.json', 'pi/index.js', 'pi/companion.mjs', 'pi/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
 }
 
 /** A package name, as jarvisd takes it. */
@@ -139,11 +141,72 @@ export function storeVersion(store, hash, files) {
       mkdirSync(join(path, '..'), { recursive: true })
       writeFileSync(path, f.data, { mode: 0o644 })
     }
-    renameSync(tmp, dir)
+    try {
+      renameSync(tmp, dir)
+    } catch (err) {
+      // Another process stored the same version meanwhile (pi-web's extension and the companion both install it).
+      if (!existsSync(dir) || packageHash(readTree(dir)) !== hash) throw err
+    }
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }
   return dir
+}
+
+const HASH_DIR = /^[0-9a-f]{64}$/
+
+/** The version <store>/current points at (installCurrent), or ''. */
+export function currentHash(store) {
+  try {
+    const target = readlinkSync(join(store, 'current'))
+    return HASH_DIR.test(target) ? target : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Store a checked package and point <store>/current at it (a symlink replaced by a rename: whoever reads `current`
+ * sees the old version or the new one, never neither). For a runtime whose host loads it from a fixed path
+ * (pi's settings name <store>/current/pi). Keeps the version current pointed at before, removes older ones.
+ * @returns {string} the version's directory.
+ */
+export function installCurrent(store, hash, files) {
+  const dir = storeVersion(store, hash, files)
+  const before = currentHash(store)
+  if (before !== hash) {
+    const tmp = join(store, `.current.${randomBytes(4).toString('hex')}.tmp`)
+    symlinkSync(hash, tmp)
+    renameSync(tmp, join(store, 'current'))
+  }
+  for (const n of readdirSync(store)) {
+    if ((HASH_DIR.test(n) && n !== hash && n !== before) || (n.startsWith('.') && n.endsWith('.tmp'))) {
+      rmSync(join(store, n), { recursive: true, force: true })
+    }
+  }
+  return dir
+}
+
+/**
+ * The package a module of it runs from: the directory holding its dirs (dsh/, pi/, runtime-sdk/), its hash, and —
+ * when that directory is a version in a store (<store>/<hash>/, reached through <store>/current or not) — the store,
+ * so the runtime may install the node's version there.
+ * @param {string} url - import.meta.url of a module at <root>/<dir>/<file> (depth: how many dirs below root).
+ * @param {string} name - the package (PACKAGES).
+ * @param {number} [depth] - 1 for <root>/pi/index.js, 2 for <root>/pi/lib/x.js.
+ * @returns {{ name: string, root: string, hash: string, store?: string }}
+ */
+export function selfPackage(url, name, depth = 1) {
+  let root = dirname(fileURLToPath(url))
+  for (let i = 0; i < depth; i++) root = dirname(root)
+  try {
+    root = realpathSync(root)
+  } catch {
+    // as given
+  }
+  const hash = packageHash(readShipped(root, PACKAGES[name] ?? []))
+  const inStore = HASH_DIR.test(basename(root)) && basename(root) === hash
+  return { name, root, hash, ...(inStore ? { store: dirname(root) } : {}) }
 }
 
 /** Write a small JSON file atomically. */

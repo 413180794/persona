@@ -53,9 +53,13 @@
 旧 node 上它不连，等 node 重启（升级）后自己连上；扩展照常工作（只是没有磁盘上的会话、不能从手机新建）：
 
 1. 装 pi 和 pi-web：`npm i -g @earendil-works/pi-coding-agent @agegr/pi-web`，配好模型（`~/.pi/agent/models.json`，见 pi 的文档）。
-2. 把这个包装进 pi：`pi install <Jarvis 仓库>/integrations/pi`（本地目录是链接，不拷贝；它按相对路径用旁边的 `runtime-sdk`，两个目录要放在一起）。
+2. 装成能自动更新的样子（下面「自动更新」）：`node <Jarvis 仓库>/integrations/pi/install.mjs`，把这个包装进
+   `~/.jarvis/runtime-packages/jarvis-pi-runtime/current/`，它会打印下面两步的确切路径。
+   再 `pi install ~/.jarvis/runtime-packages/jarvis-pi-runtime/current/pi`（它按相对路径用旁边的 `runtime-sdk`），
    pi 终端、`pi --mode rpc`、pi-web 都会加载它。装完重启 pi-web。
-3. 常驻伴随进程：`node <Jarvis 仓库>/integrations/pi/companion.mjs [--port <pi-web 端口>]`，用 launchd / systemd 保活。
+   也可以直接 `pi install <Jarvis 仓库>/integrations/pi`（本地目录是链接，不拷贝），但那样不会自动更新，要自己更新检出目录、重启 pi-web。
+3. 常驻伴随进程：`node ~/.jarvis/runtime-packages/jarvis-pi-runtime/current/pi/companion.mjs [--port <pi-web 端口>]`，用 launchd（`KeepAlive`）/
+   systemd（`Restart=always`）保活：自动更新时它装好新版本就退出，等保活把它用新代码拉起来。
    磁盘上的会话（停了的 herdr 会话、pi-web 回收的会话）都靠它列出；只在 herdr 里用 pi 也装上它。
 4. 在 herdr 里用 pi：`herdr integration install pi`（herdr 自己的 pi 集成，报状态和会话文件；不装也行，扩展会报窗格）。
 
@@ -69,6 +73,25 @@
 | `askUser` | `true` | 给模型一个 `ask_user` 工具：问用户一个问题（可带选项），手机或 pi 的对话框作答 |
 | `answerFirst` | `auto` | 授权和提问先给谁：`auto` = 手机最近 6 小时驱动过这个会话就先给手机，否则先给本地（pi 终端 / pi-web 网页）；`phone` / `local` 固定一边 |
 | `socket` | `~/.jarvis/runtime.sock` | node 的 runtime socket；环境变量 `JARVIS_RUNTIME_SOCKET` 也行 |
+| `autoUpdate` | `true` | 从存放目录装的扩展接受 node 带来的版本（「自动更新」）；`false` 不换。伴随进程用 `--no-update` |
+
+### 自动更新
+
+jarvisd 构建时把这个包（`integrations/pi` 的扩展、伴随进程和 `runtime-sdk`，`internal/runtimepkg` 的 `jarvis-pi-runtime`）打进二进制，
+node 带的就是要跑的（通用做法见 `docs/runtimes.md`「自动更新」）。从存放目录装的（pi 加载 `<存放目录>/current/pi`）才会更新：
+
+- **扩展**（pi 终端、`pi --mode rpc`、pi-web 的服务进程）：连上 node 时报自己的包哈希；node 带的不一样，它取包、核对、装成新的 `current`（符号链接改名替换），
+  然后等这个进程里**所有会话都在两轮之间、手机上没有它的卡片**，停掉自己的连接，让每个会话对自己执行 `/jarvis-reload`。这个命令是扩展注册的，
+  里面调 pi 的 `ctx.reload()`（pi 只在命令里给扩展这个能力），所以用 `sendUserMessage("/jarvis-reload", {expandPromptTemplates: true})` 当命令执行，
+  不会发给模型。pi 重新加载扩展时从磁盘读（jiti、不缓存模块），读到的是新的 `current`：同一个进程、同一个会话，换上新代码，新版本的宿主用同一个
+  进程标识（`instance`）连上 node，顶替旧的连接。pi-web 正在回复时不让重新加载，所以要等空闲。
+  pi-web 里一个会话都没开时没有可重新加载的：下一个会话打开时 pi 用的还是缓存的旧代码，它打开后马上换。
+- **伴随进程**：同样取包、装好，然后退出，launchd / systemd 用新代码把它拉起来（不保活的话它就停在那，所以一定要保活）。
+- 换不上（不能注册命令的老 pi、重新加载回来的还是旧版本）：留在旧版本，这个版本在本进程里不再试，pi 重启后再试。
+- 跑的是哪个版本：node 日志 `runtime pi-web <版本> #N connected`；扩展的日志要 `JARVIS_PI_DEBUG=1`。
+
+第一次（从没有这套机制的版本、或从检出目录装的）要手动切换一次：`install.mjs`、`pi install` 新路径、伴随进程改从新路径跑、重启 pi-web 和伴随进程。
+都是命令行，在那台电脑的终端里做（或者让 Agent 做），不用去任何界面里点。
 
 伴随进程的 `--port` / `--host` 跟 pi-web 一致（默认 `127.0.0.1:30141`）；pi-web 设了 `PI_WEB_PASSWORD` 时伴随进程要有同一个环境变量。
 
@@ -110,5 +133,9 @@
   - `node integrations/pi/e2e/herdr.mjs`：真的 herdr（独立的具名会话，配置目录在临时目录，装了 herdr 的 pi 集成）里的 pi TUI、真的 `jarvisd node`、伴随进程：
     一行 herdr 会话、扩展在服务、画面来自窗格、通用验收、手机的消息没打进窗格、`/quit` 后从磁盘列出、再发一条在 herdr 同一空间的新标签里接着并回答。2026-11-01：23/23。
   - `node integrations/pi/e2e/run.mjs`：真的 `pi --mode rpc` 加扩展、真的 `jarvisd node`：列出、通用验收。2026-11-01：16/16。
+  - `node integrations/pi/e2e/update.mjs`：自动更新。pi-web 和伴随进程从存放目录装（伴随进程由脚本像 launchd 一样保活），node 的包来自一个目录
+    （`JARVIS_RUNTIME_PACKAGES`）：同版本时什么都不提供；换成带新版本的 node 后，pi-web 里的扩展原地换上（同一个 pi-web 进程、同一个会话），
+    伴随进程装好、退出、以新版本回来，`current` 指向新版本，换完从手机发消息照常回复，`/jarvis-reload` 没有进对话。2026-11-02：9/9。
+    单测：`integrations/pi/test/pi.test.js` 末尾五项（等空闲再换、没有命令就不换也不发消息、伴随进程装完退出、换回同一版本时恢复且不再试、哈希不对不装）。
   - `node integrations/pi/e2e/pi-web.mjs`：真的 pi-web（隔离的配置目录，按 `packages` 装上这个包，空闲回收调到 6 秒）+ 伴随进程：
     没有会话时就有启动器、从手机新建、发消息、回收后从磁盘列出和翻页、再发消息唤醒、扩展接回、网页里建的会话也列出。2026-11-01：11/11。

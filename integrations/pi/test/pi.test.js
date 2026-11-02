@@ -1,6 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, readlinkSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { startFakeNode, until } from '../../runtime-sdk/testing/fake-node.js'
+import { packageHash } from '../../runtime-sdk/lib/package.js'
 import { createPiHost, piWebOf } from '../lib/pi.js'
 
 /** A pi session manager over entries (file order); the branch runs from the leaf back through parentId. */
@@ -76,7 +79,8 @@ async function setup(t, opts = {}) {
     pid: 4242,
     paneId: opts.paneId,
   }
-  const host = createPiHost(deps, { socketPath: n.path, retryMs: 20, pushDelayMs: 5, approve: opts.approve, answerFirst: opts.answerFirst, listDisk: opts.listDisk })
+  const host = createPiHost(deps, { socketPath: n.path, retryMs: 20, pushDelayMs: 5, approve: opts.approve, answerFirst: opts.answerFirst, listDisk: opts.listDisk,
+    update: opts.update, instance: opts.instance })
   t.after(() => host.stop())
   return { n, host, posts }
 }
@@ -337,4 +341,118 @@ test('the companion gives sessions that ran in herdr a resume command, and never
   assert.equal(posts.length, 0)
   await n.peer.call('session.send', { session_id: 's-web', text: 'y', client_msg_id: 'h2' })
   assert.equal(posts.length, 1)
+})
+
+// ---- updates from the node (docs/pi.md「自动更新」) ----
+
+const PKG = 'jarvis-pi-runtime'
+/** The package a node carries: what runtime.package answers. */
+function offerOf(text) {
+  const files = [{ path: 'pi/index.js', data: Buffer.from(text) }, { path: 'runtime-sdk/index.js', data: Buffer.from('export {}') }]
+  return { name: PKG, hash: packageHash(files), version: 'node-2', files: files.map((f) => ({ path: f.path, data: f.data.toString('base64') })) }
+}
+/** A session whose pi lets extensions register commands (pi 1.x does). */
+function withCommands(s) {
+  s.pi.commands = new Map()
+  s.pi.registerCommand = (name, def) => s.pi.commands.set(name, def)
+  return s
+}
+function store(t) {
+  const dir = mkdtempSync('/tmp/jrt-pistore-')
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  return dir
+}
+const reloads = (s) => s.pi.sent.filter((m) => m.content === '/jarvis-reload')
+
+test('takes the node\'s version: installs it as current, waits until the process is idle, then every session reloads itself', async (t) => {
+  const dir = store(t)
+  const { n, host } = await setup(t, { update: { name: PKG, hash: 'the-running-version', store: dir } })
+  const v2 = offerOf('v2')
+  n.offer = v2
+  const a = withCommands(piSession('s-a'))
+  const b = withCommands(piSession('s-b'))
+  host.register(a.pi)
+  host.register(b.pi)
+  await a.fire('session_start')
+  await b.fire('session_start')
+  await a.fire('agent_start') // a turn runs: not now
+  await n.ready
+  assert.deepEqual(n.hello.package, { name: PKG, hash: 'the-running-version' })
+  await until('the package installed', () => { try { return readlinkSync(join(dir, 'current')) === v2.hash } catch { return false } })
+  await new Promise((r) => setTimeout(r, 50))
+  assert.equal(reloads(a).length + reloads(b).length, 0, 'not while a turn runs')
+  assert.equal(host.retired, false)
+  await a.fire('agent_settled')
+  await until('both sessions told to reload', () => reloads(a).length === 1 && reloads(b).length === 1)
+  assert.deepEqual(reloads(a)[0].opts, { expandPromptTemplates: true }, 'as a command, never as a message to the model')
+  assert.equal(host.retired, true)
+  await until('this version off the node', () => !host.runtime.connected)
+  let reloaded = 0
+  await a.pi.commands.get('jarvis-reload').handler('', { reload: async () => { reloaded++ } })
+  assert.equal(reloaded, 1, 'the command reloads pi (its new code loads)')
+  assert.equal(n.packageCalls.length, 1)
+})
+
+test('a session that cannot run the reload command: installed, nothing sent to the model', async (t) => {
+  const dir = store(t)
+  const { n, host } = await setup(t, { update: { name: PKG, hash: 'the-running-version', store: dir } })
+  n.offer = offerOf('v2')
+  const a = withCommands(piSession('s-a'))
+  const old = piSession('s-old') // a pi without registerCommand
+  host.register(a.pi)
+  host.register(old.pi)
+  await a.fire('session_start')
+  await old.fire('session_start')
+  await until('installed', () => { try { return readlinkSync(join(dir, 'current')) === n.offer.hash } catch { return false } })
+  await new Promise((r) => setTimeout(r, 50))
+  assert.equal(a.pi.sent.length + old.pi.sent.length, 0)
+  assert.equal(host.retired, false)
+  assert.equal(host.runtime.connected, true)
+})
+
+test('the companion installs the node\'s version and exits for its supervisor', async (t) => {
+  const dir = store(t)
+  const exits = []
+  const n = await startFakeNode(t)
+  n.offer = offerOf('v2')
+  // The companion has no session of its own: it connects as soon as it starts.
+  const host2 = createPiHost({ SessionManager: { listAll: async () => [], open: () => sessionManager('x', '/') }, web: { port: 1, host: '127.0.0.1' } },
+    { socketPath: n.path, retryMs: 20, listDisk: true, update: { name: PKG, hash: 'the-running-version', store: dir, exit: (h) => exits.push(h) } })
+  t.after(() => host2.stop())
+  host2.start()
+  await until('exit called', () => exits.length === 1)
+  assert.equal(exits[0], n.offer.hash)
+  assert.equal(readlinkSync(join(dir, 'current')), n.offer.hash)
+})
+
+test('when the reload brings the same version back, it connects again and does not take that version again', async (t) => {
+  const dir = store(t)
+  const { n, host } = await setup(t, { update: { name: PKG, hash: 'the-running-version', store: dir } })
+  n.offer = offerOf('v2')
+  const a = withCommands(piSession('s-a'))
+  host.register(a.pi)
+  await a.fire('session_start')
+  await until('the session told to reload', () => reloads(a).length === 1)
+  const hellos = n.hellos
+  host.revive() // index.js does this when the reloaded module is this same version
+  await until('connected again', () => n.hellos > hellos && host.runtime.connected)
+  await new Promise((r) => setTimeout(r, 50))
+  assert.equal(n.packageCalls.length, 1, 'the same version is not fetched again')
+  assert.equal(reloads(a).length, 1)
+  assert.equal(host.retired, false)
+})
+
+test('a package whose files do not match its hash is not installed', async (t) => {
+  const dir = store(t)
+  const { n, host } = await setup(t, { update: { name: PKG, hash: 'the-running-version', store: dir } })
+  const v2 = offerOf('v2')
+  n.offer = { ...v2, files: v2.files.map((f) => (f.path === 'pi/index.js' ? { ...f, data: Buffer.from('evil').toString('base64') } : f)) }
+  const a = withCommands(piSession('s-a'))
+  host.register(a.pi)
+  await a.fire('session_start')
+  await until('fetched', () => n.packageCalls.length === 1)
+  await new Promise((r) => setTimeout(r, 50))
+  assert.throws(() => readlinkSync(join(dir, 'current')))
+  assert.equal(a.pi.sent.length, 0)
+  assert.equal(host.retired, false)
 })

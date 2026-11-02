@@ -57,7 +57,8 @@ func TestLoadOverride(t *testing.T) {
 func TestGenerate(t *testing.T) {
 	src, out := t.TempDir(), t.TempDir()
 	cmd := map[string]string{"dsh/package.json": "{}", "dsh/lib/a.js": "a", "dsh/lib/b.txt": "no", "runtime-sdk/package.json": "{}",
-		"runtime-sdk/index.js": "i", "runtime-sdk/lib/r.js": "r", "dsh/test/t.js": "no"}
+		"runtime-sdk/index.js": "i", "runtime-sdk/lib/r.js": "r", "dsh/test/t.js": "no",
+		"pi/package.json": "{}", "pi/index.js": "x", "pi/companion.mjs": "c", "pi/lib/pi.js": "p", "pi/e2e/run.mjs": "no"}
 	for path, data := range cmd {
 		_ = os.MkdirAll(filepath.Join(src, filepath.Dir(path)), 0o755)
 		if err := os.WriteFile(filepath.Join(src, path), []byte(data), 0o644); err != nil {
@@ -78,6 +79,14 @@ func TestGenerate(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(out, "jarvis-dsh-runtime", "dsh", "test")); err == nil {
 		t.Fatal("tests were copied")
+	}
+	got = got[:0]
+	for _, f := range files["jarvis-pi-runtime"] {
+		got = append(got, f.Path)
+	}
+	want = []string{"pi/package.json", "pi/index.js", "pi/companion.mjs", "pi/lib/pi.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/r.js"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("pi copied %v, want %v", got, want)
 	}
 	_ = os.Remove(filepath.Join(src, "runtime-sdk", "index.js"))
 	if _, err := Generate(src, out); err == nil || !strings.Contains(err.Error(), "matches no file") {

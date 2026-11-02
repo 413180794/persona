@@ -11,12 +11,14 @@
 
 import { basename } from 'node:path'
 import { readFileSync, statSync } from 'node:fs'
-import { createRuntime, interactionId, page, RpcError, snippet, summaryOf } from '../../runtime-sdk/index.js'
+import { createRuntime, installCurrent, interactionId, page, RpcError, snippet, summaryOf, verifyPackage } from '../../runtime-sdk/index.js'
 import { branchItems, branchKey, entryItems, firstText, HOST_ENTRY, imageOf, lastHost, lastText, partialText, toolInput, toolName } from './map.js'
 
-export const RUNTIME_VERSION = '0.2.0'
+export const RUNTIME_VERSION = '0.3.0'
 const DISK_EVERY = 30_000 // ms: list the sessions on disk at most this often (pi-web)
 const TERMINAL_HOSTS = new Set(['herdr', 'terminal']) // resumed in the machine's terminal engine, not in pi-web
+const RELOAD_COMMAND = 'jarvis-reload' // the command a session runs on itself to load a new version (docs/pi.md「自动更新」)
+const IDLE_EVERY = 5000 // ms: how often to look whether the process is idle enough to switch versions
 
 /**
  * @typedef {object} PiDeps
@@ -33,8 +35,13 @@ const TERMINAL_HOSTS = new Set(['herdr', 'terminal']) // resumed in the machine'
 /**
  * @param {PiDeps} deps
  * @param {{ socketPath?: string, answerFirst?: 'auto'|'phone'|'local', approve?: string[], listDays?: number,
- *   maxSessions?: number, retryMs?: number, pushDelayMs?: number, listDisk?: boolean, runtime?: string }} [options]
- *   listDisk: list the recent sessions on disk too, and start new ones (the companion; needs web).
+ *   maxSessions?: number, retryMs?: number, pushDelayMs?: number, listDisk?: boolean, runtime?: string,
+ *   instance?: string, update?: { name: string, hash: string, store: string, exit?: (hash: string) => void } }} [options]
+ *   listDisk: list the recent sessions on disk too, and start new ones (the companion; needs web). update: this code
+ *   runs from a version in a store (selfPackage), so it takes the node's version (docs/pi.md「自动更新」): installs it
+ *   as the store's current, then — exit given (the companion) — calls exit for its supervisor to start the new code,
+ *   or reloads this process's sessions onto it once they are all idle and no card of theirs is on the phone.
+ *   instance: this process's identity on the node, kept by the next version's host in the same process.
  */
 export function createPiHost(deps, options = {}) {
   const web = deps.web
@@ -48,6 +55,12 @@ export function createPiHost(deps, options = {}) {
   let disk = { at: 0, rows: [], paths: new Map() }
   const hosts = new Map() // session file -> { mtime, host }: where each session on disk last ran
   let started = false
+  const update = options.update?.store ? options.update : undefined
+  let want = '' // a version installed for this process to switch to
+  const bad = new Set() // versions that did not take here (the reload brought the same code back)
+  let installing = false
+  let retired = false // stopped to hand this process over to a new version
+  let idleTimer
 
   const rt = createRuntime({
     listSessions,
@@ -70,6 +83,8 @@ export function createPiHost(deps, options = {}) {
     answerFirst: options.answerFirst ?? 'auto',
     log,
     connect: deps.connect,
+    instance: options.instance,
+    ...(update ? { package: { name: update.name, hash: update.hash }, onUpdate: (offer) => void takeUpdate(offer) } : {}),
     retryMs: options.retryMs,
     pushDelayMs: options.pushDelayMs,
     // Listing sessions only on disk is safe only where the runtime running a session answers for it.
@@ -290,6 +305,21 @@ export function createPiHost(deps, options = {}) {
   /** pi's API for one session (the extension's factory argument): its events, tools and approvals. */
   function register(pi, toolDeps) {
     let current // this API's session id (a /new in the terminal moves it to another)
+    // The session's own way to load a new version: pi gives an extension reload() only in a command's context, so it
+    // runs this command on itself (sendUserMessage with commands on). Only where the command exists: anything else
+    // would go to the model as a message.
+    let commandReady = false
+    if (typeof pi.registerCommand === 'function' && typeof pi.sendUserMessage === 'function') {
+      try {
+        pi.registerCommand(RELOAD_COMMAND, {
+          description: 'Jarvis: load the new version of its extension (run by the extension itself)',
+          handler: async (_args, ctx) => ctx.reload(),
+        })
+        commandReady = true
+      } catch (err) {
+        log(`jarvis: ${RELOAD_COMMAND}: ${err.message}`)
+      }
+    }
     const track = (ctx) => {
       const id = ctx.sessionManager.getSessionId()
       if (current && current !== id) drop(current)
@@ -303,6 +333,7 @@ export function createPiHost(deps, options = {}) {
       }
       s.ctx = ctx
       s.pi = pi
+      s.reloadable = commandReady
       return s
     }
     const drop = (id) => {
@@ -317,6 +348,7 @@ export function createPiHost(deps, options = {}) {
       }
       track(ctx)
       stampHost(pi, ctx)
+      if (want) setTimeout(maybeReload, 0) // a session that opened on the old code (pi cached it): switch it too
     })
     pi.on('session_shutdown', (_e, ctx) => drop(ctx?.sessionManager?.getSessionId() ?? current))
     pi.on('agent_start', (_e, ctx) => {
@@ -329,6 +361,7 @@ export function createPiHost(deps, options = {}) {
       commit(s.id)
       rt.streamEnd(s.id)
       rt.sessionsChanged(0)
+      if (want) setTimeout(maybeReload, 0)
     })
     pi.on('message_update', (e, ctx) => {
       const s = track(ctx)
@@ -377,6 +410,68 @@ export function createPiHost(deps, options = {}) {
     return { block: true, reason: '没有人批准（没有界面，手机也没回答）' }
   }
 
+  // ---- the node's version (docs/pi.md「自动更新」) ----
+
+  /** Every session of this process is between turns and no card of this runtime waits on the phone. */
+  function idle() {
+    return ![...live.values()].some((s) => s.running) && !rt.busy()
+  }
+
+  async function takeUpdate(offer) {
+    if (!update || installing || retired || offer?.name !== update.name || offer.hash === update.hash || bad.has(offer.hash)) return
+    installing = true
+    try {
+      const { hash, files } = verifyPackage(await rt.fetchPackage(update.name), update.name)
+      if (hash === update.hash || bad.has(hash)) return
+      installCurrent(update.store, hash, files)
+      log(`jarvis: ${update.name} ${hash.slice(0, 12)} from the node is installed (running ${update.hash.slice(0, 12)})`)
+      if (update.exit) {
+        rt.stop()
+        update.exit(hash)
+        return
+      }
+      want = hash
+      clearInterval(idleTimer)
+      idleTimer = setInterval(maybeReload, IDLE_EVERY)
+      idleTimer.unref?.()
+      maybeReload()
+    } catch (err) {
+      bad.add(offer.hash)
+      log(`jarvis: ${update.name} update to ${offer.hash.slice(0, 12)} failed: ${err.message}`)
+    } finally {
+      installing = false
+    }
+  }
+
+  /**
+   * Hand the process over to the installed version once it is idle: this connection goes (the next version's host
+   * connects as the same process), and every session runs the reload command on itself. A process with no session
+   * open waits for one (pi-web opens the next on the code it cached, which then switches).
+   */
+  function maybeReload() {
+    if (!want || retired || live.size === 0 || !idle()) return
+    const sessions = [...live.values()]
+    if (!sessions.every((s) => s.reloadable)) {
+      log(`jarvis: ${update.name} ${want.slice(0, 12)} is installed; this pi cannot reload its extension by itself — it takes effect when pi restarts`)
+      bad.add(want)
+      want = ''
+      clearInterval(idleTimer)
+      return
+    }
+    retired = true
+    clearInterval(idleTimer)
+    log(`jarvis: switching ${sessions.length} session(s) to ${update.name} ${want.slice(0, 12)}`)
+    rt.stop()
+    for (const s of sessions) {
+      try {
+        const r = s.pi.sendUserMessage(`/${RELOAD_COMMAND}`, { expandPromptTemplates: true })
+        r?.catch?.((err) => log(`jarvis: reload ${s.id}: ${err.message}`))
+      } catch (err) {
+        log(`jarvis: reload ${s.id}: ${err.message}`)
+      }
+    }
+  }
+
   /** ask_user: the model asks the user; the phone or pi's own dialog answers. */
   function askUserTool(Type, track) {
     return {
@@ -423,9 +518,29 @@ export function createPiHost(deps, options = {}) {
       }
     },
     stop() {
+      clearInterval(idleTimer)
       rt.stop()
       started = false
     },
+    /** Stopped to hand over to a new version (the next version's host stops it for good, or revive takes it back). */
+    get retired() {
+      return retired
+    },
+    /**
+     * The reload brought this same version back (the new one did not load): connect again, and do not try that version
+     * again in this process.
+     */
+    revive() {
+      if (!retired) return
+      log(`jarvis: ${update?.name} ${want.slice(0, 12)} did not load; staying on ${update?.hash.slice(0, 12)}`)
+      bad.add(want)
+      want = ''
+      retired = false
+      started = true
+      rt.start()
+    },
+    /** Whether the process could switch versions now (tests). */
+    idle,
     runtime: rt,
     live,
   }

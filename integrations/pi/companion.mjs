@@ -7,11 +7,16 @@
 //   node integrations/pi/companion.mjs [--port 30141] [--host 127.0.0.1] [--socket <runtime.sock>]
 //
 // It reads pi's sessions with pi's own SessionManager, from the pi install on PATH (or PI_PACKAGE_DIR).
+//
+// Updates (docs/pi.md「自动更新」): run from a store (<store>/current/pi/companion.mjs, as launchd / systemd keep it),
+// it installs the version the node carries as current and exits; its supervisor starts it again on the new code
+// (KeepAlive / Restart=always). --no-update: never.
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { selfPackage } from '../runtime-sdk/index.js'
 import { createPiHost } from './lib/pi.js'
 
 function arg(name) {
@@ -43,14 +48,27 @@ function piPackage() {
 const { SessionManager } = await import(pathToFileURL(join(piPackage(), 'dist', 'index.js')).href)
 let host = arg('host') || process.env.PI_WEB_HOSTNAME || '127.0.0.1'
 if (host === '0.0.0.0' || host === '::') host = '127.0.0.1'
+const self = selfPackage(import.meta.url, 'jarvis-pi-runtime')
+let alive
 const piHost = createPiHost({
   SessionManager,
   web: { port: Number(arg('port') || process.env.PORT) || 30141, host, password: process.env.PI_WEB_PASSWORD || undefined },
   log: (m) => console.error(m),
-}, { listDisk: true, socketPath: arg('socket') || undefined })
+}, {
+  listDisk: true,
+  socketPath: arg('socket') || undefined,
+  update: self.store && !process.argv.includes('--no-update') ? {
+    name: self.name, hash: self.hash, store: self.store,
+    exit: (hash) => {
+      console.error(`jarvis pi-web companion: ${hash.slice(0, 12)} installed; exiting for the supervisor to start it`)
+      clearInterval(alive)
+      process.exit(0)
+    },
+  } : undefined,
+})
 piHost.start()
 // The SDK's timers do not hold a process (it usually lives in someone else's: DSH's, pi's). This process is only the
 // runtime: without this it would exit whenever it is not connected (no node yet, a node restarting, an older node).
-const alive = setInterval(() => {}, 1 << 30)
+alive = setInterval(() => {}, 1 << 30)
 console.error('jarvis pi-web companion: listing pi sessions for the node')
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { clearInterval(alive); piHost.stop(); process.exit(0) })

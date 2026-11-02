@@ -61,7 +61,7 @@ export function defaultSocketPath() {
  *   connect?: (path: string) => import('node:net').Socket, pushDelayMs?: number, retryMs?: number,
  *   refreshMs?: number, requires?: string[], onHub?: (connected: boolean) => void, assistant?: boolean,
  *   listen?: { port?: number, host?: string, path?: string, token: string | (() => string) } | boolean,
- *   token?: string | (() => string), package?: { name: string, hash: string },
+ *   token?: string | (() => string), package?: { name: string, hash: string }, instance?: string,
  *   onUpdate?: (offer: { name: string, hash: string, version?: string }) => void }} options -
  *   assistant: its launcher may run the Jarvis assistant (caps.assistant; docs/runtimes.md「助手」). requires: node
  *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
@@ -74,7 +74,9 @@ export function defaultSocketPath() {
  *   daemons.json gives for this daemon (a function: read at every connection).
  *   package / onUpdate: the code this runtime runs, for a node that keeps it up to date (docs/runtimes.md「自动更新」;
  *   the loader, loader.js, passes both): hello says the package, and when the node carries another one its reply
- *   offers it — onUpdate gets the offer, rt.fetchPackage gets the files.
+ *   offers it — onUpdate gets the offer, rt.fetchPackage gets the files. instance: this process's identity on the node
+ *   (runtime.hello's instance; default a new one per createRuntime). A runtime that replaces itself in the same process
+ *   (a new version) passes the same one, so the node takes it for this process reconnecting, not for another process.
  */
 export function createRuntime(driver, options) {
   if (!options?.runtime) throw new Error('createRuntime: options.runtime (the runtime id) is required')
@@ -90,7 +92,7 @@ export function createRuntime(driver, options) {
   const connect = options.connect ?? ((path) => createConnection(path))
   // This process's identity on the node (runtime.hello's instance): a reconnect is the same instance, another process
   // claiming the same runtime id is not, and the node refuses it (runtime_conflict).
-  const instance = randomUUID()
+  const instance = typeof options.instance === 'string' && options.instance !== '' ? options.instance : randomUUID()
   let warnedConflict = false
 
   let peer
