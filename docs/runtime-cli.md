@@ -202,6 +202,30 @@ mock 自己的 `/mock/reset`、`/mock/seen`、`/mock/churn` 照旧直接请求 h
 - 有真机登记时模拟器不接（和手机工具同一规则）；没有 App 在线 503 `phone_offline`，hub 不为它唤醒手机。
 - hub 在 hello 的 `features` 里带 `runtime_cli`；App 只在看到它时才登记 `phone_runtime_cli`（老 hub 会把它当成普通的手机工具交给 Agent）。
 
+### 怎么用
+
+App：DEBUG 包用启动参数 `-runtimeCLIHub YES` 启动（Xcode 的 scheme 里加，或 `xcrun devicectl device process launch … -runtimeCLIHub YES`），
+连上 hub、看到 hub 的 `runtime_cli` 后在 `register_phone` 里多登记 `phone_runtime_cli`；收到的调用走 `RuntimeCLI.run`（和本地端口同一份）。
+用模拟器脚本启动（带 `-pairURL`）时只登记它一个，不接手机工具（`RuntimeCLI+Hub.swift`）。
+
+```sh
+export JARVISCTL_VIA_HUB=<hub 地址>          # 或每条命令带 --via-hub <hub 地址>
+export JARVISCTL_HUB_TOKEN_FILE=<存着设备令牌的文件>   # 或 JARVISCTL_HUB_TOKEN；在 hub 那台机器上默认读 ~/.jarvis/hub.json；不会打印
+scripts/jarvisctl.py state
+scripts/jarvisctl.py settle --pixels 600
+scripts/jarvisctl.py tree --id-prefix agents. --visible
+scripts/jarvisctl.py tap --id agents.filter.unread
+scripts/jarvisctl.py screenshot shot.jpg        # App 自己画的窗口（没有状态栏），.jpg 走 JPEG，.png 原样
+```
+
+- 经 hub 能用：`state`、`settle`、`tree`、`find`、`wait`、`tap`（只有无障碍激活）、`scroll`、`type`、`navigate`、`set-style`、`snapshot` / `screenshot`、`freeze`、`wait-loaded`。
+- 不能用：`launch`（真机请用 Xcode / devicectl 装 DEBUG 包后自己打开 App）、`reset`（先不做；`navigate` 也会换新的界面树）、
+  要 `idb` 的真实触摸（菜单项的 `tap`、`longpress`、`swipe`、`drag`、`background` / `foreground`），`simctl` 的深浅色（`appearance` 改成只改 App）。
+- 回答是 WebSocket 消息：超过 16 MB 的回答报错（带大小）；截图用 JPEG（`.jpg`）或小一点的 `scale`。
+- `type` 带元素过滤时，无障碍激活拿不到焦点（SwiftUI 的输入框常这样），App 把那个元素下面的输入框设成第一响应者（点它做的事，不用触摸）；
+  模拟器上也一样，不再要 `idb`。
+- `--hub` 仍是 `launch` 配对的 hub（模拟器脚本、mock）；经 hub 发命令是 `--via-hub`，两个不混用。
+
 ## 协议和安全
 
 - 只在 DEBUG 构建里：`apple/Jarvis/Debug/` 下的文件整个包在 `#if DEBUG && os(iOS)` 里，入口是 `AppDelegate` 原有

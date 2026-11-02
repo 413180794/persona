@@ -31,6 +31,12 @@
   jarvisctl.py perf | refresh                                                 view-body counts (-perfCounts YES) | pull the hub
   jarvisctl.py call <command> [key=value …]                                   any command the app knows
 
+A DEBUG build on a real phone, through the hub (docs/runtime-cli.md「经 hub 连真机」): --via-hub <hub url> (or
+$JARVISCTL_VIA_HUB) sends every command to POST /api/v1/phone/runtime-cli; the hub's token comes from $JARVISCTL_HUB_TOKEN,
+the file $JARVISCTL_HUB_TOKEN_FILE, or ~/.jarvis/hub.json on the hub's machine, and is never printed. state, settle, tree,
+find, wait, tap (accessibility activation only), scroll, type, snapshot and screenshot work that way; launch, reset and
+the idb gestures do not (install the DEBUG build with Xcode or devicectl and open it yourself, with -runtimeCLIHub YES).
+
 Element filters: --id, --id-prefix, --label, --label-contains, --label-prefix, --trait button|text|header|selected…,
 --visible (a touch at its middle reaches it), --on-screen (its frame is on screen, covered or not), --index n (else the
 first match a touch reaches). The simulator is $JARVISCTL_UDID (or --udid, default "booted"); the app is $JARVISCTL_BUNDLE / $JARVIS_BUNDLE_ID.
@@ -38,6 +44,7 @@ first match a touch reaches). The simulator is $JARVISCTL_UDID (or --udid, defau
 commands. Standard library only; scripts can `from jarvisctl import Ctl`.
 """
 import argparse
+import base64
 import json
 import os
 import secrets
@@ -61,8 +68,24 @@ def sh(*cmd, check=True):
     return subprocess.run(cmd, check=check, text=True, capture_output=True)
 
 
+def hub_token():
+    """The hub's credential for --via-hub: never printed or logged."""
+    if os.environ.get("JARVISCTL_HUB_TOKEN"):
+        return os.environ["JARVISCTL_HUB_TOKEN"].strip()
+    path = os.environ.get("JARVISCTL_HUB_TOKEN_FILE")
+    if path:
+        with open(os.path.expanduser(path)) as f:
+            return f.read().strip()
+    try:
+        with open(os.path.expanduser("~/.jarvis/hub.json")) as f:
+            return json.load(f).get("token", "")
+    except (OSError, ValueError):
+        raise CtlError("--via-hub needs the hub's token: $JARVISCTL_HUB_TOKEN or $JARVISCTL_HUB_TOKEN_FILE")
+
+
 class Ctl:
-    def __init__(self, udid=None, bundle=None, port=None):
+    def __init__(self, udid=None, bundle=None, port=None, via_hub=None):
+        self.via_hub = (via_hub or os.environ.get("JARVISCTL_VIA_HUB") or "").rstrip("/") or None
         self.udid = udid or os.environ.get("JARVISCTL_UDID") or "booted"
         self.bundle = bundle or os.environ.get("JARVISCTL_BUNDLE") or os.environ.get("JARVIS_BUNDLE_ID") or "com.example.jarvis"
         saved = self._load()
@@ -89,6 +112,8 @@ class Ctl:
 
     def call(self, cmd, _timeout=None, **args):
         """One request per connection: a JSON line out, a JSON line back. Raises CtlError when the app says no."""
+        if self.via_hub:
+            return self._call_hub(cmd, _timeout, args)
         req = json.dumps({"token": self.token, "cmd": cmd, "args": {k: v for k, v in args.items() if v is not None}})
         wait = _timeout or (args.get("timeout") or 0) + 30
         with socket.create_connection(("127.0.0.1", self.port), timeout=wait) as s:
@@ -104,8 +129,38 @@ class Ctl:
             raise CtlError(f"{cmd}: {r.get('error')}")
         return r
 
+    def _call_hub(self, cmd, timeout, args):
+        """The command through the hub to the phone's DEBUG app (POST /api/v1/phone/runtime-cli)."""
+        if cmd == "reset":
+            raise CtlError("reset is not done on a real phone yet: navigate builds a new view tree too")
+        wait = timeout or (args.get("timeout") or 0) + 30
+        body = json.dumps({"cmd": cmd, "args": {k: v for k, v in args.items() if v is not None}, "timeout": wait}).encode()
+        req = urllib.request.Request(self.via_hub + "/api/v1/phone/runtime-cli", data=body, method="POST",
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer " + hub_token()})
+        try:
+            with urllib.request.urlopen(req, timeout=wait + 10) as resp:
+                r = json.load(resp)
+        except urllib.error.HTTPError as e:
+            try:
+                why = json.load(e).get("error")
+            except ValueError:
+                why = e.reason
+            if e.code == 503:
+                why = "no phone offers the runtime CLI (a DEBUG build launched with -runtimeCLIHub YES, open, on this hub)"
+            raise CtlError(f"{cmd}: hub {e.code}: {why}")
+        if not r.get("ok"):
+            raise CtlError(f"{cmd}: {r.get('error')}")
+        return r
+
+    def _simulator_only(self, what):
+        if self.via_hub:
+            raise CtlError(f"{what} needs the simulator (idb / simctl); over the hub there is no such thing on a real phone")
+
     def launch(self, hub=None, extra=(), wait=20):
         """Terminates the app and launches it with a fresh token (paired with `hub` when given); waits for `ping`."""
+        if self.via_hub:
+            raise CtlError("launch drives the simulator only: on a real phone install the DEBUG build with Xcode or "
+                           "devicectl and open it yourself (launch arguments: -runtimeCLIHub YES)")
         self.hub = hub or self.hub
         self.token = secrets.token_hex(16)
         sh("xcrun", "simctl", "terminate", self.udid, self.bundle, check=False)
@@ -154,6 +209,8 @@ class Ctl:
             r = self.call("activate", **f)
             if r.get("activated"):
                 return r
+        if self.via_hub:
+            raise CtlError(f"tap: {f} takes no accessibility activation, and a real touch needs idb (the simulator)")
         self.call("settle", timeout=2, stable=2, every=80, pixels=600)
         e = self.call("find", **f)["element"]
         if not e:
@@ -164,6 +221,7 @@ class Ctl:
 
     def _idb(self, *args):
         """`idb ui <args>` on this simulator; idb's companion may need a first call to come up."""
+        self._simulator_only(f"idb ui {args[0]}")
         for _ in range(2):
             r = subprocess.run(["idb", "ui", *map(str, args), "--udid", self.udid], text=True, capture_output=True)
             if r.returncode == 0:
@@ -220,6 +278,7 @@ class Ctl:
     def foreground(self, wait=10):
         """The app back in front, the same process (`simctl launch` of a running app activates it, no relaunch);
         returns once it is active again."""
+        self._simulator_only("foreground")
         before = self._pid()
         sh("xcrun", "simctl", "launch", self.udid, self.bundle)
         deadline = time.time() + wait
@@ -288,15 +347,22 @@ class Ctl:
 
     def appearance(self, value, in_app=False):
         """Light or dark: the whole simulator (status bar included, as the screenshot scripts do) or the app only."""
-        if in_app:
+        if in_app or self.via_hub:
             return self.call("set-appearance", value=value)
         sh("xcrun", "simctl", "ui", self.udid, "appearance", value)
         return {"ok": True, "appearance": value}
 
     def screenshot(self, path, settle=True, **settle_args):
-        """`simctl io screenshot` (status bar included, as the identity shots), after the screen settles."""
+        """`simctl io screenshot` (status bar included, as the identity shots), after the screen settles. Over the hub,
+        the app's own `snapshot` (no status bar), JPEG when the path says so."""
         if settle:
             self.call("settle", **({"timeout": 4, "stable": 3, "pixels": 600} | settle_args))
+        if self.via_hub:
+            jpeg = path.lower().endswith((".jpg", ".jpeg"))
+            r = self.call("snapshot", format="jpeg" if jpeg else None, scale=None if jpeg else 0)
+            with open(path, "wb") as f:
+                f.write(base64.b64decode(r["png"]))
+            return path
         sh("xcrun", "simctl", "io", self.udid, "screenshot", path)
         return path
 
@@ -343,6 +409,7 @@ def main(argv):
     p.add_argument("--port", type=int)
     p.add_argument("--bundle")
     p.add_argument("--hub")
+    p.add_argument("--via-hub")
     p.add_argument("--timeout", type=float)
     p.add_argument("--pixels", type=int)
     p.add_argument("--stable", type=int)
@@ -384,7 +451,7 @@ def main(argv):
     p.add_argument("cmd")
     p.add_argument("rest", nargs="*")
     a = p.parse_args(argv)
-    c = Ctl(a.udid, a.bundle, a.port)
+    c = Ctl(a.udid, a.bundle, a.port, a.via_hub)
     if a.cmd == "launch":
         r = c.launch(a.hub, extra)
     elif a.cmd in ("ping", "state"):
@@ -448,7 +515,8 @@ def main(argv):
     elif a.cmd == "snapshot":
         if not a.rest:
             p.error("snapshot needs a path")
-        r = c.call("snapshot", path=os.path.abspath(a.rest[0]))
+        r = {"path": c.screenshot(os.path.abspath(a.rest[0]), settle=False)} if c.via_hub else \
+            c.call("snapshot", path=os.path.abspath(a.rest[0]))
     elif a.cmd in ("perf", "refresh", "dismiss-keyboard"):
         r = c.call(a.cmd)
     elif a.cmd == "call":

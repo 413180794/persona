@@ -33,6 +33,7 @@ enum RuntimeCLI {
 
     static func startIfAsked() {
         let d = UserDefaults.standard
+        if overHub { enableAccessibilityTree() } // the hub's calls read the tree too (RuntimeCLI+Hub.swift)
         let port = d.integer(forKey: "runtimeCLI")
         guard port > 0, port < 65536, listener == nil, let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return }
         token = d.string(forKey: "runtimeCLIToken") ?? ""
@@ -75,17 +76,21 @@ enum RuntimeCLI {
     private static func handle(_ line: Data) async -> Reply {
         guard let req = (try? JSONSerialization.jsonObject(with: line)) as? Args else { return fail("bad json") }
         guard (req["token"] as? String ?? "") == token else { return fail("bad token") }
-        let name = req["cmd"] as? String ?? ""
+        return await run(req["cmd"] as? String ?? "", req["args"] as? Args ?? [:])
+    }
+
+    /// One command by name, with its `ok` and `ms`: what the local port and the hub (RuntimeCLI+Hub.swift) both run.
+    static func run(_ name: String, _ args: Args) async -> Reply {
         guard let command = commands[name] else { return fail("unknown command \(name): \(commands.keys.sorted())") }
         let started = Date.now
-        var r = await command(req["args"] as? Args ?? [:])
+        var r = await command(args)
         if r["ok"] == nil { r["ok"] = true }
         r["ms"] = Int(Date.now.timeIntervalSince(started) * 1000)
         return r
     }
 
     /// JSON, or an error reply when a value cannot be written (a NaN frame would otherwise throw an exception).
-    private static func encode(_ r: Reply) -> Data {
+    static func encode(_ r: Reply) -> Data {
         if JSONSerialization.isValidJSONObject(r), let d = try? JSONSerialization.data(withJSONObject: r, options: [.sortedKeys]) {
             return d
         }

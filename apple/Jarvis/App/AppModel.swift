@@ -665,11 +665,16 @@ final class AppModel {
 
     func registerPhone() {
         if isDemo { return } // nobody would call the phone's tools
+        var tools = PhoneToolRegistry.enabledSpecs()
         #if DEBUG
         // Simulator automation (scripts/sim.sh) must not take the real iPhone's phone_* tool calls.
-        if UserDefaults.standard.string(forKey: "pairURL") != nil { return }
+        let automation = UserDefaults.standard.string(forKey: "pairURL") != nil
+        if automation { tools = [] }
+        #if os(iOS)
+        tools += RuntimeCLI.hubToolSpecs(features: hubFeatures) // the runtime CLI over the hub, when switched on
         #endif
-        let tools = PhoneToolRegistry.enabledSpecs()
+        if automation && tools.isEmpty { return }
+        #endif
         guard let data = try? JSON.encoder.encode(tools),
               let arr = try? JSONSerialization.jsonObject(with: data) else { return }
         #if targetEnvironment(simulator)
@@ -771,6 +776,10 @@ final class AppModel {
         switch ev {
         case .hello(let features, let info):
             hubFeatures = Set(features)
+            #if DEBUG && os(iOS)
+            // Registered on connect, before this hello said whether the hub keeps the runtime CLI from the agents.
+            if RuntimeCLI.overHub { registerPhone() }
+            #endif
             if hubHello != info { hubHello = info }
             #if DEBUG
             // `-showDesktopSample YES`: a Mac signed in (and 手机静音 on), for screenshots of the banner (the demo hub sends no desktops).
@@ -901,6 +910,13 @@ final class AppModel {
     // MARK: Phone tools
 
     private func runPhoneTool(callID: String, name: String, args: JSONValue) async {
+        #if DEBUG && os(iOS)
+        if name == RuntimeCLI.hubTool {
+            let (text, isError) = await RuntimeCLI.runFromHub(args)
+            live.send(["type": "tool_result", "call_id": callID, "content": [["type": "text", "text": text]], "is_error": isError])
+            return
+        }
+        #endif
         let (content, isError) = await PhoneToolRegistry.call(name: name, args: args) { [weak self] summary in
             await self?.confirm(summary) ?? false
         }

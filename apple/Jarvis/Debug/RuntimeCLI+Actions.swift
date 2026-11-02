@@ -54,27 +54,54 @@ extension RuntimeCLI {
         return nil
     }
 
-    /// Types `text` into the field that has focus; with element filters, activates that element first (a field takes
-    /// focus that way).
+    /// Types `text` into the field that has focus; with element filters, focuses that element first: accessibility
+    /// activation, and when that leaves no field focused (a SwiftUI text field often), the text view under the element
+    /// made first responder (what a tap on it does, without a touch: the hub has none on a real phone).
     private static func type(_ a: Args) -> Reply {
         if ["id", "idPrefix", "label", "labelContains", "labelPrefix", "trait"].contains(where: { a[$0] != nil }) {
             guard let e = pick(a) else { return fail("not found") }
             _ = e.object.accessibilityActivate()
+            if !(firstResponder() is UIKeyInput) { focus(e) }
         }
         guard let r = firstResponder() as? UIKeyInput else { return fail("no text field has focus") }
         r.insertText(a["text"] as? String ?? "")
         return ["typed": true]
     }
 
+    /// The text field or view drawn for `e`: inside its view, else under its middle.
+    private static func focus(_ e: Element) {
+        func input(in v: UIView) -> UIView? {
+            if v is UIKeyInput, v.canBecomeFirstResponder { return v }
+            for s in v.subviews { if let f = input(in: s) { return f } }
+            return nil
+        }
+        var found = view(of: e.object).flatMap { input(in: $0) }
+        if found == nil, let w = window, let hit = w.hitTest(w.convert(CGPoint(x: e.frame.midX, y: e.frame.midY), from: nil), with: nil) {
+            // The hit view's own subtree, then only the views it sits in (a field editor inside its text field).
+            found = input(in: hit)
+            var up = hit.superview
+            while found == nil, let u = up {
+                if u is UIKeyInput, u.canBecomeFirstResponder { found = u }
+                up = u.superview
+            }
+        }
+        found?.becomeFirstResponder()
+    }
+
     /// The app's windows as a PNG (no status bar, unlike `simctl io screenshot`) at `scale` (the screen's when 0),
-    /// written to `path` (a simulator's files are the Mac's) or returned as base64.
+    /// written to `path` (a simulator's files are the Mac's) or returned as base64. `format` "jpeg" (`quality`, 0.8):
+    /// a fraction of the size, for the hub (a real phone has no `simctl io`).
     private static func snapshot(_ a: Args) -> Reply {
-        guard let png = render(scale: a["scale"] as? Double ?? 0)?.pngData() else { return fail("no window") }
+        guard let image = render(scale: a["scale"] as? Double ?? 0) else { return fail("no window") }
+        let jpeg = a["format"] as? String == "jpeg"
+        guard let png = jpeg ? image.jpegData(compressionQuality: a["quality"] as? Double ?? 0.8) : image.pngData() else {
+            return fail("cannot encode the image")
+        }
         if let p = a["path"] as? String {
             do { try png.write(to: URL(fileURLWithPath: p)) } catch { return fail("\(error)") }
             return ["path": p, "bytes": png.count]
         }
-        return ["png": png.base64EncodedString()]
+        return ["png": png.base64EncodedString(), "format": jpeg ? "jpeg" : "png"] // "png" is the key for either
     }
 }
 #endif
