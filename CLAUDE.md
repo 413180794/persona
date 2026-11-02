@@ -109,6 +109,10 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - hub 的内存状态随时会被别人重新部署清掉：跨请求的流程要自包含或落库。（`server.md`）
 - Claude Code 的配置目录不一定是 `~/.claude`（`CLAUDE_CONFIG_DIR`），同一会话 id 可能在两个目录各有一份，按 id 找一律取最近修改的。（`agents.md`）
 - 改 transcript 解析或同步协议用真实语料验证；改了 item 结构把 App 的 `ChatCache` 目录版本号加一。（`transcript.md`）
+- **最低兼容编译器是 Xcode 26.0（Swift 6.2），固定不动**：master 必须能在 Xcode 26.0 上编过 iOS、Mac、手表和扩展，新 Xcode 能编不算数。
+  只有新 SDK 才有的 API（`isDynamicIslandLimitedInWidth`、`toolbarVerticalEdge`、`ShowsSnippetView` / `view:` 都踩过）用 `#if compiler(>=6.3)` 包起来、`#else` 走旧行为；
+  `#available` / `@available` 只管运行时，符号编译时找不到照样报错。合入前用 Xcode 26.0 编一遍（`DEVELOPER_DIR` 见 `jarvis_config.py env`），PR 里写明编过；
+  要抬高最低版本是产品决定，先问用户，并同步改这一条和 `docs/lessons/ios.md`。（`ios.md`「最低兼容编译器」）
 - 手表 App 最低 watchOS 10（不少旧表停在 10.6，要求更高就装不上），`Shared/` 整个编进手表：里面只能用 watchOS 10 就有的 API，
   新的要 `#available` 兜底（`Color.mix` 是 watchOS 11，用 `Color.blended`）。
 

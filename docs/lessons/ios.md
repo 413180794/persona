@@ -274,6 +274,14 @@
   `fetchReminders`、`PHImageManager`、`WCSession.sendMessage` 的 reply / error……），SDK 没标 Sendable 的，编译器不报错，闭包被当成主线程代码，
   运行时隔离检查一失败就崩（`dispatch_assert_queue_fail`，2026-10-31 保存图片必崩）。这类闭包一律写成 `{ @Sendable … in`，`BackgroundCallbackTests` 按源码检查；
   SDK 已标 `NS_SWIFT_SENDABLE` 的（HealthKit 查询、URLSession）和在主线程回调的代理不用管。真点系统功能的 UI 测试（`PhotoSaveTests`）才测得出来。
+### 最低兼容编译器
+
+- **最低兼容的编译器是 Xcode 26.0（Swift 6.2），固定不动**（2026-11-02）：本机和不少开发机还在 26.0，master 必须在它上面编得过（iOS、Mac、手表、各扩展）；发版机器的 Xcode 更新（Swift 6.3.x），能编不代表 26.0 能编。
+  踩过三次：#216 `isDynamicIslandLimitedInWidth`（iOS 27 SDK，#217 修）、`toolbarVerticalEdge`（iOS 27.1 SDK）、#164 `ShowsSnippetView` / `view:`（#430 修）。
+- 新 SDK 才有的符号用 `#if compiler(>=6.3)` 包起来，`#else` 走旧行为（旧 SDK 上功能退回去，不要空着）；`#available` / `@available` 只管运行时，符号编译时找不到照样报错。
+- 改了用到新 API 的代码，合入前在 Xcode 26.0 上编一遍（`eval "$(python3 scripts/jarvis_config.py env)"` 取 `DEVELOPER_DIR`），PR 里写明编过；编不了新 SDK 的分支，在 PR 里写明没编。
+- 要抬高最低版本是产品决定：先问用户，同步改 `CLAUDE.md` 的那一条和这一节。
+
 - 发版机器的 Swift（6.3.3）和别的开发机不一样，Release 归档会报「unable to type-check this expression in reasonable time」：
   长修饰符链里的多语句闭包（`.task { … }`）会和整条链一起推断类型，报错的行号还会跟着改动乱跳。把闭包体挪成方法、id 挪成计算属性（`ChatView.prewarmRows`）。
 - Swift 按位置先读出参数再调用后面的参数：`emit(s, i, word(…, &i, …))` 里传给 `emit` 的 `i` 是 `word` 改它之前的值（文件查看器的宏 `println!` 少了 `!`）。
