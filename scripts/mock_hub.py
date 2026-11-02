@@ -1328,10 +1328,15 @@ def model_configuration():
                 provider = next((p for p in providers if p["id"] == binding["provider"]), {})
                 effective = {"provider": binding["provider"], "model": provider.get("model", "")}
             effective.update(binding)
-            purposes.append(dict(id=pid, name=name, group=group, kind=kind, override=binding, effective=effective,
-                                 revision=stored["revision"], inherited_from="现有默认" if not binding else "此用途",
-                                 fields=["provider", "model"] if kind == "api" else ["provider", "model", "effort"],
-                                 provider_ids=[p["id"] for p in providers if p["kind"] == kind], status=""))
+            purpose = dict(id=pid, name=name, group=group, kind=kind, override=binding, effective=effective,
+                           revision=stored["revision"], inherited_from="现有默认" if not binding else "此用途",
+                           fields=["provider", "model"] if kind == "api" else ["provider", "model", "effort"],
+                           provider_ids=[p["id"] for p in providers if p["kind"] == kind], status="")
+            # MOCK_MODEL_LIMIT=1: the default API connection is out of quota for 23 more minutes (docs/model-config.md「上游限流」).
+            if os.environ.get("MOCK_MODEL_LIMIT") and effective["provider"] == "legacy.ai":
+                purpose["limit"] = {"reason": "quota", "until": later(minutes=23)}
+                purpose["status"] = "额度用完，23 分钟后重试"
+            purposes.append(purpose)
     return {"purposes": purposes, "providers": providers}
 
 

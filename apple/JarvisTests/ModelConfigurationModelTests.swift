@@ -21,6 +21,24 @@ struct ModelConfigurationModelTests {
         #expect(page.summary(page.purposes[0]) == "strong · model-a")
     }
 
+    /// A use whose connection the hub holds (docs/model-config.md「上游限流」): the time as Go writes it, counted down.
+    @Test func decodesAHeldConnectionAndCountsItDown() async throws {
+        let held = #"{"id":"inbox.triage","name":"分拣与摘要","group":"收件箱","kind":"api","override":{},"effective":{"provider":"legacy.ai"},"revision":0,"status":"额度用完，23 分钟后重试","limit":{"reason":"quota","until":"2026-11-02T20:13:00.123456789+08:00"}}"#
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/model-config", json: #"{"purposes":[\#(held)],"providers":\#(Self.providers)}"#)
+        let page = make(hub)
+        await page.load()
+        let limit = try #require(page.purposes.first?.limit)
+        #expect(limit.reason == "quota")
+        let until = limit.until
+        #expect(abs(until.timeIntervalSince1970 - 1_793_621_580.123) < 0.01)
+        #expect(limit.text(now: until.addingTimeInterval(-23 * 60 + 1)) == "额度用完，23 分钟后重试")
+        #expect(limit.text(now: until.addingTimeInterval(-45)) == "额度用完，45 秒后重试")
+        #expect(limit.text(now: until.addingTimeInterval(1)) == "额度用完，稍后重试")
+        #expect(ModelLimit(reason: "busy", until: until).text(now: until.addingTimeInterval(-5)) == "并发已满，5 秒后重试")
+        #expect(page.purposes.first?.status == "额度用完，23 分钟后重试")
+    }
+
     @Test func legacyHubCannotBecomeAnEmptyEditableConfiguration() async {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/model-config") { _ in throw APIError(status: 404, message: "not found") }

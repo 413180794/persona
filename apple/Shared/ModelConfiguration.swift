@@ -21,15 +21,33 @@ nonisolated struct ModelPurpose: Codable, Hashable, Identifiable, Sendable {
     var revision: Int
     var inheritedFrom: String?
     var status: String?
+    /// Set while the hub holds this use's connection; `status` then says the same in words.
+    var limit: ModelLimit?
     var fields: [String]?
     var providerIDs: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, group, kind, parent, override, effective, revision, status, fields
+        case id, name, group, kind, parent, override, effective, revision, status, limit, fields
         case machineID = "machine_id", inheritedFrom = "inherited_from", providerIDs = "provider_ids"
     }
 
     func supports(_ field: String) -> Bool { (fields ?? ["provider", "model"]).contains(field) }
+}
+
+/// The hub stopped calling a connection after the upstream said its quota is used up or it is busy, until `until`
+/// (docs/model-config.md「上游限流」).
+nonisolated struct ModelLimit: Codable, Hashable, Sendable {
+    var reason: String // quota | busy
+    var until: Date
+
+    /// The hub's wording, counted from `now`: 额度用完，23 分钟后重试.
+    func text(now: Date = .now) -> String {
+        let what = reason == "quota" ? "额度用完" : "并发已满"
+        let left = until.timeIntervalSince(now)
+        if left <= 0 { return "\(what)，稍后重试" }
+        if left < 60 { return "\(what)，\(Int(left.rounded(.up))) 秒后重试" }
+        return "\(what)，\(Int((left / 60).rounded(.up))) 分钟后重试"
+    }
 }
 
 nonisolated struct ModelAvailableModel: Codable, Hashable, Identifiable, Sendable {

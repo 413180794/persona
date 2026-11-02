@@ -31,7 +31,9 @@ struct ModelConfigurationView: View {
                                 Text(purpose.name).font(Theme.Font.body).lineLimit(1)
                                 Text(page.summary(purpose).isEmpty ? "未配置" : page.summary(purpose))
                                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                                if let status = purpose.status, !status.isEmpty {
+                                if let limit = purpose.limit {
+                                    ModelLimitLine(limit: limit, font: Theme.Font.caption)
+                                } else if let status = purpose.status, !status.isEmpty {
                                     Text(status).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
                                 }
                             }
@@ -61,6 +63,24 @@ struct ModelConfigurationView: View {
     }
 }
 
+/// A use whose connection the hub has paused (quota used up, busy): a warning, counted down while it shows.
+private struct ModelLimitLine: View {
+    var limit: ModelLimit
+    var font: Font
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: limit.until.timeIntervalSinceNow < 90 ? 1 : 30)) { context in
+            Label {
+                Text(limit.text(now: context.date)).foregroundStyle(Theme.cautionText)
+            } icon: {
+                Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
+            }
+            .font(font).lineLimit(2)
+        }
+        .accessibilityIdentifier("model-limit")
+    }
+}
+
 struct ModelPurposeEditorView: View {
     var purposeID: String
     @State private var page = ModelConfigurationModel()
@@ -74,7 +94,9 @@ struct ModelPurposeEditorView: View {
                     if let source = purpose.inheritedFrom, !source.isEmpty {
                         LabeledContent("继承来源", value: source)
                     }
-                    if let status = purpose.status, !status.isEmpty {
+                    if let limit = purpose.limit {
+                        ModelLimitLine(limit: limit, font: Theme.Font.label)
+                    } else if let status = purpose.status, !status.isEmpty {
                         Text(status).font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
