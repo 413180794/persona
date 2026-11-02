@@ -37,6 +37,14 @@ describe("session capability contract", () => {
     expect(sessionMenuActions(legacy)).toEqual(["stop", "resume", "close"]);
     expect(resumeCommand(live)).toBe("cd /tmp/project && codex resume real-thread");
   });
+
+  it("names a runtime's session by its agent_label and offers only what it declared", () => {
+    const dsh: Session = { ...legacy, agent: "dsh", agent_label: "DSH", source_kind: "runtime", source_instance_id: "dsh",
+      capabilities: { read: true, send: true, interrupt: true, approve: true } };
+    expect(sourceSubtitle(dsh)).toBe("DSH");
+    expect(sessionMenuActions(dsh)).toEqual(["stop"]);
+    expect(sourceSubtitle({ ...dsh, capabilities: { read: true }, read_only_reason: "DSH 没有开放从手机发消息" })).toBe("DSH · 仅查看：DSH 没有开放从手机发消息");
+  });
 });
 
 describe("attach API", () => {

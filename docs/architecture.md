@@ -29,6 +29,7 @@
                                ├─ tail ~/.claude/projects/*/<session>.jsonl → 结构化事件
                                ├─ unix socket ~/.jarvis/node.sock ◄── jarvisd hook（Claude Code hooks）
                                │                                 ◄── jarvisd mcp（给 claude 的 MCP 工具）
+                               ├─ unix socket ~/.jarvis/runtime.sock ◄── runtime：没有终端的 Agent 运行时（DSH 的 Web 插件，docs/runtimes.md）
                                └─ 启动器列表：zsh -ic（`_claude_launchers` + 调用 claude 的 alias）
 ```
 
@@ -55,6 +56,9 @@
   不是 jarvis 启动的 herdr claude 也能在 App 里看（按 herdr 报告的 session id 找 transcript）、发消息、按键回答。
 - **node 经 SSH stdio**：复用 `~/.ssh/config` 里已有的 `ssh <机器>` 这类别名，不开新端口、不新增认证面；连接断了 hub 自动重连。
   ssh 进不去的电脑（NAT 后面、别的内网）退到 tailcat 打洞（`docs/server.md`「tailcat 打洞」），先 ssh、不行再 tailcat。
+- **没有终端的 Agent 是 runtime，不是宿主**：宿主是「终端开在哪」（herdr / Herdr App / Orca，一机一引擎，`docs/engines.md`），node 从窗格和
+  transcript 认会话。DSH 这种自己管会话、没有终端的 Agent 运行时，经 `runtime.sock` 的 runtime 协议挂进来：自己报会话、推内容、问手机，
+  和这台机器选的引擎并存；hub 和 App 不用改，新的 runtime 也不用改 Jarvis（`docs/runtimes.md`：协议 + SDK + 验收清单）。
 - **hub 在一台常开的机器上**：它常在线、能连 Gmail（已验证 imap.gmail.com:993 / smtp.gmail.com:465 直连可达），所有 Mac 都经它中转。
 
 ## 关键流程

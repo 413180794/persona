@@ -139,7 +139,7 @@ nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
 extension Launcher {
     /// Runs Claude Code or Codex: what the Jarvis assistant can use (headless `claude -p` or `codex app-server`).
     /// Other agents (TRAEX…) are left out; the node refuses them with a reason too.
-    var runsAssistant: Bool { baseURL != "(traex)" }
+    var runsAssistant: Bool { baseURL != "(traex)" && (agent == nil || agent == "" || agent == "claude" || agent == "codex") }
 }
 
 nonisolated struct DirEntry: Codable, Hashable, Sendable, Identifiable {
@@ -209,7 +209,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var tabID: String?
     var workspaceID: String?
     var agentName: String?
-    /// The coding agent in the pane: "claude" (or nil, from older hubs), "codex" or "traex" (TRAEX, an in-house Codex fork).
+    /// The coding agent in the pane: "claude" (or nil, from older hubs), "codex" or "traex" (TRAEX, an in-house Codex fork);
+    /// for a session a runtime lists (DSH…, docs/runtimes.md), the agent it runs.
     var agent: String? = nil
     var sourceKind: String? = nil
     var sourceThreadID: String? = nil
@@ -222,6 +223,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// app-server) or "terminal" (its screen and session record); the note says why it is the terminal.
     var codexRoute: String? = nil
     var codexRouteNote: String? = nil
+    /// What the hub says to call an agent this app does not know (a runtime's own name, "DSH"); nil for the known ones.
+    var agentLabelHint: String? = nil
     var launcher: String?
     var model: String?
     /// Claude Code's permission mode and effort level right now (`SessionModes`); nil while unknown and for Codex.
@@ -282,6 +285,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case "codex_app_server": "Codex 实时"
         case "identity_conflict": "身份冲突"
         case "codex_history": "Codex 历史"
+        case "runtime": agentLabel // an agent runtime's session (docs/runtimes.md): its own name, "DSH"
         case .some(let kind) where !kind.isEmpty: kind
         default: nil
         }
@@ -295,9 +299,18 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
 
     var isCodex: Bool { agent == "codex" || sourceKind == "codex_app_server" || sourceKind == "codex_history" }
     var isTraex: Bool { agent == "traex" }
-    /// Who the user talks to in this session: "Claude", "Codex" or "TRAEX".
-    var agentLabel: String { isCodex ? "Codex" : isTraex ? "TRAEX" : "Claude" }
-    /// How to pick the conversation up again on the computer.
+    /// Claude Code (or an older hub that does not name the agent): what the Claude-only controls (modes, /clear,
+    /// /model) are for. Any other agent — named or not yet known to this app — does not get them.
+    var isClaude: Bool { !isCodex && (agent == nil || agent == "" || agent == "claude") }
+    /// Who the user talks to in this session: "Claude", "Codex", "TRAEX", or what the hub calls a runtime's agent ("DSH").
+    var agentLabel: String {
+        if isCodex { return "Codex" }
+        if isTraex { return "TRAEX" }
+        if isClaude { return "Claude" }
+        return agentLabelHint ?? agent ?? "Claude"
+    }
+    /// How to pick the conversation up again on the computer (offered only with a terminal, canTerminal: a runtime's
+    /// sessions are picked up in the runtime's own UI).
     var resumeCommand: String { isCodex ? "codex resume" : isTraex ? "traex resume" : "claude --resume" }
 
     enum CodingKeys: String, CodingKey {
@@ -305,6 +318,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case sourceKind = "source_kind", sourceThreadID = "source_thread_id", sourceInstanceID = "source_instance_id",
              parentThreadID = "parent_thread_id", readOnlyReason = "read_only_reason"
         case codexRoute = "codex_route", codexRouteNote = "codex_route_note"
+        case agentLabelHint = "agent_label"
         case permissionMode = "permission_mode"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
@@ -335,6 +349,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         attached = try c.decodeIfPresent(Bool.self, forKey: .attached)
         codexRoute = try c.decodeIfPresent(String.self, forKey: .codexRoute)
         codexRouteNote = try c.decodeIfPresent(String.self, forKey: .codexRouteNote)
+        agentLabelHint = try c.decodeIfPresent(String.self, forKey: .agentLabelHint)
         launcher = try c.decodeIfPresent(String.self, forKey: .launcher)
         model = try c.decodeIfPresent(String.self, forKey: .model)
         permissionMode = try c.decodeIfPresent(String.self, forKey: .permissionMode)
@@ -692,6 +707,8 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var reason: String?
     /// What "always allow" allows for this request ("本会话不再问这个命令"); a Codex card without it offers no such button.
     var alwaysLabel: String?
+    /// What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md).
+    var agentLabelHint: String?
 
     var sessionKey: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
 
@@ -702,7 +719,7 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
         case id, kind, questions, plan, summary, screen, cwd, dialog, secret, agent, reason
         case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title",
              createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
-             toolInput = "tool_input", alwaysLabel = "always_label"
+             toolInput = "tool_input", alwaysLabel = "always_label", agentLabelHint = "agent_label"
     }
 }
 

@@ -37,12 +37,14 @@ extension Interaction {
         return kind.title
     }
 
-    /// The agent's name on a card the node read off its TUI (Codex, TRAEX), nil for Claude's.
+    /// The agent's name on a card not from Claude Code: one the node read off a Codex / TRAEX TUI, or an agent
+    /// runtime's own ("DSH", the hub's agent_label; docs/runtimes.md). Nil for Claude's.
     var agentName: String? {
         switch agent {
         case "codex": "Codex"
         case "traex": "TRAEX"
-        default: nil
+        case nil, "", "claude": nil
+        default: agentLabelHint ?? agent
         }
     }
 }

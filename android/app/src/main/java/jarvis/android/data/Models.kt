@@ -146,6 +146,8 @@ data class Session(
     @SerialName("read_only_reason") val readOnlyReason: String? = null,
     val capabilities: SessionCapabilities? = null,
     val attached: Boolean = false,
+    /** What the hub says to call an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md). */
+    @SerialName("agent_label") val agentLabelHint: String? = null,
     val launcher: String? = null,
     val model: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,
@@ -190,13 +192,18 @@ data class Session(
         "codex_app_server" -> "Codex 实时"
         "identity_conflict" -> "身份冲突"
         "codex_history" -> "Codex 历史"
+        "runtime" -> agentLabel // an agent runtime's session (docs/runtimes.md): its own name, "DSH"
         else -> sourceKind?.takeIf { it.isNotEmpty() }
     }
     val sourceSubtitle: String? get() = sourceLabel?.let {
         val label = if (sourceKind != "identity_conflict" && !agentName.isNullOrEmpty()) "$it · $agentName" else it
         if (canSend) label else "$label · 仅查看：${readOnlyReason?.takeIf { r -> r.isNotEmpty() } ?: "此来源尚未允许发送"}"
     }
-    val agentLabel: String get() = if (isCodex) "Codex" else when (agent) { "traex" -> "TRAEX"; else -> "Claude" }
+    val agentLabel: String get() = if (isCodex) "Codex" else when (agent) {
+        "traex" -> "TRAEX"
+        null, "", "claude" -> "Claude"
+        else -> agentLabelHint ?: agent.orEmpty()
+    }
     val isLive: Boolean get() = status != "offline"
     val updated: Instant? get() = parseTime(updatedAt)
 }
@@ -309,6 +316,10 @@ data class Interaction(
     val screen: String? = null,
     val dialog: ScreenDialog? = null,
     val secret: Boolean? = null,
+    /** Who asks when it is not Claude Code: "codex", "traex", or an agent runtime's agent ("dsh"; docs/runtimes.md). */
+    val agent: String? = null,
+    /** What "always allow" allows here; a card from another agent offers it only with this (as on iOS). */
+    @SerialName("always_label") val alwaysLabel: String? = null,
 ) {
     val sessionKey: SessionKey get() = SessionKey(machineId, sessionId)
 

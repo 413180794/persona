@@ -311,7 +311,10 @@ func (h *Hub) sessionsChanged(m *Machine) {
 func (h *Hub) syncScreenInteractions(m *Machine, list []proto.Session) {
 	blocked := map[string]proto.Session{}
 	for _, s := range list {
-		if s.Status == proto.StatusBlocked {
+		// A session without a terminal (a source whose capabilities leave it out: Codex app-server, an agent runtime)
+		// has no screen to read a dialog off: it asks through its own cards, and blocked there means it waits in its
+		// own UI (docs/runtimes.md).
+		if s.Status == proto.StatusBlocked && (s.SourceKind == "" || s.Capabilities != nil && s.Capabilities.Terminal) {
 			blocked[s.SessionID] = s
 		}
 	}

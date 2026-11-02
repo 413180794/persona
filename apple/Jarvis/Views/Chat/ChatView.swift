@@ -1014,7 +1014,7 @@ struct ChatView: View {
                 }
                 // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals).
                 // In the shell the modes are in the composer's gauge menu (ShellComposerBar).
-                if viewing == nil, !shellChat, session?.canSend == true, session?.assistant == true || (session?.isCodex != true && session?.isTraex != true) {
+                if viewing == nil, !shellChat, session?.canSend == true, session.map({ $0.assistant || $0.isClaude }) ?? true {
                     SessionModeBar(key: key, session: session).padding(.leading, Theme.Space.xs)
                 }
                 if let s = session, !s.canSend, let reason = s.sourceSubtitle {
@@ -2674,8 +2674,8 @@ struct SessionInfoSheet: View {
         }
     }
 
-    /// The coding agent in the pane: Claude Code unless the session says Codex / TRAEX.
-    private var agent: String { session?.isCodex == true || session?.isTraex == true ? session!.agentLabel : "Claude Code" }
+    /// The coding agent in the pane: Claude Code unless the session names another agent.
+    private var agent: String { session.map { $0.isClaude ? "Claude Code" : $0.agentLabel } ?? "Claude Code" }
 
     private func resume(_ id: String) -> String {
         if session?.isCodex == true { return "codex resume \(id)" }

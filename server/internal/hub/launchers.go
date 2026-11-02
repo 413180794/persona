@@ -231,8 +231,8 @@ func (h *Hub) launcherViews(ctx context.Context) []LauncherView {
 	var names []string
 	for _, m := range h.machines {
 		for _, l := range h.zshrcLaunchersOf(ctx, m.cfg.ID) {
-			if managed[l.Name] || l.Name == "claude" {
-				continue
+			if managed[l.Name] || l.Name == "claude" || (l.Source != "" && l.Source != "zshrc") {
+				continue // a runtime's launcher (DSH, node/runtimes.go) is not a model to configure here
 			}
 			v := byName[l.Name]
 			if v == nil {
@@ -287,7 +287,9 @@ func (h *Hub) machineLaunchers(ctx context.Context, m *Machine) ([]proto.Launche
 		if slices.Contains(hidden, l.Name) || slices.ContainsFunc(managed, func(s storedLauncher) bool { return s.Name == l.Name }) {
 			continue
 		}
-		l.Source = "zshrc"
+		if l.Source == "" { // a runtime's launcher (node/runtimes.go) keeps its own source, e.g. "dsh"
+			l.Source = "zshrc"
+		}
 		out = append(out, l)
 	}
 	for _, s := range managed {

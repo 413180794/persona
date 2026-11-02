@@ -75,6 +75,11 @@ type Node struct {
 	sysOnce   sync.Once       // system: read once (metrics.go)
 	sys       proto.System
 
+	// runtimes: agent runtimes without a terminal, connected on runtime.sock (runtimes.go); runtimeSock overrides the
+	// socket path (tests).
+	runtimes    *runtimeRegistry
+	runtimeSock string
+
 	// codexStarting: panes a Codex start is opening (codex_start.go): no thread is guessed for them meanwhile.
 	codexStarting map[string]bool
 
@@ -142,6 +147,7 @@ func New(version string) (*Node, error) {
 		events:   newHerdrEvents(),
 		cdirs:    newClaudeDirs(),
 		codices:  newCodexRegistry(),
+		runtimes: newRuntimeRegistry(),
 	}
 	n.configureCodex(proto.CodexConfig{})
 	n.hosts = host.NewRegistry(engineHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
@@ -181,6 +187,11 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		n.logger.Printf("hook socket: %v", err)
 	} else {
 		defer ln.Close()
+	}
+	if bl, err := n.listenRuntimeSocket(ctx); err != nil { // runtimes (runtimes.go): beside the engine, whichever it is
+		n.logger.Printf("runtime socket: %v", err)
+	} else {
+		defer bl.Close()
 	}
 	go n.startWhenConfigured(ctx) // polling and the engine's events, once the hub said which engine (engine.go)
 	go n.warmTranscripts(ctx)
@@ -320,6 +331,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return ok(n.interruptCodex(ctx, p.SessionID))
 		}
 	}
+	// A session a runtime lists (runtimes.go): the runtime answers every call about it.
+	if h := n.runtimes.ownerOf(p.SessionID); h != nil {
+		if res, err, handled := n.runtimeHandle(ctx, h, method, params); handled {
+			return res, err
+		}
+	}
 	switch method {
 	case "session.attach":
 		return ok(n.attachCodex(ctx, p.SessionID))
@@ -367,6 +384,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
 	case "launchers.list":
 		ls, err := n.launchers(ctx)
+		if bl := n.runtimes.launchers(); len(bl) > 0 {
+			// A runtime's launcher (DSH) is offered even when the login shell's list failed.
+			ls, err = append(append([]proto.Launcher(nil), ls...), bl...), nil
+		}
 		return map[string]any{"launchers": ls}, err
 	case "launchers.managed":
 		var c struct {
@@ -396,6 +417,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		tab := ""
 		if p.TabName != nil {
 			tab = *p.TabName
+		}
+		if p.ResumeSessionID == "" {
+			if s, err, ok := n.runtimeStart(ctx, p.Launcher, p.Cwd, p.Prompt); ok { // a runtime's launcher
+				return map[string]any{"session": s}, err
+			}
 		}
 		if p.Async && p.ResumeSessionID == "" {
 			s, err := n.startAsync(p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab)

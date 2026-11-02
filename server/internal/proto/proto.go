@@ -301,10 +301,14 @@ type Session struct {
 	// screen, keys and typing); CodexRouteNote says why when it is the terminal.
 	CodexRoute     string `json:"codex_route,omitempty"`
 	CodexRouteNote string `json:"codex_route_note,omitempty"`
-	// Agent is the coding agent in the pane: "claude" (also when empty, from older nodes) or "codex".
-	Agent    string `json:"agent,omitempty"`
-	Launcher string `json:"launcher,omitempty"`
-	Model    string `json:"model,omitempty"`
+	// Agent is the coding agent in the pane: "claude" (also when empty, from older nodes) or "codex"; for a session a
+	// runtime lists (docs/runtimes.md), the agent it says it runs ("dsh").
+	Agent string `json:"agent,omitempty"`
+	// AgentLabel is what the apps call the agent when they do not know it themselves: a runtime's own name ("DSH").
+	// Empty for the agents the apps know (Claude Code, Codex, TRAEX).
+	AgentLabel string `json:"agent_label,omitempty"`
+	Launcher   string `json:"launcher,omitempty"`
+	Model      string `json:"model,omitempty"`
 	// PermissionMode and Effort are what Claude Code runs with now: default / acceptEdits / plan / auto /
 	// bypassPermissions, and low … max. Empty while unknown (before the first turn, Codex).
 	PermissionMode  string `json:"permission_mode,omitempty"`
@@ -359,6 +363,10 @@ type Session struct {
 	Starting   bool   `json:"starting,omitempty"`
 	StartError string `json:"start_error,omitempty"`
 }
+
+// SourceRuntime is the source_kind of a session an agent runtime lists (docs/runtimes.md): source_instance_id names
+// the runtime ("dsh"); its capabilities come from what the runtime declared (no terminal, never attach).
+const SourceRuntime = "runtime"
 
 // Port is a listening TCP port on a machine (docs/ports.md).
 type Port struct {
@@ -536,6 +544,9 @@ type Interaction struct {
 	// AlwaysLabel names what "always allow" does for this request ("本会话不再问这个命令"); a permission card offers it
 	// only when set or for Claude.
 	AlwaysLabel string `json:"always_label,omitempty"`
+	// AgentLabel is what to call Agent when the apps do not know it (a runtime's own name, "DSH"; docs/runtimes.md),
+	// as proto.Session.AgentLabel.
+	AgentLabel string `json:"agent_label,omitempty"`
 }
 
 type Resolution struct {

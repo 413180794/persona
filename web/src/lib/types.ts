@@ -51,6 +51,8 @@ export interface Session {
   read_only_reason?: string;
   capabilities?: SessionCapabilities;
   attached?: boolean;
+  /** What to call an agent the app does not know (a runtime's own name, "DSH"; docs/runtimes.md). */
+  agent_label?: string;
   launcher?: string;
   model?: string;
   permission_mode?: string;
@@ -135,6 +137,10 @@ export interface Interaction {
   screen?: string;
   secret?: boolean;
   dialog?: { header?: string; question?: string; detail?: string; options?: DialogOption[]; rev?: string };
+  /** Who asks when it is not Claude Code: "codex", "traex", or an agent runtime's agent ("dsh"; docs/runtimes.md). */
+  agent?: string;
+  /** What "always allow" allows here; another agent's card offers it only with this. */
+  always_label?: string;
 }
 
 export interface Launcher {

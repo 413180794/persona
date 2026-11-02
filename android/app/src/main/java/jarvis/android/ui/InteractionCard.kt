@@ -245,7 +245,9 @@ fun Interaction.kindLabel(agentLabel: String = "Claude"): String = when (kind) {
     else -> "需要你"
 }
 
-private val Interaction.canAlwaysAllow: Boolean get() = kind == "permission" && sessionId.isNotEmpty()
+// Claude's 本会话总是允许; another agent's card (Codex, an agent runtime) only when it says what always allows.
+private val Interaction.canAlwaysAllow: Boolean get() = kind == "permission" && sessionId.isNotEmpty() &&
+    (agent.isNullOrEmpty() || agent == "claude" || !alwaysLabel.isNullOrEmpty())
 
 /** The one-line gist a folded card shows (iOS `InteractionPanel.previewText`). */
 private fun previewText(ix: Interaction): String = when (ix.kind) {

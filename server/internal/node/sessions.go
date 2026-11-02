@@ -519,6 +519,12 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		out = append(out, s)
 		seen[s.SessionID] = true
 	}
+	for _, s := range n.runtimes.sessions() { // runtimes (runtimes.go): listed as they say
+		if !seen[s.SessionID] {
+			out = append(out, s)
+			seen[s.SessionID] = true
+		}
+	}
 	for _, s := range n.assistantSessions() {
 		if !seen[s.SessionID] {
 			out = append(out, s)
@@ -1025,32 +1031,40 @@ func (n *Node) pollAgents(ctx context.Context) {
 			kicked = true
 		}
 		// Every tick still checks the transcripts (revs); herdr only when it said something changed (herdrevents.go).
+		// A host that does not answer (herdr not installed or not running) does not stop the list: runtimes, the
+		// assistant and the transcripts do not need it (it used to skip the whole push, so such a machine never
+		// updated its list). Its agents stay as last seen (refreshHosts).
 		if kicked || n.snapshotDue(snapped) {
 			_ = n.refreshHosts(ctx)
 			snapped = time.Now()
 		}
 		list := n.sessionList(ctx, false)
 		listed = time.Now()
-		key := listKey(list)
-		n.mu.Lock()
-		changed := key != n.lastList
-		n.lastList = key
-		revs := n.revsChanged(list)
-		n.mu.Unlock()
-		if n.peer == nil {
-			continue
-		}
-		if len(revs) > 0 {
+		if revs := n.publish(list); len(revs) > 0 {
 			n.kickPorts() // a tool call ran: it may have started (or stopped) a server (ports.go)
 		}
-		if changed {
-			_ = n.peer.Notify("sessions.changed", map[string]any{"sessions": list})
-		} else if len(revs) > 0 {
-			// A transcript grew without anything the list shows changing (a tool call, a result): only the new
-			// revs go out, a few bytes instead of the whole list, so the app can pull those sessions.
-			_ = n.peer.Notify("sessions.revs", map[string]any{"revs": revs})
-		}
 	}
+}
+
+// publish pushes a rebuilt list to the hub: the whole list when anything it shows changed, else only the revs that
+// moved (a transcript grew: a few bytes instead of the list, so the app can pull those sessions). It returns the
+// revs that moved. Runtimes (runtimes.go) publish through it too when their list changes.
+func (n *Node) publish(list []proto.Session) map[string]int64 {
+	key := listKey(list)
+	n.mu.Lock()
+	changed := key != n.lastList
+	n.lastList = key
+	revs := n.revsChanged(list)
+	n.mu.Unlock()
+	if n.peer == nil {
+		return revs
+	}
+	if changed {
+		_ = n.peer.Notify("sessions.changed", map[string]any{"sessions": list})
+	} else if len(revs) > 0 {
+		_ = n.peer.Notify("sessions.revs", map[string]any{"revs": revs})
+	}
+	return revs
 }
 
 // revsChanged records the list's revs and returns those that differ from the last pushed. Callers hold n.mu.

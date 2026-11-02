@@ -1,0 +1,20 @@
+{
+  "name": "jarvis-runtime-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plug an agent runtime without a terminal into Jarvis: the runtime side of the runtime.sock protocol.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./testing": "./testing/fake-node.js",
+    "./testing/node-harness": "./testing/node-harness.mjs"
+  },
+  "files": ["index.js", "lib/*.js", "testing/*", "examples/*"],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

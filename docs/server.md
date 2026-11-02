@@ -11,7 +11,7 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 | `internal/transcript` | Claude Code JSONL → `proto.Item`，增量读取、分页 |
 | `internal/herdr` | herdr 的 socket API 客户端（CLI 兜底）和事件订阅 |
 | `internal/herdrcore` | herdr-core（Herdr 桌面版背后的 `hc`）的 JSON-RPC 客户端和事件订阅，见 `docs/plan-orca-support.md`「herdr-core 宿主」 |
-| `internal/node` | node：会话列表、启动、发送、屏幕采样、hook / mcp 的 unix socket |
+| `internal/node` | node：会话列表、启动、发送、屏幕采样、hook / mcp 的 unix socket、runtime 的 `runtime.sock`（`runtimes.go`，`docs/runtimes.md`） |
 | `internal/hub` | hub：HTTP / WebSocket、机器连接、交互队列、手机工具转发、APNs |
 | `internal/db` | Postgres：连接池、内嵌 SQL 迁移（`migrations/NNNN_*.sql`）、各表读写 |
 | `internal/mail` | IMAP/SMTP、加密账号存储、邮件 HTTP 接口和 MCP 工具（`docs/mail.md`） |

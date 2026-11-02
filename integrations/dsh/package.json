@@ -1,0 +1,31 @@
+{
+  "name": "jarvis-dsh-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jarvis runtime for DeepSeek Harness: DSH sessions in the Jarvis apps (built on jarvis-runtime-sdk).",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

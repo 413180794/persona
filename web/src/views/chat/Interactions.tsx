@@ -262,9 +262,12 @@ function PermissionCard({ ix }: { ix: Interaction }) {
             拒绝
           </Button>
           <span className="flex gap-1.5">
-            <Button tone="secondary" onClick={() => go({ allow: true, always: true })}>
-              总是允许
-            </Button>
+            {/* Claude's 总是允许; another agent's card (Codex, an agent runtime) only when it says what always allows. */}
+            {(!ix.agent || ix.agent === "claude" || ix.always_label) && (
+              <Button tone="secondary" onClick={() => go({ allow: true, always: true })}>
+                总是允许
+              </Button>
+            )}
             <Button tone="primary" busy={busy} onClick={() => go({ allow: true })}>
               允许
             </Button>
