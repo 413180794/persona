@@ -401,7 +401,7 @@ private struct AgentsList: View {
                                    onMachines: { openFromList(MachineListRoute()) })
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
 
-        List {
+        let list = List {
             // On a phone the filter bar is the list's first row: it scrolls with the list, so the search field can
             // fold away and come back on a pull (a bar pinned in the safe area stayed put under a folded search field,
             // leaving a blurred gap, TestFlight 35). Beside the split (regular width) it stays above the list.
@@ -586,13 +586,19 @@ private struct AgentsList: View {
         .onChange(of: matching) { _, now in kept.formUnion(now) }
         .onChange(of: query.isEmpty, initial: true) { _, empty in feed.searching = !empty }
         .onChange(of: machineFilter) { _, _ in kept = [] }
-        .onAppear { feed.follow(model) }
+        .onAppear {
+            feed.follow(model)
+            #if os(iOS)
+            Self.keepReader(feed.reader, searchClose)
+            #endif
+        }
         .onScrollPhaseChange { _, phase in
             #if os(iOS) && (DEBUG || PERF_SIGNPOST)
             PerfScroll.mark("Agents list \(phase)")
             #endif
             scroll.phase = phase
             if phase != .idle {
+                feed.reader.cancel()
                 scroll.scrolling = true
                 feed.hold(true, scrolling: true)
                 return
@@ -605,6 +611,11 @@ private struct AgentsList: View {
             }
         }
         .onChange(of: covered, initial: true) { _, covered in feed.hold(covered || scroll.scrolling, scrolling: scroll.scrolling) }
+        // The row being read, brought back when a change took it off screen (`ReaderAnchor.reveal`). Around a local:
+        // the chain above in a closure is type-checked with all of it.
+        ScrollViewReader { proxy in
+            list.onAppear { feed.reader.reveal = { id, at in proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: at)) } }
+        }
     }
 
     /// The quick filter bar. Equal while the counts are: the bar is not drawn again for pushes that change none of
@@ -637,6 +648,31 @@ private struct AgentsList: View {
         path = NavigationPath([value])
     }
 
+    #if os(iOS)
+    /// `ReaderAnchor` on the list's own scroll view.
+    private static func keepReader(_ reader: ReaderAnchor, _ watcher: SearchCloseWatcher) {
+        reader.shown = { [weak watcher] in
+            guard let list = watcher?.listScrollView, list.window != nil else { return nil }
+            let inset = list.adjustedContentInset
+            let frame = list.convert(list.bounds, to: nil)
+            let top = frame.minY + inset.top, bottom = frame.maxY - inset.bottom
+            guard bottom > top else { return nil }
+            return (top...bottom, list.contentOffset.y <= -inset.top + 1)
+        }
+        reader.scroll = { [weak watcher] dy in
+            guard let list = watcher?.listScrollView else { return }
+            let inset = list.adjustedContentInset
+            let lowest = -inset.top
+            let highest = max(lowest, list.contentSize.height + inset.bottom - list.bounds.height)
+            list.contentOffset.y = min(max(list.contentOffset.y + dy, lowest), highest)
+        }
+        reader.moving = { [weak watcher] in
+            guard let list = watcher?.listScrollView else { return false }
+            return list.isTracking || list.isDragging || list.isDecelerating
+        }
+    }
+    #endif
+
     /// Opens a search result: the search closes first (open, it keeps the system navigation bar up over the chat), and
     /// the chat is pushed once it has folded away. The search's text and results stay for coming back.
     private func openFromSearch(_ key: SessionKey) {
@@ -648,7 +684,7 @@ private struct AgentsList: View {
     /// The row follows its own agent (`AgentsFeed.Row`): what only it shows changes it, not the list.
     @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil) -> some View {
         if feed.following {
-            FeedRow(row: feed.row(s)) { live in slotRowDrawn(live, context: context, inStateSection: inStateSection, cardLast: cardLast) }
+            FeedRow(row: feed.row(s), reader: feed.reader) { live in slotRowDrawn(live, context: context, inStateSection: inStateSection, cardLast: cardLast) }
         } else {
             slotRowDrawn(s, context: context, inStateSection: inStateSection, cardLast: cardLast)
         }
@@ -957,12 +993,85 @@ private struct AgentsList: View {
     }
 }
 
-/// One row of the Agents list, drawn from its agent as it is now (`AgentsFeed.Row`).
+/// One row of the Agents list, drawn from its agent as it is now (`AgentsFeed.Row`). It tells `reader` where it is,
+/// so the row being read stays put when the list's structure changes around it.
 private struct FeedRow<Content: View>: View {
     let row: AgentsFeed.Row
+    let reader: ReaderAnchor
     @ViewBuilder let content: (Session) -> Content
 
-    var body: some View { content(row.session) }
+    var body: some View {
+        let id = row.session.id
+        content(row.session)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { reader.row(id, top: $0) }
+            .onDisappear { reader.gone(id) }
+    }
+}
+
+/// Keeps the row the reader is on where it is on screen when the Agents list's structure lands at rest (#339): a space
+/// moving up above it, a card put in at the top. The list keeps its offset, so without this everything below the
+/// change slid by its height, and the reader's row went off and another space took its place.
+/// - At the very top nothing is kept: what came in shows there.
+/// - Not while a finger or a glide moves the list: the change waits for it then (`AgentsFeed.hold`), except what is
+///   critical, which may move the list (docs/ios-state.md「及时性」).
+@MainActor final class ReaderAnchor {
+    /// The list's window band as shown (below the bars), and whether it is at its very top; nil without a list.
+    var shown: () -> (band: ClosedRange<CGFloat>, atTop: Bool)? = { nil }
+    /// Scrolls the list by that many points (down for more); the list keeps it within its content.
+    var scroll: (CGFloat) -> Void = { _ in }
+    /// A finger or a glide is moving the list.
+    var moving: () -> Bool = { false }
+    /// Scrolls the list to a row with that point of it at the same point of the list (0 top, 1 bottom).
+    var reveal: (String, CGFloat) -> Void = { _, _ in }
+    /// Each drawn row's top in the window, as last laid out.
+    private var tops: [String: CGFloat] = [:]
+    private var kept: (id: String, top: CGFloat, at: CGFloat, until: Date)?
+    /// The row being read since the list last rested from a scroll: kept again for the next change while it shows,
+    /// so a row that drifted a little does not hand the place over to its neighbour.
+    private var reading: String?
+
+    func row(_ id: String, top: CGFloat) {
+        tops[id] = top
+        // Every report while it is kept: the list lays out the rows around it again a moment after the change (their
+        // real heights), not only once.
+        guard let k = kept, k.id == id else { return }
+        guard Date.now < k.until else { kept = nil; return }
+        guard abs(top - k.top) >= 0.5, !moving() else { return }
+        scroll(top - k.top)
+    }
+
+    /// A row off screen. The one being kept, taken off by the change (its space went far down): brought back near
+    /// where it was, then put exactly where it was once it reports where it is (`row`).
+    func gone(_ id: String) {
+        tops[id] = nil
+        guard let k = kept, k.id == id, Date.now < k.until, !moving() else { return }
+        DispatchQueue.main.async { [self] in
+            guard let k = kept, k.id == id, tops[id] == nil, !moving() else { return }
+            reveal(id, k.at)
+        }
+    }
+
+    /// What the list shows is about to change: the row being read is the one to keep where it is.
+    func willChange() {
+        kept = nil
+        guard !moving(), let (band, atTop) = shown(), !atTop else { return }
+        let mid = (band.lowerBound + band.upperBound) / 2
+        // The row being read if it shows, else the row the middle line falls in: the lowest one starting above it
+        // (else the first below it).
+        let inBand = tops.filter { band.contains($0.value) }
+        guard let (id, top) = reading.flatMap({ r in inBand[r].map { (r, $0) } })
+            ?? inBand.filter({ $0.value <= mid }).max(by: { $0.value < $1.value }) ?? inBand.min(by: { $0.value < $1.value })
+        else { return }
+        reading = id
+        let at = (top - band.lowerBound) / (band.upperBound - band.lowerBound)
+        kept = (id, top, at, .now + 1) // laid out on the next frames; a later move is not this change's
+    }
+
+    /// A finger or a glide took over: what moves now is theirs, and what is read afterwards is wherever it stops.
+    func cancel() {
+        kept = nil
+        reading = nil
+    }
 }
 
 #if DEBUG || PERF_SIGNPOST
@@ -1020,6 +1129,8 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     private(set) var machines: [Machine] = []
     /// Following a model: until then the list reads the model itself.
     private(set) var following = false
+    /// The row being read, kept in place when what the list shows changes.
+    @ObservationIgnored let reader = ReaderAnchor()
     @ObservationIgnored private weak var model: AppModel?
     @ObservationIgnored private var held = false
     @ObservationIgnored private var scrolling = false
@@ -1078,14 +1189,15 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         capTask = nil
         guard let (s, i, m) = current() else { return }
         show(s)
-        if i != interactions { interactions = i }
-        if m != machines { machines = m }
+        if i != interactions { reader.willChange(); interactions = i }
+        if m != machines { reader.willChange(); machines = m }
     }
 
     /// The rows that changed get their agent; the list gets the new list only if its structure changed.
     private func show(_ s: [Session]) {
         guard s != shown else { return }
         shown = s
+        reader.willChange() // a row above the one being read may grow or shrink (its last line), not only the structure
         for x in s {
             if let r = rows[x.id] {
                 if r.session != x { r.session = x }
@@ -1104,7 +1216,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         let shape = Self.shape(shown, searching: searching)
         guard force || shape != shaped else { return }
         shaped = shape
-        if shown != sessions { sessions = shown }
+        if shown != sessions { reader.willChange(); sessions = shown }
     }
 
     /// What the list's structure reads of the agents (the groups, the order, the folds, the counts, the headers; the
@@ -1184,8 +1296,8 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         }
         next += s.filter { urgent($0) && !listed.contains($0.id) }
         show(next)
-        if i != interactions { interactions = i }
-        if m != machines { machines = m }
+        if i != interactions { reader.willChange(); interactions = i }
+        if m != machines { reader.willChange(); machines = m }
         if next == s { missedSince = nil }
     }
 
@@ -1950,8 +2062,17 @@ private struct TopBar<Bar: View>: ViewModifier {
         }
     }
 
-    /// The list's scroll view: the largest collection view in the page the probe is in (List is one).
-    private var listScrollView: UIScrollView? {
+    private weak var foundList: UIScrollView?
+
+    /// The list's scroll view: the largest collection view in the page the probe is in (List is one). Kept once found
+    /// while it is in a window (`ReaderAnchor` asks on every push).
+    var listScrollView: UIScrollView? {
+        if let l = foundList, l.window != nil { return l }
+        foundList = findListScrollView
+        return foundList
+    }
+
+    private var findListScrollView: UIScrollView? {
         var r: UIResponder? = view
         while let next = r?.next {
             if let vc = next as? UIViewController {

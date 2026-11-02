@@ -164,12 +164,15 @@ final class LiveUpdateTests: XCTestCase {
         let row = (0..<rows.count).map { rows.element(boundBy: $0) }
             .filter { $0.isHittable }.min { abs($0.frame.midY - mid) < abs($1.frame.midY - mid) }
         guard let row else { return XCTFail("no row on screen") }
-        let label = row.label
+        // Found again by its title: the label also has its time (「3 分钟前」), which may turn over meanwhile.
+        let parts = row.label.components(separatedBy: "、")
+        let title = parts.count > 1 ? "、" + parts[1] + "、" : row.label
         let y = row.frame.minY
         let before = counts()
         churn()
-        let same = app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+        let same = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
         XCTAssertTrue(same.exists, "the row is still there")
+        print("TRUTH reader row moved \(String(format: "%.1f", abs(same.frame.minY - y))) pt through the pushes")
         XCTAssertEqual(same.frame.minY, y, accuracy: 2, "the row under the reader stayed put")
         report("Agents list, scrolled to the middle", from: before, to: counts())
     }

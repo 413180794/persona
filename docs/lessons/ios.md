@@ -10,6 +10,10 @@
 - 新外壳的侧边栏菜单、会话名和正文用同一档 Dynamic Type，不给整个侧边栏套 `.shellScaled()`：它会额外放大一档（标准设置下 17pt → 19pt），
   即使两边都写 `Theme.Font.body` 也不一样。「Jarvis」标题保留 `display` 层级，字号仍跟随系统和设置的小 / 标准 / 大。
 
+- `List` 换序、上面插行或改行高后保持的是滚动偏移，不是读者看着的那一行（2026-11-02，#339）：停在 Agents 列表中间时一次推送让上面的空间换了名次，
+  屏幕中间的空间整个换成了另一个，测试里那一行直接不见了。要保住就自己做：行用 `onGeometryChange` 报窗口里的位置，改数据前记下中间那一行，
+  排完按差值改 `contentOffset`（`ReaderAnchor`）；在最顶上、手指按着或正在滑时不做。两个坑：换序后 `List` 过一会儿才按真实行高重排上面的行，要在一小段时间里
+  每次报位置都校；那一行被挪出屏幕时格子被回收、`onGeometryChange` 不再来，只有 `onDisappear`，要先 `ScrollViewReader.scrollTo` 把它滚回来再校。
 - `ScrollView` + `defaultScrollAnchor(.bottom)` + `LazyVStack`：跳到很远的 id 会因为上方懒加载视图实际高度与估算不同而漂移，验证历史渲染用 `-fromSeq`。
 - 翻转的聊天列表别让它贴安全区：上方垫 1pt 空视图、输入框放在下方的 VStack 里；用 `ignoresSafeArea` + 按 inset 补边距会在键盘弹起时白屏、顶部错位。
 - 聊天列表用倒置（ScrollView 和每行各 `scaleEffect(x:1,y:-1)`）：最新消息在偏移 0，跳到最新永远精确。倒置后要自己处理安全区

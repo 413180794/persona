@@ -139,6 +139,9 @@
 - 看对话内容的 UI 测试一律带 `-openChatsFresh YES`（清掉磁盘上的对话缓存）：mock 每次重置，对话都从同一个 seq 重新开始，前面测试 churn 出来的步骤
   还在 App 的缓存里，占着这次 `/mock/say` 拿到的 seq，新回复「已经有了」就不显示，屏幕上是上一次的「工具 21 · 回复 5」。
   2026-11-02 `ChatFollowTests.testJarvisChatFollows` 在跑过 `ScrollUnderPushTests` / `ScreenTruthTests` 的模拟器上挂，看着像新外壳的 Jarvis 对话不显示回复，其实是测试环境；真实 hub 的 seq 是 transcript 里的位置，只增不重用。
+- 测试按「滑一下停在哪」挑行的，别处改了行高或字号（#245 改了新外壳的字号档）就会滑到另一处，结果跟着变（2026-11-02，#339）：
+  `testScrolledListHoldsStillThroughUpdates` 以前碰巧停在不换名次的空间，没测到读者那一屏被换掉；二分落在一个只改字号的提交上，真正的问题是 App 没保住读者那一行。
+  二分找到的提交只说明「从这里开始暴露」，先看它改的东西能不能解释现象。找回一行用标题，别用整条无障碍标签（里面有「3 分钟前」，跨分钟就对不上）。
 
 ## 要 macOS 自带命令的 Go 测试（2026-11-02）
 
