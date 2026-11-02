@@ -63,6 +63,9 @@ extension Theme {
         /// Speech to text in the composer (a tap starts, a second one ends).
         static let dictate = "mic"
         static let dictating = "mic.fill"
+        /// 长录音作为上下文，与输入框听写区分。
+        static let recording = "waveform.circle"
+        static let pause = "pause.fill"
         static let share = "square.and.arrow.up"
         static let save = "square.and.arrow.down"
         static let retry = "arrow.clockwise"

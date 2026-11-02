@@ -1,0 +1,101 @@
+#if canImport(WatchConnectivity)
+import Foundation
+import WatchConnectivity
+
+nonisolated struct RecordingReceipt: Codable, Sendable {
+    var id: UUID
+    var index: Int?
+    var total: Int?
+    static let key = "jarvisRecordingReceipt"
+    var dictionary: [String: Any] { [Self.key: (try? JSONEncoder().encode(self)) ?? Data()] }
+    init(id: UUID, index: Int? = nil, total: Int? = nil) { self.id = id; self.index = index; self.total = total }
+    init?(dictionary: [String: Any]) {
+        guard let data = dictionary[Self.key] as? Data, let value = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
+        self = value
+    }
+}
+
+#if os(watchOS)
+/// Hourhand 回传队列的适配：索引先持久化，手机确认落盘后才删除音频，失败退避。
+@Observable
+final class WatchRecordingTransfer {
+    static let shared = WatchRecordingTransfer()
+    private(set) var error: String?
+    var reachable: Bool { WCSession.default.activationState == .activated && WCSession.default.isReachable }
+    @ObservationIgnored private var ticker: Task<Void, Never>?
+    @ObservationIgnored private var attempts: [String: Int] = [:]
+    @ObservationIgnored private var retryAt: [String: Date] = [:]
+    @ObservationIgnored private var lastBatch = Date.distantPast
+
+    func start() {
+        guard ticker == nil else { return }
+        WatchSync.shared.onRecordingEvent = { [weak self] in self?.pump(force: true) }
+        WatchSync.shared.onRecordingReceipt = { [weak self] in self?.received($0) }
+        RecordingCapture.shared.onSaved = { [weak self] _ in self?.pump(force: false) }
+        ticker = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                self?.pump(force: false)
+            }
+        }
+        pump(force: true)
+    }
+
+    func pending(_ id: UUID) -> Int {
+        RecordingLibrary.shared.entry(id)?.segments.filter { !$0.delivered }.count ?? 0
+    }
+
+    func pump(force: Bool) {
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isCompanionAppInstalled else { return }
+        let now = Date()
+        let batchDue = reachable || force || now.timeIntervalSince(lastBatch) >= RecordingAudioSpec.transferBatchSeconds
+        for entry in RecordingLibrary.shared.entries where entry.source == .watch {
+            guard !entry.active || batchDue else { continue }
+            for segment in entry.segments where !segment.delivered {
+                let key = "\(entry.id)/\(segment.index)"
+                guard now >= retryAt[key] ?? .distantPast else { continue }
+                let already = session.outstandingFileTransfers.contains {
+                    let transfer = RecordingTransfer(dictionary: $0.file.metadata)
+                    return transfer?.id == entry.id && transfer?.segment?.index == segment.index
+                }
+                let url = RecordingLibrary.shared.audio(entry.id, segment.index)
+                guard !already, FileManager.default.fileExists(atPath: url.path) else { continue }
+                session.transferFile(url, metadata: RecordingTransfer(entry: entry, segment: segment).dictionary)
+                retryAt[key] = now.addingTimeInterval(60)
+            }
+            if !entry.active, !entry.endDelivered, entry.expectedSegments != nil {
+                let key = "\(entry.id)/end"
+                guard now >= retryAt[key] ?? .distantPast else { continue }
+                let already = session.outstandingUserInfoTransfers.contains { RecordingTransfer(dictionary: $0.userInfo)?.id == entry.id }
+                if !already { session.transferUserInfo(RecordingTransfer(entry: entry).dictionary) }
+                retryAt[key] = now.addingTimeInterval(60)
+            }
+        }
+        if batchDue { lastBatch = now }
+    }
+
+    func finished(_ transfer: RecordingTransfer, failed: Bool) {
+        let key = "\(transfer.id)/" + (transfer.segment.map { String($0.index) } ?? "end")
+        let count = failed ? (attempts[key] ?? 0) + 1 : 0
+        attempts[key] = count
+        retryAt[key] = Date().addingTimeInterval(failed ? min(300, 5 * pow(2, Double(min(count, 6)))) : 60)
+        if failed { error = "录音回传暂未完成，会自动重试" }
+    }
+
+    private func received(_ receipt: RecordingReceipt) {
+        let library = RecordingLibrary.shared
+        guard var entry = library.entry(receipt.id) else { return }
+        if let index = receipt.index, let position = entry.segments.firstIndex(where: { $0.index == index }) {
+            entry.segments[position].delivered = true
+            do {
+                try library.save(entry)
+                try? FileManager.default.removeItem(at: library.audio(entry.id, index))
+            } catch { self.error = "回传确认没有保存，音频仍保留在手表" }
+        }
+        if let total = receipt.total, entry.expectedSegments == total { library.change(entry.id) { $0.endDelivered = true } }
+        error = nil
+    }
+}
+#endif
+#endif

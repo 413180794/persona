@@ -25,6 +25,9 @@ final class WatchSync: NSObject, WCSessionDelegate {
     var onActivated: (() -> Void)?
     /// iPhone side: answers the watch's "send me the pairing" request.
     var configProvider: (() -> ServerConfig?)?
+    var onRecording: ((RecordingTransfer) -> Void)?
+    var onRecordingReceipt: ((RecordingReceipt) -> Void)?
+    var onRecordingEvent: (() -> Void)?
 
     private var lastSummaryPush = Date.distantPast
     private var pendingSummary: WatchSummary?
@@ -108,12 +111,19 @@ final class WatchSync: NSObject, WCSessionDelegate {
         Task { @MainActor in
             self.apply(ctx)
             self.onActivated?()
+            self.onRecordingEvent?()
         }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        let recording = RecordingTransfer(dictionary: userInfo)
+        let receipt = RecordingReceipt(dictionary: userInfo)
         nonisolated(unsafe) let copy = userInfo
-        Task { @MainActor in self.apply(copy) }
+        Task { @MainActor in
+            if let recording { self.onRecording?(recording) }
+            else if let receipt { self.onRecordingReceipt?(receipt) }
+            else { self.apply(copy) }
+        }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
@@ -130,6 +140,47 @@ final class WatchSync: NSObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext ctx: [String: Any]) {
         nonisolated(unsafe) let copy = ctx
         Task { @MainActor in self.apply(copy) }
+    }
+
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        Task { @MainActor in self.onRecordingEvent?() }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
+        #if os(iOS)
+        guard let transfer = RecordingTransfer(dictionary: file.metadata), let segment = transfer.segment else { return }
+        // 回调返回时系统删除临时文件，必须先同步移动，再交给主线程更新索引。
+        let dir = RecordingLibrary.directory.appendingPathComponent(transfer.id.uuidString, isDirectory: true)
+        let destination = dir.appendingPathComponent(RecordingSegment.fileName(segment.index))
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.moveItem(at: file.fileURL, to: destination)
+            }
+            Task { @MainActor in self.onRecording?(transfer) }
+        } catch { /* 不确认；手表保留音频并重试。 */ }
+        #endif
+    }
+
+    nonisolated func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+        #if os(watchOS)
+        guard let transfer = RecordingTransfer(dictionary: fileTransfer.file.metadata) else { return }
+        let failed = error != nil
+        Task { @MainActor in WatchRecordingTransfer.shared.finished(transfer, failed: failed) }
+        #endif
+    }
+
+    nonisolated func session(_ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer, error: Error?) {
+        #if os(watchOS)
+        guard let transfer = RecordingTransfer(dictionary: userInfoTransfer.userInfo) else { return }
+        let failed = error != nil
+        Task { @MainActor in WatchRecordingTransfer.shared.finished(transfer, failed: failed) }
+        #endif
+    }
+
+    func confirmRecording(_ receipt: RecordingReceipt) {
+        guard WCSession.default.activationState == .activated else { return }
+        WCSession.default.transferUserInfo(receipt.dictionary)
     }
 
     #if os(iOS)

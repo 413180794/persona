@@ -47,6 +47,7 @@ final class WatchModel {
             self.apply(sessions: s.sessions, interactions: s.interactions, machines: s.machines)
             if let inbox = s.inbox { self.applyInbox(inbox) }
         }
+        WatchRecordingTransfer.shared.start()
         WatchSync.shared.activate()
         Task { await poll() }
     }
@@ -153,6 +154,7 @@ final class WatchModel {
 struct WatchRootView: View {
     @Environment(WatchModel.self) private var model
     @State private var openedItem: InboxItem?
+    @State private var recordingOpen = false
     #if DEBUG
     @State private var openedInteraction: Interaction?
     @State private var openedSession: Session?
@@ -168,9 +170,17 @@ struct WatchRootView: View {
     var body: some View {
         NavigationStack {
             if model.config == nil {
-                WatchPairView()
+                VStack(spacing: Theme.Space.s) {
+                    WatchPairView()
+                    NavigationLink { WatchRecordingView() } label: {
+                        Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1)
+                    }
+                }
             } else {
                 List {
+                    NavigationLink { WatchRecordingView() } label: {
+                        Label("录音上下文", systemImage: Theme.Icon.recording).font(Theme.Font.secondaryMedium).lineLimit(1)
+                    }.watchCard()
                     if !model.interactions.isEmpty || !model.inbox.isEmpty, !Self.runningFirst {
                         Section("需要你") {
                             ForEach(Self.inboxFirst ? [] : model.interactions) { ix in
@@ -268,6 +278,10 @@ struct WatchRootView: View {
                 #endif
             }
         }
+        .sheet(isPresented: $recordingOpen) { NavigationStack { WatchRecordingView() } }
+        #if DEBUG
+        .onAppear { recordingOpen = UserDefaults.standard.bool(forKey: "openRecording") }
+        #endif
     }
 }
 

@@ -288,6 +288,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         WKApplication: true
         WKCompanionAppBundleIdentifier: $(JARVIS_BUNDLE_ID)
+        UIBackgroundModes: [audio]
+        NSMicrophoneUsageDescription: "Jarvis records audio you start on Apple Watch, for example a meeting or a spoken note, then transfers it to your iPhone for on-device transcription before you choose to share the text with your assistant."
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     settings:

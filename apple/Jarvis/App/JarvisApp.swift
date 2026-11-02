@@ -116,6 +116,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         #else
         let automation = false
         #endif
+        PhoneRecordingReceiver.shared.start()
         WatchSync.shared.activate()
         AppModel.shared.start()
         LiveActivityController.shared.start()
