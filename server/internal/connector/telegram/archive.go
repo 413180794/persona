@@ -63,6 +63,7 @@ func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connect
 		c.noteFlood(err)
 		return nil, cursor, false, scrubbed(err)
 	}
+	c.noteDialogs(ds) // the inbox reads the same list
 	var batches []connector.ChatBatch
 	more := false
 	for _, d := range ds {
@@ -190,6 +191,7 @@ func (c *Conn) Watch(ctx context.Context, changed func(scope string)) error {
 		default:
 		}
 		changed(connector.ScopeChats)
+		c.refreshInbox(ctx) // the inbox answers from memory: bring it up to date first
 		changed(connector.ScopeInbox)
 	}
 }

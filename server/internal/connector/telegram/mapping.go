@@ -391,3 +391,16 @@ func (g *gotdClient) Search(ctx context.Context, query string, in *dialog, limit
 	}
 	return out, nil
 }
+
+func (g *gotdClient) UnreadMentions(ctx context.Context, d dialog, limit int) ([]message, error) {
+	res, err := g.c.API().MessagesGetUnreadMentions(ctx, &tg.MessagesGetUnreadMentionsRequest{Peer: inputPeer(d.Peer), Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	msgs, e := messagesOf(res)
+	out := make([]message, 0, len(msgs))
+	for i := len(msgs) - 1; i >= 0; i-- { // newest first: turn around
+		out = append(out, messageOf(msgs[i], e))
+	}
+	return out, nil
+}

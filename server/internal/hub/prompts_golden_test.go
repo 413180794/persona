@@ -407,6 +407,12 @@ func goldenItems() map[string]*InboxItem {
 				RuleTier: TierAction}, Agent: agent},
 		"imessage_group": {ID: "imessage:2", Source: "imessage", Kind: "group", Title: "周末徒步", UpdatedAt: at,
 			Context: "李四（10-30 08:01）：示例：明天十点出发", Connector: &InboxConnector{Thread: "imessage-ba9876543210", Label: "群聊", RuleTier: TierFYI}},
+		"telegram_dm": {ID: "telegram:u1", Source: "telegram", Kind: "dm", Title: "示例用户", UpdatedAt: at,
+			Context:   "示例用户（Telegram 私聊）\n2026-10-30 07:58 我：在吗\n2026-10-30 07:59 示例用户：示例：周五下午三点见",
+			Connector: &InboxConnector{Thread: "u1", Label: "私聊", OpenURL: "tg://resolve?domain=example", RuleTier: TierAction}, Agent: agent},
+		"telegram_mention": {ID: "telegram:c2", Source: "telegram", Kind: "mention", Title: "示例群", UpdatedAt: at,
+			Context:   "示例群（Telegram 群）\n2026-10-30 08:01 另一个示例用户：@example 示例方案你怎么看？",
+			Connector: &InboxConnector{Thread: "c2", Label: "@你", OpenURL: "https://t.me/c/2/12", RuleTier: TierAction}},
 	}
 }
 

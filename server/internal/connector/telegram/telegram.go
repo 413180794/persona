@@ -60,6 +60,8 @@ type client interface {
 	Older(ctx context.Context, d dialog, before, limit int) ([]message, error)
 	// Search finds messages with query, in one conversation (in) or across the account, newest first.
 	Search(ctx context.Context, query string, in *dialog, limit int) ([]found, error)
+	// UnreadMentions is a group's unread messages that @ me or reply to me, oldest first; it marks nothing as read.
+	UnreadMentions(ctx context.Context, d dialog, limit int) ([]message, error)
 }
 
 // found is a search's match and its conversation.
@@ -103,6 +105,7 @@ type Conn struct {
 	// zone is the user's, for the times the tools show; nil while the hub does not know it (never the machine's:
 	// the hub runs in UTC).
 	zone *time.Location
+	box  inboxState
 }
 
 // New is the connector, keeping what it needs in secrets; zone is the user's (nil: not known yet).
@@ -277,6 +280,7 @@ func (c *Conn) checkSignedIn(ctx context.Context) {
 		}
 		c.mu.Unlock()
 		c.setStatus(connector.Status{State: connector.StateOK, Account: me, Via: st.via()})
+		c.updated() // the inbox and the archive catch up now
 	}
 }
 

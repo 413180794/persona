@@ -199,6 +199,18 @@ func (c *fakeClient) Search(_ context.Context, query string, in *dialog, limit i
 	return out, nil
 }
 
+func (c *fakeClient) UnreadMentions(_ context.Context, d dialog, limit int) ([]message, error) {
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	var out []message
+	for _, m := range c.f.history[d.Peer.key()] {
+		if m.Mentioned && len(out) < limit {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}
+
 func (c *fakeClient) LogOut(context.Context) error {
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()

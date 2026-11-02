@@ -184,6 +184,7 @@ func (c *Conn) signedIn(ctx context.Context, me string) connector.Prompt {
 	via := c.st.via()
 	c.mu.Unlock()
 	c.setStatus(connector.Status{State: connector.StateOK, Account: me, Via: via})
+	c.updated() // the inbox and the archive start now
 	return connector.Prompt{Done: true, Account: me}
 }
 

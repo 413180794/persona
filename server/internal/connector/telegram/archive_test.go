@@ -137,6 +137,10 @@ func TestArchiveFloodWait(t *testing.T) {
 // What Telegram pushes kicks the archive and the inbox once the burst settles.
 func TestWatchKicks(t *testing.T) {
 	c, f, ctx := archiveAccount(t)
+	select { // connecting asked for a catch-up kick already
+	case <-c.news:
+	default:
+	}
 	got := make(chan string, 8)
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
