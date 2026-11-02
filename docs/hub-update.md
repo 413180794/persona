@@ -134,7 +134,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 ## 5. 发布（手动，publish.sh；用户 2026-11-02）
 
-不做自动发布：发布者（chyroc）照旧在自己的开发机上手动跑 `publish.sh`，网站的 Worker 在他的 Cloudflare 账号下。
+不做自动发布：发布者照旧在自己的开发机上手动跑 `publish.sh`，网站的 Worker 在发布者的 Cloudflare 账号下。
 - 推送中继（`docs/push-relay.md`，`/relay/*`）和下载包在同一个 Worker 里，`publish.sh` 每次重新部署网站会把中继一起部署
   （Worker 部署是原子切换，不会半新半旧；中继代码有改动时也随这次发布上线）。
 - 发布前照旧要过测试，加上 `publish.sh` 自己的检查（任何一项不过就不发布）：
