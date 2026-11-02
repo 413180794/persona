@@ -13,3 +13,7 @@
 - Mac 锁屏时 `xcodebuild test -scheme JarvisMac` 报「The test runner hung before establishing connection」（2026-11-01）：测试宿主 Jarvis.app 启动时读钥匙串（`Keychain.serverConfig` → `SecItemCopyMatching`），读别的未签名构建写的条目会一直卡在 securityd。Mac 的 DEBUG 构建在 XCTest 下（有 `XCTestConfigurationFilePath`）和截图模式一样不读钥匙串（`Shared/Keychain.swift`）。
 - 共用页面里碰到 `pin.list` 这类滚动视图时，iOS 上是 `UIScrollView`、Mac 上是 `NSScrollView`（`ChatPin+Mac.swift`），`isTracking`、`isDragging`、`isDecelerating` 这些 Mac 没有：用 `#if os(iOS)` 隔开，或者在 `Mac/Compat/` 补等价的。
   2026-11-02 #243 在 `ChatView` 里加了一行 `pin.list?.isTracking`，只跑了 iOS，master 上 `JarvisMac` 编译不过（terminal 车道发现）。改了 `apple/Jarvis/Views` 的共用页面，合入前也跑一次 `JarvisMac` 的构建（`docs/mac.md`「构建、运行、截图」）。
+- 构建配置（`~/.config/jarvis/config.json`）没有 `app.bundle_id` 时，`Config.xcconfig` 的 `JARVIS_BUNDLE_ID` 是空的，xcodebuild 照样 BUILD SUCCEEDED，
+  但 Info.plist 里没有 `CFBundleIdentifier`，Mac App 一启动就在 `applicationDidFinishLaunching` 的 `UNUserNotificationCenter.current()` 断言崩溃（SIGABRT，2026-11-02）。
+  只在本机编来自己用、不发版的 Mac，可以在 xcodebuild 后面加 `JARVIS_BUNDLE_ID=<随便一个反向域名>` 覆盖，不用改配置。
+  真配对用 `open -a <Jarvis.app> 'jarvis://pair?…'`（`jarvisd hub pair` 打印的链接）；`-pairURL` 只是 DEBUG 的临时配对，不换设备凭据、不存钥匙串。

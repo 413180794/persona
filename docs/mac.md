@@ -92,6 +92,8 @@ xcodebuild build -project Jarvis.xcodeproj -scheme JarvisMac -configuration Debu
 open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑 Contents/MacOS/Jarvis 带启动参数
 ```
 
+- 配置里没有 `app.bundle_id` 时编出来的 App 一启动就崩（Info.plist 没有 bundle id），本机自用可以在 xcodebuild 后面加 `JARVIS_BUNDLE_ID=<反向域名>`（`docs/lessons/macos.md`）。
+
 - 启动参数和 iOS 一样（`MacLaunchArguments`，只在 DEBUG）：`-pairURL`、`-tab dev|mail|settings|assistant`、`-openSession <machine>/<session>`、
   `-openAssistant`、`-newAssistant`、`-showNewChat`、`-openChatsFresh`、`-openAgentsFresh`、`-lark-connector`、`-simulateTap`；体验模式 `-demo.on YES`。
 - 截图（**锁屏也能拍**）：`scripts/mac_shot.sh <名字> [启动参数…]`，浅色、深色各一张写到 `/tmp/jarvis-mac-shots/<名字>-{light,dark}.png`。
