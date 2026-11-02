@@ -30,6 +30,23 @@ type Manifest struct {
 	// Ancestors is every commit the release's code contains (EncodeAncestors of git rev-list <commit>): a hub installs
 	// it by itself only when its own commit is one of them (Build.Hold).
 	Ancestors string `json:"ancestors,omitempty"`
+	// Programs are the programs released with jarvisd that the hub runs beside it (jarvisd-telegram): name ->
+	// "linux-amd64" -> its download. The hub swaps them with jarvisd, and goes back with it. Older hubs ignore them.
+	Programs map[string]map[string]File `json:"programs,omitempty"`
+}
+
+// ProgramNames are the programs released with jarvisd, each built from server/cmd/<name>.
+var ProgramNames = []string{"jarvisd-telegram"}
+
+// program names the program a download belongs to ("jarvisd-telegram-linux-amd64.gz" -> "jarvisd-telegram"), "" for
+// jarvisd's own.
+func program(gz string) string {
+	for _, p := range ProgramNames {
+		if strings.HasPrefix(gz, p+"-") {
+			return p
+		}
+	}
+	return ""
 }
 
 // ancestorBytes is how much of each commit id Ancestors keeps: 6 bytes, 12 hex digits. A few KB for a thousand
@@ -114,15 +131,12 @@ func ParseManifest(b []byte) (*Manifest, error) {
 	return &m, nil
 }
 
-// BuildManifest describes the downloads in dir: every jarvisd-<os>-<arch>.gz there, with its hashes and the hash of
-// what it unpacks to.
+// BuildManifest describes the downloads in dir: every jarvisd-<os>-<arch>.gz there, and every program's
+// <program>-<os>-<arch>.gz, with its hashes and the hash of what it unpacks to.
 func BuildManifest(dir string, m Manifest) (*Manifest, error) {
 	gzs, err := filepath.Glob(filepath.Join(dir, "jarvisd-*-*.gz"))
 	if err != nil {
 		return nil, err
-	}
-	if len(gzs) == 0 {
-		return nil, fmt.Errorf("no jarvisd-*.gz in %s", dir)
 	}
 	m.Files = map[string]File{}
 	for _, p := range gzs {
@@ -130,7 +144,21 @@ func BuildManifest(dir string, m Manifest) (*Manifest, error) {
 		if err != nil {
 			return nil, err
 		}
-		m.Files[strings.TrimSuffix(strings.TrimPrefix(filepath.Base(p), "jarvisd-"), ".gz")] = f
+		base := filepath.Base(p)
+		if prog := program(base); prog != "" {
+			if m.Programs == nil {
+				m.Programs = map[string]map[string]File{}
+			}
+			if m.Programs[prog] == nil {
+				m.Programs[prog] = map[string]File{}
+			}
+			m.Programs[prog][strings.TrimSuffix(strings.TrimPrefix(base, prog+"-"), ".gz")] = f
+			continue
+		}
+		m.Files[strings.TrimSuffix(strings.TrimPrefix(base, "jarvisd-"), ".gz")] = f
+	}
+	if len(m.Files) == 0 {
+		return nil, fmt.Errorf("no jarvisd-*.gz in %s", dir)
 	}
 	return &m, nil
 }

@@ -130,6 +130,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 ```
 
 - `ancestors`：这次的 commit 能到达的所有提交（`git rev-list <commit>`），每个取前 6 字节，排序后 base64（「防退回」）。
+- `programs`：和 jarvisd 一起发布、hub 在旁边跑的程序（现在只有 `jarvisd-telegram`，`docs/plan-telegram.md`「架构」）：
+  `{"jarvisd-telegram": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`。老 hub 不认这个字段，照旧只换 jarvisd。
 
 - 下载的文件要同时对得上 `sha256`（压缩包）和 `binary_sha256`（解压后），新二进制的 `version -v` 还要报出清单里的版本和 build 号。
   `SHA256SUMS` 照旧给 install.sh 用。
@@ -184,6 +186,14 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - 不自动装。App 照样提示有新版本，自动更新开着时也提示；设置 › hub 里写着原因（`latest.held`），手动「更新 hub」仍然可以点；
   - 更新记录里每个新版本记一条「没有自动装」（`result: held`），写明原因，比如「新版本（提交 b2b2b2b2）不包含这个 hub 正在运行的提交 d4d4d4d4」。
 - 自动更新关着时本来就不会自己装，不记。
+
+### 和 jarvisd 一起换的程序（2026-11-03，#533）
+
+- 清单里有这个 hub 平台的 `programs` 时，下载、校验（同样的 sha256 和 `version -v` 必须是这一版）后和 jarvisd 一起换上：放在 jarvisd 旁边，
+  原来有的留 `.prev`，原来没有的记成新装的。哪一个下载或校验不过，整次更新都不做。
+- 回滚（新版起不来、看门狗、换的时候出错）把它们和 jarvisd 一起换回去，新装的删掉（`update.RestoreAll`，`pending.json` 的 `programs`）。
+- 头一次带程序的更新：看门狗跑的是旧的 jarvisd，它不认 `programs`，回滚时只换回 jarvisd；留下的新程序和旧 hub 版本对不上，hub 不会起它
+  （状态写「不是同一个版本」），等下一次更新。
 
 ## 7. 检测更新
 

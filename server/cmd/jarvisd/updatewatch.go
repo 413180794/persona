@@ -26,7 +26,7 @@ func runUpdateWatch(ctx context.Context, args []string) error {
 		return err // nothing under way
 	}
 	return update.Watch(ctx, &http.Client{Timeout: 5 * time.Second}, p, args[0], time.Now().Add(3*time.Minute), 3*time.Second,
-		func() error { return update.Restore(p.Target, p.Prev) },
+		func() error { return update.RestoreAll(p) }, // the hub and the programs swapped with it
 		func() error { return restartHub(p) })
 }
 

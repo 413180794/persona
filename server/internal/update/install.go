@@ -66,6 +66,55 @@ type Pending struct {
 	Args        []string  `json:"args"`       // how it was started
 	HealthURL   string    `json:"health_url"` // where the watchdog asks
 	Nodes       string    `json:"nodes"`      // the downloaded node binaries, put in place once confirmed
+	// Programs are the programs swapped with the hub (jarvisd-telegram): going back puts them back too.
+	Programs []Swapped `json:"programs,omitempty"`
+}
+
+// Swapped is one program swapped with the hub: Prev is the one to go back to, "" when there was none (going back
+// removes it).
+type Swapped struct {
+	Target string `json:"target"`
+	Prev   string `json:"prev,omitempty"`
+}
+
+// SwapProgram puts a program's new build in place like Swap, also when the hub had none of it before.
+func SwapProgram(target, newBin string) (Swapped, error) {
+	if _, err := os.Stat(target); errors.Is(err, os.ErrNotExist) {
+		return Swapped{Target: target}, copyFile(newBin, target)
+	}
+	prev, err := Swap(target, newBin)
+	return Swapped{Target: target, Prev: prev}, err
+}
+
+// RestoreAll goes back to what ran before the update: the hub's binary and every program swapped with it (one that
+// was new is removed). It goes on past a failure, returning the first.
+func RestoreAll(p Pending) error {
+	var first error
+	keep := func(err error) {
+		if first == nil {
+			first = err
+		}
+	}
+	if p.Prev != "" {
+		if err := Restore(p.Target, p.Prev); err != nil {
+			keep(err)
+		}
+	}
+	for _, s := range p.Programs {
+		var err error
+		if s.Prev == "" {
+			err = os.Remove(s.Target)
+			if errors.Is(err, os.ErrNotExist) {
+				err = nil
+			}
+		} else {
+			err = Restore(s.Target, s.Prev)
+		}
+		if err != nil {
+			keep(err)
+		}
+	}
+	return first
 }
 
 // RolledBack says an update went back, for the old version to record when it starts (history, bad build).

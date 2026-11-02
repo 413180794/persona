@@ -309,7 +309,7 @@ func (u *updater) offline(ids []string) []string {
 func (u *updater) rollback(p update.Pending, reason string) {
 	u.h.logf("update: going back to %s: %s", p.FromVersion, reason)
 	u.markRolledBack(p, reason)
-	if err := update.Restore(p.Target, p.Prev); err != nil {
+	if err := update.RestoreAll(p); err != nil {
 		u.h.logf("update: restore %s: %v", p.Prev, err)
 		return
 	}
@@ -548,6 +548,25 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		fail(err)
 		return
 	}
+	// The programs the hub runs beside it (jarvisd-telegram): this platform's build of each, checked like jarvisd.
+	programs := map[string]string{} // name -> the downloaded binary
+	for _, name := range update.ProgramNames {
+		f, ok := m.Programs[name][runtime.GOOS+"-"+runtime.GOARCH]
+		if !ok {
+			continue
+		}
+		u.set("downloading", name, "")
+		pb, err := update.Download(ctx, u.client, u.h.build.UpdateURL, f, filepath.Join(staged, "programs"))
+		if err != nil {
+			fail(err)
+			return
+		}
+		if err := update.CheckBinary(ctx, pb, m); err != nil {
+			fail(fmt.Errorf("%s: %w", name, err))
+			return
+		}
+		programs[name] = pb
+	}
 	// Wait until nothing the restart would interrupt is going on (or the user said 现在就更新).
 	waitStarted := time.Now()
 	for {
@@ -588,8 +607,19 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		return
 	}
 	p.Prev = prev
+	for _, name := range update.ProgramNames {
+		if pb, ok := programs[name]; ok {
+			sw, err := update.SwapProgram(filepath.Join(filepath.Dir(target), name), pb)
+			p.Programs = append(p.Programs, sw)
+			if err != nil {
+				_ = update.RestoreAll(p)
+				fail(fmt.Errorf("%s: %w", name, err))
+				return
+			}
+		}
+	}
 	if err := update.Save(update.PendingPath(u.dir), p); err != nil {
-		_ = update.Restore(target, prev)
+		_ = update.RestoreAll(p)
 		fail(err)
 		return
 	}
@@ -600,7 +630,7 @@ func (u *updater) install(ctx context.Context, auto bool) {
 	u.h.logf("update: restarting into %s", m.Version)
 	time.Sleep(500 * time.Millisecond) // the apps get the restarting event before the socket goes
 	if err := u.exec(target); err != nil {
-		_ = update.Restore(target, prev)
+		_ = update.RestoreAll(p)
 		_ = os.Remove(update.PendingPath(u.dir))
 		fail(err)
 	}

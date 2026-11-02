@@ -217,6 +217,8 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
   - **版本清单** `dl/latest.json`（各平台压缩包和解压后的 sha256、build 号、commit），不签名（用户的决定，取舍见 `docs/hub-update.md`「安全」）；
     发布前检查 build 号比线上的大、线上那版的 commit 是这次的祖先，server/、web/ 没有没提交的改动。清单带着这次包含的所有提交（`ancestors`）：
     各 hub 读它自动更新，但只在它包含自己正在运行的提交时才自己装（`docs/hub-update.md`「防退回」）。
+  - **一起发布的程序**：`jarvisd-telegram`（Telegram 连接器，单独一个程序，`docs/plan-telegram.md`）四个平台各编一份，和 jarvisd 同一套
+    `-X`、同一次隐私扫描和体积检查，`version -v` 必须和 jarvisd 的一样；清单的 `programs` 列出它们，hub 自动更新时一起换。
   - 上传前跑 `check_bundle_privacy.py --whole-short`：二进制里不能有配置里的任何值（Go 的模块路径除外；四个字以内的值按整词比，
     Unicode 表和压缩过的 JS 里到处是短的字母组合）。公开依赖中的少量协议名、官方联系链接和标准网络常量按精确上下文分类，不放行域名或私网段；
     要求二进制的 `public` 标记、未 replace 的依赖及 checksum 与 `server/go.sum` 一致，构建前 `go mod verify`。已登记的个人值始终优先拦截，见 `docs/lessons/testing.md`。

@@ -29,6 +29,7 @@ type fakePublisher struct {
 	srv     *httptest.Server
 	corrupt bool // serve another file than the one in the manifest
 	script  []byte
+	extra   map[string][]byte // more downloads by path (a program's)
 }
 
 func newPublisher(t *testing.T, version string, build int64) *fakePublisher {
@@ -58,6 +59,10 @@ func newPublisherWith(t *testing.T, version string, build int64, edit func(*upda
 			}
 			w.Write(gz)
 		default:
+			if b, ok := p.extra[r.URL.Path]; ok {
+				w.Write(b)
+				return
+			}
 			http.NotFound(w, r)
 		}
 	}))
@@ -529,5 +534,72 @@ func TestUpdateDockerSaysNewImage(t *testing.T) {
 	private = false
 	if _, err := h.upd.check(ctx); err != nil || h.upd.view().Image.Tag != "latest" {
 		t.Fatalf("the image it was built as: %v %+v", err, h.upd.view().Image)
+	}
+}
+
+// A release with a program the hub runs beside it (jarvisd-telegram): the program is checked and put next to the
+// hub's binary with it, and going back takes it away again (it was new here).
+func TestUpdateSwapsPrograms(t *testing.T) {
+	plat := runtime.GOOS + "-" + runtime.GOARCH
+	prog := []byte("#!/bin/sh\necho v2-202611021700\necho 'channel release, build 202611021700'\n")
+	pgz := gz(prog)
+	outer, inner := sha256.Sum256(pgz), sha256.Sum256(prog)
+	pf := update.File{Name: "jarvisd-telegram-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
+	p := newPublisherWith(t, "v2-202611021700", 202611021700, func(m *update.Manifest) {
+		m.Programs = map[string]map[string]update.File{"jarvisd-telegram": {plat: pf}}
+	})
+	p.extra = map[string][]byte{"/dl/" + pf.Name: pgz}
+	h, _, target, execd := updatingHub(t, p, "release")
+	ctx := context.Background()
+	if _, err := h.upd.check(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.upd.begin(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the restart", func() bool { return len(*execd) == 1 })
+	placed := filepath.Join(filepath.Dir(target), "jarvisd-telegram")
+	if b, _ := os.ReadFile(placed); !bytes.Equal(b, prog) {
+		t.Fatal("the program is not next to the hub's binary")
+	}
+	var pend update.Pending
+	if ok, _ := update.Load(update.PendingPath(h.upd.dir), &pend); !ok || len(pend.Programs) != 1 || pend.Programs[0].Target != placed || pend.Programs[0].Prev != "" {
+		t.Fatalf("pending %+v", pend)
+	}
+	h.upd.rollback(pend, "test")
+	if _, err := os.Stat(placed); !os.IsNotExist(err) {
+		t.Fatal("going back left the new program")
+	}
+	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" {
+		t.Fatal("going back did not restore the hub's binary")
+	}
+}
+
+// A program's download that is not the release's build stops the update before anything is swapped.
+func TestUpdateRefusesAWrongProgram(t *testing.T) {
+	plat := runtime.GOOS + "-" + runtime.GOARCH
+	prog := []byte("#!/bin/sh\necho v1-old\necho 'channel release, build 1'\n") // says another build
+	pgz := gz(prog)
+	outer, inner := sha256.Sum256(pgz), sha256.Sum256(prog)
+	pf := update.File{Name: "jarvisd-telegram-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
+	p := newPublisherWith(t, "v2-202611021700", 202611021700, func(m *update.Manifest) {
+		m.Programs = map[string]map[string]update.File{"jarvisd-telegram": {plat: pf}}
+	})
+	p.extra = map[string][]byte{"/dl/" + pf.Name: pgz}
+	h, _, target, execd := updatingHub(t, p, "release")
+	ctx := context.Background()
+	h.upd.check(ctx)
+	if err := h.upd.begin(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the failure", func() bool { return h.upd.view().State == "failed" })
+	if len(*execd) != 0 {
+		t.Fatal("restarted")
+	}
+	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" {
+		t.Fatal("the hub's binary was swapped")
+	}
+	if !strings.Contains(h.upd.view().Error, "jarvisd-telegram") {
+		t.Fatalf("error %q", h.upd.view().Error)
 	}
 }

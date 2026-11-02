@@ -49,6 +49,12 @@ for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/jarvisd-${t%/*}-${t#*/}" ./cmd/jarvisd)
 done
+# The programs released with jarvisd (update.ProgramNames): built the same way, on the same platforms; a hub swaps
+# them with jarvisd (docs/plan-telegram.md「架构」). jarvisd-telegram is Telegram's connector, too big to go into jarvisd.
+for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
+  (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
+    -o "../$OUT/bin/jarvisd-telegram-${t%/*}-${t#*/}" ./cmd/jarvisd-telegram)
+done
 cleanup
 sed "s|@JARVIS_DL@|$JARVIS_PUBLISH_URL/dl|" scripts/deploy/install.sh > "$OUT/install.sh"
 
@@ -63,6 +69,8 @@ fi
 host_bin="$OUT/bin/jarvisd-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 [ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built jarvisd does not report $VERSION" >&2; exit 1; }
 "$host_bin" version -v | grep -qx "channel release, build $BUILD" || { echo "the built jarvisd is not release build $BUILD" >&2; exit 1; }
+host_tg="$OUT/bin/jarvisd-telegram-${host_bin##*/jarvisd-}"
+[ "$("$host_tg" version -v)" = "$("$host_bin" version -v)" ] || { echo "jarvisd-telegram is not the same build as jarvisd" >&2; exit 1; }
 
 # Releases only move forward: a larger build number than the one served, and the served commit an ancestor of this one.
 curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/null || : > "$OUT/served.json"
