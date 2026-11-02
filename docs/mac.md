@@ -347,6 +347,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 118 条 [x]、104 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 
@@ -397,8 +398,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）读代码：行菜单和 Agent › 交给 Jarvis ⌘J 都调共用的 `AppModel.askJarvis`（同一条 `<jarvis-context>` 路径），`MacMenuShortcutTests` 里有 ⌘J；没对真 hub 发过。
 
 ## 2. Agents tab (dev list)
-- [ ] Always-visible search; quick filters 全部/需要你/未读/工作中 with counts; snapshot (`kept`) semantics — Views/Chats/ChatsView.swift (QuickFilterBar, AgentsList)
-  - Mac（2026-11-01 核对）：原来那块空白是离屏截图的问题（列表栏浮在玻璃容器里，`cacheDisplay` 跳过了它，`0af14af` 已修），浅色截图里搜索框和 全部 / 需要你 2 / 未读 11 / 工作中 5 都在。要到 Mac 前看：深色截图里工具栏搜索框是一块白色空胶囊，没有占位文字和图标，看真窗口是不是这样。
+- [x] Always-visible search; quick filters 全部/需要你/未读/工作中 with counts; snapshot (`kept`) semantics — Views/Chats/ChatsView.swift (QuickFilterBar, AgentsList)
+  - Mac（2026-11-01 核对）：原来那块空白是离屏截图的问题（列表栏浮在玻璃容器里，`cacheDisplay` 跳过了它，`0af14af` 已修），浅色截图里搜索框和 全部 / 需要你 2 / 未读 11 / 工作中 5 都在。
+  - Mac（2026-11-02 Mac mini 真窗口核对）：深色（`-macAppearance dark`）真窗口里工具栏搜索框有放大镜和占位文字「搜索空间、标签、会话、内容」，离屏那块白色空胶囊是截图的问题；点「需要你 2」后列表只剩两个需要你的 Agent。
 - [x] Grouping menu: 按项目 / 按状态 / 按机器 (`DevGrouping`, remembered); one rank order — ChatsView.swift, Views/Chats/AgentListOrder.swift, Views/Chats/AgentsMenus.swift (AgentsListMenu)
   - Mac（2026-11-01 核对）截图：按项目、按状态（需要你 / 完成未看）、按机器三种都看过，记住的 `dev.grouping` 生效；显示 › 分组方式 是同一个设置。
 - [x] Card vs compact list (`dev.compact`); compact rows on one scale — ChatsView.swift (SessionRow), Views/Chats/CompactList.swift
@@ -407,16 +409,17 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac 截图看到：卡片模式的计划等你审批、Claude 在问你 + 选项按钮；紧凑模式的 `CompactInteractionRow` 2026-11-01 核对时也截到了。
 - [x] Pinned agents, pinned spaces, busy / just-done / muted-running / idle spaces (folded), 「还有 N 个空闲」 — ChatsView.swift (IdleFoldRow, QuietSpaceRow, SpaceHeader, StateCounts)
   - Mac（2026-11-01 核对）截图：置顶的空间排第一、标题上有状态计数、「还有 2 个空闲」折叠行；置顶的 Agent 和屏蔽中还在跑的空间是同一份行代码，体验数据里没有，没截到。
-- [ ] Fold/unfold spaces and section headers (`dev.folded`), 全部折叠/全部展开 — ChatsView.swift, AgentsMenus.swift
-  - 要到 Mac 前看：点空间标题的 ⌄ 折叠 / 展开，再试 显示 › 全部折叠 / 全部展开。用 `-dev.folded` 启动没折上（分组 id 猜错了），没看到。
-- [ ] Mark all read (filter + per-space, with confirm) — ChatsView.swift, App/AppModel.swift (markSeen)
-  - 要到 Mac 前看：未读筛选下全部标为已读（带确认），空间 ⋯ › 全部标为已读（N）。都在菜单和确认框后面，离屏打不开。
+- [x] Fold/unfold spaces and section headers (`dev.folded`), 全部折叠/全部展开 — ChatsView.swift, AgentsMenus.swift
+  - Mac（2026-11-02 真窗口核对，MacBook）：点空间标题折叠 / 展开（辅助功能标签跟着变「已折叠 / 已展开」），显示 › 全部折叠后 7 个空间都折起，全部展开都展开。顺带发现折起的标题没对齐、读屏读三遍，见 #405。
+- [x] Mark all read (filter + per-space, with confirm) — ChatsView.swift, App/AppModel.swift (markSeen)
+  - Mac（2026-11-02 真窗口核对，MacBook）：空间 ⋯ › 全部标为已读（2）直接标掉（不确认，和 iOS 同一份代码），未读 11 → 9；未读筛选下「全部标为已读」弹确认「把 9 个完成未看的会话标为已读？」，确认后未读 0、列表变成空状态「没有完成未看的会话」。
 - [ ] Swipe: left = pin / interrupt, right = close; long-press row menu (rename, mute/unmute, 交给 Jarvis, 拷贝恢复命令, 关闭 Agent…, stop loop) — ChatsView.swift, AgentsMenus.swift (AgentRowMenu)
   - 要到 Mac 前看：右键一行逐项点（Mac 版第一项是「在新窗口打开」），再在触控板上对一行左右滑。长按在 Mac 上就是右键菜单，离屏打不开。
+  - Mac（2026-11-02 Mac mini 真窗口）：右键一行逐项点过：在新窗口打开（开出这个对话的窗口）、置顶 ↔ 取消置顶（列表顶上出现「置顶」一节）、重命名…（herdr 标签名和会话名两栏预填）、屏蔽通知 ↔ 开启通知、交给 Jarvis（切到主对话，发出带引用卡片的消息）、拷贝目录、拷贝恢复命令（`claude --resume <id>`）、关闭 Agent…（确认 sheet）；循环中的 Agent 多一项「停止循环」（对话里发出停 /loop 的消息）。还剩触控板左右滑：行上挂着对应的辅助功能动作（标为已看 / 置顶 / 关闭），但 cua 只能发滚轮事件，滑不出来，要真触控板。
 - [x] Close agent confirmation sheet — DesignSystem/Components.swift (CloseAgentSheet, CloseAgentConfirmation)
   - Mac（2026-11-01 核对）截图（`-showCloseAgent YES`）：「关闭这个 Agent?」、标题、所在位置、两行说明、关闭 Agent / 取消。
-- [ ] Space header ⋯ menu: 打开空间, 置顶, 屏蔽/开启通知, 重命名空间, 全部标为已读 — AgentsMenus.swift (SpaceHeaderMenu), ChatsView.swift (SpaceMenuItems, RenameSpaceAlert)
-  - 要到 Mac 前看：点空间标题上的 ⋯ 逐项试（重命名空间会弹输入框）。⋯ 按钮截图里都在，菜单离屏打不开。
+- [x] Space header ⋯ menu: 打开空间, 置顶, 屏蔽/开启通知, 重命名空间, 全部标为已读 — AgentsMenus.swift (SpaceHeaderMenu), ChatsView.swift (SpaceMenuItems, RenameSpaceAlert)
+  - Mac（2026-11-02 真窗口核对，MacBook）：⋯ 里打开空间（详情栏打开空间页）、取消置顶 / 置顶、屏蔽 / 取消屏蔽（标题旁铃铛斜杠、行变淡、挪到活跃空间最后、侧栏角标减一）、重命名空间（弹框预填旧名、能输中文、保存；体验数据不支持改名，刷新后回原名）都点过；没有未读时不显示「全部标为已读」。顺带发现打开空间页后工具栏两个按钮换了顺序，见 #483。
 - [x] Rename agent (herdr tab + Claude session name) — ChatsView.swift (RenameSessionAlert), AppModel.renameSession
   - Mac（2026-11-01 核对）截图（`-macAgentAsk rename`）：重命名框有 herdr 标签名和会话名两栏、取消 / 保存，和 iOS 同一个 `RenameSessionAlert`。
 - [x] Pins / mutes synced with hub (/api/v1/pins, /mutes), optimistic, per-agent override of space mute — App/PinsStore.swift
@@ -425,26 +428,29 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：清单写旧了：现在列表行（iOS 也一样）不再带循环 / 后台 chip，挪到了对话页顶上的 `ActivityChips`，Mac 上看到「⚙ 1」；屏蔽的 🔕 和淡化在共用的 SlotRow 里（读代码，体验数据没有屏蔽的 Agent），子 Agent 没截。
 - [ ] Machine filter menu, 「机器」 entry, 新建会话 button — ChatsView.swift (TopBar), AgentsMenus.swift
   - 要到 Mac 前看：打开工具栏的 ≡ 菜单选一台机器筛，再点「机器」（2026-11-01 起原来的「机器监控」并进了机器页）。菜单按钮和新建会话按钮截图里都在；Mac 上它也是侧栏的「机器」。
+  - Mac（2026-11-02 Mac mini 真窗口，#483 的修复构建）：≡ 菜单里有分组 / 显示 / 全部折叠 / 全部展开 / 机器 › / 机器；机器 › 选 Mac Studio 后按钮变成「Mac Studio ⌄」、列表只剩它的空间；假 hub 持续推送时菜单开着不跳。还剩：菜单里的「机器」、新建会话按钮。
 - [x] Connection status in title slot — Views/ConnectionTitle.swift
   - Mac（2026-11-01 核对）截图（`-showConnection connecting`）：列表栏标题位置是「连接中…」加转圈，侧栏底部也有。
-- [ ] Pull to refresh — ChatsView.swift
-  - Mac（2026-11-01 核对）：Mac 上没有下拉手势，换成 显示 › 刷新 ⌘R（见「显示 / 前往菜单」）：自己加载数据的页面登记自己的加载，否则按分区刷新 hub 数据，`MacViewCommandsTests` 有测试。要到 Mac 前看：在 Agents、收件箱、知识库、机器、对话的文件 / Git 各真按一次 ⌘R，看对应内容重新加载。
+- [x] Pull to refresh — ChatsView.swift
+  - Mac（2026-11-01 核对）：Mac 上没有下拉手势，换成 显示 › 刷新 ⌘R（见「显示 / 前往菜单」）：自己加载数据的页面登记自己的加载，否则按分区刷新 hub 数据，`MacViewCommandsTests` 有测试。
+  - Mac（2026-11-02 Mac mini 真窗口核对）：窗口在前时按 显示 › 刷新，看假 hub 的请求：Agents → sessions / machines / interactions / pins / mutes；收件箱 → `POST /inbox/refresh`；知识库 → `GET /kb/projects`；机器 → 同上 + `GET /metrics`；对话的文件面板 → `GET …/fs`；Git 面板 → `GET …/git/status`。App 不在前台（没有 key window）时只按分区刷新 hub 数据，这是 `refreshTarget` 的设计，后台调菜单测会以为收件箱没刷。
 - [x] Destinations registry (SessionKey, space, machine pages) — ChatsView.swift (AgentsDestinations)
   - Mac（2026-11-01 核对）截图：对话（SessionKey）、空间页（`-openSpaceFromChat`）、机器页（`-openMachinePage`）都推得进去。
 
 ## 3. Spaces & machine pages
 - [x] Space page: agents in herdr tab order (SlotCard), machine button, menu (rename, mute, mark read, 新标签 / 在这个空间开新标签) — Views/Chats/SpaceView.swift (SpaceView, SlotCard)
   - Mac（2026-11-01 核对）截图（`-openSpaceFromChat YES`）：机器按钮 + 目录、按 herdr 顺序的 SlotCard 带状态、「在这个空间开新标签」、工具栏 ⋯；菜单项离屏没打开。
-- [ ] Sibling tabs strip in chat header (state-colored capsules, swipe, ⋯ list with red dot, 「空间 X 的所有 Agent」) — SpaceView.swift (SiblingTabs, SiblingList)
-  - 要到 Mac 前看：对话页顶上那排按状态着色的胶囊（横向滚动）和 ⋯ 上的红点。⋯ 的列表（`-showSpaceTabs YES`）截图对：6 个标签页、新标签、空间的所有 Agent、状态色和当前的勾；胶囊条离屏没画出来，分不清是不是截图的问题。
+- [x] Sibling tabs strip in chat header (state-colored capsules, swipe, ⋯ list with red dot, 「空间 X 的所有 Agent」) — SpaceView.swift (SiblingTabs, SiblingList)
+  - Mac（2026-11-02 Mac mini 真窗口核对）：展开的对话顶栏里同空间的标签胶囊按状态着色（当前那个描边），⋯ 上有红点（同空间有 Agent 在等你），点胶囊切到那个 Agent。
 - [x] Machine spaces page: online state, counts, busy projects with latest line, idle projects, loose agents, ⓘ details — Views/Chats/MachineSpacesView.swift (MachineSpacesView, BusySpaceRow)
   - Mac（2026-11-01 核对）截图（`-openMachinePage macbook`）：在线、项目和 Agent 数、状态计数、进行中的项目带最新一句、工具栏 ⓘ；体验数据里这台机器没有空闲项目和散的 Agent，那两块没看到。
 
 ## 4. Chat page (agent conversation)
 - [ ] Message rendering: user bubble, assistant markdown (MarkdownUI `.jarvis` theme), thinking row, peer 「来自 名字」 card, pending/sending bubble (retry/delete), merged queued bubble, sent photos, attached images — Views/Chat/MessageViews.swift (UserBubble, PeerMessage, PendingBubble, MergedUserBubble, SentPhotos, AttachedImages, AssistantText, ThinkingRow, NoticeRow)
   - 要到 Mac 前看：别人发来的「来自 名字」卡片、合并的排队气泡、发出去的照片。假 hub 截图里用户气泡、回复 markdown、思考行、发送失败的气泡和它的菜单都对，这三种没有数据。
-- [ ] Markdown tables fitted / horizontal scroll — Views/Chat/MarkdownTable.swift (FittedTable)
+- [x] Markdown tables fitted / horizontal scroll — Views/Chat/MarkdownTable.swift (FittedTable)
   - Mac（2026-11-01 核对）：截图里两张表都按宽度排开（fitted 对）；「宽表，横着滑」在 1280pt 窗口里也放下了，横向滚动没触发，没看到。
+  - Mac（2026-11-02 Mac mini 真窗口核对）：隐藏侧边栏、窗口 820 宽时七列表放不下，被截在右边，横向滚轮能滚到「数据来源」那列；三列表按宽度换行排开。
 - [x] Line model: one turn → message / work line / answer; work line counts & duration; split merged messages — Views/Chat/ChatLines.swift, ChatView.swift (WorkLine, WorkStepView, WorkCardSlice)
   - Mac（2026-11-01 核对）截图：工作行带步数和时长，大会话的 763 步折成一行；ChatLines 是共用代码。
 - [ ] Work trace expand/collapse in place (timeline style for glass, card style for others), 「收起 N 步」, pin tapped row under finger — ChatView.swift, Views/Chat/ChatPin.swift
@@ -455,12 +461,14 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：截图里只看到 Edit 的标题（+6）和一行红色删除行，在画面底边被截掉，没看到绿色新增行；40 行截断、横向滚动、Codex 的 unified diff 都没跑到。
 - [ ] BeautifulUI style: ThinkingState, tool-run chips (ToolRunRow/ToolChipRow) — ToolViews.swift, Views/BeautifulUIBridge.swift, Packages/BeautifulUI
   - 要到 Mac 前看：BeautifulUI 风格下最后一条回复被输入栏盖住一截（截图里看到，像是真 bug，要改 ChatView.swift），以及 ThinkingState。工具运行 chip 和输入栏截图里画出来了。
+  - Mac（2026-11-02 Mac mini 真窗口）：BeautifulUI 风格下两个对话的最后一条回复都完整露在输入栏 / 提问卡片上方，没被盖住（原来那张多半是离屏截图的问题）。还剩 ThinkingState（要正在思考的会话，`MOCK_STREAM=1`）。
 - [x] Wake (background task) chip + WakeDrawer; recap strip + RecapDrawer (folded multiples) — MessageViews.swift (WakeChip, RecapCard, RecapStrip, RecapDrawer)
   - Mac（2026-11-01 核对）截图：唤醒 chip 和 WakeDrawer（`-showWakeDrawer`，DELAY 要 11 秒左右）、回顾条和 RecapDrawer（`-showRecapDrawer`，「离开期间回顾 · 3 次」）都对。
 - [x] Background task notices with outcome — Views/Chat/TaskNoteRow.swift
   - Mac（2026-11-01 核对）假 hub 截图：「✕ 退出码 1」和「✓ · 3 分」两种结果都有。
-- [ ] API error card (human explanation, chips, details copyable, folded repeats, 重试) — Views/Chat/APIErrorCard.swift
+- [x] API error card (human explanation, chips, details copyable, folded repeats, 重试) — Views/Chat/APIErrorCard.swift
   - Mac（2026-11-01 核对）：401 卡片截图看过（白话说明、401 / 要处理 chip、请求 ID 和原文、复制原文）；连续 502 折成「连续 3 次」带重试的那张没截到。
+  - Mac（2026-11-02 核对）假 hub（`MOCK_API_ERRORS=1`）离屏截图：主对话里同样的 502 三次折成一张卡片：「推理服务暂时没有可用的 GPU」、502 / 临时故障 / 连续 3 次 chip、「重试」按钮（没点）。
 - [ ] Claude suggestion pill (填入 / 直接发送) — ChatView.swift (SuggestionPill)
   - 要到 Mac 前看：点建议是否填进输入框，右键 › 直接发送 是否发出。建议胶囊截图里画出来了。
 - [ ] Inverted list, follow-end logic, frozen inserts while reading history, ↓ jump button, landing position (landUnderInput / saved position), turn-based pagination (turns=2) with auto-load at top — ChatView.swift (ChatStreamFollow), Shared/ChatStore.swift
@@ -472,38 +480,43 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Collapsing self-drawn header (ChromeHeader: title, subtitle state·machine·space›tab, sibling row, loop/background chips), follows finger, auto-collapse after 3s idle — ChatView.swift
   - 要到 Mac 前看：用触控板 / 滚轮滚时标题跟着收起，点收起后的胶囊能展开。完整标题（标题、副标题、同空间标签、循环 / 后台 chip、⋯）和翻到最新时收成胶囊截图里都对。
 - [x] Session info sheet (run / usage / location, copy id, copy resume command) — ChatView.swift (SessionInfoSheet)。Mac：对话右侧的检查器栏（⌥⌘I / 点标题），Jarvis 页是窗口 sheet
-- [ ] ⋯ menu: 终端, 文件, Git (N), 空间里的所有 Agent, 重命名…, 屏蔽, 拷贝 session id, 拷贝恢复命令, 清空上下文 /clear, 关闭 Agent… — ChatView.swift
-  - 要到 Mac 前看：点对话页的 ⋯ 逐项点。按钮截图里在，菜单离屏打不开；大部分项 Agent 菜单里也有（`-macMenuLog` 看过）。
-- [ ] Swipe left chat → Files → Git; swipe-back gesture re-enabled — Views/Session/SessionPanes.swift (SessionPane, SessionPaneBar), Views/Chat/SwipeBack.swift
-  - 要到 Mac 前看：从 ⋯ › 文件 / Git 进去再回到对话。Mac 上 SwipeTo 不做事，`-openPane files|git` 截图里两个面板都画出来了。
+- [x] ⋯ menu: 终端, 文件, Git (N), 空间里的所有 Agent, 重命名…, 屏蔽, 拷贝 session id, 拷贝恢复命令, 清空上下文 /clear, 关闭 Agent… — ChatView.swift
+  - Mac（2026-11-02 Mac mini 真窗口核对）：对话 ⋯：终端、Git（N）、文件、中断（工作中才有）、重命名…、屏蔽通知、拷贝恢复命令、拷贝目录、空间里的所有 Agent、关闭 Agent…；在文件 / Git 面板里多一项「回到对话」。清单写旧了：「清空上下文 /clear」现在在输入框 + › 快捷指令里（能清的时候才有），「拷贝 session id」在会话信息里（iOS 同一份代码）。和行菜单同名的几项走同一组函数，在行菜单里逐项点过（见上面 Swipe 那条）。
+- [x] Swipe left chat → Files → Git; swipe-back gesture re-enabled — Views/Session/SessionPanes.swift (SessionPane, SessionPaneBar), Views/Chat/SwipeBack.swift
+  - Mac（2026-11-02 Mac mini 真窗口核对）：⋯ › 文件 / Git 进面板（文件：路径栏、文件夹在前、大小 / 时间、git 标记；Git：分支、↑1、暂存、改动、提交历史），左上「返回」或 ⋯ › 回到对话 回到对话。Mac 上没有横滑，入口是 ⋯。
 - [ ] Hide tab bar in single-column chat — Views/Chat/TabBarHiding.swift
   - Mac 上没有：Mac 没有 tab 栏，`hidesTabBarWhenShown` 在兼容层（`Mac/Compat/NavigationCompat.swift`）里什么都不做。
 - [ ] Side-vertical toolbar (iPhone Duo) layout — ChatView.swift (sideBarItems, sideHeader)
   - Mac 上没有：这是 iPhone Duo 的布局，`VerticalBarsReader` 只在 iOS 编译。
 - [ ] Live status strip (spinner line, output preview, → terminal) — SessionPanes.swift (ActivityChips, ActivitySheet)
   - 要到 Mac 前看：点对话页顶上的状态 chip 打开 ActivitySheet，看转圈行、输出预览和 → 终端。chip 截图里有，浮层要点开（加截图开关得改 ChatView.swift，这次没动）。
-- [ ] Loop strip (interval, next wake, task, 停止循环 confirm) + loop tick rows — SessionPanes.swift (LoopStrip, LoopTickRow)
-  - 要到 Mac 前看：点循环 chip，在 ActivitySheet 里看间隔、下次唤醒、任务和「停止循环」确认。chip 截图里有。
-- [ ] Background tasks strip (N 个后台任务, open output file) — SessionPanes.swift (BackgroundTasksStrip)
-  - 要到 Mac 前看：点后台 chip，在 ActivitySheet 里看「N 个后台任务」并打开输出文件。chip 截图里有。
+- [x] Loop strip (interval, next wake, task, 停止循环 confirm) + loop tick rows — SessionPanes.swift (LoopStrip, LoopTickRow)
+  - Mac（2026-11-02 Mac mini 真窗口核对）：点「循环与后台任务」chip → ActivitySheet：循环中 · 每 30 分钟、下次唤醒（还有 N 分钟）、任务、「停止循环」→ 确认框「停止这个循环？」（取消 / 停止循环）；对话里 `/loop …` 的消息画成「⟳ 循环唤醒 时间 任务」小胶囊。
+- [x] Background tasks strip (N 个后台任务, open output file) — SessionPanes.swift (BackgroundTasksStrip)
+  - Mac（2026-11-02 Mac mini 真窗口核对）：同一个 ActivitySheet 里「1 个后台任务」、标题、命令、运行时长、「看输出」→ 文件查看器大 sheet 打开输出文件（路径、大小、行号）。
 - [ ] Subagents strip + read-only subagent view + footer 回到主 Agent — SessionPanes.swift (AgentStrip, SubagentFooter)
   - 要到 Mac 前看：找一个有子 Agent 的会话，看子 Agent 条、只读视图和底部「回到主 Agent」。假 hub 和体验模式都没有子 Agent 数据。
 - [ ] Queue strip (撤回编辑 / 拷贝 / 删除, pull all back) — ChatView.swift (QueueStrip), AppModel.editQueued
   - 要到 Mac 前看：Agent 工作时连发几条，看排队条的撤回编辑 / 拷贝 / 删除和全部拉回。假 hub 没有排队消息的数据。
 - [ ] Skeleton / starting note (「正在启动…」, 「没有启动起来」) — ChatView.swift (ChatSkeleton, StartingNote)
   - 要到 Mac 前看：打开一个还没加载过的对话、新起一个 Agent，看「正在启动…」和失败时的「没有启动起来」。本地假 hub 加载太快，`-openChatsFresh` 加 DELAY 2 也没截到。
+  - Mac（2026-11-02 核对）：`MOCK_DELAY=4` + `-openChatsFresh` 离屏截到骨架屏（几条灰条，标题「对话 · 连接中…」）。还剩「正在启动…」「没有启动起来」（要新起一个 Agent）。
 - [ ] Long-press message action bar: 复制 / 选择 / 引用 / 分享 / 编辑 (own); select-text sheet — Views/Chat/MessageMenu.swift
   - 要到 Mac 前看：右键一条消息打开操作条，自己的消息上有「编辑」，「选择」打开选字 sheet。`-showMenu`（DELAY 11 秒左右）截图里操作条画出来了。
+  - Mac（2026-11-02 Mac mini 真窗口）：操作条由真的右键触发（`LongPressAt` 的 rightMouseDown / Up）；辅助功能的 AXShowMenu 和后台发的右键都不触发，前台右键试了两次没出来，没查完（当时桌面有人在用，先停了）。
 - [ ] Share card image (light/dark, save to Photos, share image/text) — Views/Chat/ShareCard.swift
   - 要到 Mac 前看：分享卡片里存到照片（会弹权限）和分享图片 / 文字。`-showShareCard` 截图里卡片画出来了。
 - [ ] Image viewer (all chat images, paging, zoom, save/edit/share/copy) — Views/Chat/ImageViewer.swift
   - 要到 Mac 前看：←/→ 翻页、缩放、保存。`-openFirstImage` 截图里查看器和保存 / 编辑 / 分享 / 拷贝都在。
+  - Mac（2026-11-02 核对）：`MOCK_CHAT_IMAGES=1 -openFirstImage YES` 离屏截图：查看器、✕、保存 / 编辑 / 分享 / 拷贝都在。还剩翻页、缩放、保存（要真窗口）。
 - [x] Image editor (box / pen, 6 colors, undo/clear, 加到输入框) — Views/Chat/ImageEditor.swift
   - Mac（2026-11-01 核对）：`-openEditor YES` 原来只在 iOS 有钩子，`ImageViewer.swift` 的 macOS 分支补上后截图看到框 / 笔、6 个颜色、撤销 / 清除、加到输入框。用鼠标画、把标记画进图片（macOS 的 NSImage 分支）还要到 Mac 前试。
 - [ ] File path chips (verified via /stat), tool-row paths clickable — Views/Chat/FileViewer.swift (FileChips, LookUpFiles), Code/FilePresence.swift
   - Mac（2026-11-01 核对）：读取行的路径显示成链接；存在的路径变卡片、不存在的不变，在 §8 FilePresence 那张截图里看到，这一条自己的截图没拍到不存在的那一边，点卡片 / 链接也没试。
+  - Mac（2026-11-02 Mac mini 真窗口）：BeautifulUI 风格下回复里存在的 6 个路径都成了文件 chip，不存在的两个保持文字。还剩点 chip / 链接。
 - [ ] Context reference cards in bubbles (`<jarvis-context>`) — Views/Link/LinkSheet.swift (ContextCards, ContextChips)
   - 要到 Mac 前看：在链接面板里选字「作为上下文」后发出，看气泡里的引用卡片。`-openSendMessage` 发了一条带 `<jarvis-context>` 的消息，但截图里没出现这条消息。
+  - Mac（2026-11-02 Mac mini 真窗口）：行菜单「交给 Jarvis」发出的消息气泡里有引用卡片（上下文 · Agent · 标题，机器 / 会话 / 目录）。还剩链接面板选字「作为上下文」那条路径。
 - [x] Send-safety: refusal when computer input has draft → show / clear-and-send — App/SendSafety.swift
   - Mac（2026-11-01 核对）假 hub（`MOCK_SEND_REFUSE=input_draft`）截图：「电脑上的输入框里有字」对话框，先不发 / 清空并发送。
 - [ ] Frame stats / perf probes (debug) — Views/Chat/FrameStats.swift, App/PerfSignpost.swift
@@ -613,10 +626,12 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 要到 Mac 前看：在收件箱的邮件上点工具栏的 ✦「让 Claude 处理」，滚到第一条消息看是否带着读这封邮件的提示，开始对话后新 Agent 在 Agents 里打开。新开关 `-showMailAskClaude YES`（配 `-tab mail -openInboxMatch <标题里的字>`，已加进 release.sh 的列表）截图里表单完整，第一条消息在 sheet 下面没看到。
 
 ## 11. Machines / monitoring
-- [ ] 机器 (one page since 2026-11-01): N/M online, per-machine card with agents (需要你 / 工作中 / 空闲), CPU/mem/net now + 1h sparklines, alert rings, version-mismatch 重新部署, what needs a look first, 10s polling — Views/Machines/MachinesView.swift (MachinesView, MachineCard, MachineConcern, DeployRow)（Mac：侧边栏「机器」⌘5，`MacMachinesPage`）
-  - 合并前的「机器」列表和「机器监控」总览在 Mac 上都核对过（2026-11-01）；合并后的页面 Mac 只编译通过，没截图。要到 Mac 前看：侧栏「机器」的卡片、排序、⌘R。
+- [x] 机器 (one page since 2026-11-01): N/M online, per-machine card with agents (需要你 / 工作中 / 空闲), CPU/mem/net now + 1h sparklines, alert rings, version-mismatch 重新部署, what needs a look first, 10s polling — Views/Machines/MachinesView.swift (MachinesView, MachineCard, MachineConcern, DeployRow)（Mac：侧边栏「机器」⌘5，`MacMachinesPage`）
+  - 合并前的「机器」列表和「机器监控」总览在 Mac 上都核对过（2026-11-01）；合并后的页面 Mac 只编译通过，没截图。
+  - Mac（2026-11-02 Mac mini 核对）真窗口 + 假 hub 离屏截图（深浅色）：N/M 台在线、用量偏高、需要你的 Agent 数；离线的排最前（带 ssh 错误），告警的那台红框 + CPU 高 / 内存紧张 / 负载高；每张卡片有需要你 / 工作中 / 空闲、CPU / 内存 / 网络和 1 小时曲线；`MOCK_NODE_MISMATCH=1` 的那台底部是「这台电脑上的 Jarvis 和 hub 不是同一次部署」+「重新部署」（没点）。⌘R 见上面 Pull to refresh。
 - [ ] Machine detail: agents (open the chat), 引擎, 1/6/24h CPU/mem/net/load charts with shared scrub, per-core bars, system facts, gaps, launchers, reconnect — Views/Machines/MachineDetailView.swift, Views/Machines/MetricCharts.swift (Swift Charts)
   - 原来的监控页在 Mac 上看过 1 / 24 小时、告警卡片、CPU 和内存图（`-macSection machines -openMonitor <id>`，现在打开的是合并后的机器页）。要到 Mac 前看：往下滚看网络、负载图、每核条、系统信息、断档，用鼠标拖图看两张图一起动，点一个 Agent 进对话。
+  - Mac（2026-11-02 核对）：假 hub 离屏截图（1280×1600 被屏幕截到约 970 高）：Agent 4 个、引擎 herdr、监控 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换。下面的图表、每核条、系统信息要滚动，等真窗口。
 - [x] OS badge — Views/Machines/OSBadge.swift; model — Shared/MachineMetrics.swift
   - Mac（2026-11-01 核对）：总览卡片上 Ubuntu、两台 Apple、Debian 的标志，详情和监控页头部也有；`MachineMetricsTests` 在 JarvisMacTests 里通过。
 
@@ -691,10 +706,11 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 外观页的 小 / 标准 / 大 截图看过；显示 › 放大 / 缩小 / 标准字号 ⌘+ ⌘- ⌘0 改的是同一个值（有测试）。
 - [x] Theme tokens, icons, palettes, status palette — Shared/Design/Theme.swift, Icons.swift, Palette.swift, PersonaPalette.swift, Shared/StatusPalette.swift
   - Mac（2026-11-01 核对）：`Shared/Design` 原样编进 JarvisMac，这一轮所有截图都按它画（状态色、告警 chip、形象着色）；扫源码的 token 测试只在 iOS 的 JarvisTests 里，这次没跑。
-- [ ] Components (StatusDot, Chip, CountBadge, EmptyStateView, Monogram…) and surfaces/buttons — DesignSystem/Components.swift, DesignSystem/Styling.swift
+- [x] Components (StatusDot, Chip, CountBadge, EmptyStateView, Monogram…) and surfaces/buttons — DesignSystem/Components.swift, DesignSystem/Styling.swift
   - Mac（2026-11-01 核对）：截图里 Chip、CountBadge、Monogram、themedButton、卡片表面都看到；EmptyStateView 引的那张截图其实开着一封邮件、不是空状态，没看到。
   - Mac（2026-11-02 核对）：StatusDot「需要你」的呼吸圈改用 Core Animation 画（`MacBreathingRing`），真窗口连拍的几帧里圈从贴着圆点到放大变淡都有，
     浅色、深色（`-macAppearance dark`）都对，圈没被行裁掉；深色下圈取的是深色的红（按像素反推三个通道的透明度一致）。
+  - Mac（2026-11-02 核对）：EmptyStateView 在 Agents 列表里截到了（`MOCK_DELAY=4` 下会话列表还没到时「开始第一个开发会话」+「新建会话」）。
 
 ## 18. Notifications & notification actions
 - [ ] Request permission + APNs registration, POST /devices — App/PushRegistrar.swift (registerIfPossible；iOS 和 Mac 共用)

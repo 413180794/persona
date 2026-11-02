@@ -149,3 +149,13 @@
   开发 Mac 上没有 Go：在 hub 上 `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go test -c -o x.test ./internal/connector/imessage` 交叉编译测试二进制，
   拷回 Mac，**在包目录里**跑（`testdata` 是相对路径）。同样的办法用于 `node` 包里要 macOS 的测试。
 - `sqlite3 -json` 没有行时什么都不打印（不是 `[]`），解析前先判空。
+
+## Mac 版真窗口验收（2026-11-02，#403）
+
+- 在没签名的模拟器构建上跑 JarvisTests（`CODE_SIGNING_ALLOWED=NO`）时，`NotificationServiceTests.opensWithTheKeyInTheSharedGroup` 一定失败：没签名就没有钥匙串组，
+  `PushCrypto.ensureKey()` 返回 nil。master 上同样失败，看到它别当成自己改出来的。
+- 验 显示 › 刷新（⌘R）要让 App 在前台、主窗口是 key window：没有 key window 时只按分区刷新 hub 数据（`MacViewCommands.refreshTarget`），
+  用 cua 的 `invoke_menu` 在后台调，会看到收件箱 / 知识库「没刷」（假 hub 日志里只有 sessions、machines 那一组），其实是测法不对。
+- cua 在这个 App 上：工具栏里的菜单按钮、sheet 窗口在后台用辅助功能点不了（AXPress 报 -25202，sheet 的树读不到），要 `bring_to_front` 后用桌面坐标点；
+  `delivery_mode: "foreground"` 点完会切回原来的前台 App，刚弹出的菜单、浮层跟着关掉。sheet 用前台 Esc 关；消息操作条要真的右键（`rightMouseDown`），AXShowMenu 不行。
+  触控板左右滑（List 的 swipeActions）cua 模拟不了：它只能发滚轮事件，不带手势阶段。
