@@ -100,20 +100,20 @@ type Conn struct {
 	// flood wait.
 	news  chan struct{}
 	until time.Time
-	zone  *time.Location // the user's
+	// zone is the user's, for the times the tools show; nil while the hub does not know it (never the machine's:
+	// the hub runs in UTC).
+	zone *time.Location
 }
 
-// New is the connector, keeping what it needs in secrets; zone is the user's, for the times the tools show.
+// New is the connector, keeping what it needs in secrets; zone is the user's (nil: not known yet).
 func New(secrets connector.Secrets, zone *time.Location) *Conn {
 	c := newConn(secrets, dialGotd)
-	if zone != nil {
-		c.zone = zone
-	}
+	c.zone = zone
 	return c
 }
 
 func newConn(secrets connector.Secrets, dial dialer) *Conn {
-	return &Conn{secrets: secrets, dial: dial, wake: make(chan struct{}, 1), news: make(chan struct{}, 1), zone: time.Local,
+	return &Conn{secrets: secrets, dial: dial, wake: make(chan struct{}, 1), news: make(chan struct{}, 1),
 		status: connector.Status{State: connector.StateNotSignedIn, Error: "还没填 Telegram 的 API 凭据"}}
 }
 

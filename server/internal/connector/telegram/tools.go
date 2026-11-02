@@ -219,6 +219,12 @@ func (c *Conn) find(ctx context.Context, cl client, chat string) (dialog, error)
 	return dialog{}, fmt.Errorf("有 %d 个会话叫 %q：用 telegram_chats 里的 key", len(named), chat)
 }
 
-func (c *Conn) when(t time.Time) string { return t.In(c.zone).Format("2006-01-02 15:04") }
+// when is a time as the tools show it: in the user's zone, or in UTC saying so while the hub does not know the user's.
+func (c *Conn) when(t time.Time) string {
+	if c.zone == nil {
+		return t.UTC().Format("2006-01-02 15:04 UTC")
+	}
+	return t.In(c.zone).Format("2006-01-02 15:04")
+}
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }

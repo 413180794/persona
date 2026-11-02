@@ -354,15 +354,18 @@ func (h *Hub) addTelegram() {
 		return
 	}
 	c := proc.New(proc.Config{ID: "telegram", Name: "Telegram", Path: path, Secrets: h.secretsFor("telegram"), Logf: h.logf,
-		Version: fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number),
-		// The user's time zone, for the times the assistant's tools show (the program runs on the hub's clock).
-		SettingsNow: func() json.RawMessage {
-			b, _ := json.Marshal(map[string]string{"zone": h.userLocation().String()})
-			return b
-		}})
+		Version:     fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number),
+		SettingsNow: h.telegramSettings})
 	if err := h.addConnectorOff(c); err != nil {
 		h.logf("telegram connector: %v", err)
 	}
+}
+
+// telegramSettings is what jarvisd-telegram gets at each start: the user's time zone by name, for the times the
+// assistant's tools show (the program runs on the hub's clock, in UTC); "" while only the hub's own is known.
+func (h *Hub) telegramSettings() json.RawMessage {
+	b, _ := json.Marshal(map[string]string{"zone": h.userTZName()})
+	return b
 }
 
 // ghToken reads the token of machine's gh login (credential.gh_token); it never goes to a log.

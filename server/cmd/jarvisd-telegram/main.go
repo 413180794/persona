@@ -52,17 +52,27 @@ func main() {
 	defer stop()
 	err := serve.Main(ctx, os.Stdin, os.Stdout, func(raw json.RawMessage, secrets connector.Secrets) (connector.Connector, error) {
 		var cfg struct {
-			Zone string `json:"zone"` // the user's time zone, from the hub
+			Zone string `json:"zone"` // the user's time zone ("Asia/Shanghai"), from the hub; "" while it does not know it
 		}
 		_ = json.Unmarshal(raw, &cfg)
-		zone, err := time.LoadLocation(cfg.Zone)
-		if err != nil || cfg.Zone == "" {
-			zone = time.Local
-		}
-		return telegram.New(secrets, zone), nil
+		return telegram.New(secrets, userZone(cfg.Zone)), nil
 	})
 	if err != nil && ctx.Err() == nil && !errors.Is(err, io.EOF) { // EOF: the hub went away
 		log.Printf("stopped: %v", err)
 		os.Exit(1)
 	}
+}
+
+// userZone is the user's time zone by name, nil when there is none or it does not load (the tools then say UTC): never
+// the machine's, which is the hub's (UTC), not the user's.
+func userZone(name string) *time.Location {
+	if name == "" {
+		return nil
+	}
+	zone, err := time.LoadLocation(name)
+	if err != nil {
+		log.Printf("time zone %q: %v", name, err)
+		return nil
+	}
+	return zone
 }

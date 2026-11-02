@@ -77,3 +77,14 @@ func TestTools(t *testing.T) {
 		t.Fatal("an empty query")
 	}
 }
+
+// Before the hub knows the user's zone the tools show UTC and say so, not the machine's zone.
+func TestToolTimesWithoutTheUserZone(t *testing.T) {
+	at := time.Date(2026, 1, 2, 3, 4, 0, 0, time.FixedZone("UTC+8", 8*3600))
+	if got := New(&memSecrets{}, nil).when(at); got != "2026-01-01 19:04 UTC" {
+		t.Fatalf("no zone: %q", got)
+	}
+	if got := New(&memSecrets{}, time.FixedZone("UTC+8", 8*3600)).when(at); got != "2026-01-02 03:04" {
+		t.Fatalf("the user's: %q", got)
+	}
+}
