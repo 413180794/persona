@@ -14,7 +14,7 @@ struct JarvisApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .task(id: model.fleetLook) { LiveActivityController.shared.look(model.fleetLook) }
+                .task(id: model.fleetLook) { LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces } }
                 .onOpenURL { url in
                     if let link = FleetLink.session(url) { // tapped the Live Activity
                         model.open(SessionKey(machineID: link.machine, sessionID: link.session))

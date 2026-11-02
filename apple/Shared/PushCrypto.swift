@@ -16,9 +16,10 @@ nonisolated enum PushCrypto {
 
     // MARK: The key
 
-    /// The keychain group the app and its extension share (Info.plist, `$(AppIdentifierPrefix)<bundle id>.push`).
+    /// The keychain group the app and its extension share (Info.plist, `<team>.<bundle id>.push`); nil without a team
+    /// (an empty one leaves just the dot).
     static var accessGroup: String? {
-        (Bundle.main.object(forInfoDictionaryKey: "JarvisPushKeychainGroup") as? String).flatMap { $0.isEmpty ? nil : $0 }
+        (Bundle.main.object(forInfoDictionaryKey: "JarvisPushKeychainGroup") as? String).flatMap { $0.isEmpty || $0.hasPrefix(".") ? nil : $0 }
     }
     private static let service = "jarvis.push"
     private static let account = "push-key"

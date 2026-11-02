@@ -44,6 +44,10 @@ if strings "$APP/Jarvis" | grep -qxE '(pairURL|openSession|showNewChat|openAssis
   echo "DEBUG switches found in the Release binary" >&2; exit 1
 fi
 
+# Every bundle signed with its target's keychain groups (the app shares the Live Activity's persona with JarvisWidgets,
+# the push key with JarvisNotify): build 92 shipped without them (docs/release.md「entitlements」).
+python3 scripts/entitlements.py check "$ARCHIVE"
+
 OPTS=$(mktemp -t export).plist
 if [ -n "${NO_UPLOAD:-}" ]; then
   python3 scripts/jarvis_config.py export-options "$OPTS" export
@@ -67,6 +71,7 @@ if [ -n "${NO_UPLOAD:-}" ]; then
     exit 1
   fi
   rm -rf "$OUT/ipa"
+  python3 scripts/entitlements.py check "$OUT/export/Jarvis.ipa"
 fi
 git tag -f "testflight/$BUILD" >/dev/null 2>&1 || true
 if [ -n "${NO_UPLOAD:-}" ]; then

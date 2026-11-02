@@ -54,7 +54,8 @@ git push --tags
    归档用的是自动签名的开发描述文件（所以归档里 `aps-environment` 是 `development`），导出时按 App Store 描述文件重签成
    `production`。`NO_UPLOAD=1` 时把 `destination` 从 `upload` 改成 `export`，并额外校验导出的 ipa 里 `aps-environment`
    确实是 `production`。
-6. `git tag -f testflight/<构建号>`。
+6. `scripts/entitlements.py check`：归档里（`NO_UPLOAD=1` 时再加导出的 ipa）每个 bundle 都带着它 target 的钥匙串组，Info.plist 里的组名也在其中，见下面「entitlements」。
+7. `git tag -f testflight/<构建号>`。
 
 归档之后大约 10–30 分钟构建才会出现在 TestFlight。`asc_testflight.py wait [分钟数] [构建号]` 会每 30 秒查一次，等到
 `processingState=VALID` 后写默认的 What to Test 并加入 `Internal` 群组；`INVALID` / `FAILED` 会直接报错退出
@@ -70,6 +71,18 @@ git push --tags
 
 App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed signing 需要 Admin；手动签名绕开这个限制。
 改 Bundle ID 能力（比如再加一个 capability）会让旧描述文件失效，重跑 `scripts/asc_signing.py` 即可。
+
+## entitlements（2026-11-02）
+
+App 和扩展靠共享的钥匙串组交东西：灵动岛的形象（`<team>.<bundle id>.look`，App → JarvisWidgets）、推送中继的私钥（`.push`，App → JarvisNotify）。
+每个 bundle 的签名里都得有它 target 的 `keychain-access-groups`，Info.plist 里告诉代码用哪个组（`JarvisLookKeychainGroup`、`JarvisPushKeychainGroup`）也得是其中之一，缺一样就静默退回默认值。
+
+- **Info.plist 的组名用 `$(DEVELOPMENT_TEAM).`，不用 `$(AppIdentifierPrefix)`**：后者只在 Xcode 签名时才有值，无签名归档里是空的。entitlements 文件里照旧写 `$(AppIdentifierPrefix)`。
+- **无签名归档（`CODE_SIGNING_ALLOWED=NO`，这台 Mac 没有发布证书、导出时云签名）**：归档里的 bundle 没有 entitlements，导出按 bundle 里有什么来签。
+  导出前用 `python3 scripts/entitlements.py sign <归档>` 由内到外 ad hoc 签名，每个 bundle 带上它 target 的 entitlements（从 `xcodebuild -showBuildSettings` 找，
+  构建变量展开，`$(AppIdentifierPrefix)` 是团队的；展不开就报错，不留空）。只对 App 用 `codesign --entitlements <原始文件>`、扩展不带的话，
+  导出会把 App 的 `$(JARVIS_BUNDLE_ID)` 展成空、扩展一个组都没有（build 92 就是这样，灵动岛的形象不跟随设置，`docs/live-activity.md`）。
+- **导出后查**：`python3 scripts/entitlements.py check <ipa>`，有问题逐条列出并非零退出；对 build 92 的 ipa 报 9 处。
 
 ## 踩坑
 

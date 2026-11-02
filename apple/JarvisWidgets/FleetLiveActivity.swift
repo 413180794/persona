@@ -6,7 +6,8 @@ import WidgetKit
 /// expanded. The compact island's left side is the persona chosen in 设置 › 外观 › 形象 in its state for the fleet
 /// (FleetFace) with the most urgent count; the right side is the next count or a number the device chose (IslandCell,
 /// 设置 › 通知 › 灵动岛). Beside another app's activity it is one glyph, the most urgent count (`IslandGlyph`): no room
-/// for a face there. The expanded island and the lock screen lead with the persona and the counts, then the agents.
+/// for a face beside it; with no count, the persona alone (`IslandMinimal`). The expanded island and the lock screen
+/// lead with the persona and the counts, then the agents.
 /// Status colors are Jarvis' agent colors
 /// (docs/agent-states.md), fixed rather than following the app's style: the extension cannot read it.
 struct FleetLiveActivity: Widget {
@@ -71,7 +72,7 @@ struct FleetLiveActivity: Widget {
             } compactTrailing: {
                 IslandSide(state: state, leading: false)
             } minimal: {
-                IslandWidth { limited in IslandGlyph(cell: IslandCell.minimal(state), limited: limited) }
+                IslandWidth { limited in IslandMinimal(state: state, stale: context.isStale, limited: limited) }
             }
             .widgetURL(FleetLink.whole(state))
             .keylineTint(FleetPalette.accent)
@@ -94,7 +95,7 @@ struct IslandSide: View {
     var body: some View {
         IslandWidth { limited in
             if limited {
-                if leading { IslandGlyph(cell: IslandCell.minimal(state), limited: true) }
+                if leading { IslandMinimal(state: state, stale: stale, limited: true) }
             } else {
                 if leading {
                     // The persona, then the most urgent count (docs/live-activity.md「形象」).

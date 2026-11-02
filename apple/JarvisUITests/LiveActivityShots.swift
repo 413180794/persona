@@ -14,10 +14,12 @@ final class LiveActivityShots: XCTestCase {
             app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["JARVIS_FLEET_DETAILS"] ?? "NO",
                                    "-fleetIsland", env["JARVIS_FLEET_ISLAND"] ?? "a", "-tab", "settings",
                                    "-showFleetCount", env["JARVIS_FLEET_COUNT"] ?? "0"]
-            // The persona on the activity's leading side (`jarvis`, the default, or `jarvis-circuit`).
+            // The persona on the activity (`jarvis`, the default, `jarvis-circuit`, or a hub package such as mock_hub's
+            // `demo`, which needs JARVIS_MOCK_HUB to be downloaded from).
             if let persona = env["JARVIS_PERSONA"] { app.launchArguments += ["-openPersona", persona] }
+            if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
             app.launchPinned()
-            sleep(4)
+            sleep(env["JARVIS_MOCK_HUB"] == nil ? 4 : 8) // a package is downloaded first
         }
         XCUIDevice.shared.press(.home)
         sleep(2)
@@ -66,6 +68,56 @@ final class LiveActivityShots: XCTestCase {
         let bottom = springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.99))
         bottom.press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)))
         sleep(1)
+    }
+
+    /// A persona chosen in 设置 › 外观 › 形象 while the activity runs reaches the island within seconds, without a new
+    /// activity (docs/live-activity.md「形象」). `JARVIS_PERSONA_SWITCH=demo,jarvis-circuit,jarvis`: starts on the first,
+    /// then picks each next one in 设置 and photographs the island 3 s after leaving the app. A hub package needs
+    /// JARVIS_MOCK_HUB (scripts/mock_hub.py with MOCK_PERSONAS=demo).
+    @MainActor func testSwitchingPersonaRedrawsTheIsland() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let ids = env["JARVIS_PERSONA_SWITCH"]?.split(separator: ",").map(String.init), let first = ids.first else {
+            throw XCTSkip("set JARVIS_PERSONA_SWITCH=<persona id>,<persona id>…")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-showFleetSample", env["JARVIS_FLEET_SAMPLE"] ?? "working", "-fleetIsland", "a",
+                               "-tab", "settings", "-openAppearance", "persona", "-openPersona", first]
+        if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
+        app.launchPinned()
+        sleep(env["JARVIS_MOCK_HUB"] == nil ? 4 : 8)
+        XCUIDevice.shared.press(.home)
+        sleep(3)
+        shot("switch-0-\(first)")
+        for (i, id) in ids.dropFirst().enumerated() {
+            app.activate()
+            let card = app.buttons["persona-\(id)"]
+            if !card.waitForExistence(timeout: 3) { // 设置 keeps its page; open 形象 again if it did not
+                app.tabBars.buttons["设置"].tap()
+                let row = app.buttons["settings-persona"]
+                XCTAssertTrue(row.waitForExistence(timeout: 10), "no 形象 row:\n\(app.debugDescription)")
+                row.tap()
+            }
+            XCTAssertTrue(card.waitForExistence(timeout: 20), "\(id) is not offered:\n\(app.debugDescription)")
+            card.tap()
+            let selected = expectation(for: NSPredicate(format: "selected == true"), evaluatedWith: app.buttons["persona-\(id)"])
+            XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 20), .completed, "choosing \(id) did not take")
+            XCUIDevice.shared.press(.home)
+            sleep(3)
+            shot("switch-\(i + 1)-\(id)")
+        }
+        // Leave the simulator on the default for the other tests.
+        app.terminate()
+        app.launchArguments = ["-openPersona", "jarvis", "-tab", "settings"]
+        app.launchPinned()
+        sleep(2)
+        app.terminate()
+    }
+
+    /// mock_hub's pairing link when JARVIS_MOCK_HUB is set: the hub a package persona is downloaded from.
+    static var pair: String? {
+        ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"].map {
+            "jarvis://pair?url=" + $0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        }
     }
 
     /// Another app's activity beside ours (docs/live-activity.md「和其他 App 共用灵动岛」): the peer app

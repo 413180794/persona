@@ -112,10 +112,12 @@ targets:
         UIBackgroundModes: [remote-notification]
         # Push relay (docs/push-relay.md): where the app registers for pushes from hubs without the app's APNs key
         # (config.json app.push_relay; empty: none), and the keychain group it shares with JarvisNotify.
+        # The groups' prefix is the team, not $(AppIdentifierPrefix): that one is only set when Xcode signs, and an
+        # archive built unsigned for a cloud-signed export left it empty (scripts/entitlements.py, 2026-11-02).
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
-        JarvisPushKeychainGroup: $(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push
+        JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
         # Where the app leaves the persona the Live Activity draws for the widget extension (FleetLook).
-        JarvisLookKeychainGroup: $(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look
+        JarvisLookKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).look
         # The Fleet activity on the lock screen / Dynamic Island (docs/live-activity.md).
         NSSupportsLiveActivities: true
         # The hub is usually reached over plain HTTP inside a private network (docs/config.md).
@@ -229,7 +231,7 @@ targets:
     info:
       path: JarvisWidgets/Info.plist
       properties:
-        JarvisLookKeychainGroup: $(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look
+        JarvisLookKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).look
         CFBundleDisplayName: Jarvis
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

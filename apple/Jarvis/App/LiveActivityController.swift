@@ -3,6 +3,7 @@ import ActivityKit
 #endif
 import Foundation
 import OSLog
+import SwiftUI
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -112,10 +113,10 @@ final class LiveActivityController {
         Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate))
     }
 
-    /// The persona and its color changed (or the app started): saved for the widget extension, and the running
-    /// activity is redrawn with it now rather than at the hub's next push.
-    func look(_ look: FleetLook) {
-        guard FleetLook.save(look), let activity else { return }
+    /// The persona and its color changed (or the app started): saved for the widget extension, a package with its
+    /// faces, and the running activity is redrawn with it now rather than at the hub's next push.
+    func look(_ look: FleetLook, faces: () -> FleetFaces?) {
+        guard FleetLook.save(look, faces: faces), let activity else { return }
         Self.update(activity, activity.content)
     }
 
@@ -184,11 +185,12 @@ final class LiveActivityController {
 
 #if DEBUG
 extension LiveActivityController {
-    /// `-showFleetSample needsYou|working|done|thinking|offline` (`-fleetDetails YES` for names on the lock screen,
+    /// `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`-fleetDetails YES` for names on the lock screen,
     /// `-fleetIsland b`, `c` or `custom:assistant,load` for the island's sides, `-showFleetCount 12` for that many in
     /// each kind there is; `-openPersona jarvis-circuit` for the persona): starts the activity with made-up agents, no
-    /// hub needed, for screenshots. `thinking` is only the assistant answering; `offline` is the working sample made
-    /// stale once it shows.
+    /// hub needed, for screenshots. `thinking` is only the assistant answering (beside one finished agent);
+    /// `assistant` is the assistant alone, nothing to count (the minimal island then shows the persona); `offline` is
+    /// the working sample made stale once it shows.
     func showSample(_ phase: String, details: Bool, island spec: String?, count: Int = 0) {
         UserDefaults.standard.set(details, forKey: Self.detailsKey)
         var island = IslandPrefs()
@@ -212,6 +214,7 @@ extension LiveActivityController {
         var state: FleetState = switch phase {
         case "working": FleetState(phase: .working, working: 3, unread: 1, items: [work, done], workingSince: now - 754)
         case "done", "thinking": FleetState(phase: .done, unread: 1, items: [done])
+        case "assistant": FleetState(phase: .none)
         default: FleetState(phase: .needsYou, needsYou: 2, working: 3, unread: 1, items: [ask, plan, work], workingSince: now - 754)
         }
         if count > 0 {
@@ -227,7 +230,7 @@ extension LiveActivityController {
             try? await Task.sleep(for: .seconds(1)) // the scene must be active to start one
             // `apply` starts no activity for finished agents alone (the hub does not either) and keeps it fresh: these
             // start one directly, and `offline` is then marked stale.
-            if ["done", "thinking", "offline"].contains(phase) {
+            if ["done", "thinking", "assistant", "offline"].contains(phase) {
                 endAll()
                 try? await Task.sleep(for: .seconds(1))
                 let content = ActivityContent(state: state.tailored(island: island, details: details), staleDate: .now.addingTimeInterval(15 * 60))
@@ -247,14 +250,38 @@ extension LiveActivityController {
 #endif
 
 extension AppModel {
-    /// What the Live Activity draws (docs/live-activity.md「形象」): a built-in in the accent it has in the app; a
-    /// package (its frames are bitmaps, which the activity does not play) as the default face in its own color.
-    var fleetLook: FleetLook {
-        let p = persona
-        if p.isBuiltin {
-            return FleetLook(design: p.avatarDesign == .circuit ? .circuit : .visor, tint: builtinAccent)
+    /// What the Live Activity draws for the persona on screen (docs/live-activity.md「形象」).
+    var fleetLook: FleetLook { FleetLook(persona: persona, builtinAccent: builtinAccent) }
+    var fleetFaces: FleetFaces? { FleetFaces(persona: persona, personas: personas) }
+}
+
+nonisolated extension FleetLook {
+    /// A built-in in the accent it has in the app; a package as its pictures (`FleetFaces`), and while they cannot be
+    /// read the default face in its primary color. From the persona itself, not `Theme`: the spec is recomposed after
+    /// the persona changes.
+    init(persona p: Persona, builtinAccent: Color) {
+        guard !p.isBuiltin else {
+            self.init(design: p.design.flatMap(PersonaFace.Design.init(rawValue:)) ?? .visor, tint: builtinAccent)
+            return
         }
-        return FleetLook(design: .visor, tint: Theme.persona)
+        let color = p.palette?.primary
+        self.init(design: PersonaFace.Design.visor.rawValue, light: color?.light ?? Self.standard.light,
+                  dark: color?.dark ?? Self.standard.dark, package: "\(p.id)/\(p.rev)")
+    }
+}
+
+extension FleetFaces {
+    /// A package's faces for the activity: each state's first frame (what the top bar's dot holds still), the avatar
+    /// for the rest. Nil for a built-in, or a package not on the phone.
+    @MainActor init?(persona p: Persona, personas: PersonaStore) {
+        guard let m = p.manifest, personas.isOnPhone(p) else { return nil }
+        var states: [String: Data] = [:]
+        for s in PersonaState.allCases where m.dot.states[s.rawValue] != nil {
+            if let first = personas.frames(p, s)?.images.first, let png = Self.png(first) { states[s.rawValue] = png }
+        }
+        let avatar = personas.avatar(p, points: Self.pixels / 3, scale: 3).flatMap(Self.png)
+        guard !states.isEmpty || avatar != nil else { return nil }
+        self.init(package: "\(p.id)/\(p.rev)", states: states, avatar: avatar)
     }
 }
 

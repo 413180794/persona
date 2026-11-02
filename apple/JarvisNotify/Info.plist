@@ -21,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>JarvisPushKeychainGroup</key>
-	<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push</string>
+	<string>$(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

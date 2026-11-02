@@ -249,6 +249,9 @@
   和别的 App 的活动共用灵动岛时，iPhone 18 Pro 上两个都是限宽 28pt 的紧凑态（左右两块挤在一起，第二块被截），17 Pro 等是最小态：
   限宽靠 iOS 27 的 `isDynamicIslandLimitedInWidth` 知道，其余（哪种呈现、有没有别的 App）App 都感知不到；紧凑 / 最小态不给宽度，`ViewThatFits` 没用。
   两种机型都要拍（`scripts/island_peer.sh` + `LiveActivityShots`，`docs/live-activity.md`「和其他 App 共用灵动岛」）。
+- App 和扩展共享的钥匙串组（灵动岛的形象 `.look`、推送中继的私钥 `.push`）读不到时一律静默退回默认值，模拟器上又总是好的：
+  build 92 的扩展签名里一个组都没有（无签名归档 + ad hoc 签名没带 entitlements，`$(AppIdentifierPrefix)` 为空），灵动岛永远是默认形象 + 系统蓝。
+  Info.plist 里的组名用 `$(DEVELOPMENT_TEAM).`；动了 entitlements 或签名流程，对导出的 ipa 跑 `scripts/entitlements.py check`（`docs/release.md`「entitlements」）。
 - 机器页面的计数和列表不算「对话」tab 助手的无头会话（`MachineDetailView.agents`，和 Agents 列表一致）：它们跑在 hub 那台机器上，
   以前「服务器」卡片的「运行中」把它们也算进去了。
 - 体验模式（`docs/ios.md`「体验模式」）挂在 `APIClient` / `LiveConnection` 下面（`DemoHub`），页面代码不写 `if demo`：新页面要的接口在

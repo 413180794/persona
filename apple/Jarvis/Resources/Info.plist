@@ -34,9 +34,9 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>JarvisLookKeychainGroup</key>
-	<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look</string>
+	<string>$(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).look</string>
 	<key>JarvisPushKeychainGroup</key>
-	<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push</string>
+	<string>$(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push</string>
 	<key>JarvisPushRelay</key>
 	<string>$(JARVIS_PUSH_RELAY)</string>
 	<key>LSApplicationCategoryType</key>

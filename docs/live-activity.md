@@ -99,7 +99,8 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 ```
 紧凑态  ( 🙂2    ▬▬▬▬   ⚙3 )     左：形象 + 最急那一类的数量（只剩数字，形象已经说了是哪类）；右：照旧
 展开态  🙂             💬2 ⚙3 ●1    左上：形象；右上：三类数量，下面一行是选了的数字
-最小态 / 限宽  ⚙3                   不放形象：和别的 App 共用时只有 28–35pt，一张脸会把数量挤掉，照旧是最急那一类（上一节）
+最小态 / 限宽  ⚙3                   和别的 App 共用时只有 28–35pt，一张脸会把数量挤掉：有数量时照旧是最急那一类（上一节）；
+                                    没有可数的（只有助手在回答）时放形象，不留一个空岛（`IslandMinimal`）
 ```
 
 | Fleet | 形象的状态 | 样子 |
@@ -114,12 +115,28 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 - 「思考中」：Fleet 分不出 Agent 在思考还是在写，只有助手在回答时才用；`assistant` 只推给灵动岛显示助手的设备，别的设备看到的是空闲。
 - **不动，只在状态变时淡入淡出**：实时活动里 TimelineView、重复的 symbol 动画都不跑（见「坑」），所以画的是每个状态的静止帧（和「减弱动态效果」时 App 里的一样，`PersonaFace(moving: false)`），状态变时 `.transition(.opacity)`。不用位图序列帧，不为动画加推送。
 - **画法共用**：面罩、汇流的绘制在 `apple/Shared/Design/PersonaFace.swift`，App 的 `JarvisAvatar` 在外面套 TimelineView 让它动，扩展直接画静止帧；扩展只多编译这一个文件。
-- **选的哪个、什么颜色**：扩展读不到 App 的设置，App 在形象 / 界面风格 / 主题色变化时把 `FleetLook`（形象的画法 + 主色的浅色 / 深色值）写进和扩展共享的钥匙串组
-  `<bundle id>.look`（和推送中继共享 `.push` 的做法一样），扩展每次画的时候读；写了以后立刻用当前内容 update 一次活动，不等下一次推送。
-  没写过或读不到（免费个人团队签名没有共享组）时画默认形象 + 系统蓝。
+- **选的哪个、什么颜色**：扩展读不到 App 的设置，App 在形象 / 界面风格 / 主题色变化时把 `FleetLook`（形象的画法 + 主色的浅色 / 深色值，形象包再加 `<id>/<rev>`）
+  写进和扩展共享的钥匙串组 `<team>.<bundle id>.look`（和推送中继共享 `.push` 的做法一样，`FleetLookStore`），扩展每次画的时候读；
+  写了以后立刻用当前内容 update 一次活动，不等下一次推送（模拟器实测 3 秒内换过来，不用重开活动）。
+  没写过或读不到时画默认形象 + 系统蓝：免费个人团队签名没有共享组；build 92 也是这样，见下面「为什么 build 92 不跟随」。
+- **形象包（hub 的 `~/.jarvis/personas`，位图）**：App 把每个状态的点状动画的第一帧（「减弱动态效果」时顶栏那个点停住的样子）和头像缩到 78px（活动里最大的脸 26pt × 3）
+  的 PNG，连同包的 `<id>/<rev>` 写进同一个钥匙串组（`FleetFaces`，几十 KB，只在换了包或包更新时重写）；扩展按状态画对应那张，裁成圆。
+  包里没有某个状态的帧时用头像，再按内置形象的样子加提示：需要你加红圈，离线变灰。图片只在手机上（App 下载的包里和钥匙串里），不进仓库，测试用纯色占位图。
+  读不到图（还没写、写失败）时画默认形象（面罩），颜色用这个形象包的主色，不画别的包的图（`FleetFaces.package` 对不上就不用）。
 - **不放进 ContentState**：hub 的推送整个替换 content-state，hub 也不知道手机选了哪个形象；所以 ContentState 没变，旧版本的活动照常解码。
-- hub 上的形象包（位图）：活动不播位图，画成默认形象（面罩），颜色用这个形象的主色（`Theme.persona`）。
-- 设置 › 通知 › 灵动岛的预览（`IslandPreview`）左侧也是形象，和紧凑态一致。
+- 设置 › 通知 › 灵动岛的预览（`IslandPreview`）左侧也是形象，读的是扩展读的同一份，和紧凑态一致。
+
+#### 为什么 build 92 不跟随（2026-11-02）
+
+用户反馈「灵动岛的形象没有跟随设置」，截图是只有 Jarvis 一个活动的紧凑态（右边的「1.7B」是 Jarvis 自己的「今天的 token」，不是别的 App），左边是默认形象 + 系统蓝，也就是扩展读不到钥匙串时的样子。
+
+- **根因**：发 TestFlight 的流程先无签名归档（`CODE_SIGNING_ALLOWED=NO`），再 ad hoc 签名、导出时云签名。无签名时 `$(AppIdentifierPrefix)` 是空的，
+  ad hoc 签名又没给扩展带 entitlements：装到手机上的小组件扩展没有任何钥匙串组，App 的组名少了 bundle id，Info.plist 里的组名少了团队前缀。
+  App 写不进共享组（报 missing entitlement，当成免费团队静默放弃），扩展永远画默认形象。推送中继的 `.push` 组同样坏了（通知扩展解不开加密推送，只显示兜底文字）。
+- **另一半**：#219 有意把 hub 的形象包画成默认形象（换个颜色），所以就算钥匙串通了，选了形象包也看不到它。
+- **修法**：Info.plist 的组名改成 `$(DEVELOPMENT_TEAM).<bundle id>.…`（无签名也有值）；`scripts/entitlements.py sign` 给无签名归档里的每个 bundle 带上
+  它自己的 entitlements（展开构建变量，有展不开的就报错）再 ad hoc 签名；`scripts/entitlements.py check` 查 ipa / 归档里每个 bundle 的钥匙串组和 Info.plist 里的组名，
+  `release.sh` 归档后跑，发 TestFlight 的流程导出后也要跑（对 build 92 的 ipa 报出 9 处）。形象包画它自己的图（上一条）。
 - Apple Watch：不单独开发，`supplementalActivityFamilies([.small])` 给智能叠放一个单行版本（最急那一类的符号 + 「2 个需要你」+ 下一类的数量）。
 
 ## ContentState（`FleetState`）
@@ -204,8 +221,9 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 
 ## 验证
 
-- 布局：`-showFleetSample needsYou|working|done|thinking|offline`（`thinking` 只有助手在回答，`offline` 是开出来就标成过期的工作中；`-fleetDetails YES` 看锁屏详情，`-fleetIsland b|c|custom:assistant,load` 选灵动岛两侧，`-openPersona jarvis-circuit` 换形象）用编造的数据开一个活动，不需要 hub。
-  UI 测试 `LiveActivityShots` 读 `JARVIS_FLEET_ISLAND`、`JARVIS_PERSONA`，紧凑态隔 0.4 秒拍两张（`compact` / `compact2`），用来比对有没有动画，3 秒后再拍一张（`compact3`，刚回桌面时岛还在动画里，可能是空的）；
+- 布局：`-showFleetSample needsYou|working|done|thinking|assistant|offline`（`thinking` 只有助手在回答（旁边还有一个做完未看），`assistant` 只有助手、没有可数的（最小态这时画形象），`offline` 是开出来就标成过期的工作中；`-fleetDetails YES` 看锁屏详情，`-fleetIsland b|c|custom:assistant,load` 选灵动岛两侧，`-openPersona jarvis-circuit` 换形象）用编造的数据开一个活动，不需要 hub。
+  UI 测试 `LiveActivityShots` 读 `JARVIS_FLEET_ISLAND`、`JARVIS_PERSONA`（形象包要 `JARVIS_MOCK_HUB`：`MOCK_PERSONAS=demo` 的 mock_hub，App 先从它下载），
+  `testSwitchingPersonaRedrawsTheIsland` 读 `JARVIS_PERSONA_SWITCH=demo,jarvis-circuit,jarvis`：活动开着时在设置 › 外观 › 形象里依次换，每次回桌面 3 秒后拍灵动岛；紧凑态隔 0.4 秒拍两张（`compact` / `compact2`），用来比对有没有动画，3 秒后再拍一张（`compact3`，刚回桌面时岛还在动画里，可能是空的）；
   `JARVIS_ISLAND_PEER`（另一个 App 的活动并存、横屏）和 `JARVIS_FLEET_COUNT`（`-showFleetCount`，数量改成几位数）见上面「和其他 App 共用灵动岛」。
   模拟器上过期的活动只在锁屏上画（灰色形象 + 「等待 hub 更新…」），灵动岛上不显示。
   设置页：`-tab settings -openNotificationSettings YES -openIslandSettings YES`。

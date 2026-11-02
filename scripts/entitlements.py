@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Each bundle's entitlements in a release build: sign an unsigned archive with them, check a built one has them.
+
+The app shares keychain items with its extensions (the Live Activity's persona with JarvisWidgets, the push key with
+JarvisNotify; docs/release.md「entitlements」), which only works when every bundle is signed with its target's
+keychain groups. An archive built unsigned (CODE_SIGNING_ALLOWED=NO, for a cloud-signed export on a Mac without an
+Apple Distribution certificate) carries none, and the export signs each bundle with what it finds in it: build 92
+shipped the widget extension without any (the island drew the default persona whatever was chosen) and the app with
+groups whose bundle id was empty (2026-11-02).
+
+  scripts/entitlements.py sign <unsigned .xcarchive>      # ad hoc, inside out, each bundle with its target's file
+  scripts/entitlements.py check <.ipa | .xcarchive | .app>  # every target's keychain groups are in its signature
+
+Both read the targets from the Xcode project (`xcodebuild -showBuildSettings`, after xcodegen) and expand the build
+settings in each entitlements file; `$(AppIdentifierPrefix)` is the team's (the signature's own, when checking). A
+setting that is not there stops it rather than turning into nothing.
+"""
+import json
+import os
+import plistlib
+import re
+import subprocess
+import sys
+import tempfile
+import zipfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT = os.path.join(ROOT, "apple", "Jarvis.xcodeproj")
+VAR = re.compile(r"\$[({](\w+)[)}]")
+
+
+def targets():
+    """(bundle id, platform) → that target's build settings, Release."""
+    out = subprocess.run(["xcodebuild", "-project", PROJECT, "-alltargets", "-configuration", "Release",
+                          "-showBuildSettings", "-json"], capture_output=True, text=True, check=True).stdout
+    found = {}
+    for t in json.loads(out):
+        s = t["buildSettings"]
+        if s.get("PRODUCT_BUNDLE_IDENTIFIER"):
+            found.setdefault((s["PRODUCT_BUNDLE_IDENTIFIER"], s.get("PLATFORM_NAME", "")), s)
+    return found
+
+
+def expand(text, settings, prefix):
+    def one(m):
+        name = m.group(1)
+        value = prefix if name in ("AppIdentifierPrefix", "TeamIdentifierPrefix") else settings.get(name, "")
+        if not value:
+            sys.exit("entitlements: $(%s) has no value for %s" % (name, settings.get("TARGET_NAME", "?")))
+        return value
+    return VAR.sub(one, text)
+
+
+def wanted(settings, prefix):
+    """The target's entitlements, expanded; None when it has none."""
+    path = settings.get("CODE_SIGN_ENTITLEMENTS")
+    if not path:
+        return None
+    with open(os.path.join(settings["PROJECT_DIR"], path)) as f:
+        return plistlib.loads(expand(f.read(), settings, prefix).encode())
+
+
+def bundles(app):
+    """The app and every app / extension inside it, innermost first (a bundle is signed after what it contains)."""
+    found = []
+    for sub in ("PlugIns", "Watch", "Extensions"):
+        d = os.path.join(app, sub)
+        if os.path.isdir(d):
+            for name in sorted(os.listdir(d)):
+                if name.endswith((".app", ".appex")):
+                    found += bundles(os.path.join(d, name))
+    return found + [app]
+
+
+def identity(bundle):
+    with open(os.path.join(bundle, "Info.plist"), "rb") as f:
+        info = plistlib.load(f)
+    return info, (info.get("CFBundleIdentifier", ""), info.get("DTPlatformName", ""))
+
+
+def team_prefix(settings):
+    team = settings.get("DEVELOPMENT_TEAM", "")
+    if not team:
+        sys.exit("entitlements: no DEVELOPMENT_TEAM (python3 scripts/jarvis_config.py xcconfig, then xcodegen)")
+    return team + "."
+
+
+def sign(archive):
+    app = os.path.join(archive, "Products", "Applications", "Jarvis.app")
+    known = targets()
+    for b in bundles(app):
+        _, key = identity(b)
+        settings = known.get(key)
+        if settings is None:
+            sys.exit("entitlements: no target builds %s (%s)" % key)
+        ents = wanted(settings, team_prefix(settings))
+        cmd = ["codesign", "-f", "-s", "-"]
+        with tempfile.NamedTemporaryFile(suffix=".entitlements") as tmp:
+            if ents is not None:
+                tmp.write(plistlib.dumps(ents))
+                tmp.flush()
+                cmd += ["--entitlements", tmp.name]
+            subprocess.run(cmd + [b], check=True, capture_output=True)
+        print("signed %s%s" % (os.path.relpath(b, os.path.dirname(app)), "" if ents is None else " with its entitlements"))
+
+
+def signed(bundle):
+    out = subprocess.run(["codesign", "-d", "--entitlements", "-", "--xml", bundle], capture_output=True).stdout
+    return plistlib.loads(out) if out.strip() else {}
+
+
+def check(path):
+    with tempfile.TemporaryDirectory() as tmp:
+        if path.endswith(".ipa"):
+            with zipfile.ZipFile(path) as z:
+                z.extractall(tmp)
+            subprocess.run(["chmod", "-R", "u+rwX", tmp], check=True)  # zipfile drops the modes codesign reads
+            app = os.path.join(tmp, "Payload", "Jarvis.app")
+        elif path.endswith(".xcarchive"):
+            app = os.path.join(path, "Products", "Applications", "Jarvis.app")
+        else:
+            app = path
+        known = targets()
+        problems = []
+        for b in bundles(app):
+            info, key = identity(b)
+            name = os.path.basename(b)
+            settings = known.get(key)
+            if settings is None:
+                problems.append("%s: no target builds %s" % (name, key[0]))
+                continue
+            have = signed(b)
+            appid = have.get("application-identifier", "")
+            prefix = appid[:appid.index(".") + 1] if "." in appid else team_prefix(settings)
+            ents = wanted(settings, prefix) or {}
+            groups = have.get("keychain-access-groups", [])
+            for g in ents.get("keychain-access-groups", []):
+                if g not in groups:
+                    problems.append("%s: keychain group %s missing (signed with %s)" % (name, g, groups or "none"))
+            # The groups the code is told to use (Info.plist, e.g. JarvisLookKeychainGroup) must be ones it has.
+            for k, v in sorted(info.items()):
+                if k.endswith("KeychainGroup") and v not in groups:
+                    problems.append("%s: Info.plist %s = %s is not one of its keychain groups" % (name, k, v))
+        for p in problems:
+            print(p)
+        if problems:
+            sys.exit("entitlements: %d problem(s) in %s" % (len(problems), path))
+        print("entitlements ok: %d bundles in %s" % (len(bundles(app)), os.path.basename(path)))
+
+
+def main():
+    if len(sys.argv) != 3 or sys.argv[1] not in ("sign", "check"):
+        sys.exit(__doc__)
+    (sign if sys.argv[1] == "sign" else check)(sys.argv[2])
+
+
+if __name__ == "__main__":
+    main()

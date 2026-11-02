@@ -199,6 +199,25 @@ struct IslandGlyph: View {
     }
 }
 
+/// The minimal island and a compact side limited in width: the most urgent count (`IslandGlyph`), or, with nothing
+/// there to count or show (only the assistant answering, say), the persona in the fleet's state rather than an empty
+/// island.
+struct IslandMinimal: View {
+    var state: FleetState
+    var stale: Bool
+    var limited: Bool
+    var look: FleetLook = .saved
+
+    var body: some View {
+        let cell = IslandCell.minimal(state)
+        if cell == .empty {
+            FleetFace(size: IslandMetrics.limitedContent, state: FleetPersona.state(state, stale: stale), look: look)
+        } else {
+            IslandGlyph(cell: cell, limited: limited)
+        }
+    }
+}
+
 /// A count in a ring of its state's color, for a limited side where its symbol does not fit: the ring says it is a
 /// count, its color which one.
 struct IslandRing: View {

@@ -42,6 +42,12 @@ struct PersonaFace: View {
     /// The idle blink every few seconds (`Theme.Motion.blink`); nil: eyes stay open.
     var blink: Animation?
 
+    /// 需要你's ring: this share of the face's side, never thinner than `ringMin`. A package's picture with no frame for
+    /// the state gets the same ring on the activity (FleetFace), and offline makes it gray at this opacity.
+    static let ringShare: CGFloat = 0.07
+    static let ringMin: CGFloat = 1.5
+    static let offlineOpacity = 0.7
+
     private var accent: Color { state == .offline ? Color(white: 0.62) : tint }
     private var needsYou: Color { StatusPalette.needsYou.dot }
 
@@ -171,7 +177,7 @@ struct PersonaFace: View {
     @ViewBuilder private func needsYouRing(_ t: TimeInterval) -> some View {
         if state == .needsYou {
             let pulse = moving ? 0.55 + 0.45 * cos(t * 3) : 1
-            Circle().strokeBorder(needsYou.opacity(pulse), lineWidth: max(1.5, size * 0.07))
+            Circle().strokeBorder(needsYou.opacity(pulse), lineWidth: max(Self.ringMin, size * Self.ringShare))
         }
     }
 
