@@ -234,5 +234,42 @@ class BundleScanIntegrationTests(unittest.TestCase):
         self.assertIn("private IP", output)
 
 
+class MacBundleTests(unittest.TestCase):
+    """The Mac app's layout: Contents/MacOS/<binary>, Contents/embedded.provisionprofile, universal binaries."""
+
+    def scan(self, files, words):
+        with tempfile.TemporaryDirectory(prefix="bundle-privacy-mac-") as directory:
+            for name, data in files.items():
+                path = Path(directory) / "Jarvis.app" / "Contents" / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            output = io.StringIO()
+            with patch.object(sys, "argv", ["check_bundle_privacy.py", str(Path(directory) / "Jarvis.app")]), \
+                    patch.object(cbp.pc, "module_paths", return_value=None), \
+                    patch.object(cbp.pc, "terms", return_value=(words, set())), \
+                    patch.object(cbp.jarvis_config, "load", return_value={}), \
+                    patch.object(cbp, "signature_offset", return_value=8), redirect_stdout(output):
+                try:
+                    cbp.main()
+                except SystemExit as error:
+                    return error.code, output.getvalue()
+            return 0, output.getvalue()
+
+    def test_values_in_the_mac_binary_fail_and_the_profile_is_skipped(self):
+        value = "private-host-name"
+        code, output = self.scan({"MacOS/Jarvis": b"..." + value.encode(), "embedded.provisionprofile": value.encode()},
+                                 (value,))
+        self.assertNotEqual(code, 0)
+        self.assertIn("Contents/MacOS/Jarvis", output)
+        self.assertNotIn("provisionprofile", output)
+        self.assertNotIn(value, output)
+
+    def test_a_universal_binary_is_scanned_past_its_first_slice(self):
+        value = "private-host-name"
+        fat = b"\xca\xfe\xba\xbe" + b"\0" * 60 + b"second slice " + value.encode()
+        code, output = self.scan({"MacOS/Jarvis": fat}, (value,))
+        self.assertNotEqual(code, 0, output)
+
+
 if __name__ == "__main__":
     unittest.main()

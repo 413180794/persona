@@ -6,6 +6,10 @@
   python3 scripts/asc_testflight.py wait [minutes] [build]  # poll until that build (default: newest) is VALID, then attach it
   python3 scripts/asc_testflight.py info "<What to Test>"   # write "What to Test" on the newest build, attach it
   python3 scripts/asc_testflight.py external           # group "Friends": newest build, Beta App Review, public link
+  python3 scripts/asc_testflight.py next-build         # the next build number (both platforms, docs/release.md)
+
+Add --platform mac (anywhere) for the Mac app's builds: same App Store Connect record and groups, its own builds.
+Without it every command means the iPhone builds, so a Mac build never gets the iPhone build's notes or vice versa.
 
 "wait" and "info" also hand the build to the external group when the config has app_store.external, so every new
 TestFlight build reaches the external testers too (after Beta App Review); a failure there never fails the release.
@@ -29,19 +33,24 @@ TESTERS = STORE.get("testers", [])  # [{"email", "first_name"}]
 FEEDBACK_EMAIL = STORE.get("feedback_email", "")
 EXTERNAL = STORE.get("external", {})  # {"group", "public_link", "public_link_limit", "testers", "review", "privacy_url"}
 EXTERNAL_GROUP = EXTERNAL.get("group", "Friends")
+PLATFORMS = {"ios": "IOS", "mac": "MAC_OS"}
+PLATFORM = "IOS"  # which platform's builds the commands look at (--platform)
 
 BETA_INFO = {
-    "en-US": "Jarvis drives the Claude Code and Codex sessions on your own computers from the iPhone and the Apple Watch: "
+    "en-US": "Jarvis drives the Claude Code and Codex sessions on your own computers from the iPhone, the Apple Watch and the Mac: "
              "watch every step stream in, answer questions, approve plans and tool calls. Its assistant can also read your "
              "mail and calendar and, when you ask, your contacts, reminders, photos and health data. It connects to a hub "
              "you run yourself (see the README of the project).",
-    "zh-Hans": "Jarvis 让你在 iPhone 和 Apple Watch 上驱动自己各台电脑里的 Claude Code 和 Codex：实时看每一步、回答提问、"
+    "zh-Hans": "Jarvis 让你在 iPhone、Apple Watch 和 Mac 上驱动自己各台电脑里的 Claude Code 和 Codex：实时看每一步、回答提问、"
                "审批计划和工具调用；助手还能读你的邮件和日历，在你需要时读写通讯录、提醒事项、照片和健康数据。"
                "需要连接你自己部署的 hub（见项目 README）。",
 }
 
 
 def default_whats_new() -> str:
+    if PLATFORM == "MAC_OS":
+        return ("请试试：用 iPhone 上的配对二维码或配对链接连上 hub，在侧边栏打开一个 Agent 对话，看每一步实时出现；"
+                "遇到提问、计划和授权直接在 Mac 上处理，菜单栏图标能看到需要你的数量。有问题请在 TestFlight 里反馈。")
     return ("请试试：连上 hub 后新开一个会话，看 Claude 的每一步实时出现；遇到提问直接在手机上回答，遇到计划就审批；"
             "在「手机数据」里打开要允许的数据源，然后让 Claude 查一下通讯录或这周的日程。有问题请在 TestFlight 里反馈。")
 
@@ -81,23 +90,36 @@ def add_tester(gid: str, email: str, first_name: str, last_name: str = ""):
         raise
 
 
-def builds(limit: int = 5):
-    return request("GET", "/v1/builds", params={"filter[app]": APP_ID, "sort": "-uploadedDate", "limit": limit})["data"]
+def builds(limit: int = 5, platform: str | None = None):
+    """The newest builds of one platform (PLATFORM unless given); platform "" means both."""
+    params = {"filter[app]": APP_ID, "sort": "-uploadedDate", "limit": limit}
+    platform = PLATFORM if platform is None else platform
+    if platform:
+        params["filter[preReleaseVersion.platform]"] = platform
+    return request("GET", "/v1/builds", params=params)["data"]
+
+
+def next_build() -> int:
+    """The next build number: one more than the largest on either platform, so a number never means two commits.
+
+    The Mac build of a release reuses that release's iPhone number instead (docs/release.md「构建号」)."""
+    return max((int(b["attributes"]["version"]) for b in builds(50, platform="")), default=0) + 1
 
 
 def status():
     found = builds()
     if not found:
-        print("no builds yet (./scripts/release.sh)")
+        print("no", PLATFORM, "builds yet (./scripts/release.sh)")
         return
     for b in found:
         a = b["attributes"]
-        print(a["version"], a["processingState"], a.get("uploadedDate", "")[:16],
+        print(PLATFORM, a["version"], a["processingState"], a.get("uploadedDate", "")[:16],
               "expired" if a.get("expired") else "", a.get("expirationDate", ""), b["id"])
 
 
 def newest_valid():
     found = request("GET", "/v1/builds", params={"filter[app]": APP_ID, "filter[processingState]": "VALID",
+                                                "filter[preReleaseVersion.platform]": PLATFORM,
                                                 "sort": "-uploadedDate", "limit": 1})["data"]
     return found[0] if found else None
 
@@ -145,7 +167,8 @@ def write_info(build, whats_new: str):
 
 
 def build_by_version(version: str):
-    found = request("GET", "/v1/builds", params={"filter[app]": APP_ID, "filter[version]": version, "limit": 1})["data"]
+    found = request("GET", "/v1/builds", params={"filter[app]": APP_ID, "filter[version]": version,
+                                                "filter[preReleaseVersion.platform]": PLATFORM, "limit": 1})["data"]
     return found[0] if found else None
 
 
@@ -283,8 +306,18 @@ def external(build=None):
 
 
 def main():
+    global PLATFORM
     args = sys.argv[1:]
-    if args[:1] == ["status"]:
+    if "--platform" in args:
+        i = args.index("--platform")
+        name = args[i + 1] if i + 1 < len(args) else ""
+        if name not in PLATFORMS:
+            sys.exit(f"--platform {name!r}: one of {', '.join(PLATFORMS)}")
+        PLATFORM = PLATFORMS[name]
+        del args[i:i + 2]
+    if args[:1] == ["next-build"]:
+        print(next_build())
+    elif args[:1] == ["status"]:
         status()
     elif args[:1] == ["wait"]:
         wait(int(args[1]) if len(args) > 1 else 45, args[2] if len(args) > 2 else None)

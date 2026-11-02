@@ -2,6 +2,7 @@
 """Fail when a built app bundle holds this person's private values: anyone with the TestFlight public link can install it.
 
     python3 scripts/check_bundle_privacy.py <Jarvis.app>     # the watch app and extensions inside are scanned too
+    python3 scripts/check_bundle_privacy.py <Mac Jarvis.app> # the Mac app (Contents/…), same rules
     python3 scripts/check_bundle_privacy.py --whole-short <dir>  # published jarvisd builds (scripts/publish.sh)
 
 The values are scripts/privacy_check.py's (config, private-words.txt, CLAUDE.local.md, the home directory), plus private
@@ -10,8 +11,10 @@ after decompressing lzfse files) and in binary plists. The bundle id and team id
 and are removed before matching. App mode also recognizes only the exact configured public HTTPS /relay endpoint, and
 --whole-short only the exact public download address (publish.site_url + /dl, the hub's update URL, docs/hub-update.md);
 their host in any other context, related paths and credentials remain subject to private-value checks.
-Signing data is Apple's and is skipped: embedded.mobileprovision, _CodeSignature, and the code signature at the end of
-each Mach-O (certificate names; the archive's development profile lists device ids, which export replaces anyway).
+Signing data is Apple's and is skipped: embedded.mobileprovision (embedded.provisionprofile on the Mac), _CodeSignature,
+and the code signature at the end of each thin Mach-O (certificate names; the archive's development profile lists device
+ids, which export replaces anyway). A universal (fat) binary is scanned whole: its slices' signature offsets are each
+relative to their slice, and cutting at the first would skip the rest of the file.
 Values match as written or lowercased, not in any case: Swift's mangled symbol names are full of short fragments
 that equal a value in another case.
 The repo's own Go module path (it names the GitHub owner) is in every Go binary's imports and is removed too, as
@@ -33,7 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import jarvis_config  # noqa: E402
 import privacy_check as pc  # noqa: E402
 
-SKIP = {"embedded.mobileprovision", "CodeResources"}
+SKIP = {"embedded.mobileprovision", "embedded.provisionprofile", "CodeResources"}
 PRINTABLE = re.compile(rb"[\x20-\x7e]{4,}")
 
 
@@ -141,7 +144,7 @@ def texts(path: str):
     if data[:3] == b"bvx":  # lzfse (App Intents metadata): compressed, values would be split across matches
         data = subprocess.run(["compression_tool", "-decode", "-a", "lzfse", "-i", path, "-o", "/dev/stdout"],
                               capture_output=True).stdout
-    if data[:4] in (b"\xcf\xfa\xed\xfe", b"\xca\xfe\xba\xbe"):  # Mach-O, fat
+    if data[:4] == b"\xcf\xfa\xed\xfe":  # thin Mach-O (a fat one is scanned whole, see above)
         off = signature_offset(path)
         if off:
             data = data[:off]

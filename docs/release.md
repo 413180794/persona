@@ -159,6 +159,31 @@ python3 scripts/asc_testflight.py external   # 建群组、按配置开 / 关公
 - 测试信息要有隐私政策地址（`app_store.external.privacy_url`），中英文说明在 `asc_testflight.py` 的 `BETA_INFO`。
 - App 没有 hub 就只有配对页：审核备注（`review.notes`）要讲清楚这是配合自建 hub 的 App，否则容易被问「怎么用」。
 
+## Mac 版（2026-11-02）
+
+Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store Connect 里**同一个 App 记录**（加了 macOS 平台，版本 1.0），
+进同一个 TestFlight：同样的 Internal / Friends 组、同一个公开链接；测试员在 Mac 上装 TestFlight 就能看到 Mac 构建。
+
+- **构建号**：一个号在每个平台里只能用一次，不同平台可以重号。规则：**一次发布的 Mac 构建和这次的 iPhone 构建用同一个号**
+  （同一个号 = 同一个提交，查问题时一眼对上）；iPhone 的号、单独发的 Mac 都取**两个平台里最大的号加一**
+  （`python3 scripts/asc_testflight.py next-build`），这样不会有一个号在两个平台上指两个不同的提交。
+- **`asc_testflight.py --platform mac`**：`status` / `wait` / `info` / `external` 都只看 Mac 的构建；不带时只看 iPhone 的。
+  以前不分平台，有了 Mac 构建以后「最新的 VALID 构建」可能是另一个平台的，「测试什么」会写错地方。
+- **图标**：系统不给 Mac 图标切圆角，图标自己带圆角方块和阴影（macOS 的网格：1024 里居中 824）。`AppIcon` 图标集里 iOS 的单尺寸图之外
+  另有 `idiom: mac` 的 16–512（1x / 2x），由 `python3 scripts/make_icon.py mac` 从 iPhone 的图生成（全部重画时也会一起写）。
+  缺了它 Mac 包里没有图标，Mac App Store 拒收。Xcode 26 编出来的 `AppIcon.icns` 只有 16 和 128 两档，完整的各档在 `Assets.car` 里
+  （系统按 `CFBundleIconName` 去那里取），所以检查看的是 `Assets.car`（`xcrun assetutil --info`）里有没有 512 和 512@2x。
+- **Info.plist**：`LSApplicationCategoryType`（效率）、各项权限说明都在 `apple/project.yml` 的 JarvisMac 里。
+- **沙盒**：`com.apple.security.app-sandbox` 加网络（客户端、端口转发的本机服务端）、用户选的文件、通讯录 / 日历 / 位置 / 照片、
+  麦克风 / 摄像头（`project.yml` 的 entitlements）。没有 APNs entitlement（`docs/mac.md`），这次也不加。
+- **发布前检查**和 iPhone 一样：权限说明（`check_bundle_strings.py`）、隐私扫描（`check_bundle_privacy.py`，认 Mac 的
+  `Contents/` 结构，跳过 `embedded.provisionprofile`，通用二进制整个扫）、Release 里没有 DEBUG 开关；另外查分类和图标里有 512 / 512@2x。
+- 导出是 `.pkg`（ExportOptions 的 `method` 同样是 `app-store-connect`），和 iPhone 一样云签名：App 是 Apple Distribution，
+  `.pkg` 是 3rd Party Mac Developer Installer（`pkgutil --check-signature` 会写「issued by Apple (Development)」，这类证书都这么写）。
+  上传 `altool -t macos`。本机的发版脚本先 ad hoc 签上 Mac 的 entitlements 再导出（和 iPhone 的 `entitlements.py sign` 同一个道理）。
+- **自动发布**：发完 iPhone 构建后，这次的提交里有 Mac App 用到的改动（`apple/Mac`、`apple/Shared`、`apple/Jarvis` 除了只属于 iOS 的
+  几个文件、`apple/Packages`、`project.yml`、`Package.resolved`）就用同一个号接着发 Mac；Mac 的结果另外报，失败不影响 iPhone 那次。
+
 ## 发布 jarvisd（`scripts/publish.sh`，2026-10-31）
 
 让别人不拿源代码也能装服务端：编好的 `jarvisd` 和安装脚本放在 `site/` 那个 worker 上（配置的 `publish.site_url`）。

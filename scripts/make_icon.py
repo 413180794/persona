@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """App icon: a coral four-point spark inside a glowing reactor ring on a warm night background.
 
-Drawn at 4x and downsampled. Writes the iPhone icon (any / dark / tinted), the watch icon and docs/icon-preview.png:
+Drawn at 4x and downsampled. Writes the iPhone icon (any / dark / tinted), the watch icon, the Mac icon and
+docs/icon-preview.png:
   python3 scripts/make_icon.py
+  python3 scripts/make_icon.py mac     # only the Mac sizes, from the iPhone icon already there (nothing redrawn)
+
+The Mac icon is the same picture on macOS's icon grid: the system does not mask a Mac icon, so it carries its own
+rounded square (824 of 1024, centered) and shadow, at every size the Mac App Store asks for (16 to 512, 1x and 2x).
 """
 import json
 import math
 import os
+import sys
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
@@ -108,6 +114,43 @@ def render(variant):
     return out
 
 
+MAC_SIZES = (16, 32, 128, 256, 512)
+
+
+def mac_icon(picture):
+    """macOS's grid at 1024: an 824 rounded square (corner 185) 100 in from the left and right, lifted a little
+    above center (the shadow sits under it), with the picture filling it."""
+    body, radius, top = 824, 185, 88
+    big = 4  # drawn at 4x for smooth corners, then downsampled
+    canvas = Image.new("RGBA", (S * big, S * big), (0, 0, 0, 0))
+    mask = Image.new("L", (body * big, body * big), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, body * big - 1, body * big - 1], radius=radius * big, fill=255)
+    left = (S - body) // 2
+    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    shadow.paste((0, 0, 0, 90), (left * big, (top + 12) * big), mask)
+    canvas = Image.alpha_composite(canvas, shadow.filter(ImageFilter.GaussianBlur(14 * big)))
+    art = picture.convert("RGBA").resize((body * big, body * big), Image.LANCZOS)
+    canvas.paste(art, (left * big, top * big), mask)
+    return canvas.resize((S, S), Image.LANCZOS)
+
+
+def write_mac(picture):
+    """The Mac sizes into the iPhone icon's set (the Mac app builds the same asset catalog; iOS ignores idiom mac)."""
+    icon = mac_icon(picture)
+    path = os.path.join(IOS, "Contents.json")
+    with open(path) as f:
+        contents = json.load(f)
+    contents["images"] = [i for i in contents["images"] if i.get("idiom") != "mac"]
+    for size in MAC_SIZES:
+        for scale in (1, 2):
+            name = f"mac-{size}{'@2x' if scale == 2 else ''}.png"
+            icon.resize((size * scale, size * scale), Image.LANCZOS).save(os.path.join(IOS, name))
+            contents["images"].append({"filename": name, "idiom": "mac", "scale": f"{scale}x", "size": f"{size}x{size}"})
+    with open(path, "w") as f:
+        json.dump(contents, f, indent=2)
+        f.write("\n")
+
+
 def write_set(folder, images, contents):
     os.makedirs(folder, exist_ok=True)
     for name, im in images.items():
@@ -129,6 +172,7 @@ def main():
         ],
         "info": {"author": "xcode", "version": 1},
     })
+    write_mac(light)
     write_set(WATCH, {"icon.png": light}, {
         "images": [{"filename": "icon.png", "idiom": "universal", "platform": "watchos", "size": "1024x1024"}],
         "info": {"author": "xcode", "version": 1},
@@ -144,4 +188,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["mac"]:
+        write_mac(Image.open(os.path.join(IOS, "icon.png")))
+        print("mac icons written")
+    else:
+        main()
