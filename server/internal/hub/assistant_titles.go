@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -313,7 +314,9 @@ func (h *Hub) makeTitle(ctx context.Context, started time.Time, first, reply str
 				prompts.RenderSessionTitleInput(prompts.SessionTitleInput{First: first, Reply: reply, Retry: retry}), 200)
 			cancel()
 			if err != nil {
-				h.logf("title: %v", err)
+				if !ai.IsPaused(err) {
+					h.logf("title: %v", err)
+				}
 				break
 			}
 			kind, topic, ok := parseTitle(out)

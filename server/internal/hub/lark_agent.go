@@ -411,7 +411,7 @@ func (h *Hub) larkAgentPost(ctx context.Context, run *LarkAgentRun, text string)
 		// Comments are plain text: Markdown marks would show as they are.
 		err = h.lark.ReplyComment(ctx, run.DocURL, run.CommentID, clipRunes(plainText(text), 4000)+"\n🤖")
 	} else {
-		err = h.lark.Reply(ctx, run.MessageID, clipRunes(text, 8000)+larkAgentFooter, run.InThread, true)
+		_, err = h.lark.Reply(ctx, run.MessageID, clipRunes(text, 8000)+larkAgentFooter, run.InThread, true, "")
 	}
 	h.larkAgent.mu.Lock()
 	now := time.Now().UTC()

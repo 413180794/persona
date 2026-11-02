@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
@@ -385,6 +386,9 @@ func (e *Engine) RefreshProjects(ctx context.Context, max int) int {
 			break
 		}
 		if err := e.refreshProject(ctx, p); err != nil {
+			if ai.IsPaused(err) { // the model's connection is held: the rest wait with it (still dirty)
+				break
+			}
 			e.logf("project %s: %v", p.Slug, err)
 			continue
 		}

@@ -72,6 +72,7 @@ func (h *Hub) triageInbox(ctx context.Context) {
 }
 
 // triageOne asks the model about one item; when the model fails the item gets the rule-based tier (and no summary).
+// When its connection is held the item stays untriaged.
 func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 	h.inbox.mu.Lock()
 	last, input := it.Last, triageInput(it)
@@ -91,6 +92,15 @@ func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 	h.inbox.mu.Lock()
 	defer h.inbox.mu.Unlock()
 	if it.Last != last { // new messages arrived meanwhile: the next pass sees them
+		return false
+	}
+	if ai.IsPaused(err) {
+		// The model's connection is held (quota used up, busy): not triaged, so a pass after it is back asks again.
+		// Meanwhile a new item sits in its rule tier rather than in 需要你.
+		if it.Tier == "" {
+			it.Tier, it.Reason = ruleTier(it), "按规则"
+			return true
+		}
 		return false
 	}
 	switch out.Tier {

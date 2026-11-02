@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -26,7 +27,9 @@ func (h *Hub) autoTabName(ctx context.Context, prompt string) string {
 	defer cancel()
 	out, err := h.purposeModel("agent.title").Complete(cctx, prompts.RenderTabName(), prompt, 200) // reasoning models think first: 20 came back empty
 	if err != nil {
-		h.logf("tab name: %v", err)
+		if !ai.IsPaused(err) {
+			h.logf("tab name: %v", err)
+		}
 		return ""
 	}
 	name := tabSlug(out)

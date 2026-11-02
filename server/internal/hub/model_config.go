@@ -51,6 +51,7 @@ type ModelPurpose struct {
 	Revision      int64        `json:"revision"`
 	InheritedFrom string       `json:"inherited_from,omitempty"`
 	Status        string       `json:"status,omitempty"`
+	Limit         *ai.Pause    `json:"limit,omitempty"` // the connection is held: quota used up or busy (ai/limit.go)
 	Fields        []string     `json:"fields"`
 	ProviderIDs   []string     `json:"provider_ids"`
 }
@@ -465,6 +466,8 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 			p.Status = e.Error()
 		} else if config.APIKey == "" && config.APIKeyFile == "" {
 			p.Status = "未配置凭据"
+		} else if pause := ai.Held(config); pause != nil {
+			p.Status, p.Limit = pause.Text(), pause
 		}
 	} else if p.Kind == "plugin" {
 		for _, provider := range providers {

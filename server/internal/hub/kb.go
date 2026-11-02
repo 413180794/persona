@@ -162,6 +162,9 @@ func (h *Hub) kbLoop(ctx context.Context) {
 				break
 			}
 			if err := e.Compress(ctx, c); err != nil {
+				if ai.IsPaused(err) { // the chats stay due: compressed once the connection is back
+					break
+				}
 				h.logf("kb: compress %s: %v", c.ID, err)
 			}
 		}
@@ -190,7 +193,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 			if err := e.CollectItems(ctx, &larkItems{c: h.lark, loc: h.userLocation()}); err != nil {
 				h.logf("kb: items: %v", err)
 			}
-			if err := e.TagItems(ctx); err != nil {
+			if err := e.TagItems(ctx); err != nil && !ai.IsPaused(err) {
 				h.logf("kb: tag items: %v", err)
 			}
 		}

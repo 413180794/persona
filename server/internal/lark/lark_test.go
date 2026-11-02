@@ -379,6 +379,72 @@ func TestSendClientID(t *testing.T) {
 	}
 }
 
+func TestReplyClientID(t *testing.T) {
+	type call struct {
+		path, replyMode, editorType, clientID string
+		hasReplyMode                          bool
+	}
+	var got []call
+	answer := func(w http.ResponseWriter) {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"messageId":"7000000000000000003","feedId":"feed-1","replyToMessageId":"m-1"}`)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		c := call{path: r.URL.Path}
+		c.replyMode, c.hasReplyMode = body["replyMode"].(string)
+		c.editorType, _ = body["editorType"].(string)
+		c.clientID, _ = body["clientId"].(string)
+		got = append(got, c)
+		answer(w)
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	ctx := context.Background()
+
+	const fixed = "6f9619ff-8b86-5011-a42d-00c04fc964ff"
+	id, err := c.Reply(ctx, "m-1", "ok", false, false, fixed)
+	if err != nil || id != "7000000000000000003" {
+		t.Fatalf("Reply = %q, %v", id, err)
+	}
+	if g := got[0]; g.path != "/agent/v1/messages/m-1/replies" || g.hasReplyMode || g.editorType != "" || g.clientID != fixed {
+		t.Fatalf("direct reply sent %+v", g)
+	}
+
+	if _, err := c.Reply(ctx, "m-1", "ok", true, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Reply(ctx, "m-1", "ok", true, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if g := got[1]; g.replyMode != "thread" || g.editorType != "markdown" {
+		t.Fatalf("thread reply sent %+v", g)
+	}
+	if !ValidClientID(got[1].clientID) || got[1].clientID[14] != '4' || got[1].clientID == got[2].clientID {
+		t.Fatalf("generated clientIds %q, %q: want two distinct UUIDv4", got[1].clientID, got[2].clientID)
+	}
+
+	answer = func(w http.ResponseWriter) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = io.WriteString(w, `{"error":{"code":"MESSAGE_ALREADY_SENT","message":"Lark accepted this message"}}`)
+	}
+	if id, err := c.Reply(ctx, "m-1", "ok", false, false, fixed); err != nil || id != "" {
+		t.Fatalf("MESSAGE_ALREADY_SENT: Reply = %q, %v; want success", id, err)
+	}
+
+	answer = func(w http.ResponseWriter) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = io.WriteString(w, `{"error":{"code":"REPLY_IN_THREAD_ROOT_RECALLED","message":"Lark refused the thread reply"}}`)
+	}
+	if _, err := c.Reply(ctx, "m-1", "ok", true, false, fixed); err == nil || !strings.Contains(err.Error(), "REPLY_IN_THREAD_ROOT_RECALLED") {
+		t.Fatalf("thread refusal: err = %v, want a failure", err)
+	}
+}
+
 func TestValidClientID(t *testing.T) {
 	for _, s := range []string{
 		"6f9619ff-8b86-4011-b42d-00c04fc964ff",

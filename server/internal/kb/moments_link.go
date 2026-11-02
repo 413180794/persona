@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
@@ -100,6 +101,9 @@ func (e *Engine) LinkMoments(ctx context.Context, max int) int {
 		asked++
 		n, err := e.judgeMoments(ctx, p, cands, judged)
 		if err != nil {
+			if ai.IsPaused(err) {
+				break
+			}
 			e.logf("moments for %s: %v", p.Slug, err)
 			continue
 		}

@@ -138,6 +138,31 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, out)
 	})
+	// Replies to one message: quoted in its chat, or with thread=true inside its thread (a topic group's topic).
+	api.HandleFunc("POST /api/v1/lark/messages/{id}/replies", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Text     string `json:"text"`
+			Thread   bool   `json:"thread"`
+			ClientID string `json:"client_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" {
+			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
+			return
+		}
+		if !lark.ValidClientID(in.ClientID) {
+			in.ClientID = ""
+		}
+		id, err := h.lark.Reply(r.Context(), r.PathValue("id"), in.Text, in.Thread, false, in.ClientID)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		out := map[string]any{"ok": true}
+		if id != "" {
+			out["message_id"] = id
+		}
+		writeJSON(w, out)
+	})
 	api.HandleFunc("POST /api/v1/lark/conversations/{id}/read", func(w http.ResponseWriter, r *http.Request) {
 		var in lark.Read
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Position == "" {

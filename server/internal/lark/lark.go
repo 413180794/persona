@@ -579,32 +579,39 @@ func (c *Client) CardAction(ctx context.Context, messageID, actionID string, par
 // Send posts text to a conversation as the user and returns lark-connector's message id (empty if it gave none).
 // clientID is the idempotency key: resending the same one never posts twice. Empty generates a fresh one.
 func (c *Client) Send(ctx context.Context, feedID, text, clientID string) (string, error) {
-	if clientID == "" {
-		clientID = NewClientID()
-	}
-	var out struct {
-		MessageID string `json:"messageId"`
-	}
-	err := c.do(ctx, "POST", "/conversations/"+url.PathEscape(feedID)+"/messages", nil,
-		map[string]any{"text": text, "clientId": clientID}, &out)
-	var de *doError
-	if errors.As(err, &de) && de.Status == http.StatusConflict && de.Code == "MESSAGE_ALREADY_SENT" {
-		return "", nil // Lark already accepted this clientId; MESSAGE_DISCARDED stays an error
-	}
-	return out.MessageID, err
+	return c.post(ctx, "/conversations/"+url.PathEscape(feedID)+"/messages", map[string]any{"text": text}, clientID)
 }
 
-// Reply answers a message as the user, quoting it; `thread` posts into its thread (lark-connector finds the root).
-// `markdown` sends rich text (bold, lists, code, links), else plain text.
-func (c *Client) Reply(ctx context.Context, messageID, text string, thread, markdown bool) error {
-	body := map[string]any{"text": text, "clientId": NewClientID()}
+// Reply answers a message as the user, quoting it; `thread` posts into its thread (lark-connector finds the root; in a
+// topic group it lands in the message's topic). `markdown` sends rich text (bold, lists, code, links), else plain
+// text. It returns lark-connector's message id; clientID works as in Send.
+func (c *Client) Reply(ctx context.Context, messageID, text string, thread, markdown bool, clientID string) (string, error) {
+	body := map[string]any{"text": text}
 	if thread {
 		body["replyMode"] = "thread"
 	}
 	if markdown {
 		body["editorType"] = "markdown"
 	}
-	return c.do(ctx, "POST", "/messages/"+url.PathEscape(messageID)+"/replies", nil, body, nil)
+	return c.post(ctx, "/messages/"+url.PathEscape(messageID)+"/replies", body, clientID)
+}
+
+// post sends a message body to path with clientID (generated if empty) and returns lark-connector's message id.
+// 409 MESSAGE_ALREADY_SENT counts as sent; MESSAGE_DISCARDED stays an error.
+func (c *Client) post(ctx context.Context, path string, body map[string]any, clientID string) (string, error) {
+	if clientID == "" {
+		clientID = NewClientID()
+	}
+	body["clientId"] = clientID
+	var out struct {
+		MessageID string `json:"messageId"`
+	}
+	err := c.do(ctx, "POST", path, nil, body, &out)
+	var de *doError
+	if errors.As(err, &de) && de.Status == http.StatusConflict && de.Code == "MESSAGE_ALREADY_SENT" {
+		return "", nil
+	}
+	return out.MessageID, err
 }
 
 // NewClientID returns a random UUIDv4 for lark-connector's clientId.

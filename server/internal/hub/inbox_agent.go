@@ -130,7 +130,7 @@ func (h *Hub) judgeOne(ctx context.Context, it *InboxItem) bool {
 	err := h.judgeModel().JSON(cctx, system, input, &out)
 	cancel()
 	if err != nil {
-		if ctx.Err() == nil {
+		if ctx.Err() == nil && !ai.IsPaused(err) {
 			h.logf("inbox: judge %s: %v", it.ID, err)
 		}
 		return false

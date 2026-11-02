@@ -112,28 +112,44 @@ func (c *Client) Complete(ctx context.Context, system, user string, maxTokens in
 	if err != nil {
 		return "", err
 	}
-	if c.cfg.API == "responses" {
-		return c.respond(ctx, key, system, user)
+	// Every client of one address and key goes through the same gate, which holds requests back while the upstream
+	// is out of quota or busy (limit.go).
+	g := gateFor(c.cfg.BaseURL, key)
+	probe, err := g.admit(ctx)
+	if err != nil {
+		return "", err
 	}
+	var text string
+	var answered bool
+	if c.cfg.API == "responses" {
+		text, answered, err = c.respond(ctx, key, system, user)
+	} else {
+		text, answered, err = c.messages(ctx, key, system, user, maxTokens)
+	}
+	return text, g.done(probe, answered, err)
+}
+
+// messages calls the Messages API; answered is whether the upstream said 200.
+func (c *Client) messages(ctx context.Context, key, system, user string, maxTokens int) (text string, answered bool, err error) {
 	body, _ := json.Marshal(map[string]any{
 		"model": c.cfg.Model, "max_tokens": maxTokens, "system": system,
 		"messages": []any{map[string]any{"role": "user", "content": user}},
 	})
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.cfg.BaseURL, "/")+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("x-api-key", key)
 	req.Header.Set("anthropic-version", "2023-06-01")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("ai: %w", err)
+		return "", false, fmt.Errorf("ai: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("ai: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw[:min(len(raw), 300)])))
+		return "", false, newHTTPError(resp, raw)
 	}
 	var out struct {
 		Content []struct {
@@ -142,7 +158,7 @@ func (c *Client) Complete(ctx context.Context, system, user string, maxTokens in
 		} `json:"content"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", fmt.Errorf("ai: decode: %w", err)
+		return "", true, fmt.Errorf("ai: decode: %w", err)
 	}
 	var b strings.Builder
 	for _, part := range out.Content {
@@ -150,13 +166,13 @@ func (c *Client) Complete(ctx context.Context, system, user string, maxTokens in
 			b.WriteString(part.Text)
 		}
 	}
-	return b.String(), nil
+	return b.String(), true, nil
 }
 
 // respond calls the Responses API. It always streams: some compatible endpoints (Codex-backed relays) reject
 // stream=false, and the text is just the concatenated output_text deltas. The system prompt goes in as a developer
 // message rather than `instructions`, which those relays replace with their own.
-func (c *Client) respond(ctx context.Context, key, system, user string) (string, error) {
+func (c *Client) respond(ctx context.Context, key, system, user string) (text string, answered bool, err error) {
 	req := map[string]any{
 		"model": c.cfg.Model, "store": false, "stream": true,
 		"input": []any{
@@ -170,19 +186,19 @@ func (c *Client) respond(ctx context.Context, key, system, user string) (string,
 	body, _ := json.Marshal(req)
 	hreq, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.cfg.BaseURL, "/")+"/v1/responses", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	hreq.Header.Set("content-type", "application/json")
 	hreq.Header.Set("accept", "text/event-stream")
 	hreq.Header.Set("authorization", "Bearer "+key)
 	resp, err := c.http.Do(hreq)
 	if err != nil {
-		return "", fmt.Errorf("ai: %w", err)
+		return "", false, fmt.Errorf("ai: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return "", fmt.Errorf("ai: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw[:min(len(raw), 300)])))
+		return "", false, newHTTPError(resp, raw)
 	}
 	var b strings.Builder
 	sc := bufio.NewScanner(resp.Body)
@@ -209,22 +225,22 @@ func (c *Client) respond(ctx context.Context, key, system, user string) (string,
 		case "response.output_text.delta":
 			b.WriteString(ev.Delta)
 		case "response.completed":
-			return b.String(), nil
+			return b.String(), true, nil
 		case "response.failed", "response.incomplete", "error":
 			msg := ev.Message
 			if ev.Response.Error != nil {
 				msg = ev.Response.Error.Message
 			}
-			return "", fmt.Errorf("ai: %s: %s", ev.Type, msg)
+			return "", true, fmt.Errorf("ai: %s: %s", ev.Type, msg)
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return "", fmt.Errorf("ai: read stream: %w", err)
+		return "", true, fmt.Errorf("ai: read stream: %w", err)
 	}
 	if b.Len() == 0 {
-		return "", errors.New("ai: stream ended without a reply")
+		return "", true, errors.New("ai: stream ended without a reply")
 	}
-	return b.String(), nil
+	return b.String(), true, nil
 }
 
 // JSON asks for a JSON object and decodes the first one in the reply into out.

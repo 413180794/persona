@@ -663,6 +663,7 @@ hub 经 hub 机器上 lark-connector 的 agent 接口（`/agent/v1`，token 从�
 | GET | `/api/v1/lark/conversations/{id}/messages?before=&after=&around=&limit=&topic=` | `{"messages":[LarkMessage],"has_older","has_newer","older_cursor","newer_cursor"}`，旧→新；不带游标 = 最新一页；`around=<读到的位置+1>` 从第一条未读打开；`topic=1` 时取话题群的话题列表（只能往前翻） |
 | GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | 话题 / 回复串里的消息，格式同上 |
 | POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?}` 以本人身份发送，回 `{"ok":true,"message_id"?}`。`client_id` 是 App 生成的 UUID，原样交给 lark-connector 的 `clientId`：同一条消息重发时带同一个，只会发出一条；不传或不是 UUID 时 hub 自己生成 |
+| POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?}` 以本人身份回复这条消息，回 `{"ok":true,"message_id"?}`。`thread=false`（默认）在原会话里引用这条；`thread=true` 发进这条所在的话题（是普通群里的顶层消息时以它为根开一个话题；话题群里落进它的话题）。`client_id` 同上一行；`text` 为空 400 |
 | POST | `/api/v1/lark/conversations/{id}/read` | `{"position","badge_count"?,"message_ids"?}`：上报看到的消息（最高位置、该条的 badge_count、其间别人发的未读消息 id），只在消息真正上屏后发 |
 | GET | `/api/v1/lark/media/{key}?size=` | 图片 / 贴纸 / 头像 / 视频 / 文件原样转发（`size` 为 24 的倍数、≤624 时返回缩略图） |
 | GET | `/api/v1/lark/messages/{id}/media/{key}` | 消息作用域的媒体（同上） |

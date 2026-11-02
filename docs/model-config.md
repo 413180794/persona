@@ -47,11 +47,26 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 - 语音模型只在下一次语音会话开始/重新开始时读取。旧 hub 404 时可兼容读取旧客户端默认；新 hub 读取失败不能当作没有配置而回退。
 - 模型变化不改变权限模式，也不授权自动发送消息。
 
+## 上游限流
+
+hub 直连 API 的用途（知识处理、收件箱分拣 / 判断 / 草拟、翻译、标题）共用 `server/internal/ai` 的客户端，按连接（地址 + Key，不管哪个用途在用）各有一道闸（`ai/limit.go`）：
+
+| 上游的回答 | 认作 | 怎么停 |
+| --- | --- | --- |
+| HTTP 429，正文提到 quota / usage limit / exhausted 之类（中转的 `account_quota_exhausted`） | 额度用完 | 暂停 30 分钟；有 `Retry-After` 按它 |
+| HTTP 429 / 503 提到 concurrency（`account_concurrency_full`），或别的 429、503、529 | 并发满 | 指数退避（5 秒起，每连一次翻倍，最多 5 分钟），有 `Retry-After` 取较长的；同时给这条连接加并发上限 |
+
+- **暂停期间不发请求**：调用直接拿到 `ai.PausedError`（`ai.IsPaused`），文案就是 App 里显示的「额度用完，23 分钟后重试」。调用方把它当「延后」：知识处理的循环直接停（会话保持待压缩、项目保持待重写、条目保持未打标），收件箱分拣不把条目当分过（新条目先放在按规则的分组里，恢复后重新分），判断、翻译留到下一轮；都不打日志。
+- **只有闸打日志**：进入时一行（地址、上游的 code 和 message、暂停到几点），退出时一行（停了多久、延后了多少个请求）。
+- **暂停结束先放一个**：第一个请求去探路，别的继续延后；探路成功才放开，又被拒就再停一轮（不再打日志）。暂停前已经发出去的请求回来的同样答复不算数，不会把退避叠上去。
+- **并发上限**：第一次并发满时取当时在途请求数的一半（至少 1），再满再减半；之后每成功 10 次加 1，超过 8 就不再限。超过上限的请求排队等空位，等到自己的超时也算延后。
+- **App 里看得到**：模型配置接口里，连接被暂停的用途带 `limit`（`reason`: `quota` / `busy`，`until`），`status` 就是上面那句文案。
+
 ## 接口
 
 `GET /api/v1/model-config` 返回 `purposes` 与 `providers`；`GET /api/v1/model-config/purposes/{id}` 返回单项 `purpose` 与可用 `providers`。
 
-`Purpose` 包含 `id/name/group/kind`、`override`、`effective`、`revision`、`inherited_from/status`，以及限定表单的 `fields/provider_ids`。动态任务为 `task.<任务 id>`，插件为 `plugin.<插件 id>`。响应不包含秘密。
+`Purpose` 包含 `id/name/group/kind`、`override`、`effective`、`revision`、`inherited_from/status`、连接被暂停时的 `limit`（见「上游限流」），以及限定表单的 `fields/provider_ids`。动态任务为 `task.<任务 id>`，插件为 `plugin.<插件 id>`。响应不包含秘密。
 
 单项保存：
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/chyroc/jarvis/server/internal/ai"
 )
 
 // New mail is translated as it comes in, not when it is opened (docs/ios.md「翻译」, 2026-11-01): after each mail
@@ -115,6 +117,9 @@ func (h *Hub) translateInbox(ctx context.Context) {
 			t, err := h.translateMail(cctx, j.account, j.uid, j.mailbox, j.target)
 			cancel()
 			if err != nil {
+				if ai.IsPaused(err) { // the rest wait for the next pass
+					return
+				}
 				h.logf("inbox: translate %s into %s: %v", j.it.ID, j.target, err)
 				continue
 			}

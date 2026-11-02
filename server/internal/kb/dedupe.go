@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
@@ -157,6 +158,9 @@ func (e *Engine) DedupeProjects(ctx context.Context, max int) int {
 		asked++
 		same, keepA, reason, err := e.judgeDuplicate(ctx, c)
 		if err != nil {
+			if ai.IsPaused(err) { // not judged: asked again once the connection is back
+				break
+			}
 			e.logf("dedupe %s: %v", key, err)
 			continue
 		}
