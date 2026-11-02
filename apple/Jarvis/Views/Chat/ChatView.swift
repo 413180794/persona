@@ -722,8 +722,11 @@ struct ChatView: View {
     /// following goes to the newest, unless a tapped header is held in place (`ChatPin`).
     private func contentArrived(foldChrome: Bool) {
         // A finger on the list: not even at the newest end. The scroll phase says `tracking` only once the finger has
-        // moved; touched down near the newest, the chat jumped there under it (`ScrollUnderPushTests`, 263 pt).
+        // moved; touched down near the newest, the chat jumped there under it (`ScrollUnderPushTests`, 263 pt). The Mac
+        // has no finger resting on the list: a scroll moves it at once, and the scroll phase says so.
+        #if os(iOS)
         if pin.list?.isTracking == true { return }
+        #endif
         if !followsEnd, atBottom, !scratch.userDragging, !scratch.landingInFlight { followsEnd = true }
         guard followsEnd, !pin.holding else { return }
         scrollToEnd()
