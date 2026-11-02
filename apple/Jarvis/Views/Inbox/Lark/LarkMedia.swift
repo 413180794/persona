@@ -164,6 +164,8 @@ struct LarkRemoteImage: View {
     var size: Int? = nil
     var maxPixel: CGFloat = 1600
     var contentMode: ContentMode = .fill
+    /// Called when the image cannot be loaded, for callers that draw something else instead of the broken mark.
+    var onFailure: (() -> Void)? = nil
     @State private var image: UIImage?
     @State private var failed = false
 
@@ -182,6 +184,7 @@ struct LarkRemoteImage: View {
             if let img = LarkMedia.shared.cached(url, size: size) { image = img; return }
             image = await LarkMedia.shared.image(url, size: size, maxPixel: maxPixel)
             failed = image == nil
+            if failed { onFailure?() }
         }
     }
 }
@@ -192,19 +195,26 @@ nonisolated func larkThumbEdge(points: CGFloat) -> Int? {
     return edge > 0 && edge <= 624 ? edge : nil
 }
 
-/// Person or chat avatar: the real picture when there is one, otherwise the colored initial.
+/// Person or chat avatar: the real picture when there is one, otherwise (none, or it failed to load) the initial.
+/// `size` is at the default text size; the avatar grows with the text like the rest of the design system's sizes.
 struct LarkAvatarImage: View {
     var name: String
     var url: String?
     var isGroup = false
-    var size: CGFloat = 36
+    var size: CGFloat = Theme.Size.wellL
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// The URL that failed to load: the initial instead of a broken picture.
+    @State private var failedURL: String?
 
     var body: some View {
-        if let url, !url.isEmpty {
-            LarkRemoteImage(url: url, size: url.hasPrefix("/") ? larkThumbEdge(points: size) : nil, maxPixel: size * 3)
-                .frame(width: size, height: size)
-                .clipShape(.circle)
-                .overlay(Circle().strokeBorder(Color.primary.opacity(0.06)))
+        if let url, !url.isEmpty, failedURL != url {
+            let points = size * Theme.sizeScale(typeSize)
+            LarkRemoteImage(url: url, size: url.hasPrefix("/") ? larkThumbEdge(points: points) : nil, maxPixel: points * 3) {
+                failedURL = url
+            }
+            .scaledFrame(width: size, height: size)
+            .clipShape(.circle)
+            .overlay(Circle().strokeBorder(Color.primary.opacity(0.06)))
         } else {
             LarkAvatar(name: name, isGroup: isGroup, size: size)
         }
@@ -350,25 +360,25 @@ struct LarkFileOpener: ViewModifier {
     }
 }
 
-/// Initials (or a group glyph) on a colour picked from the name: chats and people without a picture.
+/// A chat or person without a picture: the design system's `Monogram` (the name's first letter on the neutral disc),
+/// sized like `LarkAvatarImage`.
 struct LarkAvatar: View {
     var name: String
     var isGroup: Bool
-    var size: CGFloat = 44
+    var size: CGFloat = Theme.Size.tapTarget
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        // No red or orange: beside the inbox's 需要你 rows they read as an agent waiting.
-        let palette: [Color] = [Color(hex: 0x3370FF), Color(hex: 0x00B42A), Color(hex: 0x7B61FF), Color(hex: 0x14C9C9), Color(hex: 0x4F5BD5), Color(hex: 0x64748B)]
-        let color = palette[abs(name.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }) % palette.count]
-        Circle()
-            .fill(color.gradient)
-            .frame(width: size, height: size)
-            .overlay {
-                if isGroup {
-                    Image(systemName: "person.2.fill").font(.system(size: size * 0.38)).foregroundStyle(.white)
-                } else {
-                    Text(String(name.prefix(1))).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(.white)
-                }
-            }
+        Monogram(name: name, size: size * Theme.sizeScale(typeSize), fill: Theme.monogramFill, font: Self.font(size))
+    }
+
+    /// The letter's text level for an avatar `size` points across at the default text size: about 0.4 of it, as before.
+    static func font(_ size: CGFloat) -> Font {
+        switch size {
+        case Theme.Size.avatar...: Theme.Font.heading
+        case Theme.Size.wellS...: Theme.Font.secondaryStrong
+        case Theme.Size.icon...: Theme.Font.captionStrong
+        default: Theme.Font.labelStrong
+        }
     }
 }

@@ -109,6 +109,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   图片、引用回复、表情回复、机器人、一个 75 条回复的话题（话题浮层翻页）；从第 300 条起 12 条未读，已读到 299（`read_position`）。
   `MOCK_LARK_LOGGED_OUT=1` 启动 mock 时会话列表、会话和话题都回 502「lark-connector 未登录飞书」（带 `code: lark_not_logged_in`，和 hub 一样），看错误态。数据全是编的，在 `mock_hub.py` 的 `_lark_f3`。
   已读回执（`POST …/read-states`）：f3 里我的消息 282 全部已读、296 部分已读、306 都未读；私聊 f1「韩梅梅」（`-openInboxItem lark:f1:100`）里我的消息有已读、未读（103）和没有回执（104）三种，mock 运行中新发的消息算都未读。
+  头像：f3 里 Tom 的头像能加载，天气助手的头像地址 404（看加载失败退回首字），其他人没有头像。
   @人：f2、f3 有成员（`GET …/members`，Tom 和 Mia 有头像，阿杰的群昵称是「杰哥」）；带 `mentions` 发送或回复时，mock 把文字里的 `@name` 存成 `at` 片段。
 
 ## UI 测试（`scripts/ui-test.sh`）

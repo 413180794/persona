@@ -561,7 +561,7 @@ struct LarkMessageRow: View {
                 // Mine have no avatar; the empty slot keeps them as far from the left edge as others' are from the right.
                 Group {
                     if avatar {
-                        LarkAvatarImage(name: m.senderName, url: m.senderAvatar, size: 34)
+                        LarkAvatarImage(name: m.senderName, url: m.senderAvatar, size: Theme.Size.wellM)
                             .onTapGesture { showProfile() }
                             .accessibilityAddTraits(.isButton)
                             .accessibilityLabel("\(m.senderName) 的资料")

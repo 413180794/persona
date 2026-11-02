@@ -69,8 +69,7 @@
     "hexColor" : 32
   },
   "Jarvis\/Views\/Inbox\/Lark\/LarkMedia.swift" : {
-    "animation" : 1,
-    "hexColor" : 6
+    "animation" : 1
   },
   "Jarvis\/Views\/Inbox\/Lark\/LarkMessageContent.swift" : {
     "hexColor" : 8

@@ -1248,6 +1248,10 @@ LARK_MEMBERS = {
     "f3": [("Tom", ""), ("小周", ""), ("阿杰", "杰哥"), ("Mia", ""), ("老王", ""), ("我", ""), ("天气助手", "")],
 }
 LARK_MEDIA.update({"avatar-tom": (96, 96), "avatar-mia": (96, 96)})
+# Avatars in f3: Tom's loads, the weather bot's is gone (404: the app falls back to the initial), the rest have none.
+for _m in LARK_MESSAGES["f3"]:
+    if _m["sender_name"] == "Tom": _m["sender_avatar"] = "/api/v1/lark/media/avatar-tom"
+    if _m["sender_id"] == "bot-weather": _m["sender_avatar"] = "/api/v1/lark/media/avatar-gone"
 
 
 def lark_members(feed, q, limit):

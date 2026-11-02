@@ -468,10 +468,12 @@ struct Monogram<Fill: ShapeStyle>: View {
     /// The letter's color; by default the hierarchical primary (`Color.primary` turned white in a Mac list's selected
     /// row, on the light gray disc).
     var ink: Color?
+    /// The letter's text level: a smaller disc takes a smaller one.
+    var font: Font = Theme.Font.heading
 
     var body: some View {
         Circle().fill(fill).frame(width: size, height: size)
-            .overlay(Text(String((name.isEmpty ? "?" : name).prefix(1))).font(Theme.Font.heading)
+            .overlay(Text(String((name.isEmpty ? "?" : name).prefix(1))).font(font)
                 .foregroundStyle(ink.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.primary)))
     }
 }

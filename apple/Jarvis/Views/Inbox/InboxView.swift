@@ -430,7 +430,7 @@ struct InboxRow: View {
                     .scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
                     .overlay(Image(systemName: Theme.Icon.moments).font(Theme.Font.bodyStrong).foregroundStyle(LarkColor.text("orange") ?? Theme.accent))
             } else if item.isLark {
-                LarkAvatarImage(name: item.title, url: item.avatar, isGroup: item.lark?.isGroup ?? false, size: 40)
+                LarkAvatarImage(name: item.title, url: item.avatar, isGroup: item.lark?.isGroup ?? false, size: Theme.Size.avatar)
             } else {
                 Monogram(name: item.sender ?? "", fill: Theme.monogramFill)
             }
