@@ -45,6 +45,7 @@ struct RootView: View {
         .overlay(alignment: .top) { ToastOverlay() }
         #if DEBUG
         .overlay(alignment: .bottomTrailing) { PerfCountProbe() }
+        .screenProbe("connection", ConnectionShown(shown: "\(model.connection.shown)", network: model.connection.networkUp))
         #endif
         .alert("Claude 想在 iPhone 上执行", isPresented: Binding(
             get: { model.pendingConfirmation != nil },
@@ -201,3 +202,11 @@ struct ToastOverlay: View {
         .animation(Theme.Motion.standard, value: model.toast)
     }
 }
+
+#if DEBUG
+/// What the titles say about the link (`probe.connection`): 等待网络 / 连接中… / 更新中…, or nothing (online).
+nonisolated struct ConnectionShown: Encodable, Equatable {
+    var shown: String
+    var network: Bool
+}
+#endif

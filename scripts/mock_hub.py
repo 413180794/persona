@@ -1753,6 +1753,9 @@ def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False, real=Fal
             working[0]["updated_at"] = ago(minutes=30)
         for m in MACHINES:
             m["last_seen"] = now
+        if waiting and INTERACTIONS:  # the hub's own list follows what is pushed below (/mock/truth reads it)
+            INTERACTIONS[:] = [x for x in INTERACTIONS if x["id"] != "ix_churn"]
+            if k % 2 == 0: INTERACTIONS.append(dict(INTERACTIONS[0], id="ix_churn", created_at=now))
         by = {}
         for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
         for send, subscribed in list(LIVE):
@@ -1803,6 +1806,65 @@ def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False, real=Fal
             except Exception:
                 pass
         CHURN["rounds"] += 1
+
+
+# ---------- truth and single changes (ScreenTruthTests, RenderBudgetTests; docs/ios-state.md) ----------
+# GET /mock/truth: what the hub holds now, shaped like the app's probe.agents-list (`states` and `last` by
+# "<machine>/<session>", `asks` the questions about agents): the tests compare the screen with it.
+# GET /mock/bump?what=rev|last|needs|ask|resolve: one change, pushed like the real hub (the machine's whole session list,
+# or one interaction): `rev` a working agent's transcript grew (rev, updated_at: most real pushes), `last` its last line, `needs` a working agent starts needing the user, `ask` a
+# question comes for an agent, `resolve` it is answered. Returns what changed. /mock/reset undoes them.
+BUMPED = {"asks": [], "n": 0}
+
+
+def truth():
+    agents = [s for s in all_sessions() if not s.get("assistant")]
+    keys = {s["session_id"]: s["machine_id"] + "/" + s["session_id"] for s in agents}
+    return {"states": {keys[s["session_id"]]: s["state"] for s in agents},
+            "last": {keys[s["session_id"]]: s.get("last_text") or "" for s in agents},
+            "asks": sorted(ix["id"] for ix in INTERACTIONS if ix["session_id"] in keys),
+            "titles": {keys[s["session_id"]]: s.get("title") or "" for s in agents}}
+
+
+def push_machine(mid):
+    ss = [s for s in all_sessions() if s["machine_id"] == mid]
+    for send, _ in list(LIVE):
+        try: send({"type": "sessions", "machine_id": mid, "sessions": ss})
+        except Exception: pass
+
+
+def bump(what):
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    BUMPED["n"] += 1
+    n = BUMPED["n"]
+    working = [s for s in SESSIONS if s["state"] == "working" and not s.get("assistant")]
+    if what in ("last", "needs", "rev") and working:
+        s = working[0] if what != "needs" else working[-1]
+        if what == "rev":  # what most of the real hub's pushes are: the transcript grew, nothing shown changed
+            s.update(rev=(s.get("rev") or 1000) + 517, updated_at=now)
+        elif what == "last":
+            s.update(last_text="第 %d 次更新：刚改完一处。" % n, updated_at=now)
+        else:
+            s.update(state="needs_you", status="blocked", state_since=now, updated_at=now)
+        push_machine(s["machine_id"])
+        return {"key": s["machine_id"] + "/" + s["session_id"], "state": s["state"], "last": s.get("last_text") or ""}
+    if what == "ask":
+        s = working[0] if working else SESSIONS[0]
+        ix = dict(INTERACTIONS[0], id="ix_bump_%d" % n, machine_id=s["machine_id"], session_id=s["session_id"], created_at=now)
+        INTERACTIONS.append(ix)
+        BUMPED["asks"].append(ix["id"])
+        for send, _ in list(LIVE):
+            try: send({"type": "interaction", "interaction": ix})
+            except Exception: pass
+        return {"ask": ix["id"]}
+    if what == "resolve" and BUMPED["asks"]:
+        ix_id = BUMPED["asks"].pop()
+        INTERACTIONS[:] = [x for x in INTERACTIONS if x["id"] != ix_id]
+        for send, _ in list(LIVE):
+            try: send({"type": "interaction_resolved", "id": ix_id})
+            except Exception: pass
+        return {"resolved": ix_id}
+    return {"error": "nothing to bump"}
 
 
 def say(text, user=None, stream=False, steps=10, ms=300):
@@ -1900,6 +1962,8 @@ class H(BaseHTTPRequestHandler):
                                                  q.get("real", ["0"])[0] == "1"), daemon=True).start()
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
+        if p == "/mock/truth": return self.send_json(truth())
+        if p == "/mock/bump": return self.send_json(bump(q.get("what", ["last"])[0]))
         if p == "/mock/mark": return self.send_json({"ok": True})  # a test's marker in the request log (explore)
         if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
             # &steps=50&ms=80: the hub's own pace (a delta every 80 ms, node/assistant.go).
@@ -1944,6 +2008,8 @@ class H(BaseHTTPRequestHandler):
             for x in SESSIONS:
                 if x["session_id"] in ORIG_STATE:
                     x["state"], x["status"] = ORIG_STATE[x["session_id"]]
+            INTERACTIONS[:] = [x for x in INTERACTIONS if not x["id"].startswith(("ix_bump_", "ix_churn"))]
+            BUMPED["asks"].clear()
             return self.send_json({"ok": True})
         if p == "/mock/seen": return self.send_json({"seen": SEEN})
         if p == "/mock/reconnects": return self.send_json({"reconnects": RECONNECTS})

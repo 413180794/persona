@@ -57,7 +57,8 @@
 - 列表别按「最近一次更新」排，滚动中也别让推送碰到它（2026-11-01，TestFlight 77，`docs/lanes/live-updates.md`「滚动时被迫刷新」）。
   真实 hub 每 2 秒推一次某台机器的会话，每次都带新的 `updated_at`；Agents 列表按状态加最近更新排空间，36% 的推送让空间换位置，滚动中整屏跳。
   - 排序键用不随每句输出变的时间：工作中的按开始工作的时间（`Session.sortDate`、`SpaceGroup.sortDate`）。
-  - 手指在、惯性在、被页面盖住、在另一页的时候扣住推送，停下 1.5 秒后一次落地。列表只读一个中转对象（`AgentsFeed`，
+  - 手指在、惯性在、被页面盖住、在另一页的时候扣住推送，停下 0.5 秒后一次落地，一直滚也最多扣 5 秒；
+    要用户处理的（需要你、提问、离线、出错）不扣（`docs/ios-state.md`「及时性」）。列表只读一个中转对象（`AgentsFeed`，
     `withObservationTracking` 跟着模型），扣住是它上面一个没人观察的开关：用列表自己的 `@State` 存快照，开始滚动那一下就让列表重画。
   - 扣住要真的挡住推送。这几处漏了，列表照样每次推送都重算：
     - 在 `onChange` / `onScrollPhaseChange` 里读模型，算作 body 读过：之后每次推送都让 body 重跑。
@@ -67,7 +68,8 @@
       推送一来自己重画。行里不直接读模型：body 每次把要用的值填进一个不被观察的查找表（`AgentsList.Lookup`），行从表里取；
       子视图要的值由列表传进去（`InteractionPreviewCard(machine:agentLabel:)`，`model.isMuted(session)` 而不是经 `model.session(key)` 的 `isMuted(key)`）。
   - 就算数据一模一样，`List` 只要被更新一次，就会按估算高度重新量行（估算和实际差 70 pt 一行），屏幕外的行一变高矮，内容就跳几百 pt。
-    在两次滑动之间落地也一样：下一次手指落下时才跳。所以等停稳（1.5 秒）再落地，连着甩的几下算一次滚动。
+    在两次滑动之间落地也一样：下一次手指落下时才跳。这一下是按设计落地，`PerfScroll` 记为 `landed`，不算打断；
+    别为了躲它把落地拖长，屏幕上的东西会旧太久。
   - `onScrollPhaseChange` 在 `List` 上也有效（iOS 27 模拟器实测）。滚动阶段这种只在回调里用的状态放不被观察的对象里，放 `@State` 每个阶段重算一次列表。
 - 一个会变尺寸的小东西（输入框里的 TextField）和长列表在同一个视图树里：它每变一下，SwiftUI 从根重新排版整页，懒加载列表把可见行重新量一遍
   （打字每个字约 10 ms）。把它放进自己的 hosting controller（`LayoutIsland`）：里面自己量高度报出来，页面只在高度变时排版。

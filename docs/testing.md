@@ -215,7 +215,7 @@ Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock
   - 记下几类异常：整体跳开（`jumps`，≥ 100 pt 的另记 `big`）、行之间相对挪动（`moved`）、还在屏幕里的东西被拿掉重画（`replaced`）、
     惯性被打断（`stopped`）、内容高度变了（`resized`）。
   - 每次异常记到它前 0.6 秒内到达的那类推送上（`causes`）。
-  - 页面刚放开扣住的更新（停下 1.5 秒后一次落地）的 0.3 秒内出的异常另记 `landed`：那是更新按设计在静止时落地，
+  - 页面刚放开扣住的更新（停下 0.5 秒后，或关键更新立刻）的 0.3 秒内出的异常另记 `landed`：那是更新按设计在静止时落地，
     UIKit 在下一次手指落下时才排版，不算滚动中被打断。
   - 滚动中算了哪些 body 记在 `bodies`。都在 `perf.counts` 的 `scroll` 里。
 - 断言：`big`、`replaced`、`stopped`、`defaults` 都是 0，Agents 列表的 `moved` 也是 0。两种布局、两种风格（`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`）都跑。
@@ -224,6 +224,25 @@ Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock
 - mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock_hub.py &`（两个对话要比屏幕长才滚得动），
   `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797`。
 - 测试先配对一次、退出，再带要打开的页面启动：配对的 hub 和上次不同时，App 从头开始、停在助手页，`-app.tab`、`-dev.openChat` 都不起作用。
+
+### 真实性与及时性（`ScreenTruthTests`）
+
+屏幕上说的是 hub 的真实状态，而且及时（`docs/ios-state.md`「真实性与及时性」）。
+
+- App 以 `-probes YES` 启动，`probe.agents-list` 导出列表显示的每个 Agent 的状态、最后一句和列着的提问；`probe.connection` 导出标题的连接状态。
+  每个探针带 `at`（最近一次变化的时刻），和测试发推送的时刻比。
+- mock：
+  - `/mock/truth` 给 hub 此刻的真实数据；
+  - `/mock/bump?what=rev|last|needs|ask|resolve` 一次只改一样，像真实 hub 一样推（整台机器的会话列表、或一个提问）。
+- 用例和上限：
+  - 静止时一致；
+  - 手指按着时，需要你 / 提问 1 s 内上屏；
+  - 最后一句在手指抬起后 0.5 s 内落地（断言 0.8 s，含读探针的时间）；
+  - 一直按着也 5 s 内落地（断言 5.5 s）；
+  - 固定种子的随机序列（滚动、推送、churn、进出对话、前后台、断网时推送）之后 8 s 内收敛；`TEST_RUNNER_JARVIS_SEED` 重放；
+  - 甩完立刻点行，打开的是看到的那个 Agent；
+  - 断网时标题 3 s 内显示，连回 25 s 内消失：重连按 1、2、4…最多 20 s 退避，断 8 s 后下一次大约在 15 s。
+- 两种布局、两种风格各跑，种子 7、21、42 各一轮。
 
 ### 体验模式（`DemoModeTests`、`DemoHubTests`）
 

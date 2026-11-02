@@ -278,10 +278,8 @@ private struct AgentsList: View {
     @State private var feed = AgentsFeed()
     /// Where the scrolling is (not observed: starting or stopping a scroll does not draw the list again).
     @State private var scroll = ScrollState()
-    /// How long the list rests before what the hub sent meanwhile lands: flicks in a row (about a second apart) are one
-    /// scroll. Let go between them, the list took the news at rest and laid itself out anew under the next touch
-    /// (rows above the screen grown or moved: the content jumped by hundreds of points as the finger came down).
-    private static let settle = Duration.milliseconds(1500)
+    /// How long the list rests before what the hub sent meanwhile lands (docs/ios-state.md「及时性」).
+    private static let settle = Duration.milliseconds(500)
 
     private final class ScrollState {
         var phase = ScrollPhase.idle
@@ -545,6 +543,10 @@ private struct AgentsList: View {
         .contentMargins(.top, widthClass == .regular ? nil : Theme.Space.xs, for: .scrollContent)
         .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
         .environment(\.compactList, compact)
+        #if DEBUG || PERF_SIGNPOST
+        .screenProbe("agents-list", page: shell == nil ? nil : "agents",
+                     ScreenProbe.enabled ? AgentsListShown(base, asks: interactions) : AgentsListShown())
+        #endif
         .listSectionSpacing(compact ? .compact : .default)
         .modifier(AgentsListPage(capsules: capsules))
         // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone it is the list's
@@ -581,17 +583,17 @@ private struct AgentsList: View {
             scroll.phase = phase
             if phase != .idle {
                 scroll.scrolling = true
-                feed.hold(true)
+                feed.hold(true, scrolling: true)
                 return
             }
             Task {
                 try? await Task.sleep(for: Self.settle)
                 guard scroll.phase == .idle else { return }
                 scroll.scrolling = false
-                feed.hold(covered)
+                feed.hold(covered, scrolling: false)
             }
         }
-        .onChange(of: covered, initial: true) { _, covered in feed.hold(covered || scroll.scrolling) }
+        .onChange(of: covered, initial: true) { _, covered in feed.hold(covered || scroll.scrolling, scrolling: scroll.scrolling) }
     }
 
     /// The quick filter bar. Equal while the counts are: the bar is not drawn again for pushes that change none of
@@ -935,13 +937,41 @@ private struct AgentsList: View {
     }
 }
 
-/// What the Agents list shows of the hub (docs/lanes/live-updates.md「滚动时被迫刷新」): the agents, the questions and the
-/// machines, passed on from the model as they change, except while the list holds them (scrolled, or out of sight);
-/// then what came meanwhile lands at once when it lets go.
+#if DEBUG || PERF_SIGNPOST
+/// What the Agents list shows (`probe.agents-list`, docs/ios-state.md「真实性」): each agent's state and last line, and
+/// the questions it lists, to be checked against the hub's.
+nonisolated struct AgentsListShown: Encodable, Equatable {
+    var states: [String: String] = [:]
+    var last: [String: String] = [:]
+    var asks: [String] = []
+
+    init() {}
+
+    init(_ sessions: [Session], asks: [Interaction]) {
+        for s in sessions {
+            let k = s.machineID + "/" + s.sessionID
+            states[k] = s.state.rawValue
+            last[k] = s.lastText ?? ""
+        }
+        self.asks = asks.map(\.id).sorted()
+    }
+}
+#endif
+
+/// What the Agents list shows of the hub (docs/ios-state.md): the agents, the questions and the machines, passed on
+/// from the model as they change, except while the list holds them (scrolled, or out of sight); then what came
+/// meanwhile lands at once when it lets go.
 ///
 /// Its own object: the list reads only this, so holding is a flag nobody observes. A busy hub pushes the agents every
 /// two seconds, and any update of a `List` mid-glide (the same rows or not) has it measure its rows anew: the content
 /// jumped by their difference from its estimate. Holding by the list's own state drew it again at every scroll's start.
+///
+/// Held is not stale for long (docs/ios-state.md「及时性」):
+/// - What needs the user, or says something is wrong, is never held: a question or approval coming or going, an agent
+///   starting or stopping to need the user, one going offline, a machine going offline or failing. It lands at once,
+///   even mid-glide, alone (`landCritical`): the list may still move under the finger (a card put in at the top, a
+///   space moving up), which is the price of showing it now.
+/// - Anything else waits at most `cap` while the list is being scrolled, then lands anyway.
 @MainActor @Observable final class AgentsFeed {
     private(set) var sessions: [Session] = []
     private(set) var interactions: [Interaction] = []
@@ -950,7 +980,12 @@ private struct AgentsList: View {
     private(set) var following = false
     @ObservationIgnored private weak var model: AppModel?
     @ObservationIgnored private var held = false
-    @ObservationIgnored private var missed = false
+    @ObservationIgnored private var scrolling = false
+    @ObservationIgnored private var missedSince: Date?
+    @ObservationIgnored private var capTask: Task<Void, Never>?
+    @ObservationIgnored private var watching = false
+    /// The longest a change waits while the list is being scrolled.
+    static let cap: Duration = .seconds(5)
 
     func follow(_ model: AppModel) {
         guard self.model == nil else { return }
@@ -959,33 +994,107 @@ private struct AgentsList: View {
         following = true
     }
 
-    /// Holds what the list shows (true), or lets what came meanwhile land (false).
-    func hold(_ on: Bool) {
+    /// Holds what the list shows (true), or lets what came meanwhile land (false). `scrolling`: held for the scrolling
+    /// (what waits is capped), not only out of sight.
+    func hold(_ on: Bool, scrolling: Bool) {
+        self.scrolling = on && scrolling
+        capIfScrolling()
         guard on != held else { return }
         held = on
         #if os(iOS) && (DEBUG || PERF_SIGNPOST)
         PerfScroll.mark("Agents list \(on ? "holds" : "lets go")")
-        if !on { PerfScroll.shared.released() }
         #endif
-        if !on, missed { pull() }
+        if !on, missedSince != nil { land() }
     }
 
-    /// Copies what changed and watches for the next change (`withObservationTracking` tells once).
+    /// Copies what changed.
     private func pull() {
-        guard let model else { return }
-        missed = false
-        let (s, i, m) = withObservationTracking {
-            (model.allSessions, model.pendingInteractions, model.machines)
-        } onChange: { [weak self] in
-            Task { @MainActor in self?.changed() } // told before the change: read it after
-        }
+        missedSince = nil
+        capTask?.cancel()
+        capTask = nil
+        guard let (s, i, m) = current() else { return }
         if s != sessions { sessions = s }
         if i != interactions { interactions = i }
         if m != machines { machines = m }
     }
 
+    /// The model's now, watching it for the next change if nothing is watching yet (`withObservationTracking` tells
+    /// once; watched again at every change, held or not, never twice at a time).
+    private func current() -> ([Session], [Interaction], [Machine])? {
+        guard let model else { return nil }
+        guard !watching else { return (model.allSessions, model.pendingInteractions, model.machines) }
+        watching = true
+        return withObservationTracking {
+            (model.allSessions, model.pendingInteractions, model.machines)
+        } onChange: { [weak self] in
+            Task { @MainActor in // told before the change: read it after
+                self?.watching = false
+                self?.changed()
+            }
+        }
+    }
+
+    /// What was held lands now, while the list may still be held.
+    private func land() {
+        #if os(iOS) && (DEBUG || PERF_SIGNPOST)
+        if held { PerfScroll.mark("Agents list lands while held") }
+        PerfScroll.shared.released()
+        #endif
+        pull()
+    }
+
     private func changed() {
-        if held { missed = true } else { pull() }
+        guard held else { return pull() }
+        guard let (s, i, m) = current() else { return }
+        if missedSince == nil { missedSince = .now }
+        if Self.critical(s, i, m) != Self.critical(sessions, interactions, machines) { landCritical(s, i, m) }
+        capIfScrolling()
+    }
+
+    /// While held, only what must show at once, onto the rows as shown: the states of the agents that start or stop
+    /// needing the user or go offline, the questions, the machines. Last lines, times and order wait for the rest:
+    /// landing all of it mid-glide changed the rows' heights under the finger (the list jumped by 100 pt and more).
+    private func landCritical(_ s: [Session], _ i: [Interaction], _ m: [Machine]) {
+        #if os(iOS) && (DEBUG || PERF_SIGNPOST)
+        PerfScroll.mark("Agents list lands what is critical while held")
+        PerfScroll.shared.released()
+        #endif
+        func urgent(_ x: Session) -> Bool { x.state == .needsYou || x.state == .offline }
+        let now = Dictionary(s.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let shown = Set(sessions.map(\.id))
+        var next = sessions.compactMap { old -> Session? in
+            guard let new = now[old.id] else { return urgent(old) ? nil : old } // gone: the rest goes when it lands
+            guard new.state != old.state, urgent(new) || urgent(old) else { return old }
+            var x = old
+            x.state = new.state
+            x.pendingInteractions = new.pendingInteractions
+            return x
+        }
+        next += s.filter { urgent($0) && !shown.contains($0.id) }
+        if next != sessions { sessions = next }
+        if i != interactions { interactions = i }
+        if m != machines { machines = m }
+        if next == s { missedSince = nil }
+    }
+
+    /// What waits while the list is being scrolled lands after `cap` at most, however it started waiting.
+    private func capIfScrolling() {
+        guard scrolling, missedSince != nil, capTask == nil else { return }
+        capTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.cap)
+            guard !Task.isCancelled, let self else { return }
+            self.capTask = nil
+            if self.held, self.missedSince != nil { self.land() }
+        }
+    }
+
+    /// What must show at once: who needs the user, which questions wait, what is offline or failing.
+    nonisolated static func critical(_ sessions: [Session], _ interactions: [Interaction], _ machines: [Machine]) -> Set<String> {
+        var out = Set<String>()
+        for s in sessions where s.state == .needsYou || s.state == .offline { out.insert("\(s.state.rawValue) \(s.machineID)/\(s.sessionID)") }
+        for i in interactions { out.insert("ask " + i.id) }
+        for m in machines where !m.online || !(m.error ?? "").isEmpty { out.insert("down \(m.id) \(m.error ?? "")") }
+        return out
     }
 }
 

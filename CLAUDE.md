@@ -103,6 +103,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/agent-states.md` | 统一的 Agent 状态（需要你 / 工作中 / 完成未看 / 已看）和 herdr 的对应，空间 / 槽位模型 |
 | `docs/ios.md` | iOS / watchOS App：信息架构、设计语言、手机数据工具 |
 | `docs/recording.md` | 手机和 Apple Watch 录音作为 Jarvis 上下文：分段、本机转写、可靠回传、确认发送与验证边界 |
+| `docs/ios-state.md` | App 的状态和重绘：推送怎么走到屏幕、一次推送的代价、根因、分步根治；真实性 / 及时性的标准和探针（`ScreenProbe`） |
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |

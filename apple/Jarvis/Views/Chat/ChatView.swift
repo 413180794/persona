@@ -721,6 +721,9 @@ struct ChatView: View {
     /// moving the list): follow again, or the new lines wait behind a sentinel that is on screen, with no ↓. Then
     /// following goes to the newest, unless a tapped header is held in place (`ChatPin`).
     private func contentArrived(foldChrome: Bool) {
+        // A finger on the list: not even at the newest end. The scroll phase says `tracking` only once the finger has
+        // moved; touched down near the newest, the chat jumped there under it (`ScrollUnderPushTests`, 263 pt).
+        if pin.list?.isTracking == true { return }
         if !followsEnd, atBottom, !scratch.userDragging, !scratch.landingInFlight { followsEnd = true }
         guard followsEnd, !pin.holding else { return }
         scrollToEnd()
@@ -877,6 +880,8 @@ struct ChatView: View {
                     .overlay(alignment: .bottomTrailing) { jumpArrow }
                     #if DEBUG
                     .overlay(alignment: .topLeading) { if Self.scrollProbe { scrollState } }
+                    .screenProbe("chat", page: style == .assistant ? "assistant" : "agents",
+                                 ChatShown(key: shownKey.machineID + "/" + shownKey.sessionID))
                     #endif
             }
             ChatRegion(name: "ChatFooter.body") { footer }
@@ -3448,5 +3453,12 @@ private struct VerticalBarsEdgeReader: ViewModifier {
     func body(content: Content) -> some View {
         content.onChange(of: edge != nil, initial: true) { _, v in vertical = v }
     }
+}
+#endif
+
+#if DEBUG
+/// The open conversation (`probe.chat`, docs/ios-state.md): which one, for the tests to check against what was tapped.
+nonisolated struct ChatShown: Encodable, Equatable {
+    var key: String
 }
 #endif

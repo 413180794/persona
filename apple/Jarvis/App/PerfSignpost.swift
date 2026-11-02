@@ -115,8 +115,9 @@ struct PerfCountProbe: View {
 /// - `resized`: the content's height changed;
 /// - `defaults`: UserDefaults changed (every `@AppStorage` view in the app is drawn again: the list re-laid itself out).
 /// Each is put down to the kind of push that came in the 0.6 s before it (`causes`, "kind:push"), or "none".
-/// One in the 0.3 s after a page let go of what it held (`released()`: the Agents list, at rest) is that landing, the
-/// update arriving as designed, laid out by UIKit under the next touch: counted apart (`landed`), not as the above.
+/// One in the 0.3 s after a page let go of what it held (`released()`: the Agents list), or in the first 0.5 s of the
+/// first scroll after it let go at rest, is that landing: the update arriving as designed, which UIKit lays out under
+/// the next touch (docs/ios-state.md「及时性」). Counted apart (`landed`), not as the above.
 @MainActor final class PerfScroll {
     static let shared = PerfScroll()
     private(set) var scrolling = false
@@ -125,6 +126,8 @@ struct PerfCountProbe: View {
     private var causes: [String: Int] = [:]
     private var frames = 0, jumps = 0, big = 0, moved = 0, replaced = 0, stopped = 0, resized = 0, defaults = 0, landed = 0
     private var releasedAt: CFTimeInterval = 0
+    private var scrollEndedAt: CFTimeInterval = 0
+    private var scrollStartedAt: CFTimeInterval = 0
     private var maxJump: CGFloat = 0, maxMoved: CGFloat = 0
     private var lastPush: (kind: String, at: CFTimeInterval)?
     private var link: CADisplayLink?
@@ -190,10 +193,12 @@ struct PerfCountProbe: View {
                 note("stopped", now, String(format: "at %.0f pt/s", v))
                 stopped += 1
             }
+            if scrolling { scrollEndedAt = now }
             prev = nil
             scrolling = false
             return
         }
+        if !scrolling { scrollStartedAt = now }
         scrolling = true
         frames += 1
         var f = capture(sv, now)
@@ -314,9 +319,11 @@ struct PerfCountProbe: View {
         os_log(.default, log: log, "PERFSCROLL mark %{public}@", what)
     }
 
-    /// Within 0.3 s of a page letting go: the landing, counted apart.
+    /// The landing's, counted apart: within 0.3 s of a page letting go, or early in the first scroll after it let go
+    /// at rest.
     private func landing(_ now: CFTimeInterval, _ what: String) -> Bool {
-        guard now - releasedAt < 0.3 else { return false }
+        let atRest = releasedAt > scrollEndedAt && scrollStartedAt > releasedAt && now - scrollStartedAt < 0.5
+        guard now - releasedAt < 0.3 || atRest else { return false }
         landed += 1
         causes["landed:" + what, default: 0] += 1
         return true

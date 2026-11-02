@@ -1,0 +1,176 @@
+# App 的状态和重绘（iOS）
+
+hub 一直在推（真实 hub 实测：某台机器的会话每 2 秒一次），界面要做到三件事：
+- 只重画变了的那一点；
+- 用户正在操作时不被打断；
+- 屏幕上说的永远是真的，而且来得及时。
+
+这份文档讲：
+- 现在的数据怎么从推送走到屏幕；
+- 一次推送实际让多少视图重算（量出来的）；
+- 根因是什么；
+- 分几步治，每步怎么验收；
+- 「真实、及时」怎么定义、怎么测。
+
+前因见 `docs/lanes/live-updates.md`（三次「推送打断操作」）。
+
+## 现在的数据流
+
+```
+WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线程）
+   sessions   ─▶ sessionsByMachine[机器] = 整份列表（old != new 才赋值）
+                   didSet ─▶ allSessions（全部拼起来）、sessionIndex、每个会话的 SessionCell、saveSnapshot（2 秒去抖）
+   machines   ─▶ machines（不同才赋值）─▶ machineChoices（名字、图标变了才变）
+   interaction / interaction_resolved ─▶ interactions[id]
+   revs       ─▶ AgentSync（后台拉对话，写对话缓存）
+   items / delta ─▶ 那个对话的 ChatStore
+   lark / inbox / fleet ─▶ LarkSync、InboxStore、灵动岛
+                                 │
+                                 ▼  @Observable：读过哪个属性，哪个属性一变就重算
+  视图 body ── 自己读模型（model.allSessions、model.machines、model.session(key)…），在 body 里排序、分组、计数
+```
+
+- `AppModel` 是一个 1300 行的 `@Observable`，会话、机器、等你处理的事、当前 tab、草稿、风格都挂在上面。
+- 会话推送是「一台机器的整份列表」。
+  - `Session` 一个 struct 里既有身份和布局字段（id、标题、空间、槽位），也有每次都变的字段（`rev`、`updated_at`、`last_text`、子 Agent）。
+  - 真实 hub 上每条 `sessions` 推送都带新的 `rev` / `updated_at`（10 分钟 255 条，`rev` 变了 320 次、`updated_at` 243 次），所以 `old != new` 几乎总成立。
+- `SessionCell`：每个会话一个可观察的格子。看一个会话的视图（对话页）通过 `model.session(key)` 只跟着那一个会话。
+  看全部会话的视图读 `allSessions`，任何一台机器的任何一个会话变了都重算。
+- 派生数据在 body 里算：
+  - Agents 列表的分组、排序（`SpaceGroup.build`、`AgentListOrder`）、筛选条的计数，每次 body 都从 `allSessions` 重算一遍；
+  - 角标（`agentsWaiting`）是计算属性，读的人每次推送都重算。
+- 副作用：`machines`、`sessionsByMachine`、`interactions`、`assistantConfig` 的 `didSet` 都调 `saveSnapshot()`，已经 2 秒去抖（每次推送只是取消、重排一个 Task）。
+  真正的风暴是 `AgentSync` 每拉一次对话就写一次 UserDefaults，App 里每个 `@AppStorage` 视图都重算，#215 已改。
+
+### 谁读了什么
+
+| 属性 | 读它的视图（文件） | 每次推送都变？ |
+| --- | --- | --- |
+| `allSessions` | Agents 列表（#215 后经 `AgentsFeed`）、对话页、助手页、空间页、机器的空间页、收件箱动作、会话面板（7 个文件） | 是 |
+| `sessionsByMachine` | 助手资料页、机器详情、端口在线检测（`PortPresence`）、`AgentSync` | 是 |
+| `pendingInteractions` / `interactions` | Agents 列表、收件箱、旧布局的 tab 角标、新外壳首页 | 有人提问 / 答完时 |
+| `machines` | 设置、机器页、新对话、灵动岛设置、助手页 | 连上 / 断开 / `last_seen` |
+| `session(key)`（`SessionCell`） | 对话页、行菜单 | 只在那个会话变时 |
+
+### 一次推送的代价
+
+`RenderBudgetTests`（mock，页面静止，每种推送 5 次取平均）：每次推送是那台机器的整份会话列表，其中只有一个会话的一个字段变了。
+- `rev`：对话变长了，屏幕上什么都没变（真实 hub 上大多数推送是这种）；
+- `last`：一个 Agent 的最后一句变了。
+
+| 页面 | 布局 | `rev` 一次 | `last` 一次 | 重算的视图 |
+| --- | --- | --- | --- | --- |
+| Agents 列表 | 新外壳 | 5 | 5 | `AgentsList`、`SpaceHeader`、`SlotRow`、`StateCounts`、`AssistantSidebar` |
+| Agents 列表 | 旧布局 | 4 | 4 | 同上，没有侧栏 |
+| Agent 对话 | 新外壳 | 5 | 5 | `ChatView`、`ChromeHeader`、`SessionModeBar`、`Composer`、`AssistantSidebar` |
+| Agent 对话 | 旧布局 | 4 | 4 | 同上，没有侧栏 |
+| Jarvis 对话 | 两种 | 1 | 1 | `AssistantSidebar`（助手的会话侧栏，读全部会话；新外壳里在 Agents 页上它也在） |
+
+读法：
+- 只数打了 `PerfTrace.body` 的视图，`List` 里的 cell、系统控件不在里面，实际更多；
+- `rev` 和 `last` 一样贵：屏幕上没变的推送和变了的推送代价相同，这就是「粒度太粗」和「易变和稳定混在一起」；
+- 对话页：推送改的不是这个会话时它也重算（`ChatView` 为提及、引用读了 `allSessions`，下面几层跟着）；
+- `SlotRow` 每次 1 个：行已经是 `Equatable`，只有变了的那行重画，贵的是它上面那几层；
+- 第 1–3 步的目标：`rev` 推送 0 个，`last` 推送只剩显示那句话的行。
+
+## 根因
+
+| 类 | 现在 | 后果 |
+| --- | --- | --- |
+| 粒度太粗 | 一台机器的整份会话列表一起替换；读 `allSessions` 的视图跟着任何一个会话变 | 一个会话换一句话，所有列表页、助手页都重算 |
+| 易变和稳定混在一起 | `rev`、`updated_at`、`last_text` 和标题、状态、空间在同一个 struct | 只想知道「状态变没变」的视图也被 `rev` 抖动叫醒 |
+| 派生数据在 body 里算 | 排序、分组、计数、角标在 body 里从全量重算 | 重算本身贵；结果没变也算一遍；排序键用了易变字段（#215 前空间按 `updated_at` 排） |
+| 副作用在 didSet 里 | `saveSnapshot` 去抖了；`AgentSync` 写 UserDefaults（已改） | 一次写全 App 重算 |
+| 多份真相 | 当前页：`AppModel.selectedTab` 和外壳的 `ShellState` 各一份，靠 `onChange` 同步（live 车道在改成唯一来源） | 会漏，界面和状态对不上 |
+| 「用户正在操作」各页自己处理 | 菜单、长按、滚动各有各的补丁（#131、#178、#215） | 漏一处就回来一次 |
+
+## 方案（分步，每步一个 PR，每步用数字验收）
+
+| 步 | 做什么 | 验收（数字） |
+| --- | --- | --- |
+| 0（本 PR） | 屏幕探针 + 真实性 / 及时性测试 + 关键更新不扣留 + 落地 0.5 s / 最长 5 s；量出现状 | `ScreenTruthTests` 两种布局 × 两种风格连跑 3 轮全绿；本文「一次推送的代价」有数 |
+| 1 | 会话实体化：每个会话一个 `@Observable` 对象（`SessionStore[key]`），推送先做字段级 diff，只改变了的对象、变了的字段；列表只拿排好序的 key 数组 | 只改一个会话一个字段的推送：重算的视图数 ≤ 读这个会话的叶子视图 + 1；列表 body 0 次（顺序没变时） |
+| 2 | 易变字段拆出去：`rev`、`updated_at`、token、端口放进单独的小对象，只给显示它的叶子视图（相对时间、最后一句）读，照 `WaitingBadge` 的做法 | `rev` / `updated_at` 抖动的推送：除了显示时间的那个 `Text`，0 个视图重算 |
+| 3 | 派生数据进模型层：排序、分组、筛选计数、角标在模型里算，结果真变了才发布（`AgentListOrder` 搬进 `AgentsFeed`） | 列表 body 只在顺序 / 分组 / 计数变了时跑；角标只在数字变了时跑 |
+| 4 | 「用户正在操作」做成模型层统一策略：拖动、惯性、菜单开着、键盘在输入时，非关键更新合并、延后；关键的立刻；最长延迟有上限。`AgentsFeed` 的扣留抽成通用的 `Hold`，各页登记自己的状态 | 现有的 `LiveUpdateTests`、`ScrollUnderPushTests`、`ScreenTruthTests` 全绿；页面里不再有各自的扣留代码（源码检查） |
+| 5 | 护栏：性能测试「一次只改一个会话一个字段的推送，最多 N 个视图重算」，超了就失败；源码检查「列表以外的视图不读 `allSessions`」 | 两个检查进 `JarvisTests` / UI 测试 |
+| 6（要改 hub，先算收益） | hub 只在语义变化时推（`rev`、`updated_at` 抖动不推，改走 `revs`），或者推增量 | 用录下的 10 分钟推送回放：推送条数、App 主线程耗时的改前改后 |
+
+每步都要过本文「真实性与及时性」的测试，用户看得到的交互不变。和 live 车道的 `ShellState`（当前页唯一来源）对齐：第 4 步的「用户正在操作」读它的页状态，不自己再存一份。
+
+## 真实性与及时性（每一步的验收标准）
+
+用户的要求：减少重绘不能拿正确性换，屏幕上说的必须是真的，而且来得及时。
+
+### 真实（一致）
+
+- 真实状态以 **hub** 的数据为准，不以 App 的模型为准：
+  - mock 的 `GET /mock/truth`：每个 Agent 的状态、最后一句、标题，等你处理的事；
+  - 真实 hub 用 REST 接口。
+- 屏幕上的状态由探针导出（`probe.<区域>`，见下）：
+  - Agents 列表：每个 Agent 的状态、最后一句，列着的提问；
+  - 连接：标题上的「等待网络 / 连接中… / 更新中…」。
+- 一致：静止时，探针导出的每一项都等于 hub 的。允许延后的只有「非关键」字段，而且延后有上限（下表）。
+
+### 及时（有上限）
+
+| 更新 | 例子 | 上限 | 滚动、拖动中 |
+| --- | --- | --- | --- |
+| 关键 | 某个 Agent 开始 / 不再需要你、提问或审批来了 / 答完了、Agent 离线、机器离线或出错 | 推送后 1 s 内上屏 | 不扣留，立刻上屏，而且只上关键的这部分（见下）。列表仍可能在手指下挪动：顶上插进一张卡、空间升上去，这是马上显示的代价 |
+| 非关键 | 最后一句话、顺序调整、时间、token | 手指停下后 0.5 s 内；一直在滚也最多 5 s | 合并、延后 |
+| 页面看不见时 | 被对话盖住、在另一页 | 回到这页时立刻落地 | 不重画 |
+
+扣留中来了关键更新，只落关键的部分（`AgentsFeed.landCritical`）：
+- 落什么：开始 / 不再需要你、离线的那几个 Agent 的状态，改在列着的行上；提问；机器；
+- 不落什么：最后一句、时间、顺序，照常等手指停下或 5 s 上限；
+- 为什么：一开始是连同扣着的全部一起落，最后一句改了行高，滑动中整表重排，旧布局实测跳了 104 pt（`ScrollUnderPushTests` 失败，列表在滚动中重画 10 次）。
+
+为什么停下后等 0.5 s：
+- 连着甩的几下中间只停半秒到一秒；
+- 在两次之间落地，`List` 要到下一次手指落下时才排版，那一下会跳。
+
+- `PerfScroll` 把这种跳另记为 `landed`：页面放开后 0.3 s 内，或静止时放开后的下一次滚动的前 0.5 s 内。它是更新按设计在静止时落地，不算滚动中被打断。
+- 但用户看得到：停下、更新落地，下一次手指落下时内容挪一下（mock 上偶尔几百 pt）。
+- 原因在 `List` 的行高估算：落地改了屏幕外行的高矮，UIKit 到下一次滚动才按实际高度重排。之前用 1.5 s 是为了躲开它，现在改回 0.5 s，
+  治本放在第 1–3 步：落地时只改变了的行，列表结构和行高不跟着整体重来。
+
+### 收敛
+
+任意推送序列加任意操作结束后，屏幕在上限内回到 hub 的状态。
+
+- 操作包括：滚动、拖动、开菜单、切页、进出对话、前后台、断网重连。
+- 漏掉的更新有兜底：重连后重新拉会话列表（`hello` 之后 `refresh`）。断网期间 hub 上发生的事，重连后同样要出现。
+
+### 不吞操作
+
+- 延后换序时，点到的必须是用户看到的那一行：扣留期间列表不换序，点击作用在看到的行上。
+- 落地发生在静止 0.5 s 后，不在手指按下的那一下。
+
+### 陈旧可见
+
+断网、重连、补数据的时候，标题显示「等待网络 / 连接中… / 更新中…」（`ConnectionStatus`，1.5 s 后显示，免得一闪）。
+
+## 探针和断言（msg-render 和 live 共用）
+
+App 端 `apple/Jarvis/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
+
+- `view.screenProbe("<区域>", page:, value)`：`value` 是 `Encodable & Equatable`。
+  - 挂一个 1×1 元素，`accessibilityIdentifier("probe.<区域>")`；
+  - `accessibilityValue` 是一行 JSON：`{"area","seq","at","page","v"}`。
+- 字段：
+  - `seq`：内容变一次加一；
+  - `at`：最近一次变化的时刻，毫秒。模拟器和 Mac 同一个钟，测试能直接和自己发推送的时刻比，手指还按着时发生的变化也量得到；
+  - `page`：新外壳里这块在哪一页。两页都建着，测试按它挑。
+- 区域：
+  - `agents-list`：`{states, last, asks}`；
+  - `connection`：`{shown, network}`；
+  - `chat`：`{key}`，打开的是哪个对话（page 是它所在的页）；
+  - `shell`：live 车道，`{strip, selected, tab, position, moving, drawerOpen, chatRoot, workRoot, trace}`。
+
+测试端 `apple/JarvisUITests/ScreenProbe.swift`：
+
+- `app.probe(area, as:, page:)`、`app.probeSeq`、`app.probeChanged`（`at` 转成 `Date`）；
+- `eventually(what, within:, poll:) { 差异 }`：反复读直到没有差异，返回用时，超时失败并带上最后的差异。`within: 0` 就是「现在一致」；
+- `differences(shown:truth:deferrable:)`：逐项比，`deferrable` 里的字段不算。
+
+测试：`ScreenTruthTests`（`docs/testing.md`「真实性与及时性」）。
