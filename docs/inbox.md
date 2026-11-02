@@ -78,6 +78,28 @@ removed（飞书 Moments，以前叫头条圈）里和我有关的事也进收�
 - App：行的图标是removed的、标签「removed」（@ 我的是「@我」，也出现在「@我」筛选里）；点开就是帖子和评论（`LarkMomentsPostView`，`pushed`）。
   DEBUG：`-openInboxItem <id>` 打开某一件（截removed详情用）；mock 里有一件 `moment:mp1:mn1`。
 
+## 连接器：GitHub（2026-11-02）
+
+连接器（`docs/plan-connectors.md`）的「需要我」的事也进收件箱：连接器实现 `connector.Inbox`，给出候选（一个线程一个，`InboxThing`），
+hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞书会话一样：一个线程同时只有一件没处理的，后来的动静并进去（`count` 加一）；
+处理过以后再来的另开一件；连接器说这件事结束了（合了、关了、自己回了）就自动处理掉（`done_by` = read / replied）；在别处读过、又不是「需要你」的，算 `read`。
+分拣、代写、AI 分身、已处理、保留时间都是 hub 通用的。
+
+- **GitHub**（`server/internal/connector/github/inbox.go`）：hub 没有公网入口收不到 webhook，所以轮询 `/notifications`（只看未读），间隔按 `X-Poll-Interval`（一般 60 秒），
+  带 `If-Modified-Since`，304 不读任何详情；每 10 分钟不带条件读一次全量（在 GitHub 上读过的通知可能不改 Last-Modified）。有变化的线程再读 PR / issue、评论和 review（每轮最多 30 个）。
+  请求额度剩不到一成时只轮询通知，状态显示「请求额度快用完了」。
+- 收哪些（`reason`）：等我 review 的 PR（`review_requested`）、@ 我（`mention`）、@ 了我的团队（`team_mention`，默认知悉即可）、我的 PR / issue 有别人的新评论或 review（`author`，默认知悉即可，模型判断）、
+  我触发的 CI 失败（`ci_activity` 且标题里有 fail）、分配给我（`assign`）。其余（`subscribed`、`comment`、`state_change`…）不进来。一个 PR / issue 一件（`example-org/example-repo#12`）。
+- 结束：合了 / 关了 → read；线程最新一条是我 → replied；review 请求撤了（我不在 reviewers 里了）→ 我 review 过是 replied，否则 read。已处理**不回写** GitHub 的已读。
+- 上下文：标题、状态、作者、等谁 review、描述（截 1500 字）、最近 8 条评论和 review（旧的在前，每条截 600 字）。提示词里的「类型」行在 `prompts/inbox/kinds/github.md`。
+- **发送** = 在 PR / issue 下评论（`POST /repos/{o}/{r}/issues/{n}/comments`），「发送」按钮本身就是确认；`reply_to` 写「评论到 …（仓库可见的人都能看到）」。CI 失败不能回复（只有「交给 AI」）。
+- App（只有 iOS 带 `?sources=all`；Mac、手表、Android 这一步看不到）：
+  - 行：头像是最新动静的人，角标是 GitHub 标志，标签是 `label`（「请你 review」「@我」「CI 失败」…），第二行「仓库#号 · 谁：内容」；
+  - 筛选里有「GitHub」（有条目时才出现）；
+  - 点开是通用详情 `InboxConnectorDetailView`：标题、线程、「在 GitHub 打开」（App 内的网页卡片）、hub 读到的内容。没有 PR 页、diff 页。
+  - 没有 GitHub 条目时界面不变。
+  - mock：`MOCK_GITHUB_INBOX=1`；UI 测试 `InboxConnectorTests`。
+
 ## AI 分身（自动处理 + 草拟回复）
 
 三个模型串起来（2026-10-29），全在 hub 后台跑，**只起草、不发送**：

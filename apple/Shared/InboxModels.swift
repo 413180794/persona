@@ -4,7 +4,7 @@ import Foundation
 /// hub's AI triage and whether it has been dealt with. Mirrors hub/inbox.go `InboxItem`.
 nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var id: String
-    var source: String // lark | mail
+    var source: String // lark | mail | a connector's id (github…)
     var kind: String   // dm | mention | group | bot | mail
     var account: String
     var accountName: String
@@ -34,6 +34,27 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var context: String?
     /// The AI 分身's work on it: judged, handled by an agent, a reply drafted (docs/inbox.md).
     var agent: Agent?
+    /// A thread of one of the hub's connectors (GitHub…): drawn the same for every source (docs/plan-connectors.md).
+    var connector: Connector?
+
+    nonisolated struct Connector: Codable, Hashable, Sendable {
+        var thread: String
+        var label: String?
+        /// The thread on the web, opened in the app; `openURL` is handed to the system instead (sms:…).
+        var url: String?
+        var openURL: String?
+        /// Where a reply goes and who sees it (评论到 example-org/example-repo#12（仓库可见的人都能看到）).
+        var replyTo: String?
+        var canReply: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case thread, label, url
+            case openURL = "open_url", replyTo = "reply_to", canReply = "can_reply"
+        }
+
+        /// The thread as people write it (example-org/example-repo#12), nil when it is only an id.
+        var reference: String? { thread.contains("#") ? thread : nil }
+    }
 
     nonisolated struct Moment: Codable, Hashable, Sendable {
         var postID: String
@@ -187,7 +208,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations
+        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations, connector
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 
@@ -211,7 +232,8 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
 
     /// The short tag next to the title.
     var kindLabel: String? {
-        switch kind {
+        if let c = connector { return c.label }
+        return switch kind {
         case "dm": "私聊"
         // Read elsewhere: the @ is no longer unread, so the row stops flagging it (it stays for its tier).
         case "mention": read == true ? nil : lark?.atAll == true ? "@所有人" : "@我"
@@ -232,14 +254,16 @@ extension APIClient {
         }.value
     }
 
-    /// Open items and the ones done in the last few days, newest first.
-    func inbox() async throws -> [InboxItem] {
-        try await Self.decodeInbox(request("GET", "/api/v1/inbox"))
+    /// Open items and the ones done in the last few days, newest first. `connectors`: the connectors' items too
+    /// (GitHub…), for a client that draws their `connector` block; without it the hub lists Feishu and mail only.
+    func inbox(connectors: Bool = false) async throws -> [InboxItem] {
+        try await Self.decodeInbox(request("GET", "/api/v1/inbox", query: connectors ? ["sources": "all"] : [:]))
     }
 
     /// Collects Feishu and mail now, then lists.
-    func refreshInbox() async throws -> [InboxItem] {
-        try await Self.decodeInbox(post("/api/v1/inbox/refresh", timeout: 60))
+    func refreshInbox(connectors: Bool = false) async throws -> [InboxItem] {
+        try await Self.decodeInbox(request("POST", "/api/v1/inbox/refresh", query: connectors ? ["sources": "all"] : [:],
+                                           body: [String: String](), timeout: 60))
     }
 
     // Item ids are `lark:<feed>:<position>` / `mail:<account>:<thread>:<uid>`: path-safe as they are

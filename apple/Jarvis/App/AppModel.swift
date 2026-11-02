@@ -1401,7 +1401,8 @@ final class AppModel {
     func watchSummary() -> WatchSummary {
         let sessions = allSessions.filter { $0.status.isLive }
             .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
-        let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action }
+        // The watch does not draw connectors' items (GitHub…) yet.
+        let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action && $0.connector == nil }
         return WatchSummary(sessions: Array(sessions.prefix(20)), interactions: pendingInteractions, machines: machines,
                             inbox: Array(inbox.prefix(20)))
     }

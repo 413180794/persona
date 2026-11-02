@@ -1079,6 +1079,34 @@ if os.environ.get("MOCK_DOCS"):
                  "reply": {"kind": "thread", "label": "回复评论"}}},
     ]
 
+# MOCK_GITHUB_INBOX=1: the GitHub connector's items (the generic `connector` block), listed only to apps that ask with
+# ?sources=all, like the hub; made-up repos and people.
+if os.environ.get("MOCK_GITHUB_INBOX"):
+    INBOX[1:1] = [
+        {"id": "github:review12", "source": "github", "kind": "review_requested", "account": "github", "account_name": "GitHub",
+         "title": "Add retries to the example uploader", "sender": "alice", "preview": "请看一下重试的退避时间", "count": 1,
+         "started_at": ago(minutes=25), "updated_at": ago(minutes=25), "tier": "action",
+         "summary": "alice 请你 review 上传重试的 PR，问退避时间是否合适", "reason": "请你 review", "read": False,
+         "context": "GitHub PR example-org/example-repo#12：Add retries to the example uploader\n状态：open · 作者 alice · 等这些人 review：me\n"
+                    "https://github.com/example-org/example-repo/pull/12\n\n描述：\n上传失败时按指数退避重试三次。\n\n"
+                    "最近的评论和 review（旧的在前，共 1 条）：\n\n2026-11-02 09:00Z alice：\n请看一下重试的退避时间",
+         "connector": {"thread": "example-org/example-repo#12", "label": "请你 review", "url": "https://github.com/example-org/example-repo/pull/12",
+                       "reply_to": "评论到 example-org/example-repo#12（仓库可见的人都能看到）", "can_reply": True}},
+        {"id": "github:ci7", "source": "github", "kind": "ci_failed", "account": "github", "account_name": "GitHub",
+         "title": "CI workflow run failed for main branch", "sender": "GitHub Actions", "preview": "CI workflow run failed for main branch",
+         "count": 1, "started_at": ago(hours=2), "updated_at": ago(hours=2), "tier": "action",
+         "summary": "main 分支的 CI 挂了", "reason": "CI 失败", "read": False,
+         "context": "仓库 example-org/example-repo 的 CI（GitHub Actions）：CI workflow run failed for main branch",
+         "connector": {"thread": "notification:7", "label": "CI 失败", "url": "https://github.com/example-org/example-repo/actions"}},
+    ]
+
+
+def inbox_for(query):
+    """The list as the hub gives it: connectors' items only with ?sources=all."""
+    all_sources = (query.get("sources") or [""])[0] == "all"
+    return [{k: v for k, v in x.items() if k != "context"} for x in INBOX if all_sources or "connector" not in x]
+
+
 # Mail bodies (GET /api/v1/mail/messages/{aid}/{uid}); 504 is in English, for 设置 › 翻译.
 INBOX.insert(next(i for i, x in enumerate(INBOX) if x["kind"] == "mail"), {"id": "mail:acc1:t4:504", "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
      "title": "Can we move the design review?", "sender": "Lucy Wang",
@@ -2917,13 +2945,13 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/schedule": return self.send_json({"ran": SCHEDULE_RAN})
         if p == "/mock/renamed": return self.send_json({"renamed": RENAMED})
         if p == "/mock/served": return self.send_json({"served": SERVED})
-        if p == "/api/v1/inbox": return self.send_json({"items": INBOX})
+        if p == "/api/v1/inbox": return self.send_json({"items": inbox_for(q)})
         if p == "/api/v1/lark/moments/posts/mp1": return self.send_json(MOMENT_POST)
         if p == "/api/v1/lark/moments/posts/mp1/comments": return self.send_json({"comments": MOMENT_COMMENTS})
         if p.startswith("/api/v1/inbox/"):
             iid = p[len("/api/v1/inbox/"):]
             for x in INBOX:
-                if x["id"] == iid: return self.send_json(dict(x, context=x["preview"]))
+                if x["id"] == iid: return self.send_json(dict(x, context=x.get("context") or x["preview"]))
         if mail_area(self, "GET", p, q): return
         if p == "/api/v1/mail/accounts": return self.send_json({"accounts": MAIL_ACCOUNTS})
         if p.startswith("/api/v1/mail/messages/") and p.count("/") == 6:
@@ -3342,7 +3370,7 @@ class H(BaseHTTPRequestHandler):
             if not any(m.get("client_msg_id") and m.get("client_msg_id") == body.get("client_msg_id") for m in SENT):
                 SENT.append(body)
             return self.send_json({"ok": True})
-        if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
+        if p == "/api/v1/inbox/refresh": return self.send_json({"items": inbox_for(parse_qs(urlparse(self.path).query))})
         if p == "/api/v1/translate/mail":
             body = json.loads(self.last_body or b"{}")
             t = MAIL_TRANSLATIONS.get(body.get("uid"))
@@ -3359,6 +3387,8 @@ class H(BaseHTTPRequestHandler):
                             st["value"] = ch.get("value")
                             return self.send_json(x)
             return self.send_json({"error": "no such row"}, 400)
+        if p.startswith("/api/v1/inbox/") and p.endswith("/draft"):  # AI 草拟回复
+            return self.send_json({"text": "看过了，退避时间没问题，可以合。"})
         if p.startswith("/api/v1/inbox/") and p.endswith("/reply"):
             iid, body = p[len("/api/v1/inbox/"):-len("/reply")], json.loads(self.last_body or b"{}")
             SENT.append(dict(body, inbox=iid))

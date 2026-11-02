@@ -386,6 +386,10 @@ func goldenItems() map[string]*InboxItem {
 			Mail: &InboxMail{AccountID: "acc1", Mailbox: "INBOX", UIDs: []uint32{7, 9}, Direct: true, From: mail.Address{Email: "Sender@Example.com"}}, Agent: agent},
 		"mail_cc": {ID: "mail:2", Kind: KindMail, Title: "周报", Context: "抄送：本周进展", UpdatedAt: at,
 			Mail: &InboxMail{AccountID: "acc1", Mailbox: "INBOX"}},
+		"github_review": {ID: "github:1", Source: "github", Kind: "review_requested", Title: "Add the example",
+			Context: "GitHub PR example-org/example-repo#12：Add the example\n状态：open · 作者 alice · 等这些人 review：me", UpdatedAt: at,
+			Connector: &InboxConnector{Thread: "example-org/example-repo#12", Label: "请你 review", URL: "https://github.com/example-org/example-repo/pull/12",
+				ReplyTo: "评论到 example-org/example-repo#12（仓库可见的人都能看到）", CanReply: true, RuleTier: TierAction}, Agent: agent},
 	}
 }
 
@@ -447,7 +451,7 @@ func TestGoldenInboxJudge(t *testing.T) {
 
 func TestGoldenInboxAgentPrompt(t *testing.T) {
 	items := goldenItems()
-	for _, name := range []string{"dm", "doc_rows", "doc_plain", "moment", "mail_direct"} {
+	for _, name := range []string{"dm", "doc_rows", "doc_plain", "moment", "mail_direct", "github_review"} {
 		h := agentHub(t)
 		h.cfg.Assistant.Owner = "示例用户"
 		golden(t, "inbox_agent."+name, inboxAgentPrompt(items[name], h.ownerName(), h.kbContextFor(items[name])))

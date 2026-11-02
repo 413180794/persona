@@ -63,6 +63,15 @@ struct InboxPage: View {
 
     private var openItems: [InboxItem] { store.items.filter { !$0.isDone && matches($0) } }
 
+    /// The hub's connectors with items in the list (GitHub…), one filter each; none, no chip.
+    private var connectorSources: [(id: String, name: String)] {
+        var seen = Set<String>()
+        return store.items.compactMap { it in
+            guard it.connector != nil, seen.insert(it.account).inserted else { return nil }
+            return (it.account, it.accountName)
+        }
+    }
+
     /// Agents (and the assistant) waiting for an answer, an approval or a plan review: they need the user too, so they
     /// head 需要你. Opening one goes to its chat; the Agents tab stays as it is.
     private var waitingAgents: [Interaction] {
@@ -244,6 +253,9 @@ struct InboxPage: View {
                 ForEach(accounts) { a in
                     filterChip(Self.short(a.email), on: source == a.id) { source = source == a.id ? "" : a.id }
                 }
+                ForEach(connectorSources, id: \.id) { c in
+                    filterChip(c.name, on: source == c.id) { source = source == c.id ? "" : c.id }
+                }
                 ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")], id: \.0) { k, title in
                     filterChip(title, on: kind == k) { kind = kind == k ? "" : k }
                 }
@@ -269,6 +281,9 @@ struct InboxPage: View {
                 chip("飞书", symbol: Theme.Icon.feishuChats, on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
                 ForEach(accounts) { a in
                     chip(Self.short(a.email), symbol: Theme.Icon.mail, on: source == a.id) { source = source == a.id ? "" : a.id }
+                }
+                ForEach(connectorSources, id: \.id) { c in
+                    chip(c.name, symbol: Theme.Icon.connectors, on: source == c.id) { source = source == c.id ? "" : c.id }
                 }
                 Divider().scaledFrame(height: Theme.Size.badge)
                 ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")], id: \.0) { k, title in
@@ -395,6 +410,10 @@ struct InboxRow: View {
     private var from: String {
         if let doc = item.doc { return doc.typeName + " · " + item.preview } // the preview names who: 李雷提及了你
         if item.moment != nil { return (item.sender ?? "") + "：" + item.preview } // who commented, on the post in the title
+        if let c = item.connector { // example-org/example-repo#12 · bob：请看一下
+            let who = [item.sender ?? "", item.preview].filter { !$0.isEmpty }.joined(separator: "：")
+            return [c.reference ?? "", who].filter { !$0.isEmpty }.joined(separator: " · ")
+        }
         if let t = translated?.preview, !t.isEmpty, let sender = item.sender, !sender.isEmpty { return sender + "：" + t }
         guard let sender = item.sender, !sender.isEmpty, item.lark?.isGroup != false || !item.isLark else { return item.preview }
         return sender + "：" + item.preview
@@ -417,12 +436,13 @@ struct InboxRow: View {
             }
             }
             .opacity(item.isDone ? 0.6 : 1)
-            // The source: 飞书's own mark on white, mail a neutral gray, not the accent.
+            // The source: 飞书's (or a connector's: GitHub's, a template image, in black) own mark on white; mail, or a
+            // connector without a mark, a neutral gray, not the accent.
             Group {
-                if item.isLark {
-                    Image(Theme.Brand.lark).resizable().scaledToFit().padding(1.5).background(.white, in: .circle)
+                if let brand = item.isLark ? Theme.Brand.lark : item.connector != nil ? ConnectorText.brand(item.source) : nil {
+                    Image(brand).resizable().scaledToFit().foregroundStyle(.black).padding(1.5).background(.white, in: .circle)
                 } else {
-                    Image(systemName: Theme.Icon.mailFilled)
+                    Image(systemName: item.connector != nil ? Theme.Icon.connectors : Theme.Icon.mailFilled)
                         .font(Theme.Font.labelHeavy).imageScale(.small).dynamicTypeSize(...DynamicTypeSize.large)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -611,6 +631,8 @@ struct InboxDetailView: View {
     @ViewBuilder private var content: some View {
         if current.doc != nil {
             InboxDocDetailView(item: current)
+        } else if current.connector != nil {
+            InboxConnectorDetailView(item: current)
         } else if let m = current.moment {
             LarkMomentsPostView(postID: m.postID, pushed: true) // the post and its comments, as a shared removed card opens
         } else if let c = item.larkConversation {

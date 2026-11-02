@@ -293,8 +293,8 @@ struct ShellNeedsYou: View {
 
     /// An inbox item's mark: Feishu's logo on a white tile, or its kind's symbol on the accent.
     @ViewBuilder private func beautifulMark(_ it: InboxItem) -> some View {
-        if it.source == "lark" && it.kind != "doc" && it.kind != "moment" {
-            Image(Theme.Brand.lark).resizable().scaledToFit()
+        if let brand = Self.brand(it) {
+            Image(brand).resizable().scaledToFit().foregroundStyle(.black)
                 .padding(Theme.Space.xs)
                 .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 .background(Color.white, in: .rect(cornerRadius: Theme.Radius.badge + 1, style: .continuous))
@@ -370,8 +370,8 @@ struct ShellNeedsYou: View {
     }
 
     @ViewBuilder private func mark(_ it: InboxItem) -> some View {
-        if it.source == "lark" && it.kind != "doc" && it.kind != "moment" {
-            Image(Theme.Brand.lark).resizable().scaledToFit()
+        if let brand = Self.brand(it) {
+            Image(brand).resizable().scaledToFit()
                 .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
                 .scaledFrame(width: Theme.Size.icon)
         } else {
@@ -382,8 +382,15 @@ struct ShellNeedsYou: View {
         }
     }
 
+    /// A source's own mark: 飞书's for its chats, a connector's (GitHub…); nil draws the kind's symbol.
+    private static func brand(_ it: InboxItem) -> String? {
+        if it.connector != nil { return ConnectorText.brand(it.source) }
+        return it.source == "lark" && it.kind != "doc" && it.kind != "moment" ? Theme.Brand.lark : nil
+    }
+
     private static func symbol(_ it: InboxItem) -> String {
-        switch it.kind {
+        if it.connector != nil { return Theme.Icon.connectors }
+        return switch it.kind {
         case "doc": Theme.Icon.document
         case "moment": Theme.Icon.moments
         default: Theme.Icon.mail

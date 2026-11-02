@@ -76,6 +76,8 @@ type InboxItem struct {
 	// Translations by target language: new foreign mail, translated before it is opened (inbox_translate.go).
 	Translations map[string]*InboxTranslation `json:"translations,omitempty"`
 	Moment       *InboxMoment                 `json:"moment,omitempty"` // a removed post's comments / @me (inbox_moments.go)
+	// Connector: a thread of a connector's (GitHub…), Source being its id (inbox_connectors.go).
+	Connector *InboxConnector `json:"connector,omitempty"`
 	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
 	Agent *InboxAgent `json:"agent,omitempty"`
 
@@ -157,6 +159,10 @@ func (it *InboxItem) listed() InboxItem {
 		m := *it.Moment
 		m.Notices = append([]string(nil), it.Moment.Notices...)
 		c.Moment = &m
+	}
+	if it.Connector != nil {
+		k := *it.Connector
+		c.Connector = &k
 	}
 	return c
 }
@@ -283,6 +289,7 @@ func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
 	if withMail && h.mail != nil {
 		changed = append(changed, h.collectMail(ctx)...)
 	}
+	changed = append(changed, h.collectConnectors(ctx)...)
 	h.inbox.mu.Lock()
 	for id, it := range h.inbox.items {
 		if it.DoneAt != nil && time.Since(*it.DoneAt) > inboxForget {
@@ -756,10 +763,14 @@ func mailContext(a mail.MailAccount, msgs []mail.MailSummary) string {
 
 var errNoInboxItem = errors.New("no such inbox item")
 
+var errCannotReply = errors.New("this item cannot be replied to")
+
 func (h *Hub) inboxRoutes(api *http.ServeMux) {
 	h.inbox.init()
+	// Items of connectors (GitHub…) only go to apps that draw them (?sources=all): an older app would show a PR as
+	// a mail and send a reply as one.
 	api.HandleFunc("GET /api/v1/inbox", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"items": h.inboxList()})
+		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all")})
 	})
 	api.HandleFunc("GET /api/v1/inbox/{id}", func(w http.ResponseWriter, r *http.Request) {
 		h.inbox.mu.Lock()
@@ -845,18 +856,19 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/inbox/refresh", func(w http.ResponseWriter, r *http.Request) {
 		h.collectInbox(r.Context(), true)
-		writeJSON(w, map[string]any{"items": h.inboxList()})
+		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all")})
 	})
 }
 
-// inboxList is every open item and the recently done ones, newest first.
-func (h *Hub) inboxList() []InboxItem {
+// inboxList is every open item and the recently done ones, newest first; connectors' only when all (rows stored
+// before Source was set have none, so it is the connector block that tells).
+func (h *Hub) inboxList(all bool) []InboxItem {
 	h.inbox.mu.Lock()
 	defer h.inbox.mu.Unlock()
 	cutoff := time.Now().Add(-inboxKeepDone)
 	out := make([]InboxItem, 0, len(h.inbox.items))
 	for _, it := range h.inbox.items {
-		if it.DoneAt != nil && it.DoneAt.Before(cutoff) {
+		if it.DoneAt != nil && it.DoneAt.Before(cutoff) || !all && it.Connector != nil {
 			continue
 		}
 		out = append(out, it.listed())

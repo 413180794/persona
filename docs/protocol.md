@@ -647,22 +647,24 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/v1/inbox` | `{items:[InboxItem]}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context` |
+| GET | `/api/v1/inbox` | `{items:[InboxItem]}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context`。默认只有飞书和邮件；带 `?sources=all` 才有连接器（GitHub…）的条目（带 `connector` 块的），旧 App、手表、Android 不带，所以不会把 PR 当邮件画 |
 | GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用） |
 | POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
 | POST | `/api/v1/inbox/{id}/reply` | `{text, changes?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发；`clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
 | POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
-| POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表 |
+| POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表（`?sources=all` 同上） |
 | POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`，顺序不变，模型没给的是空串；target 是 BCP 47（zh-Hans、en、ja…，`docs/ios.md`「翻译」） |
 | POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?}`：hub 读这封信自己翻，正文最多 12000 字 |
 
-`InboxItem`：`id`、`source`（lark / mail）、`kind`（dm / mention / group / bot / mail）、`account`（`feishu` 或邮箱账号 id）、
+`InboxItem`：`id`、`source`（lark / mail，或连接器的 id：github）、`kind`（dm / mention / group / bot / mail；连接器的是它自己的：review_requested / mention / team_mention / author / ci_failed / assign）、`account`（`feishu` 或邮箱账号 id）、
 `account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
 `tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / read / replied）、
 `lark{feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}`（`read_position`：这个会话在飞书里的已读位置，每次采集都刷新；`reply_to`：最后一条别人发的消息的 id，`thread_kind`：它在哪，空 = 在会话里、`topic` = 话题群的话题、`thread` = 普通群里的话题回复，这两个在采到新消息时刷新，旧数据没有）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
 `translations{<目标语言>:{subject,preview}}`（hub 提前翻好的外文邮件，`docs/ios.md`「翻译」）、`doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
-（`kind=doc`，`docs/inbox.md`「云文档」）；`agent.changes:[{ref,field,value}]` 是 AI 分身随草稿提议的改状态。
+（`kind=doc`，`docs/inbox.md`「云文档」）；`agent.changes:[{ref,field,value}]` 是 AI 分身随草稿提议的改状态；
+`connector{thread,label,url,open_url,reply_to,can_reply,rule_tier}`：连接器的一件（`docs/inbox.md`「连接器：GitHub」），App 只画这一个块、不认识具体来源：
+`label` 是行上的标签，`url` 在 App 内打开，`open_url` 交给系统打开（`sms:` 这类），`reply_to` 说回复会发到哪、谁能看到，`can_reply` 为假时不能回复（CI 失败）。
 列表变化时 WebSocket 推 `{"type":"inbox"}`（不带内容，App 自己拉）。
 
 ## 飞书 API（lark-connector）

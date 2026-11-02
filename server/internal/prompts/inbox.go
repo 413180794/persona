@@ -2,9 +2,11 @@ package prompts
 
 // InboxItem is an inbox item as the models read it (inbox/item): what kind of thing it is, then the conversation.
 type InboxItem struct {
-	Kind       string // dm | mention | group | bot | doc | moment | mail
+	Kind       string // dm | mention | group | bot | doc | moment | mail; a connector's own (inbox/kinds/<source>)
 	MailDirect bool   // mail: sent to me, not cc / a list
-	Context    string
+	// Source is a connector's id ("github") for its items, "" for Feishu's and mail's.
+	Source  string
+	Context string
 }
 
 func RenderInboxItem(it InboxItem) string { return render("inbox/item", it) }
@@ -60,10 +62,19 @@ type InboxAgent struct {
 	Doc    *InboxAgentDoc
 	Moment *InboxAgentMoment
 	Mail   *InboxAgentMail
-	KB     *KBContext // what the knowledge base knows about the item's chat
+	// Connector: an item of a connector's (GitHub…).
+	Connector *InboxAgentConnector
+	KB        *KBContext // what the knowledge base knows about the item's chat
 }
 
 type InboxAgentLark struct{ FeedID string }
+
+// InboxAgentConnector is the thread of a connector's item: Source is the connector's id.
+type InboxAgentConnector struct {
+	Source  string
+	URL     string
+	ReplyTo string
+}
 
 type InboxAgentDoc struct {
 	URL  string

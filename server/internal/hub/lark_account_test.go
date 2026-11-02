@@ -42,7 +42,7 @@ func TestInboxAccountSwitchPersists(t *testing.T) {
 		h.inbox.init()
 		h.loadInbox(ctx)
 		seen := map[string]bool{}
-		for _, row := range h.inboxList() {
+		for _, row := range h.inboxList(false) {
 			seen[row.ID] = true
 		}
 		if !seen["account-test-mail"] || seen["account-test-legacy"] != (account == 1) || seen["account-test-second"] != (account == 2) {

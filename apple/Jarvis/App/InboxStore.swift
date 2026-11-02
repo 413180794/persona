@@ -37,14 +37,21 @@ final class InboxStore {
         guard reloading == nil else { return }
         reloading = Task {
             defer { reloading = nil }
-            await fetch { try await $0.inbox() }
+            await fetch { try await $0.inbox(connectors: Self.drawsConnectors) }
         }
     }
 
     /// Pull to refresh: the hub collects Feishu and mail now.
     func refresh() async {
-        await fetch { try await $0.refreshInbox() }
+        await fetch { try await $0.refreshInbox(connectors: Self.drawsConnectors) }
     }
+
+    /// The connectors' items (GitHub…) are drawn on iOS; the Mac's inbox and the watch do not draw them yet.
+    #if os(iOS)
+    private static let drawsConnectors = true
+    #else
+    private static let drawsConnectors = false
+    #endif
 
     private func fetch(_ load: (APIClient) async throws -> [InboxItem]) async {
         guard let api = AppModel.shared.api else { return }

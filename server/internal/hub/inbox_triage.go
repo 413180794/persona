@@ -122,6 +122,12 @@ func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 
 // ruleTier is the tier without a model: people talking to me need me, groups are FYI, bots and lists are noise.
 func ruleTier(it *InboxItem) string {
+	if it.Connector != nil {
+		if it.Connector.RuleTier != "" {
+			return it.Connector.RuleTier
+		}
+		return TierNoise
+	}
 	switch it.Kind {
 	case KindDM, KindMention, KindDoc:
 		return TierAction
@@ -144,7 +150,11 @@ func ruleTier(it *InboxItem) string {
 func triageInput(it *InboxItem) string { return prompts.RenderInboxItem(promptItem(it)) }
 
 func promptItem(it *InboxItem) prompts.InboxItem {
-	return prompts.InboxItem{Kind: it.Kind, MailDirect: it.Mail != nil && it.Mail.Direct, Context: it.Context}
+	p := prompts.InboxItem{Kind: it.Kind, MailDirect: it.Mail != nil && it.Mail.Direct, Context: it.Context}
+	if it.Connector != nil {
+		p.Source = it.Source
+	}
+	return p
 }
 
 // draftReply writes a reply to an inbox item in the user's voice (optionally following their instruction).
@@ -198,6 +208,10 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 			m := *it.Moment
 			c.Moment = &m
 		}
+		if it.Connector != nil {
+			k := *it.Connector
+			c.Connector = &k
+		}
 	}
 	h.inbox.mu.Unlock()
 	if !ok {
@@ -242,6 +256,23 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 			return InboxItem{}, err
 		}
 		reply.clientID = clientID
+	case c.Connector != nil:
+		// Phone and watch can both press send: the same text on an item already replied to went out already.
+		r, _ := h.inbox.replies.LoadOrStore(id, &inboxReply{})
+		reply := r.(*inboxReply)
+		reply.mu.Lock()
+		defer reply.mu.Unlock()
+		h.inbox.mu.Lock()
+		sent := it.DoneBy == "replied" && reply.clientID == text
+		out := it.listed()
+		h.inbox.mu.Unlock()
+		if sent {
+			return out, nil
+		}
+		if err := h.replyConnector(ctx, c, text); err != nil {
+			return InboxItem{}, err
+		}
+		reply.clientID = text
 	case c.Mail != nil && h.mail != nil && len(c.Mail.UIDs) > 0:
 		orig, err := h.mail.GetMessage(ctx, c.Mail.AccountID, c.Mail.UIDs[len(c.Mail.UIDs)-1], c.Mail.Mailbox)
 		if err != nil {
@@ -251,7 +282,7 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 			return InboxItem{}, err
 		}
 	default:
-		return InboxItem{}, errors.New("this item cannot be replied to")
+		return InboxItem{}, errCannotReply
 	}
 	h.inbox.mu.Lock()
 	it.done(time.Now(), "replied")

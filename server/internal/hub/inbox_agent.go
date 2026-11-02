@@ -279,6 +279,8 @@ func inboxAgentPrompt(it *InboxItem, owner string, kbc *prompts.KBContext) strin
 		a.Doc = &prompts.InboxAgentDoc{URL: it.Doc.URL, Rows: len(it.Doc.Rows) > 0}
 	case it.Moment != nil:
 		a.Moment = &prompts.InboxAgentMoment{PostID: it.Moment.PostID}
+	case it.Connector != nil:
+		a.Connector = &prompts.InboxAgentConnector{Source: it.Source, URL: it.Connector.URL, ReplyTo: it.Connector.ReplyTo}
 	case it.Mail != nil && len(it.Mail.UIDs) > 0:
 		a.Mail = &prompts.InboxAgentMail{Account: it.Mail.AccountID, Mailbox: it.Mail.Mailbox, UID: it.Mail.UIDs[len(it.Mail.UIDs)-1]}
 	}

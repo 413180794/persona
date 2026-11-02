@@ -1,4 +1,5 @@
-{{if eq .Kind "dm"}}类型：飞书私聊
+{{if eq .Source "github"}}{{template "inbox/kinds/github" .}}
+{{else if eq .Kind "dm"}}类型：飞书私聊
 {{else if eq .Kind "mention"}}类型：飞书群里 @ 了用户
 {{else if eq .Kind "group"}}类型：飞书群的新消息（没有 @ 用户）
 {{else if eq .Kind "bot"}}类型：飞书机器人 / 应用发来的消息

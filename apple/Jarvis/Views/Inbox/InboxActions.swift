@@ -18,7 +18,10 @@ struct InboxActionBar: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: Theme.Space.s) {
-                action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
+                // A connector's thread that cannot be answered (a CI run) has only 交给 AI.
+                if item.connector.map({ $0.canReply == true }) ?? true {
+                    action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
+                }
                 action("交给 AI", symbol: Theme.Icon.handToAI, prominent: false, perform: handOff)
             }
         }
@@ -105,7 +108,9 @@ struct InboxDraftSheet: View {
                 .padding(.vertical, Theme.Space.m)
             }
             .themedPage()
-            .navigationTitle(item.moment != nil ? "评论removed" : item.doc != nil ? "评论 " + item.title : item.isLark ? "回复 " + item.title : "回复邮件")
+            .navigationTitle(item.moment != nil ? "评论removed" : item.doc != nil ? "评论 " + item.title
+                             : item.connector != nil ? "评论 " + (item.connector?.reference?.split(separator: "/").last.map(String.init) ?? item.title)
+                             : item.isLark ? "回复 " + item.title : "回复邮件")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
@@ -302,9 +307,10 @@ struct InboxHandOffSheet: View {
 
     /// The item as context the chat shows as a chip, then the ask.
     static func message(_ it: InboxItem, ask: String) -> String {
-        let title = (it.isLark ? "飞书 · " : "邮件 · ") + it.title
+        let title = (it.connector != nil ? it.accountName + " · " : it.isLark ? "飞书 · " : "邮件 · ") + it.title
         var text = it.context?.isEmpty == false ? it.context! : [it.sender ?? "", it.preview].filter { !$0.isEmpty }.joined(separator: "：")
         if let l = it.lark { text += "\n\n（飞书会话 feedId \(l.feedID)，可用飞书工具读更多上下文或回复）" }
+        if let c = it.connector, let url = c.url { text += "\n\n（\(it.accountName)：\(url)）" }
         if let m = it.mail, let uid = m.uids.last {
             text += "\n\n（邮件 account_id \(m.accountID)，mailbox \(m.mailbox)，uid \(uid)，可用 mail_read 读全文、mail_send 回复）"
         }

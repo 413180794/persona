@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -67,6 +68,32 @@ type Connector struct {
 	token  string
 	status connector.Status
 	poke   chan struct{}
+	// rateLow: under a tenth of the hour's requests are left (X-RateLimit-Remaining); only notifications are polled
+	// until rateReset.
+	rateLow   bool
+	rateReset time.Time
+
+	inbox inboxState // inbox.go
+}
+
+// noteRate records how many requests GitHub still allows this hour.
+func (c *Connector) noteRate(h http.Header) {
+	left, err1 := strconv.Atoi(h.Get("X-RateLimit-Remaining"))
+	limit, err2 := strconv.Atoi(h.Get("X-RateLimit-Limit"))
+	if err1 != nil || err2 != nil || limit <= 0 {
+		return
+	}
+	reset, _ := strconv.ParseInt(h.Get("X-RateLimit-Reset"), 10, 64)
+	c.mu.Lock()
+	c.rateLow, c.rateReset = left*10 < limit, time.Unix(reset, 0)
+	c.mu.Unlock()
+}
+
+// ratesLow says whether to save requests (only notifications are polled).
+func (c *Connector) ratesLow() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rateLow && time.Now().Before(c.rateReset)
 }
 
 // New is the connector for cfg, reading the token of machine (its display name) through fetch.
@@ -88,7 +115,19 @@ func (c *Connector) Status(context.Context) connector.Status {
 	defer c.mu.Unlock()
 	st := c.status
 	st.Via = "来自 " + c.machine + " 的 gh 登录"
+	if st.State == connector.StateOK && c.rateLow && time.Now().Before(c.rateReset) {
+		st.State = connector.StateRateLimited
+		// minutes, not a clock time: the hub's clock is not in the user's time zone
+		st.Error = fmt.Sprintf("这个小时的 GitHub 请求额度快用完了，约 %d 分钟内只看通知", int(time.Until(c.rateReset).Minutes())+1)
+	}
 	return st
+}
+
+// signedIn: the last check found the token good (rate limits aside).
+func (c *Connector) signedIn() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.status.State == connector.StateOK
 }
 
 // MachineOnline: the machine the token comes from just connected, so a token that was missing may be there now.
@@ -113,7 +152,7 @@ func (c *Connector) Run(ctx context.Context) {
 	for {
 		c.check(ctx)
 		wait := checkOK
-		if c.Status(ctx).State != connector.StateOK {
+		if !c.signedIn() {
 			wait = checkRetry
 		}
 		select {
@@ -185,64 +224,69 @@ func (c *Connector) currentToken(ctx context.Context, refresh bool) (string, err
 // Get reads path of the REST API into out (JSON; a *[]byte takes the body as it is; nil drops it), refetching the
 // token once if GitHub refuses it.
 func (c *Connector) Get(ctx context.Context, path string, out any) (http.Header, error) {
-	return c.request(ctx, http.MethodGet, path, nil, out)
+	_, h, err := c.request(ctx, http.MethodGet, path, nil, nil, out)
+	return h, err
 }
 
 // raw reads path as text (a job's log).
 func (c *Connector) raw(ctx context.Context, path string) (string, error) {
 	var b []byte
-	_, err := c.request(ctx, http.MethodGet, path, nil, &b)
+	_, _, err := c.request(ctx, http.MethodGet, path, nil, nil, &b)
 	return string(b), err
 }
 
-func (c *Connector) request(ctx context.Context, method, path string, body []byte, out any) (http.Header, error) {
+// request sends one API request with the extra headers hdr and body (JSON), decoding the answer into out (as Get);
+// it returns the status (304 is not an error: out is left as it is).
+func (c *Connector) request(ctx context.Context, method, path string, hdr http.Header, body []byte, out any) (int, http.Header, error) {
 	tok, err := c.currentToken(ctx, false)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	for attempt := 0; ; attempt++ {
-		resp, err := c.send(ctx, method, path, body, tok)
+		resp, err := c.send(ctx, method, path, hdr, body, tok)
 		if err != nil {
-			return nil, errors.New(Scrub(err.Error()))
+			return 0, nil, errors.New(Scrub(err.Error()))
 		}
 		if resp.StatusCode == http.StatusUnauthorized && attempt == 0 {
 			resp.Body.Close()
 			// The machine may have signed in again since: ask it once more.
 			if tok, err = c.currentToken(ctx, true); err != nil {
-				return nil, err
+				return 0, nil, err
 			}
 			continue
 		}
 		defer resp.Body.Close()
+		c.noteRate(resp.Header)
 		limit := int64(8 << 20)
 		if _, text := out.(*[]byte); text {
 			limit = 32 << 20 // a job's log, of which the end is kept
 		}
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
+		code := resp.StatusCode
 		switch {
-		case resp.StatusCode == http.StatusUnauthorized:
-			return resp.Header, errUnauthorized
-		case resp.StatusCode == http.StatusNotModified:
-			return resp.Header, nil
-		case resp.StatusCode >= 300:
+		case code == http.StatusUnauthorized:
+			return code, resp.Header, errUnauthorized
+		case code == http.StatusNotModified:
+			return code, resp.Header, nil
+		case code >= 300:
 			var e struct {
 				Message string `json:"message"`
 			}
 			_ = json.Unmarshal(raw, &e)
-			return resp.Header, fmt.Errorf("GitHub %s %s: %d %s", method, path, resp.StatusCode, Scrub(e.Message))
+			return code, resp.Header, fmt.Errorf("GitHub %s %s: %d %s", method, path, code, Scrub(e.Message))
 		}
 		if text, ok := out.(*[]byte); ok {
 			*text = raw
 		} else if out != nil {
 			if err := json.Unmarshal(raw, out); err != nil {
-				return resp.Header, fmt.Errorf("GitHub %s %s: %v", method, path, err)
+				return code, resp.Header, fmt.Errorf("GitHub %s %s: %v", method, path, err)
 			}
 		}
-		return resp.Header, nil
+		return code, resp.Header, nil
 	}
 }
 
-func (c *Connector) send(ctx context.Context, method, path string, body []byte, tok string) (*http.Response, error) {
+func (c *Connector) send(ctx context.Context, method, path string, hdr http.Header, body []byte, tok string) (*http.Response, error) {
 	var r io.Reader
 	if body != nil {
 		r = bytes.NewReader(body)
@@ -254,6 +298,12 @@ func (c *Connector) send(ctx context.Context, method, path string, body []byte, 
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range hdr {
+		req.Header[k] = v
+	}
 	return c.client.Do(req)
 }
 
