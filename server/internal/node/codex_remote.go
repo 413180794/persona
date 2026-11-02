@@ -516,6 +516,11 @@ func (n *Node) attachCodex(ctx context.Context, id string) error {
 
 func (n *Node) sendCodex(ctx context.Context, id, text string, images []proto.Image) error {
 	c, t, err := n.codexOwner(id)
+	if errors.Is(err, errCodexNoOwner) {
+		if src, ok := n.codexSource(id); ok && codexDesktopChat(src) {
+			return n.sendCodexDesktop(ctx, src, text, images)
+		}
+	}
 	if err != nil {
 		return refusal("codex_read_only", firstNonEmpty(err.Error(), "仅查看"), nil)
 	}

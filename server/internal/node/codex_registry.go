@@ -403,6 +403,21 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 			}
 		} else if err != errCodexNoOwner {
 			s.ReadOnlyReason = err.Error()
+		} else if o := readCodexOrigin(src.path); o.desktop {
+			switch {
+			case o.parent != "" && codexDesktopAvailable(src.home) && loadCodexAppState(src.home).listed(o.parent):
+				s.AgentName, s.ParentThreadID = "Codex App", o.parent
+				s.ReadOnlyReason = "仅查看：这个子 Agent 由父 Agent 驱动"
+				n.placeCodexDesktop(&s, src, o.parent, true)
+			case codexDesktopChat(src):
+				// The Codex App on this machine runs it (codex_desktop.go): sendable while the App has the thread loaded.
+				s.AgentName = "Codex App"
+				s.Capabilities.Send = true
+				s.ReadOnlyReason = ""
+				n.placeCodexDesktop(&s, src, src.thread, false)
+			}
+		} else if o.cli {
+			s.AgentName = "Codex CLI"
 		}
 		if n.codexBlocked(id) {
 			markCodexConflict(&s)
@@ -418,5 +433,6 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].SessionID < out[j].SessionID })
+	slotCodexDesktop(out)
 	return out
 }

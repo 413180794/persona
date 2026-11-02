@@ -87,6 +87,23 @@ Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `code
   真实 Codex：`scripts/test-codex.sh` 带 `JARVIS_CODEX_DAEMON_BINS`（`docs/testing.md`「Codex 联调」），在独立的 herdr 里起一个只给测试用的 `codex app-server --listen unix://…`
   （不碰正在用的守护进程，node 关掉发现、只认它），TUI 用 `--remote` 挂上去。
 
+## Codex 桌面 App 里的会话（App 的本机 IPC）
+
+桌面 App 自己的 app-server 走 stdio，外部接不进去；另起一个 app-server 续接同一个会话会被拒（已有活动写入者）。
+但 App 主进程在 `<CODEX_HOME>/ipc/ipc.sock` 开了一条本机消息总线，App 的窗口之间靠它互相请求「在你持有的会话里跑一轮」。
+node 作为总线上的又一个客户端（`server/internal/node/codex_desktop.go`）：
+
+- 帧是 4 字节小端长度 + JSON；先 `initialize`，再 `thread-owner-discovery` 找持有会话的窗口，再对它发 `thread-follower-start-turn`。
+  App 照常跑这一轮，界面里看得到，回复写进同一个 rollout，手机照旧从 rollout 读。
+- **每个请求都要带 App 期望的 `version`**（owner-discovery 1、start-turn 2，表在 App 主进程代码里）；不带或不对，没有客户端认领，总线一律回 `no-client-found`。
+- 总线也会问每个客户端「这个请求你能处理吗」（`client-discovery-request`），不回答它要等满超时：node 立刻回 `canHandle: false`。
+- 只有 App 本次启动后加载过的会话有持有者。没加载的（刚新建的、App 启动后没打开过的）发送时 node 先让 App 打开它（`open codex://threads/<id>`：App 会到前台并切到这个对话；后台打开 App 不加载），最多等 30 秒等到持有者再发；还是没有就拒绝（`codex_desktop_not_loaded`，没有送达）。
+- App 归档 / 恢复对话时把 rollout 在 `sessions/` 和 `archived_sessions/` 之间**移动**（inode 不变）：node 缓存的 `transcript.File` 发现原路径没了就 `Relocate` 到新位置，接着增量读；以前会一直读旧路径失败、给手机旧内容。
+- 只有 App 自己的对话走这条路：rollout 第一行 `session_meta` 的 `originator` 是 `Codex Desktop`（`source` 为 `vscode` 是侧栏对话、`exec` 是后台运行，`subagent.thread_spawn` 是子 Agent），Codex CLI 写的是 `codex-tui` / `cli`。App 的对话标成可发送（`capabilities.send`），`agent_name` 是「Codex App」；其他工具借用 App 的 codex 跑出来的会话也写 `Codex Desktop`，但 App 侧栏不列：只有侧栏里的对话（`thread-project-assignments` 或 `projectless-thread-ids` 里有）才算。App 的子 Agent 仍仅查看并带 `parent_thread_id`，归到父对话的项目里、跑完算已看；CLI 的会话 `agent_name` 是「Codex CLI」，照旧。
+- 列表像 App 的侧栏，状态和 herdr 同构（`docs/agent-states.md`）：App 记在 `<CODEX_HOME>/.codex-global-state.json` 里的侧栏状态——`electron-thread-read-state-v1` 的未读对话、`local-projects` 项目、`thread-project-assignments` / `projectless-thread-ids` 归属——文件变了就重读。按 App 的项目分组（没有项目的归「Codex 对话」），组内最新的在前；最近 3 天的对话：最后一轮在跑 → 工作中，跑完且 App 里仍未读 → `done`（完成未看），App 里看过 → `idle`（已看）。手机上看过照常也算已看。
+- Codex 回复里新建对话的指令 `::created-thread{threadId="…"}` 换成链接 `jarvis://session/<机器>/<会话>`（App 里对话链接跳转用的格式：Android 点了打开那个对话；iOS 目前只认实时活动的 `jarvis://open?…`，聊天里点这种链接还不跳，要发版），手机上点一下打开那个对话。
+- 还不支持：从手机在 App 里新建会话（App 的 `codex_app` MCP 管道校验对端进程，不绕）、steer 正在跑的一轮、审批。
+
 ## 从手机新建
 
 2026-11-02 起，手机上的「新对话」选一个 Codex 启动器，就在那台电脑的 herdr 里新开一个标签跑 Codex，第一条消息就是它的第一条消息。

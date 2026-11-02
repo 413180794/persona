@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
@@ -241,7 +243,7 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 		for _, c := range it.Content {
 			b.WriteString(c.Text)
 		}
-		text := strings.TrimSpace(b.String())
+		text := codexThreadLinks(strings.TrimSpace(b.String()))
 		if text == "" {
 			return nil
 		}
@@ -342,6 +344,24 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 	n := mk(0, it.ID, "system", proto.KindNotice)
 	n.Text = "Codex 事件：" + it.Type + "（完整记录在原会话中）"
 	return []proto.Item{n}
+}
+
+// LocalMachine is the id the hub gave this node's machine (set by the node): links to its sessions name it.
+var LocalMachine atomic.Value
+
+// The Codex app's directive for a thread it just created (its sidebar shows a card for it); in Jarvis a link that
+// opens that thread's chat (jarvis://session/<machine>/<session>, the in-chat link the apps navigate by).
+var codexCreatedThreadRe = regexp.MustCompile(`::created-thread\{threadId="([0-9a-fA-F-]+)"\}`)
+
+func codexThreadLinks(s string) string {
+	machine, _ := LocalMachine.Load().(string)
+	if machine == "" {
+		return s
+	}
+	return codexCreatedThreadRe.ReplaceAllStringFunc(s, func(m string) string {
+		id := codexCreatedThreadRe.FindStringSubmatch(m)[1]
+		return "[打开新建的对话](jarvis://session/" + url.PathEscape(machine) + "/" + url.PathEscape(id) + ")"
+	})
 }
 
 var (

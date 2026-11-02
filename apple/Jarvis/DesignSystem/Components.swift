@@ -9,6 +9,12 @@ struct StatusDot: View {
     var size: CGFloat = 9
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The needs-you ring: one breath every `breath` seconds, out to `1 + breathScale` times the dot as it fades.
+    static let breath: TimeInterval = 1.0
+    static let breathScale: CGFloat = 1.2
+    static let ringWidth = Theme.Size.lineMedium
+    static let ringOpacity = 0.6
+
     var body: some View {
         Group {
             if state == .working {
@@ -18,16 +24,23 @@ struct StatusDot: View {
             } else if state == .needsYou, !reduceMotion {
                 Circle().fill(state.color)
                     .overlay {
+                        #if os(macOS)
+                        // Core Animation runs it: the clock below relaid the whole window 30 times a second.
+                        MacBreathingRing(color: state.color.opacity(Self.ringOpacity))
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                        #else
                         // The clock drives the ring; a repeating state animation leaked into row layout changes.
                         TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-                            let p = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.0)
+                            let p = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.breath) / Self.breath
                             let eased = 1 - (1 - p) * (1 - p)
                             Circle()
-                                .stroke(state.color.opacity(0.6), lineWidth: 1.5)
-                                .scaleEffect(1 + 1.2 * eased)
+                                .stroke(state.color.opacity(Self.ringOpacity), lineWidth: Self.ringWidth)
+                                .scaleEffect(1 + Self.breathScale * eased)
                                 .opacity(1 - eased)
                         }
                         .allowsHitTesting(false)
+                        #endif
                     }
             } else {
                 Circle().fill(state.color)

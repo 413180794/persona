@@ -81,6 +81,20 @@
   同日 06:00 复测（菜单栏图标上挂了开窗口的 opener 之后）：每轮约 43 ms，壳 0 次、菜单栏图标 2 次，没变。
   ⌥ 点列表行在新窗口打开也没做：锁屏时发不了真的点击，验不了它会不会同时触发 NavigationLink。
 
+  2026-11-02 用户反馈「点起来卡卡的」之后量的（体验模式，真窗口，cua-driver 点侧栏，`ps` 取进程 CPU 时间，`sample` 看主线程）：
+  - 切侧栏分区：每次主线程约 240 ms，Debug 和 Release（`-O` 全模块）一样，不是调试版的问题。时间几乎全在 SwiftUI 建新页面的视图图和
+    AppKit 布局（页面里的 `NavigationSplitView` 每次新建一个 `NSSplitViewController`），Jarvis 自己的 body 只占一小部分。
+    `MacShell` 的 `page` 是 `switch`，换分区就整页重建。试过把去过的页面都留在 `ZStack` 里（不可见的页 `opacity(0)` + `tabIsActive`），
+    一切换就崩：隐藏页面的 `.searchable`、`.toolbar` 照样往窗口工具栏注册，两个页面各有一个搜索框就是重复的 `com.apple.SwiftUI.search`，
+    AppKit 抛 `NSInternalInconsistencyException`。要保活得让每个页面的工具栏只在显示时出现（共用页面里几十处 `.toolbar` / 快捷键），或者每页一个
+    `NSHostingController` 隔开，都还没做。
+  - 空闲 CPU（锁屏时起体验实例，`ps -o cputime` 量 20 秒）：停在 Agents 页（`-tab dev`）什么都不动占一个核的 14%；
+    停在体验模式默认打开的收件箱是 0。来源是「需要你」圆点的呼吸圈（`StatusDot`）：iOS 用 30 Hz 的 `TimelineView` 画，
+    Mac 上每一帧都让托管视图重新算约束、整个窗口重新布局。Mac 改成 Core Animation 画同一个圈（`Mac/Design/MacBreathingRing.swift`，
+    同样的缓动、最多 30 帧、所有圆点同相），同一条量法降到 0.1%。只量了 App 进程；锁屏时 WindowServer 不合成窗口，它那边的开销没量。
+    同类没改的：Jarvis 形象（`JarvisAvatar`）在思考中、工作中、需要你时也是 `TimelineView(.animation)`，BeautifulUI 风格下工作中的
+    `SpinningArc`、`repeatForever` 动画，在 Mac 上会不会同样整窗重排，没量。
+
 ## 构建、运行、截图
 
 ```sh
@@ -649,7 +663,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Theme tokens, icons, palettes, status palette — Shared/Design/Theme.swift, Icons.swift, Palette.swift, PersonaPalette.swift, Shared/StatusPalette.swift
   - Mac（2026-11-01 核对）：`Shared/Design` 原样编进 JarvisMac，这一轮所有截图都按它画（状态色、告警 chip、形象着色）；扫源码的 token 测试只在 iOS 的 JarvisTests 里，这次没跑。
 - [ ] Components (StatusDot, Chip, CountBadge, EmptyStateView, Monogram…) and surfaces/buttons — DesignSystem/Components.swift, DesignSystem/Styling.swift
-  - Mac（2026-11-01 核对）：截图里 Chip、CountBadge、Monogram、themedButton、卡片表面都看到；EmptyStateView 引的那张截图其实开着一封邮件、不是空状态，没看到，StatusDot 也没有对应 Agents 列表的截图。
+  - Mac（2026-11-01 核对）：截图里 Chip、CountBadge、Monogram、themedButton、卡片表面都看到；EmptyStateView 引的那张截图其实开着一封邮件、不是空状态，没看到。
+  - Mac（2026-11-02 核对）：StatusDot「需要你」的呼吸圈改用 Core Animation 画（`MacBreathingRing`），真窗口连拍的几帧里圈从贴着圆点到放大变淡都有，
+    浅色、深色（`-macAppearance dark`）都对，圈没被行裁掉；深色下圈取的是深色的红（按像素反推三个通道的透明度一致）。
 
 ## 18. Notifications & notification actions
 - [ ] Request permission + APNs registration, POST /devices — App/JarvisApp.swift (AppDelegate.registerIfPossible)

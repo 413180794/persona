@@ -49,3 +49,12 @@
   层级样式（`.primary`、`.secondary`）就跟着它走、不再变白；但子视图里写死的 `Color.primary` 还是会变白，要改成 `.primary`（iOS 上两者一样）。
 - `.toolbar(removing: .title)` 之后，`.primaryAction` 的按钮排到工具栏最左边（Mac 上它本来就靠前，原来是标题把它们推到了右边）：
   去掉标题的同时补一个 `ToolbarSpacer(.flexible)`。
+- 一直在动的 `TimelineView(.animation)` 在 Mac 上可能很贵（实测的只有 `StatusDot` 这一处）：每一帧都让 `NSHostingView` 申请更新约束，
+  一路报到窗口，整个窗口重新布局，锁屏时也照跑。「需要你」圆点的呼吸圈这样让 Agents 页空闲占一个核的 14%（2026-11-02；iOS 上没量过）。
+  Mac 上一直重复的动画交给 Core Animation（`NSViewRepresentable` 里的 `CAShapeLayer` + 无限重复的 `CAAnimationGroup`，`MacBreathingRing`），
+  App 主线程不参与；记得在动画组上（不是子动画上）设 `preferredFrameRateRange`，否则按屏幕刷新率跑（内建屏 120 Hz）。几个圆点要同相，就按 Core Animation 的时钟对齐
+  （`beginTime` 取整秒）；按墙钟对齐不行，Mac 睡眠时 Core Animation 的时钟停、墙钟照走，睡醒后新加的圆点就错开了。
+  每秒一次的 `.periodic` 计时按同样的代价算是 1/30，没单独量。查空闲开销：锁屏时起体验实例，`ps -o cputime` 量 20 秒，再 `sample` 看主线程。
+- 想让切换侧栏分区不重建页面，把去过的页面留在 `ZStack` 里藏起来不行：隐藏的视图照样往窗口工具栏注册 `.toolbar` 项和 `.searchable`，
+  两个页面各有一个搜索框就直接崩（`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`，2026-11-02）。
+  据 StackOverflow 76032647，macOS 的 `TabView` 也不按标签页隔开工具栏（没在本机验）。

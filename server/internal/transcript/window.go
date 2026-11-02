@@ -439,10 +439,10 @@ func (f *File) fullMeta() Meta {
 		f.mu.Unlock()
 		return m
 	}
-	end, lines, gen := f.offset-int64(len(f.partial)), f.lines, f.gen
+	end, lines, gen, path := f.offset-int64(len(f.partial)), f.lines, f.gen, f.Path
 	m := Meta{Sidechain: f.meta.Sidechain}
 	f.mu.Unlock()
-	if parseRange(f.Path, 0, end, 1, &m) != nil {
+	if parseRange(path, 0, end, 1, &m) != nil {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		return f.meta

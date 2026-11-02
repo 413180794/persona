@@ -354,6 +354,12 @@ func (n *Node) file(id string) (*transcript.File, error) {
 	}
 	n.mu.Unlock()
 	if f != nil {
+		if old := f.Where(); !fileExists(old) {
+			// Moved since it was opened (a Codex thread archived or restored): it was read from a path that is gone.
+			if p := n.transcriptPath(id); p != "" && p != old {
+				f.Relocate(p)
+			}
+		}
 		return f, nil
 	}
 	if _, _, sub := splitSubagent(id); sub {

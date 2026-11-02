@@ -397,6 +397,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			n.mu.Lock()
 			n.machineID = c.MachineID
 			n.mu.Unlock()
+			transcript.LocalMachine.Store(c.MachineID)
 		}
 		if c.Keep != nil {
 			n.setKept(*c.Keep)

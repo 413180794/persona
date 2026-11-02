@@ -987,6 +987,22 @@ type Span struct {
 
 func NewFile(path string) *File { return &File{Path: path} }
 
+// Where is the path the file is read from now.
+func (f *File) Where() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.Path
+}
+
+// Relocate points the file at where its transcript is now: Codex moves a rollout between sessions/ and
+// archived_sessions/ when a thread is archived or restored. What was read stays; reading goes on from there (a moved
+// file keeps its inode, so Refresh does not start over).
+func (f *File) Relocate(path string) {
+	f.mu.Lock()
+	f.Path = path
+	f.mu.Unlock()
+}
+
 // NewSubagentFile reads a subagent's transcript (<session>/subagents/agent-<id>.jsonl, every line a sidechain).
 func NewSubagentFile(path string) *File { return &File{Path: path, meta: Meta{Sidechain: true}} }
 
