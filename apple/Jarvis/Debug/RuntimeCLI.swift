@@ -18,8 +18,10 @@ enum RuntimeCLI {
     nonisolated(unsafe) private static var listener: NWListener?
     nonisolated(unsafe) private static var token = ""
 
-    /// Every command by name.
-    static let commands: [String: Command] = [
+    /// Every command by name: these, and each area's (`RuntimeCLI+<Area>.swift`).
+    static let commands: [String: Command] = coreCommands.merging(navigationCommands) { core, _ in core }
+
+    private static let coreCommands: [String: Command] = [
         "ping": { _ in ["pong": true, "pid": Int(ProcessInfo.processInfo.processIdentifier)] },
         "state": { _ in state() },
         "settle": { a in await settle(a) },

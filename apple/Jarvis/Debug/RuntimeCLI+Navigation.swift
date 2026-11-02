@@ -1,0 +1,110 @@
+#if DEBUG && os(iOS)
+import SwiftUI
+import UIKit
+
+/// Moving the app (docs/runtime-cli.md「导航和风格」): `navigate`, `set-style`, `set-appearance`, `defaults`.
+extension RuntimeCLI {
+    static let navigationCommands: [String: Command] = [
+        "navigate": { a in await navigate(a) },
+        "set-style": { a in setStyle(a) },
+        "set-appearance": { a in setAppearance(a) },
+        "defaults": { a in defaults(a) },
+    ]
+
+    static func key(_ s: String?) -> SessionKey? {
+        guard let s, let slash = s.firstIndex(of: "/") else { return nil }
+        return SessionKey(machineID: String(s[..<slash]), sessionID: String(s[s.index(after: slash)...]))
+    }
+
+    /// A new view tree: the window's root becomes a new hosting controller for `RootView`, so every page's own state
+    /// (the Agents page's pushed chat, the drawer, scroll positions, the glass bars) starts over. `route` runs between
+    /// the old tree and the new one: what is set there is what the new pages find when they are built, as with the
+    /// launch switches, and the old pages, gone by then, cannot take it first (they consumed `openChat`).
+    static func rebuild(route: () -> Void) async {
+        let m = AppModel.shared
+        guard let w = window else { return }
+        w.rootViewController = UIViewController()
+        try? await Task.sleep(for: .milliseconds(100))
+        m.shellSettings = false
+        m.settingsPath = NavigationPath()
+        m.openChat = nil
+        AppModel.rememberChat(nil)
+        route()
+        // What WindowGroup gives its content and a bare hosting controller does not: without the scene's phase every
+        // page that only works while the app is active (`.tabActiveTask`, machines' metrics) would wait forever.
+        let phase: ScenePhase = UIApplication.shared.applicationState == .active ? .active : .inactive
+        w.rootViewController = UIHostingController(rootView: RootView().environment(m).environment(\.scenePhase, phase))
+        w.makeKeyAndVisible()
+        try? await Task.sleep(for: .milliseconds(50))
+    }
+
+    /// The page a launch switch opens (JarvisApp, SettingsView.openDebugPage), on a new view tree (`rebuild`), or in
+    /// place with `keep`. `defaults`: launch-only switches the pages read when they are built (`openWork`…),
+    /// registered for this run, never saved.
+    private static func navigate(_ a: Args) async -> Reply {
+        let m = AppModel.shared
+        let scene = a["scene"] as? String ?? ""
+        var tab = AppTab.assistant
+        var chat: SessionKey?
+        var assistant: SessionKey?? = .none
+        var path = NavigationPath()
+        switch scene {
+        case "home": assistant = .some(nil)
+        case "assistant": assistant = .some(key(a["session"] as? String))
+        case "agents": tab = .chats
+        case "chat":
+            tab = .chats
+            guard let k = key(a["session"] as? String) else { return fail("chat needs session <machine>/<id>") }
+            chat = k
+        case "inbox": tab = .mail
+        case "settings": tab = .settings
+        case "machines":
+            tab = .settings
+            path.append(MachineListRoute())
+            if let id = a["machine"] as? String { path.append(MachineDetailRoute(id: id)) }
+        default: return fail("unknown scene \(scene) (home|assistant|agents|chat|inbox|settings|machines)")
+        }
+        if let flags = a["defaults"] as? Args { UserDefaults.standard.register(defaults: flags) }
+        let route = {
+            m.selectedTab = tab
+            if case .some(let k) = assistant { m.assistantCurrent = k }
+            m.openChat = chat
+            m.settingsPath = path
+        }
+        if a["keep"] as? Bool == true { route() } else { await rebuild(route: route) }
+        return state()
+    }
+
+    private static func setStyle(_ a: Args) -> Reply {
+        let m = AppModel.shared
+        if let s = a["style"] as? String {
+            guard let style = AppStyle(rawValue: s) else { return fail("unknown style \(s): \(AppStyle.allCases.map(\.rawValue))") }
+            m.style = style
+        }
+        if let c = a["color"] as? String {
+            guard let color = ThemeColor(rawValue: c) else { return fail("unknown color \(c): \(ThemeColor.allCases.map(\.rawValue))") }
+            m.themeColor = color
+        }
+        return state()
+    }
+
+    /// The app's windows only (`simctl ui appearance` changes the whole simulator, status bar included).
+    private static func setAppearance(_ a: Args) -> Reply {
+        let v = a["value"] as? String ?? "system"
+        let style: UIUserInterfaceStyle = v == "dark" ? .dark : v == "light" ? .light : .unspecified
+        for w in windows { w.overrideUserInterfaceStyle = style }
+        return state()
+    }
+
+    /// `set`: values in the registration domain (this run only, never saved); `remove`: saved keys deleted (what
+    /// `-openAgentsFresh YES` forgets); `get`: what they read now.
+    private static func defaults(_ a: Args) -> Reply {
+        let d = UserDefaults.standard
+        if let set = a["set"] as? Args { d.register(defaults: set) }
+        for k in a["remove"] as? [String] ?? [] { d.removeObject(forKey: k) }
+        var r: Args = [:]
+        for k in a["get"] as? [String] ?? [] { r[k] = d.object(forKey: k) ?? NSNull() }
+        return ["values": r]
+    }
+}
+#endif

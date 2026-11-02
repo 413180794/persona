@@ -5,7 +5,13 @@
   jarvisctl.py ping | state
   jarvisctl.py settle [--timeout s] [--pixels n] [--stable n]                 wait until the screen stops changing
   jarvisctl.py online [--timeout s]                                           wait for the hub's live connection
+  jarvisctl.py idle [--timeout s]                                             no request to the mock hub for 0.8 s
   jarvisctl.py screenshot <out.png> [--no-settle]                             settle, then `simctl io screenshot`
+  jarvisctl.py navigate home|assistant|agents|chat|inbox|settings|machines [--session m/s] [--machine id]
+               [--flag key=value …] [--keep]                                   the page a launch switch opens
+  jarvisctl.py set-style <glass|clay|island|lark|beautiful> [--color c]       界面风格 / 主题色
+  jarvisctl.py appearance light|dark [--in-app]                               the simulator's (default) or the app's
+  jarvisctl.py defaults [--set k=v …] [--remove k …] [--get k …]              this run's switches, saved keys
   jarvisctl.py call <command> [key=value …]                                   any command the app knows
 
 The simulator is $JARVISCTL_UDID (or --udid, default "booted"); the app is $JARVISCTL_BUNDLE / $JARVIS_BUNDLE_ID.
@@ -21,6 +27,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import urllib.request
 
 STATE_DIR = os.path.expanduser("~/.cache/jarvisctl")
 DEFAULT_PORT = 18950
@@ -96,6 +103,36 @@ class Ctl:
                     raise CtlError("the app did not answer (a DEBUG build? the port taken?)")
                 time.sleep(0.2)
 
+    def idle(self, quiet=0.8, timeout=10):
+        """Network idle, seen from the mock hub (scripts/mock_hub.py counts every GET at /mock/hits): waits until no
+        request has come in for `quiet` seconds. A page that is still waiting for its data (machines' metrics) looks
+        settled to `settle`. Returns how many requests came in meanwhile."""
+        if not self.hub:
+            raise CtlError("idle needs the mock hub (launch --hub)")
+
+        def total():
+            with urllib.request.urlopen(self.hub.rstrip("/") + "/mock/hits", timeout=5) as r:
+                # The app's requests only: these polls of /mock/hits are counted too.
+                return sum(n for k, n in json.load(r).get("hits", {}).items() if " /mock/" not in k)
+
+        start = last = total()
+        changed, deadline = time.time(), time.time() + timeout
+        while time.time() < deadline:
+            time.sleep(0.1)
+            now = total()
+            if now != last:
+                last, changed = now, time.time()
+            elif time.time() - changed >= quiet:
+                return {"ok": True, "idle": True, "requests": now - start}
+        return {"ok": True, "idle": False, "requests": last - start}
+
+    def appearance(self, value, in_app=False):
+        """Light or dark: the whole simulator (status bar included, as the screenshot scripts do) or the app only."""
+        if in_app:
+            return self.call("set-appearance", value=value)
+        sh("xcrun", "simctl", "ui", self.udid, "appearance", value)
+        return {"ok": True, "appearance": value}
+
     def screenshot(self, path, settle=True, **settle_args):
         """`simctl io screenshot` (status bar included, as the identity shots), after the screen settles."""
         if settle:
@@ -130,6 +167,15 @@ def main(argv):
     p.add_argument("--pixels", type=int)
     p.add_argument("--stable", type=int)
     p.add_argument("--no-settle", action="store_true")
+    p.add_argument("--session")
+    p.add_argument("--machine")
+    p.add_argument("--color")
+    p.add_argument("--flag", action="append", default=[])
+    p.add_argument("--set", action="append", default=[])
+    p.add_argument("--remove", action="append", default=[])
+    p.add_argument("--get", action="append", default=[])
+    p.add_argument("--keep", action="store_true")
+    p.add_argument("--in-app", action="store_true")
     p.add_argument("cmd")
     p.add_argument("rest", nargs="*")
     a = p.parse_args(argv)
@@ -140,12 +186,29 @@ def main(argv):
         r = c.call(a.cmd)
     elif a.cmd == "settle":
         r = c.call("settle", timeout=a.timeout, pixels=a.pixels, stable=a.stable)
+    elif a.cmd == "idle":
+        r = c.idle(timeout=a.timeout or 10)
     elif a.cmd == "online":
         r = c.call("online", timeout=a.timeout)
     elif a.cmd == "screenshot":
         if not a.rest:
             p.error("screenshot needs a path")
         r = {"path": c.screenshot(a.rest[0], not a.no_settle)}
+    elif a.cmd == "navigate":
+        if not a.rest:
+            p.error("navigate needs a scene")
+        flags = {k: value(v) for k, v in (x.partition("=")[::2] for x in a.flag)}
+        r = c.call("navigate", scene=a.rest[0], session=a.session, machine=a.machine, defaults=flags or None,
+                   keep=a.keep or None)
+    elif a.cmd == "set-style":
+        r = c.call("set-style", style=a.rest[0] if a.rest else None, color=a.color)
+    elif a.cmd == "appearance":
+        if not a.rest:
+            p.error("appearance needs light or dark")
+        r = c.appearance(a.rest[0], a.in_app)
+    elif a.cmd == "defaults":
+        sets = {k: value(v) for k, v in (x.partition("=")[::2] for x in a.set)}
+        r = c.call("defaults", set=sets or None, remove=a.remove or None, get=a.get or None)
     elif a.cmd == "call":
         if not a.rest:
             p.error("call needs a command")
