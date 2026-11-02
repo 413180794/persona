@@ -103,6 +103,15 @@
   测试还是绿的。这种循环放进 `bash -c '…'` 跑。
 - 新端把模型选择移到独立接口后，旧功能的保存请求要省略模型字段，防止旧草稿覆盖新选择；但旧 hub 的 PUT 可能把省略解释为清空，必须先确认统一配置能力，旧 hub 继续携带原字段。用 FakeHub 分别覆盖新旧协议，而不是只测新接口。
 - SDK 和模拟器列表里有对应条目，不等于 Xcode 能完成构建：平台安装状态或运行时版本不匹配时，scheme 报目的地不可用，actool 也会报没有兼容运行时。用独立临时工程、单独编译依赖可做 Swift 类型检查，但绕过资源编译不能当作正常 App 构建或截图验收；不要改正式工程来掩盖环境问题。
+- **Xcode、SDK、模拟器运行时分开检查**：Xcode 可以搭配兼容的旧版运行时；某份运行时的设备限制不等于 Xcode 或真机的限制。
+  `xcrun simctl list runtimes -j` 的 `supportedDeviceTypes` 给出实际设备列表；运行时 `Contents/Resources/profile.plist` 的
+  `restrictedToDeviceTypes` 可能限定设备，按设备配置的 `productClass` 核对，不能只凭系统版本猜。创建失败时先查支持范围，再换组合。
+- **运行时显示 available，创建却报 `runtime path not found`**：先核对 `simctl runtime list -j` 和运行时实际路径，不直接删镜像或改系统 plist。
+  已缓存的镜像可用 `xcodebuild -downloadPlatform iOS -buildVersion <系统版本> -architectureVariant arm64 -exportPath <新建空目录>` 导出，
+  再用 `xcodebuild -importPlatform <导出的 .exportedBundle>` 重新登记。一次排查中下载命令提示已缓存、导出完成，但退出码为 70；
+  不能把它算作成功，需检查导出内容并确认导入退出码为 0。重新导入后，原来无法创建的设备成功创建、启动并运行 App。
+  验收按「创建独立设备 → boot / bootstatus → 安装 App → 启动 → 截图」走完；若需运行测试，再确认 Xcode 能启动测试宿主。
+  Swift Testing 可能先打印 XCTest 的 `Executed 0 tests`，再实际运行 Swift 测试；以末尾 `Test run with N tests ... passed` 的数量为准，不把前一行当成空跑。
 - 模拟器和 Mac 共用回环：App 在模拟器里监听 `127.0.0.1:<端口>` 时，Mac 上已有程序占着这个号就会冲突（端口转发会退到随机端口，正好测到这条路径）。
 - **测试里执行的脚本会在开发机上真的跑**（2026-11-01）：`TestDeployScriptInstallsTheBinary` 执行 hub 的部署脚本，脚本最后一句
   `pkill -f '[j]arvisd node --attach'` 把跑测试的那台机器上真在服务的常驻 node 杀了：装了常驻 node 的 Mac 上每跑一次 hub 测试就掉线一次
