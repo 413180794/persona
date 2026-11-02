@@ -10,6 +10,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 ## 约定（必须遵守）
 
+- **所有改动都通过 GitHub PR 提交**（2026-11-02 用户要求）：代码、文档、配置等仓库内的所有改动，一律在独立分支 / worktree 上 commit，
+  只 push 到该分支，然后创建 GitHub PR；验证通过后可以直接合并，无须再征求确认。禁止在主分支上直接 commit 或 push。
+  本约定取代 `CLAUDE.local.md` 等文件中直接提交、推送到主分支的旧流程；自动提交和发布仍按原约定执行，但必须先通过 PR 合并。
 - **配置化，不写死个人的东西**：机器名、域名、账号、邮箱、路径、启动器、公司内部工具、个人偏好一律走配置
   （构建 / 部署：`~/.config/jarvis/config.json`；运行：hub 的 `~/.jarvis/hub.json`；见 `docs/config.md`），代码、脚本、
   界面文案、测试、文档、本文件里都不出现具体某个人的值（内网域名 / IP、主机名、内部项目名、个人账号、各种 key 的 ID 也算）；界面说「hub 所在的机器」「你的各台电脑」。本机的具体情况写 `CLAUDE.local.md`。
