@@ -2,13 +2,13 @@ import XCTest
 
 /// 机器 (docs/machines.md「App」): the Agents list's machine menu opens every machine on one page, what needs a look
 /// first (the offline NAS, then the busy server called out); a card opens the machine's page: its agents on top (one
-/// opens the chat), the charts below, the range switches, the system last. Against scripts/mock_hub.py
+/// opens the chat), the charts below, the range switches, the system last. Against scripts/mock/mock_hub.py
 /// (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>); TEST_RUNNER_JARVIS_SHOT_DIR=<dir> also saves the screens
 /// there as PNG for a look.
 final class MachinesPageTests: XCTestCase {
     private func hub() throws -> String {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         return hub
     }

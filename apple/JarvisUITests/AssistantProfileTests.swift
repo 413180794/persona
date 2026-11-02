@@ -2,14 +2,14 @@ import XCTest
 
 /// Jarvis's profile (详细信息 in its avatar's menu on the Jarvis tab) and its schedule: one list of tasks (every day, every
 /// 30 minutes, once), a task's page, 立即运行 for a daily task and for a follow-up, and a task's permission mode (全部放行
-/// asks first). Against scripts/mock_hub.py (JARVIS_MOCK_HUB), which records what was run at /mock/schedule.
+/// asks first). Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which records what was run at /mock/schedule.
 final class AssistantProfileTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

@@ -41,7 +41,7 @@ struct GitPane: View {
         #if os(macOS) && DEBUG
         .onAppear {
             // `-macGitSheet diff|commit`: a made-up change / commit's sheet, to see its size on the Mac (demo mode has
-            // no repositories, so it shows its error state). The change and the commit are the ones scripts/mock_hub.py
+            // no repositories, so it shows its error state). The change and the commit are the ones scripts/mock/mock_hub.py
             // (MOCK_FILES=1) answers for, so paired with it the sheets show a real diff.
             switch UserDefaults.standard.string(forKey: "macGitSheet") {
             case "diff":

@@ -1,11 +1,11 @@
 import XCTest
 
 /// 设置 › 连接器: this device's data, the mail accounts (moved here from the inbox's ⋯ menu), 飞书 and the hub's own
-/// connectors (GitHub) open from the settings list. Against scripts/mock_hub.py (JARVIS_MOCK_HUB).
+/// connectors (GitHub) open from the settings list. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
 final class ConnectorsTests: XCTestCase {
     @MainActor func testEachConnectorOpens() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

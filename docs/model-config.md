@@ -87,4 +87,4 @@ hub 直连 API 的用途（知识处理、收件箱分拣 / 判断 / 草拟、�
 - 服务端使用真实 Postgres 验证存取、单项并发更新、旧配置兼容、每个消费入口的有效模型、缓存与执行器参数。
 - Apple 用 `FakeHub` 测解码、PATCH 的 null 语义、草稿/冲突及普通任务保存不覆盖模型；UI 用 `ModelConfigurationTests` 和 DEBUG `-openModelConfiguration YES [-openModelPurpose <用途 id>]`。
 - 网页和 Android 有相同协议的纯逻辑测试。
-- `python3 -I scripts/test_model_config_mock.py` 启独立 mock，覆盖目录、保存、冲突、恢复继承与未知用途；不会调用真实模型。
+- `python3 -I scripts/mock/test_model_config_mock.py` 启独立 mock，覆盖目录、保存、冲突、恢复继承与未知用途；不会调用真实模型。

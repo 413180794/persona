@@ -7,7 +7,7 @@ final class ModelConfigurationTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let value = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py")
+            throw XCTSkip("needs scripts/mock/mock_hub.py")
         }
         hub = value
     }

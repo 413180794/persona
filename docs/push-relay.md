@@ -124,9 +124,9 @@ hub 选路（`push.go`）：有 `apns.json` → 直连（和以前一模一样�
    （`wrangler.jsonc` 的 `run_worker_first`），其余照旧是静态文件。中继的地址和密钥不进仓库：
    用 Cloudflare Tunnel（`cloudflared`）把本机 18670 暴露成一个只给 Worker 用的主机名，再在 `site/` 里
    `npx wrangler secret put RELAY_ORIGIN`（值如 `https://<tunnel 主机名>`）和 `npx wrangler secret put RELAY_PROXY_SECRET`
-   （同 `proxy_secret`），然后照常部署 `site/`（`scripts/publish.sh` 或 `npx wrangler deploy`，wrangler 4 要 Node 22+）。
+   （同 `proxy_secret`），然后照常部署 `site/`（`scripts/release/publish.sh` 或 `npx wrangler deploy`，wrangler 4 要 Node 22+）。
    两个都没设时 `/relay/*` 回 503，站点其余部分不受影响。部署后 `curl https://<官网域名>/relay/v1/health` 应回 `{"ok":true,"apns":true}`。
-4. 发 App：`python3 scripts/asc_signing.py --only <bundle id>.notify` 注册通知服务扩展的 bundle id、建「Jarvis Notify App Store」
+4. 发 App：`python3 scripts/release/asc_signing.py --only <bundle id>.notify` 注册通知服务扩展的 bundle id、建「Jarvis Notify App Store」
    profile（`release.sh` 导出时要用）；`config.json` 填 `app.push_relay`（如 `https://<官网域名>/relay`）；照常发 TestFlight。
    旧版本的 App 没有扩展、不登记中继，自建 hub 照旧收不到推送，要装这之后的版本。
 
@@ -186,7 +186,7 @@ WantedBy=default.target
 - `server/internal/hub`：没有 `apns.json` 时普通通知 / 交互 / 完成 / 静默唤醒 / Live Activity 都打到假中继、请求里没有明文；有 `apns.json` 时照旧直连。
 - `server/internal/pushcrypto` 生成的密文由 JarvisTests 用 CryptoKit 解开（跨语言测试向量）。
 - `site/worker.test.mjs`（`node --test`）：静态路径不变、没配置时 503、转发时带上密钥和客户端地址、丢掉伪造的密钥和 cookie。
-- 模拟器端到端：`scripts/relay_sim_e2e.sh` 用 App 导出的公钥，由 hub 的 Go 代码加密 → 本机 `jarvisd relay` → 假 APNs
+- 模拟器端到端：`scripts/test/relay_sim_e2e.sh` 用 App 导出的公钥，由 hub 的 Go 代码加密 → 本机 `jarvisd relay` → 假 APNs
   收下请求（检查里面没有明文）→ App 进程里跑扩展的逻辑（`PushCrypto.service`，`NotificationServiceTests`）逐条解开；
   改坏一个字节的仍是「有新消息」。
   **`simctl push` 不运行通知服务扩展**（模拟器把它当本地通知直接加进通知中心，2026-11-01 Xcode 27.1 / iOS 27.0 实测：

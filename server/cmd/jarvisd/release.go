@@ -14,7 +14,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/update"
 )
 
-// runRelease is `jarvisd release …`, what scripts/publish.sh runs to describe a release (docs/hub-update.md「发布」).
+// runRelease is `jarvisd release …`, what scripts/release/publish.sh runs to describe a release (docs/hub-update.md「发布」).
 func runRelease(args []string) error {
 	if len(args) == 0 {
 		return errors.New("usage: jarvisd release manifest … | check-next <served latest.json> --build N --commit C")

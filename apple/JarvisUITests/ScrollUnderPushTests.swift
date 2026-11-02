@@ -6,7 +6,7 @@ import XCTest
 /// round every 2 s, &real=1: rows that change height, an agent that finishes and starts again, the inbox, a question
 /// that comes and goes, new steps in the open chat) while the test drags and flicks the list; the app watches every
 /// frame of the scroll (`PerfScroll`, `-perfCounts YES`): what is on screen moves with the finger or the glide only.
-///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock_hub.py &
+///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:JarvisUITests/ScrollUnderPushTests
 /// Both layouts: TEST_RUNNER_JARVIS_LAYOUT=shell runs it in the shell (docs/testing.md).
 final class ScrollUnderPushTests: XCTestCase {
@@ -19,7 +19,7 @@ final class ScrollUnderPushTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = true
         guard let h = ProcessInfo.processInfo.environment["JARVIS_CHURN_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (JARVIS_CHURN_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (JARVIS_CHURN_HUB)")
         }
         hub = h
         _ = mock("reset")

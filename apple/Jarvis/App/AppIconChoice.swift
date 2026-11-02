@@ -5,7 +5,7 @@ import UIKit
 
 // 设置 › 外观 › App 图标 (docs/ios.md「App 图标」): the home screen icon. The default is the app's own `AppIcon`; the others
 // are alternate icon sets in the asset catalog (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`, drawn by
-// scripts/make_alt_icons.py). The system remembers the choice itself, so there is nothing to store: what is set now is
+// scripts/assets/make_alt_icons.py). The system remembers the choice itself, so there is nothing to store: what is set now is
 // `alternateIconName`. iPhone and iPad only: the watch and the Mac keep their one icon.
 
 /// One icon the user can pick.

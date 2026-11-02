@@ -1,7 +1,7 @@
 import XCTest
 
 /// 设置 › 外观's three choices of how the app looks (docs/ios.md「设计语言」): 形象, 主题色 and 界面风格, each on its own page
-/// and apart from the others. Against scripts/mock_hub.py started with MOCK_PERSONAS=<dir with a package that brings
+/// and apart from the others. Against scripts/mock/mock_hub.py started with MOCK_PERSONAS=<dir with a package that brings
 /// colors> (or demo) and JARVIS_MOCK_HUB. Screenshots go to JARVIS_LOOK_SHOTS when set (the appearance is the simulator's).
 final class LookPickerTests: XCTestCase {
     private var hub: String!
@@ -9,7 +9,7 @@ final class LookPickerTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_PERSONAS")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_PERSONAS")
         }
         self.hub = hub
     }

@@ -6,13 +6,13 @@
 cd server && go test ./... && go vet ./...                    # 服务端
 cd apple && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
-./scripts/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
+./scripts/app/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
 ```
 
 transcript 解析用真实样本做 golden 测试（`server/internal/transcript/testdata/`，`fixtures_test.go`）：每份样本的解析结果、
 「边写边读 = 一次读完」、「往前翻页不漏不重」。改了解析跑 `go test ./internal/transcript -run Fixture -update`，把 golden 的 diff 当评审看。
-加样本前先 `scripts/redact_transcript.py` 脱敏、人工复核（`testdata/README.md`）；Claude Code / Codex 升级后跑
-`scripts/transcript_stats.py` 看有没有解析器不认识的新类型。
+加样本前先 `scripts/diag/redact_transcript.py` 脱敏、人工复核（`testdata/README.md`）；Claude Code / Codex 升级后跑
+`scripts/diag/transcript_stats.py` 看有没有解析器不认识的新类型。
 
 接口冒烟：`curl -H "Authorization: Bearer $TOKEN" …/api/v1/machines`、`…/api/v1/sessions?machine_id=<machine>`。
 
@@ -39,21 +39,21 @@ transcript 解析用真实样本做 golden 测试（`server/internal/transcript/
 
 ## 安卓截图
 
-`./scripts/android.sh shots [类名]`：Paparazzi（JVM 上的 layoutlib，不要模拟器）画 `android/app/src/test/java/jarvis/android/shots/` 里的页面，
-数据来自测试自己起的 `scripts/mock_hub.py`（随机端口，`MockHub.kt`），每页浅色、深色各一张，按名字放在 `android/app/build/shots/<名字>.png`
-（`scripts/android_shots.py` 从 Paparazzi 的报告里按名字拷出来）。改了界面就跑一遍、逐张看，改前改后对比；它们只给人看，不跟基准图比。
-平时的 `./scripts/android.sh test` 不跑它们（`-Pshots` 才跑）。新页面加一个 `XxxShots.kt`，用 `ShotHost(dark) { … }` 包起来；
+`./scripts/app/android.sh shots [类名]`：Paparazzi（JVM 上的 layoutlib，不要模拟器）画 `android/app/src/test/java/jarvis/android/shots/` 里的页面，
+数据来自测试自己起的 `scripts/mock/mock_hub.py`（随机端口，`MockHub.kt`），每页浅色、深色各一张，按名字放在 `android/app/build/shots/<名字>.png`
+（`scripts/app/android_shots.py` 从 Paparazzi 的报告里按名字拷出来）。改了界面就跑一遍、逐张看，改前改后对比；它们只给人看，不跟基准图比。
+平时的 `./scripts/app/android.sh test` 不跑它们（`-Pshots` 才跑）。新页面加一个 `XxxShots.kt`，用 `ShotHost(dark) { … }` 包起来；
 要网络数据的页面先把数据装好再画（`docs/android.md`「经验」）。折叠屏（内屏平放 / 半折 / 拖过分隔条、外屏、内屏横放）、三折屏、平板、横放的手机是 `FoldShots.kt`（改了外壳、对话页都要看）。
 飞书会话和removed的页面是 `LarkShots.kt`（假 hub 带 `MOCK_LARK=1`：会话里各种消息、表情库、图片）。
 手势、键盘、通知、真实网络要在真机或模拟器上看。
 
 ## 用 mock 数据截图（README / 宣传图）
 
-截图不能带真实的业务数据：`scripts/mock_hub.py` 是一个只返回编造数据的假 hub（三台机器、几个项目的 Agent、助手对话、
+截图不能带真实的业务数据：`scripts/mock/mock_hub.py` 是一个只返回编造数据的假 hub（三台机器、几个项目的 Agent、助手对话、
 一个提问、一个计划审批、飞书 + 邮件的收件箱），够主要界面用。
 
 ```sh
-python3 scripts/mock_hub.py &                                  # 127.0.0.1:18760
+python3 scripts/mock/mock_hub.py &                                  # 127.0.0.1:18760
 SIM=$(xcrun simctl create "Jarvis Shots" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro <iOS 26 runtime>)
 xcrun simctl status_bar $SIM override --time "$(date +%H:%M)" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
 xcrun simctl launch --terminate-running-process $SIM <bundle id> \
@@ -73,7 +73,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   结果写在 App 容器的 `Documents/freeze.txt`（`xcrun simctl get_app_container $SIM <bundle id> data`），最后一行 `RESULT:`，应为移动 0pt。
 - 新建 Jarvis 对话（#511）：mock 照 hub 的样子做，会话列表立刻推，transcript 先是空的，`MOCK_ASSISTANT_TRANSCRIPT_SECONDS`（默认 1）秒后才有第一句并推给打开的对话。
   App 里发出后对话页一直是这句（不出「还没有消息」）、侧栏的新对话选中、带工作中转圈。`MOCK_ASSISTANT_START_SECONDS=<秒>` 让这个 POST 晚回，
-  等待中看气泡和「Jarvis 正在准备…」。`scripts/test_assistant_mock.py` 管着 mock 的这几件事。
+  等待中看气泡和「Jarvis 正在准备…」。`scripts/mock/test_assistant_mock.py` 管着 mock 的这几件事。
 - 跟到最新（`ChatFollowTests`，`MOCK_LONG_HISTORY=1`）：长会话打开在底部；在底部时来回复会跟到底（Jarvis 页的回复先按 `delta` 流式出）；往上翻出现「回到最新」、
   这时来回复不拽人；点了回到底部、之后照常跟随。Agent 对话页分三种打开方式测：普通、完成未看（`-showAsUnread YES`）、停在上次的位置（`-chat.read.<会话> <行 id>`）。
   回复由 mock 的 `GET /mock/say?text=…&user=…&stream=1` 推给所有打开的对话；列表在哪由 App 的 `-showScrollState YES` 报（无障碍标签
@@ -91,7 +91,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   （`SWIFT_OPTIMIZATION_LEVEL=-O`，另一个 DerivedData），带 `JARVIS_FILE_PERF=1` 跑 `FileViewerPerfTests`，再读 App 容器里的
   `Library/Caches/file-perf.log`。滚动用 App 内的匀速滚动测，别用 XCUITest 拖：它每个手势前在 App 主线程上抓一次无障碍快照，自己就是 40–100 ms 的长帧。
   改了 mock 里某条消息的文字要先卸载 App：App 按 item id 缓存会话，同 id 的新文字不会盖掉旧的。
-- 形象（`docs/persona.md`）：`MOCK_PERSONAS=demo` 启动 mock 时用 `scripts/persona/make_persona.py demo` 现画一个原创的演示形象「小薄荷」；
+- 形象（`docs/persona.md`）：`MOCK_PERSONAS=demo` 启动 mock 时用 `scripts/assets/make_persona.py demo` 现画一个原创的演示形象「小薄荷」；
   `MOCK_PERSONAS=<目录>` 则列出那个目录里的包（看别的形象的效果，包不进仓库）。UI 测试 `PersonaPickerTests` 要连 `MOCK_PERSONAS=demo` 的 mock。
   `LookPickerTests`（形象、主题色、界面风格三个选择互不影响）要连 `MOCK_PERSONAS=<目录>` 的 mock，目录里要有一个带配色、id 为 `doudou` 的包；
   设了 `JARVIS_LOOK_SHOTS=<目录>` 就把「设置 › 外观」下主题色、界面风格两页和设置首页的截图存进去（深浅色跟模拟器的外观）。它会改 App 自己存的 `ui.style` / `ui.color`，结束时点回液态玻璃 + 跟随界面风格。
@@ -115,16 +115,16 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   头像：f3 里 Tom 的头像能加载，天气助手的头像地址 404（看加载失败退回首字），其他人没有头像。
   @人：f2、f3 有成员（`GET …/members`，Tom 和 Mia 有头像，阿杰的群昵称是「杰哥」）；带 `mentions` 发送或回复时，mock 把文字里的 `@name` 存成 `at` 片段。
 
-## UI 测试（`scripts/ui-test.sh`）
+## UI 测试（`scripts/app/ui-test.sh`）
 
 `apple/JarvisUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
-`SIM=<udid> ./scripts/ui-test.sh [machine/session]`。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
-长按消息的操作条（`MessageMenuTests`，按 0.4 / 0.8 / 1.5 / 2.5 秒松手都要留下，点列表、滑动会关）连 `scripts/mock_hub.py`，不用真实 hub：
+`SIM=<udid> ./scripts/app/ui-test.sh [machine/session]`。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
+长按消息的操作条（`MessageMenuTests`，按 0.4 / 0.8 / 1.5 / 2.5 秒松手都要留下，点列表、滑动会关）连 `scripts/mock/mock_hub.py`，不用真实 hub：
 `TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/MessageMenuTests`。
 写 UI 测试时先在没有修复的代码上跑一次确认它会失败，再上修复。
 
-通知按钮（`NotificationActionTests`）不连真实 hub，连 `scripts/mock_hub.py`：
-`PORT=18791 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:JarvisUITests/NotificationActionTests`。
+通知按钮（`NotificationActionTests`）不连真实 hub，连 `scripts/mock/mock_hub.py`：
+`PORT=18791 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:JarvisUITests/NotificationActionTests`。
 它在 SpringBoard 上长按横幅、点「拒绝」，再读 mock 的 `GET /mock/resolved` 确认 hub 收到了 resolve。
 `LiveActivityActionTests` 同样连 mock：开一个示例实时活动、锁屏、点活动上的「拒绝」。模拟器系统语言是英文时授权弹窗的按钮叫「Allow」；
 授权会保留到下次，所以 App 要等进了后台才排这条通知，否则它在测试还在等弹窗时就弹过去了。
@@ -133,25 +133,25 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=apple/JarvisTests/Fixtures/terminal-observe-mixed.jsonl`
 （中英混排长回答）或 `-permission.jsonl`（权限框）截终端的样子。
 终端键栏和选择（`TerminalKeysTests`：单击 / 双击锁定 / 按住 ctrl、alt、shift，输入框里打的字带 ctrl，⌃C，发出的键名和顺序；长按出「拷贝」；快捷命令双击直接发送、输入框的补全）也连 mock：
-`PORT=18792 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:JarvisUITests/TerminalKeysTests`
+`PORT=18792 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:JarvisUITests/TerminalKeysTests`
 （mock 的 `GET /mock/keys` 回放收到的按键）。
 
 从搜索结果打开会话只有一行标题、返回后搜索结果还在、搜索时折叠的空间里的 Agent 也搜得到点得开（`SearchOpenTests`，另有不搜索的对照，对照里再右滑返回列表；
 测试带 `-openAgentsFresh YES`，不受别的测试留下的折叠影响）连普通 mock：
-`PORT=18793 python3 scripts/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:JarvisUITests/SearchOpenTests`。
+`PORT=18793 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:JarvisUITests/SearchOpenTests`。
 
 端口转发（`PortForwardTests`，`docs/ports.md`）：会话顶部和回复里的 `:端口` Badge 带页面标题、停掉的变灰，点开在网页卡片里经 mock 的
 `…/ports/{port}/connect` 加载 mock 自己起的页面（`GET /mock/ports` 看连接记录），点灰的提示「已经没有在监听」：
-`MOCK_PORTS=1 PORT=18791 python3 scripts/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:JarvisUITests/PortForwardTests`；
+`MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:JarvisUITests/PortForwardTests`；
 深浅色 × 新外壳 / 旧布局用 `TEST_RUNNER_JARVIS_LAYOUT`、`TEST_RUNNER_SHOT_SUFFIX` 各跑一遍，截图在 `/tmp/jarvis-ports-*`。
 
 发消息和终端对话框的安全检查（`SendSafetyTests`）也连 mock：
-`PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock_hub.py &`，再
+`PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock/mock_hub.py &`，再
 `TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:JarvisUITests/SendSafetyTests`：
 点终端对话框的选项，确认 hub 收到的是 `option` 而不是按键、并提示「对话框已经变了」；电脑上有草稿时点「清空并发送」，确认重发带
 `clear_draft` 且 `client_msg_id` 不变（`GET /mock/resolved`、`GET /mock/sent`）。截图：`-openSendMessage <文字>` 打开会话 3 秒后发一条（`-openSendDelay <秒>` 改这个等待）。
 
-弱网 / 断网（`ConnectionTests`，`docs/ios.md`「连接状态」）连普通 mock：`PORT=18760 python3 scripts/mock_hub.py &`，
+弱网 / 断网（`ConnectionTests`，`docs/ios.md`「连接状态」）连普通 mock：`PORT=18760 python3 scripts/mock/mock_hub.py &`，
 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/ConnectionTests`：hub 断 10 秒标题变「连接中…」、
 恢复后换回；断 0.2 秒（重连约一秒）标题完全不变；断网时发的消息显示「连上后自动发送」，恢复后 hub 只收到一次：
 中间再断几次、进后台（后台不重连，hub 回来了也要等回到前台才发）、退出 App 再打开（发件箱在磁盘上）都恰好一次。hub 重启后的去重在服务端测试（`TestSendRetryAfterRestartAndRefusal`）。
@@ -160,7 +160,7 @@ mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、�
 `lsof -i :18760` 还会列出连着它的模拟器 App，一起杀掉 App 就没了。截图：`-showConnection …`（见 `docs/ios.md`）。
 
 发送文件（`FileUploadTests`：「+」菜单里有「文件」；上传时输入框上方有进度和取消，传完路径插在打的字后面、不发送）也连 mock：
-`PORT=18771 MOCK_UPLOAD_KBPS=1024 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:JarvisUITests/FileUploadTests`
+`PORT=18771 MOCK_UPLOAD_KBPS=1024 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:JarvisUITests/FileUploadTests`
 （`GET /mock/uploads` 是收到的文件；`MOCK_UPLOAD_OLD_NODE=1` 模拟没升级的 node）。截图：`-openUploadDemo <文件名>` 打开会话 3 秒后传一个 24 MB 的假文件。
 系统的文件选择器 XCUITest 点不稳，选文件这一步没自动化。
 
@@ -170,7 +170,7 @@ mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、�
 Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、项目页的机器名 → 机器的项目页（项目 → 项目页、ⓘ → 详情、离线时的空状态）、
 新对话（离线机器不能选、目录浏览、最近目录、启动器、开始后 POST 的内容、失败时错误显示在按钮上方）。
 
-- mock：`PORT=18773 MOCK_MACHINES=1 python3 scripts/mock_hub.py &`（多一台离线的「实验室主机」，`POST …/reconnect` 后变在线；
+- mock：`PORT=18773 MOCK_MACHINES=1 python3 scripts/mock/mock_hub.py &`（多一台离线的「实验室主机」，`POST …/reconnect` 后变在线；
   Mac Studio 有 36 个 Agent；`GET /mock/hits`、`/mock/reconnects`、`/mock/started`，`/mock/reset` 恢复初始状态；cwd 以 `/broken` 结尾的新会话回 502），
   再 `TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:JarvisUITests/MachinePagesTests`，
   深色再跑一遍（`simctl ui <udid> appearance dark`、`JARVIS_STYLE=dark`），每一步的截图存到 `JARVIS_SHOTS`，失败时附截图和视图树。
@@ -194,7 +194,7 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 只看 frame 会把 TestFlight 35 / 38 的空档放过去。搜索类测试先下拉展开抽屉，不能把收起的搜索框当作没有回到列表。
 长列表滚动另用 `XCTOSSignpostMetric` 测量，模拟器只给时长不给掉帧，真机再看。
 
-- mock：`PORT=18775 MOCK_AGENTS=1 python3 scripts/mock_hub.py &`（约 130 个会话：platform 空间 3 需要你 / 35 完成未看 / 12 工作中，
+- mock：`PORT=18775 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py &`（约 130 个会话：platform 空间 3 需要你 / 35 完成未看 / 12 工作中，
   另有空闲多的空间和全空闲的空间；`seen`（WebSocket 或 `POST …/seen`）把完成未看改成已看，`GET /mock/seen` 列出，`/mock/reset` 复原），
   `TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:JarvisUITests/AgentsListTests`，深色再跑一遍。
 - `-openAgentsFresh YES` 启动时清掉列表记住的样子（机器筛选、分组、细列表、折叠）：这些值测试里要在界面上改，不能用启动参数固定（启动参数会盖过 App 写进去的值）。
@@ -212,7 +212,7 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 在搜索框里打字（字和键盘都在）、行左滑出「关闭」；对话里工作中的 Agent 的过程卡展开着、过程里的截图全屏看着（不被关掉）。
 每个用例报每轮推送的 body 次数和主线程耗时（附件和日志里的 `PERF` 行，改前改后的对比见 `docs/lanes/live-updates.md`）。
 
-- mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock_hub.py &`，`GET /mock/churn?n=12&ms=400` 推 n 轮（每轮：各机器的会话列表——工作中的换一句、
+- mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock/mock_hub.py &`，`GET /mock/churn?n=12&ms=400` 推 n 轮（每轮：各机器的会话列表——工作中的换一句、
   两个工作中的轮流变成最新——、机器列表、每个打开的对话一个新步骤，每 4 轮夹一句话），`&steps=N` 每轮每个对话加 N 步，`&final=1` 推完后这一轮结束（最后一句回复、工作中的变成完成）；`/mock/churned` 看推到第几轮；`MOCK_CHURN=1` 还在第一个对话的过程里放一张截图、多加 5 台机器（菜单要能滚）；`&inbox=1` 每轮再改一条收件箱、重推等你处理的事，`&waiting=1` 每轮多一个等你的 Agent、
   下一轮又答完（角标每轮变；真实的 hub 一直在推这两样，只推会话列表测不出角标带来的重建，`docs/lanes/live-updates.md`「又回来了」）。
 - `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:JarvisUITests/LiveUpdateTests`。
@@ -236,7 +236,7 @@ Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock
 - 断言：`big`、`replaced`、`stopped`、`defaults` 都是 0，Agents 列表的 `moved` 也是 0。两种布局、两种风格（`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`）都跑。
   - 小于 100 pt 的跳动不推送也有（懒加载的行自己定高、UI 测试合成的拖动），不算。
   - 机器页那种玻璃卡片的页面，`moved` 没有推送也一直在涨（效果层自己相对内容动），只在列表上看它。
-- mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock_hub.py &`（两个对话要比屏幕长才滚得动），
+- mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &`（两个对话要比屏幕长才滚得动），
   `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797`。
 - 测试先配对一次、退出，再带要打开的页面启动：配对的 hub 和上次不同时，App 从头开始、停在助手页，`-app.tab`、`-dev.openChat` 都不起作用。
 
@@ -285,7 +285,7 @@ Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock
 
 ## herdr 联调
 
-`./scripts/test-herdr.sh`：起一个独立的 herdr 会话（`herdr --session jarvis-test-<pid> server`，无头，和你正在用的 herdr 互不相干，
+`./scripts/test/test-herdr.sh`：起一个独立的 herdr 会话（`herdr --session jarvis-test-<pid> server`，无头，和你正在用的 herdr 互不相干，
 结束时按名字停掉），跑带 `herdrlive` 标签的测试：socket 和 CLI 结果一致、事件订阅；再在一个新建的临时目录里起一个 claude，
 依次验证信任对话框被认出（发消息拒绝 `dialog_open`）、按 option 回答（rev 核对、键从当前屏幕算）、空输入框放行、草稿拒绝
 （`input_draft`）、清空别的字不动、清空看到的那段后放行。本机没有 Go 时在 hub 机器上交叉编译测试二进制再拷回来。
@@ -293,7 +293,7 @@ Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock
 
 ## Codex 联调
 
-`./scripts/test-codex.sh`：Codex 的提问和审批卡片（`docs/codex.md`「提问和审批」）对真实 Codex 跑一遍。起一个独立的 herdr 会话（`jarvis-codex-<pid>`，
+`./scripts/test/test-codex.sh`：Codex 的提问和审批卡片（`docs/codex.md`「提问和审批」）对真实 Codex 跑一遍。起一个独立的 herdr 会话（`jarvis-codex-<pid>`，
 结束时按名字停掉），在一个新建的临时 git 仓库里起 Codex，用 node 回答卡片的同一段代码（`codexAnswer`）作答，每个用例检查 rollout 和屏幕：
 async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开着、电脑上先答了）、审批（直接答、往上翻了、别的 tab 在前台、对话记录 pager 开着时
 拒绝并写理由、电脑上先答了）、提问后紧跟审批、Plan 模式的两道题（一道按选项、一道写自己的话）。
@@ -339,7 +339,7 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
 
 - 网页手动检查：`cd web && npm run check:privacy`。
 - `npm run build` 的 `prebuild` 自动运行全仓隐私扫描，网页部署和公开发布都经过这个入口。
-- Python 回归测试：`python3 -B -m unittest discover -s scripts -p 'test*privacy*.py'`；`npm test` 不包含它。
+- Python 回归测试：`python3 -B -m unittest discover -s scripts/release -p 'test*privacy*.py' && python3 -B -m unittest discover -s scripts/test -p 'test_privacy*.py'`；`npm test` 不包含它。
   包含公开 Go 二进制的依赖常量分类、依赖校验 / replace / 工具失败时拒绝，以及真实个人值不被公共常量掩盖的测试。
   测试用隔离 HOME/Git 配置的临时仓库验证真实提交钩子、暂存区与工作树差异，不操作主工作区的暂存区或历史。
 - hooksPath 是每个克隆的本地配置；新克隆仍需运行上面的 `git config` 命令，不能因为仓库里有 hooks 文件就以为它已经生效。
@@ -452,7 +452,7 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 2. 回放：`JARVIS_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`。打印每种消息改前（录到的）和改后（这份代码会发的）
    每分钟的条数和字节；实时活动按录到的时间把每次变化喂给合并和节流，打印 App 不开时每小时推几条、灵动岛和 hub 不一致连续最长多久，超过上限就失败。
 3. 会话列表用真的 `broadcastSessions` 决定发不发，并核对和「按录到的字节比」一致（解码不丢字段）；同时挂一个收增量的 App（`sessions_delta`），数它收到的。
-4. App 后台拉对话（`AgentSync`）的次数：`python3 scripts/agentsync_replay.py ~/push.jsonl`，按录到的 `rev` 变化和当时的状态算（每分钟 45 次 → 9 次，见 `docs/ios.md`「后台同步」）。
+4. App 后台拉对话（`AgentSync`）的次数：`python3 scripts/diag/agentsync_replay.py ~/push.jsonl`，按录到的 `rev` 变化和当时的状态算（每分钟 45 次 → 9 次，见 `docs/ios.md`「后台同步」）。
 
 2026-11-02 录的 19 分钟（耗电排查，`docs/live-activity.md`「推送节奏」、`docs/server.md`「推送给 App 的量」）：
 
@@ -477,6 +477,6 @@ xcrun xcresulttool export attachments --path /tmp/shots.xcresult --output-path /
 ```
 
 `JARVIS_FLEET_SAMPLE=current` 不启动 App，只拍活动现在的样子（配合真实 APNs 推送，见 `docs/live-activity.md` 验证一节）。
-和别的 App 的活动共用灵动岛：先 `scripts/island_peer.sh <模拟器 udid>` 装示例 App（`apple/IslandPeer`，只有一个「8分」的实时活动），
+和别的 App 的活动共用灵动岛：先 `scripts/app/island_peer.sh <模拟器 udid>` 装示例 App（`apple/IslandPeer`，只有一个「8分」的实时活动），
 再加 `TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer`，多拍 `-shared`（两个活动并存）和 `-landscape`（示例 App 在前台横屏，Jarvis 的活动单独在横屏的岛上）；
 `TEST_RUNNER_JARVIS_FLEET_COUNT=12` 把编造的数量都改成 12（看两位、三位数）。iPhone 18 Pro 和 17 Pro 的规则不同，两台都要拍（`docs/live-activity.md`「和其他 App 共用灵动岛」）。

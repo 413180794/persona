@@ -302,7 +302,7 @@ func (m *Machine) connectVia(ctx context.Context, via string) (online bool, err 
 	m.hub.logf("[%s] connected over %s: %s %s/%s herdr %s claude %s", m.cfg.ID, via, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
 	m.hub.onSystem(m.cfg.ID, info.System)
 	if nodeMismatch(m.hub.version, info.Version) {
-		m.hub.logf("[%s] node %s is not the hub's build %s: deploy it (scripts/deploy.sh %s)", m.cfg.ID, info.Version, m.hub.version, m.cfg.ID)
+		m.hub.logf("[%s] node %s is not the hub's build %s: deploy it (scripts/deploy/deploy.sh %s)", m.cfg.ID, info.Version, m.hub.version, m.cfg.ID)
 	}
 	m.hub.broadcastMachines()
 	m.hub.connectors.MachineOnline(m.cfg.ID)

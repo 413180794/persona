@@ -44,7 +44,7 @@
 
 按它真正的 id 去读，这一轮（用户消息、回复、51 个工具、compact 提示）一条不差。修法见 `docs/codex.md`「识别」。
 
-新加的对拍 `scripts/live_panes_check.py`（在 hub 机器上跑，`pane_probe.py` 到每台机器上取真值）：每个 herdr 窗格的真值——Codex 按标题里的线程名，
+新加的对拍 `scripts/diag/live_panes_check.py`（在 hub 机器上跑，`pane_probe.py` 到每台机器上取真值）：每个 herdr 窗格的真值——Codex 按标题里的线程名，
 Claude 按 herdr 报的 id 或 `sessions/<pid>.json`——和 hub 列表里这个窗格的会话 id 比；Codex 这一轮还开着（最后一个回合事件是 task_started）
 且两分钟内写过的，列表里必须是 working。修前：70 个窗格（6 台）里 **9 个认错**，全是同一台机器的 Codex（26 个里 9 个），Claude 全对；4 个没法验证
 （标题里没有线程名）。

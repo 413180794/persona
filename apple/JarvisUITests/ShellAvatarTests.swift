@@ -2,7 +2,7 @@ import XCTest
 
 /// The shell's top-left button is the persona's face (docs/ios.md「新外壳」): it opens the drawer on 助手 and on Agents,
 /// and carries the inbox's mark while the inbox has something for the user (体验模式's has). The old layout keeps its ☰
-/// and the face in the middle of the bar. The empty-inbox case needs scripts/mock_hub.py started with
+/// and the face in the middle of the bar. The empty-inbox case needs scripts/mock/mock_hub.py started with
 /// MOCK_INBOX=empty (JARVIS_EMPTY_INBOX_HUB).
 final class ShellAvatarTests: XCTestCase {
     private var app: XCUIApplication!
@@ -47,7 +47,7 @@ final class ShellAvatarTests: XCTestCase {
     /// Nothing in the inbox: the face alone.
     @MainActor func testNoMarkWithAnEmptyInbox() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_EMPTY_INBOX_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_INBOX=empty (JARVIS_EMPTY_INBOX_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_INBOX=empty (JARVIS_EMPTY_INBOX_HUB)")
         }
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         launch(["-pairURL", pair, "-ui.oldLayout", "NO", "-newAssistant", "YES"])

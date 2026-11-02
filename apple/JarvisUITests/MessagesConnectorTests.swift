@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 连接器 › 信息 against scripts/mock_hub.py: the Mac's conversations and one of them, read-only (JARVIS_MOCK_HUB);
+/// 设置 › 连接器 › 信息 against scripts/mock/mock_hub.py: the Mac's conversations and one of them, read-only (JARVIS_MOCK_HUB);
 /// without Full Disk Access on that Mac, the steps to give it (JARVIS_MOCK_HUB_DENIED, a mock with MOCK_IMESSAGE=denied).
 final class MessagesConnectorTests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
@@ -21,7 +21,7 @@ final class MessagesConnectorTests: XCTestCase {
     }
 
     @MainActor func testConversationsAndAThread() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock_hub.py") }
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py") }
         // From 设置: the hub's connectors list 信息 under 连接器.
         let app = launch(hub, [])
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信息")).firstMatch

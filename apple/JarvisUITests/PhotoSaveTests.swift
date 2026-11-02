@@ -1,6 +1,6 @@
 import XCTest
 
-/// Saving to the photo library for real (scripts/mock_hub.py MOCK_PHOTO=1, JARVIS_MOCK_HUB): the image viewer's 保存
+/// Saving to the photo library for real (scripts/mock/mock_hub.py MOCK_PHOTO=1, JARVIS_MOCK_HUB): the image viewer's 保存
 /// and the share card's 保存图片, each after allowing the system's permission alert. Photos runs the change block on its
 /// own queue; a block the compiler took for main-actor code crashed the app there (2026-10-31), so the test only
 /// passes if the app is still alive and says 已保存到相册.
@@ -11,7 +11,7 @@ final class PhotoSaveTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_PHOTO=1 (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_PHOTO=1 (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

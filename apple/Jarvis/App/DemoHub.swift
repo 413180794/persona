@@ -2,8 +2,8 @@ import Foundation
 
 /// 体验模式 (docs/ios.md「体验模式」): a made-up hub inside the app, for someone without one (App Review, a friend
 /// with the TestFlight link). It sits under the data layer, so no page knows: `APIClient.request` and `LiveConnection`
-/// hand the demo config's traffic to it, and it answers with the hub's JSON. The data is scripts/mock_hub.py's, written
-/// to Resources/Demo.json by scripts/make_demo_data.py, with times moved to now. Nothing leaves the phone: what would
+/// hand the demo config's traffic to it, and it answers with the hub's JSON. The data is scripts/mock/mock_hub.py's, written
+/// to Resources/Demo.json by scripts/mock/make_demo_data.py, with times moved to now. Nothing leaves the phone: what would
 /// reach a computer, Feishu or mail says 体验模式下不会真的发送 (`onNotSent`); a message sent to an agent is echoed
 /// with a canned reply, so the chat behaves like one.
 @MainActor

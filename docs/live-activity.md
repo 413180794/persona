@@ -80,7 +80,7 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 | iPhone Duo（iOS 27.1） | — | 限宽 28，两块上下叠 | — |
 
 **验证**：`IslandFitTests` 把最小态、限宽、紧凑一侧在 1 / 2 / 3 / 4 位数时按各自的尺寸画出来，检查画出的像素都在给的范围里
-（字不缩、不省略，放不下就会溢出被查到）。模拟器上用另一个 App 的活动复现：`scripts/island_peer.sh <模拟器>` 装一个只有实时活动的
+（字不缩、不省略，放不下就会溢出被查到）。模拟器上用另一个 App 的活动复现：`scripts/app/island_peer.sh <模拟器>` 装一个只有实时活动的
 示例 App（`apple/IslandPeer`，「8分」），`LiveActivityShots` 带 `JARVIS_ISLAND_PEER=dev.example.islandpeer` 时多拍「并存」和「横屏」两张，
 `JARVIS_FLEET_COUNT=12` 把编造的数量改成两位数。
 
@@ -146,8 +146,8 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
   ad hoc 签名又没给扩展带 entitlements：装到手机上的小组件扩展没有任何钥匙串组，App 的组名少了 bundle id，Info.plist 里的组名少了团队前缀。
   App 写不进共享组（报 missing entitlement，当成免费团队静默放弃），扩展永远画默认形象。推送中继的 `.push` 组同样坏了（通知扩展解不开加密推送，只显示兜底文字）。
 - **另一半**：#219 有意把 hub 的形象包画成默认形象（换个颜色），所以就算钥匙串通了，选了形象包也看不到它。
-- **修法**：Info.plist 的组名改成 `$(DEVELOPMENT_TEAM).<bundle id>.…`（无签名也有值）；`scripts/entitlements.py sign` 给无签名归档里的每个 bundle 带上
-  它自己的 entitlements（展开构建变量，有展不开的就报错）再 ad hoc 签名；`scripts/entitlements.py check` 查 ipa / 归档里每个 bundle 的钥匙串组和 Info.plist 里的组名，
+- **修法**：Info.plist 的组名改成 `$(DEVELOPMENT_TEAM).<bundle id>.…`（无签名也有值）；`scripts/release/entitlements.py sign` 给无签名归档里的每个 bundle 带上
+  它自己的 entitlements（展开构建变量，有展不开的就报错）再 ad hoc 签名；`scripts/release/entitlements.py check` 查 ipa / 归档里每个 bundle 的钥匙串组和 Info.plist 里的组名，
   `release.sh` 归档后跑，发 TestFlight 的流程导出后也要跑（对 build 92 的 ipa 报出 9 处）。形象包画它自己的图（上一条）。
 - Apple Watch：不单独开发，`supplementalActivityFamilies([.small])` 给智能叠放一个单行版本（最急那一类的符号 + 「2 个需要你」+ 下一类的数量）。
 

@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 外观 › 形象 (docs/persona.md), against scripts/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
+/// 设置 › 外观 › 形象 (docs/persona.md), against scripts/mock/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
 /// hub's persona is offered next to the built-in Jarvis; choosing it downloads it, and the Jarvis tab's top bar takes
 /// its name and face; choosing Jarvis again brings the name back. The built-in 汇流 is offered too and keeps the name.
 final class PersonaPickerTests: XCTestCase {
@@ -11,7 +11,7 @@ final class PersonaPickerTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_PERSONAS=demo")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_PERSONAS=demo")
         }
         self.hub = hub
     }

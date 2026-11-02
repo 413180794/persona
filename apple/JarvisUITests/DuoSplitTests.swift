@@ -2,7 +2,7 @@ import XCTest
 
 /// iPhone Duo open (regular width): the Agents list is the split's sidebar and stays put while the agents it opens
 /// replace each other in the detail column (docs/ios.md「iPhone Duo」). Needs an unfolded iPhone Duo simulator and
-/// scripts/mock_hub.py:
+/// scripts/mock/mock_hub.py:
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:JarvisUITests/DuoSplitTests
 final class DuoSplitTests: XCTestCase {
     private var app: XCUIApplication!
@@ -10,7 +10,7 @@ final class DuoSplitTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

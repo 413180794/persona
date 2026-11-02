@@ -35,7 +35,7 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
   不一定送得到，以连接关闭为准重连（指数退避到 30 秒），重连后先取一次 snapshot 补齐。推来的事件名用下划线（`tab_created`），
   订阅时的类型用点（`tab.created`）。
 - 本机实测（herdr 0.9.3，7 个 Agent）：稳定时 30 秒内零事件；tab 改名到 `sessions.changed` 发出 80–140ms（原来最多 1 秒）。
-  联调：`./scripts/test-herdr.sh`（独立的 herdr 会话，见 `docs/testing.md`「herdr 联调」）。
+  联调：`./scripts/test/test-herdr.sh`（独立的 herdr 会话，见 `docs/testing.md`「herdr 联调」）。
 
 ## 和 herdr-core 的连接
 
@@ -59,8 +59,8 @@ hub 有两种部署方式，功能一样：**原生二进制**（下面，`syste
 适合 NAS 或只当 hub 的机器，`docs/docker.md`）。各台电脑上的 node 不管 hub 怎么部署，都是 `~/.jarvis/bin/jarvisd`。
 
 ```sh
-./scripts/deploy.sh                    # 编译 linux/amd64 + darwin/arm64，装到所有机器，重启 hub
-./scripts/deploy.sh <机器 id> <机器 id> # 只装部分机器
+./scripts/deploy/deploy.sh                    # 编译 linux/amd64 + darwin/arm64，装到所有机器，重启 hub
+./scripts/deploy/deploy.sh <机器 id> <机器 id> # 只装部分机器
 ```
 
 - 二进制：每台机器 `~/.jarvis/bin/jarvisd`。node 由 hub 经 `ssh <别名> ~/.jarvis/bin/jarvisd node --stdio` 拉起，Mac 上不用常驻服务。
@@ -89,12 +89,12 @@ Linux 的 systemd 用户服务要在退出 SSH 后持续运行，需由管理员
 Windows PowerShell 通过管道传 shell 脚本时，末尾可能额外带 CR，导致远端报 `$'\r': command not found`；
 使用 UTF-8 文件上传，或先编码为 base64 再在远端解码执行，避免依赖管道的换行编码。
 
-## 常驻 node（Mac，`scripts/node-launchd.sh`）
+## 常驻 node（Mac，`scripts/deploy/node-launchd.sh`）
 
 hub 通过 ssh 起 node（`jarvisd node --stdio`），node 再起助手的 claude。ssh 会话读不了 macOS 的**登录钥匙串**，所以 API key 存在钥匙串里的
 claude（`apiKeyHelper` 用 `security find-generic-password` 取）在助手里会报 401；herdr 里的 Agent 没这个问题，因为 herdr 跑在登录会话里。
 
-- `scripts/node-launchd.sh install`（在那台 Mac 上跑）：装一个 launchd 用户任务 `com.jarvis.node`，登录后常驻 `jarvisd node --attach`，
+- `scripts/deploy/node-launchd.sh install`（在那台 Mac 上跑）：装一个 launchd 用户任务 `com.jarvis.node`，登录后常驻 `jarvisd node --attach`，
   监听 `~/.jarvis/node-attach.sock`。
 - hub 照旧 ssh 起 `jarvisd node --stdio`；它发现有常驻 node 在听，就只把 ssh 的输入输出转给它（`internal/node/attach.go` 的 `Relay`），
   由常驻 node 处理这条连接。node 起的东西（助手的 claude、它的 key helper）都在登录会话里，能读钥匙串。hub 不用改，也分不出区别。
@@ -103,7 +103,7 @@ claude（`apiKeyHelper` 用 `security find-generic-password` 取）在助手里�
 - `deploy.sh` 换了二进制后会 `node-launchd.sh restart`（ssh 进来也能操作登录会话的 launchd）；hub 要重连一次才会用上新的 node（重启 hub，或 App 里「重新连接」）。
 - Agent 运行时的 `~/.jarvis/runtime.sock` 是常驻 node 进程的，不是某一条 hub 连接的（`node/runtimehost.go`）：常驻 node 一起来就开着，
   DSH 插件这类 runtime 不用等 hub；hub 换连接时它们不断开，新的连接一上来就列出它们的会话（`docs/protocol.md`「Runtime ↔ node」）。
-- `scripts/node-launchd.sh uninstall` 回到 ssh 起 node。日志：`~/.jarvis/node-attach.log`。
+- `scripts/deploy/node-launchd.sh uninstall` 回到 ssh 起 node。日志：`~/.jarvis/node-attach.log`。
 
 ## tailcat 打洞（`internal/tunnel`，`hub/tailcat.go`）
 
@@ -119,7 +119,7 @@ hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）�
   node 发一次 `ping`，连续两次不回就断开重连（旧 node 回「unknown method」也算回了）。这一分钟里有数据进出（读到数据，或大的写
   每 32 KB 发出去一段）就算活着、不 ping：慢中继上一个大页面要传很久，ping 排在它后面会误判。ping 在单独的 goroutine 里等，
   卡在死连接的写上也不耽误判断；判定断线时直接关掉底层连接，卡住的写随之失败。
-- **node 侧**：只有常驻 node（`scripts/node-launchd.sh install`，Mac 是 launchd，Linux 是 systemd 用户服务）会开 tailcat：
+- **node 侧**：只有常驻 node（`scripts/deploy/node-launchd.sh install`，Mac 是 launchd，Linux 是 systemd 用户服务）会开 tailcat：
   有 `~/.jarvis/tailcat.json` 时，在自己的 tailcat 地址上听 `18662`（node 协议，和 ssh 转过来的连接共用「一次服务一条，新的替换旧的」）
   和 `18663`（接收新二进制）。起不来（没网、DERP 连不上）就在后台退避重试，ssh 转发照常服务。
 - **配对**：hub 机器上 `jarvisd hub tailcat-key` 打印 hub 的公钥（第一次生成 `~/.jarvis/tailcat-hub.json`）；那台电脑上
@@ -130,7 +130,7 @@ hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）�
   其他 key 连握手都没有；只放行 18662–18663 两个端口。地址里有预共享密钥，和 hub token 一样是密钥：只放 hub.json，日志里不打印。
   两个 key 文件都是 0600（读到权限更宽的会改回 0600）。
 - **吊销 / 换密钥**：node 只在启动时读允许的 hub 公钥，tailcat 也不会踢掉已经连上的 peer。去掉一个 hub：从那台的 `tailcat.json`
-  的 `hubs` 删掉它，再 `scripts/node-launchd.sh restart`。地址泄露（换预共享密钥和 node 私钥）：删掉 `tailcat.json` 重新 `init`，
+  的 `hubs` 删掉它，再 `scripts/deploy/node-launchd.sh restart`。地址泄露（换预共享密钥和 node 私钥）：删掉 `tailcat.json` 重新 `init`，
   把新地址填进 hub.json 并重启 hub。换 hub 的 key：删掉 hub 机器的 `tailcat-hub.json`，重启 hub 后用新的 `hub tailcat-key` 在每台重新 `init --hub`，
   再从各台 `tailcat.json` 的 `hubs` 删掉旧的、重启常驻 node。
 - **地址固定**：地址只写 DERP 区域 id（不内嵌中继服务器），`init` 时选一次最近的区域存起来；否则每次启动重新选区域，地址会变。
@@ -162,7 +162,7 @@ hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）�
 ## 数据库（Postgres）
 
 hub 机器上的 docker 容器 `jarvis-postgres`（`postgres:18-alpine`，只监听 `127.0.0.1:18661`，数据卷 `jarvis-pgdata`，`--restart unless-stopped`）。
-`scripts/db.sh` 幂等地创建 / 启动它，首次创建时生成密码写进 `hub.json` 的 `database_url`；`deploy.sh <hub 机器 id>` 每次都会先跑它。
+`scripts/deploy/db.sh` 幂等地创建 / 启动它，首次创建时生成密码写进 `hub.json` 的 `database_url`；`deploy.sh <hub 机器 id>` 每次都会先跑它。
 hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advisory lock 防并发）。
 
 不想在 hub 机器上装 Docker 时，可以用系统自带的 Postgres（例如 Ubuntu 的 `postgresql` 包，16 版实测可用，只监听 localhost）：自己建用户 `jarvis`
@@ -181,7 +181,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | `settings` | App 里改的全局设置（如助手的启动器） |
 
 连库：`ssh <hub 机器> 'docker exec -it jarvis-postgres psql -U jarvis -d jarvis'`。
-测试：`./scripts/test-server.sh`（同步代码到 hub 机器，在 `jarvis_test` 库上跑全部测试；本机没有 docker，DB 测试在本机会 skip）。
+测试：`./scripts/test/test-server.sh`（同步代码到 hub 机器，在 `jarvis_test` 库上跑全部测试；本机没有 docker，DB 测试在本机会 skip）。
 
 旧版的 `phone_tools.json`、`devices.json`、`mail_accounts.json`、`sessions.json` 首次启动时自动导入，改名为 `*.migrated`。
 

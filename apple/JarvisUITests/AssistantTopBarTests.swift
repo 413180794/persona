@@ -3,7 +3,7 @@ import XCTest
 /// The Jarvis tab's top bar and its sidebar (docs/ios.md「Jarvis 顶栏和侧边栏」): the avatar's menu (知识库, 详细信息, the
 /// copy items), 历史对话 on the left opening the sidebar, a swipe to the right anywhere on the page doing the same,
 /// 新对话 on the right, picking a conversation in the sidebar, and the bar staying put while a long chat scrolls.
-/// Against scripts/mock_hub.py (JARVIS_MOCK_HUB): its main conversation is「今天要处理的事」, the long one is ASK4.
+/// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): its main conversation is「今天要处理的事」, the long one is ASK4.
 final class AssistantTopBarTests: XCTestCase {
     private var hub: String!
     private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
@@ -12,7 +12,7 @@ final class AssistantTopBarTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

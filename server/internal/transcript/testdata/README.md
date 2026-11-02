@@ -16,8 +16,8 @@
 
 ## 加样本
 
-1. `python3 scripts/transcript_stats.py` 看本机有哪些类型、在哪个文件哪一行。
-2. `python3 -I scripts/redact_transcript.py --words -o testdata/<名字>.jsonl <transcript>:<行号范围>`：白名单式脱敏
+1. `python3 scripts/diag/transcript_stats.py` 看本机有哪些类型、在哪个文件哪一行。
+2. `python3 -I scripts/diag/redact_transcript.py --words -o testdata/<名字>.jsonl <transcript>:<行号范围>`：白名单式脱敏
    （JSON 结构、像标识符的键、已知键的枚举值、一小组 shell / Claude Code 词保留，其余每个词换成同长度的随机词；
    uuid / 消息 id 重新映射、时间平移到 2026-01-01、路径换成 `/work/project/fN`、IP 换成 192.0.2.x、图片换成 1×1 PNG）。
 3. **人工复核再提交**（红线）：`--words` 打印原样保留的词；再 grep 一遍内网域名 / IP、主机名、人名、邮箱、仓库名、token，

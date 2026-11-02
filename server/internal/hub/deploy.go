@@ -36,7 +36,7 @@ func nodeBinary(goos, arch string) (string, error) {
 	}
 	p := filepath.Join(nodeBinaryDir(), "jarvisd-"+goos+"-"+arch)
 	if _, err := os.Stat(p); err != nil {
-		return "", fmt.Errorf("hub 上没有 %s/%s 的 jarvisd：在开发机上跑一次 scripts/deploy.sh（Docker 部署的 hub 用镜像里带的）", goos, arch)
+		return "", fmt.Errorf("hub 上没有 %s/%s 的 jarvisd：在开发机上跑一次 scripts/deploy/deploy.sh（Docker 部署的 hub 用镜像里带的）", goos, arch)
 	}
 	return p, nil
 }

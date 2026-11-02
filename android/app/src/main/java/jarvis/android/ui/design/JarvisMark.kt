@@ -21,7 +21,7 @@ import kotlin.math.sign
 import kotlin.math.sin
 
 /**
- * Jarvis' own mark, the app icon drawn small (scripts/make_icon.py): a night disc, a peach reactor ring in a coral
+ * Jarvis' own mark, the app icon drawn small (scripts/assets/make_icon.py): a night disc, a peach reactor ring in a coral
  * glow, the four-pointed spark and its small companion. The brand's coral lives only here (never on something to tap).
  */
 @Composable

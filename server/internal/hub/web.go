@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// webDist is the web client built into a published jarvisd (scripts/publish.sh copies web/dist here before building);
+// webDist is the web client built into a published jarvisd (scripts/release/publish.sh copies web/dist here before building);
 // in other builds only the placeholder is there.
 //
 //go:embed all:webdist
@@ -32,7 +32,7 @@ func webFrom(dir string, embedded fs.FS) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		// The data dir wins (scripts/deploy.sh web swaps it in whole), checked on every request like before.
+		// The data dir wins (scripts/deploy/deploy.sh web swaps it in whole), checked on every request like before.
 		var site fs.FS
 		if st, err := os.Stat(filepath.Join(dir, "index.html")); err == nil && !st.IsDir() {
 			site = os.DirFS(dir)

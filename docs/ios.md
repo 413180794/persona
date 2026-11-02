@@ -498,11 +498,11 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
     - 字号 ×1.2（库是桌面字号），代码保持 ×1；
     - 入场动画关掉。
 - 触感：发出 / 回答成功 success，新交互 warning，出错 error。
-- 图标：夜色背景 + 珊瑚光环 + 四角星（`scripts/make_icon.py`，含 dark / tinted）。
+- 图标：夜色背景 + 珊瑚光环 + 四角星（`scripts/assets/make_icon.py`，含 dark / tinted）。
 - **App 图标可以换**（设置 › 外观 › App 图标，iPhone / iPad；手表和 Mac 只有一个图标）：
   - 选项：默认（上面这个）、「p.」（Didot 小写 p 加红色句号，米白纸底，深色是墨底米白字）、「气场」（珊瑚、紫、青绿的光晕加颗粒，不画物体）。
     都是按新名字 Persona 设计的第二轮方案里挑的，只在用户选了时生效。
-  - 资源：`scripts/make_alt_icons.py` 画出 `AppIcon-Didot`、`AppIcon-Aura` 两个图标集（any / dark / tinted），
+  - 资源：`scripts/assets/make_alt_icons.py` 画出 `AppIcon-Didot`、`AppIcon-Aura` 两个图标集（any / dark / tinted），
     再从每个图标集（含默认的）缩出设置页用的预览 `AppIcons/app-icon-*`（any / dark），改了画法重跑脚本。
   - 工程：iOS 目标的 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` 列出备用图标集，构建时写进 Info.plist 的 `CFBundleAlternateIcons`；
     不在列表里的图标集不会打进包，加一个图标要同时改 `AppIconChoice`、这一行和脚本（`AppIconChoiceTests` 查三者一致、资源都在）。
@@ -547,7 +547,7 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
   `APIClient.request`（以及 `image` / `fullItem`）对它不走 URLSession，交给 `APIClient.local`；`LiveConnection` 对它不开 WebSocket，
   用 `LiveConnection.makeLocal` 做的本地 socket。两者都由 `DemoHub`（`Jarvis/App/DemoHub.swift`）注册和回答，回的是和 hub 一样的 JSON，
   所以页面、`ChatStore`、`AppModel.handle` 都不知道自己在体验模式里。没有的接口回 404「体验模式里没有这项数据」，DEBUG 下记一行 `DemoHub miss`。
-- **数据**：`scripts/make_demo_data.py` 从 `scripts/mock_hub.py`（UI 测试用的假 hub）导出 `apple/Jarvis/Resources/Demo.json`，再加几个 Agent
+- **数据**：`scripts/mock/make_demo_data.py` 从 `scripts/mock/mock_hub.py`（UI 测试用的假 hub）导出 `apple/Jarvis/Resources/Demo.json`，再加几个 Agent
   （每种状态、几个空间都有）、飞书会话的消息、邮件正文、知识库条目，终端是按手机宽度排好的 Claude 屏幕（`phone_screen`，96 列的帧在手机上每行都折）。
   全是编造的；时间存成相对值（`@rel:<秒>`、`@unix:<秒>`），载入时换成「现在」附近，演示永远是新的。机器页的曲线由 `DemoHub` 现算（`mock_hub.metric_at` 的移植）。
   改了 mock 的数据就重跑脚本、提交 JSON；`DemoHubTests` 让每个接口都经 `APIClient` 解码成 App 的模型，模型改了形状会在这里挂。
@@ -693,7 +693,7 @@ Markdown 的情况再说两点：
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES`（Jarvis tab 的侧边栏开着）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-showScrollState YES|visible`（对话列表在哪、跟不跟随，给 UI 测试读，`visible` 画出来）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openHubUpdate YES`（设置 › hub，`docs/hub-update.md`）、`-tab settings -openSkills YES`（设置 › 助手 › Skills）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES`（Jarvis tab 的侧边栏开着）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-showScrollState YES|visible`（对话列表在哪、跟不跟随，给 UI 测试读，`visible` 画出来）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openHubUpdate YES`（设置 › hub，`docs/hub-update.md`）、`-tab settings -openSkills YES`（设置 › 助手 › Skills）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/app/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-openFile <路径>`（打开会话后打开这个文件）、`-showFilePerf YES`（把打开文件的耗时和每秒帧数写进 Caches/file-perf.log，`-showFileAutoScroll YES` 让文件自己匀速滚，`-showFileAutoScrollSpeed 1500` 换速度）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。

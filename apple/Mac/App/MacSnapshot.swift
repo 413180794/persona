@@ -6,7 +6,7 @@ import SwiftUI
 /// the lock screen. `-macSnapshot <png>` renders the main window's own views into a PNG after a while
 /// (`-macSnapshotDelay <s>`, default 4), then quits with `-macSnapshotQuit YES`. `-macWindowSize 1280x820` sizes the
 /// window first; `-macAppearance dark|light` picks the appearance (`-AppleInterfaceStyle Dark` also works).
-/// `scripts/mac_shot.sh` drives it.
+/// `scripts/app/mac_shot.sh` drives it.
 @MainActor enum MacSnapshot {
     /// Before any window exists.
     static func applyAppearanceIfAsked() { applyAppearance(UserDefaults.standard.string(forKey: "macAppearance")) }

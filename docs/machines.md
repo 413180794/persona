@@ -134,9 +134,9 @@ node → hub 的 `metrics` 事件，`node.info` / `Machine` 里的 `system`。
 ## 验证
 
 - Go：`sysmon` 的夹具测试（`testdata/` 里的 /proc/stat、meminfo、net/dev、os-release、cpuinfo、vm_stat、iostat、sw_vers、system_profiler），
-  `db.TestMachineMetrics`（降采样、加权平均、空档没有点、清理），`hub.TestMetricGaps`（断开标记）；`./scripts/test-server.sh`。
+  `db.TestMachineMetrics`（降采样、加权平均、空档没有点、清理），`hub.TestMetricGaps`（断开标记）；`./scripts/test/test-server.sh`。
 - 真实采集：本机起一个测试 hub（假 HOME、独立数据库经 SSH 隧道，一台 `kind: local` 的 Mac 加一台 ssh 的 Linux），模拟器配对它看机器页和详情。
-- 假数据：`scripts/mock_hub.py` 有 4 台机器：服务器最近 25 分钟高负载（CPU / 内存 / 负载告警），Mac Studio 早上断开过两小时（空档），
+- 假数据：`scripts/mock/mock_hub.py` 有 4 台机器：服务器最近 25 分钟高负载（CPU / 内存 / 负载告警），Mac Studio 早上断开过两小时（空档），
   NAS 三小时前离线。UI 测试 `MachinesPageTests`：从机器菜单打开机器页（离线的 NAS 在最前、服务器的告警、MacBook 的「需要你」）、进服务器详情
   （Agent 在曲线上面、没有「系统与监控」这一层）、切到 24 小时、按住网络图、看系统信息、点 Agent 进对话；离线机器的详情（「重新连接」在第一屏）。
   排序的单元测试 `MachineConcernTests`。36 个 Agent 的「显示全部」在 `MachinePagesTests.testMachineProjects`，「重新部署」在 `DeployButtonTests`。

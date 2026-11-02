@@ -136,7 +136,7 @@ func TestLoadConfigCreatesAndReloads(t *testing.T) {
 	}
 }
 
-// scripts/db.sh creates hub.json with only database_url before the hub's first start: the token generated then must
+// scripts/deploy/db.sh creates hub.json with only database_url before the hub's first start: the token generated then must
 // be written down, or each start and `jarvisd hub pair` would invent another one and paired phones get 401.
 func TestLoadConfigPersistsTokenMissingFromFile(t *testing.T) {
 	home := t.TempDir()
@@ -583,7 +583,7 @@ func TestCallToolDispatch(t *testing.T) {
 func TestPhoneToolsPersist(t *testing.T) {
 	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test-server.sh runs this on the hub machine)")
+		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
 	}
 	database, err := db.Open(context.Background(), url)
 	if err != nil {

@@ -3,7 +3,7 @@ import XCTest
 /// Sending in a Feishu chat does not wait for Feishu (docs/ios.md「飞书消息渲染」): the message is on screen at once
 /// with a spinner beside it, Feishu's own copy takes its place, and one that did not go out has a failed mark that offers
 /// 重发; replies (quoted in the chat, or in a thread sheet) go the same way. The marks are found by their identifiers
-/// (lark.outgoing.sending / .failed), not their wording. Against scripts/mock_hub.py
+/// (lark.outgoing.sending / .failed), not their wording. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB), whose Feishu send takes 2 seconds and fails for a text with "#fail".
 final class LarkSendTests: XCTestCase {
     private var hub: String!
@@ -11,7 +11,7 @@ final class LarkSendTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

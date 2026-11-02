@@ -8,7 +8,7 @@ final class EngineChoiceTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let value = ProcessInfo.processInfo.environment["JARVIS_ENGINE_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_ENGINE_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_ENGINE_HUB)")
         }
         hub = value
         _ = try Data(contentsOf: URL(string: hub + "/mock/reset")!)

@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Agents list with a lot of agents (scripts/mock_hub.py with MOCK_AGENTS=1: ~120 agents, a space with 3 needing
+/// The Agents list with a lot of agents (scripts/mock/mock_hub.py with MOCK_AGENTS=1: ~120 agents, a space with 3 needing
 /// you, 35 finished-unread and 12 working): the quick filters, the compact rows, folding spaces, marking read.
 ///   TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:<port>
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there (docs/testing.md「Agents 列表」).
@@ -11,7 +11,7 @@ final class AgentsListTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let h = ProcessInfo.processInfo.environment["JARVIS_AGENTS_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_AGENTS=1 (JARVIS_AGENTS_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 (JARVIS_AGENTS_HUB)")
         }
         hub = h
         _ = mock("reset") // every agent back to its state, nothing marked seen

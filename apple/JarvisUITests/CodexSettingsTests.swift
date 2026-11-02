@@ -1,11 +1,11 @@
 import XCTest
 
-/// 设置 › Codex 设置, under Claude Code 设置: the node's Codex options with their values. Against scripts/mock_hub.py
+/// 设置 › Codex 设置, under Claude Code 设置: the node's Codex options with their values. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB).
 final class CodexSettingsTests: XCTestCase {
     @MainActor func testCodexSettingsOpen() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

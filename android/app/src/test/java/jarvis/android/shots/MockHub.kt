@@ -13,7 +13,7 @@ import java.io.File
 import java.net.ServerSocket
 
 /**
- * scripts/mock_hub.py on a free port for the screenshot tests (docs/testing.md「用 mock 数据截图」): made-up machines,
+ * scripts/mock/mock_hub.py on a free port for the screenshot tests (docs/testing.md「用 mock 数据截图」): made-up machines,
  * agents, conversations, interactions and an inbox. One per test JVM, stopped with it.
  */
 object MockHub {
@@ -21,8 +21,8 @@ object MockHub {
 
     private fun start(): String {
         val port = ServerSocket(0).use { it.localPort }
-        val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock_hub.py").exists() }
-        val pb = ProcessBuilder("python3", "scripts/mock_hub.py").directory(repo).redirectErrorStream(true)
+        val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock/mock_hub.py").exists() }
+        val pb = ProcessBuilder("python3", "scripts/mock/mock_hub.py").directory(repo).redirectErrorStream(true)
         pb.environment()["PORT"] = port.toString()
         val p = pb.start()
         Runtime.getRuntime().addShutdownHook(Thread { p.destroy() })

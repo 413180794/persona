@@ -118,11 +118,11 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 
 - 启动参数和 iOS 一样（`MacLaunchArguments`，只在 DEBUG）：`-pairURL`、`-tab dev|mail|settings|assistant`、`-openSession <machine>/<session>`、
   `-openAssistant`、`-newAssistant`、`-showNewChat`、`-openChatsFresh`、`-openAgentsFresh`、`-lark-connector`、`-simulateTap`；体验模式 `-demo.on YES`。
-- 截图（**锁屏也能拍**）：`scripts/mac_shot.sh <名字> [启动参数…]`，浅色、深色各一张写到 `/tmp/jarvis-mac-shots/<名字>-{light,dark}.png`。
+- 截图（**锁屏也能拍**）：`scripts/app/mac_shot.sh <名字> [启动参数…]`，浅色、深色各一张写到 `/tmp/jarvis-mac-shots/<名字>-{light,dark}.png`。
   配对后的「选择引擎」一步：`-openEngineStep <机器 id>`（体验模式的 `server` 就行）。看玻璃材质要截真窗口，见 `docs/lessons/macos.md`。
   默认体验模式；`BUILD=1` 先编译，`APP=` 指定 .app，`SIZE=1280x820`，`DELAY=4`，`APPEARANCES="light dark"`。
-  例：`scripts/mac_shot.sh agents -tab dev -dev.openChat ""`、`scripts/mac_shot.sh chat -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`、
-  `scripts/mac_shot.sh jarvis -tab assistant`、`scripts/mac_shot.sh inbox -tab mail`、`scripts/mac_shot.sh settings -tab settings`。
+  例：`scripts/app/mac_shot.sh agents -tab dev -dev.openChat ""`、`scripts/app/mac_shot.sh chat -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`、
+  `scripts/app/mac_shot.sh jarvis -tab assistant`、`scripts/app/mac_shot.sh inbox -tab mail`、`scripts/app/mac_shot.sh settings -tab settings`。
   背后是 DEBUG 开关 `-macSnapshot <png> [-macSnapshotDelay 秒] [-macSnapshotQuit YES] [-macWindowSize WxH] [-macAppearance dark|light]`（`Mac/App/MacSnapshot.swift`）：
   App 自己用 `cacheDisplay` 把窗口画进 PNG，不经过屏幕。
 - 截图和屏幕上的差别（2026-10-31 试出来的）：
@@ -341,7 +341,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   `.macOpensLinksInPanel($link)` 把一块视图里的 `openURL` / `openLink` 接到面板上（收件箱详情用；邮件 HTML 里的链接仍交给浏览器）。对话页、知识库在 Mac 上也换成了面板（`#if os(macOS)`）。
 - 单独的窗口：`WindowGroup(id: "link", for: URL.self)`（`MacLinkWindow`）、`WindowGroup(id: "inbox-item", for: String.self)`（`MacInboxItemWindow`）。
 - DEBUG：`-openInboxFirst YES`、`-openInboxMatch <标题里的字>` 选中一件，`-showInboxAction draft|handoff` 打开弹层，`-openInboxLink <url>` 打开链接面板，`-addMail YES` 管理邮箱。
-  例：`scripts/mac_shot.sh inbox-link -tab mail -openInboxMatch 下周的分享 -openInboxLink https://example.com/`。
+  例：`scripts/app/mac_shot.sh inbox-link -tab mail -openInboxMatch 下周的分享 -openInboxLink https://example.com/`。
 - 截图补充（2026-11-01）：窗口上的 sheet 是另一个窗口，`-macSnapshot` 现在把它另存成 `<名字>.sheet.png`；sheet 里有文本编辑器时 `terminate` 会被挡住，截完 1 秒后直接退出。
   锁屏时未签名的新构建读另一个构建写的钥匙串条目会一直卡在 securityd（跳过授权界面也一样），截图模式（`-macSnapshot`）下 Mac 的 DEBUG 构建不读钥匙串。
 
@@ -349,9 +349,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 下面是 iOS App 的全部功能，Mac 版逐条对上（做完一条勾一条）。
 
-2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
+2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 125 条 [x]、97 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 125 条 [x]、97 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -636,7 +636,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 要到 Mac 前看：单击填入、双击发送、右键上移 / 下移、补全（2026-11-01）。`-openShortcutsPanel YES` 截图里面板和「编辑」画出来了（离屏是深底深字，同键栏）。
 
 ## 8. Files / Git / code viewer
-- Mac（2026-11-01）：文件面板路径栏的 ⋯ 原来被 Mac 的弹出按钮挤成两个点，改成纯图标菜单；Git 的 diff / 提交 sheet 用大 sheet（`-macGitSheet diff|commit`，示例改成 `scripts/mock_hub.py` 的 `MOCK_FILES=1` 里有的改动和提交）。连 mock_hub 截到了有数据的列表、diff 和提交。
+- Mac（2026-11-01）：文件面板路径栏的 ⋯ 原来被 Mac 的弹出按钮挤成两个点，改成纯图标菜单；Git 的 diff / 提交 sheet 用大 sheet（`-macGitSheet diff|commit`，示例改成 `scripts/mock/mock_hub.py` 的 `MOCK_FILES=1` 里有的改动和提交）。连 mock_hub 截到了有数据的列表、diff 和提交。
   文件 / Git 面板在屏幕上时工具栏有「刷新」按钮（`Mac/Chat/MacRefreshButton.swift`，复用各自的 load()），显示 › 刷新 ⌘R 也刷它们（见「显示 / 前往菜单」）。Git diff 最后一行的背景现在铺到边（`MacDiffTextTests`）。
   mock_hub 的 /file 里没有图片（`docs/icon.png` stat 失败），要截查看器的图片 / PDF 得先加一条假数据。
 - [ ] Files pane: breadcrumbs, dirs first, size/mtime, git markers, hidden toggle, 拷贝路径, 2000 limit — Views/Session/FilesPane.swift

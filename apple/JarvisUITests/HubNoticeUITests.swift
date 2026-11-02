@@ -2,12 +2,12 @@ import XCTest
 
 /// The hub's line over the Agents list and 设置 › hub (docs/hub-update.md「App 里」). Each button on the line takes only
 /// its own taps (it sits in a list row that opens the hub page), and an update waiting for busy agents shows them and
-/// asks before 现在就更新. Against scripts/mock_hub.py (any MOCK_HUB_UPDATE; each test sets its own mode):
+/// asks before 现在就更新. Against scripts/mock/mock_hub.py (any MOCK_HUB_UPDATE; each test sets its own mode):
 ///   TEST_RUNNER_JARVIS_HUB_UPDATE_HUB=http://127.0.0.1:<port>
 final class HubNoticeUITests: XCTestCase {
     private func hub(mode: String) throws -> String {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_HUB_UPDATE_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_HUB_UPDATE_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_HUB_UPDATE_HUB)")
         }
         _ = try Data(contentsOf: URL(string: hub + "/mock/hub_update?mode=" + mode)!)
         return hub

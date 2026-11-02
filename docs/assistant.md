@@ -42,7 +42,7 @@
 
 - **副本**：仓库的 `skills/lark-connector/` 是 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、
   `scripts/ol.sh`；不要 `evals/` 和要 Node 的 `*.mjs`，hub 上没有 Node），来源 commit 记在 `skills/SOURCE.md`。
-  同步上游：`scripts/sync_lark-connector_skill.sh <lark-connector checkout>`，看 diff 后提交。
+  同步上游：`scripts/deploy/sync_lark-connector_skill.sh <lark-connector checkout>`，看 diff 后提交。
 - **怎么到助手手里**（2026-11-02 起，`docs/hub-update.md`「skill 从二进制里拿出来」）：它**不在 jarvisd 里**（不能再分发），
   放在跑助手那台机器的 `~/.jarvis/skills/lark-connector`（用户自己的 skill 空间），node 每次起助手进程时把它链接到 `~/.jarvis/assistant/.claude/skills/lark-connector`。
   旧版本 jarvisd 装进去的副本，node 第一次起助手时自动搬到 `~/.jarvis/skills/`。没有这个 skill 时没有 `ol`，助手的 CLAUDE.md 也改成只用 MCP 的 `lark_*`。

@@ -35,12 +35,12 @@ import org.junit.Test
 import java.io.File
 import java.net.ServerSocket
 
-/** scripts/mock_hub.py with MOCK_MAIL=1: whole mails for the reader (an HTML one, a thread) and three kinds of account. */
+/** scripts/mock/mock_hub.py with MOCK_MAIL=1: whole mails for the reader (an HTML one, a thread) and three kinds of account. */
 object MailMockHub {
     private val url: String by lazy {
         val port = ServerSocket(0).use { it.localPort }
-        val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock_hub.py").exists() }
-        val pb = ProcessBuilder("python3", "scripts/mock_hub.py").directory(repo).redirectErrorStream(true)
+        val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock/mock_hub.py").exists() }
+        val pb = ProcessBuilder("python3", "scripts/mock/mock_hub.py").directory(repo).redirectErrorStream(true)
         pb.environment()["PORT"] = port.toString()
         pb.environment()["MOCK_MAIL"] = "1"
         val p = pb.start()

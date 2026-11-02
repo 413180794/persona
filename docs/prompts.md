@@ -89,8 +89,8 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 1. 改 `server/internal/prompts/` 里的文件。
 2. 跑金标准测试，看差异是不是想要的：`cd server && go test ./internal/hub ./internal/kb ./internal/node -run Golden`。
 3. 确认后更新 golden：`UPDATE_GOLDEN=1 go test ./internal/hub ./internal/kb ./internal/node -run Golden`，把 `testdata/prompts/*.golden` 的 diff 一起提交。
-   `TestGoldenAssistantContextMain` 要 Postgres（`scripts/test-server.sh` 里才跑），要更新它就在 hub 机器上带 `UPDATE_GOLDEN=1` 跑
-   （`GOCMD='env UPDATE_GOLDEN=1 go test -count=1 -run TestGoldenAssistantContextMain' ./scripts/test-server.sh ./internal/hub`），再把那两个文件拷回来。
+   `TestGoldenAssistantContextMain` 要 Postgres（`scripts/test/test-server.sh` 里才跑），要更新它就在 hub 机器上带 `UPDATE_GOLDEN=1` 跑
+   （`GOCMD='env UPDATE_GOLDEN=1 go test -count=1 -run TestGoldenAssistantContextMain' ./scripts/test/test-server.sh ./internal/hub`），再把那两个文件拷回来。
 
 注意 `hub/assistant_schedule.go` 的 `scheduleHeader` 按 `assistant/task_run.md` 的头几行认出抄回来的旧头部：改那几行的写法要一起改它。
 

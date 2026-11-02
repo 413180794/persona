@@ -79,13 +79,13 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 ## 构建与验证
 
-- 服务端：`./scripts/test-server.sh`（在 hub 机器上连真实 Postgres 跑全部测试）；部署 `./scripts/deploy.sh [机器 id…]`（默认配置里的全部机器）。
-- iOS：`./scripts/sim.sh [-openSession <machine>/<session>]` 编译、装到配置里的模拟器、自动配对 hub；截图 `xcrun simctl io <udid> screenshot`。
+- 服务端：`./scripts/test/test-server.sh`（在 hub 机器上连真实 Postgres 跑全部测试）；部署 `./scripts/deploy/deploy.sh [机器 id…]`（默认配置里的全部机器）。
+- iOS：`./scripts/app/sim.sh [-openSession <machine>/<session>]` 编译、装到配置里的模拟器、自动配对 hub；截图 `xcrun simctl io <udid> screenshot`。
   直接用 xcodegen / Xcode 前先 `python3 scripts/jarvis_config.py xcconfig`（生成 bundle id、团队）。
-- Android：`./scripts/android.sh [install|apk|test]`（`docs/android.md`）。
-- 网页：`cd web && npm test && npm run build`；部署 `./scripts/deploy.sh web`（`docs/web.md`）。
+- Android：`./scripts/app/android.sh [install|apk|test]`（`docs/android.md`）。
+- 网页：`cd web && npm test && npm run build`；部署 `./scripts/deploy/deploy.sh web`（`docs/web.md`）。
 - 发布：`docs/release.md`。**每次发 TestFlight 都内部、外部两个一起发**：`release.sh` 上传后跑
-  `python3 scripts/asc_testflight.py wait 45 <构建号>`（进内部组），再跑 `python3 scripts/asc_testflight.py external`
+  `python3 scripts/release/asc_testflight.py wait 45 <构建号>`（进内部组），再跑 `python3 scripts/release/asc_testflight.py external`
   （挂到外部组、提交 Beta 审核、打印公开链接），两个都好了再告诉用户构建号和审核状态。
 
 ## 最常踩的坑
@@ -99,7 +99,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - 手动 `xcodebuild` 前先 `eval "$(python3 scripts/jarvis_config.py env)"`（`DEVELOPER_DIR`），否则用的是旧 Xcode，报一堆像别人代码坏了的错。（`testing.md`）
 - UI 测试一律 `app.launchPinned()` 启动：固定风格（默认液态玻璃，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 整套换），布局同 `launchJarvis()`。（`testing.md`）
 - DEBUG 启动参数的名字不能和任何 Swift 标识符（类型成员、存储属性）同名，否则 `release.sh` 的 strings 检查拦下 TestFlight；新开关用 `open…` / `show…` 并加进 release.sh 的列表。（`ios.md`）
-- App 和扩展共享的钥匙串组（灵动岛的形象、推送私钥）缺了就静默退回默认值、模拟器上却总是好的：发版的 ipa 要过 `scripts/entitlements.py check`，Info.plist 的组名用 `$(DEVELOPMENT_TEAM).` 不用 `$(AppIdentifierPrefix)`。（`release.md`）
+- App 和扩展共享的钥匙串组（灵动岛的形象、推送私钥）缺了就静默退回默认值、模拟器上却总是好的：发版的 ipa 要过 `scripts/release/entitlements.py check`，Info.plist 的组名用 `$(DEVELOPMENT_TEAM).` 不用 `$(AppIdentifierPrefix)`。（`release.md`）
 - 实时活动要画的东西放进 ContentState（hub 的推送里也带上），放不下的图放 App Group 容器的文件：实时活动的扩展在手机上读写不了钥匙串，模拟器上却可以（`live-activity.md`「为什么 build 103 的形象包还不对」）。
 - 常变的状态别写 UserDefaults：每写一次，App 里每个 `@AppStorage` 视图都重算（曾经每次推送都写，Agents 列表滚动中跟着重排、内容跳），放 `StateCache`。（`ios.md`）
 - App 目标默认 MainActor 隔离：交给系统在别的队列上回调的闭包写成 `{ @Sendable … in`，否则运行时崩；`apple/Shared` 的纯数据类型标 `nonisolated`。（`ios.md`）
@@ -143,7 +143,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   `StyleSpecTests`（每种风格 × 每种主题色深浅色的对比度）。不许为了过测试加豁免或调高基线。
 - **全局**：滚动条隐藏（RootView 的 `.scrollIndicators(.hidden)`，UIKit 的滚动视图自己关）；字号跟随动态字体和设置里的小 / 标准 / 大（`TextSize`）。
 - **安卓**是同一套设计系统（`android/app/src/main/java/jarvis/android/ui/design`，`docs/android.md`「设计系统」）：页面只读 `JTheme` / `JSpace` / `JRadius` / `JSize` / `JIcons`，
-  `DesignTokensTest` 管写死数值的基线（同样只能减少）；界面改动用 `./scripts/android.sh shots` 截图（浅色 / 深色，不要模拟器）看。
+  `DesignTokensTest` 管写死数值的基线（同样只能减少）；界面改动用 `./scripts/app/android.sh shots` 截图（浅色 / 深色，不要模拟器）看。
 - **逻辑层**：「加载 → 显示 → 编辑 → 保存」的页面用 MVVM，一个 `@Observable` 的 `XxxModel` 放在页面旁边，依赖从 `Deps` 传入，单元测试用 `FakeHub`；
   事件多的地方（对话页、分页）先把纯计算抽出来（`ChatLines`、`AgentListOrder`）。见 `docs/ios.md`「逻辑层的选型」。
 
@@ -156,7 +156,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `android/` | Android App（Kotlin + Compose），见 `docs/android.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
 | `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md` |
-| `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`）和公开的 jarvisd（`publish.sh`、`install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock_hub.py`） |
+| `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 jarvisd（`deploy/publish.sh`、`deploy/install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock/mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
 | `deploy/docker/` | hub 的 Docker 部署：`compose.yaml`、`.env.example`、镜像的入口脚本（镜像是仓库根的 `Dockerfile`，`.github/workflows/hub-image.yml` 构建推到 ghcr），见 `docs/docker.md` |
@@ -235,7 +235,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | 文档 | 内容 |
 | --- | --- |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
-| `docs/runtime-cli.md` | DEBUG 构建里的命令通道（`scripts/jarvisctl.py`）：运行中读状态、等画面停下、截图，协议和安全约束 |
+| `docs/runtime-cli.md` | DEBUG 构建里的命令通道（`scripts/app/jarvisctl.py`）：运行中读状态、等画面停下、截图，协议和安全约束 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 
 ### 计划和经验

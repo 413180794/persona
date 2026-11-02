@@ -14,7 +14,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// Fixtures are real transcripts / rollouts run through scripts/redact_transcript.py (testdata/README.md). Each one has
+// Fixtures are real transcripts / rollouts run through scripts/diag/redact_transcript.py (testdata/README.md). Each one has
 // a golden file with what the parser makes of it; `go test ./internal/transcript -run Fixture -update` rewrites them,
 // and the diff is the review.
 

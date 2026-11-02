@@ -60,7 +60,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Screenshots of 知识库 and Jarvis' profile pages with scripts/mock_hub.py's made-up data, light and dark (as [Shots]).
+ * Screenshots of 知识库 and Jarvis' profile pages with scripts/mock/mock_hub.py's made-up data, light and dark (as [Shots]).
  * Paparazzi draws one frame, so each page is handed what it would load first (the list loaded, an entry's detail,
  * the profile's lists), and a sheet's body is drawn in a sheet's frame (its own window can't be drawn here).
  */

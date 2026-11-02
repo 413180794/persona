@@ -3,7 +3,7 @@ import Network
 import SwiftUI
 import UIKit
 
-/// A command channel into the running app for scripts (`scripts/jarvisctl.py`, docs/runtime-cli.md), DEBUG builds only.
+/// A command channel into the running app for scripts (`scripts/app/jarvisctl.py`, docs/runtime-cli.md), DEBUG builds only.
 ///
 /// Off unless launched with `-runtimeCLI <port>` (and `-runtimeCLIToken <token>`): it then listens on 127.0.0.1:<port>
 /// (the simulator shares the Mac's loopback) for one JSON request per connection, a line

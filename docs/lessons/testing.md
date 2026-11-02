@@ -78,7 +78,7 @@
   Go 会把只读字符串拼在一起，CIDR 后甚至紧接另一个 CIDR，不能按可打印字符串的边界判断。先按真实编译输入追到依赖源码，不把原始命中输出到日志。
   `check_bundle_privacy.py --whole-short` 只对带 `public` 构建标记、未 replace 且 checksum 与 `server/go.sum` 一致的依赖，按精确协议 / HTML / 网段上下文分类；
   `publish.sh` 先 `go mod verify`。配置和私词表仍在原始文本上优先匹配，依赖缺失、校验和不符、上下文变化都拒绝；不能放行整个邮箱域名或整个私网段。
-  回归：`python3 -B -m unittest discover -s scripts -p 'test*privacy*.py'`，另跑四个平台的 `NO_DEPLOY=1 ./scripts/publish.sh`。
+  回归：`python3 -B -m unittest discover -s scripts/release -p 'test*privacy*.py' && python3 -B -m unittest discover -s scripts/test -p 'test_privacy*.py'`，另跑四个平台的 `NO_DEPLOY=1 ./scripts/release/publish.sh`。
 - 手表 Release 二进制可能是 arm64 + arm64_32 的通用 Mach-O；签名里的证书邮箱 / 个人名不是业务数据，隐私扫描只排除每个切片中经过结构和边界验证的嵌入签名 blob。
   `LC_CODE_SIGNATURE` 的偏移相对于切片，不能按第一个切片的签名位置截断整个文件；也不能因为是通用文件就把证书扫描误报后删掉私词。
   两个架构的签名前后、签名占位区剩余字节及文件尾照常扫描；畸形签名、越界 / 重叠切片不排除。回归覆盖薄 / 通用 32、64 位及大小端，另用真实手表归档验证。
@@ -99,6 +99,13 @@
 - Node 22 的内置 `WebSocket` 在握手被 HTTP 401 / 400 拒绝时可能只触发 `error`，不触发 `close`，`readyState` 仍是 CONNECTING。
   拒绝测试不要等 `close`，更不能把任意网络错误当成鉴权正确；用 HTTP upgrade 请求直接断言拒绝状态（错误 / 缺失 token 为 401、
   缺失 / 错误子协议为 400、错误路径为 404），意外收到 101 或连接错误均失败，设置总超时并回收 socket。成功握手仍用真实 WebSocket 验证。
+
+## 脚本目录迁移
+
+- 脚本移到子目录时，文字引用替换不够：同时检查 `__file__` / `$0` 推算根目录、Python 同级 import、跨目录子进程、Go 的路径构造和 SSH 传脚本的调用。
+  公共配置和隐私扫描保留顶层；隐私扫描用脚本所属仓库定位根目录，不能因为调用者当前目录不同扫到另一份 checkout。
+- `unittest discover -s scripts` 不会自动发现没有包标记的子目录；按 `test/`、`release/`、`deploy/`、`mock/` 分别发现并核对数量。
+  兼容 shell 入口只 `exec` 转发，用带空格的目录、空参数、标准输入、环境变量和非零退出码测试，不通过真正发布或重启服务来验证转发。
 
 ## 新加的 UI 测试
 

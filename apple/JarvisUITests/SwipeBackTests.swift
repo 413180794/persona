@@ -1,12 +1,12 @@
 import XCTest
 
 /// The Agents chat hides the system navigation bar for its own header; the edge swipe back must still work, folded or
-/// not. Needs a paired hub: scripts/ui-test.sh passes JARVIS_PAIR_URL and JARVIS_OPEN_SESSION.
+/// not. Needs a paired hub: scripts/app/ui-test.sh passes JARVIS_PAIR_URL and JARVIS_OPEN_SESSION.
 final class SwipeBackTests: XCTestCase {
     @MainActor private func launch(_ extra: [String]) throws -> XCUIApplication {
         let env = ProcessInfo.processInfo.environment
         guard let pair = env["JARVIS_PAIR_URL"], let session = env["JARVIS_OPEN_SESSION"] else {
-            throw XCTSkip("run through scripts/ui-test.sh (needs a hub)")
+            throw XCTSkip("run through scripts/app/ui-test.sh (needs a hub)")
         }
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", session] + extra

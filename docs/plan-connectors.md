@@ -259,7 +259,7 @@ node → hub 事件：`connector.changed {id, scope}`。
 
 每一步一个 PR，合入前同一组验证：
 
-- **现有测试全绿**：`./scripts/test-server.sh`（hub 机器、真 Postgres）、`go test ./...`、App 的 `JarvisTests` 和收件箱 / 知识库的 UI 测试。
+- **现有测试全绿**：`./scripts/test/test-server.sh`（hub 机器、真 Postgres）、`go test ./...`、App 的 `JarvisTests` 和收件箱 / 知识库的 UI 测试。
 - **golden 逐字节不变**：提示词、MCP 工具列表（`mcp_tools.*`、`mail_tools`）。
 - **新增的对照测试**（第 M0 步先写，用旧代码生成基线）：假 lark-connector + 假邮箱（合成数据）跑一轮归档 + 收件箱采集，
   把结果（知识库目录树和每个文件的内容、`InboxItem` 的 JSON）存成 golden；之后每步都必须一致。
@@ -387,7 +387,7 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
 
 已实现（#449，`server/internal/connector/imessage`，node 的 `connector.*` RPC 见 `docs/protocol.md`）：会话按人合并（一个号码在 iMessage / 短信 / RCS 上的几个 `chat` 是一个会话，群按 `guid`），
 id 是哈希；通讯录按号码后 10 位对，对不上再按后 7 位（只有一个人有时）；没有权限时 `connector.list` 按 node 怎么跑给出两种说法：经 ssh 起的打开「远程登录 › 允许远程用户完全访问磁盘」，
-launchd 常驻的 node（`scripts/node-launchd.sh`）给 jarvisd 本身授权（jarvisd 每次部署换二进制，授权可能要重开，帮手那一步解决）。
+launchd 常驻的 node（`scripts/deploy/node-launchd.sh`）给 jarvisd 本身授权（jarvisd 每次部署换二进制，授权可能要重开，帮手那一步解决）。
 测试数据是 `testdata/home`（合成的 `chat.db` 和通讯录，表结构是 macOS 26 的；`testdata/gen` 下的 `blobs.swift` + `make.py` 生成），读真数据只用 `TestRealMessagesCounts` 打印条数。
 
 - 只读打开：`sqlite3 -readonly -json`（macOS 自带的 `/usr/bin/sqlite3`，jarvisd 是 `CGO_ENABLED=0` 交叉编译的，不引入 SQLite 驱动；
@@ -455,7 +455,7 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
    - GitHub：状态、账号、粘贴 token（A / B 两种给法的说明，`SecureField`，存了只显示「已设置」）、`base_url`、最近一次同步、速率限制剩余。
    - 信息：读的是哪台 Mac、权限状态（没权限时一步步说怎么开）、收哪些会话（只收通讯录里的人 / 全部）、排除列表、保留天数。
    - DEBUG 入口 `openConnectorGitHub`、`openConnectorMessages`（和 `openConnectorFeishu` 一样，名字不和 Swift 标识符重名，加进 `release.sh` 的列表）。
-   - mock hub（`scripts/mock_hub.py`）加两个连接器和几件合成的条目，UI 测试和深浅色截图都用它。
+   - mock hub（`scripts/mock/mock_hub.py`）加两个连接器和几件合成的条目，UI 测试和深浅色截图都用它。
 
 ## 七、隐私
 

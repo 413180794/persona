@@ -17,7 +17,8 @@ the App Store and the OAuth consent screen publish anyway.
 import ipaddress, json, os, re, subprocess, sys
 from urllib.parse import unquote, urlsplit
 
-ROOT = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
+ROOT = subprocess.run(["git", "-C", os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
 HOME = os.path.expanduser("~")
 # Values too generic to search for (a machine called "mac", an OS name).
 IGNORE = {"darwin", "linux", "local", "ssh", "true", "false", "server", "localhost"}

@@ -111,5 +111,5 @@ Jarvis 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧的
 - 其他网关、没设网关地址（官方接口、codex）：说明查不了，不报错。
 - 谁去读：Jarvis 管理的启动器由 hub 用解封的 Key 读；~/.zshrc 的由**有这个启动器的那台电脑**读（node 的 `launchers.quota`：跑一遍探测拿到地址和 Key，就地请求网关），
   Key 不离开那台电脑，地址也是那台电脑能到的地址。优先 hub 自己那台。
-- App：`LauncherQuotaSection`，放在「可用性」上面；用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。mock：`scripts/mock_hub.py` 的 `cc_kiro` / `example-cli` / `cc_glm`，
+- App：`LauncherQuotaSection`，放在「可用性」上面；用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。mock：`scripts/mock/mock_hub.py` 的 `cc_kiro` / `example-cli` / `cc_glm`，
   DEBUG `-openLauncherPage <名字>` 直接打开。实测：`TestQuotaLive`（`JARVIS_LIVE_QUOTA=<探测写出的 env 文件>`）。

@@ -42,7 +42,7 @@ type Config struct {
 	// ProxySecret: behind the site's Worker (site/worker.mjs), which sends it as X-Relay-Proxy-Secret. Set, a request
 	// without it is refused (nobody can go around the Worker) and X-Forwarded-For names the client for rate limits.
 	ProxySecret string `json:"proxy_secret,omitempty"`
-	// APNsBase replaces Apple's host: only for the end-to-end script (scripts/relay_sim_e2e.sh).
+	// APNsBase replaces Apple's host: only for the end-to-end script (scripts/test/relay_sim_e2e.sh).
 	APNsBase string `json:"apns_base,omitempty"`
 }
 

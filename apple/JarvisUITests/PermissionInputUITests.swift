@@ -3,7 +3,7 @@ import XCTest
 final class PermissionInputUITests: XCTestCase {
     @MainActor func testSecureInputIsRequiredBeforeApproval() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs MOCK_SETTINGS_INPUT=1 scripts/mock_hub.py")
+            throw XCTSkip("needs MOCK_SETTINGS_INPUT=1 scripts/mock/mock_hub.py")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

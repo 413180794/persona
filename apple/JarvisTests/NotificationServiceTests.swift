@@ -51,9 +51,9 @@ struct NotificationServiceTests {
         #expect(shown.body == "有新消息") // untouched (a direct push without mutable-content never gets here anyway)
     }
 
-    /// scripts/relay_sim_e2e.sh: the very bytes the local relay handed to (fake) APNs, sealed by the hub's Go code to
+    /// scripts/test/relay_sim_e2e.sh: the very bytes the local relay handed to (fake) APNs, sealed by the hub's Go code to
     /// the key this app exported. RELAY_PAYLOADS: "<file>=<text it must show>|…".
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["RELAY_PAYLOADS"] != nil, "run by scripts/relay_sim_e2e.sh"))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["RELAY_PAYLOADS"] != nil, "run by scripts/test/relay_sim_e2e.sh"))
     func opensWhatTheRelayDelivered() async throws {
         let list = try #require(ProcessInfo.processInfo.environment["RELAY_PAYLOADS"])
         for item in list.split(separator: "|") {

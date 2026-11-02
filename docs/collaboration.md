@@ -164,7 +164,7 @@ EOF
 
 ### 维护
 
-- 判断逻辑和流程测试：`node scripts/pr_needs_issue_test.mjs`（从 workflow 里取出 github-script 的脚本，用假的 GitHub 客户端跑几十种描述样例和关闭 / 重开流程），
+- 判断逻辑和流程测试：`node scripts/test/pr_needs_issue_test.mjs`（从 workflow 里取出 github-script 的脚本，用假的 GitHub 客户端跑几十种描述样例和关闭 / 重开流程），
   改完再跑 `actionlint .github/workflows/pr-needs-issue.yml`。
 - 用的是 `pull_request_target`：跑的是默认分支上的那份 workflow，带写权限的 token，所以**绝不 checkout、不运行 PR 的代码**，
   PR 的标题、描述只通过 API 当数据读，不写进 `${{ }}`（会被注入脚本）。权限只给 `pull-requests: write` 和 `issues: write`。

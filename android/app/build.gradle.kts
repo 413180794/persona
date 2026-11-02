@@ -6,7 +6,7 @@ plugins {
     id("app.cash.paparazzi")
 }
 
-// The application id is personal (docs/config.md): scripts/android.sh passes it from ~/.config/jarvis/config.json.
+// The application id is personal (docs/config.md): scripts/app/android.sh passes it from ~/.config/jarvis/config.json.
 val appId = providers.gradleProperty("jarvisApplicationId").getOrElse("com.example.jarvis")
 
 android {
@@ -20,7 +20,7 @@ android {
         versionCode = 1
         versionName = "0.1"
         // Gmail's Google sign-in: the redirect scheme of the hub's Google OAuth client (its reversed client ID, docs/mail.md
-        // 「Android」). Personal, so it comes from the config like the application id: scripts/android.sh passes
+        // 「Android」). Personal, so it comes from the config like the application id: scripts/app/android.sh passes
         // android.google_oauth_scheme; JARVIS_GOOGLE_OAUTH_SCHEME works too. Without it the app offers app passwords.
         manifestPlaceholders["googleOAuthScheme"] = providers.gradleProperty("jarvisGoogleOAuthScheme").orNull?.takeIf { it.isNotBlank() }
             ?: System.getenv("JARVIS_GOOGLE_OAUTH_SCHEME")?.takeIf { it.isNotBlank() }
@@ -44,8 +44,8 @@ android {
     }
 }
 
-// The screenshot tests (src/test/java/jarvis/android/shots, Paparazzi against scripts/mock_hub.py) run only when asked:
-// ./scripts/android.sh shots (docs/testing.md「安卓截图」); `test` stays the plain unit tests.
+// The screenshot tests (src/test/java/jarvis/android/shots, Paparazzi against scripts/mock/mock_hub.py) run only when asked:
+// ./scripts/app/android.sh shots (docs/testing.md「安卓截图」); `test` stays the plain unit tests.
 tasks.withType<Test>().configureEach {
     if (!project.hasProperty("shots")) exclude("jarvis/android/shots/**")
     // DesignTokensTest writes its baseline anew (after counts went down): -PrecordDesignBaseline.

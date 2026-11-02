@@ -7,7 +7,7 @@
 # PR's metadata through the API: it never checks out or runs the PR's code, and the PR's text never goes through
 # ${{ }} (the script reads it as data from the API).
 #
-# Test: node scripts/pr_needs_issue_test.mjs runs the script below against sample PR descriptions and flows.
+# Test: node scripts/test/pr_needs_issue_test.mjs runs the script below against sample PR descriptions and flows.
 name: pr needs issue
 
 on:

@@ -1,6 +1,6 @@
 import XCTest
 
-/// A reply with a link in Chinese prose and wide tables (scripts/mock_hub.py MOCK_RICH=1, JARVIS_MOCK_HUB): the link
+/// A reply with a link in Chinese prose and wide tables (scripts/mock/mock_hub.py MOCK_RICH=1, JARVIS_MOCK_HUB): the link
 /// ends at the full-width bracket (it used to run on through the rest of the paragraph); a three-column table with a
 /// long Chinese column fits the screen and wraps that column; a seven-column one scrolls sideways.
 final class RichReplyTests: XCTestCase {
@@ -9,7 +9,7 @@ final class RichReplyTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_RICH=1 (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_RICH=1 (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

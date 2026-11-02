@@ -25,12 +25,12 @@ import java.io.File
 import java.net.ServerSocket
 import java.nio.file.Files
 
-/** scripts/mock_hub.py with MOCK_LARK=1: the Feishu chats behind the inbox's items, with every kind of message. */
+/** scripts/mock/mock_hub.py with MOCK_LARK=1: the Feishu chats behind the inbox's items, with every kind of message. */
 object LarkMockHub {
     private val url: String by lazy {
         val port = ServerSocket(0).use { it.localPort }
-        val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock_hub.py").exists() }
-        val pb = ProcessBuilder("python3", "scripts/mock_hub.py").directory(repo).redirectErrorStream(true)
+        val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock/mock_hub.py").exists() }
+        val pb = ProcessBuilder("python3", "scripts/mock/mock_hub.py").directory(repo).redirectErrorStream(true)
         pb.environment()["PORT"] = port.toString()
         pb.environment()["MOCK_LARK"] = "1"
         val p = pb.start()

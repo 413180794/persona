@@ -26,7 +26,7 @@ import (
 // Codex panes on a shared app-server, answered over its protocol (docs/codex.md「守护进程上的会话」): a real
 // `codex app-server` on a socket of its own (never the daemon in use), a TUI attached to it in the isolated herdr, and
 // a node that knows only that app-server (discovery off) and answers the cards the way the phone does. Env as
-// TestLiveCodexCards; JARVIS_CODEX_DAEMON=1 runs it (scripts/test-codex.sh, for a Codex with app-server daemons), and
+// TestLiveCodexCards; JARVIS_CODEX_DAEMON=1 runs it (scripts/test/test-codex.sh, for a Codex with app-server daemons), and
 // JARVIS_CODEX_FALLBACK=<a codex without one> also checks that such a Codex beside it stays on the terminal route.
 func TestLiveCodexDaemon(t *testing.T) {
 	bin, work := os.Getenv("JARVIS_CODEX_BIN"), os.Getenv("JARVIS_CODEX_WORK")

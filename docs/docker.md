@@ -4,7 +4,7 @@ hub 有两种部署方式，功能一样，按 hub 所在的机器挑一种：
 
 | 方式 | 适合 | 怎么装、怎么升级 |
 | --- | --- | --- |
-| **原生二进制**（`docs/server.md`「部署」） | 一台 Linux 服务器；hub 所在的机器自己也要跑 Agent（`kind: local`） | 开发机上 `./scripts/deploy.sh`（`systemd --user` 服务 + Postgres 容器）；或 `install.sh` 装好二进制后自己配服务。升级再跑一次 `deploy.sh` |
+| **原生二进制**（`docs/server.md`「部署」） | 一台 Linux 服务器；hub 所在的机器自己也要跑 Agent（`kind: local`） | 开发机上 `./scripts/deploy/deploy.sh`（`systemd --user` 服务 + Postgres 容器）；或 `install.sh` 装好二进制后自己配服务。升级再跑一次 `deploy.sh` |
 | **Docker**（本文） | NAS（群晖、威联通、Unraid…）或任何只当 hub 的机器 | `docker compose up -d`（hub + Postgres 两个容器）。升级 `docker compose pull && docker compose up -d` |
 
 两种方式的 hub 是同一个 `jarvisd`，`hub.json`、数据库、协议、App 都一样；从一种换到另一种只要搬 `~/.jarvis` 和数据库。
@@ -77,7 +77,7 @@ docker compose exec hub jarvisd hub pair    # App 扫码配对
 ```sh
 docker compose exec hub jarvisd hub tailcat-key          # NAS 上：hub 的公钥
 ~/.jarvis/bin/jarvisd node tailcat init --hub <公钥>     # 那台电脑上：打印它的地址
-./scripts/node-launchd.sh install                        # 那台电脑上：常驻 node
+./scripts/deploy/node-launchd.sh install                        # 那台电脑上：常驻 node
 ```
 
 把地址写进 `data/hub.json` 的 `machines`（`{"id":"laptop","name":"笔记本","kind":"tailcat","tailcat_addr":"tc…"}`），

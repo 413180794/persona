@@ -2,7 +2,7 @@ import XCTest
 
 /// The assistant's conversations titled by the hub 「MMDD | 类型 | 主题」 (docs/assistant.md「对话标题」) in the drawer,
 /// a topic too long for it cut at the end, and 重命名… in a conversation's long-press menu (the user's title is then
-/// the hub's for good). Against scripts/mock_hub.py with MOCK_TITLES=1 (JARVIS_MOCK_HUB), which records renames at
+/// the hub's for good). Against scripts/mock/mock_hub.py with MOCK_TITLES=1 (JARVIS_MOCK_HUB), which records renames at
 /// /mock/renamed.
 final class AssistantTitlesTests: XCTestCase {
     private var hub: String!
@@ -10,7 +10,7 @@ final class AssistantTitlesTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

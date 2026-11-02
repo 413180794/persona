@@ -550,7 +550,7 @@ struct WelcomeView: View {
         .sheet(isPresented: $showPair) { PairView() }
         .onAppear { withAnimation(.spring(duration: 0.8, bounce: 0.35)) { appear = true } }
         #if os(macOS) && DEBUG
-        // `-openWelcome YES -openPairSheet YES`: the 连接 hub sheet, for screenshots (scripts/mac_shot.sh).
+        // `-openWelcome YES -openPairSheet YES`: the 连接 hub sheet, for screenshots (scripts/app/mac_shot.sh).
         .onAppear { if UserDefaults.standard.bool(forKey: "openPairSheet") { showPair = true } }
         #endif
     }

@@ -16,7 +16,7 @@ import java.io.File
 import java.net.ServerSocket
 
 /**
- * The Feishu chat page's endpoints against scripts/mock_hub.py with MOCK_LARK=1, through the app's own [ApiClient]
+ * The Feishu chat page's endpoints against scripts/mock/mock_hub.py with MOCK_LARK=1, through the app's own [ApiClient]
  * extensions and models: paging (around / before / after), the thread, writes and what the fake hub recorded, people,
  * removed, emoji, media with Range. A real hub is never written to (docs/android.md「契约测试」).
  */
@@ -27,8 +27,8 @@ class LarkContractTest {
 
         @BeforeClass @JvmStatic fun start() {
             val port = ServerSocket(0).use { it.localPort }
-            val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock_hub.py").exists() }
-            val pb = ProcessBuilder("python3", "scripts/mock_hub.py").directory(repo).redirectErrorStream(true)
+            val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock/mock_hub.py").exists() }
+            val pb = ProcessBuilder("python3", "scripts/mock/mock_hub.py").directory(repo).redirectErrorStream(true)
             pb.environment()["PORT"] = port.toString()
             pb.environment()["MOCK_LARK"] = "1"
             val p = pb.start()

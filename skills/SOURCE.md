@@ -7,5 +7,5 @@
 原样拷贝，不改内容（改了下次同步会被覆盖）。**不编进 jarvisd**（不能再分发）：放进跑助手那台机器的 `~/.jarvis/skills/`，
 node 在助手进程启动时把它链接到助手目录的 `.claude/skills/` 下（`docs/hub-update.md`「skill 从二进制里拿出来」）；Jarvis 怎么用它见 `docs/assistant.md`「飞书：lark-connector skill」。
 
-同步上游：`scripts/sync_lark-connector_skill.sh <lark-connector 的 checkout>`，看 diff（尤其 SKILL.md 的「Confirm before acting」和
+同步上游：`scripts/deploy/sync_lark-connector_skill.sh <lark-connector 的 checkout>`，看 diff（尤其 SKILL.md 的「Confirm before acting」和
 references 里的写接口）后提交；写接口变了要对照 `node/larkgate.go` 的默认规则。

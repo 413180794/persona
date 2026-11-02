@@ -45,7 +45,7 @@
    开发机连不上、只有另一台（通常是 hub 机器）连得上的电脑（密钥只在那台上、路由不通）写 `"via": "<那台的 id>"`：
    部署时先拷到那台、再从那台装过去，这时 `ssh` 是**那台**上的主机名。
 
-2. **部署**：`./scripts/deploy.sh`。编译 Linux / macOS 两份 `jarvisd`，按 `os` 装到每台电脑的 `~/.jarvis/bin/`；在 hub 机器上
+2. **部署**：`./scripts/deploy/deploy.sh`。编译 Linux / macOS 两份 `jarvisd`，按 `os` 装到每台电脑的 `~/.jarvis/bin/`；在 hub 机器上
    起 Postgres 容器、把 `jarvisd hub` 装成 systemd 用户服务并启动。
 
 3. **hub 机器：告诉 hub 接入哪些电脑**。第一次启动会生成 `~/.jarvis/hub.json`（0600），里面只有它自己。补上其他电脑和手机访问的地址：
@@ -62,14 +62,14 @@
    `name` 是 App 里显示的名字；`icon` 取 `server` / `laptop` / `desktop`。`jarvisd` 不在 `~/.jarvis/bin/jarvisd` 时用 `remote_bin` 指定。
    顺便可以填 `assistant`（见下文 hub.json 一节）。
 
-4. **重启 hub 让它读到新配置**：`./scripts/deploy.sh <hub 机器 id>`（或在 hub 机器上 `systemctl --user restart jarvisd`）。
+4. **重启 hub 让它读到新配置**：`./scripts/deploy/deploy.sh <hub 机器 id>`（或在 hub 机器上 `systemctl --user restart jarvisd`）。
 
 5. **配对手机**：在 hub 机器上跑 `~/.jarvis/bin/jarvisd hub pair`，用 App 扫二维码（或手动填地址和 token）。
 
 6. **检查**：App「设置 › 机器」每台显示在线；「Agents」tab 里能看到每台电脑上 herdr 里的会话。某台不在线时先在 hub 机器上手动跑
    `ssh -o BatchMode=yes <ssh_host> '~/.jarvis/bin/jarvisd node --stdio'`，看是 SSH 不通还是二进制不在。
 
-之后加一台电脑：两份配置的 `machines` 各加一行，跑 `./scripts/deploy.sh <新机器 id> <hub 机器 id>`。
+之后加一台电脑：两份配置的 `machines` 各加一行，跑 `./scripts/deploy/deploy.sh <新机器 id> <hub 机器 id>`。
 
 ### 目前的限制
 
@@ -113,7 +113,7 @@
 | `publish.site_url` | `publish.sh` 把 `jarvisd` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 jarvisd」）；不写就不发布 |
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
 | `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`jarvis_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
-| `android.application_id` | Android App 的 application id（`scripts/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
+| `android.application_id` | Android App 的 application id（`scripts/app/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
 | `android.google_oauth_scheme` | Android App 接 Gmail 的 Google 登录回调用的 scheme：hub `google.client_id` 的反向 client ID（`docs/mail.md`「Android」）；不写就只能用应用专用密码加 Gmail |
 
 `python3 scripts/jarvis_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `apple/Config.xcconfig`；

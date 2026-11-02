@@ -1,7 +1,7 @@
 import XCTest
 
 /// Every tappable thing on the machine pages (设置 › 机器, a machine's details, an Agents list's machine menu, a
-/// machine's projects, 新对话's machine / directory / launcher), against scripts/mock_hub.py started with
+/// machine's projects, 新对话's machine / directory / launcher), against scripts/mock/mock_hub.py started with
 /// MOCK_MACHINES=1 (an offline machine that reconnect brings back, a machine with 36 agents):
 ///   TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:<port>
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there (docs/testing.md「机器页面」).
@@ -13,7 +13,7 @@ final class MachinePagesTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let h = ProcessInfo.processInfo.environment["JARVIS_MACHINES_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_MACHINES=1 (JARVIS_MACHINES_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_MACHINES=1 (JARVIS_MACHINES_HUB)")
         }
         hub = h
         _ = mock("reset") // the offline machine offline again, no sessions started

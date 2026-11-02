@@ -147,14 +147,14 @@ App 的 rows / blocks 只重建最后一轮（1000 轮会话每次事件 21 ms �
 ### 阶段 0：测试基建（先做）
 
 - **改什么**
-  - `scripts/redact_transcript.py`：把真实 transcript / rollout 脱敏成 fixture——保留结构、类型、uuid 关系、行序，文字替换成等长占位、
+  - `scripts/diag/redact_transcript.py`：把真实 transcript / rollout 脱敏成 fixture——保留结构、类型、uuid 关系、行序，文字替换成等长占位、
     路径 / 主机名 / 邮箱换成占位、base64 图片换成 1×1 PNG，并打印剩余可疑串供人工复核。
   - `server/internal/transcript/testdata/`：Claude（含 local_command、api_error 重试、task-notification 三处、queued_command、compact、
     scheduled_task_fire、tool_result 带图片、subagent）、Codex 0.15x/0.16x（含 Extension、FileChange 多文件、turn_aborted）、TRAEX 各一份。
   - golden 测试：fixture → item 列表的 JSON 快照（`-update` 刷新）；**增量 = 冷读**测试（逐字节 / 逐行追加，结果一致）；
     `After` / `Page` / `PageTurns` 分页无缝隙无重叠的性质测试。
   - 先把 A2、A5、B1–B5 写成失败的测试。
-- **验证**：`./scripts/test-server.sh ./internal/transcript/...`（Go 只在 hub 机器上）。
+- **验证**：`./scripts/test/test-server.sh ./internal/transcript/...`（Go 只在 hub 机器上）。
 - **风险**：脱敏不彻底把个人信息带进仓库——脚本白名单式替换（只留 JSON 键和枚举值），提交前人工 grep 一遍；fixture 控制在每份 < 200 KB。
 
 ### 阶段 1：服务端解析与分页正确性（不改协议）
@@ -185,7 +185,7 @@ App 的 rows / blocks 只重建最后一轮（1000 轮会话每次事件 21 ms �
 - **验证**
   - 服务端：分页 / 补发 / 改写代数的单测（含「补发 > 500」「截短后重写」「同大小替换」）。
   - App：`ChatStoreTests` 加断档、乱序、history 变化、重复批次、冷启动缓存 + 最新页的用例。
-  - 端到端：`scripts/mock_hub.py` 加「故意漏发一批 / 只发前 500 条 / 换 history」开关，模拟器跑一遍，对话完整；
+  - 端到端：`scripts/mock/mock_hub.py` 加「故意漏发一批 / 只发前 500 条 / 换 history」开关，模拟器跑一遍，对话完整；
     再在真实 hub 上走 A1、A3、A6 的复现步骤，截图对比修前修后。
 - **风险**
   - 旧 App + 新 hub：新字段旧 App 不认，行为不变；新 App + 旧 hub：没有 `history` / `after_seq` 时退回现在的逻辑，不能当成断档狂补。
@@ -233,4 +233,4 @@ App 的 rows / blocks 只重建最后一轮（1000 轮会话每次事件 21 ms �
 
 一次性的 Python 脚本（不入库）：遍历 `~/.claude/projects/*/*.jsonl` 统计 `type/subtype`、content 块类型、attachment 类型、
 同一 `<task-id>` 在可见记录里出现的次数、`parentUuid` 重挂的 prompt；遍历 `~/.codex/sessions/**/*.jsonl` 统计 `type/payload.type/item.type`。
-阶段 0 会把它整理成 `scripts/transcript_stats.py`，以后 Claude Code / Codex 升级时跑一遍看有没有新类型。
+阶段 0 会把它整理成 `scripts/diag/transcript_stats.py`，以后 Claude Code / Codex 升级时跑一遍看有没有新类型。

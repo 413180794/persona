@@ -1,13 +1,13 @@
 import XCTest
 
-/// Files sent to an agent (docs/protocol.md「发送文件」), against scripts/mock_hub.py
+/// Files sent to an agent (docs/protocol.md「发送文件」), against scripts/mock/mock_hub.py
 /// (TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:<port>; MOCK_UPLOAD_KBPS slows it down enough to see the bar).
 final class FileUploadTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
 
     private func launch(_ args: [String]) throws -> XCUIApplication {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_UPLOAD_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_UPLOAD_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_UPLOAD_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

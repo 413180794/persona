@@ -3,14 +3,14 @@ import XCTest
 /// Codex's approval and question cards (docs/codex.md「提问和审批」) in its chat: the approval says Codex asks, with its
 /// reason, the command, 拒绝 / 同意, 总是同意 naming what it allows, and 拒绝并说明理由 opening a field; a refused answer (a
 /// draft in the computer's input box) keeps the card and says why; the question card answers both questions. Against
-/// scripts/mock_hub.py with MOCK_CODEX=1 (TEST_RUNNER_JARVIS_CODEX_HUB=http://127.0.0.1:<port>);
+/// scripts/mock/mock_hub.py with MOCK_CODEX=1 (TEST_RUNNER_JARVIS_CODEX_HUB=http://127.0.0.1:<port>);
 /// TEST_RUNNER_JARVIS_SHOT_DIR=<dir> also saves the screens there as PNG.
 final class CodexCardsTests: XCTestCase {
     private let orders = "server/a1f3c2d4-0000-4000-8000-000000000004"
 
     private func hub() throws -> String {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_CODEX_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_CODEX=1 (JARVIS_CODEX_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_CODEX=1 (JARVIS_CODEX_HUB)")
         }
         return hub
     }

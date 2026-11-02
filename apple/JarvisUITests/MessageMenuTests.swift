@@ -1,14 +1,14 @@
 import XCTest
 
 /// Long-press a message: the 复制 / 选择 / 引用 / 分享 bar must stay up after the finger lifts, whatever the press
-/// length; a tap on the list or a scroll still closes it. Runs against scripts/mock_hub.py:
+/// length; a tap on the list or a scroll still closes it. Runs against scripts/mock/mock_hub.py:
 ///   TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/MessageMenuTests
 final class MessageMenuTests: XCTestCase {
     private let answer = "PR #42 看完了"
 
     @MainActor private func launch() throws -> XCUIApplication {
         guard let mock = ProcessInfo.processInfo.environment["JARVIS_MOCK_URL"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_URL)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_URL)")
         }
         let url = mock.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? mock
         let app = XCUIApplication()

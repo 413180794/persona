@@ -2,11 +2,11 @@ import XCTest
 
 /// The Fleet activity's 拒绝 button on the lock screen resolves the request: the app starts a sample activity
 /// (`-showFleetSample needsYou`, request `ix_sample`), the test locks the phone, taps 拒绝 and asks the mock hub
-/// (scripts/mock_hub.py, JARVIS_MOCK_HUB) whether the resolve arrived.
+/// (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB) whether the resolve arrived.
 final class LiveActivityActionTests: XCTestCase {
     @MainActor func testDenyFromTheLockScreen() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let app = XCUIApplication()

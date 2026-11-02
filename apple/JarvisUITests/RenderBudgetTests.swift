@@ -5,7 +5,7 @@ import XCTest
 /// (`-perfCounts YES`), per push. `rev`: the transcript grew, nothing shown changed (most of the real hub's pushes);
 /// `last`: one agent's last line. Reports for now (PERF lines, attachments); the budget it will hold to comes with the
 /// steps of docs/ios-state.md.
-///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock_hub.py &
+///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:JarvisUITests/RenderBudgetTests
 final class RenderBudgetTests: XCTestCase {
     private var hub = ""
@@ -16,7 +16,7 @@ final class RenderBudgetTests: XCTestCase {
 
     override func setUpWithError() throws {
         guard let h = ProcessInfo.processInfo.environment["JARVIS_CHURN_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (JARVIS_CHURN_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (JARVIS_CHURN_HUB)")
         }
         hub = h
         _ = mock("reset")

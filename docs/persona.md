@@ -166,7 +166,7 @@
 2. **生成姿势**：用 Codex 自己的登录，不需要 API key。
 
    ```sh
-   python3 scripts/persona/make_persona.py generate --work ~/personas/doudou \
+   python3 scripts/assets/make_persona.py generate --work ~/personas/doudou \
      --describe "a round yellow 3D character with green-ringed eyes" a.jpg b.jpg c.jpg
    ```
 
@@ -181,13 +181,13 @@
 4. **打包**（不联网）：
 
    ```sh
-   python3 scripts/persona/make_persona.py build --work ~/personas/doudou --id doudou --name 豆豆 --subtitle "圆滚滚的黄色小家伙"
+   python3 scripts/assets/make_persona.py build --work ~/personas/doudou --id doudou --name 豆豆 --subtitle "圆滚滚的黄色小家伙"
    ```
 
    - 包在 `<work>/package/doudou/`，先看 `preview.png`：五个状态的帧、浅色和深色下的颜色。
    - 位置不对时，在 `<work>/framing.json` 里按姿势微调，例如 `{"think": {"scale": 1.05, "dx": 0.02, "dy": -0.01}}`（单位是边长的比例）。
    - 颜色不对就用 `--primary`、`--accent-light`、`--accent-dark`。
-5. **装到 hub**：`python3 scripts/persona/make_persona.py install ~/personas/doudou/package/doudou`。会先解到旁边，再整个换上去；hub 机器默认读 `~/.config/jarvis/config.json`。
+5. **装到 hub**：`python3 scripts/assets/make_persona.py install ~/personas/doudou/package/doudou`。会先解到旁边，再整个换上去；hub 机器默认读 `~/.config/jarvis/config.json`。
 6. **手机上选**：设置 › 外观 › 形象。
 
 一步做完生成和打包：`make_persona.py new --id doudou --name 豆豆 a.jpg b.jpg c.jpg`。不用 AI 也行：把自己画的 8 张透明 PNG 按上面的名字放进 `<work>/poses/`，直接 `build`。只有 `avatar` 是必须的，缺的姿势用它代替。
@@ -220,7 +220,7 @@
 | --- | --- |
 | `server/internal/hub/persona_test.go` | 只列出完整的包；rev 跟着内容变；文件不出包目录；没有令牌拿不到 |
 | `apple/JarvisTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；作为主题色「跟随形象」时用形象的主色、气泡和飞书链接（飞书风格也是），没给的用风格自己的；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
-| `apple/JarvisUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Jarvis 又变回来 |
+| `apple/JarvisUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Jarvis 又变回来 |
 
 截图和录屏用的 DEBUG 启动参数：
 

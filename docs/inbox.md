@@ -121,7 +121,7 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
   上方是 Agent 的依据和「查看 AI 分身的处理过程」）。处理中的行显示「AI 分身正在处理：<task>」。详情页操作条的按钮变成「查看草稿」。
   手表打开这件事时直接显示草稿和「发送」。
 - 本地验证模型 1、2：`JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}'` 跑 `TestInboxModelsLive`
-  （经 `GOCMD=… ./scripts/test-server.sh ./internal/hub` 在 hub 机器上跑，key 文件在那台机器上）。
+  （经 `GOCMD=… ./scripts/test/test-server.sh ./internal/hub` 在 hub 机器上跑，key 文件在那台机器上）。
 
 ## 生命周期
 

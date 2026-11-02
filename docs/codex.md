@@ -84,7 +84,7 @@ Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `code
 - **看得出走哪条路**：会话带 `codex_route`（`app_server` / `terminal`）和 `codex_route_note`（为什么是终端），App 的「会话信息」显示「连接：app-server（结构化）」
   或「终端（读屏幕）」加原因；node 日志有每次接入成功 / 失败。
 - **测试**：`node/codex_daemon_test.go`（合成 app-server 上的自动接入、发消息、async 回答、审批卡、拒绝理由、接入失败重试、socket 别名）；
-  真实 Codex：`scripts/test-codex.sh` 带 `JARVIS_CODEX_DAEMON_BINS`（`docs/testing.md`「Codex 联调」），在独立的 herdr 里起一个只给测试用的 `codex app-server --listen unix://…`
+  真实 Codex：`scripts/test/test-codex.sh` 带 `JARVIS_CODEX_DAEMON_BINS`（`docs/testing.md`「Codex 联调」），在独立的 herdr 里起一个只给测试用的 `codex app-server --listen unix://…`
   （不碰正在用的守护进程，node 关掉发现、只认它），TUI 用 `--remote` 挂上去。
 
 ## Codex 桌面 App 里的会话（App 的本机 IPC）
@@ -130,7 +130,7 @@ node 作为总线上的又一个客户端（`server/internal/node/codex_desktop.
   「连接」那行写「用启动器「X」起的：它带了 -c，Codex 这时在自己的进程里跑，不在共享的 app-server 上」；0.153 没有守护进程，也是终端路线。
 - **不提供的**：Claude 的权限模式、思考强度（Codex 按启动器的参数和 `~/.codex/config.toml`）；从手机恢复已有的 Codex 会话（`codex_resume`，在电脑上 `codex resume`）。
 - **测试**：`node/codex_start_test.go`（假 herdr：窗格里的命令只有 `codex-start <文件>`、文件里是启动器的词和消息、只有一条会话、路由说明、拒绝、超时和启动失败的报错、信任对话框、
-  `codex-start` 子进程逐字节收到消息、`~/.zshrc` 里的 Codex alias）；真实 Codex：`scripts/test-codex.sh` 的 `TestLiveCodexStart`
+  `codex-start` 子进程逐字节收到消息、`~/.zshrc` 里的 Codex alias）；真实 Codex：`scripts/test/test-codex.sh` 的 `TestLiveCodexStart`
   （0.163 经 `--remote` 挂在测试自己的 app-server 上、0.153、带 `-c` 的 0.163，各连跑多轮：消息带引号 / 换行 / `$` / 反引号 / 中文 / 长文本，
   原样进 rollout，一个窗格一条会话，路由对，手机再发一条也收到）；App：`MachinePagesTests.testNewCodexSessionStartsWithItsFirstMessage`。
 
@@ -183,7 +183,7 @@ herdr 在 Codex 有没答的 async 提问时报 blocked，于是 `agent prompt` 
 - 单元测试：`screen/codex_test.go`（录下来的屏幕，0.153.4 / 0.163.0，`screen/testdata/codex-*`）、`transcript/codexask_test.go`（rollout 识别、两种 schema、
   部分回答、直接打字、旧 desktop 回复、TRAEX）、`node/codexask_test.go`（假 herdr 上每种界面状态的按键和输入、拒绝时什么都没按）、
   `hub/codexcards_test.go`（列表增删、答失败卡片回来、重连不响铃、推送标题）。
-- 真实 Codex：`scripts/test-codex.sh`（`docs/testing.md`「Codex 联调」）在独立的 herdr 里起 Codex，让它提问、请求审批，每种界面状态各一个用例，连跑多轮。
+- 真实 Codex：`scripts/test/test-codex.sh`（`docs/testing.md`「Codex 联调」）在独立的 herdr 里起 Codex，让它提问、请求审批，每种界面状态各一个用例，连跑多轮。
 - App：`CodexCardsTests`（mock `MOCK_CODEX=1`），浅色 / 深色截图。
 
 ## 还不支持

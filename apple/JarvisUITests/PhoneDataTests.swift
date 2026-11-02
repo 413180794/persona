@@ -1,11 +1,11 @@
 import XCTest
 
 /// 设置 › 连接器 › 这台 iPhone: the switch is the whole state, no 已授权 / 点此授权 labels; a source never asked is off.
-/// (The system's permission alert is not driven here: on a busy machine it took minutes and came back from earlier runs.) Against scripts/mock_hub.py (JARVIS_MOCK_HUB), on a fresh simulator.
+/// (The system's permission alert is not driven here: on a busy machine it took minutes and came back from earlier runs.) Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), on a fresh simulator.
 final class PhoneDataTests: XCTestCase {
     @MainActor func testSwitchIsTheGrant() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

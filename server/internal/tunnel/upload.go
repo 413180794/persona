@@ -23,7 +23,7 @@ import (
 // The upload port takes a new jarvisd for the node, what the hub's 重新部署 sends over ssh otherwise (hub/deploy.go):
 // one JSON line {"size","sha256"} of the binary, the binary gzipped, then the node answers one JSON line
 // {"ok"} or {"error"}. On ok the node has replaced its own executable and exits, and its supervisor (launchd,
-// systemd: scripts/node-launchd.sh) starts the new one.
+// systemd: scripts/deploy/node-launchd.sh) starts the new one.
 
 // maxBinary bounds what an upload may write.
 const maxBinary = 512 << 20

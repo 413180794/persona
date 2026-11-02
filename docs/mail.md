@@ -88,7 +88,7 @@ client ID 只写在 hub 的 `hub.json`（`google.client_id`），不进仓库和
    未经验证的应用最多 100 个用户，登录时 Google 会提示「此应用未经验证」，点「高级 → 继续」即可，自己用不需要走验证 / CASA 安全评估。
 6. 「客户端」→ 创建 OAuth 客户端，类型 **iOS**，Bundle ID 和团队 ID 填配置里的 `app.bundle_id` / `app.team_id`，得到
    `<数字>-<串>.apps.googleusercontent.com`。
-7. 写进 hub 机器的 `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy.sh <hub 机器 id>`）。
+7. 写进 hub 机器的 `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy/deploy.sh <hub 机器 id>`）。
    iOS 客户端的 client ID 是公开信息，不算密钥。
 
 没配 `google.client_id` 时，点按钮会提示「Google sign-in is not configured」。
@@ -101,7 +101,7 @@ hub 的 OAuth 客户端是 iOS 类型，回调是反向 client ID 的自定义 s
 流程跨进程：等的 `state` 存在 SharedPreferences，浏览器在前台时进程被杀，回调照样能完成。
 
 - Android 不能在运行时注册任意 scheme：intent filter 的 scheme 来自构建配置 `~/.config/jarvis/config.json` 的
-  `android.google_oauth_scheme`（`scripts/android.sh` 传给 gradle；也认环境变量 `JARVIS_GOOGLE_OAUTH_SCHEME`），不进仓库。没配时是占位值，
+  `android.google_oauth_scheme`（`scripts/app/android.sh` 传给 gradle；也认环境变量 `JARVIS_GOOGLE_OAUTH_SCHEME`），不进仓库。没配时是占位值，
   App 用 `PackageManager.queryIntentActivities` 判断接不接得住 hub 返回的 `callback_scheme`，接不住就说明原因，
   退到「Gmail + 应用专用密码」（hub 仍支持 `auth: password`）。hub 没配 `google.client_id` 时同样退到这个表单。
 - 没在真机上验证过：Google 对 iOS 客户端的自定义 scheme 回调从 Android 浏览器发起是否放行（Android 客户端类型已经禁用自定义 scheme）。

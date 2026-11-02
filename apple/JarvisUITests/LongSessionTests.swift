@@ -2,7 +2,7 @@ import XCTest
 
 /// Opening a long session: its last exchange ran 650 commands, folded on screen into one work line
 /// ("工具 650 · …"). The first page must not carry that work (it was 1400 rows and a megabyte of a real Codex session,
-/// a long blank wait on a weak network); opening the work line fetches it. Against scripts/mock_hub.py with MOCK_BIG=1
+/// a long blank wait on a weak network); opening the work line fetches it. Against scripts/mock/mock_hub.py with MOCK_BIG=1
 /// (JARVIS_MOCK_HUB), which records what each batch of the session weighed at /mock/served.
 final class LongSessionTests: XCTestCase {
     private var hub: String!
@@ -11,7 +11,7 @@ final class LongSessionTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_BIG=1 (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_BIG=1 (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

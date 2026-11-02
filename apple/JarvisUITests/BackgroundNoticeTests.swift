@@ -3,14 +3,14 @@ import XCTest
 /// Background tasks reporting back inside a chat (Item.task): a background heredoc finishing, a test run failing, a
 /// Monitor's events between two commands and its end. Each is one line in the tools' look — the heredoc's notice used
 /// to be the whole heredoc in a centered capsule, screens tall, its `>` still `&gt;`. The call that started a task says
-/// how it went, and a notice leads back to that call. Against scripts/mock_hub.py with MOCK_TASKS=1 (JARVIS_MOCK_HUB).
+/// how it went, and a notice leads back to that call. Against scripts/mock/mock_hub.py with MOCK_TASKS=1 (JARVIS_MOCK_HUB).
 final class BackgroundNoticeTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_TASKS=1 (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

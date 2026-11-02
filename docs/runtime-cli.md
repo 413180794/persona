@@ -1,6 +1,6 @@
 # Runtime CLI（DEBUG 构建里的命令通道）
 
-在模拟器里跑着的 DEBUG App 里开一个本地端口，脚本用 `scripts/jarvisctl.py` 发命令：读状态、等画面停下、截图、
+在模拟器里跑着的 DEBUG App 里开一个本地端口，脚本用 `scripts/app/jarvisctl.py` 发命令：读状态、等画面停下、截图、
 导航、切风格，（后续）读无障碍树、点按、注入状态。不用为每个场景加一个启动开关、每张截图重启一次 App。
 
 为什么做、和其他方案（URL scheme、运行时重读启动开关）的取舍、实测数字：见 2026-11-02 的评估（spike 分支
@@ -10,12 +10,12 @@
 
 ```sh
 export JARVISCTL_UDID=<模拟器 udid>            # 不设就是 booted
-scripts/jarvisctl.py launch --hub http://127.0.0.1:18760   # 结束并重新启动 App（带一次性 token），等它应答
-scripts/jarvisctl.py state                      # 当前 tab、打开的会话、风格、主题色、深浅色、连接状态
-scripts/jarvisctl.py online                     # 等 hub 的实时连接（2 s 还没连上就主动重连一次）
-scripts/jarvisctl.py settle --pixels 600        # 等画面停下（连续几帧变化不超过 600 个像素）
-scripts/jarvisctl.py screenshot out.png         # settle 之后 simctl io screenshot
-scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命令
+scripts/app/jarvisctl.py launch --hub http://127.0.0.1:18760   # 结束并重新启动 App（带一次性 token），等它应答
+scripts/app/jarvisctl.py state                      # 当前 tab、打开的会话、风格、主题色、深浅色、连接状态
+scripts/app/jarvisctl.py online                     # 等 hub 的实时连接（2 s 还没连上就主动重连一次）
+scripts/app/jarvisctl.py settle --pixels 600        # 等画面停下（连续几帧变化不超过 600 个像素）
+scripts/app/jarvisctl.py screenshot out.png         # settle 之后 simctl io screenshot
+scripts/app/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命令
 ```
 
 脚本里：`from jarvisctl import Ctl; c = Ctl(); c.launch(hub); c.call("settle", pixels=600)`。
@@ -55,18 +55,18 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 ## 导航和风格
 
 ```sh
-scripts/jarvisctl.py set-style beautiful            # 整棵树按新风格重建
-scripts/jarvisctl.py appearance dark                # 整个模拟器（状态栏一起），--in-app 只改 App
-scripts/jarvisctl.py navigate machines              # = -tab settings -openMachines YES，不用重启
-scripts/jarvisctl.py navigate chat --session <机器>/<会话> --flag openWork=YES
-scripts/jarvisctl.py idle && scripts/jarvisctl.py screenshot out.png
+scripts/app/jarvisctl.py set-style beautiful            # 整棵树按新风格重建
+scripts/app/jarvisctl.py appearance dark                # 整个模拟器（状态栏一起），--in-app 只改 App
+scripts/app/jarvisctl.py navigate machines              # = -tab settings -openMachines YES，不用重启
+scripts/app/jarvisctl.py navigate chat --session <机器>/<会话> --flag openWork=YES
+scripts/app/jarvisctl.py idle && scripts/app/jarvisctl.py screenshot out.png
 ```
 
 `navigate` 换一棵新的界面树，而不是在原来的树上改路由：评估时在原树上导航，Agents 页推进去的对话关不掉、收件箱顶栏的
 玻璃底和冷启动不一样。新树要补上 `WindowGroup` 给的 `scenePhase`，不然只在前台工作的页面（机器页的指标，
 `.tabActiveTask`）一直不动。
 
-`idle`（只在 `jarvisctl.py` 里）：等 mock hub（`scripts/mock_hub.py` 在 `/mock/hits` 数每个 GET）0.8 s 没有新请求。
+`idle`（只在 `jarvisctl.py` 里）：等 mock hub（`scripts/mock/mock_hub.py` 在 `/mock/hits` 数每个 GET）0.8 s 没有新请求。
 页面还在等数据时（机器页的指标）画面是静止的，`settle` 会以为好了，先 `idle` 再 `settle`。
 
 ## 一直在动的画面
@@ -94,7 +94,7 @@ scripts/jarvisctl.py idle && scripts/jarvisctl.py screenshot out.png
 
 ## 一次启动截完所有场景（身份对比）
 
-`scripts/jarvisctl-scenes/id-cli.py <输出目录> glass:light beautiful:dark …`：启动一次，然后每个“风格 × 深浅 × 场景”
+`scripts/app/jarvisctl-scenes/id-cli.py <输出目录> glass:light beautiful:dark …`：启动一次，然后每个“风格 × 深浅 × 场景”
 （`scenes-id1.txt` 的 7 个）`online` → `set-style` → `navigate --cold-chats` → `idle` → `settle` → `simctl io screenshot`
 （`FREEZE=1`：settle 前先 `freeze`，见上一节）。
 `id-old.sh` 是原来的拍法（每张重启 + 启动开关 + 固定 sleep）。`id-judge.py --old <目录>… --cli <目录>…` 判断两种拍法
@@ -116,9 +116,9 @@ scripts/jarvisctl.py idle && scripts/jarvisctl.py screenshot out.png
 `tree` / `find` / `wait` 读的就是 XCUITest 看到的那棵树：`accessibilityIdentifier`、label、frame、traits。
 
 ```sh
-scripts/jarvisctl.py find --id agents.filter.unread          # {"count": 1, "element": {"label": "未读 47", "frame": [...], ...}}
-scripts/jarvisctl.py wait --label-contains 收起过程 --timeout 5
-scripts/jarvisctl.py tree --id-prefix agents. --visible
+scripts/app/jarvisctl.py find --id agents.filter.unread          # {"count": 1, "element": {"label": "未读 47", "frame": [...], ...}}
+scripts/app/jarvisctl.py wait --label-contains 收起过程 --timeout 5
+scripts/app/jarvisctl.py tree --id-prefix agents. --visible
 ```
 
 元素过滤：`--id`（全等）、`--id-prefix`、`--label`（全等）、`--label-contains`、`--label-prefix`、`--trait`（button / text /
@@ -136,11 +136,11 @@ header / selected / search / image / disabled）、`--visible`（点得到）、
 ## 动作和截图
 
 ```sh
-scripts/jarvisctl.py tap --id agents.filter.unread          # 无障碍激活
-scripts/jarvisctl.py tap --id shell-agents && scripts/jarvisctl.py tap --label 细列表 --trait button   # 菜单项：自动退回真实触摸
-scripts/jarvisctl.py scroll --pages 2 ; scripts/jarvisctl.py scroll --to top
-scripts/jarvisctl.py type --trait search --text platform ; scripts/jarvisctl.py dismiss-keyboard
-scripts/jarvisctl.py snapshot app.png
+scripts/app/jarvisctl.py tap --id agents.filter.unread          # 无障碍激活
+scripts/app/jarvisctl.py tap --id shell-agents && scripts/app/jarvisctl.py tap --label 细列表 --trait button   # 菜单项：自动退回真实触摸
+scripts/app/jarvisctl.py scroll --pages 2 ; scripts/app/jarvisctl.py scroll --to top
+scripts/app/jarvisctl.py type --trait search --text platform ; scripts/app/jarvisctl.py dismiss-keyboard
+scripts/app/jarvisctl.py snapshot app.png
 ```
 
 - `tap` 先做无障碍激活；元素不吃（菜单项）或带 `--hid` 时，等画面停下、重新取 frame，用 `idb ui tap` 在中心点一下真的触摸
@@ -152,10 +152,10 @@ scripts/jarvisctl.py snapshot app.png
 都是 `jarvisctl.py` 在宿主机上用 `idb` 发的真实触摸（和 `tap` 的兜底一样，App 里不合成事件）；先等画面停下、重新取元素的 frame。
 
 ```sh
-scripts/jarvisctl.py longpress --label-contains "、给天气 App 加主屏幕小组件、"          # 行的长按菜单（默认按 1.2 s）
-scripts/jarvisctl.py swipe --label-contains "、给天气 App 加主屏幕小组件、" --dir left  # 横滑出「关闭」
-scripts/jarvisctl.py drag --from 201,300 --to 201,520 --duration 0.8                   # 下拉露出 Agents 的搜索框
-scripts/jarvisctl.py background --seconds 2 && scripts/jarvisctl.py foreground         # 回桌面再回来，同一个进程
+scripts/app/jarvisctl.py longpress --label-contains "、给天气 App 加主屏幕小组件、"          # 行的长按菜单（默认按 1.2 s）
+scripts/app/jarvisctl.py swipe --label-contains "、给天气 App 加主屏幕小组件、" --dir left  # 横滑出「关闭」
+scripts/app/jarvisctl.py drag --from 201,300 --to 201,520 --duration 0.8                   # 下拉露出 Agents 的搜索框
+scripts/app/jarvisctl.py background --seconds 2 && scripts/app/jarvisctl.py foreground         # 回桌面再回来，同一个进程
 ```
 
 - `longpress`：在元素中心按住 `--duration` 秒（`idb ui tap --duration`），等于 XCUITest 的 `press(forDuration:)`。
@@ -168,17 +168,17 @@ scripts/jarvisctl.py background --seconds 2 && scripts/jarvisctl.py foreground  
 
 ## 注入状态（mock 的场景）
 
-`scripts/mock_hub.py` 启动时按 `MOCK_*` 环境变量建一次数据，所以以前每种状态（大量 Agent、机器、出错、长对话）都要换 mock
-重启 App。`scripts/mock_scenarios.py` 把它当子进程跑在 hub 端口上，另开一个控制端口（默认 hub 端口 - 1，只听回环），
+`scripts/mock/mock_hub.py` 启动时按 `MOCK_*` 环境变量建一次数据，所以以前每种状态（大量 Agent、机器、出错、长对话）都要换 mock
+重启 App。`scripts/mock/mock_scenarios.py` 把它当子进程跑在 hub 端口上，另开一个控制端口（默认 hub 端口 - 1，只听回环），
 运行中换数据集：停掉子进程、按场景的变量重起、等它应答；App 自己重连。`mock_hub.py` 一行没改，照旧能单独跑。
 
 ```sh
-python3 scripts/mock_scenarios.py --port 18897 --scenario default &   # 控制端口 18896
-scripts/jarvisctl.py launch --hub http://127.0.0.1:18897
-scripts/jarvisctl.py scenario agents        # ~120 个 Agent（AgentsListTests 的数据），等 App 重连上
-scripts/jarvisctl.py scenario offline       # 没有 hub：顶栏下出现 连接中… / 等待网络
-scripts/jarvisctl.py scenario --env MOCK_MACHINES=1,MOCK_LONG_OS=1   # 任意 MOCK_* 组合
-scripts/jarvisctl.py scenario               # 现在跑的是哪个
+python3 scripts/mock/mock_scenarios.py --port 18897 --scenario default &   # 控制端口 18896
+scripts/app/jarvisctl.py launch --hub http://127.0.0.1:18897
+scripts/app/jarvisctl.py scenario agents        # ~120 个 Agent（AgentsListTests 的数据），等 App 重连上
+scripts/app/jarvisctl.py scenario offline       # 没有 hub：顶栏下出现 连接中… / 等待网络
+scripts/app/jarvisctl.py scenario --env MOCK_MACHINES=1,MOCK_LONG_OS=1   # 任意 MOCK_* 组合
+scripts/app/jarvisctl.py scenario               # 现在跑的是哪个
 ```
 
 场景：default、quiet、agents、churn（`/mock/churn` 按需推送，LiveUpdateTests）、machines、errors（身份截图的出错卡片）、
@@ -211,11 +211,11 @@ App：DEBUG 包用启动参数 `-runtimeCLIHub YES` 启动（Xcode 的 scheme �
 ```sh
 export JARVISCTL_VIA_HUB=<hub 地址>          # 或每条命令带 --via-hub <hub 地址>
 export JARVISCTL_HUB_TOKEN_FILE=<存着设备令牌的文件>   # 或 JARVISCTL_HUB_TOKEN；在 hub 那台机器上默认读 ~/.jarvis/hub.json；不会打印
-scripts/jarvisctl.py state
-scripts/jarvisctl.py settle --pixels 600
-scripts/jarvisctl.py tree --id-prefix agents. --visible
-scripts/jarvisctl.py tap --id agents.filter.unread
-scripts/jarvisctl.py screenshot shot.jpg        # App 自己画的窗口（没有状态栏），.jpg 走 JPEG，.png 原样
+scripts/app/jarvisctl.py state
+scripts/app/jarvisctl.py settle --pixels 600
+scripts/app/jarvisctl.py tree --id-prefix agents. --visible
+scripts/app/jarvisctl.py tap --id agents.filter.unread
+scripts/app/jarvisctl.py screenshot shot.jpg        # App 自己画的窗口（没有状态栏），.jpg 走 JPEG，.png 原样
 ```
 
 - 经 hub 能用：`state`、`settle`、`tree`、`find`、`wait`、`tap`（只有无障碍激活）、`scroll`、`type`、`navigate`、`set-style`、`snapshot` / `screenshot`、`freeze`、`wait-loaded`。
@@ -234,7 +234,7 @@ scripts/jarvisctl.py screenshot shot.jpg        # App 自己画的窗口（没�
 - 只听回环：`127.0.0.1:<端口>`（模拟器和 Mac 共用回环）。
 - 一次性 token：`launch` 每次随机生成，经启动参数 `-runtimeCLIToken` 传给 App，存在 `~/.cache/jarvisctl/<udid>.json`（0600）；token 不对的请求直接拒绝。
 - 一个连接一个请求：一行 JSON `{"token", "cmd", "args"}`，回一行 JSON。命令都在主线程（MainActor）上执行。
-- `scripts/release.sh` 检查 Release 二进制的 `strings` 里没有 `runtimeCLI`、`RuntimeCLI`、`_AXSSetAutomationEnabled`。
+- `scripts/release/release.sh` 检查 Release 二进制的 `strings` 里没有 `runtimeCLI`、`RuntimeCLI`、`_AXSSetAutomationEnabled`。
 
 ## 加命令
 

@@ -1,0 +1,38 @@
+# 脚本目录
+
+脚本按用途分组，优先使用下面的正式路径。脚本从任意工作目录调用时，都能找到所属仓库；构建、部署配置仍读取 `JARVIS_CONFIG` 或用户配置文件，不在仓库中保存个人值。
+
+| 目录 | 内容 | 常用入口 |
+| --- | --- | --- |
+| `app/` | iOS / macOS / Android 构建、运行、截图，DEBUG runtime CLI 和场景脚本 | `app/sim.sh`、`app/android.sh`、`app/mac_shot.sh`、`app/jarvisctl.py` |
+| `deploy/` | hub / node 部署、数据库准备、安装器、skills 同步 | `deploy/deploy.sh`、`deploy/install.sh` |
+| `release/` | App 和公开 jarvisd 发版、TestFlight、App Store Connect、签名、bundle 隐私和权限文案检查 | `release/release.sh`、`release/publish.sh`、`release/asc_testflight.py`、`release/entitlements.py` |
+| `mock/` | 假 hub、运行中切换场景、体验模式数据生成 | `mock/mock_hub.py`、`mock/mock_scenarios.py`、`mock/make_demo_data.py` |
+| `assets/` | App 图标、可切换图标和形象包生成 | `assets/make_icon.py`、`assets/make_alt_icons.py`、`assets/make_persona.py` |
+| `diag/` | 推送回放、窗格诊断、transcript 脱敏及统计 | `diag/agentsync_replay.py`、`diag/pane_probe.py`、`diag/redact_transcript.py` |
+| `test/` | 服务端、真实运行时联调、GitHub 流程及目录结构回归 | `test/test-server.sh`、`test/test-herdr.sh`、`test/test-codex.sh` |
+| `hooks/` | Git 提交前的隐私检查 | `git config core.hooksPath scripts/hooks` |
+
+## 顶层公共脚本
+
+- `jarvis_config.py`：所有脚本共用的配置读取与 Xcode 配置生成，位置不变。
+- `privacy_check.py`：仓库和暂存内容的隐私检查，位置不变；Git hooks、网页构建和 CI 继续调用它。
+- 常用 shell 命令保留顶层兼容入口：`sim.sh`、`android.sh`、`ui-test.sh`、`mac_shot.sh`、`deploy.sh`、`publish.sh`、`release.sh`、`test-server.sh`。
+  它们只用 `exec` 转发到正式入口，原样传递参数、环境、标准输入和退出码，没有第二份实现。仓库内部调用和文档使用子目录路径。
+- Python 脚本和其他工具使用正式路径，不保留平铺副本。仓库外的自动化请按本表迁移路径。
+
+## 验证
+
+从仓库根目录运行。脚本回归测试使用合成数据；服务端测试需要已配置的 hub 和真实 Postgres 测试库。运行实际部署、发布或真实 Agent 联调前，另按相关文档准备环境。
+
+```sh
+python3 -B -m unittest discover -s scripts/test -p 'test_*.py'
+python3 -B -m unittest discover -s scripts/release -p 'test_*.py'
+python3 -B -m unittest discover -s scripts/deploy -p 'test_*.py'
+python3 -B -m unittest discover -s scripts/mock -p 'test_*.py'
+node scripts/test/pr_needs_issue_test.mjs
+python3 scripts/privacy_check.py
+./scripts/test/test-server.sh
+```
+
+目录回归测试检查兼容入口转发、配置 import、根目录推算、shell / Python 语法，以及 mock hub 的真实启动。新增脚本放到对应功能目录，回归测试也放在同目录；不要再往顶层增加功能脚本。

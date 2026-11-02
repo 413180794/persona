@@ -66,7 +66,7 @@ const usage = `usage:
                            key, payloads sealed to the phone (docs/push-relay.md)
   jarvisd sysmon [n]       print this machine's system info and n metric samples, with what they cost
   jarvisd release manifest|check-next …
-                           the publisher's release manifest and checks (scripts/publish.sh, docs/hub-update.md「发布」)
+                           the publisher's release manifest and checks (scripts/release/publish.sh, docs/hub-update.md「发布」)
   jarvisd update-watch <pending>
                            the watchdog the hub starts over its own update (docs/hub-update.md「回滚」)
   jarvisd version [-v]     the version; -v adds the channel and build number`
@@ -221,7 +221,7 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 		}
 		fmt.Fprintf(os.Stderr, "set up %s (DERP region %d). In the hub's hub.json, this machine's entry gets\n"+
 			"  \"tailcat_addr\": the line below (a secret: it lets the hub's key in)\n"+
-			"then restart the resident node here (scripts/node-launchd.sh install) and the hub.\n", tunnel.NodeKeyPath(), k.RegionID)
+			"then restart the resident node here (scripts/deploy/node-launchd.sh install) and the hub.\n", tunnel.NodeKeyPath(), k.RegionID)
 		fmt.Println(k.Addr())
 		return nil
 	}

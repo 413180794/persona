@@ -667,7 +667,7 @@ final class AppModel {
         if isDemo { return } // nobody would call the phone's tools
         var tools = PhoneToolRegistry.enabledSpecs()
         #if DEBUG
-        // Simulator automation (scripts/sim.sh) must not take the real iPhone's phone_* tool calls.
+        // Simulator automation (scripts/app/sim.sh) must not take the real iPhone's phone_* tool calls.
         let automation = UserDefaults.standard.string(forKey: "pairURL") != nil
         if automation { tools = [] }
         #if os(iOS)

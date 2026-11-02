@@ -4,7 +4,7 @@ import XCTest
 /// while choosing a machine, a screenshot being looked at in a chat's work closed itself). The mock hub pushes a busy
 /// hub's updates on demand (GET /mock/churn: sessions with new lines and a moving order, the machine list, a new step
 /// in each open conversation); the app counts view bodies and main-thread time per push (`-perfCounts YES`).
-///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock_hub.py &
+///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:JarvisUITests/LiveUpdateTests
 final class LiveUpdateTests: XCTestCase {
     private var hub = ""
@@ -15,7 +15,7 @@ final class LiveUpdateTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let h = ProcessInfo.processInfo.environment["JARVIS_CHURN_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 (JARVIS_CHURN_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 (JARVIS_CHURN_HUB)")
         }
         hub = h
         _ = mock("reset")

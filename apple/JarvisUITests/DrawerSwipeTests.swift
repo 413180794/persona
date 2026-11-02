@@ -3,7 +3,7 @@ import XCTest
 /// The Jarvis tab's sidebar drag (docs/ios.md「Jarvis 顶栏和侧边栏」): it opens from wherever a finger starts a drag to the
 /// right — the middle of the chat at a slant, on a message bubble, right after the list stopped scrolling — while a
 /// code block wider than the phone still scrolls sideways under the finger.
-/// Against scripts/mock_hub.py started with MOCK_DRAWER=1 (JARVIS_MOCK_HUB): the main conversation ends with a wide
+/// Against scripts/mock/mock_hub.py started with MOCK_DRAWER=1 (JARVIS_MOCK_HUB): the main conversation ends with a wide
 /// code block; ASK4 is a long conversation.
 final class DrawerSwipeTests: XCTestCase {
     private var hub: String!
@@ -13,7 +13,7 @@ final class DrawerSwipeTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_DRAWER=1 (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_DRAWER=1 (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

@@ -1,7 +1,7 @@
 import XCTest
 
 /// The composer is laid out apart from the page (`LayoutIsland`): typing must still grow it line by line, keep it over
-/// the keyboard, and the page must make room for it. Against scripts/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=…);
+/// the keyboard, and the page must make room for it. Against scripts/mock/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=…);
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> keeps screenshots of one line and several.
 final class ComposerGrowTests: XCTestCase {
     @MainActor func testTypingGrowsTheComposerOverTheKeyboard() throws {
@@ -14,7 +14,7 @@ final class ComposerGrowTests: XCTestCase {
 
     @MainActor private func grows(layout: [String]) throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

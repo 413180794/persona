@@ -280,7 +280,7 @@ func TestRelayShortensWhatDoesNotFit(t *testing.T) {
 }
 
 // TestManualRelayPush pushes through a running relay the way a hub without apns.json does, for the simulator's
-// end-to-end check (scripts/relay_sim_e2e.sh). Opt-in: JARVIS_RELAY_URL, JARVIS_RELAY_GRANT, JARVIS_PUSH_KEY
+// end-to-end check (scripts/test/relay_sim_e2e.sh). Opt-in: JARVIS_RELAY_URL, JARVIS_RELAY_GRANT, JARVIS_PUSH_KEY
 // (the phone's public key); JARVIS_RELAY_KIND is "interaction" (default) or "done".
 func TestManualRelayPush(t *testing.T) {
 	url, grant, key := os.Getenv("JARVIS_RELAY_URL"), os.Getenv("JARVIS_RELAY_GRANT"), os.Getenv("JARVIS_PUSH_KEY")

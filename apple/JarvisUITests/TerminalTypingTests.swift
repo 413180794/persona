@@ -1,6 +1,6 @@
 import XCTest
 
-/// Typing straight into the terminal against scripts/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>):
+/// Typing straight into the terminal against scripts/mock/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>):
 /// a tap brings the keyboard up on the terminal, keys go out in order (batched), the key bar's modifiers apply to them.
 final class TerminalTypingTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
@@ -11,7 +11,7 @@ final class TerminalTypingTests: XCTestCase {
 
     @MainActor func testKeyboardTypesIntoTheTerminal() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -60,7 +60,7 @@ final class TerminalTypingTests: XCTestCase {
     /// terminal fewer rows.
     @MainActor func testDrivingTheTerminalSendsItsBytes() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -128,7 +128,7 @@ final class TerminalTypingTests: XCTestCase {
     /// herdr gives it to Claude Code, which scrolls its conversation itself. The view does not scroll or bounce.
     @MainActor func testSwipingIsTheWheelWhileDriving() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -176,7 +176,7 @@ final class TerminalTypingTests: XCTestCase {
     /// the spinner stood in for the view that tells the grid the subscribe waits for).
     @MainActor func testOpeningTheTerminalWhenConnectedDrivesIt() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

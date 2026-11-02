@@ -2,13 +2,13 @@ import XCTest
 
 /// An Agents chat opened from the list takes the whole screen: the tab bar goes away with the push (animated, not on
 /// its first frame: that flashed the list's bars away), stays away under and after the terminal, and comes back on
-/// the list. Needs scripts/mock_hub.py:
+/// the list. Needs scripts/mock/mock_hub.py:
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:JarvisUITests/OpenChatTabBarTests
 /// The flash itself only shows on film: run it under `xcrun simctl io <udid> recordVideo` and look at the frames
 /// right after the tap (docs/testing.md).
 final class OpenChatTabBarTests: XCTestCase {
     @MainActor func testTheTabBarLeavesWithThePushAndComesBack() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)") }
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)") }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES"]

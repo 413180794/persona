@@ -26,7 +26,7 @@ final class ShellSwitchTests: XCTestCase {
         add(shot)
     }
 
-    /// The shell on 助手's empty chat: against scripts/mock_hub.py when JARVIS_MOCK_HUB is set (connected, like a phone
+    /// The shell on 助手's empty chat: against scripts/mock/mock_hub.py when JARVIS_MOCK_HUB is set (connected, like a phone
     /// with its hub), else in 体验模式.
     @MainActor private func launchShell() {
         app = XCUIApplication()

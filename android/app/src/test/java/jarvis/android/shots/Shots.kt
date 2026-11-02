@@ -49,8 +49,8 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Screenshots of the app's pages with scripts/mock_hub.py's made-up data, light and dark (docs/testing.md「安卓截图」):
- * `./scripts/android.sh shots` writes them to android/app/build/shots/. They are looked at, not compared.
+ * Screenshots of the app's pages with scripts/mock/mock_hub.py's made-up data, light and dark (docs/testing.md「安卓截图」):
+ * `./scripts/app/android.sh shots` writes them to android/app/build/shots/. They are looked at, not compared.
  */
 class Shots {
     @get:Rule val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_6, theme = "android:Theme.Material.Light.NoActionBar", maxPercentDifference = 100.0)

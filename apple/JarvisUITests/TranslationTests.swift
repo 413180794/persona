@@ -2,14 +2,14 @@ import XCTest
 
 /// 设置 › 翻译 (docs/ios.md「翻译」): with it on, a mail in another language opens translated with 显示原文 to go back;
 /// a Feishu chat picked there gets translations under others' foreign messages, and no other chat does. Against
-/// scripts/mock_hub.py (JARVIS_MOCK_HUB): mail 504 is in English, the 设计评审 chat (f2) has English messages.
+/// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): mail 504 is in English, the 设计评审 chat (f2) has English messages.
 final class TranslationTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

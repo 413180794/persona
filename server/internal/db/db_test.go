@@ -10,7 +10,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// open connects to JARVIS_TEST_DATABASE_URL (a throwaway database; scripts/test-server.sh creates it on the hub machine)
+// open connects to JARVIS_TEST_DATABASE_URL (a throwaway database; scripts/test/test-server.sh creates it on the hub machine)
 // and wipes every table so each test starts clean.
 func open(t *testing.T) *DB {
 	t.Helper()

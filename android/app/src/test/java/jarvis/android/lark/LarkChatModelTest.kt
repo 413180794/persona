@@ -33,7 +33,7 @@ import java.net.ServerSocket
 import java.nio.file.Files
 
 /**
- * How an inbox item opens its Feishu page (iOS `InboxDetailView`, `LarkChatView`), against scripts/mock_hub.py with
+ * How an inbox item opens its Feishu page (iOS `InboxDetailView`, `LarkChatView`), against scripts/mock/mock_hub.py with
  * MOCK_LARK=1: at the first new message (never the latest page for an unread chat), 以下为新消息 above it, 有人@你 for
  * the unread mention, nothing reported read until rows were on screen, then exactly what was seen.
  */
@@ -44,8 +44,8 @@ class LarkChatModelTest {
 
         @BeforeClass @JvmStatic fun start() {
             val port = ServerSocket(0).use { it.localPort }
-            val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock_hub.py").exists() }
-            val pb = ProcessBuilder("python3", "scripts/mock_hub.py").directory(repo).redirectErrorStream(true)
+            val repo = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "scripts/mock/mock_hub.py").exists() }
+            val pb = ProcessBuilder("python3", "scripts/mock/mock_hub.py").directory(repo).redirectErrorStream(true)
             pb.environment()["PORT"] = port.toString()
             pb.environment()["MOCK_LARK"] = "1"
             val p = pb.start()

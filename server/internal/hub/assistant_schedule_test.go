@@ -371,7 +371,7 @@ func scheduleStore(t *testing.T) *db.DB {
 	t.Helper()
 	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test-server.sh runs this on the hub machine)")
+		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
 	}
 	database, err := db.Open(context.Background(), url)
 	if err != nil {

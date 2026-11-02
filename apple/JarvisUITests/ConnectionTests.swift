@@ -1,14 +1,14 @@
 import XCTest
 
 /// The title turns into 连接中… while the hub is out of reach and back afterwards, a short drop shows nothing, and a
-/// message written meanwhile waits and goes by itself (docs/ios.md「连接状态」). Against scripts/mock_hub.py, whose
+/// message written meanwhile waits and goes by itself (docs/ios.md「连接状态」). Against scripts/mock/mock_hub.py, whose
 /// /mock/down?s=<seconds> takes the hub away (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>).
 final class ConnectionTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
 
     private func hub() throws -> String {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         return hub
     }

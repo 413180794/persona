@@ -1,6 +1,6 @@
 import XCTest
 
-/// The file viewer (docs/ios.md「文件查看器」) against scripts/mock_hub.py started with MOCK_FILES=1 (JARVIS_MOCK_HUB):
+/// The file viewer (docs/ios.md「文件查看器」) against scripts/mock/mock_hub.py started with MOCK_FILES=1 (JARVIS_MOCK_HUB):
 /// only paths that are there on the conversation's machine become chips; code opens with line numbers, JSON as an
 /// outline, Markdown rendered.
 final class FileViewerUITests: XCTestCase {
@@ -10,7 +10,7 @@ final class FileViewerUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_FILES=1")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_FILES=1")
         }
         self.hub = hub
     }

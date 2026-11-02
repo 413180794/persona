@@ -105,7 +105,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             Task { await AppDelegate.postTestNotification(kind) }
         }
         // `-showPushKey YES`: asks for notifications and writes this phone's push public key to Caches/push-key.txt, so
-        // scripts/relay_sim_e2e.sh can seal a push to it and send it through a local relay (docs/push-relay.md).
+        // scripts/test/relay_sim_e2e.sh can seal a push to it and send it through a local relay (docs/push-relay.md).
         if d.bool(forKey: "showPushKey") {
             Task {
                 _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
@@ -118,7 +118,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"), island: d.string(forKey: "fleetIsland"),
                                                      count: d.integer(forKey: "showFleetCount"))
         }
-        RuntimeCLI.startIfAsked() // `-runtimeCLI <port>`: scripts/jarvisctl.py drives the running app
+        RuntimeCLI.startIfAsked() // `-runtimeCLI <port>`: scripts/app/jarvisctl.py drives the running app
         let automation = d.string(forKey: "pairURL") != nil
         #else
         let automation = false

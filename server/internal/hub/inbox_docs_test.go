@@ -193,7 +193,7 @@ func TestAroundMention(t *testing.T) {
 // TestDocsLive reads and moves real demo documents through lark-connector, on the hub machine:
 //
 //	JARVIS_LIVE_DOCS='{"lark":{"base_url":"http://127.0.0.1:<port>/agent/v1","container":"<lark-connector>"},"sheet":"<url>","base":"<url>","docx":"<url>"}' \
-//	  GOCMD='go test -count=1 -run TestDocsLive -v' ./scripts/test-server.sh ./internal/hub
+//	  GOCMD='go test -count=1 -run TestDocsLive -v' ./scripts/test/test-server.sh ./internal/hub
 //
 // The documents are the tester's own: the test moves one status there and back, and with "comment":true leaves a comment.
 func TestDocsLive(t *testing.T) {

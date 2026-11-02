@@ -326,10 +326,10 @@
   灵动岛上的数字（TPM、token、负载）会占推送预算：hub 只推设备显示的项、取两位有效数字、每台最多每分钟一次。
   和别的 App 的活动共用灵动岛时，iPhone 18 Pro 上两个都是限宽 28pt 的紧凑态（左右两块挤在一起，第二块被截），17 Pro 等是最小态：
   限宽靠 iOS 27 的 `isDynamicIslandLimitedInWidth` 知道，其余（哪种呈现、有没有别的 App）App 都感知不到；紧凑 / 最小态不给宽度，`ViewThatFits` 没用。
-  两种机型都要拍（`scripts/island_peer.sh` + `LiveActivityShots`，`docs/live-activity.md`「和其他 App 共用灵动岛」）。
+  两种机型都要拍（`scripts/app/island_peer.sh` + `LiveActivityShots`，`docs/live-activity.md`「和其他 App 共用灵动岛」）。
 - App 和扩展共享的钥匙串组（推送中继的私钥 `.push`；灵动岛的形象 build 92–103 也放过 `.look`）读不到时一律静默退回默认值，模拟器上又总是好的：
   build 92 的扩展签名里一个组都没有（无签名归档 + ad hoc 签名没带 entitlements，`$(AppIdentifierPrefix)` 为空），灵动岛永远是默认形象 + 系统蓝。
-  Info.plist 里的组名用 `$(DEVELOPMENT_TEAM).`；动了 entitlements 或签名流程，对导出的 ipa 跑 `scripts/entitlements.py check`（`docs/release.md`「entitlements」）。
+  Info.plist 里的组名用 `$(DEVELOPMENT_TEAM).`；动了 entitlements 或签名流程，对导出的 ipa 跑 `scripts/release/entitlements.py check`（`docs/release.md`「entitlements」）。
 - 实时活动在模拟器上画得出来不算数（2026-11-02，build 98 签名对了，手机上还是默认形象，换成内置形象也一样；`docs/live-activity.md`「为什么 build 98 还不对」）：
   - 实时活动要画的东西放进它的内容（ContentState），内容里放不下的（图片）放 App Group 容器里的文件。**实时活动的扩展在手机上读写不了钥匙串**：
     build 103 的诊断里 App 写进共享组、读回都成功，扩展一次报告都没写出来（模拟器上读写都行；Apple 只说实时活动跑在自己的沙盒里）。
@@ -343,7 +343,7 @@
   以前「服务器」卡片的「运行中」把它们也算进去了。
 - 体验模式（`docs/ios.md`「体验模式」）挂在 `APIClient` / `LiveConnection` 下面（`DemoHub`），页面代码不写 `if demo`：新页面要的接口在
   `DemoHub` 里没有就是 404「体验模式里没有这项数据」，加接口时顺手在 `DemoHub` 回一份、跑 `DemoModeTests` 看 `DemoHub miss` 日志。
-  演示数据改 `scripts/mock_hub.py` 后重跑 `scripts/make_demo_data.py`。会碰到电脑 / 飞书 / 邮件的操作一律不真的做（`DemoText.notSent`）。
+  演示数据改 `scripts/mock/mock_hub.py` 后重跑 `scripts/mock/make_demo_data.py`。会碰到电脑 / 飞书 / 邮件的操作一律不真的做（`DemoText.notSent`）。
 - 引擎选项来自 hub 的 `engines`，名称和 `note` 原样保留；客户端不能用固定枚举筛掉 Orca 或后续引擎，也不能因为不认识当前 `engine` 就丢掉检测列表。
   已知引擎允许离线配置；未知引擎只有 hub 回报 `available: true` 才能选择。重新生成演示数据时检查结构差异，只保留当前任务的变化，避免顺带改动收件箱和定时任务。
 - 弱网 / 断网不弹横幅，标题位换成「转圈 + 等待网络 / 连接中… / 更新中…」（`docs/ios.md`「连接状态」）。`.toolbar(removing: .title)`

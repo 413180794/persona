@@ -1,7 +1,7 @@
 import XCTest
 
 /// Answers and sends that must not land in a terminal that changed (docs/protocol.md「发消息」「终端对话框」), against
-/// scripts/mock_hub.py started with MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft
+/// scripts/mock/mock_hub.py started with MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft
 /// (TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:<port>).
 final class SendSafetyTests: XCTestCase {
     private let review = "a1f3c2d4-0000-4000-8000-000000000006"
@@ -9,7 +9,7 @@ final class SendSafetyTests: XCTestCase {
 
     private func hub() throws -> String {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_SAFETY_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_SAFETY_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_SAFETY_HUB)")
         }
         return hub
     }

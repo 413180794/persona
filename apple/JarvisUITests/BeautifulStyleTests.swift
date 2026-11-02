@@ -1,7 +1,7 @@
 import XCTest
 
 /// The BeautifulUI style (设置 › 界面风格): its prompt bar sends what was typed (it once cleared the draft before the send
-/// read it, and nothing went out), and the chat shows its components only there. Against scripts/mock_hub.py
+/// read it, and nothing went out), and the chat shows its components only there. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB), which records sends at /mock/sent.
 final class BeautifulStyleTests: XCTestCase {
     private var hub: String!
@@ -9,7 +9,7 @@ final class BeautifulStyleTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
     }

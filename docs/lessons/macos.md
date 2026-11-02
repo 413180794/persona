@@ -6,7 +6,7 @@
   UIKit 视图在 `apple/Mac/` 下写同名的 AppKit 类型；iOS 文件只加 `#if os(iOS)`。Mac target 和 App 一样默认 MainActor 隔离：Compat 里的纯数据类型、给解码线程用的 `NSImage` 辅助都要标 `nonisolated`。
 - 别把页面的分栏（`SplitNavigation`、Jarvis 页的 `NavigationSplitView`）放进另一个 `NavigationSplitView` 的详情栏：里面的详情栏会按外层侧栏还在前面来排，
   对话整个往右挪一个侧栏宽、输入框被裁掉（2026-10-31）。Mac 壳的六项侧栏是 HStack 里的一列。
-- Mac 锁屏时 `screencapture` 只拍到锁屏：截图用 `scripts/mac_shot.sh`（App 自己 `cacheDisplay` 出 PNG，`docs/mac.md`「构建、运行、截图」）。
+- Mac 锁屏时 `screencapture` 只拍到锁屏：截图用 `scripts/app/mac_shot.sh`（App 自己 `cacheDisplay` 出 PNG，`docs/mac.md`「构建、运行、截图」）。
   它画不出毛玻璃 / Liquid Glass；SwiftUI `List` 的行要单独再画一遍；深色下 List 行文字是浅色方案的颜色，还没确认是不是截图的问题。
   深浅色用 `-macAppearance`，`-AppleInterfaceStyle Dark` 当启动参数不生效。
 - 直接跑 `Jarvis.app/Contents/MacOS/Jarvis` 能带启动参数（`-demo.on YES -tab dev`…），未签名的 Debug 构建不进沙盒，写 `/tmp` 没问题；`open` 要写成 `open -n Jarvis.app --args -demo.on YES …` 才带得上参数（不带 `--args` 就没有，2026-11-02 实测）。
@@ -67,4 +67,4 @@
 - 两个视图各往窗口工具栏的 `.navigation` 放一项（壳的侧栏按钮、Agents 列表的过滤菜单），先后顺序靠不住：详情栏里的页面一带上自己的工具栏项
   （空间页的 ⋯、机器页的 ⓘ，放在什么位置都一样），SwiftUI 重排整个工具栏，列表那项就排到了壳那项前面（#483，2026-11-02）。
   要固定顺序就放进同一个 `ToolbarItemGroup`：Mac 上过滤菜单由壳画在侧栏按钮后面（`MacShellState.agentsList`），ChatsView 自己那项只留给 iOS。
-  离屏截图看得出这个顺序（`scripts/mac_shot.sh … -openSession <对话> -openSpaceFromChat YES`），菜单本身只能在真窗口里点开。
+  离屏截图看得出这个顺序（`scripts/app/mac_shot.sh … -openSession <对话> -openSpaceFromChat YES`），菜单本身只能在真窗口里点开。

@@ -29,7 +29,7 @@ type DB struct {
 // Open connects and applies pending migrations. It retries for a while so the hub can start alongside the container.
 func Open(ctx context.Context, url string) (*DB, error) {
 	if url == "" {
-		return nil, errors.New("database_url is empty (run scripts/deploy.sh <hub machine id> to create the Postgres container)")
+		return nil, errors.New("database_url is empty (run scripts/deploy/deploy.sh <hub machine id> to create the Postgres container)")
 	}
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {

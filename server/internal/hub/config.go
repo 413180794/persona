@@ -67,7 +67,7 @@ type Config struct {
 	Token              string `json:"token"`
 	PublicURL          string `json:"public_url"`
 	HookTimeoutMinutes int    `json:"hook_timeout_minutes"`
-	// DatabaseURL points at the Postgres container (scripts/deploy.sh creates it and fills this in).
+	// DatabaseURL points at the Postgres container (scripts/deploy/deploy.sh creates it and fills this in).
 	DatabaseURL string `json:"database_url"`
 	// AI configures the Messages API used for in-app AI helpers (defaults to the launcher's gateway on the hub machine).
 	AI ai.Config `json:"ai"`
@@ -173,7 +173,7 @@ func LoadConfig() (*Config, error) {
 		if err := json.Unmarshal(b, cfg); err != nil {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
-		// A hub.json written by someone else first (scripts/db.sh only puts database_url in it) has no token: keep
+		// A hub.json written by someone else first (scripts/deploy/db.sh only puts database_url in it) has no token: keep
 		// the generated one, or every start (and `jarvisd hub pair`) would make up a different one.
 		var raw map[string]any
 		if err := json.Unmarshal(b, &raw); err == nil {

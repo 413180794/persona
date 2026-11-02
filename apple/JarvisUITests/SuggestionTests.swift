@@ -1,11 +1,11 @@
 import XCTest
 
-/// Claude's suggested next message over the composer, against scripts/mock_hub.py started with MOCK_SUGGESTION=1
+/// Claude's suggested next message over the composer, against scripts/mock/mock_hub.py started with MOCK_SUGGESTION=1
 /// (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>).
 final class SuggestionTests: XCTestCase {
     @MainActor func testTapFillsTheComposer() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let suggestion = "把命名问题修完再跑一遍测试，然后推到 review/naming"
         let app = XCUIApplication()

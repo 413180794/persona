@@ -130,11 +130,11 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，助手页的输入框�
 ## 构建和安装
 
 ```sh
-./scripts/android.sh          # 编译 debug 包、装到连着的手机 / 模拟器并打开
-./scripts/android.sh apk      # 只出 APK：android/app/build/outputs/apk/debug/app-debug.apk
-./scripts/android.sh test     # 单元测试（模型解码、行合并、Markdown、设计系统的基线）
-./scripts/android.sh shots    # 各页面的截图（浅色 / 深色，mock_hub.py 的数据）→ android/app/build/shots/<名字>.png
-./scripts/android.sh shots Shots   # 只跑一个截图类
+./scripts/app/android.sh          # 编译 debug 包、装到连着的手机 / 模拟器并打开
+./scripts/app/android.sh apk      # 只出 APK：android/app/build/outputs/apk/debug/app-debug.apk
+./scripts/app/android.sh test     # 单元测试（模型解码、行合并、Markdown、设计系统的基线）
+./scripts/app/android.sh shots    # 各页面的截图（浅色 / 深色，mock_hub.py 的数据）→ android/app/build/shots/<名字>.png
+./scripts/app/android.sh shots Shots   # 只跑一个截图类
 ```
 
 - 需要 Android SDK（`$ANDROID_HOME`，默认 `~/Library/Android/sdk`）和 JDK 17；没有 JDK 17 时脚本用 Android Studio 自带的。
@@ -145,7 +145,7 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，助手页的输入框�
   （`drawable/ic_launcher_fg.xml` 内缩 18 dp，图在 `drawable-nodpi/ic_launcher_art.png`），背景是图边缘的深棕 `#1B110D`，桌面裁成圆形还是圆角方形都不会切到圆环；
   主题图标（Android 13+）用 iOS 的 tinted 版当遮罩。通知栏小图标 `ic_stat` 是同一个标志（圆环 + 四角星）的白色剪影。iOS 换图标时这两张 PNG 要重新导出。
 - hub 默认是 HTTP（内网 / VPN），`network_security.xml` 放开了明文流量；不要把 hub 暴露到公网。
-- 装到真机：手机开 USB 调试连上电脑跑 `./scripts/android.sh`，或者把 APK 发到手机上直接装。
+- 装到真机：手机开 USB 调试连上电脑跑 `./scripts/app/android.sh`，或者把 APK 发到手机上直接装。
 
 ## 界面风格
 
@@ -267,8 +267,8 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，助手页的输入框�
 
 ## 验证记录
 
-截图（`./scripts/android.sh shots`，2026-11-01，开发机没有 KVM、跑不了模拟器时就靠它）：Paparazzi 在 JVM 上用 layoutlib 画 Compose，连一个本地起的
-`scripts/mock_hub.py`（`shots/MockHub.kt`，随测试进程起停；文件和 Git 的页面另起一个 `MOCK_FILES=1` 的），外壳（助手主对话、新对话页、Agents、侧边栏）、
+截图（`./scripts/app/android.sh shots`，2026-11-01，开发机没有 KVM、跑不了模拟器时就靠它）：Paparazzi 在 JVM 上用 layoutlib 画 Compose，连一个本地起的
+`scripts/mock/mock_hub.py`（`shots/MockHub.kt`，随测试进程起停；文件和 Git 的页面另起一个 `MOCK_FILES=1` 的），外壳（助手主对话、新对话页、Agents、侧边栏）、
 对话页（提问、计划、工作中、展开的工作过程：液态玻璃的时间线和黏土的卡片）、收件箱、机器、空间页、设置、知识库（列表、条目、搜索、打标）、
 Jarvis 资料页（定时任务和编辑、跟进、运行记录、关于我、记忆）、配对、界面风格、语音、文件和 Git、全屏查看器、链接卡片、图标、
 对话里的小部件（API 报错卡片、排队中的消息、「/」快捷命令，`ChatPartsShots`）、配对后的选引擎、模型配置、
@@ -287,7 +287,7 @@ Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍�
 - 实时终端：打开 Mac 上 Claude 的窗格，接管成 46×39（herdr `session control`），打字、退格、^C 写进终端，上下拖滚 Claude 的对话；
   电脑上另一个程序占着时弹「接管 / 只看」；切「电脑尺寸」改成按 120 列镜像；关掉页面后 control 进程退出、窗格回到电脑尺寸
 - hub 重启后几秒内自动重连；长会话往前翻到两天前的内容；深色模式截图检查
-- 界面风格：模拟器连 `scripts/mock_hub.py`，五种风格 × 浅色 / 深色截了 Agents、两种交互卡片、Jarvis 主对话和抽屉、资料页、收件箱、设置、风格选择页、配对页（切风格可以直接写 `shared_prefs/ui.xml` 后重启 App）
+- 界面风格：模拟器连 `scripts/mock/mock_hub.py`，五种风格 × 浅色 / 深色截了 Agents、两种交互卡片、Jarvis 主对话和抽屉、资料页、收件箱、设置、风格选择页、配对页（切风格可以直接写 `shared_prefs/ui.xml` 后重启 App）
 
 真机（Redmi K60 Pro，Android 16，澎湃 OS 3，没有 Google 服务），手机经 USB（`adb reverse tcp:18660 tcp:18660`）连 hub：
 
@@ -300,7 +300,7 @@ Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍�
 
 收件箱「交给 AI」（模拟器连真实 hub，hub 库里临时放一件假邮件，测完删掉）：交给 Mac 上的 Agent，对话页打开、Claude 收到并回复，消息显示成上下文卡片；交给 Jarvis 新开对话并回复；件标为已处理。
 
-常驻通知、小组件、磁贴、快捷方式（模拟器 Android 16 base 镜像，连 `scripts/mock_hub.py`）：
+常驻通知、小组件、磁贴、快捷方式（模拟器 Android 16 base 镜像，连 `scripts/mock/mock_hub.py`）：
 
 - 通知展开是汇总和「查看 / 批准」，点「批准」hub 收到 `{approve:true, mode:"acceptEdits"}`，点「查看」进那个会话；深色 / 浅色截图检查
 - 小组件放到主屏幕、点 Agent 进会话；磁贴加进快速设置、显示「2 个需要你」、点了进 App
@@ -336,7 +336,7 @@ Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍�
   直接画在对话页上面（`ImageViewerOverlay`），状态栏图标打开时改成浅色、关掉时还原。
 - `Markdown` 默认包在 `SelectionContainer` 里，长按会变成系统的选中文字，消息菜单弹不出来：对话里的回复传 `selectable = false`，要选文字用菜单的「选择」。
 - 倒置列表（`reverseLayout`）的 `verticalArrangement` 写成 `spacedBy(x)` 会顶着上边排，内容少时消息浮在顶上：要 `spacedBy(x, Alignment.Bottom)`。
-- 对话页验证用 `scripts/mock_hub.py`：`MOCK_CHAT_IMAGES=1` 给「博客迁移」那段对话加两张截图（查看器、编辑器），文件和 Git 是编出来的 `~/code/weather`。
+- 对话页验证用 `scripts/mock/mock_hub.py`：`MOCK_CHAT_IMAGES=1` 给「博客迁移」那段对话加两张截图（查看器、编辑器），文件和 Git 是编出来的 `~/code/weather`。
 - `adb shell input swipe` 从屏幕最上方往下滑会拉出系统的快捷设置，测试翻历史时从屏幕中间开始滑。
 - 小米 / 澎湃 OS 上 `adb shell input` 要开「开发者选项 › USB 调试（安全设置）」，开完要重连一次 adb（`adb reconnect`）才生效；
   之后偶尔连着几次 `SecurityException: Injecting input events requires … INJECT_EVENTS`，隔几秒再发就好，测试脚本里每次点击被拒就等 3 秒重试。
@@ -367,7 +367,7 @@ Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍�
   加 U+FE0E 也没用，这几个按形状自己画。
 - hub 前面的转发断过以后，hub 那边可能还以为 node 在线，但每个调用都回 `rpc: connection closed`（/screen 也一样）。重启常驻 node
   （`launchctl kickstart -k gui/$UID/com.jarvis.node`）再让 hub 重连这台机器就好了，App 这边不用动。
-- 假 hub（`scripts/mock_hub.py`）的 WebSocket 连上时不推待处理的交互：进 App 后下拉刷新一次才拿到交互。
+- 假 hub（`scripts/mock/mock_hub.py`）的 WebSocket 连上时不推待处理的交互：进 App 后下拉刷新一次才拿到交互。
 - 飞书页面的截图（`LarkShots`）要 `MOCK_LARK=1` 的假 hub（会话里各种消息、表情库、图片）：图片在后台解码，第一帧拍不到。先用同一个名字拍一次让页面把要的图都发出去，等 `LarkMedia.settle()`（没有在下载的图），再拍真的；链接预览这种「拿回来的东西里还有图」的要来回两三次。默认的假 hub 里 f2、f3 是另一份数据（iOS 的截图、TranslationTests 和 f3 那段画全了的会话用），`MOCK_LARK=1` 时这几个会话换成这一份，两份互不影响。
 - 收件箱的详情是 `JSheet`（ModalBottomSheet，单独的窗口），链接卡片和看图盖不上去：会话这种要点链接、看图的页面推成页面画在列表上面，不放进浮层；浮层里的资料卡、话题、removed帖子点链接或图片时先关掉自己（`LarkActions.closing`）。
 - `adb shell am start` 启动一个和当前任务根 intent 一样的 intent 时只是把任务拉到前台（「Activity not started」），onNewIntent 不来；
@@ -376,4 +376,4 @@ Agents、计划卡片、空间页另在其余四种界面风格下各拍一遍�
   `prefers-color-scheme: dark` / 算法变暗。池里的 WebView 包一层 `ContextThemeWrapper(app, Theme.Jarvis)`，`values-night` 里的 `Theme.Jarvis` 是深色并写明 `isLightTheme=false`。
 - 往 WebView 的选中菜单加项：Chromium 在 `onPrepareActionMode` 里（每次选区变化）填菜单，它的项都要求显示成按钮，浮动工具栏先排这种；
   自己的项也要 `SHOW_AS_ACTION_ALWAYS`、order 比它小，才排在 Copy 前面。点了以后先 `evaluateJavascript` 读到选区再 `mode.finish()`，先 finish 的话选区已经清掉，读到空字符串。
-- `scripts/mock_hub.py` 带 `MOCK_RICH=1 MOCK_LINKS=1` 时给对话、Jarvis 主对话、收件箱各放了几个链接。
+- `scripts/mock/mock_hub.py` 带 `MOCK_RICH=1 MOCK_LINKS=1` 时给对话、Jarvis 主对话、收件箱各放了几个链接。

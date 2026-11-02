@@ -1,11 +1,11 @@
 import XCTest
 
-/// A project's 相关removed: the posts the hub linked, and one opened with its comments. Against scripts/mock_hub.py
+/// A project's 相关removed: the posts the hub linked, and one opened with its comments. Against scripts/mock/mock_hub.py
 /// (JARVIS_MOCK_HUB).
 final class KnowledgeMomentsTests: XCTestCase {
     @MainActor func testAProjectListsItsPostsAndOpensOne() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

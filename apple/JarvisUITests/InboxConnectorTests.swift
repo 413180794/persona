@@ -2,13 +2,13 @@ import XCTest
 
 /// A connector's items in the inbox (GitHub…, docs/plan-connectors.md「六、App 侧」): the generic row with the
 /// connector's tag, mark and thread, a filter for the source, the detail with the thread as the hub read it and
-/// 在 GitHub 打开, and AI 草拟回复 whose 发送 comments on the thread through the hub. Against scripts/mock_hub.py with
+/// 在 GitHub 打开, and AI 草拟回复 whose 发送 comments on the thread through the hub. Against scripts/mock/mock_hub.py with
 /// MOCK_GITHUB_INBOX=1 (JARVIS_MOCK_HUB), which lists them only to apps asking ?sources=all and records replies at
 /// /mock/sent.
 final class InboxConnectorTests: XCTestCase {
     @MainActor func testAGitHubItemReadsAndReplies() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

@@ -64,10 +64,10 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 
 1. **写配置**：把 `config.example.json` 复制到 `~/.config/jarvis/config.json`，填上你的 bundle id、开发者团队、hub 在哪台机器、
    要接入哪些电脑。仓库里没有写死任何人的机器和账号，所有个人设置都在这份配置和 hub 的 `~/.jarvis/hub.json` 里。
-2. **部署服务端**：`./scripts/deploy.sh`。它会编译 `jarvisd`，装到每台电脑上（没有 herdr 的顺便装上），在 hub 机器上启动 Postgres 和 hub 服务。
+2. **部署服务端**：`./scripts/deploy/deploy.sh`。它会编译 `jarvisd`，装到每台电脑上（没有 herdr 的顺便装上），在 hub 机器上启动 Postgres 和 hub 服务。
    hub 想放在 NAS 上的话改用 Docker：`deploy/docker/compose.yaml`（[docs/docker.md](docs/docker.md)），`deploy.sh` 只用来往各台电脑装 `jarvisd`。
 3. **告诉 hub 接入哪些电脑**：在 hub 机器的 `~/.jarvis/hub.json` 里填上各台电脑和手机访问用的地址，然后重启 hub。
-4. **安装 App**：模拟器上跑 `./scripts/sim.sh`；装到真机就用 Xcode 打开生成的工程，或者用 `./scripts/release.sh` 发到你自己的
+4. **安装 App**：模拟器上跑 `./scripts/app/sim.sh`；装到真机就用 Xcode 打开生成的工程，或者用 `./scripts/release/release.sh` 发到你自己的
    TestFlight（[docs/release.md](docs/release.md)）。
 5. **配对**：在 hub 机器上运行 `~/.jarvis/bin/jarvisd hub pair`，用 App 扫描它打印的二维码。
 

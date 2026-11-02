@@ -1,6 +1,6 @@
 import XCTest
 
-/// The chat stays at the newest message (scripts/mock_hub.py with MOCK_LONG_HISTORY=1, JARVIS_MOCK_HUB): a long chat
+/// The chat stays at the newest message (scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1, JARVIS_MOCK_HUB): a long chat
 /// opens at the bottom; at the bottom a new reply is followed; scrolled up, ↓ (回到最新) shows and brings you back; a
 /// reply that arrives while you read history does not pull you down. On an Agent's chat (working, 完成未看, and opened
 /// where you left off) and on the Jarvis page. Replies come from `/mock/say`. Where the list is comes from the app's `-showScrollState` probe:
@@ -14,7 +14,7 @@ final class ChatFollowTests: XCTestCase {
         continueAfterFailure = false
         if name.contains("RealHub") { return } // its own hub
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock_hub.py with MOCK_LONG_HISTORY=1 (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1 (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
         _ = try? Data(contentsOf: URL(string: hub + "/mock/reset")!)

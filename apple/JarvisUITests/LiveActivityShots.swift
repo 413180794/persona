@@ -73,7 +73,7 @@ final class LiveActivityShots: XCTestCase {
     /// A persona chosen in 设置 › 外观 › 形象 while the activity runs reaches the island within seconds, without a new
     /// activity (docs/live-activity.md「形象」). `JARVIS_PERSONA_SWITCH=demo,jarvis-circuit,jarvis`: starts on the first,
     /// then picks each next one in 设置 and photographs the island 3 s after leaving the app. A hub package needs
-    /// JARVIS_MOCK_HUB (scripts/mock_hub.py with MOCK_PERSONAS=demo).
+    /// JARVIS_MOCK_HUB (scripts/mock/mock_hub.py with MOCK_PERSONAS=demo).
     @MainActor func testSwitchingPersonaRedrawsTheIsland() throws {
         let env = ProcessInfo.processInfo.environment
         guard let ids = env["JARVIS_PERSONA_SWITCH"]?.split(separator: ",").map(String.init), let first = ids.first else {
