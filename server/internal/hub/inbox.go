@@ -148,6 +148,7 @@ type inbox struct {
 	handing     sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
 	translating sync.Mutex // one translation pass at a time (inbox_translate.go)
 	me          lark.Me    // the Feishu account (who @me is in documents), read once
+	replies     sync.Map   // item id -> *inboxReply: Feishu replies to one item, one at a time (inbox_triage.go)
 }
 
 func (b *inbox) init() {
@@ -262,6 +263,7 @@ func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
 	for id, it := range h.inbox.items {
 		if it.DoneAt != nil && time.Since(*it.DoneAt) > inboxForget {
 			delete(h.inbox.items, id)
+			h.inbox.replies.Delete(id)
 		}
 	}
 	h.inbox.mu.Unlock()

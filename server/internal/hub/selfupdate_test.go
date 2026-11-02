@@ -183,8 +183,10 @@ func TestUpdateConfirmOrRollBack(t *testing.T) {
 	os.WriteFile(target+".prev", []byte("#!/bin/sh\necho old\n"), 0o755)
 	os.WriteFile(target, p.script, 0o755)
 	pending := update.Pending{FromVersion: "v1-202611021500", FromBuild: 202611021500, ToVersion: "v2-202611021700", ToBuild: 202611021700,
-		Target: target, Prev: target + ".prev", Online: []string{"box"}, Started: time.Now()}
+		Target: target, Prev: target + ".prev", Online: []string{"box"}, Started: time.Now(), Auto: true}
 	update.Save(update.PendingPath(h.upd.dir), pending)
+	var told []string
+	h.upd.notify = func(title, body string) { told = append(told, title) }
 	h.upd.boot()
 	if h.upd.view().Confirmed {
 		t.Fatal("confirmed before checking")
@@ -192,6 +194,9 @@ func TestUpdateConfirmOrRollBack(t *testing.T) {
 	h.upd.confirm(context.Background(), pending)
 	if !h.upd.view().Confirmed || h.upd.settings.History[0].Result != "updated" {
 		t.Fatalf("a good update was not confirmed: %+v", h.upd.settings.History)
+	}
+	if len(told) != 1 || !strings.Contains(told[0], "v2-202611021700") {
+		t.Fatalf("an automatic update did not tell the phones: %v", told)
 	}
 	if _, err := os.Stat(update.PendingPath(h.upd.dir)); !os.IsNotExist(err) {
 		t.Fatal("the pending marker stayed")
@@ -210,8 +215,13 @@ func TestUpdateConfirmOrRollBack(t *testing.T) {
 	old := newTestHub(t)
 	old.build, old.version = update.Make("v1-202611021500", "release", "202611021500", p.srv.URL+"/dl"), "v1-202611021500"
 	old.upd.dir, old.upd.client = h.upd.dir, p.srv.Client()
+	var oldTold []string
+	old.upd.notify = func(title, body string) { oldTold = append(oldTold, body) }
 	old.upd.start(context.Background())
 	waitFor(t, "the record", func() bool { return len(old.upd.view().Error) > 0 })
+	if len(oldTold) != 1 || !strings.Contains(oldTold[0], "box") {
+		t.Fatalf("going back did not tell the phones why: %v", oldTold)
+	}
 	hs := old.upd.settings.History
 	if len(hs) != 1 || hs[0].Result != "rolled_back" || !strings.Contains(hs[0].Reason, "box") || !slices.Contains(old.upd.settings.Bad, int64(202611021700)) {
 		t.Fatalf("history %+v, bad %v", hs, old.upd.settings.Bad)

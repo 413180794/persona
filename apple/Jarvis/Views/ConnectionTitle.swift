@@ -32,13 +32,15 @@ struct ConnectionTitle: View {
 
 /// Spinner and state, at title size or (compact) subtitle size.
 struct ConnectionLabel: View {
+    @Environment(AppModel.self) private var model
     var phase: ConnectionStatus.Phase
     var compact = false
 
     var body: some View {
         HStack(spacing: compact ? 5 : 7) {
             ProgressView().controlSize(compact ? .mini : .small)
-            Text(phase.title)
+            // The hub restarting into a new version: the connection going away is expected (docs/hub-update.md).
+            Text(phase == .connecting && model.hubUpdate?.restarting == true ? "hub 正在更新…" : phase.title)
                 .font(compact ? Theme.Font.label : Theme.Font.heading)
                 .foregroundStyle(compact ? .secondary : .primary)
                 .lineLimit(1)
@@ -74,7 +76,9 @@ struct ConnectionDetails: View {
                         ConnectionLabel(phase: phase)
                     }
                 }
-                Text(Self.explanation(phase, stalled: model.live.stalled)).font(Theme.Font.secondary).foregroundStyle(.secondary)
+                Text(phase == .connecting && model.hubUpdate?.restarting == true
+                     ? "hub 正在更新到新版本，重启期间会断开一会儿，好了自动连上。"
+                     : Self.explanation(phase, stalled: model.live.stalled)).font(Theme.Font.secondary).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 let lines = Self.facts(phase: phase, link: model.live.state, nextTry: model.live.nextTry, lastOnline: status.lastOnline,
                                        rtt: model.live.rtt, outbox: model.outboxCount, now: ctx.date)

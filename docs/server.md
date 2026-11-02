@@ -231,6 +231,7 @@ App 开着时连着 hub 的 WebSocket，hub 把各种变化广播给它；真实
 - 上一版在 `~/.jarvis/bin/jarvisd.prev`。手动退回：`cp ~/.jarvis/bin/jarvisd.prev ~/.jarvis/bin/jarvisd && systemctl --user restart jarvisd`（launchd 下 `launchctl kickstart -k`），
   再在 App 里关掉自动更新，免得又装回去（回滚过的版本本来就不会自动再装）。
 - 关掉自动更新：App 设置里的开关，或 `PUT /api/v1/hub/update/settings {"auto": false}`。
+- 通知：自动更新确认后推「hub 已更新到 X」，回滚的那次记进更新记录时推「hub 更新没成功」和原因（`updater.notify`，所有设备，thread `hub_update`）；手动点的更新不另推。
 - 直接部署（`deploy.sh` / 主会话的脚本）：build 号是编译时间，比当时的公开版新，不会被降级；正在更新的那几分钟里直接部署也不会被看门狗撤销。
 
 ## 运维

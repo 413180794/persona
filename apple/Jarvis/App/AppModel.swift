@@ -444,6 +444,32 @@ final class AppModel {
 
     /// What the hub listed in its hello: `terminal_stream` means the terminal tab can subscribe to live frames.
     private(set) var hubFeatures: Set<String> = []
+    /// What the hub said it is in its hello: build and protocol, for the compatibility notices (docs/hub-update.md「兼容」).
+    private(set) var hubHello: HubHello?
+    /// The hub's version and its updating itself: fetched on connect, then the `hub_update` events.
+    var hubUpdate: HubUpdateStatus? {
+        didSet {
+            guard hubUpdate?.restarting == true, oldValue?.restarting != true else { return }
+            // A hub that is not back after its confirmation window and the watchdog's rollback (5 min) is not updating
+            // any more: stop saying so (a reconnect fetches the real state anyway).
+            hubRestartTimeout?.cancel()
+            hubRestartTimeout = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(300))
+                guard !Task.isCancelled, let self, self.hubUpdate?.restarting == true else { return }
+                self.hubUpdate = nil
+            }
+        }
+    }
+    @ObservationIgnored private var hubRestartTimeout: Task<Void, Never>?
+    /// This app's build (CFBundleVersion).
+    static let appBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
+    var hubCompat: HubCompat { HubCompat.of(hubHello, appBuild: Self.appBuild) }
+    /// The build (or problem) the user closed the line over the Agents list for (`HubNotice`). Written only on a tap.
+    var hubNoticeDismissed: Int64 = Int64(UserDefaults.standard.integer(forKey: "hubNotice.dismissed")) {
+        didSet { UserDefaults.standard.set(Int(hubNoticeDismissed), forKey: "hubNotice.dismissed") }
+    }
+    /// The one line about the hub over the Agents list, if any (docs/hub-update.md「App 里」).
+    var hubNotice: HubNotice? { isDemo ? nil : HubNotice.of(hubUpdate, compat: hubCompat, dismissed: hubNoticeDismissed) }
     /// The desktop apps (the Mac app) connected to the hub: the iPhone's 「Mac 上的 Jarvis 已登录」 (DesktopPresence.swift).
     private(set) var desktops: [DesktopDevice] = []
     /// 手机静音: this device's NotifyPrefs.muteWhileDesktop, shown on that banner.
@@ -611,6 +637,8 @@ final class AppModel {
 
     private func didConnect() {
         registerPhone()
+        // The hub's version and whether an update is out or under way (an older hub has no such page: nil).
+        Task { hubUpdate = try? await api?.hubUpdate() }
         Task { await personas.refresh(api) }
         AgentSync.shared.schedule()
         LarkSync.shared.reconnected()
@@ -739,8 +767,9 @@ final class AppModel {
         PerfTrace.push(Self.perfName(ev))
         #endif
         switch ev {
-        case .hello(let features):
+        case .hello(let features, let info):
             hubFeatures = Set(features)
+            if hubHello != info { hubHello = info }
             #if DEBUG
             // `-showDesktopSample YES`: a Mac signed in (and 手机静音 on), for screenshots of the banner (the demo hub sends no desktops).
             if UserDefaults.standard.bool(forKey: "showDesktopSample") {
@@ -783,6 +812,8 @@ final class AppModel {
             InboxStore.shared.reload()
         case .fleet(let state):
             LiveActivityController.shared.apply(state)
+        case .hubUpdate(let status):
+            if hubUpdate != status { hubUpdate = status }
         case .desktops(let list):
             desktops = list
         case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
@@ -848,6 +879,7 @@ final class AppModel {
         case .agents: "agents"
         case .inbox: "inbox"
         case .fleet: "fleet"
+        case .hubUpdate: "hub_update"
         case .desktops: "desktops"
         case .terminal: "terminal"
         case .error: "error"

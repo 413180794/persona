@@ -11,6 +11,14 @@ struct SettingsView: View {
     @AppStorage(TranslationPrefs.enabledKey) private var translating = false
     @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
 
+    /// The hub row's value: an update out or under way, else its version.
+    private var hubSummary: String {
+        guard let s = model.hubUpdate else { return "" }
+        if s.working { return s.stateTitle }
+        if s.installable { return "有新版本" }
+        return s.version
+    }
+
     /// 翻译's row value: off, or the target language.
     private var translationSummary: String { translating ? TranslationPrefs.name(of: translateTarget) : "关闭" }
 
@@ -99,6 +107,10 @@ struct SettingsView: View {
                 if !model.isDemo {
                     Section {
                         Group {
+                            NavigationLink(value: SettingsPage.hub) {
+                                SettingsRow(title: "hub", symbol: Theme.Icon.server, tint: Theme.Hue.blue, value: hubSummary, look: .oneLine)
+                            }
+                            .accessibilityIdentifier("settings.hub")
                             Button { showPair = true } label: { SettingsRow(title: "重新配对", symbol: "qrcode.viewfinder", tint: Theme.accent) }
                                 .modifier(SettingsButtonLook())
                             Button(role: .destructive) { confirmUnpair = true } label: {
@@ -156,7 +168,8 @@ struct SettingsView: View {
             #if DEBUG
             // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
             // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器;
-            // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (设备).
+            // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (设备), `-openHubUpdate YES` (hub),
+            // `-openSkills YES` (Skills).
             .onAppear(perform: openDebugPage)
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
@@ -189,6 +202,8 @@ struct SettingsView: View {
         else if d.bool(forKey: "openNotificationSettings") { p.append(SettingsPage.notifications) }
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
+        else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
+        else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
         else if d.bool(forKey: "openConnectorMail") || d.bool(forKey: "addMail") { p.append(SettingsPage.mail) }
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
@@ -242,6 +257,7 @@ struct SettingsView: View {
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
     case persona, themeColor, style, appIcon, layout, assistant, claude, codex, devices, phoneData, mail, feishu, notifications, storage, translation, modelConfiguration
+    case hub, skills
 
 }
 
@@ -285,6 +301,8 @@ private struct SettingsDestinations: ViewModifier {
         case .storage: StorageView()
         case .translation: TranslationSettingsView()
         case .modelConfiguration: ModelConfigurationView()
+        case .hub: HubSettingsPage()
+        case .skills: SkillsPage()
         }
     }
 

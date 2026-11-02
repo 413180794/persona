@@ -405,3 +405,14 @@ func TestValidClientID(t *testing.T) {
 		}
 	}
 }
+
+func TestNamedClientID(t *testing.T) {
+	// Same as Python's uuid.uuid5(UUID("a51e3f21-e1d7-4ccd-89bf-cb027f8cb8dc"), name).
+	if got := NamedClientID("lark:feed-1:100\n好的，我看一下"); got != "c05999ee-029d-5eee-8afe-3c1058078b2a" {
+		t.Fatalf("NamedClientID = %s", got)
+	}
+	a, b := NamedClientID("x\none"), NamedClientID("x\ntwo")
+	if a == b || a != NamedClientID("x\none") || !ValidClientID(a) || a[14] != '5' {
+		t.Fatalf("NamedClientID: %s %s", a, b)
+	}
+}

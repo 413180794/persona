@@ -81,10 +81,12 @@ type updater struct {
 	h      *Hub
 	dir    string
 	client *http.Client
-	// Hooks the tests replace: run another binary in this process, start the watchdog, find the running binary.
+	// Hooks the tests replace: run another binary in this process, start the watchdog, find the running binary,
+	// alert the phones.
 	exec       func(path string) error
 	startWatch func(prev, pendingPath string) error
 	target     func() (string, error)
+	notify     func(title, body string)
 	confirmIn  time.Duration
 	idleEvery  time.Duration
 	manualIdle time.Duration
@@ -109,7 +111,12 @@ func newUpdater(h *Hub) *updater {
 			return syscall.Exec(path, append([]string{path}, os.Args[1:]...), os.Environ())
 		},
 		startWatch: startWatchdog, target: runningBinary, confirmIn: updateConfirmIn, idleEvery: updateIdleEvery,
-		manualIdle: updateManualIdle, state: "idle", confirmed: true}
+		manualIdle: updateManualIdle, state: "idle", confirmed: true,
+		notify: func(title, body string) {
+			h.push.send(map[string]any{"aps": map[string]any{
+				"alert": map[string]any{"title": title, "body": body}, "sound": "default", "thread-id": "hub_update",
+			}}, "hub_update", nil)
+		}}
 }
 
 func runningBinary() (string, error) {
@@ -227,8 +234,10 @@ func (u *updater) recordRolledBack(ctx context.Context) {
 	}
 	u.record(ctx, updateRecord{FromVersion: rb.FromVersion, ToVersion: rb.ToVersion, ToBuild: rb.ToBuild, Started: rb.Started,
 		Ended: rb.At, Result: "rolled_back", Reason: rb.Reason, Auto: rb.Auto})
-	u.set("rolled_back", "", fmt.Sprintf("更新到 %s 没成功，已回到 %s：%s", rb.ToVersion, u.h.version, rb.Reason))
+	why := fmt.Sprintf("更新到 %s 没成功，已回到 %s：%s", rb.ToVersion, u.h.version, rb.Reason)
+	u.set("rolled_back", "", why)
 	_ = os.Remove(update.RolledBackPath(u.dir))
+	u.notify("hub 更新没成功", why+"。这一版不会再自动装。")
 	u.h.logf("update: %s went back to %s: %s", rb.ToVersion, u.h.version, rb.Reason)
 }
 
@@ -271,6 +280,9 @@ func (u *updater) confirm(ctx context.Context, p update.Pending) {
 		Ended: time.Now(), Result: "updated", Auto: p.Auto})
 	u.set("updated", "", "")
 	u.h.logf("update: %s -> %s confirmed", p.FromVersion, p.ToVersion)
+	if p.Auto { // one the user started is watched in the app
+		u.notify("hub 已更新到 "+p.ToVersion, "助手和 Agent 都空闲时自动装上的；各台电脑上的 jarvisd 也会换成这一版。")
+	}
 	u.updateNodes(ctx, p.Nodes)
 }
 

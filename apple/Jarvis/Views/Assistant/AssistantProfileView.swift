@@ -86,6 +86,7 @@ struct AssistantProfileView: View {
             Section {
                 ModelConfigurationLink(title: "对话模型", purposeID: "assistant", summary: model.assistantConfig?.launcher)
                 ModelConfigurationLink()
+                NavigationLink { SkillsPage() } label: { row("Skills", Theme.Icon.skills, detail: nil) }
                 LabeledContent("运行在", value: machineName)
                 LabeledContent("工作目录", value: "~/.jarvis/assistant")
             } header: {
@@ -141,6 +142,7 @@ struct AssistantProfileView: View {
                 BUIListSection("设置", footer: "每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器后，主对话从下一条消息起用新的启动器（接着原来的上下文），新对话也用它；其他对话在各自的菜单里换。") {
                     ModelConfigurationLink(title: "对话模型", purposeID: "assistant", summary: model.assistantConfig?.launcher)
                     ModelConfigurationLink()
+                    NavigationLink { SkillsPage() } label: { buiRow("Skills", Theme.Icon.skills, detail: nil) }
                     BUIListRow("运行在", value: machineName)
                     BUIListRow("工作目录", value: "~/.jarvis/assistant")
                 }

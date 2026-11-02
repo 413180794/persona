@@ -1782,6 +1782,50 @@ def net_control(path, q):
 # half of them in a new order): the working agents' last line alternates between one line and two (the row's height),
 # and one of them finishes and starts again every three rounds (its space changes rank). ScrollUnderPushTests.
 # MOCK_CHURN=1 also puts a screenshot (a tool result image) in the middle of the first conversation's work.
+# MOCK_HUB_UPDATE=available|waiting|notice|docker: the hub's version and its updating itself (docs/hub-update.md):
+# a newer release to install (auto-update off), an update waiting for two busy agents, 「自动更新已开启」 told for the first
+# time, or a Docker hub with a newer image. Unset: GET /api/v1/hub/update is 404 (a hub from before), no line anywhere.
+HUB_UPDATE_MODE = os.environ.get("MOCK_HUB_UPDATE", "")
+HUB_UPDATE = {}
+
+
+def hub_update_state():
+    if not HUB_UPDATE:
+        latest = {"version": "v0.3.1-4-gdef5678-202611030900", "build": 202611030900, "released": ago(minutes=40),
+                  "notes": "会话列表改成增量推送，更省电；灵动岛偶尔不更新的问题修好了。", "newer": True, "bad": False}
+        HUB_UPDATE.update({"version": "v0.3.0-12-gabc1234-202611021500", "build": 202611021500, "channel": "release",
+                           "can_update": True, "latest": latest, "state": "available", "busy": [], "auto": False,
+                           "auto_notice": False, "last_check": ago(minutes=20), "confirmed": True})
+        if HUB_UPDATE_MODE == "waiting":
+            HUB_UPDATE.update(state="waiting_idle", auto=True, busy=[
+                {"machine_id": "macbook", "machine": "MacBook", "session_id": "a1f3c2d4-0000-4000-8000-000000000001", "title": "给天气 App 加主屏幕小组件"},
+                {"machine_id": "server", "machine": "构建服务器", "session_id": "b2", "title": "整理发布脚本"}])
+        elif HUB_UPDATE_MODE == "notice":
+            HUB_UPDATE.update(state="idle", auto=True, auto_notice=True)
+            HUB_UPDATE["latest"] = dict(latest, version=HUB_UPDATE["version"], build=HUB_UPDATE["build"], newer=False)
+        elif HUB_UPDATE_MODE == "docker":
+            HUB_UPDATE.update(version="0.3.0", channel="docker", can_update=False, auto=False,
+                              why_not="Docker 里的 hub 由新镜像更新（docker compose pull && docker compose up -d）")
+            HUB_UPDATE["latest"] = dict(latest, version="0.3.1")
+    return HUB_UPDATE
+
+
+def set_hub_update_mode(mode):
+    global HUB_UPDATE_MODE
+    HUB_UPDATE_MODE = mode
+    HUB_UPDATE.clear()
+
+
+HUB_UPDATE_HISTORY = [
+    {"from_version": "v0.2.9-30-g1111111-202610311200", "to_version": "v0.3.0-12-gabc1234-202611021500", "to_build": 202611021500,
+     "started": ago(hours=20), "ended": ago(hours=20), "result": "updated", "auto": True},
+    {"from_version": "v0.2.9-30-g1111111-202610311200", "to_version": "v0.3.0-9-g2222222-202611011800", "to_build": 202611011800,
+     "started": ago(hours=40), "ended": ago(hours=40), "result": "rolled_back", "reason": "这些机器 2 分钟内没连回来：构建服务器", "auto": True},
+]
+
+MOCK_SKILLS = [{"name": "lark-connector", "description": "Feishu / Lark through lark-connector's agent API: messages, docs, calendar, tasks.", "source": "user"},
+               {"name": "weekly-report", "description": "Draft the week's report from the calendar, docs and chats.", "source": "user"}]
+
 LIVE = []  # (send, subscribed session ids) of each open WebSocket
 
 
@@ -2066,7 +2110,11 @@ class H(BaseHTTPRequestHandler):
             port = int(parts[6]) if parts[6].isdigit() else 0
             if len(parts) == 8 and parts[7] == "connect": return self.port_connect(parts[4], port)
             return self.send_json({"port": port, "listening": port_listening(port), "http": port_listening(port)})
-        if p == "/api/v1/health": return self.send_json({"ok": True, "version": "mock"})
+        if p == "/api/v1/health": return self.send_json({"ok": True, "version": "mock", "channel": "release", "build": 202611021500, "protocol": 1, "min_app_build": 0})
+        if p == "/api/v1/hub/update":
+            return self.send_json(hub_update_state()) if HUB_UPDATE_MODE else self.send_json({"error": "not found"}, 404)
+        if p == "/api/v1/hub/update/history": return self.send_json({"history": HUB_UPDATE_HISTORY})
+        if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
         if p == "/api/v1/machines": return self.send_json({"machines": MACHINES})
         if p == "/api/v1/metrics":
             return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES], "step": 60})
@@ -2081,6 +2129,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
         if p == "/mock/hits": return self.send_json({"hits": HITS})
+        if p == "/mock/hub_update":  # HubNoticeUITests: ?mode=available|waiting|notice|docker, from the start
+            set_hub_update_mode((q.get("mode") or [""])[0])
+            return self.send_json({"ok": True})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
             for m in MACHINES:
                 m["engine"] = "herdr"
@@ -2332,6 +2383,15 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if self.bad_network(): return
+        if p.startswith("/api/v1/hub/update") and HUB_UPDATE_MODE:
+            s, body = hub_update_state(), json.loads(self.last_body or b"{}")
+            if p == "/api/v1/hub/update/settings" and self.command == "PUT":
+                if "auto" in body: s.update(auto=bool(body["auto"]), auto_notice=False)
+                if body.get("auto_notice_seen"): s["auto_notice"] = False
+            elif p == "/api/v1/hub/update" and self.command == "POST":
+                if not s["can_update"]: return self.send_json({"error": "这个 hub 不能自己更新：" + s.get("why_not", "")}, 409)
+                s.update(state="restarting" if body.get("now") else "waiting_idle")
+            return self.send_json(s)
         if p.startswith("/api/v1/model-config/purposes/") and self.command == "PATCH":
             pid, body = unquote(p.rsplit("/", 1)[1]), json.loads(self.last_body or b"{}")
             with MODEL_CONFIG_LOCK:
@@ -2690,7 +2750,8 @@ class H(BaseHTTPRequestHandler):
         SOCKETS.add(self.connection)
         subscribed = set()
         LIVE.append((send, subscribed))
-        send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8],
+        send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8], "channel": "release",
+              "build": 202611021500, "protocol": 1, "min_app_build": 0,
               "features": ["file_upload"] + (["sessions_delta"] if delta else []) + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])})
         drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
         send({"type": "machines", "machines": MACHINES})

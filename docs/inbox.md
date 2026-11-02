@@ -133,6 +133,7 @@ removed（飞书 Moments，以前叫头条圈）里和我有关的事也进收�
   不知道的事实用【】标出来让用户补，不编；`assistant.notes` 作为「关于用户」附上）。浮层里可以直接改，也可以输入「让 AI 改：…」再重写。
   「发送」走 `POST /api/v1/inbox/{id}/reply {text}`：hub 在原会话发飞书消息，或按回复发邮件（Re: 主题、In-Reply-To / References、
   引用原文前 40 行，用收到它的账号），然后标为已处理（`done_by=replied`）。手机和手表都用这一个接口。
+  飞书的回复只发一次：手机、手表各点一次或超时重试，同样的文字只发一条（按件排队，`clientId` = UUIDv5(件 id + 文字)）。
 - **交给 AI**：把这件事作为 `<jarvis-context kind="context" title="飞书 · 群名">`（hub 给的 `context` + feedId / 邮件 uid，方便它用工具读更多、
   回复）加上「要它做什么」（默认「总结一下，告诉我要做什么，给出建议的回复」，另有两个预设）发出去：给 Jarvis 就新开一个对话（跳到「对话」），
   给某个 Agent（最近 8 个）就发进它的会话（跳过去）。默认同时标为已处理。

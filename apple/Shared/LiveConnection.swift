@@ -15,8 +15,8 @@ nonisolated enum TerminalEvent: Sendable {
 }
 
 nonisolated enum ServerEvent: Sendable {
-    /// features: what the hub supports beyond the first protocol (proto.Features).
-    case hello(features: [String])
+    /// features: what the hub supports beyond the first protocol (proto.Features); info: its build and protocol.
+    case hello(features: [String], info: HubHello)
     case machines([Machine])
     case sessions(machineID: String, [Session])
     /// What changed in a machine's list since the last (a hub that has `sessions_delta`, asked for on connect): the
@@ -42,6 +42,8 @@ nonisolated enum ServerEvent: Sendable {
     case inbox
     /// The Fleet Live Activity's content changed (hub/liveactivity.go).
     case fleet(FleetState)
+    /// The hub updating itself: checking, downloading, waiting for idle, restarting… (docs/hub-update.md).
+    case hubUpdate(HubUpdateStatus)
     /// The desktop apps connected to the hub now (sent on connect and whenever one comes or goes).
     case desktops([DesktopDevice])
     case terminal(SessionKey, TerminalEvent)
@@ -79,6 +81,11 @@ nonisolated enum ServerEvent: Sendable {
         var fleet: FleetState?
         var desktops: [DesktopDevice]?
         var features: [String]?
+        var channel: String?
+        var build: Int64?
+        var protocolVersion: Int?
+        var minAppBuild: Int?
+        var update: HubUpdateStatus?
         var epoch: String?
         var seq: Int?
         var full: Bool?
@@ -90,7 +97,8 @@ nonisolated enum ServerEvent: Sendable {
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
-            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops
+            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, channel, build, update
+            case protocolVersion = "protocol", minAppBuild = "min_app_build"
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids", sessionIDs = "session_ids"
@@ -101,7 +109,9 @@ nonisolated enum ServerEvent: Sendable {
         guard let e = try? JSON.decoder.decode(Envelope.self, from: data) else { return nil }
         let key = e.machineID.flatMap { m in e.sessionID.map { SessionKey(machineID: m, sessionID: $0) } }
         switch e.type {
-        case "hello": return .hello(features: e.features ?? [])
+        case "hello": return .hello(features: e.features ?? [], info: HubHello(channel: e.channel, build: e.build,
+                                                                               protocolVersion: e.protocolVersion, minAppBuild: e.minAppBuild))
+        case "hub_update": return e.update.map { .hubUpdate($0) }
         case "machines": return e.machines.map { .machines($0) }
         case "sessions":
             guard let m = e.machineID else { return nil }

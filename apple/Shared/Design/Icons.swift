@@ -181,6 +181,10 @@ extension Theme {
         /// This Mac out of the hub's reach (the Jarvis page's device chip on the Mac).
         static let laptopOffline = "laptopcomputer.slash"
         static let server = "server.rack"
+        /// The hub has a newer version, or is updating itself (docs/hub-update.md).
+        static let hubUpdate = "arrow.down.to.line.circle"
+        /// The assistant's skills (~/.jarvis/skills).
+        static let skills = "puzzlepiece.extension"
         static let phone = "iphone"
         static let watch = "applewatch"
         static let handoff = "iphone.and.arrow.forward"

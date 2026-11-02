@@ -413,6 +413,9 @@ private struct AgentsList: View {
             if !model.desktops.isEmpty && query.isEmpty {
                 Section { DesktopPresenceRow() } // 「Mac 上的 Jarvis 已登录」, WeChat's line over its chats
             }
+            if model.hubNotice != nil && query.isEmpty {
+                Section { HubNoticeRow() } // the hub's version: an update out, under way, or too old (docs/hub-update.md)
+            }
             #endif
             if !interactions.isEmpty && query.isEmpty {
                 listSection {

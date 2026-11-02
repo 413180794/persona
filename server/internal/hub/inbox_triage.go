@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 )
@@ -157,6 +158,12 @@ func (h *Hub) draftReply(ctx context.Context, id, instruction string) (string, e
 	return strings.TrimSpace(text), nil
 }
 
+// inboxReply serializes the Feishu replies to one inbox item and remembers the last one that went out.
+type inboxReply struct {
+	mu       sync.Mutex
+	clientID string
+}
+
 // replyInbox sends text as the user's reply — in the Feishu chat, or as a reply to the newest mail of the thread
 // from the account that received it — and files the item as done.
 func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocChange) (InboxItem, error) {
@@ -202,9 +209,25 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 	case len(changes) > 0:
 		return InboxItem{}, errors.New("only document items have a status to change")
 	case c.Lark != nil:
-		if _, err := h.lark.Send(ctx, c.Lark.FeedID, text, ""); err != nil {
+		// Phone and watch can both press send, and a timed-out request gets retried: the same reply goes out once.
+		r, _ := h.inbox.replies.LoadOrStore(id, &inboxReply{})
+		reply := r.(*inboxReply)
+		reply.mu.Lock()
+		defer reply.mu.Unlock()
+		// The id only depends on the item and the text, so lark-connector drops a repeat even after a hub restart.
+		clientID := lark.NamedClientID(id + "\n" + text)
+		h.inbox.mu.Lock()
+		sent := it.DoneBy == "replied" && reply.clientID == clientID
+		out := it.listed()
+		h.inbox.mu.Unlock()
+		if sent {
+			return out, nil
+		}
+		// Different text on an item already replied to is a second message the user means to send.
+		if _, err := h.lark.Send(ctx, c.Lark.FeedID, text, clientID); err != nil {
 			return InboxItem{}, err
 		}
+		reply.clientID = clientID
 	case c.Mail != nil && h.mail != nil && len(c.Mail.UIDs) > 0:
 		orig, err := h.mail.GetMessage(ctx, c.Mail.AccountID, c.Mail.UIDs[len(c.Mail.UIDs)-1], c.Mail.Mailbox)
 		if err != nil {

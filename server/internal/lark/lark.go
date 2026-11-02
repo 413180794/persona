@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -611,6 +612,21 @@ func NewClientID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// clientIDNamespace is the UUIDv5 namespace of NamedClientID. Fixed forever: changing it would let a retry of an
+// already delivered message post again.
+var clientIDNamespace = [16]byte{0xa5, 0x1e, 0x3f, 0x21, 0xe1, 0xd7, 0x4c, 0xcd, 0x89, 0xbf, 0xcb, 0x02, 0x7f, 0x8c, 0xb8, 0xdc}
+
+// NamedClientID is a UUIDv5 clientId derived from name: the same name always gives the same id, so the same
+// message sent again (after a timeout, from another device, after a hub restart) posts once.
+func NamedClientID(name string) string {
+	h := sha1.New()
+	h.Write(clientIDNamespace[:])
+	h.Write([]byte(name))
+	b := h.Sum(nil)[:16]
+	b[6], b[8] = b[6]&0x0f|0x50, b[8]&0x3f|0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
