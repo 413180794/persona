@@ -295,7 +295,8 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
 
 - 网页手动检查：`cd web && npm run check:privacy`。
 - `npm run build` 的 `prebuild` 自动运行全仓隐私扫描，网页部署和公开发布都经过这个入口。
-- Python 回归测试：`python3 -B -m unittest discover -s scripts -p 'test_privacy_check.py'`；`npm test` 不包含它。
+- Python 回归测试：`python3 -B -m unittest discover -s scripts -p 'test*privacy*.py'`；`npm test` 不包含它。
+  包含公开 Go 二进制的依赖常量分类、依赖校验 / replace / 工具失败时拒绝，以及真实个人值不被公共常量掩盖的测试。
   测试用隔离 HOME/Git 配置的临时仓库验证真实提交钩子、暂存区与工作树差异，不操作主工作区的暂存区或历史。
 - hooksPath 是每个克隆的本地配置；新克隆仍需运行上面的 `git config` 命令，不能因为仓库里有 hooks 文件就以为它已经生效。
 

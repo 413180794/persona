@@ -26,6 +26,8 @@ trap cleanup EXIT
 cleanup
 cp -R web/dist/. "$WEBDIST/"
 
+# Public dependency constants are classified by build-info checksums; verify the actual module cache before building.
+(cd server && go mod verify)
 LDFLAGS="-s -w -X main.version=$VERSION"
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \

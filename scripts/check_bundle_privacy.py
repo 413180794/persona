@@ -17,7 +17,10 @@ scripts/privacy_check.py does for the sources. --whole-short: a value of four ch
 whole word, not inside a longer one (a Go binary carries Unicode tables and minified JavaScript, where short values turn
 up inside ordinary words: a surname inside "touchend"); app bundles keep the strict substring match.
 Prints the file and the kind of hit, never the value.
+For public Go builds, narrowly scoped dependency constants are classified separately from private data. This requires
+unreplaced dependencies whose build-info checksums match server/go.sum; registered personal values always win.
 """
+import ipaddress
 import os
 import re
 import subprocess
@@ -31,6 +34,97 @@ SKIP = {"embedded.mobileprovision", "CodeResources"}
 PRINTABLE = re.compile(rb"[\x20-\x7e]{4,}")
 
 
+# These are protocol and standards constants, not accounts or deployment addresses. Keep contexts narrow:
+# OpenSSH's global request name, the upstream web client's exact contact link, and complete RFC 1918 networks.
+SSH_REQUEST = re.compile(r"(?<![A-Za-z0-9._%+-])ping@openssh[.]com(?![A-Za-z0-9._%+-])")
+TAILSCALE_CONTACT = re.compile(r'<a href="mailto:support\+webclient@tailscale[.]com" class="link">contact us</a>')
+RFC1918_NETWORKS = tuple(ipaddress.ip_network((address, prefix)) for address, prefix in (
+    (0x0A000000, 8), (0xAC100000, 12), (0xC0A80000, 16),
+))
+# RFC 3927 link-local address used by AWS, Google Cloud and Azure for instance metadata.
+CLOUD_METADATA_IP = ipaddress.ip_address(0xA9FEA9FE)
+
+
+def go_dependencies(path, sums_path=None):
+    """Only classify constants from unreplaced modules recorded in both this Go executable and go.sum."""
+    sums_path = sums_path or os.path.join(pc.ROOT, "server", "go.sum")
+    try:
+        with open(sums_path) as sums:
+            trusted = {tuple(line.split()) for line in sums if len(line.split()) == 3}
+        result = subprocess.run(["go", "version", "-m", path], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return set()
+    if result.returncode:
+        return set()
+    dependencies = set()
+    previous = None
+    public_build = False
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if fields == ["build", "-tags=public"]:
+            public_build = True
+        if fields[:1] == ["dep"] and len(fields) == 4:
+            previous = fields[1]
+            if tuple(fields[1:]) in trusted:
+                dependencies.add(previous)
+        elif fields[:1] == ["=>"]:
+            dependencies.discard(previous)
+        elif fields[:1] in (["mod"], ["dep"]):
+            previous = None
+    return dependencies if public_build else set()
+
+
+def generic_text(text, dependencies):
+    """Remove proven public constant occurrences only for generic IP/email detection, never private-word matching."""
+    if "golang.org/x/crypto" in dependencies:
+        text = SSH_REQUEST.sub("", text)
+    if "github.com/tailscale/web-client-prebuilt" in dependencies:
+        text = TAILSCALE_CONTACT.sub("", text)
+    if "tailscale.com" not in dependencies:
+        return text
+
+    def public_address(match):
+        address = match.group(1)
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            return match.group(0)
+        suffix = text[match.end():]
+        for network in RFC1918_NETWORKS:
+            if ip != network.network_address:
+                continue
+            if re.match(r"/%d(?!\d)" % network.prefixlen, suffix):
+                return ""
+            # ipnlocal's private and link-local CIDRs are consecutive Go string constants.
+            link_local = str(ipaddress.ip_network((0xA9FE0000, 16)))
+            if network.prefixlen == 16 and suffix.startswith("/16" + link_local):
+                return ""
+        if ip == CLOUD_METADATA_IP:
+            # Go concatenates string constants in rodata, so the HTTP literal can touch adjacent strings.
+            if text[max(0, match.start() - 7):match.start()] == "http://":
+                return ""
+            # cloudenv's adjacent metadata/resolver constants provide a specific non-URL context.
+            resolver = str(ipaddress.ip_address(int(CLOUD_METADATA_IP) - 1))
+            if suffix.startswith(resolver + "Metadata-Flavor"):
+                return ""
+        return match.group(0)
+
+    return pc.IPV4.sub(public_address, text)
+
+
+def text_kinds(text, words, whole_short=False, dependencies=frozenset()):
+    kinds = set()
+    for word in words:
+        if whole_short and len(word) <= 4:
+            if re.search(r"(?<![A-Za-z])(%s|%s)(?![A-Za-z])" % (re.escape(word), re.escape(word.lower())), text):
+                kinds.add("private value (%d chars)" % len(word))
+        elif word in text or word.lower() in text:
+            kinds.add("private value (%d chars)" % len(word))
+    for word in pc.problems(generic_text(text, dependencies), []):
+        kinds.add("private IP" if pc.IPV4.fullmatch(word) else "email")
+    return kinds
+
+
 def signature_offset(path: str):
     """Where a Mach-O's code signature starts (LC_CODE_SIGNATURE dataoff), or None for other files."""
     out = subprocess.run(["otool", "-l", path], capture_output=True, text=True).stdout
@@ -39,7 +133,8 @@ def signature_offset(path: str):
 
 
 def texts(path: str):
-    data = open(path, "rb").read()
+    with open(path, "rb") as source:
+        data = source.read()
     if data[:3] == b"bvx":  # lzfse (App Intents metadata): compressed, values would be split across matches
         data = subprocess.run(["compression_tool", "-decode", "-a", "lzfse", "-i", path, "-o", "/dev/stdout"],
                               capture_output=True).stdout
@@ -72,19 +167,13 @@ def main():
                 continue
             path = os.path.join(dirpath, f)
             kinds = set()
+            dependencies = go_dependencies(path) if whole_short else set()
             for t in texts(path):
                 for v in inherent:
                     t = t.replace(v, "")
                 if modules:
                     t = modules.sub("", t)
-                for w in words:
-                    if whole_short and len(w) <= 4:
-                        if re.search(r"(?<![A-Za-z])(%s|%s)(?![A-Za-z])" % (re.escape(w), re.escape(w.lower())), t):
-                            kinds.add("private value (%d chars)" % len(w))
-                    elif w in t or w.lower() in t:
-                        kinds.add("private value (%d chars)" % len(w))
-                for w in pc.problems(t, []):  # IPs and emails only
-                    kinds.add("private IP" if pc.IPV4.fullmatch(w) else "email")
+                kinds.update(text_kinds(t, words, whole_short, dependencies))
             bad += [(os.path.relpath(path, root), k) for k in sorted(kinds)]
     for f, k in bad:
         print("%s: %s" % (f, k))
