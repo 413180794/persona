@@ -191,7 +191,7 @@ struct ChatView: View {
             scratch.lastActivity = .now
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
-                if chrome.collapse == 0, !showInfo, !scratch.userDragging,
+                if chrome.collapse == 0, !showInfo, !scratch.userDragging, !Self.somethingPresented,
                    Date.now.timeIntervalSince(scratch.lastActivity) >= Self.chromeIdleSeconds {
                     hideChrome()
                 }
@@ -1265,6 +1265,17 @@ struct ChatView: View {
         if UserDefaults.standard.bool(forKey: "holdChromeOpen") { return .infinity }
         #endif
         return 3
+    }
+
+    /// Something is up over the page (a sheet from the header — the space's tabs —, its ⋯ menu): the header waits. Folded,
+    /// it leaves the view tree (`ChromeHeader`), and what it presented would go with it.
+    static var somethingPresented: Bool {
+        #if os(iOS)
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+            .contains { $0.isKeyWindow && $0.rootViewController?.presentedViewController != nil }
+        #else
+        false
+        #endif
     }
 
     private func scrolled(by delta: CGFloat) {
@@ -3333,14 +3344,28 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
                 .offset(y: -c)
                 .opacity(Double(1 - min(1, p * 1.5)))
                 .allowsHitTesting(p < 0.5)
-            ChatRegion(name: "ChromeCompact.body", content: compact)
-                .opacity(Double(max(0, (p - 0.5) * 2)))
-                .allowsHitTesting(p >= 0.5)
+                .modifier(GoneWhen(gone: p * 1.5 >= 1))
+            // Not there at all until it starts to show (it is clear below half way).
+            if p > 0.5 {
+                ChatRegion(name: "ChromeCompact.body", content: compact)
+                    .opacity(Double(max(0, (p - 0.5) * 2)))
+            }
         }
         .frame(height: chrome.height > 0 ? max(chrome.height - c, ChatChrome.compactHeight) : nil, alignment: .top)
         .clipped()
         .background(.bar, ignoresSafeAreaEdges: .top)
         .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in touched() })
+    }
+}
+
+/// The open header once it has faded out: still laid out (its height is what folding measures) but hidden, so its
+/// buttons leave VoiceOver and XCUITest. `accessibilityHidden` alone was not enough (its back and ⋯ are glass, UIKit):
+/// slid up under the clip, its 返回 sat in the status bar's band, invisible, "hittable", and a tap there went nowhere.
+private struct GoneWhen: ViewModifier {
+    var gone: Bool
+
+    func body(content: Content) -> some View {
+        if gone { content.hidden() } else { content }
     }
 }
 

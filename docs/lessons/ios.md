@@ -225,6 +225,11 @@
   VoiceOver 也会走进去；`opacity(0)` 也一样。一直建着、平时藏起来的大块界面（Jarvis 侧边栏）放进自己的 `UIHostingController`，用 UIKit 的
   `isHidden` 藏。SwiftUI 会在每次更新时重设 representable 给它的那个视图的 frame、transform、alpha、isHidden，自己要动的是里面一层
   （`DrawerSidebarHost.Container`）；整套环境用 `.environment(\.self, context.environment)` 带进去。
+  Agents 对话的顶栏（`ChromeHeader`）是同一类坑（2026-11-02）：全开的和折起的叠在一个 ZStack 里，只靠透明度和 `allowsHitTesting` 切换，
+  两层的「返回」一直都在树上；折起后全开那层上移进了裁切区，它的「返回」落在状态栏那一条，XCUITest 说点得到，点了是状态栏，不返回。
+  `.accessibilityHidden` 加在层上、甚至直接加在 plain 按钮上，XCUITest 都照样找得到。做法：看不见的那层不在树上（折起的细条半程前不建；
+  全开的那层淡完后 `.hidden()`，还占位、还能量高度）。代价是它的身份会变，它弹出的 sheet、菜单会跟着消失：所以有东西弹在页面上时顶栏不自己折起
+  （`ChatView.somethingPresented`），`ChatHeaderPresentationTests` 守着。
 - 量拖动 / 动画每帧的主线程耗时别在 XCUITest 下量：它打开无障碍，SwiftUI 每帧多做很多事。App 里用脚本按显示帧驱动同一条代码路径，
   `simctl launch` 启动后量（`DrawerAutoDrag`，`docs/testing.md`「侧边栏拖动」）。
 - 行要有系统的左滑（`.swipeActions`）就得是 `List`，`ScrollView` + `LazyVStack` 里没有（2026-11-01 侧边栏的「归档」）。换成 `List` 时要外观不变：
