@@ -6,7 +6,7 @@
 
 复用 Hourhand 的 `Shared/SegmentRecorder.swift`（AAC 分段）、`HourhandWatch/TransferQueue.swift`（持久化、回传退避）、`Hourhand/Transcription/SpeechEngines.swift`（本机引擎和时间戳）。迁移后统一使用 `Recording` 前缀，去掉产品账号、付费、云端、位置和独立录音库导航。
 
-- 音频：16 kHz 单声道 AAC，32 kbps，约 14 MB / 小时；前台 30 秒、后台 60 秒一段。文件定稿必须 `AVAudioFile.close()`。
+- 音频：16 kHz 单声道 AAC，32 kbps，约 14 MB / 小时；前台 30 秒、后台 60 秒一段。watchOS 11 及以上用 `AVAudioFile.close()` 定稿；watchOS 10 在回调前释放最后一个文件引用，不能在写入循环中保留局部引用。
 - 存储：各设备 Application Support/Recordings，每条 UUID 目录，`recording.json` 原子更新。不是缓存，不能因清理缓存而删除。
 - 异常退出：保留已定稿分段，删除未定稿的尾段；不自动重启麦克风。最多丢当前 30–60 秒。
 - 隐私：不采集位置，不自动上传音频，不自动发送文字。转写只用 Apple 本机模型，不隐式回退到 Apple 服务器或云端 API。

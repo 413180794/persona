@@ -163,7 +163,7 @@ nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
         var offset: AVAudioFrameCount = 0
         while offset < buffer.frameLength {
             if file == nil { openFile() }
-            guard let file else { return }
+            guard file != nil else { return }
             let segmentFrames = shared.withLock { $0.segmentFrames }
             if fileFrames >= segmentFrames, let segment = closeFile() {
                 // The segment length was lowered below what this file already holds.
@@ -173,7 +173,7 @@ nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
             let room = AVAudioFrameCount(segmentFrames - fileFrames)
             let n = min(room, buffer.frameLength - offset)
             if let slice = Self.slice(buffer, from: offset, count: n) {
-                do { try file.write(from: slice) } catch { shared.withLock { $0.failure = "录音文件写入失败" }; return }
+                do { try file?.write(from: slice) } catch { shared.withLock { $0.failure = "录音文件写入失败" }; return }
             }
             fileFrames += AVAudioFramePosition(n)
             offset += n
@@ -202,10 +202,13 @@ nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
 
     /// Finalizes the open file. Returns nil when there was nothing in it.
     private func closeFile() -> Segment? {
-        guard let file else { return nil }
-        let url = file.url
-        file.close()
-        self.file = nil
+        guard let url = file?.url else { return nil }
+        // On watchOS 10 releasing the last writer reference finalizes the file. Do not retain it in write(_:)
+        // across this call: onSegment must see the finalized AAC container.
+        autoreleasepool {
+            if #available(watchOS 11, *) { file?.close() }
+            file = nil
+        }
         guard fileFrames > 0 else {
             try? FileManager.default.removeItem(at: url)
             return nil
