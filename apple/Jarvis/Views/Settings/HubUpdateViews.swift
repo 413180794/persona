@@ -157,6 +157,10 @@ struct HubSettingsPage: View {
                     if l.bad {
                         Label("这一版上次装完起不来，已经回滚过；自动更新不会再装它。", systemImage: Theme.Icon.error)
                             .font(Theme.Font.secondary).foregroundStyle(Theme.caution)
+                    } else if let why = l.held, s.auto {
+                        Label("自动更新不会装这一版：\(why)。确认没问题可以手动更新。", systemImage: Theme.Icon.error)
+                            .font(Theme.Font.secondary).foregroundStyle(Theme.caution)
+                            .accessibilityIdentifier("hub.held")
                     }
                 }
                 if s.working {
@@ -277,7 +281,7 @@ struct HubSettingsPage: View {
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     HStack(spacing: Theme.Space.s) {
                         Text(r.resultTitle).font(Theme.Font.bodyStrong)
-                            .foregroundStyle(r.result == "updated" ? Theme.positive : r.result == "rolled_back" ? Theme.caution : Theme.danger)
+                            .foregroundStyle(r.result == "updated" ? Theme.positive : ["rolled_back", "held"].contains(r.result) ? Theme.caution : Theme.danger)
                             .lineLimit(1)
                         if r.auto { Chip(text: "自动", look: .outline) }
                         Spacer(minLength: Theme.Space.s)

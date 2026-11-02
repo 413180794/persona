@@ -25,7 +25,7 @@ func runRelease(args []string) error {
 		dir := fs.String("dir", "", "where the jarvisd-<os>-<arch>.gz are")
 		ver := fs.String("version", "", "the version")
 		num := fs.String("build", "", "the build number (UTC YYYYMMDDHHMM)")
-		commit := fs.String("commit", "", "the commit")
+		commit := fs.String("commit", "", "the commit (full id; run in its repository: its ancestors go in too)")
 		notes := fs.String("notes", "", "what is new, for the app")
 		minApp := fs.Int("min-app", 0, "the oldest app build that works with it")
 		minNode := fs.String("min-node", "", "the oldest node build that works with it")
@@ -43,8 +43,17 @@ func runRelease(args []string) error {
 				return err
 			}
 		}
+		// Every commit the release contains, so a hub deployed from newer code than this does not take it by itself.
+		revs, err := exec.Command("git", "rev-list", *commit).Output()
+		if err != nil {
+			return fmt.Errorf("git rev-list %s: %w", *commit, err)
+		}
+		ancestors, err := update.EncodeAncestors(strings.Split(string(revs), "\n"))
+		if err != nil {
+			return err
+		}
 		m, err := update.BuildManifest(*dir, update.Manifest{Version: *ver, Build: n, Commit: *commit, Released: time.Now().UTC().Truncate(time.Second),
-			MinAppBuild: *minApp, MinNodeBuild: mn, Protocol: proto.Protocol, Notes: *notes})
+			MinAppBuild: *minApp, MinNodeBuild: mn, Protocol: proto.Protocol, Notes: *notes, Ancestors: ancestors})
 		if err != nil {
 			return err
 		}

@@ -81,6 +81,9 @@ struct HubUpdateTests {
         var auto = avail
         auto.auto = true
         #expect(HubNotice.of(auto, compat: .ok, dismissed: []) == nil) // it will install by itself
+        var held = auto
+        held.latest?.held = "新版本不包含这个 hub 正在运行的提交"
+        #expect(HubNotice.of(held, compat: .ok, dismissed: []) == offered) // held back: it will not, so it is offered
         auto.autoNotice = true
         #expect(HubNotice.of(auto, compat: .ok, dismissed: []) == .autoOn) // told once
         let waiting = try JSON.decoder.decode(HubUpdateStatus.self, from: Data(Self.waiting.utf8))
@@ -99,6 +102,16 @@ struct HubUpdateTests {
         var bad = avail
         bad.latest?.bad = true
         #expect(HubNotice.of(bad, compat: .ok, dismissed: []) == nil) // went back before: not offered again
+    }
+
+    /// A release 自动更新 holds back says why (its code may not contain the hub's commit), and so does the history.
+    @Test func aHeldRelease() throws {
+        let json = Self.available.replacingOccurrences(of: #""bad":false}"#, with: #""bad":false,"held":"新版本不包含它"}"#)
+        let s = try JSON.decoder.decode(HubUpdateStatus.self, from: Data(json.utf8))
+        #expect(s.latest?.held == "新版本不包含它")
+        #expect(try JSON.decoder.decode(HubUpdateStatus.self, from: Data(Self.available.utf8)).latest?.held == nil)
+        let r = try JSON.decoder.decode(HubUpdateRecord.self, from: Data(#"{"from_version":"v1","to_version":"v2","to_build":202611021700,"result":"held","reason":"新版本不包含它","auto":true}"#.utf8))
+        #expect(r.resultTitle == "没有自动装")
     }
 
     /// A Docker hub: a newer image gets a line (no 更新, the page says what to run), closed per version.

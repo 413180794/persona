@@ -104,6 +104,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 - 防止不单调：`publish.sh` 读线上的清单，两种情况拒绝发布：
   - 新 build 号不比线上的大；
   - 线上那版的 commit 不是这次的祖先。
+- build 号只说明发布得晚，不说明代码新：hub 自动装之前还要看新版本的代码包含不包含它自己的提交（「防退回」）。
 - Docker 沿用镜像 tag 的 semver，只在 docker 渠道里比较。
 
 ## 4. 版本清单
@@ -123,9 +124,12 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   "files": {
     "linux-amd64": {"name": "jarvisd-linux-amd64.gz", "size": 12345678, "sha256": "<压缩包的>", "binary_sha256": "<解压后的>"},
     "linux-arm64": {}, "darwin-arm64": {}, "darwin-amd64": {}
-  }
+  },
+  "ancestors": "<base64>"
 }
 ```
+
+- `ancestors`：这次的 commit 能到达的所有提交（`git rev-list <commit>`），每个取前 6 字节，排序后 base64（「防退回」）。
 
 - 下载的文件要同时对得上 `sha256`（压缩包）和 `binary_sha256`（解压后），新二进制的 `version -v` 还要报出清单里的版本和 build 号。
   `SHA256SUMS` 照旧给 install.sh 用。
@@ -139,7 +143,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 - 发布前照旧要过测试，加上 `publish.sh` 自己的检查（任何一项不过就不发布）：
   1. 读线上的 `latest.json`（有的话）：新 build 号必须更大，线上那版的 commit 必须是这次的祖先（`git merge-base --is-ancestor`）；
   2. 构建四个平台（`channel=release`、`build`、`updateURL` 都写进去），隐私扫描（二进制里不能有 lark-connector）；
-  3. 生成 `latest.json`（版本、build 号、commit、发布时间、各平台压缩包和解压后的 sha256、`min_app_build`、`min_node_build`、`protocol`）；
+  3. 生成 `latest.json`（版本、build 号、commit、它包含的提交 `ancestors`、发布时间、各平台压缩包和解压后的 sha256、`min_app_build`、`min_node_build`、`protocol`）；
+     工作区的 server/、web/ 有没提交的改动时不发布（`NO_DEPLOY=1` 照样编，二进制里的提交带 `-dirty`）：清单说的是哪个提交，二进制就得是它；
   4. 发布后读回 `VERSION`、`SHA256SUMS`、`latest.json`，和本地的比一遍。
 
 ### 安全：不签名（用户 2026-11-02 拍板）
@@ -159,8 +164,26 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - 它比当时线上的公开版新，hub 自动更新看到旧的公开版不会装，**不会降级**；
   - 等发布者发了更新的版本（build 号更大），hub 再自己接手；
   - `TestNoDowngrade` 守住：清单的 build 号不比自己大就不装，等于也不装。
-- 主会话的部署脚本在仓库外，要在它的 `go build` 里加上同样的三个 `-X`（回报里会给出要加的那一行）。
+- 也写 `commit`（`-X main.commit`，server/ 有没提交的改动时后面加 `-dirty`）：之后的公开版要包含这个提交才会自己装上（「防退回」）。
+- 主会话的部署脚本在仓库外，要在它的 `go build` 里加上同样的四个 `-X`（回报里会给出要加的那一行）。
 - 不做灰度：发布后所有 hub（包括我们的）在空闲时同时更新；出了问题靠各 hub 自己的回滚和坏版本标记。
+
+### 防退回（2026-11-02，#454）
+
+只比 build 号会退回：直接部署的 hub 跑的是 master 上的提交 D（build 号是部署时间），之后有人用一份落后于 master 的代码（提交 B）
+`publish.sh`，build 号更大，hub 就会把自己「更新」成更旧的 B。`publish.sh` 的 `check-next` 只比线上那一版，管不到直接部署的 hub。
+
+- **怎么判断**：二进制记着自己的提交（`-X main.commit`），清单带着新版本包含的所有提交（`ancestors`）。
+  hub 只在新版本就是这个提交、或者 `ancestors` 里有它时才自动装（`update.Build.Hold`，`TestHold`）。
+- **为什么不问 GitHub**：仓库是私有的，hub 不一定能访问 GitHub，也不该给它 token；清单自己带着就不用联网。
+  每个提交 6 字节，900 个提交约 7 KB（base64），一年后几百 KB 也还在清单的 1 MB 上限里；
+  不在里面的提交恰好撞上某个前缀的概率，一万个提交时约 10^-10。
+- **确认不了也算不满足**：二进制没记提交（老的部署脚本）、带着没提交的改动（`-dirty`）、提交太短、清单没有 `ancestors`（老的 `publish.sh`）、读不出来。
+  从 PR 分支直接部署、之后 squash 合进 master 的，也确认不了（合并出来的是另一个提交）：下一次从 master 部署或手动更新就好。
+- **不满足时**：
+  - 不自动装。App 照样提示有新版本，自动更新开着时也提示；设置 › hub 里写着原因（`latest.held`），手动「更新 hub」仍然可以点；
+  - 更新记录里每个新版本记一条「没有自动装」（`result: held`），写明原因，比如「新版本（提交 b2b2b2b2）不包含这个 hub 正在运行的提交 d4d4d4d4」。
+- 自动更新关着时本来就不会自己装，不记。
 
 ## 7. 检测更新
 
@@ -252,7 +275,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
     开发版说明为什么不会自己更新；Docker 显示要在 NAS 上运行的那行命令，可复制；
   - 开关「自动更新 hub」（只有发布版有，默认开）；
   - 各台电脑上的 jarvisd：版本，和 hub 不是同一次部署的标「版本不同」，点进机器页「重新部署」；
-  - 「更新记录」：最近 10 次，结果（已更新 / 已回滚 / 没更新成功）、自动的标出来、从哪版到哪版、时间、回滚的原因。
+  - 「更新记录」：最近 10 次，结果（已更新 / 已回滚 / 没更新成功 / 没有自动装）、自动的标出来、从哪版到哪版、时间、回滚和没有自动装的原因。
   - 老 hub（没有 `/api/v1/hub/update`）：说明要在 hub 所在的机器上用 install.sh 更新一次。
 - **Agents 页顶上的一行**（`HubNoticeRow`，和「Mac 上的 Jarvis 已登录」同一个位置和样子，搜索时不出现）：同一时间只有一条，最要紧的在前：
   1. App 太旧（App 的 build 号低于 hub 报的 `min_app_build`）：「App 版本太旧，配不上这个 hub：请到 TestFlight 更新」，不能关；

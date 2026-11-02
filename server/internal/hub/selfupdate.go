@@ -54,7 +54,7 @@ type updateRecord struct {
 	ToBuild     int64     `json:"to_build"`
 	Started     time.Time `json:"started"`
 	Ended       time.Time `json:"ended"`
-	Result      string    `json:"result"` // updated | rolled_back | failed
+	Result      string    `json:"result"` // updated | rolled_back | failed | held (newer, not installed by itself: Reason)
 	Reason      string    `json:"reason,omitempty"`
 	Auto        bool      `json:"auto"`
 }
@@ -392,17 +392,45 @@ func (u *updater) loop(ctx context.Context) {
 		}
 		if u.wantsAuto() {
 			go u.install(ctx, true)
+		} else {
+			u.noteHeld(ctx)
 		}
 	}
 }
 
-// wantsAuto: on, newer, not a bad build, not already running.
+// wantsAuto: on, newer, not a bad build, its code contains this one's (Build.Hold), not already running.
 func (u *updater) wantsAuto() bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	r := u.release
 	return u.settings.auto() && !u.running && r != nil && u.h.build.Newer(r.Manifest.Build) &&
-		!slices.Contains(u.settings.Bad, r.Manifest.Build)
+		!slices.Contains(u.settings.Bad, r.Manifest.Build) && u.h.build.Hold(r.Manifest) == ""
+}
+
+// noteHeld writes into the history, once per release, that a newer release was not installed by itself because its
+// code may not contain this hub's (Build.Hold): the app shows it as available, with the reason, and the user can
+// still install it.
+func (u *updater) noteHeld(ctx context.Context) {
+	u.mu.Lock()
+	r := u.release
+	if !u.settings.auto() || u.running || r == nil || !u.h.build.Newer(r.Manifest.Build) || slices.Contains(u.settings.Bad, r.Manifest.Build) {
+		u.mu.Unlock()
+		return
+	}
+	why := u.h.build.Hold(r.Manifest)
+	for _, h := range u.settings.History {
+		if h.Result == "held" && h.ToBuild == r.Manifest.Build {
+			why = ""
+		}
+	}
+	u.mu.Unlock()
+	if why == "" {
+		return
+	}
+	u.h.logf("update: %s is newer but not installed by itself: %s", r.Manifest.Version, why)
+	now := time.Now()
+	u.record(ctx, updateRecord{FromVersion: u.h.version, ToVersion: r.Manifest.Version, ToBuild: r.Manifest.Build,
+		Started: now, Ended: now, Result: "held", Reason: why, Auto: true})
 }
 
 // check reads the release now (a Docker hub: its image's tags).
@@ -682,6 +710,8 @@ type latestView struct {
 	Notes    string     `json:"notes,omitempty"`
 	Newer    bool       `json:"newer"`
 	Bad      bool       `json:"bad"` // went back before: not installed automatically
+	// Held: why a newer release is not installed automatically even with 自动更新 on (Build.Hold), for people.
+	Held string `json:"held,omitempty"`
 }
 
 func (u *updater) view() updateView {
@@ -704,6 +734,9 @@ func (u *updater) view() updateView {
 		released := r.Manifest.Released
 		v.Latest = &latestView{Version: r.Manifest.Version, Build: r.Manifest.Build, Released: &released, Notes: r.Manifest.Notes,
 			Newer: u.h.build.Newer(r.Manifest.Build), Bad: slices.Contains(u.settings.Bad, r.Manifest.Build)}
+		if v.Latest.Newer && u.h.build.SelfUpdates() {
+			v.Latest.Held = u.h.build.Hold(r.Manifest)
+		}
 	}
 	if u.h.build.Channel == update.Docker {
 		if im, err := u.dockerImage(); err == nil {

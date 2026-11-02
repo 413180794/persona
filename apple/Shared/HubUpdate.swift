@@ -32,6 +32,9 @@ nonisolated struct HubUpdateStatus: Codable, Equatable, Sendable {
         var notes: String?
         var newer: Bool
         var bad: Bool // went back before: not installed automatically
+        /// Why 自动更新 does not install this newer one by itself: its code may not contain the hub's commit (a release
+        /// published from older code than the hub was deployed from). The user can still install it.
+        var held: String?
     }
 
     /// Something the restart would interrupt.
@@ -111,7 +114,7 @@ nonisolated struct HubUpdateRecord: Codable, Equatable, Sendable, Identifiable {
     var toBuild: Int64
     var started: Date?
     var ended: Date?
-    var result: String // updated | rolled_back | failed
+    var result: String // updated | rolled_back | failed | held
     var reason: String?
     var auto: Bool
     var id: String { "\(toBuild)/\(started?.timeIntervalSince1970 ?? 0)" }
@@ -120,6 +123,7 @@ nonisolated struct HubUpdateRecord: Codable, Equatable, Sendable, Identifiable {
         switch result {
         case "updated": "已更新"
         case "rolled_back": "已回滚"
+        case "held": "没有自动装"
         default: "没更新成功"
         }
     }
@@ -207,7 +211,7 @@ nonisolated enum HubNotice: Equatable, Sendable {
         if let l = s.latest, l.newer {
             if s.channel == "docker" {
                 out.append(.newImage(version: l.version))
-            } else if s.installable, !s.auto, !l.bad {
+            } else if s.installable, !s.auto || l.held != nil, !l.bad { // held: it will not install by itself either
                 out.append(.available(version: l.version, build: l.build))
             }
         }

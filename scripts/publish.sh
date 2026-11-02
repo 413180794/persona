@@ -19,6 +19,15 @@ eval "$(python3 scripts/jarvis_config.py env)"
 BUILD="$(date -u +%Y%m%d%H%M)"
 VERSION="${VERSION:-$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD}"
 COMMIT="$(git rev-parse HEAD)"
+# A release is the committed code: latest.json says which commit and lists every one it contains, and a hub
+# installs a release by itself only when its own commit is among them (docs/hub-update.md「防退回」). Published with
+# changes not committed, every hub running it would wait for a person from then on. The binaries say which commit
+# they are (STAMP, "-dirty" only in a NO_DEPLOY build).
+STAMP="$COMMIT"
+if [ -n "$(git status --porcelain -- server web)" ]; then
+  [ -n "${NO_DEPLOY:-}" ] || { echo "server/ or web/ has changes not committed: commit them first" >&2; exit 1; }
+  STAMP="$COMMIT-dirty"
+fi
 OUT=build-publish
 rm -rf "$OUT"
 mkdir -p "$OUT/bin"
@@ -33,7 +42,7 @@ cp -R web/dist/. "$WEBDIST/"
 
 # Public dependency constants are classified by build-info checksums; verify the actual module cache before building.
 (cd server && go mod verify)
-LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.updateURL=$JARVIS_PUBLISH_URL/dl"
+LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$STAMP -X main.updateURL=$JARVIS_PUBLISH_URL/dl"
 # -tags public changes no code (no file builds differently with it, TestOneBuild): it marks the binary for
 # check_bundle_privacy.py, which then knows the dependency constants it may skip.
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do

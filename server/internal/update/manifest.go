@@ -3,12 +3,15 @@ package update
 import (
 	"compress/gzip"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -24,6 +27,71 @@ type Manifest struct {
 	Protocol     int             `json:"protocol"`
 	Notes        string          `json:"notes,omitempty"`
 	Files        map[string]File `json:"files"` // "linux-amd64" -> its download
+	// Ancestors is every commit the release's code contains (EncodeAncestors of git rev-list <commit>): a hub installs
+	// it by itself only when its own commit is one of them (Build.Hold).
+	Ancestors string `json:"ancestors,omitempty"`
+}
+
+// ancestorBytes is how much of each commit id Ancestors keeps: 6 bytes, 12 hex digits. A few KB for a thousand
+// commits; a commit that is not there matches one by chance about once in 10^10 lookups at ten thousand.
+const ancestorBytes = 6
+
+var errNoAncestors = errors.New("the manifest lists no commits")
+
+// EncodeAncestors packs commit ids (hex, as git rev-list prints them) for Manifest.Ancestors: each one's first 6
+// bytes, sorted, base64.
+func EncodeAncestors(commits []string) (string, error) {
+	seen := map[string]bool{}
+	var keys []string
+	for _, c := range commits {
+		if c = strings.TrimSpace(c); c == "" {
+			continue
+		}
+		k, err := commitKey(c)
+		if err != nil {
+			return "", err
+		}
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) == 0 {
+		return "", errNoAncestors
+	}
+	sort.Strings(keys)
+	return base64.StdEncoding.EncodeToString([]byte(strings.Join(keys, ""))), nil
+}
+
+// commitKey is the first 6 bytes of a hex commit id.
+func commitKey(c string) (string, error) {
+	if len(c) < 2*ancestorBytes {
+		return "", fmt.Errorf("commit %q is too short to look up", c)
+	}
+	b, err := hex.DecodeString(c[:2*ancestorBytes])
+	if err != nil {
+		return "", fmt.Errorf("commit %q is not hex", c)
+	}
+	return string(b), nil
+}
+
+// Contains says whether the release's code includes commit: Ancestors lists it.
+func (m *Manifest) Contains(commit string) (bool, error) {
+	if m.Ancestors == "" {
+		return false, errNoAncestors
+	}
+	raw, err := base64.StdEncoding.DecodeString(m.Ancestors)
+	if err != nil || len(raw)%ancestorBytes != 0 {
+		return false, errors.New("the manifest's list of commits does not read")
+	}
+	k, err := commitKey(commit)
+	if err != nil {
+		return false, err
+	}
+	at := func(i int) string { return string(raw[i*ancestorBytes : (i+1)*ancestorBytes]) }
+	n := len(raw) / ancestorBytes
+	i := sort.Search(n, func(i int) bool { return at(i) >= k })
+	return i < n && at(i) == k, nil
 }
 
 // File is one platform's download.

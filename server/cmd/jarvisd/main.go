@@ -24,19 +24,21 @@ import (
 )
 
 // What the build wrote in (-X): the version for people, and for updates (docs/hub-update.md) the channel
-// (release / docker / dev), the build number (UTC YYYYMMDDHHMM), where the publisher's dl/ is, and for the Docker
-// image the image it was built as (where to look for newer ones).
+// (release / docker / dev), the build number (UTC YYYYMMDDHHMM), where the publisher's dl/ is, the commit it was
+// built from ("-dirty" after it with changes not committed: a release has to contain it to be installed by itself),
+// and for the Docker image the image it was built as (where to look for newer ones).
 var (
 	version   = "dev"
 	channel   = ""
 	build     = ""
 	updateURL = ""
+	commit    = ""
 	image     = ""
 )
 
 func buildInfo() update.Build {
 	b := update.Make(version, channel, build, updateURL)
-	b.Image = image
+	b.Commit, b.Image = commit, image
 	return b
 }
 

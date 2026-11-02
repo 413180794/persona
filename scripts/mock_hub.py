@@ -2474,9 +2474,10 @@ def net_control(path, q):
 # half of them in a new order): the working agents' last line alternates between one line and two (the row's height),
 # and one of them finishes and starts again every three rounds (its space changes rank). ScrollUnderPushTests.
 # MOCK_CHURN=1 also puts a screenshot (a tool result image) in the middle of the first conversation's work.
-# MOCK_HUB_UPDATE=available|waiting|notice|docker|docker-pinned: the hub's version and its updating itself
+# MOCK_HUB_UPDATE=available|waiting|notice|held|docker|docker-pinned: the hub's version and its updating itself
 # (docs/hub-update.md): a newer release to install (auto-update off), an update waiting for two busy agents, 「自动更新已开启」
-# told for the first time, or a Docker hub with a newer image (on :latest, or on a pinned version tag). Unset:
+# told for the first time, a newer release auto-update holds back (its code does not contain the hub's commit, with
+# the held line in the history), or a Docker hub with a newer image (on :latest, or on a pinned version tag). Unset:
 # GET /api/v1/hub/update is 404 (a hub from before), no line anywhere.
 HUB_UPDATE_MODE = os.environ.get("MOCK_HUB_UPDATE", "")
 HUB_UPDATE = {}
@@ -2493,6 +2494,9 @@ def hub_update_state():
             HUB_UPDATE.update(state="waiting_idle", auto=True, busy=[
                 {"machine_id": "macbook", "machine": "MacBook", "session_id": "a1f3c2d4-0000-4000-8000-000000000001", "title": "给天气 App 加主屏幕小组件"},
                 {"machine_id": "server", "machine": "构建服务器", "session_id": "b2", "title": "整理发布脚本"}])
+        elif HUB_UPDATE_MODE == "held":
+            HUB_UPDATE.update(auto=True)
+            HUB_UPDATE["latest"] = dict(latest, held=HELD_REASON)
         elif HUB_UPDATE_MODE == "notice":
             HUB_UPDATE.update(state="idle", auto=True, auto_notice=True)
             HUB_UPDATE["latest"] = dict(latest, version=HUB_UPDATE["version"], build=HUB_UPDATE["build"], newer=False)
@@ -2503,6 +2507,15 @@ def hub_update_state():
                               image={"name": "ghcr.io/owner/jarvis", "tag": "0.3.0" if pinned else "latest", "pinned": pinned})
             HUB_UPDATE["latest"] = {"version": "0.3.1", "build": 0, "newer": True, "bad": False}
     return HUB_UPDATE
+
+
+HELD_REASON = "新版本（提交 def56789）不包含这个 hub 正在运行的提交 abc12345：发布用的代码比这里的旧，或在另一条分支上，自动装了会退回"
+
+
+def hub_update_history():
+    held = [{"from_version": "v0.3.0-12-gabc1234-202611021500", "to_version": "v0.3.1-4-gdef5678-202611030900", "to_build": 202611030900,
+             "started": ago(minutes=20), "ended": ago(minutes=20), "result": "held", "reason": HELD_REASON, "auto": True}]
+    return (held if HUB_UPDATE_MODE == "held" else []) + HUB_UPDATE_HISTORY  # newest first, like the hub
 
 
 def set_hub_update_mode(mode):
@@ -2809,7 +2822,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/health": return self.send_json({"ok": True, "version": "mock", "channel": "release", "build": 202611021500, "protocol": 1, "min_app_build": 0})
         if p == "/api/v1/hub/update":
             return self.send_json(hub_update_state()) if HUB_UPDATE_MODE else self.send_json({"error": "not found"}, 404)
-        if p == "/api/v1/hub/update/history": return self.send_json({"history": HUB_UPDATE_HISTORY})
+        if p == "/api/v1/hub/update/history": return self.send_json({"history": hub_update_history()})
         if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
         if p == "/api/v1/machines": return self.send_json({"machines": MACHINES})
         if p == "/api/v1/metrics":

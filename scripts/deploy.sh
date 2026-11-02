@@ -32,7 +32,11 @@ TARGETS=("${ORDERED[@]}")
 # machine <id> <field>: a field of a machine in the config (ssh host, os, hostnames).
 field() { python3 ../scripts/jarvis_config.py machine "$1" | python3 -c "import json,sys;v=json.load(sys.stdin).get('$2','');print(' '.join(v) if isinstance(v,list) else v)"; }
 mkdir -p bin
-LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD${JARVIS_PUBLISH_URL:+ -X main.updateURL=$JARVIS_PUBLISH_URL/dl}"
+# The commit it is built from, "-dirty" after it with changes in server/ not committed: a release installs itself over
+# this build only when its code contains that commit (docs/hub-update.md「防退回」).
+COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
+[ -n "$COMMIT" ] && [ -n "$(git status --porcelain -- . 2>/dev/null)" ] && COMMIT="$COMMIT-dirty"
+LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$COMMIT${JARVIS_PUBLISH_URL:+ -X main.updateURL=$JARVIS_PUBLISH_URL/dl}"
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-linux-amd64 ./cmd/jarvisd
 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-darwin-arm64 ./cmd/jarvisd
 echo "built $VERSION"

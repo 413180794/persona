@@ -32,6 +32,11 @@ type fakePublisher struct {
 }
 
 func newPublisher(t *testing.T, version string, build int64) *fakePublisher {
+	return newPublisherWith(t, version, build, func(*update.Manifest) {})
+}
+
+// newPublisherWith is newPublisher with the manifest changed first (its commit and ancestors).
+func newPublisherWith(t *testing.T, version string, build int64, edit func(*update.Manifest)) *fakePublisher {
 	t.Helper()
 	p := &fakePublisher{script: []byte(fmt.Sprintf("#!/bin/sh\necho %s\necho 'channel release, build %d'\n", version, build))}
 	gz := gz(p.script)
@@ -40,6 +45,7 @@ func newPublisher(t *testing.T, version string, build int64) *fakePublisher {
 	m := update.Manifest{Version: version, Build: build, Protocol: proto.Protocol, Released: time.Now().UTC().Truncate(time.Second),
 		Files: map[string]update.File{runtime.GOOS + "-" + runtime.GOARCH: {Name: name, Size: int64(len(gz)),
 			SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}}}
+	edit(&m)
 	data, _ := json.Marshal(m)
 	p.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -325,6 +331,87 @@ func TestUpdateNoDowngrade(t *testing.T) {
 	}
 	if h.upd.wantsAuto() {
 		t.Fatal("would downgrade automatically")
+	}
+}
+
+// Commits for the anti-rollback tests: the release is published from b (a before it); a hub deployed straight
+// from master runs d, which came after b.
+const (
+	gitA = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+	gitB = "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+	gitD = "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
+)
+
+func publishedAtB(t *testing.T) *fakePublisher {
+	return newPublisherWith(t, "v2-202611021700", 202611021700, func(m *update.Manifest) {
+		m.Commit = gitB
+		m.Ancestors, _ = update.EncodeAncestors([]string{gitB, gitA})
+	})
+}
+
+// A release whose code does not contain the commit the hub runs is newer by its number only: it is offered, with
+// the reason, but not installed by itself, and the history says so once; the user can still install it.
+func TestUpdateHeldWhenTheReleaseIsBehind(t *testing.T) {
+	p := publishedAtB(t)
+	h, _, _, execd := updatingHub(t, p, "release")
+	h.build.Commit = gitD
+	ctx := context.Background()
+	if _, err := h.upd.check(ctx); err != nil {
+		t.Fatal(err)
+	}
+	v := h.upd.view()
+	if v.State != "available" || !v.Latest.Newer || !strings.Contains(v.Latest.Held, "不包含") {
+		t.Fatalf("view %+v %+v", v.State, v.Latest)
+	}
+	if h.upd.wantsAuto() {
+		t.Fatal("would install a release behind this hub's code by itself")
+	}
+	h.upd.noteHeld(ctx)
+	h.upd.noteHeld(ctx) // the next check, 6 hours on: written once
+	var held []updateRecord
+	for _, r := range h.upd.settings.History {
+		if r.Result == "held" {
+			held = append(held, r)
+		}
+	}
+	if len(held) != 1 || held[0].ToBuild != 202611021700 || !held[0].Auto || !strings.Contains(held[0].Reason, gitB[:8]) {
+		t.Fatalf("history %+v", h.upd.settings.History)
+	}
+	if err := h.upd.begin(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the update the user asked for", func() bool { return len(*execd) == 1 })
+}
+
+// A release that contains the hub's commit installs by itself as before, and nothing is held.
+func TestUpdateAutoWhenTheReleaseContainsIt(t *testing.T) {
+	p := publishedAtB(t)
+	h, _, _, _ := updatingHub(t, p, "release")
+	h.build.Commit = gitA
+	ctx := context.Background()
+	if _, err := h.upd.check(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := h.upd.view(); v.Latest.Held != "" || !h.upd.wantsAuto() {
+		t.Fatalf("held %q, auto %v", v.Latest.Held, h.upd.wantsAuto())
+	}
+	h.upd.noteHeld(ctx)
+	if len(h.upd.settings.History) != 0 {
+		t.Fatalf("history %+v", h.upd.settings.History)
+	}
+}
+
+// With 自动更新 off nothing would install by itself anyway: no held record either.
+func TestUpdateHeldNotNotedWithAutoOff(t *testing.T) {
+	p := publishedAtB(t)
+	h, _, _, _ := updatingHub(t, p, "release")
+	h.build.Commit = gitD
+	off := false
+	h.upd.settings.Auto = &off
+	h.upd.check(context.Background())
+	h.upd.noteHeld(context.Background())
+	if len(h.upd.settings.History) != 0 {
+		t.Fatalf("history %+v", h.upd.settings.History)
 	}
 }
 
