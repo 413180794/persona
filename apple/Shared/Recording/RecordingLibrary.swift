@@ -10,11 +10,14 @@ final class RecordingLibrary {
     private(set) var entries: [RecordingEntry] = []
     private(set) var error: String?
     @ObservationIgnored nonisolated let root: URL
+    @ObservationIgnored private var deleted: Set<UUID> = []
 
     init(root: URL = RecordingLibrary.directory) {
         self.root = root
         do {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            if let data = try? Data(contentsOf: root.appendingPathComponent("deleted.json")),
+               let ids = try? JSONDecoder().decode(Set<UUID>.self, from: data) { deleted = ids }
             let dirs = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
             entries = dirs.compactMap { dir in
                 guard UUID(uuidString: dir.lastPathComponent) != nil,
@@ -37,6 +40,7 @@ final class RecordingLibrary {
     }
 
     func save(_ entry: RecordingEntry) throws {
+        guard !deleted.contains(entry.id) else { throw CocoaError(.fileNoSuchFile) }
         try FileManager.default.createDirectory(at: folder(entry.id), withIntermediateDirectories: true)
         try JSONEncoder().encode(entry).write(to: folder(entry.id).appendingPathComponent("recording.json"), options: .atomic)
         entries.removeAll { $0.id == entry.id }
@@ -62,6 +66,11 @@ final class RecordingLibrary {
     /// 结束消息和音频可以任意顺序到达，重复消息不会覆盖已转写的分段。
     func receive(_ transfer: RecordingTransfer) throws {
         guard transfer.valid else { throw CocoaError(.fileReadCorruptFile) }
+        // 删除后迟到或重试的手表分段不能重新创建已删除的录音，但仍可确认让手表清理。
+        if deleted.contains(transfer.id) {
+            try? FileManager.default.removeItem(at: folder(transfer.id))
+            return
+        }
         var entry = entry(transfer.id) ?? RecordingEntry(id: transfer.id, createdAt: transfer.createdAt, source: .watch, locale: transfer.locale)
         entry.marks = Array(Set(entry.marks + transfer.marks)).sorted()
         if var segment = transfer.segment, !entry.segments.contains(where: { $0.index == segment.index }) {
@@ -74,7 +83,10 @@ final class RecordingLibrary {
     }
 
     func remove(_ id: UUID) throws {
-        try FileManager.default.removeItem(at: folder(id))
+        var next = deleted; next.insert(id)
+        try JSONEncoder().encode(next).write(to: root.appendingPathComponent("deleted.json"), options: .atomic)
+        deleted = next
+        if FileManager.default.fileExists(atPath: folder(id).path) { try FileManager.default.removeItem(at: folder(id)) }
         entries.removeAll { $0.id == id }
     }
 

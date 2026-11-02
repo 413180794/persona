@@ -109,22 +109,24 @@ nonisolated struct RecordingAnalyzerEngine: RecordingSpeechEngine {
             }
             return tokens
         }
-        do {
-            try await withTaskCancellationHandler {
-            if let last = try await analyzer.analyzeSequence(from: file) {
-                try await analyzer.finalizeAndFinish(through: last)
-            } else {
+        let tokens = try await withTaskCancellationHandler {
+            do {
+                if let last = try await analyzer.analyzeSequence(from: file) {
+                    try await analyzer.finalizeAndFinish(through: last)
+                } else {
+                    await analyzer.cancelAndFinishNow()
+                }
+                return try await collector.value
+            } catch {
                 await analyzer.cancelAndFinishNow()
+                collector.cancel()
+                throw error
             }
-            } onCancel: {
-                Task { await analyzer.cancelAndFinishNow() }
-            }
-        } catch {
-            await analyzer.cancelAndFinishNow()
+        } onCancel: {
             collector.cancel()
-            throw error
+            Task { await analyzer.cancelAndFinishNow() }
         }
-        let tokens = try await collector.value
+        try Task.checkCancellation()
         return RecordingSentenceBuilder.build(tokens.map { (text: $0.0, start: $0.1, end: $0.2) })
     }
 

@@ -91,7 +91,7 @@ final class WatchRecordingTransfer {
             do {
                 try library.save(entry)
                 try? FileManager.default.removeItem(at: library.audio(entry.id, index))
-            } catch { self.error = "回传确认没有保存，音频仍保留在手表" }
+            } catch { self.error = "回传确认没有保存，音频仍保留在手表"; return }
         }
         if let total = receipt.total, entry.expectedSegments == total { library.change(entry.id) { $0.endDelivered = true } }
         error = nil

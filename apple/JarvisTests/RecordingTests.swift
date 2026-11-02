@@ -50,6 +50,27 @@ import Testing
         #expect(transfer.valid)
     }
 
+    @Test func deletedRecordingCannotReturnFromLateWatchTransfer() throws {
+        let lib = try library()
+        defer { try? FileManager.default.removeItem(at: lib.root) }
+        let entry = try lib.create(source: .watch)
+        try lib.remove(entry.id)
+        let restored = RecordingLibrary(root: lib.root)
+        try restored.receive(RecordingTransfer(entry: entry, segment: RecordingSegment(index: 0, start: 0, duration: 30)))
+        #expect(restored.entry(entry.id) == nil)
+    }
+
+    @Test func microphoneOwnerCannotReleaseAnotherSession() {
+        let mic = RecordingMicrophone()
+        let recording = UUID(), dictation = UUID()
+        #expect(mic.claim(recording))
+        #expect(!mic.claim(dictation))
+        #expect(!mic.release(dictation))
+        #expect(!mic.claim(dictation))
+        #expect(mic.release(recording))
+        #expect(mic.claim(dictation))
+    }
+
     @Test func gapsAndEmptyRecordingsNotReady() {
         var entry = RecordingEntry(id: UUID(), createdAt: .now, source: .watch, active: false, expectedSegments: 2)
         entry.segments = [RecordingSegment(index: 0, start: 0, duration: 30), RecordingSegment(index: 2, start: 60, duration: 30)]

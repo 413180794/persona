@@ -2232,6 +2232,15 @@ class H(BaseHTTPRequestHandler):
             m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # now, not the mock's start
             msgs.append(m)
             return self.send_json({"ok": True})
+        if p == "/api/v1/assistant/conversations" and self.command == "POST":
+            body = json.loads(self.last_body or b"{}")
+            SENT.append({"text": body.get("prompt", ""), "images": body.get("images")})
+            session = dict(ASSISTANT[0])
+            session["session_id"] = str(uuid.uuid4())
+            session["title"] = "新对话"
+            session["main"] = bool(body.get("main"))
+            ASSISTANT.append(session)
+            return self.send_json({"session": session})
         if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
             body = json.loads(self.last_body or b"{}")
             if not any(m.get("client_msg_id") and m.get("client_msg_id") == body.get("client_msg_id") for m in SENT):

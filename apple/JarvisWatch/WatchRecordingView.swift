@@ -14,11 +14,15 @@ struct WatchRecordingView: View {
                     .font(Theme.Font.display.monospacedDigit())
                     .foregroundStyle(capture.state == .recording ? Theme.danger : .primary)
                 if capture.state == .idle {
-                    Picker("录音语言", selection: $locale) {
-                        Text("中文").tag("zh-CN")
-                        Text("英语").tag("en-US")
-                        Text("日语").tag("ja-JP")
-                    }.font(Theme.Font.secondary)
+                    Button {
+                        let languages = ["zh-CN", "en-US", "ja-JP"]
+                        let index = languages.firstIndex(of: locale) ?? 0
+                        locale = languages[(index + 1) % languages.count]
+                    } label: {
+                        Text("语言：\(locale == "zh-CN" ? "中文" : locale == "en-US" ? "英语" : "日语")")
+                            .font(Theme.Font.secondary).lineLimit(1)
+                    }
+                    .buttonStyle(.bordered)
                     Button { Task { await capture.start(locale: locale) } } label: {
                         Label("开始录音", systemImage: Theme.Icon.recording).lineLimit(1)
                     }

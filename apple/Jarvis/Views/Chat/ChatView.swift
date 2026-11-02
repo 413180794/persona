@@ -2101,6 +2101,7 @@ struct Composer: View, Equatable {
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var editingIndex: Int?
     @State private var showFiles = false
+    @State private var showRecording = false
     @State private var uploads = FileUploads()
     @State private var selection: TextSelection?
     @State private var confirmClear = false
@@ -2181,6 +2182,7 @@ struct Composer: View, Equatable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+                    Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
                 } modes: {
                     SessionModesMenu(key: key, session: model.session(key))
                 }
@@ -2201,6 +2203,7 @@ struct Composer: View, Equatable {
                                    switch source.id {
                                    case "photo": showPhotos = true
                                    case "camera": showCamera = true
+                                   case "recording": showRecording = true
                                    default: showFiles = true
                                    }
                                },
@@ -2226,6 +2229,7 @@ struct Composer: View, Equatable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+                    Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
                     Section("快捷指令") {
                         ForEach(SlashCommand.all) { cmd in
                             Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
@@ -2277,6 +2281,7 @@ struct Composer: View, Equatable {
         } message: {
             Text("\(model.session(key)?.agentLabel ?? "Claude") 会开一个新会话，这段对话留在历史里，页面会跳到新会话。")
         }
+        .recordingContextSheet(isPresented: $showRecording) { contexts.wrappedValue.append($0) }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             uploads.start(urls, machine: key.machineID, model: model) { insertPath($0) }

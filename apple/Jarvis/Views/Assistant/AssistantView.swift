@@ -468,32 +468,38 @@ struct StarterComposer: View {
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var showPhotos = false
     @State private var showFiles = false
+    @State private var showRecording = false
+    @State private var recordingContexts: [ContextRef] = []
     @State private var uploads = FileUploads()
     @State private var selection: TextSelection?
     @FocusState private var focused: Bool
 
-    private var canSend: Bool { !disabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty) }
+    private var canSend: Bool { !disabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !recordingContexts.isEmpty) }
 
     private func submit() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        send(t.isEmpty ? "请看图片" : t, images.map(\.1))
+        let body = t.isEmpty ? (images.isEmpty ? "参考录音内容。" : "请看图片") : t
+        send(recordingContexts.isEmpty ? body : recordingContexts.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
         text = ""
         images = []
+        recordingContexts = []
     }
 
     /// A PhotosPicker inside a Menu never presents (the menu dismisses first): the buttons present it from here.
     @ViewBuilder private var attachments: some View {
         Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
         Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+        Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
     }
 
     var body: some View {
         VStack(spacing: Theme.Space.s) {
+            if !recordingContexts.isEmpty { ContextChips(refs: $recordingContexts) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty { ComposerImages(images: $images) }
             if let shell {
                 ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
-                                 canSend: canSend, hasAttachments: !images.isEmpty, modesWarn: shell.mode == "bypassPermissions",
+                                 canSend: canSend, hasAttachments: !images.isEmpty || !recordingContexts.isEmpty, modesWarn: shell.mode == "bypassPermissions",
                                  send: submit) {
                     attachments
                 } modes: {
@@ -507,6 +513,7 @@ struct StarterComposer: View {
                 }
             }
         }
+        .recordingContextSheet(isPresented: $showRecording) { recordingContexts.append($0) }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
@@ -555,6 +562,7 @@ struct BeautifulStarterComposer: View {
     @State private var launchers: [Launcher] = []
     @State private var showPhotos = false
     @State private var showFiles = false
+    @State private var showRecording = false
     @State private var uploads = FileUploads()
     @State private var selection: TextSelection?
     @FocusState private var focused: Bool
@@ -584,7 +592,13 @@ struct BeautifulStarterComposer: View {
                                launcher = id
                                Haptics.tap()
                            },
-                           onAttach: { source in if source.id == "photo" { showPhotos = true } else { showFiles = true } },
+                           onAttach: { source in
+                               switch source.id {
+                               case "photo": showPhotos = true
+                               case "recording": showRecording = true
+                               default: showFiles = true
+                               }
+                           },
                            onMention: { source in
                                guard let ref = PromptItems.quote(source, in: model.allSessions) else { return false }
                                quotes.append(ref)
@@ -602,6 +616,7 @@ struct BeautifulStarterComposer: View {
         }
         // Again once the hub is paired: on a fresh launch the first try runs before there is one.
         .task(id: launcherMachine) { launchers = (try? await model.launchers(launcherMachine)) ?? [] }
+        .recordingContextSheet(isPresented: $showRecording) { quotes.append($0) }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.

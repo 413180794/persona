@@ -105,6 +105,7 @@ enum PromptItems {
         var out = [PromptSource(id: "photo", name: "照片", detail: "从相册选，最多 4 张", icon: .symbol("photo.on.rectangle"), kind: .attach)]
         if camera { out.append(PromptSource(id: "camera", name: "拍照", detail: "用相机拍一张", icon: .symbol("camera"), kind: .attach)) }
         out.append(PromptSource(id: "file", name: "文件", detail: "传到那台电脑，路径插进输入框", icon: .symbol("doc"), kind: .attach))
+        out.append(PromptSource(id: "recording", name: "录音上下文", detail: "手机或手表录音，本机转写后确认", icon: .symbol(Theme.Icon.recording), kind: .attach))
         return out
     }
 
@@ -180,19 +181,29 @@ final class Dictation {
     @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
     @ObservationIgnored private var task: SFSpeechRecognitionTask?
     @ObservationIgnored private var update: ((String) -> Void)?
+    @ObservationIgnored private let microphoneOwner = UUID()
+    @ObservationIgnored private var listeningRun = UUID()
 
     /// Starts listening; `update` gets the whole transcript so far. Returns what went wrong, if it could not start.
     func start(update: @escaping (String) -> Void) async -> String? {
+        #if os(iOS)
+        guard RecordingCapture.shared.state == .idle else { return "录音正在进行，请先结束录音再听写" }
+        #endif
         guard await Self.allowed() else { return "没有麦克风或语音识别的权限，可以到 设置 › Jarvis 打开" }
+        #if os(iOS)
+        guard RecordingCapture.shared.state == .idle else { return "录音正在进行，请先结束录音再听写" }
+        #endif
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")), recognizer.isAvailable else {
             return "语音识别现在用不了"
         }
+        guard RecordingMicrophone.shared.claim(microphoneOwner) else { return "麦克风正在使用，请先结束录音或听写" }
         #if os(iOS) // a Mac has no audio session to configure: the engine takes the input as it is
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
+            RecordingMicrophone.shared.release(microphoneOwner)
             return "麦克风打不开"
         }
         #endif
@@ -203,22 +214,30 @@ final class Dictation {
         engine.prepare()
         do { try engine.start() } catch {
             engine.inputNode.removeTap(onBus: 0)
+            #if os(iOS)
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            #endif
+            RecordingMicrophone.shared.release(microphoneOwner)
             return "麦克风打不开"
         }
         self.engine = engine
         self.request = request
         self.update = update
         isListening = true
+        listeningRun = UUID(); let run = listeningRun
         task = Self.recognize(recognizer, request) { [weak self] heard, done in
             Task { @MainActor in
-                if let heard { self?.update?(heard) }
-                if done { self?.stop() }
+                guard let self, self.listeningRun == run else { return }
+                if let heard { self.update?(heard) }
+                if done { self.stop() }
             }
         }
         return nil
     }
 
     func stop() {
+        guard RecordingMicrophone.shared.release(microphoneOwner) else { return }
+        listeningRun = UUID()
         engine?.stop()
         engine?.inputNode.removeTap(onBus: 0)
         request?.endAudio()

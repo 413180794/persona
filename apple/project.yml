@@ -109,7 +109,7 @@ targets:
         # iPad: every orientation (Split View and Stage Manager need it).
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
                                                 UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
-        UIBackgroundModes: [remote-notification]
+        UIBackgroundModes: [remote-notification, audio]
         # Push relay (docs/push-relay.md): where the app registers for pushes from hubs without the app's APNs key
         # (config.json app.push_relay; empty: none), and the keychain group it shares with JarvisNotify.
         # The groups' prefix is the team, not $(AppIdentifierPrefix): that one is only set when Xcode signs, and an
@@ -134,7 +134,7 @@ targets:
         NSHealthUpdateUsageDescription: "Jarvis only reads health data and never writes it; if a future version saves data, for example a workout Claude logs for you, it will ask here first."
         NSPhotoLibraryUsageDescription: "Jarvis lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
         NSPhotoLibraryAddUsageDescription: "Jarvis saves images Claude produces to your library when you ask, for example a chart it generated."
-        NSMicrophoneUsageDescription: "Jarvis uses the microphone for voice input when you hold the mic button, for example to dictate a message to Claude while walking."
+        NSMicrophoneUsageDescription: "Jarvis records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
         NSSpeechRecognitionUsageDescription: "Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # The native macOS app (docs/mac.md): the iOS app's logic and content views, compiled for macOS, inside a Mac
   # shell (Mac/): windows, sidebar, toolbar, menus, keyboard shortcuts, Settings, the menu bar. iOS-only parts are
@@ -209,7 +209,7 @@ targets:
         NSLocationUsageDescription: "Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
         NSPhotoLibraryUsageDescription: "Jarvis lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
         NSPhotoLibraryAddUsageDescription: "Jarvis saves images Claude produces to your library when you ask, for example a chart it generated."
-        NSMicrophoneUsageDescription: "Jarvis uses the microphone for voice input when you hold the mic button, for example to dictate a message to Claude while walking."
+        NSMicrophoneUsageDescription: "Jarvis records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
         NSSpeechRecognitionUsageDescription: "Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # Draws the Fleet Live Activity. The app starts it and reports its tokens; the hub pushes its content.
   JarvisWidgets:
