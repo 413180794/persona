@@ -216,6 +216,7 @@ export interface MenuItem {
   label: string;
   hint?: string;
   icon?: IconName;
+  state?: AgentState;
   checked?: boolean;
   danger?: boolean;
   disabled?: boolean;
@@ -249,11 +250,12 @@ export function Menu({
     if (!anchor || !ref.current) return;
     const r = anchor.getBoundingClientRect();
     const h = ref.current.offsetHeight;
-    const left = align === "left" ? r.left : r.right - width;
+    const menuWidth = Math.min(width, innerWidth - 16);
+    const left = align === "left" ? r.left : r.right - menuWidth;
     let top = side === "bottom" ? r.bottom + 6 : r.top - h - 6;
     if (side === "bottom" && top + h > innerHeight - 8) top = r.top - h - 6;
     if (top < 8) top = 8;
-    setPos({ left: Math.max(8, Math.min(left, innerWidth - width - 8)), top, width });
+    setPos({ left: Math.max(8, Math.min(left, innerWidth - menuWidth - 8)), top, width: menuWidth });
   }, [anchor, align, side, width, items.length]);
 
   useLayoutEffect(() => {
@@ -316,6 +318,7 @@ export function Menu({
             }}
             role="menuitem"
             type="button"
+            title={it.state ? `${it.label} · ${STATE_LABEL[it.state]}` : undefined}
             disabled={it.disabled}
             onMouseEnter={() => !it.disabled && setActive(i)}
             onClick={() => {
@@ -327,8 +330,10 @@ export function Menu({
               it.danger ? "text-red" : "text-ink",
             )}
           >
+            {it.state && <StatusDot state={it.state} />}
             {it.icon && <Icon name={it.icon} size={14} className={it.danger ? "" : "text-ink-3"} />}
             <span className="min-w-0 flex-1 truncate">{it.label}</span>
+            {it.state && <StatePill state={it.state} />}
             {it.hint && <span className="shrink-0 text-[11px] text-ink-3">{it.hint}</span>}
             {it.checked !== undefined && <Icon name="check" size={13} stroke={2.5} className={it.checked ? "text-ink" : "invisible"} />}
           </button>
@@ -343,7 +348,10 @@ export function useMenu() {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return {
     anchor,
-    open: (e: React.MouseEvent<HTMLElement>) => setAnchor((a) => (a ? null : e.currentTarget)),
+    open: (e: React.MouseEvent<HTMLElement>) => {
+      const target = e.currentTarget;
+      setAnchor((a) => (a ? null : target));
+    },
     close: () => setAnchor(null),
   };
 }

@@ -360,12 +360,18 @@ function Header({
           anchor={tabs.anchor}
           onClose={tabs.close}
           align="right"
-          width={260}
+          width={360}
           header={session?.space_name ? `空间 ${session.space_name}` : undefined}
           items={siblings
             .slice()
             .sort((a, b) => (a.slot_index ?? 0) - (b.slot_index ?? 0))
-            .map((s) => ({ key: s.session_id, label: `${tabLabel(s) || sessionTitle(s)} · ${sessionTitle(s)}`, checked: s.session_id === session?.session_id, onSelect: () => navigate({ name: "session", mid: s.machine_id, sid: s.session_id }) }))}
+            .map((s) => ({
+              key: s.session_id,
+              label: `${tabLabel(s) || sessionTitle(s)} · ${sessionTitle(s)}`,
+              state: stateOf(s),
+              checked: s.session_id === session?.session_id,
+              onSelect: () => navigate({ name: "session", mid: s.machine_id, sid: s.session_id }),
+            }))}
         />
       )}
       {items.length > 0 && <IconButton icon="more" label="更多" onClick={menu.open} active={Boolean(menu.anchor)} />}
