@@ -347,7 +347,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 118 条 [x]、104 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 123 条 [x]、99 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 
@@ -426,9 +426,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：共用逻辑（PinsStore、togglePin / toggleMute），Mac 的菜单调同一组函数，`MacAttention` 的测试覆盖屏蔽对 Dock 角标的影响，体验数据的置顶空间显示为置顶；没对真 hub 跑过。
 - [x] Badges: 「⟳ 下次 12:20」 loop, 「⚙ 后台 N」, 「👥 子 Agent N」, muted 🔕 styling — ChatsView.swift (SessionRow)
   - Mac（2026-11-01 核对）：清单写旧了：现在列表行（iOS 也一样）不再带循环 / 后台 chip，挪到了对话页顶上的 `ActivityChips`，Mac 上看到「⚙ 1」；屏蔽的 🔕 和淡化在共用的 SlotRow 里（读代码，体验数据没有屏蔽的 Agent），子 Agent 没截。
-- [ ] Machine filter menu, 「机器」 entry, 新建会话 button — ChatsView.swift (TopBar), AgentsMenus.swift
-  - 要到 Mac 前看：打开工具栏的 ≡ 菜单选一台机器筛，再点「机器」（2026-11-01 起原来的「机器监控」并进了机器页）。菜单按钮和新建会话按钮截图里都在；Mac 上它也是侧栏的「机器」。
+- [x] Machine filter menu, 「机器」 entry, 新建会话 button — ChatsView.swift (TopBar), AgentsMenus.swift
   - Mac（2026-11-02 Mac mini 真窗口，#483 的修复构建）：≡ 菜单里有分组 / 显示 / 全部折叠 / 全部展开 / 机器 › / 机器；机器 › 选 Mac Studio 后按钮变成「Mac Studio ⌄」、列表只剩它的空间；假 hub 持续推送时菜单开着不跳。还剩：菜单里的「机器」、新建会话按钮。
+  - Mac（2026-11-02 Mac mini 真窗口核对，master 含 #483）：≡ 菜单的「机器」在 Agents 的详情栏打开机器页；工具栏的「新建会话」打开「新对话」sheet（机器卡片、目录、启动器、权限与思考）。
 - [x] Connection status in title slot — Views/ConnectionTitle.swift
   - Mac（2026-11-01 核对）截图（`-showConnection connecting`）：列表栏标题位置是「连接中…」加转圈，侧栏底部也有。
 - [x] Pull to refresh — ChatsView.swift
@@ -453,12 +453,14 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-02 Mac mini 真窗口核对）：隐藏侧边栏、窗口 820 宽时七列表放不下，被截在右边，横向滚轮能滚到「数据来源」那列；三列表按宽度换行排开。
 - [x] Line model: one turn → message / work line / answer; work line counts & duration; split merged messages — Views/Chat/ChatLines.swift, ChatView.swift (WorkLine, WorkStepView, WorkCardSlice)
   - Mac（2026-11-01 核对）截图：工作行带步数和时长，大会话的 763 步折成一行；ChatLines 是共用代码。
-- [ ] Work trace expand/collapse in place (timeline style for glass, card style for others), 「收起 N 步」, pin tapped row under finger — ChatView.swift, Views/Chat/ChatPin.swift
-  - 要到 Mac 前看：点工作行展开 / 收起，点的那一行留在指针下面（Mac 的 ChatPin）。`-openWork` 截图里玻璃的时间线样式、黏土的卡片样式和「收起 N 步」都对。
+- [x] Work trace expand/collapse in place (timeline style for glass, card style for others), 「收起 N 步」, pin tapped row under finger — ChatView.swift, Views/Chat/ChatPin.swift
+  - Mac（2026-11-02 Mac mini 真窗口核对）：长对话（`MOCK_LONG_HISTORY=1`）里真点工作行：原地展开成时间线，被点的那行留在指针下面不动，再点收起也不动（不满一屏的短对话贴底排，钉不住是预期）。
 - [ ] Tool views: tool groups, tool call rows, detail, Bash command/output, full output sheet, TodoWrite list, base64 images, folded work row — Views/Chat/ToolViews.swift
   - 要到 Mac 前看：点开「完整输出」的 sheet（`-showFullOutput sheet` 没打开）。新开关 `-showToolDetails YES`（只在 Mac 的 DEBUG，已加进 release.sh 的列表）把每个工具行展开，截图里 TodoWrite、Bash 输出、搜索 / 读取详情、base64 图片、折叠行都对。
+  - Mac（2026-11-02 Mac mini 真窗口）：「已截断，看全文（22 KB）」打开的「工具输出」sheet 只有 470×113、内容是空的（`GET …/full` 发了），见 #508。
 - [ ] Unified DiffView (Edit/MultiEdit/Write + Codex unified diff), +N −N, 40-line truncation, horizontal scroll — ToolViews.swift (DiffView), Views/Session/GitPane.swift (DiffText)
   - Mac（2026-11-01 核对）：截图里只看到 Edit 的标题（+6）和一行红色删除行，在画面底边被截掉，没看到绿色新增行；40 行截断、横向滚动、Codex 的 unified diff 都没跑到。
+  - Mac（2026-11-02 Mac mini 真窗口）：Edit 展开后 +6 −3、红色删除行、绿色新增行都在。删除行的底色只铺到文字后面、新增行铺到右边，两种宽度不一致（iOS 没看）。还剩 40 行截断、横向滚动、Codex 的 unified diff。
 - [ ] BeautifulUI style: ThinkingState, tool-run chips (ToolRunRow/ToolChipRow) — ToolViews.swift, Views/BeautifulUIBridge.swift, Packages/BeautifulUI
   - 要到 Mac 前看：BeautifulUI 风格下最后一条回复被输入栏盖住一截（截图里看到，像是真 bug，要改 ChatView.swift），以及 ThinkingState。工具运行 chip 和输入栏截图里画出来了。
   - Mac（2026-11-02 Mac mini 真窗口）：BeautifulUI 风格下两个对话的最后一条回复都完整露在输入栏 / 提问卡片上方，没被盖住（原来那张多半是离屏截图的问题）。还剩 ThinkingState（要正在思考的会话，`MOCK_STREAM=1`）。
@@ -469,16 +471,17 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] API error card (human explanation, chips, details copyable, folded repeats, 重试) — Views/Chat/APIErrorCard.swift
   - Mac（2026-11-01 核对）：401 卡片截图看过（白话说明、401 / 要处理 chip、请求 ID 和原文、复制原文）；连续 502 折成「连续 3 次」带重试的那张没截到。
   - Mac（2026-11-02 核对）假 hub（`MOCK_API_ERRORS=1`）离屏截图：主对话里同样的 502 三次折成一张卡片：「推理服务暂时没有可用的 GPU」、502 / 临时故障 / 连续 3 次 chip、「重试」按钮（没点）。
-- [ ] Claude suggestion pill (填入 / 直接发送) — ChatView.swift (SuggestionPill)
-  - 要到 Mac 前看：点建议是否填进输入框，右键 › 直接发送 是否发出。建议胶囊截图里画出来了。
+- [x] Claude suggestion pill (填入 / 直接发送) — ChatView.swift (SuggestionPill)
+  - Mac（2026-11-02 Mac mini 真窗口核对，`MOCK_SUGGESTION=1`）：点建议胶囊填进输入框（发送键亮起、胶囊收起）；清空后胶囊回来，右键 › 直接发送 / 填入输入框，直接发送后假 hub 收到 `POST …/messages`。
 - [ ] Inverted list, follow-end logic, frozen inserts while reading history, ↓ jump button, landing position (landUnderInput / saved position), turn-based pagination (turns=2) with auto-load at top — ChatView.swift (ChatStreamFollow), Shared/ChatStore.swift
   - 要到 Mac 前看：往上翻历史时 ↓ 按钮和 ⌘↓、翻到顶自动加载、加载时位置不跳。都要真滚动，离屏截图驱动不了。
+  - Mac（2026-11-02 Mac mini 真窗口）：往上翻历史出现 ↓，⌘↓ 回到最新。假 hub 一次返回了全部历史，翻到顶的自动加载没触发；读历史时新内容插入（`MOCK_STREAM=1`）没测。
 - [ ] Local chat cache (last 2 turns per chat, 6 MB) + chats-v2 disk cache — Shared/StateCache.swift, Shared/ChatStore.swift
   - Mac（2026-11-01 核对）：「重启后缓存的内容又出现、`-openChatsFresh` 能清掉」只有口述，没留下截图或日志；每个对话 2 轮、6 MB 的上限没跑到，只是共用代码。
 - [ ] Lazy images on scroll with memory + disk cache — Views/Chat/ChatImageLoader.swift (ChatThumbnail)
   - Mac（2026-11-01 核对）：只看到一张工具行里的图片解码显示；滚动时按需拉取、内存 / 磁盘缓存都没跑到。
-- [ ] Collapsing self-drawn header (ChromeHeader: title, subtitle state·machine·space›tab, sibling row, loop/background chips), follows finger, auto-collapse after 3s idle — ChatView.swift
-  - 要到 Mac 前看：用触控板 / 滚轮滚时标题跟着收起，点收起后的胶囊能展开。完整标题（标题、副标题、同空间标签、循环 / 后台 chip、⋯）和翻到最新时收成胶囊截图里都对。
+- [x] Collapsing self-drawn header (ChromeHeader: title, subtitle state·machine·space›tab, sibling row, loop/background chips), follows finger, auto-collapse after 3s idle — ChatView.swift
+  - Mac（2026-11-02 Mac mini 真窗口核对）：往上滚时顶栏展开成完整版（标题、状态 · 机器 · 空间、同空间胶囊、⋯、循环 / 后台 chip），停下 3 秒收回胶囊，点胶囊展开。
 - [x] Session info sheet (run / usage / location, copy id, copy resume command) — ChatView.swift (SessionInfoSheet)。Mac：对话右侧的检查器栏（⌥⌘I / 点标题），Jarvis 页是窗口 sheet
 - [x] ⋯ menu: 终端, 文件, Git (N), 空间里的所有 Agent, 重命名…, 屏蔽, 拷贝 session id, 拷贝恢复命令, 清空上下文 /clear, 关闭 Agent… — ChatView.swift
   - Mac（2026-11-02 Mac mini 真窗口核对）：对话 ⋯：终端、Git（N）、文件、中断（工作中才有）、重命名…、屏蔽通知、拷贝恢复命令、拷贝目录、空间里的所有 Agent、关闭 Agent…；在文件 / Git 面板里多一项「回到对话」。清单写旧了：「清空上下文 /clear」现在在输入框 + › 快捷指令里（能清的时候才有），「拷贝 session id」在会话信息里（iOS 同一份代码）。和行菜单同名的几项走同一组函数，在行菜单里逐项点过（见上面 Swipe 那条）。
@@ -501,9 +504,10 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Skeleton / starting note (「正在启动…」, 「没有启动起来」) — ChatView.swift (ChatSkeleton, StartingNote)
   - 要到 Mac 前看：打开一个还没加载过的对话、新起一个 Agent，看「正在启动…」和失败时的「没有启动起来」。本地假 hub 加载太快，`-openChatsFresh` 加 DELAY 2 也没截到。
   - Mac（2026-11-02 核对）：`MOCK_DELAY=4` + `-openChatsFresh` 离屏截到骨架屏（几条灰条，标题「对话 · 连接中…」）。还剩「正在启动…」「没有启动起来」（要新起一个 Agent）。
+  - Mac（2026-11-02 Mac mini 真窗口）：新对话 › 开始对话后，对话页空状态「还没有消息」，输入框上方「正在启动 Claude，消息会在它就绪后发出」。还剩「没有启动起来」。
 - [ ] Long-press message action bar: 复制 / 选择 / 引用 / 分享 / 编辑 (own); select-text sheet — Views/Chat/MessageMenu.swift
   - 要到 Mac 前看：右键一条消息打开操作条，自己的消息上有「编辑」，「选择」打开选字 sheet。`-showMenu`（DELAY 11 秒左右）截图里操作条画出来了。
-  - Mac（2026-11-02 Mac mini 真窗口）：操作条由真的右键触发（`LongPressAt` 的 rightMouseDown / Up）；辅助功能的 AXShowMenu 和后台发的右键都不触发，前台右键试了两次没出来，没查完（当时桌面有人在用，先停了）。
+  - Mac（2026-11-02 Mac mini 真窗口）：在消息上真的右键、Control-点击都不出操作条（同一窗口里列表行的右键菜单正常），见 #501。分享卡片（下一条）的入口在操作条上，也跟着挡住。
 - [ ] Share card image (light/dark, save to Photos, share image/text) — Views/Chat/ShareCard.swift
   - 要到 Mac 前看：分享卡片里存到照片（会弹权限）和分享图片 / 文字。`-showShareCard` 截图里卡片画出来了。
 - [ ] Image viewer (all chat images, paging, zoom, save/edit/share/copy) — Views/Chat/ImageViewer.swift
@@ -511,9 +515,10 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-02 核对）：`MOCK_CHAT_IMAGES=1 -openFirstImage YES` 离屏截图：查看器、✕、保存 / 编辑 / 分享 / 拷贝都在。还剩翻页、缩放、保存（要真窗口）。
 - [x] Image editor (box / pen, 6 colors, undo/clear, 加到输入框) — Views/Chat/ImageEditor.swift
   - Mac（2026-11-01 核对）：`-openEditor YES` 原来只在 iOS 有钩子，`ImageViewer.swift` 的 macOS 分支补上后截图看到框 / 笔、6 个颜色、撤销 / 清除、加到输入框。用鼠标画、把标记画进图片（macOS 的 NSImage 分支）还要到 Mac 前试。
-- [ ] File path chips (verified via /stat), tool-row paths clickable — Views/Chat/FileViewer.swift (FileChips, LookUpFiles), Code/FilePresence.swift
+- [x] File path chips (verified via /stat), tool-row paths clickable — Views/Chat/FileViewer.swift (FileChips, LookUpFiles), Code/FilePresence.swift
   - Mac（2026-11-01 核对）：读取行的路径显示成链接；存在的路径变卡片、不存在的不变，在 §8 FilePresence 那张截图里看到，这一条自己的截图没拍到不存在的那一边，点卡片 / 链接也没试。
   - Mac（2026-11-02 Mac mini 真窗口）：BeautifulUI 风格下回复里存在的 6 个路径都成了文件 chip，不存在的两个保持文字。还剩点 chip / 链接。
+  - Mac（2026-11-02 Mac mini 真窗口核对）：点回复里的文件 chip、工具行展开后的「查看文件」都打开文件查看器（假 hub `GET …/file`）。
 - [ ] Context reference cards in bubbles (`<jarvis-context>`) — Views/Link/LinkSheet.swift (ContextCards, ContextChips)
   - 要到 Mac 前看：在链接面板里选字「作为上下文」后发出，看气泡里的引用卡片。`-openSendMessage` 发了一条带 `<jarvis-context>` 的消息，但截图里没出现这条消息。
   - Mac（2026-11-02 Mac mini 真窗口）：行菜单「交给 Jarvis」发出的消息气泡里有引用卡片（上下文 · Agent · 标题，机器 / 会话 / 目录）。还剩链接面板选字「作为上下文」那条路径。
