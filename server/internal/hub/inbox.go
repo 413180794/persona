@@ -93,6 +93,7 @@ type InboxLark struct {
 	IsGroup         bool   `json:"is_group"`
 	IsTopic         bool   `json:"is_topic,omitempty"`
 	StartPosition   string `json:"start_position,omitempty"`   // the first new message (open the chat there)
+	ReadPosition    string `json:"read_position,omitempty"`    // the chat's read position in Feishu, as of the last collection
 	MentionPosition string `json:"mention_position,omitempty"` // the unread @me
 	AtAll           bool   `json:"at_all,omitempty"`
 }
@@ -406,6 +407,11 @@ func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversatio
 		open, done := b.openFor(func(it *InboxItem) bool { return it.Lark != nil && it.Lark.FeedID == c.ID })
 		unchanged := open != nil && open.UpdatedAt.Equal(c.UpdatedAt) && open.Count >= c.Unread && !open.Read ||
 			open == nil && done != nil && !c.UpdatedAt.After(done.UpdatedAt) // done here, still unread in Feishu
+		if unchanged && open != nil && lark-connector.ReadPosition != c.ReadPosition {
+			// Read further elsewhere with nothing new: only the read position moves.
+			lark-connector.ReadPosition = c.ReadPosition
+			changed = append(changed, open)
+		}
 		b.mu.Unlock()
 		if unchanged {
 			continue
@@ -456,6 +462,7 @@ func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversatio
 		}
 		it.Title, it.Avatar = c.Name, c.Avatar
 		it.Lark.IsGroup, it.Lark.IsTopic, it.Lark.AtAll = c.IsGroup, c.IsTopic, c.AtAll
+		it.Lark.ReadPosition = c.ReadPosition
 		if c.MentionAt != "" {
 			it.Lark.MentionPosition = c.MentionAt
 		}

@@ -86,6 +86,36 @@ func TestInboxJudgeModelFailureRetries(t *testing.T) {
 	}
 }
 
+// An agent runtime that is already running answers before startInboxAgent has recorded the conversation: the draft
+// waits for it instead of failing.
+func TestInboxDraftBeforeTheStartReturned(t *testing.T) {
+	h := agentHub(t)
+	it := actionItem("x", time.Now())
+	it.Agent = &InboxAgent{State: AgentRunning, Task: "t"} // starting: no conversation yet
+	h.inbox.items[it.ID] = it
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		h.inbox.mu.Lock()
+		it.Agent.SessionID = "session-r1"
+		h.inbox.mu.Unlock()
+	}()
+	if _, err := h.toolInboxDraft(context.Background(), "session-r1", json.RawMessage(`{"text":"好的"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if it.Agent.State != AgentDrafted || it.Agent.Draft != "好的" {
+		t.Fatalf("agent = %+v", it.Agent)
+	}
+	old := inboxDraftWait
+	inboxDraftWait = 200 * time.Millisecond
+	t.Cleanup(func() { inboxDraftWait = old })
+	other := actionItem("y", time.Now())
+	other.Agent = &InboxAgent{State: AgentRunning}
+	h.inbox.items[other.ID] = other
+	if _, err := h.toolInboxDraft(context.Background(), "session-nobody", json.RawMessage(`{"text":"hi"}`)); err == nil {
+		t.Fatal("a conversation no item gets drafted")
+	}
+}
+
 func TestInboxDraftTool(t *testing.T) {
 	h := agentHub(t)
 	it := actionItem("x", time.Now())

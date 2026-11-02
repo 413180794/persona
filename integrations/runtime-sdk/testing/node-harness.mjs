@@ -29,6 +29,9 @@ export async function startNode({ jarvisd, keep = false, home: given, env = {} }
   const h = { root, home, runtimeSocket: join(home, '.jarvis', 'runtime.sock'), events: [], asked: [], log }
   h.resolve = () => ({ dismiss: true }) // how the "phone" answers interaction cards
   h.tools = [] // the hub's tools (mcp.tools), and how a call of one is answered (mcp.call)
+  h.assistantTools = [] // listed besides h.tools when the node asks for the assistant's
+  h.assistantContext = () => '' // the live snapshot the hub gives an assistant conversation's next message
+  h.lark = {} // lark-connector's config for the assistant (assistant.lark)
   h.toolCalls = []
   h.callTool = (params) => ({ content: [{ type: 'text', text: `${params.name} ran` }], is_error: false })
   h.hub = new Peer(stdio, {
@@ -42,7 +45,11 @@ export async function startNode({ jarvisd, keep = false, home: given, env = {} }
           h.asked.push(params.interaction)
           return h.resolve(params.interaction)
         case 'mcp.tools':
-          return { tools: h.tools }
+          return { tools: params?.assistant ? [...h.tools, ...h.assistantTools] : h.tools }
+        case 'assistant.context':
+          return { text: h.assistantContext(params?.session_id) }
+        case 'assistant.lark':
+          return h.lark
         case 'mcp.call':
           h.toolCalls.push(params)
           return h.callTool(params)

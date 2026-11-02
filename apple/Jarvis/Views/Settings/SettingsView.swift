@@ -15,7 +15,7 @@ struct SettingsView: View {
     private var hubSummary: String {
         guard let s = model.hubUpdate else { return "" }
         if s.working { return s.stateTitle }
-        if s.installable { return "有新版本" }
+        if s.latest?.newer == true { return s.channel == "docker" ? "有新镜像" : "有新版本" }
         return s.version
     }
 

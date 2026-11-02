@@ -212,16 +212,47 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		if n == nil || n.peer == nil {
 			return map[string]any{"tools": []proto.Tool{}}, nil
 		}
-		var res json.RawMessage
-		err := n.peer.Call(ctx, "mcp.tools", map[string]any{}, &res)
-		return res, err
+		// The assistant's tools (ask_user, schedule_followup…) only for a runtime that runs the assistant, with the
+		// node's own lark-connector among them (assistant_runtime.go).
+		var p struct {
+			Assistant bool `json:"assistant"`
+		}
+		_ = json.Unmarshal(params, &p)
+		assistant := p.Assistant && h.assistant()
+		var res struct {
+			Tools []proto.Tool `json:"tools"`
+		}
+		if err := n.peer.Call(ctx, "mcp.tools", map[string]any{"assistant": assistant}, &res); err != nil {
+			return nil, err
+		}
+		if assistant && n.lark-connectorAvailable() {
+			res.Tools = append(res.Tools, lark-connectorToolDef())
+		}
+		if res.Tools == nil {
+			res.Tools = []proto.Tool{}
+		}
+		return res, nil
 	case "mcp.call":
 		n := rh.current()
 		if n == nil || n.peer == nil {
 			return proto.TextResult("Jarvis hub is not connected", true), nil
 		}
+		var p struct {
+			Name      string          `json:"name"`
+			Args      json.RawMessage `json:"args"`
+			SessionID string          `json:"session_id"`
+			Assistant bool            `json:"assistant"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, fmt.Errorf("bad mcp.call: %w", err)
+		}
+		// As the assistant only for one of the assistant's conversations that this runtime runs.
+		assistant := p.Assistant && h.assistant() && rh.reg.owns(h, p.SessionID) && n.isAssistantSession(p.SessionID)
+		if assistant && p.Name == lark-connectorTool {
+			return n.assistantlark-connector(ctx, p.SessionID, p.Args), nil
+		}
 		var res json.RawMessage
-		err := n.peer.Call(ctx, "mcp.call", json.RawMessage(params), &res)
+		err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": p.Name, "args": p.Args, "session_id": p.SessionID, "assistant": assistant}, &res)
 		return res, err
 	}
 	return nil, fmt.Errorf("unknown method %s", method)

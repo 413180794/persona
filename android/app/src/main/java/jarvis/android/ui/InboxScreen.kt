@@ -68,6 +68,7 @@ import jarvis.android.ui.chat.ToastStyle
 import jarvis.android.ui.chat.Toasts
 import jarvis.android.ui.design.ButtonKind
 import jarvis.android.ui.design.Chip
+import jarvis.android.ui.design.CircleButton
 import jarvis.android.ui.design.ChipLook
 import jarvis.android.ui.design.ChoiceChip
 import jarvis.android.ui.design.CountBadge
@@ -115,6 +116,7 @@ fun InboxScreen(
     if (openedId == null) openedItem = null else items.firstOrNull { it.id == openedId }?.let { openedItem = it }
     val opened = openedItem?.takeIf { it.id == openedId }
     var sending by remember { mutableStateOf<InboxItem?>(null) }
+    var composing by remember { mutableStateOf<jarvis.android.mail.MailDraft?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { hub.loadInbox() }
 
@@ -123,7 +125,14 @@ fun InboxScreen(
     }
 
     Column(Modifier.fillMaxSize().background(JTheme.colors.page)) {
-        PageHeader("收件箱", onBack)
+        // 写邮件 (iOS: the ⋯ menu); mail accounts themselves are in 设置 › 连接器 › 邮箱.
+        val mailAccounts by jarvis.android.mail.MailStore.accounts.collectAsState()
+        LaunchedEffect(Unit) { runCatching { jarvis.android.mail.MailStore.reloadAccounts(hub.api) } }
+        PageHeader("收件箱", onBack, actions = {
+            mailAccounts?.firstOrNull()?.let { a ->
+                CircleButton(JIcons.compose, "写邮件", { composing = jarvis.android.mail.MailDraft(accountId = a.id) })
+            }
+        })
         Column(Modifier.fillMaxWidth().padding(bottom = JSpace.s), verticalArrangement = Arrangement.spacedBy(JSpace.m)) {
             SearchField(query, { query = it }, "搜索标题、发件人、内容", Modifier.padding(horizontal = JSpace.page))
             val filters = InboxFilter.available(items)
@@ -220,6 +229,7 @@ fun InboxScreen(
             )
         }
     }
+    composing?.let { d -> jarvis.android.ui.mail.ComposeMailDialog(hub.api, d, onDone = { composing = null }) }
     sending?.let { item ->
         ConfirmSend(item, item.agent?.draft.orEmpty(), onDismiss = { sending = null }) {
             sending = null
@@ -393,6 +403,7 @@ private fun InboxDetailBody(hub: Hub, item: InboxItem, modifier: Modifier, onDis
     var error by remember { mutableStateOf<String?>(null) }
     var confirmSend by remember { mutableStateOf(false) }
     var handingOff by remember { mutableStateOf(false) }
+    var composing by remember { mutableStateOf<jarvis.android.mail.MailDraft?>(null) }
     val scope = rememberCoroutineScope()
     val c = JTheme.colors
     LaunchedEffect(item.id) { runCatching { full = hub.api.inboxItem(item.id) } }
@@ -412,11 +423,16 @@ private fun InboxDetailBody(hub: Hub, item: InboxItem, modifier: Modifier, onDis
                     Text(linkified(it) { url -> jarvis.android.ui.web.Links.open(url, null) }, style = JTheme.type.body, color = c.label)
                 }
             }
-            val text = full?.context?.takeIf { it.isNotBlank() } ?: item.preview
-            Box(Modifier.fillMaxWidth().surface(RoundedCornerShape(JRadius.card)).heightIn(max = JSize.box280 + JSize.box120).verticalScroll(rememberScrollState()).padding(JSpace.m)) {
-                Text(linkified(text) { url -> jarvis.android.ui.web.Links.open(url, null) }, style = JTheme.type.secondary, color = c.label)
+            // A mail opens as the mail (iOS MailDetailView): the thread, its HTML, reply / forward, the star.
+            if (item.source == "mail" && item.mail != null) {
+                jarvis.android.ui.mail.MailThread(hub.api, item, onCompose = { composing = it })
+            } else {
+                val text = full?.context?.takeIf { it.isNotBlank() } ?: item.preview
+                Box(Modifier.fillMaxWidth().surface(RoundedCornerShape(JRadius.card)).heightIn(max = JSize.box280 + JSize.box120).verticalScroll(rememberScrollState()).padding(JSpace.m)) {
+                    Text(linkified(text) { url -> jarvis.android.ui.web.Links.open(url, null) }, style = JTheme.type.secondary, color = c.label)
+                }
+                if (full == null) CircularProgressIndicator(Modifier.size(JSize.markM), strokeWidth = JSize.rule, color = c.secondaryText)
             }
-            if (full == null) CircularProgressIndicator(Modifier.size(JSize.markM), strokeWidth = JSize.rule, color = c.secondaryText)
 
             SectionHeader("回复", modifier = Modifier.padding(start = 0.dp))
             item.agent?.note?.takeIf { it.isNotBlank() && item.agent.draft == draft }?.let {
@@ -444,6 +460,7 @@ private fun InboxDetailBody(hub: Hub, item: InboxItem, modifier: Modifier, onDis
             }
         }
     }
+    composing?.let { d -> jarvis.android.ui.mail.ComposeMailDialog(hub.api, d, onDone = { composing = null }) }
     if (handingOff) HandOffSheet(hub, full ?: item, onDismiss = { handingOff = false }, onSend = { handingOff = false; onHandOff(it) })
     if (confirmSend) ConfirmSend(item, draft, onDismiss = { confirmSend = false }) {
         confirmSend = false; busy = true; error = null

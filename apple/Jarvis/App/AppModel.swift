@@ -464,9 +464,11 @@ final class AppModel {
     /// This app's build (CFBundleVersion).
     static let appBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
     var hubCompat: HubCompat { HubCompat.of(hubHello, appBuild: Self.appBuild) }
-    /// The build (or problem) the user closed the line over the Agents list for (`HubNotice`). Written only on a tap.
-    var hubNoticeDismissed: Int64 = Int64(UserDefaults.standard.integer(forKey: "hubNotice.dismissed")) {
-        didSet { UserDefaults.standard.set(Int(hubNoticeDismissed), forKey: "hubNotice.dismissed") }
+    /// The lines over the Agents list the user closed (`HubNotice.dismissKey`), the last few. Written only on a tap.
+    private(set) var hubNoticeDismissed: [String] = UserDefaults.standard.stringArray(forKey: "hubNotice.dismissed") ?? []
+    func dismissHubNotice(_ key: String) {
+        hubNoticeDismissed = Array((hubNoticeDismissed.filter { $0 != key } + [key]).suffix(8))
+        UserDefaults.standard.set(hubNoticeDismissed, forKey: "hubNotice.dismissed")
     }
     /// The one line about the hub over the Agents list, if any (docs/hub-update.md「App 里」).
     var hubNotice: HubNotice? { isDemo ? nil : HubNotice.of(hubUpdate, compat: hubCompat, dismissed: hubNoticeDismissed) }

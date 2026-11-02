@@ -341,8 +341,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 	}
 	// A session of a runtime (runtimes.go): the runtime answers every call about it, also for an older session it no
-	// longer lists; one whose runtime is away is refused, never resumed in a terminal as a Claude session.
-	if h, err := n.runtimeFor(ctx, method, p.SessionID); err != nil {
+	// longer lists; one whose runtime is away is refused, never resumed in a terminal as a Claude session. An
+	// assistant conversation a runtime runs is the assistant's to send to, stop and set modes on (its snapshot and
+	// mode go with each message: assistant_runtime.go); the rest (pages, watch, images) is the runtime's.
+	if assistantCall[method] && n.runtimeAssistant(p.SessionID) {
+		// falls through to the assistant's branches below
+	} else if h, err := n.runtimeFor(ctx, method, p.SessionID); err != nil {
 		return nil, err
 	} else if h != nil {
 		if res, err, handled := n.runtimeHandle(ctx, h, method, params); handled {
@@ -731,6 +735,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		queue, err := n.editQueue(ctx, p.SessionID, a.Keep)
 		return map[string]any{"queue": queue}, err
 	case "session.close":
+		if n.runtimeAssistant(p.SessionID) { // the runtime keeps the conversation; a running turn stops, as a process would
+			if s, _, listed := n.runtimes.rowOf(p.SessionID); listed && s.Status == proto.StatusWorking {
+				_ = n.assistantInterruptRuntime(ctx, p.SessionID)
+			}
+			return ok(nil)
+		}
 		if n.isAssistantSession(p.SessionID) {
 			n.stopAssistant(p.SessionID)
 			return ok(nil)

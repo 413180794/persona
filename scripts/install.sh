@@ -6,9 +6,13 @@
 #
 # Puts the binary for this system at ~/.jarvis/bin/jarvisd (where the hub looks for it on every computer it reaches
 # over ssh), after checking it against the published SHA256SUMS. JARVIS_DL=<url> installs from somewhere else.
+# Then herdr (the default engine, docs/engines.md) if this computer has none: herdr's own installer puts it in
+# ~/.local/bin, where the node looks. JARVIS_SKIP_HERDR=1 leaves it out (Orca / Herdr App machines); a failed herdr
+# install only warns. scripts/ensure-herdr.sh does the same for deploy.sh: keep the two in step.
 set -eu
 
 DL="${JARVIS_DL:-@JARVIS_DL@}"
+HERDR_INSTALL="${JARVIS_HERDR_INSTALL:-https://herdr.dev/install.sh}"
 DEST="$HOME/.jarvis/bin"
 
 fail() {
@@ -64,5 +68,26 @@ case ":$PATH:" in
 *":$DEST:"*) ;;
 *) echo "(not on PATH: run it as $DEST/jarvisd, or add $DEST to PATH)" ;;
 esac
+
+# The places the node looks besides PATH (server/internal/node/node.go: ssh sessions get a minimal PATH).
+has_herdr() {
+	command -v herdr >/dev/null 2>&1 && return 0
+	for d in "$HOME/.local/bin" "$HOME/bin" /opt/homebrew/bin /usr/local/bin; do
+		[ -x "$d/herdr" ] && return 0
+	done
+	return 1
+}
+if [ "${JARVIS_SKIP_HERDR:-}" = 1 ]; then
+	:
+elif has_herdr; then
+	echo "herdr: already installed"
+else
+	echo "herdr: not found, installing it (JARVIS_SKIP_HERDR=1 skips this)"
+	if fetch "$HERDR_INSTALL" "$tmp/herdr-install.sh" && sh "$tmp/herdr-install.sh" && has_herdr; then
+		echo "herdr: installed"
+	else
+		echo "jarvisd: warning: could not install herdr; install it yourself (https://herdr.dev) before using Agents on this computer" >&2
+	fi
+fi
 echo "On the machine that runs the hub: jarvisd hub run (the first run writes ~/.jarvis/hub.json), then jarvisd hub pair."
 echo "Other computers only need the binary: the hub reaches them over ssh."

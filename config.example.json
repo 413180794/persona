@@ -38,6 +38,7 @@
   "simulator": "",
   "xcode": "",
   "android": {
-    "application_id": "com.example.jarvis"
+    "application_id": "com.example.jarvis",
+    "google_oauth_scheme": ""
   }
 }

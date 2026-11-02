@@ -22,6 +22,7 @@ type Build struct {
 	Channel   string // Release, Docker or Dev
 	Number    int64  // the build number: when it was built, UTC YYYYMMDDHHMM; 0 when unknown
 	UpdateURL string // where the publisher's dl/ is (latest.json); empty: nowhere to look
+	Image     string // the Docker image it was built as (ghcr.io/<owner>/<repo>): where a Docker hub looks for newer ones
 }
 
 // Make turns what the build wrote into the binary (-X main.version, main.channel, main.build, main.updateURL) into a

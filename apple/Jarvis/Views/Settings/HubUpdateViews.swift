@@ -211,14 +211,26 @@ struct HubSettingsPage: View {
 
     @ViewBuilder private func dockerRows(_ s: HubUpdateStatus) -> some View {
         if let l = s.latest, l.newer {
-            Text("有新镜像 \(l.version)。在 hub 所在的机器（NAS）上，compose 文件所在的目录里运行：").foregroundStyle(.secondary)
+            Text("新镜像 \(l.version)").font(Theme.Font.bodyStrong).lineLimit(1)
+            if let im = s.image, im.pinned {
+                // `pull` alone keeps the version the tag names: the tag changes first.
+                Text("在 hub 所在的机器（NAS）上，把 compose 文件旁边 .env 里的 JARVIS_IMAGE 改成：").foregroundStyle(.secondary)
+                copyRow(im.name + ":" + l.version)
+                Text("再在那个目录里运行：").foregroundStyle(.secondary)
+            } else {
+                Text("在 hub 所在的机器（NAS）上，compose 文件所在的目录里运行：").foregroundStyle(.secondary)
+            }
         } else {
-            Text("Docker 部署的 hub 由新镜像更新：在 compose 文件所在的目录里运行").foregroundStyle(.secondary)
+            Text("Docker 部署的 hub 由新镜像更新：有新镜像时在 compose 文件所在的目录里运行").foregroundStyle(.secondary)
         }
+        copyRow(Self.dockerCommand)
+    }
+
+    private func copyRow(_ text: String) -> some View {
         HStack {
-            Text(Self.dockerCommand).font(Theme.Font.code).lineLimit(1).minimumScaleFactor(0.7).textSelection(.enabled)
+            Text(text).font(Theme.Font.code).lineLimit(1).minimumScaleFactor(0.7).textSelection(.enabled)
             Spacer(minLength: Theme.Space.s)
-            Button { UIPasteboard.general.string = Self.dockerCommand; Haptics.success() } label: {
+            Button { UIPasteboard.general.string = text; Haptics.success() } label: {
                 Image(systemName: Theme.Icon.copy)
             }
             .buttonStyle(.borderless)
@@ -330,9 +342,10 @@ struct HubNoticeRow: View {
         case .appTooOld: "App 版本太旧，配不上这个 hub：请到 TestFlight 更新"
         case .hubTooOld: "hub 版本太旧，部分功能用不了"
         case .updating(let what): "hub 正在更新：" + what
-        case .rolledBack(let why): why
+        case .rolledBack(let why, _): why
         case .autoOn: "hub 会在空闲时自动更新"
         case .available(let v, _): "hub 有新版本 " + v
+        case .newImage(let v): "hub 有新镜像 " + v
         }
     }
 
@@ -355,22 +368,22 @@ struct HubNoticeRow: View {
         case .autoOn:
             Button("关闭") { Task { await HubUpdateModel().setAuto(false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.autoOff")
             Button("知道了") { Task { await HubUpdateModel().noticeSeen() } }.lineLimit(1).accessibilityIdentifier("hubNotice.seen")
-        case .available(_, let build):
+        case .available:
             Button("更新") { Task { await HubUpdateModel().update(now: false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.update")
-            dismiss(build)
-        case .rolledBack:
-            dismiss(model.hubUpdate?.latest?.build ?? 0)
-        case .hubTooOld:
-            dismiss(HubNotice.hubTooOldDismissed)
+            dismiss(n)
+        case .rolledBack, .hubTooOld, .newImage: // a Docker hub's new image: the page has the command to run
+            dismiss(n)
         case .appTooOld, .updating:
             EmptyView()
         }
     }
 
-    private func dismiss(_ value: Int64) -> some View {
-        Button { model.hubNoticeDismissed = value } label: { Image(systemName: Theme.Icon.close) }
-            .accessibilityLabel("不再提示")
-            .accessibilityIdentifier("hubNotice.dismiss")
+    @ViewBuilder private func dismiss(_ n: HubNotice) -> some View {
+        if let key = n.dismissKey {
+            Button { model.dismissHubNotice(key) } label: { Image(systemName: Theme.Icon.close) }
+                .accessibilityLabel("不再提示")
+                .accessibilityIdentifier("hubNotice.dismiss")
+        }
     }
 }
 

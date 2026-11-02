@@ -88,8 +88,10 @@ async function setup(t, opts = {}) {
     hasLiveClient: () => opts.liveClient ?? true,
     workspace: opts.workspace,
     registerTool: opts.registerTool,
+    agents: opts.agents,
+    permissionPresets: opts.permissionPresets,
   }, { socketPath: n.path, pushDelayMs: 5, retryMs: 20, interactions: opts.interactions, maxSessions: opts.maxSessions,
-    runtime: opts.runtime, name: opts.name, launcher: opts.launcher })
+    runtime: opts.runtime, name: opts.name, launcher: opts.launcher, assistant: opts.assistant, presets: opts.presets })
   t.after(() => rt.stop())
   return { n, ctl, ev, rt, answered }
 }
@@ -393,4 +395,92 @@ test('the hub\'s tools become DSH tools; a call goes through the node with the c
   assert.equal(registered.size, 1)
   rt.stop()
   assert.equal(registered.size, 0, 'stopping takes them off')
+})
+
+test('the assistant\'s conversations: hello says so, the snapshot goes first, the mode sets DSH\'s preset', async (t) => {
+  const set = []
+  const agents = { get: (id) => ({ session: { id } }) }
+  const permissionPresets = { set: (session, name) => set.push([session.id, name]) }
+  const { n, ctl, rt } = await setup(t, { assistant: true, agents, permissionPresets, liveClient: true })
+  rt.start()
+  await n.ready
+  assert.equal(n.hello.caps.assistant, true)
+  const { session } = await n.peer.call('session.start', { cwd: '/home/u/.jarvis/assistant', assistant: true })
+  const id = session.session_id
+  await n.peer.call('session.send', { session_id: id, text: 'hi', assistant: true, context: '<jarvis-context>\n- 现在：x\n</jarvis-context>', mode: 'plan', memory_dir: '/m' })
+  assert.deepEqual(ctl.prompts.at(-1).content.map((b) => b.text), ['<jarvis-context>\n- 现在：x\n</jarvis-context>', 'hi'])
+  assert.deepEqual(set, [[id, 'read-only']])
+  await n.peer.call('session.send', { session_id: id, text: 'again', assistant: true, mode: 'plan' })
+  assert.equal(set.length, 1, 'the same preset is not set twice')
+  await n.peer.call('session.send', { session_id: id, text: 'go', assistant: true, mode: 'bypassPermissions' })
+  assert.deepEqual(set.at(-1), [id, 'danger-full-access'])
+  // Without assistant the context is not used (another caller's message).
+  await n.peer.call('session.send', { session_id: 'session-x', text: 'plain', context: 'ignored' })
+  assert.deepEqual(ctl.prompts.at(-1).content.map((b) => b.text), ['plain'])
+})
+
+test('the assistant\'s approvals go to the phone even with the Web GUI open; its memory writes are not asked', async (t) => {
+  const { n, ctl, ev, rt } = await setup(t, { assistant: true, liveClient: true })
+  ctl.add('session-asst', { cwd: '/home/u/.jarvis/assistant' })
+  ctl.add('session-web', { cwd: '/w/app' })
+  rt.start()
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions')?.sessions.length === 2)
+  await n.peer.call('session.send', { session_id: 'session-asst', text: 'x', assistant: true, memory_dir: '/m/memory', mode: 'default' })
+  n.resolve = () => ({ allow: true })
+  const ask = (sid, callId) => ev.waterfall('approval/request', { agent: { session: { id: sid } }, toolName: 'bash', callId }, () => 'web-gui')
+  assert.equal(await ask('session-web', 'c0'), 'web-gui', 'a browser is open: the Web GUI asks for its own sessions')
+  assert.equal(await ask('session-asst', 'c1'), 'allowed-once')
+  assert.equal(n.asked.length, 1)
+  ev.emit('session/event', { id: 'session-asst' }, { type: 'assistant/message', seq: 5, data: { message: { content: [
+    { type: 'tool-call', id: 'w1', name: 'write', arguments: JSON.stringify({ file_path: '/m/memory/tea.md', content: 'x' }) },
+    { type: 'tool-call', id: 'w2', name: 'write', arguments: JSON.stringify({ file_path: '/m/other.md', content: 'x' }) },
+  ] } } })
+  assert.equal(await ask('session-asst', 'w1'), 'allowed-once')
+  assert.equal(n.asked.length, 1, 'a memory write is not asked')
+  assert.equal(await ask('session-asst', 'w2'), 'allowed-once')
+  assert.equal(n.asked.length, 2, 'a write elsewhere is')
+})
+
+test('ol in an assistant conversation\'s shell is stopped; elsewhere it runs as before', async (t) => {
+  const { n, ctl, ev, rt } = await setup(t, { assistant: true })
+  ctl.add('session-asst', { cwd: '/home/u/.jarvis/assistant' })
+  rt.start()
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions'))
+  const pre = (sid, command) => ev.waterfall('tools/pre-execute', { name: 'bash', arguments: { command }, agent: { session: { id: sid } } }, () => ({ kind: 'allow' }))
+  assert.equal((await pre('session-asst', 'ol GET /me')).kind, 'deny')
+  assert.equal((await pre('session-asst', 'bash ~/.jarvis/skills/lark-connector/scripts/ol.sh POST /x')).kind, 'deny')
+  assert.equal((await pre('session-asst', 'echo olive && ls')).kind, 'allow')
+  assert.equal((await pre('session-other', 'ol GET /me')).kind, 'allow')
+})
+
+test('the assistant\'s own tools are only for its conversations, called as the assistant\'s', async (t) => {
+  const registered = new Map()
+  const registerTool = (def, opts) => {
+    registered.set(def.name, { def, opts })
+    return () => registered.delete(def.name)
+  }
+  const n0 = { tools: [{ name: 'phone_contacts', description: 'Contacts', input_schema: { type: 'object' } }] }
+  const { n, ctl, rt } = await setup(t, { assistant: true, registerTool, tools: n0.tools })
+  ctl.add('session-asst', { cwd: '/home/u/.jarvis/assistant' })
+  n.tools = n0.tools
+  const plainTools = n0.tools
+  const withAssistant = [...plainTools, { name: 'ask_user', description: 'Ask', input_schema: { type: 'object' } }]
+  rt.start()
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions'))
+  // The fake node lists the same tools whatever is asked: make it answer as a hub does.
+  n.peer.onRequest = ((orig) => async (m, p) => (m === 'mcp.tools' ? { tools: p?.assistant ? withAssistant : plainTools } : orig(m, p)))(n.peer.onRequest)
+  await rt.refreshTools()
+  await until('registered', () => registered.size === 2)
+  const ask = registered.get('mcp__jarvis__ask_user')
+  assert.equal(typeof ask.opts?.when, 'function')
+  assert.equal(ask.opts.when({ agent: { session: { id: 'session-asst' } } }), true)
+  assert.equal(ask.opts.when({ agent: { session: { id: 'session-other' } } }), false)
+  assert.equal(registered.get('mcp__jarvis__phone_contacts').opts, undefined, 'the phone\'s tools are for every session')
+  await ask.def.execute({}, { agent: { session: { id: 'session-asst' } } })
+  assert.deepEqual(n.toolCalls.at(-1), { name: 'ask_user', args: {}, session_id: 'session-asst', assistant: true })
+  await registered.get('mcp__jarvis__phone_contacts').def.execute({}, { agent: { session: { id: 'session-other' } } })
+  assert.equal(n.toolCalls.at(-1).assistant, undefined)
 })

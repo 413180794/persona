@@ -145,6 +145,34 @@ rt.start()
 这些检查就是 `testing/conformance.mjs`：DSH（`integrations/dsh/e2e/run.mjs`，真的 `dsh web`）、pi（`integrations/pi/e2e/run.mjs`、
 `herdr.mjs`）的端到端都是「起宿主 + 开会话 + `conformance()` + 自己特有的几项」。
 
+## 助手（可选）
+
+runtime 可以当「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定时任务的后端（它们都走 node 的 `assistant.send`），和 Claude Code、Codex 并列：
+`createRuntime(…, {assistant: true})`（driver 要有 `start` 和 `send`）在 hello 里声明 `caps.assistant`，它的启动器在 `launchers.list` 里带
+`assistant: true`，App 的助手启动器里就有它（`Launcher.runsAssistant`），hub 也接受它做 `assistant.launcher`。助手的那一层留在 node
+（`server/internal/node/assistant_runtime.go`，代码里没有哪个 runtime 的名字）：对话的状态、每条消息开头的实时快照、权限模式、共用的记忆、
+飞书的 token 和闸门。node 用协议里本来就有的调用驱动它：
+
+| node 发 | 带的（都是可选字段，没声明 `caps.assistant` 的 runtime 收不到） |
+| --- | --- |
+| `session.start {cwd, assistant: true}` | `cwd` 是助手目录（`~/.jarvis/assistant`，里面有 `AGENTS.md` / `CLAUDE.md`、`.agents/skills/`），不带 `prompt` |
+| `session.send {session_id, text, images, client_msg_id, assistant: true, context, mode, memory_dir}` | `context`：放在用户的字前面交给模型的 `<jarvis-context>` 块（实时快照；新对话的第一条还有记忆和飞书的说明），聊天里不显示；`mode`：Jarvis 的权限模式（`default` / `acceptEdits` / `auto` / `plan` / `bypassPermissions`）；`memory_dir`：记忆目录 |
+| `session.interrupt` | 手机上的停止；关闭助手对话 = 停掉正在跑的这一轮，对话留在 runtime 里 |
+
+声明了 `caps.assistant` 的 runtime 要做到：
+
+1. **助手对话**（`assistant: true` 起的，或目录是助手目录的）的授权和提问一律先给手机（有 hub 时），不看本地界面开没开。
+2. `mcp.tools {assistant: true}` 拿到的工具（手机的、邮箱的，再加助手专用的 `ask_user`、`schedule_followup`…和 node 自己的 `lark-connector`）
+   挂给模型；助手专用的只给助手对话，调用时 `mcp.call {…, assistant: true}`。node 只在「这个 runtime 声明了助手、会话归它、是助手对话」时
+   当成助手的调用，否则照普通工具（助手专用的就没有）。
+3. 飞书一律走 `lark-connector` 工具：node 先过飞书闸门（读放行、会被别人看到的写在手机上确认、配置的规则拒绝），再在 node 上带 token 跑
+   lark-connector skill 的 `ol.sh`；token 不进 runtime。shell 里直接跑 `ol` 拦下并说明。
+4. `context` 放在用户的字前面交给模型，聊天里不显示（`<jarvis-context>` 不带属性的块；手机引用的上下文带属性，照常显示）。
+5. 按 `mode` 设自己的权限（计划 = 只读）；`memory_dir` 里的改动在非计划模式下不问。
+
+模型和思考强度由 runtime 自己定（DSH 在它的 Web GUI 里选），Jarvis 的模型配置对这种启动器不选具体模型。DSH 的做法见 `docs/dsh.md`「助手」，
+端到端 `integrations/dsh/e2e/assistant.mjs`。
+
 ## 现有的 runtime
 
 | runtime | 在哪 | 文档 |

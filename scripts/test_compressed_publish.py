@@ -14,7 +14,9 @@ assets = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(assets)
 
 
-class InstallCompressedTests(unittest.TestCase):
+class InstallTestCase(unittest.TestCase):
+    """install.sh against a fake download site: curl copies <url's file name> from downloads/ (to -o, or stdout)."""
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="jarvis-install-test-")
         self.addCleanup(self.temp.cleanup)
@@ -24,11 +26,15 @@ class InstallCompressedTests(unittest.TestCase):
         self.tools = self.root / "tools"
         for directory in (self.home, self.downloads, self.tools):
             directory.mkdir()
-        self.script("curl", '#!/bin/sh\n[ "$1" = "-fsSL" ] || exit 1\ncp "$TEST_DOWNLOADS/${2##*/}" "$4"\n')
+        self.script("curl", '#!/bin/sh\nout=-\nwhile [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift;; '
+                    '--connect-timeout|--max-time) shift;; -*) ;; *) url=$1;; esac; shift; done\n'
+                    'src="$TEST_DOWNLOADS/${url##*/}"\n[ -f "$src" ] || exit 22\n'
+                    'if [ "$out" = - ]; then cat "$src"; else cp "$src" "$out"; fi\n')
         self.script("uname", '#!/bin/sh\ncase "$1" in -s) printf "%s\\n" "$TEST_OS";; -m) printf "%s\\n" "$TEST_ARCH";; *) exit 1;; esac\n')
         self.env = {"PATH": str(self.tools) + os.pathsep + os.defpath, "HOME": str(self.home),
                     "TEST_DOWNLOADS": str(self.downloads), "TEST_OS": "Linux", "TEST_ARCH": "x86_64",
-                    "JARVIS_DL": "https://example.invalid/dl"}
+                    "JARVIS_DL": "https://example.invalid/dl", "JARVIS_SKIP_HERDR": "1",
+                    "JARVIS_HERDR_INSTALL": "https://example.invalid/herdr-install.sh"}
         self.binary = b"#!/bin/sh\nprintf '%s\\n' test-version\n"
         self.installed = self.home / ".jarvis/bin/jarvisd"
         self.installed.parent.mkdir(parents=True)
@@ -55,6 +61,8 @@ class InstallCompressedTests(unittest.TestCase):
         self.assertIn(message, result.stderr)
         self.assertEqual(self.installed.read_bytes(), b"previous-install")
 
+
+class InstallCompressedTests(InstallTestCase):
     def test_all_platforms_install_the_matching_compressed_binary(self):
         platforms = [("Linux", "x86_64", "linux-amd64"), ("Linux", "aarch64", "linux-arm64"),
                      ("Darwin", "x86_64", "darwin-amd64"), ("Darwin", "arm64", "darwin-arm64")]
@@ -89,6 +97,73 @@ class InstallCompressedTests(unittest.TestCase):
     def test_missing_download_does_not_install(self):
         self.artifact().unlink()
         self.assert_keeps_previous(self.run_install(), "could not download")
+
+
+class InstallHerdrTests(InstallTestCase):
+    """install.sh and ensure-herdr.sh add herdr when the computer has none; a failed herdr install only warns."""
+
+    def herdr_installer(self, ok=True):
+        body = ('#!/bin/sh\nmkdir -p "$HOME/.local/bin"\nprintf "#!/bin/sh\\n" > "$HOME/.local/bin/herdr"\n'
+                'chmod 755 "$HOME/.local/bin/herdr"\necho fake herdr installed\n') if ok else "#!/bin/sh\necho boom >&2\nexit 1\n"
+        (self.downloads / "herdr-install.sh").write_text(body)
+        self.env.pop("JARVIS_SKIP_HERDR")
+        self.artifact()
+
+    def herdr(self):
+        return self.home / ".local/bin/herdr"
+
+    def test_installs_herdr_when_missing(self):
+        self.herdr_installer()
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(os.access(self.herdr(), os.X_OK))
+        self.assertIn("herdr: installed", result.stdout)
+
+    def test_keeps_an_existing_herdr(self):
+        self.herdr_installer(ok=False)
+        self.script("herdr", "#!/bin/sh\n")
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("herdr: already installed", result.stdout)
+        self.assertFalse(self.herdr().exists())
+
+    def test_failed_herdr_install_still_installs_jarvisd(self):
+        self.herdr_installer(ok=False)
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.installed.read_bytes(), self.binary)
+        self.assertIn("could not install herdr", result.stderr)
+
+    def test_skip_leaves_herdr_out(self):
+        self.herdr_installer()
+        self.env["JARVIS_SKIP_HERDR"] = "1"
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(self.herdr().exists())
+        self.assertNotIn("herdr", result.stdout)
+
+    def run_ensure(self):
+        return subprocess.run(["/bin/sh", str(SCRIPTS / "ensure-herdr.sh")], env=self.env,
+                              cwd=self.root, capture_output=True, text=True, timeout=30)
+
+    def test_ensure_herdr_installs_when_missing(self):
+        self.herdr_installer()
+        result = self.run_ensure()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(os.access(self.herdr(), os.X_OK))
+        self.assertEqual(result.stdout.strip(), "herdr: installed")
+
+    def test_ensure_herdr_failure_only_warns(self):
+        self.herdr_installer(ok=False)
+        result = self.run_ensure()
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("could not install it", result.stderr)
+
+    def test_ensure_herdr_is_quiet_when_present(self):
+        self.herdr_installer(ok=False)
+        self.script("herdr", "#!/bin/sh\n")
+        result = self.run_ensure()
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
 
 class AssetSizeTests(unittest.TestCase):

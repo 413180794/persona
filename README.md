@@ -51,7 +51,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 | 东西 | 要求 |
 | --- | --- |
 | hub 机器 | 一台常开的机器，手机能访问它的 18660 端口（同一个网络或 VPN）。两种装法：Linux 上用原生二进制（docker 跑数据库 + systemd），或任何能跑 Docker 的机器（NAS 等）用 compose 跑 hub 和数据库（[docs/docker.md](docs/docker.md)） |
-| 电脑 | 装好 [herdr](https://herdr.dev) 和 Claude Code（或 Codex）的 Mac / Linux；hub 机器要能用 SSH 密钥免密码登录它们 |
+| 电脑 | 装好 Claude Code（或 Codex）的 Mac / Linux；hub 机器要能用 SSH 密钥免密码登录它们。[herdr](https://herdr.dev) 没装的话，部署 / 安装时会一起装上（`JARVIS_SKIP_HERDR=1` 跳过） |
 | iPhone | iOS 26；Apple Watch 需要 watchOS 26（可选） |
 | 开发机 | 一台装了 Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 的 Mac、Go 1.23+，用来编译服务端和 App |
 | Apple 开发者账号 | 自己编译安装 App 用；推送和 HealthKit 需要付费账号 |
@@ -64,7 +64,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 
 1. **写配置**：把 `config.example.json` 复制到 `~/.config/jarvis/config.json`，填上你的 bundle id、开发者团队、hub 在哪台机器、
    要接入哪些电脑。仓库里没有写死任何人的机器和账号，所有个人设置都在这份配置和 hub 的 `~/.jarvis/hub.json` 里。
-2. **部署服务端**：`./scripts/deploy.sh`。它会编译 `jarvisd`，装到每台电脑上，在 hub 机器上启动 Postgres 和 hub 服务。
+2. **部署服务端**：`./scripts/deploy.sh`。它会编译 `jarvisd`，装到每台电脑上（没有 herdr 的顺便装上），在 hub 机器上启动 Postgres 和 hub 服务。
    hub 想放在 NAS 上的话改用 Docker：`deploy/docker/compose.yaml`（[docs/docker.md](docs/docker.md)），`deploy.sh` 只用来往各台电脑装 `jarvisd`。
 3. **告诉 hub 接入哪些电脑**：在 hub 机器的 `~/.jarvis/hub.json` 里填上各台电脑和手机访问用的地址，然后重启 hub。
 4. **安装 App**：模拟器上跑 `./scripts/sim.sh`；装到真机就用 Xcode 打开生成的工程，或者用 `./scripts/release.sh` 发到你自己的

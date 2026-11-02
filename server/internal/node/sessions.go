@@ -527,6 +527,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 	}
 	for _, s := range n.runtimes.sessions() { // runtimes (runtimes.go): listed as they say
 		if !seen[s.SessionID] {
+			if n.runtimeAssistant(s.SessionID) { // the assistant keeps its mode (assistant_runtime.go)
+				s.PermissionMode = n.assistantModeOf(s.SessionID)
+			}
 			out = append(out, s)
 			seen[s.SessionID] = true
 		}

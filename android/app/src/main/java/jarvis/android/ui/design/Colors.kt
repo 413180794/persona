@@ -90,3 +90,20 @@ data class HueColors(val blue: Color, val orange: Color, val green: Color, val p
         else HueColors(hex(0x2E6FD0), hex(0xB35400), hex(0x1D7A4C), hex(0x7A5AF8))
     }
 }
+
+/**
+ * Other products' own colors where they mark their product (iOS `Theme.Brand`): Gmail's red and Feishu's blue on a
+ * mail account's mark, and Google's sign-in button as its branding guidelines draw it (developers.google.com/identity/
+ * branding-guidelines): the words on white with a gray outline in light, on near-black in dark; not the app's accent.
+ */
+@Immutable
+data class BrandColors(val gmail: Color, val feishu: Color, val googleFill: Color, val googleText: Color, val googleStroke: Color) {
+    companion object {
+        fun of(dark: Boolean) = BrandColors(
+            gmail = hex(0xEA4335), feishu = hex(0x3370FF),
+            googleFill = if (dark) hex(0x131314) else hex(0xFFFFFF),
+            googleText = if (dark) hex(0xE3E3E3) else hex(0x1F1F1F),
+            googleStroke = if (dark) hex(0x8E918F) else hex(0x747775),
+        )
+    }
+}

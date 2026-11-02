@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -79,6 +80,43 @@ func TestInboxLarkOneItemPerChatUntilDone(t *testing.T) {
 	ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone)
 	if len(ch) != 1 || ch[0].ID != "lark:f1:14" || ch[0].Count != 4 {
 		t.Fatalf("new item: %+v", ch)
+	}
+}
+
+func TestInboxLarkReadPosition(t *testing.T) {
+	now := time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)
+	b := newInbox()
+	chat := []lark.Message{larkMsg("20", "张三", false, now.Add(-3*time.Minute)), larkMsg("21", "张三", false, now.Add(-2*time.Minute)),
+		larkMsg("22", "张三", false, now.Add(-time.Minute))}
+	fetch := func(c lark.Conversation, n int) ([]lark.Message, error) { return chat[max(0, len(chat)-n):], nil }
+	conv := lark.Conversation{ID: "f2", Name: "张三", Unread: 3, UpdatedAt: now.Add(-time.Minute), ReadPosition: "19"}
+
+	ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone)
+	if len(ch) != 1 || ch[0].Lark.ReadPosition != "19" {
+		t.Fatalf("collected: %+v", ch)
+	}
+	it := ch[0]
+	raw, _ := json.Marshal(it.Lark)
+	if !strings.Contains(string(raw), `"read_position":"19"`) {
+		t.Fatalf("json = %s", raw)
+	}
+	// Read further elsewhere, nothing new: the read position follows without a fetch.
+	conv.Unread, conv.ReadPosition = 1, "21"
+	if ch := b.applyLark([]lark.Conversation{conv}, func(lark.Conversation, int) ([]lark.Message, error) {
+		t.Fatal("fetched a chat with no new messages")
+		return nil, nil
+	}, now, testUserZone); len(ch) != 1 || ch[0] != it || it.Lark.ReadPosition != "21" || it.Last != "22" {
+		t.Fatalf("read further: %+v", it.Lark)
+	}
+	// Same position again: no change.
+	if ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone); len(ch) != 0 {
+		t.Fatalf("unchanged chat changed %d items", len(ch))
+	}
+	// A new message refreshes it along with everything else.
+	chat = append(chat, larkMsg("23", "张三", false, now))
+	conv.Unread, conv.UpdatedAt, conv.ReadPosition = 2, now, "22"
+	if ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone); len(ch) != 1 || it.Lark.ReadPosition != "22" || it.Last != "23" {
+		t.Fatalf("follow-up: %+v", it.Lark)
 	}
 }
 

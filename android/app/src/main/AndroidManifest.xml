@@ -83,6 +83,21 @@
             </intent-filter>
         </activity>
 
+        <!-- Google's OAuth redirect for Gmail sign-in (docs/mail.md「Android」); the scheme comes from the build (app/build.gradle.kts). -->
+        <activity
+            android:name=".ui.mail.OAuthRedirectActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${googleOAuthScheme}" android:path="/oauth2redirect" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
             android:screenOrientation="fullSensor"

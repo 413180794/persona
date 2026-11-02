@@ -151,8 +151,9 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			cfg.MachineID = in.MachineID
 		}
 		if in.Launcher != "" {
-			// The assistant runs Claude Code (claude -p) or Codex (codex app-server); anything else would fail every message.
-			if m := h.byID[cfg.MachineID]; m != nil && in.Launcher != "claude" {
+			// The assistant runs Claude Code (claude -p), Codex (codex app-server) or an agent runtime that says it can
+			// (its launcher has assistant: docs/runtimes.md「助手」); anything else would fail every message.
+			if m := h.byID[cfg.MachineID]; m != nil && in.Launcher != "claude" && !h.runtimeAssistantLauncher(r.Context(), m, in.Launcher) {
 				var res struct {
 					Detail proto.LauncherDetail `json:"detail"`
 				}
@@ -160,7 +161,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 				err := m.call(pctx, "launchers.probe", map[string]any{"name": in.Launcher}, &res)
 				cancel()
 				if err == nil && res.Detail.Agent != "" && res.Detail.Agent != "claude" && res.Detail.Agent != "codex" {
-					writeErr(w, http.StatusBadRequest, fmt.Errorf("%s 跑的是 %s，助手只能用启动 Claude Code 或 Codex 的启动器", in.Launcher, res.Detail.Agent))
+					writeErr(w, http.StatusBadRequest, fmt.Errorf("%s 跑的是 %s，助手只能用启动 Claude Code、Codex 或能当助手的 runtime 的启动器", in.Launcher, res.Detail.Agent))
 					return
 				}
 			}
@@ -400,4 +401,23 @@ func (h *Hub) keepMain(ctx context.Context) {
 	if err := m.call(cctx, "node.configure", map[string]any{"keep_sessions": h.keptSessions(cctx, m.cfg.ID)}, nil); err != nil {
 		h.logf("assistant: keep main: %v", err)
 	}
+}
+
+// runtimeAssistantLauncher: launcher is one an agent runtime on machine m offers to run the assistant (launchers.list's
+// assistant), not a login-shell launcher to probe.
+func (h *Hub) runtimeAssistantLauncher(ctx context.Context, m *Machine, launcher string) bool {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	var res struct {
+		Launchers []proto.Launcher `json:"launchers"`
+	}
+	if err := m.call(ctx, "launchers.list", map[string]any{}, &res); err != nil {
+		return false
+	}
+	for _, l := range res.Launchers {
+		if l.Name == launcher && l.Assistant {
+			return true
+		}
+	}
+	return false
 }

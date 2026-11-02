@@ -1038,6 +1038,106 @@ MOMENT_COMMENTS = [
 MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com", "provider": "imap", "auth": "password",
                   "imap_host": "imap.example.com", "imap_port": 993, "smtp_host": "smtp.example.com", "smtp_port": 465}]
 
+# ---------- area: mail (Android mail lane; fake data only) ----------
+# The mail's write paths: flags, sending, adding / testing / deleting accounts, Google sign-in's start. Nothing is sent
+# anywhere: what the app posted is in GET /mock/mail. MOCK_MAIL=1 adds whole mails for the reader (an HTML one with a
+# tracking pixel, a script and an attachment; a two-mail thread) and a Gmail account whose authorization ran out and a
+# Feishu one; MOCK_GOOGLE=1 makes google/start answer (with a made-up URL).
+MAIL_LOG = {"sent": [], "flags": [], "accounts_added": [], "deleted": [], "tested": []}
+MAIL_FULL = {}
+if os.environ.get("MOCK_MAIL"):
+    MAIL_ACCOUNTS += [
+        {"id": "acc2", "name": "me@gmail.example", "email": "me@gmail.example", "provider": "gmail", "auth": "oauth2",
+         "imap_host": "imap.gmail.com", "status": "error", "error": "Google authorization expired or was revoked"},
+        {"id": "acc3", "name": "我的飞书邮箱", "email": "me@corp.example.com", "provider": "feishu", "auth": "password",
+         "imap_host": "imap.larkoffice.com", "status": "ok"},
+    ]
+    MAIL_FULL = {
+        501: {"subject": "下周的分享能不能提前到周二？", "from": {"name": "Lucy Wang", "email": "lucy@example.com"},
+              "to": [{"name": "我", "email": "me@example.com"}], "cc": [{"name": "Tom", "email": "tom@example.com"}],
+              "date": ago(hours=3), "message_id": "<501@example.com>", "references": ["<499@example.com>"],
+              "text": "Hi，\n\n周四我临时要出差，分享能不能挪到周二下午？三点以后都行。\n\nLucy", "html": "", "seen": False},
+        502: {"subject": "你的订单已发货", "from": {"name": "示例商城", "email": "shop@example.com"},
+              "to": [{"name": "", "email": "me@example.com"}], "date": ago(hours=5), "message_id": "<502@example.com>",
+              "text": "", "seen": True,
+              "html": "<html><head><script>alert(1)</script><style>.box{padding:12px}</style></head>"
+                      "<body><div class=box><h2>你的订单已发货</h2><p>订单 <b>2026102800123</b> 已由快递揽收，预计<b>周五</b>送达。</p>"
+                      "<p><img src=\"https://images.example.com/track.png\" width=1 height=1>"
+                      "<img src=\"https://images.example.com/parcel.jpg\" alt=\"包裹\"></p>"
+                      "<p><a href=\"https://shop.example.com/orders/2026102800123\" onclick=\"steal()\">查看物流</a></p></div></body></html>",
+              "attachments": [{"filename": "发票.pdf", "mime": "application/pdf", "size": 48213}]},
+        505: {"subject": "Re: 季度复盘的时间", "from": {"name": "Jack Li", "email": "jack@example.com"},
+              "to": [{"name": "我", "email": "me@example.com"}], "date": ago(hours=30), "message_id": "<505@example.com>",
+              "text": "周三上午可以吗？", "html": "", "seen": True},
+        506: {"subject": "Re: 季度复盘的时间", "from": {"name": "Jack Li", "email": "jack@example.com"},
+              "to": [{"name": "我", "email": "me@example.com"}, {"name": "Tom", "email": "tom@example.com"}], "date": ago(hours=1),
+              "message_id": "<506@example.com>", "references": ["<505@example.com>"], "flagged": True, "seen": False,
+              "text": "改到周三下午两点吧，会议室我订好了。\n\n议程：\n1. 上季度目标回顾\n2. 下季度计划\n\nJack", "html": ""},
+    }
+    INBOX.insert(0, {"id": "mail:acc1:t5:505", "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
+                     "title": "Re: 季度复盘的时间", "sender": "Jack Li", "preview": "改到周三下午两点吧，会议室我订好了。", "count": 2,
+                     "started_at": ago(hours=30), "updated_at": ago(hours=1), "tier": "action", "summary": "Jack 把季度复盘改到周三下午两点",
+                     "reason": "要你确认时间", "read": False,
+                     "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [505, 506],
+                              "from": {"name": "Jack Li", "email": "jack@example.com"}, "direct": True}})
+
+
+def mail_area(h, method, p, q):
+    """The mail paths above (True when it answered)."""
+    if p == "/mock/mail" and method == "GET":
+        h.send_json(MAIL_LOG); return True
+    if not p.startswith("/api/v1/mail/"): return False
+    body = json.loads(getattr(h, "last_body", b"") or b"{}") if method != "GET" else {}
+    parts = p.split("/")  # ['', 'api', 'v1', 'mail', 'messages', aid, uid, (flags)]
+    if p.startswith("/api/v1/mail/messages/") and len(parts) >= 7 and parts[6].isdigit():
+        uid = int(parts[6])
+        if len(parts) > 7 and parts[7] == "flags":
+            MAIL_LOG["flags"].append(dict(body, account_id=unquote(parts[5]), uid=uid))
+            if uid in MAIL_FULL: MAIL_FULL[uid].update({k: body[k] for k in ("seen", "flagged") if k in body})
+            h.send_json({"ok": True}); return True
+        if method == "GET" and uid in MAIL_FULL:
+            h.send_json({"message": dict(MAIL_FULL[uid], account_id=unquote(parts[5]), mailbox=(q.get("mailbox") or ["INBOX"])[0], uid=uid)})
+            return True
+        return False
+    if p.startswith("/api/v1/mail/accounts/") and p.endswith("/test"):
+        aid = unquote(parts[5])
+        a = next((x for x in MAIL_ACCOUNTS if x["id"] == aid), None)
+        MAIL_LOG["tested"].append(aid)
+        h.send_json({"ok": a is not None and a.get("status") != "error", "error": (a or {}).get("error") or (None if a else "no such account")})
+        return True
+    if p.startswith("/api/v1/mail/accounts/") and method == "DELETE":
+        aid = unquote(parts[5])
+        MAIL_ACCOUNTS[:] = [a for a in MAIL_ACCOUNTS if a["id"] != aid]
+        MAIL_LOG["deleted"].append(aid)
+        h.send_json({"ok": True}); return True
+    if p == "/api/v1/mail/accounts" and method == "POST":
+        email = (body.get("email") or "").strip()
+        if "@" not in email or not body.get("password"):
+            h.send_json({"error": "email and password are required"}, 400); return True
+        if body.get("password") == "wrong":
+            h.send_json({"error": "imap login: wrong authorization code"}, 400); return True
+        prov = body.get("provider") or "imap"
+        dom = email.split("@")[1]
+        acc = {"id": "acc_" + uuid.uuid4().hex[:6], "name": body.get("name") or email, "email": email, "provider": prov,
+               "auth": "password", "imap_host": body.get("imap_host") or ("imap.larkoffice.com" if prov == "feishu" else "imap." + dom),
+               "imap_port": body.get("imap_port") or 993, "smtp_host": body.get("smtp_host") or ("smtp.larkoffice.com" if prov == "feishu" else "smtp." + dom),
+               "smtp_port": body.get("smtp_port") or 465, "status": "ok"}
+        MAIL_ACCOUNTS.append(acc)
+        MAIL_LOG["accounts_added"].append({k: v for k, v in body.items() if k != "password"})
+        h.send_json({"account": acc}); return True
+    if p == "/api/v1/mail/send" and method == "POST":
+        if not body.get("to"):
+            h.send_json({"error": "at least one recipient is required"}, 400); return True
+        MAIL_LOG["sent"].append(body)
+        h.send_json({"ok": True}); return True
+    if p == "/api/v1/mail/oauth/google/start" and method == "POST":
+        if not os.environ.get("MOCK_GOOGLE"):
+            h.send_json({"error": "Google sign-in is not configured"}, 400); return True
+        h.send_json({"auth_url": "https://accounts.example.com/o/oauth2/auth?state=mock", "callback_scheme": "com.example.mock", "state": "mock"})
+        return True
+    return False
+# ---------- end area: mail ----------
+
 
 # MOCK_LONG_SLOTS=1: the weather space's tabs have long names (the space page's two-column cards must still fit).
 if os.environ.get("MOCK_LONG_SLOTS"):
@@ -1782,9 +1882,10 @@ def net_control(path, q):
 # half of them in a new order): the working agents' last line alternates between one line and two (the row's height),
 # and one of them finishes and starts again every three rounds (its space changes rank). ScrollUnderPushTests.
 # MOCK_CHURN=1 also puts a screenshot (a tool result image) in the middle of the first conversation's work.
-# MOCK_HUB_UPDATE=available|waiting|notice|docker: the hub's version and its updating itself (docs/hub-update.md):
-# a newer release to install (auto-update off), an update waiting for two busy agents, 「自动更新已开启」 told for the first
-# time, or a Docker hub with a newer image. Unset: GET /api/v1/hub/update is 404 (a hub from before), no line anywhere.
+# MOCK_HUB_UPDATE=available|waiting|notice|docker|docker-pinned: the hub's version and its updating itself
+# (docs/hub-update.md): a newer release to install (auto-update off), an update waiting for two busy agents, 「自动更新已开启」
+# told for the first time, or a Docker hub with a newer image (on :latest, or on a pinned version tag). Unset:
+# GET /api/v1/hub/update is 404 (a hub from before), no line anywhere.
 HUB_UPDATE_MODE = os.environ.get("MOCK_HUB_UPDATE", "")
 HUB_UPDATE = {}
 
@@ -1803,10 +1904,12 @@ def hub_update_state():
         elif HUB_UPDATE_MODE == "notice":
             HUB_UPDATE.update(state="idle", auto=True, auto_notice=True)
             HUB_UPDATE["latest"] = dict(latest, version=HUB_UPDATE["version"], build=HUB_UPDATE["build"], newer=False)
-        elif HUB_UPDATE_MODE == "docker":
-            HUB_UPDATE.update(version="0.3.0", channel="docker", can_update=False, auto=False,
-                              why_not="Docker 里的 hub 由新镜像更新（docker compose pull && docker compose up -d）")
-            HUB_UPDATE["latest"] = dict(latest, version="0.3.1")
+        elif HUB_UPDATE_MODE in ("docker", "docker-pinned"):
+            pinned = HUB_UPDATE_MODE == "docker-pinned"
+            HUB_UPDATE.update(version="0.3.0", build=0, channel="docker", can_update=False, auto=False,
+                              why_not="Docker 里的 hub 由新镜像更新（docker compose pull && docker compose up -d）",
+                              image={"name": "ghcr.io/owner/jarvis", "tag": "0.3.0" if pinned else "latest", "pinned": pinned})
+            HUB_UPDATE["latest"] = {"version": "0.3.1", "build": 0, "newer": True, "bad": False}
     return HUB_UPDATE
 
 
@@ -2129,7 +2232,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
         if p == "/mock/hits": return self.send_json({"hits": HITS})
-        if p == "/mock/hub_update":  # HubNoticeUITests: ?mode=available|waiting|notice|docker, from the start
+        if p == "/mock/hub_update":  # HubNoticeUITests: ?mode=<a MOCK_HUB_UPDATE mode>, from the start
             set_hub_update_mode((q.get("mode") or [""])[0])
             return self.send_json({"ok": True})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
@@ -2208,6 +2311,7 @@ class H(BaseHTTPRequestHandler):
             iid = p[len("/api/v1/inbox/"):]
             for x in INBOX:
                 if x["id"] == iid: return self.send_json(dict(x, context=x["preview"]))
+        if mail_area(self, "GET", p, q): return
         if p == "/api/v1/mail/accounts": return self.send_json({"accounts": MAIL_ACCOUNTS})
         if p.startswith("/api/v1/mail/messages/") and p.count("/") == 6:
             uid = int(p.rsplit("/", 1)[1])
@@ -2392,6 +2496,7 @@ class H(BaseHTTPRequestHandler):
                 if not s["can_update"]: return self.send_json({"error": "这个 hub 不能自己更新：" + s.get("why_not", "")}, 409)
                 s.update(state="restarting" if body.get("now") else "waiting_idle")
             return self.send_json(s)
+        if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
         if p.startswith("/api/v1/model-config/purposes/") and self.command == "PATCH":
             pid, body = unquote(p.rsplit("/", 1)[1]), json.loads(self.last_body or b"{}")
             with MODEL_CONFIG_LOCK:

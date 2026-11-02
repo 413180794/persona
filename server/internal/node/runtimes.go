@@ -67,6 +67,8 @@ type runtimeHello struct {
 		Interrupt bool `json:"interrupt"`
 		Rename    bool `json:"rename"`
 		Close     bool `json:"close"`
+		// Assistant: its launcher may run the Jarvis assistant (assistant_runtime.go; docs/runtimes.md「助手」).
+		Assistant bool `json:"assistant"`
 	} `json:"caps"`
 }
 
@@ -103,6 +105,13 @@ func (h *runtimeConn) agent() string {
 		return h.hello.Agent
 	}
 	return h.hello.Runtime
+}
+
+// assistant: the runtime runs the Jarvis assistant's conversations (caps.assistant).
+func (h *runtimeConn) assistant() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.hello.Caps.Assistant
 }
 
 // label is what the apps call the runtime.
@@ -508,7 +517,8 @@ func (b *runtimeRegistry) launchers() []proto.Launcher {
 		if agent == "claude" {
 			agent = ""
 		}
-		out = append(out, proto.Launcher{Name: h.hello.Launcher, Model: h.hello.LauncherModel, Source: h.hello.Runtime, Agent: agent})
+		out = append(out, proto.Launcher{Name: h.hello.Launcher, Model: h.hello.LauncherModel, Source: h.hello.Runtime, Agent: agent,
+			Assistant: h.hello.Caps.Assistant})
 		h.mu.Unlock()
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -1150,14 +1160,20 @@ func (n *Node) runtimeStart(ctx context.Context, launcher, cwd, prompt string) (
 	if err := h.peer.Call(ctx, "session.start", map[string]any{"cwd": cwd, "prompt": prompt}, &res); err != nil {
 		return nil, err, true
 	}
-	list := normalizeRuntimeSessions(h, []proto.Session{res.Session})
+	s, err := n.listStarted(h, res.Session)
+	return s, err, true
+}
+
+// listStarted lists a session h just started right away, before the runtime's next runtime.sessions, so the chat
+// that opens next finds it. Who answers for it is decided as for any list (recomputeOwners): a runtime that starts
+// sessions elsewhere (pi's companion starts them in pi-web) reports them offline, and the one running it, if it has
+// listed it already, keeps it.
+func (n *Node) listStarted(h *runtimeConn, started proto.Session) (*proto.Session, error) {
+	list := normalizeRuntimeSessions(h, []proto.Session{started})
 	if len(list) == 0 {
-		return nil, fmt.Errorf("%s started a session without a valid id", h.label()), true
+		return nil, fmt.Errorf("%s started a session without a valid id", h.label())
 	}
 	s := list[0]
-	// Listed right away, before the runtime's next runtime.sessions, so the chat that opens next finds it. Who answers
-	// for it is decided as for any list (recomputeOwners): a runtime that starts sessions elsewhere (pi's companion
-	// starts them in pi-web) reports them offline, and the one running it, if it has listed it already, keeps it.
 	b := n.runtimes
 	b.mu.Lock()
 	h.mu.Lock()
@@ -1183,8 +1199,8 @@ func (n *Node) runtimeStart(ctx context.Context, launcher, cwd, prompt string) (
 		o.mu.Unlock()
 	}
 	b.mu.Unlock()
-	n.publish(n.sessionList(ctx, false))
-	return &s, nil, true
+	n.publish(n.sessionList(context.Background(), false))
+	return &s, nil
 }
 
 func okResult(err error) any {

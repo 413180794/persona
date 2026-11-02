@@ -6,7 +6,7 @@ DSH 没在运行时，伴随进程从磁盘列出它的会话，给其中一个�
 
 2026-10-31 起支持（issue #169）。DSH 是第一个按「runtime」规范接入的（`docs/runtimes.md`）：node 侧是通用的 `server/internal/node/runtimes.go`，
 DSH 侧是插件 `integrations/dsh/`，建在通用的 `integrations/runtime-sdk/` 上，插件里只剩 DSH 自己的部分（列会话、翻页、事件映射、两条应答链）。
-2026-11-02 补齐了手机工具、关闭、DSH 没在运行时的列表（issue #282）。
+2026-11-02 补齐了手机工具、关闭、DSH 没在运行时的列表，助手和 AI 分身也能跑在 DSH 上（issue #282，见下面「助手」）。
 
 ## 为什么不走 herdr
 
@@ -76,6 +76,8 @@ node <Jarvis 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录�
 | `maxSessions` | `80` | 最多列多少个；手机发过消息、新建过的会话（最近 50 个）不受这两条限制，一直列着 |
 | `runtime` / `name` / `launcher` | `dsh` / `DSH` / `dsh` | 这个 DSH 在 Jarvis 里的 runtime id、叫法、启动器名。同一台电脑的第二个 DSH 要另配；改了 id 的会话仍按 DSH 的 Agent 显示（`agent: "dsh"`） |
 | `phoneTools` | `true` | 把 hub 的工具（`phone_*`、`mail_*`）给 DSH 的 Agent；`false` 不给 |
+| `assistant` | `true` | DSH 的启动器能当 Jarvis 的助手（下面「助手」）；`false` 不提供 |
+| `presets` | 见「助手」 | 助手对话里 Jarvis 的权限模式对应 DSH 的哪个权限预设，比如 `{default: workspace-write, plan: read-only}` |
 
 ## 映射
 
@@ -116,6 +118,38 @@ hub 连着时（hello 之后、`runtime.hub` 说 hub 回来时，之后每 5 分
 不会无故变动；hub 不在时留着上一份，调用会说 hub 没连上。工具在 DSH 里全局注册，DSH 的所有 Agent（包括子 Agent）都能用；DSH 的工具调用不走 DSH 自己的授权，
 会替用户出面的（建日程、发邮件）由 hub 在手机上确认，和 Claude 用这些工具时一样。工具结果里的图片不交给 DSH 的 Agent（结果里说一句）。
 
+## 助手
+
+「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定时任务都能跑在 DSH 上：在 设置 › 助手（或顶栏、定时任务、模型配置）选 DSH 的启动器 `dsh`
+（DSH 连着时才有，`launchers.list` 带 `assistant: true`）。按 runtime 的通用助手约定接入（`docs/runtimes.md`「助手」），node 侧是
+`server/internal/node/assistant_runtime.go`，没有 DSH 专用的代码；DSH 这边是插件的助手模式（`config.assistant`，默认开）。
+
+助手所在的电脑（hub 机器，或 `assistant.machine`）要常驻 `dsh web --no-open`（launchd / systemd，需要 Node 22+），装好插件。
+
+| 能力 | DSH |
+| --- | --- |
+| 流式输出 | 插件已有：`agent/assistant-stream` → `session.delta` |
+| 续聊 / 重启后 | 对话是 DSH 的会话（`session-<uuid>`），DSH 持久化；node 重启不影响（会话按目录认出是助手的），DSH 重启后下一条消息自动恢复 |
+| 停止 | `session.interrupt` → `sessionController.cancel`；关闭对话只停正在跑的这一轮，会话留在 DSH 里 |
+| 回复过程中插话 | 插件已有：工作中 steer 进这一轮 |
+| Jarvis MCP 工具 | hub 的助手工具（`ask_user`、`notify_user`、`schedule_*`、`agents_*`、`kb_*`…）注册成 `mcp__jarvis__<名字>`，只给助手对话（`tools.register` 的 `when`）；调用经 node 带上「是助手」，node 核对会话归 DSH、是助手对话 |
+| ask_user | 同一个工具，会话 id 本来就知道 |
+| DSH 自己的提问 / 计划 | 插件已有：提问链，含计划卡片和迟到的回答；助手对话一律先给手机 |
+| 命令 / 改文件的审批 | `approval/request` 链，助手对话一律先给手机（DSH 只在出沙箱这类情况才问） |
+| 飞书写操作的确认 | 工具 `lark-connector`：参数就是 `ol` 后面的词，node 先过飞书闸门（`larkCheck`：读放行、写在手机上确认、配置的规则拒绝），再在 node 上带 token 跑 lark-connector skill 的 `ol.sh`；token 不进 DSH。shell 里直接跑 `ol` 被 `tools/pre-execute` 拦下并说明 |
+| 权限模式 | 每条消息带上，插件设 DSH 的权限预设（`permissionPresets.set`）：默认 / 自动接受编辑 / 自动 → `workspace-write`，计划 → `read-only`，全部放行 → `danger-full-access`（飞书闸门仍在：它在 node 上，不靠 DSH 的授权）；`config.presets` 可以改 |
+| 思考强度、模型 | 在 DSH 里选（Web GUI，或 DSH 的默认模型）；Jarvis 的模型配置对 `dsh` 不选具体模型 |
+| 图片 | 插件已有：base64 图片块 |
+| 指令 | DSH 读助手目录的 `AGENTS.md` / `CLAUDE.md`（`assistant.prepare` 两份都写，内容一样时只加载一份），加上用户自己的 `$DSH_HOME/AGENTS.md` |
+| lark-connector skill | 助手目录的 `.agents/skills/`（DSH 读这里），飞书经 `lark-connector` 工具 |
+| 记忆 | 和 Claude、Codex **同一份**：新对话的第一条消息前面带上记忆目录、格式和当前索引（`prompts/assistant/runtime_instructions.md`），改那个目录里的文件在非计划模式下不问 |
+| 后台任务 | DSH 自己的后台任务（`job_*`）；跑完会不会叫醒对话照 DSH 的规则，node 不另记 |
+| 预热 | 不需要：`dsh web` 常驻，新对话直接 `sessionController.create` |
+| 实时快照 | 和 Claude、Codex 一样随每条消息带（`<jarvis-context>`，只带变了的节），聊天里不显示（`map.js` 去掉不带属性的 `<jarvis-context>` 块） |
+
+和 Claude 版的差别：要常驻 `dsh web`，`dsh web` 重启会打断正在跑的那一轮；助手的对话也出现在 DSH 的 Web GUI 里（可以在电脑上接着看）；
+DSH 的授权只有「允许一次」，飞书闸门的「本会话总是允许」照旧由 node 记；拒绝时写的理由 steer 给模型；一段对话换成 Claude / Codex 要新建对话。
+
 ## 子 Agent
 
 DSH 委派子 Agent 时把子 Agent 的授权策略钉成 `never`（DSH 的 `captureDelegatedPolicyOverrides`）：子 Agent 要授权的操作直接被拒，`ask_user_question` 以
@@ -145,6 +179,10 @@ DSH 委派子 Agent 时把子 Agent 的授权策略钉成 `never`（DSH 的 `cap
 
 - DSH 没在运行时：`node integrations/dsh/e2e/files.mjs`（同样两个环境变量）。真的 `dsh web` 跑一轮后停掉，伴随进程把这个会话从磁盘列成 offline、翻出内容，
   前后 `DSH_HOME` 里没有任何文件变化；从「手机」再发一条，伴随进程用唤醒脚本起 DSH，node 把消息交给插件，回复回来，会话回到插件手里。2026-11-02 实测 7/7 通过。
+
+- 助手：`node integrations/dsh/e2e/assistant.mjs`（同样两个环境变量）。「hub」用 `assistant.send` 选 `dsh` 启动器新建对话（在助手目录里、
+  第一条带上快照和记忆，聊天里只显示打的字）、`ask_user` 作为助手的调用到 hub、`lark-connector` 读直接跑（带 token）、写在手机上拒绝后不跑、
+  shell 里的 `ol` 被拦、计划模式设成 DSH 的预设、中断、node 重启后接着发。2026-11-02 实测 17/17 通过。
 
 ## 以后
 

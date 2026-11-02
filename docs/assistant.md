@@ -1,7 +1,7 @@
 # 助手（「Jarvis」tab，原「对话」）
 
 「Jarvis」tab 的 Jarvis 是 hub 所在机器上 `~/.jarvis/assistant` 里**无头运行**的 Claude Code（`claude -p` + stream-json，见
-`docs/claude-integration.md`「无头助手」）；启动器跑的是 Codex 时换成 `codex app-server`（下面「Codex」一节）。这篇讲它能做什么、怎么做到的，以及 2026-10-26 那次能力升级背后的取舍。
+`docs/claude-integration.md`「无头助手」）；启动器跑的是 Codex 时换成 `codex app-server`（下面「Codex」一节）；选的是能当助手的 Agent 运行时的启动器（DSH）时，由那个运行时跑（下面「Agent 运行时（DSH）」一节）。这篇讲它能做什么、怎么做到的，以及 2026-10-26 那次能力升级背后的取舍。
 
 ## 2026-10-26 之前它为什么弱（从真实对话记录里看到的）
 
@@ -29,7 +29,7 @@
 | 操作 Jarvis 自己 | `jarvis_settings`（先 `list`）：读写分拣规则、AI 分身规则、关于我、默认启动器，以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
 | 实时快照 | 每条发给助手的消息开头一个 `<jarvis-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，jarvis 工具不再延迟加载 |
-| 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex 上时读写的也是这一份（下面「Codex」一节），换启动器记忆不丢 |
+| 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex、DSH 上时读写的也是这一份（下面「Codex」「Agent 运行时（DSH）」两节），换启动器记忆不丢 |
 | 关于我 | App 里编辑后存 settings `assistant.notes`，覆盖 hub.json 的 `assistant.notes`，进 CLAUDE.md 末尾 |
 | 手机不在前台 | `phone_*` 调用时没有手机连着 → hub 发静默推送（`content-available`，`jarvis_wake`）→ App 在后台连上 WS 执行，25 秒后断开；等最多 20 秒。App 进后台时主动断开 WS，否则挂起的 socket 让 hub 以为手机在线、调用干等 2 分钟；断开后在后台什么都不会再把它打开（网络恢复、刷新结束、重连退避，`LiveConnection.suspended`，2026-11-02），只有这条静默推送（`wake()`）能连 |
 
@@ -249,7 +249,7 @@ App 的「定时任务」页只列前者的开关。用户让助手「每 30 分
 
 设置 › 助手（或顶栏菜单、定时任务）选一个启动 Codex 的启动器时，助手不再是 `claude -p`，而是 Codex 给 IDE 用的常驻 JSON-RPC 服务
 `codex app-server`（stdio，一行一条 JSON；协议以 `codex app-server generate-ts [--experimental]` 导出的为准，hub 机器上是 codex-cli 0.159.3）。
-代码：`server/internal/node/assistant_codex.go`；`assistant.go` 按启动器探测出的 agent（`launcherProbeCached`）选 Claude 或 Codex，别的（TRAEX…）拒绝并说明。
+代码：`server/internal/node/assistant_codex.go`；`assistant.go` 按启动器探测出的 agent（`launcherProbeCached`）选 Claude 或 Codex；能当助手的运行时的启动器交给运行时（下一节），别的（TRAEX…）拒绝并说明。
 
 **怎么起**：node 经交互式 zsh 跑启动器函数，但先把 `codex` 换成 `codex <启动器自己的参数> app-server <Jarvis 的 -c>`（`codexShell`，
 `command codex …` 也接住），所以启动器设的环境、`-c model_provider=…`、`-m` 照样生效。一段对话一个 app-server 进程、里面一个 thread：
@@ -290,6 +290,27 @@ ask_user 卡片答完拿到答案、`ol GET /me` 直接放行、`ol POST …/mes
 发图片认出颜色、预热的备用进程；记忆（同一天补测）：预置的「喜欢的茶」默认模式下直接读到（不弹卡片），
 让它记「花生过敏」后建了文件、更新了索引，「记忆」接口列得出来，新开的对话不读文件凭索引答对，`~/.codex/memories` 没被写。单测：`assistant_codex_test.go`（假的 app-server 按真实帧回放：握手、turn/start / steer / interrupt、
 各种审批和闸门、request_user_input）。
+
+## Agent 运行时（DSH）（2026-11-02，issue #282）
+
+选一个声明了助手能力的 Agent 运行时的启动器（现在是 DSH 插件的 `dsh`，`launchers.list` 带 `assistant: true`）时，对话跑在那个运行时里：
+node 的 `server/internal/node/assistant_runtime.go` 用 runtime 协议的 `session.start` / `session.send` / `session.interrupt` 驱动它，
+每条消息带上实时快照（`context`）、权限模式（`mode`）和记忆目录；对话内容、逐字、授权和提问走 runtime 本来的那几条（`docs/runtimes.md`「助手」）。
+这一层没有哪个运行时的代码：别的运行时声明了 `caps.assistant`、做到那份约定，也能当助手。
+
+和 Claude、Codex 一样的：实时快照、`ask_user` 和其他 Jarvis 工具（只给助手对话）、授权和提问一律先到手机、权限模式、共用的记忆
+（新对话第一条消息前带上目录、格式和索引：`prompts/assistant/runtime_instructions.md`）、助手目录的指令文件和 skill（`.agents/skills/`）、
+AI 分身 / 飞书 `/agent` / 定时任务（都走 `assistant.send`）。
+
+不一样的：
+
+- **飞书**：token 不进运行时。模型用 `lark-connector` 工具（参数就是 `ol` 后面的词），node 先过同一个飞书闸门（`larkCheck`），再在 node 上
+  带 token 跑 lark-connector skill 的 `ol.sh`；shell 里直接跑 `ol` 被拦下（拿不到 token，也绕不过闸门）。
+- **模型和思考强度**在运行时里选（DSH 的 Web GUI），模型配置对这种启动器不选具体模型；**预热**不需要（运行时常驻）。
+- 关闭对话只停正在跑的这一轮，对话留在运行时里；一段对话换成 Claude / Codex（或反过来）要新建对话。
+- 运行时没连上（`dsh web` 没在跑）时发消息回 `runtime_away`，什么都没发。
+
+DSH 的细节（权限预设的对应、要常驻 `dsh web`）见 `docs/dsh.md`「助手」；端到端 `integrations/dsh/e2e/assistant.mjs`。
 
 ## 资料页和头像（2026-10-30）
 

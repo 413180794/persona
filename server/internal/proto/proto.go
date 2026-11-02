@@ -200,6 +200,8 @@ type Launcher struct {
 	// Agent is what it starts when not Claude Code: "codex" (plain codex, or an alias running it; docs/codex.md
 	// 「从手机新建」). A Codex start needs its first message with it.
 	Agent string `json:"agent,omitempty"`
+	// Assistant: a runtime's launcher that may run the Jarvis assistant (docs/runtimes.md「助手」), whatever its agent.
+	Assistant bool `json:"assistant,omitempty"`
 }
 
 // LauncherDetail is what a ~/.zshrc launcher really sets (the node runs it with the agent stubbed out,

@@ -332,6 +332,8 @@ object JTheme {
         @Composable @ReadOnlyComposable get() = DiffColors.of(LocalPalette.current.dark)
     val hue: HueColors
         @Composable @ReadOnlyComposable get() = HueColors.of(LocalPalette.current.dark)
+    val brand: jarvis.android.ui.design.BrandColors
+        @Composable @ReadOnlyComposable get() = jarvis.android.ui.design.BrandColors.of(LocalPalette.current.dark)
     /** An agent state's dot, words and soft fill. */
     @Composable @ReadOnlyComposable
     fun tone(state: AgentState): StatusTone = StatusPalette.of(state, LocalPalette.current.dark)

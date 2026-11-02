@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 45
     outputs:
       version: ${{ steps.version.outputs.version }}
+      image: ${{ steps.version.outputs.image }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,6 +46,7 @@ jobs:
             v="$(git describe --always)-$(date -u +%Y%m%d%H%M)"
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       # The image's web build skips this (no scripts/ or git in its build context): it runs here, on the checkout.
       - name: Privacy check
@@ -59,7 +61,9 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: jarvis-hub:ci
-          build-args: VERSION=${{ steps.version.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            IMAGE=${{ steps.version.outputs.image }}
           cache-from: type=gha,scope=hub
           cache-to: type=gha,scope=hub,mode=max
 
@@ -95,10 +99,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Image name
-        id: name
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -111,7 +111,7 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ${{ steps.name.outputs.image }}
+          images: ${{ needs.smoke.outputs.image }}
           flavor: latest=false
           tags: |
             type=match,pattern=v(.*),group=1
@@ -124,7 +124,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: VERSION=${{ needs.smoke.outputs.version }}
+          build-args: |
+            VERSION=${{ needs.smoke.outputs.version }}
+            IMAGE=${{ needs.smoke.outputs.image }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=hub

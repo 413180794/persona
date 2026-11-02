@@ -91,18 +91,19 @@ type updater struct {
 	idleEvery  time.Duration
 	manualIdle time.Duration
 
-	mu        sync.Mutex
-	settings  updateSettings
-	loaded    bool
-	state     string // idle | checking | available | downloading | waiting_idle | restarting | confirming | updated | rolled_back | failed
-	progress  string
-	errText   string
-	release   *update.Published
-	lastCheck time.Time
-	busy      []busyItem
-	running   bool
-	now       bool // the user confirmed 现在就更新: stop waiting for idle
-	confirmed bool // no update to confirm, or this process confirmed it
+	mu          sync.Mutex
+	settings    updateSettings
+	loaded      bool
+	state       string // idle | checking | available | downloading | waiting_idle | restarting | confirming | updated | rolled_back | failed
+	progress    string
+	errText     string
+	release     *update.Published
+	newestImage string // a Docker hub: the newest release tag of its image
+	lastCheck   time.Time
+	busy        []busyItem
+	running     bool
+	now         bool // the user confirmed 现在就更新: stop waiting for idle
+	confirmed   bool // no update to confirm, or this process confirmed it
 }
 
 func newUpdater(h *Hub) *updater {
@@ -375,7 +376,7 @@ func copyInto(from, to string) error {
 // loop checks for releases (a minute after starting, then every 6 hours) and installs one when updating itself is
 // on and the release is newer and not a build that went back.
 func (u *updater) loop(ctx context.Context) {
-	if !u.h.build.SelfUpdates() {
+	if !u.h.build.SelfUpdates() && u.h.build.Channel != update.Docker {
 		return
 	}
 	wait := updateFirstCheck
@@ -404,8 +405,11 @@ func (u *updater) wantsAuto() bool {
 		!slices.Contains(u.settings.Bad, r.Manifest.Build)
 }
 
-// check reads the release now.
+// check reads the release now (a Docker hub: its image's tags).
 func (u *updater) check(ctx context.Context) (*update.Published, error) {
+	if u.h.build.Channel == update.Docker {
+		return nil, u.checkImage(ctx)
+	}
 	if u.h.build.UpdateURL == "" {
 		return nil, errNotRelease
 	}
@@ -668,15 +672,16 @@ type updateView struct {
 	AutoNotice bool        `json:"auto_notice"`
 	LastCheck  *time.Time  `json:"last_check,omitempty"`
 	Confirmed  bool        `json:"confirmed"`
+	Image      *imageView  `json:"image,omitempty"` // a Docker hub's image
 }
 
 type latestView struct {
-	Version  string    `json:"version"`
-	Build    int64     `json:"build"`
-	Released time.Time `json:"released"`
-	Notes    string    `json:"notes,omitempty"`
-	Newer    bool      `json:"newer"`
-	Bad      bool      `json:"bad"` // went back before: not installed automatically
+	Version  string     `json:"version"`
+	Build    int64      `json:"build"` // 0 for an image (tags have no build numbers)
+	Released *time.Time `json:"released,omitempty"`
+	Notes    string     `json:"notes,omitempty"`
+	Newer    bool       `json:"newer"`
+	Bad      bool       `json:"bad"` // went back before: not installed automatically
 }
 
 func (u *updater) view() updateView {
@@ -696,10 +701,69 @@ func (u *updater) view() updateView {
 		v.LastCheck = &t
 	}
 	if r := u.release; r != nil {
-		v.Latest = &latestView{Version: r.Manifest.Version, Build: r.Manifest.Build, Released: r.Manifest.Released, Notes: r.Manifest.Notes,
+		released := r.Manifest.Released
+		v.Latest = &latestView{Version: r.Manifest.Version, Build: r.Manifest.Build, Released: &released, Notes: r.Manifest.Notes,
 			Newer: u.h.build.Newer(r.Manifest.Build), Bad: slices.Contains(u.settings.Bad, r.Manifest.Build)}
 	}
+	if u.h.build.Channel == update.Docker {
+		if im, err := u.dockerImage(); err == nil {
+			v.Image = &imageView{Name: im.Name(), Tag: im.Tag, Pinned: im.Pinned()}
+		}
+		if u.newestImage != "" {
+			v.Latest = &latestView{Version: u.newestImage, Newer: update.NewerVersion(u.newestImage, u.h.version)}
+		}
+	}
 	return v
+}
+
+// imageView is the image a Docker hub runs, for the app's instructions: a pinned tag has to be changed in .env.
+type imageView struct {
+	Name   string `json:"name"`
+	Tag    string `json:"tag"`
+	Pinned bool   `json:"pinned"`
+}
+
+// dockerImage is the image this Docker hub runs: the compose file's JARVIS_IMAGE, else the one it was built as.
+func (u *updater) dockerImage() (update.Image, error) {
+	s := os.Getenv("JARVIS_IMAGE")
+	if s == "" {
+		s = u.h.build.Image
+	}
+	if s == "" {
+		return update.Image{}, errors.New("不知道这个 hub 是哪个镜像：compose 没把 JARVIS_IMAGE 传进容器")
+	}
+	return update.ParseImage(s)
+}
+
+// checkImage asks the registry for the newest release of the image this Docker hub runs (docs/hub-update.md「Docker」).
+// A private image needs JARVIS_REGISTRY_TOKEN (a read token) in the container's environment.
+func (u *updater) checkImage(ctx context.Context) error {
+	im, err := u.dockerImage()
+	if err != nil {
+		u.set("idle", "", err.Error())
+		return err
+	}
+	u.setState("checking")
+	cctx, cancel := context.WithTimeout(ctx, updateRequestLimit)
+	defer cancel()
+	newest, err := update.LatestVersion(cctx, u.client, im, os.Getenv("JARVIS_REGISTRY_TOKEN"))
+	u.mu.Lock()
+	u.lastCheck = time.Now()
+	if err == nil {
+		u.newestImage = newest
+	}
+	u.mu.Unlock()
+	switch {
+	case errors.Is(err, update.ErrPrivate):
+		u.set("idle", "", "查不了新镜像："+err.Error()+"。在 .env 里设 JARVIS_REGISTRY_TOKEN（能读这个镜像的 token），或者把镜像改成公开")
+	case err != nil:
+		u.set("idle", "", "查不了新镜像："+err.Error())
+	case update.NewerVersion(newest, u.h.version):
+		u.set("available", "", "")
+	default:
+		u.set("idle", "", "")
+	}
+	return err
 }
 
 func (u *updater) routes(api *http.ServeMux) {

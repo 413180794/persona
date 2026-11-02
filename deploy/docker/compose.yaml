@@ -23,6 +23,9 @@ services:
       # What the app connects to and pairs with: how phones reach this machine (a LAN address, a VPN, a reverse proxy).
       JARVIS_PUBLIC_URL: ${JARVIS_PUBLIC_URL:?set JARVIS_PUBLIC_URL in .env}
       JARVIS_DATABASE_URL: postgres://jarvis:${JARVIS_DB_PASSWORD:?set JARVIS_DB_PASSWORD in .env}@postgres:5432/jarvis?sslmode=disable
+      # The image above, so the hub can say when a newer one is out (and a read token if the image is private).
+      JARVIS_IMAGE: ${JARVIS_IMAGE}
+      JARVIS_REGISTRY_TOKEN: ${JARVIS_REGISTRY_TOKEN:-}
     ports:
       - "${JARVIS_PORT:-18660}:18660"
     volumes:

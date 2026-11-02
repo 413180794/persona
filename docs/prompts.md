@@ -21,6 +21,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/lost_tasks.md` | jarvisd 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
+| `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<jarvis-context>`：共用的记忆（目录、格式、当前索引），有 lark-connector skill 时说明飞书走 `lark-connector` 工具 | `node/assistant_runtime.go` |
 | `lark/chat_agent.md`、`doc_agent.md` | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | `hub/lark_agent.go`、`lark_agent_docs.go` |
 | `lark/chat_context.md`、`doc_context.md`、`line.md` | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
 | `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `hub/inbox_triage.go` |
@@ -57,6 +58,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 | `mcp/schedule/` | `schedule_followup`、`schedule_routine`、`delete_routine`、`list_followups`、`cancel_followup` | 同上 |
 | `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start` | 同上 |
 | `mcp/inbox/` | `inbox_draft`（AI 分身交草稿） | 同上 |
+| `mcp/assistant/lark-connector.md` | `lark-connector`：助手跑在 Agent 运行时上时的飞书（lark-connector skill 的 `ol` 在 node 上跑，先过飞书闸门） | node（`node/assistant_runtime.go`，经 `runtime.sock` 的 `mcp.tools` 给运行时） |
 | `mcp/lark/` | `lark_agent_reply`（飞书 /agent 交答案）；`lark_chats`、`lark_messages`、`lark_search`（配了 lark-connector 才有） | 同上 |
 | `mcp/kb/` | `kb_search`、`kb_list`、`kb_get`、`kb_update` | 同上 |
 | `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |

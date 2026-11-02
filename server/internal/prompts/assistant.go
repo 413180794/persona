@@ -159,6 +159,19 @@ type CodexMemory struct {
 
 func RenderCodexMemory(m CodexMemory) string { return render("assistant/codex_memory", m) }
 
+// RuntimeInstructions is what the assistant on an agent runtime (DSH…) gets with a new conversation's first message
+// (assistant/runtime_instructions): the shared memory, and Feishu through the lark-connector tool when the skill is there.
+type RuntimeInstructions struct {
+	Dir       string
+	Index     string // MEMORY.md, trimmed
+	Truncated bool   // Index is the start of a longer one
+	lark-connector  bool   // the lark-connector skill is on the assistant's machine
+}
+
+func RenderRuntimeInstructions(r RuntimeInstructions) string {
+	return render("assistant/runtime_instructions", r)
+}
+
 // RenderCodexInstructions is the Codex assistant's developer instructions (assistant/codex_instructions): the memory.
 // The live snapshot is not in them but in each message (TurnContext), like Claude's.
 func RenderCodexInstructions(memory string) string {

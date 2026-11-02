@@ -112,6 +112,10 @@ func (n *Node) isAssistantSession(id string) bool {
 	if p := n.transcriptPath(id); p != "" && strings.Contains(filepath.Base(filepath.Dir(p)), "-jarvis-assistant") {
 		return true
 	}
+	// A conversation an agent runtime runs (assistant_runtime.go), listed before this node kept its state.
+	if s, _, ok := n.runtimes.rowOf(id); ok && strings.HasSuffix(s.Cwd, "/.jarvis/assistant") {
+		return true
+	}
 	return false
 }
 
@@ -120,6 +124,10 @@ func (n *Node) isAssistantSession(id string) bool {
 // never written) starts a new conversation at the hub instead of a blank one under the old id (docs/assistant.md
 // 「定时任务」).
 func (n *Node) assistantResumable(id string) bool {
+	if n.runtimeAssistant(id) { // a runtime keeps it: still its while the runtime knows it
+		_, _, known := n.runtimes.belongs(id)
+		return known
+	}
 	if id == "" || !validID(id) {
 		return false
 	}
@@ -135,7 +143,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if launcher != "" && !nameRe.MatchString(launcher) {
 		return "", fmt.Errorf("invalid launcher %q", launcher)
 	}
-	if id != "" && !validID(id) {
+	if id != "" && !validID(id) && !n.runtimeAssistant(id) {
 		return "", fmt.Errorf("invalid session id %q", id)
 	}
 	if err := validModes(mode, effort); err != nil {
@@ -143,6 +151,15 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	resume := id != ""
 	st, _ := n.state.get(id)
+	// An agent runtime's launcher, or a conversation one runs (assistant_runtime.go): it keeps its model; the node
+	// keeps the conversation's state, snapshot, mode and memory.
+	rl := launcherOr(launcher, st.Launcher)
+	if onRuntime, runs := n.assistantRuntime(rl), n.runtimeAssistant(id); onRuntime != nil || runs {
+		if id != "" && (onRuntime == nil || !runs) && !(runs && launcher == "") { // another kind of agent than its own
+			return "", errors.New("换到另一种 Agent 需要新建对话")
+		}
+		return n.assistantSendRuntime(ctx, onRuntime, id, cwd, rl, text, images, mode)
+	}
 	execution := executionOption(options)
 	if len(options) == 0 || (execution.Fingerprint == "" && execution.Model == "") {
 		if launcher == "" || launcher == st.Launcher {
@@ -306,6 +323,9 @@ func (n *Node) adoptSpare(cwd, launcher string, options ...modelExecution) *assi
 
 // assistantWarm makes sure a fresh spare process is waiting for the next new conversation.
 func (n *Node) assistantWarm(cwd, launcher string, options ...modelExecution) error {
+	if n.assistantRuntime(launcher) != nil { // a runtime is running already: nothing to start ahead
+		return nil
+	}
 	execution := executionOption(options)
 	if err := execution.check(); err != nil {
 		return err
@@ -600,6 +620,9 @@ func (n *Node) emitDelta(id, text string) {
 // assistantInterrupt stops the current turn. claude -p has no interrupt over stdin, so the process is killed;
 // the next message resumes the conversation from its transcript. Codex has turn/interrupt: the process stays.
 func (n *Node) assistantInterrupt(id string) error {
+	if n.runtimeAssistant(id) {
+		return n.assistantInterruptRuntime(context.Background(), id)
+	}
 	n.mu.Lock()
 	p := n.procs[id]
 	n.mu.Unlock()
@@ -831,6 +854,9 @@ func (n *Node) assistantAgent(ctx context.Context, launcher string) (string, err
 	if launcher == "claude" {
 		return "claude", nil
 	}
+	if n.assistantRuntime(launcher) != nil {
+		return assistantOnRuntime, nil
+	}
 	d := n.launcherProbeCached(ctx, launcher)
 	switch d.Agent {
 	case "", "claude": // a probe that failed: try it as claude, as before
@@ -838,7 +864,15 @@ func (n *Node) assistantAgent(ctx context.Context, launcher string) (string, err
 	case "codex":
 		return "codex", nil
 	}
-	return "", fmt.Errorf("启动器 %s 跑的是 %s，Jarvis 助手只能用启动 Claude Code 或 Codex 的启动器：在 设置 › 助手 换一个", launcher, d.Agent)
+	return "", fmt.Errorf("启动器 %s 跑的是 %s，Jarvis 助手只能用启动 Claude Code、Codex 或能当助手的 runtime 的启动器（比如 DSH 插件的）：在 设置 › 助手 换一个", launcher, d.Agent)
+}
+
+// launcherOr is launcher, or the conversation's own when none is given.
+func launcherOr(launcher, own string) string {
+	if launcher != "" {
+		return launcher
+	}
+	return own
 }
 
 // agentOf is assistantAgent from the probe cache, for places that only need to know (no error).

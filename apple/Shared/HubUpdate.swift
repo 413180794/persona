@@ -16,6 +16,14 @@ nonisolated struct HubUpdateStatus: Codable, Equatable, Sendable {
     var autoNotice: Bool
     var lastCheck: Date?
     var confirmed: Bool
+    var image: Image? // a Docker hub's image
+
+    /// The image a Docker hub runs: a pinned tag (a version) has to be changed in .env to get a newer one.
+    nonisolated struct Image: Codable, Equatable, Sendable {
+        var name: String
+        var tag: String
+        var pinned: Bool
+    }
 
     nonisolated struct Latest: Codable, Equatable, Sendable {
         var version: String
@@ -41,7 +49,7 @@ nonisolated struct HubUpdateStatus: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case version, build, channel, canUpdate = "can_update", whyNot = "why_not", latest, state, progress, busy, error, auto
-        case autoNotice = "auto_notice", lastCheck = "last_check", confirmed
+        case autoNotice = "auto_notice", lastCheck = "last_check", confirmed, image
     }
 
     init(from decoder: Decoder) throws {
@@ -60,6 +68,7 @@ nonisolated struct HubUpdateStatus: Codable, Equatable, Sendable {
         autoNotice = try c.decodeIfPresent(Bool.self, forKey: .autoNotice) ?? false
         lastCheck = try c.decodeIfPresent(Date.self, forKey: .lastCheck)
         confirmed = try c.decodeIfPresent(Bool.self, forKey: .confirmed) ?? true
+        image = try c.decodeIfPresent(Image.self, forKey: .image)
     }
 
     /// Between swapping the binary and the new version confirming: the socket going away is expected.
@@ -163,28 +172,46 @@ nonisolated enum HubNotice: Equatable, Sendable {
     case appTooOld
     case hubTooOld
     case updating(String) // what it is doing
-    case rolledBack(String) // why, until dismissed
+    case rolledBack(String, build: Int64) // why, until dismissed
     case autoOn // tell once that it updates itself
     case available(version: String, build: Int64)
+    case newImage(version: String) // a Docker hub: the user pulls it
 
-    /// What `dismissed` holds once the user closed the 「hub 太旧」 line.
-    static let hubTooOldDismissed: Int64 = -1
+    /// What closing the line remembers, so this one does not come back (nil: it cannot be closed).
+    var dismissKey: String? {
+        switch self {
+        case .hubTooOld: "hubTooOld"
+        case .rolledBack(_, let build): "rolledBack:\(build)"
+        case .available(_, let build): "build:\(build)"
+        case .newImage(let version): "image:" + version
+        case .appTooOld, .updating, .autoOn: nil
+        }
+    }
 
-    /// `dismissed`: the build (or problem) the user closed the line for.
-    static func of(_ status: HubUpdateStatus?, compat: HubCompat, dismissed: Int64) -> HubNotice? {
+    /// `dismissed`: the `dismissKey`s of the lines the user closed.
+    static func of(_ status: HubUpdateStatus?, compat: HubCompat, dismissed: [String]) -> HubNotice? {
+        candidates(status, compat: compat).first { n in n.dismissKey.map { !dismissed.contains($0) } ?? true }
+    }
+
+    private static func candidates(_ status: HubUpdateStatus?, compat: HubCompat) -> [HubNotice] {
+        var out: [HubNotice] = []
         switch compat {
-        case .appTooOld: return .appTooOld
-        case .hubTooOld: return dismissed == HubNotice.hubTooOldDismissed ? nil : .hubTooOld
+        case .appTooOld: return [.appTooOld]
+        case .hubTooOld: out.append(.hubTooOld)
         case .ok: break
         }
-        guard let s = status else { return nil }
-        if s.working { return .updating(s.stateTitle) }
-        if s.state == "rolled_back", let e = s.error, let b = s.latest?.build, dismissed != b { return .rolledBack(e) }
-        if s.autoNotice { return .autoOn }
-        if let l = s.latest, s.installable, !s.auto, !l.bad, dismissed != l.build {
-            return .available(version: l.version, build: l.build)
+        guard let s = status else { return out }
+        if s.working { out.append(.updating(s.stateTitle)) }
+        if s.state == "rolled_back", let e = s.error, let b = s.latest?.build { out.append(.rolledBack(e, build: b)) }
+        if s.autoNotice { out.append(.autoOn) }
+        if let l = s.latest, l.newer {
+            if s.channel == "docker" {
+                out.append(.newImage(version: l.version))
+            } else if s.installable, !s.auto, !l.bad {
+                out.append(.available(version: l.version, build: l.build))
+            }
         }
-        return nil
+        return out
     }
 }
 

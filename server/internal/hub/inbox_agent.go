@@ -305,6 +305,19 @@ func (b *inbox) itemOfAgent(sessionID string) *InboxItem {
 	return nil
 }
 
+// inboxDraftWait bounds how long a draft waits for its agent's start to record the conversation (agentStarting).
+var inboxDraftWait = 15 * time.Second
+
+// agentStarting: an agent is being started and does not know its conversation yet. Callers hold b.mu.
+func (b *inbox) agentStarting() bool {
+	for _, it := range b.items {
+		if it.Agent != nil && it.Agent.State == AgentRunning && it.Agent.SessionID == "" {
+			return true
+		}
+	}
+	return false
+}
+
 // isInboxAgent: the conversation is an inbox agent's (no "finished" push for it: the draft in the inbox is the result).
 func (h *Hub) isInboxAgent(sessionID string) bool {
 	h.inbox.mu.Lock()
@@ -323,6 +336,14 @@ func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.Ra
 	}
 	h.inbox.mu.Lock()
 	it := h.inbox.itemOfAgent(sessionID)
+	// An agent that answers before its start returned (an agent runtime that is already running starts a turn at
+	// once): its item learns the conversation's id a moment later.
+	for wait := time.Now().Add(inboxDraftWait); it == nil && h.inbox.agentStarting() && time.Now().Before(wait); {
+		h.inbox.mu.Unlock()
+		time.Sleep(100 * time.Millisecond)
+		h.inbox.mu.Lock()
+		it = h.inbox.itemOfAgent(sessionID)
+	}
 	if it == nil {
 		h.inbox.mu.Unlock()
 		return "", errors.New("this conversation was not started for an inbox item")

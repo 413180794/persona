@@ -4,6 +4,10 @@
 
 import { appToolName, clipInput, light, snippet } from '../../runtime-sdk/index.js'
 
+// The live snapshot the Jarvis assistant starts each message with (node/assistant_context.go; a bare <jarvis-context>
+// tag, unlike the phone's quoted context, which carries attributes): context for the model, not shown in the chat.
+const SNAPSHOT_RE = /<jarvis-context>[\s\S]*?<\/jarvis-context>\s*/g
+
 /** Jarvis seq of a DSH event: DSH counts from 0, Jarvis treats 0 as "nothing yet". */
 export const jarvisSeq = (dshSeq) => dshSeq + 1
 /** DSH seq of a Jarvis seq. */
@@ -104,7 +108,8 @@ export function eventItems(event, { full = false } = {}) {
       }
       if (kind !== 'user') break
       ;(d.content ?? []).forEach((b, i) => {
-        if (b?.type === 'text' && typeof b.text === 'string' && b.text.trim() !== '') push(i, { role: 'user', kind: 'text', text: b.text })
+        const text = b?.type === 'text' && typeof b.text === 'string' ? b.text.replace(SNAPSHOT_RE, '') : ''
+        if (text.trim() !== '') push(i, { role: 'user', kind: 'text', text })
         else if (b?.type === 'image') push(i, { role: 'user', kind: 'image', image: imageOf(b) })
       })
       break

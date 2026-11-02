@@ -22,8 +22,10 @@ RUN npm run build --ignore-scripts
 
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 # VERSION: what the hub reports and compares with its nodes' (a node of another build gets 重新部署). The image's
-# hub never replaces itself (channel docker): it says when a newer image is out (docs/hub-update.md).
+# hub never replaces itself (channel docker): it says when a newer image is out (docs/hub-update.md), looking up the
+# tags of IMAGE (the workflow passes ghcr.io/<owner>/<repo>) unless the compose file says which image it runs.
 ARG VERSION=dev
+ARG IMAGE=
 WORKDIR /src/server
 COPY server/go.mod server/go.sum ./
 RUN go mod download
@@ -31,7 +33,7 @@ COPY server/ ./
 COPY --from=web /src/web/dist/ internal/hub/webdist/
 RUN for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do \
       CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
-        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/jarvisd || exit 1; \
+        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/jarvisd || exit 1; \
     done
 
 FROM alpine:3.22

@@ -127,6 +127,13 @@ import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.CallEnd
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.automirrored.rounded.Forward
+import androidx.compose.material.icons.automirrored.rounded.ReplyAll
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.AddCircle
+import androidx.compose.material.icons.rounded.NetworkCheck
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 
 /**
  * The icon vocabulary (iOS `Theme.Icon`, apple/Shared/Design/Icons.swift): one meaning, one Material symbol, in the
@@ -302,4 +309,12 @@ object JIcons {
     val voice: ImageVector = Icons.Rounded.RecordVoiceOver
     /** End a voice conversation. */
     val hangUp: ImageVector = Icons.Rounded.CallEnd
+    /** Mail (the reader and 写邮件): reply to all, forward, star, test a connection, add an account, move back. */
+    val replyAll: ImageVector = Icons.AutoMirrored.Rounded.ReplyAll
+    val forward: ImageVector = Icons.AutoMirrored.Rounded.Forward
+    val star: ImageVector = Icons.Rounded.StarBorder
+    val starred: ImageVector = Icons.Rounded.Star
+    val testConnection: ImageVector = Icons.Rounded.NetworkCheck
+    val addFilled: ImageVector = Icons.Rounded.AddCircle
+    val undo: ImageVector = Icons.AutoMirrored.Rounded.Undo
 }

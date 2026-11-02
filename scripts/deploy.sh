@@ -37,13 +37,18 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o 
 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-darwin-arm64 ./cmd/jarvisd
 echo "built $VERSION"
 
+# is_here <machine id>: the config lists this computer's host name for it.
+is_here() {
+  local here=" $(field "$1" hostnames) "
+  [[ "$here" == *" $(hostname -s) "* || "$here" == *" $(scutil --get LocalHostName 2>/dev/null) "* ]]
+}
+
 install_bin() { # machine-id binary
-  local id=$1 bin=$2 host here
+  local id=$1 bin=$2 host
   host=$(field "$id" ssh); host=${host:-$id}
-  here=" $(field "$id" hostnames) "
   # This machine (listed by host name in the config): copy instead of going through ssh.
   via=$(field "$id" via)
-  if [[ "$here" == *" $(hostname -s) "* || "$here" == *" $(scutil --get LocalHostName 2>/dev/null) "* ]]; then
+  if is_here "$id"; then
     mkdir -p ~/.jarvis/bin && cp "$bin" ~/.jarvis/bin/jarvisd.new && mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd
     restart_resident
   elif [ -n "$via" ]; then
@@ -63,6 +68,23 @@ install_bin() { # machine-id binary
   fi
 }
 
+# herdr on a machine that has none (scripts/ensure-herdr.sh; JARVIS_SKIP_HERDR=1 skips it): a first install should
+# leave a machine whose Agents show up. Never fails the deploy.
+ensure_herdr() { # machine-id
+  local id=$1 host via vh
+  [ "${JARVIS_SKIP_HERDR:-}" = 1 ] && return 0
+  host=$(field "$id" ssh); host=${host:-$id}
+  via=$(field "$id" via)
+  if is_here "$id"; then
+    sh ../scripts/ensure-herdr.sh
+  elif [ -n "$via" ]; then
+    vh=$(field "$via" ssh); vh=${vh:-$via}
+    ssh -o ConnectTimeout=10 "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host 'sh -s'" < ../scripts/ensure-herdr.sh
+  else
+    ssh -o ConnectTimeout=10 "$host" 'sh -s' < ../scripts/ensure-herdr.sh
+  fi 2>&1 | sed "s/^/$id: /" || true
+}
+
 # A resident node (scripts/node-launchd.sh, Mac or Linux) keeps the old binary until it restarts.
 restart_resident() { ../scripts/node-launchd.sh restart || true; }
 
@@ -75,6 +97,7 @@ for t in "${TARGETS[@]}"; do
       ssh "$JARVIS_HUB_SSH" 'mkdir -p ~/.jarvis/bin/nodes' &&
         scp -q bin/jarvisd-linux-amd64 bin/jarvisd-darwin-arm64 "$JARVIS_HUB_SSH:.jarvis/bin/nodes/"
       install_bin "$t" "bin/jarvisd-$(field "$t" os)-$( [ "$(field "$t" os)" = darwin ] && echo arm64 || echo amd64)"
+      ensure_herdr "$t"
       ssh "$JARVIS_HUB_SSH" 'bash -s' <<'EOF'
 set -e
 mkdir -p ~/.config/systemd/user
@@ -104,6 +127,6 @@ EOF
       [[ " $JARVIS_MACHINES " == *" $t "* ]] || { echo "unknown machine $t (not in the config)" >&2; exit 2; }
       os=$(field "$t" os); os=${os:-darwin}
       bin="bin/jarvisd-$os-$( [ "$os" = darwin ] && echo arm64 || echo amd64)"
-      if install_bin "$t" "$bin"; then echo "$t: installed"; else echo "$t: unreachable, skipped"; fi ;;
+      if install_bin "$t" "$bin"; then echo "$t: installed"; ensure_herdr "$t"; else echo "$t: unreachable, skipped"; fi ;;
   esac
 done

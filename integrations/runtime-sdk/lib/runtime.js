@@ -54,7 +54,8 @@ export function defaultSocketPath() {
  * @param {{ runtime: string, name?: string, agent?: string, version?: string, launcher?: string, launcherModel?: string,
  *   socketPath?: string, answerFirst?: 'auto'|'phone'|'local', log?: (msg: string) => void,
  *   connect?: (path: string) => import('node:net').Socket, pushDelayMs?: number, retryMs?: number,
- *   refreshMs?: number, requires?: string[], onHub?: (connected: boolean) => void }} options - requires: node
+ *   refreshMs?: number, requires?: string[], onHub?: (connected: boolean) => void, assistant?: boolean }} options -
+ *   assistant: its launcher may run the Jarvis assistant (caps.assistant; docs/runtimes.md「助手」). requires: node
  *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
  *   connected, and tries again once the node restarts (its socket file is replaced) or after 10 minutes. onHub: called
  *   after every hello and whenever the node's hub comes or goes (a runtime fetching the hub's tools does it then).
@@ -159,6 +160,8 @@ export function createRuntime(driver, options) {
       interrupt: typeof driver.interrupt === 'function',
       rename: typeof driver.rename === 'function',
       close: typeof driver.close === 'function',
+      // It runs the Jarvis assistant's conversations (docs/runtimes.md「助手」): what that asks of it is the runtime's.
+      assistant: options.assistant === true && typeof driver.start === 'function' && typeof driver.send === 'function',
     }
     const h = { runtime: options.runtime, name: options.name ?? options.runtime, version: options.version ?? '', instance, caps }
     if (options.agent) h.agent = options.agent
@@ -611,23 +614,26 @@ export function createRuntime(driver, options) {
      * The hub's tools for this runtime's agents (mcp.tools: the phone's phone_*, mail_*), [] without a node or hub.
      * @returns {Promise<{name: string, description: string, input_schema: object}[]>}
      */
-    async tools() {
+    async tools({ assistant = false } = {}) {
       const p = peer
       if (!p) return []
-      const res = await p.call('mcp.tools', {}, { timeoutMs: 15_000 })
+      const res = await p.call('mcp.tools', assistant ? { assistant: true } : {}, { timeoutMs: 15_000 })
       return Array.isArray(res?.tools) ? res.tools.filter((t) => t && typeof t.name === 'string' && t.name !== '') : []
     },
     /**
      * Call one of the hub's tools (mcp.call). Phone tools may wait for the phone (woken in the background, or a
      * confirmation on it), so there is no timeout of its own: signal ends the wait.
-     * @param {{name: string, args?: object, session_id?: string}} params
+     * @param {{name: string, args?: object, session_id?: string, assistant?: boolean}} params - assistant: the call is
+     *   an assistant conversation's (the node checks it is one this runtime runs).
      * @param {{signal?: AbortSignal}} [opts]
      * @returns {Promise<{content: {type: string, text?: string, data?: string, mime_type?: string}[], is_error?: boolean}>}
      */
     async callTool(params, { signal } = {}) {
       const p = peer
       if (!p) return { content: [{ type: 'text', text: 'Jarvis is not connected on this machine' }], is_error: true }
-      return p.call('mcp.call', { name: params.name, args: params.args ?? {}, session_id: params.session_id ?? '' }, { timeoutMs: 0, signal })
+      const call = { name: params.name, args: params.args ?? {}, session_id: params.session_id ?? '' }
+      if (params.assistant) call.assistant = true
+      return p.call('mcp.call', call, { timeoutMs: 0, signal })
     },
     /** Push the list now (tests). */
     pushNow: pushSessions,

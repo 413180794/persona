@@ -29,6 +29,8 @@ type runtimeHub struct {
 	asked    []proto.Interaction
 	resolve  func(proto.Interaction) proto.Resolution
 	nodePeer *rpc.Peer
+	// answer takes the other hub calls (mcp.tools, assistant.context…); handled false: an unexpected call.
+	answer func(method string, params json.RawMessage) (res any, err error, handled bool)
 }
 
 func (b *runtimeHub) lastList() []proto.Session {
@@ -63,6 +65,7 @@ func runtimeNodeOn(t *testing.T, shared *RuntimeHost) (*Node, *runtimeHub) {
 	n.cdirs = newClaudeDirs()
 	n.cdirs.scan = func() map[int]procEnv { return nil }
 	n.metas, n.bgScans = map[string]quickMeta{}, map[string]*bgScan{}
+	n.modes = map[string]sessionModes{}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	n2hR, n2hW := io.Pipe()
@@ -106,6 +109,14 @@ func runtimeNodeOn(t *testing.T, shared *RuntimeHost) (*Node, *runtimeHub) {
 			resolve := end.resolve
 			end.mu.Unlock()
 			return resolve(p.Interaction), nil
+		}
+		end.mu.Lock()
+		answer := end.answer
+		end.mu.Unlock()
+		if answer != nil {
+			if res, err, handled := answer(method, params); handled {
+				return res, err
+			}
 		}
 		return nil, errors.New("unexpected hub call " + method)
 	}

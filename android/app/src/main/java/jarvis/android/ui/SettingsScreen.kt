@@ -69,7 +69,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * 设置 (iOS SettingsView), a full-screen sheet over the shell with ✕: groups of rows with colored tiles like iOS's
- * Settings. Its sub-pages (机器 and a machine's page and charts, Claude Code 设置, 设备, 通知, 存储空间, 界面风格) are a
+ * Settings. Its sub-pages (机器 and a machine's page and charts, Claude Code 设置, 设备, 通知, 存储空间, 界面风格, 连接器) are a
  * stack of [SettingsRoute] paths in [stack], kept by the caller so it survives opening a chat from a machine's page.
  */
 @Composable
@@ -135,7 +135,10 @@ fun SettingsScreen(
                 row { KitRow("Claude Code 设置", onClick = { push(SettingsRoute.Claude) }, icon = JIcons.options, iconColor = hue.orange, subtitle = "各台电脑上的常用选项，可以一起改") }
                 row { KitRow("设备", onClick = { push(SettingsRoute.Devices) }, icon = JIcons.key, iconColor = hue.green, subtitle = "能连 hub 的手机、手表和网页") }
             }
-            PhoneDataSection()
+            jarvis.android.ui.mail.ConnectorsGroup(
+                hub.api, reloadKey = stack.value.size,
+                onPhone = { push(SettingsRoute.PhoneData) }, onMail = { push(SettingsRoute.Mail) }, onFeishu = { push(SettingsRoute.Feishu) },
+            )
             KitGroup(
                 header = "后台通知",
                 footer = "这个 App 不用推送服务：它在后台和 hub 保持连接，有事就直接弹通知（通知栏里会常驻一条「已连接 hub」）。" +
@@ -192,7 +195,7 @@ private fun openAutostart(ctx: android.content.Context) {
  * turned on; turning one on asks for its Android permission. Only the ones on are declared to the hub.
  */
 @Composable
-private fun PhoneDataSection() {
+internal fun PhoneDataSection() {
     val runner = runCatching { jarvis.android.JarvisApp.instance.phoneTools }.getOrNull() ?: return
     val enabled by runner.enabled.collectAsState()
     val ctx = LocalContext.current

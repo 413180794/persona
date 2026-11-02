@@ -21,7 +21,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   `internal/update` 的下载 / 替换 / 看门狗、`jarvisd update-watch`；接口见第 12 节。
 - **第 3 步（App）已做**：`apple/Shared/HubUpdate.swift`（状态、记录、Skills、兼容判断 `HubCompat`、提示条选哪一条 `HubNotice`）、
   `Views/Settings/HubUpdateViews.swift`（设置 › hub、提示条、Skills 页）；hub 在自动更新装好、回滚后推一条普通通知。第 10 节已改成现状。
-- 第 4 步还没做。
+- **第 4 步（Docker 检测和提示）已做**：Docker 的 hub 每 6 小时问一次 registry 它的镜像有哪些标签（`internal/update/image.go`），
+  最新的正式版本比自己新就提示，App 里给出要运行的命令（钉了版本的先改 `.env`）。见「Docker」一节。
 
 ## 现状（2026-11-02 核实）
 
@@ -222,12 +223,24 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 | | 发布版（我们的 hub、install.sh 装的） | Docker | dev |
 | --- | --- | --- | --- |
-| 检测 | 版本清单 | 镜像 tag | 不检测 |
-| 更新 | 自动（默认开）/ App 一键 | 提示 `docker compose pull && docker compose up -d` | 无 |
+| 检测 | 版本清单 | registry 上镜像的标签（见「Docker」） | 不检测 |
+| 更新 | 自动（默认开）/ App 一键 | 提示 `docker compose pull && docker compose up -d`（钉了版本的先改 `.env`） | 无 |
 | 重启 | 自己 `exec` 新二进制 | 用户重建容器 | — |
 | 回滚 | 自动（`.prev`，坏版本不再试） | 换回上一个 tag | — |
 | node | 跟着 hub 自动重新部署 | 镜像自带 node 二进制，重建后照旧「重新部署」 | — |
 | 急需 master | 直接部署（打 `release` 和编译时间，旧的公开版不会把它降级，更新的公开版自动接手） | — | — |
+
+### Docker（第 4 步）
+
+- **查哪个镜像**：compose 把 `.env` 的 `JARVIS_IMAGE` 传进容器，hub 查的就是它；没传（老的 compose 文件）用构建时写进二进制的
+  `main.image`（`hub-image.yml` 传 `ghcr.io/<owner>/<repo>`，不写死）。
+- **怎么查**：registry 的 `GET /v2/<repo>/tags/list`，按它回的 `WWW-Authenticate` 先拿一个拉取 token（公开镜像匿名就给，ghcr.io、
+  Docker Hub 都是这样），跟着 `Link` 翻页。只认 `X.Y.Z`，取最大的；比自己的版本新才算「有新镜像」。自己的版本也得是 `X.Y.Z`
+  （或 `-rc1` 这类预发布）：手动跑出来的 `edge` 镜像版本是 `git describe`，比 tag 新，比不出来，就只显示最新的正式版本。
+- **私有镜像**：仓库私有时 ghcr 上的镜像默认也私有，匿名拿不到 token。`.env` 里设 `JARVIS_REGISTRY_TOKEN`（能读这个镜像的 token），
+  或者把镜像改成公开；没设时设置 › hub 里说查不了、该设什么。不读 NAS 上 `docker login` 存的凭据（在宿主上，容器里没有）。
+- **App**：Agents 页顶上「hub 有新镜像 X」，只有 ×（按版本记，下个版本再提示）；设置 › hub 里是命令，标签钉在某个版本时先给改 `.env` 的那一行。
+- 不做：替用户拉镜像、重建容器（要挂 Docker socket，等于把 NAS 交给 hub）。
 
 ## 10. App 里
 
@@ -247,7 +260,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   3. 更新中：「hub 正在更新：等 2 个在忙的结束」之类；
   4. 回滚了：原因，× 关掉（按这一版记）；
   5. 第一次告知：「hub 会在空闲时自动更新」，带「关闭」（关掉自动更新）和「知道了」，点任一个 hub 记下 `auto_notice_seen`，不再出现；
-  6. 有新版本而自动更新关着：「hub 有新版本 X」，带「更新」和 ×（这一版不再提示）。自动更新开着时不提示，它会自己装。
+  6. 有新版本而自动更新关着：「hub 有新版本 X」，带「更新」和 ×（这一版不再提示）。自动更新开着时不提示，它会自己装；
+     Docker 的 hub 是「hub 有新镜像 X」，只有 ×。关掉一条后下一条照常出现，App 记得最近关掉的几条。
   点这一行别的地方打开 hub 页（sheet）。不弹窗、不挡操作，按钮文字单行；行里几个按钮各管各的（`.borderless`，`HubNoticeUITests`）。
   只放 Agents 页：助手页是一段对话，顶上多一行会把对话往下推；hub 的状态和机器、Agent 放在一起看。
 - **通知**：自动更新装好推一条「hub 已更新到 X」，回滚了推「hub 更新没成功」和原因（hub 的 `updater.notify`）；手动点的更新在 App 里看得到，不另推。

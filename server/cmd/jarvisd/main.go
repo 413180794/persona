@@ -24,15 +24,21 @@ import (
 )
 
 // What the build wrote in (-X): the version for people, and for updates (docs/hub-update.md) the channel
-// (release / docker / dev), the build number (UTC YYYYMMDDHHMM) and where the publisher's dl/ is.
+// (release / docker / dev), the build number (UTC YYYYMMDDHHMM), where the publisher's dl/ is, and for the Docker
+// image the image it was built as (where to look for newer ones).
 var (
 	version   = "dev"
 	channel   = ""
 	build     = ""
 	updateURL = ""
+	image     = ""
 )
 
-func buildInfo() update.Build { return update.Make(version, channel, build, updateURL) }
+func buildInfo() update.Build {
+	b := update.Make(version, channel, build, updateURL)
+	b.Image = image
+	return b
+}
 
 const usage = `usage:
   jarvisd launch <name> …   run claude with a launcher kept in 设置 › 模型 (from the local node)

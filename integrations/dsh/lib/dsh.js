@@ -5,11 +5,24 @@
 // drive it with fakes; index.js wires the real Cordis services.
 
 import { randomUUID } from 'node:crypto'
-import { basename } from 'node:path'
+import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { createRuntime, interactionId, RpcError, summaryOf } from '../../runtime-sdk/index.js'
 import { attachmentOf, dshSeq, eventItems, itemsOf, jarvisSeq, lastText, streamText, toolInput, toolName } from './map.js'
 
-export const RUNTIME_VERSION = '0.2.0'
+export const RUNTIME_VERSION = '0.3.0'
+
+// The DSH permission preset for each Jarvis permission mode of an assistant conversation (config presets overrides):
+// Codex's mapping, in DSH's presets (docs/dsh.md「助手」). DSH has no auto mode: as the default.
+const DEFAULT_PRESETS = { default: 'workspace-write', acceptEdits: 'workspace-write', auto: 'workspace-write',
+  plan: 'read-only', bypassPermissions: 'danger-full-access' }
+
+// ol (the lark-connector skill's helper) run in the shell, as a command word.
+const OL_IN_SHELL = /(^|[\s;&|(`$])(ol|[^\s;&|]*lark-connector\/scripts\/ol\.sh)(\s|$)/
+
+/** cwd is the Jarvis assistant's directory (~/.jarvis/assistant, as the node and the hub tell its conversations). */
+function assistantDir(cwd) {
+  return typeof cwd === 'string' && cwd.replace(/\/+$/, '').endsWith('/.jarvis/assistant')
+}
 
 
 /**
@@ -19,8 +32,11 @@ export const RUNTIME_VERSION = '0.2.0'
  * @property {{ answer(agent: object, callId: string, answer: object): boolean } | undefined} [userQuestions]
  * @property {{ archivedSessionIds: readonly string[], archiveSession(id: string, o?: {stopActivity?: boolean}): Promise<void> } | undefined} [workspace]
  *   DSH's workspaceRegistry: archived sessions are not listed; closing one from the phone archives it.
- * @property {(definition: object) => (() => void) | undefined} [registerTool] - ctx.tools.register: the hub's tools
- *   (phone_*, mail_*) for DSH's agents. Absent: none.
+ * @property {(definition: object, options?: object) => (() => void) | undefined} [registerTool] - ctx.tools.register:
+ *   the hub's tools (phone_*, mail_*; the assistant's own for its conversations) for DSH's agents. Absent: none.
+ * @property {{ get(id: string): { session: object } | undefined } | undefined} [agents] - ctx.agents: a live session,
+ *   to set an assistant conversation's permission preset on.
+ * @property {{ set(session: object, name: string): void } | undefined} [permissionPresets] - ctx.permissionPresets.
  * @property {() => boolean} [hasLiveClient] - whether a DSH Web GUI is connected.
  * @property {(msg: string) => void} [log]
  * @property {(path: string) => import('node:net').Socket} [connect] - tests.
@@ -32,7 +48,9 @@ const TOOLS_EVERY = 5 * 60_000 // ms: look at the hub's tools this often (the ph
  * @param {DshDeps} deps
  * @param {{ runtime?: string, name?: string, launcher?: string, socketPath?: string,
  *   interactions?: 'auto'|'phone'|'browser', listDays?: number, maxSessions?: number, pushDelayMs?: number,
- *   retryMs?: number }} [options] - runtime / name / launcher: how this DSH shows in Jarvis (dsh / DSH / dsh).
+ *   retryMs?: number, assistant?: boolean, presets?: Record<string, string> }} [options] - runtime / name / launcher:
+ *   how this DSH shows in Jarvis (dsh / DSH / dsh). assistant: it may run the Jarvis assistant (docs/dsh.md「助手」);
+ *   presets: the DSH permission preset for each Jarvis permission mode of an assistant conversation.
  */
 export function createDshRuntime(deps, options = {}) {
   const runtimeID = options.runtime ?? 'dsh'
@@ -45,6 +63,10 @@ export function createDshRuntime(deps, options = {}) {
   const texts = new Map() // session id -> the assistant text being generated
   const disposers = []
   const tools = { key: '', disposers: [], refreshing: false, timer: undefined }
+  // The Jarvis assistant's conversations (their directory is the assistant's): id -> { memoryDir, mode }.
+  const assistants = new Map()
+  const presets = { ...DEFAULT_PRESETS, ...(options.presets ?? {}) }
+  const isAssistant = (id) => assistants.has(id)
 
   const state = (id) => {
     let s = known.get(id)
@@ -75,6 +97,7 @@ export function createDshRuntime(deps, options = {}) {
       const id = String(s.sessionId)
       if (s.origin === 'subagent' || s.parentSessionId) continue // a subagent's or a workflow's: its parent shows it
       if (archived.has(id)) continue // archived in DSH (or closed from the phone): DSH hides it too
+      if (options.assistant && assistantDir(s.cwd) && !assistants.has(id)) assistants.set(id, {})
       const st = known.get(id)
       const running = s.running === true || st?.running === true
       const waiting = activeQuestions(s) > 0 // asked in the Web GUI; cards on the phone the SDK marks itself
@@ -131,7 +154,7 @@ export function createDshRuntime(deps, options = {}) {
   // ---- the hub's tools for DSH's agents (phone_*, mail_*: docs/dsh.md「手机工具」) ----
 
   /** The DSH tool for one of the hub's tools: called through the node (mcp.call), its text as the result. */
-  function toolDefinition(t) {
+  function toolDefinition(t, assistantOnly) {
     const schema = t.input_schema && typeof t.input_schema === 'object' && !Array.isArray(t.input_schema)
       ? t.input_schema : { type: 'object', properties: {} }
     return {
@@ -145,7 +168,10 @@ export function createDshRuntime(deps, options = {}) {
       async execute(args, exec) {
         const agent = exec?.agent
         const sessionId = String(agent?.session?.id ?? agent?.id ?? '')
-        const res = await rt.callTool({ name: t.name, args: args && typeof args === 'object' ? args : {}, session_id: sessionId }, { signal: exec?.signal })
+        const call = { name: t.name, args: args && typeof args === 'object' ? args : {}, session_id: sessionId }
+        if (isAssistant(sessionId)) call.assistant = true
+        else if (assistantOnly) throw new Error(`${t.name} is the Jarvis assistant's`)
+        const res = await rt.callTool(call, { signal: exec?.signal })
         const text = resultText(res?.content)
         if (res?.is_error) throw new Error(text || `${t.name} failed`)
         return { content: [{ type: 'text', text }] }
@@ -159,13 +185,18 @@ export function createDshRuntime(deps, options = {}) {
     tools.refreshing = true
     try {
       const list = await rt.tools()
-      const key = JSON.stringify(list.map((t) => [t.name, t.description, t.input_schema]))
+      // The assistant's own tools (ask_user, schedule_followup, lark-connector…) only for its conversations.
+      const plain = new Set(list.map((t) => t.name))
+      const all = options.assistant ? await rt.tools({ assistant: true }) : list
+      const key = JSON.stringify(all.map((t) => [t.name, t.description, t.input_schema, plain.has(t.name)]))
       if (key === tools.key) return
       dropTools()
       tools.key = key
-      for (const t of list) {
+      for (const t of all) {
+        const assistantOnly = !plain.has(t.name)
         try {
-          const dispose = deps.registerTool(toolDefinition(t))
+          const when = assistantOnly ? (c) => isAssistant(String(c?.agent?.session?.id ?? c?.agent?.id ?? '')) : undefined
+          const dispose = deps.registerTool(toolDefinition(t, assistantOnly), when ? { when } : undefined)
           if (typeof dispose === 'function') tools.disposers.push(dispose)
         } catch (err) {
           log(`jarvis: tool ${t.name}: ${err.message}`)
@@ -301,6 +332,15 @@ export function createDshRuntime(deps, options = {}) {
 
   async function send(params) {
     const content = []
+    const assistant = options.assistant === true && params.assistant === true // the node says so only for its assistant conversations
+    if (assistant) {
+      const a = assistants.get(params.session_id) ?? {}
+      if (typeof params.memory_dir === 'string' && params.memory_dir !== '') a.memoryDir = params.memory_dir
+      if (typeof params.mode === 'string' && params.mode !== '') a.mode = params.mode
+      assistants.set(params.session_id, a)
+      // The live snapshot goes in front of what was typed, as for Claude and Codex (the chat does not show it: map.js).
+      if (typeof params.context === 'string' && params.context.trim() !== '') content.push({ type: 'text', text: params.context })
+    }
     if (typeof params.text === 'string' && params.text.trim() !== '') content.push({ type: 'text', text: params.text })
     for (const img of params.images ?? []) {
       if (img?.data) content.push({ type: 'image', mediaType: img.mime || 'image/jpeg', data: img.data, name: 'phone' })
@@ -314,12 +354,29 @@ export function createDshRuntime(deps, options = {}) {
       mode: running ? 'steer' : 'queue',
       content,
     }, AbortSignal.timeout(25_000))
+    if (assistant) applyPreset(params.session_id)
+  }
+
+  /** The DSH permission preset for an assistant conversation's Jarvis mode, set once its agent is live. */
+  function applyPreset(id) {
+    const a = assistants.get(id)
+    const name = presets[a?.mode || 'default'] ?? presets.default
+    if (!name || a?.preset === name || !deps.permissionPresets || !deps.agents) return
+    const agent = deps.agents.get(id)
+    if (!agent?.session) return
+    try {
+      deps.permissionPresets.set(agent.session, name)
+      a.preset = name
+    } catch (err) {
+      log(`jarvis: preset ${name} for ${id}: ${err.message}`)
+    }
   }
 
   async function start(params) {
     if (!params.cwd) throw new RpcError('要选一个目录', 'bad_request')
     const res = await deps.controller.create({ cwd: params.cwd })
     const id = String(res.sessionId)
+    if (options.assistant && params.assistant === true) assistants.set(id, {})
     if (typeof params.prompt === 'string' && params.prompt.trim() !== '') await send({ session_id: id, text: params.prompt })
     const session = { session_id: id, cwd: params.cwd, title: basename(params.cwd), status: 'idle',
       space_id: params.cwd, space_name: basename(params.cwd), updated_at: new Date().toISOString() }
@@ -353,6 +410,7 @@ export function createDshRuntime(deps, options = {}) {
     pushDelayMs: options.pushDelayMs,
     retryMs: options.retryMs,
     onHub: (connected) => void refreshTools(connected),
+    assistant: options.assistant === true,
   })
 
   // ---- DSH's events ----
@@ -408,13 +466,36 @@ export function createDshRuntime(deps, options = {}) {
     rt.stream(id, text)
   }
 
+  /** A write or edit of a file in an assistant conversation's memory directory, outside plan mode. */
+  function memoryWrite(sessionId, name, input) {
+    const a = assistants.get(sessionId)
+    const file = typeof input?.file_path === 'string' ? input.file_path : ''
+    if (!a?.memoryDir || a.mode === 'plan' || !file || !['write', 'edit'].includes(name)) return false
+    const rel = relative(a.memoryDir, resolve(a.memoryDir, file))
+    return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+  }
+
+  /**
+   * In an assistant conversation, lark-connector goes through the lark-connector tool (the node holds the token and confirms
+   * writes on the phone): ol run in the shell is stopped with that said.
+   */
+  function onPreExecute(exec, next) {
+    const id = String(exec?.agent?.session?.id ?? exec?.agent?.id ?? '')
+    const cmd = exec?.name === 'bash' && typeof exec?.arguments?.command === 'string' ? exec.arguments.command : ''
+    if (id && isAssistant(id) && OL_IN_SHELL.test(cmd)) {
+      return { kind: 'deny', reason: '飞书（lark-connector）在这里用 lark-connector 工具：参数就是 ol 后面那些词；shell 里的 ol 拿不到 token。' }
+    }
+    return next()
+  }
+
   async function onApproval(req, next) {
     const agent = req?.agent
     const sessionId = String(agent?.session?.id ?? agent?.id ?? '')
-    if (!sessionId || !rt.phoneFirst(sessionId)) return next()
+    if (!sessionId || !(isAssistant(sessionId) ? rt.hubConnected : rt.phoneFirst(sessionId))) return next()
     const call = req.callId ? calls.get(sessionId)?.get(req.callId) : undefined
     const name = call?.name ?? req.toolName
     const input = call ? toolInput(call.name, call.args) : undefined
+    if (memoryWrite(sessionId, name, input)) return 'allowed-once' // the assistant's own memory: not asked, as for Codex
     const ix = {
       id: interactionId(runtimeID, sessionId, 'permission', req.callId ?? randomUUID()),
       kind: 'permission',
@@ -458,7 +539,7 @@ export function createDshRuntime(deps, options = {}) {
     const agent = request?.agent
     const sessionId = String(agent?.session?.id ?? agent?.id ?? '')
     const questions = request?.questions ?? []
-    if (!sessionId || questions.length === 0 || !rt.phoneFirst(sessionId)) return next()
+    if (!sessionId || questions.length === 0 || !(isAssistant(sessionId) ? rt.hubConnected : rt.phoneFirst(sessionId))) return next()
     const callId = request.wait?.callId
     const plan = questions.length === 1 && questions[0].intent?.kind === 'plan-review' ? questions[0] : undefined
     const ix = {
@@ -528,6 +609,7 @@ export function createDshRuntime(deps, options = {}) {
       // First on DSH's answerer chains (the Web GUI registers when a browser connects): see docs/dsh.md.
       listen('approval/request', onApproval, { global: true, prepend: true })
       listen('user-questions/request', onQuestion, { global: true, prepend: true })
+      if (options.assistant) listen('tools/pre-execute', onPreExecute, { global: true, prepend: true })
       rt.start()
       if (typeof deps.registerTool === 'function') {
         tools.timer = setInterval(() => void refreshTools(rt.hubConnected), TOOLS_EVERY)

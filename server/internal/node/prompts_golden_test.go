@@ -4,6 +4,8 @@ package node
 // intended change with UPDATE_GOLDEN=1 go test ./internal/node -run Golden, and read the diff.
 
 import (
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +36,22 @@ func TestGoldenCodexMemory(t *testing.T) {
 	goldenNode(t, "codex_memory.index", strings.ReplaceAll(codexMemoryPrompt(dir), dir, "<dir>"))
 	_ = os.WriteFile(filepath.Join(dir, "MEMORY.md"), []byte("  "+strings.Repeat("- [条目](x.md) — 说明\n", 1200)), 0o600)
 	goldenNode(t, "codex_memory.long", strings.ReplaceAll(codexMemoryPrompt(dir), dir, "<dir>"))
+}
+
+// What an assistant on an agent runtime gets with a new conversation's first message (assistant_runtime.go): the
+// memory, without and with the lark-connector skill on the machine.
+func TestGoldenRuntimeInstructions(t *testing.T) {
+	n, home := testNode(t)
+	n.logger = log.New(io.Discard, "", 0)
+	cwd := filepath.Join(home, ".jarvis", "assistant")
+	mem := t.TempDir()
+	_ = os.WriteFile(filepath.Join(mem, "MEMORY.md"), []byte("- [习惯](habits.md) — 回复先给结论\n"), 0o600)
+	clean := func(s string) string { return strings.ReplaceAll(s, mem, "<dir>") }
+	goldenNode(t, "runtime_instructions", clean(n.runtimeInstructions(cwd, mem)))
+	script := filepath.Join(cwd, ".agents", "skills", "lark-connector", "scripts", "ol.sh")
+	_ = os.MkdirAll(filepath.Dir(script), 0o755)
+	_ = os.WriteFile(script, []byte("#!/bin/bash\n"), 0o755)
+	goldenNode(t, "runtime_instructions.lark-connector", clean(n.runtimeInstructions(cwd, mem)))
 }
 
 func TestGoldenLostTasksNotice(t *testing.T) {

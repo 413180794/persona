@@ -46,7 +46,8 @@ Packages 设置里把它改成公开。Postgres 用的是 Docker Hub 上的 `pos
 - `openssh-client`、证书、时区数据。
 
 镜像里的 jarvisd 不带任何 skill（和所有二进制一样）：助手的 skill 放在跑助手那台机器的 `~/.jarvis/skills/`（`docs/hub-update.md`「skill 从二进制里拿出来」）。
-镜像里的 hub 是 `docker` 渠道：不会自己换二进制，有新镜像时提示拉取。
+镜像里的 hub 是 `docker` 渠道：不会自己换二进制，有新镜像时提示拉取（见「升级」）。构建时把镜像名（`ghcr.io/<owner>/<repo>`）写进二进制，
+compose 传进来的 `JARVIS_IMAGE` 优先。
 
 ## 装
 
@@ -92,9 +93,24 @@ docker compose exec hub jarvisd hub tailcat-key          # NAS 上：hub 的公�
 | `JARVIS_LOCAL_NODE=0` | 第一次启动不写「本机」那台机器（镜像里已设） |
 | `JARVIS_NODE_BINARIES` | 「重新部署」用的 node 构建在哪（镜像里是 `/opt/jarvis/nodes`；原生方式是 `~/.jarvis/bin/nodes`） |
 | `PUID` / `PGID`、`TZ` | 见上 |
-| `JARVIS_IMAGE`、`JARVIS_POSTGRES_IMAGE`、`JARVIS_PORT` | compose 用：两个镜像从哪拉、hub 映射到宿主的哪个端口 |
+| `JARVIS_IMAGE`、`JARVIS_POSTGRES_IMAGE`、`JARVIS_PORT` | compose 用：两个镜像从哪拉、hub 映射到宿主的哪个端口。`JARVIS_IMAGE` 也传进 hub 容器：hub 查它的标签，看有没有新镜像（见下「升级」） |
+| `JARVIS_REGISTRY_TOKEN` | 镜像是私有的时候，一个能读它的 token（GitHub：`read:packages` 的 Personal Access Token），hub 拿它查新镜像；公开的镜像不用 |
 
 原生方式也认这些变量（例如 systemd 的 `Environment=`），只是平时用不着。
+
+## 升级
+
+hub 不会自己换镜像，有新镜像时 App 里提示（`docs/hub-update.md`「Docker」）：hub 每 6 小时（设置 › hub 里「检查更新」随时）问一次 registry
+`JARVIS_IMAGE` 的标签，最新的正式版本（`X.Y.Z`，不算 `-rc`、`edge`、`sha-…`）比自己新，Agents 页顶上出现「hub 有新镜像 X」，
+设置 › hub 里是要运行的命令（可复制）：
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+`.env` 里 `JARVIS_IMAGE` 钉在某个版本（`…:1.2.0`）的，`pull` 拉不到新的：先把标签改成新版本（App 里给出整行），再运行上面的命令。
+手动跑出来的 `edge`、`sha-…` 镜像版本号是 `git describe`，比不出新旧，只显示最新的正式版本是哪个。
+镜像是私有的、又没设 `JARVIS_REGISTRY_TOKEN`，设置 › hub 里说查不了、该设什么。
 
 ## 网络
 

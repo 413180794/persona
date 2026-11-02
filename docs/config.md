@@ -20,7 +20,7 @@
 | 机器 | 要有 |
 | --- | --- |
 | hub 机器（Linux） | docker（Postgres 容器；不想装 Docker 就用系统自带的 Postgres，见 `docs/server.md`「数据库」）、systemd 用户服务、herdr；手机能访问它的 18660 端口（同一个网络或 VPN）。放在 NAS 上、或只当 hub 不跑 Agent 时，也可以整个用 Docker 跑（`docs/docker.md`），下面的第 1、2 步只用来往各台电脑装 `jarvisd` |
-| 每台要接入的电脑 | herdr，以及 Claude Code（或 Codex）；`~/.jarvis/bin/jarvisd`（第 2 步部署脚本会拷过去） |
+| 每台要接入的电脑 | Claude Code（或 Codex）；`~/.jarvis/bin/jarvisd` 和 herdr（第 2 步部署脚本会拷过去；herdr 没有的话用它的官方安装器装到 `~/.local/bin`，用别的引擎不想装就 `JARVIS_SKIP_HERDR=1`） |
 | SSH | hub 机器能**免密码**登录每台电脑（hub 用 `BatchMode=yes`，只能用密钥），在 hub 机器的 `~/.ssh/config` 里给每台起个别名；开发机也要能 SSH 到每台（部署用） |
 
 在 NAT 后面、hub 连不进去的电脑（比如家里的 Mac、另一个内网里的机器），用 **tailcat**（`docs/server.md`「tailcat 打洞」）：
@@ -114,6 +114,7 @@
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
 | `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`jarvis_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
 | `android.application_id` | Android App 的 application id（`scripts/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
+| `android.google_oauth_scheme` | Android App 接 Gmail 的 Google 登录回调用的 scheme：hub `google.client_id` 的反向 client ID（`docs/mail.md`「Android」）；不写就只能用应用专用密码加 Gmail |
 
 `python3 scripts/jarvis_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `apple/Config.xcconfig`；
 `sim.sh` / `release.sh` 会自动生成。直接跑 `xcodegen` 或打开 Xcode 之前先跑一次 `python3 scripts/jarvis_config.py xcconfig`。

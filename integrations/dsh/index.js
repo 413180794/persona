@@ -26,11 +26,27 @@ function idOf(config, key, fallback) {
   return v
 }
 
+const MODES = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions']
+
+/** config.presets: Jarvis permission mode -> DSH preset name; anything else fails the load. */
+function presetsOf(p) {
+  if (p === undefined || p === null) return undefined
+  if (typeof p !== 'object' || Array.isArray(p)) throw new Error('jarvis-dsh-runtime: config.presets must map Jarvis permission modes to DSH presets')
+  for (const [mode, name] of Object.entries(p)) {
+    if (!MODES.includes(mode) || typeof name !== 'string' || name === '') {
+      throw new Error(`jarvis-dsh-runtime: config.presets.${mode}: a mode of ${MODES.join(' / ')} to a DSH preset name`)
+    }
+  }
+  return p
+}
+
 /**
  * @param {import('@deepseek-ai/cordis').Context} ctx
  * @param {{ socket?: string, interactions?: 'auto'|'phone'|'browser', listDays?: number, maxSessions?: number,
- *   runtime?: string, name?: string, launcher?: string, phoneTools?: boolean }} [config] - runtime / name / launcher:
- *   how this DSH appears in Jarvis (default dsh / DSH / dsh); a second DSH on the same machine needs its own.
+ *   runtime?: string, name?: string, launcher?: string, phoneTools?: boolean, assistant?: boolean,
+ *   presets?: Record<string, string> }} [config] - runtime / name / launcher: how this DSH appears in Jarvis (default
+ *   dsh / DSH / dsh); a second DSH on the same machine needs its own. assistant (default true): its launcher may run
+ *   the Jarvis assistant (docs/dsh.md「助手」); presets: the DSH permission preset per Jarvis permission mode there.
  */
 export function apply(ctx, config = {}) {
   const runtimeID = idOf(config, 'runtime', 'dsh')
@@ -42,10 +58,12 @@ export function apply(ctx, config = {}) {
       on: (event, listener, options) => scope.on(event, listener, options),
       userQuestions: optional(scope, 'userQuestions'),
       workspace: optional(scope, 'workspaceRegistry'),
-      registerTool: config.phoneTools === false ? undefined : (definition) => {
+      registerTool: config.phoneTools === false ? undefined : (definition, opts) => {
         const tools = optional(scope, 'tools')
-        return typeof tools?.register === 'function' ? tools.register(definition) : undefined
+        return typeof tools?.register === 'function' ? tools.register(definition, opts) : undefined
       },
+      agents: optional(scope, 'agents'),
+      permissionPresets: optional(scope, 'permissionPresets'),
       hasLiveClient: () => {
         const gateway = optional(scope, 'typertGateway')
         return typeof gateway?.hasLiveClient === 'function' ? gateway.hasLiveClient() : true
@@ -59,6 +77,8 @@ export function apply(ctx, config = {}) {
       interactions: ['auto', 'phone', 'browser'].includes(config.interactions) ? config.interactions : 'auto',
       listDays: Number.isFinite(config.listDays) && config.listDays > 0 ? config.listDays : 7,
       maxSessions: Number.isFinite(config.maxSessions) && config.maxSessions > 0 ? config.maxSessions : 80,
+      assistant: config.assistant !== false,
+      presets: presetsOf(config.presets),
     })
     scope.effect(() => {
       runtime.start()

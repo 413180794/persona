@@ -10,7 +10,8 @@ import jarvis.android.ui.machines.MachinesScreen
 
 /**
  * The pages pushed over 设置, as plain strings so the stack survives in a saved state: "machines", "machine/<id>",
- * "monitor/<id>", "engine/<id>", "claude", "devices", "notifications", "storage", "style".
+ * "monitor/<id>", "engine/<id>", "claude", "devices", "notifications", "storage", "style"; 连接器: "phone-data", "mail",
+ * "mail-add", "feishu".
  */
 sealed interface SettingsRoute {
     val path: String
@@ -26,6 +27,10 @@ sealed interface SettingsRoute {
     data object Notifications : SettingsRoute { override val path = "notifications" }
     data object Storage : SettingsRoute { override val path = "storage" }
     data object Style : SettingsRoute { override val path = "style" }
+    data object PhoneData : SettingsRoute { override val path = "phone-data" }
+    data object Mail : SettingsRoute { override val path = "mail" }
+    data object MailAdd : SettingsRoute { override val path = "mail-add" }
+    data object Feishu : SettingsRoute { override val path = "feishu" }
 
     companion object {
         fun of(path: String): SettingsRoute? {
@@ -42,6 +47,10 @@ sealed interface SettingsRoute {
                 "notifications" -> Notifications
                 "storage" -> Storage
                 "style" -> Style
+                "phone-data" -> PhoneData
+                "mail" -> Mail
+                "mail-add" -> MailAdd
+                "feishu" -> Feishu
                 else -> null
             }
         }
@@ -72,5 +81,9 @@ fun SettingsPage(
         SettingsRoute.Notifications -> NotificationSettingsScreen(hub, pop)
         SettingsRoute.Storage -> StorageScreen(pop)
         SettingsRoute.Style -> jarvis.android.ui.StylePickerScreen(onBack = pop)
+        SettingsRoute.PhoneData -> jarvis.android.ui.mail.PhoneDataScreen(pop)
+        SettingsRoute.Mail -> jarvis.android.ui.mail.MailAccountsScreen(hub.api, pop, onAdd = { push(SettingsRoute.MailAdd) })
+        SettingsRoute.MailAdd -> jarvis.android.ui.mail.AddMailAccountScreen(hub.api, pop, onAdded = pop)
+        SettingsRoute.Feishu -> jarvis.android.ui.mail.FeishuConnectorScreen(hub.api, pop, onAgentModel = { push(SettingsRoute.ModelPurpose("lark.agent")) })
     }
 }

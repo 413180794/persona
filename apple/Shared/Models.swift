@@ -126,20 +126,25 @@ nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
     var model: String?
     /// "codex" for plain codex or an alias running it (docs/codex.md「从手机新建」); nil: Claude Code.
     var agent: String? = nil
+    /// An agent runtime's launcher that can run the Jarvis assistant (DSH's, docs/runtimes.md「助手」).
+    var assistant: Bool? = nil
     var id: String { name }
     /// A Codex start sends its first message with it and waits for the thread Codex makes.
     var isCodex: Bool { agent == "codex" }
 
     enum CodingKeys: String, CodingKey {
-        case name, model, agent
+        case name, model, agent, assistant
         case baseURL = "base_url"
     }
 }
 
 extension Launcher {
-    /// Runs Claude Code or Codex: what the Jarvis assistant can use (headless `claude -p` or `codex app-server`).
-    /// Other agents (TRAEX…) are left out; the node refuses them with a reason too.
-    var runsAssistant: Bool { baseURL != "(traex)" && (agent == nil || agent == "" || agent == "claude" || agent == "codex") }
+    /// Runs Claude Code or Codex, or is an agent runtime's launcher that says it can: what the Jarvis assistant can
+    /// use (headless `claude -p`, `codex app-server`, the runtime). Other agents (TRAEX…) are left out; the node
+    /// refuses them with a reason too.
+    var runsAssistant: Bool {
+        assistant == true || (baseURL != "(traex)" && (agent == nil || agent == "" || agent == "claude" || agent == "codex"))
+    }
 }
 
 nonisolated struct DirEntry: Codable, Hashable, Sendable, Identifiable {

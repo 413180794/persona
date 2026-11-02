@@ -15,7 +15,7 @@ test('hello names the runtime and declares only the caps whose driver methods ex
   assert.equal(n.hello.runtime, 'toy')
   assert.equal(n.hello.name, 'Toy')
   assert.equal(n.hello.agent, 'claude')
-  assert.deepEqual(n.hello.caps, { start: false, send: true, interrupt: false, rename: false, close: false })
+  assert.deepEqual(n.hello.caps, { start: false, send: true, interrupt: false, rename: false, close: false, assistant: false })
   assert.equal(n.hello.launcher, undefined, 'no launcher without start')
   await until('list', () => n.last('runtime.sessions'))
   await n.peer.call('session.send', { session_id: 's1', text: 'x' })

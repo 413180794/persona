@@ -167,6 +167,10 @@ python3 scripts/asc_testflight.py external   # 建群组、按配置开 / 关公
 curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd，按 SHA256SUMS 校验，不对就不装
 ```
 
+- 装好 `jarvisd` 后，这台电脑上找不到 herdr（PATH 和 node 会找的 `~/.local/bin` 等目录）就用 herdr 官方安装器（`https://herdr.dev/install.sh`）
+  一起装上：首次安装完 Agents 里就能看到会话。装不上只打一行警告，不影响 `jarvisd`；用 Orca / Herdr App 的电脑 `JARVIS_SKIP_HERDR=1` 跳过。
+  `deploy.sh` 往每台电脑装 `jarvisd` 时做同样的事（`scripts/ensure-herdr.sh`，两处的步骤保持一致）。
+
 - `release.sh` 传完 TestFlight 后接着跑它，版本号是 `<提交>-<构建号>`，和这一版 TestFlight 对得上；`NO_PUBLISH=1` 只发 TestFlight，
   配置里没有 `publish.site_url` 也不发。单独跑：`./scripts/publish.sh`，`NO_DEPLOY=1` 只编译和检查（产物在 `build-publish/`）。
 - 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`，写进 `channel=release`、build 号（UTC `YYYYMMDDHHMM`）和 `updateURL`：

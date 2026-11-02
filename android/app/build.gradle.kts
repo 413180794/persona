@@ -19,6 +19,12 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1"
+        // Gmail's Google sign-in: the redirect scheme of the hub's Google OAuth client (its reversed client ID, docs/mail.md
+        // 「Android」). Personal, so it comes from the config like the application id: scripts/android.sh passes
+        // android.google_oauth_scheme; JARVIS_GOOGLE_OAUTH_SCHEME works too. Without it the app offers app passwords.
+        manifestPlaceholders["googleOAuthScheme"] = providers.gradleProperty("jarvisGoogleOAuthScheme").orNull?.takeIf { it.isNotBlank() }
+            ?: System.getenv("JARVIS_GOOGLE_OAUTH_SCHEME")?.takeIf { it.isNotBlank() }
+            ?: "jarvis.oauth.unset"
     }
 
     buildTypes {

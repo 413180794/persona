@@ -93,6 +93,21 @@ client ID 只写在 hub 的 `hub.json`（`google.client_id`），不进仓库和
 
 没配 `google.client_id` 时，点按钮会提示「Google sign-in is not configured」。
 
+### Android
+
+hub 的 OAuth 客户端是 iOS 类型，回调是反向 client ID 的自定义 scheme，hub 负责拼授权 URL、换 token，所以 Android 只要打开 URL、
+接住回调（`android/…/mail/GoogleSignIn.kt`）：系统浏览器打开 `auth_url`，`ui/mail/OAuthRedirectActivity` 收到
+`<scheme>:/oauth2redirect?code&state` 后交给 hub 的 `finish`，再把 App 拉回前台。只认这次流程的 `state`（别的 App 伪造的回调不理）；
+流程跨进程：等的 `state` 存在 SharedPreferences，浏览器在前台时进程被杀，回调照样能完成。
+
+- Android 不能在运行时注册任意 scheme：intent filter 的 scheme 来自构建配置 `~/.config/jarvis/config.json` 的
+  `android.google_oauth_scheme`（`scripts/android.sh` 传给 gradle；也认环境变量 `JARVIS_GOOGLE_OAUTH_SCHEME`），不进仓库。没配时是占位值，
+  App 用 `PackageManager.queryIntentActivities` 判断接不接得住 hub 返回的 `callback_scheme`，接不住就说明原因，
+  退到「Gmail + 应用专用密码」（hub 仍支持 `auth: password`）。hub 没配 `google.client_id` 时同样退到这个表单。
+- 没在真机上验证过：Google 对 iOS 客户端的自定义 scheme 回调从 Android 浏览器发起是否放行（Android 客户端类型已经禁用自定义 scheme）。
+  不行的话要么在 hub 加一个 Android / Web 类型客户端（Web 要 client secret 和 https 回调），要么继续用应用专用密码。
+- 从浏览器直接返回（没授权）时，回到页面 1.5 秒内没收到回调就当取消。
+
 ## 让 Jarvis 添加（2026-11-01）
 
 App 的「添加邮箱」页去掉了「AI 一键添加」（粘贴一段文字让模型认，`POST /api/v1/ai/mail-account` 也删了）。现在直接在 Jarvis 里说

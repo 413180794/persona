@@ -383,3 +383,64 @@ func TestUpdateNodesBinariesInPlace(t *testing.T) {
 		t.Fatal("tried to deploy to the hub's own machine")
 	}
 }
+
+// A Docker hub never replaces itself, but it looks up its image's tags and says when a newer release is out, and how
+// to get it (a pinned tag is changed in .env); a private image without a token says what to set.
+func TestUpdateDockerSaysNewImage(t *testing.T) {
+	private := false
+	reg := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if private {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.URL.Path != "/v2/owner/jarvis/tags/list" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `{"name":"owner/jarvis","tags":["0.3.0","0.4.0","0.5.0-rc1","edge","latest"]}`)
+	}))
+	defer reg.Close()
+	host := strings.TrimPrefix(reg.URL, "http://")
+	h := newTestHub(t)
+	h.build, h.version = update.Make("0.3.0", "docker", "", ""), "0.3.0"
+	h.upd.client = reg.Client()
+	ctx := context.Background()
+
+	t.Setenv("JARVIS_IMAGE", host+"/owner/jarvis:latest")
+	if _, err := h.upd.check(ctx); err != nil {
+		t.Fatal(err)
+	}
+	v := h.upd.view()
+	if v.State != "available" || v.Latest == nil || v.Latest.Version != "0.4.0" || !v.Latest.Newer || v.CanUpdate {
+		t.Fatalf("a newer image is not offered: %+v %+v", v, v.Latest)
+	}
+	if v.Image == nil || v.Image.Name != host+"/owner/jarvis" || v.Image.Tag != "latest" || v.Image.Pinned {
+		t.Fatalf("image %+v", v.Image)
+	}
+	t.Setenv("JARVIS_IMAGE", host+"/owner/jarvis:0.3.0")
+	if v := h.upd.view(); v.Image == nil || !v.Image.Pinned {
+		t.Fatalf("a pinned tag: %+v", v.Image)
+	}
+
+	h.version = "0.4.0"
+	h.upd.check(ctx)
+	if v := h.upd.view(); v.State != "idle" || v.Latest.Newer {
+		t.Fatalf("the newest image offered again: %+v", v)
+	}
+
+	private = true
+	h.upd.check(ctx)
+	if v := h.upd.view(); !strings.Contains(v.Error, "JARVIS_REGISTRY_TOKEN") {
+		t.Fatalf("a private image does not say what to set: %q", v.Error)
+	}
+
+	t.Setenv("JARVIS_IMAGE", "")
+	if _, err := h.upd.check(ctx); err == nil || !strings.Contains(h.upd.view().Error, "JARVIS_IMAGE") {
+		t.Fatalf("no image to look at: %v, %q", err, h.upd.view().Error)
+	}
+	h.build.Image = host + "/owner/jarvis"
+	private = false
+	if _, err := h.upd.check(ctx); err != nil || h.upd.view().Image.Tag != "latest" {
+		t.Fatalf("the image it was built as: %v %+v", err, h.upd.view().Image)
+	}
+}

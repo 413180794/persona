@@ -75,25 +75,45 @@ struct HubUpdateTests {
 
     @Test func theLineOverTheAgentsList() throws {
         let avail = try JSON.decoder.decode(HubUpdateStatus.self, from: Data(Self.available.utf8))
-        #expect(HubNotice.of(avail, compat: .ok, dismissed: 0) == .available(version: "v2-202611021700", build: 202611021700))
-        #expect(HubNotice.of(avail, compat: .ok, dismissed: 202611021700) == nil) // closed for this build
+        let offered = HubNotice.available(version: "v2-202611021700", build: 202611021700)
+        #expect(HubNotice.of(avail, compat: .ok, dismissed: []) == offered)
+        #expect(HubNotice.of(avail, compat: .ok, dismissed: [offered.dismissKey!]) == nil) // closed for this build
         var auto = avail
         auto.auto = true
-        #expect(HubNotice.of(auto, compat: .ok, dismissed: 0) == nil) // it will install by itself
+        #expect(HubNotice.of(auto, compat: .ok, dismissed: []) == nil) // it will install by itself
         auto.autoNotice = true
-        #expect(HubNotice.of(auto, compat: .ok, dismissed: 0) == .autoOn) // told once
+        #expect(HubNotice.of(auto, compat: .ok, dismissed: []) == .autoOn) // told once
         let waiting = try JSON.decoder.decode(HubUpdateStatus.self, from: Data(Self.waiting.utf8))
-        #expect(HubNotice.of(waiting, compat: .ok, dismissed: 0) == .updating("等 1 个在忙的结束"))
+        #expect(HubNotice.of(waiting, compat: .ok, dismissed: []) == .updating("等 1 个在忙的结束"))
         var back = avail
         (back.state, back.error) = ("rolled_back", "更新到 v2 没成功，已回到 v1：box 没连回来")
-        #expect(HubNotice.of(back, compat: .ok, dismissed: 0) == .rolledBack("更新到 v2 没成功，已回到 v1：box 没连回来"))
-        #expect(HubNotice.of(nil, compat: .appTooOld, dismissed: 0) == .appTooOld)
-        #expect(HubNotice.of(nil, compat: .hubTooOld, dismissed: 0) == .hubTooOld)
-        #expect(HubNotice.of(nil, compat: .hubTooOld, dismissed: HubNotice.hubTooOldDismissed) == nil)
+        let wentBack = HubNotice.rolledBack("更新到 v2 没成功，已回到 v1：box 没连回来", build: 202611021700)
+        #expect(HubNotice.of(back, compat: .ok, dismissed: []) == wentBack)
+        // Closing one line lets the next one through, and closing that does not bring the first back.
+        #expect(HubNotice.of(back, compat: .ok, dismissed: [wentBack.dismissKey!]) == offered)
+        #expect(HubNotice.of(back, compat: .ok, dismissed: [wentBack.dismissKey!, offered.dismissKey!]) == nil)
+        #expect(HubNotice.of(nil, compat: .appTooOld, dismissed: []) == .appTooOld)
+        #expect(HubNotice.appTooOld.dismissKey == nil) // cannot be closed
+        #expect(HubNotice.of(nil, compat: .hubTooOld, dismissed: []) == .hubTooOld)
+        #expect(HubNotice.of(nil, compat: .hubTooOld, dismissed: ["hubTooOld"]) == nil)
         var bad = avail
         bad.latest?.bad = true
-        #expect(HubNotice.of(bad, compat: .ok, dismissed: 0) == nil) // went back before: not offered again
+        #expect(HubNotice.of(bad, compat: .ok, dismissed: []) == nil) // went back before: not offered again
     }
+
+    /// A Docker hub: a newer image gets a line (no 更新, the page says what to run), closed per version.
+    @Test func aDockerHub() throws {
+        let docker = try JSON.decoder.decode(HubUpdateStatus.self, from: Data(Self.docker.utf8))
+        #expect(docker.image == .init(name: "ghcr.io/owner/jarvis", tag: "0.3.0", pinned: true))
+        #expect(HubNotice.of(docker, compat: .ok, dismissed: []) == .newImage(version: "0.4.0"))
+        #expect(HubNotice.of(docker, compat: .ok, dismissed: ["image:0.4.0"]) == nil)
+        #expect(HubNotice.of(docker, compat: .ok, dismissed: ["image:0.3.9"]) == .newImage(version: "0.4.0"))
+        var current = docker
+        current.latest?.newer = false
+        #expect(HubNotice.of(current, compat: .ok, dismissed: []) == nil)
+    }
+
+    static let docker = #"{"version":"0.3.0","build":0,"channel":"docker","can_update":false,"why_not":"Docker 里的 hub 由新镜像更新","latest":{"version":"0.4.0","build":0,"newer":true,"bad":false},"state":"available","busy":[],"auto":false,"auto_notice":false,"confirmed":true,"image":{"name":"ghcr.io/owner/jarvis","tag":"0.3.0","pinned":true}}"#
 
     @Test func eventsCarryItLive() {
         guard case .hello(_, let info)? = ServerEvent.decode(Data(#"{"type":"hello","features":["x"],"channel":"release","build":202611021500,"protocol":1,"min_app_build":0}"#.utf8)) else {
