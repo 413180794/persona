@@ -1225,9 +1225,14 @@ LARK_MESSAGES = {"f2": [
 # MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose lark-connector
 # lost its Feishu session.
 LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
-LARK_EMOJIS = {k: {"label": label, "url": "/api/v1/lark/media/emoji-" + k}
-               for k, label in (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"))}
-LARK_MEDIA = {"trail-photo": (480, 320), "emoji-THUMBSUP": (32, 32), "emoji-OK": (32, 32), "emoji-JIAYI": (32, 32)}
+_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
+                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
+# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+# flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
+LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
+LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}
+# GET /api/v1/lark/reactions/quick: what the hub answers when lark-connector has no recent ones (lark.Client.QuickReactions).
+LARK_QUICK = ["THUMBSUP", "HEART", "SMILE", "LAUGH", "SURPRISED", "CRY", "OK", "DONE"]
 
 
 def _lark_f3():
@@ -3136,7 +3141,8 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/lark/messages/") and p.endswith("/thread"):
             return self.send_json(lark_window(LARK_THREADS.get(p.split("/")[5], []), q))
         if p.startswith("/api/v1/lark/media/") and p.split("/")[5] in LARK_MEDIA:
-            body = base64.b64decode(mock_png(*LARK_MEDIA[p.split("/")[5]]))
+            key = p.split("/")[5]
+            body = fs_media(key) if key.startswith("emoji-") else base64.b64decode(mock_png(*LARK_MEDIA[key]))
             self.send_response(200); self.send_header("Content-Type", "image/png")
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
             return
@@ -3148,6 +3154,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/lark/labels": return self.send_json({"labels": []})
         if p == "/api/v1/lark/flags": return self.send_json({"conversations": [], "messages": []})
         if p == "/api/v1/lark/emojis": return self.send_json({"emojis": LARK_EMOJIS})
+        if p == "/api/v1/lark/reactions/quick": return self.send_json({"keys": LARK_QUICK})
         if p.startswith("/api/v1/machines/") and not machine_online(p.split("/")[4]) and p.split("/")[5] in ("launchers", "dirs"):
             return self.send_json({"error": "%s: machine is offline" % p.split("/")[4]}, 503)
         if p.startswith("/api/v1/machines/") and p.endswith("/dirs"):

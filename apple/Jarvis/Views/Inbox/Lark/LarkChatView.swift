@@ -742,17 +742,27 @@ struct LarkMessageRow: View {
             .contextMenu { menu }
     }
 
-    /// Long press: a row of quick reactions, reply, more emoji, copy.
+    /// Long press: a bar of quick reactions on top (one tap reacts), then reply, more emoji, copy.
+    /// A context menu cannot put a tappable view above itself (its preview takes no taps), so the bar is the menu's
+    /// first row, as a palette: six emoji across (all the palette shows without scrolling) instead of the four a compact
+    /// group fits.
     @ViewBuilder private var menu: some View {
         if react != nil && !message.recalled {
             ControlGroup {
-                ForEach(Array(LarkMedia.shared.quickReactions.prefix(4)), id: \.self) { key in
+                ForEach(LarkQuickReactions.bar(LarkMedia.shared.quickReactions), id: \.self) { key in
                     Button { react?(message, key) } label: {
-                        if let img = LarkMedia.shared.emojiImage(key, points: 28) { Image(uiImage: img) } else { Text(LarkMedia.labelFallback(key, text: nil)) }
+                        if let img = LarkMedia.shared.emojiImage(key, points: 28) {
+                            Image(uiImage: img).renderingMode(.original)
+                        } else {
+                            Text(LarkMedia.labelFallback(key, text: nil))
+                        }
                     }
+                    .accessibilityLabel(LarkMedia.shared.emoji(key)?.label ?? LarkMedia.labelFallback(key, text: nil))
+                    .accessibilityIdentifier("lark.quickReaction")
                 }
             }
-            .controlGroupStyle(.compactMenu)
+            .controlGroupStyle(.palette)
+            .menuActionDismissBehavior(.enabled) // a palette keeps the menu up after a tap; Feishu closes it
         }
         if let reply, let route = LarkReply.route(for: message, inTopicGroup: reply.inTopicGroup, inThread: inThread) {
             Button {

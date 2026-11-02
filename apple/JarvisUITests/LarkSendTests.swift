@@ -94,6 +94,32 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(failed.exists, "the failed one stays until it is dealt with")
     }
 
+    /// Long press: a bar of the quick reactions on top of the menu (six across), one tap reacts; the menu's own items
+    /// are still there. The mock's quick list is THUMBSUP HEART SMILE LAUGH SURPRISED CRY OK DONE.
+    @MainActor func testLongPressBarReactsInOneTap() {
+        let app = openChat()
+        let target = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "我先看了一下")).firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout: 5))
+        sleep(2) // the emoji catalogue and the quick list come in after the chat opens
+        target.press(forDuration: 1.2)
+        let heart = app.buttons["爱心"]
+        XCTAssertTrue(heart.waitForExistence(timeout: 3), "the bar is in the long-press menu")
+        for label in ["赞", "微笑", "大笑", "惊讶", "流泪"] {
+            XCTAssertTrue(app.buttons[label].exists, "\(label) is in the bar")
+        }
+        XCTAssertFalse(app.buttons["OK"].exists, "six in the bar, not seven")
+        XCTAssertTrue(app.buttons["回复"].exists && app.buttons["表情回复"].exists && app.buttons["拷贝"].exists,
+                      "the menu's items are still there")
+        shot(app, "lark-quick-bar")
+        heart.tap()
+        sleep(1)
+        shot(app, "lark-quick-reacted")
+        XCTAssertTrue(heart.waitForNonExistence(timeout: 3), "the menu closes")
+        // The chip under the message: its emoji's label and the count (LarkReactionChip).
+        let chip = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "爱心")).firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 3), "one tap reacts: the message has the reaction\n\(app.debugDescription)")
+    }
+
     /// 回复 in a message's long-press menu: a quote bar over the box, and the message goes out quoting it.
     @MainActor func testQuotedReplyShowsTheQuoteWhileItGoes() {
         let app = openChat()

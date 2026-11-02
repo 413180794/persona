@@ -23,6 +23,24 @@ struct LarkEmojiImage: View {
     }
 }
 
+/// The emoji of the long-press bar: the hub's quick reactions (recent first, then Feishu's defaults), each once, as
+/// many as the row shows without scrolling.
+nonisolated enum LarkQuickReactions {
+    /// Feishu's long-press row holds six or seven; the menu's palette shows six across without scrolling.
+    static let count = 6
+
+    static func bar(_ keys: [String]) -> [String] {
+        var seen = Set<String>(), out: [String] = []
+        for k in keys {
+            let key = k.trimmingCharacters(in: .whitespaces)
+            guard !key.isEmpty, seen.insert(key.lowercased()).inserted else { continue }
+            out.append(key)
+            if out.count == count { break }
+        }
+        return out
+    }
+}
+
 /// 表情回复: the user's quick reactions on top, then every group of the catalogue (Feishu's picker).
 struct LarkReactionPicker: View {
     var message: LarkMessage
