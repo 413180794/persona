@@ -35,6 +35,11 @@
   连接失败时丢掉这个 client（`Dialer.Reset`）下次重建。tailcat 的连接（gVisor netstack）没有 keepalive，对面消失后读永远阻塞，hub 要自己定时 ping；node 退出时要先关掉给 hub 的连接、`DrainTCP`，最后才关 tailcat 端点，
   顺序反了 FIN 发不出去，hub 要等两次 ping 超时（约 2 分钟）才发现，重新部署因此超时（2026-11-01 联调踩到）。
   经 tailcat 收文件时 `gzip.Reader` 要 `Multistream(false)`，否则读完一段还会等下一段，连接上的回复永远发不出去。
+- 自建 derper（`docs/server.md`「自建中继」，2026-11-02）：`-certmode manual -hostname <IP>` 缺证书时 derper 自己生成一张自签证书，
+  在日志里打印配 map 用的节点（带 `CertName`），看着省事，但那张只有 1 年；tailscale 的 `tlsdial` 校验固定证书时照样检查 `NotAfter`，
+  到期后连不上中继，所以要自己生成一张长期的。
+  derper 不发 DERP map，`--derp-map-url` 是 tailcat 用 HTTP GET 取的，要另起静态服务。以 root 跑、没给 `-c` 时，derper 把私钥写到 `/var/lib/derper/derper.key`。
+  换 map 后 `init` 会重新选区域，地址跟着变（密钥不变）。
 
 ## Cloudflare Tunnel 推送中继（2026-11-02）
 

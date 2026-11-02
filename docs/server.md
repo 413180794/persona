@@ -139,8 +139,21 @@ hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）�
   一次只收一个（同时来的第二个立即回「正在上传」）；60 秒没收到数据就放弃，hub 中途重启不会把下一次部署卡住。
   `deploy.sh` 首次安装仍要能 ssh 到那台（或手动放二进制）。
 - **代价**：jarvisd 从约 19 MB 变成约 36 MB（gzip 后 8 MB → 15 MB）；冷启动约 7 秒（拉 DERP map、选区域），第一次拨通约 6.5 秒。
-  公共中继没有 SLA、走中继时限速，可以用 `--derp-map-url` / hub.json 的 `tailcat.derp_map_url` 换成自建的 derper。tailcat 不承诺 API 稳定，
+  公共中继没有 SLA、走中继时限速，可以用 `--derp-map-url` / hub.json 的 `tailcat.derp_map_url` 换成自建的 derper（见下一条）。tailcat 不承诺 API 稳定，
   升级依赖时跑一遍下面的联调。
+- **自建中继（derper）**：内容本来就是 WireGuard 端到端加密的，但公共中继看得到哪两个 key 在通信、双方 IP 和流量大小；
+  各台电脑和 hub 在同一个内网时，可以在 hub 所在的机器上跑一个只绑内网地址的 derper，找路和兜底转发都不出内网：
+  1. 编译：`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go install tailscale.com/cmd/derper@<版本>`，版本取 `server/go.mod` 里 `tailscale.com` 那一行，和 tailcat 用的对齐。
+  2. 证书：只有 IP、没有域名时用自签证书，客户端靠 DERP map 里节点的 `CertName: "sha256-raw:<证书 DER 的 sha256>"` 固定它，不需要 CA。
+     自己用 openssl 生成一张长期的（`subjectAltName=IP:<内网 IP>`），放成 `<certdir>/<内网 IP>.crt` / `.key`；不要用 derper 缺证书时自动生成的那张（见 `docs/lessons/server.md`）。
+  3. 运行（systemd 用户服务）：`derper -a <内网 IP>:<DERP 端口> -certmode manual -hostname <内网 IP> -certdir <certdir> -c <私钥文件> -http-port -1 -stun-port <STUN 端口> -home blank`。
+     `-a` 带了 IP，STUN 也只绑这个 IP；`-c` 一定要给。
+  4. DERP map：derper 不发 map，tailcat 是用 HTTP GET 取的，另起一个静态服务（例如 `python3 -I -m http.server <端口> --bind <内网 IP> --directory <目录>`）
+     发 `derpmap.json`：一个区域（id 用 900–999，留给自定义区域的段），一个节点，`HostName` / `IPv4` 是内网 IP，`IPv6: "none"`，加上 `CertName`、`DERPPort`、`STUNPort`。
+     发出去之前在每台电脑上取一次 map、用 `openssl s_client` 拿到证书算 sha256，和 `CertName` 对一下。
+  5. 切换：hub.json 写 `tailcat.derp_map_url`；每台电脑跑 `jarvisd node tailcat init --hub <公钥> --derp-map-url <map 地址>`。密钥不变，但会在新 map 里重新选区域，
+     地址因此变了，要把新地址换进 hub.json 那台的 `tailcat_addr`，再重启那台的常驻 node 和 hub。改了 map（换证书、换端口）也要重启两边。
+  6. 验证：机器列表的 `tailcat_path` 还是 `direct`；node 的日志是 `DERP region 9xx`；两边的 jarvisd 只连到 derper 的端口，没有到公共中继的连接（`ss -tnp` / `lsof -i`）。
 - **只管 hub ↔ node**：手机 / 网页到 hub 仍然需要一个能访问到的入口（`public_url`）。
 - 联调（要外网）：`JARVIS_TEST_TAILCAT=1 go test ./internal/tunnel -run EndToEnd`（真实中继上的拨号、鉴权、上传），以及
   `internal/hub/tailcat_e2e_test.go` 顶部注释里的命令（两版真实 jarvisd：ssh 不通 → 走 tailcat 上线 → 经 tailcat 部署新版本并重连）。

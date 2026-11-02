@@ -166,7 +166,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   只走 tailcat、不试 ssh（没有 `ssh_host`）；`kind: "ssh"` 加 `tailcat_addr` 是先 ssh、不行再 tailcat。
 - 环境变量 `JARVIS_DATABASE_URL`、`JARVIS_PUBLIC_URL`、`JARVIS_LISTEN` 覆盖同名的设置（不写回文件），Docker 部署靠它们
   （`docs/docker.md`「环境变量」）；`JARVIS_LOCAL_NODE=0` 时第一次运行不写本机那台。
-- `tailcat.derp_map_url`（可选）：用自建的 DERP 中继（derper）代替 Tailscale 的公共中继时，它的 DERP map 地址；各台电脑
+- `tailcat.derp_map_url`（可选）：用自建的 DERP 中继（derper，做法见 `docs/server.md`「自建中继」）代替 Tailscale 的公共中继时，它的 DERP map 地址；各台电脑
   `init` 时要带同一个 `--derp-map-url`。
 - `machines[].claude_config_dirs`（可选）：这台机器上除 `~/.claude` 以外的 Claude Code 配置目录（启动器设的 `CLAUDE_CONFIG_DIR`，
   比如 `["~/.config/claude-code/profiles/work"]`，`~/` 是那台机器的 home）。正在跑的 claude 用的目录 node 自己会找到并记进数据库，
