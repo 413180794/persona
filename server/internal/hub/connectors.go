@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/github"
+	"github.com/chyroc/jarvis/server/internal/connector/proc"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
@@ -279,6 +282,38 @@ func (h *Hub) registerConnectors() {
 		if err := h.addIMessage(*im); err != nil {
 			h.logf("imessage connector: %v", err)
 		}
+	}
+	h.addTelegram()
+}
+
+// telegramProgram is jarvisd-telegram next to the running jarvisd ("" when there is none).
+func telegramProgram() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	p := filepath.Join(filepath.Dir(exe), "jarvisd-telegram")
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	return p
+}
+
+// addTelegram registers the Telegram connector where its program is (docs/plan-telegram.md): off until the user
+// turns it on and signs in from the app; the API credentials and the session are the user's, sealed in
+// connector_secrets. The program runs only when its build is the hub's.
+func (h *Hub) addTelegram() {
+	path := telegramProgram()
+	if path == "" {
+		return
+	}
+	c := proc.New(proc.Config{ID: "telegram", Name: "Telegram", Path: path, Secrets: h.secretsFor("telegram"), Logf: h.logf,
+		Version: fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number)})
+	if err := h.addConnectorOff(c); err != nil {
+		h.logf("telegram connector: %v", err)
 	}
 }
 
