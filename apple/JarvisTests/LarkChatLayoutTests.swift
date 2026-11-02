@@ -94,4 +94,19 @@ import Testing
         #expect(!LarkChatLayout.continues(onItsWay, after: msg("2", from: "我", uid: "u-other", at: at(10, 0)), calendar: Self.cal),
                 "someone else called 我 is not me")
     }
+
+    @Test func mineGoRightWithoutMyAvatarOrName() {
+        let mine = msg("1", from: "王小明", uid: "u-me", mine: true, at: at(10, 0))
+        let theirs = msg("2", from: "Tom", uid: "u1", at: at(10, 0))
+        let system = msg("3", from: "", mine: true, at: at(10, 0), type: "SYSTEM")
+        #expect(LarkChatLayout.side(of: mine) == .right)
+        #expect(LarkChatLayout.side(of: theirs) == .left)
+        #expect(LarkChatLayout.side(of: system) == .left, "system lines are centred, never pushed right")
+        #expect(LarkChatLayout.side(of: LarkOutgoing(text: "hi").message(like: nil)) == .right, "on its way: right too")
+        #expect(!LarkChatLayout.showsAvatar(mine, grouped: false) && !LarkChatLayout.showsName(mine, grouped: false, isGroup: true))
+        #expect(LarkChatLayout.showsAvatar(theirs, grouped: false) && LarkChatLayout.showsName(theirs, grouped: false, isGroup: true))
+        #expect(!LarkChatLayout.showsAvatar(theirs, grouped: true) && !LarkChatLayout.showsName(theirs, grouped: true, isGroup: true))
+        #expect(LarkChatLayout.showsAvatar(theirs, grouped: false) && !LarkChatLayout.showsName(theirs, grouped: false, isGroup: false),
+                "one-to-one: avatar, no name")
+    }
 }

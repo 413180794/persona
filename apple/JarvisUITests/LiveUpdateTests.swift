@@ -240,12 +240,18 @@ final class LiveUpdateTests: XCTestCase {
     }
 
     // A row swiped open (关闭 showing) stays open while its agent keeps working.
-    func testSwipedRowStaysOpenThroughUpdates() {
+    @MainActor func testSwipedRowStaysOpenThroughUpdates() {
         launch()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "给天气 App 加主屏幕小组件")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 15))
         sleep(2)
+        // On a smaller iPhone the row starts under the tab bar, where a swipe switches tabs instead (#488).
+        app.bringAboveTabBar(row)
+        let agents = app.tabBars.buttons["Agents"]
         row.swipeLeft()
+        if agents.exists {
+            XCTAssertTrue(agents.isSelected, "the swipe switched tabs instead of opening the row")
+        }
         let close = app.buttons["关闭"]
         XCTAssertTrue(close.waitForExistence(timeout: 5), "the row's swipe actions")
         churn()

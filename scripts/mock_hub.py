@@ -1196,6 +1196,7 @@ def _lark_f3():
             _lm("309", "Tom", "装备清单：水、午饭、外套、头灯", mins=33), _lm("310", "阿杰", "头灯也要带？", mins=32),
             _lm("311", "Tom", "周六早上 8 点地铁站集合，记得带水", mins=30)]
     rest[-2]["reactions"] = [{"key": "JIAYI", "count": 2, "users": ["小周", "Mia"]}]
+    rest[1]["reactions"] = [{"key": "THUMBSUP", "count": 2, "users": ["Tom", "Mia"]}]  # on mine: chips under a bubble on the right
     out += [photo, route, reply, bot, thread] + rest
     replies = [_lm(str(n), who[n % len(who)], "报名 %d：%s" % (n, ["拼车", "自己去", "坐地铁"][n % 3]), mins=43 - n * 0.4)
                for n in range(1, 76)]

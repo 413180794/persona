@@ -213,6 +213,8 @@ struct LarkInlineText: View {
 struct LarkFlowLayout: Layout {
     var spacing: CGFloat = 8
     var lineSpacing: CGFloat = 8
+    /// Lines end at the right edge (under my messages, which sit on the right).
+    var trailing = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
@@ -228,13 +230,28 @@ struct LarkFlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, row: CGFloat = 0
+        // Lines first (which subviews, how wide), then each line placed from the left or ending at the right.
+        var lines: [(items: [(LayoutSubview, CGSize)], width: CGFloat, height: CGFloat)] = []
+        var x: CGFloat = 0
         for s in subviews {
             let size = s.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
-            if x > bounds.minX && x + size.width > bounds.maxX { y += row + lineSpacing; x = bounds.minX; row = 0 }
-            s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: min(size.width, bounds.width), height: size.height))
+            if lines.isEmpty || (x > 0 && x + size.width > bounds.width) {
+                lines.append(([], 0, 0))
+                x = 0
+            }
+            lines[lines.count - 1].items.append((s, size))
+            lines[lines.count - 1].width = x + size.width
+            lines[lines.count - 1].height = max(lines[lines.count - 1].height, size.height)
             x += size.width + spacing
-            row = max(row, size.height)
+        }
+        var y = bounds.minY
+        for line in lines {
+            var x = trailing ? bounds.maxX - min(line.width, bounds.width) : bounds.minX
+            for (s, size) in line.items {
+                s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: min(size.width, bounds.width), height: size.height))
+                x += size.width + spacing
+            }
+            y += line.height + lineSpacing
         }
     }
 }

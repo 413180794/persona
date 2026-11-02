@@ -59,6 +59,22 @@ nonisolated enum LarkChatLayout {
     /// Gregorian weekday 1 is Sunday.
     private static let weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
 
+    /// Which side a message sits on: mine on the right (Feishu on the phone), everyone else's on the left.
+    enum Side: Equatable {
+        case left, right
+        var alignment: Alignment { self == .right ? .trailing : .leading }
+        var horizontal: HorizontalAlignment { self == .right ? .trailing : .leading }
+    }
+
+    /// Mine, including one on its way, go right; system lines are centred by the row and count as left.
+    static func side(of m: LarkMessage) -> Side { m.isMine && !m.isSystem ? .right : .left }
+
+    /// Others' messages show the sender's avatar on the first of a run; mine never show my own.
+    static func showsAvatar(_ m: LarkMessage, grouped: Bool) -> Bool { side(of: m) == .left && !grouped }
+
+    /// In a group chat, others' name over the first of a run; never mine, never in a one-to-one chat.
+    static func showsName(_ m: LarkMessage, grouped: Bool, isGroup: Bool) -> Bool { isGroup && showsAvatar(m, grouped: grouped) }
+
     /// Space above a message.
     static func gap(grouped: Bool) -> CGFloat { grouped ? groupedGap : Theme.Space.m }
 }

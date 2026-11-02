@@ -124,6 +124,10 @@
 - **`List` 里的 `LabeledContent` 在无障碍树里是一个元素**（2026-11-02）：标签和值合成一个 label（「登录, 来自 MacBook 的 gh 登录」），
   `app.staticTexts["来自 MacBook 的 gh 登录"]` 找不到，测试报失败、截图上却明明有这行字。按值找要用
   `descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", 值))`；同一页里单独的 `Text`（账号、状态）照常是 staticText。
+- **小一点的 iPhone 上，列表里的行可能在浮动标签栏底下**（2026-11-02，#488）：`row.swipeLeft()` 从行的中间开始滑，
+  落在 Liquid Glass 的标签栏上就成了拖动标签栏的选中项，切到最左边的「Jarvis」，测试只看到「拉不出关闭按钮」。行这时照样是
+  `exists` / `hittable`。同一个测试在 iPhone 18 Pro Max 上过、在 iPhone 18 Pro 上 100% 挂，一度被当成 #382 的回归（#382 之前的提交在 Pro 上一样挂）。
+  对行做滑动、点按前先 `app.bringAboveTabBar(row)`（`JarvisUITests/AgentsSearch.swift`）；查「只在某个车道挂」的 UI 测试，先比一下各自模拟器的机型。
 - 模拟器和 Mac 共用回环：App 在模拟器里监听 `127.0.0.1:<端口>` 时，Mac 上已有程序占着这个号就会冲突（端口转发会退到随机端口，正好测到这条路径）。
 - **测试里执行的脚本会在开发机上真的跑**（2026-11-01）：`TestDeployScriptInstallsTheBinary` 执行 hub 的部署脚本，脚本最后一句
   `pkill -f '[j]arvisd node --attach'` 把跑测试的那台机器上真在服务的常驻 node 杀了：装了常驻 node 的 Mac 上每跑一次 hub 测试就掉线一次

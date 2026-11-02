@@ -490,8 +490,6 @@ struct LarkTimeSeparator: View {
     }
 }
 
-/// One message, laid out like lark-connector (and Feishu desktop): everyone's messages on the left with avatar and,
-/// in group chats, the sender's name on the first of a run; mine in blue. Avatar and name open the profile card.
 /// 设置 › 翻译 for a chat picked there: a message from someone else in another language gets its translation under
 /// the bubble, asked for when the row shows (the requests of one screen go together).
 struct LarkTranslationLine: View {
@@ -528,6 +526,9 @@ struct LarkTranslationLine: View {
     }
 }
 
+/// One message, laid out like Feishu on the phone: others' on the left with avatar and, in group chats, the sender's
+/// name on the first of a run; mine on the right in blue, without my avatar or name (LarkChatLayout.side).
+/// Avatar and name open the profile card.
 struct LarkMessageRow: View {
     var message: LarkMessage
     var grouped: Bool
@@ -554,18 +555,21 @@ struct LarkMessageRow: View {
             .padding(.horizontal, Theme.Space.xl)
             .padding(.vertical, Theme.Space.xs)
         } else {
+            let side = LarkChatLayout.side(of: m)
+            let avatar = LarkChatLayout.showsAvatar(m, grouped: grouped)
             HStack(alignment: .top, spacing: Theme.Space.s) {
+                // Mine have no avatar; the empty slot keeps them as far from the left edge as others' are from the right.
                 Group {
-                    if grouped { Color.clear } else {
+                    if avatar {
                         LarkAvatarImage(name: m.senderName, url: m.senderAvatar, size: 34)
                             .onTapGesture { showProfile() }
                             .accessibilityAddTraits(.isButton)
                             .accessibilityLabel("\(m.senderName) 的资料")
-                    }
+                    } else { Color.clear }
                 }
-                .scaledFrame(width: Theme.Size.wellM, height: grouped ? Theme.Size.line : Theme.Size.wellM)
-                VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    if !grouped && isGroup {
+                .scaledFrame(width: Theme.Size.wellM, height: avatar ? Theme.Size.wellM : Theme.Size.line)
+                VStack(alignment: side.horizontal, spacing: Theme.Space.xs) {
+                    if LarkChatLayout.showsName(m, grouped: grouped, isGroup: isGroup) {
                         HStack(spacing: Theme.Space.xs) {
                             Text(m.senderName).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                                 .onTapGesture { showProfile() }
@@ -579,7 +583,7 @@ struct LarkMessageRow: View {
                     LarkTranslationLine(message: m, feedID: feedID)
                     footer
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: side.alignment)
             }
             .sheet(isPresented: $picking) {
                 LarkReactionPicker(message: m) { react?(m, $0) }
@@ -672,7 +676,7 @@ struct LarkMessageRow: View {
         let m = message
         let reactions = m.reactions ?? []
         if !reactions.isEmpty {
-            LarkFlowLayout(spacing: 6, lineSpacing: 6) {
+            LarkFlowLayout(spacing: 6, lineSpacing: 6, trailing: LarkChatLayout.side(of: m) == .right) {
                 ForEach(reactions, id: \.key) { r in
                     Button { react?(m, r.key) } label: { LarkReactionChip(reaction: r) }
                         .buttonStyle(.plain)
@@ -687,7 +691,7 @@ struct LarkMessageRow: View {
                     .accessibilityLabel("表情回复")
                 }
             }
-            .scaledFrame(maxWidth: Theme.Size.box300, alignment: .leading)
+            .scaledFrame(maxWidth: Theme.Size.box300, alignment: LarkChatLayout.side(of: m).alignment)
         }
         let replies = max(m.threadReplyCount ?? 0, m.replyCount)
         // No time here: it is in the separators above (LarkChatLayout).
