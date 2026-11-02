@@ -112,6 +112,28 @@ final class CodexCardsTests: XCTestCase {
         XCTAssertEqual(answers?["改完以后怎么验证？"] as? String, "先在本地跑基准测试")
     }
 
+    /// The question card's "其他回答…" row turns into a field inside the chat list: the tap that opens it must not be
+    /// taken for a tap on the empty page, which closes the keyboard.
+    @MainActor func testOtherAnswerFieldKeepsTheKeyboard() throws {
+        let hub = try hub()
+        _ = try? Data(contentsOf: URL(string: hub + "/mock/reset")!)
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", orders]
+        app.launchJarvis()
+        XCTAssertTrue(anything(app, "Codex 需要你授权").waitForExistence(timeout: 20), app.debugDescription)
+        app.buttons["同意"].tap()
+        XCTAssertTrue(anything(app, "Codex 在问你").waitForExistence(timeout: 10), app.debugDescription)
+        anything(app, "只给 user_id 加索引").tap()
+        XCTAssertTrue(anything(app, "改完以后怎么验证？").waitForExistence(timeout: 5))
+        anything(app, "其他回答…").tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard opens with the field")
+        app.typeText("先在本地跑基准测试")
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "the keyboard stays while typing in the field")
+        let typed = app.descendants(matching: .any).matching(NSPredicate(format: "value CONTAINS %@", "先在本地跑基准测试")).firstMatch
+        XCTAssertTrue(typed.exists, "what was typed is in the field")
+    }
+
     /// The BeautifulUI style: the same cards as its approval card — 同意 / 总是同意 (what it allows) / 拒绝, Codex's reason.
     @MainActor func testBeautifulUIStyle() throws {
         let hub = try hub()

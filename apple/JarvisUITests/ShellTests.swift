@@ -94,6 +94,21 @@ final class ShellTests: XCTestCase {
         see(button("shell-composer-send"), "send once there is something to send")
     }
 
+    /// The keyboard goes away with a tap on the page above the composer, and the composer, with what was typed, stays.
+    @MainActor func testTapOnThePageClosesTheKeyboard() {
+        launch()
+        let field = see(app.textViews["shell-composer-field"].firstMatch.exists ? app.textViews["shell-composer-field"].firstMatch
+                        : app.textFields["shell-composer-field"].firstMatch, "the composer", timeout: 15)
+        field.tap()
+        field.typeText("你好")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard after tapping the composer")
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "a tap on the field itself keeps the keyboard")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), "the keyboard still up after a tap on the page")
+        see(button("shell-composer-send"), "the draft and its send button after the keyboard closed")
+    }
+
     @MainActor func testOldLayoutBringsTheTabsBack() {
         launch(["-tab", "settings", "-openAppearance", "layout"], emptyChat: false)
         let toggle = see(oldLayoutSwitch, "旧布局 in 设置 › 外观 › 布局", timeout: 15)

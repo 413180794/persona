@@ -53,6 +53,7 @@ struct ShellHome: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        .dismissesKeyboardOnTap()
         .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
         .background(Theme.pageBackground.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {

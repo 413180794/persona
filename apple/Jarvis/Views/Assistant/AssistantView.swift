@@ -275,6 +275,7 @@ struct AssistantHome: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        .dismissesKeyboardOnTap()
         // The floating top bar (AssistantTopBar) is over the page: leave its room, let the page scroll under it. Before
         // the composer is added: margins reach every scroll view below them, and the chips' row above the field stood
         // the top bar's height tall, over the suggestion cards.
