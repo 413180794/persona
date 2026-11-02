@@ -26,6 +26,15 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     /// The icons' ink: the text color, or in the BeautifulUI style its quieter second ink.
     private var ink: Color { AppStyle.current.usesBeautifulUI ? theme.colors.ink2 : Color.primary }
 
+    /// How far the send button's tap area sits from the card's right and bottom edges. In the BeautifulUI style the
+    /// button's circle is concentric with the card's corner: its gap to both edges is the card's radius less its own,
+    /// so the gap along the corner is the same as along the sides. The other styles keep their row inset.
+    private var sendInset: CGFloat {
+        guard AppStyle.current.usesBeautifulUI else { return Theme.Space.s }
+        let well = Theme.Size.wellL
+        return Theme.Shell.composerRadius - well / 2 - (Theme.Size.tapTarget - well) / 2
+    }
+
     private var expanded: Bool { focused.wrappedValue || !text.isEmpty || hasAttachments }
 
     var body: some View {
@@ -69,8 +78,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                         stopButton(stop)
                     }
                 }
-                .padding(.horizontal, Theme.Space.s)
-                .padding(.bottom, Theme.Space.s)
+                .padding(.leading, Theme.Space.s)
+                .padding(.trailing, sendInset)
+                .padding(.bottom, sendInset)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
