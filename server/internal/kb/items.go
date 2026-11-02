@@ -148,21 +148,15 @@ type Hit struct {
 // Markdown of the ExtraDirs and (when messages is set) the message archive; newest message days first. At most limit
 // hits.
 func (e *Engine) Search(query string, messages bool, limit int) []Hit {
-	words := strings.Fields(strings.ToLower(query))
-	if len(words) == 0 {
+	match := matcher(query)
+	if match == nil {
 		return nil
-	}
-	match := func(l string) bool {
-		l = strings.ToLower(l)
-		for _, w := range words {
-			if !strings.Contains(l, w) {
-				return false
-			}
-		}
-		return true
 	}
 	var hits []Hit
 	scan := func(p string) {
+		if len(hits) >= limit {
+			return
+		}
 		raw, err := os.ReadFile(p)
 		if err != nil {
 			return

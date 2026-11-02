@@ -145,8 +145,8 @@ export function pendingOutgoing(out: Outgoing[], messages: AgentMessage[], slack
 
 // ── session list store, refreshed on the hub's {"type":"agents"} event ─
 
-type ListState = { sessions: AgentSession[]; loaded: boolean; error: string; version: number };
-let list: ListState = { sessions: [], loaded: false, error: "", version: 0 };
+type ListState = { sessions: AgentSession[]; loaded: boolean; error: string };
+let list: ListState = { sessions: [], loaded: false, error: "" };
 const listeners = new Set<() => void>();
 const emit = (p: Partial<ListState>) => {
   list = { ...list, ...p };
@@ -165,7 +165,6 @@ export function refreshAgentSessions(): Promise<void> {
 // Called by the WebSocket handler: re-pull the list, and tell open sessions which ids moved (empty = all).
 export function agentsChanged(ids: string[]) {
   void refreshAgentSessions();
-  emit({ version: list.version + 1 });
   changedListeners.forEach((l) => l(ids));
 }
 

@@ -280,8 +280,8 @@ export function createPiHost(deps, options = {}) {
     if (entries.length === s.pushed) return
     const branch = sm.getBranch()
     const key = branchKey(entries, branch)
-    const fresh = branchItems(entries, branch).filter((i) => i.seq > s.pushed)
-    rt.append(id, { items: rt.watching(id) ? fresh : [], fromSeq: s.key === key ? s.pushed : undefined, toSeq: entries.length, history: `pi:${id}:${key}` })
+    const fresh = rt.watching(id) ? branchItems(entries, branch).filter((i) => i.seq > s.pushed) : []
+    rt.append(id, { items: fresh, fromSeq: s.key === key ? s.pushed : undefined, toSeq: entries.length, history: `pi:${id}:${key}` })
     s.pushed = entries.length
     s.key = key
     s.updatedAt = Date.now()

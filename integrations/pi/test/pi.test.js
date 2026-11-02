@@ -155,6 +155,42 @@ test('a watched session gets what it writes as continuous batches, its live text
   assert.deepEqual(n.all('session.items').at(-1).items.map((i) => i.text), ['two, again'])
 })
 
+test('an unwatched session skips item mapping, keeps branch bookkeeping, and catches up when watched', async (t) => {
+  const { n, host } = await setup(t)
+  const a = piSession('s-later', '/w/app', [msg('u1', null, 'user', 'one'), msg('a1', 'u1', 'assistant', 'a1')])
+  host.register(a.pi)
+  await a.fire('session_start')
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions')?.sessions.some((s) => s.session_id === 's-later'))
+  let mapped = 0
+  const timestamp = a.sm.entries[0].timestamp
+  Object.defineProperty(a.sm.entries[0], 'timestamp', { get() { mapped++; return timestamp } })
+  a.sm.append(msg('u2', 'a1', 'user', 'two'))
+  await a.fire('message_end')
+  a.sm.append(msg('u2b', 'a1', 'user', 'two, again'))
+  await a.fire('message_end')
+  assert.equal(mapped, 0, 'no item conversion while nobody watches')
+  assert.equal(host.live.get('s-later').pushed, 4)
+  assert.equal(host.live.get('s-later').key, 'u2b')
+  assert.equal(n.all('session.items').length, 0)
+  await until('unwatched revision is listed', () => n.last('runtime.sessions')?.sessions.find((s) => s.session_id === 's-later')?.rev === 4)
+
+  await n.peer.call('session.watch', { session_id: 's-later', since_seq: 2 })
+  await until('caught up on the new branch', () => n.last('session.items')?.to_seq === 4)
+  const catchup = n.last('session.items')
+  assert.deepEqual(catchup.items.map((i) => i.text), ['two, again'])
+  assert.equal(catchup.from_seq, 2)
+  assert.equal(catchup.history, 'pi:s-later:u2b')
+  assert.ok(mapped > 0, 'watch catch-up still converts the branch')
+  a.sm.append(msg('a2b', 'u2b', 'assistant', 'new answer'))
+  await a.fire('message_end')
+  await until('live after catch-up', () => n.last('session.items')?.to_seq === 5)
+  const live = n.last('session.items')
+  assert.equal(live.from_seq, 4)
+  assert.equal(live.history, catchup.history)
+  assert.deepEqual(live.items.map((i) => i.text), ['new answer'])
+})
+
 test('the pi-web companion lists sessions on disk, opens one to send to it, and starts new ones through pi-web', async (t) => {
   const disk = [
     { id: 's-old', path: '/pi/s-old.jsonl', cwd: '/w/app', name: '', firstMessage: 'refactor the parser', modified: new Date(Date.now() - 3600_000), messageCount: 4 },
