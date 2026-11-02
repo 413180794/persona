@@ -22,15 +22,12 @@ import (
 
 // assistantTools are the tools only assistant conversations get; their descriptions and schemas are in
 // prompts/mcp (docs/prompts.md).
-func assistantTools(withLark bool) []proto.Tool {
+func assistantTools() []proto.Tool {
 	names := []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
 		"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply",
 		"kb_search", "kb_list", "kb_get", "kb_update", "jarvis_settings",
 		"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
 		"conversation_new", "conversation_send"}
-	if withLark {
-		names = append(names, "lark_chats", "lark_messages", "lark_search")
-	}
 	tools := make([]proto.Tool, 0, len(names))
 	for _, n := range names {
 		tools = append(tools, mcpTool(n))
@@ -50,7 +47,7 @@ func isAssistantTool(name string) bool {
 		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply", "jarvis_settings":
 		return true
 	}
-	return strings.HasPrefix(name, "lark_") || strings.HasPrefix(name, "kb_") || strings.HasPrefix(name, "conversation")
+	return strings.HasPrefix(name, "kb_") || strings.HasPrefix(name, "conversation")
 }
 
 // callAssistantTool runs one assistant tool for the conversation sessionID on machine m.
@@ -185,9 +182,6 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 			return "", err
 		}
 		return fmt.Sprintf("Started on %s in %s: session %s. It shows up in the app's Agents tab.", am.cfg.Name, a.Cwd, res.Session.SessionID), nil
-	}
-	if strings.HasPrefix(name, "lark_") {
-		return h.runLarkTool(ctx, m, name, args)
 	}
 	return "", fmt.Errorf("unknown tool %s", name)
 }
@@ -479,7 +473,7 @@ func toolSummary(name string, input json.RawMessage) string {
 
 // ---- Feishu ----
 
-func (h *Hub) runLarkTool(ctx context.Context, m *Machine, name string, args json.RawMessage) (string, error) {
+func (h *Hub) runLarkTool(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	switch name {
 	case "lark_chats":
 		var a struct {

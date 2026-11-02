@@ -856,25 +856,18 @@ func (h *Hub) setPhoneTools(tools []proto.Tool) {
 	}
 }
 
-// mcpTools are the tools of an assistant conversation or an agent: the hub's own, then (the assistant's only) those
-// of every connector that is ok.
+// mcpTools are the tools of an assistant conversation or an agent: the phone's, then those of the connectors that
+// are ok and give their tools to agents too (mail); for the assistant also its own, then those of the connectors
+// only it gets (Feishu, GitHub…).
 func (h *Hub) mcpTools(assistant bool) []proto.Tool {
-	tools := h.mcpBuiltinTools(assistant)
-	if assistant {
-		tools = append(tools, h.connectors.Tools(context.Background())...)
-	}
-	return tools
-}
-
-func (h *Hub) mcpBuiltinTools(assistant bool) []proto.Tool {
 	h.mu.Lock()
 	tools := append([]proto.Tool(nil), h.phoneTools...)
 	h.mu.Unlock()
-	if h.mail != nil {
-		tools = append(tools, h.mail.Tools()...)
-	}
+	ctx := context.Background()
+	tools = append(tools, h.connectors.ToolsFor(ctx, true)...)
 	if assistant {
-		tools = append(tools, assistantTools(h.lark != nil)...)
+		tools = append(tools, assistantTools()...)
+		tools = append(tools, h.connectors.ToolsFor(ctx, false)...)
 	}
 	return tools
 }
@@ -885,10 +878,6 @@ func (h *Hub) callTool(ctx context.Context, machineID, name string, args json.Ra
 		return proto.TextResult("unknown tool "+name, true)
 	case strings.HasPrefix(name, "phone_"):
 		return h.callPhone(ctx, name, args)
-	case strings.HasPrefix(name, "mail_") && h.mail != nil:
-		return h.mail.Call(ctx, name, args, func(ctx context.Context, summary string, input json.RawMessage) bool {
-			return h.approve(ctx, machineID, name, summary, input)
-		})
 	}
 	return proto.TextResult("unknown tool "+name, true)
 }

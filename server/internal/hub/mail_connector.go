@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 // mailConnector is mail as a connector (docs/plan-connectors.md「三、迁移」): so far what goes into the knowledge
@@ -77,4 +79,63 @@ func (c mailConnector) Changes(ctx context.Context, cursor string, _ int) ([]con
 	}
 	raw, _ := json.Marshal(cursors)
 	return batches, string(raw), false, nil
+}
+
+// Tools are mail's (prompts/mcp/mail) without mail_send, which is an action: the user allows each mail on the phone
+// (the gate), the card as it always was.
+func (c mailConnector) Tools() []proto.Tool {
+	var out []proto.Tool
+	for _, t := range c.h.mail.Tools() {
+		if t.Name != mail.ToolSend {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func (c mailConnector) Actions() []proto.Tool {
+	for _, t := range c.h.mail.Tools() {
+		if t.Name == mail.ToolSend {
+			return []proto.Tool{t}
+		}
+	}
+	return nil
+}
+
+// ForAgents: the coding agents get mail too.
+func (mailConnector) ForAgents() bool { return true }
+
+func (c mailConnector) Call(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	return toolText(c.h.mail.Call(ctx, name, args, nil))
+}
+
+// Validate refuses a mail_send that could not be sent before the user is asked.
+func (mailConnector) Validate(name string, args json.RawMessage) error {
+	if name != mail.ToolSend {
+		return nil
+	}
+	_, err := mail.SendSummary(args)
+	return err
+}
+
+func (mailConnector) Describe(_ context.Context, name string, args json.RawMessage) (connector.Action, string) {
+	summary, _ := mail.SendSummary(args)
+	return connector.Action{Name: name}, summary
+}
+
+// Do sends it (the gate let it through).
+func (c mailConnector) Do(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	return toolText(c.h.mail.Call(ctx, name, args, nil))
+}
+
+// toolText is a tool result as text, its error as an error (connector.ReadTools / Actions return them that way).
+func toolText(r proto.ToolResult) (string, error) {
+	var b strings.Builder
+	for _, c := range r.Content {
+		b.WriteString(c.Text)
+	}
+	if r.IsError {
+		return "", errors.New(b.String())
+	}
+	return b.String(), nil
 }

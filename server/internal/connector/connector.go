@@ -79,6 +79,17 @@ type Actions interface {
 	Do(ctx context.Context, name string, args json.RawMessage) (string, error)
 }
 
+// AgentTools is a connector whose tools also go to the coding agents (mail), not only to the assistant.
+type AgentTools interface {
+	ForAgents() bool
+}
+
+// Validator checks an action's arguments before the gate asks the user: a call that cannot run is refused without
+// a card.
+type Validator interface {
+	Validate(name string, args json.RawMessage) error
+}
+
 // Events are changes the connector hears about as they happen (a realtime socket, a file that changed). Watch runs
 // until ctx ends, calling changed with what changed; the hub restarts it with a backoff when it returns an error.
 type Events interface {

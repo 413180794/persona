@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -126,10 +127,13 @@ func (s *Service) Call(ctx context.Context, name string, args json.RawMessage, a
 
 	case ToolSend:
 		var req SendRequest
-		if err := json.Unmarshal(args, &req); err != nil {
-			return proto.TextResult("invalid arguments: "+err.Error(), true)
+		summary, err := SendSummary(args)
+		if err == nil {
+			err = json.Unmarshal(args, &req)
 		}
-		summary := fmt.Sprintf("Send mail to %s: %s", formatAddresses(req.To), req.Subject)
+		if err != nil {
+			return proto.TextResult(err.Error(), true)
+		}
 		if approve != nil && !approve(ctx, summary, args) {
 			return proto.TextResult("The user declined to send this email.", true)
 		}
@@ -139,6 +143,15 @@ func (s *Service) Call(ctx context.Context, name string, args json.RawMessage, a
 		return proto.TextResult("Mail sent to "+formatAddresses(req.To)+".", false)
 	}
 	return proto.TextResult("unknown tool "+name, true)
+}
+
+// SendSummary is mail_send's arguments as the approval card says them, or why they are not mail_send's.
+func SendSummary(args json.RawMessage) (string, error) {
+	var req SendRequest
+	if err := json.Unmarshal(args, &req); err != nil {
+		return "", errors.New("invalid arguments: " + err.Error())
+	}
+	return fmt.Sprintf("Send mail to %s: %s", formatAddresses(req.To), req.Subject), nil
 }
 
 func formatAddresses(addrs []Address) string {

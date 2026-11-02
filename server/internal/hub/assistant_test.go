@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -61,8 +62,10 @@ func TestAgentsListAndFind(t *testing.T) {
 func TestAssistantToolsOnlyForAssistant(t *testing.T) {
 	h := newTestHub(t)
 	h.lark = lark.New(lark.Config{})
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors() // Feishu's read tools come from its connector
 	for _, tool := range h.mcpTools(false) {
-		if isAssistantTool(tool.Name) {
+		if isAssistantTool(tool.Name) || strings.HasPrefix(tool.Name, "lark_") {
 			t.Fatalf("%s leaked to ordinary sessions", tool.Name)
 		}
 	}

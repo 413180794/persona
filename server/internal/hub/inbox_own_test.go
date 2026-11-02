@@ -7,6 +7,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 // replyMail records what it was asked to send.
@@ -78,3 +79,5 @@ func TestInboxRepliesGoToTheirConnector(t *testing.T) {
 		t.Fatalf("ReplyItem: %v %+v", err, rc.got)
 	}
 }
+
+func (*replyMail) Tools() []proto.Tool { return (*mail.Service)(nil).Tools() }

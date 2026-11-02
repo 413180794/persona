@@ -58,12 +58,12 @@ func (c toolConnector) Tools() []proto.Tool {
 func (toolConnector) Call(context.Context, string, json.RawMessage) (string, error) { return "", nil }
 
 // A connector may not offer a tool the hub has itself; one only named like them ("lark") is fine, does not take
-// the hub's lark_* calls, and is not listed while it has its own row in the app.
+// the hub's lark_* calls (lark_agent_reply stays the hub's), and is not listed while it has its own row in the app.
 func TestConnectorsShadowNoBuiltinTool(t *testing.T) {
 	h := newTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
 	for _, c := range []toolConnector{{"kb", []string{"kb_search"}}, {"phone", []string{"phone_contacts"}},
-		{"mail", []string{"mail_send"}}, {"lark", []string{"lark_chats"}}, {"agent", []string{"agent_send"}}} {
+		{"lark", []string{"lark_agent_reply"}}, {"agent", []string{"agent_send"}}} {
 		if err := h.addConnector(c); err == nil {
 			t.Errorf("connector %q offering %v was registered", c.id, c.tools)
 		}
@@ -74,8 +74,8 @@ func TestConnectorsShadowNoBuiltinTool(t *testing.T) {
 	if err := h.addConnector(namedConnector("lark")); err != nil {
 		t.Fatal(err)
 	}
-	if h.connectors.Offers("lark_chats") {
-		t.Fatal("a lark connector without tools took over lark_chats")
+	if h.connectors.Offers("lark_agent_reply") {
+		t.Fatal("a lark connector without tools took over lark_agent_reply")
 	}
 	_, out := call(t, h.routes(), "GET", "/api/v1/connectors", h.cfg.Token, "")
 	if list := out["connectors"].([]any); len(list) != 1 || list[0].(map[string]any)["id"] != "example" {

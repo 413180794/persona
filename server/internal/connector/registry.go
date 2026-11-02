@@ -151,6 +151,17 @@ func (r *Registry) Offers(name string) bool {
 	return c != nil && slices.Contains(ToolNames(c), name)
 }
 
+func forAgents(c Connector) bool {
+	a, ok := c.(AgentTools)
+	return ok && a.ForAgents()
+}
+
+// ForAgents says whether the tool name is a connector's that the coding agents get too.
+func (r *Registry) ForAgents(name string) bool {
+	c := r.Owner(name)
+	return c != nil && forAgents(c)
+}
+
 // StatusOf is a connector's status: StateDisabled when the user switched it off; one without Accounts is always ok.
 func StatusOf(ctx context.Context, c Connector) Status {
 	if c != nil && reflect.TypeOf(c).Comparable() {
@@ -166,9 +177,15 @@ func StatusOf(ctx context.Context, c Connector) Status {
 
 // Tools are the read tools and the actions of every connector that is ok, in the order added.
 func (r *Registry) Tools(ctx context.Context) []proto.Tool {
+	return append(r.ToolsFor(ctx, true), r.ToolsFor(ctx, false)...)
+}
+
+// ToolsFor are the tools of the connectors that are ok and whose tools go to the agents too (agents), or only to
+// the assistant (!agents), in the order added.
+func (r *Registry) ToolsFor(ctx context.Context, agents bool) []proto.Tool {
 	var out []proto.Tool
 	for _, c := range r.All() {
-		if StatusOf(ctx, c).State != StateOK {
+		if forAgents(c) != agents || StatusOf(ctx, c).State != StateOK {
 			continue
 		}
 		if t, ok := c.(ReadTools); ok {
@@ -213,6 +230,11 @@ func (r *Registry) Call(ctx context.Context, name string, args json.RawMessage, 
 	a, ok := c.(Actions)
 	if !ok || !has(a.Actions(), name) {
 		return proto.TextResult("unknown tool "+name, true)
+	}
+	if v, ok := c.(Validator); ok {
+		if err := v.Validate(name, args); err != nil {
+			return proto.TextResult(err.Error(), true)
+		}
 	}
 	r.mu.RLock()
 	rules := r.rules

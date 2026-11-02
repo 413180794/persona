@@ -21,6 +21,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 // The connector baseline (issue #522): what the hub makes today of Feishu (through lark-connector) and mail, the inbox items
@@ -648,3 +649,6 @@ func TestConnectorBaseline(t *testing.T) {
 
 	golden(t, "connector_baseline.requests", norm.apply(strings.Join(requests(), "\n")+"\n"))
 }
+
+// Tools are mail's own (the mail connector lists them when it is registered).
+func (baselineMail) Tools() []proto.Tool { return (*mail.Service)(nil).Tools() }

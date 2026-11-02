@@ -2,14 +2,16 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/kb"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// larkConnector is Feishu (with removed) as a connector (docs/plan-connectors.md「三、迁移」): so far its chats and
-// removed posts for the knowledge base and its documents, meetings and events as items. The inbox, the tools, the
-// gate's rules and 设置 › 连接器's row move to it step by step (M3–M6). The realtime events stay with the hub
+// larkConnector is Feishu (with removed) as a connector (docs/plan-connectors.md「三、迁移」): its chats and removed posts
+// for the knowledge base, its documents, meetings and events as items, its inbox (inbox_own.go) and its read tools.
+// The gate's rules and 设置 › 连接器's row move to it in M5–M6. The realtime events stay with the hub
 // (lark_events.go): they also refresh the app's 信息 tab and personal agents, and start /agent at once.
 type larkConnector struct{ h *Hub }
 
@@ -37,4 +39,14 @@ func (h *Hub) listedConnectors(ctx context.Context) []connector.Info {
 		}
 	}
 	return out
+}
+
+// Tools: reading Feishu (prompts/mcp/lark), the assistant's only. Writes go through the lark-connector skill and the
+// node's gate (lark_gate); lark_agent_reply answers a /agent request and stays the hub's.
+func (larkConnector) Tools() []proto.Tool {
+	return []proto.Tool{mcpTool("lark_chats"), mcpTool("lark_messages"), mcpTool("lark_search")}
+}
+
+func (c larkConnector) Call(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	return c.h.runLarkTool(ctx, name, args)
 }

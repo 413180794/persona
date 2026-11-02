@@ -24,19 +24,24 @@ func TestGoldenMCPTools(t *testing.T) {
 	}
 	h := newTestHub(t)
 	h.mail = (*mail.Service)(nil) // Tools() reads nothing from the service
+	register := func() {          // the connectors as the hub registers them (mail's and Feishu's tools come from them)
+		h.connectors = connector.NewRegistry(nil)
+		h.registerConnectors()
+	}
+	register()
 	golden(t, "mcp_tools.assistant_without_lark", show(h.mcpTools(true)))
 	h.lark = lark.New(lark.Config{BaseURL: "http://127.0.0.1:1", Token: "t"})
+	register()
 	golden(t, "mcp_tools.assistant", show(h.mcpTools(true)))
 	golden(t, "mcp_tools.agent", show(h.mcpTools(false)))
 	// With GitHub signed in: its read tools after the hub's own, for the assistant only.
-	h.connectors = connector.NewRegistry(nil)
 	if err := h.addConnector(signedInGitHub{github.New(github.Config{}, "Mac", nil)}); err != nil {
 		t.Fatal(err)
 	}
 	golden(t, "mcp_tools.assistant_with_github", show(h.mcpTools(true)))
 	golden(t, "mcp_tools.agent", show(h.mcpTools(false)))
 	// With iMessage handed to Jarvis (the switch is on by default): its read tools too.
-	h.connectors = connector.NewRegistry(nil)
+	register()
 	if err := h.addConnector(readableIMessage{imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil)}); err != nil {
 		t.Fatal(err)
 	}
