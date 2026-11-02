@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
@@ -566,6 +567,9 @@ func TestConnectorBaseline(t *testing.T) {
 	h.inbox.init()
 	h.userTZ = "Asia/Shanghai"
 	h.lark = lark.New(lark.Config{BaseURL: srv.URL, Token: "t"})
+	// The connectors as the hub registers them (Feishu's sources and items come from the registry).
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors()
 	h.mail = newBaselineMail(base)
 	ctx := context.Background()
 

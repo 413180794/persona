@@ -20,8 +20,9 @@
 gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程序，jarvisd 本身不变大。
 
 - **代码**：连接器在 `server/internal/connector/telegram`（用 gotd），程序是 `server/cmd/jarvisd-telegram`，同一个 Go module、同一次构建出来。
+  hub 不传任何 Telegram 的配置给它：凭据和会话都在 `connector_secrets` 里，它经 `secrets.*` 读写。
   jarvisd 不 import 它：测试守住 `go list -deps ./cmd/jarvisd` 里没有 gotd。
-- **hub 怎么用它**：配了 `telegram`、开关开着时，hub 起 `jarvisd-telegram`（和 jarvisd 放在同一个目录），用 stdin / stdout 跑现有的双向 JSON-lines RPC
+- **hub 怎么用它**：开关开着时，hub 起 `jarvisd-telegram`（和 jarvisd 放在同一个目录），用 stdin / stdout 跑现有的双向 JSON-lines RPC
   （`internal/rpc`，hub↔node 用的那个）。hub 这边是一个通用的「子进程连接器」适配器（`connector/proc`），把 Connector 的各项能力
   （状态、登录、归档、收件箱、只读工具、事件）一一转成 RPC 调用；子进程那边一个 `connector/serve` 把任意 Go 连接器挂到 stdio 上。
   加密存储反过来：子进程调 hub 的 `secrets.load / save / delete`，会话的明文只在两边的内存里，不落子进程的磁盘。
@@ -34,18 +35,21 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
   - hub 自动更新时两个一起下载、校验（`version -v`）、一起换上，旧的各留 `.prev`；新版起不来回滚时两个一起回滚。
 - **部署**：`deploy.sh` 和主会话的 `deploy-hub.sh`（写成 `.new`）在 hub 机器上多放这一个。
 
-## 配置和凭据
+## 凭据：都由用户在 App 里填（用户 2026-11-03：「Telegram 的 API 凭据也让用户填，不要写到程序里面」）
 
-- **api_id / api_hash**：用户在 my.telegram.org 用自己的账号申请（「API development tools」），写 hub 的 `~/.jarvis/hub.json`：
-  `"telegram": {"api_id": 12345, "api_hash": "…"}`。不进仓库、不进 App、不进日志。没配时连接器的状态是 `not_configured`，设置页说怎么配。
-- **会话（auth key + 数据中心）**：gotd 的 `session.Storage`（`LoadSession` / `StoreSession`）接到 hub：用 `secret.key` AES-GCM 加密
-  （和启动器的 Key、邮箱凭据同一个主密钥，`hub/launchers.go` 的 `sealKey`），存 Postgres 新表 `connector_secrets(connector, sealed, updated_at)`。
-  明文只在内存；任何接口都不返回它，只回「已登录 · 账号名」。这张表是通用的：以后要存凭据的连接器都用它。
-- **登录**（设置 › 连接器 › Telegram）：手机号 → 验证码（发到 Telegram 的其他设备上，或短信）→ 有两步验证时再填密码。
-  hub 一步一步转给 Telegram：`auth.sendCode` → `auth.signIn` →（`SESSION_PASSWORD_NEEDED` 时）`account.getPassword` + SRP 校验密码。
-  中间状态（`phone_code_hash`）只在内存，hub 重启了就重新来。密码只经过内存，用完即丢。
-- **退出**：`auth.logOut`（Telegram 那边这个会话也没了），再删 `connector_secrets` 那一行。
-- hub 的网络：hub 机器直连 Telegram 的数据中心（2026-11-03 测过 TCP 443 和 web.telegram.org 都通）。连不上的环境以后再加 `telegram.proxy`（SOCKS5），这版不做。
+- **api_id / api_hash**：不放 hub.json、不编进程序、不放构建配置。登录的**第一步**就让用户填，表单上附一句申请指引：
+  「去 my.telegram.org，用你的 Telegram 账号登录，进 API development tools 建一个应用，把 api_id 和 api_hash 填到这里」。
+- **会话（auth key + 数据中心）**：gotd 的 `session.Storage` 接到 hub。凭据和会话放在一起（一份 JSON），用 `secret.key` AES-GCM 加密
+  （和启动器的 Key、邮箱凭据同一个主密钥，`sealKey`），存 Postgres 的 `connector_secrets`（T1）。明文只在两个进程的内存里。
+- **显示**：App 只显示 api_id，api_hash 打码（只露最后 4 位）：状态的 `via` 是「api_id 1234567 · api_hash ••••a1b2」。
+  日志、错误、响应里永远不出现这两个值（连接器的错误先抹掉它们）。
+- **登录**（设置 › 连接器 › Telegram）：api_id + api_hash → 手机号 → 验证码（发到 Telegram 的其他设备上，或短信）→ 有两步验证时再填密码。
+  第一步先用填的凭据连一次 Telegram（`help.getConfig`），不对就留在这一步（「api_id 或 api_hash 不对」）。
+  之后 hub 一步一步转给 Telegram：`auth.sendCode` → `auth.signIn` →（`SESSION_PASSWORD_NEEDED` 时）`account.getPassword` + SRP 校验密码。
+  中间状态（`phone_code_hash`）只在内存，程序重启了就从手机号重新来。密码只经过内存，用完即丢。
+- **退出**：`auth.logOut`（Telegram 那边这个会话也没了），再删 `connector_secrets` 那一行：凭据和会话一起删。要换凭据就退出再登录。
+- **默认关着**：jarvisd-telegram 在的 hub 都会登记这个连接器，但默认是关的（T1 的 `addConnectorOff`）；用户在设置里打开开关、再按上面的步骤登录。
+- hub 的网络：hub 机器直连 Telegram 的数据中心（2026-11-03 测过 TCP 443 和 web.telegram.org 都通）。连不上的环境以后再加代理，这版不做。
 
 ## 读什么
 
@@ -80,11 +84,12 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
 
 ## 设置 › 连接器 › Telegram
 
-- 状态：未配置（说明 api_id 怎么配）/ 未登录 / 已登录 · 显示名（@用户名）/ 限流 / 出错。
-- 登录：一步一个表单（手机号 → 验证码 → 密码），通用：hub 告诉 App 这一步要哪些字段，App 照着画（以后别的要分步登录的连接器也用它）。
-- **开关「同步 Telegram」**：关掉就停止同步（不连 Telegram、不进知识库和收件箱、助手没有工具），登录状态保留。
+- 状态：关着 / 未登录 / 已登录 · 显示名（@用户名）· 「api_id 1234567 · api_hash ••••a1b2」/ 限流 / 出错。
+- 登录：一步一个表单（api_id + api_hash 和申请指引 → 手机号 → 验证码 → 密码），通用：hub 告诉 App 这一步要哪些字段，App 照着画
+  （以后别的要分步登录的连接器也用它）；api_hash、密码是 `secret` 字段，输入时遮住。
+- **开关「同步 Telegram」**：默认关；关掉就停止同步（不连 Telegram、不进知识库和收件箱、助手没有工具），登录状态保留。
 - **删除已存的数据**：知识库里 `telegram-*` 的会话和人、收件箱里 Telegram 的条目、游标；要二次确认。
-- **退出登录**：见上。
+- **退出登录**：凭据和会话一起删（见上）；要换凭据就退出再登录。
 - 收件箱的行用通用的连接器块（GitHub 已经在用），标志 `Theme.Brand.telegram`（官方标志，加资源）。
 
 ## 接口改动（`server/internal/connector`，2026-11-03 和 ovis 对过）
@@ -103,6 +108,14 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
    收件箱 `Source=<id>` 的条目、`cursors/<id>.json`。`DELETE /api/v1/connectors/{id}/data`。
 - 和 ovis 的迁移（M1 #529 加 `Chats` / `Items`、M6 给 `Status` 加 `Guide`、M3 加 `InboxReplier`）不重叠，谁后合谁 rebase。
 
+## 可选：接电脑上已有的 Telegram 服务（先不做）
+
+有的人已经在某台电脑上跑着一个托管了自己账号的 Telegram 客户端（Telethon、TDLib 的 CLI 或服务）。可以像 iMessage 那样走「node 当本地连接器」
+（`docs/plan-connectors.md` 第二节第三种）：node 读本机那个服务（只读命令），hub 一侧注册成连接器，凭据和会话一直留在那台电脑上（比如它的钥匙串），不进 hub。
+- 好处：不用在 hub 上再登录一次，不多一个 Telegram 设备会话；已经授权过的服务直接用。
+- 代价：每种服务的命令和输出各不一样，要一个适配层；只能读那个服务肯给的；那台电脑离线就没有数据；限速由那个服务管。
+- 现在不做，先把 jarvisd-telegram 做完；有人要时再按 iMessage 的 `connector.*` RPC 加一个 `telegram` 的本地源。
+
 ## 测试
 
 - 不用真账号：Telegram 的调用收在一个小接口后面（`api`：发验证码、登录、密码、会话列表、历史、搜索、退出），单元测试用假的实现（合成的会话和消息，人名用「示例用户」）。
@@ -110,6 +123,10 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
 - 加密：存进库的是密文（测试里断言库里那一行不含明文 auth key）；退出后那一行没了。
 - 隐私扫描照常；日志只记会话 id、条数、错误类型，不记正文、手机号、验证码、密码。
 - 真账号的登录由用户自己在 App 里做。之后只在 hub 上看数字（会话数、行数、收件箱条数）。
+- **对照真实数据的样子**：用户在一台 Mac 上有一个托管了自己 Telegram 账号的只读服务（Telethon CLI，经本机 unix socket）。只用它的读命令
+  （status、dialogs、resolve、messages、search，`--limit` 不超过 200），一次一个请求、间隔 0.5–1 秒、FloodWait 等够，不轮询、不大批量拉；
+  **绝不**调用发送类命令。只对照结构（会话类型、群和超级群、回复、@我、静音 / 归档、附件的种类），记录也只写结构：真实的消息、人名、群名、
+  手机号、id 不进仓库、夹具、PR、issue 和日志。gotd 用不了它的会话（那是另一份授权）。
 
 ## 分步
 
@@ -117,7 +134,7 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
 | --- | --- |
 | T1 | 框架：`Login`、`Secrets`（`connector_secrets` 表）、`SetEnabled` / `disabled`、hub 的登录 / 退出 / 开关接口（已和 ovis 对过） |
 | T2a | 子进程连接器：hub 的 `connector/proc` 和子进程的 `connector/serve`（RPC、版本对齐、退避重启、开关停起），用测试里的假子进程验证 |
-| T2b | `jarvisd-telegram`：gotd 客户端、分步登录、会话经 hub 加密存、退出、状态；`hub.json` 的 `telegram`；jarvisd 不带 gotd 的测试 |
+| T2b | `jarvisd-telegram`：gotd 客户端、分步登录（凭据 → 手机号 → 验证码 → 密码）、凭据和会话经 hub 加密存、退出、状态（只露 api_id）；jarvisd 不带 gotd 的测试 |
 | T2c | 发布和更新：`deploy.sh`、`publish.sh`（编、扫、体积、清单的 `programs`）、hub 自动更新一起换一起回滚、Docker 镜像、`deploy-hub.sh.new` |
 | T3 | 知识库归档（会话增量）+ 实时踢 + 只读工具 + 提示词和 golden；删除已存数据（知识库、收件箱、游标） |
 | T4 | 收件箱 |
@@ -125,7 +142,7 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
 
 ## 用户定的（2026-11-03）
 
-1. **api_id / api_hash**：用户去 my.telegram.org 申请，主会话写进 hub.json 的 `telegram`。在这之前除了真登录都先做。
+1. **api_id / api_hash**：用户在 App 里登录的第一步自己填（上面「凭据」），不放 hub.json、不编进程序、不放构建配置。
 2. **第一次同步**：每个会话最近 30 天、最多 500 条。
 3. **收哪些会话**：只收私聊和群（含超级群），不收频道、机器人、Saved Messages；静音和归档的只进知识库、不进收件箱。
 4. **账号风险**：用户知道 Telegram 的「设备」里会多一个会话、会遇到限速；会话加密存，只读用。

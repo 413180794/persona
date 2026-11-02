@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
@@ -119,22 +120,32 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	}
 }
 
-// kbSources are where the knowledge base archives chats from: Feishu's chats and removed posts.
+// kbSources are where the knowledge base archives chats from, chat by chat: every connector's (Feishu's chats and
+// removed posts), in the order they were registered.
 func (h *Hub) kbSources() []kb.Source {
-	if h.lark == nil {
-		return nil
+	var out []kb.Source
+	for _, c := range h.connectors.All() {
+		if cs, ok := c.(connector.Chats); ok {
+			out = append(out, cs.ChatSources()...)
+		}
 	}
-	return []kb.Source{&larkSource{c: h.lark}, &momentsSource{c: h.lark}}
+	return out
 }
 
-// kbCollectItems records Feishu's documents, meetings and events, and tags new ones.
+// kbCollectItems records every connector's items (Feishu's documents, meetings and events) and tags new ones.
 func (h *Hub) kbCollectItems(ctx context.Context) {
-	if h.lark == nil {
-		return
-	}
 	e := h.kb.eng
-	if err := e.CollectItems(ctx, &larkItems{c: h.lark, loc: h.userLocation()}); err != nil {
-		h.logf("kb: items: %v", err)
+	any := false
+	for _, c := range h.connectors.All() {
+		if is, ok := c.(connector.Items); ok {
+			any = true
+			if err := e.CollectItems(ctx, is.ItemSource()); err != nil {
+				h.logf("kb: items: %v", err)
+			}
+		}
+	}
+	if !any {
+		return
 	}
 	if err := e.TagItems(ctx); err != nil && !ai.IsPaused(err) {
 		h.logf("kb: tag items: %v", err)
@@ -205,7 +216,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 				h.logf("kb: backfilled %d line(s)", n)
 			}
 		})
-		if h.lark != nil && time.Since(lastItems) >= kbItemsPoll {
+		if time.Since(lastItems) >= kbItemsPoll {
 			lastItems = time.Now()
 			h.kbCollectItems(ctx)
 		}

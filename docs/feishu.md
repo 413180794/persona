@@ -26,6 +26,7 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
   `ol METHOD PATH [JSON]` 直连 lark-connector 的 agent API，读写都能做；写操作先过 node 的闸门（会被别人看到的在手机上确认）。
   详见 `docs/assistant.md`「飞书：lark-connector skill」。下面的接口速查是这边实测的补充，lark-connector 的 references 更全，以它和 `ol GET /` 为准。
 - 会话、消息、已读、发消息、表情回复、卡片按钮走 hub 的专用路由（`docs/protocol.md` 飞书 API）。
+- 没有 lark-connector 时用官方 lark-cli 接飞书：方案见 `docs/plan-lark-cli.md`（#273，还没实现）。
 
 ## lark-connector 与 hub 分机部署
 

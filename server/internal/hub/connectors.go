@@ -18,11 +18,15 @@ import (
 // implements — the assistant's tools (writes behind the gate), 设置 › 连接器's status, realtime kicks
 // (internal/connector, docs/plan-connectors.md).
 
-// addConnector registers c, refusing an id whose tools would shadow the hub's own ("kb_…", "phone_…").
+// addConnector registers c, refusing one that offers a tool the hub has itself ("kb_search", "phone_…"): calls go
+// to the connector first. A connector may share a prefix with the hub's tools ("lark") as long as it does not offer
+// them; the hub's own then move to it (docs/plan-connectors.md M4).
 func (h *Hub) addConnector(c connector.Connector) error {
-	for _, t := range h.builtinTools() {
-		if strings.HasPrefix(t, c.ID()+"_") {
-			return fmt.Errorf("connector %q: its tools would shadow the hub's %s", c.ID(), t)
+	for _, t := range connector.ToolNames(c) {
+		for _, b := range h.builtinTools() {
+			if t == b || strings.HasSuffix(b, "_") && strings.HasPrefix(t, b) {
+				return fmt.Errorf("connector %q: %s would shadow the hub's own", c.ID(), t)
+			}
 		}
 	}
 	return h.connectors.Add(c)
@@ -58,13 +62,25 @@ func (h *Hub) callConnector(ctx context.Context, machineID, name string, args js
 
 func (h *Hub) connectorRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/connectors", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"connectors": h.connectors.Infos(r.Context())})
+		writeJSON(w, map[string]any{"connectors": h.listedConnectors(r.Context())})
 	})
 	h.imessageRoutes(api)
 }
 
-// startConnectors registers the connectors hub.json sets up and runs them.
+// startConnectors registers the connectors and runs them.
 func (h *Hub) startConnectors(ctx context.Context) {
+	h.registerConnectors()
+	h.connectors.Start(ctx, h.connectorChanged, h.logf)
+}
+
+// registerConnectors registers Feishu (first: the knowledge base reads its sources in this order) and the
+// connectors hub.json sets up.
+func (h *Hub) registerConnectors() {
+	if h.lark != nil {
+		if err := h.addConnector(larkConnector{h}); err != nil {
+			h.logf("lark connector: %v", err)
+		}
+	}
 	if gh := h.cfg.GitHub; gh.Configured() {
 		name := gh.Auth.FromMachine
 		if m := h.byID[name]; m != nil {
@@ -79,7 +95,6 @@ func (h *Hub) startConnectors(ctx context.Context) {
 			h.logf("imessage connector: %v", err)
 		}
 	}
-	h.connectors.Start(ctx, h.connectorChanged, h.logf)
 }
 
 // ghToken reads the token of machine's gh login (credential.gh_token); it never goes to a log.

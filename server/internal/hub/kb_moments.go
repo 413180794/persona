@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"errors"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -71,7 +72,19 @@ func (s *momentsSource) Chats(ctx context.Context, limit int) ([]kb.SourceChat, 
 	out := make([]kb.SourceChat, 0, len(posts))
 	// Nothing older than a year (2026-11-01: 13 of the first 21 were from 2023–2025; the archive keeps a year).
 	cutoff := time.Now().AddDate(-1, 0, 0)
-	for id, p := range posts {
+	// The most recently active first (then by id): the limit keeps those, and every run goes in the same order.
+	ids := make([]string, 0, len(posts))
+	for id := range posts {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		if !active[ids[i]].Equal(active[ids[j]]) {
+			return active[ids[i]].After(active[ids[j]])
+		}
+		return ids[i] < ids[j]
+	})
+	for _, id := range ids {
+		p := posts[id]
 		if active[id].Before(cutoff) {
 			continue
 		}

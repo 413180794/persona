@@ -72,6 +72,29 @@ func (r *Registry) Owner(tool string) Connector {
 	return r.Get(id)
 }
 
+// ToolNames are the names of every read tool and action a connector offers, whatever its status.
+func ToolNames(c Connector) []string {
+	var out []string
+	if t, ok := c.(ReadTools); ok {
+		for _, tl := range t.Tools() {
+			out = append(out, tl.Name)
+		}
+	}
+	if a, ok := c.(Actions); ok {
+		for _, tl := range a.Actions() {
+			out = append(out, tl.Name)
+		}
+	}
+	return out
+}
+
+// Offers says whether a registered connector offers the tool name (its own: the "<ID>_" prefix and in its list).
+// A connector named like the hub's own tools ("lark") does not take those over until it offers them itself.
+func (r *Registry) Offers(name string) bool {
+	c := r.Owner(name)
+	return c != nil && slices.Contains(ToolNames(c), name)
+}
+
 // StatusOf is a connector's status; one without Accounts is always ok.
 func StatusOf(ctx context.Context, c Connector) Status {
 	if a, ok := c.(Accounts); ok {
@@ -215,6 +238,8 @@ func Capabilities(c Connector) []string {
 	_, hosts := c.(Hosts)
 	_, inbox := c.(Inbox)
 	_, archive := c.(Archive)
+	_, chats := c.(Chats)
+	_, items := c.(Items)
 	add("status", status)
 	add("tools", tools)
 	add("actions", actions)
@@ -222,5 +247,7 @@ func Capabilities(c Connector) []string {
 	add("hosts", hosts)
 	add("inbox", inbox)
 	add("archive", archive)
+	add("chats", chats)
+	add("items", items)
 	return out
 }

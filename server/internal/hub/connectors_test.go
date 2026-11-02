@@ -40,16 +40,46 @@ type namedConnector string
 func (c namedConnector) ID() string   { return string(c) }
 func (c namedConnector) Name() string { return string(c) }
 
+// toolConnector offers the tools named.
+type toolConnector struct {
+	id    string
+	tools []string
+}
+
+func (c toolConnector) ID() string   { return c.id }
+func (c toolConnector) Name() string { return c.id }
+func (c toolConnector) Tools() []proto.Tool {
+	var out []proto.Tool
+	for _, n := range c.tools {
+		out = append(out, proto.Tool{Name: n})
+	}
+	return out
+}
+func (toolConnector) Call(context.Context, string, json.RawMessage) (string, error) { return "", nil }
+
+// A connector may not offer a tool the hub has itself; one only named like them ("lark") is fine, does not take
+// the hub's lark_* calls, and is not listed while it has its own row in the app.
 func TestConnectorsShadowNoBuiltinTool(t *testing.T) {
 	h := newTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
-	for _, id := range []string{"kb", "phone", "mail", "lark", "conversation", "agent", "inbox"} {
-		if err := h.addConnector(namedConnector(id)); err == nil {
-			t.Errorf("connector %q was registered", id)
+	for _, c := range []toolConnector{{"kb", []string{"kb_search"}}, {"phone", []string{"phone_contacts"}},
+		{"mail", []string{"mail_send"}}, {"lark", []string{"lark_chats"}}, {"agent", []string{"agent_send"}}} {
+		if err := h.addConnector(c); err == nil {
+			t.Errorf("connector %q offering %v was registered", c.id, c.tools)
 		}
 	}
 	if err := h.addConnector(namedConnector("example")); err != nil {
 		t.Fatal(err)
+	}
+	if err := h.addConnector(namedConnector("lark")); err != nil {
+		t.Fatal(err)
+	}
+	if h.connectors.Offers("lark_chats") {
+		t.Fatal("a lark connector without tools took over lark_chats")
+	}
+	_, out := call(t, h.routes(), "GET", "/api/v1/connectors", h.cfg.Token, "")
+	if list := out["connectors"].([]any); len(list) != 1 || list[0].(map[string]any)["id"] != "example" {
+		t.Fatalf("listed %v", list)
 	}
 }
 
