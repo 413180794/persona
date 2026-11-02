@@ -229,6 +229,13 @@ func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, 
 			provider = "legacy.judge"
 		}
 		c := h.legacyModelConfig(provider)
+		if c.BaseURL == "" {
+			// No hub.json connection for this use: fall back to a provider the hub can call itself, instead of failing
+			// while a keyed Claude connection sits unused (#388). Not stored, so a later explicit choice still wins.
+			if name := h.fallbackAPIProvider(ctx); name != "" {
+				return ModelBinding{Provider: "launcher." + name}, modelAutoSource, nil
+			}
+		}
 		return ModelBinding{Provider: provider, Model: c.Model, Effort: c.ReasoningEffort}, "hub 配置", nil
 	}
 	if p.ID == "assistant" {
@@ -239,6 +246,36 @@ func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, 
 		return ModelBinding{Provider: "launcher.claude"}, "默认", nil
 	}
 	return ModelBinding{Provider: p.ID}, "插件默认", nil
+}
+
+// modelAutoSource is what 继承来源 says for an API use that runs on fallbackAPIProvider's pick.
+const modelAutoSource = "自动选择（hub 上能直接调用的接入）"
+
+// modelNoAPIStatus explains an API use with nothing to call: launchers like 「Claude Code 默认」 only start a CLI on a
+// computer, so they never show up for these uses.
+const modelNoAPIStatus = "没有能直接调用的模型：「Claude Code 默认」这类启动器只能在电脑上启动，不能用于此项。" +
+	"在 设置 › 模型供应商 添加带 Key 的接入后选它"
+
+// fallbackAPIProvider names the managed connection an unconfigured API use runs on: the first direct API provider,
+// else the first keyed launcher speaking Messages (Responses launchers cannot serve these uses). Hidden ones and
+// ones without an address, a default model or a key are skipped. "" when there is none.
+func (h *Hub) fallbackAPIProvider(ctx context.Context) string {
+	stored := h.storedLaunchers(ctx)
+	hidden := h.hiddenLaunchers(ctx)
+	usable := func(s storedLauncher) bool {
+		return !slices.Contains(hidden, s.Name) && s.BaseURL != "" && s.Model != "" && s.KeySealed != ""
+	}
+	for _, s := range stored {
+		if s.Kind == "api" && usable(s) {
+			return s.Name
+		}
+	}
+	for _, s := range stored {
+		if s.Kind != "api" && s.API != "responses" && usable(s) {
+			return s.Name
+		}
+	}
+	return ""
 }
 
 func mergeModel(base, over ModelBinding) ModelBinding {
@@ -418,6 +455,9 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 	p.Status = "未验证"
 	if !slices.Contains(p.ProviderIDs, p.Effective.Provider) {
 		p.Status = "供应商不存在或不兼容"
+		if p.Kind == "api" && strings.HasPrefix(p.Effective.Provider, "legacy.") && h.legacyModelConfig(p.Effective.Provider).BaseURL == "" {
+			p.Status = modelNoAPIStatus
+		}
 	} else if p.Kind == "api" && p.Effective.Model == "" {
 		p.Status = "未配置模型"
 	} else if p.Kind == "api" {

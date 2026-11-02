@@ -82,12 +82,20 @@
   ⌥ 点列表行在新窗口打开也没做：锁屏时发不了真的点击，验不了它会不会同时触发 NavigationLink。
 
   2026-11-02 用户反馈「点起来卡卡的」之后量的（体验模式，真窗口，cua-driver 点侧栏，`ps` 取进程 CPU 时间，`sample` 看主线程）：
-  - 切侧栏分区：每次主线程约 240 ms，Debug 和 Release（`-O` 全模块）一样，不是调试版的问题。时间几乎全在 SwiftUI 建新页面的视图图和
-    AppKit 布局（页面里的 `NavigationSplitView` 每次新建一个 `NSSplitViewController`），Jarvis 自己的 body 只占一小部分。
-    `MacShell` 的 `page` 是 `switch`，换分区就整页重建。试过把去过的页面都留在 `ZStack` 里（不可见的页 `opacity(0)` + `tabIsActive`），
-    一切换就崩：隐藏页面的 `.searchable`、`.toolbar` 照样往窗口工具栏注册，两个页面各有一个搜索框就是重复的 `com.apple.SwiftUI.search`，
-    AppKit 抛 `NSInternalInconsistencyException`。要保活得让每个页面的工具栏只在显示时出现（共用页面里几十处 `.toolbar` / 快捷键），或者每页一个
-    `NSHostingController` 隔开，都还没做。
+  - 切侧栏分区（#390）：每次主线程约 240 ms，Debug 和 Release（`-O` 全模块）一样，不是调试版的问题。
+    `⌘1…⌘6` 轮流切、量切过去 1.2 秒内的进程 CPU（不读无障碍树，见下面量法）：设置约 400 ms、收件箱约 460、知识库约 440、Jarvis 约 560、
+    Agents 约 770、机器约 1100；什么都不按的 1.2 秒是 0。
+    **整页重建不是大头**：`MacShell` 的 `page` 是 `switch`，换分区就整页重建，但改成系统 `TabView` 保活（去过的页留着，工具栏跟着当前页，
+    macOS 26 上实测不崩、状态保留）之后六个分区合计 3750 ms，和原来的 3730 一样：机器页快了约 480 ms（Swift Charts 的迷你曲线不用重建），
+    别的页反而慢了一点。时间花在每次都要做的事上：新页面重新进窗口后的 AppKit 布局（`List` 行自动算高、约束、`NSHostingView` 量尺寸）、
+    工具栏的项整批换一遍（每个都是一个 SwiftUI 托管视图；Agents ↔ 知识库来回切平均每次约 115 ms）、菜单栏图标重画（`MenuBarExtra`，每次约 25 ms），
+    采样里还有一截在查本地化表（`Locale`、`mostPreferredLanguageOf`）。所以没有一个改了就快的地方，要按页、按项减：机器页的迷你曲线、Agents 的工具栏项、菜单栏图标不跟着分区重画。
+    保活的几条路都试过：`ZStack` 里藏起来，隐藏页的 `.searchable`、`.toolbar` 照样往窗口工具栏注册，两个搜索框直接崩
+    （`NSInternalInconsistencyException`）；每页一个 `NSHostingController` 轮流桥接工具栏，根视图的工具栏项被挤掉、切换时 `NSRangeException`；
+    `TabView` 能用但不快（上面），它在工具栏正中的分段选择器 SwiftUI 也藏不掉（`.defaultVisibility(.hidden, for: .tabBar)`、`.hidden()` 都不行，
+    要从 AppKit 那边 `NSToolbarItem.isHidden`）。原型在本地分支 `wip/390-tabview-keepalive`，没合。
+    量法：cua-driver 点无障碍元素会让 App 一直维护无障碍树（每次点击另有几十毫秒），按快捷键要用 `background` 投递
+    （`foreground` 每次把窗口切到前台再切回去，活跃 / 不活跃各重画一遍）；`sample` 主线程看去向。
   - 空闲 CPU（锁屏时起体验实例，`ps -o cputime` 量 20 秒）：停在 Agents 页（`-tab dev`）什么都不动占一个核的 14%；
     停在体验模式默认打开的收件箱是 0。来源是「需要你」圆点的呼吸圈（`StatusDot`）：iOS 用 30 Hz 的 `TimelineView` 画，
     Mac 上每一帧都让托管视图重新算约束、整个窗口重新布局。Mac 改成 Core Animation 画同一个圈（`Mac/Design/MacBreathingRing.swift`，

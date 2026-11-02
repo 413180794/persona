@@ -280,3 +280,97 @@ func TestTaskModelConfigurationSurvivesOrdinaryTaskSave(t *testing.T) {
 		t.Fatalf("ordinary task edit overwrote model: %+v %v", b, err)
 	}
 }
+
+// #388: with no hub.json "ai", API uses run on a keyed connection the hub already has instead of failing, and say so.
+func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
+	h, mux := modelTestHub(t)
+	ctx := context.Background()
+	h.cfg.AI = ai.Config{}
+	var model string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Model string }
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		model = in.Model
+		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": "ok"}}})
+	}))
+	defer srv.Close()
+	key, err := h.sealKey("private-test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	purpose := func(id string) ModelPurpose {
+		r := modelRequest(mux, "GET", id, "")
+		if r.Code != 200 {
+			t.Fatalf("%s: %d %s", id, r.Code, r.Body.String())
+		}
+		var out struct {
+			Purpose ModelPurpose `json:"purpose"`
+		}
+		if err := json.Unmarshal(r.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.Purpose
+	}
+
+	// Nothing to call: the status and the error say where to fix it, not only hub.json.
+	if p := purpose("inbox.draft"); p.Status != modelNoAPIStatus {
+		t.Fatalf("unconfigured status: %+v", p)
+	}
+	if _, err := h.purposeModel("inbox.draft").Complete(ctx, "", "", 10); err == nil || !strings.Contains(err.Error(), "设置 › 模型配置") {
+		t.Fatalf("unconfigured error: %v", err)
+	}
+
+	// Keyless, hidden, Responses and model-less launchers are not candidates; a keyed Messages launcher is.
+	launchers := []storedLauncher{
+		{ManagedLauncher: proto.ManagedLauncher{Name: "nokey", BaseURL: srv.URL, Model: "m"}},
+		{ManagedLauncher: proto.ManagedLauncher{Name: "hidden", BaseURL: srv.URL, Model: "m"}, KeySealed: key},
+		{ManagedLauncher: proto.ManagedLauncher{Name: "responses", API: "responses", BaseURL: srv.URL, Model: "m"}, KeySealed: key},
+		{ManagedLauncher: proto.ManagedLauncher{Name: "nomodel", BaseURL: srv.URL}, KeySealed: key},
+		{ManagedLauncher: proto.ManagedLauncher{Name: "claude-gw", BaseURL: srv.URL, Model: "gateway-default"}, KeySealed: key},
+	}
+	if err := h.put(ctx, launchersManagedKey, launchers); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.put(ctx, launchersHiddenKey, []string{"hidden"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"inbox.triage", "inbox.judge", "inbox.draft", "translate", "kb.compress", "assistant.title", "agent.title"} {
+		p := purpose(id)
+		if p.Effective.Provider != "launcher.claude-gw" || p.Effective.Model != "gateway-default" || p.Status != "未验证" {
+			t.Fatalf("%s did not fall back: %+v", id, p)
+		}
+		if _, err := h.purposeModel(id).Complete(ctx, "", "", 10); err != nil || model != "gateway-default" {
+			t.Fatalf("%s: sent %q, %v", id, model, err)
+		}
+	}
+	if p := purpose("inbox.draft"); p.InheritedFrom != modelAutoSource {
+		t.Fatalf("fallback not labelled: %+v", p)
+	}
+	if p := purpose("translate"); p.InheritedFrom != "inbox.triage" {
+		t.Fatalf("child no longer inherits its parent: %+v", p)
+	}
+
+	// A direct API provider comes before a launcher; nothing is written as an override.
+	launchers = append(launchers, storedLauncher{ManagedLauncher: proto.ManagedLauncher{Name: "direct", Kind: "api", API: "responses", BaseURL: srv.URL, Model: "api-default"}, KeySealed: key})
+	if err := h.put(ctx, launchersManagedKey, launchers); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := h.resolveModel(ctx, "inbox.draft"); b.Provider != "launcher.direct" {
+		t.Fatalf("API provider not preferred: %+v", b)
+	}
+	if r, _ := h.modelRecord(ctx, "inbox.draft"); r.Revision != 0 || r.Binding != (ModelBinding{}) {
+		t.Fatalf("fallback was stored: %+v", r)
+	}
+
+	// An explicit choice wins over the fallback, and hub.json's "ai" still wins over it too.
+	if r := modelRequest(mux, "PATCH", "inbox.draft", `{"revision":0,"provider":"launcher.claude-gw","model":"picked"}`); r.Code != 200 {
+		t.Fatalf("%d %s", r.Code, r.Body.String())
+	}
+	if b, _ := h.resolveModel(ctx, "inbox.draft"); b.Provider != "launcher.claude-gw" || b.Model != "picked" {
+		t.Fatalf("explicit choice lost: %+v", b)
+	}
+	h.cfg.AI = ai.Config{BaseURL: srv.URL, APIKeyFile: "/tmp/test-key", Model: "hub-json"}
+	if b, _ := h.resolveModel(ctx, "assistant.title"); b.Provider != "legacy.ai" || b.Model != "hub-json" {
+		t.Fatalf("hub.json baseline replaced: %+v", b)
+	}
+}

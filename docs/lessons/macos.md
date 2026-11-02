@@ -57,4 +57,6 @@
   每秒一次的 `.periodic` 计时按同样的代价算是 1/30，没单独量。查空闲开销：锁屏时起体验实例，`ps -o cputime` 量 20 秒，再 `sample` 看主线程。
 - 想让切换侧栏分区不重建页面，把去过的页面留在 `ZStack` 里藏起来不行：隐藏的视图照样往窗口工具栏注册 `.toolbar` 项和 `.searchable`，
   两个页面各有一个搜索框就直接崩（`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`，2026-11-02）。
-  据 StackOverflow 76032647，macOS 的 `TabView` 也不按标签页隔开工具栏（没在本机验）。
+  系统 `TabView` 在 macOS 26 上是按标签页隔开工具栏的（StackOverflow 76032647 说的是 macOS 13），也保留各页状态；但它在工具栏正中放的
+  分段选择器 SwiftUI 藏不掉，而且保活之后切换并没有变快：时间不在建视图，在新页面进窗口后的 AppKit 布局和整批换工具栏项（`docs/mac.md` 性能，#390）。
+  先 `sample` 看时间去哪，再决定要不要保活。
