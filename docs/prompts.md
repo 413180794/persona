@@ -41,6 +41,8 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `tools/translate*.md` | 翻译短文本 / 一封邮件 | `hub/translate.go` |
 | `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
+| `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、有没有函数工具、重连时断之前说过的话） | `voice/session.go` |
+| `voice/delegated.md`、`report.md`、`handoff.md` | 语音里交给主对话的消息、做完后告诉语音模型的话、交出去时先回的那句 | `voice/session.go`、`delegate.go` |
 | `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |
 | `shared/user_rules.md` | 「用户自己定的规则」段（分拣、判断共用） | |
 
@@ -63,6 +65,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 | `mcp/kb/` | `kb_search`、`kb_list`、`kb_get`、`kb_update` | 同上 |
 | `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |
 | `mcp/github/` | `github_search`、`github_read`、`github_diff`、`github_checks`（只读）；`github_comment`、`github_review`（写，过闸门） | 助手，GitHub 连接器状态是 `ok` 时（`connector/github/tools.go`；golden `mcp_tools.assistant_with_github`） |
+| `mcp/voice/` | `search_knowledge`、`list_agents`、`send_to_agent`、`ask_jarvis` | 内置语音插件开了 `tools` 的上游（`voice/tools.go`，作为 GPT-Live 的函数工具声明在 `session.start` 里） |
 
 工具的**列表和顺序**还在代码里（上面两个函数按名字取 `prompts.Tool(name)`），处理调用的代码也在原处。加一个工具：在对应目录加文件，
 把名字加进列表，写处理代码，`UPDATE_GOLDEN=1` 更新 `mcp_tools.*` / `mail_tools` 的 golden。`TestEveryMCPToolIsUsed` 抓没人提供的工具文件。

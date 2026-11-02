@@ -21,6 +21,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/sysmon"
 	"github.com/chyroc/jarvis/server/internal/tunnel"
 	"github.com/chyroc/jarvis/server/internal/update"
+	"github.com/chyroc/jarvis/server/internal/voice"
 )
 
 // What the build wrote in (-X): the version for people, and for updates (docs/hub-update.md) the channel
@@ -64,6 +65,7 @@ const usage = `usage:
                            message as its last argument, no shell in between (docs/codex.md「从手机新建」)
   jarvisd relay [config]   run the push relay (config ~/.jarvis/relay.json): pushes for hubs without the app's APNs
                            key, payloads sealed to the phone (docs/push-relay.md)
+  jarvisd voice            the built-in voice plugin: the hub runs it (hub.json plugins, docs/plugins.md「内置语音插件」)
   jarvisd sysmon [n]       print this machine's system info and n metric samples, with what they cost
   jarvisd release manifest|check-next …
                            the publisher's release manifest and checks (scripts/release/publish.sh, docs/hub-update.md「发布」)
@@ -151,6 +153,8 @@ func main() {
 		err = relay.Run(ctx, path)
 	case "mcp":
 		err = mcpserver.Serve(ctx, version, os.Stdin, os.Stdout)
+	case "voice":
+		err = voice.Run(ctx)
 	case "sysmon":
 		n := 3
 		if len(os.Args) > 2 {

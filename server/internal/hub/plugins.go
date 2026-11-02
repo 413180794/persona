@@ -3,6 +3,7 @@ package hub
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +36,9 @@ type PluginConfig struct {
 	Env      map[string]string `json:"env,omitempty"`
 	Dir      string            `json:"dir,omitempty"` // working directory; "~/" is the hub machine's home
 	Disabled bool              `json:"disabled,omitempty"`
+	// Config is the plugin's own settings, handed over as JSON in JARVIS_PLUGIN_CONFIG (the built-in voice plugin's
+	// providers, docs/plugins.md「内置语音插件」).
+	Config json.RawMessage `json:"config,omitempty"`
 }
 
 // PluginView is a plugin as the app sees it (GET /api/v1/plugins).
@@ -173,11 +177,21 @@ func (p *plugin) once(ctx context.Context, env []string, logf func(string, ...an
 		return err
 	}
 	_ = os.Remove(p.socket) // left by a previous run that was killed
-	cmd := exec.Command(expandHome(p.cfg.Command), p.cfg.Args...)
+	command := expandHome(p.cfg.Command)
+	if command == "jarvisd" {
+		// The built-in plugins (`jarvisd voice`): this very binary, wherever it is installed.
+		if self, err := os.Executable(); err == nil {
+			command = self
+		}
+	}
+	cmd := exec.Command(command, p.cfg.Args...)
 	cmd.Dir = expandHome(p.cfg.Dir)
 	cmd.Env = append(append(os.Environ(), env...), "JARVIS_PLUGIN_ID="+p.cfg.ID, "JARVIS_PLUGIN_SOCKET="+p.socket)
 	for k, v := range p.cfg.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	if len(p.cfg.Config) > 0 {
+		cmd.Env = append(cmd.Env, "JARVIS_PLUGIN_CONFIG="+string(p.cfg.Config))
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stopping it takes its children too
 	out, err := cmd.StdoutPipe()

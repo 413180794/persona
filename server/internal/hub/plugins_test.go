@@ -38,6 +38,7 @@ func servePluginForTest() {
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"path": r.URL.Path, "query": r.URL.RawQuery, "auth": r.Header.Get("Authorization"),
 			"hub": os.Getenv("JARVIS_HUB_URL"), "id": os.Getenv("JARVIS_PLUGIN_ID"), "extra": os.Getenv("EXTRA"),
+			"config": os.Getenv("JARVIS_PLUGIN_CONFIG"),
 		})
 	})
 	mux.HandleFunc("GET /ws", func(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +69,8 @@ func TestPluginRelay(t *testing.T) {
 	self, _ := os.Executable()
 	h := &Hub{cfg: &Config{Listen: ":18999", Token: "secret"}, logger: log.New(io.Discard, "", 0)}
 	h.plugins = newPlugins(dir, []PluginConfig{
-		{ID: "voice", Kind: "voice", Command: self, Env: map[string]string{"JARVIS_TEST_PLUGIN": "1", "EXTRA": "x"}},
+		{ID: "voice", Kind: "voice", Command: self, Env: map[string]string{"JARVIS_TEST_PLUGIN": "1", "EXTRA": "x"},
+			Config: json.RawMessage(`{"providers":[]}`)},
 		{ID: "off", Kind: "voice", Command: self, Disabled: true},
 		{ID: "Bad ID", Command: self},
 	}, h.logf)
@@ -110,7 +112,7 @@ func TestPluginRelay(t *testing.T) {
 	var echo map[string]string
 	_ = json.NewDecoder(res.Body).Decode(&echo)
 	res.Body.Close()
-	want := map[string]string{"path": "/echo", "query": "a=1", "auth": "", "hub": "http://127.0.0.1:18999", "id": "voice", "extra": "x"}
+	want := map[string]string{"path": "/echo", "query": "a=1", "auth": "", "hub": "http://127.0.0.1:18999", "id": "voice", "extra": "x", "config": `{"providers":[]}`}
 	if fmt.Sprint(echo) != fmt.Sprint(want) {
 		t.Fatalf("got %v, want %v", echo, want)
 	}
