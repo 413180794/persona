@@ -1,8 +1,9 @@
 import Foundation
 import Observation
 
-// 信息 (docs/plan-connectors.md「五」): one Mac's Messages, read through the hub for the user's own eyes. Nothing is
-// stored, nothing goes to a model, nothing is marked read. Read-only: the app never sends from here.
+// 信息 (docs/plan-connectors.md「五」): one Mac's Messages, read through the hub. The app shows every conversation;
+// with 交给 Jarvis on (the hub's switch, on by default) the real ones also go to the knowledge base, the inbox and the
+// assistant. Nothing is marked read, nothing is sent.
 
 /// GET /api/v1/imessage: the connector's status, with the steps on the Mac when it may not read.
 nonisolated struct MessagesStatus: Codable, Hashable, Sendable {
@@ -11,6 +12,16 @@ nonisolated struct MessagesStatus: Codable, Hashable, Sendable {
     var error: String?
     var guide: [String]?
     var via: String?
+    /// 交给 Jarvis: the knowledge base, the inbox and the assistant read the real conversations (nil from a hub
+    /// before it: they did not).
+    var ai: Bool?
+}
+
+/// DELETE /api/v1/imessage/data: what the hub no longer keeps.
+nonisolated struct MessagesForgotten: Codable, Hashable, Sendable {
+    var chats: Int
+    var people: Int
+    var inbox: Int
 }
 
 nonisolated struct MessagesPerson: Codable, Hashable, Sendable {
@@ -86,6 +97,15 @@ nonisolated struct MessagesPage: Codable, Sendable {
 
 extension APIClient {
     func messagesStatus() async throws -> MessagesStatus { try await get("/api/v1/imessage") }
+
+    func setMessagesAI(_ on: Bool) async throws -> MessagesStatus {
+        struct Body: Encodable { var ai: Bool }
+        return try JSON.decoder.decode(MessagesStatus.self, from: await request("PUT", "/api/v1/imessage/settings", body: Body(ai: on)))
+    }
+
+    func deleteMessagesData() async throws -> MessagesForgotten {
+        try JSON.decoder.decode(MessagesForgotten.self, from: await request("DELETE", "/api/v1/imessage/data"))
+    }
 
     func messagesChats(before: String? = nil) async throws -> MessagesChatsPage {
         var q = ["limit": "50"]

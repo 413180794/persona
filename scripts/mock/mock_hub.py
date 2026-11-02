@@ -1124,6 +1124,18 @@ if os.environ.get("MOCK_GITHUB_INBOX"):
          "connector": {"thread": "notification:7", "label": "CI 失败", "url": "https://github.com/example-org/example-repo/actions"}},
     ]
 
+# MOCK_IMESSAGE_INBOX=1: an unread iMessage conversation in the inbox (sms: opens Messages), only with ?sources=all.
+if os.environ.get("MOCK_IMESSAGE_INBOX"):
+    INBOX[1:1] = [
+        {"id": "imessage:a1b2", "source": "imessage", "kind": "dm", "account": "imessage", "account_name": "信息",
+         "title": "张三", "sender": "张三", "preview": "示例：周五下午三点见，地方你定", "count": 2,
+         "started_at": ago(minutes=12), "updated_at": ago(minutes=8), "tier": "action",
+         "summary": "张三约你周五下午三点见面，等你定地方", "reason": "约时间", "read": False,
+         "context": "我（10-30 07:58）：在吗\n张三（10-30 07:59）：示例：周五下午三点见，地方你定",
+         "connector": {"thread": "imessage-0a1b2c3d4e5f", "open_url": "sms:+15550100", "reply_to": "在「信息」里回复（Jarvis 不替你发）",
+                       "rule_tier": "action"}},
+    ]
+
 
 def inbox_for(query):
     """The list as the hub gives it: connectors' items only with ?sources=all."""
@@ -1162,7 +1174,7 @@ LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilit
 # 信息 (GET /api/v1/imessage…, docs/plan-connectors.md「五」): one Mac's Messages, read for the user's own eyes. Every
 # name, number (+1 555 01xx) and text is made up. MOCK_IMESSAGE=denied: that Mac's node has no Full Disk Access.
 IMESSAGE_DENIED = os.environ.get("MOCK_IMESSAGE") == "denied"
-IMESSAGE_STATUS = {"machine": "MacBook", "status": "ok", "via": "ssh"}
+IMESSAGE_STATUS = {"machine": "MacBook", "status": "ok", "via": "ssh", "ai": True}
 if IMESSAGE_DENIED:
     IMESSAGE_STATUS = {"machine": "MacBook", "status": "no_permission", "via": "ssh",
                        "error": "macOS 不让 Jarvis 读这台 Mac 上的「信息」：要给它「完全磁盘访问权限」",
@@ -3492,6 +3504,14 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "bad options"}, 400)
             GITHUB_CONNECTOR.setdefault("options", {}).update({k: v for k, v in o.items() if v is not None})
             return self.send_json(GITHUB_CONNECTOR)
+        if self.command == "PUT" and p == "/api/v1/imessage/settings":  # 交给 Jarvis on / off
+            body = json.loads(self.last_body or b"{}")
+            if not isinstance(body.get("ai"), bool): return self.send_json({"error": "ai: true or false"}, 400)
+            IMESSAGE_STATUS["ai"] = body["ai"]
+            return self.send_json(IMESSAGE_STATUS)
+        if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once 交给 Jarvis is off
+            if IMESSAGE_STATUS.get("ai"): return self.send_json({"error": "先关掉「交给 Jarvis」再删除", "code": "ai_on"}, 409)
+            return self.send_json({"chats": 6, "people": 9, "inbox": 1})
         if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/engine"):
             mid = p.split("/")[4]
             machine = next((m for m in MACHINES if m["id"] == mid), None)

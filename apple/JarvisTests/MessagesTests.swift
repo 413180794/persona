@@ -82,6 +82,31 @@ struct MessagesTests {
         #expect(plain.allSatisfy { $0.sender == nil && $0.service == nil })
     }
 
+    /// 交给 Jarvis: the switch's state from the hub, turned off and on, and what a delete removed.
+    @Test func theSwitchAndDelete() async throws {
+        let hub = FakeHub()
+        hub.on("PUT", "/api/v1/imessage/settings") { req in
+            let on = String(decoding: req.body ?? Data(), as: UTF8.self).contains("true")
+            return Data(#"{"machine":"MacBook","status":"ok","ai":\#(on)}"#.utf8)
+        }
+        hub.on("DELETE", "/api/v1/imessage/data", json: #"{"chats":6,"people":9,"inbox":1}"#)
+        let api = hub.client
+        let off = try await api.setMessagesAI(false)
+        #expect(off.ai == false && off.status == "ok")
+        #expect(try await api.setMessagesAI(true).ai == true)
+        #expect(try await api.deleteMessagesData() == MessagesForgotten(chats: 6, people: 9, inbox: 1))
+        // An older hub has no switch.
+        let old = try JSON.decoder.decode(MessagesStatus.self, from: Data(#"{"machine":"MacBook","status":"ok"}"#.utf8))
+        #expect(old.ai == nil)
+    }
+
+    /// 在信息里回复: the item's sms: link, with the AI 分身's draft as the body.
+    @Test func replyInMessagesOpensTheNumber() {
+        #expect(InboxActionBar.systemURL("sms:+15550100", draft: nil)?.absoluteString == "sms:+15550100")
+        #expect(InboxActionBar.systemURL("sms:+15550100", draft: "好的 明天见")?.absoluteString == "sms:+15550100&body=%E5%A5%BD%E7%9A%84%20%E6%98%8E%E5%A4%A9%E8%A7%81")
+        #expect(InboxActionBar.systemURL("https://example.com/a", draft: "x")?.absoluteString == "https://example.com/a")
+    }
+
     @Test func separatorTimes() throws {
         let cal = Calendar.current
         let now = try #require(cal.date(from: DateComponents(year: 2026, month: 11, day: 2, hour: 22)))

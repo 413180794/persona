@@ -8,6 +8,7 @@ struct InboxActionBar: View {
     var item: InboxItem
     var draft: () -> Void
     var handOff: () -> Void
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -21,6 +22,12 @@ struct InboxActionBar: View {
                 // A connector's thread that cannot be answered (a CI run) has only 交给 AI.
                 if item.connector.map({ $0.canReply == true }) ?? true {
                     action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
+                } else if let open = item.connector?.openURL, let url = Self.systemURL(open, draft: item.agentDraft) {
+                    // Answered in the source's own app (在信息里回复: Messages with the number, and the AI 分身's draft).
+                    let sms = url.scheme == "sms"
+                    action(sms ? "在信息里回复" : "打开", symbol: sms ? Theme.Icon.messagesApp : Theme.Icon.openExternal, prominent: true) {
+                        openURL(url)
+                    }
                 }
                 action("交给 AI", symbol: Theme.Icon.handToAI, prominent: false, perform: handOff)
             }
@@ -29,6 +36,17 @@ struct InboxActionBar: View {
         .padding(.vertical, Theme.Space.m)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    /// The item's `open_url` for the system; an sms: one carries the draft as its body.
+    nonisolated static func systemURL(_ raw: String, draft: String?) -> URL? {
+        guard var url = URL(string: raw) else { return nil }
+        if url.scheme == "sms", let draft, !draft.isEmpty,
+           let body = draft.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+           let withBody = URL(string: raw + "&body=" + body) {
+            url = withBody
+        }
+        return url
     }
 
     private func action(_ title: String, symbol: String, prominent: Bool, perform: @escaping () -> Void) -> some View {

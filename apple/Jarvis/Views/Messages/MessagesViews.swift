@@ -1,7 +1,8 @@
 import SwiftUI
 
-// 设置 › 连接器 › 信息: one Mac's Messages, read through the hub (docs/plan-connectors.md「五」). The user reads them
-// here and only here: they are not stored on the hub, not given to any model, not marked read. Nothing is sent.
+// 设置 › 连接器 › 信息: one Mac's Messages, read through the hub (docs/plan-connectors.md「五」). The user reads every
+// conversation here; 交给 Jarvis (on by default) also gives the real ones to the knowledge base, the inbox and the
+// assistant, and can be turned off, and what the hub kept deleted. Nothing is marked read, nothing is sent.
 
 struct MessagesChatsRoute: Hashable {}
 struct MessagesThreadRoute: Hashable { var id: String; var name: String }
@@ -12,6 +13,9 @@ struct MessagesConnectorView: View {
     @State private var status: MessagesStatus?
     @State private var loading = true
     @State private var failure: String?
+    @State private var saving = false
+    @State private var confirmDelete = false
+    @State private var deleted: String?
 
     var body: some View {
         List {
@@ -56,10 +60,36 @@ struct MessagesConnectorView: View {
                     SettingsHeading("在 \(status?.machine ?? "那台 Mac") 上打开权限")
                 }
             }
+            if let ai = status?.ai {
+                Section {
+                    Toggle(isOn: Binding(get: { ai }, set: { on in Task { await setAI(on) } })) {
+                        Label("交给 Jarvis（知识库、收件箱、助手）", systemImage: Theme.Icon.ai).lineLimit(2)
+                    }
+                    .disabled(saving)
+                    .accessibilityIdentifier("messages-ai")
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Label("删除 hub 上已存的信息", systemImage: Theme.Icon.delete).lineLimit(1)
+                    }
+                    .disabled(ai || saving)
+                    .accessibilityIdentifier("messages-delete")
+                    if let deleted {
+                        Text(deleted).font(Theme.Font.label).foregroundStyle(.secondary)
+                    }
+                } footer: {
+                    Text(ai ? "通讯录里的人和你回复过的会话会进知识库和收件箱（和飞书一样分拣），助手能查、能总结；验证码会打码。关掉立刻停止；要删 hub 上已存的，先关掉。"
+                            : "现在不交给 Jarvis：不同步、不进收件箱，助手读不到。hub 上之前存下的还在，可以删除。")
+                }
+            }
             Section {
             } footer: {
-                Text("消息只在这里给你自己看：不存到 hub、不交给 AI，看了也不会标成已读。Jarvis 只读，不会替你发消息。")
+                Text(status?.ai == nil ? "消息只在这里给你自己看：不存到 hub、不交给 AI，看了也不会标成已读。Jarvis 只读，不会替你发消息。"
+                                       : "这里能看全部会话（直接读那台 Mac，看了也不会标成已读）。Jarvis 只读，不会替你发消息。")
             }
+        }
+        .confirmationDialog("删除 hub 上已存的信息？", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("删除", role: .destructive) { Task { await deleteData() } }
+        } message: {
+            Text("知识库里的信息会话和人、收件箱里的信息条目都会删掉；那台 Mac 上的消息不受影响。")
         }
         .themedPage()
         .navigationTitle("信息")
@@ -95,6 +125,31 @@ struct MessagesConnectorView: View {
             failure = nil
         } catch {
             failure = error.shown.map { "读不到信息的状态：\($0)" }
+        }
+    }
+
+    private func setAI(_ on: Bool) async {
+        saving = true
+        defer { saving = false }
+        do {
+            if let s = try await model.api?.setMessagesAI(on) { status = s }
+            deleted = nil
+            failure = nil
+        } catch {
+            failure = error.shown.map { "没改成：\($0)" }
+        }
+    }
+
+    private func deleteData() async {
+        saving = true
+        defer { saving = false }
+        do {
+            if let d = try await model.api?.deleteMessagesData() {
+                deleted = "已删除 \(d.chats) 个会话、\(d.people) 个人、\(d.inbox) 件收件箱条目"
+            }
+            failure = nil
+        } catch {
+            failure = error.shown.map { "没删成：\($0)" }
         }
     }
 }
