@@ -27,6 +27,8 @@ arm64 | aarch64) arch=arm64 ;;
 *) fail "no build for $(uname -m)" ;;
 esac
 name="jarvisd-$os-$arch"
+archive="$name.gz"
+command -v gzip >/dev/null 2>&1 || fail "needs gzip to unpack the download"
 
 if command -v curl >/dev/null 2>&1; then
 	fetch() { curl -fsSL "$1" -o "$2"; }
@@ -46,10 +48,12 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 fetch "$DL/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $DL/SHA256SUMS"
-fetch "$DL/$name" "$tmp/$name" || fail "could not download $DL/$name"
-want="$(awk -v n="$name" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")"
-[ -n "$want" ] || fail "$name is not in SHA256SUMS"
-[ "$(sum "$tmp/$name")" = "$want" ] || fail "checksum mismatch for $name: not installed"
+fetch "$DL/$archive" "$tmp/$archive" || fail "could not download $DL/$archive"
+want="$(awk -v n="$archive" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")"
+[ -n "$want" ] || fail "$archive is not in SHA256SUMS"
+[ "$(sum "$tmp/$archive")" = "$want" ] || fail "checksum mismatch for $archive: not installed"
+gzip -dc "$tmp/$archive" > "$tmp/$name" || fail "could not unpack $archive: not installed"
+[ -s "$tmp/$name" ] || fail "$archive contains an empty binary: not installed"
 
 mkdir -p "$DEST"
 chmod 755 "$tmp/$name"

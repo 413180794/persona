@@ -152,6 +152,9 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
   - 上传前跑 `check_bundle_privacy.py --whole-short`：二进制里不能有配置里的任何值（Go 的模块路径除外；四个字以内的值按整词比，
     Unicode 表和压缩过的 JS 里到处是短的字母组合）。公开依赖中的少量协议名、官方联系链接和标准网络常量按精确上下文分类，不放行域名或私网段；
     要求二进制的 `public` 标记、未 replace 的依赖及 checksum 与 `server/go.sum` 一致，构建前 `go mod verify`。已登记的个人值始终优先拦截，见 `docs/lessons/testing.md`。
+- 下载包是 `jarvisd-<os>-<arch>.gz`：原始二进制先过隐私扫描，再用 `gzip -n -9` 压缩，`SHA256SUMS` 校验压缩包；安装脚本校验通过后解压安装，校验失败 / 解压失败不覆盖旧版本。
+  Workers 静态资源每个文件最多 25 MiB（[官方限制](https://developers.cloudflare.com/workers/platform/limits/#static-assets)），上传前 `check_asset_sizes.py` 检查整个发布目录；本地 `build-publish/bin` 保留未压缩二进制供排查，但不上传。
+  回归：`python3 -B -m unittest discover -s scripts -p 'test_compressed_publish.py'`。
 - 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
   报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION` 和 `dl/SHA256SUMS` 确认上去的就是刚编的。
 - 还没有的（别人能装但还不顺手，见 `docs/config.md`）：一键 `jarvisd setup`（现在 hub 要自己准备 Postgres、`hub.json`）、

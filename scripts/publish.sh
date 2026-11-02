@@ -34,7 +34,6 @@ for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
     -o "../$OUT/bin/jarvisd-${t%/*}-${t#*/}" ./cmd/jarvisd)
 done
 cleanup
-(cd "$OUT/bin" && shasum -a 256 jarvisd-* > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 sed "s|@JARVIS_DL@|$JARVIS_PUBLISH_URL/dl|" scripts/install.sh > "$OUT/install.sh"
 
 # Anyone can download these: no private values in them (CLAUDE.md), and no copied skill. install.sh is the repo's
@@ -47,12 +46,19 @@ fi
 host_bin="$OUT/bin/jarvisd-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 [ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built jarvisd does not report $VERSION" >&2; exit 1; }
 
+# 隐私扫描检查未压缩的原始二进制；只把压缩包发布到 Workers，避免单资源超过 25 MiB。
+for bin in "$OUT/bin"/jarvisd-*; do
+  gzip -n -9 -c "$bin" > "$bin.gz"
+done
+(cd "$OUT/bin" && shasum -a 256 jarvisd-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
+
 # The site with dl/ and install.sh added, deployed from a copy (site/ in the tree stays as committed).
 rm -rf "$OUT/site"
 cp -R site "$OUT/site"
 mkdir -p "$OUT/site/public/dl"
-cp "$OUT/bin/"* "$OUT/site/public/dl/"
+cp "$OUT/bin/"*.gz "$OUT/bin/SHA256SUMS" "$OUT/bin/VERSION" "$OUT/site/public/dl/"
 cp "$OUT/install.sh" "$OUT/site/public/install.sh"
+python3 scripts/check_asset_sizes.py "$OUT/site/public"
 if [ -n "${NO_DEPLOY:-}" ]; then
   echo "jarvisd $VERSION built and checked in $OUT (not deployed)."
   exit 0
@@ -62,7 +68,7 @@ WRANGLER="${JARVIS_WRANGLER:-}"
 # release failed here with "Authentication error" until `cf auth whoami` ran).
 command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true
 (cd "$OUT/site" && if [ -n "$WRANGLER" ]; then "$WRANGLER" deploy; else npx wrangler deploy; fi) >"$OUT/deploy.log" 2>&1 \
-  || { tail -20 "$OUT/deploy.log" >&2; echo "deploy failed (cf auth expired? run: cf auth login)" >&2; exit 1; }
+  || { tail -20 "$OUT/deploy.log" >&2; echo "deploy failed; see $OUT/deploy.log (only run cf auth login for authentication errors)" >&2; exit 1; }
 
 # What is served now is what was built.
 served="$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/VERSION" 2>/dev/null || true)"
