@@ -157,7 +157,7 @@ func TestCodexDaemonAsyncAnswer(t *testing.T) {
 	}
 	path := filepath.Join(dir, "rollout-2026-11-02T10-00-00-"+remoteRaw+".jsonl")
 	meta := strings.Replace(cxMeta, cxID, remoteRaw, 1)
-	if err := os.WriteFile(path, []byte(meta+"\n"+cxAsyncCall+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(cxToday(meta+"\n"+cxAsyncCall)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	n.registerCodex(filepath.Join(n.home, ".codex"), remoteRaw, path)

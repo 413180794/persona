@@ -60,6 +60,11 @@ func TestModelFingerprintTracksManagedProviderChanges(t *testing.T) {
 func TestModelChangeDoesNotKillBackgroundTasks(t *testing.T) {
 	n := codexTestNode(t)
 	withFakeHub(t, n)
+	// The model check would run this machine's claude through its login shell; on one where that doesn't start (the
+	// hub) the send failed there, before the hold this is about.
+	modelProbeCache.Lock()
+	modelProbeCache.results[n.home+"\x00claude\x00new"] = modelProbeResult{at: time.Now(), agent: "claude"}
+	modelProbeCache.Unlock()
 	old := modelExecution{Model: "old", Fingerprint: "before"}
 	p := &assistantProc{id: testThread, agent: "claude", launcher: "claude", cwd: t.TempDir(), exited: make(chan struct{}), born: time.Now(), model: old, fingerprint: n.executionFingerprint("claude", old), tasks: []string{"background work"}}
 	n.procs[testThread] = p

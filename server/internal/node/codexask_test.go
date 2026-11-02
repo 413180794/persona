@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -36,6 +37,22 @@ const (
 	cxEmpty = "• Done.\n\n› Ask Codex to do anything\n\n  gpt-6 low · /private/tmp/project\n"
 )
 
+// cxToday moves the fixtures' timestamps (2026-11-01 13:40 on) to an hour ago, keeping their order: async questions
+// older than codexAskMaxAge are dropped, and with the fixed day every test that lists one failed from 2026-11-02
+// 01:40 UTC on.
+func cxToday(lines string) string {
+	shift := time.Since(time.Date(2026, 11, 1, 13, 40, 0, 0, time.UTC)) - time.Hour
+	return cxStamp.ReplaceAllStringFunc(lines, func(m string) string {
+		at, err := time.Parse(time.RFC3339Nano, m[len(`"timestamp":"`):len(m)-1])
+		if err != nil {
+			return m
+		}
+		return `"timestamp":"` + at.Add(shift).UTC().Format("2006-01-02T15:04:05.000Z") + `"`
+	})
+}
+
+var cxStamp = regexp.MustCompile(`"timestamp":"[^"]+"`)
+
 func cxBox(text string) string {
 	return "• Done.\n\n› " + text + "\n\n  gpt-6 low · /private/tmp/project\n"
 }
@@ -53,7 +70,7 @@ func codexNode(t *testing.T, status string, lines ...string) (*Node, *fakeHerdr,
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "rollout-2026-11-01T21-40-06-"+cxID+".jsonl")
-	if err := os.WriteFile(path, []byte(strings.Join(append([]string{cxMeta}, lines...), "\n")+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(cxToday(strings.Join(append([]string{cxMeta}, lines...), "\n"))+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	n.agents[cxID] = host.Agent{Agent: "codex", PaneID: cxPane, AgentStatus: status, Cwd: "/private/tmp/project"}
@@ -298,7 +315,7 @@ func TestCodexAnswerOverlay(t *testing.T) {
 		if at < len(steps) && steps[at].after(c) {
 			f.setScreen(cxPane, steps[at].screen)
 			if at == len(steps)-1 {
-				appendLine(t, path, cxSyncOut)
+				appendLine(t, path, cxToday(cxSyncOut))
 			}
 			at++
 		}
@@ -365,7 +382,7 @@ func TestCodexAnswerOverlayFromLaterQuestion(t *testing.T) {
 	f.screenSteps(cxPane, func(c herdrCall) bool { return c.Method == "pane.send_keys" }, cxOverlay(1, nil), q1, cxOverlay(1, nil), cxEmpty)
 	f.after(func(c herdrCall) {
 		if isKeys("1")(c) {
-			appendLine(t, path, cxSyncOut)
+			appendLine(t, path, cxToday(cxSyncOut))
 		}
 	})
 	card := onlyCard(t, n)
