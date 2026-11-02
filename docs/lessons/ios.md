@@ -2,6 +2,9 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- 共享视图引用的辅助扩展也必须编进每个目标：watchOS 10 兼容把 `Color.mix` 换成 `blended` 后，扩展若仍留在 `Theme.swift`，
+  只编入 `PersonaFace` 的灵动岛小组件会在 Release 归档失败。独立成 `Shared/Design/ColorBlend.swift`，XcodeGen 显式加入小组件；不要把整套 App 主题拖进扩展。
+
 ## 聊天列表与滚动
 
 - `ScrollView` + `defaultScrollAnchor(.bottom)` + `LazyVStack`：跳到很远的 id 会因为上方懒加载视图实际高度与估算不同而漂移，验证历史渲染用 `-fromSeq`。
