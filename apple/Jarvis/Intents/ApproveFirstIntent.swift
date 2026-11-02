@@ -40,7 +40,8 @@ struct ApproveFirstIntent: AppIntent {
 
     /// What to send, or nil when this kind cannot be settled from Siri.
     static func resolution(for ix: Interaction) -> Resolution? {
-        switch ix.kind {
+        guard !ix.requiresInput else { return nil }
+        return switch ix.kind {
         case .permission: Resolution(allow: true)
         case .plan: Resolution(approve: true, mode: "bypassPermissions")
         case .question, .screen: nil

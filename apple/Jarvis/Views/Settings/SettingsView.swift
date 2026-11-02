@@ -60,6 +60,9 @@ struct SettingsView: View {
                         NavigationLink(value: SettingsPage.claude) {
                             SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)
                         }
+                        NavigationLink(value: SettingsPage.codex) {
+                            SettingsRow(title: "Codex 设置", symbol: Theme.Icon.options, tint: Theme.Hue.gray)
+                        }
                     }
                     .bareListRow()
                 }
@@ -186,6 +189,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openNotificationSettings") { p.append(SettingsPage.notifications) }
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
+        else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
         else if d.bool(forKey: "openConnectorMail") || d.bool(forKey: "addMail") { p.append(SettingsPage.mail) }
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
@@ -237,7 +241,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case persona, themeColor, style, layout, assistant, claude, devices, phoneData, mail, feishu, notifications, storage, translation, modelConfiguration
+    case persona, themeColor, style, layout, assistant, claude, codex, devices, phoneData, mail, feishu, notifications, storage, translation, modelConfiguration
 
 }
 
@@ -267,6 +271,7 @@ private struct SettingsDestinations: ViewModifier {
         #endif
         case .assistant: AssistantProfileView()
         case .claude: ClaudeSettingsView()
+        case .codex: ClaudeSettingsView(agent: .codex)
         case .devices: DevicesView()
         case .phoneData: PhoneDataView()
         case .mail: MailAccountsView(inSheet: false)
@@ -634,8 +639,24 @@ struct QRScanner: UIViewControllerRepresentable {
 #endif
 
 /// Claude Code's /config options (a whitelist of ~/.claude/settings.json keys) on each machine.
+/// Which agent's settings a page edits: Claude Code's settings.json or Codex's config.toml (the node keeps a whitelist
+/// of each, claudeconfig.go / codexconfig.go).
+enum AgentSettingsKind {
+    case claude, codex
+
+    var title: String { self == .claude ? "Claude Code 设置" : "Codex 设置" }
+
+    var footer: String {
+        switch self {
+        case .claude: "改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。"
+        case .codex: "改的是那台机器的 ~/.codex/config.toml，只动下面这几项，文件里别的配置（模型提供方、项目信任等）原样保留；新开的 Codex 会话生效。"
+        }
+    }
+}
+
 struct ClaudeSettingsView: View {
     @Environment(AppModel.self) private var model
+    var agent: AgentSettingsKind = .claude
     @AppStorage("claudeSettings.machine") private var machineID = ""
     @AppStorage("claudeSettings.applyAll") private var applyAll = true
     @State private var settings: [APIClient.ClaudeSetting] = []
@@ -651,7 +672,7 @@ struct ClaudeSettingsView: View {
                 }
                 Toggle("同时改所有在线机器", isOn: $applyAll)
             } footer: {
-                Text("改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。")
+                Text(agent.footer)
             }
             if let error {
                 Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
@@ -661,7 +682,7 @@ struct ClaudeSettingsView: View {
             }
         }
         .themedPage()
-        .navigationTitle("Claude Code 设置")
+        .navigationTitle(agent.title)
         .onAppear { if machineID.isEmpty { machineID = model.hubMachineID } } // first visit: the hub's machine
         .overlay { if loading && settings.isEmpty { ProgressView() } }
         .task(id: machineID) { await load() }
@@ -707,7 +728,7 @@ struct ClaudeSettingsView: View {
         loading = true
         defer { loading = false }
         do {
-            settings = try await api.claudeSettings(machine: machineID)
+            settings = agent == .claude ? try await api.claudeSettings(machine: machineID) : try await api.codexSettings(machine: machineID)
             error = nil
         } catch {
             self.error = error.shown
@@ -720,7 +741,8 @@ struct ClaudeSettingsView: View {
         var failed: [String] = []
         for id in targets {
             do {
-                let list = try await api.setClaudeSetting(machine: id, key: key, value: value)
+                let list = agent == .claude ? try await api.setClaudeSetting(machine: id, key: key, value: value)
+                    : try await api.setCodexSetting(machine: id, key: key, value: value)
                 if id == machineID { settings = list }
             } catch {
                 if !error.isCancellation { failed.append("\(model.machine(id)?.name ?? id)：\(error.localizedDescription)") }

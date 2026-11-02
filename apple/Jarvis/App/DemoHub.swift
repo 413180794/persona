@@ -192,7 +192,7 @@ final class DemoHub {
             case "dirs":
                 guard online(id) else { throw APIError(status: 503, message: "\(id): machine is offline") }
                 return data["dirs"] ?? .object([:])
-            case "claude-settings": return ["settings": .array([])]
+            case "claude-settings", "codex-settings": return ["settings": .array([])]
             #if os(macOS)
             case "file": // the Mac's file viewer (and its ⌘F find): one made-up source file, whatever is asked for
                 let path = q["path"] ?? "Sources/Forecast.swift"

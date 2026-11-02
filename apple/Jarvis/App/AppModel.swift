@@ -176,6 +176,7 @@ final class AppModel {
         // The engine step only when the hub reports engines (an older hub cannot save one; the step must not trap).
         pairingEngineMachineID = EngineSelectionModel.pairingMachine(pairedMachines).flatMap { $0.engines.isEmpty ? nil : $0.id }
         sessionsByMachine = [:]
+        pendingSessions = [:] // a burst from the hub left before this
         interactions = [:]
         desktops = []
         muteWhileDesktop = false
@@ -198,6 +199,7 @@ final class AppModel {
         config = .demo
         machines = []
         sessionsByMachine = [:]
+        pendingSessions = [:] // a burst from the hub left before this
         interactions = [:]
         desktops = []
         muteWhileDesktop = false
@@ -236,6 +238,7 @@ final class AppModel {
         forgetDeviceCredentials()
         machines = []
         sessionsByMachine = [:]
+        pendingSessions = [:] // a burst from the hub left before this
         interactions = [:]
         desktops = []
         muteWhileDesktop = false
@@ -682,6 +685,31 @@ final class AppModel {
         #endif
     }
 
+    /// Session lists received and not applied yet (`applyPendingSessions`), by machine.
+    @ObservationIgnored private var pendingSessions: [String: [Session]] = [:]
+    @ObservationIgnored private var sessionsFlushScheduled = false
+    /// How long session lists wait for the rest of a burst: under a frame and a half, too short to see.
+    static let sessionsCoalesce: TimeInterval = 0.025
+
+    private func applyPendingSessions() {
+        sessionsFlushScheduled = false
+        let pending = pendingSessions
+        pendingSessions = [:]
+        var lists = sessionsByMachine
+        var olds: [(old: [Session], new: [Session])] = []
+        for (machineID, list) in pending {
+            let old = lists[machineID] ?? []
+            if old != list { lists[machineID] = list }
+            olds.append((old, list))
+        }
+        if lists != sessionsByMachine { sessionsByMachine = lists }
+        WatchSync.shared.push(summary: watchSummary())
+        for (old, new) in olds {
+            notifyTransitions(old: old, new: new)
+            AgentSync.shared.sessions(new)
+        }
+    }
+
     private func handle(_ ev: ServerEvent) {
         #if DEBUG || PERF_SIGNPOST
         PerfTrace.push(Self.perfName(ev))
@@ -711,11 +739,13 @@ final class AppModel {
                 }
             }
         case .sessions(let machineID, let list):
-            let old = sessionsByMachine[machineID] ?? []
-            if old != list { sessionsByMachine[machineID] = list }
-            WatchSync.shared.push(summary: watchSummary())
-            notifyTransitions(old: old, new: list)
-            AgentSync.shared.sessions(list)
+            // A busy hub sends each machine's list on its own, one after another: they are applied together a moment
+            // later, so the pages that read the sessions update once for the lot (one SwiftUI pass, not one a machine).
+            pendingSessions[machineID] = list
+            if !sessionsFlushScheduled {
+                sessionsFlushScheduled = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.sessionsCoalesce) { [weak self] in self?.applyPendingSessions() }
+            }
         case .revs(let machineID, let revs):
             AgentSync.shared.revs(machine: machineID, revs)
         case .lark(let feedIDs):

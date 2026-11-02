@@ -681,6 +681,14 @@ nonisolated struct APIClient: Sendable {
     func claudeSettings(machine: String) async throws -> [ClaudeSetting] {
         try await get("/api/v1/machines/\(machine)/claude-settings", as: ClaudeSettingsResponse.self).settings
     }
+    /// Codex's options (~/.codex/config.toml), the same shape as Claude's.
+    func codexSettings(machine: String) async throws -> [ClaudeSetting] {
+        try await get("/api/v1/machines/\(machine)/codex-settings", as: ClaudeSettingsResponse.self).settings
+    }
+    func setCodexSetting(machine: String, key: String, value: JSONValue) async throws -> [ClaudeSetting] {
+        try JSON.decoder.decode(ClaudeSettingsResponse.self, from: try await request("PUT", "/api/v1/machines/\(machine)/codex-settings",
+            body: SetSetting(key: key, value: value))).settings
+    }
     struct SetSetting: Encodable { var key: String; var value: JSONValue }
     func setClaudeSetting(machine: String, key: String, value: JSONValue) async throws -> [ClaudeSetting] {
         try JSON.decoder.decode(ClaudeSettingsResponse.self, from: try await request("PUT", "/api/v1/machines/\(machine)/claude-settings",

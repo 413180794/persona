@@ -53,7 +53,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 
 | 目录 | 工具 | 谁提供 |
 | --- | --- | --- |
-| `mcp/assistant/` | `ask_user`、`notify_user` | 助手对话（`hub/assistant_tools.go` 的 `assistantTools`） |
+| `mcp/assistant/` | `ask_user`、`notify_user`、`jarvis_settings`（设置读写与手机确认） | 助手对话（`hub/assistant_tools.go` 的 `assistantTools`） |
 | `mcp/schedule/` | `schedule_followup`、`schedule_routine`、`delete_routine`、`list_followups`、`cancel_followup` | 同上 |
 | `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start` | 同上 |
 | `mcp/inbox/` | `inbox_draft`（AI 分身交草稿） | 同上 |

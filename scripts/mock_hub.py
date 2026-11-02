@@ -548,6 +548,15 @@ INTERACTIONS = [
      "plan": "## 支持 HEIC\n\n1. 用 `sips` 把 HEIC 转成 JPEG，质量 90，保留 EXIF\n2. 转换放到导出前，原文件不动\n3. 已经转过的按内容哈希跳过\n4. 补测试：竖拍、实况照片、没有 EXIF 的图"},
 ]
 
+if os.environ.get("MOCK_SETTINGS_INPUT"):
+    INTERACTIONS.append({
+        "id": "ix_settings_input", "machine_id": "macbook", "session_id": REVIEW,
+        "session_title": "检查 PR #42 的改动", "kind": "permission", "tool_name": "jarvis_settings",
+        "summary": "添加邮箱 me@example.com，填上授权码后先连一遍再保存",
+        "created_at": ago(minutes=1), "expires_at": later(minutes=15),
+        "fields": [{"key": "password", "label": "密码 / 授权码", "placeholder": "填写邮箱授权码", "secret": True}],
+    })
+
 # MOCK_CODEX=1: the Codex session's question (Plan mode, two questions) and an approval, as a node reads them off the
 # Codex TUI (docs/codex.md「提问和审批」); the first answer to the approval is refused as if the computer's input box held
 # a draft (409 input_draft), the next one goes through (GET /mock/resolved has them all).
@@ -731,7 +740,19 @@ def _claude_settings():  # 设置 › Claude Code 设置: the node's whitelist (
     ]
 
 
+def _codex_settings():  # 设置 › Codex 设置: the node's whitelist (server/internal/node/codexconfig.go)
+    return [
+        {"key": "model", "title": "模型", "detail": "没指定模型时 Codex 用哪个，比如 gpt-5.5", "type": "string", "default": "", "value": "gpt-5.5"},
+        {"key": "model_reasoning_effort", "title": "思考强度", "detail": "越高越慢、越仔细", "type": "enum",
+         "options": ["minimal", "low", "medium", "high", "xhigh"], "default": "medium", "value": "high"},
+        {"key": "approval_policy", "title": "什么时候问你", "detail": "执行命令前要不要先确认；never 一律不问", "type": "enum",
+         "options": ["untrusted", "on-failure", "on-request", "never"], "default": "on-request", "value": None},
+        {"key": "hide_agent_reasoning", "title": "隐藏思考过程", "detail": "不显示模型的思考事件", "type": "bool", "default": False, "value": None},
+    ]
+
+
 CLAUDE_SETTINGS = {}  # machine id → its settings, made on first use
+CODEX_SETTINGS = {}
 KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /mock/keys)
 UPLOADS = []  # files received (GET /mock/uploads)
 SENT = []  # bodies of sends, one per client_msg_id (GET /mock/sent)
@@ -2015,6 +2036,8 @@ class H(BaseHTTPRequestHandler):
                                                  {"name": "codex", "model": "gpt-5.5", "agent": "codex"}]})  # Codex: 从手机新建
         if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings"):
             return self.send_json({"settings": CLAUDE_SETTINGS.setdefault(p.split("/")[4], _claude_settings())})
+        if p.startswith("/api/v1/machines/") and p.endswith("/codex-settings"):
+            return self.send_json({"settings": CODEX_SETTINGS.setdefault(p.split("/")[4], _codex_settings())})
         if p.startswith("/api/v1/sessions/") and p.endswith("/items"):
             sid = p.split("/")[5]
             items = find_items(sid)
@@ -2349,14 +2372,15 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。",
                                        "code": "prompt_changed", "delivered": "none"}, 409)
             return self.send_json({"ok": True})
-        if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings") and self.command == "PUT":
+        if p.startswith("/api/v1/machines/") and (p.endswith("/claude-settings") or p.endswith("/codex-settings")) and self.command == "PUT":
             body, mid = json.loads(self.last_body or b"{}"), p.split("/")[4]
             if not machine_online(mid):
                 return self.send_json({"error": "machine is offline"}, 503)
-            for st in CLAUDE_SETTINGS.setdefault(mid, _claude_settings()):
+            store, make = (CODEX_SETTINGS, _codex_settings) if p.endswith("/codex-settings") else (CLAUDE_SETTINGS, _claude_settings)
+            for st in store.setdefault(mid, make()):
                 if st["key"] == body.get("key"):
                     st["value"] = body.get("value")
-            return self.send_json({"settings": CLAUDE_SETTINGS[mid]})
+            return self.send_json({"settings": store[mid]})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # 设置 › 通知
             body = json.loads(self.last_body or b"{}")
             PREFS.update({k: v for k, v in body.items() if k in ("input", "done", "live_activity", "lock_details")})

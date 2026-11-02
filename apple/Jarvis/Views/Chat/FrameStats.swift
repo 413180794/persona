@@ -103,6 +103,52 @@ final class FrameStats: NSObject {
 #if os(iOS)
 import UIKit
 
+/// Any page, measured (`-showPagePerf YES`, docs/testing.md「整个 App」): 10 s after launch, 8 s on the page as it is
+/// (a script pushes hub updates meanwhile), then the page's main scroll view (the largest one on screen) glides
+/// down for 3 s and back up for 3 s at 2000 pt/s. Writes Documents/frames-page-idle.json and frames-page-glide.json.
+@MainActor enum PagePerf {
+    static func runIfAsked() {
+        guard UserDefaults.standard.bool(forKey: "showPagePerf") else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(10))
+            FrameStats.shared.start()
+            // For the script: push now (Documents/page-idle-started).
+            if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                try? Data().write(to: dir.appending(path: "page-idle-started"))
+            }
+            try? await Task.sleep(for: .seconds(8))
+            FrameStats.shared.stop(label: "page-idle")
+            try? await Task.sleep(for: .seconds(1))
+            guard let list = mainScrollView() else { return }
+            list.setContentOffset(CGPoint(x: list.contentOffset.x, y: -list.adjustedContentInset.top), animated: false)
+            try? await Task.sleep(for: .seconds(1))
+            FrameStats.shared.start()
+            await ListGlide.run(list, seconds: 3, speed: 2000)
+            await ListGlide.run(list, seconds: 3, speed: -2000)
+            FrameStats.shared.stop(label: "page-glide")
+        }
+    }
+
+    /// The tallest-content scroll view that is on screen and taller than half the window.
+    private static func mainScrollView() -> UIScrollView? {
+        guard let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows).first(where: \.isKeyWindow) else { return nil }
+        var best: UIScrollView?
+        func visit(_ v: UIView) {
+            if v.isHidden || v.alpha < 0.01 { return }
+            if let s = v as? UIScrollView, s.isScrollEnabled, s.bounds.height > window.bounds.height / 2,
+               s.contentSize.height > s.bounds.height,
+               s.convert(s.bounds, to: window).intersects(window.bounds),
+               s.contentSize.height > (best?.contentSize.height ?? 0) {
+                best = s
+            }
+            for sub in v.subviews { visit(sub) }
+        }
+        visit(window)
+        return best
+    }
+}
+
 /// Moves a scroll view at a steady speed, one step per display frame (`-showAutoScroll`'s glide).
 @MainActor final class ListGlide: NSObject {
     private var done: CheckedContinuation<Void, Never>?

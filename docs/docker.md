@@ -24,7 +24,7 @@ hub 有两种部署方式，功能一样，按 hub 所在的机器挑一种：
 
 ## 镜像
 
-`ghcr.io/chyroc/jarvis`，linux/amd64 和 linux/arm64，由 `.github/workflows/hub-image.yml` 构建：
+`ghcr.io/<owner>/jarvis`（`<owner>` 是仓库所属账号或组织，填进 `.env` 的 `JARVIS_IMAGE`），linux/amd64 和 linux/arm64，由 `.github/workflows/hub-image.yml` 构建：
 
 | 标签 | 什么时候有 |
 | --- | --- |

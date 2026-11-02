@@ -75,7 +75,7 @@ func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 	h.inbox.mu.Lock()
 	last, input := it.Last, triageInput(it)
 	h.inbox.mu.Unlock()
-	system := prompts.RenderInboxTriage(prompts.InboxTriage{Owner: h.cfg.Assistant.Owner, Rules: strings.TrimSpace(h.cfg.Inbox.Rules)})
+	system := prompts.RenderInboxTriage(prompts.InboxTriage{Owner: h.cfg.Assistant.Owner, Rules: h.inboxRules(ctx)})
 	var out struct {
 		Tier    string `json:"tier"`
 		Summary string `json:"summary"`

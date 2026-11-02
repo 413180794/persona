@@ -102,8 +102,10 @@ type Mail interface {
 	ListMessages(ctx context.Context, opts mail.ListOptions) (*mail.ListResult, error)
 	GetMessage(ctx context.Context, accountID string, uid uint32, mailbox string) (*mail.MailMessage, error)
 	Send(ctx context.Context, req mail.SendRequest) error
-	// AddAccount connects with the settings and saves the account when IMAP and SMTP work (mail_account_add).
+	// AddAccount connects with the settings and saves the account when IMAP and SMTP work; DeleteAccount removes one
+	// (jarvis_settings mail.accounts, self_settings.go).
 	AddAccount(req mail.AddAccountRequest) (*mail.MailAccount, error)
+	DeleteAccount(id string) error
 }
 
 // NewMail is set by the mail integration (see mail_glue.go).
@@ -600,6 +602,14 @@ var errNotPending = errors.New("no longer pending")
 func (h *Hub) resolve(id string, r proto.Resolution) error {
 	h.mu.Lock()
 	p := h.interactions[id]
+	if p != nil && r.Allow != nil && *r.Allow {
+		for _, f := range p.ix.Fields {
+			if !f.Optional && strings.TrimSpace(r.Values[f.Key]) == "" {
+				h.mu.Unlock()
+				return fmt.Errorf("请先填写%s", f.Label)
+			}
+		}
+	}
 	if p != nil && p.local != nil {
 		delete(h.interactions, id) // claimed: a second answer to the same card is not pending any more
 	}
@@ -617,7 +627,7 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 			status = "failed"
 		}
 		// What was typed into a terminal may be a password: the history keeps that something was, not what.
-		kept := r
+		kept := redacted(p.ix, r)
 		if kept.Text != "" {
 			kept.Text = "<redacted>"
 		}
@@ -625,13 +635,34 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		h.finished(p)
 		return err
 	}
-	h.recordEnd(id, status, &r)
+	kept := redacted(p.ix, r)
+	h.recordEnd(id, status, &kept)
 	select {
 	case p.done <- r:
 	default:
 	}
 	h.finishInteraction(id)
 	return nil
+}
+
+// redacted is the resolution as the history keeps it: secret fields say they were filled in, not what with.
+func redacted(ix proto.Interaction, r proto.Resolution) proto.Resolution {
+	if len(r.Values) == 0 {
+		return r
+	}
+	secret := map[string]bool{}
+	for _, f := range ix.Fields {
+		secret[f.Key] = f.Secret
+	}
+	vals := make(map[string]string, len(r.Values))
+	for k, v := range r.Values {
+		if secret[k] {
+			v = "<redacted>"
+		}
+		vals[k] = v
+	}
+	r.Values = vals
+	return r
 }
 
 func (h *Hub) finishInteraction(id string) {
@@ -756,7 +787,7 @@ func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 		tools = append(tools, h.mail.Tools()...)
 	}
 	if assistant {
-		tools = append(tools, assistantTools(h.lark != nil, h.mail != nil)...)
+		tools = append(tools, assistantTools(h.lark != nil)...)
 	}
 	return tools
 }

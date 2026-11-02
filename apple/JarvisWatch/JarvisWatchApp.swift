@@ -366,8 +366,13 @@ struct WatchInteractionView: View {
                     Button("打回") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) }
                 case .permission:
                     Text(interaction.summary ?? "").font(.caption2.monospaced())
-                    Button("允许") { act(Resolution(allow: true)) }.buttonStyle(.borderedProminent)
-                    Button("拒绝") { act(Resolution(allow: false)) }
+                    if interaction.requiresInput {
+                        Text("请在 iPhone 上填写后允许").font(Theme.Font.caption)
+                    } else {
+                        Button { act(Resolution(allow: true)) } label: { Text("允许").lineLimit(1) }
+                            .buttonStyle(.borderedProminent)
+                    }
+                    Button { act(Resolution(allow: false)) } label: { Text("拒绝").lineLimit(1) }
                 case .screen:
                     Text(interaction.screen ?? "").font(.caption2.monospaced())
                     if let d = interaction.dialog { // the hub's reading: answered by option, checked on the computer first

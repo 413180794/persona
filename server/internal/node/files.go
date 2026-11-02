@@ -27,9 +27,9 @@ type FileContent struct {
 	Mime      string   `json:"mime"`
 	Text      string   `json:"text,omitempty"` // UTF-8 text files
 	Data      string   `json:"data,omitempty"` // base64 for binary files (images, PDFs)
-	Truncated bool     `json:"truncated"`        // there is more after this page
-	Offset    int64    `json:"offset"`           // where this page starts (bytes)
-	Next      int64    `json:"next,omitempty"`   // where the next page starts; 0 at the end
+	Truncated bool     `json:"truncated"`      // there is more after this page
+	Offset    int64    `json:"offset"`         // where this page starts (bytes)
+	Next      int64    `json:"next,omitempty"` // where the next page starts; 0 at the end
 	IsDir     bool     `json:"is_dir"`
 	Entries   []string `json:"entries,omitempty"` // directory listing (names, dirs end with /)
 }

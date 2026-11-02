@@ -20,8 +20,8 @@ struct PortLinksTests {
 
     @Test func theMachinesOwnName() {
         #expect(one("http://MacBook.local:3000/pricing", hostnames: ["MacBook"]) == PortLink(port: 3000, path: "/pricing", secure: false))
-        #expect(one("http://example-machine:8080/", hostnames: ["example-machine.local"]) == PortLink(port: 8080, path: "/", secure: false))
-        #expect(one("http://example-machine:8080/") == nil, "another machine's name")
+        #expect(one("http://server:8080/", hostnames: ["server.local"]) == PortLink(port: 8080, path: "/", secure: false))
+        #expect(one("http://server:8080/") == nil, "another machine's name")
     }
 
     @Test func notPortLinks() {

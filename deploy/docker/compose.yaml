@@ -9,7 +9,7 @@ name: jarvis
 
 services:
   hub:
-    image: ${JARVIS_IMAGE:-ghcr.io/chyroc/jarvis:latest}
+    image: ${JARVIS_IMAGE:?set JARVIS_IMAGE in .env}
     restart: unless-stopped
     # Reaps what jarvisd's children leave behind (ssh's ProxyCommand / ProxyJump processes when ssh is killed).
     init: true

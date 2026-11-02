@@ -43,6 +43,9 @@
 - node 的精确模型元数据和 `node_sessions` 必须原子保存；复用 Postgres `settings` 的 `node_model.<machine>.<session>` 键与 SQL CTE，无需本地 JSON 状态文件。单用途编辑用数据库 revision 条件更新，不把 PATCH 的读改写误当成并发安全。
 - 模型切换不能杀掉仍有后台任务的助手；下一轮在安全边界生效，忙时明确拒绝发送。普通任务页未提交模型字段时要保留已有模型选择，防止时间/开关编辑覆盖统一模型页刚保存的值。
 
+- 旧入口修改助手启动器时也要写统一用途配置，不能只写旧 `assistant.launcher`：已有 `model_config.assistant` 会覆盖它，界面显示成功但下一段对话仍用旧值。
+  修改「关于我」等非模型字段则从 `assistantConfigLegacy` 取基底，避免把有效模型选择抄进旧配置、以后恢复继承时又冒出来；审批期间用 revision 检查并发修改。
+
 ## 时区
 
 - hub 跑在 UTC，用户不在（2026-11-01「时区也都修一下」）：服务端给人看、给 AI 读的时间、按天分的东西，一律按用户的时区（`Hub.userLocation()`，知识库是 `kb.Store.Zone()`），

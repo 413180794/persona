@@ -328,12 +328,33 @@ mock 加 `MOCK_LONG_ASSISTANT=1`（主对话是 60 轮：每轮几个工具、�
 | stream | 超过 16 ms 的帧 | 21–40 | 7–12 |
 | stream | `ChatView` body 次数 | 33 | 1 |
 | glide | 掉帧（晚于 1.5 帧） | — | 0 |
-| type | 每个字主线程 | 约 10 ms | 约 10 ms（没变，见下） |
+| type | 每个字主线程超过 8 ms 的帧（40 个字） | 24–35 | 2–3（输入框放进 `LayoutIsland` 后） |
 
 改了什么：用户气泡、回复、工作行、输入框改成 `Equatable`（页面每次推送都会重算，以前屏幕上和懒加载缓冲里的每一行跟着重算）；
 侧边栏关着时不读 `assistantConversations`（它读所有机器的所有会话）；顶栏的状态圆点拆成单独的视图（顶栏和它的菜单不再跟着推送重建）；
 流式回复按块切开（`StreamChunks`），写完的块不再重新解析排版，间距按主题的 margin 补；已经停在最新端时流式的「跟到最新」不再写 `ScrollPosition`。
-打字没变：每个字都让整页从根重新排版一次（输入框和列表在同一个 VStack 里，懒加载列表会重新量可见行），要把输入框放进自己的 hosting controller 才能隔开，还没做。
+打字：每个字都让整页从根重新排版一次（输入框和列表在同一个 VStack 里，懒加载列表会重新量可见行）。现在输入框在自己的
+hosting controller 里排版（`LayoutIsland`，`DesignSystem/LayoutIsland.swift`），页面只在它的高度变了（折行、上面多一个提示）时才重新排；
+`ComposerGrowTests` 查多行时它会长高、一直在键盘上面、删回一行会缩回去（新外壳和旧布局各一遍）。
+
+### 整个 App（任意页面）
+
+`-showPagePerf YES`（DEBUG）：启动 10 秒后量 8 秒「停在页面上」（`frames-page-idle.json`；开始时写 `Documents/page-idle-started`，
+脚本看到它再 `GET /mock/churn?n=12&ms=500`，推送不会落到别的段里），然后找屏幕上最大的滚动视图，按显示帧往下滑 3 秒、往回 3 秒（2000 pt/s，
+`frames-page-glide.json`）。配合打开页面的启动参数：工作页 `-tab dev -app.tab chats`、收件箱 / 机器 `-openShellPage inbox|machines`、
+Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约 130 个 Agent）才看得出列表的开销。
+
+2026-11-01，iPhone 17 Pro 模拟器，各 2 次：
+
+| 页面 | 12 轮推送的主线程合计 | 超过 16 ms 的帧（停 / 滑） |
+| --- | --- | --- |
+| 工作（Agents 列表，130 个 Agent） | 约 375 ms → 82–88 ms | 15 → 1–4 / 1–2 |
+| 收件箱 | 19 ms | 6 / 8 |
+| 机器 | 44 ms | 2 / 7 |
+| 长 Agent 对话（`MOCK_LONG_HISTORY=1`） | 37 ms | 6 / 6 |
+
+工作页的改动：hub 把每台机器的会话列表分开推（一轮好几条），以前每条都让读会话的页面各重算一遍；现在 25 ms 内到的合成一次
+（`AppModel.applyPendingSessions`），一轮推送从约 4 次 SwiftUI 更新变成 1 次。
 
 ## 侧边栏拖动（Jarvis tab）
 

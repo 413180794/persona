@@ -120,7 +120,7 @@ func (h *Hub) judgeOne(ctx context.Context, it *InboxItem) bool {
 	h.inbox.mu.Lock()
 	last, input := it.Last, prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: it.Summary, Item: promptItem(it)})
 	h.inbox.mu.Unlock()
-	system := prompts.RenderInboxJudge(prompts.InboxJudge{Owner: h.ownerName(), Rules: strings.TrimSpace(h.cfg.Inbox.Agent.Rules)})
+	system := prompts.RenderInboxJudge(prompts.InboxJudge{Owner: h.ownerName(), Rules: h.inboxAgentRules(ctx)})
 	var out struct {
 		Handle bool   `json:"handle"`
 		Task   string `json:"task"`

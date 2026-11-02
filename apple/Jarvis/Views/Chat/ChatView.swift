@@ -1022,7 +1022,7 @@ struct ChatView: View {
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
                          onCleared: { switchTo($0) })
-                    .equatable()
+                    .layoutIsland() // typing lays out the composer alone, not the whole page (LayoutIsland)
             }
             .padding(.horizontal, Theme.Space.m)
             .padding(.bottom, Theme.Space.s)

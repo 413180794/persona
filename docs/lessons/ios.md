@@ -63,6 +63,11 @@
   - 就算数据一模一样，`List` 只要被更新一次，就会按估算高度重新量行（估算和实际差 70 pt 一行），屏幕外的行一变高矮，内容就跳几百 pt。
     在两次滑动之间落地也一样：下一次手指落下时才跳。所以等停稳（1.5 秒）再落地，连着甩的几下算一次滚动。
   - `onScrollPhaseChange` 在 `List` 上也有效（iOS 27 模拟器实测）。滚动阶段这种只在回调里用的状态放不被观察的对象里，放 `@State` 每个阶段重算一次列表。
+- 一个会变尺寸的小东西（输入框里的 TextField）和长列表在同一个视图树里：它每变一下，SwiftUI 从根重新排版整页，懒加载列表把可见行重新量一遍
+  （打字每个字约 10 ms）。把它放进自己的 hosting controller（`LayoutIsland`）：里面自己量高度报出来，页面只在高度变时排版。
+  别用 `sizingOptions = .intrinsicContentSize` 让页面跟着它变高：试过，打字时输入框不长高（2026-11-01，`ComposerGrowTests`）。
+- `List` 的行别为了 `Equatable` 包成自定义视图、再把 `.swipeActions` / `.contextMenu` 放进它的 body：试过（2026-11-01），推送和滑动都更慢
+  （UIKit 那边每次都要重新配置 cell 的滑动操作）。Agents 列表推送的开销靠合并推送降下来（`AppModel.applyPendingSessions`）。
 
 ## 导航
 

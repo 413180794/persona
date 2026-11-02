@@ -515,12 +515,17 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	case proto.IxScreen:
 		body = "打开 Jarvis 查看屏幕并操作"
 	}
+	category := "INTERACTION_" + strings.ToUpper(ix.Kind)
+	if len(ix.Fields) > 0 { // something to fill in first: no buttons on the notification, a tap opens the card
+		category = "INTERACTION_INPUT"
+		body += "（打开 Jarvis 填写）"
+	}
 	return map[string]any{
 		"aps": map[string]any{
 			"alert":              map[string]any{"title": title, "subtitle": ix.SessionTitle + " · " + machine, "body": body},
 			"sound":              "default",
 			"thread-id":          ix.SessionID,
-			"category":           "INTERACTION_" + strings.ToUpper(ix.Kind),
+			"category":           category,
 			"interruption-level": "time-sensitive",
 		},
 		"interaction_id": ix.ID, "machine_id": ix.MachineID, "session_id": ix.SessionID,

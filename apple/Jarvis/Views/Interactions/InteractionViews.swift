@@ -143,13 +143,18 @@ struct InteractionPreviewCard: View {
                 }
             }
         case .permission:
-            HStack {
-                Button(interaction.agentName == nil ? "允许" : "同意") { Task { await model.resolve(interaction, Resolution(allow: true)) } }
+            if interaction.requiresInput {
+                Button { open() } label: { Text("打开填写").lineLimit(1) }
                     .themedButton(prominent: true)
-                Button("拒绝") { Task { await model.resolve(interaction, Resolution(allow: false)) } }
-                    .themedButton()
+            } else {
+                HStack {
+                    Button(interaction.agentName == nil ? "允许" : "同意") { Task { await model.resolve(interaction, Resolution(allow: true)) } }
+                        .themedButton(prominent: true)
+                    Button("拒绝") { Task { await model.resolve(interaction, Resolution(allow: false)) } }
+                        .themedButton()
+                }
+                .controlSize(.small)
             }
-            .controlSize(.small)
         case .screen:
             // Only when the hub read the dialog too (it checks the screen before pressing the key).
             if interaction.dialog != nil, let d = interaction.screenDialog {
@@ -594,7 +599,8 @@ struct PermissionForm: View {
     var interaction: Interaction
 
     var body: some View {
-        if AppStyle.current.usesBeautifulUI { BUIPermissionForm(interaction: interaction) } else { plain }
+        if interaction.requiresInput { PermissionInputForm(interaction: interaction) }
+        else if AppStyle.current.usesBeautifulUI { BUIPermissionForm(interaction: interaction) } else { plain }
     }
 
     @ViewBuilder private var plain: some View {

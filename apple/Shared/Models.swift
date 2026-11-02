@@ -701,6 +701,8 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var dialog: ScreenDialog?
     /// The terminal asks for a password: typed into a password field, not kept anywhere.
     var secret: Bool?
+    var fields: [InteractionField]?
+    var requiresInput: Bool { !(fields ?? []).isEmpty }
     /// Who asks when it is not Claude Code: "codex" / "traex" (a card read off a Codex TUI, docs/codex.md「提问和审批」).
     var agent: String?
     /// Why the agent asks for this permission, in its words.
@@ -716,11 +718,20 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var screenDialog: ScreenParser.Dialog? { dialog?.parsed ?? screen.flatMap(ScreenParser.dialog) }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, questions, plan, summary, screen, cwd, dialog, secret, agent, reason
+        case id, kind, questions, plan, summary, screen, cwd, dialog, secret, fields, agent, reason
         case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title",
              createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
              toolInput = "tool_input", alwaysLabel = "always_label", agentLabelHint = "agent_label"
     }
+}
+
+nonisolated struct InteractionField: Codable, Hashable, Sendable, Identifiable {
+    var key: String
+    var label: String
+    var placeholder: String?
+    var secret: Bool?
+    var optional: Bool?
+    var id: String { key }
 }
 
 nonisolated struct Resolution: Codable, Sendable {
@@ -738,9 +749,10 @@ nonisolated struct Resolution: Codable, Sendable {
     var preKeys: [String]?
     /// A screen dialog's option (Interaction.dialog): the node works out its keys, after checking the dialog is unchanged.
     var option: String?
+    var values: [String: String]?
 
     enum CodingKeys: String, CodingKey {
-        case answers, approve, mode, feedback, allow, always, message, keys, text, dismiss, option
+        case answers, approve, mode, feedback, allow, always, message, keys, text, dismiss, option, values
         case preKeys = "pre_keys"
     }
 

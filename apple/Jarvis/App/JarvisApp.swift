@@ -57,6 +57,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if d.bool(forKey: "openAgentsFresh") {
             for k in ["dev.machineFilter", "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
         }
+        #if os(iOS)
+        PagePerf.runIfAsked()
+        #endif
         switch d.string(forKey: "tab") {
         case "dev": AppModel.shared.selectedTab = .chats
         case "mail": AppModel.shared.selectedTab = .mail

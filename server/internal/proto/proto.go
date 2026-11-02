@@ -537,6 +537,10 @@ type Interaction struct {
 	// Secret: the screen asks for a password. The app takes it in a password field and keeps no copy; the hub never
 	// stores what is typed into a terminal card anyway.
 	Secret bool `json:"secret,omitempty"`
+	// Fields are filled in on the phone before approving (a permission card that needs a password): the values come
+	// back in Resolution.Values and never pass through the model. Quick approve (notification buttons, preview
+	// cards, the watch, Siri) is off for such cards: they open the form.
+	Fields []Field `json:"fields,omitempty"`
 	// Resumable: a hook waits on it that reconnects when its node goes away (hub or node restart), so the hub keeps
 	// it pending through the gap instead of cancelling it (docs/protocol.md「交互挺过重启」).
 	Resumable bool `json:"resumable,omitempty"`
@@ -551,6 +555,15 @@ type Interaction struct {
 	// AgentLabel is what to call Agent when the apps do not know it (a runtime's own name, "DSH"; docs/runtimes.md),
 	// as proto.Session.AgentLabel.
 	AgentLabel string `json:"agent_label,omitempty"`
+}
+
+// Field is one input of a card (Interaction.Fields).
+type Field struct {
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Placeholder string `json:"placeholder,omitempty"`
+	Secret      bool   `json:"secret,omitempty"` // a password: a secure field, redacted in the history
+	Optional    bool   `json:"optional,omitempty"`
 }
 
 type Resolution struct {
@@ -569,6 +582,8 @@ type Resolution struct {
 	// Option answers a screen dialog by its option's key (Interaction.Dialog): the keys are worked out where they are
 	// pressed, from the screen as it is then (Text goes with a type_something option).
 	Option string `json:"option,omitempty"`
+	// Values are the card's Fields as filled in on the phone, by key.
+	Values map[string]string `json:"values,omitempty"`
 }
 
 // Tool is an MCP tool definition.

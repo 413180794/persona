@@ -613,6 +613,22 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "session.unwatch":
 		n.unwatch(p.SessionID)
 		return ok(nil)
+	case "codex.settings":
+		list, err := n.getCodexSettings()
+		return map[string]any{"settings": list}, err
+	case "codex.settings.set":
+		var a struct {
+			Key   string `json:"key"`
+			Value any    `json:"value"`
+		}
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
+		if err := n.setCodexSetting(a.Key, a.Value); err != nil {
+			return nil, err
+		}
+		list, err := n.getCodexSettings()
+		return map[string]any{"settings": list}, err
 	case "claude.settings":
 		list, err := n.getClaudeSettings()
 		return map[string]any{"settings": list}, err

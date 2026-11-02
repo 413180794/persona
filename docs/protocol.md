@@ -255,6 +255,12 @@ Codex / TRAEX 在终端里没有 hook，node 自己从 rollout 读提问（`requ
 TUI 回到了能作答的状态，输入后再确认 Codex 收下了才回成功；否则回 409 `input_draft` / `dialog_open` / `prompt_changed`（什么都没输入），
 卡片留着（`prompt_changed` 除外）。细节见 `docs/codex.md`「提问和审批」。
 
+### 需要填写的授权卡片
+
+`permission` 交互可带 `fields: [{key,label,placeholder?,secret?,optional?}]`，App 用安全输入框填写密码，批准时发送
+`{"allow":true,"values":{"password":"…"}}`。必填字段缺失时 hub 拒绝本次批准并保留卡片；交互历史的 secret 字段只记录 `<redacted>`，
+原始值只交给等待中的工具处理。此类卡片的通知分类是 `INTERACTION_INPUT`（无快捷允许按钮），列表、手表和 Siri 不直接批准。
+
 ### 终端对话框（screen 交互）
 
 Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`，40 行）建一张 `screen` 卡：
