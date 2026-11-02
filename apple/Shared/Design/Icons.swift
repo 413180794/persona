@@ -89,6 +89,8 @@ extension Theme {
         static let style = "paintpalette"
         /// 设置 › 外观 › 主题色.
         static let themeColor = "swatchpalette"
+        /// 设置 › 外观 › App 图标 (the home screen icon).
+        static let appIcon = "app.badge"
         /// 设置 › 外观 › 布局 (the shell or the old tabs).
         static let layout = "rectangle.topthird.inset.filled"
         /// Open the thing the row points at (a sub-Agent, a card's link).

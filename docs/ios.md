@@ -497,6 +497,15 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
     - 入场动画关掉。
 - 触感：发出 / 回答成功 success，新交互 warning，出错 error。
 - 图标：夜色背景 + 珊瑚光环 + 四角星（`scripts/make_icon.py`，含 dark / tinted）。
+- **App 图标可以换**（设置 › 外观 › App 图标，iPhone / iPad；手表和 Mac 只有一个图标）：
+  - 选项：默认（上面这个）、「p.」（Didot 小写 p 加红色句号，米白纸底，深色是墨底米白字）、「气场」（珊瑚、紫、青绿的光晕加颗粒，不画物体）。
+    都是按新名字 Persona 设计的第二轮方案里挑的，只在用户选了时生效。
+  - 资源：`scripts/make_alt_icons.py` 画出 `AppIcon-Didot`、`AppIcon-Aura` 两个图标集（any / dark / tinted），
+    再从每个图标集（含默认的）缩出设置页用的预览 `AppIcons/app-icon-*`（any / dark），改了画法重跑脚本。
+  - 工程：iOS 目标的 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` 列出备用图标集，构建时写进 Info.plist 的 `CFBundleAlternateIcons`；
+    不在列表里的图标集不会打进包，加一个图标要同时改 `AppIconChoice`、这一行和脚本（`AppIconChoiceTests` 查三者一致、资源都在）。
+  - 选择由系统记住，App 不存：当前是哪个读 `alternateIconName`（`AppIconModel`），换的时候系统弹自己的提示框。
+  - 截图：`-tab settings -openAppearance icon`；`AppIconTests`（UI 测试，体验模式）点「气场」、接受系统提示、回主屏截图，再换回默认。
 - 品牌色：App 图标的珊瑚色（`Theme.brand`）只给 Jarvis 自己的标志：设置和对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。
   两份 AccentColor 资源（手表的标题和 tint、系统弹窗这类读资源的地方）是系统蓝；实时活动读不到风格，描边和按钮固定用系统蓝（按钮是压深的 `#0071E3`，白字 4.7:1）。
 

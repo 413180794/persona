@@ -194,9 +194,9 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
-        else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | layout
+        else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | icon | layout
             p.append(a == "color" ? SettingsPage.themeColor : a == "style" ? SettingsPage.style
-                     : a == "layout" ? SettingsPage.layout : SettingsPage.persona)
+                     : a == "icon" ? SettingsPage.appIcon : a == "layout" ? SettingsPage.layout : SettingsPage.persona)
         }
         else if d.bool(forKey: "openModelConfiguration") {
             p.append(SettingsPage.modelConfiguration)
@@ -241,7 +241,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case persona, themeColor, style, layout, assistant, claude, codex, devices, phoneData, mail, feishu, notifications, storage, translation, modelConfiguration
+    case persona, themeColor, style, appIcon, layout, assistant, claude, codex, devices, phoneData, mail, feishu, notifications, storage, translation, modelConfiguration
 
 }
 
@@ -264,6 +264,11 @@ private struct SettingsDestinations: ViewModifier {
         case .persona: PersonaSettingsPage()
         case .themeColor: ThemeColorSettingsPage()
         case .style: StyleSettingsPage()
+        #if os(iOS)
+        case .appIcon: AppIconSettingsPage()
+        #else
+        case .appIcon: EmptyView()
+        #endif
         #if os(iOS)
         case .layout: LayoutSettingsPage()
         #else

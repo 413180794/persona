@@ -102,6 +102,8 @@ nonisolated enum Theme {
         /// A whole page pushed aside as a card (the Jarvis tab's page beside its sidebar): about the screen's own
         /// corners on a current iPhone, so the card reads as the screen slid over, not a smaller box.
         static let page: CGFloat = 55
+        /// An app icon's corner for an icon `side` points wide: the home screen's squircle (about 22.4% of the side).
+        static func appIcon(_ side: CGFloat) -> CGFloat { side * 0.2237 }
     }
 
     /// Spacing on a 4 pt grid, BeautifulUI's (`BUISpacing`): 2 4 6 8 12 16 24 32, nothing in between. Pages and the
