@@ -134,7 +134,8 @@ App 和灵动岛扩展（JarvisWidgets）靠 App Group 容器里的文件交形�
 
 内部测试员必须是团队成员；给朋友用走外部测试：群组「Friends」（`app_store.external.group`）。2026-10-30 用户定的是**公开链接**
 （`public_link: true`，`public_link_limit: 50`）：把 `https://testflight.apple.com/join/…` 发到群里，谁点开都能装，满 50 人后链接不再收人。
-当前的公开链接：<https://testflight.apple.com/join/vsjfy3hE>（`asc_testflight.py external` 每次都会打印，变了就更新这里）。
+当前的公开链接：<https://testflight.apple.com/join/Nb5DjHXf>（`asc_testflight.py external` 每次都会打印，变了就更新这里；2026-11-02 核对）。
+iPhone 和 Mac 是同一个链接（同一个 Friends 组），在 Mac 上用 TestFlight 打开它就是 Mac 版。
 **只私下发给要测的人，不放到官网（`site/`）或任何公开页面上**（2026-10-31 用户要求）。
 不用收集邮箱；`app_store.external.testers` 仍然可以写，列出的邮箱另外收到邀请邮件。`public_link: false` 时只有这些邮箱能加入。
 
