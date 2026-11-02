@@ -114,6 +114,8 @@ func (inboxTestStore) PutInboxItem(context.Context, string, []byte, time.Time, *
 	return nil
 }
 
+func (inboxTestStore) DeleteInboxItems(context.Context, []string) error { return nil }
+
 // A judge call put off by a held connection leaves the item to be judged later and says nothing in the log.
 func TestInboxJudgePutOffQuietly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

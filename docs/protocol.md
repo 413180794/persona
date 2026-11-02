@@ -616,6 +616,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | --- | --- | --- |
 | GET | `/api/v1/imessage` | `{machine, status, error?, guide?:[…], via?, ai}`：信息连接器（hub.json `imessage.machine`）的状态，当场问那台 Mac（刚开了权限，刷新就是新的）；没有完全磁盘访问权限时 `guide` 是在那台 Mac 上一步步怎么开，`via` 是那台 Mac 的 node 怎么跑（`ssh` / `launchd`，两种开法不一样）。没设置是 404 `not_configured` |
 | PUT | `/api/v1/imessage/settings` | `{ai: bool}`：「交给 Jarvis」开关（存在 hub，默认开）；开着时真正的会话进知识库、收件箱，助手有 `imessage_*` 工具；关掉立刻停。回 `GET /api/v1/imessage` 的样子（多一个 `ai`） |
+| DELETE | `/api/v1/imessage/data` | 删掉 hub 上存下的信息：知识库里的信息会话和人（连同索引、项目里的引用和它们写的时间线、归档游标，项目标成待重写）、收件箱里的信息条目 → `{chats, people, inbox}`。「交给 Jarvis」开着时 409 `ai_on`（先关掉，不然下一轮又同步回来）；那台 Mac 上的消息不受影响 |
 | GET | `/api/v1/imessage/chats?limit=&before=` | 那台 Mac 的会话，新的在前（node 的 `connector.chats`，字段见下面「hub ↔ node」）。只读、不存、不交给模型。没权限 403 `no_permission`，Mac 不在线 503 `offline`，node 太旧 409 `node_outdated` |
 | GET | `/api/v1/imessage/chats/{id}/messages?limit=&before=` | 一个会话的一页消息，旧的在前（node 的 `connector.older`）；`id` 不像会话 id（`imessage-<12 位十六进制>`）的不发给 Mac，404 `no_chat` |
 | GET | `/api/v1/connectors` | `{"connectors":[{id, name, status, account?, via?, error?, last_sync?, last_event?, capabilities:[…], hosts?:[…], enabled}]}`：hub 上注册的连接器（不含飞书和邮箱，它们还走自己的接口）。`status` 是 `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error` / `disabled`（用户在设置里关掉了，`enabled` 为 false）；`via` 说登录从哪来（「来自 <机器> 的 gh 登录」）；`error` 是给人看的一句话，不含密钥；`capabilities` 取 `status` / `tools` / `actions` / `events` / `hosts` / `inbox` / `archive` / `login`；`hosts` 是这个连接器的链接所在的主机名（App 用来认链接） |

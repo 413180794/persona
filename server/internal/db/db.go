@@ -580,6 +580,15 @@ func (d *DB) PutKBEntity(ctx context.Context, kind, id, name, importance string,
 	return err
 }
 
+// DeleteKBEntities removes the index rows of kind with these ids (a source the user took back, kb.ForgetSource).
+func (d *DB) DeleteKBEntities(ctx context.Context, kind string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := d.pool.Exec(ctx, `DELETE FROM kb_entities WHERE kind = $1 AND id = ANY($2)`, kind, ids)
+	return err
+}
+
 // KBEntities lists indexed entities of a kind (all kinds when ""), carrying tag when set, most important first.
 func (d *DB) KBEntities(ctx context.Context, kind, tag string, limit int) ([]KBEntity, error) {
 	if limit <= 0 {
@@ -610,6 +619,15 @@ func (d *DB) KBEntities(ctx context.Context, kind, tag string, limit int) ([]KBE
 func (d *DB) PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error {
 	_, err := d.pool.Exec(ctx, `INSERT INTO inbox_items (id, data, updated_at, done_at) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (id) DO UPDATE SET data = $2, updated_at = $3, done_at = $4`, id, data, updatedAt, doneAt)
+	return err
+}
+
+// DeleteInboxItems removes inbox items for good (a source the user took back).
+func (d *DB) DeleteInboxItems(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := d.pool.Exec(ctx, `DELETE FROM inbox_items WHERE id = ANY($1)`, ids)
 	return err
 }
 

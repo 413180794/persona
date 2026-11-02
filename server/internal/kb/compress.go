@@ -95,6 +95,9 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 	if err := e.modelFor("kb.compress").JSONMax(cctx, prompts.RenderKBCompress(prompts.KBOwner{Owner: e.Owner}), in, 4000, &d); err != nil {
 		return err
 	}
+	if _, ok := e.Store.Chat(c.ID); !ok { // forgotten while the model wrote (ForgetSource): not written back
+		return nil
+	}
 	now := time.Now().UTC()
 	if strings.TrimSpace(d.Summary) != "" {
 		if err := e.Store.PutSummary(KindChat, c.ID, "# "+c.Name+"\n\n"+d.Summary); err != nil {

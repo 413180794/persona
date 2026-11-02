@@ -235,6 +235,14 @@ func TestInboxItems(t *testing.T) {
 	if err := json.Unmarshal(rows[0], &it); err != nil || it.Count != 2 {
 		t.Fatalf("row = %s", rows[0])
 	}
+	// Deleted for good: a source taken back.
+	_ = d.PutInboxItem(ctx, "imessage:1", []byte(`{"id":"imessage:1"}`), now, nil)
+	if err := d.DeleteInboxItems(ctx, []string{"imessage:1"}); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ := d.InboxItems(ctx, now.Add(-8*24*time.Hour)); len(rows) != 1 {
+		t.Fatalf("rows after delete = %d", len(rows))
+	}
 }
 
 func TestDeviceTokens(t *testing.T) {
@@ -282,6 +290,20 @@ func TestKBEntities(t *testing.T) {
 	}
 	if list, _ := d.KBEntities(ctx, "", "发布", 10); len(list) != 2 {
 		t.Fatalf("tag filter: %+v", list)
+	}
+	// A source taken back: only its rows of that kind go.
+	_ = d.PutKBEntity(ctx, "chats", "imessage-0123456789ab", "张三", "", 10, nil, "", now)
+	_ = d.PutKBEntity(ctx, "people", "imessage-0123456789ab", "张三", "", 10, nil, "", now)
+	if err := d.DeleteKBEntities(ctx, "chats", []string{"imessage-0123456789ab", "nope"}); err != nil {
+		t.Fatal(err)
+	}
+	chats, _ := d.KBEntities(ctx, "chats", "", 10)
+	people, _ := d.KBEntities(ctx, "people", "", 10)
+	if len(chats) != 1 || chats[0].ID != "c" || len(people) == 0 {
+		t.Fatalf("after delete: chats %+v people %+v", chats, people)
+	}
+	if err := d.DeleteKBEntities(ctx, "chats", nil); err != nil {
+		t.Fatal(err)
 	}
 }
 

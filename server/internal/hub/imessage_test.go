@@ -268,3 +268,53 @@ func TestIMessageArchive(t *testing.T) {
 		t.Errorf("a number in a file name:\n%s", strings.Join(names, "\n"))
 	}
 }
+
+// Deleting what the hub kept: only once 交给 Jarvis is off; the knowledge base's iMessage chats and people and the
+// inbox's iMessage items go, the rest stays.
+func TestIMessageDelete(t *testing.T) {
+	h, _ := modelTestHub(t)
+	h.store = inboxTestStore{h.store.(*modelTestStore)}
+	h.connectors = connector.NewRegistry(nil)
+	h.inbox.init()
+	mux := h.routes()
+	imessageNode(t, h, func(method string, _ json.RawMessage) (any, error) {
+		return json.RawMessage(`{"connectors":[{"id":"imessage","status":"ok"}]}`), nil
+	})
+	if err := h.addIMessage(imessage.Config{Machine: "mac"}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := kb.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.kb.eng = &kb.Engine{Store: st}
+	_ = st.PutChat(&kb.Chat{ID: "imessage-0123456789ab", Source: "imessage", Name: "张三"})
+	_ = st.PutChat(&kb.Chat{ID: "lark-f1", Source: "lark", Name: "需求群"})
+	_ = st.PutPerson(&kb.Person{ID: "imessage-a1b2c3d4e5f6", Source: "imessage", Name: "张三"})
+	h.inbox.items["imessage:1"] = &InboxItem{ID: "imessage:1", Source: "imessage", Title: "张三"}
+	h.inbox.items["lark:f1:1"] = &InboxItem{ID: "lark:f1:1", Source: "lark", Title: "需求群"}
+
+	if code, out := call(t, mux, "DELETE", "/api/v1/imessage/data", h.cfg.Token, ""); code != 409 || out["code"] != "ai_on" {
+		t.Fatalf("while on: %d %v", code, out)
+	}
+	if _, ok := st.Chat("imessage-0123456789ab"); !ok {
+		t.Fatal("deleted while on")
+	}
+	call(t, mux, "PUT", "/api/v1/imessage/settings", h.cfg.Token, `{"ai":false}`)
+	code, out := call(t, mux, "DELETE", "/api/v1/imessage/data", h.cfg.Token, "")
+	if code != 200 || out["chats"] != 1.0 || out["people"] != 1.0 || out["inbox"] != 1.0 {
+		t.Fatalf("delete: %d %v", code, out)
+	}
+	if _, ok := st.Chat("imessage-0123456789ab"); ok {
+		t.Error("the chat is still there")
+	}
+	if _, ok := st.Chat("lark-f1"); !ok {
+		t.Error("Feishu's chat is gone")
+	}
+	if _, ok := h.inbox.items["imessage:1"]; ok {
+		t.Error("the inbox item is still there")
+	}
+	if _, ok := h.inbox.items["lark:f1:1"]; !ok {
+		t.Error("Feishu's inbox item is gone")
+	}
+}

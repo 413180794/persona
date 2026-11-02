@@ -386,7 +386,8 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
 默认只给成员里有通讯录里的人、或者我说过话的会话（验证码、银行、快递这类没人存的短号码不给），交出去的文字里验证码打码，App 自己看的不打码。
 hub 一侧（`connector/imessage/jarvis.go`）：开关「交给 Jarvis」（hub 设置 `imessage.ai`，默认开）开着时实现 `Archive`（知识库的会话 `imessage-<会话哈希>`、人 `imessage-<号码哈希>`）、
 `Inbox`（每 2 分钟看最近的会话：有未读的进收件箱，私聊需要你、群聊知悉即可，在别处读了或我回了就结束；「在信息里回复」是 `sms:` 链接，Jarvis 不发）、
-`ReadTools`（`imessage_chats` / `imessage_read` / `imessage_search`）；关掉后都不给，已存的另外删。
+`ReadTools`（`imessage_chats` / `imessage_read` / `imessage_search`）；关掉后都不给，已存的另外删：`DELETE /api/v1/imessage/data`（关着时才行）调 `kb.Engine.ForgetSource("imessage")`
+删会话、人、项目里的引用和它们写的时间线、游标（项目标成待重写，摘要按剩下的重写），再删索引行和收件箱条目；正在压缩的会话删了以后不会被写回。
 
 已实现（#449，`server/internal/connector/imessage`，node 的 `connector.*` RPC 见 `docs/protocol.md`）：会话按人合并（一个号码在 iMessage / 短信 / RCS 上的几个 `chat` 是一个会话，群按 `guid`），
 id 是哈希；通讯录按号码后 10 位对，对不上再按后 7 位（只有一个人有时）；没有权限时 `connector.list` 按 node 怎么跑给出两种说法：经 ssh 起的打开「远程登录 › 允许远程用户完全访问磁盘」，
