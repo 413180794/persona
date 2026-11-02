@@ -48,8 +48,8 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		if err != nil {
 			return nil, err
 		}
-		if agent != "claude" {
-			return nil, errors.New("普通 Agent 的启动只支持 Claude Code 启动器")
+		if agent != "claude" && agent != "codex" {
+			return nil, errors.New("普通 Agent 的启动只支持 Claude Code 或 Codex 启动器")
 		}
 	}
 	if resume != "" {
@@ -71,6 +71,12 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if argv, ok := n.codexLauncher(ctx, launcher); ok { // codex_start.go
 		if resume != "" {
 			return nil, refusal("codex_resume", "Codex 会话请在电脑上恢复（codex resume）：从手机只能新建。", nil)
+		}
+		if execution.Model != "" {
+			argv = append(withoutModelArgs(argv), "--model", execution.Model)
+		}
+		if execution.Effort != "" {
+			return nil, errors.New("新建 Codex 的思考强度由其启动器管理，请将此用途的思考强度恢复继承")
 		}
 		return n.startCodex(ctx, launch, cwd, launcher, argv, prompt, ws, tabName)
 	}

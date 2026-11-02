@@ -28,6 +28,9 @@ func (n *Node) launcherModelCheck(ctx context.Context, name, model string) (stri
 	if _, managed := n.managedLauncher(name); managed {
 		return "claude", nil
 	}
+	if _, ok := n.codexLauncher(ctx, name); ok {
+		return "codex", nil
+	}
 	key := n.home + "\x00" + name + "\x00" + model
 	modelProbeCache.Lock()
 	cached, ok := modelProbeCache.results[key]

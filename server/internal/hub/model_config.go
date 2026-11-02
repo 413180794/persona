@@ -572,8 +572,11 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 				if err := m.call(ctx, "launchers.model.check", map[string]any{"name": strings.TrimPrefix(b.Provider, "launcher."), "model": b.Model}, &result); err != nil {
 					return fmt.Errorf("无法验证启动器的具体模型: %w", err)
 				}
-				if p.ID == "agent.new" && result.Agent != "claude" {
-					return errors.New("普通 Agent 的启动只支持 Claude Code 启动器")
+				if p.ID == "agent.new" && result.Agent != "claude" && result.Agent != "codex" {
+					return errors.New("普通 Agent 的启动只支持 Claude Code 或 Codex 启动器")
+				}
+				if p.ID == "agent.new" && result.Agent == "codex" && b.Effort != "" {
+					return errors.New("新建 Codex 的思考强度由其启动器管理，请恢复继承")
 				}
 			}
 		}

@@ -133,6 +133,19 @@ func TestCodexStartAnswersWithTheThread(t *testing.T) {
 	}
 }
 
+func TestCodexStartUsesThePurposeModel(t *testing.T) {
+	withCodexLaunchers(t, map[string][]string{"cx": {"codex", "--model=old", "-c", "model_reasoning_effort=low"}})
+	n, _, _, _ := codexStartHerdr(t, 0)
+	_, err := request(t, n, "session.start", map[string]any{"cwd": "~/proj", "launcher": "cx", "prompt": "hello", "model": "purpose-model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"codex", "-c", "model_reasoning_effort=low", "--model", "purpose-model"}
+	if strings.Join(ran, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("runs %q, want %q", ran, want)
+	}
+}
+
 func TestCodexStartRefusals(t *testing.T) {
 	withCodexLaunchers(t, map[string][]string{"codex": {"codex"}})
 	n, _, _, cmds := codexStartHerdr(t, 0)
