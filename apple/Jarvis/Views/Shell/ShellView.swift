@@ -171,13 +171,8 @@ private struct ShellMovingBar: View {
             .padding(.top, Theme.Space.xxs)
             .shellScaled()
             .background(alignment: .top) {
-                GeometryReader { g in
-                    let solid = g.safeAreaInsets.top + AssistantTopBar.height - Theme.Space.sm
-                    TopFog(solidHeight: solid, fadeHeight: AssistantTopBar.fade)
-                        .frame(width: g.size.width, height: solid + AssistantTopBar.fade)
-                        .offset(y: -g.safeAreaInsets.top)
-                }
-                .opacity(1 - p)
+                BarFog(solid: AssistantTopBar.height - Theme.Space.sm, fade: AssistantTopBar.fade)
+                    .opacity(1 - p)
             }
             .allowsHitTesting(false)
             .accessibilityHidden(true)

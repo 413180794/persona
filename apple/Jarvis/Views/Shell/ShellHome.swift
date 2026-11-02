@@ -3,10 +3,11 @@ import SwiftUI
 
 /// A new conversation in the shell (docs/ios.md「新外壳」): the same welcome as the old layout's (`AssistantWelcome`:
 /// greeting, what Jarvis can reach, things to ask), and over the composer what needs the user right now — agents
-/// waiting on them and the inbox's 需要你 — one quiet line each. While the conversation spins up, the first message and
-/// a typing line so the send feels instant.
+/// waiting on them and the inbox's 需要你 — one quiet line each, as many as fit under the welcome's first row of things
+/// to ask (`NeedsRoom`). While the conversation spins up, the first message and a typing line so the send feels instant.
 struct ShellHome: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var typeSize
     var pending: PendingStart?
     var error: String?
     @Binding var launcher: String?
@@ -14,6 +15,10 @@ struct ShellHome: View {
     @Binding var effort: String
     var openInbox: (InboxItem) -> Void
     var send: (String, [ImagePayload]) -> Void
+    @State private var room = NeedsRoom()
+
+    /// How far the welcome fades out over 需要你 and the composer, rather than being cut off at their edge.
+    fileprivate static let fade = Theme.Space.xl
 
     /// What the page shows: the start error, or under `-showHomeState error` a sample one (screenshots).
     private var shownError: String? {
@@ -55,35 +60,109 @@ struct ShellHome: View {
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()
         .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
+        // Room to scroll the last things to ask clear of the fade.
+        .contentMargins(.bottom, Self.fade, for: .scrollContent)
+        .onPreferenceChange(WelcomeFold.self) { room.fold = $0 }
         .background(Theme.pageBackground.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: Theme.Space.m) {
                 if pending == nil {
                     if let error = shownError {
-                        if AppStyle.current.usesBeautifulUI {
-                            ShellErrorNote(text: error).padding(.horizontal, Theme.Space.s)
-                        } else {
-                            Label(error, systemImage: Theme.Icon.error)
-                                .font(Theme.Font.caption)
-                                .foregroundStyle(Theme.danger)
-                                .padding(.horizontal, Theme.Space.l)
+                        Group {
+                            if AppStyle.current.usesBeautifulUI {
+                                ShellErrorNote(text: error).padding(.horizontal, Theme.Space.s)
+                            } else {
+                                Label(error, systemImage: Theme.Icon.error)
+                                    .font(Theme.Font.caption)
+                                    .foregroundStyle(Theme.danger)
+                                    .padding(.horizontal, Theme.Space.l)
+                            }
                         }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room.error = $0 }
                     }
-                    ShellNeedsYou(openInbox: openInbox).shellScaled()
+                    ShellNeedsYou(maxHeight: room.needs(withError: shownError != nil), openInbox: openInbox).shellScaled()
                 }
                 StarterComposer(disabled: pending != nil, shell: StarterComposer.ShellModes(launcher: $launcher, mode: $mode, effort: $effort),
                                 send: send)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room.composerAtRest($0, typeSize: typeSize) }
             }
             .padding(.horizontal, Theme.Space.m)
             .padding(.bottom, Theme.Space.s)
             .frame(maxWidth: ChatView.readableWidth)
             .frame(maxWidth: .infinity)
             // The welcome reaches down here: back what needs the user and the field with the page, or the cards read
-            // through them.
+            // through them; above them the welcome fades out (a hard edge cut the cards in two).
+            .background(alignment: .top) {
+                LinearGradient(colors: [Theme.pageBackground.opacity(0), Theme.pageBackground], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.fade)
+                    .offset(y: -Self.fade)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             .background(Theme.pageBackground.ignoresSafeArea(edges: .bottom))
         }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { room.pageAtRest($0) }
         .navigationTitle(model.persona.name)
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
+    }
+}
+
+/// How tall 需要你 may be on the new conversation page: what is left between the end of the welcome's first row of things
+/// to ask and the composer (2026-11-02, #283: on iPhone Duo's outer screen three rows and the composer took half of the
+/// screen and cut the suggestions in two). It shows as many rows as fit there, at least one. No limit until it is all
+/// measured.
+private struct NeedsRoom {
+    /// The page's height with the keyboard down: the most it has been at this width. The keyboard makes the whole page
+    /// shorter (not its safe area: `ignoresSafeArea(.keyboard)` does not get the height back), and typing must not take
+    /// rows away; turning the phone or the other screen of an iPhone Duo changes the width.
+    private(set) var page: CGFloat = 0
+    private var pageWidth: CGFloat = 0
+    /// Where the welcome's first row of things to ask ends, from the top of the scroll content (`WelcomeFold`).
+    var fold: CGFloat = 0
+    /// The composer at rest, one line: the least it has been at this text size (typing grows it, which must not take
+    /// rows away either).
+    private(set) var composer: CGFloat = 0
+    private var composerSize: DynamicTypeSize?
+    /// The start error over 需要你, while it shows.
+    var error: CGFloat = 0
+
+    mutating func pageAtRest(_ size: CGSize) {
+        guard size.height > 0 else { return }
+        page = size.width == pageWidth ? max(page, size.height) : size.height
+        pageWidth = size.width
+    }
+
+    mutating func composerAtRest(_ height: CGFloat, typeSize: DynamicTypeSize) {
+        guard height > 0 else { return }
+        composer = composerSize == typeSize && composer > 0 ? min(composer, height) : height
+        composerSize = typeSize
+    }
+
+    func needs(withError: Bool) -> CGFloat {
+        guard page > 0, fold > 0, composer > 0 else { return .infinity }
+        // Under it: the composer, the stack's spacing and bottom padding (ShellHome), the error and its spacing.
+        let below = composer + Theme.Space.m + Theme.Space.s + (withError ? error + Theme.Space.m : 0)
+        return page - AssistantTopBar.height - fold - ShellHome.fade - below
+    }
+}
+
+/// Offers its one subview exactly `height` (its own ideal height when that is unlimited) whatever the parent offers, and
+/// takes the subview's own size, so a `ViewThatFits` in it picks what fits in `height`. A `.frame(maxHeight:)` would itself
+/// grow to `height`; going by the parent's offer, the stack in `safeAreaInset` offers less while the keyboard is up and
+/// rows dropped as soon as the composer was focused.
+private struct AtMostHeight: Layout {
+    var height: CGFloat
+
+    private func offer(width: CGFloat?) -> ProposedViewSize {
+        ProposedViewSize(width: width, height: height.isFinite ? max(0, height) : nil)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.first?.sizeThatFits(offer(width: proposal.width)) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: offer(width: bounds.width))
     }
 }
 
@@ -108,12 +187,13 @@ private struct ShellErrorNote: View {
 }
 
 /// What needs the user, over the empty composer: the agents waiting on them (an answer, an approval, a plan), then the
-/// inbox's 需要你, newest first — three at most, then where the rest are. A tap opens it where it lives.
+/// inbox's 需要你, newest first — three at most, fewer when `maxHeight` has no room for them (one at least), then where
+/// the rest are. A tap opens it where it lives.
 struct ShellNeedsYou: View {
     @Environment(AppModel.self) private var model
+    /// How tall it may be (`NeedsRoom`).
+    var maxHeight: CGFloat = .infinity
     var openInbox: (InboxItem) -> Void
-
-    private static let shown = 3
 
     private enum Line: Identifiable {
         case agent(Interaction)
@@ -143,17 +223,40 @@ struct ShellNeedsYou: View {
     var body: some View {
         let all = lines
         if !all.isEmpty {
-            if AppStyle.current.usesBeautifulUI { beautiful(all) } else { plain(all) }
+            AtMostHeight(height: maxHeight) {
+                ViewThatFits(in: .vertical) {
+                    list(all, shown: 3)
+                    list(all, shown: 2)
+                    list(all, shown: 1)
+                }
+            }
         }
     }
 
+    /// Its own height whatever it is offered: with no room even for one row, the last one is drawn whole, not squeezed.
+    private func list(_ all: [Line], shown: Int) -> some View {
+        Group {
+            if AppStyle.current.usesBeautifulUI { beautiful(all, shown: shown) } else { plain(all, shown: shown) }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The line for what is not shown: how many are left and where they are. The inbox holds only its own: once agents
+    /// are among them it says 需要你, and with only agents left it opens Agents.
+    private func more(_ hidden: ArraySlice<Line>) -> (text: String, open: () -> Void) {
+        let agents = hidden.filter { if case .agent = $0 { true } else { false } }.count
+        let text = agents > 0 ? "还有 \(hidden.count) 件需要你" : "还有 \(hidden.count) 件在收件箱"
+        return (text, { [model] in model.selectedTab = agents == hidden.count ? .chats : .mail })
+    }
+
     /// BeautifulUI's list card: a heading with how many wait, then one row per thing (its mark, who, what, a chevron).
-    private func beautiful(_ all: [Line]) -> some View {
+    private func beautiful(_ all: [Line], shown: Int) -> some View {
         BUIListSection("需要你", count: all.count) {
-            ForEach(all.prefix(Self.shown)) { line in beautifulRow(line) }
-            if all.count > Self.shown {
-                Button { model.selectedTab = .mail } label: {
-                    BUIListRow("还有 \(all.count - Self.shown) 件在收件箱", accessory: .disclosure) {
+            ForEach(all.prefix(shown)) { line in beautifulRow(line) }
+            if all.count > shown {
+                let rest = more(all.dropFirst(shown))
+                Button(action: rest.open) {
+                    BUIListRow(rest.text, accessory: .disclosure) {
                         BUIIconTile(Theme.Icon.inbox, tint: Color.secondary)
                     }
                 }
@@ -204,17 +307,18 @@ struct ShellNeedsYou: View {
 
     private func oneLine(_ s: String) -> String { s.replacingOccurrences(of: "\n", with: " ") }
 
-    private func plain(_ all: [Line]) -> some View {
+    private func plain(_ all: [Line], shown: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(all.prefix(Self.shown)) { line in row(line) }
-            if all.count > Self.shown {
-                Button { model.selectedTab = .mail } label: {
+            ForEach(all.prefix(shown)) { line in row(line) }
+            if all.count > shown {
+                let rest = more(all.dropFirst(shown))
+                Button(action: rest.open) {
                     HStack(spacing: Theme.Space.m) {
                         Image(systemName: Theme.Icon.inbox)
                             .font(Theme.Font.heading)
                             .foregroundStyle(.secondary)
                             .scaledFrame(width: Theme.Size.icon)
-                        Text("还有 \(all.count - Self.shown) 件在收件箱").font(Theme.Font.body).foregroundStyle(.secondary).lineLimit(1)
+                        Text(rest.text).font(Theme.Font.body).foregroundStyle(.secondary).lineLimit(1)
                         Spacer(minLength: 0)
                     }
                     .modifier(LineFrame())

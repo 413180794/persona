@@ -11,11 +11,12 @@ final class AssistantWelcomeTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    @MainActor private func launch(oldLayout: Bool, newConversation: Bool) {
+    @MainActor private func launch(oldLayout: Bool, newConversation: Bool, needsYou: Bool = false) {
         app = XCUIApplication()
-        // `-showHomeState empty`: nothing needs the user, the case that was blank.
+        // `-showHomeState empty`: nothing needs the user, the case that was blank. Without it, the demo's agents waiting
+        // and inbox items to answer.
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", oldLayout ? "YES" : "NO", "-app.tab", "assistant",
-                               "-dev.openChat", "", "-showHomeState", "empty"]
+                               "-dev.openChat", ""] + (needsYou ? [] : ["-showHomeState", "empty"])
             // Otherwise the demo's main conversation (the last run may have left a new one open).
             + (newConversation ? ["-newAssistant", "YES"] : ["-openAssistant", "server/b2e4d6f8-0000-4000-8000-000000000001"])
         app.launchPinned()
@@ -58,6 +59,31 @@ final class AssistantWelcomeTests: XCTestCase {
     @MainActor func testTheOldLayoutsNewConversation() {
         launch(oldLayout: true, newConversation: true)
         assertWelcome("old")
+    }
+
+    /// What needs the user over the composer stays below the welcome's first row of things to ask: on a short screen
+    /// (iPhone Duo's outer one, an SE) fewer rows, the rest in 还有 N 件 (#283: three rows and the composer took half the
+    /// outer screen and cut the cards in two). Typing does not change how many.
+    @MainActor func testNeedsYouLeavesTheFirstRowToAsk() {
+        launch(oldLayout: false, newConversation: true, needsYou: true)
+        let needs = app.descendants(matching: .any)["shell-needs-you"].firstMatch
+        XCTAssertTrue(needs.waitForExistence(timeout: 15), "nothing needs the user over the composer")
+        sleep(1)
+        shot("needs you")
+        let ask = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "今天的安排")).firstMatch
+        XCTAssertTrue(ask.exists, "no things to ask")
+        XCTAssertLessThanOrEqual(ask.frame.maxY, needs.frame.minY, "需要你 covers the first row of things to ask")
+        let rows = { self.app.buttons.matching(NSPredicate(format: "identifier IN %@", ["shell-needs-agent", "shell-needs-inbox"])).count }
+        let shown = rows()
+        XCTAssertGreaterThan(shown, 0, "not one row of what needs the user")
+        let more = app.buttons["shell-needs-more"].firstMatch
+        let rest = more.exists ? more.label : nil
+        app.descendants(matching: .any)["shell-composer-field"].firstMatch.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard")
+        sleep(1)
+        shot("needs you while typing")
+        XCTAssertEqual(rows(), shown, "typing changed how many rows of 需要你 show")
+        XCTAssertEqual(more.exists ? more.label : nil, rest, "typing changed what 还有 N 件 says")
     }
 
     /// From a conversation, the sidebar's 新对话 opens the same welcome.

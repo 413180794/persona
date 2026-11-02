@@ -126,6 +126,16 @@
   新外壳的新对话页只画了输入框和「需要你」，旧布局的欢迎页（问候、能看到什么、可以问的事）没搬过来，没有待办时整页空白，一天后用户才发现。
   共用的内容抽成一个视图两边用（`AssistantWelcome`），再加一个 UI 测试按「元素在屏幕上、没被盖住」守住，不能只看编译通过。
   `safeAreaInset` 里的东西不带底色时，滚动内容长了会从它后面透出来（叠在「需要你」下面）：给这块垫上页面底色。
+- 固定在底部的一块（`safeAreaInset` 里的「需要你」+ 输入框）按普通 iPhone 的高度定行数，到了矮屏（iPhone Duo 外屏约 678pt、SE）会吃掉半屏，
+  把滚动内容拦腰截断（2026-11-02，#283）。按实际空间定：量出不该被盖住的那一行在滚动内容里的下沿（`WelcomeFold`，在内容自己的坐标系里量，
+  滚动不变）和页面高度（键盘不算），剩下的高度给底部那块；输入框按静止时的高度算，否则一聚焦、一打字行数就跳。键盘弹起时 iPhone 上是整个页面的 frame
+  变矮、不是安全区变了，背景加 `ignoresSafeArea(.keyboard)` 量不回原来的高度：取同一宽度下量到过的最大值（转屏、Duo 开合会改宽度）。
+  这种「打字时不变」的 UI 测试要在原来就显示多行的机型上跑（17 Pro）：Duo 外屏本来就只剩 1 行，掉无可掉，测试白过。垫了底色的那块上沿加一条渐隐，别硬切。
+- `ViewThatFits` 要在一个高度预算里挑：外面套 `.frame(maxHeight:)` 不行，它自己会撑到 maxHeight；用一个「只给这么高、自己按孩子的大小」的
+  `Layout`（`AtMostHeight`），而且不要再和父视图给的高度取小：键盘弹起时 `safeAreaInset` 里的 VStack 给的高度变小，一聚焦行数就掉。一个都放不下时 `ViewThatFits` 拿最后一个孩子、按给的（更小的）高度排，BeautifulUI 的列表行会被压扁：
+  每个孩子加 `.fixedSize(horizontal: false, vertical: true)`。
+- iPhone Duo 外屏（和内屏横放）的状态栏竖在侧边，安全区左右有 inset：按 `g.size.width` 画的背景（浮动顶栏下的雾）停在状态栏旁边，
+  深色下是一条硬边。铺满的背景宽度加上 `safeAreaInsets.leading + trailing`、往左挪 leading（`BarFog`）。
 
 - XCUITest 里，容器上的 `accessibilityIdentifier` 会盖掉它里面按钮自己的（侧边栏的 `assistant-sidebar` 让底部的「新对话」药丸查不到 `sidebar-new`）：
   按 label 找，再用 identifier 排除别处同名的按钮。

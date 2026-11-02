@@ -360,6 +360,7 @@ struct AssistantWelcome: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .modifier(WelcomeFold.Mark(first: s.title == suggestions.first?.title))
                     }
                 }
             } else {
@@ -379,10 +380,13 @@ struct AssistantWelcome: View {
                             .card(padding: 14)
                         }
                         .buttonStyle(.plain)
+                        // Two cards a row: the row ends where the taller of the first two does.
+                        .modifier(WelcomeFold.Mark(first: suggestions.prefix(2).contains { $0.title == s.title }))
                     }
                 }
             }
         }
+        .coordinateSpace(.named(WelcomeFold.space))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("assistant-welcome")
     }
@@ -416,6 +420,27 @@ struct AssistantWelcome: View {
         case 11..<13: "中午好"
         case 13..<18: "下午好"
         default: "晚上好"
+        }
+    }
+}
+
+/// Where the welcome's first row of things to ask ends, from the welcome's top (so scrolling does not move it): the
+/// shell keeps what needs the user over the composer below it (`ShellHome`).
+struct WelcomeFold: PreferenceKey {
+    static let space = "assistant-welcome"
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+
+    /// On every thing to ask; the ones in the first row say where they end.
+    struct Mark: ViewModifier {
+        var first: Bool
+
+        func body(content: Content) -> some View {
+            content.background {
+                GeometryReader { g in
+                    Color.clear.preference(key: WelcomeFold.self, value: first ? g.frame(in: .named(WelcomeFold.space)).maxY : 0)
+                }
+            }
         }
     }
 }

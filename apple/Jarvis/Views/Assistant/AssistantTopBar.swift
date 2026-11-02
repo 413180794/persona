@@ -87,14 +87,7 @@ struct AssistantTopBar: View {
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.xxs)
         .frame(height: Self.height, alignment: .top)
-        .background(alignment: .top) {
-            GeometryReader { g in
-                let solid = g.safeAreaInsets.top + Self.height - 6
-                TopFog(solidHeight: solid, fadeHeight: Self.fade)
-                    .frame(width: g.size.width, height: solid + Self.fade)
-                    .offset(y: -g.safeAreaInsets.top)
-            }
-        }
+        .background(alignment: .top) { BarFog(solid: Self.height - 6, fade: Self.fade) }
         .connectionDetails($showLink)
         .modifier(ShellBarAtRest()) // ShellMovingBar stands in while the strip slides
     }
@@ -122,14 +115,9 @@ struct AssistantTopBar: View {
         .padding(.top, Theme.Space.xxs)
         .frame(height: Self.height, alignment: .top)
         .background(alignment: .top) {
-            // From the top of the screen (under the status bar) to a little below the bar: solid down to the bar's
-            // bottom edge, fading out below it (fading under the pill let the messages show through the name).
-            GeometryReader { g in
-                let solid = g.safeAreaInsets.top + Self.height - 6
-                TopFog(solidHeight: solid, fadeHeight: Self.fade)
-                    .frame(width: g.size.width, height: solid + Self.fade)
-                    .offset(y: -g.safeAreaInsets.top)
-            }
+            // Solid down to the bar's bottom edge, fading out below it (fading under the pill let the messages show
+            // through the name).
+            BarFog(solid: Self.height - 6, fade: Self.fade)
         }
     }
 
@@ -354,6 +342,24 @@ extension AppModel {
         guard session.state == .working else { return .idle }
         let last = chats[key]?.items.last
         return last == nil || last?.role == "user" || last?.kind == .thinking ? .thinking : .working
+    }
+}
+
+/// `TopFog` behind a floating bar, as its background: from the top of the screen (under the status bar) down to `solid`
+/// below the safe area's top, then fading out over `fade`, and across the whole width. On iPhone Duo's outer screen
+/// the status bar stands at the side: a fog only as wide as the page stopped beside it, a hard edge (#283).
+struct BarFog: View {
+    var solid: CGFloat
+    var fade: CGFloat
+
+    var body: some View {
+        GeometryReader { g in
+            let inset = g.safeAreaInsets
+            let solidHeight = inset.top + solid
+            TopFog(solidHeight: solidHeight, fadeHeight: fade)
+                .frame(width: g.size.width + inset.leading + inset.trailing, height: solidHeight + fade)
+                .offset(x: -inset.leading, y: -inset.top)
+        }
     }
 }
 
