@@ -31,13 +31,33 @@ extension RuntimeCLI {
         let frame: CGRect
         let traits: UIAccessibilityTraits
 
-        /// On screen (not hit-tested: the shell keeps both pages in the tree, the one behind counts as visible).
-        var visible: Bool {
+        /// The frame is on screen, whether or not something covers it.
+        var onScreen: Bool {
             let screen = RuntimeCLI.window?.screen.bounds ?? .zero
             return !frame.isEmpty && frame.minX.isFinite && screen.intersects(frame)
         }
 
-        var json: Reply {
+        /// On screen, drawn, and what a touch at its middle reaches: no layer above it is hidden or transparent (the
+        /// shell keeps the page behind in the tree, drawn at opacity 0), and UIKit's hit test there, in the top-most
+        /// window that takes the touch, lands in its view or in a view around it (not in a menu or sheet over it).
+        /// SwiftUI's accessibility hit test cannot tell: it answers with the hidden page's elements.
+        var visible: Bool {
+            guard onScreen, let v = RuntimeCLI.view(of: object), let w = v.window else { return false }
+            var l: CALayer? = v.layer
+            while let cur = l {
+                if cur.isHidden || cur.opacity < 0.01 { return false }
+                l = cur.superlayer
+            }
+            let screen = w.screen.bounds
+            let mid = CGPoint(x: frame.intersection(screen).midX, y: frame.intersection(screen).midY)
+            for top in RuntimeCLI.windows.sorted(by: { $0.windowLevel > $1.windowLevel }) where !top.isHidden {
+                guard let hit = top.hitTest(top.convert(mid, from: nil), with: nil) else { continue }
+                return hit.isDescendant(of: v) || v.isDescendant(of: hit)
+            }
+            return false
+        }
+
+        var traitNames: [String] {
             var t: [String] = []
             if traits.contains(.button) { t.append("button") }
             if traits.contains(.selected) { t.append("selected") }
@@ -46,10 +66,27 @@ extension RuntimeCLI {
             if traits.contains(.notEnabled) { t.append("disabled") }
             if traits.contains(.searchField) { t.append("search") }
             if traits.contains(.image) { t.append("image") }
+            return t
+        }
+
+        var json: Reply {
+            let t = traitNames
             // A frame can be NaN or infinite (an element mid-layout): 0, never a value JSON cannot hold.
             let f = [frame.minX, frame.minY, frame.width, frame.height].map { $0.isFinite ? (Double($0) * 10).rounded() / 10 : 0 }
-            return ["id": id, "label": label, "value": value, "traits": t, "visible": visible, "frame": f]
+            return ["id": id, "label": label, "value": value, "traits": t, "visible": visible, "onScreen": onScreen, "frame": f]
         }
+    }
+
+    /// The view an accessibility element is drawn in: itself, or the first view up its containers.
+    static func view(of o: NSObject) -> UIView? {
+        let container = Selector(("accessibilityContainer"))
+        var cur: NSObject? = o
+        for _ in 0..<40 {
+            guard let c = cur else { return nil }
+            if let v = c as? UIView { return v }
+            cur = c.responds(to: container) ? c.perform(container)?.takeUnretainedValue() as? NSObject : nil
+        }
+        return nil
     }
 
     /// Every accessibility element of the app's windows, top-most window first (menus, sheets), in reading order.
@@ -80,7 +117,7 @@ extension RuntimeCLI {
     }
 
     /// Filters: `id` (exact), `idPrefix`, `label` (exact), `labelContains`, `labelPrefix`, `trait` ("button"…),
-    /// `visibleOnly`.
+    /// `visibleOnly` (a touch reaches it), `onScreenOnly` (its frame is on screen).
     static func elements(matching a: Args) -> [Element] {
         allElements().filter { e in
             if let id = a["id"] as? String, e.id != id { return false }
@@ -88,17 +125,19 @@ extension RuntimeCLI {
             if let l = a["label"] as? String, e.label != l { return false }
             if let l = a["labelContains"] as? String, !e.label.contains(l) { return false }
             if let l = a["labelPrefix"] as? String, !e.label.hasPrefix(l) { return false }
-            if let t = a["trait"] as? String, !(e.json["traits"] as? [String] ?? []).contains(t) { return false }
+            if let t = a["trait"] as? String, !e.traitNames.contains(t) { return false }
+            if a["onScreenOnly"] as? Bool == true, !e.onScreen { return false }
             if a["visibleOnly"] as? Bool == true, !e.visible { return false }
             return true
         }
     }
 
-    /// The `index`-th match, or without `index` the first one on screen (then the first at all).
+    /// The `index`-th match, or without `index` the first one a touch reaches (then the first on screen, then the
+    /// first at all).
     static func pick(_ a: Args) -> Element? {
         let all = elements(matching: a)
         if let i = a["index"] as? Int { return i >= 0 && i < all.count ? all[i] : nil }
-        return all.first(where: \.visible) ?? all.first
+        return all.first(where: \.visible) ?? all.first(where: \.onScreen) ?? all.first
     }
 
     private static func find(_ a: Args) -> Reply {

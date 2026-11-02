@@ -34,7 +34,7 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 | `freeze` | `on`（默认 true，false 恢复）、`reduceMotion`（默认 true）、`layers`（strip / pause / none，默认 strip） | `frozen`、`reduceMotion`、`paused`；见「一直在动的画面」 |
 | `online` | `timeout`（15 s） | `nudged`（是否主动重连过）；超时报错并带当前状态 |
 | `reset` | `coldChats`（内存里不留对话，和启动后一样从磁盘缓存再到 hub 重新加载）、`dropChatCache`（磁盘缓存也清掉，= `-openChatsFresh YES`） | 新的界面树，路由不动，和刚启动一样。回答同 `state` |
-| `tree` | 元素过滤（下面） | `elements`：每个无障碍元素的 `id`（accessibilityIdentifier）、`label`、`value`、`traits`、`frame`（屏幕坐标，pt）、`visible` |
+| `tree` | 元素过滤（下面） | `elements`：每个无障碍元素的 `id`（accessibilityIdentifier）、`label`、`value`、`traits`、`frame`（屏幕坐标，pt）、`visible`（点得到）、`onScreen`（frame 在屏幕里） |
 | `find` | 元素过滤、`index` | `count`、`element`（没有 `index` 时取第一个在屏幕上的） |
 | `wait` | 元素过滤、`gone`、`timeout`（10 s） | 每 100 ms 查一次，等到有（或没了）；超时报错 |
 | `perf` | | `counts`：各视图 body 次数、事件数、主线程耗时（要 `-perfCounts YES` 启动，`LiveUpdateTests` 读的同一份） |
@@ -122,11 +122,15 @@ scripts/jarvisctl.py tree --id-prefix agents. --visible
 ```
 
 元素过滤：`--id`（全等）、`--id-prefix`、`--label`（全等）、`--label-contains`、`--label-prefix`、`--trait`（button / text /
-header / selected / search / image / disabled）、`--visible`、`--index`。
+header / selected / search / image / disabled）、`--visible`（点得到）、`--on-screen`（frame 在屏幕里，被盖住也算）、`--index`
+（不给就取第一个点得到的，没有再取第一个在屏幕里的）。
 
 - 行的文字是一整个按钮的 label（“完成未看、platform 任务 4、12 分钟前、…”），不像 XCUITest 能再取里面的 staticText：
   按 `--label-contains "、名字、"` 找。
-- `visible` 只看 frame 在不在屏幕里：外壳把两页都挂在树里，被盖住的那页也算可见。
+- `visible` 是“手指点在它中间能点到它”：它上面的图层没有隐藏或透明（外壳把藏起来的那页留在树里、画成透明），并且 UIKit 在那一点的命中测试
+  （从最上层的窗口起）落在它的视图里或它外面一层，不在盖住它的菜单、弹层里。外壳两页都有的 `shell-agents`，`find` 拿到的是点得到的那个。
+  SwiftUI 的无障碍命中测试（`accessibilityHitTest`）分不出来：在 Agents 页上点行，它答的是藏起来的助手页的元素。
+  只要 frame 在屏幕里的用 `onScreen` / `--on-screen`（以前的 `visible`）。
 - frame 可能是 NaN（布局中的元素），回答里写成 0。
 
 ## 动作和截图

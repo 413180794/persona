@@ -31,7 +31,8 @@
   jarvisctl.py call <command> [key=value …]                                   any command the app knows
 
 Element filters: --id, --id-prefix, --label, --label-contains, --label-prefix, --trait button|text|header|selected…,
---visible, --index n (else the first match on screen). The simulator is $JARVISCTL_UDID (or --udid, default "booted"); the app is $JARVISCTL_BUNDLE / $JARVIS_BUNDLE_ID.
+--visible (a touch at its middle reaches it), --on-screen (its frame is on screen, covered or not), --index n (else the
+first match a touch reaches). The simulator is $JARVISCTL_UDID (or --udid, default "booted"); the app is $JARVISCTL_BUNDLE / $JARVIS_BUNDLE_ID.
 `launch` picks a one-time token and keeps it, with the port, in ~/.cache/jarvisctl/<udid>.json for the later
 commands. Standard library only; scripts can `from jarvisctl import Ctl`.
 """
@@ -288,7 +289,8 @@ class Ctl:
 def filters(a):
     """The element filters of the command line, as the app's commands take them."""
     f = {"id": a.id, "idPrefix": a.id_prefix, "label": a.label, "labelContains": a.label_contains,
-         "labelPrefix": a.label_prefix, "trait": a.trait, "index": a.index, "visibleOnly": a.visible or None}
+         "labelPrefix": a.label_prefix, "trait": a.trait, "index": a.index, "visibleOnly": a.visible or None,
+         "onScreenOnly": a.on_screen or None}
     return {k: v for k, v in f.items() if v is not None}
 
 
@@ -343,6 +345,7 @@ def main(argv):
         p.add_argument(f)
     p.add_argument("--index", type=int)
     p.add_argument("--visible", action="store_true")
+    p.add_argument("--on-screen", action="store_true")
     p.add_argument("--ignore-id", action="append", default=[])
     p.add_argument("--ignore-label-contains", action="append", default=[])
     p.add_argument("--ignore-rect", action="append", default=[])
