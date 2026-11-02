@@ -244,4 +244,5 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | --- | --- |
 | `docs/plan-orca-support.md` | 计划：支持 Orca（进行中）：先把宿主（herdr、Orca）和 Agent 分开、抽出宿主接口，再接 Orca 来源；每一步的范围、Orca 能提供什么、风险 |
 | `docs/plan-connectors.md` | 计划：连接器（先接 GitHub 和 iMessage）：能力可选的 Connector 接口、内置 / 外部进程 / node 本地三种形态、飞书邮件的迁移步骤、隐私和拍板项 |
+| `docs/plan-telegram.md` | 计划：Telegram 连接器（用户自己的账号，第一版只读）：gotd/td 选型、分步登录和加密存会话、收哪些会话和增量、收件箱、只读工具、设置的开关 / 删除 / 退出，要用户定的 |
 | `docs/lessons/` | 经验（踩坑）按主题分文件：协作、Agent、助手、服务端、transcript、飞书邮件、终端、iOS、macOS、测试，索引 `docs/lessons/README.md` |
