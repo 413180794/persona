@@ -59,7 +59,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 人和 Agent 都按这个流程做。所有 Agent 共用同一个 GitHub 账号，assignee 分不出是谁，**以 issue 里最新的「认领」评论为准**。
 
 1. **先找 issue**：`gh issue list --state all --search "<关键词>"`（连已关闭的一起看，别重复做已经做完的）。
-2. **没有就建**：`gh issue create`，写清楚要做什么、为什么；需求加 `enhancement` 标签，fix 加 `bug`。
+2. **已有就直接认领，没有才建**：查到同样意思的 issue（不管谁建的）就在它上面认领（第 3 步；别人认领着的按第 4 步），不另建一个；
+   确实没有才 `gh issue create`，写清楚要做什么、为什么；需求加 `enhancement` 标签，fix 加 `bug`。
 3. **动手前认领**：`gh issue edit <号> --add-assignee @me`，再评论 `认领：<机器 id> / <会话或分支>，<时间>`。
    机器 id 用配置里给机器起的 id，不写主机名。
 4. **已经被别人认领**（最新的认领评论不是你）：
