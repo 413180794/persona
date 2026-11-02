@@ -58,13 +58,7 @@ struct LarkChatView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if pager.hasOlder {
-                    Button { Task { await loadOlder() } } label: {
-                        Group { if loadingOlder { ProgressView().controlSize(.small) } else { Text("加载更早的消息").lineLimit(1) } }
-                            .font(Theme.Font.labelMedium)
-                            .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(LarkColor.blue)
+                    LarkLoadOlderButton(title: "加载更早的消息", loading: loadingOlder) { Task { await loadOlder() } }
                 }
                 if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, Theme.Space.s) }
                 ForEach(Array(pager.messages.enumerated()), id: \.element.id) { i, m in
@@ -485,6 +479,23 @@ struct LarkChatView: View {
     }
 }
 
+/// 加载更早的…: the older page of a chat or thread, a spinner while it comes.
+struct LarkLoadOlderButton: View {
+    var title: String
+    var loading: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group { if loading { ProgressView().controlSize(.small) } else { Text(title).lineLimit(1) } }
+                .font(Theme.Font.labelMedium)
+                .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(LarkColor.blue)
+    }
+}
+
 /// Feishu's 以下为新消息 line above the first unread message.
 struct LarkNewMessagesDivider: View {
     var body: some View {
@@ -718,60 +729,6 @@ extension LarkMessage {
         }
         m.reactions = list
         return (m, false)
-    }
-}
-
-/// A thread: its first message, then every reply.
-struct LarkThreadView: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    var root: LarkMessage
-    var isGroup = true
-    var feedID: String? = nil
-    @State private var person: LarkPersonRef?
-    @State private var replies: [LarkMessage] = []
-    @State private var loading = true
-    @State private var error: String?
-    @State private var fileRequest: (url: String, name: String)?
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    LarkMessageRow(message: root, grouped: false, isGroup: isGroup, feedID: feedID, inThread: true)
-                    HStack {
-                        Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(Theme.Font.labelMedium).foregroundStyle(.secondary)
-                        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: Theme.Size.line)
-                    }
-                    .padding(.vertical, Theme.Space.m)
-                    if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
-                    ForEach(Array(replies.enumerated()), id: \.element.id) { i, m in
-                        let prev = i > 0 ? replies[i - 1] : nil
-                        LarkMessageRow(message: m, grouped: LarkChatView.continues(m, after: prev), isGroup: isGroup, feedID: feedID, inThread: true)
-                            .padding(.top, LarkChatView.gap(grouped: LarkChatView.continues(m, after: prev)))
-                    }
-                }
-                .padding(Theme.Space.m)
-            }
-            .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
-            .environment(\.larkOpenProfile, { person = $0 })
-            .environment(\.larkReact, { m, key in
-                guard let i = replies.firstIndex(where: { $0.id == m.id }) else { return }
-                let (next, remove) = m.togglingReaction(key, me: "我")
-                replies[i] = next
-                Task { do { try await model.api?.larkReact(m.id, key: key, remove: remove) } catch { model.show(error) } }
-            })
-            .modifier(LarkFileOpener(request: $fileRequest))
-            .sheet(item: $person) { LarkProfileView(person: $0) }
-            .navigationTitle("话题")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
-            .task {
-                defer { loading = false }
-                guard let api = model.api else { return }
-                do { replies = try await api.larkThread(root.id).messages.filter { $0.id != root.id } } catch { self.error = error.shown }
-            }
-        }
     }
 }
 

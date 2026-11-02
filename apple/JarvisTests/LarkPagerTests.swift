@@ -112,4 +112,24 @@ import Testing
         p.openRead(at: "11", readPosition: "9")
         #expect(p.readCursor == "12")
     }
+
+    @Test func aThreadsOlderPageGoesOnTopWithoutRepeatsOrItsRoot() {
+        var p = LarkPager()
+        p.replace(with: page([60, 61, 62], older: true, olderCursor: "60").replies(of: "m1"))
+        #expect(p.hasOlder && p.olderRequest == "60")
+        // The oldest page starts with the root and overlaps what is loaded.
+        p.prepend(page([1, 58, 59, 60], older: false, olderCursor: "1").replies(of: "m1"))
+        #expect(p.messages.map(\.position) == ["58", "59", "60", "61", "62"])
+        #expect(!p.hasOlder, "no more pages once the hub says so")
+    }
+
+    @Test func aThreadRefreshAddsNewRepliesOnce() {
+        var p = LarkPager()
+        p.replace(with: page([1, 10, 11]).replies(of: "m1"))
+        let fresh = p.refresh(with: page([1, 10, 11, 12]).replies(of: "m1"))
+        #expect(fresh.map(\.position) == ["12"], "the root is not a new reply")
+        p.add(fresh)
+        p.add(p.refresh(with: page([11, 12]).replies(of: "m1")))
+        #expect(p.messages.map(\.position) == ["10", "11", "12"])
+    }
 }
