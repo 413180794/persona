@@ -351,8 +351,47 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 123 条 [x]、99 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 125 条 [x]、97 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
+
+### 真窗口验收怎么分工（2026-11-03 起）
+
+真窗口验收拆成两个角色。
+
+- **开发会话**（写代码的 Agent），负责：
+  - 读 issue、改代码；
+  - 准备被测窗口：编译，起隔离的验收副本和假 hub；
+  - 写验收单；
+  - 复核执行者报「不通过」「存疑」的项：看它交回的截图，必要时等它跑完再亲自看一次。
+- **执行者**（另一个更便宜的模型），负责：用 cua 操作、截图、对照预期，按项交回报告和证据截图。
+  - 它经本机配置的无头 Agent 通道调用，在独立的上下文里跑，开发会话只读报告。
+  - 通道、命令和参数是本机的事，写在 `CLAUDE.local.md`。
+
+为什么这样分：#403 一晚上的 token 约七成花在 cua 操作、截图和读截图上，而且这些全堆在开发会话越来越大的上下文里，每一步都要重读一遍。
+
+**执行者跑的时候**：
+- 开发会话不碰界面，同一时间只能有一个 Agent 用 cua；
+- 一批要几分钟，放后台跑，项目多就拆成几批。
+
+**开发会话自己看界面时**也要省 token：
+- 读文字用带 `query` 的无障碍树；
+- 截图只看缩小或裁下来的那一块；
+- 能离屏截图的不上真窗口。
+
+**验收单的写法**：执行者只看得到验收单，看不到开发会话的上下文。
+- 给出被测窗口的 pid 和 window_id。
+- 写清边界：只碰这个窗口和它弹出的菜单；不点窗口外的墙纸（会触发「显示桌面」）；除非某项写明，不用前台投递；不改文件。
+- 预期写成能观察到的事实，比如出现了哪个按钮、哪段文字。不写「看起来正常」。
+- 有条件才出现的东西写明条件。比如头像菜单里，「中断」只在对话工作中出现，「连接详情」只在连接不在线时出现。
+- 辅助功能树和截图对不上时，以截图里画出来的为准。
+- 每项存一张能证明这一项结论那一刻的截图（菜单开着、状态已经变了）。
+- 报告每项一行：编号、通过 / 不通过 / 存疑、证据。
+
+**切换前的对照**（2026-11-03）：拿 3 项已有结论的让执行者跑：建议胶囊（通过）、消息右键操作条（不通过，#501）、头像菜单（通过）。
+- 第一遍：1 项一致，2 项报「存疑」，证据都对。
+  - 操作条那项：辅助功能树里有「复制 / 选择 / 引用 / 分享」，但画面上没有。
+  - 头像菜单那项：验收单把有条件的菜单项写成了必有。
+- 按上面的写法改了验收单，第二遍 3 项全部一致。执行者没有碰副本以外的窗口。
 
 
 ## 0. App shell / navigation
@@ -378,14 +417,14 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）截图：主对话打开，侧栏置顶「主对话」、最近里有几条分支对话；逻辑是共用的 AppModel。
 - [x] Home: greeting + available devices + 6 suggestions; launcher/model chip list; StarterComposer (or BeautifulStarterComposer) with photos — Views/Assistant/AssistantView.swift (AssistantHome, StarterComposer, StarterModelChip, AssistantToolsRow)
   - Mac 截图看过（`-tab assistant -assistant.current ""`）：问候、在线机器 + 这台 Mac、6 个建议、启动器 / 权限 / 思考 chip、输入框；图片走拖放 / 粘贴（`MacComposerFiles`）。
-- [ ] First message shows bubble + 「正在准备」 immediately, session starts in background; warm assistant — AssistantView.swift, AppModel.warmAssistant
-  - 要到 Mac 前看：Jarvis › 新对话里打一句按 ⏎，气泡和「正在准备」应立刻出现。没有能自动发第一句的 DEBUG 开关。
+- [x] First message shows bubble + 「正在准备」 immediately, session starts in background; warm assistant — AssistantView.swift, AppModel.warmAssistant
+  - Mac（2026-11-03 Mac mini 真窗口，#536 修过后）：打开新对话页时假 hub 收到 `POST /api/v1/assistant/warm`（预热）；mock 加 `MOCK_ASSISTANT_START_SECONDS=2` 时，发出后先是气泡和「Jarvis 正在准备…」；POST 回来后对话页一直是这句（`MOCK_ASSISTANT_TRANSCRIPT_SECONDS=3`，transcript 晚到也不出「还没有消息」、不重复），侧栏的新对话排「最近」第一、选中、带转圈。之前发出后是空的「还没有消息」：mock 不像 hub，App 在真 hub 上也有这个空档，见 #511。
 - [x] Thinking hidden; tool calls folded into 「工具 N · 电脑、iPhone…」 — Views/Chat/ChatLines.swift, ChatView.swift
   - Mac（2026-11-01 核对）深浅色截图：没有思考块，工具调用折成回复上方的「工具 3 · 1 分 ›」。
 - [x] Floating top bar with fog, center persona dot + name capsule; connection state replaces name — Views/Assistant/AssistantTopBar.swift (AssistantTopBar, TopFog)
   - Mac（2026-11-01 核对）截图：顶栏浮在对话上、带雾，中间是形象和「Jarvis」胶囊；`-showConnection connecting` 时胶囊换成「连接中…」。
-- [ ] Avatar menu: 知识库, 详细信息 (profile), 回到主对话, 拷贝目录 / 拷贝信息 / 拷贝会话 ID (「✓ 已拷贝」 3s), 启动器 submenu (switch launcher, applies via --resume next message), 会话信息, 中断, 连接详情 — AssistantTopBar.swift
-  - 要到 Mac 前看：点头像逐项点一遍：拷贝类显示「✓ 已拷贝」3 秒，启动器子菜单能切换。离屏打不开菜单，只截到其中「会话信息」的 sheet（`-showInfo`）。
+- [x] Avatar menu: 知识库, 详细信息 (profile), 回到主对话, 拷贝目录 / 拷贝信息 / 拷贝会话 ID (「✓ 已拷贝」 3s), 启动器 submenu (switch launcher, applies via --resume next message), 会话信息, 中断, 连接详情 — AssistantTopBar.swift
+  - Mac（2026-11-02 Mac mini 真窗口逐项点过；11-03 执行验收的 Agent 又跑了一遍、截图复核）：标题「Jarvis · 启动器」，知识库、详细信息（档案页）、回到主对话（只在侧对话里有，点了回到主对话）、拷贝目录 / 拷贝信息（多行，含启动器）/ 拷贝会话 ID（名字胶囊「✓ 已拷贝会话 ID」）、启动器 › 下一条消息起使用（切换后菜单显示新的启动器）、会话信息（运行 / 用量 / 位置 sheet）。「中断」只在对话工作中、「连接详情」只在连接不在线时出现（`AssistantTopBar` 里的条件），空闲、在线的主对话上没有，是对的。
 - [x] Left button: history sidebar; right button: new chat (disabled on new-chat page) — AssistantTopBar.swift
   - Mac（2026-11-01 核对）深色截图：左边侧栏开关、右边新对话按钮都在（浅色下玻璃按钮只剩边框）；新对话页上按钮置灰没截，和 iOS 同一份代码。
 - [ ] Sidebar: search, new chat, Jarvis card (online/offline + machine → profile), 定时任务 / 知识库 tiles, 置顶 (main pinned, long-press pin, `assistant.pinned`), day groups 今天/昨天/最近7天/更早 (8 + 查看全部), row = title + preview + time + status dot (need-you red / unread blue / working spinner), long-press 拷贝会话 ID / 结束 / 置顶, 设置 row in drawer — Views/Assistant/AssistantSidebar.swift

@@ -163,6 +163,9 @@
 - cua 在这个 App 上：工具栏里的菜单按钮、sheet 窗口在后台用辅助功能点不了（AXPress 报 -25202，sheet 的树读不到），要 `bring_to_front` 后用桌面坐标点；
   `delivery_mode: "foreground"` 点完会切回原来的前台 App，刚弹出的菜单、浮层跟着关掉。sheet 用前台 Esc 关；消息操作条要真的右键（`rightMouseDown`），AXShowMenu 不行。
   触控板左右滑（List 的 swipeActions）cua 模拟不了：它只能发滚轮事件，不带手势阶段。
+- cua 的坐标会按最近一次整屏截图的缩放换算：同一个会话里拍过一张缩小的整屏图（`max_image_dimension` 1280，屏幕 1920 宽），
+  之后按原始坐标点就被放大了 1.5 倍，点到了墙纸。点墙纸会触发 macOS 的「显示桌面」，把所有窗口推到屏幕边上，再点一次墙纸才回来。
+  整屏截图一律用原始分辨率（`max_image_dimension: 0`）；用坐标点之前，先确认它落在自己的窗口或弹出的菜单里。
 - 「只在 mock 下坏」先拿体验模式对照，再去看 hub 的代码到底怎么走（#511）：两个假 hub 都可能不像 hub，而且可能一个比 hub 好、一个比 hub 坏。
   新建 Jarvis 对话：mock 原来根本不写第一句、不推会话列表（App 显示「还没有消息」、新对话不选中）；DemoHub 立刻写好第一句（一切正常）；
   hub 是先推会话列表，node 对还没写 transcript 的会话回空的 items，等 claude 写下第一行（watch 每 0.5 秒看一次）才推。所以真 hub 上也会闪一下「还没有消息」，
