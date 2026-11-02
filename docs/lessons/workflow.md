@@ -41,3 +41,6 @@
   连上后先看 `/api/v1/health` 的 `version` 是不是自己那份。
 - 远程 `pkill -f <模式>` 会匹配到执行它的那条 ssh 命令本身（命令行里也有这个模式），把自己的会话杀掉、后面的清理不跑：用 `pgrep` 拿到 pid 再 kill，或者用不会出现在命令行里的写法。
 - 远程用 `nohup … &` 起的后台进程会让 ssh 一直不返回（继承了会话），工具调用就卡到超时：重定向输出之外再加 `setsid`，或者起完单独一条 ssh 去查。
+- 提交前用 `git var GIT_AUTHOR_IDENT` 确认作者是 GitHub 身份（比如 noreply 邮箱，仓库级 `git config --local` 设）：全局 git 身份如果是公司的真名和邮箱，
+  它会留在 PR 的提交记录里（`refs/pull/<n>/head`，PR 合并后改不掉、删不了，只有 GitHub 支持能清），
+  而且 squash 合并时 GitHub 会把和合并人不同的作者写成 `Co-authored-by` 带进 master 的提交信息（2026-11-02）。worktree 共用仓库级配置。
