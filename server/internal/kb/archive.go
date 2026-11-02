@@ -312,9 +312,17 @@ type Backfiller interface {
 // at most chats per run, pages per chat. The new lines are only archived (searchable), not compressed again.
 func (e *Engine) Backfill(ctx context.Context, chats, pages int) (int, error) {
 	limit := e.textCutoff()
+	// Only chats of a source that can go back (not mail's, not a connector's archive): the others would take the
+	// run's places and never be backfilled.
+	backfills := map[string]bool{}
+	for _, s := range e.Sources {
+		if _, ok := s.(Backfiller); ok {
+			backfills[s.Name()] = true
+		}
+	}
 	var todo []*Chat
 	for _, c := range e.Store.Chats() {
-		if !c.BackfillDone && c.Source != "mail" {
+		if !c.BackfillDone && backfills[c.Source] {
 			todo = append(todo, c)
 		}
 	}

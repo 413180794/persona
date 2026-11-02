@@ -25,7 +25,7 @@ type KnownProject struct {
 // KBCompressInput is a chat's summary so far and its new messages (kb/compress_input).
 type KBCompressInput struct {
 	Name      string
-	Kind      string // dm | group | bot | mail | moment
+	Kind      string // dm | group | bot | mail | moment | pr | issue
 	Automated bool   // mail from a notification / marketing address
 	Projects  []KnownProject
 	Tags      []string

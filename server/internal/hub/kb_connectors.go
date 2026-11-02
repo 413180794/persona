@@ -1,0 +1,93 @@
+package hub
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/chyroc/jarvis/server/internal/kb"
+)
+
+// Connectors' conversations in the knowledge base (connector.Archive): each one's cursor is a file in the data dir,
+// its batches are ingested like mail's, as chats "<id>-<chat id>"; compressing, tagging and projects follow as for
+// any chat.
+
+const (
+	kbConnectorPoll  = 10 * time.Minute // how often a connector is asked for changes
+	kbConnectorPages = 3                // calls per connector and run
+	kbConnectorLimit = 20               // conversations per call
+)
+
+// kbConnectorSource names a connector's chats for Ingest; it has nothing to download.
+type kbConnectorSource struct{ id string }
+
+func (s kbConnectorSource) Name() string                                      { return s.id }
+func (kbConnectorSource) Chats(context.Context, int) ([]kb.SourceChat, error) { return nil, nil }
+func (kbConnectorSource) Download(context.Context, string, string) error {
+	return errors.New("no attachments")
+}
+func (kbConnectorSource) Messages(context.Context, kb.SourceChat, string, int) ([]kb.SourceMessage, string, bool, error) {
+	return nil, "", false, nil
+}
+
+// kbConnectors archives what moved in every signed-in connector with an archive.
+func (h *Hub) kbConnectors(ctx context.Context) {
+	e := h.kb.eng
+	for _, c := range h.connectors.All() {
+		a, ok := c.(connector.Archive)
+		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK || ctx.Err() != nil {
+			continue
+		}
+		n, err := archiveConnector(ctx, e, c.ID(), a)
+		if err != nil {
+			h.logf("kb: %s: %v", c.ID(), err)
+		}
+		if n > 0 {
+			h.logf("kb: %s: %d new line(s)", c.ID(), n)
+		}
+	}
+}
+
+type connectorCursor struct {
+	Cursor string `json:"cursor"`
+}
+
+// archiveConnector reads a connector's changes from its cursor, ingests them and moves the cursor on (only past
+// what was ingested: a failure reads the same again next time).
+func archiveConnector(ctx context.Context, e *kb.Engine, id string, a connector.Archive) (int, error) {
+	file := filepath.Join(e.Store.Dir, "cursors", id+".json")
+	var cur connectorCursor
+	if raw, err := os.ReadFile(file); err == nil {
+		_ = json.Unmarshal(raw, &cur)
+	}
+	total := 0
+	for page := 0; page < kbConnectorPages; page++ {
+		batches, next, more, err := a.Changes(ctx, cur.Cursor, kbConnectorLimit)
+		if err != nil {
+			return total, err
+		}
+		for _, b := range batches {
+			n, err := e.Ingest(ctx, kbConnectorSource{id}, b.Chat, b.Messages)
+			if err != nil {
+				return total, err
+			}
+			total += n
+		}
+		cur.Cursor = next
+		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+			return total, err
+		}
+		raw, _ := json.Marshal(cur)
+		if err := os.WriteFile(file, raw, 0o600); err != nil {
+			return total, err
+		}
+		if !more {
+			break
+		}
+	}
+	return total, nil
+}

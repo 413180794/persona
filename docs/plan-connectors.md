@@ -478,7 +478,7 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 | G1 ✓ | GitHub（#421）：`credential.gh_token` RPC、`from_machine` 取 token（内存）、~~粘贴备选~~（先不做，等真有人不用 gh 时再加）、状态、`/api/v1/connectors`、设置页的 GitHub 行 | 设置页显示「来自 <机器> 的 gh 登录 · 账号」；那台机器离线时用内存里的、hub 重启后离线报「未授权（<机器> 离线）」、连上自动恢复；401 重新取一次；旧 node 报太旧；token 不出现在数据库、日志、响应、助手环境里（grep 验证）；粘贴假 token 报错；设置页深浅色截图 |
 | G2 ✓ | 只读工具 `github_search/read/diff/checks` | golden；对 mock GitHub（合成 JSON）的单元测试；用户的真 token 在 hub 上读一个自己的 PR（只看结果条数和截断是否生效） |
 | G3 ✓ | 通知轮询 + 收件箱（四种情形）+ `?sources=all` + App 的通用行和详情 | 合成通知的单元测试覆盖每种 `reason`、并入 / 另开、`done_by`；304 和 `X-Poll-Interval` 被遵守（测试里的假服务器计数）；旧 App 列表不变；新 App 截图 |
-| G4 | 知识库：PR / issue 会话、`remotes` 对项目、链接成条目 | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
+| G4 ✓ | 知识库（#476）：PR / issue 会话（`connector.Archive`，游标在 `cursors/<id>.json`）；`remotes` 对项目、链接成条目另做（G4b） | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
 | G5 | 写：`github_comment`、`github_review` 过闸门；收件箱「发送」= 评论 | 闸门测试（confirm / allow / deny）；用户在自己的测试仓库实测一次评论（卡片截图里只有合成内容的测试仓库） |
 | I0 | 在选定的 Mac 上确认权限和规模（只读行数，已完成一部分） | 报告里有：哪台、权限是否够、消息量 |
 | I1 | node：`connector.list/changes`、typedstream 解码、ROWID 游标、kqueue（#449 的第一步先做了 `connector.list` / `connector.chats` / `connector.older`、typedstream、Mac 通讯录对名字，给 App 的会话列表和消息查看用；`changes`、kqueue 等进知识库时再做） | 合成 `chat.db` + 合成 blob 的单元测试（包括解不出来的）；旧 hub ↔ 新 node、新 hub ↔ 旧 node 都不报错 |

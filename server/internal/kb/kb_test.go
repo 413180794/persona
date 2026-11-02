@@ -357,7 +357,13 @@ func TestBackfill(t *testing.T) {
 	if _, err := e.Archive(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	n, err := e.Backfill(context.Background(), 5, 1)
+	// More relevant chats of a source that cannot go back (a connector's archive) do not take the run's one place.
+	for _, id := range []string{"github-a", "github-b"} {
+		if err := st.PutChat(&Chat{ID: id, Source: "github", SourceID: id, Kind: "pr", Relevance: 9}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, err := e.Backfill(context.Background(), 1, 1)
 	if err != nil || n != 3 {
 		t.Fatalf("backfilled %d %v", n, err)
 	}

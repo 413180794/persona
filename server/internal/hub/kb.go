@@ -137,7 +137,7 @@ func (h *Hub) rezoneKB(st *kb.Store) {
 
 func (h *Hub) kbLoop(ctx context.Context) {
 	e := h.kb.eng
-	var lastMail, lastItems, lastPrune, lastLinks time.Time
+	var lastMail, lastItems, lastPrune, lastLinks, lastConnectors time.Time
 	t := time.NewTicker(kbPoll)
 	defer t.Stop()
 	for {
@@ -150,6 +150,10 @@ func (h *Hub) kbLoop(ctx context.Context) {
 		if h.mail != nil && time.Since(lastMail) >= kbMailPoll {
 			lastMail = time.Now()
 			h.kbMail(ctx)
+		}
+		if time.Since(lastConnectors) >= kbConnectorPoll {
+			lastConnectors = time.Now()
+			run(ctx, func() { h.kbConnectors(ctx) })
 		}
 		for i, c := range e.DueForCompression(time.Now()) {
 			if i >= kbCompressMax || ctx.Err() != nil {

@@ -214,11 +214,13 @@ func Capabilities(c Connector) []string {
 	_, events := c.(Events)
 	_, hosts := c.(Hosts)
 	_, inbox := c.(Inbox)
+	_, archive := c.(Archive)
 	add("status", status)
 	add("tools", tools)
 	add("actions", actions)
 	add("events", events)
 	add("hosts", hosts)
 	add("inbox", inbox)
+	add("archive", archive)
 	return out
 }
