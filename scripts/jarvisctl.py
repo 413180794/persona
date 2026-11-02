@@ -15,6 +15,10 @@
   jarvisctl.py defaults [--set k=v …] [--remove k …] [--get k …]              this run's switches, saved keys
   jarvisctl.py tree [filters] | find [filters]                                the accessibility tree (what XCUITest sees)
   jarvisctl.py wait [filters] [--gone] [--timeout s]                          until an element is there (or gone)
+  jarvisctl.py tap [filters] [--hid]                                          activate it; a real touch (idb) if it does not take that
+  jarvisctl.py scroll [--pages n | --to top|bottom]                           the largest scroll view, no fling
+  jarvisctl.py type --text T [filters] | dismiss-keyboard                     into the focused field (filters: focus that first)
+  jarvisctl.py snapshot <out.png>                                             the app's windows, no status bar
   jarvisctl.py perf | refresh                                                 view-body counts (-perfCounts YES) | pull the hub
   jarvisctl.py call <command> [key=value …]                                   any command the app knows
 
@@ -131,6 +135,39 @@ class Ctl:
                 return {"ok": True, "idle": True, "requests": now - start}
         return {"ok": True, "idle": False, "requests": last - start}
 
+    def tap(self, hid=False, **f):
+        """Accessibility activation (a button's action, a menu opening), or with `hid` / when the element does not take
+        it (a menu's items) a real touch at the middle of its frame through `idb ui tap`, once the screen settles (an
+        opening menu moves its items under the touch)."""
+        if not hid:
+            r = self.call("activate", **f)
+            if r.get("activated"):
+                return r
+        self.call("settle", timeout=2, stable=2, every=80, pixels=600)
+        e = self.call("find", **f)["element"]
+        if not e:
+            raise CtlError(f"tap: not found {f}")
+        x, y, w, h = e["frame"]
+        for _ in range(2):  # idb's companion may need a first call to come up
+            r = subprocess.run(["idb", "ui", "tap", "--udid", self.udid, str(round(x + w / 2)), str(round(y + h / 2))],
+                               text=True, capture_output=True)
+            if r.returncode == 0:
+                return {"ok": True, "hid": True, "element": e}
+            sh("idb", "connect", self.udid, check=False)
+        raise CtlError(f"tap: idb failed: {r.stderr.strip()[-200:]}")
+
+    def type(self, text, **f):
+        """Types into the focused field; with filters, focuses that element first: accessibility activation, and when
+        that leaves no field focused (a SwiftUI field often), a real touch on it."""
+        try:
+            return self.call("type", text=text, **f)
+        except CtlError as e:
+            if not f or "no text field has focus" not in str(e):
+                raise
+        self.tap(hid=True, **f)
+        time.sleep(0.4)
+        return self.call("type", text=text)
+
     def appearance(self, value, in_app=False):
         """Light or dark: the whole simulator (status bar included, as the screenshot scripts do) or the app only."""
         if in_app:
@@ -193,6 +230,10 @@ def main(argv):
     p.add_argument("--index", type=int)
     p.add_argument("--visible", action="store_true")
     p.add_argument("--gone", action="store_true")
+    p.add_argument("--hid", action="store_true")
+    p.add_argument("--text")
+    p.add_argument("--pages", type=float)
+    p.add_argument("--to")
     p.add_argument("--cold-chats", action="store_true")
     p.add_argument("--drop-chat-cache", action="store_true")
     p.add_argument("cmd")
@@ -235,7 +276,17 @@ def main(argv):
         if a.cmd == "wait":
             f.update(timeout=a.timeout, gone=a.gone or None)
         r = c.call(a.cmd, **f)
-    elif a.cmd in ("perf", "refresh"):
+    elif a.cmd == "tap":
+        r = c.tap(a.hid, **filters(a))
+    elif a.cmd == "scroll":
+        r = c.call("scroll", pages=a.pages, to=a.to)
+    elif a.cmd == "type":
+        r = c.type(a.text or "", **filters(a))
+    elif a.cmd == "snapshot":
+        if not a.rest:
+            p.error("snapshot needs a path")
+        r = c.call("snapshot", path=os.path.abspath(a.rest[0]))
+    elif a.cmd in ("perf", "refresh", "dismiss-keyboard"):
         r = c.call(a.cmd)
     elif a.cmd == "call":
         if not a.rest:

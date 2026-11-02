@@ -38,6 +38,11 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 | `wait` | 元素过滤、`gone`、`timeout`（10 s） | 每 100 ms 查一次，等到有（或没了）；超时报错 |
 | `perf` | | `counts`：各视图 body 次数、事件数、主线程耗时（要 `-perfCounts YES` 启动，`LiveUpdateTests` 读的同一份） |
 | `refresh` | | 向 hub 拉一次（下拉刷新做的事） |
+| `activate` | 元素过滤 | 对找到的元素做 VoiceOver 双击做的事（按钮的动作、打开菜单）；`activated` 为 false 说明它不吃（菜单项） |
+| `scroll` | `pages`（屏数，负数往上，每屏 0.8 个高度）或 `to`（top / bottom） | 屏幕上最大的那个滚动视图直接设偏移量，没有惯性；`offset`、`contentHeight` |
+| `type` | `text`，可带元素过滤（先激活它拿焦点） | 往有焦点的输入框里打字 |
+| `dismiss-keyboard` | | 收起键盘 |
+| `snapshot` | `path` 或不带（回 base64），`scale` | App 窗口的 PNG（不含状态栏；要和老截图逐像素比用 `jarvisctl.py screenshot`） |
 | `navigate` | `scene`（home / assistant / agents / chat / inbox / settings / machines），`session`（`<机器>/<会话>`，chat 和 assistant 要），`machine`（machines 下打开某台），`defaults`（只在建页面时读的开关，如 `{"openWork": true}`），`keep`（不换新的界面树），`coldChats`、`dropChatCache`（同 `reset`） | 落到和对应启动开关一样的页面（`-newAssistant`、`-openAssistant`、`-tab dev`、`-openSession`、`-tab mail`、`-tab settings`、`-openMachines`），默认在一棵新的界面树上（窗口的根换成新的 `RootView`，Agents 页推进去的对话、抽屉、滚动位置都从头来）。回答同 `state` |
 | `set-style` | `style`（glass / clay / island / lark / beautiful）、`color`（主题色） | 同 `state`；整棵树按新风格重建 |
 | `set-appearance` | `value`（light / dark / system） | 只改 App 的窗口；`jarvisctl.py appearance` 默认改整个模拟器（`simctl ui appearance`，状态栏一起变，截图脚本用这个） |
@@ -95,6 +100,20 @@ header / selected / search / image / disabled）、`--visible`、`--index`。
   按 `--label-contains "、名字、"` 找。
 - `visible` 只看 frame 在不在屏幕里：外壳把两页都挂在树里，被盖住的那页也算可见。
 - frame 可能是 NaN（布局中的元素），回答里写成 0。
+
+## 动作和截图
+
+```sh
+scripts/jarvisctl.py tap --id agents.filter.unread          # 无障碍激活
+scripts/jarvisctl.py tap --id shell-agents && scripts/jarvisctl.py tap --label 细列表 --trait button   # 菜单项：自动退回真实触摸
+scripts/jarvisctl.py scroll --pages 2 ; scripts/jarvisctl.py scroll --to top
+scripts/jarvisctl.py type --trait search --text platform ; scripts/jarvisctl.py dismiss-keyboard
+scripts/jarvisctl.py snapshot app.png
+```
+
+- `tap` 先做无障碍激活；元素不吃（菜单项）或带 `--hid` 时，等画面停下、重新取 frame，用 `idb ui tap` 在中心点一下真的触摸
+  （要装 `idb` 和 `idb_companion`，第一次调用可能要等 companion 起来，脚本会重试一次）。
+- 没有惯性、长按、横滑、拖动：要这些的用例（`LiveUpdateTests` 的长按菜单、横滑行，`ChatFollowTests` 的手指滚动）留在 XCUITest。
 
 ## 协议和安全
 
