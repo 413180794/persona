@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/lark"
 )
 
@@ -37,6 +38,8 @@ func replyHub(t *testing.T) (*Hub, func() []string) {
 	t.Cleanup(srv.Close)
 	h := newTestHub(t)
 	h.lark = lark.New(lark.Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors()
 	h.inbox.init()
 	h.inbox.items["lark:feed-1:100"] = &InboxItem{ID: "lark:feed-1:100", Source: "lark", UpdatedAt: time.Now(),
 		Lark: &InboxLark{AccountID: 1, FeedID: "feed-1", StartPosition: "100"}}
@@ -125,6 +128,8 @@ func TestInboxReplyPlacement(t *testing.T) {
 	t.Cleanup(srv.Close)
 	h := newTestHub(t)
 	h.lark = lark.New(lark.Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors()
 	h.inbox.init()
 
 	const send, replies = "/agent/v1/conversations/feed-1/messages", "/agent/v1/messages/m-9/replies"

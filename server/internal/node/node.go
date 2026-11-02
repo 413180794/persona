@@ -109,6 +109,9 @@ type Node struct {
 	larkCfg     proto.AssistantLark
 	larkCfgAt   time.Time
 	larkAllowed map[string]bool
+	// lark-cli (larkcligate.go): each command's risk level as lark-cli reported it, and where the binary is.
+	larkRisks    map[string]string
+	larkCLIPaths map[string]string
 }
 
 func New(version string) (*Node, error) {

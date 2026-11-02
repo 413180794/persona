@@ -383,3 +383,28 @@ func TestSentMessages(t *testing.T) {
 		t.Fatalf("an old unacknowledged operation must not execute again: %q", st)
 	}
 }
+
+// A connector's secret: stored sealed by the hub, replaced, read back, deleted; another connector has none.
+func TestConnectorSecrets(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if _, ok, err := d.ConnectorSecret(ctx, "example"); ok || err != nil {
+		t.Fatalf("none yet: %v %v", ok, err)
+	}
+	for _, v := range []string{"sealed-1", "sealed-2"} {
+		if err := d.PutConnectorSecret(ctx, "example", v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if v, ok, err := d.ConnectorSecret(ctx, "example"); !ok || err != nil || v != "sealed-2" {
+		t.Fatalf("got %q %v %v", v, ok, err)
+	}
+	if _, ok, _ := d.ConnectorSecret(ctx, "other"); ok {
+		t.Fatal("another connector has it")
+	}
+	if err := d.DeleteConnectorSecret(ctx, "example"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := d.ConnectorSecret(ctx, "example"); ok {
+		t.Fatal("still there after delete")
+	}
+}

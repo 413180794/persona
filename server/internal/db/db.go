@@ -459,6 +459,29 @@ func (d *DB) InteractionOutcome(ctx context.Context, id string) (string, *proto.
 	return status, &res, json.Unmarshal(raw, &res)
 }
 
+// ---- connector secrets ----
+
+// ConnectorSecret is a connector's sealed secret; false when it has none.
+func (d *DB) ConnectorSecret(ctx context.Context, connector string) (string, bool, error) {
+	var sealed string
+	err := d.pool.QueryRow(ctx, `SELECT sealed FROM connector_secrets WHERE connector = $1`, connector).Scan(&sealed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	return sealed, err == nil, err
+}
+
+func (d *DB) PutConnectorSecret(ctx context.Context, connector, sealed string) error {
+	_, err := d.pool.Exec(ctx, `INSERT INTO connector_secrets (connector, sealed, updated_at) VALUES ($1, $2, now())
+		ON CONFLICT (connector) DO UPDATE SET sealed = $2, updated_at = now()`, connector, sealed)
+	return err
+}
+
+func (d *DB) DeleteConnectorSecret(ctx context.Context, connector string) error {
+	_, err := d.pool.Exec(ctx, `DELETE FROM connector_secrets WHERE connector = $1`, connector)
+	return err
+}
+
 // ---- settings ----
 
 // Setting decodes the value stored under key into out; it reports false when the key is unset.
@@ -670,6 +693,6 @@ func (d *DB) TouchDeviceToken(ctx context.Context, id string) error {
 
 // TruncateForTest clears tables in tests.
 func (d *DB) TruncateForTest(ctx context.Context) error {
-	_, err := d.pool.Exec(ctx, `TRUNCATE devices, device_tokens, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, machine_systems, machine_metrics, sent_messages, todos, todo_agents CASCADE`)
+	_, err := d.pool.Exec(ctx, `TRUNCATE devices, device_tokens, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, connector_secrets, machine_systems, machine_metrics, sent_messages, todos, todo_agents CASCADE`)
 	return err
 }

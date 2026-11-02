@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -23,10 +24,65 @@ type Registry struct {
 	mu    sync.RWMutex
 	list  []Connector
 	rules []Rule
+	off   map[string]bool // switched off by the user (SetEnabled)
+	// run is what Start was given, to start a connector switched on later; stop cancels a running one's Run / Watch.
+	run  *starter
+	stop map[string]context.CancelFunc
+}
+
+type starter struct {
+	ctx     context.Context
+	changed func(id, scope string)
+	logf    func(string, ...any)
 }
 
 // NewRegistry holds no connector yet; rules are the write gate's (hub.json connector_gate, ValidateRules).
-func NewRegistry(rules []Rule) *Registry { return &Registry{rules: rules} }
+func NewRegistry(rules []Rule) *Registry {
+	return &Registry{rules: rules, off: map[string]bool{}, stop: map[string]context.CancelFunc{}}
+}
+
+// switchedOff are the connectors switched off, by instance: StatusOf answers StateDisabled for them, so every pipe
+// that goes by the status (tools, the inbox, the archive) leaves them alone without knowing about the switch.
+var switchedOff sync.Map
+
+// SetEnabled switches a connector on or off. Off, it does not run (its Run and Watch are cancelled), offers no tools
+// and brings nothing into the inbox or the knowledge base, and its status is StateDisabled; on, it starts again.
+// Signing in and out (Login) still work while it is off. The hub keeps the choice (it calls this before Start).
+func (r *Registry) SetEnabled(id string, on bool) error {
+	c := r.Get(id)
+	if c == nil {
+		return fmt.Errorf("no connector %q", id)
+	}
+	if !reflect.TypeOf(c).Comparable() {
+		return fmt.Errorf("connector %q cannot be switched off (not comparable)", id)
+	}
+	r.mu.Lock()
+	var cancel context.CancelFunc
+	if on {
+		delete(r.off, id)
+		switchedOff.Delete(c)
+	} else {
+		r.off[id] = true
+		switchedOff.Store(c, true)
+		cancel = r.stop[id]
+		delete(r.stop, id)
+	}
+	r.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if on {
+		r.startOne(c)
+	}
+	return nil
+}
+
+// Enabled says whether a connector is switched on (every one is, until SetEnabled says otherwise).
+func (r *Registry) Enabled(id string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return !r.off[id]
+}
 
 // Add registers a connector; its ID must be new and look like one.
 func (r *Registry) Add(c Connector) error {
@@ -95,8 +151,13 @@ func (r *Registry) Offers(name string) bool {
 	return c != nil && slices.Contains(ToolNames(c), name)
 }
 
-// StatusOf is a connector's status; one without Accounts is always ok.
+// StatusOf is a connector's status: StateDisabled when the user switched it off; one without Accounts is always ok.
 func StatusOf(ctx context.Context, c Connector) Status {
+	if c != nil && reflect.TypeOf(c).Comparable() {
+		if _, off := switchedOff.Load(c); off {
+			return Status{State: StateDisabled}
+		}
+	}
 	if a, ok := c.(Accounts); ok {
 		return a.Status(ctx)
 	}
@@ -190,6 +251,8 @@ type Info struct {
 	LastEvent    *time.Time `json:"last_event,omitempty"`
 	Capabilities []string   `json:"capabilities"`
 	Hosts        []string   `json:"hosts,omitempty"`
+	// Enabled: switched on (SetEnabled); off, Status is "disabled".
+	Enabled bool `json:"enabled"`
 }
 
 // MachineOnline tells every connector that depends on a computer that machine id just connected.
@@ -207,7 +270,7 @@ func (r *Registry) Infos(ctx context.Context) []Info {
 	for _, c := range r.All() {
 		st := StatusOf(ctx, c)
 		info := Info{ID: c.ID(), Name: c.Name(), Status: st.State, Account: st.Account, Via: st.Via, Error: st.Error,
-			LastSync: when(st.LastSync), LastEvent: when(st.LastEvent), Capabilities: Capabilities(c)}
+			LastSync: when(st.LastSync), LastEvent: when(st.LastEvent), Capabilities: Capabilities(c), Enabled: r.Enabled(c.ID())}
 		if h, ok := c.(Hosts); ok {
 			info.Hosts = h.Hosts()
 		}
@@ -223,8 +286,11 @@ func when(t time.Time) *time.Time {
 	return &t
 }
 
-// Capabilities names the optional interfaces a connector implements.
+// Capabilities names the optional interfaces a connector implements, or the ones it says it has (Capabler).
 func Capabilities(c Connector) []string {
+	if cp, ok := c.(Capabler); ok {
+		return append([]string{}, cp.Capabilities()...)
+	}
 	out := []string{}
 	add := func(name string, ok bool) {
 		if ok {
@@ -240,6 +306,7 @@ func Capabilities(c Connector) []string {
 	_, archive := c.(Archive)
 	_, chats := c.(Chats)
 	_, items := c.(Items)
+	_, login := c.(Login)
 	add("status", status)
 	add("tools", tools)
 	add("actions", actions)
@@ -249,5 +316,6 @@ func Capabilities(c Connector) []string {
 	add("archive", archive)
 	add("chats", chats)
 	add("items", items)
+	add("login", login)
 	return out
 }

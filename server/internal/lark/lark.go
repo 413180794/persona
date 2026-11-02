@@ -27,11 +27,31 @@ type Config struct {
 	BaseURL   string `json:"base_url"`          // default http://127.0.0.1:8095/agent/v1
 	Container string `json:"container"`         // docker container to read lark-connector_AGENT_TOKEN from when Token is empty (no default)
 	Token     string `json:"token,omitempty"`   // agent token; kept for the client's lifetime (never dropped on a 401)
+
+	// CLI is Feishu's official open-platform CLI (lark-cli) as a second source beside lark-connector (docs/plan-lark-cli.md);
+	// nil: not used.
+	CLI *CLIConfig `json:"cli,omitempty"`
+	// Prefer is the primary source when both are configured: "lark-connector" (default) or "cli".
+	Prefer string `json:"prefer,omitempty"`
 }
+
+// CLIConfig is how the hub and the assistant run lark-cli. Its app and the user's login stay in lark-cli's own store.
+type CLIConfig struct {
+	Bin     string `json:"bin,omitempty"`     // command name or absolute path; default lark-cli, looked up in a login shell
+	Profile string `json:"profile,omitempty"` // lark-cli --profile; "" is its default profile
+}
+
+// lark-connectorConfigured: lark-connector has a token, or a container to read one from.
+func (cfg Config) lark-connectorConfigured() bool { return cfg.Token != "" || cfg.Container != "" }
 
 func (cfg Config) Validate() error {
 	if cfg.Account < 0 || cfg.Account > 999999999 {
 		return errors.New("lark.account must be an integer between 1 and 999999999 (or 0 for the primary account)")
+	}
+	switch cfg.Prefer {
+	case "", "lark-connector", "cli":
+	default:
+		return errors.New(`lark.prefer must be "lark-connector" or "cli"`)
 	}
 	return nil
 }

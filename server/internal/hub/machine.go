@@ -628,15 +628,25 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		return m.hub.waitInteraction(ctx, p.Interaction)
 	case "assistant.lark":
-		// lark-connector's token goes to the assistant's machine only (its process runs the lark-connector skill).
+		// lark-connector's token goes to the assistant's machine only (its process runs the lark-connector skill); so does how to
+		// run lark-cli (its login stays on that machine, in lark-cli's own store).
 		if m.hub.lark == nil || m.cfg.ID != m.hub.assistantConfig(ctx).MachineID {
 			return proto.AssistantLark{}, nil
+		}
+		lc := m.hub.cfg.Lark
+		out := proto.AssistantLark{Rules: m.hub.cfg.LarkGate, Prefer: lc.Prefer}
+		if lc.CLI != nil {
+			out.CLI = &proto.LarkCLI{Bin: lc.CLI.Bin, Profile: lc.CLI.Profile}
+		}
+		if lc.CLI != nil && !lc.lark-connectorConfigured() {
+			return out, nil // lark-cli only: there is no lark-connector to hand out
 		}
 		base, token, err := m.hub.lark.AgentAccess(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return proto.AssistantLark{Base: base, Token: token, Account: m.hub.lark.Account(), Rules: m.hub.cfg.LarkGate}, nil
+		out.Base, out.Token, out.Account = base, token, m.hub.lark.Account()
+		return out, nil
 	case "state.load":
 		out := map[string]db.NodeSession{}
 		if m.hub.store != nil {

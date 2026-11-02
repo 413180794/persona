@@ -1,0 +1,256 @@
+package node
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
+)
+
+// lark-cli (Feishu's official open-platform CLI, docs/plan-lark-cli.md) in the assistant's Bash passes the same gate
+// as ol (larkgate.go). lark-cli tells which commands write: every command's --help prints "Risk: read", "Risk: write"
+// or "Risk: high-risk-write". Reads run at once; writes, and commands whose risk cannot be read, are confirmed on the
+// phone with the whole command on the card. Logging in and out, switching apps or profiles, and updating lark-cli are
+// the user's to do: refused.
+
+// larkRisk asks lark-cli for a command's risk level ("" when it cannot say).
+type larkRisk func(words []string) string
+
+var (
+	// lark-cli's own commands that only print: help, method schemas, the skills it carries, who is logged in.
+	larkCLIRead      = map[string]bool{"schema": true, "skills": true, "whoami": true, "doctor": true, "help": true, "completion": true}
+	larkCLIAuthRead  = map[string]bool{"status": true, "check": true, "scopes": true, "list": true}
+	larkCLIEventRead = map[string]bool{"list": true, "schema": true, "status": true}
+	larkRiskRe       = regexp.MustCompile(`(?m)^\s*Risk:\s*([a-z-]+)`)
+	// larkCLIRe: a lark-cli call anywhere in a command the gate cannot parse.
+	larkCLIRe = regexp.MustCompile("(^|[\\s;&|(`])(\\S*/)?lark-cli(\\s|$)")
+)
+
+func isLarkCLI(name string) bool { return name == "lark-cli" || filepath.Base(name) == "lark-cli" }
+
+// parseLarkCLI reads `lark-cli <words…> [flags]`: the words name the command (`im +messages-send`, `api POST
+// /open-apis/…`), the flags are its input. ok is false when the gate cannot tell what the command is.
+func parseLarkCLI(args []string, risk larkRisk) (c larkCall, deny string, ok bool) {
+	c = larkCall{CLI: true, Method: "CLI", Args: args}
+	var words, flags []string
+	for i, a := range args {
+		if strings.HasPrefix(a, "-") {
+			flags = args[i:]
+			break
+		}
+		words = append(words, a)
+	}
+	for _, f := range flags {
+		if f == "--profile" || strings.HasPrefix(f, "--profile=") {
+			return c, "lark-cli 的配置档由 hub 定（hub.json 的 lark.cli.profile），不要自己传 --profile。", false
+		}
+	}
+	if strings.Contains(strings.Join(words, " "), "$") {
+		return c, "", false // a variable names the command: its risk is unknown
+	}
+	c.Path = "/" + strings.Join(words, "/")
+	switch {
+	case len(words) == 0:
+		if hasFlag(flags, "-h", "--help", "-v", "--version") {
+			c.Risk = "read"
+			return c, "", true
+		}
+		return c, "", false
+	case hasFlag(flags, "-h", "--help"):
+		c.Risk = "read"
+	case words[0] == "auth":
+		if len(words) > 1 && larkCLIAuthRead[words[1]] {
+			c.Risk = "read"
+			return c, "", true
+		}
+		return c, "lark-cli 的登录、退出和授权由他自己在 hub 所在的机器上做（lark-cli auth login），不要替他运行。", false
+	case words[0] == "config" || words[0] == "profile" || words[0] == "update":
+		return c, "不要改 lark-cli 的配置、配置档或版本：这些由他自己做。", false
+	case hasFlag(flags, "--dry-run"):
+		c.Risk = "read" // prints the request, runs nothing
+	case larkCLIRead[words[0]]:
+		c.Risk = "read"
+	case words[0] == "event" && len(words) > 1 && larkCLIEventRead[words[1]]:
+		c.Risk = "read"
+	case words[0] == "api":
+		if len(words) < 3 {
+			return c, "", false
+		}
+		c.Method, c.Path = strings.ToUpper(words[1]), words[2]
+		c.Query, c.Body = flagValue(flags, "--params"), flagValue(flags, "--data")
+	default:
+		if risk != nil {
+			c.Risk = risk(words)
+		}
+	}
+	return c, "", true
+}
+
+// cliRead: a lark-cli call that only reads (its own risk level, or a GET through `lark-cli api`).
+func (c larkCall) cliRead() bool {
+	if c.Method == "CLI" {
+		return c.Risk == "read"
+	}
+	return c.Method == "GET" || c.Method == "HEAD"
+}
+
+// larkRiskNote marks the card when lark-cli calls a command high-risk, or could not say how risky it is.
+func larkRiskNote(c larkCall) string {
+	switch {
+	case c.Method != "CLI":
+		return ""
+	case c.Risk == "high-risk-write":
+		return "（lark-cli 标为高风险）"
+	case c.Risk == "":
+		return "（lark-cli 没给出风险等级）"
+	}
+	return ""
+}
+
+// shellJoin is the arguments as the user would type them, for the card: quoted only where a shell needs it.
+func shellJoin(args []string) string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		if a == "" || strings.ContainsAny(a, " \t\n'\"\\$`|&;<>()*?[]{}#~!") {
+			a = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
+		}
+		out[i] = a
+	}
+	return strings.Join(out, " ")
+}
+
+func hasFlag(flags []string, names ...string) bool {
+	for _, f := range flags {
+		for _, n := range names {
+			if f == n || strings.HasPrefix(f, n+"=") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// flagValue is `--name value` or `--name=value`.
+func flagValue(flags []string, name string) string {
+	for i, f := range flags {
+		if v, ok := strings.CutPrefix(f, name+"="); ok {
+			return v
+		}
+		if f == name && i+1 < len(flags) {
+			return flags[i+1]
+		}
+	}
+	return ""
+}
+
+// larkCLIRisk asks lark-cli for the risk level of each command it is given, once per command; nil without lark-cli
+// in the hub's config.
+func (n *Node) larkCLIRisk(cfg proto.AssistantLark) larkRisk {
+	if cfg.CLI == nil {
+		return nil
+	}
+	return func(words []string) string {
+		key := cfg.CLI.Profile + "\x00" + strings.Join(words, " ")
+		n.mu.Lock()
+		r, ok := n.larkRisks[key]
+		n.mu.Unlock()
+		if ok {
+			return r
+		}
+		bin := n.larkCLIBin(cfg.CLI)
+		if bin == "" {
+			return ""
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, bin, append(append(larkCLIProfile(cfg.CLI), words...), "--help")...)
+		cmd.Env = larkCLIEnv(bin)
+		out, _ := cmd.CombinedOutput()
+		m := larkRiskRe.FindSubmatch(out)
+		if m == nil {
+			return "" // not cached: lark-cli may be updating, or missing for now
+		}
+		r = string(m[1])
+		n.mu.Lock()
+		if n.larkRisks == nil {
+			n.larkRisks = map[string]string{}
+		}
+		n.larkRisks[key] = r
+		n.mu.Unlock()
+		return r
+	}
+}
+
+// larkCLIBin is lark-cli's absolute path: lark.cli.bin as given, else looked up in a login shell (an npm install
+// usually lives in a version manager's directory that only the user's shell puts on PATH); "" when it is not there.
+func (n *Node) larkCLIBin(c *proto.LarkCLI) string {
+	bin := c.Bin
+	if bin == "" {
+		bin = "lark-cli"
+	}
+	if filepath.IsAbs(bin) {
+		return bin
+	}
+	n.mu.Lock()
+	p, ok := n.larkCLIPaths[bin]
+	n.mu.Unlock()
+	if ok {
+		return p
+	}
+	if p, _ = exec.LookPath(bin); p == "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		out, _ := loginShell(ctx, "command -v "+shellQuote(bin)).Output()
+		cancel()
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		if last := strings.TrimSpace(lines[len(lines)-1]); filepath.IsAbs(last) {
+			p = last
+		}
+	}
+	if p != "" {
+		n.mu.Lock()
+		if n.larkCLIPaths == nil {
+			n.larkCLIPaths = map[string]string{}
+		}
+		n.larkCLIPaths[bin] = p
+		n.mu.Unlock()
+	}
+	return p
+}
+
+func larkCLIProfile(c *proto.LarkCLI) []string {
+	if c.Profile == "" {
+		return nil
+	}
+	return []string{"--profile", c.Profile}
+}
+
+// larkCLIEnv: lark-cli's own directory first on PATH, for an npm shim that runs `env node`.
+func larkCLIEnv(bin string) []string {
+	return append(os.Environ(), "PATH="+filepath.Dir(bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// writeLarkCLIWrapper puts `lark-cli` on the assistant's PATH (dir): the configured binary with the configured
+// profile. Without lark-cli in the config, or when it cannot be found, there is none.
+func (n *Node) writeLarkCLIWrapper(dir string, c *proto.LarkCLI) {
+	path := filepath.Join(dir, "lark-cli")
+	bin := ""
+	if c != nil {
+		bin = n.larkCLIBin(c)
+	}
+	if bin == "" || bin == path {
+		_ = os.Remove(path)
+		return
+	}
+	args := ""
+	for _, a := range larkCLIProfile(c) {
+		args += " " + shellQuote(a)
+	}
+	wrapper := "#!/bin/sh\n# lark-cli as hub.json lark.cli says (node/larkcligate.go), on the assistant's PATH.\nPATH=" +
+		shellQuote(filepath.Dir(bin)) + ":\"$PATH\" exec " + shellQuote(bin) + args + " \"$@\"\n"
+	_ = os.WriteFile(path, []byte(wrapper), 0o755)
+}

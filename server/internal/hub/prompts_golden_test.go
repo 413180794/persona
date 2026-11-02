@@ -204,6 +204,12 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 	golden(t, "assistant_claude_md.bare", bare.assistantClaudeMD(ctx, true))
 	// No lark-connector skill on the assistant's machine (~/.jarvis/skills): no ol, Feishu through the MCP tools.
 	golden(t, "assistant_claude_md.no_lark-connector", bare.assistantClaudeMD(ctx, false))
+	// lark-cli only (docs/plan-lark-cli.md): no lark-connector configured, no lark-connector skill.
+	bare.cfg.Lark.CLI = &lark.CLIConfig{}
+	golden(t, "assistant_claude_md.lark_cli", bare.assistantClaudeMD(ctx, false))
+	// Both sources, lark-cli preferred.
+	bare.cfg.Lark.Token, bare.cfg.Lark.Prefer = "test-token", "cli"
+	golden(t, "assistant_claude_md.both", bare.assistantClaudeMD(ctx, true))
 }
 
 var (

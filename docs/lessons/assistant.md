@@ -35,3 +35,5 @@
   判断缓存为什么没中，别猜，复制一份真实对话（换会话 id、放临时目录）一项一项改着重启，看 `message_start` 的 `cache_read_input_tokens`。
 - 无头 `claude -p` 会自动压缩（窗口用 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 调），但 Claude Code 的空闲压缩只在交互式会话里跑；stream-json 发一条 `/compact`
   就能手动压。实测续聊进程的第一条消息有时还不压、下一条才压，别拿一次没压当「不支持」。
+- npm 装的 lark-cli 是 `#!/usr/bin/env node` 的脚本，node 和它都在 nvm 这类目录里，systemd 起的 jarvisd 的 PATH 里没有（2026-11-03，#273）：
+  按命令名直接执行会「找不到」，找到了也会因为 `env node` 失败。node 先用登录 shell `command -v` 找到绝对路径，执行时把它所在的目录放到 PATH 最前（`node/larkcligate.go`）；助手 PATH 上的包装同理。

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/ai"
-	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 )
@@ -184,8 +183,9 @@ type inboxReply struct {
 	clientID string
 }
 
-// replyInbox sends text as the user's reply — in the Feishu chat, or as a reply to the newest mail of the thread
-// from the account that received it — and files the item as done.
+// replyInbox sends text as the user's reply through the connector the item belongs to — in the Feishu chat, a
+// document's comments, a removed post, a reply to the newest mail of the thread, a GitHub comment… — and files the item
+// as done.
 func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocChange) (InboxItem, error) {
 	h.inbox.mu.Lock()
 	it, ok := h.inbox.items[id]
@@ -217,72 +217,33 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 	if !ok {
 		return InboxItem{}, errNoInboxItem
 	}
-	switch {
-	case c.Moment != nil && len(changes) == 0:
-		if err := h.replyMoment(ctx, *c.Moment, text); err != nil {
-			return InboxItem{}, err
-		}
-	case c.Doc != nil:
-		// The status moves first: a reply saying "done" with the row still 进行中 would be wrong.
-		for _, ch := range changes {
-			if err := h.writeDocStatus(ctx, *c.Doc, ch); err != nil {
-				return InboxItem{}, err
-			}
-		}
-		if text != "" {
-			if err := h.replyDoc(ctx, *c.Doc, text); err != nil {
-				return InboxItem{}, err
-			}
-		}
-	case len(changes) > 0:
+	// Phone and watch can both press send, and a timed-out request gets retried: one reply of an item at a time,
+	// held until the item is filed (the connector's check for "already sent" relies on it).
+	r, _ := h.inbox.replies.LoadOrStore(id, &inboxReply{})
+	once := r.(*inboxReply)
+	once.mu.Lock()
+	defer once.mu.Unlock()
+	req := inboxReplyReq{id: id, live: it, item: c, text: text, changes: changes, once: once}
+	var already bool
+	var err error
+	switch own := h.ownInboxFor(c); {
+	case len(changes) > 0 && (c.Connector != nil || own == nil):
 		return InboxItem{}, errors.New("only document items have a status to change")
-	case c.Lark != nil:
-		// Phone and watch can both press send, and a timed-out request gets retried: the same reply goes out once.
-		r, _ := h.inbox.replies.LoadOrStore(id, &inboxReply{})
-		reply := r.(*inboxReply)
-		reply.mu.Lock()
-		defer reply.mu.Unlock()
-		// The id only depends on the item and the text, so lark-connector drops a repeat even after a hub restart.
-		clientID := lark.NamedClientID(id + "\n" + text)
-		h.inbox.mu.Lock()
-		sent := it.DoneBy == "replied" && reply.clientID == clientID
-		out := it.listed()
-		h.inbox.mu.Unlock()
-		if sent {
-			return out, nil
-		}
-		// Different text on an item already replied to is a second message the user means to send.
-		if err := h.sendLarkReply(ctx, c, text, clientID); err != nil {
-			return InboxItem{}, err
-		}
-		reply.clientID = clientID
 	case c.Connector != nil:
-		// Phone and watch can both press send: the same text on an item already replied to went out already.
-		r, _ := h.inbox.replies.LoadOrStore(id, &inboxReply{})
-		reply := r.(*inboxReply)
-		reply.mu.Lock()
-		defer reply.mu.Unlock()
-		h.inbox.mu.Lock()
-		sent := it.DoneBy == "replied" && reply.clientID == text
-		out := it.listed()
-		h.inbox.mu.Unlock()
-		if sent {
-			return out, nil
-		}
-		if err := h.replyConnector(ctx, c, text); err != nil {
-			return InboxItem{}, err
-		}
-		reply.clientID = text
-	case c.Mail != nil && h.mail != nil && len(c.Mail.UIDs) > 0:
-		orig, err := h.mail.GetMessage(ctx, c.Mail.AccountID, c.Mail.UIDs[len(c.Mail.UIDs)-1], c.Mail.Mailbox)
-		if err != nil {
-			return InboxItem{}, err
-		}
-		if err := h.mail.Send(ctx, mailReply(c.Mail.AccountID, orig, text)); err != nil {
-			return InboxItem{}, err
-		}
+		already, err = h.replyConnectorItem(ctx, req)
+	case own != nil:
+		already, err = own.replyInbox(ctx, req)
 	default:
 		return InboxItem{}, errCannotReply
+	}
+	if err != nil {
+		return InboxItem{}, err
+	}
+	if already {
+		h.inbox.mu.Lock()
+		out := it.listed()
+		h.inbox.mu.Unlock()
+		return out, nil
 	}
 	h.inbox.mu.Lock()
 	it.done(time.Now(), "replied")

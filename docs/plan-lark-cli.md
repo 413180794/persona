@@ -155,15 +155,16 @@
 | `event consume` | 放行（只读），提示词要求带 `--max-events` / `--timeout` |
 | 闸门读不懂的命令（循环、`$(…)`）里有 lark-cli 的写 | 整条命令手机确认（和 `ol` 一样） |
 
-`hub.json` 的 `lark_gate` 规则照样先匹配，lark-cli 的调用写成 `{"method": "CLI", "path": "im +messages-send", "action": "allow"}`。
+`hub.json` 的 `lark_gate` 规则照样先匹配，lark-cli 的调用写成 `{"method": "CLI", "path": "/im/+messages-send", "action": "allow"}`（命令的词用 `/` 连起来）。
 Codex 的 app-server 审批走同一个 `larkCheck`。
 
 ## 分步计划
 
 - [ ] **L0 方案**：这份文档（本 PR）。
-- [ ] **L1 助手**：内置 skill `feishu-cli`（Jarvis 自己写的，登记在 `Redistributable`）；闸门认 lark-cli；配置 `lark.cli`、`lark.prefer`；提示词（`server/internal/prompts/`）
-  按装了哪些来源说明用哪个（两个都有时各管什么）；`docs/feishu.md`、`docs/config.md`、`docs/assistant.md`，写明 `auth login --domain all`。
-  验收：助手能查最近的消息、文档、日程；发消息弹确认卡片，拒绝后不发；配了 lark-connector 的 hub 行为不变。
+- [x] **L1 助手**：闸门认 lark-cli（`node/larkcligate.go`）；配置 `lark.cli`、`lark.prefer`；助手 PATH 上的 `lark-cli` 包装；提示词（CLAUDE.md 多一段，
+  不另做内置 skill：领域说明让 Agent 用 `lark-cli skills read` 读 CLI 自带的）按配了哪些来源说明用哪个；`docs/feishu.md`、`docs/config.md`、
+  `docs/assistant.md`「飞书：lark-cli」，写明 `auth login --domain all`。
+  验收：助手能查最近的消息、文档、日程；发消息弹确认卡片，拒绝后不发；配了 lark-connector 的 hub 行为不变（原有 golden 不变）。
 - [ ] **L2 连接器骨架**：`internal/larkcli` 适配层 + `larkcli` 连接器的 `Accounts`（`auth status`、过期提醒，接设置页）和 `ReadTools`（`lark_chats` / `lark_messages` / `lark_search` 的 lark-cli 版）。
 - [ ] **L3 知识库**：`Archive`（会话、消息、人、群：搜索轮询 + 往回补；附件）、`Items`（日程、会议、妙记、文档标题）。验收：知识库里有飞书会话和人，格式和 lark-connector 来源一样。
 - [ ] **L4 收件箱**：`Inbox`：@我、私聊、我参与的话题的回复（「收件箱收什么」）；和 lark-connector 并存时只从主来源收；回复走 `Actions`，经闸门和手机卡片。

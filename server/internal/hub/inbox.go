@@ -269,25 +269,11 @@ func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
 	h.inbox.running.Lock()
 	defer h.inbox.running.Unlock()
 	var changed []*InboxItem
-	if h.lark != nil {
-		ch, err := h.collectLark(ctx)
-		if err != nil {
-			h.logf("inbox: feishu: %v", err)
+	// The hub's own connectors (Feishu, then mail) in the order registered, then the others' generic things.
+	for _, c := range h.connectors.All() {
+		if own, ok := c.(ownInbox); ok {
+			changed = append(changed, own.collectInbox(ctx, withMail)...)
 		}
-		changed = append(changed, ch...)
-		docs, err := h.collectDocs(ctx)
-		if err != nil {
-			h.logf("inbox: feishu docs: %v", err)
-		}
-		changed = append(changed, docs...)
-		moments, err := h.collectMoments(ctx)
-		if err != nil {
-			h.logf("inbox: removed: %v", err)
-		}
-		changed = append(changed, moments...)
-	}
-	if withMail && h.mail != nil {
-		changed = append(changed, h.collectMail(ctx)...)
 	}
 	changed = append(changed, h.collectConnectors(ctx)...)
 	h.inbox.mu.Lock()

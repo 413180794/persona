@@ -49,3 +49,17 @@ type Inbox interface {
 	Collect(ctx context.Context) ([]InboxThing, error)
 	Reply(ctx context.Context, thread, text string) error
 }
+
+// InboxReply is a reply to one of a connector's inbox items, as InboxReplier gets it.
+type InboxReply struct {
+	Thread string
+	ItemID string // the hub's inbox item
+	Last   string // the newest move the item holds (InboxThing.Last): what the reply answers
+	Text   string
+}
+
+// InboxReplier is an inbox that answers with more than the thread and the text (which move it answers, which item);
+// the hub uses it instead of Inbox.Reply when a connector has it.
+type InboxReplier interface {
+	ReplyItem(ctx context.Context, r InboxReply) error
+}

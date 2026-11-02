@@ -63,6 +63,31 @@
     排在内置规则前面，第一条匹配的说了算。比如以后想让发消息不再确认：`{"method":"POST","path":"/conversations/*/messages","action":"allow"}`。
 - 早报、「今天要我处理什么」可以用 `ol POST /context/harvest '{"preset":"today"}'`（@我、日程、待办、我的审批，一次拿到）。
 
+## 飞书：lark-cli（2026-11-03，#273 的 L1）
+
+没有 lark-connector 的 hub 也能让助手读写飞书：用飞书官方的开放平台命令行 lark-cli（`@larksuite/cli`），方案和后面几步见 `docs/plan-lark-cli.md`。
+这一步只做助手，收件箱、知识库、`/agent` 还是只认 lark-connector。
+
+- **怎么开**：hub.json `lark.cli`（`docs/config.md`），lark-cli 装在助手所在的机器上，用户自己 `lark-cli auth login --domain all` 登录一次。
+  lark-connector 可以同时配着，`lark.prefer` 定提示词里谁优先。
+- **怎么到助手手里**：node 起助手进程前向 hub 要配置（RPC `assistant.lark` 多了 `cli`、`prefer`；只配 lark-cli 时不去问 lark-connector，也就没有它的 token），
+  在 `~/.jarvis/assistant-bin/lark-cli` 写一行包装：配置的那个 lark-cli（不是绝对路径时在登录 shell 里找）加上配置的 `--profile`，
+  并把 lark-cli 所在目录放进 PATH（npm 的 lark-cli 是 `env node` 的脚本，要找得到 node）。没配 `lark.cli` 或找不到 lark-cli 就不写。
+  lark-cli 的凭据留在它自己的 `~/.lark-cli`，hub 和 node 都不碰。
+- **说明书**：不往助手目录拷 skill。CLAUDE.md（`prompts/assistant/claude_md.md`）多一段，让它先 `lark-cli skills read lark-<领域>` 读 lark-cli 自带、
+  跟版本走的领域说明，参数用 `--help` / `lark-cli schema`。只有 lark-cli 时说明没有未读和removed、`lark_*` MCP 工具用不了，找要处理的消息用
+  `im +messages-search --is-at-me / --chat-type p2p`；两个都有时按 `lark.prefer` 分工（golden `assistant_claude_md.lark_cli`、`.both`）。
+- **闸门**（`node/larkcligate.go`，接在 `ol` 的闸门里，同一个 `larkCheck`，Codex 也走它）：lark-cli 自己知道哪些命令会写，每个命令的 `--help` 都打印
+  `Risk: read / write / high-risk-write`，node 第一次见到一个命令时问一次（按命令缓存，约 50 ms）：
+  - `read` 直接放行；`write`、`high-risk-write`、问不出来的都在手机上弹「飞书」卡片，写的是做什么（发消息、回复、表情、撤回…）和整条命令，
+    高风险、没给风险等级的另外标出来。拒绝时把他的话还给助手；「本会话总是允许」记住这个命令。
+  - 只打印的直接放行：`--help`、`--version`、`--dry-run`、`schema`、`skills`、`whoami`、`doctor`、`auth status / check / scopes / list`、`event list / schema / status`；
+    `lark-cli api` 按 HTTP 方法：GET / HEAD 放行，其余确认（卡片上是方法、路径和 `--data`）。
+  - 拒绝：`auth login / logout`（登录他自己做）、`config`、`profile`、`update`、自己传 `--profile`、碰 `~/.lark-cli/`。
+  - 闸门读不懂的命令（循环、`$(…)`、接 python）里有 lark-cli：只要有一个不是已知的读，就整条命令在手机上确认，不管权限模式。
+  - hub.json `lark_gate` 的规则先匹配：`{"method":"CLI","path":"/im/+messages-send","action":"allow"}`。
+- **还没做**：runtime 助手（DSH、pi）的提示词和 `lark-connector` 工具还只认 lark-connector；设置页的 lark-cli 状态、缺的权限（L2）。
+
 ## 主对话、知识库和上下文流动（2026-10-30）
 
 提示词都在 `server/internal/prompts/assistant/`（`docs/prompts.md`）：CLAUDE.md 是 `claude_md.md`，快照是 `snapshot.md`（主对话那句在 `context.md`），定时任务到点的消息是 `task_run.md`，默认的早报 / 晚间回顾是 `routine_*.md`。

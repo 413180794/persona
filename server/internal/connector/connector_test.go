@@ -157,8 +157,8 @@ func TestInfos(t *testing.T) {
 	_ = r.Add(plain{})
 	b, _ := json.Marshal(r.Infos(context.Background()))
 	want := `[{"id":"example","name":"Example","status":"ok","account":"alice","last_sync":"2026-01-02T03:04:05Z",` +
-		`"capabilities":["status","tools","actions","events","hosts"],"hosts":["example.com"]},` +
-		`{"id":"plain","name":"Plain","status":"ok","capabilities":[]}]`
+		`"capabilities":["status","tools","actions","events","hosts"],"hosts":["example.com"],"enabled":true},` +
+		`{"id":"plain","name":"Plain","status":"ok","capabilities":[],"enabled":true}]`
 	if string(b) != want {
 		t.Fatalf("infos\n%s\nwant\n%s", b, want)
 	}

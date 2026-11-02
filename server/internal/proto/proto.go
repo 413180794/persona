@@ -714,4 +714,12 @@ type AssistantLark struct {
 	Base    string     `json:"base"`
 	Token   string     `json:"token"`
 	Rules   []LarkRule `json:"rules,omitempty"`
+	CLI     *LarkCLI   `json:"cli,omitempty"`    // lark-cli is configured (hub.json lark.cli, docs/plan-lark-cli.md)
+	Prefer  string     `json:"prefer,omitempty"` // "lark-connector" | "cli": the primary source when both are there
+}
+
+// LarkCLI is how the assistant's machine runs lark-cli.
+type LarkCLI struct {
+	Bin     string `json:"bin,omitempty"`
+	Profile string `json:"profile,omitempty"`
 }

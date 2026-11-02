@@ -137,9 +137,11 @@ func TestConnectorItemsListAndReply(t *testing.T) {
 	if len(old["items"].([]any)) != 1 || len(all["items"].([]any)) != 2 {
 		t.Fatalf("old %v\nall %v", old, all)
 	}
-	id := openItems(h)[0].ID
-	if id == "mail:1" {
-		id = openItems(h)[1].ID
+	id := ""
+	for _, it := range openItems(h) { // a map's order: read it once
+		if it.Connector != nil {
+			id = it.ID
+		}
 	}
 	for range 2 { // pressed twice (phone and watch): sent once
 		code, out := call(t, mux, "POST", "/api/v1/inbox/"+id+"/reply", h.cfg.Token, `{"text":"看过了"}`)

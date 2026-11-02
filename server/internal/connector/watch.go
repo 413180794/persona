@@ -13,17 +13,36 @@ var (
 	watchHealthy      = time.Minute
 )
 
-// Start runs every connector registered so far until ctx ends: its Run, and its Watch, calling changed with the
-// connector's id and the scope; a Watch that returns is started again after a backoff (its error is logged as the
-// connector wrote it — connectors keep secrets out of their errors).
+// Start runs every connector registered so far that is switched on, until ctx ends: its Run, and its Watch, calling
+// changed with the connector's id and the scope; a Watch that returns is started again after a backoff (its error is
+// logged as the connector wrote it — connectors keep secrets out of their errors). Each runs under its own context:
+// switching it off cancels it, switching it on starts it again (SetEnabled).
 func (r *Registry) Start(ctx context.Context, changed func(id, scope string), logf func(string, ...any)) {
+	r.mu.Lock()
+	r.run = &starter{ctx: ctx, changed: changed, logf: logf}
+	r.mu.Unlock()
 	for _, c := range r.All() {
-		if run, ok := c.(Runner); ok {
-			go run.Run(ctx)
-		}
-		if e, ok := c.(Events); ok {
-			go watchOne(ctx, c.ID(), e, changed, logf)
-		}
+		r.startOne(c)
+	}
+}
+
+// startOne runs c unless Start has not been called, it is switched off or it runs already.
+func (r *Registry) startOne(c Connector) {
+	id := c.ID()
+	r.mu.Lock()
+	if r.run == nil || r.off[id] || r.stop[id] != nil {
+		r.mu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(r.run.ctx)
+	r.stop[id] = cancel
+	run := r.run
+	r.mu.Unlock()
+	if rn, ok := c.(Runner); ok {
+		go rn.Run(ctx)
+	}
+	if e, ok := c.(Events); ok {
+		go watchOne(ctx, id, e, run.changed, run.logf)
 	}
 }
 

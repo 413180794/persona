@@ -105,12 +105,29 @@ func containsItem(list []*InboxItem, it *InboxItem) bool {
 	return false
 }
 
-// replyConnector sends the user's reply to the item's thread through its connector.
-func (h *Hub) replyConnector(ctx context.Context, c InboxItem, text string) error {
+// replyConnectorItem sends the user's reply to a connector's item, to its thread through the connector
+// (InboxReplier when it has it); the same text on an item already replied to went out already.
+func (h *Hub) replyConnectorItem(ctx context.Context, r inboxReplyReq) (already bool, err error) {
+	c := r.item
+	h.inbox.mu.Lock()
+	sent := r.live.DoneBy == "replied" && r.once.clientID == r.text
+	h.inbox.mu.Unlock()
+	if sent {
+		return true, nil
+	}
 	conn := h.connectors.Get(c.Source)
 	in, ok := conn.(connector.Inbox)
 	if !ok || !c.Connector.CanReply {
-		return errCannotReply
+		return false, errCannotReply
 	}
-	return in.Reply(ctx, c.Connector.Thread, text)
+	if rp, ok := conn.(connector.InboxReplier); ok {
+		err = rp.ReplyItem(ctx, connector.InboxReply{Thread: c.Connector.Thread, ItemID: c.ID, Last: c.Last, Text: r.text})
+	} else {
+		err = in.Reply(ctx, c.Connector.Thread, r.text)
+	}
+	if err != nil {
+		return false, err
+	}
+	r.once.clientID = r.text
+	return false, nil
 }

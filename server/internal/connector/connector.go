@@ -32,6 +32,8 @@ const (
 	StateNoPermission  = "no_permission"
 	StateRateLimited   = "rate_limited"
 	StateError         = "error"
+	// StateDisabled: the user switched it off (Registry.SetEnabled): it does not run, offer tools or bring anything in.
+	StateDisabled = "disabled"
 )
 
 // Status is how a connector is doing, for 设置 › 连接器 and the assistant: only an ok connector offers tools.

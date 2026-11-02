@@ -101,7 +101,7 @@ func isAssistant(cwd, dir string) bool {
 // machine has the lark-connector skill (assistantSkills).
 func (h *Hub) assistantClaudeMD(ctx context.Context, lark-connector bool) string {
 	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(h.cfg.Assistant.Owner), Notes: h.assistantNotes(ctx), ExtraDirs: h.kb.cfg.ExtraDirs,
-		lark-connector: lark-connector}
+		lark-connector: lark-connector, LarkCLI: h.cfg.Lark.CLI != nil, lark-connectorConfigured: h.cfg.Lark.lark-connectorConfigured(), LarkPrefer: h.cfg.Lark.Prefer}
 	for _, m := range h.machines {
 		d.Machines = append(d.Machines, prompts.AssistantMachine{Name: m.cfg.Name, ID: m.cfg.ID, Local: m.cfg.Kind == "local", SSHHost: m.cfg.SSHHost})
 	}

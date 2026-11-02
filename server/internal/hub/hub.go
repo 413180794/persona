@@ -104,6 +104,8 @@ type Hub struct {
 	todos         todosState
 
 	connectors *connector.Registry // sources of the user's information (connectors.go)
+	// connectorsOff start switched off until the user turns them on (addConnectorOff).
+	connectorsOff map[string]bool
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -148,6 +150,9 @@ type Store interface {
 	SeenTimes(ctx context.Context) (map[[2]string]time.Time, error)
 	Setting(ctx context.Context, key string, out any) (bool, error)
 	PutSetting(ctx context.Context, key string, v any) error
+	ConnectorSecret(ctx context.Context, connector string) (string, bool, error)
+	PutConnectorSecret(ctx context.Context, connector, sealed string) error
+	DeleteConnectorSecret(ctx context.Context, connector string) error
 	CreateDeviceToken(ctx context.Context, t db.DeviceToken, hash string) error
 	DeviceTokenByHash(ctx context.Context, hash string) (*db.DeviceToken, error)
 	DeviceTokens(ctx context.Context) ([]db.DeviceToken, error)

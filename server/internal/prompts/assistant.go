@@ -16,6 +16,11 @@ type AssistantClaudeMD struct {
 	Notes     string // 设置 › 助手 › 关于我, trimmed
 	ExtraDirs []string
 	lark-connector  bool // the assistant's machine has the lark-connector skill (~/.jarvis/skills/lark-connector): ol is on its PATH
+	// LarkCLI: hub.json configures lark-cli (docs/plan-lark-cli.md), on the assistant's PATH; lark-connectorConfigured: Open
+	// Lark is configured too (lark.token / lark.container); LarkPrefer: "cli" when lark-cli is the primary source.
+	LarkCLI            bool
+	lark-connectorConfigured bool
+	LarkPrefer         string
 }
 
 func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assistant/claude_md", d) }

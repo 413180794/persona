@@ -119,7 +119,7 @@ func TestLarkGate(t *testing.T) {
 {"text":"hi"}
 EOF`, "other"},
 	} {
-		v := classifyLark(tc.cmd, host, cwd)
+		v := classifyLark(tc.cmd, host, cwd, nil)
 		got := "allow"
 		switch {
 		case v.deny != "":
@@ -146,7 +146,7 @@ EOF`, "other"},
 func TestLarkSummary(t *testing.T) {
 	cwd := t.TempDir()
 	_ = os.WriteFile(filepath.Join(cwd, "msg.json"), []byte(`{"text":"来自文件"}`), 0o600)
-	v := classifyLark(`ol POST /conversations/7123/messages @msg.json && ol POST /messages/9/reactions '{"type":"OK"}'`, "", cwd)
+	v := classifyLark(`ol POST /conversations/7123/messages @msg.json && ol POST /messages/9/reactions '{"type":"OK"}'`, "", cwd, nil)
 	s := larkSummary(v.calls)
 	for _, want := range []string{"以你的身份在飞书上发消息", "POST /conversations/7123/messages", `"text": "来自文件"`, "表情回复", "POST /messages/9/reactions"} {
 		if !strings.Contains(s, want) {
@@ -182,7 +182,7 @@ func TestOlWriteInComplexCommands(t *testing.T) {
 		`echo hello`:                                 false,
 		`cat tool.go | grep "ol POST"`:               false,
 	} {
-		v := classifyLark(cmd, "", "")
+		v := classifyLark(cmd, "", "", nil)
 		got := v.other && olWriteRe.MatchString(cmd) // followed or not, a write is confirmed
 		for _, c := range v.calls {
 			if !v.other && decideLark(defaultLarkRules, c) == "confirm" {

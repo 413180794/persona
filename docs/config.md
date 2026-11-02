@@ -182,9 +182,17 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   修改后重启 hub（`systemctl --user restart jarvisd`），收件箱、默认飞书请求、媒体和实时事件统一切换，不需要更新 iOS。
   助手的 `ol` 在新进程启动时继承所选账号；已有助手进程保留启动时的环境，需要重新启动才切换。
   不同账号的服务端收件箱记录隔离并保留，切回后可继续查看；不会同时聚合多个账号。
+- `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为 lark-connector 之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
+  `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`。`bin` 是命令名或绝对路径，默认 `lark-cli`，不是绝对路径时在登录 shell 里找
+  （npm 全局装的常在 nvm 这类目录下，systemd 的 PATH 里没有）；`profile` 是 lark-cli 的 `--profile`，空的用它的默认档。
+  应用和用户的登录都留在 lark-cli 自己那里（`~/.lark-cli`），不进 `hub.json`：在助手所在的机器上自己跑一次
+  `lark-cli auth login --domain all`（全部领域的用户权限；没有浏览器加 `--no-wait --json`，在手机上点链接授权），一周内没用过要重新登录。
+  现在（L1）只给助手用：它的 PATH 上有 `lark-cli`（带上配置的 `profile`），写操作过闸门（`docs/assistant.md`「飞书：lark-cli」）。
+- `lark.prefer`（可选）：lark-connector 和 lark-cli 都配了时谁是主来源，`lark-connector`（默认）或 `cli`；现在只影响助手的提示词怎么分工。
 - `lark_gate`（可选）：助手用 lark-connector skill 写飞书时的闸门规则，排在内置规则前面，第一条匹配的说了算：
   `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]`（`action` 是 `allow` / `confirm` / `deny`，可加 `body` 按顶层字段匹配；
-  `docs/assistant.md`「飞书：lark-connector skill」）。
+  `docs/assistant.md`「飞书：lark-connector skill」）。lark-cli 的命令写成 `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
+  （`path` 是命令的词用 `/` 连起来，`*` / `**` 通配同上），匹配上就不再看 lark-cli 自报的风险等级。
 - `connector_gate`（可选）：连接器写操作（`github_comment` 这类）的闸门规则，第一条匹配的说了算，没有匹配的就在手机上逐次确认：
   `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
   （`connector`、`action` 可用 `*` 通配；`match` 按工具参数的顶层字段匹配，字符串也可以通配；`decision` 是 `allow` / `confirm` / `deny`，
