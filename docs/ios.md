@@ -231,7 +231,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 ## 新外壳（ChatGPT 式，2026-11-01）
 
 用户要求（2026-11-01）：照 ChatGPT 的 iOS App 重排 iPhone 的外壳，「聊天是 Jarvis（大改），工作是 Agents（改个入口）」，
-两页叫「助手」「Agents」（2026-11-01 用户要求，原来叫「聊天」「工作」）；没有待办时首页不放建议；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
+两页叫「助手」「Agents」（2026-11-01 用户要求，原来叫「聊天」「工作」）；新对话页和旧布局一样是欢迎页（2026-11-02 用户要回来的，原来没有待办时什么都不放，整页空白）；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
 只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变。代码在 `Jarvis/Views/Shell/`，组件在
 `DesignSystem/ShellComponents.swift`、`ShellComposerBar.swift`，颜色和尺寸是 `Theme.Shell`（各风格都用这一套中性色）。
 
@@ -245,7 +245,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 | 侧边栏 | 从 Jarvis tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；两页都可以点左上角的头像（Agents 页右拖是翻回助手）。内容：认识 Jarvis、收件箱（带数）、定时任务、知识库、机器，下面是对话历史，底部「新对话」药丸 + 设置 |
 | 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
 | 设置 | 全屏浮层（`model.shellSettings`，放在 model 里：换风格会重建整棵树，浮层要回到原来那一页），右上角 × |
-| 空对话 | 只有输入框；上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`）。没有就什么都不显示 |
+| 空对话 | 和旧布局同一个欢迎页（`AssistantWelcome`：问候、开一段新对话 / 主对话的说明、在线的机器和 iPhone、六个可以问的事；液态玻璃是两列卡片，BeautifulUI 是「可以问我」列表卡片）。2026-11-01 第一版只放输入框，没有待办时整页空白，用户 2026-11-02 要回原来的设计。输入框上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`），没有就不显示；这一块和输入框垫着页面底色，欢迎页滚到它们下面。`AssistantWelcomeTests` 守着：两种布局、从侧边栏点新对话，问候、说明、第一个建议都在屏幕上、在输入框上面 |
 | 输入框 | 一行：[+] 问 Jarvis [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [权限和思考强度] [麦克风] [发送]（`ShellComposerBar`）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。权限 / 思考强度从输入框上面那排挪进了量表菜单（`SessionModesMenu`、新对话的 `StarterModesMenu`，后者还能选启动器） |
 | 对话 | 用户气泡换成中性灰（`Theme.Shell.userBubble`），只在壳里的 Jarvis 对话（`\.shellChat`），Agents 的对话不变 |
 | 弱网 | 顶栏下面一个小药丸（等待网络 / 连接中…），两页共用；原来的标题位被切换按钮占了 |

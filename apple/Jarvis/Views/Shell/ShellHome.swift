@@ -1,10 +1,10 @@
 import BeautifulUI
 import SwiftUI
 
-/// A new conversation in the shell (docs/ios.md「新外壳」), like ChatGPT's empty chat: nothing but the composer, and over
-/// it what needs the user right now — agents waiting on them and the inbox's 需要你 — one quiet line each. Nothing to
-/// do, nothing shown (the user's choice: no suggestions in their place). While the conversation spins up, the first
-/// message and a typing line so the send feels instant.
+/// A new conversation in the shell (docs/ios.md「新外壳」): the same welcome as the old layout's (`AssistantWelcome`:
+/// greeting, what Jarvis can reach, things to ask), and over the composer what needs the user right now — agents
+/// waiting on them and the inbox's 需要你 — one quiet line each. While the conversation spins up, the first message and
+/// a typing line so the send feels instant.
 struct ShellHome: View {
     @Environment(AppModel.self) private var model
     var pending: PendingStart?
@@ -43,6 +43,9 @@ struct ShellHome: View {
                     }
                     .padding(.top, Theme.Space.m)
                     TypingIndicator(text: "\(model.persona.name) 正在准备…")
+                } else {
+                    // Its errors stay over the composer, where the send was.
+                    AssistantWelcome(send: send)
                 }
             }
             .padding(.horizontal, Theme.Space.l)
@@ -74,6 +77,9 @@ struct ShellHome: View {
             .padding(.bottom, Theme.Space.s)
             .frame(maxWidth: ChatView.readableWidth)
             .frame(maxWidth: .infinity)
+            // The welcome reaches down here: back what needs the user and the field with the page, or the cards read
+            // through them.
+            .background(Theme.pageBackground.ignoresSafeArea(edges: .bottom))
         }
         .navigationTitle(model.persona.name)
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }

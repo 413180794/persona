@@ -233,8 +233,8 @@ struct PendingStart: Equatable {
     var imageCount: Int
 }
 
-/// Empty state: greeting, what Jarvis can reach, one-tap suggestions; while a conversation spins up it shows the
-/// first message and a typing indicator so the send feels instant.
+/// The old layout's new conversation: `AssistantWelcome` (greeting, what Jarvis can reach, one-tap suggestions); while
+/// a conversation spins up it shows the first message and a typing indicator so the send feels instant.
 struct AssistantHome: View {
     @Environment(AppModel.self) private var model
     var pending: PendingStart?
@@ -243,15 +243,6 @@ struct AssistantHome: View {
     @Binding var mode: String
     @Binding var effort: String
     var send: (String, [ImagePayload]) -> Void
-
-    private let suggestions: [(symbol: String, title: String, prompt: String)] = [
-        ("calendar", "今天的安排", "看一下我今天的安排：iPhone 日历和飞书日历都查，合并后按时间列出来。"),
-        (Theme.Icon.mailAccounts, "要处理的邮件", "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"),
-        ("macbook.and.iphone", "电脑在忙什么", "我各台电脑上的 Agent 现在都在忙什么？哪些在等我、哪些跑完了还没看？"),
-        ("bubble.left.and.text.bubble.right", "飞书消息", "总结一下我今天飞书上收到的重要消息，哪些需要我回复。"),
-        ("person.2.wave.2", "会前准备", "看看我今天接下来的会，挑最重要的一个帮我准备：议程、相关文档、上次的纪要和没完成的待办。"),
-        ("heart.text.square", "这周的健康", "根据我 iPhone 上的健康数据，总结一下这周的步数、睡眠和运动情况。"),
-    ]
 
     var body: some View {
         ScrollView {
@@ -274,47 +265,7 @@ struct AssistantHome: View {
                     .padding(.top, Theme.Space.m)
                     TypingIndicator(text: "Jarvis 正在准备…")
                 } else {
-                    header
-                    if let error {
-                        Label(error, systemImage: Theme.Icon.error)
-                            .font(Theme.Font.caption)
-                            .foregroundStyle(Theme.danger)
-                    }
-                    if AppStyle.current.usesBeautifulUI {
-                        // BeautifulUI's list card: one row per thing to ask, its mark, what it is and how it is put.
-                        BUIListSection("可以问我") {
-                            ForEach(suggestions, id: \.title) { s in
-                                Button {
-                                    Haptics.tap()
-                                    send(s.prompt, [])
-                                } label: {
-                                    BUIListRow(s.title, detail: s.prompt, accessory: .disclosure, detailLines: 1) {
-                                        BUIIconTile(s.symbol, tint: Theme.accent)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    } else {
-                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                            ForEach(suggestions, id: \.title) { s in
-                                Button {
-                                    Haptics.tap()
-                                    send(s.prompt, [])
-                                } label: {
-                                    VStack(alignment: .leading, spacing: Theme.Space.m) {
-                                        Image(systemName: s.symbol)
-                                            .font(Theme.Font.title)
-                                            .foregroundStyle(Theme.accent)
-                                        Text(s.title).font(Theme.Font.heading).foregroundStyle(Color.primary)
-                                    }
-                                    .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box72, alignment: .topLeading)
-                                    .card(padding: 14)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
+                    AssistantWelcome(error: error, send: send)
                 }
             }
             .padding(.horizontal, Theme.Space.xl)
@@ -355,6 +306,71 @@ struct AssistantHome: View {
         }
         .navigationTitle("Jarvis")
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
+    }
+}
+
+/// What a new conversation opens on, in both layouts (2026-11-02 the user wanted it back in the shell, which had shown
+/// only the composer): a greeting, what Jarvis can reach, one-tap things to ask.
+struct AssistantWelcome: View {
+    @Environment(AppModel.self) private var model
+    var error: String? = nil
+    var send: (String, [ImagePayload]) -> Void
+
+    private let suggestions: [(symbol: String, title: String, prompt: String)] = [
+        ("calendar", "今天的安排", "看一下我今天的安排：iPhone 日历和飞书日历都查，合并后按时间列出来。"),
+        (Theme.Icon.mailAccounts, "要处理的邮件", "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"),
+        ("macbook.and.iphone", "电脑在忙什么", "我各台电脑上的 Agent 现在都在忙什么？哪些在等我、哪些跑完了还没看？"),
+        ("bubble.left.and.text.bubble.right", "飞书消息", "总结一下我今天飞书上收到的重要消息，哪些需要我回复。"),
+        ("person.2.wave.2", "会前准备", "看看我今天接下来的会，挑最重要的一个帮我准备：议程、相关文档、上次的纪要和没完成的待办。"),
+        ("heart.text.square", "这周的健康", "根据我 iPhone 上的健康数据，总结一下这周的步数、睡眠和运动情况。"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xl) {
+            header
+            if let error {
+                Label(error, systemImage: Theme.Icon.error)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.danger)
+            }
+            if AppStyle.current.usesBeautifulUI {
+                // BeautifulUI's list card: one row per thing to ask, its mark, what it is and how it is put.
+                BUIListSection("可以问我") {
+                    ForEach(suggestions, id: \.title) { s in
+                        Button {
+                            Haptics.tap()
+                            send(s.prompt, [])
+                        } label: {
+                            BUIListRow(s.title, detail: s.prompt, accessory: .disclosure, detailLines: 1) {
+                                BUIIconTile(s.symbol, tint: Theme.accent)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(suggestions, id: \.title) { s in
+                        Button {
+                            Haptics.tap()
+                            send(s.prompt, [])
+                        } label: {
+                            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                                Image(systemName: s.symbol)
+                                    .font(Theme.Font.title)
+                                    .foregroundStyle(Theme.accent)
+                                Text(s.title).font(Theme.Font.heading).foregroundStyle(Color.primary)
+                            }
+                            .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box72, alignment: .topLeading)
+                            .card(padding: 14)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("assistant-welcome")
     }
 
     private var header: some View {
