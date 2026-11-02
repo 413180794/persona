@@ -22,12 +22,14 @@ struct EngineSelectionView: View {
         let machine = app.machine(machineID)
         Form {
             if let machine, let selection {
+                #if os(iOS)
                 if pairing {
                     Section {
                         Text("这台电脑用哪个引擎").font(Theme.Font.title)
                         Text(machine.name).font(Theme.Font.secondary).foregroundStyle(.secondary)
                     }
                 }
+                #endif
                 Section {
                     ForEach(EngineSelectionModel.options(machine)) { found in
                         let engine = MachineEngine(rawValue: found.id)
@@ -59,7 +61,21 @@ struct EngineSelectionView: View {
                         .disabled(selection.saving || !EngineSelectionModel.canSelect(engine, on: machine))
                     }
                 } header: {
+                    #if os(macOS)
+                    // The Mac's pairing step fills the window: the question heads the page, not a card of its own.
+                    if pairing {
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                            Text("这台电脑用哪个引擎").font(Theme.Font.title).foregroundStyle(.primary)
+                            Text(machine.name).font(Theme.Font.secondary).foregroundStyle(.secondary)
+                        }
+                        .textCase(nil)
+                        .padding(.bottom, Theme.Space.s)
+                    } else {
+                        Text("引擎")
+                    }
+                    #else
                     Text("引擎")
+                    #endif
                 } footer: {
                     Text(machine.online ? "只显示所选引擎里的会话，随时可在设置 › 机器里修改。" : "机器离线，选择会在连接后生效。只显示所选引擎里的会话。")
                 }
@@ -69,8 +85,9 @@ struct EngineSelectionView: View {
                         if pairing { Text("必须选一个引擎才能继续，检查网络后再点一次确认。").font(Theme.Font.secondary) }
                     }
                 }
+                #if os(iOS)
                 Section {
-                    Button { Task { if await selection.save(machineID: machineID) { finish() } } } label: {
+                    Button { save(selection) } label: {
                         HStack {
                             Text(pairing ? "确认并继续" : "保存").lineLimit(1)
                             Spacer()
@@ -80,6 +97,7 @@ struct EngineSelectionView: View {
                     .disabled(selection.saving || !EngineSelectionModel.canSelect(selection.selected, on: machine))
                     .accessibilityIdentifier("engine.save")
                 }
+                #endif
             } else {
                 Section {
                     Text("暂时读不到这台机器")
@@ -88,6 +106,13 @@ struct EngineSelectionView: View {
             }
         }
         .themedPage()
+        #if os(macOS)
+        // A form row of tinted text read as a link, not the step's way on (2026-11-02): the Mac puts the action
+        // where its setup sheets do, a prominent button at the bottom right, and ⏎ presses it.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let machine, let selection { saveBar(selection, machine) }
+        }
+        #endif
         .navigationTitle("选择引擎")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: machineID) {
@@ -105,6 +130,33 @@ struct EngineSelectionView: View {
         let status = found.available ? "检测到可用" : "没检测到"
         return found.available && !(found.version ?? "").isEmpty ? "\(status) · \(found.version!)" : status
     }
+
+    private func save(_ selection: EngineSelectionModel) {
+        Task { if await selection.save(machineID: machineID) { finish() } }
+    }
+
+    #if os(macOS)
+    private func saveBar(_ selection: EngineSelectionModel, _ machine: Machine) -> some View {
+        HStack(spacing: Theme.Space.m) {
+            Spacer()
+            if selection.saving { ProgressView().controlSize(.small) }
+            Button { save(selection) } label: {
+                Text(pairing ? "确认并继续" : "保存").lineLimit(1)
+            }
+            .themedButton(prominent: true)
+            .controlSize(.large)
+            // ⏎ only on the pairing step (a window of its own): pushed into the main window from 机器, a window-wide
+            // default button took ⏎ from the ⌘K panel and the search field, saved and closed the page.
+            .keyboardShortcut(pairing ? .defaultAction : nil)
+            .disabled(selection.saving || !EngineSelectionModel.canSelect(selection.selected, on: machine))
+            .accessibilityIdentifier("engine.save")
+        }
+        .padding(.horizontal, Theme.Space.xl)
+        .padding(.vertical, Theme.Space.l)
+        .background(.bar) // the Mac's bottom bars (find bar, the inbox's reply bar): the window's own tint in dark
+        .overlay(alignment: .top) { Divider() }
+    }
+    #endif
 
     private func finish() {
         if pairing { app.pairingEngineMachineID = nil } else { dismiss() }

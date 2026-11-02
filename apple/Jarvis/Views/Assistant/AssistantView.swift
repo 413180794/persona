@@ -23,7 +23,7 @@ struct AssistantView: View {
     /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Jarvis 顶栏和侧边栏」.
     @State private var drawer = AssistantDrawer()
     /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; 历史对话 shows or hides it.
-    @State private var columns = NavigationSplitViewVisibility.all
+    @State private var columns = SplitColumns.shown
     #if DEBUG
     @State private var showAvatars = false
     #endif
@@ -41,6 +41,18 @@ struct AssistantView: View {
             stack // the shell holds the drawer around both of its pages
         } else if widthClass == .regular {
             // The split keeps both columns clear of the fold when the device is partly folded.
+            #if os(macOS)
+            // The history list in the content column, flush with the window and the conversation; the sidebar column
+            // (a floating glass card on macOS 26) stays empty: the shell's sections are the window's sidebar.
+            NavigationSplitView(columnVisibility: $columns) {
+                SplitColumns.noSidebar
+            } content: {
+                sidebar(column: true).modifier(SidebarWidth())
+            } detail: {
+                stack
+            }
+            .navigationSplitViewStyle(.balanced)
+            #else
             NavigationSplitView(columnVisibility: $columns) {
                 // The system sizes the column on iPhone Duo (and moves the divide onto the fold); iPad, as the other tabs.
                 sidebar(column: true)
@@ -51,6 +63,7 @@ struct AssistantView: View {
             }
             .modifier(SidebarTopFill(shown: columns != .detailOnly))
             .navigationSplitViewStyle(.balanced)
+            #endif
         } else {
             // The sidebar takes the whole height, like ChatGPT's: the tab bar fades away as it comes out
             // (`AssistantDrawer.tabBar`).
@@ -79,7 +92,7 @@ struct AssistantView: View {
         if let shell {
             shell.drawer.open()
         } else if widthClass == .regular {
-            withAnimation(Theme.Motion.standard) { columns = columns == .detailOnly ? .all : .detailOnly }
+            withAnimation(Theme.Motion.standard) { columns = columns == .detailOnly ? SplitColumns.shown : .detailOnly }
         } else {
             drawer.open()
         }

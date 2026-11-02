@@ -133,7 +133,8 @@ extension View {
             .dynamicTypeSize(model.textSize.applied(to: .large))
             .buiTheme(.jarvis())
             .scrollIndicators(.automatic)
-            // Every iOS Form grouped (System Settings' look), pages and sheets alike: the Mac's default two-column
+            // Every iOS Form in the window grouped (System Settings' look; a sheet is its own window and needs
+            // `macSheet()`, 2026-11-02): the Mac's default two-column
             // form put the iPhone's section rows (pickers, editors) in the label column and cut them off.
             .formStyle(.grouped)
     }
@@ -162,6 +163,19 @@ private struct MacShell: View {
                     if sidebarHidden { MacConnectionFooter().background(Theme.systemSidebar) }
                 }
         }
+        // No toolbar band across the window: the sections column reaches up behind the traffic lights, and the bar's
+        // backdrop and hairline cut it off at the toolbar (2026-11-02).
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        // Next to the traffic lights, over the sections column: shows or hides that column (显示 › 显示/隐藏侧边栏,
+        // ⌃⌘S). The pages' lists have no button of their own: one there sat over this column and hid the list.
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button { withAnimation(Theme.Motion.layout) { sidebarHidden.toggle() } } label: {
+                    Label(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏", systemImage: Theme.Icon.sidebar)
+                }
+                .help(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏")
+            }
+        }
         // Something moved the tab (a notification, ⌘K, a link): its section comes to the front.
         .onChange(of: model.selectedTab) { shell.section = nil }
         .onChange(of: model.openChat) { if model.openChat != nil { shell.section = nil } }
@@ -170,37 +184,43 @@ private struct MacShell: View {
 
     @AppStorage(MacSection.sidebarHiddenKey) private var sidebarHidden = false
 
+    /// The sections, with the rows the Jarvis page's own list draws (`AssistantSidebar`): the same icon box, type and
+    /// rounded selection (2026-11-02 user: the system's source list beside it looked unstyled). Flush with the window's
+    /// edges, up behind the traffic lights; inset from them it looked like a card on a backing board (same day).
     private var sections: some View {
-            List(selection: Binding(get: { MacSection.shown(override: shell.section, tab: model.selectedTab) },
-                                    set: { if let s = $0 { shell.go(s, model) } })) {
-                ForEach(MacSection.allCases) { section in
-                    Label(section.title, systemImage: section.icon)
-                        .lineLimit(1)
-                        .badge(badge(section))
-                        .tag(section)
-                        .accessibilityIdentifier("mac.section.\(section.rawValue)")
-                }
+        let shown = MacSection.shown(override: shell.section, tab: model.selectedTab)
+        return VStack(spacing: Theme.Space.xxs) {
+            ForEach(MacSection.allCases) { section in
+                MacSectionRow(section: section, selected: section == shown, badge: badge(section)) { shell.go(section, model) }
             }
-            .listStyle(.sidebar)
+            Spacer(minLength: 0)
             // The sidebar's foot: while the hub is out of reach, 等待网络 / 连接中… (a click explains), as the
             // iPhone's title spot does (docs/mac.md「主窗口」).
-            .safeAreaInset(edge: .bottom, spacing: 0) { MacConnectionFooter() }
-            .frame(width: Theme.Size.macSidebarIdeal)
-            .background(Theme.systemSidebar)
-            .transition(.move(edge: .leading))
+            MacConnectionFooter()
+        }
+        // Below the traffic lights at a fixed height: the title bar is taller on pages with toolbar items, and rows
+        // that followed it jumped up and down between sections.
+        .padding(.top, Theme.Size.macToolbarHeight)
+        .padding(.horizontal, Theme.Space.s)
+        .padding(.bottom, Theme.Space.s)
+        .frame(width: Theme.Size.macSidebarIdeal)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea(.container, edges: .top)
+        .background(Theme.systemSidebar)
+        .transition(.move(edge: .leading))
     }
 
     /// The iOS tab bar's badges (`RootView`).
-    private func badge(_ section: MacSection) -> Text? {
+    private func badge(_ section: MacSection) -> MacSectionRow.Badge? {
         let n: Int
         switch section {
         case .knowledge, .machines: return nil
         case .assistant: n = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count
         case .agents: n = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey) }.count
         case .inbox: n = InboxStore.shared.actionCount
-        case .settings: return model.isDemo ? Text("体验") : nil
+        case .settings: return model.isDemo ? .word("体验") : nil
         }
-        return n > 0 ? Text("\(n)") : nil
+        return n > 0 ? .count(n) : nil
     }
 
     @ViewBuilder private var page: some View {
@@ -212,6 +232,53 @@ private struct MacShell: View {
         case .machines: MacMachinesPage()
         case .settings: SettingsView()
         }
+    }
+}
+
+/// One section in the shell's sidebar: the row `AssistantSidebar` draws for 新对话 / 定时任务 / 知识库 (an icon in a
+/// fixed box, body type), selected with the same rounded well its current conversation has.
+struct MacSectionRow: View {
+    enum Badge: Equatable {
+        /// Things waiting for the user (the tab bar's red number).
+        case count(Int)
+        /// A word in place of a number (设置 in 体验模式).
+        case word(String)
+    }
+
+    var section: MacSection
+    var selected: Bool
+    var badge: Badge?
+    var go: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: go) {
+            HStack(spacing: Theme.Space.l) {
+                Image(systemName: section.icon).resizable().scaledToFit().foregroundStyle(Color.primary)
+                    .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
+                    .scaledFrame(width: Theme.Size.icon)
+                Text(section.title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                Spacer(minLength: 0)
+                switch badge {
+                case .count(let n): CountBadge(count: n, look: .solid(Theme.needsYou))
+                case .word(let w): Text(w).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                case nil: EmptyView()
+                }
+            }
+            .padding(.horizontal, Theme.Space.m)
+            .scaledFrame(minHeight: Theme.Size.avatarL)
+            .background {
+                if selected || hovering {
+                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                        .fill(selected ? Theme.Fill.well : Theme.Fill.macHover)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("mac.section.\(section.rawValue)")
     }
 }
 

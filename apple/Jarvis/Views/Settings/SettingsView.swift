@@ -556,9 +556,11 @@ struct PairView: View {
                                 Task { await connect() }
                             }
                         }
+                        #if os(iOS)
                         .scaledFrame(height: Theme.Size.box280)
                         .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .listRowInsets(EdgeInsets())
+                        #endif
                     } footer: {
                         #if os(iOS)
                         Text("扫描 `jarvisd hub pair` 打印的二维码。")
@@ -568,12 +570,32 @@ struct PairView: View {
                     }
                 }
                 Section("手动输入") {
+                    #if os(macOS)
+                    // A grouped form puts the label on the left and the field on the right with no box: the prompt
+                    // shows where to type.
+                    TextField("服务器地址", text: $url, prompt: Text(verbatim: "http://hub.example.com:18660")).autocorrectionDisabled()
+                    SecureField("Token", text: $token, prompt: Text("配对链接里的 token"))
+                    #else
                     TextField("服务器地址", text: $url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     SecureField("Token", text: $token)
+                    #endif
                 }
                 if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
             }
             .themedPage()
+            #if os(macOS)
+            // A window sheet does not take the main window's grouped forms: without this the Mac laid the fields out
+            // in two columns, the labels flush against the sheet's left edge (2026-11-02).
+            .macSheet()
+            // ⌘V lands in the focused field (the address field has it when the sheet opens), not on the paste button:
+            // a pairing link pasted there pairs as the button does; an address stays an address.
+            .onChange(of: url) { _, typed in
+                guard let cfg = ServerConfig(pairURL: typed) else { return }
+                url = cfg.url.absoluteString
+                token = cfg.token
+                Task { await connect() }
+            }
+            #endif
             .navigationTitle("连接 hub")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

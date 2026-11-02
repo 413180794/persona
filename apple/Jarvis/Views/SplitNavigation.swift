@@ -12,7 +12,7 @@ import SwiftUI
 struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: View {
     @Environment(\.horizontalSizeClass) private var widthClass
     /// Whether the list column shows (its button in the toolbar closes it).
-    @State private var columns = NavigationSplitViewVisibility.all
+    @State private var columns = SplitColumns.shown
     @Binding var path: NavigationPath
     /// The pages the list opens (`navigationDestination`s), registered in both layouts.
     var destinations: Destinations
@@ -22,6 +22,28 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
 
     var body: some View {
         if widthClass == .regular {
+            #if os(macOS)
+            // The list in the content column (flush; the sidebar column floats as a glass card on macOS 26 and stays
+            // empty). A value link in the content column replaces the detail column's stack, as one in the sidebar did.
+            NavigationSplitView(columnVisibility: $columns) {
+                SplitColumns.noSidebar
+            } content: {
+                // The look the list had in the sidebar column (no row lines, footers as before) on the window's white,
+                // as the Jarvis and Agents lists beside the sections are; lists that pick a style keep it. Inside the
+                // destinations, so the style stays in this column whichever environment the pushed pages are built in.
+                sidebar
+                    .listStyle(.sidebar)
+                    .scrollContentBackground(.hidden)
+                    .modifier(destinations)
+                    .modifier(SidebarWidth())
+            } detail: {
+                NavigationStack(path: $path) {
+                    empty.modifier(destinations)
+                }
+            }
+            .navigationSplitViewStyle(.balanced)
+            .environment(\.splitDetail, SplitDetail(isFirstPage: path.count <= 1))
+            #else
             NavigationSplitView(columnVisibility: $columns) {
                 // No stack of its own: a value link in the sidebar column replaces the detail column's stack. A sidebar
                 // stack that refused its pushes (a path binding that always read empty) first slid the list away, then
@@ -38,12 +60,28 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
             // On the whole split, not the detail stack: its pages are built from the destinations the sidebar
             // registered, in the sidebar's environment.
             .environment(\.splitDetail, SplitDetail(isFirstPage: path.count <= 1))
+            #endif
         } else {
             NavigationStack(path: $path) {
                 sidebar.modifier(destinations)
             }
         }
     }
+}
+
+/// What a split shows when its list is out: the list beside the page. On the Mac the list is the content column of a
+/// three-column split whose sidebar column stays empty (`noSidebar`): macOS 26 draws the sidebar column as a glass card
+/// floating off the window's edges, the window's backdrop showing round it (2026-11-02 user: 像浮在背景板上，有缺口).
+/// The shell's sections column is the window's sidebar there.
+enum SplitColumns {
+    #if os(macOS)
+    static let shown = NavigationSplitViewVisibility.doubleColumn
+
+    /// The empty sidebar column, and no system button to bring it out.
+    static var noSidebar: some View { Color.clear.toolbar(removing: .sidebarToggle) }
+    #else
+    static let shown = NavigationSplitViewVisibility.all
+    #endif
 }
 
 /// The list column's width. iPhone Duo: none of our own (the system sizes the columns, and partly folded it moves the

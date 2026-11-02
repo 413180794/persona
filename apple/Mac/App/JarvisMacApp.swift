@@ -292,6 +292,14 @@ enum MacLaunchArguments {
             MacShellState.shared.quickOpen = true
         }
         if d.bool(forKey: "openNewAgent") { MacShellState.shared.newAgent = true }
+        // `-openEngineStep <machine id>`: pairing's 选择引擎 step for that machine, once the hub's machines are in (the
+        // step reads the machine when it appears).
+        if let id = d.string(forKey: "openEngineStep") {
+            Task {
+                for _ in 0..<40 where model.machine(id) == nil { try? await Task.sleep(for: .milliseconds(250)) }
+                model.pairingEngineMachineID = id
+            }
+        }
         // `-macMenuLog YES`: the Agent menu's items and shortcuts as built for the chat on screen (the 回答 submenu).
         if d.bool(forKey: "macMenuLog") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 8) {

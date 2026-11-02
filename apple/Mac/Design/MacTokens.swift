@@ -14,6 +14,8 @@ extension Theme.Size {
     static let macWindowMinHeight: CGFloat = 560
     static let macWindowWidth: CGFloat = 1280
     static let macWindowHeight: CGFloat = 820
+    /// A window's title bar with a unified toolbar: where the shell's sections start, whatever the page's toolbar holds.
+    static let macToolbarHeight: CGFloat = 52
     /// The shell's sidebar column (Jarvis / Agents / 收件箱 / 设置).
     static let macSidebarMin: CGFloat = 180
     static let macSidebarIdeal: CGFloat = 210
@@ -42,7 +44,14 @@ extension Theme.Size {
     static let macInspectorMax: CGFloat = 420
 }
 
+extension Theme {
+    /// A glyph on a tinted fill (the composer's send / 中断 circles), as the system's prominent buttons draw it.
+    static let macOnTint = Color.white
+}
+
 extension Theme.Icon {
+    /// Shows or hides the window's sections column (the toolbar button beside the traffic lights, ⌃⌘S).
+    static let sidebar = "sidebar.left"
     /// A click with the mouse or trackpad (the Mac's version of a tap, 终端设置 › 操作).
     static let click = "cursorarrow.click"
     /// The right-click menu.
@@ -57,6 +66,8 @@ extension Theme.Icon {
 }
 
 extension Theme.Fill {
+    /// A row under the pointer in the shell's sidebar: half the selected row's well.
+    static let macHover = Theme.Fill.well.opacity(0.5)
     /// The faint dim behind ⌘K (a click on it closes the panel).
     static let macScrim = Color.black.opacity(0.12)
     /// Floating panels over the page (⌘K): the window background, opaque like Xcode's Open Quickly.

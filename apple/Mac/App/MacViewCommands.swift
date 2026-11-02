@@ -56,7 +56,8 @@ struct MacViewMenu: Commands {
             Divider()
         }
         CommandGroup(after: .sidebar) {
-            // The window's sections column (MacShell); the pages' own list columns have their buttons.
+            // The window's sections column (MacShell), as the toolbar button beside the traffic lights does; the pages'
+            // list columns have no button on the Mac (SplitColumns).
             Button(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏") {
                 withAnimation(Theme.Motion.layout) { sidebarHidden.toggle() }
             }

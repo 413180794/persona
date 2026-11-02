@@ -9,6 +9,9 @@
 - UI 测试一律 `app.launchPinned()` 启动（`UITestStyle`）：App 记着上一个测试留下的风格，BeautifulUI 风格的界面又不一样，不说风格的测试会碰上别人留下的样子
   （LongSessionTests 在 BeautifulStyleTests 之后跑就挂过）。默认液态玻璃，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 整套换成 BeautifulUI 风格跑；
   只测某一种风格的测试自己传 `-ui.style`。它经 `launchJarvis()` 启动，没选布局的测试照旧跑在四个 tab 的旧布局上。`UITestStyleTests` 查源码（`launch()`、`launchJarvis()` 都算漏）。
+- JarvisTests 别跑在配对过真 hub 的模拟器上（`jarvis-sim` / `sim.sh` 配对的那台）：iOS 的测试宿主不跳过钥匙串（只有 Mac 跳过，`Shared/Keychain.swift`），
+  一启动就拿配对连 hub、以模拟器身份注册手机工具、弹通知授权。2026-11-02 在这样一台上连着三次「test runner hung before establishing connection」
+  （没锁屏，重启模拟器也一样），换一台从没装过 App 的模拟器第一次就过了，卡住的具体原因没再追。用 `simctl list devices` 挑一台没跑过 Jarvis 的。
 - UI 测试锁了模拟器屏幕却没解锁（模拟器上按 Home 不解锁，要上滑），下一次 `xcodebuild test` 报「test runner hung before establishing connection」。
   模拟器系统语言是英文时，系统授权弹窗的按钮叫「Allow」，UI 测试两种都要认。
 - 模拟器会被 XCUITest 的 typeText 切成「硬件键盘」模式：之后软键盘不再弹出（键盘按钮显示已弹起，但屏幕上没有键盘），依赖键盘高度的测试全挂。

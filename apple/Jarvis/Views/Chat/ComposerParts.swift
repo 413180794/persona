@@ -23,11 +23,22 @@ struct ComposerRow<MenuItems: View>: View {
             Menu { menu() } label: {
                 Image(systemName: Theme.Icon.add).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
             }
+            #if os(macOS)
+            // A Mac menu draws as a pull-down button with its arrow beside the label: clipped to the circle, the +
+            // was cut in half (2026-11-02). As a plain button with no arrow, in a round glass of its own.
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .macRoundButton()
+            #else
             .themedButton()
             .clipShape(.circle)
+            #endif
 
             TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
                 .lineLimit(1...6)
+                #if os(macOS)
+                .textFieldStyle(.plain) // the surface below is the field's box; the Mac's own bezel drew a second one inside
+                #endif
                 .focused(focused)
                 .padding(.horizontal, Theme.Space.l)
                 .padding(.vertical, Theme.Space.m)
@@ -38,16 +49,24 @@ struct ComposerRow<MenuItems: View>: View {
                 Button(action: stop) {
                     Image(systemName: Theme.Icon.interrupt).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
+                #if os(macOS)
+                .macRoundButton(prominent: true)
+                #else
                 .themedButton(prominent: true)
-                .tint(Theme.danger)
                 .clipShape(.circle)
+                #endif
+                .tint(Theme.danger)
                 .accessibilityLabel("中断")
             } else {
                 Button(action: send) {
                     Image(systemName: Theme.Icon.send).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
+                #if os(macOS)
+                .macRoundButton(prominent: true)
+                #else
                 .themedButton(prominent: true)
                 .clipShape(.circle)
+                #endif
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: .command)
                 .accessibilityLabel("发送")

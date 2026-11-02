@@ -8,17 +8,14 @@ enum DataScannerViewController {
     static let isAvailable = true
 }
 
-/// Stands where the iPhone's camera view is: a paste button for the pairing link. `onCode` gets the link, as the
-/// scanner hands over a scanned code.
+/// Stands where the iPhone's camera view is: a paste button for the pairing link, one row of the grouped form (the
+/// camera's square would leave a tall empty card). `onCode` gets the link, as the scanner hands over a scanned code.
 struct QRScanner: View {
     var onCode: (String) -> Void
     @State private var failed = false
 
     var body: some View {
-        VStack(spacing: Theme.Space.m) {
-            Image(systemName: Theme.Icon.paste)
-                .font(Theme.Font.display)
-                .foregroundStyle(.secondary)
+        VStack(spacing: Theme.Space.s) {
             Button {
                 let s = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 if ServerConfig(pairURL: s) != nil {
@@ -31,11 +28,12 @@ struct QRScanner: View {
                 Label("粘贴配对链接", systemImage: Theme.Icon.paste).lineLimit(1)
             }
             .themedButton(prominent: true)
-            .keyboardShortcut("v", modifiers: .command)
+            .controlSize(.large)
             if failed {
                 Text("剪贴板里不是配对链接").font(Theme.Font.caption).foregroundStyle(Theme.danger)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Theme.Space.l)
     }
 }

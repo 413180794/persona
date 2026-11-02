@@ -97,6 +97,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 - 启动参数和 iOS 一样（`MacLaunchArguments`，只在 DEBUG）：`-pairURL`、`-tab dev|mail|settings|assistant`、`-openSession <machine>/<session>`、
   `-openAssistant`、`-newAssistant`、`-showNewChat`、`-openChatsFresh`、`-openAgentsFresh`、`-lark-connector`、`-simulateTap`；体验模式 `-demo.on YES`。
 - 截图（**锁屏也能拍**）：`scripts/mac_shot.sh <名字> [启动参数…]`，浅色、深色各一张写到 `/tmp/jarvis-mac-shots/<名字>-{light,dark}.png`。
+  配对后的「选择引擎」一步：`-openEngineStep <机器 id>`（体验模式的 `server` 就行）。看玻璃材质要截真窗口，见 `docs/lessons/macos.md`。
   默认体验模式；`BUILD=1` 先编译，`APP=` 指定 .app，`SIZE=1280x820`，`DELAY=4`，`APPEARANCES="light dark"`。
   例：`scripts/mac_shot.sh agents -tab dev -dev.openChat ""`、`scripts/mac_shot.sh chat -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`、
   `scripts/mac_shot.sh jarvis -tab assistant`、`scripts/mac_shot.sh inbox -tab mail`、`scripts/mac_shot.sh settings -tab settings`。
@@ -118,10 +119,16 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 
 ## Mac 版现在的样子（阶段 0：能编、能跑）
 
-- 壳（`Mac/App/`）：窗口左边一列四项（Jarvis / Agents / 收件箱 / 设置，角标同 iOS 的 tab 栏），右边是 iOS 的页面本身；
+- 壳（`Mac/App/`）：窗口左边一列六项（Jarvis / Agents / 收件箱 / 知识库 / 机器 / 设置，角标同 iOS 的 tab 栏），右边是 iOS 的页面本身；
+  这一列贴着窗口左边、上下到顶（伸到红绿灯后面），侧栏底色，和页面之间一条分隔线；行和 Jarvis 页的历史列表（`AssistantSidebar`）同一套：
+  同样的图标框和字号，选中是同样的灰色圆角底（`MacSectionRow`；2026-11-02 用户：系统的源列表放在旁边像没做过样式）。
+  窗口工具栏不画底色和分隔线；红绿灯旁边一个按钮收起 / 显示这一列（和「显示 › 隐藏侧边栏」⌃⌘S 是同一个动作）。
   `horizontalSizeClass` 在 Mac 上恒为 `.regular`，所以 Agents、收件箱、设置、Jarvis 走的是 iPad / iPhone Duo 打开时的分栏布局。
   外层不用 `NavigationSplitView`：页面自己是分栏，分栏套在另一个分栏的详情栏里时，里面的详情栏按外层侧栏还在前面排版，对话被挤到右边、输入框被裁掉。
-  ⌘1…⌘4 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
+  页面的分栏在 Mac 上是三栏、第一栏空着（`SplitColumns`）：macOS 26 把分栏的侧栏画成离窗口四边一点的玻璃卡片，周围露出窗口底色
+  （2026-11-02 用户：像浮在背景板上，有缺口），没有关掉的 API；内容栏是贴边的，列表放在内容栏，内容栏里的 `NavigationLink(value:)` 照样推进详情栏。
+  代价：Agents、收件箱、设置的列表栏在 Mac 上不能收起（原来工具栏上的「隐藏列表」在红绿灯旁边，正好压在六项这一列上），Jarvis 页的历史列表照旧用顶栏的按钮收起。
+  ⌘1…⌘6 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
   App 在后台不断开 WebSocket（Mac 应用常驻，hub 靠这条连接找到它）。
 - 兼容层（`Mac/Compat/`）：`UIKitTypes.swift`（UIColor / UIImage / UIFont / UIEdgeInsets 的别名，UIPasteboard、UIApplication.open、UIDevice（含电池）、
   UIGraphicsImageRenderer、haptics 空操作、UIKit 语义色）、`SwiftUICompat.swift`（iOS 专用修饰符的同名 Mac 版本：`navigationBarTitleDisplayMode` 什么都不做、
@@ -145,7 +152,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
     由 Mac 提醒；助手按你的要求发的提醒照推）、看登录时间、退出那台 Mac（吊销它的设备凭据，要重新配对）。协议见 `docs/protocol.md` 的 `desktops` / `register_desktop`。
     配对时 Mac 用配对 token 换的设备凭据现在要 kind `desktop`（`AppModel.credentialKind`，有测试），hub 存成 `other`、权限不变，设置 › 设备 里显示电脑图标。
     这次改动之前已经换过凭据的 Mac 在列表里还标成 phone，只是标签，撤销后重新配对就对了（不改）。
-- 临时实现，等后面打磨：外层侧栏和页面自己的分栏是两层（应做成真正的三栏）；分页的 `TabView(.page)` 换成了默认样式 / 箭头翻页；
+- 临时实现，等后面打磨：外层侧栏和页面自己的分栏是两层（六项是 HStack 里的一列，页面是第一栏空着的三栏分栏）；分页的 `TabView(.page)` 换成了默认样式 / 箭头翻页；
   `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；代码行只有整行选择；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
   字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体（`UIFontMetrics` 按 iOS 的 body 表换算）。
 
