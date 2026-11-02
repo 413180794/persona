@@ -261,6 +261,9 @@
   `defaultMinListRowHeight` 设 0。**单独一个 `Divider()` 当一行会竖着画**（一根小竖线）：包一层 `VStack`。
 - 抽屉开着时左拖本来是关抽屉；行的左滑要先赢：`DrawerPan` 在 `shouldBeRequiredToFailBy` 里让列表（UICollectionView）的 pan 等它，
   它在 `gestureRecognizerShouldBegin` 里看手指下的 cell 有没有 `SwipeRowMark`（一个空的 UIView 标记）再放手。
+- 一组子视图（`HStack` 里的图标、文字、计数）只在外面挂 `.accessibilityLabel` 不够：标签会落到每个子视图上，读屏连读几遍
+  （「还有 N 个空闲」那行读三遍「展开 N 个空闲的 agent」，iOS 和 Mac 一样，#405，2026-11-02）。先 `.accessibilityElement(children: .ignore)`
+  合成一个元素再给标签；包在 `Button` 里也照样能按。
 
 ## Swift 与编译
 

@@ -714,7 +714,7 @@ private struct AgentsList: View {
                 spaceHeader(g, folded: true)
                     // Where a header sits; the capsules: the page's edge, where an open space's title is too.
                     .listRowInsets(capsules ? EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page)
-                                   : EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                                   : Self.foldedHeaderInsets)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
@@ -891,6 +891,16 @@ private struct AgentsList: View {
 
     /// The agents as BeautifulUI's capsules: its style, cards (not 细列表).
     private var capsules: Bool { !compact && AppStyle.current.usesBeautifulUI }
+
+    #if os(macOS)
+    /// A folded space's header, a plain row, where an open section's header sits: the row's own insets on the Mac
+    /// (a fixed 20 put it 20pt in on both sides and cut its name short, #405).
+    private static let foldedHeaderInsets: EdgeInsets? = nil
+    #else
+    /// A folded space's header, a plain row, where an open section's header sits: 20 is the system's inset for an
+    /// inset-grouped section header on iOS (matching it, not a design value).
+    private static let foldedHeaderInsets: EdgeInsets? = EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)
+    #endif
 
     /// A capsule's room: the page's edges, a little air above and below.
     private static let capsuleInsets = EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page, bottom: Theme.Space.xs, trailing: Theme.Space.page)
@@ -1744,6 +1754,8 @@ struct IdleFoldRow: View {
         }
         .padding(.vertical, Theme.Space.xs)
         .contentShape(.rect)
+        // One element: on the stack alone the label went to each of its three children (read out three times, #405).
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("展开 \(sessions.count) 个空闲的 agent")
     }
 }
