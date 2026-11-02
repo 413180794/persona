@@ -18,6 +18,7 @@ import Testing
 
     @Test func gmailMakesNoPasswordRequest() {
         #expect(MailAccountForm(kind: .gmail, email: "me@example.com", password: "p").request == nil)
+        #expect(MailAccountForm(kind: .outlook, email: "me@example.com", password: "p").request == nil) // signs in with Microsoft
         #expect(MailAccountForm(kind: .feishu, email: "me@example.com", password: "p").request?.provider == "feishu")
     }
 }

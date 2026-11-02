@@ -165,15 +165,19 @@ func (s *Service) Send(ctx context.Context, req SendRequest) error {
 		if err := s.sendMail(ctx, a, a.Email, rcpts, raw); err != nil {
 			return err
 		}
-	} else if a.Auth == AuthOAuth2 {
+	} else if a.Auth == AuthOAuth2 && a.Provider == ProviderGmail {
 		if err := s.gmailAPISend(ctx, a, req.Bcc, raw); err != nil {
 			return err
 		}
 	} else if err := s.smtpSend(ctx, a, a.Email, rcpts, raw); err != nil {
+		if a.Provider == ProviderOutlook {
+			return outlookHint(fmt.Errorf("smtp: %w", err))
+		}
 		return err
 	}
 
-	if a.Provider != ProviderGmail {
+	// Gmail and Exchange file what they send in Sent themselves.
+	if a.Provider != ProviderGmail && a.Provider != ProviderOutlook {
 		s.appendToSent(ctx, a, raw)
 	}
 	return nil

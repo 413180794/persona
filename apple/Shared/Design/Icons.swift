@@ -255,6 +255,8 @@ extension Theme {
         /// Google's G, only on the 使用 Google 账号登录 button.
         static let google = "brand-google"
         static let gmail = "brand-gmail"
+        /// Microsoft's four squares, only on the 使用 Microsoft 账号登录 button and Outlook accounts.
+        static let microsoft = "brand-microsoft"
         /// iPhone's own apps, for the data Jarvis reads from them (设置 › 连接器 › 这台 iPhone): their App Store artwork.
         static let iosContacts = "ios-app-contacts"
         static let iosCalendar = "ios-app-calendar"

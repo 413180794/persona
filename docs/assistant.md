@@ -77,6 +77,8 @@
 - **说明书**：不往助手目录拷 skill。CLAUDE.md（`prompts/assistant/claude_md.md`）多一段，让它先 `lark-cli skills read lark-<领域>` 读 lark-cli 自带、
   跟版本走的领域说明，参数用 `--help` / `lark-cli schema`。只有 lark-cli 时说明没有未读和removed、`lark_*` MCP 工具用不了，找要处理的消息用
   `im +messages-search --is-at-me / --chat-type p2p`；两个都有时按 `lark.prefer` 分工（golden `assistant_claude_md.lark_cli`、`.both`）。
+  只配了 lark-cli 时，机器上留着的 lark-connector skill（旧版 jarvisd 拷进助手目录的）不算：没有 lark-connector 可连，CLAUDE.md 里不提 `ol`
+  （2026-11-03 部署到 hub 机器时撞上：说明书先推荐 `ol`，又说没有 lark-connector）。
 - **闸门**（`node/larkcligate.go`，接在 `ol` 的闸门里，同一个 `larkCheck`，Codex 也走它）：lark-cli 自己知道哪些命令会写，每个命令的 `--help` 都打印
   `Risk: read / write / high-risk-write`，node 第一次见到一个命令时问一次（按命令缓存，约 50 ms）：
   - `read` 直接放行；`write`、`high-risk-write`、问不出来的都在手机上弹「飞书」卡片，写的是做什么（发消息、回复、表情、撤回…）和整条命令，

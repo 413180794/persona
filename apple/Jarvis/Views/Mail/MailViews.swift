@@ -76,6 +76,35 @@ extension APIClient {
     }
     func deleteMailAccount(_ id: String) async throws { try await delete("/api/v1/mail/accounts/\(id)") }
 
+    /// Outlook's "Sign in with Microsoft" (docs/mail.md「Outlook 接入方式」): the client ID the user registered in
+    /// Microsoft Entra (kept on the hub) and the redirect URI to register with it.
+    struct MicrosoftConfig: Codable, Equatable {
+        var configured: Bool
+        var clientID: String?
+        var source: String?
+        var redirectURI: String
+        enum CodingKeys: String, CodingKey { case configured, source, clientID = "client_id", redirectURI = "redirect_uri" }
+    }
+    struct MicrosoftFinish: Encodable {
+        var state: String
+        var code: String?
+        var error: String?
+        var errorDescription: String?
+        enum CodingKeys: String, CodingKey { case state, code, error, errorDescription = "error_description" }
+    }
+    func microsoftConfig() async throws -> MicrosoftConfig { try await get("/api/v1/mail/oauth/microsoft/config") }
+    /// Keeps the client ID on the hub ("" forgets it).
+    func setMicrosoftClientID(_ id: String) async throws -> MicrosoftConfig {
+        try JSON.decoder.decode(MicrosoftConfig.self, from: await request("PUT", "/api/v1/mail/oauth/microsoft/config", body: ["client_id": id]))
+    }
+    func microsoftSignInStart() async throws -> GoogleStart {
+        try await post("/api/v1/mail/oauth/microsoft/start", as: GoogleStart.self)
+    }
+    /// Hands the callback to the hub (also an error: it says what to do about it, e.g. an admin has to consent).
+    func microsoftSignInFinish(_ f: MicrosoftFinish) async throws -> MailAccount {
+        try await post("/api/v1/mail/oauth/microsoft/finish", body: f, timeout: 60, as: AccountResponse.self).account
+    }
+
 }
 
 struct MailDetailView: View {
@@ -405,7 +434,7 @@ struct MailAccountsView: View {
                             MailProviderMark(provider: a.provider ?? "")
                             VStack(alignment: .leading) {
                                 Text(a.email).font(Theme.Font.heading)
-                                Text(a.status == "error" ? (a.error ?? "错误") : a.auth == "oauth2" ? "Gmail · Google 账号登录" : "\(a.provider == "feishu" ? "飞书邮箱" : (a.imapHost ?? ""))")
+                                Text(a.status == "error" ? (a.error ?? "错误") : a.auth == "oauth2" ? (a.provider == "outlook" ? "Outlook · Microsoft 账号登录" : "Gmail · Google 账号登录") : "\(a.provider == "feishu" ? "飞书邮箱" : (a.imapHost ?? ""))")
                                     .font(Theme.Font.label).foregroundStyle(a.status == "error" ? Theme.danger : .secondary)
                             }
                         }
@@ -443,6 +472,7 @@ struct MailProviderMark: View {
         Group {
             switch provider {
             case "gmail": Image(Theme.Brand.gmail).resizable().scaledToFit()
+            case "outlook": Image(Theme.Brand.microsoft).resizable().scaledToFit()
             case "feishu": Image(Theme.Brand.lark).resizable().scaledToFit()
             default: Image(systemName: "envelope.circle.fill").resizable().scaledToFit().foregroundStyle(Theme.accent)
             }
@@ -451,10 +481,12 @@ struct MailProviderMark: View {
     }
 }
 
-/// Google's sign-in button as its branding guidelines draw it (developers.google.com/identity/branding-guidelines):
-/// the G on white with a gray outline in light mode, on #131314 in dark mode; not the app's accent.
-struct GoogleSignInLabel: View {
+/// A provider's sign-in button as Google's branding guidelines draw it (developers.google.com/identity/branding-guidelines),
+/// which Microsoft's allow too: the mark on white with a gray outline in light mode, on #131314 in dark mode; not the
+/// app's accent.
+struct AccountSignInLabel: View {
     @Environment(\.colorScheme) private var scheme
+    var mark: String
     var title: String
     var busy = false
 
@@ -462,7 +494,7 @@ struct GoogleSignInLabel: View {
         let dark = scheme == .dark
         HStack(spacing: Theme.Space.m) {
             if busy { ProgressView().controlSize(.small) } else {
-                Image(Theme.Brand.google).resizable().scaledToFit().scaledFrame(width: Theme.Size.iconXS, height: Theme.Size.iconXS)
+                Image(mark).resizable().scaledToFit().scaledFrame(width: Theme.Size.iconXS, height: Theme.Size.iconXS)
             }
             Text(title).font(Theme.Font.heading).lineLimit(1)
         }
@@ -492,7 +524,7 @@ struct AddMailAccountView: View {
                 if form.kind == .gmail {
                     Section {
                         Button { Task { await signInWithGoogle() } } label: {
-                            GoogleSignInLabel(title: saving ? "正在连接 Gmail…" : "使用 Google 账号登录", busy: saving)
+                            AccountSignInLabel(mark: Theme.Brand.google, title: saving ? "正在连接 Gmail…" : "使用 Google 账号登录", busy: saving)
                         }
                         .buttonStyle(.plain)
                         .disabled(saving)
@@ -501,15 +533,17 @@ struct AddMailAccountView: View {
                     } footer: {
                         Text("跳到 Google 选择账号并授权 Jarvis 收发邮件，不需要密码。授权随时可以在 Google 账号的「第三方应用和服务」里撤销；授权失效时再登录一次即可恢复。")
                     }
+                } else if form.kind == .outlook {
+                    OutlookSignInSection(error: $error) { dismiss() }
                 } else {
                     Section {
                         TextField("邮箱地址", text: $form.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                         SecureField("密码 / 授权码", text: $form.password)
                     } footer: {
                         switch form.kind {
-                        case .gmail: EmptyView()
+                        case .gmail, .outlook: EmptyView()
                         case .feishu: Text("飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。")
-                        case .imap: Text("QQ / 163 / Outlook / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。")
+                        case .imap: Text("QQ / 163 / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。Outlook 用上面的「Outlook」登录。")
                         }
                     }
                 }
@@ -533,7 +567,7 @@ struct AddMailAccountView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                if form.kind != .gmail {
+                if form.kind != .gmail && form.kind != .outlook {
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("连接") } }
                             .disabled(saving || form.email.isEmpty || form.password.isEmpty)

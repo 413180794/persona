@@ -8,7 +8,7 @@ It serves machines, agents, conversations, interactions and the inbox, enough fo
 does not know are logged to stderr as MISSING. Timestamps are relative to when it starts. See docs/testing.md.
 """
 import base64, unicodedata
-import copy, hashlib, json, os, struct, sys, threading, time, uuid
+import copy, hashlib, json, os, re, struct, sys, threading, time, uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
@@ -1905,8 +1905,26 @@ def mail_area(h, method, p, q):
             h.send_json({"error": "Google sign-in is not configured"}, 400); return True
         h.send_json({"auth_url": "https://accounts.example.com/o/oauth2/auth?state=mock", "callback_scheme": "com.example.mock", "state": "mock"})
         return True
+    # Outlook's "Sign in with Microsoft": no client ID until the app saves one (MOCK_OUTLOOK_CLIENT=1: already there).
+    if p == "/api/v1/mail/oauth/microsoft/config":
+        if method == "PUT":
+            cid = (body.get("client_id") or "").strip()
+            if cid and not re.fullmatch(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", cid):
+                h.send_json({"error": "这不像 client ID：Entra 应用「概述」页的「应用程序(客户端) ID」，形如 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}, 400); return True
+            MS_CONFIG.update(configured=bool(cid), client_id=cid or None, source="app" if cid else None)
+            MAIL_LOG.setdefault("microsoft_client", []).append(cid)
+        h.send_json({k: v for k, v in MS_CONFIG.items() if v is not None}); return True
+    if p == "/api/v1/mail/oauth/microsoft/start" and method == "POST":
+        if not MS_CONFIG["configured"]:
+            h.send_json({"error": "还没有 Outlook 登录用的 client ID"}, 400); return True
+        h.send_json({"auth_url": "https://login.example.com/common/oauth2/v2.0/authorize?state=mock", "callback_scheme": "jarvis-mail-oauth", "state": "mock"})
+        return True
     return False
 # ---------- end area: mail ----------
+
+MS_CONFIG = {"configured": False, "client_id": None, "source": None, "redirect_uri": "jarvis-mail-oauth://outlook"}
+if os.environ.get("MOCK_OUTLOOK_CLIENT"):
+    MS_CONFIG.update(configured=True, client_id="11111111-2222-3333-4444-555555555555", source="app")
 
 
 # MOCK_LONG_SLOTS=1: the weather space's tabs have long names (the space page's two-column cards must still fit).

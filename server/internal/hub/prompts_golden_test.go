@@ -207,6 +207,10 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 	// lark-cli only (docs/plan-lark-cli.md): no lark-connector configured, no lark-connector skill.
 	bare.cfg.Lark.CLI = &lark.CLIConfig{}
 	golden(t, "assistant_claude_md.lark_cli", bare.assistantClaudeMD(ctx, false))
+	// An lark-connector skill left on the machine changes nothing without lark-connector: no ol to offer.
+	if got := bare.assistantClaudeMD(ctx, true); got != bare.assistantClaudeMD(ctx, false) {
+		t.Error("lark-cli only: the lark-connector skill alone should not bring ol back")
+	}
 	// Both sources, lark-cli preferred.
 	bare.cfg.Lark.Token, bare.cfg.Lark.Prefer = "test-token", "cli"
 	golden(t, "assistant_claude_md.both", bare.assistantClaudeMD(ctx, true))

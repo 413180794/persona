@@ -62,6 +62,13 @@ type AssistantProfile struct {
 	Launcher string `json:"launcher,omitempty"`
 }
 
+// MicrosoftConfig is Outlook's "Sign in with Microsoft" (docs/mail.md「Outlook 接入方式」): an optional default client
+// ID (the user normally enters their own in the app; it is never built in) and the redirect URI registered with it.
+type MicrosoftConfig struct {
+	ClientID    string `json:"client_id,omitempty"`
+	RedirectURI string `json:"redirect_uri,omitempty"`
+}
+
 type Config struct {
 	Listen             string `json:"listen"`
 	Token              string `json:"token"`
@@ -86,8 +93,10 @@ type Config struct {
 	// are not given to any model.
 	IMessage *imessage.Config `json:"imessage,omitempty"`
 	// Google is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
-	Google   GoogleConfig    `json:"google"`
-	Machines []MachineConfig `json:"machines"`
+	Google GoogleConfig `json:"google"`
+	// Microsoft: Outlook's sign-in (optional; the app asks for the client ID when there is none).
+	Microsoft MicrosoftConfig `json:"microsoft,omitempty"`
+	Machines  []MachineConfig `json:"machines"`
 	// Assistant personalizes the 对话 tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
 	// know about them and their setup (where code lives, which skills reach work data, machines to stay out of).
 	Assistant AssistantProfile `json:"assistant"`

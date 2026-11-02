@@ -47,10 +47,15 @@ type Service struct {
 	imapDial func(a *MailAccount) (*imapclient.Client, error)
 	// googleClientID is the iOS OAuth client used for "Sign in with Google" (hub.json google.client_id).
 	googleClientID string
-	usedStates     map[string]time.Time    // OAuth states already finished, against replays
-	googleProxy    *url.URL                // hub.json google.proxy for Gmail traffic (proxy.go), nil = direct
-	googleHTTP     *http.Client            // talks to Google's OAuth and Gmail API endpoints
-	access         map[string]*accessCache // access tokens, by refresh token
+	// Outlook sign-in (microsoft.go): hub.json's default client ID and redirect, and the one the user entered
+	// (loaded from the settings once).
+	msDefaultClientID, msRedirect string
+	msClientID                    string
+	msClientLoaded                bool
+	usedStates                    map[string]time.Time    // OAuth states already finished, against replays
+	googleProxy                   *url.URL                // hub.json google.proxy for Gmail traffic (proxy.go), nil = direct
+	googleHTTP                    *http.Client            // talks to Google's OAuth and Gmail API endpoints
+	access                        map[string]*accessCache // access tokens, by refresh token
 	// verify replaces the IMAP + SMTP login check of new accounts in tests.
 	verify func(ctx context.Context, a *MailAccount) error
 	// refreshAccess replaces the Google token endpoint in tests.
@@ -302,7 +307,7 @@ func (s *Service) testAccount(ctx context.Context, a *MailAccount) error {
 	}
 	c.Close()
 
-	if a.Auth == AuthOAuth2 {
+	if a.Auth == AuthOAuth2 && a.Provider == ProviderGmail {
 		// Sent through the Gmail API, not SMTP (gmailAPIBase).
 		return s.gmailAPICheck(ctx, a)
 	}
@@ -372,7 +377,7 @@ func buildAccount(req AddAccountRequest) (*MailAccount, error) {
 	if a.Provider == "" {
 		a.Provider = ProviderIMAP
 	}
-	if a.Provider != ProviderGmail && a.Provider != ProviderIMAP && a.Provider != ProviderFeishu {
+	if a.Provider != ProviderGmail && a.Provider != ProviderIMAP && a.Provider != ProviderFeishu && a.Provider != ProviderOutlook {
 		return nil, fmt.Errorf("invalid provider %q", a.Provider)
 	}
 
@@ -383,8 +388,8 @@ func buildAccount(req AddAccountRequest) (*MailAccount, error) {
 			return nil, errors.New("password is required")
 		}
 	case AuthOAuth2:
-		if a.Provider != ProviderGmail {
-			return nil, errors.New("invalid auth \"oauth2\": only Gmail signs in with Google")
+		if a.Provider != ProviderGmail && a.Provider != ProviderOutlook {
+			return nil, errors.New("invalid auth \"oauth2\": only Gmail and Outlook sign in with their accounts")
 		}
 	default:
 		return nil, fmt.Errorf("invalid auth %q", a.Auth)

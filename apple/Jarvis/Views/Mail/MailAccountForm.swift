@@ -4,7 +4,7 @@ import Foundation
 /// `AddMailAccountView` binds to it and talks to the hub; `MailAccountFormTests` checks it.
 struct MailAccountForm: Equatable {
     enum Kind: String, CaseIterable, Identifiable {
-        case gmail = "Gmail", feishu = "飞书", imap = "其他 IMAP"
+        case gmail = "Gmail", outlook = "Outlook", feishu = "飞书", imap = "其他 IMAP"
         var id: String { rawValue }
     }
 
@@ -18,11 +18,11 @@ struct MailAccountForm: Equatable {
 
     var canSave: Bool { !email.isEmpty && !password.isEmpty }
 
-    /// The account to add with a password; nil for Gmail, which signs in with Google.
+    /// The account to add with a password; nil for Gmail and Outlook, which sign in with Google / Microsoft.
     var request: APIClient.AddAccount? {
         var req = APIClient.AddAccount(name: email, email: email, auth: "password")
         switch kind {
-        case .gmail:
+        case .gmail, .outlook:
             return nil
         case .feishu:
             req.provider = "feishu"

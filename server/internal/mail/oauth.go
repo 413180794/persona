@@ -40,6 +40,8 @@ var (
 
 // OAuthCreds is the long-lived credential of an OAuth account, stored encrypted.
 type OAuthCreds struct {
+	// Provider is whose sign-in it is: "" Google, "microsoft" (microsoft.go).
+	Provider     string `json:"provider,omitempty"`
 	ClientID     string `json:"client_id"`
 	RefreshToken string `json:"refresh_token"`
 }
@@ -53,9 +55,10 @@ type OAuthStart struct {
 
 // OAuthFinishRequest is the POST /api/v1/mail/oauth/google/finish body: the callback URL's query.
 type OAuthFinishRequest struct {
-	State string `json:"state"`
-	Code  string `json:"code"`
-	Error string `json:"error,omitempty"`
+	State            string `json:"state"`
+	Code             string `json:"code"`
+	Error            string `json:"error,omitempty"`
+	ErrorDescription string `json:"error_description,omitempty"`
 }
 
 // oauthState is what the state parameter carries, sealed with the store key: the flow survives a
@@ -63,6 +66,7 @@ type OAuthFinishRequest struct {
 type oauthState struct {
 	Verifier string `json:"v"`
 	Created  int64  `json:"t"`
+	ClientID string `json:"c,omitempty"` // Microsoft: the client the flow started with (the user may change it meanwhile)
 }
 
 func (s *Service) sealState(st oauthState) (string, error) {
@@ -156,23 +160,10 @@ func (s *Service) StartGoogleOAuth(loginHint string) (*OAuthStart, error) {
 // FinishGoogleOAuth exchanges the authorization code, verifies IMAP and SMTP access and saves
 // the account. Signing in again with an existing Gmail account replaces its credentials.
 func (s *Service) FinishGoogleOAuth(ctx context.Context, req OAuthFinishRequest) (*MailAccount, error) {
-	st, err := s.openState(req.State)
-	if err != nil || s.now().Sub(time.Unix(st.Created, 0)) > oauthPendingTTL {
-		return nil, errors.New("invalid or expired sign-in, start again")
-	}
 	// Each state is good for one attempt (remembered in memory; Google's codes are single use anyway).
-	s.mu.Lock()
-	now := s.now()
-	for k, at := range s.usedStates {
-		if now.Sub(at) > oauthPendingTTL {
-			delete(s.usedStates, k)
-		}
-	}
-	_, used := s.usedStates[req.State]
-	s.usedStates[req.State] = now
-	s.mu.Unlock()
-	if used {
-		return nil, errors.New("invalid or expired sign-in, start again")
+	st, err := s.claimState(req.State)
+	if err != nil {
+		return nil, err
 	}
 	if req.Error != "" {
 		return nil, fmt.Errorf("Google sign-in failed: %s", req.Error)
@@ -320,13 +311,25 @@ func (s *Service) accessToken(ctx context.Context, creds *OAuthCreds) (string, e
 	if c.token != "" && s.now().Add(time.Minute).Before(c.expires) {
 		return c.token, nil
 	}
-	tr, err := s.googleToken(ctx, url.Values{
+	form := url.Values{
 		"client_id":     {creds.ClientID},
 		"refresh_token": {creds.RefreshToken},
 		"grant_type":    {"refresh_token"},
-	})
+	}
+	var tr *tokenResponse
+	var err error
+	if creds.Provider == oauthMicrosoft {
+		form.Set("scope", microsoftScopes)
+		tr, err = s.microsoftToken(ctx, form)
+	} else {
+		tr, err = s.googleToken(ctx, form)
+	}
 	if err != nil {
 		return "", err
+	}
+	// Microsoft hands out a new refresh token with every refresh (the old one lapses): keep it.
+	if tr.RefreshToken != "" && tr.RefreshToken != creds.RefreshToken {
+		s.rotateRefresh(creds, tr.RefreshToken, c)
 	}
 	expiresIn := tr.ExpiresIn
 	if expiresIn <= 0 {
@@ -334,6 +337,19 @@ func (s *Service) accessToken(ctx context.Context, creds *OAuthCreds) (string, e
 	}
 	c.token, c.expires = tr.AccessToken, s.now().Add(time.Duration(expiresIn)*time.Second)
 	return c.token, nil
+}
+
+// rotateRefresh replaces an account's refresh token (and the key of its access cache) and saves the accounts.
+func (s *Service) rotateRefresh(creds *OAuthCreds, refresh string, c *accessCache) {
+	s.mu.Lock()
+	delete(s.access, creds.RefreshToken)
+	creds.RefreshToken = refresh
+	s.access[refresh] = c
+	accounts := s.snapshotLocked()
+	s.mu.Unlock()
+	if err := s.store.save(accounts); err != nil {
+		logf("mail: save the rotated refresh token: %v", err)
+	}
 }
 
 // xoauth2Payload is the SASL XOAUTH2 initial response: "user=<email>^Aauth=Bearer <token>^A^A".

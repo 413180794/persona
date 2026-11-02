@@ -632,6 +632,9 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | POST | `/api/v1/mail/accounts` | 新增（密码 / 授权码）：测试连接成功才保存 → `{"account"}`；`auth:"oauth2"` 一律 400 |
 | POST | `/api/v1/mail/oauth/google/start` | Gmail「使用 Google 账号登录」：`{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`；App 用 ASWebAuthenticationSession 打开 `auth_url`，等 `callback_scheme` 回调；hub 未配置 `google.client_id` 时 400 |
 | POST | `/api/v1/mail/oauth/google/finish` | 回调 URL 里的 `{"state","code"}`（或 `{"state","error"}`）→ hub 换 refresh token、验证 IMAP + Gmail API（发信走 Gmail API）后保存 → `{"account"}`；同一邮箱再登录一次 = 更新凭据（ID 不变）；state 一次性、15 分钟过期 |
+| GET / PUT | `/api/v1/mail/oauth/microsoft/config` | Outlook 登录的设置：`{configured, client_id?, source?: app\|config, redirect_uri}`；PUT `{client_id}` 存用户在 Microsoft Entra 注册的 client ID（加密存 hub，空串清掉；格式不对 400）（`docs/mail.md`「Outlook 接入方式」） |
+| POST | `/api/v1/mail/oauth/microsoft/start` | `{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`；没有 client ID 时 400 |
+| POST | `/api/v1/mail/oauth/microsoft/finish` | 回调的 `{state, code}` 或 `{state, error, error_description}` → `{"account"}`；错误翻成该怎么办（管理员同意、IMAP / SMTP AUTH 被关、授权过期…）。同一个邮箱再登录 = 更新凭据 |
 | DELETE | `/api/v1/mail/accounts/{aid}` | |
 | POST | `/api/v1/mail/accounts/{aid}/test` | `{"ok":true}` / `{"error"}` |
 | GET | `/api/v1/mail/accounts/{aid}/mailboxes` | `{"mailboxes":[{"name","role","unseen","total"}]}`，role ∈ inbox/sent/drafts/trash/archive/junk/"" |

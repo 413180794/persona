@@ -100,8 +100,14 @@ func isAssistant(cwd, dir string) bool {
 // assistantClaudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md); lark-connector: the assistant's
 // machine has the lark-connector skill (assistantSkills).
 func (h *Hub) assistantClaudeMD(ctx context.Context, lark-connector bool) string {
+	lc := h.cfg.Lark
+	if lc.CLI != nil && !lc.lark-connectorConfigured() {
+		// lark-cli only: an lark-connector skill left on the machine (an older jarvisd copied it in) has no lark-connector to talk
+		// to, so ol is not offered.
+		lark-connector = false
+	}
 	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(h.cfg.Assistant.Owner), Notes: h.assistantNotes(ctx), ExtraDirs: h.kb.cfg.ExtraDirs,
-		lark-connector: lark-connector, LarkCLI: h.cfg.Lark.CLI != nil, lark-connectorConfigured: h.cfg.Lark.lark-connectorConfigured(), LarkPrefer: h.cfg.Lark.Prefer}
+		lark-connector: lark-connector, LarkCLI: lc.CLI != nil, lark-connectorConfigured: lc.lark-connectorConfigured(), LarkPrefer: lc.Prefer}
 	for _, m := range h.machines {
 		d.Machines = append(d.Machines, prompts.AssistantMachine{Name: m.cfg.Name, ID: m.cfg.ID, Local: m.cfg.Kind == "local", SSHHost: m.cfg.SSHHost})
 	}

@@ -108,6 +108,62 @@ hub 的 OAuth 客户端是 iOS 类型，回调是反向 client ID 的自定义 s
   不行的话要么在 hub 加一个 Android / Web 类型客户端（Web 要 client secret 和 https 回调），要么继续用应用专用密码。
 - 从浏览器直接返回（没授权）时，回到页面 1.5 秒内没收到回调就当取消。
 
+## Outlook 接入方式：使用 Microsoft 账号登录（OAuth2 + XOAUTH2，2026-11-03）
+
+个人的 Outlook.com / Hotmail 和公司、学校的 Microsoft 365 邮箱都走这个：App 的「添加邮箱 › Outlook」点「使用 Microsoft 账号登录」→
+系统浏览器打开 Microsoft 登录、授权 → 回到 App → 账号加好，不用密码。做法照 Gmail（上一节），区别：
+
+- **client ID 不编进程序**：每个用户用自己在 Microsoft Entra 注册的应用（免费，步骤见下面）。App 第一次点「Outlook」时让你填它的
+  client ID，hub 用 `secret.key` 加密后存进 Postgres（settings 表的 `mail.microsoft_client`），这个 hub 以后都复用；hub.json 的
+  `microsoft.client_id` 可以给一个默认值（App 里填的优先）。client ID 出现在每个登录 URL 里，不是密钥。
+- **回调地址**：固定的自定义 scheme `jarvis-mail-oauth://outlook`，所有 hub 一样（要改就写 hub.json 的 `microsoft.redirect_uri`，Entra 里同步改）。
+  App 用 ASWebAuthenticationSession 接住这个 scheme，不需要在 Info.plist 里注册，所以**不用为哪个 hub 单独发版**；
+  没用 `msauth.<bundle id>://auth`：它跟着 App 的 bundle ID 走，自己编译的人 bundle ID 各不相同，固定 scheme 对谁都一样。
+- **公共客户端 + PKCE**，authority 用 `common`（个人账号和任何公司的账号都能登），没有 client secret；换 token 在 hub 上做，refresh token 不经过手机。
+  scope：`https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send offline_access openid email`。
+- 邮箱地址取 ID token 的 `email`，没有就取 `preferred_username`（工作账号的登录名）。
+- **收发**：IMAP `outlook.office365.com:993`、SMTP `smtp.office365.com:587`（STARTTLS），都是 XOAUTH2。Exchange 自己会把发出的信放进
+  「已发送」，hub 不再追加一份。
+- **refresh token 会轮换**：Microsoft 每次刷新都发一个新的（旧的随之失效），hub 拿到就立刻加密存回 `oauth_enc`（Google 不轮换）。
+- 凭据：`{provider: "microsoft", client_id, refresh_token}` 加密存 `mail_accounts.oauth_enc`，同 Gmail。
+- 代码：`server/internal/mail/microsoft.go`；App：`apple/Jarvis/Views/Mail/MailOutlookViews.swift`。
+- 接口：`GET` / `PUT /api/v1/mail/oauth/microsoft/config`（`{configured, client_id, source: app|config, redirect_uri}`；PUT `{client_id}`，空串清掉）、
+  `POST …/microsoft/start`（`{login_hint?}` → `{auth_url, callback_scheme, state}`）、`POST …/microsoft/finish`（回调的 `{state, code}` 或
+  `{state, error, error_description}` → `{account}`）。回调带着错误也交给 hub：它把 Microsoft 的错误码翻成该怎么办（见下面）。
+- 真账号还没验证过（2026-11-03 只用假的 token 端点和假的 IMAP / SMTP 测了），由用户自己登录验证。
+
+### 在 Microsoft Entra 注册应用（一次，照着点）
+
+1. 打开 <https://entra.microsoft.com>，用你的微软账号登录（个人账号也可以，第一次进会自动建一个「默认目录」）。
+   进不去或看不到菜单，就打开 <https://portal.azure.com> 搜「应用注册」，是同一个东西。
+2. 左边「标识」→「应用程序」→「应用注册」→「新注册」。
+3. 填三项，然后点「注册」：
+   - 名称：随便，比如 `Jarvis Mail`；
+   - 「受支持的帐户类型」：选「**任何组织目录(任何 Microsoft Entra ID 租户 - 多租户)中的帐户和个人 Microsoft 帐户(例如，Skype、Xbox)**」；
+   - 「重定向 URI」：平台选「**公共客户端/本机(移动和桌面)**」，填 `jarvis-mail-oauth://outlook`（以 App 里显示的为准，可以点复制）。
+4. 注册完在「概述」页复制「**应用程序(客户端) ID**」（形如 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`）。
+5. 左边「身份验证」：确认「移动和桌面应用程序」下面有 `jarvis-mail-oauth://outlook`；拉到「高级设置」，把「**允许公共客户端流**」设为「是」，点「保存」。
+6. 左边「API 权限」→「添加权限」：
+   - 「我的组织使用的 API」里搜 `Office 365 Exchange Online` →「委托的权限」→ 勾 `IMAP.AccessAsUser.All` 和 `SMTP.Send` →「添加权限」；
+   - 再「添加权限」→「Microsoft Graph」→「委托的权限」→ 勾 `offline_access`、`openid`、`email`（默认的 `User.Read` 留着无妨）。
+   个人账号的目录里有时搜不到 Exchange Online：跳过这一步也能用（登录时按 scope 动态申请，同意页上照样列出这些权限）；
+   公司账号建议加上，管理员「授予管理员同意」时看的就是这里列的权限。
+7. 回到 App：设置 › 连接器 › 邮箱 › 添加邮箱 › Outlook，把 client ID 填进去保存，再点「使用 Microsoft 账号登录」。
+
+### 出错时怎么办（hub 返回的提示就是这些）
+
+| 情况 | 提示里说的办法 |
+| --- | --- |
+| 公司账号要管理员同意（`AADSTS65001` / `90094` / `90095`） | 请 IT 管理员在 Entra 的「企业应用程序」里找到这个应用 →「权限」→「授予管理员同意」，或允许用户自己同意；也可以改用个人账号 |
+| 用户在同意页点了取消（`AADSTS65004` / `access_denied`） | 再点一次登录并同意 |
+| client ID 不对，或注册时没选「个人和组织账号」（`AADSTS700016`） | 检查 client ID 和「受支持的帐户类型」 |
+| 回调地址对不上（`AADSTS50011`） | 在「身份验证 › 移动和桌面应用程序」里加上 App 显示的回调地址 |
+| 没打开「允许公共客户端流」（`AADSTS7000218`） | 在「身份验证 › 高级设置」里打开 |
+| 没拿到读邮件的权限（返回的 scope 里没有 IMAP） | 在「API 权限」里加上 `IMAP.AccessAsUser.All`、`SMTP.Send` 再登录 |
+| IMAP 登录被拒（`AUTHENTICATE failed`） | 个人账号：outlook.com「设置 › 邮件 › 转发和 IMAP」打开「允许设备和应用使用 IMAP」；工作账号：请管理员在 Exchange 管理中心为你的邮箱启用 IMAP |
+| SMTP 认证被关（`5.7.139 SmtpClientAuthentication is disabled`） | 请管理员在 Microsoft 365 管理中心为你的邮箱打开「经过身份验证的 SMTP」；收信不受影响 |
+| 授权过期或被撤销（刷新时 `invalid_grant`：`AADSTS70008`、`50173`、要求重新多重验证等） | 在 App 里再点「使用 Microsoft 账号登录」选同一个邮箱，账号原地更新（ID 不变） |
+
 ## 让 Jarvis 添加（2026-11-01）
 
 App 的「添加邮箱」页去掉了「AI 一键添加」（粘贴一段文字让模型认，`POST /api/v1/ai/mail-account` 也删了）。现在直接在 Jarvis 里说
