@@ -10,6 +10,17 @@ mkdir -p "$HOME/.jarvis" && chmod 700 "$HOME/.jarvis"
 
 url() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("database_url",""))' "$CFG" 2>/dev/null || true; }
 
+# No docker on the hub machine: the database is one set up by hand (the distribution's own Postgres, docs/server.md
+# 「数据库」) and hub.json's database_url points at it. Nothing to create here; only check that it answers.
+if ! command -v docker >/dev/null 2>&1; then
+  [ -n "$(url)" ] || { echo "no docker and no database_url in hub.json: install docker, or set up Postgres yourself (docs/server.md)" >&2; exit 1; }
+  if command -v pg_isready >/dev/null 2>&1; then
+    pg_isready -q -d "$(url)" || { echo "the Postgres at hub.json's database_url does not answer" >&2; exit 1; }
+  fi
+  echo "postgres from hub.json's database_url (no docker)"
+  exit 0
+fi
+
 if ! docker ps -a --format '{{.Names}}' | grep -qx "$NAME"; then
   PW=$(python3 -c 'import secrets;print(secrets.token_hex(24))')
   docker volume create jarvis-pgdata >/dev/null

@@ -165,6 +165,11 @@ hub 机器上的 docker 容器 `jarvis-postgres`（`postgres:18-alpine`，只监
 `scripts/db.sh` 幂等地创建 / 启动它，首次创建时生成密码写进 `hub.json` 的 `database_url`；`deploy.sh <hub 机器 id>` 每次都会先跑它。
 hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advisory lock 防并发）。
 
+不想在 hub 机器上装 Docker 时，可以用系统自带的 Postgres（例如 Ubuntu 的 `postgresql` 包，16 版实测可用，只监听 localhost）：自己建用户 `jarvis`
+和库 `jarvis`、`jarvis_test`（属主都是 `jarvis`，后者给 `test-server.sh` 用），把 `postgres://jarvis:<密码>@127.0.0.1:5432/jarvis?sslmode=disable`
+写进 `hub.json` 的 `database_url`（0600）。hub 机器上没有 docker 时，`db.sh` 不建容器，只用 `pg_isready` 检查这个地址能不能连上，
+`deploy.sh` 和 `test-server.sh` 照常用。下面「连库」那条命令里的 `docker exec … psql` 换成 `psql "<database_url>"`。
+
 | 表 | 内容 |
 | --- | --- |
 | `live_activities` | 每台设备的实时活动：活动 token、push-to-start token、开始时间（`docs/live-activity.md`） |

@@ -19,7 +19,7 @@
 
 | 机器 | 要有 |
 | --- | --- |
-| hub 机器（Linux） | docker（Postgres 容器）、systemd 用户服务、herdr；手机能访问它的 18660 端口（同一个网络或 VPN）。放在 NAS 上、或只当 hub 不跑 Agent 时，也可以整个用 Docker 跑（`docs/docker.md`），下面的第 1、2 步只用来往各台电脑装 `jarvisd` |
+| hub 机器（Linux） | docker（Postgres 容器；不想装 Docker 就用系统自带的 Postgres，见 `docs/server.md`「数据库」）、systemd 用户服务、herdr；手机能访问它的 18660 端口（同一个网络或 VPN）。放在 NAS 上、或只当 hub 不跑 Agent 时，也可以整个用 Docker 跑（`docs/docker.md`），下面的第 1、2 步只用来往各台电脑装 `jarvisd` |
 | 每台要接入的电脑 | herdr，以及 Claude Code（或 Codex）；`~/.jarvis/bin/jarvisd`（第 2 步部署脚本会拷过去） |
 | SSH | hub 机器能**免密码**登录每台电脑（hub 用 `BatchMode=yes`，只能用密钥），在 hub 机器的 `~/.ssh/config` 里给每台起个别名；开发机也要能 SSH 到每台（部署用） |
 
