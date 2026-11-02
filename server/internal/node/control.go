@@ -114,7 +114,8 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		args = "--resume " + id
 	}
 	cmd := fmt.Sprintf("%s %s%s --settings %s --mcp-config %s", n.launcherCommand(launcher), args, modeFlags(mode, effort),
-		shellQuote(filepath.Join(n.dir, "claude-settings.json")), shellQuote(filepath.Join(n.dir, "mcp.json")))
+		shellQuote(n.claudeSettings(ctx, launcher, filepath.Join(n.dir, "claude-settings.json"), cwd)),
+		shellQuote(filepath.Join(n.dir, "mcp.json")))
 	if execution.Model != "" {
 		cmd += " --model " + shellQuote(execution.Model)
 	}

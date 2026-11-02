@@ -6,6 +6,10 @@
   node 启动会话后要检查 blocked 屏幕（`docs/claude-integration.md`）。
 - Claude 输入框里的灰字（预测的下一句、新会话的 `Try "…"`）在纯文本读屏里和用户打的字一模一样：判断有没有草稿要用 ansi 读屏看 dim（SGR 2）。
   2.1.312 的信任目录对话框选项不带编号（`❯ No, exit`），认对话框靠底部的 `Enter to confirm · Esc to cancel`（`server/internal/screen`）。
+- Claude Code 的 `--settings` 只认最后一个，不合并（2026-11-02 实测：`--settings A --settings B` 时 A 的 `env` 全没了）。启动器 alias 自己带
+  `--settings`、凭据在那个文件的 `env` 里时，Jarvis 再追加一个 `--settings` 就把它顶掉，从手机起的会话和助手每条消息都回
+  `Not logged in · Please run /login`（transcript 里是 `isApiErrorMessage` + `authentication_failed`），在 herdr 里自己敲同一个 alias 却正常。
+  node 现在把两份合成一个文件再传（`docs/launchers.md`「~/.zshrc 里怎么认」）。
 - AskUserQuestion：PreToolUse hook 返回 `permissionDecision: allow` + `updatedInput.answers` 即可代答（2.1.310 实测）。
 - ExitPlanMode：走 PermissionRequest（不走 PreToolUse）。`allow` 必须带 `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
   才生效，单纯 `{behavior:allow}` 仍会弹 TUI 对话框；`deny` + `message` 会把反馈作为 tool_result 交给模型。

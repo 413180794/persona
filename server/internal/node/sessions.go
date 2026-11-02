@@ -1131,6 +1131,8 @@ var launcherCache struct {
 	fetching bool       // a background refresh (cachedLaunchers) is running
 	// codex: how each Codex launcher runs (codex_start.go), its words as the shell would run them.
 	codex map[string][]string
+	// settings: the --settings a claude alias brings itself, as its words give it (launcher_settings.go).
+	settings map[string]string
 }
 
 // launcherScript lists the login shell's launchers in one go (sourcing ~/.zshrc takes a while): what the
@@ -1167,17 +1169,18 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 	if err != nil && len(out) == 0 {
 		return nil, fmt.Errorf("list launchers: %w", err)
 	}
-	list, codex := mergeLaunchers(string(out))
+	list, codex, settings := mergeLaunchers(string(out))
 	launcherCache.Lock()
-	launcherCache.at, launcherCache.list, launcherCache.codex = time.Now(), list, codex
+	launcherCache.at, launcherCache.list, launcherCache.codex, launcherCache.settings = time.Now(), list, codex, settings
 	launcherCache.Unlock()
 	return list, nil
 }
 
 // mergeLaunchers is launcherScript's output as the launcher list: the helper's, then the aliases it does not name
 // (nothing at all: plain claude), then Codex's — plain codex when it is on the PATH, and the aliases that run it (how
-// each runs: codex).
-func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string) {
+// each runs: codex). settings: the claude aliases' own --settings, by name (launcher_settings.go); an alias is what
+// the shell runs for its name even when the helper lists the name too.
+func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string, settings map[string]string) {
 	helper, rest, _ := strings.Cut(out, "\x1d")
 	aliases, codexPath, _ := strings.Cut(rest, "\x1d")
 	list = parseLaunchers(helper)
@@ -1185,7 +1188,8 @@ func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]strin
 	for _, l := range list {
 		seen[l.Name] = true
 	}
-	for _, l := range parseAliasLaunchers(aliases) {
+	claudeAliases, settings := parseAliasLaunchers(aliases)
+	for _, l := range claudeAliases {
 		if !seen[l.Name] {
 			list = append(list, l)
 		}
@@ -1205,7 +1209,7 @@ func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]strin
 			codex[l.Name] = words[l.Name]
 		}
 	}
-	return list, codex
+	return list, codex, settings
 }
 
 // cachedLaunchers never waits for the login shell: it returns the last list (possibly stale, nil before the first
@@ -1268,9 +1272,10 @@ var assignRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 // parseAliasLaunchers reads launcherScript's alias records and keeps the aliases that start claude: after the
 // variables set in front of it (`A=1 B=2 claude …`), through env / command / exec / noglob, by path or not, with
 // `export A=1;` before it in the same alias. Their gateway and model come from ANTHROPIC_BASE_URL and ANTHROPIC_MODEL
-// (or --model). Codex's are parseCodexAliases'. Sorted by name: the shell keeps no order.
-func parseAliasLaunchers(out string) []proto.Launcher {
-	var list []proto.Launcher
+// (or --model). Codex's are parseCodexAliases'. Sorted by name: the shell keeps no order. settings: the ones that
+// bring their own --settings, by name (launcher_settings.go).
+func parseAliasLaunchers(out string) (list []proto.Launcher, settings map[string]string) {
+	settings = map[string]string{}
 	for _, rec := range strings.Split(out, "\x1e") {
 		words := strings.Split(rec, "\x1f")
 		if len(words) < 2 {
@@ -1280,13 +1285,16 @@ func parseAliasLaunchers(out string) []proto.Launcher {
 		if !nameRe.MatchString(name) || name == "claude" {
 			continue
 		}
-		if l, ok := aliasLauncher(words[1 : len(words)-1]); ok {
+		if l, s, ok := aliasLauncher(words[1 : len(words)-1]); ok {
 			l.Name = name
 			list = append(list, l)
+			if s != "" {
+				settings[name] = s
+			}
 		}
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
-	return list
+	return list, settings
 }
 
 // parseCodexAliases keeps the aliases that run Codex: `export` statements and one codex command (through env /
@@ -1395,8 +1403,9 @@ func commandIndex(cmd []string, env map[string]string) int {
 	return -1
 }
 
-// aliasLauncher finds the claude command in an alias's words and what it is started with.
-func aliasLauncher(words []string) (proto.Launcher, bool) {
+// aliasLauncher finds the claude command in an alias's words and what it is started with; settings is its own
+// --settings (the last one, as Claude Code takes it), "" for none: launcher_settings.go.
+func aliasLauncher(words []string) (l proto.Launcher, settings string, ok bool) {
 	exported := map[string]string{}
 	for len(words) > 0 {
 		end := len(words)
@@ -1431,17 +1440,22 @@ func aliasLauncher(words []string) (proto.Launcher, bool) {
 		if filepath.Base(cmd[i]) != "claude" {
 			continue
 		}
-		l := proto.Launcher{BaseURL: env["ANTHROPIC_BASE_URL"], Model: env["ANTHROPIC_MODEL"], Source: "zshrc"}
+		l = proto.Launcher{BaseURL: env["ANTHROPIC_BASE_URL"], Model: env["ANTHROPIC_MODEL"], Source: "zshrc"}
 		for j := i + 1; j < len(cmd); j++ {
 			if cmd[j] == "--model" && j+1 < len(cmd) && l.Model == "" {
 				l.Model = cmd[j+1]
 			} else if m, ok := strings.CutPrefix(cmd[j], "--model="); ok && l.Model == "" {
 				l.Model = m
 			}
+			if cmd[j] == "--settings" && j+1 < len(cmd) {
+				settings = cmd[j+1]
+			} else if s, ok := strings.CutPrefix(cmd[j], "--settings="); ok {
+				settings = s
+			}
 		}
-		return l, true
+		return l, settings, true
 	}
-	return proto.Launcher{}, false
+	return proto.Launcher{}, "", false
 }
 
 // parseLaunchers parses `_claude_launchers` output: name padded to 26, base URL padded to 40, then model.

@@ -30,6 +30,12 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   跟 Agent 无关的（`ll`、`gst`…）。都没有时只有默认的 `claude`。
 - 列表里只有名字、网关、模型；alias 里的 Key / Token 不出 node。「查看定义」对 alias 显示的是 `whence -f` 给的原文，Key 照样打码。
 - 函数写的启动器还是要靠 `_claude_launchers` 列出来：函数体里最后跑什么，不真跑一遍看不出来（见下「启动器页面上的参数」）。
+- **alias 自带 `--settings`**（`alias work="claude --settings ~/.claude/settings.work.json …"`，网关、Token、模型在那个文件的 `env` 里）：
+  Jarvis 起 claude 时自己也要传一个 `--settings`（把提问、授权、做完转到手机的 hooks），而 Claude Code 只认**最后一个** `--settings`。
+  所以 node 启动时把 alias 的那份和 Jarvis 的合成一个文件（alias 的所有设置 + 两边的 hooks，Jarvis 的排在后面），写到
+  `~/.jarvis/launcher-settings/<启动器>-<claude|assistant>-settings.json`（0600，里面有 Token），作为最后一个 `--settings` 传进去；
+  每次启动重写一遍（`node/launcher_settings.go`）。`~`、`$HOME`、相对路径（按会话目录）、`--settings '{…}'` 都认；文件读不了时退回只传 Jarvis 的。
+  函数写的启动器里的 `--settings` 看不到，照样会被顶掉。
 
 ## Jarvis 管理的怎么跑
 

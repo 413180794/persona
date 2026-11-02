@@ -37,7 +37,7 @@ func asNode(t *testing.T, defs, script string) string {
 // listFrom is the node's launcher list for a ~/.zshrc made of defs.
 func listFrom(t *testing.T, defs string) []proto.Launcher {
 	t.Helper()
-	list, _ := mergeLaunchers(asNode(t, defs, launcherScript))
+	list, _, _ := mergeLaunchers(asNode(t, defs, launcherScript))
 	return list
 }
 
@@ -137,7 +137,7 @@ func TestParseAliasLaunchers(t *testing.T) {
 		rec("d", "ANTHROPIC_BASE_URL=https://y.example.com", "traex") +
 		rec("bad name", "claude") +
 		"junk-without-separators"
-	got := parseAliasLaunchers(out)
+	got, _ := parseAliasLaunchers(out)
 	if len(got) != 2 || got[0].Name != "a" || got[0].Model != "m" || got[1].Name != "b" || got[1].BaseURL != "https://x.example.com" {
 		t.Fatalf("got %+v", got)
 	}

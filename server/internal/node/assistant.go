@@ -368,7 +368,8 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	}}})
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--include-partial-messages",
-		"--settings", filepath.Join(n.dir, "assistant-settings.json"), "--mcp-config", string(mcp),
+		"--settings", n.claudeSettings(context.Background(), launcher, filepath.Join(n.dir, "assistant-settings.json"), cwd),
+		"--mcp-config", string(mcp),
 		"--allowedTools", assistantAllowedTools}
 	if execution.Model != "" {
 		args = append(args, "--model", execution.Model)
