@@ -2,11 +2,11 @@ import SwiftUI
 
 /// Pairing uses the same picker as Settings, with an always-available way to continue without saving.
 struct PairingEngineView: View {
-    var machineID: String
+    var ref: MachineRef
 
     var body: some View {
         NavigationStack {
-            EngineSelectionView(machineID: machineID, pairing: true)
+            EngineSelectionView(ref: ref, pairing: true)
         }
     }
 }
@@ -14,12 +14,13 @@ struct PairingEngineView: View {
 struct EngineSelectionView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
-    var machineID: String
+    var ref: MachineRef
     var pairing = false
     @State private var selection: EngineSelectionModel?
+    private var machineID: String { ref.id }
 
     var body: some View {
-        let machine = app.machine(machineID)
+        let machine = app.machine(ref)
         Form {
             if let machine, let selection {
                 #if os(iOS)
@@ -115,9 +116,9 @@ struct EngineSelectionView: View {
         #endif
         .navigationTitle("选择引擎")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: machineID) {
+        .task(id: ref) {
             guard let machine else { return }
-            selection = EngineSelectionModel(machine: machine, pairing: pairing, deps: .init(api: { app.api }, updated: { app.applyMachine($0) }))
+            selection = EngineSelectionModel(machine: machine, pairing: pairing, deps: .init(api: { [ref] in app.api(ref.group) }, updated: { app.applyMachine($0) }))
         }
         .onChange(of: machine) { _, updated in
             if let updated { selection?.synchronize(updated, pairing: pairing) }
@@ -159,6 +160,6 @@ struct EngineSelectionView: View {
     #endif
 
     private func finish() {
-        if pairing { app.pairingEngineMachineID = nil } else { dismiss() }
+        if pairing { app.pairingEngineMachine = nil } else { dismiss() }
     }
 }

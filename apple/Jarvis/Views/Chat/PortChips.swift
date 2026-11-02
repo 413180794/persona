@@ -27,7 +27,7 @@ struct PortChips: View {
 /// The ports an agent listens on (`Session.ports`), in the conversation's header: a tap opens one.
 struct SessionPortChips: View {
     @Environment(\.openPort) private var openPort
-    var machine: String
+    var machine: MachineRef
     var ports: [ListeningPort]
 
     var body: some View {
@@ -40,7 +40,7 @@ struct SessionPortChips: View {
 private struct PortBadgeRow: View {
     @Environment(AppModel.self) private var model
     var links: [PortLink]
-    var machine: String
+    var machine: MachineRef
     var open: (PortLink) -> Void
 
     var body: some View {
@@ -65,7 +65,7 @@ private struct PortBadgeRow: View {
             }
         }
         .scrollClipDisabled()
-        .task(id: links) { model.portPresence.ask(links.map(\.port), machine: machine, listed: listed, api: model.api) }
+        .task(id: links) { model.portPresence.ask(links.map(\.port), machine: machine, listed: listed, api: model.api(machine.group)) }
     }
 
     /// `:5173`, with the path when the link has one (`:8000/docs`).

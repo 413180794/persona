@@ -54,8 +54,8 @@ final class AgentSync {
     }
 
     /// Only some transcripts grew (the light `revs` event).
-    func revs(machine: String, _ changed: [String: Int64]) {
-        for (sid, r) in changed { known[SessionKey(machineID: machine, sessionID: sid)] = r }
+    func revs(machine: MachineRef, _ changed: [String: Int64]) {
+        for (sid, r) in changed { known[SessionKey(group: machine.group, machineID: machine.id, sessionID: sid)] = r }
         schedule()
     }
 
@@ -72,9 +72,12 @@ final class AgentSync {
 
     private func plan() {
         let model = AppModel.shared
-        guard model.live.state == .connected, model.api != nil else { return }
+        // Each group's agents while its own socket is up (docs/multi-hub.md).
+        let up = Set(model.groupIDs.filter { model.isLive($0) })
+        guard !up.isEmpty else { return }
         let cutoff = Date.now.addingTimeInterval(-Self.recentWindow)
         let recent = model.sessionsByMachine.values.joined()
+            .filter { up.contains($0.group) }
             .filter { $0.status != .offline || ($0.updatedAt ?? .distantPast) > cutoff }
             .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
             .prefix(Self.maxSessions)
@@ -126,7 +129,7 @@ final class AgentSync {
             Task {
                 let ok = await pull(key)
                 running.remove(key)
-                if ok { synced["\(key.machineID)/\(key.sessionID)"] = rev; save() }
+                if ok { synced[key.path] = rev; save() } // `Session.id` of the same session
                 pump()
             }
         }
@@ -140,7 +143,8 @@ final class AgentSync {
     /// Brings one session up to date; false when the hub could not be reached (it is tried again on the next change).
     private func pull(_ key: SessionKey) async -> Bool {
         let model = AppModel.shared
-        guard let api = model.api else { return false }
+        guard let api = model.api(key.group) else { return false }
+
         do {
             if let store = model.existingChat(key), !store.items.isEmpty {
                 let r = try await api.items(key, afterSeq: store.covered)

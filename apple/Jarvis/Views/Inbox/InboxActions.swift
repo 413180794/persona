@@ -154,7 +154,7 @@ struct InboxDraftSheet: View {
             }
             if let key = a.sessionKey {
                 Button {
-                    model.assistantCurrent = key
+                    model.assistantCurrent = model.inHub(key)
                     model.selectedTab = .assistant
                     dismiss()
                 } label: {
@@ -279,7 +279,7 @@ struct InboxHandOffSheet: View {
                         ForEach(agents) { s in
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(s.displayTitle).lineLimit(1)
-                                Text(model.machine(s.machineID)?.name ?? s.machineID).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                                Text(model.machine(s.machineRef)?.title ?? s.machineID).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .tag(SessionKey?.some(s.key))
                         }

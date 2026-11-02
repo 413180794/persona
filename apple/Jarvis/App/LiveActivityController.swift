@@ -55,8 +55,14 @@ final class LiveActivityController {
             let state = activity.content.state.tailored(island: prefs.island, details: prefs.lockDetails, look: AppModel.shared.fleetLook)
             Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate, relevanceScore: Self.relevance(state)))
         }
-        if let api = AppModel.shared.api {
-            Task { if let fleet = try? await api.fleet() { apply(fleet) } }
+        // Every group's fleet, merged (docs/multi-hub.md「实时活动」).
+        let model = AppModel.shared
+        Task {
+            var any = false
+            for link in model.links {
+                if let fleet = try? await link.api.fleet() { link.fleet = fleet; any = true }
+            }
+            if any { apply(model.mergedFleet()) }
         }
     }
 
@@ -234,7 +240,10 @@ final class LiveActivityController {
         #if DEBUG
         if UserDefaults.standard.string(forKey: "pairURL") != nil { return } // simulator automation is not this phone
         #endif
-        guard let api = AppModel.shared.api else { return }
+        // To the first group's hub only (docs/multi-hub.md「实时活动」): two hubs pushing the same activity would each
+        // overwrite it with their own agents. In the app the activity shows every group (`AppModel.mergedFleet`); in
+        // the background it follows that hub's pushes, and its unqualified ids are that group's (FleetActions).
+        guard let api = AppModel.shared.links.first?.api else { return }
         Task { try? await api.reportLiveActivity(device: PushRegistrar.deviceID, body) }
     }
 }

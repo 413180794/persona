@@ -37,7 +37,12 @@ struct SettingsView: View {
                             if model.isDemo {
                                 Text("体验模式 · 数据都是编造的").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                             } else {
-                                Text(model.config?.url.absoluteString ?? "").font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1)
+                                if model.isMultiHub {
+                                    // Several groups of hubs: the one the hub-level settings below are about, to pick another.
+                                    HubSwitcher()
+                                } else {
+                                    Text(model.config?.url.absoluteString ?? "").font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1)
+                                }
                                 HStack(spacing: Theme.Space.sm) {
                                     Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                                     Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(Theme.Font.label).foregroundStyle(.secondary)
@@ -107,6 +112,14 @@ struct SettingsView: View {
                 if !model.isDemo {
                     Section {
                         Group {
+                            // Every hub paired, by group: add one, rename, disconnect one (docs/multi-hub.md). Also with
+                            // one hub: it is where a second one is added (the only row the single-hub page gained).
+                            NavigationLink(value: SettingsPage.hubs) {
+                                SettingsRow(title: "hub", symbol: Theme.Icon.hubGroup, tint: Theme.Hue.green,
+                                            value: model.isMultiHub ? "\(model.groupIDs.count) 组" : model.groupName(model.hub?.group ?? ""),
+                                            look: .oneLine)
+                            }
+                            .accessibilityIdentifier("settings.hubs")
                             NavigationLink(value: SettingsPage.hub) {
                                 SettingsRow(title: "hub", symbol: Theme.Icon.server, tint: Theme.Hue.blue, value: hubSummary, look: .oneLine)
                             }
@@ -114,7 +127,7 @@ struct SettingsView: View {
                             Button { showPair = true } label: { SettingsRow(title: "重新配对", symbol: "qrcode.viewfinder", tint: Theme.accent) }
                                 .modifier(SettingsButtonLook())
                             Button(role: .destructive) { confirmUnpair = true } label: {
-                                SettingsRow(title: "断开并忘记服务器", symbol: Theme.Icon.end, tint: Theme.danger)
+                                SettingsRow(title: model.isMultiHub ? "断开所有 hub" : "断开并忘记服务器", symbol: Theme.Icon.end, tint: Theme.danger)
                             }
                             .modifier(SettingsButtonLook())
                         }
@@ -202,6 +215,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openNotificationSettings") { p.append(SettingsPage.notifications) }
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
+        else if d.bool(forKey: "openHubs") { p.append(SettingsPage.hubs) }
         else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
@@ -264,6 +278,8 @@ struct SettingsView: View {
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
     case persona, themeColor, style, appIcon, layout, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
+    /// 设置 › hub: the hubs paired, by group (docs/multi-hub.md).
+    case hubs
     case hub, skills
     /// A connector of the hub's by its id (GET /api/v1/connectors): GitHub…
     case connector(String)
@@ -280,7 +296,7 @@ private struct SettingsDestinations: ViewModifier {
             .navigationDestination(for: ModelLaunchersRoute.self) { _ in ModelLaunchersView().splitDetailPage() }
             .navigationDestination(for: ModelPurposeRoute.self) { r in ModelPurposeEditorView(purposeID: r.id).splitDetailPage() }
             .navigationDestination(for: ModelLauncherRoute.self) { r in ModelLauncherDetailView(name: r.name).splitDetailPage() }
-            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
+            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref).splitDetailPage() }
             .navigationDestination(for: MessagesChatsRoute.self) { _ in MessagesChatListView().splitDetailPage() }
             .navigationDestination(for: MessagesThreadRoute.self) { r in MessagesThreadView(id: r.id, name: r.name).splitDetailPage() }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
@@ -315,6 +331,7 @@ private struct SettingsDestinations: ViewModifier {
         case .storage: StorageView()
         case .translation: TranslationSettingsView()
         case .modelConfiguration: ModelConfigurationView()
+        case .hubs: HubsView()
         case .hub: HubSettingsPage()
         case .skills: SkillsPage()
         }
@@ -716,7 +733,9 @@ enum AgentSettingsKind {
 struct ClaudeSettingsView: View {
     @Environment(AppModel.self) private var model
     var agent: AgentSettingsKind = .claude
+    /// The machine id, "group|id" for another group of hubs (`MachineRef.path`).
     @AppStorage("claudeSettings.machine") private var machineID = ""
+    private var ref: MachineRef { MachineRef(path: machineID) }
     @AppStorage("claudeSettings.applyAll") private var applyAll = true
     @State private var settings: [APIClient.ClaudeSetting] = []
     @State private var loading = false
@@ -727,7 +746,7 @@ struct ClaudeSettingsView: View {
         List {
             Section {
                 Picker("机器", selection: $machineID) {
-                    ForEach(model.machines.filter(\.online)) { m in Text(m.name).tag(m.id) }
+                    ForEach(model.machines.filter(\.online), id: \.ref) { m in Text(m.title).tag(m.ref.path) }
                 }
                 Toggle("同时改所有在线机器", isOn: $applyAll)
             } footer: {
@@ -742,7 +761,7 @@ struct ClaudeSettingsView: View {
         }
         .themedPage()
         .navigationTitle(agent.title)
-        .onAppear { if machineID.isEmpty { machineID = model.hubMachineID } } // first visit: the hub's machine
+        .onAppear { if machineID.isEmpty { machineID = model.hubRef(model.hubMachineID).path } } // first visit: the hub's machine
         .overlay { if loading && settings.isEmpty { ProgressView() } }
         .task(id: machineID) { await load() }
         .refreshable { await load() }
@@ -782,12 +801,13 @@ struct ClaudeSettingsView: View {
     }
 
     private func load() async {
-        guard let api = model.api else { return }
-        if model.machine(machineID)?.online != true, let first = model.machines.first(where: \.online) { machineID = first.id }
+        if model.machine(ref)?.online != true, let first = model.machines.first(where: \.online) { machineID = first.ref.path }
+        let ref = ref
+        guard let api = model.api(ref.group) else { return }
         loading = true
         defer { loading = false }
         do {
-            settings = agent == .claude ? try await api.claudeSettings(machine: machineID) : try await api.codexSettings(machine: machineID)
+            settings = agent == .claude ? try await api.claudeSettings(machine: ref.id) : try await api.codexSettings(machine: ref.id)
             error = nil
         } catch {
             self.error = error.shown
@@ -795,16 +815,17 @@ struct ClaudeSettingsView: View {
     }
 
     private func set(_ key: String, _ value: JSONValue) async {
-        guard let api = model.api else { return }
-        let targets = applyAll ? model.machines.filter(\.online).map(\.id) : [machineID]
+        // Every online machine of every group of hubs, each through its own group's hub.
+        let targets = applyAll ? model.machines.filter(\.online).map(\.ref) : [ref]
         var failed: [String] = []
-        for id in targets {
+        for target in targets {
+            guard let api = model.api(target.group) else { continue }
             do {
-                let list = agent == .claude ? try await api.setClaudeSetting(machine: id, key: key, value: value)
-                    : try await api.setCodexSetting(machine: id, key: key, value: value)
-                if id == machineID { settings = list }
+                let list = agent == .claude ? try await api.setClaudeSetting(machine: target.id, key: key, value: value)
+                    : try await api.setCodexSetting(machine: target.id, key: key, value: value)
+                if target == ref { settings = list }
             } catch {
-                if !error.isCancellation { failed.append("\(model.machine(id)?.name ?? id)：\(error.localizedDescription)") }
+                if !error.isCancellation { failed.append("\(model.machine(target)?.title ?? target.id)：\(error.localizedDescription)") }
             }
         }
         if failed.isEmpty {
@@ -881,7 +902,7 @@ struct SettingsHeading: View {
 }
 
 /// 设置's buttons that are rows: the list's tinted button; in the BeautifulUI style a plain row (its tile carries the color).
-private struct SettingsButtonLook: ViewModifier {
+struct SettingsButtonLook: ViewModifier {
     func body(content: Content) -> some View {
         if AppStyle.current.usesBeautifulUI { content.buttonStyle(.plain) } else { content }
     }

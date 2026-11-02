@@ -14,7 +14,7 @@ struct AssistantProfileView: View {
     #endif
 
     private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
-    private var machineName: String { model.machine(machineID)?.name ?? machineID }
+    private var machineName: String { model.machine(model.hubRef(machineID))?.name ?? machineID }
 
     /// The machines the hub connects to, by name ("服务器、笔记本…"), from the hub's own list.
     private var machinesLine: String {
@@ -171,7 +171,7 @@ struct AssistantProfileView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             HStack(spacing: Theme.Space.s) {
-                let online = model.machine(machineID)?.online ?? false
+                let online = model.machine(model.hubRef(machineID))?.online ?? false
                 Chip(text: online ? "在线" : "离线", symbol: online ? Theme.Icon.successFilled : "moon.zzz", look: online ? .tint(Theme.positive) : .neutral)
                 if working { Chip(text: "工作中", symbol: Theme.Icon.more, look: .tint(Theme.accent)) }
                 if let next = upcoming.first {
@@ -197,7 +197,7 @@ struct AssistantProfileView: View {
 
     /// Any assistant conversation running a turn right now.
     private var working: Bool {
-        (model.sessionsByMachine[machineID] ?? []).contains { $0.assistant && $0.state == .working }
+        (model.sessionsByMachine[model.hubRef(machineID)] ?? []).contains { $0.assistant && $0.state == .working }
     }
 
     private var upcoming: [AssistantUpcoming] {
@@ -418,7 +418,7 @@ struct AssistantRunRow: View {
         if let key = run.key {
             Button {
                 model.selectedTab = .assistant
-                model.assistantCurrent = key
+                model.assistantCurrent = model.inHub(key)
             } label: { row }
             .buttonStyle(.plain)
             .accessibilityHint("打开这次运行的对话")
@@ -448,7 +448,7 @@ struct AssistantRunRow: View {
         if let key = run.key {
             Button {
                 model.selectedTab = .assistant
-                model.assistantCurrent = key
+                model.assistantCurrent = model.inHub(key)
             } label: { content }
             .accessibilityHint("打开这次运行的对话")
         } else {

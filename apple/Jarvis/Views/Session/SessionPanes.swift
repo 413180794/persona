@@ -345,8 +345,8 @@ struct TerminalPanel: View {
                              onFontSize: pinched,
                              onSwipe: swipe,
                              onDoubleTap: pasteClipboard,
-                             onWheel: feed.drives && model.canScrollTerminal ? { model.terminalScroll(key, lines: $0, at: $1) } : nil,
-                             onClick: feed.drives && model.canClickTerminal ? { model.terminalClick(key, column: $0, row: $1) } : nil,
+                             onWheel: feed.drives && model.canScrollTerminal(key.group) ? { model.terminalScroll(key, lines: $0, at: $1) } : nil,
+                             onClick: feed.drives && model.canClickTerminal(key.group) ? { model.terminalClick(key, column: $0, row: $1) } : nil,
                              onGrid: gridChanged)
             }
         }

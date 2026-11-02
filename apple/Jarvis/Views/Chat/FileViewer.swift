@@ -32,10 +32,13 @@ extension APIClient {
 
 /// A file mentioned in a conversation, opened on the machine the session runs on.
 struct FileRef: Identifiable, Hashable {
+    /// The group of hubs the machine is in (docs/multi-hub.md).
+    var group: String = ""
     var machineID: String
     var path: String
     var cwd: String?
-    var id: String { machineID + ":" + path }
+    var id: String { MachineRef(group: group, id: machineID).path + ":" + path }
+    var machineRef: MachineRef { MachineRef(group: group, id: machineID) }
 }
 
 nonisolated enum FilePaths {
@@ -114,7 +117,7 @@ struct LookUpFiles: ViewModifier {
     func body(content: Content) -> some View {
         content.task(id: paths) {
             guard !paths.isEmpty, let scope else { return }
-            model.filePresence.ask(paths, in: scope, api: model.api)
+            model.filePresence.ask(paths, in: scope, api: model.api(scope.machine.group))
         }
     }
 }
@@ -137,7 +140,7 @@ struct FileViewer: View {
         NavigationStack {
             content
                 .navigationTitle(page?.file?.name ?? (ref.path as NSString).lastPathComponent)
-                .navigationSubtitle(model.machine(ref.machineID)?.name ?? ref.machineID)
+                .navigationSubtitle(model.machine(ref.machineRef)?.name ?? ref.machineID)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -159,7 +162,7 @@ struct FileViewer: View {
     }
 
     private func open() async {
-        let p = FileViewerModel(ref: ref, api: model.api)
+        let p = FileViewerModel(ref: ref, api: model.api(ref.group))
         page = p
         await p.load()
     }
@@ -171,7 +174,7 @@ struct FileViewer: View {
                 List(file.entries ?? [], id: \.self) { e in
                     Button {
                         history.append(ref)
-                        ref = FileRef(machineID: ref.machineID, path: (file.path as NSString).appendingPathComponent(e), cwd: ref.cwd)
+                        ref = FileRef(group: ref.group, machineID: ref.machineID, path: (file.path as NSString).appendingPathComponent(e), cwd: ref.cwd)
                     } label: {
                         Label(e, systemImage: e.hasSuffix("/") ? Theme.Icon.folder : FileViewer.symbol(for: e))
                             .foregroundStyle(Color.primary)
@@ -179,7 +182,7 @@ struct FileViewer: View {
                 }
                 .themedPage()
             case .markdown where !page.showSource:
-                MarkdownFile(page: page, home: model.machine(ref.machineID)?.home, loadImage: loadImageFile)
+                MarkdownFile(page: page, home: model.machine(ref.machineRef)?.home, loadImage: loadImageFile)
             case .markdown, .json, .code:
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     meta(page).padding(.horizontal, Theme.Space.l)
@@ -249,7 +252,7 @@ struct FileViewer: View {
     private func meta(_ page: FileViewerModel) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             HStack(spacing: Theme.Space.sm) {
-                Text(Fmt.path(page.file?.path ?? ref.path, home: model.machine(ref.machineID)?.home)).lineLimit(1).truncationMode(.head)
+                Text(Fmt.path(page.file?.path ?? ref.path, home: model.machine(ref.machineRef)?.home)).lineLimit(1).truncationMode(.head)
                 Text("·")
                 Text(ByteCountFormatter.string(fromByteCount: page.file?.size ?? 0, countStyle: .file))
                 if let lang = page.language { Text("· " + lang) }
@@ -262,7 +265,7 @@ struct FileViewer: View {
 
     /// An image the markdown file refers to, read from the same machine.
     private func loadImageFile(_ path: String) async -> FileContent? {
-        try? await model.api?.file(machine: ref.machineID, path: path, cwd: ref.cwd)
+        try? await model.api(ref.group)?.file(machine: ref.machineID, path: path, cwd: ref.cwd)
     }
 
     static func symbol(for path: String) -> String {

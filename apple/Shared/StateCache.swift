@@ -14,7 +14,15 @@ nonisolated enum StateCache {
         return try? JSON.decoder.decode(T.self, from: data)
     }
 
+    static func remove(_ name: String) {
+        Task.detached(priority: .utility) {
+            guard let url = url(name) else { return }
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     static func save<T: Encodable & Sendable>(_ name: String, _ value: T) {
+
         Task.detached(priority: .utility) {
             guard let url = url(name), let data = try? JSON.encoder.encode(value) else { return }
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

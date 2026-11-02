@@ -55,7 +55,8 @@ nonisolated enum NotificationActions {
     static func reportFailure(id: String, title: String, error: Error) async {
         let content = UNMutableNotificationContent()
         content.title = title
-        content.body = IntentFailure.sentence(for: error, host: Keychain.serverConfig?.url.host())
+        content.body = IntentFailure.sentence(for: error, host: HubStore.load().hubs.first?.config.url.host())
+
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "resolve-failed-\(id)", content: content, trigger: nil))
     }
 

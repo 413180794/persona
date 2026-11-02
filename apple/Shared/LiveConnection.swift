@@ -15,8 +15,9 @@ nonisolated enum TerminalEvent: Sendable {
 }
 
 nonisolated enum ServerEvent: Sendable {
-    /// features: what the hub supports beyond the first protocol (proto.Features); info: its build and protocol.
-    case hello(features: [String], info: HubHello)
+    /// features: what the hub supports beyond the first protocol (proto.Features); which hub it is and its group
+    /// (docs/plan-hub-mesh.md 2.6); its build and protocol (docs/hub-update.md).
+    case hello(HubHello)
     case machines([Machine])
     case sessions(machineID: String, [Session])
     /// What changed in a machine's list since the last (a hub that has `sessions_delta`, asked for on connect): the
@@ -94,14 +95,26 @@ nonisolated enum ServerEvent: Sendable {
         var data: String?
         var unsupported: Bool?
         var state: String?
+        var hubID: String?
+        var hubName: String?
+        var mesh: MeshField?
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
-            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, channel, build, update
-            case protocolVersion = "protocol", minAppBuild = "min_app_build"
+            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update
+            case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build"
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids", sessionIDs = "session_ids"
+        }
+    }
+
+    /// The hello's `mesh`; anything else there is no mesh rather than a lost hello.
+    private struct MeshField: Decodable {
+        var hubs: [MeshHub]?
+        enum CodingKeys: String, CodingKey { case hubs }
+        init(from decoder: Decoder) throws {
+            hubs = (try? decoder.container(keyedBy: CodingKeys.self)).flatMap { try? $0.decodeIfPresent([MeshHub].self, forKey: .hubs) }
         }
     }
 
@@ -109,8 +122,9 @@ nonisolated enum ServerEvent: Sendable {
         guard let e = try? JSON.decoder.decode(Envelope.self, from: data) else { return nil }
         let key = e.machineID.flatMap { m in e.sessionID.map { SessionKey(machineID: m, sessionID: $0) } }
         switch e.type {
-        case "hello": return .hello(features: e.features ?? [], info: HubHello(channel: e.channel, build: e.build,
-                                                                               protocolVersion: e.protocolVersion, minAppBuild: e.minAppBuild))
+        case "hello": return .hello(HubHello(features: e.features ?? [], hubID: e.hubID, hubName: e.hubName, mesh: e.mesh?.hubs,
+                                             channel: e.channel, build: e.build, protocolVersion: e.protocolVersion,
+                                             minAppBuild: e.minAppBuild))
         case "hub_update": return e.update.map { .hubUpdate($0) }
         case "machines": return e.machines.map { .machines($0) }
         case "sessions":
@@ -161,6 +175,31 @@ nonisolated enum ServerEvent: Sendable {
     }
 }
 
+nonisolated extension ServerEvent {
+    /// The event with the group of the connection it came on (docs/multi-hub.md) on every key, session, machine and
+    /// interaction in it. The default group's events are left as they are.
+    func stamped(_ group: String) -> ServerEvent {
+        guard !group.isEmpty else { return self }
+        func k(_ key: SessionKey) -> SessionKey { var key = key; key.group = group; return key }
+        switch self {
+        case .machines(let list): return .machines(list.map { var m = $0; m.group = group; return m })
+        case .sessions(let machine, let list): return .sessions(machineID: machine, list.map { var s = $0; s.group = group; return s })
+        case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
+            return .items(k(key), items, backlog: backlog, hasMore: hasMore, span: span, moreAfter: moreAfter)
+        case .screen(let key, let text, let status): return .screen(k(key), text: text, status: status)
+        case .delta(let key, let text): return .delta(k(key), text: text)
+        case .interaction(let ix): var ix = ix; ix.group = group; return .interaction(ix)
+        case .hookEvent(let key, let event, let message, let lastText):
+            return .hookEvent(k(key), event: event, message: message, lastText: lastText)
+        case .terminal(let key, let event): return .terminal(k(key), event)
+        case .error(let key, let message): return .error(key.map(k), message)
+        case .sessionsDelta(let machine, let upsert, let remove):
+            return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
+        case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops: return self
+        }
+    }
+}
+
 /// The 体验模式 hub's end of the socket (Jarvis/App/DemoHub.swift): what the app sends goes to `receive`, and it
 /// answers through `deliver` with the same JSON a hub sends.
 protocol LocalSocket: AnyObject {
@@ -192,8 +231,13 @@ final class LiveConnection {
     @ObservationIgnored var onChange: (() -> Void)?
     @ObservationIgnored var prepareEvent: (@Sendable (ServerEvent) -> Void)?
     @ObservationIgnored var onConnected: (() -> Void)?
+    /// Picks where each attempt goes when a group has several hubs (HubRoute, docs/multi-hub.md「选路」): asked before
+    /// every attempt; nil keeps the config given to `connect`.
+    @ObservationIgnored var route: (@MainActor () async -> ServerConfig?)?
 
     @ObservationIgnored private var config: ServerConfig?
+    /// Where the socket goes (or went last): the config given to `connect`, or the one `route` picked.
+    var currentConfig: ServerConfig? { config }
     @ObservationIgnored private var task: URLSessionWebSocketTask?
     /// The demo config's socket, made by `makeLocal` (DemoHub registers it at launch).
     @ObservationIgnored private var local: LocalSocket?
@@ -252,6 +296,14 @@ final class LiveConnection {
         if state != .connected || stalled { open() }
     }
 
+    /// The group's center answers again while the socket is on a member (AppModel.watchCenter): open a new socket,
+    /// which asks `route` first and so goes to the center. Nothing while suspended or with no route to ask.
+    func reroute() {
+        guard config != nil, route != nil, !suspended else { return }
+        backoff = 1
+        open()
+    }
+
     /// The network path changed (Wi-Fi to cellular): a socket on the old interface goes quiet without failing. Ping
     /// now, so a dead one shows as stalled in seconds instead of at the next heartbeat.
     func probe() {
@@ -270,6 +322,25 @@ final class LiveConnection {
             openLocal(gen)
             return
         }
+        guard let route else { openSocket(config, gen); return }
+        state = .connecting
+        stalled = false
+        nextTry = nil
+        Task { @MainActor [weak self] in
+            let picked = await route()
+            guard let self, gen == self.generation, !self.suspended else { return }
+            if let picked, picked != self.config {
+                self.config = picked
+                self.onRoute?(picked)
+            }
+            self.openSocket(self.config ?? config, gen)
+        }
+    }
+
+    /// The hub `route` picked for the next attempt.
+    @ObservationIgnored var onRoute: ((ServerConfig) -> Void)?
+
+    private func openSocket(_ config: ServerConfig, _ gen: Int) {
         var comps = URLComponents(url: config.url.appending(path: "/api/v1/ws"), resolvingAgainstBaseURL: false)!
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
         // A hub that has it sends session lists as deltas (an older one ignores the question and sends whole lists).

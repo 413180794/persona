@@ -17,7 +17,8 @@ nonisolated enum MacOpenURL {
             let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             func value(_ name: String) -> String? { q.first { $0.name == name }?.value.flatMap { $0.isEmpty ? nil : $0 } }
             guard let m = value("machine"), let s = value("session") else { return .app }
-            return .session(SessionKey(machineID: m, sessionID: s))
+            // "group|machine" for another group's row (FleetMerge); resolved against the groups where it is opened.
+            return SessionKey(path: m + "/" + s).map { .session($0) } ?? .app
         case "pair": return .pair
         default: return .ignore
         }

@@ -5,14 +5,42 @@ nonisolated enum Keychain {
     // The phone app's bundle id on both phone and watch (the watch app's is <id>.watchkitapp).
     private static let service = (Bundle.main.bundleIdentifier ?? "jarvis").replacingOccurrences(of: ".watchkitapp", with: "")
 
-    static func save(_ data: Data, account: String) {
+    /// Whether it was written (callers that must not lose what they replace read it back: HubStore).
+    @discardableResult
+    static func save(_ data: Data, account: String) -> Bool {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                     kSecAttrAccount as String: account]
         SecItemDelete(query as CFDictionary)
         var add = query
         add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(add as CFDictionary, nil)
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+    }
+
+    /// What reading an item came to: there, not there, or not readable now (before the first unlock after boot
+    /// `errSecInteractionNotAllowed`, which a push woken in the background can meet). Not readable is not "not there".
+    enum Read: Equatable, Sendable {
+        case found(Data)
+        case missing
+        case failed(OSStatus)
+    }
+
+    static func read(account: String) -> Read {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                    kSecAttrAccount as String: account, kSecReturnData as String: true,
+                                    kSecMatchLimit as String: kSecMatchLimitOne]
+        var out: AnyObject?
+        #if os(macOS) && DEBUG
+        // As in `load`: screenshots and the JarvisMacTests host never touch the keychain.
+        if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return .missing }
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return .missing }
+        #endif
+        let status = SecItemCopyMatching(query as CFDictionary, &out)
+        switch status {
+        case errSecSuccess: return (out as? Data).map { .found($0) } ?? .failed(status)
+        case errSecItemNotFound: return .missing
+        default: return .failed(status)
+        }
     }
 
     static func load(account: String) -> Data? {
@@ -38,20 +66,18 @@ nonisolated enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 
-    /// The watch's own, answer-only credential (DeviceCredentials.swift): what the phone hands the watch.
-    static var watchConfig: ServerConfig? {
-        get { load(account: "watch").flatMap { try? JSONDecoder().decode(ServerConfig.self, from: $0) } }
-        set {
-            if let newValue, let data = try? JSONEncoder().encode(newValue) { save(data, account: "watch") }
-            else { delete(account: "watch") }
-        }
-    }
+    /// The single pairing and the watch's credential from before several hubs (docs/multi-hub.md): `HubStore` moves
+    /// them into the default group and drops them once the registry is written.
+    static let legacyServerAccount = "server"
+    static let legacyWatchAccount = "watch"
+}
 
-    static var serverConfig: ServerConfig? {
-        get { load(account: "server").flatMap { try? JSONDecoder().decode(ServerConfig.self, from: $0) } }
-        set {
-            if let newValue, let data = try? JSONEncoder().encode(newValue) { save(data, account: "server") }
-            else { delete(account: "server") }
-        }
-    }
+/// The keychain as `HubStore` uses it, so tests can make reads fail and writes not stick (`MultiHubTests`).
+nonisolated struct KeychainAccess: Sendable {
+    var read: @Sendable (String) -> Keychain.Read
+    var write: @Sendable (Data, String) -> Bool
+    var delete: @Sendable (String) -> Void
+
+    static let system = KeychainAccess(read: { Keychain.read(account: $0) }, write: { Keychain.save($0, account: $1) },
+                                       delete: { Keychain.delete(account: $0) })
 }

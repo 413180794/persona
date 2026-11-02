@@ -1,8 +1,10 @@
 import AppIntents
 import Foundation
 
-// Siri / Shortcuts entry points. Every intent talks to the hub directly (Keychain.serverConfig + APIClient), so the
-// app does not have to be in the foreground; only OpenSessionIntent runs inside the app and moves its navigation.
+// Siri / Shortcuts entry points. Every intent talks to the hubs directly (HubStore + APIClient), so the app does not
+// have to be in the foreground; only OpenSessionIntent runs inside the app and moves its navigation. With several
+// groups of hubs (docs/multi-hub.md「Siri」) they see every group: machines and sessions carry their group, the status
+// adds the groups up, and whatever acts goes to the group of what it acts on.
 
 /// Everything the intents say out loud. Pure functions, so the tests can pin the wording without a hub.
 nonisolated enum IntentText {
@@ -131,13 +133,47 @@ nonisolated enum IntentFailure: LocalizedError {
 }
 
 nonisolated enum IntentSupport {
-    /// Fresh client every call: the pairing can change while the app is running.
-    static func client() throws -> APIClient {
-        guard let config = Keychain.serverConfig else { throw IntentFailure.notPaired }
-        return APIClient(config: config)
+    /// Fresh clients every call, one per group (its first hub): the pairing can change while the app is running.
+    static func clients() throws -> [APIClient] {
+        let registry = HubStore.load()
+        let out = registry.groups.compactMap { g in registry.primary(g).map { APIClient(config: $0.config, group: g) } }
+        guard !out.isEmpty else { throw IntentFailure.notPaired }
+        return out
     }
 
-    static func host() -> String? { Keychain.serverConfig?.url.host() }
+    /// The client of one group (a machine's, a session's); the first group's when it is gone.
+    static func client(group: String = "") throws -> APIClient {
+        let all = try clients()
+        return all.first { $0.group == group } ?? all[0]
+    }
+
+    /// Every group's machines; with several groups each named with its group ("MacBook · 公司").
+    static func machines() async throws -> [Machine] {
+        let all = try clients()
+        let registry = HubStore.load()
+        var out: [Machine] = []
+        for api in all {
+            let list = try await api.machines()
+            out += all.count > 1 ? list.map { var m = $0; m.groupLabel = registry.name(api.group); return m } : list
+        }
+        return out
+    }
+
+    /// Every group's sessions, or one group's.
+    static func sessions(group: String? = nil) async throws -> [Session] {
+        var out: [Session] = []
+        for api in try clients() where group == nil || api.group == group { out += try await api.sessions() }
+        return out
+    }
+
+    /// Every group's pending interactions.
+    static func interactions() async throws -> [Interaction] {
+        var out: [Interaction] = []
+        for api in try clients() { out += try await api.interactions() }
+        return out
+    }
+
+    static func host() -> String? { HubStore.load().hubs.first?.config.url.host() }
 
     /// A dialog built from runtime text; `IntentDialog`'s literal initializer only takes compile-time strings.
     static func dialog(_ text: String) -> IntentDialog { IntentDialog("\(text)") }
@@ -145,16 +181,17 @@ nonisolated enum IntentSupport {
 
 /// Selection rules shared by the intents. Pure, so the tests can drive them with decoded models.
 nonisolated enum IntentPicker {
-    /// The remembered machine if it still exists, otherwise the first online one.
+    /// The remembered machine if it still exists, otherwise the first online one. `preferred` is what the new-chat
+    /// sheet remembers: a machine id, or "group|id" for another group (`MachineRef.path`).
     static func machine(_ machines: [Machine], preferred: String?) -> Machine? {
-        if let preferred, let match = machines.first(where: { $0.id == preferred }) { return match }
+        if let preferred, let match = machines.first(where: { $0.ref.path == preferred }) { return match }
         return machines.first(where: \.online) ?? machines.first
     }
 
     /// The most recently updated session on a machine that is not offline.
-    static func session(_ sessions: [Session], machine: String) -> Session? {
+    static func session(_ sessions: [Session], machine: String, group: String = "") -> Session? {
         sessions
-            .filter { $0.machineID == machine && $0.status != .offline }
+            .filter { $0.machineID == machine && $0.group == group && $0.status != .offline }
             .max { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }
     }
 

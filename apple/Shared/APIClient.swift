@@ -89,6 +89,9 @@ nonisolated struct APIClient: Sendable {
     var session: URLSession = .shared
     /// Answers every request in place of the network: unit tests' `FakeHub`. The demo config uses `local`.
     var transport: Transport?
+    /// The group of paired hubs this client talks to (docs/multi-hub.md): put on the sessions, machines,
+    /// interactions and keys it returns. "" = the default group.
+    var group: String = ""
     /// Answers the demo config's requests (DemoHub registers it at launch); every endpoint goes through `request`.
     nonisolated(unsafe) static var local: (@Sendable (LocalRequest) async throws -> Data)?
 
@@ -211,11 +214,31 @@ nonisolated struct APIClient: Sendable {
         return try await get("/api/v1/health", as: H.self).ok
     }
 
-    func machines() async throws -> [Machine] { try await get("/api/v1/machines", as: MachinesResponse.self).machines }
+    /// Which hub this is (`GET /api/v1/health`: `hub_id`, `hub_name`; docs/plan-hub-mesh.md 2.6).
+    struct Identity: Decodable, Sendable {
+        var hubID: String?
+        var hubName: String?
+        enum CodingKeys: String, CodingKey { case hubID = "hub_id", hubName = "hub_name" }
+    }
+    func identity() async throws -> Identity { try await get("/api/v1/health", as: Identity.self) }
+
+
+    func machines() async throws -> [Machine] {
+        stamp(try await get("/api/v1/machines", as: MachinesResponse.self).machines)
+    }
     func setEngine(machine: String, engine: MachineEngine) async throws -> Machine {
         struct Body: Encodable { var engine: String }
-        return try JSON.decoder.decode(Machine.self, from: await request("PUT", "/api/v1/machines/\(machine)/engine", body: Body(engine: engine.rawValue)))
+        var m = try JSON.decoder.decode(Machine.self, from: await request("PUT", "/api/v1/machines/\(machine)/engine", body: Body(engine: engine.rawValue)))
+        m.group = group
+        return m
     }
+
+    /// The group on what the hub returned (docs/multi-hub.md).
+    func stamp(_ list: [Machine]) -> [Machine] { group.isEmpty ? list : list.map { var m = $0; m.group = group; return m } }
+    func stamp(_ list: [Session]) -> [Session] { group.isEmpty ? list : list.map { var s = $0; s.group = group; return s } }
+    func stamp(_ list: [Interaction]) -> [Interaction] { group.isEmpty ? list : list.map { var i = $0; i.group = group; return i } }
+    func stamp(_ s: Session) -> Session { var s = s; s.group = group; return s }
+    func stamp(_ k: SessionKey) -> SessionKey { var k = k; k.group = group; return k }
     func launchers(machine: String) async throws -> [Launcher] {
         try await get("/api/v1/machines/\(machine)/launchers", as: LaunchersResponse.self).launchers
     }
@@ -237,9 +260,9 @@ nonisolated struct APIClient: Sendable {
     }
     func sessions() async throws -> [Session] {
         let data = try await request("GET", "/api/v1/sessions")
-        return try await Task.detached(priority: .userInitiated) {
+        return stamp(try await Task.detached(priority: .userInitiated) {
             try JSON.decoder.decode(SessionsResponse.self, from: data).sessions
-        }.value
+        }.value)
     }
 
     struct StartRequest: Encodable {
@@ -265,7 +288,7 @@ nonisolated struct APIClient: Sendable {
     }
 
     func start(_ req: StartRequest) async throws -> Session {
-        try await post("/api/v1/sessions", body: req, timeout: req.async == true ? 20 : 110, as: SessionResponse.self).session
+        stamp(try await post("/api/v1/sessions", body: req, timeout: req.async == true ? 20 : 110, as: SessionResponse.self).session)
     }
 
     private func sp(_ k: SessionKey) -> String { "/api/v1/sessions/\(k.machineID)/\(k.sessionID)" }
@@ -603,7 +626,7 @@ nonisolated struct APIClient: Sendable {
     /// Runs a task now instead of at its time; returns the conversation it went to.
     func runTask(_ id: String) async throws -> SessionKey {
         let r = try await post("/api/v1/assistant/tasks/\(id)/run", body: [String: String](), timeout: 130, as: TaskRun.self)
-        return SessionKey(machineID: r.machineID, sessionID: r.sessionID)
+        return SessionKey(group: group, machineID: r.machineID, sessionID: r.sessionID)
     }
 
     /// One entry of the schedule's history: a routine or follow-up that ran, failed to start, or was skipped.
@@ -661,10 +684,10 @@ nonisolated struct APIClient: Sendable {
     /// `main`: the new conversation becomes the main one.
     func startConversation(prompt: String, images: [ImagePayload] = [], launcher: String? = nil, permissionMode: String? = nil,
                            effort: String? = nil, main: Bool = false) async throws -> Session {
-        try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images,
-                                                                              launcher: launcher, permissionMode: permissionMode, effort: effort,
-                                                                              main: main ? true : nil),
-                       timeout: 110, as: SessionResponse.self).session
+        stamp(try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images,
+                                                                                    launcher: launcher, permissionMode: permissionMode, effort: effort,
+                                                                                    main: main ? true : nil),
+                             timeout: 110, as: SessionResponse.self).session)
     }
 
     struct ClaudeSetting: Codable, Identifiable, Sendable {
@@ -696,7 +719,7 @@ nonisolated struct APIClient: Sendable {
     }
 
     func interactions() async throws -> [Interaction] {
-        try await get("/api/v1/interactions", as: InteractionsResponse.self).interactions
+        stamp(try await get("/api/v1/interactions", as: InteractionsResponse.self).interactions)
     }
     func resolve(_ id: String, _ r: Resolution) async throws { try await post("/api/v1/interactions/\(id)/resolve", body: r) }
 

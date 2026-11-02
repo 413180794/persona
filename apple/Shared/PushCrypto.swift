@@ -24,9 +24,13 @@ nonisolated enum PushCrypto {
     private static let service = "jarvis.push"
     private static let account = "push-key"
 
-    private static func query(group: String?) -> [String: Any] {
+    /// Each group of hubs seals to a key of its own (docs/multi-hub.md「推送」): the default group's is the one the
+    /// phone always had, another group's has the group's id after it. The key that opens a push says whose it is.
+    static func account(group: String) -> String { group.isEmpty ? account : account + "." + group }
+
+    private static func query(group: String?, hubGroup: String = "") -> [String: Any] {
         var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                kSecAttrAccount as String: account]
+                                kSecAttrAccount as String: account(group: hubGroup)]
         if let group { q[kSecAttrAccessGroup as String] = group }
         #if os(macOS)
         // A Mac's default is the old file keychain, where access groups do nothing and an item belongs to the app that
@@ -37,8 +41,8 @@ nonisolated enum PushCrypto {
     }
 
     /// The private key, if this phone made one. Readable once the phone was unlocked after boot (the extension runs locked).
-    static func loadKey() -> P256.KeyAgreement.PrivateKey? {
-        var q = query(group: accessGroup)
+    static func loadKey(group hubGroup: String = "") -> P256.KeyAgreement.PrivateKey? {
+        var q = query(group: accessGroup, hubGroup: hubGroup)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var out: AnyObject?
@@ -46,11 +50,37 @@ nonisolated enum PushCrypto {
         return try? P256.KeyAgreement.PrivateKey(rawRepresentation: data)
     }
 
+    /// Every group's key: (group, key), the default group's first.
+    static func allKeys() -> [(group: String, key: P256.KeyAgreement.PrivateKey)] {
+        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                kSecReturnData as String: true, kSecReturnAttributes as String: true,
+                                kSecMatchLimit as String: kSecMatchLimitAll]
+        if let accessGroup { q[kSecAttrAccessGroup as String] = accessGroup }
+        var out: AnyObject?
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let items = out as? [[String: Any]] else {
+            return loadKey().map { [("", $0)] } ?? []
+        }
+        var keys: [(group: String, key: P256.KeyAgreement.PrivateKey)] = []
+        for item in items {
+            guard let name = item[kSecAttrAccount as String] as? String, let data = item[kSecValueData as String] as? Data,
+                  let key = try? P256.KeyAgreement.PrivateKey(rawRepresentation: data) else { continue }
+            if name == account { keys.insert(("", key), at: 0) }
+            else if name.hasPrefix(account + ".") { keys.append((String(name.dropFirst(account.count + 1)), key)) }
+        }
+        return keys
+    }
+
+    /// A group that is gone: its key goes too.
+    static func removeKey(group hubGroup: String) {
+        SecItemDelete(query(group: accessGroup, hubGroup: hubGroup) as CFDictionary)
+        SecItemDelete(query(group: nil, hubGroup: hubGroup) as CFDictionary)
+    }
+
     /// The key, made and saved the first time. It never leaves this phone: not synced, not in backups.
-    static func ensureKey() -> P256.KeyAgreement.PrivateKey? {
-        if let key = loadKey() { return key }
+    static func ensureKey(group hubGroup: String = "") -> P256.KeyAgreement.PrivateKey? {
+        if let key = loadKey(group: hubGroup) { return key }
         let key = P256.KeyAgreement.PrivateKey()
-        var add = query(group: accessGroup)
+        var add = query(group: accessGroup, hubGroup: hubGroup)
         add[kSecValueData as String] = key.rawRepresentation
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         var status = SecItemAdd(add as CFDictionary, nil)
@@ -61,7 +91,7 @@ nonisolated enum PushCrypto {
             status = SecItemAdd(add as CFDictionary, nil)
         }
         // Only a key that reads back: one that was not saved would make the hub seal to a key this phone does not keep.
-        return status == errSecSuccess || status == errSecDuplicateItem ? loadKey() : nil
+        return status == errSecSuccess || status == errSecDuplicateItem ? loadKey(group: hubGroup) : nil
     }
 
     /// What the hub gets: the X9.63 uncompressed point (65 bytes), base64.
@@ -122,13 +152,38 @@ nonisolated enum PushCrypto {
 
     /// What the notification service extension shows for a delivered push (JarvisNotify/NotificationService.swift):
     /// the decrypted content, or the push as it came (the relay's 「有新消息」).
-    static func service(_ content: UNNotificationContent, key: () -> P256.KeyAgreement.PrivateKey? = loadKey,
+    static func service(_ content: UNNotificationContent, key: () -> P256.KeyAgreement.PrivateKey? = { loadKey() },
+                        now: Date = .now) -> (UNNotificationContent, Outcome) {
+        service(content, keys: { key().map { [("", $0)] } ?? [] }, now: now)
+    }
+
+    /// Tries every group's key; the one that opens the push names its group (`jarvis_group`, docs/multi-hub.md).
+    static func service(_ content: UNNotificationContent, keys: () -> [(group: String, key: P256.KeyAgreement.PrivateKey)],
                         now: Date = .now) -> (UNNotificationContent, Outcome) {
         guard isSealed(content.userInfo) else { return (content, .notSealed) }
-        guard let key = key() else { return (content, .noKey) }
-        guard let payload = payload(content.userInfo, key: key, now: now),
-              let out = content.mutableCopy() as? UNMutableNotificationContent else { return (content, .unopened) }
-        apply(payload, to: out)
-        return (out, .opened)
+        let all = keys()
+        guard !all.isEmpty else { return (content, .noKey) }
+        for (group, key) in all {
+            guard let payload = payload(content.userInfo, key: key, now: now),
+                  let out = content.mutableCopy() as? UNMutableNotificationContent else { continue }
+            apply(payload, to: out)
+            if !group.isEmpty {
+                var info = out.userInfo
+                info[groupKey] = group
+                out.userInfo = info
+            }
+            return (out, .opened)
+        }
+        return (content, .unopened)
     }
+
+    /// Where an opened push says which group's key opened it (another group than the default one).
+    static let groupKey = "jarvis_group"
+
+    /// A push's payload opened with any group's key, and the group.
+    static func opened(_ userInfo: [AnyHashable: Any], keys: [(group: String, key: P256.KeyAgreement.PrivateKey)]) -> (group: String, payload: [String: Any])? {
+        for (group, key) in keys { if let p = payload(userInfo, key: key) { return (group, p) } }
+        return nil
+    }
+
 }

@@ -430,7 +430,7 @@ struct ShellDestinations: ViewModifier {
                     }
                 }
                 .modifier(InboxDestinations(accounts: accounts.accounts))
-                .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
+                .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref) }
                 .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
                 .environment(\.feishuOpen) { path.append($0) }
         } else {

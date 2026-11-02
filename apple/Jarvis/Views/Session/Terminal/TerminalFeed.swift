@@ -77,8 +77,8 @@ final class TerminalFeed {
     /// Called four times a second while the tab is on screen: keeps the stream subscribed, polls when it cannot
     /// stream, retries after failures and keeps the health current.
     func tick(_ model: AppModel) async {
-        if mode == .poll, !unsupported, model.canStreamTerminal, model.isLive {
-            if wantsControl, model.canControlTerminal, control == .off {
+        if mode == .poll, !unsupported, model.canStreamTerminal(key.group), model.isLive(key.group) {
+            if wantsControl, model.canControlTerminal(key.group), control == .off {
                 guard phoneGrid != nil else { return } // the view's first layout tells the size
             }
             mode = .stream // the hub's hello came after the first reads: what they concluded about history is moot
@@ -89,7 +89,7 @@ final class TerminalFeed {
         }
         switch mode {
         case .stream:
-            guard model.isLive else {
+            guard model.isLive(key.group) else {
                 subscribed = false // the connection's hello subscribes again
                 if failure == nil { failure = Self.linkDown }
                 return
@@ -112,11 +112,11 @@ final class TerminalFeed {
 
     func retryNow(_ model: AppModel) {
         nextTry = .distantPast
-        if mode == .stream, model.isLive { subscribe(model, continuing: true) }
+        if mode == .stream, model.isLive(key.group) { subscribe(model, continuing: true) }
     }
 
     private func willDrive(_ model: AppModel) -> Bool {
-        wantsControl && model.canControlTerminal && phoneGrid != nil && control != .declined && control != .busy
+        wantsControl && model.canControlTerminal(key.group) && phoneGrid != nil && control != .declined && control != .busy
     }
 
     private func subscribe(_ model: AppModel, continuing: Bool) {
@@ -291,7 +291,7 @@ final class TerminalFeed {
     // MARK: Polling (no stream)
 
     private func refresh(_ model: AppModel) async {
-        guard let api = model.api else { return }
+        guard let api = model.api(key.group) else { return }
         do {
             let r = try await api.screen(key, lines: Self.page, recent: true, ansi: true)
             guard mode == .poll else { return }
@@ -318,7 +318,7 @@ final class TerminalFeed {
 
     /// The page of scrollback before the first rows on screen; the screen stops following the pane meanwhile.
     func loadOlder(_ model: AppModel) async {
-        guard !loading, hasOlder, loaded, control == .off || control == .declined, let api = model.api else { return }
+        guard !loading, hasOlder, loaded, control == .off || control == .declined, let api = model.api(key.group) else { return }
         loading = true
         error = nil
         let wasPaused = paused

@@ -4,6 +4,8 @@ import SwiftUI
 struct FilesPane: View {
     @Environment(AppModel.self) private var model
     let machineID: String
+    /// The group of hubs the machine is in (docs/multi-hub.md).
+    var group: String = ""
     let cwd: String
     var git: GitStatus?
     @State private var stack: [String] = [] // folders entered below cwd
@@ -117,7 +119,7 @@ struct FilesPane: View {
                 Haptics.tap()
                 stack.append(e.name)
             } else {
-                file = FileRef(machineID: machineID, path: full, cwd: cwd)
+                file = FileRef(group: group, machineID: machineID, path: full, cwd: cwd)
             }
         } label: {
             HStack(spacing: Theme.Space.m) {
@@ -167,7 +169,7 @@ struct FilesPane: View {
     }
 
     private func load() async {
-        guard let api = model.api, !cwd.isEmpty else { return }
+        guard let api = model.api(group), !cwd.isEmpty else { return }
         let target = path
         do {
             let l = try await api.listDir(machine: machineID, path: target, cwd: cwd)

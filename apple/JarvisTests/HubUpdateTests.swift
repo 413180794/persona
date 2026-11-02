@@ -129,10 +129,10 @@ struct HubUpdateTests {
     static let docker = #"{"version":"0.3.0","build":0,"channel":"docker","can_update":false,"why_not":"Docker 里的 hub 由新镜像更新","latest":{"version":"0.4.0","build":0,"newer":true,"bad":false},"state":"available","busy":[],"auto":false,"auto_notice":false,"confirmed":true,"image":{"name":"ghcr.io/owner/jarvis","tag":"0.3.0","pinned":true}}"#
 
     @Test func eventsCarryItLive() {
-        guard case .hello(_, let info)? = ServerEvent.decode(Data(#"{"type":"hello","features":["x"],"channel":"release","build":202611021500,"protocol":1,"min_app_build":0}"#.utf8)) else {
+        guard case .hello(let info)? = ServerEvent.decode(Data(#"{"type":"hello","features":["x"],"channel":"release","build":202611021500,"protocol":1,"min_app_build":0}"#.utf8)) else {
             Issue.record("hello"); return
         }
-        #expect(info == HubHello(channel: "release", build: 202611021500, protocolVersion: 1, minAppBuild: 0))
+        #expect(info == HubHello(features: ["x"], channel: "release", build: 202611021500, protocolVersion: 1, minAppBuild: 0))
         guard case .hubUpdate(let s)? = ServerEvent.decode(Data((#"{"type":"hub_update","update":"# + Self.waiting + "}").utf8)) else {
             Issue.record("hub_update"); return
         }

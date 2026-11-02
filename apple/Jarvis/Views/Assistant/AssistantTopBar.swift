@@ -62,7 +62,7 @@ struct AssistantTopBar: View {
                 if UserDefaults.standard.bool(forKey: "showInfo") { try? await Task.sleep(for: .seconds(2)); showInfo = true }
             }
             #endif
-        .task(id: machineID) { launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant) }
+        .task(id: model.hubRef(machineID)) { launchers = ((try? await model.launchers(model.hubRef(machineID))) ?? []).filter(\.runsAssistant) }
     }
 
     @ViewBuilder private var bar: some View {
@@ -223,6 +223,16 @@ struct AssistantTopBar: View {
     }
 
     @ViewBuilder private func menuItems(_ link: ConnectionStatus.Phase) -> some View {
+        if model.isMultiHub, let current = model.hub?.group {
+            // Several groups of hubs: each has its own Jarvis (docs/multi-hub.md「hub 级页面」); pick whose.
+            Section("hub") {
+                Picker("hub", selection: Binding(get: { current }, set: { model.selectHub($0) })) {
+                    ForEach(model.groupIDs, id: \.self) { g in
+                        Label(model.groupName(g), systemImage: Theme.Icon.hubGroup).tag(g)
+                    }
+                }
+            }
+        }
         Section(menuTitle) {
             if link != .online {
                 Button { showLink = true } label: { Label("连接详情", systemImage: Theme.Icon.offline) }
@@ -271,7 +281,14 @@ struct AssistantTopBar: View {
 
     /// The menu's heading: which conversation, and what it runs on.
     private var menuTitle: String {
+        let title = baseMenuTitle
+        guard model.isMultiHub, let g = model.hub?.group else { return title }
+        return title + " · " + model.groupName(g)
+    }
+
+    private var baseMenuTitle: String {
         guard let key else { return "新对话 · \(launcher)" }
+
         let title = name == model.persona.name && key == model.assistantMain ? "主对话" : name
         return [title, launcher, Fmt.model(session?.model)].compactMap { $0 }.joined(separator: " · ")
     }
@@ -279,7 +296,7 @@ struct AssistantTopBar: View {
     private var infoText: String {
         AssistantCopyText.info(title: session.map { $0.title.isEmpty || $0.title == "Claude Code" ? nil : $0.title } ?? nil,
                                isMain: key != nil && key == model.assistantMain, sessionID: key?.sessionID,
-                               machine: model.machine(machineID)?.name, machineID: machineID, cwd: cwd,
+                               machine: model.machine(model.hubRef(machineID))?.name, machineID: machineID, cwd: cwd,
                                launcher: launcher, model: Fmt.model(session?.model))
     }
 
@@ -336,7 +353,7 @@ extension AppModel {
         #endif
         // 更新中… is the hub answering again: not 离线.
         let link = connection.shown
-        if link == .waitingForNetwork || link == .connecting || machine(machineID)?.online == false { return .offline }
+        if link == .waitingForNetwork || link == .connecting || machine(hubRef(machineID))?.online == false { return .offline }
         guard let key, let session = session(key) else { return .idle }
         if session.state == .needsYou || !interactions(for: key).isEmpty { return .needsYou }
         guard session.state == .working else { return .idle }

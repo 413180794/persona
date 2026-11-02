@@ -32,9 +32,15 @@ final class PushRegistrar {
         }
     }
 
+    /// Registers with every group: at its first hub, the one that issued the credential (docs/plan-hub-mesh.md 2.6: the
+    /// group's other hubs pass their pushes to it, one push per device), each group sealing to a key of its own
+    /// (docs/multi-hub.md「推送」).
     func didRegister(token: Data) {
         let hex = token.map { String(format: "%02x", $0) }.joined()
-        guard let api = AppModel.shared.api else { return }
+        let registry = HubStore.load()
+        let clients = registry.groups.compactMap { g in registry.primary(g).map { (group: g, api: APIClient(config: $0.config, group: g)) } }
+            .filter { !$0.api.config.isDemo }
+        guard !clients.isEmpty else { return }
         #if DEBUG
         let env = "sandbox"
         #else
@@ -45,28 +51,29 @@ final class PushRegistrar {
         #else
         let kind = "iphone"
         #endif
-        let body = APIClient.DeviceBody(deviceID: Self.deviceID, name: UIDevice.current.name, kind: kind, apnsToken: hex,
+        let base = APIClient.DeviceBody(deviceID: Self.deviceID, name: UIDevice.current.name, kind: kind, apnsToken: hex,
                                         apnsEnv: env, topic: Bundle.main.bundleIdentifier)
         Task {
-            try? await api.register(device: await Self.withRelay(body, token: hex, env: env))
-        }
-    }
-
-    /// A hub without the app's APNs key pushes through the relay, sealed to this key (docs/push-relay.md); the
-    /// notification service extension (JarvisNotify, on a Mac JarvisMacNotify) opens it. The hub decides: with its own
-    /// key it ignores these and pushes directly, as before.
-    private static func withRelay(_ body: APIClient.DeviceBody, token: String, env: String) async -> APIClient.DeviceBody {
-        var body = body
-        if let relay = PushRelay.url, let key = PushCrypto.ensureKey(), let topic = body.topic {
-            do {
-                body.relayGrant = try await PushRelay.grant(relay: relay, token: token, env: env, topic: topic)
-                body.relayURL = relay.absoluteString
-                body.pushKey = PushCrypto.publicKey(key)
-            } catch {
-                PushRelay.log.error("relay registration: \(error.localizedDescription, privacy: .public)")
+            // A hub without the app's APNs key pushes through the relay, sealed to this group's key (docs/push-relay.md);
+            // the notification service extension opens it. The hub decides: with its own key it ignores these.
+            var grant: String?
+            if let relay = PushRelay.url, let topic = base.topic {
+                do {
+                    grant = try await PushRelay.grant(relay: relay, token: hex, env: env, topic: topic)
+                } catch {
+                    PushRelay.log.error("relay registration: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            for c in clients {
+                var body = base
+                if let grant, let relay = PushRelay.url, let key = PushCrypto.ensureKey(group: c.group) {
+                    body.relayGrant = grant
+                    body.relayURL = relay.absoluteString
+                    body.pushKey = PushCrypto.publicKey(key)
+                }
+                try? await c.api.register(device: body)
             }
         }
-        return body
     }
 
     /// This device's id at the hub: its push token and its notification settings hang off it.

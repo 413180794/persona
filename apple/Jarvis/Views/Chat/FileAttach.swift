@@ -71,8 +71,9 @@ final class FileUploads {
     @ObservationIgnored private var last: Task<Void, Never>?
 
     /// Queues picked files for machine; done gets each one's path on the machine, in the order picked.
-    func start(_ urls: [URL], machine: String, model: AppModel, done: @escaping (String) -> Void) {
-        if !model.hubFeatures.isEmpty, !model.hubFeatures.contains("file_upload") {
+    func start(_ urls: [URL], machine: MachineRef, model: AppModel, done: @escaping (String) -> Void) {
+        let features = model.features(machine.group)
+        if !features.isEmpty, !features.contains("file_upload") {
             model.toast = Toast("hub 版本太旧，还不能发送文件：更新 hub 后再试", style: .error)
             return
         }
@@ -103,19 +104,19 @@ final class FileUploads {
         items.removeAll { $0.id == id }
     }
 
-    private func run(_ id: UUID, url: URL, machine: String, model: AppModel, done: (String) -> Void) async {
+    private func run(_ id: UUID, url: URL, machine: MachineRef, model: AppModel, done: (String) -> Void) async {
         defer {
             tasks[id] = nil
             items.removeAll { $0.id == id }
         }
         update(id) { $0.waiting = false }
-        guard let api = model.api else { return }
+        guard let api = model.api(machine.group) else { return }
         let name = url.lastPathComponent
         do {
             let staged = try await Self.stage(url)
             defer { try? FileManager.default.removeItem(at: staged.deletingLastPathComponent()) }
             update(id) { $0.size = (try? staged.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? $0.size }
-            let out = try await api.upload(file: staged, name: name, machine: machine) { sent in
+            let out = try await api.upload(file: staged, name: name, machine: machine.id) { sent in
                 Task { @MainActor [weak self] in self?.update(id) { $0.sent = max($0.sent, sent) } }
             }
             guard !Task.isCancelled else { return }

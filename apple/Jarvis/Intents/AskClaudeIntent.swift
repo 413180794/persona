@@ -43,8 +43,9 @@ struct AskClaudeIntent: AppIntent {
         guard !body.isEmpty else { throw IntentFailureSentence("要跟 Claude 说什么？") }
 
         do {
-            let api = try IntentSupport.client()
-            let target = try await resolveMachine(api)
+            let target = try await resolveMachine()
+            // To the hub of the machine's group.
+            let api = try IntentSupport.client(group: target.ref.group)
             let session = try await deliver(api, on: target, text: body)
             return .result(
                 opensIntent: OpenSessionIntent(target: SessionEntity(session)),
@@ -56,9 +57,9 @@ struct AskClaudeIntent: AppIntent {
     }
 
     /// An explicit machine wins; otherwise the one used last in the new-chat sheet, else the first online one.
-    private func resolveMachine(_ api: APIClient) async throws -> MachineEntity {
+    private func resolveMachine() async throws -> MachineEntity {
         if let machine { return machine }
-        let machines = try await api.machines()
+        let machines = try await IntentSupport.machines()
         guard let picked = IntentPicker.machine(machines, preferred: UserDefaults.standard.string(forKey: IntentText.machineKey))
         else { throw IntentFailure.noMachine }
         return MachineEntity(picked)
@@ -69,7 +70,7 @@ struct AskClaudeIntent: AppIntent {
         if newSession { return try await startSession(api, on: machine, text: text) }
 
         let sessions = try await api.sessions()
-        guard let session = IntentPicker.session(sessions, machine: machine.id) else {
+        guard let session = IntentPicker.session(sessions, machine: machine.ref.id, group: machine.ref.group) else {
             throw IntentFailure.noSession(machine.name)
         }
         guard session.canSend else { throw IntentFailureSentence(session.sourceSubtitle ?? "此会话仅可查看") }
@@ -83,6 +84,6 @@ struct AskClaudeIntent: AppIntent {
               let cwd = defaults.string(forKey: IntentText.cwdKey(machine.id)), !cwd.isEmpty
         else { throw IntentFailure.noLauncher(machine.name) }
         // The prompt rides along with the start request; sending it again would duplicate it.
-        return try await api.start(.init(machineID: machine.id, cwd: cwd, launcher: launcher, prompt: text, async: true))
+        return try await api.start(.init(machineID: machine.ref.id, cwd: cwd, launcher: launcher, prompt: text, async: true))
     }
 }

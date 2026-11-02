@@ -3,7 +3,14 @@ import Foundation
 import WatchConnectivity
 #endif
 
+/// Each group's credential the watch uses, and the groups' names (docs/multi-hub.md「手表」).
+nonisolated struct WatchConfigs: Codable, Sendable, Equatable {
+    var configs: [String: ServerConfig]
+    var names: [String: String] = [:]
+}
+
 /// What the watch needs to render without its own WebSocket: live sessions and pending interactions.
+
 nonisolated struct WatchSummary: Codable, Sendable {
     var sessions: [Session]
     var interactions: [Interaction]
@@ -20,11 +27,14 @@ final class WatchSync: NSObject, WCSessionDelegate {
     static let shared = WatchSync()
 
     var onConfig: ((ServerConfig) -> Void)?
+    /// Every group's credential (a phone that knows several hubs).
+    var onConfigs: ((WatchConfigs) -> Void)?
     var onSummary: ((WatchSummary) -> Void)?
     /// Called once the session is activated; the phone pushes its pairing then (pushes before that are dropped).
     var onActivated: (() -> Void)?
     /// iPhone side: answers the watch's "send me the pairing" request.
     var configProvider: (() -> ServerConfig?)?
+    var configsProvider: (() -> WatchConfigs?)?
     var onRecording: ((RecordingTransfer) -> Void)?
     var onRecordingReceipt: ((RecordingReceipt) -> Void)?
     var onRecordingEvent: (() -> Void)?
@@ -36,6 +46,20 @@ final class WatchSync: NSObject, WCSessionDelegate {
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self
         WCSession.default.activate()
+    }
+
+    /// Every group's credential for the watch (docs/multi-hub.md「手表」), and what the groups are called; `config`
+    /// (the first group's) stays for a watch app from before several hubs.
+    func push(configs: [String: ServerConfig], names: [String: String]) {
+        guard let first = configs[""] ?? configs.values.first else { return }
+        let all = (try? JSONEncoder().encode(WatchConfigs(configs: configs, names: names))) ?? Data()
+        let data = (try? JSONEncoder().encode(first)) ?? Data()
+        update(["config": data, "configs": all])
+        #if os(iOS)
+        if WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled {
+            WCSession.default.transferUserInfo(["config": data, "configs": all])
+        }
+        #endif
     }
 
     func push(config: ServerConfig) {
@@ -98,7 +122,9 @@ final class WatchSync: NSObject, WCSessionDelegate {
     }
 
     private func apply(_ ctx: [String: Any]) {
-        if let data = ctx["config"] as? Data, let cfg = try? JSONDecoder().decode(ServerConfig.self, from: data) {
+        if let data = ctx["configs"] as? Data, let all = try? JSONDecoder().decode(WatchConfigs.self, from: data) {
+            onConfigs?(all)
+        } else if let data = ctx["config"] as? Data, let cfg = try? JSONDecoder().decode(ServerConfig.self, from: data) {
             onConfig?(cfg)
         }
         if let data = ctx["summary"] as? Data, let s = try? JSON.decoder.decode(WatchSummary.self, from: data) {
@@ -129,11 +155,10 @@ final class WatchSync: NSObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         nonisolated(unsafe) let reply = replyHandler
         Task { @MainActor in
-            if let cfg = self.configProvider?(), let data = try? JSONEncoder().encode(cfg) {
-                reply(["config": data])
-            } else {
-                reply([:])
-            }
+            var answer: [String: Any] = [:]
+            if let cfg = self.configProvider?(), let data = try? JSONEncoder().encode(cfg) { answer["config"] = data }
+            if let all = self.configsProvider?(), let data = try? JSONEncoder().encode(all) { answer["configs"] = data }
+            reply(answer)
         }
     }
 

@@ -11,16 +11,28 @@ import UserNotifications
 final class AppModel {
     static let shared = AppModel()
 
-    /// Set by pair / unpair and when the phone gets its own credential (DeviceCredentials.swift).
-    var config: ServerConfig? { didSet { if config?.isDemo != oldValue?.isDemo { applyPersonaPalette() } } }
+    /// Every hub paired and the groups they form (HubStore, docs/multi-hub.md). Changed only through the group
+    /// functions (HubLinks.swift), which save it (`saveRegistry`).
+    var registry: HubRegistry
+    /// The keychain could not be read at launch (before the first unlock after boot): `registry` is empty because it is
+    /// unknown, not because nothing is paired. Nothing is written until it reads (`retryRegistry`).
+    @ObservationIgnored private(set) var registryUnreadable = false
+    /// One per group, in the registry's order; the demo's alone in 体验模式.
+    private(set) var links: [HubLink] = []
+    /// The group hub-level pages show (`selectHub`); the first group when it is not one of them.
+    var hubGroup: String
+    /// The hub-level group's hub (what Jarvis, 收件箱 and the hub's settings talk to); nil when not paired.
+    var config: ServerConfig? { hub?.config }
     /// Jarvis's looks (docs/persona.md): the chosen one, what the hub offers, the packages on the phone.
     let personas = PersonaStore()
     /// Which paths conversations mention are there on their machines (only those are linked).
     let filePresence = FilePresence()
     /// Which machine ports links point at are listening (docs/ports.md).
     let portPresence = PortPresence()
-    let live: LiveConnection
-    /// What the titles say about the link (等待网络 / 连接中… / 更新中…).
+    /// The hub-level group's socket (its state for the pages about the hub); every group has its own (`links`).
+    var live: LiveConnection { hub?.live ?? idleLive }
+    @ObservationIgnored private let idleLive = LiveConnection()
+    /// What the titles say about the links (等待网络 / 连接中… / 更新中…).
     let connection: ConnectionStatus
     private(set) var machines: [Machine] = [] {
         didSet {
@@ -31,13 +43,13 @@ final class AppModel {
     }
     /// The machines as menus list them (name, icon): changes only when one is added, removed or renamed.
     private(set) var machineChoices: [MachineChoice] = []
-    private(set) var sessionsByMachine: [String: [Session]] = [:] {
+    private(set) var sessionsByMachine: [MachineRef: [Session]] = [:] {
         didSet {
             allSessions = sessionsByMachine.values.flatMap { $0 }
             var index: [SessionKey: Session] = [:]
             for (machine, sessions) in sessionsByMachine {
                 for session in sessions {
-                    let key = SessionKey(machineID: machine, sessionID: session.sessionID)
+                    let key = SessionKey(group: machine.group, machineID: machine.id, sessionID: session.sessionID)
                     if index[key] == nil { index[key] = session }
                 }
             }
@@ -52,8 +64,10 @@ final class AppModel {
     /// when that session changes, not on every push about any of them (the open chat and the tab badges were redrawn
     /// for each machine's list, 2026-10-31). `allSessions` is still there for views about all of them.
     @ObservationIgnored private var sessionCells: [SessionKey: SessionCell] = [:]
+    /// Pending interactions by `uid` (the hub's id, with the group for another group).
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot() } }
-    var pairingEngineMachineID: String?
+    /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
+    var pairingEngineMachine: MachineRef?
     var toast: Toast?
     var openChat: SessionKey?
     /// A chat to open at its latest answer, like a finished one from the list (ChatView takes it): a tap on a
@@ -73,16 +87,21 @@ final class AppModel {
 
     /// The dev chat that was open; saved when a chat opens, cleared when going back to the list.
     static func rememberChat(_ key: SessionKey?) {
-        if let key { UserDefaults.standard.set("\(key.machineID)/\(key.sessionID)", forKey: "dev.openChat") }
+        if let key { UserDefaults.standard.set(key.path, forKey: "dev.openChat") }
         else { UserDefaults.standard.removeObject(forKey: "dev.openChat") }
     }
     /// Session whose chat is on screen; its completion pings are suppressed.
     var visibleSession: SessionKey?
-    private(set) var assistantConfig: APIClient.AssistantState? { didSet { saveSnapshot() } }
+    private(set) var assistantConfig: APIClient.AssistantState? {
+        didSet {
+            if let g = hub?.group, let a = assistantConfig { assistantByGroup[g] = a }
+            saveSnapshot()
+        }
+    }
     /// The assistant conversation shown in the 对话 tab (persisted across launches).
     var assistantCurrent: SessionKey? {
         didSet {
-            let v = assistantCurrent.map { "\($0.machineID)/\($0.sessionID)" } ?? ""
+            let v = assistantCurrent?.path ?? ""
             UserDefaults.standard.set(v, forKey: "assistant.current")
         }
     }
@@ -93,135 +112,270 @@ final class AppModel {
 
     @ObservationIgnored private(set) var chats: [SessionKey: ChatStore] = [:]
     @ObservationIgnored var flushingOutbox = false
+    /// Per group: the task asking a member-connected group's center whether it answers again (HubLinks.watchCenter).
+    @ObservationIgnored var centerWatch: [String: Task<Void, Never>] = [:]
     @ObservationIgnored let outboxWriter = Debouncer(.milliseconds(300))
-    @ObservationIgnored private(set) var launcherCache: [String: [Launcher]] = [:]
+    /// By group and machine.
+    @ObservationIgnored private(set) var launcherCache: [MachineRef: [Launcher]] = [:]
 
-    var api: APIClient? { config.map { APIClient(config: $0) } }
-    var isPaired: Bool { config != nil }
+    /// The hub-level group's client: for pages about the hub (Jarvis, 收件箱, its settings). A session's, a machine's
+    /// or an interaction's requests go to its own group (`api(_:)`).
+    var api: APIClient? { hub?.api }
+    var isPaired: Bool { !links.isEmpty }
     /// 体验模式: the made-up hub inside the app (DemoHub), no server at all. Remembered across launches until the
-    /// user leaves it or pairs.
-    var isDemo: Bool { config?.isDemo == true }
-    private static let demoKey = "demo.on"
+    /// user leaves it or pairs. It is a group of its own, the only one.
+    var isDemo: Bool { links.first?.isDemo == true }
+    static let demoKey = "demo.on"
 
     init() {
-        let live = LiveConnection()
-        self.live = live
-        connection = ConnectionStatus(live: live)
+        connection = ConnectionStatus()
         DemoHub.install()
         #if DEBUG
         // `-openWelcome YES`: start unpaired and out of 体验模式, on the pairing page (DemoModeTests).
         if UserDefaults.standard.bool(forKey: "openWelcome") {
-            Keychain.serverConfig = nil
+            HubStore.save(HubRegistry()) // known empty: deletes the registry and the old single pairing
             UserDefaults.standard.removeObject(forKey: Self.demoKey)
         }
         #endif
-        config = Keychain.serverConfig ?? (UserDefaults.standard.bool(forKey: Self.demoKey) ? .demo : nil)
-        // Last known machines, agents and pending interactions: the lists are there offline and on a cold start.
-        if config != nil { restoreSnapshot(); restoreOutbox() }
+        switch HubStore.read() {
+        case .registry(let r): registry = r
+        case .unreadable:
+            // Not "unpaired": launched before the first unlock after boot (a push in the background). Nothing is
+            // saved until it reads (`saveRegistry`); it is read again when the app comes to the front.
+            registry = HubRegistry()
+            registryUnreadable = true
+        }
+        hubGroup = UserDefaults.standard.string(forKey: Self.hubGroupKey) ?? ""
         if let raw = UserDefaults.standard.string(forKey: "app.tab"), let tab = AppTab(rawValue: raw) {
             selectedTab = tab
         }
-        if selectedTab == .chats, let v = UserDefaults.standard.string(forKey: "dev.openChat"), let slash = v.firstIndex(of: "/") {
-            openChat = SessionKey(machineID: String(v[..<slash]), sessionID: String(v[v.index(after: slash)...]))
+        // Remembered as `SessionKey.path`: no group in it is the default group.
+        if selectedTab == .chats, let v = UserDefaults.standard.string(forKey: "dev.openChat") {
+            openChat = SessionKey(path: v)
         }
-        if let v = UserDefaults.standard.string(forKey: "assistant.current"), let slash = v.firstIndex(of: "/") {
-            assistantCurrent = SessionKey(machineID: String(v[..<slash]), sessionID: String(v[v.index(after: slash)...]))
+        if let v = UserDefaults.standard.string(forKey: "assistant.current") {
+            assistantCurrent = SessionKey(path: v)
         }
-        live.onEvent = { [weak self] in self?.handle($0) }
-        live.prepareEvent = { event in
-            switch event {
-            // What `StreamingText` asks for: the block being written (the finished ones are memoized as they finish).
-            case .delta(_, let text): _ = MarkdownMemo.content(StreamChunks.split(text).tail + " ▍")
-            case .interaction(let interaction):
-                if let plan = interaction.plan { _ = MarkdownMemo.content(plan) }
-            default: break
-            }
+        connection.lives = { [weak self] in self?.links.map(\.live) ?? [] }
+        buildLinks()
+        if registry.hubs.isEmpty, !registryUnreadable, UserDefaults.standard.bool(forKey: Self.demoKey) {
+            links = [makeLink("", .demo)]
         }
-        WatchSync.shared.configProvider = { Keychain.watchConfig ?? Keychain.serverConfig }
+        // Last known machines, agents and pending interactions: the lists are there offline and on a cold start.
+        if isPaired { restoreSnapshot(); restoreOutbox() }
+        WatchSync.shared.configProvider = { [weak self] in self.flatMap { $0.watchConfigs()[""] ?? $0.watchConfigs().values.first } }
+        WatchSync.shared.configsProvider = { [weak self] in
+            guard let self, !self.registry.hubs.isEmpty else { return nil }
+            return WatchConfigs(configs: self.watchConfigs(), names: Dictionary(uniqueKeysWithValues: self.registry.groups.map { ($0, self.groupName($0)) }))
+        }
+
         WatchSync.shared.onActivated = { [weak self] in
-            guard let self, let cfg = self.config else { return }
-            WatchSync.shared.push(config: Keychain.watchConfig ?? cfg)
+            guard let self, self.isPaired, !self.isDemo else { return }
+            self.pushWatchConfigs()
             WatchSync.shared.push(summary: self.watchSummary())
         }
         personas.onChange = { [weak self] in self?.applyPersonaPalette() }
         applyPersonaPalette()
-        live.onConnected = { [weak self] in self?.didConnect() }
-        live.onChange = { [weak self] in self?.connection.update() }
         connection.onCaughtUp = { [weak self] in self?.flushOutbox() }
+        #if os(iOS)
+        if registryUnreadable {
+            NotificationCenter.default.addObserver(forName: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil,
+                                                   queue: .main) { @Sendable _ in MainActor.assumeIsolated { AppModel.shared.retryRegistry() } }
+        }
+        #endif
         DemoHub.shared.onNotSent = { [weak self] in self?.toast = Toast(DemoText.notSent) }
     }
 
+    /// Saves the registry, unless it could not be read: writing then would replace the real one (or delete it, empty).
+    func saveRegistry(_ r: HubRegistry) {
+        HubStore.save(r, known: !registryUnreadable)
+    }
+
+    /// The keychain could not be read at launch: try again (the app came to the front, the phone was unlocked), and
+    /// once it reads, start as a launch with it would have.
+    func retryRegistry() {
+        guard registryUnreadable, case .registry(let r) = HubStore.read() else { return }
+        registryUnreadable = false
+        registry = r
+        buildLinks()
+        if registry.hubs.isEmpty, UserDefaults.standard.bool(forKey: Self.demoKey) {
+            links = [makeLink("", .demo)] // 体验模式, as a launch that could read would have opened it
+            applyPersonaPalette()
+        }
+        guard isPaired else { return }
+        restoreSnapshot()
+        restoreOutbox()
+        start()
+        PushRegistrar.shared.registerIfPossible()
+    }
+
+    /// What `StreamingText` asks for, prepared off the main thread as events arrive.
+    nonisolated static func prepare(_ event: ServerEvent) {
+        switch event {
+        // The block being written (the finished ones are memoized as they finish).
+        case .delta(_, let text): _ = MarkdownMemo.content(StreamChunks.split(text).tail + " ▍")
+        case .interaction(let interaction):
+            if let plan = interaction.plan { _ = MarkdownMemo.content(plan) }
+        default: break
+        }
+    }
+
+    /// One link per group of the registry, keeping the ones that are already there (their sockets stay open).
+    func buildLinks() {
+        let wanted = registry.groups
+        var out: [HubLink] = []
+        for g in wanted {
+            guard let primary = registry.primary(g) else { continue }
+            if let had = links.first(where: { $0.group == g && !$0.isDemo }) {
+                had.fallback = primary.config
+                out.append(had)
+            } else {
+                out.append(makeLink(g, primary.config))
+            }
+        }
+        for gone in links where !out.contains(where: { $0 === gone }) { gone.live.disconnect() }
+        links = out
+        for link in links where !link.isDemo { link.live.route = routePicker(link.group) }
+        if link(hubGroup) == nil, let first = links.first { hubGroup = first.group }
+        applyPersonaPalette()
+        relabelMachines()
+    }
+
+
+    func makeLink(_ group: String, _ config: ServerConfig) -> HubLink {
+        let pins = PinsStore(deps: .init(api: { [weak self] in self?.api(group) }, report: { [weak self] in self?.show($0) },
+                                         suffix: group))
+        let link = HubLink(group: group, config: config, pins: pins)
+        link.live.onEvent = { [weak self] ev in self?.handle(ev.stamped(group), group: group) }
+        link.live.prepareEvent = { Self.prepare($0) }
+        link.live.onConnected = { [weak self] in self?.didConnect(group) }
+        link.live.onChange = { [weak self] in self?.connection.update() }
+        return link
+    }
+
     #if DEBUG
-    func adopt(_ cfg: ServerConfig) {
-        config = cfg
+    /// `-pairURL` (and `-pairURL2`, `-pairURL3`: more hubs, for the multi-hub screenshots and tests): the hubs the
+    /// simulator runs with. Hubs already paired with the same address and credential keep their group and ids.
+    func adopt(_ configs: [ServerConfig]) {
+        var r = HubRegistry()
+        for cfg in configs {
+            if let had = registry.hubs.first(where: { $0.config == cfg }) {
+                r.hubs.append(had)
+            } else {
+                var hub = PairedHub(config: cfg)
+                hub.group = r.newGroupID()
+                r.hubs.append(hub)
+            }
+        }
+        r.groupNames = registry.groupNames
+        registry = HubGrouping.regroup(r)
+        saveRegistry(registry)
+        buildLinks()
         if machines.isEmpty { restoreSnapshot() }
     }
     #endif
 
     func start() {
-        guard let config else { return }
-        #if os(iOS)
-        // Launched in the background (a push, a file from the watch): the socket waits for the app to open.
-        live.suspended = UIApplication.shared.applicationState == .background
-        #endif
-        live.connect(config)
-        if config.isDemo { return } // no watch, no device credentials: nothing to talk to
-        WatchSync.shared.push(config: Keychain.watchConfig ?? config)
+        guard isPaired else { return }
+        for link in links {
+            #if os(iOS)
+            // Launched in the background (a push, a file from the watch): the socket waits for the app to open.
+            link.live.suspended = UIApplication.shared.applicationState == .background
+            #endif
+            link.live.connect(link.fallback)
+        }
+        if isDemo { return } // no watch, no device credentials: nothing to talk to
+        pushWatchConfigs()
         Task { await upgradeCredentials() }
     }
 
+    /// Adds a hub (scanned / pasted pairing link). Another group's hub, or a hub already paired again, joins what is
+    /// there; any other hub starts a group of its own beside the others (docs/multi-hub.md「添加 hub」). The other
+    /// groups keep everything.
     func pair(_ new: ServerConfig) async throws {
+        retryRegistry()
+        // Unknown pairings would be written over (the keychain is not readable before the first unlock).
+        guard !registryUnreadable else { throw APIError(status: 0, message: "现在读不到已保存的配对，解锁手机后再试") }
         let client = APIClient(config: new)
         let pairedMachines = try await client.machines()
+        let identity = try? await client.identity()
         if isDemo { leaveDemo() } // a real hub ends 体验模式
-        config = new
-        Keychain.serverConfig = new
-        forgetDeviceCredentials()
-        machines = pairedMachines
-        // The engine step only when the hub reports engines (an older hub cannot save one; the step must not trap).
-        pairingEngineMachineID = EngineSelectionModel.pairingMachine(pairedMachines).flatMap { $0.engines.isEmpty ? nil : $0.id }
-        sessionsByMachine = [:]
-        pendingSessions = [:] // a burst from the hub left before this
-        interactions = [:]
-        desktops = []
-        muteWhileDesktop = false
-        live.disconnect()
-        live.connect(new)
-        WatchSync.shared.push(config: new)
+        var r = registry
+        let group: String
+        let same = r.hubs.firstIndex { h in
+            if let id = identity?.hubID, !id.isEmpty, let had = h.hubID { return had == id }
+            return h.config.url == new.url // a hub that does not say who it is: the same address
+        }
+        if let i = same {
+            // The same hub paired again (a new pairing link): its new credential replaces the old one.
+            r.hubs[i].config = new
+            r.hubs[i].deviceID = nil
+            r.hubs[i].watch = nil
+            group = r.hubs[i].group
+        } else {
+            var hub = PairedHub(config: new, hubID: identity?.hubID, hubName: identity?.hubName)
+            // Listed in a group's mesh already: it joins that group (shown once, not as a group of its own).
+            hub.group = identity?.hubID.flatMap { r.group(hubID: $0) } ?? r.newGroupID()
+            r.hubs.append(hub)
+            group = hub.group
+        }
+        let fresh = link(group) == nil
+        registry = r
+        saveRegistry(r)
+        buildLinks()
+        if fresh {
+            replaceMachines(group, pairedMachines.map { var m = $0; m.group = group; return m })
+            // The engine step only when the hub reports engines (an older hub cannot save one; the step must not trap).
+            pairingEngineMachine = EngineSelectionModel.pairingMachine(pairedMachines).flatMap { $0.engines.isEmpty ? nil : MachineRef(group: group, id: $0.id) }
+        }
+        if links.count == 1 { hubGroup = group }
+        guard let link = link(group) else { return }
+        link.live.disconnect()
+        link.live.connect(registry.primary(group)?.config ?? new)
+        pushWatchConfigs()
         PushRegistrar.shared.registerIfPossible()
         Task { await upgradeCredentials() }
     }
 
+
     /// 体验模式 from the pairing page: every tab runs on DemoHub's made-up data, nothing is sent anywhere.
     func enterDemo() {
-        guard config == nil else { return }
+        guard !isPaired else { return }
         DemoHub.shared.reset()
         InboxStore.shared.forget()
         forgetDemoChats()
         chats = [:]
         assistantCurrent = DemoHub.shared.mainConversation // Jarvis opens on a conversation, not a blank new one
         UserDefaults.standard.set(true, forKey: Self.demoKey)
-        config = .demo
+        let demo = makeLink("", .demo)
+        links = [demo]
+        hubGroup = ""
+        applyPersonaPalette()
         machines = []
         sessionsByMachine = [:]
         pendingSessions = [:] // a burst from the hub left before this
         interactions = [:]
-        desktops = []
         muteWhileDesktop = false
         selectedTab = .chats
-        live.connect(.demo)
+        demo.live.connect(.demo)
         toast = Toast("已进入体验模式，数据都是编造的")
     }
 
     /// Out of 体验模式 (退出 or pairing): what it showed goes with it.
     private func leaveDemo() {
         UserDefaults.standard.set(false, forKey: Self.demoKey)
-        live.disconnect()
+        for link in links { link.live.disconnect() }
+        links = []
+        applyPersonaPalette()
         InboxStore.shared.forget()
         forgetDemoChats()
         chats = [:]
         subscribers = [:]
         shown = []
+        machines = []
+        sessionsByMachine = [:]
+        pendingSessions = [:]
+        interactions = [:]
     }
 
     /// What the demo's conversations left behind: drafts, and cached chats (a new demo starts over).
@@ -233,19 +387,21 @@ final class AppModel {
         for key in demo { ChatCache.remove(key) }
     }
 
+    /// 退出 everything: every group, every hub (设置 › 断开 with one group, a revoked credential of this device).
     func unpair() {
-        pairingEngineMachineID = nil
+        pairingEngineMachine = nil
         if isDemo { leaveDemo() }
-        live.disconnect()
+        for link in links { link.live.disconnect() }
         LiveActivityController.shared.endAll() // its buttons would talk to a hub we no longer know
-        config = nil
-        Keychain.serverConfig = nil
+        links = []
+        registry = HubRegistry()
+        saveRegistry(registry)
+        applyPersonaPalette()
         forgetDeviceCredentials()
         machines = []
         sessionsByMachine = [:]
         pendingSessions = [:] // a burst from the hub left before this
         interactions = [:]
-        desktops = []
         muteWhileDesktop = false
         chats = [:]
         subscribers = [:]
@@ -255,9 +411,41 @@ final class AppModel {
 
     /// The PUT response updates immediately; subsequent machines pushes remain authoritative.
     func applyMachine(_ machine: Machine) {
-        guard let index = machines.firstIndex(where: { $0.id == machine.id }) else { return }
+        guard let index = machines.firstIndex(where: { $0.ref == machine.ref }) else { return }
+        var machine = machine
+        machine.groupLabel = machines[index].groupLabel
         machines[index] = machine
     }
+
+    /// With several groups every machine says which group it is in (`Machine.title`); with one, none does.
+    func relabelMachines() {
+        let multi = isMultiHub
+        let relabeled = machines.map { m in
+            var m = m
+            m.groupLabel = multi ? groupName(m.group) : nil
+            return m
+        }
+        if relabeled != machines { machines = relabeled }
+    }
+
+
+    /// One group's machines in the merged list (the other groups' stay where they are).
+    func replaceMachines(_ group: String, _ list: [Machine]) {
+        let label = isMultiHub ? groupName(group) : nil
+        let list = list.map { m in
+            var m = m
+            m.group = group
+            m.groupLabel = label
+            return m
+        }
+        var merged: [Machine] = []
+        for g in groupIDs {
+            merged += g == group ? list : machines.filter { $0.group == g }
+        }
+        if !groupIDs.contains(group) { merged += list }
+        if merged != machines { machines = merged }
+    }
+
 
     // MARK: Derived
 
@@ -273,30 +461,40 @@ final class AppModel {
     /// chat opened with no title (「对话 · 对话」) and no machine until then.
     func adopt(_ s: Session) {
         guard session(s.key) == nil else { return }
-        sessionsByMachine[s.machineID, default: []].append(s)
+        sessionsByMachine[s.machineRef, default: []].append(s)
     }
 
-    func machine(_ id: String) -> Machine? { machines.first { $0.id == id } }
+    func machine(_ ref: MachineRef) -> Machine? { machines.first { $0.id == ref.id && $0.group == ref.group } }
+    /// A machine of the hub-level group (the assistant's, a hub setting's).
+    func hubRef(_ id: String) -> MachineRef { MachineRef(group: hub?.group ?? "", id: id) }
+    /// The hub-level group's machines (pages about the hub: Jarvis, its settings).
+    var hubMachines: [Machine] { let g = hub?.group ?? ""; return machines.filter { $0.group == g } }
     /// The machine the hub runs on (it reports itself as "local"): where the assistant lives by default.
-    var hubMachineID: String { machines.first { $0.kind == "local" }?.id ?? machines.first?.id ?? "" }
+    var hubMachineID: String { hubMachines.first { $0.kind == "local" }?.id ?? hubMachines.first?.id ?? "" }
 
     var pendingInteractions: [Interaction] {
         interactions.values.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
     }
 
+    /// The hub-level group's Jarvis conversations (each hub has its own Jarvis), newest first.
     var assistantConversations: [Session] {
-        allSessions.filter { $0.assistant && $0.archived != true }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        let g = hub?.group ?? ""
+        return allSessions.filter { $0.assistant && $0.archived != true && $0.group == g }
+            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
     }
 
     /// The archived ones (已归档), newest first.
     var archivedConversations: [Session] {
-        allSessions.filter { $0.assistant && $0.archived == true }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        let g = hub?.group ?? ""
+        return allSessions.filter { $0.assistant && $0.archived == true && $0.group == g }
+            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
     }
 
     /// Loads the assistant config; with no remembered conversation, picks up the newest one.
     func refreshAssistant() async {
         guard let api else { return }
         if let st = try? await api.assistant() {
+            guard api.group == hub?.group else { return } // another group was picked meanwhile
             assistantConfig = st
             // Only on the very first launch: after "新对话" the key exists but is empty, and the home page stays.
             let neverChosen = UserDefaults.standard.object(forKey: "assistant.current") == nil
@@ -304,7 +502,7 @@ final class AppModel {
                 if let main = assistantMain {
                     assistantCurrent = main
                 } else if let newest = st.conversations.max(by: { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }) {
-                    assistantCurrent = SessionKey(machineID: st.machineID, sessionID: newest.sessionID)
+                    assistantCurrent = SessionKey(group: api.group, machineID: st.machineID, sessionID: newest.sessionID)
                 }
             }
             // Routines and the assistant's sense of "now" follow this device's time zone (the Mac app writes its
@@ -317,7 +515,7 @@ final class AppModel {
     /// The main conversation (the Jarvis tab's long-running one), when the hub has one.
     var assistantMain: SessionKey? {
         guard let st = assistantConfig, let id = st.main, !id.isEmpty else { return nil }
-        return SessionKey(machineID: st.machineID, sessionID: id)
+        return SessionKey(group: hub?.group ?? "", machineID: st.machineID, sessionID: id)
     }
 
     /// Shows a Jarvis conversation from another page (定时任务's 立即运行 / its own conversation): the Jarvis tab or the
@@ -325,6 +523,7 @@ final class AppModel {
     func openAssistantConversation(_ key: SessionKey) {
         shellSettings = false
         selectedTab = .assistant
+        selectHub(key.group)
         assistantCurrent = key
         assistantReveal += 1
     }
@@ -374,6 +573,7 @@ final class AppModel {
         if latestAnswer { latestAnswerFor = key }
         if session(key)?.assistant == true {
             selectedTab = .assistant
+            selectHub(key.group) // a conversation of another group's Jarvis: that group's Jarvis
             assistantCurrent = key
         } else {
             selectedTab = .chats
@@ -402,6 +602,15 @@ final class AppModel {
     @ObservationIgnored private var chatUse: [SessionKey: Int] = [:]
     @ObservationIgnored private var chatTick = 0
 
+    /// Forgets a chat held in memory (its group went away).
+    func dropChat(_ key: SessionKey) {
+        chats[key] = nil
+        chatUse[key] = nil
+        subscribers[key] = nil
+        shown.removeAll { $0.key == key }
+        if visibleSession == key { visibleSession = shown.last?.key }
+    }
+
     private func evictChats() {
         // A chat with messages still going out stays (its pending list is the outbox).
         let idle = chats.keys.filter { k in
@@ -428,25 +637,37 @@ final class AppModel {
         subscribers[key, default: []].insert(owner)
         guard first else { return }
         let store = chat(key)
-        live.send(subscribeMessage(key))
-        if live.state != .connected && !store.loadedOnce { Task { await loadInitial(key) } }
+        socket(key.group)?.send(subscribeMessage(key))
+        if socket(key.group)?.state != .connected && !store.loadedOnce { Task { await loadInitial(key) } }
     }
 
     func unsubscribe(_ key: SessionKey, by owner: UUID) {
         guard var owners = subscribers[key], owners.remove(owner) != nil else { return }
         guard owners.isEmpty else { subscribers[key] = owners; return }
         subscribers[key] = nil
-        live.send(["type": "unsubscribe", "machine_id": key.machineID, "session_id": key.sessionID])
+        socket(key.group)?.send(["type": "unsubscribe", "machine_id": key.machineID, "session_id": key.sessionID])
     }
+
+    /// The socket of a group.
+    func socket(_ group: String) -> LiveConnection? { link(group)?.live }
 
     func isSubscribed(_ key: SessionKey) -> Bool { subscribers[key] != nil }
 
     // MARK: Terminal streams
 
-    /// What the hub listed in its hello: `terminal_stream` means the terminal tab can subscribe to live frames.
-    private(set) var hubFeatures: Set<String> = []
-    /// What the hub said it is in its hello: build and protocol, for the compatibility notices (docs/hub-update.md「兼容」).
-    private(set) var hubHello: HubHello?
+    /// What a group's hub listed in its hello (`terminal_stream`: the terminal tab can subscribe to live frames).
+    func features(_ group: String) -> Set<String> { link(group)?.features ?? [] }
+    /// What the hub-level group's hub listed (hub-level pages: connectors, skills…).
+    var hubFeatures: Set<String> { hub?.features ?? [] }
+    /// The desktop apps (the Mac app) connected to the hub-level group's hub: the iPhone's 「Mac 上的 Jarvis 已登录」
+    /// (DesktopPresence.swift).
+    var desktops: [DesktopDevice] { hub?.desktops ?? [] }
+    /// What the hub-level group's hub said it is in its hello: build and protocol, for the compatibility notices
+    /// (docs/hub-update.md「兼容」); nil until it said anything.
+    var hubHello: HubHello? {
+        guard let hello = hub?.hello, hello != HubHello() else { return nil }
+        return hello
+    }
     /// The hub's version and its updating itself: fetched on connect, then the `hub_update` events.
     var hubUpdate: HubUpdateStatus? {
         didSet {
@@ -473,22 +694,24 @@ final class AppModel {
     }
     /// The one line about the hub over the Agents list, if any (docs/hub-update.md「App 里」).
     var hubNotice: HubNotice? { isDemo ? nil : HubNotice.of(hubUpdate, compat: hubCompat, dismissed: hubNoticeDismissed) }
-    /// The desktop apps (the Mac app) connected to the hub: the iPhone's 「Mac 上的 Jarvis 已登录」 (DesktopPresence.swift).
-    private(set) var desktops: [DesktopDevice] = []
     /// 手机静音: this device's NotifyPrefs.muteWhileDesktop, shown on that banner.
     private(set) var muteWhileDesktop = false
     @ObservationIgnored private var muteWrites = 0
     /// The terminal views streaming each session (one at a time; a newer one replaces the handler).
     @ObservationIgnored private var terminalHandlers: [SessionKey: (TerminalEvent) -> Void] = [:]
 
-    var canStreamTerminal: Bool { hubFeatures.contains("terminal_stream") }
+    func canStreamTerminal(_ group: String) -> Bool { features(group).contains("terminal_stream") }
     /// The hub can let the phone drive a terminal at its own size (`terminal_control`).
-    var canControlTerminal: Bool { hubFeatures.contains("terminal_control") }
+    func canControlTerminal(_ group: String) -> Bool { features(group).contains("terminal_control") }
     /// The hub takes the wheel over a terminal the app drives (terminal_input scroll) to herdr.
-    var canScrollTerminal: Bool { hubFeatures.contains("terminal_scroll") }
+    func canScrollTerminal(_ group: String) -> Bool { features(group).contains("terminal_scroll") }
     /// The hub takes a tap on a terminal the app drives (terminal_input click) to herdr as a click.
-    var canClickTerminal: Bool { hubFeatures.contains("terminal_click") }
+    func canClickTerminal(_ group: String) -> Bool { features(group).contains("terminal_click") }
+    /// The hub-level group's socket is up.
     var isLive: Bool { live.state == .connected }
+    /// A group's socket is up.
+    func isLive(_ group: String) -> Bool { socket(group)?.state == .connected }
+
 
     /// Starts (or continues, with the last epoch and seq the view holds) a session's terminal stream. grid: drive it at
     /// that size (the phone's); takeover: even if another program on the computer holds it.
@@ -500,7 +723,7 @@ final class AppModel {
         if let epoch { msg["epoch"] = epoch; msg["after_seq"] = after }
         if let grid { msg["control"] = ["cols": grid.cols, "rows": grid.rows] }
         if takeover { msg["takeover"] = true }
-        live.send(msg)
+        socket(key.group)?.send(msg)
     }
 
     /// Typed into a terminal the phone drives: the bytes go straight to it (in order, over the WebSocket). grid: the
@@ -510,7 +733,7 @@ final class AppModel {
         var msg: [String: Any] = ["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID]
         if !text.isEmpty { msg["text"] = text }
         if let grid { msg["control"] = ["cols": grid.cols, "rows": grid.rows] }
-        live.send(msg)
+        socket(key.group)?.send(msg)
     }
 
     /// The mouse wheel over a terminal the app drives, in lines (> 0 back in history), over a cell of its screen: herdr
@@ -520,18 +743,18 @@ final class AppModel {
         guard session(key)?.canTerminal == true, lines != 0 else { return }
         var msg: [String: Any] = ["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "scroll": lines]
         if let at { msg["at"] = [at.col, at.row] }
-        live.send(msg)
+        socket(key.group)?.send(msg)
     }
 
     /// A tap on a terminal the app drives: a left click at that cell of its screen (0-based).
     func terminalClick(_ key: SessionKey, column: Int, row: Int) {
         guard session(key)?.canTerminal == true else { return }
-        live.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "click": [column, row]])
+        socket(key.group)?.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "click": [column, row]])
     }
 
     func terminalUnsubscribe(_ key: SessionKey) {
         guard terminalHandlers.removeValue(forKey: key) != nil else { return }
-        live.send(["type": "terminal_unsubscribe", "machine_id": key.machineID, "session_id": key.sessionID])
+        socket(key.group)?.send(["type": "terminal_unsubscribe", "machine_id": key.machineID, "session_id": key.sessionID])
     }
     private var subscribed: [SessionKey] { Array(subscribers.keys) }
 
@@ -559,7 +782,7 @@ final class AppModel {
     func existingChat(_ key: SessionKey) -> ChatStore? { chats[key] }
 
     func loadInitial(_ key: SessionKey) async {
-        guard let api else { return }
+        guard let api = api(key.group) else { return }
         do {
             let res = try await api.items(key, beforeSeq: nil)
             settle(key, chat(key).apply(res.items, span: res.span, backlog: true, hasMore: res.hasMore))
@@ -586,7 +809,7 @@ final class AppModel {
     /// Fetches what comes after the chat's `covered`, page by page, until it is whole; past 8 pages it starts over from
     /// the latest page instead.
     func fill(_ key: SessionKey) async {
-        guard let api, !filling.contains(key) else { return }
+        guard let api = api(key.group), !filling.contains(key) else { return }
         filling.insert(key)
         defer { filling.remove(key) }
         let store = chat(key)
@@ -603,15 +826,15 @@ final class AppModel {
 
     /// Starts the chat over from the latest page (the hole was too big, or the transcript was replaced).
     func reload(_ key: SessionKey) async {
-        guard let api, let page = try? await api.items(key, beforeSeq: nil) else { return }
+        guard let api = api(key.group), let page = try? await api.items(key, beforeSeq: nil) else { return }
         chat(key).replace(with: page.items, hasMore: page.hasMore, span: page.span)
     }
 
     /// Fetches the work a fold stands for into the chat, once at a time per fold (several rows of one open work line
     /// may ask together).
     func unfold(_ key: SessionKey, _ fold: Item) async throws {
-        guard let api else { return }
-        let id = "\(key.machineID)/\(key.sessionID)/\(fold.id)"
+        guard let api = api(key.group) else { return }
+        let id = "\(key.path)/\(fold.id)"
         if let running = unfolding[id] {
             _ = try await running.value
             return
@@ -625,7 +848,7 @@ final class AppModel {
 
     func loadOlder(_ key: SessionKey) async {
         let store = chat(key)
-        guard let api, store.hasMore, !store.isLoadingOlder, let first = store.items.first else { return }
+        guard let api = api(key.group), store.hasMore, !store.isLoadingOlder, let first = store.items.first else { return }
         store.isLoadingOlder = true
         defer { store.isLoadingOlder = false }
         do {
@@ -638,41 +861,58 @@ final class AppModel {
 
     // MARK: Events
 
-    private func didConnect() {
-        registerPhone()
-        // The hub's version and whether an update is out or under way (an older hub has no such page: nil).
-        Task { hubUpdate = try? await api?.hubUpdate() }
-        Task { await personas.refresh(api) }
+    private func didConnect(_ group: String) {
+        guard let link = link(group) else { return }
+        registerPhone(link)
+        if group == hub?.group {
+            // The hub's version and whether an update is out or under way (an older hub has no such page: nil).
+            Task { hubUpdate = try? await api?.hubUpdate() }
+            Task { await personas.refresh(api) }
+            LarkSync.shared.reconnected()
+            InboxStore.shared.reload()
+        }
         AgentSync.shared.schedule()
-        LarkSync.shared.reconnected()
-        InboxStore.shared.reload()
         // 更新中… until the open chats' backlog and the pending interactions are in (ConnectionStatus).
-        connection.startCatchUp(["interactions"] + subscribed.map(Self.catchUpPart))
-        for key in subscribed {
+        let mine = subscribed.filter { $0.group == group }
+        connection.startCatchUp(group, [Self.interactionsPart(group)] + mine.map(Self.catchUpPart))
+        for key in mine {
             deltas.drop(key)
             chat(key).liveText = "" // a delta that cleared it may have been lost with the old socket
-            live.send(subscribeMessage(key))
+            link.live.send(subscribeMessage(key))
         }
         // Questions answered on the computer while the socket was down are gone from the hub: drop their cards.
         Task {
-            defer { connection.caughtUp("interactions") }
-            guard let ixs = try? await api?.interactions() else { return }
-            interactions = Dictionary(ixs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            defer { connection.caughtUp(Self.interactionsPart(group)) }
+            guard let ixs = try? await api(group)?.interactions() else { return }
+            replaceInteractions(group, ixs)
             WatchSync.shared.push(summary: watchSummary())
         }
     }
 
-    private static func catchUpPart(_ key: SessionKey) -> String { "chat:\(key.machineID)/\(key.sessionID)" }
+    /// One group's pending interactions (the other groups' stay).
+    func replaceInteractions(_ group: String, _ list: [Interaction]) {
+        var all = interactions.filter { $0.value.group != group }
+        for ix in list where all[ix.uid] == nil { all[ix.uid] = ix }
+        if all != interactions { interactions = all }
+    }
 
+    private static func catchUpPart(_ key: SessionKey) -> String { "chat:\(key.path)" }
+    private static func interactionsPart(_ group: String) -> String { group.isEmpty ? "interactions" : "interactions:\(group)" }
+
+    /// Offers this phone's tools to every group's hub (their assistants may call them).
     func registerPhone() {
-        if isDemo { return } // nobody would call the phone's tools
+        for link in links { registerPhone(link) }
+    }
+
+    private func registerPhone(_ link: HubLink) {
+        if link.isDemo { return } // nobody would call the phone's tools
         var tools = PhoneToolRegistry.enabledSpecs()
         #if DEBUG
         // Simulator automation (scripts/app/sim.sh) must not take the real iPhone's phone_* tool calls.
         let automation = UserDefaults.standard.string(forKey: "pairURL") != nil
         if automation { tools = [] }
         #if os(iOS)
-        tools += RuntimeCLI.hubToolSpecs(features: hubFeatures) // the runtime CLI over the hub, when switched on
+        tools += RuntimeCLI.hubToolSpecs(features: link.features) // the runtime CLI over the hub, when switched on
         #endif
         if automation && tools.isEmpty { return }
         #endif
@@ -683,8 +923,9 @@ final class AppModel {
         #else
         let simulator = false
         #endif
-        live.send(Self.registration(deviceName: UIDevice.current.name, tools: arr, simulator: simulator, deviceID: PushRegistrar.deviceID))
+        link.live.send(Self.registration(deviceName: UIDevice.current.name, tools: arr, simulator: simulator, deviceID: PushRegistrar.deviceID))
     }
+
 
     /// Turns 手机静音 on or off: optimistic, only this one setting is written (the PUT merges), and only the latest
     /// switch's answer counts (a quick on → off must not end on whichever reply came last).
@@ -732,7 +973,7 @@ final class AppModel {
     /// Streamed replies drawn at most 5 times a second (`DeltaPacer`).
     @ObservationIgnored private var deltas = DeltaPacer()
     /// Session lists received and not applied yet (`applyPendingSessions`), by machine.
-    @ObservationIgnored private var pendingSessions: [String: [Session]] = [:]
+    @ObservationIgnored private var pendingSessions: [MachineRef: [Session]] = [:]
     @ObservationIgnored private var sessionsFlushScheduled = false
     /// How long session lists wait for the rest of a burst: under a frame and a half, too short to see.
     static let sessionsCoalesce: TimeInterval = 0.025
@@ -748,7 +989,7 @@ final class AppModel {
     /// update once for the lot, and only when a list really changed; the notifications, the watch and the chats kept
     /// current in the background (`AgentSync`) follow them. The one place the lists land (msg-render's SessionStore
     /// replaces its inside, docs/ios-state.md).
-    func applySessions(_ byMachine: [String: [Session]]) {
+    func applySessions(_ byMachine: [MachineRef: [Session]]) {
         var lists = sessionsByMachine
         var olds: [(old: [Session], new: [Session])] = []
         for (machineID, list) in byMachine {
@@ -770,64 +1011,68 @@ final class AppModel {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.sessionsCoalesce) { [weak self] in self?.applyPendingSessions() }
     }
 
-    private func handle(_ ev: ServerEvent) {
+    private func handle(_ ev: ServerEvent, group: String) {
         #if DEBUG || PERF_SIGNPOST
         PerfTrace.push(Self.perfName(ev))
         #endif
+        let isHub = group == hub?.group
         switch ev {
-        case .hello(let features, let info):
-            hubFeatures = Set(features)
+        case .hello(let hello):
+            link(group)?.received(hello)
             #if DEBUG && os(iOS)
             // Registered on connect, before this hello said whether the hub keeps the runtime CLI from the agents.
-            if RuntimeCLI.overHub { registerPhone() }
+            if RuntimeCLI.overHub, let link = link(group) { registerPhone(link) }
             #endif
-            if hubHello != info { hubHello = info }
             #if DEBUG
             // `-showDesktopSample YES`: a Mac signed in (and 手机静音 on), for screenshots of the banner (the demo hub sends no desktops).
-            if UserDefaults.standard.bool(forKey: "showDesktopSample") {
-                desktops = [DesktopDevice(device: "dev_sample", name: "MacBook Pro", since: Date().addingTimeInterval(-3600))]
+            if UserDefaults.standard.bool(forKey: "showDesktopSample"), isHub {
+                link(group)?.desktops = [DesktopDevice(device: "dev_sample", name: "MacBook Pro", since: Date().addingTimeInterval(-3600))]
                 muteWhileDesktop = true
             }
             #endif
-            for handler in terminalHandlers.values { handler(.reconnected) }
+            for (key, handler) in terminalHandlers where key.group == group { handler(.reconnected) }
+            learned(hello, group: group)
         case .terminal(let key, let event):
             terminalHandlers[key]?(event)
         case .machines(let list):
             // A machine that just came back: re-subscribe its open chats (their backlog failed while it was down).
-            let wasOffline = Set(machines.filter { !$0.online }.map(\.id))
+            let wasOffline = Set(machines.filter { !$0.online && $0.group == group }.map(\.id))
             // Every view that names a machine reads the list: the same list again is no change.
-            if machines != list { machines = list }
+            replaceMachines(group, list)
             for m in list where m.online && wasOffline.contains(m.id) {
-                for key in subscribed where key.machineID == m.id {
+                for key in subscribed where key.machineRef == m.ref {
                     chat(key).error = nil
-                    live.send(subscribeMessage(key))
+                    socket(group)?.send(subscribeMessage(key))
                 }
             }
         case .sessions(let machineID, let list):
             // A busy hub sends each machine's list on its own, one after another: they are applied together a moment
             // later, so the pages that read the sessions update once for the lot (one SwiftUI pass, not one a machine).
-            let old = pendingSessions[machineID] ?? sessionsByMachine[machineID] ?? []
-            pendingSessions[machineID] = SessionPatch.snapshot(list, over: old, deltaHub: hubFeatures.contains(SessionPatch.feature))
+            let ref = MachineRef(group: group, id: machineID)
+            let old = pendingSessions[ref] ?? sessionsByMachine[ref] ?? []
+            pendingSessions[ref] = SessionPatch.snapshot(list, over: old, deltaHub: features(group).contains(SessionPatch.feature))
             scheduleSessionsFlush()
         case .sessionsDelta(let machineID, let upsert, let remove):
             // Over the newest the app has: a list still waiting for the flush, or what is shown.
-            let base = pendingSessions[machineID] ?? sessionsByMachine[machineID] ?? []
-            pendingSessions[machineID] = SessionPatch.apply(base, upsert: upsert, remove: remove)
+            let ref = MachineRef(group: group, id: machineID)
+            let base = pendingSessions[ref] ?? sessionsByMachine[ref] ?? []
+            pendingSessions[ref] = SessionPatch.apply(base, upsert: upsert, remove: remove)
             scheduleSessionsFlush()
         case .revs(let machineID, let revs):
-            AgentSync.shared.revs(machine: machineID, revs)
+            AgentSync.shared.revs(machine: MachineRef(group: group, id: machineID), revs)
         case .lark(let feedIDs):
-            LarkSync.shared.received(feedIDs)
+            if isHub { LarkSync.shared.received(feedIDs) }
         case .agents(let ids):
-            PersonalAgentSync.shared.received(ids)
+            if isHub { PersonalAgentSync.shared.received(ids) }
         case .inbox:
-            InboxStore.shared.reload()
+            if isHub { InboxStore.shared.reload() }
         case .fleet(let state):
-            LiveActivityController.shared.apply(state)
+            link(group)?.fleet = state
+            LiveActivityController.shared.apply(mergedFleet())
         case .hubUpdate(let status):
-            if hubUpdate != status { hubUpdate = status }
+            if isHub, hubUpdate != status { hubUpdate = status }
         case .desktops(let list):
-            desktops = list
+            link(group)?.desktops = list
         case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
             if backlog { connection.caughtUp(Self.catchUpPart(key)) }
             let store = chat(key)
@@ -854,15 +1099,15 @@ final class AppModel {
             case .kept: break
             }
         case .interaction(let ix):
-            let isNew = interactions[ix.id] == nil
-            interactions[ix.id] = ix
+            let isNew = interactions[ix.uid] == nil
+            interactions[ix.uid] = ix
             if isNew { Haptics.attention() }
             WatchSync.shared.push(summary: watchSummary())
         case .interactionResolved(let id):
-            interactions[id] = nil
+            interactions[group.isEmpty ? id : group + "|" + id] = nil
             WatchSync.shared.push(summary: watchSummary())
         case .toolCall(let callID, let name, let args):
-            Task { await runPhoneTool(callID: callID, name: name, args: args) }
+            Task { await runPhoneTool(callID: callID, name: name, args: args, group: group) }
         case .hookEvent:
             break
         case .error(let key, let message):
@@ -910,11 +1155,11 @@ final class AppModel {
 
     // MARK: Phone tools
 
-    private func runPhoneTool(callID: String, name: String, args: JSONValue) async {
+    private func runPhoneTool(callID: String, name: String, args: JSONValue, group: String) async {
         #if DEBUG && os(iOS)
         if name == RuntimeCLI.hubTool {
             let (text, isError) = await RuntimeCLI.runFromHub(args)
-            live.send(["type": "tool_result", "call_id": callID, "content": [["type": "text", "text": text]], "is_error": isError])
+            socket(group)?.send(["type": "tool_result", "call_id": callID, "content": [["type": "text", "text": text]], "is_error": isError])
             return
         }
         #endif
@@ -922,8 +1167,9 @@ final class AppModel {
             await self?.confirm(summary) ?? false
         }
         guard let data = try? JSON.encoder.encode(content), let arr = try? JSONSerialization.jsonObject(with: data) else { return }
-        live.send(["type": "tool_result", "call_id": callID, "content": arr, "is_error": isError])
+        socket(group)?.send(["type": "tool_result", "call_id": callID, "content": arr, "is_error": isError])
     }
+
 
     private func confirm(_ summary: String) async -> Bool {
         Haptics.attention()
@@ -941,10 +1187,11 @@ final class AppModel {
     // MARK: Actions
 
     func resolve(_ ix: Interaction, _ r: Resolution) async {
-        guard session(ix.sessionKey)?.canApprove == true, let api else { return }
+        // To the hub of the interaction's own group (docs/multi-hub.md「操作发到哪」).
+        guard session(ix.sessionKey)?.canApprove == true, let api = api(ix.group) else { return }
         // No network: the card stays as it is (taking it away and bringing it back a moment later read as "done").
         guard connection.networkUp else { notDone(); return }
-        interactions[ix.id] = nil
+        interactions[ix.uid] = nil
         do {
             try await api.resolve(ix.id, r)
             Haptics.success()
@@ -953,7 +1200,7 @@ final class AppModel {
             Haptics.attention()
             toast = Toast("终端上的对话框已经变了，这次没有按任何键：看看新的再答", style: .error)
         } catch {
-            if (error as? APIError)?.status != 410 { interactions[ix.id] = ix }
+            if (error as? APIError)?.status != 410 { interactions[ix.uid] = ix }
             show(error)
         }
     }
@@ -966,7 +1213,7 @@ final class AppModel {
 
     /// Edit or delete one queued message: everything is pulled back out of claude and the others re-queued.
     func editQueued(_ key: SessionKey, index: Int, delete: Bool) async {
-        guard allowSend(key), let api, let queue = session(key)?.queued, queue.indices.contains(index) else { return }
+        guard allowSend(key), let api = api(key.group), let queue = session(key)?.queued, queue.indices.contains(index) else { return }
         do {
             let pulled = try await api.editQueue(key, keep: queue.indices.filter { $0 != index })
             if !delete, pulled.indices.contains(index) {
@@ -1010,8 +1257,8 @@ final class AppModel {
         guard let pane = session(key)?.paneID, await send(key, text: "/clear") else { return nil }
         for _ in 0..<40 {
             try? await Task.sleep(for: .milliseconds(500))
-            if let s = sessionsByMachine[key.machineID]?.first(where: { $0.paneID == pane && $0.sessionID != key.sessionID && $0.state.isLive }) {
-                return SessionKey(machineID: key.machineID, sessionID: s.sessionID)
+            if let s = sessionsByMachine[key.machineRef]?.first(where: { $0.paneID == pane && $0.sessionID != key.sessionID && $0.state.isLive }) {
+                return s.key
             }
         }
         toast = Toast("已发送 /clear，新会话出现后在列表里打开", style: .info)
@@ -1038,12 +1285,14 @@ final class AppModel {
     private func deliver(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
         Task {
             // The hub is out of reach: the message waits (clock, 连上后自动发送) instead of failing after a timeout.
-            let outcome: SendOutcome = isLive && !live.stalled ? await sendPending(key, msg, clearDraft: clearDraft) : .waiting
+            let socket = socket(key.group)
+            let outcome: SendOutcome = socket?.state == .connected && socket?.stalled == false
+                ? await sendPending(key, msg, clearDraft: clearDraft) : .waiting
             settleSend(key, msg.id, outcome)
         }
     }
     func send(_ key: SessionKey, text: String, images: [ImagePayload] = [], haptic: Bool = true) async -> Bool {
-        guard allowSend(key), let api else { return false }
+        guard allowSend(key), let api = api(key.group) else { return false }
         do {
             try await api.send(key, text: text, images: images, launcher: assistantLaunchers[key])
             if haptic { Haptics.tap() }
@@ -1056,16 +1305,20 @@ final class AppModel {
 
     /// The user looked at this session: finished work stops being "unread" (docs/agent-states.md).
     func markSeen(_ key: SessionKey) {
-        if live.state == .connected {
-            live.send(["type": "seen", "machine_id": key.machineID, "session_id": key.sessionID])
-        } else if let api {
-            Task { try? await api.post("/api/v1/sessions/\(key.machineID)/\(key.sessionID)/seen") }
-        }
+        sendSeen(key)
         // Optimistic: flip the local copy right away.
-        if var list = sessionsByMachine[key.machineID], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }),
+        if var list = sessionsByMachine[key.machineRef], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }),
            list[i].state == .unread {
             list[i].state = .idle
-            sessionsByMachine[key.machineID] = list
+            sessionsByMachine[key.machineRef] = list
+        }
+    }
+
+    private func sendSeen(_ key: SessionKey) {
+        if let socket = socket(key.group), socket.state == .connected {
+            socket.send(["type": "seen", "machine_id": key.machineID, "session_id": key.sessionID])
+        } else if let api = api(key.group) {
+            Task { try? await api.post("/api/v1/sessions/\(key.machineID)/\(key.sessionID)/seen") }
         }
     }
 
@@ -1073,16 +1326,10 @@ final class AppModel {
     func markSeen(_ keys: [SessionKey]) {
         let unread = keys.filter { session($0)?.state == .unread }
         guard !unread.isEmpty else { return }
-        for key in unread {
-            if live.state == .connected {
-                live.send(["type": "seen", "machine_id": key.machineID, "session_id": key.sessionID])
-            } else if let api {
-                Task { try? await api.post("/api/v1/sessions/\(key.machineID)/\(key.sessionID)/seen") }
-            }
-        }
+        for key in unread { sendSeen(key) }
         var lists = sessionsByMachine
         for key in unread {
-            if let i = lists[key.machineID]?.firstIndex(where: { $0.sessionID == key.sessionID }) { lists[key.machineID]![i].state = .idle }
+            if let i = lists[key.machineRef]?.firstIndex(where: { $0.sessionID == key.sessionID }) { lists[key.machineRef]![i].state = .idle }
         }
         sessionsByMachine = lists
         Haptics.success()
@@ -1108,11 +1355,11 @@ final class AppModel {
 
     func interrupt(_ key: SessionKey) async {
         guard session(key)?.canInterrupt == true else { return }
-        do { try await api?.interrupt(key); Haptics.tap() } catch { show(error) }
+        do { try await api(key.group)?.interrupt(key); Haptics.tap() } catch { show(error) }
     }
 
     func attach(_ key: SessionKey) async {
-        guard session(key)?.canAttach == true, let api else { return }
+        guard session(key)?.canAttach == true, let api = api(key.group) else { return }
         do {
             try await api.attach(key)
             await refresh()
@@ -1124,13 +1371,13 @@ final class AppModel {
     /// list confirms it. Returns whether it worked.
     @discardableResult
     func setModes(_ key: SessionKey, permissionMode: String? = nil, effort: String? = nil) async -> Bool {
-        guard allowSend(key), let api else { return false }
+        guard allowSend(key), let api = api(key.group) else { return false }
         do {
             try await api.setModes(key, permissionMode: permissionMode, effort: effort)
-            if var list = sessionsByMachine[key.machineID], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }) {
+            if var list = sessionsByMachine[key.machineRef], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }) {
                 if let permissionMode { list[i].permissionMode = permissionMode }
                 if let effort { list[i].effort = effort }
-                sessionsByMachine[key.machineID] = list
+                sessionsByMachine[key.machineRef] = list
             }
             Haptics.success()
             return true
@@ -1143,24 +1390,25 @@ final class AppModel {
 
     func keys(_ key: SessionKey, _ keys: [String], text: String = "") async {
         guard session(key)?.canTerminal == true else { return }
-        do { try await api?.keys(key, keys: keys, text: text) } catch { show(error) }
+        do { try await api(key.group)?.keys(key, keys: keys, text: text) } catch { show(error) }
     }
 
     func close(_ key: SessionKey) async {
         guard session(key)?.canTerminal == true else { return }
-        do { try await api?.close(key); toast = Toast("已关闭会话", style: .success) } catch { show(error) }
+        do { try await api(key.group)?.close(key); toast = Toast("已关闭会话", style: .success) } catch { show(error) }
     }
 
     /// After a change in 设置 › 模型: the pickers read the machines' lists again.
     func forgetLaunchers() { launcherCache = [:] }
 
-    func launchers(_ machine: String, refresh: Bool = false) async throws -> [Launcher] {
+    func launchers(_ machine: MachineRef, refresh: Bool = false) async throws -> [Launcher] {
         if !refresh, let cached = launcherCache[machine] { return cached }
-        guard let api else { return [] }
-        let list = try await api.launchers(machine: machine)
+        guard let api = api(machine.group) else { return [] }
+        let list = try await api.launchers(machine: machine.id)
         launcherCache[machine] = list
         return list
     }
+
 
     // MARK: Style
 
@@ -1240,55 +1488,109 @@ final class AppModel {
     }
 
     @ObservationIgnored private let snapshotWriter = Debouncer(.seconds(2))
+    /// The other groups' Jarvis settings, kept for when one of them is picked (`assistantConfig` is the hub-level one).
+    @ObservationIgnored private var assistantByGroup: [String: APIClient.AssistantState] = [:]
+
+    /// Each group's snapshot: "dev" for the default group (what it always was), "dev.<group>" for the others.
+    static func snapshotName(_ group: String) -> String { group.isEmpty ? "dev" : "dev." + group }
 
     private func restoreSnapshot() {
-        guard let snap = StateCache.load("dev", as: DevSnapshot.self) else { return }
-        machines = snap.machines
-        sessionsByMachine = Dictionary(grouping: snap.sessions, by: \.machineID)
-        interactions = Dictionary(snap.interactions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        assistantConfig = snap.assistant
+        var allMachines: [Machine] = [], allSessions: [Session] = [], allInteractions: [Interaction] = []
+        for g in groupIDs {
+            guard let snap = StateCache.load(Self.snapshotName(g), as: DevSnapshot.self) else { continue }
+            allMachines += snap.machines.map { var m = $0; m.group = g; return m }
+            allSessions += snap.sessions.map { var s = $0; s.group = g; return s }
+            allInteractions += snap.interactions.map { var i = $0; i.group = g; return i }
+            if let a = snap.assistant { assistantByGroup[g] = a }
+        }
+        machines = allMachines
+        sessionsByMachine = Dictionary(grouping: allSessions, by: \.machineRef)
+        interactions = Dictionary(allInteractions.map { ($0.uid, $0) }, uniquingKeysWith: { a, _ in a })
+        assistantConfig = assistantByGroup[hub?.group ?? ""]
     }
 
     private func saveSnapshot() {
         snapshotWriter.run { [weak self] in
-            guard let self, self.config != nil else { return }
-            StateCache.save("dev", DevSnapshot(machines: self.machines, sessions: self.sessionsByMachine.values.flatMap { $0 },
-                                               interactions: Array(self.interactions.values), assistant: self.assistantConfig))
+            guard let self, self.isPaired else { return }
+            let hubGroup = self.hub?.group
+            for g in self.groupIDs {
+                let assistant = g == hubGroup ? self.assistantConfig : self.assistantByGroup[g]
+                StateCache.save(Self.snapshotName(g), DevSnapshot(
+                    machines: self.machines.filter { $0.group == g },
+                    sessions: self.sessionsByMachine.filter { $0.key.group == g }.values.flatMap { $0 },
+                    interactions: Array(self.interactions.values.filter { $0.group == g }), assistant: assistant))
+            }
         }
     }
 
+    /// What the app holds about groups that are no longer there.
+    func forgetGroups(_ gone: Set<String>, keepingPushKeys: Bool = false) {
+        guard !gone.isEmpty else { return }
+        machines = machines.filter { !gone.contains($0.group) }
+        sessionsByMachine = sessionsByMachine.filter { !gone.contains($0.key.group) }
+        interactions = interactions.filter { !gone.contains($0.value.group) }
+        for key in chats.keys where gone.contains(key.group) { dropChat(key) }
+        drafts = drafts.filter { !gone.contains($0.key.group) }
+        if let k = openChat, gone.contains(k.group) { openChat = nil }
+        if let k = assistantCurrent, gone.contains(k.group) { assistantCurrent = nil }
+        for g in gone {
+            StateCache.remove(Self.snapshotName(g))
+            ChatCache.removeGroup(g)
+            PinsStore.forget(suffix: g)
+            if !keepingPushKeys { PushCrypto.removeKey(group: g) }
+        }
+        if links.contains(where: { $0.fleet != nil }) { LiveActivityController.shared.apply(mergedFleet()) }
+        saveOutbox()
+    }
+
+    /// Another group was picked for the hub-level pages: their data starts over from that group's.
+    func hubChanged() {
+        if let g = hub?.group {
+            assistantConfig = assistantByGroup[g]
+        }
+        if let a = assistantCurrent, a.group != hub?.group { assistantCurrent = assistantMain }
+        InboxStore.shared.forget()
+        InboxStore.shared.reload()
+        Task {
+            await refreshAssistant()
+            await personas.refresh(api)
+            if assistantCurrent == nil { assistantCurrent = assistantMain }
+        }
+        applyPersonaPalette()
+    }
+
+
     // MARK: Pins and mutes
 
-    /// Pinned / muted spaces and agents (`PinsStore`); the views ask through the methods below.
-    @ObservationIgnored private(set) lazy var pinsStore = PinsStore(deps: .init(api: { [weak self] in self?.api },
-                                                                              report: { [weak self] in self?.show($0) }))
-    var pins: Pins {
-        get { pinsStore.pins }
-        set { pinsStore.pins = newValue }
-    }
-    var mutes: Pins {
-        get { pinsStore.mutes }
-        set { pinsStore.mutes = newValue }
-    }
+    /// Pinned / muted spaces and agents: each group's hub keeps its own (`PinsStore`, one per group); the views ask
+    /// through the methods below. Keys are the hub's ("machine/space name", "machine/session id"), without the group.
+    func pinsStore(_ group: String) -> PinsStore? { link(group)?.pins }
 
     static func pinKey(space g: SpaceGroup) -> String { "\(g.machineID)/\(g.name)" }
     static func pinKey(session k: SessionKey) -> String { "\(k.machineID)/\(k.sessionID)" }
 
-    func isPinned(_ g: SpaceGroup) -> Bool { pinsStore.isPinned(space: Self.pinKey(space: g)) }
-    func isPinned(_ k: SessionKey) -> Bool { pinsStore.isPinned(session: Self.pinKey(session: k)) }
-    func togglePin(_ g: SpaceGroup) { pinsStore.togglePin(space: Self.pinKey(space: g)) }
-    func togglePin(_ k: SessionKey) { pinsStore.togglePin(session: Self.pinKey(session: k)) }
-    func loadPins() async { await pinsStore.load() }
+    func isPinned(_ g: SpaceGroup) -> Bool { pinsStore(g.group)?.isPinned(space: Self.pinKey(space: g)) == true }
+    func isPinned(_ k: SessionKey) -> Bool { pinsStore(k.group)?.isPinned(session: Self.pinKey(session: k)) == true }
+    func togglePin(_ g: SpaceGroup) { pinsStore(g.group)?.togglePin(space: Self.pinKey(space: g)) }
+    func togglePin(_ k: SessionKey) { pinsStore(k.group)?.togglePin(session: Self.pinKey(session: k)) }
+    /// Where a pinned agent sits among its group's pinned agents (the newest pin first).
+    func pinOrder(_ k: SessionKey) -> Int { pinsStore(k.group)?.pins.sessions.firstIndex(of: Self.pinKey(session: k)) ?? 0 }
+    func loadPins() async {
+        for link in links { await link.pins.load() }
+    }
 
-    func isMuted(_ g: SpaceGroup) -> Bool { pinsStore.isMuted(space: Self.pinKey(space: g)) }
+    func isMuted(_ g: SpaceGroup) -> Bool { pinsStore(g.group)?.isMuted(space: Self.pinKey(space: g)) == true }
     /// Muted: the agent itself, or its space unless the agent was turned back on there (same rule as the hub).
-    func isMuted(_ k: SessionKey) -> Bool { pinsStore.isMuted(session: Self.pinKey(session: k), space: spaceKey(k)) }
+    func isMuted(_ k: SessionKey) -> Bool {
+        pinsStore(k.group)?.isMuted(session: Self.pinKey(session: k), space: spaceKey(k)) == true
+    }
     func isMuted(_ s: Session) -> Bool {
-        pinsStore.isMuted(session: Self.pinKey(session: s.key), space: s.spaceName.map { "\(s.machineID)/\($0)" })
+        pinsStore(s.group)?.isMuted(session: Self.pinKey(session: s.key), space: s.spaceName.map { "\(s.machineID)/\($0)" }) == true
     }
     private func spaceKey(_ k: SessionKey) -> String? { session(k)?.spaceName.map { "\(k.machineID)/\($0)" } }
-    func toggleMute(_ g: SpaceGroup) { pinsStore.toggleMute(space: Self.pinKey(space: g)) }
-    func toggleMute(_ k: SessionKey) { pinsStore.toggleMute(session: Self.pinKey(session: k), space: spaceKey(k)) }
+    func toggleMute(_ g: SpaceGroup) { pinsStore(g.group)?.toggleMute(space: Self.pinKey(space: g)) }
+    func toggleMute(_ k: SessionKey) { pinsStore(k.group)?.toggleMute(session: Self.pinKey(session: k), space: spaceKey(k)) }
+
 
     // MARK: Attachments
 
@@ -1302,19 +1604,19 @@ final class AppModel {
     /// Renames a space (herdr workspace) on its machine; shown at once, the hub keeps pins / mutes with it.
     func renameSpace(_ g: SpaceGroup, to name: String) async {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let api, !name.isEmpty, name != g.name else { return }
+        guard let api = api(g.group), !name.isEmpty, name != g.name else { return }
         let oldKey = Self.pinKey(space: g), newKey = "\(g.machineID)/\(name)"
-        edit(machine: g.machineID) { s in if s.spaceID == g.spaceID { s.spaceName = name } }
-        pinsStore.renameSpace(oldKey, to: newKey)
+        edit(machine: g.machineRef) { s in if s.spaceID == g.spaceID { s.spaceName = name } }
+        pinsStore(g.group)?.renameSpace(oldKey, to: newKey)
         do { try await api.renameSpace(machine: g.machineID, workspaceID: g.spaceID, name: name) } catch { show(error) }
         await refresh()
     }
 
     /// Renames an agent's herdr tab and / or its Claude session name (nil leaves that one alone).
     func renameSession(_ k: SessionKey, tab: String?, title: String?) async {
-        guard session(k)?.canTerminal == true, let api else { return }
+        guard session(k)?.canTerminal == true, let api = api(k.group) else { return }
         let tab = tab?.trimmingCharacters(in: .whitespacesAndNewlines), title = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        edit(machine: k.machineID) { s in
+        edit(machine: k.machineRef) { s in
             guard s.sessionID == k.sessionID else { return }
             if let tab, !tab.isEmpty { s.slotName = tab }
             if let title, !title.isEmpty { s.title = title }
@@ -1328,20 +1630,20 @@ final class AppModel {
 
     /// Archives an assistant conversation or brings it back: shown at once, the hub's push confirms it.
     func archiveConversation(_ k: SessionKey, _ archived: Bool) async {
-        guard let api else { return }
+        guard let api = api(k.group) else { return }
         guard !archived || k != assistantMain else { return } // the hub refuses the main one too
-        edit(machine: k.machineID) { s in if s.sessionID == k.sessionID { s.archived = archived } }
+        edit(machine: k.machineRef) { s in if s.sessionID == k.sessionID { s.archived = archived } }
         Haptics.tap()
         do {
             try await api.archiveConversation(k.sessionID, archived: archived)
             toast = Toast(archived ? "已归档" : "已取消归档", style: .success)
         } catch {
-            edit(machine: k.machineID) { s in if s.sessionID == k.sessionID { s.archived = !archived } }
+            edit(machine: k.machineRef) { s in if s.sessionID == k.sessionID { s.archived = !archived } }
             show(error)
         }
     }
 
-    private func edit(machine: String, _ change: (inout Session) -> Void) {
+    private func edit(machine: MachineRef, _ change: (inout Session) -> Void) {
         guard var list = sessionsByMachine[machine] else { return }
         for i in list.indices { change(&list[i]) }
         sessionsByMachine[machine] = list
@@ -1356,6 +1658,7 @@ final class AppModel {
             + "不要再安排下一次唤醒，回复一句「循环已停止」即可。")
     }
 
+    /// Everything again from every group's hub (pull to refresh, coming back to the app).
     func refresh() async {
         guard let api else { return }
         Task { await loadPins() }
@@ -1369,32 +1672,47 @@ final class AppModel {
                 Translator.shared.syncPrefs(hubHas: p.translate)
                 LiveActivityController.shared.settings(p)
             }
-            if let fleet = try? await api.fleet() { LiveActivityController.shared.apply(fleet) }
+            var any = false
+            for link in links {
+                if let fleet = try? await link.api.fleet() { link.fleet = fleet; any = true }
+            }
+            if any { LiveActivityController.shared.apply(mergedFleet()) }
         }
+        await withTaskGroup(of: Void.self) { tasks in
+            for link in links { tasks.addTask { await self.refresh(link) } }
+        }
+    }
+
+    /// One group's machines, sessions and interactions.
+    private func refresh(_ link: HubLink) async {
+        let api = link.api, group = link.group
         do {
             async let m = api.machines()
             async let s = api.sessions()
             async let i = api.interactions()
             let (machines, sessions, ixs) = try await (m, s, i)
-            self.machines = machines
-            let rest = Dictionary(grouping: sessions, by: \.machineID)
-            if live.state == .connected && hubFeatures.contains(SessionPatch.feature) {
+            guard self.link(group) === link else { return } // removed meanwhile
+            replaceMachines(group, machines)
+            let rest = Dictionary(grouping: sessions, by: \.machineRef)
+            var lists = sessionsByMachine.filter { $0.key.group != group }
+            if link.live.state == .connected && link.features.contains(SessionPatch.feature) {
                 // What the socket pushed is newer than this answer: only the Codex history comes from it.
-                var lists = sessionsByMachine
-                for (m, list) in rest {
-                    lists[m] = SessionPatch.refreshed(list, over: lists[m] ?? [], connectedToDeltaHub: true)
-                    if let p = pendingSessions[m] { pendingSessions[m] = SessionPatch.refreshed(list, over: p, connectedToDeltaHub: true) }
+                for (ref, list) in rest {
+                    lists[ref] = SessionPatch.refreshed(list, over: sessionsByMachine[ref] ?? [], connectedToDeltaHub: true)
+                    if let p = pendingSessions[ref] { pendingSessions[ref] = SessionPatch.refreshed(list, over: p, connectedToDeltaHub: true) }
                 }
-                if lists != sessionsByMachine { sessionsByMachine = lists }
             } else {
-                sessionsByMachine = rest
+                for (ref, list) in rest { lists[ref] = list }
             }
-            interactions = Dictionary(ixs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-            live.ensureConnected()
+            if lists != sessionsByMachine { sessionsByMachine = lists }
+            replaceInteractions(group, ixs)
+            link.live.ensureConnected()
         } catch {
-            if !error.isOffline { show(error) } // the title says 等待网络 / 连接中…
+            // The title says 等待网络 / 连接中…; with several groups one unreachable is not an error to show.
+            if !error.isOffline, !isMultiHub { show(error) }
         }
     }
+
 
     func show(_ error: Error) {
         if error.isOffline { notDone(); return }

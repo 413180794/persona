@@ -17,7 +17,8 @@ struct JarvisApp: App {
                 .task(id: model.fleetLook) { LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces } }
                 .onOpenURL { url in
                     if let link = FleetLink.session(url) { // tapped the Live Activity
-                        model.open(SessionKey(machineID: link.machine, sessionID: link.session))
+                        // "group|machine" for another group's row (FleetMerge); a row the hub pushed names no group.
+                        if let key = model.resolve(path: link.machine + "/" + link.session) { model.open(key) }
                         return
                     }
                     guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
@@ -31,16 +32,15 @@ struct JarvisApp: App {
         // background (scene apps are, during didFinishLaunching): the socket opens now.
         .onChange(of: phase, initial: true) { old, new in
             if new == .active {
-                model.live.suspended = false
+                model.retryRegistry() // launched in the background before the first unlock: the pairing reads now
+                model.resumeLinks()
                 LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces }
-                model.live.ensureConnected()
                 if old != new { Task { await model.refresh() } }
             } else if new == .background {
                 // A suspended app's socket looks alive to the hub until it times out, and phone_* calls sent to it hang.
                 // Closed, the hub knows the phone is away and wakes it with a silent push instead; and nothing opens it
                 // again until the app is back (the network returning, a refresh ending: LiveConnection.suspended).
-                model.live.suspended = true
-                model.live.disconnect()
+                model.suspendLinks()
             }
         }
     }
@@ -51,10 +51,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().setNotificationCategories(NotificationActions.categories)
         #if DEBUG
-        // Simulator automation: `simctl launch … -pairURL jarvis://pair?...`
+        // Simulator automation: `simctl launch … -pairURL jarvis://pair?...`; `-pairURL2`, `-pairURL3` pair more hubs
+        // (several groups, docs/multi-hub.md「截图」).
         if let s = UserDefaults.standard.string(forKey: "pairURL"), let cfg = ServerConfig(pairURL: s) {
-            Keychain.serverConfig = cfg
-            AppModel.shared.adopt(cfg)
+            let more = ["pairURL2", "pairURL3"].compactMap { UserDefaults.standard.string(forKey: $0).flatMap(ServerConfig.init(pairURL:)) }
+            AppModel.shared.adopt([cfg] + more)
         }
         let d = UserDefaults.standard
         PopFrames.startIfAsked()
@@ -62,7 +63,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if d.bool(forKey: "openChatsFresh") { ChatCache.removeAll() }
         // `-openAgentsFresh YES`: the Agents list's saved look forgotten (AgentsListTests).
         if d.bool(forKey: "openAgentsFresh") {
-            for k in ["dev.machineFilter", "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
+            for k in ["dev.machineFilter", HubFilter.key, "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
         }
         #if os(iOS)
         PagePerf.runIfAsked()
@@ -74,8 +75,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         case "assistant": AppModel.shared.selectedTab = .assistant
         default: break
         }
-        if let open = d.string(forKey: "openSession"), let slash = open.firstIndex(of: "/") {
-            let key = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
+        // "machine/session", or "group|machine/session" for another group.
+        if let open = d.string(forKey: "openSession"), let key = AppModel.shared.resolve(path: open) {
             // `-openFromDoneNotice YES`: as a tap on its "完成" notification (lands on the latest answer).
             if d.bool(forKey: "openFromDoneNotice") {
                 AppDelegate.openFromNotification(key, finished: true)
@@ -85,9 +86,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             }
         }
         if d.string(forKey: "lark-connector") != nil { AppModel.shared.selectedTab = .mail }
-        if let open = d.string(forKey: "openAssistant"), let slash = open.firstIndex(of: "/") {
+        if let open = d.string(forKey: "openAssistant"), let key = AppModel.shared.resolve(path: open) {
             AppModel.shared.selectedTab = .assistant
-            AppModel.shared.assistantCurrent = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
+            AppModel.shared.assistantCurrent = key
+        }
+        // `-openHub <group id or 1-based index>`: the hub-level pages show that group (several groups).
+        if let g = d.string(forKey: "openHub") {
+            let ids = AppModel.shared.groupIDs
+            AppModel.shared.selectHub(Int(g).flatMap { ids.indices.contains($0 - 1) ? ids[$0 - 1] : nil } ?? g)
         }
         if d.bool(forKey: "newAssistant") {
             AppModel.shared.selectedTab = .assistant
@@ -95,8 +101,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         AppModel.shared.debugShowNewChat = d.bool(forKey: "showNewChat")
         // `-simulateTap <machine>/<session>`: what tapping a push does, 4 s after launch (on another screen by then).
-        if let tap = d.string(forKey: "simulateTap"), let slash = tap.firstIndex(of: "/") {
-            let key = SessionKey(machineID: String(tap[..<slash]), sessionID: String(tap[tap.index(after: slash)...]))
+        if let tap = d.string(forKey: "simulateTap"), let key = AppModel.shared.resolve(path: tap) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { AppDelegate.openFromNotification(key) }
         }
         // `-showTestNotification permission|plan`: posts what an interaction push looks like (category, ids), 3 s
@@ -141,19 +146,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// iOS gives ~30 s; connect, let the hub deliver the call over the socket, then let go.
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        // Through the relay the reason is sealed (docs/push-relay.md): open it here, in the app's own process.
-        let wake = PushCrypto.isSealed(userInfo) ? PushCrypto.payload(userInfo, key: PushCrypto.loadKey())?["jarvis_wake"] : userInfo["jarvis_wake"]
+        // Through the relay the reason is sealed (docs/push-relay.md): open it here, in the app's own process, with
+        // each group's key (the one that opens it says whose hub needs the phone).
+        var info = userInfo
+        if PushCrypto.isSealed(userInfo), let opened = PushCrypto.opened(userInfo, keys: PushCrypto.allKeys()) {
+            for (k, v) in opened.payload { info[k] = v }
+            if !opened.group.isEmpty { info[PushCrypto.groupKey] = opened.group }
+        }
+        let wake = info["jarvis_wake"]
         guard wake != nil, AppModel.shared.isPaired, !AppModel.shared.isDemo else {
             completionHandler(.noData)
             return
         }
-        AppModel.shared.live.wake()
+        // That group's hub (`hub_id`, the key); unknown: every group.
+        let group = AppModel.shared.pushGroup(info)
+        AppModel.shared.wakeLinks(group)
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.asyncAfter(deadline: .now() + 25) {
-            if UIApplication.shared.applicationState == .background {
-                AppModel.shared.live.suspended = true
-                AppModel.shared.live.disconnect()
-            }
+            if UIApplication.shared.applicationState == .background { AppModel.shared.suspendLinks() }
             done(.newData)
         }
     }
@@ -163,10 +173,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     // queue, do the work there and call back from there.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        let key = Self.sessionKey(notification.request.content.userInfo)
+        let ref = Self.sessionRef(notification.request.content.userInfo)
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
-            let visible = MainActor.assumeIsolated { AppModel.shared.visibleSession }
+            let (key, visible) = MainActor.assumeIsolated { (ref.flatMap(Self.sessionKey), AppModel.shared.visibleSession) }
             done(key != nil && key == visible ? [] : [.banner, .sound, .list])
         }
     }
@@ -174,16 +184,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                             withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
-        let key = Self.sessionKey(info)
+        let ref = Self.sessionRef(info)
         let action = response.actionIdentifier
         let text = (response as? UNTextInputNotificationResponse)?.userText
         let ixID = info["interaction_id"] as? String
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
+                // The group the push came from (docs/multi-hub.md「推送」): its hub settles the button, its session opens.
+                let key = ref.flatMap(Self.sessionKey)
                 if let ixID, let resolution = NotificationActions.resolution(action: action, text: text) {
                     // A button on the notification: settle it in the background, the app stays where it is.
-                    AppDelegate.resolveFromNotification(ixID, resolution, action: action, done: done)
+                    AppDelegate.resolveFromNotification(ixID, group: key?.group ?? ref?.group, resolution, action: action, done: done)
                     return
                 }
                 // No interaction: a turn finished ("完成"), opened at its answer like from the list.
@@ -196,7 +208,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// Runs a notification button against the hub. iOS may have launched the app in the background just for this, so
     /// hold a background task until the request is answered; a failure comes back as a local notification, because
     /// the user is not looking at the app.
-    static func resolveFromNotification(_ id: String, _ resolution: Resolution, action: String, done: @escaping () -> Void) {
+    static func resolveFromNotification(_ id: String, group: String?, _ resolution: Resolution, action: String, done: @escaping () -> Void) {
         let app = UIApplication.shared
         var task = UIBackgroundTaskIdentifier.invalid
         task = app.beginBackgroundTask(withName: "resolve-interaction") {
@@ -205,8 +217,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         Task {
             do {
-                guard let config = Keychain.serverConfig else { throw IntentFailure.notPaired }
-                try await APIClient(config: config).resolve(id, resolution)
+                try await HubStore.client(group: group).resolve(id, resolution)
             } catch {
                 await NotificationActions.reportFailure(id: id, title: NotificationActions.failureTitle(action: action), error: error)
             }
@@ -236,11 +247,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
     #endif
 
-    nonisolated static func sessionKey(_ info: [AnyHashable: Any]) -> SessionKey? {
-        guard let machine = info["machine_id"] as? String, let session = info["session_id"] as? String,
-              !machine.isEmpty, !session.isEmpty else { return nil }
-        return SessionKey(machineID: machine, sessionID: session)
-    }
+    nonisolated static func sessionRef(_ info: [AnyHashable: Any]) -> PushRef? { PushRef(info) }
+    static func sessionKey(_ ref: PushRef) -> SessionKey { ref.key(AppModel.shared) }
+
 
     /// Opens the session a notification is about. On a cold launch the tap arrives before the UI exists: `open`
     /// only sets state (tab + chat to open) that the views pick up when they appear.

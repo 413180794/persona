@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Start a session inside an existing space (a new herdr tab next to the other agents).
 struct SpacePreset {
+    /// The machine id, or "group|id" for another group of hubs (`MachineRef.path`).
     var machineID: String
     var cwd: String
     var workspaceID: String
@@ -34,7 +35,9 @@ struct NewChatView: View {
     @State private var error: String?
     @FocusState private var promptFocused: Bool
 
-    private var machine: Machine? { model.machine(machineID) }
+    /// `machineID` is what is remembered: the machine id, "group|id" for another group of hubs (`MachineRef.path`).
+    private var ref: MachineRef { MachineRef(path: machineID) }
+    private var machine: Machine? { model.machine(ref) }
 
     /// The launcher runs Codex: it starts with its first message (Codex makes the thread then) and the start waits for it.
     private var codex: Bool { launchers.first(where: { $0.name == (launcher.isEmpty && unifiedModels ? defaultLauncher : launcher) })?.isCodex == true }
@@ -75,7 +78,7 @@ struct NewChatView: View {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: Theme.Space.m) {
-                            ForEach(model.machines) { m in machineCard(m) }
+                            ForEach(model.machines, id: \.ref) { m in machineCard(m) }
                         }
                         .padding(.vertical, Theme.Space.xs)
                     }
@@ -84,7 +87,7 @@ struct NewChatView: View {
 
                 Section {
                     NavigationLink {
-                        DirectoryBrowser(machineID: machineID, start: cwd.isEmpty ? "" : cwd) { picked in cwd = picked }
+                        DirectoryBrowser(ref: ref, start: cwd.isEmpty ? "" : cwd) { picked in cwd = picked }
                     } label: {
                         HStack {
                             Image(systemName: Theme.Icon.folderFilled).foregroundStyle(Theme.accent)
@@ -239,15 +242,15 @@ struct NewChatView: View {
     /// Remember the last machine, but fall back to the first online one (machines may arrive after the sheet opens).
     private func pickDefaultMachine() {
         if machine == nil || machine?.online == false, let m = model.machines.first(where: \.online) ?? model.machines.first {
-            machineID = m.id
+            machineID = m.ref.path
         }
     }
 
     private func machineCard(_ m: Machine) -> some View {
-        let selected = m.id == machineID
+        let selected = m.ref.path == machineID
         return Button {
             Haptics.tap()
-            machineID = m.id
+            machineID = m.ref.path
         } label: {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack {
@@ -256,7 +259,8 @@ struct NewChatView: View {
                     Circle().fill(m.online ? Theme.positive : Color.secondary.opacity(0.4)).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
                 }
                 Text(m.name).font(Theme.Font.secondaryStrong).lineLimit(1)
-                Text(m.online ? (m.hostname ?? "在线") : "离线").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                // Several groups of hubs: which group the machine is in, where the host name was.
+                Text(m.online ? (m.groupLabel ?? m.hostname ?? "在线") : "离线").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             .scaledFrame(width: Theme.Size.box120, alignment: .leading)
             .padding(Theme.Space.m)
@@ -269,7 +273,7 @@ struct NewChatView: View {
     }
 
     private func loadMachine() async {
-        guard !machineID.isEmpty, let api = model.api, machine?.online == true else { return }
+        guard !machineID.isEmpty, let api = model.api(ref.group), machine?.online == true else { return }
         loading = true
         defer { loading = false }
         error = nil
@@ -281,8 +285,8 @@ struct NewChatView: View {
             } catch let e as APIError where e.status == 404 {
                 unifiedModels = false
             }
-            async let l = model.launchers(machineID)
-            async let d = api.dirs(machine: machineID, path: "")
+            async let l = model.launchers(ref)
+            async let d = api.dirs(machine: ref.id, path: "")
             let (ls, dirs) = try await (l, d)
             launchers = ls
             recent = dirs.recent ?? []
@@ -306,7 +310,7 @@ struct NewChatView: View {
     }
 
     private func start() async {
-        guard let api = model.api else { return }
+        guard let api = model.api(ref.group) else { return }
         starting = true
         error = nil
         defer { starting = false }
@@ -316,7 +320,7 @@ struct NewChatView: View {
             if codex {
                 // Codex picks its thread's id once it has the first message: it goes with the start, which answers
                 // with that thread (one session, already working on it).
-                let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: prompt,
+                let s = try await api.start(.init(machineID: ref.id, cwd: cwd, launcher: launcher, prompt: prompt,
                                                   workspaceID: preset?.workspaceID, tabName: name.isEmpty ? nil : name))
                 UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
                 UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
@@ -327,7 +331,7 @@ struct NewChatView: View {
             }
             // The hub answers at once and starts claude in the background; the first message goes out as an ordinary
             // message (on screen right away, typed in once claude is ready).
-            let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: nil,
+            let s = try await api.start(.init(machineID: ref.id, cwd: cwd, launcher: launcher, prompt: nil,
                                               workspaceID: preset?.workspaceID, permissionMode: mode.isEmpty ? nil : mode,
                                               effort: effort.isEmpty ? nil : effort, tabName: name.isEmpty ? nil : name,
                                               async: true, nameHint: p.isEmpty ? nil : p))
@@ -397,7 +401,7 @@ struct LauncherPicker: View {
 struct DirectoryBrowser: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    var machineID: String
+    var ref: MachineRef
     var start: String
     var onPick: (String) -> Void
     @State private var list: DirList?
@@ -445,9 +449,9 @@ struct DirectoryBrowser: View {
     }
 
     private func load(_ p: String) async {
-        guard let api = model.api else { return }
+        guard let api = model.api(ref.group) else { return }
         do {
-            let l = try await api.dirs(machine: machineID, path: p)
+            let l = try await api.dirs(machine: ref.id, path: p)
             withAnimation(Theme.Motion.standard) {
                 list = l
                 path = l.path

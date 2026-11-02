@@ -4,6 +4,8 @@ import SwiftUI
 struct GitPane: View {
     @Environment(AppModel.self) private var model
     let machineID: String
+    /// The group of hubs the machine is in (docs/multi-hub.md).
+    var group: String = ""
     let cwd: String
     @Binding var status: GitStatus?
     @State private var error: String?
@@ -36,8 +38,8 @@ struct GitPane: View {
         .toolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac
         #endif
         .task(id: cwd) { await load() }
-        .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, cwd: cwd, target: t) }
-        .sheet(item: $commit) { c in GitCommitSheet(machineID: machineID, cwd: cwd, commit: c) }
+        .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, group: group, cwd: cwd, target: t) }
+        .sheet(item: $commit) { c in GitCommitSheet(machineID: machineID, group: group, cwd: cwd, commit: c) }
         #if os(macOS) && DEBUG
         .onAppear {
             // `-macGitSheet diff|commit`: a made-up change / commit's sheet, to see its size on the Mac (demo mode has
@@ -134,7 +136,7 @@ struct GitPane: View {
     }
 
     private func load() async {
-        guard let api = model.api, !cwd.isEmpty else { return }
+        guard let api = model.api(group), !cwd.isEmpty else { return }
         do {
             status = try await api.gitStatus(machine: machineID, cwd: cwd)
             older = []
@@ -146,7 +148,7 @@ struct GitPane: View {
     }
 
     private func loadMore(after skip: Int) async {
-        guard let api = model.api else { return }
+        guard let api = model.api(group) else { return }
         loadingMore = true
         defer { loadingMore = false }
         if let more = try? await api.gitLog(machine: machineID, cwd: cwd, skip: skip) {
@@ -252,6 +254,8 @@ struct GitDiffSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let machineID: String
+    /// The group of hubs the machine is in (docs/multi-hub.md).
+    var group: String = ""
     let cwd: String
     @State var target: GitDiffTarget
     @State private var diff: GitDiff?
@@ -288,7 +292,7 @@ struct GitDiffSheet: View {
             .task(id: target) {
                 diff = nil
                 do {
-                    diff = try await model.api?.gitDiff(machine: machineID, cwd: cwd, path: target.file.path, staged: target.staged)
+                    diff = try await model.api(group)?.gitDiff(machine: machineID, cwd: cwd, path: target.file.path, staged: target.staged)
                 } catch { self.error = error.shown }
             }
             #if os(macOS)
@@ -303,6 +307,8 @@ struct GitCommitSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let machineID: String
+    /// The group of hubs the machine is in (docs/multi-hub.md).
+    var group: String = ""
     let cwd: String
     let commit: GitCommit
     @State private var show: GitShow?
@@ -358,7 +364,7 @@ struct GitCommitSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .task {
-                do { show = try await model.api?.gitShow(machine: machineID, cwd: cwd, hash: commit.hash) }
+                do { show = try await model.api(group)?.gitShow(machine: machineID, cwd: cwd, hash: commit.hash) }
                 catch { self.error = error.shown }
             }
             #if os(macOS)

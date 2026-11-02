@@ -12,10 +12,12 @@ extension RuntimeCLI {
         "defaults": { a in defaults(a) },
     ]
 
+    /// "machine/session", or "group|machine/session" for another group of hubs.
     static func key(_ s: String?) -> SessionKey? {
-        guard let s, let slash = s.firstIndex(of: "/") else { return nil }
-        return SessionKey(machineID: String(s[..<slash]), sessionID: String(s[s.index(after: slash)...]))
+        guard let s else { return nil }
+        return AppModel.shared.resolve(path: s)
     }
+
 
     /// A new view tree: the window's root becomes a new hosting controller for `RootView`, so every page's own state
     /// (the Agents page's pushed chat, the drawer, scroll positions, the glass bars) starts over. `route` runs between

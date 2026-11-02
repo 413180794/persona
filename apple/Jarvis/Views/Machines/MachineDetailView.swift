@@ -9,7 +9,8 @@ import SwiftUI
 struct MachineDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var phase
-    var machineID: String
+    var ref: MachineRef
+    private var machineID: String { ref.id }
     @State private var range: MetricRange = Self.initialRange
     @State private var data: MachineMetrics?
     @State private var shownRange: MetricRange?
@@ -21,8 +22,8 @@ struct MachineDetailView: View {
     @State private var allAgents = false
 
     /// A machine's agents: live ones, not the 对话 tab's assistant conversations (the Agents tab leaves those out too).
-    static func agents(_ model: AppModel, _ machineID: String) -> [Session] {
-        (model.sessionsByMachine[machineID] ?? []).filter { $0.status.isLive && !$0.assistant }
+    static func agents(_ model: AppModel, _ ref: MachineRef) -> [Session] {
+        (model.sessionsByMachine[ref] ?? []).filter { $0.status.isLive && !$0.assistant }
     }
 
     /// The agents before 显示全部: with dozens on one machine its charts would be screens away.
@@ -37,7 +38,7 @@ struct MachineDetailView: View {
     }
 
     var body: some View {
-        let machine = model.machine(machineID)
+        let machine = model.machine(ref)
         let system = data?.system ?? machine?.system
         let online = machine?.online ?? data?.online ?? false
         ScrollView {
@@ -118,7 +119,7 @@ struct MachineDetailView: View {
     /// Needs-you first, then working, then the rest, each in the hub's order.
     private func agentsSection(_ machine: Machine) -> some View {
         let rank: (AgentState) -> Int = { $0 == .needsYou ? 0 : $0 == .working ? 1 : 2 }
-        let sessions = Self.agents(model, machineID).enumerated()
+        let sessions = Self.agents(model, ref).enumerated()
             .sorted { (rank($0.element.state), $0.offset) < (rank($1.element.state), $1.offset) }
             .map(\.element)
         let shown = allAgents ? sessions : Array(sessions.prefix(Self.agentsShown))
@@ -168,7 +169,7 @@ struct MachineDetailView: View {
     private func engineRow(_ machine: Machine) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             NavigationLink { // a leaf: nothing is pushed from the picker, so a view push is fine in this value stack
-                EngineSelectionView(machineID: machineID)
+                EngineSelectionView(ref: ref)
             } label: {
                 HStack(spacing: Theme.Space.s) {
                     Text("引擎").font(Theme.Font.body).lineLimit(1)
@@ -240,7 +241,7 @@ struct MachineDetailView: View {
     // MARK: Loading
 
     private func load() async {
-        guard let api = model.api else { return }
+        guard let api = model.api(ref.group) else { return }
         let r = range
         do {
             let fresh = try await api.machineMetrics(machineID, range: r)
@@ -265,9 +266,9 @@ struct MachineDetailView: View {
     }
 
     private func loadLaunchers(refresh: Bool) async {
-        guard model.machine(machineID)?.online == true else { launchers = []; return }
+        guard model.machine(ref)?.online == true else { launchers = []; return }
         do {
-            launchers = try await model.launchers(machineID, refresh: refresh)
+            launchers = try await model.launchers(ref, refresh: refresh)
             launcherError = nil
         } catch {
             launcherError = error.shown.map { "读不到启动器：\($0)" }
@@ -279,7 +280,7 @@ struct MachineDetailView: View {
         reconnecting = true
         defer { reconnecting = false }
         do {
-            try await model.api?.reconnect(machine: machineID)
+            try await model.api(ref.group)?.reconnect(machine: machineID)
         } catch {
             if let m = error.shown { model.toast = Toast("重新连接失败：\(m)", style: .error) }
             return
@@ -287,13 +288,13 @@ struct MachineDetailView: View {
         for _ in 0..<10 {
             try? await Task.sleep(for: .seconds(1.5))
             await model.refresh()
-            if model.machine(machineID)?.online == true {
+            if model.machine(ref)?.online == true {
                 Haptics.success()
                 await loadLaunchers(refresh: true)
                 return
             }
         }
-        let err = model.machine(machineID)?.error
+        let err = model.machine(ref)?.error
         model.toast = Toast("还没连上\(err.map { "：\($0)" } ?? "")", style: .error)
     }
 

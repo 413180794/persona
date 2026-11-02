@@ -146,13 +146,7 @@ nonisolated struct SkillsResponse: Codable, Sendable {
     var skills: [AgentSkill]
 }
 
-/// What the hub said it is in its hello (docs/protocol.md): its build and protocol, for the compatibility notices.
-nonisolated struct HubHello: Equatable, Sendable {
-    var channel: String?
-    var build: Int64?
-    var protocolVersion: Int?
-    var minAppBuild: Int?
-}
+// What the hub said it is in its hello (its build and protocol): `HubHello` (Hubs.swift), with who the hub is.
 
 /// Whether this app and the hub go together (docs/hub-update.md「兼容」).
 nonisolated enum HubCompat: Equatable, Sendable {

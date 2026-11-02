@@ -16,10 +16,19 @@ struct JarvisWatchApp: App {
     }
 }
 
-/// Watch state: seeded by the phone over WatchConnectivity, refreshed from the hub directly while open.
+/// Watch state: seeded by the phone over WatchConnectivity, refreshed from the hubs directly while open. With several
+/// groups of hubs on the phone (docs/multi-hub.md「手表」) the watch gets each group's credential and shows them merged;
+/// what it does goes to the group of what it acts on.
 @Observable
 final class WatchModel {
-    var config: ServerConfig?
+    /// Each group's credential ("" = the default group); one group from a phone before several hubs.
+    var configs: [String: ServerConfig] = [:]
+    /// What the groups are called (labels, when there are several).
+    var names: [String: String] = [:]
+    /// The default (or first) group's: the watch is paired while there is one.
+    var config: ServerConfig? { configs[""] ?? groups.first.flatMap { configs[$0] } }
+    /// The groups, the default one first.
+    var groups: [String] { configs.keys.sorted { ($0.isEmpty ? 0 : 1, $0) < ($1.isEmpty ? 0 : 1, $1) } }
     var sessions: [Session] = []
     var interactions: [Interaction] = []
     /// The inbox's 需要你 (Feishu messages and mail the AI says need the user), newest first.
@@ -28,18 +37,31 @@ final class WatchModel {
     var error: String?
     var lastUpdate: Date?
 
-    var api: APIClient? { config.map { APIClient(config: $0) } }
+    /// The default (or first) group's client: the inbox (each hub has its own; the watch shows the first group's).
+    var api: APIClient? { groups.first.flatMap { api($0) } }
+    /// A group's client.
+    func api(_ group: String) -> APIClient? { configs[group].map { APIClient(config: $0, group: group) } }
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: "config"), let c = try? JSONDecoder().decode(ServerConfig.self, from: data) {
-            config = c
+        if let data = UserDefaults.standard.data(forKey: "configs"), let all = try? JSONDecoder().decode(WatchConfigs.self, from: data) {
+            (configs, names) = (all.configs, all.names)
+        } else if let data = UserDefaults.standard.data(forKey: "config"), let c = try? JSONDecoder().decode(ServerConfig.self, from: data) {
+            configs = ["": c]
         }
         #if DEBUG
-        if let s = UserDefaults.standard.string(forKey: "pairURL"), let c = ServerConfig(pairURL: s) { config = c }
+        if let s = UserDefaults.standard.string(forKey: "pairURL"), let c = ServerConfig(pairURL: s) { configs = ["": c] }
         #endif
         WatchSync.shared.onConfig = { [weak self] c in
-            self?.config = c
+            self?.configs = ["": c]
+            self?.names = [:]
             UserDefaults.standard.set(try? JSONEncoder().encode(c), forKey: "config")
+            UserDefaults.standard.removeObject(forKey: "configs")
+            Task { await self?.refresh() }
+        }
+        WatchSync.shared.onConfigs = { [weak self] all in
+            self?.configs = all.configs
+            self?.names = all.names
+            UserDefaults.standard.set(try? JSONEncoder().encode(all), forKey: "configs")
             Task { await self?.refresh() }
         }
         WatchSync.shared.onSummary = { [weak self] s in
@@ -53,7 +75,7 @@ final class WatchModel {
     }
 
     private func apply(sessions: [Session], interactions: [Interaction], machines: [Machine]) {
-        let hadNew = interactions.contains { ix in !self.interactions.contains { $0.id == ix.id } }
+        let hadNew = interactions.contains { ix in !self.interactions.contains { $0.uid == ix.uid } }
         func rank(_ s: Session) -> Int { s.state.priority }
         self.sessions = sessions.filter { $0.state.isLive && !$0.assistant || $0.state == .needsYou || $0.state == .working }
             .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0.sortDate > $1.sortDate }
@@ -70,20 +92,29 @@ final class WatchModel {
         if hadNew { WKInterfaceDevice.current().play(.notification) }
     }
 
+    /// Every group's agents, requests and machines (each group's hub answers for its own), merged.
     func refresh() async {
-        guard let api else { return }
-        do {
-            async let s = api.sessions()
-            async let i = api.interactions()
-            async let m = api.machines()
-            async let x = api.inbox()
-            let (ss, ii, mm) = try await (s, i, m)
-            apply(sessions: ss, interactions: ii, machines: mm)
-            if let xx = try? await x { applyInbox(xx) }
-            error = nil
-        } catch {
-            self.error = error.watchShown
+        guard let first = api else { return }
+        var ss: [Session] = [], ii: [Interaction] = [], mm: [Machine] = []
+        var failure: Error?
+        let multi = configs.count > 1
+        for g in groups {
+            guard let api = api(g) else { continue }
+            do {
+                async let s = api.sessions()
+                async let i = api.interactions()
+                async let m = api.machines()
+                let (a, b, c) = try await (s, i, m)
+                ss += a
+                ii += b
+                mm += multi ? c.map { var m = $0; m.groupLabel = names[g] ?? g; return m } : c
+            } catch {
+                failure = error
+            }
         }
+        if failure == nil || !ss.isEmpty || !mm.isEmpty { apply(sessions: ss, interactions: ii, machines: mm) }
+        if let xx = try? await first.inbox() { applyInbox(xx) }
+        error = failure.flatMap { ss.isEmpty && mm.isEmpty ? $0.watchShown : nil }
     }
 
     private func poll() async {
@@ -94,10 +125,11 @@ final class WatchModel {
     }
 
     func resolve(_ ix: Interaction, _ r: Resolution) async {
-        guard sessions.first(where: { $0.key == ix.sessionKey })?.canApprove == true, let api else { return }
+        // To the hub of the interaction's own group.
+        guard sessions.first(where: { $0.key == ix.sessionKey })?.canApprove == true, let api = api(ix.group) else { return }
         do {
             try await api.resolve(ix.id, r)
-            interactions.removeAll { $0.id == ix.id }
+            interactions.removeAll { $0.uid == ix.uid }
             WKInterfaceDevice.current().play(.success)
         } catch {
             self.error = error.watchShown
@@ -106,7 +138,7 @@ final class WatchModel {
     }
 
     func send(_ key: SessionKey, _ text: String) async {
-        guard sessions.first(where: { $0.key == key })?.canSend == true, let api else { return }
+        guard sessions.first(where: { $0.key == key })?.canSend == true, let api = api(key.group) else { return }
         do {
             try await api.send(key, text: text)
             WKInterfaceDevice.current().play(.success)
@@ -144,11 +176,11 @@ final class WatchModel {
 
     func interrupt(_ key: SessionKey) async {
         guard sessions.first(where: { $0.key == key })?.canInterrupt == true else { return }
-        try? await api?.interrupt(key)
+        try? await api(key.group)?.interrupt(key)
         WKInterfaceDevice.current().play(.stop)
     }
 
-    func machine(_ id: String) -> Machine? { machines.first { $0.id == id } }
+    func machine(_ ref: MachineRef) -> Machine? { machines.first { $0.ref == ref } }
 }
 
 struct WatchRootView: View {
@@ -183,7 +215,7 @@ struct WatchRootView: View {
                     }.watchCard()
                     if !model.interactions.isEmpty || !model.inbox.isEmpty, !Self.runningFirst {
                         Section("需要你") {
-                            ForEach(Self.inboxFirst ? [] : model.interactions) { ix in
+                            ForEach(Self.inboxFirst ? [] : model.interactions, id: \.uid) { ix in
                                 NavigationLink { WatchInteractionView(interaction: ix) } label: {
                                     VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
                                         Label(ix.kind.watchTitle, systemImage: ix.kind.watchSymbol)
@@ -241,7 +273,7 @@ struct WatchRootView: View {
                                     VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
                                         Text(s.displayTitle).font(.headline).lineLimit(2)
                                         Text([s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ").isEmpty
-                                             ? (model.machine(s.machineID)?.name ?? s.machineID)
+                                             ? (model.machine(s.machineRef)?.title ?? s.machineID)
                                              : [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › "))
                                             .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                                     }
@@ -506,7 +538,7 @@ struct WatchSessionView: View {
         }
         .navigationTitle(session.displayTitle)
         .task {
-            try? await model.api?.post("/api/v1/sessions/\(session.machineID)/\(session.sessionID)/seen")
+            try? await model.api(session.group)?.post("/api/v1/sessions/\(session.machineID)/\(session.sessionID)/seen")
         }
         .task(id: session.rev) { await load() }
         // The model refreshes every 8 s while the app is active; a session without a rev (older hub) still reloads.
@@ -514,7 +546,7 @@ struct WatchSessionView: View {
     }
 
     private func load() async {
-        guard let api = model.api, let res = try? await api.items(session.key, beforeSeq: nil, turns: 2) else { return }
+        guard let api = model.api(session.group), let res = try? await api.items(session.key, beforeSeq: nil, turns: 2) else { return }
         items = res.items.filter { $0.kind == .text && !WatchText.shown($0.text ?? "").isEmpty }
     }
 }

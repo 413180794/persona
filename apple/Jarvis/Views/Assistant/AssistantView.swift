@@ -546,7 +546,7 @@ struct StarterComposer: View {
                 } modes: {
                     StarterModesMenu(modes: shell, launchers: launchers)
                 }
-                .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID))?.filter(\.runsAssistant) ?? [] }
+                .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID)))?.filter(\.runsAssistant) ?? [] }
             } else {
                 ComposerRow(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
                             send: submit) {
@@ -558,14 +558,14 @@ struct StarterComposer: View {
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
-            uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
+            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         }
         #if os(macOS)
         // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
         .macComposerFiles(images: images.count, focused: focused, attach: { MacDrop.append($0, to: &images) }, upload: { urls in
-            uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
+            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         })
@@ -656,19 +656,19 @@ struct BeautifulStarterComposer: View {
                            })
         }
         // Again once the hub is paired: on a fresh launch the first try runs before there is one.
-        .task(id: launcherMachine) { launchers = (try? await model.launchers(launcherMachine)) ?? [] }
+        .task(id: launcherMachine) { launchers = (try? await model.launchers(model.hubRef(launcherMachine))) ?? [] }
         .recordingContextSheet(isPresented: $showRecording) { quotes.append($0) }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
-            uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
+            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         }
         #if os(macOS)
         // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
         .macComposerFiles(images: images.count, focused: focused, attach: { MacDrop.append($0, to: &images) }, upload: { urls in
-            uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
+            uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         })
@@ -791,7 +791,7 @@ struct StarterModelChip: View {
         } label: {
             ModeChip(symbol: Theme.Icon.model, text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
         }
-        .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID)) ?? [] }
+        .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID))) ?? [] }
     }
 }
 

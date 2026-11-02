@@ -127,7 +127,7 @@ private struct SiblingList: View {
     /// Where a new tab goes: the space this chat is in (its machine, directory and herdr workspace).
     private var preset: SpacePreset? {
         guard let s = space, let ws = s.spaceID else { return nil }
-        return SpacePreset(machineID: s.machineID, cwd: s.cwd, workspaceID: ws, spaceName: s.spaceName ?? "")
+        return SpacePreset(machineID: s.machineRef.path, cwd: s.cwd, workspaceID: ws, spaceName: s.spaceName ?? "")
     }
 
     var body: some View {
@@ -224,10 +224,10 @@ struct SpaceView: View {
                 if let first {
                     HStack(spacing: Theme.Space.s) {
                         // The machine opens its own list of projects.
-                        NavigationLink(value: MachineRoute(id: first.machineID)) {
+                        NavigationLink(value: MachineRoute(first.machineRef)) {
                             HStack(spacing: Theme.Space.sm) {
-                                Image(systemName: model.machine(first.machineID)?.symbol ?? Theme.Icon.machine)
-                                Text(model.machine(first.machineID)?.name ?? first.machineID).lineLimit(1)
+                                Image(systemName: model.machine(first.machineRef)?.symbol ?? Theme.Icon.machine)
+                                Text(model.machine(first.machineRef)?.title ?? first.machineID).lineLimit(1)
                                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelHeavy)
                             }
                             .fontWeight(.semibold)
@@ -239,8 +239,8 @@ struct SpaceView: View {
                         }
                         .buttonStyle(.plain)
                         .layoutPriority(1)
-                        .accessibilityLabel("\(model.machine(first.machineID)?.name ?? first.machineID) 上的所有项目")
-                        Text(Fmt.path(first.cwd, home: model.machine(first.machineID)?.home)).lineLimit(1).truncationMode(.head)
+                        .accessibilityLabel("\(model.machine(first.machineRef)?.title ?? first.machineID) 上的所有项目")
+                        Text(Fmt.path(first.cwd, home: model.machine(first.machineRef)?.home)).lineLimit(1).truncationMode(.head)
                     }
                     .font(Theme.Font.caption)
                     .foregroundStyle(.secondary)
@@ -285,7 +285,7 @@ struct SpaceView: View {
         }
         .sheet(isPresented: $showNew) {
             if let first, let ws = first.spaceID {
-                NewChatView(preset: SpacePreset(machineID: first.machineID, cwd: first.cwd, workspaceID: ws, spaceName: first.spaceName ?? "")) { s in
+                NewChatView(preset: SpacePreset(machineID: first.machineRef.path, cwd: first.cwd, workspaceID: ws, spaceName: first.spaceName ?? "")) { s in
                     showNew = false
                     started = s.key
                 }

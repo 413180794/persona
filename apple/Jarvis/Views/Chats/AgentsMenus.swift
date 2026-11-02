@@ -10,13 +10,15 @@ import SwiftUI
 
 /// A machine as the ⋯ menu shows it: not its live state (last seen, online), which changes with every push.
 nonisolated struct MachineChoice: Equatable, Identifiable {
+    /// `MachineRef.path`: the machine id, "group|id" for another group of hubs (what the filter remembers).
     var id: String
+    /// With several groups, with the group's name (`Machine.title`).
     var name: String
     var symbol: String
 
     @MainActor init(_ m: Machine) {
-        id = m.id
-        name = m.name
+        id = m.ref.path
+        name = m.title
         symbol = m.symbol
     }
 }
@@ -51,6 +53,7 @@ struct AgentsListMenu: View {
     }
 
     @AppStorage("dev.machineFilter") private var machineFilter = ""
+    @AppStorage(HubFilter.key) private var hubFilter = ""
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
     @AppStorage("dev.compact") private var compact = false
 
@@ -61,11 +64,13 @@ struct AgentsListMenu: View {
         // Only the machines' names and icons: not their live state, which changes with every push.
         let machines = model.machineChoices
         let chosen = machines.first { $0.id == machineFilter }
+        let hub = model.isMultiHub ? HubFilter.group(hubFilter).map { model.groupName($0) } : nil
         if inline {
             items(machines)
         } else {
-            Menu { items(machines) } label: { label(chosen) }
-                .accessibilityLabel((chosen.map { "当前机器：\($0.name)，" } ?? "") + "分组：" + grouping.title)
+            Menu { items(machines) } label: { label(chosen, hub: hub) }
+                .accessibilityLabel((hub.map { "当前 hub：\($0)，" } ?? "") + (chosen.map { "当前机器：\($0.name)，" } ?? "")
+                                    + "分组：" + grouping.title)
         }
     }
 
@@ -88,9 +93,18 @@ struct AgentsListMenu: View {
                     withAnimation(Theme.Motion.standard) { actions.expand() }
                 } label: { Label("全部展开", systemImage: "rectangle.expand.vertical") }
             }
+            if model.isMultiHub {
+                // Several groups of hubs (docs/multi-hub.md「按组筛选」): one group's agents only.
+                Picker("hub", selection: Binding(get: { hubFilter }, set: { hubFilter = $0; machineFilter = "" })) {
+                    Label("全部 hub", systemImage: Theme.Icon.hubGroup).tag("")
+                    ForEach(model.groupIDs, id: \.self) { g in
+                        Label(model.groupName(g), systemImage: Theme.Icon.hubGroup).tag(HubFilter.value(g))
+                    }
+                }
+            }
             Picker("机器", selection: $machineFilter) {
                 Label("全部机器", systemImage: "square.grid.2x2").tag("")
-                ForEach(machines) { m in
+                ForEach(machines.filter { m in HubFilter.matches(hubFilter, MachineRef(path: m.id).group) }) { m in
                     Label(m.name, systemImage: m.symbol).tag(m.id)
                 }
             }
@@ -101,11 +115,20 @@ struct AgentsListMenu: View {
             }
     }
 
-    @ViewBuilder private func label(_ chosen: MachineChoice?) -> some View {
+    @ViewBuilder private func label(_ chosen: MachineChoice?, hub: String?) -> some View {
             if let m = chosen {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: m.symbol)
                     Text(m.name).lineLimit(1)
+                    Image(systemName: Theme.Icon.expand).font(Theme.Font.labelHeavy)
+                }
+                .font(Theme.Font.secondaryStrong)
+                .fixedSize()
+            } else if let hub {
+                // One group of hubs shown (several groups): its name in the corner, like a machine's.
+                HStack(spacing: Theme.Space.sm) {
+                    Image(systemName: Theme.Icon.hubGroup)
+                    Text(hub).lineLimit(1)
                     Image(systemName: Theme.Icon.expand).font(Theme.Font.labelHeavy)
                 }
                 .font(Theme.Font.secondaryStrong)
@@ -171,7 +194,7 @@ struct AgentRowMenu: View, Equatable {
         }
         Button {
             guard let s = now() else { return }
-            Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineID)?.name)) }
+            Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
         } label: {
             Label("交给 Jarvis", systemImage: Theme.Icon.ai)
         }

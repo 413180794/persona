@@ -98,7 +98,12 @@ struct InboxPage: View {
                 .searchable(text: $query, prompt: "搜索标题、发件人、内容")
                 .toolbar {
                     ToolbarItem(placement: .principal) { ConnectionTitle(title: "收件箱") }
+                    if model.isMultiHub {
+                        // Each hub has its own inbox (docs/multi-hub.md「hub 级页面」): whose this is, and the others.
+                        ToolbarItem(placement: .topBarLeading) { HubSwitcher(compact: true) }
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
+
                         // Mail accounts are managed in 设置 › 连接器 › 邮箱 (2026-11-01, with this device's data and 飞书).
                         Menu {
                             Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: Theme.Icon.compose) }
@@ -210,7 +215,7 @@ struct InboxPage: View {
 
     private func agentRow(_ ix: Interaction) -> some View {
         Button { open(ix) } label: {
-            InboxAgentRow(interaction: ix, machine: model.machine(ix.machineID), machineName: model.machine(ix.machineID)?.name ?? ix.machineID)
+            InboxAgentRow(interaction: ix, machine: model.machine(ix.machineRef), machineName: model.machine(ix.machineRef)?.title ?? ix.machineID)
         }
         .buttonStyle(.plain)
         .modifier(InboxRowLook())
@@ -218,13 +223,7 @@ struct InboxPage: View {
 
     /// The agent's chat (the assistant's in 对话), where the question / plan / approval waits.
     private func open(_ ix: Interaction) {
-        if model.session(ix.sessionKey)?.assistant == true {
-            model.assistantCurrent = ix.sessionKey
-            model.selectedTab = .assistant
-        } else {
-            model.openChat = ix.sessionKey
-            model.selectedTab = .chats
-        }
+        model.open(ix.sessionKey) // in its own group (another group's Jarvis: that group's)
     }
 
     private func row(_ it: InboxItem) -> some View {

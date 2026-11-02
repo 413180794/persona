@@ -15,9 +15,9 @@ struct JarvisStatusIntent: AppIntent {
 
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
         do {
-            let api = try IntentSupport.client()
-            async let sessionsRequest = api.sessions()
-            async let interactionsRequest = api.interactions()
+            // Every group added up (docs/multi-hub.md「Siri」).
+            async let sessionsRequest = IntentSupport.sessions()
+            async let interactionsRequest = IntentSupport.interactions()
             let sessions = try await sessionsRequest
             let interactions = try await interactionsRequest
             let text = IntentText.status(

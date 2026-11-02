@@ -201,6 +201,7 @@ final class MacInboxState {
     /// The agent's chat (the assistant's in Jarvis), where the question / plan / approval waits.
     func open(_ ix: Interaction, model: AppModel) {
         if model.session(ix.sessionKey)?.assistant == true {
+            model.selectHub(ix.group)
             model.assistantCurrent = ix.sessionKey
             model.selectedTab = .assistant
         } else {

@@ -4,7 +4,12 @@ import SwiftUI
 /// (SessionKey): a page pushed with `NavigationLink { … }` that pushes by value puts the new page *under* itself, so a
 /// tap seemed to do nothing (设置 › 机器 › a card; 机器详情 › an agent). Every stack that shows them registers both.
 struct MachineListRoute: Hashable {}
-struct MachineDetailRoute: Hashable { var id: String }
+struct MachineDetailRoute: Hashable {
+    var ref: MachineRef
+    init(_ ref: MachineRef) { self.ref = ref }
+    /// A machine of the default group, or "group|id" (launch arguments).
+    init(id: String) { ref = MachineRef(path: id) }
+}
 
 /// What brings a machine to the top of 机器 (docs/machines.md「App」), most pressing first: it is offline, a value is
 /// too high, an agent there needs you, its jarvisd is not the hub's build.
@@ -57,33 +62,32 @@ struct AgentTally: Equatable {
 struct MachinesView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var phase
-    @State private var metrics: [String: MachineMetrics] = [:]
-    /// The hub keeps no metrics (404: before machine monitoring): the cards have no CPU / memory / network.
-    @State private var unmonitored = false
+    @State private var metrics: [MachineRef: MachineMetrics] = [:]
+    /// The groups whose hub keeps no metrics (404: before machine monitoring): their cards have no CPU / memory / network.
+    @State private var unmonitoredGroups = Set<String>()
+    private var unmonitored: Bool { !unmonitoredGroups.isEmpty && unmonitoredGroups.count >= model.groupIDs.count }
 
     var body: some View {
         let machines = model.machines
-        let tallies = Dictionary(machines.map { ($0.id, AgentTally(MachineDetailView.agents(model, $0.id))) }, uniquingKeysWith: { a, _ in a })
-        let alerts = Dictionary(machines.map { ($0.id, alertLevel($0)) }, uniquingKeysWith: { a, _ in a })
-        let ordered = MachineConcern.ordered(machines) { m in
-            MachineConcern.of(m, alert: alerts[m.id] ?? .normal, waiting: tallies[m.id]?.needsYou ?? 0)
-        }
+        let tallies = Dictionary(machines.map { ($0.ref, AgentTally(MachineDetailView.agents(model, $0.ref))) }, uniquingKeysWith: { a, _ in a })
+        let alerts = Dictionary(machines.map { ($0.ref, alertLevel($0)) }, uniquingKeysWith: { a, _ in a })
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.m) {
                 if !machines.isEmpty {
                     summary(machines, alerts: alerts.values.filter { $0 > .normal }, waiting: tallies.values.reduce(0) { $0 + $1.needsYou })
                 }
-                // Top-aligned: an offline card is shorter than its neighbour and would float in the middle of the row.
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Size.cardColumn), spacing: Theme.Space.m, alignment: .top)],
-                          spacing: Theme.Space.m) {
-                    ForEach(ordered) { m in
-                        NavigationLink(value: MachineDetailRoute(id: m.id)) {
-                            MachineCard(machine: m, tally: tallies[m.id], metrics: metrics[m.id], showsMetrics: !unmonitored)
+                if model.isMultiHub {
+                    // Several groups of hubs: one block each, under its name (docs/multi-hub.md).
+                    ForEach(model.groupIDs, id: \.self) { g in
+                        let mine = machines.filter { $0.group == g }
+                        if !mine.isEmpty {
+                            groupHeader(g, machines: mine)
+                            grid(mine, tallies: tallies, alerts: alerts)
                         }
-                        .buttonStyle(.plain)
                     }
+                } else {
+                    grid(machines, tallies: tallies, alerts: alerts)
                 }
-                .animation(Theme.Motion.layout, value: ordered.map(\.id))
                 if machines.isEmpty {
                     EmptyStateView(symbol: Theme.Icon.machines, title: "还没有机器", message: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。")
                 } else if !unmonitored {
@@ -119,9 +123,41 @@ struct MachinesView: View {
         }
     }
 
+    /// The cards, what needs a look first.
+    private func grid(_ machines: [Machine], tallies: [MachineRef: AgentTally], alerts: [MachineRef: MetricLevel]) -> some View {
+        let ordered = MachineConcern.ordered(machines) { m in
+            MachineConcern.of(m, alert: alerts[m.ref] ?? .normal, waiting: tallies[m.ref]?.needsYou ?? 0)
+        }
+        // Top-aligned: an offline card is shorter than its neighbour and would float in the middle of the row.
+        return LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Size.cardColumn), spacing: Theme.Space.m, alignment: .top)],
+                         spacing: Theme.Space.m) {
+            ForEach(ordered, id: \.ref) { m in
+                NavigationLink(value: MachineDetailRoute(m.ref)) {
+                    MachineCard(machine: m, tally: tallies[m.ref], metrics: metrics[m.ref], showsMetrics: !unmonitoredGroups.contains(m.group))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .animation(Theme.Motion.layout, value: ordered.map(\.ref))
+    }
+
+    /// A group's name over its cards, with how its link is and how many of its machines are online.
+    private func groupHeader(_ group: String, machines: [Machine]) -> some View {
+        HStack(spacing: Theme.Space.sm) {
+            if let live = model.socket(group) { HubStatusDot(live: live) }
+            Text(model.groupName(group)).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
+            Text("\(machines.filter(\.online).count)/\(machines.count)").font(Theme.Font.label).foregroundStyle(.tertiary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Theme.Space.xs)
+        .padding(.top, Theme.Space.s)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("machines.group.\(group)")
+    }
+
     /// The worst of a machine's latest values; normal while it is offline or has sent nothing lately.
     private func alertLevel(_ m: Machine) -> MetricLevel {
-        guard m.online, let mm = metrics[m.id], let s = mm.latest else { return .normal }
+        guard m.online, let mm = metrics[m.ref], let s = mm.latest else { return .normal }
         return MetricAlert.of(s, cores: (mm.system ?? m.system)?.cores).first?.level ?? .normal
     }
 
@@ -148,19 +184,25 @@ struct MachinesView: View {
         .padding(.horizontal, Theme.Space.xs)
     }
 
+    /// Every group's metrics (each hub keeps its own machines').
     private func loadMetrics() async {
-        guard let api = model.api else { return }
-        do {
-            let fresh = try await api.metricsOverview()
-            metrics = Dictionary(fresh.map { ($0.machineID, $0) }, uniquingKeysWith: { a, _ in a })
-            unmonitored = false
-        } catch {
-            if error.isCancellation { return }
-            // A hub before machine monitoring: the cards go without numbers. Other errors keep the last numbers (the
-            // title says when the hub is out of reach).
-            if let e = error as? APIError, e.status == 404 { unmonitored = true }
+        for g in model.groupIDs {
+            guard let api = model.api(g) else { continue }
+            do {
+                let fresh = try await api.metricsOverview()
+                var all = metrics.filter { $0.key.group != g }
+                for m in fresh where all[MachineRef(group: g, id: m.machineID)] == nil { all[MachineRef(group: g, id: m.machineID)] = m }
+                metrics = all
+                unmonitoredGroups.remove(g)
+            } catch {
+                if error.isCancellation { return }
+                // A hub before machine monitoring: the cards go without numbers. Other errors keep the last numbers (the
+                // title says when the hub is out of reach).
+                if let e = error as? APIError, e.status == 404 { unmonitoredGroups.insert(g) }
+            }
         }
     }
+
 }
 
 struct DotLabel: LabelStyle {
@@ -206,7 +248,7 @@ struct MachineCard: View {
                 }
             }
             if machine.online {
-                AgentCounts(tally: tally ?? AgentTally(MachineDetailView.agents(model, machine.id)))
+                AgentCounts(tally: tally ?? AgentTally(MachineDetailView.agents(model, machine.ref)))
                 if showsMetrics { metricsRow(sample) }
             } else if let err = machine.error, !err.isEmpty {
                 Text(err).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)

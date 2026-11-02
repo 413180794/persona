@@ -21,8 +21,8 @@ struct RootView: View {
         let _ = PerfTrace.body("RootView")
         #endif
         Group {
-            if let id = model.pairingEngineMachineID {
-                PairingEngineView(machineID: id)
+            if let ref = model.pairingEngineMachine {
+                PairingEngineView(ref: ref)
             } else if model.isPaired {
                 #if os(iOS)
                 if usesShell { ShellView() } else { RootTabs() }

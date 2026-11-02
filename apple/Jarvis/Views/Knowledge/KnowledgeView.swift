@@ -516,7 +516,7 @@ struct KnowledgeDetailView: View {
                     Section {
                         ForEach(agents) { s in
                             Button { model.open(s.key) } label: {
-                                SessionRow(session: s, machine: model.machine(s.machineID))
+                                SessionRow(session: s, machine: model.machine(s.machineRef))
                             }
                             .buttonStyle(.plain)
                         }

@@ -12,7 +12,8 @@ final class NotificationService: UNNotificationServiceExtension {
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         self.contentHandler = contentHandler
         fallback = request.content
-        let (content, outcome) = PushCrypto.service(request.content)
+        // Every group of hubs seals to its own key (docs/multi-hub.md「推送」): the one that opens it names the group.
+        let (content, outcome) = PushCrypto.service(request.content, keys: PushCrypto.allKeys)
         // Why a push stayed 「有新消息」 is the first question when one does (no content in the log).
         switch outcome {
         case .notSealed: break

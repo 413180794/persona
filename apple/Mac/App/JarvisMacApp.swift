@@ -84,7 +84,7 @@ extension AppModel {
         }
         #endif
         switch MacOpenURL.route(url) {
-        case .session(let key): MacShellState.shared.open(key, self)
+        case .session(let key): MacShellState.shared.open(resolve(path: key.path) ?? key, self)
         case .pair: openPairing(url)
         case .app, .ignore: break
         }
@@ -200,10 +200,10 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        let key = Self.sessionKey(notification.request.content.userInfo)
+        let ref = PushRef(notification.request.content.userInfo)
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
-            let visible = MainActor.assumeIsolated { AppModel.shared.visibleSession }
+            let (key, visible) = MainActor.assumeIsolated { (ref?.key(AppModel.shared), AppModel.shared.visibleSession) }
             done(key != nil && key == visible ? [] : [.banner, .sound, .list])
         }
     }
@@ -211,18 +211,19 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                             withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
-        let key = Self.sessionKey(info)
+        let ref = PushRef(info)
         let action = response.actionIdentifier
         let text = (response as? UNTextInputNotificationResponse)?.userText
         let ixID = info["interaction_id"] as? String
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
+                // The group the push came from (docs/multi-hub.md「推送」).
+                let key = ref?.key(AppModel.shared)
                 if let ixID, let resolution = NotificationActions.resolution(action: action, text: text) {
                     Task {
                         do {
-                            guard let config = Keychain.serverConfig else { throw IntentFailure.notPaired }
-                            try await APIClient(config: config).resolve(ixID, resolution)
+                            try await HubStore.client(group: key?.group).resolve(ixID, resolution)
                         } catch {
                             await NotificationActions.reportFailure(id: ixID, title: NotificationActions.failureTitle(action: action), error: error)
                         }
@@ -239,11 +240,6 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
     }
 
-    nonisolated static func sessionKey(_ info: [AnyHashable: Any]) -> SessionKey? {
-        guard let machine = info["machine_id"] as? String, let session = info["session_id"] as? String,
-              !machine.isEmpty, !session.isEmpty else { return nil }
-        return SessionKey(machineID: machine, sessionID: session)
-    }
 }
 
 #if DEBUG
@@ -255,15 +251,15 @@ enum MacLaunchArguments {
         let d = UserDefaults.standard
         let model = AppModel.shared
         if let s = d.string(forKey: "pairURL"), let cfg = ServerConfig(pairURL: s) {
-            Keychain.serverConfig = cfg
-            model.adopt(cfg)
+            let more = ["pairURL2", "pairURL3"].compactMap { d.string(forKey: $0).flatMap(ServerConfig.init(pairURL:)) }
+            model.adopt([cfg] + more)
             // Snapshots skip the keychain (Keychain.load), so AppModel.init saw no config and left the outbox on disk:
             // bring it back as a launch with a stored pairing does (it skips messages already there).
             model.restoreOutbox()
         }
         if d.bool(forKey: "openChatsFresh") { ChatCache.removeAll() }
         if d.bool(forKey: "openAgentsFresh") {
-            for k in ["dev.machineFilter", "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
+            for k in ["dev.machineFilter", HubFilter.key, "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
         }
         // A tab, a chat or a conversation named on the command line shows that, not the 知识库 / 机器 remembered
         // from last time (MacShell's onChange is not there yet to clear it).
@@ -305,8 +301,9 @@ enum MacLaunchArguments {
         // step reads the machine when it appears).
         if let id = d.string(forKey: "openEngineStep") {
             Task {
-                for _ in 0..<40 where model.machine(id) == nil { try? await Task.sleep(for: .milliseconds(250)) }
-                model.pairingEngineMachineID = id
+                let ref = model.hubRef(id)
+                for _ in 0..<40 where model.machine(ref) == nil { try? await Task.sleep(for: .milliseconds(250)) }
+                model.pairingEngineMachine = ref
             }
         }
         // `-macMenuLog YES`: the Agent menu's items and shortcuts as built for the chat on screen (the 回答 submenu).
@@ -398,10 +395,10 @@ enum MacLaunchArguments {
         }
     }
 
-    /// `<machine>/<session>`.
+    /// `<machine>/<session>`, or `group|machine/session` for another group of hubs.
     private static func sessionKey(_ s: String?) -> SessionKey? {
-        guard let s, let slash = s.firstIndex(of: "/") else { return nil }
-        return SessionKey(machineID: String(s[..<slash]), sessionID: String(s[s.index(after: slash)...]))
+        guard let s else { return nil }
+        return AppModel.shared.resolve(path: s)
     }
 }
 #endif

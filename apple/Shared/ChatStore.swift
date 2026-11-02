@@ -958,8 +958,21 @@ nonisolated enum ChatCache {
     /// The caches folder holding the copies. v2: items carry `wake`; older copies would keep the merged turns until
     /// they scrolled out. v3: notices carry `task` (a page's copy of an item never replaces the cached one: old
     /// notices stayed centered blocks). v4: Codex unknown events are retained and external sources have distinct identities.
-    /// Bump it whenever the item structure changes.
-    static let folder = "chats-v4"
+    /// v5: several groups of hubs (docs/multi-hub.md): the default group's copies at the top, another group's in
+    /// `group-<id>/`. The items did not change, so v4's copies are moved over as they are (`moveOlder`): an upgrade
+    /// keeps the cached chats. Bump it whenever the item structure changes.
+    static let folder = "chats-v5"
+    /// The folder before, whose copies are the default group's (same items, same names).
+    private static let previous = "chats-v4"
+
+    /// Once per launch, before the first copy is read or written (a static let runs once, on whichever thread asks first).
+    private static let moveOlder: Void = {
+        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let old = base.appending(path: previous), new = base.appending(path: folder)
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) else { return }
+        try? fm.moveItem(at: old, to: new)
+    }()
 
     /// Whether a caches folder is one of ChatCache's, this version or an older one ("chats", "chats-v<N>"): what
     /// 设置 › 存储空间 counts under 「Agent 对话」.
@@ -970,10 +983,29 @@ nonisolated enum ChatCache {
         return !version.isEmpty && version.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
+    /// The default group's copies where they always were; another group's in a folder of its own (docs/multi-hub.md:
+    /// the same machine and session ids can be in two groups).
     private static func url(_ key: SessionKey) -> URL? {
-        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        guard let dir = directory(key.group) else { return nil }
         let safe = "\(key.machineID)_\(key.sessionID)".map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }
-        return base.appending(path: folder).appending(path: String(safe) + ".json")
+        return dir.appending(path: String(safe) + ".json")
+    }
+
+    private static func directory(_ group: String) -> URL? {
+        _ = moveOlder
+        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        let dir = base.appending(path: folder)
+        guard !group.isEmpty else { return dir }
+        let safe = group.map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }
+        return dir.appending(path: "group-" + String(safe))
+    }
+
+    /// A group that is gone: its copies go too (the default group's: the files at the top, not the other groups' folders).
+    static func removeGroup(_ group: String) {
+        guard let dir = directory(group) else { return }
+        guard group.isEmpty else { try? FileManager.default.removeItem(at: dir); return }
+        let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+        for f in files where f.pathExtension == "json" { try? FileManager.default.removeItem(at: f) }
     }
 
     static func load(_ key: SessionKey) -> (items: [Item], hasMore: Bool, history: String?, covered: Int?)? {
@@ -983,6 +1015,7 @@ nonisolated enum ChatCache {
     }
 
     static func removeAll() {
+        _ = moveOlder
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
         try? FileManager.default.removeItem(at: base.appending(path: folder))
     }

@@ -16,14 +16,15 @@ struct ApproveFirstIntent: AppIntent {
 
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
         do {
-            let api = try IntentSupport.client()
-            guard let first = IntentPicker.pending(try await api.interactions()) else {
+            // The oldest of every group's, settled at its own group's hub.
+            guard let first = IntentPicker.pending(try await IntentSupport.interactions()) else {
                 throw IntentFailure.noPending
             }
             guard let resolution = Self.resolution(for: first) else {
                 let hint = IntentText.needsApp(first.kind)
                 return .result(value: hint, dialog: IntentSupport.dialog(hint))
             }
+            let api = try IntentSupport.client(group: first.group)
             let sessions = try await api.sessions()
             let session = sessions.first { $0.key == first.sessionKey }
             guard session?.canApprove == true else {

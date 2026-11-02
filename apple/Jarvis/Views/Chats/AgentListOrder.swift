@@ -46,7 +46,7 @@ struct AgentListOrder {
     /// The fold ids of the sections shown now (全部折叠): one per machine with live agents, or one per rank in use.
     func sectionIDs(_ sessions: [Session], byMachine: Bool) -> [String] {
         let live = sessions.filter { $0.state.isLive }
-        if byMachine { return Set(live.map(\.machineID)).map { "machine/" + $0 } }
+        if byMachine { return Set(live.map(\.machineRef.path)).map { "machine/" + $0 } }
         let ranks = Set(live.map(rank))
         return Self.stateKeys.enumerated().filter { ranks.contains($0.offset) }.map { "state/" + $0.element }
     }

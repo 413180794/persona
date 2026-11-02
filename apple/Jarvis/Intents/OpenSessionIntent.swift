@@ -6,24 +6,26 @@ struct SessionEntity: AppEntity, Hashable, Sendable {
     nonisolated static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "会话")
     nonisolated static let defaultQuery = SessionEntityQuery()
 
-    /// `machine/session`: the same shape as the `-openSession` debug switch.
+    /// `machine/session` (`group|machine/session` for another group of hubs): the same shape as `-openSession`.
     var id: String
     var machineID: String
     var sessionID: String
     var title: String
+    var group: String = ""
 
-    nonisolated init(machineID: String, sessionID: String, title: String) {
-        self.id = "\(machineID)/\(sessionID)"
+    nonisolated init(machineID: String, sessionID: String, title: String, group: String = "") {
+        self.id = SessionKey(group: group, machineID: machineID, sessionID: sessionID).path
         self.machineID = machineID
         self.sessionID = sessionID
         self.title = title
+        self.group = group
     }
 
     nonisolated init(_ session: Session) {
-        self.init(machineID: session.machineID, sessionID: session.sessionID, title: session.title)
+        self.init(machineID: session.machineID, sessionID: session.sessionID, title: session.title, group: session.group)
     }
 
-    var key: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
+    var key: SessionKey { SessionKey(group: group, machineID: machineID, sessionID: sessionID) }
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(title.isEmpty ? sessionID : title)", subtitle: "\(machineID)")
@@ -46,7 +48,7 @@ struct SessionEntityQuery: EntityQuery {
 
     private static func all() async throws -> [SessionEntity] {
         do {
-            return try await IntentSupport.client().sessions().map(SessionEntity.init)
+            return try await IntentSupport.sessions().map(SessionEntity.init)
         } catch {
             throw IntentFailureSentence(IntentFailure.sentence(for: error, host: IntentSupport.host()))
         }
@@ -69,7 +71,7 @@ struct OpenSessionIntent: OpenIntent {
         let key = target.key
         await MainActor.run {
             AppModel.shared.selectedTab = .chats
-            AppModel.shared.openChat = key
+            AppModel.shared.openChat = AppModel.shared.resolve(path: key.path) ?? key
         }
         return .result()
     }

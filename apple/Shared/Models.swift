@@ -29,11 +29,24 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var system: MachineSystem?
     var engine: MachineEngine = .herdr
     var engines: [DetectedEngine] = []
+    /// Hub mesh (docs/plan-hub-mesh.md 2.6): the hub that owns the computer in its group, its name, the computer's own
+    /// id across hubs, and how the hub reaches it. nil from hubs before the mesh.
+    var hubID: String? = nil
+    var hubName: String? = nil
+    var machineUID: String? = nil
+    var route: MachineHubRoute? = nil
+    /// The group of paired hubs this machine came from (docs/multi-hub.md); nil for the default group. The app's own,
+    /// never sent by a hub.
+    var hubGroup: String? = nil
+    /// With several groups, the group's name, for lists to say where a machine is (`title`); nil with one group.
+    var groupLabel: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines
+        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines, route
         case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
         case nodeMismatch = "node_mismatch", nodeVersion = "node_version", deploying, deployError = "deploy_error"
+        case hubID = "hub_id", hubName = "hub_name", machineUID = "machine_uid", hubGroup = "app_hub_group",
+             groupLabel = "app_group_label"
     }
 
     var symbol: String {
@@ -70,8 +83,75 @@ extension Machine {
         system = try c.decodeIfPresent(MachineSystem.self, forKey: .system)
         engine = try c.decodeIfPresent(MachineEngine.self, forKey: .engine) ?? .herdr
         engines = try c.decodeIfPresent([DetectedEngine].self, forKey: .engines) ?? []
+        hubID = try? c.decodeIfPresent(String.self, forKey: .hubID)
+        hubName = try? c.decodeIfPresent(String.self, forKey: .hubName)
+        machineUID = try? c.decodeIfPresent(String.self, forKey: .machineUID)
+        route = try? c.decodeIfPresent(MachineHubRoute.self, forKey: .route)
+        hubGroup = try c.decodeIfPresent(String.self, forKey: .hubGroup)
+        groupLabel = try? c.decodeIfPresent(String.self, forKey: .groupLabel)
     }
 }
+
+/// How the hub the app is connected to reaches a machine (docs/plan-hub-mesh.md 2.6): directly (`local`, `ssh`,
+/// `tailcat`, `link`) or through another hub of its group (`peer`, `hops` links away).
+nonisolated struct MachineHubRoute: Codable, Hashable, Sendable {
+    var via: String
+    var hops: Int = 0
+    var rttMS: Int? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case via, hops
+        case rttMS = "rtt_ms"
+    }
+
+    init(via: String, hops: Int = 0, rttMS: Int? = nil) {
+        self.via = via
+        self.hops = hops
+        self.rttMS = rttMS
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        via = (try? c.decodeIfPresent(String.self, forKey: .via)) ?? ""
+        hops = (try? c.decodeIfPresent(Int.self, forKey: .hops)) ?? 0
+        rttMS = try? c.decodeIfPresent(Int.self, forKey: .rttMS)
+    }
+}
+
+nonisolated extension Machine {
+    /// The group it came from ("" = the default group).
+    var group: String {
+        get { hubGroup ?? "" }
+        set { hubGroup = newValue.isEmpty ? nil : newValue }
+    }
+    /// Which machine across groups: the same machine id can be in two groups.
+    var ref: MachineRef { MachineRef(group: group, id: id) }
+    /// What lists call it: its name, and with several groups the group's ("MacBook · 公司").
+    var title: String { groupLabel.map { "\(name) · \($0)" } ?? name }
+}
+
+/// A machine across groups of hubs (docs/multi-hub.md): its group and the id its hub gives it.
+nonisolated struct MachineRef: Hashable, Sendable, Codable {
+    var group: String
+    var id: String
+
+    init(group: String = "", id: String) {
+        self.group = group
+        self.id = id
+    }
+
+    /// The machine id, or "group|machine id" for another group: what pickers and filters remember.
+    var path: String { group.isEmpty ? id : group + "|" + id }
+
+    init(path: String) {
+        if let bar = path.firstIndex(of: "|") {
+            self.init(group: String(path[..<bar]), id: String(path[path.index(after: bar)...]))
+        } else {
+            self.init(id: path)
+        }
+    }
+}
+
 
 nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseIterable, Identifiable, Sendable {
     var rawValue: String
@@ -270,12 +350,21 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var starting: Bool? = nil
     /// Starting it failed (shown in the chat; sends get the same error).
     var startError: String? = nil
+    /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
+    var hubGroup: String? = nil
 
-    var id: String { machineID + "/" + sessionID }
+    /// Unique across groups; for the default group exactly what it always was.
+    var id: String { (hubGroup.map { $0 + "|" } ?? "") + machineID + "/" + sessionID }
     /// What lists sort by, newest first: a working agent's updated_at moves on every step, so working ones keep
     /// the time they started working and stay put.
     var sortDate: Date { (state == .working ? stateSince : nil) ?? updatedAt ?? .distantPast }
-    var key: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
+    var key: SessionKey { SessionKey(group: group, machineID: machineID, sessionID: sessionID) }
+    var machineRef: MachineRef { MachineRef(group: group, id: machineID) }
+    /// The group it came from ("" = the default group).
+    var group: String {
+        get { hubGroup ?? "" }
+        set { hubGroup = newValue.isEmpty ? nil : newValue }
+    }
     var folderName: String { (cwd as NSString).lastPathComponent }
 
     var hasSource: Bool { !(sourceKind ?? "").isEmpty }
@@ -330,7 +419,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev, suggestion,
-             starting, startError = "start_error"
+             starting, startError = "start_error", hubGroup = "app_hub_group"
     }
 
     init(from decoder: Decoder) throws {
@@ -384,6 +473,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         suggestion = try c.decodeIfPresent(String.self, forKey: .suggestion)
         starting = try c.decodeIfPresent(Bool.self, forKey: .starting)
         startError = try c.decodeIfPresent(String.self, forKey: .startError)
+        hubGroup = try c.decodeIfPresent(String.self, forKey: .hubGroup)
     }
 }
 
@@ -541,9 +631,43 @@ nonisolated enum AgentState: String, Codable, Sendable, CaseIterable {
     var isLive: Bool { self != .offline }
 }
 
+/// A session across groups of hubs (docs/multi-hub.md): group, machine id, session id. The default group ("") has no
+/// group in its JSON or its string forms, so everything keyed by its sessions stays byte for byte what it was.
 nonisolated struct SessionKey: Hashable, Sendable, Codable {
     var machineID: String
     var sessionID: String
+    /// nil for the default group.
+    var hubGroup: String?
+
+    init(group: String = "", machineID: String, sessionID: String) {
+        self.machineID = machineID
+        self.sessionID = sessionID
+        hubGroup = group.isEmpty ? nil : group
+    }
+
+    var group: String {
+        get { hubGroup ?? "" }
+        set { hubGroup = newValue.isEmpty ? nil : newValue }
+    }
+    var machineRef: MachineRef { MachineRef(group: group, id: machineID) }
+
+    /// "machine/session", or "group|machine/session" for another group: what launch arguments, remembered chats and
+    /// deep links write.
+    var path: String { (hubGroup.map { $0 + "|" } ?? "") + machineID + "/" + sessionID }
+
+    /// Reads `path` back (also the old "machine/session").
+    init?(path: String) {
+        var rest = Substring(path)
+        var group = ""
+        if let bar = rest.firstIndex(of: "|"), rest[..<bar].firstIndex(of: "/") == nil {
+            group = String(rest[..<bar])
+            rest = rest[rest.index(after: bar)...]
+        }
+        guard let slash = rest.firstIndex(of: "/") else { return nil }
+        let machine = String(rest[..<slash]), session = String(rest[rest.index(after: slash)...])
+        guard !machine.isEmpty, !session.isEmpty else { return nil }
+        self.init(group: group, machineID: machine, sessionID: session)
+    }
 }
 
 nonisolated struct ImagePayload: Codable, Hashable, Sendable {
@@ -729,8 +853,18 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var alwaysLabel: String?
     /// What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md).
     var agentLabelHint: String?
+    /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
+    var hubGroup: String?
 
-    var sessionKey: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
+    var sessionKey: SessionKey { SessionKey(group: group, machineID: machineID, sessionID: sessionID) }
+    var machineRef: MachineRef { MachineRef(group: group, id: machineID) }
+
+    var group: String {
+        get { hubGroup ?? "" }
+        set { hubGroup = newValue.isEmpty ? nil : newValue }
+    }
+    /// Unique across groups (`id` is the hub's, what resolve takes); for the default group just `id`.
+    var uid: String { (hubGroup.map { $0 + "|" } ?? "") + id }
 
     /// The dialog to show: the hub's reading, else the app's own (older hubs).
     var screenDialog: ScreenParser.Dialog? { dialog?.parsed ?? screen.flatMap(ScreenParser.dialog) }
@@ -739,7 +873,7 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
         case id, kind, questions, plan, summary, screen, cwd, dialog, secret, fields, agent, reason
         case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title",
              createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
-             toolInput = "tool_input", alwaysLabel = "always_label", agentLabelHint = "agent_label"
+             toolInput = "tool_input", alwaysLabel = "always_label", agentLabelHint = "agent_label", hubGroup = "app_hub_group"
     }
 }
 

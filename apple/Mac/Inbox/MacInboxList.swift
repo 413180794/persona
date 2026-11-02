@@ -162,7 +162,7 @@ struct MacInboxList: View {
     }
 
     private func agentRow(_ ix: Interaction) -> some View {
-        InboxAgentRow(interaction: ix, machine: model.machine(ix.machineID), machineName: model.machine(ix.machineID)?.name ?? ix.machineID)
+        InboxAgentRow(interaction: ix, machine: model.machine(ix.machineRef), machineName: model.machine(ix.machineRef)?.name ?? ix.machineID)
             .tag(MacInboxSelection.agent(ix.id))
             .macHoverRow(.agent(ix.id))
     }

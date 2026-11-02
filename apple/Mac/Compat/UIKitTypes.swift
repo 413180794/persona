@@ -366,3 +366,9 @@ final class UISelectionFeedbackGenerator {
     func prepare() {}
 }
 #endif
+
+extension NSScrollView {
+    /// UIKit's "a finger is on it" (ChatView holds the chat still under one): a Mac scroll view has no touch to hold it,
+    /// and a scroll in progress shows up in the view's own scroll phase.
+    var isTracking: Bool { false }
+}

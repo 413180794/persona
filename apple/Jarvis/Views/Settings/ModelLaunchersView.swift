@@ -22,7 +22,7 @@ struct ModelLaunchersView: View {
     private func matches(_ l: LauncherView) -> Bool {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return true }
-        let machines = (l.machines ?? []).map { model.machine($0)?.name ?? $0 }
+        let machines = (l.machines ?? []).map { model.machine(model.hubRef($0))?.name ?? $0 }
         return ([l.name, l.model ?? "", l.smallModel ?? "", l.baseURL ?? ""] + machines).contains { $0.localizedCaseInsensitiveContains(q) }
     }
 
@@ -167,7 +167,7 @@ struct ModelLaunchersView: View {
 
     private func machineNames(_ l: LauncherView) -> String? {
         guard let ids = l.machines, !ids.isEmpty else { return nil }
-        return ids.map { model.machine($0)?.name ?? $0 }.joined(separator: "、")
+        return ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: "、")
     }
 
     private func load() async {
@@ -226,7 +226,7 @@ struct ModelLauncherDetailView: View {
     private func detailGroups(_ l: LauncherView) -> [DetailGroup] {
         var out: [DetailGroup] = []
         for (id, d) in (l.details ?? [:]).sorted(by: { $0.key < $1.key }) {
-            let name = model.machine(id)?.name ?? id
+            let name = model.machine(model.hubRef(id))?.name ?? id
             if let i = out.firstIndex(where: { $0.detail == d }) {
                 out[i].machines.append(id)
                 out[i].names += "、" + name
@@ -254,7 +254,7 @@ struct ModelLauncherDetailView: View {
                     if l.managed { LabeledContent("API Key", value: l.hasKey == true ? "已设置（不显示）" : "未设置") }
                     if let a = l.args, !a.isEmpty { mono("额外参数", a.joined(separator: " ")) }
                     if let ids = l.machines, !ids.isEmpty {
-                        LabeledContent("电脑", value: ids.map { model.machine($0)?.name ?? $0 }.joined(separator: "、"))
+                        LabeledContent("电脑", value: ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: "、"))
                     }
                 }
                 if l.managed {
@@ -277,7 +277,7 @@ struct ModelLauncherDetailView: View {
                         DisclosureGroup(isExpanded: $showDefinition) {
                             ForEach(defs.sorted(by: { $0.key < $1.key }), id: \.key) { id, def in
                                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                                    if defs.count > 1 { Text(model.machine(id)?.name ?? id).font(Theme.Font.labelStrong).foregroundStyle(.secondary) }
+                                    if defs.count > 1 { Text(model.machine(model.hubRef(id))?.name ?? id).font(Theme.Font.labelStrong).foregroundStyle(.secondary) }
                                     Text(def).font(Theme.Font.code).textSelection(.enabled)
                                 }
                             }
@@ -339,7 +339,7 @@ struct ModelLauncherDetailView: View {
     /// The machines to test on: a ~/.zshrc launcher's own (online ones), a Jarvis one on the hub's machine.
     private func testMachines(_ l: LauncherView) -> [String] {
         if l.managed { return [""] } // the hub picks (the assistant's machine)
-        return (l.machines ?? []).filter { model.machine($0)?.online != false }
+        return (l.machines ?? []).filter { model.machine(model.hubRef($0))?.online != false }
     }
 
     @ViewBuilder private func availability(_ l: LauncherView) -> some View {
@@ -348,7 +348,7 @@ struct ModelLauncherDetailView: View {
         Section {
             ForEach(machines, id: \.self) { id in
                 if let entry = checks[id] {
-                    LauncherCheckRow(machine: id.isEmpty ? nil : (model.machine(id)?.name ?? id), check: entry)
+                    LauncherCheckRow(machine: id.isEmpty ? nil : (model.machine(model.hubRef(id))?.name ?? id), check: entry)
                 }
             }
             Button { Task { await check(machines) } } label: {

@@ -36,8 +36,11 @@ final class WatchSync: NSObject {
     var onSummary: ((WatchSummary) -> Void)?
     var onActivated: (() -> Void)?
     var configProvider: (() -> ServerConfig?)?
+    var configsProvider: (() -> WatchConfigs?)?
 
     func activate() {}
     func push(config: ServerConfig) {}
+    func push(configs: [String: ServerConfig], names: [String: String]) {}
+
     func push(summary: @autoclosure () -> WatchSummary) {}
 }

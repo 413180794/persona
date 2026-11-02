@@ -790,7 +790,7 @@ struct AssistantTaskEditor: View {
 
     private func open(_ key: SessionKey) {
         if creating { dismiss() }
-        model.openAssistantConversation(key)
+        model.openAssistantConversation(model.inHub(key)) // a task's conversation is the hub-level group's Jarvis
     }
 }
 

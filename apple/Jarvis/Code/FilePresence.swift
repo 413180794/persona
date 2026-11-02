@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Where the paths of a conversation are looked up: its machine and working directory (relative paths are in it).
 struct FileScope: Hashable, Sendable {
-    var machine: String
+    /// The machine, in its group of hubs (docs/multi-hub.md).
+    var machine: MachineRef
     var cwd: String
 }
 
@@ -28,6 +29,8 @@ final class FilePresence {
 
     private var known: [Key: Entry] = [:]
     @ObservationIgnored private var waiting: [FileScope: Set<String>] = [:]
+    /// Whom to ask about each scope: its group's hub.
+    @ObservationIgnored private var clients: [FileScope: APIClient] = [:]
     @ObservationIgnored private var flushing: Task<Void, Never>?
 
     /// How long an answer holds: a file that is there stays linked a while; a missing one may be written soon (the
@@ -65,22 +68,26 @@ final class FilePresence {
         }
         guard !stale.isEmpty else { return }
         waiting[scope, default: []].formUnion(stale)
+        clients[scope] = api
         guard flushing == nil else { return }
         flushing = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
-            await self?.flush(api)
+            await self?.flush()
         }
     }
 
-    private func flush(_ api: APIClient) async {
+    private func flush() async {
         let batches = waiting
+        let clients = clients
         waiting = [:]
+        self.clients = [:]
         flushing = nil
         for (scope, paths) in batches {
+            guard let api = clients[scope] else { continue }
             let list = Array(paths)
             for start in stride(from: 0, to: list.count, by: 50) {
                 let chunk = Array(list[start..<min(list.count, start + 50)])
-                let answers = try? await api.stat(machine: scope.machine, paths: chunk, cwd: scope.cwd)
+                let answers = try? await api.stat(machine: scope.machine.id, paths: chunk, cwd: scope.cwd)
                 let now = Date.now
                 for p in chunk {
                     known[Key(scope: scope, path: p)] = Entry(kind: answers?[p] ?? (answers == nil ? nil : .missing), at: now)

@@ -9,10 +9,13 @@ import WatchConnectivity
 // pairing token stays, as before; the next launch tries again.
 
 extension AppModel {
-    static let deviceIDKey = "auth.deviceID"
-
-    /// This phone's device token id; nil while it still uses the pairing token.
-    var deviceID: String? { UserDefaults.standard.string(forKey: Self.deviceIDKey) }
+    /// This device's token id at the hub-level group's hub (设置 › 设备 marks it 本机); nil while it still uses the
+    /// pairing token there. Each paired hub has its own (docs/multi-hub.md).
+    var deviceID: String? {
+        guard let hub else { return nil }
+        let on = hub.config
+        return (registry.hubs.first { $0.group == hub.group && $0.config == on } ?? registry.primary(hub.group))?.deviceID
+    }
 
     /// The kind of this device's own credential at the hub (POST /auth/tokens), shown in 设置 › 设备. A Mac is a
     /// desktop, not the phone (AppModel.registration): the hub keeps it as "other" (full rights, a computer's icon).
@@ -24,39 +27,44 @@ extension AppModel {
         #endif
     }
 
+    /// Every paired hub trades its pairing token for this device's own (each hub separately), and every group gets
+    /// the watch an answer-only one at its first hub.
     func upgradeCredentials() async {
-        guard var cfg = config else { return }
+        guard isPaired, !isDemo else { return }
         #if DEBUG
         if UserDefaults.standard.string(forKey: "pairURL") != nil { return } // simulator runs paired from the command line
         #endif
-        if deviceID == nil {
-            do {
-                let t = try await APIClient(config: cfg).createToken(name: UIDevice.current.name, kind: Self.credentialKind)
-                cfg.token = t.token
-                Keychain.serverConfig = cfg
-                UserDefaults.standard.set(t.id, forKey: Self.deviceIDKey)
-                config = cfg
-                live.disconnect()
-                live.connect(cfg)
-            } catch {
-                return
+        for paired in registry.hubs where paired.deviceID == nil {
+            let old = paired.config
+            guard let t = try? await APIClient(config: old).createToken(name: UIDevice.current.name, kind: Self.credentialKind) else { continue }
+            var cfg = old
+            cfg.token = t.token
+            updateHub(paired.id) { $0.config = cfg; $0.deviceID = t.id }
+            buildLinks()
+            // The group's socket goes on with the new credential if it was on this hub.
+            if let link = link(paired.group), link.live.currentConfig == old || link.live.currentConfig == nil {
+                link.live.disconnect()
+                link.live.connect(cfg)
             }
         }
         #if canImport(WatchConnectivity)
-        if WCSession.isSupported(), WCSession.default.isPaired, WCSession.default.isWatchAppInstalled,
-           Keychain.watchConfig?.url != cfg.url,
-           let t = try? await APIClient(config: cfg).createToken(name: "Apple Watch", kind: "watch") {
-            Keychain.watchConfig = ServerConfig(url: cfg.url, token: t.token)
+        if WCSession.isSupported(), WCSession.default.isPaired, WCSession.default.isWatchAppInstalled {
+            for g in registry.groups {
+                guard let primary = registry.primary(g), primary.watch?.url != primary.config.url,
+                      let t = try? await APIClient(config: primary.config).createToken(name: "Apple Watch", kind: "watch") else { continue }
+                updateHub(primary.id) { $0.watch = ServerConfig(url: primary.config.url, token: t.token) }
+            }
         }
         #endif
-        WatchSync.shared.push(config: Keychain.watchConfig ?? cfg)
+        pushWatchConfigs()
     }
 
+    /// Nothing kept about this device's credentials outside the registry any more (the registry goes with `unpair`).
     func forgetDeviceCredentials() {
-        UserDefaults.standard.removeObject(forKey: Self.deviceIDKey)
-        Keychain.watchConfig = nil
+        UserDefaults.standard.removeObject(forKey: HubStore.legacyDeviceIDKey)
     }
 }
+
 
 /// 设置 › 设备: every device with its own credential, revocable one by one.
 struct DevicesView: View {
@@ -151,7 +159,8 @@ struct DevicesView: View {
         do {
             try await api.revokeToken(t.id)
             Haptics.success()
-            if t.id == current { model.unpair(); return }
+            // This device's own credential at the hub-level group's hub: that group goes (the others stay).
+            if t.id == current { model.removeGroup(model.hub?.group ?? ""); return }
             await load()
         } catch {
             model.show(error)

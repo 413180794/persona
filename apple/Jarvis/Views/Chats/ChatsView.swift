@@ -3,9 +3,12 @@ import SwiftUI
 
 /// Agents that share a space (a herdr workspace, or whatever groups agents in another host) on one machine.
 struct SpaceGroup: Identifiable {
-    var id: String // machineID/spaceID
+    var id: String // machineID/spaceID, "group|machineID/spaceID" for another group of hubs
     var machineID: String
     var spaceID: String
+    /// The group of hubs its machine is in (docs/multi-hub.md); "" = the default group.
+    var group: String = ""
+    var machineRef: MachineRef { MachineRef(group: group, id: machineID) }
     var name: String
     var index: Int
     var sessions: [Session] // in tab order
@@ -24,9 +27,9 @@ struct SpaceGroup: Identifiable {
         var groups: [String: SpaceGroup] = [:]
         for s in sessions where s.state.isLive {
             let spaceID = s.spaceID ?? "-"
-            let key = "\(s.machineID)/\(spaceID)"
+            let key = "\(s.machineRef.path)/\(spaceID)"
             if groups[key] == nil {
-                groups[key] = SpaceGroup(id: key, machineID: s.machineID, spaceID: spaceID,
+                groups[key] = SpaceGroup(id: key, machineID: s.machineID, spaceID: spaceID, group: s.group,
                                          name: s.spaceName ?? s.folderName, index: s.spaceIndex ?? 0, sessions: [])
             }
             groups[key]!.sessions.append(s)
@@ -204,7 +207,7 @@ struct ChatsView: View {
                         if m == "all" { openFromList(MachineListRoute()) } else { openFromList(MachineDetailRoute(id: m)) }
                     }
                     #endif
-                    if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
+                    if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(MachineRef(path: machineFilter)) == nil { machineFilter = "" }
                 }
         } empty: {
             SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
@@ -264,6 +267,8 @@ private struct AgentsList: View {
 
     @State private var searchClose = SearchCloseWatcher()
     @AppStorage("dev.machineFilter") private var machineFilter = ""
+    /// Several groups of hubs: the one the list shows ("" = all; `HubFilter`).
+    @AppStorage(HubFilter.key) private var hubFilter = ""
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
     /// 细列表: one line per agent.
     @AppStorage("dev.compact") private var compact = false
@@ -314,22 +319,23 @@ private struct AgentsList: View {
     /// following the machines while the list was held, was drawn again by the next push, and the `List` measured its
     /// rows anew mid-glide (the content jumped by the difference from its estimate).
     private final class Lookup {
-        var machines: [String: Machine] = [:]
+        var machines: [MachineRef: Machine] = [:]
         var sessions: [SessionKey: Session] = [:]
 
         func update(machines: [Machine], sessions: [Session]) {
-            self.machines = Dictionary(machines.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            self.machines = Dictionary(machines.map { ($0.ref, $0) }, uniquingKeysWith: { a, _ in a })
             self.sessions = Dictionary(sessions.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         }
     }
 
-    private func machine(_ id: String) -> Machine? { lookup.machines[id] }
+    private func machine(_ ref: MachineRef) -> Machine? { lookup.machines[ref] }
     private func session(_ key: SessionKey) -> Session? { lookup.sessions[key] }
 
     /// The agents the machine menu and the search leave.
     private var base: [Session] {
         sessions.filter { s in
-            !s.assistant && (machineFilter.isEmpty || s.machineID == machineFilter) &&
+            !s.assistant && (machineFilter.isEmpty || s.machineRef.path == machineFilter) &&
+            (!model.isMultiHub || HubFilter.matches(hubFilter, s.group)) &&
             (query.isEmpty || [s.title, s.cwd, s.lastText ?? "", s.spaceName ?? "", s.slotName ?? ""]
                 .contains { $0.localizedCaseInsensitiveContains(query) })
         }
@@ -388,11 +394,12 @@ private struct AgentsList: View {
                 + groups.filter { !$0.isQuiet && model.isMuted($0) }
         let quiet = quick != .all ? [] : groups.filter { $0.isQuiet && !(model.isPinned($0) && !model.isMuted($0)) }
         let pinnedAgents = filtered.filter { model.isPinned($0.key) }
-            .map { (session: $0, order: model.pins.sessions.firstIndex(of: AppModel.pinKey(session: $0.key)) ?? 0) }
+            .map { (session: $0, order: model.pinOrder($0.key)) }
             .sorted { $0.order < $1.order }
             .map(\.session)
         let interactions = (feed.following ? feed.interactions : model.pendingInteractions).filter { ix in
-            guard let s = session(ix.sessionKey), !s.assistant, machineFilter.isEmpty || s.machineID == machineFilter else { return false }
+            guard let s = session(ix.sessionKey), !s.assistant, machineFilter.isEmpty || s.machineRef.path == machineFilter,
+                  !model.isMultiHub || HubFilter.matches(hubFilter, s.group) else { return false }
             return quick == .all || quick == .needsYou
         }
         let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
@@ -424,22 +431,24 @@ private struct AgentsList: View {
             #endif
             if !interactions.isEmpty && query.isEmpty {
                 listSection {
-                    ForEach(interactions) { ix in
+                    ForEach(interactions, id: \.uid) { ix in
                         if compact {
                             // 细列表: one row like an agent's; the chat answers it.
                             NavigationLink(value: ix.sessionKey) {
-                                CompactInteractionRow(interaction: ix, machine: machine(ix.machineID)?.name)
+                                CompactInteractionRow(interaction: ix, machine: machine(ix.machineRef)?.title)
                             }
                             .listRowInsets(CompactList.rowInsets)
                             .accessibilityIdentifier("agents.interaction")
                         } else if capsules {
                             // A card of its own on the page, as the agents' capsules.
-                            InteractionPreviewCard(interaction: ix, inCell: false) { openFromList(ix.sessionKey) }
+                            // Several groups of hubs: the card says whose (one group: as it always was, no machine).
+                            InteractionPreviewCard(interaction: ix, machine: model.isMultiHub ? machine(ix.machineRef)?.title : nil,
+                                                   inCell: false) { openFromList(ix.sessionKey) }
                                 .listRowInsets(Self.capsuleInsets)
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                         } else {
-                            InteractionPreviewCard(interaction: ix, machine: machine(ix.machineID)?.name,
+                            InteractionPreviewCard(interaction: ix, machine: machine(ix.machineRef)?.title,
                                                    agentLabel: session(ix.sessionKey)?.agentLabel ?? "Claude", inCell: true) { openFromList(ix.sessionKey) }
                                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 } // rows of different shapes: one line
                         }
@@ -512,7 +521,7 @@ private struct AgentsList: View {
                             )) {
                                 ForEach(g.sessions) { s in slotRow(s) }
                             } label: {
-                                QuietSpaceRow(group: g, machine: machine(g.machineID), showMachine: machineFilter.isEmpty)
+                                QuietSpaceRow(group: g, machine: machine(g.machineRef), showMachine: machineFilter.isEmpty)
                             }
                             }
                         }
@@ -701,7 +710,7 @@ private struct AgentsList: View {
                 .equatable()
         } else {
             SlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil,
-                    machine: context && grouping != .machine && machineFilter.isEmpty ? machine(s.machineID)?.name : nil,
+                    machine: context && grouping != .machine && machineFilter.isEmpty ? machine(s.machineRef)?.title : nil,
                     hideState: inStateSection, surface: cardLast.map { .cardRow(last: $0) } ?? .capsule, time: time)
                 .equatable()
         }
@@ -748,7 +757,7 @@ private struct AgentsList: View {
     private func spaceHeader(_ g: SpaceGroup, folded isFolded: Bool) -> some View {
         HStack(spacing: Theme.Space.xs) {
             Button { toggleFold(g.id) } label: {
-                SpaceHeader(group: g, machine: machine(g.machineID), showMachine: machineFilter.isEmpty,
+                SpaceHeader(group: g, machine: machine(g.machineRef), showMachine: machineFilter.isEmpty,
                             pinned: model.isPinned(g), muted: model.isMuted(g), folded: isFolded)
             }
             .buttonStyle(.plain)
@@ -813,22 +822,22 @@ private struct AgentsList: View {
 
     /// One section per machine, its agents by state; idle ones fold like in a space.
     @ViewBuilder private func machineSections(_ live: [Session]) -> some View {
-        let machines = self.machines.filter { m in live.contains { $0.machineID == m.id } }
-        ForEach(machines) { m in
-            let rows = ordered(live.filter { $0.machineID == m.id })
-            let id = "machine/" + m.id
-            let group = SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-", name: m.name, index: 0, sessions: rows)
+        let machines = self.machines.filter { m in live.contains { $0.machineRef == m.ref } }
+        ForEach(machines, id: \.ref) { m in
+            let rows = ordered(live.filter { $0.machineRef == m.ref })
+            let id = "machine/" + m.ref.path
+            let group = SpaceGroup(id: "m-" + m.ref.path, machineID: m.id, spaceID: "-", group: m.group, name: m.title, index: 0, sessions: rows)
             listSection {
                 if !isFolded(id) {
                     if quick == .all {
                         ForEach(rows.filter(stays)) { s in slotRow(s, context: true) }
-                        foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.id, label: "空闲")
+                        foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.ref.path, label: "空闲")
                     } else {
                         ForEach(rows) { s in slotRow(s, context: true) }
                     }
                 }
             } header: {
-                FoldButton(title: m.name, folded: isFolded(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
+                FoldButton(title: m.title, folded: isFolded(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
                     MachineSectionHeader(machine: m, group: group)
                 }
             }
@@ -886,7 +895,7 @@ private struct AgentsList: View {
                 if open { expandedQuiet.remove(g.id) } else { expandedQuiet.insert(g.id) }
             }
         } label: {
-            CompactQuietSpaceRow(group: g, machine: machine(g.machineID), showMachine: machineFilter.isEmpty, expanded: open)
+            CompactQuietSpaceRow(group: g, machine: machine(g.machineRef), showMachine: machineFilter.isEmpty, expanded: open)
         }
         .buttonStyle(.plain)
         .listRowInsets(CompactList.rowInsets)
@@ -939,7 +948,7 @@ private struct AgentsList: View {
                 if open { expandedQuiet.remove(g.id) } else { expandedQuiet.insert(g.id) }
             }
         } label: {
-            QuietSpaceCardHead(group: g, machine: machine(g.machineID), showMachine: machineFilter.isEmpty, open: open)
+            QuietSpaceCardHead(group: g, machine: machine(g.machineRef), showMachine: machineFilter.isEmpty, open: open)
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page, bottom: open ? 0 : Theme.Space.xs, trailing: Theme.Space.page))
@@ -1337,9 +1346,10 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     /// What must show at once: who needs the user, which questions wait, what is offline or failing.
     nonisolated static func critical(_ sessions: [Session], _ interactions: [Interaction], _ machines: [Machine]) -> Set<String> {
         var out = Set<String>()
-        for s in sessions where s.state == .needsYou || s.state == .offline { out.insert("\(s.state.rawValue) \(s.machineID)/\(s.sessionID)") }
-        for i in interactions { out.insert("ask " + i.id) }
-        for m in machines where !m.online || !(m.error ?? "").isEmpty { out.insert("down \(m.id) \(m.error ?? "")") }
+        for s in sessions where s.state == .needsYou || s.state == .offline { out.insert("\(s.state.rawValue) \(s.id)") }
+        for i in interactions { out.insert("ask " + i.uid) }
+        for m in machines where !m.online || !(m.error ?? "").isEmpty { out.insert("down \(m.ref.path) \(m.error ?? "")") }
+
         return out
     }
 }
@@ -1507,7 +1517,7 @@ struct SpaceHeader: View {
             if pinned { Image(systemName: Theme.Icon.pinned).font(small).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
             if muted { Image(systemName: Theme.Icon.muted).font(small).foregroundStyle(Color.secondary).accessibilityLabel("已屏蔽") }
             if showMachine, let machine {
-                Text(machine.name).font(small).foregroundStyle(Color.secondary).textCase(nil).lineLimit(1)
+                Text(machine.title).font(small).foregroundStyle(Color.secondary).textCase(nil).lineLimit(1)
             }
             Spacer(minLength: 4)
             StateCounts(group: group).opacity(muted ? 0.6 : 1)
@@ -1516,7 +1526,7 @@ struct SpaceHeader: View {
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([group.name, folded ? "已折叠" : "已展开", pinned ? "已置顶" : "", muted ? "已屏蔽" : "",
-                             showMachine ? machine?.name ?? "" : "", StateCounts.spoken(group)]
+                             showMachine ? machine?.title ?? "" : "", StateCounts.spoken(group)]
             .filter { !$0.isEmpty }.joined(separator: "，"))
         .accessibilityAddTraits(.isButton)
     }
@@ -1803,7 +1813,7 @@ struct QuietSpaceRow: View {
             Image(systemName: Theme.Icon.space).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(group.name).font(Theme.Font.heading).lineLimit(1)
-                Text([showMachine ? machine?.name : nil, "\(group.sessions.count) 个标签",
+                Text([showMachine ? machine?.title : nil, "\(group.sessions.count) 个标签",
                       group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -1843,7 +1853,7 @@ struct QuietSpaceCardHead: View {
 
     var body: some View {
         TaskRow(TaskItem(id: group.id, title: group.name,
-                         subtitle: [showMachine ? machine?.name : nil, "\(group.sessions.count) 个标签",
+                         subtitle: [showMachine ? machine?.title : nil, "\(group.sessions.count) 个标签",
                                     group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                          status: .pending(step: 0)),
@@ -1976,9 +1986,9 @@ struct MachineSectionHeader: View {
         HStack(spacing: Theme.Space.s) {
             Image(systemName: machine.symbol).foregroundStyle(machine.online ? Theme.accent : .secondary)
             if compact {
-                Text(machine.name).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
+                Text(machine.title).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
             } else {
-                Text(machine.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
+                Text(machine.title).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             }
             if !machine.online {
                 Text("离线").font(Theme.Font.labelStrong).foregroundStyle(.secondary).textCase(nil)
@@ -1995,9 +2005,9 @@ private struct AgentsDestinations: ViewModifier {
         content
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id).splitDetailPage() }
-            .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(machineID: r.id).splitDetailPage() }
+            .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(ref: r.ref).splitDetailPage() }
             .navigationDestination(for: MachineListRoute.self) { _ in MachinesView().splitDetailPage() }
-            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
+            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref).splitDetailPage() }
             .navigationDestination(for: PersonalAgentsRoute.self) { _ in PersonalAgentListView().splitDetailPage() }
             .navigationDestination(for: PersonalAgentSession.self) { s in PersonalAgentSessionView(session: s).id(s.id).splitDetailPage() }
     }

@@ -363,7 +363,7 @@ struct CloseAgentSheet: View {
 
     private var place: String {
         var parts: [String] = []
-        if let m = model.machine(session.machineID)?.name { parts.append(m) }
+        if let m = model.machine(session.machineRef)?.title { parts.append(m) }
         if let space = session.spaceName, !space.isEmpty {
             // A tab named by its number reads "#1", as in the chat's header.
             let slot = session.slotName.map { $0.allSatisfy(\.isNumber) ? "#" + $0 : $0 }

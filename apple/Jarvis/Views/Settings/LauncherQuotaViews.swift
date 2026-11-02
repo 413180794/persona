@@ -68,7 +68,7 @@ struct LauncherQuotaSection: View {
     private func footer(_ a: LauncherQuotaAnswer) -> String {
         var parts: [String] = []
         if let k = a.quota?.keyName, !k.isEmpty { parts.append("网关上的 Key 名：\(k)") }
-        if let m = a.machine, !m.isEmpty { parts.append("由 \(model.machine(m)?.name ?? m) 读取，Key 不离开那台电脑") }
+        if let m = a.machine, !m.isEmpty { parts.append("由 \(model.machine(model.hubRef(m))?.name ?? m) 读取，Key 不离开那台电脑") }
         if let t = a.checkedAt { parts.append(Fmt.relative(t) + "读的，一分钟内再打开用这次的") }
         return parts.joined(separator: "；") + "。"
     }

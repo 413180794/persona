@@ -118,7 +118,7 @@ struct FileViewerTests {
             return Data(#"{"stats": [\#(stats.joined(separator: ","))]}"#.utf8)
         }
         let presence = FilePresence()
-        let scope = FileScope(machine: "mac", cwd: "/w")
+        let scope = FileScope(machine: MachineRef(id: "mac"), cwd: "/w")
         presence.ask(["a.go", "gone.go"], in: scope, api: hub.client)
         presence.ask(["b.go"], in: scope, api: hub.client)
         #expect(!presence.linkable("a.go", in: scope)) // not known yet: plain
@@ -131,13 +131,13 @@ struct FileViewerTests {
         try await Task.sleep(for: .milliseconds(300))
         #expect(hub.sent("GET", "/api/v1/machines/mac/stat").count == 1)
         // Another directory is another question.
-        #expect(!presence.linkable("a.go", in: FileScope(machine: "mac", cwd: "/other")))
+        #expect(!presence.linkable("a.go", in: FileScope(machine: MachineRef(id: "mac"), cwd: "/other")))
     }
 
     @Test func noAnswerLinksNothing() async throws {
         let hub = FakeHub() // no stat route: an old node
         let presence = FilePresence()
-        let scope = FileScope(machine: "mac", cwd: "")
+        let scope = FileScope(machine: MachineRef(id: "mac"), cwd: "")
         presence.ask(["~/a.go"], in: scope, api: hub.client)
         try await Task.sleep(for: .milliseconds(400))
         #expect(!presence.linkable("~/a.go", in: scope))

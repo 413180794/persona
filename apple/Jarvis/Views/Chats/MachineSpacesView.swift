@@ -1,16 +1,21 @@
 import SwiftUI
 
-struct MachineRoute: Hashable { var id: String }
+struct MachineRoute: Hashable {
+    var ref: MachineRef
+    init(_ ref: MachineRef) { self.ref = ref }
+    /// A machine of the default group, or "group|id" (launch arguments).
+    init(id: String) { ref = MachineRef(path: id) }
+}
 
 /// One machine's projects (herdr spaces): the busy ones with their agents' counts and latest line, the idle ones
 /// below; tap one for its page. Opened from a project page's machine name.
 struct MachineSpacesView: View {
     @Environment(AppModel.self) private var model
-    var machineID: String
+    var ref: MachineRef
 
     var body: some View {
-        let machine = model.machine(machineID)
-        let sessions = model.allSessions.filter { $0.machineID == machineID && $0.state.isLive && !$0.assistant }
+        let machine = model.machine(ref)
+        let sessions = model.allSessions.filter { $0.machineRef == ref && $0.state.isLive && !$0.assistant }
         let groups = SpaceGroup.build(sessions)
         let pinned = groups.filter { model.isPinned($0) }
         let active = pinned + groups.filter { !$0.isQuiet && !model.isPinned($0) }
@@ -46,12 +51,12 @@ struct MachineSpacesView: View {
         }
         .listStyle(.insetGrouped)
         .themedPage()
-        .navigationTitle(machine?.name ?? machineID)
+        .navigationTitle(machine?.title ?? ref.id)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 // By value, like the chats the details page opens (MachineDetailRoute).
-                NavigationLink(value: MachineDetailRoute(id: machineID)) { Label("机器详情", systemImage: Theme.Icon.info) }
+                NavigationLink(value: MachineDetailRoute(ref)) { Label("机器详情", systemImage: Theme.Icon.info) }
             }
         }
     }

@@ -109,7 +109,7 @@ struct MacAgentMenu: Commands {
             Button("交给 Jarvis") {
                 if let key, let s = model.session(key) {
                     MacShellState.shared.willOpen() // 知识库 / 机器 make way for the Jarvis page
-                    Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineID)?.name)) }
+                    Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
                 }
             }
             .keyboardShortcut("j", modifiers: .command)

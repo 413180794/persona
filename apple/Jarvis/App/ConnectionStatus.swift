@@ -39,11 +39,13 @@ final class ConnectionStatus {
     /// Everything is fetched again after a reconnect: messages that waited for the network can go.
     @ObservationIgnored var onCaughtUp: (() -> Void)?
 
-    @ObservationIgnored private let live: LiveConnection
+    /// Every group's socket (docs/multi-hub.md); one while there is one group.
+    @ObservationIgnored var lives: () -> [LiveConnection] = { [] }
     @ObservationIgnored private let monitor = NWPathMonitor()
     @ObservationIgnored private var due: Task<Void, Never>?
-    @ObservationIgnored private var awaiting = Set<String>()
-    @ObservationIgnored private var catchUpID = 0
+    /// What each group is still fetching after its reconnect.
+    @ObservationIgnored private var awaiting: [String: Set<String>] = [:]
+    @ObservationIgnored private var catchUpIDs: [String: Int] = [:]
     #if DEBUG
     /// `-showConnection waiting|connecting|updating`: the titles show that state (screenshots).
     @ObservationIgnored private let forced: Phase? = switch UserDefaults.standard.string(forKey: "showConnection") {
@@ -56,8 +58,7 @@ final class ConnectionStatus {
     @ObservationIgnored private let offline = UserDefaults.standard.bool(forKey: "simulateOffline")
     #endif
 
-    init(live: LiveConnection) {
-        self.live = live
+    init() {
         #if DEBUG
         if let forced { shown = forced }
         if offline { networkUp = false }
@@ -69,15 +70,29 @@ final class ConnectionStatus {
         monitor.start(queue: .main)
     }
 
-    /// The state the link is in right now, before the delay.
+    /// The state the links are in right now, before the delay.
     var phase: Phase {
-        Self.phase(network: networkUp, link: live.state, stalled: live.stalled, catchingUp: catchingUp)
+        Self.phase(network: networkUp, links: lives().map { ($0.state, $0.stalled) }, catchingUp: catchingUp)
     }
 
     static func phase(network: Bool, link: LiveConnection.State, stalled: Bool, catchingUp: Bool) -> Phase {
         if link == .idle { return .online } // not paired, or in the background (the socket is closed on purpose)
         if !network { return .waitingForNetwork }
         if link != .connected || stalled { return .connecting }
+        return catchingUp ? .updating : .online
+    }
+
+    /// Several groups (docs/multi-hub.md「连接状态」): connecting only while none of them is up — one group out of reach
+    /// (a work hub behind a VPN) would otherwise keep every title on 连接中…; the hub list and the group chips say which
+    /// one is down. One group: exactly the single-link rule.
+    static func phase(network: Bool, links: [(state: LiveConnection.State, stalled: Bool)], catchingUp: Bool) -> Phase {
+        let active = links.filter { $0.state != .idle }
+        guard active.count > 1 else {
+            let one = active.first ?? (.idle, false)
+            return phase(network: network, link: one.state, stalled: one.stalled, catchingUp: catchingUp)
+        }
+        if !network { return .waitingForNetwork }
+        if !active.contains(where: { $0.state == .connected && !$0.stalled }) { return .connecting }
         return catchingUp ? .updating : .online
     }
 
@@ -114,37 +129,42 @@ final class ConnectionStatus {
         #endif
         let was = networkUp
         networkUp = up
-        if up && !was {
-            live.reconnectNow() // the backoff may be at 20 s: Telegram reconnects the moment the network is back
-        } else if up {
-            live.probe() // another interface: the old socket may be dead without knowing it
+        for live in lives() {
+            if up && !was {
+                live.reconnectNow() // the backoff may be at 20 s: Telegram reconnects the moment the network is back
+            } else if up {
+                live.probe() // another interface: the old socket may be dead without knowing it
+            }
         }
         update()
     }
 
-    /// After a reconnect: `parts` are what is being fetched again; each reports back with `caughtUp`.
-    func startCatchUp(_ parts: [String]) {
-        catchUpID += 1
-        let id = catchUpID
-        awaiting = Set(parts)
+    /// After a group's reconnect: `parts` are what is being fetched again; each reports back with `caughtUp`.
+    func startCatchUp(_ group: String = "", _ parts: [String]) {
+        catchUpIDs[group, default: 0] += 1
+        let id = catchUpIDs[group]!
+        awaiting[group] = parts.isEmpty ? nil : Set(parts)
         catchingUp = !awaiting.isEmpty
         update()
-        guard catchingUp else { onCaughtUp?(); return }
+        guard awaiting[group] != nil else { onCaughtUp?(); return }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.catchUpLimit)
-            guard let self, self.catchUpID == id, self.catchingUp else { return }
-            self.awaiting = []
+            guard let self, self.catchUpIDs[group] == id, self.awaiting[group] != nil else { return }
+            self.awaiting[group] = nil
             self.finishCatchUp()
         }
     }
 
     func caughtUp(_ part: String) {
-        guard catchingUp, awaiting.remove(part) != nil, awaiting.isEmpty else { return }
+        guard catchingUp, let group = awaiting.first(where: { $0.value.contains(part) })?.key else { return }
+        awaiting[group]?.remove(part)
+        guard awaiting[group]?.isEmpty == true else { return }
+        awaiting[group] = nil
         finishCatchUp()
     }
 
     private func finishCatchUp() {
-        catchingUp = false
+        catchingUp = !awaiting.isEmpty
         update()
         onCaughtUp?()
     }

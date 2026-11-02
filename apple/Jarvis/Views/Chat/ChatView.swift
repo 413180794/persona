@@ -123,7 +123,7 @@ struct ChatView: View {
     /// The session whose items are on screen: the subagent's own transcript while one is open (its items, images and
     /// full texts are fetched from it, not from the main session).
     static func shownKey(_ key: SessionKey, viewing: Subagent?) -> SessionKey {
-        viewing.map { SessionKey(machineID: key.machineID, sessionID: $0.sessionID) } ?? key
+        viewing.map { SessionKey(group: key.group, machineID: key.machineID, sessionID: $0.sessionID) } ?? key
     }
     private var store: ChatStore { model.chat(shownKey) }
     private var session: Session? { model.session(key) }
@@ -239,7 +239,7 @@ struct ChatView: View {
         }
         #endif
         .environment(\.openFile, actions.openFile)
-        .environment(\.fileScope, FileScope(machine: key.machineID, cwd: session?.cwd ?? ""))
+        .environment(\.fileScope, FileScope(machine: key.machineRef, cwd: session?.cwd ?? ""))
         .environment(\.chatImages, store.images)
         .environment(\.viewImages, actions.viewImages)
         .environment(\.imageZoom, imageZoom)
@@ -431,11 +431,11 @@ struct ChatView: View {
     /// Opens a port of this conversation's machine: the phone listens for it and the sheet loads it from there; a
     /// port nothing listens on any more says so (its badge turns gray).
     private func openPort(_ l: PortLink) {
-        let machine = key.machineID
+        let machine = key.machineRef
         Task {
             do {
                 let url = try await model.forwardedURL(l, machine: machine)
-                let name = model.machine(machine)?.name ?? machine
+                let name = model.machine(machine)?.title ?? machine.id
                 link = LinkTarget(url: url, forwarded: "\(name) :\(l.port)")
             } catch {
                 model.toast = Toast(error.localizedDescription, style: .error)
@@ -446,21 +446,21 @@ struct ChatView: View {
     /// What this render's actions do (`ChatActions`).
     private var handlers: ChatActions.Handlers {
         ChatActions.Handlers(
-            openFile: { [key, session] path in file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd) },
+            openFile: { [key, session] path in file = FileRef(group: key.group, machineID: key.machineID, path: path, cwd: session?.cwd) },
             // A link to this machine's localhost is one of its ports, opened through the hub (docs/ports.md).
             openLink: { [model, key] url in
-                if let l = PortLinks.link(url, hostnames: model.hostnames(of: key.machineID)) { openPort(l) } else { link = LinkTarget(url: url) }
+                if let l = PortLinks.link(url, hostnames: model.hostnames(of: key.machineRef)) { openPort(l) } else { link = LinkTarget(url: url) }
             },
             openPort: { openPort($0) },
             viewImages: { viewingImages = $0 },
             attachImage: { [model, key] img in model.composerInbox[key, default: []].append(img) },
             loadImage: { [model, key] path in
-                guard let f = try? await model.api?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
+                guard let f = try? await model.api(key.group)?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
                 return ImagePayload(mime: f.mime ?? "image/jpeg", data: data)
             },
             // The session on screen: a subagent's items live in its own transcript.
             loadFullText: { [model, shownKey] id in
-                guard let api = model.api else { throw CancellationError() }
+                guard let api = model.api(shownKey.group) else { throw CancellationError() }
                 return try await api.fullItem(shownKey, id: id).text ?? ""
             },
             openSubagent: { toolUseID in
@@ -835,9 +835,9 @@ struct ChatView: View {
                     .padding(.top, style == .dev ? chrome.height - min(chrome.collapse, chrome.maxCollapse) : 0)
             } else { chatPane }
         // Files and Git come in from the right (a swipe to the left), the chat back from the left.
-        case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
+        case .git: GitPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
             .transition(.move(edge: .trailing))
-        case .files: FilesPane(machineID: key.machineID, cwd: session?.cwd ?? "", git: git).padding(.top, headerRoom)
+        case .files: FilesPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", git: git).padding(.top, headerRoom)
             .transition(.move(edge: .trailing))
         }
     }
@@ -868,7 +868,7 @@ struct ChatView: View {
     }
 
     private func loadGit() async {
-        guard style == .dev, let cwd = session?.cwd, !cwd.isEmpty, let api = model.api else { return }
+        guard style == .dev, let cwd = session?.cwd, !cwd.isEmpty, let api = model.api(key.group) else { return }
         if let s = try? await api.gitStatus(machine: key.machineID, cwd: cwd) { git = s }
     }
 
@@ -1485,7 +1485,7 @@ struct ChatView: View {
             let words = stateWords(s, now: ctx.date)
             let tabShown = model.siblings(of: key).count > 1
             let place = [s.spaceName, tabShown ? nil : s.slotLabel].compactMap { $0 }.joined(separator: " › ")
-            let machine = model.machine(s.machineID)?.name ?? s.machineID
+            let machine = model.machine(s.machineRef)?.title ?? s.machineID
             HStack(spacing: Theme.Space.xs) {
                 StatusDot(state: s.state, size: 7)
                 ViewThatFits(in: .horizontal) {
@@ -1570,7 +1570,7 @@ struct ChatView: View {
                 }
                 // The ports it listens on (its dev servers, docs/ports.md): a tap opens the page.
                 if let ports = session?.ports, !ports.isEmpty {
-                    SessionPortChips(machine: key.machineID, ports: ports)
+                    SessionPortChips(machine: key.machineRef, ports: ports)
                         .padding(.horizontal, Theme.Space.l)
                         .padding(.bottom, Theme.Space.s)
                 }
@@ -1587,7 +1587,7 @@ struct ChatView: View {
         .sheet(isPresented: $showActivity) {
             ActivitySheet(loop: session?.loop, background: session?.background ?? [], stopLoop: { model.stopLoop(key) }) { t in
                 showActivity = false
-                if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
+                if let out = t.outputFile { file = FileRef(group: key.group, machineID: key.machineID, path: out, cwd: session?.cwd) }
             }
         }
     }
@@ -1639,7 +1639,7 @@ struct ChatView: View {
                     }
                 }
             }
-            if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineID, ports: ports) }
+            if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
             let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
             if pane == .chat, !agents.isEmpty {
                 AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
@@ -1661,7 +1661,7 @@ struct ChatView: View {
         .sheet(isPresented: $showActivity) {
             ActivitySheet(loop: session?.loop, background: session?.background ?? [], stopLoop: { model.stopLoop(key) }) { t in
                 showActivity = false
-                if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
+                if let out = t.outputFile { file = FileRef(group: key.group, machineID: key.machineID, path: out, cwd: session?.cwd) }
             }
         }
     }
@@ -1857,7 +1857,7 @@ struct ChatView: View {
                 Task {
                     for _ in 0..<40 where session == nil { try? await Task.sleep(for: .milliseconds(250)) }
                     try? await Task.sleep(for: .seconds(1))
-                    file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd)
+                    file = FileRef(group: key.group, machineID: key.machineID, path: f, cwd: session?.cwd)
                 }
             }
             if let id = UserDefaults.standard.string(forKey: "openAgent") { // `-openAgent <agent id>`: that subagent
@@ -2006,7 +2006,7 @@ struct ChatView: View {
             let launcher = model.assistantLaunchers[key] ?? s.launcher
             return s.status.isActive ? "正在处理…" : ([launcher, Fmt.model(s.model)].compactMap { $0 }.joined(separator: " · "))
         }
-        let machine = model.machine(s.machineID)?.name ?? s.machineID
+        let machine = model.machine(s.machineRef)?.title ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
         return [s.sourceSubtitle, machine, place.isEmpty ? nil : place, s.hasSource ? nil : s.agentLabel, s.state.label].compactMap { $0 }.joined(separator: " · ")
     }
@@ -2321,7 +2321,7 @@ struct Composer: View, Equatable {
         .recordingContextSheet(isPresented: $showRecording) { contexts.wrappedValue.append($0) }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
-            uploads.start(urls, machine: key.machineID, model: model) { insertPath($0) }
+            uploads.start(urls, machine: key.machineRef, model: model) { insertPath($0) }
         }
         #if os(macOS)
         // Finder drags: pictures are attached like 照片, other files uploaded to the machine like 文件 (docs/mac.md).
@@ -2342,7 +2342,7 @@ struct Composer: View, Equatable {
                 try? await Task.sleep(for: .seconds(3))
                 let url = FileManager.default.temporaryDirectory.appending(path: name)
                 try? Data(count: 24 << 20).write(to: url)
-                uploads.start([url], machine: key.machineID, model: model) { insertPath($0) }
+                uploads.start([url], machine: key.machineRef, model: model) { insertPath($0) }
             }
         }
         #endif
@@ -2393,7 +2393,7 @@ struct Composer: View, Equatable {
     }
 
     private func upload(_ urls: [URL]) {
-        uploads.start(urls, machine: key.machineID, model: model) { insertPath($0) }
+        uploads.start(urls, machine: key.machineRef, model: model) { insertPath($0) }
         focused = true
     }
     #endif
@@ -2613,7 +2613,7 @@ struct SessionInfoSheet: View {
                         }
                     }
                     Section("位置") {
-                        row(Theme.Icon.folder, "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineID)?.home), mono: true)
+                        row(Theme.Icon.folder, "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineRef)?.home), mono: true)
                         if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", "分支", b, mono: true) }
                     }
                     Section {
@@ -2641,7 +2641,7 @@ struct SessionInfoSheet: View {
             #endif
         }
         .task(id: key) {
-            do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.shown }
+            do { info = try await model.api(key.group)?.sessionInfo(key) } catch { self.error = error.shown }
         }
     }
 
@@ -2662,7 +2662,7 @@ struct SessionInfoSheet: View {
     /// The title, its state in words (the one place they still show) and where it runs.
     private var header: some View {
         let s = session
-        let place = [model.machine(key.machineID)?.name ?? key.machineID, s?.spaceName, s?.slotLabel]
+        let place = [model.machine(key.machineRef)?.title ?? key.machineID, s?.spaceName, s?.slotLabel]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
         return VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Text(s?.displayTitle ?? "会话").font(Theme.Font.title).lineLimit(2)

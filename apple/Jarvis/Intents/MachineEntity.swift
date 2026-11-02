@@ -1,7 +1,8 @@
 import AppIntents
 import Foundation
 
-/// A machine as Siri sees it: id and name come from `/api/v1/machines`.
+/// A machine as Siri sees it: id and name come from `/api/v1/machines`. The id is `MachineRef.path` (the machine id,
+/// "group|id" for another group of hubs); the name says the group when there are several.
 struct MachineEntity: AppEntity, Hashable, Sendable {
     nonisolated static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "机器")
     nonisolated static let defaultQuery = MachineEntityQuery()
@@ -17,8 +18,11 @@ struct MachineEntity: AppEntity, Hashable, Sendable {
     }
 
     nonisolated init(_ machine: Machine) {
-        self.init(id: machine.id, name: machine.name, online: machine.online)
+        self.init(id: machine.ref.path, name: machine.title, online: machine.online)
     }
+
+    /// The machine id at its hub, and its group.
+    var ref: MachineRef { MachineRef(path: id) }
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(name)", subtitle: online ? "在线" : "离线")
@@ -53,7 +57,7 @@ struct MachineEntityQuery: EntityQuery, EntityStringQuery {
 
     private static func all() async throws -> [MachineEntity] {
         do {
-            return try await IntentSupport.client().machines().map(MachineEntity.init)
+            return try await IntentSupport.machines().map(MachineEntity.init)
         } catch {
             throw IntentFailureSentence(IntentFailure.sentence(for: error, host: IntentSupport.host()))
         }

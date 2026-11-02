@@ -1092,7 +1092,7 @@ struct AssistantSidebar: View {
     }
 
     private var profileFooter: some View {
-        let machine = model.machine(machineID)
+        let machine = model.machine(model.hubRef(machineID))
         let online = machine?.online ?? false
         return VStack(spacing: 0) {
             Divider()

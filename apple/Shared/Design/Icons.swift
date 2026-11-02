@@ -181,6 +181,9 @@ extension Theme {
         /// This Mac out of the hub's reach (the Jarvis page's device chip on the Mac).
         static let laptopOffline = "laptopcomputer.slash"
         static let server = "server.rack"
+        /// A group of hubs that know each other (设置 › hub, the group filter and labels of the merged lists;
+        /// docs/multi-hub.md).
+        static let hubGroup = "network"
         /// The hub has a newer version, or is updating itself (docs/hub-update.md).
         static let hubUpdate = "arrow.down.to.line.circle"
         /// The assistant's skills (~/.jarvis/skills).

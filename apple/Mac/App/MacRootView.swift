@@ -83,8 +83,8 @@ struct MacRootView: View {
         let _ = PerfTrace.body("MacRootView")
         #endif
         Group {
-            if let id = model.pairingEngineMachineID {
-                PairingEngineView(machineID: id)
+            if let ref = model.pairingEngineMachine {
+                PairingEngineView(ref: ref)
             } else if model.isPaired {
                 MacShell()
             } else {
@@ -260,7 +260,7 @@ struct MacMachinesPage: View {
     var body: some View {
         NavigationStack(path: $path) {
             MachinesView()
-                .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
+                .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref) }
                 .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
         }
         #if DEBUG

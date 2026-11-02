@@ -6,7 +6,7 @@ import Testing
     typealias Phase = ConnectionStatus.Phase
 
     @Test func phases() {
-        let p = ConnectionStatus.phase
+        let p = ConnectionStatus.phase(network:link:stalled:catchingUp:)
         #expect(p(true, .idle, false, false) == .online) // not paired or in the background: nothing to say
         #expect(p(false, .idle, false, false) == .online)
         #expect(p(false, .connected, false, false) == .waitingForNetwork) // no network wins over a socket that has not noticed

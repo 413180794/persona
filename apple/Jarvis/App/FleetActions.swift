@@ -14,10 +14,12 @@ nonisolated enum FleetActions {
         }
     }
 
+    /// `interactionID` as the activity has it: "group|id" for another group's request (FleetMerge), the hub's id alone
+    /// for the default group's or one the hub pushed (the hub the activity's token went to: the first group).
     static func run(_ action: Action, _ interactionID: String) async {
         do {
-            guard let config = Keychain.serverConfig else { throw IntentFailure.notPaired }
-            try await APIClient(config: config).resolve(interactionID, resolution(action))
+            let (named, id) = FleetMerge.split(interactionID)
+            try await HubStore.client(group: named).resolve(id, resolution(action))
             await LiveActivityController.shared.resolvedLocally(interactionID)
         } catch {
             if (error as? APIError)?.status == 410 { // already settled elsewhere: just drop it from the activity
