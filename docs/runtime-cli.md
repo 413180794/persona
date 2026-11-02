@@ -33,6 +33,11 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 | `settle` | `timeout`（8 s）、`every`（150 ms）、`stable`（3 次）、`pixels`（0） | `settled`、`frames`、`changed` |
 | `online` | `timeout`（15 s） | `nudged`（是否主动重连过）；超时报错并带当前状态 |
 | `reset` | `coldChats`（内存里不留对话，和启动后一样从磁盘缓存再到 hub 重新加载）、`dropChatCache`（磁盘缓存也清掉，= `-openChatsFresh YES`） | 新的界面树，路由不动，和刚启动一样。回答同 `state` |
+| `tree` | 元素过滤（下面） | `elements`：每个无障碍元素的 `id`（accessibilityIdentifier）、`label`、`value`、`traits`、`frame`（屏幕坐标，pt）、`visible` |
+| `find` | 元素过滤、`index` | `count`、`element`（没有 `index` 时取第一个在屏幕上的） |
+| `wait` | 元素过滤、`gone`、`timeout`（10 s） | 每 100 ms 查一次，等到有（或没了）；超时报错 |
+| `perf` | | `counts`：各视图 body 次数、事件数、主线程耗时（要 `-perfCounts YES` 启动，`LiveUpdateTests` 读的同一份） |
+| `refresh` | | 向 hub 拉一次（下拉刷新做的事） |
 | `navigate` | `scene`（home / assistant / agents / chat / inbox / settings / machines），`session`（`<机器>/<会话>`，chat 和 assistant 要），`machine`（machines 下打开某台），`defaults`（只在建页面时读的开关，如 `{"openWork": true}`），`keep`（不换新的界面树），`coldChats`、`dropChatCache`（同 `reset`） | 落到和对应启动开关一样的页面（`-newAssistant`、`-openAssistant`、`-tab dev`、`-openSession`、`-tab mail`、`-tab settings`、`-openMachines`），默认在一棵新的界面树上（窗口的根换成新的 `RootView`，Agents 页推进去的对话、抽屉、滚动位置都从头来）。回答同 `state` |
 | `set-style` | `style`（glass / clay / island / lark / beautiful）、`color`（主题色） | 同 `state`；整棵树按新风格重建 |
 | `set-appearance` | `value`（light / dark / system） | 只改 App 的窗口；`jarvisctl.py appearance` 默认改整个模拟器（`simctl ui appearance`，状态栏一起变，截图脚本用这个） |
@@ -71,6 +76,25 @@ scripts/jarvisctl.py idle && scripts/jarvisctl.py screenshot out.png
   只清内存不清磁盘：启动本来就读磁盘缓存。
 - **按页面自己的计时等**：对话的顶栏闲置 3 s 自己折叠（`ChatView.chromeIdleSeconds`），老方法 7 s 后截一定是折叠的；
   `settle` 1–2 s 就停了，所以对话场景至少等 3.6 s（`id-cli.py` 的 `AT_LEAST`）。
+
+## 读状态（无障碍树）
+
+开着 CLI 时 App 调一次私有的 `_AXSSetAutomationEnabled(1)`（XCUITest 开的就是它；没有辅助技术在跑时 SwiftUI 不建无障碍元素），
+`tree` / `find` / `wait` 读的就是 XCUITest 看到的那棵树：`accessibilityIdentifier`、label、frame、traits。
+
+```sh
+scripts/jarvisctl.py find --id agents.filter.unread          # {"count": 1, "element": {"label": "未读 47", "frame": [...], ...}}
+scripts/jarvisctl.py wait --label-contains 收起过程 --timeout 5
+scripts/jarvisctl.py tree --id-prefix agents. --visible
+```
+
+元素过滤：`--id`（全等）、`--id-prefix`、`--label`（全等）、`--label-contains`、`--label-prefix`、`--trait`（button / text /
+header / selected / search / image / disabled）、`--visible`、`--index`。
+
+- 行的文字是一整个按钮的 label（“完成未看、platform 任务 4、12 分钟前、…”），不像 XCUITest 能再取里面的 staticText：
+  按 `--label-contains "、名字、"` 找。
+- `visible` 只看 frame 在不在屏幕里：外壳把两页都挂在树里，被盖住的那页也算可见。
+- frame 可能是 NaN（布局中的元素），回答里写成 0。
 
 ## 协议和安全
 

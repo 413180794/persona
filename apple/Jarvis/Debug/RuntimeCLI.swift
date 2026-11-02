@@ -20,6 +20,7 @@ enum RuntimeCLI {
 
     /// Every command by name: these, and each area's (`RuntimeCLI+<Area>.swift`).
     static let commands: [String: Command] = coreCommands.merging(navigationCommands) { core, _ in core }
+        .merging(elementCommands) { core, _ in core }
 
     private static let coreCommands: [String: Command] = [
         "ping": { _ in ["pong": true, "pid": Int(ProcessInfo.processInfo.processIdentifier)] },
@@ -33,6 +34,7 @@ enum RuntimeCLI {
         let port = d.integer(forKey: "runtimeCLI")
         guard port > 0, port < 65536, listener == nil, let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return }
         token = d.string(forKey: "runtimeCLIToken") ?? ""
+        enableAccessibilityTree()
         let params = NWParameters.tcp
         params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: nwPort)
         params.allowLocalEndpointReuse = true

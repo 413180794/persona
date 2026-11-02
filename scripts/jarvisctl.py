@@ -13,9 +13,13 @@
   jarvisctl.py set-style <glass|clay|island|lark|beautiful> [--color c]       界面风格 / 主题色
   jarvisctl.py appearance light|dark [--in-app]                               the simulator's (default) or the app's
   jarvisctl.py defaults [--set k=v …] [--remove k …] [--get k …]              this run's switches, saved keys
+  jarvisctl.py tree [filters] | find [filters]                                the accessibility tree (what XCUITest sees)
+  jarvisctl.py wait [filters] [--gone] [--timeout s]                          until an element is there (or gone)
+  jarvisctl.py perf | refresh                                                 view-body counts (-perfCounts YES) | pull the hub
   jarvisctl.py call <command> [key=value …]                                   any command the app knows
 
-The simulator is $JARVISCTL_UDID (or --udid, default "booted"); the app is $JARVISCTL_BUNDLE / $JARVIS_BUNDLE_ID.
+Element filters: --id, --id-prefix, --label, --label-contains, --label-prefix, --trait button|text|header|selected…,
+--visible, --index n (else the first match on screen). The simulator is $JARVISCTL_UDID (or --udid, default "booted"); the app is $JARVISCTL_BUNDLE / $JARVIS_BUNDLE_ID.
 `launch` picks a one-time token and keeps it, with the port, in ~/.cache/jarvisctl/<udid>.json for the later
 commands. Standard library only; scripts can `from jarvisctl import Ctl`.
 """
@@ -142,6 +146,13 @@ class Ctl:
         return path
 
 
+def filters(a):
+    """The element filters of the command line, as the app's commands take them."""
+    f = {"id": a.id, "idPrefix": a.id_prefix, "label": a.label, "labelContains": a.label_contains,
+         "labelPrefix": a.label_prefix, "trait": a.trait, "index": a.index, "visibleOnly": a.visible or None}
+    return {k: v for k, v in f.items() if v is not None}
+
+
 def value(v):
     """key=value from the command line: numbers and YES/NO as JSON, the rest as text."""
     if v in ("YES", "true"):
@@ -177,6 +188,11 @@ def main(argv):
     p.add_argument("--get", action="append", default=[])
     p.add_argument("--keep", action="store_true")
     p.add_argument("--in-app", action="store_true")
+    for f in ("--id", "--id-prefix", "--label", "--label-contains", "--label-prefix", "--trait"):
+        p.add_argument(f)
+    p.add_argument("--index", type=int)
+    p.add_argument("--visible", action="store_true")
+    p.add_argument("--gone", action="store_true")
     p.add_argument("--cold-chats", action="store_true")
     p.add_argument("--drop-chat-cache", action="store_true")
     p.add_argument("cmd")
@@ -214,6 +230,13 @@ def main(argv):
     elif a.cmd == "defaults":
         sets = {k: value(v) for k, v in (x.partition("=")[::2] for x in a.set)}
         r = c.call("defaults", set=sets or None, remove=a.remove or None, get=a.get or None)
+    elif a.cmd in ("tree", "find", "wait"):
+        f = filters(a)
+        if a.cmd == "wait":
+            f.update(timeout=a.timeout, gone=a.gone or None)
+        r = c.call(a.cmd, **f)
+    elif a.cmd in ("perf", "refresh"):
+        r = c.call(a.cmd)
     elif a.cmd == "call":
         if not a.rest:
             p.error("call needs a command")
@@ -221,7 +244,7 @@ def main(argv):
         r = c.call(a.rest[0], **{k: value(v) for k, v in kv.items()})
     else:
         p.error(f"unknown command {a.cmd}")
-    print(json.dumps(r, ensure_ascii=False))
+    print(json.dumps(r, ensure_ascii=False, indent=1 if a.cmd == "tree" else None))
 
 
 if __name__ == "__main__":
