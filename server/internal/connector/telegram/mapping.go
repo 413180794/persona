@@ -306,16 +306,7 @@ func (g *gotdClient) History(ctx context.Context, d dialog, minID int, since tim
 		if err != nil {
 			return nil, err
 		}
-		var msgs []tg.MessageClass
-		var e entities
-		switch r := res.(type) {
-		case *tg.MessagesMessages:
-			msgs, e = r.Messages, entitiesOf(r.Users, r.Chats)
-		case *tg.MessagesMessagesSlice:
-			msgs, e = r.Messages, entitiesOf(r.Users, r.Chats)
-		case *tg.MessagesChannelMessages:
-			msgs, e = r.Messages, entitiesOf(r.Users, r.Chats)
-		}
+		msgs, e := messagesOf(res)
 		stop := len(msgs) < page
 		for _, m := range msgs { // newest first
 			mm := messageOf(m, e)
@@ -339,4 +330,64 @@ func (g *gotdClient) History(ctx context.Context, d dialog, minID int, since tim
 		got[i], got[j] = got[j], got[i]
 	}
 	return got, nil
+}
+
+// messagesOf is a messages response's messages and the entities they name.
+func messagesOf(res tg.MessagesMessagesClass) ([]tg.MessageClass, entities) {
+	switch r := res.(type) {
+	case *tg.MessagesMessages:
+		return r.Messages, entitiesOf(r.Users, r.Chats)
+	case *tg.MessagesMessagesSlice:
+		return r.Messages, entitiesOf(r.Users, r.Chats)
+	case *tg.MessagesChannelMessages:
+		return r.Messages, entitiesOf(r.Users, r.Chats)
+	}
+	return nil, entitiesOf(nil, nil)
+}
+
+func (g *gotdClient) Older(ctx context.Context, d dialog, before, limit int) ([]message, error) {
+	res, err := g.c.API().MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{Peer: inputPeer(d.Peer), OffsetID: before, Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	msgs, e := messagesOf(res)
+	out := make([]message, 0, len(msgs))
+	for i := len(msgs) - 1; i >= 0; i-- { // newest first: turn around
+		out = append(out, messageOf(msgs[i], e))
+	}
+	return out, nil
+}
+
+func (g *gotdClient) Search(ctx context.Context, query string, in *dialog, limit int) ([]found, error) {
+	var res tg.MessagesMessagesClass
+	var err error
+	if in != nil {
+		res, err = g.c.API().MessagesSearch(ctx, &tg.MessagesSearchRequest{Peer: inputPeer(in.Peer), Q: query, Filter: &tg.InputMessagesFilterEmpty{}, Limit: limit})
+	} else {
+		res, err = g.c.API().MessagesSearchGlobal(ctx, &tg.MessagesSearchGlobalRequest{Q: query, Filter: &tg.InputMessagesFilterEmpty{},
+			OffsetPeer: &tg.InputPeerEmpty{}, Limit: limit})
+	}
+	if err != nil {
+		return nil, err
+	}
+	msgs, e := messagesOf(res)
+	out := make([]found, 0, len(msgs))
+	for _, m := range msgs {
+		pc := peerOfMessage(m)
+		p, _ := e.peerOf(pc)
+		d := dialog{Peer: p, Name: e.nameOf(pc), Kind: "group"}
+		switch pp := pc.(type) {
+		case *tg.PeerUser:
+			d.Kind = "dm"
+			if u := e.users[pp.UserID]; u != nil {
+				d.Bot, d.Self = u.Bot, u.Self
+			}
+		case *tg.PeerChannel:
+			if ch, ok := e.chats[pp.ChannelID].(*tg.Channel); ok {
+				d.Broadcast = ch.Broadcast && !ch.Megagroup
+			}
+		}
+		out = append(out, found{Dialog: d, Message: messageOf(m, e)})
+	}
+	return out, nil
 }

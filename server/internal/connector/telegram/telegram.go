@@ -56,6 +56,16 @@ type client interface {
 	// History is a conversation's messages newer than minID, oldest first. With minID 0 (a first read) it goes back
 	// to since, at most max messages.
 	History(ctx context.Context, d dialog, minID int, since time.Time, max int) ([]message, error)
+	// Older is a conversation's limit messages before the id before (0: the newest), oldest first.
+	Older(ctx context.Context, d dialog, before, limit int) ([]message, error)
+	// Search finds messages with query, in one conversation (in) or across the account, newest first.
+	Search(ctx context.Context, query string, in *dialog, limit int) ([]found, error)
+}
+
+// found is a search's match and its conversation.
+type found struct {
+	Dialog  dialog
+	Message message
 }
 
 // dialer connects with c, keeping the session in store, until ctx ends (Check says whether Telegram knows c).
@@ -90,15 +100,20 @@ type Conn struct {
 	// flood wait.
 	news  chan struct{}
 	until time.Time
+	zone  *time.Location // the user's
 }
 
-// New is the connector, keeping what it needs in secrets.
-func New(secrets connector.Secrets) *Conn {
-	return newConn(secrets, dialGotd)
+// New is the connector, keeping what it needs in secrets; zone is the user's, for the times the tools show.
+func New(secrets connector.Secrets, zone *time.Location) *Conn {
+	c := newConn(secrets, dialGotd)
+	if zone != nil {
+		c.zone = zone
+	}
+	return c
 }
 
 func newConn(secrets connector.Secrets, dial dialer) *Conn {
-	return &Conn{secrets: secrets, dial: dial, wake: make(chan struct{}, 1), news: make(chan struct{}, 1),
+	return &Conn{secrets: secrets, dial: dial, wake: make(chan struct{}, 1), news: make(chan struct{}, 1), zone: time.Local,
 		status: connector.Status{State: connector.StateNotSignedIn, Error: "还没填 Telegram 的 API 凭据"}}
 }
 

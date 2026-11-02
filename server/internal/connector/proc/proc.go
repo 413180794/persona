@@ -34,8 +34,10 @@ type Config struct {
 	Env      []string // added to the hub's environment
 	// Version is what `<Path> version -v` must print (the hub's own): the two come from one build. "" skips it.
 	Version string
-	// Settings is sent with init: the connector's section of hub.json.
-	Settings json.RawMessage
+	// Settings is sent with init: the connector's section of hub.json. SettingsNow, when set, is asked instead at
+	// each start (what the hub learns later: the user's time zone).
+	Settings    json.RawMessage
+	SettingsNow func() json.RawMessage
 	// Secrets is the hub's store for this connector: the program's secrets.* calls reach only this one.
 	Secrets connector.Secrets
 	Logf    func(string, ...any)
@@ -257,8 +259,12 @@ func (c *Conn) spawn(ctx context.Context) (*child, error) {
 	go func() { ch.served <- peer.Serve(context.Background(), stdout) }()
 	ictx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
+	settings := c.cfg.Settings
+	if c.cfg.SettingsNow != nil {
+		settings = c.cfg.SettingsNow()
+	}
 	var man serve.Manifest
-	if err := peer.Call(ictx, serve.MInit, serve.InitParams{Config: c.cfg.Settings}, &man); err != nil {
+	if err := peer.Call(ictx, serve.MInit, serve.InitParams{Config: settings}, &man); err != nil {
 		ch.stop()
 		return nil, fmt.Errorf("%s 的程序没准备好：%v", c.cfg.Name, err)
 	}

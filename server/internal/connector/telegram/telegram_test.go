@@ -166,6 +166,39 @@ func (c *fakeClient) History(_ context.Context, d dialog, minID int, since time.
 	return out, nil
 }
 
+func (c *fakeClient) Older(_ context.Context, d dialog, before, limit int) ([]message, error) {
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	var out []message
+	for _, m := range c.f.history[d.Peer.key()] {
+		if before == 0 || m.ID < before {
+			out = append(out, m)
+		}
+	}
+	if len(out) > limit {
+		out = out[len(out)-limit:]
+	}
+	return out, nil
+}
+
+func (c *fakeClient) Search(_ context.Context, query string, in *dialog, limit int) ([]found, error) {
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	var out []found
+	for _, d := range c.f.dialogs {
+		if in != nil && d.Peer.key() != in.Peer.key() {
+			continue
+		}
+		h := c.f.history[d.Peer.key()]
+		for i := len(h) - 1; i >= 0; i-- {
+			if strings.Contains(h[i].Text, query) && len(out) < limit {
+				out = append(out, found{Dialog: d, Message: h[i]})
+			}
+		}
+	}
+	return out, nil
+}
+
 func (c *fakeClient) LogOut(context.Context) error {
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()

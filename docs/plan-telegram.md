@@ -136,7 +136,7 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
 | T2a | 子进程连接器：hub 的 `connector/proc` 和子进程的 `connector/serve`（RPC、版本对齐、退避重启、开关停起），用测试里的假子进程验证 |
 | T2b | `jarvisd-telegram`：gotd 客户端、分步登录（凭据 → 手机号 → 验证码 → 密码）、凭据和会话经 hub 加密存、退出、状态（只露 api_id）；jarvisd 不带 gotd 的测试 |
 | T2c | 发布和更新：`deploy.sh`、`publish.sh`（编、扫、体积、清单的 `programs`）、hub 自动更新一起换一起回滚、Docker 镜像、`deploy-hub.sh.new` |
-| T3 | 知识库归档（会话增量）+ 实时踢 + 只读工具 + 提示词和 golden；删除已存数据（知识库、收件箱、游标） |
+| T3 | T3a 知识库归档（会话增量）+ 实时踢；T3b 只读工具 + 提示词；T3c 删除已存数据（知识库、收件箱、游标） |
 | T4 | 收件箱 |
 | T5 | App：设置里的登录表单、开关、删除、退出；收件箱行的标志；mock hub；两种风格 × 深浅色截图 |
 

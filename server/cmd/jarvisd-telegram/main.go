@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/serve"
@@ -49,8 +50,16 @@ func main() {
 	log.SetFlags(0) // the hub prefixes each line it keeps
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err := serve.Main(ctx, os.Stdin, os.Stdout, func(_ json.RawMessage, secrets connector.Secrets) (connector.Connector, error) {
-		return telegram.New(secrets), nil
+	err := serve.Main(ctx, os.Stdin, os.Stdout, func(raw json.RawMessage, secrets connector.Secrets) (connector.Connector, error) {
+		var cfg struct {
+			Zone string `json:"zone"` // the user's time zone, from the hub
+		}
+		_ = json.Unmarshal(raw, &cfg)
+		zone, err := time.LoadLocation(cfg.Zone)
+		if err != nil || cfg.Zone == "" {
+			zone = time.Local
+		}
+		return telegram.New(secrets, zone), nil
 	})
 	if err != nil && ctx.Err() == nil && !errors.Is(err, io.EOF) { // EOF: the hub went away
 		log.Printf("stopped: %v", err)

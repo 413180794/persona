@@ -354,7 +354,12 @@ func (h *Hub) addTelegram() {
 		return
 	}
 	c := proc.New(proc.Config{ID: "telegram", Name: "Telegram", Path: path, Secrets: h.secretsFor("telegram"), Logf: h.logf,
-		Version: fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number)})
+		Version: fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number),
+		// The user's time zone, for the times the assistant's tools show (the program runs on the hub's clock).
+		SettingsNow: func() json.RawMessage {
+			b, _ := json.Marshal(map[string]string{"zone": h.userLocation().String()})
+			return b
+		}})
 	if err := h.addConnectorOff(c); err != nil {
 		h.logf("telegram connector: %v", err)
 	}
