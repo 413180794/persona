@@ -53,7 +53,10 @@ func runtimeNode(t *testing.T) (*Node, *runtimeHub) {
 	n.runtimes = newRuntimeRegistry()
 	n.runtimeSock = filepath.Join(dir, "h.sock")
 	n.hosts = herdrHosts(&herdr.Client{Bin: filepath.Join(dir, "no-herdr")}) // herdr unreachable: no socket, no binary
+	// No running claude to find: the real scan found the hub's assistant, and the list read its transcripts.
 	n.cdirs = newClaudeDirs()
+	n.cdirs.scan = func() map[int]procEnv { return nil }
+	n.metas, n.bgScans = map[string]quickMeta{}, map[string]*bgScan{}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	n2hR, n2hW := io.Pipe()
