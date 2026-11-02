@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import SwiftUI
 import Testing
 import UIKit
@@ -55,15 +56,27 @@ struct FleetPersonaTests {
         #expect(look.package == nil && look.faceDesign == .circuit)
     }
 
-    /// The persona does not ride in the ContentState: an activity the hub pushes today (or pushed before this change)
-    /// decodes to the same state, and the state encodes no look of its own.
-    @Test func contentStateUnchanged() throws {
+    /// The persona rides in the ContentState (build 98: the extension did not get it from the keychain on a phone):
+    /// content from an older hub, without it, still decodes and draws from the keychain; with it, the extension draws
+    /// what the content says, and the app's own updates carry it.
+    @Test func lookRidesInTheContent() throws {
         let json = #"{"phase":"needsYou","needsYou":1,"working":0,"unread":0,"items":[],"details":false,"assistant":true,"left":"status","right":"tpm"}"#
-        let s = try JSONDecoder().decode(FleetState.self, from: Data(json.utf8))
-        #expect(FleetPersona.state(s, stale: false) == .needsYou)
-        let out = try JSONSerialization.jsonObject(with: JSONEncoder().encode(s)) as? [String: Any]
-        #expect(out?["design"] == nil)
+        let old = try JSONDecoder().decode(FleetState.self, from: Data(json.utf8))
+        #expect(FleetPersona.state(old, stale: false) == .needsYou && old.look == nil)
+        let out = try JSONSerialization.jsonObject(with: JSONEncoder().encode(old)) as? [String: Any]
         #expect(out?["look"] == nil)
+
+        let pushed = #"{"phase":"working","working":1,"look":{"design":"circuit","light":13919295,"dark":15238012}}"#
+        let state = try JSONDecoder().decode(FleetState.self, from: Data(pushed.utf8))
+        #expect(state.look == FleetLook(design: "circuit", light: 0xD4643F, dark: 0xE8837C))
+        #expect(state.drawnLook.faceDesign == .circuit)
+        // A look the extension cannot read (a later hub's) is dropped, not the whole content.
+        let odd = try JSONDecoder().decode(FleetState.self, from: Data(#"{"phase":"working","look":{"design":7}}"#.utf8))
+        #expect(odd.phase == .working && odd.look == nil)
+
+        let mine = FleetLook(design: "visor", light: 1, dark: 2, package: "a/1")
+        #expect(old.tailored(island: IslandPrefs(), details: true, look: mine).look == mine)
+        #expect(state.tailored(island: IslandPrefs(), details: true).look == state.look)
     }
 
     // MARK: 设置 › 外观 › 形象 → what the extension draws
@@ -218,4 +231,86 @@ struct FleetPersonaTests {
     }
 
     static func hex(_ c: Color) -> UInt32 { FleetLook.hex(c, .dark) }
+
+    // MARK: What a phone draws (build 98, 2026-11-02)
+
+    /// A placeholder as busy as a real persona's frame: blocks of a few colors, fixed by a seed.
+    static func busy(_ side: Int = 144, block: Int = 14, seed: UInt64 = 7) -> UIImage {
+        var rng = seed
+        func next() -> UInt64 { rng = rng &* 6364136223846793005 &+ 1442695040888963407; return rng >> 33 }
+        let colors: [UIColor] = [.systemTeal, .systemOrange, .systemPurple, .white, .black, .systemYellow]
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { ctx in
+            for y in stride(from: 0, to: side, by: block) {
+                for x in stride(from: 0, to: side, by: block) {
+                    colors[Int(next() % UInt64(colors.count))].setFill()
+                    ctx.fill(CGRect(x: x, y: y, width: block, height: block))
+                }
+            }
+        }
+    }
+
+    /// Every picture is drawn as 26 points whatever its pixels, and none is over 4 KB: a busy one is made with fewer
+    /// pixels. A phone does not draw a Live Activity whose picture is larger than where it shows (a PNG decoded at 1×
+    /// is as many points as it has pixels: 78) or over 4 KB; the simulator drew both.
+    @Test func facesAreSmallEnoughForAPhone() throws {
+        let png = try #require(FleetFaces.png(Self.busy()))
+        #expect(png.count <= FleetFaces.maxBytes)
+        let image = try #require(FleetFaces.image(png))
+        #expect(image.size == CGSize(width: FleetFaces.points, height: FleetFaces.points))
+        let cg = try #require(image.cgImage)
+        #expect(cg.width < Int(FleetFaces.pixels), "made with fewer pixels")
+        #expect(cg.bitsPerComponent == 8)
+        // A simple one keeps all of them, and is drawn at the same size.
+        let plain = try #require(UIImage(data: Self.disc(0x40B2A0)))
+        let disc = try #require(FleetFaces.png(plain))
+        let drawn = try #require(FleetFaces.image(disc))
+        #expect(drawn.cgImage?.width == Int(FleetFaces.pixels) && drawn.size.width == FleetFaces.points)
+        // Noise fits at no size: no picture rather than one a phone would refuse.
+        if let noise = FleetFaces.png(Self.busy(block: 1)) { #expect(noise.count <= FleetFaces.maxBytes) }
+    }
+
+    /// The extension's report is written again only when what it read changed.
+    @Test func reportComparesWhatWasRead() {
+        var a = FleetLookReport()
+        a.look(errSecSuccess, .standard, bytes: 60)
+        var b = a
+        b.at = .now
+        #expect(a.same(b))
+        b.faces(errSecItemNotFound, nil, bytes: nil)
+        #expect(!a.same(b))
+    }
+
+    /// 灵动岛诊断 names the first step that fails, in the order the look travels from 设置 to the island.
+    @Test func diagnosticsNameTheFailingStep() {
+        let look = FleetLook(design: "visor", light: 1, dark: 1, package: "a/1")
+        var i = IslandDiagnostics.Input(look: look, group: "g")
+        i.hub = .some(nil)
+        #expect(IslandDiagnostics.verdict(i).contains("hub 没有这台手机的形象"))
+        i.hub = .some(.standard)
+        #expect(IslandDiagnostics.verdict(i).contains("hub 记下的不是设置里的形象"))
+        i.hub = .some(look)
+        i.activity = .some(nil)
+        #expect(IslandDiagnostics.verdict(i).contains("实时活动内容里不是设置里的形象"))
+        i.activity = .some(look)
+        i.writes = [FleetLookStore.facesAccount: (.now, errSecMissingEntitlement, 9000)]
+        #expect(IslandDiagnostics.verdict(i).contains("签名里没有这个钥匙串组"))
+        i.writes = [:]
+        #expect(IslandDiagnostics.verdict(i).contains("扩展没留下报告"))
+        var seen = FleetLookReport()
+        seen.content(.standard)
+        i.seen = seen
+        #expect(IslandDiagnostics.verdict(i).contains("扩展上次画的不是设置里的形象"))
+        seen.content(look)
+        seen.faces(errSecItemNotFound, nil, bytes: nil)
+        i.seen = seen
+        #expect(IslandDiagnostics.verdict(i) == "扩展读不到这个形象包的图（没有这一条），画的是默认形象换成它的颜色")
+        seen.faces(errSecSuccess, "a/1", bytes: 12000)
+        i.seen = seen
+        #expect(IslandDiagnostics.verdict(i) == "扩展画的和设置一致")
+        let rows = IslandDiagnostics.sections(i, now: .now)
+        #expect(rows.map(\.title) == ["结论", "形象", "App 这次启动写进钥匙串", "钥匙串里", "扩展最近一次"])
+        #expect(IslandDiagnostics.text(rows).contains("实时活动的内容里：visor · a/1"))
+    }
 }

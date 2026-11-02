@@ -497,7 +497,8 @@ func (b *inbox) settleLark(convs []lark.Conversation, latest func(feed string, t
 			}
 		}
 		b.mu.Lock()
-		it.Read = true
+		// Nothing in the chat is unread any more: drop the count so the row stops showing the old badge.
+		it.Read, it.Count = true, 0
 		switch {
 		case replied:
 			it.done(now, "replied")

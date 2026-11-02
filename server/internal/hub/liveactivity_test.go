@@ -395,6 +395,27 @@ func TestIslandSides(t *testing.T) {
 	}
 }
 
+// The device's persona rides in its pushes (the widget extension cannot read the app's settings); the JSON is what
+// apple/Shared/FleetState.swift decodes. One that would bloat every push is dropped.
+func TestFleetLookForDevice(t *testing.T) {
+	look := &FleetLook{Design: "circuit", Light: 0xD4643F, Dark: 0xE8837C}
+	d := FleetState{Phase: "working", Working: 1}.forDevice(NotifyPrefs{Look: look}, FleetStats{})
+	b, _ := json.Marshal(d)
+	if want := `"look":{"design":"circuit","light":13919295,"dark":15238012}`; !strings.Contains(string(b), want) {
+		t.Fatalf("got %s, want %s in it", b, want)
+	}
+	if d := (FleetState{}).forDevice(defaultPrefs(), FleetStats{}); d.Look != nil {
+		t.Fatalf("a device that told nothing gets no look: %+v", d.Look)
+	}
+	p := devicePrefs(json.RawMessage(`{"look":{"design":"visor","light":1,"dark":2,"package":"mint/r1"}}`))
+	if p.Look == nil || p.Look.Package != "mint/r1" {
+		t.Fatalf("stored look: %+v", p.Look)
+	}
+	if p := devicePrefs(json.RawMessage(`{"look":{"design":"` + strings.Repeat("x", 40) + `"}}`)); p.Look != nil {
+		t.Fatalf("an oversized look kept: %+v", p.Look)
+	}
+}
+
 func TestFleetForDevice(t *testing.T) {
 	stats := FleetStats{TPM: 12000, Tokens: 42000000, Requests: 220,
 		Loads: []FleetLoad{{ID: "a", Name: "A", Percent: 30}, {ID: "b", Name: "B", Percent: 70}}}

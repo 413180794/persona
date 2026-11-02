@@ -22,6 +22,11 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
     var right: IslandSlot = .status
     /// The numbers the island shows, rounded to two significant digits by the hub.
     var stats: Stats?
+    /// The persona this device's activity draws (设置 › 形象). The widget extension cannot read the app's settings, and
+    /// on a phone it did not get them from the shared keychain either (build 98): the app stamps its own updates with
+    /// it, and the hub echoes what the app told it (prefs `look`) in this device's pushes (docs/live-activity.md「形象」).
+    /// Nil from an older hub: the extension falls back to the keychain.
+    var look: FleetLook?
 
     nonisolated struct Stats: Codable, Hashable, Sendable {
         var tpm = 0
@@ -110,7 +115,8 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
     }
 
     init(phase: Phase = .none, needsYou: Int = 0, working: Int = 0, unread: Int = 0, items: [Item] = [], workingSince: Double? = nil,
-         details: Bool = false, assistant: Bool = false, left: IslandSlot = .status, right: IslandSlot = .status, stats: Stats? = nil) {
+         details: Bool = false, assistant: Bool = false, left: IslandSlot = .status, right: IslandSlot = .status, stats: Stats? = nil,
+         look: FleetLook? = nil) {
         self.phase = phase
         self.needsYou = needsYou
         self.working = working
@@ -122,6 +128,7 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
         self.left = left
         self.right = right
         self.stats = stats
+        self.look = look
     }
 
     init(from decoder: Decoder) throws {
@@ -137,12 +144,15 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
         left = (try? c.decodeIfPresent(IslandSlot.self, forKey: .left)) ?? .status
         right = (try? c.decodeIfPresent(IslandSlot.self, forKey: .right)) ?? .status
         stats = try? c.decodeIfPresent(Stats.self, forKey: .stats)
+        look = try? c.decodeIfPresent(FleetLook.self, forKey: .look)
     }
 
-    /// The app's own copy for this device, like the hub's push (hub forDevice): its settings, the chosen load.
-    func tailored(island: IslandPrefs, details: Bool) -> FleetState {
+    /// The app's own copy for this device, like the hub's push (hub forDevice): its settings, the chosen load, and the
+    /// persona it draws when given.
+    func tailored(island: IslandPrefs, details: Bool, look: FleetLook? = nil) -> FleetState {
         var s = self
         s.details = details
+        if let look { s.look = look }
         (s.left, s.right) = island.sides
         if var stats = s.stats, !stats.loads.isEmpty {
             let pick = stats.loads.first { $0.id == island.machine } ?? stats.loads.max { $0.percent < $1.percent }
@@ -366,5 +376,26 @@ nonisolated enum IslandCell: Hashable, Sendable {
         case .timer: s.workingSinceDate.map { .timer($0) } ?? .empty
         case .none: .empty
         }
+    }
+}
+
+/// Which persona the Live Activity draws and in what color (docs/live-activity.md「形象」): the app's choice in
+/// 设置 › 外观 › 形象 and the accent it draws that persona in. It rides in the activity's content (`FleetState.look`),
+/// and the app also leaves it with a package's pictures in a keychain group it shares with the widget extension
+/// (LiveActivity/FleetPersona.swift: drawing, saving, reading).
+nonisolated struct FleetLook: Codable, Hashable, Sendable {
+    /// PersonaFace.Design's raw value: a built-in's drawing; for a package, what is drawn while its faces cannot be.
+    var design: String
+    /// The accent as "0xRRGGBB" values, light and dark.
+    var light: UInt32
+    var dark: UInt32
+    /// A hub package ("<id>/<rev>"): drawn from its faces (`FleetFaces`). Nil: a built-in.
+    var package: String?
+
+    init(design: String, light: UInt32, dark: UInt32, package: String? = nil) {
+        self.design = design
+        self.light = light
+        self.dark = dark
+        self.package = package
     }
 }

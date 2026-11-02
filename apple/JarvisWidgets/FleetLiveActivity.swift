@@ -30,7 +30,7 @@ struct FleetLiveActivity: Widget {
                 // The persona in the corner, like the compact island's left side; the counts move to the right (beside
                 // the face they lost their numbers: the corner is about 125 pt).
                 DynamicIslandExpandedRegion(.leading) {
-                    FleetFace(size: FleetLiveActivity.expandedFace, state: FleetPersona.state(state, stale: context.isStale))
+                    FleetFace(size: FleetLiveActivity.expandedFace, state: FleetPersona.state(state, stale: context.isStale), look: state.drawnLook)
                         .padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing, priority: 1) {
@@ -72,7 +72,7 @@ struct FleetLiveActivity: Widget {
             } compactTrailing: {
                 IslandSide(state: state, leading: false)
             } minimal: {
-                IslandWidth { limited in IslandMinimal(state: state, stale: context.isStale, limited: limited) }
+                IslandWidth { limited in IslandMinimal(state: state, stale: context.isStale, limited: limited, look: state.drawnLook) }
             }
             .widgetURL(FleetLink.whole(state))
             .keylineTint(FleetPalette.accent)
@@ -95,11 +95,11 @@ struct IslandSide: View {
     var body: some View {
         IslandWidth { limited in
             if limited {
-                if leading { IslandMinimal(state: state, stale: stale, limited: true) }
+                if leading { IslandMinimal(state: state, stale: stale, limited: true, look: state.drawnLook) }
             } else {
                 if leading {
                     // The persona, then the most urgent count (docs/live-activity.md「形象」).
-                    IslandLeading(state: state, stale: stale).padding(.leading, IslandMetrics.edge)
+                    IslandLeading(state: state, stale: stale, look: state.drawnLook).padding(.leading, IslandMetrics.edge)
                 } else {
                     IslandCellView(cell: IslandCell.sides(state).right).padding(.trailing, IslandMetrics.edge)
                 }
@@ -297,7 +297,7 @@ struct FleetLockScreen: View {
     private var full: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
-                FleetFace(size: FleetLiveActivity.lockFace, state: FleetPersona.state(state, stale: stale))
+                FleetFace(size: FleetLiveActivity.lockFace, state: FleetPersona.state(state, stale: stale), look: state.drawnLook)
                 FleetCounts(state: state, short: FleetStatsLine.count(state) > 1)
                 Spacer(minLength: 0)
                 FleetStatsLine(state: state)

@@ -1,31 +1,13 @@
 import Foundation
+import OSLog
 import Security
 import SwiftUI
 import UIKit
 
-/// Which persona the Live Activity draws and in what color (docs/live-activity.md「形象」): the app's choice in
-/// 设置 › 外观 › 形象 and the accent it draws that persona in, written by the app and read by the widget extension,
-/// which cannot read the app's settings. Kept out of the ContentState on purpose: the hub's pushes replace the whole
-/// state, and the hub does not know the phone's look.
-nonisolated struct FleetLook: Codable, Hashable, Sendable {
-    /// PersonaFace.Design's raw value: a built-in's drawing; for a package, what is drawn while its faces cannot be.
-    var design: String
-    /// The accent as "0xRRGGBB" values, light and dark.
-    var light: UInt32
-    var dark: UInt32
-    /// A hub package ("<id>/<rev>"): drawn from its faces (`FleetFaces`), saved beside the look. Nil: a built-in.
-    var package: String?
-
-    /// Before the app wrote one (or a build without the shared keychain group): the default persona in the app's
-    /// default accent.
+/// The look's drawing and where the app leaves it for the extension (the value itself: Shared/FleetState.swift).
+nonisolated extension FleetLook {
+    /// Before the app told the activity anything: the default persona in the app's default accent.
     static let standard = FleetLook(design: PersonaFace.Design.visor.rawValue, light: 0x007AFF, dark: 0x0A84FF)
-
-    init(design: String, light: UInt32, dark: UInt32, package: String? = nil) {
-        self.design = design
-        self.light = light
-        self.dark = dark
-        self.package = package
-    }
 
     /// A design in a (dynamic) color, resolved to its light and dark values.
     init(design: PersonaFace.Design, tint: Color, package: String? = nil) {
@@ -43,15 +25,29 @@ nonisolated struct FleetLook: Codable, Hashable, Sendable {
     var faceDesign: PersonaFace.Design { PersonaFace.Design(rawValue: design) ?? .visor }
     var tint: Color { Color(light: light, dark: dark) }
 
-    /// What the app saved last; `standard` when nothing is readable. Cheap enough to call on every render.
-    static var saved: FleetLook { load(.keychain) }
+    /// What the app saved last; `standard` when nothing is readable. Cheap enough to call on every render. The widget
+    /// extension tells what it read (`FleetLookReport`).
+    static var saved: FleetLook {
+        let (data, status) = FleetKeychain.read(FleetLookStore.lookAccount)
+        let look = data.flatMap { try? JSONDecoder().decode(FleetLook.self, from: $0) }
+        FleetLookReport.note { $0.look(status, look, bytes: data?.count) }
+        return look ?? standard
+    }
 
     static func load(_ store: FleetLookStore) -> FleetLook {
         store.read(FleetLookStore.lookAccount).flatMap { try? JSONDecoder().decode(FleetLook.self, from: $0) } ?? standard
     }
 
     /// The package's faces as saved, when they are this look's.
-    func faces(_ store: FleetLookStore = .keychain) -> FleetFaces? {
+    func faces() -> FleetFaces? {
+        guard package != nil else { return nil }
+        let (data, status) = FleetKeychain.read(FleetLookStore.facesAccount)
+        let faces = data.flatMap { try? PropertyListDecoder().decode(FleetFaces.self, from: $0) }
+        FleetLookReport.note { $0.faces(status, faces?.package, bytes: data?.count) }
+        return faces?.package == package ? faces : nil
+    }
+
+    func faces(_ store: FleetLookStore) -> FleetFaces? {
         guard let package, let data = store.read(FleetLookStore.facesAccount),
               let faces = try? PropertyListDecoder().decode(FleetFaces.self, from: data), faces.package == package else { return nil }
         return faces
@@ -64,9 +60,12 @@ nonisolated struct FleetLook: Codable, Hashable, Sendable {
         var changed = false
         if let package = look.package {
             // The faces before the look; a look is drawn only with faces of its own package, never another's.
-            if look.faces(store) == nil, let made = faces(), made.package == package,
-               let data = try? PropertyListEncoder().encode(made), store.write(data, FleetLookStore.facesAccount) {
-                changed = true
+            if look.faces(store) == nil {
+                if let made = faces(), made.package == package, let data = try? PropertyListEncoder().encode(made) {
+                    changed = store.write(data, FleetLookStore.facesAccount)
+                } else {
+                    FleetKeychain.log.error("no faces for \(package, privacy: .public): drawn in its color")
+                }
             }
         } else {
             _ = store.write(nil, FleetLookStore.facesAccount) // a built-in: no picture of the user's left behind
@@ -78,17 +77,36 @@ nonisolated struct FleetLook: Codable, Hashable, Sendable {
     }
 }
 
+nonisolated extension FleetState {
+    /// The persona to draw: the one the content carries (the app's updates, the hub's pushes), else — an older hub —
+    /// what the app left in the keychain. The keychain is read either way, so the extension's report says whether it
+    /// can be.
+    var drawnLook: FleetLook {
+        let kept = FleetLook.saved
+        FleetLookReport.note { $0.content(look) }
+        return look ?? kept
+    }
+}
+
 /// A hub package's faces on the activity (its pictures are the user's and stay on the hub and the phone, never in the
 /// repository): the first frame of each state's dot, the one the app holds still with Reduce Motion, and the avatar
-/// for a state the package has no frames for. PNGs as large as the activity's largest face.
+/// for a state the package has no frames for. PNGs as large as the activity's largest face, drawn at its size, and
+/// small: a phone may not draw a Live Activity whose picture is larger than where it shows (an image decoded at 1× is
+/// as many points as it has pixels), and Live Activity libraries keep each picture under 4 KB; the simulator draws
+/// anything (docs/live-activity.md「为什么 build 98 还不对」).
 nonisolated struct FleetFaces: Codable, Hashable, Sendable {
     var package: String
     /// PersonaState raw value → PNG, only the states the package draws itself.
     var states: [String: Data]
     var avatar: Data?
 
-    /// The largest face on the activity (the lock screen's, the expanded island's) at 3×, in pixels.
-    static let pixels: CGFloat = 78
+    /// The largest face on the activity (the lock screen's, the expanded island's), in points; each picture is drawn
+    /// at this size whatever its pixels.
+    static let points: CGFloat = 26
+    /// Its pixels at 3×, the most a picture gets.
+    static let pixels: CGFloat = points * 3
+    /// The most bytes a picture takes: a busier one is made with fewer pixels.
+    static let maxBytes = 4000
 
     /// The picture for a state, and whether it is that state's own (else the avatar or the idle frame: the activity
     /// adds the state's cue, as it does on the built-ins).
@@ -98,14 +116,26 @@ nonisolated struct FleetFaces: Codable, Hashable, Sendable {
         return nil
     }
 
-    /// A picture made into one of them: square, `pixels` on a side, PNG.
+    /// A picture made into one of them: square, PNG, `pixels` on a side or fewer to stay within `maxBytes` (a real
+    /// persona's frame is 11–15 KB at 78px and fits at about 36–42px; down to 30, nil when even that is too large).
     static func png(_ image: UIImage) -> Data? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        let side = CGSize(width: pixels, height: pixels)
-        return UIGraphicsImageRenderer(size: side, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: side))
-        }.pngData()
+        format.preferredRange = .standard // 8 bits a channel, whatever the screen
+        for side in stride(from: pixels, through: 30, by: -6) {
+            let size = CGSize(width: side, height: side)
+            let data = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+                image.draw(in: CGRect(origin: .zero, size: size))
+            }.pngData()
+            if let data, data.count <= maxBytes { return data }
+        }
+        return nil
+    }
+
+    /// A picture as the activity draws it: `points` on a side, at the scale its pixels give.
+    static func image(_ png: Data) -> UIImage? {
+        guard let cg = UIImage(data: png)?.cgImage else { return nil }
+        return UIImage(cgImage: cg, scale: CGFloat(cg.width) / points, orientation: .up)
     }
 }
 
@@ -115,41 +145,173 @@ nonisolated struct FleetFaces: Codable, Hashable, Sendable {
 nonisolated struct FleetLookStore: Sendable {
     static let lookAccount = "fleet-look"
     static let facesAccount = "fleet-faces"
+    /// What the widget extension last read (`FleetLookReport`), written by the extension.
+    static let seenAccount = "fleet-seen"
 
     var read: @Sendable (String) -> Data?
     /// Nil deletes. False when it could not be saved.
     var write: @Sendable (Data?, String) -> Bool
 
-    static let keychain = FleetLookStore(read: { account in
-        // Any group: the extension has only the shared one, and the app's own groups hold no item of this service.
-        var q = query(account, group: nil)
-        q[kSecReturnData as String] = true
-        q[kSecMatchLimit as String] = kSecMatchLimitOne
-        var out: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess else { return nil }
-        return out as? Data
-    }, write: { data, account in
-        // Signed without the shared group (a free personal team, or a build that lost it: scripts/entitlements.py),
-        // nothing is saved and the extension draws `standard`.
-        guard let group else { return false }
-        SecItemDelete(query(account, group: group) as CFDictionary)
-        guard let data else { return true }
-        var add = query(account, group: group)
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
-    })
+    static let keychain = FleetLookStore(read: { FleetKeychain.read($0).data }, write: { FleetKeychain.write($0, $1) == errSecSuccess })
+}
 
-    /// `<team>.<bundle id>.look`; nil without a team (an empty one leaves just the dot).
-    private static var group: String? {
+/// The shared keychain group itself. Both sides use the group by name, so the app compares what it saves with the very
+/// item the extension reads (not one of its other groups'), and every answer is logged and kept for 灵动岛诊断.
+nonisolated enum FleetKeychain {
+    static let service = "jarvis.look"
+    /// The island's log (Console: subsystem `jarvis`, category `island`): every keychain answer on either side, so a
+    /// phone that draws the wrong persona says which step failed (docs/live-activity.md「诊断」).
+    static let log = Logger(subsystem: "jarvis", category: "island")
+
+    /// `<team>.<bundle id>.look`, in both bundles' Info.plist; nil without a team (an empty one leaves just the dot).
+    static var group: String? {
         (Bundle.main.object(forInfoDictionaryKey: "JarvisLookKeychainGroup") as? String).flatMap { $0.isEmpty || $0.hasPrefix(".") ? nil : $0 }
     }
 
+    /// The item and the keychain's answer. In the group by name; a bundle not signed with it (errSecMissingEntitlement)
+    /// looks in the groups it has.
+    static func read(_ account: String) -> (data: Data?, status: OSStatus) {
+        func copy(_ group: String?) -> (Data?, OSStatus) {
+            var q = query(account, group: group)
+            q[kSecReturnData as String] = true
+            q[kSecMatchLimit as String] = kSecMatchLimitOne
+            var out: AnyObject?
+            let status = SecItemCopyMatching(q as CFDictionary, &out)
+            return (out as? Data, status)
+        }
+        var (data, status) = copy(group)
+        if status == errSecMissingEntitlement, group != nil { (data, status) = copy(nil) }
+        if status != errSecSuccess && status != errSecItemNotFound {
+            log.error("read \(account, privacy: .public) in \(group ?? "-", privacy: .public): \(status)")
+        }
+        return (data, status)
+    }
+
+    /// Saves (nil deletes) and reads it back. Signed without the shared group (a free personal team, or a build that
+    /// lost it: scripts/entitlements.py), nothing is saved and the extension draws `standard`.
+    static func write(_ data: Data?, _ account: String) -> OSStatus {
+        guard let group else {
+            log.error("write \(account, privacy: .public): no keychain group in Info.plist")
+            return remember(account, errSecMissingEntitlement, bytes: data?.count)
+        }
+        let deleted = SecItemDelete(query(account, group: group) as CFDictionary)
+        guard let data else { return remember(account, deleted == errSecItemNotFound ? errSecSuccess : deleted, bytes: nil) }
+        var add = query(account, group: group)
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        var status = SecItemAdd(add as CFDictionary, nil)
+        if status == errSecSuccess, read(account).data != data { status = errSecDataNotAvailable }
+        if status == errSecSuccess {
+            log.notice("wrote \(account, privacy: .public), \(data.count) bytes, in \(group, privacy: .public)")
+        } else {
+            log.error("write \(account, privacy: .public), \(data.count) bytes, in \(group, privacy: .public): \(status)")
+        }
+        return remember(account, status, bytes: data.count)
+    }
+
+    /// The last write of each account in this process: account → (when, answer, bytes).
+    nonisolated(unsafe) private static var writes: [String: (at: Date, status: OSStatus, bytes: Int?)] = [:]
+    private static let lock = NSLock()
+
+    static var lastWrites: [String: (at: Date, status: OSStatus, bytes: Int?)] { lock.withLock { writes } }
+
+    private static func remember(_ account: String, _ status: OSStatus, bytes: Int?) -> OSStatus {
+        lock.withLock { writes[account] = (.now, status, bytes) }
+        return status
+    }
+
+    /// One item of the service as the keychain lists it.
+    struct Item: Hashable, Sendable {
+        var account: String
+        var group: String
+        var bytes: Int
+        var modified: Date?
+    }
+
+    /// Every item of the service this bundle can see, in any of its groups, and the keychain's answer.
+    static func items() -> ([Item], OSStatus) {
+        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                kSecReturnAttributes as String: true, kSecReturnData as String: true,
+                                kSecMatchLimit as String: kSecMatchLimitAll]
+        q[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
+        var out: AnyObject?
+        let status = SecItemCopyMatching(q as CFDictionary, &out)
+        let found = (out as? [[String: Any]] ?? []).map { a in
+            Item(account: a[kSecAttrAccount as String] as? String ?? "?", group: a[kSecAttrAccessGroup as String] as? String ?? "?",
+                 bytes: (a[kSecValueData as String] as? Data)?.count ?? 0, modified: a[kSecAttrModificationDate as String] as? Date)
+        }
+        return (found.sorted { ($0.account, $0.group) < ($1.account, $1.group) }, status)
+    }
+
     private static func query(_ account: String, group: String?) -> [String: Any] {
-        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "jarvis.look",
+        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecAttrAccount as String: account]
         if let group { q[kSecAttrAccessGroup as String] = group }
         return q
+    }
+}
+
+/// What the widget extension last drew from, written by it into the shared group (`fleet-seen`) and shown on 灵动岛诊断:
+/// the keychain's answer for the look and the faces, and what they held. Written only when it changes or ten minutes
+/// on, never on every render. An extension that cannot use the keychain cannot write it either: then only its log
+/// says so.
+nonisolated struct FleetLookReport: Codable, Hashable, Sendable {
+    var at = Date.distantPast
+    /// The look in the activity's content ("design" or "design · package"), nil when it carried none.
+    var content: String?
+    var lookStatus: Int32?
+    var design: String?
+    var package: String?
+    var lookBytes: Int?
+    var facesStatus: Int32?
+    var facesPackage: String?
+    var facesBytes: Int?
+
+    mutating func content(_ look: FleetLook?) {
+        content = look.map { Self.describe($0) }
+    }
+
+    static func describe(_ look: FleetLook) -> String { [look.design, look.package].compactMap { $0 }.joined(separator: " · ") }
+
+    mutating func look(_ status: OSStatus, _ look: FleetLook?, bytes: Int?) {
+        (lookStatus, design, package, lookBytes) = (status, look?.design, look?.package, bytes)
+    }
+
+    mutating func faces(_ status: OSStatus, _ package: String?, bytes: Int?) {
+        (facesStatus, facesPackage, facesBytes) = (status, package, bytes)
+    }
+
+    /// The same reading, whenever it was.
+    func same(_ other: FleetLookReport) -> Bool {
+        var a = self, b = other
+        (a.at, b.at) = (.distantPast, .distantPast)
+        return a == b
+    }
+
+    /// What the extension wrote last; nil when it never did (or this bundle cannot read it).
+    static var seen: FleetLookReport? {
+        FleetKeychain.read(FleetLookStore.seenAccount).data.flatMap { try? JSONDecoder().decode(FleetLookReport.self, from: $0) }
+    }
+
+    nonisolated(unsafe) private static var current = FleetLookReport()
+    nonisolated(unsafe) private static var written: FleetLookReport?
+    private static let lock = NSLock()
+    private static let inExtension = Bundle.main.bundleURL.pathExtension == "appex"
+
+    /// Records a reading in the widget extension (the app's own readings are not the extension's) and writes the report
+    /// when it says something new.
+    static func note(_ change: (inout FleetLookReport) -> Void) {
+        guard inExtension else { return }
+        let due: FleetLookReport? = lock.withLock {
+            change(&current)
+            if let w = written, w.same(current), Date.now.timeIntervalSince(w.at) < 600 { return nil }
+            current.at = .now
+            written = current
+            return current
+        }
+        guard let due else { return }
+        FleetKeychain.log.notice("extension drew \(due.content ?? "no look in the content", privacy: .public); keychain look \(due.lookStatus ?? 1) \(due.design ?? "-", privacy: .public) \(due.package ?? "-", privacy: .public), faces \(due.facesStatus ?? 1) \(due.facesBytes ?? 0) bytes")
+        if let data = try? JSONEncoder().encode(due) { _ = FleetKeychain.write(data, FleetLookStore.seenAccount) }
     }
 }
 
@@ -182,7 +344,7 @@ struct FleetFace: View {
 
     var body: some View {
         Group {
-            if let face = (faces ?? look.faces())?.face(state), let image = UIImage(data: face.png) {
+            if let face = (faces ?? look.faces())?.face(state), let image = FleetFaces.image(face.png) {
                 Image(uiImage: image)
                     .resizable()
                     .interpolation(.high)

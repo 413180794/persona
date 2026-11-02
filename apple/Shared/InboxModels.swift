@@ -211,7 +211,8 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var kindLabel: String? {
         switch kind {
         case "dm": "私聊"
-        case "mention": lark?.atAll == true ? "@所有人" : "@我"
+        // Read elsewhere: the @ is no longer unread, so the row stops flagging it (it stays for its tier).
+        case "mention": read == true ? nil : lark?.atAll == true ? "@所有人" : "@我"
         case "bot": "机器人"
         case "doc": doc?.notice == "comment" || doc?.notice == "reply" ? "评论" : "@我"
         case "moment": moment?.notice?.hasPrefix("atIn") == true ? "@我" : "removed"

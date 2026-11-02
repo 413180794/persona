@@ -66,6 +66,9 @@ type NotifyPrefs struct {
 	// MuteWhileDesktop: 手机静音 (WeChat's) — no alert pushes to this device while a desktop app (the Mac app) is
 	// connected; it shows them there (desktops.go).
 	MuteWhileDesktop bool `json:"mute_while_desktop"`
+	// Look: the persona this device's Live Activity draws (设置 › 形象), echoed in its pushes (FleetState.Look): the
+	// widget extension cannot read the app's settings.
+	Look *FleetLook `json:"look,omitempty"`
 }
 
 // TranslatePrefs mirrors 设置 › 翻译 on a device.
@@ -144,6 +147,9 @@ func devicePrefs(raw json.RawMessage) NotifyPrefs {
 	case "a", "b", "c", "custom":
 	default:
 		p.Island.Preset = "a"
+	}
+	if l := p.Look; l != nil && (l.Design == "" || len(l.Design) > 32 || len(l.Package) > 160) {
+		p.Look = nil // every push carries it, inside the activity's 4 KB
 	}
 	return p
 }

@@ -24,6 +24,9 @@ struct InboxTests {
         let chat = items[0], mail = items[1]
         #expect(!chat.isTriaged && chat.triage == .action) // not triaged yet: shown as needing you
         #expect(chat.kindLabel == "@我")
+        var read = chat
+        read.read = true // read in Feishu while it still needs me: no @ flag
+        #expect(read.kindLabel == nil)
         let conv = try #require(chat.larkConversation)
         #expect(conv.id == "f1" && conv.isGroup && conv.focus == "11" && conv.unread == 3)
 

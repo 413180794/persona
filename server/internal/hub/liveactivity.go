@@ -63,6 +63,17 @@ type FleetState struct {
 	Right string `json:"right,omitempty"`
 	// Stats: the numbers the device shows, rounded so that small changes do not cost a push (usage.go).
 	Stats *FleetStats `json:"stats,omitempty"`
+	// Look: the persona the device's activity draws, as the app told the hub (prefs look); nil until it did.
+	Look *FleetLook `json:"look,omitempty"`
+}
+
+// FleetLook is the persona the activity draws (apple/Shared/FleetState.swift FleetLook): the hub only passes on what
+// the device told it.
+type FleetLook struct {
+	Design  string `json:"design"` // a built-in's drawing ("visor", "circuit"); a package's while its pictures cannot be read
+	Light   uint32 `json:"light"`  // the accent, 0xRRGGBB, light and dark
+	Dark    uint32 `json:"dark"`
+	Package string `json:"package,omitempty"` // a hub package, "<id>/<rev>": its pictures are on the phone
 }
 
 // FleetStats are the island's numbers. A push carries only those the device shows; the app's own copy has them all.
@@ -107,11 +118,12 @@ func (h *Hub) fleetStats() FleetStats {
 	return st
 }
 
-// forDevice is what one device gets: its settings, and of the assistant and the numbers only what it shows (so a
-// change it does not show costs no push).
+// forDevice is what one device gets: its settings and persona, and of the assistant and the numbers only what it
+// shows (so a change it does not show costs no push).
 func (s FleetState) forDevice(p NotifyPrefs, stats FleetStats) FleetState {
 	d := s
 	d.Details = p.LockDetails
+	d.Look = p.Look
 	d.Left, d.Right = p.Island.sides()
 	shows := func(slot string) bool { return d.Left == slot || d.Right == slot }
 	if !shows(SlotAssistant) {

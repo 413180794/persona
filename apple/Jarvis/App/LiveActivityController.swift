@@ -51,7 +51,7 @@ final class LiveActivityController {
         }
         if let activity {
             // At once from what is showing (another machine's load comes with the hub's fleet below).
-            let state = activity.content.state.tailored(island: prefs.island, details: prefs.lockDetails)
+            let state = activity.content.state.tailored(island: prefs.island, details: prefs.lockDetails, look: AppModel.shared.fleetLook)
             Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate, relevanceScore: Self.relevance(state)))
         }
         if let api = AppModel.shared.api {
@@ -76,7 +76,7 @@ final class LiveActivityController {
 
     /// The hub's current fleet (the `fleet` event, or GET /api/v1/fleet on becoming active).
     func apply(_ hubState: FleetState) {
-        let state = hubState.tailored(island: island, details: lockDetails)
+        let state = hubState.tailored(island: island, details: lockDetails, look: AppModel.shared.fleetLook)
         guard enabled, ActivityAuthorizationInfo().areActivitiesEnabled else {
             endAll()
             return
@@ -114,11 +114,49 @@ final class LiveActivityController {
         Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate))
     }
 
-    /// The persona and its color changed (or the app started): saved for the widget extension, a package with its
-    /// faces, and the running activity is redrawn with it now rather than at the hub's next push.
-    func look(_ look: FleetLook, faces: () -> FleetFaces?) {
-        guard FleetLook.save(look, faces: faces), let activity else { return }
-        Self.update(activity, activity.content)
+    /// The persona and its color changed, or the app started or came back (what failed is tried again). It goes three
+    /// ways (docs/live-activity.md「形象」):
+    ///   - into the running activity's content now, which also makes the system draw it again;
+    ///   - to the hub, which puts it in this device's pushes (`look` in the device's prefs);
+    ///   - into the keychain group shared with the widget extension, with a package's pictures (`FleetLook.save`).
+    /// `force` (灵动岛诊断): written anew everywhere and redrawn even when nothing changed.
+    func look(_ look: FleetLook, force: Bool = false, faces: () -> FleetFaces?) {
+        if force {
+            _ = FleetLookStore.keychain.write(nil, FleetLookStore.lookAccount)
+            _ = FleetLookStore.keychain.write(nil, FleetLookStore.facesAccount)
+            toldHub = nil
+        }
+        let saved = FleetLook.save(look, faces: faces)
+        tellHub(look)
+        guard let activity else { return }
+        let content = activity.content
+        guard content.state.look != look || saved || force else { return }
+        var state = content.state
+        state.look = look
+        // A new stale date too: an update identical to what is showing may draw nothing.
+        let stale = (content.staleDate ?? .now.addingTimeInterval(15 * 60)).addingTimeInterval(1)
+        Self.update(activity, ActivityContent(state: state, staleDate: stale, relevanceScore: content.relevanceScore))
+    }
+
+    /// The look in the running activity's content: nil without an activity (灵动岛诊断).
+    var runningLook: FleetLook?? { activity.map { $0.content.state.look } }
+
+    /// The look the hub has for this device (nil: not told since launch).
+    private var toldHub: FleetLook?
+    private var telling: Task<Void, Never>?
+
+    private func tellHub(_ look: FleetLook) {
+        guard toldHub != look, let api = AppModel.shared.api, !api.config.isDemo else { return }
+        telling?.cancel()
+        telling = Task { [weak self] in
+            do {
+                try await api.setFleetLook(device: PushRegistrar.deviceID, look)
+                guard !Task.isCancelled else { return }
+                self?.toldHub = look
+            } catch {
+                FleetKeychain.log.error("telling the hub the look: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     func endAll() {
@@ -241,7 +279,8 @@ extension LiveActivityController {
             if ["done", "thinking", "assistant", "offline"].contains(phase) {
                 endAll()
                 try? await Task.sleep(for: .seconds(1))
-                let content = ActivityContent(state: state.tailored(island: island, details: details), staleDate: .now.addingTimeInterval(15 * 60))
+                let content = ActivityContent(state: state.tailored(island: island, details: details, look: AppModel.shared.fleetLook),
+                                              staleDate: .now.addingTimeInterval(15 * 60))
                 request(content)
                 if phase == "offline", let activity {
                     // A request already stale is refused, and the simulator does not redraw when a stale date passes:
@@ -287,7 +326,7 @@ extension FleetFaces {
         for s in PersonaState.allCases where m.dot.states[s.rawValue] != nil {
             if let first = personas.frames(p, s)?.images.first, let png = Self.png(first) { states[s.rawValue] = png }
         }
-        let avatar = personas.avatar(p, points: Self.pixels / 3, scale: 3).flatMap(Self.png)
+        let avatar = personas.avatar(p, points: Self.points, scale: 3).flatMap(Self.png)
         guard !states.isEmpty || avatar != nil else { return nil }
         self.init(package: "\(p.id)/\(p.rev)", states: states, avatar: avatar)
     }

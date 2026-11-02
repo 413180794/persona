@@ -102,7 +102,7 @@ func TestInboxLarkSettle(t *testing.T) {
 	now := time.Now()
 	b := newInbox()
 	mk := func(id, tier string) *InboxItem {
-		it := &InboxItem{ID: id, Tier: tier, Last: "5", Lark: &InboxLark{FeedID: id}}
+		it := &InboxItem{ID: id, Kind: KindMention, Tier: tier, Count: 4, Last: "5", Lark: &InboxLark{FeedID: id, AtAll: true}}
 		b.items[id] = it
 		return it
 	}
@@ -118,13 +118,13 @@ func TestInboxLarkSettle(t *testing.T) {
 	if fyi.open() || !fyi.Read || fyi.DoneBy != "read" {
 		t.Errorf("fyi read elsewhere should be done: %+v", fyi)
 	}
-	if !action.open() || !action.Read {
-		t.Errorf("action read elsewhere stays open: %+v", action)
+	if !action.open() || !action.Read || action.Count != 0 {
+		t.Errorf("action read elsewhere stays open without the unread count: %+v", action)
 	}
 	if replied.open() || replied.DoneBy != "replied" {
 		t.Errorf("replied should be done: %+v", replied)
 	}
-	if !still.open() || still.Read {
+	if !still.open() || still.Read || still.Count != 4 {
 		t.Errorf("unread chat untouched: %+v", still)
 	}
 }

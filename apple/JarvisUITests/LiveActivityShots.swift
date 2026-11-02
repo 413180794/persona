@@ -85,6 +85,7 @@ final class LiveActivityShots: XCTestCase {
         if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
         app.launchPinned()
         sleep(env["JARVIS_MOCK_HUB"] == nil ? 4 : 8)
+        Self.allowNotifications()
         XCUIDevice.shared.press(.home)
         sleep(3)
         shot("switch-0-\(first)")
@@ -114,6 +115,18 @@ final class LiveActivityShots: XCTestCase {
     }
 
     /// mock_hub's pairing link when JARVIS_MOCK_HUB is set: the hub a package persona is downloaded from.
+    /// A simulator whose permissions were reset asks for notifications on launch: the prompt would take the Home press
+    /// (and the app, not active behind it, starts no activity).
+    @MainActor static func allowNotifications() {
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        guard alert.waitForExistence(timeout: 2) else { return }
+        for label in ["Allow", "允许"] where alert.buttons[label].exists {
+            alert.buttons[label].tap()
+            sleep(2)
+            return
+        }
+    }
+
     static var pair: String? {
         ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"].map {
             "jarvis://pair?url=" + $0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

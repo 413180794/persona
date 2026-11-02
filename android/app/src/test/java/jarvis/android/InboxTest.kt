@@ -41,6 +41,7 @@ class InboxTest {
     @Test fun labels() {
         assertEquals("私聊", items[0].kindLabel)
         assertEquals("@所有人", items[1].kindLabel)
+        assertEquals("群聊", items[1].copy(read = true).kindLabel) // read in Feishu: no @ flag
         assertEquals("抄送", items[2].kindLabel) // not direct
         assertEquals("飞书", items[0].sourceLabel)
         assertEquals("me@example.com", items[2].sourceLabel)

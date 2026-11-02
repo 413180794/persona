@@ -8,12 +8,17 @@ import SwiftUI
 struct IslandSettingsView: View {
     @Binding var island: IslandPrefs
     @Environment(AppModel.self) private var model
+    /// 灵动岛诊断, opened by touching and holding the first preview (not a row: it is for a phone that draws the wrong
+    /// persona, when asked to).
+    @State private var diagnostics = false
 
     var body: some View {
         List {
             Section {
                 VStack(spacing: Theme.Space.l) {
                     preview("平时", Self.sample(needsYou: false), island)
+                        .contentShape(.rect)
+                        .onLongPressGesture { diagnostics = true }
                     preview("有 Agent 需要你时", Self.sample(needsYou: true), island)
                     VStack(spacing: Theme.Space.sm) {
                         IslandSharedPreview(state: Self.sample(needsYou: false))
@@ -85,6 +90,16 @@ struct IslandSettingsView: View {
         .themedPage()
         .navigationTitle("灵动岛")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $diagnostics) { IslandDiagnosticsView() }
+        #if DEBUG
+        // `-openIslandDiagnostics YES` (with `-openIslandSettings YES -openNotificationSettings YES -tab settings`).
+        .task {
+            if UserDefaults.standard.bool(forKey: "openIslandDiagnostics") {
+                try? await Task.sleep(for: .milliseconds(600))
+                diagnostics = true
+            }
+        }
+        #endif
     }
 
     private func preview(_ title: String, _ state: FleetState, _ island: IslandPrefs) -> some View {

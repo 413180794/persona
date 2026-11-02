@@ -742,6 +742,15 @@ nonisolated struct APIClient: Sendable {
     func setMuteWhileDesktop(device: String, _ on: Bool) async throws -> NotifyPrefs {
         try JSON.decoder.decode(NotifyPrefs.self, from: try await request("PUT", "/api/v1/devices/\(device)/prefs", body: MuteWhileDesktopPut(on: on)))
     }
+    /// The persona the hub keeps for this device's Live Activity; nil when it has none (an older hub never has one).
+    func fleetLook(device: String) async throws -> FleetLook? {
+        struct Prefs: Decodable { var look: FleetLook? }
+        return try await get("/api/v1/devices/\(device)/prefs", as: Prefs.self).look
+    }
+    /// The persona this device's Live Activity draws, alone (the PUT merges): the hub echoes it in the device's pushes.
+    func setFleetLook(device: String, _ look: FleetLook) async throws {
+        _ = try await request("PUT", "/api/v1/devices/\(device)/prefs", body: FleetLookPut(look: look))
+    }
     func setNotifyPrefs(device: String, _ prefs: NotifyPrefs) async throws -> NotifyPrefs {
         try JSON.decoder.decode(NotifyPrefs.self, from: try await request("PUT", "/api/v1/devices/\(device)/prefs", body: prefs))
     }

@@ -32,6 +32,7 @@ struct JarvisApp: App {
         .onChange(of: phase, initial: true) { old, new in
             if new == .active {
                 model.live.suspended = false
+                LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces }
                 model.live.ensureConnected()
                 if old != new { Task { await model.refresh() } }
             } else if new == .background {

@@ -47,7 +47,11 @@ data class InboxItem(
     val kindLabel: String
         get() = when (kind) {
             "dm" -> "私聊"
-            "mention" -> if (lark?.atAll == true) "@所有人" else "@我"
+            "mention" -> when {
+                read -> "群聊" // read elsewhere: the @ is no longer unread
+                lark?.atAll == true -> "@所有人"
+                else -> "@我"
+            }
             "group" -> "群聊"
             "bot" -> "机器人"
             "mail" -> if (mail?.direct == true) "邮件" else "抄送"

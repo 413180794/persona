@@ -789,6 +789,11 @@ nonisolated struct MuteWhileDesktopPut: Encodable, Sendable {
     enum CodingKeys: String, CodingKey { case on = "mute_while_desktop" }
 }
 
+/// The Live Activity's persona alone, for the prefs PUT (it merges): FleetState.look.
+nonisolated struct FleetLookPut: Encodable, Sendable {
+    var look: FleetLook
+}
+
 nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     enum Done: String, Codable, CaseIterable, Sendable { case off, long, always }
     var input: Bool = true
