@@ -108,6 +108,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"), island: d.string(forKey: "fleetIsland"),
                                                      count: d.integer(forKey: "showFleetCount"))
         }
+        RuntimeCLI.startIfAsked() // `-runtimeCLI <port>`: scripts/jarvisctl.py drives the running app
         let automation = d.string(forKey: "pairURL") != nil
         #else
         let automation = false

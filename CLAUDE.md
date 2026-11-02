@@ -100,6 +100,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
+| `docs/runtime-cli.md` | DEBUG 构建里的命令通道（`scripts/jarvisctl.py`）：运行中读状态、等画面停下、截图，协议和安全约束 |
 | `docs/codex.md` | Codex 和 TRAEX（内部 Codex 分支）支持：怎么识别、rollout 格式怎么映射成对话、提问和审批卡片（读 rollout 和屏幕、各种界面状态下怎么作答）、改走 app-server 和审批 hook 的调研、还不支持什么 |
 | `docs/runtimes.md` | 接入 Agent 运行时（runtime）的规范：和宿主的区别、多机怎么汇总、driver 要实现什么、内容和交互的约定、命名、SDK、验收清单 |
 | `docs/dsh.md` | DSH（DeepSeek Harness）支持：第一个 runtime，DSH Web 插件的安装、事件映射、授权 / 提问怎么到手机、限制、端到端验证 |
