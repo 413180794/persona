@@ -1,11 +1,12 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, the accent action, sections, one gliding highlight.
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, isQuiet, type AgentGroup } from "../lib/agent-groups";
 import { api, setToken } from "../lib/api";
-import { ago, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
+import { ago, baseName, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { href, navigate, type Route } from "../lib/router";
-import { useCounts, useSpaces } from "../lib/sessions";
+import { useAgentSessions, useCounts, useSpaces } from "../lib/sessions";
 import { reset, useStore } from "../lib/store";
-import type { Session } from "../lib/types";
+import type { Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
@@ -30,6 +31,12 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const machines = useStore((s) => s.machines);
   const assistant = useStore((s) => s.assistant);
   const { spaces, loose, recent } = useSpaces();
+  const all = useAgentSessions();
+  const mutes = useStore((s) => s.mutes);
+  const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("jarvis.agentGrouping")));
+  const groupingMenu = useMenu();
+  const groups = useMemo(() => grouping === "space" ? [] : buildAgentGroups(all, machines, grouping, mutes), [all, machines, grouping, mutes]);
+  const groupingLabel = AGENT_GROUPINGS.find((g) => g.key === grouping)!.label;
   const counts = useCounts();
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());
@@ -44,7 +51,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
     route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new") : route.name === "machines" ? "machines" : route.name === "settings" ? "settings" : "home";
   // a space with nothing to look at (every agent seen and waiting) goes to「空闲的空间」, like the app; the open
   // conversation's space stays where it is so the row under the pointer doesn't move away
-  const busy = (sp: (typeof spaces)[number]) => sp.sessions.some((s) => ["needs_you", "working", "unread"].includes(stateOf(s)) || activeKey === `s:${s.machine_id}/${s.session_id}`);
+  const busy = (sp: (typeof spaces)[number]) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
   const active = spaces.filter(busy);
   const idle = spaces.filter((sp) => !busy(sp));
 
@@ -120,6 +127,21 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           </Section>
         )}
 
+        <div className="mt-3 flex items-center justify-between gap-2 px-2">
+          <span className="text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
+          <button type="button" aria-label={`Agent 分组：${groupingLabel}`} aria-haspopup="menu" aria-expanded={Boolean(groupingMenu.anchor)} onClick={groupingMenu.open} className="relative z-10 flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
+            {groupingLabel}
+            <Icon name="chevron" size={10} stroke={2} />
+          </button>
+        </div>
+        {groupingMenu.anchor && (
+          <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header="Agent 分组" items={AGENT_GROUPINGS.map((g) => ({
+            key: g.key, label: g.label, icon: g.key === "space" ? "folder" : g.key === "machine" ? "machine" : "layers", checked: grouping === g.key,
+            onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); setHovered(null); },
+          }))} />
+        )}
+
+        {grouping === "space" ? <>
         {active.map((sp) => (
           <SpaceSection key={sp.key} sp={sp} machineName={machines.length > 1 ? machines.find((m) => m.id === sp.machineId)?.name : undefined} reg={reg} hover={setHovered} activeKey={activeKey} go={go} />
         ))}
@@ -141,6 +163,10 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
             ))}
           </Section>
         )}
+
+        </> : groups.map((group) => (
+          <AgentSection key={group.key} group={group} machines={machines} byMachine={grouping === "machine"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} />
+        ))}
 
         {recent.length > 0 && (
           <Section title="最近（未运行）" folded={recentFolded} onToggle={toggleRecent}>
@@ -211,21 +237,46 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
   return (
     <div className="mt-3">
       <div className="group/sec flex items-center gap-1 px-2 pb-1">
-        <button type="button" disabled={!onToggle} onClick={onToggle} className="relative z-10 flex min-w-0 flex-1 items-center gap-1 text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase enabled:hover:text-ink-2">
-          <span className="truncate">{title}</span>
+        <button type="button" aria-expanded={onToggle ? !folded : undefined} disabled={!onToggle} onClick={onToggle} className="relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase enabled:hover:text-ink-2">
+          <span className="min-w-0 truncate">{title}</span>
           {onToggle && <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />}
         </button>
         {right}
       </div>
       <Collapse open={!folded}>
-        <div className="flex flex-col gap-px">{children}</div>
+        <div className="flex flex-col gap-px" inert={folded || undefined}>{children}</div>
       </Collapse>
     </div>
   );
 }
 
+function AgentSection({ group, machines, byMachine, reg, hover, activeKey, go }: { group: AgentGroup; machines: Machine[]; byMachine: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
+  const [folded, toggle] = useFolded(group.key, group.folded);
+  const [showIdle, setShowIdle] = useState(false);
+  const idle = byMachine ? group.sessions.filter((s) => isQuiet(s) && activeKey !== `s:${s.machine_id}/${s.session_id}`) : [];
+  const idleKeys = new Set(idle.map((s) => `${s.machine_id}/${s.session_id}`));
+  const visible = group.sessions.filter((s) => !idleKeys.has(`${s.machine_id}/${s.session_id}`));
+  const row = (s: Session) => {
+    const key = `s:${s.machine_id}/${s.session_id}`;
+    const context = [s.space_name || baseName(s.cwd), !byMachine && machines.length > 1 ? machines.find((m) => m.id === s.machine_id)?.name : ""].filter(Boolean).join(" · ");
+    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} />;
+  };
+  return (
+    <Section title={<span className="flex min-w-0 items-center gap-1.5">{group.state && <span aria-hidden><StatusDot state={group.state} size={6} /></span>}<span className="truncate">{group.name}</span></span>} folded={folded} onToggle={toggle} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{group.sessions.length}</span>}>
+      {visible.map(row)}
+      {idle.length > 0 && <>
+        <button type="button" aria-expanded={showIdle} onClick={() => setShowIdle((v) => !v)} className="relative z-10 flex w-full items-center gap-1.5 whitespace-nowrap rounded-control px-2 py-1.5 text-left text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
+          <Icon name="chevron" size={10} style={{ transform: showIdle ? "none" : "rotate(-90deg)" }} />
+          <span>空闲 {idle.length}</span>
+        </button>
+        <Collapse open={showIdle}><div inert={!showIdle || undefined}>{idle.map(row)}</div></Collapse>
+      </>}
+    </Section>
+  );
+}
+
 function SpaceSection({ sp, machineName, reg, hover, activeKey, go }: { sp: ReturnType<typeof useSpaces>["spaces"][number]; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
-  const allIdle = sp.sessions.every((s) => stateOf(s) === "idle" || stateOf(s) === "unknown");
+  const allIdle = sp.sessions.every(isQuiet);
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3);
   const states = sp.sessions.map(stateOf);
   const dots = (["needs_you", "unread", "working"] as const).filter((s) => states.includes(s));

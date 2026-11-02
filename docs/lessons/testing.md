@@ -70,6 +70,12 @@
 - hooks 文件存在不等于启用：`core.hooksPath` 是克隆本地配置，启用后用隔离临时仓库验证真实 `git commit`，不拿主工作区做拒绝测试。网页构建前也检查，避免未启用钩子的克隆直接发布。
 - 测试递归失败要明确控制或模拟递归限制，不要假定固定嵌套层数在所有 Python 版本都会报错；Python 回归测试单独运行，`npm test` 不会自动覆盖它。
 
+## 网页分组与折叠
+
+- 对齐 iOS 状态分组时，不能直接按原始 `state` 分桶：idle / unknown 但带 loop、后台工作或运行中子 Agent 的是「待唤醒」；屏蔽读取 `/mutes`，项目屏蔽按机器 / 项目名称匹配，Agent 的单独允许项可覆盖项目屏蔽，但不能覆盖 Agent 自己的屏蔽。
+- CSS 的 `grid-template-rows: 0fr` 和 opacity 只把折叠内容藏起来，不会让链接退出键盘焦点和无障碍树；侧边栏折叠容器加 `inert`。组标题内的状态圆点已有同义文字，要 `aria-hidden`，否则按钮会被读成两遍「工作中」。
+- 网页截图要先等菜单项真正渲染，不要在点开菜单的同一帧直接截图（可能只拍到外壳）；深浅色验证把主题偏好也存进 localStorage，单独改根节点 class 在 reload 后会回到旧主题。
+
 ## 新加的 UI 测试
 
 - 新建的测试文件要先 `xcodegen` 再跑，否则 `-only-testing:` 选中的是空集，xcodebuild 照样 `** TEST SUCCEEDED **`（`Executed 0 tests`）。

@@ -68,9 +68,9 @@ export function stateColor(st: AgentState): string {
 export function byAttention(a: Session, b: Session): number {
   const d = RANK[stateOf(a)] - RANK[stateOf(b)];
   if (d) return d;
-  const ta = stateOf(a) === "working" ? a.state_since : a.updated_at;
-  const tb = stateOf(b) === "working" ? b.state_since : b.updated_at;
-  return (tb ?? "").localeCompare(ta ?? "") || a.session_id.localeCompare(b.session_id);
+  const ta = stateOf(a) === "working" ? a.state_since || a.updated_at : a.updated_at;
+  const tb = stateOf(b) === "working" ? b.state_since || b.updated_at : b.updated_at;
+  return (tb ?? "").localeCompare(ta ?? "") || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
 }
 
 export function isLive(s: Session) {

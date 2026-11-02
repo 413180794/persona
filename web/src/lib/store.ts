@@ -3,6 +3,7 @@
 
 import { useRef, useSyncExternalStore } from "react";
 import { api, getToken } from "./api";
+import type { AgentMutes } from "./agent-groups";
 import type { AssistantInfo, Interaction, Item, Machine, Session } from "./types";
 
 export type Conn = "connecting" | "online" | "offline";
@@ -14,6 +15,7 @@ export interface State {
   sessions: Record<string, Session[]>;
   interactions: Interaction[];
   assistant: AssistantInfo | null;
+  mutes: AgentMutes;
   loaded: boolean;
 }
 
@@ -24,6 +26,7 @@ let state: State = {
   sessions: {},
   interactions: [],
   assistant: null,
+  mutes: { spaces: [], sessions: [], allowed: [] },
   loaded: false,
 };
 
@@ -228,11 +231,12 @@ function syncAssistant(mid: string, list: Session[]) {
 }
 
 export async function refresh() {
-  const [sessions, interactions, assistant, machines] = await Promise.allSettled([
+  const [sessions, interactions, assistant, machines, mutes] = await Promise.allSettled([
     api<{ sessions: Session[] }>("/sessions"),
     api<{ interactions: Interaction[] }>("/interactions"),
     api<AssistantInfo>("/assistant"),
     api<{ machines: Machine[] }>("/machines"),
+    api<AgentMutes>("/mutes"),
   ]);
   const patch: Partial<State> = { loaded: true };
   if (sessions.status === "fulfilled") {
@@ -243,6 +247,7 @@ export async function refresh() {
   if (interactions.status === "fulfilled") patch.interactions = interactions.value.interactions ?? [];
   if (assistant.status === "fulfilled") patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
   if (machines.status === "fulfilled") patch.machines = machines.value.machines ?? [];
+  if (mutes.status === "fulfilled") patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
   set(patch);
 }
 
@@ -257,5 +262,5 @@ export function markSeenLocally(mid: string, sid: string) {
 
 export function reset() {
   disconnect();
-  set({ machines: [], sessions: {}, interactions: [], assistant: null, loaded: false, conn: "connecting" });
+  set({ machines: [], sessions: {}, interactions: [], assistant: null, mutes: { spaces: [], sessions: [], allowed: [] }, loaded: false, conn: "connecting" });
 }

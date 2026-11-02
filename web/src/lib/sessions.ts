@@ -1,6 +1,7 @@
 // Derived lists the sidebar, the home page and the palette share.
 import { useMemo } from "react";
 import { byAttention, stateOf } from "./format";
+import { splitAgentSessions } from "./agent-groups";
 import { useStore } from "./store";
 import type { Session } from "./types";
 
@@ -20,9 +21,7 @@ export function useSpaces(): { spaces: Space[]; loose: Session[]; recent: Sessio
   const all = useAgentSessions();
   const machines = useStore((s) => s.machines);
   return useMemo(() => {
-    // an offline computer's agents can't be driven right now: they go with the recent ones
-    const up = new Set(machines.filter((m) => m.online).map((m) => m.id));
-    const live = all.filter((s) => stateOf(s) !== "offline" && up.has(s.machine_id));
+    const { live, recent } = splitAgentSessions(all, machines);
     const map = new Map<string, Space>();
     const loose: Session[] = [];
     for (const s of live) {
@@ -40,10 +39,6 @@ export function useSpaces(): { spaces: Space[]; loose: Session[]; recent: Sessio
     const bySlot = (a: Session, b: Session) => (a.slot_index ?? 0) - (b.slot_index ?? 0) || a.session_id.localeCompare(b.session_id);
     const spaces = [...map.values()].map((sp) => ({ ...sp, index: sp.sessions[0]?.space_index ?? 0, sessions: sp.sessions.sort(bySlot) }));
     spaces.sort((a, b) => order(a.machineId) - order(b.machineId) || a.index - b.index || a.name.localeCompare(b.name));
-    const recent = all
-      .filter((s) => stateOf(s) === "offline" || !up.has(s.machine_id))
-      .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
-      .slice(0, 40);
     return { spaces, loose: loose.sort(byAttention), recent };
   }, [all, machines]);
 }
