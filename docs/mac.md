@@ -168,7 +168,6 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   - Apple Watch 同步：Mac 不和手表配对，`WatchSync` 是空的；设置里也不再显示「同步到 Apple Watch」（2026-11-01 前还显示，点了提示已发送）。
   - 拍照（`UIImagePickerController`）：`isSourceTypeAvailable(.camera)` 为 false，输入框不出「拍照」；图片从文件、剪贴板来。
   - 扫码配对（VisionKit `DataScannerViewController`）：换成「粘贴配对链接」按钮（`Mac/Settings/PairingPaste+Mac.swift`），或直接打开 `jarvis://pair?…` 链接。
-  - 远程推送：target 还没有 APNs entitlement，`PushRegistrar` 不注册；App 开着时靠 WebSocket，本地通知照常。
   - 健康数据：macOS 有 HealthKit 的接口但没有数据，`phone_health_summary` 在 Mac 上不注册（`PhoneToolRegistry.healthTools`）；设置 › 连接器 › 这台 Mac 里也没有健康开关（`PhoneDataSource.onThisDevice`，有测试），「N 项已打开」同样不算它。页脚的说明改成了 Mac 的说法（问你的是这台 Mac）。待查：截图里设置页的长页脚（这里、通知页）只显示一行带省略号，加 `fixedSize` 也一样，分不清是 `-macSnapshot` 重画 List 行的问题还是真的被截，要解锁后用真截图看。
   - **Mac 是桌面端，不是手机**（2026-11-01 用户定：照微信「Mac 微信已登录」的做法）：以前 Mac 版也发 `register_phone`，hub 只有一个「手机」
     （`hub.phoneClient`），Mac 一直在线时 phone_* 全落到 Mac 上、hub 不再推送唤醒进了后台的 iPhone、Mac 的工具表还把 `phone_health_summary` 冲掉了。
@@ -188,18 +187,38 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 
 `apple/Mac/App/MacAttention.swift`、`MacMenuBar.swift`，测试 `apple/JarvisMacTests`（`JarvisMac` scheme 的 test）。
 
-- Mac 没有 APNs（target 没有推送权限），hub 推不到这里：`MacAttentionWatcher` 盯着 AppModel 的会话列表（App 开着时 WebSocket 一直连着），
+- App 开着、连着 hub 时：`MacAttentionWatcher` 盯着 AppModel 的会话列表（WebSocket 一直连着），
   有 Agent 刚变成「需要你」/「完成未看」就发一条本地通知，规则和 hub 给手机推送的一样，读同一份 设置 › 通知（`NotifyPrefs`：需要你处理时、
   Agent 做完时 不推送 / 只推长任务（这一轮干了 `long_turn_seconds`，默认 60 秒以上）/ 每次都推）。不发的：App 在前台时正开着的那个对话、屏蔽了的、
   列表里刚出现的、答完紧接着做完的（同一次停下）、Jarvis 对话做完（它问你时照发）、体验模式、WebSocket 第一次连上后 3 秒内
   （之前的列表是上次退出时的缓存，和第一次刷新的差别是 App 关着时的旧事；按连上算，不按启动算，网络晚到也不会补发一堆）。
-  第一次真有通知要发时才申请权限，答应了再发（问的时候加进去的会丢）。屏蔽 / 取消屏蔽立刻改 Dock 角标。
+  通知权限在配对后 / 启动时就问（`PushRegistrar`，和 iPhone 一样：App 关着时来的远程推送只有之前答应过才显示）；还没答应时 watcher 要发通知会再问一次，答应了再发（问的时候加进去的会丢）。
+  App 关着或断开时由 hub 推送，见下面「远程推送（Mac）」。屏蔽 / 取消屏蔽立刻改 Dock 角标。
 - 通知带和 hub 推送一样的 userInfo（`machine_id` / `session_id` / `interaction_id`）和类别：授权有「允许 / 拒绝」，计划有「批准 / 打回修改」，
   点按钮由 `MacAppDelegate` 直接交给 hub，点通知打开对话；同一个 Agent 的第二条「做完了」替换第一条。
 - Dock 角标：需要你的数量（不算屏蔽的），和侧边栏的角标同口径。
 - 菜单栏（`MenuBarExtra`，菜单样式，主窗口关了也在）：图标旁是需要你的数量；菜单里分「需要你」（等得最久的在前）、「正在工作」、
   「做完了，还没看」（最近 5 个）。需要你的一项是子菜单：说了什么 + 卡片上一点就能答的那几个（单个问题的选项、允许 / 拒绝、批准计划、
   hub 读出来的终端短选项）+ 打开对话；别的点一下打开对话。最后是「打开 Jarvis」「退出 Jarvis」。
+
+## 远程推送（Mac）
+
+2026-11-02 起（#420）。`apple/Jarvis/App/PushRegistrar.swift`（和 iPhone 共用）、`MacAppDelegate`，hub 在 `hub/push.go`、`hub/desktops.go`。
+
+- **账号**：iPhone 和 Mac 是同一个 bundle id，App ID 是 UNIVERSAL、本来就开着 Push Notifications，开发者账号不用改。
+  entitlement 在 macOS 上叫 `com.apple.developer.aps-environment`（`project.yml`）；本机编的不签名的版本没有它，注册失败、只有本地通知。
+- **登记**：配对后 / 每次启动问通知权限，答应了就注册 APNs，拿到 token 后 `POST /api/v1/devices`，kind `mac`，topic 是 bundle id（和 iPhone 同一个），
+  TestFlight 包 `production`、DEBUG `sandbox`。hub 不分平台，按设备登记的 topic 和环境推（APNs 的地址 macOS 和 iOS 一样）。
+- **不重复**：App 开着、连着 hub 时本地通知已经有了（上面的 `MacAttentionWatcher`），所以 `register_desktop` 带上推送用的 `device_id`，
+  hub 在这期间不给这台 Mac 推「需要你处理」「Agent 做完」；助手按你的要求发的提醒（`notify_user`）、hub 更新的通知 App 自己不会发，照推。
+  App 关了、Mac 睡眠断开（hub 的心跳约 35 秒发现）以后 hub 照常推。
+- **静默唤醒**（`jarvis_wake`）不发给 Mac：那是叫醒 iPhone 跑 phone_* 工具的，Mac 是桌面端。
+- **按钮**：hub 推送的 category 和 iPhone 一样，Mac 启动时注册的是同一套（`NotificationActions.categories`）：授权「允许 / 拒绝」、计划「批准 / 打回修改」（可输入），
+  提问和终端没有按钮，点开到对话。点按钮、点通知都走 `MacAppDelegate`，和本地通知一样。
+- **退出**：在 iPhone 上退出这台 Mac（或 设置 › 设备 里撤销）时，hub 连它登记的推送设备一起删掉（登记时记下了是哪个设备凭据），之后不再推；
+  它的通知设置也跟着没了，重新配对从默认值开始。iPhone 的撤销也一样。
+- **推送中继还不支持 Mac**：没有自己 APNs key 的 hub 走中继，正文是密文，要靠通知服务扩展解密（`docs/push-relay.md`）。Mac 还没有这个扩展，
+  登记了也只能显示「有新消息」，所以 Mac 不向中继登记：这样的 hub 照旧推不到 Mac，App 开着时仍是本地通知。要做的事见 #432。
 
 ## 侧边栏的「知识库」「机器」（Mac）
 
@@ -676,14 +695,14 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
     浅色、深色（`-macAppearance dark`）都对，圈没被行裁掉；深色下圈取的是深色的红（按像素反推三个通道的透明度一致）。
 
 ## 18. Notifications & notification actions
-- [ ] Request permission + APNs registration, POST /devices — App/JarvisApp.swift (AppDelegate.registerIfPossible)
-  - Mac 上没有：JarvisMac 没有推送权限、Mac 没有 APNs，不向 hub 登记设备 token；对应的是 `MacAttentionWatcher` 的本地通知，第一次要发时才申请权限。
+- [ ] Request permission + APNs registration, POST /devices — App/PushRegistrar.swift (registerIfPossible；iOS 和 Mac 共用)
+  - Mac（2026-11-02）：`com.apple.developer.aps-environment`，`MacAppDelegate` 收 token，以 kind `mac` 登记（「远程推送（Mac）」）；还不走推送中继。要用 TestFlight 包在真 Mac 上验证。
 - [x] Categories INTERACTION_PERMISSION (允许 auth-required / 拒绝) and INTERACTION_PLAN (批准 / 打回修改 text input) — App/NotificationActions.swift
 - [ ] Background resolve from action, failure local notification — App/JarvisApp.swift (resolveFromNotification)
   - 要到 Mac 前看：有 Agent 等授权时，悬停系统通知 › 选项 › 允许，hub 处理掉、窗口不出来；hub 断开时再来一次，应出一条失败通知。读代码：`MacAppDelegate` 走和 iOS 一样的 `NotificationActions.resolution` / `reportFailure`，`NotificationActionsTests` 在 Mac 上通过。
 - [x] Tap opens session (main-queue completion handler), suppress while viewing — JarvisApp.swift（Mac：`MacAppDelegate`，本地通知见「菜单栏、Dock 角标、通知」）
 - [ ] Silent push handling (wake / disconnect) — JarvisApp.swift
-  - Mac 上没有：没有 APNs 就没有静默推送；App 开着时 WebSocket 一直连着，`MacAttentionWatcher` 按会话列表发本地通知。
+  - Mac 上没有：静默唤醒是叫醒 iPhone 跑 phone_* 工具的，hub 不发给 Mac；App 开着时 WebSocket 一直连着，`MacAttentionWatcher` 按会话列表发本地通知。
 - [x] Settings: 需要你处理时, Agent 做完时 (不推送/只推长任务/每次都推), per-device prefs on hub, system-disabled warning + open settings — Views/Settings/NotificationSettingsView.swift
   - Mac（2026-11-01 核对）：截图看到「通知没有打开」+ 系统通知设置、需要你处理时、Agent 做完时三选一；在假 hub 上改这台设备的设置（PUT …/prefs）后页面跟着变，`NotifyPrefsTests` 在 Mac 上通过。在页面上点选写回 hub 没试。
 

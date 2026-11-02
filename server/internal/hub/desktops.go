@@ -100,14 +100,31 @@ func (h *Hub) desktopOnline() bool {
 	return false
 }
 
+// desktopOpen: the desktop app with this push id is connected. It posts its own notifications for agents that turn
+// needs-you or finish (the Mac's MacAttentionWatcher, on the same 设置 › 通知), so those pushes would show twice.
+func (h *Hub) desktopOpen(device string) bool {
+	if device == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.desktop && c.pushDevice == device {
+			return true
+		}
+	}
+	return false
+}
+
 // registerDesktop marks c as a desktop app and tells every client. Not for an answer-only device (a watch): it would
-// mute the phone.
-func (h *Hub) registerDesktop(c *client, name string) {
+// mute the phone. pushDevice is its id for pushes (PushRegistrar.deviceID; empty from an older app): while it is
+// connected the hub leaves the agents' alerts to it (desktopOpen).
+func (h *Hub) registerDesktop(c *client, name, pushDevice string) {
 	if c.role != roleFull {
 		return
 	}
 	h.mu.Lock()
-	c.desktop, c.name, c.since = true, name, time.Now()
+	c.desktop, c.name, c.since, c.pushDevice = true, name, time.Now(), pushDevice
 	h.announceDesktopsLocked()
 	h.mu.Unlock()
 	h.logf("desktop %q connected (device %s)", name, c.device)

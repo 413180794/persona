@@ -157,6 +157,7 @@ func (h *Hub) routes() http.Handler {
 			writeErr(w, http.StatusBadRequest, errors.New("device_id is required"))
 			return
 		}
+		d.Credential = principalOf(r.Context()).ID // revoking it stops the pushes (Pusher.signedOut)
 		h.push.register(d)
 		writeJSON(w, map[string]any{"ok": true})
 	})
@@ -547,8 +548,9 @@ type client struct {
 	desktop bool
 	// device and role: whose credential opened the connection (devicetokens.go); device is empty for the pairing token.
 	device, role string
-	// pushDevice: the phone's id for pushes (register_phone's device_id, PushRegistrar.deviceID in the app): while it is
-	// connected its app is open, and draws its Live Activity itself (liveactivity.go). Empty for an older app.
+	// pushDevice: the app's id for pushes (register_phone's / register_desktop's device_id, PushRegistrar.deviceID in
+	// the app): while it is connected its app is open, and a phone draws its Live Activity itself (liveactivity.go), a
+	// desktop posts its own notifications (desktopOpen). Empty for an older app.
 	pushDevice string
 	// delta: the app asked for sessions_delta (sessions_push.go); have is, by machine, each session it has (id -> its
 	// JSON as sent), under the hub's sessionsMu.
@@ -764,7 +766,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		LazyImages bool            `json:"lazy_images"`
 		FoldWork   bool            `json:"fold_work"`
 		DeviceName string          `json:"device_name"`
-		DeviceID   string          `json:"device_id"` // register_phone: the phone's id for pushes
+		DeviceID   string          `json:"device_id"` // register_phone / register_desktop: the app's id for pushes
 		Simulator  bool            `json:"simulator"`
 		Tools      []proto.Tool    `json:"tools"`
 		CallID     string          `json:"call_id"`
@@ -836,7 +838,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 			h.setPhoneTools(msg.Tools)
 		}
 	case "register_desktop":
-		h.registerDesktop(c, msg.DeviceName)
+		h.registerDesktop(c, msg.DeviceName, msg.DeviceID)
 	case "seen":
 		if h.byID[msg.MachineID] != nil && msg.SessionID != "" {
 			h.markSeen(msg.MachineID, msg.SessionID)

@@ -128,9 +128,12 @@ type Device struct {
 	Topic     string `json:"topic,omitempty"`
 	// Pushing through the relay (docs/push-relay.md): the phone's public key (base64 X9.63), the relay's URL and the
 	// grant it gave the phone.
-	PushKey    string    `json:"push_key,omitempty"`
-	RelayURL   string    `json:"relay_url,omitempty"`
-	RelayGrant string    `json:"relay_grant,omitempty"`
+	PushKey    string `json:"push_key,omitempty"`
+	RelayURL   string `json:"relay_url,omitempty"`
+	RelayGrant string `json:"relay_grant,omitempty"`
+	// Credential: the device token (device_tokens.id) that registered it, set by the hub, never from the request;
+	// empty for the pairing token. Revoking it forgets the device (hub: Pusher.signedOut).
+	Credential string    `json:"-"`
 	UpdatedAt  time.Time `json:"updated_at"`
 	// Prefs is the device's notification settings as JSON (hub decodes it); empty = defaults. Registration
 	// (UpsertDevice) never touches it, only SetDevicePrefs does.
@@ -138,23 +141,23 @@ type Device struct {
 }
 
 func (d *DB) UpsertDevice(ctx context.Context, v Device) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
 		ON CONFLICT (device_id) DO UPDATE SET name = $2, kind = $3, apns_token = $4, apns_env = $5, topic = $6,
-			push_key = $7, relay_url = $8, relay_grant = $9, updated_at = now()`,
-		v.DeviceID, v.Name, v.Kind, v.APNSToken, v.APNSEnv, v.Topic, v.PushKey, v.RelayURL, v.RelayGrant)
+			push_key = $7, relay_url = $8, relay_grant = $9, credential = $10, updated_at = now()`,
+		v.DeviceID, v.Name, v.Kind, v.APNSToken, v.APNSEnv, v.Topic, v.PushKey, v.RelayURL, v.RelayGrant, v.Credential)
 	return err
 }
 
 func (d *DB) Devices(ctx context.Context) ([]Device, error) {
-	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, updated_at, prefs FROM devices ORDER BY updated_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at, prefs FROM devices ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Device, error) {
 		var v Device
 		var prefs []byte
-		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.PushKey, &v.RelayURL, &v.RelayGrant, &v.UpdatedAt, &prefs)
+		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.PushKey, &v.RelayURL, &v.RelayGrant, &v.Credential, &v.UpdatedAt, &prefs)
 		if len(prefs) > 0 {
 			v.Prefs = prefs
 		}

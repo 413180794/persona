@@ -717,7 +717,7 @@ final class AppModel {
     /// draws it from the fleet events (hub/liveactivity.go).
     nonisolated static func registration(deviceName: String, tools: Any, simulator: Bool, deviceID: String = "") -> [String: Any] {
         #if os(macOS)
-        ["type": "register_desktop", "device_name": deviceName]
+        ["type": "register_desktop", "device_name": deviceName, "device_id": deviceID]
         #else
         ["type": "register_phone", "device_name": deviceName, "tools": tools, "simulator": simulator, "device_id": deviceID]
         #endif

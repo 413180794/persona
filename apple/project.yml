@@ -162,6 +162,9 @@ targets:
     entitlements:
       path: Mac/Resources/JarvisMac.entitlements
       properties:
+        # Remote push (PushRegistrar; macOS's name for iOS's aps-environment). The archive says development; the App
+        # Store export signs it production (checked by scripts/entitlements.py check on the .pkg).
+        com.apple.developer.aps-environment: development
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         # A machine's port forwarded to this Mac's loopback for the in-app browser (docs/ports.md).

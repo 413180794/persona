@@ -9,7 +9,11 @@ shipped the widget extension without any (the island drew the default persona wh
 groups whose bundle id was empty (2026-11-02).
 
   scripts/entitlements.py sign <unsigned .xcarchive>      # ad hoc, inside out, each bundle with its target's file
-  scripts/entitlements.py check <.ipa | .xcarchive | .app>  # every target's groups are in its signature
+  scripts/entitlements.py check <.ipa | .pkg | .xcarchive | .app>  # every target's groups are in its signature
+
+The Mac app (JarvisMac, the same bundle id, a .pkg for the store) the same way. In an exported .ipa / .pkg the push
+entitlement (`aps-environment`, on a Mac `com.apple.developer.aps-environment`) must also say production: the archive
+says development, and only the App Store export changes it.
 
 Both read the targets from the Xcode project (`xcodebuild -showBuildSettings`, after xcodegen) and expand the build
 settings in each entitlements file; `$(AppIdentifierPrefix)` is the team's (the signature's own, when checking). A
@@ -28,6 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(ROOT, "apple", "Jarvis.xcodeproj")
 VAR = re.compile(r"\$[({](\w+)[)}]")
 APP_GROUPS = "com.apple.security.application-groups"
+APS = ("aps-environment", "com.apple.developer.aps-environment")  # iOS, macOS
 
 
 def targets():
@@ -61,11 +66,17 @@ def wanted(settings, prefix):
         return plistlib.loads(expand(f.read(), settings, prefix).encode())
 
 
+def contents(bundle):
+    """Where a bundle keeps its Info.plist and what it contains: Contents/ in a Mac bundle, the bundle itself on iOS."""
+    mac = os.path.join(bundle, "Contents")
+    return mac if os.path.isdir(mac) else bundle
+
+
 def bundles(app):
     """The app and every app / extension inside it, innermost first (a bundle is signed after what it contains)."""
     found = []
     for sub in ("PlugIns", "Watch", "Extensions"):
-        d = os.path.join(app, sub)
+        d = os.path.join(contents(app), sub)
         if os.path.isdir(d):
             for name in sorted(os.listdir(d)):
                 if name.endswith((".app", ".appex")):
@@ -74,7 +85,7 @@ def bundles(app):
 
 
 def identity(bundle):
-    with open(os.path.join(bundle, "Info.plist"), "rb") as f:
+    with open(os.path.join(contents(bundle), "Info.plist"), "rb") as f:
         info = plistlib.load(f)
     return info, (info.get("CFBundleIdentifier", ""), info.get("DTPlatformName", ""))
 
@@ -111,12 +122,19 @@ def signed(bundle):
 
 
 def check(path):
+    exported = path.endswith((".ipa", ".pkg"))
     with tempfile.TemporaryDirectory() as tmp:
         if path.endswith(".ipa"):
             with zipfile.ZipFile(path) as z:
                 z.extractall(tmp)
             subprocess.run(["chmod", "-R", "u+rwX", tmp], check=True)  # zipfile drops the modes codesign reads
             app = os.path.join(tmp, "Payload", "Jarvis.app")
+        elif path.endswith(".pkg"):
+            subprocess.run(["pkgutil", "--expand-full", path, os.path.join(tmp, "x")], check=True, capture_output=True)
+            found = [os.path.join(r, d) for r, ds, _ in os.walk(os.path.join(tmp, "x")) for d in ds if d == "Jarvis.app"]
+            if not found:
+                sys.exit("entitlements: no Jarvis.app in %s" % path)
+            app = found[0]
         elif path.endswith(".xcarchive"):
             app = os.path.join(path, "Products", "Applications", "Jarvis.app")
         else:
@@ -142,6 +160,11 @@ def check(path):
             for g in ents.get(APP_GROUPS, []):
                 if g not in app_groups:
                     problems.append("%s: App Group %s missing (signed with %s)" % (name, g, app_groups or "none"))
+            for k in (k for k in APS if k in ents):
+                if k not in have:
+                    problems.append("%s: %s missing (no push)" % (name, k))
+                elif exported and have[k] != "production":
+                    problems.append("%s: %s is %s, not production" % (name, k, have[k]))
             # The groups the code is told to use (Info.plist: JarvisPushKeychainGroup, JarvisAppGroup) must be ones it has.
             for k, v in sorted(info.items()):
                 if k.endswith("KeychainGroup") and v not in groups:

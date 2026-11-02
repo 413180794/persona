@@ -220,6 +220,7 @@ func Run(ctx context.Context, b update.Build) error {
 	}
 	h.push = newPusher(cfg.dir, h.store, h.logf)
 	h.push.desktopOnline = h.desktopOnline
+	h.push.desktopOpen = h.desktopOpen
 	h.ai = ai.New(cfg.AI)
 	if c := cfg.Inbox.TriageAI; c != nil {
 		h.triageAI = ai.New(c.Over(cfg.AI))

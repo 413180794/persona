@@ -28,22 +28,6 @@ import Observation
     func showSample(_ phase: String, details: Bool, island spec: String?) {}
 }
 
-/// The Mac's id at the hub (its notification settings hang off it). Remote push to the Mac needs an APNs
-/// entitlement the target does not have yet, so nothing is registered: the Mac keeps its WebSocket open while
-/// it runs, and the hub reaches it that way (docs/mac.md).
-final class PushRegistrar {
-    static let shared = PushRegistrar()
-
-    func registerIfPossible() {}
-
-    static var deviceID: String {
-        if let id = UserDefaults.standard.string(forKey: "deviceID") { return id }
-        let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: "deviceID")
-        return id
-    }
-}
-
 /// There is no Apple Watch paired to a Mac: the pairing and summary pushes go nowhere.
 final class WatchSync: NSObject {
     static let shared = WatchSync()

@@ -197,7 +197,7 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 	})
 }
 
-// revoked forgets a device's cached lookups and closes its live connections.
+// revoked forgets a device's cached lookups, closes its live connections and stops its pushes.
 func (h *Hub) revoked(id string) {
 	t := &h.devtok
 	t.mu.Lock()
@@ -218,5 +218,6 @@ func (h *Hub) revoked(id string) {
 	for _, c := range gone {
 		c.conn.CloseNow()
 	}
+	h.push.signedOut(id)
 	h.logf("device token %s revoked (%d connections closed)", id, len(gone))
 }

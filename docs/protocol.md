@@ -197,7 +197,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
 | POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution |
-| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?}`；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送 |
+| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?}`；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
 | POST | `/api/v1/devices/{id}/live-activity` | 实时活动的 token：`{"push_to_start_token"}`、`{"activity_id","push_token"}`（会轮换，重复发）、`{"activity_id","ended":true}`（`docs/live-activity.md`） |
 | GET | `/api/v1/fleet` | `{"fleet": FleetState}`：当前的实时活动内容（App 回到前台时拉），`stats` 带全部数字和每台机器的负载 |
 | GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| 无, points: [MetricPoint]}], "step": 60}`：App「机器」页每张卡片上的现在值和走势，按配置顺序的每台机器，`points` 是最近 1 小时、每分钟一个点；`latest` 只在 30 秒内收到过样本时有（`docs/machines.md`） |
@@ -250,7 +250,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | `terminal_input` | `machine_id`, `session_id`, `text`（终端字节，原样写进去）, `control: {cols, rows}`（可选，新尺寸）, `scroll`（可选，滚轮的行数，> 0 往回、< 0 往新，feature `terminal_scroll`）, `at`（可选，`[column, row]` 从 0 起，滚轮落在屏幕的哪一格：手指按下的地方；不带时 node 用屏幕正中间）, `click`（可选，`[column, row]` 从 0 起，屏幕上那一格左键单击，feature `terminal_click`）：只有正在接管的那个连接发的才转给 node |
 | `terminal_unsubscribe` | `machine_id`, `session_id` |
 | `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用）, `device_id`（推送用的设备 id，同 `POST /api/v1/devices`：连着的这段时间 hub 不给这台设备的实时活动推 APNs，App 自己画，`docs/live-activity.md`「推送节奏」；老 App 不带） |
-| `register_desktop` | `device_name`：Mac App 登记成桌面端，不是手机——不接 `phone_*`，也不挡 hub 推送唤醒 iPhone（`hub/desktops.go`）。退出它就是吊销它的设备凭据（`DELETE /api/v1/auth/tokens/{id}`，hub 随即断开它的连接） |
+| `register_desktop` | `device_name`：Mac App 登记成桌面端，不是手机——不接 `phone_*`，也不挡 hub 推送唤醒 iPhone（`hub/desktops.go`）；`device_id`（推送用的设备 id，同 `POST /api/v1/devices`：连着的这段时间 hub 不给这台 Mac 推「需要你处理」「Agent 做完」，它自己发本地通知；老 App 不带）。退出它就是吊销它的设备凭据（`DELETE /api/v1/auth/tokens/{id}`，hub 随即断开它的连接、删掉它登记的推送） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
 | `pong` | — |
 

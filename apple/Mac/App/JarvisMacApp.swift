@@ -177,7 +177,16 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         #if DEBUG
         MacSnapshot.scheduleIfAsked()
         #endif
+        PushRegistrar.shared.registerIfPossible()
     }
+
+    func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        PushRegistrar.shared.didRegister(token: deviceToken)
+    }
+
+    /// A build signed without the push entitlement (the unsigned local ones) lands here: the Mac then only has the
+    /// notifications it posts itself while it runs.
+    func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {}
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 

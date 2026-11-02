@@ -11,6 +11,7 @@
   深浅色用 `-macAppearance`，`-AppleInterfaceStyle Dark` 当启动参数不生效。
 - 直接跑 `Jarvis.app/Contents/MacOS/Jarvis` 能带启动参数（`-demo.on YES -tab dev`…），未签名的 Debug 构建不进沙盒，写 `/tmp` 没问题；`open` 要写成 `open -n Jarvis.app --args -demo.on YES …` 才带得上参数（不带 `--args` 就没有，2026-11-02 实测）。
 - Mac 锁屏时 `xcodebuild test -scheme JarvisMac` 报「The test runner hung before establishing connection」（2026-11-01）：测试宿主 Jarvis.app 启动时读钥匙串（`Keychain.serverConfig` → `SecItemCopyMatching`），读别的未签名构建写的条目会一直卡在 securityd。Mac 的 DEBUG 构建在 XCTest 下（有 `XCTestConfigurationFilePath`）和截图模式一样不读钥匙串（`Shared/Keychain.swift`）。
+- Mac 的推送 entitlement 叫 `com.apple.developer.aps-environment`，不是 iOS 的 `aps-environment`。App ID 开过推送就够（iPhone 和 Mac 同一个 UNIVERSAL 的 App ID），归档里写 `development`，App Store 导出时变成 `production`；本机不签名编的版本签名里没有任何 entitlement，收不到远程推送，只有本地通知（2026-11-02，`docs/mac.md`「远程推送（Mac）」）。
 - 共用页面里碰到 `pin.list` 这类滚动视图时，iOS 上是 `UIScrollView`、Mac 上是 `NSScrollView`（`ChatPin+Mac.swift`），`isTracking`、`isDragging`、`isDecelerating` 这些 Mac 没有：用 `#if os(iOS)` 隔开，或者在 `Mac/Compat/` 补等价的。
   2026-11-02 #243 在 `ChatView` 里加了一行 `pin.list?.isTracking`，只跑了 iOS，master 上 `JarvisMac` 编译不过（terminal 车道发现）。改了 `apple/Jarvis/Views` 的共用页面，合入前也跑一次 `JarvisMac` 的构建（`docs/mac.md`「构建、运行、截图」）。
 - 构建配置（`~/.config/jarvis/config.json`）没有 `app.bundle_id` 时，`Config.xcconfig` 的 `JARVIS_BUNDLE_ID` 是空的，xcodebuild 照样 BUILD SUCCEEDED，

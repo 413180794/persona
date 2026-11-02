@@ -85,6 +85,7 @@ App Group 的 ID 本身不带团队前缀，Info.plist 里直接写 `$(JARVIS_AP
   导出会把 App 的 `$(JARVIS_BUNDLE_ID)` 展成空、扩展一个组都没有（build 92 就是这样，灵动岛的形象不跟随设置，`docs/live-activity.md`）。
 - **导出后查**：`python3 scripts/entitlements.py check <ipa>`，有问题逐条列出并非零退出；对 build 92 的 ipa 报 9 处。
   App Group 同样查：每个 bundle 的签名里有它 target 的组，Info.plist 的 `JarvisAppGroup` 是其中之一。
+  导出的 ipa / pkg 里推送 entitlement（`aps-environment`，Mac 是 `com.apple.developer.aps-environment`）必须是 `production`。Mac 的 .pkg 同样能查。
 
 ## App Group（2026-11-02）
 
@@ -176,12 +177,15 @@ Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store 
   （系统按 `CFBundleIconName` 去那里取），所以检查看的是 `Assets.car`（`xcrun assetutil --info`）里有没有 512 和 512@2x。
 - **Info.plist**：`LSApplicationCategoryType`（效率）、各项权限说明都在 `apple/project.yml` 的 JarvisMac 里。
 - **沙盒**：`com.apple.security.app-sandbox` 加网络（客户端、端口转发的本机服务端）、用户选的文件、通讯录 / 日历 / 位置 / 照片、
-  麦克风 / 摄像头（`project.yml` 的 entitlements）。没有 APNs entitlement（`docs/mac.md`），这次也不加。
+  麦克风 / 摄像头（`project.yml` 的 entitlements）。
+- **推送**（2026-11-02 起，`docs/mac.md`「远程推送（Mac）」）：`com.apple.developer.aps-environment`（macOS 上的名字，iOS 是 `aps-environment`）。
+  App ID 是 UNIVERSAL、早就开着 Push Notifications，开发者账号不用改；归档里是 `development`，App Store 导出时云签名改成 `production`。
 - **发布前检查**和 iPhone 一样：权限说明（`check_bundle_strings.py`）、隐私扫描（`check_bundle_privacy.py`，认 Mac 的
   `Contents/` 结构，跳过 `embedded.provisionprofile`，通用二进制整个扫）、Release 里没有 DEBUG 开关；另外查分类和图标里有 512 / 512@2x。
 - 导出是 `.pkg`（ExportOptions 的 `method` 同样是 `app-store-connect`），和 iPhone 一样云签名：App 是 Apple Distribution，
   `.pkg` 是 3rd Party Mac Developer Installer（`pkgutil --check-signature` 会写「issued by Apple (Development)」，这类证书都这么写）。
-  上传 `altool -t macos`。本机的发版脚本先 ad hoc 签上 Mac 的 entitlements 再导出（和 iPhone 的 `entitlements.py sign` 同一个道理）。
+  上传 `altool -t macos`。本机的发版脚本和 iPhone 一样先 `entitlements.py sign` 再导出，导出后 `entitlements.py check <.pkg>`：
+  每个 bundle 带着它 target 的 entitlements，推送是 `production`（`check` 认 Mac 的 `Contents/` 结构和 `.pkg`，iPhone 的 ipa 也查推送环境）。
 - **自动发布**：发完 iPhone 构建后，这次的提交里有 Mac App 用到的改动（`apple/Mac`、`apple/Shared`、`apple/Jarvis` 除了只属于 iOS 的
   几个文件、`apple/Packages`、`project.yml`、`Package.resolved`）就用同一个号接着发 Mac；Mac 的结果另外报，失败不影响 iPhone 那次。
 

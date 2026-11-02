@@ -4,8 +4,8 @@ import UserNotifications
 
 /// What the Mac does outside its window when an agent needs you or finishes (docs/mac.md「和 iOS 的对应」):
 /// the Dock badge (how many need you) and a system notification for each agent that just turned 需要你 / 做完了.
-/// The phone gets these as pushes from the hub; the Mac has no APNs entitlement, so it watches its own session list
-/// (the WebSocket stays open while the app runs) and follows the same 设置 › 通知 choices (`NotifyPrefs`).
+/// While the app runs it watches its own session list (the WebSocket stays open) and follows the same 设置 › 通知
+/// choices (`NotifyPrefs`); the hub pushes these to the Mac only while it is not connected (docs/mac.md「远程推送（Mac）」).
 enum MacAttention {
     /// The notifications to post for a session-list change: agents that turned needs-you or finished. Not for the
     /// chat on screen while the app is in front, a muted agent, a session the list just learned about, or a finish

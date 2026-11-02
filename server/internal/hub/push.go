@@ -26,8 +26,11 @@ import (
 	"github.com/chyroc/jarvis/server/internal/relayproto"
 )
 
-// Device is an iPhone or Watch that wants push notifications.
+// Device is an iPhone, a Mac or a Watch that wants push notifications.
 type Device = db.Device
+
+// kindMac is a Mac app's device (PushRegistrar on macOS): it gets alerts, not the phone's wake pushes.
+const kindMac = "mac"
 
 // apnsConfig lives in ~/.jarvis/apns.json; without it the hub pushes through the relay each phone registered with
 // (docs/push-relay.md), and with neither push is off.
@@ -43,6 +46,9 @@ type Pusher struct {
 	now    func() time.Time
 	// desktopOnline: a desktop app is connected (Hub.desktopOnline), for 手机静音.
 	desktopOnline func() bool
+	// desktopOpen: the desktop app with this push device id is connected (Hub.desktopOpen); it posts its own
+	// notifications for agents then (the Mac's MacAttentionWatcher).
+	desktopOpen func(device string) bool
 
 	mu      sync.Mutex
 	devices map[string]Device
@@ -150,10 +156,20 @@ func (p *Pusher) reachable(d Device) bool {
 }
 
 // send alerts every device whose settings take it (nil: all of them).
-// A device that chose 手机静音 gets none while a desktop app is connected (desktops.go).
+// A device that chose 手机静音 gets none while a desktop app is connected (desktops.go), and a desktop app that is
+// connected gets none of these: it shows them itself. What was asked for explicitly (nil) goes to it all the same.
 func (p *Pusher) send(payload map[string]any, collapseID string, wants func(NotifyPrefs) bool) {
-	online := p != nil && p.desktopOnline != nil && p.desktopOnline()
-	p.sendAs(payload, collapseID, "alert", "10", alertWanted(wants, online))
+	if p == nil {
+		return
+	}
+	online := p.desktopOnline != nil && p.desktopOnline()
+	byPrefs := alertWanted(wants, online)
+	p.sendAs(payload, collapseID, "alert", "10", func(d Device) bool {
+		if wants != nil && p.desktopOpen != nil && p.desktopOpen(d.DeviceID) {
+			return false
+		}
+		return byPrefs(devicePrefs(d.Prefs))
+	})
 }
 
 func (p *Pusher) device(id string) (Device, bool) {
@@ -161,6 +177,27 @@ func (p *Pusher) device(id string) (Device, bool) {
 	defer p.mu.Unlock()
 	d, ok := p.devices[id]
 	return d, ok
+}
+
+// signedOut forgets the devices a revoked credential registered (退出那台 Mac, 设置 › 设备): an app signed out gets
+// no more pushes, its Live Activity included. Its notification settings go with it; pairing again starts from the
+// defaults.
+func (p *Pusher) signedOut(credential string) {
+	if p == nil || credential == "" {
+		return
+	}
+	p.mu.Lock()
+	var gone []Device
+	for _, d := range p.devices {
+		if d.Credential == credential {
+			gone = append(gone, d)
+		}
+	}
+	p.mu.Unlock()
+	for _, d := range gone {
+		p.forget(d)
+		p.logf("device %s signed out: no more pushes", d.Name)
+	}
 }
 
 // forget drops a device whose token APNs says is dead.
@@ -420,23 +457,32 @@ func (p *Pusher) ready() bool {
 }
 
 // wake sends a silent background push: iOS gives the app ~30 s to connect and run a pending phone_* call.
-// Best effort: the system throttles these and never delivers them to a force-quit app.
+// Best effort: the system throttles these and never delivers them to a force-quit app. Phones only: the phone_*
+// tools run on the iPhone (a Mac registers as a desktop, docs/mac.md).
 func (p *Pusher) wake(reason string) {
-	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "jarvis_wake": reason}, "", "background", "5", nil)
+	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "jarvis_wake": reason}, "", "background", "5",
+		func(d Device) bool { return d.Kind != kindMac })
 }
 
-func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority string, wants func(NotifyPrefs) bool) {
+// sendAs pushes to every reachable device that to picks (nil: all of them). to runs outside p.mu: it may ask the hub.
+func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority string, to func(Device) bool) {
 	if p == nil {
 		return
 	}
 	p.mu.Lock()
-	devices := make([]Device, 0, len(p.devices))
+	reachable := make([]Device, 0, len(p.devices))
 	for _, d := range p.devices {
-		if p.reachable(d) && (wants == nil || wants(devicePrefs(d.Prefs))) {
-			devices = append(devices, d)
+		if p.reachable(d) {
+			reachable = append(reachable, d)
 		}
 	}
 	p.mu.Unlock()
+	devices := reachable[:0]
+	for _, d := range reachable {
+		if to == nil || to(d) {
+			devices = append(devices, d)
+		}
+	}
 	if len(devices) == 0 {
 		return
 	}
