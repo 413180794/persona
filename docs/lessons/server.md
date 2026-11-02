@@ -33,6 +33,11 @@
 - 云主机的公网 IP / EIP 前面通常有外层防火墙或 NAT（实测 UCloud 机器：22、8080 等所有端口从公网都连不上，但本机 ss 显示在监听，
   本机自己 curl 公网 IP 也不通——不能用 hairpin 自连判断端口有没有开）。手机接 hub 优先让它走公司 VPN / 内网地址，或在云控制台放行端口；
   判断公网可达性用外部探测（如 check-host.net 的 TCP 检查），不要只在机器上试。
+- App 更新页提示「这个 hub 不会自己更新」：查 `GET /api/v1/hub/update` 的 `can_update`，`Build.SelfUpdates()` 要求
+  channel=release、build 号合法（YYYYMMDDHHMM）、编译时编入了 updateURL（`<发布站>/dl`）三个条件都满足。
+  `deploy.sh` 从构建配置的 `publish.site_url` 经 ldflags 注入它；手动 go build 部署最容易漏——配置里缺 `publish.site_url`
+  就没有 `-X main.updateURL=...`，补上配置、照 deploy.sh 的 ldflags 重编即可。Docker 渠道只更新镜像、不替换二进制，
+  提示换镜像是正常的（`docs/hub-update.md`）。
 - hub 关掉 RPC peer 不等于连接结束：ssh 子进程还活着，连接循环要同时等 `peer.Done()`，否则「重连」之后机器一直显示在线、每个调用都回 `rpc: connection closed`（`TestReconnectGivesAWorkingConnection`）。
 - tailcat（`docs/server.md`「tailcat 打洞」，2026-11-01）：`Server.AllowedClients` 为空时**所有人**都能连进来，node 的 key 文件里没有 hub 公钥就拒绝加载；
   `Server.TailcatAddr()` 会把 DERP 区域的服务器内嵌进地址、且不设 `RegionID` 时每次启动按延迟重新选区域，地址会变：自己用 `ConnInfo{RegionID}` 拼地址，区域在 `init` 时定下来。
