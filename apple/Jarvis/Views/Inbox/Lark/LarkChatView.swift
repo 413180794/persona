@@ -53,6 +53,9 @@ struct LarkChatView: View {
     @State private var person: LarkPersonRef?
     @State private var debugPick: LarkMessage?
     @State private var debugPost: String?
+    /// Read receipts of my messages on screen (LarkReadReceipts) and the request in flight.
+    @State private var receipts = LarkReadReceipts()
+    @State private var receiptTask: Task<Void, Never>?
 
     init(conversation: LarkConversation) {
         self.conversation = conversation
@@ -79,10 +82,15 @@ struct LarkChatView: View {
                         if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
                         if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
                         let grouped = LarkChatLayout.continues(m, after: prev)
-                        LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id)
+                        LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id,
+                                       readState: receipts.states[m.id])
                             .padding(.top, LarkChatLayout.gap(grouped: grouped))
                     }
-                    .onAppear { markSeen(m) }
+                    .onAppear {
+                        markSeen(m)
+                        receiptAppeared(m)
+                    }
+                    .onDisappear { receipts.disappeared(m.id) }
                 }
                 if pager.hasNewer {
                     ProgressView().controlSize(.small).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
@@ -153,10 +161,14 @@ struct LarkChatView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 await refreshLatest()
+                askReceiptsAgain()
             }
         }
         .task {
-            for await _ in LarkSync.shared.changes(of: conversation.id) { await refreshLatest() }
+            for await _ in LarkSync.shared.changes(of: conversation.id) {
+                await refreshLatest()
+                askReceiptsAgain()
+            }
         }
         // Back in front: what came on screen while it was in the back is reported now.
         .onTabVisibility(appear: reportSoon, disappear: flushRead)
@@ -367,6 +379,40 @@ struct LarkChatView: View {
         Task { try? await api.larkRead(feed, report) }
     }
 
+    // MARK: Read receipts
+
+    private func receiptAppeared(_ m: LarkMessage) {
+        guard LarkReadReceipts.tracks(m) else { return }
+        receipts.appeared(m)
+        askReceipts()
+    }
+
+    /// The chat changed (a push, the fallback poll): receipts of mine on screen that not everyone has read may have too.
+    private func askReceiptsAgain() {
+        receipts.chatChanged()
+        askReceipts()
+    }
+
+    /// One request at a time, no sooner than LarkReadReceipts.minGap after the last; rows that come on screen
+    /// together go in one request.
+    private func askReceipts() {
+        guard receiptTask == nil, let wait = receipts.wait(now: .now), let api = model.api else { return }
+        let feed = conversation.id
+        receiptTask = Task {
+            try? await Task.sleep(for: .seconds(max(wait, 0.4)))
+            let ids = receipts.take(now: .now)
+            if !ids.isEmpty {
+                do {
+                    receipts.record(try await api.larkReadStates(feed, ids: ids))
+                } catch {
+                    receipts.failed(status: (error as? APIError)?.status)
+                }
+            }
+            receiptTask = nil
+            askReceipts() // what came due meanwhile
+        }
+    }
+
     // MARK: Sending
 
     @ViewBuilder private var outgoingRows: some View {
@@ -551,6 +597,8 @@ struct LarkMessageRow: View {
     var inThread = false
     /// A message of mine on its way: its spinner or failed mark beside the bubble (LarkOutgoingRow).
     var sending: LarkSendMark? = nil
+    /// The read receipt of a message of mine (LarkReadReceipts), shown beside it once there is one.
+    var readState: LarkReadState? = nil
     @Environment(\.larkOpenProfile) private var openProfile
     @Environment(\.larkReact) private var react
     @Environment(\.larkReply) private var reply
@@ -597,6 +645,11 @@ struct LarkMessageRow: View {
                     if let sending {
                         HStack(alignment: .center, spacing: Theme.Space.s) {
                             LarkSendMarkView(mark: sending)
+                            content
+                        }
+                    } else if side == .right, let read = LarkReadMark(state: readState, isGroup: isGroup) {
+                        HStack(alignment: .bottom, spacing: Theme.Space.s) {
+                            LarkReadMarkView(mark: read)
                             content
                         }
                     } else {

@@ -17,7 +17,7 @@ import (
 // any chat.
 
 const (
-	kbConnectorPoll  = 10 * time.Minute // how often a connector is asked for changes
+	kbConnectorPoll  = 10 * time.Minute // how often a connector is asked for changes, unless it says (connector.Poller)
 	kbConnectorPages = 3                // calls per connector and run
 	kbConnectorLimit = 20               // conversations per call
 )
@@ -34,7 +34,8 @@ func (kbConnectorSource) Messages(context.Context, kb.SourceChat, string, int) (
 	return nil, "", false, nil
 }
 
-// kbConnectors archives what moved in every signed-in connector with an archive.
+// kbConnectors archives what moved in every signed-in connector with an archive that is due (its NextPoll, else
+// kbConnectorPoll, since it was last asked).
 func (h *Hub) kbConnectors(ctx context.Context) {
 	e := h.kb.eng
 	for _, c := range h.connectors.All() {
@@ -42,15 +43,31 @@ func (h *Hub) kbConnectors(ctx context.Context) {
 		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK || ctx.Err() != nil {
 			continue
 		}
-		n, err := archiveConnector(ctx, e, c.ID(), a)
-		if err != nil {
-			h.logf("kb: %s: %v", c.ID(), err)
+		every := kbConnectorPoll
+		if p, ok := c.(connector.Poller); ok {
+			every = p.NextPoll()
 		}
-		if n > 0 {
-			h.logf("kb: %s: %d new line(s)", c.ID(), n)
+		h.kb.mu.Lock()
+		if h.kb.archivedAt == nil {
+			h.kb.archivedAt = map[string]time.Time{}
+		}
+		due := time.Since(h.kb.archivedAt[c.ID()]) >= every
+		if due {
+			h.kb.archivedAt[c.ID()] = time.Now()
+		}
+		h.kb.mu.Unlock()
+		if !due {
+			continue
+		}
+		if _, err := archiveConnector(ctx, e, c.ID(), a); err != nil {
+			h.logf("kb: %s: %v", c.ID(), err)
 		}
 	}
 }
+
+// legacyCursors are cursors kept before connectors had cursors/<id>.json: read once when the new file is not
+// there yet (mail's per-account UIDs, in the same format), left in place.
+var legacyCursors = map[string]string{"mail": "mail-cursors.json"}
 
 type connectorCursor struct {
 	Cursor string `json:"cursor"`
@@ -63,6 +80,10 @@ func archiveConnector(ctx context.Context, e *kb.Engine, id string, a connector.
 	var cur connectorCursor
 	if raw, err := os.ReadFile(file); err == nil {
 		_ = json.Unmarshal(raw, &cur)
+	} else if old, ok := legacyCursors[id]; ok {
+		if raw, err := os.ReadFile(filepath.Join(e.Store.Dir, old)); err == nil {
+			cur.Cursor = string(raw)
+		}
 	}
 	total := 0
 	for page := 0; page < kbConnectorPages; page++ {

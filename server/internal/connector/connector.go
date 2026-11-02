@@ -107,6 +107,11 @@ type Hosts interface {
 	Hosts() []string
 }
 
+// Poller is a connector the hub asks for changes (Archive) at its own pace rather than the hub's default.
+type Poller interface {
+	NextPoll() time.Duration
+}
+
 // Chats is a connector whose conversations the knowledge base reads chat by chat, each with its own cursor
 // (Feishu's chats, removed posts): one kb.Source per stream, its Name the prefix of its chats' ids (which never
 // changes). A source that can read further back also implements kb.Backfiller.

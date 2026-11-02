@@ -63,3 +63,65 @@ func TestArchiveConnectorIngestsAndKeepsTheCursor(t *testing.T) {
 		t.Fatalf("the next run started from %q", last)
 	}
 }
+
+// pollFake is an archive that asks to be polled every minute and counts the calls.
+type pollFake struct{ calls int }
+
+func (*pollFake) ID() string              { return "example" }
+func (*pollFake) Name() string            { return "Example" }
+func (*pollFake) NextPoll() time.Duration { return time.Minute }
+func (f *pollFake) Changes(_ context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {
+	f.calls++
+	return nil, cursor, false, nil
+}
+
+// A connector is asked when it is due (its NextPoll), not on every loop of the knowledge base.
+func TestKBConnectorsWhenDue(t *testing.T) {
+	h := newTestHub(t)
+	st, _ := kb.NewStore(t.TempDir())
+	h.kb.eng = &kb.Engine{Store: st}
+	h.connectors = connector.NewRegistry(nil)
+	f := &pollFake{}
+	if err := h.addConnector(f); err != nil {
+		t.Fatal(err)
+	}
+	h.kbConnectors(context.Background())
+	h.kbConnectors(context.Background())
+	if f.calls != 1 {
+		t.Fatalf("asked %d times within its minute", f.calls)
+	}
+	h.kb.archivedAt["example"] = time.Now().Add(-2 * time.Minute)
+	h.kbConnectors(context.Background())
+	if f.calls != 2 {
+		t.Fatalf("not asked again once due: %d", f.calls)
+	}
+}
+
+// Mail's cursors from before (mail-cursors.json) are where its archive goes on from: nothing archived twice; the
+// new file takes over, the old one stays.
+func TestMailCursorGoesOnFromTheOldFile(t *testing.T) {
+	st, _ := kb.NewStore(t.TempDir())
+	e := &kb.Engine{Store: st}
+	old := `{"acc1":12}`
+	if err := os.WriteFile(filepath.Join(st.Dir, "mail-cursors.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := &archiveFake{}
+	if _, err := archiveConnector(context.Background(), e, "mail", f); err != nil {
+		t.Fatal(err)
+	}
+	if f.cursors[0] != old {
+		t.Fatalf("started from %q, not the old cursors", f.cursors[0])
+	}
+	if _, err := os.Stat(filepath.Join(st.Dir, "cursors", "mail.json")); err != nil {
+		t.Fatal("no new cursor file")
+	}
+	if _, err := os.Stat(filepath.Join(st.Dir, "mail-cursors.json")); err != nil {
+		t.Fatal("the old file is gone")
+	}
+	// Another connector never reads mail's old file.
+	g := &archiveFake{}
+	if _, err := archiveConnector(context.Background(), e, "example", g); err != nil || g.cursors[0] != "" {
+		t.Fatalf("example started from %q, %v", g.cursors[0], err)
+	}
+}

@@ -459,6 +459,8 @@ Asia/Shanghai
   "covered_until": "0001-01-01T00:00:00Z",
   "created": "<now@Z>"
 }
+=== cursors/mail.json
+{"cursor":"{\"acc1\":13,\"acc2\":3}"}
 === docs/DocA1.json
 {
   "kind": "docs",
@@ -505,8 +507,6 @@ Asia/Shanghai
   "relevance": 0,
   "tagged_at": "0001-01-01T00:00:00Z"
 }
-=== mail-cursors.json
-{"acc1":13,"acc2":3}
 === meetings/mh1.json
 {
   "kind": "meetings",

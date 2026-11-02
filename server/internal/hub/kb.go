@@ -19,7 +19,6 @@ import (
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/mail"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -46,10 +45,12 @@ const (
 )
 
 type kbState struct {
-	once sync.Once
-	kick chan struct{}
-	eng  *kb.Engine
-	cfg  KBConfig
+	mu         sync.Mutex
+	archivedAt map[string]time.Time // connector id -> when its archive was last asked (kb_connectors.go)
+	once       sync.Once
+	kick       chan struct{}
+	eng        *kb.Engine
+	cfg        KBConfig
 }
 
 func (h *Hub) kbKick() {
@@ -167,7 +168,7 @@ func (h *Hub) rezoneKB(st *kb.Store) {
 
 func (h *Hub) kbLoop(ctx context.Context) {
 	e := h.kb.eng
-	var lastMail, lastItems, lastPrune, lastLinks, lastConnectors time.Time
+	var lastItems, lastPrune, lastLinks time.Time
 	t := time.NewTicker(kbPoll)
 	defer t.Stop()
 	for {
@@ -177,14 +178,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 				h.logf("kb: archive: %v", err)
 			}
 		})
-		if h.mail != nil && time.Since(lastMail) >= kbMailPoll {
-			lastMail = time.Now()
-			h.kbMail(ctx)
-		}
-		if time.Since(lastConnectors) >= kbConnectorPoll {
-			lastConnectors = time.Now()
-			run(ctx, func() { h.kbConnectors(ctx) })
-		}
+		run(ctx, func() { h.kbConnectors(ctx) }) // mail, GitHub…, each when it is due
 		for i, c := range e.DueForCompression(time.Now()) {
 			if i >= kbCompressMax || ctx.Err() != nil {
 				break
@@ -474,74 +468,6 @@ func (s *larkItems) DocTitle(ctx context.Context, u string) string {
 }
 
 // --- mail ---
-
-// mailSource lets kb.Ingest save mail: one chat per account and correspondent.
-type mailSource struct{}
-
-func (mailSource) Name() string                                        { return "mail" }
-func (mailSource) Chats(context.Context, int) ([]kb.SourceChat, error) { return nil, nil }
-func (mailSource) Download(context.Context, string, string) error {
-	return errors.New("no mail attachments")
-}
-func (mailSource) Messages(context.Context, kb.SourceChat, string, int) ([]kb.SourceMessage, string, bool, error) {
-	return nil, "", false, nil
-}
-
-// kbMail archives inbox mail newer than the last UID seen per account (subject + text, 4 000 characters).
-func (h *Hub) kbMail(ctx context.Context) {
-	e := h.kb.eng
-	cursorsFile := filepath.Join(e.Store.Dir, "mail-cursors.json")
-	cursors := map[string]uint32{}
-	if raw, err := os.ReadFile(cursorsFile); err == nil {
-		_ = json.Unmarshal(raw, &cursors)
-	}
-	accounts, err := h.mail.ListAccounts()
-	if err != nil {
-		return
-	}
-	reads := 0
-	for _, a := range accounts {
-		res, err := h.mail.ListMessages(ctx, mail.ListOptions{AccountID: a.ID, Limit: 40})
-		if err != nil {
-			continue
-		}
-		last := cursors[a.ID]
-		top := last
-		for i := len(res.Messages) - 1; i >= 0; i-- { // oldest first
-			m := res.Messages[i]
-			if m.UID <= last {
-				continue
-			}
-			if m.UID > top {
-				top = m.UID
-			}
-			text := m.Snippet
-			if reads < 10 {
-				if full, err := h.mail.GetMessage(ctx, a.ID, m.UID, m.Mailbox); err == nil && strings.TrimSpace(full.Text) != "" {
-					text = full.Text
-				}
-				reads++
-			}
-			at, _ := time.Parse(time.RFC3339, m.Date)
-			addr := strings.ToLower(m.From.Email)
-			name := m.From.Name
-			if name == "" {
-				name = addr
-			}
-			sc := kb.SourceChat{ID: a.ID + "-" + addr, Name: name + " · 邮件", Kind: "mail"}
-			sm := kb.SourceMessage{ID: fmt.Sprint(m.UID), SenderID: addr, SenderName: name, At: at, Type: "TEXT",
-				Mine: strings.EqualFold(addr, a.Email),
-				Text: "【" + m.Subject + "】" + clipRunes(strings.TrimSpace(text), 4000)}
-			if _, err := e.Ingest(ctx, mailSource{}, sc, []kb.SourceMessage{sm}); err != nil {
-				h.logf("kb: mail %s: %v", a.Email, err)
-			}
-		}
-		cursors[a.ID] = top
-	}
-	if raw, err := json.Marshal(cursors); err == nil {
-		_ = os.WriteFile(cursorsFile, raw, 0o600)
-	}
-}
 
 // --- assistant tools (definitions in prompts/mcp/kb) ---
 

@@ -569,8 +569,8 @@ func TestConnectorBaseline(t *testing.T) {
 	h.lark = lark.New(lark.Config{BaseURL: srv.URL, Token: "t"})
 	// The connectors as the hub registers them (Feishu's sources and items come from the registry).
 	h.connectors = connector.NewRegistry(nil)
-	h.registerConnectors()
 	h.mail = newBaselineMail(base)
+	h.registerConnectors()
 	ctx := context.Background()
 
 	h.collectInbox(ctx, true)
@@ -589,7 +589,7 @@ func TestConnectorBaseline(t *testing.T) {
 	if _, err := h.kb.eng.Archive(ctx); err != nil {
 		t.Fatal(err)
 	}
-	h.kbMail(ctx)
+	h.kbConnectors(ctx) // mail
 	h.kbCollectItems(ctx)
 	var unexpected []string
 	for _, l := range logs.lines {

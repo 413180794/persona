@@ -54,7 +54,7 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
    按游标（`afterPosition`）增量拉，第一次见到的会话从最新 100 条开始；追加到当天的 `messages/*.md`（日期和时间按用户的时区，见下面「时区」）。
    图片 / 文件 / 富文本里的图下载到 `attachments/<日期>/`（单个 20 MB 以内），行里留 `[附件](相对路径)`；消息里的飞书文档链接记进 `docs/`。
    话题群只读最新一页的话题。邮件每 6 分钟按账号读收件箱最新 40 封里 UID 比上次大的，每轮最多读 10 封全文（其余用摘要），
-   记到 `mail-<账号>-<对方地址>` 会话里；游标在 `mail-cursors.json`。
+   记到 `mail-<账号>-<对方地址>` 会话里；游标在 `cursors/mail.json`（各账号的 UID；2026-11-03 以前在 `mail-cursors.json`，没有新文件时从它接着读）。
    连接器（`docs/plan-connectors.md`，实现 `connector.Archive` 的）每 10 分钟按一个游标读一次「自从上次以来」有新消息的会话，
    游标在 `cursors/<连接器>.json`，会话 id 是 `<连接器>-<会话>`。往回补只对能往回读的来源（飞书、removed），连接器的会话不占往回补的名额。
    - **GitHub**：只收和我有关的 PR / issue（`involves:@me`，第一次看最近 30 天），不爬整个仓库。

@@ -81,6 +81,11 @@ func (h *Hub) registerConnectors() {
 			h.logf("lark connector: %v", err)
 		}
 	}
+	if h.mail != nil {
+		if err := h.addConnector(mailConnector{h}); err != nil {
+			h.logf("mail connector: %v", err)
+		}
+	}
 	if gh := h.cfg.GitHub; gh.Configured() {
 		name := gh.Auth.FromMachine
 		if m := h.byID[name]; m != nil {

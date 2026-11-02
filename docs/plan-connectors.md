@@ -271,7 +271,7 @@ node → hub 事件：`connector.changed {id, scope}`。
 | --- | --- | --- |
 | M0 | 写对照测试和 `connector-diff`，用当前 master 生成基线 | 基线入库（合成数据）；真实对照在当前代码上自己和自己比一致 |
 | M1 ✓ | （#529）`connector` 加 `Chats{ChatSources() []kb.Source}`、`Items{ItemSource()}`，飞书连接器（`hub/lark_connector.go`）包住 `larkSource`、`momentsSource`、`larkItems`，`kbSources()` / `kbCollectItems()` 从 Registry 来；工具只分发给真的提供它的连接器（`Registry.Offers`），所以 `lark` 连接器在 M4 前不接 `lark_*`；`/api/v1/connectors` 在 M6 前不列 `lark` / `mail`。**和原计划不同**：飞书的事件 WebSocket 不包进连接器的 `Events`，它还要推 App 的信息 tab、刷新个人 Agent、立刻起 /agent，留在 hub。原计划：加 `connector` 包和 `Registry`；飞书连接器 = 现在的 `larkSource` + `momentsSource` + `larkItems` + 事件 WebSocket 的包装；`kb.Engine.Sources` 从 Registry 来 | 知识库 id 前缀不变；真实对照一致 |
-| M2 | 邮件实现 `StreamSource`（UID 游标），删掉空壳 `mailSource` 和 `kbMail` 的循环；`mail-cursors.json` 迁到 `cursors/` 并兼容读旧文件 | 迁移前后同一批邮件得到同样的会话和行；游标不回退（不会重复归档） |
+| M2 ✓ | （#544）邮件连接器（`hub/mail_connector.go`）实现 `connector.Archive`，加可选的 `Poller`（邮件 6 分钟），删掉 `kbMail`；对照基线只有游标文件的位置变了。原计划：邮件实现 `StreamSource`（UID 游标），删掉空壳 `mailSource` 和 `kbMail` 的循环；`mail-cursors.json` 迁到 `cursors/` 并兼容读旧文件 | 迁移前后同一批邮件得到同样的会话和行；游标不回退（不会重复归档） |
 | M3 | 收件箱：`collectLark` / `collectDocs` / `collectMoments` / `collectMail` 包成 `Inbox`；`replyInbox` 的 `switch` 换成 `Reply`；加 `?sources=` | 收件箱对照一致；旧 App（不带 `sources`）看到的列表和以前一样 |
 | M4 | MCP：`lark_*`、`mail_*` 从 Registry 注册，`callTool` 按前缀分发 | 三种工具列表的 golden 逐字节一致；`TestEveryMCPToolIsUsed` 过 |
 | M5 | 闸门：`mail_send` 的批准、`lark_gate` 的规则读取搬进 `connector/gate.go`，加 `connector_gate` 配置 | 卡片文字和以前一样（截图对比）；`lark_gate` 老配置照样生效 |
