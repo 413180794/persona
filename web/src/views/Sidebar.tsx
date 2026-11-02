@@ -1,15 +1,17 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, the accent action, sections, one gliding highlight.
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, isQuiet, type AgentGroup } from "../lib/agent-groups";
+import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, setToken } from "../lib/api";
 import { ago, baseName, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts, useSpaces } from "../lib/sessions";
 import { reset, useStore } from "../lib/store";
 import type { Machine, Session } from "../lib/types";
-import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu } from "../ui/atoms";
+import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, type MenuItem } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
+import { AgentAvatar } from "./agents/AgentAvatar";
 
 function useFolded(key: string, initial = false): [boolean, () => void] {
   const [v, setV] = useState(() => {
@@ -49,7 +51,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
 
   const activeKey =
-    route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new") : route.name === "machines" ? "machines" : route.name === "settings" ? "settings" : "home";
+    route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new") : route.name === "machines" ? "machines" : route.name === "settings" ? "settings" : route.name === "agents" ? (route.id ? `a:${route.id}` : "agents") : "home";
   // a space with nothing to look at (every agent seen and waiting) goes to「空闲的空间」, like the app; the open
   // conversation's space stays where it is so the row under the pointer doesn't move away
   const busy = (sp: (typeof spaces)[number]) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
@@ -119,6 +121,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           <NavRow k="machines" reg={reg} hover={setHovered} active={activeKey === "machines"} to={{ name: "machines" }} go={go} icon="machine" label="机器" hint={machines.length ? `${online}/${machines.length}` : undefined} />
           <NavRow k="settings" reg={reg} hover={setHovered} active={activeKey === "settings"} to={{ name: "settings" }} go={go} icon="gear" label="设置" />
         </div>
+
+        <PersonalAgents reg={reg} hover={setHovered} activeKey={activeKey} go={go} />
 
         {convs.length > 0 && (
           <Section title="Jarvis 对话" folded={jarvisFolded} onToggle={toggleJarvis}>
@@ -366,5 +370,190 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showSt
       {!t && (st === "offline" || !showState) && <span className="shrink-0 text-[11px] text-ink-3">{ago(s.updated_at)}</span>}
       {(s.pending_interactions ?? 0) > 0 && <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red px-1 text-[10px] font-semibold text-white tabular-nums">{s.pending_interactions}</span>}
     </a>
+  );
+}
+
+// 个人 Agent: lark-connector's personal agents with a view menu (分组 / 排序 / 显示), a search field, pins and custom
+// sections — the prefs live on the hub so iOS sees the same pins.
+type MenuPage = "root" | "group" | "sort" | "show";
+function agentViewItems(page: MenuPage, setPage: (p: MenuPage) => void, p: AgentPrefs, providers: string[]): MenuItem[] {
+  const v = viewOf(p);
+  const back: MenuItem = { key: "back", label: "‹ 返回", keepOpen: true, onSelect: () => setPage("root") };
+  if (page === "group")
+    return [back, ...(Object.keys(GROUP_LABEL) as GroupBy[]).map((g, i) => ({ key: g, label: GROUP_LABEL[g], divider: i === 0, checked: v.group === g, onSelect: () => updateAgentPrefs((x) => setView(x, { group: g })) }))];
+  if (page === "sort")
+    return [back, ...(Object.keys(SORT_LABEL) as SortBy[]).map((s, i) => ({ key: s, label: SORT_LABEL[s], divider: i === 0, checked: v.sort === s, onSelect: () => updateAgentPrefs((x) => setView(x, { sort: s })) }))];
+  if (page === "show")
+    return [
+      back,
+      ...(Object.keys(SHOW_LABEL) as ShowMode[]).map((s, i) => ({ key: s, label: SHOW_LABEL[s], divider: i === 0, checked: v.show === s, keepOpen: true, onSelect: () => updateAgentPrefs((x) => setView(x, { show: s })) })),
+      ...providers.map((pr, i) => ({ key: `p:${pr}`, label: providerLabel(pr), hint: i === 0 ? "来源" : undefined, divider: i === 0, checked: !v.providers.length || v.providers.includes(pr), keepOpen: true, onSelect: () => updateAgentPrefs((x) => (viewOf(x).providers.length ? toggleProvider(x, pr) : setView(x, { providers: providers.filter((y) => y !== pr) }))) })),
+    ];
+  const showHint = v.show !== "all" ? SHOW_LABEL[v.show] : v.providers.length ? `${v.providers.length} 个来源` : SHOW_LABEL.all;
+  return [
+    { key: "group", label: "分组方式", hint: GROUP_LABEL[v.group], submenu: true, onSelect: () => setPage("group") },
+    { key: "sort", label: "排序方式", hint: SORT_LABEL[v.sort], submenu: true, onSelect: () => setPage("sort") },
+    { key: "show", label: "显示", hint: showHint, submenu: true, onSelect: () => setPage("show") },
+    {
+      key: "section",
+      label: "新建分组",
+      icon: "plus",
+      divider: true,
+      onSelect: () => {
+        const name = prompt("分组名称")?.trim();
+        if (name) updateAgentPrefs((x) => addSection(x, name));
+      },
+    },
+    { key: "reset", label: "重置为默认", divider: true, disabled: isDefaultView(p), onSelect: () => updateAgentPrefs(resetView) },
+    { key: "all", label: "查看全部", onSelect: () => navigate({ name: "agents" }) },
+  ];
+}
+
+// Row actions (context menu on web): pin, move to a custom section, remove a section.
+function agentRowItems(s: AgentSession, p: AgentPrefs): MenuItem[] {
+  const pinned = p.pins.includes(s.id);
+  const cur = p.assign[s.id];
+  return [
+    { key: "pin", label: pinned ? "取消置顶" : "置顶", icon: "pin", onSelect: () => updateAgentPrefs((x) => togglePin(x, s.id)) },
+    ...p.sections.map((sec, i) => ({ key: `sec:${sec.id}`, label: `移到「${sec.name}」`, divider: i === 0, checked: cur === sec.id, onSelect: () => updateAgentPrefs((x) => assignSection(x, s.id, cur === sec.id ? null : sec.id)) })),
+    ...(cur ? [{ key: "unsec", label: "移出分组", onSelect: () => updateAgentPrefs((x) => assignSection(x, s.id, null)) }] : []),
+  ];
+}
+
+function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
+  const { sessions, loaded, error } = useAgentList();
+  const prefs = useAgentPrefs();
+  const [folded, toggle] = useFolded("personal-agents");
+  const [q, setQ] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [all, setAll] = useState<Record<string, boolean>>({});
+  const menu = useMenu();
+  const [page, setPage] = useState<MenuPage>("root");
+  const [rowMenu, setRowMenu] = useState<{ s: AgentSession; el: HTMLElement } | null>(null);
+  if (loaded && !sessions.length && !error) return null;
+  const groups = arrangeSessions(sessions, prefs, q);
+  const unread = totalUnread(sessions);
+  const providers = [...new Set(sessions.map((s) => s.provider))];
+  const filtered = !isDefaultView(prefs) || !!q;
+  const sectionOf = (key: string) => (key.startsWith("sec:") ? key.slice(4) : "");
+  return (
+    <Section
+      title="个人 Agent"
+      folded={folded}
+      onToggle={toggle}
+      right={
+        <>
+          {unread ? <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-tint px-1 text-[10px] font-semibold text-accent-ink tabular-nums">{unread}</span> : <span className="text-[10.5px] text-ink-3 tabular-nums">{sessions.length || ""}</span>}
+          <button type="button" title="搜索个人 Agent" aria-label="搜索个人 Agent" onClick={() => setSearching((x) => !x || !!q)} className={cx("relative z-10 flex size-5 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2", (searching || q) && "text-ink-2")}>
+            <Icon name="search" size={12} />
+          </button>
+          <button
+            type="button"
+            title="筛选与排序"
+            aria-label="筛选与排序"
+            aria-haspopup="menu"
+            onClick={(e) => {
+              setPage("root");
+              menu.open(e);
+            }}
+            className={cx("relative z-10 flex size-5 items-center justify-center rounded-[5px] hover:bg-hover hover:text-ink-2", filtered ? "text-accent" : "text-ink-3", menu.anchor && "bg-hover")}
+          >
+            <Icon name="filter" size={12} />
+          </button>
+          {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" width={220} items={agentViewItems(page, setPage, prefs, providers)} />}
+        </>
+      }
+    >
+      {!loaded && <p className="px-2 py-1 text-[12px] text-ink-3">加载中…</p>}
+      {error && <p className="px-2 py-1 text-[12px] text-red" title={error}>个人 Agent 加载失败</p>}
+      {(searching || q) && (
+        <input
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setQ("");
+              setSearching(false);
+            }
+          }}
+          placeholder="搜索个人 Agent"
+          className="relative z-10 mx-1 mb-1 h-7 rounded-control bg-inset px-2 text-[12px] text-ink shadow-hairline outline-none placeholder:text-ink-3"
+        />
+      )}
+      {loaded && !error && !groups.length && <p className="px-2 py-1 text-[12px] text-ink-3">没有匹配的会话</p>}
+      {groups.map((g) => {
+        const more = !q && !all[g.key] && g.key !== "pinned" && g.sessions.length > 5;
+        const sec = sectionOf(g.key);
+        return (
+          <div key={g.key} className="flex flex-col gap-px">
+            {g.label && (groups.length > 1 || g.key === "pinned" || sec) && (
+              <div className="group/g flex items-center gap-1.5 px-2 pt-1.5 pb-0.5 text-[11px] text-ink-3">
+                {g.key === "pinned" && <Icon name="pin" size={10} />}
+                <span className="min-w-0 flex-1 truncate">{g.label}</span>
+                {g.unread > 0 && <span className="tabular-nums text-accent-ink">{g.unread}</span>}
+                {sec && (
+                  <button type="button" title="删除分组" aria-label={`删除分组 ${g.label}`} onClick={() => confirm(`删除分组「${g.label}」？会话会回到原来的位置。`) && updateAgentPrefs((x) => removeSection(x, sec))} className="relative z-10 opacity-0 group-hover/g:opacity-100 hover:text-ink-2">
+                    <Icon name="x" size={10} />
+                  </button>
+                )}
+              </div>
+            )}
+            {(more ? g.sessions.slice(0, 5) : g.sessions).map((s) => (
+              <AgentRow key={s.id} s={s} reg={reg} hover={hover} active={activeKey === `a:${s.id}`} go={go} pinned={prefs.pins.includes(s.id)} onMenu={(el) => setRowMenu({ s, el })} />
+            ))}
+            {g.sessions.length > 5 && !q && g.key !== "pinned" && (
+              <button type="button" onClick={() => setAll((x) => ({ ...x, [g.key]: !x[g.key] }))} className="relative z-10 w-full rounded-[7px] px-2 py-1 text-left text-[12px] text-ink-3 hover:text-ink-2">
+                {more ? `再显示 ${g.sessions.length - 5} 个` : "收起"}
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {rowMenu && <Menu anchor={rowMenu.el} onClose={() => setRowMenu(null)} align="right" width={200} items={agentRowItems(rowMenu.s, prefs)} />}
+    </Section>
+  );
+}
+
+function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSession; reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; pinned: boolean; onMenu: (el: HTMLElement) => void }) {
+  const k = `a:${s.id}`;
+  const to: Route = { name: "agents", id: s.id };
+  const unread = s.unreadCount > 0;
+  return (
+    <div className="group/row relative" onContextMenu={(e) => {
+      e.preventDefault();
+      onMenu(e.currentTarget);
+    }}>
+      <a
+        ref={reg(k)}
+        href={href(to)}
+        onClick={go(to)}
+        onMouseEnter={() => hover(k)}
+        onFocus={() => hover(k)}
+        onBlur={() => hover(null)}
+        aria-current={active ? "page" : undefined}
+        title={`${s.title || "未命名会话"} · ${providerLabel(s.provider)}`}
+        className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98]"
+      >
+        <AgentAvatar s={s} size={16} />
+        <span className={cx("min-w-0 flex-1 truncate text-[13px]", active || unread ? "font-medium text-ink" : "text-ink-2")}>{s.title || "未命名会话"}</span>
+        <span className="flex shrink-0 items-center group-hover/row:invisible">
+          {unread ? (
+            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white tabular-nums">{s.unreadCount}</span>
+          ) : (
+            s.rankTimeMs > 0 && <span className="text-[11px] text-ink-3">{ago(new Date(s.rankTimeMs).toISOString())}</span>
+          )}
+        </span>
+      </a>
+      <button
+        type="button"
+        title={pinned ? "取消置顶" : "置顶"}
+        aria-label={pinned ? "取消置顶" : "置顶"}
+        onClick={() => updateAgentPrefs((x) => togglePin(x, s.id))}
+        className={cx("absolute top-1/2 right-1 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-[5px] opacity-0 hover:bg-hover group-hover/row:opacity-100 focus-visible:opacity-100", pinned ? "text-accent" : "text-ink-3")}
+      >
+        <Icon name="pin" size={11} />
+      </button>
+    </div>
   );
 }

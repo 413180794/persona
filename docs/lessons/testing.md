@@ -93,6 +93,9 @@
 
 ## 新加的 UI 测试
 
+- DEBUG 启动参数触发的动作（发一条消息、打开某页）不要写在 `onAppear` 里每次都跑（2026-11-02）：带 `-openSession` 启动时对话页 0.2 秒内出现、消失、再出现三次，
+  `-openSendMessage` 就写了三条消息（各自新的 id），`ConnectionTests` 看到 hub 收到三次，像是断网重发的 bug。会产生副作用的触发一次启动只做一次（`ChatView.debugSent`）。
+  判断是不是真重复：看 mock `/mock/sent` 里的 `client_msg_id`，同一条消息的重发 id 相同，服务端和 mock 都按它去重。
 - 新建的测试文件要先 `xcodegen` 再跑，否则 `-only-testing:` 选中的是空集，xcodebuild 照样 `** TEST SUCCEEDED **`（`Executed 0 tests`）。
   看结果要 grep `Executed N tests`，N 不能是 0（2026-11-01，端口转发的 UI 测试第一次「通过」其实一个都没跑）。
 - 启动一律 `app.launchPinned()`（钉住风格），不是 `launchJarvis()`：`UITestStyleTests` 扫源码拦这个。

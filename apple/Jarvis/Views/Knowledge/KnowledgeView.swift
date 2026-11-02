@@ -180,7 +180,7 @@ struct KnowledgeView: View {
                 }
             }
         } label: {
-            Image(systemName: tag == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+            Image(systemName: tag == nil ? Theme.Icon.filter : Theme.Icon.filterActive)
         }
         .accessibilityLabel(tag.map { "按标签筛选，当前 #\($0)" } ?? "按标签筛选")
     }

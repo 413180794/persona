@@ -75,6 +75,8 @@ extension Theme {
         static let run = "play.fill"
         static let add = "plus"
         static let send = "arrow.up"
+        /// The round send button beside a composer.
+        static let submit = "arrow.up.circle.fill"
         static let sendMail = "paperplane.fill"
         static let reply = "arrowshape.turn.up.left"
         /// Leave the app for another one (飞书).
@@ -107,6 +109,11 @@ extension Theme {
         /// Try something out for real (测试可用性: a launcher answers one question on each machine).
         static let tryOut = "bolt.horizontal.circle"
         static let options = "slider.horizontal.3"
+        /// A list filter menu: off, and on (something filtered).
+        static let filter = "line.3.horizontal.decrease.circle"
+        static let filterActive = "line.3.horizontal.decrease.circle.fill"
+        /// A plain list layout.
+        static let listView = "list.bullet"
         static let settings = "gearshape"
         static let enter = "return"
         static let link = "link"

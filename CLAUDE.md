@@ -208,6 +208,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/ios.md` | iOS / watchOS App：信息架构、设计语言、手机数据工具 |
 | `docs/ios-state.md` | App 的状态和重绘：推送怎么走到屏幕、一次推送的代价、根因、分步根治；真实性 / 及时性的标准和探针（`ScreenProbe`） |
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
+| `docs/siri.md` | Siri 深度集成：问 Jarvis（助手主对话）、让个人 Agent 去做、未读、控制中心 / 操作按钮、Spotlight 索引 |
 | `docs/live-activity.md` | 锁屏 / 灵动岛实时活动（Fleet）：显示什么、和其他 App 共用灵动岛（限宽 / 最小态）、ContentState、hub 的 liveactivity 推送和 push-to-start、怎么在模拟器上验证 |
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 | `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`apple/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |

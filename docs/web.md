@@ -60,6 +60,14 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     当前 Agent 保留勾选标记；长标题单行截断、悬停可看完整标题和状态，窄屏菜单宽度不超出视口。有别的需要你时按钮带红点。「⋯」：拷贝会话 ID / 目录 / 恢复命令，关闭 Agent（先确认）。
   - 打开页面、页面回到前台时发 `seen`。
 - **Jarvis**：`/j` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。
+- **个人 Agent**（`/a`、`/a/<整个 id 编码>`，`src/lib/agents.ts`、`src/views/agents/`）：lark-connector 配对的个人 Agent（`/api/v1/agents/*`，
+  `docs/protocol.md`）。侧边栏「个人 Agent」按 provider 分组、组内按最近排序，带未读数，会话多于 6 个时可筛选；`/a` 是带搜索的全量列表。
+  会话页：打开即 `POST …/read`；「加载更早的消息」用 `nextCursor`，按 `externalId` 去重、按 `position` 排序；tool-call 折叠，未知 block 原样显示 JSON。
+  发送带新的 UUID `clientId`，失败可重试（同一个 `clientId`，hub 幂等）；持久化后的消息没有 `clientId`，本地气泡按文本 + 时间收敛；`canSend=false` 时输入框禁用。
+  WS `{"type":"agents","session_ids":[...]}` 时刷新列表，打开的会话在 id 命中（或列表为空）时重拉最新一页。
+
+  ![网页版侧边栏的个人 Agent：按来源分组，带头像、未读数、搜索和筛选按钮](screenshots/web-personal-agents.png)
+
 - **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：四个分类，和 App 的设置同一套接口。
   「通用」是外观（跟随系统 / 浅色 / 深色）、Jarvis 助手的运行位置和统一模型配置入口、这个浏览器（hub 地址、断开）；
   「模型供应商」是全部接入（搜索；Jarvis 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、

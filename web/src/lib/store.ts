@@ -2,6 +2,7 @@
 // Views read it with useStore(selector); per-session item streams go to listeners (ChatView subscribes).
 
 import { useRef, useSyncExternalStore } from "react";
+import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents } from "./agents";
 import { api, getToken } from "./api";
 import type { AgentMutes } from "./agent-groups";
 import type { AssistantInfo, Interaction, Item, Machine, Session } from "./types";
@@ -175,6 +176,8 @@ function onMessage(msg: Record<string, unknown>) {
       set({ conn: "online", version: String(msg.server_version ?? "") });
       sessionListeners.forEach((ls) => ls.forEach((l) => l.reconnected?.()));
       void refresh();
+      void refreshAgentSessions();
+      void refreshAgentPrefs();
       break;
     case "ping":
       send({ type: "pong" });
@@ -206,6 +209,12 @@ function onMessage(msg: Record<string, unknown>) {
       sessionListeners.get(key(e.machine_id, e.session_id))?.forEach((l) => l.items?.(e));
       break;
     }
+    case "agents.prefs":
+      void refreshAgentPrefs();
+      break;
+    case "agents":
+      agentsChanged(Array.isArray(msg.session_ids) ? (msg.session_ids as string[]) : []);
+      break;
     case "delta":
       sessionListeners.get(key(msg.machine_id as string, msg.session_id as string))?.forEach((l) => l.delta?.(msg.text as string));
       break;
@@ -270,6 +279,7 @@ export function markSeenLocally(mid: string, sid: string) {
 
 export function reset() {
   disconnect();
+  resetAgents();
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({ machines: [], sessions: {}, interactions: [], assistant: null, launches: {}, mutes: { spaces: [], sessions: [], allowed: [] }, loaded: false, conn: "connecting" });
 }

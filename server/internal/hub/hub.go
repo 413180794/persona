@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/agents"
 	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/lark"
@@ -42,6 +43,7 @@ type Hub struct {
 	translations      translateCache // translate.go
 	quotas            quotaCache     // launcherquota.go
 	lark              *lark.Client
+	agents            *agents.Service
 	larkLastEvent     atomic.Int64 // Unix seconds of the last realtime event from lark-connector (设置 › 连接器 › 飞书)
 
 	terms terminals // the terminal tab's live streams (terminal.go)
@@ -215,6 +217,7 @@ func Run(ctx context.Context, version string) error {
 	}
 	h.lark = lark.New(cfg.Lark)
 	h.inbox.larkAccount = h.lark.Account()
+	h.initAgents()
 	for _, mc := range cfg.Machines {
 		m := newMachine(h, mc)
 		h.machines = append(h.machines, m)
@@ -228,6 +231,7 @@ func Run(ctx context.Context, version string) error {
 	go h.scheduleLoop(ctx)
 	go h.larkEvents(ctx)
 	go h.larkAgentLoop(ctx)
+	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)

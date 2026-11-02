@@ -431,7 +431,7 @@ struct QuestionForm: View {
                     }
                 if !needsFooter, !text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button { submit() } label: {
-                        Image(systemName: "arrow.up.circle.fill").font(Theme.Font.title).foregroundStyle(Theme.accent)
+                        Image(systemName: Theme.Icon.submit).font(Theme.Font.title).foregroundStyle(Theme.accent)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("发送回答")
@@ -872,7 +872,7 @@ struct ScreenForm: View {
                         send(opt.key, answer(opt, text: t))
                     } label: {
                         if sending == opt.key { ProgressView().controlSize(.small) }
-                        else { Image(systemName: "arrow.up.circle.fill").font(Theme.Font.title).foregroundStyle(Theme.accent) }
+                        else { Image(systemName: Theme.Icon.submit).font(Theme.Font.title).foregroundStyle(Theme.accent) }
                     }
                     .buttonStyle(.plain)
                     .disabled(sending != nil)

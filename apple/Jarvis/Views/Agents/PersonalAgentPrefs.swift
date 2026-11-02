@@ -1,0 +1,213 @@
+import Foundation
+import Observation
+
+// The personal-agents list prefs shared with the web (docs/protocol.md 「个人 Agent 列表偏好」): pins, the view
+// (分组 / 排序 / 显示 / 来源), and custom sections. Kept on the hub (GET/PUT /api/v1/agents/prefs), cached in
+// UserDefaults; an older hub without the endpoint leaves them local.
+
+nonisolated enum AgentGroupBy: String, Codable, CaseIterable, Sendable {
+    case date, provider, none
+    var label: String { switch self { case .date: "日期"; case .provider: "来源"; case .none: "不分组" } }
+}
+
+nonisolated enum AgentSortBy: String, Codable, CaseIterable, Sendable {
+    case updated, unread, name
+    var label: String { switch self { case .updated: "最近更新"; case .unread: "未读数"; case .name: "名称" } }
+}
+
+nonisolated enum AgentShow: String, Codable, CaseIterable, Sendable {
+    case all, unread, sendable
+    var label: String { switch self { case .all: "全部"; case .unread: "仅未读"; case .sendable: "仅可发送" } }
+}
+
+nonisolated struct PersonalAgentView: Codable, Hashable, Sendable {
+    var group: String?
+    var sort: String?
+    var show: String?
+    var providers: [String]?
+
+    var groupBy: AgentGroupBy { group.flatMap(AgentGroupBy.init(rawValue:)) ?? .date }
+    var sortBy: AgentSortBy { sort.flatMap(AgentSortBy.init(rawValue:)) ?? .updated }
+    var showMode: AgentShow { show.flatMap(AgentShow.init(rawValue:)) ?? .all }
+    var providerFilter: [String] { providers ?? [] }
+    var isDefault: Bool { groupBy == .date && sortBy == .updated && showMode == .all && providerFilter.isEmpty }
+}
+
+nonisolated struct PersonalAgentSection: Codable, Hashable, Identifiable, Sendable {
+    var id: String
+    var name: String
+}
+
+nonisolated struct PersonalAgentPrefs: Codable, Hashable, Sendable {
+    var pins: [String] = []
+    var view = PersonalAgentView()
+    var sections: [PersonalAgentSection] = []
+    var assign: [String: String] = [:]
+
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        pins = try c.decodeIfPresent([String].self, forKey: .pins) ?? []
+        view = try c.decodeIfPresent(PersonalAgentView.self, forKey: .view) ?? PersonalAgentView()
+        sections = try c.decodeIfPresent([PersonalAgentSection].self, forKey: .sections) ?? []
+        assign = try c.decodeIfPresent([String: String].self, forKey: .assign) ?? [:]
+    }
+    enum CodingKeys: String, CodingKey { case pins, view, sections, assign }
+
+    func isPinned(_ id: String) -> Bool { pins.contains(id) }
+    mutating func togglePin(_ id: String) {
+        if let i = pins.firstIndex(of: id) { pins.remove(at: i) } else { pins.insert(id, at: 0) }
+    }
+    mutating func assign(_ id: String, to section: String?) {
+        if let section { assign[id] = section } else { assign[id] = nil }
+    }
+    mutating func addSection(_ name: String, id: String = "s" + String(Int(Date().timeIntervalSince1970 * 1000), radix: 36)) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !n.isEmpty { sections.append(PersonalAgentSection(id: id, name: n)) }
+    }
+    mutating func removeSection(_ id: String) {
+        sections.removeAll { $0.id == id }
+        assign = assign.filter { $0.value != id }
+    }
+    /// 重置为默认: the view only; pins and sections stay.
+    mutating func resetView() { view = PersonalAgentView() }
+    mutating func toggleProvider(_ p: String, all: [String]) {
+        var cur = view.providerFilter.isEmpty ? all : view.providerFilter
+        if let i = cur.firstIndex(of: p) { cur.remove(at: i) } else { cur.append(p) }
+        view.providers = Set(cur) == Set(all) ? [] : cur
+    }
+}
+
+nonisolated struct PersonalAgentGroup: Identifiable, Hashable, Sendable {
+    var id: String // pinned, sec:<id>, p:<provider>, d:<bucket>, all
+    var label: String
+    var sessions: [PersonalAgentSession]
+    var unread: Int { sessions.reduce(0) { $0 + $1.unreadCount } }
+}
+
+nonisolated enum PersonalAgentArrange {
+    static func providerLabel(_ p: String) -> String {
+        ["grok_bot": "Grok Bot", "muse": "Muse", "cue": "Cue", "dots": "Dots", "claude_duet": "Claude Duet"][p] ?? (p.isEmpty ? "其他" : p)
+    }
+
+    static func bucket(_ ms: Int64, now: Date, calendar: Calendar = .current) -> (key: String, label: String, order: Int) {
+        let t = Date(timeIntervalSince1970: Double(ms) / 1000)
+        let today = calendar.startOfDay(for: now)
+        let day: TimeInterval = 86_400
+        if t >= today { return ("today", "今天", 0) }
+        if t >= today.addingTimeInterval(-day) { return ("yesterday", "昨天", 1) }
+        if t >= today.addingTimeInterval(-7 * day) { return ("week", "近 7 天", 2) }
+        if t >= today.addingTimeInterval(-30 * day) { return ("month", "近 30 天", 3) }
+        return ("older", "更早", 4)
+    }
+
+    /// Same order as the web's arrangeSessions: filter, 已置顶 (pin order), custom sections, then the grouping.
+    static func arrange(_ list: [PersonalAgentSession], prefs: PersonalAgentPrefs, query: String = "", now: Date = Date()) -> [PersonalAgentGroup] {
+        let v = prefs.view
+        let q = query.trimmingCharacters(in: .whitespaces)
+        let keep = list.filter { s in
+            (q.isEmpty || s.title.localizedCaseInsensitiveContains(q) || s.provider.localizedCaseInsensitiveContains(q)
+                || providerLabel(s.provider).localizedCaseInsensitiveContains(q))
+                && (v.showMode != .unread || s.unreadCount > 0) && (v.showMode != .sendable || s.canSend)
+                && (v.providerFilter.isEmpty || v.providerFilter.contains(s.provider))
+        }
+        let byID = Dictionary(keep.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var out: [PersonalAgentGroup] = []
+        let pinned = prefs.pins.compactMap { byID[$0] }
+        var used = Set(pinned.map(\.id))
+        if !pinned.isEmpty { out.append(PersonalAgentGroup(id: "pinned", label: "已置顶", sessions: pinned)) }
+        let cmp: (PersonalAgentSession, PersonalAgentSession) -> Bool = { a, b in
+            switch v.sortBy {
+            case .unread: a.unreadCount != b.unreadCount ? a.unreadCount > b.unreadCount : a.rankTimeMs > b.rankTimeMs
+            case .name: a.title != b.title ? a.title.localizedStandardCompare(b.title) == .orderedAscending : a.rankTimeMs > b.rankTimeMs
+            case .updated: a.rankTimeMs > b.rankTimeMs
+            }
+        }
+        for sec in prefs.sections {
+            let ss = keep.filter { !used.contains($0.id) && prefs.assign[$0.id] == sec.id }.sorted(by: cmp)
+            used.formUnion(ss.map(\.id))
+            if !ss.isEmpty { out.append(PersonalAgentGroup(id: "sec:\(sec.id)", label: sec.name, sessions: ss)) }
+        }
+        let rest = keep.filter { !used.contains($0.id) }.sorted(by: cmp)
+        switch v.groupBy {
+        case .none:
+            if !rest.isEmpty { out.append(PersonalAgentGroup(id: "all", label: out.isEmpty ? "" : "其他", sessions: rest)) }
+        case .provider:
+            var order: [String] = []
+            var by: [String: [PersonalAgentSession]] = [:]
+            for s in rest {
+                if by[s.provider] == nil { order.append(s.provider) }
+                by[s.provider, default: []].append(s)
+            }
+            var gs = order.map { PersonalAgentGroup(id: "p:\($0)", label: providerLabel($0), sessions: by[$0]!) }
+            if v.sortBy == .name { gs.sort { $0.label.localizedStandardCompare($1.label) == .orderedAscending } }
+            else { gs.sort { ($0.sessions.map(\.rankTimeMs).max() ?? 0) > ($1.sessions.map(\.rankTimeMs).max() ?? 0) } }
+            out += gs
+        case .date:
+            var by: [String: (label: String, order: Int, ss: [PersonalAgentSession])] = [:]
+            for s in rest {
+                let b = bucket(s.rankTimeMs, now: now)
+                by[b.key, default: (b.label, b.order, [])].ss.append(s)
+            }
+            out += by.sorted { $0.value.order < $1.value.order }.map { PersonalAgentGroup(id: "d:\($0.key)", label: $0.value.label, sessions: $0.value.ss) }
+        }
+        return out
+    }
+}
+
+@MainActor @Observable
+final class PersonalAgentPrefsStore {
+    static let shared = PersonalAgentPrefsStore()
+    private static let key = "jarvis.agents.prefs"
+
+    private(set) var prefs: PersonalAgentPrefs
+    private var hubBacked = true
+    private var seq = 0
+
+    init(defaults: UserDefaults = .standard) {
+        prefs = defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode(PersonalAgentPrefs.self, from: $0) } ?? PersonalAgentPrefs()
+    }
+
+    private func cache(_ p: PersonalAgentPrefs) {
+        prefs = p
+        if let d = try? JSONEncoder().encode(p) { UserDefaults.standard.set(d, forKey: Self.key) }
+    }
+
+    func load(_ api: APIClient?) async {
+        guard let api else { return }
+        do {
+            let p = try await api.personalAgentPrefs()
+            hubBacked = true
+            cache(p)
+        } catch let e as APIError where e.status == 404 || e.status == 405 {
+            hubBacked = false
+        } catch {}
+    }
+
+    func update(_ api: APIClient?, _ change: (inout PersonalAgentPrefs) -> Void) {
+        var p = prefs
+        change(&p)
+        cache(p)
+        guard hubBacked, let api else { return }
+        seq += 1
+        let mine = seq
+        Task {
+            do {
+                let saved = try await api.putPersonalAgentPrefs(p)
+                if mine == seq { cache(saved) }
+            } catch let e as APIError where e.status == 404 || e.status == 405 {
+                hubBacked = false
+            } catch {}
+        }
+    }
+}
+
+extension APIClient {
+    func personalAgentPrefs() async throws -> PersonalAgentPrefs {
+        try await get("/api/v1/agents/prefs", as: PersonalAgentPrefs.self)
+    }
+
+    func putPersonalAgentPrefs(_ p: PersonalAgentPrefs) async throws -> PersonalAgentPrefs {
+        try JSON.decoder.decode(PersonalAgentPrefs.self, from: try await request("PUT", "/api/v1/agents/prefs", body: p))
+    }
+}

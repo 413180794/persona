@@ -777,6 +777,8 @@ final class AppModel {
             AgentSync.shared.revs(machine: machineID, revs)
         case .lark(let feedIDs):
             LarkSync.shared.received(feedIDs)
+        case .agents(let ids):
+            PersonalAgentSync.shared.received(ids)
         case .inbox:
             InboxStore.shared.reload()
         case .fleet(let state):
@@ -843,6 +845,7 @@ final class AppModel {
         case .hookEvent: "hook"
         case .revs: "revs"
         case .lark: "lark"
+        case .agents: "agents"
         case .inbox: "inbox"
         case .fleet: "fleet"
         case .desktops: "desktops"

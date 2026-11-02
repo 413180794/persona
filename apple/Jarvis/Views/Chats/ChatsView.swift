@@ -164,6 +164,9 @@ struct ChatsView: View {
                         ToolbarItem(placement: .principal) { ConnectionTitle() }
                         ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
                         ToolbarItem(placement: .topBarTrailing) {
+                            Button { openFromList(PersonalAgentsRoute()) } label: { Label("个人 Agent", systemImage: "person.crop.circle.badge.checkmark") }
+                        }
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
                         }
                     }
@@ -1730,6 +1733,8 @@ private struct AgentsDestinations: ViewModifier {
             .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(machineID: r.id).splitDetailPage() }
             .navigationDestination(for: MachineListRoute.self) { _ in MachinesView().splitDetailPage() }
             .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
+            .navigationDestination(for: PersonalAgentsRoute.self) { _ in PersonalAgentListView().splitDetailPage() }
+            .navigationDestination(for: PersonalAgentSession.self) { s in PersonalAgentSessionView(session: s).id(s.id).splitDetailPage() }
     }
 }
 

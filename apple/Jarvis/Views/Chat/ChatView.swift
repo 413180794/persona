@@ -1259,6 +1259,11 @@ struct ChatView: View {
     /// The flipped list's offset grows toward older messages. Like Safari's toolbar, the chrome follows the finger:
     /// reading on (toward the newest) folds it as far as the finger goes, going back into the history unfolds it.
     /// Idle time before the open chrome folds itself.
+    #if DEBUG
+    /// `-openSendMessage` went out this launch.
+    static var debugSent = false
+    #endif
+
     static var chromeIdleSeconds: TimeInterval {
         #if DEBUG
         // `-holdChromeOpen YES`: the header never folds by itself (UI tests that tap in it).
@@ -1825,7 +1830,11 @@ struct ChatView: View {
                 }
             }
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
-            if let t = UserDefaults.standard.string(forKey: "openSendMessage") { // `-openSendMessage <text>`: refusals (SendSafety)
+            // `-openSendMessage <text>`: refusals (SendSafety). Once per launch: the chat appears, goes and appears again
+            // while the app starts (three times in 0.2 s), and each one wrote the message anew, with its own id
+            // (ConnectionTests saw it reach the hub three times; a message the user writes is written once).
+            if let t = UserDefaults.standard.string(forKey: "openSendMessage"), !Self.debugSent {
+                Self.debugSent = true
                 // `-openSendDelay <s>`: later (ConnectionTests sends while the hub is down)
                 let delay = UserDefaults.standard.object(forKey: "openSendDelay") != nil ? UserDefaults.standard.double(forKey: "openSendDelay") : 3
                 Task { try? await Task.sleep(for: .seconds(delay)); model.sendNow(key, text: t) }

@@ -3,6 +3,8 @@
 const P: Record<string, React.ReactNode> = {
   spark: <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" fill="currentColor" stroke="none" />,
   chevron: <path d="M6 9l6 6 6-6" />,
+  pin: <g><path d="M12 17v5" /><path d="M9 10.76V6h6v4.76a2 2 0 0 0 1.11 1.79l1.78.9A2 2 0 0 1 19 15.24V17H5v-1.76a2 2 0 0 1 1.11-1.79l1.78-.9A2 2 0 0 0 9 10.76z" /><path d="M8 2h8v4H8z" /></g>,
+  filter: <path d="M3 5h18M6 12h12M10 19h4" />,
   chevronRight: <path d="M9 6l6 6-6 6" />,
   chevronLeft: <path d="M15 18l-6-6 6-6" />,
   up: <path d="M12 19V5M5 12l7-7 7 7" />,

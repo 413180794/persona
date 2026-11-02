@@ -195,6 +195,7 @@ func (h *Hub) routes() http.Handler {
 	h.kbRoutes(api)
 	h.personaRoutes(api)
 	h.larkRoutes(api)
+	h.agentRoutes(api)
 	h.inboxRoutes(api)
 	h.translateRoutes(api)
 	h.pluginRoutes(api)

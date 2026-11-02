@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/agents"
 	"github.com/chyroc/jarvis/server/internal/lark"
 )
 
@@ -34,6 +35,12 @@ func (h *Hub) larkEvents(ctx context.Context) {
 	}
 	h.lark.Events(ctx, func(ev lark.Event) {
 		h.larkLastEvent.Store(time.Now().Unix())
+		if ev.Type == "agent-bridge.updated" { // personal agents: refresh just those sessions, not the Feishu inbox
+			if h.agents != nil {
+				h.agents.Updated(agents.OLKBridge, ev.SessionKeys)
+			}
+			return
+		}
 		h.larkAgentEvent(ev) // a /agent request starts at once, not with the coalesced refresh
 		mu.Lock()
 		defer mu.Unlock()

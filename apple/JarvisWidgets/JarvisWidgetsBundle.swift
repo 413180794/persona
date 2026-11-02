@@ -5,5 +5,7 @@ import WidgetKit
 struct JarvisWidgetsBundle: WidgetBundle {
     var body: some Widget {
         FleetLiveActivity()
+        AskJarvisControl()
+        JarvisAgentsControl()
     }
 }

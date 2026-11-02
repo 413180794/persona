@@ -77,7 +77,7 @@ struct AgentsListMenu: View {
             }
             Picker("显示", selection: $compact) {
                 Label("卡片", systemImage: "rectangle.grid.1x2").tag(false)
-                Label("细列表", systemImage: "list.bullet").tag(true)
+                Label("细列表", systemImage: Theme.Icon.listView).tag(true)
             }
             Section {
                 Button {

@@ -84,13 +84,77 @@ final class ConnectionTests: XCTestCase {
         let waiting = app.staticTexts["连上后自动发送"]
         XCTAssertTrue(waiting.waitForExistence(timeout: 12), "no waiting bubble:\n\(app.debugDescription)")
         shot("waiting")
+        assertArrivesOnce(hub, text)
+    }
+
+    // Exactly once, whatever happens while it waits (the app resends with the message's id, the hub and node drop
+    // what they have seen; hub restarts are the server's tests, TestSendRetryAfterRestartAndRefusal).
+
+    /// The link drops and comes back again and again, before and after the message goes: still one.
+    @MainActor func testMessageArrivesOnceThroughOutages() throws {
+        let hub = try hub()
+        let text = "几次断网的消息 \(Int.random(in: 1000...9999))"
+        let app = launch(hub, ["-openSession", "macbook/" + widget, "-openSendMessage", text, "-openSendDelay", "9"])
+        sleep(4)
+        _ = mock(hub, "/mock/down?s=8")
+        XCTAssertTrue(app.staticTexts["连上后自动发送"].waitForExistence(timeout: 12), "no waiting bubble")
+        _ = mock(hub, "/mock/down?s=6") // longer down while it waits
+        assertArrivesOnce(hub, text, settle: 0)
+        for _ in 0..<2 { // and drops after it went
+            _ = mock(hub, "/mock/down?s=3")
+            sleep(8)
+        }
+        XCTAssertEqual(sent(hub, text).count, 1, "a reconnect sent it again")
+    }
+
+    /// Written offline, then the app goes to the background and the hub comes back meanwhile: in the background the
+    /// app does not reconnect (#248), so nothing goes until it is in front again, and then it goes once.
+    @MainActor func testWaitingMessageThroughTheBackground() throws {
+        let hub = try hub()
+        let text = "进后台前写的消息 \(Int.random(in: 1000...9999))"
+        let app = launch(hub, ["-openSession", "macbook/" + widget, "-openSendMessage", text, "-openSendDelay", "9"])
+        sleep(4)
+        _ = mock(hub, "/mock/down?s=10")
+        XCTAssertTrue(app.staticTexts["连上后自动发送"].waitForExistence(timeout: 12), "no waiting bubble")
+        XCUIDevice.shared.press(.home)
+        sleep(12) // the hub is back while the app is away
+        XCTAssertTrue(sent(hub, text).isEmpty, "sent from the background (it should not reconnect there)")
+        app.activate()
+        assertArrivesOnce(hub, text)
+    }
+
+    /// Written offline, the app is quit while it waits, and opened again (the outbox is on disk): one.
+    @MainActor func testWaitingMessageAfterRelaunch() throws {
+        let hub = try hub()
+        let text = "退出前没发出的消息 \(Int.random(in: 1000...9999))"
+        var app = launch(hub, ["-openSession", "macbook/" + widget, "-openSendMessage", text, "-openSendDelay", "9"])
+        sleep(4)
+        _ = mock(hub, "/mock/down?s=25")
+        XCTAssertTrue(app.staticTexts["连上后自动发送"].waitForExistence(timeout: 12), "no waiting bubble")
+        sleep(1) // the outbox is written
+        app.terminate()
+        app = launch(hub, ["-openSession", "macbook/" + widget]) // not written again: what the outbox kept
+        XCTAssertTrue(app.staticTexts["连上后自动发送"].waitForExistence(timeout: 15), "the waiting message did not come back")
+        assertArrivesOnce(hub, text)
+    }
+
+    private func sent(_ hub: String, _ text: String) -> [[String: Any]] {
+        (mock(hub, "/mock/sent")["sent"] as? [[String: Any]] ?? []).filter { $0["text"] as? String == text }
+    }
+
+    /// It reaches the hub within 40 s, then nothing more comes for `settle` seconds.
+    private func assertArrivesOnce(_ hub: String, _ text: String, settle: UInt32 = 8,
+                                   file: StaticString = #filePath, line: UInt = #line) {
         let deadline = Date.now.addingTimeInterval(40)
-        var sent: [[String: Any]] = []
+        var got: [[String: Any]] = []
         while Date.now < deadline {
-            sent = (mock(hub, "/mock/sent")["sent"] as? [[String: Any]] ?? []).filter { $0["text"] as? String == text }
-            if !sent.isEmpty { break }
+            got = sent(hub, text)
+            if !got.isEmpty { break }
             usleep(500_000)
         }
-        XCTAssertEqual(sent.count, 1, "the waiting message should reach the hub once, after it is back")
+        sleep(settle)
+        got = sent(hub, text)
+        let ids = got.map { $0["client_msg_id"] as? String ?? "-" }
+        XCTAssertEqual(got.count, 1, "the waiting message should reach the hub once, after it is back: \(ids)", file: file, line: line)
     }
 }

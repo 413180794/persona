@@ -220,6 +220,9 @@ export interface MenuItem {
   checked?: boolean;
   danger?: boolean;
   disabled?: boolean;
+  divider?: boolean; // a hairline above this row
+  submenu?: boolean; // shows a › and keeps the menu open (the caller swaps the items)
+  keepOpen?: boolean;
   onSelect: () => void;
 }
 
@@ -284,7 +287,7 @@ export function Menu({
       } else if (e.key === "Enter" && active >= 0) {
         e.preventDefault();
         items[active].onSelect();
-        onClose();
+        if (!items[active].submenu && !items[active].keepOpen) onClose();
       }
     };
     addEventListener("mousedown", down);
@@ -310,7 +313,8 @@ export function Menu({
           className="pointer-events-none absolute inset-x-0 rounded-[6px] bg-hover"
           style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 200ms ${EASE}, height 200ms ${EASE}, opacity 120ms ease` }}
         />
-        {items.map((it, i) => (
+        {items.map((it, i) => [
+          it.divider && i > 0 && <div key={`${it.key}-sep`} role="separator" className="mx-1 my-1 h-px bg-line" />,
           <button
             key={it.key}
             ref={(el) => {
@@ -323,7 +327,7 @@ export function Menu({
             onMouseEnter={() => !it.disabled && setActive(i)}
             onClick={() => {
               it.onSelect();
-              onClose();
+              if (!it.submenu && !it.keepOpen) onClose();
             }}
             className={cx(
               "relative z-10 flex h-8 w-full items-center gap-2 rounded-[6px] px-2 text-left text-[12.5px] disabled:opacity-40",
@@ -336,8 +340,9 @@ export function Menu({
             {it.state && <StatePill state={it.state} />}
             {it.hint && <span className="shrink-0 text-[11px] text-ink-3">{it.hint}</span>}
             {it.checked !== undefined && <Icon name="check" size={13} stroke={2.5} className={it.checked ? "text-ink" : "invisible"} />}
-          </button>
-        ))}
+            {it.submenu && <Icon name="chevron" size={12} className="-rotate-90 text-ink-3" />}
+          </button>,
+        ])}
       </div>
     </div>,
     document.body,

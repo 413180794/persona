@@ -35,6 +35,9 @@ nonisolated enum ServerEvent: Sendable {
     case revs(machineID: String, [String: Int64])
     /// Feishu conversations with new or changed messages (lark-connector's realtime events, relayed by the hub).
     case lark(feedIDs: [String])
+    /// Personal agent sessions (lark-connector agent-bridge, hub/agents.go) that changed: `<source>:<sessionKey>` ids, empty
+    /// for "something changed, re-pull the list".
+    case agents(sessionIDs: [String])
     /// The unified inbox changed (hub/inbox.go): pull it.
     case inbox
     /// The Fleet Live Activity's content changed (hub/liveactivity.go).
@@ -72,6 +75,7 @@ nonisolated enum ServerEvent: Sendable {
         var error: String?
         var revs: [String: Int64]?
         var feedIDs: [String]?
+        var sessionIDs: [String]?
         var fleet: FleetState?
         var desktops: [DesktopDevice]?
         var features: [String]?
@@ -89,7 +93,7 @@ nonisolated enum ServerEvent: Sendable {
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
-                 lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids"
+                 lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids", sessionIDs = "session_ids"
         }
     }
 
@@ -128,6 +132,9 @@ nonisolated enum ServerEvent: Sendable {
             guard let m = e.machineID, let revs = e.revs else { return nil }
             return .revs(machineID: m, revs)
         case "lark": return .lark(feedIDs: e.feedIDs ?? [])
+        case "agents": return .agents(sessionIDs: e.sessionIDs ?? [])
+        // the list prefs changed on another device: a non-session id wakes only the lists, which re-pull the prefs
+        case "agents.prefs": return .agents(sessionIDs: ["agents.prefs"])
         case "inbox": return .inbox
         case "fleet": return e.fleet.map { .fleet($0) }
         case "desktops": return .desktops(e.desktops ?? [])

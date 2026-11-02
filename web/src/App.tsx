@@ -4,6 +4,7 @@ import { pair, takeToken } from "./lib/auth";
 import { useRoute } from "./lib/router";
 import { connect, disconnect, reset, useStore } from "./lib/store";
 import { cx, EASE, Spinner, Toasts } from "./ui/atoms";
+import { AgentsView } from "./views/agents/AgentsView";
 import { ChatView } from "./views/chat/ChatView";
 import { Home } from "./views/Home";
 import { Jarvis } from "./views/Jarvis";
@@ -88,10 +89,10 @@ function Shell() {
     return () => removeEventListener("keydown", key);
   }, []);
 
-  useEffect(() => setDrawer(false), [route.name, route.name === "session" ? route.sid : route.name === "jarvis" ? route.sid : ""]);
+  useEffect(() => setDrawer(false), [route.name, route.name === "session" ? route.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
 
   const title =
-    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "machines" ? "机器" : route.name === "settings" ? "设置" : "总览";
+    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "machines" ? "机器" : route.name === "settings" ? "设置" : route.name === "agents" ? "个人 Agent" : "总览";
   useEffect(() => {
     document.title = `${title} · Jarvis`;
   }, [title]);
@@ -103,6 +104,9 @@ function Shell() {
       break;
     case "jarvis":
       main = <Jarvis sid={route.sid} onToggleSidebar={toggle} />;
+      break;
+    case "agents":
+      main = <AgentsView key={route.id ?? ""} id={route.id} onToggleSidebar={toggle} />;
       break;
     case "machines":
       main = <Machines onToggleSidebar={toggle} />;

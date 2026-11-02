@@ -18,6 +18,8 @@ type Event struct {
 	FeedIDs []string // conversations it touches
 	// Message is the message a message.upserted event carries (new, edited, or a thread's root updated).
 	Message *Message
+	// SessionKeys are the agent-bridge sessions an agent-bridge.updated event touches.
+	SessionKeys []string
 }
 
 // Events follows lark-connector's realtime stream (GET /agent/v1/events, a WebSocket of {"type":…} events) until ctx ends,
@@ -102,7 +104,8 @@ func parseEvent(data []byte) (Event, bool) {
 		Conversations []struct {
 			FeedID string `json:"feedId"`
 		} `json:"conversations"`
-		Message *rawMessage `json:"message"`
+		Message     *rawMessage `json:"message"`
+		SessionKeys []string    `json:"sessionKeys"`
 	}
 	if json.Unmarshal(data, &raw) != nil {
 		return Event{}, false
@@ -110,6 +113,8 @@ func parseEvent(data []byte) (Event, bool) {
 	switch raw.Type {
 	case "message.upserted", "message.deleted", "message.recalled", "conversation.upserted", "conversations.upserted",
 		"feed.settings.updated":
+	case "agent-bridge.updated":
+		return Event{Type: raw.Type, SessionKeys: raw.SessionKeys}, true
 	default:
 		return Event{}, false // presence, typing, todo, mail, meetings…
 	}

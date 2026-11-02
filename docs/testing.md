@@ -139,7 +139,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 
 弱网 / 断网（`ConnectionTests`，`docs/ios.md`「连接状态」）连普通 mock：`PORT=18760 python3 scripts/mock_hub.py &`，
 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/ConnectionTests`：hub 断 10 秒标题变「连接中…」、
-恢复后换回；断 0.2 秒（重连约一秒）标题完全不变；断网时发的消息显示「连上后自动发送」，恢复后 hub 只收到一次。
+恢复后换回；断 0.2 秒（重连约一秒）标题完全不变；断网时发的消息显示「连上后自动发送」，恢复后 hub 只收到一次：
+中间再断几次、进后台（后台不重连，hub 回来了也要等回到前台才发）、退出 App 再打开（发件箱在磁盘上）都恰好一次。hub 重启后的去重在服务端测试（`TestSendRetryAfterRestartAndRefusal`）。
 mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、新连接不应答就关）、`GET /mock/delay?s=<秒>`（之后每个请求和 pong 都晚这么久，0 关掉；
 启动时也可以 `MOCK_DELAY=<秒>`）。手动测真断开：只杀监听端口的进程 `kill $(lsof -i TCP:18760 -sTCP:LISTEN -t)`——
 `lsof -i :18760` 还会列出连着它的模拟器 App，一起杀掉 App 就没了。截图：`-showConnection …`（见 `docs/ios.md`）。

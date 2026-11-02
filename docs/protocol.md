@@ -648,6 +648,22 @@ hub 经 hub 机器上 lark-connector 的 agent 接口（`/agent/v1`，token 从�
 媒体改写规则：parts JSON 里所有 `"/api/media/` → `"/api/v1/lark/media/`，`"/api/messages/` → `"/api/v1/lark/messages/`
 （合并转发卡片里嵌套的消息也一并改写）。
 
+## 个人 Agent 列表偏好
+
+`GET /api/v1/agents/prefs` / `PUT /api/v1/agents/prefs`（整份替换），存在 hub 的 settings 表（key `agents.prefs`），Web 和 iOS 共用：
+
+```json
+{"pins":["<sessionId>"],
+ "view":{"group":"date|provider|none","sort":"updated|unread|name","show":"all|unread|sendable","providers":["grok_bot"]},
+ "sections":[{"id":"s1","name":"工作"}],
+ "assign":{"<sessionId>":"s1"},
+ "updatedAt":"…"}
+```
+
+- 字段缺省 = 默认（按日期分组、按最近更新排序、显示全部、所有来源）。`pins` 有序、去重；`assign` 里指向不存在分组的条目会被丢掉。
+- 置顶的会话总在最上面的「已置顶」，然后是自定义分组，再按 `view.group` 分组。
+- PUT 成功后广播 `{"type":"agents.prefs"}`，其他端重新 GET。旧 hub 没有这个接口（404）时客户端只存本地。
+
 ## 消息里的标签（客户端解析）
 
 | 标签 | 谁写 | 含义 / 显示 |

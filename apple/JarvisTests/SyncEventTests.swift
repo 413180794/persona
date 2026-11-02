@@ -16,6 +16,24 @@ struct SyncEventTests {
         #expect(ids == ["a", "b"])
     }
 
+    @Test func decodesAgents() throws {
+        let data = Data(#"{"type":"agents","session_ids":["removedbridge:agent:grok_bot:a:b/"]}"#.utf8)
+        guard case .agents(let ids) = try #require(ServerEvent.decode(data)) else { Issue.record("not agents"); return }
+        #expect(ids == ["removedbridge:agent:grok_bot:a:b/"])
+    }
+
+    @Test func personalAgentPathEncodesSlashAndColon() {
+        #expect(APIClient.agentPath("removedbridge:agent:x:y/") == "/api/v1/agents/sessions/removedbridge%3Aagent%3Ax%3Ay%2F")
+    }
+
+    @Test func personalAgentMessageKeepsUnknownBlocks() throws {
+        let json = #"{"externalId":"t1","role":"assistant","blocks":[{"type":"text","text":"hi"},{"type":"tool-call","name":"web"},{"type":"image","url":"u"}],"createTimeMs":1,"position":3}"#
+        let m = try JSON.decoder.decode(PersonalAgentMessage.self, from: Data(json.utf8))
+        #expect(m.blocks.map(\.type) == ["text", "tool-call", "image"])
+        #expect(m.blocks[1].name == "web")
+        #expect(m.local == nil)
+    }
+
     @Test func sessionCarriesRev() throws {
         let s = try JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"s","status":"idle","rev":42}"#.utf8))
         #expect(s.rev == 42)

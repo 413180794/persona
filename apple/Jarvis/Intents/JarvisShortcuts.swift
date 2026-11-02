@@ -5,9 +5,43 @@ import AppIntents
 struct JarvisShortcuts: AppShortcutsProvider {
     nonisolated static var appShortcuts: [AppShortcut] {
         AppShortcut(
+            intent: AskJarvisIntent(),
+            phrases: [
+                "问 \(.applicationName)",
+                "用 \(.applicationName) 问一下",
+                "Ask \(.applicationName)",
+                "Ask \(.applicationName) a question",
+            ],
+            shortTitle: "问 Jarvis",
+            systemImageName: "sparkles"
+        )
+        AppShortcut(
+            intent: AgentTaskIntent(),
+            phrases: [
+                "用 \(.applicationName) 让 Agent 去做",
+                "让 \(.applicationName) 的 \(\.$agent) 去做",
+                "\(.applicationName) 交给 Agent",
+                "Have \(.applicationName) agent do something",
+                "Send a task to \(\.$agent) with \(.applicationName)",
+            ],
+            shortTitle: "让 Agent 去做",
+            systemImageName: "person.crop.circle.badge.checkmark"
+        )
+        AppShortcut(
+            intent: AgentsStatusIntent(),
+            phrases: [
+                "\(.applicationName) 个人 Agent 未读",
+                "\(.applicationName) Agent 有什么新消息",
+                "Check \(.applicationName) agents",
+            ],
+            shortTitle: "Agent 未读",
+            systemImageName: "tray.full"
+        )
+        AppShortcut(
             intent: AskClaudeIntent(),
             phrases: [
                 "用 \(.applicationName) 问 Claude",
+                "Ask Claude with \(.applicationName)",
                 "\(.applicationName) 问 Claude",
                 "用 \(.applicationName) 问一下 Claude",
             ],
@@ -18,6 +52,7 @@ struct JarvisShortcuts: AppShortcutsProvider {
             intent: JarvisStatusIntent(),
             phrases: [
                 "\(.applicationName) 状态",
+                "\(.applicationName) status",
                 "\(.applicationName) 现在怎么样",
                 "用 \(.applicationName) 看进度",
             ],
