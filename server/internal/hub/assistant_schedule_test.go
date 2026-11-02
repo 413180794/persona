@@ -92,6 +92,7 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 
 	// 09:01: the daily task, the first one-off and the patrol are due (no machine, so the runs just log and give up).
 	h.runDue(context.Background(), at(9, 1))
+	h.sched.inflight.Wait() // the runs it started give up (no machine) before we look
 	if r, _ := taskByID(h, "r"); !r.LastRun.Equal(at(9, 1)) {
 		t.Fatalf("the daily task should have run at 09:01, last = %v", r.LastRun)
 	}
@@ -109,6 +110,7 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 	s.tasks[3].At = at(7, 0)
 	s.mu.Unlock()
 	h.runDue(context.Background(), at(9, 2))
+	h.sched.inflight.Wait() // the runs it started give up (no machine) before we look
 	if p, _ := taskByID(h, "p"); !p.At.Equal(at(9, 32)) {
 		t.Fatalf("after a long outage: %+v", p)
 	}
@@ -120,13 +122,48 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 	s.tasks[0].LastRun = at(9, 0).Add(-24 * time.Hour)
 	s.mu.Unlock()
 	h.runDue(context.Background(), at(11, 0))
+	h.sched.inflight.Wait() // the runs it started give up (no machine) before we look
 	if r, _ := taskByID(h, "r"); !r.LastRun.Equal(at(11, 0)) || r.LastStatus != runSkipped {
 		t.Fatalf("a stale run is skipped but recorded: %+v", r)
 	}
 	// A day later the one-off that ran is gone.
 	h.runDue(context.Background(), at(9, 2).Add(25*time.Hour))
+	h.sched.inflight.Wait() // the runs it started give up (no machine) before we look
 	if _, ok := taskByID(h, "f1"); ok {
 		t.Fatal("a one-off that ran a day ago is only history")
+	}
+}
+
+// A run that ends after a newer run or skip of its task started is history only: the slow 09:01 run (an assistant
+// that takes a while to give up) records its failure after the 11:00 skip, and the task still says skipped (#556).
+func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {
+	h := newTestHub(t)
+	h.userTZ = "Asia/Shanghai"
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	at := func(hh, mm int) time.Time { return time.Date(2026, 10, 26, hh, mm, 0, 0, loc) }
+	setTasks(h, Task{ID: "r", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Enabled: true,
+		LastRun: at(11, 0).UTC(), LastStatus: runSkipped, LastError: "Jarvis 停机，错过了时间"})
+
+	h.recordRun(ScheduleRun{Kind: "routine", RefID: "r", Status: runFailed, Error: "assistant machine is not configured", of: at(9, 1).UTC()})
+	r, _ := taskByID(h, "r")
+	if r.LastStatus != runSkipped || r.LastError != "Jarvis 停机，错过了时间" {
+		t.Fatalf("the late run overwrote the newer status: %+v", r)
+	}
+	s := h.loadSchedule(context.Background())
+	s.mu.Lock()
+	n := len(s.runs)
+	s.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("the late run is not in the history: %d runs", n)
+	}
+	// The run of the current LastRun, and 立即运行 (started after it), do set it.
+	h.recordRun(ScheduleRun{Kind: "routine", RefID: "r", Status: runOK, SessionID: "s2", of: at(11, 0).UTC()})
+	if r, _ := taskByID(h, "r"); r.LastStatus != runOK || r.LastSessionID != "s2" {
+		t.Fatalf("the latest run's status: %+v", r)
+	}
+	h.recordRun(ScheduleRun{Kind: "routine", RefID: "r", Status: runFailed, Error: "x", Manual: true, of: at(11, 30).UTC()})
+	if r, _ := taskByID(h, "r"); r.LastStatus != runFailed {
+		t.Fatalf("立即运行 after it: %+v", r)
 	}
 }
 

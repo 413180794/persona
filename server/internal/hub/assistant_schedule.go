@@ -156,6 +156,9 @@ type ScheduleRun struct {
 	Manual    bool      `json:"manual,omitempty"` // 立即运行
 	MachineID string    `json:"machine_id,omitempty"`
 	SessionID string    `json:"session_id,omitempty"`
+	// of is when the scheduler started this run (the task's LastRun then; 立即运行's tap): a run that finishes after a
+	// newer one started is history only, it does not overwrite the newer one's status (recordRun).
+	of time.Time
 }
 
 const (
@@ -182,6 +185,8 @@ type schedule struct {
 	wake   chan struct{} // the list changed: scheduleLoop recomputes when to wake up
 	// sending: tasks whose run is being sent right now (runTask), so two can't go into one conversation at once.
 	sending map[string]bool
+	// inflight: runs runDue started and that have not recorded their result yet.
+	inflight sync.WaitGroup
 }
 
 func defaultRoutines() []Routine {
@@ -822,7 +827,7 @@ func (h *Hub) runDue(ctx context.Context, now time.Time) {
 			} else { // missed by a long hub outage: skip rather than send a stale 早报 at noon
 				t.LastStatus, t.LastError = runSkipped, "Jarvis 停机，错过了时间"
 				skipped = append(skipped, ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: next.UTC(), At: now.UTC(),
-					Status: runSkipped, Error: t.LastError})
+					Status: runSkipped, Error: t.LastError, of: now.UTC()})
 			}
 		case repeatOnce, repeatInterval:
 			if t.At.After(now) {
@@ -859,11 +864,17 @@ func (h *Hub) runDue(ctx context.Context, now time.Time) {
 	}
 	h.broadcastSchedule()
 	for _, d := range due {
-		go func() { _, _ = h.runTask(d.t, d.due, now, false) }()
+		s.inflight.Add(1)
+		go func() {
+			defer s.inflight.Done()
+			_, _ = h.runTask(d.t, d.due, now, false)
+		}()
 	}
 }
 
-// recordRun appends to the history (and the task's last status).
+// recordRun appends to the history, and sets the task's last status unless a newer run has started since this one
+// (r.of before the task's LastRun): runs record when they end, and a slow one — an assistant that takes a minute to
+// give up — must not overwrite the status of the run or skip that came after it (#556).
 func (h *Hub) recordRun(r ScheduleRun) {
 	r.ID = "run_" + randomHex(4)
 	s := h.loadSchedule(context.Background())
@@ -872,7 +883,7 @@ func (h *Hub) recordRun(r ScheduleRun) {
 	if len(s.runs) > maxRuns {
 		s.runs = append([]ScheduleRun(nil), s.runs[len(s.runs)-maxRuns:]...)
 	}
-	if i := s.indexLocked(r.RefID); i >= 0 {
+	if i := s.indexLocked(r.RefID); i >= 0 && (r.of.IsZero() || !s.tasks[i].LastRun.After(r.of)) {
 		t := &s.tasks[i]
 		t.LastStatus, t.LastError = r.Status, r.Error
 		if r.SessionID != "" {
@@ -906,7 +917,8 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	loc, kb := h.userLocation(), h.kb.eng != nil
-	run := ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: due.UTC(), At: time.Now().UTC(), Manual: manual, Status: runOK}
+	run := ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: due.UTC(), At: time.Now().UTC(), Manual: manual, Status: runOK,
+		of: now.UTC()}
 	if !h.sched.begin(t.ID) { // the same task is being sent right now (立即运行 as it came due)
 		return proto.Session{}, h.skipRun(run, errTaskBusy)
 	}
