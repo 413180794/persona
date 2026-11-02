@@ -19,6 +19,7 @@
   jarvisctl.py scroll [--pages n | --to top|bottom]                           the largest scroll view, no fling
   jarvisctl.py type --text T [filters] | dismiss-keyboard                     into the focused field (filters: focus that first)
   jarvisctl.py snapshot <out.png>                                             the app's windows, no status bar
+  jarvisctl.py scenario [name] [--env MOCK_X=1,…] [--control port]           switch the mock hub's data set (mock_scenarios.py)
   jarvisctl.py perf | refresh                                                 view-body counts (-perfCounts YES) | pull the hub
   jarvisctl.py call <command> [key=value …]                                   any command the app knows
 
@@ -36,6 +37,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 
 STATE_DIR = os.path.expanduser("~/.cache/jarvisctl")
@@ -168,6 +170,26 @@ class Ctl:
         time.sleep(0.4)
         return self.call("type", text=text)
 
+    def scenario(self, name=None, env=None, control=None, wait=20):
+        """Switches the data set of the hub scripts/mock_scenarios.py runs (its control port: `control`, else the hub's
+        port - 1), then waits for the app's live connection (none for "offline"). Without name / env: what runs."""
+        if not control:
+            if not self.hub:
+                raise CtlError("scenario needs the mock hub (launch --hub) or --control")
+            control = urllib.parse.urlparse(self.hub).port - 1
+        q = {"name": name} if name else {"env": env} if env else {}
+        url = f"http://127.0.0.1:{control}/scenario" + ("?" + urllib.parse.urlencode(q) if q else "")
+        try:
+            with urllib.request.urlopen(url, timeout=60) as r:
+                out = json.load(r)
+        except urllib.error.HTTPError as e:
+            raise CtlError(f"scenario: {json.load(e).get('error')}")
+        except OSError as e:
+            raise CtlError(f"scenario: no scripts/mock_scenarios.py on {control} ({e})")
+        if q and out.get("scenario") != "offline":
+            self.call("online", timeout=wait)
+        return dict(out, ok=True)
+
     def appearance(self, value, in_app=False):
         """Light or dark: the whole simulator (status bar included, as the screenshot scripts do) or the app only."""
         if in_app:
@@ -234,6 +256,8 @@ def main(argv):
     p.add_argument("--text")
     p.add_argument("--pages", type=float)
     p.add_argument("--to")
+    p.add_argument("--env")
+    p.add_argument("--control", type=int)
     p.add_argument("--cold-chats", action="store_true")
     p.add_argument("--drop-chat-cache", action="store_true")
     p.add_argument("cmd")
@@ -276,6 +300,8 @@ def main(argv):
         if a.cmd == "wait":
             f.update(timeout=a.timeout, gone=a.gone or None)
         r = c.call(a.cmd, **f)
+    elif a.cmd == "scenario":
+        r = c.scenario(a.rest[0] if a.rest else None, a.env, a.control)
     elif a.cmd == "tap":
         r = c.tap(a.hid, **filters(a))
     elif a.cmd == "scroll":

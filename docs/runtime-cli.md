@@ -115,6 +115,25 @@ scripts/jarvisctl.py snapshot app.png
   （要装 `idb` 和 `idb_companion`，第一次调用可能要等 companion 起来，脚本会重试一次）。
 - 没有惯性、长按、横滑、拖动：要这些的用例（`LiveUpdateTests` 的长按菜单、横滑行，`ChatFollowTests` 的手指滚动）留在 XCUITest。
 
+## 注入状态（mock 的场景）
+
+`scripts/mock_hub.py` 启动时按 `MOCK_*` 环境变量建一次数据，所以以前每种状态（大量 Agent、机器、出错、长对话）都要换 mock
+重启 App。`scripts/mock_scenarios.py` 把它当子进程跑在 hub 端口上，另开一个控制端口（默认 hub 端口 - 1，只听回环），
+运行中换数据集：停掉子进程、按场景的变量重起、等它应答；App 自己重连。`mock_hub.py` 一行没改，照旧能单独跑。
+
+```sh
+python3 scripts/mock_scenarios.py --port 18897 --scenario default &   # 控制端口 18896
+scripts/jarvisctl.py launch --hub http://127.0.0.1:18897
+scripts/jarvisctl.py scenario agents        # ~120 个 Agent（AgentsListTests 的数据），等 App 重连上
+scripts/jarvisctl.py scenario offline       # 没有 hub：顶栏下出现 连接中… / 等待网络
+scripts/jarvisctl.py scenario --env MOCK_MACHINES=1,MOCK_LONG_OS=1   # 任意 MOCK_* 组合
+scripts/jarvisctl.py scenario               # 现在跑的是哪个
+```
+
+场景：default、quiet、agents、churn（`/mock/churn` 按需推送，LiveUpdateTests）、machines、errors（身份截图的出错卡片）、
+long（长对话）、big、rich、tasks、offline。和 UI 测试用的是同一套数据，名字见 `mock_scenarios.py` 的 `SCENARIOS`。
+mock 自己的 `/mock/reset`、`/mock/seen`、`/mock/churn` 照旧直接请求 hub 端口。
+
 ## 协议和安全
 
 - 只在 DEBUG 构建里：`apple/Jarvis/Debug/` 下的文件整个包在 `#if DEBUG && os(iOS)` 里，入口是 `AppDelegate` 原有
