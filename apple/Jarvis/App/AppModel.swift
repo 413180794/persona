@@ -130,7 +130,8 @@ final class AppModel {
         live.onEvent = { [weak self] in self?.handle($0) }
         live.prepareEvent = { event in
             switch event {
-            case .delta(_, let text): _ = MarkdownMemo.content(text + " ▍")
+            // What `StreamingText` asks for: the block being written (the finished ones are memoized as they finish).
+            case .delta(_, let text): _ = MarkdownMemo.content(StreamChunks.split(text).tail + " ▍")
             case .interaction(let interaction):
                 if let plan = interaction.plan { _ = MarkdownMemo.content(plan) }
             default: break
@@ -617,6 +618,7 @@ final class AppModel {
         // 更新中… until the open chats' backlog and the pending interactions are in (ConnectionStatus).
         connection.startCatchUp(["interactions"] + subscribed.map(Self.catchUpPart))
         for key in subscribed {
+            deltas.drop(key)
             chat(key).liveText = "" // a delta that cleared it may have been lost with the old socket
             live.send(subscribeMessage(key))
         }
@@ -691,6 +693,8 @@ final class AppModel {
         #endif
     }
 
+    /// Streamed replies drawn at most 5 times a second (`DeltaPacer`).
+    @ObservationIgnored private var deltas = DeltaPacer()
     /// Session lists received and not applied yet (`applyPendingSessions`), by machine.
     @ObservationIgnored private var pendingSessions: [String: [Session]] = [:]
     @ObservationIgnored private var sessionsFlushScheduled = false
@@ -766,8 +770,10 @@ final class AppModel {
             if backlog { connection.caughtUp(Self.catchUpPart(key)) }
             let store = chat(key)
             settle(key, store.apply(items, span: span, backlog: backlog, hasMore: hasMore, moreAfter: moreAfter))
-            // The streamed message landed in the transcript: stop drawing its live copy.
-            if !store.liveText.isEmpty, items.contains(where: { $0.role == "assistant" && $0.kind == .text && ($0.text ?? "").hasPrefix(store.liveText) }) {
+            // The streamed message landed in the transcript: stop drawing its live copy (and the newer one kept back).
+            let live = deltas.pendingText(key) ?? store.liveText
+            if !live.isEmpty, items.contains(where: { $0.role == "assistant" && $0.kind == .text && ($0.text ?? "").hasPrefix(live) }) {
+                deltas.drop(key)
                 store.liveText = ""
             }
         case .screen(let key, let text, let status):
@@ -776,7 +782,15 @@ final class AppModel {
             c.screenStatus = status
             c.screenUpdatedAt = .now
         case .delta(let key, let text):
-            chat(key).liveText = text
+            switch deltas.offer(key, text, now: .now) {
+            case .draw(let t): chat(key).liveText = t
+            case .later(let wait):
+                DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+                    guard let self, let t = self.deltas.due(key, now: .now) else { return }
+                    self.chat(key).liveText = t
+                }
+            case .kept: break
+            }
         case .interaction(let ix):
             let isNew = interactions[ix.id] == nil
             interactions[ix.id] = ix

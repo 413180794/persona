@@ -96,6 +96,7 @@ final class LiveActivityController {
         endTask = nil
         let content = ActivityContent(state: state, staleDate: .now.addingTimeInterval(15 * 60), relevanceScore: Self.relevance(state))
         if let activity {
+            guard Self.worthUpdating(activity.content.state, staleDate: activity.content.staleDate, to: state, now: .now) else { return }
             Self.update(activity, content)
         } else if UIApplication.shared.applicationState == .active, state.phase != .done {
             request(content)
@@ -130,6 +131,13 @@ final class LiveActivityController {
     }
 
     // Activity is not Sendable, but its methods are safe from any thread (ActivityKit does its own locking).
+    /// Whether `state` needs an update over what the activity shows: each one redraws the island and the lock screen,
+    /// and most fleet events change something this phone does not show (another island slot, the numbers of another
+    /// machine). The same content still goes when its stale date is near, which each update moves 15 minutes on.
+    nonisolated static func worthUpdating(_ shown: FleetState, staleDate: Date?, to state: FleetState, now: Date) -> Bool {
+        shown != state || (staleDate ?? .distantPast) < now.addingTimeInterval(5 * 60)
+    }
+
     private static func update(_ activity: Activity<JarvisActivityAttributes>, _ content: ActivityContent<FleetState>) {
         nonisolated(unsafe) let a = activity
         Task { await a.update(content) }
