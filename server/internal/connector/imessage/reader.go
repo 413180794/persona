@@ -327,6 +327,7 @@ func ints(ids []int64) string {
 // msgRow is one message as the queries select it.
 type msgRow struct {
 	Conv        int     `json:"conv"`
+	ChatRow     int64   `json:"chat"` // the chat's ROWID (Changes, Search)
 	RowID       int64   `json:"rowid"`
 	GUID        string  `json:"guid"`
 	Date        int64   `json:"date"`
@@ -370,8 +371,9 @@ func (m msgRow) text() (string, bool) {
 	return strings.TrimSpace(strings.ReplaceAll(t, "￼", "")), true
 }
 
-// Chats is a page of conversations, newest first, before the cursor a previous page returned.
-func (r *Reader) Chats(ctx context.Context, limit int, before string) (ChatsPage, error) {
+// Chats is a page of conversations, newest first, before the cursor a previous page returned. keep KeepContacts
+// leaves out what does not go to Jarvis (Changes); anything else lists them all (the app's own view).
+func (r *Reader) Chats(ctx context.Context, limit int, before, keep string) (ChatsPage, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
@@ -425,8 +427,17 @@ func (r *Reader) Chats(ctx context.Context, limit int, before string) (ChatsPage
 	if err != nil {
 		return ChatsPage{}, err
 	}
+	wrote := map[string]bool{}
+	if keep == KeepContacts {
+		if wrote, err = r.wrote(ctx, page); err != nil {
+			return ChatsPage{}, err
+		}
+	}
 	for i, cv := range page {
 		c := r.chat(cv, people[cv.id], names)
+		if keep == KeepContacts && !wrote[cv.id] && !anyNamed(c.Members) {
+			continue
+		}
 		if p, ok := previews[i]; ok {
 			c.FromMe = p.FromMe == 1
 			c.Preview = preview(p, names, handles, files[p.RowID], c.Group)
@@ -636,8 +647,8 @@ GROUP BY j.chat_id`, &rows); err != nil {
 }
 
 // Messages is a page of a conversation's messages, the newest ones or those before the cursor a previous page
-// returned, oldest first. Tapbacks are left out.
-func (r *Reader) Messages(ctx context.Context, id string, limit int, before string) (MessagesPage, error) {
+// returned, oldest first. Tapbacks are left out. keep KeepContacts refuses a conversation that does not go to Jarvis.
+func (r *Reader) Messages(ctx context.Context, id string, limit int, before, keep string) (MessagesPage, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
@@ -654,6 +665,19 @@ func (r *Reader) Messages(ctx context.Context, id string, limit int, before stri
 	}
 	if cv == nil {
 		return MessagesPage{}, ErrNoChat
+	}
+	if keep == KeepContacts {
+		people, err := r.members(ctx, []*conversation{cv})
+		if err != nil {
+			return MessagesPage{}, err
+		}
+		wrote, err := r.wrote(ctx, []*conversation{cv})
+		if err != nil {
+			return MessagesPage{}, err
+		}
+		if !wrote[cv.id] && !anyNamed(people[cv.id]) {
+			return MessagesPage{}, ErrNoChat
+		}
 	}
 	where := ""
 	if before != "" {

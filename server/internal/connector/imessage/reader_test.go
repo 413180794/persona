@@ -27,7 +27,7 @@ func fixture(t *testing.T) *Reader {
 func TestChatsAreConversationsNewestFirst(t *testing.T) {
 	r := fixture(t)
 	ctx := context.Background()
-	page, err := r.Chats(ctx, 50, "")
+	page, err := r.Chats(ctx, 50, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestChatsAreConversationsNewestFirst(t *testing.T) {
 	var paged []string
 	before := ""
 	for range 5 {
-		p, err := r.Chats(ctx, 2, before)
+		p, err := r.Chats(ctx, 2, before, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,7 +92,7 @@ func TestChatsAreConversationsNewestFirst(t *testing.T) {
 func TestMessagesOfAConversation(t *testing.T) {
 	r := fixture(t)
 	ctx := context.Background()
-	chats, err := r.Chats(ctx, 50, "")
+	chats, err := r.Chats(ctx, 50, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestMessagesOfAConversation(t *testing.T) {
 		byName[c.Name] = c.ID
 	}
 
-	page, err := r.Messages(ctx, byName["张三"], 50, "")
+	page, err := r.Messages(ctx, byName["张三"], 50, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestMessagesOfAConversation(t *testing.T) {
 	var paged []string
 	before := ""
 	for range 5 {
-		p, err := r.Messages(ctx, byName["张三"], 3, before)
+		p, err := r.Messages(ctx, byName["张三"], 3, before, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,7 +153,7 @@ func TestMessagesOfAConversation(t *testing.T) {
 		t.Errorf("pages = %v", paged)
 	}
 
-	group, err := r.Messages(ctx, byName["周末徒步"], 50, "")
+	group, err := r.Messages(ctx, byName["周末徒步"], 50, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestMessagesOfAConversation(t *testing.T) {
 		t.Errorf("group:\n%s", strings.Join(lines, "\n"))
 	}
 
-	code, err := r.Messages(ctx, byName["12345"], 50, "")
+	code, err := r.Messages(ctx, byName["12345"], 50, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,11 +189,11 @@ func TestMessagesOfAConversation(t *testing.T) {
 		t.Errorf("short code = %+v", code.Messages)
 	}
 
-	if _, err := r.Messages(ctx, "imessage-000000000000", 50, ""); !errors.Is(err, ErrNoChat) {
+	if _, err := r.Messages(ctx, "imessage-000000000000", 50, "", ""); !errors.Is(err, ErrNoChat) {
 		t.Errorf("unknown id: %v", err)
 	}
 	for _, bad := range []string{"x", "1.x", "1;DROP TABLE message"} {
-		if _, err := r.Messages(ctx, byName["张三"], 50, bad); err == nil {
+		if _, err := r.Messages(ctx, byName["张三"], 50, bad, ""); err == nil {
 			t.Errorf("cursor %q accepted", bad)
 		}
 	}
@@ -217,7 +217,7 @@ func TestStatus(t *testing.T) {
 	if launchd.State != connector.StateNoPermission || !strings.Contains(launchd.Guide[1], "/opt/jarvis/jarvisd") {
 		t.Errorf("launchd: %+v", launchd)
 	}
-	if _, err := (&Reader{Home: "testdata/home", SQLite: denied}).Chats(ctx, 10, ""); !errors.Is(err, ErrNoPermission) {
+	if _, err := (&Reader{Home: "testdata/home", SQLite: denied}).Chats(ctx, 10, "", ""); !errors.Is(err, ErrNoPermission) {
 		t.Errorf("chats without permission: %v", err)
 	}
 

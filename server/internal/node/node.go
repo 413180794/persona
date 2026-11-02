@@ -364,7 +364,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{}, nil
 	case "node.info":
 		return n.info(ctx), nil
-	case "connector.list", "connector.chats", "connector.older": // this Mac's own data, e.g. Messages (connectors.go)
+	case "connector.list", "connector.chats", "connector.older", "connector.changes", "connector.search": // this Mac's own data (connectors.go)
 		return localConnector(ctx, method, params)
 	case "credential.gh_token": // the GitHub connector's token from this machine's gh login (credential.go)
 		var c struct {
