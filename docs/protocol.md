@@ -603,6 +603,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | `mail_accounts` / `mail_search` / `mail_read` | hub | 只读 |
 | `mail_send` | hub | 发送前创建 `permission` 交互，手机批准后才发 |
 | `github_search` / `github_read` / `github_diff` / `github_checks` | hub（GitHub 连接器） | 只读，见下一行 |
+| `github_comment` / `github_review` | hub（GitHub 连接器） | 写：过 `connector_gate`，默认手机上逐次确认；卡片写明仓库#号「标题」、全文、谁会看到，approve 开头是【批准】 |
 | `<连接器 id>_*` | hub（连接器） | 只给助手、只给状态是 `ok` 的连接器。只读工具直接执行；写操作先过 hub.json 的 `connector_gate`，默认创建 `permission` 交互（卡片上写明谁会看到），手机批准后才执行（`server/internal/connector`） |
 
 ## 连接器 API

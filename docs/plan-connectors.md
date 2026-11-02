@@ -479,7 +479,7 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 | G2 ✓ | 只读工具 `github_search/read/diff/checks` | golden；对 mock GitHub（合成 JSON）的单元测试；用户的真 token 在 hub 上读一个自己的 PR（只看结果条数和截断是否生效） |
 | G3 ✓ | 通知轮询 + 收件箱（四种情形）+ `?sources=all` + App 的通用行和详情 | 合成通知的单元测试覆盖每种 `reason`、并入 / 另开、`done_by`；304 和 `X-Poll-Interval` 被遵守（测试里的假服务器计数）；旧 App 列表不变；新 App 截图 |
 | G4 ✓ | 知识库（#476）：PR / issue 会话（`connector.Archive`，游标在 `cursors/<id>.json`）；`remotes` 对项目、链接成条目另做（G4b） | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
-| G5 | 写：`github_comment`、`github_review` 过闸门；收件箱「发送」= 评论 | 闸门测试（confirm / allow / deny）；用户在自己的测试仓库实测一次评论（卡片截图里只有合成内容的测试仓库） |
+| G5 ✓ | 写（#480；实测等用户在自己的测试仓库做）：`github_comment`、`github_review` 过闸门；收件箱「发送」= 评论 | 闸门测试（confirm / allow / deny）；用户在自己的测试仓库实测一次评论（卡片截图里只有合成内容的测试仓库） |
 | I0 | 在选定的 Mac 上确认权限和规模（只读行数，已完成一部分） | 报告里有：哪台、权限是否够、消息量 |
 | I1 | node：`connector.list/changes`、typedstream 解码、ROWID 游标、kqueue（#449 的第一步先做了 `connector.list` / `connector.chats` / `connector.older`、typedstream、Mac 通讯录对名字，给 App 的会话列表和消息查看用；`changes`、kqueue 等进知识库时再做） | 合成 `chat.db` + 合成 blob 的单元测试（包括解不出来的）；旧 hub ↔ 新 node、新 hub ↔ 旧 node 都不报错 |
 | I2 | hub：远程连接器适配、知识库归档（只收通讯录里的人）、联系人名字、验证码打码、排除即删除（#449 先做了适配：hub.json `imessage.machine`、状态和权限引导 `GET /api/v1/imessage`、App 读会话和消息的两个只读接口，不存、不给模型；归档等 AI 开关有结论再做） | 在真 Mac 上跑一轮：只打印会话数、行数、被排除数、解码失败数；抽查由用户自己在 App 里看 |
