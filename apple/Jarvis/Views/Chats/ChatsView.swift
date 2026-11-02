@@ -201,6 +201,7 @@ struct ChatsView: View {
             SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
                              message: "左边列表里点一个 Agent，对话会在这里打开。")
         }
+        .modifier(ShellNavigationClearance(active: shell != nil && path.isEmpty && !searching && searchedBeforePush == nil))
         // While searching the field rises into the bar the shell's floats over: the bar makes way (the field has its
         // own 取消), as a system search takes the navigation bar, and comes back when the search closes (TestFlight 70:
         // the field was drawn under ☰, the switch and 新建会话). A result opened closes the search before the push

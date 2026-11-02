@@ -138,6 +138,10 @@
 - 浮在系统导航栏上的自画顶栏（新外壳的 `AgentsTopBar`，导航栏留着只为 `navigationBarDrawer` 的搜索框）：搜索一激活，系统把搜索框升进导航栏那一行，
   正好在顶栏的按钮下面，两层叠着谁也点不全（TestFlight 70「点击搜索组件直接冲突」）。搜索时不画自画顶栏（`searching` 为 true），让系统的搜索框和「取消」占满那一行；
   这种叠压 XCUITest 的 `exists` 看不出来，要比 frame 是否相交（`ShellSearchTests`）。
+- 搜索未激活、只是下拉展开时，系统导航栏仍只给标准按钮留高，放大一档的外壳按钮和头像的收件箱角标会压住搜索框（2026-11-02；模拟器复现头像 frame 底部 125pt、搜索框顶部 117pt）。
+  `safeAreaPadding` 不会移动 UIKit 的搜索栏；在导航容器外按顶栏的实际字号、按钮高度、角标外伸和设计系统间距预留布局高度（`ShellNavigationClearance`），
+  顶栏 overlay 保持原位置。预留区域必须带页面底色，否则浅色会露出白色横条；搜索激活、推出对话时归还空间，旧布局完全不应用。
+  `ShellSearchTests` 覆盖小 / 标准 / 大字号的展开、输入、取消、搜索结果返回，深浅色都看截图。
 
 - 不要写「PrimitiveButtonStyle 里 `Button(configuration).buttonStyle(.glass)`」来包装系统按钮样式：玻璃样式下递归到爆栈，
   打开对话页就崩（崩溃栈全在 Swift 运行时的类型解析里，看不到业务代码）。按风格切样式用 View 扩展在调用处直接选（`.themedButton()`）。

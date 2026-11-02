@@ -269,6 +269,28 @@ extension View {
     func shellScaled() -> some View { modifier(ShellScaled()) }
 }
 
+/// 为浮动顶栏预留系统导航栏之外的高度；搜索激活时归还空间，让系统搜索框升到顶行。
+struct ShellNavigationClearance: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    var active: Bool
+
+    static func height(at size: DynamicTypeSize) -> CGFloat {
+        // 顶栏比正文大一档；头像的收件箱角标还会超出按钮的下沿。系统导航栏只保证一个标准点按区域。
+        let k = Theme.sizeScale(TextSize.large.applied(to: size))
+        let chrome = Theme.Size.tapTarget * k + Theme.Size.badge * k / 2 + Theme.Space.xxs * 2
+        return max(0, chrome + Theme.Space.s - Theme.Size.tapTarget)
+    }
+
+    func body(content: Content) -> some View {
+        // 安全区 padding 只影响列表，不会移动 UIKit 的搜索栏；在导航容器外预留布局空间。
+        content
+            .padding(.top, active ? Self.height(at: typeSize) : 0)
+            .background {
+                if active { Theme.groupedPage.ignoresSafeArea() }
+            }
+    }
+}
+
 private struct ShellScaled: ViewModifier {
     @Environment(\.dynamicTypeSize) private var size
 

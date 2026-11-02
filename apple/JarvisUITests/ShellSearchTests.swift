@@ -18,7 +18,12 @@ final class ShellSearchTests: XCTestCase {
     }
 
     @MainActor private func attachScreen(_ name: String) {
-        let shot = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = app.screenshot()
+        if let directory = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+            try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".png"))
+        }
+        let shot = XCTAttachment(screenshot: screenshot)
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)
@@ -72,6 +77,49 @@ final class ShellSearchTests: XCTestCase {
         attachScreen("after cancel")
         assertClear(of: app.searchFields.firstMatch, "after 取消")
     }
+    /// 展开的搜索框在小、标准、大字号下都要避开顶栏，包括头像超出按钮的角标。
+    @MainActor func testExpandedSearchClearsTheTopBarAtEveryTextSize() {
+        for size in ["small", "standard", "large"] {
+            app = XCUIApplication()
+            app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-app.tab", "chats",
+                                   "-dev.openChat", "", "-ui.textSize", size]
+            app.launchPinned()
+            see(app.buttons["agents-new"].firstMatch, "Agents 顶栏", timeout: 15)
+            let field = app.revealAgentsSearch()
+            attachScreen("expanded-" + size)
+            assertClear(of: field, "展开搜索框，字号 " + size)
+            let face = app.buttons["work-sidebar-button"].firstMatch
+            XCTAssertGreaterThanOrEqual(field.frame.minY - face.frame.maxY, 8,
+                                        "搜索框要与头像及收件箱角标留出间距，字号 " + size)
+            app.terminate()
+        }
+    }
+
+    /// 搜索结果推出对话后不保留列表的顶部间距；返回时恢复顶栏、搜索词和不重叠的布局。
+    @MainActor func testSearchResultReturnsToAnUncoveredSearchField() {
+        app = XCUIApplication()
+        app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-app.tab", "chats", "-dev.openChat", ""]
+        app.launchPinned()
+        see(app.buttons["agents-new"].firstMatch, "Agents 顶栏", timeout: 15)
+        let field = app.revealAgentsSearch()
+        field.tapCenter()
+        field.typeText("天气")
+        let result = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "给天气 App")).firstMatch
+        see(result, "搜索结果").tapCenter()
+        see(app.buttons["更多"].firstMatch, "对话")
+        attachScreen("result-chat")
+        XCTAssertFalse(app.navigationBars.firstMatch.isHittable, "对话不应带上列表的系统导航栏")
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
+            .press(forDuration: 0.1, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)),
+                   withVelocity: .slow, thenHoldForDuration: 0.1)
+        see(app.buttons["agents-new"].firstMatch, "返回后的 Agents 顶栏")
+        let returned = app.revealAgentsSearch()
+        XCTAssertEqual(returned.value as? String, "天气")
+        attachScreen("result-returned")
+        assertClear(of: returned, "从搜索结果返回")
+    }
+
     /// 收件箱 and 知识库, pushed on 助手, search in their own navigation bar: the shell's top bar is not over them.
     @MainActor func testSearchOnPagesPushedOnTheAssistant() {
         for (page, title) in [("inbox", "收件箱"), ("knowledge", "知识库")] {

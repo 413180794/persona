@@ -30,6 +30,9 @@
   最后报 `unexpected EOF`（2026-11-01）。办法：按 `server/go.sum` 列出 hub 的 `~/go/pkg/mod/cache/download` 里缺的文件，在开发机上从
   proxy.golang.org 下好（.zip / .mod / .info），rsync 到 hub 的一个目录，测试时 `GOPROXY=file://<那个目录>,https://proxy.golang.org`。
 
+- `gh pr edit` 更新正文时可能附带查询组织 / 讨论字段，只带 `repo` scope 的 token 会报缺 `read:org`（2026-11-02）。
+  更新正文不需要扩权限：把 `{"body": "…"}` 作为 JSON 标准输入交给 `gh api --method PATCH repos/<owner>/<repo>/pulls/<number> --input -`，只访问仓库的 PR 接口。
+
 ## 临时的测试 hub
 
 - 要在真实机器上验证、又不能动生产 hub：在 hub 机器上用另一个 HOME（`HOME=/tmp/x jarvisd hub`，hub.json 里换 listen 端口、
