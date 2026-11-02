@@ -146,6 +146,7 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 	n.eng.name = engine
 	n.mu.Lock()
 	n.engEpoch++
+	epoch := n.engEpoch
 	n.hostAgents, n.layouts, n.agents, n.panePIDs, n.lastList = nil, nil, map[string]host.Agent{}, map[string]panePID{}, ""
 	n.lastPanes = nil
 	n.mu.Unlock()
@@ -159,9 +160,18 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 
 	// The new engine's list goes to the hub when it is ready, not before the reply: building it asks the engine, scans
 	// processes and reads every agent's transcript, which on a machine with dozens of agents and cold caches took
-	// longer than the hub's 30 s for engine.use, and the app's engine picker waits on that call (#635).
-	bg := context.WithoutCancel(ctx)
-	go func() { n.publish(n.sessionList(bg, true)) }()
+	// longer than the hub's 30 s for engine.use, and the app's engine picker waits on that call (#635). Built outside
+	// n.eng.use, so a list finished after a later switch is dropped: it would cover the newer engine's until the next
+	// poll (the hub would see sessions vanish and finish).
+	go func() {
+		list := n.sessionList(ctx, true)
+		n.mu.Lock()
+		current := n.engEpoch == epoch
+		n.mu.Unlock()
+		if current {
+			n.publish(list)
+		}
+	}()
 	return nil
 }
 
