@@ -9,7 +9,7 @@ import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { createRuntime, interactionId, RpcError, summaryOf } from '../../runtime-sdk/index.js'
 import { attachmentOf, dshSeq, eventItems, itemsOf, jarvisSeq, lastText, streamText, toolInput, toolName } from './map.js'
 
-export const RUNTIME_VERSION = '0.4.0'
+export const RUNTIME_VERSION = '0.5.0'
 
 // The DSH permission preset for each Jarvis permission mode of an assistant conversation (config presets overrides):
 // Codex's mapping, in DSH's presets (docs/dsh.md「助手」). DSH has no auto mode: as the default.
@@ -63,11 +63,13 @@ export function splitChild(id) {
  * @param {{ runtime?: string, name?: string, launcher?: string, socketPath?: string,
  *   interactions?: 'auto'|'phone'|'browser', listDays?: number, maxSessions?: number, pushDelayMs?: number,
  *   retryMs?: number, assistant?: boolean, presets?: Record<string, string>, listen?: { port: number, host?: string,
- *   path?: string, token: string | (() => string) } }} [options] - runtime / name / launcher:
+ *   path?: string, token: string | (() => string) }, package?: { name: string, hash: string },
+ *   onUpdate?: Function }} [options] - runtime / name / launcher:
  *   how this DSH shows in Jarvis (dsh / DSH / dsh). assistant: it may run the Jarvis assistant (docs/dsh.md「助手」);
  *   presets: the DSH permission preset for each Jarvis permission mode of an assistant conversation. listen: be a
  *   daemon the node dials (docs/daemons.md) instead of connecting to runtime.sock: DSH running as another user, in a
  *   container, on another machine (the node's daemons.json names it then, and a daemon does not run the assistant).
+ *   package / onUpdate: from the loader (lib/plugin.js), passed on to createRuntime (docs/runtimes.md「自动更新」).
  */
 export function createDshRuntime(deps, options = {}) {
   const runtimeID = options.runtime ?? 'dsh'
@@ -572,6 +574,8 @@ export function createDshRuntime(deps, options = {}) {
     onHub: (connected) => void refreshTools(connected),
     assistant: options.assistant === true,
     listen: options.listen,
+    package: options.package,
+    onUpdate: options.onUpdate,
   })
 
   // ---- DSH's events ----
@@ -867,6 +871,10 @@ export function createDshRuntime(deps, options = {}) {
     get connected() {
       return rt.connected
     },
+    /** A card of this runtime is out on the phone (the loader switches versions only when none is). */
+    busy: () => rt.busy(),
+    /** The node's package (the loader's update). */
+    fetchPackage: (name) => rt.fetchPackage(name),
     /** Look at the hub's tools now (tests). */
     refreshTools: () => refreshTools(rt.hubConnected),
     pushNow: rt.pushNow,

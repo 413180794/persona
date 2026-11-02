@@ -31,6 +31,10 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./
 COPY --from=web /src/web/dist/ internal/hub/webdist/
+# The runtime packages jarvisd carries and keeps its runtimes on (docs/runtimes.md「自动更新」): the DSH plugin's code.
+COPY integrations/dsh/ /src/integrations/dsh/
+COPY integrations/runtime-sdk/ /src/integrations/runtime-sdk/
+RUN go generate ./internal/runtimepkg
 RUN for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do \
       CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
         -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/jarvisd || exit 1; \

@@ -151,6 +151,32 @@ Agent 把活交出去再结束这一轮（后台子 Agent、workflow、后台跑
 
 DSH 的做法见 `docs/dsh.md`「子 Agent 和后台任务」。
 
+## 自动更新（可选）
+
+runtime 是**装在别的程序里的插件**时（DSH 的插件），那个程序加载一次就一直留着它，换文件不会生效，要人去那个程序里重新加载。
+为了不用每次去电脑上点，插件分成两层，代码由 node 带过来（#619）：
+
+- **加载器**：宿主加载的那个文件（DSH 的 `integrations/dsh/index.js`）只做「选版本、加载、换版本」，用 SDK 的 `createLoader`
+  （`runtime-sdk/lib/loader.js`），不再改它。**实现**（`dsh/lib/plugin.js` 和它 import 的一切）每个版本放在存放目录的
+  `<store>/<哈希>/` 下，加载器从那里 import：随包附带的那份也先拷进去再加载，因为宿主的模块缓存按路径记，同一个进程里重新加载插件时，
+  路径不变就还是旧代码。存放目录在 node 的 socket 旁边：`~/.jarvis/runtime-packages/<包名>/`，`current.json` 记着跑的是哪个。
+- **包**：一组文件和它们的哈希（按路径排序，每个文件 `路径\0内容的 sha256\n`，再整体 sha256）。哪些文件算进包，Go
+  （`server/internal/runtimepkg` 的 `Packages`）和 JS（`runtime-sdk/lib/package.js` 的 `PACKAGES`）各有一份清单，必须一样
+  （`TestPackagesMatchTheLoader` 守着）。jarvisd 构建前跑 `go generate ./internal/runtimepkg`，把这些文件从 `integrations/` 拷进来嵌进二进制
+  （Dockerfile、`deploy.sh`、`publish.sh` 都跑），所以 node 带的总是和它同一次构建的插件。没跑生成的构建不带包，什么也不提供。
+- **流程**：hello 带 `package: {name, hash}`；node 带着同名、哈希不同的包时，回复里 `update: {name, hash, version}`；
+  SDK 把它交给 `onUpdate`，加载器用 `runtime.package` 取文件，核对路径、大小和哈希，写到 `<store>/<哈希>/`（先写旁边再改名，不会有写一半的版本），
+  然后**等手机上没有这个 runtime 的卡片**（`rt.busy()`，最多等 2 小时），停掉旧的、import 新的、启动；新的起不来就回到旧的，
+  这个哈希这次进程里不再试。新的连上 node 时 hello 报新哈希，node 不再提供。
+- **以谁为准**：node 带的就是要跑的，不比新旧（node 回退，插件跟着回退）。只有一个例外：随包附带的文件被人换过（手动装了新的一份），
+  它的哈希和 `current.json` 记的不一样，就先跑手动装的这份，node 有不同的再提供。
+- **安全**：只有经本机 `runtime.sock` 连进来的 runtime 拿得到包（和 node 同一个用户）；daemon 拿不到（link 不转 `package`，
+  `runtime.package` 回 `unsupported`），daemon 模式的 DSH 插件默认也不接受更新（`autoUpdate`），要换版本就重启它。
+- **第一次**：在没有加载器的老插件上，要在宿主里手动重新加载一次，换成加载器；之后都是「发布 → hub → node → 插件」。加载器自己要改时同样要手动一次，所以它要尽量薄。
+- 要换版本的实现模块导出 `api`（`LOADER_API`，现在是 1）和 `start(host)`，返回 `{stop, busy, fetchPackage}`（就是 `createRuntime` 的同名方法），
+  `host` 里有加载器的 `context`（DSH 是 `{ctx, config}`）和要传给 `createRuntime` 的 `package`、`onUpdate`。加一个这样的 runtime：在两份清单里登记它的文件，
+  宿主加载的入口改成 `createLoader`。
+
 ## 验收
 
 一个 runtime 接好，要能过这些（`integrations/runtime-sdk/e2e/echo.mjs` 是模板：真的 `jarvisd node`，脚本当 hub；
@@ -164,6 +190,7 @@ DSH 的做法见 `docs/dsh.md`「子 Agent 和后台任务」。
 - [ ] 授权 / 提问 / 计划到手机，回答回到 Agent；手机交回时本地界面照常弹
 - [ ] 终端类调用回 `unsupported`；runtime 退出后它的会话从列表里消失
 - [ ] （有子 Agent / 后台任务的）这一轮结束、它们还在跑时，会话行的 `subagents` / `background` 列着它们；`<会话>@<子 Agent>` 能翻页、watch；跑完后行上说完了
+- [ ] （装在别的程序里、用加载器的）node 带另一个版本时自己换上并照常工作，宿主重启后跑换上的那个（`integrations/dsh/e2e/update.mjs` 是模板）
 
 这些检查就是 `testing/conformance.mjs`：DSH（`integrations/dsh/e2e/run.mjs`，真的 `dsh web`）、pi（`integrations/pi/e2e/run.mjs`、
 `herdr.mjs`）的端到端都是「起宿主 + 开会话 + `conformance()` + 自己特有的几项」。

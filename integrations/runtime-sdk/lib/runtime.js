@@ -61,7 +61,8 @@ export function defaultSocketPath() {
  *   connect?: (path: string) => import('node:net').Socket, pushDelayMs?: number, retryMs?: number,
  *   refreshMs?: number, requires?: string[], onHub?: (connected: boolean) => void, assistant?: boolean,
  *   listen?: { port?: number, host?: string, path?: string, token: string | (() => string) } | boolean,
- *   token?: string | (() => string) }} options -
+ *   token?: string | (() => string), package?: { name: string, hash: string },
+ *   onUpdate?: (offer: { name: string, hash: string, version?: string }) => void }} options -
  *   assistant: its launcher may run the Jarvis assistant (caps.assistant; docs/runtimes.md「助手」). requires: node
  *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
  *   connected, and tries again once the node restarts (its socket file is replaced) or after 10 minutes. onHub: called
@@ -71,6 +72,9 @@ export function defaultSocketPath() {
  *   itself (host 127.0.0.1 and path /jarvis/runtime by default); without one ({token}, or `true` with
  *   options.token) the runtime's own HTTP server hands upgrades to rt.accept(). The token is what the node's
  *   daemons.json gives for this daemon (a function: read at every connection).
+ *   package / onUpdate: the code this runtime runs, for a node that keeps it up to date (docs/runtimes.md「自动更新」;
+ *   the loader, loader.js, passes both): hello says the package, and when the node carries another one its reply
+ *   offers it — onUpdate gets the offer, rt.fetchPackage gets the files.
  */
 export function createRuntime(driver, options) {
   if (!options?.runtime) throw new Error('createRuntime: options.runtime (the runtime id) is required')
@@ -181,6 +185,7 @@ export function createRuntime(driver, options) {
       assistant: options.assistant === true && typeof driver.start === 'function' && typeof driver.send === 'function',
     }
     const h = { runtime: options.runtime, name: options.name ?? options.runtime, version: options.version ?? '', instance, caps }
+    if (options.package?.name && options.package?.hash) h.package = { name: options.package.name, hash: options.package.hash }
     if (options.agent) h.agent = options.agent
     if (options.launcher && caps.start) {
       h.launcher = options.launcher
@@ -242,6 +247,18 @@ export function createRuntime(driver, options) {
       }
       warnedRequires = false
       warnedConflict = false
+      const offer = res?.update
+      if (typeof options.onUpdate === 'function' && options.package && offer?.name === options.package.name &&
+        typeof offer.hash === 'string' && offer.hash !== options.package.hash) {
+        // After this connection is set up: the loader fetches the package through it.
+        setImmediate(() => {
+          try {
+            options.onUpdate({ name: offer.name, hash: offer.hash, version: typeof offer.version === 'string' ? offer.version : '' })
+          } catch (err) {
+            log(`jarvis: onUpdate: ${err.message}`)
+          }
+        })
+      }
     } catch (err) {
       if (peer === p) peer = undefined
       if (err instanceof RpcError && err.code === 'runtime_conflict') {
@@ -719,6 +736,17 @@ export function createRuntime(driver, options) {
       const call = { name: params.name, args: params.args ?? {}, session_id: params.session_id ?? '' }
       if (params.assistant) call.assistant = true
       return p.call('mcp.call', call, { timeoutMs: 0, signal })
+    },
+    /** Whether a card of this runtime is out on the phone (the loader waits for none before switching versions). */
+    busy: () => [...pending.values()].some((n) => n > 0),
+    /**
+     * The node's package (runtime.package): {name, hash, version, files: [{path, data (base64)}]}; check it with
+     * verifyPackage before using it.
+     */
+    async fetchPackage(name) {
+      const p = peer
+      if (!p) throw new Error('not connected to the node')
+      return p.call('runtime.package', { name }, { timeoutMs: 60_000 })
     },
     /** Push the list now (tests). */
     pushNow: pushSessions,

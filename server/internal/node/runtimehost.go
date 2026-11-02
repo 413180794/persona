@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/runtimepkg"
 )
 
 // RuntimeHost is the runtime socket (runtime.sock, runtimes.go) and the runtimes connected to it. A resident node
@@ -213,8 +215,14 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		// one running it answers for it (runtimes.go recomputeOwners), so a runtime may list sessions it only has on disk.
 		// resume_argv: a session listed offline with resume_argv is resumed in the terminal engine (pi.go).
 		// handover: a send refused with the handover code goes to the runtime that takes the session over (handOver).
-		return map[string]any{"protocol": RuntimeProtocol, "node_version": rh.version, "hub": rh.current() != nil,
-			"features": []string{"prefer_running", "resume_argv", "handover"}}, nil
+		res := map[string]any{"protocol": RuntimeProtocol, "node_version": rh.version, "hub": rh.current() != nil,
+			"features": []string{"prefer_running", "resume_argv", "handover"}}
+		if offer := rh.packageOffer(h, hello); offer != nil {
+			res["update"] = offer
+		}
+		return res, nil
+	case "runtime.package":
+		return rh.servePackage(h, params)
 	case "interaction.create":
 		n := rh.current()
 		if n == nil { // no hub to put it in front of the phone: ask again (same id) once one is connected
@@ -342,4 +350,64 @@ func resumeArgvs(params json.RawMessage) map[string][]string {
 		}
 	}
 	return out
+}
+
+// packageOffer is the update a runtime gets in its hello reply (docs/runtimes.md「自动更新」): this node's package of
+// the name the runtime runs, when the hashes differ. A daemon gets none: its code is not this machine's to replace
+// (its link does not pass the package on either).
+func (rh *RuntimeHost) packageOffer(h *runtimeConn, hello runtimeHello) map[string]any {
+	if hello.Package == nil || h.isDaemon() || !runtimepkg.NameRe.MatchString(hello.Package.Name) {
+		return nil
+	}
+	pkg, err := runtimepkg.Load(hello.Package.Name)
+	if err != nil {
+		rh.logger.Printf("runtime %s: package %s: %v", hello.Runtime, hello.Package.Name, err)
+		return nil
+	}
+	if pkg == nil || pkg.Hash == hello.Package.Hash {
+		return nil
+	}
+	rh.logger.Printf("runtime %s #%d: offering package %s %s (it runs %s)", hello.Runtime, h.serial, pkg.Name, pkgHash(pkg.Hash), pkgHash(hello.Package.Hash))
+	return map[string]any{"name": pkg.Name, "hash": pkg.Hash, "version": rh.version}
+}
+
+// servePackage answers runtime.package {name}: the files of this node's package, base64, with their hash.
+func (rh *RuntimeHost) servePackage(h *runtimeConn, params json.RawMessage) (any, error) {
+	if h.isDaemon() {
+		return nil, errUnsupportedForDaemons("runtime packages")
+	}
+	if h.id() == "" {
+		return nil, errors.New("runtime.package before runtime.hello")
+	}
+	var p struct {
+		Name string `json:"name"`
+	}
+	_ = json.Unmarshal(params, &p)
+	if !runtimepkg.NameRe.MatchString(p.Name) {
+		return nil, &rpc.Error{Message: fmt.Sprintf("bad package name %q", p.Name), Code: "bad_request"}
+	}
+	pkg, err := runtimepkg.Load(p.Name)
+	if err != nil {
+		return nil, err
+	}
+	if pkg == nil {
+		return nil, &rpc.Error{Message: "this jarvisd carries no package " + p.Name, Code: "not_found"}
+	}
+	files := make([]map[string]string, len(pkg.Files))
+	for i, f := range pkg.Files {
+		files[i] = map[string]string{"path": f.Path, "data": base64.StdEncoding.EncodeToString(f.Data)}
+	}
+	rh.logger.Printf("runtime %s #%d: sent package %s %s", h.id(), h.serial, pkg.Name, pkgHash(pkg.Hash))
+	return map[string]any{"name": pkg.Name, "hash": pkg.Hash, "version": rh.version, "files": files}, nil
+}
+
+// pkgHash is the start of a package hash for the log; "none" for a runtime that has no package hash.
+func pkgHash(hash string) string {
+	if len(hash) > 12 {
+		return hash[:12]
+	}
+	if hash == "" {
+		return "none"
+	}
+	return hash
 }

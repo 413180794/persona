@@ -1,8 +1,12 @@
-# Only server/, web/ and deploy/docker/ go into the hub image (Dockerfile).
+# Only server/, web/, deploy/docker/ and the runtime packages' sources (integrations/, go generate) go into the hub
+# image (Dockerfile).
 *
 !server/
 !web/
 !deploy/docker/
+!integrations/dsh/
+!integrations/runtime-sdk/
+integrations/**/node_modules/
 server/bin/
 server/internal/hub/webdist/*
 !server/internal/hub/webdist/README.md

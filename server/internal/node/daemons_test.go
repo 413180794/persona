@@ -21,6 +21,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/runtimepkg"
 )
 
 // fakeDaemon is a daemon's WebSocket endpoint speaking the runtime protocol: what it was asked, and how it answers.
@@ -661,5 +662,29 @@ func TestDaemonSubagentIDs(t *testing.T) {
 		if in, ok := link.inner(id); ok {
 			t.Fatalf("%q is the daemon's %q", id, in)
 		}
+	}
+}
+
+// A daemon's code is not this machine's to replace: its hello gets no package offer, and runtime.package is refused.
+func TestDaemonGetsNoPackage(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(runtimepkg.OverrideEnv, dir)
+	_ = os.MkdirAll(filepath.Join(dir, "jarvis-dsh-runtime", "dsh"), 0o755)
+	if err := os.WriteFile(filepath.Join(dir, "jarvis-dsh-runtime", "dsh", "a.js"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := startFakeDaemon(t, "tok", map[string]any{"runtime": "x", "caps": map[string]any{"send": true},
+		"package": map[string]any{"name": "jarvis-dsh-runtime", "hash": "an-older-one"}})
+	rh, _ := daemonHost(t, map[string]any{"id": "acme", "url": d.url(), "token": "tok"})
+	runtimeNodeOn(t, rh)
+	waitFor(t, "the daemon's hello", func() bool { res, _, _ := d.hellod(); return res != nil })
+	if res, _, _ := d.hellod(); res["update"] != nil {
+		t.Fatalf("a daemon was offered a package: %v", res)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var out map[string]any
+	if err := d.current().Call(ctx, "runtime.package", map[string]any{"name": "jarvis-dsh-runtime"}, &out); err == nil {
+		t.Fatalf("a daemon fetched a package: %v", out)
 	}
 }

@@ -43,6 +43,8 @@ cp -R web/dist/. "$WEBDIST/"
 # Public dependency constants are classified by build-info checksums; verify the actual module cache before building.
 (cd server && go mod verify)
 LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$STAMP -X main.updateURL=$JARVIS_PUBLISH_URL/dl"
+# The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md「自动更新」), from integrations/.
+(cd server && go generate ./internal/runtimepkg)
 # -tags public changes no code (no file builds differently with it, TestOneBuild): it marks the binary for
 # check_bundle_privacy.py, which then knows the dependency constants it may skip.
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do

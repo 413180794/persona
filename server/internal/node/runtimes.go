@@ -61,7 +61,13 @@ type runtimeHello struct {
 	Launcher string `json:"launcher,omitempty"`
 	// LauncherModel is what the form shows next to the launcher (e.g. the runtime's default model).
 	LauncherModel string `json:"launcher_model,omitempty"`
-	Caps          struct {
+	// Package is the code the runtime runs when this node can keep it up to date (runtimepkg, docs/runtimes.md「自动更新」):
+	// its package name and hash. A different hash than the node's gets an update offer in the reply.
+	Package *struct {
+		Name string `json:"name"`
+		Hash string `json:"hash"`
+	} `json:"package,omitempty"`
+	Caps struct {
 		Start     bool `json:"start"`
 		Send      bool `json:"send"`
 		Interrupt bool `json:"interrupt"`

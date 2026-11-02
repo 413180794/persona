@@ -11,6 +11,8 @@
 | `lib/runtime.js` | 连接 / 重连 / `runtime.hello`、列表推送、watch 补发和连续性、逐字节流、问手机、「谁先回答」 |
 | `lib/items.js` | 页里的长度上限、截断说明、稳定的交互 id |
 | `lib/wire.js` | 和 `server/internal/rpc` 同一种 JSON 行 RPC |
+| `lib/loader.js` | 装在别的程序里的 runtime 的加载器（`createLoader`）：从带哈希的版本目录加载实现，node 带来新版本时取包、核对、等手机上的卡、换上，失败回旧的（`docs/runtimes.md`「自动更新」） |
+| `lib/package.js` | 包：文件清单（和 jarvisd 的 `runtimepkg.Packages` 一样）、哈希、核对、原子写入存放目录 |
 | `lib/listen.js` | daemon 的端点：握手（token、子协议 `jarvis-runtime.v1`）和服务端的 WebSocket 帧，`runtime.js` 的监听模式用它 |
 | `testing/fake-node.js` | 单元测试用的假 node（临时 socket，记录 runtime 说了什么，像 node 一样调它） |
 | `testing/node-harness.mjs` | 端到端用：起一个真的 `jarvisd node --stdio`（隔离的 HOME），脚本当 hub |

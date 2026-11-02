@@ -33,6 +33,8 @@ DSH 这边是一个装进 `dsh web` 的插件，用的是 Web GUI 自己用的�
 - **装进 profile**（长期用）：在 DSH 里装 `integrations/dsh` 这个 bundle（Web GUI 的插件管理，或让 DSH 的 Agent 用 `plugin_manager` 的
   `install_bundle`，target 写这个目录的绝对路径）。bundle 自带 `cordis.patch.yml`，装上就插入 `jarvis-dsh-runtime` 一行。
   插件按相对路径用仓库里的 `integrations/runtime-sdk/`，所以从 Jarvis 仓库的检出目录装（本地目录安装是链接，不拷贝），别单独拷走 `integrations/dsh`。
+- **之后的更新是自动的**：`index.js` 只是加载器，插件的代码由 node 带来（下面「自动更新」）。装好（或从没有加载器的老版本换上来）时在 DSH 里重新加载一次，
+  以后 hub 更新、node 跟着更新时插件自己换上，不用再去 DSH 里点。
 - **不装、先试**：`dsh --profile web --patch <文件>`，文件里插一行，`name` 写 `index.js` 的绝对路径：
 
   ```yaml
@@ -78,7 +80,21 @@ node <Jarvis 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录�
 | `phoneTools` | `true` | 把 hub 的工具（`phone_*`、`mail_*`）给 DSH 的 Agent；`false` 不给 |
 | `assistant` | `true` | DSH 的启动器能当 Jarvis 的助手（下面「助手」）；`false` 不提供 |
 | `presets` | 见「助手」 | 助手对话里 Jarvis 的权限模式对应 DSH 的哪个权限预设，比如 `{default: workspace-write, plan: read-only}` |
+| `autoUpdate` | `true`（当 daemon 时 `false`） | 接受 node 带来的插件版本（「自动更新」） |
 | `listen` | 不填 | 当 daemon（`docs/daemons.md`）：`{port, host?, path?, token \| token_file}`，不连 `socket`，开一个 WebSocket 端点让 node 来连（默认 `127.0.0.1`、路径 `/jarvis/runtime`）。DSH 跑在别的系统用户下、容器里或别的机器上时用；node 那边在 `daemons.json` 里写同一个地址和 token，名字、启动器以那边为准；当 daemon 时没有手机工具，也不能当助手 |
+
+### 自动更新
+
+插件分两层（通用做法见 `docs/runtimes.md`「自动更新」）：DSH 加载的 `index.js` 是加载器，不再改；插件的代码（`lib/plugin.js`、`lib/dsh.js`…和
+`runtime-sdk`）每个版本放在 `~/.jarvis/runtime-packages/jarvis-dsh-runtime/<哈希>/`，加载器从那里 import。jarvisd 构建时把这些文件打进二进制；
+插件连上 node 时报自己的哈希，node 带的不一样就让它来取，插件核对后等手机上没有它的卡片，停掉旧的、换上新的，DSH 的会话和 Web GUI 不受影响
+（插件只是旁观者，换的几秒里手机上的列表停一下）。整个过程不经过 DSH 的插件管理和热加载：链接安装的插件不在热加载的监视目录里，换文件不会生效；
+插件管理在被手机驱动的会话里还会报 `HMR transactions cannot be nested`（插件在插件管理的事务里启动时，事务的上下文跟着它的连接走了，DSH 的问题）。
+
+- 跑的哪个版本：node 日志 `runtime dsh <版本> #N connected`，插件日志 `jarvis: jarvis-dsh-runtime <哈希> (shipped / from the node)`、`switched to …`；
+  `current.json` 记着 node 给的那个。
+- 手动装了一份新的（换了检出目录里的文件）：它的哈希和 `current.json` 记的不同，下次加载先跑它；node 带的不一样会再换。
+- 不想自动更新：`autoUpdate: false`。当 daemon（`listen`）时默认就不更新，换版本要重启 DSH。
 
 ## 映射
 
@@ -201,6 +217,11 @@ hub 的「完成」推送等这些跑完、父会话被叫醒的那一轮结束�
 
 - DSH 没在运行时：`node integrations/dsh/e2e/files.mjs`（同样两个环境变量）。真的 `dsh web` 跑一轮后停掉，伴随进程把这个会话从磁盘列成 offline、翻出内容，
   前后 `DSH_HOME` 里没有任何文件变化；从「手机」再发一条，伴随进程用唤醒脚本起 DSH，node 把消息交给插件，回复回来，会话回到插件手里。2026-11-02 实测 7/7 通过。
+
+- 自动更新：`node integrations/dsh/e2e/update.mjs`（同样两个环境变量）。node 的包来自一个目录（`JARVIS_RUNTIME_PACKAGES`），这样不用另编一个 jarvisd：
+  node 带的和插件一样时什么都不提供，插件从存放目录跑随包附带的那份；换成带新版本插件的 node（就像 hub 更新了它），插件被提供、取文件、自己换上，
+  新会话从「手机」发消息照常回复；DSH 重启后直接跑 node 给的那个，不再取。2026-11-02 实测 7/7 通过。加载器本身：`cd integrations/runtime-sdk && npm test`
+  （`loader.test.js`：换版本、哈希不对不换、起不来回旧的、等手机上的卡、手动装的优先、daemon 不换）。
 
 - 助手：`node integrations/dsh/e2e/assistant.mjs`（同样两个环境变量）。「hub」用 `assistant.send` 选 `dsh` 启动器新建对话（在助手目录里、
   第一条带上快照和记忆，聊天里只显示打的字）、`ask_user` 作为助手的调用到 hub、`lark-connector` 读直接跑（带 token）、写在手机上拒绝后不跑、

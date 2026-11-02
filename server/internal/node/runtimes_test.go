@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/herdr"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/runtimepkg"
 )
 
 // runtimeHub is the hub end of a node under test: the events it got and how it answers interactions.
@@ -677,5 +679,72 @@ func TestRuntimeSubagentsAndBackground(t *testing.T) {
 		if h, _, _ := n.runtimes.belongs(id); h != nil {
 			t.Fatalf("%q belongs to a runtime", id)
 		}
+	}
+}
+
+// A runtime running another version of a package the node carries is offered the node's in the hello reply, and
+// fetches it with runtime.package; one running the same is not (docs/runtimes.md「自动更新」).
+func TestRuntimePackageUpdate(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(runtimepkg.OverrideEnv, dir)
+	root := filepath.Join(dir, "jarvis-dsh-runtime")
+	for path, data := range map[string]string{"dsh/lib/plugin.js": "export const api = 1", "runtime-sdk/index.js": "export {}"} {
+		_ = os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0o755)
+		if err := os.WriteFile(filepath.Join(root, path), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pkg, err := runtimepkg.Load("jarvis-dsh-runtime")
+	if err != nil || pkg == nil {
+		t.Fatal(err)
+	}
+	n, _ := runtimeNode(t)
+
+	hello := dshHello()
+	hello["package"] = map[string]any{"name": "jarvis-dsh-runtime", "hash": "an-older-one"}
+	old := dialRuntime(t, n, hello)
+	offer, _ := old.helloR["update"].(map[string]any)
+	if offer["name"] != "jarvis-dsh-runtime" || offer["hash"] != pkg.Hash || offer["version"] == nil {
+		t.Fatalf("hello answered %v", old.helloR)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var got struct {
+		Name  string `json:"name"`
+		Hash  string `json:"hash"`
+		Files []struct {
+			Path string `json:"path"`
+			Data string `json:"data"`
+		} `json:"files"`
+	}
+	if err := old.peer.Call(ctx, "runtime.package", map[string]any{"name": "jarvis-dsh-runtime"}, &got); err != nil {
+		t.Fatal(err)
+	}
+	var files []runtimepkg.File
+	for _, f := range got.Files {
+		data, err := base64.StdEncoding.DecodeString(f.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, runtimepkg.File{Path: f.Path, Data: data})
+	}
+	if got.Name != "jarvis-dsh-runtime" || got.Hash != pkg.Hash || runtimepkg.Hash(files) != pkg.Hash || len(files) != 2 {
+		t.Fatalf("package %s %s, %d files", got.Name, got.Hash, len(files))
+	}
+	if err := old.peer.Call(ctx, "runtime.package", map[string]any{"name": "something-else"}, &got); err == nil {
+		t.Fatal("a package the node does not carry was served")
+	}
+
+	// Running the node's own: nothing offered. Without a package (an older runtime): nothing either.
+	same := dshHello()
+	same["runtime"], same["launcher"] = "dsh2", "dsh2"
+	same["package"] = map[string]any{"name": "jarvis-dsh-runtime", "hash": pkg.Hash}
+	if r := dialRuntime(t, n, same); r.helloR["update"] != nil {
+		t.Fatalf("offered its own package: %v", r.helloR)
+	}
+	plain := dshHello()
+	plain["runtime"], plain["launcher"] = "dsh3", "dsh3"
+	if r := dialRuntime(t, n, plain); r.helloR["update"] != nil {
+		t.Fatalf("offered a package to a runtime without one: %v", r.helloR)
 	}
 }
