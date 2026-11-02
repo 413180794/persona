@@ -79,6 +79,7 @@ import jarvis.android.data.isWaiting
 import jarvis.android.data.matches
 import jarvis.android.data.parseTime
 import jarvis.android.data.underFilter
+import jarvis.android.data.state
 import jarvis.android.ui.chat.ToastStyle
 import jarvis.android.ui.chat.Toasts
 import jarvis.android.ui.design.Chip
@@ -147,10 +148,12 @@ fun AgentsScreen(
     options: AgentsListOptions, inShell: Boolean = true, onOpenMonitor: () -> Unit = {},
     /** The agent whose chat is open beside the list (a wide window): its row is marked. */
     selected: SessionKey? = null,
+    onOpenTodo: ((String) -> Unit)? = null,
 ) {
     val conn by hub.conn.collectAsState()
     val machines by hub.machines.collectAsState()
     val byMachine by hub.sessions.collectAsState()
+    val todos by hub.todos.collectAsState()
     val allPending by hub.interactions.collectAsState()
     val pins by hub.pins.collectAsState()
     val mutes by hub.mutes.collectAsState()
@@ -276,6 +279,38 @@ fun AgentsScreen(
                             }
                         }
                         if (!isFolded) card(id, list) { s -> AgentRow(s, names[s.machineId], g.muted(s), showWhere = true, onRow, onLong, showMachine = false) }
+                    }
+                    Grouping.Todo -> g.byTodo(live, todos).forEach { (todo, list) ->
+                        val id = "todo/" + (todo?.id ?: "none")
+                        sections += id
+                        val isFolded = !expandAll && id in options.folded
+                        item(key = "h-$id") {
+                            if (todo != null) {
+                                val state = todo.state { k -> hub.session(k) }
+                                val tone = JTheme.tone(when (state) {
+                                    jarvis.android.data.TodoState.NeedsYou -> AgentState.NeedsYou
+                                    jarvis.android.data.TodoState.Unread -> AgentState.Unread
+                                    jarvis.android.data.TodoState.Working -> AgentState.Working
+                                    else -> AgentState.Idle
+                                })
+                                SectionHeader(
+                                    todo.title,
+                                    folded = isFolded,
+                                    onClick = { if (onOpenTodo != null) onOpenTodo(todo.id) else options.toggle(id) },
+                                    lead = { Icon(JIcons.todo, null, Modifier.size(JSize.iconS), tint = JTheme.colors.secondaryText) }
+                                ) {
+                                    Text(state.title, style = JTheme.type.caption, color = tone.text, maxLines = 1)
+                                    Spacer(Modifier.width(JSpace.xs))
+                                    Text("${list.size}", style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 1)
+                                    Icon(JIcons.disclosure, null, Modifier.size(JSize.markS), tint = JTheme.colors.tertiaryText)
+                                }
+                            } else {
+                                SectionHeader("没有待办", count = list.size, folded = isFolded, onClick = { options.toggle(id) })
+                            }
+                        }
+                        if (!isFolded) card(id, list) { s ->
+                            AgentRow(s, names[s.machineId], g.muted(s), showWhere = true, onRow, onLong, showMachine = multiMachine, inTodoSection = true)
+                        }
                     }
                 }
                 if (offline.isNotEmpty()) {
@@ -552,19 +587,19 @@ private fun pendingGist(ix: Interaction): String = when (ix.kind) {
 @Composable
 internal fun AgentRow(
     s: Session, machine: String?, muted: Boolean, showWhere: Boolean, onClick: (Session) -> Unit, onLongClick: (Session) -> Unit,
-    showMachine: Boolean = showWhere,
+    showMachine: Boolean = showWhere, inTodoSection: Boolean = false,
 ) {
     val close = LocalCloseAgent.current
     if (close != null && s.isLive && s.canTerminal) {
-        SwipeToClose(s.key.path, onClose = { close(s) }) { AgentRowBody(s, machine, muted, showWhere, onClick, onLongClick, showMachine) }
-    } else AgentRowBody(s, machine, muted, showWhere, onClick, onLongClick, showMachine)
+        SwipeToClose(s.key.path, onClose = { close(s) }) { AgentRowBody(s, machine, muted, showWhere, onClick, onLongClick, showMachine, inTodoSection) }
+    } else AgentRowBody(s, machine, muted, showWhere, onClick, onLongClick, showMachine, inTodoSection)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AgentRowBody(
     s: Session, machine: String?, muted: Boolean, showWhere: Boolean, onClick: (Session) -> Unit, onLongClick: (Session) -> Unit,
-    showMachine: Boolean,
+    showMachine: Boolean, inTodoSection: Boolean = false,
 ) {
     val c = JTheme.colors
     val strong = s.agentState == AgentState.NeedsYou || s.agentState == AgentState.Unread
@@ -588,7 +623,7 @@ private fun AgentRowBody(
             s.lastText?.takeIf { it.isNotBlank() }?.let {
                 Text(it.replace('\n', ' '), style = JTheme.type.secondary, color = c.secondaryText, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            AgentMeta(s, machine, showWhere, showMachine)
+            AgentMeta(s, machine, showWhere, showMachine, inTodoSection)
         }
         Box(Modifier.height(JSize.iconS), contentAlignment = Alignment.Center) {
             Icon(JIcons.disclosure, null, Modifier.size(JSize.iconXS), tint = c.tertiaryText)
@@ -626,7 +661,7 @@ private fun SwipeToClose(id: String, onClose: () -> Unit, content: @Composable (
 /** 「需要你 · Claude · weather › tests · MacBook」 plus the loop / background marks. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AgentMeta(s: Session, machine: String?, showWhere: Boolean, showMachine: Boolean) {
+private fun AgentMeta(s: Session, machine: String?, showWhere: Boolean, showMachine: Boolean, inTodoSection: Boolean = false) {
     val c = JTheme.colors
     val tab = s.slotName?.takeIf { it.isNotBlank() && it != s.slotIndex?.toString() }
     val where = listOfNotNull(
@@ -658,6 +693,11 @@ private fun AgentMeta(s: Session, machine: String?, showWhere: Boolean, showMach
         val subs = s.subagents.orEmpty().count { it.running }
         if (subs > 0) Chip("子 Agent $subs", icon = JIcons.person)
         if (s.isWaiting && s.loop == null && bg == 0 && subs == 0) Chip("待唤醒", look = ChipLook.Tint(c.loop))
+        if (!inTodoSection) {
+            s.todo?.title?.takeIf { it.isNotBlank() }?.let { todoTitle ->
+                Chip(todoTitle, icon = JIcons.todo, look = ChipLook.Outline)
+            }
+        }
     }
 }
 

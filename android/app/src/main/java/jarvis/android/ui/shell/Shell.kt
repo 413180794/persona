@@ -225,12 +225,16 @@ fun ShellRoot(
             val atRoot = routes.isEmpty() && !settings && (open == null || chatInPane)
 
             val sidebar: @Composable () -> Unit = {
+                val todos by hub.todos.collectAsState()
+                val todosSupported by hub.todosSupported.collectAsState()
                 Sidebar(
                     conversations = model.conversations(byMachine), model = model,
                     current = model.current.takeIf { page == ShellPage.Assistant }, inboxCount = inboxAction,
+                    todoCount = todos.count { !it.isDone }, showTodos = todosSupported,
                     actions = SidebarActions(
                         openProfile = { go(ShellPage.Assistant); push("profile"); drawer.closeIn(scope) },
                         openInbox = { go(ShellPage.Assistant); push("inbox"); drawer.closeIn(scope) },
+                        openTodos = { go(ShellPage.Assistant); push("todos"); drawer.closeIn(scope) },
                         openRoutines = { go(ShellPage.Assistant); push("routines"); drawer.closeIn(scope) },
                         openKnowledge = { go(ShellPage.Assistant); push("knowledge"); drawer.closeIn(scope) },
                         openMachines = { go(ShellPage.Assistant); push("machines"); drawer.closeIn(scope) },
@@ -254,6 +258,7 @@ fun ShellRoot(
                     onOpenSpace = { if (wide) { paneSpace = it; openSession.value = null } else push("space/$it") },
                     options = listOptions, inShell = true, onOpenMonitor = { push("machines") },
                     selected = open.takeIf { chatInPane },
+                    onOpenTodo = { push("todo/$it") },
                 )
             }
             var reselect by remember { mutableStateOf<ShellPage?>(null) }
@@ -308,7 +313,7 @@ fun ShellRoot(
                                 chatInPane && key != null -> Box(Modifier.fillMaxSize().padding(top = JSize.shellBar)) {
                                     // Opened from the space page in this pane: back returns to it.
                                     ChatScreen(hub, key, onBack = { openSession.value = null }, onHandToJarvis = handToJarvis, backButton = space != null,
-                                        onCleared = { openSession.value = it })
+                                        onCleared = { openSession.value = it }, onOpenTodo = { push("todo/$it") })
                                 }
                                 space != null -> Box(Modifier.fillMaxSize().padding(top = JSize.shellBar)) {
                                     CompositionLocalProvider(LocalPaneRoot provides true) {
@@ -399,7 +404,7 @@ fun ShellRoot(
                 BackHandler { openSession.value = null }
                 Box(Modifier.fillMaxSize().background(JTheme.colors.page).pointerInput(Unit) {}) {
                     // /clear opens the new session in its place.
-                    ChatScreen(hub, open, onBack = { openSession.value = null }, onHandToJarvis = handToJarvis, onCleared = { openSession.value = it })
+                    ChatScreen(hub, open, onBack = { openSession.value = null }, onHandToJarvis = handToJarvis, onCleared = { openSession.value = it }, onOpenTodo = { push("todo/$it") })
                 }
             }
             jarvis.android.ui.chat.ToastHost(Modifier.zIndex(10f))
@@ -454,6 +459,8 @@ private fun RouteScreen(
     val rest = route.substringAfter('/', "")
     when (head) {
         "inbox" -> InboxScreen(hub, onBack = back, onHandOff = inboxHandOff, openId = inboxOpen)
+        "todos" -> jarvis.android.ui.TodosScreen(hub, onBack = back, onOpenTodo = { push("todo/$it") })
+        "todo" -> jarvis.android.ui.TodoDetailScreen(hub, rest, onBack = back, onOpenSession = openSession)
         "profile", "routines" -> AssistantProfile(
             hub, machineName = machines.firstOrNull { it.id == model.machine }?.displayName ?: model.machine,
             // A routine's run may be a conversation the list has not seen yet: read it again.
@@ -518,6 +525,7 @@ private fun jarvis.android.data.Grouping.icon() = when (this) {
     jarvis.android.data.Grouping.Space -> JIcons.space
     jarvis.android.data.Grouping.State -> JIcons.notifications
     jarvis.android.data.Grouping.Machine -> JIcons.machine
+    jarvis.android.data.Grouping.Todo -> JIcons.todo
 }
 
 /** Weak network: one small pill under the top bar for both pages (docs/ios.md「连接状态」). */

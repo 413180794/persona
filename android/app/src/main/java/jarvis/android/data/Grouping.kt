@@ -7,7 +7,7 @@ import java.time.Instant
  * `SpaceGroup.build`, and the section order of 按项目) so both phones list agents the same way. Plain Kotlin, no
  * Android types: unit tested in GroupingTest.
  */
-enum class Grouping(val title: String) { Space("按项目"), State("按状态"), Machine("按机器") }
+enum class Grouping(val title: String) { Space("按项目"), State("按状态"), Machine("按机器"), Todo("按待办") }
 
 /** Nothing to look at now, but a /loop or background work will wake it: 待唤醒. */
 val Session.isQuiet: Boolean get() = agentState == AgentState.Idle || agentState == AgentState.Unknown
@@ -99,6 +99,37 @@ class Grouper(private val pins: Pins, private val mutes: Pins) {
     fun byMachine(sessions: List<Session>, machines: List<Machine>): List<Pair<Machine, List<Session>>> {
         val by = sessions.groupBy { it.machineId }
         return machines.mapNotNull { m -> by[m.id]?.let { m to ordered(it) } }
+    }
+
+    /**
+     * 按待办 (umbrella.final.md): each uncompleted todo that has agents has a section in todo order
+     * (state rank, then newest first); unlinked agents fold into the final 没有待办 section.
+     * Sessions within each section follow `ordered` (matching 按状态 with pinned, muted, and ranks).
+     */
+    fun byTodo(sessions: List<Session>, todos: List<Todo>): List<Pair<Todo?, List<Session>>> {
+        val sessionMap = sessions.associateBy { it.key }
+        val uncompletedTodos = todos.filter { !it.isDone }.sortedWith(
+            compareBy<Todo> { it.state { k -> sessionMap[k] }.rank }
+                .thenByDescending { it.created ?: Instant.EPOCH }
+                .thenBy { it.id }
+        )
+        val claimed = mutableSetOf<SessionKey>()
+        val result = mutableListOf<Pair<Todo?, List<Session>>>()
+
+        for (todo in uncompletedTodos) {
+            val linkedKeys = todo.currentAgents.map { it.key }.toSet()
+            val matched = sessions.filter { (it.todo?.id == todo.id && it.todo?.id?.isNotEmpty() == true) || it.key in linkedKeys }
+            if (matched.isNotEmpty()) {
+                result.add(todo to ordered(matched))
+                claimed.addAll(matched.map { it.key })
+            }
+        }
+
+        val unlinked = sessions.filter { it.key !in claimed }
+        if (unlinked.isNotEmpty()) {
+            result.add(null to ordered(unlinked))
+        }
+        return result
     }
 }
 

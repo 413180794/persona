@@ -101,6 +101,7 @@ fun AgentActionsSheet(
 ) {
     var renaming by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
+    var pickingTodo by remember { mutableStateOf(false) }
     val place = listOfNotNull(machine, s.spaceName?.takeIf { it.isNotBlank() }?.let { sp -> listOfNotNull(sp, s.slotName?.takeIf { it.isNotBlank() }).joinToString(" › ") })
         .joinToString(" · ")
 
@@ -110,7 +111,7 @@ fun AgentActionsSheet(
         JarvisApp.instance.scope.launch { runCatching { block() }.onFailure { onError("$what 没成功：${it.message}") } }
     }
 
-    if (!renaming && !closing) JSheet(onDismiss) {
+    if (!renaming && !closing && !pickingTodo) JSheet(onDismiss) {
         Row(Modifier.fillMaxWidth().padding(horizontal = JSpace.page + JSpace.xs, vertical = JSpace.s), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(JSpace.m)) {
             StatusDot(s.agentState, muted = muted)
@@ -124,6 +125,15 @@ fun AgentActionsSheet(
             RowDivider(ActionTextColumn)
             ActionRow(if (muted) "开启通知" else "屏蔽通知", if (muted) JIcons.unmute else JIcons.mute,
                 subtitle = if (!muted) "不再弹提问和完成的通知，列表里弱化显示" else null) { act(if (muted) "开启通知" else "屏蔽通知") { hub.toggleMute(s) } }
+            // 待办关联 / 解除关联 (umbrella.final.md)
+            RowDivider(ActionTextColumn)
+            if (s.todo != null) {
+                ActionRow("解除关联", JIcons.todo, subtitle = "从待办「${s.todo.title}」解除关联") {
+                    act("解除关联") { hub.unlinkTodoAgent(s.todo.id, s.key) }
+                }
+            } else {
+                ActionRow("关联到待办…", JIcons.todo) { pickingTodo = true }
+            }
             // 实时接入: a session an agent runtime holds read-only (DSH…) can be taken over live.
             if (s.canAttach) {
                 RowDivider(ActionTextColumn)
@@ -137,6 +147,17 @@ fun AgentActionsSheet(
         if (s.isLive && s.canTerminal) GroupCard(Modifier.padding(top = JSpace.m)) {
             ActionRow("关闭 Agent…", JIcons.close, danger = true) { closing = true }
         }
+    }
+
+    if (pickingTodo) {
+        TodoPickerSheet(
+            hub = hub,
+            onDismiss = { pickingTodo = false; onDismiss() },
+            onPick = { todo ->
+                pickingTodo = false
+                act("关联待办") { hub.linkTodoAgent(todo.id, s.key) }
+            }
+        )
     }
 
     if (renaming) {

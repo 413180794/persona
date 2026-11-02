@@ -284,7 +284,8 @@ fun ChoiceChip(
 @Composable
 fun SectionHeader(
     text: String, modifier: Modifier = Modifier, count: Int? = null, countColor: Color? = null,
-    folded: Boolean? = null, onClick: (() -> Unit)? = null, trailing: @Composable RowScope.() -> Unit = {},
+    folded: Boolean? = null, onClick: (() -> Unit)? = null, lead: (@Composable () -> Unit)? = null,
+    trailing: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
         modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
@@ -293,6 +294,7 @@ fun SectionHeader(
         horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
     ) {
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+            if (lead != null) lead()
             Text(text, style = JTheme.type.sectionHeader, color = JTheme.colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             if (count != null) {
                 if (countColor != null) CountBadge(count, color = countColor.copy(alpha = 0.14f), text = countColor)

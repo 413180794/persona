@@ -57,6 +57,7 @@ import jarvis.android.ui.design.StatusDot
 data class SidebarActions(
     val openProfile: () -> Unit,
     val openInbox: () -> Unit,
+    val openTodos: () -> Unit = {},
     val openRoutines: () -> Unit,
     val openKnowledge: () -> Unit,
     val openMachines: () -> Unit,
@@ -67,12 +68,13 @@ data class SidebarActions(
 
 /**
  * The shell's drawer (iOS `AssistantSidebar` in the shell): the name and search on top; 认识 Jarvis and the places to
- * go (收件箱 with its count, 定时任务, 知识库, 机器); the conversations — 置顶 (the main one first) and 最近 (30, then
+ * go (收件箱 with its count, 待办 with uncompleted count, 定时任务, 知识库, 机器); the conversations — 置顶 (the main one first) and 最近 (30, then
  * 查看全部); at the foot the 新对话 pill and 设置.
  */
 @Composable
 fun Sidebar(
     conversations: List<Session>, model: AssistantModel, current: String?, inboxCount: Int, actions: SidebarActions,
+    todoCount: Int = 0, showTodos: Boolean = true,
 ) {
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -102,6 +104,9 @@ fun Sidebar(
                     DrawerRow("认识 Jarvis", onClick = actions.openProfile) { JarvisMark(JSize.icon) }
                 }
                 item(key = "inbox") { DrawerAction("收件箱", JIcons.inbox, actions.openInbox, count = inboxCount) }
+                if (showTodos) {
+                    item(key = "todos") { DrawerAction("待办", JIcons.todo, actions.openTodos, count = todoCount, countTone = true) }
+                }
                 item(key = "routines") { DrawerAction("定时任务", JIcons.schedule, actions.openRoutines) }
                 item(key = "knowledge") { DrawerAction("知识库", JIcons.knowledge, actions.openKnowledge) }
                 item(key = "machines") { DrawerAction("机器", JIcons.machines, actions.openMachines) }
@@ -170,8 +175,13 @@ private const val RECENT = 30
 
 /** A place to go: its symbol in one box (so the words line up), the words, a count. */
 @Composable
-private fun DrawerAction(title: String, icon: ImageVector, onClick: () -> Unit, count: Int = 0) {
-    DrawerRow(title, onClick = onClick, trailing = { if (count > 0) CountBadge(count, color = JTheme.needsYou.dot) }) {
+private fun DrawerAction(title: String, icon: ImageVector, onClick: () -> Unit, count: Int = 0, countTone: Boolean = false) {
+    DrawerRow(title, onClick = onClick, trailing = {
+        if (count > 0) {
+            if (countTone) CountBadge(count, color = JTheme.colors.fillChip, text = JTheme.colors.secondaryText)
+            else CountBadge(count, color = JTheme.needsYou.dot)
+        }
+    }) {
         Icon(icon, null, Modifier.size(JSize.iconS), tint = JTheme.colors.label)
     }
 }

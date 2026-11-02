@@ -76,6 +76,67 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
             .onFailure { _inbox.value = before; throw it }
     }
 
+    /** The todos list; refreshed when the hub says it changed (WebSocket `todos`), on (re)connect and on demand. */
+    private val _todos = MutableStateFlow<List<Todo>>(emptyList())
+    val todos: StateFlow<List<Todo>> = _todos.asStateFlow()
+
+    private val _todosSupported = MutableStateFlow(true)
+    val todosSupported: StateFlow<Boolean> = _todosSupported.asStateFlow()
+
+    suspend fun loadTodos() {
+        runCatching { api.todos() }
+            .onSuccess {
+                _todos.value = it
+                _todosSupported.value = true
+            }
+            .onFailure { e ->
+                if (e is HubException && e.status == 404) {
+                    _todosSupported.value = false
+                    _todos.value = emptyList()
+                }
+            }
+    }
+
+    suspend fun createTodo(title: String, notes: String = ""): Todo {
+        val t = api.createTodo(title, notes)
+        loadTodos()
+        return t
+    }
+
+    suspend fun setTodoDone(todo: Todo, done: Boolean) {
+        val before = _todos.value
+        val now = java.time.Instant.now().toString()
+        _todos.update { list -> list.map { if (it.id == todo.id) it.copy(doneAt = if (done) now else null) else it } }
+        runCatching { api.patchTodo(todo.id, done = done) }
+            .onSuccess { updated ->
+                _todos.update { list -> list.map { if (it.id == updated.id) updated else it } }
+            }
+            .onFailure {
+                _todos.value = before
+                throw it
+            }
+    }
+
+    suspend fun updateTodo(id: String, title: String? = null, notes: String? = null) {
+        val updated = api.patchTodo(id, title = title, notes = notes)
+        _todos.update { list -> list.map { if (it.id == updated.id) updated else it } }
+    }
+
+    suspend fun deleteTodo(id: String) {
+        api.deleteTodo(id)
+        _todos.update { list -> list.filterNot { it.id == id } }
+    }
+
+    suspend fun linkTodoAgent(todoId: String, k: SessionKey) {
+        api.linkTodoAgent(todoId, k)
+        loadTodos()
+    }
+
+    suspend fun unlinkTodoAgent(todoId: String, k: SessionKey) {
+        api.unlinkTodoAgent(todoId, k)
+        loadTodos()
+    }
+
     /** Pinned / muted spaces and agents, kept by the hub (Postgres) so every device sees the same. */
     private val _pins = MutableStateFlow(Pins())
     val pins: StateFlow<Pins> = _pins.asStateFlow()
@@ -196,8 +257,8 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 _conn.value = ConnState.Online
                 phoneTools?.let { registerPhone(webSocket, it) }
                 synchronized(chats) { chats.values.toList() }.forEach { it.resubscribe() }
-                // Pins and mutes have no WebSocket event: read them on every (re)connect; the inbox too.
-                scope.launch { loadPins(); loadInbox() }
+                // Pins and mutes have no WebSocket event: read them on every (re)connect; the inbox too; todos too.
+                scope.launch { loadPins(); loadInbox(); loadTodos() }
                 _larkChanges.tryEmit(emptySet())
             }
 
@@ -329,6 +390,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 chat(SessionKey(mid, sid), create = false)?.onDelta(msg["text"]?.jsonPrimitive?.content.orEmpty())
             }
             "inbox" -> scope.launch { loadInbox() } // no content: the app pulls the list
+            "todos" -> scope.launch { loadTodos() }
             "lark" -> _larkChanges.tryEmit((msg["feed_ids"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }?.toSet().orEmpty())
             "tool_call" -> {
                 val id = msg["call_id"]?.jsonPrimitive?.content ?: return

@@ -1,12 +1,15 @@
 package jarvis.android.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -47,7 +50,10 @@ import jarvis.android.ui.media.MediaShare
  * files are (GET …/info); copying the session id or the resume command last.
  */
 @Composable
-fun SessionInfoSheet(hub: Hub, key: SessionKey, session: Session?, machineName: String?, onDismiss: () -> Unit) {
+fun SessionInfoSheet(
+    hub: Hub, key: SessionKey, session: Session?, machineName: String?, onDismiss: () -> Unit,
+    onOpenTodo: ((String) -> Unit)? = null,
+) {
     val ctx = LocalContext.current
     var info by remember { mutableStateOf<ApiClient.SessionInfo?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -63,6 +69,32 @@ fun SessionInfoSheet(hub: Hub, key: SessionKey, session: Session?, machineName: 
                         .joinToString(DOT_SEP),
                     style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
+            }
+            session?.todo?.let { todo ->
+                SectionHeader("待办")
+                GroupCard {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenTodo?.invoke(todo.id); onDismiss() }
+                            .padding(horizontal = JSpace.l, vertical = JSpace.m),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(JIcons.todo, null, Modifier.size(JSize.iconS), tint = JTheme.colors.secondaryText)
+                        Spacer(Modifier.width(JSpace.m))
+                        Column(Modifier.weight(1f)) {
+                            Text("待办", style = JTheme.type.caption, color = JTheme.colors.secondaryText)
+                            Text(
+                                todo.title,
+                                style = JTheme.type.bodyStrong,
+                                color = JTheme.colors.label,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(JIcons.disclosure, null, Modifier.size(JSize.iconXS), tint = JTheme.colors.tertiaryText)
+                    }
+                }
             }
             val i = info
             when {

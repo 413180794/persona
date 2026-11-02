@@ -146,15 +146,16 @@ class ApiClient(val baseUrl: String, val token: String) {
         @SerialName("client_msg_id") val clientMsgId: String,
         @SerialName("clear_draft") val clearDraft: String? = null,
         val images: List<ImagePayload>? = null,
+        @SerialName("todo_id") val todoId: String? = null,
     )
 
     /**
      * clientMsgId stays the same on a retry: the node types a message once (docs/protocol.md「发消息」).
      * Images go inline as base64 (JPEG, the long side at most 1600 px, as iOS sends them).
      */
-    suspend fun send(k: SessionKey, text: String, clientMsgId: String, clearDraft: String? = null, images: List<ImagePayload> = emptyList()) {
+    suspend fun send(k: SessionKey, text: String, clientMsgId: String, clearDraft: String? = null, images: List<ImagePayload> = emptyList(), todoId: String? = null) {
         requireSession(k) { it.canSend }
-        post(sp(k) + "/messages", SendBody(text, clientMsgId, clearDraft, images.ifEmpty { null }))
+        post(sp(k) + "/messages", SendBody(text, clientMsgId, clearDraft, images.ifEmpty { null }, todoId))
     }
 
     @Serializable data class Uploaded(val path: String = "", val name: String = "", val size: Long = 0)
@@ -228,14 +229,18 @@ class ApiClient(val baseUrl: String, val token: String) {
         val async: Boolean? = null,
         /** What the tab name is made from when the first message goes as a message of its own, not `prompt`. */
         @SerialName("name_hint") val nameHint: String? = null,
+        @SerialName("todo_id") val todoId: String? = null,
     )
     @Serializable private data class SessionResp(val session: Session)
     /** Starts claude in a new herdr tab, in the background: the session comes back at once, the first message goes in
      *  once claude is ready. */
     /** `mode` null = whatever the launcher / that computer's Claude settings use (as iOS sends it). */
     /** As iOS: no `prompt`, the first message is sent as an ordinary message once the chat is open (on screen at once). */
-    suspend fun start(machine: String, cwd: String, launcher: String, nameHint: String?, mode: String? = null, workspaceId: String? = null): Session =
-        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, null, mode, workspaceId, async = true, nameHint = nameHint))).session
+    suspend fun start(
+        machine: String, cwd: String, launcher: String, nameHint: String?,
+        mode: String? = null, workspaceId: String? = null, todoId: String? = null
+    ): Session =
+        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, null, mode, workspaceId, async = true, nameHint = nameHint, todoId = todoId))).session
 
     /** What the node knows about a session from its transcript (GET …/info, iOS SessionInfo). */
     @Serializable
@@ -431,4 +436,35 @@ class ApiClient(val baseUrl: String, val token: String) {
     /** Trades the pairing token for this device's own (docs/protocol.md「鉴权」). */
     suspend fun createToken(name: String): NewToken =
         JsonCodec.decodeFromString(post("/api/v1/auth/tokens", TokenReq(name, "phone")))
+
+    // --- Todos (umbrella.final.md) ---
+
+    @Serializable private data class TodoResp(val todo: Todo)
+    @Serializable private data class TodosList(val todos: List<Todo> = emptyList())
+    suspend fun todos(): List<Todo> = get<TodosList>("/api/v1/todos").todos
+
+    @Serializable private data class NewTodo(val title: String, val notes: String = "")
+    suspend fun createTodo(title: String, notes: String = ""): Todo =
+        JsonCodec.decodeFromString<TodoResp>(post("/api/v1/todos", NewTodo(title, notes))).todo
+
+    @Serializable
+    private data class PatchTodo(
+        val title: String? = null,
+        val notes: String? = null,
+        val done: Boolean? = null,
+    )
+    suspend fun patchTodo(id: String, title: String? = null, notes: String? = null, done: Boolean? = null): Todo =
+        JsonCodec.decodeFromString<TodoResp>(raw("PATCH", "/api/v1/todos/$id", JsonCodec.encodeToString(PatchTodo(title, notes, done)))).todo
+
+    suspend fun deleteTodo(id: String) {
+        raw("DELETE", "/api/v1/todos/$id")
+    }
+
+    suspend fun linkTodoAgent(todoId: String, k: SessionKey) {
+        raw("PUT", "/api/v1/todos/$todoId/agents/${k.machineId}/${k.sessionId}")
+    }
+
+    suspend fun unlinkTodoAgent(todoId: String, k: SessionKey) {
+        raw("DELETE", "/api/v1/todos/$todoId/agents/${k.machineId}/${k.sessionId}")
+    }
 }

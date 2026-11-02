@@ -1,6 +1,26 @@
 package jarvis.android.shots
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import jarvis.android.data.AgentState
@@ -9,7 +29,13 @@ import jarvis.android.data.SessionKey
 import jarvis.android.ui.AgentsListOptions
 import jarvis.android.ui.ChatScreen
 import jarvis.android.ui.InboxScreen
+import jarvis.android.ui.JTheme
 import jarvis.android.ui.SettingsScreen
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
 import jarvis.android.ui.shell.AssistantModel
 import jarvis.android.ui.shell.ShellPage
 import jarvis.android.ui.shell.ShellRoot
@@ -100,6 +126,78 @@ class Shots {
     @Test fun settings() {
         for (dark in listOf(false, true)) {
             paparazzi.snapshot("settings" + if (dark) "-dark" else "") { ShotHost(dark) { SettingsScreen(hub, onBack = {}, asSheet = true) } }
+        }
+    }
+
+    @Test fun todos() = shell("todos", ShellPage.Assistant, routes = listOf("todos"))
+
+    @Test fun todoDetail() = shell("todo-detail", ShellPage.Assistant, routes = listOf("todos", "todo/todo_weather"))
+
+    @Test fun todoHandoff() {
+        val todo = runBlocking {
+            hub.todos.value.firstOrNull { it.id == "todo_weather" } ?: hub.api.todos().first()
+        }
+        for (dark in listOf(false, true)) {
+            paparazzi.snapshot("todo-handoff" + if (dark) "-dark" else "") {
+                ShotHost(dark) {
+                    SheetFrame("交给 Agent", under = {
+                        jarvis.android.ui.TodoDetailScreen(hub, todo.id, onBack = {}, onOpenSession = {})
+                    }) {
+                        jarvis.android.ui.TodoHandOffBody(hub, todo, onDismiss = {}, onStarted = {})
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun agentsByTodo() {
+        for (dark in listOf(false, true)) {
+            val model = assistant(null)
+            val options = AgentsListOptions(null)
+            options.pick(jarvis.android.data.Grouping.Todo)
+            paparazzi.snapshot("agents-by-todo" + if (dark) "-dark" else "") {
+                ShotHost(dark) {
+                    ShellRoot(hub, mutableStateOf(null), mutableStateOf(null), assistant = model, options = options,
+                        startPage = ShellPage.Agents, startRoutes = emptyList(), startDrawer = 0f)
+                }
+            }
+        }
+    }
+
+    @Test fun chatMenu() {
+        val key = session { it.agentState == AgentState.NeedsYou && it.machineId == "macbook" }.key
+        loaded(key)
+        for (dark in listOf(false, true)) {
+            paparazzi.snapshot("chat-menu" + if (dark) "-dark" else "") {
+                ShotHost(dark) {
+                    ChatScreen(hub, key, onBack = {}, initialMenuOpen = true, onOpenTodo = {})
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetFrame(title: String, under: @Composable () -> Unit, body: @Composable ColumnScope.() -> Unit) {
+    val c = JTheme.colors
+    Box(Modifier.fillMaxSize()) {
+        under()
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.32f)))
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(top = JSize.shellBar)
+                .clip(RoundedCornerShape(topStart = JRadius.panel, topEnd = JRadius.panel)).background(c.page),
+        ) {
+            Box(
+                Modifier.align(Alignment.CenterHorizontally).padding(top = JSpace.s, bottom = JSpace.xs)
+                    .size(width = JSize.wellL, height = JSize.grabber).background(c.fillPressed, CircleShape),
+            )
+            Box(Modifier.fillMaxWidth().padding(horizontal = JSpace.page, vertical = JSpace.s)) {
+                Text(title, style = JTheme.type.heading, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center).padding(horizontal = JSize.tapTarget))
+                CircleButton(JIcons.close, "关闭", {}, Modifier.align(Alignment.CenterEnd), size = JSize.wellL)
+            }
+            body()
+            Spacer(Modifier.height(JSpace.l))
         }
     }
 }

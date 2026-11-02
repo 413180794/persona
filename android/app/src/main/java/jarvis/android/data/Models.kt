@@ -175,6 +175,8 @@ data class Session(
     val starting: Boolean? = null,
     /** Starting it failed (shown in the chat; sends get the same error). */
     @SerialName("start_error") val startError: String? = null,
+    /** What todo this session is linked to (docs/umbrella.final.md), if any and not completed. */
+    val todo: SessionTodo? = null,
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)

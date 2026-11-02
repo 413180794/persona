@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.DragInteraction
@@ -189,6 +190,8 @@ fun ChatScreen(
     openWork: Boolean = false,
     /** False in a wide window's right pane: the list is beside it (iOS: a split view's detail has no back). */
     backButton: Boolean = true,
+    onOpenTodo: ((String) -> Unit)? = null,
+    initialMenuOpen: Boolean = false,
 ) {
     val store = remember(key) { hub.chat(key) }
     DisposableEffect(key) {
@@ -504,12 +507,28 @@ fun ChatScreen(
     val top = if (inShell) WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + JSize.shellBar else 0.dp
 
     CompositionLocalProvider(LocalChatEnv provides env, LocalLinkSource provides key, LocalShellChat provides inShell) {
-        // A wide window keeps the conversation to a readable column, centered (iOS `ChatView.readableWidth`).
-        Column(Modifier.fillMaxSize().background(JTheme.colors.page).imePadding().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = JSize.readable)) {
-            if (!inShell) ChatTopBar(
-                title = title, session = session, machine = machine?.displayName, assistant = assistant,
-                onBack = onBack.takeIf { backButton }, onTitle = { info = true },
-            ) { close ->
+        Box(Modifier.fillMaxSize()) {
+            // A wide window keeps the conversation to a readable column, centered (iOS `ChatView.readableWidth`).
+            Column(Modifier.fillMaxSize().background(JTheme.colors.page).imePadding().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = JSize.readable)) {
+                if (!inShell) ChatTopBar(
+                    title = title, session = session, machine = machine?.displayName, assistant = assistant,
+                    onBack = onBack.takeIf { backButton }, onTitle = { info = true }, initialMenuOpen = initialMenuOpen,
+                ) { close ->
+                val todo = session?.todo
+                if (todo != null && onOpenTodo != null) {
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text("待办", style = JTheme.type.caption, color = JTheme.colors.secondaryText)
+                                Text(todo.title, style = JTheme.type.bodyStrong, color = JTheme.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        },
+                        onClick = { close(); onOpenTodo(todo.id) },
+                        leadingIcon = { Icon(JIcons.todo, null, Modifier.size(JSize.iconS), tint = JTheme.colors.secondaryText) },
+                        trailingIcon = { Icon(JIcons.disclosure, null, Modifier.size(JSize.iconXS), tint = JTheme.colors.tertiaryText) }
+                    )
+                    HorizontalDivider()
+                }
                 if (openTerminal != null) DropdownMenuItem({ Text("终端", maxLines = 1) }, { close(); openTerminal() }, leadingIcon = { Icon(JIcons.terminal, null) })
                 val cwd = env.cwd
                 if (!assistant && cwd != null && machine != null) {
@@ -676,7 +695,45 @@ fun ChatScreen(
         }
         MessageMenuHost(menu)
         menu.selecting?.let { text -> SelectTextDialog(text) { menu.selecting = null } }
-        if (info) SessionInfoSheet(hub, key, session, machine?.displayName, onDismiss = { info = false })
+        if (info) SessionInfoSheet(hub, key, session, machine?.displayName, onDismiss = { info = false }, onOpenTodo = onOpenTodo)
+
+        if (initialMenuOpen) {
+            // In snapshot tests, Paparazzi does not draw Android Popup windows; draw the menu inline over the page.
+            val todo = session?.todo ?: hub.todos.value.firstOrNull { !it.isDone }?.let { jarvis.android.data.SessionTodo(it.id, it.title) }
+            Box(
+                Modifier
+                    .statusBarsPadding()
+                    .padding(top = JSize.shellBar, end = JSpace.page)
+                    .align(Alignment.TopEnd)
+                    .widthIn(min = jarvis.android.ui.design.JSize.box200)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(jarvis.android.ui.design.JRadius.card))
+                    .background(JTheme.colors.card)
+                    .border(jarvis.android.ui.design.JSize.hairline, JTheme.colors.separator, androidx.compose.foundation.shape.RoundedCornerShape(jarvis.android.ui.design.JRadius.card))
+            ) {
+                Column(Modifier.padding(vertical = jarvis.android.ui.design.JSpace.xs)) {
+                    if (todo != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text("待办", style = JTheme.type.caption, color = JTheme.colors.secondaryText)
+                                    Text(todo.title, style = JTheme.type.bodyStrong, color = JTheme.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            },
+                            onClick = {},
+                            leadingIcon = { Icon(JIcons.todo, null, Modifier.size(JSize.iconS), tint = JTheme.colors.secondaryText) },
+                            trailingIcon = { Icon(JIcons.disclosure, null, Modifier.size(JSize.iconXS), tint = JTheme.colors.tertiaryText) }
+                        )
+                        HorizontalDivider()
+                    }
+                    DropdownMenuItem({ Text("终端", maxLines = 1) }, {}, leadingIcon = { Icon(JIcons.terminal, null) })
+                    DropdownMenuItem({ Text("文件", maxLines = 1) }, {}, leadingIcon = { Icon(JIcons.folder, null) })
+                    DropdownMenuItem({ Text("Git", maxLines = 1) }, {}, leadingIcon = { Icon(JIcons.agents, null) })
+                    DropdownMenuItem({ Text("拷贝目录", maxLines = 1) }, {}, leadingIcon = { Icon(JIcons.copy, null) })
+                    DropdownMenuItem({ Text("会话信息", maxLines = 1) }, {}, leadingIcon = { Icon(JIcons.info, null) })
+                }
+            }
+        }
+    }
     }
 
     // A send the computer refused: say so once (清空并发送 when the node can clear a one-line draft).
@@ -772,9 +829,10 @@ private fun SuggestionPill(text: String, onUse: () -> Unit) {
 @Composable
 private fun ChatTopBar(
     title: String, session: jarvis.android.data.Session?, machine: String?, assistant: Boolean,
-    onBack: (() -> Unit)?, onTitle: () -> Unit, menu: @Composable androidx.compose.foundation.layout.ColumnScope.(() -> Unit) -> Unit,
+    onBack: (() -> Unit)?, onTitle: () -> Unit, initialMenuOpen: Boolean = false,
+    menu: @Composable androidx.compose.foundation.layout.ColumnScope.(() -> Unit) -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(initialMenuOpen) }
     val link by ConnectionWatch.label.collectAsState()
     Box(Modifier.fillMaxWidth().statusBarsPadding().height(JSize.shellBar).padding(horizontal = JSpace.page)) {
         if (onBack != null) CircleButton(JIcons.back, "返回", onBack, Modifier.align(Alignment.CenterStart))
