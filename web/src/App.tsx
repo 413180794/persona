@@ -15,6 +15,7 @@ import { StartingAgent } from "./views/StartingAgent";
 import { Palette } from "./views/Palette";
 import { Settings } from "./views/Settings";
 import { Sidebar } from "./views/Sidebar";
+import { TodosView } from "./views/Todos";
 
 // A link with the hub's token (`?token=…` or `#token=…`) signs in without the form. The token leaves the address bar
 // before anything else runs (history, bookmarks, a copied link), and is traded for this browser's own one.
@@ -92,7 +93,7 @@ function Shell() {
   useEffect(() => setDrawer(false), [route.name, route.name === "session" ? route.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
 
   const title =
-    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "machines" ? "机器" : route.name === "settings" ? "设置" : route.name === "agents" ? "个人 Agent" : "总览";
+    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "todos" ? "待办" : route.name === "machines" ? "机器" : route.name === "settings" ? "设置" : route.name === "agents" ? "个人 Agent" : "总览";
   useEffect(() => {
     document.title = `${title} · Jarvis`;
   }, [title]);
@@ -104,6 +105,9 @@ function Shell() {
       break;
     case "jarvis":
       main = <Jarvis sid={route.sid} onToggleSidebar={toggle} />;
+      break;
+    case "todos":
+      main = <TodosView selectedId={route.id} onToggleSidebar={toggle} />;
       break;
     case "agents":
       main = <AgentsView key={route.id ?? ""} id={route.id} onToggleSidebar={toggle} />;

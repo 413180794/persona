@@ -7,7 +7,8 @@ export type Route =
   | { name: "jarvis"; sid?: string }
   | { name: "machines" }
   | { name: "settings" }
-  | { name: "agents"; id?: string };
+  | { name: "agents"; id?: string }
+  | { name: "todos"; id?: string };
 
 export function parse(path: string): Route {
   const p = path.split("/").filter(Boolean).map(decodeURIComponent);
@@ -16,6 +17,10 @@ export function parse(path: string): Route {
   if (p[0] === "a") return { name: "agents", id: p[1] };
   if (p[0] === "machines") return { name: "machines" };
   if (p[0] === "settings") return { name: "settings" };
+  if (p[0] === "todos") {
+    const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null;
+    return { name: "todos", id: p[1] || q || undefined };
+  }
   return { name: "home" };
 }
 
@@ -31,13 +36,17 @@ export function href(r: Route): string {
       return "/settings";
     case "agents":
       return r.id ? `/a/${encodeURIComponent(r.id)}` : "/a";
+    case "todos":
+      return r.id ? `/todos?id=${encodeURIComponent(r.id)}` : "/todos";
     default:
       return "/";
   }
 }
 
 const listeners = new Set<() => void>();
-addEventListener("popstate", () => listeners.forEach((l) => l()));
+if (typeof addEventListener !== "undefined") {
+  addEventListener("popstate", () => listeners.forEach((l) => l()));
+}
 
 export function navigate(r: Route | string, replace = false) {
   const to = typeof r === "string" ? r : href(r);

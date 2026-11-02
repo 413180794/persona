@@ -1,11 +1,12 @@
 import { byAttention, stateOf } from "./format";
 import type { AgentState, Machine, Session } from "./types";
 
-export type AgentGrouping = "space" | "state" | "machine";
+export type AgentGrouping = "space" | "state" | "machine" | "todo";
 export const AGENT_GROUPINGS: { key: AgentGrouping; label: string }[] = [
   { key: "space", label: "按项目" },
   { key: "state", label: "按状态" },
   { key: "machine", label: "按机器" },
+  { key: "todo", label: "按待办" },
 ];
 
 export function agentGrouping(value: string | null): AgentGrouping {
@@ -24,6 +25,8 @@ export interface AgentGroup {
   sessions: Session[];
   state?: AgentState;
   folded?: boolean;
+  todoId?: string;
+  todoStatus?: string;
 }
 
 export function splitAgentSessions(all: Session[], machines: Machine[]) {

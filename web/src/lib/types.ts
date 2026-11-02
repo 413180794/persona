@@ -77,6 +77,7 @@ export interface Session {
   background?: { id: string; kind: string; description?: string; command?: string }[];
   rev?: number;
   suggestion?: string;
+  todo?: { id: string; title: string };
 }
 
 export interface Item {

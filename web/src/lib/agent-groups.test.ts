@@ -19,7 +19,7 @@ describe("Agent 分组偏好", () => {
   it("默认按项目，并兼容丢失或未知的偏好", () => {
     expect(agentGrouping(null)).toBe("space");
     expect(agentGrouping("invalid")).toBe("space");
-    for (const value of ["space", "state", "machine"]) expect(agentGrouping(value)).toBe(value);
+    for (const value of ["space", "state", "machine", "todo"]) expect(agentGrouping(value)).toBe(value);
   });
 });
 

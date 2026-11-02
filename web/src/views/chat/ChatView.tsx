@@ -4,7 +4,9 @@ import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/
 import { ago, resumeCommand, sessionCan, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate } from "../../lib/router";
 import { acknowledgeLaunch } from "../../lib/new-agent";
-import { getSession, getState, markSeenLocally, refresh, useStore } from "../../lib/store";
+import { getSession, getState, markSeenLocally, refresh, refreshTodos, useStore } from "../../lib/store";
+import { unlinkAgentFromTodo } from "../../lib/todos";
+import { LinkTodoDialog } from "../LinkTodoDialog";
 import { parseUserText, segments, type UserMessage } from "../../lib/turns";
 import type { Session } from "../../lib/types";
 import { Button, copyText, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
@@ -321,6 +323,7 @@ function Header({
   const menu = useMenu();
   const tabs = useMenu();
   const [closing, setClosing] = useState(false);
+  const [linkTodoOpen, setLinkTodoOpen] = useState(false);
   const state = session ? stateOf(session) : "unknown";
   const sub = assistant
     ? [sourceSubtitle(session), session?.launcher, session?.updated_at ? ago(session.updated_at) : ""].filter(Boolean).join(" · ")
@@ -339,6 +342,46 @@ function Header({
 
   const items: MenuItem[] = session
     ? [
+        ...(session.todo
+          ? [
+              {
+                key: "todo-detail",
+                label: `待办：${session.todo.title}`,
+                icon: "todo" as const,
+                onSelect: () => navigate(`/todos?id=${encodeURIComponent(session.todo!.id)}`),
+              },
+              {
+                key: "unlink-todo",
+                label: "解除关联",
+                icon: "x" as const,
+                onSelect: async () => {
+                  try {
+                    await unlinkAgentFromTodo(session.todo!.id, session.machine_id, session.session_id);
+                    await refreshTodos();
+                    await refresh();
+                    toast("已解除待办关联", "ok");
+                  } catch (e) {
+                    toast(`解除关联失败：${errorText(e)}`, "error");
+                  }
+                },
+              },
+              {
+                key: "relink-todo",
+                label: "关联到待办…",
+                icon: "todo" as const,
+                onSelect: () => setLinkTodoOpen(true),
+              },
+            ]
+          : !assistant
+            ? [
+                {
+                  key: "link-todo",
+                  label: "关联到待办…",
+                  icon: "todo" as const,
+                  onSelect: () => setLinkTodoOpen(true),
+                },
+              ]
+            : []),
         ...(allowed.includes("attach") ? [{ key: "attach", label: "实时接入", icon: "link" as const, onSelect: () => void attach() }] : []),
         ...(allowed.includes("stop") ? [{ key: "stop", label: "中断", icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
         { key: "sid", label: "拷贝会话 ID", icon: "copy", onSelect: () => copyText(session.session_id) },
@@ -388,6 +431,7 @@ function Header({
       {items.length > 0 && <IconButton icon="more" label="更多" onClick={menu.open} active={Boolean(menu.anchor)} />}
       {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" items={items} />}
       {session && <CloseAgent open={closing} onClose={() => setClosing(false)} session={session} machineName={machineName} />}
+      <LinkTodoDialog open={linkTodoOpen} session={session} onClose={() => setLinkTodoOpen(false)} />
     </header>
   );
 }
