@@ -18,7 +18,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   界面文案、测试、文档、本文件里都不出现具体某个人的值（内网域名 / IP、主机名、内部项目名、个人账号、各种 key 的 ID 也算）；界面说「hub 所在的机器」「你的各台电脑」。本机的具体情况写 `CLAUDE.local.md`。
 - **随时沉淀经验**：踩坑、怪异行为当场写进 `docs/lessons/<主题>.md`（索引 `docs/lessons/README.md`），设计取舍写进 `docs/<主题>.md`；
   跨模块、最常踩的再在本文件「最常踩的坑」留一行。本文件只放约定和最核心的东西，别再往里堆细节。这条规则本身也要保留。
-- 代码注释、提交信息用英文；文档用中文；App 界面文案用中文。
+- **所有 commit 必须用英文**（2026-11-02 用户要求）：commit 的标题和正文，以及 PR 的标题和正文都用英文，
+  因为 squash 合并直接把 PR 标题和正文当成 master 上的 commit 信息。代码注释也用英文；文档、issue 用中文；App 界面文案用中文。
 - **不提交任何内网信息或个人信息**（2026-10-28 用户要求；`scripts/privacy_check.py` 自动查，见 `docs/testing.md`「隐私扫描」）：代码、测试数据、文档、截图、提交信息里都不能有内网域名 / IP / URL、
   主机名、内部项目 / 仓库名、真实的公司或个人数据（消息、文档链接、人名），以及个人账号、邮箱、各种 key / 项目的 ID。示例一律用占位符
   （`<hub 地址>`、`me@example.com`）；具体值只写配置或 `CLAUDE.local.md`。Jarvis 支持的产品 / 工具名（飞书、TRAEX、removed 等）不算。
@@ -55,7 +56,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
    - 从认领时间起最多等 **12 小时**；这期间认领人有新进展（issue 评论、关联 PR 的推送）就从最后一次进展重新算。
    - 超过 12 小时没动静就接手：评论 `接手：<机器 id> / <会话或分支>，<时间>，原认领 <时间> 已超过 12 小时`，assign 给自己，接着做。
 5. **做**：在独立分支 / worktree 上改，分支名带 issue 号（如 `fix/123-xxx`）。做不下去要放弃时，在 issue 里说明做到哪一步，取消 assign。
-6. **提 PR**：一个 PR 对应一个 issue，正文写 `Closes #<号>`（fix 写 `Fixes #<号>`），合并时 GitHub 自动关闭 issue。
+6. **提 PR**：一个 PR 对应一个 issue，标题和正文用英文（会变成 master 上的 commit），正文写 `Closes #<号>`（fix 写 `Fixes #<号>`），合并时 GitHub 自动关闭 issue。
 7. **自行合并**：不需要别人 review，**质量自己保证**：按「构建与验证」跑过测试，界面改动看过截图，CI 通过后
    `gh pr merge <号> --squash --delete-branch`，确认 issue 已经关闭。
 
