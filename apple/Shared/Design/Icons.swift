@@ -225,6 +225,12 @@ extension Theme {
         static let mention = "at"
         /// A group chat (群聊).
         static let groupChat = "rectangle.3.group.bubble"
+        /// 信息 (the Messages app's data on a Mac) as a connector, and its conversations.
+        static let messagesApp = "message.fill"
+        /// An attachment (a mail's, a message's): a file; a video, a voice message.
+        static let attachment = "paperclip"
+        static let video = "video"
+        static let voiceMessage = "waveform"
         /// Send someone a message.
         static let message = "bubble.left.fill"
         static let credentials = "key"

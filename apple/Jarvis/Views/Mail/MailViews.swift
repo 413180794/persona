@@ -128,7 +128,7 @@ struct MailDetailView: View {
                     if let atts = m.attachments, !atts.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.sm) {
                             ForEach(Array(atts.enumerated()), id: \.offset) { _, a in
-                                Label("\(a.filename ?? "附件")  \(ByteCountFormatter.string(fromByteCount: Int64(a.size ?? 0), countStyle: .file))", systemImage: "paperclip")
+                                Label("\(a.filename ?? "附件")  \(ByteCountFormatter.string(fromByteCount: Int64(a.size ?? 0), countStyle: .file))", systemImage: Theme.Icon.attachment)
                                     .font(Theme.Font.caption)
                             }
                         }

@@ -48,6 +48,11 @@ enum ConnectorText {
         c.status == "ok" ? (c.account ?? state(c)) : state(c)
     }
 
+    /// The symbol of a connector without a mark of its own.
+    static func symbol(_ id: String) -> String {
+        id == "imessage" ? Theme.Icon.messagesApp : Theme.Icon.connectors
+    }
+
     /// The connector's own mark (`Theme.Brand`), nil for one the app has none for.
     static func brand(_ id: String) -> String? {
         switch id {
@@ -151,7 +156,7 @@ struct ConnectorsSection: View {
                 ForEach(hubConnectors) { c in
                     NavigationLink(value: SettingsPage.connector(c.id)) {
                         if AppStyle.current.usesBeautifulUI {
-                            SettingsRow(title: c.name, symbol: Theme.Icon.connectors, tint: Theme.accent, value: ConnectorText.summary(c),
+                            SettingsRow(title: c.name, symbol: ConnectorText.symbol(c.id), tint: Theme.accent, value: ConnectorText.summary(c),
                                         brand: ConnectorText.brand(c.id))
                         } else {
                             LabeledContent {
@@ -163,7 +168,7 @@ struct ConnectorsSection: View {
                                     if let brand = ConnectorText.brand(c.id) {
                                         Image(brand).resizable().scaledToFit()
                                     } else {
-                                        Image(systemName: Theme.Icon.connectors)
+                                        Image(systemName: ConnectorText.symbol(c.id))
                                     }
                                 }
                             }

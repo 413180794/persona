@@ -1,0 +1,486 @@
+{
+  "id": "doc:dn1:<ms:base+30m>",
+  "source": "lark",
+  "kind": "doc",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "季度规划",
+  "sender": "李四",
+  "preview": "李四 在文档中提及了你",
+  "count": 1,
+  "started_at": "<base+30m@+08:00>",
+  "updated_at": "<base+30m@+08:00>",
+  "tier": "action",
+  "reason": "按规则",
+  "doc": {
+    "url": "https://example.feishu.cn/docx/DocB2",
+    "link": "https://example.feishu.cn/docx/DocB2",
+    "type": "docx",
+    "notice": "mention",
+    "notice_id": "dn1",
+    "reply": {
+      "kind": "thread",
+      "label": "回复评论",
+      "thread": "ct1"
+    },
+    "read_at": "<now@Z>"
+  },
+  "last": "<ms:base+30m>",
+  "context": "飞书文档「季度规划」的通知：李四 在文档中提及了你\n链接：https://example.feishu.cn/docx/DocB2\n\n提到用户的评论：\n- 评论「接入部分」：\n  李四：@示例用户 这里的排期能确认下吗？\n\n文档里 @用户 附近的内容：\n# 季度规划\n\n## 目标\n完成示例服务接入。\n\n## 分工\n@示例用户 负责接入部分，请在周五前确认排期。\n李四 负责文档。",
+  "triaged_at": "<ms:base+30m>"
+}
+{
+  "id": "doc:dn2:<ms:base+40m>",
+  "source": "lark",
+  "kind": "doc",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "排期表",
+  "sender": "王五",
+  "preview": "王五 评论了你：这一行什么时候能完成？",
+  "count": 1,
+  "started_at": "<base+40m@+08:00>",
+  "updated_at": "<base+40m@+08:00>",
+  "tier": "action",
+  "reason": "按规则",
+  "doc": {
+    "url": "https://example.feishu.cn/sheets/ShtC3",
+    "link": "https://example.feishu.cn/sheets/ShtC3",
+    "type": "sheet",
+    "notice": "comment",
+    "notice_id": "dn2",
+    "rows": [
+      {
+        "ref": "s1!1",
+        "table": "排期",
+        "title": "接入示例",
+        "fields": [
+          {
+            "name": "负责人",
+            "value": "@示例用户"
+          },
+          {
+            "name": "截止",
+            "value": "周五"
+          }
+        ],
+        "status": [
+          {
+            "field": "2",
+            "name": "状态",
+            "value": "进行中",
+            "options": [
+              {
+                "name": "未开始"
+              },
+              {
+                "name": "进行中",
+                "color": "#ffaa00"
+              },
+              {
+                "name": "已完成",
+                "color": "#00aa00"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "ref": "s1!3",
+        "table": "排期",
+        "title": "联调",
+        "fields": [
+          {
+            "name": "负责人",
+            "value": "@示例用户 李四"
+          }
+        ],
+        "status": [
+          {
+            "field": "2",
+            "name": "状态",
+            "value": "已完成",
+            "options": [
+              {
+                "name": "未开始"
+              },
+              {
+                "name": "进行中",
+                "color": "#ffaa00"
+              },
+              {
+                "name": "已完成",
+                "color": "#00aa00"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "reply": {
+      "kind": "thread",
+      "label": "回复评论",
+      "thread": "ct2"
+    },
+    "read_at": "<now@Z>"
+  },
+  "last": "<ms:base+40m>",
+  "context": "飞书电子表格「排期表」的通知：王五 评论了你：这一行什么时候能完成？\n链接：https://example.feishu.cn/sheets/ShtC3\n\n提到用户的行（ref 用来改状态；状态列 field=列的 id，可选值在括号里）：\n1. [排期] 接入示例；负责人=@示例用户；截止=周五；状态=进行中（field=2，可选：未开始 / 进行中 / 已完成）（ref=s1!1）\n2. [排期] 联调；负责人=@示例用户 李四；状态=已完成（field=2，可选：未开始 / 进行中 / 已完成）（ref=s1!3）\n\n提到用户的评论：\n- 评论「接入示例」：\n  王五：@示例用户 这一行什么时候能完成？",
+  "triaged_at": "<ms:base+40m>"
+}
+{
+  "id": "doc:dn3:<ms:base+55m>",
+  "source": "lark",
+  "kind": "doc",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "新人手册",
+  "sender": "周九",
+  "preview": "周九 回复了你的评论",
+  "count": 1,
+  "started_at": "<base+55m@+08:00>",
+  "updated_at": "<base+55m@+08:00>",
+  "tier": "action",
+  "reason": "按规则",
+  "doc": {
+    "url": "https://example.feishu.cn/wiki/WikiE5",
+    "link": "https://example.feishu.cn/docx/DocE5doc",
+    "type": "docx",
+    "notice": "reply",
+    "notice_id": "dn3",
+    "reply": {
+      "kind": "thread",
+      "label": "回复评论",
+      "thread": "ct4"
+    },
+    "read_at": "<now@Z>"
+  },
+  "last": "<ms:base+55m>",
+  "context": "飞书文档「新人手册」的通知：周九 回复了你的评论\n链接：https://example.feishu.cn/wiki/WikiE5\n\n提到用户的评论：\n- 评论「装好开发环境」：\n  示例用户：这里的步骤过时了\n  周九：@示例用户 已更新，再看看？\n\n文档里 @用户 附近的内容：\n# 新人手册\n\n1. 申请账号\n2. 装好开发环境",
+  "triaged_at": "<ms:base+55m>"
+}
+{
+  "id": "lark:f_bot:601",
+  "source": "lark",
+  "kind": "bot",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "构建机器人",
+  "sender": "构建机器人",
+  "avatar": "/api/v1/lark/media/avatar_f_bot",
+  "preview": "构建失败：示例服务 #128",
+  "count": 1,
+  "started_at": "<base+50m@+08:00>",
+  "updated_at": "<base+50m@Z>",
+  "tier": "noise",
+  "reason": "按规则",
+  "lark": {
+    "account_id": 1,
+    "feed_id": "f_bot",
+    "is_group": false,
+    "start_position": "601",
+    "reply_to": "m601"
+  },
+  "last": "601",
+  "context": "飞书私聊（构建机器人）的新消息：\n[<D0> 10:50] 构建机器人：构建失败：示例服务 #128",
+  "triaged_at": "601"
+}
+{
+  "id": "lark:f_dm:202",
+  "source": "lark",
+  "kind": "dm",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "张三",
+  "sender": "张三",
+  "avatar": "/api/v1/lark/media/avatar_f_dm",
+  "preview": "今天能给反馈吗？",
+  "count": 2,
+  "started_at": "<base@+08:00>",
+  "updated_at": "<base+5m@+08:00>",
+  "tier": "action",
+  "reason": "按规则",
+  "lark": {
+    "account_id": 1,
+    "feed_id": "f_dm",
+    "is_group": false,
+    "start_position": "202",
+    "read_position": "201",
+    "reply_to": "m203"
+  },
+  "last": "203",
+  "context": "飞书私聊（张三）的新消息：\n[<D0> 10:00] 张三：方案在 https://example.feishu.cn/docx/DocA1 里，帮忙看下\n[<D0> 10:05] 张三：今天能给反馈吗？",
+  "triaged_at": "203"
+}
+{
+  "id": "lark:f_grp:304",
+  "source": "lark",
+  "kind": "mention",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "示例项目群",
+  "sender": "李四",
+  "avatar": "/api/v1/lark/media/avatar_f_grp",
+  "preview": "@示例用户 明天的评审你能来吗？",
+  "count": 3,
+  "started_at": "<base+10m@+08:00>",
+  "updated_at": "<base+15m@+08:00>",
+  "tier": "action",
+  "reason": "按规则",
+  "lark": {
+    "account_id": 1,
+    "feed_id": "f_grp",
+    "is_group": true,
+    "start_position": "304",
+    "read_position": "302",
+    "mention_position": "305",
+    "reply_to": "m305"
+  },
+  "last": "305",
+  "context": "飞书群「示例项目群」的新消息：\n[<D0> 10:10] 李四：这张图是最新的吗\n[<D0> 10:15] 李四（@了我）：@示例用户 明天的评审你能来吗？",
+  "triaged_at": "305"
+}
+{
+  "id": "lark:f_mutedat:501",
+  "source": "lark",
+  "kind": "mention",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "兴趣小组",
+  "sender": "周九",
+  "avatar": "/api/v1/lark/media/avatar_f_mutedat",
+  "preview": "@示例用户 周末活动报名了吗",
+  "count": 1,
+  "started_at": "<base+45m@+08:00>",
+  "updated_at": "<base+45m@+08:00>",
+  "tier": "action",
+  "reason": "按规则",
+  "lark": {
+    "account_id": 1,
+    "feed_id": "f_mutedat",
+    "is_group": true,
+    "start_position": "501",
+    "mention_position": "501",
+    "reply_to": "m501"
+  },
+  "last": "501",
+  "context": "飞书群「兴趣小组」的新消息：\n[<D0> 10:45] 周九（@了我）：@示例用户 周末活动报名了吗",
+  "triaged_at": "501"
+}
+{
+  "id": "lark:f_topic:701",
+  "source": "lark",
+  "kind": "group",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "话题讨论",
+  "sender": "吴十",
+  "avatar": "/api/v1/lark/media/avatar_f_topic",
+  "preview": "新话题：示例工具怎么用？",
+  "count": 1,
+  "started_at": "<base+25m@+08:00>",
+  "updated_at": "<base+25m@+08:00>",
+  "tier": "fyi",
+  "reason": "按规则",
+  "lark": {
+    "account_id": 1,
+    "feed_id": "f_topic",
+    "is_group": true,
+    "is_topic": true,
+    "start_position": "701",
+    "reply_to": "m701",
+    "thread_kind": "topic"
+  },
+  "last": "701",
+  "context": "飞书群「话题讨论」的新消息：\n[<D0> 10:25] 吴十：新话题：示例工具怎么用？",
+  "triaged_at": "701"
+}
+{
+  "id": "mail:acc1:5adb4f79d1c8:11",
+  "source": "mail",
+  "kind": "mail",
+  "account": "acc1",
+  "account_name": "me@example.com",
+  "title": "[团队] 本周周报",
+  "sender": "团队周报",
+  "preview": "本周进展：示例服务已上线。",
+  "count": 1,
+  "started_at": "<base-30m@Z>",
+  "updated_at": "<base-30m@Z>",
+  "tier": "noise",
+  "reason": "按规则",
+  "mail": {
+    "account_id": "acc1",
+    "mailbox": "INBOX",
+    "uids": [
+      11
+    ],
+    "message_id": "\u003cm11@example.com\u003e",
+    "from": {
+      "name": "团队周报",
+      "email": "weekly@lists.example.com"
+    },
+    "thread": "5adb4f79d1c8"
+  },
+  "last": "11",
+  "context": "邮箱 me@example.com 收到的未读邮件（共 1 封，下面是最新一封）：\n发件人：团队周报 \u003cweekly@lists.example.com\u003e\n收件人：team@lists.example.com\n抄送：me@example.com\n时间：<base-30m@Z>\n主题：[团队] 本周周报\n\n本周进展：示例服务已上线。",
+  "triaged_at": "11",
+  "body_of": "11"
+}
+{
+  "id": "mail:acc1:b9d4b77fd56b:10",
+  "source": "mail",
+  "kind": "mail",
+  "account": "acc1",
+  "account_name": "me@example.com",
+  "title": "您的账单已生成",
+  "sender": "no-reply@notify.example.com",
+  "preview": "本月账单 123.45 元。",
+  "count": 1,
+  "started_at": "<base-3h@Z>",
+  "updated_at": "<base-3h@Z>",
+  "tier": "fyi",
+  "reason": "按规则",
+  "mail": {
+    "account_id": "acc1",
+    "mailbox": "INBOX",
+    "uids": [
+      10
+    ],
+    "message_id": "\u003cm10@example.com\u003e",
+    "from": {
+      "name": "",
+      "email": "no-reply@notify.example.com"
+    },
+    "direct": true,
+    "thread": "b9d4b77fd56b"
+  },
+  "last": "10",
+  "context": "邮箱 me@example.com 收到的未读邮件（共 1 封，下面是最新一封）：\n发件人： \u003cno-reply@notify.example.com\u003e\n收件人：me@example.com\n抄送：\n时间：<base-3h@Z>\n主题：您的账单已生成\n\n本月账单 123.45 元。",
+  "triaged_at": "10",
+  "body_of": "10"
+}
+{
+  "id": "mail:acc1:e77baf3e5570:12",
+  "source": "mail",
+  "kind": "mail",
+  "account": "acc1",
+  "account_name": "me@example.com",
+  "title": "Re: 请确认季度预算",
+  "sender": "张三",
+  "preview": "补充一下：附件是最新版本。",
+  "count": 2,
+  "started_at": "<base+20m@Z>",
+  "updated_at": "<base+40m@Z>",
+  "tier": "fyi",
+  "reason": "按规则",
+  "mail": {
+    "account_id": "acc1",
+    "mailbox": "INBOX",
+    "uids": [
+      12,
+      13
+    ],
+    "message_id": "\u003cm13@example.com\u003e",
+    "from": {
+      "name": "张三",
+      "email": "zhangsan@example.com"
+    },
+    "direct": true,
+    "thread": "e77baf3e5570"
+  },
+  "last": "13",
+  "context": "邮箱 me@example.com 收到的未读邮件（共 2 封，下面是最新一封）：\n发件人：张三 \u003czhangsan@example.com\u003e\n收件人：me@example.com\n抄送：\n时间：<base+40m@Z>\n主题：Re: 请确认季度预算\n\n补充一下：附件是最新版本。",
+  "triaged_at": "13",
+  "body_of": "13"
+}
+{
+  "id": "mail:acc2:d88fc805a6ad:3",
+  "source": "mail",
+  "kind": "mail",
+  "account": "acc2",
+  "account_name": "me.home@example.com",
+  "title": "Can we move the design review?",
+  "sender": "Alice Example",
+  "preview": "Hi, I'm travelling on Thursday, so I won't make the review. Could we do Tuesday?",
+  "count": 1,
+  "started_at": "<base+1h@Z>",
+  "updated_at": "<base+1h@Z>",
+  "tier": "fyi",
+  "reason": "按规则",
+  "mail": {
+    "account_id": "acc2",
+    "mailbox": "INBOX",
+    "uids": [
+      3
+    ],
+    "message_id": "\u003cm3@example.com\u003e",
+    "from": {
+      "name": "Alice Example",
+      "email": "alice@example.com"
+    },
+    "direct": true,
+    "thread": "d88fc805a6ad"
+  },
+  "last": "3",
+  "context": "邮箱 me.home@example.com 收到的未读邮件（共 1 封，下面是最新一封）：\n发件人：Alice Example \u003calice@example.com\u003e\n收件人：me.home@example.com\n抄送：\n时间：<base+1h@Z>\n主题：Can we move the design review?\n\nHi, I'm travelling on Thursday, so I won't make the review. Could we do Tuesday?",
+  "triaged_at": "3",
+  "body_of": "3"
+}
+{
+  "id": "moment:p_mine:mn1",
+  "source": "lark",
+  "kind": "moment",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "周末去爬山了，风景很好。",
+  "sender": "钱二",
+  "preview": "写得好，下次叫上我",
+  "count": 1,
+  "started_at": "<base+1h@Z>",
+  "updated_at": "<base+1h@Z>",
+  "read": true,
+  "done_at": "<now@Z>",
+  "done_by": "replied",
+  "moment": {
+    "post_id": "p_mine",
+    "notice": "comment",
+    "notices": [
+      "mn1"
+    ],
+    "reply_to": "c1",
+    "my_post": true,
+    "post_text": "周末去爬山了，风景很好。",
+    "read_at": "<now@Z>"
+  },
+  "last": "<ms:base+1h>",
+  "context": "removed（我发的帖子，评论全公司可见）\n帖子：周末去爬山了，风景很好。\n- <D0> 11:00 钱二：写得好，下次叫上我  ← 要回复的这条\n- <D0> 11:10 我 回复 钱二：好的\n"
+}
+{
+  "id": "moment:p_other:mn2",
+  "source": "lark",
+  "kind": "moment",
+  "account": "feishu",
+  "account_name": "飞书",
+  "title": "关于示例工具的一点想法：上手快，文档少。",
+  "sender": "赵六",
+  "preview": "@示例用户 你怎么看",
+  "count": 1,
+  "started_at": "<base+2h@Z>",
+  "updated_at": "<base+2h@Z>",
+  "tier": "action",
+  "reason": "按规则",
+  "moment": {
+    "post_id": "p_other",
+    "notice": "atInComment",
+    "notices": [
+      "mn2"
+    ],
+    "reply_to": "c4",
+    "post_text": "关于示例工具的一点想法：上手快，文档少。",
+    "read_at": "<now@Z>"
+  },
+  "last": "<ms:base+2h>",
+  "context": "removed（别人的帖子，评论全公司可见）\n帖子：关于示例工具的一点想法：上手快，文档少。\n- <D0> 11:40 褚三：这个工具挺好用\n- <D0> 12:00 赵六：@示例用户 你怎么看  ← 要回复的这条\n",
+  "triaged_at": "<ms:base+2h>"
+}

@@ -440,7 +440,10 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 ## 六、App 侧
 
 遵守「不做第二个某某 App」：不给 GitHub 做浏览页面（没有仓库列表、PR 页、diff 页）。**信息是例外**（用户 2026-11-02「App 里先做最小可用的一版：会话列表加消息查看」）：
-消息默认不交给 AI（`imessage.model` 默认关），用户只能在 App 里自己看，所以有会话列表和消息查看（只读，经 hub 读那台 Mac 的 `chat.db`，消息不复制到 hub）。其余只做三处：
+消息默认不交给 AI（`imessage.model` 默认关），用户只能在 App 里自己看，所以有会话列表和消息查看（只读，经 hub 读那台 Mac 的 `chat.db`，消息不复制到 hub）。
+已实现（#449）：设置 › 连接器 › 信息（读的是哪台 Mac、状态，没有完全磁盘访问权限时按那台 Mac 的 node 怎么跑一步步说怎么开、「重新检查」）› 会话（新的在前，未读数，搜名字或号码）› 一个会话
+（像「信息」那样：隔一小时或换一天出时间，群里换人出名字，短信 / iMessage 换了标出来，回复带被回复的开头，附件只有描述，编辑、撤回、读不出来的都说明）；
+`Views/Messages/`，DEBUG `-openConnectorMessages YES [-openMessagesChats YES]`、`-openMessagesChat <会话 id>`，mock 的 `MOCK_IMESSAGE=denied`，UI 测试 `MessagesConnectorTests`。其余只做三处：
 
 1. **收件箱的条目**：通用的 `InboxConnector` 块画行和详情（上面「GitHub」「iMessage」里写的样子）；筛选条按 `GET /api/v1/connectors` 加「GitHub」「信息」；
    手表的「需要你」也显示（标签 + 标题 + 摘要）。App 请求列表时带 `?sources=all`。Android、网页这一轮不做，它们拿不到新来源（不带参数）。
@@ -478,12 +481,12 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 | G1 ✓ | GitHub（#421）：`credential.gh_token` RPC、`from_machine` 取 token（内存）、~~粘贴备选~~（先不做，等真有人不用 gh 时再加）、状态、`/api/v1/connectors`、设置页的 GitHub 行 | 设置页显示「来自 <机器> 的 gh 登录 · 账号」；那台机器离线时用内存里的、hub 重启后离线报「未授权（<机器> 离线）」、连上自动恢复；401 重新取一次；旧 node 报太旧；token 不出现在数据库、日志、响应、助手环境里（grep 验证）；粘贴假 token 报错；设置页深浅色截图 |
 | G2 ✓ | 只读工具 `github_search/read/diff/checks` | golden；对 mock GitHub（合成 JSON）的单元测试；用户的真 token 在 hub 上读一个自己的 PR（只看结果条数和截断是否生效） |
 | G3 ✓ | 通知轮询 + 收件箱（四种情形）+ `?sources=all` + App 的通用行和详情 | 合成通知的单元测试覆盖每种 `reason`、并入 / 另开、`done_by`；304 和 `X-Poll-Interval` 被遵守（测试里的假服务器计数）；旧 App 列表不变；新 App 截图 |
-| G4 ✓ | 知识库（#476）：PR / issue 会话（`connector.Archive`，游标在 `cursors/<id>.json`）；`remotes` 对项目、链接成条目另做（G4b） | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
+| G4 ✓ | 知识库（#476）：PR / issue 会话（`connector.Archive`，游标在 `cursors/<id>.json`）。`remotes` 对项目、链接成条目（G4b）暂不做：2026-11-02 hub 上 40 个在用的项目没有一个填了 `dirs`，对上了也挂不到项目；链接本来就在压缩的上下文里。等项目普遍有 `dirs` 再做 | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
 | G5 ✓ | 写（#480；实测等用户在自己的测试仓库做）：`github_comment`、`github_review` 过闸门；收件箱「发送」= 评论 | 闸门测试（confirm / allow / deny）；用户在自己的测试仓库实测一次评论（卡片截图里只有合成内容的测试仓库） |
 | I0 | 在选定的 Mac 上确认权限和规模（只读行数，已完成一部分） | 报告里有：哪台、权限是否够、消息量 |
 | I1 | node：`connector.list/changes`、typedstream 解码、ROWID 游标、kqueue（#449 的第一步先做了 `connector.list` / `connector.chats` / `connector.older`、typedstream、Mac 通讯录对名字，给 App 的会话列表和消息查看用；`changes`、kqueue 等进知识库时再做） | 合成 `chat.db` + 合成 blob 的单元测试（包括解不出来的）；旧 hub ↔ 新 node、新 hub ↔ 旧 node 都不报错 |
 | I2 | hub：远程连接器适配、知识库归档（只收通讯录里的人）、联系人名字、验证码打码、排除即删除（#449 先做了适配：hub.json `imessage.machine`、状态和权限引导 `GET /api/v1/imessage`、App 读会话和消息的两个只读接口，不存、不给模型；归档等 AI 开关有结论再做） | 在真 Mac 上跑一轮：只打印会话数、行数、被排除数、解码失败数；抽查由用户自己在 App 里看 |
-| I3 | 收件箱 + `sms:` 回复 + 设置里的「信息」行 | 合成数据单元测试；mock hub 截图；真机上点「在信息里回复」草稿已填好 |
+| I3 | 收件箱 + `sms:` 回复 + 设置里的「信息」行（#449 先做了「信息」行和会话 / 消息查看；收件箱等 AI 开关有结论，用 G3 的 `InboxThing.OpenURL` 和通用块的 `open_url` 按钮） | 合成数据单元测试；mock hub 截图；真机上点「在信息里回复」草稿已填好 |
 | I4 | 附件（图片，可选） | 拷贝只在 Attachments 目录下；30 天清理 |
 | I5 | 帮手（LaunchAgent + 自己的授权）+ `imessage_send` 过闸门 | 关掉 ssh 的完全磁盘访问后仍能读；发送卡片截图；拒绝时不发 |
 | X1 | 外部进程连接器（`kind: connector`、MCP 客户端、`/sync/*`） | 有第一个外部连接器时再做；用一个合成的示例插件跑通 |

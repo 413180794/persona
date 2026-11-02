@@ -87,10 +87,7 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 			e.ExtraDirs = append(e.ExtraDirs, d)
 		}
 	}
-	if h.lark != nil {
-		e.Sources = append(e.Sources, &larkSource{c: h.lark})
-		e.Sources = append(e.Sources, &momentsSource{c: h.lark})
-	}
+	e.Sources = h.kbSources()
 	if idx, ok := h.store.(kbIndex); ok {
 		e.Index = func(kind, id, name string, t kb.Tagging, one string, updated time.Time) {
 			ictx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -119,6 +116,28 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 			days = 365
 		}
 		go h.momentsCrawlLoop(ctx, st, *m, days)
+	}
+}
+
+// kbSources are where the knowledge base archives chats from: Feishu's chats and removed posts.
+func (h *Hub) kbSources() []kb.Source {
+	if h.lark == nil {
+		return nil
+	}
+	return []kb.Source{&larkSource{c: h.lark}, &momentsSource{c: h.lark}}
+}
+
+// kbCollectItems records Feishu's documents, meetings and events, and tags new ones.
+func (h *Hub) kbCollectItems(ctx context.Context) {
+	if h.lark == nil {
+		return
+	}
+	e := h.kb.eng
+	if err := e.CollectItems(ctx, &larkItems{c: h.lark, loc: h.userLocation()}); err != nil {
+		h.logf("kb: items: %v", err)
+	}
+	if err := e.TagItems(ctx); err != nil && !ai.IsPaused(err) {
+		h.logf("kb: tag items: %v", err)
 	}
 }
 
@@ -188,12 +207,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 		})
 		if h.lark != nil && time.Since(lastItems) >= kbItemsPoll {
 			lastItems = time.Now()
-			if err := e.CollectItems(ctx, &larkItems{c: h.lark, loc: h.userLocation()}); err != nil {
-				h.logf("kb: items: %v", err)
-			}
-			if err := e.TagItems(ctx); err != nil && !ai.IsPaused(err) {
-				h.logf("kb: tag items: %v", err)
-			}
+			h.kbCollectItems(ctx)
 		}
 		if time.Since(lastPrune) >= 24*time.Hour {
 			lastPrune = time.Now()
