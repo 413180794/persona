@@ -687,20 +687,22 @@ private struct AgentsList: View {
     /// The row follows its own agent (`AgentsFeed.Row`): what only it shows changes it, not the list.
     @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil) -> some View {
         if feed.following {
-            FeedRow(row: feed.row(s), reader: feed.reader) { live in slotRowDrawn(live, context: context, inStateSection: inStateSection, cardLast: cardLast) }
+            FeedRow(row: feed.row(s), reader: feed.reader) { live, time in
+                slotRowDrawn(live, time: time, context: context, inStateSection: inStateSection, cardLast: cardLast)
+            }
         } else {
-            slotRowDrawn(s, context: context, inStateSection: inStateSection, cardLast: cardLast)
+            slotRowDrawn(s, time: nil, context: context, inStateSection: inStateSection, cardLast: cardLast)
         }
     }
 
-    @ViewBuilder private func slotRowDrawn(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool?) -> some View {
+    @ViewBuilder private func slotRowDrawn(_ s: Session, time: AgentTime?, context: Bool, inStateSection: Bool, cardLast: Bool?) -> some View {
         if compact {
-            CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil)
+            CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil, time: time)
                 .equatable()
         } else {
             SlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil,
                     machine: context && grouping != .machine && machineFilter.isEmpty ? machine(s.machineID)?.name : nil,
-                    hideState: inStateSection, surface: cardLast.map { .cardRow(last: $0) } ?? .capsule)
+                    hideState: inStateSection, surface: cardLast.map { .cardRow(last: $0) } ?? .capsule, time: time)
                 .equatable()
         }
     }
@@ -1011,11 +1013,11 @@ private struct AgentsList: View {
 private struct FeedRow<Content: View>: View {
     let row: AgentsFeed.Row
     let reader: ReaderAnchor
-    @ViewBuilder let content: (Session) -> Content
+    @ViewBuilder let content: (Session, AgentTime) -> Content
 
     var body: some View {
         let id = row.session.id
-        content(row.session)
+        content(row.session, row.time)
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { reader.row(id, top: $0) }
             .onDisappear { reader.gone(id) }
     }
@@ -1184,8 +1186,14 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     /// One agent as its row shows it. The row reads this: a change only rows show (the last line, the time, a new
     /// step) draws that row again, not the list.
     @Observable final class Row {
+        /// The agent as the row shows it: its `rev` and `updatedAt` are as of its last other change.
         fileprivate(set) var session: Session
-        init(_ session: Session) { self.session = session }
+        /// When it last moved, for the row's time alone: a working agent's moves on every step.
+        let time: AgentTime
+        init(_ session: Session) {
+            self.session = session
+            time = AgentTime(session.updatedAt)
+        }
     }
 
     func row(_ s: Session) -> Row {
@@ -1213,7 +1221,8 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         reader.willChange() // a row above the one being read may grow or shrink (its last line), not only the structure
         for x in s {
             if let r = rows[x.id] {
-                if r.session != x { r.session = x }
+                if !Session.sameApartFromTicks(r.session, x) { r.session = x }
+                if r.time.updatedAt != x.updatedAt { r.time.updatedAt = x.updatedAt }
             } else {
                 rows[x.id] = Row(x)
             }
@@ -1575,6 +1584,8 @@ nonisolated struct SlotRow: View, Equatable {
     var dot = true
     /// What the BeautifulUI style's row is drawn on.
     var surface: Surface = .none
+    /// When it last moved, followed apart from the row (`AgentsFeed.Row.time`); nil: the session's own.
+    var time: AgentTime? = nil
 
     enum Surface: Equatable {
         /// Bare: a List's row that has its own background and chevron.
@@ -1611,10 +1622,7 @@ nonisolated struct SlotRow: View, Equatable {
                     if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
                 } trailing: {
                     VStack(alignment: .trailing, spacing: Theme.Space.xs) {
-                        TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                            Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        .fixedSize()
+                        AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
                         if session.state == .needsYou && !muted && !hideState { BUIPill(session.state.label, tone: .red) }
                         if muted {
                             Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知")
@@ -1633,10 +1641,7 @@ nonisolated struct SlotRow: View, Equatable {
                                 .lineLimit(2)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 4)
-                            TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                                Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            .fixedSize()
+                            AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
                         }
                         if let last = session.lastText.flatMap({ $0.isEmpty ? nil : Fmt.plain($0) }) {
                             Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
@@ -1689,12 +1694,39 @@ nonisolated struct SlotRow: View, Equatable {
     }
 }
 
+/// When an agent last moved (`updatedAt`), followed apart from the rest of it: a working agent's moves on every step,
+/// and only its row's time shows it (docs/ios-state.md「第 2 步」).
+@Observable final class AgentTime: Equatable {
+    var updatedAt: Date?
+    init(_ updatedAt: Date?) { self.updatedAt = updatedAt }
+    nonisolated static func == (a: AgentTime, b: AgentTime) -> Bool { a === b }
+}
+
+/// A row's 「3 分钟前」, kept current every 30 s: the one view a step of a working agent draws again (`AgentTime`).
+struct AgentTimeText: View {
+    let time: AgentTime?
+    let fallback: Date?
+    let font: Font
+
+    var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("AgentTimeText")
+        #endif
+        let at = time?.updatedAt ?? fallback
+        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+            Text(Fmt.relative(at, now: ctx.date)).font(font).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .fixedSize()
+    }
+}
+
 /// 细列表: one line per agent — state dot, title and where (the tab, or space › tab when the section is not the space),
 /// when on the right (alone there, so the times line up). `CompactList`'s scale.
 nonisolated struct CompactSlotRow: View, Equatable {
     var session: Session
     var muted = false
     var space: String? = nil
+    var time: AgentTime? = nil
 
     @MainActor
     var body: some View {
@@ -1718,10 +1750,7 @@ nonisolated struct CompactSlotRow: View, Equatable {
             }
             Spacer(minLength: Theme.Space.xs)
             if muted { Image(systemName: Theme.Icon.muted).font(CompactList.meta).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
-            TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(CompactList.meta.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
-            }
-            .fixedSize()
+            AgentTimeText(time: time, fallback: session.updatedAt, font: CompactList.meta.monospacedDigit())
         }
         .opacity(muted ? 0.8 : 1)
     }

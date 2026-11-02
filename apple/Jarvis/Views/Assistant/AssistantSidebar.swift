@@ -636,7 +636,10 @@ struct AssistantSidebar: View {
         // Closed in its drawer, the sidebar keeps the list it last showed: `assistantConversations` reads every session
         // on every machine, so each hub push re-ran this body (three times a push) while nobody could see it. It
         // reads the live list again as soon as it starts to come out (`isOut`).
-        let all = feed.conversations(drawer?.isOut ?? true ? model.assistantConversations : nil)
+        let out = drawer?.isOut ?? true
+        let all = feed.conversations(out ? model.assistantConversations : nil)
+        // The same for 已归档's count: it reads every session too (all of them redrew this while it was closed).
+        let archived = feed.archived(out ? model.archivedConversations.count : nil)
         VStack(spacing: 0) {
             topBar
                 .padding(.horizontal, Theme.Space.xl)
@@ -648,7 +651,7 @@ struct AssistantSidebar: View {
                     if query.isEmpty {
                         actions
                         VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
-                        conversations(all)
+                        conversations(all, archived: archived)
                     } else {
                         results(AssistantSidebarSearch.filter(all, query))
                     }
@@ -809,7 +812,7 @@ struct AssistantSidebar: View {
 
     // MARK: Conversations
 
-    @ViewBuilder private func conversations(_ all: [Session]) -> some View {
+    @ViewBuilder private func conversations(_ all: [Session], archived: Int) -> some View {
         let main = model.assistantMain
         let pinned = all.filter(isPinned).sorted { $0.key == main && $1.key != main } // the main one first
         if !pinned.isEmpty {
@@ -852,12 +855,11 @@ struct AssistantSidebar: View {
                 .buttonStyle(.plain)
             }
         }
-        archivedRow
+        archivedRow(archived)
     }
 
     /// 已归档 (N) at the end of the list when there are any: where swiped-away conversations are.
-    @ViewBuilder private var archivedRow: some View {
-        let n = model.archivedConversations.count
+    @ViewBuilder private func archivedRow(_ n: Int) -> some View {
         if n > 0 {
             Button { showArchived = true } label: {
                 Label("已归档（\(n)）", systemImage: Theme.Icon.archive)
@@ -1208,5 +1210,13 @@ final class SidebarFeed {
     func conversations(_ live: [Session]?) -> [Session] {
         if let live { last = live }
         return last
+    }
+
+    private var archivedCount = 0
+
+    /// 已归档's count the same way.
+    func archived(_ live: Int?) -> Int {
+        if let live { archivedCount = live }
+        return archivedCount
     }
 }

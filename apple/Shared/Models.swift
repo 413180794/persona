@@ -474,6 +474,19 @@ nonisolated struct BackgroundTask: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+nonisolated extension Session {
+    /// The same apart from what ticks on every step of a working agent: `rev` (the transcript grew) and `updatedAt`.
+    /// Views that show neither take a push of only those as no change (docs/ios-state.md「第 2 步」).
+    static func sameApartFromTicks(_ a: Session?, _ b: Session?) -> Bool {
+        guard var a, var b else { return a == nil && b == nil }
+        a.rev = nil
+        b.rev = nil
+        a.updatedAt = nil
+        b.updatedAt = nil
+        return a == b
+    }
+}
+
 extension Session {
     /// Space this session belongs to, unique across machines (nil when it is not running in a host like herdr).
     var spaceKey: String? { spaceID.map { "\(machineID)/\($0)" } }

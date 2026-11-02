@@ -89,4 +89,22 @@ import Testing
         d.state = .needsYou
         #expect(AgentsFeed.shape([a], searching: false) != AgentsFeed.shape([d], searching: false))
     }
+
+    /// A working agent's steps tick `rev` and `updatedAt` only: views about the agent that show neither (its chat, its
+    /// row apart from the time) take that as no change; anything they show is one.
+    @Test func ticksAreNoChangeForWhatShowsNeither() {
+        let a = session("a", state: "working", updated: 600)
+        var b = a
+        b.rev = 7
+        b.updatedAt = Date(timeIntervalSince1970: 900)
+        #expect(Session.sameApartFromTicks(a, b))
+        var c = b
+        c.lastText = "a new line"
+        #expect(!Session.sameApartFromTicks(a, c))
+        var d = a
+        d.state = .needsYou
+        #expect(!Session.sameApartFromTicks(a, d))
+        #expect(Session.sameApartFromTicks(nil, nil))
+        #expect(!Session.sameApartFromTicks(a, nil))
+    }
 }

@@ -86,6 +86,19 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 - 对话页和第 0 步一样（新外壳 5、旧布局 4，第 2 步的事）。有一次单独跑量到 `rev` 推送时 Agent 对话重画了 7 个气泡（旧布局 1.4 个），
   完整矩阵重跑是 0，没再出现；对话页不读 `AgentsFeed`，第 2 步给气泡数加上限再看。
 
+第 2 步之后（同一测试，量之前先等页面不再重画，见下「第 2 步」；两种布局各跑 2 次）：
+
+| 页面 | 布局 | `rev` 一次 | `last` 一次 | 重算的视图 |
+| --- | --- | --- | --- | --- |
+| Agents 列表 | 两种 | 1–1.6 | 2–2.6 | `rev`：只有那一行的时间 `AgentTimeText`；`last`：那一行 `SlotRow` 和它的时间；跨整分钟那次列表重排一次（0.6） |
+| Agent 对话 | 两种 | 0 | 4 | `last`：`ChatView`、`ChromeHeader`、`SessionModeBar`、`Composer`（这个会话的最后一句变了，`SessionCell` 发布） |
+| Jarvis 对话 | 两种 | 0 | 0 | |
+
+- 「7 个气泡」是测试量早了：每页第一个量的是 `rev`，App 刚启动、对话还在加载历史和排版，气泡的 body 算在了第一次推送头上。
+  现在 `RenderBudgetTests` 先等计数 1 秒不变再量，两种布局各两次都是 0。
+- `AssistantSidebar` 不再出现：收起时连「已归档」的计数也不读了（它也遍历全部会话）。
+- 对话页的 `last` 还是 4：最后一句是会话的内容，`SessionCell` 照样发布；那 4 个视图里没有一个显示最后一句，第 3 步把它们读的东西拆细。
+
 ## 根因
 
 | 类 | 现在 | 后果 |
@@ -102,8 +115,8 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 | 步 | 做什么 | 验收（数字） |
 | --- | --- | --- |
 | 0（#243，已合） | 屏幕探针 + 真实性 / 及时性测试 + 关键更新不扣留 + 落地 0.5 s / 最长 5 s；量出现状 | `ScreenTruthTests` 两种布局 × 两种风格连跑 3 轮全绿；本文「一次推送的代价」有数 |
-| 1（本 PR） | Agents 列表的结构和行分开发布（见下「第 1 步」）：每行跟着自己的 Agent（`AgentsFeed.Row`），列表只在结构变了时重排 | 只改一个会话一个字段的推送：重算的视图数 ≤ 读这个会话的叶子视图 + 1；列表 body 0 次（结构没变时） |
-| 2 | 易变字段拆出去：`rev`、`updated_at`、token、端口放进单独的小对象，只给显示它的叶子视图（相对时间、最后一句）读，照 `WaitingBadge` 的做法 | `rev` / `updated_at` 抖动的推送：除了显示时间的那个 `Text`，0 个视图重算 |
+| 1（#338，已合） | Agents 列表的结构和行分开发布（见下「第 1 步」）：每行跟着自己的 Agent（`AgentsFeed.Row`），列表只在结构变了时重排 | 只改一个会话一个字段的推送：重算的视图数 ≤ 读这个会话的叶子视图 + 1；列表 body 0 次（结构没变时） |
+| 2（本 PR） | 易变字段拆出去：`rev`、`updated_at`、token、端口放进单独的小对象，只给显示它的叶子视图（相对时间、最后一句）读，照 `WaitingBadge` 的做法 | `rev` / `updated_at` 抖动的推送：除了显示时间的那个 `Text`，0 个视图重算 |
 | 3 | 派生数据进模型层：排序、分组、筛选计数、角标在模型里算，结果真变了才发布（`AgentListOrder` 搬进 `AgentsFeed`） | 列表 body 只在顺序 / 分组 / 计数变了时跑；角标只在数字变了时跑 |
 | 4 | 「用户正在操作」做成模型层统一策略：拖动、惯性、菜单开着、键盘在输入时，非关键更新合并、延后；关键的立刻；最长延迟有上限。`AgentsFeed` 的扣留抽成通用的 `Hold`，各页登记自己的状态 | 现有的 `LiveUpdateTests`、`ScrollUnderPushTests`、`ScreenTruthTests` 全绿；页面里不再有各自的扣留代码（源码检查） |
 | 5 | 护栏：性能测试「一次只改一个会话一个字段的推送，最多 N 个视图重算」，超了就失败；源码检查「列表以外的视图不读 `allSessions`」 | 两个检查进 `JarvisTests` / UI 测试 |
@@ -119,6 +132,19 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 - 探针 `probe.agents-list` 从各行读（`AgentsListProbe`），量的是画出来的，不是列表结构。
 
 模型里的 `SessionStore` 等 testflight 车道的会话增量（第 6 步）合了再做：增量合回 `sessionsByMachine` 的入口统一成一个函数，换实现只改那里。
+
+### 第 2 步：`rev`、`updated_at` 只叫醒显示时间的那个视图
+
+一个干活的 Agent 每走一步，hub 推一次整份会话列表，其中这个会话只有 `rev`（transcript 变长了）和 `updated_at` 变了：
+- `Session.sameApartFromTicks`：除了这两个字段都一样，就算没变；
+- 模型的 `SessionCell`（`AppModel.session(_:)`，对话页、顶栏、各种菜单读它）只在别的字段变了时发布。所以它里面的 `rev`、`updatedAt`
+  可能比列表里的旧：要这两个值的地方（`AgentSync` 按 `rev` 拉 transcript、排序、侧栏的时间）一律读整份列表（`allSessions`），不读格子；
+- Agents 列表的 `AgentsFeed.Row.session` 同理；行的时间单独放在 `AgentsFeed.Row.time`（`AgentTime`），只有 `AgentTimeText` 读它，
+  每 30 s 自己刷新「n 分钟前」；
+- 新外壳的侧栏收起时不读「已归档」的计数（和会话列表一样，拉出来才读）。
+
+真实性：时间每次推送都更新（`AgentTime` 跟着 `show()` 落地，扣留时和列表一起扣着）；状态、最后一句、提问照常走格子和行，
+`ScreenTruthTests` 3 轮 × 2 种布局 × 2 种风格全绿。
 
 每步都要过本文「真实性与及时性」的测试，用户看得到的交互不变。和 live 车道的 `ShellState`（当前页唯一来源）对齐：第 4 步的「用户正在操作」读它的页状态，不自己再存一份。
 

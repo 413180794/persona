@@ -53,9 +53,23 @@ final class RenderBudgetTests: XCTestCase {
         return d["bodies"] as? [String: Int] ?? [:]
     }
 
+    /// The counts once nothing runs for a second: a chat still loading its history or laying out its rows right after
+    /// launch is not a push's cost (it showed up as bubbles in whichever push was measured first).
+    private func settled() -> [String: Int] {
+        var last = bodies()
+        for _ in 0..<20 {
+            sleep(1)
+            let now = bodies()
+            if now == last { return now }
+            last = now
+        }
+        XCTFail("the page never stopped drawing")
+        return last
+    }
+
     /// Bodies per push, by view, for `pushes` pushes of `what`, a second apart.
     private func measure(_ page: String, _ what: String) {
-        let before = bodies()
+        let before = settled()
         for _ in 0..<Self.pushes {
             mock("bump?what=" + what)
             sleep(1)

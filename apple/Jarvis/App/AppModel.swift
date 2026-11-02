@@ -42,7 +42,7 @@ final class AppModel {
                 }
             }
             sessionIndex = index
-            for (key, cell) in sessionCells where cell.value != index[key] { cell.value = index[key] }
+            for (key, cell) in sessionCells where !Session.sameApartFromTicks(cell.value, index[key]) { cell.value = index[key] }
             saveSnapshot()
         }
     }
@@ -261,6 +261,7 @@ final class AppModel {
 
     // MARK: Derived
 
+    /// One session, for views about it: its `rev` and `updatedAt` may be older than the list's (`SessionCell`).
     func session(_ key: SessionKey) -> Session? {
         if let cell = sessionCells[key] { return cell.value }
         let cell = SessionCell(sessionIndex[key])
@@ -1455,7 +1456,9 @@ enum Haptics {
     static func attention() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
 }
 
-/// One session's latest state, observed on its own (`AppModel.session(_:)`).
+/// One session's latest state, observed on its own (`AppModel.session(_:)`). Its `rev` and `updatedAt` are as of its
+/// last other change: a push of only those (most of a working agent's) draws nothing that reads the cell
+/// (`Session.sameApartFromTicks`); what shows the time reads the lists (`allSessions`, `AgentsFeed.Row.time`).
 @Observable final class SessionCell {
     var value: Session?
     init(_ value: Session?) { self.value = value }
