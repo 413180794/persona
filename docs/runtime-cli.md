@@ -32,7 +32,8 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 | `state` | | `tab`、`openChat`、`assistant`、`visibleSession`、`settingsOpen`、`settingsDepth`、`style`、`color`、`appearance`、`connection`、`paired` |
 | `settle` | `timeout`（8 s）、`every`（150 ms）、`stable`（3 次）、`pixels`（0） | `settled`、`frames`、`changed` |
 | `online` | `timeout`（15 s） | `nudged`（是否主动重连过）；超时报错并带当前状态 |
-| `navigate` | `scene`（home / assistant / agents / chat / inbox / settings / machines），`session`（`<机器>/<会话>`，chat 和 assistant 要），`machine`（machines 下打开某台），`defaults`（只在建页面时读的开关，如 `{"openWork": true}`），`keep`（不换新的界面树） | 落到和对应启动开关一样的页面（`-newAssistant`、`-openAssistant`、`-tab dev`、`-openSession`、`-tab mail`、`-tab settings`、`-openMachines`），默认在一棵新的界面树上（窗口的根换成新的 `RootView`，Agents 页推进去的对话、抽屉、滚动位置都从头来）。回答同 `state` |
+| `reset` | `coldChats`（内存里不留对话，和启动后一样从磁盘缓存再到 hub 重新加载）、`dropChatCache`（磁盘缓存也清掉，= `-openChatsFresh YES`） | 新的界面树，路由不动，和刚启动一样。回答同 `state` |
+| `navigate` | `scene`（home / assistant / agents / chat / inbox / settings / machines），`session`（`<机器>/<会话>`，chat 和 assistant 要），`machine`（machines 下打开某台），`defaults`（只在建页面时读的开关，如 `{"openWork": true}`），`keep`（不换新的界面树），`coldChats`、`dropChatCache`（同 `reset`） | 落到和对应启动开关一样的页面（`-newAssistant`、`-openAssistant`、`-tab dev`、`-openSession`、`-tab mail`、`-tab settings`、`-openMachines`），默认在一棵新的界面树上（窗口的根换成新的 `RootView`，Agents 页推进去的对话、抽屉、滚动位置都从头来）。回答同 `state` |
 | `set-style` | `style`（glass / clay / island / lark / beautiful）、`color`（主题色） | 同 `state`；整棵树按新风格重建 |
 | `set-appearance` | `value`（light / dark / system） | 只改 App 的窗口；`jarvisctl.py appearance` 默认改整个模拟器（`simctl ui appearance`，状态栏一起变，截图脚本用这个） |
 | `defaults` | `set`（只在这次运行有效，写进注册域，不落盘）、`remove`（删掉存下的键，`-openAgentsFresh` 做的事）、`get` | `values` |
@@ -56,7 +57,20 @@ scripts/jarvisctl.py idle && scripts/jarvisctl.py screenshot out.png
 `idle`（只在 `jarvisctl.py` 里）：等 mock hub（`scripts/mock_hub.py` 在 `/mock/hits` 数每个 GET）0.8 s 没有新请求。
 页面还在等数据时（机器页的指标）画面是静止的，`settle` 会以为好了，先 `idle` 再 `settle`。
 
-和冷启动逐像素一致的 `reset`（连对话也冷加载）在下一个 PR。
+## 一次启动截完所有场景（身份对比）
+
+`scripts/jarvisctl-scenes/id-cli.py <输出目录> glass:light beautiful:dark …`：启动一次，然后每个“风格 × 深浅 × 场景”
+（`scenes-id1.txt` 的 7 个）`online` → `set-style` → `navigate --cold-chats` → `idle` → `settle` → `simctl io screenshot`。
+`id-old.sh` 是原来的拍法（每张重启 + 启动开关 + 固定 sleep）。`id-judge.py --old <目录>… --cli <目录>…` 判断两种拍法
+截的是否一样：规则同 `tools/shotdiff.py`（任一通道差超过 2 算不同，噪声向外扩 6 px），噪声取每种方法自己几遍之间的所有两两差
+（一直在动的地方：工作中的圆点、机器曲线，拍的遍数越多覆盖的相位越全）。要 numpy 和 Pillow。
+
+要和冷启动一样，有三件事（都踩过）：
+- **新的界面树**：在原树上导航，Agents 页推进去的对话、收件箱顶栏的玻璃底都留着。
+- **对话冷加载**（`coldChats`）：已在内存里的对话打开时内容一次到位，冷启动是先出页面、内容后到，两者滚动不一样。
+  只清内存不清磁盘：启动本来就读磁盘缓存。
+- **按页面自己的计时等**：对话的顶栏闲置 3 s 自己折叠（`ChatView.chromeIdleSeconds`），老方法 7 s 后截一定是折叠的；
+  `settle` 1–2 s 就停了，所以对话场景至少等 3.6 s（`id-cli.py` 的 `AT_LEAST`）。
 
 ## 协议和安全
 

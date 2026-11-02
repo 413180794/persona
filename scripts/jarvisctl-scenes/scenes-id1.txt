@@ -1,0 +1,7 @@
+home 7 -newAssistant YES
+agents 7 -tab dev -dev.openChat ""
+chat 7 -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openWork YES
+inbox 7 -tab mail
+settings 7 -tab settings
+machines 7 -tab settings -openMachines YES
+error 9 -openAssistant server/b2e4d6f8-0000-4000-8000-000000000001

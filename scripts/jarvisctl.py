@@ -7,8 +7,9 @@
   jarvisctl.py online [--timeout s]                                           wait for the hub's live connection
   jarvisctl.py idle [--timeout s]                                             no request to the mock hub for 0.8 s
   jarvisctl.py screenshot <out.png> [--no-settle]                             settle, then `simctl io screenshot`
+  jarvisctl.py reset [--cold-chats] [--drop-chat-cache]                      a new view tree, as after a launch
   jarvisctl.py navigate home|assistant|agents|chat|inbox|settings|machines [--session m/s] [--machine id]
-               [--flag key=value …] [--keep]                                   the page a launch switch opens
+               [--flag key=value …] [--keep] [--cold-chats]                    the page a launch switch opens
   jarvisctl.py set-style <glass|clay|island|lark|beautiful> [--color c]       界面风格 / 主题色
   jarvisctl.py appearance light|dark [--in-app]                               the simulator's (default) or the app's
   jarvisctl.py defaults [--set k=v …] [--remove k …] [--get k …]              this run's switches, saved keys
@@ -176,6 +177,8 @@ def main(argv):
     p.add_argument("--get", action="append", default=[])
     p.add_argument("--keep", action="store_true")
     p.add_argument("--in-app", action="store_true")
+    p.add_argument("--cold-chats", action="store_true")
+    p.add_argument("--drop-chat-cache", action="store_true")
     p.add_argument("cmd")
     p.add_argument("rest", nargs="*")
     a = p.parse_args(argv)
@@ -194,12 +197,14 @@ def main(argv):
         if not a.rest:
             p.error("screenshot needs a path")
         r = {"path": c.screenshot(a.rest[0], not a.no_settle)}
+    elif a.cmd == "reset":
+        r = c.call("reset", coldChats=a.cold_chats or None, dropChatCache=a.drop_chat_cache or None)
     elif a.cmd == "navigate":
         if not a.rest:
             p.error("navigate needs a scene")
         flags = {k: value(v) for k, v in (x.partition("=")[::2] for x in a.flag)}
         r = c.call("navigate", scene=a.rest[0], session=a.session, machine=a.machine, defaults=flags or None,
-                   keep=a.keep or None)
+                   keep=a.keep or None, coldChats=a.cold_chats or None, dropChatCache=a.drop_chat_cache or None)
     elif a.cmd == "set-style":
         r = c.call("set-style", style=a.rest[0] if a.rest else None, color=a.color)
     elif a.cmd == "appearance":

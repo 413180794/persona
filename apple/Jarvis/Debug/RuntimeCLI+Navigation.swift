@@ -2,9 +2,10 @@
 import SwiftUI
 import UIKit
 
-/// Moving the app (docs/runtime-cli.md「导航和风格」): `navigate`, `set-style`, `set-appearance`, `defaults`.
+/// Moving the app (docs/runtime-cli.md「导航和风格」): `reset`, `navigate`, `set-style`, `set-appearance`, `defaults`.
 extension RuntimeCLI {
     static let navigationCommands: [String: Command] = [
+        "reset": { a in await reset(a) },
         "navigate": { a in await navigate(a) },
         "set-style": { a in setStyle(a) },
         "set-appearance": { a in setAppearance(a) },
@@ -38,9 +39,27 @@ extension RuntimeCLI {
         try? await Task.sleep(for: .milliseconds(50))
     }
 
+    /// A new view tree as after a launch (`rebuild`), the route left as it is. `coldChats`: no chat kept in memory
+    /// either, so each loads again (from the disk cache, then the hub) when its page comes up, as after a launch;
+    /// `dropChatCache`: none on disk either (`-openChatsFresh YES`).
+    private static func reset(_ a: Args) async -> Reply {
+        await rebuild { cool(a) }
+        return state()
+    }
+
+    /// Runs between the old tree and the new one (`rebuild`'s route): only then are the old pages' chats no longer
+    /// shown or subscribed, which AppModel's eviction would keep.
+    private static func cool(_ a: Args) {
+        if a["dropChatCache"] as? Bool == true { ChatCache.removeAll() }
+        guard a["coldChats"] as? Bool == true else { return }
+        let m = AppModel.shared
+        // Pushed out through AppModel's own eviction: it keeps the last `keptChats` idle chats.
+        for i in 0..<(AppModel.keptChats + 2) { _ = m.chat(SessionKey(machineID: "runtime-cli", sessionID: "evict-\(i)")) }
+    }
+
     /// The page a launch switch opens (JarvisApp, SettingsView.openDebugPage), on a new view tree (`rebuild`), or in
     /// place with `keep`. `defaults`: launch-only switches the pages read when they are built (`openWork`…),
-    /// registered for this run, never saved.
+    /// registered for this run, never saved. `coldChats`, `dropChatCache`: as `reset`.
     private static func navigate(_ a: Args) async -> Reply {
         let m = AppModel.shared
         let scene = a["scene"] as? String ?? ""
@@ -66,6 +85,7 @@ extension RuntimeCLI {
         }
         if let flags = a["defaults"] as? Args { UserDefaults.standard.register(defaults: flags) }
         let route = {
+            cool(a)
             m.selectedTab = tab
             if case .some(let k) = assistant { m.assistantCurrent = k }
             m.openChat = chat
