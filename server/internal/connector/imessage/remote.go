@@ -5,14 +5,15 @@ import (
 	"errors"
 	"regexp"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
 )
 
 // The hub's side: the connector reads through the node of one Mac (Reader runs there), so it is a thin adapter over
-// that node's connector.* RPCs. It has no tools: the messages are not given to the assistant or any model. The app
-// reads them for the user (hub/imessage.go), and nothing is stored on the hub.
+// that node's connector.* RPCs. The app reads every conversation for the user (hub/imessage.go); with 交给 Jarvis on
+// (jarvis.go) the real ones also go to the knowledge base, the inbox and the assistant.
 
 // Config is hub.json's "imessage".
 type Config struct {
@@ -43,12 +44,23 @@ type Remote struct {
 	guide  []string
 	via    string
 	poke   chan struct{}
+
+	// Zone is the user's time zone, for the times the models read (the hub's userLocation).
+	Zone func() *time.Location
+
+	ai       atomic.Bool // 交给 Jarvis (jarvis.go)
+	inboxMu  sync.Mutex
+	things   []connector.InboxThing
+	contexts map[string]string // conversation + newest message → its last messages as text
+	newest   time.Time         // the newest conversation Watch saw
 }
 
 // NewRemote is the connector reading the Messages of cfg.Machine (named machine) through call.
 func NewRemote(cfg Config, machine string, call Caller) *Remote {
-	return &Remote{cfg: cfg, machine: machine, call: call, poke: make(chan struct{}, 1),
+	c := &Remote{cfg: cfg, machine: machine, call: call, poke: make(chan struct{}, 1), contexts: map[string]string{},
 		status: connector.Status{State: connector.StateError, Error: "正在问 " + machine + "…"}}
+	c.ai.Store(true)
+	return c
 }
 
 func (c *Remote) ID() string   { return ID }
@@ -70,13 +82,15 @@ type Detail struct {
 	Error   string   `json:"error,omitempty"`
 	Guide   []string `json:"guide,omitempty"`
 	Via     string   `json:"via,omitempty"` // ssh | launchd
+	// AI: 交给 Jarvis is on (the knowledge base, the inbox, the assistant's tools).
+	AI bool `json:"ai"`
 }
 
 func (c *Remote) Detail(ctx context.Context) Detail {
 	st := c.Status(ctx)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return Detail{Machine: c.machine, Status: st.State, Error: st.Error, Guide: c.guide, Via: c.via}
+	return Detail{Machine: c.machine, Status: st.State, Error: st.Error, Guide: c.guide, Via: c.via, AI: c.AI()}
 }
 
 // MachineOnline: the Mac just connected, so look again.

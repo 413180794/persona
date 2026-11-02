@@ -390,6 +390,12 @@ func goldenItems() map[string]*InboxItem {
 			Context: "GitHub PR example-org/example-repo#12：Add the example\n状态：open · 作者 alice · 等这些人 review：me", UpdatedAt: at,
 			Connector: &InboxConnector{Thread: "example-org/example-repo#12", Label: "请你 review", URL: "https://github.com/example-org/example-repo/pull/12",
 				ReplyTo: "评论到 example-org/example-repo#12（仓库可见的人都能看到）", CanReply: true, RuleTier: TierAction}, Agent: agent},
+		"imessage_dm": {ID: "imessage:1", Source: "imessage", Kind: "dm", Title: "张三", UpdatedAt: at,
+			Context: "我（10-30 07:58）：在吗\n张三（10-30 07:59）：示例：周五下午三点见，地方你定",
+			Connector: &InboxConnector{Thread: "imessage-0123456789ab", OpenURL: "sms:+15550100", ReplyTo: "在「信息」里回复（Jarvis 不替你发）",
+				RuleTier: TierAction}, Agent: agent},
+		"imessage_group": {ID: "imessage:2", Source: "imessage", Kind: "group", Title: "周末徒步", UpdatedAt: at,
+			Context: "李四（10-30 08:01）：示例：明天十点出发", Connector: &InboxConnector{Thread: "imessage-ba9876543210", Label: "群聊", RuleTier: TierFYI}},
 	}
 }
 

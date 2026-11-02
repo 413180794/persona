@@ -1,0 +1,423 @@
+package imessage
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/chyroc/jarvis/server/internal/kb"
+	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/chyroc/jarvis/server/internal/proto"
+)
+
+// 交给 Jarvis (#528; the user, 2026-11-03: iMessage's texts may go to AI like Feishu's): while the switch is on, the
+// Mac's real conversations (KeepContacts) go into the knowledge base (connector.Archive, by ROWID), unread ones into
+// the inbox (connector.Inbox, triaged like Feishu's), and the assistant reads them (ReadTools). Codes are masked in
+// all of it. Off: none of it — nothing is read for Jarvis, the tools are gone; what the hub kept stays until the
+// user deletes it (hub/imessage.go).
+
+// SetAI turns 交给 Jarvis on or off (the hub keeps the choice).
+func (c *Remote) SetAI(on bool) {
+	c.ai.Store(on)
+	if !on {
+		c.inboxMu.Lock()
+		c.things, c.contexts = nil, map[string]string{}
+		c.inboxMu.Unlock()
+	}
+}
+
+// AI says whether the messages go to Jarvis.
+func (c *Remote) AI() bool { return c.ai.Load() }
+
+// zone is the user's time zone (the hub sets Zone); never the machine's, which for a hub is UTC.
+func (c *Remote) zone() *time.Location {
+	if c.Zone != nil {
+		if z := c.Zone(); z != nil {
+			return z
+		}
+	}
+	return time.UTC
+}
+
+// changesPage is how many messages one connector.changes call asks for.
+const changesPage = 300
+
+// Changes is connector.Archive: the new messages of the conversations that go to Jarvis, as knowledge-base chats
+// "imessage-<12 hex>" (the conversation's id) with people "imessage-<hash of their number>".
+func (c *Remote) Changes(ctx context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {
+	if !c.AI() {
+		return nil, cursor, false, nil
+	}
+	var page ChangesPage
+	if err := c.read(ctx, "connector.changes", map[string]any{"id": ID, "cursor": cursor, "limit": changesPage,
+		"days": 30, "keep": KeepContacts}, &page); err != nil {
+		return nil, cursor, false, err
+	}
+	out := make([]connector.ChatBatch, 0, len(page.Batches))
+	for _, b := range page.Batches {
+		out = append(out, kbBatch(b))
+	}
+	return out, page.Next, page.More, nil
+}
+
+func kbBatch(b Batch) connector.ChatBatch {
+	kind := "dm"
+	if b.Chat.Group {
+		kind = "group"
+	}
+	out := connector.ChatBatch{Chat: kb.SourceChat{ID: strings.TrimPrefix(b.Chat.ID, ID+"-"), Name: b.Chat.Name, Kind: kind,
+		UpdatedAt: b.Chat.Last}}
+	for _, m := range b.Messages {
+		sm := kb.SourceMessage{ID: m.ID, Position: m.ID, Mine: m.FromMe, Type: "TEXT", Text: lineText(m), At: m.At}
+		if m.Kind == "event" {
+			sm.Type = "SYSTEM"
+		}
+		if m.Sender != nil {
+			sm.SenderID, sm.SenderName = PersonKey(m.Sender.Handle), m.Sender.shown()
+		}
+		out.Messages = append(out.Messages, sm)
+	}
+	return out
+}
+
+// PersonKey is a person's id in the knowledge base: a hash of their number or address, never the number itself.
+func PersonKey(handle string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(handle))))
+	return hex.EncodeToString(sum[:6])
+}
+
+// lineText is a message as one line of text: what it says, what it answers, what it carries.
+func lineText(m Message) string {
+	switch {
+	case m.Kind == "event":
+		return m.Text
+	case m.Unsent:
+		return "（撤回了一条消息）"
+	case m.Undecoded:
+		return "[无法显示的消息]"
+	}
+	text := m.Text
+	for _, a := range m.Attachments {
+		text = strings.TrimSpace(text + " " + a.describe())
+	}
+	if m.ReplyTo != "" {
+		text = "回复「" + m.ReplyTo + "」：" + text
+	}
+	return text
+}
+
+func (a Attachment) describe() string {
+	switch a.Kind {
+	case "image":
+		return "[图片]"
+	case "video":
+		return "[视频]"
+	case "audio":
+		return "[语音]"
+	}
+	if a.Name != "" {
+		return "[文件 " + a.Name + "]"
+	}
+	return "[文件]"
+}
+
+// Collect is connector.Inbox: the conversations Watch last saw (unread ones open or add to an item; one read
+// elsewhere or answered closes it).
+func (c *Remote) Collect(context.Context) ([]connector.InboxThing, error) {
+	if !c.AI() {
+		return nil, nil
+	}
+	c.inboxMu.Lock()
+	defer c.inboxMu.Unlock()
+	return slices.Clone(c.things), nil
+}
+
+var errNoReply = errors.New("在「信息」里回复：Jarvis 不替你发信息")
+
+// Reply: Jarvis does not send messages (the item's 在信息里回复 opens Messages with the number).
+func (c *Remote) Reply(context.Context, string, string) error { return errNoReply }
+
+// How often Watch looks at the Mac for new messages, how many conversations it looks at, and how many of a
+// conversation's last messages go to the inbox (triage, the AI 分身).
+var (
+	watchPoll    = 2 * time.Minute
+	watchChats   = 30
+	contextLines = 15
+)
+
+// Watch is connector.Events: every couple of minutes it lists the newest conversations, keeps the inbox's things
+// from them and kicks the knowledge base when anything came in. A Mac that does not answer is waited for (the
+// status says why), so the hub does not restart and log this every few minutes.
+func (c *Remote) Watch(ctx context.Context, changed func(scope string)) error {
+	for {
+		if c.AI() && c.Status(ctx).State == connector.StateOK {
+			c.look(ctx, changed)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(watchPoll):
+		}
+	}
+}
+
+func (c *Remote) look(ctx context.Context, changed func(scope string)) {
+	var page ChatsPage
+	if err := c.read(ctx, "connector.chats", map[string]any{"id": ID, "limit": watchChats, "keep": KeepContacts}, &page); err != nil {
+		return
+	}
+	var newest time.Time
+	var things []connector.InboxThing
+	for _, chat := range page.Chats {
+		if chat.Last.After(newest) {
+			newest = chat.Last
+		}
+		if time.Since(chat.Last) > 7*24*time.Hour {
+			continue
+		}
+		things = append(things, c.thing(ctx, chat))
+	}
+	c.inboxMu.Lock()
+	moved := !newest.Equal(c.newest)
+	same := slices.EqualFunc(things, c.things, func(a, b connector.InboxThing) bool {
+		return a.Thread == b.Thread && a.Last == b.Last && a.Read == b.Read && a.Done == b.Done
+	})
+	c.newest = newest
+	if c.AI() {
+		c.things = things
+	}
+	c.inboxMu.Unlock()
+	if moved {
+		changed(connector.ScopeChats)
+	}
+	if !same {
+		changed(connector.ScopeInbox)
+	}
+}
+
+// thing is a conversation as the inbox sees it; an unread one carries its last messages for triage.
+func (c *Remote) thing(ctx context.Context, chat Chat) connector.InboxThing {
+	last := strconv.FormatInt(chat.Last.UnixNano(), 10)
+	t := connector.InboxThing{Thread: chat.ID, Kind: "dm", Title: chat.Name, Sender: chat.Name, Preview: MaskCodes(chat.Preview),
+		At: chat.Last, Last: last, ReplyTo: "在「信息」里回复（Jarvis 不替你发）", Tier: "action"}
+	if chat.Group {
+		t.Kind, t.Label, t.Tier = "group", "群聊", "fyi"
+		if s, _, ok := strings.Cut(t.Preview, "："); ok {
+			t.Sender = s
+		}
+	}
+	if !chat.Group && len(chat.Members) == 1 {
+		t.OpenURL = "sms:" + chat.Members[0].Handle
+	}
+	switch {
+	case chat.FromMe:
+		t.Done = connector.DoneReplied
+	case chat.Unread == 0:
+		t.Read = true
+	default:
+		t.Context = c.context(ctx, chat.ID, last)
+	}
+	return t
+}
+
+// context is a conversation's last messages as text, read once for each newest message.
+func (c *Remote) context(ctx context.Context, chat, last string) string {
+	key := chat + "\n" + last
+	c.inboxMu.Lock()
+	text, ok := c.contexts[key]
+	c.inboxMu.Unlock()
+	if ok {
+		return text
+	}
+	var page MessagesPage
+	if err := c.read(ctx, "connector.older", map[string]any{"id": ID, "chat": chat, "limit": contextLines, "keep": KeepContacts}, &page); err != nil {
+		return ""
+	}
+	text = c.transcript(page.Messages)
+	c.inboxMu.Lock()
+	if len(c.contexts) > 200 {
+		c.contexts = map[string]string{}
+	}
+	c.contexts[key] = text
+	c.inboxMu.Unlock()
+	return text
+}
+
+// transcript is messages as the models read them: 张三（10-30 08:00）：…, codes masked.
+func (c *Remote) transcript(msgs []Message) string {
+	var b strings.Builder
+	for _, m := range msgs {
+		who := "我"
+		if !m.FromMe {
+			who = "有人"
+			if m.Sender != nil {
+				who = m.Sender.shown()
+			}
+		}
+		if m.Kind == "event" {
+			who = "（群）"
+		}
+		fmt.Fprintf(&b, "%s（%s）：%s\n", who, m.At.In(c.zone()).Format("01-02 15:04"), MaskCodes(lineText(m)))
+	}
+	return strings.TrimSpace(b.String())
+}
+
+var readTools = []string{"imessage_chats", "imessage_read", "imessage_search"}
+
+// Tools is connector.ReadTools: none while the switch is off.
+func (c *Remote) Tools() []proto.Tool {
+	if !c.AI() {
+		return nil
+	}
+	out := make([]proto.Tool, 0, len(readTools))
+	for _, n := range readTools {
+		t := prompts.Tool(n)
+		out = append(out, proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema})
+	}
+	return out
+}
+
+// Call runs one of the read tools on the Mac's messages (the conversations that go to Jarvis, codes masked).
+func (c *Remote) Call(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !c.AI() {
+		return "", errors.New("「信息」没有交给 Jarvis（设置 › 连接器 › 信息）")
+	}
+	var a struct {
+		Chat   string `json:"chat"`
+		Before string `json:"before"`
+		Query  string `json:"query"`
+		Limit  int    `json:"limit"`
+		Days   int    `json:"days"`
+	}
+	if len(args) > 0 {
+		if err := json.Unmarshal(args, &a); err != nil {
+			return "", fmt.Errorf("arguments: %w", err)
+		}
+	}
+	switch name {
+	case "imessage_chats":
+		var page ChatsPage
+		if err := c.read(ctx, "connector.chats", map[string]any{"id": ID, "limit": clamp(a.Limit, 30, 100), "before": a.Before,
+			"keep": KeepContacts}, &page); err != nil {
+			return "", errors.New(c.explain(err))
+		}
+		return c.chatsText(page), nil
+	case "imessage_read":
+		chat := strings.TrimSpace(a.Chat)
+		if !ValidChat(chat) {
+			return "", errors.New("chat must be a conversation id from imessage_chats or imessage_search (imessage-<12 hex>)")
+		}
+		var page MessagesPage
+		if err := c.read(ctx, "connector.older", map[string]any{"id": ID, "chat": chat, "limit": clamp(a.Limit, 40, 200),
+			"before": a.Before, "keep": KeepContacts}, &page); err != nil {
+			return "", errors.New(c.explain(err))
+		}
+		return c.messagesText(page), nil
+	case "imessage_search":
+		if strings.TrimSpace(a.Query) == "" {
+			return "", errors.New("query is empty")
+		}
+		var res struct {
+			Hits []Hit `json:"hits"`
+		}
+		if err := c.read(ctx, "connector.search", map[string]any{"id": ID, "query": a.Query, "limit": clamp(a.Limit, 20, 50),
+			"days": clamp(a.Days, 365, 3650), "keep": KeepContacts}, &res); err != nil {
+			return "", errors.New(c.explain(err))
+		}
+		return c.hitsText(a.Query, res.Hits), nil
+	}
+	return "", fmt.Errorf("unknown tool %s", name)
+}
+
+func clamp(n, def, most int) int {
+	if n <= 0 {
+		return def
+	}
+	return min(n, most)
+}
+
+func (c *Remote) when(t time.Time) string { return t.In(c.zone()).Format("2006-01-02 15:04") }
+
+func (c *Remote) chatsText(page ChatsPage) string {
+	if len(page.Chats) == 0 {
+		return "没有会话。"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s 上「信息」的会话，最新的在前：\n", c.machine)
+	for _, ch := range page.Chats {
+		kind := "私聊"
+		if ch.Group {
+			var who []string
+			for _, p := range ch.Members {
+				who = append(who, p.shown())
+			}
+			kind = "群聊（" + strings.Join(who, "、") + "）"
+		} else if len(ch.Members) == 1 && ch.Members[0].Name != "" {
+			kind = "私聊 " + ch.Members[0].Handle
+		}
+		fmt.Fprintf(&b, "- %s [%s] · %s · %s", ch.Name, ch.ID, kind, c.when(ch.Last))
+		if ch.Unread > 0 {
+			fmt.Fprintf(&b, " · 未读 %d", ch.Unread)
+		}
+		if ch.Preview != "" {
+			prefix := ""
+			if ch.FromMe {
+				prefix = "我："
+			}
+			fmt.Fprintf(&b, "：%s%s", prefix, MaskCodes(ch.Preview))
+		}
+		b.WriteString("\n")
+	}
+	if page.More {
+		fmt.Fprintf(&b, "（还有更早的：before=%s）\n", page.Before)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func (c *Remote) messagesText(page MessagesPage) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "会话「%s」[%s]，旧的在前：\n", page.Chat.Name, page.Chat.ID)
+	if page.More {
+		fmt.Fprintf(&b, "（还有更早的：before=%s）\n", page.Before)
+	}
+	for _, m := range page.Messages {
+		who := "我"
+		switch {
+		case m.Kind == "event":
+			who = "（群）"
+		case !m.FromMe && m.Sender != nil:
+			who = m.Sender.shown()
+		case !m.FromMe:
+			who = "对方"
+		}
+		fmt.Fprintf(&b, "[%s] %s：%s\n", c.when(m.At), who, MaskCodes(lineText(m)))
+	}
+	if len(page.Messages) == 0 {
+		b.WriteString("（没有消息）\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func (c *Remote) hitsText(query string, hits []Hit) string {
+	if len(hits) == 0 {
+		return "没有找到含「" + query + "」的消息。"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "含「%s」的消息，最新的在前：\n", query)
+	for _, h := range hits {
+		who := "我"
+		if !h.Message.FromMe && h.Message.Sender != nil {
+			who = h.Message.Sender.shown()
+		}
+		fmt.Fprintf(&b, "- [%s] 「%s」[%s] %s：%s\n", c.when(h.Message.At), h.Chat.Name, h.Chat.ID, who, MaskCodes(lineText(h.Message)))
+	}
+	return strings.TrimSpace(b.String())
+}

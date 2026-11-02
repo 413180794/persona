@@ -195,7 +195,9 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   状态看 设置 › 连接器 › GitHub。
 - `imessage`（可选）：信息连接器。`{"machine": "<机器 id>"}`：App 里能看哪台 Mac 的「信息」（经那台 Mac 的 node 只读 `~/Library/Messages/chat.db`，
   要给它完全磁盘访问权限，App 的 设置 › 连接器 › 信息 会说怎么开）。只写一台（同一个 Apple ID 的几台 Mac 消息是同一份）。
-  消息只给你在 App 里自己看：不存到 hub、不进知识库和收件箱、不交给任何模型，日志里也没有号码和正文（`docs/plan-connectors.md`「五」）。
+  App 里能看所有会话。开关「交给 Jarvis」（设置 › 连接器 › 信息，默认开，存在 hub）开着时，真正的会话（成员里有通讯录里的人、或者你说过话的）
+  按 ROWID 增量进知识库和收件箱（和飞书一样分拣），助手有 `imessage_chats` / `imessage_read` / `imessage_search`；验证码打码。关掉就都停，
+  hub 上已经存下的另外可以删。日志里没有号码和正文（`docs/plan-connectors.md`「五」）。
 - `assistant.owner`：「对话」tab 的助手称呼你什么；`assistant.notes`：附在助手说明（`~/.jarvis/assistant/CLAUDE.md`）最后的
   Markdown，写只有你这套环境才有的东西：代码在哪、用哪些 skills / CLI 访问工作数据、哪些目录不能碰。
 - 模型设置的日常入口是 **设置 › 模型供应商 / 模型配置**（`docs/model-config.md`）：前者管理连接和凭据，后者管理对话、分类、翻译、知识处理、`/agent`、定时任务等用途。旧 `ai`、`inbox.*_ai`、`kb.ai`、各启动器默认作为兼容基线保留；统一用途覆盖存 Postgres，不写回 `hub.json`。没有覆盖时保持原模型，不会因为打开设置而迁移成其他供应商。

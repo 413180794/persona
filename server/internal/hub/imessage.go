@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,16 +14,35 @@ import (
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
-// 信息 (connector/imessage, docs/plan-connectors.md「五」): the app reads one Mac's Messages, through that Mac's node,
-// for the user's own eyes. The hub only passes pages along: it stores nothing, gives nothing to a model, and logs no
-// number or message (only the connector, the Mac and the kind of failure).
+// 信息 (connector/imessage, docs/plan-connectors.md「五」): the app reads one Mac's Messages through that Mac's node;
+// the hub passes the pages along and keeps none of them. With 交给 Jarvis on (the user's switch, on by default,
+// imessageAIKey) the real conversations also go to the knowledge base, the inbox and the assistant's tools
+// (connector/imessage/jarvis.go). No number or message is logged (only the connector, the Mac and the kind of failure).
+
+// imessageAIKey is the settings key of 交给 Jarvis: absent means on.
+const imessageAIKey = "imessage.ai"
 
 func (h *Hub) addIMessage(cfg imessage.Config) error {
 	name := cfg.Machine
 	if m := h.byID[cfg.Machine]; m != nil {
 		name = m.cfg.Name
 	}
-	return h.addConnector(imessage.NewRemote(cfg, name, h.imessageCall(cfg.Machine)))
+	c := imessage.NewRemote(cfg, name, h.imessageCall(cfg.Machine))
+	c.Zone = h.userLocation
+	c.SetAI(h.imessageAI(context.Background()))
+	return h.addConnector(c)
+}
+
+// imessageAI is the user's 交给 Jarvis choice: on unless they turned it off.
+func (h *Hub) imessageAI(ctx context.Context) bool {
+	on := true
+	if h.store != nil {
+		var v bool
+		if ok, err := h.store.Setting(ctx, imessageAIKey, &v); err == nil && ok {
+			on = v
+		}
+	}
+	return on
 }
 
 var errNotAMachine = errors.New("imessage.machine is not a machine in hub.json")
@@ -67,6 +87,37 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 			return
 		}
 		c.Check(r.Context())
+		writeJSON(w, c.Detail(r.Context()))
+	})
+	// PUT /api/v1/imessage/settings {"ai": bool}: 交给 Jarvis on or off. Off stops what goes to Jarvis at once; what
+	// the hub already keeps stays until DELETE /api/v1/imessage/data.
+	api.HandleFunc("PUT /api/v1/imessage/settings", func(w http.ResponseWriter, r *http.Request) {
+		c := h.imessage()
+		if c == nil {
+			writeCode(w, http.StatusNotFound, "not_configured", "没有设置「信息」", nil)
+			return
+		}
+		var in struct {
+			AI *bool `json:"ai"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.AI == nil {
+			writeErr(w, http.StatusBadRequest, errors.New("ai: true or false"))
+			return
+		}
+		if h.store == nil {
+			writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
+			return
+		}
+		if err := h.store.PutSetting(r.Context(), imessageAIKey, *in.AI); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		c.SetAI(*in.AI)
+		h.logf("imessage: 交给 Jarvis %v", *in.AI)
+		if *in.AI {
+			h.kbKick()
+			h.kickInbox()
+		}
 		writeJSON(w, c.Detail(r.Context()))
 	})
 	api.HandleFunc("GET /api/v1/imessage/chats", func(w http.ResponseWriter, r *http.Request) {

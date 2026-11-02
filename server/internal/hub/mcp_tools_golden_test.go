@@ -7,6 +7,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/github"
+	"github.com/chyroc/jarvis/server/internal/connector/imessage"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
 )
@@ -34,6 +35,19 @@ func TestGoldenMCPTools(t *testing.T) {
 	}
 	golden(t, "mcp_tools.assistant_with_github", show(h.mcpTools(true)))
 	golden(t, "mcp_tools.agent", show(h.mcpTools(false)))
+	// With iMessage handed to Jarvis (the switch is on by default): its read tools too.
+	h.connectors = connector.NewRegistry(nil)
+	if err := h.addConnector(readableIMessage{imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil)}); err != nil {
+		t.Fatal(err)
+	}
+	golden(t, "mcp_tools.assistant_with_imessage", show(h.mcpTools(true)))
+	golden(t, "mcp_tools.agent", show(h.mcpTools(false)))
+}
+
+type readableIMessage struct{ *imessage.Remote }
+
+func (readableIMessage) Status(context.Context) connector.Status {
+	return connector.Status{State: connector.StateOK}
 }
 
 type signedInGitHub struct{ *github.Connector }

@@ -69,8 +69,10 @@ func TestRemoteStatus(t *testing.T) {
 	if st := c.Status(ctx); st.State != connector.StateNotConfigured {
 		t.Errorf("not a Mac: %+v", st)
 	}
-	if _, ok := any(c).(connector.ReadTools); ok {
-		t.Error("the messages must not reach the assistant: no tools")
+	// The assistant reads the messages only while they are handed to Jarvis.
+	c.SetAI(false)
+	if c.Tools() != nil {
+		t.Error("tools while 交给 Jarvis is off")
 	}
 }
 

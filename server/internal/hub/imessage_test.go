@@ -6,13 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/imessage"
+	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
@@ -111,9 +116,17 @@ func TestIMessageThroughTheHub(t *testing.T) {
 		list[0].(map[string]any)["account"] != "示例 Mac" || list[0].(map[string]any)["name"] != "信息" {
 		t.Fatalf("connectors: %v", out)
 	}
-	if caps := list[0].(map[string]any)["capabilities"].([]any); fmt.Sprint(caps) != "[status]" {
-		t.Errorf("capabilities %v: no tools, the messages do not reach the assistant", caps)
+	if caps := list[0].(map[string]any)["capabilities"].([]any); fmt.Sprint(caps) != "[status tools events inbox archive]" {
+		t.Errorf("capabilities %v", caps)
 	}
+	if n := len(h.connectors.Tools(context.Background())); n != 3 {
+		t.Errorf("%d tools with 交给 Jarvis on", n)
+	}
+	h.imessage().SetAI(false)
+	if n := len(h.connectors.Tools(context.Background())); n != 0 {
+		t.Errorf("%d tools with 交给 Jarvis off", n)
+	}
+	h.imessage().SetAI(true)
 
 	code, out = call(t, mux, "GET", "/api/v1/imessage/chats?limit=20&before=9.imessage-0123456789ab", h.cfg.Token, "")
 	chats, _ := out["chats"].([]any)
@@ -165,5 +178,93 @@ func TestIMessageOldOrOfflineMac(t *testing.T) {
 	m.mu.Unlock()
 	if code, out := call(t, mux, "GET", "/api/v1/imessage/chats", h.cfg.Token, ""); code != 503 || !strings.Contains(out["error"].(string), "不在线") {
 		t.Fatalf("offline: %d %v", code, out)
+	}
+}
+
+// 交给 Jarvis: on unless the user turned it off; the choice is kept and applied at once.
+func TestIMessageAISwitch(t *testing.T) {
+	h, _ := modelTestHub(t)
+	h.connectors = connector.NewRegistry(nil)
+	mux := h.routes()
+	imessageNode(t, h, func(method string, _ json.RawMessage) (any, error) {
+		return json.RawMessage(`{"connectors":[{"id":"imessage","status":"ok"}]}`), nil
+	})
+	if err := h.addIMessage(imessage.Config{Machine: "mac"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, out := call(t, mux, "GET", "/api/v1/imessage", h.cfg.Token, ""); out["ai"] != true {
+		t.Fatalf("default: %v", out)
+	}
+	if code, out := call(t, mux, "PUT", "/api/v1/imessage/settings", h.cfg.Token, `{"ai":false}`); code != 200 || out["ai"] != false {
+		t.Fatalf("off: %d %v", code, out)
+	}
+	if h.imessage().AI() || len(h.connectors.Tools(context.Background())) != 0 {
+		t.Error("still on")
+	}
+	if code, _ := call(t, mux, "PUT", "/api/v1/imessage/settings", h.cfg.Token, `{}`); code != 400 {
+		t.Errorf("no ai: %d", code)
+	}
+	// A restart reads the choice back.
+	h.connectors = connector.NewRegistry(nil)
+	if err := h.addIMessage(imessage.Config{Machine: "mac"}); err != nil {
+		t.Fatal(err)
+	}
+	if h.imessage().AI() {
+		t.Error("on again after a restart")
+	}
+	if code, out := call(t, mux, "PUT", "/api/v1/imessage/settings", h.cfg.Token, `{"ai":true}`); code != 200 || out["ai"] != true || !h.imessage().AI() {
+		t.Errorf("on: %d %v", code, out)
+	}
+}
+
+// The Mac's new messages go into the knowledge base as chats imessage-<the conversation's hash>, people as
+// imessage-<hash of their number>: no number in a file name; the cursor moves on.
+func TestIMessageArchive(t *testing.T) {
+	h := newTestHub(t)
+	h.connectors = connector.NewRegistry(nil)
+	imessageNode(t, h, func(method string, _ json.RawMessage) (any, error) {
+		switch method {
+		case "connector.list":
+			return json.RawMessage(`{"connectors":[{"id":"imessage","status":"ok"}]}`), nil
+		case "connector.changes":
+			return json.RawMessage(`{"next":"9","batches":[{"chat":{"id":"imessage-0123456789ab","name":"张三","members":[{"handle":"+15550100","name":"张三"}],
+"services":["SMS"],"last":"` + time.Now().UTC().Format(time.RFC3339) + `"},"messages":[
+{"id":"8","at":"` + time.Now().Add(-time.Minute).UTC().Format(time.RFC3339) + `","kind":"message","sender":{"handle":"+15550100","name":"张三"},"text":"示例：周五见"},
+{"id":"9","at":"` + time.Now().UTC().Format(time.RFC3339) + `","kind":"message","from_me":true,"text":"好"}]}]}`), nil
+		}
+		return nil, fmt.Errorf("unexpected %s", method)
+	})
+	if err := h.addIMessage(imessage.Config{Machine: "mac"}); err != nil {
+		t.Fatal(err)
+	}
+	c := h.imessage()
+	c.Check(context.Background())
+	st, err := kb.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &kb.Engine{Store: st}
+	n, err := archiveConnector(context.Background(), e, imessage.ID, c)
+	if err != nil || n != 2 {
+		t.Fatalf("%d lines, %v", n, err)
+	}
+	chat, ok := st.Chat("imessage-0123456789ab")
+	if !ok || chat.Name != "张三" || chat.Kind != "dm" || chat.Pending != 2 {
+		t.Fatalf("chat %+v", chat)
+	}
+	people := st.People()
+	if len(people) != 1 || people[0].ID != "imessage-"+imessage.PersonKey("+15550100") || people[0].Name != "张三" {
+		t.Fatalf("people %+v", people)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(st.Dir, "cursors", "imessage.json")); !strings.Contains(string(raw), `"9"`) {
+		t.Errorf("cursor %s", raw)
+	}
+	var names []string
+	_ = filepath.WalkDir(st.Dir, func(p string, _ fs.DirEntry, _ error) error {
+		names = append(names, p)
+		return nil
+	})
+	if strings.Contains(strings.Join(names, "\n"), "5550100") {
+		t.Errorf("a number in a file name:\n%s", strings.Join(names, "\n"))
 	}
 }
