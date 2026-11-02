@@ -292,5 +292,5 @@ func mailReply(accountID string, orig *mail.MailMessage, text string) mail.SendR
 	}
 	body := text + "\n\n" + orig.Date + "，" + from + " 写道：\n" + strings.Join(quoted, "\n")
 	return mail.SendRequest{AccountID: accountID, To: []mail.Address{orig.From}, Subject: subject, Text: body,
-		InReplyTo: orig.MessageID, References: strings.Join(refs, " ")}
+		InReplyTo: orig.MessageID, References: mail.MessageIDs(strings.Join(refs, " "))}
 }

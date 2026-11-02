@@ -42,7 +42,7 @@ func RenderMessage(req SendRequest, from Address) ([]byte, error) {
 	if req.InReplyTo != "" {
 		h.SetMsgIDList("In-Reply-To", []string{trimMsgID(req.InReplyTo)})
 	}
-	if refs := parseReferences(req.References, req.InReplyTo); len(refs) > 0 {
+	if refs := parseReferences(string(req.References), req.InReplyTo); len(refs) > 0 {
 		h.SetMsgIDList("References", refs)
 	}
 

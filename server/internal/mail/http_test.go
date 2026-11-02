@@ -1,12 +1,15 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	gomail "github.com/emersion/go-message/mail"
 )
 
 // doJSON issues a request against the handler and decodes the JSON reply.
@@ -220,4 +223,55 @@ func itoa(n uint32) string {
 		n /= 10
 	}
 	return string(buf[i:])
+}
+
+// TestHTTPSendReferences posts replies the way each client builds them: the iOS app sends references as an array
+// of message ids, the web app and the assistant as one space-separated string.
+func TestHTTPSendReferences(t *testing.T) {
+	for _, tc := range []struct {
+		name, refs string
+		want       []string
+	}{
+		{"array", `["<a@example.com>", "<b@example.com>"]`, []string{"a@example.com", "b@example.com"}},
+		{"array of bare ids", `["a@example.com", "b@example.com"]`, []string{"a@example.com", "b@example.com"}},
+		{"string", `"<a@example.com> <b@example.com>"`, []string{"a@example.com", "b@example.com"}},
+		{"empty array", `[]`, []string{"b@example.com"}},
+		{"null", `null`, []string{"b@example.com"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newTestIMAP(t)
+			fs := newFakeSMTPServer(t)
+			s := newServiceWithAccount(t, srv)
+			useFakeSMTP(t, s, srv, fs)
+
+			body := `{"account_id":"acc_test","to":[{"email":"li@example.com"}],"cc":[],"subject":"Re: hi","text":"ok",` +
+				`"in_reply_to":"<b@example.com>","references":` + tc.refs + `}`
+			code, resp := doJSON(t, s, http.MethodPost, "/api/v1/mail/send", body)
+			if code != http.StatusOK {
+				t.Fatalf("send status = %d, body %v", code, resp)
+			}
+
+			fs.mu.Lock()
+			raw := fs.data
+			fs.mu.Unlock()
+			r, err := gomail.CreateReader(bytes.NewReader(raw))
+			if err != nil {
+				t.Fatalf("read delivered message: %v\n%s", err, raw)
+			}
+			defer r.Close()
+			refs, err := r.Header.MsgIDList("References")
+			if err != nil || strings.Join(refs, " ") != strings.Join(tc.want, " ") {
+				t.Fatalf("References = %v, %v; want %v", refs, err, tc.want)
+			}
+		})
+	}
+
+	// Anything else is still a bad request.
+	s := newServiceWithAccount(t, newTestIMAP(t))
+	for _, refs := range []string{`42`, `[1, 2]`, `{"a":1}`} {
+		body := `{"account_id":"acc_test","to":[{"email":"li@example.com"}],"subject":"x","text":"y","references":` + refs + `}`
+		if code, _ := doJSON(t, s, http.MethodPost, "/api/v1/mail/send", body); code != http.StatusBadRequest {
+			t.Errorf("references %s: status = %d, want 400", refs, code)
+		}
+	}
 }

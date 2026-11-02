@@ -31,7 +31,8 @@ extension APIClient {
         var subject: String
         var text: String
         var inReplyTo: String?
-        var references: [String]?
+        /// Space-separated Message-IDs, the way the hub's `SendRequest` takes them.
+        var references: String?
         enum CodingKeys: String, CodingKey {
             case to, cc, subject, text, references
             case accountID = "account_id", inReplyTo = "in_reply_to"
@@ -400,7 +401,8 @@ struct ComposeView: View {
         defer { sending = false }
         do {
             try await api.sendMail(.init(accountID: draft.accountID, to: addresses(draft.to), cc: addresses(draft.cc),
-                                         subject: draft.subject, text: draft.body, inReplyTo: draft.inReplyTo, references: draft.references))
+                                         subject: draft.subject, text: draft.body, inReplyTo: draft.inReplyTo,
+                                         references: draft.references?.joined(separator: " ")))
             Haptics.success()
             model.toast = Toast("已发送", style: .success)
             dismiss()

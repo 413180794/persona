@@ -4,6 +4,12 @@
 // The JSON shapes mirror docs/protocol.md ("邮件 API"); keep them in sync.
 package mail
 
+import (
+	"encoding/json"
+	"errors"
+	"strings"
+)
+
 // Address is a mail address with an optional display name.
 type Address struct {
 	Name  string `json:"name"`
@@ -146,13 +152,31 @@ type SetFlagsRequest struct {
 
 // SendRequest is a message to send.
 type SendRequest struct {
-	AccountID  string    `json:"account_id"`
-	To         []Address `json:"to"`
-	Cc         []Address `json:"cc,omitempty"`
-	Bcc        []Address `json:"bcc,omitempty"`
-	Subject    string    `json:"subject"`
-	Text       string    `json:"text"`
-	HTML       string    `json:"html,omitempty"`
-	InReplyTo  string    `json:"in_reply_to,omitempty"`
-	References string    `json:"references,omitempty"`
+	AccountID  string     `json:"account_id"`
+	To         []Address  `json:"to"`
+	Cc         []Address  `json:"cc,omitempty"`
+	Bcc        []Address  `json:"bcc,omitempty"`
+	Subject    string     `json:"subject"`
+	Text       string     `json:"text"`
+	HTML       string     `json:"html,omitempty"`
+	InReplyTo  string     `json:"in_reply_to,omitempty"`
+	References MessageIDs `json:"references,omitempty"`
+}
+
+// MessageIDs is a space-separated list of Message-IDs, such as a References header. Clients send it either as
+// one string (the web app, the assistant) or as an array of ids (the iOS app); an array is joined with spaces.
+type MessageIDs string
+
+func (m *MessageIDs) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*m = MessageIDs(s)
+		return nil
+	}
+	var ids []string
+	if err := json.Unmarshal(b, &ids); err != nil {
+		return errors.New("references must be a string or an array of strings")
+	}
+	*m = MessageIDs(strings.Join(ids, " "))
+	return nil
 }
