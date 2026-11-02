@@ -19,6 +19,7 @@ struct LarkThreadView: View {
     @State private var loadingOlder = false
     @State private var error: String?
     @State private var fileRequest: (url: String, name: String)?
+    /// What is typed in the box, kept as the thread's draft (LarkDrafts) until it is sent.
     @State private var text = ""
     @FocusState private var boxFocused: Bool
     /// Replies on their way (LarkOutgoing, `thread` true), under the loaded ones until their copies arrive.
@@ -60,6 +61,9 @@ struct LarkThreadView: View {
                 LarkComposer(placeholder: "回复话题", text: $text, focused: $boxFocused, sendID: "lark.thread.send", send: send)
             }
             .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
+            .onAppear { if text.isEmpty { text = LarkDrafts.shared[.thread(root.id)].text } }
+            .onChange(of: text) { _, now in LarkDrafts.shared.set(LarkDraft(text: now), for: .thread(root.id)) }
+            .onDisappear { LarkDrafts.shared.flush() }
             .environment(\.larkReply, LarkReplyHandler(inThread: true) { _ in boxFocused = true })
             .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
             .environment(\.larkOpenProfile, { person = $0 })

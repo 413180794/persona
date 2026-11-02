@@ -34,7 +34,8 @@ struct LarkChatView: View {
     @State private var loadingOlder = false
     @State private var loadingNewer = false
     @State private var error: String?
-    @State private var text = ""
+    /// What is typed in the box; with `replyTo`, kept as the chat's draft (LarkDrafts) until it is sent.
+    @State private var text: String
     /// The message 回复 picked: quoted over the box and by what is sent next.
     @State private var replyTo: LarkReplyTo?
     @FocusState private var composerFocused: Bool
@@ -52,6 +53,14 @@ struct LarkChatView: View {
     @State private var person: LarkPersonRef?
     @State private var debugPick: LarkMessage?
     @State private var debugPost: String?
+
+    init(conversation: LarkConversation) {
+        self.conversation = conversation
+        // The draft left here last time, quote and all.
+        let draft = LarkDrafts.shared[.chat(conversation.id)]
+        _text = State(initialValue: draft.text)
+        _replyTo = State(initialValue: draft.replyTo)
+    }
 
     private var isTopic: Bool { conversation.isTopic == true }
     /// Opens at a message (first unread / a flagged message) rather than at the bottom.
@@ -107,6 +116,10 @@ struct LarkChatView: View {
             if let id = debugPost { LarkMomentsPostView(postID: id) }
         }
         .safeAreaInset(edge: .bottom) { composer }
+        .onChange(of: LarkDraft(text: text, replyTo: replyTo)) { _, draft in
+            LarkDrafts.shared.set(draft, for: .chat(conversation.id))
+        }
+        .onDisappear { LarkDrafts.shared.flush() }
         .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
         .themedPage()
         .navigationTitle(conversation.name)
