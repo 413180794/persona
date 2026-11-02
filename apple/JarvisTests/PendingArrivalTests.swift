@@ -54,6 +54,20 @@ struct PendingArrivalTests {
         #expect(s.pending.count == 1)
     }
 
+    // A new Jarvis conversation's first message (#511), shown as sent once the start request returns: the node answers
+    // a session claude has not written to yet with no items, which must leave the bubble (the page read 还没有消息);
+    // the first line, written a moment later but stamped before the bubble was made, takes it.
+    @Test func aNewConversationsFirstMessageStaysUntilWritten() {
+        let s = store()
+        var p = PendingMessage(text: "帮我看看今天的安排", images: [])
+        p.state = .sent
+        s.pending = [p]
+        s.merge([], backlog: true, hasMore: false)
+        #expect(s.pending.count == 1)
+        s.merge([user(1, "帮我看看今天的安排", at: Date().addingTimeInterval(-2))])
+        #expect(s.pending.isEmpty)
+    }
+
     // Outboxes saved before createdAt was kept still load.
     @Test func oldOutboxesDecode() throws {
         let old = #"{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","text":"好","images":[],"state":{"waiting":{}}}"#

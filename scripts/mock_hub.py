@@ -3494,13 +3494,32 @@ class H(BaseHTTPRequestHandler):
             if body.get("mentions"): m["parts"] = lark_mention_parts(m["text"], body["mentions"])
             return self.send_json({"ok": True, "message_id": m["id"]})
         if p == "/api/v1/assistant/conversations" and self.command == "POST":
+            # As the hub does (#511, hub/assistant.go startAssistant, node/assistant.go assistantSend): the session the
+            # hub returns, the machine's list pushed, and no transcript yet: the node answers a starting session's items
+            # with none, and its watch sends the first line once claude has written it (MOCK_ASSISTANT_TRANSCRIPT_SECONDS
+            # later, default 1). MOCK_ASSISTANT_START_SECONDS: the request itself takes that long (the hub prepares the
+            # directory, the model config and the live snapshot first); meanwhile the app shows 正在准备.
+            time.sleep(float(os.environ.get("MOCK_ASSISTANT_START_SECONDS", "0")))
             body = json.loads(self.last_body or b"{}")
-            SENT.append({"text": body.get("prompt", ""), "images": body.get("images")})
-            session = dict(ASSISTANT[0])
-            session["session_id"] = str(uuid.uuid4())
-            session["title"] = "新对话"
-            session["main"] = bool(body.get("main"))
+            prompt = body.get("prompt", "")
+            SENT.append({"text": prompt, "images": body.get("images")})
+            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            sid = str(uuid.uuid4())
+            session = assistant_sess(sid, "", 0, "")  # what the hub returns: no title, model or transcript rev yet
+            for k in ("model", "rev", "seen_at", "agent"): session.pop(k)  # the hub sends agent only when not Claude Code
+            session.update(status="working", state="working", updated_at=now, launcher=body.get("launcher") or "claude",
+                           permission_mode=body.get("permission_mode") or "", effort=body.get("effort") or "")
             ASSISTANT.append(session)
+            push_machine("server")
+
+            def written():
+                first = [it("user", "text", 0, text=prompt, ts=now)]
+                ITEMS[sid] = first
+                for send, subscribed in list(LIVE):
+                    if sid in subscribed:
+                        try: send({"type": "items", "machine_id": "server", "session_id": sid, "items": first, **span(first, 0)})
+                        except Exception: pass
+            threading.Timer(float(os.environ.get("MOCK_ASSISTANT_TRANSCRIPT_SECONDS", "1")), written).start()
             return self.send_json({"session": session})
         if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
             body = json.loads(self.last_body or b"{}")

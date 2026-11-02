@@ -227,6 +227,9 @@ struct AssistantView: View {
                                                     main: model.assistantMain == nil) // the first one becomes the main conversation
             if model.assistantMain == nil { await model.refreshAssistant() }
             Haptics.success()
+            model.adopt(s)
+            // The message stays on screen until claude has written it (matched by its text: not one of images only).
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.showSent(s.key, text: text, images: images) }
             withAnimation(Theme.Motion.standard) {
                 model.assistantCurrent = s.key
                 pending = nil

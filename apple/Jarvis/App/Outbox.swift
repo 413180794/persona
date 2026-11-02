@@ -3,6 +3,7 @@ import Foundation
 // Messages written while the hub is out of reach (docs/ios.md「连接状态」): they stay in their chat as pending bubbles
 // with a clock (连上后自动发送) and go out by themselves once the app is connected and caught up, in the order they
 // were written. Kept on disk too, so quitting the app (or iOS ending it in the background) does not lose them.
+// Sent bubbles live here too: they stay until the transcript's copy arrives (`settleSend`, `showSent`).
 
 enum SendOutcome: Equatable {
     case sent, failed, waiting
@@ -20,6 +21,14 @@ extension AppModel {
     /// Messages still going out (written offline, or being sent).
     var outboxCount: Int {
         chats.values.reduce(0) { n, s in n + s.pending.count { $0.state == .waiting || $0.state == .sending } }
+    }
+
+    /// A message the hub already has, on screen as sent until its transcript copy arrives: a new Jarvis conversation's
+    /// first one went with the start request, and the node shows no transcript until claude has written it (#511).
+    func showSent(_ key: SessionKey, text: String, images: [ImagePayload]) {
+        let msg = PendingMessage(text: text, images: images)
+        chat(key).pending.append(msg)
+        settleSend(key, msg.id, .sent)
     }
 
     /// Records how a send went; a sent bubble stays until its transcript copy arrives (a minute at most).
