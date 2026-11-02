@@ -33,7 +33,10 @@ struct LarkChatView: View {
     @State private var pager = LarkPager()
     @State private var loadingOlder = false
     @State private var loadingNewer = false
-    @State private var error: String?
+    /// The first load is on its way (the page shows a spinner when nothing was cached).
+    @State private var loading = true
+    /// Why the last load failed: the page's placeholder when there is nothing to show, a line on top otherwise.
+    @State private var problem: LarkLoadProblem?
     /// What is typed in the box; with `replyTo`, kept as the chat's draft (LarkDrafts) until it is sent.
     @State private var text: String
     /// The message 回复 picked: quoted over the box and by what is sent next.
@@ -75,7 +78,7 @@ struct LarkChatView: View {
                 if pager.hasOlder {
                     LarkLoadOlderButton(title: "加载更早的消息", loading: loadingOlder) { Task { await loadOlder() } }
                 }
-                if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, Theme.Space.s) }
+                if hasContent, let line = problem?.inline { Label(line, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, Theme.Space.s) }
                 ForEach(Array(pager.messages.enumerated()), id: \.element.id) { i, m in
                     let prev = i > 0 ? pager.messages[i - 1] : nil
                     VStack(alignment: .leading, spacing: 0) {
@@ -107,6 +110,7 @@ struct LarkChatView: View {
         .onScrollGeometryChange(for: Bool.self) { g in
             g.contentOffset.y + g.containerSize.height >= g.contentSize.height - g.contentInsets.bottom - 80
         } action: { _, v in atBottom = v }
+        .overlay { placeholder }
         .overlay(alignment: .bottomTrailing) { jumpToLatestButton }
         .overlay(alignment: .topTrailing) { mentionButton }
         .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
@@ -243,7 +247,31 @@ struct LarkChatView: View {
         if !r.hasNewer.map({ $0 }).isTrue { StateCache.save("lark-chat-\(conversation.id)", Array(r.messages.suffix(80))) }
     }
 
+    /// Messages, or mine on their way: a problem is then one line on top rather than the page's placeholder.
+    private var hasContent: Bool { !pager.messages.isEmpty || !outgoing.isEmpty }
+
+    /// Loading, empty, or what went wrong, while there are no messages to show (BeautifulUI draws its own).
+    @ViewBuilder private var placeholder: some View {
+        switch LarkChatPlaceholder.of(hasContent: hasContent, loading: loading, problem: problem) {
+        case .loading:
+            LoadableContent(state: Loadable<Void>.loading, retry: nil) { _ in EmptyView() }
+        case .empty:
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: "还没有消息", message: "发出的第一条消息会出现在这里。")
+        case .failed(let p):
+            EmptyStateView(symbol: p.symbol, title: p.title, message: p.message, action: (title: "重试", run: retry))
+        case nil:
+            EmptyView()
+        }
+    }
+
+    private func retry() {
+        problem = nil
+        loading = true
+        Task { await load() }
+    }
+
     private func load() async {
+        defer { loading = false }
         guard let api = model.api else { return }
         do {
             if let focus = conversation.focus {
@@ -266,7 +294,7 @@ struct LarkChatView: View {
                 apply(try await api.larkMessages(conversation.id, topic: isTopic))
                 pager.readCursor = pager.messages.last?.position
             }
-            error = nil
+            problem = nil
             #if DEBUG
             // Simulator automation: `-larkFocus <messageId>` scrolls to that message (screenshots of one kind of card).
             if let focus = UserDefaults.standard.string(forKey: "larkFocus") { await scroll(to: focus) }
@@ -277,7 +305,7 @@ struct LarkChatView: View {
             if let post = UserDefaults.standard.string(forKey: "larkMoments") { debugPost = post }
             #endif
         } catch {
-            self.error = error.shown
+            problem = LarkLoadProblem.of(error)
         }
     }
 
@@ -292,6 +320,7 @@ struct LarkChatView: View {
     /// Polls the tail while it is loaded: new messages append, cards that changed (alert status…) update in place.
     private func refreshLatest() async {
         guard !pager.hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) else { return }
+        problem = nil // it answers again (lark-connector signed in again, the network is back)
         let fresh = pager.refresh(with: r)
         guard !fresh.isEmpty else { return }
         let follow = atBottom

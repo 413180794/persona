@@ -234,6 +234,9 @@ Registry ──┬─ ChatSources / Streams / Backfiller / Attachments → kb.En
 - 代价：hub 要多一个 MCP 客户端（`tools/list`、`tools/call` 两个方法，几百行）；外部连接器的工具描述不在本仓库的 `prompts/mcp/`，不受 golden 管，
   这是「提示词一律放 `prompts/`」的一个明文例外（只适用于不在本仓库的代码）。
 - 现在没有第一个外部连接器，**这一形态先只定协议，等真有一个再实现**（见「需要用户拍板」）。
+- **第一方的子进程形态（已做，#533）**：本仓库里、只是依赖太大不想编进 jarvisd 的连接器（Telegram 的 gotd），用 `connector/serve`（程序那头）
+  和 `connector/proc`（hub 这头）：hub 起程序，stdin / stdout 上跑 hub↔node 那套 JSON-lines RPC，Connector 的各项能力一一对应成方法，
+  程序启动时报 manifest（id、name、能力，`Capabler`），加密存储反过来由程序调 hub 的 `secrets.*`（hub 绑定到这个连接器）。和上面给第三方的 HTTP + MCP 不冲突。
 
 ### 第三种：node 当本地连接器（Mac 上的数据）
 
