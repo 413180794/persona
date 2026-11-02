@@ -36,6 +36,17 @@
   顺序反了 FIN 发不出去，hub 要等两次 ping 超时（约 2 分钟）才发现，重新部署因此超时（2026-11-01 联调踩到）。
   经 tailcat 收文件时 `gzip.Reader` 要 `Multistream(false)`，否则读完一段还会等下一段，连接上的回复永远发不出去。
 
+## Cloudflare Tunnel 推送中继（2026-11-02）
+
+- `systemctl --user` 的 `active` 只表示 cloudflared 进程在运行，不表示已经连上边缘或加载远程 ingress。验收要看 Tunnel 连接、
+  官网健康检查和源站拒绝直连三个结果；正常出口下 URLSession 的 User-Agent 也要能访问。
+- UDP/7844 被网络限制时，用 `--protocol http2`，同时确认 TCP/7844 能出站；某一个边缘地址超时，cloudflared 会重试其他地址，
+  不要因为第一条超时日志就判定整个 Tunnel 失败。Token 用 `--token-file`，不放 `--token` 参数，日志级别不设 debug。
+- Python urllib 的默认 User-Agent 可能先被 Cloudflare 边缘以 1010 拒绝，甚至没到 Worker；检查失败时要区分边缘拒绝、
+  Worker 的 503 和源站的 `not through the proxy` 403。不要为了一个测试客户端关闭站点安全规则；用实际 App User-Agent 复测。
+- 上线代理只更新 `proxy_secret` 和 Worker 同名密钥，保留 grant 的 `relay.secret`；源站健康检查需要带代理头，官网检查不需要。
+  新建凭据和现有 grant 密钥的备份集中存密码管理器，临时文件权限 0600，值不写进参数或日志。
+
 ## 统一模型配置
 
 - 「供应商」不等于可运行启动器：直接 API 接入不能下发 node 或进入新建会话列表；用途选择按 API / 启动器 / 插件能力过滤。只改 UI 或 `ANTHROPIC_MODEL` 无法保证模型生效，shell 启动器可能清空环境变量，必须验证参数转发并给真实执行器传模型。

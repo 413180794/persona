@@ -130,8 +130,9 @@ python3 scripts/asc_testflight.py external   # 建群组、按配置开 / 关公
   审核通过后才能加入。
 - 审核状态看构建的 `buildBetaDetail.externalBuildState`：`READY_FOR_BETA_SUBMISSION`（挂了没交）→ `WAITING_FOR_BETA_REVIEW` →
   `IN_BETA_REVIEW` → `BETA_APPROVED` / `BETA_REJECTED`。
-- 朋友的 hub 是他们自己部署的：没有开发者账号的 APNs key，就收不到推送和实时活动（App 打开时照常实时）；Gmail 登录要他们
-  自己建 Google OAuth 客户端、写进自己 hub 的 `hub.json`（`docs/mail.md`）。
+- 朋友的 hub 是他们自己部署的：没有开发者账号的 APNs key 时，新版 App 通过发布方的推送中继收通知和实时活动
+  （需发版配置填 `app.push_relay`、设备登记成功，见 `docs/push-relay.md`）；未配置中继的旧版只能在 App 打开时实时接收。
+  Gmail 登录要他们自己建 Google OAuth 客户端、写进自己 hub 的 `hub.json`（`docs/mail.md`）。
 - 测试信息要有隐私政策地址（`app_store.external.privacy_url`），中英文说明在 `asc_testflight.py` 的 `BETA_INFO`。
 - App 没有 hub 就只有配对页：审核备注（`review.notes`）要讲清楚这是配合自建 hub 的 App，否则容易被问「怎么用」。
 
@@ -157,8 +158,10 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
   回归：`python3 -B -m unittest discover -s scripts -p 'test_compressed_publish.py'`。
 - 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
   报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION` 和 `dl/SHA256SUMS` 确认上去的就是刚编的。
+- 推送中继已部署（2026-11-02）：常驻 `jarvisd relay` + Cloudflare Tunnel + 官网 Worker 转发，公网健康、源站保护、登记和鉴权已验证。
+  发版配置需填 `app.push_relay`，安装带通知扩展的新 TestFlight 才会登记；真实设备上的通知解密仍要单独验收，见 `docs/push-relay.md`。
 - 还没有的（别人能装但还不顺手，见 `docs/config.md`）：一键 `jarvisd setup`（现在 hub 要自己准备 Postgres、`hub.json`）、
-  推送中继的部署（代码已有：`jarvisd relay` + App 的通知服务扩展，见 `docs/push-relay.md`「部署」；要发布方跑起来、构建配置填上 `app.push_relay` 再发一版）、macOS 二进制的 Developer ID 公证（用浏览器下载会被 Gatekeeper 拦，`curl` 不会）。
+  macOS 二进制的 Developer ID 公证（用浏览器下载会被 Gatekeeper 拦，`curl` 不会）。
 
 ## 发布 hub 镜像（`.github/workflows/hub-image.yml`，2026-11-01）
 

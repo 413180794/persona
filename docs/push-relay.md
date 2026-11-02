@@ -129,6 +129,51 @@ hub 选路（`push.go`）：有 `apns.json` → 直连（和以前一模一样�
    profile（`release.sh` 导出时要用）；`config.json` 填 `app.push_relay`（如 `https://<官网域名>/relay`）；照常发 TestFlight。
    旧版本的 App 没有扩展、不登记中继，自建 hub 照旧收不到推送，要装这之后的版本。
 
+## 常驻 Cloudflare Tunnel（Linux）
+
+远程管理的 Tunnel 在 Cloudflare 配置两条 ingress：第一条是源站主机名 → `http://127.0.0.1:18670`，最后一条是
+`http_status:404`；源站 DNS 用开启代理的 CNAME 指向 `<Tunnel ID>.cfargotunnel.com`。不要复用已有业务的 Tunnel 或覆盖它的 ingress。
+
+把经过官方发布 SHA-256 校验的 `cloudflared` 放进 `~/.jarvis/bin/`，Tunnel token 放进 `~/.jarvis/relay-tunnel.token`（0600），
+新建 `~/.config/systemd/user/jarvis-relay-tunnel.service`：
+
+```ini
+[Unit]
+Description=Jarvis push relay Cloudflare Tunnel
+After=network-online.target jarvis-relay.service
+Wants=network-online.target
+
+[Service]
+ExecStart=%h/.jarvis/bin/cloudflared --no-autoupdate tunnel --protocol http2 run --token-file %h/.jarvis/relay-tunnel.token
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
+```
+
+`jarvis-relay.service` 是这台机器上运行 `jarvisd relay` 的 unit 名；若不同，改成实际名字。执行
+`systemctl --user daemon-reload`、`systemctl --user enable --now jarvis-relay-tunnel.service`，并确认用户已开启 linger，
+退出 SSH 后服务才会继续运行。`--token-file` 避免 token 出现在进程参数或日志里；部署机的 UDP/7844 不通时显式用 HTTP/2，
+仍需允许 TCP/7844 出站。单看 unit 是 `active` 不够，还要看到 Tunnel 已登记连接、远程 ingress 已加载。
+
+代理密钥与 grant 加密密钥是两回事：修改 `proxy_secret` 时同时更新 Worker 的 `RELAY_PROXY_SECRET`，但保留 `relay.secret`，
+否则已有手机的 grant 会失效。新建的代理密钥、Tunnel token 和 grant 密钥备份一起保存到密码管理器；只经权限为 0600 的临时文件传递，
+不放命令行、不打印值。部署完成后删除临时文件。
+
+## 部署验收
+
+- 官网 `GET /relay/v1/health`：200，`ok`、`apns` 都是 `true`。这只证明服务和 APNs key 已加载，不代表真实设备收到通知。
+- 源站主机名同一路径，不带代理密钥：403，正文是 `not through the proxy`，不能绕过 Worker。
+- 无效设备 token 登记：400；不在允许列表内的 topic：403。
+- 正确 topic 和测试 token 登记：200，grant 不输出；不带 grant 的推送：401。
+- 有效 grant 但无效密文：400，不向 APNs 发出；测试不要拿真实设备 token，以免误发通知。
+- `config.json` 的 `app.push_relay` 已填，通知扩展描述文件有效，归档的 `JarvisPushRelay` 指向官网 `/relay`，
+  App 和扩展的共享推送钥匙串组均通过 `entitlements.py check`。
+- 安装新 TestFlight 后，在没有自有 APNs key 的 hub 上验证普通通知解密与 Live Activity；模拟器健康检查不能代替真机验收。
+
 ## 自己搭中继
 
 只有持有 App 所属 Team 的 APNs key 才能给这个 App 推送，所以「自己搭中继」= 自己签名装 App（自己的 Team、自己的 bundle id）+
