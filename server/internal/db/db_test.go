@@ -7,8 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/db/dbtest"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
+
+// TestMain runs the tests on a database of their own (dbtest, #583): other runs on the same machine do not touch it.
+func TestMain(m *testing.M) { os.Exit(dbtest.Main(m)) }
 
 // open connects to JARVIS_TEST_DATABASE_URL (a throwaway database; scripts/test/test-server.sh creates it on the hub machine)
 // and wipes every table so each test starts clean.

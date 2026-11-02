@@ -16,15 +16,18 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/chyroc/jarvis/server/internal/db/dbtest"
 )
 
 // TestMain doubles as a plugin: re-run with JARVIS_TEST_PLUGIN=1 the test binary serves on JARVIS_PLUGIN_SOCKET.
+// Otherwise the tests run on a database of their own (dbtest, #583).
 func TestMain(m *testing.M) {
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "1" {
 		servePluginForTest()
 		return
 	}
-	os.Exit(m.Run())
+	os.Exit(dbtest.Main(m))
 }
 
 func servePluginForTest() {

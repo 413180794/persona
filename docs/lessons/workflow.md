@@ -25,7 +25,10 @@
   写成 `(cd … && python3 … > log 2>&1 &)` 时，后台那层 shell 还拿着脚本的 stdout，`脚本 | tail` 永远等不到结尾，
   脚本早跑完了也不会唤醒等它的会话（2026-11-01 停了将近 6 小时）。
 - macOS 的 sed 不认 `\b`，整词替换用 `perl -pi -e 's/\bFoo\b/Bar/g'`。
-- `scripts/test/test-server.sh` 在两个 checkout 里同时跑会共用同一个 `jarvis_test` 库，DB 测试会互相干扰随机失败：并发跑时单独重跑失败的包确认。
+- 服务端测试以前都连同一个 `jarvis_test` 库：几个车道和部署同时跑，互相清掉、迁移对方的表，测试拿到空的或别人的数据随机失败（#545、#556、#583）。
+  现在有库的测试包在 `TestMain` 里调 `dbtest.Main`（`server/internal/db/dbtest`）：每个测试二进制在 `JARVIS_TEST_DATABASE_URL` 旁边建自己的
+  `jarvis_test_<时间>_<随机>`，跑完删掉（被杀掉留下的，6 小时后由下一次运行清掉）；测试里再起的子进程（假 node）沿用父进程的库。
+  新加用到数据库的测试包也要这样加 `TestMain`，别直接连共用的库。角色没有建库权限时退回成加锁、排队用共用的库。
 - 新加了大依赖（#167 的 tailscale / gvisor，单个 zip 21 MB）后第一次在 hub 机器上 `go test`：那台机器出网慢，`go` 在下载上挂了二十多分钟，
   最后报 `unexpected EOF`（2026-11-01）。办法：按 `server/go.sum` 列出 hub 的 `~/go/pkg/mod/cache/download` 里缺的文件，在开发机上从
   proxy.golang.org 下好（.zip / .mod / .info），rsync 到 hub 的一个目录，测试时 `GOPROXY=file://<那个目录>,https://proxy.golang.org`。

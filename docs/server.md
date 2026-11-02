@@ -181,7 +181,9 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | `settings` | App 里改的全局设置（如助手的启动器） |
 
 连库：`ssh <hub 机器> 'docker exec -it jarvis-postgres psql -U jarvis -d jarvis'`。
-测试：`./scripts/test/test-server.sh`（同步代码到 hub 机器，在 `jarvis_test` 库上跑全部测试；本机没有 docker，DB 测试在本机会 skip）。
+测试：`./scripts/test/test-server.sh`（同步代码到 hub 机器跑全部测试；本机没有 docker，DB 测试在本机会 skip）。`JARVIS_TEST_DATABASE_URL`
+（脚本指向 `jarvis_test`）只是起点：每个测试二进制在它旁边建一个自己的库、跑完删掉（`server/internal/db/dbtest`），几处同时跑也互不干扰；
+所以 `jarvis` 角色要能建库（容器里的是超级用户；自己装的 Postgres 给它 `CREATEDB`，不给就退回成排队用 `jarvis_test`）。
 
 旧版的 `phone_tools.json`、`devices.json`、`mail_accounts.json`、`sessions.json` 首次启动时自动导入，改名为 `*.migrated`。
 
