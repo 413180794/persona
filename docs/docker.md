@@ -24,7 +24,7 @@ hub 有两种部署方式，功能一样，按 hub 所在的机器挑一种：
 
 ## 镜像
 
-`ghcr.io/<owner>/jarvis`（`<owner>` 是仓库所属账号或组织，填进 `.env` 的 `JARVIS_IMAGE`），linux/amd64 和 linux/arm64，由 `.github/workflows/hub-image.yml` 构建：
+`ghcr.io/<owner>/persona`（镜像名跟着仓库走：`<owner>` 是仓库所属账号或组织，`persona` 是仓库名；填进 `.env` 的 `JARVIS_IMAGE`），linux/amd64 和 linux/arm64，由 `.github/workflows/hub-image.yml` 构建：
 
 | 标签 | 什么时候有 |
 | --- | --- |
@@ -111,6 +111,9 @@ docker compose pull && docker compose up -d
 `.env` 里 `JARVIS_IMAGE` 钉在某个版本（`…:1.2.0`）的，`pull` 拉不到新的：先把标签改成新版本（App 里给出整行），再运行上面的命令。
 手动跑出来的 `edge`、`sha-…` 镜像版本号是 `git describe`，比不出新旧，只显示最新的正式版本是哪个。
 镜像是私有的、又没设 `JARVIS_REGISTRY_TOKEN`，设置 › hub 里说查不了、该设什么。
+从 0.1.1 及更早的版本升上来，App 里不会提示，要手动换：那时仓库还叫 jarvis，镜像在 `ghcr.io/<owner>/jarvis`，0.1.2 起在
+`ghcr.io/<owner>/persona`，旧名字下不会再有新版本。把 `.env` 的 `JARVIS_IMAGE` 改成新名字和版本，`compose.yaml` 换成新的
+（它把 `JARVIS_IMAGE`、`JARVIS_REGISTRY_TOKEN` 传给 hub，之后的新版本才提示得出来），再运行上面的命令。
 
 ## 网络
 
