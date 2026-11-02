@@ -54,7 +54,7 @@ def main():
         c.call("set-style", style=style)
         for name, nav in SCENES:
             s = time.time()
-            c.call("online", timeout=15)
+            restarts = c.online(15).get("mockRestarts", [])
             flags = {"openWork": False}
             flags.update(nav.get("defaults", {}))
             if freeze:
@@ -77,6 +77,8 @@ def main():
             fh.write(f"{f}\t{t:.2f}\t{ok}\t{n}\n")
     print(f"DONE id-cli {out}: {len(times)} shots in {time.time() - t0:.0f} s "
           f"({sum(1 for t in times if not t[2])} not settled)")
+    if restarts:  # mock_scenarios.py had to start the hub again: shots around then may show 连接中…
+        print(f"WARNING the mock hub was restarted {len(restarts)} time(s): {restarts}")
 
 
 if __name__ == "__main__":

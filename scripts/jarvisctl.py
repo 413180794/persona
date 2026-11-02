@@ -7,6 +7,7 @@
                [--ignore-id prefix …] [--ignore-label-contains t …] [--ignore-rect x,y,w,h …]   … except there
   jarvisctl.py freeze [--off] [--layers strip|pause|none] [--keep-motion]     hold still what animates (Reduce Motion…)
   jarvisctl.py online [--timeout s]                                           wait for the hub's live connection
+                                                                              (+ mock_scenarios.py's restarts of the hub)
   jarvisctl.py idle [--timeout s]                                             no request to the mock hub for 0.8 s
   jarvisctl.py screenshot <out.png> [--no-settle]                             settle, then `simctl io screenshot`
   jarvisctl.py reset [--cold-chats] [--drop-chat-cache]                      a new view tree, as after a launch
@@ -271,6 +272,20 @@ class Ctl:
             self.call("online", timeout=wait)
         return dict(out, ok=True)
 
+    def online(self, timeout=None, control=None):
+        """Waits for the hub's live connection. When the hub is scripts/mock_scenarios.py's, also says whether it had to
+        start the hub again since it began (`mockRestarts`: when, exit code, scenario): what a long run shot while the
+        hub was down shows 连接中…, so the script can take those again."""
+        r = self.call("online", timeout=timeout)
+        if self.hub or control:
+            port = control or urllib.parse.urlparse(self.hub).port - 1
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/scenario", timeout=2) as resp:
+                    r["mockRestarts"] = json.load(resp).get("restarts", [])
+            except (OSError, ValueError):
+                pass  # a mock_hub.py on its own, or a real hub: nothing to ask
+        return r
+
     def appearance(self, value, in_app=False):
         """Light or dark: the whole simulator (status bar included, as the screenshot scripts do) or the app only."""
         if in_app:
@@ -381,7 +396,7 @@ def main(argv):
     elif a.cmd == "idle":
         r = c.idle(timeout=a.timeout or 10)
     elif a.cmd == "online":
-        r = c.call("online", timeout=a.timeout)
+        r = c.online(a.timeout, a.control)
     elif a.cmd == "screenshot":
         if not a.rest:
             p.error("screenshot needs a path")

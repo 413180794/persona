@@ -32,7 +32,7 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 | `state` | | `tab`、`openChat`、`assistant`、`visibleSession`、`settingsOpen`、`settingsDepth`、`style`、`color`、`appearance`、`connection`、`paired`、`appState`（active / inactive / background）、`screen`（窗口的宽高，pt） |
 | `settle` | `timeout`（8 s）、`every`（150 ms）、`stable`（3 次）、`pixels`（0）、`ignore`（元素过滤，一组或几组，它们的 frame 不比较）、`ignorePad`（6 pt）、`ignoreRects`（`[[x, y, w, h]]`，pt） | `settled`、`frames`、`changed`、`box`（最后两帧还不一样的地方） |
 | `freeze` | `on`（默认 true，false 恢复）、`reduceMotion`（默认 true）、`layers`（strip / pause / none，默认 strip） | `frozen`、`reduceMotion`、`paused`；见「一直在动的画面」 |
-| `online` | `timeout`（15 s） | `nudged`（是否主动重连过）；超时报错并带当前状态 |
+| `online` | `timeout`（15 s） | `nudged`（是否主动重连过）；超时报错并带当前状态。`jarvisctl.py online` 连着 `mock_scenarios.py` 时还回 `mockRestarts`（见「注入状态」） |
 | `reset` | `coldChats`（内存里不留对话，和启动后一样从磁盘缓存再到 hub 重新加载）、`dropChatCache`（磁盘缓存也清掉，= `-openChatsFresh YES`） | 新的界面树，路由不动，和刚启动一样。回答同 `state` |
 | `tree` | 元素过滤（下面） | `elements`：每个无障碍元素的 `id`（accessibilityIdentifier）、`label`、`value`、`traits`、`frame`（屏幕坐标，pt）、`visible`（点得到）、`onScreen`（frame 在屏幕里） |
 | `find` | 元素过滤、`index` | `count`、`element`（没有 `index` 时取第一个在屏幕上的） |
@@ -184,6 +184,11 @@ scripts/jarvisctl.py scenario               # 现在跑的是哪个
 场景：default、quiet、agents、churn（`/mock/churn` 按需推送，LiveUpdateTests）、machines、errors（身份截图的出错卡片）、
 long（长对话）、big、rich、tasks、offline。和 UI 测试用的是同一套数据，名字见 `mock_scenarios.py` 的 `SCENARIOS`。
 mock 自己的 `/mock/reset`、`/mock/seen`、`/mock/churn` 照旧直接请求 hub 端口。
+
+**mock 被杀了会自己回来**：一个长时间不重启的 CLI 会话里，mock 中途被外面杀掉（评估时就碰上过别的 Agent 的 `pkill -f mock_hub.py`），
+之后截的图全停在“连接中…”。`mock_scenarios.py` 每 0.5 s 看一次它起的 `mock_hub.py`：不是自己切场景停掉的、意外退出了，就按当前场景
+重新拉起来，记下时间、退出码、场景（`offline` 场景和切场景都不算）。`GET /scenario` 的 `restarts` 是这些记录，`jarvisctl.py online`
+回答里的 `mockRestarts` 是同一份，`id-cli.py` 跑完有重启就打一行 WARNING（那前后的截图要重拍）。实测 `kill -9` 子进程后 0.6 s hub 又能应答。
 
 ## 协议和安全
 

@@ -9,12 +9,15 @@ and answers on --control (127.0.0.1 only):
     GET /scenario?name=agents          restart the hub with that scenario's variables (below), wait until it answers
     GET /scenario?env=MOCK_X=1,MOCK_Y=2  any set of MOCK_* variables
     GET /scenario?name=offline         no hub at all: the app goes 连接中… / 等待网络
-The app reconnects by itself (`jarvisctl.py scenario` waits for `online`). Standard library only; nothing in
-mock_hub.py changes, and it can still be run on its own as before.
+The app reconnects by itself (`jarvisctl.py scenario` waits for `online`). A hub that exits by itself (another agent's
+`pkill -f mock_hub.py` took one down mid-run) is started again with the same scenario within a second; GET /scenario
+lists those restarts (`restarts`: when, exit code, scenario) and `jarvisctl.py online` reports them. Standard library
+only; nothing in mock_hub.py changes, and it can still be run on its own as before.
 """
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -47,6 +50,24 @@ class Hub:
         self.child = None
         self.name, self.env = "offline", {}
         self.lock = threading.Lock()
+        self.restarts = []
+        self.closing = False
+        threading.Thread(target=self.guard, daemon=True).start()
+
+    def guard(self):
+        """Starts the hub again when it exited without being asked (not a switch, not offline)."""
+        while True:
+            time.sleep(0.5)
+            with self.lock:
+                if self.closing or self.child is None or self.child.poll() is None:
+                    continue
+                rc = self.child.returncode
+                self.restarts.append({"at": time.strftime("%H:%M:%S"), "rc": rc, "scenario": self.name})
+                print(json.dumps({"restart": self.restarts[-1]}), flush=True)
+                try:
+                    self.start(self.env)
+                except RuntimeError as e:
+                    print(json.dumps({"restart failed": str(e)}), flush=True)
 
     def stop(self):
         if self.child and self.child.poll() is None:
@@ -73,19 +94,24 @@ class Hub:
             self.name, self.env = name, env or {}
             if env is None:
                 return {"scenario": name, "env": {}, "ms": int((time.time() - started) * 1000)}
-            # The child gets only the scenario's MOCK_* (none inherited from this process).
-            base = {k: v for k, v in os.environ.items() if not k.startswith("MOCK_")}
-            out = open(self.log, "a") if self.log else subprocess.DEVNULL
-            self.child = subprocess.Popen([sys.executable, "-u", os.path.join(HERE, "mock_hub.py")],
-                                          env=dict(base, PORT=str(self.port), **env), stdout=out, stderr=out)
-            deadline = time.time() + 30  # a big data set (MOCK_BIG) takes seconds to build
-            while not self.answers():
-                if self.child.poll() is not None:
-                    raise RuntimeError(f"mock_hub.py exited ({self.child.returncode})")
-                if time.time() > deadline:
-                    raise RuntimeError("mock_hub.py did not answer in 30 s")
-                time.sleep(0.1)
+            self.start(env)
             return {"scenario": name, "env": env, "ms": int((time.time() - started) * 1000)}
+
+    def start(self, env):
+        """mock_hub.py with `env` on the hub port; returns once it answers. Called with the lock held."""
+        # The child gets only the scenario's MOCK_* (none inherited from this process).
+        base = {k: v for k, v in os.environ.items() if not k.startswith("MOCK_")}
+        out = open(self.log, "a") if self.log else subprocess.DEVNULL
+        self.child = subprocess.Popen([sys.executable, "-u", os.path.join(HERE, "mock_hub.py")],
+                                      env=dict(base, PORT=str(self.port), **env), stdout=out, stderr=out)
+        deadline = time.time() + 30  # a big data set (MOCK_BIG) takes seconds to build
+        while not self.answers():
+            if self.child.poll() is not None:
+                rc, self.child = self.child.returncode, None
+                raise RuntimeError(f"mock_hub.py exited ({rc})")
+            if time.time() > deadline:
+                raise RuntimeError("mock_hub.py did not answer in 30 s")
+            time.sleep(0.1)
 
 
 def control(hub):
@@ -117,7 +143,8 @@ def control(hub):
                     if name not in SCENARIOS:
                         return self.reply(400, {"error": f"unknown scenario {name}", "scenarios": sorted(SCENARIOS)})
                     return self.reply(200, hub.switch(name, SCENARIOS[name]))
-                return self.reply(200, {"scenario": hub.name, "env": hub.env, "scenarios": sorted(SCENARIOS)})
+                return self.reply(200, {"scenario": hub.name, "env": hub.env, "scenarios": sorted(SCENARIOS),
+                                        "restarts": hub.restarts})
             except RuntimeError as e:
                 return self.reply(500, {"error": str(e)})
     return Handler
@@ -135,12 +162,20 @@ def main():
     print(json.dumps(hub.switch(a.scenario, SCENARIOS[a.scenario])), flush=True)
     server = ThreadingHTTPServer(("127.0.0.1", control_port), control(hub))
     print(f"control on 127.0.0.1:{control_port}, hub on {a.port}", flush=True)
+
+    def interrupted(*_):
+        raise KeyboardInterrupt
+
+    # Stopped by port (`kill`), as CLAUDE.md asks: take the hub down too, not leave it behind on its port.
+    signal.signal(signal.SIGTERM, interrupted)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        hub.stop()
+        hub.closing = True
+        with hub.lock:
+            hub.stop()
 
 
 if __name__ == "__main__":
