@@ -19,6 +19,10 @@
   jarvisctl.py wait [filters] [--gone] [--timeout s]                          until an element is there (or gone)
   jarvisctl.py wait-loaded [--session m/s] [--timeout s]                      the chat on screen has its history from the hub
   jarvisctl.py tap [filters] [--hid]                                          activate it; a real touch (idb) if it does not take that
+  jarvisctl.py longpress [filters] [--duration s]                             a real touch held on it (idb)
+  jarvisctl.py swipe [filters] --dir left|right|up|down [--distance pt] [--duration s]   a real swipe across it
+  jarvisctl.py drag --from x,y --to x,y [--duration s]                        a real finger between two points (pt)
+  jarvisctl.py background [--seconds s] | foreground                          the Home button | the app back, same process
   jarvisctl.py scroll [--pages n | --to top|bottom]                           the largest scroll view, no fling
   jarvisctl.py type --text T [filters] | dismiss-keyboard                     into the focused field (filters: focus that first)
   jarvisctl.py snapshot <out.png>                                             the app's windows, no status bar
@@ -153,13 +157,86 @@ class Ctl:
         if not e:
             raise CtlError(f"tap: not found {f}")
         x, y, w, h = e["frame"]
-        for _ in range(2):  # idb's companion may need a first call to come up
-            r = subprocess.run(["idb", "ui", "tap", "--udid", self.udid, str(round(x + w / 2)), str(round(y + h / 2))],
-                               text=True, capture_output=True)
+        self._idb("tap", round(x + w / 2), round(y + h / 2))
+        return {"ok": True, "hid": True, "element": e}
+
+    def _idb(self, *args):
+        """`idb ui <args>` on this simulator; idb's companion may need a first call to come up."""
+        for _ in range(2):
+            r = subprocess.run(["idb", "ui", *map(str, args), "--udid", self.udid], text=True, capture_output=True)
             if r.returncode == 0:
-                return {"ok": True, "hid": True, "element": e}
+                return
             sh("idb", "connect", self.udid, check=False)
-        raise CtlError(f"tap: idb failed: {r.stderr.strip()[-200:]}")
+        raise CtlError(f"idb ui {args[0]} failed: {r.stderr.strip()[-200:]}")
+
+    def frame(self, **f):
+        """Where the element is once the screen settles (what moves under a finger moves first): [x, y, w, h] in
+        points; the whole screen without filters."""
+        self.call("settle", timeout=2, stable=2, every=80, pixels=600)
+        if not f:
+            return [0, 0, *self.call("state")["screen"]]
+        e = self.call("find", **f)["element"]
+        if not e:
+            raise CtlError(f"not found {f}")
+        return e["frame"]
+
+    def longpress(self, duration=1.2, **f):
+        """A real touch held at the middle of the element (a row's context menu), as XCUITest's press(forDuration:)."""
+        x, y, w, h = self.frame(**f)
+        at = [round(x + w / 2), round(y + h / 2)]
+        self._idb("tap", *at, "--duration", duration)
+        return {"ok": True, "at": at, "duration": duration}
+
+    def swipe(self, direction, distance=None, duration=0.25, **f):
+        """A real swipe through the middle of the element (the whole screen without filters), as XCUITest's swipeLeft /
+        swipeUp: across half its width for left / right (a row's swipe actions show; a longer one is a full swipe,
+        which runs the first action), 70 % of its height for up / down, or `distance` points."""
+        sign = {"left": -1, "up": -1, "right": 1, "down": 1}.get(direction)
+        if sign is None:
+            raise CtlError(f"swipe: --dir left|right|up|down, not {direction!r}")
+        x, y, w, h = self.frame(**f)
+        cx, cy = x + w / 2, y + h / 2
+        horizontal = direction in ("left", "right")
+        half = distance / 2 if distance else (w * 0.25 if horizontal else h * 0.35)
+        if horizontal:
+            return self.drag((cx - sign * half, cy), (cx + sign * half, cy), duration)
+        return self.drag((cx, cy - sign * half), (cx, cy + sign * half), duration)
+
+    def drag(self, start, end, duration=1.0):
+        """A real finger from `start` to `end` ((x, y) in points) over `duration` seconds: slow is a drag (the pull that
+        shows the Agents search field), fast a fling."""
+        pts = [round(v) for v in (*start, *end)]
+        self._idb("swipe", *pts, "--duration", duration, "--delta", 5)
+        return {"ok": True, "from": pts[:2], "to": pts[2:], "duration": duration}
+
+    def background(self, seconds=0):
+        """The Home button: the app goes to the background, the process stays; `seconds` there before returning."""
+        self._idb("button", "HOME")
+        time.sleep(seconds)
+        return {"ok": True}
+
+    def foreground(self, wait=10):
+        """The app back in front, the same process (`simctl launch` of a running app activates it, no relaunch);
+        returns once it is active again."""
+        before = self._pid()
+        sh("xcrun", "simctl", "launch", self.udid, self.bundle)
+        deadline = time.time() + wait
+        while True:
+            try:
+                if self.call("state", _timeout=2).get("appState") == "active":
+                    pid = self._pid()
+                    return {"ok": True, "pid": pid, "samePid": before is None or pid == before}
+            except (OSError, CtlError, ValueError):
+                pass
+            if time.time() > deadline:
+                raise CtlError("foreground: the app is not active again")
+            time.sleep(0.2)
+
+    def _pid(self):
+        try:
+            return self.call("ping", _timeout=2).get("pid")
+        except (OSError, CtlError, ValueError):
+            return None
 
     def type(self, text, **f):
         """Types into the focused field; with filters, focuses that element first: accessibility activation, and when
@@ -222,6 +299,11 @@ def ignored(a):
     return {"ignore": ignore or None, "ignoreRects": rects or None}
 
 
+def point(v):
+    x, y = v.split(",")
+    return float(x), float(y)
+
+
 def value(v):
     """key=value from the command line: numbers and YES/NO as JSON, the rest as text."""
     if v in ("YES", "true"):
@@ -269,6 +351,11 @@ def main(argv):
     p.add_argument("--keep-motion", action="store_true")
     p.add_argument("--gone", action="store_true")
     p.add_argument("--hid", action="store_true")
+    p.add_argument("--duration", type=float)
+    p.add_argument("--dir")
+    p.add_argument("--distance", type=float)
+    p.add_argument("--from", dest="start")
+    p.add_argument("--seconds", type=float)
     p.add_argument("--text")
     p.add_argument("--pages", type=float)
     p.add_argument("--to")
@@ -324,6 +411,18 @@ def main(argv):
         r = c.scenario(a.rest[0] if a.rest else None, a.env, a.control)
     elif a.cmd == "tap":
         r = c.tap(a.hid, **filters(a))
+    elif a.cmd == "longpress":
+        r = c.longpress(a.duration or 1.2, **filters(a))
+    elif a.cmd == "swipe":
+        r = c.swipe(a.dir or "", a.distance, a.duration or 0.25, **filters(a))
+    elif a.cmd == "drag":
+        if not (a.start and a.to and "," in a.to):
+            p.error("drag needs --from x,y --to x,y")
+        r = c.drag(point(a.start), point(a.to), a.duration or 1.0)
+    elif a.cmd == "background":
+        r = c.background(a.seconds or 0)
+    elif a.cmd == "foreground":
+        r = c.foreground()
     elif a.cmd == "scroll":
         r = c.call("scroll", pages=a.pages, to=a.to)
     elif a.cmd == "type":

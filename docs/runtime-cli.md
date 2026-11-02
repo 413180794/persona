@@ -29,7 +29,7 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 | 命令 | 参数 | 回答 |
 |---|---|---|
 | `ping` | | `pong`、`pid` |
-| `state` | | `tab`、`openChat`、`assistant`、`visibleSession`、`settingsOpen`、`settingsDepth`、`style`、`color`、`appearance`、`connection`、`paired` |
+| `state` | | `tab`、`openChat`、`assistant`、`visibleSession`、`settingsOpen`、`settingsDepth`、`style`、`color`、`appearance`、`connection`、`paired`、`appState`（active / inactive / background）、`screen`（窗口的宽高，pt） |
 | `settle` | `timeout`（8 s）、`every`（150 ms）、`stable`（3 次）、`pixels`（0）、`ignore`（元素过滤，一组或几组，它们的 frame 不比较）、`ignorePad`（6 pt）、`ignoreRects`（`[[x, y, w, h]]`，pt） | `settled`、`frames`、`changed`、`box`（最后两帧还不一样的地方） |
 | `freeze` | `on`（默认 true，false 恢复）、`reduceMotion`（默认 true）、`layers`（strip / pause / none，默认 strip） | `frozen`、`reduceMotion`、`paused`；见「一直在动的画面」 |
 | `online` | `timeout`（15 s） | `nudged`（是否主动重连过）；超时报错并带当前状态 |
@@ -141,7 +141,26 @@ scripts/jarvisctl.py snapshot app.png
 
 - `tap` 先做无障碍激活；元素不吃（菜单项）或带 `--hid` 时，等画面停下、重新取 frame，用 `idb ui tap` 在中心点一下真的触摸
   （要装 `idb` 和 `idb_companion`，第一次调用可能要等 companion 起来，脚本会重试一次）。
-- 没有惯性、长按、横滑、拖动：要这些的用例（`LiveUpdateTests` 的长按菜单、横滑行，`ChatFollowTests` 的手指滚动）留在 XCUITest。
+- `scroll` 直接设偏移量，没有惯性：要真实手指滚动的（`ChatFollowTests`）用下面的 `drag` / `swipe`，或留在 XCUITest。
+
+## 手势和前后台
+
+都是 `jarvisctl.py` 在宿主机上用 `idb` 发的真实触摸（和 `tap` 的兜底一样，App 里不合成事件）；先等画面停下、重新取元素的 frame。
+
+```sh
+scripts/jarvisctl.py longpress --label-contains "、给天气 App 加主屏幕小组件、"          # 行的长按菜单（默认按 1.2 s）
+scripts/jarvisctl.py swipe --label-contains "、给天气 App 加主屏幕小组件、" --dir left  # 横滑出「关闭」
+scripts/jarvisctl.py drag --from 201,300 --to 201,520 --duration 0.8                   # 下拉露出 Agents 的搜索框
+scripts/jarvisctl.py background --seconds 2 && scripts/jarvisctl.py foreground         # 回桌面再回来，同一个进程
+```
+
+- `longpress`：在元素中心按住 `--duration` 秒（`idb ui tap --duration`），等于 XCUITest 的 `press(forDuration:)`。
+- `swipe`：穿过元素中心；左右默认划过它宽度的一半（行的横滑按钮露出来；划得更长就是“全划”，会直接执行第一个动作，
+  实测划 70% 宽度就弹出了「关闭这个 Agent？」），上下默认划过高度的 70%；`--distance` 指定点数。不带元素过滤就是整个屏幕。
+- `drag`：两点之间一根手指，`--duration` 越长越像拖（下拉露出搜索框用 0.8 s），越短越像甩。
+- `background`：按 Home 键，App 进后台（进程还在，几秒内还能应答）；`foreground`：`simctl launch` 一个已经在跑的 App 只是把它带回前台、
+  不重启，等 `state` 的 `appState` 变回 active，回答里 `samePid` 确认是同一个进程。
+- 做不到的：系统级手势（从屏幕边缘滑回桌面、控制中心、多指捏合以外的系统手势）不做，`background` 用 Home 键代替；要这些的留在 XCUITest。
 
 ## 注入状态（mock 的场景）
 

@@ -106,6 +106,8 @@ enum RuntimeCLI {
             "style": m.style.rawValue, "color": m.themeColor.rawValue, "paired": m.isPaired,
             "connection": "\(m.connection.shown)",
             "appearance": window?.traitCollection.userInterfaceStyle == .dark ? "dark" : "light",
+            "appState": ["active", "inactive", "background"][min(2, UIApplication.shared.applicationState.rawValue)],
+            "screen": [Double(window?.bounds.width ?? 0), Double(window?.bounds.height ?? 0)],
         ]
     }
 
