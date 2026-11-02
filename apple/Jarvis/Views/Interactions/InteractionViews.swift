@@ -764,7 +764,9 @@ struct ScreenForm: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        if AppStyle.current.usesBeautifulUI { BUIScreenForm(interaction: interaction) } else { plain }
+        if AppStyle.current.usesBeautifulUI { BUIScreenForm(interaction: interaction) } else {
+            plain.terminalCover($showTerminal, for: interaction)
+        }
     }
 
     @ViewBuilder private var plain: some View {
@@ -821,14 +823,15 @@ struct ScreenForm: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Button { withAnimation(Theme.Motion.standard) { showTerminal.toggle() } } label: {
-                    Label(showTerminal ? "收起终端" : "查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
+                // The whole live terminal of that session, the one 终端 opens in its chat (#563): its keys, its scrolling.
+                Button { Haptics.tap(); showTerminal = true } label: {
+                    Label("查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
                 }
+                .accessibilityIdentifier("screen-card-terminal")
             }
             .font(Theme.Font.captionMedium)
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accent)
-            if showTerminal { terminal(screen) }
         }
     }
 
@@ -1372,6 +1375,16 @@ struct BUIPermissionForm: View {
     }
 }
 
+extension View {
+    /// A screen card's 查看终端: the session's whole live terminal comes up over the page (TerminalCover), the same as
+    /// 终端 in its chat; dragged down it is the card again.
+    func terminalCover(_ shown: Binding<Bool>, for ix: Interaction) -> some View {
+        fullScreenCover(isPresented: shown) {
+            TerminalCover(key: SessionKey(machineID: ix.machineID, sessionID: ix.sessionID)).presentationBackground(.clear)
+        }
+    }
+}
+
 /// The BeautifulUI style's terminal waiting on a choice (AskUserQuestion that bypassed the hook, a permission prompt…).
 /// The dialog is read off the screen and laid out as an approval card: question, numbered options with their descriptions, "其他回答…"
 /// for "Type something." The raw terminal and its keys stay one tap away; a screen with no dialog shows them directly.
@@ -1385,7 +1398,7 @@ struct BUIScreenForm: View {
     var body: some View {
         let screen = interaction.screen ?? ""
         if let d = interaction.screenDialog {
-            dialog(d, screen: screen)
+            dialog(d, screen: screen).terminalCover($showTerminal, for: interaction)
         } else {
             VStack(alignment: .leading, spacing: Theme.Space.m) { terminal(screen) }
         }
@@ -1448,14 +1461,15 @@ struct BUIScreenForm: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Button { withAnimation(Theme.Motion.standard) { showTerminal.toggle() } } label: {
-                    Label(showTerminal ? "收起终端" : "查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
+                // The whole live terminal of that session, the one 终端 opens in its chat (#563): its keys, its scrolling.
+                Button { Haptics.tap(); showTerminal = true } label: {
+                    Label("查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
                 }
+                .accessibilityIdentifier("screen-card-terminal")
             }
             .font(Theme.Font.captionMedium)
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accent)
-            if showTerminal { terminal(screen) }
         }
     }
 

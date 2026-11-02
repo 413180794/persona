@@ -38,4 +38,28 @@ final class MultiSelectCardTests: XCTestCase {
         XCTAssertNil(r["option"])
         XCTAssertNil(r["keys"], "keys are worked out on the computer, from the screen as it is then")
     }
+
+    /// 查看终端 brings up the session's whole live terminal (#563), not a small one inside the card; closing it is
+    /// the card again.
+    @MainActor func testViewTerminalOpensTheFullTerminal() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MULTI_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SCREEN_MULTI=1 (JARVIS_MULTI_HUB)")
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + review]
+        app.launchPinned()
+        let open = app.buttons["screen-card-terminal"]
+        XCTAssertTrue(open.waitForExistence(timeout: 15), "no 查看终端 on the card:\n\(app.debugDescription)")
+        open.tap()
+        let close = app.descendants(matching: .any)["terminal-close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 10), "no full terminal:\n\(app.debugDescription)")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "full-terminal"
+        shot.lifetime = .keepAlways
+        add(shot)
+        XCTAssertFalse(app.buttons["收起终端"].exists, "the card's own small terminal is gone")
+        close.tap()
+        XCTAssertTrue(open.waitForExistence(timeout: 10), "the card is not back after closing the terminal")
+    }
 }
