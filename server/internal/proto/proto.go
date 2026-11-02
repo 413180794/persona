@@ -113,6 +113,13 @@ const (
 	CodeNotSignedIn = "not_signed_in"
 )
 
+// Codes of a failed connector.chats / connector.older (hub → node, node/connectors.go): macOS does not let the
+// node read the connector's data (Full Disk Access), or no conversation has that id.
+const (
+	CodeNoPermission = "no_permission"
+	CodeNoChat       = "no_chat"
+)
+
 // UploadedFile is where an upload landed on the machine.
 type UploadedFile struct {
 	Path string `json:"path"` // absolute

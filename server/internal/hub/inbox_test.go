@@ -235,3 +235,52 @@ func TestInboxMailReply(t *testing.T) {
 		t.Fatal("kept an existing Re:")
 	}
 }
+
+func TestInboxLarkReplyTarget(t *testing.T) {
+	now := time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)
+	b := newInbox()
+	threadReply := larkMsg("31", "张三", false, now.Add(-2*time.Minute))
+	threadReply.ThreadID, threadReply.ThreadKind = "m30", "reply"
+	chat := []lark.Message{larkMsg("30", "李四", false, now.Add(-3*time.Minute)), threadReply,
+		larkMsg("32", "我", true, now.Add(-time.Minute))}
+	fetch := func(c lark.Conversation, n int) ([]lark.Message, error) { return chat[max(0, len(chat)-n):], nil }
+	conv := lark.Conversation{ID: "f3", Name: "项目群", IsGroup: true, AtMe: true, Unread: 3, UpdatedAt: now.Add(-time.Minute)}
+
+	// The newest message from someone else is a thread reply; my own after it is not what the reply answers.
+	ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone)
+	if len(ch) != 1 || ch[0].Lark.ReplyTo != "m31" || ch[0].Lark.ThreadKind != LarkThreadThread {
+		t.Fatalf("collected: %+v", ch[0].Lark)
+	}
+	it := ch[0]
+	raw, _ := json.Marshal(it.Lark)
+	if !strings.Contains(string(raw), `"reply_to":"m31"`) || !strings.Contains(string(raw), `"thread_kind":"thread"`) {
+		t.Fatalf("json = %s", raw)
+	}
+	// A newer message in the chat itself moves both.
+	chat = append(chat, larkMsg("33", "李四", false, now))
+	conv.Unread, conv.UpdatedAt = 4, now
+	if ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone); len(ch) != 1 || it.Lark.ReplyTo != "m33" || it.Lark.ThreadKind != "" {
+		t.Fatalf("follow-up: %+v", it.Lark)
+	}
+	raw, _ = json.Marshal(it.Lark)
+	if strings.Contains(string(raw), "thread_kind") {
+		t.Fatalf("json = %s, want thread_kind left out", raw)
+	}
+
+	// A topic group lists topics: whatever the newest is, a reply goes into it.
+	topics := []lark.Message{larkMsg("40", "王五", false, now)}
+	topicConv := lark.Conversation{ID: "f4", Name: "话题群", IsGroup: true, IsTopic: true, Unread: 1, UpdatedAt: now}
+	ch = b.applyLark([]lark.Conversation{topicConv}, func(lark.Conversation, int) ([]lark.Message, error) { return topics, nil }, now, testUserZone)
+	if len(ch) != 1 || ch[0].Lark.ReplyTo != "m40" || ch[0].Lark.ThreadKind != LarkThreadTopic {
+		t.Fatalf("topic group: %+v", ch[0].Lark)
+	}
+
+	// A DM is never in a thread.
+	dm := larkMsg("50", "赵六", false, now)
+	dm.ThreadKind = "reply"
+	ch = b.applyLark([]lark.Conversation{{ID: "f5", Name: "赵六", Unread: 1, UpdatedAt: now}},
+		func(lark.Conversation, int) ([]lark.Message, error) { return []lark.Message{dm}, nil }, now, testUserZone)
+	if len(ch) != 1 || ch[0].Lark.ReplyTo != "m50" || ch[0].Lark.ThreadKind != "" {
+		t.Fatalf("dm: %+v", ch[0].Lark)
+	}
+}

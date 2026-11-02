@@ -182,6 +182,10 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 	var c InboxItem
 	if ok {
 		c = *it
+		if it.Lark != nil { // collection rewrites these fields while the reply is out
+			l := *it.Lark
+			c.Lark = &l
+		}
 		if it.Mail != nil {
 			m := *it.Mail
 			c.Mail = &m
@@ -234,7 +238,7 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 			return out, nil
 		}
 		// Different text on an item already replied to is a second message the user means to send.
-		if _, err := h.lark.Send(ctx, c.Lark.FeedID, text, clientID); err != nil {
+		if err := h.sendLarkReply(ctx, c, text, clientID); err != nil {
 			return InboxItem{}, err
 		}
 		reply.clientID = clientID
@@ -255,6 +259,25 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, []*InboxItem{it})
 	return out, nil
+}
+
+// sendLarkReply posts the reply to a Feishu item where the other side will see it: into the thread or topic the
+// newest message is in, quoting that message when I was @'d in a group, else as a new message in the chat (a DM;
+// a group where it is not clear which message the reply answers; an item collected before reply_to existed).
+func (h *Hub) sendLarkReply(ctx context.Context, it InboxItem, text, clientID string) error {
+	l := it.Lark
+	var err error
+	switch {
+	case !l.IsGroup || l.ReplyTo == "":
+		_, err = h.lark.Send(ctx, l.FeedID, text, clientID)
+	case l.ThreadKind != "":
+		_, err = h.lark.Reply(ctx, l.ReplyTo, text, true, false, clientID)
+	case it.Kind == KindMention:
+		_, err = h.lark.Reply(ctx, l.ReplyTo, text, false, false, clientID)
+	default:
+		_, err = h.lark.Send(ctx, l.FeedID, text, clientID)
+	}
+	return err
 }
 
 // mailReply is a reply to orig: Re: subject, threading headers, the original quoted below.

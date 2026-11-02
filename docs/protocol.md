@@ -486,6 +486,9 @@ hub → node 请求：
 | `port.probe` | `{port}` → `{port, listening, http, title?}`：GET / 一次（Host 是 `localhost:端口`） |
 | `port.dial` | `{id, port}` → `{}`：连上本机这个端口（扫描时它绑的地址，否则 127.0.0.1 再 ::1，只连本机），开一条流 `id`；没在听时报错 `code: port_gone`。之后两边用下面的 `stream.*` 事件传字节 |
 | `credential.gh_token` | `{host}` → `{token}`：这台机器上非交互地跑 `gh auth token --hostname <host>`，给 GitHub 连接器（`github.auth.from_machine`）。只有 hub 能调（hook / MCP 的 `node.sock` 不认）；token 不写日志。没装 gh 报 `code: no_gh`，没登录（或登录在钥匙串里、经 ssh 读不到）报 `code: not_signed_in`；旧 node 报 unknown method |
+| `connector.list` | → `{connectors:[{id, status, error?, guide?, via}]}`：这台电脑自己能提供的连接器（现在只有 Mac 上的 `imessage`；别的系统回空列表）。`status` 是 `ok` / `not_configured`（没有「信息」的数据）/ `no_permission`（没有完全磁盘访问权限，`guide` 是在这台 Mac 上一步步怎么开，按 `via` 是 `ssh` 还是 `launchd` 常驻 node 分两种说法）/ `error` |
+| `connector.chats` | `{id, limit?, before?}` → `{chats:[{id, name, group?, members:[{handle, name?}], services, last, preview?, from_me?, unread?}], more?, before?}`：会话，新的在前；一个人在 iMessage / 短信 / RCS 上的几个会话算一个，群各算一个；`id` 是哈希（`imessage-<12 位>`），不含号码。只读 |
+| `connector.older` | `{id, chat, limit?, before?}` → `{chat, messages:[{id, at, kind: message\|event, from_me?, sender?, text?, service?, attachments?:[{kind, name, mime, size}], reply_to?, edited?, unsent?, unread?, undecoded?}], more?, before?}`：一个会话最新的一页或 `before` 之前的一页，旧的在前；点按回应不算消息，附件只有描述。没有权限报 `code: no_permission`，没有这个会话报 `code: no_chat`。只有 hub 能调、不写日志（不记号码和正文）；旧 node 报 unknown method |
 | `codex.answer` | `{session_id, id, resolution}`：回答 node 列出的 Codex 卡片（`docs/codex.md`「提问和审批」）；拒绝时是带 `code` 的错误，什么都没输入 |
 
 流（`internal/streams`，两个方向都有）：`stream.data {id, data}`（data 是 base64，一次最多 32 KB）、`stream.ack {id, n}`（写出去了 n 字节；
@@ -648,7 +651,7 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 | GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用） |
 | POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
-| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发；`clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。文字不同照常发 |
+| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发；`clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
 | POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
 | POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表 |
 | POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`，顺序不变，模型没给的是空串；target 是 BCP 47（zh-Hans、en、ja…，`docs/ios.md`「翻译」） |
@@ -657,7 +660,7 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 `InboxItem`：`id`、`source`（lark / mail）、`kind`（dm / mention / group / bot / mail）、`account`（`feishu` 或邮箱账号 id）、
 `account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
 `tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / read / replied）、
-`lark{feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all}`（`read_position`：这个会话在飞书里的已读位置，每次采集都刷新）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
+`lark{feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}`（`read_position`：这个会话在飞书里的已读位置，每次采集都刷新；`reply_to`：最后一条别人发的消息的 id，`thread_kind`：它在哪，空 = 在会话里、`topic` = 话题群的话题、`thread` = 普通群里的话题回复，这两个在采到新消息时刷新，旧数据没有）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
 `translations{<目标语言>:{subject,preview}}`（hub 提前翻好的外文邮件，`docs/ios.md`「翻译」）、`doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
 （`kind=doc`，`docs/inbox.md`「云文档」）；`agent.changes:[{ref,field,value}]` 是 AI 分身随草稿提议的改状态。
 列表变化时 WebSocket 推 `{"type":"inbox"}`（不带内容，App 自己拉）。

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -102,5 +103,68 @@ func TestInboxReplyAfterRestartReusesClientID(t *testing.T) {
 	}
 	if got := sends(); len(got) != 2 || got[0] != got[1] {
 		t.Fatalf("sends = %q, want the same clientId twice", got)
+	}
+}
+
+func TestInboxReplyPlacement(t *testing.T) {
+	type call struct{ path, replyMode, clientID string }
+	var mu sync.Mutex
+	var calls []call
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			ReplyMode string `json:"replyMode"`
+			ClientID  string `json:"clientId"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		calls = append(calls, call{r.URL.Path, body.ReplyMode, body.ClientID})
+		mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"messageId":"7000000000000000005"}`)
+	}))
+	t.Cleanup(srv.Close)
+	h := newTestHub(t)
+	h.lark = lark.New(lark.Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	h.inbox.init()
+
+	const send, replies = "/agent/v1/conversations/feed-1/messages", "/agent/v1/messages/m-9/replies"
+	cases := []struct {
+		name      string
+		kind      string
+		lark      InboxLark
+		path      string
+		replyMode string
+	}{
+		{"dm", KindDM, InboxLark{ReplyTo: "m-9"}, send, ""},
+		{"topic", KindGroup, InboxLark{IsGroup: true, IsTopic: true, ReplyTo: "m-9", ThreadKind: LarkThreadTopic}, replies, "thread"},
+		{"thread", KindGroup, InboxLark{IsGroup: true, ReplyTo: "m-9", ThreadKind: LarkThreadThread}, replies, "thread"},
+		{"thread mention", KindMention, InboxLark{IsGroup: true, ReplyTo: "m-9", ThreadKind: LarkThreadThread}, replies, "thread"},
+		{"mention", KindMention, InboxLark{IsGroup: true, ReplyTo: "m-9"}, replies, ""},
+		{"group", KindGroup, InboxLark{IsGroup: true, ReplyTo: "m-9"}, send, ""},
+		{"legacy mention", KindMention, InboxLark{IsGroup: true}, send, ""},
+		{"legacy topic", KindGroup, InboxLark{IsGroup: true, IsTopic: true}, send, ""},
+	}
+	ctx := context.Background()
+	for i, tc := range cases {
+		id := "lark:feed-1:" + strconv.Itoa(100+i)
+		l := tc.lark
+		l.AccountID, l.FeedID = 1, "feed-1"
+		h.inbox.mu.Lock()
+		h.inbox.items[id] = &InboxItem{ID: id, Source: "lark", Kind: tc.kind, UpdatedAt: time.Now(), Lark: &l}
+		h.inbox.mu.Unlock()
+		// The second reply with the same text is the phone and the watch both pressing send: it goes out once.
+		for range 2 {
+			if it, err := h.replyInbox(ctx, id, "收到"); err != nil || it.DoneBy != "replied" {
+				t.Fatalf("%s: %+v %v", tc.name, it, err)
+			}
+		}
+		mu.Lock()
+		got := calls
+		calls = nil
+		mu.Unlock()
+		want := call{tc.path, tc.replyMode, lark.NamedClientID(id + "\n收到")}
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("%s: calls = %+v, want %+v", tc.name, got, want)
+		}
 	}
 }

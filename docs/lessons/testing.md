@@ -139,3 +139,10 @@
 - 看对话内容的 UI 测试一律带 `-openChatsFresh YES`（清掉磁盘上的对话缓存）：mock 每次重置，对话都从同一个 seq 重新开始，前面测试 churn 出来的步骤
   还在 App 的缓存里，占着这次 `/mock/say` 拿到的 seq，新回复「已经有了」就不显示，屏幕上是上一次的「工具 21 · 回复 5」。
   2026-11-02 `ChatFollowTests.testJarvisChatFollows` 在跑过 `ScrollUnderPushTests` / `ScreenTruthTests` 的模拟器上挂，看着像新外壳的 Jarvis 对话不显示回复，其实是测试环境；真实 hub 的 seq 是 transcript 里的位置，只增不重用。
+
+## 要 macOS 自带命令的 Go 测试（2026-11-02）
+
+- 信息连接器读 `chat.db` 用的是 macOS 的 `/usr/bin/sqlite3`（jarvisd 不带 cgo），hub 机器（Linux）上没有 `sqlite3`，那几个测试在 hub 上会跳过。
+  开发 Mac 上没有 Go：在 hub 上 `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go test -c -o x.test ./internal/connector/imessage` 交叉编译测试二进制，
+  拷回 Mac，**在包目录里**跑（`testdata` 是相对路径）。同样的办法用于 `node` 包里要 macOS 的测试。
+- `sqlite3 -json` 没有行时什么都不打印（不是 `[]`），解析前先判空。

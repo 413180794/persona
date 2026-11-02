@@ -96,6 +96,29 @@ type InboxLark struct {
 	ReadPosition    string `json:"read_position,omitempty"`    // the chat's read position in Feishu, as of the last collection
 	MentionPosition string `json:"mention_position,omitempty"` // the unread @me
 	AtAll           bool   `json:"at_all,omitempty"`
+	// ReplyTo is the newest message from someone else; ThreadKind says where it sits: "" in the chat, "topic" in a
+	// topic group's topic, "thread" in a thread of a normal group. A reply from the inbox goes there (replyInbox).
+	ReplyTo    string `json:"reply_to,omitempty"`
+	ThreadKind string `json:"thread_kind,omitempty"`
+}
+
+// Values of InboxLark.ThreadKind.
+const (
+	LarkThreadTopic  = "topic"
+	LarkThreadThread = "thread"
+)
+
+// larkThreadKind is InboxLark.ThreadKind for message m of chat c: a topic group (lark-connector chatMode "topic") lists
+// topics, so every item there is in one; in a normal group a thread reply shown in the chat has threadMessageType
+// "reply". A thread root is a plain message in the chat.
+func larkThreadKind(c lark.Conversation, m lark.Message) string {
+	switch {
+	case c.IsTopic:
+		return LarkThreadTopic
+	case c.IsGroup && m.ThreadKind == "reply":
+		return LarkThreadThread
+	}
+	return ""
 }
 
 type InboxMail struct {
@@ -463,6 +486,7 @@ func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversatio
 		it.Title, it.Avatar = c.Name, c.Avatar
 		it.Lark.IsGroup, it.Lark.IsTopic, it.Lark.AtAll = c.IsGroup, c.IsTopic, c.AtAll
 		it.Lark.ReadPosition = c.ReadPosition
+		it.Lark.ReplyTo, it.Lark.ThreadKind = last.ID, larkThreadKind(c, last)
 		if c.MentionAt != "" {
 			it.Lark.MentionPosition = c.MentionAt
 		}

@@ -382,6 +382,11 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
 
 ### 读 chat.db
 
+已实现（#449，`server/internal/connector/imessage`，node 的 `connector.*` RPC 见 `docs/protocol.md`）：会话按人合并（一个号码在 iMessage / 短信 / RCS 上的几个 `chat` 是一个会话，群按 `guid`），
+id 是哈希；通讯录按号码后 10 位对，对不上再按后 7 位（只有一个人有时）；没有权限时 `connector.list` 按 node 怎么跑给出两种说法：经 ssh 起的打开「远程登录 › 允许远程用户完全访问磁盘」，
+launchd 常驻的 node（`scripts/node-launchd.sh`）给 jarvisd 本身授权（jarvisd 每次部署换二进制，授权可能要重开，帮手那一步解决）。
+测试数据是 `testdata/home`（合成的 `chat.db` 和通讯录，表结构是 macOS 26 的；`testdata/gen` 下的 `blobs.swift` + `make.py` 生成），读真数据只用 `TestRealMessagesCounts` 打印条数。
+
 - 只读打开：`sqlite3 -readonly -json`（macOS 自带的 `/usr/bin/sqlite3`，jarvisd 是 `CGO_ENABLED=0` 交叉编译的，不引入 SQLite 驱动；
   `attributedBody` 用 `hex()` 取出来）。不加 `immutable=1`（会读不到还在 WAL 里的新消息）。不复制、不缓存整个库。
 - 用到的表：`message`（`ROWID`、`guid`、`text`、`attributedBody`、`handle_id`、`is_from_me`、`date`、`date_read`、`is_read`、`cache_has_attachments`、
@@ -434,7 +439,8 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 
 ## 六、App 侧
 
-遵守「不做第二个某某 App」：不给 GitHub 或信息做浏览页面（没有仓库列表、PR 页、diff 页、会话列表、聊天页）。只做三处：
+遵守「不做第二个某某 App」：不给 GitHub 做浏览页面（没有仓库列表、PR 页、diff 页）。**信息是例外**（用户 2026-11-02「App 里先做最小可用的一版：会话列表加消息查看」）：
+消息默认不交给 AI（`imessage.model` 默认关），用户只能在 App 里自己看，所以有会话列表和消息查看（只读，经 hub 读那台 Mac 的 `chat.db`，消息不复制到 hub）。其余只做三处：
 
 1. **收件箱的条目**：通用的 `InboxConnector` 块画行和详情（上面「GitHub」「iMessage」里写的样子）；筛选条按 `GET /api/v1/connectors` 加「GitHub」「信息」；
    手表的「需要你」也显示（标签 + 标题 + 摘要）。App 请求列表时带 `?sources=all`。Android、网页这一轮不做，它们拿不到新来源（不带参数）。
@@ -475,7 +481,7 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 | G4 | 知识库：PR / issue 会话、`remotes` 对项目、链接成条目 | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
 | G5 | 写：`github_comment`、`github_review` 过闸门；收件箱「发送」= 评论 | 闸门测试（confirm / allow / deny）；用户在自己的测试仓库实测一次评论（卡片截图里只有合成内容的测试仓库） |
 | I0 | 在选定的 Mac 上确认权限和规模（只读行数，已完成一部分） | 报告里有：哪台、权限是否够、消息量 |
-| I1 | node：`connector.list/changes`、typedstream 解码、ROWID 游标、kqueue | 合成 `chat.db` + 合成 blob 的单元测试（包括解不出来的）；旧 hub ↔ 新 node、新 hub ↔ 旧 node 都不报错 |
+| I1 | node：`connector.list/changes`、typedstream 解码、ROWID 游标、kqueue（#449 的第一步先做了 `connector.list` / `connector.chats` / `connector.older`、typedstream、Mac 通讯录对名字，给 App 的会话列表和消息查看用；`changes`、kqueue 等进知识库时再做） | 合成 `chat.db` + 合成 blob 的单元测试（包括解不出来的）；旧 hub ↔ 新 node、新 hub ↔ 旧 node 都不报错 |
 | I2 | hub：远程连接器适配、知识库归档（只收通讯录里的人）、联系人名字、验证码打码、排除即删除 | 在真 Mac 上跑一轮：只打印会话数、行数、被排除数、解码失败数；抽查由用户自己在 App 里看 |
 | I3 | 收件箱 + `sms:` 回复 + 设置里的「信息」行 | 合成数据单元测试；mock hub 截图；真机上点「在信息里回复」草稿已填好 |
 | I4 | 附件（图片，可选） | 拷贝只在 Attachments 目录下；30 天清理 |
