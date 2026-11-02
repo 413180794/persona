@@ -127,7 +127,8 @@ func (n *Node) startWatchLocked() {
 }
 
 // useEngine switches the node to engine: the old host's agents, places and caches go, its change stream stops, the
-// new engine's starts, and a fresh session list goes to the hub. The engine in use already: nothing happens.
+// new engine's starts, and a fresh session list goes to the hub once built (in the background: the reply does not wait
+// for it). The engine in use already: nothing happens.
 //
 // Switches take turns (n.eng.use). A refresh running meanwhile drops its result (n.engEpoch), and every terminal
 // stream of the old engine ends with terminal.end, so the phone does not hold one of its panes.
@@ -156,13 +157,11 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 	n.eng.mu.Unlock()
 	n.logf("engine: now %s", engine)
 
-	list := n.sessionList(ctx, true)
-	n.mu.Lock()
-	n.lastList = listKey(list)
-	n.mu.Unlock()
-	if n.peer != nil {
-		_ = n.peer.Notify("sessions.changed", map[string]any{"sessions": list})
-	}
+	// The new engine's list goes to the hub when it is ready, not before the reply: building it asks the engine, scans
+	// processes and reads every agent's transcript, which on a machine with dozens of agents and cold caches took
+	// longer than the hub's 30 s for engine.use, and the app's engine picker waits on that call (#635).
+	bg := context.WithoutCancel(ctx)
+	go func() { n.publish(n.sessionList(bg, true)) }()
 	return nil
 }
 

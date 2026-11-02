@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -323,8 +324,60 @@ func TestEngineSwitchDropsAnOldRefresh(t *testing.T) {
 	if _, ok := n.agent(sidA); ok {
 		t.Error("herdr's agent came back")
 	}
-	if _, ok := n.agent(sidB); !ok {
-		t.Error("herdr-core's agent lost")
+	waitFor(t, "herdr-core's agent", func() bool { _, ok := n.agent(sidB); return ok }) // the switch's list is built in the background
+	if _, ok := n.agent(sidA); ok {
+		t.Error("herdr's agent came back")
+	}
+}
+
+// engine.use answers once the engine is switched; the new engine's list follows when it is built, however long that
+// takes (on a machine with dozens of agents and cold caches it took longer than the hub's 30 s, and the app's engine
+// picker waited on that call: #635).
+func TestEngineUseAnswersBeforeTheList(t *testing.T) {
+	n, _, home := herdrNode(t)
+	hc := newFakeHC(t)
+	t.Setenv("HC_SOCKET", hc.sock)
+	writeClaudePID(t, home, 4242, sidB)
+	writeTranscript(t, home, hcCwd, sidB, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"b"}`)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once, unblock sync.Once
+	t.Cleanup(func() { unblock.Do(func() { close(release) }) })
+	hc.handle("terminal.list", func(map[string]any) any {
+		once.Do(func() { close(entered) })
+		<-release
+		return map[string]any{"terminals": []any{hcTerminal("t1", "claude-code", "working", 4242, "claude", hcCwd, "", "", "")}}
+	})
+	pushes := hubPipe(t, n)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := n.handle(context.Background(), "engine.use", json.RawMessage(`{"engine":"herdr-core"}`))
+		done <- err
+	}()
+	<-entered // the list is being built, and stays stuck until released
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("engine.use waited for the session list")
+	}
+	if got := n.engine(); got != proto.EngineHerdrCore {
+		t.Fatalf("engine %q", got)
+	}
+
+	unblock.Do(func() { close(release) })
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case p := <-pushes:
+			if p.Event == "sessions.changed" && strings.Contains(string(p.Params), sidB) {
+				return
+			}
+		case <-deadline:
+			t.Fatal("the new engine's list was never pushed")
+		}
 	}
 }
 
