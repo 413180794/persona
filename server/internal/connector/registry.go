@@ -239,17 +239,8 @@ func (r *Registry) Call(ctx context.Context, name string, args json.RawMessage, 
 	r.mu.RLock()
 	rules := r.rules
 	r.mu.RUnlock()
-	switch Decide(rules, c.ID(), name, args) {
-	case Deny:
-		return proto.TextResult("The hub's rules (connector_gate) do not allow "+name+".", true)
-	case Confirm:
-		act, summary := a.Describe(ctx, name, args)
-		if act.Visible != "" {
-			summary += "\n\n谁会看到：" + act.Visible
-		}
-		if ask == nil || !ask(ctx, summary, args) {
-			return proto.TextResult("The user declined "+name+".", true)
-		}
+	if res := gate(ctx, rules, c, a, name, args, ask); res != nil {
+		return *res
 	}
 	return result(a.Do(ctx, name, args))
 }

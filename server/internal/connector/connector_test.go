@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -143,10 +144,38 @@ func TestValidateRules(t *testing.T) {
 		{Connector: "*", Action: "*", Decision: "yes"},
 		{Connector: "", Action: "*", Decision: Allow},
 		{Connector: "[", Action: "*", Decision: Allow},
+		{Connector: "lark", Action: "lark_send", Decision: Allow},
+		{Connector: "lark", Action: "POST conversations", Decision: Allow},
 	} {
 		if ValidateRules([]Rule{r}) == nil {
 			t.Errorf("%+v was accepted", r)
 		}
+	}
+}
+
+// connector_gate's rules of connector "lark" become the Feishu gate's rules (node/larkgate.go), ahead of lark_gate's.
+func TestLarkRules(t *testing.T) {
+	rules := []Rule{
+		{Connector: "github", Action: "github_comment", Decision: Allow},
+		{Connector: "lark", Action: "post /conversations/*/messages", Match: map[string]any{"msg_type": "text"}, Decision: Allow},
+		{Connector: "lark", Action: "CLI /docs/**", Decision: Deny},
+		{Connector: "lark", Action: "*", Decision: Confirm},
+	}
+	if err := ValidateRules(rules); err != nil {
+		t.Fatal(err)
+	}
+	old := []proto.LarkRule{{Method: "DELETE", Path: "/messages/*", Action: "deny"}}
+	want := []proto.LarkRule{
+		{Method: "POST", Path: "/conversations/*/messages", Body: map[string]any{"msg_type": "text"}, Action: "allow"},
+		{Method: "CLI", Path: "/docs/**", Action: "deny"},
+		{Method: "*", Path: "**", Action: "confirm"},
+		old[0],
+	}
+	if got := LarkRules(rules, old); !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+	if got := LarkRules(nil, old); !reflect.DeepEqual(got, old) {
+		t.Fatalf("lark_gate alone: %+v", got)
 	}
 }
 

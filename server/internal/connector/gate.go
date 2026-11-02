@@ -1,10 +1,14 @@
 package connector
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path"
 	"reflect"
+	"strings"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 // Decisions of the write gate.
@@ -24,6 +28,12 @@ type Rule struct {
 	Decision  string         `json:"decision"`
 }
 
+// Lark is the connector id whose rules are the assistant's Feishu writes (lark-connector's ol, lark-cli). Those run on
+// the assistant's machine, where node/larkgate.go reads the command: they are not the Registry's actions, so a rule
+// of connector "lark" goes there instead (LarkRules) and its action is "<METHOD> <path>" in lark_gate's terms —
+// "POST /conversations/*/messages", "CLI /im/+messages-send", "*" for any call.
+const Lark = "lark"
+
 // ValidateRules reports a rule the gate could not use, so a typo in hub.json stops the start instead of quietly
 // asking (or worse, quietly allowing) something else.
 func ValidateRules(rules []Rule) error {
@@ -38,8 +48,44 @@ func ValidateRules(rules []Rule) error {
 				return fmt.Errorf("connector_gate[%d]: bad pattern %q", i, p)
 			}
 		}
+		if r.Connector == Lark {
+			if _, ok := larkRule(r); !ok {
+				return fmt.Errorf("connector_gate[%d]: a lark action is \"<METHOD> <path>\" or \"*\", not %q", i, r.Action)
+			}
+		}
 	}
 	return nil
+}
+
+// LarkRules are the rules the assistant's Feishu gate gets (proto.AssistantLark.Rules): connector_gate's rules of
+// connector "lark" first, then hub.json's older lark_gate ones, which keep working as they are; the node puts its
+// built-in rules after them.
+func LarkRules(rules []Rule, larkGate []proto.LarkRule) []proto.LarkRule {
+	var out []proto.LarkRule
+	for _, r := range rules {
+		if r.Connector != Lark {
+			continue
+		}
+		if lr, ok := larkRule(r); ok {
+			out = append(out, lr)
+		}
+	}
+	return append(out, larkGate...)
+}
+
+// larkRule is r in lark_gate's terms: the action's method and path, Match as the body's fields.
+func larkRule(r Rule) (proto.LarkRule, bool) {
+	lr := proto.LarkRule{Method: "*", Path: "**", Body: r.Match, Action: r.Decision}
+	if r.Action == "*" {
+		return lr, true
+	}
+	method, p, ok := strings.Cut(strings.TrimSpace(r.Action), " ")
+	p = strings.TrimSpace(p)
+	if !ok || method == "" || !strings.HasPrefix(p, "/") {
+		return lr, false
+	}
+	lr.Method, lr.Path = strings.ToUpper(method), p
+	return lr, true
 }
 
 // Decide is what the gate says about the action name of connector id with args.
@@ -52,6 +98,27 @@ func Decide(rules []Rule, id, name string, args json.RawMessage) string {
 		}
 	}
 	return Confirm
+}
+
+// gate lets the action name of c through or answers instead of it: Deny refuses, Confirm asks the user with the
+// card's words (Describe, and who will see it) and refuses unless they allow it, Allow says nothing. A nil result
+// means run it.
+func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string, args json.RawMessage, ask Ask) *proto.ToolResult {
+	switch Decide(rules, c.ID(), name, args) {
+	case Deny:
+		res := proto.TextResult("The hub's rules (connector_gate) do not allow "+name+".", true)
+		return &res
+	case Confirm:
+		act, summary := a.Describe(ctx, name, args)
+		if act.Visible != "" {
+			summary += "\n\n谁会看到：" + act.Visible
+		}
+		if ask == nil || !ask(ctx, summary, args) {
+			res := proto.TextResult("The user declined "+name+".", true)
+			return &res
+		}
+	}
+	return nil
 }
 
 func matches(pattern, s string) bool {

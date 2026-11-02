@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
@@ -637,7 +638,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			return proto.AssistantLark{}, nil
 		}
 		lc := m.hub.cfg.Lark
-		out := proto.AssistantLark{Rules: m.hub.cfg.LarkGate, Prefer: lc.Prefer}
+		out := proto.AssistantLark{Rules: connector.LarkRules(m.hub.cfg.ConnectorGate, m.hub.cfg.LarkGate), Prefer: lc.Prefer}
 		if lc.CLI != nil {
 			out.CLI = &proto.LarkCLI{Bin: lc.CLI.Bin, Profile: lc.CLI.Profile}
 		}

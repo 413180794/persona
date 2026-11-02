@@ -60,8 +60,10 @@
   - 碰 `lark-connector_AGENT_TOKEN`、`/proc/*/environ`、直接 curl lark-connector、给 ol 加 `-v` / `--trace` / `-w` 这类会把请求头打出来的参数：直接拒绝。
   - 别的命令（接 python、写到 /tmp 以外、`$(…)`）：闸门不管，按权限模式走普通的 Bash 批准；但只要里面有 `ol` 的写（`ol POST …`），
     不管权限模式（包括 bypass）都弹「飞书」卡片，整条命令给他看。
-  - 规则是配置：hub.json `lark_gate` 是一串 `{method, path, body?, action: allow|confirm|deny}`（path 里 `*` 一段、`**` 剩下的全部），
-    排在内置规则前面，第一条匹配的说了算。比如以后想让发消息不再确认：`{"method":"POST","path":"/conversations/*/messages","action":"allow"}`。
+  - 规则是配置：写在 hub.json `connector_gate`，和其他连接器的写操作一个写法，`connector` 写 `lark`，`action` 写「方法 路径」（path 里 `*` 一段、`**` 剩下的全部，
+    `"*"` 是任何调用），`match` 按 body 的顶层字段，`decision` 是 `allow|confirm|deny`；排在内置规则前面，第一条匹配的说了算。
+    比如以后想让发消息不再确认：`{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`。
+    老的 `lark_gate`（`{method, path, body?, action}`）照样生效，排在 `connector_gate` 的飞书规则后面；hub 把两份合成一份交给 node（`connector.LarkRules`，2026-11-03 迁移 M5）。
 - 早报、「今天要我处理什么」可以用 `ol POST /context/harvest '{"preset":"today"}'`（@我、日程、待办、我的审批，一次拿到）。
 
 ## 飞书：lark-cli（2026-11-03，#273 的 L1）
@@ -88,7 +90,8 @@
     `lark-cli api` 按 HTTP 方法：GET / HEAD 放行，其余确认（卡片上是方法、路径和 `--data`）。
   - 拒绝：`auth login / logout`（登录他自己做）、`config`、`profile`、`update`、自己传 `--profile`、碰 `~/.lark-cli/`。
   - 闸门读不懂的命令（循环、`$(…)`、接 python）里有 lark-cli：只要有一个不是已知的读，就整条命令在手机上确认，不管权限模式。
-  - hub.json `lark_gate` 的规则先匹配：`{"method":"CLI","path":"/im/+messages-send","action":"allow"}`。
+  - hub.json 的规则先匹配：`connector_gate` 里 `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}`（老的 `lark_gate` 写法
+    `{"method":"CLI","path":"/im/+messages-send","action":"allow"}` 也行）。
 - **还没做**：runtime 助手（DSH、pi）的提示词和 `lark-connector` 工具还只认 lark-connector；设置页的 lark-cli 状态、缺的权限（L2）。
 
 ## 主对话、知识库和上下文流动（2026-10-30）

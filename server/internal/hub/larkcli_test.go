@@ -2,8 +2,10 @@ package hub
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
+	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -13,6 +15,8 @@ import (
 func TestAssistantLarkWithLarkCLIOnly(t *testing.T) {
 	h := newTestHub(t)
 	h.cfg.Lark = lark.Config{CLI: &lark.CLIConfig{Bin: "/opt/lark/bin/lark-cli", Profile: "work"}, Prefer: "cli"}
+	h.cfg.ConnectorGate = []connector.Rule{{Connector: "lark", Action: "CLI /im/+messages-send", Decision: "allow"}}
+	h.cfg.LarkGate = []proto.LarkRule{{Method: "CLI", Path: "/docs/**", Action: "deny"}}
 	h.lark = lark.New(h.cfg.Lark)
 	m := newMachine(h, MachineConfig{ID: "server", Name: "服务器", Kind: "local"})
 	h.machines, h.byID["server"] = []*Machine{m}, m
@@ -24,6 +28,10 @@ func TestAssistantLarkWithLarkCLIOnly(t *testing.T) {
 	got := out.(proto.AssistantLark)
 	if got.CLI == nil || got.CLI.Bin != "/opt/lark/bin/lark-cli" || got.CLI.Profile != "work" || got.Prefer != "cli" {
 		t.Fatalf("lark-cli config not passed on: %+v", got)
+	}
+	// connector_gate's lark rules first, then the older lark_gate ones.
+	if want := []proto.LarkRule{{Method: "CLI", Path: "/im/+messages-send", Action: "allow"}, h.cfg.LarkGate[0]}; !reflect.DeepEqual(got.Rules, want) {
+		t.Fatalf("rules: %+v, want %+v", got.Rules, want)
 	}
 	if got.Base != "" || got.Token != "" {
 		t.Fatalf("no lark-connector, no token: %+v", got)
