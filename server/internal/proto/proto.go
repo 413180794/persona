@@ -69,6 +69,14 @@ type Engine struct {
 	Note      string `json:"note,omitempty"`
 }
 
+// Protocol is the app <-> hub protocol's major version: it goes up only for a change an older app cannot live with
+// (features cover everything finer). MinAppBuild is the oldest app build (CFBundleVersion) this hub works with; 0:
+// any. Both are in /api/v1/health and the WebSocket hello (docs/hub-update.md「兼容」).
+const (
+	Protocol    = 1
+	MinAppBuild = 0
+)
+
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
 // clients that need to know before they try (docs/protocol.md).
 var Features = []string{

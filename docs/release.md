@@ -146,10 +146,14 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
 
 - `release.sh` 传完 TestFlight 后接着跑它，版本号是 `<提交>-<构建号>`，和这一版 TestFlight 对得上；`NO_PUBLISH=1` 只发 TestFlight，
   配置里没有 `publish.site_url` 也不发。单独跑：`./scripts/publish.sh`，`NO_DEPLOY=1` 只编译和检查（产物在 `build-publish/`）。
-- 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`：
+- 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`，写进 `channel=release`、build 号（UTC `YYYYMMDDHHMM`）和 `updateURL`：
   - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.jarvis/web` 时就用二进制里的；有就照旧用目录里的。
-  - **不带 lark-connector skill**（`assistantskills/files_public.go`）：它是从私有的上游仓库拷来的（GPL-3.0），不是我们能再分发的；
-    公开版的助手没有这个 skill，脚本会确认二进制里没有它。自己的机器照旧用 `deploy.sh` 编的完整版。
+  - **不带任何 skill**：lark-connector 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.jarvis/skills/`，
+    所以只有一种二进制，我们自己的 hub 也用它（`docs/hub-update.md`）。脚本会确认二进制里没有 lark-connector。
+    `-tags public` 不改变任何代码（`TestOneBuild`），只是给隐私扫描的标记。
+  - **版本清单** `dl/latest.json`（各平台压缩包和解压后的 sha256、build 号、commit），配置了 `publish.signing_key` 就签出 `latest.json.sig`，
+    并用新二进制编进去的公钥验一遍；发布前检查 build 号比线上的大、线上那版的 commit 是这次的祖先。各 hub 只装签过名的
+    （`docs/hub-update.md`「发布」「发布者生成钥匙」）。
   - 上传前跑 `check_bundle_privacy.py --whole-short`：二进制里不能有配置里的任何值（Go 的模块路径除外；四个字以内的值按整词比，
     Unicode 表和压缩过的 JS 里到处是短的字母组合）。公开依赖中的少量协议名、官方联系链接和标准网络常量按精确上下文分类，不放行域名或私网段；
     要求二进制的 `public` 标记、未 replace 的依赖及 checksum 与 `server/go.sum` 一致，构建前 `go mod verify`。已登记的个人值始终优先拦截，见 `docs/lessons/testing.md`。
@@ -157,7 +161,8 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
   Workers 静态资源每个文件最多 25 MiB（[官方限制](https://developers.cloudflare.com/workers/platform/limits/#static-assets)），上传前 `check_asset_sizes.py` 检查整个发布目录；本地 `build-publish/bin` 保留未压缩二进制供排查，但不上传。
   回归：`python3 -B -m unittest discover -s scripts -p 'test_compressed_publish.py'`。
 - 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
-  报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION` 和 `dl/SHA256SUMS` 确认上去的就是刚编的。
+  报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION`、`dl/SHA256SUMS`、`dl/latest.json`（和 `.sig`）确认上去的就是刚编的。
+  推送中继在同一个 Worker 里（`/relay/*`），每次发布会把它一起重新部署。
 - 推送中继已部署（2026-11-02）：常驻 `jarvisd relay` + Cloudflare Tunnel + 官网 Worker 转发，公网健康、源站保护、登记和鉴权已验证。
   发版配置需填 `app.push_relay`，安装带通知扩展的新 TestFlight 才会登记；真实设备上的通知解密仍要单独验收，见 `docs/push-relay.md`。
 - 还没有的（别人能装但还不顺手，见 `docs/config.md`）：一键 `jarvisd setup`（现在 hub 要自己准备 Postgres、`hub.json`）、
@@ -176,6 +181,6 @@ git tag v1.2.0 && git push origin v1.2.0   # -> ghcr.io/<owner>/<repo>:1.2.0 和
 - 不打 tag 想要一个当前分支的镜像：Actions 里手动运行 hub image（`edge`、`sha-<提交>`）。
 - PR 上只冒烟，不推（推送那一步才有 `packages: write`）。
 - 镜像里的 jarvisd 用 tag 去掉 `v` 当版本（`jarvisd version`）；node 跟它不一样时 App 提示「重新部署」，用的是镜像里带的 node 构建。
-- 构建用 `-tags public`（不带复制来的助手 skill），和 `publish.sh` 一样。
+- 镜像里的 jarvisd 是 `docker` 渠道：不带 skill（和所有二进制一样），不自己更新，有新镜像时提示拉取（`docs/hub-update.md`）。
 - 仓库私有时包也私有，NAS 要 `docker login ghcr.io`（`docs/docker.md`「镜像」）。
 

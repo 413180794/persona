@@ -15,6 +15,7 @@ type AssistantClaudeMD struct {
 	Machines  []AssistantMachine
 	Notes     string // 设置 › 助手 › 关于我, trimmed
 	ExtraDirs []string
+	lark-connector  bool // the assistant's machine has the lark-connector skill (~/.jarvis/skills/lark-connector): ol is on its PATH
 }
 
 func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assistant/claude_md", d) }

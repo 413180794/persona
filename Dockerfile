@@ -3,7 +3,8 @@
 # compiled on the build machine, only the last stage runs on the target platform.
 #
 #   docker build -t jarvis-hub .
-#   docker build --build-arg BUILD_TAGS= -t jarvis-hub .   # with the bundled assistant skills (not to redistribute)
+#
+# No skills are inside: the assistant's come from ~/.jarvis/skills on its machine (docs/hub-update.md「skill 从二进制里拿出来」).
 
 FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /src/web
@@ -20,19 +21,17 @@ COPY web/ ./
 RUN npm run build --ignore-scripts
 
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
-# VERSION: what the hub reports and compares with its nodes' (a node of another build gets 重新部署).
+# VERSION: what the hub reports and compares with its nodes' (a node of another build gets 重新部署). The image's
+# hub never replaces itself (channel docker): it says when a newer image is out (docs/hub-update.md).
 ARG VERSION=dev
-# BUILD_TAGS=public leaves out the skills copied from a private upstream, as the published binaries do
-# (scripts/publish.sh); an image only you pull can carry them (empty).
-ARG BUILD_TAGS=public
 WORKDIR /src/server
 COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./
 COPY --from=web /src/web/dist/ internal/hub/webdist/
 RUN for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do \
-      CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -tags "$BUILD_TAGS" -trimpath \
-        -ldflags "-s -w -X main.version=$VERSION" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/jarvisd || exit 1; \
+      CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
+        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/jarvisd || exit 1; \
     done
 
 FROM alpine:3.22

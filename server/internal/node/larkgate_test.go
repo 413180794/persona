@@ -1,6 +1,8 @@
 package node
 
 import (
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,12 +13,45 @@ import (
 )
 
 func TestAssistantLarkAccountEnvironment(t *testing.T) {
+	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), larkCfg: proto.AssistantLark{
 		Base: "http://127.0.0.1:18000", Token: "test-token", Account: 2,
 	}}
 	env := n.assistantLarkEnv(t.TempDir())
 	if !strings.Contains(strings.Join(env, "\n"), "lark-connector_ACCOUNT=2") {
 		t.Fatal("assistant did not inherit the configured account")
+	}
+}
+
+// ol is on the assistant's PATH only when the lark-connector skill is in the user's space (~/.jarvis/skills, linked into
+// the assistant's directory): skills are no longer inside jarvisd (docs/hub-update.md).
+func TestOlOnlyWithTheSkill(t *testing.T) {
+	user, cwd := t.TempDir(), t.TempDir()
+	t.Setenv("JARVIS_SKILLS_DIR", user)
+	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0)}
+	ol := filepath.Join(n.dir, "assistant-bin", "ol")
+	n.assistantLarkEnv(cwd)
+	if _, err := os.Stat(ol); !os.IsNotExist(err) {
+		t.Fatalf("ol without the lark-connector skill: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(user, "lark-connector", "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(user, "lark-connector", "SKILL.md"), []byte("---\nname: lark-connector\n---\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(user, "lark-connector", "scripts", "ol.sh"), []byte("#!/bin/bash\n"), 0o755)
+	n.assistantLarkEnv(cwd)
+	if _, err := os.Stat(ol); err != nil {
+		t.Fatalf("no ol with the skill: %v", err)
+	}
+	if st, err := os.Lstat(filepath.Join(cwd, ".claude", "skills", "lark-connector")); err != nil || st.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the skill is not linked into the assistant's directory: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(user, "lark-connector")); err != nil {
+		t.Fatal(err)
+	}
+	n.assistantLarkEnv(cwd)
+	if _, err := os.Stat(ol); !os.IsNotExist(err) {
+		t.Fatal("ol stayed after the skill was removed")
 	}
 }
 

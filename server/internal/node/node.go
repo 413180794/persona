@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/assistantskills"
 	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
@@ -674,6 +675,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "git.log":
 		list, err := n.gitLog(ctx, p.Cwd, p.Skip, p.Limit)
 		return map[string]any{"commits": list}, err
+	case "skills.list": // the skills the assistant gets on this machine (docs/hub-update.md「skill 从二进制里拿出来」)
+		return map[string]any{"skills": assistantskills.List(assistantskills.UserDir())}, nil
 	case "assistant.prepare":
 		var a struct {
 			Dir      string `json:"dir"`

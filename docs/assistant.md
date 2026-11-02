@@ -40,11 +40,13 @@
 
 用户要求：「lark-connector 自带 skill……现在只走我们的 MCP lark_* 工具，自由度低」「skill 弄一个副本就行，不搞整个 lark-connector 仓库丢进去」。
 
-- **副本**：`server/internal/assistantskills/lark-connector/` 是 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、
-  `scripts/ol.sh`；不要 `evals/` 和要 Node 的 `*.mjs`，hub 上没有 Node），来源 commit 记在 `assistantskills/SOURCE.md`。
+- **副本**：仓库的 `skills/lark-connector/` 是 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、
+  `scripts/ol.sh`；不要 `evals/` 和要 Node 的 `*.mjs`，hub 上没有 Node），来源 commit 记在 `skills/SOURCE.md`。
   同步上游：`scripts/sync_lark-connector_skill.sh <lark-connector checkout>`，看 diff 后提交。
-- **怎么到助手手里**：jarvisd 把副本编进二进制（`go:embed`），node 每次起助手进程时装到 `~/.jarvis/assistant/.claude/skills/lark-connector`
-  （内容没变就跳过），所以随部署走、不用另外拷。`~/.jarvis/assistant-bin/ol` 是一行包装，放在助手进程的 PATH 最前，助手直接 `ol GET /me`。
+- **怎么到助手手里**（2026-11-02 起，`docs/hub-update.md`「skill 从二进制里拿出来」）：它**不在 jarvisd 里**（不能再分发），
+  放在跑助手那台机器的 `~/.jarvis/skills/lark-connector`（用户自己的 skill 空间），node 每次起助手进程时把它链接到 `~/.jarvis/assistant/.claude/skills/lark-connector`。
+  旧版本 jarvisd 装进去的副本，node 第一次起助手时自动搬到 `~/.jarvis/skills/`。没有这个 skill 时没有 `ol`，助手的 CLAUDE.md 也改成只用 MCP 的 `lark_*`。
+  有的话 `~/.jarvis/assistant-bin/ol` 是一行包装，放在助手进程的 PATH 最前，助手直接 `ol GET /me`。
 - **token**：node 起进程前向 hub 要（RPC `assistant.lark`，只回给 assistant 所在的机器）：hub.json `lark.base_url` 去掉 `/agent/v1` 作为
   `lark-connector_AGENT_BASE`，`lark.token`（没写就照旧从 lark-connector 容器读）作为 `lark-connector_AGENT_TOKEN`，只放进这个进程的环境变量，不落盘、不进日志。
   ol.sh 找 token 的顺序是这个环境变量 → `lark-connector_ENV_FILE` → 所在仓库的 `.env`；副本不在仓库里，只靠环境变量（实测通）。

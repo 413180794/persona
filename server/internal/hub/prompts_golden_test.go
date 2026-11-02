@@ -196,12 +196,14 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 	h.cfg.Assistant.Owner = "示例用户"
 	h.cfg.Assistant.Notes = "  我在示例公司做后端。\n常用 skills：demo-skill。  "
 	h.kb.cfg.ExtraDirs = []string{"/home/me/notes", "/home/me/facts"}
-	golden(t, "assistant_claude_md.full", h.assistantClaudeMD(ctx))
+	golden(t, "assistant_claude_md.full", h.assistantClaudeMD(ctx, true))
 
 	bare := newTestHub(t)
 	m := newMachine(bare, MachineConfig{ID: "server", Name: "服务器", Kind: "local"})
 	bare.machines, bare.byID["server"] = []*Machine{m}, m
-	golden(t, "assistant_claude_md.bare", bare.assistantClaudeMD(ctx))
+	golden(t, "assistant_claude_md.bare", bare.assistantClaudeMD(ctx, true))
+	// No lark-connector skill on the assistant's machine (~/.jarvis/skills): no ol, Feishu through the MCP tools.
+	golden(t, "assistant_claude_md.no_lark-connector", bare.assistantClaudeMD(ctx, false))
 }
 
 var (

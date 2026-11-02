@@ -33,7 +33,8 @@
   ],
   "publish": {
     "site_url": "https://jarvis.example.com",
-    "wrangler": ""
+    "wrangler": "",
+    "signing_key": ""
   },
   "simulator": "",
   "xcode": "",

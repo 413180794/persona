@@ -1,7 +1,9 @@
 #!/bin/bash
 # Publish jarvisd for anyone to install (docs/release.md「发布 jarvisd」): build the four binaries with the web client
-# inside and without the copied skills (-tags public), check them for private values, then deploy the site/ worker
-# with dl/ and install.sh added, at the config's publish.site_url:
+# inside (no skills in them: those live in each machine's ~/.jarvis/skills), check them for private values, write the
+# release manifest latest.json (signed with publish.signing_key when set, docs/hub-update.md「发布」), then deploy the
+# site/ worker with dl/ and install.sh added, at the config's publish.site_url. Every hub of the release channel
+# updates itself to it. The worker also runs the push relay (/relay/*): it is deployed with it.
 #
 #   curl -fsSL <publish.site_url>/install.sh | sh
 #
@@ -13,7 +15,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 eval "$(python3 scripts/jarvis_config.py env)"
 [ -n "$JARVIS_PUBLISH_URL" ] || { echo "publish.site_url is not set in the config (docs/config.md)" >&2; exit 2; }
-VERSION="${VERSION:-$(git describe --always --dirty 2>/dev/null || echo dev)-$(date +%Y%m%d%H%M)}"
+# The build number orders releases (UTC YYYYMMDDHHMM): hubs install only a larger one.
+BUILD="$(date -u +%Y%m%d%H%M)"
+VERSION="${VERSION:-$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD}"
+COMMIT="$(git rev-parse HEAD)"
 OUT=build-publish
 rm -rf "$OUT"
 mkdir -p "$OUT/bin"
@@ -28,7 +33,9 @@ cp -R web/dist/. "$WEBDIST/"
 
 # Public dependency constants are classified by build-info checksums; verify the actual module cache before building.
 (cd server && go mod verify)
-LDFLAGS="-s -w -X main.version=$VERSION"
+LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.updateURL=$JARVIS_PUBLISH_URL/dl"
+# -tags public changes no code (no file builds differently with it, TestOneBuild): it marks the binary for
+# check_bundle_privacy.py, which then knows the dependency constants it may skip.
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/jarvisd-${t%/*}-${t#*/}" ./cmd/jarvisd)
@@ -36,8 +43,9 @@ done
 cleanup
 sed "s|@JARVIS_DL@|$JARVIS_PUBLISH_URL/dl|" scripts/install.sh > "$OUT/install.sh"
 
-# Anyone can download these: no private values in them (CLAUDE.md), and no copied skill. install.sh is the repo's
-# (scripts/privacy_check.py covers it) plus the site's address, which is public on purpose.
+# Anyone can download these: no private values in them (CLAUDE.md), and no copied skill (lark-connector is the user's, in
+# ~/.jarvis/skills). install.sh is the repo's (scripts/privacy_check.py covers it) plus the site's address, which is
+# public on purpose.
 python3 scripts/check_bundle_privacy.py --whole-short "$OUT/bin"
 if strings "$OUT/bin/jarvisd-linux-amd64" | grep -q "name: lark-connector"; then
   echo "the lark-connector skill is in the public build" >&2
@@ -45,6 +53,11 @@ if strings "$OUT/bin/jarvisd-linux-amd64" | grep -q "name: lark-connector"; then
 fi
 host_bin="$OUT/bin/jarvisd-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 [ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built jarvisd does not report $VERSION" >&2; exit 1; }
+"$host_bin" version -v | grep -qx "channel release, build $BUILD" || { echo "the built jarvisd is not release build $BUILD" >&2; exit 1; }
+
+# Releases only move forward: a larger build number than the one served, and the served commit an ancestor of this one.
+curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/null || : > "$OUT/served.json"
+"$host_bin" release check-next "$OUT/served.json" --build "$BUILD" --commit "$COMMIT" || exit 1
 
 # 隐私扫描检查未压缩的原始二进制；只把压缩包发布到 Workers，避免单资源超过 25 MiB。
 for bin in "$OUT/bin"/jarvisd-*; do
@@ -52,11 +65,24 @@ for bin in "$OUT/bin"/jarvisd-*; do
 done
 (cd "$OUT/bin" && shasum -a 256 jarvisd-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 
+# The manifest hubs update from, signed when the key is configured (it never leaves this machine). Unsigned, hubs only
+# say a newer release is out and install nothing (docs/hub-update.md「签名还没启用的过渡期」).
+"$host_bin" release manifest --dir "$OUT/bin" --version "$VERSION" --build "$BUILD" --commit "$COMMIT" --out "$OUT/bin/latest.json"
+if [ -n "${JARVIS_SIGNING_KEY:-}" ]; then
+  [ -f "$JARVIS_SIGNING_KEY" ] || { echo "publish.signing_key is set but $JARVIS_SIGNING_KEY does not exist" >&2; exit 1; }
+  "$host_bin" release sign "$JARVIS_SIGNING_KEY" "$OUT/bin/latest.json"
+  # With the keys the new binary trusts: a key not yet in keys.go would publish what no hub can install.
+  "$host_bin" release verify "$OUT/bin/latest.json" || exit 1
+else
+  echo "no publish.signing_key: latest.json goes out unsigned, hubs will not update themselves (docs/hub-update.md「发布者生成钥匙」)" >&2
+fi
+
 # The site with dl/ and install.sh added, deployed from a copy (site/ in the tree stays as committed).
 rm -rf "$OUT/site"
 cp -R site "$OUT/site"
 mkdir -p "$OUT/site/public/dl"
-cp "$OUT/bin/"*.gz "$OUT/bin/SHA256SUMS" "$OUT/bin/VERSION" "$OUT/site/public/dl/"
+cp "$OUT/bin/"*.gz "$OUT/bin/SHA256SUMS" "$OUT/bin/VERSION" "$OUT/bin/latest.json" "$OUT/site/public/dl/"
+[ -f "$OUT/bin/latest.json.sig" ] && cp "$OUT/bin/latest.json.sig" "$OUT/site/public/dl/"
 cp "$OUT/install.sh" "$OUT/site/public/install.sh"
 python3 scripts/check_asset_sizes.py "$OUT/site/public"
 if [ -n "${NO_DEPLOY:-}" ]; then
@@ -77,4 +103,8 @@ if [ "$served" != "$VERSION" ]; then
   exit 1
 fi
 curl -fsSL "$JARVIS_PUBLISH_URL/dl/SHA256SUMS" | cmp -s - "$OUT/bin/SHA256SUMS" || { echo "served SHA256SUMS differs" >&2; exit 1; }
+curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" | cmp -s - "$OUT/bin/latest.json" || { echo "served latest.json differs" >&2; exit 1; }
+if [ -f "$OUT/bin/latest.json.sig" ]; then
+  curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json.sig" | cmp -s - "$OUT/bin/latest.json.sig" || { echo "served latest.json.sig differs" >&2; exit 1; }
+fi
 echo "jarvisd $VERSION published: curl -fsSL $JARVIS_PUBLISH_URL/install.sh | sh"

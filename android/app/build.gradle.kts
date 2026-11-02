@@ -72,6 +72,9 @@ dependencies {
     implementation("androidx.window:window:1.3.0")
     // The home-screen widget (widget/JarvisWidget.kt); the last version that builds against compileSdk 34.
     implementation("androidx.glance:glance-appwidget:1.1.1")
+    // phone_health_summary (phone/Health.kt). 1.1.0-alpha08 is the last one that builds against compileSdk 34
+    // (alpha09 needs 35, 1.1.0 needs 36 and AGP 8.9).
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha08")
 
     testImplementation("junit:junit:4.13.2")
     // REST calls against a local HTTP server (same version as okhttp).

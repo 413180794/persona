@@ -20,9 +20,19 @@ import (
 	"github.com/chyroc/jarvis/server/internal/relay"
 	"github.com/chyroc/jarvis/server/internal/sysmon"
 	"github.com/chyroc/jarvis/server/internal/tunnel"
+	"github.com/chyroc/jarvis/server/internal/update"
 )
 
-var version = "dev"
+// What the build wrote in (-X): the version for people, and for updates (docs/hub-update.md) the channel
+// (release / docker / dev), the build number (UTC YYYYMMDDHHMM) and where the publisher's dl/ is.
+var (
+	version   = "dev"
+	channel   = ""
+	build     = ""
+	updateURL = ""
+)
+
+func buildInfo() update.Build { return update.Make(version, channel, build, updateURL) }
 
 const usage = `usage:
   jarvisd launch <name> …   run claude with a launcher kept in 设置 › 模型 (from the local node)
@@ -47,7 +57,9 @@ const usage = `usage:
   jarvisd relay [config]   run the push relay (config ~/.jarvis/relay.json): pushes for hubs without the app's APNs
                            key, payloads sealed to the phone (docs/push-relay.md)
   jarvisd sysmon [n]       print this machine's system info and n metric samples, with what they cost
-  jarvisd version`
+  jarvisd release keygen|manifest|sign|verify|check-next …
+                           the publisher's release signing (scripts/publish.sh, docs/hub-update.md「发布」)
+  jarvisd version [-v]     the version; -v adds the channel and build number`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -60,6 +72,12 @@ func main() {
 	switch os.Args[1] {
 	case "version", "--version", "-v":
 		fmt.Println(version)
+		if len(os.Args) > 2 && os.Args[2] == "-v" {
+			b := buildInfo()
+			fmt.Printf("channel %s, build %d\n", b.Channel, b.Number)
+		}
+	case "release":
+		err = runRelease(os.Args[2:])
 	case "hub":
 		sub := "run"
 		if len(os.Args) > 2 {
@@ -67,7 +85,7 @@ func main() {
 		}
 		switch sub {
 		case "run":
-			err = hub.Run(ctx, version)
+			err = hub.Run(ctx, buildInfo())
 		case "pair":
 			err = hub.Pair()
 		case "tailcat-key":

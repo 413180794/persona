@@ -49,6 +49,13 @@
   "properties": [],
   "required": []
  },
+ "phone_health_summary": {
+  "properties": [
+   "days",
+   "metrics"
+  ],
+  "required": []
+ },
  "phone_location_current": {
   "properties": [],
   "required": []

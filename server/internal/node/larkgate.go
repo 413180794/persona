@@ -14,7 +14,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// The assistant drives Feishu through lark-connector's own skill (assistantskills/lark-connector): Bash runs `ol METHOD PATH
+// The assistant drives Feishu through lark-connector's own skill (lark-connector, in the user's ~/.jarvis/skills): Bash runs `ol METHOD PATH
 // [BODY]` against the lark-connector agent API as the user. Every Bash call of the assistant passes a PreToolUse hook that
 // reads the command (docs/assistant.md「飞书：lark-connector skill」):
 //
@@ -518,21 +518,25 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 	return cfg
 }
 
-// assistantLarkEnv installs the skills in the assistant's directory and gives its process what ol.sh needs: Open
-// Lark's base and token (from the hub, only in this process's environment) and `ol` on PATH. Without a config from
-// the hub, only the skills: ol then says the agent API is not reachable.
+// assistantLarkEnv puts the skills in the assistant's directory (the user's from ~/.jarvis/skills, linked, and the
+// built-in ones, assistantskills) and gives its process what ol.sh needs when the lark-connector skill is among them:
+// lark-connector's base and token (from the hub, only in this process's environment) and `ol` on PATH. Without a config
+// from the hub, ol says the agent API is not reachable.
 func (n *Node) assistantLarkEnv(cwd string) []string {
 	skills := filepath.Join(cwd, ".claude", "skills")
-	if err := os.MkdirAll(skills, 0o755); err == nil {
-		if err := assistantskills.Install(skills); err != nil {
-			n.logger.Printf("assistant: install skills: %v", err)
-		}
+	if err := assistantskills.Sync(skills, assistantskills.UserDir(), n.logger.Printf); err != nil {
+		n.logger.Printf("assistant: skills: %v", err)
 	}
 	bin := filepath.Join(n.dir, "assistant-bin")
 	_ = os.MkdirAll(bin, 0o755)
-	wrapper := "#!/bin/sh\n# lark-connector's helper (the lark-connector skill), on the assistant's PATH (node/larkgate.go).\nexec bash " +
-		shellQuote(assistantskills.OlScript(skills)) + " \"$@\"\n"
-	_ = os.WriteFile(filepath.Join(bin, "ol"), []byte(wrapper), 0o755)
+	ol := filepath.Join(bin, "ol")
+	if _, err := os.Stat(assistantskills.OlScript(skills)); err == nil {
+		wrapper := "#!/bin/sh\n# lark-connector's helper (the lark-connector skill), on the assistant's PATH (node/larkgate.go).\nexec bash " +
+			shellQuote(assistantskills.OlScript(skills)) + " \"$@\"\n"
+		_ = os.WriteFile(ol, []byte(wrapper), 0o755)
+	} else {
+		_ = os.Remove(ol) // no lark-connector skill on this machine: no ol to call
+	}
 	env := []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "JARVIS_ASSISTANT_BIN=" + bin}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

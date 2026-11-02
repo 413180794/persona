@@ -25,11 +25,13 @@ import (
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/chyroc/jarvis/server/internal/update"
 )
 
 type Hub struct {
 	cfg      *Config
 	version  string
+	build    update.Build // channel, build number, where updates come from (docs/hub-update.md)
 	logger   *log.Logger
 	machines []*Machine
 	byID     map[string]*Machine
@@ -170,13 +172,14 @@ type pending struct {
 // (node.ResumeWait).
 var resumeGrace = 3 * time.Minute
 
-func Run(ctx context.Context, version string) error {
+func Run(ctx context.Context, b update.Build) error {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
 	}
+	version := b.Version
 	h := &Hub{
-		cfg: cfg, version: version, logger: log.New(os.Stderr, "", log.LstdFlags),
+		cfg: cfg, version: version, build: b, logger: log.New(os.Stderr, "", log.LstdFlags),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 	}

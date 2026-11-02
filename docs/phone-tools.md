@@ -69,6 +69,11 @@ Claude 再调一次会再问一次。
 健康有一个 iOS 的硬限制：**系统永远不告诉 App 读权限有没有被授予**（防泄漏）。所以设置页显示的是「是否已经
 请求过」，实际的拒绝会表现为查询结果为空。工具描述里已经写明这一点，模型不会把空结果当成「没数据」以外的结论。
 
+安卓的 `phone_health_summary` 读 Health Connect（`android/.../phone/Health.kt`），工具名、说明、参数和 iOS 一字不差（描述里
+「读权限永远不报告给 App」这句也照留，hub 只存一份工具列表）。不同的地方：Health Connect 会告诉 App 哪些读权限给了，
+所以设置页能显示「只允许了部分数据」，结果里没授权的指标列在 `not_granted`；一个都没授权时直接返回错误，而不是空结果。
+安卓 14 起 Health Connect 是系统自带，8–13 要另装（没有 Google 服务的手机通常没有），这时工具返回「这台手机没有 Health Connect」。
+
 ## 实现要点
 
 - 连接复用：每个账号不适用——这里每个工具自己建查询；EventKit 的 `EKEventStore`、`CNContactStore`、

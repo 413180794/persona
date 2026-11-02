@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Forum
@@ -255,6 +256,8 @@ object JIcons {
     val meeting: ImageVector = Icons.Rounded.Videocam
     /** A calendar event. */
     val event: ImageVector = Icons.Rounded.CalendarMonth
+    /** Health data (设置 › 手机数据 › 健康, iOS `heart`). */
+    val health: ImageVector = Icons.Rounded.Favorite
     /** A one-off follow-up: Jarvis comes back to something later. */
     val followOn: ImageVector = Icons.Rounded.SubdirectoryArrowRight
     /** A run that was skipped. */

@@ -22,7 +22,7 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
 
 - `GET /api/v1/lark/raw/<path>` = lark-connector `GET /agent/v1/<path>`（只读；JSON 里的 `/api/...` 媒体路径已改写回 hub）。
   `POST` 只放行 `search/page`、`search/mention-history`（只读搜索，POST 是因为 body 大）。助手的 `lark_*` MCP 工具走同一套白名单（`lark.Read`）。
-- **助手自己调 lark-connector**（2026-10-30）：用 lark-connector 自带的 lark-connector skill（仓库里的副本 `server/internal/assistantskills/lark-connector`），
+- **助手自己调 lark-connector**（2026-10-30）：用 lark-connector 自带的 lark-connector skill（仓库里的副本 `skills/lark-connector`，装在跑助手那台机器的 `~/.jarvis/skills/`），
   `ol METHOD PATH [JSON]` 直连 lark-connector 的 agent API，读写都能做；写操作先过 node 的闸门（会被别人看到的在手机上确认）。
   详见 `docs/assistant.md`「飞书：lark-connector skill」。下面的接口速查是这边实测的补充，lark-connector 的 references 更全，以它和 `ol GET /` 为准。
 - 会话、消息、已读、发消息、表情回复、卡片按钮走 hub 的专用路由（`docs/protocol.md` 飞书 API）。

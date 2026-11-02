@@ -64,6 +64,8 @@ enum class Source(val title: String, val detail: String, val permissions: List<S
     Contacts("通讯录", "按姓名、公司、邮箱、电话搜索联系人", listOf(Manifest.permission.READ_CONTACTS)),
     Calendar("日历", "看日程；新建日程前先在手机上确认", listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)),
     Location("位置", "一次性定位和地址", listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)),
+    /** Not Android runtime permissions: Health Connect grants its own ([Health.permissions], asked for in 设置). */
+    Health("健康", "步数、心率、睡眠、活动能量等汇总", emptyList()),
     Photos("照片", "看最近的照片和截图，按需读出一张给 Claude 看", photoPermissions()),
 }
 
@@ -168,6 +170,14 @@ object PhoneTools {
             schema(), Source.Location,
         ) { c, _ -> location(c) },
         PhoneTool(
+            "phone_health_summary",
+            "Summarize the user's health data per day. Metrics: steps, distance (meters), active_energy (kcal), heart_rate (bpm, average/min/max over the day), resting_heart_rate (bpm), sleep (hours asleep), weight (kg). Defaults to steps over the last 7 days. Only the requested metrics are read. Days run from local midnight to midnight; today's numbers are partial. Returns one row per day with only the days that have data. Read access is never reported to apps, so an empty result can also mean the user denied read access.",
+            schema(
+                "metrics" to array("Metrics to summarize. Default [\"steps\"].", str("One metric.", Health.metricNames)),
+                "days" to int("How many days back from today, default 7, max 90.", 1, 90),
+            ), Source.Health,
+        ) { c, a -> Health.summary(c, a) },
+        PhoneTool(
             "phone_photos_recent",
             "List recent photos and videos, newest first. Each row has the Photos local identifier, creation date (ISO 8601), media type (image/video), pixel width and height, whether it is a screenshot, whether it is a favorite, duration in seconds for videos, and the latitude/longitude where the photo was taken when it is geotagged. Pass an id to phone_photo_get to actually see the image.",
             schema(
@@ -206,7 +216,11 @@ private fun schema(vararg props: Pair<String, JsonObject>, required: List<String
     putJsonObject("properties") { props.forEach { (k, v) -> put(k, v) } }
     if (required.isNotEmpty()) put("required", buildJsonArray { required.forEach { add(it) } })
 }
-private fun str(d: String) = buildJsonObject { put("type", "string"); put("description", d) }
+private fun str(d: String, values: List<String> = emptyList()) = buildJsonObject {
+    put("type", "string"); put("description", d)
+    if (values.isNotEmpty()) put("enum", buildJsonArray { values.forEach { add(it) } })
+}
+private fun array(d: String, items: JsonObject) = buildJsonObject { put("type", "array"); put("description", d); put("items", items) }
 private fun bool(d: String) = buildJsonObject { put("type", "boolean"); put("description", d) }
 private fun int(d: String, min: Int, max: Int) = buildJsonObject { put("type", "integer"); put("description", d); put("minimum", min); put("maximum", max) }
 

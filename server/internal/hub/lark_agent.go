@@ -262,7 +262,7 @@ func (h *Hub) startLarkAgent(ctx context.Context, cfg LarkAgentConfig, machineID
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx)}, &prep); err != nil {
+	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector"))}, &prep); err != nil {
 		return "", "", err
 	}
 	var res struct {

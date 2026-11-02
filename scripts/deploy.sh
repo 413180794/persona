@@ -8,7 +8,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 eval "$(python3 scripts/jarvis_config.py env)"
 cd server
-VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$(date +%Y%m%d%H%M)"
+# Straight from master, for when a change cannot wait for a release: the build number is the build time (UTC), so an
+# older release never replaces it and the next release does (docs/hub-update.md「直接部署」).
+BUILD="$(date -u +%Y%m%d%H%M)"
+VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD"
 TARGETS=("$@")
 [ ${#TARGETS[@]} -eq 0 ] && read -ra TARGETS <<< "$JARVIS_MACHINES"
 
@@ -29,7 +32,7 @@ TARGETS=("${ORDERED[@]}")
 # machine <id> <field>: a field of a machine in the config (ssh host, os, hostnames).
 field() { python3 ../scripts/jarvis_config.py machine "$1" | python3 -c "import json,sys;v=json.load(sys.stdin).get('$2','');print(' '.join(v) if isinstance(v,list) else v)"; }
 mkdir -p bin
-LDFLAGS="-s -w -X main.version=$VERSION"
+LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD${JARVIS_PUBLISH_URL:+ -X main.updateURL=$JARVIS_PUBLISH_URL/dl}"
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-linux-amd64 ./cmd/jarvisd
 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-darwin-arm64 ./cmd/jarvisd
 echo "built $VERSION"

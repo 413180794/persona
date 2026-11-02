@@ -111,6 +111,7 @@
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
 | `publish.site_url` | `publish.sh` 把 `jarvisd` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 jarvisd」）；不写就不发布 |
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
+| `publish.signing_key` | 发布者给 `latest.json` 签名的私钥文件路径（0600，只在发布者自己的机器上，绝不进仓库；生成见 `docs/hub-update.md`「发布者生成钥匙」）。不写就照样发布，但清单不签名，各 hub 只提示、不自动更新 |
 | `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`jarvis_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
 | `android.application_id` | Android App 的 application id（`scripts/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
 

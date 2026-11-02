@@ -205,27 +205,107 @@ private fun PhoneDataSection() {
         asking = null; tick++
         if (result.values.any { it }) runner.setEnabled(s, true)
     }
+    val granted = remember(tick) { jarvis.android.phone.Source.entries.associateWith { jarvis.android.phone.PhoneTools.granted(ctx, it) } }
+    PhoneDataGroup(
+        enabled, granted,
+        onToggle = { src, want ->
+            when {
+                !want -> runner.setEnabled(src, false)
+                granted[src] == true -> runner.setEnabled(src, true)
+                else -> { asking = src; request.launch(src.permissions.toTypedArray()) }
+            }
+        },
+        health = { HealthRow(jarvis.android.phone.Source.Health in enabled, runner) },
+    )
+}
+
+/** The 手机数据 group from what is on and granted; [health] draws the 健康 row (the screenshots pass each of its states). */
+@Composable
+internal fun PhoneDataGroup(
+    enabled: Set<jarvis.android.phone.Source>,
+    granted: Map<jarvis.android.phone.Source, Boolean>,
+    onToggle: (jarvis.android.phone.Source, Boolean) -> Unit,
+    health: @Composable () -> Unit,
+) {
     KitGroup(
         header = "手机数据",
         footer = "让 Claude 用这台手机上的数据（通过 hub 调用 phone_* 工具）。默认都关着；新建日程这类会改数据的操作，执行前会先在手机上问你。" +
             "同时用 iPhone 和安卓时，最后连上 hub 的那台回答。",
     ) {
         jarvis.android.phone.Source.entries.forEach { src ->
+            if (src == jarvis.android.phone.Source.Health) { row(health); return@forEach }
             row {
-                val granted = remember(tick, src) { jarvis.android.phone.PhoneTools.granted(ctx, src) }
                 val on = src in enabled
                 KitSwitchRow(
-                    src.title, on, { want ->
-                        when {
-                            !want -> runner.setEnabled(src, false)
-                            granted -> runner.setEnabled(src, true)
-                            else -> { asking = src; request.launch(src.permissions.toTypedArray()) }
-                        }
-                    },
-                    subtitle = if (on && !granted) "没有权限，在系统设置里给 Jarvis 授权" else src.detail,
+                    src.title, on, { onToggle(src, it) },
+                    subtitle = if (on && granted[src] != true) "没有权限，在系统设置里给 Jarvis 授权" else src.detail,
                     icon = JIcons.phone, iconTint = JTheme.hue.green,
                 )
             }
         }
+    }
+}
+
+/** What the 健康 row shows: Health Connect missing / out of date, or the switch with how much was granted. */
+sealed interface HealthRowState {
+    data class Unavailable(val reason: String) : HealthRowState
+    data class Available(val on: Boolean, val some: Boolean, val all: Boolean) : HealthRowState
+}
+
+/**
+ * 健康: Health Connect grants its own read permissions (its dialog, not Android's), and on Android 13 and older it is
+ * an app that may be missing or out of date — then the row says so and offers to get it instead of a switch that
+ * can't work. Permissions are re-read whenever the page comes back (the user may revoke them in Health Connect).
+ */
+@Composable
+private fun HealthRow(on: Boolean, runner: jarvis.android.phone.PhoneToolRunner) {
+    val ctx = LocalContext.current
+    val health = jarvis.android.phone.Health
+    var tick by remember { mutableStateOf(0) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) { lifecycle.currentStateFlow.collect { if (it == androidx.lifecycle.Lifecycle.State.RESUMED) tick++ } }
+    val unavailable = remember(tick) { health.unavailableReason(ctx) }
+    var granted by remember { mutableStateOf<Set<String>?>(null) }
+    LaunchedEffect(tick) { granted = health.granted(ctx) }
+    val request = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.health.connect.client.PermissionController.createRequestPermissionResultContract(),
+    ) { result ->
+        tick++
+        if (result.isNotEmpty()) runner.setEnabled(jarvis.android.phone.Source.Health, true)
+    }
+    // Until Health Connect has answered, take it as granted: no warning flashes on the row.
+    val all = granted?.containsAll(health.permissions) ?: true
+    val state = unavailable?.let { HealthRowState.Unavailable(it) }
+        ?: HealthRowState.Available(on, some = granted?.any { it in health.permissions } ?: true, all = all)
+    HealthRowView(
+        state,
+        onGet = { runCatching { ctx.startActivity(health.installIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+        onToggle = { want ->
+            when {
+                !want -> runner.setEnabled(jarvis.android.phone.Source.Health, false)
+                all -> runner.setEnabled(jarvis.android.phone.Source.Health, true)
+                else -> request.launch(health.permissions)
+            }
+        },
+    )
+}
+
+@Composable
+internal fun HealthRowView(state: HealthRowState, onGet: () -> Unit, onToggle: (Boolean) -> Unit) {
+    val src = jarvis.android.phone.Source.Health
+    when (state) {
+        is HealthRowState.Unavailable -> KitRow(
+            src.title, onClick = onGet, icon = JIcons.health, iconColor = JTheme.colors.danger,
+            subtitle = "${state.reason}，装好后再打开（安卓 14 起系统自带）", value = "获取",
+        )
+        is HealthRowState.Available -> KitSwitchRow(
+            src.title, state.on, onToggle,
+            subtitle = when {
+                state.on && !state.some -> "Health Connect 里没有允许读取，关掉再打开重新授权"
+                state.on && !state.all -> "只允许了部分数据，缺的那些查不到"
+                else -> src.detail
+            },
+            icon = JIcons.health, iconTint = JTheme.colors.danger,
+        )
     }
 }

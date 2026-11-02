@@ -97,9 +97,11 @@ func isAssistant(cwd, dir string) bool {
 	return cwd == dir || strings.HasSuffix(cwd, "/"+assistantDir)
 }
 
-// assistantClaudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md).
-func (h *Hub) assistantClaudeMD(ctx context.Context) string {
-	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(h.cfg.Assistant.Owner), Notes: h.assistantNotes(ctx), ExtraDirs: h.kb.cfg.ExtraDirs}
+// assistantClaudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md); lark-connector: the assistant's
+// machine has the lark-connector skill (assistantSkills).
+func (h *Hub) assistantClaudeMD(ctx context.Context, lark-connector bool) string {
+	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(h.cfg.Assistant.Owner), Notes: h.assistantNotes(ctx), ExtraDirs: h.kb.cfg.ExtraDirs,
+		lark-connector: lark-connector}
 	for _, m := range h.machines {
 		d.Machines = append(d.Machines, prompts.AssistantMachine{Name: m.cfg.Name, ID: m.cfg.ID, Local: m.cfg.Kind == "local", SSHHost: m.cfg.SSHHost})
 	}
@@ -129,6 +131,7 @@ func (h *Hub) assistantState(ctx context.Context, withArchived bool) assistantVi
 }
 
 func (h *Hub) assistantRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/v1/skills", h.serveSkills)
 	api.HandleFunc("GET /api/v1/assistant", func(w http.ResponseWriter, r *http.Request) {
 		archived := r.URL.Query().Get("archived")
 		writeJSON(w, h.assistantState(r.Context(), archived == "1" || archived == "true"))
@@ -295,7 +298,7 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx)}, &prep); err != nil {
+	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector"))}, &prep); err != nil {
 		return nil, err
 	}
 	// Headless claude (node/assistant.go): no herdr tab, streamed tokens, any launcher per message.
@@ -336,7 +339,7 @@ func (h *Hub) warmAssistant(launcher string) {
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx)}, &prep); err != nil {
+	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector"))}, &prep); err != nil {
 		return
 	}
 	params := map[string]any{"cwd": prep.Cwd, "launcher": launcher}

@@ -45,9 +45,8 @@ Packages 设置里把它改成公开。Postgres 用的是 Docker Hub 上的 `pos
 - 嵌进二进制的网页版（`docs/web.md`），打开 hub 的地址就是；
 - `openssh-client`、证书、时区数据。
 
-构建用 `-tags public`，和公开发布的二进制一样不带复制来的助手 skill（`server/internal/assistantskills`）：经它「重新部署」的电脑上，
-助手少了这些 skill。只自己用的镜像可以带上：`docker build --build-arg BUILD_TAGS= -t jarvis-hub .`，再在 `.env` 里写
-`JARVIS_IMAGE=jarvis-hub`。
+镜像里的 jarvisd 不带任何 skill（和所有二进制一样）：助手的 skill 放在跑助手那台机器的 `~/.jarvis/skills/`（`docs/hub-update.md`「skill 从二进制里拿出来」）。
+镜像里的 hub 是 `docker` 渠道：不会自己换二进制，有新镜像时提示拉取。
 
 ## 装
 
