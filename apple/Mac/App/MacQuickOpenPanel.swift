@@ -19,7 +19,9 @@ import SwiftUI
     /// What the Agent menu asks of the chat showing `key` (a new value each time): toggle the inspector
     /// (显示会话信息 ⌥⌘I), or bring up its own 重命名 / 清空上下文 / 关闭 Agent dialogs.
     var chatRequest: ChatRequest?
-    /// The Agents list's 全部折叠 / 全部展开 (its own ⋯ menu's), for 显示 › 全部折叠 / 全部展开.
+    /// What the Agents list's menu acts on (its folds, its machine filter, 机器): the shell draws that menu in the
+    /// window's toolbar while Agents shows, and 显示 › 全部折叠 / 全部展开 use it too. Never cleared: whoever reads it
+    /// checks that Agents is the section showing.
     var agentsList: AgentsListMenu.Actions?
     /// The key window's number, and the chat each window shows (ChatView registers itself): what the Agent menu acts on.
     var keyWindow: Int?

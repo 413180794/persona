@@ -80,7 +80,8 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	if cfg.AI != nil {
 		model = ai.New(cfg.AI.Over(h.cfg.AI))
 	}
-	e := &kb.Engine{Store: st, Model: model, ModelFor: func(id string) kb.Model { return h.purposeModel(id) }, Owner: h.ownerName(), Logf: h.logf, AttachmentDays: cfg.AttachmentDays}
+	e := &kb.Engine{Store: st, Model: model, ModelFor: func(id string) kb.Model { return h.purposeModel(id) }, Owner: h.ownerName(), Logf: h.logf,
+		TextDays: cfg.TextDays, AttachmentDays: cfg.AttachmentDays}
 	for _, d := range cfg.ExtraDirs {
 		if d = expandHome(strings.TrimSpace(d)); filepath.IsAbs(d) {
 			e.ExtraDirs = append(e.ExtraDirs, d)
@@ -136,13 +137,6 @@ func (h *Hub) rezoneKB(st *kb.Store) {
 
 func (h *Hub) kbLoop(ctx context.Context) {
 	e := h.kb.eng
-	textDays, attDays := h.kb.cfg.TextDays, h.kb.cfg.AttachmentDays
-	if textDays <= 0 {
-		textDays = 365
-	}
-	if attDays <= 0 {
-		attDays = 30
-	}
 	var lastMail, lastItems, lastPrune, lastLinks time.Time
 	t := time.NewTicker(kbPoll)
 	defer t.Stop()
@@ -182,7 +176,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 			})
 		}
 		run(ctx, func() {
-			if n, err := e.Backfill(ctx, textDays, 5, 3); err != nil {
+			if n, err := e.Backfill(ctx, 5, 3); err != nil {
 				h.logf("kb: backfill: %v", err)
 			} else if n > 0 {
 				h.logf("kb: backfilled %d line(s)", n)
@@ -199,7 +193,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 		}
 		if time.Since(lastPrune) >= 24*time.Hour {
 			lastPrune = time.Now()
-			if n := e.Store.Prune(time.Now(), textDays, attDays); n > 0 {
+			if n := e.Prune(time.Now()); n > 0 {
 				h.logf("kb: pruned %d day(s)", n)
 			}
 		}

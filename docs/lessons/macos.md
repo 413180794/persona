@@ -63,3 +63,7 @@
   先 `sample` 看时间去哪，再决定要不要保活。
 - 别用写死的 `listRowInsets` 去对齐 `List` 里的分组标题：iOS 上分组标题的缩进是 20，Mac 上是行自带的缩进（窄得多），iOS 那套数值在 Mac 上把行往里多推一截。
   折起的空间只剩标题、画成普通一行，写死 20 时在 Mac 上比展开的空间标题左右各缩 20pt，名字被截成「weat…」（#405，2026-11-02）。Mac 上传 `nil`，用行自带的缩进。
+- 两个视图各往窗口工具栏的 `.navigation` 放一项（壳的侧栏按钮、Agents 列表的过滤菜单），先后顺序靠不住：详情栏里的页面一带上自己的工具栏项
+  （空间页的 ⋯、机器页的 ⓘ，放在什么位置都一样），SwiftUI 重排整个工具栏，列表那项就排到了壳那项前面（#483，2026-11-02）。
+  要固定顺序就放进同一个 `ToolbarItemGroup`：Mac 上过滤菜单由壳画在侧栏按钮后面（`MacShellState.agentsList`），ChatsView 自己那项只留给 iOS。
+  离屏截图看得出这个顺序（`scripts/mac_shot.sh … -openSession <对话> -openSpaceFromChat YES`），菜单本身只能在真窗口里点开。

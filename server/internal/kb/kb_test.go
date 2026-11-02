@@ -214,6 +214,53 @@ func TestPrune(t *testing.T) {
 	}
 }
 
+// A chat archived for the first time starts with its newest page, which for a quiet chat reaches back years; the
+// first mail of a quiet mailbox can be as old. Nothing past the text retention is written: the daily prune would
+// delete it and the next chat or mailbox read for the first time would write such days again. The oldest day the
+// prune keeps is written whole.
+func TestArchiveKeepsToTheTextRetention(t *testing.T) {
+	st, _ := NewStore(t.TempDir())
+	now := time.Now()
+	edge := now.AddDate(0, 0, -365).In(st.Zone())
+	edge = time.Date(edge.Year(), edge.Month(), edge.Day(), 0, 1, 0, 0, st.Zone()) // first minute of the oldest kept day
+	var msgs []SourceMessage
+	for i, at := range []time.Time{now.AddDate(0, 0, -900), now.AddDate(0, 0, -700), now.AddDate(0, 0, -400), edge,
+		now.AddDate(0, 0, -30), now.AddDate(0, 0, -1)} {
+		msgs = append(msgs, msg(i, "张三", at.Format(time.DateOnly), at))
+	}
+	src := &fakeSource{chats: []SourceChat{{ID: "q", Name: "安静的群", Kind: "group", UpdatedAt: msgs[5].At}},
+		msgs: map[string][]SourceMessage{"q": msgs}}
+	e := &Engine{Store: st, Sources: []Source{src}, TextDays: 365}
+	ctx := context.Background()
+	if _, err := e.Archive(ctx); err != nil {
+		t.Fatal(err)
+	}
+	mails := []SourceMessage{msg(6, "李四", "【旧】500 天前", now.AddDate(0, 0, -500)), msg(7, "李四", "【新】刚才", now.Add(-time.Hour))}
+	if _, err := e.Ingest(ctx, src, SourceChat{ID: "li", Name: "李四 · 邮件", Kind: "mail"}, mails); err != nil {
+		t.Fatal(err)
+	}
+	cut := edge.Format(time.DateOnly)
+	for _, id := range st.IDs(KindChat) {
+		for _, d := range st.Days(id) {
+			if d < cut {
+				t.Errorf("%s: day %s written, past the 365-day retention", id, d)
+			}
+		}
+	}
+	if n := e.Prune(now); n != 0 {
+		t.Errorf("the daily prune removed %d day(s) just written", n)
+	}
+	if days := st.Days("lark-q"); len(days) == 0 || days[0] != cut {
+		t.Errorf("chat days %v, want the oldest kept day %s first", days, cut)
+	}
+	if c, _ := st.Chat("lark-q"); c.Messages != 3 {
+		t.Errorf("chat counts %d lines, want the 3 within the retention", c.Messages)
+	}
+	if c, _ := st.Chat("lark-li"); c.Messages != 1 {
+		t.Errorf("mail chat counts %d lines, want 1", c.Messages)
+	}
+}
+
 func TestSlug(t *testing.T) {
 	if s := Slug("Jarvis 2.0 发布!"); s != "jarvis-2-0-发布" {
 		t.Fatal(s)
@@ -310,7 +357,7 @@ func TestBackfill(t *testing.T) {
 	if _, err := e.Archive(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	n, err := e.Backfill(context.Background(), 365, 5, 1)
+	n, err := e.Backfill(context.Background(), 5, 1)
 	if err != nil || n != 3 {
 		t.Fatalf("backfilled %d %v", n, err)
 	}

@@ -84,6 +84,12 @@
   家目录 `/dev/null`，挂进来的 `~/.ssh` 就没用了）：镜像的入口脚本按 PUID / PGID 改 `jarvis` 用户本身并删掉撞号的条目，而不是
   `docker run --user <uid>`；`docker compose exec` 默认是 root，镜像里的 `jarvisd` 包一层降到 `jarvis`，否则建出来的 tailcat key 归 root，hub 读不了。
 
+## 知识库（docs/knowledge.md）
+
+- 保留期要卡在写入口，不能只靠每天的清理：会话第一次归档读的是「最新 100 条」，安静的会话这一页能早到几年前，
+  清理刚删完，6 秒后就又写出 47 个超期的日文件（2026-11-02 线上）。所有写日文件的路径（`Archive`、`Ingest`、`Backfill`）共用
+  `Engine.textCutoff()`（清理保留的最早那天的零点），清理走 `Engine.Prune`，两边是同一份天数；新加写入路径也要用它，`TestArchiveKeepsToTheTextRetention` 用「写完马上清理，删掉的天数应为 0」来查。
+
 ## 端口转发（docs/ports.md）
 
 - RPC 的 `OnEvent` 跑在读循环里：在里面阻塞（比如把收到的字节直接写给一个读得慢的 WebSocket）会卡住这台机器的所有 RPC。

@@ -13,15 +13,19 @@ import (
 )
 
 // Ingest appends messages of one chat that a source pushes (mail), creating the chat. Same lines, people and
-// links as Archive.
+// links as Archive, and the same retention (the first read of a quiet mailbox reaches back years).
 func (e *Engine) Ingest(ctx context.Context, src Source, sc SourceChat, msgs []SourceMessage) (int, error) {
 	id := ChatID(src.Name(), sc.ID)
 	c, ok := e.Store.Chat(id)
 	if !ok {
 		c = &Chat{ID: id, Source: src.Name(), SourceID: sc.ID, Kind: sc.Kind, Name: sc.Name, Created: time.Now().UTC()}
 	}
+	cut := e.textCutoff()
 	var lines []Line
 	for _, m := range msgs {
+		if m.At.Before(cut) {
+			continue
+		}
 		l := e.line(ctx, src, c, m)
 		if l.Text == "" {
 			continue

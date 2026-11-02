@@ -149,7 +149,7 @@ struct ChatsView: View {
                 // navigation container: a chat pushed on it must not move, nor the list on the way back, #340).
                 .background { ShellNavigationClearance(active: shell != nil && !searching) }
                 #if os(macOS)
-                .onAppear { MacShellState.shared.agentsList = menuActions } // 显示 › 全部折叠 / 全部展开
+                .onAppear { MacShellState.shared.agentsList = menuActions } // the shell's toolbar menu, 显示 › 全部折叠 / 全部展开
                 #endif
                 .onChange(of: path.isEmpty) { _, atList in
                     // Back at the list: the field shows what the results are for again (set it anew, the field is empty).
@@ -165,7 +165,10 @@ struct ChatsView: View {
                             .sharedBackgroundVisibility(.hidden)
                     } else {
                         ToolbarItem(placement: .principal) { ConnectionTitle() }
+                        #if os(iOS)
+                        // On the Mac the shell shows it, next to its sidebar button (MacShell).
                         ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
+                        #endif
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { openFromList(PersonalAgentsRoute()) } label: { Label("个人 Agent", systemImage: "person.crop.circle.badge.checkmark") }
                         }

@@ -63,6 +63,9 @@ type Engine struct {
 	PagesPerChat int // pages read per chat and run (10)
 	// AttachmentDays: attachments of older messages are not downloaded (they would be pruned anyway; 30).
 	AttachmentDays int
+	// TextDays: older messages are not written at all (365). Prune deletes such days, and anything that wrote them
+	// again (a chat's first page, a mailbox's first read, backfill) would bring them back after every prune.
+	TextDays int
 
 	failed int // attachment downloads that failed this run (logged once per chat)
 }
@@ -91,6 +94,20 @@ func or(n, d int) int {
 		return d
 	}
 	return n
+}
+
+// textCutoff is the start of the oldest day Prune keeps (in the archive's zone): a message before it is past
+// TextDays and is not written.
+func (e *Engine) textCutoff() time.Time {
+	zone := e.Store.Zone()
+	d := time.Now().AddDate(0, 0, -or(e.TextDays, 365)).In(zone)
+	return time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, zone)
+}
+
+// Prune deletes message days past TextDays and attachment days past AttachmentDays: the same days textCutoff
+// stops writing.
+func (e *Engine) Prune(now time.Time) int {
+	return e.Store.Prune(now, or(e.TextDays, 365), or(e.AttachmentDays, 30))
 }
 
 // ChatID is the knowledge-base id of a source chat.
@@ -151,6 +168,7 @@ func (e *Engine) archiveChat(ctx context.Context, src Source, sc SourceChat) (in
 		limit = or(e.FirstPage, 100)
 	}
 	total := 0
+	cut := e.textCutoff()
 	for page := 0; page < or(e.PagesPerChat, 10); page++ {
 		msgs, newer, more, err := src.Messages(ctx, sc, cursor, limit)
 		if err != nil {
@@ -159,8 +177,8 @@ func (e *Engine) archiveChat(ctx context.Context, src Source, sc SourceChat) (in
 		var lines []Line
 		for _, m := range msgs {
 			// Already archived: the cursor's own message, or (topic groups, read from the newest page each time) anything
-			// not newer than the last archived message.
-			if m.Position != "" && m.Position == cursor || c.Messages > 0 && !m.At.After(c.LastAt) {
+			// not newer than the last archived message. Past the retention: the newest page of a quiet chat goes back years.
+			if m.Position != "" && m.Position == cursor || c.Messages > 0 && !m.At.After(c.LastAt) || m.At.Before(cut) {
 				continue
 			}
 			l := e.line(ctx, src, c, m)
@@ -292,8 +310,8 @@ type Backfiller interface {
 
 // Backfill reads older history of the most relevant chats into their day files, back to the text retention:
 // at most chats per run, pages per chat. The new lines are only archived (searchable), not compressed again.
-func (e *Engine) Backfill(ctx context.Context, textDays, chats, pages int) (int, error) {
-	limit := time.Now().AddDate(0, 0, -textDays)
+func (e *Engine) Backfill(ctx context.Context, chats, pages int) (int, error) {
+	limit := e.textCutoff()
 	var todo []*Chat
 	for _, c := range e.Store.Chats() {
 		if !c.BackfillDone && c.Source != "mail" {

@@ -147,6 +147,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   窗口工具栏不画底色和分隔线，也不显示页面标题（`.toolbar(removing: .title)`：系统把标题排在红绿灯旁边的按钮后面、压在这一列上，长一点就越过分隔线，
   2026-11-02 用户：文字都超出去了；在哪一页看这一列的选中，窗口标题仍在「窗口」菜单里）。标题原来占的位置换成一个 `ToolbarSpacer(.flexible)`，
   不然页面的按钮全挤到左边。红绿灯旁边一个按钮收起 / 显示这一列（和「显示 › 隐藏侧边栏」⌃⌘S 是同一个动作）。
+  在 Agents 分区，它后面紧跟着列表的 ≡ 菜单（分组、显示、折叠、机器）：两个放在壳的同一个 `ToolbarItemGroup` 里。以前 ≡ 是列表自己的工具栏项，
+  详情栏打开空间页、机器页（页面带自己的 ⋯ / ⓘ）时就排到了侧栏按钮前面（2026-11-02，`docs/lessons/macos.md`）。
   按钮（`themedButton`）在 Mac 上是自己画的胶囊（`Mac/Design/MacCapsuleButton.swift`）：主要的是主题色底白字，其余是主题色字配一层浅的主题色底，
   和收件箱草稿卡片上的「发送 / 修改」、筛选 chip 一样；系统的玻璃按钮在活跃窗口里会整个填成主题色（见 `docs/lessons/macos.md`）。
   `horizontalSizeClass` 在 Mac 上恒为 `.regular`，所以 Agents、收件箱、设置、Jarvis 走的是 iPad / iPhone Duo 打开时的分栏布局。

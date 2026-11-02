@@ -173,11 +173,18 @@ private struct MacShell: View {
         // Next to the traffic lights, over the sections column: shows or hides that column (显示 › 显示/隐藏侧边栏,
         // ⌃⌘S). The pages' lists have no button of their own: one there sat over this column and hid the list.
         .toolbar {
-            ToolbarItem(placement: .navigation) {
+            ToolbarItemGroup(placement: .navigation) {
                 Button { withAnimation(Theme.Motion.layout) { sidebarHidden.toggle() } } label: {
                     Label(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏", systemImage: Theme.Icon.sidebar)
                 }
                 .help(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏")
+                // The Agents list's menu (filter, grouping, folding) right after it, in this group. As the list's own
+                // `.navigation` item it jumped in front of this button whenever a page in the detail column brought an
+                // item of its own (a space's ⋯, a machine's ⓘ): the window's toolbar is rebuilt then, list items first.
+                // Only while Agents shows: `agentsList` stays set after the list goes away.
+                if shown == .agents, let actions = shell.agentsList {
+                    AgentsListMenu(actions: actions)
+                }
             }
             // What the title's room did: the pages' actions stay at the trailing end, by the search field (without
             // it they lined up at the leading edge, over this column).
@@ -191,11 +198,13 @@ private struct MacShell: View {
 
     @AppStorage(MacSection.sidebarHiddenKey) private var sidebarHidden = false
 
+    /// The section on screen: the one picked in the column, else the tab's.
+    private var shown: MacSection { MacSection.shown(override: shell.section, tab: model.selectedTab) }
+
     /// The sections, with the rows the Jarvis page's own list draws (`AssistantSidebar`): the same icon box, type and
     /// rounded selection (2026-11-02 user: the system's source list beside it looked unstyled). Flush with the window's
     /// edges, up behind the traffic lights; inset from them it looked like a card on a backing board (same day).
     private var sections: some View {
-        let shown = MacSection.shown(override: shell.section, tab: model.selectedTab)
         return VStack(spacing: Theme.Space.xxs) {
             ForEach(MacSection.allCases) { section in
                 MacSidebarRow(icon: section.icon, title: section.title, selected: section == shown, badge: badge(section),
@@ -232,7 +241,7 @@ private struct MacShell: View {
     }
 
     @ViewBuilder private var page: some View {
-        switch MacSection.shown(override: shell.section, tab: model.selectedTab) {
+        switch shown {
         case .assistant: AssistantView()
         case .agents: ChatsView()
         case .inbox: MacInboxPage()

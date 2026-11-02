@@ -3,8 +3,9 @@ import SwiftUI
 // The Agents list's menus depend on nothing that changes with each push from the hub: the list is drawn again on
 // every one (sessions, machines), and a menu drawn again with it is handed to UIKit again — the open ⋯ menu jumped back
 // to its top under the finger choosing a machine (2026-10-31), a row's long-press menu was rebuilt for every row on
-// every push. The ⋯ menu sits in the toolbar of `ChatsView`, which does not follow the list; a row's is equal while
-// what it offers is. What the actions need at tap time (the sections listed now, the session as it is now) comes from
+// every push. The ⋯ menu sits in the toolbar of `ChatsView`, which does not follow the list (on the Mac in the shell's,
+// `MacShell`: open, it stayed put through `/mock/churn` pushes and a machine could be picked, 2026-11-02); a row's is
+// equal while what it offers is. What the actions need at tap time (the sections listed now, the session as it is now) comes from
 // an object the views do not observe. `LiveUpdateTests` covers it.
 
 /// A machine as the ⋯ menu shows it: not its live state (last seen, online), which changes with every push.

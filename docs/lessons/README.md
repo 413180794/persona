@@ -9,7 +9,7 @@
 | `agents.md` | 改 node 里驱动 Claude Code / Codex / TRAEX 的部分：herdr 的行为、认窗格和会话、配置目录、发送、`/effort`、生图 |
 | `dsh.md` | 改 DSH 插件（`integrations/dsh`）或 runtime 接入（`runtime.sock`、`integrations/runtime-sdk`）：DSH 的应答链、事件来源、seq、日志格式、端到端测试的坑 |
 | `assistant.md` | 改「Jarvis」tab 的无头助手：ask_user、权限、后台任务、定时任务、飞书写操作闸门 |
-| `server.md` | 改 hub / node 的进程、连接、推送、代理、端口转发、机器监控、远程部署 |
+| `server.md` | 改 hub / node 的进程、连接、推送、代理、端口转发、机器监控、远程部署、知识库的写入和保留期 |
 | `transcript.md` | 改 transcript / rollout 解析、会话列表、分页、后台同步、折叠、App 的会话缓存 |
 | `lark-mail.md` | 改飞书（lark-connector）和邮件（IMAP / SMTP / Gmail）、云文档通知 |
 | `terminal.md` | 改终端 tab：herdr 读屏 / observe / 接管、滚动、键盘输入、宽字符 |
