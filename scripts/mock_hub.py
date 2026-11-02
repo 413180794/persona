@@ -2916,6 +2916,31 @@ class H(BaseHTTPRequestHandler):
             m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # now, not the mock's start
             msgs.append(m)
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/lark/messages/") and p.endswith("/replies"):  # 飞书回复: in the thread or quoted in the chat
+            body, mid = json.loads(self.last_body or b"{}"), p.split("/")[5]
+            time.sleep(float(os.environ.get("MOCK_LARK_SEND_SECONDS", "2")))
+            if "#fail" in body.get("text", ""):
+                return self.send_json({"error": "lark-connector: reply timed out"}, 502)
+            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            feed, target = next(((f, m) for f, ms in LARK_MESSAGES.items() for m in ms if m["id"] == mid), (None, None))
+            if body.get("thread"):
+                replies = LARK_THREADS.setdefault(mid, [])
+                pos = str(max([int(m["position"]) for m in replies] or [0]) + 1)
+                m = _lm(pos, "我", body.get("text", ""), mine=True, mins=0)
+                m.update(id="%s-%s" % (mid, pos), created_at=now)
+                replies.append(m)
+                if target is not None:
+                    target["reply_count"] = target.get("reply_count", 0) + 1
+                    target["thread_reply_count"] = target.get("thread_reply_count", 0) + 1
+            elif feed is not None:
+                msgs = LARK_MESSAGES[feed]
+                pos = str(max(int(x["position"]) for x in msgs) + 1)
+                m = _lm(pos, "我", body.get("text", ""), mine=True, mins=0)
+                m.update(created_at=now, reply_to={"id": mid, "sender_name": target["sender_name"], "text": target["text"]})
+                msgs.append(m)
+            else:
+                return self.send_json({"error": "no such message"}, 404)
+            return self.send_json({"ok": True, "message_id": m["id"]})
         if p == "/api/v1/assistant/conversations" and self.command == "POST":
             body = json.loads(self.last_body or b"{}")
             SENT.append({"text": body.get("prompt", ""), "images": body.get("images")})

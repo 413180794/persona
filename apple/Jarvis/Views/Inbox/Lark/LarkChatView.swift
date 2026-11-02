@@ -35,6 +35,9 @@ struct LarkChatView: View {
     @State private var loadingNewer = false
     @State private var error: String?
     @State private var text = ""
+    /// The message 回复 picked: quoted over the box and by what is sent next.
+    @State private var replyTo: LarkReplyTo?
+    @FocusState private var composerFocused: Bool
     /// What I wrote that is on its way (on screen at once, sent one after another in the background).
     @State private var outgoing: [LarkOutgoing] = []
     @State private var sendChain: Task<Void, Never>?
@@ -95,6 +98,10 @@ struct LarkChatView: View {
         .environment(\.larkRefresh, { Task { await refreshLatest() } })
         .environment(\.larkOpenProfile, { person = $0 })
         .environment(\.larkReact, { m, key in react(m, key) })
+        .environment(\.larkReply, LarkReplyHandler(inTopicGroup: isTopic) { m in
+            replyTo = LarkReply.quote(m)
+            composerFocused = true
+        })
         .modifier(LarkFileOpener(request: $fileRequest))
         .sheet(item: $person) { LarkProfileView(person: $0) }
         .sheet(item: $debugPick) { m in LarkReactionPicker(message: m) { react(m, $0) } }
@@ -145,23 +152,8 @@ struct LarkChatView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: Theme.Space.s) {
-            TextField("回复 \(conversation.name)", text: $text, axis: .vertical)
-                .lineLimit(1...5)
-                .padding(.horizontal, Theme.Space.l)
-                .padding(.vertical, Theme.Space.s)
-                .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
-            Button { send() } label: {
-                Image(systemName: Theme.Icon.send).font(Theme.Font.heading)
-                    .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
-            }
-            .themedButton(prominent: true)
-            .clipShape(.circle)
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel("发送")
-        }
-        .padding(.horizontal, Theme.Space.m)
-        .padding(.bottom, Theme.Space.s)
+        LarkComposer(placeholder: "回复 \(conversation.name)", text: $text, focused: $composerFocused,
+                     replyTo: replyTo, cancelReply: { replyTo = nil }, send: send)
     }
 
     // MARK: Jumps
@@ -399,7 +391,11 @@ struct LarkChatView: View {
             let prev = i > 0 ? outgoing[i - 1].message(like: mine) : pager.messages.last
             LarkOutgoingRow(outgoing: o, message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup,
                             retry: { resend(o.id) },
-                            edit: { discard(o.id); text = text.isEmpty ? o.text : text + "\n" + o.text },
+                            edit: {
+                                discard(o.id)
+                                text = text.isEmpty ? o.text : text + "\n" + o.text
+                                if replyTo == nil { replyTo = o.replyTo }
+                            },
                             discard: { discard(o.id) })
                 .padding(.top, Self.gap(grouped: Self.continues(m, after: prev)))
                 .id(o.id)
@@ -411,7 +407,8 @@ struct LarkChatView: View {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         text = ""
-        let o = LarkOutgoing(text: t)
+        let o = LarkOutgoing(text: t, replyTo: replyTo)
+        replyTo = nil
         withAnimation(Theme.Motion.standard) { outgoing.append(o) }
         Haptics.tap()
         deliver(o.id)
@@ -439,7 +436,7 @@ struct LarkChatView: View {
             await before?.value // in the order written
             guard let api = model.api, let o = outgoing.first(where: { $0.id == id }), o.state == .sending else { return }
             do {
-                try await api.larkSend(conversation.id, text: o.text, clientID: o.clientID)
+                try await LarkOutbox.deliver(o, feed: conversation.id, api: api)
                 setState(id, .sent)
                 // Its copy replaces it (settleOutgoing); the push usually brings it, a refresh makes sure.
                 await refreshLatest()
@@ -555,7 +552,10 @@ struct LarkMessageRow: View {
     var inThread = false
     @Environment(\.larkOpenProfile) private var openProfile
     @Environment(\.larkReact) private var react
+    @Environment(\.larkReply) private var reply
     @State private var showThread = false
+    /// The thread sheet opens with its box focused (回复 on a topic group's thread).
+    @State private var threadFocus = false
     @State private var picking = false
 
     var body: some View {
@@ -599,6 +599,9 @@ struct LarkMessageRow: View {
             .sheet(isPresented: $picking) {
                 LarkReactionPicker(message: m) { react?(m, $0) }
             }
+            .sheet(isPresented: $showThread, onDismiss: { threadFocus = false }) {
+                LarkThreadView(root: m, isGroup: isGroup, feedID: feedID, focusBox: threadFocus)
+            }
         }
     }
 
@@ -615,7 +618,12 @@ struct LarkMessageRow: View {
                 .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                 .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
         } else if parts.isEmpty {
-            bubble { Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : m.text).font(Theme.Font.body) }
+            bubble {
+                VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                    if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
+                    Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : m.text).font(Theme.Font.body)
+                }
+            }
         } else if LarkPartsView.isBare(parts) {
             if let reply = m.replyTo { LarkReplyQuote(reply: reply).padding(.horizontal, Theme.Space.xs) }
             LarkPartsView(parts: parts)
@@ -641,7 +649,7 @@ struct LarkMessageRow: View {
             .contextMenu { menu }
     }
 
-    /// Long press: a row of quick reactions, more emoji, copy.
+    /// Long press: a row of quick reactions, reply, more emoji, copy.
     @ViewBuilder private var menu: some View {
         if react != nil && !message.recalled {
             ControlGroup {
@@ -652,6 +660,18 @@ struct LarkMessageRow: View {
                 }
             }
             .controlGroupStyle(.compactMenu)
+        }
+        if let reply, let route = LarkReply.route(for: message, inTopicGroup: reply.inTopicGroup, inThread: inThread) {
+            Button {
+                if route == .openThread {
+                    threadFocus = true
+                    showThread = true
+                } else {
+                    reply.answer(message)
+                }
+            } label: { Label("回复", systemImage: Theme.Icon.reply) }
+        }
+        if react != nil && !message.recalled {
             Button { picking = true } label: { Label("表情回复", systemImage: "face.smiling") }
         }
         Button {
@@ -699,7 +719,6 @@ struct LarkMessageRow: View {
             .font(Theme.Font.label)
             .foregroundStyle(.secondary)
             .lineLimit(1)
-            .sheet(isPresented: $showThread) { LarkThreadView(root: m, isGroup: isGroup, feedID: feedID) }
         }
     }
 }

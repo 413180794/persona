@@ -266,6 +266,18 @@ extension APIClient {
     func larkSend(_ id: String, text: String, clientID: String? = nil) async throws {
         try await post("/api/v1/lark/conversations/\(id)/messages", body: LarkText(text: text, clientID: clientID), timeout: Self.larkSendTimeout)
     }
+    struct LarkReplyBody: Encodable {
+        var text: String
+        /// True: a reply in the message's thread; false: a quoted reply in its chat.
+        var thread: Bool
+        var clientID: String?
+        enum CodingKeys: String, CodingKey { case text, thread, clientID = "client_id" }
+    }
+    /// A reply to one message: quoted in its chat, or in its thread. Same idempotency and timeout as `larkSend`.
+    func larkReply(messageID: String, text: String, thread: Bool, clientID: String? = nil) async throws {
+        try await post("/api/v1/lark/messages/\(messageID)/replies", body: LarkReplyBody(text: text, thread: thread, clientID: clientID),
+                       timeout: Self.larkSendTimeout)
+    }
     /// Reports what the reader has seen (never sent just for opening a chat).
     func larkRead(_ id: String, _ report: LarkReadReport) async throws { try await post("/api/v1/lark/conversations/\(id)/read", body: report) }
     func larkEmojis() async throws -> LarkEmojis { try await get("/api/v1/lark/emojis") }
