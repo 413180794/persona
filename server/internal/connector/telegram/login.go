@@ -139,7 +139,7 @@ func (c *Conn) stepCredentials(ctx context.Context, v map[string]string) (connec
 	}
 	cctx, cancel := context.WithTimeout(ctx, connectWait)
 	defer cancel()
-	probe, err := c.dial(cctx, creds{id, hash}, &memSession{})
+	probe, err := c.dial(cctx, creds{id, hash}, &memSession{}, func() {})
 	if err == nil {
 		err = probe.Check(cctx)
 	}

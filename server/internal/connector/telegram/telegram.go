@@ -51,12 +51,19 @@ type client interface {
 	LogOut(ctx context.Context) error
 	// Done is closed when the connection ended (Telegram dropped it, or its ctx ended).
 	Done() <-chan struct{}
+	// Dialogs is the account's conversations, newest first: the main list and the archive folder, up to limit each.
+	Dialogs(ctx context.Context, limit int) ([]dialog, error)
+	// History is a conversation's messages newer than minID, oldest first. With minID 0 (a first read) it goes back
+	// to since, at most max messages.
+	History(ctx context.Context, d dialog, minID int, since time.Time, max int) ([]message, error)
 }
+
+// dialer connects with c, keeping the session in store, until ctx ends (Check says whether Telegram knows c).
+// updated is called whenever Telegram tells of something new (a message, a read): the connector's realtime kick.
 
 var errPasswordNeeded = errors.New("2FA password needed")
 
-// dialer connects with c, keeping the session in store, until ctx ends (Check says whether Telegram knows c).
-type dialer func(ctx context.Context, c creds, store sessionStore) (client, error)
+type dialer func(ctx context.Context, c creds, store sessionStore, updated func()) (client, error)
 
 // sessionStore is where gotd keeps its session (session.Storage's two methods).
 type sessionStore interface {
@@ -79,6 +86,10 @@ type Conn struct {
 	pending struct{ phone, hash string }
 	// wake makes Run connect again (the credentials changed, or the user signed out).
 	wake chan struct{}
+	// news is Telegram telling of something new, for Watch; until is when Telegram lets the archive go on after a
+	// flood wait.
+	news  chan struct{}
+	until time.Time
 }
 
 // New is the connector, keeping what it needs in secrets.
@@ -87,17 +98,20 @@ func New(secrets connector.Secrets) *Conn {
 }
 
 func newConn(secrets connector.Secrets, dial dialer) *Conn {
-	return &Conn{secrets: secrets, dial: dial, wake: make(chan struct{}, 1),
+	return &Conn{secrets: secrets, dial: dial, wake: make(chan struct{}, 1), news: make(chan struct{}, 1),
 		status: connector.Status{State: connector.StateNotSignedIn, Error: "还没填 Telegram 的 API 凭据"}}
 }
 
 func (*Conn) ID() string   { return "telegram" }
 func (*Conn) Name() string { return "Telegram" }
 
-// Status answers from memory.
+// Status answers from memory; a flood wait that is over is over here (the hub reads only an ok connector).
 func (c *Conn) Status(context.Context) connector.Status {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.status.State == connector.StateRateLimited && !time.Now().Before(c.until) {
+		c.status.State, c.status.Error = connector.StateOK, ""
+	}
 	return c.status
 }
 
@@ -185,7 +199,7 @@ func (c *Conn) Run(ctx context.Context) {
 			continue
 		}
 		cctx, stop := context.WithCancel(ctx)
-		cl, err := c.dial(cctx, creds{st.APIID, st.APIHash}, sessionOf{c})
+		cl, err := c.dial(cctx, creds{st.APIID, st.APIHash}, sessionOf{c}, c.updated)
 		if err != nil {
 			stop()
 			c.setStatus(connector.Status{State: connector.StateError, Via: st.via(), Error: "连不上 Telegram：" + explain(err)})

@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -60,9 +61,14 @@ type fakeTelegram struct {
 	twoFA     bool
 	loggedOut bool
 	dials     int
+	// The account's conversations and their messages (archive_test.go).
+	dialogs []dialog
+	history map[string][]message // peer key -> messages, oldest first
+	reads   []string             // "<key> after <minID>": what History was asked
+	updated func()
 }
 
-func (f *fakeTelegram) dial(ctx context.Context, c creds, store sessionStore) (client, error) {
+func (f *fakeTelegram) dial(ctx context.Context, c creds, store sessionStore, updated func()) (client, error) {
 	f.mu.Lock()
 	f.dials++
 	f.mu.Unlock()
@@ -73,6 +79,9 @@ func (f *fakeTelegram) dial(ctx context.Context, c creds, store sessionStore) (c
 	}
 	done := make(chan struct{})
 	go func() { <-ctx.Done(); close(done) }()
+	f.mu.Lock()
+	f.updated = updated
+	f.mu.Unlock()
 	return &fakeClient{f: f, store: store, done: done, creds: c}, nil
 }
 
@@ -133,6 +142,28 @@ func (c *fakeClient) Me(context.Context) (string, bool, error) {
 		return "", false, nil
 	}
 	return "示例用户（@example）", true, nil
+}
+
+func (c *fakeClient) Dialogs(context.Context, int) ([]dialog, error) {
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	return append([]dialog(nil), c.f.dialogs...), nil
+}
+
+func (c *fakeClient) History(_ context.Context, d dialog, minID int, since time.Time, max int) ([]message, error) {
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	c.f.reads = append(c.f.reads, fmt.Sprintf("%s after %d", d.Peer.key(), minID))
+	var out []message
+	for _, m := range c.f.history[d.Peer.key()] {
+		if m.ID > minID && (minID != 0 || !m.At.Before(since)) {
+			out = append(out, m)
+		}
+	}
+	if len(out) > max { // the newest max
+		out = out[len(out)-max:]
+	}
+	return out, nil
 }
 
 func (c *fakeClient) LogOut(context.Context) error {

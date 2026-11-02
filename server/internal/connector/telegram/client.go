@@ -14,12 +14,17 @@ import (
 
 // dialGotd connects a gotd client with c and keeps it running until ctx ends (it does not tell whether Telegram knows c:
 // Check does). It logs nothing: no logger is given.
-func dialGotd(ctx context.Context, c creds, store sessionStore) (client, error) {
+func dialGotd(ctx context.Context, c creds, store sessionStore, updated func()) (client, error) {
 	cl := telegram.NewClient(c.id, c.hash, telegram.Options{
 		SessionStorage: gotdSession{store},
 		// How the session shows in the user's Telegram devices.
-		Device:    telegram.DeviceConfig{DeviceModel: "Jarvis", SystemVersion: runtime.GOOS, AppVersion: "Jarvis"},
-		NoUpdates: true,
+		Device: telegram.DeviceConfig{DeviceModel: "Jarvis", SystemVersion: runtime.GOOS, AppVersion: "Jarvis"},
+		// What Telegram pushes only kicks the archive and the inbox: they read what is new themselves, by message id,
+		// so a gap in the updates loses nothing.
+		UpdateHandler: telegram.UpdateHandlerFunc(func(context.Context, tg.UpdatesClass) error {
+			updated()
+			return nil
+		}),
 	})
 	g := &gotdClient{c: cl, creds: c, done: make(chan struct{})}
 	ready := make(chan error, 1)
