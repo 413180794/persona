@@ -188,6 +188,10 @@ Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store 
   `.pkg` 是 3rd Party Mac Developer Installer（`pkgutil --check-signature` 会写「issued by Apple (Development)」，这类证书都这么写）。
   上传 `altool -t macos`。本机的发版脚本和 iPhone 一样先 `entitlements.py sign` 再导出，导出后 `entitlements.py check <.pkg>`：
   每个 bundle 带着它 target 的 entitlements，推送是 `production`（`check` 认 Mac 的 `Contents/` 结构和 `.pkg`，iPhone 的 ipa 也查推送环境）。
+- **包里的文件要别的用户也能读**（Mac 110，2026-11-02）：`.pkg` 里有只有属主能读的文件，上传时报 ITMS-90255
+  「files that are only readable by the root user」（macOS 以运行 App 的用户身份验签名）。自动发版（auto-tf）的 umask 是 077，
+  脚本里 `cp -R` 复制的归档全成了 0700 / 0600；在交互 shell（umask 022）里试永远看不出来。发版脚本开头 `umask 022`、复制归档用 `ditto`（保留原权限），
+  导出前对 `.app`、导出后对 `.pkg` 展开的 App 查一遍：所有文件 a+r、所有目录 a+rx，不满足就不传。iPhone 的脚本也一样改了（ipa 不查这个，110 照样过）。
 - **自动发布**：发完 iPhone 构建后，这次的提交里有 Mac App 用到的改动（`apple/Mac`、`apple/Shared`、`apple/Jarvis` 除了只属于 iOS 的
   几个文件、`apple/Packages`、`project.yml`、`Package.resolved`）就用同一个号接着发 Mac；Mac 的结果另外报，失败不影响 iPhone 那次。
 
