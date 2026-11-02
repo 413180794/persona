@@ -7,6 +7,9 @@
 
 ## 聊天列表与滚动
 
+- 新外壳的侧边栏菜单、会话名和正文用同一档 Dynamic Type，不给整个侧边栏套 `.shellScaled()`：它会额外放大一档（标准设置下 17pt → 19pt），
+  即使两边都写 `Theme.Font.body` 也不一样。「Jarvis」标题保留 `display` 层级，字号仍跟随系统和设置的小 / 标准 / 大。
+
 - `ScrollView` + `defaultScrollAnchor(.bottom)` + `LazyVStack`：跳到很远的 id 会因为上方懒加载视图实际高度与估算不同而漂移，验证历史渲染用 `-fromSeq`。
 - 翻转的聊天列表别让它贴安全区：上方垫 1pt 空视图、输入框放在下方的 VStack 里；用 `ignoresSafeArea` + 按 inset 补边距会在键盘弹起时白屏、顶部错位。
 - 聊天列表用倒置（ScrollView 和每行各 `scaleEffect(x:1,y:-1)`）：最新消息在偏移 0，跳到最新永远精确。倒置后要自己处理安全区

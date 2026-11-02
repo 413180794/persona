@@ -122,7 +122,6 @@ struct ShellView: View {
                          drawer: shell.drawer,
                          openInbox: { go(.inbox) },
                          openMachines: { go(.machines) })
-            .shellScaled()
     }
 
     private func go(_ page: ShellPage) {

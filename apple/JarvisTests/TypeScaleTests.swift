@@ -57,6 +57,18 @@ struct TypeScaleTests {
         #expect(found.isEmpty, "a weight added to a level:\n\(found.joined(separator: "\n"))")
     }
 
+    /// Sidebar navigation and conversation names read at the same Dynamic Type size as the messages. The shell's
+    /// enlarged chrome must not wrap the sidebar as a whole (both already use Theme.Font.body).
+    @Test func shellSidebarKeepsTheReadingSize() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appending(path: "Jarvis/Views/Shell/ShellView.swift"), encoding: .utf8)
+        let start = try #require(source.range(of: "private var sidebar: some View {"))
+        let end = try #require(source.range(of: "private func go(", range: start.upperBound..<source.endIndex))
+        let sidebar = source[start.lowerBound..<end.lowerBound]
+        #expect(sidebar.contains("AssistantSidebar("))
+        #expect(!sidebar.contains(".shellScaled()"), "sidebar text must not be one Dynamic Type step larger than messages")
+    }
+
     /// Vertical stacks space their lines with `Theme.Space` (4 pt grid); 0 is fine.
     @Test func verticalSpacingIsOnTheGrid() throws {
         let found = try Self.hits(Self.stackSpacing)
