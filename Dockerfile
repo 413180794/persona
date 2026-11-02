@@ -35,6 +35,11 @@ RUN for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do \
       CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
         -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/jarvisd || exit 1; \
     done
+# The Telegram connector's program (docs/plan-telegram.md), for this image's platform only: the hub runs it next to
+# jarvisd, and starts it only when its `version -v` is jarvisd's (the same -X).
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
+      -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker" -o /out/jarvisd-telegram ./cmd/jarvisd-telegram
 
 FROM alpine:3.22
 ARG TARGETARCH
@@ -44,6 +49,9 @@ RUN apk add --no-cache ca-certificates tzdata openssh-client su-exec \
  && mkdir -p /home/jarvis/.jarvis && chown jarvis:jarvis /home/jarvis/.jarvis && chmod 700 /home/jarvis/.jarvis
 COPY --from=build /out/nodes/ /opt/jarvis/nodes/
 RUN ln -s /opt/jarvis/nodes/jarvisd-linux-$TARGETARCH /opt/jarvis/jarvisd && /opt/jarvis/jarvisd version
+# Next to the binary jarvisd runs as (the link resolves into nodes/), where the hub looks for it.
+COPY --from=build /out/jarvisd-telegram /opt/jarvis/nodes/jarvisd-telegram
+RUN [ "$(/opt/jarvis/nodes/jarvisd-telegram version -v)" = "$(/opt/jarvis/jarvisd version -v)" ]
 COPY deploy/docker/jarvisd.sh /usr/local/bin/jarvisd
 COPY deploy/docker/entrypoint.sh /usr/local/bin/jarvis-entrypoint
 # ~/.jarvis is the data volume (hub.json, keys, the knowledge base): the node builds live outside it. No local node:

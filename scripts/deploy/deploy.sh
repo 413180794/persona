@@ -72,6 +72,20 @@ install_bin() { # machine-id binary
   fi
 }
 
+# install_telegram <hub machine id> <os-arch>: the Telegram connector's program next to the hub's jarvisd (only the hub
+# runs it, docs/plan-telegram.md), the same build as jarvisd: the hub starts it only when `version -v` matches.
+install_telegram() {
+  local id=$1 plat=$2 bin
+  bin="bin/jarvisd-telegram-$plat"
+  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" ./cmd/jarvisd-telegram || return 1
+  if is_here "$id"; then
+    cp "$bin" ~/.jarvis/bin/jarvisd-telegram.new && mv ~/.jarvis/bin/jarvisd-telegram.new ~/.jarvis/bin/jarvisd-telegram
+  else
+    scp -q "$bin" "$JARVIS_HUB_SSH:.jarvis/bin/jarvisd-telegram.new" &&
+      ssh "$JARVIS_HUB_SSH" 'chmod 755 ~/.jarvis/bin/jarvisd-telegram.new && mv ~/.jarvis/bin/jarvisd-telegram.new ~/.jarvis/bin/jarvisd-telegram'
+  fi
+}
+
 # herdr on a machine that has none (scripts/deploy/ensure-herdr.sh; JARVIS_SKIP_HERDR=1 skips it): a first install should
 # leave a machine whose Agents show up. Never fails the deploy.
 ensure_herdr() { # machine-id
@@ -100,7 +114,9 @@ for t in "${TARGETS[@]}"; do
       # the hub's build its own (server/internal/hub/deploy.go).
       ssh "$JARVIS_HUB_SSH" 'mkdir -p ~/.jarvis/bin/nodes' &&
         scp -q bin/jarvisd-linux-amd64 bin/jarvisd-darwin-arm64 "$JARVIS_HUB_SSH:.jarvis/bin/nodes/"
-      install_bin "$t" "bin/jarvisd-$(field "$t" os)-$( [ "$(field "$t" os)" = darwin ] && echo arm64 || echo amd64)"
+      hub_plat="$(field "$t" os)-$( [ "$(field "$t" os)" = darwin ] && echo arm64 || echo amd64)"
+      install_bin "$t" "bin/jarvisd-$hub_plat"
+      install_telegram "$t" "$hub_plat"
       ensure_herdr "$t"
       ssh "$JARVIS_HUB_SSH" 'bash -s' <<'EOF'
 set -e

@@ -52,21 +52,37 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 fetch "$DL/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $DL/SHA256SUMS"
-fetch "$DL/$archive" "$tmp/$archive" || fail "could not download $DL/$archive"
-want="$(awk -v n="$archive" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")"
-[ -n "$want" ] || fail "$archive is not in SHA256SUMS"
-[ "$(sum "$tmp/$archive")" = "$want" ] || fail "checksum mismatch for $archive: not installed"
-gzip -dc "$tmp/$archive" > "$tmp/$name" || fail "could not unpack $archive: not installed"
-[ -s "$tmp/$name" ] || fail "$archive contains an empty binary: not installed"
 
-mkdir -p "$DEST"
-chmod 755 "$tmp/$name"
-mv "$tmp/$name" "$DEST/jarvisd"
+# get <name> <installed as>: downloads <name>.gz, checks it against SHA256SUMS and puts it in $DEST.
+get() {
+	archive="$1.gz"
+	fetch "$DL/$archive" "$tmp/$archive" || fail "could not download $DL/$archive"
+	want="$(awk -v n="$archive" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")"
+	[ -n "$want" ] || fail "$archive is not in SHA256SUMS"
+	[ "$(sum "$tmp/$archive")" = "$want" ] || fail "checksum mismatch for $archive: not installed"
+	gzip -dc "$tmp/$archive" > "$tmp/$1" || fail "could not unpack $archive: not installed"
+	[ -s "$tmp/$1" ] || fail "$archive contains an empty binary: not installed"
+	mkdir -p "$DEST"
+	chmod 755 "$tmp/$1"
+	mv "$tmp/$1" "$DEST/$2"
+}
+
+get "$name" jarvisd
 version="$("$DEST/jarvisd" version 2>/dev/null || echo unknown)"
 echo "jarvisd $version installed at $DEST/jarvisd"
 case ":$PATH:" in
 *":$DEST:"*) ;;
 *) echo "(not on PATH: run it as $DEST/jarvisd, or add $DEST to PATH)" ;;
+esac
+
+# On the computer that runs the hub, JARVIS_WITH=telegram also installs jarvisd-telegram, the Telegram connector's
+# program, next to jarvisd (docs/plan-telegram.md). Other computers do not need it; a hub that updates itself gets it
+# with its next update anyway.
+case ",${JARVIS_WITH:-}," in
+*,telegram,*)
+	get "jarvisd-telegram-$os-$arch" jarvisd-telegram
+	echo "jarvisd-telegram installed at $DEST/jarvisd-telegram"
+	;;
 esac
 
 # The places the node looks besides PATH (server/internal/node/node.go: ssh sessions get a minimal PATH).
@@ -90,4 +106,5 @@ else
 	fi
 fi
 echo "On the machine that runs the hub: jarvisd hub run (the first run writes ~/.jarvis/hub.json), then jarvisd hub pair."
+echo "(With JARVIS_WITH=telegram there it also installs the Telegram connector.)"
 echo "Other computers only need the binary: the hub reaches them over ssh."

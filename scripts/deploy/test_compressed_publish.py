@@ -62,6 +62,43 @@ class InstallTestCase(unittest.TestCase):
         self.assertEqual(self.installed.read_bytes(), b"previous-install")
 
 
+class InstallTelegramTests(InstallTestCase):
+    """JARVIS_WITH=telegram: the hub's computer also gets jarvisd-telegram (docs/plan-telegram.md); others do not."""
+
+    telegram = b"#!/bin/sh\nprintf '%s\\n' telegram\n"
+
+    def both(self):
+        files = {"jarvisd-linux-amd64.gz": gzip.compress(self.binary, mtime=0),
+                 "jarvisd-telegram-linux-amd64.gz": gzip.compress(self.telegram, mtime=0)}
+        for name, data in files.items():
+            (self.downloads / name).write_bytes(data)
+        (self.downloads / "SHA256SUMS").write_text("".join(hashlib.sha256(d).hexdigest() + "  " + n + "\n" for n, d in files.items()))
+
+    def test_the_hub_asks_for_telegram(self):
+        self.both()
+        self.env["JARVIS_WITH"] = "telegram"
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        program = self.home / ".jarvis/bin/jarvisd-telegram"
+        self.assertEqual(program.read_bytes(), self.telegram)
+        self.assertTrue(os.access(program, os.X_OK))
+
+    def test_other_computers_do_not_get_it(self):
+        self.both()
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.home / ".jarvis/bin/jarvisd-telegram").exists())
+
+    def test_a_program_that_does_not_check_out_is_not_installed(self):
+        self.both()
+        (self.downloads / "jarvisd-telegram-linux-amd64.gz").write_bytes(gzip.compress(b"something else", mtime=0))
+        self.env["JARVIS_WITH"] = "telegram"
+        result = self.run_install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("checksum mismatch for jarvisd-telegram-linux-amd64.gz", result.stderr)
+        self.assertFalse((self.home / ".jarvis/bin/jarvisd-telegram").exists())
+
+
 class InstallCompressedTests(InstallTestCase):
     def test_all_platforms_install_the_matching_compressed_binary(self):
         platforms = [("Linux", "x86_64", "linux-amd64"), ("Linux", "aarch64", "linux-arm64"),
