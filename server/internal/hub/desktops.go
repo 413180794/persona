@@ -121,10 +121,31 @@ func (h *Hub) dropClient(c *client) {
 	if desktop {
 		h.announceDesktopsLocked()
 	}
+	phone, device := c.phone, c.pushDevice
 	h.mu.Unlock()
 	if desktop {
 		h.logf("desktop %q disconnected (device %s)", c.name, c.device)
 	}
+	if phone && !h.phoneOpen(device) {
+		h.live.phoneLeft(device, c.clean)
+	}
+}
+
+// phoneOpen: the app on the phone with this push id is open and connected. An app closes its connection when it goes
+// to the background, so it is open while connected (a suspended one with the socket left open is dropped by the
+// pings within ~35 s).
+func (h *Hub) phoneOpen(device string) bool {
+	if device == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.phone && c.pushDevice == device {
+			return true
+		}
+	}
+	return false
 }
 
 // alertWanted is which devices an alert push goes to: what their settings pick (wants; nil: every device, for what

@@ -160,7 +160,8 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 ## 推送（`hub/liveactivity.go`）
 
 - 触发：hub 每次广播 `sessions` / `interaction` / `interaction_resolved` 时重算快照，和上次推的一样就不推。
-- 合并：新的「需要你」立刻推（priority 10）；其他变化等 2.5 秒合并后推（priority 5）。不带 alert、不带 category（交互推送已经响过）。
+- 节奏见下面「推送节奏」：「需要你」的变化立刻推（priority 10），其他变化合并 2.5 秒、每台设备最多 30 秒一次（priority 5），
+  App 开着的设备不推。不带 alert、不带 category（交互推送已经响过）。
 - `stale-date` = 现在 + 15 分钟，内容没变也每 10 分钟重推一次续期；hub 断了活动会变「过期」，界面显示「等待 hub 更新…」（P3 的按钮也会隐藏）。
 - 结束：没有可显示的超过 1 分钟，或只剩做完未看的超过 5 分钟，推 `end`（`dismissal-date` = 现在）并忘掉活动 token。
 - 开始：有活动 token 就 `update`；没有（App 没开过、上一个结束了）而有 push-to-start token，就在「一轮」开始时推一次 `start`
@@ -169,6 +170,24 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
   环境跟设备注册时一样（Debug 构建是 sandbox）。410 / BadDeviceToken 时删掉那个 token。
 - 每台设备一行 `live_activities`（`device_id`、`activity_id`、`push_token`、`push_to_start_token`、`started_at`），内存里有一份，每次变化写库。
 - 开着 App 时 hub 还广播 `{"type":"fleet","fleet":{…}}`，App 自己更新活动（比推送快，模拟器上也能用）。
+
+## 推送节奏（2026-11-02，耗电排查）
+
+用户真实 hub 上，灵动岛的内容一小时变约 180 次，以前每次都推一条，手机每收到一次就重画一遍灵动岛和锁屏。现在：
+
+| 变化 | 例子 | 怎么推 | 灵动岛最多落后 hub |
+| --- | --- | --- | --- |
+| 关键 | 有 Agent 开始需要你（提问、审批、终端对话框），或不再需要你（答完了、在电脑上答了、走了） | 立刻推，priority 10 | 0（hub 一侧；之前的屏幕卡判断仍有 1.5 / 3 秒） |
+| 普通 | 在工作 / 做完的个数、条目标题、助手在回答、轮次开始的时间 | 合并 2.5 秒；同一台设备距上次推送不到 `fleetMinGap`（30 秒）就等到那时，推当时最新的 | 30 + 2.5 秒 |
+| 只有数字 | token、TPM、负载 | 照旧：每台设备至少隔 `live_metrics_seconds`（60 秒），取整后变了才推 | 60 秒 |
+
+- 上限由 `TestFleetPacingBound`（每 3 秒一变、10 分钟，夹着提问和答完）和 `TestPushReplay`（真实 hub 录下的 19 分钟）守住：
+  「灵动岛显示的和 hub 不一样」连续最长 29.2 秒；改 30 秒为 60 秒是 58.8 秒（`docs/testing.md`「推送回放」）。
+- **App 开着时不推**：App 在 `register_phone` 里带上推送用的设备 id（`device_id`），连着的这段时间 hub 不给它的活动发 APNs，
+  只记下「它已经画了这一版」；App 自己按 `fleet` 事件更新活动。App 进后台主动断开（close 1000 / 1001）时，hub 认为活动停在最后广播的那一版；
+  网络断、被杀、挂起后被 ping 超时踢掉（不是自己关的），或者最后一版已经超过 10 分钟（可能过期了），hub 不知道它显示什么，立刻补推当前状态。
+  老 App 不带 `device_id`，照旧推。
+- 回放（录下的 19 分钟，App 不开时）：每小时 188 条 → 115 条（30 秒）；60 秒时是 60 条。App 开着时 0 条。
 
 ## 用量（token / TPM / 负载）
 
@@ -185,11 +204,11 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 
 ## 推送预算
 
-- 状态（需要你 / 在工作 / 做完、条目、按钮）的变化照旧：新的「需要你」立刻推（priority 10），其他合并 2.5 秒（priority 5）。
+- 状态（需要你 / 在工作 / 做完、条目、按钮）的变化：「需要你」的变化立刻推（priority 10），其他合并 2.5 秒、每台设备最多 30 秒一次（priority 5），见「推送节奏」。
 - 只有数字变了：hub 每 15 秒看一次，对每台有活动的设备，距它上次收到推送超过 `notify.live_metrics_seconds`（默认 60 秒）、
   而且它显示的（取整后的）数字确实变了，才推一次 priority 5 的 update。状态推送也会顺带最新的数字。
 - 每台设备记着上次推给它的 content-state，一样的就不推（比如助手开始回答，但这台设备的灵动岛不显示助手）。
-- App 在前台时自己用 `fleet` 事件更新活动（不占推送预算），数字跟着每次变化走。
+- App 在前台时自己用 `fleet` 事件更新活动（不占推送预算），数字跟着每次变化走；这时 hub 不给这台设备推（新 App 才行，见「推送节奏」）。
 
 ## App（`LiveActivityController`）
 

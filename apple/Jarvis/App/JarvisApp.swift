@@ -27,13 +27,18 @@ struct JarvisApp: App {
                     }
                 }
         }
-        .onChange(of: phase) { _, new in
+        // `initial`: a launch into the foreground is already active here, and `start()` may have found the app in the
+        // background (scene apps are, during didFinishLaunching): the socket opens now.
+        .onChange(of: phase, initial: true) { old, new in
             if new == .active {
+                model.live.suspended = false
                 model.live.ensureConnected()
-                Task { await model.refresh() }
+                if old != new { Task { await model.refresh() } }
             } else if new == .background {
                 // A suspended app's socket looks alive to the hub until it times out, and phone_* calls sent to it hang.
-                // Closed, the hub knows the phone is away and wakes it with a silent push instead.
+                // Closed, the hub knows the phone is away and wakes it with a silent push instead; and nothing opens it
+                // again until the app is back (the network returning, a refresh ending: LiveConnection.suspended).
+                model.live.suspended = true
                 model.live.disconnect()
             }
         }
@@ -140,10 +145,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             completionHandler(.noData)
             return
         }
-        AppModel.shared.live.ensureConnected()
+        AppModel.shared.live.wake()
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.asyncAfter(deadline: .now() + 25) {
-            if UIApplication.shared.applicationState == .background { AppModel.shared.live.disconnect() }
+            if UIApplication.shared.applicationState == .background {
+                AppModel.shared.live.suspended = true
+                AppModel.shared.live.disconnect()
+            }
             done(.newData)
         }
     }

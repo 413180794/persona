@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -540,10 +541,15 @@ type client struct {
 	desktop bool
 	// device and role: whose credential opened the connection (devicetokens.go); device is empty for the pairing token.
 	device, role string
-	lazy         bool // asked for items without image data (subscribe with lazy_images)
-	fold         bool // asked for backlogs with the agent's work folded (subscribe with fold_work)
-	name         string
-	since        time.Time
+	// pushDevice: the phone's id for pushes (register_phone's device_id, PushRegistrar.deviceID in the app): while it is
+	// connected its app is open, and draws its Live Activity itself (liveactivity.go). Empty for an older app.
+	pushDevice string
+	// clean: the app closed the connection itself (gone to the background), rather than the network dropping it.
+	clean bool
+	lazy  bool // asked for items without image data (subscribe with lazy_images)
+	fold  bool // asked for backlogs with the agent's work folded (subscribe with fold_work)
+	name  string
+	since time.Time
 }
 
 func (c *client) sendJSON(v any) {
@@ -564,11 +570,15 @@ func (h *Hub) broadcast(v any) {
 	if err != nil {
 		return
 	}
-	if m, ok := v.(map[string]any); ok {
-		switch m["type"] {
-		case "sessions", "interaction", "interaction_resolved": // what the Fleet activity is made of
-			h.live.changed()
-		}
+	typ, _ := v.(map[string]any)["type"].(string)
+	h.broadcastRaw(typ, b)
+}
+
+// broadcastRaw sends every app the message b (of type typ).
+func (h *Hub) broadcastRaw(typ string, b []byte) {
+	switch typ {
+	case "sessions", "interaction", "interaction_resolved": // what the Fleet activity is made of
+		h.live.changed()
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -576,8 +586,34 @@ func (h *Hub) broadcast(v any) {
 		select {
 		case c.out <- b:
 		default:
+			// 512 messages behind. Skipping this one would leave the app wrong for good (a session list is not sent
+			// again while it stays the same): drop the connection like sendJSON; the app reconnects and resyncs.
+			if c.conn != nil {
+				go c.conn.Close(websocket.StatusPolicyViolation, "too slow")
+			}
 		}
 	}
+}
+
+// broadcastSessions sends every app a machine's session list, unless it is the list they last got. A third of the
+// lists the hub sent were the same again (an interaction shown, a session seen, a node pass that changed nothing the
+// app reads), each up to ~150 KB for the phone to download and decode (docs/server.md「推送给 App 的量」). The lock
+// is held until the message is queued, so what was recorded is what the apps got last.
+func (h *Hub) broadcastSessions(m *Machine, list []proto.Session) {
+	b, err := json.Marshal(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": list})
+	if err != nil {
+		return
+	}
+	h.sessionsMu.Lock()
+	defer h.sessionsMu.Unlock()
+	if bytes.Equal(h.sessionsSent[m.cfg.ID], b) {
+		return
+	}
+	if h.sessionsSent == nil {
+		h.sessionsSent = map[string][]byte{}
+	}
+	h.sessionsSent[m.cfg.ID] = b
+	h.broadcastRaw("sessions", b)
 }
 
 func (h *Hub) toSubscribers(machineID, sessionID string, v any) {
@@ -725,6 +761,8 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {
+			s := websocket.CloseStatus(err)
+			c.clean = s == websocket.StatusNormalClosure || s == websocket.StatusGoingAway
 			return
 		}
 		h.onClientMessage(ctx, c, data)
@@ -740,6 +778,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		LazyImages bool            `json:"lazy_images"`
 		FoldWork   bool            `json:"fold_work"`
 		DeviceName string          `json:"device_name"`
+		DeviceID   string          `json:"device_id"` // register_phone: the phone's id for pushes
 		Simulator  bool            `json:"simulator"`
 		Tools      []proto.Tool    `json:"tools"`
 		CallID     string          `json:"call_id"`
@@ -805,7 +844,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 			return
 		}
 		h.mu.Lock()
-		c.phone, c.sim, c.name, c.since = true, msg.Simulator, msg.DeviceName, time.Now()
+		c.phone, c.sim, c.name, c.since, c.pushDevice = true, msg.Simulator, msg.DeviceName, time.Now(), msg.DeviceID
 		h.mu.Unlock()
 		if len(msg.Tools) > 0 {
 			h.setPhoneTools(msg.Tools)

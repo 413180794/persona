@@ -159,6 +159,10 @@ final class AppModel {
 
     func start() {
         guard let config else { return }
+        #if os(iOS)
+        // Launched in the background (a push, a file from the watch): the socket waits for the app to open.
+        live.suspended = UIApplication.shared.applicationState == .background
+        #endif
         live.connect(config)
         if config.isDemo { return } // no watch, no device credentials: nothing to talk to
         WatchSync.shared.push(config: Keychain.watchConfig ?? config)
@@ -641,7 +645,7 @@ final class AppModel {
         #else
         let simulator = false
         #endif
-        live.send(Self.registration(deviceName: UIDevice.current.name, tools: arr, simulator: simulator))
+        live.send(Self.registration(deviceName: UIDevice.current.name, tools: arr, simulator: simulator, deviceID: PushRegistrar.deviceID))
     }
 
     /// Turns 手机静音 on or off: optimistic, only this one setting is written (the PUT merges), and only the latest
@@ -677,11 +681,13 @@ final class AppModel {
     /// How this device introduces itself to the hub. The iPhone is the phone (its phone_* tools, the wake pushes when
     /// it is away); a Mac is a desktop, like WeChat's 「Mac 微信已登录」 (hub/desktops.go, docs/mac.md「Mac 是桌面端，不是手机」):
     /// registered as the phone it took every phone_* call and kept the hub from waking the iPhone.
-    nonisolated static func registration(deviceName: String, tools: Any, simulator: Bool) -> [String: Any] {
+    /// `deviceID` is the phone's id for pushes: while it is connected the hub sends its Live Activity no pushes, the app
+    /// draws it from the fleet events (hub/liveactivity.go).
+    nonisolated static func registration(deviceName: String, tools: Any, simulator: Bool, deviceID: String = "") -> [String: Any] {
         #if os(macOS)
         ["type": "register_desktop", "device_name": deviceName]
         #else
-        ["type": "register_phone", "device_name": deviceName, "tools": tools, "simulator": simulator]
+        ["type": "register_phone", "device_name": deviceName, "tools": tools, "simulator": simulator, "device_id": deviceID]
         #endif
     }
 

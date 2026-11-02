@@ -418,6 +418,25 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 改前那一轮第一次快甩就没打开（松手速度 495pt/s 不到旧阈值 600），第一帧 18.6 ms，关上后 40–50 ms。
 模拟器跑在 Mac 的 CPU 上，绝对值比真机小，看相对变化；真机 120 Hz 每帧只有 8.3 ms。
 
+## 推送回放（`TestPushReplay`）
+
+改 hub 推给 App 的东西（会话列表、实时活动的节奏）之前和之后，用同一段真实推送比：
+
+1. 在 hub 机器上录：`cd server && go run ./cmd/pushrec 20m ~/push.jsonl`。它像 App 一样连 hub（用 `~/.jarvis/hub.json` 的 token，不打印），
+   不注册成手机 / 桌面、不打开对话，每条消息一行 `{"t": 毫秒, "msg": 原文}`。文件里是真实的会话（标题、最后一句），0600，**只留在那台机器上**，不拷走、不进仓库。
+2. 回放：`JARVIS_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`。打印每种消息改前（录到的）和改后（这份代码会发的）
+   每分钟的条数和字节；实时活动按录到的时间把每次变化喂给合并和节流，打印 App 不开时每小时推几条、灵动岛和 hub 不一致连续最长多久，超过上限就失败。
+3. 会话列表用真的 `broadcastSessions` 决定发不发，并核对和「按录到的字节比」一致（解码不丢字段）。
+
+2026-11-02 录的 19 分钟（耗电排查，`docs/live-activity.md`「推送节奏」、`docs/server.md`「推送给 App 的量」）：
+
+| | 改前 | 改后 |
+| --- | --- | --- |
+| `sessions` | 36.9 条 / 分钟，2605 KB / 分钟 | 29.7 条，2452 KB |
+| 全部消息 | 104.9 条 / 分钟，2616 KB / 分钟 | 97.7 条，2462 KB |
+| 实时活动（App 不开） | 188 条 / 小时，不一致最长 2.5 秒 | 115 条，最长 29.2 秒（60 秒节流：60 条，58.8 秒） |
+| 实时活动（App 开着） | 同上 | 0 |
+
 ## 实时活动截图（`LiveActivityShots`）
 
 `simctl io screenshot` 拍不到灵动岛和锁屏上的活动。UI 测试 `LiveActivityShots` 用 `-showFleetSample` 开一个编造的活动，

@@ -92,6 +92,6 @@ func (h *Hub) markSeen(machine, session string) {
 		}
 	}
 	if m := h.byID[machine]; m != nil {
-		h.broadcast(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
+		h.broadcastSessions(m, h.decorated(m))
 	}
 }

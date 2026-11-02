@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"path"
@@ -22,12 +23,18 @@ import (
 // (FleetState, the activity's ContentState) from what it already knows and pushes it over APNs (push type
 // liveactivity) to each device's activity token; push-to-start opens one when the app is not running.
 //
-// Budget: Apple throttles activity updates (numbers unpublished), so changes are merged for fleetCoalesce, a new
-// "needs you" goes out at once, the timer (working since…) runs on the phone, and nothing is sent while nothing
-// changes except a refresh before the content goes stale.
+// Budget: Apple throttles activity updates (numbers unpublished), and each one redraws the island and the lock screen
+// on the phone. So what needs the user (a request arriving, or answered) goes out at once; anything else is merged
+// for fleetCoalesce and reaches a device at most every fleetMinGap; the timer (working since…) runs on the phone; a
+// phone whose app is open draws the activity itself from the fleet events and gets no push; and nothing is sent
+// while nothing changes except a refresh before the content goes stale (docs/live-activity.md「推送节奏」).
 
 const (
-	fleetCoalesce   = 2500 * time.Millisecond
+	fleetCoalesce = 2500 * time.Millisecond
+	// fleetMinGap: an ordinary change (counts, titles, the assistant, an agent done) reaches a device at most this
+	// often, so a device's activity is at most fleetMinGap + fleetCoalesce behind the hub (TestFleetPacingBound).
+	// On the user's hub (2026-11-02) the fleet changed ~180 times an hour, each one a push.
+	fleetMinGap     = 30 * time.Second
 	fleetStaleIn    = 15 * time.Minute // stale-date: buttons disappear if the hub goes quiet this long
 	fleetRefresh    = 10 * time.Minute // resend unchanged content before it goes stale
 	fleetEndAfter   = time.Minute      // empty this long: end the activity
@@ -308,8 +315,8 @@ func unix(t time.Time) float64 {
 	return float64(t.Unix())
 }
 
-// coalescer decides when a new fleet state goes out: a new "needs you" at once, anything else after fleetCoalesce
-// (more changes in the meantime ride along).
+// coalescer decides when a new fleet state goes out: a change in what needs the user (a request arriving, or answered
+// or gone) at once, anything else after fleetCoalesce (more changes in the meantime ride along).
 type coalescer struct {
 	sent    []byte          // last state pushed
 	needs   map[string]bool // its needs-you items
@@ -323,10 +330,8 @@ func (c *coalescer) offer(st FleetState) (now, schedule bool) {
 		c.pending = false
 		return false, false
 	}
-	for id := range st.needsYouIDs() {
-		if !c.needs[id] {
-			return true, false
-		}
+	if needs := st.needsYouIDs(); !maps.Equal(needs, c.needs) && (len(needs) > 0 || len(c.needs) > 0) {
+		return true, false
 	}
 	if c.pending {
 		return false, false
@@ -361,11 +366,21 @@ type liveActivities struct {
 	sent      map[string][]byte    // device -> the content-state it last got
 	sentAt    map[string]time.Time // device -> when
 	stats     []byte               // last numbers broadcast to the open apps
+	// The last fleet broadcast to the open apps, and when: what an app that closed its connection cleanly (gone to
+	// the background) left its activity showing (phoneLeft).
+	shownState FleetState
+	shownStats FleetStats
+	shownAt    time.Time
+	repair     bool // a device's activity shows something unknown: flush without waiting for a change
+	// wake: when the run loop's timer goes off next (zero: not set), for a merge or a device's turn after fleetMinGap.
+	wake   time.Time
+	now    func() time.Time
+	minGap time.Duration // fleetMinGap (0 in the replay of how it was before, pushreplay_test.go)
 }
 
 func newLiveActivities(h *Hub) *liveActivities {
 	return &liveActivities{h: h, signal: make(chan struct{}, 1), rows: map[string]db.LiveActivity{}, started: map[string]int{},
-		sent: map[string][]byte{}, sentAt: map[string]time.Time{}}
+		sent: map[string][]byte{}, sentAt: map[string]time.Time{}, now: time.Now, minGap: fleetMinGap}
 }
 
 func (la *liveActivities) load(ctx context.Context) {
@@ -430,33 +445,53 @@ func (la *liveActivities) run(ctx context.Context) {
 			return
 		case <-la.signal:
 			la.mu.Lock()
-			if la.resend {
-				la.resend, la.coal.sent = false, nil
-			}
+			resend, repair := la.resend, la.repair
+			la.resend, la.repair = false, false
 			la.mu.Unlock()
 			st := la.snapshot()
 			if b, _ := json.Marshal(st); !bytes.Equal(b, la.shown) { // the open app updates its activity itself
 				la.shown = b
 				la.broadcast(st)
 			}
+			if resend {
+				// A device's settings changed (details on the lock screen, the island's sides): show it now.
+				la.coal.sent = nil
+				la.wakeAt(timer, la.flush(st, false, true))
+				continue
+			}
 			now, schedule := la.coal.offer(st)
 			switch {
 			case now:
-				la.flush(st, true, false)
+				la.wakeAt(timer, la.flush(st, true, false))
 			case schedule:
-				timer.Reset(fleetCoalesce)
+				la.wakeAt(timer, la.now().Add(fleetCoalesce))
+			case repair:
+				la.wakeAt(timer, la.flush(st, false, false))
 			}
 		case <-timer.C:
-			la.flush(la.snapshot(), false, false)
+			la.wake = time.Time{}
+			la.wakeAt(timer, la.flush(la.snapshot(), false, false))
 		case <-tick.C:
 			la.tick()
 		}
 	}
 }
 
+// wakeAt sets the run loop's timer for t, unless it goes off sooner already (zero t: nothing to do).
+func (la *liveActivities) wakeAt(timer *time.Timer, t time.Time) {
+	if t.IsZero() || (!la.wake.IsZero() && !t.Before(la.wake)) {
+		return
+	}
+	la.wake = t
+	timer.Reset(max(t.Sub(la.now()), time.Millisecond))
+}
+
 // broadcast sends the open apps the fleet with every number (each app picks what its own settings show).
 func (la *liveActivities) broadcast(st FleetState) {
 	stats := la.h.fleetStats()
+	la.mu.Lock()
+	la.shownState, la.shownStats, la.shownAt = st, stats, la.now()
+	la.mu.Unlock()
 	st.Stats = &stats
 	la.stats, _ = json.Marshal(stats)
 	la.h.broadcast(map[string]any{"type": "fleet", "fleet": st})
@@ -464,10 +499,11 @@ func (la *liveActivities) broadcast(st FleetState) {
 
 // tick: end an activity that has been over for a while, refresh one about to go stale, update the numbers.
 func (la *liveActivities) tick() {
+	now := la.now()
 	la.mu.Lock()
-	over := !la.emptyAt.IsZero() && time.Since(la.emptyAt) >= fleetEndAfter
-	stale := !la.last.empty() && time.Since(la.lastPush) >= fleetRefresh
-	doneLong := la.last.Phase == "done" && !la.doneSince.IsZero() && time.Since(la.doneSince) >= fleetDoneLinger
+	over := !la.emptyAt.IsZero() && now.Sub(la.emptyAt) >= fleetEndAfter
+	stale := !la.last.empty() && now.Sub(la.lastPush) >= fleetRefresh
+	doneLong := la.last.Phase == "done" && !la.doneSince.IsZero() && now.Sub(la.doneSince) >= fleetDoneLinger
 	last := la.last
 	la.mu.Unlock()
 	switch {
@@ -476,7 +512,7 @@ func (la *liveActivities) tick() {
 	case stale:
 		la.flush(la.snapshot(), false, true)
 	case !last.empty():
-		la.metrics(last, time.Now())
+		la.metrics(last, now)
 	}
 }
 
@@ -498,14 +534,54 @@ func (la *liveActivities) metrics(last FleetState, now time.Time) {
 	la.mu.Unlock()
 	for _, r := range rows {
 		d, ok := la.h.push.device(r.DeviceID)
-		if !ok || !devicePrefs(d.Prefs).LiveActivity {
-			continue
+		if !ok || !devicePrefs(d.Prefs).LiveActivity || la.h.phoneOpen(r.DeviceID) {
+			continue // an open app has every number from the fleet event
 		}
 		dst := last.forDevice(devicePrefs(d.Prefs), stats)
 		if la.markSent(r.DeviceID, dst, now, false) {
 			la.send(d, r, liveActivityPayload("update", dst, now), false)
 		}
 	}
+}
+
+// notYet says whether dst, a change for device, waits for its turn (fleetMinGap after its last push), and until when.
+// What needs the user, a forced resend, and a device whose activity shows something unknown go now.
+func (la *liveActivities) notYet(device string, dst FleetState, now time.Time, urgent bool) (due time.Time, wait bool) {
+	if urgent {
+		return time.Time{}, false
+	}
+	b, _ := json.Marshal(dst)
+	la.mu.Lock()
+	defer la.mu.Unlock()
+	at, ok := la.sentAt[device]
+	if !ok || bytes.Equal(b, la.sent[device]) {
+		return time.Time{}, false
+	}
+	due = at.Add(la.minGap)
+	return due, now.Before(due)
+}
+
+// phoneLeft: the app on device closed its connection. Gone to the background (a clean close), its activity shows the
+// last fleet it was sent, which is what the device has now. Otherwise (the network dropped, the app was killed or
+// suspended with the socket open) what it shows is unknown, and so is it when that fleet is old enough to have gone
+// stale: the current state goes out at once, without waiting for a change or fleetMinGap.
+func (la *liveActivities) phoneLeft(device string, clean bool) {
+	if la == nil || device == "" {
+		return
+	}
+	d, ok := la.h.push.device(device)
+	now := la.now()
+	la.mu.Lock()
+	if clean && ok && !la.shownAt.IsZero() && now.Sub(la.shownAt) < fleetRefresh {
+		b, _ := json.Marshal(la.shownState.forDevice(devicePrefs(d.Prefs), la.shownStats))
+		la.sent[device], la.sentAt[device] = b, la.shownAt
+	} else {
+		delete(la.sent, device)
+		delete(la.sentAt, device)
+		la.repair = true
+	}
+	la.mu.Unlock()
+	la.changed()
 }
 
 // markSent records dst as the device's content-state and says whether it is new (always, when forced).
@@ -521,10 +597,12 @@ func (la *liveActivities) markSent(device string, dst FleetState, now time.Time,
 }
 
 // flush pushes st to every device that wants the activity: update a running one, or start one (once per episode).
-// A device whose own version did not change (the change was something it does not show) is skipped unless forced.
-func (la *liveActivities) flush(st FleetState, urgent, force bool) {
+// A device whose own version did not change (the change was something it does not show) is skipped unless forced; one
+// whose app is open is not pushed (it draws the activity itself); one pushed less than fleetMinGap ago gets an ordinary
+// change later: next is when the first of those is due (zero: none).
+func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Time) {
 	la.coal.sentState(st)
-	now := time.Now()
+	now := la.now()
 	la.mu.Lock()
 	wasOver := la.last.empty() || la.last.Phase == "done"
 	if st.empty() {
@@ -552,7 +630,7 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) {
 	}
 	la.mu.Unlock()
 	if st.empty() {
-		return // ended by tick after fleetEndAfter, unless something comes back first
+		return time.Time{} // ended by tick after fleetEndAfter, unless something comes back first
 	}
 	stats := la.h.fleetStats()
 	for _, r := range rows {
@@ -567,6 +645,16 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) {
 		dst := st.forDevice(prefs, stats)
 		switch {
 		case r.PushToken != "" && now.Sub(r.StartedAt) < fleetMaxAge:
+			if la.h.phoneOpen(r.DeviceID) {
+				la.markSent(r.DeviceID, dst, now, false) // what its app just drew from the fleet event
+				continue
+			}
+			if due, wait := la.notYet(r.DeviceID, dst, now, urgent || force); wait {
+				if next.IsZero() || due.Before(next) {
+					next = due
+				}
+				continue
+			}
 			if la.markSent(r.DeviceID, dst, now, force) {
 				la.send(d, r, liveActivityPayload("update", dst, now), urgent)
 			}
@@ -583,6 +671,7 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) {
 			}
 		}
 	}
+	return next
 }
 
 func (la *liveActivities) endAll() {

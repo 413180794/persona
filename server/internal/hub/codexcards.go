@@ -127,6 +127,6 @@ func (h *Hub) codexPending(m *Machine, ix proto.Interaction) *pending {
 func (h *Hub) show(ix proto.Interaction) {
 	h.broadcast(map[string]any{"type": "interaction", "interaction": ix})
 	if m := h.byID[ix.MachineID]; m != nil {
-		h.broadcast(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
+		h.broadcastSessions(m, h.decorated(m))
 	}
 }

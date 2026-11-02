@@ -53,6 +53,10 @@ type Hub struct {
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
 
+	// sessionsSent: each machine's last session list sent to the apps, the whole message (broadcastSessions).
+	sessionsMu   sync.Mutex
+	sessionsSent map[string][]byte
+
 	mu            sync.Mutex
 	clients       map[*client]struct{}
 	interactions  map[string]*pending
@@ -304,7 +308,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 
 func (h *Hub) sessionsChanged(m *Machine) {
 	list := h.decorated(m)
-	h.broadcast(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": list})
+	h.broadcastSessions(m, list)
 	h.syncScreenInteractions(m, list)
 	h.syncPlanInteractions(m)
 }
@@ -456,7 +460,7 @@ func trimScreen(s string) string {
 func (h *Hub) announce(ix proto.Interaction) {
 	h.broadcast(map[string]any{"type": "interaction", "interaction": ix})
 	if m := h.byID[ix.MachineID]; m != nil {
-		h.broadcast(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
+		h.broadcastSessions(m, h.decorated(m))
 	}
 	if !h.muted(ix.MachineID, ix.SessionID) {
 		h.push.notifyInteraction(ix, h.machineName(ix.MachineID))
@@ -683,7 +687,7 @@ func (h *Hub) finished(p *pending) {
 	id := p.ix.ID
 	h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 	if m := h.byID[p.ix.MachineID]; m != nil {
-		h.broadcast(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
+		h.broadcastSessions(m, h.decorated(m))
 	}
 	h.push.clear(id)
 }

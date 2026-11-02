@@ -5,11 +5,14 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"github.com/chyroc/jarvis/server/internal/apns"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -445,4 +448,252 @@ func TestLiveActivityMetrics(t *testing.T) {
 	la.metrics(working, now.Add(200*time.Second))
 	time.Sleep(50 * time.Millisecond)
 	f.calls(t, 2)
+}
+
+func TestCoalescerNeedsYouBothWays(t *testing.T) {
+	var c coalescer
+	working := FleetState{Phase: "working", Working: 1, Items: []FleetItem{{ID: "m/a", Kind: "working"}}}
+	asks := FleetState{Phase: "needsYou", NeedsYou: 1, Working: 1,
+		Items: []FleetItem{{ID: "m/b", Kind: proto.IxQuestion, Interaction: "ix1"}, {ID: "m/a", Kind: "working"}}}
+	c.sentState(working)
+	if now, _ := c.offer(asks); !now {
+		t.Fatal("a request arriving goes out at once")
+	}
+	c.sentState(asks)
+	// Answered (here or on the computer): the island must stop saying so at once, not after the gap.
+	if now, _ := c.offer(working); !now {
+		t.Fatal("a request answered goes out at once")
+	}
+	c.sentState(working)
+	more := working
+	more.Working = 2
+	if now, sched := c.offer(more); now || !sched {
+		t.Fatalf("an ordinary change waits: %v %v", now, sched)
+	}
+}
+
+// fleetClock gives h.live a clock the test moves, and the device "phone" a running activity.
+func fleetClock(t *testing.T) (*Hub, *fakeAPNs, *time.Time) {
+	h, f := testLive(t)
+	clock := time.Unix(1_800_000_000, 0)
+	h.live.now = func() time.Time { return clock }
+	h.live.update("phone", func(v *db.LiveActivity) { v.ActivityID, v.PushToken, v.StartedAt = "act1", "acttok", clock })
+	if err := h.push.setPrefs("phone", NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true}); err != nil {
+		t.Fatal(err)
+	}
+	return h, f, &clock
+}
+
+func TestFleetMinGap(t *testing.T) {
+	h, f, clock := fleetClock(t)
+	la := h.live
+	working := func(n int) FleetState {
+		return FleetState{Phase: "working", Working: n, Items: []FleetItem{{ID: "m/a", Title: "api", Kind: "working"}}}
+	}
+	t0 := *clock
+	if next := la.flush(working(1), false, false); !next.IsZero() {
+		t.Fatalf("first change waits for nothing: %v", next)
+	}
+	f.calls(t, 1)
+
+	// An ordinary change 5 s later: its turn is fleetMinGap after the last push.
+	*clock = t0.Add(5 * time.Second)
+	if next := la.flush(working(2), false, false); !next.Equal(t0.Add(fleetMinGap)) {
+		t.Fatalf("deferred until %v, want %v", next, t0.Add(fleetMinGap))
+	}
+	// A request arriving does not wait, and carries what changed meanwhile.
+	*clock = t0.Add(8 * time.Second)
+	asks := working(2)
+	asks.Phase, asks.NeedsYou = "needsYou", 1
+	asks.Items = append([]FleetItem{{ID: "m/b", Kind: proto.IxPermission, Interaction: "ix1"}}, asks.Items...)
+	la.flush(asks, true, false)
+	c := f.calls(t, 2)
+	if c[1].Priority != "10" || c[1].State.NeedsYou != 1 || c[1].State.Working != 2 {
+		t.Fatalf("request push %+v", c[1])
+	}
+	// Its turn come, the deferred device gets the state as it is then.
+	*clock = t0.Add(8*time.Second + fleetMinGap)
+	if next := la.flush(working(3), false, false); !next.IsZero() {
+		t.Fatalf("due: %v", next)
+	}
+	c = f.calls(t, 3)
+	if c[2].Priority != "5" || c[2].State.Working != 3 {
+		t.Fatalf("ordinary push %+v", c[2])
+	}
+}
+
+// TestFleetPacingBound runs the run loop's decisions (coalescer, flush and its next) over a fleet that changes every
+// 3 s for 10 minutes, a request arriving and being answered now and then: every change reaches the device within
+// fleetMinGap + fleetCoalesce (it, or a later state), a request arriving or answered at once, and far fewer pushes go
+// out than there were changes.
+func TestFleetPacingBound(t *testing.T) {
+	h, _, clock := fleetClock(t)
+	la := h.live
+	start := *clock
+	end := start.Add(10 * time.Minute)
+	type change struct {
+		at       time.Time
+		critical bool
+	}
+	var changes []change
+	var pushedAt []time.Time // each push, and the last change it carried
+	var pushedUpTo []int
+	var truth FleetState
+	var due time.Time // the run loop's timer
+	pushed := func() bool {
+		la.mu.Lock()
+		defer la.mu.Unlock()
+		return la.sentAt["phone"].Equal(*clock)
+	}
+	flush := func(urgent bool) {
+		if next := la.flush(truth, urgent, false); !next.IsZero() && (due.IsZero() || next.Before(due)) {
+			due = next
+		}
+		if pushed() && (len(pushedAt) == 0 || !pushedAt[len(pushedAt)-1].Equal(*clock) || pushedUpTo[len(pushedUpTo)-1] < len(changes)-1) {
+			pushedAt, pushedUpTo = append(pushedAt, *clock), append(pushedUpTo, len(changes)-1)
+		}
+	}
+	for step := 0; clock.Before(end); step++ {
+		truth = FleetState{Phase: "working", Working: 1 + step%4, Items: []FleetItem{{ID: "m/a", Title: "api", Kind: "working"}}}
+		if step%40 >= 20 && step%40 < 27 { // a request for 21 s, then answered
+			truth.Phase, truth.NeedsYou = "needsYou", 1
+			truth.Items = append([]FleetItem{{ID: "m/b", Kind: proto.IxQuestion, Interaction: fmt.Sprintf("ix%d", step/40)}}, truth.Items...)
+		}
+		now, schedule := la.coal.offer(truth)
+		changes = append(changes, change{*clock, now})
+		switch {
+		case now:
+			flush(true)
+		case schedule:
+			if at := clock.Add(fleetCoalesce); due.IsZero() || at.Before(due) {
+				due = at
+			}
+		}
+		next := clock.Add(3 * time.Second) // time passes to the next change, the timer going off on the way
+		for !due.IsZero() && !due.After(next) {
+			*clock, due = due, time.Time{}
+			flush(false)
+		}
+		*clock = next
+	}
+	bound := fleetMinGap + fleetCoalesce
+	worst := time.Duration(0)
+	for i, c := range changes {
+		if c.at.After(end.Add(-bound)) {
+			break // still within its bound when the run ended
+		}
+		k := sort.Search(len(pushedUpTo), func(k int) bool { return pushedUpTo[k] >= i })
+		if k == len(pushedUpTo) {
+			t.Fatalf("change %d at %v never reached the device", i, c.at.Sub(start))
+		}
+		lag := pushedAt[k].Sub(c.at)
+		if c.critical && lag != 0 {
+			t.Fatalf("a request change at %v waited %v", c.at.Sub(start), lag)
+		}
+		worst = max(worst, lag)
+	}
+	if worst > bound {
+		t.Fatalf("a change reached the device after %v, bound %v", worst, bound)
+	}
+	if len(pushedAt) > len(changes)/4 {
+		t.Fatalf("%d pushes for %d changes: the gap does not hold", len(pushedAt), len(changes))
+	}
+	t.Logf("%d changes in 10 min: %d pushes, the slowest change after %v (bound %v)", len(changes), len(pushedAt), worst, bound)
+}
+
+func TestFleetOpenPhone(t *testing.T) {
+	h, f, clock := fleetClock(t)
+	la := h.live
+	working := FleetState{Phase: "working", Working: 1, Items: []FleetItem{{ID: "m/a", Title: "api", Kind: "working"}}}
+	app := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleFull, phone: true, pushDevice: "phone"}
+	h.mu.Lock()
+	h.clients[app] = struct{}{}
+	h.mu.Unlock()
+
+	// Open: the app draws the activity from the fleet event; no push, but the hub knows what it shows.
+	la.broadcast(working)
+	la.flush(working, true, false)
+	time.Sleep(50 * time.Millisecond)
+	if n := len(f.calls(t, 0)); n != 0 {
+		t.Fatalf("pushed to an open app: %d", n)
+	}
+	// Gone to the background (a clean close): it shows the last fleet, nothing to send.
+	app.clean = true
+	h.dropClient(app)
+	la.flush(working, false, false)
+	time.Sleep(50 * time.Millisecond)
+	if n := len(f.calls(t, 0)); n != 0 {
+		t.Fatalf("pushed what the app already showed: %d", n)
+	}
+	la.mu.Lock()
+	repair := la.repair
+	la.mu.Unlock()
+	if repair {
+		t.Fatal("a clean close needs no repair")
+	}
+
+	// Open again, then the network drops (no clean close): what it shows is unknown, the state goes at once although
+	// the last update was moments ago.
+	app2 := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleFull, phone: true, pushDevice: "phone"}
+	h.mu.Lock()
+	h.clients[app2] = struct{}{}
+	h.mu.Unlock()
+	more := working
+	more.Working = 2
+	la.broadcast(more)
+	la.flush(more, false, false)
+	*clock = clock.Add(time.Second)
+	h.dropClient(app2)
+	la.mu.Lock()
+	repair = la.repair
+	la.mu.Unlock()
+	if !repair {
+		t.Fatal("a dropped connection should repair the activity")
+	}
+	if next := la.flush(more, false, false); !next.IsZero() {
+		t.Fatalf("repair waited for the gap: %v", next)
+	}
+	if c := f.calls(t, 1); c[0].State.Working != 2 {
+		t.Fatalf("repair push %+v", c[0])
+	}
+
+	// A clean close long after the last fleet event: the activity may have gone stale, push it.
+	app3 := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleFull, phone: true, pushDevice: "phone", clean: true}
+	h.mu.Lock()
+	h.clients[app3] = struct{}{}
+	h.mu.Unlock()
+	*clock = clock.Add(fleetRefresh + time.Minute)
+	h.dropClient(app3)
+	la.mu.Lock()
+	repair = la.repair
+	la.mu.Unlock()
+	if !repair {
+		t.Fatal("a stale activity should be refreshed when the app leaves")
+	}
+}
+
+func TestSessionsSentOnce(t *testing.T) {
+	h := newTestHub(t)
+	app := &client{out: make(chan []byte, 16), subs: map[[2]string]bool{}, role: roleFull}
+	h.clients[app] = struct{}{}
+	box, mini := &Machine{cfg: MachineConfig{ID: "box"}}, &Machine{cfg: MachineConfig{ID: "mini"}}
+	a := []proto.Session{{SessionID: "s1", Status: proto.StatusWorking, LastText: "reading"}}
+	b := []proto.Session{{SessionID: "s1", Status: proto.StatusWorking, LastText: "writing"}}
+	h.broadcastSessions(box, a)
+	h.broadcastSessions(box, a) // the same again (an interaction shown, a session seen): not sent
+	h.broadcastSessions(mini, a)
+	h.broadcastSessions(box, b)
+	h.broadcastSessions(box, a) // back to the first: the apps have b, so it goes
+	var got []string
+	for len(app.out) > 0 {
+		var m struct {
+			Machine  string          `json:"machine_id"`
+			Sessions []proto.Session `json:"sessions"`
+		}
+		_ = json.Unmarshal(<-app.out, &m)
+		got = append(got, m.Machine+":"+m.Sessions[0].LastText)
+	}
+	if want := []string{"box:reading", "mini:reading", "box:writing", "box:reading"}; !slices.Equal(got, want) {
+		t.Fatalf("sent %v, want %v", got, want)
+	}
 }

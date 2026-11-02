@@ -184,6 +184,11 @@ final class LiveConnection {
     static let slowAfter: TimeInterval = 5
     static let slowPingEvery: Duration = .seconds(5)
     @ObservationIgnored private var lastPong = Date.distantPast
+    /// The app is in the background: nothing opens the socket (a reconnect after a failure, the network coming back, a
+    /// refresh finishing) but `wake()`, for a silent push. iOS suspends an app with its socket open, and the hub takes
+    /// a connected phone for an open app: no wake push for its phone_* calls, no Live Activity pushes (it draws its
+    /// own), until the pings time out.
+    @ObservationIgnored var suspended = false
 
     func connect(_ config: ServerConfig) {
         self.config = config
@@ -200,6 +205,12 @@ final class LiveConnection {
         state = .idle
         stalled = false
         nextTry = nil
+    }
+
+    /// A silent push (`jarvis_wake`) in the background: connect for the hub's call, though suspended.
+    func wake() {
+        suspended = false
+        ensureConnected()
     }
 
     /// Reconnect now if the socket is down (e.g. app came to foreground).
@@ -224,7 +235,7 @@ final class LiveConnection {
     }
 
     private func open() {
-        guard let config else { return }
+        guard let config, !suspended else { return }
         generation += 1
         let gen = generation
         task?.cancel(with: .goingAway, reason: nil)
