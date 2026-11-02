@@ -70,4 +70,23 @@ import Testing
         site.spaceID = "site"
         #expect(SpaceGroup.build([site, docs]).map(\.spaceID) == ["docs", "site"])
     }
+
+    // What the list's structure reads (docs/ios-state.md, step 1): a push that changes only what a row shows leaves
+    // the list alone; the row follows its own agent.
+    @Test func onlyRowsFollowWhatOnlyRowsShow() {
+        let a = session("a", state: "working", updated: 600, since: 60)
+        var b = a
+        b.rev = 42
+        b.lastText = "a new line"
+        b.updatedAt = Date(timeIntervalSince1970: 630) // the same minute
+        #expect(AgentsFeed.shape([a], searching: false) == AgentsFeed.shape([b], searching: false))
+        // While searching the last lines are what it filters by.
+        #expect(AgentsFeed.shape([a], searching: true) != AgentsFeed.shape([b], searching: true))
+        var c = a
+        c.updatedAt = Date(timeIntervalSince1970: 700) // the next minute: a header's「n 分钟前」
+        #expect(AgentsFeed.shape([a], searching: false) != AgentsFeed.shape([c], searching: false))
+        var d = a
+        d.state = .needsYou
+        #expect(AgentsFeed.shape([a], searching: false) != AgentsFeed.shape([d], searching: false))
+    }
 }

@@ -221,11 +221,11 @@ final class LiveUpdateTests: XCTestCase {
         report("Chat, work card open", from: before, to: counts())
     }
 
-    // Typing into the search field: the text and the keyboard stay while the list behind it changes.
-    func testSearchKeepsWhatIsTypedThroughUpdates() {
+    // Typing into the search field: the text and the keyboard stay while the list behind it changes. The field
+    // starts folded away; a pull shows it.
+    @MainActor func testSearchKeepsWhatIsTypedThroughUpdates() {
         launch()
-        let field = app.searchFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 15))
+        let field = app.revealAgentsSearch()
         field.tap()
         field.typeText("platform")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))

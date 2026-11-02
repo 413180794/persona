@@ -547,8 +547,7 @@ private struct AgentsList: View {
         .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
         .environment(\.compactList, compact)
         #if DEBUG || PERF_SIGNPOST
-        .screenProbe("agents-list", page: shell == nil ? nil : "agents",
-                     ScreenProbe.enabled ? AgentsListShown(base, asks: interactions) : AgentsListShown())
+        .overlay { if ScreenProbe.enabled { AgentsListProbe(feed: feed, sessions: base, asks: interactions, page: shell == nil ? nil : "agents") } }
         #endif
         .listSectionSpacing(compact ? .compact : .default)
         .modifier(AgentsListPage(capsules: capsules))
@@ -577,6 +576,7 @@ private struct AgentsList: View {
         .renameSessionAlert($renamingSession)
         .confirmClose($closingSession)
         .onChange(of: matching) { _, now in kept.formUnion(now) }
+        .onChange(of: query.isEmpty, initial: true) { _, empty in feed.searching = !empty }
         .onChange(of: machineFilter) { _, _ in kept = [] }
         .onAppear { feed.follow(model) }
         .onScrollPhaseChange { _, phase in
@@ -637,7 +637,16 @@ private struct AgentsList: View {
         searchClose.whenClosed { path.append(key) }
     }
 
+    /// The row follows its own agent (`AgentsFeed.Row`): what only it shows changes it, not the list.
     @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil) -> some View {
+        if feed.following {
+            FeedRow(row: feed.row(s)) { live in slotRowDrawn(live, context: context, inStateSection: inStateSection, cardLast: cardLast) }
+        } else {
+            slotRowDrawn(s, context: context, inStateSection: inStateSection, cardLast: cardLast)
+        }
+    }
+
+    @ViewBuilder private func slotRowDrawn(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool?) -> some View {
         if compact {
             CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil)
                 .equatable()
@@ -940,7 +949,28 @@ private struct AgentsList: View {
     }
 }
 
+/// One row of the Agents list, drawn from its agent as it is now (`AgentsFeed.Row`).
+private struct FeedRow<Content: View>: View {
+    let row: AgentsFeed.Row
+    @ViewBuilder let content: (Session) -> Content
+
+    var body: some View { content(row.session) }
+}
+
 #if DEBUG || PERF_SIGNPOST
+/// `probe.agents-list`: the rows as drawn (each follows its agent apart from the list), not the list's structure.
+private struct AgentsListProbe: View {
+    let feed: AgentsFeed
+    let sessions: [Session]
+    let asks: [Interaction]
+    let page: String?
+
+    var body: some View {
+        let drawn = feed.following ? sessions.map { feed.row($0).session } : sessions
+        Color.clear.allowsHitTesting(false).screenProbe("agents-list", page: page, AgentsListShown(drawn, asks: asks))
+    }
+}
+
 /// What the Agents list shows (`probe.agents-list`, docs/ios-state.md「真实性」): each agent's state and last line, and
 /// the questions it lists, to be checked against the hub's.
 nonisolated struct AgentsListShown: Encodable, Equatable {
@@ -976,6 +1006,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
 ///   space moving up), which is the price of showing it now.
 /// - Anything else waits at most `cap` while the list is being scrolled, then lands anyway.
 @MainActor @Observable final class AgentsFeed {
+    /// The agents as the list's structure last changed (`shape`): the body reads this, each row its own `Row`.
     private(set) var sessions: [Session] = []
     private(set) var interactions: [Interaction] = []
     private(set) var machines: [Machine] = []
@@ -987,6 +1018,14 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     @ObservationIgnored private var missedSince: Date?
     @ObservationIgnored private var capTask: Task<Void, Never>?
     @ObservationIgnored private var watching = false
+    /// What the rows show: the latest that landed (`sessions` may be older in what only rows show).
+    @ObservationIgnored private var shown: [Session] = []
+    @ObservationIgnored private var shaped: [Session] = []
+    @ObservationIgnored private var rows: [String: Row] = [:]
+    /// The list filters by the agents' last lines while it is searched: they are structure then.
+    @ObservationIgnored var searching = false {
+        didSet { if searching != oldValue { restructure(force: true) } }
+    }
     /// The longest a change waits while the list is being scrolled.
     static let cap: Duration = .seconds(5)
 
@@ -1010,15 +1049,77 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         if !on, missedSince != nil { land() }
     }
 
+    /// One agent as its row shows it. The row reads this: a change only rows show (the last line, the time, a new
+    /// step) draws that row again, not the list.
+    @Observable final class Row {
+        fileprivate(set) var session: Session
+        init(_ session: Session) { self.session = session }
+    }
+
+    func row(_ s: Session) -> Row {
+        if let r = rows[s.id] { return r }
+        let r = Row(s)
+        rows[s.id] = r
+        return r
+    }
+
     /// Copies what changed.
     private func pull() {
         missedSince = nil
         capTask?.cancel()
         capTask = nil
         guard let (s, i, m) = current() else { return }
-        if s != sessions { sessions = s }
+        show(s)
         if i != interactions { interactions = i }
         if m != machines { machines = m }
+    }
+
+    /// The rows that changed get their agent; the list gets the new list only if its structure changed.
+    private func show(_ s: [Session]) {
+        guard s != shown else { return }
+        shown = s
+        for x in s {
+            if let r = rows[x.id] {
+                if r.session != x { r.session = x }
+            } else {
+                rows[x.id] = Row(x)
+            }
+        }
+        if rows.count > s.count {
+            let ids = Set(s.map(\.id))
+            rows = rows.filter { ids.contains($0.key) }
+        }
+        restructure(force: false)
+    }
+
+    private func restructure(force: Bool) {
+        let shape = Self.shape(shown, searching: searching)
+        guard force || shape != shaped else { return }
+        shaped = shape
+        if shown != sessions { sessions = shown }
+    }
+
+    /// What the list's structure reads of the agents (the groups, the order, the folds, the counts, the headers; the
+    /// last lines while searching), with what only rows show taken out.
+    /// - The time: a working agent's moves on every step; headers show it in minutes (「4 分钟前」), so the minute.
+    /// - Subagents and background work: only whether any runs (a row with one stays out of the idle fold).
+    nonisolated static func shape(_ list: [Session], searching: Bool) -> [Session] {
+        list.map { s in
+            var x = s
+            x.rev = nil
+            x.suggestion = nil
+            x.ports = nil
+            x.queued = nil
+            x.permissionMode = nil
+            x.effort = nil
+            x.model = nil
+            x.seenAt = nil
+            if !searching { x.lastText = nil }
+            x.updatedAt = s.updatedAt.map { Date(timeIntervalSince1970: ($0.timeIntervalSince1970 / 60).rounded(.down) * 60) }
+            x.subagents = (s.subagents ?? []).contains(where: \.running) ? [] : nil
+            x.background = (s.background ?? []).isEmpty ? nil : []
+            return x
+        }
     }
 
     /// The model's now, watching it for the next change if nothing is watching yet (`withObservationTracking` tells
@@ -1050,7 +1151,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         guard held else { return pull() }
         guard let (s, i, m) = current() else { return }
         if missedSince == nil { missedSince = .now }
-        if Self.critical(s, i, m) != Self.critical(sessions, interactions, machines) { landCritical(s, i, m) }
+        if Self.critical(s, i, m) != Self.critical(shown, interactions, machines) { landCritical(s, i, m) }
         capIfScrolling()
     }
 
@@ -1064,8 +1165,8 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         #endif
         func urgent(_ x: Session) -> Bool { x.state == .needsYou || x.state == .offline }
         let now = Dictionary(s.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let shown = Set(sessions.map(\.id))
-        var next = sessions.compactMap { old -> Session? in
+        let listed = Set(shown.map(\.id))
+        var next = shown.compactMap { old -> Session? in
             guard let new = now[old.id] else { return urgent(old) ? nil : old } // gone: the rest goes when it lands
             guard new.state != old.state, urgent(new) || urgent(old) else { return old }
             var x = old
@@ -1073,8 +1174,8 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
             x.pendingInteractions = new.pendingInteractions
             return x
         }
-        next += s.filter { urgent($0) && !shown.contains($0.id) }
-        if next != sessions { sessions = next }
+        next += s.filter { urgent($0) && !listed.contains($0.id) }
+        show(next)
         if i != interactions { interactions = i }
         if m != machines { machines = m }
         if next == s { missedSince = nil }

@@ -28,7 +28,9 @@ final class ChatFollowTests: XCTestCase {
         if let i = open.firstIndex(where: { $0 == "-openSession" || $0 == "-openAssistant" }), i + 1 < open.count { opened = open[i + 1] }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-showScrollState", "YES", "-dev.openChat", ""] + open
+        // No chat kept on disk from an earlier run: the mock starts its conversations over at each reset, and a cached
+        // one from another test (its churned steps) took the seqs this test's replies get; they did not show.
+        app.launchArguments = ["-pairURL", pair, "-showScrollState", "YES", "-dev.openChat", "", "-openChatsFresh", "YES"] + open
         app.launchPinned()
         return app
     }
