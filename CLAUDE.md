@@ -10,8 +10,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 ## 约定（必须遵守）
 
-- **所有改动都通过 GitHub PR 提交**（2026-11-02 用户要求）：代码、文档、配置等仓库内的所有改动，一律在独立分支 / worktree 上 commit，
-  只 push 到该分支，然后创建 GitHub PR；验证通过后可以直接合并，无须再征求确认。禁止在主分支上直接 commit 或 push。
+- **所有改动都走「issue → 认领 → PR → 自行合并」**（2026-11-02 用户要求，步骤见下面「开发工作流」）：需求和 fix 都先有 issue，
+  代码、文档、配置等仓库内的所有改动一律在独立分支 / worktree 上 commit，只 push 到该分支，再提 PR 关联 issue。禁止在主分支上直接 commit 或 push。
   本约定取代 `CLAUDE.local.md` 等文件中直接提交、推送到主分支的旧流程；自动提交和发布仍按原约定执行，但必须先通过 PR 合并。
 - **配置化，不写死个人的东西**：机器名、域名、账号、邮箱、路径、启动器、公司内部工具、个人偏好一律走配置
   （构建 / 部署：`~/.config/jarvis/config.json`；运行：hub 的 `~/.jarvis/hub.json`；见 `docs/config.md`），代码、脚本、
@@ -41,6 +41,23 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   页面里不写死数值、系统字号、SF Symbol 名字、十六进制颜色；缺什么先加 token。见下面「设计系统（iOS）」。
 - **提示词一律放 `server/internal/prompts/`**（2026-11-01 用户要求，含 MCP 工具的描述和参数说明，在 `mcp/`）：一个提示词一个文件（按场景分子目录），同一个 Agent 的几段用模板组合，不在 Go 代码里 fmt / + 提示词；调用方只准备数据。改了提示词要更新 golden 测试并看 diff，见 `docs/prompts.md`。
 - 质量标准：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
+
+## 开发工作流
+
+人和 Agent 都按这个流程做。所有 Agent 共用同一个 GitHub 账号，assignee 分不出是谁，**以 issue 里最新的「认领」评论为准**。
+
+1. **先找 issue**：`gh issue list --state all --search "<关键词>"`（连已关闭的一起看，别重复做已经做完的）。
+2. **没有就建**：`gh issue create`，写清楚要做什么、为什么；需求加 `enhancement` 标签，fix 加 `bug`。
+3. **动手前认领**：`gh issue edit <号> --add-assignee @me`，再评论 `认领：<机器 id> / <会话或分支>，<时间>`。
+   机器 id 用配置里给机器起的 id，不写主机名。
+4. **已经被别人认领**（最新的认领评论不是你）：
+   - 不碰这个 issue，先做别的或等。
+   - 从认领时间起最多等 **12 小时**；这期间认领人有新进展（issue 评论、关联 PR 的推送）就从最后一次进展重新算。
+   - 超过 12 小时没动静就接手：评论 `接手：<机器 id> / <会话或分支>，<时间>，原认领 <时间> 已超过 12 小时`，assign 给自己，接着做。
+5. **做**：在独立分支 / worktree 上改，分支名带 issue 号（如 `fix/123-xxx`）。做不下去要放弃时，在 issue 里说明做到哪一步，取消 assign。
+6. **提 PR**：一个 PR 对应一个 issue，正文写 `Closes #<号>`（fix 写 `Fixes #<号>`），合并时 GitHub 自动关闭 issue。
+7. **自行合并**：不需要别人 review，**质量自己保证**：按「构建与验证」跑过测试，界面改动看过截图，CI 通过后
+   `gh pr merge <号> --squash --delete-branch`，确认 issue 已经关闭。
 
 ## 设计系统（iOS）
 
