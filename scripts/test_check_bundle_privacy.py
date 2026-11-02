@@ -136,14 +136,14 @@ class GoDependenciesTests(unittest.TestCase):
 
 
 class BundleScanIntegrationTests(unittest.TestCase):
-    def scan(self, text, words=(), public=True):
+    def scan(self, text, words=(), public=True, config=None):
         with tempfile.TemporaryDirectory(prefix="bundle-privacy-test-") as directory:
             (Path(directory) / "binary").write_bytes(text.encode())
             output = io.StringIO()
             args = ["check_bundle_privacy.py"] + (["--whole-short"] if public else []) + [directory]
             with patch.object(sys, "argv", args), patch.object(cbp.pc, "module_paths", return_value=None), \
                     patch.object(cbp.pc, "terms", return_value=(words, set())), \
-                    patch.object(cbp.jarvis_config, "load", return_value={}), \
+                    patch.object(cbp.jarvis_config, "load", return_value=config or {}), \
                     patch.object(cbp, "go_dependencies", return_value=DEPENDENCIES), redirect_stdout(output):
                 try:
                     cbp.main()
@@ -174,6 +174,36 @@ class BundleScanIntegrationTests(unittest.TestCase):
         self.assertIn("private IP", output)
         self.assertNotIn(EMAIL, output)
         self.assertNotIn(address, output)
+
+    def test_app_accepts_only_the_exact_configured_public_relay_url(self):
+        relay = "https://relay.example.test/relay"
+        config = {"app": {"push_relay": relay}}
+        words = ("relay.example.test", relay)
+        for text in (relay, '<string>' + relay + '</string>'):
+            with self.subTest(text=text):
+                code, output = self.scan(text, words=words, public=False, config=config)
+                self.assertEqual(code, 0, output)
+        for text in (relay + "/private", relay + "?token=placeholder", relay + "#context",
+                     relay + ".other", "relay.example.test", "person@relay.example.test",
+                     "https://user@relay.example.test/relay", relay + "\nrelay.example.test"):
+            with self.subTest(text=text):
+                code, output = self.scan(text, words=words, public=False, config=config)
+                self.assertNotEqual(code, 0)
+                self.assertIn("private value", output)
+        code, _ = self.scan(relay, words=words, public=True, config=config)
+        self.assertNotEqual(code, 0)
+
+    def test_non_public_or_invalid_relay_urls_remain_private(self):
+        for relay in ("http://relay.example.test/relay", "https://user:password@relay.example.test/relay",
+                      "https://relay.example.test/relay?token=placeholder", "https://relay.example.test/other",
+                      "https://localhost/relay", "https://203.0.113.17/relay", "https://[invalid/relay",
+                      "https://relay.example.test:8443/relay"):
+            with self.subTest(relay=relay):
+                code, output = self.scan(relay, words=(relay,), public=False, config={"app": {"push_relay": relay}})
+                self.assertNotEqual(code, 0)
+                self.assertIn("private value", output)
+        for relay in (None, [], {}):
+            self.assertEqual(cbp.remove_public_relay_url("private-placeholder", relay), "private-placeholder")
 
     def test_app_mode_stays_strict(self):
         code, output = self.scan(CONTACT + "\n" + str(NETWORKS[0]), public=False)

@@ -7,7 +7,8 @@
 The values are scripts/privacy_check.py's (config, private-words.txt, CLAUDE.local.md, the home directory), plus private
 IPv4 addresses and emails outside placeholder domains, looked for in every file's printable strings (like `strings`,
 after decompressing lzfse files) and in binary plists. The bundle id and team id are in every signed build on purpose
-and are removed before matching.
+and are removed before matching. App mode also recognizes only the exact configured public HTTPS /relay endpoint;
+its host in any other context, related paths, credentials, and the public Go build remain subject to private-value checks.
 Signing data is Apple's and is skipped: embedded.mobileprovision, _CodeSignature, and the code signature at the end of
 each Mach-O (certificate names; the archive's development profile lists device ids, which export replaces anyway).
 Values match as written or lowercased, not in any case: Swift's mangled symbol names are full of short fragments
@@ -25,6 +26,7 @@ import os
 import re
 import subprocess
 import sys
+from urllib.parse import urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import jarvis_config  # noqa: E402
@@ -147,6 +149,29 @@ def texts(path: str):
         yield subprocess.run(["plutil", "-convert", "xml1", "-o", "-", path], capture_output=True, text=True).stdout
 
 
+def remove_public_relay_url(text, configured_url):
+    """The app intentionally ships this exact public HTTPS endpoint, not its entire host or other URLs."""
+    if not isinstance(configured_url, str):
+        return text
+    url = configured_url.rstrip("/")
+    try:
+        parsed = urlsplit(url)
+        if (parsed.scheme != "https" or not parsed.hostname or "." not in parsed.hostname
+                or parsed.username or parsed.password or parsed.query or parsed.fragment
+                or parsed.port is not None or parsed.path != "/relay"):
+            return text
+        try:
+            ipaddress.ip_address(parsed.hostname)
+            return text
+        except ValueError:
+            pass
+    except ValueError:
+        return text
+    # Do not remove a prefix of another URL, a credential URL, or an extended path/query.
+    boundary = r"[A-Za-z0-9._~:/?#@!$&()*+,;=%-]"
+    return re.sub(r"(?<!" + boundary + ")" + re.escape(url) + r"(?!" + boundary + ")", "", text)
+
+
 def main():
     args = sys.argv[1:]
     whole_short = "--whole-short" in args
@@ -169,6 +194,8 @@ def main():
             kinds = set()
             dependencies = go_dependencies(path) if whole_short else set()
             for t in texts(path):
+                if not whole_short:
+                    t = remove_public_relay_url(t, jarvis_config.get(cfg, "app.push_relay", ""))
                 for v in inherent:
                     t = t.replace(v, "")
                 if modules:
