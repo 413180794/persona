@@ -1,6 +1,6 @@
 # iOS / watchOS App
 
-XcodeGen 工程 `apple/project.yml`（`Jarvis.xcodeproj` 不入库）。iOS 26 / watchOS 26，Swift 6，默认 MainActor 隔离。依赖 MarkdownUI。
+XcodeGen 工程 `apple/project.yml`（`Jarvis.xcodeproj` 不入库）。iOS 26 / watchOS 10（手表 App 要能装在停在 watchOS 10 的旧表上），Swift 6，默认 MainActor 隔离。依赖 MarkdownUI。
 Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/config.md`）。界面中文。
 
 ## 信息架构

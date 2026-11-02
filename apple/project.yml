@@ -7,7 +7,7 @@ configFiles:
 options:
   deploymentTarget:
     iOS: "26.0"
-    watchOS: "26.0"
+    watchOS: "10.0"
     macOS: "26.0"
   developmentLanguage: zh-Hans
   createIntermediateGroups: true

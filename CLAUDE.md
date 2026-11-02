@@ -157,3 +157,5 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - hub 的内存状态随时会被别人重新部署清掉：跨请求的流程要自包含或落库。（`server.md`）
 - Claude Code 的配置目录不一定是 `~/.claude`（`CLAUDE_CONFIG_DIR`），同一会话 id 可能在两个目录各有一份，按 id 找一律取最近修改的。（`agents.md`）
 - 改 transcript 解析或同步协议用真实语料验证；改了 item 结构把 App 的 `ChatCache` 目录版本号加一。（`transcript.md`）
+- 手表 App 最低 watchOS 10（不少旧表停在 10.6，2026-11-02 用户的表装不上），`Shared/` 整个编进手表：里面只能用 watchOS 10 就有的 API，
+  新的要 `#available` 兜底（`Color.mix` 是 watchOS 11，用 `Color.blended`）。

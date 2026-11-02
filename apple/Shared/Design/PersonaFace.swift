@@ -62,11 +62,11 @@ struct PersonaFace: View {
     // together in Jarvis), in the accent on a dark disc of it.
 
     private var circuit: some View {
-        let ground = accent.mix(with: .black, by: 0.82)
-        let mark = accent.mix(with: .white, by: 0.15)
+        let ground = accent.blended(with: .black, by: 0.82)
+        let mark = accent.blended(with: .white, by: 0.15)
         let t = time
         return ZStack {
-            Circle().fill(LinearGradient(colors: [accent.mix(with: .black, by: 0.76), accent.mix(with: .black, by: 0.88)],
+            Circle().fill(LinearGradient(colors: [accent.blended(with: .black, by: 0.76), accent.blended(with: .black, by: 0.88)],
                                          startPoint: .top, endPoint: .bottom))
             Canvas { ctx, box in
                 let w = box.width
@@ -81,7 +81,7 @@ struct PersonaFace: View {
                         let p = Circuit.point(on: pts, at: f)
                         let r = w * Circuit.trace * 0.6
                         ctx.fill(Path(ellipseIn: CGRect(x: p.x * w - r, y: p.y * w - r, width: r * 2, height: r * 2)),
-                                 with: .color(accent.mix(with: .white, by: 0.75)))
+                                 with: .color(accent.blended(with: .white, by: 0.75)))
                     }
                 }
                 var solid = Path()
@@ -130,7 +130,7 @@ struct PersonaFace: View {
     private var visor: some View {
         let t = time
         return ZStack {
-            Circle().fill(LinearGradient(colors: [accent.mix(with: .white, by: 0.28), accent, accent.mix(with: .black, by: 0.18)],
+            Circle().fill(LinearGradient(colors: [accent.blended(with: .white, by: 0.28), accent, accent.blended(with: .black, by: 0.18)],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
             Capsule()
                 .fill(LinearGradient(colors: [Color(white: 0.16), Color(white: 0.05)], startPoint: .top, endPoint: .bottom))
@@ -168,7 +168,7 @@ struct PersonaFace: View {
 
     private var eye: some View {
         Capsule()
-            .fill(state == .offline ? Color(white: 0.5) : accent.mix(with: .white, by: 0.55))
+            .fill(state == .offline ? Color(white: 0.5) : accent.blended(with: .white, by: 0.55))
             .frame(width: size * 0.085, height: state == .offline ? size * 0.03 : size * 0.13)
             .shadow(color: state == .offline ? .clear : accent.opacity(0.9), radius: size * 0.05)
     }
