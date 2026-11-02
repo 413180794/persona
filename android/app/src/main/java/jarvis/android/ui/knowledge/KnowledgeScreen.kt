@@ -3,51 +3,31 @@ package jarvis.android.ui.knowledge
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.Article
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.FilterAlt
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.FilterAlt
-import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.outlined.Videocam
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -68,12 +48,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import jarvis.android.data.AgentState
 import jarvis.android.data.Hub
 import jarvis.android.data.KbEntry
 import jarvis.android.data.KbHit
@@ -84,7 +62,25 @@ import jarvis.android.data.KbSearchGroup
 import jarvis.android.data.SessionKey
 import jarvis.android.data.kbList
 import jarvis.android.data.kbSearch
-import jarvis.android.ui.ago
+import jarvis.android.ui.CardSlice
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.Chip
+import jarvis.android.ui.design.ChipLook
+import jarvis.android.ui.design.ChoiceChip
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.EmptyState
+import jarvis.android.ui.design.FittingRow
+import jarvis.android.ui.design.GroupFooter
+import jarvis.android.ui.design.IconTile
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.LetterTile
+import jarvis.android.ui.design.PageHeader
+import jarvis.android.ui.design.PageLoading
+import jarvis.android.ui.design.SearchField
+import jarvis.android.ui.design.SectionHeader
+import jarvis.android.ui.listTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -102,27 +98,31 @@ import kotlinx.coroutines.launch
  * to Jarvis ([onAsk]) or an Agent. Entries open on a stack of their own (a detail's links push further entries).
  */
 @Composable
-fun KnowledgeScreen(hub: Hub, onBack: () -> Unit, onAsk: (String) -> Unit, onOpenSession: (SessionKey) -> Unit) {
+fun KnowledgeScreen(
+    hub: Hub, onBack: () -> Unit, onAsk: (String) -> Unit, onOpenSession: (SessionKey) -> Unit,
+    /** The list's state when it is made elsewhere (the screenshots load it first); by default the page makes its own. */
+    model: KnowledgeListModel? = null,
+) {
     val scope = rememberCoroutineScope()
-    val model = remember { KnowledgeListModel(hub, scope) }
+    val list = remember { model ?: KnowledgeListModel(hub, scope) }
     val stack = remember { mutableStateListOf<KbEntry>() }
     BackHandler { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) else onBack() }
     val top = stack.lastOrNull()
     if (top != null) {
         androidx.compose.runtime.key(stack.size, top.key) {
             KnowledgeDetailScreen(
-                hub, top, onBack = { stack.removeAt(stack.lastIndex) }, onOpen = { stack.add(model.known(it)) },
+                hub, top, onBack = { stack.removeAt(stack.lastIndex) }, onOpen = { stack.add(list.known(it)) },
                 onAsk = onAsk, onOpenSession = onOpenSession,
-                onChanged = { model.load() },
+                onChanged = { list.load() },
             )
         }
     } else {
-        KnowledgeHome(model, onBack, onOpen = { stack.add(it) })
+        KnowledgeHome(list, onBack, onOpen = { stack.add(it) })
     }
 }
 
 /** The list page's state: one list per kind and tag, and the search; kept while an entry is open on top of it. */
-internal class KnowledgeListModel(private val hub: Hub, private val scope: CoroutineScope) {
+class KnowledgeListModel(private val hub: Hub, private val scope: CoroutineScope) {
     data class State(
         val kind: KbKind = KbKind.PROJECTS,
         val tag: String? = null,
@@ -193,81 +193,85 @@ internal class KnowledgeListModel(private val hub: Hub, private val scope: Corou
     }
 }
 
+/**
+ * The list (iOS `KnowledgeView`): the search field and the kinds stay on top, as on 收件箱; below, the sections as
+ * cards — projects as 重点 / 进行中 / 已完成 with 不是项目 folded, the other kinds by importance and relevance.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun KnowledgeHome(model: KnowledgeListModel, onBack: () -> Unit, onOpen: (KbEntry) -> Unit) {
     val s by model.state.collectAsState()
     var showIgnored by rememberSaveable { mutableStateOf(false) }
-    var tagMenu by remember { mutableStateOf(false) }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text("知识库", maxLines = 1) },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-            actions = {
-                Box {
-                    IconButton(onClick = { tagMenu = true }) {
-                        Icon(if (s.tag == null) Icons.Outlined.FilterAlt else Icons.Filled.FilterAlt, s.tag?.let { "按标签筛选，当前 #$it" } ?: "按标签筛选")
-                    }
-                    DropdownMenu(tagMenu, { tagMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("全部", maxLines = 1) }, onClick = { tagMenu = false; model.selectTag(null) },
-                            leadingIcon = { if (s.tag == null) Icon(Icons.Default.Check, null) else Spacer(Modifier.size(24.dp)) },
-                        )
-                        val tags = s.list?.tags.orEmpty()
-                        if (tags.isNotEmpty()) HorizontalDivider()
-                        tags.forEach { t ->
-                            DropdownMenuItem(
-                                text = { Text("#$t", maxLines = 1) }, onClick = { tagMenu = false; model.selectTag(t) },
-                                leadingIcon = { if (s.tag == t) Icon(Icons.Default.Check, null) else Spacer(Modifier.size(24.dp)) },
-                            )
-                        }
-                    }
-                }
-            },
-        )
-    }) { pad ->
-        PullToRefreshBox(isRefreshing = s.refreshing, onRefresh = { model.load(pull = true) }, modifier = Modifier.fillMaxSize().padding(pad)) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-                item(key = "search") {
-                    OutlinedTextField(
-                        s.query, model::search, singleLine = true,
-                        placeholder = { Text("搜索档案和聊天记录", maxLines = 1) },
-                        leadingIcon = { Icon(Icons.Default.Search, null) },
-                        trailingIcon = { if (s.query.isNotEmpty()) IconButton(onClick = { model.search("") }) { Icon(Icons.Default.Cancel, "清除") } },
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
-                }
-                // Search covers every kind: the chips (one of them lit) would say otherwise.
-                if (s.query.isBlank()) item(key = "kinds") {
-                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(KbKind.entries, key = { it.wire }) { k ->
-                            val on = s.kind == k
-                            val n = s.lists[k]?.items?.size
-                            FilterChip(
-                                selected = on, onClick = { model.select(k) },
-                                leadingIcon = { Icon(k.icon(), null, Modifier.size(18.dp)) },
-                                label = { Text(if (on && n != null) "${k.title} $n" else k.title, maxLines = 1) },
-                            )
-                        }
-                    }
-                }
-                val list = s.list
+    Column(Modifier.fillMaxSize().background(JTheme.colors.page)) {
+        PageHeader("知识库", onBack) { TagMenu(s.tag, s.list?.tags.orEmpty(), model::selectTag) }
+        Column(Modifier.fillMaxWidth().padding(bottom = JSpace.s), verticalArrangement = Arrangement.spacedBy(JSpace.m)) {
+            SearchField(s.query, model::search, "搜索档案和聊天记录", Modifier.padding(horizontal = JSpace.page))
+            // Search covers every kind: the chips (one of them lit) would say otherwise.
+            if (s.query.isBlank()) KindChips(s.kind, s.lists, model::select)
+        }
+        PullToRefreshBox(isRefreshing = s.refreshing, onRefresh = { model.load(pull = true) }, modifier = Modifier.weight(1f).fillMaxWidth()) {
+            val list = s.list
+            val error = s.error
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = JSpace.xxl + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+            ) {
                 when {
                     s.query.isNotBlank() -> searchResults(s.hits, s.query, model, onOpen)
                     list != null -> listContent(list, s.kind, s.tag, showIgnored, { showIgnored = !showIgnored }, onOpen)
-                    s.error != null -> item(key = "error") {
-                        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("读不到知识库：${s.error}", color = MaterialTheme.colorScheme.error)
-                            TextButton(onClick = { model.load() }) { Text("重试", maxLines = 1) }
-                        }
+                    error != null -> item(key = "error") {
+                        EmptyState(JIcons.errorOutline, "读不到知识库", error, action = "重试" to { model.load() })
                     }
-                    else -> item(key = "loading") { Loading() }
+                    else -> item(key = "loading") { PageLoading() }
                 }
             }
         }
     }
+}
+
+/** The six kinds as choices with their symbol; the chosen one says how many it holds once loaded. */
+@Composable
+private fun KindChips(kind: KbKind, lists: Map<KbKind, KbList>, onPick: (KbKind) -> Unit) {
+    val c = JTheme.colors
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = JSpace.page),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.s),
+    ) {
+        KbKind.entries.forEach { k ->
+            val on = k == kind
+            ChoiceChip(
+                k.title, on, { onPick(k) },
+                lead = { Icon(k.icon(), null, Modifier.size(JSize.markM), tint = if (on) c.accent else c.secondaryText) },
+                count = if (on) lists[k]?.items?.size else null,
+            )
+        }
+    }
+}
+
+/** The header's filter: 全部 or one of the kind's common tags; lit in the accent while a tag is picked. */
+@Composable
+private fun TagMenu(tag: String?, tags: List<String>, onPick: (String?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        CircleButton(
+            JIcons.filter, tag?.let { "按标签筛选，当前 #$it" } ?: "按标签筛选", { open = true },
+            tint = if (tag != null) JTheme.colors.accent else JTheme.colors.label,
+        )
+        DropdownMenu(open, { open = false }) {
+            TagItem("全部", tag == null) { open = false; onPick(null) }
+            if (tags.isNotEmpty()) HorizontalDivider(thickness = JSize.hairline, color = JTheme.colors.separator)
+            tags.forEach { t -> TagItem("#$t", tag == t) { open = false; onPick(t) } }
+        }
+    }
+}
+
+@Composable
+private fun TagItem(text: String, on: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text, maxLines = 1) }, onClick = onClick,
+        leadingIcon = { if (on) Icon(JIcons.done, null, tint = JTheme.colors.accent) else Spacer(Modifier.size(JSize.icon)) },
+    )
 }
 
 private fun LazyListScope.listContent(
@@ -275,61 +279,80 @@ private fun LazyListScope.listContent(
 ) {
     if (list.items.isEmpty()) {
         item(key = "empty") {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(kind.icon(), null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.outline)
-                Spacer(Modifier.size(12.dp))
-                Text(if (tag == null) "还没有${kind.title}" else "没有带 #$tag 的${kind.title}", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.size(6.dp))
-                Text(
-                    "hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            EmptyState(
+                kind.icon(), if (tag == null) "还没有${kind.title}" else "没有带 #$tag 的${kind.title}",
+                "hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。",
+            )
         }
         return
     }
-    fun rows(prefix: String, entries: List<KbEntry>) = items(entries, key = { prefix + it.key }) { e -> KbRow(e) { onOpen(e) } }
     if (kind != KbKind.PROJECTS) {
-        item(key = "h") { SectionTitle(tag?.let { "#$it" } ?: "按重要级和相关性", list.items.size) }
-        rows("e:", list.items)
+        item(key = "h") { SectionHeader(tag?.let { "#$it" } ?: "按重要级和相关性", count = list.items.size) }
+        entryCard("e", list.items, onOpen)
         return
     }
     val g = KbProjectGroups.of(list.items)
-    if (g.focus.isNotEmpty()) { item(key = "focus:h") { SectionTitle("重点", g.focus.size) }; rows("f:", g.focus) }
-    if (g.rest.isNotEmpty()) { item(key = "rest:h") { SectionTitle(if (g.focus.isEmpty()) "进行中" else "其他进行中", g.rest.size) }; rows("r:", g.rest) }
-    if (g.done.isNotEmpty()) { item(key = "done:h") { SectionTitle("已完成", g.done.size) }; rows("d:", g.done) }
+    if (g.focus.isNotEmpty()) { item(key = "focus:h") { SectionHeader("重点", count = g.focus.size) }; entryCard("f", g.focus, onOpen) }
+    if (g.rest.isNotEmpty()) {
+        item(key = "rest:h") { SectionHeader(if (g.focus.isEmpty()) "进行中" else "其他进行中", count = g.rest.size) }
+        entryCard("r", g.rest, onOpen)
+    }
+    if (g.done.isNotEmpty()) { item(key = "done:h") { SectionHeader("已完成", count = g.done.size) }; entryCard("d", g.done, onOpen) }
     if (g.ignored.isNotEmpty()) {
+        // Its own card, folded: a row that opens it, the entries under it in the same card.
         item(key = "ig:toggle") {
-            Row(
-                Modifier.fillMaxWidth().clickable(onClick = toggleIgnored).padding(horizontal = 16.dp, vertical = 14.dp)
-                    .semantics { contentDescription = "不是项目 ${g.ignored.size} 个，" + if (showIgnored) "收起" else "展开" },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("不是项目", color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                Text("  ${g.ignored.size}", color = MaterialTheme.colorScheme.outline, maxLines = 1)
-                Spacer(Modifier.weight(1f))
-                Icon(if (showIgnored) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.outline)
+            Column(Modifier.padding(top = JSpace.section)) {
+                CardSlice(first = true, last = !showIgnored) { FoldRow("不是项目", g.ignored.size, showIgnored, toggleIgnored) }
             }
         }
-        if (showIgnored) rows("i:", g.ignored)
-        item(key = "ig:f") { Note("只在通知、营销邮件、机器人会话里出现的，不会再更新。打标里改回「进行中」就恢复。") }
+        if (showIgnored) entryCard("i", g.ignored, onOpen, startsCard = false)
+        item(key = "ig:f") { GroupFooter("只在通知、营销邮件、机器人会话里出现的，不会再更新。打标里改回「进行中」就恢复。") }
+    }
+}
+
+/**
+ * Entries as one card, each row its own lazy item drawing its slice of it; [startsCard] false: under a row above (the
+ * fold's), whose words start at the card's inset, so the first separator does too.
+ */
+private fun LazyListScope.entryCard(prefix: String, entries: List<KbEntry>, onOpen: (KbEntry) -> Unit, startsCard: Boolean = true) {
+    itemsIndexed(entries, key = { _, e -> "$prefix:" + e.key }) { i, e ->
+        CardSlice(
+            first = startsCard && i == 0, last = i == entries.lastIndex, divider = !startsCard || i > 0,
+            dividerStart = if (i == 0) JSpace.l else KbTextColumn,
+        ) { KbRow(e) { onOpen(e) } }
+    }
+}
+
+/** A folded group's row: its name and count quiet, the chevron turning down when open. */
+@Composable
+private fun FoldRow(title: String, count: Int, open: Boolean, onClick: () -> Unit) {
+    val c = JTheme.colors
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = JSize.box50).padding(horizontal = JSpace.l, vertical = JSpace.s)
+            .semantics { contentDescription = "$title $count 个，" + if (open) "收起" else "展开" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
+    ) {
+        Text(title, style = JTheme.type.body, color = c.secondaryText, maxLines = 1)
+        Text("$count", style = JTheme.type.body, color = c.tertiaryText, maxLines = 1, modifier = Modifier.weight(1f))
+        Icon(if (open) JIcons.expand else JIcons.disclosure, null, Modifier.size(JSize.iconXS), tint = c.tertiaryText)
     }
 }
 
 private fun LazyListScope.searchResults(hits: List<KbHit>?, query: String, model: KnowledgeListModel, onOpen: (KbEntry) -> Unit) {
+    val groups = hits?.let(KbSearchGroup::make)
     when {
-        hits == null -> item(key = "searching") { Loading() }
+        groups == null -> item(key = "searching") { PageLoading() }
         // Hits outside any entry (the directory's README) open nothing: those alone are no result either.
-        KbSearchGroup.make(hits).isEmpty() -> item(key = "nohits") { Note("没有找到「${query.trim()}」") }
-        else -> {
-            val groups = KbSearchGroup.make(hits)
-            for (k in KbKind.entries) {
-                val these = groups.filter { it.kind == k }
-                if (these.isEmpty()) continue
-                item(key = "sh:" + k.wire) { SectionTitle(k.title, these.size) }
-                items(these, key = { "s:" + it.key }) { g ->
-                    val known = model.known(g.kind, g.id)
-                    val entry = known ?: KbEntry(kind = g.kind.wire, id = g.id, name = g.id)
+        groups.isEmpty() -> item(key = "nohits") { EmptyState(JIcons.search, "没有找到", "档案和聊天记录里没有「${query.trim()}」。") }
+        else -> for (k in KbKind.entries) {
+            val these = groups.filter { it.kind == k }
+            if (these.isEmpty()) continue
+            item(key = "sh:" + k.wire) { SectionHeader(k.title, count = these.size) }
+            itemsIndexed(these, key = { _, g -> "s:" + g.key }) { i, g ->
+                val known = model.known(g.kind, g.id)
+                val entry = known ?: KbEntry(kind = g.kind.wire, id = g.id, name = g.id)
+                CardSlice(first = i == 0, last = i == these.lastIndex, dividerStart = HitTextColumn) {
                     HitRow(entry, named = known != null, group = g, query = query) { onOpen(entry) }
                 }
             }
@@ -337,141 +360,162 @@ private fun LazyListScope.searchResults(hits: List<KbHit>?, query: String, model
     }
 }
 
+/** Where a row's words start (after its tile): the separators start there too. */
+private val KbTextColumn: Dp = JSpace.l + JSize.wellL + JSpace.m
+private val HitTextColumn: Dp = JSpace.l + JSize.wellS + JSpace.m
+
 internal fun KbKind.icon(): ImageVector = when (this) {
-    KbKind.PROJECTS -> Icons.Outlined.Layers
-    KbKind.CHATS -> Icons.Outlined.Forum
-    KbKind.PEOPLE -> Icons.Outlined.Groups
-    KbKind.DOCS -> Icons.AutoMirrored.Outlined.Article
-    KbKind.MEETINGS -> Icons.Outlined.Videocam
-    KbKind.EVENTS -> Icons.Outlined.CalendarMonth
+    KbKind.PROJECTS -> JIcons.project
+    KbKind.CHATS -> JIcons.feishuChats
+    KbKind.PEOPLE -> JIcons.people
+    KbKind.DOCS -> JIcons.document
+    KbKind.MEETINGS -> JIcons.meeting
+    KbKind.EVENTS -> JIcons.event
 }
 
-@Composable
-internal fun Loading() {
-    Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp) }
-}
-
-@Composable
-internal fun Note(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
-}
-
-/** A section title and, dimmer, how many are in it. */
-@Composable
-internal fun SectionTitle(text: String, count: Int? = null) {
-    Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, maxLines = 1)
-        if (count != null) Text("  $count", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline, maxLines = 1)
-    }
-}
-
-/** P0 red, P1 orange, P2 blue, P3 and unranked grey (iOS `ImportanceBadge.color`). */
+/** P0 red, P1 amber (the 需要你 and 工作中 tones), P2 blue, P3 and unranked gray (iOS `ImportanceBadge.color`). */
 @Composable
 internal fun importanceColor(p: String?): Color = when (p) {
-    "P0" -> Color(0xFFFF453A)
-    "P1" -> Color(0xFFFF9F0A)
-    "P2" -> Color(0xFF0A84FF)
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
+    "P0" -> JTheme.needsYou.dot
+    "P1" -> JTheme.tone(AgentState.Working).dot
+    "P2" -> JTheme.hue.blue
+    else -> JTheme.colors.secondaryText
 }
 
-/** The color a relevance pill takes: high red, middling orange, low neutral. */
-internal fun relevanceTint(v: Int): Color? = when {
-    v >= 70 -> Color(0xFFFF453A)
-    v >= 40 -> Color(0xFFFF9F0A)
-    else -> null
-}
-
-/** A small capsule: tinted text on a soft tint of the same color, or neutral. */
+/** A pill in an importance's color: its words dark enough to read on its soft fill. */
 @Composable
-internal fun KbPill(text: String, tint: Color? = null, bold: Boolean = false) {
-    val c = tint ?: MaterialTheme.colorScheme.onSurfaceVariant
-    Text(
-        text, fontSize = 11.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, color = c, maxLines = 1, softWrap = false,
-        modifier = Modifier.background(c.copy(alpha = if (tint == null) 0.10f else 0.14f), CircleShape).padding(horizontal = 7.dp, vertical = 2.dp),
-    )
+private fun importanceLook(p: String?): ChipLook = when (p) {
+    "P0" -> JTheme.needsYou.let { ChipLook.Tint(it.tint, it.text) }
+    "P1" -> JTheme.tone(AgentState.Working).let { ChipLook.Tint(it.tint, it.text) }
+    "P2" -> ChipLook.Tint(JTheme.hue.blue)
+    else -> ChipLook.Neutral
 }
 
 @Composable
 internal fun ImportanceBadge(importance: String?) {
     val p = importance.orEmpty()
-    if (p.isNotEmpty()) Box(Modifier.clearAndSetSemantics { contentDescription = "重要级 $p" }) { KbPill(p, importanceColor(p), bold = true) }
+    if (p.isNotEmpty()) Chip(p, Modifier.clearAndSetSemantics { contentDescription = "重要级 $p" }, look = importanceLook(p))
 }
 
-/** A rounded tile: the kind's icon, or a person's / chat's first character; tinted by importance. */
+/** 与我相关: high in the 需要你 red, middling amber, low neutral (iOS `RelevanceMeter`). */
 @Composable
-internal fun KbAvatar(entry: KbEntry, size: Dp = 40.dp) {
+internal fun RelevanceBadge(relevance: Int) {
+    val look = when {
+        relevance >= 70 -> JTheme.needsYou.let { ChipLook.Tint(it.tint, it.text) }
+        relevance >= 40 -> JTheme.tone(AgentState.Working).let { ChipLook.Tint(it.tint, it.text) }
+        else -> ChipLook.Neutral
+    }
+    Chip("相关 $relevance", look = look)
+}
+
+/** 短期 / 长期, the long ones in blue; [suffix] 「项目」 on the entry's page. */
+@Composable
+internal fun ProjectKindBadge(kind: String, suffix: String = "") {
+    Chip(kind + suffix, look = if (kind == "长期") ChipLook.Tint(JTheme.hue.blue) else ChipLook.Neutral)
+}
+
+/** A rounded tile: the kind's symbol, or a person's / chat's first character; in the importance's color. */
+@Composable
+internal fun KbAvatar(entry: KbEntry, size: Dp = JSize.wellL) {
     val tint = importanceColor(entry.importance)
     val kind = KbKind.of(entry.kind)
-    Box(
-        Modifier.size(size).background(tint.copy(alpha = 0.14f), RoundedCornerShape(size * 0.28f)).clearAndSetSemantics {},
-        contentAlignment = Alignment.Center,
-    ) {
-        val c = entry.name.firstOrNull { !it.isWhitespace() && it !in "#@（(【[「『《〈\"'“‘" }
-        if ((kind == KbKind.PEOPLE || kind == KbKind.CHATS) && c != null) {
-            Text(c.uppercase(), color = tint, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.42f).sp, maxLines = 1)
-        } else {
-            Icon(kind?.icon() ?: Icons.Outlined.Layers, null, tint = tint, modifier = Modifier.size(size * 0.5f))
-        }
-    }
+    val letter = entry.name.firstOrNull { !it.isWhitespace() && it !in "#@（(【[「『《〈\"'“‘" }
+    val hidden = Modifier.clearAndSetSemantics {}
+    if ((kind == KbKind.PEOPLE || kind == KbKind.CHATS) && letter != null) LetterTile(letter.uppercase(), tint, hidden, size)
+    else IconTile(kind?.icon() ?: JIcons.project, tint, hidden, size, filled = false)
 }
 
-/** One ranked entry: a tile carrying the importance, the name and when it changed, its one-line state, then pills and tags. */
+/**
+ * One ranked entry (iOS `KBRow`): the tile carrying its kind and importance, the name and when it changed, its
+ * one-line state, then its importance, kind, relevance and as many whole tags as fit.
+ */
 @Composable
 internal fun KbRow(entry: KbEntry, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        KbAvatar(entry)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                entry.updated?.let { Text(ago(it), fontSize = 11.sp, color = cs.outline, maxLines = 1, modifier = Modifier.padding(start = 8.dp)) }
-            }
-            entry.oneLine?.takeIf { it.isNotEmpty() }?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                ImportanceBadge(entry.importance)
-                entry.projectKind?.let { KbPill(it, if (it == "长期") Color(0xFF0A84FF) else null) }
-                if (entry.relevance > 0) KbPill("相关 ${entry.relevance}", relevanceTint(entry.relevance))
-                // Whole tags only, as many as fit (a cut "#Manage…" says nothing): the rest are dropped.
-                entry.tags.orEmpty().take(2).forEach { t ->
-                    Text("#$t", fontSize = 11.sp, color = cs.onSurfaceVariant, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f, fill = false))
+    val c = JTheme.colors
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = JSpace.l, end = JSpace.m, top = JSpace.m, bottom = JSpace.m),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
+    ) {
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(JSpace.m)) {
+            KbAvatar(entry)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+                    // Two lines: documents and meetings are told apart by the end of their titles.
+                    Text(entry.name, style = JTheme.type.heading, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).alignByBaseline())
+                    entry.updated?.let {
+                        Text(listTime(it), style = JTheme.type.label, color = c.tertiaryText, maxLines = 1, modifier = Modifier.alignByBaseline())
+                    }
+                }
+                entry.oneLine?.takeIf { it.isNotEmpty() }?.let {
+                    Text(it, style = JTheme.type.secondary, color = c.secondaryText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                FittingRow(Modifier.padding(top = JSpace.xxs)) {
+                    ImportanceBadge(entry.importance)
+                    entry.projectKind?.let { ProjectKindBadge(it) }
+                    if (entry.relevance > 0) RelevanceBadge(entry.relevance)
+                    entry.tags.orEmpty().forEach { t -> Text("#$t", style = JTheme.type.label, color = c.secondaryText, maxLines = 1, softWrap = false) }
                 }
             }
         }
+        Icon(JIcons.disclosure, null, Modifier.size(JSize.iconXS), tint = c.tertiaryText)
     }
 }
 
-/** One entry found by a search: its tile and name, then up to two matching lines with what was searched for in bold. */
+/** One entry found by a search (iOS `KBHitRow`): its tile and name, then up to two places with the words in bold. */
 @Composable
 private fun HitRow(entry: KbEntry, named: Boolean, group: KbSearchGroup, query: String, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        KbAvatar(entry, 34.dp)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (named) entry.name else group.kind.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (group.hits.size > 2) Text("  ${group.hits.size} 处", fontSize = 11.sp, color = cs.outline, maxLines = 1)
-            }
-            group.hits.take(2).forEach { h ->
-                Text(h.source, fontSize = 11.sp, color = cs.outline, maxLines = 1)
-                Text(marked(h.text, query, cs.onSurface), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    val c = JTheme.colors
+    val strong = JTheme.type.secondaryStrong.toSpanStyle().copy(color = c.label)
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = JSpace.l, end = JSpace.m, top = JSpace.m, bottom = JSpace.m),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
+    ) {
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(JSpace.m)) {
+            KbAvatar(entry, JSize.wellS)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+                    Text(if (named) entry.name else group.kind.title, style = JTheme.type.secondaryStrong, color = c.label, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
+                    if (group.hits.size > 2) {
+                        Text("${group.hits.size} 处", style = JTheme.type.label, color = c.tertiaryText, maxLines = 1, modifier = Modifier.alignByBaseline())
+                    }
+                }
+                group.hits.take(2).forEach { h ->
+                    Column(verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+                        Text(h.source, style = JTheme.type.label, color = c.tertiaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(marked(h.text, query, strong), style = JTheme.type.secondary, color = c.secondaryText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
+        Icon(JIcons.disclosure, null, Modifier.size(JSize.iconXS), tint = c.tertiaryText)
     }
 }
 
-/** [text] with every case-insensitive occurrence of [query] bold and in [strong]. */
-internal fun marked(text: String, query: String, strong: Color): AnnotatedString = buildAnnotatedString {
-    val q = query.trim()
-    if (q.isEmpty()) { append(text); return@buildAnnotatedString }
-    var from = 0
-    while (true) {
-        val i = text.indexOf(q, from, ignoreCase = true)
-        if (i < 0) break
-        append(text.substring(from, i))
-        withStyle(SpanStyle(color = strong, fontWeight = FontWeight.SemiBold)) { append(text.substring(i, i + q.length)) }
-        from = i + q.length
+/** [text] with every word of [query] (any case) in [strong]: the hub matches lines with all the words (iOS `marked`). */
+internal fun marked(text: String, query: String, strong: SpanStyle): AnnotatedString {
+    val words = query.split(Regex("\\s+")).filter { it.isNotEmpty() }
+    if (words.isEmpty()) return AnnotatedString(text)
+    val on = BooleanArray(text.length)
+    for (w in words) {
+        var from = 0
+        while (true) {
+            val i = text.indexOf(w, from, ignoreCase = true)
+            if (i < 0) break
+            for (j in i until i + w.length) on[j] = true
+            from = i + w.length
+        }
     }
-    append(text.substring(from))
+    return buildAnnotatedString {
+        var i = 0
+        while (i < text.length) {
+            var j = i
+            while (j < text.length && on[j] == on[i]) j++
+            if (on[i]) withStyle(strong) { append(text, i, j) } else append(text, i, j)
+            i = j
+        }
+    }
 }

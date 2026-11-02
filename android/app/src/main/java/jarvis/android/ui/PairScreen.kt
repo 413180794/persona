@@ -1,26 +1,26 @@
 package jarvis.android.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,10 +29,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import jarvis.android.JarvisApp
@@ -43,9 +47,24 @@ import jarvis.android.data.Engines
 import jarvis.android.data.Pairing
 import jarvis.android.data.PairingEngine
 import jarvis.android.data.PairingStore
+import jarvis.android.ui.design.ButtonKind
+import jarvis.android.ui.design.ErrorLine
+import jarvis.android.ui.design.GroupCard
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JTextField
+import jarvis.android.ui.design.JarvisMark
+import jarvis.android.ui.design.PillButton
+import jarvis.android.ui.design.RowDivider
+import jarvis.android.ui.design.SectionHeader
+import jarvis.android.ui.settings.KitNoticeRow
 import kotlinx.coroutines.launch
 
-/** First run: scan the QR code `jarvisd hub pair` prints, or type the address and token. */
+/**
+ * First run (iOS `WelcomeView` and `PairView` on one page): Jarvis' mark and what it is, 扫码配对 for the QR code
+ * `jarvisd hub pair` prints, or the address and token typed into the card below.
+ */
 @Composable
 fun PairScreen(reason: String? = null) {
     var url by remember { mutableStateOf("") }
@@ -92,43 +111,80 @@ fun PairScreen(reason: String? = null) {
         if (link != null) { url = link.url; token = link.token; pair(link, fromLink = true) }
     }
 
-    Surface(Modifier.fillMaxSize()) {
+    val c = JTheme.colors
+    BoxWithConstraints(Modifier.fillMaxSize().background(c.page), contentAlignment = Alignment.TopCenter) {
+        // At least the screen's height, so a short page sits in the middle; a keyboard makes it scroll.
         Column(
-            Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.widthIn(max = JSize.readable).fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
+                .safeDrawingPadding().padding(vertical = JSpace.xxl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            Spacer(Modifier.height(32.dp))
-            Text("连接 hub", style = MaterialTheme.typography.headlineMedium)
-            reason?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+            JarvisMark(JSize.box96)
+            Spacer(Modifier.height(JSpace.xl))
+            Text("Jarvis", style = JTheme.type.display, color = c.label, maxLines = 1)
+            Spacer(Modifier.height(JSpace.sm))
             Text(
-                "在 hub 所在的机器上运行 ~/.jarvis/bin/jarvisd hub pair，扫它打印的二维码。",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "把每台电脑上的 Claude 装进口袋", style = JTheme.type.title, color = c.secondaryText, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = JSpace.xl),
             )
-            Button(
+            // Why this page is back (the hub refused this phone's token): a notice above the ways to pair again.
+            reason?.let { GroupCard(Modifier.fillMaxWidth().padding(top = JSpace.l)) { KitNoticeRow("需要重新配对", it, tint = c.danger) } }
+
+            Spacer(Modifier.height(JSpace.xxl))
+            PillButton(
+                "扫码配对",
                 onClick = {
                     scan.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("扫描配对二维码").setBeepEnabled(false).setOrientationLocked(false))
                 },
-                enabled = !busy, modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Default.QrCodeScanner, null)
-                Text("  扫码配对", maxLines = 1)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = JSpace.page),
+                kind = ButtonKind.Prominent, icon = JIcons.qrScan, enabled = !busy, large = true,
+            )
+            Text(
+                // The command on a line of its own, so it never breaks in the middle.
+                buildAnnotatedString {
+                    append("在 hub 所在的机器上运行这条命令，扫它打印的二维码\n")
+                    withStyle(SpanStyle(fontFamily = JTheme.type.code.fontFamily, color = c.label)) { append("~/.jarvis/bin/jarvisd hub pair") }
+                },
+                style = JTheme.type.caption, color = c.secondaryText, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = JSpace.xl).padding(top = JSpace.m),
+            )
+
+            Spacer(Modifier.height(JSpace.l))
+            SectionHeader("或者手动填写")
+            GroupCard {
+                FieldRow("地址") {
+                    JTextField(
+                        url, { url = it }, "http://<hub 地址>:18660", KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        Modifier.weight(1f), singleLine = true, fill = Color.Transparent,
+                    )
+                }
+                RowDivider()
+                FieldRow("token") {
+                    JTextField(token, { token = it }, "配对 token", Modifier.weight(1f), singleLine = true, password = true, fill = Color.Transparent)
+                }
             }
-            Spacer(Modifier.height(8.dp))
-            Text("或者手动填写", style = MaterialTheme.typography.titleSmall)
-            OutlinedTextField(
-                url, { url = it }, label = { Text("hub 地址") }, placeholder = { Text("http://<hub 地址>:18660") },
-                singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth(),
+            PillButton(
+                "连接", onClick = { pair(Pairing(url.trim(), token.trim())) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = JSpace.page).padding(top = JSpace.m),
+                kind = ButtonKind.Tinted, large = true, enabled = !busy && url.startsWith("http") && token.isNotBlank(),
             )
-            OutlinedTextField(
-                token, { token = it }, label = { Text("token") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedButton(
-                onClick = { pair(Pairing(url.trim(), token.trim())) },
-                enabled = !busy && url.startsWith("http") && token.isNotBlank(), modifier = Modifier.fillMaxWidth(),
-            ) { Text("连接", maxLines = 1) }
-            if (busy) CircularProgressIndicator()
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (busy) {
+                Row(Modifier.padding(top = JSpace.l), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+                    CircularProgressIndicator(Modifier.size(JSize.markM), strokeWidth = JSize.rule, color = c.secondaryText)
+                    Text("正在连接…", style = JTheme.type.secondary, color = c.secondaryText, maxLines = 1)
+                }
+            }
+            error?.let { ErrorLine(it, Modifier.fillMaxWidth().padding(horizontal = JSpace.page + JSpace.xs).padding(top = JSpace.m)) }
         }
+    }
+}
+
+/** One line of the manual card: what it is on the left, the field taking the rest. */
+@Composable
+private fun FieldRow(label: String, field: @Composable RowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = JSize.box50).padding(start = JSpace.l, end = JSpace.xs), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = JTheme.type.body, color = JTheme.colors.label, maxLines = 1, modifier = Modifier.width(JSize.box56))
+        field()
     }
 }

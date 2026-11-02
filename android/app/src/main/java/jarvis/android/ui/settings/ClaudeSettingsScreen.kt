@@ -1,5 +1,10 @@
 package jarvis.android.ui.settings
 
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.JIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -125,33 +130,33 @@ fun ClaudeSettingsScreen(hub: Hub, onBack: () -> Unit) {
     }
 
     KitPage("Claude Code 设置", onBack, actions = {
-        IconButton(onClick = { scope.launch { load() } }, enabled = !loading) { Icon(Icons.Default.Refresh, "刷新") }
+        IconButton(onClick = { scope.launch { load() } }, enabled = !loading) { Icon(JIcons.retry, "刷新") }
     }) {
         item(key = "target") {
             KitGroup(
-                Modifier.padding(top = 8.dp),
+                Modifier.padding(top = JSpace.s),
                 footer = "改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。",
             ) {
                 row {
                     Box {
                         Row(
                             Modifier.fillMaxWidth().clickable(enabled = online.isNotEmpty(), role = Role.DropdownList) { pickMachine = true }
-                                .heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                                .heightIn(min = JSize.avatarXL).padding(horizontal = JSpace.l, vertical = JSpace.m),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(JSpace.s),
                         ) {
-                            Text("机器", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f), maxLines = 1)
+                            Text("机器", style = JTheme.type.body, color = c.label, modifier = Modifier.weight(1f), maxLines = 1)
                             Text(
                                 machines.firstOrNull { it.id == machineId }?.displayName ?: if (online.isEmpty()) "没有在线的机器" else "",
-                                fontSize = 17.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                style = JTheme.type.body, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
-                            Icon(Icons.Default.UnfoldMore, null, tint = c.tertiaryLabel, modifier = Modifier.size(18.dp))
+                            Icon(JIcons.expandAll, null, tint = c.tertiaryLabel, modifier = Modifier.size(JSize.badge))
                         }
                         DropdownMenu(expanded = pickMachine, onDismissRequest = { pickMachine = false }) {
                             online.forEach { m ->
                                 DropdownMenuItem(
                                     text = { Text(m.displayName, maxLines = 1) },
-                                    trailingIcon = { if (m.id == machineId) Icon(Icons.Default.Check, null, tint = c.accent) },
+                                    trailingIcon = { if (m.id == machineId) Icon(JIcons.done, null, tint = c.accent) },
                                     onClick = {
                                         pickMachine = false
                                         machineId = m.id
@@ -169,14 +174,14 @@ fun ClaudeSettingsScreen(hub: Hub, onBack: () -> Unit) {
         }
         error?.let { msg ->
             item(key = "error") {
-                KitGroup(Modifier.padding(top = 20.dp)) {
-                    row { Text(msg, fontSize = 13.sp, color = c.danger, modifier = Modifier.padding(16.dp)) }
+                KitGroup(Modifier.padding(top = JSpace.xl)) {
+                    row { Text(msg, style = JTheme.type.caption, color = c.danger, modifier = Modifier.padding(JSpace.l)) }
                 }
             }
         }
         when {
             settings.isNotEmpty() -> item(key = "settings") {
-                KitGroup(Modifier.padding(top = 20.dp)) {
+                KitGroup(Modifier.padding(top = JSpace.xl)) {
                     settings.forEach { s -> row { SettingRow(s, drafts, ::set) } }
                 }
             }
@@ -184,8 +189,8 @@ fun ClaudeSettingsScreen(hub: Hub, onBack: () -> Unit) {
                 Box(Modifier.fillMaxWidth().padding(top = 60.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             }
             online.isEmpty() -> item(key = "none") {
-                Text("没有在线的机器：机器连上 hub 后再来改。", fontSize = 15.sp, color = c.secondaryLabel,
-                    modifier = Modifier.fillMaxWidth().padding(32.dp))
+                Text("没有在线的机器：机器连上 hub 后再来改。", style = JTheme.type.secondary, color = c.secondaryLabel,
+                    modifier = Modifier.fillMaxWidth().padding(JSpace.xxl))
             }
         }
     }
@@ -198,38 +203,38 @@ private fun SettingRow(s: ClaudeSetting, drafts: MutableMap<String, String>, set
     when (s.type) {
         "bool" -> Row(
             Modifier.fillMaxWidth().clickable(role = Role.Switch) { set(s.key, JsonPrimitive(!s.boolValue)) }
-                .heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                .heightIn(min = JSize.avatarXL).padding(horizontal = JSpace.l, vertical = JSpace.m),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(JSpace.m),
         ) {
             SettingTitle(s, Modifier.weight(1f))
-            Switch(checked = s.boolValue, onCheckedChange = null)
+            Switch(checked = s.boolValue, onCheckedChange = null, colors = jSwitchColors())
         }
         "enum" -> {
             var open by remember { mutableStateOf(false) }
             Box {
                 Row(
                     Modifier.fillMaxWidth().clickable(role = Role.DropdownList) { open = true }
-                        .heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                        .heightIn(min = JSize.avatarXL).padding(horizontal = JSpace.l, vertical = JSpace.m),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(JSpace.s),
                 ) {
                     SettingTitle(s, Modifier.weight(1f))
-                    Text(s.stringValue, fontSize = 17.sp, color = c.secondaryLabel, maxLines = 1)
-                    Icon(Icons.Default.UnfoldMore, null, tint = c.tertiaryLabel, modifier = Modifier.size(18.dp))
+                    Text(s.stringValue, style = JTheme.type.body, color = c.secondaryLabel, maxLines = 1)
+                    Icon(JIcons.expandAll, null, tint = c.tertiaryLabel, modifier = Modifier.size(JSize.badge))
                 }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                     s.options.orEmpty().forEach { o ->
                         DropdownMenuItem(
                             text = { Text(o, maxLines = 1) },
-                            trailingIcon = { if (o == s.stringValue) Icon(Icons.Default.Check, null, tint = c.accent) },
+                            trailingIcon = { if (o == s.stringValue) Icon(JIcons.done, null, tint = c.accent) },
                             onClick = { open = false; if (o != s.stringValue) set(s.key, JsonPrimitive(o)) },
                         )
                     }
                 }
             }
         }
-        else -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        else -> Column(Modifier.fillMaxWidth().padding(horizontal = JSpace.l, vertical = JSpace.m), verticalArrangement = Arrangement.spacedBy(JSpace.s)) {
             SettingTitle(s, Modifier.fillMaxWidth())
             val text = drafts[s.key] ?: s.stringValue
             fun commit() {
@@ -254,11 +259,11 @@ private fun SettingRow(s: ClaudeSetting, drafts: MutableMap<String, String>, set
 @Composable
 private fun SettingTitle(s: ClaudeSetting, modifier: Modifier) {
     val c = kitColors
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(s.title, fontSize = 17.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            if (s.isDefault) Text("默认", fontSize = 11.sp, color = c.tertiaryLabel, maxLines = 1)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+            Text(s.title, style = JTheme.type.body, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (s.isDefault) Text("默认", style = JTheme.type.label, color = c.tertiaryLabel, maxLines = 1)
         }
-        if (s.detail.isNotEmpty()) Text(s.detail, fontSize = 13.sp, lineHeight = 18.sp, color = c.secondaryLabel)
+        if (s.detail.isNotEmpty()) Text(s.detail, style = JTheme.type.caption, color = c.secondaryLabel)
     }
 }

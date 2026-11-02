@@ -1,5 +1,10 @@
 package jarvis.android.ui.settings
 
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.JIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -98,7 +103,7 @@ fun DevicesScreen(hub: Hub, onBack: () -> Unit) {
     }
 
     KitPage("设备", onBack, actions = {
-        IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Default.Refresh, "刷新") }
+        IconButton(onClick = { scope.launch { load() } }) { Icon(JIcons.retry, "刷新") }
     }) {
         val active = tokens.filter { !it.revoked }
         val revoked = tokens.filter { it.revoked }
@@ -106,7 +111,7 @@ fun DevicesScreen(hub: Hub, onBack: () -> Unit) {
             !loaded -> item { Box(Modifier.fillMaxWidth().padding(top = 80.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
             tokens.isEmpty() -> item {
                 KitEmpty(
-                    Icons.Default.Key, "还没有设备凭据",
+                    JIcons.key, "还没有设备凭据",
                     unsupported ?: if (current == null) "hub 更新后，这台手机会自动换成自己的凭据。" else null,
                     Modifier.padding(top = 60.dp),
                 )
@@ -114,7 +119,7 @@ fun DevicesScreen(hub: Hub, onBack: () -> Unit) {
             else -> {
                 item(key = "active") {
                     KitGroup(
-                        Modifier.padding(top = 8.dp),
+                        Modifier.padding(top = JSpace.s),
                         footer = "每台设备有自己的凭据，丢了哪台就撤销哪台，其他设备不受影响。手表只能看和回答，不能改设置、开关 Agent。" +
                             if (current == null) "这台手机还在用配对 token。" else "",
                         separatorStart = 52.dp,
@@ -154,22 +159,22 @@ private fun TokenRow(t: DeviceToken, isCurrent: Boolean, onRevoke: (() -> Unit)?
     val c = kitColors
     val dim = t.revoked
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().heightIn(min = JSize.box56).padding(start = JSpace.l, end = JSpace.xs, top = JSpace.s, bottom = JSpace.s),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
         Icon(
-            when (t.kind) { "watch" -> Icons.Default.Watch; "phone" -> Icons.Default.Smartphone; else -> Icons.Default.Computer },
-            null, tint = if (dim) c.secondaryLabel else c.accent, modifier = Modifier.size(24.dp),
+            when (t.kind) { "watch" -> JIcons.watch; "phone" -> JIcons.phone; else -> JIcons.machine },
+            null, tint = if (dim) c.secondaryLabel else c.accent, modifier = Modifier.size(JSize.icon),
         )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(t.title, fontSize = 17.sp, color = if (dim) c.secondaryLabel else c.label, maxLines = 1,
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                Text(t.title, style = JTheme.type.body, color = if (dim) c.secondaryLabel else c.label, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (isCurrent) KitChip("本机", color = c.accent)
                 if (t.role == "answer") KitChip("只能回答")
             }
-            Text(detail(t), fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1)
+            Text(detail(t), style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1)
         }
         if (onRevoke != null) {
             TextButton(onClick = onRevoke) { Text("撤销", color = c.danger, maxLines = 1) }

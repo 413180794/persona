@@ -1,5 +1,10 @@
 package jarvis.android.ui.chat
 
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
 import android.graphics.Bitmap
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
@@ -90,17 +95,17 @@ fun ToolGroup(steps: List<ToolStep>, working: Boolean) {
     val calls = remember(steps) { steps.mapNotNull { (it as? ToolStep.Call)?.call } }
     var expanded by remember(steps.first().id) { mutableStateOf(false) }
     val c = chatColors
-    Column(Modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
         if (calls.size > 2 && !expanded) {
             Row(
-                Modifier.fillMaxWidth().clip(CircleShape).background(c.fillWell).clickable { expanded = true }.padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().clip(CircleShape).background(c.fillWell).clickable { expanded = true }.padding(horizontal = JSpace.m, vertical = JSpace.s),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
             ) {
-                Icon(Icons.Rounded.Layers, null, Modifier.size(14.dp), tint = c.secondaryLabel)
-                Text("${calls.size} 个步骤", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.secondaryLabel, maxLines = 1)
-                Text(ToolText.runSummary(calls), fontSize = 12.sp, color = c.tertiaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Icon(Icons.Rounded.ExpandMore, null, Modifier.size(16.dp), tint = c.secondaryLabel)
+                Icon(JIcons.space, null, Modifier.size(JSize.markS), tint = c.secondaryLabel)
+                Text("${calls.size} 个步骤", style = JTheme.type.labelMedium, color = c.secondaryLabel, maxLines = 1)
+                Text(ToolText.runSummary(calls), style = JTheme.type.label, color = c.tertiaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Icon(JIcons.expand, null, Modifier.size(JSize.markM), tint = c.secondaryLabel)
             }
             calls.lastOrNull()?.let { ToolCallRow(it, working, autoExpand = working && it.isRunning) }
         } else {
@@ -111,16 +116,16 @@ fun ToolGroup(steps: List<ToolStep>, working: Boolean) {
                 }
             }
             if (calls.size > 2) {
-                Text("收起", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.accent, maxLines = 1,
-                    modifier = Modifier.padding(start = 12.dp).clip(RoundedCornerShape(6.dp)).clickable { expanded = false }.padding(4.dp))
+                Text("收起", style = JTheme.type.labelMedium, color = c.accent, maxLines = 1,
+                    modifier = Modifier.padding(start = JSpace.m).clip(RoundedCornerShape(JRadius.badge)).clickable { expanded = false }.padding(JSpace.xs))
             }
         }
     }
 }
 
 /** Where a tool row's words start inside a work card (inset + 24 dp icon + 10): separators start there. */
-val WorkTextColumn = 46.dp
-val WorkInset = 12.dp
+val WorkInset = JSpace.m
+val WorkTextColumn = WorkInset + JSize.icon + JSpace.m
 
 /**
  * One tool call (iOS `ToolCallRow`): icon (a spinner while it runs), verb, subject, chevron; tap for its detail.
@@ -139,29 +144,33 @@ fun ToolCallRow(call: ToolCall, working: Boolean, grouped: Boolean = false, auto
     }
     val pad = if (grouped) WorkInset else 10.dp
     Column(
-        Modifier.fillMaxWidth().then(if (grouped) Modifier else Modifier.clip(RoundedCornerShape(12.dp)).background(c.fillWell)).animateContentSize(),
+        Modifier.fillMaxWidth().then(if (grouped) Modifier else Modifier.clip(RoundedCornerShape(JRadius.card)).background(c.fillWell)).animateContentSize(),
     ) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = if (grouped) 44.dp else 38.dp).clickable { expanded = !open }.padding(horizontal = pad, vertical = 6.dp),
+            Modifier.fillMaxWidth().heightIn(min = if (grouped) 44.dp else 38.dp).clickable { expanded = !open }.padding(horizontal = pad, vertical = JSpace.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(JSpace.m),
         ) {
-            Box(Modifier.size(24.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                if (running) CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = tint)
-                else Icon(ToolText.icon(call.name), null, Modifier.size(13.dp), tint = tint)
+            // On the timeline the symbol sits on the line: the page's color under its tint hides the line there.
+            Box(Modifier.size(JSize.icon).clip(CircleShape).then(if (grouped && workTimeline) Modifier.background(c.page) else Modifier)
+                .background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                if (running) CircularProgressIndicator(Modifier.size(JSize.markXS), strokeWidth = JSize.lineMedium, color = tint)
+                else Icon(ToolText.icon(call.name), null, Modifier.size(JSize.markXS), tint = tint)
             }
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(ToolText.verb(call.name), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
-                Text(remember(call.use.id) { ToolText.subject(call.use) }, fontSize = 15.sp, color = c.secondaryLabel, maxLines = 1,
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                Text(ToolText.verb(call.name), style = if (grouped && workTimeline) JTheme.type.secondaryMedium else JTheme.type.secondaryStrong, color = c.label, maxLines = 1)
+                Text(remember(call.use.id) { ToolText.subject(call.use) }, style = JTheme.type.secondary, color = c.secondaryLabel, maxLines = 1,
                     overflow = TextOverflow.Ellipsis)
             }
-            if (call.isError) Icon(Icons.Rounded.ErrorOutline, null, Modifier.size(15.dp), tint = c.danger)
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, if (open) "收起" else "展开", Modifier.size(16.dp).rotate(if (open) 90f else 0f), tint = c.tertiaryLabel)
+            if (call.isError) Icon(JIcons.errorOutline, null, Modifier.size(JSize.mark), tint = c.danger)
+            Icon(JIcons.disclosure, if (open) "收起" else "展开", Modifier.size(JSize.markM).rotate(if (open) 90f else 0f), tint = c.tertiaryLabel)
         }
+        // On the timeline what opens under a step starts at the words' column, right of the line.
+        val detailStart = if (grouped && workTimeline) WorkTextColumn else pad
         if (ToolText.baseName(call.name) == "TodoWrite") {
-            TodoList(call.input()?.get("todos") as? JsonArray, Modifier.padding(start = pad, end = pad, bottom = 8.dp))
+            TodoList(call.input()?.get("todos") as? JsonArray, Modifier.padding(start = detailStart, end = pad, bottom = JSpace.s))
         } else if (open) {
-            ToolDetail(call, working, Modifier.padding(start = pad, end = pad, bottom = 10.dp))
+            ToolDetail(call, working, Modifier.padding(start = detailStart, end = pad, bottom = JSpace.m))
         }
     }
 }
@@ -173,7 +182,7 @@ fun ToolDetail(call: ToolCall, working: Boolean, modifier: Modifier = Modifier) 
     val base = ToolText.baseName(call.name)
     val i = call.input()
     val env = LocalChatEnv.current
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(JSpace.s)) {
         when (base) {
             "Bash" -> CodeBlock("$ " + i.str("command").orEmpty(), maxLines = 12)
             "Edit" -> {
@@ -198,18 +207,18 @@ fun ToolDetail(call: ToolCall, working: Boolean, modifier: Modifier = Modifier) 
             "Read", "NotebookEdit" -> (i.str("file_path") ?: i.str("notebook_path"))?.let { PathLink(it) }
             "ExitPlanMode" -> Markdown(i.str("plan").orEmpty())
             "AskUserQuestion" -> (i?.get("questions") as? JsonArray).orEmpty().forEach { q ->
-                Text(((q as? JsonObject).str("question")).orEmpty(), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.label)
+                Text(((q as? JsonObject).str("question")).orEmpty(), style = JTheme.type.captionMedium, color = c.label)
             }
-            "Task", "Agent" -> Text(i.str("prompt").orEmpty(), fontSize = 13.sp, color = c.secondaryLabel, maxLines = 8, overflow = TextOverflow.Ellipsis)
+            "Task", "Agent" -> Text(i.str("prompt").orEmpty(), style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 8, overflow = TextOverflow.Ellipsis)
             else -> if (i != null && i.isNotEmpty()) CodeBlock(remember(call.use.id) { pretty(i) }, maxLines = 14)
         }
         val result = call.result
         if (result != null && (base != "Edit" || result.isError == true)) {
             ResultBlock(result)
         } else if (call.isRunning && working) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp)
-                Text("运行中…", fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                CircularProgressIndicator(Modifier.size(JSize.markXS), strokeWidth = JSize.lineMedium)
+                Text("运行中…", style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1)
             }
         }
         if (call.images.isNotEmpty() && env != null) {
@@ -225,14 +234,14 @@ fun PathLink(path: String) {
     val c = chatColors
     val env = LocalChatEnv.current
     Row(
-        Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = env?.canOpenFiles == true) { env?.openFile(path) }.padding(vertical = 2.dp),
+        Modifier.clip(RoundedCornerShape(JRadius.badge)).clickable(enabled = env?.canOpenFiles == true) { env?.openFile(path) }.padding(vertical = JSpace.xxs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.xs),
     ) {
-        Icon(fileIcon(path), null, Modifier.size(13.dp), tint = if (env?.canOpenFiles == true) c.accent else c.secondaryLabel)
-        Text(path, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = if (env?.canOpenFiles == true) c.accent else c.secondaryLabel,
+        Icon(fileIcon(path), null, Modifier.size(JSize.markXS), tint = if (env?.canOpenFiles == true) c.accent else c.secondaryLabel)
+        Text(path, style = JTheme.type.code, color = if (env?.canOpenFiles == true) c.accent else c.secondaryLabel,
             maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        if (env?.canOpenFiles == true) Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(12.dp), tint = c.accent)
+        if (env?.canOpenFiles == true) Icon(JIcons.openExternal, null, Modifier.size(JSize.markXS), tint = c.accent)
     }
 }
 
@@ -244,25 +253,25 @@ fun ResultBlock(result: Item) {
     val text = result.cutText
     var full by remember(result.id) { mutableStateOf(false) }
     if (text.isEmpty() && result.fullSize == null) {
-        Text(if (error) "失败" else "完成，无输出", fontSize = 12.sp, color = if (error) c.danger else c.secondaryLabel)
+        Text(if (error) "失败" else "完成，无输出", style = JTheme.type.label, color = if (error) c.danger else c.secondaryLabel)
         return
     }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
         if (error) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(Icons.Rounded.Cancel, null, Modifier.size(14.dp), tint = c.danger)
-                Text("出错了", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.danger, maxLines = 1)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+                Icon(JIcons.clear, null, Modifier.size(JSize.markS), tint = c.danger)
+                Text("出错了", style = JTheme.type.labelStrong, color = c.danger, maxLines = 1)
             }
         }
         CodeBlock(text.trimEnd(), maxLines = 10)
         result.fullSize?.let { size ->
             Row(
-                Modifier.clip(RoundedCornerShape(6.dp)).clickable { full = true }.padding(vertical = 4.dp),
+                Modifier.clip(RoundedCornerShape(JRadius.badge)).clickable { full = true }.padding(vertical = JSpace.xs),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(JSpace.xs),
             ) {
-                Icon(Icons.AutoMirrored.Rounded.Subject, null, Modifier.size(14.dp), tint = c.accent)
-                Text("已截断，看全文（${formatBytes(size.toLong())}）", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.accent, maxLines = 1)
+                Icon(JIcons.output, null, Modifier.size(JSize.markS), tint = c.accent)
+                Text("已截断，看全文（${formatBytes(size.toLong())}）", style = JTheme.type.labelMedium, color = c.accent, maxLines = 1)
             }
         }
     }
@@ -285,7 +294,7 @@ fun FullOutputDialog(itemId: String, onDismiss: () -> Unit) {
         actions = {
             text?.let { t ->
                 IconButton(onClick = { MediaShare.copyText(ctx, t, "工具输出"); Toasts.show("已拷贝", ToastStyle.SUCCESS) }) {
-                    Icon(Icons.Rounded.ContentCopy, contentDescription = "拷贝全文")
+                    Icon(JIcons.copy, contentDescription = "拷贝全文")
                 }
             }
         },
@@ -294,8 +303,8 @@ fun FullOutputDialog(itemId: String, onDismiss: () -> Unit) {
             val t = text
             when {
                 t != null -> jarvis.android.ui.files.MonoLines(jarvis.android.ui.files.numberedLines(t), Modifier.fillMaxSize())
-                error != null -> Text(error!!, color = chatColors.danger, modifier = Modifier.align(Alignment.Center).padding(24.dp))
-                else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
+                error != null -> Text(error!!, color = chatColors.danger, modifier = Modifier.align(Alignment.Center).padding(JSpace.xl))
+                else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(JSize.icon), strokeWidth = JSize.rule) }
             }
         }
     }
@@ -310,17 +319,17 @@ fun DiffHeader(path: String?, adds: Int, dels: Int) {
     val env = LocalChatEnv.current
     val canOpen = env?.canOpenFiles == true
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(enabled = canOpen) { env?.openFile(path) }.padding(vertical = 2.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(JRadius.badge)).clickable(enabled = canOpen) { env?.openFile(path) }.padding(vertical = JSpace.xxs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
     ) {
-        Icon(fileIcon(path), null, Modifier.size(13.dp), tint = c.secondaryLabel)
-        Text(path.substringAfterLast('/'), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
-        Text(path.substringBeforeLast('/', ""), fontSize = 13.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Icon(fileIcon(path), null, Modifier.size(JSize.markXS), tint = c.secondaryLabel)
+        Text(path.substringAfterLast('/'), style = JTheme.type.captionStrong, color = c.label, maxLines = 1)
+        Text(path.substringBeforeLast('/', ""), style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f))
-        if (adds > 0) Text("+$adds", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.diffAdd)
-        if (dels > 0) Text("−$dels", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.diffDel)
-        if (canOpen) Icon(Icons.AutoMirrored.Rounded.OpenInNew, "查看文件", Modifier.size(13.dp), tint = c.accent)
+        if (adds > 0) Text("+$adds", style = JTheme.type.captionStrong, color = c.diffAdd)
+        if (dels > 0) Text("−$dels", style = JTheme.type.captionStrong, color = c.diffDel)
+        if (canOpen) Icon(JIcons.openExternal, "查看文件", Modifier.size(JSize.markXS), tint = c.accent)
     }
 }
 
@@ -337,11 +346,11 @@ fun DiffView(content: DiffContent) {
     val clipped = !full && content.lines.size > max
     val shown = if (clipped) content.lines.take(max) else content.lines
     val scroll = rememberScrollState()
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
         // Every line as wide as the longest (or the box): the colored backgrounds run the full width.
-        BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.codeBackground)) {
+        BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(JRadius.control)).background(c.codeBackground)) {
             val boxWidth = maxWidth
-            Column(Modifier.horizontalScroll(scroll).width(IntrinsicSize.Max).widthIn(min = boxWidth).padding(vertical = 6.dp)) {
+            Column(Modifier.horizontalScroll(scroll).width(IntrinsicSize.Max).widthIn(min = boxWidth).padding(vertical = JSpace.sm)) {
                 shown.forEach { l ->
                     val (sign, color, fill) = when (l.kind) {
                         DiffLine.Kind.ADD -> Triple("+", c.diffAdd, c.diffAddFill)
@@ -349,9 +358,9 @@ fun DiffView(content: DiffContent) {
                         else -> Triple(" ", c.secondaryLabel, Color.Transparent)
                     }
                     val quiet = l.kind == DiffLine.Kind.HUNK || l.kind == DiffLine.Kind.INFO
-                    Row(Modifier.fillMaxWidth().background(fill).padding(horizontal = 8.dp, vertical = 1.dp)) {
-                        Text(sign, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp, color = color, modifier = Modifier.width(12.dp))
-                        Text(l.text.ifEmpty { " " }, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp,
+                    Row(Modifier.fillMaxWidth().background(fill).padding(horizontal = JSpace.s, vertical = JSize.line)) {
+                        Text(sign, style = JTheme.type.code, color = color, modifier = Modifier.width(JSize.markXS))
+                        Text(l.text.ifEmpty { " " }, style = JTheme.type.code,
                             color = if (quiet) c.secondaryLabel else c.label, softWrap = false)
                     }
                 }
@@ -359,15 +368,15 @@ fun DiffView(content: DiffContent) {
             if (scroll.canScrollForward) {
                 Box(Modifier.matchParentSize()) {
                     Box(
-                        Modifier.align(Alignment.CenterEnd).width(28.dp).fillMaxHeight()
+                        Modifier.align(Alignment.CenterEnd).width(JSize.wellXS).fillMaxHeight()
                             .background(Brush.horizontalGradient(listOf(c.codeBackground.copy(alpha = 0f), c.codeBackground))),
                     )
                 }
             }
         }
         if (clipped) {
-            Text("展开全部 ${content.lines.size} 行", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.accent, maxLines = 1,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { full = true }.padding(vertical = 4.dp, horizontal = 2.dp))
+            Text("展开全部 ${content.lines.size} 行", style = JTheme.type.labelMedium, color = c.accent, maxLines = 1,
+                modifier = Modifier.clip(RoundedCornerShape(JRadius.badge)).clickable { full = true }.padding(vertical = JSpace.xs, horizontal = JSpace.xxs))
         }
     }
 }
@@ -376,22 +385,22 @@ fun DiffView(content: DiffContent) {
 @Composable
 fun TodoList(todos: JsonArray?, modifier: Modifier = Modifier) {
     val c = chatColors
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
         todos.orEmpty().forEach { t ->
             val o = t as? JsonObject
             val status = o.str("status") ?: "pending"
             val done = status == "completed"
             val doing = status == "in_progress"
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
                 Icon(
-                    when { done -> Icons.Rounded.CheckCircle; doing -> Icons.Rounded.TripOrigin; else -> Icons.Rounded.RadioButtonUnchecked },
+                    when { done -> JIcons.success; doing -> JIcons.inProgress; else -> JIcons.unchecked },
                     contentDescription = when { done -> "已完成"; doing -> "进行中"; else -> "待办" },
                     tint = when { done -> c.positive; doing -> chatColors.working; else -> c.secondaryLabel },
-                    modifier = Modifier.padding(top = 1.dp).size(16.dp),
+                    modifier = Modifier.padding(top = JSize.line).size(JSize.markM),
                 )
                 Text(
                     if (doing) o.str("activeForm") ?: o.str("content").orEmpty() else o.str("content").orEmpty(),
-                    fontSize = 13.sp,
+                    style = JTheme.type.caption,
                     lineHeight = 18.sp,
                     color = if (done) c.secondaryLabel else c.label,
                     textDecoration = if (done) TextDecoration.LineThrough else null,
@@ -420,7 +429,7 @@ fun ChatThumb(img: ViewerImage, local: List<ViewerImage> = listOf(img), modifier
         (width ?: 0) > 0 && (height ?: 0) > 0 -> width!!.toFloat() / height!!
         else -> 1.4f
     }.coerceIn(0.25f, 4f)
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(JRadius.control)
     Box(modifier.sizeIn(maxHeight = 280.dp), contentAlignment = Alignment.CenterStart) {
         Box(
             Modifier.aspectRatio(ratio, matchHeightConstraintsFirst = ratio < 1f).clip(shape).background(c.fillWell)
@@ -431,10 +440,10 @@ fun ChatThumb(img: ViewerImage, local: List<ViewerImage> = listOf(img), modifier
             when {
                 b != null -> Image(remember(b) { b.asImageBitmap() }, "图片，点按查看大图", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 state == false -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Rounded.BrokenImage, null, tint = c.secondaryLabel)
-                    Text("加载失败，点一下重试", fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1)
+                    Icon(JIcons.brokenImage, null, tint = c.secondaryLabel)
+                    Text("加载失败，点一下重试", style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1)
                 }
-                else -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else -> CircularProgressIndicator(Modifier.size(JSize.badge), strokeWidth = JSize.rule)
             }
         }
     }
@@ -446,7 +455,7 @@ fun SquareThumb(img: ViewerImage, side: androidx.compose.ui.unit.Dp, onClick: ((
     val c = chatColors
     val hub = LocalChatEnv.current?.hub
     val bmp by produceState<Bitmap?>(ChatImageLoader.cached(img, 400), img) { if (value == null) value = hub?.let { ChatImageLoader.load(it, img, 400) } }
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(JRadius.control)
     Box(
         Modifier.size(side).clip(shape).background(c.fillChip).border(0.5.dp, c.label.copy(alpha = 0.1f), shape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
@@ -454,7 +463,7 @@ fun SquareThumb(img: ViewerImage, side: androidx.compose.ui.unit.Dp, onClick: ((
     ) {
         val b = bmp
         if (b != null) Image(remember(b) { b.asImageBitmap() }, "图片", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        else CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        else CircularProgressIndicator(Modifier.size(JSize.markM), strokeWidth = JSize.rule)
     }
 }
 
@@ -465,15 +474,15 @@ fun CodeBlock(code: String, modifier: Modifier = Modifier, maxLines: Int = 20) {
     var full by remember(code) { mutableStateOf(false) }
     val lines = remember(code) { code.split('\n') }
     val clipped = !full && lines.size > maxLines
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
         Box(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.codeBackground)
-                .horizontalScroll(rememberScrollState()).padding(10.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(JRadius.control)).background(c.codeBackground)
+                .horizontalScroll(rememberScrollState()).padding(JSpace.m),
         ) {
             Text(
                 if (clipped) remember(code, maxLines) { lines.take(maxLines).joinToString("\n") } else code,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
+                style = JTheme.type.label,
                 lineHeight = 16.sp,
                 color = c.label,
                 softWrap = false,
@@ -482,11 +491,11 @@ fun CodeBlock(code: String, modifier: Modifier = Modifier, maxLines: Int = 20) {
         if (clipped) {
             Text(
                 "展开全部 ${lines.size} 行",
-                fontSize = 12.sp,
+                style = JTheme.type.label,
                 fontWeight = FontWeight.Medium,
                 color = c.accent,
                 maxLines = 1,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { full = true }.padding(vertical = 4.dp, horizontal = 2.dp),
+                modifier = Modifier.clip(RoundedCornerShape(JRadius.badge)).clickable { full = true }.padding(vertical = JSpace.xs, horizontal = JSpace.xxs),
             )
         }
     }

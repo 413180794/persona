@@ -1,5 +1,10 @@
 package jarvis.android.ui.chat
 
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -114,6 +119,9 @@ private class BarPosition(private val at: Offset, private val gap: Int, private 
     }
 }
 
+/** The bar's dark ink, the same in every style and appearance (iOS's menu bar). */
+private val MenuInk = Color(0xFF2C2C2E)
+
 /** The bar itself, over everything (a Popup at the press point). */
 @Composable
 fun MessageMenuHost(menu: MessageMenuState) {
@@ -128,17 +136,17 @@ fun MessageMenuHost(menu: MessageMenuState) {
         properties = PopupProperties(focusable = true),
     ) {
         Row(
-            Modifier.shadow(10.dp, RoundedCornerShape(12.dp)).background(Color(0xFF2C2C2E), RoundedCornerShape(12.dp))
-                .horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp).height(62.dp),
+            Modifier.shadow(10.dp, RoundedCornerShape(JRadius.card)).background(MenuInk, RoundedCornerShape(JRadius.card))
+                .horizontalScroll(rememberScrollState()).padding(horizontal = JSpace.sm).height(62.dp),
         ) {
             fun done() = menu.close()
-            BarItem("复制", Icons.Rounded.ContentCopy) { MediaShare.copyText(ctx, t.text, "消息"); Toasts.show("已拷贝", ToastStyle.SUCCESS); done() }
-            BarItem("选择", Icons.Rounded.TextFields) { menu.selecting = t.text; done() }
-            BarItem("引用", Icons.Rounded.FormatQuote) { menu.quote(t.text); done() }
-            BarItem("分享", Icons.Rounded.Share) { MediaShare.shareText(ctx, t.text); done() }
-            menu.askJarvis?.let { ask -> BarItem("交给 Jarvis", Icons.AutoMirrored.Rounded.Send) { ask(t.text); done() } }
-            menu.asContext?.let { add -> BarItem("作为上下文", Icons.Rounded.AlternateEmail) { add(t.text); done() } }
-            if (t.isUser) BarItem("编辑", Icons.Rounded.Edit) { menu.edit(t.text); done() }
+            BarItem("复制", JIcons.copy) { MediaShare.copyText(ctx, t.text, "消息"); Toasts.show("已拷贝", ToastStyle.SUCCESS); done() }
+            BarItem("选择", JIcons.select) { menu.selecting = t.text; done() }
+            BarItem("引用", JIcons.quote) { menu.quote(t.text); done() }
+            BarItem("分享", JIcons.share) { MediaShare.shareText(ctx, t.text); done() }
+            menu.askJarvis?.let { ask -> BarItem("交给 Jarvis", JIcons.handToAI) { ask(t.text); done() } }
+            menu.asContext?.let { add -> BarItem("作为上下文", JIcons.addContext) { add(t.text); done() } }
+            if (t.isUser) BarItem("编辑", JIcons.edit) { menu.edit(t.text); done() }
         }
     }
 }
@@ -146,13 +154,13 @@ fun MessageMenuHost(menu: MessageMenuState) {
 @Composable
 private fun BarItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Column(
-        Modifier.width(if (title.length > 3) 62.dp else 46.dp).height(62.dp).clickable(onClick = onClick).padding(top = 10.dp),
+        Modifier.width(if (title.length > 3) 62.dp else 46.dp).height(62.dp).clickable(onClick = onClick).padding(top = JSpace.m),
         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(JSpace.xs),
     ) {
         // A fixed box: every label stays on one line whatever the icon's height.
-        Box(Modifier.size(22.dp), contentAlignment = androidx.compose.ui.Alignment.Center) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
-        Text(title, fontSize = 11.sp, color = Color.White, maxLines = 1, softWrap = false)
+        Box(Modifier.size(JSize.iconS), contentAlignment = androidx.compose.ui.Alignment.Center) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(JSize.iconXS)) }
+        Text(title, style = JTheme.type.label, color = Color.White, maxLines = 1, softWrap = false)
     }
 }
 
@@ -165,12 +173,12 @@ fun SelectTextDialog(text: String, onDismiss: () -> Unit) {
         onBack = onDismiss,
         actions = {
             TextButton(onClick = { MediaShare.copyText(ctx, text, "消息"); Toasts.show("已拷贝", ToastStyle.SUCCESS); onDismiss() }) {
-                Text("全部拷贝", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text("全部拷贝", style = JTheme.type.bodyStrong, color = JTheme.colors.accent, maxLines = 1)
             }
         },
     ) { pad ->
         SelectionContainer(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState())) {
-            Text(text, fontSize = 17.sp, lineHeight = 24.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp))
+            Text(text, style = JTheme.type.body, lineHeight = 24.sp, modifier = Modifier.padding(horizontal = JSpace.l, vertical = JSpace.l))
         }
     }
 }

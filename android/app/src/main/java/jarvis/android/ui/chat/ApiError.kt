@@ -3,18 +3,42 @@ package jarvis.android.ui.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import jarvis.android.ui.ChatRow
 import jarvis.android.ui.FoldedRow
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.ButtonKind
+import jarvis.android.ui.design.Chip
+import jarvis.android.ui.design.ChipLook
+import jarvis.android.ui.design.IconAction
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.PillButton
+import jarvis.android.ui.media.MediaShare
 
 /**
  * A model API error in a chat (iOS APIErrorInfo), read from the text Claude Code writes when it gives up
@@ -119,71 +143,59 @@ fun foldApiErrors(rows: List<FoldedRow>): List<ChatItem> {
  * The card for an API error (iOS APIErrorCard): the reason with a warning mark and chips (the status, 临时故障 /
  * 要处理, 连续 N 次); tapped, the ids to copy and the raw text; 重试 sends 继续 when [retry] is given.
  */
-@androidx.compose.runtime.Composable
+@Composable
 fun ApiErrorCard(e: ApiErrorLine, retry: (() -> Unit)?) {
-    val c = androidx.compose.material3.MaterialTheme.colorScheme
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    var open by androidx.compose.runtime.saveable.rememberSaveable(e.row.key) { androidx.compose.runtime.mutableStateOf(false) }
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+    val c = JTheme.colors
+    val ctx = LocalContext.current
+    var open by rememberSaveable(e.row.key) { mutableStateOf(false) }
+    val shape = RoundedCornerShape(JRadius.card)
     val info = e.info
-    fun copy(s: String) { jarvis.android.ui.media.MediaShare.copyText(ctx, s, "错误"); Toasts.show("已复制", ToastStyle.SUCCESS) }
-    androidx.compose.foundation.layout.Column(
-        androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 4.dp)
-            .background(c.error.copy(alpha = 0.06f), shape).border(1.dp, c.error.copy(alpha = 0.22f), shape)
-            .clickable { open = !open }.padding(12.dp)
+    fun copy(s: String) { MediaShare.copyText(ctx, s, "错误"); Toasts.show("已复制", ToastStyle.SUCCESS) }
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = JSpace.xs).clip(shape)
+            .background(c.danger.copy(alpha = 0.06f)).border(JSize.hairline * 2, c.danger.copy(alpha = 0.22f), shape)
+            .clickable { open = !open }.padding(JSpace.m)
             .semantics { contentDescription = "API 错误：${info.reason}" },
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(JSpace.s),
     ) {
-        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Default.Warning, null, tint = c.error,
-                modifier = androidx.compose.ui.Modifier.size(18.dp))
-            androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(8.dp))
-            androidx.compose.material3.Text(info.reason, style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+            Icon(JIcons.error, null, Modifier.size(JSize.markL), tint = c.danger)
+            Text(info.reason, style = JTheme.type.bodyStrong, color = c.label, modifier = Modifier.weight(1f))
+            Icon(if (open) JIcons.collapse else JIcons.expand, null, Modifier.size(JSize.markM), tint = c.tertiaryText)
         }
-        androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
-            info.status?.let { Chip("$it", error = true) }
-            when (info.transient) { true -> Chip("临时故障"); false -> Chip("要处理"); null -> {} }
+        Row(horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+            info.status?.let { Chip("$it", look = ChipLook.Tint(c.danger)) }
+            when (info.transient) {
+                true -> Chip("临时故障")
+                false -> Chip("要处理", look = ChipLook.Tint(c.caution.copy(alpha = 0.14f), c.cautionText))
+                null -> {}
+            }
             if (e.count > 1) Chip("连续 ${e.count} 次")
         }
         if (open) {
             info.requestId?.let { Field("请求 ID", it) { copy(it) } }
             info.session?.let { Field("Session", it) { copy(it) } }
-            e.row.row.let { (it as? jarvis.android.ui.ChatRow.Assistant)?.item ?: (it as? jarvis.android.ui.ChatRow.Notice)?.item }?.time?.let { t ->
+            e.row.row.let { (it as? ChatRow.Assistant)?.item ?: (it as? ChatRow.Notice)?.item }?.time?.let { t ->
                 Field("时间", java.time.format.DateTimeFormatter.ofPattern("M月d日 HH:mm:ss").format(t.atZone(java.time.ZoneId.systemDefault())), null)
             }
-            androidx.compose.foundation.text.selection.SelectionContainer {
-                androidx.compose.material3.Text(
-                    info.raw, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                    modifier = androidx.compose.ui.Modifier.fillMaxWidth().background(c.surfaceVariant, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(10.dp),
+            SelectionContainer {
+                Text(
+                    info.raw, style = JTheme.type.code, color = c.label,
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(JRadius.control)).background(c.codeBackground).padding(JSpace.m),
                 )
             }
-            androidx.compose.material3.TextButton(onClick = { copy(info.raw) }) { androidx.compose.material3.Text("复制原文", maxLines = 1) }
+            PillButton("复制原文", { copy(info.raw) }, kind = ButtonKind.Neutral, icon = JIcons.copy)
         }
-        retry?.let { r ->
-            androidx.compose.material3.FilledTonalButton(onClick = r) { androidx.compose.material3.Text("重试", maxLines = 1) }
-        }
+        retry?.let { r -> PillButton("重试", r, kind = ButtonKind.Tinted, icon = JIcons.retry) }
     }
 }
 
-@androidx.compose.runtime.Composable
-private fun Chip(text: String, error: Boolean = false) {
-    val c = androidx.compose.material3.MaterialTheme.colorScheme
-    androidx.compose.material3.Text(
-        text, style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = if (error) c.error else c.onSurfaceVariant,
-        modifier = androidx.compose.ui.Modifier.background(if (error) c.error.copy(alpha = 0.12f) else c.surfaceVariant, androidx.compose.foundation.shape.RoundedCornerShape(50))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-    )
-}
-
-@androidx.compose.runtime.Composable
+/** An id under the card: its name, the id in the code face, copy at the end. */
+@Composable
 private fun Field(name: String, value: String, onCopy: (() -> Unit)?) {
-    androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        androidx.compose.material3.Text(name, style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, modifier = androidx.compose.ui.Modifier.width(64.dp))
-        androidx.compose.material3.Text(value, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-            modifier = androidx.compose.ui.Modifier.weight(1f))
-        onCopy?.let { androidx.compose.material3.TextButton(onClick = it) { androidx.compose.material3.Text("复制", maxLines = 1) } }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+        Text(name, style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 1, modifier = Modifier.width(JSize.box64))
+        Text(value, style = JTheme.type.code, color = JTheme.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        onCopy?.let { IconAction(JIcons.copy, "复制", it, tint = JTheme.colors.accent, size = JSize.iconXS) }
     }
 }

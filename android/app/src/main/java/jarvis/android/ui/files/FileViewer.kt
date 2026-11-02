@@ -11,27 +11,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -50,12 +42,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import jarvis.android.data.Hub
+import jarvis.android.ui.CardSlice
+import jarvis.android.ui.JTheme
 import jarvis.android.ui.Markdown
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.DOT_SEP
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.design.JSpace
 import jarvis.android.ui.media.ChatImageLoader
 import jarvis.android.ui.media.MediaShare
 import jarvis.android.ui.media.ImageViewerArgs
@@ -63,10 +59,13 @@ import jarvis.android.ui.media.ViewerImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Behind a PDF's white pages: the neutral gray PDF viewers use (PDFKit's), the same in light and dark. */
+private val PdfBackdrop = Color(0xFF808080)
+
 /**
  * One file on a machine (iOS `FileViewer`): Markdown rendered (or its source), code and text monospaced with line
  * numbers scrolling both ways, images (tap for the viewer) and PDFs shown, a directory listed. Up to 2 MB (the node's
- * cap; the meta line says when it was cut).
+ * cap; the meta line says when it was cut). [initialFile]: the file already read, for the first frame (screenshots).
  */
 @Composable
 internal fun FileViewer(
@@ -78,8 +77,9 @@ internal fun FileViewer(
     onBack: () -> Unit,
     onOpen: (String) -> Unit,
     onOpenImage: (ImageViewerArgs) -> Unit,
+    initialFile: FileContent? = null,
 ) {
-    var file by remember(path) { mutableStateOf<FileContent?>(null) }
+    var file by remember(path) { mutableStateOf(initialFile) }
     var error by remember(path) { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
     var raw by rememberSaveable(path) { mutableStateOf(false) }
@@ -99,28 +99,30 @@ internal fun FileViewer(
         actions = {
             var open by remember { mutableStateOf(false) }
             Box {
-                IconButton(onClick = { open = true }) { Icon(Icons.Default.MoreVert, contentDescription = "更多") }
+                CircleButton(JIcons.more, "更多", { open = true })
                 DropdownMenu(open, onDismissRequest = { open = false }) {
                     if (markdown) DropdownMenuItem(
                         text = { Text(if (raw) "渲染 Markdown" else "查看源文件", maxLines = 1) },
                         onClick = { raw = !raw; open = false },
+                        leadingIcon = { Icon(if (raw) JIcons.document else JIcons.code, null) },
                     )
                     DropdownMenuItem(text = { Text("拷贝路径", maxLines = 1) }, onClick = {
                         MediaShare.copyText(ctx, f?.path?.ifEmpty { null } ?: path, "路径"); MediaShare.toast(ctx, "已拷贝路径"); open = false
-                    })
+                    }, leadingIcon = { Icon(JIcons.copy, null) })
                     f?.text?.let { t ->
                         DropdownMenuItem(text = { Text("拷贝内容", maxLines = 1) }, onClick = {
                             MediaShare.copyText(ctx, t, f.name); MediaShare.toast(ctx, "已拷贝"); open = false
-                        })
-                        DropdownMenuItem(text = { Text("分享", maxLines = 1) }, onClick = { MediaShare.shareText(ctx, t); open = false })
+                        }, leadingIcon = { Icon(JIcons.copy, null) })
+                        DropdownMenuItem(text = { Text("分享", maxLines = 1) }, onClick = { MediaShare.shareText(ctx, t); open = false },
+                            leadingIcon = { Icon(JIcons.share, null) })
                     }
                 }
             }
         },
-    ) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad)) {
+    ) { insets ->
+        Box(Modifier.fillMaxSize()) {
             when {
-                f != null -> FileBody(hub, f, markdown && !raw, onOpen, onOpenImage)
+                f != null -> FileBody(hub, f, markdown && !raw, insets, onOpen, onOpenImage)
                 error != null -> ErrorNotice("打不开这个文件", error!!, onRetry = { reload++ })
                 else -> Loading()
             }
@@ -128,77 +130,72 @@ internal fun FileViewer(
     }
 }
 
+/** The path, the size, and when it was cut (iOS `FileViewer.meta`): monospaced, in the secondary color. */
 @Composable
 private fun MetaLine(f: FileContent) {
     Text(
-        listOfNotNull(FilesPaths.keepEnd(f.path), if (f.isDir) null else FilesPaths.formatBytes(f.size), if (f.truncated) "只显示前 2 MB" else null).joinToString(" · "),
-        fontSize = 12.sp,
-        fontFamily = FontFamily.Monospace,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        listOfNotNull(FilesPaths.keepEnd(f.path), if (f.isDir) null else FilesPaths.formatBytes(f.size), if (f.truncated) "只显示前 2 MB" else null).joinToString(DOT_SEP),
+        style = JTheme.type.code,
+        color = JTheme.colors.secondaryText,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = JSpace.page + JSpace.xs, vertical = JSpace.s),
     )
 }
 
 @Composable
-private fun FileBody(hub: Hub, f: FileContent, rendered: Boolean, onOpen: (String) -> Unit, onOpenImage: (ImageViewerArgs) -> Unit) {
+private fun FileBody(hub: Hub, f: FileContent, rendered: Boolean, insets: PaddingValues, onOpen: (String) -> Unit, onOpenImage: (ImageViewerArgs) -> Unit) {
     val text = f.text
     val data = f.data
+    val bottom = insets.calculateBottomPadding()
     when {
-        f.isDir -> LazyColumn(Modifier.fillMaxSize()) {
+        f.isDir -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = JSpace.xxl + bottom)) {
             item { MetaLine(f) }
-            items(f.entries.orEmpty()) { e ->
-                val dir = e.endsWith("/")
-                Row(
-                    Modifier.fillMaxWidth().clickable { onOpen(FilesPaths.join(f.path, e)) }.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Icon(
-                        fileIcon(e, dir), null, modifier = Modifier.size(22.dp),
-                        tint = if (dir) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(e.trimEnd('/'), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val entries = f.entries.orEmpty()
+            itemsIndexed(entries) { i, e ->
+                CardSlice(first = i == 0, last = i == entries.lastIndex, dividerStart = FileTextColumn) {
+                    FileRow(e.trimEnd('/'), e.endsWith("/"), onClick = { onOpen(FilesPaths.join(f.path, e)) })
                 }
             }
         }
-        text != null && rendered -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        text != null && rendered -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = JSpace.xxl + bottom)) {
             MetaLine(f)
-            HorizontalDivider()
             SelectionContainer {
-                Markdown(simplifyHtml(text), Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                Markdown(simplifyHtml(text), Modifier.padding(horizontal = JSpace.page, vertical = JSpace.s))
             }
         }
+        // Code and text in a rounded block on the code background (iOS: the lines in a control-cornered box, 12 from the edges).
         text != null -> Column(Modifier.fillMaxSize()) {
             MetaLine(f)
-            HorizontalDivider()
-            MonoLines(numberedLines(text), Modifier.weight(1f).fillMaxWidth())
+            Box(
+                Modifier.weight(1f).fillMaxWidth().padding(horizontal = JSpace.m).padding(bottom = JSpace.s + bottom)
+                    .clip(RoundedCornerShape(JRadius.control)).background(JTheme.colors.codeBackground),
+            ) { MonoLines(numberedLines(text), Modifier.fillMaxSize()) }
         }
-        data != null && f.mime.orEmpty().startsWith("image/") -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        data != null && f.mime.orEmpty().startsWith("image/") -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = bottom)) {
             MetaLine(f)
             val img = remember(f.path, data.length) { ViewerImage(data = data, mime = f.mime) }
             val bmp by produceState<Bitmap?>(null, img) { value = ChatImageLoader.load(hub, img, 1600) }
             val b = bmp
             if (b == null) {
-                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Loading() }
+                Box(Modifier.fillMaxWidth().padding(JSpace.xxl), contentAlignment = Alignment.Center) { Loading() }
             } else {
                 Image(
                     b.asImageBitmap(), contentDescription = f.name, contentScale = ContentScale.Fit,
-                    modifier = Modifier.padding(16.dp).fillMaxWidth().aspectRatio(b.width.toFloat() / b.height.coerceAtLeast(1))
-                        .clip(RoundedCornerShape(10.dp))
+                    modifier = Modifier.padding(JSpace.page).fillMaxWidth().aspectRatio(b.width.toFloat() / b.height.coerceAtLeast(1))
+                        .clip(RoundedCornerShape(JRadius.control))
                         .clickable(onClickLabel = "查看大图") { onOpenImage(ImageViewerArgs(listOf(img))) },
                 )
             }
         }
-        data != null && f.mime == "application/pdf" -> PdfPages(f.path, data)
-        else -> Notice(Icons.Outlined.HelpOutline, "无法预览", "${f.mime ?: "二进制文件"} · ${FilesPaths.formatBytes(f.size)}")
+        data != null && f.mime == "application/pdf" -> PdfPages(f.path, data, bottom)
+        else -> Notice(JIcons.question, "无法预览", "${f.mime ?: "二进制文件"}$DOT_SEP${FilesPaths.formatBytes(f.size)}")
     }
 }
 
 /** A PDF's pages as images (PdfRenderer reads from a file: the bytes go to the cache first). */
 @Composable
-private fun PdfPages(path: String, data: String) {
+private fun PdfPages(path: String, data: String, bottom: androidx.compose.ui.unit.Dp) {
     val ctx = LocalContext.current
     val renderer by produceState<PdfRenderer?>(null, path) {
         value = withContext(Dispatchers.IO) {
@@ -216,9 +213,9 @@ private fun PdfPages(path: String, data: String) {
     }
     DisposableEffect(r) { onDispose { synchronized(r) { runCatching { r.close() } } } }
     LazyColumn(
-        Modifier.fillMaxSize().background(Color(0xFF808080)),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().background(PdfBackdrop),
+        contentPadding = PaddingValues(start = JSpace.m, end = JSpace.m, top = JSpace.m, bottom = JSpace.m + bottom),
+        verticalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
         items(r.pageCount) { i ->
             val page by produceState<Bitmap?>(null, r, i) {

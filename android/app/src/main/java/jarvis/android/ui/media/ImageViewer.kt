@@ -27,25 +27,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.outlined.BrokenImage
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -70,16 +58,21 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import jarvis.android.data.ImagePayload
 import jarvis.android.data.Hub
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.JarvisTheme
+import jarvis.android.ui.design.ButtonKind
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.PillButton
+import jarvis.android.ui.design.surface
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-
-private val Scrim = Color.Black.copy(alpha = 0.45f)
 
 private sealed interface Page {
     data object Loading : Page
@@ -91,6 +84,7 @@ private sealed interface Page {
  * Full-screen images (iOS `ImageViewer`): swipe through [ImageViewerArgs.images] from its index, pinch / double-tap
  * zoom and pan, a tap toggles the controls, pull down to close. Top: close and 「n / m」; bottom: 保存 (to the
  * gallery), 编辑 (only with [ImageViewerArgs.canEdit]: the marked-up picture goes to [onEdited], the chat's composer), 分享, 拷贝.
+ * Always in the dark appearance (iOS's black viewer): the controls are the design system's, light on the black.
  */
 @Composable
 fun ImageViewerScreen(hub: Hub, args: ImageViewerArgs, onBack: () -> Unit, onEdited: (ImagePayload) -> Unit = {}) {
@@ -128,6 +122,7 @@ fun ImageViewerScreen(hub: Hub, args: ImageViewerArgs, onBack: () -> Unit, onEdi
         if (granted) save() else MediaShare.toast(ctx, "没有存储权限，保存不了")
     }
 
+    JarvisTheme(dark = true) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = fade))) {
         HorizontalPager(
             state = pager,
@@ -146,10 +141,14 @@ fun ImageViewerScreen(hub: Hub, args: ImageViewerArgs, onBack: () -> Unit, onEdi
                 (value as? Page.Ready)?.let { ready[page] = it.bitmap }
             }
             when (val s = state) {
-                Page.Failed -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.BrokenImage, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(40.dp))
-                    Text("图片加载失败", color = Color.White.copy(alpha = 0.7f), fontSize = 15.sp, maxLines = 1)
-                    TextButton(onClick = { attempt++ }) { Text("重试", color = Color.White, maxLines = 1) }
+                Page.Failed -> Column(
+                    Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(JSpace.m, Alignment.CenterVertically),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(JIcons.brokenImage, null, tint = JTheme.colors.secondaryText, modifier = Modifier.size(JSize.avatar))
+                    Text("图片加载失败", style = JTheme.type.secondary, color = JTheme.colors.secondaryText, maxLines = 1)
+                    PillButton("重试", { attempt++ }, Modifier.surface(CircleShape, floating = true), kind = ButtonKind.Neutral)
                 }
                 is Page.Ready -> ZoomableImage(
                     s.bitmap,
@@ -159,68 +158,38 @@ fun ImageViewerScreen(hub: Hub, args: ImageViewerArgs, onBack: () -> Unit, onEdi
                     onPullEnd = { far -> if (far) onBack() else pull = 0f },
                 )
                 Page.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                    CircularProgressIndicator(color = Color.White, strokeWidth = JSize.rule, modifier = Modifier.size(JSize.wellXS))
                 }
             }
         }
 
         AnimatedVisibility(chrome && pull == 0f, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                val iconColors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Scrim, contentColor = Color.White)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    FilledTonalIconButton(onClick = onBack, colors = iconColors) { Icon(Icons.Default.Close, contentDescription = "关闭") }
-                    Spacer(Modifier.weight(1f))
-                    if (images.size > 1) {
-                        Text(
-                            "${pager.currentPage + 1} / ${images.size}",
-                            color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                            modifier = Modifier.background(Scrim, CircleShape).padding(horizontal = 12.dp, vertical = 6.dp),
-                        )
+            val shown = ready[pager.currentPage]
+            ViewerChrome(
+                index = pager.currentPage, count = images.size, saving = saving, ready = shown != null, canEdit = args.canEdit,
+                onClose = onBack,
+                onSave = { if (MediaShare.needsStoragePermission(ctx)) askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else save() },
+                onEdit = { editing = shown },
+                onShare = {
+                    scope.launch {
+                        val img = current()
+                        val bytes = ChatImageLoader.bytes(hub, img)
+                        if (bytes == null) MediaShare.toast(ctx, "图片还没取到")
+                        else runCatching { MediaShare.shareImage(ctx, bytes, img.mime ?: MediaShare.sniffMime(bytes)) }
+                            .onFailure { MediaShare.toast(ctx, "分享失败") }
                     }
-                }
-                Spacer(Modifier.weight(1f))
-                val shown = ready[pager.currentPage]
-                val buttonColors = ButtonDefaults.filledTonalButtonColors(containerColor = Scrim, contentColor = Color.White)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FilledTonalButton(
-                        onClick = { if (MediaShare.needsStoragePermission(ctx)) askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else save() },
-                        enabled = !saving && shown != null,
-                        colors = buttonColors,
-                    ) {
-                        Icon(Icons.Default.Download, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (saving) "保存中" else "保存", maxLines = 1)
+                },
+                onCopy = {
+                    scope.launch {
+                        val img = current()
+                        val bytes = ChatImageLoader.bytes(hub, img)
+                        val ok = bytes != null && runCatching { MediaShare.copyImage(ctx, bytes, img.mime ?: MediaShare.sniffMime(bytes)) }.isSuccess
+                        MediaShare.toast(ctx, if (ok) "已拷贝图片" else "拷贝失败")
                     }
-                    if (args.canEdit && shown != null) {
-                        FilledTonalButton(onClick = { editing = shown }, colors = buttonColors) {
-                            Icon(Icons.Default.Draw, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("编辑", maxLines = 1)
-                        }
-                    }
-                    Spacer(Modifier.weight(1f))
-                    if (shown != null) {
-                        FilledTonalIconButton(colors = iconColors, onClick = {
-                            scope.launch {
-                                val img = current()
-                                val bytes = ChatImageLoader.bytes(hub, img)
-                                if (bytes == null) MediaShare.toast(ctx, "图片还没取到")
-                                else runCatching { MediaShare.shareImage(ctx, bytes, img.mime ?: MediaShare.sniffMime(bytes)) }
-                                    .onFailure { MediaShare.toast(ctx, "分享失败") }
-                            }
-                        }) { Icon(Icons.Default.Share, contentDescription = "分享") }
-                        FilledTonalIconButton(colors = iconColors, onClick = {
-                            scope.launch {
-                                val img = current()
-                                val bytes = ChatImageLoader.bytes(hub, img)
-                                val ok = bytes != null && runCatching { MediaShare.copyImage(ctx, bytes, img.mime ?: MediaShare.sniffMime(bytes)) }.isSuccess
-                                MediaShare.toast(ctx, if (ok) "已拷贝图片" else "拷贝失败")
-                            }
-                        }) { Icon(Icons.Default.ContentCopy, contentDescription = "拷贝") }
-                    }
-                }
-            }
+                },
+            )
         }
+    }
     }
 
     editing?.let { img ->
@@ -229,6 +198,45 @@ fun ImageViewerScreen(hub: Hub, args: ImageViewerArgs, onBack: () -> Unit, onEdi
             MediaShare.toast(ctx, "已加到输入框，补一句话就能发")
             editing = null
             onBack()
+        }
+    }
+}
+
+/**
+ * The viewer's controls (iOS `ImageViewer.overlay`), on the dark appearance the viewer sets: ✕ and 「n / m」 at the
+ * top; 保存, 编辑 ([canEdit]), then 分享 and 拷贝 at the bottom once the picture is [ready]. Everything sits on an
+ * opaque floating surface, so it reads over any picture; 44 tall, like the round buttons.
+ */
+@Composable
+internal fun ViewerChrome(
+    index: Int, count: Int, saving: Boolean, ready: Boolean, canEdit: Boolean,
+    onClose: () -> Unit, onSave: () -> Unit, onEdit: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = JSpace.l, vertical = JSpace.s)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircleButton(JIcons.close, "关闭", onClose)
+            Spacer(Modifier.weight(1f))
+            if (count > 1) {
+                Text(
+                    "${index + 1} / $count", style = JTheme.type.secondaryStrong, color = JTheme.colors.label, maxLines = 1,
+                    modifier = Modifier.surface(CircleShape, floating = true).padding(horizontal = JSpace.m, vertical = JSpace.s),
+                )
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(JSpace.m), verticalAlignment = Alignment.CenterVertically) {
+            PillButton(
+                if (saving) "保存中" else "保存", onSave, Modifier.heightIn(min = JSize.tapTarget),
+                kind = ButtonKind.Prominent, icon = JIcons.save, enabled = !saving && ready,
+            )
+            if (canEdit && ready) {
+                PillButton("编辑", onEdit, Modifier.heightIn(min = JSize.tapTarget).surface(CircleShape, floating = true), kind = ButtonKind.Neutral, icon = JIcons.markup)
+            }
+            Spacer(Modifier.weight(1f))
+            if (ready) {
+                CircleButton(JIcons.share, "分享", onShare)
+                CircleButton(JIcons.copy, "拷贝", onCopy)
+            }
         }
     }
 }

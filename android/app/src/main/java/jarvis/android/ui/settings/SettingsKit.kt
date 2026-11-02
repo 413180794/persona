@@ -64,11 +64,28 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jarvis.android.data.HubException
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.Chip
+import jarvis.android.ui.design.ChipLook
+import jarvis.android.ui.design.EmptyState
+import jarvis.android.ui.design.IconTile
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.PageLoading
+import jarvis.android.ui.design.JTextField
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.PageHeader
+import jarvis.android.ui.design.RowDivider
+import jarvis.android.ui.design.SectionHeader
+import jarvis.android.ui.design.surface
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 
-// The pieces the 设置 sub-pages and 机器 share: rounded groups of rows on the page, like Android's own settings.
-// Colors come from the app's MaterialTheme (kitColors), so these pages follow light / dark and dynamic color.
+// The pieces the 设置 sub-pages and 机器 share: rounded groups of rows on the page, like iOS's inset grouped lists.
+// Everything comes from the design system (ui/design, JTheme): the style's cards, the type scale, the spacing.
 
-/** The roles these pages color with, read from the current MaterialTheme. */
+/** The roles these pages color with (the current style's tokens). */
 @Immutable
 data class KitColors(
     val dark: Boolean,
@@ -88,53 +105,36 @@ data class KitColors(
 val kitColors: KitColors
     @Composable @ReadOnlyComposable
     get() {
-        val s = MaterialTheme.colorScheme
-        val dark = s.background.luminance() < 0.5f
+        val p = JTheme.colors
         return KitColors(
-            dark = dark,
-            page = s.surface,
-            card = s.surfaceContainer,
-            label = s.onSurface,
-            secondaryLabel = s.onSurfaceVariant,
-            tertiaryLabel = s.onSurfaceVariant.copy(alpha = 0.6f),
-            separator = s.outlineVariant.copy(alpha = 0.6f),
-            fillChip = s.surfaceContainerHighest,
-            accent = s.primary,
-            danger = s.error,
-            positive = if (dark) Color(0xFF30D158) else Color(0xFF248A3D),
-            caution = if (dark) Color(0xFFFF9F0A) else Color(0xFFC93400),
+            dark = p.dark, page = p.page, card = p.card, label = p.label, secondaryLabel = p.secondaryText,
+            tertiaryLabel = p.tertiaryText, separator = p.separator, fillChip = p.fillChip, accent = p.accent,
+            danger = p.danger, positive = p.positive, caution = p.cautionText,
         )
     }
 
-/** Corner of groups and cards. */
-val KitCorner: Dp = 16.dp
+/** Corner of groups and cards: the style's. */
+val KitCorner: Dp @Composable @ReadOnlyComposable get() = JTheme.style.corner
 
 /** A card on the page: the grouped rows, the machine cards, the charts. */
 @Composable
 fun Modifier.kitCard(padding: Dp = 0.dp, shape: Shape = RoundedCornerShape(KitCorner)): Modifier =
-    background(kitColors.card, shape).padding(padding)
+    surface(shape).padding(padding)
 
-/** A sub-page: a top bar with back and a lazy column of [KitGroup]s. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** A sub-page: the round back button and the title, then a lazy column of [KitGroup]s. */
 @Composable
 fun KitPage(
     title: String,
-    onBack: () -> Unit,
+    /** Null: no way back (a step that must be done, like choosing an engine right after pairing). */
+    onBack: (() -> Unit)?,
     actions: @Composable RowScope.() -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { jarvis.android.ui.PaneBackButton(onBack) },
-                actions = actions,
-            )
-        },
-    ) { pad ->
+    Column(Modifier.fillMaxSize().background(JTheme.colors.page)) {
+        PageHeader(title, onBack, actions = actions)
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = pad.calculateTopPadding() + 4.dp, bottom = pad.calculateBottomPadding() + 32.dp),
+            contentPadding = PaddingValues(top = JSpace.xs, bottom = JSpace.xxl + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
             content = content,
         )
     }
@@ -152,25 +152,22 @@ fun KitGroup(
     modifier: Modifier = Modifier,
     header: String? = null,
     footer: String? = null,
-    separatorStart: Dp = 16.dp,
+    separatorStart: Dp = JSpace.l,
     content: KitGroupScope.() -> Unit,
 ) {
     val c = kitColors
     val scope = KitGroupScope().apply(content)
-    Column(modifier.fillMaxWidth().padding(top = if (header != null) 20.dp else 0.dp)) {
-        if (header != null) {
-            Text(header, style = MaterialTheme.typography.labelLarge, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 32.dp, end = 32.dp, bottom = 6.dp))
-        }
-        Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().kitCard()) {
+    Column(modifier.fillMaxWidth().padding(top = if (header != null) JSpace.s else JSpace.l)) {
+        if (header != null) SectionHeader(header)
+        Column(Modifier.padding(horizontal = JSpace.page).fillMaxWidth().kitCard()) {
             scope.rows.forEachIndexed { i, r ->
-                if (i > 0) Box(Modifier.padding(start = separatorStart).fillMaxWidth().height(0.5.dp).background(c.separator))
+                if (i > 0) RowDivider(separatorStart)
                 r()
             }
         }
         if (footer != null) {
-            Text(footer, fontSize = 13.sp, lineHeight = 18.sp, color = c.secondaryLabel,
-                modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp))
+            Text(footer, style = JTheme.type.caption, color = c.secondaryLabel,
+                modifier = Modifier.padding(start = JSpace.page + JSpace.l, end = JSpace.page + JSpace.l, top = JSpace.sm))
         }
     }
 }
@@ -184,24 +181,25 @@ fun KitRow(
     value: String? = null,
     titleColor: Color = Color.Unspecified,
     subtitle: String? = null,
+    iconColor: Color = Color.Unspecified,
 ) {
     val c = kitColors
     Row(
         Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }
-            .heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+            .heightIn(min = JSize.box50).padding(horizontal = JSpace.l, vertical = JSpace.s),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        if (icon != null) Icon(icon, null, tint = c.accent, modifier = Modifier.size(22.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 16.sp, color = titleColor.takeOrElse { c.label }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (!subtitle.isNullOrEmpty()) Text(subtitle, fontSize = 13.sp, lineHeight = 18.sp, color = c.secondaryLabel)
+        if (icon != null) IconTile(icon, iconColor.takeOrElse { c.accent })
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Text(title, style = JTheme.type.body, color = titleColor.takeOrElse { c.label }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!subtitle.isNullOrEmpty()) Text(subtitle, style = JTheme.type.caption, color = c.secondaryLabel)
         }
         if (!value.isNullOrEmpty()) {
-            Text(value, fontSize = 14.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 200.dp), textAlign = TextAlign.End)
+            Text(value, style = JTheme.type.body, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = JSize.box200), textAlign = TextAlign.End)
         }
-        if (onClick != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiaryLabel, modifier = Modifier.size(20.dp))
+        if (onClick != null) Icon(JIcons.disclosure, null, tint = c.tertiaryLabel, modifier = Modifier.size(JSize.iconXS))
     }
 }
 
@@ -220,20 +218,27 @@ fun KitSwitchRow(
     Row(
         Modifier.fillMaxWidth()
             .clickable(enabled = enabled, role = Role.Switch) { onChange(!checked) }
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .heightIn(min = JSize.box50)
+            .padding(horizontal = JSpace.l, vertical = JSpace.s)
             .alpha(if (enabled) 1f else 0.45f),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        if (icon != null) Icon(icon, null, tint = iconTint.takeOrElse { c.accent }, modifier = Modifier.size(22.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 16.sp, color = c.label)
-            if (!subtitle.isNullOrEmpty()) Text(subtitle, fontSize = 13.sp, lineHeight = 18.sp, color = c.secondaryLabel)
+        if (icon != null) IconTile(icon, iconTint.takeOrElse { c.accent })
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Text(title, style = JTheme.type.body, color = c.label)
+            if (!subtitle.isNullOrEmpty()) Text(subtitle, style = JTheme.type.caption, color = c.secondaryLabel)
         }
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled, colors = jSwitchColors())
     }
 }
+
+/** The switches' colors: the accent when on, a soft gray track when off (iOS's). */
+@Composable
+fun jSwitchColors() = androidx.compose.material3.SwitchDefaults.colors(
+    checkedThumbColor = Color.White, checkedTrackColor = JTheme.colors.positive, checkedBorderColor = Color.Transparent,
+    uncheckedThumbColor = Color.White, uncheckedTrackColor = JTheme.colors.fillPressed, uncheckedBorderColor = Color.Transparent,
+)
 
 /** One option of an inline picker: a check mark when [selected]. */
 @Composable
@@ -243,32 +248,32 @@ fun KitChoiceRow(title: String, selected: Boolean, onClick: () -> Unit, detail: 
         Modifier.fillMaxWidth()
             .semantics { this.selected = selected; role = Role.RadioButton }
             .clickable(onClick = onClick)
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .heightIn(min = JSize.box50)
+            .padding(horizontal = JSpace.l, vertical = JSpace.s),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 16.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (!detail.isNullOrEmpty()) Text(detail, fontSize = 13.sp, color = c.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Text(title, style = JTheme.type.body, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!detail.isNullOrEmpty()) Text(detail, style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        if (selected) Icon(Icons.Default.Check, "已选", tint = c.accent, modifier = Modifier.size(20.dp))
+        if (selected) Icon(JIcons.done, "已选", tint = c.accent, modifier = Modifier.size(JSize.iconXS))
     }
 }
 
 /** A warning inside a group: a symbol, a bold title and a line of explanation. */
 @Composable
-fun KitNoticeRow(title: String, message: String? = null, tint: Color = Color.Unspecified, icon: ImageVector = Icons.Default.Warning) {
+fun KitNoticeRow(title: String, message: String? = null, tint: Color = Color.Unspecified, icon: ImageVector = JIcons.error) {
     val c = kitColors
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = JSpace.l, vertical = JSpace.m),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        Icon(icon, null, tint = tint.takeOrElse { c.caution }, modifier = Modifier.size(22.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-            if (!message.isNullOrEmpty()) Text(message, fontSize = 13.sp, lineHeight = 18.sp, color = c.secondaryLabel)
+        Icon(icon, null, tint = tint.takeOrElse { c.caution }, modifier = Modifier.size(JSize.iconS))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Text(title, style = JTheme.type.heading, color = c.label)
+            if (!message.isNullOrEmpty()) Text(message, style = JTheme.type.caption, color = c.secondaryLabel)
         }
     }
 }
@@ -287,12 +292,12 @@ fun KitActionRow(
     val color = if (destructive) c.danger else c.accent
     Row(
         Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 10.dp).alpha(if (enabled) 1f else 0.4f),
+            .heightIn(min = JSize.box50).padding(horizontal = JSpace.l, vertical = JSpace.s).alpha(if (enabled) 1f else 0.4f),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        if (icon != null) Icon(icon, null, tint = color, modifier = Modifier.size(22.dp))
-        Text(title, fontSize = 16.sp, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (icon != null) Icon(icon, null, tint = color, modifier = Modifier.size(JSize.iconS))
+        Text(title, style = JTheme.type.body, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         trailing?.invoke()
     }
 }
@@ -302,68 +307,50 @@ fun KitActionRow(
 fun KitValueRow(label: String, value: String, mono: Boolean = false) {
     val c = kitColors
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().heightIn(min = JSize.tapTarget).padding(horizontal = JSpace.l, vertical = JSpace.s),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        Text(label, fontSize = 16.sp, color = c.label, maxLines = 1)
-        Text(value, fontSize = if (mono) 14.sp else 16.sp, color = c.secondaryLabel, modifier = Modifier.weight(1f), textAlign = TextAlign.End,
-            fontFamily = if (mono) FontFamily.Monospace else null)
+        Text(label, style = JTheme.type.body, color = c.label, maxLines = 1)
+        Text(value, style = if (mono) JTheme.type.code else JTheme.type.body, color = c.secondaryLabel, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
 }
 
 /** A small label nobody taps: neutral grey, or tinted with [color]. */
 @Composable
 fun KitChip(text: String, color: Color = Color.Unspecified, icon: ImageVector? = null) {
-    val c = kitColors
     val tinted = color != Color.Unspecified
-    Row(
-        Modifier.background(if (tinted) color.copy(alpha = 0.14f) else c.fillChip, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        if (icon != null) Icon(icon, null, tint = if (tinted) color else c.secondaryLabel, modifier = Modifier.size(10.dp))
-        Text(text, fontSize = 12.sp, color = if (tinted) color else c.secondaryLabel, maxLines = 1)
-    }
+    Chip(text, icon = icon, look = if (tinted) ChipLook.Tint(color) else ChipLook.Neutral)
 }
 
 /** Nothing to show yet: a symbol, a line and why. */
 @Composable
 fun KitEmpty(icon: ImageVector, title: String, message: String?, modifier: Modifier = Modifier) {
-    val c = kitColors
-    Column(modifier.fillMaxWidth().padding(horizontal = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(icon, null, tint = c.tertiaryLabel, modifier = Modifier.size(44.dp))
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center)
-        if (!message.isNullOrEmpty()) Text(message, fontSize = 15.sp, color = c.secondaryLabel, textAlign = TextAlign.Center)
-    }
+    EmptyState(icon, title, message.orEmpty(), modifier)
 }
 
-/** A single-line field in a settings group; spacing stays in the shared kit. */
+/** A single-line field in a settings group: its label above, the filled field under it. */
 @Composable
 fun KitTextField(label: String, value: String, onChange: (String) -> Unit, placeholder: String = "", enabled: Boolean = true) {
-    OutlinedTextField(
-        value = value, onValueChange = onChange, singleLine = true, enabled = enabled,
-        label = { Text(label, maxLines = 1) },
-        placeholder = { Text(placeholder, maxLines = 1, color = kitColors.tertiaryLabel) },
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-    )
+    Column(Modifier.fillMaxWidth().padding(horizontal = JSpace.l, vertical = JSpace.m), verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+        Text(label, style = JTheme.type.caption, color = kitColors.secondaryLabel, maxLines = 1)
+        JTextField(value, onChange, placeholder, enabled = enabled, singleLine = true)
+    }
 }
 
 data class KitOption(val id: String, val title: String)
 
-/** A picker row keeps the current value visible even when its source is no longer in the options. */
+/** A picker row: the value at the end, a menu of [options] with the current one checked; a value no longer offered still shows. */
 @Composable
 fun KitPickerRow(title: String, value: String, options: List<KitOption>, onChange: (String) -> Unit, enabled: Boolean = true) {
     var open by remember { mutableStateOf(false) }
     Box {
-        KitRow(title, onClick = if (enabled) ({ open = true }) else null,
-            value = options.firstOrNull { it.id == value }?.title ?: value)
+        KitRow(title, onClick = if (enabled) ({ open = true }) else null, value = options.firstOrNull { it.id == value }?.title ?: value)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(option.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    trailingIcon = { if (option.id == value) Icon(Icons.Default.Check, "已选", tint = kitColors.accent) },
+                    text = { Text(option.title, style = JTheme.type.body, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    trailingIcon = { if (option.id == value) Icon(JIcons.done, "已选", tint = kitColors.accent) },
                     onClick = { open = false; onChange(option.id) },
                 )
             }
@@ -371,10 +358,9 @@ fun KitPickerRow(title: String, value: String, options: List<KitOption>, onChang
     }
 }
 
+/** Loading inside a group. */
 @Composable
-fun KitLoadingRow() {
-    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-}
+fun KitLoadingRow() = PageLoading(Modifier.fillMaxWidth().padding(JSpace.xxl))
 
 /** A short confirmation or error at the bottom of the screen. */
 fun kitToast(ctx: Context, text: String) {

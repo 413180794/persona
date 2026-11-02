@@ -9,10 +9,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.HorizontalDivider
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.surface
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -78,9 +82,19 @@ object SessionModes {
     fun effortLabel(id: String?): String? = id?.let { e -> effortLevels.firstOrNull { it.id == e }?.title ?: e }
 }
 
+/** The symbol of a permission mode (iOS `SessionModes.symbol`). */
+fun modeIcon(id: String?) = when (id) {
+    "acceptEdits" -> JIcons.edit
+    "plan" -> JIcons.plan
+    "auto" -> JIcons.ai
+    "bypassPermissions" -> JIcons.allowEverything
+    else -> JIcons.askFirst
+}
+
 /**
- * The two chips above the composer (iOS SessionModeBar): permission mode and effort level, like the footer of Claude
- * Code's TUI. Picking one changes it on the running session. Claude only: Codex / TRAEX have their own policies.
+ * The chips above the composer (iOS SessionModeBar): permission mode and effort level, like the footer of Claude Code's
+ * TUI, and the model when [onPickModel] can send `/model`. Picking one changes it on the running session. Claude only:
+ * Codex / TRAEX have their own policies.
  */
 @Composable
 fun SessionModeBar(hub: Hub, session: Session, onPickModel: ((String) -> Unit)? = null) {
@@ -95,61 +109,88 @@ fun SessionModeBar(hub: Hub, session: Session, onPickModel: ((String) -> Unit)? 
             changing = false
         }
     }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s), verticalAlignment = Alignment.CenterVertically) {
             ModeMenu(
-                text = SessionModes.modeLabel(session.permissionMode) ?: "权限模式", known = session.permissionMode != null,
-                warn = session.permissionMode == "bypassPermissions", enabled = !changing,
-                options = SessionModes.switchable(session.permissionMode), current = session.permissionMode,
+                text = SessionModes.modeLabel(session.permissionMode) ?: "权限模式", icon = modeIcon(session.permissionMode),
+                known = session.permissionMode != null, warn = session.permissionMode == "bypassPermissions", enabled = !changing,
+                options = SessionModes.switchable(session.permissionMode), current = session.permissionMode, itemIcon = ::modeIcon,
             ) { change(mode = it) }
             ModeMenu(
-                text = session.effort?.let { "思考" + SessionModes.effortLabel(it) } ?: "思考强度", known = session.effort != null,
-                warn = false, enabled = !changing, options = SessionModes.effortLevels, current = session.effort,
+                text = session.effort?.let { "思考 " + SessionModes.effortLabel(it) } ?: "思考强度", icon = JIcons.effort, known = session.effort != null,
+                warn = false, enabled = !changing, options = SessionModes.effortLevels, current = session.effort, itemIcon = { JIcons.effort },
             ) { change(effort = it) }
             // /model for Claude in a herdr pane (iOS canPickModel): Codex / TRAEX pick in a menu the phone can't drive.
             if (onPickModel != null && session.paneId != null && !session.assistant) {
                 val id = SessionModes.claudeModelId(session.model)
                 ModeMenu(
-                    text = SessionModes.claudeModels.first { it.id == id }.title, known = session.model != null,
-                    warn = false, enabled = !changing, options = SessionModes.claudeModels, current = id,
+                    text = SessionModes.claudeModels.first { it.id == id }.title, icon = JIcons.model, known = session.model != null,
+                    warn = false, enabled = !changing, options = SessionModes.claudeModels, current = id, itemIcon = { JIcons.model },
                 ) { if (it != id) onPickModel(it) }
             }
-            if (changing) CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp)
+            if (changing) CircularProgressIndicator(Modifier.size(JSize.markXS), strokeWidth = JSize.lineMedium, color = JTheme.colors.secondaryText)
         }
-        error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+        error?.let { Text(it, style = JTheme.type.caption, color = JTheme.colors.danger) }
     }
+}
+
+/**
+ * The same two choices as items of the shell composer's gauge menu (iOS `SessionModesMenu`): the modes, a divider,
+ * the effort levels; the current ones checked.
+ */
+@Composable
+fun ColumnScope.ModeMenuItems(hub: Hub, session: Session, close: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    fun change(mode: String? = null, effort: String? = null) {
+        close()
+        if ((mode == null || mode == session.permissionMode) && (effort == null || effort == session.effort)) return
+        scope.launch { runCatching { hub.setModes(session.key, mode, effort) }.onFailure { jarvis.android.ui.chat.Toasts.show("没改成：${it.message}", jarvis.android.ui.chat.ToastStyle.ERROR) } }
+    }
+    Text("权限模式", style = JTheme.type.sectionHeader, color = JTheme.colors.secondaryText, modifier = Modifier.padding(horizontal = JSpace.l, vertical = JSpace.s))
+    SessionModes.switchable(session.permissionMode).forEach { o ->
+        ModeItem(o, modeIcon(o.id), o.id == session.permissionMode) { change(mode = o.id) }
+    }
+    HorizontalDivider()
+    Text("思考强度", style = JTheme.type.sectionHeader, color = JTheme.colors.secondaryText, modifier = Modifier.padding(horizontal = JSpace.l, vertical = JSpace.s))
+    SessionModes.effortLevels.forEach { o -> ModeItem(o, JIcons.effort, o.id == session.effort) { change(effort = o.id) } }
+}
+
+@Composable
+private fun ModeItem(o: SessionModes.Option, icon: androidx.compose.ui.graphics.vector.ImageVector, current: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = {
+            Column {
+                Text(o.title, style = JTheme.type.body, maxLines = 1)
+                if (o.detail.isNotEmpty()) Text(o.detail, style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 2)
+            }
+        },
+        leadingIcon = { Icon(icon, null, tint = if (o.id == "bypassPermissions") JTheme.colors.danger else JTheme.colors.label) },
+        trailingIcon = { if (current) Icon(JIcons.done, "当前", tint = JTheme.colors.accent) },
+        onClick = onClick,
+    )
 }
 
 @Composable
 private fun ModeMenu(
-    text: String, known: Boolean, warn: Boolean, enabled: Boolean,
-    options: List<SessionModes.Option>, current: String?, onPick: (String) -> Unit,
+    text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, known: Boolean, warn: Boolean, enabled: Boolean,
+    options: List<SessionModes.Option>, current: String?, itemIcon: (String) -> androidx.compose.ui.graphics.vector.ImageVector,
+    onPick: (String) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    val c = MaterialTheme.colorScheme
+    val c = JTheme.colors
+    val words = when { warn -> c.danger; known -> c.label; else -> c.secondaryText }
     Box {
         Row(
-            Modifier.clip(RoundedCornerShape(50)).background(if (warn) c.errorContainer else c.surfaceVariant)
-                .clickable(enabled = enabled) { open = true }.padding(horizontal = 10.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
+            Modifier.height(JSize.wellS).surface(CircleShape, floating = true, fill = if (warn) c.danger.copy(alpha = 0.12f) else null)
+                .clickable(enabled = enabled) { open = true }.padding(horizontal = JSpace.m),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.xs),
         ) {
-            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 1,
-                color = when { warn -> c.onErrorContainer; known -> c.onSurface; else -> c.onSurfaceVariant })
-            Icon(Icons.Default.UnfoldMore, null, Modifier.size(14.dp), tint = c.onSurfaceVariant)
+            Icon(icon, null, Modifier.size(JSize.markS), tint = words)
+            Text(text, style = JTheme.type.labelMedium, maxLines = 1, color = words)
+            Icon(JIcons.expandAll, null, Modifier.size(JSize.markXS), tint = c.tertiaryText)
         }
         DropdownMenu(open, onDismissRequest = { open = false }) {
-            options.forEach { o ->
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(o.title)
-                            if (o.detail.isNotEmpty()) Text(o.detail, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
-                        }
-                    },
-                    trailingIcon = { if (o.id == current) Icon(Icons.Default.Check, "当前") },
-                    onClick = { open = false; onPick(o.id) },
-                )
-            }
+            options.forEach { o -> ModeItem(o, itemIcon(o.id), o.id == current) { open = false; onPick(o.id) } }
         }
     }
 }

@@ -3,6 +3,7 @@
 #   ./scripts/android.sh            # debug build, install, launch
 #   ./scripts/android.sh test       # unit tests only
 #   ./scripts/android.sh apk        # debug APK only (android/app/build/outputs/apk/debug/app-debug.apk)
+#   ./scripts/android.sh shots [类名] # screenshots of the pages with mock_hub.py's data, light and dark → android/app/build/shots/
 # The application id comes from ~/.config/jarvis/config.json: android.application_id, else app.bundle_id.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,10 +20,14 @@ cd android
 [ -f local.properties ] || echo "sdk.dir=$SDK" > local.properties
 case "${1:-install}" in
   test) ./gradlew -q -PjarvisApplicationId="$APP_ID" :app:testDebugUnitTest ;;
+  shots)
+    rm -rf app/build/reports/paparazzi
+    ./gradlew -q -PjarvisApplicationId="$APP_ID" -Pshots :app:testDebugUnitTest --tests "jarvis.android.shots.${2:-*}"
+    python3 ../scripts/android_shots.py app/build/reports/paparazzi/debug app/build/shots ;;
   apk) ./gradlew -q -PjarvisApplicationId="$APP_ID" :app:assembleDebug && ls -la app/build/outputs/apk/debug/app-debug.apk ;;
   install)
     ./gradlew -q -PjarvisApplicationId="$APP_ID" :app:assembleDebug
     "$ADB" install -r app/build/outputs/apk/debug/app-debug.apk
     "$ADB" shell am start -n "$APP_ID/jarvis.android.MainActivity" >/dev/null ;;
-  *) echo "usage: $0 [install|apk|test]" >&2; exit 2 ;;
+  *) echo "usage: $0 [install|apk|test|shots [class]]" >&2; exit 2 ;;
 esac

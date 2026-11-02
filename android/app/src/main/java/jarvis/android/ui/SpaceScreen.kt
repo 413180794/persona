@@ -45,6 +45,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import jarvis.android.JarvisApp
+import jarvis.android.ui.chat.ToastStyle
+import jarvis.android.ui.chat.Toasts
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.CountBadge
+import jarvis.android.ui.design.EmptyState
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.PageHeader
+import jarvis.android.ui.design.StatusDot
+import jarvis.android.ui.design.surface
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
 import jarvis.android.data.Grouper
 import jarvis.android.data.Hub
 import jarvis.android.data.SessionKey
@@ -66,99 +83,82 @@ fun SpaceScreen(hub: Hub, spaceId: String, onOpen: (SessionKey) -> Unit, onBack:
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var newTab by remember { mutableStateOf(false) }
-    var notice by remember { mutableStateOf<String?>(null) }
 
     val g = Grouper(pins, mutes)
     val space = g.spaces(byMachine.values.flatten().filter { !it.assistant }).firstOrNull { it.id == spaceId }
     val machine = machines.firstOrNull { it.id == space?.machineId }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = { PaneBackButton(onBack) },
-                title = {
-                    Column {
-                        Text(space?.name ?: "空间", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            listOfNotNull(machine?.displayName, space?.sessions?.firstOrNull()?.cwd?.let { tailOf(it) }).joinToString(" · "),
-                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-                        )
-                    }
-                },
-                actions = {
-                    if (space != null) Box {
-                        IconButton(onClick = { menu = true }) {
-                            Icon(if (g.muted(space)) Icons.Default.NotificationsOff else Icons.Default.MoreVert, "空间操作")
-                        }
-                        DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                            val unread = space.sessions.filter { it.agentState == jarvis.android.data.AgentState.Unread }
-                            if (unread.isNotEmpty()) DropdownMenuItem({ Text("全部标为已读（${unread.size}）") }, {
-                                menu = false; JarvisApp.instance.scope.launch { hub.markSeen(unread) }
-                            })
-                            DropdownMenuItem({ Text(if (g.pinned(space)) "取消置顶空间" else "置顶空间") }, {
-                                menu = false
-                                scope.launch { runCatching { hub.toggleSpacePin(space) }.onFailure { notice = "置顶没成功：${it.message}" } }
-                            })
-                            DropdownMenuItem({ Text(if (g.muted(space)) "取消屏蔽空间" else "屏蔽这个空间") }, {
-                                menu = false
-                                scope.launch { runCatching { hub.toggleSpaceMute(space) }.onFailure { notice = "屏蔽没成功：${it.message}" } }
-                            })
-                            if (space.workspaceId != null) DropdownMenuItem({ Text("重命名空间…") }, { menu = false; renaming = true })
-                        }
-                    }
-                },
-            )
-        },
-        snackbarHost = { notice?.let { Snackbar(Modifier.padding(12.dp), action = { TextButton({ notice = null }) { Text("好", maxLines = 1) } }) { Text(it) } } },
-    ) { pad ->
+    Column(Modifier.fillMaxSize().background(JTheme.colors.page)) {
+        PageHeader(
+            space?.name ?: "空间", onBack,
+            subtitle = listOfNotNull(machine?.displayName, space?.sessions?.firstOrNull()?.cwd?.let { tailOf(it) }).joinToString(" · "),
+        ) {
+            if (space != null) Box {
+                CircleButton(if (g.muted(space)) JIcons.muted else JIcons.more, "空间操作", { menu = true })
+                DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                    val unread = space.sessions.filter { it.agentState == jarvis.android.data.AgentState.Unread }
+                    if (unread.isNotEmpty()) DropdownMenuItem({ Text("全部标为已读（${unread.size}）", maxLines = 1) }, {
+                        menu = false; JarvisApp.instance.scope.launch { hub.markSeen(unread) }
+                    }, leadingIcon = { Icon(JIcons.done, null) })
+                    DropdownMenuItem({ Text(if (g.pinned(space)) "取消置顶空间" else "置顶空间", maxLines = 1) }, {
+                        menu = false
+                        scope.launch { runCatching { hub.toggleSpacePin(space) }.onFailure { Toasts.show("置顶没成功：${it.message}", ToastStyle.ERROR) } }
+                    }, leadingIcon = { Icon(JIcons.pin, null) })
+                    DropdownMenuItem({ Text(if (g.muted(space)) "取消屏蔽空间" else "屏蔽这个空间", maxLines = 1) }, {
+                        menu = false
+                        scope.launch { runCatching { hub.toggleSpaceMute(space) }.onFailure { Toasts.show("屏蔽没成功：${it.message}", ToastStyle.ERROR) } }
+                    }, leadingIcon = { Icon(if (g.muted(space)) JIcons.unmute else JIcons.mute, null) })
+                    if (space.workspaceId != null) DropdownMenuItem({ Text("重命名空间…", maxLines = 1) }, { menu = false; renaming = true }, leadingIcon = { Icon(JIcons.edit, null) })
+                }
+            }
+        }
         if (space == null) {
             // The space went away (its last agent closed, or herdr restarted with new ids).
-            Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("这个空间里已经没有在跑的 Agent 了", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            return@Scaffold
+            EmptyState(JIcons.space, "这个空间空了", "这个空间里已经没有在跑的 Agent 了。")
+            return@Column
         }
         LazyVerticalGrid(
-            GridCells.Fixed(2), Modifier.padding(pad).fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
+            GridCells.Fixed(2), Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = JSpace.page, end = JSpace.page, top = JSpace.s, bottom = JSpace.xxl),
+            horizontalArrangement = Arrangement.spacedBy(JSpace.m), verticalArrangement = Arrangement.spacedBy(JSpace.m),
         ) {
             items(space.sessions, key = { it.key.path }) { s ->
                 val asks = pending.count { it.machineId == s.machineId && it.sessionId == s.sessionId }
-                Card(onClick = { onOpen(s.key) }, modifier = Modifier.heightIn(min = 150.dp)) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (g.muted(s)) StateDot(jarvis.android.data.AgentState.Idle) else StateDot(s.agentState)
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                // The tab's name, unless it just repeats the title below (renamed together) or is herdr's number.
-                                s.slotName?.takeIf { it.isNotBlank() && it != s.slotIndex?.toString() && it != s.displayTitle } ?: "#${s.slotIndex ?: 0}",
-                                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                            )
-                            if (asks > 0) Text("$asks 件需要你", style = MaterialTheme.typography.labelSmall, color = s.agentState.color(), maxLines = 1)
-                        }
-                        Text(s.displayTitle, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val tone = JTheme.tone(if (g.muted(s)) jarvis.android.data.AgentState.Idle else s.agentState)
+                Column(
+                    Modifier.heightIn(min = JSize.box140 + JSpace.s).surface(RoundedCornerShape(JTheme.style.corner)).clickable { onOpen(s.key) }.padding(JSpace.m),
+                    verticalArrangement = Arrangement.spacedBy(JSpace.xs),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                        StatusDot(s.agentState, muted = g.muted(s))
                         Text(
-                            listOf(s.agentState.label(), ago(s.updated)).filter { it.isNotEmpty() }.joinToString(" · "),
-                            style = MaterialTheme.typography.labelSmall, color = s.agentState.color(), maxLines = 1,
+                            // The tab's name, unless it just repeats the title below (renamed together) or is herdr's number.
+                            s.slotName?.takeIf { it.isNotBlank() && it != s.slotIndex?.toString() && it != s.displayTitle } ?: "#${s.slotIndex ?: 0}",
+                            style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                         )
-                        s.lastText?.takeIf { it.isNotBlank() }?.let {
-                            Text(it.replace('\n', ' '), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                        }
+                        if (asks > 0) CountBadge(asks, color = JTheme.needsYou.dot)
+                    }
+                    Text(s.displayTitle, style = JTheme.type.heading, color = JTheme.colors.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        listOf(s.agentState.label(), listTime(s.updated)).filter { it.isNotEmpty() }.joinToString(" · "),
+                        style = JTheme.type.labelMedium, color = tone.text, maxLines = 1,
+                    )
+                    s.lastText?.takeIf { it.isNotBlank() }?.let {
+                        Text(it.replace('\n', ' '), style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 4, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
             if (space.workspaceId != null && machine?.online == true) item(key = "new", span = { GridItemSpan(1) }) {
-                OutlinedCard(
-                    onClick = { newTab = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
-                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)),
+                Column(
+                    Modifier.fillMaxWidth().heightIn(min = JSize.box140 + JSpace.s).clip(RoundedCornerShape(JTheme.style.corner))
+                        .background(JTheme.colors.accent.copy(alpha = 0.06f))
+                        .border(JSize.hairline * 2, JTheme.colors.accent.copy(alpha = 0.35f), RoundedCornerShape(JTheme.style.corner))
+                        .clickable { newTab = true },
+                    verticalArrangement = Arrangement.spacedBy(JSpace.s, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Column(Modifier.fillMaxWidth().heightIn(min = 150.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
-                        Text("在这个空间开新标签", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, maxLines = 1)
-                    }
+                    Icon(JIcons.add, null, Modifier.size(JSize.icon), tint = JTheme.colors.accent)
+                    Text("在这个空间开新标签", style = JTheme.type.secondaryStrong, color = JTheme.colors.accent, maxLines = 1)
                 }
             }
         }
@@ -171,7 +171,7 @@ fun SpaceScreen(hub: Hub, spaceId: String, onOpen: (SessionKey) -> Unit, onBack:
             onDismiss = { renaming = false },
             onSave = { name ->
                 renaming = false
-                JarvisApp.instance.scope.launch { runCatching { hub.renameSpace(space, name) }.onFailure { notice = "重命名没成功：${it.message}" } }
+                JarvisApp.instance.scope.launch { runCatching { hub.renameSpace(space, name) }.onFailure { Toasts.show("重命名没成功：${it.message}", ToastStyle.ERROR) } }
             },
         )
     }

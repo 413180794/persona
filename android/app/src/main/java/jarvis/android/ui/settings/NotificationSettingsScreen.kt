@@ -1,5 +1,10 @@
 package jarvis.android.ui.settings
 
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.JIcons
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -65,11 +70,11 @@ fun NotificationSettingsScreen(hub: Hub, onBack: () -> Unit) {
     KitPage("通知", onBack) {
         if (!allowed) {
             item(key = "off") {
-                KitGroup(Modifier.padding(top = 8.dp)) {
+                KitGroup(Modifier.padding(top = JSpace.s)) {
                     row {
-                        KitNoticeRow("通知没有打开", "下面的设置要在系统设置里允许 Jarvis 发通知后才生效。", icon = Icons.Default.NotificationsOff)
+                        KitNoticeRow("通知没有打开", "下面的设置要在系统设置里允许 Jarvis 发通知后才生效。", icon = JIcons.muted)
                     }
-                    row { KitActionRow("去系统设置打开", icon = Icons.Default.Settings, onClick = { openChannel(ctx, null) }) }
+                    row { KitActionRow("去系统设置打开", icon = JIcons.settings, onClick = { openChannel(ctx, null) }) }
                 }
             }
         }
@@ -80,7 +85,7 @@ fun NotificationSettingsScreen(hub: Hub, onBack: () -> Unit) {
             ) {
                 row {
                     KitSwitchRow("需要你处理时", input, onChange = { save(it, done) },
-                        subtitle = "提问、计划审批、工具授权、终端等你输入", icon = Icons.Default.SmsFailed, iconTint = c.danger)
+                        subtitle = "提问、计划审批、工具授权、终端等你输入", icon = JIcons.failedMessage, iconTint = c.danger)
                 }
             }
         }

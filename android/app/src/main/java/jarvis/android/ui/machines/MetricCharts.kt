@@ -1,5 +1,8 @@
 package jarvis.android.ui.machines
 
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
 import jarvis.android.ui.settings.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -89,37 +92,37 @@ fun MetricChart(
     val xTicks = remember(start, end) { ChartMath.timeTicks(start, end) }
     val picked = selection.value?.let { nearestPoint(points, it, step) }
     val measurer = rememberTextMeasurer()
-    val small = TextStyle(fontSize = 11.sp, color = labelColor)
+    val small = JTheme.type.label.copy(color = labelColor)
     val slop = LocalViewConfiguration.current.touchSlop
     val longPress = LocalViewConfiguration.current.longPressTimeoutMillis
     // The value labels sit right of the plot: as wide as the widest one.
     val axisPx = remember(yTicks, measurer) { yTicks.maxOfOrNull { measurer.measure(axisFormat(it), small).size.width } ?: 0 }
 
     Column(
-        Modifier.fillMaxWidth().kitCard(padding = 14.dp).semantics(mergeDescendants = true) {
+        Modifier.fillMaxWidth().kitCard(padding = JSpace.l).semantics(mergeDescendants = true) {
             contentDescription = title + "，" + summary(series, points, now, format)
         },
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f), maxLines = 1)
-            if (picked != null) Text(hm(picked.t), fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1)
+            Text(title, style = JTheme.type.secondaryStrong, color = c.label, modifier = Modifier.weight(1f), maxLines = 1)
+            if (picked != null) Text(hm(picked.t), style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(JSpace.l), verticalAlignment = Alignment.CenterVertically) {
             series.forEachIndexed { i, s ->
                 val v = if (picked != null) s.value(picked) else now.getOrNull(i)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.xs)) {
                     if (series.size > 1) {
-                        Box(Modifier.size(8.dp).background(s.color, CircleShape))
-                        Text(s.name, fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1)
+                        Box(Modifier.size(JSize.dot).background(s.color, CircleShape))
+                        Text(s.name, style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1)
                     }
-                    Text(v?.let(format) ?: "—", fontSize = if (series.size > 1) 16.sp else 20.sp, fontWeight = FontWeight.SemiBold,
+                    Text(v?.let(format) ?: "—", style = if (series.size > 1) JTheme.type.bodyStrong else JTheme.type.title,
                         color = c.label, maxLines = 1)
                 }
             }
         }
         Canvas(
-            Modifier.fillMaxWidth().height(150.dp).pointerInput(start, end) {
+            Modifier.fillMaxWidth().height(JSize.box140 + JSpace.s).pointerInput(start, end) {
                 // Hold (or drag sideways) to read a moment; a vertical drag is the page's scroll and is left alone.
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)

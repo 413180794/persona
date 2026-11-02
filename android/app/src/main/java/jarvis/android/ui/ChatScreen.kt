@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -113,6 +114,27 @@ import jarvis.android.ui.chat.WorkStepRow
 import jarvis.android.ui.chat.WorkingIndicator
 import jarvis.android.ui.chat.AssistantText
 import jarvis.android.ui.chat.composeMessage
+import jarvis.android.ui.chat.ChatComposer
+import jarvis.android.ui.chat.Drafts
+import jarvis.android.ui.chat.ComposerActions
+import jarvis.android.ui.chat.ShellComposer
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.GroupCard
+import jarvis.android.ui.design.GroupRow
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.design.JSheet
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.RowDivider
+import jarvis.android.ui.design.SectionHeader
+import jarvis.android.ui.design.StatusDot
+import jarvis.android.ui.design.surface
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.height
 import jarvis.android.ui.chat.quoted
 import jarvis.android.ui.files.FilesScreen
 import jarvis.android.ui.files.FilesTarget
@@ -151,19 +173,22 @@ private sealed interface ChatLine {
 @Composable
 fun ChatScreen(
     hub: Hub, key: SessionKey, onBack: () -> Unit,
-    /** The Jarvis tab's conversation: headless (no terminal), titled Jarvis, its reply streamed as it is written. */
+    /** The Jarvis assistant's conversation: headless (no terminal), its reply streamed as it is written. */
     assistant: Boolean = false,
-    /** Replaces the back arrow (the Jarvis tab opens its history instead). */
-    navigation: (@Composable () -> Unit)? = null,
-    actions: @Composable () -> Unit = {},
-    /** Something (a tab bar) sits under the screen and takes the system navigation bar's inset itself. */
-    embedded: Boolean = false,
+    /** In the shell (the 助手 page): the shell draws the top bar over it; neutral bubbles and the shell's composer. */
+    inShell: Boolean = false,
     /** 「交给 Jarvis」 on a message: the prompt for a new assistant conversation (null: not offered). */
     onHandToJarvis: ((String) -> Unit)? = null,
     /** Put the cursor in the composer once (the 「问 Jarvis」 shortcut), then [onFocusTaken]. */
     focusComposer: Boolean = false, onFocusTaken: () -> Unit = {},
     /** /clear made a new session in the same pane: open it (null: stay; the list shows it). */
     onCleared: ((SessionKey) -> Unit)? = null,
+    /** The shell composer's voice button: the hub's voice conversation (语音对话). */
+    onVoice: (() -> Unit)? = null,
+    /** Every work line open from the start (screenshots, iOS `-openWork YES`). */
+    openWork: Boolean = false,
+    /** False in a wide window's right pane: the list is beside it (iOS: a split view's detail has no back). */
+    backButton: Boolean = true,
 ) {
     val store = remember(key) { hub.chat(key) }
     DisposableEffect(key) {
@@ -180,6 +205,14 @@ fun ChatScreen(
     val machine = machines.firstOrNull { it.id == key.machineId }
     val pending by hub.interactions.collectAsState()
     val cards = pending.filter { it.machineId == key.machineId && it.sessionId == key.sessionId }
+    // Something new to answer while the chat is open: a warning tap (iOS's haptics: new interaction = warning).
+    val hapticsView = jarvis.android.ui.design.hapticView()
+    var seenCards by remember(key) { mutableStateOf(cards.map { it.id }.toSet()) }
+    LaunchedEffect(cards.map { it.id }) {
+        val ids = cards.map { it.id }.toSet()
+        if ((ids - seenCards).isNotEmpty()) jarvis.android.ui.design.Haptics.warning(hapticsView)
+        seenCards = ids
+    }
     val working = session?.agentState == AgentState.Working
     val scope = rememberCoroutineScope()
 
@@ -210,7 +243,9 @@ fun ChatScreen(
         Outbox.arrived(key, items) // a pending bubble gives way to the transcript's copy
     }
     // Work lines the user opened (by the id of their first step).
-    var expandedWork by remember(key) { mutableStateOf(setOf<String>()) }
+    var expandedWork by remember(key) {
+        mutableStateOf(if (openWork) foldWork(rows, false, emptySet()).filterIsInstance<FoldedRow.Work>().map { it.id }.toSet() else setOf())
+    }
     val toggleWork: (String) -> Unit = { id -> expandedWork = if (id in expandedWork) expandedWork - id else expandedWork + id }
     val folded = remember(rows, working, expandedWork) { foldWork(rows, working, expandedWork) }
     // The viewer pages through every image; user tags warm up off the main thread (iOS `RowMemo.prewarm`).
@@ -276,13 +311,12 @@ fun ChatScreen(
         if (urls.isNotEmpty()) WebViewPool.preload(appContext, urls)
     }
 
-    var draft by rememberSaveable(key.path) { mutableStateOf("") }
+    // Kept outside the page (Drafts): folding the phone moves the chat to another layout, and the words stay.
+    var draft by Drafts.of(key.path)
     // Refusals already explained (the dialog shows once per message; the bubble keeps its red mark).
     var refusalsShown by remember(key) { mutableStateOf(setOf<String>()) }
     var notice by remember { mutableStateOf<String?>(null) }
     var terminal by remember { mutableStateOf(false) }
-    var moreMenu by remember { mutableStateOf(false) }
-    var showInfo by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     FocusComposer(focusComposer, focus, onFocusTaken)
     // Excerpts picked 「作为上下文」 (a message's menu or a page in the link sheet): chips above the input box, sent as
@@ -294,7 +328,6 @@ fun ChatScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var images by remember(key.path) { mutableStateOf(listOf<jarvis.android.data.ImagePayload>()) }
     var uploading by remember { mutableStateOf<String?>(null) }
-    var attachMenu by remember { mutableStateOf(false) }
     val pickPhotos = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(jarvis.android.data.MAX_IMAGES),
     ) { uris ->
@@ -336,21 +369,10 @@ fun ChatScreen(
     val askCamera = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { granted -> if (granted) openCamera() else notice = "没有相机权限，可以到系统设置 › 应用 › Jarvis 打开" }
-    // 语音输入 (iOS Dictation): the phone's own voice input screen (RecognizerIntent), so it works with whichever
-    // recognizer the phone has (Xiaomi's, Google's…); what it heard goes at the end of the box, to edit before sending.
-    val dictation = remember(context) {
-        android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "说吧，说完会放进输入框")
-    }
-    val canDictate = remember(context) { dictation.resolveActivity(context.packageManager) != null }
-    val dictate = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
-    ) { r ->
-        val heard = r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim()
-        if (!heard.isNullOrEmpty()) draft = jarvis.android.ui.chat.withDictation(draft, heard)
-    }
+    // 语音输入 (iOS Dictation): what the phone's recognizer heard goes at the end of the box, to edit before sending.
+    val dictate = jarvis.android.ui.chat.rememberDictation(
+        onHeard = { heard -> draft = jarvis.android.ui.chat.withDictation(draft, heard) }, onError = { notice = it },
+    )
     val pickFiles = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
@@ -376,7 +398,8 @@ fun ChatScreen(
     // client_msg_id, and puts a refusal or failure on the bubble (重发 / 删除 there).
     // /clear only for Claude in a herdr pane (iOS canClear): not Jarvis, not Codex / TRAEX.
     val canClear = !assistant && session?.canSend == true && session.canTerminal && session.paneId != null && !session.isCodex && (session.agent == null || session.agent == "claude")
-    val canSend = session?.canSend == true
+    // An agent runtime's session may be read-only here (DSH…): nothing goes in, the composer says why.
+    val writable = session?.canSend == true
     var confirmClear by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     if (confirmClear) androidx.compose.material3.AlertDialog(
@@ -391,7 +414,7 @@ fun ChatScreen(
                     clearing = false
                     if (next != null) onCleared?.invoke(next) else Toasts.show("已发送 /clear，新会话出现后在列表里打开")
                 }
-            }) { Text("清空", color = MaterialTheme.colorScheme.error, maxLines = 1) }
+            }) { Text("清空", color = JTheme.colors.danger, maxLines = 1) }
         },
         dismissButton = { TextButton({ confirmClear = false }) { Text("取消", maxLines = 1) } },
     )
@@ -446,252 +469,214 @@ fun ChatScreen(
         return
     }
 
-    CompositionLocalProvider(LocalChatEnv provides env, LocalLinkSource provides key) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    navigationIcon = navigation ?: { PaneBackButton(onBack) },
-                    title = {
-                        // Tapping the title shows 会话信息 (iOS: the title opens SessionInfoSheet).
-                        Column(Modifier.clickable(enabled = session != null) { showInfo = true }) {
-                            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            val where = if (assistant) listOfNotNull(
-                                "Jarvis", session?.agentState?.takeIf { it == AgentState.Working }?.let { "正在回复" },
-                            ).joinToString(" · ") else listOfNotNull(
-                                session?.sourceSubtitle,
-                                machine?.displayName,
-                                session?.spaceName?.takeIf { it.isNotBlank() },
-                                session?.agentState?.label(),
-                            ).joinToString(" · ")
-                            // While the hub is out of reach the subtitle says so, with a small spinner (docs/ios.md「连接状态」).
-                            val link by ConnectionWatch.label.collectAsState()
-                            val l = link
-                            if (l != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (l != "需要重新配对") CircularProgressIndicator(Modifier.size(11.dp), strokeWidth = 1.5.dp)
-                                Spacer(Modifier.size(6.dp))
-                                Text(l, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                            } else {
-                                Text(where, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                            }
-                        }
-                    },
-                    actions = {
-                        if (openTerminal != null) IconButton(onClick = openTerminal) { Icon(Icons.Default.Terminal, "终端") }
-                        if (working && session?.canInterrupt == true) {
-                            IconButton(onClick = { scope.launch { runCatching { hub.api.interrupt(key) }.onFailure { notice = it.message } } }) {
-                                Icon(Icons.Default.Stop, "中断")
-                            }
-                        }
-                        actions()
-                        val cwd = env.cwd
-                        if (!assistant && ((cwd != null && machine != null) || session?.canAttach == true)) Box {
-                            IconButton(onClick = { moreMenu = true }) { Icon(Icons.Default.MoreVert, "更多") }
-                            DropdownMenu(moreMenu, onDismissRequest = { moreMenu = false }) {
-                                if (cwd != null && machine != null) {
-                                    DropdownMenuItem({ Text("文件", maxLines = 1) }, {
-                                        moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.DIR)
-                                    })
-                                    gitCount?.let { n ->
-                                        DropdownMenuItem({ Text(if (n > 0) "Git（$n）" else "Git", maxLines = 1) }, {
-                                            moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.GIT)
-                                        })
+    var info by remember { mutableStateOf(false) }
+    val canSend = writable && uploading == null && (draft.isNotBlank() || images.isNotEmpty() || contexts.isNotEmpty())
+    val interrupt: (() -> Unit)? = if (working && session?.canInterrupt == true) ({ scope.launch { runCatching { hub.api.interrupt(key) }.onFailure { notice = it.message } } }) else null
+    val placeholder = when {
+        !writable && session?.hasSource == true -> "此会话仅可查看"
+        assistant -> "问 Jarvis"
+        session?.isLive == false -> "发消息会在电脑上恢复这个会话"
+        working -> "补充说明（会排队发送）"
+        else -> "发给 ${session?.agentLabel ?: "Claude"}"
+    }
+    val attachItems: @Composable androidx.compose.foundation.layout.ColumnScope.(() -> Unit) -> Unit = { close ->
+        DropdownMenuItem({ Text("照片", maxLines = 1) }, {
+            close()
+            pickPhotos.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }, enabled = images.size < jarvis.android.data.MAX_IMAGES, leadingIcon = { Icon(JIcons.photo, null) })
+        DropdownMenuItem({ Text("拍照", maxLines = 1) }, {
+            close()
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) openCamera() else askCamera.launch(android.Manifest.permission.CAMERA)
+        }, enabled = images.size < jarvis.android.data.MAX_IMAGES, leadingIcon = { Icon(JIcons.camera, null) })
+        if (!assistant) DropdownMenuItem({ Text("文件（传到电脑上）", maxLines = 1) }, { close(); pickFiles.launch(arrayOf("*/*")) }, leadingIcon = { Icon(JIcons.attach, null) })
+        // Jarvis' quick messages go out at once; /clear asks first.
+        HorizontalDivider()
+        jarvis.android.ui.chat.SlashCommand.all.forEach { cmd ->
+            DropdownMenuItem({ Text(cmd.title, maxLines = 1) }, { close(); Outbox.send(hub, key, cmd.text) }, leadingIcon = { Icon(JIcons.send, null) })
+        }
+        if (canClear) DropdownMenuItem(
+            { Text("清空上下文 /clear", color = JTheme.colors.danger, maxLines = 1) },
+            { close(); confirmClear = true }, enabled = !working && !clearing, leadingIcon = { Icon(JIcons.clear, null, tint = JTheme.colors.danger) },
+        )
+    }
+    val top = if (inShell) WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + JSize.shellBar else 0.dp
+
+    CompositionLocalProvider(LocalChatEnv provides env, LocalLinkSource provides key, LocalShellChat provides inShell) {
+        // A wide window keeps the conversation to a readable column, centered (iOS `ChatView.readableWidth`).
+        Column(Modifier.fillMaxSize().background(JTheme.colors.page).imePadding().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = JSize.readable)) {
+            if (!inShell) ChatTopBar(
+                title = title, session = session, machine = machine?.displayName, assistant = assistant,
+                onBack = onBack.takeIf { backButton }, onTitle = { info = true },
+            ) { close ->
+                if (openTerminal != null) DropdownMenuItem({ Text("终端", maxLines = 1) }, { close(); openTerminal() }, leadingIcon = { Icon(JIcons.terminal, null) })
+                val cwd = env.cwd
+                if (!assistant && cwd != null && machine != null) {
+                    DropdownMenuItem({ Text("文件", maxLines = 1) }, {
+                        close(); filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.DIR)
+                    }, leadingIcon = { Icon(JIcons.folder, null) })
+                    gitCount?.let { n ->
+                        DropdownMenuItem({ Text(if (n > 0) "Git（$n）" else "Git", maxLines = 1) }, {
+                            close(); filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.GIT)
+                        }, leadingIcon = { Icon(JIcons.agents, null) })
+                    }
+                }
+                if (!assistant && cwd != null) DropdownMenuItem({ Text("拷贝目录", maxLines = 1) }, {
+                    close()
+                    jarvis.android.ui.media.MediaShare.copyText(context, cwd, "目录")
+                    Toasts.show("已拷贝", ToastStyle.SUCCESS)
+                }, leadingIcon = { Icon(JIcons.copy, null) })
+                DropdownMenuItem({ Text("会话信息", maxLines = 1) }, { close(); info = true }, leadingIcon = { Icon(JIcons.info, null) })
+                // A session an agent runtime holds read-only can be taken over live (iOS 实时接入).
+                if (session?.canAttach == true) DropdownMenuItem({ Text("实时接入", maxLines = 1) }, {
+                    close()
+                    scope.launch {
+                        runCatching { hub.api.attach(key); hub.refresh() }
+                            .onSuccess { Toasts.show("已实时接入", ToastStyle.SUCCESS) }
+                            .onFailure { notice = "接入失败：${it.message}" }
+                    }
+                }, leadingIcon = { Icon(JIcons.terminal, null) })
+                if (!assistant && session?.isLive == true && session.canTerminal) {
+                    HorizontalDivider()
+                    DropdownMenuItem({ Text("关闭 Agent…", color = JTheme.colors.danger, maxLines = 1) }, { close(); closing = true },
+                        leadingIcon = { Icon(JIcons.close, null, tint = JTheme.colors.danger) })
+                }
+            }
+            Box(Modifier.weight(1f)) {
+                if (state.loading && rows.isEmpty()) {
+                    CircularProgressIndicator(Modifier.align(Alignment.Center).size(JSize.icon), strokeWidth = JSize.rule, color = JTheme.colors.secondaryText)
+                } else {
+                    LazyColumn(
+                        state = list, reverseLayout = true, modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(WorkBridge * 2, Alignment.Bottom),
+                        contentPadding = PaddingValues(start = JSpace.page, end = JSpace.page, top = top + JSpace.s, bottom = JSpace.s),
+                    ) {
+                        items(lines, key = { it.key }, contentType = { contentType(it) }) { line ->
+                            when (line) {
+                                is ChatLine.Pending -> PendingBubble(line.p, key)
+                                is ChatLine.Live -> Markdown(line.text, Modifier.fillMaxWidth().padding(vertical = JSpace.xxs))
+                                is ChatLine.Working -> WorkingIndicator(line.label)
+                                is ChatLine.Queued -> QueueStrip(line.items) { i, delete ->
+                                    scope.launch {
+                                        // Pull everything back and re-queue the rest, as iOS (session.queue.edit).
+                                        runCatching { hub.api.editQueue(key, line.items.indices.filter { it != i }) }
+                                            .onSuccess { pulled ->
+                                                if (!delete && i in pulled.indices) draft = if (draft.isEmpty()) pulled[i] else draft + "\n" + pulled[i]
+                                                Toasts.show(if (delete) "已从队列删除" else "已撤回到输入框，改好再发送", ToastStyle.SUCCESS)
+                                            }
+                                            .onFailure { notice = "没改成：${it.message}" }
                                     }
                                 }
-                                DropdownMenuItem({ Text("会话信息", maxLines = 1) }, { moreMenu = false; showInfo = true })
-                                if (session?.canAttach == true) DropdownMenuItem(
-                                    { Text("实时接入", maxLines = 1) },
-                                    {
-                                        moreMenu = false
-                                        scope.launch { runCatching { hub.api.attach(key); hub.refresh() }
-                                            .onSuccess { Toasts.show("已实时接入", ToastStyle.SUCCESS) }
-                                            .onFailure { notice = "接入失败：${it.message}" } }
-                                    },
+                                is ChatLine.Line -> FoldedRowView(line.row, key, working, toggleWork, openTerminal)
+                                // 重试 only when the error is the last thing, the agent is not working (someone may have
+                                // retried already) and trying again can help (not a login or a bad request), as iOS.
+                                is ChatLine.Error -> jarvis.android.ui.chat.ApiErrorCard(
+                                    line.e,
+                                    retry = if (line.latest && !working && line.e.info.transient != false) {
+                                        { Outbox.send(hub, key, "继续") }
+                                    } else null,
                                 )
-                                if (session?.isLive == true && session.canTerminal) DropdownMenuItem(
-                                    { Text("关闭 Agent…", color = MaterialTheme.colorScheme.error, maxLines = 1) },
-                                    { moreMenu = false; closing = true },
-                                )
-                                if (cwd != null) DropdownMenuItem({ Text("拷贝目录", maxLines = 1) }, {
-                                    moreMenu = false
-                                    jarvis.android.ui.media.MediaShare.copyText(context, cwd, "目录")
-                                    Toasts.show("已拷贝", ToastStyle.SUCCESS)
-                                })
-                            }
-                        }
-                    },
-                )
-            },
-        ) { pad ->
-            Column(Modifier.padding(pad).readableWidth().imePadding()) {
-                Box(Modifier.weight(1f)) {
-                    if (state.loading && rows.isEmpty()) {
-                        CircularProgressIndicator(Modifier.align(Alignment.Center))
-                    } else {
-                        LazyColumn(
-                            state = list, reverseLayout = true, modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(WorkBridge * 2, Alignment.Bottom),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                        ) {
-                            items(lines, key = { it.key }, contentType = { contentType(it) }) { line ->
-                                when (line) {
-                                    is ChatLine.Pending -> PendingBubble(line.p, key)
-                                    is ChatLine.Live -> Markdown(line.text, Modifier.fillMaxWidth().padding(vertical = 2.dp))
-                                    is ChatLine.Working -> WorkingIndicator(line.label)
-                                    is ChatLine.Queued -> QueueStrip(line.items) { i, delete ->
-                                        scope.launch {
-                                            // Pull everything back and re-queue the rest, as iOS (session.queue.edit).
-                                            runCatching { hub.api.editQueue(key, line.items.indices.filter { it != i }) }
-                                                .onSuccess { pulled ->
-                                                    if (!delete && i in pulled.indices) draft = if (draft.isEmpty()) pulled[i] else draft + "\n" + pulled[i]
-                                                    Toasts.show(if (delete) "已从队列删除" else "已撤回到输入框，改好再发送", ToastStyle.SUCCESS)
-                                                }
-                                                .onFailure { notice = "没改成：${it.message}" }
-                                        }
-                                    }
-                                    is ChatLine.Line -> FoldedRowView(line.row, key, working, toggleWork, openTerminal)
-                                    // 重试 only when the error is the last thing, the agent is not working (someone may have
-                                    // retried already) and trying again can help (not a login or a bad request), as iOS.
-                                    is ChatLine.Error -> jarvis.android.ui.chat.ApiErrorCard(
-                                        line.e,
-                                        retry = if (line.latest && !working && line.e.info.transient != false) {
-                                            { jarvis.android.chat.Outbox.send(hub, key, "继续") }
-                                        } else null,
-                                    )
-                                    ChatLine.Older -> Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(Modifier.size(20.dp))
-                                    }
+                                ChatLine.Older -> Box(Modifier.fillMaxWidth().padding(JSpace.s), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(Modifier.size(JSize.iconXS), strokeWidth = JSize.rule, color = JTheme.colors.secondaryText)
                                 }
                             }
                         }
                     }
-                    if (farFromEnd) {
-                        Box(
-                            Modifier.align(Alignment.BottomCenter).padding(12.dp).size(40.dp).clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                                .clickable { follow = true; scope.launch { list.scrollToItem(0) } },
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "回到最新", tint = MaterialTheme.colorScheme.onSurface) }
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    farFromEnd, Modifier.align(Alignment.BottomCenter).padding(bottom = JSpace.m),
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(), exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+                ) {
+                    CircleButton(JIcons.expand, "回到最新", { follow = true; scope.launch { list.scrollToItem(0) } }, size = JSize.wellXL)
+                }
+            }
+            // What the agent waits on, pinned above the input box (iOS InteractionPanel): each folds to one line.
+            if (cards.isNotEmpty()) {
+                // While typing, the keyboard takes half the screen: the cards get less, so the conversation stays in view.
+                val share = if (androidx.compose.foundation.layout.WindowInsets.isImeVisible) 0.25f else 0.55f
+                val maxH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * share).dp
+                Column(
+                    Modifier.fillMaxWidth().heightIn(max = maxH).verticalScroll(rememberScrollState()).padding(horizontal = JSpace.m, vertical = JSpace.xs),
+                    verticalArrangement = Arrangement.spacedBy(JSpace.s),
+                ) { cards.forEach { ix -> androidx.compose.runtime.key(ix.id) { InteractionCard(hub, ix) } } }
+            }
+            Column(
+                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = JSpace.m).padding(top = JSpace.xs, bottom = JSpace.s),
+                verticalArrangement = Arrangement.spacedBy(JSpace.s),
+            ) {
+                notice?.let {
+                    Row(Modifier.padding(horizontal = JSpace.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                        Icon(JIcons.error, null, Modifier.size(JSize.markS), tint = JTheme.colors.danger)
+                        Text(it, color = JTheme.colors.danger, style = JTheme.type.caption, maxLines = 3)
                     }
                 }
-                // What the agent waits on, pinned above the input box (iOS InteractionPanel): each folds to one line.
-                if (cards.isNotEmpty()) {
-                    // While typing, the keyboard takes half the screen: the cards get less, so the conversation stays in view.
-                    val share = if (androidx.compose.foundation.layout.WindowInsets.isImeVisible) 0.25f else 0.55f
-                    val maxH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * share).dp
-                    Column(
-                        Modifier.fillMaxWidth().heightIn(max = maxH).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) { cards.forEach { ix -> androidx.compose.runtime.key(ix.id) { InteractionCard(hub, ix) } } }
-                }
-                if (session?.hasSource == true && !canSend) Text(
-                    session.sourceSubtitle.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
                 session?.takeIf { it.starting == true || it.startError != null }?.let { StartingNote(it.startError, it.agentLabel) }
-                session?.takeIf { it.canSend && !it.isCodex && (it.agent == null || it.agent == "claude") }?.let {
+                // Why nothing can be typed: the runtime's own words for where the session lives.
+                if (session?.hasSource == true && !writable) Text(
+                    session.sourceSubtitle.orEmpty(), style = JTheme.type.caption, color = JTheme.colors.secondaryText,
+                    modifier = Modifier.padding(horizontal = JSpace.xs),
+                )
+                if (!inShell) session?.takeIf { it.canSend && !it.isCodex && (it.agent == null || it.agent == "claude") }?.let {
                     // Photos and quotes in the box stay for the message: /model goes out on its own.
                     SessionModeBar(hub, it, onPickModel = { id -> Outbox.send(hub, key, "/model $id") })
                 }
-                session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
-                    AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
-                }
+                session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() && !working }?.let { sug -> SuggestionPill(sug) { draft = sug } }
                 if (contexts.isNotEmpty()) Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
                 ) {
                     contexts.forEach { ref -> ContextChip(ref) { Links.removeContext(key, ref) } }
                 }
-                if (images.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (images.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
                     images.forEachIndexed { i, img ->
                         Box {
                             val bmp = remember(img.data) {
                                 runCatching { android.util.Base64.decode(img.data, android.util.Base64.DEFAULT).let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
                             }
-                            bmp?.let { Image(it.asImageBitmap(), "第 ${i + 1} 张", Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
-                            IconButton({ images = images.filterIndexed { j, _ -> j != i } }, Modifier.size(24.dp).align(Alignment.TopEnd)) {
-                                Icon(Icons.Default.Cancel, "移除这张", tint = androidx.compose.ui.graphics.Color.White)
-                            }
+                            bmp?.let { Image(it.asImageBitmap(), "第 ${i + 1} 张", Modifier.size(JSize.box64).clip(RoundedCornerShape(JRadius.control)), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+                            Box(
+                                Modifier.align(Alignment.TopEnd).padding(JSpace.xxs).size(JSize.iconXS).clip(CircleShape)
+                                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)).clickable { images = images.filterIndexed { j, _ -> j != i } },
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(JIcons.close, "移除这张", Modifier.size(JSize.markXS), tint = androidx.compose.ui.graphics.Color.White) }
                         }
                     }
                 }
                 uploading?.let { name ->
-                    Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                        Text("  正在传「$name」到电脑上…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.padding(horizontal = JSpace.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+                        CircularProgressIndicator(Modifier.size(JSize.markS), strokeWidth = JSize.rule, color = JTheme.colors.secondaryText)
+                        Text("正在传「$name」到电脑上…", style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 1)
                     }
                 }
                 // Typed "/": the quick messages over the box; picking one puts its message in (/clear asks first).
                 jarvis.android.ui.chat.SlashCommand.matching(draft, canClear && !working && !clearing).takeIf { it.isNotEmpty() }?.let { cmds ->
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp)).padding(vertical = 4.dp),
-                    ) {
-                        cmds.forEach { cmd ->
-                            Row(
-                                Modifier.fillMaxWidth().clickable {
-                                    if (cmd.word == jarvis.android.ui.chat.SlashCommand.CLEAR) { draft = ""; confirmClear = true } else draft = cmd.text
-                                }.padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(cmd.word, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.widthIn(min = 88.dp))
-                                Text(cmd.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
+                    jarvis.android.ui.chat.SlashPicker(cmds) { cmd ->
+                        if (cmd.word == jarvis.android.ui.chat.SlashCommand.CLEAR) { draft = ""; confirmClear = true } else draft = cmd.text
                     }
                 }
-                Row(Modifier.fillMaxWidth().then(if (embedded) Modifier else Modifier.navigationBarsPadding()).padding(8.dp), verticalAlignment = Alignment.Bottom) {
-                    Box {
-                        IconButton({ attachMenu = true }, enabled = canSend && uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
-                        DropdownMenu(attachMenu, onDismissRequest = { attachMenu = false }) {
-                            DropdownMenuItem({ Text("照片") }, {
-                                attachMenu = false
-                                pickPhotos.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            }, enabled = images.size < jarvis.android.data.MAX_IMAGES)
-                            DropdownMenuItem({ Text("拍照") }, {
-                                attachMenu = false
-                                if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) ==
-                                    android.content.pm.PackageManager.PERMISSION_GRANTED
-                                ) openCamera() else askCamera.launch(android.Manifest.permission.CAMERA)
-                            }, enabled = images.size < jarvis.android.data.MAX_IMAGES)
-                            DropdownMenuItem({ Text("文件（传到电脑上）") }, { attachMenu = false; pickFiles.launch(arrayOf("*/*")) })
-                            HorizontalDivider()
-                            jarvis.android.ui.chat.SlashCommand.all.forEach { cmd ->
-                                DropdownMenuItem({ Text(cmd.title) }, { attachMenu = false; Outbox.send(hub, key, cmd.text) })
-                            }
-                            if (canClear) DropdownMenuItem(
-                                { Text("清空上下文 /clear", color = MaterialTheme.colorScheme.error) },
-                                { attachMenu = false; confirmClear = true }, enabled = !working && !clearing,
-                            )
-                        }
-                    }
-                    OutlinedTextField(
-                        draft, { draft = it }, enabled = canSend,
-                        placeholder = {
-                            Text(
-                                when {
-                                    !canSend && session?.hasSource == true -> "此会话仅可查看"
-                                    assistant -> "问 Jarvis…"
-                                    session?.isLive == false -> "发消息会在电脑上恢复这个会话"
-                                    else -> "发给 ${session?.agentLabel ?: "Claude"}"
-                                },
-                            )
-                        },
-                        modifier = Modifier.weight(1f).heightIn(max = 180.dp).focusRequester(focus), shape = RoundedCornerShape(20.dp),
+                if (inShell) {
+                    ShellComposer(
+                        draft, { draft = it }, placeholder, canSend = canSend,
+                        actions = ComposerActions(
+                            send = { send() }, stop = interrupt, attach = attachItems.takeIf { writable }, voice = onVoice, dictate = dictate.takeIf { writable },
+                            modes = session?.takeIf { it.agent == null || it.agent == "claude" }?.let { s -> { close -> ModeMenuItems(hub, s, close) } },
+                        ),
+                        focus = focus, hasAttachments = images.isNotEmpty() || contexts.isNotEmpty(),
+                        modesWarn = session?.permissionMode == "bypassPermissions",
                     )
-                    if (canDictate && draft.isBlank() && images.isEmpty()) IconButton(
-                        onClick = { runCatching { dictate.launch(dictation) }.onFailure { notice = "这台手机上没有语音输入" } },
-                        enabled = canSend && uploading == null,
-                    ) { Icon(Icons.Default.Mic, "语音输入") }
-                    IconButton(
-                        onClick = { send() },
-                        enabled = canSend && uploading == null && (draft.isNotBlank() || images.isNotEmpty() || contexts.isNotEmpty()),
-                    ) { Icon(Icons.AutoMirrored.Filled.Send, "发送") }
+                } else {
+                    ChatComposer(
+                        draft, { draft = it }, placeholder, canSend = canSend,
+                        actions = ComposerActions(send = { send() }, stop = interrupt, attach = attachItems.takeIf { writable }, dictate = dictate.takeIf { writable }),
+                        focus = focus, enabled = writable,
+                    )
                 }
             }
         }
-        if (showInfo) SessionInfoSheet(hub, key, session, machine?.displayName, onDismiss = { showInfo = false })
         MessageMenuHost(menu)
         menu.selecting?.let { text -> SelectTextDialog(text) { menu.selecting = null } }
+        if (info) SessionInfoSheet(hub, key, session, machine?.displayName, onDismiss = { info = false })
     }
 
     // A send the computer refused: say so once (清空并发送 when the node can clear a one-line draft).
@@ -752,15 +737,71 @@ private fun ImageViewerOverlay(hub: Hub, args: ImageViewerArgs, onClose: () -> U
 @Composable
 private fun ContextChip(ref: ContextRef, onRemove: () -> Unit) {
     Row(
-        Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)).padding(start = 10.dp),
+        Modifier.height(JSize.wellM).surface(CircleShape, floating = true).padding(start = JSpace.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.FormatQuote, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.size(4.dp))
-        Text(ref.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
-        IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.Close, "不带这段上下文", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+        Icon(JIcons.text, null, Modifier.size(JSize.markS), tint = JTheme.colors.accent)
+        Spacer(Modifier.size(JSpace.xs))
+        Text(ref.title, style = JTheme.type.labelMedium, color = JTheme.colors.label, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = JSize.box220))
+        Box(Modifier.size(JSize.wellM).clip(CircleShape).clickable(onClick = onRemove), contentAlignment = Alignment.Center) {
+            Icon(JIcons.close, "不带这段上下文", Modifier.size(JSize.markS), tint = JTheme.colors.secondaryText)
+        }
+    }
+}
+
+/** Claude's suggested next message (iOS `SuggestionPill`): ✦ in the AI's color, the words, 采用 fills the input box. */
+@Composable
+private fun SuggestionPill(text: String, onUse: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = JSize.wellL).surface(CircleShape, floating = true).clickable(onClick = onUse).padding(horizontal = JSpace.m),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.s),
+    ) {
+        Icon(JIcons.ai, null, Modifier.size(JSize.markS), tint = JTheme.colors.ai)
+        Text("建议", style = JTheme.type.labelStrong, color = JTheme.colors.ai, maxLines = 1)
+        Text(text, style = JTheme.type.secondary, color = JTheme.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text("采用", style = JTheme.type.secondaryStrong, color = JTheme.colors.accent, maxLines = 1)
+    }
+}
+
+/**
+ * The Agents chat's top bar (iOS `ChromeHeader`): a round back button, the title as a capsule in the middle — the
+ * state's dot, 「space › tab」 or the title, and the state in words when it is one to act on — and ⋯ (终端, 文件,
+ * Git, 拷贝目录, 会话信息). A tap on the capsule opens 会话信息. While the hub is out of reach the capsule says so.
+ */
+@Composable
+private fun ChatTopBar(
+    title: String, session: jarvis.android.data.Session?, machine: String?, assistant: Boolean,
+    onBack: (() -> Unit)?, onTitle: () -> Unit, menu: @Composable androidx.compose.foundation.layout.ColumnScope.(() -> Unit) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val link by ConnectionWatch.label.collectAsState()
+    Box(Modifier.fillMaxWidth().statusBarsPadding().height(JSize.shellBar).padding(horizontal = JSpace.page)) {
+        if (onBack != null) CircleButton(JIcons.back, "返回", onBack, Modifier.align(Alignment.CenterStart))
+        Row(
+            Modifier.align(Alignment.Center).padding(horizontal = JSize.tapTarget + JSpace.s).height(JSize.wellL)
+                .surface(CircleShape, floating = true).clickable(onClick = onTitle).padding(horizontal = JSpace.m),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
+        ) {
+            val l = link
+            if (l != null) {
+                if (l != "需要重新配对") CircularProgressIndicator(Modifier.size(JSize.markXS), strokeWidth = JSize.lineMedium, color = JTheme.colors.secondaryText)
+                Text(l, style = JTheme.type.secondaryMedium, color = JTheme.colors.secondaryText, maxLines = 1)
+            } else {
+                session?.let { StatusDot(it.agentState, JSize.dot) }
+                val place = session?.let { s ->
+                    listOfNotNull(s.spaceName?.takeIf { it.isNotBlank() }, s.slotName?.takeIf { it.isNotBlank() }?.let { if (it.all(Char::isDigit)) "#$it" else it })
+                        .joinToString(" › ").ifEmpty { null }
+                }
+                Text(if (assistant) title else place ?: title, style = JTheme.type.secondaryStrong, color = JTheme.colors.label, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                val st = session?.agentState
+                if (st == AgentState.NeedsYou || st == AgentState.Working) Text(st.label(), style = JTheme.type.caption, color = JTheme.tone(st).text, maxLines = 1)
+            }
+        }
+        Box(Modifier.align(Alignment.CenterEnd)) {
+            CircleButton(JIcons.more, "更多", { open = true })
+            DropdownMenu(open, onDismissRequest = { open = false }) { menu { open = false } }
         }
     }
 }
@@ -795,21 +836,20 @@ private fun FoldedRowView(f: FoldedRow, key: SessionKey, working: Boolean, toggl
 /** A session Jarvis is still starting (node/starting.go): what is sent now goes in once it is ready. Or why it did not start. */
 @Composable
 internal fun StartingNote(error: String?, agent: String) {
+    val c = JTheme.colors
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
-            .background(
-                if (error == null) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                RoundedCornerShape(12.dp),
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+        Modifier.fillMaxWidth()
+            .background(if (error == null) c.fillWell else c.danger.copy(alpha = 0.1f), RoundedCornerShape(JRadius.card))
+            .padding(horizontal = JSpace.m, vertical = JSpace.s)
             .then(Modifier.clearAndSetSemantics { contentDescription = if (error == null) "正在启动 $agent" else "没有启动起来：$error" }),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.s),
     ) {
-        if (error == null) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+        if (error == null) CircularProgressIndicator(Modifier.size(JSize.markS), strokeWidth = JSize.rule, color = c.secondaryText)
+        else Icon(JIcons.error, null, Modifier.size(JSize.markS), tint = c.danger)
         Text(
             if (error == null) "正在启动 $agent，消息会在它就绪后发出" else "没有启动起来：$error",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3,
+            style = JTheme.type.caption, color = if (error == null) c.secondaryText else c.danger, maxLines = 3,
         )
     }
 }
@@ -821,29 +861,30 @@ internal fun StartingNote(error: String?, agent: String) {
 @Composable
 internal fun QueueStrip(items: List<String>, onAct: (index: Int, delete: Boolean) -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val c = JTheme.colors
     Column(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.fillMaxWidth().padding(vertical = JSpace.xs).clip(RoundedCornerShape(JRadius.card)).background(c.fillWell).padding(JSpace.m),
+        verticalArrangement = Arrangement.spacedBy(JSpace.sm),
     ) {
-        Text("排队中 ${items.size} 条 · Claude 忙完会依次处理", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("排队中 ${items.size} 条 · Claude 忙完会依次处理", style = JTheme.type.caption, color = c.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
         items.forEachIndexed { i, q ->
             var open by remember { mutableStateOf(false) }
             Box {
                 Row(
-                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
-                        .clickable { open = true }.padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxWidth().surface(RoundedCornerShape(JRadius.control)).clickable { open = true }
+                        .padding(horizontal = JSpace.m, vertical = JSpace.s),
+                    verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(JSpace.s),
                 ) {
-                    Text("${i + 1}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    Text(q, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text("${i + 1}", style = JTheme.type.labelStrong, color = c.accent, maxLines = 1)
+                    Text(q, style = JTheme.type.secondary, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 }
-                androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }) {
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("撤回编辑") }, onClick = { open = false; onAct(i, false) })
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("拷贝") }, onClick = {
+                DropdownMenu(open, onDismissRequest = { open = false }) {
+                    DropdownMenuItem({ Text("撤回编辑", maxLines = 1) }, { open = false; onAct(i, false) }, leadingIcon = { Icon(JIcons.edit, null) })
+                    DropdownMenuItem({ Text("拷贝", maxLines = 1) }, {
                         open = false; jarvis.android.ui.media.MediaShare.copyText(ctx, q, "消息"); Toasts.show("已拷贝", ToastStyle.SUCCESS)
-                    })
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("删除", color = MaterialTheme.colorScheme.error) }, onClick = { open = false; onAct(i, true) })
+                    }, leadingIcon = { Icon(JIcons.copy, null) })
+                    DropdownMenuItem({ Text("删除", color = c.danger, maxLines = 1) }, { open = false; onAct(i, true) },
+                        leadingIcon = { Icon(JIcons.delete, null, tint = c.danger) })
                 }
             }
         }

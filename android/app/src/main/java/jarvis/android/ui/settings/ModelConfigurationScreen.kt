@@ -1,5 +1,16 @@
 package jarvis.android.ui.settings
 
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.GroupFooter
+import jarvis.android.ui.design.SearchField
+import jarvis.android.ui.design.PillButton
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.ButtonKind
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -30,8 +41,12 @@ import kotlinx.coroutines.launch
 
 /** The hub owns the purpose catalog. A purpose is a real model consumer, never a locally invented skill. */
 @Composable
-fun ModelConfigurationScreen(hub: Hub, onBack: () -> Unit, onPurpose: (String) -> Unit) {
-    var data by remember { mutableStateOf<ModelConfigurationBody?>(null) }
+fun ModelConfigurationScreen(
+    hub: Hub, onBack: () -> Unit, onPurpose: (String) -> Unit,
+    /** Loaded ahead (the screenshot tests); it is read again either way. */
+    preloaded: ModelConfigurationBody? = null,
+) {
+    var data by remember { mutableStateOf(preloaded) }
     var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
@@ -54,20 +69,21 @@ fun ModelConfigurationScreen(hub: Hub, onBack: () -> Unit, onPurpose: (String) -
     val groups = modelPurposeGroups(data?.purposes.orEmpty(), query)
 
     KitPage("模型配置", onBack, actions = {
-        IconButton(onClick = { scope.launch { load() } }, enabled = !loading) { Icon(Icons.Default.Refresh, "刷新") }
+        CircleButton(JIcons.retry, "刷新", { scope.launch { load() } }, enabled = !loading)
     }) {
         item(key = "search") {
-            KitGroup(footer = "各功能下一次运行使用这里的配置，不打断正在工作的任务。连接与凭据在模型供应商中管理。") {
-                row { KitTextField("搜索用途或模型", query, { query = it }) }
+            Column(Modifier.padding(top = JSpace.s), verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                SearchField(query, { query = it }, "搜索用途或模型", Modifier.padding(horizontal = JSpace.page))
+                GroupFooter("各功能下一次运行使用这里的配置，不打断正在工作的任务。连接与凭据在模型供应商中管理。")
             }
         }
         error?.let { message -> item(key = "error") { KitGroup { row { KitNoticeRow("读取失败", message, tint = kitColors.danger) } } } }
         if (loading && data == null) item(key = "loading") { KitLoadingRow() }
+        // One group per kind of use (iOS: a section each), every purpose a row in it.
         groups.forEach { (group, purposes) ->
-            item(key = "group.$group") { KitGroup(header = group) { row { KitValueRow("用途", "${purposes.size} 项") } } }
-            purposes.forEach { p ->
-                item(key = p.id) {
-                    KitGroup {
+            item(key = "group.$group") {
+                KitGroup(header = "$group · ${purposes.size}") {
+                    purposes.forEach { p ->
                         row {
                             val source = data?.purposes?.firstOrNull { it.id == p.inheritedFrom }?.name ?: p.inheritedFrom
                             KitRow(p.name, onClick = { onPurpose(p.id) }, subtitle = listOfNotNull(
@@ -149,7 +165,7 @@ fun ModelPurposeScreen(hub: Hub, id: String, onBack: () -> Unit) {
     val provider = data?.providers?.firstOrNull { it.id == (draft.provider.takeIf { value -> value.isNotEmpty() } ?: p?.effective?.provider) }
 
     KitPage(p?.name ?: "模型配置", onBack, actions = {
-        TextButton(onClick = { save() }, enabled = p != null && !busy && !conflict) { Text(if (busy) "保存中…" else "保存", maxLines = 1) }
+        PillButton(if (busy) "保存中…" else "保存", { save() }, kind = ButtonKind.Prominent, enabled = p != null && !busy && !conflict)
     }) {
         if (p == null && busy) item(key = "loading") { KitLoadingRow() }
         if (p != null) {

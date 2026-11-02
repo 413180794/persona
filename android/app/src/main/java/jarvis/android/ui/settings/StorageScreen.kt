@@ -1,5 +1,10 @@
 package jarvis.android.ui.settings
 
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.JIcons
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,17 +95,17 @@ fun StorageScreen(onBack: () -> Unit) {
     KitPage("存储空间", onBack) {
         item(key = "total") {
             KitGroup(
-                Modifier.padding(top = 8.dp),
+                Modifier.padding(top = JSpace.s),
                 footer = "Jarvis 在这台手机上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。",
             ) {
                 row {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(JSpace.l), verticalArrangement = Arrangement.spacedBy(JSpace.m)) {
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(if (usage == null) "计算中…" else storageText(total), fontSize = 34.sp, fontWeight = FontWeight.Bold,
                                 color = c.label, modifier = Modifier.weight(1f), maxLines = 1)
                             if (usage != null) {
-                                Text("其中缓存 ${storageText(clearableTotal)}", fontSize = 15.sp, color = c.secondaryLabel, maxLines = 1,
-                                    modifier = Modifier.padding(bottom = 6.dp))
+                                Text("其中缓存 ${storageText(clearableTotal)}", style = JTheme.type.secondary, color = c.secondaryLabel, maxLines = 1,
+                                    modifier = Modifier.padding(bottom = JSpace.sm))
                             }
                         }
                         StorageBar(usage, total)
@@ -109,33 +114,33 @@ fun StorageScreen(onBack: () -> Unit) {
             }
         }
         item(key = "kinds") {
-            KitGroup(Modifier.padding(top = 20.dp), separatorStart = 58.dp) {
+            KitGroup(Modifier.padding(top = JSpace.xl), separatorStart = 58.dp) {
                 shown.forEach { kind ->
                     row {
                         val bytes = usage?.get(kind) ?: 0L
                         val canClear = kind.clearable && bytes > 0 && clearing == null
                         Row(
                             Modifier.fillMaxWidth().clickable(enabled = canClear) { confirmOne = kind }
-                                .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                                .heightIn(min = JSize.box56).padding(horizontal = JSpace.l, vertical = JSpace.m),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(JSpace.m),
                         ) {
-                            Box(Modifier.size(30.dp).background(kindColor(kind), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-                                Icon(kindIcon(kind), null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Box(Modifier.size(JSize.wellS).background(kindColor(kind), RoundedCornerShape(JRadius.badge)), contentAlignment = Alignment.Center) {
+                                Icon(kindIcon(kind), null, tint = Color.White, modifier = Modifier.size(JSize.badge))
                             }
                             Column(Modifier.weight(1f)) {
-                                Text(kind.title, fontSize = 17.sp, color = c.label, maxLines = 1)
-                                Text(kind.detail, fontSize = 12.sp, color = c.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(kind.title, style = JTheme.type.body, color = c.label, maxLines = 1)
+                                Text(kind.detail, style = JTheme.type.label, color = c.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            if (clearing == kind) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                            else Text(usage?.let { storageText(bytes) } ?: "—", fontSize = 16.sp, color = c.secondaryLabel, maxLines = 1)
+                            if (clearing == kind) CircularProgressIndicator(Modifier.size(JSize.badge), strokeWidth = JSize.rule)
+                            else Text(usage?.let { storageText(bytes) } ?: "—", style = JTheme.type.body, color = c.secondaryLabel, maxLines = 1)
                         }
                     }
                 }
             }
         }
         item(key = "clear") {
-            KitGroup(Modifier.padding(top = 20.dp), footer = "点某一类可以只清它。") {
+            KitGroup(Modifier.padding(top = JSpace.xl), footer = "点某一类可以只清它。") {
                 row {
                     KitActionRow(
                         if (clearing != null) "正在清除…" else "清除全部缓存",
@@ -182,7 +187,7 @@ private fun StorageBar(usage: Map<StorageKind, Long>?, total: Long) {
     val colors = shown.map { kindColor(it) }
     Layout(
         content = { colors.forEach { col -> Box(Modifier.background(col)) } },
-        modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)).background(c.fillChip),
+        modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(JRadius.badge)).background(c.fillChip),
     ) { measurables, constraints ->
         val w = constraints.maxWidth
         val h = constraints.maxHeight
@@ -213,12 +218,12 @@ private fun kindColor(k: StorageKind): Color {
 }
 
 private fun kindIcon(k: StorageKind): ImageVector = when (k) {
-    StorageKind.AGENT_CHATS -> Icons.Default.Forum
-    StorageKind.CHAT_IMAGES -> Icons.Default.Photo
-    StorageKind.FEISHU_MEDIA -> Icons.Default.AttachFile
-    StorageKind.PAGE_STATE -> Icons.AutoMirrored.Filled.List
-    StorageKind.WEB -> Icons.Default.Public
-    StorageKind.NETWORK -> Icons.Default.Language
+    StorageKind.AGENT_CHATS -> JIcons.feishuChats
+    StorageKind.CHAT_IMAGES -> JIcons.photo
+    StorageKind.FEISHU_MEDIA -> JIcons.attach
+    StorageKind.PAGE_STATE -> JIcons.list
+    StorageKind.WEB -> JIcons.web
+    StorageKind.NETWORK -> JIcons.translate
     StorageKind.OTHER -> Icons.Default.Inventory2
-    StorageKind.APP_DATA -> Icons.Default.Settings
+    StorageKind.APP_DATA -> JIcons.settings
 }

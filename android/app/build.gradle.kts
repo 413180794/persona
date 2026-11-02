@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("app.cash.paparazzi")
 }
 
 // The application id is personal (docs/config.md): scripts/android.sh passes it from ~/.config/jarvis/config.json.
@@ -37,6 +38,14 @@ android {
     }
 }
 
+// The screenshot tests (src/test/java/jarvis/android/shots, Paparazzi against scripts/mock_hub.py) run only when asked:
+// ./scripts/android.sh shots (docs/testing.md「安卓截图」); `test` stays the plain unit tests.
+tasks.withType<Test>().configureEach {
+    if (!project.hasProperty("shots")) exclude("jarvis/android/shots/**")
+    // DesignTokensTest writes its baseline anew (after counts went down): -PrecordDesignBaseline.
+    if (project.hasProperty("recordDesignBaseline")) systemProperty("recordDesignBaseline", "true")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
@@ -59,10 +68,10 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     // QR pairing (jarvis://pair?...) without Google Play services, which many Android phones in China do not have.
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    // Where a foldable's hinge is (ui/shell/Fold.kt): the inner screen's two panes meet there.
+    implementation("androidx.window:window:1.3.0")
     // The home-screen widget (widget/JarvisWidget.kt); the last version that builds against compileSdk 34.
     implementation("androidx.glance:glance-appwidget:1.1.1")
-    // Folds (FoldingFeature) for the two-pane layout on foldables (docs/android.md「折叠屏 / 宽屏」).
-    implementation("androidx.window:window:1.2.0")
 
     testImplementation("junit:junit:4.13.2")
     // REST calls against a local HTTP server (same version as okhttp).

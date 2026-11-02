@@ -27,11 +27,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // The open chat lives here, not in Compose's saved state: carry it over if the system recreates the activity.
-        // The launch intent was handled the first time; handling it again would reopen a notification's chat the user closed.
-        if (savedInstanceState == null) handle(intent)
-        else savedInstanceState.getString(STATE_SESSION)?.let(::sessionOf)?.let { openSession.value = it }
-        if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (savedInstanceState == null) {
+            handle(intent)
+            if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            // Recreated (a change the activity does not take itself, e.g. the theme): the chat that was open stays
+            // open, and the intent that started the app is not acted on twice (it would reopen its session).
+            savedInstanceState.getString(STATE_SESSION)?.let(::sessionOf)?.let { openSession.value = it }
+        }
         val app = application as JarvisApp
         setContent {
             JarvisTheme {

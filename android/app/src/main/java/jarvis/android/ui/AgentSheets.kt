@@ -54,6 +54,29 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import jarvis.android.JarvisApp
+import jarvis.android.ui.design.ButtonKind
+import jarvis.android.ui.design.ChoiceChip
+import jarvis.android.ui.design.GroupCard
+import jarvis.android.ui.design.IconAction
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSheet
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JTextField
+import jarvis.android.ui.design.PillButton
+import jarvis.android.ui.design.RowDivider
+import jarvis.android.ui.design.SectionHeader
+import jarvis.android.ui.design.StatusDot
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
 import jarvis.android.data.ApiClient
 import jarvis.android.data.Hub
 import jarvis.android.data.HubException
@@ -67,8 +90,10 @@ import jarvis.android.data.Session
 import jarvis.android.data.SessionKey
 import kotlinx.coroutines.launch
 
-/** Long press on an agent: pin, mute, rename, close. Changes show at once and are put back if the hub refuses. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Long press on an agent (iOS's row menu): pin, mute, 实时接入, rename, close. Changes show at once and are put back if
+ * the hub refuses. Closing asks first ([CloseAgentDialog]).
+ */
 @Composable
 fun AgentActionsSheet(
     hub: Hub, s: Session, pinned: Boolean, muted: Boolean, machine: String?,
@@ -76,6 +101,8 @@ fun AgentActionsSheet(
 ) {
     var renaming by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
+    val place = listOfNotNull(machine, s.spaceName?.takeIf { it.isNotBlank() }?.let { sp -> listOfNotNull(sp, s.slotName?.takeIf { it.isNotBlank() }).joinToString(" › ") })
+        .joinToString(" · ")
 
     // The app scope, not the sheet's: dismissing the sheet would cancel its own scope halfway through the call.
     fun act(what: String, block: suspend () -> Unit) {
@@ -83,99 +110,110 @@ fun AgentActionsSheet(
         JarvisApp.instance.scope.launch { runCatching { block() }.onFailure { onError("$what 没成功：${it.message}") } }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
-            Text(
-                s.displayTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-            Text(
-                listOfNotNull(machine, s.spaceName?.takeIf { it.isNotBlank() }, s.slotName?.takeIf { it.isNotBlank() }).joinToString(" · "),
-                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp),
-            )
-            ListItem(
-                headlineContent = { Text(if (pinned) "取消置顶" else "置顶") },
-                leadingContent = { Icon(if (pinned) Icons.Outlined.PushPin else Icons.Default.PushPin, null) },
-                modifier = Modifier.clickable { act(if (pinned) "取消置顶" else "置顶") { hub.togglePin(s) } },
-            )
-            ListItem(
-                headlineContent = { Text(if (muted) "开启通知" else "屏蔽通知") },
-                supportingContent = { if (!muted) Text("不再弹提问和完成的通知，列表里弱化显示") },
-                leadingContent = { Icon(if (muted) Icons.Default.Notifications else Icons.Default.NotificationsOff, null) },
-                modifier = Modifier.clickable { act(if (muted) "开启通知" else "屏蔽通知") { hub.toggleMute(s) } },
-            )
-            if (s.canAttach) ListItem(
-                headlineContent = { Text("实时接入", maxLines = 1) },
-                modifier = Modifier.clickable { act("实时接入") { hub.api.attach(s.key); hub.refresh() } },
-            )
-            if (s.isLive && s.canTerminal) {
-                ListItem(
-                    headlineContent = { Text("重命名…") },
-                    supportingContent = { Text("同时改 herdr 的标签页名和 Claude 的会话名") },
-                    leadingContent = { Icon(Icons.Default.Edit, null) },
-                    modifier = Modifier.clickable { renaming = true },
-                )
-                HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                ListItem(
-                    headlineContent = { Text("关闭 Agent…", color = MaterialTheme.colorScheme.error) },
-                    leadingContent = { Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.error) },
-                    modifier = Modifier.clickable { closing = true },
-                )
+    if (!renaming && !closing) JSheet(onDismiss) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = JSpace.page + JSpace.xs, vertical = JSpace.s), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(JSpace.m)) {
+            StatusDot(s.agentState, muted = muted)
+            Column(Modifier.weight(1f)) {
+                Text(s.displayTitle, style = JTheme.type.heading, color = JTheme.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (place.isNotEmpty()) Text(place, style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+        }
+        GroupCard(Modifier.padding(top = JSpace.s)) {
+            ActionRow(if (pinned) "取消置顶" else "置顶", JIcons.pin) { act(if (pinned) "取消置顶" else "置顶") { hub.togglePin(s) } }
+            RowDivider(ActionTextColumn)
+            ActionRow(if (muted) "开启通知" else "屏蔽通知", if (muted) JIcons.unmute else JIcons.mute,
+                subtitle = if (!muted) "不再弹提问和完成的通知，列表里弱化显示" else null) { act(if (muted) "开启通知" else "屏蔽通知") { hub.toggleMute(s) } }
+            // 实时接入: a session an agent runtime holds read-only (DSH…) can be taken over live.
+            if (s.canAttach) {
+                RowDivider(ActionTextColumn)
+                ActionRow("实时接入", JIcons.terminal) { act("实时接入") { hub.api.attach(s.key); hub.refresh() } }
+            }
+            if (s.isLive && s.canTerminal) {
+                RowDivider(ActionTextColumn)
+                ActionRow("重命名…", JIcons.edit, subtitle = "同时改 herdr 的标签页名和 Claude 的会话名") { renaming = true }
+            }
+        }
+        if (s.isLive && s.canTerminal) GroupCard(Modifier.padding(top = JSpace.m)) {
+            ActionRow("关闭 Agent…", JIcons.close, danger = true) { closing = true }
         }
     }
 
     if (renaming) {
         RenameDialog(
             title = "重命名", current = s.displayTitle, note = null,
-            onDismiss = { renaming = false },
+            onDismiss = { renaming = false; onDismiss() },
             onSave = { name -> renaming = false; act("重命名") { hub.api.rename(s.key, name) } },
         )
     }
 
-    if (closing) CloseAgentDialog(hub, s, machine, onDismiss = { closing = false }, onError = onError, onConfirmed = onDismiss)
+    if (closing) CloseAgentDialog(hub, s, machine, onDismiss = { closing = false; onDismiss() }, onError = onError)
 }
 
 /**
- * 关闭 Agent's confirmation (iOS: the same from the row's swipe, its long-press menu and the chat's ⋯ menu): quits the
- * agent and closes its herdr tab; the transcript stays, so it can be resumed from 最近 7 天.
+ * 关闭 Agent's confirmation (iOS `CloseAgentSheet`, the same from the row's swipe, its long-press menu and the chat's ⋯):
+ * which agent, what closing does — it quits the agent and closes its herdr tab; the transcript stays, so it can be
+ * resumed from 最近 7 天.
  */
 @Composable
 fun CloseAgentDialog(
     hub: Hub, s: Session, machine: String?, onDismiss: () -> Unit, onError: (String) -> Unit,
-    /** After 关闭 Agent is tapped (the long-press sheet closes too). */
+    /** After 关闭 Agent is tapped. */
     onConfirmed: () -> Unit = {},
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("关闭这个 Agent？") },
-        text = {
+    val place = listOfNotNull(machine, s.spaceName?.takeIf { it.isNotBlank() }?.let { sp -> listOfNotNull(sp, s.slotName?.takeIf { it.isNotBlank() }).joinToString(" › ") })
+        .joinToString(" · ")
+    JSheet(onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = JSpace.page), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(JSpace.m)) {
+            Box(Modifier.size(JSize.box56).clip(CircleShape).background(JTheme.colors.danger.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Icon(JIcons.close, null, Modifier.size(JSize.well), tint = JTheme.colors.danger)
+            }
+            Text("关闭这个 Agent？", style = JTheme.type.title, color = JTheme.colors.label)
+            Text(listOf(s.displayTitle, place).filter { it.isNotEmpty() }.joinToString(" · "), style = JTheme.type.secondaryMedium, color = JTheme.colors.label,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Text(
                 "会退出 ${machine ?: "电脑"} 上的 ${s.agentLabel}，并关掉它在 herdr 里的标签页" +
                     (s.slotName?.takeIf { it.isNotBlank() }?.let { "「$it」" } ?: "") +
-                    "（分屏的标签页只关它这一格）。正在做的事会中断。\n对话记录还在，之后可以在「最近 7 天」里发消息恢复。",
+                    "（分屏的标签页只关它这一格）。正在做的事会中断。对话记录还在，之后可以在「最近 7 天」里发消息恢复。",
+                style = JTheme.type.secondary, color = JTheme.colors.secondaryText, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                if (hub.session(s.key)?.canTerminal != true) return@TextButton
+            PillButton("关闭 Agent", {
+                // It may have stopped being closable (closed elsewhere) since the sheet opened.
+                if (hub.session(s.key)?.canTerminal != true) { onDismiss(); return@PillButton }
                 onDismiss(); onConfirmed()
-                // The app scope: the dialog's own would be cancelled as it closes.
+                // The app scope: the sheet's own would be cancelled as it closes.
                 JarvisApp.instance.scope.launch { runCatching { hub.api.close(s.key) }.onFailure { onError("关闭 没成功：${it.message}") } }
-            }) {
-                Text("关闭 Agent", color = MaterialTheme.colorScheme.error, maxLines = 1)
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", maxLines = 1) } },
-    )
+            }, Modifier.fillMaxWidth().padding(top = JSpace.s), kind = ButtonKind.DestructiveProminent, large = true)
+            PillButton("取消", onDismiss, Modifier.fillMaxWidth(), kind = ButtonKind.Neutral, large = true)
+        }
+    }
+}
+
+/** Where an action row's words start (after its symbol). */
+private val ActionTextColumn = JSpace.l + JSize.iconS + JSpace.l
+
+@Composable
+private fun ActionRow(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, subtitle: String? = null, danger: Boolean = false, onClick: () -> Unit) {
+    val color = if (danger) JTheme.colors.danger else JTheme.colors.label
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = JSize.box50).clickable(onClick = onClick).padding(horizontal = JSpace.l, vertical = JSpace.s),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.l),
+    ) {
+        Icon(icon, null, Modifier.size(JSize.iconS), tint = if (danger) color else JTheme.colors.accent)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Text(title, style = JTheme.type.body, color = color, maxLines = 1)
+            subtitle?.let { Text(it, style = JTheme.type.caption, color = JTheme.colors.secondaryText, maxLines = 2) }
+        }
+    }
 }
 
 /**
- * Starts claude on one of the computers: pick the machine, a directory (recent ones first, or browse from home),
- * the launcher, and an optional first message. The hub opens a new herdr tab there (docs/protocol.md「REST」).
+ * Starts claude on one of the computers (iOS `NewChatView`): pick the machine, a folder (recent ones first, or
+ * browse from home), the launcher and the permission mode, and maybe a first message. The hub opens a new herdr tab
+ * there (docs/protocol.md「REST」).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NewSessionSheet(
     hub: Hub, machines: List<Machine>, onDismiss: () -> Unit, onStarted: (SessionKey) -> Unit,
@@ -235,120 +273,139 @@ fun NewSessionSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = { if (!starting) onDismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (preset != null) "在「${preset.spaceName}」开新标签" else "新开会话", style = MaterialTheme.typography.titleLarge)
-            if (preset != null) Text(tailOf(preset.cwd), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    JSheet({ if (!starting) onDismiss() }, title = if (preset != null) "在「${preset.spaceName}」开新标签" else "新开会话", onClose = { if (!starting) onDismiss() }) {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+            if (preset != null) Text(tailOf(preset.cwd), style = JTheme.type.code, color = JTheme.colors.secondaryText,
+                modifier = Modifier.padding(horizontal = JSpace.page + JSpace.xs))
             if (machines.size > 1 && preset == null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader("电脑")
+                FlowRow(Modifier.padding(horizontal = JSpace.page), horizontalArrangement = Arrangement.spacedBy(JSpace.s), verticalArrangement = Arrangement.spacedBy(JSpace.s)) {
                     machines.forEach { m ->
-                        FilterChip(machine?.id == m.id, { machine = m }, label = { Text(m.displayName, maxLines = 1) }, enabled = !starting)
+                        ChoiceChip(m.displayName, machine?.id == m.id, { if (!starting) machine = m },
+                            lead = { Icon(JIcons.machine, null, Modifier.size(JSize.markM), tint = if (machine?.id == m.id) JTheme.colors.accent else JTheme.colors.secondaryText) })
                     }
                 }
             }
 
             val d = dir
-            if (preset == null) Row(verticalAlignment = Alignment.CenterVertically) {
-                if (d?.parent != null) IconButton(onClick = { browse(d.parent) }, enabled = !starting) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "上一级") }
-                Text(
-                    tailOf(picked ?: d?.path ?: ""), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                if (loading) CircularProgressIndicator(Modifier.padding(8.dp))
-            }
-            if (preset == null) LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                val recent = d?.recent.orEmpty()
-                // The hub sends recent directories only with the home listing (an empty path).
-                if (recent.isNotEmpty()) {
-                    item { Text("最近用过", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
-                    items(recent, key = { "r/" + it.path }) { r ->
-                        DirRow(r.name.ifBlank { r.path.substringAfterLast('/') }, r.path, recent = true, selected = picked == r.path) { picked = r.path }
+            if (preset == null) {
+                SectionHeader("目录") { if (loading) CircularProgressIndicator(Modifier.size(JSize.markM), strokeWidth = JSize.rule, color = JTheme.colors.secondaryText) }
+                GroupCard {
+                    Row(Modifier.fillMaxWidth().heightIn(min = JSize.tapTarget).padding(start = JSpace.xs, end = JSpace.l), verticalAlignment = Alignment.CenterVertically) {
+                        if (d?.parent != null) IconAction(JIcons.back, "上一级", { browse(d.parent) }, enabled = !starting, size = JSize.markL)
+                        else Spacer(Modifier.width(JSpace.m))
+                        Text(tailOf(picked ?: d?.path ?: ""), style = JTheme.type.code, color = JTheme.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f))
                     }
-                    item { Text("浏览", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp)) }
-                }
-                items(d?.entries.orEmpty(), key = { "e/" + it.path }) { e ->
-                    DirRow(e.name, if (e.isGit) "git 仓库" else null, recent = false, selected = picked == e.path) {
-                        // A tap picks the folder; a second tap on the picked one goes inside it.
-                        if (picked == e.path) { picked = null; browse(e.path) } else picked = e.path
+                    val recent = d?.recent.orEmpty()
+                    Column(Modifier.heightIn(max = JSize.box300).verticalScroll(rememberScrollState())) {
+                        // The hub sends recent directories only with the home listing (an empty path).
+                        if (recent.isNotEmpty()) {
+                            Text("最近用过", style = JTheme.type.sectionHeader, color = JTheme.colors.secondaryText, modifier = Modifier.padding(start = JSpace.l, top = JSpace.s, bottom = JSpace.xs))
+                            recent.forEach { r -> DirRow(r.name.ifBlank { r.path.substringAfterLast('/') }, r.path, recent = true, selected = picked == r.path) { picked = r.path } }
+                            Text("浏览", style = JTheme.type.sectionHeader, color = JTheme.colors.secondaryText, modifier = Modifier.padding(start = JSpace.l, top = JSpace.m, bottom = JSpace.xs))
+                        }
+                        d?.entries.orEmpty().forEach { e ->
+                            DirRow(e.name, if (e.isGit) "git 仓库" else null, recent = false, selected = picked == e.path) {
+                                // A tap picks the folder; a second tap on the picked one goes inside it.
+                                if (picked == e.path) { picked = null; browse(e.path) } else picked = e.path
+                            }
+                        }
                     }
                 }
             }
 
             if (unifiedModels) {
-                KitPickerRow(
-                    "本次启动器", launcher.orEmpty(),
-                    listOf(KitOption("", "跟随模型配置")) + launchers.map { KitOption(it.name, it.name) },
-                    onChange = { launcher = it.takeIf(String::isNotEmpty) }, enabled = !starting,
-                )
+                // Models are configured by purpose (设置 › 模型配置): the launcher follows it unless one is picked here.
+                SectionHeader("启动器")
+                GroupCard {
+                    KitPickerRow(
+                        "本次启动器", launcher.orEmpty(),
+                        listOf(KitOption("", "跟随模型配置")) + launchers.map { KitOption(it.name, it.name) },
+                        onChange = { launcher = it.takeIf(String::isNotEmpty) }, enabled = !starting,
+                    )
+                }
             } else if (launchers.size > 1) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    launchers.forEach { l -> FilterChip(launcher == l.name, { launcher = l.name }, label = { Text(l.name, maxLines = 1) }, enabled = !starting) }
+                SectionHeader("启动器")
+                FlowRow(Modifier.padding(horizontal = JSpace.page), horizontalArrangement = Arrangement.spacedBy(JSpace.s), verticalArrangement = Arrangement.spacedBy(JSpace.s)) {
+                    launchers.forEach { l -> ChoiceChip(l.name, launcher == l.name, { if (!starting) launcher = l.name },
+                        lead = { Icon(JIcons.model, null, Modifier.size(JSize.markM), tint = if (launcher == l.name) JTheme.colors.accent else JTheme.colors.secondaryText) }) }
                 }
             }
             // The same choices as iOS (SessionModes.permissionModes); bypass can only be picked when starting.
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionHeader("权限模式")
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = JSpace.page), horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
                 PERMISSION_MODES.forEach { (id, title) ->
-                    FilterChip(mode == id, { mode = id }, label = { Text(title, maxLines = 1) }, enabled = !starting)
+                    ChoiceChip(title, mode == id, { if (!starting) mode = id }, lead = if (id.isEmpty()) null else ({
+                        Icon(modeIcon(id), null, Modifier.size(JSize.markM), tint = if (id == "bypassPermissions") JTheme.colors.danger else if (mode == id) JTheme.colors.accent else JTheme.colors.secondaryText)
+                    }))
                 }
             }
-            OutlinedTextField(
-                prompt, { prompt = it }, placeholder = { Text("第一条消息（可以不填）") },
-                modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp), enabled = !starting,
-            )
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            SectionHeader("第一条消息")
+            JTextField(prompt, { prompt = it }, "可以不填，进了对话再说", Modifier.padding(horizontal = JSpace.page), minLines = 2, maxLines = 5,
+                enabled = !starting, fill = JTheme.colors.card)
+            error?.let {
+                Row(Modifier.padding(horizontal = JSpace.page + JSpace.xs, vertical = JSpace.xs), horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                    Icon(JIcons.error, null, Modifier.size(JSize.markS), tint = JTheme.colors.danger)
+                    Text(it, color = JTheme.colors.danger, style = JTheme.type.caption)
+                }
+            }
             val cwd = picked ?: d?.path
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 16.dp)) {
-                OutlinedButton(onClick = onDismiss, enabled = !starting) { Text("取消", maxLines = 1) }
-                Button(
-                    onClick = {
-                        val m = machine ?: return@Button
-                        starting = true; error = null
-                        val panesBefore = hub.livePanes(m.id)
-                        scope.launch {
-                            val first = prompt.trim()
-                            runCatching { hub.api.start(m.id, cwd!!, launcher ?: if (unifiedModels) "" else "claude", first.ifEmpty { null }, mode.ifEmpty { null }, preset?.workspaceId) }
-                                .onSuccess { s0 ->
-                                    // The hub answers at once and starts claude in the background: open the chat now, and
-                                    // send the first message as an ordinary one (it waits on the node until claude is ready).
-                                    val s = s0.copy(machineId = m.id)
-                                    hub.adopt(s)
-                                    if (first.isNotEmpty()) jarvis.android.chat.Outbox.send(hub, s.key, first)
-                                    onStarted(s.key)
-                                }
-                                .onFailure { e ->
-                                    // Often claude did start and the node only gave up on it:
-                                    //  - it stopped on a dialog (trust this folder, the bypass warning…), which the hub turns
-                                    //    into a card the user can answer in the session;
-                                    //  - its footer is one the node doesn't recognise yet ("did not become ready").
-                                    // Either way, if a session came up in that directory since we pressed start, open it.
-                                    val msg = e.message.orEmpty()
-                                    val maybeUp = "agent_blocked" in msg || "did not become ready" in msg
-                                    val fresh = if (maybeUp) { hub.refresh(); hub.startedIn(m.id, cwd!!, panesBefore) } else null
-                                    if (fresh != null) onStarted(fresh.key)
-                                    else { error = "没启动起来：${msg.lineSequence().firstOrNull()}"; starting = false }
-                                }
-                        }
-                    },
-                    enabled = !starting && !loadingModels && machine != null && !cwd.isNullOrBlank(),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    if (starting) CircularProgressIndicator(Modifier.padding(end = 8.dp), strokeWidth = 2.dp)
-                    Text(if (starting) "正在启动…" else "在这里启动", maxLines = 1)
-                }
-            }
+            PillButton(
+                if (starting) "正在启动…" else "在这里启动",
+                onClick = {
+                    val m = machine ?: return@PillButton
+                    starting = true; error = null
+                    val panesBefore = hub.livePanes(m.id)
+                    scope.launch {
+                        val first = prompt.trim()
+                        runCatching { hub.api.start(m.id, cwd!!, launcher ?: if (unifiedModels) "" else "claude", first.ifEmpty { null }, mode.ifEmpty { null }, preset?.workspaceId) }
+                            .onSuccess { s0 ->
+                                // The hub answers at once and starts claude in the background: open the chat now, and
+                                // send the first message as an ordinary one (it waits on the node until claude is ready).
+                                val s = s0.copy(machineId = m.id)
+                                hub.adopt(s)
+                                if (first.isNotEmpty()) jarvis.android.chat.Outbox.send(hub, s.key, first)
+                                onStarted(s.key)
+                            }
+                            .onFailure { e ->
+                                // Often claude did start and the node only gave up on it:
+                                //  - it stopped on a dialog (trust this folder, the bypass warning…), which the hub turns
+                                //    into a card the user can answer in the session;
+                                //  - its footer is one the node doesn't recognise yet ("did not become ready").
+                                // Either way, if a session came up in that directory since we pressed start, open it.
+                                val msg = e.message.orEmpty()
+                                val maybeUp = "agent_blocked" in msg || "did not become ready" in msg
+                                val fresh = if (maybeUp) { hub.refresh(); hub.startedIn(m.id, cwd!!, panesBefore) } else null
+                                if (fresh != null) onStarted(fresh.key)
+                                else { error = "没启动起来：${msg.lineSequence().firstOrNull()}"; starting = false }
+                            }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = JSpace.page, vertical = JSpace.m),
+                kind = ButtonKind.Prominent, large = true, icon = if (starting) null else JIcons.run,
+                enabled = !starting && !loadingModels && machine != null && !cwd.isNullOrBlank(),
+            )
         }
     }
 }
 
+/** A folder to start in: picked, it is on the accent's soft tint with a check; tapped again, it opens. */
 @Composable
 private fun DirRow(name: String, detail: String?, recent: Boolean, selected: Boolean, onClick: () -> Unit) {
-    ListItem(
-        headlineContent = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent = detail?.let { { Text(tailOf(it), maxLines = 1, overflow = TextOverflow.Ellipsis) } },
-        leadingContent = { Icon(if (recent) Icons.Default.History else Icons.Default.Folder, null) },
-        tonalElevation = if (selected) 6.dp else 0.dp,
-        modifier = Modifier.clickable(onClick = onClick),
-    )
+    val c = JTheme.colors
+    Row(
+        Modifier.fillMaxWidth().background(if (selected) c.accent.copy(alpha = 0.1f) else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClick = onClick).heightIn(min = JSize.tapTarget).padding(horizontal = JSpace.l, vertical = JSpace.s),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.m),
+    ) {
+        Icon(if (recent) JIcons.recent else JIcons.folder, null, Modifier.size(JSize.iconXS), tint = if (selected) c.accent else c.secondaryText)
+        Column(Modifier.weight(1f)) {
+            Text(name, style = JTheme.type.body, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            detail?.let { Text(tailOf(it), style = JTheme.type.caption, color = c.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+        if (selected) Icon(JIcons.done, "已选", Modifier.size(JSize.iconXS), tint = c.accent)
+    }
 }
 
 /** The end of a long path ("…/code/foo/bar"): the part that tells folders apart (no start-ellipsis in this Compose). */

@@ -68,6 +68,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   `TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；减少后删掉 `TokenBaseline.json` 重跑记下新基线）、
   `StyleSpecTests`（每种风格 × 每种主题色深浅色的对比度）。不许为了过测试加豁免或调高基线。
 - **全局**：滚动条隐藏（RootView 的 `.scrollIndicators(.hidden)`，UIKit 的滚动视图自己关）；字号跟随动态字体和设置里的小 / 标准 / 大（`TextSize`）。
+- **安卓**是同一套设计系统（`android/app/src/main/java/jarvis/android/ui/design`，`docs/android.md`「设计系统」）：页面只读 `JTheme` / `JSpace` / `JRadius` / `JSize` / `JIcons`，
+  `DesignTokensTest` 管写死数值的基线（同样只能减少）；界面改动用 `./scripts/android.sh shots` 截图（浅色 / 深色，不要模拟器）看。
 - **逻辑层**：「加载 → 显示 → 编辑 → 保存」的页面用 MVVM，一个 `@Observable` 的 `XxxModel` 放在页面旁边，依赖从 `Deps` 传入，单元测试用 `FakeHub`；
   事件多的地方（对话页、分页）先把纯计算抽出来（`ChatLines`、`AgentListOrder`）。见 `docs/ios.md`「逻辑层的选型」。
 

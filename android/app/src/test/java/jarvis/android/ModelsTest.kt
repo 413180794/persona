@@ -93,9 +93,25 @@ class MarkdownTest {
         val b = parseBlocks("# T\n\npara one\nline two\n\n- a\n- b\n\n```\ncode\n```\n> q")
         assertEquals(Block.Heading(1, "T"), b[0])
         assertEquals(Block.Para("para one\nline two"), b[1])
-        assertEquals(Block.Para("• a\n• b"), b[2])
-        assertEquals(Block.Code("code"), b[3])
-        assertTrue(b[4] is Block.Quote)
+        assertEquals(Block.Item("•", "a"), b[2])
+        assertEquals(Block.Item("•", "b"), b[3])
+        assertEquals(Block.Code("code"), b[4])
+        assertTrue(b[5] is Block.Quote)
+    }
+
+    @Test fun listsHangTheirLines() {
+        val b = parseBlocks("1. 补齐测试（MacBook）\n2. 照片同步\n  第二行接着上一项\n  - 子项")
+        assertEquals(Block.Item("1.", "补齐测试（MacBook）"), b[0])
+        assertEquals(Block.Item("2.", "照片同步\n第二行接着上一项"), b[1])
+        assertEquals(Block.Item("•", "子项", indent = 1), b[2])
+    }
+
+    @Test fun tables() {
+        val b = parseBlocks("前面\n\n| 指标 | 改前 | 改后 |\n| --- | :---: | ---: |\n| p95 | 1.8 s | 0.2 s |\n| QPS | 120 | 900 |\n\n后面")
+        assertEquals(Block.Para("前面"), b[0])
+        assertEquals(Block.Table(listOf("指标", "改前", "改后"), listOf(listOf("p95", "1.8 s", "0.2 s"), listOf("QPS", "120", "900"))), b[1])
+        assertEquals(Block.Para("后面"), b[2])
+        assertEquals(Block.Rule, parseBlocks("a\n\n---\n\nb")[1])
     }
 
     @Test fun hashWithoutSpaceIsNotAHeading() {

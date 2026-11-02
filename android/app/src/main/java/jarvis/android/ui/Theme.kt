@@ -3,7 +3,6 @@ package jarvis.android.ui
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -25,6 +24,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import jarvis.android.R
 import jarvis.android.data.AgentState
+import jarvis.android.ui.design.DiffColors
+import jarvis.android.ui.design.HueColors
+import jarvis.android.ui.design.JTypeScale
+import jarvis.android.ui.design.ShellColors
+import jarvis.android.ui.design.StatusPalette
+import jarvis.android.ui.design.StatusTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -100,6 +105,20 @@ data class JarvisPalette(
     val ai: Color,
     /** The app icon's coral: Jarvis' own mark only, never something to tap. */
     val brand: Color,
+    /** Theme.Fill.pressed: a selected or pressed state. */
+    val fillPressed: Color = fillChip,
+    /** Supporting text: opaque, ≥ 4.5:1 on every page, card and fill (iOS's translucent secondary is 3.3:1 on gray). */
+    val secondaryText: Color = secondaryLabel,
+    /** Times and the quietest marks. */
+    val tertiaryText: Color = tertiaryLabel,
+    /** /loop and other scheduled wake-ups (待唤醒). */
+    val loop: Color = accent,
+    /** Count badges on rows: white digits on it are ≥ 4.5:1 in both appearances. */
+    val countBadge: Color = Color(0xFF636366),
+    /** Behind code blocks and terminal snippets, the same in every style. */
+    val codeBackground: Color = fillWell,
+    /** The surface a floating control sits on (circle buttons, the composer's +, chips over the page). */
+    val floating: Color = card,
 )
 
 private fun hex(v: Long) = Color(0xFF000000 or v)
@@ -160,6 +179,17 @@ fun paletteOf(style: AppStyle, dark: Boolean): JarvisPalette {
         cautionText = pick(0xB35400, 0xFF9F0A),
         ai = pick(0x5B4FD6, 0x9C94FF),
         brand = pick(0xD4683F, 0xE8835C),
+        fillPressed = if (dark) Color(0x52787880) else Color(0x29787880),
+        secondaryText = if (dark) hex(0x9A9AA0) else hex(0x636367),
+        tertiaryText = if (dark) hex(0x6E6E74) else hex(0x8E8E93),
+        loop = pick(0x2E6FD0, 0x5B9BFF),
+        countBadge = hex(0x636366),
+        codeBackground = pick(0xF3F1EC, 0x1C1D21),
+        // Floating controls: the glass styles' frosted white (opaque here: Android blurs nothing behind a view).
+        floating = when (style) {
+            AppStyle.GLASS, AppStyle.CLAUDE -> pick(0xFFFFFF, 0x1C1C1E)
+            else -> card
+        },
     )
 }
 
@@ -234,23 +264,8 @@ private val RoundedFamily: FontFamily by lazy {
     )
 }
 
-private fun typography(rounded: Boolean): Typography {
-    val t = Typography()
-    if (!rounded) return t
-    val f = RoundedFamily
-    return t.copy(
-        displayLarge = t.displayLarge.copy(fontFamily = f), displayMedium = t.displayMedium.copy(fontFamily = f),
-        displaySmall = t.displaySmall.copy(fontFamily = f), headlineLarge = t.headlineLarge.copy(fontFamily = f),
-        headlineMedium = t.headlineMedium.copy(fontFamily = f), headlineSmall = t.headlineSmall.copy(fontFamily = f),
-        titleLarge = t.titleLarge.copy(fontFamily = f), titleMedium = t.titleMedium.copy(fontFamily = f),
-        titleSmall = t.titleSmall.copy(fontFamily = f), bodyLarge = t.bodyLarge.copy(fontFamily = f),
-        bodyMedium = t.bodyMedium.copy(fontFamily = f), bodySmall = t.bodySmall.copy(fontFamily = f),
-        labelLarge = t.labelLarge.copy(fontFamily = f), labelMedium = t.labelMedium.copy(fontFamily = f),
-        labelSmall = t.labelSmall.copy(fontFamily = f),
-    )
-}
-
 private val LocalPalette = staticCompositionLocalOf { paletteOf(AppStyle.GLASS, false) }
+private val LocalType = staticCompositionLocalOf { JTypeScale.of(null) }
 
 /**
  * The picked 界面风格, kept on this phone (SharedPreferences "ui", key `ui.style` like iOS's UserDefaults key; not
@@ -276,6 +291,14 @@ object StyleStore {
     const val KEY = "ui.style"
 }
 
+/** Material's own shapes on the design system's corners: menus and fields at the card's, sheets at the panel's. */
+private val Shapes = androidx.compose.material3.Shapes(
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(jarvis.android.ui.design.JRadius.card),
+    small = androidx.compose.foundation.shape.RoundedCornerShape(jarvis.android.ui.design.JRadius.control),
+    medium = androidx.compose.foundation.shape.RoundedCornerShape(jarvis.android.ui.design.JRadius.card),
+    large = androidx.compose.foundation.shape.RoundedCornerShape(jarvis.android.ui.design.JRadius.panel),
+)
+
 /** The app theme: the style picked in 设置 (live, [StyleStore.style]) in the system's light or dark appearance. */
 @Composable
 fun JarvisTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
@@ -284,13 +307,14 @@ fun JarvisTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -
     val style by StyleStore.style.collectAsState()
     val palette = remember(style, dark) { paletteOf(style, dark) }
     val scheme = remember(palette) { schemeOf(palette) }
-    val type = remember(style.rounded) { typography(style.rounded) }
-    CompositionLocalProvider(LocalPalette provides palette) {
-        MaterialTheme(colorScheme = scheme, typography = type, content = content)
+    val scale = remember(style.rounded) { JTypeScale.of(if (style.rounded) RoundedFamily else null) }
+    val type = remember(scale) { scale.material() }
+    CompositionLocalProvider(LocalPalette provides palette, LocalType provides scale) {
+        MaterialTheme(colorScheme = scheme, typography = type, shapes = Shapes, content = content)
     }
 }
 
-/** The current tokens: `JTheme.colors.card`, `JTheme.style.corner`… */
+/** The current tokens: `JTheme.colors.card`, `JTheme.type.body`, `JTheme.style.corner`… */
 object JTheme {
     val colors: JarvisPalette
         @Composable @ReadOnlyComposable get() = LocalPalette.current
@@ -298,17 +322,29 @@ object JTheme {
         @Composable @ReadOnlyComposable get() = LocalPalette.current.style
     val isDark: Boolean
         @Composable @ReadOnlyComposable get() = LocalPalette.current.dark
+    /** The type scale (design/Type.kt): `JTheme.type.heading`, `JTheme.type.captionStrong`… */
+    val type: JTypeScale
+        @Composable @ReadOnlyComposable get() = LocalType.current
+    /** The ChatGPT-style shell's neutral colors. */
+    val shell: ShellColors
+        @Composable @ReadOnlyComposable get() = ShellColors.of(LocalPalette.current.dark)
+    val diff: DiffColors
+        @Composable @ReadOnlyComposable get() = DiffColors.of(LocalPalette.current.dark)
+    val hue: HueColors
+        @Composable @ReadOnlyComposable get() = HueColors.of(LocalPalette.current.dark)
+    /** An agent state's dot, words and soft fill. */
+    @Composable @ReadOnlyComposable
+    fun tone(state: AgentState): StatusTone = StatusPalette.of(state, LocalPalette.current.dark)
+    val needsYou: StatusTone
+        @Composable @ReadOnlyComposable get() = StatusPalette.needsYou(LocalPalette.current.dark)
 }
 
-/** The state colours the iOS app uses (docs/agent-states.md): needs you red-orange, done-unseen blue, working green. */
-fun AgentState.color(): Color = when (this) {
-    AgentState.NeedsYou -> Color(0xFFFF6B3D)
-    AgentState.Unread -> Color(0xFF3B82F6)
-    AgentState.Working -> Color(0xFF22C55E)
-    AgentState.Idle -> Color(0xFF9CA3AF)
-    AgentState.Unknown -> Color(0xFF9CA3AF)
-    AgentState.Offline -> Color(0xFFD1D5DB)
-}
+/** The state's dot in the current appearance (docs/agent-states.md: needs you red, working amber, done-unseen green). */
+val AgentState.color: Color
+    @Composable @ReadOnlyComposable get() = JTheme.tone(this).dot
+
+/** The dot outside Compose's theme (the widget, notifications): the same table. */
+fun AgentState.dotColor(dark: Boolean): Color = StatusPalette.of(this, dark).dot
 
 fun AgentState.label(): String = when (this) {
     AgentState.NeedsYou -> "需要你"

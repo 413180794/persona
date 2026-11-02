@@ -37,6 +37,15 @@ transcript 解析用真实样本做 golden 测试（`server/internal/transcript/
 
 模拟器限制：屏幕锁着时 computer-use 点不了模拟器，靠 DEBUG 启动参数直达页面；推送、HealthKit 真实数据、WatchConnectivity 同步要真机。
 
+## 安卓截图
+
+`./scripts/android.sh shots [类名]`：Paparazzi（JVM 上的 layoutlib，不要模拟器）画 `android/app/src/test/java/jarvis/android/shots/` 里的页面，
+数据来自测试自己起的 `scripts/mock_hub.py`（随机端口，`MockHub.kt`），每页浅色、深色各一张，按名字放在 `android/app/build/shots/<名字>.png`
+（`scripts/android_shots.py` 从 Paparazzi 的报告里按名字拷出来）。改了界面就跑一遍、逐张看，改前改后对比；它们只给人看，不跟基准图比。
+平时的 `./scripts/android.sh test` 不跑它们（`-Pshots` 才跑）。新页面加一个 `XxxShots.kt`，用 `ShotHost(dark) { … }` 包起来；
+要网络数据的页面先把数据装好再画（`docs/android.md`「经验」）。折叠屏（内屏平放 / 半折 / 拖过分隔条、外屏、内屏横放）、三折屏、平板、横放的手机是 `FoldShots.kt`（改了外壳、对话页都要看）。
+手势、键盘、通知、真实网络要在真机或模拟器上看。
+
 ## 用 mock 数据截图（README / 宣传图）
 
 截图不能带真实的业务数据：`scripts/mock_hub.py` 是一个只返回编造数据的假 hub（三台机器、几个项目的 Agent、助手对话、

@@ -3,31 +3,23 @@ package jarvis.android.ui.files
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,14 +36,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import jarvis.android.data.Hub
 import jarvis.android.data.JsonCodec
+import jarvis.android.ui.CardSlice
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.tailOf
+import jarvis.android.ui.design.ChoiceChip
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.DOT_SEP
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
 import jarvis.android.ui.media.ImageViewerArgs
 import jarvis.android.ui.media.MediaShare
 import kotlinx.serialization.SerialName
@@ -66,6 +63,17 @@ sealed interface FilesRoute {
     /** One file of a commit; its diff comes from the (cached) `git/show` of [hash]. */
     @Serializable @SerialName("commit_file") data class CommitFile(val hash: String, val file: GitFile) : FilesRoute
 }
+
+/**
+ * What the files screen shows in its first frame, before its own calls answer (screenshots): listings by path, the
+ * repository, a file, and the folder the browser is in ([here], under the target's path).
+ */
+data class FilesPreload(
+    val listings: Map<String, FsListing> = emptyMap(),
+    val git: GitStatus? = null,
+    val file: FileContent? = null,
+    val here: String? = null,
+)
 
 /** The pushed pages survive leaving for the image viewer and rotation (as JSON strings). */
 private val RouteStackSaver = listSaver<SnapshotStateList<FilesRoute>, String>(
@@ -84,7 +92,7 @@ private val RouteStackSaver = listSaver<SnapshotStateList<FilesRoute>, String>(
  * returns to where you were, then up the folders, then leaves.
  */
 @Composable
-fun FilesScreen(hub: Hub, target: FilesTarget, onBack: () -> Unit, onOpenImage: (ImageViewerArgs) -> Unit) {
+fun FilesScreen(hub: Hub, target: FilesTarget, onBack: () -> Unit, onOpenImage: (ImageViewerArgs) -> Unit, preload: FilesPreload? = null) {
     val machineId = target.machineId
     val path = target.path
     val mode = target.resolvedMode
@@ -95,12 +103,12 @@ fun FilesScreen(hub: Hub, target: FilesTarget, onBack: () -> Unit, onOpenImage: 
     var tab by rememberSaveable { mutableIntStateOf(if (mode == FilesTarget.Mode.GIT) 1 else 0) }
     // The browser's top folder and where it is now; both become absolute once the hub has listed them.
     var root by rememberSaveable { mutableStateOf(path) }
-    var here by rememberSaveable { mutableStateOf(path) }
+    var here by rememberSaveable { mutableStateOf(preload?.here ?: path) }
     // Git runs in the folder asked for (the hub expands "~"); relative paths are in the caller's cwd.
     val gitCwd = remember(path, cwd) {
         if (!path.startsWith("/") && !path.startsWith("~") && !cwd.isNullOrEmpty()) FilesPaths.join(cwd, path) else path
     }
-    var git by remember { mutableStateOf<GitStatus?>(null) }
+    var git by remember { mutableStateOf(preload?.git) }
     var gitError by remember { mutableStateOf<String?>(null) }
     var gitReload by remember { mutableIntStateOf(0) }
 
@@ -131,35 +139,38 @@ fun FilesScreen(hub: Hub, target: FilesTarget, onBack: () -> Unit, onOpenImage: 
         )
         is FilesRoute.CommitFile -> CommitFilePage(hub, machineId, gitRoot(git, gitCwd), top.hash, top.file, onBack = goBack)
         null -> if (mode == FilesTarget.Mode.FILE) {
-            FileViewer(hub, machineId, path, cwd, machineName, onBack = onBack, onOpen = { stack += FilesRoute.File(it) }, onOpenImage = onOpenImage)
+            FileViewer(hub, machineId, path, cwd, machineName, onBack = onBack, onOpen = { stack += FilesRoute.File(it) }, onOpenImage = onOpenImage,
+                initialFile = preload?.file)
         } else {
             val repo = git?.isRepo == true
             val ctx = LocalContext.current
             FilesPage(
                 title = if (tab == 0) "文件" else "Git",
-                subtitle = machineName + " · " + (if (tab == 0) here else git?.root ?: gitCwd),
+                // The path's informative end ("…/code/weather"): the header's middle has room for little more.
+                subtitle = machineName + DOT_SEP + tailOf(if (tab == 0) here else git?.root ?: gitCwd, 2),
                 onBack = goBack,
                 actions = {
                     if (tab == 0) BrowserMenu(ctx, here, canGoUp = here == root && FilesPaths.parent(root) != null) {
                         FilesPaths.parent(root)?.let { root = it; here = it }
                     }
                 },
-            ) { pad ->
-                Column(Modifier.fillMaxSize().padding(pad)) {
+            ) { insets ->
+                Column(Modifier.fillMaxSize()) {
                     if (repo || mode == FilesTarget.Mode.GIT) {
                         val n = git?.files?.size ?: 0
                         Segments(listOf("文件", if (n > 0) "Git（$n）" else "Git"), tab, { tab = it })
                     }
                     if (tab == 0) {
                         Browser(
-                            hub, machineId, root, here, cwd, git,
+                            hub, machineId, root, here, cwd, git, insets,
                             onResolved = { asked, resolved -> if (asked == root) { root = resolved; here = resolved } },
                             onDir = { here = it },
                             onFile = { stack += FilesRoute.File(it) },
+                            initial = preload?.listings.orEmpty(),
                         )
                     } else {
                         GitPane(
-                            hub, machineId, gitRoot(git, gitCwd), git, gitError, onRefresh = { gitError = null; gitReload++ },
+                            hub, machineId, gitRoot(git, gitCwd), git, gitError, insets, onRefresh = { gitError = null; gitReload++ },
                             onFile = { f -> stack += FilesRoute.Diff(f, f.isStaged && !f.hasUnstaged) },
                             onCommit = { c -> stack += FilesRoute.Commit(c) },
                         )
@@ -182,21 +193,26 @@ private object ShowHidden {
     }
 }
 
+/** ⋯ of the browser (iOS's menu beside the breadcrumb): hidden files, the path, the folder above the top one. */
 @Composable
 private fun BrowserMenu(ctx: Context, here: String, canGoUp: Boolean, onUp: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }) { Icon(Icons.Default.MoreVert, contentDescription = "更多") }
+        CircleButton(JIcons.more, "更多", { open = true })
         DropdownMenu(open, onDismissRequest = { open = false }) {
             val hidden = ShowHidden.get(ctx)
             DropdownMenuItem(
                 text = { Text(if (hidden) "不显示隐藏文件" else "显示隐藏文件", maxLines = 1) },
                 onClick = { ShowHidden.set(ctx, !hidden); open = false },
+                leadingIcon = { Icon(if (hidden) JIcons.hide else JIcons.view, null) },
             )
             DropdownMenuItem(text = { Text("拷贝路径", maxLines = 1) }, onClick = {
                 MediaShare.copyText(ctx, here, "路径"); MediaShare.toast(ctx, "已拷贝路径"); open = false
-            })
-            if (canGoUp) DropdownMenuItem(text = { Text("上一级文件夹", maxLines = 1) }, onClick = { onUp(); open = false })
+            }, leadingIcon = { Icon(JIcons.copy, null) })
+            if (canGoUp) DropdownMenuItem(
+                text = { Text("上一级文件夹", maxLines = 1) }, onClick = { onUp(); open = false },
+                leadingIcon = { Icon(JIcons.back, null) },
+            )
         }
     }
 }
@@ -209,13 +225,15 @@ private fun Browser(
     here: String,
     cwd: String?,
     git: GitStatus?,
+    insets: PaddingValues,
     onResolved: (asked: String, resolved: String) -> Unit,
     onDir: (String) -> Unit,
     onFile: (String) -> Unit,
+    initial: Map<String, FsListing> = emptyMap(),
 ) {
     val ctx = LocalContext.current
     // Listings already seen: going back up a level shows at once, then refreshes.
-    val listings = remember { mutableStateMapOf<String, FsListing>() }
+    val listings = remember { mutableStateMapOf<String, FsListing>().apply { putAll(initial) } }
     var error by remember(here) { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
     LaunchedEffect(here, reload) {
@@ -232,7 +250,6 @@ private fun Browser(
     }
     Column(Modifier.fillMaxSize()) {
         Breadcrumb(FilesPaths.crumbs(root, here), onPick = onDir)
-        HorizontalDivider()
         val l = listings[here]
         when {
             l != null -> {
@@ -240,18 +257,24 @@ private fun Browser(
                 val entries = l.entries.filter { showHidden || !it.name.startsWith(".") }
                 val dir = l.path.ifEmpty { here }
                 if (entries.isEmpty()) {
-                    Notice(Icons.Outlined.Folder, if (l.entries.isEmpty()) "空文件夹" else "只有隐藏文件")
+                    if (l.entries.isEmpty()) Notice(JIcons.folder, "空文件夹", "这个文件夹里什么都没有。")
+                    else Notice(JIcons.hide, "只有隐藏文件", "在右上角的 ⋯ 里打开「显示隐藏文件」就能看到。")
                 } else {
                     val now = remember(l) { java.time.Instant.now() }
-                    LazyColumn(Modifier.fillMaxSize()) {
-                        items(entries, key = { it.name }) { e ->
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = JSpace.xs, bottom = JSpace.xxl + insets.calculateBottomPadding()),
+                    ) {
+                        itemsIndexed(entries, key = { _, e -> e.name }) { i, e ->
                             val full = FilesPaths.join(dir, e.name)
-                            EntryRow(e, FilesPaths.gitMark(git, full, e.dir), now) { if (e.dir) onDir(full) else onFile(full) }
+                            CardSlice(first = i == 0, last = i == entries.lastIndex, dividerStart = FileTextColumn) {
+                                EntryRow(e, FilesPaths.gitMark(git, full, e.dir), now) { if (e.dir) onDir(full) else onFile(full) }
+                            }
                         }
                         if (l.truncated) item {
                             Text(
-                                "文件太多，只列出了前 2000 个", style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp),
+                                "文件太多，只列出了前 2000 个", style = JTheme.type.caption, color = JTheme.colors.secondaryText,
+                                modifier = Modifier.padding(start = JSpace.page + JSpace.l, end = JSpace.page, top = JSpace.sm),
                             )
                         }
                     }
@@ -263,57 +286,34 @@ private fun Browser(
     }
 }
 
+/** The levels from the top folder down to here as chips (the current one chosen), scrolled to the end as you go in. */
 @Composable
 private fun Breadcrumb(levels: List<Pair<String, String>>, onPick: (String) -> Unit) {
+    val scroll = rememberScrollState()
+    LaunchedEffect(levels.size) { scroll.animateScrollTo(scroll.maxValue) }
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().horizontalScroll(scroll).padding(horizontal = JSpace.page, vertical = JSpace.s),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.xs),
     ) {
         levels.forEachIndexed { i, (name, full) ->
-            if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
+            if (i > 0) Icon(JIcons.disclosure, null, Modifier.size(JSize.markM), tint = JTheme.colors.tertiaryText)
             val current = i == levels.lastIndex
-            Text(
-                name,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (current) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                modifier = Modifier.background(if (current) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent, CircleShape)
-                    .clickable(enabled = !current) { onPick(full) }
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-            )
+            ChoiceChip(name, selected = current, onClick = { if (!current) onPick(full) })
         }
     }
 }
 
 @Composable
 private fun EntryRow(e: FsEntry, mark: String?, now: java.time.Instant, onClick: () -> Unit) {
-    val hidden = e.name.startsWith(".")
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    val meta = listOfNotNull(if (e.dir) null else FilesPaths.formatBytes(e.size), e.modified?.let { FilesPaths.relative(it, now) })
+    FileRow(
+        e.name + if (e.symlink) " ↗" else "", e.dir, onClick,
+        meta = meta.joinToString(DOT_SEP), quiet = e.name.startsWith("."),
     ) {
-        Icon(
-            fileIcon(e.name, e.dir), null,
-            tint = if (e.dir) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
-        )
-        Column(Modifier.weight(1f)) {
-            Text(
-                e.name + if (e.symlink) " ↗" else "", fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = if (hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-            )
-            val meta = listOfNotNull(if (e.dir) null else FilesPaths.formatBytes(e.size), e.modified?.let { FilesPaths.relative(it, now) })
-            if (meta.isNotEmpty()) {
-                Text(meta.joinToString("  "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
-        }
         if (mark != null) {
-            if (e.dir) Box(Modifier.size(7.dp).background(gitColor(mark), RoundedCornerShape(50)))
+            if (e.dir) Box(Modifier.size(JSize.dotS).clip(CircleShape).background(gitColor(mark)))
             else GitBadge(mark)
         }
-        if (e.dir) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
     }
 }

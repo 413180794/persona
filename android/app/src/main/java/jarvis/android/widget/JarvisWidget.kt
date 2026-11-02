@@ -145,10 +145,12 @@ class JarvisWidget : GlanceAppWidget() {
         private val CARD = ColorProvider(Color(0xFFFFFFFF), Color(0xFF1C1C1E))
         private val LABEL = ColorProvider(Color(0xFF000000), Color(0xFFFFFFFF))
         private val SECONDARY = ColorProvider(Color(0x993C3C43), Color(0x99EBEBF5))
-        private val ACCENT = ColorProvider(Color(0xFF2B5CE6), Color(0xFF9DB4FF))
-        private val NEEDS_YOU = ColorProvider(Color(0xFFFF6B3D), Color(0xFFFF6B3D))
-        private val WORKING = ColorProvider(Color(0xFF22C55E), Color(0xFF22C55E))
-        private val DONE = ColorProvider(Color(0xFF3B82F6), Color(0xFF3B82F6))
+        private val ACCENT = ColorProvider(Color(0xFF007AFF), Color(0xFF0A84FF))
+        // The agent states' dots, the same table as the app (ui/design/Colors.kt StatusPalette, iOS StatusPalette):
+        // needs you red, working amber, finished-unseen green.
+        private val NEEDS_YOU = ColorProvider(jarvis.android.ui.design.StatusPalette.needsYou(false).dot, jarvis.android.ui.design.StatusPalette.needsYou(true).dot)
+        private val WORKING = ColorProvider(jarvis.android.ui.design.StatusPalette.working(false).dot, jarvis.android.ui.design.StatusPalette.working(true).dot)
+        private val DONE = ColorProvider(jarvis.android.ui.design.StatusPalette.unread(false).dot, jarvis.android.ui.design.StatusPalette.unread(true).dot)
 
         /** Redraws every placed widget (cheap when none is placed). */
         suspend fun refresh(ctx: Context) {

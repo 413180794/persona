@@ -1,5 +1,10 @@
 package jarvis.android.ui.chat
 
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -83,6 +88,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.ReadOnlyComposable
 import kotlinx.coroutines.launch
 
 // The chat's message rows (apple/Jarvis/Views/Chat/MessageViews.swift). Tools are in chat/ToolViews.kt.
@@ -98,7 +104,7 @@ fun UserBubble(item: Item) {
         PeerMessage(item, parsed.text, from)
         return
     }
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
         if (parsed.refs.isNotEmpty()) ContextCards(parsed.refs)
         if (parsed.images.isNotEmpty()) AttachedImages(parsed.images)
         if (parsed.text.isNotEmpty()) Bubble(parsed.text, Modifier.messageLongPress(item.id, parsed.text, isUser = true))
@@ -123,8 +129,8 @@ fun Bubble(text: String, modifier: Modifier = Modifier, faded: Boolean = false, 
             style = MaterialTheme.typography.bodyLarge,
             color = c.userBubbleText,
             modifier = modifier.widthIn(max = maxWidth - 48.dp)
-                .background(c.userBubble.copy(alpha = if (faded) 0.6f else 1f), RoundedCornerShape(18.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .background(c.userBubble.copy(alpha = if (faded) 0.6f else 1f), RoundedCornerShape(JRadius.bubble))
+                .padding(horizontal = JSpace.l, vertical = JSpace.m),
         )
     }
 }
@@ -134,16 +140,16 @@ fun Bubble(text: String, modifier: Modifier = Modifier, faded: Boolean = false, 
 private fun PeerMessage(item: Item, text: String, from: String) {
     val c = chatColors
     Column(
-        Modifier.padding(end = 32.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.fillWell)
-            .border(0.5.dp, c.label.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
-            .messageLongPress(item.id, text, isUser = false).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.padding(end = JSpace.xxl).fillMaxWidth().clip(RoundedCornerShape(JRadius.card)).background(c.fillWell)
+            .border(0.5.dp, c.label.copy(alpha = 0.08f), RoundedCornerShape(JRadius.card))
+            .messageLongPress(item.id, text, isUser = false).padding(JSpace.m),
+        verticalArrangement = Arrangement.spacedBy(JSpace.sm),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(Icons.Rounded.SwapHoriz, null, Modifier.size(14.dp), tint = c.secondaryLabel)
-            Text("来自 $from", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.secondaryLabel, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+            Icon(JIcons.fromPeer, null, Modifier.size(JSize.markS), tint = c.secondaryLabel)
+            Text("来自 $from", style = JTheme.type.labelStrong, color = c.secondaryLabel, maxLines = 1)
         }
-        Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = c.label)
+        Text(text, style = JTheme.type.body, color = c.label)
     }
 }
 
@@ -152,22 +158,22 @@ private fun PeerMessage(item: Item, text: String, from: String) {
 fun ContextCards(refs: List<ContextRef>) {
     val c = chatColors
     val from = jarvis.android.ui.web.LocalLinkSource.current // the page opens in the link sheet, not a browser
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
         refs.forEach { r ->
             Row(
-                Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(12.dp)).background(c.fillWell)
+                Modifier.widthIn(max = JSize.box300).clip(RoundedCornerShape(JRadius.card)).background(c.fillWell)
                     .clickable(enabled = r.url.startsWith("http")) { jarvis.android.ui.web.Links.open(r.url, from) }.height(IntrinsicSize.Min),
             ) {
-                Box(Modifier.padding(vertical = 8.dp).width(3.dp).fillMaxHeight().background(c.accent.copy(alpha = 0.5f), CircleShape))
-                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(if (r.kind == "edit") Icons.Rounded.AutoAwesome else Icons.Rounded.FormatQuote, null, Modifier.size(13.dp), tint = c.accent)
-                        Text((if (r.kind == "edit") "要改的内容 · " else "上下文 · ") + r.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                Box(Modifier.padding(vertical = JSpace.s).width(JSpace.xxs).fillMaxHeight().background(c.accent.copy(alpha = 0.5f), CircleShape))
+                Column(Modifier.padding(JSpace.m), verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+                        Icon(if (r.kind == "edit") JIcons.ai else JIcons.quote, null, Modifier.size(JSize.markXS), tint = c.accent)
+                        Text((if (r.kind == "edit") "要改的内容 · " else "上下文 · ") + r.title, style = JTheme.type.labelStrong,
                             color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Text(r.text, fontSize = 13.sp, lineHeight = 18.sp, color = c.secondaryLabel, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(r.text, style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     val host = remember(r.url) { runCatching { java.net.URI(r.url).host }.getOrNull().orEmpty() }
-                    if (host.isNotEmpty()) Text(host, fontSize = 11.sp, color = c.tertiaryLabel, maxLines = 1)
+                    if (host.isNotEmpty()) Text(host, style = JTheme.type.label, color = c.tertiaryLabel, maxLines = 1)
                 }
             }
         }
@@ -179,7 +185,7 @@ fun ContextCards(refs: List<ContextRef>) {
 private fun AttachedImages(paths: List<String>) {
     val env = LocalChatEnv.current ?: return
     val side = if (paths.size == 1) 120.dp else 76.dp
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(JSpace.sm, Alignment.End)) {
         val loaded = paths.map { path ->
             produceState<ViewerImage?>(AttachedImageCache.get(env.key.machineId, path), path) {
                 if (value != null) return@produceState
@@ -194,8 +200,8 @@ private fun AttachedImages(paths: List<String>) {
             if (img != null) {
                 SquareThumb(img, side) { env.openImage(img, loaded.mapNotNull { it.value }) }
             } else {
-                Box(Modifier.size(side).clip(RoundedCornerShape(8.dp)).background(chatColors.fillChip), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Box(Modifier.size(side).clip(RoundedCornerShape(JRadius.control)).background(chatColors.fillChip), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(JSize.markM), strokeWidth = JSize.rule)
                 }
             }
         }
@@ -217,7 +223,7 @@ fun SentPhotos(items: List<Item>, key: SessionKey) {
     val env = LocalChatEnv.current
     val imgs = remember(items) { items.map { imageOf(key, it) } }
     val side = if (imgs.size == 1) 140.dp else 84.dp
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(JSpace.sm, Alignment.End)) {
         imgs.forEach { img -> SquareThumb(img, side) { env?.openImage(img, imgs) } }
     }
 }
@@ -230,16 +236,16 @@ fun FileChips(paths: List<String>, alignEnd: Boolean = false) {
     val c = chatColors
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp, if (alignEnd) Alignment.End else Alignment.Start),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.sm, if (alignEnd) Alignment.End else Alignment.Start),
     ) {
         paths.forEach { p ->
             Row(
-                Modifier.clip(CircleShape).background(c.accent.copy(alpha = 0.1f)).clickable { env.openFile(p) }.padding(horizontal = 9.dp, vertical = 5.dp),
+                Modifier.clip(CircleShape).background(c.accent.copy(alpha = 0.1f)).clickable { env.openFile(p) }.padding(horizontal = JSpace.s, vertical = JSpace.xs),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(JSpace.xs),
             ) {
-                Icon(fileIcon(p), null, Modifier.size(12.dp), tint = c.accent)
-                Text(p.trimEnd('/').substringAfterLast('/').ifEmpty { p }, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.accent, maxLines = 1)
+                Icon(fileIcon(p), null, Modifier.size(JSize.markXS), tint = c.accent)
+                Text(p.trimEnd('/').substringAfterLast('/').ifEmpty { p }, style = JTheme.type.labelMedium, color = c.accent, maxLines = 1)
             }
         }
     }
@@ -257,20 +263,20 @@ fun PendingBubble(p: PendingMessage, key: SessionKey) {
     var menu by remember { mutableStateOf(false) }
     val parsed = remember(p.text) { parseContexts(p.text) }
     val text = parsed.second
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
         if (parsed.first.isNotEmpty()) ContextCards(parsed.first)
         if (p.images.isNotEmpty()) {
             val side = if (p.images.size == 1) 120.dp else 76.dp
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
                 p.images.forEach { SquareThumb(remember(it) { ViewerImage(data = it.data, mime = it.mime) }, side, null) }
             }
         }
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
             when {
                 bad -> Box {
                     Icon(
-                        Icons.Rounded.Error, contentDescription = "发送失败，重发或删除", tint = c.danger,
-                        modifier = Modifier.padding(bottom = 10.dp).size(22.dp).clip(CircleShape).clickable { menu = true },
+                        JIcons.critical, contentDescription = "发送失败，重发或删除", tint = c.danger,
+                        modifier = Modifier.padding(bottom = JSpace.m).size(JSize.iconS).clip(CircleShape).clickable { menu = true },
                     )
                     DropdownMenu(menu, onDismissRequest = { menu = false }) {
                         if (p.canClearDraft) DropdownMenuItem(text = { Text("清空并发送", maxLines = 1) },
@@ -282,12 +288,12 @@ fun PendingBubble(p: PendingMessage, key: SessionKey) {
                     }
                 }
                 p.phase == PendingMessage.Phase.SENDING ->
-                    Icon(Icons.Rounded.Schedule, contentDescription = "发送中", tint = c.tertiaryLabel, modifier = Modifier.padding(bottom = 12.dp).size(13.dp))
+                    Icon(JIcons.time, contentDescription = "发送中", tint = c.tertiaryLabel, modifier = Modifier.padding(bottom = JSpace.m).size(JSize.markXS))
                 // Written offline: a clock that offers 现在重试 / 不发了 (iOS Outbox).
                 p.phase == PendingMessage.Phase.WAITING -> Box {
                     Icon(
-                        Icons.Rounded.Schedule, contentDescription = "连上后自动发送，点按可以现在重试或不发了", tint = c.secondaryLabel,
-                        modifier = Modifier.padding(bottom = 10.dp).size(22.dp).clip(CircleShape).clickable { menu = true }.padding(3.dp),
+                        JIcons.time, contentDescription = "连上后自动发送，点按可以现在重试或不发了", tint = c.secondaryLabel,
+                        modifier = Modifier.padding(bottom = JSpace.m).size(JSize.iconS).clip(CircleShape).clickable { menu = true }.padding(JSpace.xxs),
                     )
                     DropdownMenu(menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("现在重试", maxLines = 1) },
@@ -301,7 +307,7 @@ fun PendingBubble(p: PendingMessage, key: SessionKey) {
             Box(Modifier.weight(1f, fill = false)) { Bubble(text.ifEmpty { "图片" }, faded = bad, fill = false) }
         }
         if (p.phase == PendingMessage.Phase.WAITING) {
-            Text("连上后自动发送", fontSize = 12.sp, color = c.secondaryLabel, textAlign = TextAlign.End, maxLines = 1)
+            Text("连上后自动发送", style = JTheme.type.label, color = c.secondaryLabel, textAlign = TextAlign.End, maxLines = 1)
         }
         if (bad) {
             Text(
@@ -311,12 +317,12 @@ fun PendingBubble(p: PendingMessage, key: SessionKey) {
                     PendingMessage.Phase.UNKNOWN -> "可能已经送到电脑上了：先看看对话里有没有，再决定要不要重发"
                     else -> p.error ?: "没发出去"
                 },
-                fontSize = 12.sp,
+                style = JTheme.type.label,
                 color = c.danger,
                 textAlign = TextAlign.End,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 48.dp),
+                modifier = Modifier.padding(start = JSize.avatarXL),
             )
         }
     }
@@ -326,10 +332,12 @@ fun PendingBubble(p: PendingMessage, key: SessionKey) {
 
 /** The agent's words: Markdown, no bubble, reading first; file chips; 看全文 when the hub cut it. */
 @Composable
-fun AssistantText(item: Item, modifier: Modifier = Modifier) {
+fun AssistantText(item: Item, modifier: Modifier = Modifier, quiet: Boolean = false) {
     FullTextLoader(item) { text ->
-        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Markdown(text, Modifier.fillMaxWidth().messageLongPress(item.id, text, isUser = false), selectable = false)
+        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+            // Quiet: what it said in the middle of its work (the timeline), a size down and gray (iOS `AssistantText(quiet:)`).
+            Markdown(text, Modifier.fillMaxWidth().messageLongPress(item.id, text, isUser = false), selectable = false,
+                color = if (quiet) chatColors.secondaryLabel else chatColors.label, base = if (quiet) JTheme.type.secondary else JTheme.type.body)
             FileChips(remember(text) { FilePaths.find(text) })
         }
     }
@@ -379,22 +387,22 @@ fun ThinkingRow(item: Item, modifier: Modifier = Modifier) {
     var open by remember(item.id) { mutableStateOf(false) }
     val c = chatColors
     val text = item.text.orEmpty().trim()
-    Column(modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(JSpace.sm)) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { open = !open }.padding(vertical = 2.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(JRadius.badge)).clickable { open = !open }.padding(vertical = JSpace.xxs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
         ) {
-            Icon(Icons.Rounded.Psychology, null, Modifier.size(14.dp), tint = c.secondaryLabel)
-            Text(if (open) "思考过程" else ToolText.firstLine(text), fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1,
+            Icon(JIcons.thinking, null, Modifier.size(JSize.markS), tint = c.secondaryLabel)
+            Text(if (open) "思考过程" else ToolText.firstLine(text), style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(14.dp).rotate(if (open) 90f else 0f), tint = c.secondaryLabel)
+            Icon(JIcons.disclosure, null, Modifier.size(JSize.markS).rotate(if (open) 90f else 0f), tint = c.secondaryLabel)
         }
         if (open) {
             Row(Modifier.height(IntrinsicSize.Min)) {
-                Box(Modifier.width(2.dp).fillMaxHeight().background(c.secondaryLabel.copy(alpha = 0.3f)))
+                Box(Modifier.width(JSpace.xxs).fillMaxHeight().background(c.secondaryLabel.copy(alpha = 0.3f)))
                 SelectionContainer {
-                    Text(text, fontSize = 13.sp, lineHeight = 18.sp, color = c.secondaryLabel, modifier = Modifier.padding(start = 10.dp))
+                    Text(text, style = JTheme.type.caption, color = c.secondaryLabel, modifier = Modifier.padding(start = JSpace.m))
                 }
             }
         }
@@ -410,17 +418,17 @@ fun NoticeRow(item: Item, inWork: Boolean = false) {
         if (item.wake == true) {
             val (summary, failed) = remember(text) { wakeSummary(text) }
             Row(
-                Modifier.clip(CircleShape).background(c.fillWell).padding(horizontal = 12.dp, vertical = 6.dp),
+                Modifier.clip(CircleShape).background(c.fillWell).padding(horizontal = JSpace.m, vertical = JSpace.sm),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
             ) {
-                Icon(if (failed) Icons.Rounded.Error else Icons.Rounded.Notifications, null, Modifier.size(13.dp), tint = if (failed) c.danger else c.accent)
-                Text(summary, fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Icon(if (failed) JIcons.critical else JIcons.notifications, null, Modifier.size(JSize.markXS), tint = if (failed) c.danger else c.accent)
+                Text(summary, style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         } else {
             Text(
-                text, fontSize = 12.sp, color = c.secondaryLabel, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(c.fillWell).padding(horizontal = 12.dp, vertical = 5.dp),
+                text, style = JTheme.type.label, color = c.secondaryLabel, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clip(RoundedCornerShape(JRadius.card)).background(c.fillWell).padding(horizontal = JSpace.m, vertical = JSpace.xs),
             )
         }
     }
@@ -436,13 +444,13 @@ fun RecapCard(item: Item) {
     val now by rememberNow(60_000)
     Box(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.clip(CircleShape).background(c.fillWell).clickable { open = true }.padding(horizontal = 10.dp, vertical = 5.dp),
+            Modifier.clip(CircleShape).background(c.fillWell).clickable { open = true }.padding(horizontal = JSpace.m, vertical = JSpace.xs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
         ) {
-            Icon(Icons.Rounded.History, null, Modifier.size(15.dp), tint = c.accent)
-            Text("离开期间回顾" + (item.time?.let { " · " + relativeTime(it, now) } ?: ""), fontSize = 13.sp, color = c.secondaryLabel, maxLines = 1)
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(14.dp), tint = c.secondaryLabel)
+            Icon(JIcons.recent, null, Modifier.size(JSize.mark), tint = c.accent)
+            Text("离开期间回顾" + (item.time?.let { " · " + relativeTime(it, now) } ?: ""), style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 1)
+            Icon(JIcons.disclosure, null, Modifier.size(JSize.markS), tint = c.secondaryLabel)
         }
     }
     if (open) RecapDrawer(item) { open = false }
@@ -455,10 +463,10 @@ fun RecapDrawer(item: Item, onDismiss: () -> Unit) {
     val c = chatColors
     val now by rememberNow(60_000)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(), containerColor = c.page) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("离开期间回顾", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.CenterHorizontally))
-            item.time?.let { Text("写于 " + relativeTime(it, now), fontSize = 13.sp, color = c.secondaryLabel) }
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = JSpace.l).navigationBarsPadding().padding(bottom = JSpace.l),
+            verticalArrangement = Arrangement.spacedBy(JSpace.m)) {
+            Text("离开期间回顾", style = JTheme.type.heading, color = c.label, modifier = Modifier.align(Alignment.CenterHorizontally))
+            item.time?.let { Text("写于 " + relativeTime(it, now), style = JTheme.type.caption, color = c.secondaryLabel) }
             SelectionContainer { Markdown(item.text.orEmpty(), Modifier.fillMaxWidth()) }
         }
     }
@@ -476,31 +484,32 @@ fun WorkLineRow(w: FoldedRow.Work, onToggle: () -> Unit, onTerminal: (() -> Unit
     val now by rememberNow(if (w.running) 1_000 else 60_000)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Row(
-            Modifier.weight(1f, fill = false).clip(RoundedCornerShape(6.dp)).clickable(enabled = w.items.isNotEmpty(), onClick = onToggle)
-                .padding(vertical = 4.dp, horizontal = 2.dp),
+            Modifier.weight(1f, fill = false).clip(RoundedCornerShape(JRadius.badge)).clickable(enabled = w.items.isNotEmpty(), onClick = onToggle)
+                .padding(vertical = JSpace.xs, horizontal = JSpace.xxs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(JSpace.sm),
         ) {
-            if (w.running) CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = chatColors.working)
+            if (w.running) CircularProgressIndicator(Modifier.size(JSize.markXS), strokeWidth = JSize.lineMedium, color = chatColors.working)
             BoxWithConstraints(Modifier.weight(1f, fill = false)) {
                 val full = workLabel(w.stats, w.running, now)
                 val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-                val width = remember(full, measurer) {
-                    measurer.measure(full, androidx.compose.ui.text.TextStyle(fontSize = 13.sp), softWrap = false, maxLines = 1).size.width
+                val style = JTheme.type.caption
+                val width = remember(full, measurer, style) {
+                    measurer.measure(full, style, softWrap = false, maxLines = 1).size.width
                 }
                 val tooLong = width > constraints.maxWidth
-                Text(if (tooLong) workLabel(w.stats, w.running, now, short = true) else full, fontSize = 13.sp, color = c.secondaryLabel,
+                Text(if (tooLong) workLabel(w.stats, w.running, now, short = true) else full, style = JTheme.type.caption, color = c.secondaryLabel,
                     maxLines = 1, softWrap = false)
             }
             if (w.items.isNotEmpty()) {
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, if (w.expanded) "收起过程" else "展开过程",
-                    Modifier.size(14.dp).rotate(if (w.expanded) 90f else 0f), tint = c.secondaryLabel)
+                Icon(JIcons.disclosure, if (w.expanded) "收起过程" else "展开过程",
+                    Modifier.size(JSize.markS).rotate(if (w.expanded) 90f else 0f), tint = c.secondaryLabel)
             }
         }
         if (onTerminal != null) {
-            Spacer(Modifier.width(8.dp))
-            Icon(Icons.Rounded.Terminal, contentDescription = "打开终端", tint = c.secondaryLabel,
-                modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onTerminal).padding(8.dp))
+            Spacer(Modifier.width(JSpace.s))
+            Icon(JIcons.terminal, contentDescription = "打开终端", tint = c.secondaryLabel,
+                modifier = Modifier.size(JSize.well).clip(CircleShape).clickable(onClick = onTerminal).padding(JSpace.s))
         }
     }
 }
@@ -509,19 +518,40 @@ fun WorkLineRow(w: FoldedRow.Work, onToggle: () -> Unit, onTerminal: (() -> Unit
 val WorkBridge: Dp = 6.dp
 
 /**
- * A slice of an open work line's card (iOS `WorkCardSlice`): each step is a lazy list line of its own, so each draws
- * its part — rounded on top for the first, at the bottom for the 收起 foot, bridging the list's gaps; a hairline from
- * the words' column between steps.
+ * 液态玻璃 lays an open work line out as a timeline (iOS `StyleSpec.workList = .timeline`, 2026-10-31): no card, a thin
+ * line down the left from the first step to 「收起 N 步」, the tools' round symbols sitting on it; the other styles
+ * keep the card.
+ */
+val workTimeline: Boolean
+    @Composable @ReadOnlyComposable get() = JTheme.style == AppStyle.GLASS
+
+/** Where the timeline's line runs: under the tools' symbols. */
+val WorkLineX: Dp = WorkInset + JSize.icon / 2
+
+/**
+ * A slice of an open work line (iOS `WorkCardSlice`): each step is a lazy list line of its own, so each draws its
+ * part — of the card (rounded on top for the first, at the bottom for the 收起 foot, a hairline from the words'
+ * column between steps) or of the timeline's line — reaching into the list's gaps to meet its neighbours.
  */
 @Composable
 fun Modifier.workSlice(top: Boolean, bottom: Boolean): Modifier {
     val c = chatColors
+    if (workTimeline) {
+        val line = c.separator
+        return this.drawBehind {
+            val bridge = WorkBridge.toPx()
+            val x = WorkLineX.toPx()
+            val y0 = if (top) JSize.tapTarget.toPx() / 2 else -bridge
+            val y1 = if (bottom) size.height / 2 else size.height + bridge
+            drawLine(line, Offset(x, y0), Offset(x, y1), strokeWidth = JSize.lineMedium.toPx())
+        }
+    }
     val fill = c.fillWell
     val stroke = c.cardStroke
     val sep = c.separator
     return this.drawBehind {
         val bridge = WorkBridge.toPx()
-        val r = 12.dp.toPx()
+        val r = JRadius.card.toPx()
         val y0 = if (top) 0f else -bridge
         val y1 = if (bottom) size.height else size.height + bridge
         val rect = Rect(0f, y0, size.width, y1)
@@ -530,7 +560,7 @@ fun Modifier.workSlice(top: Boolean, bottom: Boolean): Modifier {
             bottomLeft = if (bottom) cr else CornerRadius.Zero, bottomRight = if (bottom) cr else CornerRadius.Zero)
         drawPath(Path().apply { addRoundRect(rr) }, fill)
         // The outline: the sides, plus the rounded top / bottom where the card starts / ends.
-        val w = 0.5.dp.toPx()
+        val w = JSize.hairline.toPx()
         val p = Path()
         p.moveTo(0f, if (bottom) y1 - r else y1)
         if (top) {
@@ -553,21 +583,27 @@ fun Modifier.workSlice(top: Boolean, bottom: Boolean): Modifier {
     }
 }
 
+/** A step's content inset: from the card's edge, or (timeline) from the words' column right of the line. */
+@Composable
+private fun Modifier.stepInset(): Modifier =
+    if (workTimeline) padding(start = WorkTextColumn, end = JSpace.xs, top = JSpace.m, bottom = JSpace.m)
+    else padding(horizontal = WorkInset, vertical = JSpace.m)
+
 /** One step of an opened work line (iOS `WorkStepView`). */
 @Composable
 fun WorkStepRow(step: FoldedRow.Step, working: Boolean) {
     Box(Modifier.fillMaxWidth().workSlice(top = step.first, bottom = false)) {
         when (val w = step.item) {
             is WorkItem.Call -> ToolCallRow(w.call, working, grouped = true)
-            is WorkItem.Thought -> Box(Modifier.padding(horizontal = WorkInset, vertical = 10.dp)) {
+            is WorkItem.Thought -> Box(Modifier.stepInset()) {
                 if (w.item.kind == "notice") NoticeRow(w.item, inWork = true) else ThinkingRow(w.item)
             }
-            is WorkItem.Text -> AssistantText(w.item, Modifier.padding(horizontal = WorkInset, vertical = 10.dp))
+            is WorkItem.Text -> AssistantText(w.item, Modifier.stepInset(), quiet = workTimeline)
             is WorkItem.Image -> {
                 val env = LocalChatEnv.current
                 if (env != null) {
                     val img = remember(w.item.id) { imageOf(env.key, w.item) }
-                    ChatThumb(img, modifier = Modifier.padding(horizontal = WorkInset, vertical = 10.dp), width = w.item.image?.width, height = w.item.image?.height)
+                    ChatThumb(img, modifier = Modifier.stepInset(), width = w.item.image?.width, height = w.item.image?.height)
                 }
             }
         }
@@ -578,17 +614,17 @@ fun WorkStepRow(step: FoldedRow.Step, working: Boolean) {
 @Composable
 fun WorkEndRow(count: Int, onCollapse: () -> Unit) {
     val c = chatColors
-    Box(Modifier.fillMaxWidth().workSlice(top = false, bottom = true).clickable(onClick = onCollapse).padding(horizontal = WorkInset, vertical = 10.dp)) {
-        Text("收起 $count 步", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.accent, maxLines = 1)
+    Box(Modifier.fillMaxWidth().workSlice(top = false, bottom = true).clickable(onClick = onCollapse).stepInset()) {
+        Text("收起 $count 步", style = JTheme.type.captionMedium, color = c.accent, maxLines = 1)
     }
 }
 
 @Composable
 fun WorkingIndicator(label: String) {
     val c = chatColors
-    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.8.dp, color = chatColors.working)
-        Text(label, fontSize = 13.sp, color = c.secondaryLabel, maxLines = 1)
+    Row(Modifier.padding(vertical = JSpace.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+        CircularProgressIndicator(Modifier.size(JSize.markS), strokeWidth = JSize.lineMedium, color = chatColors.working)
+        Text(label, style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 1)
     }
 }
 

@@ -1,5 +1,10 @@
 package jarvis.android.ui.machines
 
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.JIcons
 import jarvis.android.ui.settings.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -114,45 +119,45 @@ fun MachineDetailScreen(
 
     KitPage(machine?.displayName ?: machineId, onBack) {
         if (machine == null) {
-            item { Text("hub 上没有这台机器了。", fontSize = 15.sp, color = c.secondaryLabel, modifier = Modifier.padding(32.dp)) }
+            item { Text("hub 上没有这台机器了。", style = JTheme.type.secondary, color = c.secondaryLabel, modifier = Modifier.padding(JSpace.xxl)) }
             return@KitPage
         }
-        item(key = "card") { MachineCard(hub, machine, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
+        item(key = "card") { MachineCard(hub, machine, Modifier.padding(horizontal = JSpace.l, vertical = JSpace.xs)) }
         item(key = "sessions") {
             KitGroup(header = "运行中的 Claude", separatorStart = 38.dp) {
                 if (sessions.isEmpty()) {
                     row {
-                        Text(if (online) "没有运行中的会话" else "机器离线，连上后显示它的会话", fontSize = 17.sp, color = c.secondaryLabel,
-                            modifier = Modifier.padding(16.dp))
+                        Text(if (online) "没有运行中的会话" else "机器离线，连上后显示它的会话", style = JTheme.type.body, color = c.secondaryLabel,
+                            modifier = Modifier.padding(JSpace.l))
                     }
                 }
                 sessions.forEach { s -> row { SessionLine(s) { onOpenSession(s.key) } } }
             }
         }
         item(key = "monitor") {
-            KitGroup(Modifier.padding(top = 20.dp), footer = "只显示所选引擎里的会话。") {
-                row { KitRow("系统与监控", icon = Icons.Default.Speed, onClick = onOpenMonitor) }
-                row { KitRow("引擎", icon = Icons.Default.Terminal, value = Engines.currentName(machine), onClick = onOpenEngine) }
+            KitGroup(Modifier.padding(top = JSpace.xl), footer = "只显示所选引擎里的会话。") {
+                row { KitRow("系统与监控", icon = JIcons.effort, onClick = onOpenMonitor) }
+                row { KitRow("引擎", icon = JIcons.terminal, value = Engines.currentName(machine), onClick = onOpenEngine) }
             }
         }
         item(key = "launchers") {
             KitGroup(header = if (online) "启动器 ${launchers.size}" else "启动器") {
                 when {
-                    !online -> row { Text("机器离线，连上后显示", fontSize = 17.sp, color = c.secondaryLabel, modifier = Modifier.padding(16.dp)) }
+                    !online -> row { Text("机器离线，连上后显示", style = JTheme.type.body, color = c.secondaryLabel, modifier = Modifier.padding(JSpace.l)) }
                     launcherError != null && launchers.isEmpty() -> row {
-                        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.Warning, null, tint = c.danger, modifier = Modifier.size(16.dp))
-                            Text(launcherError.orEmpty(), fontSize = 13.sp, color = c.danger)
+                        Row(Modifier.padding(JSpace.l), horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+                            Icon(JIcons.error, null, tint = c.danger, modifier = Modifier.size(JSize.markM))
+                            Text(launcherError.orEmpty(), style = JTheme.type.caption, color = c.danger)
                         }
                     }
                 }
                 launchers.forEach { l ->
                     row {
-                        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                        Row(Modifier.fillMaxWidth().heightIn(min = JSize.tapTarget).padding(horizontal = JSpace.l, vertical = JSpace.m),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text(l.name, fontSize = 16.sp, fontFamily = FontFamily.Monospace, color = c.label, modifier = Modifier.weight(1f), maxLines = 1,
+                            Text(l.name, style = JTheme.type.body, fontFamily = FontFamily.Monospace, color = c.label, modifier = Modifier.weight(1f), maxLines = 1,
                                 overflow = TextOverflow.Ellipsis)
-                            Text(modelLabel(l.model).orEmpty(), fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1)
+                            Text(modelLabel(l.model).orEmpty(), style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1)
                         }
                     }
                 }
@@ -160,20 +165,20 @@ fun MachineDetailScreen(
         }
         item(key = "reconnect") {
             KitGroup(
-                Modifier.padding(top = 20.dp),
+                Modifier.padding(top = JSpace.xl),
                 footer = if (machine.kind == "local") "hub 所在的机器，直接运行 node。" else "hub 通过 ssh ${machine.sshHost ?: machine.id} 接入。",
             ) {
                 row {
                     Row(
-                        Modifier.fillMaxWidth().clickable(enabled = !reconnecting) { reconnect() }.heightIn(min = 48.dp)
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        Modifier.fillMaxWidth().clickable(enabled = !reconnecting) { reconnect() }.heightIn(min = JSize.avatarXL)
+                            .padding(horizontal = JSpace.l, vertical = JSpace.m),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
                     ) {
-                        Icon(Icons.Default.Refresh, null, tint = c.accent, modifier = Modifier.size(22.dp))
-                        Text(if (reconnecting) "正在重新连接…" else "重新连接", fontSize = 17.sp, color = c.accent, maxLines = 1,
+                        Icon(JIcons.retry, null, tint = c.accent, modifier = Modifier.size(JSize.iconS))
+                        Text(if (reconnecting) "正在重新连接…" else "重新连接", style = JTheme.type.body, color = c.accent, maxLines = 1,
                             modifier = Modifier.weight(1f))
-                        if (reconnecting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        if (reconnecting) CircularProgressIndicator(Modifier.size(JSize.badge), strokeWidth = JSize.rule)
                     }
                 }
             }
@@ -187,23 +192,23 @@ private fun SessionLine(s: Session, onClick: () -> Unit) {
     val c = kitColors
     val state = s.agentState
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = JSize.box56).padding(start = JSpace.l, end = JSpace.m, top = JSpace.m, bottom = JSpace.m),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        Box(Modifier.size(10.dp).background(state.color(), CircleShape))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(s.displayTitle, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Box(Modifier.size(JSize.dotXL).background(state.color, CircleShape))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                Text(s.displayTitle, style = JTheme.type.body, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     fontWeight = if (state == AgentState.Unread) FontWeight.SemiBold else FontWeight.Normal,
                     modifier = Modifier.weight(1f, fill = false))
-                if (state == AgentState.NeedsYou) Text("需要你", fontSize = 12.sp, color = c.danger, maxLines = 1)
+                if (state == AgentState.NeedsYou) Text("需要你", style = JTheme.type.label, color = c.danger, maxLines = 1)
             }
             s.lastText?.takeIf { it.isNotBlank() }?.let {
-                Text(it.replace('\n', ' '), fontSize = 13.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(it.replace('\n', ' '), style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Text(relativeTime(s.updated), fontSize = 13.sp, color = c.secondaryLabel, maxLines = 1)
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiaryLabel, modifier = Modifier.size(20.dp))
+        Text(relativeTime(s.updated), style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 1)
+        Icon(JIcons.disclosure, null, tint = c.tertiaryLabel, modifier = Modifier.size(JSize.iconXS))
     }
 }

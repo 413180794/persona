@@ -38,20 +38,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -76,9 +72,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -87,6 +80,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import jarvis.android.JarvisApp
 import jarvis.android.data.SessionKey
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.CircleButton
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -194,7 +193,6 @@ fun LinkHost(content: @Composable () -> Unit) {
 @Composable
 private fun LinkSheet(request: LinkRequest, offset: Float, heightPx: Float, onDrag: (Float) -> Unit, onSettle: (Float) -> Unit) {
     val ctx = LocalContext.current
-    val colors = MaterialTheme.colorScheme
     val web = remember(request.url) { WebViewPool.view(ctx, request.url) }
     var editing by remember(request.url) { mutableStateOf<ContextRef?>(null) }
     BackHandler { onSettle(1f) }
@@ -218,7 +216,7 @@ private fun LinkSheet(request: LinkRequest, offset: Float, heightPx: Float, onDr
     if (dim > 0.01f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
 
     val drag = rememberDraggableState(onDrag)
-    val sheetShape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+    val sheetShape = RoundedCornerShape(topStart = JRadius.panel, topEnd = JRadius.panel)
     Column(
         Modifier
             .offset { IntOffset(0, (offset * heightPx).roundToInt()) }
@@ -226,51 +224,38 @@ private fun LinkSheet(request: LinkRequest, offset: Float, heightPx: Float, onDr
             // A shadow in light mode, a lighter container colour in dark: the sheet stays apart from the chat at 60 %.
             .shadow(16.dp, sheetShape)
             .clip(sheetShape)
-            .background(colors.surfaceContainer),
+            .background(JTheme.colors.card),
     ) {
         // Full screen runs under the status bar: the header moves below it as the sheet reaches the top.
         val statusTop = WindowInsets.statusBars.getTop(LocalDensity.current)
         val clear = ((SheetStops.MID - offset) / SheetStops.MID).coerceIn(0f, 1f)
         Spacer(Modifier.height(with(LocalDensity.current) { (statusTop * clear).toDp() }))
-        Column(
-            Modifier.fillMaxWidth().draggable(
+        LinkSheetTop(
+            title = title, host = host.ifEmpty { request.url },
+            canGoBack = web.page.canGoBack,
+            progress = if (web.page.loading && web.page.progress < 1f) web.page.progress else null,
+            drag = Modifier.draggable(
                 drag, Orientation.Vertical,
                 onDragStopped = { v -> onSettle(SheetStops.settle(offset, v / heightPx)) },
             ),
-        ) {
-            Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(width = 36.dp, height = 5.dp).clip(RoundedCornerShape(3.dp)).background(colors.outlineVariant))
-            }
-            Header(
-                title = title, host = host.ifEmpty { request.url },
-                canGoBack = web.page.canGoBack, onBack = { web.goBack() },
-                onCopy = {
-                    ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newRawUri("链接", Uri.parse(request.url)))
-                    Links.toast("已拷贝链接")
-                },
-                onBrowser = {
-                    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(request.url)).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                        .onFailure { Links.toast("没有能打开这个链接的浏览器") }
-                },
-                onShare = {
-                    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, request.url)
-                    runCatching { ctx.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                },
-                onClose = { onSettle(1f) },
-            )
-        }
-        Box(Modifier.fillMaxWidth().height(2.dp)) {
-            if (web.page.loading && web.page.progress < 1f) {
-                LinearProgressIndicator(
-                    progress = { web.page.progress.coerceAtLeast(0.05f) },
-                    modifier = Modifier.fillMaxSize(), color = colors.primary, trackColor = Color.Transparent,
-                )
-            }
-        }
-        HorizontalDivider(thickness = 0.5.dp)
+            onBack = { web.goBack() },
+            onCopy = {
+                ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newRawUri("链接", Uri.parse(request.url)))
+                Links.toast("已拷贝链接")
+            },
+            onBrowser = {
+                runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(request.url)).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    .onFailure { Links.toast("没有能打开这个链接的浏览器") }
+            },
+            onShare = {
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, request.url)
+                runCatching { ctx.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            },
+            onClose = { onSettle(1f) },
+        )
         // Typing into the page at full screen: keep the field above the keyboard. At 60 % the keyboard belongs to the chat.
         Box(Modifier.fillMaxWidth().weight(1f).then(if (offset < 0.05f) Modifier.imePadding() else Modifier)) {
-            PooledWebView(web, hasChat = request.from != null, background = colors.surface.toArgb(), onPick = ::pick)
+            PooledWebView(web, hasChat = request.from != null, background = JTheme.colors.page.toArgb(), onPick = ::pick)
         }
     }
 
@@ -298,8 +283,43 @@ private fun sendEdit(key: SessionKey, text: String) {
     }
 }
 
+/**
+ * The sheet's top (iOS `LinkSheet.header`): the grabber and the header, which drag the sheet ([drag]); the page's
+ * loading line; a hairline over the page.
+ */
 @Composable
-private fun Header(
+internal fun LinkSheetTop(
+    title: String,
+    host: String,
+    canGoBack: Boolean,
+    progress: Float?,
+    drag: Modifier,
+    onBack: () -> Unit,
+    onCopy: () -> Unit,
+    onBrowser: () -> Unit,
+    onShare: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().then(drag)) {
+        Box(Modifier.fillMaxWidth().padding(top = JSpace.s, bottom = JSpace.xs), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(width = JSize.wellL, height = JSize.grabber).background(JTheme.colors.fillPressed, CircleShape))
+        }
+        LinkSheetHeader(title, host, canGoBack, onBack, onCopy, onBrowser, onShare, onClose)
+    }
+    Box(Modifier.fillMaxWidth().height(JSize.rule)) {
+        if (progress != null) {
+            LinearProgressIndicator(
+                progress = { progress.coerceAtLeast(0.05f) },
+                modifier = Modifier.fillMaxSize(), color = JTheme.colors.accent, trackColor = Color.Transparent,
+            )
+        }
+    }
+    HorizontalDivider(thickness = JSize.hairline, color = JTheme.colors.separator)
+}
+
+/** The page's title and host, then ⋯ (拷贝链接 · 在浏览器打开 · 分享) and ✕; ‹ first once the page has been followed. */
+@Composable
+private fun LinkSheetHeader(
     title: String,
     host: String,
     canGoBack: Boolean,
@@ -309,37 +329,30 @@ private fun Header(
     onShare: () -> Unit,
     onClose: () -> Unit,
 ) {
-    val colors = MaterialTheme.colorScheme
+    val c = JTheme.colors
     var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
+        Modifier.fillMaxWidth().padding(start = if (canGoBack) JSpace.m else JSpace.l, end = JSpace.m, bottom = JSpace.s),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(JSpace.s),
     ) {
-        if (canGoBack) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回上一页", tint = colors.primary) }
-        } else {
-            Spacer(Modifier.size(8.dp))
-        }
-        Column(Modifier.weight(1f).padding(end = 4.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(host, style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (canGoBack) CircleButton(JIcons.back, "返回上一页", onBack, size = JSize.wellL)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Text(title, style = JTheme.type.secondaryStrong, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(host, style = JTheme.type.label, color = c.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreHoriz, "更多", tint = colors.primary) }
+            CircleButton(JIcons.more, "更多", { menu = true }, size = JSize.wellL)
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("拷贝链接", maxLines = 1) }, leadingIcon = { Icon(Icons.Default.Link, null) }, onClick = { menu = false; onCopy() })
+                DropdownMenuItem(text = { Text("拷贝链接", maxLines = 1) }, leadingIcon = { Icon(JIcons.link, null) }, onClick = { menu = false; onCopy() })
                 DropdownMenuItem(
-                    text = { Text("在浏览器打开", maxLines = 1) }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) },
+                    text = { Text("在浏览器打开", maxLines = 1) }, leadingIcon = { Icon(JIcons.openExternal, null) },
                     onClick = { menu = false; onBrowser() },
                 )
-                DropdownMenuItem(text = { Text("分享", maxLines = 1) }, leadingIcon = { Icon(Icons.Default.Share, null) }, onClick = { menu = false; onShare() })
+                DropdownMenuItem(text = { Text("分享", maxLines = 1) }, leadingIcon = { Icon(JIcons.share, null) }, onClick = { menu = false; onShare() })
             }
         }
-        IconButton(onClick = onClose, modifier = Modifier.semantics { contentDescription = "关闭" }) {
-            Box(Modifier.size(28.dp).clip(RoundedCornerShape(14.dp)).background(colors.surfaceVariant), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Close, null, tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp))
-            }
-        }
+        CircleButton(JIcons.close, "关闭", onClose, size = JSize.wellL)
     }
 }
 

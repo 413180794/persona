@@ -71,6 +71,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import jarvis.android.data.*
 import jarvis.android.ui.chat.*
+import jarvis.android.ui.design.ButtonKind
+import jarvis.android.ui.design.Chip
+import jarvis.android.ui.design.ChipLook
+import jarvis.android.ui.design.IconAction
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JTextField
+import jarvis.android.ui.design.PageScaffold
+import jarvis.android.ui.design.PillButton
+import jarvis.android.ui.design.RowDivider
+import jarvis.android.ui.design.surface
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -102,6 +116,7 @@ fun InteractionCard(
     var fullPlan by remember(ix.id) { mutableStateOf(false) }
     var error by remember(ix.id) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val view = jarvis.android.ui.design.hapticView()
     val submit: (Resolution) -> Unit = { r ->
         if (!busy && allowed && hub.session(ix.sessionKey)?.canApprove == true) {
             busy = true
@@ -109,8 +124,10 @@ fun InteractionCard(
             scope.launch {
                 try {
                     hub.resolve(ix, r)
+                    jarvis.android.ui.design.Haptics.success(view)
                     onResolved()
                 } catch (e: HubException) {
+                    if (e.status != 410 && e.status != 404) jarvis.android.ui.design.Haptics.error(view)
                     error = when {
                         e.status == 410 || e.status == 404 -> null // answered elsewhere or expired
                         e.code == "prompt_changed" -> "终端上的对话框已经变了，这次没有按任何键：看看新的再答"
@@ -125,89 +142,63 @@ fun InteractionCard(
     }
     val folded = collapsible && collapsed
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = c.card,
-        border = BorderStroke(1.dp, AgentState.NeedsYou.color().copy(alpha = 0.28f)),
-        shadowElevation = 6.dp,
+    val tone = JTheme.needsYou
+    Column(
+        modifier.fillMaxWidth().surface(RoundedCornerShape(JRadius.panel), floating = true)
+            .padding(start = JSpace.l, end = JSpace.s, top = JSpace.xs, bottom = if (folded) JSpace.xs else JSpace.l),
     ) {
-        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = if (folded) 4.dp else 14.dp)) {
-            Row(
-                Modifier.fillMaxWidth().then(
-                    if (collapsible) Modifier.clickable(role = Role.Button, onClickLabel = if (folded) "展开" else "收起") { collapsed = !collapsed }
-                    else Modifier,
-                ),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.size(8.dp).background(AgentState.NeedsYou.color(), CircleShape))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    ix.kindLabel(hub.session(ix.sessionKey)?.agentLabel ?: "Claude"),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = AgentState.NeedsYou.color(),
-                    maxLines = 1,
-                )
-                if (folded) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        previewText(ix),
-                        fontSize = 15.sp,
-                        color = c.label,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                } else {
-                    ix.toolName?.takeIf { ix.kind == "permission" }?.let {
-                        Text(
-                            " · " + ToolText.baseName(it),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = c.secondaryLabel,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = JSize.tapTarget).then(
+                if (collapsible) Modifier.clickable(role = Role.Button, onClickLabel = if (folded) "展开" else "收起") { collapsed = !collapsed }
+                else Modifier,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(interactionIcon(ix), null, Modifier.size(JSize.markL), tint = tone.dot)
+            Spacer(Modifier.width(JSpace.sm))
+            Text(ix.kindLabel(hub.session(ix.sessionKey)?.agentLabel ?: "Claude"), style = JTheme.type.captionStrong, color = tone.text, maxLines = 1)
+            if (folded) {
+                Spacer(Modifier.width(JSpace.s))
+                Text(previewText(ix), style = JTheme.type.secondary, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            } else {
+                ix.toolName?.takeIf { ix.kind == "permission" }?.let {
+                    Text(" · " + ToolText.baseName(it), style = JTheme.type.captionStrong, color = c.secondaryLabel, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 }
-                if (busy) CircularProgressIndicator(Modifier.size(16.dp).padding(end = 4.dp), strokeWidth = 2.dp)
-                if (ix.kind == "plan" && !folded) {
-                    IconButton(onClick = { fullPlan = true }) {
-                        Icon(Icons.Rounded.OpenInFull, contentDescription = "全屏查看计划", tint = c.secondaryLabel, modifier = Modifier.size(18.dp))
-                    }
-                }
-                Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = c.secondaryLabel) }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("交回电脑处理", maxLines = 1) },
-                            enabled = allowed,
-                            onClick = { menu = false; submit(Resolutions.dismiss()) },
-                        )
-                    }
-                }
-                if (collapsible) {
-                    Icon(
-                        Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = c.secondaryLabel,
-                        modifier = Modifier.padding(end = 4.dp).size(22.dp).rotate(if (folded) 180f else 0f),
+                Spacer(Modifier.weight(1f))
+            }
+            if (busy) CircularProgressIndicator(Modifier.padding(end = JSpace.xs).size(JSize.markM), strokeWidth = JSize.rule, color = c.secondaryLabel)
+            if (ix.kind == "plan" && !folded) IconAction(JIcons.enlarge, "全屏查看计划", { fullPlan = true }, tint = c.secondaryLabel, size = JSize.markL)
+            Box {
+                IconAction(JIcons.more, "更多", { menu = true }, tint = c.accent, size = JSize.iconXS)
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("交回电脑处理", maxLines = 1) },
+                        enabled = allowed,
+                        onClick = { menu = false; submit(Resolutions.dismiss()) },
+                        leadingIcon = { Icon(JIcons.machine, null) },
                     )
                 }
             }
-            if (!folded) {
-                Column(Modifier.padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    when (ix.kind) {
-                        "question" -> QuestionBody(ix, busy || !allowed, submit)
-                        "plan" -> PlanBody(ix, busy || !allowed, submit)
-                        "permission" -> PermissionBody(ix, busy || !allowed, submit)
-                        "screen" -> ScreenBody(ix, busy || !allowed, submit)
-                        else -> Text(
-                            "这个请求手机还不支持，在电脑上处理",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = c.secondaryLabel,
-                        )
+            if (collapsible) {
+                Icon(JIcons.expand, contentDescription = null, tint = c.secondaryLabel,
+                    modifier = Modifier.padding(end = JSpace.s).size(JSize.iconXS).rotate(if (folded) 180f else 0f))
+            }
+        }
+        if (!folded) {
+            Column(Modifier.padding(end = JSpace.s), verticalArrangement = Arrangement.spacedBy(JSpace.m)) {
+                when (ix.kind) {
+                    "question" -> QuestionBody(ix, busy || !allowed, submit)
+                    "plan" -> PlanBody(ix, busy || !allowed, submit)
+                    "permission" -> PermissionBody(ix, busy || !allowed, submit)
+                    "screen" -> ScreenBody(ix, busy || !allowed, submit)
+                    else -> Text("这个请求手机还不支持，在电脑上处理", style = JTheme.type.secondary, color = c.secondaryLabel)
+                }
+                error?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                        Icon(JIcons.error, null, Modifier.size(JSize.markS), tint = c.danger)
+                        Text(it, color = c.danger, style = JTheme.type.caption)
                     }
-                    error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall) }
                 }
             }
         }
@@ -265,13 +256,14 @@ fun planTitle(plan: String): String =
 /** The plan full screen (iOS: a sheet with the title and 完成). */
 @Composable
 private fun FullPlan(plan: String, onDone: () -> Unit) {
-    FullScreenPage(
-        title = planTitle(plan),
-        onBack = onDone,
-        actions = { TextButton(onClick = onDone) { Text("完成", fontWeight = FontWeight.SemiBold, maxLines = 1) } },
-    ) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Markdown(plan.ifBlank { "（计划是空的）" })
+    Dialog(onDismissRequest = onDone, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        PageScaffold(planTitle(plan), onBack = onDone, actions = {
+            Text("完成", style = JTheme.type.bodyStrong, color = JTheme.colors.accent, maxLines = 1,
+                modifier = Modifier.clip(CircleShape).clickable(onClick = onDone).padding(horizontal = JSpace.m, vertical = JSpace.s))
+        }) {
+            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(JSpace.page)) {
+                Markdown(plan.ifBlank { "（计划是空的）" })
+            }
         }
     }
 }
@@ -316,11 +308,11 @@ private fun QuestionBody(ix: Interaction, busy: Boolean, submit: (Resolution) ->
         if (questions.size > 1) "${page + 1}/${questions.size}" else null,
         if (q.multiSelect) "可多选" else null,
     ).joinToString(" · ")
-    if (meta.isNotEmpty()) Text(meta, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.secondaryLabel, maxLines = 1)
-    Text(q.question, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.fillWell)) {
+    if (meta.isNotEmpty()) Text(meta, style = JTheme.type.captionStrong, color = c.secondaryLabel, maxLines = 1)
+    Text(q.question, style = JTheme.type.heading, color = c.label)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(JRadius.card)).background(c.fillWell)) {
         q.options.forEachIndexed { i, opt ->
-            if (i > 0) HorizontalDivider(Modifier.padding(start = 50.dp), color = c.separator)
+            if (i > 0) RowDivider(OptionTextColumn)
             val selected = opt.label in picked[q.question].orEmpty()
             OptionRow(opt.displayLabel, opt.recommended, opt.description, number = "${i + 1}", selected = selected, enabled = !busy) {
                 val cur = picked[q.question].orEmpty()
@@ -337,7 +329,7 @@ private fun QuestionBody(ix: Interaction, busy: Boolean, submit: (Resolution) ->
                 }
             }
         }
-        HorizontalDivider(Modifier.padding(start = 50.dp), color = c.separator)
+        RowDivider(OptionTextColumn)
         OtherRow(
             value = typed[q.question].orEmpty(),
             enabled = !busy,
@@ -351,19 +343,18 @@ private fun QuestionBody(ix: Interaction, busy: Boolean, submit: (Resolution) ->
     if (needsFooter) {
         val isLast = page >= questions.size - 1 || allAnswered
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            if (page > 0) ThemedButton(onClick = { page -= 1 }, enabled = !busy) { Text("上一题", maxLines = 1) }
+            if (page > 0) PillButton("上一题", { page -= 1 }, kind = ButtonKind.Neutral, enabled = !busy)
             Spacer(Modifier.weight(1f))
-            ThemedButton(
-                onClick = { if (isLast) send() else page += 1 },
-                prominent = true,
-                enabled = !busy && answer(q) != null,
-            ) { Text(if (isLast) "提交" else "下一题", maxLines = 1) }
+            PillButton(if (isLast) "提交" else "下一题", { if (isLast) send() else page += 1 }, kind = ButtonKind.Prominent, enabled = !busy && answer(q) != null)
         }
     }
 }
 
 private fun answerFor(q: Question, picked: Set<String>): String =
     q.options.map { it.label }.filter { it in picked }.joinToString(", ")
+
+/** Where an option's words start (after its number): the separators between options start there. */
+private val OptionTextColumn = JSpace.l + JSize.icon + JSpace.m
 
 /**
  * One option in the grouped box: a numbered circle (accent with a white check when picked), the label in the label
@@ -385,33 +376,27 @@ private fun OptionRow(
         Modifier.fillMaxWidth()
             .background(if (selected) c.accent.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 11.dp)
+            .padding(horizontal = JSpace.l, vertical = JSpace.m)
             .semantics { if (selected) stateDescription = "已选" },
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
         Box(
-            Modifier.size(24.dp).clip(CircleShape).background(if (selected || busy) c.accent else c.fillChip),
+            Modifier.size(JSize.icon).clip(CircleShape).background(if (selected || busy) c.accent else c.fillChip),
             contentAlignment = Alignment.Center,
         ) {
             when {
-                busy -> CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = Color.White)
-                selected -> Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                else -> Text(number, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.secondaryLabel, maxLines = 1)
+                busy -> CircularProgressIndicator(Modifier.size(JSize.markXS), strokeWidth = JSize.lineMedium, color = Color.White)
+                selected -> Icon(JIcons.done, contentDescription = null, tint = Color.White, modifier = Modifier.size(JSize.markS))
+                else -> Text(number, style = JTheme.type.labelStrong, color = c.secondaryLabel, maxLines = 1)
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(label, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = c.label, modifier = Modifier.weight(1f, fill = false))
-                if (recommended) {
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "推荐", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.ai, maxLines = 1,
-                        modifier = Modifier.background(c.ai.copy(alpha = 0.14f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp),
-                    )
-                }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
+                Text(label, style = JTheme.type.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = c.label, modifier = Modifier.weight(1f, fill = false))
+                if (recommended) Chip("推荐", look = ChipLook.Tint(c.ai))
             }
-            description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = c.secondaryLabel) }
+            description?.takeIf { it.isNotBlank() }?.let { Text(it, style = JTheme.type.caption, color = c.secondaryLabel) }
         }
     }
 }
@@ -421,32 +406,30 @@ private fun OptionRow(
 private fun OtherRow(value: String, enabled: Boolean, onChange: (String) -> Unit, onSend: (() -> Unit)?, placeholder: String = "其他回答…") {
     val c = chatColors
     Row(
-        Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+        Modifier.fillMaxWidth().padding(start = JSpace.l, end = JSpace.sm, top = JSpace.xs, bottom = JSpace.xs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        Box(Modifier.size(24.dp).clip(CircleShape).background(c.fillChip), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Edit, null, tint = c.secondaryLabel, modifier = Modifier.size(13.dp))
+        Box(Modifier.size(JSize.icon).clip(CircleShape).background(c.fillChip), contentAlignment = Alignment.Center) {
+            Icon(JIcons.edit, null, tint = c.secondaryLabel, modifier = Modifier.size(JSize.markXS))
         }
         BasicTextField(
             value = value,
             onValueChange = onChange,
             enabled = enabled,
             maxLines = 4,
-            textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+            textStyle = JTheme.type.body.copy(color = c.label),
             cursorBrush = SolidColor(c.accent),
-            modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+            modifier = Modifier.weight(1f).padding(vertical = JSpace.s),
             decorationBox = { inner ->
                 Box {
-                    if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, color = c.secondaryLabel, maxLines = 1)
+                    if (value.isEmpty()) Text(placeholder, style = JTheme.type.body, color = c.secondaryLabel, maxLines = 1)
                     inner()
                 }
             },
         )
         if (onSend != null && value.isNotBlank()) {
-            IconButton(onClick = onSend, enabled = enabled) {
-                Icon(Icons.Rounded.ArrowCircleUp, contentDescription = "发送回答", tint = c.accent, modifier = Modifier.size(28.dp))
-            }
+            RoundButton(JIcons.send, "发送回答", onSend, fill = c.accent, words = Color.White, enabled = enabled)
         }
     }
 }
@@ -457,44 +440,20 @@ private fun OtherRow(value: String, enabled: Boolean, onChange: (String) -> Unit
 private fun PlanBody(ix: Interaction, busy: Boolean, submit: (Resolution) -> Unit) {
     var rejecting by remember(ix.id) { mutableStateOf(false) }
     var feedback by remember(ix.id) { mutableStateOf("") }
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(max = 280.dp)
-            .background(chatColors.fillWell, RoundedCornerShape(12.dp))
-            .verticalScroll(rememberScrollState())
-            .padding(12.dp),
-    ) {
+    Box(Modifier.fillMaxWidth().heightIn(max = JSize.box280).verticalScroll(rememberScrollState())) {
         Markdown(ix.plan.orEmpty().ifBlank { "（计划是空的）" })
     }
     if (rejecting) {
-        OutlinedTextField(
-            value = feedback,
-            onValueChange = { feedback = it },
-            placeholder = { Text("修改意见（可以不写）", maxLines = 1) },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !busy,
-            maxLines = 5,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { rejecting = false }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Text("取消", maxLines = 1)
-            }
-            Button(onClick = { submit(Resolutions.rejectPlan(feedback.trim())) }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Text("打回修改", maxLines = 1)
-            }
+        JTextField(feedback, { feedback = it }, "修改意见（可以不写）", enabled = !busy, maxLines = 5)
+        Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+            PillButton("取消", { rejecting = false }, Modifier.weight(1f), kind = ButtonKind.Neutral, enabled = !busy)
+            PillButton("打回修改", { submit(Resolutions.rejectPlan(feedback.trim())) }, Modifier.weight(1f), kind = ButtonKind.Prominent, enabled = !busy)
         }
     } else {
-        Button(onClick = { submit(Resolutions.approvePlanAuto()) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("批准并自动执行", maxLines = 1)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = { submit(Resolutions.approvePlanAcceptEdits()) }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Text("自动接受编辑", maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            OutlinedButton(onClick = { rejecting = true }, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Text("打回修改", maxLines = 1)
-            }
+        PillButton("批准并自动执行", { submit(Resolutions.approvePlanAuto()) }, Modifier.fillMaxWidth(), kind = ButtonKind.Prominent, icon = JIcons.run, enabled = !busy, large = true)
+        Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+            PillButton("自动接受编辑", { submit(Resolutions.approvePlanAcceptEdits()) }, Modifier.weight(1f), kind = ButtonKind.Tinted, enabled = !busy)
+            PillButton("打回", { rejecting = true }, Modifier.weight(1f), kind = ButtonKind.Tinted, enabled = !busy)
         }
     }
 }
@@ -508,39 +467,22 @@ private fun PermissionBody(ix: Interaction, busy: Boolean, submit: (Resolution) 
     val detail = ix.summary?.takeIf { it.isNotBlank() } ?: ix.toolInput?.let { pretty(it) }
     if (!detail.isNullOrBlank()) {
         Box(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 200.dp)
-                .background(chatColors.fillWell, RoundedCornerShape(12.dp))
-                .verticalScroll(rememberScrollState())
-                .padding(12.dp),
-        ) {
-            Text(detail, fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 18.sp)
-        }
+            Modifier.fillMaxWidth().heightIn(max = JSize.box200).background(chatColors.codeBackground, RoundedCornerShape(JRadius.control))
+                .verticalScroll(rememberScrollState()).padding(JSpace.m),
+        ) { Text(detail, style = JTheme.type.code, color = chatColors.label) }
     }
     if (denying) {
-        OutlinedTextField(
-            value = reason,
-            onValueChange = { reason = it },
-            placeholder = { Text("告诉它为什么（可以不写）", maxLines = 1) },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !busy,
-            maxLines = 4,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { denying = false }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("取消", maxLines = 1) }
-            Button(onClick = { submit(Resolutions.deny(reason)) }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("拒绝", maxLines = 1) }
+        JTextField(reason, { reason = it }, "告诉它为什么（可以不写）", enabled = !busy, maxLines = 4)
+        Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+            PillButton("取消", { denying = false }, Modifier.weight(1f), kind = ButtonKind.Neutral, enabled = !busy)
+            PillButton("拒绝", { submit(Resolutions.deny(reason)) }, Modifier.weight(1f), kind = ButtonKind.DestructiveProminent, enabled = !busy)
         }
     } else {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { denying = true }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("拒绝", maxLines = 1) }
-            Button(onClick = { submit(Resolutions.allow()) }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("允许", maxLines = 1) }
+        Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+            PillButton("拒绝", { denying = true }, Modifier.weight(1f), kind = ButtonKind.Destructive, enabled = !busy, large = true)
+            PillButton("允许", { submit(Resolutions.allow()) }, Modifier.weight(1f), kind = ButtonKind.Prominent, enabled = !busy, large = true)
         }
-        if (ix.canAlwaysAllow) {
-            TextButton(onClick = { submit(Resolutions.allow(always = true)) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                Text("本会话总是允许", maxLines = 1)
-            }
-        }
+        if (ix.canAlwaysAllow) PillButton("本会话总是允许", { submit(Resolutions.allow(always = true)) }, Modifier.fillMaxWidth(), kind = ButtonKind.Tinted, enabled = !busy)
     }
 }
 
@@ -563,22 +505,22 @@ private fun ScreenBody(ix: Interaction, busy: Boolean, submit: (Resolution) -> U
         return
     }
     dialog.header?.takeIf { it.isNotBlank() }?.let {
-        Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.secondaryLabel, maxLines = 1)
+        Text(it, style = JTheme.type.captionStrong, color = c.secondaryLabel, maxLines = 1)
     }
     dialog.question.takeIf { it.isNotBlank() }?.let {
-        Text(it, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+        Text(it, style = JTheme.type.heading, color = c.label)
     }
     dialog.detail?.takeIf { it.isNotBlank() }?.let {
         Box(
-            Modifier.fillMaxWidth().heightIn(max = 180.dp)
-                .background(c.fillWell, RoundedCornerShape(12.dp))
-                .verticalScroll(rememberScrollState()).padding(10.dp),
-        ) { Text(it, fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 18.sp, color = c.secondaryLabel) }
+            Modifier.fillMaxWidth().heightIn(max = JSize.box200)
+                .background(c.codeBackground, RoundedCornerShape(JRadius.control))
+                .verticalScroll(rememberScrollState()).padding(JSpace.m),
+        ) { Text(it, style = JTheme.type.code, color = c.secondaryLabel) }
     }
     val choices = dialog.options.filter { it.kind != "chat" }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.fillWell)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(JRadius.card)).background(c.fillWell)) {
         choices.forEachIndexed { i, opt ->
-            if (i > 0) HorizontalDivider(Modifier.padding(start = 50.dp), color = c.separator)
+            if (i > 0) RowDivider(OptionTextColumn)
             if (opt.needsText) {
                 OtherRow(
                     value = typing,
@@ -600,18 +542,10 @@ private fun ScreenBody(ix: Interaction, busy: Boolean, submit: (Resolution) -> U
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         dialog.options.firstOrNull { it.kind == "chat" }?.let { chat ->
-            TextButton(onClick = { sending = chat.key; submit(Resolutions.screenOption(chat.key)) }, enabled = !busy) {
-                Icon(Icons.AutoMirrored.Rounded.Chat, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("改在对话里说", fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            }
+            PillButton("改在对话里说", { sending = chat.key; submit(Resolutions.screenOption(chat.key)) }, kind = ButtonKind.Tinted, icon = JIcons.chatInstead, enabled = !busy)
         }
         Spacer(Modifier.weight(1f))
-        TextButton(onClick = { showTerminal = !showTerminal }) {
-            Icon(Icons.Rounded.Terminal, null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(if (showTerminal) "收起终端" else "查看终端", fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-        }
+        PillButton(if (showTerminal) "收起终端" else "查看终端", { showTerminal = !showTerminal }, kind = ButtonKind.Neutral, icon = JIcons.terminal)
     }
     if (showTerminal) ScreenTerminal(ix, busy, submit)
 }
@@ -623,60 +557,30 @@ private fun ScreenTerminal(ix: Interaction, busy: Boolean, submit: (Resolution) 
     val c = chatColors
     var text by remember(ix.id) { mutableStateOf("") }
     if (ix.secret == true) {
-        ix.screen?.lineSequence()?.lastOrNull { it.isNotBlank() }?.let {
-            Text(it.trim(), fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = c.label)
-        }
-        OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
-            placeholder = { Text("密码", maxLines = 1) },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true,
-            enabled = !busy,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text("只用这一次，不会保存", style = MaterialTheme.typography.labelSmall, color = c.secondaryLabel)
-        Button(onClick = { submit(Resolutions.screenText(text)) }, enabled = !busy && text.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-            Text("发送", maxLines = 1)
-        }
+        ix.screen?.lineSequence()?.lastOrNull { it.isNotBlank() }?.let { Text(it.trim(), style = JTheme.type.code, color = c.label) }
+        JTextField(text, { text = it }, "密码", singleLine = true, enabled = !busy, password = true)
+        Text("只用这一次，不会保存", style = JTheme.type.label, color = c.secondaryLabel)
+        PillButton("发送", { submit(Resolutions.screenText(text)) }, Modifier.fillMaxWidth(), kind = ButtonKind.Prominent, enabled = !busy && text.isNotEmpty(), large = true)
         return
     }
     ix.screen?.takeIf { it.isNotBlank() }?.let {
         Box(
-            Modifier.fillMaxWidth().heightIn(max = 220.dp)
-                .background(Color(0xFF111418), RoundedCornerShape(12.dp))
-                .verticalScroll(rememberScrollState()).padding(10.dp),
-        ) { Text(it.trimEnd(), fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp, softWrap = true, color = Color(0xFFE5E7EB)) }
+            Modifier.fillMaxWidth().heightIn(max = JSize.box220)
+                .background(TerminalInk, RoundedCornerShape(JRadius.control))
+                .verticalScroll(rememberScrollState()).padding(JSpace.m),
+        ) { Text(it.trimEnd(), style = JTheme.type.code, softWrap = true, color = TerminalPaper) }
     }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpace.s), verticalArrangement = Arrangement.spacedBy(JSpace.s)) {
         listOf("1" to listOf("1"), "2" to listOf("2"), "3" to listOf("3"), "回车" to listOf("enter"), "Esc" to listOf("esc"))
-            .forEach { (label, keys) ->
-                OutlinedButton(onClick = { submit(Resolutions.screenKeys(keys)) }, enabled = !busy) { Text(label, maxLines = 1) }
-            }
+            .forEach { (label, keys) -> PillButton(label, { submit(Resolutions.screenKeys(keys)) }, kind = ButtonKind.Neutral, enabled = !busy) }
     }
-    OutlinedTextField(
-        value = text,
-        onValueChange = { text = it },
-        placeholder = { Text("输入文字发送到终端", maxLines = 1) },
-        modifier = Modifier.fillMaxWidth(),
-        enabled = !busy,
-        maxLines = 3,
-        trailingIcon = if (text.isNotEmpty()) {
-            { TextButton(onClick = { submit(Resolutions.screenText(text)) }, enabled = !busy) { Text("发送", maxLines = 1) } }
-        } else null,
-    )
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+        JTextField(text, { text = it }, "输入文字发送到终端", Modifier.weight(1f), enabled = !busy, maxLines = 3)
+        if (text.isNotEmpty()) RoundButton(JIcons.send, "发送", { submit(Resolutions.screenText(text)) }, fill = c.accent, words = Color.White, enabled = !busy)
+    }
 }
 
-/** The app's button: tonal, or filled when [prominent]. */
-@Composable
-private fun ThemedButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    prominent: Boolean = false,
-    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
-) {
-    if (prominent) Button(onClick, modifier, enabled, content = content)
-    else FilledTonalButton(onClick, modifier, enabled, content = content)
-}
+/** The terminal's own colors (iOS `Theme.terminalBackground` / `terminalText`), the same in every style. */
+private val TerminalInk = Color(0xFF16171B)
+private val TerminalPaper = Color(0xFFE6E3DA)
+

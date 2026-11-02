@@ -1966,6 +1966,12 @@ class H(BaseHTTPRequestHandler):
             if not purpose: return self.send_json({"error": "模型用途不存在"}, 404)
             return self.send_json({"purpose": purpose, "providers": catalog["providers"]})
         if p == "/api/v1/assistant/tasks": return self.send_json({"tasks": SCHEDULE})
+        # The two lists the Android app still reads (the hub's views of the same tasks, assistant_schedule.go):
+        # routines are the daily tasks, follow-ups the enabled once / interval ones by their next run.
+        if p == "/api/v1/assistant/routines": return self.send_json({"routines": [t for t in SCHEDULE if t.get("repeat") == "daily"]})
+        if p == "/api/v1/assistant/followups":
+            due = [{**t, "at": t.get("next_run")} for t in SCHEDULE if t.get("repeat") != "daily" and t.get("enabled")]
+            return self.send_json({"followups": sorted(due, key=lambda t: t["at"] or "")})
         if p.startswith("/api/v1/machines/") and p.endswith("/stat"):
             cwd = q.get("cwd", [""])[0]
             paths = q.get("path", []) + [x for x in q.get("paths", [""])[0].split("\n") if x]
@@ -2268,7 +2274,16 @@ class H(BaseHTTPRequestHandler):
             if t is None: return self.send_json({"error": "这个定时任务已经不在了"}, 404)
             for k in ("run_machine_id", "run_session_id", "run_launcher"): t.pop(k, None)
             return self.send_json({"task": t})
-        if p.startswith("/api/v1/assistant/tasks/") and p.endswith("/run"):
+        if p == "/api/v1/assistant/routines" and self.command == "PUT":  # the Android app replaces the daily ones
+            old = {t["id"]: t for t in SCHEDULE if t.get("repeat") == "daily"}
+            new = [save_task(old.get(r.get("id")) or {"id": "rt_" + uuid.uuid4().hex[:8], "created_at": ago()}, {**r, "repeat": "daily"})
+                   for r in json.loads(self.last_body or b"{}").get("routines") or []]
+            SCHEDULE[:] = [t for t in SCHEDULE if t.get("repeat") != "daily"] + new
+            return self.send_json({"routines": new})
+        if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":
+            SCHEDULE[:] = [t for t in SCHEDULE if t["id"] != p.split("/")[5]]
+            return self.send_json({"ok": True})
+        if p.startswith(("/api/v1/assistant/tasks/", "/api/v1/assistant/routines/", "/api/v1/assistant/followups/")) and p.endswith("/run"):
             tid = p.split("/")[5]
             SCHEDULE_RAN.append(tid)
             t = next((t for t in SCHEDULE if t["id"] == tid), {})

@@ -2,35 +2,25 @@ package jarvis.android.ui.chat
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PictureAsPdf
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import jarvis.android.data.HubException
+import jarvis.android.ui.design.PageScaffold
 import jarvis.android.ui.ContextRef
 import jarvis.android.ui.composeWithContexts
 import kotlinx.coroutines.delay
@@ -105,8 +95,10 @@ fun fileIcon(path: String): ImageVector {
     }
 }
 
-/** A full-screen page in a dialog: back, title, actions (tool output, selectable text, the plan). */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * A full-screen page in a dialog (tool output, selectable text, the plan): the design system's page header — the
+ * round back button, the title, [actions] at the end — then [content], given the gesture bar's inset to keep clear.
+ */
 @Composable
 fun FullScreenPage(
     title: String,
@@ -115,14 +107,14 @@ fun FullScreenPage(
     content: @Composable (PaddingValues) -> Unit,
 ) {
     Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    actions = { actions() },
-                )
-            },
-        ) { pad -> Box(Modifier.fillMaxSize()) { content(pad) } }
+        FullScreenPageBody(title, onBack, actions, content)
+    }
+}
+
+/** What [FullScreenPage] shows in its dialog (screenshots draw it without one). */
+@Composable
+internal fun FullScreenPageBody(title: String, onBack: () -> Unit, actions: @Composable () -> Unit, content: @Composable (PaddingValues) -> Unit) {
+    PageScaffold(title, onBack, actions = { actions() }) {
+        Box(Modifier.weight(1f).fillMaxWidth()) { content(WindowInsets.navigationBars.asPaddingValues()) }
     }
 }

@@ -37,6 +37,10 @@ import jarvis.android.data.Engines
 import jarvis.android.data.Hub
 import jarvis.android.data.Machine
 import jarvis.android.settings.setEngine
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JSpace
 import jarvis.android.ui.settings.KitActionRow
 import jarvis.android.ui.settings.KitGroup
 import jarvis.android.ui.settings.KitNoticeRow
@@ -62,10 +66,11 @@ fun EngineScreen(hub: Hub, machineId: String, onDone: () -> Unit, pairing: Boole
     }
     LaunchedEffect(machine) { machine?.let { selection?.synchronize(it) } }
 
-    KitPage(if (pairing) "选择引擎" else "引擎", onBack = { if (selection?.saving != true) onDone() }) {
+    // Right after pairing an engine must be chosen: no back button (system back is held by the caller too).
+    KitPage(if (pairing) "选择引擎" else "引擎", onBack = if (pairing) null else ({ if (selection?.saving != true) onDone() })) {
         if (machine == null || selection == null) {
             item(key = "missing") {
-                KitGroup(Modifier.padding(top = 20.dp)) {
+                KitGroup(Modifier.padding(top = JSpace.xl)) {
                     row { KitNoticeRow("暂时读不到这台机器", if (pairing) "配对已完成，稍后可以在设置 › 电脑 › 机器里选择引擎。" else null) }
                     if (pairing) row { KitActionRow("先继续", onClick = onDone) }
                 }
@@ -74,9 +79,9 @@ fun EngineScreen(hub: Hub, machineId: String, onDone: () -> Unit, pairing: Boole
         }
         if (pairing) {
             item(key = "title") {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("这台电脑用哪个引擎", style = MaterialTheme.typography.headlineSmall, color = c.label)
-                    Text(machine.displayName, fontSize = 15.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Column(Modifier.fillMaxWidth().padding(horizontal = JSpace.page + JSpace.xs, vertical = JSpace.m), verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+                    Text("这台电脑用哪个引擎", style = JTheme.type.title, color = c.label)
+                    Text(machine.displayName, style = JTheme.type.secondary, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -94,16 +99,16 @@ fun EngineScreen(hub: Hub, machineId: String, onDone: () -> Unit, pairing: Boole
         }
         selection.error?.let { err ->
             item(key = "error") {
-                KitGroup(Modifier.padding(top = 20.dp)) {
+                KitGroup(Modifier.padding(top = JSpace.xl)) {
                     row {
                         KitNoticeRow(err, if (pairing) "必须选一个引擎才能继续，检查网络后再点一次确认。" else null,
-                            tint = c.danger, icon = Icons.Default.Error)
+                            tint = c.danger, icon = JIcons.error)
                     }
                 }
             }
         }
         item(key = "actions") {
-            KitGroup(Modifier.padding(top = 20.dp)) {
+            KitGroup(Modifier.padding(top = JSpace.xl)) {
                 row {
                     KitActionRow(
                         if (pairing) "确认并继续" else "保存",
@@ -116,7 +121,7 @@ fun EngineScreen(hub: Hub, machineId: String, onDone: () -> Unit, pairing: Boole
                             }
                         },
                         enabled = !selection.saving && Engines.canSelect(selection.selected, machine),
-                        trailing = if (selection.saving) ({ CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }) else null,
+                        trailing = if (selection.saving) ({ CircularProgressIndicator(Modifier.size(JSize.markL), strokeWidth = JSize.rule, color = c.secondaryLabel) }) else null,
                     )
                 }
             }
@@ -132,23 +137,23 @@ private fun EngineOption(found: DetectedEngine, machine: Machine, selected: Bool
         Modifier.fillMaxWidth()
             .semantics { this.selected = selected }
             .clickable(enabled = enabled, role = Role.RadioButton, onClick = onClick)
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .heightIn(min = JSize.box50)
+            .padding(horizontal = JSpace.l, vertical = JSpace.m)
             .alpha(if (enabled) 1f else 0.45f),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(JSpace.m),
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(found.name.ifBlank { found.id }, fontSize = 16.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Engines.detail(found.id)?.let { Text(it, fontSize = 13.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            Text(Engines.detection(found.id, machine), fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Text(found.name.ifBlank { found.id }, style = JTheme.type.body, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Engines.detail(found.id)?.let { Text(it, style = JTheme.type.caption, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Text(Engines.detection(found.id, machine), style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
             found.note?.takeIf { it.isNotBlank() }?.let {
-                Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = c.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(it, style = JTheme.type.label, color = c.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         Icon(
-            if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle, if (selected) "已选" else null,
-            tint = if (selected) c.accent else c.tertiaryLabel, modifier = Modifier.size(22.dp),
+            if (selected) JIcons.success else JIcons.unchecked, if (selected) "已选" else null,
+            tint = if (selected) c.accent else c.tertiaryLabel, modifier = Modifier.size(JSize.iconS),
         )
     }
 }

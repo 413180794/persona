@@ -1,5 +1,14 @@
 package jarvis.android.ui.machines
 
+import jarvis.android.ui.design.JSpace
+import jarvis.android.ui.design.JSize
+import jarvis.android.ui.design.JRadius
+import jarvis.android.ui.JTheme
+import jarvis.android.ui.design.JIcons
+import jarvis.android.ui.design.ChoiceChip
+import jarvis.android.ui.design.PageHeader
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.navigationBarsPadding
 import jarvis.android.ui.settings.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -112,40 +121,26 @@ fun MachineMonitorScreen(hub: Hub, machineId: String, onBack: () -> Unit) {
 
     val system = data?.system ?: machine?.system
     val online = data?.online ?: machine?.online ?: false
-    Scaffold(
-        containerColor = c.page,
-        topBar = {
-            TopAppBar(
-                title = { Text(machine?.displayName ?: machineId, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { jarvis.android.ui.PaneBackButton(onBack) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = c.page, scrolledContainerColor = c.page),
-            )
-        },
-    ) { pad ->
+    Column(Modifier.fillMaxSize().background(c.page)) {
+        PageHeader(machine?.displayName ?: machineId, onBack, subtitle = "系统与监控")
         Column(
-            Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).verticalScroll(rememberScrollState())
-                .padding(top = 8.dp, bottom = pad.calculateBottomPadding() + 32.dp, start = 16.dp, end = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()
+                .padding(top = JSpace.s, bottom = JSpace.xxl, start = JSpace.page, end = JSpace.page),
+            verticalArrangement = Arrangement.spacedBy(JSpace.l),
         ) {
             Header(machine, system, online)
             val latest = data?.latest
             if (latest != null && online) NowGrid(latest, system?.cores)
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                MetricRange.entries.forEachIndexed { i, r ->
-                    SegmentedButton(
-                        selected = r == range,
-                        onClick = { range = r },
-                        shape = SegmentedButtonDefaults.itemShape(i, MetricRange.entries.size),
-                        icon = {},
-                    ) { Text(r.title, maxLines = 1, fontSize = 14.sp) }
-                }
+            // 1 / 6 / 24 小时 as the app's choice chips (iOS: a segmented picker).
+            Row(horizontalArrangement = Arrangement.spacedBy(JSpace.s)) {
+                MetricRange.entries.forEach { r -> ChoiceChip(r.title, r == range, { range = r }) }
             }
             Charts(data, shownRange, system, selection, failure)
             val cores = data?.latest?.cores
             if (cores != null && online && cores.size > 1) CoreBars(cores)
             if (system != null) SystemFacts(system, machine)
             Text("历史保留 24 小时。最近 1 小时每 10 秒一个点，更早的每分钟一个点；中间断开的时段不连线。",
-                fontSize = 12.sp, color = c.secondaryLabel, modifier = Modifier.padding(horizontal = 4.dp))
+                style = JTheme.type.label, color = c.secondaryLabel, modifier = Modifier.padding(horizontal = JSpace.xs))
         }
     }
 }
@@ -166,19 +161,19 @@ private fun Header(m: Machine?, system: MachineSystem?, online: Boolean) {
     val c = kitColors
     val now by rememberNow()
     Row(Modifier.fillMaxWidth().kitCard(padding = 14.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        horizontalArrangement = Arrangement.spacedBy(JSpace.l)) {
         OSBadge(system, m, size = 54.dp, online = online)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(osName(m, system) ?: "未知系统", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 2)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpace.xxs)) {
+            Text(osName(m, system) ?: "未知系统", style = JTheme.type.heading, color = c.label, maxLines = 2)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.sm)) {
                 StateDot(if (online) c.positive else c.secondaryLabel, size = 7.dp)
-                Text(if (online) "在线" else "离线", fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                Text(if (online) "在线" else "离线", style = JTheme.type.secondaryStrong,
                     color = if (online) c.positive else c.secondaryLabel, maxLines = 1)
                 val boot = system?.bootTime
                 if (online && boot != null && boot > 0) {
-                    Text("已运行 " + MetricFormat.uptime(boot, now), fontSize = 15.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("已运行 " + MetricFormat.uptime(boot, now), style = JTheme.type.secondary, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 } else if (!online && parseTime(m?.lastSeen) != null) {
-                    Text("最后在线 " + relativeTime(parseTime(m?.lastSeen), now), fontSize = 15.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("最后在线 " + relativeTime(parseTime(m?.lastSeen), now), style = JTheme.type.secondary, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -220,10 +215,10 @@ private fun Charts(data: MachineMetrics?, shownRange: MetricRange?, system: Mach
         }
         if (data.points.all { it.isGap }) {
             Text(if (data.online) "刚开始记录：过一会儿这里就有曲线了。" else "这段时间这台机器没有连上。",
-                fontSize = 13.sp, color = c.secondaryLabel, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                style = JTheme.type.caption, color = c.secondaryLabel, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     } else if (failure != null) {
-        KitEmpty(icon = Icons.AutoMirrored.Filled.ShowChart, title = "看不到监控数据", message = failure, modifier = Modifier.padding(vertical = 30.dp))
+        KitEmpty(icon = JIcons.chart, title = "看不到监控数据", message = failure, modifier = Modifier.padding(vertical = 30.dp))
     } else {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
     }
@@ -245,9 +240,9 @@ private fun NowGrid(s: MetricSample, cores: Int?) {
         { m -> Tile(m, "交换", if (s.swapTotal > 0) MetricFormat.bytes(s.swapUsed) else "未启用",
             if (s.swapTotal > 0) "共 " + MetricFormat.bytes(s.swapTotal) else null, s.swapPercent?.let { it / 100 }, c.secondaryLabel, MetricLevel.NORMAL) },
     )
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(JSpace.m)) {
         tiles.chunked(2).forEach { pair ->
-            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) { pair.forEach { it(Modifier.weight(1f).fillMaxHeight()) } }
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(JSpace.m)) { pair.forEach { it(Modifier.weight(1f).fillMaxHeight()) } }
         }
     }
 }
@@ -255,16 +250,16 @@ private fun NowGrid(s: MetricSample, cores: Int?) {
 @Composable
 private fun Tile(modifier: Modifier, title: String, value: String, detail: String?, fraction: Double?, color: Color, level: MetricLevel) {
     val c = kitColors
-    Column(modifier.kitCard(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1)
+    Column(modifier.kitCard(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpace.xs)) {
+            Text(title, style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1)
             if (level > MetricLevel.NORMAL) {
-                Icon(Icons.Default.Warning, null, tint = MetricColors.level(level), modifier = Modifier.size(12.dp))
-                Text(if (level == MetricLevel.CRITICAL) "过高" else "偏高", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.secondaryLabel, maxLines = 1)
+                Icon(JIcons.error, null, tint = MetricColors.level(level), modifier = Modifier.size(JSize.markXS))
+                Text(if (level == MetricLevel.CRITICAL) "过高" else "偏高", style = JTheme.type.labelStrong, color = c.secondaryLabel, maxLines = 1)
             }
         }
         Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(detail ?: " ", fontSize = 12.sp, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(detail ?: " ", style = JTheme.type.label, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (fraction != null) MeterBar(fraction, if (level > MetricLevel.NORMAL) MetricColors.level(level) else color)
         else Spacer(Modifier.height(6.dp)) // every tile the same height
     }
@@ -275,10 +270,10 @@ private fun Tile(modifier: Modifier, title: String, value: String, detail: Strin
 private fun CoreBars(cores: List<Double>) {
     val c = kitColors
     val cpu = MetricColors.cpu
-    Column(Modifier.fillMaxWidth().kitCard(padding = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().kitCard(padding = 14.dp), verticalArrangement = Arrangement.spacedBy(JSpace.s)) {
         Row {
-            Text("每个核心", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
-            Text("最忙 ${MetricFormat.percent(cores.maxOrNull())}", fontSize = 12.sp, color = c.secondaryLabel)
+            Text("每个核心", style = JTheme.type.secondaryStrong, color = c.label, modifier = Modifier.weight(1f))
+            Text("最忙 ${MetricFormat.percent(cores.maxOrNull())}", style = JTheme.type.label, color = c.secondaryLabel)
         }
         val gap = if (cores.size > 32) 1.dp else 2.dp
         Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Bottom) {
@@ -311,11 +306,11 @@ private fun SystemFacts(system: MachineSystem, machine: Machine?) {
         machine?.nodeVersion?.takeIf { it.isNotEmpty() }?.let { add("Jarvis node" to it) }
     }
     Column(Modifier.fillMaxWidth().kitCard(padding = 14.dp)) {
-        Text("系统", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.padding(bottom = 8.dp))
+        Text("系统", style = JTheme.type.secondaryStrong, color = c.label, modifier = Modifier.padding(bottom = JSpace.s))
         rows.forEachIndexed { i, (k, v) ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(k, fontSize = 15.sp, color = c.secondaryLabel)
-                Text(v, fontSize = 15.sp, color = c.label, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth().padding(vertical = JSpace.sm), horizontalArrangement = Arrangement.spacedBy(JSpace.m)) {
+                Text(k, style = JTheme.type.secondary, color = c.secondaryLabel)
+                Text(v, style = JTheme.type.secondary, color = c.label, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
             }
             if (i < rows.size - 1) Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
         }
