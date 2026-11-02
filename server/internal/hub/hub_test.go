@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/chyroc/jarvis/server/internal/db"
 	"io"
 	"log"
@@ -268,6 +269,10 @@ func newTestHub(t *testing.T) *Hub {
 		push: newPusher(cfg.dir, nil, func(string, ...any) {}),
 	}
 	h.live = newLiveActivities(h)
+	h.upd = newUpdater(h)
+	h.upd.dir = filepath.Join(cfg.dir, "update")
+	h.upd.exec = func(string) error { return errors.New("exec is not run in tests") }
+	h.upd.startWatch = func(string, string) error { return nil }
 	return h
 }
 

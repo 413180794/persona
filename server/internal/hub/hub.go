@@ -32,6 +32,7 @@ type Hub struct {
 	cfg      *Config
 	version  string
 	build    update.Build // channel, build number, where updates come from (docs/hub-update.md)
+	upd      *updater     // updating itself to the publisher's release (selfupdate.go)
 	logger   *log.Logger
 	machines []*Machine
 	byID     map[string]*Machine
@@ -173,17 +174,22 @@ type pending struct {
 var resumeGrace = 3 * time.Minute
 
 func Run(ctx context.Context, b update.Build) error {
+	logger := log.New(os.Stderr, "", log.LstdFlags)
+	// An update that keeps failing goes back before anything else can fail, the config included (selfupdate.go).
+	updating := newUpdater(&Hub{build: b, version: b.Version, logger: logger}).boot()
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
 	}
 	version := b.Version
 	h := &Hub{
-		cfg: cfg, version: version, build: b, logger: log.New(os.Stderr, "", log.LstdFlags),
+		cfg: cfg, version: version, build: b, logger: logger,
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 	}
 	h.live = newLiveActivities(h)
+	h.upd = newUpdater(h)
+	h.upd.confirmed = !updating // an update under way is confirmed by this process (its watchdog waits for that)
 	database, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
@@ -237,6 +243,7 @@ func Run(ctx context.Context, b update.Build) error {
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
+	h.upd.start(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
 	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
 	h.startPlugins(ctx)

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Publish jarvisd for anyone to install (docs/release.md「发布 jarvisd」): build the four binaries with the web client
 # inside (no skills in them: those live in each machine's ~/.jarvis/skills), check them for private values, write the
-# release manifest latest.json (signed with publish.signing_key when set, docs/hub-update.md「发布」), then deploy the
-# site/ worker with dl/ and install.sh added, at the config's publish.site_url. Every hub of the release channel
+# release manifest latest.json (every file's sha256, docs/hub-update.md「发布」), then deploy the site/ worker with dl/
+# and install.sh added, at the config's publish.site_url. Every hub of the release channel
 # updates itself to it. The worker also runs the push relay (/relay/*): it is deployed with it.
 #
 #   curl -fsSL <publish.site_url>/install.sh | sh
@@ -65,24 +65,15 @@ for bin in "$OUT/bin"/jarvisd-*; do
 done
 (cd "$OUT/bin" && shasum -a 256 jarvisd-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 
-# The manifest hubs update from, signed when the key is configured (it never leaves this machine). Unsigned, hubs only
-# say a newer release is out and install nothing (docs/hub-update.md「签名还没启用的过渡期」).
+# The manifest hubs update from: version, build number, commit and every download's sha256 (not signed, the user's
+# call: it guards against a broken download over HTTPS, docs/hub-update.md「安全」).
 "$host_bin" release manifest --dir "$OUT/bin" --version "$VERSION" --build "$BUILD" --commit "$COMMIT" --out "$OUT/bin/latest.json"
-if [ -n "${JARVIS_SIGNING_KEY:-}" ]; then
-  [ -f "$JARVIS_SIGNING_KEY" ] || { echo "publish.signing_key is set but $JARVIS_SIGNING_KEY does not exist" >&2; exit 1; }
-  "$host_bin" release sign "$JARVIS_SIGNING_KEY" "$OUT/bin/latest.json"
-  # With the keys the new binary trusts: a key not yet in keys.go would publish what no hub can install.
-  "$host_bin" release verify "$OUT/bin/latest.json" || exit 1
-else
-  echo "no publish.signing_key: latest.json goes out unsigned, hubs will not update themselves (docs/hub-update.md「发布者生成钥匙」)" >&2
-fi
 
 # The site with dl/ and install.sh added, deployed from a copy (site/ in the tree stays as committed).
 rm -rf "$OUT/site"
 cp -R site "$OUT/site"
 mkdir -p "$OUT/site/public/dl"
 cp "$OUT/bin/"*.gz "$OUT/bin/SHA256SUMS" "$OUT/bin/VERSION" "$OUT/bin/latest.json" "$OUT/site/public/dl/"
-[ -f "$OUT/bin/latest.json.sig" ] && cp "$OUT/bin/latest.json.sig" "$OUT/site/public/dl/"
 cp "$OUT/install.sh" "$OUT/site/public/install.sh"
 python3 scripts/check_asset_sizes.py "$OUT/site/public"
 if [ -n "${NO_DEPLOY:-}" ]; then
@@ -104,7 +95,4 @@ if [ "$served" != "$VERSION" ]; then
 fi
 curl -fsSL "$JARVIS_PUBLISH_URL/dl/SHA256SUMS" | cmp -s - "$OUT/bin/SHA256SUMS" || { echo "served SHA256SUMS differs" >&2; exit 1; }
 curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" | cmp -s - "$OUT/bin/latest.json" || { echo "served latest.json differs" >&2; exit 1; }
-if [ -f "$OUT/bin/latest.json.sig" ]; then
-  curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json.sig" | cmp -s - "$OUT/bin/latest.json.sig" || { echo "served latest.json.sig differs" >&2; exit 1; }
-fi
 echo "jarvisd $VERSION published: curl -fsSL $JARVIS_PUBLISH_URL/install.sh | sh"

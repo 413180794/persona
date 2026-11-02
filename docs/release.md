@@ -151,9 +151,8 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
   - **不带任何 skill**：lark-connector 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.jarvis/skills/`，
     所以只有一种二进制，我们自己的 hub 也用它（`docs/hub-update.md`）。脚本会确认二进制里没有 lark-connector。
     `-tags public` 不改变任何代码（`TestOneBuild`），只是给隐私扫描的标记。
-  - **版本清单** `dl/latest.json`（各平台压缩包和解压后的 sha256、build 号、commit），配置了 `publish.signing_key` 就签出 `latest.json.sig`，
-    并用新二进制编进去的公钥验一遍；发布前检查 build 号比线上的大、线上那版的 commit 是这次的祖先。各 hub 只装签过名的
-    （`docs/hub-update.md`「发布」「发布者生成钥匙」）。
+  - **版本清单** `dl/latest.json`（各平台压缩包和解压后的 sha256、build 号、commit），不签名（用户的决定，取舍见 `docs/hub-update.md`「安全」）；
+    发布前检查 build 号比线上的大、线上那版的 commit 是这次的祖先。各 hub 读它自动更新。
   - 上传前跑 `check_bundle_privacy.py --whole-short`：二进制里不能有配置里的任何值（Go 的模块路径除外；四个字以内的值按整词比，
     Unicode 表和压缩过的 JS 里到处是短的字母组合）。公开依赖中的少量协议名、官方联系链接和标准网络常量按精确上下文分类，不放行域名或私网段；
     要求二进制的 `public` 标记、未 replace 的依赖及 checksum 与 `server/go.sum` 一致，构建前 `go mod verify`。已登记的个人值始终优先拦截，见 `docs/lessons/testing.md`。
@@ -161,7 +160,7 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
   Workers 静态资源每个文件最多 25 MiB（[官方限制](https://developers.cloudflare.com/workers/platform/limits/#static-assets)），上传前 `check_asset_sizes.py` 检查整个发布目录；本地 `build-publish/bin` 保留未压缩二进制供排查，但不上传。
   回归：`python3 -B -m unittest discover -s scripts -p 'test_compressed_publish.py'`。
 - 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
-  报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION`、`dl/SHA256SUMS`、`dl/latest.json`（和 `.sig`）确认上去的就是刚编的。
+  报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION`、`dl/SHA256SUMS`、`dl/latest.json` 确认上去的就是刚编的。
   推送中继在同一个 Worker 里（`/relay/*`），每次发布会把它一起重新部署。
 - 推送中继已部署（2026-11-02）：常驻 `jarvisd relay` + Cloudflare Tunnel + 官网 Worker 转发，公网健康、源站保护、登记和鉴权已验证。
   发版配置需填 `app.push_relay`，安装带通知扩展的新 TestFlight 才会登记；真实设备上的通知解密仍要单独验收，见 `docs/push-relay.md`。

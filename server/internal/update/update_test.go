@@ -3,9 +3,7 @@ package update
 import (
 	"bytes"
 	"compress/gzip"
-	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -53,79 +51,6 @@ func TestNoDowngrade(t *testing.T) {
 	}
 	if (Build{}).Newer(202611021700) {
 		t.Error("a build without a number updates")
-	}
-}
-
-func testKey(t *testing.T) (ed25519.PrivateKey, ed25519.PublicKey) {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "k")
-	pub, err := Keygen(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	priv, err := LoadPrivate(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return priv, pub
-}
-
-func TestSignAndVerify(t *testing.T) {
-	priv, pub := testKey(t)
-	_, other := testKey(t)
-	data := []byte(`{"version":"v1","build":202611021530}`)
-	sig, _ := json.Marshal(Sign(priv, data))
-	if err := Verify(data, sig, []ed25519.PublicKey{other, pub}); err != nil {
-		t.Fatalf("a good signature: %v", err)
-	}
-	tampered := bytes.Replace(data, []byte("1530"), []byte("1531"), 1)
-	if err := Verify(tampered, sig, []ed25519.PublicKey{pub}); !errors.Is(err, ErrBadSignature) {
-		t.Fatalf("one byte changed: %v", err)
-	}
-	if err := Verify(data, sig, []ed25519.PublicKey{other}); !errors.Is(err, ErrUnknownKey) {
-		t.Fatalf("a key not trusted: %v", err)
-	}
-	if err := Verify(data, nil, []ed25519.PublicKey{pub}); !errors.Is(err, ErrUnsigned) {
-		t.Fatalf("no signature: %v", err)
-	}
-	if err := Verify(data, sig, nil); !errors.Is(err, ErrNoTrustedKey) {
-		t.Fatalf("no keys compiled in: %v", err)
-	}
-	if err := Verify(data, []byte(`{"key_id":"x","signature":"%%%"}`), []ed25519.PublicKey{pub}); !errors.Is(err, ErrBadSignature) {
-		t.Fatalf("garbage: %v", err)
-	}
-}
-
-func TestKeyFiles(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "k")
-	if _, err := Keygen(path); err != nil {
-		t.Fatal(err)
-	}
-	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
-		t.Fatalf("key file mode %v", st.Mode().Perm())
-	}
-	if _, err := Keygen(path); err == nil {
-		t.Fatal("an existing key was overwritten")
-	}
-	if err := os.Chmod(path, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := LoadPrivate(path); err == nil {
-		t.Fatal("a key others can read was used")
-	}
-}
-
-func TestTrustedKeysSkipsMalformed(t *testing.T) {
-	_, pub := testKey(t)
-	saved := trustedKeys
-	defer func() { trustedKeys = saved }()
-	trustedKeys = map[string]string{
-		KeyID(pub):         base64.StdEncoding.EncodeToString(pub),
-		"0000000000000000": base64.StdEncoding.EncodeToString(pub), // id does not match the key
-		"bad":              "%%%",
-	}
-	if got := TrustedKeys(); len(got) != 1 || !got[0].Equal(pub) {
-		t.Fatalf("%d keys", len(got))
 	}
 }
 

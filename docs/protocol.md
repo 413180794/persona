@@ -13,7 +13,7 @@
   `GET /api/v1/auth/tokens` 列出（`current` 是本机），`DELETE /api/v1/auth/tokens/{id}` 撤销：立即失效（查询结果缓存 30 秒，撤销时清掉）
   并断开它的 WebSocket。App 在「设置 › 设备」里管理。旧 hub 没有这个接口时 App 继续用配对 token，下次启动再试。
 - `GET /api/v1/health` 不需要鉴权，返回 `{"ok":true,"version":"...","channel":"release|docker|dev","build":202611021530,"protocol":1,"min_app_build":0,"features":[…]}`：
-  `channel` 和 `build`（UTC `YYYYMMDDHHMM`，没有是 0）是这个 hub 怎么构建、能不能自己更新；`protocol` 是 App ↔ hub 的大版本号，`min_app_build` 是它能配的最老的 App（`docs/hub-update.md`「兼容」）。
+  `channel` 和 `build`（UTC `YYYYMMDDHHMM`，没有是 0）是这个 hub 怎么构建、能不能自己更新；`update.confirmed` 是这个进程有没有确认完一次更新（没有更新要确认时为真，看门狗等它）；`protocol` 是 App ↔ hub 的大版本号，`min_app_build` 是它能配的最老的 App（`docs/hub-update.md`「兼容」）。
 - 功能协商：`/api/v1/health` 和 WebSocket 的 `hello` 带 `features`（`proto.Features`：`client_msg_id`、`send_refusals`、
   `screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`）。新字段都是可选的，App 目前靠字段在不在判断；
   以后有「旧 hub 会误解」的新请求时先查这里。机器列表里的 `node_version` / `node_mismatch`：那台电脑上的 jarvisd 不是 hub 这次部署的
@@ -160,6 +160,11 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | POST | `/api/v1/sessions/{mid}/{sid}/modes` | `{"permission_mode"?, "effort"?}`：改在跑的会话的权限模式 / 思考强度（`docs/ios.md`「思考强度和权限模式」）；会话列表里的 `permission_mode`、`effort` 是当前值。`POST /api/v1/sessions` 和 `POST /api/v1/assistant/conversations` 也收这两个字段，作为启动时的值 |
 | POST | `/api/v1/sessions/{mid}/{sid}/rename` | `{"tab_name"?, "title"?}`：tab 用 `herdr tab rename`；会话名给在跑的 claude 发 `/rename <名字>`（它写 `custom-title`），没在跑就直接往 transcript 追加同样的 `custom-title` 行。助手的对话：`title` 同时记成用户起的标题（hub 的 `assistant.titles`，不再被自动标题覆盖，`docs/assistant.md`「对话标题」）；Codex 的助手对话只记在 hub |
 | GET / PUT | `/api/v1/mutes` | 屏蔽，结构同 pins，另有 `allowed`（空间被屏蔽时单独开启通知的 Agent）。规则：Agent 自己在 sessions 里→屏蔽；在 allowed 里→不屏蔽；否则看它的空间。被屏蔽的 Agent / 空间不推送任何通知（完成、需要你），手机上弱化显示；hub 内存缓存，PUT 时更新 |
+| GET | `/api/v1/hub/update` | hub 的版本和更新状态（`docs/hub-update.md`）：`{version, build, channel, can_update, why_not?, latest?{version, build, released, notes, newer, bad}, state, progress?, busy:[{machine_id, machine, session_id?, title}], error?, auto, auto_notice, last_check?, confirmed}`；`state`：`idle` / `checking` / `available` / `downloading` / `waiting_idle` / `restarting` / `confirming` / `updated` / `rolled_back` / `failed`；`busy` 是重启会打断的（在工作或在等回答的对话、正在重新部署的机器）；`auto_notice`：还没告诉过用户「自动更新已开启」 |
+| POST | `/api/v1/hub/update/check` | 立即检查，回同上 |
+| POST | `/api/v1/hub/update` | `{"now"?: true}` 开始更新：下载、校验、等助手和 Agent 都空闲、替换、重启；`now` 是二级确认后的「现在就更新」，不等空闲。不是发布版（`dev` / `docker`）、没有更新的版本时 409（`error` 说明，Docker 给出 `docker compose pull` 的命令） |
+| PUT | `/api/v1/hub/update/settings` | `{"auto"?: bool, "auto_notice_seen"?: bool}`：自动更新开关（默认开），改了开关也算告诉过了 |
+| GET | `/api/v1/hub/update/history` | `{"history":[{from_version, to_version, to_build, started, ended, result: updated\|rolled_back\|failed, reason?, auto}]}`，新的在前，留 50 条 |
 | GET | `/api/v1/skills` | 跑助手那台机器上的 skill（只读）：`{"machine_id","machine","skills":[{"name","description","source":"user\|builtin"}]}`；用户的在那台机器的 `~/.jarvis/skills/`（`docs/hub-update.md`）。node 太旧（没有 `skills.list`）或不在线时 502 |
 | GET / PUT | `/api/v1/pins` | 开发列表置顶：`{"spaces":["server/app"],"sessions":["server/<session id>"]}`，空间用「机器/空间名」（herdr 重启后 workspace id 会变），存 Postgres settings |
 | GET | `/api/v1/machines/{mid}/file?path=&cwd=&offset=` | 读一个文件（文件查看器，`docs/ios.md`「文件查看器」）：`{"path","name","size","mime","text"\|"data","truncated","offset","next","is_dir","entries"?}`。文本文件每次最多 2 MB，从 `offset` 读起，没读完时停在最后一个完整行的末尾，`next` 是下一页的起点（读完为 0）；二进制文件整个给（上限 2 MB），不能从中间读；目录给前 500 项。`~` 是 home，相对路径在 `cwd` 里；拒绝 iCloud |
@@ -217,6 +222,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 
 | type | 字段 |
 | --- | --- |
+| `hub_update` | `update`（同 `GET /api/v1/hub/update`）：检查、下载、等空闲、重启、确认、回滚，状态一变就推；`restarting` 之后连接会断一会儿，是预期的 |
 | `hello` | `server_version`, `client_id`, `features`, `channel`, `build`, `protocol`, `min_app_build`（同 `/api/v1/health`） |
 | `machines` | `machines` |
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`） |

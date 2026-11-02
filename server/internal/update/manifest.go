@@ -34,7 +34,7 @@ type File struct {
 	BinarySHA256 string `json:"binary_sha256"`
 }
 
-// ParseManifest reads latest.json (verify its signature first: Verify).
+// ParseManifest reads latest.json.
 func ParseManifest(b []byte) (*Manifest, error) {
 	var m Manifest
 	if err := json.Unmarshal(b, &m); err != nil {

@@ -57,8 +57,10 @@ const usage = `usage:
   jarvisd relay [config]   run the push relay (config ~/.jarvis/relay.json): pushes for hubs without the app's APNs
                            key, payloads sealed to the phone (docs/push-relay.md)
   jarvisd sysmon [n]       print this machine's system info and n metric samples, with what they cost
-  jarvisd release keygen|manifest|sign|verify|check-next …
-                           the publisher's release signing (scripts/publish.sh, docs/hub-update.md「发布」)
+  jarvisd release manifest|check-next …
+                           the publisher's release manifest and checks (scripts/publish.sh, docs/hub-update.md「发布」)
+  jarvisd update-watch <pending>
+                           the watchdog the hub starts over its own update (docs/hub-update.md「回滚」)
   jarvisd version [-v]     the version; -v adds the channel and build number`
 
 func main() {
@@ -78,6 +80,8 @@ func main() {
 		}
 	case "release":
 		err = runRelease(os.Args[2:])
+	case "update-watch": // the old binary watching an update come up (hub/selfupdate.go)
+		err = runUpdateWatch(ctx, os.Args[2:])
 	case "hub":
 		sub := "run"
 		if len(os.Args) > 2 {

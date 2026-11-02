@@ -21,9 +21,13 @@ func (h *Hub) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "version": h.version, "features": proto.Features, "channel": h.build.Channel,
-			"build": h.build.Number, "protocol": proto.Protocol, "min_app_build": proto.MinAppBuild})
+			"build": h.build.Number, "protocol": proto.Protocol, "min_app_build": proto.MinAppBuild,
+			"update": map[string]any{"confirmed": h.upd == nil || h.upd.isConfirmed()}}) // the watchdog waits for this
 	})
 	api := http.NewServeMux()
+	if h.upd != nil {
+		h.upd.routes(api)
+	}
 	api.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"machines": h.machineList()})
 	})

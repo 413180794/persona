@@ -6,7 +6,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 ## 实现进度
 
-- **第 1 步（一种二进制和签名）已做**（这一节以下的「现状」是开工前的样子）：
+- **第 1 步（一种二进制和版本清单）已做**（这一节以下的「现状」是开工前的样子）：
   - skill 拿出二进制：`internal/assistantskills` 只放内置 skill（现在为空）；node 每次起助手时 `Sync`：链接 `~/.jarvis/skills/` 里用户的 skill，
     删掉失效的链接，旧版本装的 lark-connector 自动搬过去（`TestSyncMovesTheOldCopy`）；`ol` 只在有 lark-connector 时出现（`TestOlOnlyWithTheSkill`）；
     助手的 CLAUDE.md 在没有 lark-connector 时只讲 MCP 的 `lark_*`（golden `assistant_claude_md.no_lark-connector`），hub 问 node 的 `skills.list`；
@@ -14,9 +14,12 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - 一种二进制：没有按 `public` 区分的文件了（`TestOneBuild`）；publish.sh 留着 `-tags public` 只当隐私扫描的标记（扫描靠它认出可以跳过的依赖常量）。
   - 渠道和 build 号：`main.channel`、`main.build`、`main.updateURL`；publish.sh、deploy.sh 打 `release`，Docker 打 `docker`；
     `jarvisd version -v` 显示渠道和 build 号；`/api/v1/health`、`hello` 带 `channel`、`build`、`protocol`、`min_app_build`。
-  - 签名：`internal/update`（清单、ed25519 签名和验签、`CheckNext`、不降级 `TestNoDowngrade`），`jarvisd release keygen|manifest|sign|verify|check-next`；
-    publish.sh 发 `latest.json`，配了 `publish.signing_key` 就签名并用新二进制验，发布前检查 build 号和 commit 祖先。`keys.go` 里还没有公钥。
-- 第 2–4 步还没做。
+  - 版本清单：`internal/update`（清单、`CheckNext`、不降级 `TestNoDowngrade`），`jarvisd release manifest|check-next`；
+    publish.sh 发 `latest.json`（各文件的 sha256），发布前检查 build 号递增、线上那版的 commit 是这次的祖先。
+    第 1 步里原有 ed25519 签名，用户改主意后在第 2 步删掉（见「安全」）。
+- **第 2 步（hub 更新和回滚）已做**：`hub/selfupdate.go`（检测、下载校验、等空闲和「现在就更新」、替换、确认或回滚、坏版本、更新记录、node 跟着更新）、
+  `internal/update` 的下载 / 替换 / 看门狗、`jarvisd update-watch`；接口见第 12 节。
+- 第 3、4 步还没做。
 
 ## 现状（2026-11-02 核实）
 
@@ -44,7 +47,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 1. **只有一种二进制**：skill 不在二进制里，所有 hub（包括我们自己的）用同一个发布版，都能自动更新。
 2. 用户的 skill 放在自己的空间里，更新永远不碰它。
 3. 发布者手动发布（`publish.sh`），各个 hub（包括我们的）空闲时自己更新，再更新自己的 node。急需 master 改动时可以直接部署，不会被旧的公开版降级。
-4. 装之前验签；任何一步不对就不动现在的二进制。
+4. 装之前核对 sha256、新二进制自检；任何一步不对就不动现在的二进制。
 5. 有对话在跑或在等回答就不重启。
 6. 新版本起不来、机器连不上就自动回到上一版；回滚过的版本不再自动重试。
 7. 不做灰度：发布前的门槛必须全过，发布后所有 hub 同时更新，各自出问题各自回滚。
@@ -100,9 +103,9 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - 线上那版的 commit 不是这次的祖先。
 - Docker 沿用镜像 tag 的 semver，只在 docker 渠道里比较。
 
-## 4. 版本清单和签名
+## 4. 版本清单
 
-`dl/` 里多两个文件：`latest.json`，和它的签名 `latest.json.sig`（ed25519，带 key id）。
+`dl/` 里多一个文件 `latest.json`：
 
 ```json
 {
@@ -121,15 +124,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 }
 ```
 
-- 用 ed25519：Go 标准库就有（`crypto/ed25519`），hub 不多带依赖，签名也用仓库里的 Go 命令，开发机不用装别的工具。
-- **公钥**编进二进制（`server/internal/update/keys.go` 的 `trustedKeys`，可以放多把，换钥匙时新旧都认）。
-  `trustedKeys` 是空的（钥匙还没生成）时什么清单都不信，「检查更新」显示「这个版本没有可信的签名公钥」。
-- **私钥**只在发布者自己的开发机上（`publish.signing_key` 指路径），绝不进仓库；由发布者生成，步骤见第 5 节，我们这边不生成。
-- 只信签过名的清单；下载的文件要同时对得上 `sha256`（压缩包）和 `binary_sha256`（解压后）。`SHA256SUMS` 照旧给 install.sh 用。
-- **换钥匙**：
-  - 新公钥先随一版二进制发出去（用旧钥匙签），之后的清单用新钥匙签，旧公钥留一段时间再删；
-  - 钥匙丢了：各 hub 用 install.sh 手动装一版带新公钥的。
-- 没有可信签名（过渡期）：只提示、不安装，见第 5 节。
+- 下载的文件要同时对得上 `sha256`（压缩包）和 `binary_sha256`（解压后），新二进制的 `version -v` 还要报出清单里的版本和 build 号。
+  `SHA256SUMS` 照旧给 install.sh 用。
 - `min_app_build`：低于它的 App 用不了这版 hub。`min_node_build`：低于它的 node 要先更新（hub 会自动重新部署）。`protocol` 见「兼容」。
 
 ## 5. 发布（手动，publish.sh；用户 2026-11-02）
@@ -141,26 +137,17 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   1. 读线上的 `latest.json`（有的话）：新 build 号必须更大，线上那版的 commit 必须是这次的祖先（`git merge-base --is-ancestor`）；
   2. 构建四个平台（`channel=release`、`build`、`updateURL` 都写进去），隐私扫描（二进制里不能有 lark-connector）；
   3. 生成 `latest.json`（版本、build 号、commit、发布时间、各平台压缩包和解压后的 sha256、`min_app_build`、`min_node_build`、`protocol`）；
-  4. 配置了 `publish.signing_key`：用它签出 `latest.json.sig`，再用新构建的二进制（编进去的公钥）验一遍，验不过就不发布；
-  5. 发布后读回 `VERSION`、`SHA256SUMS`、`latest.json` 和 `.sig`，和本地的比一遍。
+  4. 发布后读回 `VERSION`、`SHA256SUMS`、`latest.json`，和本地的比一遍。
 
-### 签名还没启用的过渡期
+### 安全：不签名（用户 2026-11-02 拍板）
 
-发布者还没生成钥匙、线上还没有 `.sig`，或者 hub 的二进制里还没有公钥时：**hub 只提示有新版本，不安装**（自动和手动都不装）。
-- `latest.json` 照样发（没签名），hub 读它只为了显示「有新版本 X」。App 里写明「发布方还没启用签名：hub 不能自己更新，在 hub 机器上运行 install.sh 更新」。
-- 选「只提示」不选「什么都不说」：用户能知道有新版本；而不装就不会有被冒充的风险，冒充最多骗出一条提示。
-- 启用签名以后，带着公钥的那一版要手动装一次（install.sh，或者我们的 hub 用直接部署）；之后就都能自己更新了。
-
-### 发布者生成钥匙（我们这边不生成私钥）
-
-1. 在发布用的开发机上：`cd server && go run ./cmd/jarvisd release keygen ~/.config/jarvis/release-signing.key`。
-   它写出私钥文件（0600，已存在就拒绝覆盖），并打印 key id 和要加进 `server/internal/update/keys.go` 的那一行。
-2. `~/.config/jarvis/config.json` 的 `publish` 里加 `"signing_key": "~/.config/jarvis/release-signing.key"`。
-3. 公钥进仓库：把打印的那一行加进 `keys.go` 的 `trustedKeys`，走 issue → PR 合入（公钥是公开的，私钥文件绝不进仓库）。
-4. 私钥另外备份到只有自己能访问的地方：丢了只能换钥匙（见上面「换钥匙」）。
-5. 合入后跑一次 `publish.sh`：这一版带着公钥、清单也签了名。各 hub 手动装上这一版以后，就会自己更新了。
-
-顺序要对：先合入公钥，再配置 `signing_key` 发布。反过来的话 publish.sh 用新二进制验签会失败，拒绝发布（这正是想要的保护）。
+用户：「为啥还要签名，Linux 服务就不签了吧，搞太复杂」。取舍写清楚：
+- **防的**：下载传坏、被截断（sha256 对不上就删掉、不装），以及装上一个跑不起来或不是这个版本的二进制（`version -v` 自检，起来后还要过确认，不行就回滚）。
+  下载走 HTTPS，传输途中被篡改要先攻破 TLS。
+- **不防的**：发布站点（`publish.site_url` 的 Worker、发布者的 Cloudflare 账号）被冒充或被入侵。那样攻击者可以同时换掉二进制和 `latest.json` 里的 sha256，
+  所有开着自动更新的 hub 都会装上，而且是以运行 hub 的用户身份执行。
+- 用户知情，决定不做签名。以后要加：在清单旁边放一个签名、公钥编进二进制，hub 只装验签通过的（第 1 步曾经这样实现过，见 git 历史）。
+- 不想承担这个风险的 hub：在 App 里把自动更新关掉，或者用 Docker 部署（拉镜像时自己决定）。
 
 ## 6. 直接部署（急需 master 改动时）
 
@@ -176,13 +163,13 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 - **发布版**：
   - hub 启动后 1 分钟检查一次，之后每 6 小时；App 可以「立即检查」（`POST /api/v1/hub/update/check`）；
-  - 只取清单和签名（几 KB）：build 号比自己大、不在坏版本列表里，才算有更新；验签通过才能装，没签名或验不过只提示（第 5 节）。结果广播给开着的 App。
+  - 只取清单（几 KB）：build 号比自己大、不在坏版本列表里，才算有更新；结果广播给开着的 App。
 - **Docker 版**：
   - 6 小时一次，查镜像仓库的 tag（GHCR 匿名的 `tags/list`），取最大的正式 semver，比自己大就提示；
-  - 不用签名：hub 不装任何东西，拉镜像的是 Docker，按 digest 校验；
+  - hub 不装任何东西，拉镜像的是 Docker，按 digest 校验；
   - 镜像名由 CI 构建时写进二进制，代码里不写死。
 - **dev**：不检查，只显示版本。
-- 网络不通、验签失败：记日志，App 里「检查更新」显示原因，不重试轰炸（照 6 小时）。
+- 网络不通、清单坏了：记日志，App 里「检查更新」显示原因，不重试轰炸（照 6 小时）。
 
 ## 8. 更新（发布版；自动和手动是同一个流程）
 
@@ -194,7 +181,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
    - 下到 `~/.jarvis/update/<build>/`：hub 自己平台的压缩包，加上当前连着的各台机器平台的 node 二进制（node 跟着一起更新用）；
    - 断了重下，最多 3 次；临时文件下完才改名。
 2. **校验**：
-   - 两个 sha256 都对上签过名的清单才继续，不对就删掉下载、报错，现在的二进制不动；
+   - 两个 sha256 都对上清单才继续，不对就删掉下载、报错，现在的二进制不动；
    - 解压后跑一次 `<新> version`，必须报出清单里的版本和 `release` 渠道。
 3. **准备**：
    - node 二进制放进 `~/.jarvis/bin/nodes/`：公开安装的 hub 也就能「重新部署」了；
@@ -233,7 +220,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 | | 发布版（我们的 hub、install.sh 装的） | Docker | dev |
 | --- | --- | --- | --- |
-| 检测 | 签名清单 | 镜像 tag | 不检测 |
+| 检测 | 版本清单 | 镜像 tag | 不检测 |
 | 更新 | 自动（默认开）/ App 一键 | 提示 `docker compose pull && docker compose up -d` | 无 |
 | 重启 | 自己 `exec` 新二进制 | 用户重建容器 | — |
 | 回滚 | 自动（`.prev`，坏版本不再试） | 换回上一个 tag | — |
@@ -248,7 +235,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - 开关「自动更新 hub」（只有发布版有，**默认开**）：助手和 Agent 都空闲时装；
   - 点了「更新」而有东西在忙时：显示在等哪些（对话名、机器），一个「现在就更新」进二级确认（见第 8 节第 4 步）；
   - 「更新记录」：一行一次，从哪版到哪版、时间、结果；
-  - 有更新时：发布版显示「更新 hub 到 X」和这一版的说明（没签名时写明不能在 App 里更新，给 install.sh 的命令）；Docker 显示要在 NAS 上运行的那行命令（可复制）。
+  - 有更新时：发布版显示「更新 hub 到 X」和这一版的说明；Docker 显示要在 NAS 上运行的那行命令（可复制）。
 - **第一次告知**：新装的 hub，或者老 hub 第一次升级到有这个功能的版本，App 里出现一条提示「hub 会在空闲时自动更新」，
   带「关闭自动更新」和「知道了」；点任一个就不再出现（hub 记下 `auto_notice_seen`）。
 - **进 App 时的提示**：有新版本、自动更新关着时，Agents 页和助手页顶部出现一条细的提示条「hub 有新版本 X · 更新」，右边一个 ×。
@@ -287,22 +274,21 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 ## 13. 测试
 
 - Go：
-  - 验签：签名错、改了一个字节、不认识的钥匙，都拒绝；
+  - 下载不对：sha256 不对上就删掉、不装，传到一半断了重下；
   - 下载中断后重试；sha256 不对时删掉、不替换；
   - 新版本起不来：用测试里编的一个故意起不来的二进制，确认新进程自检和看门狗都能回滚，坏版本记下、不再自动试；
   - 等空闲：助手或任何 Agent 忙时不重启（自动和手动都是），`now` 跳过等待；
   - skill：符号链接建立和清理、旧安装的自动迁移、同名时用户的优先、`ol` 只在有 lark-connector 时出现；内置 skill 目录只有可再分发的；
   - dev / docker 渠道不管清单多新都不安装（接口 409）；
   - **不降级**（`TestNoDowngrade`）：直接部署的二进制（build 号是编译时间）看到 build 号更小或相等的清单不装；更大的才装；
-  - 没签名、签名不是信任的钥匙：只提示、不安装。
-- publish.sh：build 号不递增、线上 commit 不是祖先、配了私钥但验签不过，都不发布；没配私钥时清单照发但不签。
+- publish.sh：build 号不递增、线上 commit 不是祖先，都不发布。
 - App：用 FakeHub 测设置里的 hub 一行、第一次告知、提示条（出现、点 × 不再出现、进度、断开期间的说明、不兼容的两种提示）、更新记录、Skills 列表。
   截图：两种风格 × 深浅色。
 
 ## 14. 分步实现
 
-1. **一种二进制和签名**：skill 拿出来（用户空间、符号链接、迁移、`ol` 和提示词按需、只读列表的接口）、去掉 `-tags public`、
-   渠道和 build 号（publish.sh、deploy.sh、Docker）、`internal/update`（清单、签名、验签、钥匙生成命令）、publish.sh 发清单和签名并做两项单调检查；
+1. **一种二进制和版本清单**：skill 拿出来（用户空间、符号链接、迁移、`ol` 和提示词按需、只读列表的接口）、去掉 `-tags public`、
+   渠道和 build 号（publish.sh、deploy.sh、Docker）、`internal/update`（清单、发布前检查）、publish.sh 发清单并做两项单调检查；
    `/api/v1/health` 带新字段。部署前把 lark-connector 放进我们 hub 的 `~/.jarvis/skills/`（或者靠自动迁移）。
 2. **hub 更新和回滚**：检测、下载校验、等空闲（「现在就更新」）、替换、看门狗、坏版本、记录、不降级；node 跟着更新（补 `via` 和 tailcat）。
 3. **App**：设置的 hub 一行、第一次告知、提示条、进度、在等哪些、更新记录、不兼容提示、Skills 列表。
@@ -315,8 +301,9 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 2. 自动更新**默认开**；第一次要明确告诉用户并给关闭的入口；每次更新留记录；回滚过的版本不再自动重试。
 3. 不限时段：助手和 Agent 都空闲就装。有对话在跑或在等回答就不重启。
 4. 版本号用发布时间（UTC `YYYYMMDDHHMM`）做 build 号。
-5. **不做自动发布**：发布者照旧手动跑 publish.sh（Worker 在他的账号下）；publish.sh 加上清单、签名、build 号和 commit 祖先检查。
-   私钥在发布者的开发机上，由他按文档生成。我们的 hub 也自动更新到他发布的版本；直接部署保留，用于急需 master 的时候，不会被降级。
-6. 不做灰度，发布后所有 hub 同时更新；各 hub 自己回滚。签名还没启用时只提示、不安装。
+5. **不做自动发布**：发布者照旧手动跑 publish.sh（Worker 在他的账号下）；publish.sh 加上清单、build 号和 commit 祖先检查。
+   我们的 hub 也自动更新到他发布的版本；直接部署保留，用于急需 master 的时候，不会被降级。
+6. 不做灰度，发布后所有 hub 同时更新；各 hub 自己回滚。
+9. **不签名**（用户：「Linux 服务就不签了吧，搞太复杂」）：清单只有 sha256，走 HTTPS，对上就自动装；只防传坏，不防发布站点被冒充或入侵（见「安全」）。
 7. 手动更新也等助手和 Agent 都空闲；App 显示在等哪些，二级确认里给「现在就更新」。
 8. skill 空间放在跑助手的那台机器上的 `~/.jarvis/skills/`。

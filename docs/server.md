@@ -223,6 +223,16 @@ App 开着时连着 hub 的 WebSocket，hub 把各种变化广播给它；真实
   不发重复的列表以后，丢掉的那条不会再被下一条一样的补上。
 - 实时活动的推送节奏见 `docs/live-activity.md`「推送节奏」。
 
+## 自己更新（`hub/selfupdate.go`，`docs/hub-update.md`）
+
+发布版（`channel=release`）的 hub 每 6 小时看一次发布站点的 `latest.json`，有更新的版本、助手和 Agent 都空闲时自己换二进制、重启，起不来就回到上一版。
+- 文件都在 `~/.jarvis/update/`：`<build>/` 是下载（node 二进制在 `nodes/`，确认后放进 `~/.jarvis/bin/nodes/`）；`pending.json` 是进行中的更新（确认完就删）；
+  `rolledback.json` 是刚回滚的那次（旧版本起来后记进更新记录、标成坏版本再删）；`watch.log` 是看门狗的输出，没有服务管理器时回滚后起的 hub 输出在 `hub.log`。
+- 上一版在 `~/.jarvis/bin/jarvisd.prev`。手动退回：`cp ~/.jarvis/bin/jarvisd.prev ~/.jarvis/bin/jarvisd && systemctl --user restart jarvisd`（launchd 下 `launchctl kickstart -k`），
+  再在 App 里关掉自动更新，免得又装回去（回滚过的版本本来就不会自动再装）。
+- 关掉自动更新：App 设置里的开关，或 `PUT /api/v1/hub/update/settings {"auto": false}`。
+- 直接部署（`deploy.sh` / 主会话的脚本）：build 号是编译时间，比当时的公开版新，不会被降级；正在更新的那几分钟里直接部署也不会被看门狗撤销。
+
 ## 运维
 
 - 机器离线：App 里显示 ssh 的最后一行错误。NAT 后面的电脑要先建好反向隧道（`docs/config.md`）。

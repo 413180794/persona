@@ -64,8 +64,6 @@ def env(cfg: dict) -> dict:
         # Where scripts/publish.sh puts jarvisd and install.sh (the site/ worker's domain), and the wrangler to run.
         "JARVIS_PUBLISH_URL": get(cfg, "publish.site_url", "").rstrip("/"),
         "JARVIS_WRANGLER": os.path.expanduser(get(cfg, "publish.wrangler", "")),
-        # The publisher's release signing key (docs/hub-update.md「发布者生成钥匙」): only its path, on their machine.
-        "JARVIS_SIGNING_KEY": os.path.expanduser(get(cfg, "publish.signing_key", "")),
     }
     # Which Xcode builds (and releases) the app; a DEVELOPER_DIR already in the environment wins. iPhone Duo needs
     # Xcode 27 or later: built with an older one, the app does not reach under the status bar and the camera.
