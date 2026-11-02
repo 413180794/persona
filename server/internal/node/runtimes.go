@@ -53,6 +53,10 @@ type runtimeHello struct {
 	// Agent is the agent its sessions run, when it is not the runtime itself (a runtime hosting Claude Code).
 	Agent   string `json:"agent,omitempty"`
 	Version string `json:"version,omitempty"`
+	// Instance identifies the process behind the connection (the SDK makes one per runtime it creates): a reconnect
+	// says the same, another process configured with the same runtime id does not and is refused (runtime_conflict).
+	// Empty from older runtimes.
+	Instance string `json:"instance,omitempty"`
 	// Launcher, when set, is offered in the new-session form; session.start with it goes to this runtime.
 	Launcher string `json:"launcher,omitempty"`
 	// LauncherModel is what the form shows next to the launcher (e.g. the runtime's default model).
@@ -71,7 +75,9 @@ type runtimeConn struct {
 	serial int
 	peer   *rpc.Peer
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// drop ends the connection (RuntimeHost.serve's); nil in tests that make connections by hand.
+	drop     func()
 	hello    runtimeHello
 	ready    bool            // runtime.hello arrived
 	sessions []proto.Session // its last runtime.sessions
@@ -126,6 +132,9 @@ type runtimeRegistry struct {
 	known map[string]knownSession
 	// unclaimed: ids no connected runtime had when asked, and until when not to ask again.
 	unclaimed map[string]time.Time
+	// logf reports what an operator should fix (a launcher two runtimes offer); nil: nowhere. warned: said once each.
+	logf   func(format string, args ...any)
+	warned map[string]bool
 }
 
 // knownSession is the runtime a session belongs to, by the runtime's id (a reconnect is the same runtime).
@@ -139,7 +148,79 @@ const maxKnown = 8192
 
 func newRuntimeRegistry() *runtimeRegistry {
 	return &runtimeRegistry{conns: map[int]*runtimeConn{}, owner: map[string]*runtimeConn{}, watching: map[string]int{},
-		known: map[string]knownSession{}, unclaimed: map[string]time.Time{}}
+		known: map[string]knownSession{}, unclaimed: map[string]time.Time{}, warned: map[string]bool{}}
+}
+
+// warnOnce logs a message once per key. Callers hold b.mu.
+func (b *runtimeRegistry) warnOnce(key, format string, args ...any) {
+	if b.logf == nil || b.warned[key] {
+		return
+	}
+	b.warned[key] = true
+	b.logf(format, args...)
+}
+
+// besideShell drops the runtimes' launchers named like one of the login shell's (shell): a session.start with that
+// name runs the shell's (runtimeStart), so the form lists it once. Logged once per name.
+func (b *runtimeRegistry) besideShell(runtime, shell []proto.Launcher) []proto.Launcher {
+	names := map[string]bool{}
+	for _, l := range shell {
+		names[l.Name] = true
+	}
+	out := make([]proto.Launcher, 0, len(runtime))
+	for _, l := range runtime {
+		if names[l.Name] {
+			b.mu.Lock()
+			b.warnOnce("shell launcher "+l.Name, "runtime %s: launcher %q has the name of a launcher in the login shell, which runs instead", l.Source, l.Name)
+			b.mu.Unlock()
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// shellLauncherNames are the login shell's launcher names as last listed (none before the first list; nothing is run
+// to get them).
+func shellLauncherNames() map[string]bool {
+	launcherCache.Lock()
+	defer launcherCache.Unlock()
+	names := make(map[string]bool, len(launcherCache.list))
+	for _, l := range launcherCache.list {
+		names[l.Name] = true
+	}
+	return names
+}
+
+// hello records h's runtime.hello unless another process holds the same runtime id. A ready connection with that id
+// and another instance is a second process configured alike: refused with runtime_conflict (one of them needs another
+// id). One with the same instance is this process's earlier connection — it reconnected before the node saw the old
+// socket close — returned as stale for the caller to close. A runtime that sends no instance (an older SDK) is let in
+// as before: the newest connection answers for the id.
+func (b *runtimeRegistry) hello(h *runtimeConn, hello runtimeHello) (stale []*runtimeConn, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, o := range b.conns {
+		if o == h {
+			continue
+		}
+		o.mu.Lock()
+		same := o.ready && o.hello.Runtime == hello.Runtime
+		instance := o.hello.Instance
+		o.mu.Unlock()
+		if !same || instance == "" || hello.Instance == "" {
+			continue
+		}
+		if instance != hello.Instance {
+			return nil, &rpc.Error{Code: "runtime_conflict",
+				Message: fmt.Sprintf("another process is connected to this node as runtime %q", hello.Runtime)}
+		}
+		stale = append(stale, o)
+	}
+	h.mu.Lock()
+	h.hello, h.ready = hello, true
+	h.mu.Unlock()
+	return stale, nil
 }
 
 // remember records that id belongs to h's runtime. Callers hold b.mu and h.mu.
@@ -380,6 +461,34 @@ func (b *runtimeRegistry) sessions() []proto.Session {
 	return out
 }
 
+// launcherOwners maps each launcher name the runtimes offer to the one connection that answers for it: the one
+// connected first, so the form and session.start agree and do not change while both stay connected. The others'
+// launcher of that name is not offered (logged once). Callers hold b.mu.
+func (b *runtimeRegistry) launcherOwners() map[string]*runtimeConn {
+	conns := make([]*runtimeConn, 0, len(b.conns))
+	for _, h := range b.conns {
+		conns = append(conns, h)
+	}
+	sort.Slice(conns, func(i, j int) bool { return conns[i].serial < conns[j].serial })
+	owners := map[string]*runtimeConn{}
+	ownerIDs := map[string]string{}
+	for _, h := range conns {
+		h.mu.Lock()
+		name, rt, ok := h.hello.Launcher, h.hello.Runtime, h.ready && h.hello.Caps.Start && h.hello.Launcher != ""
+		h.mu.Unlock()
+		if !ok {
+			continue
+		}
+		if owners[name] != nil {
+			b.warnOnce(fmt.Sprintf("launcher %d %s", h.serial, name), "runtime %s #%d: launcher %q is offered by runtime %s already; not offered twice",
+				rt, h.serial, name, ownerIDs[name])
+			continue
+		}
+		owners[name], ownerIDs[name] = h, rt
+	}
+	return owners
+}
+
 // launchers are the runtimes' entries for the new-session form.
 func (b *runtimeRegistry) launchers() []proto.Launcher {
 	if b == nil {
@@ -388,22 +497,18 @@ func (b *runtimeRegistry) launchers() []proto.Launcher {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var out []proto.Launcher
-	seen := map[string]bool{}
-	for _, h := range b.conns {
+	for _, h := range b.launcherOwners() {
 		h.mu.Lock()
-		if h.ready && h.hello.Caps.Start && h.hello.Launcher != "" && !seen[h.hello.Launcher] {
-			seen[h.hello.Launcher] = true
-			// Agent, as for a Codex launcher (proto.Launcher.Agent): what it starts is not Claude Code, so the apps do
-			// not offer it where only Claude Code or Codex can run (the Jarvis assistant).
-			agent := h.hello.Agent
-			if agent == "" {
-				agent = h.hello.Runtime
-			}
-			if agent == "claude" {
-				agent = ""
-			}
-			out = append(out, proto.Launcher{Name: h.hello.Launcher, Model: h.hello.LauncherModel, Source: h.hello.Runtime, Agent: agent})
+		// Agent, as for a Codex launcher (proto.Launcher.Agent): what it starts is not Claude Code, so the apps do
+		// not offer it where only Claude Code or Codex can run (the Jarvis assistant).
+		agent := h.hello.Agent
+		if agent == "" {
+			agent = h.hello.Runtime
 		}
+		if agent == "claude" {
+			agent = ""
+		}
+		out = append(out, proto.Launcher{Name: h.hello.Launcher, Model: h.hello.LauncherModel, Source: h.hello.Runtime, Agent: agent})
 		h.mu.Unlock()
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -417,15 +522,7 @@ func (b *runtimeRegistry) launcherRuntime(name string) *runtimeConn {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for _, h := range b.conns {
-		h.mu.Lock()
-		match := h.ready && h.hello.Caps.Start && h.hello.Launcher == name
-		h.mu.Unlock()
-		if match {
-			return h
-		}
-	}
-	return nil
+	return b.launcherOwners()[name]
 }
 
 func (b *runtimeRegistry) watch(h *runtimeConn, id string, since int) {
@@ -465,6 +562,9 @@ func (n *Node) listenRuntimeSocket(ctx context.Context) (*RuntimeHost, error) {
 	rh := &RuntimeHost{reg: n.runtimes, path: n.runtimePath(), version: n.Version, logger: n.logger}
 	if rh.reg == nil {
 		rh.reg = newRuntimeRegistry()
+	}
+	if rh.reg.logf == nil && n.logger != nil {
+		rh.reg.logf = n.logger.Printf
 	}
 	if err := rh.Listen(ctx); err != nil {
 		return nil, err
@@ -918,6 +1018,10 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 				"client_msg_id": opts.ClientMsgID})
 			return err
 		})
+		if rpcCode(err) == runtimeHandover && ctx.Value(handingOver{}) == nil {
+			res, err := n.handOver(ctx, h, p.SessionID, params)
+			return res, err, true
+		}
 		return okResult(err), err, true
 	case "session.interrupt":
 		if !caps.Interrupt {
@@ -970,10 +1074,72 @@ func (n *Node) runtimeStatus(h *runtimeConn, id string) string {
 	return proto.StatusUnknown
 }
 
+// runtimeHandover is the code of a send a runtime hands over instead of taking (it lists the session from disk, and
+// has asked the program that runs it to start): handOver delivers it to the runtime that takes the session.
+const runtimeHandover = "handover"
+
+// runtimeHandoverWait bounds the wait for the runtime that takes a handed-over session.
+var runtimeHandoverWait = 45 * time.Second
+
+// handingOver marks the context of a send handOver forwards: the runtime it reaches cannot hand it over again.
+type handingOver struct{}
+
+// handOver delivers a send that from (the session's owner) handed over: to the connection that lists the session as
+// running once one does (prefer_running), or to the first other runtime that answers for it (an older session it
+// does not list; the claim path of runtimeFor), whichever comes first within runtimeHandoverWait. Nothing is sent
+// when none does.
+func (n *Node) handOver(ctx context.Context, from *runtimeConn, id string, params json.RawMessage) (any, error) {
+	ctx = context.WithValue(ctx, handingOver{}, true)
+	forward := func(to *runtimeConn) (any, error) {
+		res, err, _ := n.runtimeHandle(ctx, to, "session.send", params)
+		return res, err
+	}
+	deadline := time.Now().Add(runtimeHandoverWait)
+	var asked time.Time
+	for {
+		if r, owner, ok := n.runtimes.rowOf(id); ok && owner != from && r.Status != proto.StatusOffline {
+			return forward(owner)
+		}
+		if time.Since(asked) > 2*time.Second {
+			asked = time.Now()
+			for _, c := range n.runtimes.ready() {
+				if c == from {
+					continue
+				}
+				cctx, cancel := context.WithTimeout(ctx, runtimeClaimTimeout)
+				err := c.peer.Call(cctx, "session.items", map[string]any{"session_id": id, "limit": 1}, nil)
+				cancel()
+				if err == nil {
+					n.runtimes.claim(c, id)
+					return forward(c)
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			return nil, refusal("not_running", fmt.Sprintf("%s 把这个会话交给运行它的程序，%d 秒内没等到它接手，这次没有发送。",
+				from.label(), int(runtimeHandoverWait.Seconds())), nil)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+// rpcCode is the code of an rpc error, "" for anything else.
+func rpcCode(err error) string {
+	var e *rpc.Error
+	if errors.As(err, &e) {
+		return e.Code
+	}
+	return ""
+}
+
 // runtimeStart starts a session in the runtime offering launcher; nil when no runtime does.
 func (n *Node) runtimeStart(ctx context.Context, launcher, cwd, prompt string) (*proto.Session, error, bool) {
 	h := n.runtimes.launcherRuntime(launcher)
-	if h == nil {
+	if h == nil || shellLauncherNames()[launcher] { // the login shell's launcher of that name runs, as the form lists
 		return nil, nil, false
 	}
 	ctx, cancel := context.WithTimeout(ctx, runtimeCallTimeout)

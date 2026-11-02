@@ -118,6 +118,20 @@ func upstreamError(raw []byte) (code, message string) {
 	return e.Error.Code, e.Error.Message
 }
 
+// doError is a non-2xx answer (other than 401) to c.do, keeping the status and lark-connector's error code.
+type doError struct {
+	Status  int
+	Code    string
+	Message string
+}
+
+func (e *doError) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("lark: %s (%s)", e.Message, e.Code)
+	}
+	return fmt.Sprintf("lark: HTTP %d", e.Status)
+}
+
 // unauthorized handles a 401 from lark-connector. An AUTH_* code means lark-connector itself is logged out of Feishu: the
 // token stays and the error says so. Anything else is a rejected agent token: forget a token read from the
 // container (it may have been recreated with a new one), but never the one from config.
@@ -170,10 +184,8 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		if resp.StatusCode == 401 {
 			return c.unauthorized(raw)
 		}
-		if code, msg := upstreamError(raw); msg != "" {
-			return fmt.Errorf("lark: %s (%s)", msg, code)
-		}
-		return fmt.Errorf("lark: HTTP %d", resp.StatusCode)
+		code, msg := upstreamError(raw)
+		return &doError{Status: resp.StatusCode, Code: code, Message: msg}
 	}
 	if out == nil {
 		return nil
@@ -563,22 +575,28 @@ func (c *Client) CardAction(ctx context.Context, messageID, actionID string, par
 	return c.do(ctx, "POST", "/messages/"+url.PathEscape(messageID)+"/card-actions/"+url.PathEscape(actionID), nil, body, nil)
 }
 
-func (c *Client) Send(ctx context.Context, feedID, text string) error {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
-	clientID := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
-	return c.do(ctx, "POST", "/conversations/"+url.PathEscape(feedID)+"/messages", nil,
-		map[string]any{"text": text, "clientId": clientID}, nil)
+// Send posts text to a conversation as the user and returns lark-connector's message id (empty if it gave none).
+// clientID is the idempotency key: resending the same one never posts twice. Empty generates a fresh one.
+func (c *Client) Send(ctx context.Context, feedID, text, clientID string) (string, error) {
+	if clientID == "" {
+		clientID = NewClientID()
+	}
+	var out struct {
+		MessageID string `json:"messageId"`
+	}
+	err := c.do(ctx, "POST", "/conversations/"+url.PathEscape(feedID)+"/messages", nil,
+		map[string]any{"text": text, "clientId": clientID}, &out)
+	var de *doError
+	if errors.As(err, &de) && de.Status == http.StatusConflict && de.Code == "MESSAGE_ALREADY_SENT" {
+		return "", nil // Lark already accepted this clientId; MESSAGE_DISCARDED stays an error
+	}
+	return out.MessageID, err
 }
 
 // Reply answers a message as the user, quoting it; `thread` posts into its thread (lark-connector finds the root).
 // `markdown` sends rich text (bold, lists, code, links), else plain text.
 func (c *Client) Reply(ctx context.Context, messageID, text string, thread, markdown bool) error {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
-	body := map[string]any{"text": text, "clientId": fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])}
+	body := map[string]any{"text": text, "clientId": NewClientID()}
 	if thread {
 		body["replyMode"] = "thread"
 	}
@@ -586,6 +604,33 @@ func (c *Client) Reply(ctx context.Context, messageID, text string, thread, mark
 		body["editorType"] = "markdown"
 	}
 	return c.do(ctx, "POST", "/messages/"+url.PathEscape(messageID)+"/replies", nil, body, nil)
+}
+
+// NewClientID returns a random UUIDv4 for lark-connector's clientId.
+func NewClientID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// ValidClientID reports whether s is a UUID lark-connector accepts as a clientId (version 1-8, RFC variant, any case).
+func ValidClientID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case i == 8 || i == 13 || i == 18 || i == 23:
+			if ch != '-' {
+				return false
+			}
+		case !('0' <= ch && ch <= '9' || 'a' <= ch && ch <= 'f' || 'A' <= ch && ch <= 'F'):
+			return false
+		}
+	}
+	return '1' <= s[14] && s[14] <= '8' && strings.ContainsRune("89abAB", rune(s[19]))
 }
 
 // Read is what the reader has actually seen: everything up to Position, plus the unread messages from

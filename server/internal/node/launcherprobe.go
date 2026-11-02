@@ -44,7 +44,8 @@ __jp_report() {
 function claude { __jp_report claude "$@" }
 function codex { __jp_report codex "$@" }
 function traex { __jp_report traex "$@" }
-function command { case "$1" in claude|codex|traex) local w=$1; shift; __jp_report $w "$@" ;; *) builtin command "$@" ;; esac }
+function dsh { __jp_report dsh "$@" }
+function command { case "$1" in claude|codex|traex|dsh) local w=$1; shift; __jp_report $w "$@" ;; *) builtin command "$@" ;; esac }
 function env {
   while [[ $# -gt 0 ]]; do
     case "$1" in

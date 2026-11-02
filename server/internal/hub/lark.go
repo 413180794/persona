@@ -116,17 +116,27 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/lark/conversations/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Text string `json:"text"`
+			Text     string `json:"text"`
+			ClientID string `json:"client_id"` // the app's idempotency key; a retry with the same one posts once
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" {
 			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
 			return
 		}
-		if err := h.lark.Send(r.Context(), r.PathValue("id"), in.Text); err != nil {
+		// A missing or malformed client_id is not an error: Send makes one up, as it did before apps sent it.
+		if !lark.ValidClientID(in.ClientID) {
+			in.ClientID = ""
+		}
+		id, err := h.lark.Send(r.Context(), r.PathValue("id"), in.Text, in.ClientID)
+		if err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 			return
 		}
-		writeJSON(w, map[string]any{"ok": true})
+		out := map[string]any{"ok": true}
+		if id != "" {
+			out["message_id"] = id
+		}
+		writeJSON(w, out)
 	})
 	api.HandleFunc("POST /api/v1/lark/conversations/{id}/read", func(w http.ResponseWriter, r *http.Request) {
 		var in lark.Read

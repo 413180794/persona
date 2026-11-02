@@ -8,7 +8,8 @@
 // Nothing outside fresh temp directories is touched: DSH_HOME, the node's HOME and the workspace all live there.
 
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { conformance } from '../../runtime-sdk/testing/conformance.mjs'
@@ -52,6 +53,9 @@ const modelURL = `${model.url}/v1`
 
 node = await startNode({ jarvisd, keep })
 check('the node starts without herdr', typeof node.info.version === 'string')
+// The hub's tools (the phone's): DSH's agents get them through the plugin (docs/dsh.md「手机工具」).
+node.tools = [{ name: 'phone_echo', description: 'Echo a text on the phone (e2e)', input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }]
+node.callTool = (params) => ({ content: [{ type: 'text', text: `the phone echoes ${params.args?.text}` }], is_error: false })
 
 const patch = join(root, 'patch.yml')
 const askPlugin = join(root, 'e2e-ask.js')
@@ -115,6 +119,22 @@ try {
     history: (h) => h === `dsh:${sid}`,
   })
   check('the card is DSH\'s, with DSH\'s reason beside the command', approval.agent === 'dsh' && approval.agent_label === 'DSH' && approval.reason === 'e2e approval' && approval.summary === 'echo JARVIS_E2E_ASK ran', JSON.stringify({ agent: approval.agent, label: approval.agent_label, reason: approval.reason, summary: approval.summary }))
+
+  // A phone tool, called by DSH's agent: through the node to the hub, with the session, and its result back.
+  await until('the turn after the interrupt ends', async () => node.status(sid) === 'done', 30_000).catch(() => {})
+  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__jarvis__phone_echo', toolArguments: JSON.stringify({ text: 'JARVIS_E2E_PHONE' }), successText: 'The phone answered' })
+  await node.call('session.send', { session_id: sid, text: 'ask the phone', client_msg_id: randomUUID() })
+  await until('the phone tool result', () => node.items(sid).some((i) => i.kind === 'tool_result' && /the phone echoes JARVIS_E2E_PHONE/.test(i.text ?? '')), 60_000)
+  const call = node.toolCalls.find((c) => c.name === 'phone_echo')
+  check('a phone tool reaches the hub with the calling session, and its result reaches the agent', call?.session_id === sid && call?.args?.text === 'JARVIS_E2E_PHONE', JSON.stringify(call))
+  await until('the reply after the phone tool', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
+
+  // Closing from the phone archives the session in DSH: it leaves the list, and DSH's archive set has it.
+  await until('idle before closing', async () => node.status(sid) === 'done', 30_000).catch(() => {})
+  await node.call('session.close', { session_id: sid })
+  await until('gone from the list', async () => !((await node.call('sessions.list')).sessions ?? []).some((s) => s.session_id === sid), 30_000)
+  const workspace = JSON.parse(readFileSync(join(dshHome, 'storages', 'workspace.json'), 'utf8'))
+  check('closing from the phone archives it in DSH and takes it off the list', workspace.global?.archivedSessionIds?.includes(sid), JSON.stringify(workspace.global?.archivedSessionIds))
 } catch (err) {
   check('run', false, err.message)
   console.log('--- node log ---\n' + node.log.join('').slice(-3000))

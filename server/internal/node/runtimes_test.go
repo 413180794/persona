@@ -132,6 +132,7 @@ type fakeRuntime struct {
 	events []string       // event names the node pushed, in order
 	hubs   []bool         // runtime.hub pushes: whether a hub is connected
 	helloR map[string]any // what runtime.hello answered
+	closed chan struct{}  // closed when the connection ends (helloAt)
 }
 
 func (f *fakeRuntime) got(method string) []json.RawMessage {

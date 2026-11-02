@@ -47,7 +47,7 @@ func TestRuntimeStaysAcrossHubConnections(t *testing.T) {
 	if hub, _ := rt.helloR["hub"].(bool); hub {
 		t.Fatal("hello said a hub is connected before one was")
 	}
-	if f, _ := rt.helloR["features"].([]any); len(f) != 2 || f[0] != "prefer_running" || f[1] != "resume_argv" {
+	if f, _ := rt.helloR["features"].([]any); len(f) != 3 || f[0] != "prefer_running" || f[1] != "resume_argv" || f[2] != "handover" {
 		t.Fatalf("features %v", rt.helloR["features"])
 	}
 	_ = rt.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": "session-1", "status": "done"}}})

@@ -323,3 +323,85 @@ func TestParseEventCarriesTheMessage(t *testing.T) {
 		t.Fatal("only message events carry a message")
 	}
 }
+
+func TestSendClientID(t *testing.T) {
+	var got []string
+	answer := func(w http.ResponseWriter) { _, _ = io.WriteString(w, `{"messageId":"7000000000000000001"}`) }
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/agent/v1/conversations/feed-1/messages" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		var body struct {
+			Text     string `json:"text"`
+			ClientID string `json:"clientId"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		got = append(got, body.ClientID)
+		answer(w)
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	ctx := context.Background()
+
+	const fixed = "6F9619FF-8B86-4011-B42D-00C04FC964FF"
+	id, err := c.Send(ctx, "feed-1", "hi", fixed)
+	if err != nil || id != "7000000000000000001" {
+		t.Fatalf("Send = %q, %v", id, err)
+	}
+	if got[0] != fixed {
+		t.Fatalf("clientId = %q, want it passed through as %q", got[0], fixed)
+	}
+
+	if _, err := c.Send(ctx, "feed-1", "hi", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Send(ctx, "feed-1", "hi", ""); err != nil {
+		t.Fatal(err)
+	}
+	if !ValidClientID(got[1]) || got[1][14] != '4' || got[1] == got[2] {
+		t.Fatalf("generated clientIds %q, %q: want two distinct UUIDv4", got[1], got[2])
+	}
+
+	answer = func(w http.ResponseWriter) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = io.WriteString(w, `{"error":{"code":"MESSAGE_ALREADY_SENT","message":"Lark accepted this message"}}`)
+	}
+	if id, err := c.Send(ctx, "feed-1", "hi", fixed); err != nil || id != "" {
+		t.Fatalf("MESSAGE_ALREADY_SENT: Send = %q, %v; want success", id, err)
+	}
+
+	answer = func(w http.ResponseWriter) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = io.WriteString(w, `{"error":{"code":"MESSAGE_DISCARDED","message":"This message was discarded"}}`)
+	}
+	if _, err := c.Send(ctx, "feed-1", "hi", fixed); err == nil || !strings.Contains(err.Error(), "MESSAGE_DISCARDED") {
+		t.Fatalf("MESSAGE_DISCARDED: err = %v, want a failure", err)
+	}
+}
+
+func TestValidClientID(t *testing.T) {
+	for _, s := range []string{
+		"6f9619ff-8b86-4011-b42d-00c04fc964ff",
+		"6F9619FF-8B86-4011-B42D-00C04FC964FF",
+		"6f9619ff-8b86-5011-a42d-00c04fc964ff",
+		NewClientID(),
+	} {
+		if !ValidClientID(s) {
+			t.Errorf("ValidClientID(%q) = false", s)
+		}
+	}
+	for _, s := range []string{
+		"",
+		"not-a-uuid",
+		"6f9619ff8b864011b42d00c04fc964ff",
+		"6f9619ff-8b86-4011-b42d-00c04fc964f",
+		"6f9619ff-8b86-4011-b42d-00c04fc964fg",
+		"6f9619ff-8b86-0011-b42d-00c04fc964ff", // version 0
+		"6f9619ff-8b86-4011-c42d-00c04fc964ff", // not the RFC variant
+		"{6f9619ff-8b86-4011-b42d-00c04fc964f}",
+	} {
+		if ValidClientID(s) {
+			t.Errorf("ValidClientID(%q) = true", s)
+		}
+	}
+}

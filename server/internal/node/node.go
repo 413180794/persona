@@ -401,8 +401,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "launchers.list":
 		ls, err := n.launchers(ctx)
 		if bl := n.runtimes.launchers(); len(bl) > 0 {
-			// A runtime's launcher (DSH) is offered even when the login shell's list failed.
-			ls, err = append(append([]proto.Launcher(nil), ls...), bl...), nil
+			// A runtime's launcher (DSH) is offered even when the login shell's list failed; one named like a shell
+			// launcher is not (the shell's runs: runtimeStart).
+			ls, err = append(append([]proto.Launcher(nil), ls...), n.runtimes.besideShell(bl, ls)...), nil
 		}
 		return map[string]any{"launchers": ls}, err
 	case "launchers.managed":

@@ -44,7 +44,7 @@ func TestAccountSelectionAcrossTransports(t *testing.T) {
 			if _, _, err := c.Conversations(ctx, "unread", "", 1); err != nil {
 				t.Fatal(err)
 			}
-			if err := c.Send(ctx, "test-feed", "test message"); err != nil {
+			if _, err := c.Send(ctx, "test-feed", "test message", ""); err != nil {
 				t.Fatal(err)
 			}
 			if err := c.Media(ctx, httptest.NewRecorder(), "/media/test", nil, nil); err != nil {

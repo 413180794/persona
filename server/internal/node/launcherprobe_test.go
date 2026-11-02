@@ -127,6 +127,13 @@ func TestProbeCodex(t *testing.T) {
 	assertNoSecret(t, d, "sk-fake-codex-0123456789")
 }
 
+func TestProbeDSH(t *testing.T) {
+	// A launcher running DSH is DSH's, not a Claude one tried as claude (the dsh it runs is stubbed, not started).
+	if d := probe(t, "ds"); d.Agent != "dsh" {
+		t.Fatalf("%+v", d)
+	}
+}
+
 func TestProbeOfANonLauncher(t *testing.T) {
 	zsh, err := exec.LookPath("zsh")
 	if err != nil {

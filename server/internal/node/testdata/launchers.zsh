@@ -66,3 +66,8 @@ cc_exports() {
 cx() {
 	OPENAI_BASE_URL="https://gw.example.com/openai" OPENAI_API_KEY="sk-fake-codex-0123456789" codex -m gpt-x -c model_reasoning_effort=high "$@"
 }
+
+# A launcher that runs DSH (DeepSeek Harness), not Claude or Codex.
+ds() {
+	DEEPSEEK_API_KEY="sk-fake-ds-0123456789" command dsh --profile web "$@"
+}

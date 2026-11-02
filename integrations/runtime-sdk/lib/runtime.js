@@ -4,6 +4,7 @@
 // the "who answers first" policy. A runtime supplies a driver with what only it knows: its sessions, their pages, and
 // how to send to them; it calls back append / stream / ask / sessionsChanged as things happen.
 
+import { randomUUID } from 'node:crypto'
 import { existsSync, statSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { homedir } from 'node:os'
@@ -22,6 +23,7 @@ const TOUCHED = 50 // the sessions the phone sent to or started last, listed wha
 const RETRY_MAX = 30_000 // ms: the longest wait while there is no socket file (no node on this machine yet)
 const NEW_NODE_EVERY = 5000 // ms: after an older node, look this often for a new one (the socket file replaced)
 const NEW_NODE_MAX = 10 * 60_000 // ms: …and connect again after this long anyway
+const CONFLICT_RETRY = 30_000 // ms: another process holds this runtime id on the node: try again this often
 
 /** The node's runtime socket for the user this process runs as. */
 export function defaultSocketPath() {
@@ -52,9 +54,10 @@ export function defaultSocketPath() {
  * @param {{ runtime: string, name?: string, agent?: string, version?: string, launcher?: string, launcherModel?: string,
  *   socketPath?: string, answerFirst?: 'auto'|'phone'|'local', log?: (msg: string) => void,
  *   connect?: (path: string) => import('node:net').Socket, pushDelayMs?: number, retryMs?: number,
- *   refreshMs?: number, requires?: string[] }} options - requires: node features (runtime.hello's features) this
- *   runtime cannot do without; on a node lacking one it does not stay connected, and tries again once the node
- *   restarts (its socket file is replaced) or after 10 minutes.
+ *   refreshMs?: number, requires?: string[], onHub?: (connected: boolean) => void }} options - requires: node
+ *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
+ *   connected, and tries again once the node restarts (its socket file is replaced) or after 10 minutes. onHub: called
+ *   after every hello and whenever the node's hub comes or goes (a runtime fetching the hub's tools does it then).
  */
 export function createRuntime(driver, options) {
   if (!options?.runtime) throw new Error('createRuntime: options.runtime (the runtime id) is required')
@@ -64,6 +67,10 @@ export function createRuntime(driver, options) {
   const baseRetry = options.retryMs ?? 1000
   const log = options.log ?? (() => {})
   const connect = options.connect ?? ((path) => createConnection(path))
+  // This process's identity on the node (runtime.hello's instance): a reconnect is the same instance, another process
+  // claiming the same runtime id is not, and the node refuses it (runtime_conflict).
+  const instance = randomUUID()
+  let warnedConflict = false
 
   let peer
   let stopped = false
@@ -153,7 +160,7 @@ export function createRuntime(driver, options) {
       rename: typeof driver.rename === 'function',
       close: typeof driver.close === 'function',
     }
-    const h = { runtime: options.runtime, name: options.name ?? options.runtime, version: options.version ?? '', caps }
+    const h = { runtime: options.runtime, name: options.name ?? options.runtime, version: options.version ?? '', instance, caps }
     if (options.agent) h.agent = options.agent
     if (options.launcher && caps.start) {
       h.launcher = options.launcher
@@ -175,7 +182,7 @@ export function createRuntime(driver, options) {
     socket.once('error', () => {}) // handled by close
     socket.once('connect', async () => {
       const p = new Peer(socket, { prefix: 'd', onRequest: (m, params) => request(m, params), onEvent: (event, params) => {
-        if (event === 'runtime.hub' && peer === p) setHub(params?.connected !== false)
+        if (event === 'runtime.hub' && peer === p && setHub(params?.connected !== false)) hubChanged()
       } })
       for (const w of watched.values()) clearTimeout(w.timer)
       watched.clear() // a new node asks again for what the phone watches
@@ -197,9 +204,19 @@ export function createRuntime(driver, options) {
           return
         }
         warnedRequires = false
+        warnedConflict = false
       } catch (err) {
-        log(`jarvis: hello failed: ${err.message}`)
         if (peer === p) peer = undefined
+        if (err instanceof RpcError && err.code === 'runtime_conflict') {
+          // Another process is this runtime id on the node (two copies configured alike): do not fight it.
+          if (!warnedConflict) log(`jarvis: ${err.message}; give this one another runtime id (trying again every ${CONFLICT_RETRY / 1000}s)`)
+          warnedConflict = true
+          heldOff = true
+          p.close(err)
+          scheduleConnect(CONFLICT_RETRY)
+          return
+        }
+        log(`jarvis: hello failed: ${err.message}`)
         p.close(err)
         scheduleConnect(backoff())
         return
@@ -207,6 +224,7 @@ export function createRuntime(driver, options) {
       retryMs = baseRetry
       log('jarvis: connected to the node')
       schedulePush(0)
+      hubChanged()
       const why = await p.done
       if (peer === p) peer = undefined
       log(`jarvis: node connection closed${why?.message ? `: ${why.message}` : ''}`)
@@ -390,9 +408,19 @@ export function createRuntime(driver, options) {
    * the last 6 hours, or the runtime's own UI is not open).
    */
   function setHub(connected) {
-    if (connected === hubConnected) return
+    if (connected === hubConnected) return false
     hubConnected = connected
     log(`jarvis: the node's hub ${connected ? 'is back' : 'is gone'}`)
+    return true
+  }
+
+  function hubChanged() {
+    if (typeof options.onHub !== 'function') return
+    try {
+      options.onHub(peer !== undefined && hubConnected)
+    } catch (err) {
+      log(`jarvis: onHub: ${err.message}`)
+    }
   }
 
   function phoneFirst(sessionId) {
@@ -578,6 +606,28 @@ export function createRuntime(driver, options) {
     /** Whether that node has a hub connected (the phone can be asked). */
     get hubConnected() {
       return peer !== undefined && hubConnected
+    },
+    /**
+     * The hub's tools for this runtime's agents (mcp.tools: the phone's phone_*, mail_*), [] without a node or hub.
+     * @returns {Promise<{name: string, description: string, input_schema: object}[]>}
+     */
+    async tools() {
+      const p = peer
+      if (!p) return []
+      const res = await p.call('mcp.tools', {}, { timeoutMs: 15_000 })
+      return Array.isArray(res?.tools) ? res.tools.filter((t) => t && typeof t.name === 'string' && t.name !== '') : []
+    },
+    /**
+     * Call one of the hub's tools (mcp.call). Phone tools may wait for the phone (woken in the background, or a
+     * confirmation on it), so there is no timeout of its own: signal ends the wait.
+     * @param {{name: string, args?: object, session_id?: string}} params
+     * @param {{signal?: AbortSignal}} [opts]
+     * @returns {Promise<{content: {type: string, text?: string, data?: string, mime_type?: string}[], is_error?: boolean}>}
+     */
+    async callTool(params, { signal } = {}) {
+      const p = peer
+      if (!p) return { content: [{ type: 'text', text: 'Jarvis is not connected on this machine' }], is_error: true }
+      return p.call('mcp.call', { name: params.name, args: params.args ?? {}, session_id: params.session_id ?? '' }, { timeoutMs: 0, signal })
     },
     /** Push the list now (tests). */
     pushNow: pushSessions,

@@ -28,6 +28,9 @@ export async function startNode({ jarvisd, keep = false, home: given, env = {} }
   }
   const h = { root, home, runtimeSocket: join(home, '.jarvis', 'runtime.sock'), events: [], asked: [], log }
   h.resolve = () => ({ dismiss: true }) // how the "phone" answers interaction cards
+  h.tools = [] // the hub's tools (mcp.tools), and how a call of one is answered (mcp.call)
+  h.toolCalls = []
+  h.callTool = (params) => ({ content: [{ type: 'text', text: `${params.name} ran` }], is_error: false })
   h.hub = new Peer(stdio, {
     prefix: 'h',
     onEvent: (event, params) => h.events.push({ event, params, at: Date.now() }),
@@ -39,7 +42,10 @@ export async function startNode({ jarvisd, keep = false, home: given, env = {} }
           h.asked.push(params.interaction)
           return h.resolve(params.interaction)
         case 'mcp.tools':
-          return { tools: [] }
+          return { tools: h.tools }
+        case 'mcp.call':
+          h.toolCalls.push(params)
+          return h.callTool(params)
         default:
           return {}
       }

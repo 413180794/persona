@@ -50,8 +50,8 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
 ## 启动器页面上的参数（`node/launcherprobe.go`）
 
 只读 ~/.zshrc 里函数的原文看不出 `_claude_proxy URL TOKEN MODEL WINDOW` 这类 helper、局部变量最后设了什么，所以 node 把启动器在
-子 shell 里真跑一遍：`claude` / `codex` / `traex` / `command` / `env` 都换成桩，只打印 Agent 会拿到的环境变量和参数，再和 shell 自己的
-环境比，只算启动器改了的。页面上按电脑显示（各台一样就合成一组）：
+子 shell 里真跑一遍：`claude` / `codex` / `traex` / `dsh` / `command` / `env` 都换成桩，只打印 Agent 会拿到的环境变量和参数，再和 shell 自己的
+环境比，只算启动器改了的（跑 `dsh` 的启动器认成 DSH，不会真把 DSH 跑起来，也不再当成 Claude 去起）。页面上按电脑显示（各台一样就合成一组）：
 
 - 运行：Agent（Claude Code / Codex / TRAEX）、网关、Key 放在哪个变量（值不显示）
 - 模型：主模型、Fable / Opus / Sonnet / Haiku、小模型、子 Agent，各自的变量名；Codex 看 `-m`

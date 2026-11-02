@@ -77,7 +77,7 @@ const text = (seq, role, body) => role === 'user'
   : { type: 'assistant/message', seq, time: 0, surfaceOp: 'append', data: { message: { role: 'assistant', content: [{ type: 'text', text: body }] } } }
 
 async function setup(t, opts = {}) {
-  const n = await startFakeNode(t)
+  const n = await startFakeNode(t, { tools: opts.tools })
   const ctl = controller()
   const ev = bus()
   const answered = []
@@ -86,7 +86,10 @@ async function setup(t, opts = {}) {
     on: ev.on,
     userQuestions: { answer: (agent, callId, answer) => { answered.push({ callId, answer }); return true } },
     hasLiveClient: () => opts.liveClient ?? true,
-  }, { socketPath: n.path, pushDelayMs: 5, retryMs: 20, interactions: opts.interactions, maxSessions: opts.maxSessions })
+    workspace: opts.workspace,
+    registerTool: opts.registerTool,
+  }, { socketPath: n.path, pushDelayMs: 5, retryMs: 20, interactions: opts.interactions, maxSessions: opts.maxSessions,
+    runtime: opts.runtime, name: opts.name, launcher: opts.launcher })
   t.after(() => rt.stop())
   return { n, ctl, ev, rt, answered }
 }
@@ -310,4 +313,84 @@ test('reconnects when the node goes away and comes back', async (t) => {
   await until('first list', () => n.all('runtime.sessions').length === 1)
   n.peer.close(new Error('node restarted'))
   await until('reconnected', () => rt.connected && n.all('runtime.sessions').length >= 2, 5000)
+})
+
+/** A workspaceRegistry: its archive set and the archive calls. */
+function workspace(archived = []) {
+  const w = {
+    archivedSessionIds: [...archived],
+    calls: [],
+    async archiveSession(id, o) {
+      w.calls.push({ id, ...o })
+      w.archivedSessionIds = [...w.archivedSessionIds, id]
+    },
+  }
+  return w
+}
+
+test('archived sessions are not listed, and closing one from the phone archives it and stops its work', async (t) => {
+  const ws = workspace(['session-gone'])
+  const { n, ctl, rt } = await setup(t, { workspace: ws })
+  ctl.add('session-gone', { cwd: '/w/app' })
+  ctl.add('session-live', { cwd: '/w/app', running: true })
+  rt.start()
+  await n.ready
+  assert.equal(n.hello.caps.close, true)
+  await until('listed', () => n.last('runtime.sessions'))
+  assert.deepEqual(n.last('runtime.sessions').sessions.map((s) => s.session_id), ['session-live'])
+  await n.peer.call('session.close', { session_id: 'session-live' })
+  assert.deepEqual(ws.calls, [{ id: 'session-live', stopActivity: true }])
+  await until('gone from the list', () => n.last('runtime.sessions')?.sessions.length === 0)
+})
+
+test('another runtime id, name and launcher: in hello, the cards\' ids and the rows\' label', async (t) => {
+  const { n, ctl, ev, rt } = await setup(t, { runtime: 'dsh-work', name: 'DSH (work)', launcher: 'dsh-work', interactions: 'phone' })
+  ctl.add('session-w', { cwd: '/w/app' })
+  rt.start()
+  await n.ready
+  assert.equal(n.hello.runtime, 'dsh-work')
+  assert.equal(n.hello.name, 'DSH (work)')
+  assert.equal(n.hello.launcher, 'dsh-work')
+  assert.equal(n.hello.agent, 'dsh', 'it still runs DSH\'s agent')
+  await until('listed', () => n.last('runtime.sessions'))
+  assert.equal(n.last('runtime.sessions').sessions[0].agent_label, 'DSH (work)')
+  n.resolve = () => ({ allow: true })
+  const outcome = await ev.waterfall('approval/request', { agent: { session: { id: 'session-w' } }, toolName: 'bash', callId: 'c1' }, () => 'unavailable')
+  assert.equal(outcome, 'allowed-once')
+  assert.ok(n.asked[0].id.includes('dsh-work'), n.asked[0].id)
+})
+
+test('the hub\'s tools become DSH tools; a call goes through the node with the calling session', async (t) => {
+  const registered = new Map()
+  const registerTool = (def) => {
+    registered.set(def.name, def)
+    return () => registered.delete(def.name)
+  }
+  const { n, rt } = await setup(t, { registerTool, tools: [
+    { name: 'phone_calendar_events', description: 'Calendar', input_schema: { type: 'object', properties: { day: { type: 'string' } } } },
+    { name: 'mail_search', description: 'Mail', input_schema: { type: 'object' } },
+  ] })
+  rt.start()
+  await n.ready
+  await until('registered', () => registered.size === 2)
+  const def = registered.get('mcp__jarvis__phone_calendar_events')
+  assert.equal(def.description, 'Calendar')
+  assert.deepEqual(def.parameters.properties.day, { type: 'string' })
+  const value = await def.execute({ day: 'today' }, { agent: { session: { id: 'session-c' } }, signal: AbortSignal.timeout(5000) })
+  assert.deepEqual(n.toolCalls.at(-1), { name: 'phone_calendar_events', args: { day: 'today' }, session_id: 'session-c' })
+  assert.deepEqual(def.output.render({}, value), [{ type: 'text', text: 'phone_calendar_events ran' }])
+  n.callTool = () => ({ content: [{ type: 'text', text: 'iPhone 不在线，请打开 Jarvis' }], is_error: true })
+  await assert.rejects(def.execute({}, { agent: { session: { id: 'session-c' } } }), /iPhone 不在线/)
+
+  // The same tools: nothing re-registered; a changed list replaces them; the hub away keeps them.
+  await rt.refreshTools()
+  assert.equal(registered.size, 2)
+  n.tools = [{ name: 'phone_reminders', description: 'Reminders', input_schema: { type: 'object' } }]
+  await rt.refreshTools()
+  assert.deepEqual([...registered.keys()], ['mcp__jarvis__phone_reminders'])
+  n.setHub(false)
+  await new Promise((r) => setTimeout(r, 50))
+  assert.equal(registered.size, 1)
+  rt.stop()
+  assert.equal(registered.size, 0, 'stopping takes them off')
 })

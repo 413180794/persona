@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRuntime, interactionId, light, PAGE_TEXT } from '../index.js'
+import { createRuntime, interactionId, light, PAGE_TEXT, RpcError } from '../index.js'
 import { startFakeNode, until } from '../testing/fake-node.js'
 import { createEchoRuntime } from '../examples/echo-runtime.mjs'
 
@@ -248,4 +248,67 @@ test('recent: pinned and phone-touched sessions always, the rest by age up to th
   assert.deepEqual(got.map((r) => r.session_id), ['a', 'b', 'old-running', 'old-touched'])
   const { appToolName } = await import('../index.js')
   assert.deepEqual([appToolName('bash'), appToolName('find', { find: 'Glob' }), appToolName('mystery')], ['Bash', 'Glob', 'mystery'])
+})
+
+test('hello carries one instance per runtime, the same on every reconnect', async (t) => {
+  const n = await startFakeNode(t)
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: n.path, retryMs: 20 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  const first = n.hello.instance
+  assert.match(first, /^[0-9a-f-]{36}$/)
+  n.peer.close(new Error('node restarts'))
+  await until('hello again', () => n.hellos >= 2)
+  assert.equal(n.hello.instance, first)
+  const other = createRuntime(minimal(), { runtime: 'toy2', socketPath: n.path, retryMs: 20 })
+  t.after(() => other.stop())
+  other.start()
+  await until('the other runtime', () => n.hello.runtime === 'toy2')
+  assert.notEqual(n.hello.instance, first)
+})
+
+test('a runtime id another process holds is not fought over: it is tried again only every 30 seconds', async (t) => {
+  const n = await startFakeNode(t)
+  n.conflict()
+  const logs = []
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: n.path, retryMs: 20, log: (m) => logs.push(m) })
+  t.after(() => rt.stop())
+  rt.start()
+  await until('refused', () => n.hellos >= 1)
+  await new Promise((r) => setTimeout(r, 300))
+  assert.equal(n.hellos, 1, 'not retried on the short back-off')
+  assert.equal(rt.connected, false)
+  assert.ok(logs.some((m) => m.includes('another runtime id')), logs.join('\n'))
+})
+
+test('the hub\'s tools: listed and called through the node, onHub after hello and as the hub comes and goes', async (t) => {
+  const n = await startFakeNode(t, { tools: [{ name: 'phone_contacts', description: 'Contacts', input_schema: { type: 'object' } }] })
+  const hubs = []
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: n.path, retryMs: 20, onHub: (c) => hubs.push(c) })
+  t.after(() => rt.stop())
+  assert.deepEqual(await rt.tools(), [], 'no node yet: none')
+  rt.start()
+  await n.ready
+  await until('onHub after hello', () => hubs.length === 1)
+  assert.deepEqual(hubs, [true])
+  assert.deepEqual((await rt.tools()).map((x) => x.name), ['phone_contacts'])
+  const res = await rt.callTool({ name: 'phone_contacts', args: { q: 'li' }, session_id: 's1' })
+  assert.equal(res.content[0].text, 'phone_contacts ran')
+  assert.deepEqual(n.toolCalls[0], { name: 'phone_contacts', args: { q: 'li' }, session_id: 's1' })
+  n.setHub(false)
+  await until('onHub: gone', () => hubs.length === 2)
+  n.setHub(false) // no change: not called again
+  n.setHub(true)
+  await until('onHub: back', () => hubs.length === 3)
+  assert.deepEqual(hubs, [true, false, true])
+})
+
+test('a refusal with data reaches the node with its data (delivered: none)', async (t) => {
+  const n = await startFakeNode(t)
+  const rt = createRuntime(minimal({ send: async () => { throw new RpcError('handed over', 'handover', { delivered: 'none' }) } }), { runtime: 'toy', socketPath: n.path, retryMs: 20 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await assert.rejects(n.peer.call('session.send', { session_id: 's1', text: 'x' }), (err) => err.code === 'handover' && err.data?.delivered === 'none')
 })

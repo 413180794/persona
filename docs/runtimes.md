@@ -56,8 +56,10 @@ runtime 不用知道 hub 在哪、不用开端口、不用鉴权（同一个系�
 | `rt.stream(id, text)` / `rt.streamEnd(id)` | 正在生成的整段文字 / 这段结束（SDK 节流到最多 120 ms 一次） |
 | `rt.ask(interaction, {signal})` | 要人决定：卡片到手机，等回答。返回 `Resolution`；`{dismiss: true}` = 交回电脑（手机上点了、过期、没有 hub），交给 runtime 自己的界面。期间会话自动显示「需要你」 |
 | `rt.phoneFirst(id)` | 先问手机还是先问本地界面 |
+| `rt.tools()` / `rt.callTool({name, args, session_id})` | hub 的工具（手机的 `phone_*`、`mail_*`）给自己的 Agent 用：列出来注册成自己的工具，调用时经 node 交给 hub（`createRuntime` 的 `onHub` 在 hello 之后、hub 来去时回调，正好用来取工具） |
+| 发消息时抛 `RpcError(…, 'handover', {delivered: 'none'})` | 只读磁盘的伴随进程：会话不在自己这儿跑，已经让能跑它的程序起来；node 把这条消息交给接手的 runtime（`requires: ['handover']`，DSH 的 `dsh-files`） |
 
-SDK 负责的（每个 runtime 不用再写）：连接 / 重连 / `runtime.hello`、列表推送、watch 的补发和连续性（`from_seq` / `to_seq` 对不上时如实标出，
+SDK 负责的（每个 runtime 不用再写）：连接 / 重连 / `runtime.hello`（带上这个进程的 `instance`：另一个进程用了同一个 runtime id 时 node 不让连，SDK 记一行日志、每 30 秒再试，不抢）、列表推送、watch 的补发和连续性（`from_seq` / `to_seq` 对不上时如实标出，
 手机会补洞）、逐字节流、问手机时会话变「需要你」、node 重启时同一个交互用同一个 id 再问（`interactionId(...)`，最多等 2 分钟）、
 被撤回的交互从手机上撤掉、同一个 `client_msg_id` 只交给 driver 一次（重试拿第一次的结果，失败的可以再发）、「谁先回答」的策略（node 说没有 hub 时一律先给本地界面，`rt.hubConnected`）、断了以后尽快连回来（socket 文件在就每秒试一次）。
 
@@ -103,7 +105,10 @@ runtime 之间共用、但不属于协议的，也在 SDK 里，各 runtime 直�
 
 - `runtime` id：小写，`[A-Za-z0-9][A-Za-z0-9_.-]*`，同时是 `space_kind` 和会话的默认 `agent`。`name` 是 App 里的叫法（会话带 `agent_label`）。
 - runtime 里跑的是 App 认识的 Agent（比如一个跑 Claude Code 的平台）时，`agent` 填那个（`claude`），App 按它显示；否则不填。
-- 会话 id 在这台机器上唯一，最长 128 个字符，不能是路径；`launcher` 名不要和 `~/.zshrc` 里的启动器重名。
+- runtime id 在一台机器上只能有一个进程用：同一个程序要在一台机器上跑两份（两个 DSH profile），让 id、`name`、`launcher` 可以配置，
+  node 拒绝第二个用同样 id 的进程（`runtime_conflict`）。runtime 改了 id 但跑的还是同一种 Agent 时，`agent` 填那种 Agent（改了名的 DSH 填 `dsh`），会话行带上 `agent_label`。
+- 会话 id 在这台机器上唯一，最长 128 个字符，不能是路径；`launcher` 名不要和 `~/.zshrc` 里的启动器重名（重名时 shell 的为准，runtime 的不列），
+  两个 runtime 的启动器重名时只有先连上的那个提供。
 
 ## 最小例子
 
@@ -144,7 +149,7 @@ rt.start()
 
 | runtime | 在哪 | 文档 |
 | --- | --- | --- |
-| DSH（`dsh`） | `integrations/dsh`：`dsh web` 的 Cordis 插件 | `docs/dsh.md` |
+| DSH（`dsh`，可配置） | `integrations/dsh`：`dsh web` 的 Cordis 插件；DSH 没在运行时的伴随进程 `companion.mjs`（`dsh-files`） | `docs/dsh.md` |
 | pi（`pi-<pid>`、`pi-web`、`pi-files`） | `integrations/pi`：pi 扩展（每个 pi 进程一条连接）+ pi-web 伴随进程 | `docs/pi.md` |
 | echo（例子） | `integrations/runtime-sdk/examples/echo-runtime.mjs` | 本文「最小例子」 |
 

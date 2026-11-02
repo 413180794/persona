@@ -202,7 +202,7 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 	case len(changes) > 0:
 		return InboxItem{}, errors.New("only document items have a status to change")
 	case c.Lark != nil:
-		if err := h.lark.Send(ctx, c.Lark.FeedID, text); err != nil {
+		if _, err := h.lark.Send(ctx, c.Lark.FeedID, text, ""); err != nil {
 			return InboxItem{}, err
 		}
 	case c.Mail != nil && h.mail != nil && len(c.Mail.UIDs) > 0:

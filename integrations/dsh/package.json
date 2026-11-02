@@ -12,6 +12,7 @@
   },
   "files": [
     "index.js",
+    "companion.mjs",
     "lib/*.js",
     "cordis.patch.yml",
     "locale/*.json",

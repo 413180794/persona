@@ -41,8 +41,10 @@ func NewRuntimeHost(version, path string) *RuntimeHost {
 	if path == "" {
 		path = RuntimeSocketPath()
 	}
-	return &RuntimeHost{reg: newRuntimeRegistry(), path: path, version: version,
+	rh := &RuntimeHost{reg: newRuntimeRegistry(), path: path, version: version,
 		logger: log.New(os.Stderr, "node: ", log.LstdFlags|log.Lmsgprefix)}
+	rh.reg.logf = rh.logger.Printf
+	return rh
 }
 
 // current is the Node serving the hub now, nil between connections.
@@ -143,6 +145,9 @@ func (rh *RuntimeHost) serve(ctx context.Context, c net.Conn) {
 	defer c.Close()
 	peer := rpc.New("r", c)
 	h := rh.reg.add(peer)
+	h.mu.Lock()
+	h.drop = cancel
+	h.mu.Unlock()
 	peer.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
 		return rh.request(ctx, h, method, params)
 	}
@@ -174,15 +179,28 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		if hello.Agent = strings.TrimSpace(hello.Agent); hello.Agent != "" && !runtimeIDRe.MatchString(hello.Agent) {
 			return nil, fmt.Errorf("runtime.hello: bad agent %q", hello.Agent)
 		}
-		h.mu.Lock()
-		h.hello, h.ready = hello, true
-		h.mu.Unlock()
+		hello.Instance = strings.TrimSpace(hello.Instance)
+		stale, err := rh.reg.hello(h, hello)
+		if err != nil {
+			rh.logger.Printf("runtime %s #%d refused: %v", hello.Runtime, h.serial, err)
+			return nil, err
+		}
+		for _, o := range stale { // this process again, on a new connection: the old one is dead
+			o.mu.Lock()
+			drop := o.drop
+			o.mu.Unlock()
+			o.peer.Close(errors.New("the runtime reconnected"))
+			if drop != nil {
+				drop()
+			}
+		}
 		rh.logger.Printf("runtime %s %s #%d connected", hello.Runtime, hello.Version, h.serial)
 		// features: what this node does beyond the first protocol. prefer_running: when two runtimes list a session, the
 		// one running it answers for it (runtimes.go recomputeOwners), so a runtime may list sessions it only has on disk.
 		// resume_argv: a session listed offline with resume_argv is resumed in the terminal engine (pi.go).
+		// handover: a send refused with the handover code goes to the runtime that takes the session over (handOver).
 		return map[string]any{"protocol": RuntimeProtocol, "node_version": rh.version, "hub": rh.current() != nil,
-			"features": []string{"prefer_running", "resume_argv"}}, nil
+			"features": []string{"prefer_running", "resume_argv", "handover"}}, nil
 	case "interaction.create":
 		n := rh.current()
 		if n == nil { // no hub to put it in front of the phone: ask again (same id) once one is connected

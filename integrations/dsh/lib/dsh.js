@@ -17,17 +17,26 @@ export const RUNTIME_VERSION = '0.2.0'
  * @property {object} controller - DSH sessionController: list / page / projections / prompt / cancel / create / rename / attachment.
  * @property {(event: string, listener: Function, options?: object) => () => void} on - ctx.on.
  * @property {{ answer(agent: object, callId: string, answer: object): boolean } | undefined} [userQuestions]
+ * @property {{ archivedSessionIds: readonly string[], archiveSession(id: string, o?: {stopActivity?: boolean}): Promise<void> } | undefined} [workspace]
+ *   DSH's workspaceRegistry: archived sessions are not listed; closing one from the phone archives it.
+ * @property {(definition: object) => (() => void) | undefined} [registerTool] - ctx.tools.register: the hub's tools
+ *   (phone_*, mail_*) for DSH's agents. Absent: none.
  * @property {() => boolean} [hasLiveClient] - whether a DSH Web GUI is connected.
  * @property {(msg: string) => void} [log]
  * @property {(path: string) => import('node:net').Socket} [connect] - tests.
  */
 
+const TOOLS_EVERY = 5 * 60_000 // ms: look at the hub's tools this often (the phone registers its tools when it connects)
+
 /**
  * @param {DshDeps} deps
- * @param {{ socketPath?: string, interactions?: 'auto'|'phone'|'browser', listDays?: number, maxSessions?: number,
- *   pushDelayMs?: number, retryMs?: number }} [options]
+ * @param {{ runtime?: string, name?: string, launcher?: string, socketPath?: string,
+ *   interactions?: 'auto'|'phone'|'browser', listDays?: number, maxSessions?: number, pushDelayMs?: number,
+ *   retryMs?: number }} [options] - runtime / name / launcher: how this DSH shows in Jarvis (dsh / DSH / dsh).
  */
 export function createDshRuntime(deps, options = {}) {
+  const runtimeID = options.runtime ?? 'dsh'
+  const label = options.name ?? 'DSH'
   const listDays = options.listDays ?? 7
   const maxSessions = options.maxSessions ?? 80
   const log = deps.log ?? (() => {})
@@ -35,6 +44,7 @@ export function createDshRuntime(deps, options = {}) {
   const calls = new Map() // session id -> Map(callId -> { name, args }): recent tool calls, for approval cards
   const texts = new Map() // session id -> the assistant text being generated
   const disposers = []
+  const tools = { key: '', disposers: [], refreshing: false, timer: undefined }
 
   const state = (id) => {
     let s = known.get(id)
@@ -59,10 +69,12 @@ export function createDshRuntime(deps, options = {}) {
 
   async function listSessions() {
     const { items } = await withTimeout(20_000, (signal) => deps.controller.list({}, signal))
+    const archived = archivedIDs()
     const rows = []
     for (const s of items ?? []) {
       const id = String(s.sessionId)
       if (s.origin === 'subagent' || s.parentSessionId) continue // a subagent's or a workflow's: its parent shows it
+      if (archived.has(id)) continue // archived in DSH (or closed from the phone): DSH hides it too
       const st = known.get(id)
       const running = s.running === true || st?.running === true
       const waiting = activeQuestions(s) > 0 // asked in the Web GUI; cards on the phone the SDK marks itself
@@ -84,6 +96,7 @@ export function createDshRuntime(deps, options = {}) {
         status: waiting ? 'blocked' : running ? 'working' : 'done',
         updated_at: new Date(s.updatedAt ?? Date.now()).toISOString(),
       }
+      if (runtimeID !== 'dsh') row.agent_label = label // the node names only a runtime's own agent itself
       if (s.cwd) {
         row.space_id = s.cwd
         row.space_name = basename(s.cwd)
@@ -97,6 +110,84 @@ export function createDshRuntime(deps, options = {}) {
   function activeQuestions(summary) {
     const q = summary?.projections?.values?.userQuestions
     return Array.isArray(q?.active) ? q.active.length : 0
+  }
+
+  /** DSH's archived sessions (none when it has no workspace registry, or it is not loaded yet). */
+  function archivedIDs() {
+    try {
+      const ids = deps.workspace?.archivedSessionIds
+      return new Set(Array.isArray(ids) ? ids.map(String) : [])
+    } catch {
+      return new Set() // the registry's state is not loaded yet: nothing is known to be archived
+    }
+  }
+
+  /** Closing from the phone archives the session, as DSH's own close does, stopping what still runs in it. */
+  async function close(params) {
+    await deps.workspace.archiveSession(params.session_id, { stopActivity: true })
+    known.delete(params.session_id)
+  }
+
+  // ---- the hub's tools for DSH's agents (phone_*, mail_*: docs/dsh.md「手机工具」) ----
+
+  /** The DSH tool for one of the hub's tools: called through the node (mcp.call), its text as the result. */
+  function toolDefinition(t) {
+    const schema = t.input_schema && typeof t.input_schema === 'object' && !Array.isArray(t.input_schema)
+      ? t.input_schema : { type: 'object', properties: {} }
+    return {
+      name: `mcp__jarvis__${t.name}`,
+      description: typeof t.description === 'string' ? t.description : t.name,
+      parameters: schema,
+      output: {
+        schema: { type: 'object', properties: { content: { type: 'array', items: {} } }, required: ['content'], additionalProperties: false },
+        render: (_args, value) => [{ type: 'text', text: resultText(value?.content) }],
+      },
+      async execute(args, exec) {
+        const agent = exec?.agent
+        const sessionId = String(agent?.session?.id ?? agent?.id ?? '')
+        const res = await rt.callTool({ name: t.name, args: args && typeof args === 'object' ? args : {}, session_id: sessionId }, { signal: exec?.signal })
+        const text = resultText(res?.content)
+        if (res?.is_error) throw new Error(text || `${t.name} failed`)
+        return { content: [{ type: 'text', text }] }
+      },
+    }
+  }
+
+  /** Registers the hub's tools when they changed; the last ones stay while the hub is away (a call says so). */
+  async function refreshTools(connected) {
+    if (typeof deps.registerTool !== 'function' || !connected || tools.refreshing) return
+    tools.refreshing = true
+    try {
+      const list = await rt.tools()
+      const key = JSON.stringify(list.map((t) => [t.name, t.description, t.input_schema]))
+      if (key === tools.key) return
+      dropTools()
+      tools.key = key
+      for (const t of list) {
+        try {
+          const dispose = deps.registerTool(toolDefinition(t))
+          if (typeof dispose === 'function') tools.disposers.push(dispose)
+        } catch (err) {
+          log(`jarvis: tool ${t.name}: ${err.message}`)
+        }
+      }
+      log(`jarvis: ${tools.disposers.length} Jarvis tools for DSH's agents`)
+    } catch (err) {
+      log(`jarvis: the hub's tools: ${err.message}`)
+    } finally {
+      tools.refreshing = false
+    }
+  }
+
+  function dropTools() {
+    for (const d of tools.disposers.splice(0)) {
+      try {
+        d()
+      } catch {
+        // already disposed with the plugin's scope
+      }
+    }
+    tools.key = ''
   }
 
   async function cursorOf(sessionId, signal) {
@@ -230,8 +321,10 @@ export function createDshRuntime(deps, options = {}) {
     const res = await deps.controller.create({ cwd: params.cwd })
     const id = String(res.sessionId)
     if (typeof params.prompt === 'string' && params.prompt.trim() !== '') await send({ session_id: id, text: params.prompt })
-    return { session: { session_id: id, cwd: params.cwd, title: basename(params.cwd), status: 'idle',
-      space_id: params.cwd, space_name: basename(params.cwd), updated_at: new Date().toISOString() } }
+    const session = { session_id: id, cwd: params.cwd, title: basename(params.cwd), status: 'idle',
+      space_id: params.cwd, space_name: basename(params.cwd), updated_at: new Date().toISOString() }
+    if (runtimeID !== 'dsh') session.agent_label = label
+    return { session }
   }
 
   const rt = createRuntime({
@@ -244,12 +337,14 @@ export function createDshRuntime(deps, options = {}) {
     interrupt: (params) => deps.controller.cancel({ sessionId: params.session_id }),
     start,
     rename: (params) => deps.controller.rename({ sessionId: params.session_id, title: params.title }),
+    close: typeof deps.workspace?.archiveSession === 'function' ? close : undefined,
     hasLocalClient: typeof deps.hasLiveClient === 'function' ? deps.hasLiveClient : undefined,
   }, {
-    runtime: 'dsh',
-    name: 'DSH',
+    runtime: runtimeID,
+    name: options.name ?? 'DSH',
+    agent: runtimeID === 'dsh' ? undefined : 'dsh', // a renamed DSH still runs DSH's agent (its cards are DSH's)
     version: RUNTIME_VERSION,
-    launcher: 'dsh',
+    launcher: options.launcher ?? 'dsh',
     launcherModel: 'DeepSeek Harness',
     socketPath: options.socketPath,
     answerFirst: options.interactions === 'browser' ? 'local' : options.interactions ?? 'auto',
@@ -257,6 +352,7 @@ export function createDshRuntime(deps, options = {}) {
     connect: deps.connect,
     pushDelayMs: options.pushDelayMs,
     retryMs: options.retryMs,
+    onHub: (connected) => void refreshTools(connected),
   })
 
   // ---- DSH's events ----
@@ -320,7 +416,7 @@ export function createDshRuntime(deps, options = {}) {
     const name = call?.name ?? req.toolName
     const input = call ? toolInput(call.name, call.args) : undefined
     const ix = {
-      id: interactionId('dsh', sessionId, 'permission', req.callId ?? randomUUID()),
+      id: interactionId(runtimeID, sessionId, 'permission', req.callId ?? randomUUID()),
       kind: 'permission',
       session_id: sessionId,
       tool_name: toolName(name),
@@ -366,7 +462,7 @@ export function createDshRuntime(deps, options = {}) {
     const callId = request.wait?.callId
     const plan = questions.length === 1 && questions[0].intent?.kind === 'plan-review' ? questions[0] : undefined
     const ix = {
-      id: interactionId('dsh', sessionId, plan ? 'plan' : 'question', callId ?? questions.map((q) => q.id).join(',')),
+      id: interactionId(runtimeID, sessionId, plan ? 'plan' : 'question', callId ?? questions.map((q) => q.id).join(',')),
       kind: plan ? 'plan' : 'question',
       session_id: sessionId,
     }
@@ -433,6 +529,10 @@ export function createDshRuntime(deps, options = {}) {
       listen('approval/request', onApproval, { global: true, prepend: true })
       listen('user-questions/request', onQuestion, { global: true, prepend: true })
       rt.start()
+      if (typeof deps.registerTool === 'function') {
+        tools.timer = setInterval(() => void refreshTools(rt.hubConnected), TOOLS_EVERY)
+        tools.timer.unref?.()
+      }
     },
     stop() {
       for (const d of disposers.splice(0)) {
@@ -442,11 +542,15 @@ export function createDshRuntime(deps, options = {}) {
           // already gone
         }
       }
+      clearInterval(tools.timer)
+      dropTools()
       rt.stop()
     },
     get connected() {
       return rt.connected
     },
+    /** Look at the hub's tools now (tests). */
+    refreshTools: () => refreshTools(rt.hubConnected),
     pushNow: rt.pushNow,
   }
 }
@@ -472,4 +576,14 @@ export function answerOf(questions, plan, res) {
     if (value && selected.length === 0) item.custom = value
     return item
   })
+}
+
+/** The text of a hub tool result's content (images are not passed on to DSH's agents: said in a line). */
+export function resultText(content) {
+  const parts = []
+  for (const c of Array.isArray(content) ? content : []) {
+    if (c?.type === 'text' && typeof c.text === 'string') parts.push(c.text)
+    else if (c?.type === 'image') parts.push(`[图片 ${c.mime_type ?? ''}：DSH 里不显示]`.replace(' ：', '：'))
+  }
+  return parts.join('\n')
 }

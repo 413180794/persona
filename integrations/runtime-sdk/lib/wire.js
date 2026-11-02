@@ -83,6 +83,7 @@ export class Peer {
     } catch (err) {
       const error = { message: err instanceof Error ? err.message : String(err) }
       if (err && typeof err.code === 'string') error.code = err.code
+      if (err && err.data !== undefined && err.data !== null && typeof err.data === 'object') error.data = err.data
       out = { id: m.id, error }
     }
     this.write(out)
