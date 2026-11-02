@@ -49,4 +49,26 @@ struct LarkOutboxTests {
         o.state = .sent
         #expect(LarkOutbox.remaining([o], messages: [], now: now).isEmpty)
     }
+
+    @Test func aRetryKeepsTheMessagesID() {
+        var o = LarkOutgoing(text: "好的", at: Date(timeIntervalSince1970: 0))
+        o.state = .failed("超时")
+        let id = o.id, clientID = o.clientID
+        o.retry(at: Date(timeIntervalSince1970: 60))
+        #expect(o.id == id && o.clientID == clientID)
+        #expect(o.state == .sending && o.at == Date(timeIntervalSince1970: 60))
+    }
+
+    @Test func theSendCarriesTheMessagesIDAsClientID() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/lark/conversations/f1/messages", json: "{}")
+        let o = LarkOutgoing(text: "收到")
+        try await hub.client.larkSend("f1", text: o.text, clientID: o.clientID)
+        try await hub.client.larkSend("f1", text: o.text, clientID: o.clientID) // the retry
+        let bodies = try hub.sent("POST", "/api/v1/lark/conversations/f1/messages").map { r in
+            try JSONSerialization.jsonObject(with: r.body ?? Data()) as? [String: String]
+        }
+        #expect(bodies.count == 2)
+        #expect(bodies.allSatisfy { $0 == ["text": "收到", "client_id": o.id.uuidString.lowercased()] })
+    }
 }

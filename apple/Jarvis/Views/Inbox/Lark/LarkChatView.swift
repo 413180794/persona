@@ -425,8 +425,7 @@ struct LarkChatView: View {
 
     private func resend(_ id: UUID) {
         guard let i = outgoing.firstIndex(where: { $0.id == id }) else { return }
-        outgoing[i].state = .sending
-        outgoing[i].at = .now
+        outgoing[i].retry()
         deliver(id)
     }
 
@@ -440,7 +439,7 @@ struct LarkChatView: View {
             await before?.value // in the order written
             guard let api = model.api, let o = outgoing.first(where: { $0.id == id }), o.state == .sending else { return }
             do {
-                try await api.larkSend(conversation.id, text: o.text)
+                try await api.larkSend(conversation.id, text: o.text, clientID: o.clientID)
                 setState(id, .sent)
                 // Its copy replaces it (settleOutgoing); the push usually brings it, a refresh makes sure.
                 await refreshLatest()

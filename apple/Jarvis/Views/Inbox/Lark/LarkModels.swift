@@ -255,8 +255,17 @@ extension APIClient {
     func larkThread(_ messageID: String, before: String? = nil) async throws -> LarkMessages {
         try await get("/api/v1/lark/messages/\(messageID)/thread", query: ["before": before ?? "", "limit": "60"])
     }
-    struct LarkText: Encodable { var text: String }
-    func larkSend(_ id: String, text: String) async throws { try await post("/api/v1/lark/conversations/\(id)/messages", body: LarkText(text: text)) }
+    struct LarkText: Encodable {
+        var text: String
+        /// The same for every try of one message, so the hub sends it once however often it is retried.
+        var clientID: String?
+        enum CodingKeys: String, CodingKey { case text, clientID = "client_id" }
+    }
+    /// lark-connector can take a while to confirm a send; a retry after an early timeout is what sent twice.
+    static let larkSendTimeout: TimeInterval = 45
+    func larkSend(_ id: String, text: String, clientID: String? = nil) async throws {
+        try await post("/api/v1/lark/conversations/\(id)/messages", body: LarkText(text: text, clientID: clientID), timeout: Self.larkSendTimeout)
+    }
     /// Reports what the reader has seen (never sent just for opening a chat).
     func larkRead(_ id: String, _ report: LarkReadReport) async throws { try await post("/api/v1/lark/conversations/\(id)/read", body: report) }
     func larkEmojis() async throws -> LarkEmojis { try await get("/api/v1/lark/emojis") }

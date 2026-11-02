@@ -45,6 +45,10 @@ nonisolated enum IslandMetrics {
     /// The persona on the compact island's left side (docs/live-activity.md「形象」), and the gap to its count.
     static let face: CGFloat = 22
     static let faceGap: CGFloat = 4
+    /// The persona in the expanded island's corner and on the lock screen (a hub package's pictures are made at every
+    /// face size, `FleetFaces.sizes`).
+    static let expandedFace: CGFloat = 26
+    static let lockFace: CGFloat = 26
     /// The ring around a count that has no room for its symbol.
     static let ring: CGFloat = 1.5
 

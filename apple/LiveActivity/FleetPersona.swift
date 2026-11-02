@@ -38,11 +38,11 @@ nonisolated extension FleetLook {
         store.read(FleetLookStore.lookFile).flatMap { try? JSONDecoder().decode(FleetLook.self, from: $0) } ?? standard
     }
 
-    /// The package's picture for a state as saved, when this look is a package's; read on its own, the one the
-    /// activity is about to draw.
-    func face(_ state: PersonaState) -> (png: Data, own: Bool)? {
+    /// The package's picture for a state at the size it is drawn, as saved, when this look is a package's; read on its
+    /// own, the one the activity is about to draw.
+    func face(_ state: PersonaState, points: CGFloat) -> (png: Data, own: Bool)? {
         guard let package else { return nil }
-        let face = FleetLookStore.shared.face(package, state)
+        let face = FleetLookStore.shared.face(package, state, points: points)
         FleetLookReport.note { $0.face(package, face.map { ($0.file, $0.png.count) }) }
         return face.map { ($0.png, $0.own) }
     }
@@ -87,50 +87,61 @@ nonisolated extension FleetState {
 
 /// A hub package's faces on the activity (its pictures are the user's and stay on the hub and the phone, never in the
 /// repository): one picture a state, the first frame of its dot (the one the app holds still with Reduce Motion), and
-/// the avatar only when a state has none. PNGs as large as the activity's largest face, drawn at its size, and small:
-/// a phone may not draw a Live Activity whose picture is larger than where it shows (an image decoded at 1× is as many
-/// points as it has pixels), and Live Activity libraries keep each picture under 4 KB; the simulator draws anything
+/// the avatar only when a state has none. Each at every size the activity draws a face (compact, minimal / limited,
+/// expanded, lock screen), points × 3 pixels: a phone may not draw a Live Activity whose picture is larger than where
+/// it shows (an image decoded at 1× is as many points as it has pixels), and the simulator draws anything
 /// (docs/live-activity.md「为什么 build 98 还不对」). Each is a file of its own, read only when drawn.
-nonisolated struct FleetFaces: Codable, Hashable, Sendable {
+nonisolated struct FleetFaces: Hashable, Sendable {
+    /// One picture at each size: points → PNG.
+    typealias Picture = [Int: Data]
+
     var package: String
-    /// PersonaState raw value → PNG, only the states the package draws itself.
-    var states: [String: Data]
-    var avatar: Data?
+    /// PersonaState raw value → its picture, only the states the package draws itself.
+    var states: [String: Picture]
+    var avatar: Picture?
 
-    /// The largest face on the activity (the lock screen's, the expanded island's), in points; each picture is drawn
-    /// at this size whatever its pixels.
-    static let points: CGFloat = 26
-    /// Its pixels at 3×, the most a picture gets.
-    static let pixels: CGFloat = points * 3
-    /// The most bytes a picture takes: a busier one is made with fewer pixels.
-    static let maxBytes = 4000
+    /// The sizes the activity draws a face at, in points: compact 22, minimal / limited 24, expanded and lock screen 26.
+    static let sizes = Set([IslandMetrics.face, IslandMetrics.limitedContent, IslandMetrics.expandedFace, IslandMetrics.lockFace].map { Int($0) }).sorted()
+    /// Pixels a point: every iPhone with a Dynamic Island.
+    static let scale: CGFloat = 3
 
-    /// The picture for a state, and whether it is that state's own (else the avatar or the idle frame: the activity
-    /// adds the state's cue, as it does on the built-ins).
-    func face(_ state: PersonaState) -> (png: Data, own: Bool)? {
-        if let own = states[state.rawValue] { return (own, true) }
-        if let other = avatar ?? states[PersonaState.idle.rawValue] { return (other, false) }
+    /// The stored size a face of `points` reads: the smallest that is not smaller, else the largest.
+    static func size(_ points: CGFloat) -> Int { sizes.first { CGFloat($0) >= points } ?? sizes[sizes.count - 1] }
+
+    /// The picture for a state at the size it is drawn, and whether it is that state's own (else the avatar or the
+    /// idle frame: the activity adds the state's cue, as it does on the built-ins).
+    func face(_ state: PersonaState, points: CGFloat) -> (png: Data, own: Bool)? {
+        let size = Self.size(points)
+        if let own = states[state.rawValue]?[size] { return (own, true) }
+        if let other = (avatar ?? states[PersonaState.idle.rawValue])?[size] { return (other, false) }
         return nil
     }
 
-    /// A picture made into one of them: square, PNG, `pixels` on a side or fewer to stay within `maxBytes` (a real
-    /// persona's frame is 11–15 KB at 78px and fits at about 36–42px; down to 30, nil when even that is too large).
-    static func png(_ image: UIImage) -> Data? {
+    /// A picture from the package (its 144 px dot frame, an avatar file at least as large as the largest face) made at
+    /// every size; nil when one cannot be.
+    static func picture(_ image: UIImage) -> Picture? {
+        var out: Picture = [:]
+        for size in sizes {
+            guard let png = png(image, points: CGFloat(size)) else { return nil }
+            out[size] = png
+        }
+        return out
+    }
+
+    /// Square, points × 3 on a side, scaled down with high-quality interpolation, PNG (lossless), 8 bits a channel.
+    static func png(_ image: UIImage, points: CGFloat) -> Data? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.preferredRange = .standard // 8 bits a channel, whatever the screen
-        for side in stride(from: pixels, through: 30, by: -6) {
-            let size = CGSize(width: side, height: side)
-            let data = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-                image.draw(in: CGRect(origin: .zero, size: size))
-            }.pngData()
-            if let data, data.count <= maxBytes { return data }
-        }
-        return nil
+        let rect = CGRect(x: 0, y: 0, width: points * scale, height: points * scale)
+        return UIGraphicsImageRenderer(size: rect.size, format: format).image { ctx in
+            ctx.cgContext.interpolationQuality = .high
+            image.draw(in: rect)
+        }.pngData()
     }
 
     /// A picture as the activity draws it: `points` on a side, at the scale its pixels give.
-    static func image(_ png: Data) -> UIImage? {
+    static func image(_ png: Data, points: CGFloat) -> UIImage? {
         guard let cg = UIImage(data: png)?.cgImage else { return nil }
         return UIImage(cgImage: cg, scale: CGFloat(cg.width) / points, orientation: .up)
     }
@@ -143,7 +154,8 @@ nonisolated struct FleetFaces: Codable, Hashable, Sendable {
 /// directory of their own.
 ///
 ///     Fleet/look.json                    the look, for content without one (an older hub)
-///     Fleet/faces/<package>/<state>.png  one picture a state, avatar.png for the states without one; one package
+///     Fleet/faces/<package>/<state>_<pt>.png  a picture a state at each face size, avatar_<pt>.png for the states
+///                                             without one; one package
 ///     Fleet/seen.json                    what the extension last read (FleetLookReport)
 nonisolated struct FleetLookStore: Sendable {
     static let lookFile = "look.json"
@@ -202,9 +214,10 @@ nonisolated struct FleetLookStore: Sendable {
         return error == nil
     }
 
-    /// The package's directory: its id and rev with anything but letters, digits, `.`, `-` and `_` as `_`.
+    /// The package's directory: its id and rev with anything but letters, digits, `.`, `-` and `_` as `_`, and `_3x`
+    /// (a picture at each face size: the ones an older build made, all at 4 KB, are made again, #349).
     static func folder(_ package: String) -> String {
-        String(package.map { $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) ? $0 : "_" })
+        String(package.map { $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) ? $0 : "_" }) + "_3x"
     }
 
     func hasFaces(_ package: String) -> Bool {
@@ -212,21 +225,31 @@ nonisolated struct FleetLookStore: Sendable {
         return FileManager.default.fileExists(atPath: dir.path(percentEncoded: false))
     }
 
-    /// One state's picture, its file and whether it is the state's own (else the avatar, else the idle frame).
-    func face(_ package: String, _ state: PersonaState) -> (png: Data, own: Bool, file: String)? {
+    /// A picture's file: "<state or avatar>_<points>.png".
+    static func file(_ name: String, _ size: Int) -> String { "\(name)_\(size).png" }
+
+    /// One state's picture at the size a face of `points` reads, its file and whether it is the state's own (else the
+    /// avatar, else the idle frame).
+    func face(_ package: String, _ state: PersonaState, points: CGFloat) -> (png: Data, own: Bool, file: String)? {
         let dir = Self.facesDir + "/" + Self.folder(package) + "/"
+        let size = FleetFaces.size(points)
         for (name, own) in [(state.rawValue, true), (Self.avatarName, false), (PersonaState.idle.rawValue, false)] {
-            if let png = read(dir + name + ".png") { return (png, own, name + ".png") }
+            if let png = read(dir + Self.file(name, size)) { return (png, own, Self.file(name, size)) }
         }
         return nil
     }
 
-    /// All of a package's pictures (灵动岛诊断, tests).
+    /// All of a package's pictures (tests).
     func faces(_ package: String) -> FleetFaces? {
         let dir = Self.facesDir + "/" + Self.folder(package) + "/"
-        var states: [String: Data] = [:]
-        for s in PersonaState.allCases { states[s.rawValue] = read(dir + s.rawValue + ".png") }
-        let avatar = read(dir + Self.avatarName + ".png")
+        func picture(_ name: String) -> FleetFaces.Picture? {
+            var out: FleetFaces.Picture = [:]
+            for size in FleetFaces.sizes { out[size] = read(dir + Self.file(name, size)) }
+            return out.isEmpty ? nil : out
+        }
+        var states: [String: FleetFaces.Picture] = [:]
+        for s in PersonaState.allCases { states[s.rawValue] = picture(s.rawValue) }
+        let avatar = picture(Self.avatarName)
         return states.isEmpty && avatar == nil ? nil : FleetFaces(package: package, states: states, avatar: avatar)
     }
 
@@ -246,10 +269,12 @@ nonisolated struct FleetLookStore: Sendable {
                 let new = all.appending(path: ".new-" + folder, directoryHint: .isDirectory)
                 try? fm.removeItem(at: new)
                 try fm.createDirectory(at: new, withIntermediateDirectories: true)
-                var files = faces.states.map { ($0.key, $0.value) }
-                if let avatar = faces.avatar { files.append((Self.avatarName, avatar)) }
-                for (file, png) in files {
-                    try png.write(to: new.appending(path: file + ".png"), options: .completeFileProtectionUntilFirstUserAuthentication)
+                var pictures = faces.states.map { ($0.key, $0.value) }
+                if let avatar = faces.avatar { pictures.append((Self.avatarName, avatar)) }
+                for (name, picture) in pictures {
+                    for (size, png) in picture {
+                        try png.write(to: new.appending(path: Self.file(name, size)), options: .completeFileProtectionUntilFirstUserAuthentication)
+                    }
                 }
                 let dest = all.appending(path: folder, directoryHint: .isDirectory)
                 if fm.fileExists(atPath: dest.path(percentEncoded: false)) { try fm.removeItem(at: dest) }
@@ -263,7 +288,8 @@ nonisolated struct FleetLookStore: Sendable {
         } catch let e {
             error = e
         }
-        Self.wrote(name, error, bytes: faces.map { $0.states.values.reduce($0.avatar?.count ?? 0) { $0 + $1.count } })
+        let bytes = faces.map { f in (Array(f.states.values) + [f.avatar].compactMap { $0 }).reduce(0) { $0 + $1.values.reduce(0) { $0 + $1.count } } }
+        Self.wrote(name, error, bytes: bytes)
         return error == nil
     }
 
@@ -400,7 +426,8 @@ struct FleetFace: View {
 
     var body: some View {
         Group {
-            if let face = faces?.face(state) ?? look.face(state), let image = FleetFaces.image(face.png) {
+            if let face = faces?.face(state, points: size) ?? look.face(state, points: size),
+               let image = FleetFaces.image(face.png, points: CGFloat(FleetFaces.size(size))) {
                 Image(uiImage: image)
                     .resizable()
                     .interpolation(.high)

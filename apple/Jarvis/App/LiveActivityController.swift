@@ -329,14 +329,17 @@ nonisolated extension FleetLook {
 
 extension FleetFaces {
     /// A package's faces for the activity: one picture a state, its first frame (what the top bar's dot holds still),
-    /// and the avatar only for states without one. Nil for a built-in, or a package not on the phone.
+    /// and the avatar only for states without one, each made at every face size from the package's own pixels. Nil for
+    /// a built-in, or a package not on the phone.
     @MainActor init?(persona p: Persona, personas: PersonaStore) {
         guard let m = p.manifest, personas.isOnPhone(p) else { return nil }
-        var states: [String: Data] = [:]
+        var states: [String: Picture] = [:]
         for s in PersonaState.allCases where m.dot.states[s.rawValue] != nil {
-            if let first = personas.frames(p, s)?.images.first, let png = Self.png(first) { states[s.rawValue] = png }
+            if let first = personas.frames(p, s)?.images.first, let picture = Self.picture(first) { states[s.rawValue] = picture }
         }
-        let avatar = states.count == PersonaState.allCases.count ? nil : personas.avatar(p, points: Self.points, scale: 3).flatMap(Self.png)
+        // The avatar file at least as large as the largest face, scaled down from it.
+        let avatar = states.count == PersonaState.allCases.count ? nil
+            : personas.avatar(p, points: CGFloat(Self.sizes[Self.sizes.count - 1]), scale: Self.scale).flatMap(Self.picture)
         guard !states.isEmpty || avatar != nil else { return nil }
         self.init(package: "\(p.id)/\(p.rev)", states: states, avatar: avatar)
     }

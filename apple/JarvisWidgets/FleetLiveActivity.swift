@@ -14,8 +14,8 @@ struct FleetLiveActivity: Widget {
     /// Agent rows that fit: the expanded island and the lock screen are both capped at about 160 pt.
     static let rows = 2
     /// The persona's side: the expanded island's corner, the lock screen's header.
-    static let expandedFace: CGFloat = 26
-    static let lockFace: CGFloat = 26
+    static let expandedFace = IslandMetrics.expandedFace
+    static let lockFace = IslandMetrics.lockFace
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: JarvisActivityAttributes.self) { context in

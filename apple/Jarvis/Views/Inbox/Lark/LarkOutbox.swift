@@ -10,6 +10,15 @@ struct LarkOutgoing: Identifiable, Equatable {
     var at = Date()
     var state: State = .sending
 
+    /// What the hub gets as `client_id`: this message's id, unchanged by retries.
+    var clientID: String { id.uuidString.lowercased() }
+
+    /// 重发: on its way again, as the same message.
+    mutating func retry(at now: Date = .now) {
+        state = .sending
+        at = now
+    }
+
     /// Drawn like my other messages: my name and avatar from the last one I sent here.
     func message(like mine: LarkMessage?) -> LarkMessage {
         LarkMessage(id: "outgoing-\(id.uuidString)", position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? "我",

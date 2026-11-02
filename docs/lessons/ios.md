@@ -306,7 +306,7 @@
     内容不变的 update 系统可能不重画：要它重画，就让内容真的变。
   - App Group 要先在开发者网站上注册、加到 App ID 上，API key 做不了（没有这个接口，`-allowProvisioningUpdates` 的导出也不会替你建），
     没注册就加 entitlements 会让导出失败（`docs/release.md`「App Group」）。
-  - 模拟器不管实时活动的图片限制。图不能比它所在的呈现大：`UIImage(data:)` 按 1× 解码，78px 就是 78pt。按显示尺寸给 scale，单张也控制在 4 KB 以内（`FleetFaces`）。
+  - 模拟器不管实时活动的图片限制。图不能比它所在的呈现大：`UIImage(data:)` 按 1× 解码，78px 就是 78pt。按显示尺寸给 scale（`FleetFaces`）。几个实时活动的第三方库还守着单张 4 KB（Apple 没写）；放钥匙串时照做过，图糊，改走 App Group 文件后按每种形态的大小各存一张 @3x、从原图高质量缩（#349）。
   - 测试数据要和真实的一样复杂：纯色占位图只有几百字节，任何大小限制都碰不到。拿真实形象包在本机测，包不进仓库。
   - 手机上扩展读到了什么，只能靠它自己报：日志（`category:island`）加 设置 › 通知 › 灵动岛 长按预览打开的诊断页（`docs/live-activity.md`「诊断」）。
 - 机器页面的计数和列表不算「对话」tab 助手的无头会话（`MachineDetailView.agents`，和 Agents 列表一致）：它们跑在 hub 那台机器上，

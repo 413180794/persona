@@ -162,22 +162,29 @@ struct FleetPersonaTests {
         #expect(read.light == 0x40B2A0) // the package's primary, for the moments its faces cannot be read
         let faces = try #require(read.faces(shared.store))
         #expect(faces.package == "mint/r1")
-        // One file a picture, each one small: the three states the package draws and its avatar for the other two.
+        // A file a picture and size: the three states the package draws and its avatar for the other two, each at
+        // the compact (22), minimal (24) and expanded / lock screen (26) size, × 3.
+        #expect(FleetFaces.sizes == [22, 24, 26])
         let files = try #require(shared.store.files())
-        #expect(files.map(\.name) == ["faces/mint_r1/avatar.png", "faces/mint_r1/idle.png", "faces/mint_r1/thinking.png",
-                                       "faces/mint_r1/working.png", "look.json"])
-        #expect(files.allSatisfy { $0.bytes <= FleetFaces.maxBytes })
-        #expect(shared.store.face("mint/r1", .working)?.file == "working.png")
-        let needsYou = shared.store.face("mint/r1", .needsYou)
-        #expect(needsYou?.file == "avatar.png" && needsYou?.own == false)
+        let names: [String] = ["avatar", "idle", "thinking", "working"].flatMap { (n: String) -> [String] in
+            FleetFaces.sizes.map { "faces/mint_r1_3x/\(n)_\($0).png" }
+        }
+        #expect(files.map(\.name) == names + ["look.json"])
+        for picture in faces.states.values {
+            for (size, png) in picture { #expect(UIImage(data: png)?.cgImage?.width == size * 3) }
+        }
+        #expect(shared.store.face("mint/r1", .working, points: IslandMetrics.face)?.file == "working_22.png")
+        #expect(shared.store.face("mint/r1", .working, points: IslandMetrics.lockFace)?.file == "working_26.png")
+        let needsYou = shared.store.face("mint/r1", .needsYou, points: IslandMetrics.limitedContent)
+        #expect(needsYou?.file == "avatar_24.png" && needsYou?.own == false)
         let size = IslandMetrics.face
         for (state, name) in [(PersonaState.idle, "idle"), (.working, "working"), (.thinking, "thinking")] {
-            #expect(faces.face(state)?.own == true)
+            #expect(faces.face(state, points: size)?.own == true)
             let drawn = try Self.pixel(FleetFace(size: size, state: state, look: read, faces: faces), size: size, at: Self.center)
             #expect(Self.near(drawn.rgb, Self.colors[name]!), "\(state): \(String(drawn.rgb, radix: 16))")
         }
         // No frames for needs you: the avatar in the built-ins' red ring.
-        #expect(faces.face(.needsYou)?.own == false)
+        #expect(faces.face(.needsYou, points: size)?.own == false)
         let needs = FleetFace(size: size, state: .needsYou, look: read, faces: faces)
         #expect(Self.near(try Self.pixel(needs, size: size, at: Self.center).rgb, Self.colors["avatar"]!))
         let ring = try Self.pixel(needs, size: size, at: CGPoint(x: 0.5, y: 0.03)).rgb
@@ -197,7 +204,7 @@ struct FleetPersonaTests {
         let shared = Shared()
         FleetLook.save(FleetLook(persona: personas.current, builtinAccent: Palette.systemBlue),
                        faces: { FleetFaces(persona: personas.current, personas: personas) }, to: shared.store)
-        #expect(shared.packages == ["mint_r1"])
+        #expect(shared.packages == ["mint_r1_3x"])
 
         let circuit = FleetLook(persona: .circuit, builtinAccent: Palette.coral)
         #expect(FleetLook.save(circuit, faces: { nil }, to: shared.store))
@@ -210,28 +217,31 @@ struct FleetPersonaTests {
     /// Another package's faces are never drawn for this one; faces that cannot be made leave the package's color.
     @Test func facesBelongToTheirPackage() throws {
         let shared = Shared()
-        let a = FleetFaces(package: "a/1", states: ["idle": Self.disc(0x40B2A0)], avatar: nil)
+        let a = FleetFaces(package: "a/1", states: ["idle": try #require(Self.picture(0x40B2A0))], avatar: nil)
         FleetLook.save(FleetLook(design: "visor", light: 1, dark: 1, package: "a/1"), faces: { a }, to: shared.store)
         let b = FleetLook(design: "visor", light: 0x24418F, dark: 0x24418F, package: "b/1")
         #expect(FleetLook.save(b, faces: { nil }, to: shared.store))
         let read = FleetLook.load(shared.store)
         #expect(read.package == "b/1" && read.light == 0x24418F)
         #expect(read.faces(shared.store) == nil)
-        #expect(shared.store.face("b/1", .idle) == nil)
+        #expect(shared.store.face("b/1", .idle, points: 26) == nil)
     }
 
     /// A package with a picture for every state: one file each and no avatar. Another package replaces it whole.
     @Test func onePictureAState() throws {
         let shared = Shared()
-        var states: [String: Data] = [:]
-        for s in PersonaState.allCases { states[s.rawValue] = Self.disc(0x40B2A0) }
+        let disc = try #require(Self.picture(0x40B2A0))
+        var states: [String: FleetFaces.Picture] = [:]
+        for s in PersonaState.allCases { states[s.rawValue] = disc }
         #expect(shared.store.save(FleetFaces(package: "a/1", states: states, avatar: nil)))
-        #expect(shared.store.files()?.map(\.name) == PersonaState.allCases.map { "faces/a_1/\($0.rawValue).png" }.sorted())
-        #expect(shared.store.save(FleetFaces(package: "b/2", states: ["idle": Self.disc(0x24418F)], avatar: nil)))
-        #expect(shared.packages == ["b_2"])
-        let working = shared.store.face("b/2", .working)
-        #expect(working?.file == "idle.png" && working?.own == false)
-        #expect(shared.store.face("a/1", .working) == nil)
+        #expect(shared.store.files()?.map(\.name) == PersonaState.allCases.flatMap { s in
+            FleetFaces.sizes.map { "faces/a_1_3x/\(s.rawValue)_\($0).png" }
+        }.sorted())
+        #expect(shared.store.save(FleetFaces(package: "b/2", states: ["idle": try #require(Self.picture(0x24418F))], avatar: nil)))
+        #expect(shared.packages == ["b_2_3x"])
+        let working = shared.store.face("b/2", .working, points: 24)
+        #expect(working?.file == "idle_24.png" && working?.own == false)
+        #expect(shared.store.face("a/1", .working, points: 24) == nil)
     }
 
     /// Nothing written yet, or a build signed without the group: the default face in system blue, the one the user
@@ -275,25 +285,26 @@ struct FleetPersonaTests {
         }
     }
 
-    /// Every picture is drawn as 26 points whatever its pixels, and none is over 4 KB: a busy one is made with fewer
-    /// pixels. A phone does not draw a Live Activity whose picture is larger than where it shows (a PNG decoded at 1×
-    /// is as many points as it has pixels: 78) or over 4 KB; the simulator drew both.
-    @Test func facesAreSmallEnoughForAPhone() throws {
-        let png = try #require(FleetFaces.png(Self.busy()))
-        #expect(png.count <= FleetFaces.maxBytes)
-        let image = try #require(FleetFaces.image(png))
-        #expect(image.size == CGSize(width: FleetFaces.points, height: FleetFaces.points))
-        let cg = try #require(image.cgImage)
-        #expect(cg.width < Int(FleetFaces.pixels), "made with fewer pixels")
-        #expect(cg.bitsPerComponent == 8)
-        // A simple one keeps all of them, and is drawn at the same size.
-        let plain = try #require(UIImage(data: Self.disc(0x40B2A0)))
-        let disc = try #require(FleetFaces.png(plain))
-        let drawn = try #require(FleetFaces.image(disc))
-        #expect(drawn.cgImage?.width == Int(FleetFaces.pixels) && drawn.size.width == FleetFaces.points)
-        // Noise fits at no size: no picture rather than one a phone would refuse.
-        if let noise = FleetFaces.png(Self.busy(block: 1)) { #expect(noise.count <= FleetFaces.maxBytes) }
+    /// Every picture is made at its face's size × 3 and drawn as that size: a phone does not draw a Live Activity whose
+    /// picture is larger than where it shows (a PNG decoded at 1× is as many points as it has pixels), and it is as
+    /// sharp as the screen. A busy one keeps all its pixels (the 4 KB of the keychain days is gone, #349); a face of a
+    /// size in between reads the next larger picture.
+    @Test func facesAreDrawnAtTheirSize() throws {
+        for source in [Self.busy(), Self.busy(block: 1), try #require(UIImage(data: Self.disc(0x40B2A0)))] {
+            let picture = try #require(FleetFaces.picture(source))
+            #expect(picture.keys.sorted() == FleetFaces.sizes)
+            for (size, png) in picture {
+                let image = try #require(FleetFaces.image(png, points: CGFloat(size)))
+                #expect(image.size == CGSize(width: size, height: size) && image.scale == 3)
+                let cg = try #require(image.cgImage)
+                #expect(cg.width == size * 3 && cg.bitsPerComponent == 8)
+            }
+        }
+        #expect(FleetFaces.size(20) == 22 && FleetFaces.size(23) == 24 && FleetFaces.size(26) == 26 && FleetFaces.size(40) == 26)
     }
+
+    /// A placeholder picture at every size: a disc of one color.
+    static func picture(_ rgb: UInt32) -> FleetFaces.Picture? { UIImage(data: disc(rgb)).flatMap(FleetFaces.picture) }
 
     /// The extension's report is written again only when what it read changed.
     @Test func reportComparesWhatWasRead() {
