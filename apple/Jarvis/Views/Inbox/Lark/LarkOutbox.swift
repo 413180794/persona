@@ -105,7 +105,8 @@ enum LarkReply {
     }
 }
 
-/// An outgoing message under the chat: the bubble, faded while it goes, and below it 发送中 or what went wrong.
+/// An outgoing message under the chat: my bubble, and beside it a small spinner while it goes or the failed mark
+/// (LarkSendMark), like Feishu.
 struct LarkOutgoingRow: View {
     var outgoing: LarkOutgoing
     var message: LarkMessage
@@ -116,32 +117,49 @@ struct LarkOutgoingRow: View {
     var discard: () -> Void
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: Theme.Space.xs) {
-            LarkMessageRow(message: message, grouped: grouped, isGroup: isGroup)
-                .environment(\.larkReact, nil) // not in Feishu yet: nothing to react to
-                .opacity(outgoing.state == .sending ? 0.6 : 1)
-            switch outgoing.state {
-            case .sending:
-                HStack(spacing: Theme.Space.xs) {
-                    ProgressView().controlSize(.mini)
-                    Text("发送中").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                }
-                .accessibilityElement(children: .combine)
-            case .sent:
-                EmptyView()
-            case .failed(let why):
-                Menu {
-                    Button(action: retry) { Label("重发", systemImage: Theme.Icon.retry) }
-                    Button(action: edit) { Label("放回输入框", systemImage: Theme.Icon.undo) }
-                    Button(role: .destructive, action: discard) { Label("删除", systemImage: Theme.Icon.delete) }
-                } label: {
-                    Label("没发出去，点按重发", systemImage: Theme.Icon.errorFilled)
-                        .font(Theme.Font.label).foregroundStyle(Theme.danger).lineLimit(1)
-                        .scaledFrame(minHeight: Theme.Size.tapTarget)
-                }
-                .accessibilityHint(why)
+        LarkMessageRow(message: message, grouped: grouped, isGroup: isGroup,
+                       sending: LarkSendMark(state: outgoing.state, retry: retry, edit: edit, discard: discard))
+            .environment(\.larkReact, nil) // not in Feishu yet: nothing to react to
+    }
+}
+
+/// How a message of mine on its way stands, drawn beside its bubble: a spinner while it goes, nothing once sent,
+/// the failed mark when it did not go out (tap: 重发 / 放回输入框 / 删除).
+struct LarkSendMark {
+    var state: LarkOutgoing.State
+    var retry: () -> Void
+    var edit: () -> Void
+    var discard: () -> Void
+}
+
+struct LarkSendMarkView: View {
+    var mark: LarkSendMark
+
+    var body: some View {
+        switch mark.state {
+        case .sending:
+            ProgressView().controlSize(.mini)
+                .scaledFrame(width: Theme.Size.iconL, height: Theme.Size.iconL)
+                .accessibilityLabel("发送中")
+                .accessibilityIdentifier("lark.outgoing.sending")
+        case .sent:
+            EmptyView()
+        case .failed(let why):
+            Menu {
+                Button(action: mark.retry) { Label("重发", systemImage: Theme.Icon.retry) }
+                Button(action: mark.edit) { Label("放回输入框", systemImage: Theme.Icon.undo) }
+                Button(role: .destructive, action: mark.discard) { Label("删除", systemImage: Theme.Icon.delete) }
+            } label: {
+                Image(systemName: Theme.Icon.errorFilled)
+                    .font(Theme.Font.body)
+                    .foregroundStyle(Theme.danger)
+                    // As wide as the icon (close to the bubble), as tall as a tap target.
+                    .scaledFrame(width: Theme.Size.iconL, height: Theme.Size.tapTarget)
+                    .contentShape(.rect)
             }
+            .accessibilityLabel("没发出去，点按重发")
+            .accessibilityHint(why)
+            .accessibilityIdentifier("lark.outgoing.failed")
         }
-        .accessibilityIdentifier("lark.outgoing")
     }
 }

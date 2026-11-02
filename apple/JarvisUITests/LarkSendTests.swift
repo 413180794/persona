@@ -1,8 +1,9 @@
 import XCTest
 
 /// Sending in a Feishu chat does not wait for Feishu (docs/ios.md「飞书消息渲染」): the message is on screen at once
-/// with 发送中, Feishu's own copy takes its place, and one that did not go out offers 重发; replies (quoted in the chat, or in a
-/// thread sheet) go the same way. Against scripts/mock_hub.py
+/// with a spinner beside it, Feishu's own copy takes its place, and one that did not go out has a failed mark that offers
+/// 重发; replies (quoted in the chat, or in a thread sheet) go the same way. The marks are found by their identifiers
+/// (lark.outgoing.sending / .failed), not their wording. Against scripts/mock_hub.py
 /// (JARVIS_MOCK_HUB), whose Feishu send takes 2 seconds and fails for a text with "#fail".
 final class LarkSendTests: XCTestCase {
     private var hub: String!
@@ -47,7 +48,7 @@ final class LarkSendTests: XCTestCase {
         let app = openChat()
         let text = "下午三点前我看一下 " + UUID().uuidString.prefix(8)
         send(app, text)
-        let sending = app.staticTexts["发送中"]
+        let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
         XCTAssertTrue(sending.waitForExistence(timeout: 1), "the message is not on screen while it goes")
         XCTAssertTrue(app.staticTexts[text].exists)
         let field = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH %@", "回复")).firstMatch
@@ -63,7 +64,7 @@ final class LarkSendTests: XCTestCase {
     @MainActor func testFailedMessageOffersRetry() {
         let app = openChat()
         send(app, "#fail 这条发不出去")
-        let failed = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "没发出去")).firstMatch
+        let failed = app.buttons["lark.outgoing.failed"]
         XCTAssertTrue(failed.waitForExistence(timeout: 10), "a failed send says so")
         shot(app, "lark-failed")
         failed.tap()
@@ -71,6 +72,26 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(app.buttons["放回输入框"].exists)
         app.buttons["删除"].tap()
         XCTAssertTrue(failed.waitForNonExistence(timeout: 3))
+    }
+
+    /// The send marks sit beside the bubble, like Feishu: the failed mark left of the failed message on its line, and
+    /// spinners while later ones go. Two more messages push the failed one up out from under the box for the shot.
+    @MainActor func testSendMarksSitBesideTheBubble() {
+        let app = openChat()
+        let failedText = "#fail 旁边是标记 " + UUID().uuidString.prefix(6)
+        send(app, failedText)
+        let failed = app.buttons["lark.outgoing.failed"]
+        XCTAssertTrue(failed.waitForExistence(timeout: 10), "a failed send has its mark")
+        let bubble = app.staticTexts[failedText]
+        XCTAssertTrue(bubble.exists)
+        XCTAssertLessThanOrEqual(failed.frame.maxX, bubble.frame.minX, "the mark is left of the bubble")
+        XCTAssertLessThan(abs(failed.frame.midY - bubble.frame.midY), 12, "on the bubble's line, not under it")
+        send(app, "第二条 " + UUID().uuidString.prefix(6))
+        send(app, "第三条 " + UUID().uuidString.prefix(6))
+        let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending")
+        XCTAssertTrue(sending.firstMatch.waitForExistence(timeout: 2), "the ones going have spinners")
+        shot(app, "lark-marks")
+        XCTAssertTrue(failed.exists, "the failed one stays until it is dealt with")
     }
 
     /// 回复 in a message's long-press menu: a quote bar over the box, and the message goes out quoting it.
@@ -88,7 +109,7 @@ final class LarkSendTests: XCTestCase {
         shot(app, "lark-reply-bar")
         let text = "我来改 " + UUID().uuidString.prefix(8)
         send(app, text)
-        // The mock takes 2 s to send: what shows within a second is the local row. (Its 发送中 line can sit under the
+        // The mock takes 2 s to send: what shows within a second is the local row. (Its spinner can sit under the
         // keyboard, so the row is checked by its text and quote.)
         XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 1), "the reply is not on screen while it goes")
         XCTAssertTrue(bar.waitForNonExistence(timeout: 2), "the quote bar goes with the message")

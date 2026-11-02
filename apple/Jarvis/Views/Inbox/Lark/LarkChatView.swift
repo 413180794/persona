@@ -536,6 +536,8 @@ struct LarkMessageRow: View {
     var feedID: String? = nil
     /// Inside a thread sheet the reply count is not a link to itself.
     var inThread = false
+    /// A message of mine on its way: its spinner or failed mark beside the bubble (LarkOutgoingRow).
+    var sending: LarkSendMark? = nil
     @Environment(\.larkOpenProfile) private var openProfile
     @Environment(\.larkReact) private var react
     @Environment(\.larkReply) private var reply
@@ -579,7 +581,14 @@ struct LarkMessageRow: View {
                             }
                         }
                     }
-                    content
+                    if let sending {
+                        HStack(alignment: .center, spacing: Theme.Space.s) {
+                            LarkSendMarkView(mark: sending)
+                            content
+                        }
+                    } else {
+                        content
+                    }
                     LarkTranslationLine(message: m, feedID: feedID)
                     footer
                 }
