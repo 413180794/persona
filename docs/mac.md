@@ -351,7 +351,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 125 条 [x]、97 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 129 条 [x]、93 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -371,7 +371,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 **执行者跑的时候**：
 - 开发会话不碰界面，同一时间只能有一个 Agent 用 cua；
-- 一批要几分钟，放后台跑，项目多就拆成几批。
+- 一批放后台跑：5 项左右实测 12–14 分钟（2026-11-03），项目多就拆成几批、在一条后台命令里依次跑。
 
 **开发会话自己看界面时**也要省 token：
 - 读文字用带 `query` 的无障碍树；
@@ -385,7 +385,11 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - 有条件才出现的东西写明条件。比如头像菜单里，「中断」只在对话工作中出现，「连接详情」只在连接不在线时出现。
 - 辅助功能树和截图对不上时，以截图里画出来的为准。
 - 每项存一张能证明这一项结论那一刻的截图（菜单开着、状态已经变了）。
-- 报告每项一行：编号、通过 / 不通过 / 存疑、证据。
+- 报告每项一行：编号、通过 / 不通过 / 存疑、证据。每做完一项就追加写进一个报告文件：通道只在结束时输出，超时被杀就什么都拿不到（2026-11-03 一批卡在最后一项 15 分钟，前两项的结论全丢）。
+- 每项给个时限（比如 4 分钟），到时就按当时看到的报「存疑」、做下一项。
+- 滚动给固定的量（往上滚 3 次、每次多少），不写「滚到看见某一条为止」：执行者会为找那一条来回滚好几分钟。
+- sheet 里往输入框打字写明用前台投递：后台的辅助功能插入会让字显示在框里，但不触发 App 的搜索（见 `docs/lessons/testing.md`）。
+  还要写明怎么拿到 sheet 里的框（同一条经验）：没写，执行者在 sheet 上卡了 8 分钟。
 
 **切换前的对照**（2026-11-03）：拿 3 项已有结论的让执行者跑：建议胶囊（通过）、消息右键操作条（不通过，#501）、头像菜单（通过）。
 - 第一遍：1 项一致，2 项报「存疑」，证据都对。
@@ -406,9 +410,10 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：2000pt 宽窗口截图：对话栏约 760pt 居中，欢迎页（`-openWelcome`）约 560pt 居中。
 - [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/JarvisApp.swift。Mac：`MacOpenURL`（有测试），open 打开那个对话（从别的页面也切过去，`-macOpenURL <链接>` 验过），pair 只在没配对 / 体验模式时接受；对话里的 jarvis:// 链接仍只拷贝（LinkPolicy）。外面来的链接交给已经开着的主窗口（`handlesExternalEvents`）：以前每来一个链接就多开一个主窗口（`open -a Jarvis.app jarvis://…` 两次 → 3 个，`-macWindowLog YES` 记数）
 - [ ] Scene phase: reconnect + refresh on active, disconnect socket on background — App/JarvisApp.swift
-  - 要到 Mac 前看：切到别的 App 再切回来，列表刷新、断了的连接会重连。Mac 有意不在后台断开 WebSocket（见「阶段 0」），锁屏时场景状态不变，离屏验不了。
+  - Mac（2026-11-03 Mac mini 真窗口：执行者操作，开发会话看假 hub 的请求日志）：⌘H 隐藏期间一个请求都没有；带回前台后依次 GET machines / interactions / sessions / pins / mutes / fleet（`refresh()`）。在后台不断开 WebSocket 是 Mac 有意的（见「阶段 0」）。还差：断了的连接回到前台会不会重连（比如隐藏期间重启假 hub，再带回前台）。
 - [ ] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
   - 要到 Mac 前看：在对话里往上翻，⌘Q 后重开，看是不是回到同一行（⌘Q 不一定触发 onDisappear）。只带 `-app.tab chats -dev.openChat …` 启动时回到了 Agents 和那个对话，tab 和对话的恢复看过。
+  - Mac（2026-11-03 Mac mini 真窗口）：⌘Q 后不带参数重开，回到 Agents 和上次打开的对话；同一次运行里切到别的对话再切回来，回到原来看的那一行。还差冷启动后的阅读位置：⌘Q 时位置存上了（`chat.read.<会话>`），重开后却停在最底部，用启动参数 `-chat.read.<会话> <行 id>` 打开也一样（#597）。
 - [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/JarvisApp.swift + views
   - Mac 上截图一直靠它们：`-tab`、`-openSession`、`-openTerminal`、`-openTerminalSettings`、`-openAssistantPage`、`-showInboxAction`、`-showNewChat`、`-addMail`、`-openWelcome`、`-showKnowledgeEntry` 都试过；Mac 自己的另见各节（`-macSection`、`-macAgentAsk`、`-openChatWindow`、`-macWindowLog`…）。
 
@@ -428,13 +433,13 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Left button: history sidebar; right button: new chat (disabled on new-chat page) — AssistantTopBar.swift
   - Mac（2026-11-01 核对）深色截图：左边侧栏开关、右边新对话按钮都在（浅色下玻璃按钮只剩边框）；新对话页上按钮置灰没截，和 iOS 同一份代码。
 - [ ] Sidebar: search, new chat, Jarvis card (online/offline + machine → profile), 定时任务 / 知识库 tiles, 置顶 (main pinned, long-press pin, `assistant.pinned`), day groups 今天/昨天/最近7天/更早 (8 + 查看全部), row = title + preview + time + status dot (need-you red / unread blue / working spinner), long-press 拷贝会话 ID / 结束 / 置顶, 设置 row in drawer — Views/Assistant/AssistantSidebar.swift
-  - 要到 Mac 前看：右键一行（拷贝会话 ID / 结束 / 置顶）、搜索按钮、查看全部、行上的状态点（连真 hub）。截图修好后（`0af14af`）深浅色都看到标题 + 搜索、新对话 / 定时任务 / 知识库、置顶 / 最近、底部 Jarvis 卡片；这是现在的布局，清单里的磁贴和按天分组是旧设计（iOS 也一样）。
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`。行尾：需要你红点、完成未看蓝点、工作中转圈，别的行没有标记。「最近」显示 30 条，末尾「查看全部（39）」展开到全部、变成「收起」。右键一行：置顶、重命名…、归档、拷贝会话 ID（剪贴板里是会话 id）、结束…（确认 sheet「关闭这个 Agent？」，取消后还在）；主对话只有拷贝会话 ID、结束…。置顶后排在「置顶」里主对话下面，取消置顶回到按时间的位置。搜索（见 §25）、底部 Jarvis 卡片（资料页）、定时任务、知识库都点过。清单里的按天分组和磁贴是旧设计（iOS 也一样），现在一行是标题加行尾标记。还差：Jarvis 卡片离线时的样子、点「新对话」、窄窗口抽屉（`AssistantDrawer+Mac.swift`）底部的「设置」。
 - [ ] Drawer gesture: pan anywhere, 45° rule, yields to horizontally scrollable content, velocity/half settle, page card scale/offset, tab bar fade (UIKit host) — AssistantSidebar.swift (DrawerPan, DrawerPageMotion, DrawerSidebarHost), Views/Assistant/DrawerProbe.swift
   - Mac 上没有：窗口恒为 regular，侧栏是分栏的一列加开关按钮；窄窗口才用的抽屉（`AssistantDrawer+Mac.swift`）没有拖动，`DrawerPan` / `DrawerProbe` 只在 iOS 编译。
 - [x] Regular width: sidebar = split view left column, toggle button — AssistantView.swift, SplitNavigation.swift
   - Mac（2026-11-01 核对）截图：Jarvis 侧栏是 NavigationSplitView 的左栏，顶部右侧有开关按钮。
 - [ ] Jarvis avatar (mask face, eyes move when working) — Views/Assistant/JarvisAvatar.swift
-  - 要到 Mac 前看：给 Jarvis 发一句，看它工作时眼睛动不动。脸在截图里画出来了，眼睛要 display link，锁屏时不走。
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：打开工作中、还没有回复的对话（「思考中」），顶栏头像上方思考泡泡里的三个点轮流动，连拍几张各不相同；空闲的主对话上不动。还差：工作中（回复正在出）时的眼睛扫动没亲眼看到，可以用 `-showPersonaState working` 固定成工作中再看。
 - [x] Profile page: identity, machine, online/working, 「接下来」 3 items, 主动做事 (tasks, run history), 了解你 (关于我, 记忆), 设置 (launcher, 管理启动器), capabilities list — Views/Assistant/AssistantProfileView.swift (AssistantProfileView, AssistantUpcomingRow, AssistantRunsView, AssistantRunRow)
   - Mac 截图看到（1280×1500 窗口）：身份、所在机器、在线 + 下一件、接下来 3 项、主动做事（定时任务、运行记录）、了解你（关于我、记忆）、设置（启动器、管理启动器），底部的能力列表 2026-11-01 核对时也看到了。
 - [x] 「交给 Jarvis」 from other pages sends `<jarvis-context>` into main conversation — AppModel.askJarvis
@@ -519,6 +524,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Inverted list, follow-end logic, frozen inserts while reading history, ↓ jump button, landing position (landUnderInput / saved position), turn-based pagination (turns=2) with auto-load at top — ChatView.swift (ChatStreamFollow), Shared/ChatStore.swift
   - 要到 Mac 前看：往上翻历史时 ↓ 按钮和 ⌘↓、翻到顶自动加载、加载时位置不跳。都要真滚动，离屏截图驱动不了。
   - Mac（2026-11-02 Mac mini 真窗口）：往上翻历史出现 ↓，⌘↓ 回到最新。假 hub 一次返回了全部历史，翻到顶的自动加载没触发；读历史时新内容插入（`MOCK_STREAM=1`）没测。
+  - Mac（2026-11-03 Mac mini 真窗口）：长对话往上翻了一阵后，最新一轮画到了较早历史的上面，辅助功能树里的顺序却是对的（#585）；冷启动后没有落到保存的位置，停在最底部（#597）。
 - [ ] Local chat cache (last 2 turns per chat, 6 MB) + chats-v2 disk cache — Shared/StateCache.swift, Shared/ChatStore.swift
   - Mac（2026-11-01 核对）：「重启后缓存的内容又出现、`-openChatsFresh` 能清掉」只有口述，没留下截图或日志；每个对话 2 轮、6 MB 的上限没跑到，只是共用代码。
 - [ ] Lazy images on scroll with memory + disk cache — Views/Chat/ChatImageLoader.swift (ChatThumbnail)
@@ -670,8 +676,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 10. New chat form
 - [x] Machine picker, launcher picker (per-machine launchers, 跟随启动器), directory browser with search, 加入空间, title, first prompt, mode picker; remembers machine/launcher/cwd for Siri — Views/NewChat/NewChatView.swift (NewChatView, LauncherPicker, DirectoryBrowser)（Mac：⌘N 打开 sheet，见「快速打开、新建」）
-- [ ] Prefilled new chat (from mail 「让 Claude 处理」) — Views/Mail/MailViews.swift (NewChatPrefilled)
-  - 要到 Mac 前看：在收件箱的邮件上点工具栏的 ✦「让 Claude 处理」，滚到第一条消息看是否带着读这封邮件的提示，开始对话后新 Agent 在 Agents 里打开。新开关 `-showMailAskClaude YES`（配 `-tab mail -openInboxMatch <标题里的字>`，已加进 release.sh 的列表）截图里表单完整，第一条消息在 sheet 下面没看到。
+  - 清单里的「directory browser with search」是旧描述：目录选择（`DirectoryBrowser`）没有搜索框，iOS 也一样（见 §25）。
+- [x] Prefilled new chat (from mail 「让 Claude 处理」) — Views/Mail/MailViews.swift (NewChatPrefilled)
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：收件箱打开一封邮件，工具栏「让 Claude 处理」弹出新对话 sheet，第一条消息预填「请用 mail_read 读取邮件（account_id、mailbox、uid、主题），总结要点，并给出建议的回复草稿。」；「开始对话」后切到 Agents，打开新会话，显示「正在启动 Claude，消息会在它就绪后发出」。
 
 ## 11. Machines / monitoring
 - [x] 机器 (one page since 2026-11-01): N/M online, per-machine card with agents (需要你 / 工作中 / 空闲), CPU/mem/net now + 1h sparklines, alert rings, version-mismatch 重新部署, what needs a look first, 10s polling — Views/Machines/MachinesView.swift (MachinesView, MachineCard, MachineConcern, DeployRow)（Mac：侧边栏「机器」⌘5，`MacMachinesPage`）
@@ -856,15 +863,15 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：共用代码，上面 outbox 跨重启读回用到了它；Mac 写了哪些文件只是口述，没列出来。没签名的 DEBUG 构建没有沙盒，写的是所有这类构建共用的 `~/Library/Caches/state/`，并行的 worktree 会互相覆盖（这次 outbox.json 就被另一个 Agent 的运行覆盖过）；签了名的有沙盒。
 
 ## 25. Search
-- [ ] Agents search — ChatsView.swift (searchable, SearchCloseProbe)
-  - 要到 Mac 前看：⌘F 或点搜索框，输一个会话标题看列表筛选，✕ 能关掉。搜索框在每张 Agents 截图的工具栏里，没有预填的 DEBUG 开关。
-- [ ] Assistant sidebar search — AssistantSidebar.swift
-  - 要到 Mac 前看：在 Jarvis 侧栏的「搜索对话」里输字看对话筛选。`-openAssistantSidebar YES` 那张截图侧栏是空白（截图问题）。
+- [x] Agents search — ChatsView.swift (searchable, SearchCloseProbe)
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：⌘F 让工具栏的搜索框获得焦点（窗口在前台时），输「博客」只剩「博客迁移到 Astro」；✕ 清空、列表恢复；再按 Esc 搜索框失焦。
+- [x] Assistant sidebar search — AssistantSidebar.swift
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：点放大镜出「搜索对话」框和「取消」；输「第 3 周」只剩一条、没有分节，输「火星」显示「没有找到「火星」」；取消后回到完整列表。
 - [x] Inbox search — InboxView.swift
 - [ ] Knowledge search — KnowledgeView.swift
   - Mac（2026-11-01 核对）截图（`-showKnowledgeSearch 发布`）按 项目 / 会话 / 人 分组对；高亮只在「人」那条里看到加粗，项目和会话露出的片段里没有这个词（§12 用「小组件」搜时每条都加粗了）。
-- [ ] Launcher search, directory search, translation chat picker search — ModelLaunchersView.swift, NewChatView.swift, TranslationSettingsView.swift
-  - 要到 Mac 前看：⌘N 里在目录搜索输字；设置 › 翻译 › 飞书会话 里搜索会话。启动器搜索截图看过（`-showModelSearch <词>`）。
+- [x] Launcher search, directory search, translation chat picker search — ModelLaunchersView.swift, NewChatView.swift, TranslationSettingsView.swift
+  - Mac（2026-11-03 Mac mini 真窗口：执行者跑，开发会话复核了两项「不通过」）：⌘N › 启动器（本次覆盖）› 「函数名或模型」输「s」，codex 被筛掉；设置 › 翻译 › 飞书会话（「要翻译的会话」sheet）输「徒步」只剩「周末徒步群」。执行者用后台的辅助功能插入打字，字显示在框里但不触发搜索，报了不通过；改用前台真按键就筛了（`docs/lessons/testing.md`）。翻译那一项原来是 mock 的飞书会话缺 `is_mine` 等字段，App 解不开（「未能读取数据，因为数据丢失。」），mock 已补上（`scripts/mock/test_lark_mock.py`）。设置 › 模型供应商的启动器搜索（`ModelLaunchersView`）：`-showModelSearch <词>` 预填后截图看到列表筛选（2026-11-01）。清单里的「directory search」是旧描述：目录选择（`DirectoryBrowser`）没有搜索框，iOS 也一样，是逐级点进去。
 
 ## 26. Settings pages
 - [x] Root: header (demo note), 形象, 界面风格 + 字号, 助手, 模型, Claude Code 设置, 机器, 设备, 手机数据, 通知, 翻译, 存储空间, 服务器, 关于, 同步到 Apple Watch — Views/Settings/SettingsView.swift (SettingsDestinations, SettingsPage)

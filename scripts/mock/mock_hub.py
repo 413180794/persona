@@ -200,13 +200,16 @@ SESSIONS = [
 # MOCK_MACHINES=1: the machine pages' edge cases (MachinePagesTests): a fourth machine that is offline with an ssh
 # error (POST …/reconnect brings it back), and Mac Studio with many agents across several projects.
 MOCK_MACHINES = bool(os.environ.get("MOCK_MACHINES"))
+# A session's status for each state, as the hub pairs them.
+STATUS_OF_STATE = {"working": "working", "idle": "idle", "unread": "done", "needs_you": "blocked"}
+
 if MOCK_MACHINES:
     MACHINES.append({"id": "lab", "name": "实验室主机", "kind": "ssh", "icon": "desktop", "ssh_host": "lab", "online": False,
                      "error": "ssh: connect to host lab port 22: Connection refused", "last_seen": ago(hours=3)})
     for i in range(36):
         proj = ["infra", "ml-train", "docs-site", "mobile"][i % 4]
         state = ["working", "idle", "idle", "unread", "idle", "needs_you"][i % 6]
-        status = {"working": "working", "idle": "idle", "unread": "done", "needs_you": "blocked"}[state]
+        status = STATUS_OF_STATE[state]
         SESSIONS.append(sess("studio", "c3d5e7f9-0000-4000-8000-%012d" % i, "%s 的第 %d 个任务" % (proj, i + 1),
                              "/Users/me/code/" + proj, status, state, proj, 4 + i % 4, "t%d" % (i // 4 + 1), i // 4 + 1,
                              i * 7, "第 %d 个 Agent 的最新一句话，长一点好看看会不会被截断或者挤到别的地方去。" % (i + 1),
@@ -233,7 +236,7 @@ if os.environ.get("MOCK_AGENTS"):
             for _ in range(count):
                 slot += 1
                 n += 1
-                status = {"working": "working", "idle": "idle", "unread": "done", "needs_you": "blocked"}[state]
+                status = STATUS_OF_STATE[state]
                 SESSIONS.append(sess(mid, "e5f7a9b1-0000-4000-8000-%012d" % n, "%s 任务 %d" % (proj, slot), "/Users/me/code/" + proj,
                                      status, state, proj, sidx, "t%d" % slot, slot, n * 3,
                                      "第 %d 个 Agent 的最新一句话，看看细列表和卡片里会不会挤在一起。" % n,
@@ -283,6 +286,17 @@ ASSISTANT = [
     assistant_sess(ASK3, "帮我约周五和韩梅梅吃饭", 60 * 28, "已经在日历里加好了。"),
     assistant_sess(ASK4, "整理这个季度的读书笔记", 60 * 50, "第 30 本整理好了。"),
 ]
+
+# MOCK_ASSISTANT_SIDEBAR=1: the Jarvis sidebar's 最近 holds more than the 30 it shows before 查看全部
+# (`AssistantSidebar.recentCount`), and one row in each state it marks at the end: waiting for you (red dot), unread
+# (blue dot), working (spinner).
+if os.environ.get("MOCK_ASSISTANT_SIDEBAR") == "1":
+    for _n, _state in enumerate(["needs_you", "unread", "working"] + ["idle"] * 33):
+        _s = assistant_sess("b2e4d6f8-0000-4000-8000-%012d" % (100 + _n), "整理第 %d 周的周报" % (_n + 1),
+                            10 * (_n + 1) if _n < 3 else 60 * 24 * 3 + 60 * _n, "周报整理好了。")
+        _s.update(state=_state, status=STATUS_OF_STATE[_state],
+                  pending_interactions=1 if _state == "needs_you" else 0)
+        ASSISTANT.append(_s)
 
 # ---------- the assistant's schedule (Jarvis › 资料 › 定时任务) ----------
 def next_at(hhmm, weekdays):
@@ -1558,6 +1572,11 @@ FS_CONVS = [
     {"id": "f3", "name": "周末徒步群", "is_group": True, "unread": 1, "preview": "周六早上 8 点地铁站集合", "updated_at": ago(minutes=30),
      "read_position": "299"},
 ]
+# The hub always sends these (server/internal/lark/feed.go, no omitempty) and the app's LarkConversation requires them:
+# without them 设置 › 翻译 › 飞书会话 read 「未能读取数据，因为数据丢失。」 (test_lark_mock.py).
+for _c in LARK_CHATS + FS_CONVS:
+    for _k in ("at_me", "muted", "is_mine"):
+        _c.setdefault(_k, False)
 
 
 def fs_page(feed, q):

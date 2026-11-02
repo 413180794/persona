@@ -179,3 +179,8 @@
   这才是 App 该修的（第一句按「已发送」留在屏幕上）。当初写「体验模式也复现」，其实是副本钥匙串里留着 mock 的配对、`-demo.on YES` 没生效（见上面「钥匙串里留着以前配对过的 hub」）。
 - cua 的 `tree_format: "elements"` 不列只有值、没有标签的静态文字（新对话页的乐观气泡、「Jarvis 正在准备…」都在里面），拿它判断「没显示」会误判；
   判断某段文字在不在，用 `get_window_state` 带 `query`（树里有 `AXStaticText = "…"`）或截图。
+- cua 的 `type_text` 默认在后台用辅助功能插入文字（`AXSelectedText`）：主窗口工具栏的搜索框能筛选，sheet 里 `.searchable` 的框（新建对话 › 启动器）
+  字显示出来了、列表却不筛，看着像 App 的 bug；用 `delivery_mode: "foreground"`（真按键）打同样的字就筛了（2026-11-03）。sheet 里打字一律前台投递，
+  验收单里写明，否则执行者会报「不通过」。
+- cua 里 sheet 自己的 window_id 读不到树（`ax_window_unresolved`），也不能对它定点投递；用主窗口的 window_id 读（sheet 在树里是 `AXSheet`），
+  拿到框的 token 再 `type_text` 前台投递。前台投递完 cua 会把前台还给原来的 App，之后别往桌面（`scope: desktop`）发键，会落到别的 App 上。
