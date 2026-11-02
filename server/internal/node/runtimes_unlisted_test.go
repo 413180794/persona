@@ -1,0 +1,106 @@
+package node
+
+import (
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/rpc"
+)
+
+// An older session a runtime stopped listing (DSH lists its latest 80 of thousands) is still its own: a send goes to
+// the runtime, not to herdr as a Claude session to resume, and what the runtime pushes for it reaches the hub.
+func TestRuntimeOlderSessionStillGoesToItsRuntime(t *testing.T) {
+	n, hub := runtimeNode(t)
+	host := dialRuntime(t, n, dshHello())
+	const old = "0bd545f1-681d-4d98-bf5a-eb7c1251a0f0" // DSH's older sessions have plain uuids, as Claude's do
+	_ = host.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": old, "status": "done"}}})
+	waitFor(t, "listed", func() bool { _, ok := listed(t, n)[old]; return ok })
+	_ = host.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": "session-new", "status": "working"}}})
+	waitFor(t, "pushed out of the list", func() bool { _, ok := listed(t, n)[old]; return !ok })
+
+	if _, err := nodeCall(t, n, "session.send", map[string]any{"session_id": old, "text": "still there?", "client_msg_id": "m-1"}); err != nil {
+		t.Fatalf("send to an older session of the runtime: %v", err)
+	}
+	if got := host.got("session.send"); len(got) != 1 || !strings.Contains(string(got[0]), "still there?") {
+		t.Fatalf("the runtime was asked to send %d times", len(got))
+	}
+	if _, err := nodeCall(t, n, "session.watch", map[string]any{"session_id": old, "since_seq": 0}); err != nil {
+		t.Fatal(err)
+	}
+	_ = host.peer.Notify("session.items", map[string]any{"session_id": old, "from_seq": 3, "to_seq": 4, "items": []map[string]any{{"id": "4#0", "seq": 4}}})
+	waitFor(t, "its items reach the hub", func() bool {
+		hub.mu.Lock()
+		defer hub.mu.Unlock()
+		return len(hub.items) == 1
+	})
+}
+
+// A session this machine has nothing for (no agent, no transcript) that a runtime has without ever listing it (the
+// phone kept it from before a node restart) is asked about once and then goes to that runtime; a session no runtime
+// has is asked about once a minute at most and goes the old way.
+func TestRuntimeAnswersForASessionItDoesNotList(t *testing.T) {
+	n, _ := runtimeNode(t)
+	host := dialRuntime(t, n, dshHello())
+	const mine, other = "aaaaaaaa-1111-4222-8333-444455556666", "bbbbbbbb-1111-4222-8333-444455556666"
+	host.mu.Lock()
+	host.answer = func(method string, params json.RawMessage) (any, error) {
+		var p struct {
+			SessionID string `json:"session_id"`
+		}
+		_ = json.Unmarshal(params, &p)
+		if method == "session.items" && p.SessionID != mine {
+			return nil, &rpc.Error{Message: "DSH 里没有会话 " + p.SessionID, Code: "not_found"}
+		}
+		return map[string]any{"ok": true, "items": []any{}}, nil
+	}
+	host.mu.Unlock()
+
+	if _, err := nodeCall(t, n, "session.send", map[string]any{"session_id": mine, "text": "hi", "client_msg_id": "m-2"}); err != nil {
+		t.Fatalf("send to a session the runtime has: %v", err)
+	}
+	if len(host.got("session.send")) != 1 {
+		t.Fatal("not sent through the runtime")
+	}
+	if _, err := nodeCall(t, n, "session.send", map[string]any{"session_id": mine, "text": "again", "client_msg_id": "m-3"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(host.got("session.items")) != 1 {
+		t.Fatalf("asked %d times about a session it already claimed", len(host.got("session.items")))
+	}
+
+	_, err := nodeCall(t, n, "session.send", map[string]any{"session_id": other, "text": "hi", "client_msg_id": "m-4"})
+	if err == nil {
+		t.Fatal("a session nobody has was sent")
+	}
+	_, _ = nodeCall(t, n, "session.send", map[string]any{"session_id": other, "text": "hi", "client_msg_id": "m-5"})
+	if len(host.got("session.items")) != 2 || len(host.got("session.send")) != 2 {
+		t.Fatalf("items asked %d times, sends %d", len(host.got("session.items")), len(host.got("session.send")))
+	}
+}
+
+// A session of a runtime that has gone (DSH closed) is refused with a reason, not resumed in herdr.
+func TestRuntimeAwaySessionIsRefusedNotResumed(t *testing.T) {
+	n, _ := runtimeNode(t)
+	host := dialRuntime(t, n, dshHello())
+	const id = "0bd545f1-681d-4d98-bf5a-eb7c1251a0f0"
+	_ = host.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": id, "status": "done"}}})
+	waitFor(t, "listed", func() bool { _, ok := listed(t, n)[id]; return ok })
+	_ = host.conn.Close()
+	waitFor(t, "gone", func() bool { _, ok := listed(t, n)[id]; return !ok })
+	_, err := nodeCall(t, n, "session.send", map[string]any{"session_id": id, "text": "hi", "client_msg_id": "m-6"})
+	var re *rpc.Error
+	if !errors.As(err, &re) || re.Code != "runtime_away" || !strings.Contains(re.Message, "DSH 没有连上") || strings.Contains(re.Message, "herdr") {
+		t.Fatalf("got %v", err)
+	}
+	if !strings.Contains(string(re.Data), `"none"`) {
+		t.Fatalf("data %s", re.Data)
+	}
+	// Unwatching stays quiet.
+	if _, err := nodeCall(t, n, "session.unwatch", map[string]any{"session_id": id}); err != nil {
+		t.Fatalf("unwatch: %v", err)
+	}
+	time.Sleep(10 * time.Millisecond)
+}

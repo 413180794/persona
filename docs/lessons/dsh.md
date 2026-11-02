@@ -24,3 +24,11 @@
   加 hub 行为时要在 hub 的测试里补一条（`hub/runtime_test.go`）。
 - **没标 `agent` 的卡会被画成 Claude 的**：iOS / Android / 网页对没有 `agent` 的授权卡都给「本会话总是允许」，DSH 只能当「允许一次」，按了也会再问。
   runtime 的卡由 node 标上 `agent` / `agent_label`，App 只在 Claude 的卡或带 `always_label` 的卡上给「总是允许」。
+- **列表不是归属**（2026-11-01）：插件只列最近的顶层会话（7 天内、最多 80 个），node 以前只按「当前列表」认归属，掉出列表的 DSH 会话
+  （更早的、DSH 重启后插件忘了的）就被当成这台机器上没在跑的 Claude 会话，`claude --resume` 到 herdr 里。DSH 的老会话 id 是纯 uuid、
+  和 Claude 的一样，能过 id 校验；新会话（`session-…`）先报 `invalid session id`。现在 node 记着哪个 runtime 列过哪些会话，从没列过的先问 runtime，
+  插件把手机碰过的会话一直列着（`e2e/older-session.mjs`：列表上限 1、重启 DSH 后给掉出列表的会话发消息）。
+- **数会话先分清父子**（同一天，误判过一次）：`~/.dsh/sessions` 下两千多个目录里 98% 是子 Agent / workflow 派生的会话（会话头
+  `origin: "subagent"` 或带 `parentSession`），顶层会话只有几十个，7 天内只有个位数。插件本来就不列子会话，80 的上限远没碰到；
+  当时手机上「发不出去的 dsh 会话」其实是 `DSH-Claw` 目录下一个**开在 Claude 桌面版里的 Claude 会话**（`docs/lessons/agents.md`）。
+  查「某个会话为什么怎样」先拿到它的 id 和来源，别从总数推。会话头是 zstd 压缩的 jsonl 第一行（`session.v4.jsonl.zstd`，老的是 `v2` / 无版本号）。

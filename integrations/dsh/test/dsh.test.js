@@ -86,7 +86,7 @@ async function setup(t, opts = {}) {
     on: ev.on,
     userQuestions: { answer: (agent, callId, answer) => { answered.push({ callId, answer }); return true } },
     hasLiveClient: () => opts.liveClient ?? true,
-  }, { socketPath: n.path, pushDelayMs: 5, retryMs: 20, interactions: opts.interactions })
+  }, { socketPath: n.path, pushDelayMs: 5, retryMs: 20, interactions: opts.interactions, maxSessions: opts.maxSessions })
   t.after(() => rt.stop())
   return { n, ctl, ev, rt, answered }
 }
@@ -96,6 +96,7 @@ test('lists DSH sessions to the node after hello', async (t) => {
   ctl.add('session-a', { cwd: '/w/app', running: true, projections: { kind: 'cached', asOfSeq: 41, values: { title: 'Fix the build' } } })
   ctl.add('session-blank', { cwd: '/w/app', blank: true })
   ctl.add('session-child', { cwd: '/w/app', origin: 'subagent' })
+  ctl.add('session-legacy-child', { cwd: '/w/app', parentSessionId: 'session-a' }) // older DSH: a parent, no origin
   ctl.add('session-old', { cwd: '/w/app', updatedAt: Date.now() - 30 * 86_400_000 })
   rt.start()
   await n.ready
@@ -111,6 +112,20 @@ test('lists DSH sessions to the node after hello', async (t) => {
   assert.equal(list[0].title, 'Fix the build')
   assert.equal(list[0].space_name, 'app')
   assert.equal(list[0].rev, 42)
+})
+
+test('a session the phone sends to stays listed past the count and age limits', async (t) => {
+  const { n, ctl, rt } = await setup(t, { maxSessions: 2 })
+  ctl.add('session-old', { cwd: '/w/app', updatedAt: Date.now() - 30 * 86_400_000 }, [text(0, 'user', 'long ago')])
+  for (const id of ['session-x', 'session-y', 'session-z']) ctl.add(id, { cwd: '/w/app' })
+  rt.start()
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions'))
+  assert.equal(n.last('runtime.sessions').sessions.length, 2)
+  assert.ok(!n.last('runtime.sessions').sessions.some((s) => s.session_id === 'session-old'))
+  await n.peer.call('session.send', { session_id: 'session-old', text: 'still there?' })
+  await until('kept in the list', () => n.last('runtime.sessions')?.sessions.some((s) => s.session_id === 'session-old'))
+  assert.equal(n.last('runtime.sessions').sessions.length, 2, 'the kept one counts toward the limit')
 })
 
 test('pages history back from the end, by turns, before a seq, after a seq and over a range', async (t) => {

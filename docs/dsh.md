@@ -48,7 +48,7 @@ DSH 这边是一个装进 `dsh web` 的插件，用的是 Web GUI 自己用的�
 | `interactions` | `auto` | 授权和提问先给谁：`phone` 一律先给手机；`browser` 从不给手机（Jarvis 只看、只发）；`auto` 见下 |
 | `socket` | `~/.jarvis/runtime.sock` | node 的 runtime socket；环境变量 `JARVIS_RUNTIME_SOCKET` 也行 |
 | `listDays` | `7` | 列出最近几天动过的会话（正在跑、在等人的总会列出） |
-| `maxSessions` | `80` | 最多列多少个 |
+| `maxSessions` | `80` | 最多列多少个；手机发过消息、新建过的会话（最近 50 个）不受这两条限制，一直列着 |
 
 ## 映射
 
@@ -98,6 +98,8 @@ DSH 这边是一个装进 `dsh web` 的插件，用的是 Web GUI 自己用的�
   看思考和回复、翻历史、批准一条命令（真的执行）、回答一个提问、看逐字、中断，最后核对推送的连续性。2026-10-31 实测 15/15 通过。
   脚本给 DSH 装了一个只在测试里用的规则（含 `JARVIS_E2E_ASK` 的命令要授权）和一个「不沙箱但要授权」的权限预设：
   在别的沙箱里（比如 Agent 的 shell）起不了 DSH 自己的沙箱。
+- 掉出列表的老会话：`node integrations/dsh/e2e/older-session.mjs`（同样两个环境变量）。插件只列 1 个会话，建 A、B 两个，
+  重启 DSH 让插件忘掉手机碰过 A，再给 A 发消息，要求送到 DSH、回复推回来、没有走 herdr。2026-11-01：新版 5/5，部署中的旧版 3/5。
 
 ## 以后
 

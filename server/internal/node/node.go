@@ -333,8 +333,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return ok(n.interruptCodex(ctx, p.SessionID))
 		}
 	}
-	// A session a runtime lists (runtimes.go): the runtime answers every call about it.
-	if h := n.runtimes.ownerOf(p.SessionID); h != nil {
+	// A session of a runtime (runtimes.go): the runtime answers every call about it, also for an older session it no
+	// longer lists; one whose runtime is away is refused, never resumed in a terminal as a Claude session.
+	if h, err := n.runtimeFor(ctx, method, p.SessionID); err != nil {
+		return nil, err
+	} else if h != nil {
 		if res, err, handled := n.runtimeHandle(ctx, h, method, params); handled {
 			return res, err
 		}

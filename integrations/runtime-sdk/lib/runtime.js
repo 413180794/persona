@@ -385,6 +385,7 @@ export function createRuntime(driver, options) {
         need(driver.send, 'send')
         phoneDriven.set(params.session_id, Date.now())
         await driver.send(params)
+        schedulePush() // what the phone sends to is active now: the list may change (a runtime keeps it listed)
         return { ok: true }
       case 'session.interrupt':
         await need(driver.interrupt, 'interrupt')(params)

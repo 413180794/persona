@@ -33,7 +33,15 @@ export function createDshRuntime(deps, options = {}) {
   const maxSessions = options.maxSessions ?? 80
   const log = deps.log ?? (() => {})
   const known = new Map() // session id -> { lastSeq (DSH), lastText, running }
-  const keep = new Set() // blank sessions started from the phone: listed before their first prompt
+  // Sessions the phone started or sent to, listed whatever the age and count limits say (and blank ones before their
+  // first prompt): a chat the phone has open must stay in the list, or the node no longer knows it is DSH's.
+  const keep = new Set()
+  const MAX_KEEP = 50
+  const touch = (id) => {
+    keep.delete(id)
+    keep.add(id)
+    while (keep.size > MAX_KEEP) keep.delete(keep.values().next().value)
+  }
   const calls = new Map() // session id -> Map(callId -> { name, args }): recent tool calls, for approval cards
   const texts = new Map() // session id -> the assistant text being generated
   const disposers = []
@@ -65,7 +73,7 @@ export function createDshRuntime(deps, options = {}) {
     const rows = []
     for (const s of items ?? []) {
       const id = String(s.sessionId)
-      if (s.origin === 'subagent') continue
+      if (s.origin === 'subagent' || s.parentSessionId) continue // a subagent's or a workflow's: its parent shows it
       const st = known.get(id)
       const running = s.running === true || st?.running === true
       const waiting = activeQuestions(s) > 0 // asked in the Web GUI; cards on the phone the SDK marks itself
@@ -74,7 +82,10 @@ export function createDshRuntime(deps, options = {}) {
       rows.push({ s, id, running, waiting })
     }
     rows.sort((a, b) => (b.s.updatedAt ?? 0) - (a.s.updatedAt ?? 0))
-    return rows.slice(0, maxSessions).map(({ s, id, running, waiting }) => {
+    const kept = rows.filter((r) => keep.has(r.id))
+    const rest = rows.filter((r) => !keep.has(r.id)).slice(0, Math.max(0, maxSessions - kept.length))
+    const chosen = [...kept, ...rest].sort((a, b) => (b.s.updatedAt ?? 0) - (a.s.updatedAt ?? 0))
+    return chosen.map(({ s, id, running, waiting }) => {
       const st = known.get(id)
       const hints = s.projections
       const title = typeof hints?.values?.title === 'string' ? hints.values.title : ''
@@ -211,6 +222,7 @@ export function createDshRuntime(deps, options = {}) {
   }
 
   async function send(params) {
+    touch(params.session_id)
     const content = []
     if (typeof params.text === 'string' && params.text.trim() !== '') content.push({ type: 'text', text: params.text })
     for (const img of params.images ?? []) {
@@ -231,7 +243,7 @@ export function createDshRuntime(deps, options = {}) {
     if (!params.cwd) throw new RpcError('要选一个目录', 'bad_request')
     const res = await deps.controller.create({ cwd: params.cwd })
     const id = String(res.sessionId)
-    keep.add(id)
+    touch(id)
     if (typeof params.prompt === 'string' && params.prompt.trim() !== '') await send({ session_id: id, text: params.prompt })
     return { session: { session_id: id, cwd: params.cwd, title: basename(params.cwd), status: 'idle',
       space_id: params.cwd, space_name: basename(params.cwd), updated_at: new Date().toISOString() } }

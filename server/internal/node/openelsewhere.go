@@ -1,0 +1,83 @@
+package node
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+// A Claude session already open in another client — Claude's desktop app, a terminal Jarvis does not drive — is not
+// resumed from the phone: a second `claude --resume` would write the same transcript as the one running. Without a
+// terminal host Jarvis cannot see those as live (they list as not running), so the check is on the session files
+// every running claude writes (sessions/<pid>.json in its config directory).
+
+// Refusals of a start or resume, with nothing started or typed (the app shows the reason): a running claude has the
+// session open; the machine's engine (herdr) is not running or not installed.
+const (
+	openElsewhere = "open_elsewhere"
+	engineMissing = "engine_missing"
+)
+
+// claudeOpenElsewhere is the running claude that has session id open, outside any pane Jarvis drives (callers ask
+// for sessions with no live agent), and where it runs, in the app's words.
+func (n *Node) claudeOpenElsewhere(id string) (pid int, where string, ok bool) {
+	if id == "" {
+		return 0, "", false
+	}
+	for _, dir := range n.claudeConfigDirs() {
+		files, _ := filepath.Glob(filepath.Join(dir, "sessions", "*.json"))
+		for _, f := range files {
+			p, err := strconv.Atoi(strings.TrimSuffix(filepath.Base(f), ".json"))
+			if err != nil || p <= 0 {
+				continue
+			}
+			st, err := os.Stat(f)
+			if err != nil || st.Size() > 64<<10 {
+				continue
+			}
+			b, err := os.ReadFile(f)
+			if err != nil {
+				continue
+			}
+			var s struct {
+				SessionID  string `json:"sessionId"`
+				Entrypoint string `json:"entrypoint"`
+			}
+			if json.Unmarshal(b, &s) != nil || s.SessionID != id || !alive(p) {
+				continue // another session, or a file left by a claude that exited
+			}
+			return p, whereOpen(s.Entrypoint), true
+		}
+	}
+	return 0, "", false
+}
+
+// whereOpen names the client a claude runs in, from its entrypoint.
+func whereOpen(entrypoint string) string {
+	switch {
+	case entrypoint == "claude-desktop":
+		return "Claude 桌面版"
+	case entrypoint == "cli":
+		return "电脑上的一个终端"
+	case strings.HasPrefix(entrypoint, "sdk"):
+		return "电脑上的另一个程序"
+	default:
+		return "电脑上的另一个地方"
+	}
+}
+
+// openElsewhereRefusal is the refusal for a resume of a session open in another client, nil when none has it open.
+func (n *Node) openElsewhereRefusal(id string) error {
+	pid, where, ok := n.claudeOpenElsewhere(id)
+	if !ok {
+		return nil
+	}
+	w := where
+	if w != "" && w[0] < 0x80 {
+		w = " " + w // 「正在 Claude 桌面版里」: a space between Chinese and a Latin word
+	}
+	return refusal(openElsewhere, "这个会话正在"+w+"里开着，Jarvis 不会再起一个 Claude 同时写它：在"+w+
+		"里接着用，或者先在那边关掉它再从手机发。这次没有发送。", map[string]any{"pid": pid})
+}

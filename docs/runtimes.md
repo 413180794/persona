@@ -50,6 +50,7 @@ runtime 不用知道 hub 在哪、不用开端口、不用鉴权（同一个系�
 
 | 调用 | 什么时候 |
 | --- | --- |
+| （不用调） | 列表只列最近的就行：没列出的老会话 node 也认得是你的（列过的记着；从没列过的会问你一次 `items`），调用照样交给你，所以 `send` / `items` 要能处理不在列表里的会话 |
 | `rt.sessionsChanged()` | 会话多了、少了、开始 / 结束一轮、改了名 |
 | `rt.append(id, {items, fromSeq, toSeq, history})` | 有新内容落盘（没人看着时 SDK 只让列表刷新 rev）。`items` 可以是空的：聊天里不显示的内容也要推进 seq |
 | `rt.stream(id, text)` / `rt.streamEnd(id)` | 正在生成的整段文字 / 这段结束（SDK 节流到最多 120 ms 一次） |

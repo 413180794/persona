@@ -94,3 +94,8 @@
   两种都要认。macOS 的临时目录 `/var/…` 其实是 `/private/var/…`：只认解析后的，在 Linux 上测都过、到 Mac 上就 60 秒超时（2026-11-02 从手机新建 Codex）。
 - 往 herdr 窗格里打命令起 Codex 时，别把 alias 展开后的词打进去：alias 里可能带 Key，会上屏、进 shell 历史。启动器的词和第一条消息一起写进 0600 文件，
   窗格里只打 `jarvisd codex-start <文件>`（`codex_start.go`）。
+- **开在 Claude 桌面版（或别的终端）里的 Claude 会话**（2026-11-01，没装 herdr 的 Mac）：Claude 桌面版跑的是真的 `claude` 进程，也写
+  `~/.claude/projects` 的 transcript 和 `sessions/<pid>.json`（`entrypoint: "claude-desktop"`）。Jarvis 没有终端宿主时看不到它在跑，按 transcript
+  列成「未运行」，从手机发消息就去 herdr 里 `claude --resume`：装了 herdr 会起第二个进程同时写同一个会话，没装就报
+  「herdr is not running on this machine: herdr workspace list: exec: "herdr"…」。现在恢复前先看有没有活着的 claude 在 `sessions/<pid>.json` 里开着这个会话，
+  有就拒绝（`open_elsewhere`，说是在哪开着）；引擎起不来时拒绝的话也换成人话（`engine_missing`）。列表里仍显示「未运行」，还没有「在别处开着」的状态。

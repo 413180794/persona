@@ -56,6 +56,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		if a, ok := n.agent(resume); ok {
 			return n.sessionFor(resume, a), nil // already running
 		}
+		if r := n.openElsewhereRefusal(resume); r != nil { // open in Claude's desktop app or a terminal (openelsewhere.go)
+			return nil, r
+		}
 	}
 
 	launch, err := hostCap[host.Launcher](n) // new sessions start in the engine (herdr only so far: herdr-core cannot start them)
@@ -213,7 +216,12 @@ func tabLabel(name string, taken map[string]bool) string {
 func (n *Node) workspaceFor(ctx context.Context, launch host.Launcher, cwd string) (string, error) {
 	wss, err := launch.Spaces(ctx)
 	if err != nil {
-		return "", fmt.Errorf("herdr is not running on this machine: %w", err)
+		// Nothing was started or typed: say so, and what to do, instead of herdr's own words (the app showed
+		// "herdr workspace list: exec: \"herdr\": executable file not found").
+		name := proto.EngineNames[n.engine()]
+		return "", refusal(engineMissing, fmt.Sprintf("这台电脑上的 %s 没在运行（或没装），不能在这里新开或接着会话，这次没有发送。"+
+			"要从手机接着电脑上开着的会话，在那边继续；要从手机新开，先在这台电脑上装好并打开 %s。", name, name),
+			map[string]any{"detail": "herdr is not running on this machine: " + err.Error()})
 	}
 	base := filepath.Base(cwd)
 	for _, w := range wss {

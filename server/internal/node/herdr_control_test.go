@@ -261,7 +261,8 @@ func TestHerdrStartOfALiveSessionAndWithoutHerdr(t *testing.T) {
 
 	f.reset()
 	f.reply("workspace.list", herdrFail{Code: "internal", Message: "down"})
-	if _, err := request(t, n, "session.start", map[string]any{"cwd": home}); err == nil || !strings.Contains(err.Error(), "herdr is not running") {
+	// Refused with nothing sent, in words the app can show (not herdr's own error).
+	if _, err := request(t, n, "session.start", map[string]any{"cwd": home}); !isRefusal(err, engineMissing) || !strings.Contains(err.Error(), "没在运行") {
 		t.Fatalf("err %v", err)
 	}
 	assertTrace(t, f.trace(), []string{call("workspace.list", nil)})
