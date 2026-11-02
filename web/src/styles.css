@@ -32,6 +32,13 @@
   --tooltip-fg: #f6f7f8;
   --tooltip-muted: #a5a8ad;
   --tooltip-border: #3a3c40;
+  /* Image markup (the chat's image editor): burned into the picture, so the same in light and dark. */
+  --mark-red: #ff3b30;
+  --mark-yellow: #ffcc00;
+  --mark-green: #34c759;
+  --mark-blue: #007aff;
+  --mark-white: #fff;
+  --mark-black: #000;
   --shadow-hairline: 0 0 0 1px var(--line);
   --shadow-btn: 0 0 0 1px var(--line-strong), 0 1px 2px #1018280d;
   --shadow-card: 0 0 0 1px var(--line), 0 1px 2px #1018280a, 0 2px 6px #10182808;
@@ -144,11 +151,15 @@ body {
 .stream-caret{background:var(--ink);vertical-align:text-bottom;border-radius:1px;width:2px;height:1.05em;margin-left:1.5px;animation:caret-blink 1s step-end infinite;display:inline-block;translate:0 -.5px}
 
 /* ── Jarvis additions ──────────────────────────────────── */
-:root { --status-needs: var(--red); --status-working: var(--orange); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: #f0f1f3; }
-.dark { --user-bubble: #2c2d31; }
+:root { --status-needs: var(--red); --status-working: var(--orange); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: #f0f1f3; --term-magenta: #a347ba; --term-cyan: #0f8a9c; }
+.dark { --user-bubble: #2c2d31; --term-magenta: #c678dd; --term-cyan: #4fb6c4; }
+/* The machine page's load chart (iOS MetricColor.load): its own hue, apart from CPU / memory / network. */
+:root { --chart-load: #e87ba4; }
+.dark { --chart-load: #d55181; }
 @theme inline { --color-user-bubble: var(--user-bubble); }
 @keyframes breathe{0%,to{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
 @keyframes slide-up{0%{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes slide-in-right{0%{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
 
 html, body, #root { height: 100%; }
 body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }

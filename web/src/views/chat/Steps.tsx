@@ -3,12 +3,18 @@
 import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { imageURL } from "../../lib/api";
+import { toolFile } from "../../lib/files";
 import { duration } from "../../lib/format";
+import { openPanel } from "../../lib/panel";
+import { getSession } from "../../lib/store";
+import { taskBadge, taskLabel, taskPill, taskSubject, wakeSummary, type Tone } from "../../lib/tasks";
 import { editStats, toolChip, toolIcon, toolLabel, workSummary, type Segment, type Step } from "../../lib/turns";
 import type { Item } from "../../lib/types";
 import { Collapse, copyText, cx, EASE, PixelGrid, Shimmer, Spinner } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
+import { useChatContext } from "./chat-context";
+import { ChatImageViewer } from "./ImageViewer";
 
 export function WorkRow({
   seg,
@@ -17,6 +23,7 @@ export function WorkRow({
   mid,
   sid,
   expandFold,
+  onOpen,
 }: {
   seg: Segment;
   live: boolean;
@@ -24,6 +31,8 @@ export function WorkRow({
   mid: string;
   sid: string;
   expandFold: (f: Item) => Promise<void>;
+  /** Opening does something else (a merged exchange splits into its messages) instead of unfolding here. */
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [loadingFolds, setLoadingFolds] = useState(false);
@@ -34,6 +43,10 @@ export function WorkRow({
   if (!seg.steps.length && !live) return null;
 
   const toggle = async () => {
+    if (onOpen) {
+      onOpen();
+      return;
+    }
     const next = !open;
     setOpen(next);
     if (next && seg.folds.length) {
@@ -104,7 +117,7 @@ const StepRow = memo(function StepRow({ step, live, mid, sid }: { step: Step; li
         </div>
       );
     case "notice":
-      return <NoticeRow item={step.item} />;
+      return <NoticeRow item={step.item} mid={mid} sid={sid} />;
     case "image":
       return (
         <div className="py-1">
@@ -133,12 +146,17 @@ function Disclosure({
   extra,
   status,
   detail,
+  onChip,
+  chipTitle,
 }: {
   icon: IconName;
   filled?: boolean;
   label: string;
   chip?: string;
   mono?: boolean;
+  /** The chip is a link (a tool's file): it opens that instead of folding the row. */
+  onChip?: () => void;
+  chipTitle?: string;
   extra?: React.ReactNode;
   status?: React.ReactNode;
   detail?: React.ReactNode;
@@ -168,9 +186,25 @@ function Disclosure({
         <span className="shrink-0 text-[12.5px] font-medium whitespace-nowrap text-ink">{label}</span>
         {chip && (
           <span
+            {...(onChip && {
+              role: "link",
+              tabIndex: 0,
+              title: chipTitle,
+              onClick: (e: React.MouseEvent) => {
+                e.stopPropagation();
+                onChip();
+              },
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                e.stopPropagation();
+                onChip();
+              },
+            })}
             className={cx(
               "inline-flex h-5.5 min-w-0 items-center truncate rounded-chip bg-hover-2 px-1.5 text-[11.5px] text-[#43464c] shadow-hairline dark:bg-field dark:text-ink-2",
               mono && "font-mono",
+              onChip && "cursor-pointer underline-offset-2 hover:text-accent-ink hover:underline dark:hover:text-accent-ink",
             )}
           >
             <span className="truncate">{chip}</span>
@@ -190,48 +224,80 @@ function Disclosure({
 
 function ToolRow({ step, live, mid, sid }: { step: Extract<Step, { kind: "tool" }>; live?: boolean; mid: string; sid: string }) {
   const { use, result } = step;
+  const { tasks, subagents, openSubagent } = useChatContext();
   const stats = editStats(use);
   const running = !result && live;
   const error = result?.is_error;
+  const open = fileOpener(use, mid, sid);
+  // a call that went to the background says how the task went (后台 · 已完成)
+  const call = use.tool_use_id;
+  const bg = call && (tasks.started.has(call) || tasks.notes.has(call)) ? taskBadge(tasks.notes.get(call) ?? []) : null;
+  const sub = call && (use.tool_name === "Agent" || use.tool_name === "Task") && openSubagent ? subagents.find((a) => a.tool_use_id === call) : undefined;
   return (
-    <Disclosure
-      icon={toolIcon(use.tool_name)}
-      label={toolLabel(use.tool_name)}
-      chip={toolChip(use)}
-      mono={use.tool_name !== "Task" && use.tool_name !== "Agent" && use.tool_name !== "TodoWrite"}
-      extra={
-        stats && (stats.add || stats.del) ? (
-          <span className="shrink-0 font-mono text-[11px] tabular-nums">
-            <span className="text-green">+{stats.add}</span> {stats.del > 0 && <span className="text-red">−{stats.del}</span>}
-          </span>
-        ) : null
-      }
-      status={running ? <Spinner size={11} /> : error ? <span className="rounded-[4px] bg-red-tint px-1 text-[10.5px] font-medium text-red">出错</span> : null}
-      detail={<ToolDetail step={step} mid={mid} sid={sid} />}
-    />
+    <>
+      <Disclosure
+        icon={toolIcon(use.tool_name)}
+        label={toolLabel(use.tool_name)}
+        chip={toolChip(use)}
+        mono={use.tool_name !== "Task" && use.tool_name !== "Agent" && use.tool_name !== "TodoWrite"}
+        extra={
+          stats && (stats.add || stats.del) ? (
+            <span className="shrink-0 font-mono text-[11px] tabular-nums">
+              <span className="text-green">+{stats.add}</span> {stats.del > 0 && <span className="text-red">−{stats.del}</span>}
+            </span>
+          ) : null
+        }
+        status={
+          running ? (
+            <Spinner size={11} />
+          ) : error ? (
+            <span className="rounded-[4px] bg-red-tint px-1 text-[10.5px] font-medium text-red">出错</span>
+          ) : bg ? (
+            <span className={cx("rounded-[4px] px-1 text-[10.5px] font-medium whitespace-nowrap", bg.failed ? "bg-red-tint text-red" : "bg-field text-ink-2")}>{bg.text}</span>
+          ) : null
+        }
+        detail={<ToolDetail step={step} mid={mid} sid={sid} />}
+        onChip={open}
+        chipTitle={open ? `打开 ${toolFile(use.tool_name, use.tool_input)?.path}` : undefined}
+      />
+      {sub && openSubagent && (
+        <button type="button" onClick={() => openSubagent(sub)} className="mb-1 ml-6 flex w-fit items-center gap-1 rounded-[6px] px-1 py-0.5 text-[12px] font-medium whitespace-nowrap text-accent-ink transition-colors hover:bg-hover-2">
+          查看子 Agent
+          <Icon name="chevronRight" size={12} stroke={2.2} />
+        </button>
+      )}
+    </>
   );
+}
+
+/** Opens the file a Read / Edit / Write step works on in the side panel, relative paths in the session's folder. */
+function fileOpener(use: Item, mid: string, sid: string): (() => void) | undefined {
+  const f = toolFile(use.tool_name, use.tool_input);
+  if (!f) return undefined;
+  return () => openPanel({ kind: "file", mid, path: f.path, cwd: getSession(mid, sid)?.cwd, line: f.line });
 }
 
 function ToolDetail({ step, mid, sid }: { step: Extract<Step, { kind: "tool" }>; mid: string; sid: string }) {
   const { use, result, images } = step;
   const inp = (use.tool_input ?? {}) as Record<string, unknown>;
   const name = use.tool_name ?? "";
+  const open = fileOpener(use, mid, sid);
   let input: React.ReactNode = null;
   if ((name === "Bash" || name === "exec_command" || name === "shell") && (typeof inp.command === "string" || Array.isArray(inp.command))) {
     const cmd = Array.isArray(inp.command) ? (inp.command as string[]).join(" ") : (inp.command as string);
     input = <Mono text={`$ ${cmd}`} />;
   } else if (name === "Edit" && typeof inp.old_string === "string") {
-    input = <Diff path={String(inp.file_path ?? "")} oldText={inp.old_string as string} newText={String(inp.new_string ?? "")} />;
+    input = <Diff path={String(inp.file_path ?? "")} oldText={inp.old_string as string} newText={String(inp.new_string ?? "")} onOpen={open} />;
   } else if (name === "MultiEdit" && Array.isArray(inp.edits)) {
     input = (
       <div className="flex flex-col gap-1.5">
         {(inp.edits as Record<string, unknown>[]).map((e, i) => (
-          <Diff key={i} path={i === 0 ? String(inp.file_path ?? "") : ""} oldText={String(e.old_string ?? "")} newText={String(e.new_string ?? "")} />
+          <Diff key={i} path={i === 0 ? String(inp.file_path ?? "") : ""} oldText={String(e.old_string ?? "")} newText={String(e.new_string ?? "")} onOpen={open} />
         ))}
       </div>
     );
   } else if (name === "Write" && typeof inp.content === "string") {
-    input = <Diff path={String(inp.file_path ?? "")} oldText="" newText={inp.content as string} />;
+    input = <Diff path={String(inp.file_path ?? "")} oldText="" newText={inp.content as string} onOpen={open} />;
   } else if (name === "TodoWrite" && Array.isArray(inp.todos)) {
     input = <Todos todos={inp.todos as Record<string, unknown>[]} />;
   } else if (name === "Task" || name === "Agent") {
@@ -239,8 +305,16 @@ function ToolDetail({ step, mid, sid }: { step: Extract<Step, { kind: "tool" }>;
   } else if (Object.keys(inp).length) {
     input = <Mono text={JSON.stringify(inp, null, 2)} />;
   }
+  // Read / NotebookEdit / a Codex change (no old_string) have no diff header to click: the path, as a link.
+  const link = open && !(name === "Write" || name === "MultiEdit" || (name === "Edit" && typeof inp.old_string === "string")) ? toolFile(name, inp)?.path : undefined;
   return (
     <div className="flex flex-col gap-1.5 py-1">
+      {link && open && (
+        <button type="button" onClick={open} className="flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-[6px] px-0.5 text-left font-mono text-[11.5px] text-accent-ink hover:underline">
+          <Icon name="read" size={12} className="shrink-0" />
+          <span className="truncate">{link}</span>
+        </button>
+      )}
       {input}
       {result?.text && name !== "TodoWrite" && <Mono text={result.text} tone={result.is_error ? "error" : "out"} />}
       {images.length > 0 && (
@@ -277,13 +351,20 @@ function Mono({ text, tone }: { text: string; tone?: "out" | "error" }) {
   );
 }
 
-function Diff({ path, oldText, newText }: { path: string; oldText: string; newText: string }) {
+function Diff({ path, oldText, newText, onOpen }: { path: string; oldText: string; newText: string; onOpen?: () => void }) {
   const [all, setAll] = useState(false);
   const lines = [...(oldText ? oldText.split("\n").map((t) => ({ t, k: "-" as const })) : []), ...(newText ? newText.split("\n").map((t) => ({ t, k: "+" as const })) : [])];
   const shown = all ? lines : lines.slice(0, 40);
   return (
     <div className="overflow-hidden rounded-[8px] bg-surface shadow-hairline">
-      {path && <div className="truncate border-b border-line bg-inset px-2.5 py-1 font-mono text-[11px] text-ink-2">{path}</div>}
+      {path &&
+        (onOpen ? (
+          <button type="button" onClick={onOpen} title={`打开 ${path}`} className="block w-full truncate border-b border-line bg-inset px-2.5 py-1 text-left font-mono text-[11px] text-ink-2 hover:text-accent-ink hover:underline">
+            {path}
+          </button>
+        ) : (
+          <div className="truncate border-b border-line bg-inset px-2.5 py-1 font-mono text-[11px] text-ink-2">{path}</div>
+        ))}
       <div className="max-h-80 overflow-auto py-1 font-mono text-[11.5px] leading-[1.6]">
         {shown.map((l, i) => (
           <div key={i} className={cx("flex min-w-fit pr-3", l.k === "+" ? "bg-green-tint" : "bg-red-tint")}>
@@ -327,25 +408,63 @@ export function Todos({ todos }: { todos: Record<string, unknown>[] }) {
   );
 }
 
-function NoticeRow({ item }: { item: Item }) {
+const TONE: Record<Tone, string> = {
+  green: "bg-green-tint text-green",
+  red: "bg-red-tint text-red",
+  neutral: "bg-field text-ink-2",
+  orange: "bg-orange-tint text-orange",
+};
+
+const TASK_ICON: Record<string, IconName> = { shell: "run", monitor: "monitor", agent: "agent" };
+
+/** A notice in a trace: a background task reporting back (iOS TaskNoteRow), a wake, or a plain line. */
+export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: string }) {
+  const { tasks } = useChatContext();
   const t = item.task;
   if (t) {
-    const ok = t.status === "completed" || t.status === "ended";
-    const bad = t.status === "failed" || t.status === "killed";
-    const label = { shell: "后台命令", monitor: "监控", agent: "子 Agent", task: "后台任务" }[t.kind] ?? "后台任务";
+    const call = tasks.calls.get(item.id);
+    const pill = taskPill(t, call ? tasks.startedAt.get(call) : undefined, item.ts);
+    const out = t.output_file;
+    const detail = (
+      <div className="flex flex-col gap-1.5 py-1">
+        {t.kind === "shell" ? (
+          <Mono text={`$ ${t.detail || t.title || ""}`} />
+        ) : t.kind === "agent" ? (
+          t.detail && <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-ink-2">{t.detail}</p>
+        ) : (
+          t.detail && <Mono text={t.detail} />
+        )}
+        {t.kind === "monitor" && (t.status === "event" || !t.detail) && t.title && <p className="text-[12px] text-ink-3">{t.title}</p>}
+        {out && (
+          <button
+            type="button"
+            onClick={() => openPanel({ kind: "file", mid, path: out, cwd: getSession(mid, sid)?.cwd })}
+            className="flex w-fit items-center gap-1.5 rounded-[6px] px-0.5 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline"
+          >
+            <Icon name="read" size={12} />
+            查看输出
+          </button>
+        )}
+      </div>
+    );
     return (
       <Disclosure
-        icon="bell"
-        label={label}
-        chip={t.title || firstLine(item.text)}
+        icon={TASK_ICON[t.kind] ?? "bell"}
+        label={taskLabel(t)}
+        chip={taskSubject(t, call ? tasks.descriptions.get(call) : undefined) || firstLine(item.text)}
         mono={t.kind === "shell"}
-        status={
-          <span className={cx("rounded-[4px] px-1 text-[10.5px] font-medium", ok ? "bg-green-tint text-green" : bad ? "bg-red-tint text-red" : "bg-field text-ink-2")}>
-            {{ completed: "完成", failed: "失败", killed: "已停止", stopped: "已停止", event: "事件", ended: "结束", waiting: "等待" }[t.status] ?? t.status}
-          </span>
-        }
-        detail={t.detail ? <Mono text={t.detail} /> : undefined}
+        status={pill ? <span className={cx("rounded-[4px] px-1 text-[10.5px] font-medium whitespace-nowrap", TONE[pill.tone])}>{pill.text}</span> : null}
+        detail={t.detail || t.title || out ? detail : undefined}
       />
+    );
+  }
+  if (item.wake) {
+    const w = wakeSummary(item);
+    return (
+      <div className="flex min-h-7 items-center gap-2 px-[3px] py-1 text-[12.5px] text-ink-2">
+        <Icon name="bell" size={13} className={cx("shrink-0", w.failed ? "text-red" : "text-accent")} />
+        <span className="min-w-0 truncate">{w.text}</span>
+      </div>
     );
   }
   return (
@@ -379,7 +498,7 @@ export function Thumb({ item, mid, sid, size = 132 }: { item: Item; mid: string;
       >
         <img src={src} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
       </button>
-      {open && <Lightbox src={src} onClose={() => setOpen(false)} />}
+      {open && <ChatImageViewer item={item} mid={mid} sid={sid} onClose={() => setOpen(false)} />}
     </>
   );
 }

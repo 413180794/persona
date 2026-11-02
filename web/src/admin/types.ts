@@ -1,0 +1,230 @@
+// Shapes of the hub's admin API (docs/admin.md「接口」, docs/plan-hub-mesh.md 2.7 for peers).
+
+export type Access = "loopback" | "lan" | "cidrs" | "any";
+
+export interface AdminState {
+  password_set: boolean;
+  logged_in: boolean;
+  can_setup: boolean;
+  // No password yet and the request came over loopback (maybe a reverse proxy on the hub machine relaying the
+  // internet): setup also needs the one-time code the hub logs / `jarvisd hub admin setup-code` prints.
+  setup_code_required?: boolean;
+  csrf?: string;
+  hub_name: string;
+  version: string;
+  session_expires_at?: string;
+}
+
+export interface Restart {
+  required: boolean;
+  reasons: string[];
+}
+
+export interface Endpoint {
+  url: string;
+  kind: string; // ipv6 | name | lan | ipv4
+  port: number;
+  scheme: string;
+  seen_at?: string;
+}
+
+export interface TLSInfo {
+  listen: string;
+  port: number;
+  fp: string;
+}
+
+export interface Overview {
+  hub: {
+    hub_id: string;
+    name: string;
+    name_set: boolean;
+    default_name: string;
+    version: string;
+    started_at: string;
+    os: string;
+    arch: string;
+    container: boolean;
+    can_restart: boolean;
+  };
+  listen: string;
+  public_url: string;
+  tls: TLSInfo | null;
+  endpoints: Endpoint[];
+  machines: { total: number; online: number };
+  devices: number;
+  restart: Restart;
+}
+
+export interface DoctorItem {
+  level: "ok" | "problem" | "info";
+  item: string;
+  detail: string;
+}
+
+export interface DoctorReport {
+  items: DoctorItem[];
+  next: string[];
+  ran_at: string;
+}
+
+export type MachineState = "active" | "pending_add" | "pending_remove";
+
+// How a hub reaches a computer (docs/plan-hub-center.md 4, 5). service: the hub dials the computer's connector; link:
+// the computer's jarvis-link dials the hub; hub: through a member hub of the group (configured on that member only).
+export type Via = "local" | "service" | "link" | "ssh" | "tailcat" | "hub";
+
+// One way to a computer (plan 5「paths」): which hub it goes through, the hub.json entry there, whether it works now.
+export interface MachinePath {
+  via: Via | string;
+  hub_id: string;
+  id?: string;
+  ok: boolean;
+  rtt_ms?: number;
+  active?: boolean;
+  error?: string;
+}
+
+export interface AdminMachine {
+  id: string;
+  name: string;
+  kind: string; // local | service | link | ssh | tailcat | hub
+  icon?: string;
+  ssh_host?: string;
+  online: boolean;
+  error?: string;
+  transport?: string;
+  node_version?: string;
+  node_mismatch?: boolean;
+  os?: string;
+  last_seen?: string;
+  link?: { version?: string; address?: string; since?: string } | null;
+  state: MachineState;
+  tailcat?: boolean;
+  address?: string; // service: the connector's host:port
+  proxy?: string; // service: socks5://… it is dialed through (no password)
+  hub_id?: string; // the hub it is reached through now
+  paths?: MachinePath[];
+}
+
+export interface AddedMachine {
+  machine: AdminMachine;
+  restart: Restart;
+}
+
+// POST machines/{id}/connector: a service computer's connector paired again.
+export interface ConnectorRepair {
+  ok: boolean;
+  address: string;
+  version: string;
+  restart_required: boolean;
+}
+
+export interface MachinesView {
+  machines: AdminMachine[];
+  tls: boolean;
+  restart: Restart;
+}
+
+export interface LinkPair {
+  pair_url: string;
+  expires_at: string;
+  command: string;
+}
+
+export interface Device {
+  id: string;
+  name: string;
+  kind: string;
+  role: string;
+  created_at?: string;
+  last_seen?: string;
+  revoked_at?: string;
+  machine_id?: string;
+}
+
+export interface PhonePair {
+  pair_url: string;
+  url: string;
+  expires_at: string;
+  fp?: string;
+  qr: { size: number; rows: string[] };
+}
+
+export interface NetworkView {
+  listen: string;
+  public_url: string;
+  public_url_from_env?: boolean; // JARVIS_PUBLIC_URL sets it (Docker's .env): shown, not editable here
+  tls: TLSInfo | null;
+  advertise: string[];
+  advertise_ipv6: boolean;
+  advertise_lan: boolean;
+  endpoints: Endpoint[];
+  security: { trusted_cidrs: string[]; allow_public_plaintext: boolean };
+  admin: { access: Access; cidrs: string[]; session_hours: number; from_env: boolean; container: boolean };
+  you: { address: string; tls: boolean; allowed: Record<Access, boolean> };
+  restart: Restart;
+}
+
+// refused: the other hub no longer accepts our credential (most likely it disconnected us on its side).
+export type PeerState = "connected" | "connecting" | "offline" | "refused";
+
+export interface Peer {
+  hub_id: string;
+  name: string;
+  state: PeerState;
+  address?: string;
+  rtt_ms?: number;
+  since?: string;
+  error?: string;
+  machines: number; // machines the peer reaches directly and owns
+  role?: Role;
+}
+
+// The group of hubs (docs/plan-hub-center.md 2, 6): exactly one center serves every client and keeps all state;
+// members pass requests and their computers on to it. A lone hub is its own center.
+export type Role = "center" | "member";
+
+export interface MeshHub {
+  hub_id: string;
+  name: string;
+  role: Role;
+  online: boolean;
+  self?: boolean;
+  paired?: boolean; // paired with this hub directly
+}
+
+export interface MeshView {
+  role: Role;
+  center: { hub_id: string; name: string; online: boolean };
+  term: number;
+  hubs: MeshHub[];
+}
+
+export interface DiscoveredHub {
+  hub_id: string;
+  name: string;
+  addresses: string[];
+  fp: string;
+  version?: string;
+}
+
+export interface PeersView {
+  peers: Peer[];
+  discovered: DiscoveredHub[];
+}
+
+export interface PeerCode {
+  code: string;
+  expires_at: string;
+}
+
+// POST peers/probe: who answers at an address, to check against what the other hub's admin page shows before
+// pasting its peer code. tls_port 0 and an empty fp: that hub has no TLS, so it cannot link.
+export interface PeerProbe {
+  hub_id: string;
+  name: string;
+  tls_port: number;
+  fp: string;
+  version?: string;
+}

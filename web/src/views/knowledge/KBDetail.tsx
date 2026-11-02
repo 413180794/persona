@@ -1,0 +1,526 @@
+// One knowledge entry (/kb/<kind>/<id>): its tile, name, badges, one line and tags, 问 Jarvis; then the places a
+// search found, the Agents on a project, the timeline, the profile, removed, related entries by kind, code directories,
+// a chat's last 7 days and the folder (docs/ios.md 信息架构 知识库). 打标 in the header.
+import { useEffect, useState } from "react";
+import { api, enc, errorText, isAbort } from "../../lib/api";
+import { ago, sessionTitle, shortPath, stateOf, tabLabel } from "../../lib/format";
+import {
+  agentPreset,
+  askJarvisText,
+  dayTitle,
+  dirsOf,
+  entryFromDetail,
+  factsOf,
+  formatAt,
+  hitView,
+  importanceTone,
+  kindTitle,
+  linkGroups,
+  parseMessageLine,
+  parseRecent,
+  profile,
+  projectInfo,
+  shortWhen,
+  statusLabel,
+  timeline,
+  type KBDetailResponse,
+  type KBEntry,
+  type KBMatch,
+  type KBMomentRef,
+} from "../../lib/kb";
+import { machineWithHub } from "../../lib/mesh";
+import { openPanel } from "../../lib/panel";
+import { href, onLinkClick } from "../../lib/router";
+import { getState, useStore } from "../../lib/store";
+import type { Session } from "../../lib/types";
+import { Button, Collapse, copyText, cx, IconButton, Loading, StatePill, StatusDot, toast } from "../../ui/atoms";
+import { Icon } from "../../ui/icons";
+import { Markdown } from "../../ui/Markdown";
+import { known, remember } from "./cache";
+import { askJarvis } from "../../lib/outbox";
+import { openNewAgent } from "../../lib/new-agent";
+import { DayDialog, MessageView, MomentDialog, TagEditor } from "./KBDialogs";
+import { ErrorBox } from "./KBList";
+import { Badges, Card, KBIcon, Marked, MoreRow, onPlainClick, SectionTitle, Tile, TonePill } from "./KBParts";
+
+/** Timeline lines shown before 显示全部. */
+const LOG_SHOWN = 6;
+/** Related entries of one kind (and removed posts) shown before 全部. */
+const LINKS_SHOWN = 4;
+/** Search matches shown before 显示全部. */
+const MATCHES_SHOWN = 5;
+
+export function EmptyDetail() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-8 pb-[8vh] text-center" style={{ animation: `fade-in 300ms ease-out both` }}>
+      <span className="mb-3 flex size-11 items-center justify-center rounded-[12px] bg-field text-ink-3">
+        <Icon name="book" size={20} />
+      </span>
+      <p className="text-[14px] font-medium text-ink">选一个条目</p>
+      <p className="mt-1 max-w-[320px] text-[12.5px] leading-relaxed text-ink-3">看它的档案、时间线和关联；「问 Jarvis」把它交给主对话。</p>
+    </div>
+  );
+}
+
+export function EntryDetail({
+  kind,
+  id,
+  query,
+  reloadKey,
+  onToggleSidebar,
+  onBack,
+  onOpen,
+  onSaved,
+}: {
+  kind: string;
+  id: string;
+  /** Opened from a search: the places it was found come first. */
+  query?: string;
+  reloadKey: number;
+  onToggleSidebar: () => void;
+  onBack: () => void;
+  onOpen: (e: KBEntry) => void;
+  onSaved: () => void;
+}) {
+  const [resp, setResp] = useState<KBDetailResponse | null>(null);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [allLog, setAllLog] = useState(false);
+  const [allMatches, setAllMatches] = useState(false);
+  const [allMoments, setAllMoments] = useState(false);
+  const [openKinds, setOpenKinds] = useState<Set<string>>(new Set());
+  const [showRecent, setShowRecent] = useState(false);
+  const [day, setDay] = useState<{ day: string; focus?: number; query?: string } | null>(null);
+  const [moment, setMoment] = useState<KBMomentRef | null>(null);
+
+  useEffect(() => {
+    setError("");
+    const ac = new AbortController();
+    api<KBDetailResponse>(`/kb/${enc(kind)}/${enc(id)}${query ? `?q=${enc(query)}` : ""}`, { signal: ac.signal })
+      .then((r) => {
+        remember(r.detail.links ?? []);
+        setResp(r);
+      })
+      .catch((e) => !isAbort(e) && setError(errorText(e)));
+    return () => ac.abort();
+  }, [kind, id, query, reloadKey, retry]);
+
+  const d = resp?.detail;
+  const base = known(kind, id);
+  const e: KBEntry = d ? entryFromDetail(base, d) : (base ?? { kind, id, name: id, relevance: 0 });
+  const status = statusLabel(projectInfo(e)?.status);
+
+  // the main conversation opens at once with the message on its way (no main one yet: this starts it)
+  const ask = async () => {
+    setAsking(true);
+    try {
+      await askJarvis(askJarvisText(e, d));
+    } catch (err) {
+      toast(`没发出去：${errorText(err)}`, "error");
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  const facts = d ? factsOf(d.kind, d.meta) : null;
+  const log = timeline(d?.log);
+  const prof = profile(d?.summary, e.one_line, e.name);
+  const links = linkGroups(d?.links);
+  const dirs = dirsOf(d?.meta);
+  const recent = d?.kind === "chats" ? parseRecent(d.recent) : [];
+  const into = typeof d?.meta?.merged_into === "string" ? d.meta.merged_into : "";
+  const moments = d?.moments ?? [];
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-line px-3 sm:px-4">
+        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+        <IconButton icon="chevronLeft" label="返回列表" onClick={onBack} className="@4xl:hidden" />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink-2">{kindTitle(kind)}</span>
+        <Button tone="secondary" onClick={() => setEditing(true)} disabled={!d}>
+          <KBIcon name="tag" size={14} stroke={2.1} />
+          打标
+        </Button>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[720px] px-4 pt-6 pb-20 sm:px-8">
+          {/* Header: what it is at a glance, and the way out (handing it to Jarvis). */}
+          <div>
+            <div className="flex items-center gap-3.5">
+              <Tile entry={e} size={48} />
+              <div className="min-w-0 flex-1">
+                <h1 className="line-clamp-3 text-[20px] font-semibold leading-snug tracking-tight text-ink">{e.name}</h1>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <Badges entry={e} status={status} kindSuffix="项目" />
+                </div>
+              </div>
+            </div>
+            {e.one_line && <p className="mt-3.5 text-[14px] leading-relaxed text-ink">{e.one_line}</p>}
+            {e.tags && e.tags.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {e.tags.map((t) => (
+                  <TonePill key={t}>#{t}</TonePill>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button tone="accent" icon="spark" busy={asking} disabled={!d} onClick={ask} title="把这个条目的档案和最近进展带进 Jarvis 的主对话">
+                问 Jarvis
+              </Button>
+              {kind === "projects" && (
+                <Button
+                  tone="secondary"
+                  icon="plus"
+                  disabled={!d}
+                  onClick={() => openNewAgent(agentPreset(kind, e, d, getState().machines.filter((m) => m.online).map((m) => m.id)))}
+                  title="新建一个 Agent，带上这个项目的档案和最近进展"
+                >
+                  开 Agent
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {!d && !error && (
+            <div className="py-12">
+              <Loading />
+            </div>
+          )}
+          {error && !d && (
+            <div className="mt-6">
+              <ErrorBox text={error} onRetry={() => setRetry((x) => x + 1)} />
+            </div>
+          )}
+
+          {d && (
+            <div className="mt-7 flex flex-col gap-6" style={{ animation: "fade-in 200ms ease-out both" }}>
+              {facts && (
+                <section>
+                  <Card>
+                    {facts.at && (
+                      <div className="flex items-center gap-3 px-4 py-2.5 text-[13px]">
+                        <span className="flex-1 text-ink-2">{facts.whenLabel}</span>
+                        <span className="whitespace-nowrap text-ink tabular-nums">{formatAt(facts.at)}</span>
+                      </div>
+                    )}
+                    {facts.url && (
+                      <button type="button" onClick={() => openPanel({ kind: "link", url: facts.url!, title: e.name })} className="flex w-full items-center gap-2 whitespace-nowrap px-4 py-2.5 text-left text-[13px] font-medium text-accent-ink hover:bg-hover">
+                        <Icon name="external" size={14} />
+                        {facts.openLabel}
+                      </button>
+                    )}
+                  </Card>
+                </section>
+              )}
+
+              {query && resp?.matches && (
+                <Matches
+                  matches={resp.matches}
+                  query={query}
+                  all={allMatches}
+                  onToggle={() => setAllMatches((x) => !x)}
+                  onOpenDay={d.kind === "chats" ? (m) => setDay({ day: m.day!, focus: m.n, query }) : undefined}
+                />
+              )}
+
+              {resp?.agents && resp.agents.length > 0 && <Agents agents={resp.agents} />}
+
+              {log.length > 0 && (
+                <section>
+                  <SectionTitle title="时间线" count={log.length} />
+                  <Card>
+                    <ol className="px-4 pt-1.5 pb-1">
+                      {(allLog ? log : log.slice(0, LOG_SHOWN)).map((l, i, shown) => {
+                        const first = i === 0;
+                        const last = i === shown.length - 1 && (allLog || log.length <= LOG_SHOWN);
+                        return (
+                          <li key={i} className="relative flex gap-3">
+                            {/* The rail joins the dots: none above the newest, none below the oldest shown. */}
+                            <span aria-hidden className="relative w-3 shrink-0">
+                              {!first && <span className="absolute top-0 left-1/2 h-4 w-px -translate-x-1/2 bg-line-strong" />}
+                              {!last && <span className="absolute top-4 bottom-0 left-1/2 w-px -translate-x-1/2 bg-line-strong" />}
+                              <span className={cx("absolute top-[13px] left-1/2 size-2 -translate-x-1/2 rounded-full", first ? "bg-accent" : "bg-ink-3 opacity-60")} />
+                            </span>
+                            <div className="min-w-0 flex-1 py-2">
+                              {(l.when || l.source) && (
+                                <div className={cx("flex min-w-0 items-baseline gap-2 text-[11.5px]", first ? "text-accent-ink" : "text-ink-3")}>
+                                  {l.when && <span className="shrink-0 font-semibold tabular-nums">{shortWhen(l.when)}</span>}
+                                  {l.source && <span className="truncate">{l.source}</span>}
+                                </div>
+                              )}
+                              <p className="mt-0.5 text-[13px] leading-relaxed text-ink">{l.text}</p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                    {log.length > LOG_SHOWN && <MoreRow open={allLog} label={`显示全部 ${log.length} 条`} onClick={() => setAllLog((x) => !x)} />}
+                  </Card>
+                </section>
+              )}
+
+              {prof && (
+                <section>
+                  <SectionTitle title="档案" />
+                  <Card>
+                    <div className="px-4 py-3.5">
+                      <Markdown text={prof} small />
+                    </div>
+                  </Card>
+                </section>
+              )}
+
+              {into && (
+                <section>
+                  <Card>
+                    <a
+                      href={href({ name: "kb", kind: "projects", id: into })}
+                      onClick={(ev) => onPlainClick(ev, () => onOpen({ kind: "projects", id: into, name: into, relevance: 0 }))}
+                      className="flex items-center gap-2 whitespace-nowrap px-4 py-2.5 text-[13px] font-medium text-accent-ink hover:bg-hover"
+                    >
+                      <Icon name="link" size={14} />
+                      已合并到另一个项目
+                      <span className="flex-1" />
+                      <Icon name="chevronRight" size={12} stroke={2.2} className="text-ink-3" />
+                    </a>
+                  </Card>
+                  <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">和另一个项目是同一件事，时间线、会话和人都并过去了。这里保留合并前的样子。</p>
+                </section>
+              )}
+
+              {moments.length > 0 && (
+                <section>
+                  <SectionTitle title="相关removed" count={moments.length} />
+                  <Card>
+                    {(allMoments ? moments : moments.slice(0, LINKS_SHOWN)).map((m) => (
+                      <button key={m.id} type="button" onClick={() => setMoment(m)} className="block w-full px-4 py-2.5 text-left transition-colors hover:bg-hover">
+                        <span className="flex items-center gap-2 text-[11.5px]">
+                          <span className="truncate font-semibold text-ink">{m.author}</span>
+                          {ago(m.at) && <span className="shrink-0 text-ink-3">{ago(m.at)}</span>}
+                          <span className="flex-1" />
+                          {m.comments > 0 && (
+                            <span className="flex shrink-0 items-center gap-1 text-ink-3 tabular-nums" aria-label={`${m.comments} 条评论`}>
+                              <Icon name="chat" size={12} />
+                              {m.comments}
+                            </span>
+                          )}
+                        </span>
+                        {m.note && <span className="mt-0.5 block truncate text-[12.5px] font-medium text-accent-ink">{m.note}</span>}
+                        <span className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-ink-2">{m.text}</span>
+                      </button>
+                    ))}
+                    {moments.length > LINKS_SHOWN && <MoreRow open={allMoments} label={`全部 ${moments.length} 条`} onClick={() => setAllMoments((x) => !x)} />}
+                  </Card>
+                </section>
+              )}
+
+              {links.map((g) => {
+                const open = openKinds.has(g.kind);
+                return (
+                  <section key={g.kind}>
+                    <SectionTitle title={g.title} count={g.items.length} />
+                    <Card>
+                      {(open ? g.items : g.items.slice(0, LINKS_SHOWN)).map((x) => (
+                        <a
+                          key={`${x.kind}/${x.id}`}
+                          href={href({ name: "kb", kind: x.kind, id: x.id })}
+                          onClick={(ev) => onPlainClick(ev, () => onOpen(x))}
+                          className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-hover"
+                        >
+                          <Tile entry={x} size={30} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-medium text-ink">{x.name}</span>
+                            {x.one_line && <span className="block truncate text-[12px] text-ink-3">{x.one_line}</span>}
+                          </span>
+                          {x.importance && (
+                            <TonePill tone={importanceTone(x.importance)} strong>
+                              {x.importance}
+                            </TonePill>
+                          )}
+                          <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />
+                        </a>
+                      ))}
+                      {g.items.length > LINKS_SHOWN && (
+                        <MoreRow
+                          open={open}
+                          label={`全部 ${g.items.length} 个`}
+                          onClick={() =>
+                            setOpenKinds((s) => {
+                              const n = new Set(s);
+                              if (n.has(g.kind)) n.delete(g.kind);
+                              else n.add(g.kind);
+                              return n;
+                            })
+                          }
+                        />
+                      )}
+                    </Card>
+                  </section>
+                );
+              })}
+
+              {dirs.length > 0 && <Dirs dirs={dirs} />}
+
+              {recent.length > 0 && (
+                <section>
+                  <Card>
+                    <button type="button" onClick={() => setShowRecent((x) => !x)} aria-expanded={showRecent} className="flex h-10 w-full items-center gap-2 px-4 text-left transition-colors hover:bg-hover">
+                      <Icon name="chat" size={14} className="text-ink-3" />
+                      <span className="flex-1 whitespace-nowrap text-[13px] text-ink">最近 7 天的消息</span>
+                      <span className="text-[12px] text-ink-3 tabular-nums">{recent.reduce((n, x) => n + x.messages.length, 0)}</span>
+                      <Icon name="chevronRight" size={12} stroke={2.2} className={cx("text-ink-3 transition-transform duration-200", showRecent && "rotate-90")} />
+                    </button>
+                    <Collapse open={showRecent}>
+                      {showRecent && (
+                        <div className="border-t border-line px-4 pt-2 pb-3">
+                          {recent.map((g, i) => (
+                            <div key={g.day ?? i} className="mt-2 first:mt-0">
+                              {g.day && (
+                                <div className="mb-1 flex items-center gap-2">
+                                  <span className="text-[11.5px] font-semibold text-ink-3">{dayTitle(g.day)}</span>
+                                  <span className="flex-1" />
+                                  <button type="button" onClick={() => setDay({ day: g.day! })} className="whitespace-nowrap rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-medium text-accent-ink hover:bg-hover">
+                                    看这一天
+                                  </button>
+                                </div>
+                              )}
+                              <div className="flex flex-col gap-2">
+                                {g.messages.map((m, j) => (
+                                  <MessageView key={j} m={m} />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Collapse>
+                  </Card>
+                </section>
+              )}
+
+              <section>
+                <SectionTitle title="目录" />
+                <Card>
+                  <div className="flex items-center gap-2 px-4 py-2">
+                    <span className="min-w-0 flex-1 font-mono text-[12px] break-all text-ink-2 select-all">{d.path}</span>
+                    <IconButton icon="copy" label="拷贝目录" onClick={() => void copyText(d.path)} />
+                  </div>
+                </Card>
+                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">Jarvis、AI 分身和各台电脑上的 Agent 都能直接读这个目录。</p>
+              </section>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {d && <TagEditor entry={e} open={editing} onClose={() => setEditing(false)} onSaved={onSaved} />}
+      {d?.kind === "chats" && <DayDialog chat={d.id} chatName={e.name} day={day?.day ?? null} focus={day?.focus} query={day?.query} onClose={() => setDay(null)} />}
+      <MomentDialog moment={moment} onClose={() => setMoment(null)} />
+    </div>
+  );
+}
+
+/** Where the search is in this entry: each place with what is around it; a message opens its day at it. */
+function Matches({ matches, query, all, onToggle, onOpenDay }: { matches: KBMatch[]; query: string; all: boolean; onToggle: () => void; onOpenDay?: (m: KBMatch) => void }) {
+  const shown = all ? matches : matches.slice(0, MATCHES_SHOWN);
+  return (
+    <section>
+      <SectionTitle title={`搜索「${query}」`} count={matches.length >= 40 ? "40+" : matches.length} />
+      <Card>
+        {!matches.length && <p className="px-4 py-2.5 text-[12.5px] text-ink-2">「{query}」在名字或资料里</p>}
+        {shown.map((m) => {
+          const v = hitView(m);
+          const body = (
+            <>
+              {/* a message shows its own time below */}
+              <span className="block truncate text-[11px] text-ink-3">{m.day ? `聊天记录 · ${dayTitle(m.day)}` : v.source}</span>
+              {m.day ? (
+                <span className="mt-0.5 flex flex-col gap-0.5">
+                  {m.before?.length ? <span className="truncate text-[11.5px] text-ink-3">{line(m.before[m.before.length - 1])}</span> : null}
+                  <MessageView m={parseMessageLine(m.line)} query={query} clamp />
+                  {m.after?.length ? <span className="truncate text-[11.5px] text-ink-3">{line(m.after[0])}</span> : null}
+                </span>
+              ) : (
+                <span className="mt-0.5 line-clamp-4 text-[13px] leading-relaxed text-ink-2">
+                  <Marked text={v.text} query={query} />
+                </span>
+              )}
+            </>
+          );
+          return m.day && onOpenDay ? (
+            <button key={`${m.path}#${m.n}`} type="button" onClick={() => onOpenDay(m)} className="block w-full px-4 py-2.5 text-left transition-colors hover:bg-hover">
+              {body}
+            </button>
+          ) : (
+            <div key={`${m.path}#${m.n}`} className="px-4 py-2.5">
+              {body}
+            </div>
+          );
+        })}
+        {matches.length > MATCHES_SHOWN && <MoreRow open={all} label={`显示全部 ${matches.length} 处`} onClick={onToggle} />}
+      </Card>
+    </section>
+  );
+}
+
+function line(raw: string) {
+  const m = parseMessageLine(raw);
+  return m.sender ? `${m.sender}：${m.text}` : m.text;
+}
+
+/** The Agents working in the project's code directories, live from the store when it has them. */
+function Agents({ agents }: { agents: Session[] }) {
+  const sessions = useStore((s) => s.sessions);
+  const machines = useStore((s) => s.machines);
+  const live = agents.map((a) => (sessions[a.machine_id] ?? []).find((x) => x.session_id === a.session_id) ?? a);
+  return (
+    <section>
+      <SectionTitle title="在做这个项目的 Agent" count={live.length} />
+      <Card>
+        {live.map((s) => {
+          const to = { name: "session" as const, mid: s.machine_id, sid: s.session_id };
+          const st = stateOf(s);
+          return (
+            <a key={`${s.machine_id}/${s.session_id}`} href={href(to)} onClick={(ev) => onLinkClick(ev, to)} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-hover">
+              <span className="flex w-3 shrink-0 justify-center">
+                <StatusDot state={st} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-medium text-ink">{sessionTitle(s)}</span>
+                <span className="block truncate text-[11.5px] text-ink-3">
+                  {[machineWithHub(s.machine_id, machines), s.space_name, tabLabel(s)].filter(Boolean).join(" › ")}
+                  {s.last_text ? ` · ${s.last_text}` : ""}
+                </span>
+              </span>
+              <StatePill state={st} />
+            </a>
+          );
+        })}
+      </Card>
+    </section>
+  );
+}
+
+function Dirs({ dirs }: { dirs: { machine: string; path: string }[] }) {
+  const machines = useStore((s) => s.machines);
+  return (
+    <section>
+      <SectionTitle title="代码目录" count={dirs.length} />
+      <Card>
+        {dirs.map((x) => (
+          <div key={`${x.machine}:${x.path}`} className="flex items-center gap-2.5 px-4 py-2">
+            <Icon name="folder" size={14} className="shrink-0 text-ink-3" />
+            <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink" title={x.path}>
+              {shortPath(x.path)}
+            </span>
+            {x.machine && <span className="shrink-0 whitespace-nowrap text-[11.5px] text-ink-3">{machineWithHub(x.machine, machines)}</span>}
+            <IconButton icon="copy" label="拷贝路径" size={24} iconSize={13} onClick={() => void copyText(x.path)} />
+          </div>
+        ))}
+      </Card>
+    </section>
+  );
+}

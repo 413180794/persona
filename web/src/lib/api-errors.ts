@@ -1,0 +1,70 @@
+// A model API error in a chat (iOS APIErrorInfo): read from the text Claude Code writes when it gives up
+// ("API Error: 502 …", an answer) or from the hub's notice ("API 错误：Overloaded（重试 10 次后放弃）"). What a person
+// needs first is in front: why, in words, the status code, and whether it is likely to pass by itself.
+
+export interface APIErrorInfo {
+  status?: number;
+  /** One line, in words. */
+  reason: string;
+  /** Likely to pass if tried again later (5xx, rate limits, timeouts); false when someone has to act (login, a bad
+   *  request); undefined when the text does not say. */
+  transient?: boolean;
+  requestId?: string;
+  session?: string;
+  raw: string;
+}
+
+/** Two errors are "the same" for folding when these match. */
+export function errorSignature(e: APIErrorInfo): string {
+  return `${e.status ?? 0}|${e.reason}`;
+}
+
+const STATUS_RE = /^\s*(\d{3})\b/;
+const REQUEST_RE = /\b(?:req(?:uest)?(?:[ _-]?id)?)[:=\s"]+([A-Za-z0-9_-]{8,})/i;
+const SESSION_RE = /\bsession(?:[ _-]?id)?[:=\s"]+([A-Za-z0-9_:-]{6,})/i;
+
+export function parseAPIError(text?: string): APIErrorInfo | null {
+  const t = (text ?? "").trim();
+  let body: string;
+  if (t.startsWith("API Error:")) body = t.slice("API Error:".length);
+  else if (t.startsWith("API 错误：")) body = t.slice("API 错误：".length);
+  else return null;
+  const m = STATUS_RE.exec(body);
+  const status = m ? Number(m[1]) : undefined;
+  const [reason, transient] = explain(body.toLowerCase(), status);
+  return {
+    status,
+    reason,
+    transient,
+    requestId: REQUEST_RE.exec(body)?.[1],
+    session: SESSION_RE.exec(body)?.[1],
+    raw: t,
+  };
+}
+
+function explain(s: string, status?: number): [string, boolean | undefined] {
+  if (s.includes("no available gpu")) return ["推理服务暂时没有可用的 GPU", true];
+  if (s.includes("overloaded") || status === 529) return ["模型服务太忙，过载了", true];
+  if (status === 401 || status === 403 || s.includes("authentication") || s.includes("/login") || s.includes("login expire")) {
+    return ["登录过期了，要在电脑上重新 /login", false];
+  }
+  if (status === 429 || s.includes("rate limit") || s.includes("rate_limit")) return ["请求太多，被限流了", true];
+  if (s.includes("timed out") || s.includes("timeout")) return ["请求超时了", true];
+  if (s.includes("connection")) return ["连不上模型服务", true];
+  if (status === 400) return ["请求被拒绝：参数或上下文有问题", false];
+  if (status !== undefined && status >= 500 && status < 600) return ["模型服务暂时不可用", true];
+  const temporary = s.includes("temporary") || s.includes("try again");
+  return ["模型请求失败", temporary ? true : undefined];
+}
+
+/** Whether the card's 重试 can help: a login or a bad request is not fixed by trying again. */
+export function retryable(e: APIErrorInfo): boolean {
+  return e.transient !== false;
+}
+
+const RETRIES = new Set(["继续", "重试", "再试一次", "continue", "retry", "go on"]);
+
+/** A message that only asks to try again ("继续"): between two of the same error it folds into the card. */
+export function isRetryText(text: string): boolean {
+  return RETRIES.has(text.trim().toLowerCase());
+}

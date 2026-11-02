@@ -1,12 +1,19 @@
-// Beautiful UI's Prompt Bar, wired to a session: multi-line input, / commands, image attachments (paste, drop,
-// pick), files uploaded to the session's machine, send — and stop while the agent works and nothing is typed.
+// Beautiful UI's Prompt Bar, wired to a session: multi-line input, / commands, @ files and sessions, image attachments
+// (paste, drop, pick; click one to mark it up), files uploaded to the session's machine, send — and stop while the
+// agent works and nothing is typed. Quotes, edits and edited images from the chat arrive as draft events (drafts.ts).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api, enc, errorText } from "../../lib/api";
 import { uuid } from "../../lib/format";
 import { imagePayload, MAX_IMAGE, quotePath } from "../../lib/attachments";
+import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
+import { applyDraft, onDraftEvent, replaceNeedsConfirm, type DraftImage } from "../../lib/drafts";
+import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { cx, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { ContextChips } from "../link/ContextChips";
+import { ImageEditor } from "./ImageEditor";
+import { MentionMenu, useMentionRows, type MentionRow, type MentionSource } from "./MentionMenu";
 
 export interface Attachment {
   id: string;
@@ -47,6 +54,13 @@ async function readImage(file: File): Promise<Attachment> {
   return { ...await imagePayload(file), id: uuid(), name: file.name || "image.png", url: URL.createObjectURL(file) };
 }
 
+function fromDraftImage(img: DraftImage, id = uuid()): Attachment {
+  const bin = atob(img.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { ...img, id, url: URL.createObjectURL(new Blob([bytes], { type: img.mime })) };
+}
+
 export function Composer({
   draftKey,
   placeholder,
@@ -59,6 +73,7 @@ export function Composer({
   autoFocus,
   footer,
   suggestion,
+  mention,
 }: {
   draftKey: string;
   placeholder: string;
@@ -71,6 +86,8 @@ export function Composer({
   autoFocus?: boolean;
   footer?: React.ReactNode;
   suggestion?: string;
+  /** Turns on the @ menu: the chat's files and folder, and other sessions. */
+  mention?: MentionSource;
 }) {
   const [draft, setDraft] = useState(() => localStorage.getItem(`draft:${draftKey}`) ?? "");
   const [atts, setAtts] = useState<Attachment[]>([]);
@@ -80,9 +97,21 @@ export function Composer({
   const [active, setActive] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [rowBox, setRowBox] = useState<{ top: number; height: number } | null>(null);
+  const [caret, setCaret] = useState(0);
+  const [focused, setFocused] = useState(false);
+  const [mActive, setMActive] = useState(0);
+  const [editing, setEditing] = useState<Attachment | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // text picked in the link panel waits here (lib/links.ts), and 「AI 修改」 sends through this composer
+  const contexts = useContexts(draftKey);
+  const sendNow = useRef<(text: string) => Promise<boolean>>(async () => false);
+  sendNow.current = async (text) => (disabled ? false : onSend({ text, images: [] }));
+  const canTake = useRef(!disabled);
+  canTake.current = !disabled;
+  const handle = useMemo<ComposerHandle>(() => ({ key: draftKey, send: (text) => sendNow.current(text), focus: () => input.current?.focus(), ready: () => canTake.current }), [draftKey]);
+  useEffect(() => registerComposer(handle), [handle]);
 
   // a different conversation: its own draft
   useEffect(() => {
@@ -90,6 +119,33 @@ export function Composer({
     setAtts([]);
     if (autoFocus) setTimeout(() => input.current?.focus(), 0);
   }, [draftKey, autoFocus]);
+
+  // 引用 / 编辑 / a queued message pulled back / an edited picture, from the chat (lib/drafts.ts)
+  const draftNow = useRef(draft);
+  draftNow.current = draft;
+  useEffect(
+    () =>
+      onDraftEvent(draftKey, (e) => {
+        if (!canTake.current) return;
+        if (e.type === "image") {
+          setAtts((cur) => [...cur, fromDraftImage(e.image)]);
+          input.current?.focus();
+          return;
+        }
+        if (e.type === "replace" && replaceNeedsConfirm(draftNow.current, e.text) && !confirm("输入框里有没发出去的字，换成这条消息？")) return;
+        const next = applyDraft(draftNow.current, e);
+        setDraft(next);
+        setDismissed(false);
+        requestAnimationFrame(() => {
+          const el = input.current;
+          if (!el) return;
+          el.focus();
+          el.setSelectionRange(next.length, next.length);
+          setCaret(next.length);
+        });
+      }),
+    [draftKey],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -115,6 +171,53 @@ export function Composer({
     const el = rowRefs.current[active];
     setRowBox(el ? { top: el.offsetTop, height: el.offsetHeight } : null);
   }, [active, rows.length]);
+
+  // @: the token just before the caret (lib/mentions.ts)
+  const token = mention && focused && !dismissed && query === null && caret <= draft.length ? mentionAt(draft, caret) : null;
+  const { rows: mRows, loading: mLoading } = useMentionRows(token, mention, machineId);
+  useEffect(() => setMActive(0), [token?.query]);
+  const mOpen = Boolean(token);
+
+  const trackCaret = () => {
+    const el = input.current;
+    if (el) setCaret(el.selectionStart);
+  };
+
+  const pickMention = (r: MentionRow) => {
+    if (!token) return;
+    if (r.kind === "session") {
+      // a session goes with the message as a quote, not as text (PromptItems.quote)
+      const q = sessionQuote(r.session);
+      addContext(draftKey, newContext("context", q.title, q.url, q.text));
+      const out = replaceToken(draft, token, "");
+      setDraft(out.text);
+      setCaret(out.caret);
+      requestAnimationFrame(() => input.current?.setSelectionRange(out.caret, out.caret));
+      return;
+    }
+    const out = replaceToken(draft, token, r.insert);
+    setDraft(out.text);
+    setCaret(out.caret);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(out.caret, out.caret);
+    });
+  };
+
+  const typeAt = () => {
+    const el = input.current;
+    const at = el ? Math.min(el.selectionStart, draft.length) : draft.length;
+    const before = draft.slice(0, at);
+    const ins = before && !/\s$/.test(before) ? " @" : "@";
+    const next = before + ins + draft.slice(at);
+    setDraft(next);
+    setDismissed(false);
+    setCaret(at + ins.length);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(at + ins.length, at + ins.length);
+    });
+  };
 
   const addFiles = async (files: FileList | File[]) => {
     if (disabled) return;
@@ -155,19 +258,22 @@ export function Composer({
     }
   };
 
-  const canSend = (draft.trim().length > 0 || atts.length > 0) && !sending && !disabled;
-  const showStop = working && !draft.trim() && !atts.length && onStop;
+  const canSend = (draft.trim().length > 0 || atts.length > 0 || contexts.length > 0) && !sending && !disabled;
+  const showStop = working && !draft.trim() && !atts.length && !contexts.length && onStop;
 
   const submit = async (text = draft) => {
-    if (sending || disabled || (!text.trim() && !atts.length)) return;
+    const refs = getContexts(draftKey);
+    if (sending || disabled || (!text.trim() && !atts.length && !refs.length)) return;
     setSending(true);
-    const ok = await onSend({ text: text.trim(), images: atts.map((a) => ({ mime: a.mime, data: a.data })) });
+    // picked contexts ride in front as <jarvis-context> tags (docs/protocol.md「消息里的标签」)
+    const ok = await onSend({ text: withContexts(refs, text, atts.length > 0), images: atts.map((a) => ({ mime: a.mime, data: a.data })) });
     setSending(false);
     if (ok) {
       setDraft("");
       atts.forEach((a) => URL.revokeObjectURL(a.url));
       setAtts([]);
       localStorage.removeItem(`draft:${draftKey}`);
+      refs.forEach((r) => removeContext(draftKey, r.id));
     }
     input.current?.focus();
   };
@@ -223,15 +329,20 @@ export function Composer({
         </div>
       )}
 
+      {mOpen && (
+        <MentionMenu rows={mRows} active={Math.min(mActive, Math.max(mRows.length - 1, 0))} loading={mLoading} browsing={Boolean(token && browseTarget(token.query, mention?.cwd))} onHover={setMActive} onPick={pickMention} />
+      )}
+
       <div
         className={cx(
           "relative flex flex-col gap-1.5 rounded-[14px] border bg-surface p-1.5 shadow-card transition-[border-color,box-shadow] duration-150 focus-within:border-line-strong",
           dragging ? "border-accent shadow-[0_0_0_3px_var(--accent-tint)]" : "border-line",
         )}
       >
+        <ContextChips draftKey={draftKey} />
         {atts.length > 0 && (
           <div className="px-0.5 pt-0.5">
-            <AttachmentTray attachments={atts} onRemove={(id) => {
+            <AttachmentTray attachments={atts} onOpen={(id) => setEditing(atts.find((a) => a.id === id) ?? null)} onRemove={(id) => {
               const att = atts.find((a) => a.id === id);
               if (att) URL.revokeObjectURL(att.url);
               setAtts((cur) => cur.filter((a) => a.id !== id));
@@ -243,10 +354,18 @@ export function Composer({
           rows={1}
           value={draft}
           disabled={disabled}
+          onFocus={() => {
+            activateComposer(handle);
+            setFocused(true);
+          }}
+          onBlur={() => setFocused(false)}
           onChange={(e) => {
             setDraft(e.target.value);
             setDismissed(false);
+            setCaret(e.target.selectionStart);
           }}
+          onSelect={trackCaret}
+          onClick={trackCaret}
           onPaste={(e) => {
             const files = Array.from(e.clipboardData.files);
             if (files.length) {
@@ -256,6 +375,24 @@ export function Composer({
           }}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+            if (mOpen) {
+              if ((e.key === "ArrowDown" || e.key === "ArrowUp") && mRows.length) {
+                e.preventDefault();
+                setMActive((a) => (a + (e.key === "ArrowDown" ? 1 : mRows.length - 1)) % mRows.length);
+                return;
+              }
+              if ((e.key === "Enter" || e.key === "Tab") && mRows.length) {
+                e.preventDefault();
+                pickMention(mRows[Math.min(mActive, mRows.length - 1)]);
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                setDismissed(true);
+                return;
+              }
+            }
             if (rows.length) {
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
@@ -298,6 +435,18 @@ export function Composer({
           >
             {uploading ? <Spinner /> : <Icon name="plus" size={16} stroke={2} />}
           </button>
+          {mention && (
+            <button
+              type="button"
+              aria-label="引用文件或会话"
+              title="引用文件或会话（@）"
+              disabled={disabled}
+              onClick={typeAt}
+              className="flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+            >
+              <Icon name="at" size={15} />
+            </button>
+          )}
           {commands.length > 0 && (
           <button
             type="button"
@@ -341,6 +490,18 @@ export function Composer({
           )}
         </div>
       </div>
+      {editing && (
+        <ImageEditor
+          src={editing.url}
+          onCancel={() => setEditing(null)}
+          onDone={(img) => {
+            const old = editing;
+            setEditing(null);
+            setAtts((cur) => cur.map((a) => (a.id === old.id ? fromDraftImage(img, a.id) : a)));
+            URL.revokeObjectURL(old.url);
+          }}
+        />
+      )}
     </div>
   );
 }

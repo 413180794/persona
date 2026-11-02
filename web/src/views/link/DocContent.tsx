@@ -1,0 +1,452 @@
+// How a Feishu document reads in the panel: the Markdown export through the page's own Markdown look (prose-j), or
+// the JSON tree drawn as the same HTML (FeishuDocRenderer: the blocks Feishu documents are made of; the rare ones
+// say so and point at Feishu). Content colors are left out: the page only uses its own tokens.
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { bytes } from "../../lib/format";
+import { clickLink, linkHref, prefetchLink } from "../../lib/links";
+import { linkify, markdownComponents, markdownUrl } from "../../ui/Markdown";
+import { Icon } from "../../ui/icons";
+import { attr, BR, mediaURL, num, orderedNumbers, plainText, type DocNode } from "./feishu-doc";
+
+// ── Markdown ──
+
+interface MdNode {
+  type: string;
+  value?: string;
+  children?: MdNode[];
+}
+
+// The export's <br> (cells, mostly) arrive as BR; markdown here renders no raw HTML, so they become real breaks.
+function remarkBreaks() {
+  const walk = (node: MdNode) => {
+    if (!node.children) return;
+    const out: MdNode[] = [];
+    for (const c of node.children) {
+      if (c.type === "text" && c.value?.includes(BR)) {
+        c.value.split(BR).forEach((part, i) => {
+          if (i) out.push({ type: "break" });
+          if (part) out.push({ type: "text", value: part });
+        });
+      } else {
+        walk(c);
+        out.push(c);
+      }
+    }
+    node.children = out;
+  };
+  return (tree: MdNode) => walk(tree);
+}
+
+export function DocMarkdown({ markdown }: { markdown: string }) {
+  return (
+    <div className="prose-j">
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents} urlTransform={markdownUrl}>
+        {linkify(markdown)}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+// ── JSON tree ──
+
+export function DocTree({ doc }: { doc: DocNode }) {
+  return (
+    <div className="prose-j">
+      <Blocks nodes={doc.content ?? []} />
+    </div>
+  );
+}
+
+function Blocks({ nodes }: { nodes: DocNode[] }) {
+  const numbers = orderedNumbers(nodes);
+  return (
+    <>
+      {nodes.map((n, i) => (
+        <Block key={i} node={n} number={numbers[i]} />
+      ))}
+    </>
+  );
+}
+
+const INLINE = new Set(["text", "mention", "hardBreak", "equation", "statusTag"]);
+
+/** A container whose only child is a paragraph reads as that paragraph's text (list items, table cells). */
+function Tight({ nodes }: { nodes: DocNode[] }) {
+  if (nodes.length === 1 && nodes[0].type === "paragraph") return <Inline nodes={nodes[0].content ?? []} />;
+  return <Blocks nodes={nodes} />;
+}
+
+function align(n: DocNode): React.CSSProperties | undefined {
+  const a = attr(n, "align");
+  return a === "center" || a === "right" ? { textAlign: a } : undefined;
+}
+
+function Block({ node, number }: { node: DocNode; number?: number }) {
+  const kids = node.content ?? [];
+  switch (node.type) {
+    case "paragraph":
+      return kids.length ? (
+        <p style={align(node)}>
+          <Inline nodes={kids} />
+        </p>
+      ) : (
+        <div aria-hidden className="h-2" />
+      );
+    case "heading": {
+      const level = num(node, "level") ?? 1;
+      const Tag = (level <= 1 ? "h1" : level === 2 ? "h2" : level === 3 ? "h3" : "h4") as "h1" | "h2" | "h3" | "h4";
+      return (
+        <Tag style={align(node)}>
+          <Inline nodes={kids} />
+        </Tag>
+      );
+    }
+    case "bulletList":
+      return (
+        <ul>
+          {kids.map((item, i) => (
+            <ListItem key={i} item={item} />
+          ))}
+        </ul>
+      );
+    case "orderedList":
+      return (
+        <ol start={number ?? 1}>
+          {kids.map((item, i) => (
+            <ListItem key={i} item={item} />
+          ))}
+        </ol>
+      );
+    case "taskList":
+      return (
+        <ul className="list-none! pl-0.5!">
+          {kids.map((item, i) => (
+            <ListItem key={i} item={item} task />
+          ))}
+        </ul>
+      );
+    case "listItem":
+    case "mindnoteItem":
+      return (
+        <ul>
+          <ListItem item={node} />
+        </ul>
+      );
+    case "blockquote":
+      return (
+        <blockquote>
+          <Blocks nodes={kids} />
+        </blockquote>
+      );
+    case "callout":
+      return (
+        <div className="my-3 flex gap-2.5 rounded-card bg-inset px-3 py-2.5 shadow-hairline">
+          {attr(node, "emoji") && <span className="shrink-0 text-[16px] leading-[1.6]">{attr(node, "emoji")}</span>}
+          <div className="min-w-0 flex-1 [&>:first-child]:mt-0 [&>:last-child]:mb-0">
+            <Blocks nodes={kids} />
+          </div>
+        </div>
+      );
+    case "columns":
+      return (
+        <div className="flex flex-col gap-1">
+          {kids.map((col, i) => (
+            <div key={i}>
+              <Blocks nodes={col.content ?? []} />
+            </div>
+          ))}
+        </div>
+      );
+    case "column":
+    case "synced":
+    case "agenda":
+    case "agendaContent":
+    case "doc":
+    case "mindnote":
+    case "slideNotes":
+      return <Blocks nodes={kids} />;
+    case "agendaItem":
+      return (
+        <div className="my-3 rounded-card bg-inset px-3 py-2 shadow-hairline [&>:first-child]:mt-0 [&>:last-child]:mb-0">
+          <Blocks nodes={kids} />
+        </div>
+      );
+    case "agendaTitle":
+      return (
+        <h4>
+          <Inline nodes={kids} />
+        </h4>
+      );
+    case "horizontalRule":
+      return <hr />;
+    case "codeBlock":
+    case "mermaid":
+    case "plantuml": {
+      const lang = node.type === "mermaid" ? "Mermaid 图" : node.type === "plantuml" ? "PlantUML 图" : attr(node, "language");
+      return (
+        <div>
+          {lang && lang.toLowerCase() !== "plaintext" && lang.toLowerCase() !== "text" && <div className="mt-3 -mb-1 text-[11.5px] text-ink-3">{lang}</div>}
+          <pre>
+            <code>{plainText(node)}</code>
+          </pre>
+        </div>
+      );
+    }
+    case "table":
+      return <Table node={node} />;
+    case "image":
+      return <Image node={node} />;
+    case "missingImage":
+      return <Placeholder text={attr(node, "caption") || "图片无法显示"} />;
+    case "bookmark":
+      return <LinkCard href={attr(node, "href")} title={attr(node, "title") || attr(node, "href") || "链接"} subtitle={attr(node, "summary")} />;
+    case "embedLink": {
+      const kind = attr(node, "kind") ?? "";
+      const label = { sheet: "电子表格", bitable: "多维表格", base: "多维表格", mindnote: "思维笔记", chat: "群聊", calendarEvent: "日程" }[kind] ?? "内嵌内容";
+      const href = attr(node, "href");
+      return <LinkCard href={href?.startsWith("http") ? href : undefined} title={attr(node, "title") || label} subtitle={label} />;
+    }
+    case "file": {
+      const token = attr(node, "token");
+      const size = num(node, "size");
+      return (
+        <LinkCard
+          href={token ? mediaURL(`/api/v1/lark/raw/documents/drive/files/${encodeURIComponent(token)}/download`) : attr(node, "sourceUrl")}
+          title={attr(node, "name") || "文件"}
+          subtitle={size ? bytes(size) : "文件"}
+          icon="clip"
+          download={Boolean(token)}
+        />
+      );
+    }
+    case "docTask": {
+      const done = node.attrs?.checked === true || node.attrs?.checked === "true";
+      return (
+        <p className="flex items-start gap-2">
+          <input type="checkbox" checked={done} readOnly className="mt-[0.45em]" />
+          <span className={done ? "text-ink-3 line-through" : undefined}>{attr(node, "summary") || plainText(node)}</span>
+        </p>
+      );
+    }
+    case "mindnoteLabel":
+      return (
+        <p>
+          <Inline nodes={kids} />
+        </p>
+      );
+    case "slide":
+      return (
+        <div className="my-3 rounded-card bg-inset px-3.5 py-3 shadow-hairline [&>:last-child]:mb-0">
+          <div className="text-[11.5px] font-medium text-ink-3">第 {num(node, "index") ?? 0} 页</div>
+          <Blocks nodes={kids} />
+        </div>
+      );
+    case "toc":
+    case "readReceipt":
+    case "widgetEmpty":
+      return null;
+    case "unsupported":
+      return <Placeholder text={attr(node, "kind") === "isv" ? "第三方小组件，在飞书中查看" : "这个内容块暂不支持，在飞书中查看"} href={attr(node, "sourceUrl")} />;
+    default:
+      if (!kids.length) return <Placeholder text="这个内容块暂不支持，在飞书中查看" href={attr(node, "sourceUrl") ?? attr(node, "href")} />;
+      if (kids.every((k) => INLINE.has(k.type)))
+        return (
+          <p>
+            <Inline nodes={kids} />
+          </p>
+        );
+      return <Blocks nodes={kids} />;
+  }
+}
+
+function ListItem({ item, task }: { item: DocNode; task?: boolean }) {
+  const kids = item.content ?? [];
+  const todo = task || item.attrs?.todo === true || item.attrs?.todo === "true";
+  const done = item.attrs?.checked === true || item.attrs?.checked === "true";
+  if (!todo) {
+    return (
+      <li>
+        <Tight nodes={kids} />
+      </li>
+    );
+  }
+  return (
+    <li className="flex list-none items-start gap-2">
+      <input type="checkbox" checked={done} readOnly className="mt-[0.45em]" />
+      <div className={done ? "min-w-0 flex-1 text-ink-3 line-through" : "min-w-0 flex-1"}>
+        <Tight nodes={kids} />
+      </div>
+    </li>
+  );
+}
+
+function Table({ node }: { node: DocNode }) {
+  const rows = (node.content ?? []).filter((r) => r.type === "tableRow");
+  return (
+    <table>
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={i}>
+            {(r.content ?? [])
+              .filter((c) => c.type === "tableCell" || c.type === "tableHeader")
+              .map((c, j) => {
+                const Cell = c.type === "tableHeader" ? "th" : "td";
+                return (
+                  <Cell key={j} colSpan={num(c, "colspan") ?? undefined} rowSpan={num(c, "rowspan") ?? undefined}>
+                    <Tight nodes={c.content ?? []} />
+                  </Cell>
+                );
+              })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function Image({ node }: { node: DocNode }) {
+  const src = attr(node, "src");
+  if (!src) return <Placeholder text="图片无法显示" />;
+  const w = num(node, "width") ?? num(node, "displayWidth");
+  const h = num(node, "height");
+  const caption = attr(node, "caption");
+  return (
+    <figure className="my-3">
+      <a href={mediaURL(src)} target="_blank" rel="noreferrer noopener">
+        <img
+          src={mediaURL(src)}
+          alt={attr(node, "alt") || caption || "图片"}
+          loading="lazy"
+          width={w}
+          height={h}
+          className="h-auto bg-inset"
+          style={w && h ? { aspectRatio: `${w} / ${h}` } : undefined}
+        />
+      </a>
+      {caption && <figcaption className="mt-1 text-center text-[12px] text-ink-3">{caption}</figcaption>}
+    </figure>
+  );
+}
+
+function LinkCard({ href, title, subtitle, icon = "link", download }: { href?: string; title: string; subtitle?: string; icon?: "link" | "clip"; download?: boolean }) {
+  const body = (
+    <>
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-[8px] bg-field text-ink-2">
+        <Icon name={icon} size={14} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-ink">{title}</span>
+        {subtitle && <span className="block truncate text-[11.5px] text-ink-3">{subtitle}</span>}
+      </span>
+    </>
+  );
+  const cls = "my-3 flex items-center gap-2.5 rounded-card bg-surface px-3 py-2 no-underline! shadow-card";
+  if (!href) return <div className={cls}>{body}</div>;
+  return (
+    <a
+      href={linkHref(href)}
+      target="_blank"
+      rel="noreferrer noopener"
+      download={download || undefined}
+      onClick={(e) => (download ? undefined : clickLink(e, href, title))}
+      onPointerEnter={() => prefetchLink(href)}
+      className={`${cls} transition-colors hover:bg-hover`}
+    >
+      {body}
+    </a>
+  );
+}
+
+function Placeholder({ text, href }: { text: string; href?: string }) {
+  return (
+    <div className="my-3 flex items-center gap-2 rounded-card border border-dashed border-line-strong px-3 py-2 text-[12.5px] text-ink-3">
+      <Icon name="info" size={13} />
+      <span className="min-w-0 flex-1">{text}</span>
+      {href?.startsWith("http") && (
+        <a href={href} target="_blank" rel="noreferrer noopener" className="shrink-0 whitespace-nowrap">
+          打开
+        </a>
+      )}
+    </div>
+  );
+}
+
+// ── inline runs ──
+
+function Inline({ nodes }: { nodes: DocNode[] }) {
+  return (
+    <>
+      {nodes.map((n, i) => (
+        <Run key={i} node={n} />
+      ))}
+    </>
+  );
+}
+
+function Run({ node }: { node: DocNode }) {
+  switch (node.type) {
+    case "text":
+      return <Marked node={node} />;
+    case "hardBreak":
+      return <br />;
+    case "mention": {
+      const kind = attr(node, "kind") ?? "";
+      const label = attr(node, "label") ?? "";
+      if (kind === "user") return <span className="text-accent-ink">@{label}</span>;
+      if (kind === "reminder") {
+        const t = Date.parse(label);
+        return <span className="text-orange">⏰ {Number.isFinite(t) ? new Date(t).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : label}</span>;
+      }
+      const href = attr(node, "href");
+      const text = `${kind === "doc" ? "📄 " : ""}${label}`;
+      return href ? (
+        <a href={linkHref(href)} target="_blank" rel="noreferrer noopener" onClick={(e) => clickLink(e, href, label)} onPointerEnter={() => prefetchLink(href)}>
+          {text}
+        </a>
+      ) : (
+        <span className="text-accent-ink">{text}</span>
+      );
+    }
+    case "equation":
+      return <span className="font-serif italic">{attr(node, "latex")}</span>;
+    case "statusTag":
+      return <span className="rounded-chip bg-field px-1.5 py-px text-[0.86em] font-medium text-ink-2">{attr(node, "text")}</span>;
+    default:
+      return <Inline nodes={node.content ?? []} />;
+  }
+}
+
+function Marked({ node }: { node: DocNode }) {
+  let out: React.ReactNode = node.text ?? "";
+  let href: string | undefined;
+  for (const m of node.marks ?? []) {
+    switch (m.type) {
+      case "bold":
+        out = <strong>{out}</strong>;
+        break;
+      case "italic":
+        out = <em>{out}</em>;
+        break;
+      case "underline":
+        out = <u>{out}</u>;
+        break;
+      case "strike":
+        out = <s>{out}</s>;
+        break;
+      case "code":
+        out = <code>{out}</code>;
+        break;
+      case "link":
+        if (typeof m.attrs?.href === "string") href = m.attrs.href;
+        break;
+    }
+  }
+  if (!href) return <>{out}</>;
+  const to = href;
+  return (
+    <a href={linkHref(to)} target="_blank" rel="noreferrer noopener" onClick={(e) => clickLink(e, to, node.text)} onPointerEnter={() => prefetchLink(to)}>
+      {out}
+    </a>
+  );
+}

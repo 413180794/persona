@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
 import { pair, takeToken } from "./lib/auth";
+import { closePanel, getPanel } from "./lib/panel";
 import { useRoute } from "./lib/router";
 import { connect, disconnect, reset, useStore } from "./lib/store";
 import { cx, EASE, Spinner, Toasts } from "./ui/atoms";
@@ -11,10 +12,18 @@ import { Jarvis } from "./views/Jarvis";
 import { Login } from "./views/Login";
 import { Machines } from "./views/Machines";
 import { NewAgent } from "./views/NewAgent";
+import { onOpenNewAgent, type NewAgentPreset } from "./lib/new-agent";
 import { StartingAgent } from "./views/StartingAgent";
 import { Palette } from "./views/Palette";
 import { Settings } from "./views/Settings";
 import { Sidebar } from "./views/Sidebar";
+import { SidePanel } from "./views/SidePanel";
+import { History } from "./views/assistant/History";
+import { Profile } from "./views/assistant/Profile";
+import { Routines } from "./views/assistant/Routines";
+import { Inbox } from "./views/inbox/Inbox";
+import { Knowledge } from "./views/knowledge/Knowledge";
+import { MachineDetail } from "./views/machines/MachineDetail";
 import { TodosView } from "./views/Todos";
 
 // A link with the hub's token (`?token=…` or `#token=…`) signs in without the form. The token leaves the address bar
@@ -76,6 +85,11 @@ function Shell() {
   const starting = useStore((s) => route.name === "session" ? (s.sessions[route.mid] ?? []).find((session) => session.session_id === route.sid)?.starting : undefined);
   const [palette, setPalette] = useState(false);
   const [newAgent, setNewAgent] = useState(false);
+  const [preset, setPreset] = useState<NewAgentPreset | null>(null);
+  useEffect(() => onOpenNewAgent((p) => {
+    setPreset(p);
+    setNewAgent(true);
+  }), []);
   const [drawer, setDrawer] = useState(false);
   const toggle = useCallback(() => setDrawer((d) => !d), []);
 
@@ -91,9 +105,18 @@ function Shell() {
   }, []);
 
   useEffect(() => setDrawer(false), [route.name, route.name === "session" ? route.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
+  // a session's terminal / files / Git belong to that conversation: moving to another page closes them (a link stays)
+  const at = route.name === "session" ? `${route.mid}/${route.sid}` : route.name;
+  useEffect(() => {
+    const p = getPanel();
+    if (p && p.kind !== "link" && !(p.kind !== "file" && route.name === "session" && p.mid === route.mid && p.sid === route.sid)) closePanel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at]);
 
   const title =
-    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "todos" ? "待办" : route.name === "machines" ? "机器" : route.name === "settings" ? "设置" : route.name === "agents" ? "个人 Agent" : "总览";
+    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "history" ? "Jarvis 的对话" : route.name === "profile" ? "Jarvis 的资料" : route.name === "inbox" ? "收件箱"
+      : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
+      : route.name === "agents" ? "个人 Agent" : "总览";
   useEffect(() => {
     document.title = `${title} · Jarvis`;
   }, [title]);
@@ -106,6 +129,21 @@ function Shell() {
     case "jarvis":
       main = <Jarvis sid={route.sid} onToggleSidebar={toggle} />;
       break;
+    case "history":
+      main = <History onToggleSidebar={toggle} />;
+      break;
+    case "profile":
+      main = <Profile onToggleSidebar={toggle} />;
+      break;
+    case "inbox":
+      main = <Inbox id={route.id} onToggleSidebar={toggle} />;
+      break;
+    case "routines":
+      main = <Routines onToggleSidebar={toggle} />;
+      break;
+    case "kb":
+      main = <Knowledge kind={route.kind} id={route.id} onToggleSidebar={toggle} />;
+      break;
     case "todos":
       main = <TodosView selectedId={route.id} onToggleSidebar={toggle} />;
       break;
@@ -114,6 +152,9 @@ function Shell() {
       break;
     case "machines":
       main = <Machines onToggleSidebar={toggle} />;
+      break;
+    case "machine":
+      main = <MachineDetail key={route.mid} mid={route.mid} onToggleSidebar={toggle} />;
       break;
     case "settings":
       main = <Settings onToggleSidebar={toggle} />;
@@ -146,8 +187,12 @@ function Shell() {
         )}
         {main}
       </main>
+      <SidePanel />
       <Palette open={palette} onClose={() => setPalette(false)} onNewAgent={() => setNewAgent(true)} />
-      <NewAgent open={newAgent} onClose={() => setNewAgent(false)} />
+      <NewAgent open={newAgent} preset={preset} onClose={() => {
+        setNewAgent(false);
+        setPreset(null);
+      }} />
     </div>
   );
 }

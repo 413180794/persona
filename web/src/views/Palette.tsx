@@ -1,5 +1,6 @@
 // ⌘K: Beautiful UI's Search, over every agent and Jarvis conversation.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { machineWithHub } from "../lib/mesh";
 import { createPortal } from "react-dom";
 import { ago, sessionTitle, shortPath, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
 import { navigate, type Route } from "../lib/router";
@@ -45,7 +46,7 @@ export function Palette({ open, onClose, onNewAgent }: { open: boolean; onClose:
 
   const hits = useMemo(() => {
     const query = q.trim().toLowerCase();
-    const name = (m: string) => machines.find((x) => x.id === m)?.name ?? m;
+    const name = (m: string) => machineWithHub(m, machines);
     const out: Hit[] = [];
     for (const s of sessions) {
       const sc = score(s, query, name(s.machine_id));
@@ -100,7 +101,7 @@ export function Palette({ open, onClose, onNewAgent }: { open: boolean; onClose:
           <span aria-hidden className="pointer-events-none absolute inset-x-1.5 rounded-[8px] bg-hover" style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 180ms ${EASE}, height 180ms ${EASE}` }} />
           {hits.map((h, i) => {
             const st = stateOf(h.s);
-            const meta = h.assistant ? "Jarvis" : [machines.find((m) => m.id === h.s.machine_id)?.name, h.s.space_name, tabLabel(h.s)].filter(Boolean).join(" › ");
+            const meta = h.assistant ? "Jarvis" : [machineWithHub(h.s.machine_id, machines), h.s.space_name, tabLabel(h.s)].filter(Boolean).join(" › ");
             return (
               <button
                 key={h.key}

@@ -1,0 +1,294 @@
+// The chat's lines other than an exchange (iOS ChatView.lineView): the wake that opens new work, the chip under an
+// answer for background tasks that reported back (and its drawer), recaps (and their drawer, and the strip above the
+// composer), model API errors as cards, and the header of a split exchange.
+import { memo, useState } from "react";
+import { ago, clock } from "../../lib/format";
+import { retryable, type APIErrorInfo } from "../../lib/api-errors";
+import { wakeSummary } from "../../lib/tasks";
+import { wakeDrawer, workSegment, type ChatLine, type Turn } from "../../lib/turns";
+import type { Item } from "../../lib/types";
+import { Button, Collapse, copyText, cx, Dialog, Spinner } from "../../ui/atoms";
+import { Icon } from "../../ui/icons";
+import { Markdown } from "../../ui/Markdown";
+import { Answer, SegmentView } from "./SegmentView";
+import { NoticeRow, WorkRow } from "./Steps";
+
+export interface LineProps {
+  line: ChatLine;
+  now: number;
+  mid: string;
+  sid: string;
+  streaming?: string;
+  expandFold: (f: Item) => Promise<void>;
+  /** A merged exchange's work row: split it into its messages. */
+  onSplit: (group: string) => void;
+  onUnsplit: (group: string) => void;
+  /** 重试 on an API error card (only on the last line, while the agent is not working). */
+  onRetry?: () => void;
+}
+
+export const ChatLineView = memo(function ChatLineView({ line, now, mid, sid, streaming, expandFold, onSplit, onUnsplit, onRetry }: LineProps) {
+  switch (line.kind) {
+    case "segment":
+      return (
+        <SegmentView
+          seg={line.seg}
+          live={line.live}
+          now={now}
+          mid={mid}
+          sid={sid}
+          streaming={line.live ? streaming : undefined}
+          expandFold={expandFold}
+          onOpen={line.group ? () => onSplit(line.group!) : undefined}
+        />
+      );
+    case "split":
+      return (
+        <button
+          type="button"
+          onClick={() => onUnsplit(line.group)}
+          className="-mb-3 flex w-fit items-center gap-1.5 self-end rounded-control px-1.5 py-0.5 text-[12px] whitespace-nowrap text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2"
+        >
+          已按 {line.count} 条消息拆开 · 收起
+          <Icon name="up" size={12} stroke={2.2} />
+        </button>
+      );
+    case "notice":
+      return <LineNotice item={line.item} />;
+    case "wakes":
+      return <WakeChip turn={line.turn} live={line.live} now={now} mid={mid} sid={sid} expandFold={expandFold} />;
+    case "recaps":
+      return <RecapChip items={line.items} />;
+    case "apiError":
+      return <APIErrorCard info={line.info} count={line.count} at={line.item.ts} onRetry={onRetry && retryable(line.info) ? onRetry : undefined} />;
+  }
+});
+
+/** A notice on a line of its own: a wake opening new work (a centered capsule), "已中断", a long local command's output. */
+function LineNotice({ item }: { item: Item }) {
+  const [open, setOpen] = useState(false);
+  if (item.wake) {
+    const w = wakeSummary(item);
+    return (
+      <div className="flex justify-center">
+        <span className="flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] text-ink-2 shadow-hairline" title={clock(item.ts)}>
+          <Icon name="bell" size={12} className={cx("shrink-0", w.failed ? "text-red" : "text-accent")} />
+          <span className="min-w-0 truncate">{w.text}</span>
+        </span>
+      </div>
+    );
+  }
+  const text = item.text ?? "";
+  if (!text.includes("\n") && text.length <= 60) {
+    return (
+      <div className="flex justify-center">
+        <span className="rounded-full bg-inset px-3 py-1 text-[12px] text-ink-2 shadow-hairline" title={clock(item.ts)}>
+          {text}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-start gap-2 rounded-card bg-inset px-3 py-2 text-left shadow-hairline">
+      <Icon name="info" size={13} className="mt-[3px] shrink-0 text-ink-3" />
+      <span className={cx("min-w-0 text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink-2", !open && "line-clamp-4")}>{text}</span>
+    </button>
+  );
+}
+
+// ── background tasks that reported back after the answer ──
+
+function WakeChip({ turn, live, now, mid, sid, expandFold }: { turn: Turn; live: boolean; now: number; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const notices = turn.wakes;
+  const failed = notices.some((n) => wakeSummary(n).failed);
+  const text = live ? "后台任务完成 · 正在处理" : notices.length === 1 ? wakeSummary(notices[0]).text : `${notices.length} 个后台任务完成`;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="后台任务完成，查看之后的消息"
+        className="-mt-2 flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] text-ink-2 shadow-hairline transition-colors hover:bg-hover-2"
+      >
+        {live ? <Spinner size={11} /> : <Icon name="bell" size={12} className={cx("shrink-0", failed ? "text-red" : "text-accent")} />}
+        <span className="min-w-0 truncate">{text}</span>
+        <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />
+      </button>
+      <Dialog open={open} onClose={() => setOpen(false)} title={notices.length > 1 ? `${notices.length} 个后台任务完成` : "后台任务完成"} width={640}>
+        {open && <WakeDrawerBody turn={turn} live={live} now={now} mid={mid} sid={sid} expandFold={expandFold} />}
+      </Dialog>
+    </>
+  );
+}
+
+/** Each wake (its reports, then what the agent answered to them), newest first; the steps in between fold into one
+ *  work row at the end. */
+function WakeDrawerBody({ turn, live, now, mid, sid, expandFold }: { turn: Turn; live: boolean; now: number; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
+  const d = wakeDrawer(turn);
+  const work = workSegment(`dw-${turn.id}`, d.process);
+  return (
+    <div className="flex max-h-[65vh] flex-col gap-5 overflow-y-auto pr-1">
+      {d.groups.map((g) => (
+        <section key={g.id} className="flex flex-col gap-2">
+          <div className="flex flex-col gap-0.5">
+            {g.notices.map((n) => (
+              <NoticeRow key={n.id} item={n} mid={mid} sid={sid} />
+            ))}
+          </div>
+          {g.answer && <Answer item={g.answer} />}
+        </section>
+      ))}
+      {(work.steps.length > 0 || live) && <WorkRow seg={work} live={live} now={now} mid={mid} sid={sid} expandFold={expandFold} />}
+    </div>
+  );
+}
+
+// ── recaps ──
+
+/** Claude Code's "while you were away" recap: one short line; the recap itself opens in a drawer. Several in a row are
+ *  one line, the newest first in the drawer. */
+function RecapChip({ items }: { items: Item[] }) {
+  const [open, setOpen] = useState(false);
+  const newest = items[items.length - 1];
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={items.length > 1 ? `${items.length} 次离开期间回顾，点击查看` : "离开期间回顾，点击查看"}
+        className="flex w-fit max-w-full items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] whitespace-nowrap text-ink-2 shadow-hairline transition-colors hover:bg-hover-2"
+      >
+        <Icon name="retry" size={12} className="shrink-0 text-accent" />
+        离开期间回顾
+        {items.length > 1 && <span>· {items.length} 次</span>}
+        {newest.ts && <span>· {ago(newest.ts)}</span>}
+        <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />
+      </button>
+      <RecapDrawer items={items} open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+function RecapDrawer({ items, open, onClose }: { items: Item[]; open: boolean; onClose: () => void }) {
+  return (
+    <Dialog open={open} onClose={onClose} title={items.length > 1 ? `离开期间回顾 · ${items.length} 次` : "离开期间回顾"} width={600}>
+      <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
+        {[...items].reverse().map((it, n) => (
+          <section key={it.id} className={cx("flex flex-col gap-2", n > 0 && "border-t border-line pt-4")}>
+            {it.ts && (
+              <span className="text-[11.5px] text-ink-3">
+                {n === 0 && items.length > 1 ? "最新 · " : ""}写于 {ago(it.ts)}
+              </span>
+            )}
+            <Markdown text={it.text ?? ""} />
+          </section>
+        ))}
+      </div>
+    </Dialog>
+  );
+}
+
+/** The newest recap in full above the composer when you come back to a chat; a click (or typing) closes it. The line in
+ *  the chat stays. */
+export function RecapStrip({ item, onClose }: { item: Item; onClose: () => void }) {
+  return (
+    <div className="group/recap relative flex gap-2.5 rounded-card bg-accent-tint px-3 py-2.5" style={{ animation: "fade-up 250ms ease-out both" }}>
+      <span aria-hidden className="w-[3px] shrink-0 rounded-full bg-accent" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap text-ink">
+          <Icon name="retry" size={12} className="text-accent" />
+          离开期间回顾
+          {item.ts && <span className="font-normal text-ink-3">· {ago(item.ts)}</span>}
+        </span>
+        <div className="line-clamp-6 text-[13px] leading-relaxed text-ink-2">
+          <Markdown text={item.text ?? ""} small />
+        </div>
+      </div>
+      <button type="button" onClick={onClose} aria-label="关闭回顾" title="关闭" className="flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink">
+        <Icon name="x" size={13} />
+      </button>
+    </div>
+  );
+}
+
+const CLOSED_RECAPS = "jarvis.closedRecaps";
+
+/** The recap closed per conversation (its id), kept in this browser. */
+export function closedRecap(key: string): string | undefined {
+  try {
+    return (JSON.parse(localStorage.getItem(CLOSED_RECAPS) ?? "{}") as Record<string, string>)[key];
+  } catch {
+    return undefined;
+  }
+}
+
+export function closeRecap(key: string, id: string) {
+  let all: Record<string, string> = {};
+  try {
+    all = JSON.parse(localStorage.getItem(CLOSED_RECAPS) ?? "{}");
+  } catch {
+    /* start over */
+  }
+  delete all[key];
+  all[key] = id;
+  const keys = Object.keys(all);
+  if (keys.length > 300) for (const k of keys.slice(0, keys.length - 200)) delete all[k];
+  localStorage.setItem(CLOSED_RECAPS, JSON.stringify(all));
+}
+
+// ── model API errors ──
+
+function APIErrorCard({ info, count, at, onRetry }: { info: APIErrorInfo; count: number; at?: string; onRetry?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const sub = info.transient === true ? "临时故障，过一会儿多半会好" : info.transient === false ? "要你处理，重试没有用" : "";
+  return (
+    <div className="flex flex-col gap-2.5 rounded-card bg-red-tint px-3.5 py-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--red)_22%,transparent)]">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`API 错误：${info.reason}`} className="flex min-w-0 items-start gap-2 text-left">
+        <Icon name="info" size={15} stroke={2.2} className="mt-[2px] shrink-0 text-red" />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-[14px] font-semibold text-ink">{info.reason}</span>
+          {sub && <span className="text-[12px] text-ink-2">{sub}</span>}
+        </span>
+        <span className="flex shrink-0 items-center gap-1">
+          {info.status !== undefined && <span className="rounded-[4px] bg-red-tint px-1 font-mono text-[11px] font-medium text-red">{info.status}</span>}
+          {count > 1 && <span className="rounded-[4px] bg-field px-1 text-[11px] font-medium whitespace-nowrap text-ink-2">连续 {count} 次</span>}
+          <Icon name="chevron" size={13} stroke={2.2} className="text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(180deg)" : "none" }} />
+        </span>
+      </button>
+      <Collapse open={open}>
+        <div className="flex flex-col gap-1.5 pt-0.5">
+          {info.requestId && <Field label="请求 ID" value={info.requestId} />}
+          {info.session && <Field label="Session" value={info.session} />}
+          {at && <Field label="时间" value={clock(at)} copy={false} />}
+          <pre className="max-h-56 overflow-auto rounded-[8px] bg-surface px-2.5 py-2 font-mono text-[11.5px] leading-[1.6] whitespace-pre-wrap text-ink-2 shadow-hairline [overflow-wrap:anywhere]">{info.raw}</pre>
+          <button type="button" onClick={() => copyText(info.raw)} className="flex w-fit items-center gap-1 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline">
+            <Icon name="copy" size={12} />
+            复制原文
+          </button>
+        </div>
+      </Collapse>
+      {onRetry && (
+        <div>
+          <Button icon="retry" onClick={onRetry}>
+            重试
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value, copy = true }: { label: string; value: string; copy?: boolean }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-[12px]">
+      <span className="w-14 shrink-0 text-ink-3">{label}</span>
+      <span className="min-w-0 truncate font-mono text-ink-2">{value}</span>
+      {copy && (
+        <button type="button" onClick={() => copyText(value)} aria-label={`拷贝${label}`} className="flex size-5 shrink-0 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover-2 hover:text-ink">
+          <Icon name="copy" size={11} />
+        </button>
+      )}
+    </div>
+  );
+}

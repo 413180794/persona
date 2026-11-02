@@ -302,7 +302,7 @@ export function Menu({
     <div
       ref={ref}
       role="menu"
-      className="fixed z-50 rounded-[10px] bg-surface p-1 shadow-overlay"
+      className="fixed z-50 max-h-[min(70vh,520px)] overflow-y-auto rounded-[10px] bg-surface p-1 shadow-overlay"
       style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: side === "bottom" ? `top ${align}` : `bottom ${align}` }}
       onMouseLeave={() => setActive(-1)}
     >

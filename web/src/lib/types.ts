@@ -15,6 +15,25 @@ export interface Machine {
   deploying?: boolean;
   deploy_error?: string;
   system?: { name?: string; model?: string; cpu?: string; cores?: number; memory?: number };
+  engine?: string;
+  kind?: string;
+  arch?: string;
+  home?: string;
+  last_seen?: string;
+  /** Interconnected hubs (docs/plan-hub-mesh.md 2.6): the hub that owns this computer, and the way there. */
+  hub_id?: string;
+  hub_name?: string;
+  machine_uid?: string;
+  route?: { via: string; hops: number; rtt_ms?: number };
+}
+
+/** The hubs of this hub's interconnected group, from the signed-in hello (docs/plan-hub-mesh.md 2.6). */
+export interface MeshHub {
+  hub_id: string;
+  name: string;
+  online?: boolean;
+  self?: boolean;
+  endpoints?: string[];
 }
 
 export interface Subagent {
@@ -23,6 +42,11 @@ export interface Subagent {
   type?: string;
   description?: string;
   running?: boolean;
+  tool_use_id?: string;
+  background?: boolean;
+  started_at?: string;
+  updated_at?: string;
+  last_text?: string;
 }
 
 export interface SessionCapabilities {
@@ -73,11 +97,46 @@ export interface Session {
   pending_interactions?: number;
   queued?: string[];
   subagents?: Subagent[];
-  loop?: { kind: string; next_at?: string; cron?: string; prompt?: string };
-  background?: { id: string; kind: string; description?: string; command?: string }[];
+  loop?: LoopInfo;
+  background?: BackgroundTask[];
   rev?: number;
   suggestion?: string;
+  /** An assistant conversation moved out of the list (docs/assistant.md「管理自己的对话」). */
+  archived?: boolean;
   todo?: { id: string; title: string };
+}
+
+/** A /loop: Claude re-runs a prompt on its own, scheduling each wakeup ("wakeup") or by cron ("cron"). */
+export interface LoopInfo {
+  kind: string;
+  prompt?: string;
+  reason?: string;
+  interval_seconds?: number;
+  next_at?: string;
+  cron?: string;
+  ticks?: number;
+}
+
+/** A command or subagent running in the background until it reports back. */
+export interface BackgroundTask {
+  id: string;
+  kind: string;
+  description?: string;
+  command?: string;
+  output_file?: string;
+  started_at?: string;
+}
+
+/** What a background task's notice says (proto.TaskNote). */
+export interface TaskNote {
+  kind: string;
+  status: string;
+  title?: string;
+  task_id?: string;
+  tool_use_id?: string;
+  exit_code?: number;
+  output_file?: string;
+  detail?: string;
 }
 
 export interface Item {
@@ -85,7 +144,7 @@ export interface Item {
   seq: number;
   ts?: string;
   role: "user" | "assistant" | "system";
-  kind: "text" | "thinking" | "tool_use" | "tool_result" | "notice" | "image" | "fold";
+  kind: "text" | "thinking" | "tool_use" | "tool_result" | "notice" | "image" | "fold" | "recap";
   text?: string;
   tool_use_id?: string;
   tool_name?: string;
@@ -94,10 +153,11 @@ export interface Item {
   full_size?: number;
   queued?: boolean;
   wake?: boolean;
-  task?: { kind: string; status: string; title?: string; detail?: string; exit_code?: number };
+  task?: TaskNote;
   fold?: { items: number; tools: number; thoughts: number; until?: string; through_seq: number; through_id?: string };
   image?: { mime: string; data?: string; lazy?: boolean; width?: number; height?: number };
-  from?: { name?: string };
+  /** Sent by another Claude session (cross-session messaging), not typed by you: its name. */
+  from?: string;
 }
 
 export interface ItemsPage {
@@ -175,6 +235,9 @@ export interface AssistantInfo {
   launcher?: string;
   cwd?: string;
   main?: string;
+  timezone?: string;
+  notes?: string;
+  notes_effective?: string;
   conversations: Session[];
 }
 

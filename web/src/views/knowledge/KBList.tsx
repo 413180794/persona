@@ -1,0 +1,464 @@
+// The knowledge list: search, the six kinds as chips with a tag filter, the kind's entries grouped the way the app
+// groups them (docs/knowledge.md「各页面」), and search results merged by entry.
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { api, enc, errorText, isAbort } from "../../lib/api";
+import { ago } from "../../lib/format";
+import {
+  countLabel,
+  groupEntries,
+  groupResults,
+  hitView,
+  KB_KINDS,
+  KIND_TITLE,
+  projectInfo,
+  rowTags,
+  statusLabel,
+  type KBEntry,
+  type KBKind,
+  type KBList,
+  type KBResult,
+} from "../../lib/kb";
+import { href, navigate } from "../../lib/router";
+import { Collapse, cx, EASE, IconButton, Loading, Spinner } from "../../ui/atoms";
+import { Icon } from "../../ui/icons";
+import { lists, listKey, remember, searches } from "./cache";
+import { Badges, Card, KBIcon, KIND_ICON, Marked, onPlainClick, SectionTitle, Tile } from "./KBParts";
+
+/** Rows drawn at once in a section; more on 再显示 (people run to thousands). */
+const PAGE = 150;
+
+export function ListPane({
+  kind,
+  selected,
+  detailOpen,
+  reloadKey,
+  onToggleSidebar,
+  onOpen,
+}: {
+  kind: KBKind;
+  selected?: { kind: string; id: string };
+  detailOpen: boolean;
+  reloadKey: number;
+  onToggleSidebar: () => void;
+  onOpen: (e: KBEntry, query?: string) => void;
+}) {
+  const [tags, setTags] = useState<Partial<Record<KBKind, string>>>({});
+  const tag = tags[kind];
+  const key = listKey(kind, tag);
+  const [list, setList] = useState<KBList | undefined>(() => lists.get(key));
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    setList(lists.get(key));
+    setError("");
+    const ac = new AbortController();
+    api<KBList>(`/kb/${kind}${tag ? `?tag=${enc(tag)}` : ""}`, { signal: ac.signal })
+      .then((l) => {
+        const v = { items: l.items ?? [], tags: l.tags ?? [] };
+        lists.set(key, v);
+        remember(v.items);
+        setList(v);
+      })
+      .catch((e) => !isAbort(e) && setError(errorText(e)));
+    return () => ac.abort();
+  }, [key, kind, tag, reloadKey, retry]);
+
+  // ── search ──
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<{ q: string; results: KBResult[] } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const q = query.trim();
+
+  useEffect(() => {
+    setSearchError("");
+    if (!q) {
+      setFound(null);
+      setSearching(false);
+      return;
+    }
+    const cached = searches.get(q);
+    if (cached) {
+      setFound({ q, results: cached });
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const ac = new AbortController();
+    const t = setTimeout(() => {
+      api<{ results: KBResult[] | null }>(`/kb-search?q=${enc(q)}&results=1`, { signal: ac.signal })
+        .then((r) => {
+          const results = r.results ?? [];
+          searches.set(q, results);
+          remember(results.map((x) => x.entry));
+          setFound({ q, results });
+        })
+        .catch((e) => !isAbort(e) && setSearchError(errorText(e)))
+        .finally(() => !ac.signal.aborted && setSearching(false));
+    }, 300); // typing
+    return () => {
+      clearTimeout(t);
+      ac.abort();
+    };
+  }, [q, reloadKey]);
+
+  const sections = useMemo(() => (list?.items ? groupEntries(kind, list.items, tag) : []), [list, kind, tag]);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [limits, setLimits] = useState<Record<string, number>>({});
+  const toggle = (k: string) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+  const isSel = (e: KBEntry) => selected?.kind === e.kind && selected.id === e.id;
+  const setTag = (t?: string) => setTags((x) => ({ ...x, [kind]: t }));
+
+  return (
+    <section className={cx("min-h-0 min-w-0 flex-col @4xl:w-[400px] @4xl:shrink-0 @4xl:border-r @4xl:border-line", detailOpen ? "hidden @4xl:flex" : "flex w-full")}>
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
+        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+        <h1 className="flex-1 truncate text-[14px] font-semibold text-ink">知识库</h1>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[760px] px-3 pt-3 pb-16 sm:px-4">
+          <label className="flex h-9 items-center gap-2 rounded-control bg-surface px-3 shadow-btn focus-within:shadow-[inset_0_0_0_1px_var(--accent)]">
+            {searching ? <Spinner size={13} /> : <Icon name="search" size={13} stroke={2} className="shrink-0 text-ink-3" />}
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+              placeholder="搜索档案和聊天记录"
+              aria-label="搜索知识库"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
+            />
+            {query && <IconButton icon="x" label="清除" size={22} iconSize={12} onClick={() => setQuery("")} />}
+          </label>
+
+          {q ? (
+            <SearchResults found={found} error={searchError} searching={searching} isSel={isSel} onOpen={onOpen} />
+          ) : (
+            <>
+              <div className="mt-3 flex items-start gap-2">
+                {/* Search covers every kind: the chips (one of them lit) would say otherwise, so they go while searching. */}
+                <div role="tablist" aria-label="类型" className="flex min-w-0 flex-1 flex-wrap gap-1">
+                  {KB_KINDS.map((k) => {
+                    const on = k === kind;
+                    const n = on ? list?.items?.length : undefined;
+                    return (
+                      <a
+                        key={k}
+                        role="tab"
+                        aria-selected={on}
+                        href={href({ name: "kb", kind: k })}
+                        onClick={(e) => onPlainClick(e, () => navigate({ name: "kb", kind: k }))}
+                        className={cx(
+                          "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12.5px] font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.96]",
+                          on ? "bg-ink text-surface" : "bg-field text-ink-2 hover:bg-hover-2 hover:text-ink",
+                        )}
+                      >
+                        {KIND_TITLE[k]}
+                        {n !== undefined && <span className="tabular-nums opacity-70">{countLabel(n)}</span>}
+                      </a>
+                    );
+                  })}
+                </div>
+                <TagFilter tags={list?.tags ?? lists.get(listKey(kind))?.tags ?? []} value={tag} onChange={setTag} />
+              </div>
+              {tag && (
+                <div className="mt-2 flex items-center gap-1.5 px-1 text-[12px] text-ink-3">
+                  只看
+                  <button type="button" onClick={() => setTag(undefined)} className="inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full bg-accent-tint px-2 font-medium text-accent-ink hover:brightness-105" title="取消筛选">
+                    #{tag}
+                    <Icon name="x" size={11} stroke={2.4} />
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-col gap-5">
+                {!list && !error && (
+                  <div className="py-10">
+                    <Loading />
+                  </div>
+                )}
+                {error && !list && <ErrorBox text={error} onRetry={() => setRetry((x) => x + 1)} />}
+                {list && sections.length === 0 && <Empty kind={kind} tag={tag} />}
+                {sections.map((s) => {
+                  const k = `${kind}:${s.key}`;
+                  const shown = !s.fold || open.has(k);
+                  const limit = limits[k] ?? PAGE;
+                  const rows = s.items.slice(0, limit).map((e) => <EntryRow key={`${e.kind}/${e.id}`} e={e} tag={tag} selected={isSel(e)} onOpen={onOpen} />);
+                  const more = s.items.length - limit;
+                  const moreRow = more > 0 && (
+                    <button type="button" onClick={() => setLimits((x) => ({ ...x, [k]: limit + PAGE }))} className="flex h-9 w-full items-center whitespace-nowrap px-4 text-[12.5px] font-medium text-accent-ink hover:bg-hover">
+                      再显示 {Math.min(more, PAGE)} 个（还有 {more} 个）
+                    </button>
+                  );
+                  return (
+                    <div key={k} style={{ animation: `fade-up 320ms ${EASE} both` }}>
+                      {s.fold ? (
+                        <>
+                          <Card>
+                            <button type="button" onClick={() => toggle(k)} aria-expanded={shown} className="flex h-10 w-full items-center gap-2 px-3.5 text-left transition-colors hover:bg-hover">
+                              <span className="whitespace-nowrap text-[13px] text-ink-2">{s.title}</span>
+                              <span className="text-[12px] text-ink-3 tabular-nums">{s.items.length}</span>
+                              <span className="flex-1" />
+                              <Icon name="chevronRight" size={12} stroke={2.2} className={cx("text-ink-3 transition-transform duration-200", shown && "rotate-90")} />
+                            </button>
+                            <Collapse open={shown}>
+                              {shown && (
+                                <div className="divide-y divide-line border-t border-line">
+                                  {rows}
+                                  {moreRow}
+                                </div>
+                              )}
+                            </Collapse>
+                          </Card>
+                          {s.footer && <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{s.footer}</p>}
+                        </>
+                      ) : (
+                        <>
+                          <SectionTitle title={s.title} count={s.items.length} />
+                          <Card>
+                            {rows}
+                            {moreRow}
+                          </Card>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** One ranked entry: the kind tile carrying the importance, the name, its one line, then badges and the tags that fit. */
+function EntryRow({ e, tag, selected, onOpen }: { e: KBEntry; tag?: string; selected: boolean; onOpen: (e: KBEntry) => void }) {
+  const tags = rowTags(e, tag);
+  const when = ago(e.updated);
+  const status = projectInfo(e)?.status === "paused" ? statusLabel("paused") : null;
+  const badges = e.importance || e.relevance > 0 || tags.length || status || e.kind === "projects";
+  return (
+    <a
+      href={href({ name: "kb", kind: e.kind, id: e.id })}
+      onClick={(ev) => onPlainClick(ev, () => onOpen(e))}
+      aria-current={selected ? "page" : undefined}
+      className={cx("flex gap-3 px-3.5 py-3 transition-colors", selected ? "bg-hover-2" : "hover:bg-hover")}
+    >
+      <Tile entry={e} />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
+          {/* Two lines: documents and meetings are told apart by the end of their titles. */}
+          <span className="line-clamp-2 min-w-0 flex-1 text-[13.5px] font-medium leading-snug text-ink">{e.name}</span>
+          {when && <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">{when}</span>}
+        </span>
+        {e.one_line && <span className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-ink-2">{e.one_line}</span>}
+        {badges && (
+          // One line high: tags that would wrap fall below it and out of sight, so only whole ones show.
+          <span className="mt-1.5 flex h-[18px] flex-wrap items-center gap-x-1.5 gap-y-4 overflow-hidden">
+            <Badges entry={e} status={status} />
+            {tags.map((t) => (
+              <span key={t} className="whitespace-nowrap text-[11px] text-ink-3">
+                #{t}
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
+    </a>
+  );
+}
+
+function SearchResults({
+  found,
+  error,
+  searching,
+  isSel,
+  onOpen,
+}: {
+  found: { q: string; results: KBResult[] } | null;
+  error: string;
+  searching: boolean;
+  isSel: (e: KBEntry) => boolean;
+  onOpen: (e: KBEntry, query?: string) => void;
+}) {
+  if (error && !found) return <div className="mt-4"><ErrorBox text={error} /></div>;
+  if (!found)
+    return (
+      <div className="py-10">
+        <Loading label="搜索中" />
+      </div>
+    );
+  if (!found.results.length) {
+    return (
+      <div className={cx("mt-10 flex flex-col items-center px-6 text-center transition-opacity", searching && "opacity-50")}>
+        <span className="mb-3 flex size-10 items-center justify-center rounded-[11px] bg-field text-ink-3">
+          <Icon name="search" size={18} />
+        </span>
+        <p className="text-[13.5px] font-medium text-ink">没有找到「{found.q}」</p>
+        <p className="mt-1 text-[12.5px] text-ink-3">每个词都要出现在同一行里。换个说法，或少写几个词。</p>
+      </div>
+    );
+  }
+  return (
+    <div className={cx("mt-4 flex flex-col gap-5 transition-opacity", searching && "opacity-60")}>
+      {groupResults(found.results).map((g) => (
+        <div key={g.kind}>
+          <SectionTitle title={g.title} count={g.results.length} />
+          <Card>
+            {g.results.map((r) => (
+              <ResultRow key={`${r.entry.kind}/${r.entry.id}`} r={r} q={found.q} selected={isSel(r.entry)} onOpen={(e) => onOpen(e, found.q)} />
+            ))}
+          </Card>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** One entry a search found: its tile and name, then up to two matching lines with the words in bold. */
+function ResultRow({ r, q, selected, onOpen }: { r: KBResult; q: string; selected: boolean; onOpen: (e: KBEntry) => void }) {
+  const hits = (r.hits ?? []).slice(0, 2).map((h) => hitView(h));
+  return (
+    <a
+      href={href({ name: "kb", kind: r.entry.kind, id: r.entry.id })}
+      onClick={(ev) => onPlainClick(ev, () => onOpen(r.entry))}
+      aria-current={selected ? "page" : undefined}
+      className={cx("flex gap-3 px-3.5 py-2.5 transition-colors", selected ? "bg-hover-2" : "hover:bg-hover")}
+    >
+      <Tile entry={r.entry} size={30} />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
+            <Marked text={r.entry.name} query={q} />
+          </span>
+          {r.count > hits.length && <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">{r.count >= 99 ? "99+ 处" : `${r.count} 处`}</span>}
+        </span>
+        {!hits.length && r.entry.one_line && (
+          <span className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-ink-2">
+            <Marked text={r.entry.one_line} query={q} />
+          </span>
+        )}
+        {hits.map((h, i) => (
+          <span key={i} className="mt-1 block">
+            <span className="block truncate text-[11px] text-ink-3">{h.source}</span>
+            <span className="line-clamp-2 text-[12.5px] leading-snug text-ink-2">
+              <Marked text={h.text} query={q} />
+            </span>
+          </span>
+        ))}
+      </span>
+    </a>
+  );
+}
+
+function Empty({ kind, tag }: { kind: KBKind; tag?: string }) {
+  return (
+    <div className="flex flex-col items-center px-6 py-10 text-center">
+      <span className="mb-3 flex size-10 items-center justify-center rounded-[11px] bg-field text-ink-3">
+        <KBIcon name={KIND_ICON[kind]} size={18} />
+      </span>
+      <p className="text-[13.5px] font-medium text-ink">{tag ? `没有带 #${tag} 的${KIND_TITLE[kind]}` : `还没有${KIND_TITLE[kind]}`}</p>
+      <p className="mt-1 max-w-[340px] text-[12.5px] leading-relaxed text-ink-3">hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。</p>
+    </div>
+  );
+}
+
+export function ErrorBox({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-card bg-red-tint px-3 py-2.5 text-[12.5px] text-red">
+      <span className="min-w-0 flex-1">{text}</span>
+      {onRetry && (
+        <button type="button" onClick={onRetry} className="shrink-0 whitespace-nowrap rounded-[6px] px-2 py-1 font-medium hover:bg-surface">
+          重试
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The filter icon and its popover: every tag of this kind as a chip (a menu ran off the screen with thirty). */
+function TagFilter({ tags, value, onChange }: { tags: string[]; value?: string; onChange: (t?: string) => void }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <span className="relative">
+        <IconButton icon="filter" label={value ? `按标签筛选，当前 #${value}` : "按标签筛选"} active={Boolean(value) || Boolean(anchor)} onClick={(e) => { const t = e.currentTarget; setAnchor((a) => (a ? null : t)); }} />
+        {value && <span aria-hidden className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-accent" />}
+      </span>
+      {anchor && (
+        <TagPopover
+          anchor={anchor}
+          tags={tags}
+          value={value}
+          onPick={(t) => {
+            onChange(t);
+            setAnchor(null);
+          }}
+          onClose={() => setAnchor(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function TagPopover({ anchor, tags, value, onPick, onClose }: { anchor: HTMLElement; tags: string[]; value?: string; onPick: (t?: string) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" });
+  useLayoutEffect(() => {
+    const r = anchor.getBoundingClientRect();
+    const width = Math.min(300, innerWidth - 16);
+    setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.right - width, innerWidth - width - 8)), width });
+  }, [anchor]);
+  useEffect(() => {
+    const down = (e: MouseEvent) => {
+      if (ref.current?.contains(e.target as Node) || anchor.contains(e.target as Node)) return;
+      onClose();
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("mousedown", down);
+    addEventListener("keydown", key);
+    return () => {
+      removeEventListener("mousedown", down);
+      removeEventListener("keydown", key);
+    };
+  }, [anchor, onClose]);
+  const chip = (label: string, on: boolean, pick: () => void) => (
+    <button
+      key={label}
+      type="button"
+      onClick={pick}
+      aria-pressed={on}
+      className={cx("inline-flex h-7 max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12px] font-medium transition-colors", on ? "bg-ink text-surface" : "bg-field text-ink-2 hover:bg-hover-2 hover:text-ink")}
+    >
+      {on && <Icon name="check" size={11} stroke={2.6} />}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+  return createPortal(
+    <div ref={ref} role="dialog" aria-label="按标签筛选" className="fixed z-50 rounded-[12px] bg-surface p-2.5 shadow-overlay" style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: "top right" }}>
+      <div className="mb-2 flex items-center px-0.5">
+        <span className="flex-1 text-[11.5px] font-medium text-ink-3">常用标签</span>
+        {value && (
+          <button type="button" onClick={() => onPick(undefined)} className="whitespace-nowrap text-[11.5px] font-medium text-accent-ink hover:underline">
+            清除筛选
+          </button>
+        )}
+      </div>
+      <div className="flex max-h-[min(55vh,340px)] flex-wrap gap-1.5 overflow-y-auto">
+        {chip("全部", !value, () => onPick(undefined))}
+        {tags.map((t) => chip(`#${t}`, value === t, () => onPick(t)))}
+        {!tags.length && <p className="w-full px-0.5 py-2 text-[12px] text-ink-3">这一类还没有标签。</p>}
+      </div>
+    </div>,
+    document.body,
+  );
+}

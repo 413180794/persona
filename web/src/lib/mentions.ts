@@ -1,0 +1,124 @@
+// The composer's @ menu (iOS PromptComposer.swift PromptItems, BeautifulUI PromptToken): files this chat's tools
+// read or wrote and the session's folder (picking one types `@path`, which Claude Code and Codex read as that file),
+// then other agents' sessions (picking one quotes it as a <jarvis-context> before the message). No DOM here.
+
+import type { Item, Session } from "./types";
+
+export interface MentionToken {
+  /** Offset of the `@`. */
+  start: number;
+  /** Offset just past the query (the caret). */
+  end: number;
+  query: string;
+}
+
+/** The `@word` being typed just before the caret: at the start or after whitespace, so an e-mail address is not one. */
+export function mentionAt(text: string, caret: number): MentionToken | null {
+  const before = text.slice(0, caret);
+  const m = /(^|\s)@([^\s@]*)$/.exec(before);
+  if (!m) return null;
+  const start = before.length - m[2].length - 1;
+  return { start, end: caret, query: m[2] };
+}
+
+/** The draft with the token replaced by `insert`, and where the caret goes. */
+export function replaceToken(text: string, token: MentionToken, insert: string): { text: string; caret: number } {
+  const before = text.slice(0, token.start);
+  let after = text.slice(token.end);
+  // a picked file ends in a space: don't double it
+  if (insert.endsWith(" ") && after.startsWith(" ")) after = after.slice(1);
+  return { text: before + insert + after, caret: before.length + insert.length };
+}
+
+/** A path as typed after @: relative to the session's folder when inside it. */
+export function relPath(path: string, cwd?: string): string {
+  if (!cwd) return path;
+  const base = cwd.replace(/\/+$/, "");
+  return path.startsWith(`${base}/`) ? path.slice(base.length + 1) : path;
+}
+
+/** Files the chat's tools read or wrote, newest first, at most `limit` (PromptItems.files). Absolute paths. */
+export function chatFiles(items: Item[], limit = 12): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let i = items.length - 1; i >= 0 && out.length < limit; i--) {
+    const it = items[i];
+    if (it.kind !== "tool_use") continue;
+    const p = it.tool_input?.file_path ?? it.tool_input?.notebook_path;
+    if (typeof p !== "string" || !p || seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+
+/** Where to list for a query with a slash in it: the folder part (relative to cwd, or absolute / ~) and the rest. */
+export function browseTarget(query: string, cwd?: string): { dir: string; typed: string; filter: string } | null {
+  const slash = query.lastIndexOf("/");
+  if (slash < 0) return null;
+  const typed = query.slice(0, slash + 1); // what stays typed in front of a picked name
+  const filter = query.slice(slash + 1);
+  const part = typed.replace(/\/+$/, "");
+  let dir: string;
+  if (typed.startsWith("/")) dir = part || "/";
+  else if (typed.startsWith("~")) dir = part || "~";
+  else if (cwd) dir = `${cwd.replace(/\/+$/, "")}/${part}`;
+  else return null;
+  return { dir, typed, filter };
+}
+
+/** Whether a name matches what is typed: anywhere in it, case-insensitive; hidden files only when asked for. */
+export function nameMatches(name: string, filter: string): boolean {
+  const f = filter.toLowerCase();
+  if (name.startsWith(".") && !f.startsWith(".")) return false;
+  return name.toLowerCase().includes(f);
+}
+
+/** Ranks matches: names that start with the query first, then the rest, each keeping its order. */
+export function byPrefix<T>(rows: T[], name: (t: T) => string, filter: string): T[] {
+  const f = filter.toLowerCase();
+  if (!f) return rows;
+  const head = rows.filter((r) => name(r).toLowerCase().startsWith(f));
+  return [...head, ...rows.filter((r) => !name(r).toLowerCase().startsWith(f))];
+}
+
+/** Who answers in a session ("Claude" / "Codex" / "TRAEX" / a runtime's own name; Session.agentLabel). */
+export function agentLabel(s: Pick<Session, "agent" | "agent_label" | "source_kind">): string {
+  if (s.agent === "codex" || s.source_kind === "codex_app_server" || s.source_kind === "codex_history") return "Codex";
+  if (s.agent === "traex") return "TRAEX";
+  if (!s.agent || s.agent === "claude") return "Claude";
+  return s.agent_label || s.agent;
+}
+
+function folderName(cwd?: string): string {
+  const parts = (cwd ?? "").replace(/\/+$/, "").split("/");
+  return parts[parts.length - 1] || "";
+}
+
+/** A session's title as the @ menu shows it (Session.displayTitle). */
+export function displayTitle(s: Pick<Session, "title" | "cwd">): string {
+  const t = s.title?.trim();
+  return !t || t === "Claude Code" ? folderName(s.cwd) || "未命名会话" : t;
+}
+
+/** Other agents' sessions, most recently active first, at most `limit` (PromptItems.sessions). */
+export function otherSessions(all: Session[], except: string | undefined, query: string, limit = 8): Session[] {
+  const q = query.toLowerCase();
+  return all
+    .filter((s) => !s.assistant && `${s.machine_id}/${s.session_id}` !== except)
+    .filter((s) => !q || displayTitle(s).toLowerCase().includes(q) || sessionDetail(s).toLowerCase().includes(q))
+    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+    .slice(0, limit);
+}
+
+export function sessionDetail(s: Session): string {
+  return [agentLabel(s), folderName(s.cwd)].filter(Boolean).join(" · ");
+}
+
+/** The quote for a picked session, sent as a <jarvis-context> before the message (PromptItems.quote). */
+export function sessionQuote(s: Session): { title: string; url: string; text: string } {
+  const lines = [`另一个会话：${displayTitle(s)}（${agentLabel(s)}）`, `目录：${s.cwd}`];
+  const last = s.last_text?.trim();
+  if (last) lines.push(`它最近说：${[...last].slice(0, 600).join("")}`);
+  return { title: displayTitle(s), url: `jarvis://session/${s.machine_id}/${s.session_id}`, text: lines.join("\n") };
+}

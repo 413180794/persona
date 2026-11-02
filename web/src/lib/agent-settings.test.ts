@@ -1,0 +1,114 @@
+import { describe, expect, it } from "vitest";
+import {
+  AGENT_TEXT,
+  applySummary,
+  effective,
+  EMPTY_MAIL_FORM,
+  isUnset,
+  mailAccountLine,
+  mailErrors,
+  mailRequest,
+  mailSummary,
+  pickMachine,
+  textValue,
+  valueText,
+  withValue,
+  type AgentSetting,
+} from "./agent-settings";
+
+const recap: AgentSetting = { key: "awaySummaryEnabled", title: "离开回顾", detail: "", type: "bool", default: true, value: null };
+const effort: AgentSetting = { key: "effortLevel", title: "思考强度", detail: "", type: "enum", options: ["low", "high"], default: "high", value: "low" };
+
+describe("agent settings", () => {
+  it("read the value in effect and whether it is set", () => {
+    expect(effective(recap)).toBe(true);
+    expect(isUnset(recap)).toBe(true);
+    expect(effective(effort)).toBe("low");
+    expect(isUnset(effort)).toBe(false);
+    expect(effective({ ...recap, default: undefined })).toBeNull();
+  });
+
+  it("change one key and roll it back", () => {
+    const list = [recap, effort];
+    const changed = withValue(list, "awaySummaryEnabled", false);
+    expect(changed[0].value).toBe(false);
+    expect(changed[1]).toBe(effort);
+    expect(withValue(changed, "awaySummaryEnabled", null)[0].value).toBeNull();
+  });
+
+  it("send an empty text field as back to the default", () => {
+    expect(textValue("  中文 ")).toBe("中文");
+    expect(textValue("   ")).toBeNull();
+  });
+
+  it("edit an online machine, the remembered one first", () => {
+    const ms = [
+      { id: "nas", online: false },
+      { id: "server", online: true },
+      { id: "macbook", online: true },
+    ];
+    expect(pickMachine(ms, "macbook")).toBe("macbook");
+    expect(pickMachine(ms, "nas")).toBe("server");
+    expect(pickMachine(ms, "")).toBe("server");
+    expect(pickMachine([{ id: "nas", online: false }], "nas")).toBe("");
+  });
+
+  it("report a change sent to several machines", () => {
+    expect(applySummary([{ id: "a", name: "A" }])).toEqual({ ok: true, text: "已保存" });
+    expect(applySummary([{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }])).toEqual({ ok: true, text: "已应用到 3 台机器" });
+    expect(applySummary([{ id: "a", name: "A" }, { id: "b", name: "NAS", error: "machine is offline" }])).toEqual({ ok: false, text: "1 台已应用，1 台失败（NAS：machine is offline）" });
+    expect(applySummary([{ id: "b", name: "NAS", error: "x" }]).text).toBe("没有改成（NAS：x）");
+  });
+
+  it("say values in words", () => {
+    expect(valueText(true)).toBe("开");
+    expect(valueText(false)).toBe("关");
+    expect(valueText(null)).toBe("默认");
+    expect(valueText("high")).toBe("high");
+    expect(AGENT_TEXT.codex.path).toBe("codex-settings");
+    expect(AGENT_TEXT.claude.footer).toContain("~/.claude/settings.json");
+  });
+});
+
+describe("mail account form", () => {
+  it("needs an address and a password; Gmail is for the phone", () => {
+    expect(mailErrors({ ...EMPTY_MAIL_FORM })).toEqual({ email: "填邮箱地址", password: "填密码或授权码" });
+    expect(mailErrors({ ...EMPTY_MAIL_FORM, email: "me@", password: "x" }).email).toBe("邮箱地址的格式不对");
+    expect(mailErrors({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "x" })).toEqual({});
+    expect(mailErrors({ ...EMPTY_MAIL_FORM, kind: "gmail" }).kind).toContain("手机");
+    expect(mailErrors({ ...EMPTY_MAIL_FORM, kind: "feishu", email: "me@example.com" }).password).toContain("飞书");
+    expect(mailErrors({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "x", imapHost: "imap.example.com", imapPort: "abc" }).imapPort).toBeTruthy();
+  });
+
+  it("builds the hub's request", () => {
+    expect(mailRequest({ ...EMPTY_MAIL_FORM, kind: "gmail" })).toBeNull();
+    expect(mailRequest({ ...EMPTY_MAIL_FORM, kind: "feishu", email: " me@example.com ", password: "pw", imapHost: "ignored" })).toEqual({
+      name: "me@example.com",
+      email: "me@example.com",
+      provider: "feishu",
+      auth: "password",
+      password: "pw",
+    });
+    // servers left empty: the hub guesses them from the domain
+    expect(mailRequest({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "pw" })).toEqual({ name: "me@example.com", email: "me@example.com", provider: "imap", auth: "password", password: "pw" });
+    expect(mailRequest({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "pw", imapHost: "imap.example.com", imapPort: "993", smtpHost: "smtp.example.com", smtpPort: "587" })).toMatchObject({
+      imap_host: "imap.example.com",
+      imap_port: 993,
+      smtp_host: "smtp.example.com",
+      smtp_port: 587,
+      smtp_security: "starttls",
+    });
+    expect(mailRequest({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "pw", smtpHost: "smtp.example.com", smtpPort: "465" })?.smtp_security).toBe("tls");
+  });
+
+  it("describe accounts", () => {
+    expect(mailAccountLine({ id: "a", email: "me@example.com", status: "error", error: "auth failed" })).toBe("auth failed");
+    expect(mailAccountLine({ id: "a", email: "me@example.com", auth: "oauth2", provider: "gmail" })).toBe("Gmail · Google 账号登录");
+    expect(mailAccountLine({ id: "a", email: "me@example.com", provider: "feishu" })).toBe("飞书邮箱");
+    expect(mailAccountLine({ id: "a", email: "me@example.com", provider: "imap", imap_host: "imap.example.com" })).toBe("IMAP · imap.example.com");
+    expect(mailSummary(null)).toBe("");
+    expect(mailSummary([])).toBe("未添加");
+    expect(mailSummary([{ id: "a", email: "x", status: "error" }, { id: "b", email: "y" }])).toBe("2 个 · 有错误");
+    expect(mailSummary([{ id: "a", email: "x" }])).toBe("1 个账户");
+  });
+});

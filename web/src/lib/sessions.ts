@@ -1,16 +1,11 @@
 // Derived lists the sidebar, the home page and the palette share.
 import { useMemo } from "react";
-import { byAttention, stateOf } from "./format";
-import { splitAgentSessions } from "./agent-groups";
+import { stateOf } from "./format";
+import { buildSpaces, splitAgentSessions, type Space } from "./agent-groups";
 import { useStore } from "./store";
 import type { Session } from "./types";
 
-export interface Space {
-  key: string;
-  machineId: string;
-  name: string;
-  sessions: Session[];
-}
+export type { Space };
 
 export function useAgentSessions(): Session[] {
   const by = useStore((s) => s.sessions);
@@ -22,24 +17,7 @@ export function useSpaces(): { spaces: Space[]; loose: Session[]; recent: Sessio
   const machines = useStore((s) => s.machines);
   return useMemo(() => {
     const { live, recent } = splitAgentSessions(all, machines);
-    const map = new Map<string, Space>();
-    const loose: Session[] = [];
-    for (const s of live) {
-      if (!s.space_id) {
-        loose.push(s);
-        continue;
-      }
-      const key = `${s.machine_id}/${s.space_id}`;
-      if (!map.has(key)) map.set(key, { key, machineId: s.machine_id, name: s.space_name || s.space_id, sessions: [] });
-      map.get(key)!.sessions.push(s);
-    }
-    const order = (m: string) => machines.findIndex((x) => x.id === m);
-    // The sidebar keeps herdr's order (machine, workspace, tab): rows that jump around as agents change state
-    // are hard to click. What needs attention is on the home page and in the state dots.
-    const bySlot = (a: Session, b: Session) => (a.slot_index ?? 0) - (b.slot_index ?? 0) || a.session_id.localeCompare(b.session_id);
-    const spaces = [...map.values()].map((sp) => ({ ...sp, index: sp.sessions[0]?.space_index ?? 0, sessions: sp.sessions.sort(bySlot) }));
-    spaces.sort((a, b) => order(a.machineId) - order(b.machineId) || a.index - b.index || a.name.localeCompare(b.name));
-    return { spaces, loose: loose.sort(byAttention), recent };
+    return { ...buildSpaces(live, machines), recent };
   }, [all, machines]);
 }
 

@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { api, errorText } from "../lib/api";
 import { bytes, stateOf } from "../lib/format";
+import { hubLabel, routeText } from "../lib/mesh";
+import { href, onLinkClick } from "../lib/router";
 import { useAgentSessions } from "../lib/sessions";
 import { useStore } from "../lib/store";
 import type { MachineMetrics, MetricPoint } from "../lib/types";
@@ -63,22 +65,31 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             const working = agents.filter((s) => stateOf(s) === "working").length;
             const memPct = l?.mem_used && l.mem_total ? (l.mem_used / l.mem_total) * 100 : undefined;
             const diskPct = l?.disk_used && l.disk_total ? (l.disk_used / l.disk_total) * 100 : undefined;
+            const hub = hubLabel(m, machines);
+            const route = routeText(m, machines);
+            const detail = { name: "machine" as const, mid: m.id };
             return (
               <section key={m.id} className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${i * 60}ms both` }}>
                 <div className="flex items-start gap-3 px-4 pt-3.5">
                   <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[9px]", m.online ? "bg-field text-ink-2" : "bg-inset text-ink-3")}>
                     <Icon name="machine" size={16} />
                   </span>
-                  <div className="min-w-0 flex-1">
+                  <a href={href(detail)} onClick={(e) => onLinkClick(e, detail)} className="group/title min-w-0 flex-1 rounded-[6px]">
                     <div className="flex items-center gap-2">
-                      <h2 className="truncate text-[14px] font-semibold text-ink">{m.name}</h2>
+                      <h2 className="truncate text-[14px] font-semibold text-ink group-hover/title:underline">{m.name}</h2>
+                      {hub && (
+                        <span title={route ? `${hub} · ${route}` : hub} className="inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-field px-1.5 text-[11px] font-medium text-ink-2">
+                          <Icon name="hub" size={11} />
+                          {hub}
+                        </span>
+                      )}
                       <span className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[11px] font-medium", m.online ? "bg-green-tint text-green" : "bg-field text-ink-3")}>
                         <span className={cx("size-1.5 rounded-full", m.online ? "bg-green" : "bg-ink-3")} />
                         {m.online ? "在线" : "离线"}
                       </span>
                     </div>
                     <p className="truncate text-[11.5px] text-ink-3">{[m.system?.name || m.os, m.system?.model, m.system?.cpu].filter(Boolean).join(" · ") || m.hostname}</p>
-                  </div>
+                  </a>
                   {!m.online && (
                     <Button tone="secondary" icon="retry" onClick={() => reconnect(m.id)}>
                       重连
@@ -106,7 +117,10 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 </div>
                 <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11.5px] text-ink-3">
                   <span>{!m.online ? "连不上这台电脑" : agents.length ? `${agents.length} 个 Agent${working ? `，${working} 个在工作` : ""}` : "没有在跑的 Agent"}</span>
-                  <span className="font-mono">{[m.claude_version && `claude ${m.claude_version}`, m.herdr_version && `herdr ${m.herdr_version}`].filter(Boolean).join(" · ")}</span>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="truncate font-mono">{[m.claude_version && `claude ${m.claude_version}`, m.herdr_version && `herdr ${m.herdr_version}`].filter(Boolean).join(" · ")}</span>
+                    <a href={href(detail)} onClick={(e) => onLinkClick(e, detail)} className="shrink-0 whitespace-nowrap text-ink-2 hover:text-ink">详情 ›</a>
+                  </span>
                 </div>
               </section>
             );

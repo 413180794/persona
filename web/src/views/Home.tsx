@@ -1,12 +1,14 @@
 // 总览: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ago, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
+import { hubLabel, machineWithHub } from "../lib/mesh";
 import { href, onLinkClick } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { useStore } from "../lib/store";
 import type { AgentState, Interaction, Session } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, StatusDot, useNow } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { MarkSeenDialog } from "./AgentMenus";
 
 const KIND: Record<Interaction["kind"], string> = { question: "提问", plan: "计划待批准", permission: "需要授权", screen: "终端对话框" };
 
@@ -27,8 +29,9 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
     const pick = (st: AgentState) => sessions.filter((s) => stateOf(s) === st).sort((a, b) => ((st === "working" ? a.state_since : b.updated_at) ?? "").localeCompare((st === "working" ? b.state_since : a.updated_at) ?? ""));
     return { needs: pick("needs_you"), working: pick("working"), unread: pick("unread") };
   }, [sessions]);
-  const name = (mid: string) => machines.find((m) => m.id === mid)?.name ?? mid;
+  const name = (mid: string) => machineWithHub(mid, machines);
   const quiet = !groups.needs.length && !groups.working.length && !groups.unread.length;
+  const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
 
   return (
     <div className="flex h-full flex-col">
@@ -89,7 +92,16 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           )}
 
           {groups.unread.length > 0 && (
-            <Group title="做完了，还没看" count={groups.unread.length}>
+            <Group
+              title="做完了，还没看"
+              count={groups.unread.length}
+              right={
+                <button type="button" onClick={() => setConfirmSeen(groups.unread)} className="flex h-6 items-center gap-1 whitespace-nowrap rounded-control px-1.5 text-[12px] text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
+                  <Icon name="check" size={12} stroke={2.4} />
+                  全部标为已读
+                </button>
+              }
+            >
               {groups.unread.map((s, i) => (
                 <SessionTask key={s.session_id} s={s} i={i} machine={name(s.machine_id)} pill={<Pill tone="green">{ago(s.updated_at) || "完成"}</Pill>} />
               ))}
@@ -116,17 +128,22 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {machines.map((m) => {
                   const mine = m.online ? sessions.filter((s) => s.machine_id === m.id && stateOf(s) !== "offline") : [];
+                  const hub = hubLabel(m, machines);
+                  const detail = { name: "machine" as const, mid: m.id };
                   return (
-                    <div key={m.id} className="flex items-center gap-3 rounded-card bg-surface px-3 py-2.5 shadow-card">
+                    <a key={m.id} href={href(detail)} onClick={(e) => onLinkClick(e, detail)} className="flex items-center gap-3 rounded-card bg-surface px-3 py-2.5 shadow-card transition-colors hover:bg-hover">
                       <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-[8px]", m.online ? "bg-field text-ink-2" : "bg-inset text-ink-3")}>
                         <Icon name="machine" size={15} />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-ink">{m.name}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate text-[13px] font-medium text-ink">{m.name}</span>
+                          {hub && <span className="shrink-0 truncate text-[11.5px] text-ink-3">{hub}</span>}
+                        </span>
                         <span className="block truncate text-[11.5px] text-ink-3">{m.online ? `${mine.length} 个 Agent${m.system?.name ? ` · ${m.system.name}` : ""}` : m.error || "离线"}</span>
                       </span>
                       <span className={cx("size-2 shrink-0 rounded-full", m.online ? "bg-green" : "bg-line-strong")} title={m.online ? "在线" : "离线"} />
-                    </div>
+                    </a>
                   );
                 })}
               </div>
@@ -134,6 +151,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           )}
         </div>
       </div>
+      <MarkSeenDialog list={confirmSeen} onClose={() => setConfirmSeen(null)} />
     </div>
   );
 }

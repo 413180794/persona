@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeItems, parseUserText, segments, toolChip, workSummary } from "./turns";
+import { chatLines, isLoopTick, mergeItems, parseUserText, segments, toolChip, wakeDrawer, workSegment, workSummary } from "./turns";
 import type { Item } from "./types";
 
 const u = (seq: number, text: string, extra: Partial<Item> = {}): Item => ({ id: `u${seq}#0`, seq, role: "user", kind: "text", text, ...extra });
@@ -70,4 +70,129 @@ describe("parseUserText", () => {
 
 it("toolChip shows the first line of a command", () => {
   expect(toolChip(tool(1, "x"))).toBe("ls -la");
+});
+
+describe("chatLines", () => {
+  const notice = (seq: number, text: string, extra: Partial<Item> = {}): Item => ({ id: `n${seq}#0`, seq, role: "system", kind: "notice", text, ...extra });
+  const recap = (seq: number, text: string): Item => ({ id: `rc${seq}#0`, seq, role: "system", kind: "recap", text });
+  const wake = (seq: number, title: string, status = "completed"): Item =>
+    notice(seq, `后台命令完成 · ${title}`, { wake: true, task: { kind: "shell", status, title, task_id: `bk${seq}` } });
+  const kinds = (ls: ReturnType<typeof chatLines>) => ls.map((l) => l.kind);
+
+  it("draws one segment per message, the live one last", () => {
+    const ls = chatLines([u(1, "hi"), a(2, "ok"), u(3, "next"), tool(4, "x")], { live: true });
+    expect(kinds(ls)).toEqual(["segment", "segment"]);
+    expect(ls.map((l) => l.kind === "segment" && l.live)).toEqual([false, true]);
+  });
+
+  it("merges a finished exchange of several messages into one, and splits it when asked", () => {
+    const items = [u(1, "first"), tool(2, "x"), res(3, "x"), u(4, "also this", { queued: true }), a(5, "partial"), tool(6, "y"), res(7, "y"), a(8, "all done")];
+    const ls = chatLines(items);
+    expect(kinds(ls)).toEqual(["segment"]);
+    const m = ls[0].kind === "segment" ? ls[0] : null;
+    expect(m?.group).toBe("wt-u1#0");
+    expect(m?.seg.user?.parts).toEqual(["first", "also this"]);
+    expect(m?.seg.answer?.text).toBe("all done");
+    expect(m?.seg.tools).toBe(2);
+    expect(m?.seg.steps.map((s) => s.kind)).toEqual(["tool", "text", "tool"]);
+    const open = chatLines(items, { split: new Set(["wt-u1#0"]) });
+    expect(kinds(open)).toEqual(["split", "segment", "segment"]);
+    expect(open[0].kind === "split" && open[0].count).toBe(2);
+    // the live exchange is never merged
+    expect(kinds(chatLines(items, { live: true }))).toEqual(["segment", "segment"]);
+  });
+
+  it("keeps an interrupted notice after the exchange", () => {
+    const ls = chatLines([u(1, "go"), tool(2, "x"), notice(3, "已中断")]);
+    expect(kinds(ls)).toEqual(["segment", "notice"]);
+  });
+
+  it("folds recaps in a row into one line", () => {
+    const ls = chatLines([u(1, "go"), a(2, "done"), recap(3, "one"), recap(4, "two"), u(5, "back"), a(6, "ok"), recap(7, "three")]);
+    expect(kinds(ls)).toEqual(["segment", "recaps", "segment", "recaps"]);
+    expect(ls[1].kind === "recaps" && ls[1].items.map((i) => i.text)).toEqual(["one", "two"]);
+    expect(ls[1].id).toBe("rc3#0");
+  });
+
+  it("keeps work a background task woke the agent for in the exchange, behind a wakes chip", () => {
+    const items = [
+      u(1, "run the tests in the background"),
+      a(2, "started, I will tell you when it ends — this is the long one"),
+      wake(3, "tests"),
+      tool(4, "x"),
+      res(5, "x"),
+      a(6, "all green"),
+    ];
+    const ls = chatLines(items);
+    expect(kinds(ls)).toEqual(["segment", "wakes"]);
+    const seg = ls[0].kind === "segment" ? ls[0].seg : null;
+    // the longest run's words are the answer; what came after it is only in the drawer
+    expect(seg?.answer?.text).toContain("long one");
+    const w = ls[1].kind === "wakes" ? ls[1].turn : null;
+    expect(w?.wakes).toHaveLength(1);
+    const d = wakeDrawer(w!);
+    expect(d.groups.map((g) => g.answer?.text)).toEqual(["all green"]);
+    expect(d.groups[0].notices.map((n) => n.id)).toEqual(["n3#0"]);
+    expect(d.process.map((p) => p.kind)).toEqual(["tool_use", "tool_result"]);
+  });
+
+  it("puts the latest wake first in the drawer", () => {
+    const items = [u(1, "go"), a(2, "ok"), wake(3, "a"), a(4, "a done"), wake(5, "b"), a(6, "b done")];
+    const ls = chatLines(items);
+    const w = ls.find((l) => l.kind === "wakes");
+    const d = wakeDrawer(w!.kind === "wakes" ? w!.turn : (null as never));
+    expect(d.groups.map((g) => g.answer?.text)).toEqual(["b done", "a done"]);
+  });
+
+  it("reopens the exchange a recap closed when a background task reports back", () => {
+    const ls = chatLines([u(1, "go"), a(2, "started the build, waiting for it"), recap(3, "waiting for the build"), wake(4, "build"), a(5, "ok")]);
+    expect(kinds(ls)).toEqual(["segment", "wakes", "recaps"]);
+  });
+
+  it("opens work a wake started on its own with the wake notice", () => {
+    const ls = chatLines([wake(1, "build"), tool(2, "x"), res(3, "x"), a(4, "build is up")]);
+    expect(kinds(ls)).toEqual(["notice", "segment"]);
+    expect(ls[1].kind === "segment" && ls[1].seg.answer?.text).toBe("build is up");
+  });
+
+  it("turns API errors into cards and folds retries of the same one", () => {
+    const err = "API Error: 502 upstream error, try again";
+    const ls = chatLines([u(1, "plan the day"), a(2, err), u(3, "继续"), a(4, err), u(5, "继续"), a(6, err)]);
+    expect(kinds(ls)).toEqual(["segment", "apiError"]);
+    const e = ls[1].kind === "apiError" ? ls[1] : null;
+    expect(e?.count).toBe(3);
+    expect(e?.info.status).toBe(502);
+    expect(e?.info.transient).toBe(true);
+    // the message before it stays, without the error as its answer
+    expect(ls[0].kind === "segment" && ls[0].seg.answer).toBeUndefined();
+  });
+
+  it("does not fold a different error, nor one after real work", () => {
+    const ls = chatLines([u(1, "a"), a(2, "API Error: 502 bad gateway"), u(3, "继续"), a(4, "API Error: 401 authentication_error")]);
+    expect(kinds(ls)).toEqual(["segment", "apiError", "segment", "apiError"]);
+    const ls2 = chatLines([u(1, "a"), a(2, "API Error: 502 x"), u(3, "do something else"), tool(4, "x"), res(5, "x"), a(6, "API Error: 502 x")]);
+    expect(kinds(ls2)).toEqual(["segment", "apiError", "segment", "apiError"]);
+  });
+
+  it("marks cross-session messages and loop ticks", () => {
+    const ls = chatLines([u(1, "hello from the other side", { from: "build-bot" }), a(2, "ok"), u(3, "/loop check CI"), a(4, "CI is green")]);
+    const segs = ls.flatMap((l) => (l.kind === "segment" ? [l.seg] : []));
+    expect(segs[0].user?.from).toBe("build-bot");
+    expect(isLoopTick(segs[1].user!)).toBe(true);
+  });
+
+  it("shows the work row while working with nothing of the turn yet", () => {
+    const ls = chatLines([u(1, "go"), a(2, "done"), recap(3, "r")], { live: true });
+    expect(kinds(ls)).toEqual(["segment", "recaps", "segment"]);
+    expect(ls[2].kind === "segment" && ls[2].live).toBe(true);
+  });
+});
+
+describe("workSegment", () => {
+  it("keeps every step, words included, without an answer", () => {
+    const s = workSegment("w", [tool(1, "x"), res(2, "x"), a(3, "between"), tool(4, "y"), a(5, "end")]);
+    expect(s.answer).toBeUndefined();
+    expect(s.steps.map((x) => x.kind)).toEqual(["tool", "text", "tool", "text"]);
+    expect(s.replies).toBe(2);
+  });
 });

@@ -1,0 +1,90 @@
+// One item opened: what it is and where from, 已处理 on the right; the AI's summary with AI 草拟回复 / 交给 AI; then
+// the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the removed post.
+import { useState } from "react";
+import { agentDraft, agentWorking, isDone, kindLabel, labelIsUrgent, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
+import { navigate } from "../../lib/router";
+import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
+import { Button, Loading } from "../../ui/atoms";
+import { Icon } from "../../ui/icons";
+import { DocBody, MailBody, MomentBody } from "./InboxBodies";
+import { DraftDialog, HandOffDialog } from "./InboxDialogs";
+import { AgentWorking, ItemAvatar, Spark, Tag } from "./InboxParts";
+import { LarkThread } from "./LarkThread";
+
+export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
+  const [dialog, setDialog] = useState<"" | "draft" | "handoff">("");
+  const prefs = useTranslatePrefs();
+  if (!item) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        {loaded ? <p className="text-[13px] text-ink-3">这件事已经不在收件箱里了</p> : <Loading />}
+      </div>
+    );
+  }
+  const done = isDone(item);
+  const label = kindLabel(item);
+  const draft = agentDraft(item);
+  const translated = hubTranslation(item, prefs);
+  return (
+    <div className="flex h-full min-h-0 flex-col" key={item.id}>
+      <div className="shrink-0 border-b border-line px-4 pt-4 pb-3 sm:px-6">
+        <div className="mx-auto max-w-[760px]">
+          <div className="flex items-start gap-3">
+            <ItemAvatar it={item} size={36} />
+            <div className="min-w-0 flex-1">
+              <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold text-ink">
+                <span className="truncate" title={translated?.subject ? item.title : undefined}>{translated?.subject || item.title}</span>
+                {label && <Tag urgent={labelIsUrgent(item)}>{label}</Tag>}
+              </h2>
+              <p className="mt-0.5 truncate text-[12px] text-ink-3">{[sourceLine(item), shortTime(item.updated_at)].filter(Boolean).join(" · ")}</p>
+            </div>
+            {done ? (
+              <Button tone="secondary" icon="inbox" onClick={() => void setDone(item, false)}>移回</Button>
+            ) : (
+              <Button
+                tone="secondary"
+                icon="check"
+                onClick={() => {
+                  void setDone(item, true);
+                  navigate({ name: "inbox" });
+                }}
+              >
+                已处理
+              </Button>
+            )}
+          </div>
+          {item.summary && (
+            <p className="mt-3 text-[13px] leading-relaxed text-ink">
+              <Spark />
+              {item.summary}
+            </p>
+          )}
+          {!done && agentWorking(item) && <div className="mt-2"><AgentWorking it={item} /></div>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? "查看草稿" : "AI 草拟回复"}</Button>
+            <Button tone="secondary" icon="spark" onClick={() => setDialog("handoff")}>交给 AI</Button>
+          </div>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {item.doc ? <DocBody item={item} /> : item.moment ? <MomentBody item={item} /> : item.lark ? <LarkThread item={item} /> : item.mail ? <MailBody item={item} /> : (
+          <div className="mx-auto max-w-[760px] px-6 py-5 text-[13.5px] whitespace-pre-wrap text-ink">{item.preview}</div>
+        )}
+      </div>
+      {dialog === "draft" && <DraftDialog item={item} onClose={() => setDialog("")} />}
+      {dialog === "handoff" && <HandOffDialog item={item} onClose={() => setDialog("")} />}
+    </div>
+  );
+}
+
+export function DetailPlaceholder() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+      <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3">
+        <Icon name="inbox" size={18} />
+      </span>
+      <p className="text-[13.5px] font-medium text-ink">选一件事</p>
+      <p className="text-[12.5px] text-ink-3">左边列表里点一件事，详情会在这里打开。</p>
+    </div>
+  );
+}

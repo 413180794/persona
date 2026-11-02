@@ -9,6 +9,11 @@ import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { Group, Row, Pill } from "./settings/SettingsParts";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
+import { AgentSettings } from "./settings/AgentSettings";
+import { AssistantSettings } from "./settings/AssistantSettings";
+import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
+import { Connectors } from "./settings/Connectors";
+import { TranslationSettings } from "./settings/TranslationSettings";
 import { modelPurpose, modelSummary, type ModelPurpose } from "../lib/model-config";
 
 // ── types (docs/launchers.md) ───────────────────────────
@@ -71,18 +76,24 @@ export function tokens(n: number): string {
 
 // ── page ────────────────────────────────────────────────
 
-type Tab = "general" | "models" | "model-config" | "devices";
+type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "translate" | "devices";
+const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "translate", "devices"];
 
 export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const [tab, setTab] = useState<Tab>(() => {
     const t = new URLSearchParams(location.search).get("tab");
-    return t === "models" || t === "model-config" || t === "devices" ? t : "general";
+    return TABS.includes(t as Tab) ? (t as Tab) : "general";
   });
   const [purpose, setPurpose] = useState<string | null>(() => new URLSearchParams(location.search).get("purpose"));
   const tabs: { k: Tab; label: string; icon: IconName }[] = [
     { k: "general", label: "通用", icon: "gear" },
-    { k: "models", label: "模型供应商", icon: "spark" },
+    { k: "assistant", label: "助手", icon: "spark" },
+    { k: "models", label: "模型供应商", icon: "layers" },
     { k: "model-config", label: "模型配置", icon: "gear" },
+    { k: "claude", label: "Claude Code", icon: "terminal" },
+    { k: "codex", label: "Codex", icon: "terminal" },
+    { k: "connectors", label: "连接器", icon: "link" },
+    { k: "translate", label: "翻译", icon: "translate" },
     { k: "devices", label: "设备", icon: "key" },
   ];
   const pick = (k: Tab, id: string | null = null) => {
@@ -118,6 +129,10 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           {tab === "general" && <General onConfigure={() => pick("model-config", "assistant")} />}
           {tab === "models" && <Models />}
           {tab === "model-config" && <ModelConfiguration open={purpose} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
+          {tab === "assistant" && <AssistantSettings onConfigure={() => pick("model-config", "assistant")} />}
+          {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
+          {tab === "connectors" && <Connectors />}
+          {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
           {tab === "devices" && <Devices />}
         </div>
       </div>
@@ -181,6 +196,10 @@ function General({ onConfigure }: { onConfigure: () => void }) {
         </div>
       </Group>
 
+      <Group title="形象" footer="Jarvis 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。形象包放在 hub 机器上。">
+        <PersonaPicker builtin={<BuiltinFace size={56} />} />
+      </Group>
+
       <Group title="Jarvis 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.jarvis/assistant"} 里后台运行。模型与启动器统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。`}>
         <Row label="对话模型" hint={purpose ? modelSummary(purpose) : assistant?.launcher} onClick={onConfigure}>
           <span>模型配置</span>
@@ -195,6 +214,10 @@ function General({ onConfigure }: { onConfigure: () => void }) {
 
 function About() {
   const machines = useStore((s) => s.machines);
+  const hubName = useStore((s) => s.hubName);
+  // interconnected hubs (docs/plan-hub-mesh.md 2.6): this page talks to one hub and sees its whole group
+  const mesh = useStore((s) => s.mesh);
+  const others = mesh.filter((h) => !h.self);
   const logout = async () => {
     const id = localStorage.getItem("jarvis.tokenId");
     if (id) await api(`/auth/tokens/${enc(id)}`, { method: "DELETE" }).catch(() => {});
@@ -208,6 +231,17 @@ function About() {
       <Row label="hub 地址" mono>
         {location.host}
       </Row>
+      {hubName && <Row label="hub">{hubName}</Row>}
+      {others.length > 0 && (
+        <Row label="互联的 hub" hint="这些 hub 上的电脑也列在这里，经这台 hub 访问">
+          {others.map((h) => (
+            <span key={h.hub_id} className="flex items-center gap-1.5">
+              <span className={cx("size-1.5 rounded-full", h.online === false ? "bg-ink-3" : "bg-green")} />
+              {h.name || h.hub_id}
+            </span>
+          ))}
+        </Row>
+      )}
       <Row label="电脑">{`${machines.filter((m) => m.online).length} / ${machines.length} 在线`}</Row>
       <div className="flex justify-end px-4 py-2.5">
         <Button tone="quiet" icon="logout" onClick={() => void logout()} className="text-red enabled:hover:text-red">

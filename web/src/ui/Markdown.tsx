@@ -1,6 +1,7 @@
 import { memo } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { clickLink, linkHref, linkRoute, prefetchLink } from "../lib/links";
 import { copyText } from "./atoms";
 import { Icon } from "./icons";
 
@@ -34,12 +35,31 @@ export function linkify(md: string): string {
     .join("");
 }
 
-const components: Components = {
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noreferrer noopener">
+// jarvis://session links survive (they move to that conversation); everything else as react-markdown decides
+// (javascript: and other apps' schemes are dropped).
+export function markdownUrl(url: string): string {
+  return linkRoute(url).kind === "session" ? url : defaultUrlTransform(url);
+}
+
+// A link opens where it belongs (lib/links.ts): Feishu documents in the side panel, conversations in place, pages in
+// a new tab. ⌘ / Ctrl / middle click is always the browser's new tab.
+function Link({ href, children }: { href?: string; children?: React.ReactNode }) {
+  const title = textOf(children).trim();
+  return (
+    <a
+      href={href ? linkHref(href) : undefined}
+      target="_blank"
+      rel="noreferrer noopener"
+      onClick={(e) => clickLink(e, href, title && title !== href ? title : undefined)}
+      onPointerEnter={() => prefetchLink(href)}
+    >
       {children}
     </a>
-  ),
+  );
+}
+
+export const markdownComponents: Components = {
+  a: ({ href, children }) => <Link href={href}>{children}</Link>,
   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
 };
 
@@ -70,7 +90,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 export const Markdown = memo(function Markdown({ text, small }: { text: string; small?: boolean }) {
   return (
     <div className={`prose-j ${small ? "prose-sm" : ""}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={markdownUrl}>
         {linkify(text)}
       </ReactMarkdown>
     </div>

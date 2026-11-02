@@ -1,8 +1,9 @@
 // Start an agent on one of your computers: machine, folder (recent ones first), launcher, the first message.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { hubLabel } from "../lib/mesh";
 import { api, ApiError, enc, errorText } from "../lib/api";
 import { pickAttachment, releaseAttachments, type LocalAttachment } from "../lib/attachments";
-import { launchAgent } from "../lib/new-agent";
+import { launchAgent, presetPrompt, type NewAgentPreset } from "../lib/new-agent";
 import { AttachmentTray } from "../ui/AttachmentTray";
 import { modelPurpose, modelSummary } from "../lib/model-config";
 import { baseName, shortPath } from "../lib/format";
@@ -18,7 +19,7 @@ interface Dirs {
   recent?: { path: string; name: string; last_used?: string }[];
 }
 
-export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: () => void; /** Filled in when another page opens it (知识库's 开 Agent). */ preset?: NewAgentPreset | null }) {
   const machines = useStore((s) => s.machines);
   const online = useMemo(() => machines.filter((m) => m.online), [machines]);
   const [mid, setMid] = useState(() => localStorage.getItem("new.machine") ?? "");
@@ -36,10 +37,21 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const submitted = useRef(false);
+  // a preset's folder, put in once its computer is the chosen one (choosing a computer loads that one's last folder)
+  const presetCwd = useRef<{ mid: string; cwd: string } | null>(null);
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
 
   useEffect(() => { if (open) submitted.current = false; }, [open]);
+  useEffect(() => {
+    if (!open || !preset) return;
+    if (preset.prompt) setPrompt((draft) => presetPrompt(preset.prompt, draft));
+    if (preset.machineId && preset.cwd && online.some((m) => m.id === preset.machineId)) {
+      presetCwd.current = { mid: preset.machineId, cwd: preset.cwd };
+      setMid(preset.machineId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preset]);
   useEffect(() => {
     if (prompt) localStorage.setItem("draft:new-agent", prompt);
     else localStorage.removeItem("draft:new-agent");
@@ -56,7 +68,8 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
   };
 
   useEffect(() => {
-    if (open && (!mid || !online.some((m) => m.id === mid)) && online[0]) setMid(online[0].id);
+    // a preset's computer (set just above, in the same commit) is not overridden by the first one online
+    if (open && !presetCwd.current && (!mid || !online.some((m) => m.id === mid)) && online[0]) setMid(online[0].id);
   }, [open, online, mid]);
 
   useEffect(() => {
@@ -89,7 +102,9 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
       })
       .catch((e) => { if (!controller.signal.aborted) toast(errorText(e), "error"); })
       .finally(() => { if (!controller.signal.aborted) setLoadingModels(false); });
-    setCwd(localStorage.getItem(`new.cwd.${mid}`) ?? "");
+    const p = presetCwd.current;
+    if (p?.mid === mid) presetCwd.current = null;
+    setCwd(p?.mid === mid ? p.cwd : (localStorage.getItem(`new.cwd.${mid}`) ?? ""));
     setBrowse("");
     return () => controller.abort();
   }, [open, mid]);
@@ -149,6 +164,7 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
               >
                 <span className={cx("size-1.5 rounded-full", m.online ? "bg-green" : "bg-ink-3")} />
                 {m.name}
+                {hubLabel(m, machines) && <span className={mid === m.id ? "opacity-70" : "text-ink-3"}>{hubLabel(m, machines)}</span>}
               </button>
             ))}
           </div>

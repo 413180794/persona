@@ -5,23 +5,35 @@ import { useRef, useSyncExternalStore } from "react";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents } from "./agents";
 import { api, ApiError, getToken } from "./api";
 import type { AgentMutes } from "./agent-groups";
-import type { AssistantInfo, Interaction, Item, Machine, Session } from "./types";
+import { stateOf } from "./format";
+import { NO_PINS, pinsOf, type AgentPins } from "./pins";
+import type { AssistantInfo, Interaction, Item, Machine, MeshHub, Session } from "./types";
 import type { AgentLaunch } from "./new-agent";
 import type { Todo } from "./todos";
 import { releaseAttachments } from "./attachments";
+import type { OutboxEntry } from "./outbox";
 
 export type Conn = "connecting" | "online" | "offline";
 
 export interface State {
   conn: Conn;
   version: string;
+  /** What the hub can do (hello `features`): terminal_stream, terminal_control… */
+  features: string[];
+  /** This hub's name and its interconnected group (docs/plan-hub-mesh.md 2.6); empty on older hubs. */
+  hubName: string;
+  mesh: MeshHub[];
   machines: Machine[];
   sessions: Record<string, Session[]>;
   interactions: Interaction[];
   assistant: AssistantInfo | null;
   mutes: AgentMutes;
+  /** Pinned spaces / agents (GET /pins): the top of the Agents list. */
+  pins: AgentPins;
   loaded: boolean;
   launches: Record<string, AgentLaunch>;
+  /** Messages other pages sent for a conversation (`mid/sid`), shown there until the transcript has them (lib/outbox.ts). */
+  outbox: Record<string, OutboxEntry[]>;
   todos: Todo[];
   todosSupported: boolean;
   todosLoaded: boolean;
@@ -30,13 +42,18 @@ export interface State {
 let state: State = {
   conn: "connecting",
   version: "",
+  features: [],
+  hubName: "",
+  mesh: [],
   machines: [],
   sessions: {},
   interactions: [],
   assistant: null,
   mutes: { spaces: [], sessions: [], allowed: [] },
+  pins: NO_PINS,
   loaded: false,
   launches: {},
+  outbox: {},
   todos: [],
   todosSupported: true,
   todosLoaded: false,
@@ -117,6 +134,25 @@ export function listenSession(mid: string, sid: string, l: SessionListener) {
   };
 }
 
+// ── other pushes (inbox, lark, terminal…): pages that need them listen by type ──
+
+type HubListener = (msg: Record<string, unknown>) => void;
+const hubListeners = new Map<string, Set<HubListener>>();
+
+/** Listen to one type of WebSocket message (`inbox`, `lark`, `terminal`, `terminal_control`…); returns the unsubscribe. */
+export function onHubEvent(type: string, l: HubListener) {
+  if (!hubListeners.has(type)) hubListeners.set(type, new Set());
+  hubListeners.get(type)!.add(l);
+  return () => {
+    hubListeners.get(type)?.delete(l);
+  };
+}
+
+/** Whether the socket is open now (a page that sends its own subscriptions waits for `hello` otherwise). */
+export function isOpen() {
+  return ws?.readyState === WebSocket.OPEN;
+}
+
 // ── WebSocket ───────────────────────────────────────────
 
 let ws: WebSocket | null = null;
@@ -183,13 +219,21 @@ if (typeof window !== "undefined") {
 
 function onMessage(msg: Record<string, unknown>) {
   switch (msg.type) {
-    case "hello":
-      set({ conn: "online", version: String(msg.server_version ?? "") });
+    case "hello": {
+      const mesh = (msg.mesh as { hubs?: MeshHub[] } | undefined)?.hubs;
+      set({
+        conn: "online",
+        version: String(msg.server_version ?? ""),
+        features: Array.isArray(msg.features) ? (msg.features as string[]) : [],
+        hubName: typeof msg.hub_name === "string" ? msg.hub_name : "",
+        mesh: Array.isArray(mesh) ? mesh : [],
+      });
       sessionListeners.forEach((ls) => ls.forEach((l) => l.reconnected?.()));
       void refresh();
       void refreshAgentSessions();
       void refreshAgentPrefs();
       break;
+    }
     case "ping":
       send({ type: "pong" });
       break;
@@ -233,10 +277,47 @@ function onMessage(msg: Record<string, unknown>) {
       sessionListeners.get(key(msg.machine_id as string, msg.session_id as string))?.forEach((l) => l.delta?.(msg.text as string));
       break;
   }
+  if (typeof msg.type === "string") hubListeners.get(msg.type)?.forEach((l) => l(msg));
+}
+
+/** Replace the mutes after a PUT /mutes (the chat's 屏蔽通知). */
+export function setMutes(mutes: AgentMutes) {
+  set({ mutes });
+}
+
+/** Replace the pins after a PUT /pins (optimistic; put back on failure). */
+export function setPins(pins: AgentPins) {
+  set({ pins });
+}
+
+/** 全部标为已读: every finished-unread one of these is seen now, in one update of the list (iOS AppModel.markSeen). The
+ * hub pushes the sessions back as seen; the list does not wait for it. */
+export function markSeen(list: Pick<Session, "machine_id" | "session_id">[]) {
+  const keys = new Set(list.map((s) => `${s.machine_id}/${s.session_id}`));
+  const now = new Date().toISOString();
+  const sessions: Record<string, Session[]> = {};
+  let changed = false;
+  for (const [mid, ss] of Object.entries(state.sessions)) {
+    sessions[mid] = ss.map((s) => {
+      if (!keys.has(`${s.machine_id}/${s.session_id}`) || stateOf(s) !== "unread") return s;
+      changed = true;
+      if (isOpen()) markSeenLocally(s.machine_id, s.session_id);
+      else void api(`/sessions/${encodeURIComponent(s.machine_id)}/${encodeURIComponent(s.session_id)}/seen`, { method: "POST" }).catch(() => {});
+      return { ...s, state: "idle" as const, seen_at: now };
+    });
+  }
+  if (changed) set({ sessions });
 }
 
 export function putLaunch(launch: AgentLaunch) {
   set({ launches: { ...state.launches, [launch.id]: launch } });
+}
+
+export function setOutbox(key: string, list: OutboxEntry[]) {
+  const next = { ...state.outbox };
+  if (list.length) next[key] = list;
+  else delete next[key];
+  set({ outbox: next });
 }
 
 export function upsertSession(s: Session) {
@@ -262,12 +343,13 @@ function syncAssistant(mid: string, list: Session[]) {
 }
 
 export async function refresh() {
-  const [sessions, interactions, assistant, machines, mutes, todos] = await Promise.allSettled([
+  const [sessions, interactions, assistant, machines, mutes, pins, todos] = await Promise.allSettled([
     api<{ sessions: Session[] }>("/sessions"),
     api<{ interactions: Interaction[] }>("/interactions"),
     api<AssistantInfo>("/assistant"),
     api<{ machines: Machine[] }>("/machines"),
     api<AgentMutes>("/mutes"),
+    api<Partial<AgentPins>>("/pins"),
     api<{ todos: Todo[] }>("/todos"),
   ]);
   const patch: Partial<State> = { loaded: true };
@@ -280,6 +362,7 @@ export async function refresh() {
   if (assistant.status === "fulfilled") patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
   if (machines.status === "fulfilled") patch.machines = machines.value.machines ?? [];
   if (mutes.status === "fulfilled") patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
+  if (pins.status === "fulfilled") patch.pins = pinsOf(pins.value);
   if (todos.status === "fulfilled") {
     patch.todos = todos.value.todos ?? [];
     patch.todosSupported = true;
@@ -324,7 +407,9 @@ export function reset() {
     interactions: [],
     assistant: null,
     launches: {},
+    outbox: {},
     mutes: { spaces: [], sessions: [], allowed: [] },
+    pins: NO_PINS,
     todos: [],
     todosSupported: true,
     todosLoaded: false,

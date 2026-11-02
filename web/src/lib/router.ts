@@ -5,7 +5,13 @@ export type Route =
   | { name: "home" }
   | { name: "session"; mid: string; sid: string }
   | { name: "jarvis"; sid?: string }
+  | { name: "history" }
+  | { name: "profile" }
+  | { name: "inbox"; id?: string }
+  | { name: "routines" }
+  | { name: "kb"; kind?: string; id?: string }
   | { name: "machines" }
+  | { name: "machine"; mid: string }
   | { name: "settings" }
   | { name: "agents"; id?: string }
   | { name: "todos"; id?: string };
@@ -14,8 +20,13 @@ export function parse(path: string): Route {
   const p = path.split("/").filter(Boolean).map(decodeURIComponent);
   if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2] };
   if (p[0] === "j") return { name: "jarvis", sid: p[1] };
+  if (p[0] === "history") return { name: "history" };
+  if (p[0] === "assistant") return { name: "profile" };
+  if (p[0] === "inbox") return { name: "inbox", id: p[1] };
+  if (p[0] === "routines") return { name: "routines" };
+  if (p[0] === "kb") return { name: "kb", kind: p[1], id: p[2] };
+  if (p[0] === "machines") return p[1] ? { name: "machine", mid: p[1] } : { name: "machines" };
   if (p[0] === "a") return { name: "agents", id: p[1] };
-  if (p[0] === "machines") return { name: "machines" };
   if (p[0] === "settings") return { name: "settings" };
   if (p[0] === "todos") {
     const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null;
@@ -30,8 +41,20 @@ export function href(r: Route): string {
       return `/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}`;
     case "jarvis":
       return r.sid ? `/j/${encodeURIComponent(r.sid)}` : "/j";
+    case "history":
+      return "/history";
+    case "profile":
+      return "/assistant";
+    case "inbox":
+      return r.id ? `/inbox/${encodeURIComponent(r.id)}` : "/inbox";
+    case "routines":
+      return "/routines";
+    case "kb":
+      return ["/kb", r.kind, r.kind && r.id].filter(Boolean).map((x, i) => (i ? encodeURIComponent(x as string) : x)).join("/");
     case "machines":
       return "/machines";
+    case "machine":
+      return `/machines/${encodeURIComponent(r.mid)}`;
     case "settings":
       return "/settings";
     case "agents":

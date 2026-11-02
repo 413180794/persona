@@ -125,3 +125,36 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
     delivering.delete(id);
   }
 }
+
+// ── opening 新建 Agent from another page ────────────────
+
+/** What 新建 Agent opens with when another page opens it (知识库's 开 Agent): the first message, and where if known. */
+export interface NewAgentPreset {
+  prompt?: string;
+  machineId?: string;
+  cwd?: string;
+}
+
+const openers = new Set<(preset: NewAgentPreset) => void>();
+
+/** Opens 新建 Agent (the app shell listens) with `preset` filled in. */
+export function openNewAgent(preset: NewAgentPreset = {}) {
+  openers.forEach((l) => l(preset));
+}
+
+export function onOpenNewAgent(l: (preset: NewAgentPreset) => void) {
+  openers.add(l);
+  return () => {
+    openers.delete(l);
+  };
+}
+
+/** The first message with a preset: its text first, then what was already being written (a draft isn't lost). */
+export function presetPrompt(preset: string | undefined, draft: string): string {
+  const p = (preset ?? "").trimEnd();
+  if (!p) return draft;
+  if (!draft.trim()) return `${p}\n\n`;
+  if (draft.startsWith(p)) return draft;
+  return `${p}\n\n${draft.trim()}`;
+}
+

@@ -1,16 +1,22 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, the accent action, sections, one gliding highlight.
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, isQuiet, type AgentGroup } from "../lib/agent-groups";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
+import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type Space } from "../lib/agent-groups";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, errorText, setToken } from "../lib/api";
+import { useInboxBadge } from "../lib/inbox";
+import { machineWithHub } from "../lib/mesh";
 import { ago, baseName, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
+import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { href, navigate, type Route } from "../lib/router";
-import { useAgentSessions, useCounts, useSpaces } from "../lib/sessions";
+import { useAgentSessions, useCounts } from "../lib/sessions";
 import { reset, refresh, refreshTodos, useStore } from "../lib/store";
 import { buildTodoAgentGroups, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
 import type { Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, toast, useMenu, type MenuItem } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
+import { RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
+import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog } from "./LinkTodoDialog";
@@ -34,9 +40,10 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const conn = useStore((s) => s.conn);
   const machines = useStore((s) => s.machines);
   const assistant = useStore((s) => s.assistant);
-  const { spaces, loose, recent } = useSpaces();
   const all = useAgentSessions();
   const mutes = useStore((s) => s.mutes);
+  const pins = useStore((s) => s.pins);
+  const loaded = useStore((s) => s.loaded);
   const todos = useStore((s) => s.todos);
   const todosSupported = useStore((s) => s.todosSupported);
   const uncompletedTodosCount = useMemo(() => todos.filter((t) => !t.done_at).length, [todos]);
@@ -47,13 +54,50 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
     if (todosSupported === false) return AGENT_GROUPINGS.filter((g) => g.key !== "todo");
     return AGENT_GROUPINGS;
   }, [todosSupported]);
+  const groupingLabel = (availableGroupings.find((g) => g.key === grouping) ?? availableGroupings[0]).label;
+  // the quick filter (全部 / 需要你 / 未读 / 工作中), stacked on any grouping; what it showed when chosen stays (`kept`)
+  const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("jarvis.agentFilter")));
+  const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
+  const { live, recent: offline } = useMemo(() => splitAgentSessions(all, machines), [all, machines]);
+  const seeded = useRef(false);
+  useEffect(() => {
+    // a filter saved in this browser starts from what it matches once the list has loaded
+    if (!loaded || seeded.current) return;
+    seeded.current = true;
+    setKept(matchingKeys(live, filter, mutes));
+  }, [loaded, live, filter, mutes]);
+  const filtered = filter !== "all";
+  const filterTotals = useMemo(() => filterCounts(live, mutes), [live, mutes]);
+  const shown = useMemo(() => applyFilter(live, filter, mutes, kept), [live, filter, mutes, kept]);
+  // a pinned agent shows once, under 置顶 (an offline one too, unless a filter is on); the groups below are the rest
+  const pinnedAgents = useMemo(() => pinnedSessions(filtered ? shown : [...shown, ...offline], pins), [filtered, shown, offline, pins]);
+  const unpinned = useMemo(() => {
+    const keys = new Set(pinnedAgents.map(agentKey));
+    return keys.size ? shown.filter((s) => !keys.has(agentKey(s))) : shown;
+  }, [shown, pinnedAgents]);
+  const recent = useMemo(() => (filtered ? [] : offline.filter((s) => !pinnedAgents.some((p) => agentKey(p) === agentKey(s)))), [filtered, offline, pinnedAgents]);
+  const { spaces, loose } = useMemo(() => buildSpaces(unpinned, machines), [unpinned, machines]);
   const groups = useMemo(() => {
     if (grouping === "space") return [];
-    if (grouping === "todo") return buildTodoAgentGroups(all, machines, todos, mutes);
-    return buildAgentGroups(all, machines, grouping, mutes);
-  }, [all, machines, grouping, mutes, todos]);
-  const groupingLabel = (availableGroupings.find((g) => g.key === grouping) ?? availableGroupings[0]).label;
+    if (grouping === "todo") return buildTodoAgentGroups(unpinned, machines, todos, mutes);
+    return buildAgentGroups(unpinned, machines, grouping, mutes);
+  }, [unpinned, machines, grouping, mutes, todos]);
+  const unreadShown = filter === "unread" ? unreadOf(shown) : [];
+  const choose = (f: AgentFilter) => {
+    localStorage.setItem("jarvis.agentFilter", f);
+    setFilter(f);
+    setKept(matchingKeys(live, f, mutes));
+    setHovered(null);
+  };
+  const [rowMenu, setRowMenu] = useState<{ s: Session; anchor: HTMLElement } | null>(null);
+  const [spaceMenu, setSpaceMenu] = useState<{ sp: Space; anchor: HTMLElement } | null>(null);
+  const [renaming, setRenaming] = useState<Session | null>(null);
+  const [renamingSpace, setRenamingSpace] = useState<Session | null>(null);
+  const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
+  const onRowMenu = (s: Session, anchor: HTMLElement) => setRowMenu((m) => (m?.anchor === anchor ? null : { s, anchor }));
+  const onSpaceMenu = (sp: Space, anchor: HTMLElement) => setSpaceMenu((m) => (m?.anchor === anchor ? null : { sp, anchor }));
   const counts = useCounts();
+  const inbox = useInboxBadge();
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());
   const [hovered, setHovered] = useState<string | null>(null);
@@ -66,12 +110,14 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
 
   const activeKey =
-    route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new") : route.name === "todos" ? "todos" : route.name === "machines" ? "machines" : route.name === "settings" ? "settings" : route.name === "agents" ? (route.id ? `a:${route.id}` : "agents") : "home";
+    route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new")
+      : route.name === "todos" ? "todos" : route.name === "machines" || route.name === "machine" ? "machines" : route.name === "kb" ? "kb"
+      : route.name === "settings" ? "settings" : route.name === "agents" ? (route.id ? `a:${route.id}` : "agents") : route.name;
   // a space with nothing to look at (every agent seen and waiting) goes to「空闲的空间」, like the app; the open
   // conversation's space stays where it is so the row under the pointer doesn't move away
-  const busy = (sp: (typeof spaces)[number]) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
-  const active = spaces.filter(busy);
-  const idle = spaces.filter((sp) => !busy(sp));
+  const busy = (sp: Space) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
+  // pinned spaces lead; under a quick filter nothing folds into 「空闲的空间」
+  const { active, idle } = arrangeSpaces(spaces, { pins, mutes, filtered, busy });
 
   useLayoutEffect(() => {
     const el = rows.current.get(hovered ?? activeKey);
@@ -133,6 +179,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         <div className="flex flex-col gap-px pt-1">
           <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.needs || undefined} badgeTone="red" />
           <NavRow k="j:new" reg={reg} hover={setHovered} active={activeKey === "j:new"} to={{ name: "jarvis" }} go={go} icon="spark" label="Jarvis" />
+          <NavRow k="inbox" reg={reg} hover={setHovered} active={activeKey === "inbox"} to={{ name: "inbox" }} go={go} icon="inbox" label="收件箱" badge={inbox || undefined} badgeTone="red" />
+          <NavRow k="routines" reg={reg} hover={setHovered} active={activeKey === "routines"} to={{ name: "routines" }} go={go} icon="clock" label="定时任务" />
+          <NavRow k="kb" reg={reg} hover={setHovered} active={activeKey === "kb"} to={{ name: "kb" }} go={go} icon="book" label="知识库" />
           {todosSupported !== false && (
             <NavRow k="todos" reg={reg} hover={setHovered} active={activeKey === "todos"} to={{ name: "todos" }} go={go} icon="todo" label="待办" badge={uncompletedTodosCount || undefined} />
           )}
@@ -147,6 +196,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
             {convs.map((c) => (
               <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={setHovered} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} label={c.session_id === assistant?.main ? "主对话" : undefined} showState={false} />
             ))}
+            <NavRow k="history" reg={reg} hover={setHovered} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label="全部对话" hint={(assistant?.conversations.length ?? 0) > convs.length ? String(assistant!.conversations.length) : undefined} />
           </Section>
         )}
 
@@ -163,6 +213,32 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
             onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); setHovered(null); },
           }))} />
         )}
+        <FilterBar selection={filter} counts={filterTotals} onChoose={choose} />
+
+        {unreadShown.length > 0 && (
+          <button type="button" onClick={() => setConfirmSeen(unreadShown)} className="relative z-10 mt-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-[background-color,transform] duration-100 hover:bg-hover active:scale-[0.98]">
+            <span className="flex size-3.5 shrink-0 items-center justify-center text-green"><Icon name="check" size={13} stroke={2.4} /></span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">全部标为已读</span>
+            <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-3 tabular-nums">{unreadShown.length} 个完成未看</span>
+          </button>
+        )}
+
+        {filtered && shown.length === 0 && (
+          <div className="mt-2 flex items-center gap-2 px-2 py-1.5 text-[12px] text-ink-3">
+            <span className="min-w-0 flex-1 truncate">没有{AGENT_FILTERS.find((f) => f.key === filter)!.label}的 Agent</span>
+            <button type="button" onClick={() => choose("all")} className="relative z-10 shrink-0 whitespace-nowrap rounded-control px-1.5 py-0.5 text-[12px] font-medium text-accent-ink hover:bg-hover">看全部</button>
+          </div>
+        )}
+
+        {pinnedAgents.length > 0 && (
+          <Section title={<span className="flex items-center gap-1"><Icon name="pin" size={10} stroke={2.2} />置顶</span>}>
+            {pinnedAgents.map((s) => {
+              const key = `s:${s.machine_id}/${s.session_id}`;
+              const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
+              return <SessionRow key={key} s={s} k={key} reg={reg} hover={setHovered} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} onMenu={onRowMenu} />;
+            })}
+          </Section>
+        )}
 
         {launches.length > 0 && <Section title="正在启动">
           {launches.map((launch) => <NavRow key={launch.id} k={`s:${launch.machineId}/${launch.id}`} reg={reg} hover={setHovered} active={activeKey === `s:${launch.machineId}/${launch.id}`} to={{ name: "session", mid: launch.machineId, sid: launch.id }} go={go} icon={launch.phase === "failed" ? "retry" : "agent"} label={launch.text || baseName(launch.cwd) || "新 Agent"} hint={launch.phase === "failed" ? "启动失败" : "后台启动中"} />)}
@@ -170,14 +246,14 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
 
         {grouping === "space" ? <>
         {active.map((sp) => (
-          <SpaceSection key={sp.key} sp={sp} machineName={machines.length > 1 ? machines.find((m) => m.id === sp.machineId)?.name : undefined} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
+          <SpaceSection key={sp.key} sp={sp} machineName={machines.length > 1 ? machineWithHub(sp.machineId, machines) : undefined} reg={reg} hover={setHovered} activeKey={activeKey} go={go} pinned={isSpacePinned(sp.machineId, sp.name, pins)} muted={isSpaceMuted(sp, mutes)} onMenu={onSpaceMenu} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
         ))}
 
         {idle.length > 0 && (
           <Section title={`空闲的空间 ${idle.length}`} folded={idleFolded} onToggle={toggleIdle}>
             {idle.flatMap((sp) =>
               sp.sessions.map((s) => (
-                <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={sp.sessions.length > 1 ? `${sp.name} › ${tabLabel(s)}` : sp.name} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
+                <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={sp.sessions.length > 1 ? `${sp.name} › ${tabLabel(s)}` : sp.name} onMenu={onRowMenu} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
               )),
             )}
           </Section>
@@ -186,19 +262,19 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         {loose.length > 0 && (
           <Section title="其他 Agent">
             {loose.map((s) => (
-              <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
+              <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
             ))}
           </Section>
         )}
 
         </> : groups.map((group) => (
-          <AgentSection key={group.key} group={group} machines={machines} byMachine={grouping === "machine"} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
+          <AgentSection key={group.key} group={group} machines={machines} byMachine={grouping === "machine"} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
         ))}
 
         {recent.length > 0 && (
           <Section title="最近（未运行）" folded={recentFolded} onToggle={toggleRecent}>
             {(showAllRecent ? recent : recent.slice(0, 8)).map((s) => (
-              <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
+              <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
             ))}
             {recent.length > 8 && (
               <button type="button" onClick={() => setShowAllRecent((x) => !x)} className="relative z-10 w-full rounded-[7px] px-2 py-1 text-left text-[12px] text-ink-3 hover:text-ink-2">
@@ -208,6 +284,11 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           </Section>
         )}
       </div>
+      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} onClose={() => setRowMenu(null)} onRename={setRenaming} />}
+      {spaceMenu && <SpaceMenu sp={spaceMenu.sp} anchor={spaceMenu.anchor} onClose={() => setSpaceMenu(null)} onRename={setRenamingSpace} onMarkSeen={setConfirmSeen} />}
+      {renaming && <RenameDialog open session={renaming} onClose={() => setRenaming(null)} />}
+      {renamingSpace && <RenameSpaceDialog open session={renamingSpace} onClose={() => setRenamingSpace(null)} />}
+      <MarkSeenDialog list={confirmSeen} onClose={() => setConfirmSeen(null)} onDone={() => setKept(new Set())} />
 
       {sessionContextMenu && (
         <Menu
@@ -257,6 +338,40 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         onClose={() => setLinkTargetSession(undefined)}
       />
     </aside>
+  );
+}
+
+/** 全部 / 需要你 / 未读 / 工作中 with their counts (iOS QuickFilterBar): 全部 and the states that have agents now; the
+ * chosen one stays while it empties, so it can be left. Hidden when there is nothing to pick. */
+function FilterBar({ selection, counts, onChoose }: { selection: AgentFilter; counts: FilterCounts; onChoose: (f: AgentFilter) => void }) {
+  const keys = shownFilters(selection, counts);
+  if (keys.length < 2) return null;
+  return (
+    <div role="radiogroup" aria-label="快速筛选" className="mt-1.5 flex flex-wrap gap-0.5 px-1">
+      {keys.map((k) => {
+        const f = AGENT_FILTERS.find((x) => x.key === k)!;
+        const on = k === selection;
+        const n = k === "all" ? undefined : counts[k];
+        return (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={n === undefined ? f.label : `${f.label} ${n}`}
+            onClick={() => onChoose(k)}
+            className={cx(
+              "relative z-10 flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-[7px] text-[11.5px] transition-[background-color,color,box-shadow] duration-150",
+              on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-2 hover:bg-hover hover:text-ink",
+            )}
+          >
+            {f.state && <StatusDot state={f.state} size={6} />}
+            {f.label}
+            {n !== undefined && <span className={cx("tabular-nums", on ? "text-ink-2" : "text-ink-3")}>{n}</span>}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -325,7 +440,7 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
   );
 }
 
-function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKey, go, onSessionMenu }: { group: AgentGroup; machines: Machine[]; byMachine: boolean; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onSessionMenu?: (s: Session, el: HTMLElement) => void }) {
+function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { group: AgentGroup; machines: Machine[]; byMachine: boolean; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void }) {
   const [folded, toggle] = useFolded(group.key, group.folded);
   const [showIdle, setShowIdle] = useState(false);
   const idle = byMachine ? group.sessions.filter((s) => isQuiet(s) && activeKey !== `s:${s.machine_id}/${s.session_id}`) : [];
@@ -333,8 +448,8 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
   const visible = group.sessions.filter((s) => !idleKeys.has(`${s.machine_id}/${s.session_id}`));
   const row = (s: Session) => {
     const key = `s:${s.machine_id}/${s.session_id}`;
-    const context = [s.space_name || baseName(s.cwd), !byMachine && machines.length > 1 ? machines.find((m) => m.id === s.machine_id)?.name : ""].filter(Boolean).join(" · ");
-    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} showTodoTag={!byTodo} onContextMenu={(el) => onSessionMenu?.(s, el)} />;
+    const context = [s.space_name || baseName(s.cwd), !byMachine && machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
+    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} showTodoTag={!byTodo} onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu?.(s, el)} />;
   };
 
   const statusInfo = group.todoStatus ? TODO_STATUS_INFO[group.todoStatus as TodoStatus] : undefined;
@@ -357,6 +472,7 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
     <span className="flex min-w-0 items-center gap-1.5">
       {group.state && <span aria-hidden><StatusDot state={group.state} size={6} /></span>}
       <span className="truncate">{group.name}</span>
+      {group.hub && <span className="shrink-0 truncate normal-case tracking-normal font-normal">{group.hub}</span>}
     </span>
   );
 
@@ -382,7 +498,7 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
   );
 }
 
-function SpaceSection({ sp, machineName, reg, hover, activeKey, go, onSessionMenu }: { sp: ReturnType<typeof useSpaces>["spaces"][number]; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onSessionMenu?: (s: Session, el: HTMLElement) => void }) {
+function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onSessionMenu }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void }) {
   const allIdle = sp.sessions.every(isQuiet);
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3);
   const states = sp.sessions.map(stateOf);
@@ -394,23 +510,37 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, onSessionMen
       title={
         <span className="flex items-center gap-1.5">
           <span className="truncate normal-case tracking-normal text-[11.5px] text-ink-2">{sp.name}</span>
+          {pinned && <span title="已置顶" className="shrink-0 text-accent"><Icon name="pin" size={10} stroke={2.2} /><span className="sr-only">已置顶</span></span>}
+          {muted && <span title="已屏蔽通知" className="shrink-0"><Icon name="bellOff" size={10} stroke={2.2} /><span className="sr-only">已屏蔽通知</span></span>}
           {machineName && <span className="truncate normal-case tracking-normal text-[11px] font-normal text-ink-3">{machineName}</span>}
         </span>
       }
       right={
-        folded && dots.length ? (
-          <span className="flex items-center gap-1">
-            {dots.map((d) => (
-              <StatusDot key={d} state={d} size={6} />
-            ))}
-          </span>
-        ) : (
-          <span className="text-[10.5px] text-ink-3 tabular-nums">{sp.sessions.length}</span>
-        )
+        <span className="flex items-center gap-1">
+          {folded && dots.length ? (
+            <span className="flex items-center gap-1">
+              {dots.map((d) => (
+                <StatusDot key={d} state={d} size={6} />
+              ))}
+            </span>
+          ) : (
+            <span className="text-[10.5px] text-ink-3 tabular-nums">{sp.sessions.length}</span>
+          )}
+          <button
+            type="button"
+            aria-label={`空间 ${sp.name} 的操作`}
+            aria-haspopup="menu"
+            title="空间的操作"
+            onClick={(e) => onMenu(sp, e.currentTarget)}
+            className="relative z-10 -my-1 flex size-5 items-center justify-center rounded-[5px] text-ink-3 opacity-0 transition-opacity duration-150 group-hover/sec:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+          >
+            <Icon name="more" size={12} />
+          </button>
+        </span>
       }
     >
       {sp.sessions.map((s) => (
-        <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} tab showTodoTag onContextMenu={(el) => onSessionMenu?.(s, el)} />
+        <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} tab showTodoTag onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu?.(s, el)} />
       ))}
     </Section>
   );
@@ -418,6 +548,7 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, onSessionMen
 
 type RegFn = (k: string) => (el: HTMLElement | null) => void;
 type GoFn = (to: Route) => (e: React.MouseEvent) => void;
+type RowMenuFn = (s: Session, anchor: HTMLElement) => void;
 
 function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint }: { k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number; badgeTone?: "red"; hint?: string }) {
   return (
@@ -445,26 +576,34 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
-function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showState = true, showTodoTag, onContextMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; hint?: string; showState?: boolean; showTodoTag?: boolean; onContextMenu?: (el: HTMLElement) => void }) {
+function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showState = true, showTodoTag, onMenu, onContextMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; hint?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; onContextMenu?: (el: HTMLElement) => void }) {
   const st = stateOf(s);
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
-  return (
+  const row = useRef<HTMLAnchorElement | null>(null);
+  const link = (
     <a
-      ref={reg(k)}
+      ref={(el) => {
+        row.current = el;
+        reg(k)(el);
+      }}
       href={href(to)}
       onClick={go(to)}
       onContextMenu={(e) => {
+        // right click (or the menu key): the todo menu when the list gives one, else the row's menu
         if (onContextMenu) {
           e.preventDefault();
           onContextMenu(e.currentTarget);
+        } else if (onMenu) {
+          e.preventDefault();
+          onMenu(s, e.currentTarget);
         }
       }}
       onMouseEnter={() => hover(k)}
       onFocus={() => hover(k)}
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
-      title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${s.todo ? `\n待办：${s.todo.title}` : ""}${s.last_text ? `\n${s.last_text}` : ""}`}
-      className="group/row relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98]"
+      title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n待办：${s.todo.title}` : ""}${s.last_text ? `\n${s.last_text}` : ""}`}
+      className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98]"
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
       <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
@@ -472,17 +611,36 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showSt
       </span>
       {showTodoTag && s.todo && (
         <span
-          className="flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3"
+          className="flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3 group-hover/row:invisible"
           title={`待办：${s.todo.title}`}
           aria-label={`待办：${s.todo.title}`}
         >
           <Icon name="todo" size={10} stroke={2} />
         </span>
       )}
-      {t && <span className="max-w-[72px] shrink-0 truncate text-[11px] text-ink-3">{t}</span>}
-      {!t && (st === "offline" || !showState) && <span className="shrink-0 text-[11px] text-ink-3">{ago(s.updated_at)}</span>}
-      {(s.pending_interactions ?? 0) > 0 && <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red px-1 text-[10px] font-semibold text-white tabular-nums">{s.pending_interactions}</span>}
+      {/* the row's ⋯ takes the end on hover: what is there steps aside instead of showing half under it */}
+      {t && <span className="max-w-[72px] shrink-0 truncate text-[11px] text-ink-3 group-hover/row:invisible">{t}</span>}
+      {!t && (st === "offline" || !showState) && <span className="shrink-0 text-[11px] text-ink-3 group-hover/row:invisible">{ago(s.updated_at)}</span>}
+      {(s.pending_interactions ?? 0) > 0 && <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red px-1 text-[10px] font-semibold text-white tabular-nums group-hover/row:invisible">{s.pending_interactions}</span>}
     </a>
+  );
+  if (!onMenu) return link;
+  // the ⋯ shows over the row's end on hover (a pointer); touch has the chat's ⋯ menu and the long press
+  return (
+    <div className="group/row relative">
+      {link}
+      <button
+        type="button"
+        aria-label="Agent 的操作"
+        aria-haspopup="menu"
+        title="更多"
+        tabIndex={-1}
+        onClick={() => row.current && onMenu(s, row.current)}
+        className="absolute top-1/2 right-1 z-20 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink group-hover/row:flex"
+      >
+        <Icon name="more" size={14} />
+      </button>
+    </div>
   );
 }
 

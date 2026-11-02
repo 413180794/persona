@@ -3,18 +3,37 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
 import { ago, resumeCommand, sessionCan, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate } from "../../lib/router";
+import { togglePanel, usePanel } from "../../lib/panel";
+import { machineWithHub } from "../../lib/mesh";
+import { hasModes, isMuted, toggleMute } from "../../lib/session-actions";
+import { flipPin } from "../../lib/agent-actions";
+import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch } from "../../lib/new-agent";
-import { getSession, getState, markSeenLocally, refresh, refreshTodos, useStore } from "../../lib/store";
+import { getSession, getState, markSeenLocally, refresh, refreshTodos, setMutes, useStore } from "../../lib/store";
+import { buildTaskIndex, STOP_LOOP_MESSAGE, visibleSubagents } from "../../lib/tasks";
+import { outboxKey, settleOutbox } from "../../lib/outbox";
+import { conversationKey, pickedLauncher } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
-import { parseUserText, segments, type UserMessage } from "../../lib/turns";
-import type { Session } from "../../lib/types";
-import { Button, copyText, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
+import { chatLines, parseUserText, segments, type UserMessage } from "../../lib/turns";
+import type { Item, Session, Subagent } from "../../lib/types";
+import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Composer, type Outgoing } from "./Composer";
 import { InteractionCard } from "./Interactions";
-import { SegmentView, UserBubble } from "./SegmentView";
+import { UserBubble } from "./SegmentView";
+import { ActivityChips, AgentStrip, SubagentFooter } from "./Activity";
+import { ChatContext, type ChatContextValue } from "./chat-context";
+import { ChatLineView, closedRecap, closeRecap, RecapStrip } from "./Lines";
 import { useTranscript } from "./useTranscript";
+import { ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
+import { ChatActionsContext, type ChatActions } from "./chat-actions";
+import { QueueStrip } from "./QueueStrip";
+import { chatFiles } from "../../lib/mentions";
+import { sameMessage } from "../../lib/queue";
+import { OutboxBubbles } from "./OutboxBubbles";
+import { AssistantFace, AssistantLauncherChip, useAssistantMenu } from "../assistant/AssistantChat";
+import { usePersona } from "../assistant/Persona";
 
 interface Pending {
   id: string;
@@ -24,29 +43,53 @@ interface Pending {
 
 export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar }: { mid: string; sid: string; assistant?: boolean; starting?: boolean; onToggleSidebar?: () => void }) {
   const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid) ?? s.assistant?.conversations.find((c) => c.session_id === sid));
-  const machine = useStore((s) => s.machines.find((m) => m.id === mid));
+  const machineName = useStore((s) => machineWithHub(mid, s.machines));
   const siblings = useStore((s) => (session?.space_id ? (s.sessions[mid] ?? []).filter((x) => x.space_id === session.space_id && stateOf(x) !== "offline") : []));
   const interactions = useStore((s) => s.interactions.filter((i) => i.machine_id === mid && i.session_id === sid));
-  const tr = useTranscript(mid, sid, { starting: launching });
+  // a subagent's conversation is read in the same chat, read-only (its session id is "<parent>@<agent>")
+  const [viewing, setViewing] = useState<Subagent | null>(null);
+  useEffect(() => setViewing(null), [mid, sid]);
+  const viewed = viewing ? (session?.subagents?.find((a) => a.id === viewing.id) ?? viewing) : null;
+  const shownSid = viewed?.session_id ?? sid;
+  const tr = useTranscript(mid, shownSid, { starting: Boolean(launching) && !viewed });
   const [pending, setPending] = useState<Pending[]>(() => {
     const launch = Object.values(getState().launches).find((l) => l.phase === "ready" && l.machineId === mid && l.session?.session_id === sid);
     const out = launch?.outgoing;
     if (!launch || !out || (!out.text && !out.images.length)) return [];
-    return [{ id: launch.id, at: Date.now(), msg: { id: `pending:${launch.id}`, text: out.text, images: out.images.map((image, i) => ({ id: `pending:${launch.id}#${i}`, seq: 0, role: "user", kind: "image", image })), contexts: [] } }];
+    return [{ id: launch.id, at: Date.now(), msg: { id: `pending:${launch.id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${launch.id}#${i}`, seq: 0, role: "user", kind: "image", image })) } }];
   });
   const [draftRefusal, setDraftRefusal] = useState<{ out: Outgoing; id: string; draft: string; clearable?: string } | null>(null);
+  // what other pages sent here (问 Jarvis, 交给 AI…): shown like this page's own sending bubbles (lib/outbox.ts)
+  const outbox = useStore((s) => s.outbox[outboxKey(mid, sid)] ?? []);
+  // a message Claude queued shows in the queue strip, not as a sending bubble too (ChatView.swift chatScroll)
+  const queued = session?.queued ?? [];
+  const shownPending = queued.length ? pending.filter((p) => !queued.some((q) => sameMessage(q, p.msg.text))) : pending;
+  const outgoing = shownPending.length + outbox.filter((e) => e.state !== "failed").length;
+  const persona = usePersona();
   const state = session ? stateOf(session) : "unknown";
-  const working = state === "working" || Boolean(tr.streaming) || pending.length > 0;
+  const working = state === "working" || Boolean(tr.streaming) || outgoing > 0;
   // still starting only until the conversation has anything in it: the flag the caller passes may outlive the start
   const starting = Boolean(launching) && !tr.items.length && !tr.streaming && state !== "working";
   const now = useNow(1000, working);
 
   const segs = useMemo(() => segments(tr.items), [tr.items]);
+  // finished exchanges of several messages the user split open (iOS openWork on a merged exchange)
+  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => setSplit((x) => (x.size ? new Set() : x)), [mid, shownSid]);
+
+  // what the messages' menus, the image viewer and the @ menu read from this chat (chat-actions.ts)
+  const items = useRef(tr.items);
+  items.current = tr.items;
+  const draftKey = `${mid}/${sid}`;
+  const canCompose = sessionCan(session, "send");
+  const actions = useMemo<ChatActions>(() => ({ draftKey, canCompose, images: () => items.current.filter((i) => i.kind === "image") }), [draftKey, canCompose]);
+  const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current) }), [session?.cwd, draftKey]);
 
   // a sent message stays as a "sending" bubble until the transcript has it
   useEffect(() => {
     const users = segs.slice(-4).flatMap((seg) => seg.user ? [seg.user] : []);
     users.forEach((user) => acknowledgeLaunch(mid, sid, user));
+    settleOutbox(mid, sid, users);
     if (!pending.length) return;
     setPending((ps) => ps.filter((p) => !users.some((user) => user.text === parseUserText(p.msg.text).text && user.images.length >= p.msg.images.length) && Date.now() - p.at < 30_000));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,7 +115,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   useEffect(() => {
     first.current = true;
     atEnd.current = true;
-  }, [mid, sid]);
+  }, [mid, shownSid]);
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -86,7 +129,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       el.scrollTop = el.scrollHeight;
       if (tr.items.length) first.current = false;
     }
-  }, [tr.items, pending, tr.streaming, interactions.length]);
+  }, [tr.items, pending, outbox, tr.streaming, interactions.length]);
 
   // content that grows by itself (images loading, a row expanding at the end) keeps the end in view
   useEffect(() => {
@@ -128,13 +171,14 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         toast(sourceSubtitle(session) || "正在读取会话信息，稍后再试", "error");
         return false;
       }
-      const p: Pending = { id, at: Date.now(), msg: { id: `pending:${id}`, text: out.text, images: [], contexts: [] } };
+      // a sending bubble shows picked contexts as quote cards, like the transcript will (not the raw tags)
+      const p: Pending = { id, at: Date.now(), msg: { id: `pending:${id}`, ...parseUserText(out.text), images: [] } };
       setPending((ps) => [...ps.filter((x) => x.id !== id), p]);
       atEnd.current = true;
       try {
         await api(`${sessionPath(mid, sid)}/messages`, {
           method: "POST",
-          json: { text: out.text, images: out.images.length ? out.images : undefined, client_msg_id: id, clear_draft: clearDraft },
+          json: { text: out.text, images: out.images.length ? out.images : undefined, client_msg_id: id, clear_draft: clearDraft, launcher: assistant ? pickedLauncher(conversationKey(mid, sid)) : undefined },
         });
         return true;
       } catch (e) {
@@ -151,7 +195,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         return false;
       }
     },
-    [mid, sid, session],
+    [mid, sid, session, assistant],
   );
 
   const onSend = (out: Outgoing) => deliver(out, uuid());
@@ -178,18 +222,53 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, session]);
 
-  const lastLive = working && !tr.loading;
+  const lastLive = viewed ? Boolean(viewed.running) && !tr.loading : working && !tr.loading;
   const title = session ? sessionTitle(session) : assistant ? "新对话" : "会话";
+  const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (viewed ? true : !outgoing), split }), [tr.items, lastLive, viewed, outgoing, split]);
+  const ctx = useMemo<ChatContextValue>(
+    () => ({ tasks: buildTaskIndex(tr.items), subagents: session?.subagents ?? [], openSubagent: assistant ? undefined : (a) => setViewing(a) }),
+    [tr.items, session?.subagents, assistant],
+  );
+  const agents = assistant ? [] : visibleSubagents(session?.subagents, viewed?.id);
+  const onSplit = useCallback((g: string) => setSplit((x) => new Set([...x, g])), []);
+  const onUnsplit = useCallback((g: string) => setSplit((x) => new Set([...x].filter((y) => y !== g))), []);
+  const lastLine = lines[lines.length - 1];
+  // 重试 on an API error card: only when it is the last thing, the agent is not working (someone may have retried already)
+  const retry = useCallback(() => void deliver({ text: "继续", images: [] }, uuid()), [deliver]);
+  const canRetry = !viewed && lastLine?.kind === "apiError" && state !== "working" && !outgoing && sessionCan(session, "send");
+  // Claude Code's "while you were away" recap, above the composer while it is the newest thing and not closed
+  const recapKey = `${mid}/${sid}`;
+  const [recapClosed, setRecapClosed] = useState(() => closedRecap(recapKey));
+  useEffect(() => setRecapClosed(closedRecap(recapKey)), [recapKey]);
+  const newestRecap = !assistant && !viewed && lastLine?.kind === "recaps" ? lastLine.items[lastLine.items.length - 1] : undefined;
+  const pendingRecap = newestRecap && recapClosed !== newestRecap.id ? newestRecap : undefined;
+  const dismissRecap = () => {
+    if (!pendingRecap) return;
+    closeRecap(recapKey, pendingRecap.id);
+    setRecapClosed(pendingRecap.id);
+  };
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <Header session={session} title={title} machineName={machine?.name ?? mid} assistant={assistant} siblings={siblings} onToggleSidebar={onToggleSidebar} onInterrupt={interrupt} />
+      <Header
+        session={session}
+        title={title}
+        machineName={machineName}
+        assistant={assistant}
+        siblings={siblings}
+        onToggleSidebar={onToggleSidebar}
+        onInterrupt={interrupt}
+        onStopLoop={() => void deliver({ text: STOP_LOOP_MESSAGE, images: [] }, uuid())}
+        last={assistant ? tr.items[tr.items.length - 1] : undefined}
+      />
+      {agents.length > 0 && <AgentStrip agents={agents} viewing={viewed?.id} onSelect={setViewing} />}
 
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto [overflow-anchor:none]">
+          <ChatActionsContext.Provider value={actions}>
           <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
             {session?.start_error && <div role="alert" className="rounded-control bg-inset px-3 py-2 text-[13px] text-red">启动失败：{session.start_error}</div>}
-            {starting && !tr.loading && !pending.length && <Loading label="正在启动 Agent" />}
+            {starting && !tr.loading && !outgoing && <Loading label="正在启动 Agent" />}
             {tr.loadingEarlier && (
               <div className="flex justify-center py-2">
                 <Loading label="加载更早的消息" />
@@ -209,21 +288,36 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                 </Button>
               </div>
             )}
-            {segs.map((seg, i) => {
-              const live = lastLive && i === segs.length - 1 && !pending.length;
-              return <SegmentView key={seg.id} seg={seg} live={live} now={now} mid={mid} sid={sid} streaming={live && tr.streaming ? tr.streaming : undefined} expandFold={tr.expandFold} />;
-            })}
-            {pending.map((p) => (
+            <ChatContext.Provider value={ctx}>
+              {lines.map((line, i) => (
+                <ChatLineView
+                  key={line.id}
+                  line={line}
+                  // only a live line ticks or streams: the others keep their memo
+                  now={(line.kind === "segment" || line.kind === "wakes") && line.live ? now : 0}
+                  mid={mid}
+                  sid={shownSid}
+                  streaming={line.kind === "segment" && line.live ? tr.streaming || undefined : undefined}
+                  expandFold={tr.expandFold}
+                  onSplit={onSplit}
+                  onUnsplit={onUnsplit}
+                  onRetry={canRetry && i === lines.length - 1 ? retry : undefined}
+                />
+              ))}
+            </ChatContext.Provider>
+            {!viewed && shownPending.map((p) => (
               <div key={p.id} className="flex flex-col gap-3">
                 <UserBubble msg={p.msg} mid={mid} sid={sid} pending />
               </div>
             ))}
-            {pending.length > 0 && (
+            {!viewed && <OutboxBubbles mid={mid} sid={sid} entries={outbox} />}
+            {!viewed && (shownPending.length > 0 || outbox.some((e) => e.state === "sending") || (starting && outgoing > 0)) && (
               <div className="flex items-center gap-2.5">
                 <Loading label={starting ? "正在准备" : "正在送达"} />
               </div>
             )}
           </div>
+          </ChatActionsContext.Provider>
         </div>
         {showDown && (
           <button
@@ -238,23 +332,20 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         )}
       </div>
 
-      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-2 px-4 pb-4 sm:px-7">
+      {viewed && (
+        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-2 px-4 pb-4 sm:px-7">
+          <SubagentFooter agent={viewed} onBack={() => setViewing(null)} />
+        </div>
+      )}
+      <div className={cx("mx-auto flex w-full max-w-[760px] flex-col gap-2 px-4 pb-4 sm:px-7", viewed && "hidden")} onInput={pendingRecap ? dismissRecap : undefined}>
+        {pendingRecap && <RecapStrip item={pendingRecap} onClose={dismissRecap} />}
         {interactions.map((ix) => (
           <InteractionCard key={ix.id} ix={ix} />
         ))}
-        {(session?.queued?.length ?? 0) > 0 && (
-          <div className="flex flex-col gap-1 rounded-[10px] bg-inset px-3 py-2 shadow-hairline">
-            <span className="text-[11px] font-medium text-ink-3">排队中 · 它做完这一步就会看到</span>
-            {session!.queued!.map((q, i) => (
-              <span key={i} className="truncate text-[12.5px] text-ink-2">
-                {q}
-              </span>
-            ))}
-          </div>
-        )}
+        {session && queued.length > 0 && <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} />}
         <Composer
-          draftKey={`${mid}/${sid}`}
-          placeholder={!sessionCan(session, "send") && session?.source_kind ? "此会话仅可查看" : assistant ? "问 Jarvis…" : state === "offline" ? "发消息会在电脑上恢复这个会话…" : "给 Agent 发消息…"}
+          draftKey={draftKey}
+          placeholder={!sessionCan(session, "send") && session?.source_kind ? "此会话仅可查看" : assistant ? `问 ${persona.name}…` : state === "offline" ? "发消息会在电脑上恢复这个会话…" : "给 Agent 发消息…"}
           machineId={mid}
           working={state === "working"}
           onSend={onSend}
@@ -262,6 +353,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           onStop={assistant || !sessionCan(session, "interrupt") ? undefined : interrupt}
           commands={assistant ? [] : undefined}
           suggestion={session?.suggestion}
+          mention={mention}
           autoFocus
           footer={session ? <ComposerFooter session={session} assistant={assistant} /> : null}
         />
@@ -299,8 +391,16 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 }
 
 function ComposerFooter({ session, assistant }: { session: Session; assistant?: boolean }) {
-  const parts = [sourceSubtitle(session), session.launcher, session.model?.split("/").pop(), assistant ? "" : shortPath(session.cwd)].filter(Boolean);
-  return <span title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>;
+  // a Jarvis conversation's launcher and model are its chip (they switch there)
+  const parts = [sourceSubtitle(session), ...(assistant ? [] : [session.launcher, session.model?.split("/").pop(), shortPath(session.cwd)])].filter(Boolean);
+  const modes = !assistant && hasModes(session) && stateOf(session) !== "offline";
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      {modes && <ModeChips session={session} />}
+      {assistant && <AssistantLauncherChip session={session} />}
+      <span className="min-w-0 truncate" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>
+    </span>
+  );
 }
 
 function Header({
@@ -311,6 +411,8 @@ function Header({
   siblings,
   onToggleSidebar,
   onInterrupt,
+  onStopLoop,
+  last,
 }: {
   session?: Session;
   title: string;
@@ -319,10 +421,31 @@ function Header({
   siblings: Session[];
   onToggleSidebar?: () => void;
   onInterrupt: () => void;
+  onStopLoop: () => void;
+  last?: Item;
 }) {
   const menu = useMenu();
   const tabs = useMenu();
+  const panel = usePanel();
+  const mutes = useStore((s) => s.mutes);
   const [closing, setClosing] = useState(false);
+  const [dialog, setDialog] = useState<"info" | "rename" | "space" | null>(null);
+  const muted = Boolean(session && !assistant && isMuted(session, mutes));
+  const pinned = useStore((s) => Boolean(session && isPinned(session, s.pins)));
+  // 屏蔽通知: the hub stops pushing this agent's 需要你 / 做完了 (an agent's switch sits on top of its space's)
+  const flipMute = async () => {
+    if (!session) return;
+    const before = getState().mutes;
+    const next = toggleMute(session, before);
+    setMutes(next);
+    try {
+      await api("/mutes", { method: "PUT", json: next });
+      toast(isMuted(session, next) ? "已屏蔽通知" : "已恢复通知", "ok");
+    } catch (e) {
+      setMutes(before);
+      toast(`没改成：${errorText(e)}`, "error");
+    }
+  };
   const [linkTodoOpen, setLinkTodoOpen] = useState(false);
   const state = session ? stateOf(session) : "unknown";
   const sub = assistant
@@ -338,10 +461,19 @@ function Header({
     } catch (e) { toast(`接入失败：${errorText(e)}`, "error"); }
   };
   const others = siblings.filter((s) => s.session_id !== session?.session_id);
+  // the session's terminal, files and Git open in the side panel (docs/web.md「侧边面板」); the assistant has none
+  const here = (p: typeof panel, kind: string) => Boolean(p && p.kind === kind && "sid" in p && session && p.mid === session.machine_id && p.sid === session.session_id);
+  const showTerminal = Boolean(session && !assistant && sessionCan(session, "terminal") && stateOf(session) !== "offline");
+  const showFiles = Boolean(session && !assistant && session.cwd);
+  const openTerminal = () => session && togglePanel({ kind: "terminal", mid: session.machine_id, sid: session.session_id });
+  const openFiles = () => session && togglePanel({ kind: "files", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
+  const openGit = () => session && togglePanel({ kind: "git", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
   const othersNeed = others.some((s) => stateOf(s) === "needs_you");
+  const assistantItems = useAssistantMenu(assistant ? session : undefined);
 
   const items: MenuItem[] = session
     ? [
+        ...assistantItems,
         ...(session.todo
           ? [
               {
@@ -383,7 +515,14 @@ function Header({
               ]
             : []),
         ...(allowed.includes("attach") ? [{ key: "attach", label: "实时接入", icon: "link" as const, onSelect: () => void attach() }] : []),
+        ...(showTerminal ? [{ key: "terminal", label: "终端", icon: "terminal" as const, checked: here(panel, "terminal"), onSelect: openTerminal }] : []),
+        ...(showFiles ? [{ key: "files", label: "文件", icon: "folder" as const, checked: here(panel, "files"), onSelect: openFiles }, { key: "git", label: "Git", icon: "git" as const, checked: here(panel, "git"), onSelect: openGit }] : []),
         ...(allowed.includes("stop") ? [{ key: "stop", label: "中断", icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
+        { key: "info", label: "会话信息", icon: "info", onSelect: () => setDialog("info") },
+        ...(sessionCan(session, "send") && (session.assistant || !session.source_kind) ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => setDialog("rename") }] : []),
+        ...(!assistant && session.space_id && !session.source_kind ? [{ key: "space", label: "重命名空间…", icon: "folder" as const, onSelect: () => setDialog("space") }] : []),
+        ...(!assistant ? [{ key: "mute", label: muted ? "恢复通知" : "屏蔽通知", icon: muted ? ("bell" as const) : ("bellOff" as const), onSelect: () => void flipMute() }] : []),
+        ...(!assistant ? [{ key: "pin", label: pinned ? "取消置顶" : "置顶", icon: "pin" as const, onSelect: () => void flipPin(session) }] : []),
         { key: "sid", label: "拷贝会话 ID", icon: "copy", onSelect: () => copyText(session.session_id) },
         ...(session.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, onSelect: () => copyText(session.cwd) }] : []),
         ...(allowed.includes("resume") ? [{ key: "resume", label: "拷贝恢复命令", icon: "terminal" as const, onSelect: () => copyText(resumeCommand(session)) }] : []),
@@ -397,11 +536,13 @@ function Header({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           {session && !assistant && <StatusDot state={state} />}
+          {assistant && <AssistantFace session={session} last={last} />}
           <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>
           {session && !assistant && state !== "idle" && <StatePill state={state} />}
         </div>
         <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>
       </div>
+      {session && !assistant && <ActivityChips session={session} onStopLoop={onStopLoop} />}
       {others.length > 0 && (
         <button type="button" onClick={tabs.open} className="relative flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover hover:text-ink">
           <Icon name="layers" size={13} />
@@ -428,9 +569,14 @@ function Header({
             }))}
         />
       )}
+      {showFiles && <IconButton icon="folder" label="文件" onClick={openFiles} active={here(panel, "files") || here(panel, "git")} className="hidden sm:flex" />}
+      {showTerminal && <IconButton icon="terminal" label="终端" onClick={openTerminal} active={here(panel, "terminal")} className="hidden sm:flex" />}
       {items.length > 0 && <IconButton icon="more" label="更多" onClick={menu.open} active={Boolean(menu.anchor)} />}
       {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" items={items} />}
       {session && <CloseAgent open={closing} onClose={() => setClosing(false)} session={session} machineName={machineName} />}
+      {session && <SessionInfoDialog open={dialog === "info"} onClose={() => setDialog(null)} session={session} machineName={machineName} />}
+      {session && <RenameDialog open={dialog === "rename"} onClose={() => setDialog(null)} session={session} />}
+      {session && <RenameSpaceDialog open={dialog === "space"} onClose={() => setDialog(null)} session={session} />}
       <LinkTodoDialog open={linkTodoOpen} session={session} onClose={() => setLinkTodoOpen(false)} />
     </header>
   );

@@ -1,4 +1,5 @@
 import { byAttention, stateOf } from "./format";
+import { hubLabel } from "./mesh";
 import type { AgentState, Machine, Session } from "./types";
 
 export type AgentGrouping = "space" | "state" | "machine" | "todo";
@@ -25,6 +26,8 @@ export interface AgentGroup {
   sessions: Session[];
   state?: AgentState;
   folded?: boolean;
+  /** The machine's hub, only when the list spans more than one (docs/plan-hub-mesh.md 2.6). */
+  hub?: string;
   todoId?: string;
   todoStatus?: string;
 }
@@ -38,6 +41,34 @@ export function splitAgentSessions(all: Session[], machines: Machine[]) {
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? "") || a.machine_id.localeCompare(b.machine_id) || a.session_id.localeCompare(b.session_id))
     .slice(0, 40);
   return { live, recent };
+}
+
+export interface Space {
+  key: string;
+  machineId: string;
+  name: string;
+  sessions: Session[];
+}
+
+/** Live agents by herdr space, in herdr's order (machine, workspace, tab); agents outside any space are `loose`. The
+ * sidebar keeps that order: rows that jump around as agents change state are hard to click. */
+export function buildSpaces(live: Session[], machines: Machine[]): { spaces: Space[]; loose: Session[] } {
+  const map = new Map<string, Space>();
+  const loose: Session[] = [];
+  for (const s of live) {
+    if (!s.space_id) {
+      loose.push(s);
+      continue;
+    }
+    const key = `${s.machine_id}/${s.space_id}`;
+    if (!map.has(key)) map.set(key, { key, machineId: s.machine_id, name: s.space_name || s.space_id, sessions: [] });
+    map.get(key)!.sessions.push(s);
+  }
+  const order = (m: string) => machines.findIndex((x) => x.id === m);
+  const bySlot = (a: Session, b: Session) => (a.slot_index ?? 0) - (b.slot_index ?? 0) || a.session_id.localeCompare(b.session_id);
+  const spaces = [...map.values()].map((sp) => ({ ...sp, index: sp.sessions[0]?.space_index ?? 0, sessions: sp.sessions.sort(bySlot) }));
+  spaces.sort((a, b) => order(a.machineId) - order(b.machineId) || a.index - b.index || a.name.localeCompare(b.name));
+  return { spaces: spaces.map(({ index: _index, ...sp }) => sp), loose: loose.sort(byAttention) };
 }
 
 export function isWaiting(s: Session): boolean {
@@ -64,7 +95,9 @@ function byDate(a: Session, b: Session): number {
 export function buildAgentGroups(all: Session[], machines: Machine[], grouping: "state" | "machine", mutes: AgentMutes = { spaces: [], sessions: [] }): AgentGroup[] {
   const { live } = splitAgentSessions(all, machines);
   if (grouping === "machine") {
-    return machines.map((m) => ({ key: `machine:${m.id}`, name: m.name, sessions: live.filter((s) => s.machine_id === m.id).sort(byAttention) })).filter((g) => g.sessions.length);
+    return machines
+      .map((m) => ({ key: `machine:${m.id}`, name: m.name, hub: hubLabel(m, machines) || undefined, sessions: live.filter((s) => s.machine_id === m.id).sort(byAttention) }))
+      .filter((g) => g.sessions.length);
   }
   const groups: AgentGroup[] = [
     { key: "state:needs", name: "需要你", state: "needs_you", sessions: [] },

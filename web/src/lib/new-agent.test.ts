@@ -6,7 +6,7 @@ vi.mock("./store", () => {
 });
 vi.mock("./router", () => ({ href: (r: { mid: string; sid: string }) => `/s/${r.mid}/${r.sid}`, navigate: vi.fn() }));
 
-import { acknowledgeLaunch, deliverLaunch, launchAgent } from "./new-agent";
+import { acknowledgeLaunch, deliverLaunch, launchAgent, onOpenNewAgent, openNewAgent, presetPrompt } from "./new-agent";
 import { getState, upsertSession } from "./store";
 import { navigate } from "./router";
 import { pickAttachment } from "./attachments";
@@ -131,5 +131,23 @@ describe("本地优先启动", () => {
     expect(getState().launches[id]).toMatchObject({ phase: "failed", uncertain: false });
     expect(getState().launches[id].error).toContain("暂不支持首条消息带附件");
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("opened from another page", () => {
+  it("puts the preset first and keeps what was being written", () => {
+    expect(presetPrompt("<ctx/>\n\n", "")).toBe("<ctx/>\n\n");
+    expect(presetPrompt("<ctx/>\n\n", "  修一下  ")).toBe("<ctx/>\n\n修一下");
+    expect(presetPrompt("<ctx/>\n\n", "<ctx/>\n\n修一下")).toBe("<ctx/>\n\n修一下");
+    expect(presetPrompt(undefined, "草稿")).toBe("草稿");
+  });
+
+  it("reaches the shell's listener", () => {
+    const got: unknown[] = [];
+    const off = onOpenNewAgent((p) => got.push(p));
+    openNewAgent({ prompt: "x", machineId: "m", cwd: "/a" });
+    off();
+    openNewAgent({ prompt: "y" });
+    expect(got).toEqual([{ prompt: "x", machineId: "m", cwd: "/a" }]);
   });
 });

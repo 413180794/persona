@@ -1,0 +1,6 @@
+/* xterm draws its IME composition box black on white whatever the theme: give it the page's colors. */
+.xterm .composition-view {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-raised);
+}
