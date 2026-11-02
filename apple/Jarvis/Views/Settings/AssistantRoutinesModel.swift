@@ -29,6 +29,7 @@ struct AssistantDeps {
     /// Why the list could not be read; the page shows it only when it has none to show.
     private(set) var error: String?
     @ObservationIgnored private let deps: Deps
+    @ObservationIgnored private var centralModels: Bool?
 
     init(deps: Deps = .live) { self.deps = deps }
 
@@ -60,7 +61,15 @@ struct AssistantDeps {
             withAnimation(Theme.Motion.standard) { tasks[i] = t }
         }
         do {
-            let saved = try await api.saveTask(t)
+            if centralModels == nil {
+                do {
+                    _ = try await api.modelConfiguration()
+                    centralModels = true
+                } catch let error as APIError where error.status == 404 {
+                    centralModels = false
+                }
+            }
+            let saved = try await api.saveTask(t, includesModelSettings: centralModels != true)
             if let i = tasks.firstIndex(where: { $0.id == saved.id }) { tasks[i] = saved } else { tasks.append(saved) }
             return saved
         } catch {

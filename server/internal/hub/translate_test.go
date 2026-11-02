@@ -12,7 +12,8 @@ import (
 
 func TestTranslateTextsKeepsOrderAndCaches(t *testing.T) {
 	h := newTestHub(t)
-	h.triageAI = fakeModel(t, `{"texts":["你好","明天见"]}`)
+	model, setReply := mutableModel(t, `{"texts":["你好","明天见"]}`)
+	h.triageAI = model
 	out, err := h.translateTexts(context.Background(), []string{"Hello", "", "See you tomorrow"}, "zh-Hans")
 	if err != nil {
 		t.Fatal(err)
@@ -21,7 +22,7 @@ func TestTranslateTextsKeepsOrderAndCaches(t *testing.T) {
 		t.Fatalf("%q", out)
 	}
 	// Cached now: a model that would answer wrongly is not asked.
-	h.triageAI = fakeModel(t, `{"texts":["错"]}`)
+	setReply(`{"texts":["错"]}`)
 	out, err = h.translateTexts(context.Background(), []string{"See you tomorrow"}, "zh-Hans")
 	if err != nil || out[0] != "明天见" {
 		t.Fatalf("%q %v", out, err)

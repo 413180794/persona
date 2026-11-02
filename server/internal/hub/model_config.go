@@ -1,0 +1,794 @@
+package hub
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"slices"
+	"strings"
+
+	"github.com/chyroc/jarvis/server/internal/ai"
+)
+
+// ModelBinding is a sparse, non-secret selection; missing fields inherit a declared baseline.
+type ModelBinding struct {
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Effort   string `json:"effort,omitempty"`
+}
+
+type modelRecord struct {
+	Revision int64        `json:"revision"`
+	Binding  ModelBinding `json:"binding"`
+}
+
+type ModelProvider struct {
+	ID       string        `json:"id"`
+	Name     string        `json:"name"`
+	Kind     string        `json:"kind"`
+	API      string        `json:"api,omitempty"`
+	Model    string        `json:"model,omitempty"`
+	Machines []string      `json:"machines,omitempty"`
+	Hidden   bool          `json:"hidden,omitempty"`
+	HasKey   bool          `json:"has_key,omitempty"`
+	Models   []ModelChoice `json:"models,omitempty"`
+	Status   string        `json:"status,omitempty"`
+}
+
+type ModelPurpose struct {
+	ID            string       `json:"id"`
+	Name          string       `json:"name"`
+	Group         string       `json:"group"`
+	Kind          string       `json:"kind"`
+	Parent        string       `json:"parent,omitempty"`
+	MachineID     string       `json:"machine_id,omitempty"`
+	Override      ModelBinding `json:"override"`
+	Effective     ModelBinding `json:"effective"`
+	Revision      int64        `json:"revision"`
+	InheritedFrom string       `json:"inherited_from,omitempty"`
+	Status        string       `json:"status,omitempty"`
+	Fields        []string     `json:"fields"`
+	ProviderIDs   []string     `json:"provider_ids"`
+}
+
+var modelPurposes = []ModelPurpose{
+	{ID: "assistant", Name: "Jarvis 对话", Group: "对话与 Agent", Kind: "launcher"},
+	{ID: "inbox.agent", Name: "AI 分身", Group: "对话与 Agent", Kind: "launcher", Parent: "assistant"},
+	{ID: "lark.agent", Name: "飞书 /agent", Group: "对话与 Agent", Kind: "launcher", Parent: "assistant"},
+	{ID: "agent.new", Name: "新建 Agent", Group: "对话与 Agent", Kind: "launcher"},
+	{ID: "inbox.triage", Name: "分拣与摘要", Group: "收件箱", Kind: "api"},
+	{ID: "inbox.judge", Name: "AI 分身判断器", Group: "收件箱", Kind: "api"},
+	{ID: "inbox.draft", Name: "草拟回复", Group: "收件箱", Kind: "api"},
+	{ID: "translate", Name: "文本与邮件翻译", Group: "翻译", Kind: "api", Parent: "inbox.triage"},
+	{ID: "kb", Name: "知识处理默认模型", Group: "知识处理", Kind: "api", Parent: "inbox.triage"},
+	{ID: "kb.compress", Name: "会话压缩与打标", Group: "知识处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.project", Name: "项目档案重写", Group: "知识处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.dedupe", Name: "项目去重", Group: "知识处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.items", Name: "事项提取与打标", Group: "知识处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.moments", Name: "removed关联", Group: "知识处理", Kind: "api", Parent: "kb"},
+	{ID: "assistant.title", Name: "对话标题", Group: "辅助功能", Kind: "api"},
+	{ID: "agent.title", Name: "Agent 标签名", Group: "辅助功能", Kind: "api"},
+	{ID: "schedule", Name: "定时任务默认模型", Group: "定时任务", Kind: "launcher", Parent: "assistant"},
+}
+
+var errModelPurposeNotFound = errors.New("没有这个模型用途")
+
+func modelKey(id string) string { return "model_config." + id }
+
+func (h *Hub) modelRecord(ctx context.Context, id string) (modelRecord, error) {
+	var r modelRecord
+	if h.store != nil {
+		_, err := h.store.Setting(ctx, modelKey(id), &r)
+		return r, err
+	}
+	return r, nil
+}
+
+func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, error) {
+	for _, p := range modelPurposes {
+		if p.ID == id {
+			if p.Kind == "launcher" && p.ID != "agent.new" {
+				p.MachineID = h.assistantConfigLegacy(ctx).MachineID
+			}
+			if h.cfg != nil {
+				if p.ID == "lark.agent" && h.byID[h.cfg.LarkAgent.Machine] != nil {
+					p.MachineID = h.cfg.LarkAgent.Machine
+				}
+				if p.ID == "inbox.agent" && h.byID[h.cfg.Inbox.Agent.Machine] != nil {
+					p.MachineID = h.cfg.Inbox.Agent.Machine
+				}
+			}
+			return p, nil
+		}
+	}
+	if strings.HasPrefix(id, "task.") {
+		s := h.loadSchedule(ctx)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if !s.loaded {
+			return ModelPurpose{}, errors.New("读不到定时任务")
+		}
+		for _, t := range s.tasks {
+			if id == "task."+t.ID {
+				return ModelPurpose{ID: id, Name: t.label(), Group: "定时任务", Kind: "launcher", Parent: "schedule", MachineID: t.MachineID}, nil
+			}
+		}
+	}
+	if strings.HasPrefix(id, "plugin.") && h.plugins != nil {
+		for _, p := range h.plugins.list() {
+			if id == "plugin."+p.ID && p.Kind == "voice" {
+				return ModelPurpose{ID: id, Name: p.Name, Group: "插件", Kind: "plugin"}, nil
+			}
+		}
+	}
+	return ModelPurpose{}, errModelPurposeNotFound
+}
+
+// Legacy connections remain server-side and retain their existing field-wise inheritance.
+func (h *Hub) legacyModelConfig(id string) ai.Config {
+	var c ai.Config
+	if h.cfg != nil {
+		c = h.cfg.AI
+	}
+	if h.ai != nil && c.BaseURL == "" {
+		c = h.ai.Config()
+	}
+	switch id {
+	case "legacy.triage":
+		if h.cfg != nil && h.cfg.Inbox.TriageAI != nil {
+			c = h.cfg.Inbox.TriageAI.Over(c)
+		} else if h.triageAI != nil {
+			c = h.triageAI.Config()
+		}
+	case "legacy.judge":
+		if h.cfg != nil && h.cfg.Inbox.JudgeAI != nil {
+			c = h.cfg.Inbox.JudgeAI.Over(c)
+		} else if h.judgeAI != nil {
+			c = h.judgeAI.Config()
+		}
+	case "legacy.kb":
+		if h.cfg != nil && h.cfg.KB.AI != nil {
+			c = h.cfg.KB.AI.Over(c)
+		} else {
+			c = h.legacyModelConfig("legacy.triage")
+		}
+	}
+	return c
+}
+
+func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
+	out := []ModelProvider{}
+	for _, x := range []struct{ id, name string }{{"legacy.ai", "hub 默认 API"}, {"legacy.triage", "hub 分拣 API"}, {"legacy.judge", "hub 判断 API"}, {"legacy.kb", "hub 知识 API"}} {
+		c := h.legacyModelConfig(x.id)
+		if c.BaseURL == "" {
+			continue
+		}
+		apiName := c.API
+		if apiName == "" {
+			apiName = "messages"
+		}
+		out = append(out, ModelProvider{ID: x.id, Name: x.name, Kind: "api", API: apiName, Model: c.Model, HasKey: c.APIKeyFile != "" || c.APIKey != ""})
+	}
+	for _, v := range h.launcherViews(ctx) {
+		kind := v.Kind
+		if kind == "" {
+			kind = "launcher"
+		}
+		apiName := v.API
+		if kind == "api" && apiName == "" {
+			apiName = "messages"
+		}
+		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: v.Name, Kind: kind, API: apiName, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey})
+	}
+	if !slices.ContainsFunc(out, func(p ModelProvider) bool { return p.ID == "launcher.claude" }) {
+		out = append(out, ModelProvider{ID: "launcher.claude", Name: "Claude Code 默认", Kind: "launcher"})
+	}
+	if h.plugins != nil {
+		for _, p := range h.plugins.list() {
+			if p.Kind == "voice" {
+				models, err := h.pluginModelChoices(ctx, "plugin."+p.ID)
+				provider := ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: models.Default, Models: models.Models}
+				if err != nil {
+					provider.Status = err.Error()
+				}
+				out = append(out, provider)
+			}
+		}
+	}
+	return out
+}
+
+func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, string, error) {
+	if p.Parent != "" {
+		// Explicit old per-use launchers/configurations remain baselines, not new immutable overrides.
+		if h.cfg != nil {
+			if p.ID == "inbox.agent" && h.cfg.Inbox.Agent.Launcher != "" {
+				return ModelBinding{Provider: "launcher." + h.cfg.Inbox.Agent.Launcher}, "hub 配置", nil
+			}
+			if p.ID == "lark.agent" && h.cfg.LarkAgent.Launcher != "" {
+				return ModelBinding{Provider: "launcher." + h.cfg.LarkAgent.Launcher}, "hub 配置", nil
+			}
+			if p.ID == "kb" && h.cfg.KB.AI != nil {
+				c := h.legacyModelConfig("legacy.kb")
+				return ModelBinding{Provider: "legacy.kb", Model: c.Model, Effort: c.ReasoningEffort}, "hub 配置", nil
+			}
+		}
+		b, err := h.resolveModel(ctx, p.Parent)
+		return b, p.Parent, err
+	}
+	if p.Kind == "api" {
+		provider := "legacy.ai"
+		if p.ID == "inbox.triage" {
+			provider = "legacy.triage"
+		}
+		if p.ID == "inbox.judge" {
+			provider = "legacy.judge"
+		}
+		c := h.legacyModelConfig(provider)
+		return ModelBinding{Provider: provider, Model: c.Model, Effort: c.ReasoningEffort}, "hub 配置", nil
+	}
+	if p.ID == "assistant" {
+		cfg := h.assistantConfigLegacy(ctx)
+		return ModelBinding{Provider: "launcher." + cfg.Launcher}, "助手默认", nil
+	}
+	if p.Kind == "launcher" {
+		return ModelBinding{Provider: "launcher.claude"}, "默认", nil
+	}
+	return ModelBinding{Provider: p.ID}, "插件默认", nil
+}
+
+func mergeModel(base, over ModelBinding) ModelBinding {
+	if over.Provider != "" && over.Provider != base.Provider {
+		base = ModelBinding{Provider: over.Provider}
+	}
+	if over.Provider != "" {
+		base.Provider = over.Provider
+	}
+	if over.Model != "" {
+		base.Model = over.Model
+	}
+	if over.Effort != "" {
+		base.Effort = over.Effort
+	}
+	return base
+}
+
+func (h *Hub) resolveModel(ctx context.Context, id string) (ModelBinding, error) {
+	p, err := h.modelPurposeDef(ctx, id)
+	if err != nil {
+		return ModelBinding{}, err
+	}
+	base, _, err := h.modelBaseline(ctx, p)
+	if err != nil {
+		return base, err
+	}
+	if strings.HasPrefix(id, "task.") {
+		s := h.loadSchedule(ctx)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, t := range s.tasks {
+			if id == "task."+t.ID {
+				return mergeModel(base, ModelBinding{Provider: launcherProvider(t.Launcher), Model: t.Model, Effort: t.Effort}), nil
+			}
+		}
+	}
+	r, err := h.modelRecord(ctx, id)
+	if err != nil {
+		return base, fmt.Errorf("读取模型配置失败: %w", err)
+	}
+	return mergeModel(base, r.Binding), nil
+}
+
+func launcherProvider(name string) string {
+	if name == "" {
+		return ""
+	}
+	return "launcher." + name
+}
+
+func (h *Hub) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, error) {
+	var c ai.Config
+	if strings.HasPrefix(b.Provider, "legacy.") {
+		c = h.legacyModelConfig(b.Provider)
+	} else if name, ok := strings.CutPrefix(b.Provider, "launcher."); ok {
+		found := false
+		for _, s := range h.storedLaunchers(ctx) {
+			if s.Name == name {
+				if s.Kind != "api" && s.API == "responses" {
+					return c, errors.New("启动器不能作为 Responses API")
+				}
+				c = ai.Config{API: s.API, BaseURL: s.BaseURL, Model: s.Model}
+				key, err := h.openKey(s.KeySealed)
+				if err != nil {
+					return c, errors.New("供应商密钥解密失败")
+				}
+				c.APIKey = key
+				found = true
+				break
+			}
+		}
+		if !found {
+			return c, errors.New("这个供应商不能在 hub 上直接调用 API")
+		}
+	} else {
+		return c, errors.New("不是 API 供应商")
+	}
+	if b.Model != "" {
+		c.Model = b.Model
+	}
+	c.ReasoningEffort = b.Effort
+	if c.API != "" && c.API != "messages" && c.API != "responses" {
+		return c, errors.New("不支持这个 API 协议")
+	}
+	if c.API != "responses" && b.Effort != "" {
+		c.ReasoningEffort = ""
+	} // Older Messages configurations carried an unused Responses-only field.
+	return c, nil
+}
+
+func (h *Hub) purposeModel(id string) *ai.Client {
+	return ai.NewResolved(func(ctx context.Context) (*ai.Client, error) {
+		b, err := h.resolveModel(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		c, err := h.apiConfig(ctx, b)
+		if err != nil {
+			return nil, err
+		}
+		return ai.New(c), nil
+	})
+}
+
+func (h *Hub) modelFingerprint(ctx context.Context, id string) (string, error) {
+	b, err := h.resolveModel(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return h.modelBindingFingerprint(ctx, b)
+}
+
+func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProvider) (ModelPurpose, error) {
+	p, err := h.modelPurposeDef(ctx, id)
+	if err != nil {
+		return p, err
+	}
+	r, err := h.modelRecord(ctx, id)
+	if err != nil {
+		return p, err
+	}
+	p.Override, p.Revision = r.Binding, r.Revision
+	if strings.HasPrefix(id, "task.") {
+		s := h.loadSchedule(ctx)
+		s.mu.Lock()
+		for _, t := range s.tasks {
+			if id == "task."+t.ID {
+				p.Override = ModelBinding{Provider: launcherProvider(t.Launcher), Model: t.Model, Effort: t.Effort}
+				p.Revision = t.ModelRevision
+				break
+			}
+		}
+		s.mu.Unlock()
+	}
+	p.Effective, err = h.resolveModel(ctx, id)
+	if err != nil {
+		return p, err
+	}
+	_, p.InheritedFrom, err = h.modelBaseline(ctx, p)
+	if err != nil {
+		return p, err
+	}
+	p.Fields = []string{"provider", "model"}
+	p.ProviderIDs = []string{}
+	for _, v := range providers {
+		compatible := v.Kind == p.Kind
+		if p.Kind == "api" && v.Kind == "launcher" {
+			for _, s := range h.storedLaunchers(ctx) {
+				if v.ID == "launcher."+s.Name {
+					compatible = s.API != "responses"
+					break
+				}
+			}
+		}
+		if p.Kind == "plugin" {
+			compatible = v.ID == p.ID
+		}
+		if compatible && p.Kind == "launcher" && len(v.Machines) > 0 && p.MachineID != "" {
+			compatible = slices.Contains(v.Machines, p.MachineID)
+		}
+		if compatible {
+			p.ProviderIDs = append(p.ProviderIDs, v.ID)
+		}
+		if v.ID == p.Effective.Provider {
+			if p.Effective.Model == "" {
+				p.Effective.Model = v.Model
+			}
+			if p.Kind == "api" && v.API == "responses" {
+				p.Fields = append(p.Fields, "effort")
+			}
+		}
+	}
+	if p.Kind == "launcher" {
+		p.Fields = append(p.Fields, "effort")
+	}
+	p.Status = "未验证"
+	if !slices.Contains(p.ProviderIDs, p.Effective.Provider) {
+		p.Status = "供应商不存在或不兼容"
+	} else if p.Kind == "api" && p.Effective.Model == "" {
+		p.Status = "未配置模型"
+	} else if p.Kind == "api" {
+		if config, e := h.apiConfig(ctx, p.Effective); e != nil {
+			p.Status = e.Error()
+		} else if config.APIKey == "" && config.APIKeyFile == "" {
+			p.Status = "未配置凭据"
+		}
+	} else if p.Kind == "plugin" {
+		for _, provider := range providers {
+			if provider.ID == p.Effective.Provider && provider.Status != "" {
+				p.Status = provider.Status
+				break
+			}
+		}
+	} else if p.Kind == "launcher" && p.MachineID != "" {
+		if m := h.byID[p.MachineID]; m != nil {
+			m.mu.Lock()
+			online, info := m.online, m.info
+			m.mu.Unlock()
+			if !online {
+				p.Status = "运行机器离线"
+			} else if info.Version != "" && !info.ModelConfiguration {
+				p.Status = "需要更新 node"
+			}
+		}
+	}
+	return p, nil
+}
+
+type modelPatch struct {
+	Revision *int64          `json:"revision"`
+	Provider json.RawMessage `json:"provider"`
+	Model    json.RawMessage `json:"model"`
+	Effort   json.RawMessage `json:"effort"`
+}
+
+func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
+	if in.Provider != nil {
+		var provider string
+		if string(in.Provider) != "null" {
+			if err := json.Unmarshal(in.Provider, &provider); err != nil {
+				return b, errors.New("供应商要是字符串或 null")
+			}
+		}
+		if provider != b.Provider {
+			b.Model, b.Effort = "", ""
+		}
+	}
+	for _, f := range []struct {
+		raw json.RawMessage
+		dst *string
+	}{{in.Provider, &b.Provider}, {in.Model, &b.Model}, {in.Effort, &b.Effort}} {
+		if f.raw == nil {
+			continue
+		}
+		if string(f.raw) == "null" {
+			*f.dst = ""
+			continue
+		}
+		var v string
+		if err := json.Unmarshal(f.raw, &v); err != nil {
+			return b, errors.New("模型字段要是字符串或 null")
+		}
+		if v == "" || strings.TrimSpace(v) != v || strings.ContainsAny(v, "\r\n\x00") || len(v) > 512 {
+			return b, errors.New("模型字段不能为空或包含换行")
+		}
+		*f.dst = v
+	}
+	return b, nil
+}
+
+func (h *Hub) saveModelRecord(ctx context.Context, id string, revision int64, b ModelBinding) error {
+	if h.store == nil {
+		return errors.New("没有数据库，不能保存模型配置")
+	}
+	r := modelRecord{Revision: revision + 1, Binding: b}
+	if s, ok := h.store.(interface {
+		CompareSetting(context.Context, string, int64, any) (bool, error)
+	}); ok {
+		updated, err := s.CompareSetting(ctx, modelKey(id), revision, r)
+		if err != nil {
+			return err
+		}
+		if !updated {
+			return errModelConflict
+		}
+		return nil
+	}
+	// Test stores share this lock with legacy writes; production always uses database CAS.
+	old, err := h.modelRecord(ctx, id)
+	if err != nil {
+		return err
+	}
+	if old.Revision != revision {
+		return errModelConflict
+	}
+	return h.store.PutSetting(ctx, modelKey(id), r)
+}
+
+var errModelConflict = errors.New("配置已被修改，请重新加载后保存")
+
+func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding, providers []ModelProvider) error {
+	var provider *ModelProvider
+	for i := range providers {
+		if providers[i].ID == b.Provider {
+			provider = &providers[i]
+			break
+		}
+	}
+	if provider == nil {
+		return errors.New("供应商不存在")
+	}
+	if !slices.Contains(p.ProviderIDs, b.Provider) {
+		return errors.New("供应商不支持这个用途")
+	}
+	if b.Effort != "" && !slices.Contains([]string{"low", "medium", "high", "xhigh", "max"}, b.Effort) {
+		return errors.New("思考等级不支持")
+	}
+	if p.Kind == "api" {
+		_, err := h.apiConfig(ctx, b)
+		return err
+	}
+	if p.Kind == "plugin" {
+		if b.Effort != "" {
+			return errors.New("插件不支持思考等级")
+		}
+		if b.Model != "" {
+			models, err := h.pluginModelChoices(ctx, p.ID)
+			if err != nil {
+				return err
+			}
+			if !slices.ContainsFunc(models.Models, func(m ModelChoice) bool { return m.ID == b.Model }) {
+				return errors.New("插件没有这个模型")
+			}
+		}
+		return nil
+	}
+	if p.Kind == "launcher" {
+		if len(provider.Machines) > 0 && p.MachineID != "" && !slices.Contains(provider.Machines, p.MachineID) {
+			return errors.New("运行这个用途的电脑没有该启动器")
+		}
+		if b.Model != "" {
+			m := h.byID[p.MachineID]
+			if m == nil && len(provider.Machines) > 0 {
+				m = h.byID[provider.Machines[0]]
+			}
+			if m != nil {
+				var result struct {
+					Agent string `json:"agent"`
+				}
+				if err := m.call(ctx, "launchers.model.check", map[string]any{"name": strings.TrimPrefix(b.Provider, "launcher."), "model": b.Model}, &result); err != nil {
+					return fmt.Errorf("无法验证启动器的具体模型: %w", err)
+				}
+				if p.ID == "agent.new" && result.Agent != "claude" {
+					return errors.New("普通 Agent 的启动只支持 Claude Code 启动器")
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/v1/model-config", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		providers := h.modelProviders(ctx)
+		purposes := []ModelPurpose{}
+		ids := []string{}
+		for _, p := range modelPurposes {
+			ids = append(ids, p.ID)
+		}
+		s := h.loadSchedule(ctx)
+		s.mu.Lock()
+		for _, t := range s.tasks {
+			if !t.done() {
+				ids = append(ids, "task."+t.ID)
+			}
+		}
+		s.mu.Unlock()
+		if h.plugins != nil {
+			for _, p := range h.plugins.list() {
+				if p.Kind == "voice" {
+					ids = append(ids, "plugin."+p.ID)
+				}
+			}
+		}
+		for _, id := range ids {
+			p, err := h.modelPurpose(ctx, id, providers)
+			if err != nil {
+				writeErr(w, 500, err)
+				return
+			}
+			purposes = append(purposes, p)
+		}
+		writeJSON(w, map[string]any{"purposes": purposes, "providers": providers})
+	})
+	detail := func(w http.ResponseWriter, r *http.Request) {
+		providers := h.modelProviders(r.Context())
+		p, err := h.modelPurpose(r.Context(), r.PathValue("id"), providers)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, errModelPurposeNotFound) {
+				status = http.StatusNotFound
+			}
+			writeErr(w, status, err)
+			return
+		}
+		writeJSON(w, map[string]any{"purpose": p, "providers": providers})
+	}
+	api.HandleFunc("GET /api/v1/model-config/purposes/{id}", detail)
+	api.HandleFunc("PATCH /api/v1/model-config/purposes/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var in modelPatch
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&in); err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+		if in.Revision == nil || *in.Revision < 0 {
+			writeErr(w, 400, errors.New("需要配置版本"))
+			return
+		}
+		h.modelMu.Lock()
+		defer h.modelMu.Unlock()
+		ctx, id := r.Context(), r.PathValue("id")
+		providers := h.modelProviders(ctx)
+		p, err := h.modelPurpose(ctx, id, providers)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, errModelPurposeNotFound) {
+				status = http.StatusNotFound
+			}
+			writeErr(w, status, err)
+			return
+		}
+		if p.Revision != *in.Revision {
+			writeErr(w, 409, errModelConflict)
+			return
+		}
+		b, err := patchModel(p.Override, in)
+		if err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+		base, _, err := h.modelBaseline(ctx, p)
+		if err != nil {
+			writeErr(w, 500, err)
+			return
+		}
+		effective := mergeModel(base, b)
+		if in.Effort != nil && string(in.Effort) != "null" && p.Kind == "api" {
+			config, e := h.apiConfig(ctx, effective)
+			if e != nil {
+				writeErr(w, 400, e)
+				return
+			}
+			if config.API != "responses" {
+				writeErr(w, 400, errors.New("这个 API 接入不支持思考等级"))
+				return
+			}
+		}
+		if b != (ModelBinding{}) {
+			if err = h.validateModel(ctx, p, effective, providers); err != nil {
+				writeErr(w, 400, err)
+				return
+			}
+		}
+		if strings.HasPrefix(id, "task.") {
+			err = h.saveTaskModel(ctx, strings.TrimPrefix(id, "task."), p.Revision, b)
+		} else {
+			err = h.saveModelRecord(ctx, id, p.Revision, b)
+		}
+		if err != nil {
+			status := 500
+			if errors.Is(err, errModelConflict) {
+				status = 409
+			}
+			writeErr(w, status, err)
+			return
+		}
+		detail(w, r)
+	})
+}
+
+func (h *Hub) saveTaskModel(ctx context.Context, id string, revision int64, b ModelBinding) error {
+	s := h.loadSchedule(ctx)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.loaded || h.store == nil {
+		return errors.New("读不到任务数据库")
+	}
+	i := s.indexLocked(id)
+	if i < 0 {
+		return errors.New("没有这个任务")
+	}
+	if s.tasks[i].ModelRevision != revision {
+		return errModelConflict
+	}
+	old := s.tasks[i]
+	s.tasks[i].Launcher = strings.TrimPrefix(b.Provider, "launcher.")
+	s.tasks[i].Model = b.Model
+	s.tasks[i].Effort = b.Effort
+	s.tasks[i].ModelRevision++
+	if err := h.store.PutSetting(ctx, tasksKey, s.tasks); err != nil {
+		s.tasks[i] = old
+		return err
+	}
+	return nil
+}
+
+func (h *Hub) modelBindingFingerprint(ctx context.Context, b ModelBinding) (string, error) {
+	raw, _ := json.Marshal(b)
+	if strings.HasPrefix(b.Provider, "legacy.") {
+		c := h.legacyModelConfig(b.Provider)
+		v, _ := json.Marshal(c)
+		raw = append(raw, v...)
+	}
+	if name, ok := strings.CutPrefix(b.Provider, "launcher."); ok {
+		for _, s := range h.storedLaunchers(ctx) {
+			if s.Name == name {
+				v, _ := json.Marshal(s)
+				raw = append(raw, v...)
+				break
+			}
+		}
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// applyModel selects the execution profile without mutating permission mode.
+func (h *Hub) applyModel(ctx context.Context, id string, params map[string]any) error {
+	b, err := h.resolveModel(ctx, id)
+	if err != nil {
+		return err
+	}
+	if name, _ := params["launcher"].(string); name != "" && launcherProvider(name) != b.Provider {
+		b = ModelBinding{Provider: launcherProvider(name)}
+	}
+	if model, _ := params["model"].(string); model != "" {
+		b.Model = model
+	}
+	if effort, _ := params["effort"].(string); effort != "" {
+		b.Effort = effort
+	}
+	if name, ok := strings.CutPrefix(b.Provider, "launcher."); ok {
+		for _, provider := range h.storedLaunchers(ctx) {
+			if provider.Name == name && provider.Kind == "api" {
+				return errors.New("这个用途引用了直接 API 接入，不能作为启动器运行")
+			}
+		}
+		params["launcher"] = name
+	} else if strings.HasPrefix(id, "plugin.") {
+		params["model"] = b.Model
+		return nil
+	} else {
+		return errors.New("这个用途不是启动器")
+	}
+	if b.Model != "" {
+		params["model"] = b.Model
+	}
+	if b.Effort != "" {
+		params["effort"] = b.Effort
+	}
+	fingerprint, err := h.modelBindingFingerprint(ctx, b)
+	if err != nil {
+		return err
+	}
+	raw, _ := json.Marshal(b)
+	sum := sha256.Sum256(append([]byte(fingerprint), raw...))
+	params["model_fingerprint"] = hex.EncodeToString(sum[:])
+	return nil
+}

@@ -16,7 +16,7 @@ import (
 // seconds at most). "" when there is no message or the model fails: the node names it agent-<n>.
 func (h *Hub) autoTabName(ctx context.Context, prompt string) string {
 	prompt = strings.TrimSpace(prompt)
-	if prompt == "" || h.ai == nil {
+	if prompt == "" {
 		return ""
 	}
 	if r := []rune(prompt); len(r) > 1500 {
@@ -24,7 +24,7 @@ func (h *Hub) autoTabName(ctx context.Context, prompt string) string {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	out, err := h.ai.Complete(cctx, prompts.RenderTabName(), prompt, 200) // reasoning models think first: 20 came back empty
+	out, err := h.purposeModel("agent.title").Complete(cctx, prompts.RenderTabName(), prompt, 200) // reasoning models think first: 20 came back empty
 	if err != nil {
 		h.logf("tab name: %v", err)
 		return ""

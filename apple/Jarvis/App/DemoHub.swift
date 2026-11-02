@@ -27,6 +27,7 @@ final class DemoHub {
     private var inbox: [JSONValue] = []
     private var lark: [String: [JSONValue]] = [:]
     private var tasks: [JSONValue] = []
+    private var modelBindings: [String: JSONValue] = [:]
     private var memory: [JSONValue] = []
     private var prefs: JSONValue = .object([:])
     private var pins: JSONValue = .object([:])
@@ -58,6 +59,7 @@ final class DemoHub {
     /// Back to the data as shipped (entering 体验模式 again starts over).
     func reset() {
         loaded = false
+        modelBindings = [:]
         sockets = []
     }
 
@@ -154,6 +156,7 @@ final class DemoHub {
             var a = data["assistant"]?.object ?? [:]
             a["conversations"] = .array(sessions.filter { $0["assistant"]?.bool == true })
             return .object(a)
+        case ["model-config"]: return DemoModelCatalog.configuration(tasks: tasks, overrides: modelBindings)
         case ["assistant", "tasks"]: return ["tasks": .array(tasks)]
         case ["assistant", "runs"]:
             let runs = data["runs"]?.array ?? []
@@ -173,6 +176,10 @@ final class DemoHub {
         default: break
         }
         switch (p.first ?? "", p.count) {
+        case ("model-config", 3) where p[1] == "purposes":
+            let catalog = DemoModelCatalog.configuration(tasks: tasks, overrides: modelBindings)
+            guard let purpose = catalog["purposes"]?.array?.first(where: { $0["id"]?.string == p[2] }) else { throw notFound() }
+            return ["purpose": purpose, "providers": catalog["providers"] ?? []]
         case ("machines", 3):
             let id = p[1]
             switch p[2] {
@@ -254,6 +261,19 @@ final class DemoHub {
     }
 
     private func change(_ method: String, _ p: [String], _ body: JSONValue) throws -> JSONValue {
+        if p.count == 3, p[0] == "model-config", p[1] == "purposes", method == "PATCH" {
+            let id = p[2]
+            let catalog = DemoModelCatalog.configuration(tasks: tasks, overrides: modelBindings)
+            guard let purpose = catalog["purposes"]?.array?.first(where: { $0["id"]?.string == id }) else { throw notFound() }
+            guard body["revision"]?.int == purpose["revision"]?.int else { throw APIError(status: 409, message: "配置已修改，请重新加载") }
+            var binding = purpose["override"]?.object ?? [:]
+            for field in ["provider", "model", "effort"] {
+                guard let value = body[field] else { continue }
+                if value == .null { binding.removeValue(forKey: field) } else { binding[field] = value }
+            }
+            modelBindings[id] = ["override": .object(binding), "revision": .number(Double((purpose["revision"]?.int ?? 0) + 1))]
+            return try get(p, [:])
+        }
         switch p {
         case ["sessions"]:
             throw APIError(status: 403, message: "体验模式下不能新建会话：连接你自己的 hub 后再试")

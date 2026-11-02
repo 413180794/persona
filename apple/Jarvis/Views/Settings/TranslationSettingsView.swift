@@ -15,8 +15,9 @@ struct TranslationSettingsView: View {
         List {
             Section {
                 Toggle(isOn: $enabled) { Label("自动翻译", systemImage: Theme.Icon.translate) }
+                ModelConfigurationLink(title: "翻译模型", purposeID: "translate")
             } footer: {
-                Text("内容不是目标语言时自动翻译，原文随时可以切回来。翻译由 hub 上处理小任务的模型来做。")
+                Text("内容不是目标语言时自动翻译，原文随时可以切回来。翻译由「模型配置」中的翻译模型处理。")
             }
             if enabled {
                 Section {

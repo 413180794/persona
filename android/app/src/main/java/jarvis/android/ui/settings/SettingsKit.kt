@@ -26,6 +26,10 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +40,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -329,6 +337,43 @@ fun KitEmpty(icon: ImageVector, title: String, message: String?, modifier: Modif
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center)
         if (!message.isNullOrEmpty()) Text(message, fontSize = 15.sp, color = c.secondaryLabel, textAlign = TextAlign.Center)
     }
+}
+
+/** A single-line field in a settings group; spacing stays in the shared kit. */
+@Composable
+fun KitTextField(label: String, value: String, onChange: (String) -> Unit, placeholder: String = "", enabled: Boolean = true) {
+    OutlinedTextField(
+        value = value, onValueChange = onChange, singleLine = true, enabled = enabled,
+        label = { Text(label, maxLines = 1) },
+        placeholder = { Text(placeholder, maxLines = 1, color = kitColors.tertiaryLabel) },
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+    )
+}
+
+data class KitOption(val id: String, val title: String)
+
+/** A picker row keeps the current value visible even when its source is no longer in the options. */
+@Composable
+fun KitPickerRow(title: String, value: String, options: List<KitOption>, onChange: (String) -> Unit, enabled: Boolean = true) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        KitRow(title, onClick = if (enabled) ({ open = true }) else null,
+            value = options.firstOrNull { it.id == value }?.title ?: value)
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    trailingIcon = { if (option.id == value) Icon(Icons.Default.Check, "已选", tint = kitColors.accent) },
+                    onClick = { open = false; onChange(option.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun KitLoadingRow() {
+    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 }
 
 /** A short confirmation or error at the bottom of the screen. */

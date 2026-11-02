@@ -7,6 +7,9 @@ import { reset, useStore } from "../lib/store";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
+import { Group, Row, Pill } from "./settings/SettingsParts";
+import { ModelConfiguration } from "./settings/ModelConfiguration";
+import { modelPurpose, modelSummary, type ModelPurpose } from "../lib/model-config";
 
 // ── types (docs/launchers.md) ───────────────────────────
 
@@ -27,6 +30,8 @@ interface LauncherDetail {
 interface LauncherView {
   name: string;
   source: "zshrc" | "jarvis";
+  kind?: "launcher" | "api";
+  api?: "messages" | "responses";
   base_url?: string;
   model?: string;
   small_model?: string;
@@ -66,25 +71,31 @@ export function tokens(n: number): string {
 
 // ── page ────────────────────────────────────────────────
 
-type Tab = "general" | "models" | "devices";
+type Tab = "general" | "models" | "model-config" | "devices";
 
 export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
-  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(location.search).get("tab") as Tab) || "general");
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = new URLSearchParams(location.search).get("tab");
+    return t === "models" || t === "model-config" || t === "devices" ? t : "general";
+  });
+  const [purpose, setPurpose] = useState<string | null>(() => new URLSearchParams(location.search).get("purpose"));
   const tabs: { k: Tab; label: string; icon: IconName }[] = [
     { k: "general", label: "通用", icon: "gear" },
-    { k: "models", label: "模型", icon: "spark" },
+    { k: "models", label: "模型供应商", icon: "spark" },
+    { k: "model-config", label: "模型配置", icon: "gear" },
     { k: "devices", label: "设备", icon: "key" },
   ];
-  const pick = (k: Tab) => {
+  const pick = (k: Tab, id: string | null = null) => {
     setTab(k);
-    history.replaceState(null, "", k === "general" ? "/settings" : `/settings?tab=${k}`);
+    setPurpose(id);
+    history.replaceState(null, "", k === "general" ? "/settings" : `/settings?tab=${k}${id ? `&purpose=${enc(id)}` : ""}`);
   };
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
         <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        <h1 className="text-[14px] font-semibold text-ink">设置</h1>
-        <nav className="ml-3 flex items-center gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline" aria-label="设置分类">
+        <h1 className="shrink-0 whitespace-nowrap text-[14px] font-semibold text-ink">设置</h1>
+        <nav className="ml-1 flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline sm:ml-3" aria-label="设置分类">
           {tabs.map((t) => (
             <button
               key={t.k}
@@ -104,62 +115,13 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div key={tab} className="mx-auto max-w-[760px] px-5 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
-          {tab === "general" && <General />}
+          {tab === "general" && <General onConfigure={() => pick("model-config", "assistant")} />}
           {tab === "models" && <Models />}
+          {tab === "model-config" && <ModelConfiguration open={purpose} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
           {tab === "devices" && <Devices />}
         </div>
       </div>
     </div>
-  );
-}
-
-// ── shared bits ─────────────────────────────────────────
-
-function Group({ title, footer, children, right }: { title?: React.ReactNode; footer?: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }) {
-  return (
-    <section className="mb-6">
-      {(title || right) && (
-        <div className="mb-1.5 flex items-end gap-2 px-1">
-          <h2 className="flex-1 text-[12px] font-medium text-ink-3">{title}</h2>
-          {right}
-        </div>
-      )}
-      <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">{children}</div>
-      {footer && <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{footer}</p>}
-    </section>
-  );
-}
-
-function Row({ label, hint, children, onClick, mono }: { label: React.ReactNode; hint?: React.ReactNode; children?: React.ReactNode; onClick?: () => void; mono?: boolean }) {
-  const body = (
-    <>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] text-ink">{label}</div>
-        {hint && <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{hint}</div>}
-      </div>
-      {children !== undefined && <div className={cx("flex min-w-0 shrink-0 items-center gap-2 text-[12.5px] text-ink-2", mono && "font-mono")}>{children}</div>}
-      {onClick && <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />}
-    </>
-  );
-  return onClick ? (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover">
-      {body}
-    </button>
-  ) : (
-    <div className="flex items-center gap-3 px-4 py-2.5">{body}</div>
-  );
-}
-
-function Pill({ children, tone }: { children: React.ReactNode; tone?: "accent" | "green" | "red" }) {
-  return (
-    <span
-      className={cx(
-        "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full px-1.5 text-[11px] font-medium",
-        tone === "accent" ? "bg-accent-tint text-accent-ink" : tone === "green" ? "bg-green-tint text-green" : tone === "red" ? "bg-red-tint text-red" : "bg-inset text-ink-2 shadow-hairline",
-      )}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -179,33 +141,16 @@ interface AssistantState {
   cwd?: string;
 }
 
-function General() {
+function General({ onConfigure }: { onConfigure: () => void }) {
   const theme = useTheme();
   const machines = useStore((s) => s.machines);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
-  const [launchers, setLaunchers] = useState<{ name: string; model?: string; source?: string }[] | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [purpose, setPurpose] = useState<ModelPurpose | null>(null);
 
   useEffect(() => {
-    api<AssistantState>("/assistant")
-      .then((a) => {
-        setAssistant(a);
-        if (a.machine_id) return api<{ launchers: { name: string; model?: string; source?: string }[] }>(`/machines/${enc(a.machine_id)}/launchers`).then((r) => setLaunchers(r.launchers ?? []));
-      })
-      .catch((e) => toast(errorText(e), "error"));
+    api<AssistantState>("/assistant").then(setAssistant).catch((e) => toast(errorText(e), "error"));
+    modelPurpose("assistant").then((r) => setPurpose(r.purpose)).catch(() => {});
   }, []);
-
-  const setLauncher = async (name: string) => {
-    setSaving(true);
-    try {
-      setAssistant(await api<AssistantState>("/assistant", { method: "PUT", json: { launcher: name } }));
-      toast(`新对话将使用 ${name}`, "ok");
-    } catch (e) {
-      toast(errorText(e), "error");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const themes: { k: Theme; label: string; icon: IconName }[] = [
     { k: "system", label: "跟随系统", icon: "monitor" },
@@ -236,28 +181,9 @@ function General() {
         </div>
       </Group>
 
-      <Group title="Jarvis 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.jarvis/assistant"} 里后台运行一个 Claude。换启动器后主对话从下一条消息起用它（接着原来的上下文），新对话也用它；启动器在「模型」里管理。`}>
-        <Row label="启动器（模型）" hint={launchers?.find((l) => l.name === assistant?.launcher)?.model}>
-          {!launchers ? (
-            <Spinner />
-          ) : (
-            <select
-              value={assistant?.launcher ?? ""}
-              disabled={saving}
-              onChange={(e) => void setLauncher(e.target.value)}
-              className="h-8 max-w-[260px] rounded-control bg-inset px-2 font-mono text-[12.5px] text-ink shadow-hairline outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
-              aria-label="助手的启动器"
-            >
-              {!launchers.some((l) => l.name === assistant?.launcher) && assistant?.launcher && <option value={assistant.launcher}>{assistant.launcher}</option>}
-              {launchers.map((l) => (
-                <option key={l.name} value={l.name}>
-                  {l.name}
-                  {l.model ? ` · ${l.model}` : ""}
-                  {l.source === "jarvis" ? " · Jarvis" : ""}
-                </option>
-              ))}
-            </select>
-          )}
+      <Group title="Jarvis 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.jarvis/assistant"} 里后台运行。模型与启动器统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。`}>
+        <Row label="对话模型" hint={purpose ? modelSummary(purpose) : assistant?.launcher} onClick={onConfigure}>
+          <span>模型配置</span>
         </Row>
         <Row label="运行在">{machineName ?? "—"}</Row>
       </Group>
@@ -324,6 +250,7 @@ function Models() {
         <div className="flex items-center gap-2">
           <span className="truncate font-mono text-[13px] font-medium text-ink">{l.name}</span>
           {l.source === "jarvis" && <Pill tone="accent">Jarvis</Pill>}
+          {l.kind === "api" && <Pill>直接 API</Pill>}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11.5px] text-ink-3">
           {l.model && <span className="truncate font-mono text-ink-2">{l.model}</span>}
@@ -340,19 +267,19 @@ function Models() {
       <div className="mb-4 flex items-center gap-2">
         <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-control bg-surface px-3 shadow-btn focus-within:shadow-[inset_0_0_0_1px_var(--accent)]">
           <Icon name="search" size={13} stroke={2} className="text-ink-3" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="名字、模型、网关或电脑" className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3" aria-label="搜索启动器" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="名字、模型、网关或电脑" className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3" aria-label="搜索供应商" />
           {query && <IconButton icon="x" label="清除" size={22} iconSize={12} onClick={() => setQuery("")} />}
         </label>
         <Button tone="accent" icon="plus" onClick={() => setEditing("new")}>
-          新增启动器
+          新增供应商
         </Button>
       </div>
       {!list && !error && <Loading />}
       {error && <p className="text-[13px] text-red">{error}</p>}
-      {list && query && shown.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">没有和「{query}」相关的启动器</p>}
+      {list && query && shown.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">没有和「{query}」相关的供应商</p>}
       {list && (!query || managed.length > 0) && (
-        <Group title={`Jarvis 管理 ${managed.length}`} footer={managed.length ? "Key 加密存在 hub，启动时才交给那台电脑，不写进文件；以 jarvisd launch <名字> 运行。" : undefined}>
-          {managed.length ? managed.map(row) : <p className="px-4 py-3 text-[12.5px] text-ink-3">还没有。点「新增启动器」：填网关地址、Key 和模型，所有电脑都能用。</p>}
+        <Group title={`Jarvis 管理 ${managed.length}`} footer={managed.length ? "Key 加密存在 hub；直接 API 由 hub 调用，启动器以 jarvisd launch <名字> 运行。" : undefined}>
+          {managed.length ? managed.map(row) : <p className="px-4 py-3 text-[12.5px] text-ink-3">还没有。点「新增供应商」：填协议、网关地址、Key 和默认模型；用途在「模型配置」中选择。</p>}
         </Group>
       )}
       {zshrc.length > 0 && (
@@ -468,7 +395,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
             ) : (
               <span className="relative">
                 <Button tone="quiet" icon={l.source === "jarvis" ? "x" : undefined} onClick={() => setConfirm((c) => !c)} className="text-red enabled:hover:text-red">
-                  {l.source === "jarvis" ? "删除启动器" : "在 Jarvis 里隐藏"}
+                  {l.source === "jarvis" ? "删除供应商" : "在 Jarvis 里隐藏"}
                 </Button>
                 {/* the confirmation comes up right at the button (like the app), not as another dialog */}
                 {confirm && (
@@ -530,11 +457,13 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
 
           {l.source === "jarvis" && (
             <KV title="设置">
+              <KVRow k="接入方式" v={l.kind === "api" ? "直接 API" : "启动器"} />
+              {l.kind === "api" && <KVRow k="协议" v={l.api === "responses" ? "Responses" : "Messages"} />}
               <KVRow k="Base URL" v={l.base_url} mono />
               <KVRow k="模型" v={l.model} mono />
-              {l.small_model && <KVRow k="小模型" v={l.small_model} mono />}
+              {l.kind !== "api" && l.small_model && <KVRow k="小模型" v={l.small_model} mono />}
               <KVRow k="API Key" v={l.has_key ? "已设置（不显示）" : "未设置"} />
-              {l.args?.length ? <KVRow k="额外参数" v={l.args.join(" ")} mono /> : null}
+              {l.kind !== "api" && l.args?.length ? <KVRow k="额外参数" v={l.args.join(" ")} mono /> : null}
             </KV>
           )}
 
@@ -630,22 +559,23 @@ function DetailBlock({ d, place }: { d: LauncherDetail; place?: string }) {
 function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView | "new" | null; onClose: () => void; onSaved: () => void }) {
   const isNew = existing === "new";
   const old = existing && existing !== "new" ? existing : null;
-  const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", args: "" });
+  const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", args: "", kind: "launcher", api: "messages" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setError("");
-    setF(old ? { name: old.name, base_url: old.base_url ?? "", api_key: "", model: old.model ?? "", small_model: old.small_model ?? "", args: (old.args ?? []).join(" ") } : { name: "", base_url: "", api_key: "", model: "", small_model: "", args: "" });
+    setF(old ? { name: old.name, base_url: old.base_url ?? "", api_key: "", model: old.model ?? "", small_model: old.small_model ?? "", args: (old.args ?? []).join(" "), kind: old.kind ?? "launcher", api: old.api ?? "messages" } : { name: "", base_url: "", api_key: "", model: "", small_model: "", args: "", kind: "launcher", api: "messages" });
   }, [existing]);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
-  const ready = f.name && f.base_url && f.model && (!isNew || f.api_key);
+  const ready = f.name.trim() && f.base_url.trim() && f.model.trim() && (!isNew || f.api_key.trim());
   const save = async () => {
+    if (busy || !ready) return;
     setBusy(true);
     setError("");
     try {
-      const body = { name: f.name.trim(), base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.small_model.trim(), args: f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined };
+      const body = { name: f.name.trim(), kind: f.kind, api: f.kind === "api" ? f.api : "messages", base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.kind === "api" ? "" : f.small_model.trim(), args: f.kind === "api" ? [] : f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined };
       await api(isNew ? "/launchers" : enLauncher(body.name), { method: isNew ? "POST" : "PUT", json: body });
       toast(isNew ? `已新增 ${body.name}` : `已保存 ${body.name}`, "ok");
       onSaved();
@@ -679,7 +609,7 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
       open={existing !== null}
       onClose={onClose}
       width={480}
-      title={isNew ? "新增启动器" : `编辑 ${old?.name ?? ""}`}
+      title={isNew ? "新增供应商" : `编辑 ${old?.name ?? ""}`}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
@@ -698,14 +628,30 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
           if (ready) void save();
         }}
       >
-        {field("name", "名字", { placeholder: "比如 jv_strong", hint: "字母、数字、_ 和 -；新对话、助手里按这个名字选。", mono: true, disabled: !isNew })}
-        {field("base_url", "Base URL", { placeholder: "https://…", hint: "Anthropic Messages 兼容的地址（设成 ANTHROPIC_BASE_URL）。", mono: true })}
+        <label className="block">
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">接入方式</span>
+          <select value={f.kind} onChange={(e) => setF((x) => ({ ...x, kind: e.target.value, api: "messages" }))} disabled={!isNew}
+            className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none disabled:opacity-60">
+            <option value="launcher">Claude Code 启动器</option>
+            <option value="api">直接 API</option>
+          </select>
+        </label>
+        {f.kind === "api" && <label className="block">
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">API 协议</span>
+          <select value={f.api} onChange={(e) => setF((x) => ({ ...x, api: e.target.value }))}
+            className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none">
+            <option value="messages">Anthropic Messages</option>
+            <option value="responses">OpenAI Responses</option>
+          </select>
+        </label>}
+        {field("name", "名字", { placeholder: "比如 jv_strong", hint: "字母、数字、_ 和 -；在模型配置中按这个名字选。", mono: true, disabled: !isNew })}
+        {field("base_url", "Base URL", { placeholder: "https://…", hint: f.api === "responses" ? "Responses 兼容 API 的基础地址。" : "Messages 兼容 API 的基础地址。", mono: true })}
         {field("api_key", isNew || !old?.has_key ? "API Key" : "API Key（不改就留空）", { type: "password", hint: "加密存在 hub，接口不会再返回。" })}
-        <div className="grid grid-cols-2 gap-3">
-          {field("model", "模型", { placeholder: "主模型", mono: true })}
-          {field("small_model", "小模型（可选）", { placeholder: "默认同模型", mono: true })}
+        <div className={f.kind === "api" ? "" : "grid grid-cols-2 gap-3"}>
+          {field("model", "默认模型", { placeholder: "主模型", mono: true })}
+          {f.kind !== "api" && field("small_model", "小模型（可选）", { placeholder: "默认同模型", mono: true })}
         </div>
-        {field("args", "额外参数（可选）", { placeholder: "--dangerously-skip-permissions", hint: "加在 claude 后面，空格分隔，每个都以 - 开头。", mono: true })}
+        {f.kind !== "api" && field("args", "额外参数（可选）", { placeholder: "--dangerously-skip-permissions", hint: "加在 claude 后面，空格分隔，每个都以 - 开头。", mono: true })}
         {error && <p className="text-[12px] text-red">{error}</p>}
         <button type="submit" hidden />
       </form>

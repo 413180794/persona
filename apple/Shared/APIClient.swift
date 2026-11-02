@@ -521,6 +521,7 @@ nonisolated struct APIClient: Sendable {
         var launcher: String?
         var permissionMode: String?
         var effort: String?
+        var includesModelSettings = true
         var createdBy: String?    // "assistant": Jarvis set it up from a conversation
         var lastRun: Date?        // read-only, set by the hub
         var lastSessionID: String?
@@ -571,15 +572,20 @@ nonisolated struct APIClient: Sendable {
             try c.encode(repeats, forKey: .repeats); try c.encodeIfPresent(at, forKey: .at)
             try c.encode(time, forKey: .time); try c.encode(weekdays, forKey: .weekdays); try c.encode(everyMinutes, forKey: .everyMinutes)
             try c.encode(enabled, forKey: .enabled); try c.encode(sessionID ?? "", forKey: .sessionID)
-            try c.encode(launcher ?? "", forKey: .launcher); try c.encode(permissionMode ?? "", forKey: .permissionMode)
-            try c.encode(effort ?? "", forKey: .effort)
+            try c.encode(permissionMode ?? "", forKey: .permissionMode)
+            if includesModelSettings {
+                try c.encode(launcher ?? "", forKey: .launcher)
+                try c.encode(effort ?? "", forKey: .effort)
+            }
         }
     }
     struct TasksBody: Decodable { var tasks: [ScheduledTask] }
     struct TaskBody: Codable { var task: ScheduledTask }
     func scheduledTasks() async throws -> [ScheduledTask] { try await get("/api/v1/assistant/tasks", as: TasksBody.self).tasks }
     /// Creates `t` (no id yet) or saves the user's changes to it; returns it as the hub has it.
-    func saveTask(_ t: ScheduledTask) async throws -> ScheduledTask {
+    func saveTask(_ t: ScheduledTask, includesModelSettings: Bool = true) async throws -> ScheduledTask {
+        var t = t
+        t.includesModelSettings = includesModelSettings
         let data = t.id.isEmpty ? try await request("POST", "/api/v1/assistant/tasks", body: t)
                                 : try await request("PUT", "/api/v1/assistant/tasks/\(t.id)", body: t)
         return try JSON.decoder.decode(TaskBody.self, from: data).task

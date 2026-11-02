@@ -32,6 +32,14 @@ type AssistantConfig struct {
 }
 
 func (h *Hub) assistantConfig(ctx context.Context) AssistantConfig {
+	cfg := h.assistantConfigLegacy(ctx)
+	if r, err := h.modelRecord(ctx, "assistant"); err == nil && r.Binding.Provider != "" {
+		cfg.Launcher = strings.TrimPrefix(r.Binding.Provider, "launcher.")
+	}
+	return cfg
+}
+
+func (h *Hub) assistantConfigLegacy(ctx context.Context) AssistantConfig {
 	cfg := AssistantConfig{MachineID: h.cfg.Assistant.Machine, Launcher: h.cfg.Assistant.Launcher}
 	if cfg.Launcher == "" {
 		cfg.Launcher = "claude"
@@ -179,6 +187,19 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
 			return
 		}
+		if in.Launcher != "" {
+			h.modelMu.Lock()
+			record, err := h.modelRecord(r.Context(), "assistant")
+			if err == nil {
+				record.Binding = mergeModel(record.Binding, ModelBinding{Provider: launcherProvider(in.Launcher)})
+				err = h.saveModelRecord(r.Context(), "assistant", record.Revision, record.Binding)
+			}
+			h.modelMu.Unlock()
+			if err != nil {
+				writeErr(w, 500, err)
+				return
+			}
+		}
 		if err := h.store.PutSetting(r.Context(), "assistant", cfg); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
@@ -262,7 +283,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 	})
 }
 
-func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.Image, launcher, mode, effort string) (*proto.Session, error) {
+func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.Image, launcher, mode, effort string, purposes ...string) (*proto.Session, error) {
 	cfg := h.assistantConfig(ctx)
 	if launcher != "" {
 		cfg.Launcher = launcher // one-off choice from the app; the saved default stays
@@ -281,8 +302,16 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	var res struct {
 		SessionID string `json:"session_id"`
 	}
-	if err := m.call(ctx, "assistant.send", map[string]any{"cwd": prep.Cwd, "launcher": cfg.Launcher, "text": prompt, "images": images,
-		"permission_mode": mode, "effort": effort}, &res); err != nil {
+	params := map[string]any{"cwd": prep.Cwd, "launcher": launcher, "text": prompt, "images": images, "permission_mode": mode, "effort": effort}
+	purpose := "assistant"
+	if len(purposes) > 0 {
+		purpose = purposes[0]
+	}
+	if err := h.applyModel(ctx, purpose, params); err != nil {
+		return nil, err
+	}
+	cfg.Launcher, _ = params["launcher"].(string)
+	if err := m.call(ctx, "assistant.send", params, &res); err != nil {
 		return nil, err
 	}
 	s := proto.Session{SessionID: res.SessionID, Cwd: prep.Cwd, Status: proto.StatusWorking, Launcher: cfg.Launcher,
@@ -310,7 +339,12 @@ func (h *Hub) warmAssistant(launcher string) {
 	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx)}, &prep); err != nil {
 		return
 	}
-	if err := m.call(ctx, "assistant.warm", map[string]any{"cwd": prep.Cwd, "launcher": launcher}, nil); err != nil {
+	params := map[string]any{"cwd": prep.Cwd, "launcher": launcher}
+	if err := h.applyModel(ctx, "assistant", params); err != nil {
+		h.logf("warm model: %v", err)
+		return
+	}
+	if err := m.call(ctx, "assistant.warm", params, nil); err != nil {
 		h.logf("warm assistant: %v", err)
 	}
 }

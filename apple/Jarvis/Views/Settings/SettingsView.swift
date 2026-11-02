@@ -49,7 +49,10 @@ struct SettingsView: View {
                 Section {
                     Group {
                         NavigationLink(value: ModelLaunchersRoute()) {
-                            SettingsRow(title: "模型", symbol: Theme.Icon.cpu, tint: Theme.Hue.purple)
+                            SettingsRow(title: "模型供应商", symbol: Theme.Icon.cpu, tint: Theme.Hue.purple)
+                        }
+                        NavigationLink(value: SettingsPage.modelConfiguration) {
+                            SettingsRow(title: "模型配置", symbol: Theme.Icon.model, tint: Theme.ai)
                         }
                         NavigationLink(value: SettingsPage.assistant) {
                             SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai, value: model.assistantConfig?.launcher ?? "", look: .code)
@@ -191,6 +194,10 @@ struct SettingsView: View {
             p.append(a == "color" ? SettingsPage.themeColor : a == "style" ? SettingsPage.style
                      : a == "layout" ? SettingsPage.layout : SettingsPage.persona)
         }
+        else if d.bool(forKey: "openModelConfiguration") {
+            p.append(SettingsPage.modelConfiguration)
+            if let id = d.string(forKey: "openModelPurpose") { p.append(ModelPurposeRoute(id: id)) }
+        }
         else if let n = d.string(forKey: "openLauncherPage") { p.append(ModelLaunchersRoute()); p.append(ModelLauncherRoute(name: n)) }
         else if d.bool(forKey: "openModelLaunchers") || d.string(forKey: "openModelLauncher") != nil { // 设置 › 模型 (› one)
             p.append(ModelLaunchersRoute())
@@ -230,7 +237,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case persona, themeColor, style, layout, assistant, claude, devices, phoneData, mail, feishu, notifications, storage, translation
+    case persona, themeColor, style, layout, assistant, claude, devices, phoneData, mail, feishu, notifications, storage, translation, modelConfiguration
 
 }
 
@@ -242,6 +249,7 @@ private struct SettingsDestinations: ViewModifier {
             .navigationDestination(for: SettingsPage.self) { page(for: $0).splitDetailPage() }
             .navigationDestination(for: MachineListRoute.self) { _ in MachinesView().splitDetailPage() }
             .navigationDestination(for: ModelLaunchersRoute.self) { _ in ModelLaunchersView().splitDetailPage() }
+            .navigationDestination(for: ModelPurposeRoute.self) { r in ModelPurposeEditorView(purposeID: r.id).splitDetailPage() }
             .navigationDestination(for: ModelLauncherRoute.self) { r in ModelLauncherDetailView(name: r.name).splitDetailPage() }
             .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
@@ -266,6 +274,7 @@ private struct SettingsDestinations: ViewModifier {
         case .notifications: NotificationSettingsView()
         case .storage: StorageView()
         case .translation: TranslationSettingsView()
+        case .modelConfiguration: ModelConfigurationView()
         }
     }
 

@@ -76,6 +76,10 @@ func (h *Hub) translateTexts(ctx context.Context, texts []string, target string)
 	if err := h.translateModel(); err != nil {
 		return nil, err
 	}
+	fingerprint, err := h.modelFingerprint(ctx, "translate")
+	if err != nil {
+		return nil, err
+	}
 	out := make([]string, len(texts))
 	var todo []int
 	for i, t := range texts {
@@ -83,7 +87,7 @@ func (h *Hub) translateTexts(ctx context.Context, texts []string, target string)
 		if t == "" {
 			continue
 		}
-		if v, ok := h.translations.get(translateKey("t", target, t)); ok {
+		if v, ok := h.translations.get(translateKey("t", fingerprint, target, t)); ok {
 			out[i] = v
 		} else {
 			todo = append(todo, i)
@@ -106,7 +110,7 @@ func (h *Hub) translateTexts(ctx context.Context, texts []string, target string)
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	// A reasoning model spends hidden tokens first (docs/lessons/agents.md): leave plenty.
-	if err := h.triageModel().JSONMax(cctx, system, string(body), min(4000+total*3, 32000), &res); err != nil {
+	if err := h.purposeModel("translate").JSONMax(cctx, system, string(body), min(4000+total*3, 32000), &res); err != nil {
 		return nil, err
 	}
 	if len(res.Texts) != len(in) {
@@ -116,16 +120,17 @@ func (h *Hub) translateTexts(ctx context.Context, texts []string, target string)
 		v := strings.TrimSpace(res.Texts[j])
 		out[i] = v
 		if v != "" {
-			h.translations.put(translateKey("t", target, strings.TrimSpace(texts[i])), v)
+			h.translations.put(translateKey("t", fingerprint, target, strings.TrimSpace(texts[i])), v)
 		}
 	}
 	return out, nil
 }
 
 type mailTranslation struct {
-	Subject string `json:"subject"`
-	Text    string `json:"text"`
-	Clipped bool   `json:"clipped,omitempty"` // the body was longer than translated
+	ModelFingerprint string `json:"model_fingerprint,omitempty"`
+	Subject          string `json:"subject"`
+	Text             string `json:"text"`
+	Clipped          bool   `json:"clipped,omitempty"` // the body was longer than translated
 }
 
 // translateMail translates one message's subject and body (the HTML version as readable text when there is no text
@@ -144,7 +149,11 @@ func (h *Hub) translateMail(ctx context.Context, accountID string, uid uint32, m
 	if t, ok := h.storedMailTranslation(accountID, uid, mailbox, target); ok { // translated when it came in
 		return t, nil
 	}
-	key := translateKey("m", accountID, mailbox, fmt.Sprint(uid), target)
+	fingerprint, err := h.modelFingerprint(ctx, "translate")
+	if err != nil {
+		return mailTranslation{}, err
+	}
+	key := translateKey("m", fingerprint, accountID, mailbox, fmt.Sprint(uid), target)
 	if v, ok := h.translations.get(key); ok {
 		var t mailTranslation
 		if json.Unmarshal([]byte(v), &t) == nil {
@@ -167,13 +176,14 @@ func (h *Hub) translateMail(ctx context.Context, accountID string, uid uint32, m
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	in := prompts.RenderTranslateMailInput(m.Subject, text)
-	if err := h.triageModel().JSONMax(cctx, system, in, min(4000+len([]rune(in))*3, 48000), &t); err != nil {
+	if err := h.purposeModel("translate").JSONMax(cctx, system, in, min(4000+len([]rune(in))*3, 48000), &t); err != nil {
 		return mailTranslation{}, err
 	}
 	t.Subject, t.Text = strings.TrimSpace(t.Subject), strings.TrimSpace(t.Text)
 	if t.Text == "" && text != "" {
 		return mailTranslation{}, errors.New("the model returned no translation")
 	}
+	t.ModelFingerprint = fingerprint
 	raw, _ := json.Marshal(t)
 	h.translations.put(key, string(raw))
 	return t, nil

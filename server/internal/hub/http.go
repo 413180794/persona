@@ -49,6 +49,7 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"launchers": ls})
 	}))
 	h.launcherRoutes(api)
+	h.modelConfigRoutes(api)
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path")}
 	}))
@@ -493,7 +494,16 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	var res struct {
 		Session proto.Session `json:"session"`
 	}
-	if err := m.call(ctx, "session.start", p, &res); err != nil {
+	raw, _ := json.Marshal(p)
+	params := map[string]any{}
+	_ = json.Unmarshal(raw, &params)
+	if p.ResumeSessionID == "" {
+		if err := h.applyModel(ctx, "agent.new", params); err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+	}
+	if err := m.call(ctx, "session.start", params, &res); err != nil {
 		callErr(w, err)
 		return
 	}

@@ -161,6 +161,7 @@ struct FeishuConnectorView: View {
                 use(Theme.Icon.knowledge, "知识库", "会话、人、群、项目归档下来，给助手和 AI 分身做上下文")
                 use(Theme.Icon.ai, "助手", "Jarvis 能搜消息、读文档；发消息等写操作先在手机上问你")
                 use(Theme.Icon.agents, "/agent", "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复")
+                ModelConfigurationLink(title: "/agent 模型", purposeID: "lark.agent")
             }
         }
         .themedPage()

@@ -256,11 +256,14 @@ func (d *DB) PhoneTools(ctx context.Context) ([]proto.Tool, error) {
 
 // NodeSession is what a node remembers about a session it started (see internal/node).
 type NodeSession struct {
-	Pane      string    `json:"pane,omitempty"`
-	Launcher  string    `json:"launcher"`
-	Cwd       string    `json:"cwd"`
-	StartedAt time.Time `json:"started_at"`
-	Tasks     []string  `json:"tasks,omitempty"` // an assistant conversation's running background tasks
+	Model            string    `json:"model,omitempty"`
+	ModelFingerprint string    `json:"model_fingerprint,omitempty"`
+	ModelEffort      string    `json:"model_effort,omitempty"`
+	Pane             string    `json:"pane,omitempty"`
+	Launcher         string    `json:"launcher"`
+	Cwd              string    `json:"cwd"`
+	StartedAt        time.Time `json:"started_at"`
+	Tasks            []string  `json:"tasks,omitempty"` // an assistant conversation's running background tasks
 }
 
 func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSession) error {
@@ -271,17 +274,25 @@ func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSessi
 	if tasks == nil {
 		tasks = []string{}
 	}
-	_, err := d.pool.Exec(ctx, `INSERT INTO node_sessions (machine_id, session_id, pane, launcher, cwd, started_at, tasks, updated_at)
+	_, err := d.pool.Exec(ctx, `WITH saved AS (
+		INSERT INTO node_sessions (machine_id, session_id, pane, launcher, cwd, started_at, tasks, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-		ON CONFLICT (machine_id, session_id) DO UPDATE SET pane = $3, launcher = $4, cwd = $5, started_at = $6, tasks = $7, updated_at = now()`,
-		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt, tasks)
+		ON CONFLICT (machine_id, session_id) DO UPDATE SET pane = $3, launcher = $4, cwd = $5, started_at = $6, tasks = $7, updated_at = now()
+		RETURNING machine_id, session_id
+	) INSERT INTO settings (key, value, updated_at)
+		SELECT 'node_model.' || machine_id || '.' || session_id,
+		jsonb_build_object('model', $8::text, 'model_fingerprint', $9::text, 'model_effort', $10::text), now() FROM saved
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt, tasks, s.Model, s.ModelFingerprint, s.ModelEffort)
 	return err
 }
 
 // NodeSessions returns a machine's sessions from the last 60 days.
 func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeSession, error) {
-	rows, err := d.pool.Query(ctx, `SELECT session_id, pane, launcher, cwd, started_at, tasks FROM node_sessions
-		WHERE machine_id = $1 AND started_at > now() - interval '60 days'`, machine)
+	rows, err := d.pool.Query(ctx, `SELECT n.session_id, n.pane, n.launcher, n.cwd, n.started_at, n.tasks,
+		COALESCE(s.value->>'model',''), COALESCE(s.value->>'model_fingerprint',''), COALESCE(s.value->>'model_effort','')
+		FROM node_sessions n LEFT JOIN settings s ON s.key = 'node_model.' || n.machine_id || '.' || n.session_id
+		WHERE n.machine_id = $1 AND n.started_at > now() - interval '60 days'`, machine)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +301,7 @@ func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeS
 	for rows.Next() {
 		var id string
 		var s NodeSession
-		if err := rows.Scan(&id, &s.Pane, &s.Launcher, &s.Cwd, &s.StartedAt, &s.Tasks); err != nil {
+		if err := rows.Scan(&id, &s.Pane, &s.Launcher, &s.Cwd, &s.StartedAt, &s.Tasks, &s.Model, &s.ModelFingerprint, &s.ModelEffort); err != nil {
 			return nil, err
 		}
 		out[id] = s
@@ -468,6 +479,24 @@ func (d *DB) PutSetting(ctx context.Context, key string, v any) error {
 	_, err = d.pool.Exec(ctx, `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now())
 		ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()`, key, raw)
 	return err
+}
+
+// CompareSetting atomically replaces a versioned setting without losing another writer's update.
+// A cleared binding keeps its revision, so restoring defaults does not reset concurrency history.
+func (d *DB) CompareSetting(ctx context.Context, key string, revision int64, value any) (bool, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return false, err
+	}
+	tag, err := d.pool.Exec(ctx, `INSERT INTO settings (key, value, updated_at)
+		SELECT $1, $2::jsonb, now() WHERE $3::bigint = 0
+		ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = now()
+		WHERE COALESCE((settings.value->>'revision')::bigint, 0) = $3`, key, raw, revision)
+	if revision != 0 && err == nil && tag.RowsAffected() == 0 {
+		tag, err = d.pool.Exec(ctx, `UPDATE settings SET value = $2::jsonb, updated_at = now()
+			WHERE key = $1 AND COALESCE((value->>'revision')::bigint, 0) = $3`, key, raw, revision)
+	}
+	return tag.RowsAffected() == 1, err
 }
 
 // ---- session views ----

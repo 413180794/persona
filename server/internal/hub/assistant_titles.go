@@ -305,11 +305,11 @@ func (h *Hub) firstExchange(ctx context.Context, m *Machine, id string) (first, 
 // 「探索 | the first message's first 14 characters」.
 func (h *Hub) makeTitle(ctx context.Context, started time.Time, first, reply string) string {
 	day := titleDay(started, h.userLocation())
-	if h.ai != nil && strings.TrimSpace(first) != "" {
+	if strings.TrimSpace(first) != "" {
 		retry := ""
 		for range 2 {
 			cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			out, err := h.ai.Complete(cctx, prompts.RenderSessionTitle(),
+			out, err := h.purposeModel("assistant.title").Complete(cctx, prompts.RenderSessionTitle(),
 				prompts.RenderSessionTitleInput(prompts.SessionTitleInput{First: first, Reply: reply, Retry: retry}), 200)
 			cancel()
 			if err != nil {

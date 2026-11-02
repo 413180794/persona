@@ -26,10 +26,7 @@ type InboxConfig struct {
 }
 
 func (h *Hub) triageModel() *ai.Client {
-	if h.triageAI != nil {
-		return h.triageAI
-	}
-	return h.ai
+	return h.purposeModel("inbox.triage")
 }
 
 const triageConcurrency = 4
@@ -153,7 +150,7 @@ func (h *Hub) draftReply(ctx context.Context, id, instruction string) (string, e
 	}
 	system := prompts.RenderInboxDraft(prompts.InboxDraft{Owner: h.cfg.Assistant.Owner, Notes: strings.TrimSpace(h.cfg.Assistant.Notes)})
 	input := prompts.RenderInboxDraftInput(prompts.InboxDraftInput{Item: item, Instruction: strings.TrimSpace(instruction)})
-	text, err := h.ai.Complete(ctx, system, input, 1024)
+	text, err := h.purposeModel("inbox.draft").Complete(ctx, system, input, 1024)
 	if err != nil {
 		return "", err
 	}

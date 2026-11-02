@@ -78,10 +78,7 @@ type InboxAgent struct {
 }
 
 func (h *Hub) judgeModel() *ai.Client {
-	if h.judgeAI != nil {
-		return h.judgeAI
-	}
-	return h.ai
+	return h.purposeModel("inbox.judge")
 }
 
 // handInbox is one pass of models 2 and 3: settle agents that finished or hung, judge newly triaged 需要你 items,
@@ -226,7 +223,11 @@ func (h *Hub) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, prompt 
 	var res struct {
 		SessionID string `json:"session_id"`
 	}
-	if err := m.call(ctx, "assistant.send", map[string]any{"cwd": prep.Cwd, "launcher": ac.Launcher, "text": prompt}, &res); err != nil {
+	params := map[string]any{"cwd": prep.Cwd, "text": prompt}
+	if err := h.applyModel(ctx, "inbox.agent", params); err != nil {
+		return "", "", err
+	}
+	if err := m.call(ctx, "assistant.send", params, &res); err != nil {
 		return "", "", err
 	}
 	return m.cfg.ID, res.SessionID, nil

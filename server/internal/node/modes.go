@@ -123,6 +123,15 @@ func (n *Node) setModes(ctx context.Context, id, mode, effort string) error {
 		p := n.procs[id]
 		n.mu.Unlock()
 		if p != nil && p.alive() {
+			if effort != "" {
+				p.mu.Lock()
+				p.model.Effort = effort
+				p.mu.Unlock()
+				if st, ok := n.state.get(id); ok {
+					st.ModelEffort = effort
+					n.state.put(id, st)
+				}
+			}
 			n.syncAssistantModes(p)
 		} // else: applied when the next message starts the process
 		n.notifySessions()
@@ -332,6 +341,9 @@ func (n *Node) syncAssistantModes(p *assistantProc) {
 	}
 	mode, effort := n.modesOf(p.id)
 	p.mu.Lock()
+	if p.model.UseEffort {
+		effort = p.model.Effort
+	}
 	var reqs []map[string]any
 	if mode != "" && mode != p.mode {
 		reqs = append(reqs, map[string]any{"subtype": "set_permission_mode", "mode": mode})

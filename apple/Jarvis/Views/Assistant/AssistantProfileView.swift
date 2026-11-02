@@ -6,9 +6,6 @@ import SwiftUI
 /// remembers, what it is told about the user, and its launcher.
 struct AssistantProfileView: View {
     @Environment(AppModel.self) private var model
-    @State private var launchers: [Launcher] = []
-    @State private var showLaunchers = false
-    @State private var selection = ""
     @State private var tasks: [APIClient.ScheduledTask]?
     @State private var runs: [APIClient.ScheduleRun]?
     @State private var memoryCount: Int?
@@ -29,24 +26,8 @@ struct AssistantProfileView: View {
         Group { if AppStyle.current.usesBeautifulUI { cards } else { list } }
         .navigationTitle("Jarvis")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            selection = model.assistantConfig?.launcher ?? "claude"
-            launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant)
-        }
-        .sheet(isPresented: $showLaunchers, onDismiss: {
-            Task { launchers = ((try? await model.launchers(machineID, refresh: true)) ?? launchers).filter(\.runsAssistant) }
-        }) {
-            NavigationStack {
-                ModelLaunchersView()
-                    .navigationDestination(for: ModelLauncherRoute.self) { r in ModelLauncherDetailView(name: r.name) }
-            }
-        }
         .task { await load() }
         .refreshable { await load() }
-        .onChange(of: selection) { old, new in
-            guard !old.isEmpty, old != new else { return }
-            Task { await model.setAssistantLauncher(new) }
-        }
         #if DEBUG
         .onAppear {
             if debugPage == nil, let p = UserDefaults.standard.string(forKey: "openAssistantPage"),
@@ -103,17 +84,8 @@ struct AssistantProfileView: View {
                 Text("「关于我」是你告诉 Jarvis 的；「记忆」是它在对话里自己记下的，都可以改。")
             }
             Section {
-                NavigationLink {
-                    LauncherPicker(launchers: launchers, selection: $selection)
-                } label: {
-                    LabeledContent("启动器（模型）") {
-                        Text(selection).font(Theme.Font.body.monospaced()).lineLimit(1)
-                    }
-                }
-                // A sheet: this page is pushed by view in the Jarvis tab and by value in 设置 (value links mix badly).
-                Button { showLaunchers = true } label: {
-                    Label("管理启动器", systemImage: Theme.Icon.cpu).lineLimit(1)
-                }
+                ModelConfigurationLink(title: "对话模型", purposeID: "assistant", summary: model.assistantConfig?.launcher)
+                ModelConfigurationLink()
                 LabeledContent("运行在", value: machineName)
                 LabeledContent("工作目录", value: "~/.jarvis/assistant")
             } header: {
@@ -167,16 +139,8 @@ struct AssistantProfileView: View {
                     }
                 }
                 BUIListSection("设置", footer: "每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器后，主对话从下一条消息起用新的启动器（接着原来的上下文），新对话也用它；其他对话在各自的菜单里换。") {
-                    NavigationLink {
-                        LauncherPicker(launchers: launchers, selection: $selection)
-                    } label: {
-                        buiRow("启动器（模型）", Theme.Icon.model, detail: selection)
-                    }
-                    // A sheet: this page is pushed by view in the Jarvis tab and by value in 设置 (value links mix badly).
-                    Button { showLaunchers = true } label: {
-                        BUIListRow("管理启动器") { BUIIconTile(Theme.Icon.cpu, tint: Theme.accent) }
-                    }
-                    .buttonStyle(.plain)
+                    ModelConfigurationLink(title: "对话模型", purposeID: "assistant", summary: model.assistantConfig?.launcher)
+                    ModelConfigurationLink()
                     BUIListRow("运行在", value: machineName)
                     BUIListRow("工作目录", value: "~/.jarvis/assistant")
                 }

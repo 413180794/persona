@@ -56,6 +56,11 @@ import androidx.compose.ui.unit.dp
 import jarvis.android.JarvisApp
 import jarvis.android.data.ApiClient
 import jarvis.android.data.Hub
+import jarvis.android.data.HubException
+import jarvis.android.settings.modelPurpose
+import jarvis.android.ui.settings.KitOption
+import jarvis.android.ui.settings.KitPickerRow
+import kotlinx.coroutines.CancellationException
 import jarvis.android.data.Launcher
 import jarvis.android.data.Machine
 import jarvis.android.data.Session
@@ -189,6 +194,8 @@ fun NewSessionSheet(
     var picked by remember { mutableStateOf<String?>(null) }
     var launchers by remember { mutableStateOf<List<Launcher>>(emptyList()) }
     var launcher by remember { mutableStateOf<String?>(null) }
+    var unifiedModels by remember { mutableStateOf(false) }
+    var loadingModels by remember { mutableStateOf(true) }
     var prompt by remember { mutableStateOf(initialPrompt) }
     var mode by remember { mutableStateOf("") } // "" = whatever the launcher uses
     var loading by remember { mutableStateOf(false) }
@@ -208,7 +215,24 @@ fun NewSessionSheet(
         val m = machine ?: return@LaunchedEffect
         dir = null; picked = preset?.cwd ?: initialDir?.second?.takeIf { initialDir.first == m.id }; launcher = null
         if (preset == null) browse("")
-        runCatching { hub.api.launchers(m.id) }.onSuccess { l -> launchers = l; launcher = l.firstOrNull()?.name }
+        loadingModels = true
+        try {
+            launchers = hub.api.launchers(m.id)
+            unifiedModels = try {
+                hub.api.modelPurpose("agent.new")
+                true
+            } catch (e: HubException) {
+                if (e.status != 404) throw e
+                false
+            }
+            launcher = if (unifiedModels) null else launchers.firstOrNull()?.name
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = "读不到新 Agent 模型配置：${e.message}"
+        } finally {
+            loadingModels = false
+        }
     }
 
     ModalBottomSheet(onDismissRequest = { if (!starting) onDismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -250,7 +274,13 @@ fun NewSessionSheet(
                 }
             }
 
-            if (launchers.size > 1) {
+            if (unifiedModels) {
+                KitPickerRow(
+                    "本次启动器", launcher.orEmpty(),
+                    listOf(KitOption("", "跟随模型配置")) + launchers.map { KitOption(it.name, it.name) },
+                    onChange = { launcher = it.takeIf(String::isNotEmpty) }, enabled = !starting,
+                )
+            } else if (launchers.size > 1) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     launchers.forEach { l -> FilterChip(launcher == l.name, { launcher = l.name }, label = { Text(l.name, maxLines = 1) }, enabled = !starting) }
                 }
@@ -276,7 +306,7 @@ fun NewSessionSheet(
                         val panesBefore = hub.livePanes(m.id)
                         scope.launch {
                             val first = prompt.trim()
-                            runCatching { hub.api.start(m.id, cwd!!, launcher ?: "claude", first.ifEmpty { null }, mode.ifEmpty { null }, preset?.workspaceId) }
+                            runCatching { hub.api.start(m.id, cwd!!, launcher ?: if (unifiedModels) "" else "claude", first.ifEmpty { null }, mode.ifEmpty { null }, preset?.workspaceId) }
                                 .onSuccess { s0 ->
                                     // The hub answers at once and starts claude in the background: open the chat now, and
                                     // send the first message as an ordinary one (it waits on the node until claude is ready).
@@ -299,7 +329,7 @@ fun NewSessionSheet(
                                 }
                         }
                     },
-                    enabled = !starting && machine != null && !cwd.isNullOrBlank(),
+                    enabled = !starting && !loadingModels && machine != null && !cwd.isNullOrBlank(),
                     modifier = Modifier.weight(1f),
                 ) {
                     if (starting) CircularProgressIndicator(Modifier.padding(end = 8.dp), strokeWidth = 2.dp)

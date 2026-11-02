@@ -11,7 +11,7 @@ import base64, unicodedata
 import copy, hashlib, json, os, struct, sys, threading, time, uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 PORT = int(os.environ.get("PORT", "18760"))
 NOW = datetime.now(timezone.utc)
@@ -849,7 +849,54 @@ LARK_MESSAGES = {"f2": [
     _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
 ]}
 
-# 设置 › 模型: two ~/.zshrc launchers, one through relay-history and one through FAKEMODEL, with their quota.
+# Unified model configuration uses only made-up providers and purposes.
+MODEL_BINDINGS = {}
+MODEL_CONFIG_LOCK = threading.RLock()
+MODEL_DEFINITIONS = [
+    ("assistant", "Jarvis 对话", "对话与 Agent", "launcher"),
+    ("inbox.agent", "AI 分身", "对话与 Agent", "launcher"),
+    ("lark.agent", "飞书 /agent", "对话与 Agent", "launcher"),
+    ("agent.new", "新建 Agent", "对话与 Agent", "launcher"),
+    ("inbox.triage", "分拣与摘要", "收件箱", "api"),
+    ("inbox.judge", "AI 分身判断", "收件箱", "api"),
+    ("inbox.draft", "草拟回复", "收件箱", "api"),
+    ("translate", "文本与邮件翻译", "翻译", "api"),
+    ("kb", "知识处理默认模型", "知识处理", "api"),
+    ("kb.compress", "会话压缩与打标", "知识处理", "api"),
+    ("kb.project", "项目档案重写", "知识处理", "api"),
+    ("kb.dedupe", "项目去重", "知识处理", "api"),
+    ("kb.items", "事项提取与打标", "知识处理", "api"),
+    ("kb.moments", "removed关联", "知识处理", "api"),
+    ("assistant.title", "对话标题", "辅助功能", "api"),
+    ("agent.title", "Agent 标签名", "辅助功能", "api"),
+    ("schedule", "定时任务默认模型", "定时任务", "launcher"),
+]
+
+
+def model_configuration():
+    providers = [dict(id="launcher." + l["name"], name=l["name"], kind=l.get("kind", "launcher"),
+                      model=l.get("model"), hidden=l.get("hidden", False)) for l in LAUNCHERS]
+    providers += [{"id": "launcher.claude", "name": "claude", "kind": "launcher", "model": "model-chat"},
+                  {"id": "legacy.ai", "name": "轻量 API", "kind": "api", "api": "messages", "model": "model-fast"}]
+    definitions = MODEL_DEFINITIONS + [("task." + t["id"], t.get("title") or "跟进任务", "定时任务", "launcher") for t in SCHEDULE]
+    purposes = []
+    with MODEL_CONFIG_LOCK:
+        for pid, name, group, kind in definitions:
+            stored = MODEL_BINDINGS.get(pid, {"revision": 0, "override": {}})
+            binding = dict(stored["override"])
+            effective = {"provider": "legacy.ai" if kind == "api" else "launcher.claude", "model": "model-fast" if kind == "api" else "model-chat"}
+            if binding.get("provider"):
+                provider = next((p for p in providers if p["id"] == binding["provider"]), {})
+                effective = {"provider": binding["provider"], "model": provider.get("model", "")}
+            effective.update(binding)
+            purposes.append(dict(id=pid, name=name, group=group, kind=kind, override=binding, effective=effective,
+                                 revision=stored["revision"], inherited_from="现有默认" if not binding else "此用途",
+                                 fields=["provider", "model"] if kind == "api" else ["provider", "model", "effort"],
+                                 provider_ids=[p["id"] for p in providers if p["kind"] == kind], status=""))
+    return {"purposes": purposes, "providers": providers}
+
+
+# 设置 › 模型供应商: two ~/.zshrc launchers, one through relay-history and one through FAKEMODEL, with their quota.
 LAUNCHERS = [
     {"name": "cc_kiro", "source": "zshrc", "base_url": "http://gateway.example.com:18000", "model": "kiro/claude-opus-5-5", "machines": ["macbook"]},
     {"name": "example-cli", "source": "zshrc", "base_url": "http://fakemodel.example.com", "model": "gpt-6.1-sol", "machines": ["macbook"]},
@@ -1891,6 +1938,12 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.jarvis/assistant",
                                    "timezone": "Asia/Shanghai", "notes_effective": "", "conversations": ASSISTANT,
                                    "main": ASK1})
+        if p == "/api/v1/model-config": return self.send_json(model_configuration())
+        if p.startswith("/api/v1/model-config/purposes/"):
+            catalog = model_configuration()
+            purpose = next((x for x in catalog["purposes"] if x["id"] == unquote(p.rsplit("/", 1)[1])), None)
+            if not purpose: return self.send_json({"error": "模型用途不存在"}, 404)
+            return self.send_json({"purpose": purpose, "providers": catalog["providers"]})
         if p == "/api/v1/assistant/tasks": return self.send_json({"tasks": SCHEDULE})
         if p.startswith("/api/v1/machines/") and p.endswith("/stat"):
             cwd = q.get("cwd", [""])[0]
@@ -1983,7 +2036,6 @@ class H(BaseHTTPRequestHandler):
             served(sid, "page", out)
             return self.send_json(out)
         if p.startswith("/api/v1/sessions/") and "/items/" in p and p.endswith("/full"):
-            from urllib.parse import unquote
             item = FULL.get(unquote(p.split("/")[7]))
             return self.send_json(item) if item else self.send_json({"error": "not found"}, 404)
         if p.startswith("/api/v1/sessions/") and p.endswith("/info"):  # the chat's 开发信息 card
@@ -2088,6 +2140,23 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if self.bad_network(): return
+        if p.startswith("/api/v1/model-config/purposes/") and self.command == "PATCH":
+            pid, body = unquote(p.rsplit("/", 1)[1]), json.loads(self.last_body or b"{}")
+            with MODEL_CONFIG_LOCK:
+                catalog = model_configuration()
+                purpose = next((x for x in catalog["purposes"] if x["id"] == pid), None)
+                if purpose is None: return self.send_json({"error": "模型用途不存在"}, 404)
+                if os.environ.get("MOCK_MODEL_CONFLICT") or body.get("revision") != purpose["revision"]:
+                    return self.send_json({"error": "配置已在别处修改"}, 409)
+                binding = dict(purpose["override"])
+                for field in purpose["fields"]:
+                    if field not in body: continue
+                    if body[field] is None: binding.pop(field, None)
+                    else: binding[field] = body[field]
+                MODEL_BINDINGS[pid] = {"revision": purpose["revision"] + 1, "override": binding}
+                catalog = model_configuration()
+                purpose = next(x for x in catalog["purposes"] if x["id"] == pid)
+                return self.send_json({"purpose": purpose, "providers": catalog["providers"]})
         if p.startswith("/api/v1/machines/") and p.endswith("/open") and "/ports/" in p:
             port = int(p.split("/")[6])
             if not port_listening(port): return self.send_json({"error": "nothing is listening on port %d" % port}, 404)
@@ -2324,6 +2393,7 @@ class H(BaseHTTPRequestHandler):
 
     do_PUT = do_POST
     do_DELETE = do_POST
+    do_PATCH = do_POST
 
     # ---------- minimal WebSocket ----------
     def port_connect(self, mid, port):

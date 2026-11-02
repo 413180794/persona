@@ -1,6 +1,7 @@
 // Start an agent on one of your computers: machine, folder (recent ones first), launcher, the first message.
 import { useEffect, useMemo, useState } from "react";
-import { api, enc, errorText } from "../lib/api";
+import { api, ApiError, enc, errorText } from "../lib/api";
+import { modelPurpose, modelSummary } from "../lib/model-config";
 import { baseName, shortPath } from "../lib/format";
 import { navigate } from "../lib/router";
 import { useStore } from "../lib/store";
@@ -22,6 +23,9 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
   const [cwd, setCwd] = useState("");
   const [launcher, setLauncher] = useState("");
   const [launchers, setLaunchers] = useState<Launcher[]>([]);
+  const [unified, setUnified] = useState(true);
+  const [modelDefault, setModelDefault] = useState("");
+  const [loadingModels, setLoadingModels] = useState(false);
   const [dirs, setDirs] = useState<Dirs | null>(null);
   const [browse, setBrowse] = useState("");
   const [loadingDirs, setLoadingDirs] = useState(false);
@@ -36,16 +40,35 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
     if (!open || !mid) return;
     localStorage.setItem("new.machine", mid);
     setLaunchers([]);
-    api<{ launchers: Launcher[] }>(`/machines/${enc(mid)}/launchers`)
-      .then((r) => {
+    const controller = new AbortController();
+    setLauncher("");
+    setModelDefault("");
+    setLoadingModels(true);
+    Promise.all([
+      api<{ launchers: Launcher[] }>(`/machines/${enc(mid)}/launchers`, { signal: controller.signal }),
+      modelPurpose("agent.new").catch((e) => {
+        if (e instanceof ApiError && e.status === 404) return null;
+        throw e;
+      }),
+    ])
+      .then(([r, config]) => {
+        if (controller.signal.aborted) return;
         const ls = r.launchers ?? [];
         setLaunchers(ls);
-        const saved = localStorage.getItem(`new.launcher.${mid}`);
-        setLauncher(ls.some((l) => l.name === saved) ? saved! : (ls[0]?.name ?? ""));
+        setUnified(config !== null);
+        if (config) {
+          setModelDefault(modelSummary(config.purpose, config.providers));
+          setLauncher("");
+        } else {
+          const saved = localStorage.getItem(`new.launcher.${mid}`);
+          setLauncher(ls.some((l) => l.name === saved) ? saved! : (ls[0]?.name ?? ""));
+        }
       })
-      .catch(() => setLaunchers([]));
+      .catch((e) => { if (!controller.signal.aborted) toast(errorText(e), "error"); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingModels(false); });
     setCwd(localStorage.getItem(`new.cwd.${mid}`) ?? "");
     setBrowse("");
+    return () => controller.abort();
   }, [open, mid]);
 
   useEffect(() => {
@@ -58,12 +81,12 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
   }, [open, mid, browse]);
 
   const start = async () => {
-    if (!mid || !cwd.trim()) return;
+    if (busy || loadingModels || !mid || !cwd.trim()) return;
     setBusy(true);
     try {
       const r = await api<{ session: Session }>("/sessions", { method: "POST", json: { machine_id: mid, cwd: cwd.trim(), launcher: launcher || undefined, prompt: prompt.trim() || undefined } });
       localStorage.setItem(`new.cwd.${mid}`, cwd.trim());
-      if (launcher) localStorage.setItem(`new.launcher.${mid}`, launcher);
+      if (launcher && !unified) localStorage.setItem(`new.launcher.${mid}`, launcher);
       setPrompt("");
       onClose();
       navigate({ name: "session", mid, sid: r.session.session_id });
@@ -87,7 +110,7 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
           <Button tone="quiet" onClick={onClose}>
             取消
           </Button>
-          <Button tone="primary" busy={busy} disabled={!mid || !cwd.trim()} onClick={start}>
+          <Button tone="primary" busy={busy} disabled={loadingModels || !mid || !cwd.trim()} onClick={start}>
             启动
           </Button>
         </>
@@ -146,9 +169,13 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
           </div>
         </Field>
 
-        {launchers.length > 1 && (
-          <Field label="启动器">
+        {(unified || launchers.length > 1) && (
+          <Field label={unified ? "启动器（本次覆盖）" : "启动器"}>
             <div className="flex flex-wrap gap-1.5">
+              {unified && <button type="button" onClick={() => setLauncher("")} title={modelDefault}
+                className={cx("h-7 rounded-control px-2.5 text-[12px] whitespace-nowrap transition-colors", launcher === "" ? "bg-ink text-surface" : "bg-surface text-ink-2 shadow-btn hover:bg-hover hover:text-ink")}>
+                跟随模型配置
+              </button>}
               {launchers.map((l) => (
                 <button
                   key={l.name}
@@ -161,6 +188,7 @@ export function NewAgent({ open, onClose }: { open: boolean; onClose: () => void
                 </button>
               ))}
             </div>
+            {unified && <p className="mt-1.5 text-[11.5px] text-ink-3">{launcher ? "只覆盖这次新会话，不改变统一默认。" : modelDefault || "使用统一模型配置中的新 Agent 默认值。"}</p>}
           </Field>
         )}
 

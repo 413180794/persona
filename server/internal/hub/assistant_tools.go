@@ -180,8 +180,11 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		}
 		sctx, cancel := context.WithTimeout(ctx, 100*time.Second)
 		defer cancel()
-		if err := am.call(sctx, "session.start", map[string]any{"cwd": a.Cwd, "launcher": a.Launcher, "prompt": a.Prompt,
-			"tab_name": h.autoTabName(sctx, a.Prompt)}, &res); err != nil {
+		params := map[string]any{"cwd": a.Cwd, "launcher": a.Launcher, "prompt": a.Prompt, "tab_name": h.autoTabName(sctx, a.Prompt)}
+		if err := h.applyModel(sctx, "agent.new", params); err != nil {
+			return "", err
+		}
+		if err := am.call(sctx, "session.start", params, &res); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("Started on %s in %s: session %s. It shows up in the app's Agents tab.", am.cfg.Name, a.Cwd, res.Session.SessionID), nil

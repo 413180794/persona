@@ -45,11 +45,12 @@ type Source interface {
 
 // Engine runs the pipeline: archive, compress, evolve, tag, prune (docs/knowledge.md).
 type Engine struct {
-	Store   *Store
-	Sources []Source
-	Model   Model
-	Owner   string // how the owner is called (the AI writes "我" for them)
-	Logf    func(string, ...any)
+	Store    *Store
+	Sources  []Source
+	Model    Model
+	ModelFor func(string) Model
+	Owner    string // how the owner is called (the AI writes "我" for them)
+	Logf     func(string, ...any)
 	// ExtraDirs are directories outside the data dir that Search also reads (Markdown files, read only): notes the
 	// user keeps elsewhere, e.g. a git repository of facts. Absolute paths.
 	ExtraDirs []string
@@ -64,6 +65,13 @@ type Engine struct {
 	AttachmentDays int
 
 	failed int // attachment downloads that failed this run (logged once per chat)
+}
+
+func (e *Engine) modelFor(id string) Model {
+	if e.ModelFor != nil {
+		return e.ModelFor(id)
+	}
+	return e.Model
 }
 
 func (e *Engine) logf(f string, a ...any) {

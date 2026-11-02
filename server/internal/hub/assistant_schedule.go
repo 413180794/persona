@@ -58,6 +58,8 @@ type Task struct {
 	// How claude runs, chosen in the app only (the assistant can't raise its own permissions): "" = the assistant's
 	// launcher, Claude Code's default mode, the launcher's effort.
 	Launcher       string `json:"launcher,omitempty"`
+	Model          string `json:"model,omitempty"`
+	ModelRevision  int64  `json:"model_revision,omitempty"`
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Effort         string `json:"effort,omitempty"`
 	// CreatedBy is "assistant" for tasks Jarvis set up from a conversation.
@@ -911,8 +913,18 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 	defer h.sched.end(t.ID)
 	if t.SessionID != "" {
 		if m := h.byID[t.MachineID]; m != nil {
-			err := m.call(ctx, "assistant.send", map[string]any{"session_id": t.SessionID, "text": taskPrompt(t, due, now, loc, manual, kb, false),
-				"launcher": t.Launcher, "permission_mode": t.PermissionMode, "effort": t.Effort}, nil)
+			params := map[string]any{"session_id": t.SessionID, "text": taskPrompt(t, due, now, loc, manual, kb, false), "launcher": t.Launcher, "model": t.Model, "permission_mode": t.PermissionMode, "effort": t.Effort}
+			if t.Launcher == "" {
+				if r, e := h.modelRecord(ctx, "schedule"); e == nil && r.Binding.Provider == "" {
+					if source, ok := m.session(t.SessionID); ok {
+						params["launcher"] = source.Launcher
+					}
+				}
+			}
+			err := h.applyModel(ctx, "task."+t.ID, params)
+			if err == nil {
+				err = m.call(ctx, "assistant.send", params, nil)
+			}
 			if err == nil {
 				run.MachineID, run.SessionID = t.MachineID, t.SessionID
 				h.logf("task %s ran %s after its time", t.ID, lateness(due, time.Now()))
@@ -925,7 +937,13 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 	cfg := h.assistantConfig(ctx)
 	launcher := t.Launcher
 	if launcher == "" {
-		launcher = cfg.Launcher
+		binding, err := h.resolveModel(ctx, "task."+t.ID)
+		if err != nil {
+			run.Status, run.Error = runFailed, err.Error()
+			h.recordRun(run)
+			return proto.Session{}, err
+		}
+		launcher = strings.TrimPrefix(binding.Provider, "launcher.")
 	}
 	if t.RunSessionID != "" {
 		m := h.byID[t.RunMachineID]
@@ -939,8 +957,11 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 			run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
 			return proto.Session{}, h.skipRun(run, errTaskBusy)
 		default:
-			err := m.call(ctx, "assistant.send", map[string]any{"session_id": t.RunSessionID, "text": taskPrompt(t, due, now, loc, manual, kb, true),
-				"launcher": t.Launcher, "permission_mode": t.PermissionMode, "effort": t.Effort, "resume_only": true}, nil)
+			params := map[string]any{"session_id": t.RunSessionID, "text": taskPrompt(t, due, now, loc, manual, kb, true), "launcher": t.Launcher, "model": t.Model, "permission_mode": t.PermissionMode, "effort": t.Effort, "resume_only": true}
+			err := h.applyModel(ctx, "task."+t.ID, params)
+			if err == nil {
+				err = m.call(ctx, "assistant.send", params, nil)
+			}
 			if err == nil {
 				run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
 				h.logf("task %s ran %s after its time (its conversation %s)", t.ID, lateness(due, time.Now()), short(t.RunSessionID))
@@ -950,7 +971,7 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 			h.logf("task %s into its conversation %s: %v; starting a new one", t.ID, short(t.RunSessionID), err)
 		}
 	}
-	sess, err := h.startAssistant(ctx, taskPrompt(t, due, now, loc, manual, kb, false), nil, t.Launcher, t.PermissionMode, t.Effort)
+	sess, err := h.startAssistant(ctx, taskPrompt(t, due, now, loc, manual, kb, false), nil, t.Launcher, t.PermissionMode, t.Effort, "task."+t.ID)
 	if err != nil {
 		h.logf("task %s: %v", t.ID, err)
 		run.Status, run.Error = runFailed, err.Error()
@@ -1106,7 +1127,10 @@ func editTask(old, in Task, now time.Time) Task {
 	t := old
 	t.Title, t.Prompt, t.Repeat, t.Enabled = in.Title, in.Prompt, in.Repeat, in.Enabled
 	t.Time, t.Weekdays, t.EveryMinutes = in.Time, in.Weekdays, in.EveryMinutes
-	t.Launcher, t.PermissionMode, t.Effort = in.Launcher, in.PermissionMode, in.Effort
+	t.Launcher, t.Model, t.PermissionMode, t.Effort = in.Launcher, in.Model, in.PermissionMode, in.Effort
+	if t.Launcher != old.Launcher || t.Model != old.Model || t.Effort != old.Effort {
+		t.ModelRevision++
+	}
 	if in.SessionID == "" {
 		t.SessionID = ""
 	}
@@ -1153,8 +1177,8 @@ func (h *Hub) scheduleRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"task": v})
 	})
 	api.HandleFunc("PUT /api/v1/assistant/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var in Task
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
@@ -1165,6 +1189,22 @@ func (h *Hub) scheduleRoutes(api *http.ServeMux) {
 			s.mu.Unlock()
 			writeErr(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
 			return
+		}
+		var in Task
+		encoded, _ := json.Marshal(raw)
+		if err := json.Unmarshal(encoded, &in); err != nil {
+			s.mu.Unlock()
+			writeErr(w, 400, err)
+			return
+		}
+		if _, ok := raw["launcher"]; !ok {
+			in.Launcher = s.tasks[i].Launcher
+		}
+		if _, ok := raw["model"]; !ok {
+			in.Model = s.tasks[i].Model
+		}
+		if _, ok := raw["effort"]; !ok {
+			in.Effort = s.tasks[i].Effort
 		}
 		t := editTask(s.tasks[i], in, time.Now())
 		if err := checkTask(&t, time.Now()); err != nil {
@@ -1232,7 +1272,7 @@ func (h *Hub) scheduleRoutes(api *http.ServeMux) {
 			if !ok {
 				prev = Task{ID: "rt_" + randomHex(4), CreatedAt: now.UTC()}
 			}
-			rt.Repeat, rt.Launcher, rt.PermissionMode, rt.Effort, rt.SessionID = repeatDaily, prev.Launcher, prev.PermissionMode, prev.Effort, prev.SessionID
+			rt.Repeat, rt.Launcher, rt.Model, rt.PermissionMode, rt.Effort, rt.SessionID = repeatDaily, prev.Launcher, prev.Model, prev.PermissionMode, prev.Effort, prev.SessionID
 			t := editTask(prev, rt, now)
 			if err := checkTask(&t, now); err != nil {
 				s.mu.Unlock()

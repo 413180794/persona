@@ -30,10 +30,13 @@ type stateFile struct {
 }
 
 type sessionState struct {
-	Pane      string    `json:"pane,omitempty"`
-	Launcher  string    `json:"launcher"`
-	Cwd       string    `json:"cwd"`
-	StartedAt time.Time `json:"started_at"`
+	Pane             string    `json:"pane,omitempty"`
+	Launcher         string    `json:"launcher"`
+	Model            string    `json:"model,omitempty"`
+	ModelFingerprint string    `json:"model_fingerprint,omitempty"`
+	ModelEffort      string    `json:"model_effort,omitempty"`
+	Cwd              string    `json:"cwd"`
+	StartedAt        time.Time `json:"started_at"`
 	// Tasks: the assistant conversation's background tasks and monitors running right now (node/assistant.go).
 	Tasks []string `json:"tasks,omitempty"`
 }

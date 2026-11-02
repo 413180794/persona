@@ -181,7 +181,11 @@ command() { if [[ "$1" == codex ]]; then shift; codex "$@"; else builtin command
 ` + launcher
 }
 
-func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool) (*assistantProc, error) {
+func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options ...modelExecution) (*assistantProc, error) {
+	execution := executionOption(options)
+	if err := execution.check(); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(cwd, 0o700); err != nil {
 		return nil, err
 	}
@@ -211,7 +215,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool) (*assist
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
 	p := &assistantProc{id: id, agent: "codex", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
-		born: time.Now(), lastActive: time.Now()}
+		born: time.Now(), lastActive: time.Now(), model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
 	memDir := n.memoryDir(cwd)
 	if err := os.MkdirAll(memDir, 0o700); err != nil {
 		n.logger.Printf("assistant codex: memory dir: %v", err)
@@ -294,6 +298,9 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 	mode, _ := n.modesOf(id)
 	approval, sandbox := codexPolicy(mode)
 	params := map[string]any{"cwd": cwd, "approvalPolicy": approval, "sandbox": sandbox}
+	if c.p.model.Model != "" {
+		params["model"] = c.p.model.Model
+	}
 	// The same on every start of the thread, apart from the memory index: the live snapshot goes with each message.
 	params["developerInstructions"] = prompts.RenderCodexInstructions(codexMemoryPrompt(c.memDir))
 	var res struct {
@@ -391,8 +398,16 @@ func (c *codexConn) deliver(ctx context.Context, live, text string, images []pro
 		n.logger.Printf("assistant codex %s: steer: %v; starting a turn instead", short(thread), err) // the turn just ended
 	}
 	mode, effort := n.modesOf(c.p.id)
+	c.p.mu.Lock()
+	if c.p.model.UseEffort {
+		effort = c.p.model.Effort
+	}
+	c.p.mu.Unlock()
 	approval, _ := codexPolicy(mode)
 	params := map[string]any{"threadId": thread, "input": input, "approvalPolicy": approval, "sandboxPolicy": codexSandboxPolicy(mode, c.memDir)}
+	if c.p.model.Model != "" {
+		params["model"] = c.p.model.Model
+	}
 	if effort != "" {
 		params["effort"] = effort
 	}

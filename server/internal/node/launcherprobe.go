@@ -29,7 +29,11 @@ const probeMarker = "__JARVIS_LAUNCHER_PROBE__"
 // (NUL-separated KEY=VALUE on one line), "<marker> agent <name>", "<marker> arg <arg>" lines, then "<marker> env" and
 // the environment the agent got. Only what the launcher changed counts: the node's own environment (a claude it runs
 // in, a gateway exported in ~/.zshrc for everything) is not the launcher's.
-func probeScript(name string) string {
+func probeScript(name string, args ...string) string {
+	command := name
+	for _, arg := range args {
+		command += " " + shellQuote(arg)
+	}
 	return fmt.Sprintf(`
 __jp_report() {
   print -r -- "%[1]s agent $1"; shift
@@ -54,7 +58,7 @@ function env {
 }
 print -rn -- "%[1]s base "; print -rn -N -- ${(f)"$(/usr/bin/env)"}; print
 ( %[2]s ) </dev/null
-`, probeMarker, name)
+`, probeMarker, command)
 }
 
 // Probe is what a launcher would run: the agent, its arguments, the environment it sets.
@@ -131,13 +135,13 @@ func (n *Node) launcherProbeCached(ctx context.Context, name string) proto.Launc
 }
 
 // launcherProbe runs the probe on this machine (a login shell, so ~/.zshrc defines the launcher).
-func (n *Node) launcherProbe(ctx context.Context, name string) (Probe, error) {
+func (n *Node) launcherProbe(ctx context.Context, name string, args ...string) (Probe, error) {
 	if !nameRe.MatchString(name) {
 		return Probe{}, fmt.Errorf("invalid launcher %q", name)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	cmd := loginShell(ctx, probeScript(name))
+	cmd := loginShell(ctx, probeScript(name, args...))
 	killGroupOnCancel(cmd)
 	out, _ := cmd.Output()
 	p, ok := parseProbe(string(out))

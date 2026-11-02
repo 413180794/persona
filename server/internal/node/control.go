@@ -31,13 +31,26 @@ func newUUID() string {
 // after the directory is reused or created.
 // tabName names the herdr tab (hub picks one from the first message when the user gave none); empty: agent-<n>.
 // newID is the id a new session gets (startAsync picked it already); empty: a fresh one.
-func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort, tabName, newID string) (*proto.Session, error) {
+func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort, tabName, newID string, options ...modelExecution) (*proto.Session, error) {
+	execution := executionOption(options)
+	if err := execution.check(); err != nil {
+		return nil, err
+	}
 	if resume != "" && n.externalCodex(resume) {
 		return nil, refusal("codex_read_only", "不能用启动器恢复外部 Codex 会话", nil)
 	}
 	cwd, launcher, err := n.checkStart(cwd, launcher, resume, mode, effort)
 	if err != nil {
 		return nil, err
+	}
+	if execution.Model != "" {
+		agent, err := n.launcherModelCheck(ctx, launcher, execution.Model)
+		if err != nil {
+			return nil, err
+		}
+		if agent != "claude" {
+			return nil, errors.New("普通 Agent 的启动只支持 Claude Code 启动器")
+		}
 	}
 	if resume != "" {
 		if a, ok := n.agent(resume); ok {
@@ -93,7 +106,10 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	}
 	cmd := fmt.Sprintf("%s %s%s --settings %s --mcp-config %s", n.launcherCommand(launcher), args, modeFlags(mode, effort),
 		shellQuote(filepath.Join(n.dir, "claude-settings.json")), shellQuote(filepath.Join(n.dir, "mcp.json")))
-	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC()}
+	if execution.Model != "" {
+		cmd += " --model " + shellQuote(execution.Model)
+	}
+	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC(), Model: execution.Model, ModelFingerprint: execution.Fingerprint}
 	if prev, ok := n.state.get(id); ok && resume != "" {
 		st.StartedAt = prev.StartedAt
 	}

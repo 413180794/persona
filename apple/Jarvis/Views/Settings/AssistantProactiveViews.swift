@@ -423,7 +423,6 @@ struct AssistantTaskEditor: View {
     @State private var confirmBypass = false
     @State private var deleted = false
     @State private var runs: [APIClient.ScheduleRun] = []
-    @State private var launchers: [Launcher] = []
     /// Presented as the "new task" sheet: nothing is saved unless 添加 (or 立即运行) is tapped.
     private let creating: Bool
     /// The conversation it came from, to switch back to after turning 接着原来的对话 off.
@@ -553,7 +552,6 @@ struct AssistantTaskEditor: View {
             guard let id = saved?.id, !id.isEmpty, let api = model.api else { return }
             runs = (try? await api.scheduleRuns(ref: id)) ?? []
         }
-        .task { launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant) }
         #if DEBUG
         .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") == "bypassTask" { confirmBypass = true } }
         #endif
@@ -664,15 +662,8 @@ struct AssistantTaskEditor: View {
     /// The model (launcher), permission mode and effort a run starts claude with; "" in a picker = the default.
     private var runsWithSection: some View {
         Section {
-            Picker(selection: optional(\.launcher)) {
-                Text("跟随 Jarvis（\(model.assistantConfig?.launcher ?? "claude")）").tag("")
-                ForEach(launcherNames, id: \.self) { name in
-                    let l = launchers.first { $0.name == name }
-                    Text([name, Fmt.model(l?.model)].compactMap { $0 }.joined(separator: " · ")).tag(name)
-                }
-            } label: {
-                Label("模型", systemImage: Theme.Icon.cpu).lineLimit(1)
-            }
+            ModelConfigurationLink(title: draft.id.isEmpty ? "任务默认模型" : "任务模型",
+                                   purposeID: draft.id.isEmpty ? "schedule" : "task.\(draft.id)")
             // A Menu around an inline picker: a menu-style Picker greys out a value that has an icon, and 全部放行 is red.
             LabeledContent {
                 Menu {
@@ -695,12 +686,6 @@ struct AssistantTaskEditor: View {
             } label: {
                 Label("权限模式", systemImage: Theme.Icon.askFirst).lineLimit(1)
             }
-            Picker(selection: optional(\.effort)) {
-                Text("跟随启动器").tag("")
-                ForEach(SessionModes.effortLevels) { o in Text(o.title).tag(o.id) }
-            } label: {
-                Label("思考强度", systemImage: Theme.Icon.effort).lineLimit(1)
-            }
         } header: {
             Text("运行方式")
         } footer: {
@@ -714,21 +699,10 @@ struct AssistantTaskEditor: View {
         }
     }
 
-    /// The hub's launchers, plus the task's own when the list doesn't have it (yet).
-    private var launcherNames: [String] {
-        var names = launchers.map(\.name)
-        if let l = draft.launcher, !names.contains(l) { names.append(l) }
-        return names
-    }
-
     private var intervals: [Int] {
         var list = AssistantScheduleText.intervals
         if !list.contains(draft.everyMinutes) { list.append(draft.everyMinutes); list.sort() }
         return list
-    }
-
-    private func optional(_ path: WritableKeyPath<APIClient.ScheduledTask, String?>) -> Binding<String> {
-        Binding { draft[keyPath: path] ?? "" } set: { draft[keyPath: path] = $0.isEmpty ? nil : $0 }
     }
 
     /// 全部放行 asks first.

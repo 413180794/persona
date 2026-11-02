@@ -1,7 +1,7 @@
-# 启动器与「设置 › 模型」
+# 启动器与「设置 › 模型供应商」
 
 启动器决定 claude 用哪个网关、哪个模型。以前全是各台电脑 `~/.zshrc` 里调用 claude 的函数或 alias（见下「~/.zshrc 里怎么认」，
-node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都会展开）；2026-10-31 起「设置 › 模型」把它们和在 App 里加的放在一起管理。
+node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都会展开）；2026-10-31 起「设置 › 模型供应商」把它们和在 App 里加的放在一起管理。
 代码：`server/internal/hub/launchers.go`、`server/internal/node/managed.go`；App `Views/Settings/ModelLaunchersView.swift`。
 
 ## 两种来源
@@ -84,7 +84,13 @@ Jarvis 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不能
 | `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度（见下）：`{machine, checked_at, quota}`，查不了时 `{error, unsupported}`；hub 缓存一分钟，`refresh=1` 重读 |
 | `GET /api/v1/machines/{mid}/launchers` | 这台能启动的（选择器用）：它的 ~/.zshrc 去掉隐藏的，加上 Jarvis 管理的；每项带 `source` |
 
-「设置 › 助手」的启动器选择器和新对话的一样读最后这个接口，所以用的就是这里的数据；助手页有「管理启动器」。
+「设置 › 助手」中的对话模型入口和定时任务的模型入口都打开统一的「模型配置」。供应商负责接入与默认值，用途负责具体选择，见 `docs/model-config.md`。
+
+## 直接 API 供应商
+
+Jarvis 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧的启动器行为）和 `api`（`messages` / `responses`）字段。
+`kind: api` 由 hub 直接发请求，不下发给 node，也不会出现在新建 Agent 的启动器列表中；小模型和 CLI 额外参数不用于这类接入。
+认证仍使用原有的加密 Key 存储，不需要把 API Key 放进用途配置。原有 `/launchers` 接口与供应商名称保持兼容。
 
 ## 额度（2026-10-31）
 

@@ -28,6 +28,7 @@ struct AssistantRoutinesModelTests {
     private func hub() -> FakeHub {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/assistant/tasks", json: #"{"tasks":\#(Self.tasks)}"#)
+        hub.on("GET", "/api/v1/model-config", json: #"{"purposes":[],"providers":[]}"#)
         hub.on("GET", "/api/v1/assistant/runs", json: #"{"runs":[]}"#)
         return hub
     }
@@ -60,7 +61,7 @@ struct AssistantRoutinesModelTests {
         hub.on("PUT", "/api/v1/assistant/tasks/p1") { req in
             let body = try JSONSerialization.jsonObject(with: req.body ?? Data()) as! [String: Any]
             #expect(body["permission_mode"] as? String == "bypassPermissions")
-            #expect(body["launcher"] as? String == "")
+            #expect(body["launcher"] == nil && body["effort"] == nil, "model fields are managed separately")
             #expect(body["every_minutes"] as? Int == 60)
             #expect(body["last_run"] == nil && body["next_run"] == nil && body["created_by"] == nil)
             return Data(#"{"task":{"id":"p1","title":"巡检","prompt":"看看 Agent","repeat":"interval","every_minutes":60,"enabled":true,"permission_mode":"bypassPermissions","next_run":"2026-10-31T13:30:00Z"}}"#.utf8)
@@ -74,6 +75,23 @@ struct AssistantRoutinesModelTests {
         #expect(saved?.everyMinutes == 60 && saved?.nextRun != nil)
         #expect(page.repeating[1].permissionMode == "bypassPermissions")
         #expect(hub.sent("PUT", "/api/v1/assistant/tasks/p1").count == 1)
+    }
+
+    @Test func legacyHubTimeEditsRetainItsExplicitModelFields() async {
+        let hub = hub()
+        hub.on("GET", "/api/v1/model-config") { _ in throw APIError(status: 404, message: "old hub") }
+        hub.on("PUT", "/api/v1/assistant/tasks/p1") { req in
+            let body = try JSONSerialization.jsonObject(with: req.body ?? Data()) as! [String: Any]
+            #expect(body["launcher"] as? String == "strong")
+            #expect(body["effort"] as? String == "high")
+            return Data(#"{"task":{"id":"p1","title":"巡检","prompt":"看看 Agent","repeat":"interval","every_minutes":60,"enabled":true,"launcher":"strong","effort":"high"}}"#.utf8)
+        }
+        let page = make(hub, Sink())
+        await page.load()
+        var task = page.repeating[1]
+        task.launcher = "strong"
+        task.effort = "high"
+        #expect(await page.save(task) != nil)
     }
 
     @Test func aNewTaskIsPostedAndAdded() async {

@@ -9,6 +9,8 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var smallModel: String?
     var args: [String]?
     var hasKey: Bool?
+    var kind: String?
+    var api: String?
     var machines: [String]?
     var hidden: Bool?
     var definitions: [String: String]?
@@ -18,7 +20,7 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var managed: Bool { source == "jarvis" }
 
     enum CodingKeys: String, CodingKey {
-        case name, source, model, args, machines, hidden, definitions, details
+        case name, source, model, args, machines, hidden, definitions, details, kind, api
         case baseURL = "base_url", smallModel = "small_model", hasKey = "has_key"
     }
 }
@@ -76,8 +78,10 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     var smallModel: String
     var args: [String]
     var apiKey: String?
+    var kind: String? = nil
+    var api: String? = nil
     enum CodingKeys: String, CodingKey {
-        case name, model, args
+        case name, model, args, kind, api
         case baseURL = "base_url", smallModel = "small_model", apiKey = "api_key"
     }
 }

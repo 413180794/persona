@@ -135,7 +135,11 @@ func (l *startLog) listed(seen map[string]bool) []proto.Session {
 
 // startAsync checks the arguments, answers with the session it is going to be and starts it in the background.
 // id is the session id to use (the hub may pick it); empty: a new one.
-func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, tabName string) (*proto.Session, error) {
+func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, tabName string, options ...modelExecution) (*proto.Session, error) {
+	execution := executionOption(options)
+	if err := execution.check(); err != nil {
+		return nil, err
+	}
 	if id == "" {
 		id = newUUID()
 	} else if !validID(id) {
@@ -168,7 +172,7 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		_, err := n.start(ctx, cwd, launcher, prompt, "", workspaceID, mode, effort, tabName, id)
+		_, err := n.start(ctx, cwd, launcher, prompt, "", workspaceID, mode, effort, tabName, id, execution)
 		if err != nil {
 			log.Printf("start %s: %v", id, err)
 		}

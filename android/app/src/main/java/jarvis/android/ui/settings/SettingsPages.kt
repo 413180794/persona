@@ -20,6 +20,8 @@ sealed interface SettingsRoute {
     data class Monitor(val id: String) : SettingsRoute { override val path = "monitor/$id" }
     data class Engine(val id: String) : SettingsRoute { override val path = "engine/$id" }
     data object Claude : SettingsRoute { override val path = "claude" }
+    data object Models : SettingsRoute { override val path = "model-config" }
+    data class ModelPurpose(val id: String) : SettingsRoute { override val path = "model-purpose/$id" }
     data object Devices : SettingsRoute { override val path = "devices" }
     data object Notifications : SettingsRoute { override val path = "notifications" }
     data object Storage : SettingsRoute { override val path = "storage" }
@@ -34,6 +36,8 @@ sealed interface SettingsRoute {
                 "monitor" -> rest.takeIf { it.isNotEmpty() }?.let(::Monitor)
                 "engine" -> rest.takeIf { it.isNotEmpty() }?.let(::Engine)
                 "claude" -> Claude
+                "model-config" -> Models
+                "model-purpose" -> rest.takeIf { it.isNotEmpty() }?.let(::ModelPurpose)
                 "devices" -> Devices
                 "notifications" -> Notifications
                 "storage" -> Storage
@@ -62,6 +66,8 @@ fun SettingsPage(
         is SettingsRoute.Monitor -> MachineMonitorScreen(hub, route.id, pop)
         is SettingsRoute.Engine -> EngineScreen(hub, route.id, onDone = pop)
         SettingsRoute.Claude -> ClaudeSettingsScreen(hub, pop)
+        SettingsRoute.Models -> ModelConfigurationScreen(hub, pop, onPurpose = { push(SettingsRoute.ModelPurpose(it)) })
+        is SettingsRoute.ModelPurpose -> ModelPurposeScreen(hub, route.id, pop)
         SettingsRoute.Devices -> DevicesScreen(hub, pop)
         SettingsRoute.Notifications -> NotificationSettingsScreen(hub, pop)
         SettingsRoute.Storage -> StorageScreen(pop)

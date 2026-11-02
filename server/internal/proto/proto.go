@@ -72,6 +72,7 @@ type Engine struct {
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
 // clients that need to know before they try (docs/protocol.md).
 var Features = []string{
+	"model_configuration",    // unified per-purpose models and provider selection
 	"client_msg_id",          // session.send dedupes retries
 	"send_refusals",          // 409 dialog_open / input_draft, clear_draft
 	"screen_dialog",          // interaction.dialog, Resolution.option, 409 prompt_changed
@@ -104,14 +105,15 @@ type UploadedFile struct {
 }
 
 type NodeInfo struct {
-	Hostname      string  `json:"hostname"`
-	OS            string  `json:"os"`
-	Arch          string  `json:"arch"`
-	Home          string  `json:"home"`
-	HerdrVersion  string  `json:"herdr_version"`
-	ClaudeVersion string  `json:"claude_version"`
-	Version       string  `json:"version"`
-	System        *System `json:"system,omitempty"`
+	ModelConfiguration bool    `json:"model_configuration,omitempty"`
+	Hostname           string  `json:"hostname"`
+	OS                 string  `json:"os"`
+	Arch               string  `json:"arch"`
+	Home               string  `json:"home"`
+	HerdrVersion       string  `json:"herdr_version"`
+	ClaudeVersion      string  `json:"claude_version"`
+	Version            string  `json:"version"`
+	System             *System `json:"system,omitempty"`
 	// Engine is the engine the node drives now; Engines, what it found (proto.Machine.Engines). Older nodes leave
 	// both out.
 	Engine  string   `json:"engine,omitempty"`
@@ -231,6 +233,8 @@ type LauncherEnv struct {
 // ManagedLauncher is a launcher kept by the hub (设置 › 模型): what `jarvisd launch <name>` sets before it runs claude.
 // The key only goes to nodes (in memory), never to the app.
 type ManagedLauncher struct {
+	Kind       string `json:"kind,omitempty"` // launcher (default) or api
+	API        string `json:"api,omitempty"`  // messages or responses for direct API providers
 	Name       string `json:"name"`
 	BaseURL    string `json:"base_url"`
 	Model      string `json:"model"`

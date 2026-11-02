@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -65,18 +66,20 @@ type assistantProc struct {
 	wmu    sync.Mutex   // one writer on stdin at a time (messages and control requests)
 	reqSeq atomic.Int64 // control request ids
 
-	mu         sync.Mutex
-	mode       string // permission mode / effort level already sent (modes.go)
-	effort     string
-	busy       bool
-	lastActive time.Time
-	partial    strings.Builder // text of the assistant message being generated
-	lastDelta  time.Time
-	tasks      []string // running background tasks and monitors (descriptions), from background_tasks_changed
-	context    int      // tokens in the conversation's context at its last request (claude), or after a compaction
-	compacting bool     // an idle compaction is running (compactIdle)
-	compacted  bool     // compactIdle ran in this process: it is let go when idle again
-	requested  bool     // its first request was logged
+	mu          sync.Mutex
+	mode        string // permission mode / effort level already sent (modes.go)
+	effort      string
+	model       modelExecution
+	fingerprint string
+	busy        bool
+	lastActive  time.Time
+	partial     strings.Builder // text of the assistant message being generated
+	lastDelta   time.Time
+	tasks       []string // running background tasks and monitors (descriptions), from background_tasks_changed
+	context     int      // tokens in the conversation's context at its last request (claude), or after a compaction
+	compacting  bool     // an idle compaction is running (compactIdle)
+	compacted   bool     // compactIdle ran in this process: it is let go when idle again
+	requested   bool     // its first request was logged
 }
 
 func (p *assistantProc) write(line []byte) error {
@@ -128,7 +131,7 @@ func (n *Node) assistantResumable(id string) bool {
 
 // assistantSend delivers a user message, starting or restarting the headless claude when needed.
 // id == "" starts a new conversation and returns its id.
-func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string, images []proto.Image, mode, effort string) (string, error) {
+func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string, images []proto.Image, mode, effort string, options ...modelExecution) (string, error) {
 	if launcher != "" && !nameRe.MatchString(launcher) {
 		return "", fmt.Errorf("invalid launcher %q", launcher)
 	}
@@ -140,11 +143,32 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	resume := id != ""
 	st, _ := n.state.get(id)
+	execution := executionOption(options)
+	if len(options) == 0 || (execution.Fingerprint == "" && execution.Model == "") {
+		if launcher == "" || launcher == st.Launcher {
+			execution = modelExecution{Model: st.Model, Effort: st.ModelEffort, UseEffort: st.ModelFingerprint != "", Fingerprint: st.ModelFingerprint}
+		}
+	}
+	if launcher != "" && st.Launcher != "" && launcher != st.Launcher && execution.Fingerprint == "" {
+		execution.UseEffort = true
+		execution.Fingerprint = "launcher-default"
+	}
+	if effort != "" {
+		execution.Effort = effort
+	}
+	if err := execution.check(); err != nil {
+		return "", err
+	}
 	if launcher == "" && id != "" {
 		launcher = st.Launcher
 	}
 	if launcher == "" {
 		launcher = "claude"
+	}
+	if execution.Model != "" {
+		if _, err := n.launcherModelCheck(ctx, launcher, execution.Model); err != nil {
+			return "", err
+		}
 	}
 	agent, err := n.assistantAgent(ctx, launcher)
 	if err != nil {
@@ -153,7 +177,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	var p *assistantProc
 	if id == "" {
 		// The spare was started without --permission-mode, and bypassPermissions can't be switched to later.
-		if p = n.adoptSpareFor(cwd, launcher, mode); p != nil {
+		if p = n.adoptSpareFor(cwd, launcher, mode, execution); p != nil {
 			id, launcher, cwd = p.id, p.launcher, p.cwd
 		} else if agent == "claude" {
 			id = newUUID()
@@ -170,34 +194,46 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	snapc := make(chan string, 1)
 	go func(id string) { snapc <- n.assistantContext(id) }(id)
 	if id == "" { // a new Codex conversation: the thread's id is Codex's to pick
-		if p, err = n.spawnCodex("", cwd, launcher, false, false); err != nil {
+		if p, err = n.spawnCodex("", cwd, launcher, false, false, execution); err != nil {
 			return "", err
 		}
 		id = p.id
-	}
-	n.noteModes(id, mode, effort)
-	if st, known := n.state.get(id); !known || st.Launcher != launcher || st.Cwd != cwd {
-		started := st.StartedAt
-		if started.IsZero() {
-			started = time.Now().UTC()
-		}
-		n.state.put(id, sessionState{Launcher: launcher, Cwd: cwd, StartedAt: started})
 	}
 
 	n.mu.Lock()
 	p = n.procs[id]
 	n.mu.Unlock()
 	// Claude takes bypassPermissions only at start; Codex gets the policy with every turn (codexPolicy).
-	if p != nil && (!p.alive() || p.launcher != launcher || (p.agent == "claude" && mode == proto.ModeBypass && p.mode != mode)) {
+	if p != nil && p.alive() && p.agent != agent {
+		return "", errors.New("换到另一种 Agent 需要新建对话")
+	}
+	if p != nil && (!p.alive() || p.launcher != launcher || p.fingerprint != n.executionFingerprint(launcher, execution) || (p.agent == "claude" && mode == proto.ModeBypass && p.mode != mode)) {
+		p.mu.Lock()
+		active := p.busy || len(p.tasks) > 0
+		p.mu.Unlock()
+		if active && p.alive() {
+			return "", errors.New("模型配置已更新，请等当前任务结束后再发送")
+		}
 		n.stopAssistant(id) // model switch, dead process or bypassPermissions (start-only): resume in a fresh one
 		n.rememberTasks(id, nil)
 		p = nil
 	}
+	n.noteModes(id, mode, effort)
 	if p == nil {
-		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false); err != nil {
+		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false, execution); err != nil {
 			return "", err
 		}
 	}
+	if st, known := n.state.get(id); !known || st.Launcher != launcher || st.Cwd != cwd || st.Model != execution.Model || st.ModelFingerprint != execution.Fingerprint || st.ModelEffort != execution.Effort {
+		started := st.StartedAt
+		if started.IsZero() {
+			started = time.Now().UTC()
+		}
+		st.Launcher, st.Cwd, st.StartedAt = launcher, cwd, started
+		st.Model, st.ModelFingerprint, st.ModelEffort = execution.Model, execution.Fingerprint, execution.Effort
+		n.state.put(id, st)
+	}
+
 	live, commit := n.turnContext(id, <-snapc)
 	if p.agent == "codex" {
 		p.mu.Lock()
@@ -242,7 +278,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	return id, nil
 }
 
-func (n *Node) adoptSpareFor(cwd, launcher, mode string) *assistantProc {
+func (n *Node) adoptSpareFor(cwd, launcher, mode string, options ...modelExecution) *assistantProc {
 	if mode == proto.ModeBypass { // a Codex spare is fine: its policy goes with each turn
 		n.mu.Lock()
 		sp := n.spare
@@ -251,16 +287,16 @@ func (n *Node) adoptSpareFor(cwd, launcher, mode string) *assistantProc {
 			return nil
 		}
 	}
-	return n.adoptSpare(cwd, launcher)
+	return n.adoptSpare(cwd, launcher, options...)
 }
 
 // adoptSpare hands the warm spare process to a new conversation when it fits (same directory and launcher, fresh).
-func (n *Node) adoptSpare(cwd, launcher string) *assistantProc {
+func (n *Node) adoptSpare(cwd, launcher string, options ...modelExecution) *assistantProc {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	p := n.spare
 	if p == nil || !p.alive() || time.Since(p.born) > assistantSpareMaxAge ||
-		(launcher != "" && p.launcher != launcher) || (cwd != "" && p.cwd != cwd) {
+		(launcher != "" && p.launcher != launcher) || (cwd != "" && p.cwd != cwd) || p.fingerprint != n.executionFingerprint(p.launcher, executionOption(options)) {
 		return nil
 	}
 	n.spare = nil
@@ -269,13 +305,17 @@ func (n *Node) adoptSpare(cwd, launcher string) *assistantProc {
 }
 
 // assistantWarm makes sure a fresh spare process is waiting for the next new conversation.
-func (n *Node) assistantWarm(cwd, launcher string) error {
+func (n *Node) assistantWarm(cwd, launcher string, options ...modelExecution) error {
+	execution := executionOption(options)
+	if err := execution.check(); err != nil {
+		return err
+	}
 	if launcher == "" || !nameRe.MatchString(launcher) {
 		return fmt.Errorf("invalid launcher %q", launcher)
 	}
 	n.mu.Lock()
 	old := n.spare
-	if old != nil && old.alive() && old.launcher == launcher && old.cwd == cwd && time.Since(old.born) < assistantSpareMaxAge/2 {
+	if old != nil && old.alive() && old.launcher == launcher && old.cwd == cwd && old.fingerprint == n.executionFingerprint(launcher, execution) && time.Since(old.born) < assistantSpareMaxAge/2 {
 		n.mu.Unlock()
 		return nil
 	}
@@ -287,7 +327,7 @@ func (n *Node) assistantWarm(cwd, launcher string) error {
 	if _, err := n.assistantAgent(context.Background(), launcher); err != nil {
 		return err
 	}
-	p, err := n.spawnAssistant("", cwd, launcher, false, true)
+	p, err := n.spawnAssistant("", cwd, launcher, false, true, execution)
 	if err != nil {
 		return err
 	}
@@ -304,17 +344,21 @@ func (n *Node) assistantWarm(cwd, launcher string) error {
 
 // spawnAssistant starts the conversation's process for its launcher's agent: claude -p (spawnClaude) or codex
 // app-server (spawnCodex). A new Codex conversation (id "") gets its id from Codex.
-func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*assistantProc, error) {
+func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool, options ...modelExecution) (*assistantProc, error) {
 	if n.agentOf(launcher) == "codex" {
-		return n.spawnCodex(id, cwd, launcher, resume, spare)
+		return n.spawnCodex(id, cwd, launcher, resume, spare, options...)
 	}
 	if id == "" {
 		id = newUUID()
 	}
-	return n.spawnClaude(id, cwd, launcher, resume, spare)
+	return n.spawnClaude(id, cwd, launcher, resume, spare, options...)
 }
 
-func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool) (*assistantProc, error) {
+func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options ...modelExecution) (*assistantProc, error) {
+	execution := executionOption(options)
+	if err := execution.check(); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(cwd, 0o700); err != nil {
 		return nil, err
 	}
@@ -326,6 +370,9 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool) (*assis
 		"--include-partial-messages",
 		"--settings", filepath.Join(n.dir, "assistant-settings.json"), "--mcp-config", string(mcp),
 		"--allowedTools", assistantAllowedTools}
+	if execution.Model != "" {
+		args = append(args, "--model", execution.Model)
+	}
 	// bypassPermissions only takes as a flag at start; the other modes are set with a control request (syncAssistantModes).
 	var startMode string
 	if !spare {
@@ -366,7 +413,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool) (*assis
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
 	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
-		born: time.Now(), lastActive: time.Now(), mode: startMode}
+		born: time.Now(), lastActive: time.Now(), mode: startMode, model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
 	if !spare {
 		n.mu.Lock()
 		n.procs[id] = p

@@ -370,7 +370,19 @@ func (m *Machine) setOffline(err error) {
 func (m *Machine) call(ctx context.Context, method string, params any, out any) error {
 	m.mu.Lock()
 	p := m.peer
+	info := m.info
 	m.mu.Unlock()
+	if info.Version != "" && !info.ModelConfiguration && (method == "assistant.send" || method == "assistant.warm" || method == "session.start" || method == "session.send") {
+		raw, _ := json.Marshal(params)
+		var fields struct {
+			Model       string `json:"model"`
+			Fingerprint string `json:"model_fingerprint"`
+		}
+		_ = json.Unmarshal(raw, &fields)
+		if fields.Model != "" || fields.Fingerprint != "" {
+			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: "这台电脑的 node 还不支持统一模型配置，请更新 node"}
+		}
+	}
 	if p == nil {
 		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
 	}

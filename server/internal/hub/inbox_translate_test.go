@@ -43,7 +43,8 @@ func (f fakeInboxMail) GetMessage(ctx context.Context, accountID string, uid uin
 func TestNewMailIsTranslatedBeforeItIsOpened(t *testing.T) {
 	h := newTestHub(t)
 	h.inbox.init()
-	h.triageAI = fakeModel(t, `{"subject":"设计评审能改期吗？","text":"你好，周四我要出差。"}`)
+	model, setReply := mutableModel(t, `{"subject":"设计评审能改期吗？","text":"你好，周四我要出差。"}`)
+	h.triageAI = model
 	h.mail = fakeInboxMail{msgs: map[uint32]*mail.MailMessage{
 		7: {MailSummary: mail.MailSummary{Subject: "Can we move the design review?"}, Text: "Hi, I'm travelling on Thursday, so I won't make the review."},
 	}}
@@ -93,7 +94,7 @@ func TestNewMailIsTranslatedBeforeItIsOpened(t *testing.T) {
 		t.Fatal("bad json")
 	}
 	// Opening the mail takes the stored translation: a model that would answer wrongly is not asked.
-	h.triageAI = fakeModel(t, `{"subject":"错","text":"错"}`)
+	setReply(`{"subject":"错","text":"错"}`)
 	got, err := h.translateMail(context.Background(), "a", 7, "INBOX", "zh-Hans")
 	if err != nil || got.Subject != "设计评审能改期吗？" {
 		t.Fatalf("opened: %+v %v", got, err)

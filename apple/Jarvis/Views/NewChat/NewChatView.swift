@@ -19,6 +19,8 @@ struct NewChatView: View {
     @AppStorage("newChat.machine") private var machineID = ""
     @State private var cwd = ""
     @State private var launcher = ""
+    @State private var unifiedModels = false
+    @State private var defaultLauncher = ""
     @State private var mode = ""   // "" = whatever the launcher uses
     @State private var effort = ""
     @State private var prompt = ""
@@ -35,13 +37,13 @@ struct NewChatView: View {
     private var machine: Machine? { model.machine(machineID) }
 
     /// The launcher runs Codex: it starts with its first message (Codex makes the thread then) and the start waits for it.
-    private var codex: Bool { launchers.first(where: { $0.name == launcher })?.isCodex == true }
+    private var codex: Bool { launchers.first(where: { $0.name == (launcher.isEmpty && unifiedModels ? defaultLauncher : launcher) })?.isCodex == true }
 
     private var promptHint: String { codex ? "想让 Codex 做什么？（必填：Codex 收到第一条消息才建会话）" : "想让 Claude 做什么？（可以留空）" }
 
     /// Nothing missing for 开始对话.
     private var ready: Bool {
-        machine?.online == true && !cwd.isEmpty && !launcher.isEmpty
+        machine?.online == true && !cwd.isEmpty && (!launcher.isEmpty || unifiedModels)
             && !(codex && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
@@ -120,12 +122,12 @@ struct NewChatView: View {
 
                 Section {
                     NavigationLink {
-                        LauncherPicker(launchers: launchers, selection: $launcher)
+                        LauncherPicker(launchers: launchers, selection: $launcher, allowDefault: unifiedModels)
                     } label: {
                         HStack {
                             Image(systemName: Theme.Icon.model).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                                Text(launcher.isEmpty ? "选择启动器" : launcher).font(Theme.Font.heading.monospaced())
+                                Text(launcher.isEmpty ? (unifiedModels ? "跟随模型配置" : "选择启动器") : launcher).font(Theme.Font.heading.monospaced()).lineLimit(1)
                                 if let l = launchers.first(where: { $0.name == launcher }), let m = l.model, !m.isEmpty {
                                     Text(m).font(Theme.Font.label).foregroundStyle(.secondary)
                                 }
@@ -135,8 +137,8 @@ struct NewChatView: View {
                         }
                     }
                     .accessibilityIdentifier("newChat.launcher")
-                } header: { Text("启动器（模型）") } footer: {
-                    Text("来自这台机器 ~/.zshrc 里的 claude 启动函数、跑 claude 或 codex 的 alias，以及 codex 本身，会在 herdr 里新开一个标签页运行。")
+                } header: { Text("启动器（本次覆盖）") } footer: {
+                    Text(unifiedModels ? "默认使用「模型配置 › 新建 Agent」的设置。手动选择只影响这次会话，不改变全局默认。" : "来自这台机器的 Claude Code / Codex 启动器，会在终端引擎里新开一个标签页运行。")
                 }
 
                 if !codex { // Claude Code's modes; a Codex keeps its own
@@ -182,7 +184,8 @@ struct NewChatView: View {
                 // A Mac sheet's primary button sits beside 取消 and answers ⏎ (docs/mac.md「和 iOS 的对应」).
                 ToolbarItem(placement: .confirmationAction) {
                     Button(starting ? startingLabel : "开始对话") { Task { await start() } }
-                        .disabled(starting || !ready)
+                        .lineLimit(1)
+                        .disabled(starting || loading || !ready)
                 }
                 #endif
             }
@@ -211,7 +214,7 @@ struct NewChatView: View {
                 }
                 .themedButton(prominent: true)
                 .controlSize(.large)
-                .disabled(starting || !ready)
+                .disabled(starting || loading || !ready)
                 #endif
                 }
                 .padding(.horizontal, Theme.Space.xl)
@@ -269,6 +272,13 @@ struct NewChatView: View {
         defer { loading = false }
         error = nil
         do {
+            do {
+                let purpose = try await api.modelPurpose("agent.new").purpose
+                defaultLauncher = purpose.effective.provider.map { $0.hasPrefix("launcher.") ? String($0.dropFirst("launcher.".count)) : $0 } ?? ""
+                unifiedModels = true
+            } catch let e as APIError where e.status == 404 {
+                unifiedModels = false
+            }
             async let l = model.launchers(machineID)
             async let d = api.dirs(machine: machineID, path: "")
             let (ls, dirs) = try await (l, d)
@@ -279,12 +289,15 @@ struct NewChatView: View {
                 let saved = UserDefaults.standard.string(forKey: "launcher.\(machineID)")
                 mode = UserDefaults.standard.string(forKey: "mode.\(machineID)") ?? ""
                 effort = UserDefaults.standard.string(forKey: "effort.\(machineID)") ?? ""
-                if let saved, ls.contains(where: { $0.name == saved }) { launcher = saved }
+                if unifiedModels { launcher = ""; effort = "" }
+                else if let saved, ls.contains(where: { $0.name == saved }) { launcher = saved }
                 if let preset { cwd = preset.cwd } else {
                     cwd = UserDefaults.standard.string(forKey: "cwd.\(machineID)") ?? recent.first?.path ?? ""
                 }
             }
-            if !ls.contains(where: { $0.name == launcher }) { launcher = ls.first?.name ?? "" }
+            if !ls.contains(where: { $0.name == launcher }), !(unifiedModels && launcher.isEmpty) {
+                launcher = unifiedModels ? "" : ls.first?.name ?? ""
+            }
         } catch {
             self.error = error.shown
         }
@@ -316,9 +329,11 @@ struct NewChatView: View {
                                               workspaceID: preset?.workspaceID, permissionMode: mode.isEmpty ? nil : mode,
                                               effort: effort.isEmpty ? nil : effort, tabName: name.isEmpty ? nil : name,
                                               async: true, nameHint: p.isEmpty ? nil : p))
-            UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
+            if !unifiedModels {
+                UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
+                UserDefaults.standard.set(effort, forKey: "effort.\(machineID)")
+            }
             UserDefaults.standard.set(mode, forKey: "mode.\(machineID)")
-            UserDefaults.standard.set(effort, forKey: "effort.\(machineID)")
             UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
             Haptics.success()
             model.adopt(s)
@@ -334,11 +349,20 @@ struct NewChatView: View {
 struct LauncherPicker: View {
     var launchers: [Launcher]
     @Binding var selection: String
+    var allowDefault = false
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
     var body: some View {
         List {
+            if allowDefault {
+                Button {
+                    selection = ""
+                    dismiss()
+                } label: {
+                    Label("跟随模型配置", systemImage: Theme.Icon.model).lineLimit(1)
+                }
+            }
             ForEach(launchers.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || ($0.model ?? "").localizedCaseInsensitiveContains(query) }) { l in
                 Button {
                     selection = l.name

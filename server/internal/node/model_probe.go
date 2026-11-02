@@ -1,0 +1,95 @@
+package node
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"sync"
+	"time"
+)
+
+var modelProbeCache = struct {
+	sync.Mutex
+	results map[string]modelProbeResult
+}{results: map[string]modelProbeResult{}}
+
+type modelProbeResult struct {
+	at    time.Time
+	agent string
+	err   error
+}
+
+// launcherModelCheck verifies argument forwarding without contacting a model API.
+// A fixed --model flag must not silently win over the user's purpose-specific choice.
+func (n *Node) launcherModelCheck(ctx context.Context, name, model string) (string, error) {
+	if err := (modelExecution{Model: model}).check(); err != nil {
+		return "", err
+	}
+	if _, managed := n.managedLauncher(name); managed {
+		return "claude", nil
+	}
+	key := n.home + "\x00" + name + "\x00" + model
+	modelProbeCache.Lock()
+	cached, ok := modelProbeCache.results[key]
+	modelProbeCache.Unlock()
+	if ok && time.Since(cached.at) < 10*time.Minute {
+		return cached.agent, cached.err
+	}
+	probe, err := n.launcherProbe(ctx, name, "--model", model)
+	if err == nil {
+		err = forwardedModel(probe, model)
+	}
+	modelProbeCache.Lock()
+	if len(modelProbeCache.results) > 256 {
+		modelProbeCache.results = map[string]modelProbeResult{}
+	}
+	modelProbeCache.results[key] = modelProbeResult{at: time.Now(), agent: probe.Agent, err: err}
+	modelProbeCache.Unlock()
+	return probe.Agent, err
+}
+
+func forwardedModel(probe Probe, model string) error {
+	if probe.Agent == "codex" {
+		return nil
+	} // app-server's thread/turn fields override the launcher's CLI default.
+	matches := 0
+	for i, arg := range probe.Args {
+		if arg == "--model" || arg == "-m" {
+			if i+1 < len(probe.Args) && probe.Args[i+1] == model {
+				matches++
+			} else {
+				return errors.New("启动器固定了模型参数，不能覆盖具体模型")
+			}
+		}
+		if strings.HasPrefix(arg, "--model=") {
+			if strings.TrimPrefix(arg, "--model=") == model {
+				matches++
+			} else {
+				return errors.New("启动器固定了模型参数，不能覆盖具体模型")
+			}
+		}
+	}
+	if matches != 1 {
+		return errors.New("启动器没有可靠转发模型参数，请在模型供应商中修正它")
+	}
+	return nil
+}
+
+// withoutModelArgs leaves one unambiguous model flag: the purpose-specific caller's.
+func withoutModelArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--model" || arg == "-m" {
+			if i+1 < len(args) {
+				i++
+			}
+			continue
+		}
+		if strings.HasPrefix(arg, "--model=") {
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out
+}

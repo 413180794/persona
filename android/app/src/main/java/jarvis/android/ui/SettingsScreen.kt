@@ -106,6 +106,8 @@ fun SettingsScreen(
             )
             Header("外观")
             StyleSettingsRow(onClick = { push(SettingsRoute.Style) })
+            Header("AI")
+            NavItem("模型配置", Icons.Default.Tune, "对话、分拣、翻译和各项 AI 功能统一选择模型") { push(SettingsRoute.Models) }
             Header("电脑")
             val mismatch = machines.filter { it.online && it.nodeMismatch == true }
             NavItem(

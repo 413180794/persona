@@ -25,7 +25,9 @@ type Config struct {
 	API        string `json:"api"`
 	BaseURL    string `json:"base_url"`
 	APIKeyFile string `json:"api_key_file"`
-	Model      string `json:"model"`
+	// APIKey is an in-memory credential supplied by the hub's encrypted provider store.
+	APIKey string `json:"-"`
+	Model  string `json:"model"`
 	// ReasoningEffort is sent as reasoning.effort to the Responses API when set (e.g. "low").
 	ReasoningEffort string `json:"reasoning_effort"`
 }
@@ -52,20 +54,34 @@ func (c Config) Over(base Config) Config {
 
 // configured: there is a model to call. Nothing is assumed (it used to default to one person's gateway and key file):
 // without hub.json's "ai" the helpers that need a model say so.
-func (c Config) configured() bool { return c.BaseURL != "" && c.Model != "" && c.APIKeyFile != "" }
+func (c Config) configured() bool {
+	return c.BaseURL != "" && c.Model != "" && (c.APIKeyFile != "" || c.APIKey != "")
+}
 
 var errNotConfigured = errors.New(`ai: no model configured (set "ai" in hub.json: base_url, api_key_file, model)`)
 
 type Client struct {
-	cfg  Config
-	http *http.Client
+	cfg     Config
+	http    *http.Client
+	resolve func(context.Context) (*Client, error)
 }
+
+// NewResolved resolves the execution configuration at the start of every request.
+func NewResolved(resolve func(context.Context) (*Client, error)) *Client {
+	return &Client{resolve: resolve}
+}
+
+// Config returns the immutable connection configuration, never an API response.
+func (c *Client) Config() Config { return c.cfg }
 
 func New(cfg Config) *Client {
 	return &Client{cfg: cfg, http: &http.Client{Timeout: 60 * time.Second}}
 }
 
 func (c *Client) key() (string, error) {
+	if c.cfg.APIKey != "" {
+		return c.cfg.APIKey, nil
+	}
 	path := c.cfg.APIKeyFile
 	if strings.HasPrefix(path, "~/") {
 		home, _ := os.UserHomeDir()
@@ -80,6 +96,13 @@ func (c *Client) key() (string, error) {
 
 // Complete sends one user message with a system prompt and returns the text reply.
 func (c *Client) Complete(ctx context.Context, system, user string, maxTokens int) (string, error) {
+	if c.resolve != nil {
+		resolved, err := c.resolve(ctx)
+		if err != nil {
+			return "", err
+		}
+		return resolved.Complete(ctx, system, user, maxTokens)
+	}
 	if !c.cfg.configured() {
 		return "", errNotConfigured
 	}

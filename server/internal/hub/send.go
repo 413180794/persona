@@ -85,7 +85,10 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	// app picked one for this send; side conversations keep the launcher they started with.
 	if l, _ := p["launcher"].(string); l == "" {
 		if cfg := h.assistantConfig(r.Context()); cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID {
-			p["launcher"] = cfg.Launcher
+			if err := h.applyModel(r.Context(), "assistant", p); err != nil {
+				writeErr(w, 400, err)
+				return
+			}
 		}
 	}
 	// The send carries on when the phone stops waiting (backgrounded, network gone): it may be typing already, and

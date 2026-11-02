@@ -80,7 +80,7 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	if cfg.AI != nil {
 		model = ai.New(cfg.AI.Over(h.cfg.AI))
 	}
-	e := &kb.Engine{Store: st, Model: model, Owner: h.ownerName(), Logf: h.logf, AttachmentDays: cfg.AttachmentDays}
+	e := &kb.Engine{Store: st, Model: model, ModelFor: func(id string) kb.Model { return h.purposeModel(id) }, Owner: h.ownerName(), Logf: h.logf, AttachmentDays: cfg.AttachmentDays}
 	for _, d := range cfg.ExtraDirs {
 		if d = expandHome(strings.TrimSpace(d)); filepath.IsAbs(d) {
 			e.ExtraDirs = append(e.ExtraDirs, d)

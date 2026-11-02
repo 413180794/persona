@@ -15,11 +15,12 @@ import (
 
 // InboxTranslation is one item's translation into one language.
 type InboxTranslation struct {
-	Subject string `json:"subject"`
-	Preview string `json:"preview"`
-	Text    string `json:"text,omitempty"` // the whole body; not in the list
-	Clipped bool   `json:"clipped,omitempty"`
-	Of      string `json:"of,omitempty"` // the item's Last it translates
+	Subject          string `json:"subject"`
+	Preview          string `json:"preview"`
+	Text             string `json:"text,omitempty"` // the whole body; not in the list
+	Clipped          bool   `json:"clipped,omitempty"`
+	ModelFingerprint string `json:"model_fingerprint,omitempty"`
+	Of               string `json:"of,omitempty"` // the item's Last it translates
 }
 
 // foreignScript reports whether text is in another writing system than target's. Scripts, not languages: English
@@ -77,6 +78,11 @@ func (h *Hub) translateInbox(ctx context.Context) {
 	if len(targets) == 0 || h.mail == nil || h.translateModel() != nil || !h.inbox.translating.TryLock() {
 		return
 	}
+	fingerprint, err := h.modelFingerprint(ctx, "translate")
+	if err != nil {
+		h.inbox.translating.Unlock()
+		return
+	}
 	h.inbox.mu.Lock()
 	var jobs []translateJob
 	for _, it := range h.inbox.items {
@@ -84,7 +90,7 @@ func (h *Hub) translateInbox(ctx context.Context) {
 			continue
 		}
 		for _, t := range targets {
-			if have := it.Translations[t]; have != nil && have.Of == it.Last {
+			if have := it.Translations[t]; have != nil && have.Of == it.Last && have.ModelFingerprint == fingerprint {
 				continue
 			}
 			if !foreignScript(it.Title+"\n"+it.Preview, t) {
@@ -121,7 +127,7 @@ func (h *Hub) translateInbox(ctx context.Context) {
 				j.it.Translations = map[string]*InboxTranslation{}
 			}
 			j.it.Translations[j.target] = &InboxTranslation{Subject: t.Subject, Preview: clip(oneLine(t.Text), 200), Text: t.Text,
-				Clipped: t.Clipped, Of: j.last}
+				Clipped: t.Clipped, Of: j.last, ModelFingerprint: t.ModelFingerprint}
 			h.inbox.mu.Unlock()
 			h.saveInbox(ctx, []*InboxItem{j.it})
 		}
@@ -130,6 +136,10 @@ func (h *Hub) translateInbox(ctx context.Context) {
 
 // storedMailTranslation is a translation the inbox already has for this message, if any.
 func (h *Hub) storedMailTranslation(accountID string, uid uint32, mailbox, target string) (mailTranslation, bool) {
+	fingerprint, err := h.modelFingerprint(context.Background(), "translate")
+	if err != nil {
+		return mailTranslation{}, false
+	}
 	h.inbox.mu.Lock()
 	defer h.inbox.mu.Unlock()
 	for _, it := range h.inbox.items {
@@ -137,8 +147,8 @@ func (h *Hub) storedMailTranslation(accountID string, uid uint32, mailbox, targe
 		if m == nil || m.AccountID != accountID || len(m.UIDs) == 0 || m.UIDs[len(m.UIDs)-1] != uid || (mailbox != "" && m.Mailbox != mailbox) {
 			continue
 		}
-		if t := it.Translations[target]; t != nil && t.Of == it.Last && t.Text != "" {
-			return mailTranslation{Subject: t.Subject, Text: t.Text, Clipped: t.Clipped}, true
+		if t := it.Translations[target]; t != nil && t.Of == it.Last && t.Text != "" && t.ModelFingerprint == fingerprint {
+			return mailTranslation{Subject: t.Subject, Text: t.Text, Clipped: t.Clipped, ModelFingerprint: fingerprint}, true
 		}
 	}
 	return mailTranslation{}, false

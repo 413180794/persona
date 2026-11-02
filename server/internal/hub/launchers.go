@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -45,6 +47,8 @@ type storedLauncher struct {
 
 // LauncherView is one launcher for the app: where it comes from, which machines have it; never the key.
 type LauncherView struct {
+	Kind       string   `json:"kind,omitempty"`
+	API        string   `json:"api,omitempty"`
 	Name       string   `json:"name"`
 	Source     string   `json:"source"` // zshrc | jarvis
 	BaseURL    string   `json:"base_url,omitempty"`
@@ -155,6 +159,9 @@ func (h *Hub) put(ctx context.Context, key string, v any) error {
 func (h *Hub) managedForNodes(ctx context.Context) []proto.ManagedLauncher {
 	var out []proto.ManagedLauncher
 	for _, s := range h.storedLaunchers(ctx) {
+		if s.Kind == "api" {
+			continue
+		}
 		l := s.ManagedLauncher
 		if k, err := h.openKey(s.KeySealed); err == nil {
 			l.APIKey = k
@@ -223,7 +230,7 @@ func (h *Hub) launcherViews(ctx context.Context) []LauncherView {
 	managed := map[string]bool{}
 	for _, s := range h.storedLaunchers(ctx) {
 		managed[s.Name] = true
-		out = append(out, LauncherView{Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model, SmallModel: s.SmallModel,
+		out = append(out, LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model, SmallModel: s.SmallModel,
 			Args: s.Args, HasKey: s.KeySealed != ""})
 	}
 	hidden := h.hiddenLaunchers(ctx)
@@ -293,6 +300,9 @@ func (h *Hub) machineLaunchers(ctx context.Context, m *Machine) ([]proto.Launche
 		out = append(out, l)
 	}
 	for _, s := range managed {
+		if s.Kind == "api" {
+			continue
+		}
 		out = append(out, proto.Launcher{Name: s.Name, BaseURL: s.BaseURL, Model: s.Model, Source: "jarvis"})
 	}
 	return out, nil
@@ -301,6 +311,8 @@ func (h *Hub) machineLaunchers(ctx context.Context, m *Machine) ([]proto.Launche
 // --- app API ---
 
 type launcherInput struct {
+	Kind       string   `json:"kind"`
+	API        string   `json:"api"`
 	Name       string   `json:"name"`
 	BaseURL    string   `json:"base_url"`
 	Model      string   `json:"model"`
@@ -310,12 +322,27 @@ type launcherInput struct {
 }
 
 func (in launcherInput) check() error {
+	if in.Kind != "" && in.Kind != "api" && in.Kind != "launcher" {
+		return errors.New("接入类型不支持")
+	}
+	if in.API != "" && in.API != "messages" && in.API != "responses" {
+		return errors.New("API 协议不支持")
+	}
+	if in.Kind != "api" && in.API == "responses" {
+		return errors.New("Claude 启动器只支持 Messages 接入")
+	}
+	if in.Kind == "api" && (len(in.Args) != 0 || in.SmallModel != "") {
+		return errors.New("直接 API 接入不能设置启动参数或小模型")
+	}
 	if !managedLauncherName.MatchString(in.Name) || in.Name == "claude" {
 		return errors.New("名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）")
 	}
 	u, err := url.Parse(strings.TrimSpace(in.BaseURL))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return errors.New("Base URL 要是 http(s):// 开头的地址")
+	}
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("Base URL 不能包含账号、凭据、查询参数或片段，请把凭据填在 API Key 中")
 	}
 	if strings.TrimSpace(in.Model) == "" {
 		return errors.New("要填模型")
@@ -428,6 +455,17 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 		ctx, name := r.Context(), r.PathValue("name")
 		list := h.storedLaunchers(ctx)
 		if i := slices.IndexFunc(list, func(s storedLauncher) bool { return s.Name == name }); i >= 0 {
+			h.modelMu.Lock()
+			defer h.modelMu.Unlock()
+			uses, err := h.providerModelUses(ctx, launcherProvider(name))
+			if err != nil {
+				writeErr(w, 500, err)
+				return
+			}
+			if len(uses) > 0 {
+				writeErr(w, 409, fmt.Errorf("这个供应商仍被 %s 使用，请先在模型配置中更换", strings.Join(uses, "、")))
+				return
+			}
 			list = slices.Delete(list, i, i+1)
 			if err := h.put(ctx, launchersManagedKey, list); err != nil {
 				writeErr(w, http.StatusInternalServerError, err)
@@ -451,6 +489,22 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/v1/launchers/{name}/check", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 		defer cancel()
+		for _, provider := range h.storedLaunchers(ctx) {
+			if provider.Name == r.PathValue("name") && provider.Kind == "api" {
+				started := time.Now()
+				config, err := h.apiConfig(ctx, ModelBinding{Provider: launcherProvider(provider.Name), Model: provider.Model})
+				answer := ""
+				if err == nil {
+					answer, err = ai.New(config).Complete(ctx, "", prompts.RenderLauncherCheck(), 128)
+				}
+				result := proto.LauncherCheck{Agent: "api", Model: config.Model, Answer: clip(oneLine(answer), 200), OK: err == nil, Millis: int(time.Since(started).Milliseconds())}
+				if err != nil {
+					result.Error = clip(oneLine(err.Error()), 400)
+				}
+				writeJSON(w, map[string]any{"check": result})
+				return
+			}
+		}
 		m := h.byID[r.URL.Query().Get("machine")]
 		if m == nil {
 			m = h.byID[h.assistantConfig(ctx).MachineID]
@@ -487,6 +541,7 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 	}
 	s.Name, s.BaseURL, s.Model, s.SmallModel = in.Name, strings.TrimRight(strings.TrimSpace(in.BaseURL), "/"),
 		strings.TrimSpace(in.Model), strings.TrimSpace(in.SmallModel)
+	s.Kind, s.API = in.Kind, in.API
 	s.Args = in.Args
 	if in.APIKey != nil && strings.TrimSpace(*in.APIKey) != "" {
 		sealed, err := h.sealKey(strings.TrimSpace(*in.APIKey))
@@ -507,6 +562,6 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 		return
 	}
 	h.pushManaged(ctx)
-	writeJSON(w, map[string]any{"launcher": LauncherView{Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model,
+	writeJSON(w, map[string]any{"launcher": LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model,
 		SmallModel: s.SmallModel, Args: s.Args, HasKey: s.KeySealed != ""}})
 }

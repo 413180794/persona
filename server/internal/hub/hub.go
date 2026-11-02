@@ -34,7 +34,8 @@ type Hub struct {
 	byID     map[string]*Machine
 	mail     Mail
 	push     *Pusher
-	store    Store // nil in unit tests: nothing is persisted
+	store    Store      // nil in unit tests: nothing is persisted
+	modelMu  sync.Mutex // serializes legacy writes and test stores without a database CAS
 	ai       *ai.Client
 	// The inbox's own models (inbox_agent.go): 1 triages, 2 decides what the agent (3) should take on.
 	triageAI, judgeAI *ai.Client

@@ -28,6 +28,9 @@ type managedLaunchers struct {
 func (n *Node) setManaged(list []proto.ManagedLauncher) {
 	m := map[string]proto.ManagedLauncher{}
 	for _, l := range list {
+		if l.Kind == "api" {
+			continue
+		}
 		m[l.Name] = l
 	}
 	n.managed.mu.Lock()
@@ -112,6 +115,12 @@ func Launch(ctx context.Context, name string, args []string) error {
 		}
 	}
 	env = append(env, resp.Env...)
+	for _, arg := range args {
+		if arg == "--model" || strings.HasPrefix(arg, "--model=") {
+			resp.Args = withoutModelArgs(resp.Args)
+			break
+		}
+	}
 	return syscall.Exec(claude, append(append([]string{"claude"}, resp.Args...), args...), env)
 }
 

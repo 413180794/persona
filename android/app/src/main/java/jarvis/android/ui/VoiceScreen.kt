@@ -81,6 +81,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import jarvis.android.data.Hub
+import jarvis.android.data.HubException
+import jarvis.android.settings.modelPurpose
+import jarvis.android.ui.settings.KitActionRow
+import jarvis.android.ui.settings.KitGroup
+import jarvis.android.ui.settings.KitLoadingRow
+import jarvis.android.ui.settings.KitNoticeRow
+import jarvis.android.ui.settings.ModelPurposeScreen
+import jarvis.android.ui.settings.kitMessage
+import kotlinx.coroutines.CancellationException
 import jarvis.android.voice.Line
 import jarvis.android.voice.Plugin
 import jarvis.android.voice.Voice
@@ -98,19 +107,45 @@ import jarvis.android.voice.voices
 @Composable
 fun VoiceScreen(hub: Hub, plugin: Plugin, onBack: () -> Unit) {
     val context = LocalContext.current
-    BackHandler(onBack = onBack)
+    var configuring by remember { mutableStateOf(false) }
+    BackHandler { if (configuring) configuring = false else onBack() }
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) }
     var denied by remember { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> granted = ok; denied = !ok }
     LaunchedEffect(Unit) { if (!granted) ask.launch(Manifest.permission.RECORD_AUDIO) }
 
-    // The model and voice picked here, kept on this phone; null = the plugin's default. A voice belongs to a model's
-    // set: one the new model does not have falls back to that model's default.
-    var modelId by remember { mutableStateOf(VoicePrefs.model(context, plugin.id)) }
+    // Global model selection belongs to the hub. Only the voice remains a preference on this phone.
+    var modelId by remember(plugin.id) { mutableStateOf<String?>(null) }
+    var configurationLoaded by remember(plugin.id) { mutableStateOf(false) }
+    var configurationError by remember(plugin.id) { mutableStateOf<String?>(null) }
+    var round by remember { mutableStateOf(0) }
     var models by remember { mutableStateOf<VoiceModels?>(null) }
-    var modelsError by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(plugin.id) {
-        runCatching { hub.api.voiceModels(plugin.id) }.onSuccess { models = it }.onFailure { modelsError = it.message }
+    LaunchedEffect(plugin.id, round) {
+        configurationLoaded = false
+        configurationError = null
+        try {
+            models = hub.api.voiceModels(plugin.id)
+            val purpose = try {
+                hub.api.modelPurpose("plugin.${plugin.id}").purpose
+            } catch (e: HubException) {
+                if (e.status != 404) throw e
+                null // older hubs still use their own default and the phone's legacy selection
+            }
+            val selected = purpose?.effective?.model ?: if (purpose == null) VoicePrefs.model(context, plugin.id) else null
+            val status = purpose?.status?.takeIf { it.isNotBlank() && it != "未验证" }
+            if (status != null) {
+                configurationError = status
+            } else if (selected != null && models!!.models.none { it.id == selected }) {
+                configurationError = "配置的语音模型不在插件目录中，请在模型配置里重新选择。"
+            } else {
+                modelId = selected
+                configurationLoaded = true
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            configurationError = e.kitMessage
+        }
     }
     val model = modelId ?: models?.default
     var voiceId by remember { mutableStateOf(VoicePrefs.voice(context, plugin.id)) }
@@ -128,73 +163,78 @@ fun VoiceScreen(hub: Hub, plugin: Plugin, onBack: () -> Unit) {
     }
     var menu by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf<Pick?>(null) }
-    var round by remember { mutableStateOf(0) } // a new conversation after 重新开始
     val voiceName = voices?.firstOrNull { it.id == (voiceId ?: defaultVoice) }?.name
     val modelName = models?.models?.firstOrNull { it.id == model }?.label ?: model
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(plugin.name.ifEmpty { "语音" }, maxLines = 1)
-                        val sub = listOfNotNull(modelName, voiceName).joinToString(" · ")
-                        if (sub.isNotEmpty()) {
-                            Text(sub, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Box {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(plugin.name.ifEmpty { "语音" }, maxLines = 1)
+                            val sub = listOfNotNull(modelName, voiceName).joinToString(" · ")
+                            if (sub.isNotEmpty()) {
+                                Text(sub, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
-                    }
-                },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                actions = {
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Default.Tune, "模型和音色") }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("模型", maxLines = 1) }, leadingIcon = { Icon(Icons.Default.Memory, null) },
-                                onClick = { menu = false; picking = Pick.MODEL },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("音色", maxLines = 1) }, leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
-                                onClick = { menu = false; picking = Pick.VOICE },
-                            )
+                    },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
+                    actions = {
+                        Box {
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Default.Tune, "模型和音色") }
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("模型配置", maxLines = 1) }, leadingIcon = { Icon(Icons.Default.Memory, null) },
+                                    onClick = { menu = false; configuring = true },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("音色", maxLines = 1) }, leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
+                                    onClick = { menu = false; picking = Pick.VOICE },
+                                )
+                            }
                         }
+                    },
+                )
+            },
+        ) { pad ->
+            Box(Modifier.padding(pad).fillMaxSize()) {
+                when {
+                    !granted -> NoMic(denied, onAsk = { ask.launch(Manifest.permission.RECORD_AUDIO) })
+                    configurationError != null -> KitGroup {
+                        row { KitNoticeRow("语音模型不可用", configurationError) }
+                        row { KitActionRow("模型配置", { configuring = true }) }
+                        row { KitActionRow("重试", { round++ }) }
                     }
-                },
-            )
-        },
-    ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
-            when {
-                !granted -> NoMic(denied, onAsk = { ask.launch(Manifest.permission.RECORD_AUDIO) })
-                // Changing either starts a new conversation (they are fixed when a session starts).
-                else -> key(round, modelId, voiceId) {
-                    Conversation(context, hub, plugin, voiceId, modelId, onRestart = { round++ }, onHangUp = onBack)
+                    !configurationLoaded -> KitLoadingRow()
+                    // Changing either starts a new conversation (they are fixed when a session starts).
+                    else -> key(round, modelId, voiceId) {
+                        Conversation(context, hub, plugin, voiceId, modelId, onRestart = { configurationLoaded = false; round++ }, onHangUp = onBack)
+                    }
                 }
             }
         }
-    }
 
-    when (picking) {
-        Pick.MODEL -> PickSheet(
-            title = "模型", onDismiss = { picking = null }, error = modelsError?.let { "模型列表没拿到：$it" },
-            rows = models?.models?.map { m ->
-                PickRow(m.id, m.label, listOfNotNull(m.id.takeIf { it != m.label }, "默认".takeIf { m.id == models?.default }).joinToString(" · ").ifEmpty { null })
-            },
-            chosen = model,
-            onPick = { id -> modelId = id.takeIf { it != models?.default }; VoicePrefs.setModel(context, plugin.id, modelId) },
-        )
-        Pick.VOICE -> PickSheet(
-            title = "音色", onDismiss = { picking = null }, error = voicesError?.let { "音色列表没拿到：$it" },
-            rows = voices?.map { v -> PickRow(v.id, v.name, voiceDetail(v, v.id == defaultVoice)) },
-            chosen = voiceId ?: defaultVoice,
-            onPick = { id -> voiceId = id; VoicePrefs.setVoice(context, plugin.id, id) },
-        )
-        null -> {}
+        when (picking) {
+            Pick.VOICE -> PickSheet(
+                title = "音色", onDismiss = { picking = null }, error = voicesError?.let { "音色列表没拿到：$it" },
+                rows = voices?.map { v -> PickRow(v.id, v.name, voiceDetail(v, v.id == defaultVoice)) },
+                chosen = voiceId ?: defaultVoice,
+                onPick = { id -> voiceId = id; VoicePrefs.setVoice(context, plugin.id, id) },
+            )
+            null -> {}
+        }
+        if (configuring) {
+            ModelPurposeScreen(hub, "plugin.${plugin.id}", onBack = {
+                configuring = false
+                if (!configurationLoaded) round++
+            })
+        }
     }
 }
 
-private enum class Pick { MODEL, VOICE }
+private enum class Pick { VOICE }
 
 private data class PickRow(val id: String, val name: String, val detail: String?)
 
@@ -345,11 +385,10 @@ private fun Subtitle(l: Line) {
     }
 }
 
-/** The model and voice picked for each voice plugin, on this phone (SharedPreferences "voice"); null = its default. */
+/** Voice is a local preference; the legacy model is read only when connected to an older hub. */
 object VoicePrefs {
     private fun sp(ctx: Context) = ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
     fun voice(ctx: Context, plugin: String): String? = sp(ctx).getString("voice.$plugin", null)
     fun setVoice(ctx: Context, plugin: String, id: String) = sp(ctx).edit().putString("voice.$plugin", id).apply()
     fun model(ctx: Context, plugin: String): String? = sp(ctx).getString("model.$plugin", null)
-    fun setModel(ctx: Context, plugin: String, id: String?) = sp(ctx).edit().putString("model.$plugin", id).apply()
 }

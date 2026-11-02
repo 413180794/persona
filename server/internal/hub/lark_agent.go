@@ -268,7 +268,10 @@ func (h *Hub) startLarkAgent(ctx context.Context, cfg LarkAgentConfig, machineID
 	var res struct {
 		SessionID string `json:"session_id"`
 	}
-	params := map[string]any{"cwd": prep.Cwd, "launcher": ac.Launcher, "text": prompt}
+	params := map[string]any{"cwd": prep.Cwd, "text": prompt}
+	if err := h.applyModel(ctx, "lark.agent", params); err != nil {
+		return "", "", err
+	}
 	if sessionID != "" {
 		params["session_id"] = sessionID
 	}

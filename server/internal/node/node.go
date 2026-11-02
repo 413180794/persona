@@ -271,43 +271,45 @@ func (n *Node) writeClaudeConfig() error {
 
 func (n *Node) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	var p struct {
-		Path            string          `json:"path"`
-		Paths           []string        `json:"paths"`
-		Offset          int64           `json:"offset"`
-		SessionID       string          `json:"session_id"`
-		Cwd             string          `json:"cwd"`
-		Launcher        string          `json:"launcher"`
-		Prompt          string          `json:"prompt"`
-		ResumeSessionID string          `json:"resume_session_id"`
-		WorkspaceID     string          `json:"workspace_id"`
-		Text            string          `json:"text"`
-		Images          []proto.Image   `json:"images"`
-		PreKeys         []string        `json:"pre_keys"`
-		Keys            []string        `json:"keys"`
-		Lines           int             `json:"lines"`
-		BeforeSeq       int             `json:"before_seq"`
-		AfterSeq        *int            `json:"after_seq"`
-		Limit           int             `json:"limit"`
-		SinceSeq        int             `json:"since_seq"`
-		Source          string          `json:"source"`
-		Format          string          `json:"format"`
-		Staged          bool            `json:"staged"`
-		Hash            string          `json:"hash"`
-		Skip            int             `json:"skip"`
-		Turns           int             `json:"turns"`
-		LazyImages      bool            `json:"lazy_images"`
-		FoldWork        bool            `json:"fold_work"`
-		FromSeq         int             `json:"from_seq"`
-		ThroughSeq      int             `json:"through_seq"`
-		Name            string          `json:"name"`
-		TabName         *string         `json:"tab_name"`
-		TZ              string          `json:"tz"` // the user's time zone (launchers.quota)
-		Async           bool            `json:"async"`
-		Title           *string         `json:"title"`
-		PermissionMode  string          `json:"permission_mode"`
-		Effort          string          `json:"effort"`
-		ResumeOnly      bool            `json:"resume_only"`
-		Raw             json.RawMessage `json:"-"`
+		Path             string          `json:"path"`
+		Paths            []string        `json:"paths"`
+		Offset           int64           `json:"offset"`
+		SessionID        string          `json:"session_id"`
+		Cwd              string          `json:"cwd"`
+		Launcher         string          `json:"launcher"`
+		Model            string          `json:"model"`
+		ModelFingerprint string          `json:"model_fingerprint"`
+		Prompt           string          `json:"prompt"`
+		ResumeSessionID  string          `json:"resume_session_id"`
+		WorkspaceID      string          `json:"workspace_id"`
+		Text             string          `json:"text"`
+		Images           []proto.Image   `json:"images"`
+		PreKeys          []string        `json:"pre_keys"`
+		Keys             []string        `json:"keys"`
+		Lines            int             `json:"lines"`
+		BeforeSeq        int             `json:"before_seq"`
+		AfterSeq         *int            `json:"after_seq"`
+		Limit            int             `json:"limit"`
+		SinceSeq         int             `json:"since_seq"`
+		Source           string          `json:"source"`
+		Format           string          `json:"format"`
+		Staged           bool            `json:"staged"`
+		Hash             string          `json:"hash"`
+		Skip             int             `json:"skip"`
+		Turns            int             `json:"turns"`
+		LazyImages       bool            `json:"lazy_images"`
+		FoldWork         bool            `json:"fold_work"`
+		FromSeq          int             `json:"from_seq"`
+		ThroughSeq       int             `json:"through_seq"`
+		Name             string          `json:"name"`
+		TabName          *string         `json:"tab_name"`
+		TZ               string          `json:"tz"` // the user's time zone (launchers.quota)
+		Async            bool            `json:"async"`
+		Title            *string         `json:"title"`
+		PermissionMode   string          `json:"permission_mode"`
+		Effort           string          `json:"effort"`
+		ResumeOnly       bool            `json:"resume_only"`
+		Raw              json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -398,6 +400,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		n.setManaged(c.Launchers)
 		return map[string]any{"ok": true}, nil
+	case "launchers.model.check":
+		agent, err := n.launcherModelCheck(ctx, p.Name, p.Model)
+		return map[string]any{"agent": agent}, err
 	case "launchers.show":
 		def, err := n.launcherDefinition(ctx, p.Name)
 		return map[string]any{"definition": def}, err
@@ -424,21 +429,21 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			}
 		}
 		if p.Async && p.ResumeSessionID == "" {
-			s, err := n.startAsync(p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab)
+			s, err := n.startAsync(p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 			return map[string]any{"session": s}, err
 		}
-		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "")
+		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 		return map[string]any{"session": s}, err
 	case "assistant.send":
 		if p.ResumeOnly && !n.assistantResumable(p.SessionID) {
 			return nil, fmt.Errorf("conversation %s is gone", p.SessionID)
 		}
-		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort)
+		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 		return map[string]any{"session_id": id}, err
 	case "session.modes":
 		return ok(n.setModes(ctx, p.SessionID, p.PermissionMode, p.Effort))
 	case "assistant.warm":
-		return ok(n.assistantWarm(p.Cwd, p.Launcher))
+		return ok(n.assistantWarm(p.Cwd, p.Launcher, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint}))
 	case "assistant.memory":
 		var a memoryOp
 		if err := json.Unmarshal(params, &a); err != nil {
@@ -450,7 +455,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		_ = json.Unmarshal(params, &opts)
 		return ok(n.sends.once(opts.ClientMsgID, func() error {
 			if n.isAssistantSession(p.SessionID) {
-				_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "")
+				_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 				return err
 			}
 			return n.send(ctx, p.SessionID, p.Text, p.Images, opts)
@@ -733,16 +738,17 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 	host, _ := os.Hostname()
 	hv := n.herdrVersion(ctx)
 	return proto.NodeInfo{
-		Hostname:      host,
-		OS:            runtime.GOOS,
-		Arch:          runtime.GOARCH,
-		Home:          n.home,
-		HerdrVersion:  hv,
-		ClaudeVersion: claudeVersion(ctx),
-		Version:       n.Version,
-		System:        n.system(ctx),
-		Engine:        n.engine(),
-		Engines:       n.engines(ctx, hv),
+		ModelConfiguration: true,
+		Hostname:           host,
+		OS:                 runtime.GOOS,
+		Arch:               runtime.GOARCH,
+		Home:               n.home,
+		HerdrVersion:       hv,
+		ClaudeVersion:      claudeVersion(ctx),
+		Version:            n.Version,
+		System:             n.system(ctx),
+		Engine:             n.engine(),
+		Engines:            n.engines(ctx, hv),
 	}
 }
 

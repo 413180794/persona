@@ -38,7 +38,7 @@ struct ModelLaunchersView: View {
                 }
                 if query.isEmpty || !managed.isEmpty { Section {
                     if managed.isEmpty {
-                        Text("还没有。点右上角 + 加一个：填网关地址、Key 和模型，所有电脑都能用。")
+                        Text("还没有。点右上角 + 添加接入方式、网关、Key 和默认模型，再在「模型配置」里按用途选择。")
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                     ForEach(managed) { row($0) }
@@ -83,12 +83,12 @@ struct ModelLaunchersView: View {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
-        .navigationTitle("模型")
+        .navigationTitle("模型供应商")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、模型、网关或电脑")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { adding = true } label: { Image(systemName: Theme.Icon.add) }.accessibilityLabel("新增启动器")
+                Button { adding = true } label: { Image(systemName: Theme.Icon.add) }.accessibilityLabel("新增供应商")
             }
         }
         .sheet(isPresented: $adding) {
@@ -244,6 +244,7 @@ struct ModelLauncherDetailView: View {
             if let l = launcher {
                 Section {
                     LabeledContent("来源", value: l.managed ? "Jarvis 管理" : "~/.zshrc 里的函数")
+                    if l.kind == "api" { LabeledContent("接入方式", value: "直接 API · \(l.api == "responses" ? "Responses" : "Messages")") }
                     // A ~/.zshrc launcher's gateway and models are in the sections it was probed into below.
                     if l.managed || (l.details ?? [:]).isEmpty {
                         if let u = l.baseURL, !u.isEmpty { mono("Base URL", u) }
@@ -258,13 +259,15 @@ struct ModelLauncherDetailView: View {
                 }
                 if l.managed {
                     Section {
-                        Text("在任何电脑上都以 `jarvisd launch \(l.name)` 运行：从本机的 node 取到这些设置再启动 claude。")
+                        Text(l.kind == "api" ? "hub 直接请求此 API，不在电脑上启动 Agent。各用途在「模型配置」中选择它。" : "在任何电脑上都以 `jarvisd launch \(l.name)` 运行：从本机的 node 取到这些设置再启动 claude。")
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
                 // How much is left comes before trying it: it is why the page is opened more often.
-                LauncherQuotaSection(name: l.name)
-                availability(l)
+                if l.kind != "api" {
+                    LauncherQuotaSection(name: l.name)
+                    availability(l)
+                }
                 // What the launcher really sets, once for the machines where it is the same.
                 ForEach(detailGroups(l), id: \.machines) { g in
                     LauncherDetailSections(detail: g.detail, place: groups(l) > 1 ? g.names : nil)
@@ -420,6 +423,8 @@ struct LauncherEditor: View {
     @State private var modelName = ""
     @State private var smallModel = ""
     @State private var args = ""
+    @State private var kind = "launcher"
+    @State private var protocolName = "messages"
     @State private var saving = false
     @State private var error: String?
 
@@ -433,25 +438,43 @@ struct LauncherEditor: View {
                         .font(Theme.Font.body.monospaced())
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .disabled(!isNew)
-                } header: { Text("名字") } footer: { Text("字母、数字、_ 和 -；新对话、助手里按这个名字选。") }
+                } header: { Text("名字") } footer: { Text("字母、数字、_ 和 -；按这个名字选择供应商。") }
+                Section {
+                    Picker("接入方式", selection: $kind) {
+                        Text("Claude Code 启动器").tag("launcher")
+                        Text("直接 API").tag("api")
+                    }
+                    if kind == "api" {
+                        Picker("API 协议", selection: $protocolName) {
+                            Text("Messages").tag("messages")
+                            Text("Responses").tag("responses")
+                        }
+                    }
+                } footer: {
+                    Text(kind == "api" ? "hub 直接请求模型，供分拣、翻译和知识处理等用途选择。" : "在你的电脑上启动 Claude Code，供对话和 Agent 等用途选择。")
+                }
                 Section {
                     TextField("https://…", text: $baseURL)
                         .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     SecureField(isNew || existing?.hasKey != true ? "API Key" : "API Key（不改就留空）", text: $apiKey)
-                } header: { Text("网关") } footer: { Text("Anthropic Messages 兼容的地址（会设成 ANTHROPIC_BASE_URL）。Key 加密存在 hub。") }
+                } header: { Text("网关") } footer: { Text("填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。") }
                 Section {
-                    TextField("模型", text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("小模型（可选，默认同上）", text: $smallModel).textInputAutocapitalization(.never).autocorrectionDisabled()
-                } header: { Text("模型") } footer: { Text("模型用于主对话和子 Agent；小模型用于标题、摘要这类轻活。") }
-                Section {
-                    TextField("比如 --dangerously-skip-permissions", text: $args)
-                        .font(Theme.Font.body.monospaced()).textInputAutocapitalization(.never).autocorrectionDisabled()
-                } header: { Text("额外参数（可选）") } footer: { Text("加在 claude 后面，空格分隔，每个都以 - 开头。") }
+                    TextField("默认模型", text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    if kind == "launcher" {
+                        TextField("小模型（可选，默认同上）", text: $smallModel).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    }
+                } header: { Text("默认模型") } footer: { Text("各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。") }
+                if kind == "launcher" {
+                    Section {
+                        TextField("比如 --dangerously-skip-permissions", text: $args)
+                            .font(Theme.Font.body.monospaced()).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    } header: { Text("额外参数（可选）") } footer: { Text("加在 claude 后面，空格分隔，每个都以 - 开头。") }
+                }
                 if let error {
                     Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
                 }
             }
-            .navigationTitle(isNew ? "新增启动器" : "编辑 \(existing?.name ?? "")")
+            .navigationTitle(isNew ? "新增供应商" : "编辑 \(existing?.name ?? "")")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.lineLimit(1) }
@@ -467,6 +490,8 @@ struct LauncherEditor: View {
                 modelName = e.model ?? ""
                 smallModel = e.smallModel ?? ""
                 args = (e.args ?? []).joined(separator: " ")
+                kind = e.kind ?? "launcher"
+                protocolName = e.api ?? "messages"
             }
         }
         #if os(macOS)
@@ -480,9 +505,10 @@ struct LauncherEditor: View {
         defer { saving = false }
         let input = LauncherInput(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL.trimmingCharacters(in: .whitespaces),
                                   model: modelName.trimmingCharacters(in: .whitespaces),
-                                  smallModel: smallModel.trimmingCharacters(in: .whitespaces),
-                                  args: args.split(whereSeparator: \.isWhitespace).map(String.init),
-                                  apiKey: apiKey.isEmpty ? nil : apiKey)
+                                  smallModel: kind == "api" ? "" : smallModel.trimmingCharacters(in: .whitespaces),
+                                  args: kind == "api" ? [] : args.split(whereSeparator: \.isWhitespace).map(String.init),
+                                  apiKey: apiKey.isEmpty ? nil : apiKey, kind: kind,
+                                  api: kind == "api" ? protocolName : "messages")
         do {
             try await api.saveLauncher(input, isNew: isNew)
             model.forgetLaunchers()
