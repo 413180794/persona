@@ -42,11 +42,15 @@ extension Theme.Size {
     static let macInspectorMin: CGFloat = 260
     static let macInspector: CGFloat = 300
     static let macInspectorMax: CGFloat = 420
+    /// A split's detail column narrower than this is logged as squeezed (no page fits in it).
+    static let macSplitSquished: CGFloat = 200
 }
 
 extension Theme {
     /// A glyph on a tinted fill (the composer's send / 中断 circles), as the system's prominent buttons draw it.
     static let macOnTint = Color.white
+    /// The words' color, fixed (not `.primary`, which a selected list row turns white).
+    static let macLabel = Color(nsColor: .labelColor)
 }
 
 extension Theme.Icon {

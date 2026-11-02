@@ -6,30 +6,31 @@ import SwiftUI
 // E or ⌫ files the selected as 已处理 and selects the next, ⏎ or a double click opens it in a window of its own (an
 // agent row: its chat), a right-click menu with everything the row can do, swipe left on the trackpad for 已处理.
 
-/// The inbox's entries in the window's sidebar: sources (全部, 飞书, each mail account) and kinds (@我, 私聊, 群聊, 邮件,
-/// Agent), each with what still waits in it. A `Section` of rows for a sidebar `List`; picking one sets the list's
-/// filter. Rows are tagged with `MacInboxFilter`, so a sidebar whose selection is that type selects them natively.
+/// The inbox's filters column: sources (全部, 飞书, each mail account) and kinds (@我, 私聊, 群聊, 邮件, Agent), each with
+/// what still waits in it; picking one sets the list's filter. The shell's rows (`MacSidebarRow`), not a sidebar
+/// `List`: its words went light gray whenever the window was not the active one (2026-11-02 user: 看不太清).
 struct MacInboxFilters: View {
     @Environment(AppModel.self) private var model
     var state = MacInboxState.shared
 
     var body: some View {
-        Section("收件箱") {
-            ForEach(state.sources) { row($0) }
-        }
-        Section("类型") {
-            ForEach(state.kinds) { row($0) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                MacSidebarHeading(title: "收件箱")
+                ForEach(state.sources) { row($0) }
+                MacSidebarHeading(title: "类型")
+                ForEach(state.kinds) { row($0) }
+            }
+            .padding(.horizontal, Theme.Space.s)
+            .padding(.bottom, Theme.Space.s)
         }
     }
 
     private func row(_ f: MacInboxFilter) -> some View {
         let n = state.count(f, model: model)
-        return Label(f.title, systemImage: f.icon)
-            .lineLimit(1)
-            .badge(n > 0 ? Text("\(n)") : nil)
-            .tag(f)
+        return MacSidebarRow(icon: f.icon, title: f.title, selected: state.filter == f, badge: n > 0 ? .word("\(n)") : nil,
+                             identifier: "mac.inbox.filter.\(f.id)") { state.filter = f }
             .help(f.title)
-            .accessibilityIdentifier("mac.inbox.filter.\(f.id)")
     }
 }
 
@@ -70,6 +71,7 @@ struct MacInboxList: View {
         }
         .listStyle(.inset)
         .alternatingRowBackgrounds(.disabled)
+        .scrollContentBackground(.hidden) // the page's color (MacInboxPage)
         .overlay {
             if sections.isEmpty && !store.loading {
                 EmptyStateView(symbol: Theme.Icon.success, title: state.query.isEmpty ? "都处理完了" : "没有匹配的",
@@ -162,7 +164,7 @@ struct MacInboxList: View {
     private func agentRow(_ ix: Interaction) -> some View {
         InboxAgentRow(interaction: ix, machine: model.machine(ix.machineID), machineName: model.machine(ix.machineID)?.name ?? ix.machineID)
             .tag(MacInboxSelection.agent(ix.id))
-            .macHoverRow()
+            .macHoverRow(.agent(ix.id))
     }
 
     private func row(_ it: InboxItem) -> some View {
@@ -170,7 +172,7 @@ struct MacInboxList: View {
                  send: { text in Task { await store.send(it, text: text, changes: it.agent?.changes ?? []) } },
                  edit: { state.editingDraft = it })
             .tag(MacInboxSelection.item(it.id))
-            .macHoverRow()
+            .macHoverRow(.item(it.id))
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if it.isDone {
                     Button { store.setDone(it, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }.tint(Theme.accent)
@@ -243,17 +245,30 @@ extension View {
             .frame(minWidth: Theme.Size.macSheetMinWidth, minHeight: Theme.Size.macSheetMinHeight)
     }
 
-    /// A list row that reacts to the pointer (a light fill under it), as Mac lists with row actions do.
-    func macHoverRow() -> some View { modifier(MacHoverRow()) }
+    /// A list row that reacts to the pointer (a light fill under it), as Mac lists with row actions do, and shows it is
+    /// selected with the shell's gray well.
+    func macHoverRow(_ id: MacInboxSelection) -> some View { modifier(MacHoverRow(id: id)) }
 }
 
+/// The system's selection stays (↑↓, ⇧ / ⌘, E and ⌫ go by it) but is not what shows: in the active window it filled the
+/// row with the accent, and what the row draws in its own colors went under it (the AI 分身's draft header, its 修改
+/// button, the sparkles: 2026-11-02). The page's color over it, the well on that, and the row's words in their usual
+/// colors (selected, the system turned them white).
 private struct MacHoverRow: ViewModifier {
+    var id: MacInboxSelection
     @State private var hovering = false
 
     func body(content: Content) -> some View {
+        // Read here, not by the list: there every ↑ / ↓ grouped the whole inbox again.
+        let selected = MacInboxState.shared.selection.contains(id)
         content
+            // The label color as such: the system's selected-row white comes with the hierarchical styles.
+            .foregroundStyle(Theme.macLabel)
+            .environment(\.backgroundProminence, .standard)
             .padding(.horizontal, Theme.Space.xs)
-            .background(hovering ? Theme.Fill.well : Color.clear, in: .rect(cornerRadius: Theme.Radius.control))
+            .background(selected ? Theme.Fill.well : hovering ? Theme.Fill.macHover : Color.clear,
+                        in: .rect(cornerRadius: Theme.Radius.control))
             .onHover { hovering = $0 }
+            .listRowBackground(Theme.pageBackground)
     }
 }

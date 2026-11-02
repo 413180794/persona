@@ -37,3 +37,15 @@
   用有屏幕录制权限的 computer-use 工具（比如 cua-driver 的 `get_window_state` 加 `screenshot_out_file`）截这个实例的窗口，窗口不在当前屏幕上也截得到；
   这是 `CLAUDE.md`「截图验证不用 computer-use」的 Mac 例外：只截图、不操作，后台发的快捷键到不了菜单（窗口不是 key），要点按就别用这条路。
   别动用户自己开着的那个实例，`-pairURL` 会改写钥匙串里的配对。
+- 只截不在前台的窗口会漏掉一类问题：系统控件在活跃窗口里换颜色。玻璃按钮（`.buttonStyle(.glass)`）在活跃窗口里整个填成主题色，
+  按钮里紫色的「推荐」标签看不见；后台窗口里它是灰的，之前的截图全是后台窗口，一直没发现（2026-11-02 用户：文字被背景色盖住都看不清）。
+  `.glassProminent` 的字是青色、`.foregroundStyle` 改不动。Mac 的 `themedButton` 因此自己画胶囊（`MacCapsuleButton`）。
+  截活跃窗口：cua-driver 的 `bring_to_front`（带 `window_id`）把那个体验实例提到前台再截，会抢几秒焦点，实例退出后焦点回到原来的 App。
+- 侧边栏样式的 `List`（`.listStyle(.sidebar)`）放在分栏的侧栏以外，窗口不在前台时行的字整个变浅灰，像禁用了一样；选中在活跃窗口里是主题色，和壳的灰色选中不是一套。
+  收件箱的筛选栏改用壳的行（`MacSidebarRow`）。
+- `List(selection:)` 的选中行在活跃窗口里是主题色实底，系统只把 `.primary` / `.secondary` 和 `Color.primary` 换成白色，行里自己定的颜色
+  （草稿卡片的紫色标题、主题色的「修改」、星标）照原样画在蓝底上，看不见。`.environment(\.backgroundProminence, .standard)` 拦不住这次变白。
+  做法（`MacHoverRow`）：`.listRowBackground(页面底色)` 盖住系统的选中底，选中的灰底自己画；行上 `.foregroundStyle(Color(nsColor: .labelColor))`，
+  层级样式（`.primary`、`.secondary`）就跟着它走、不再变白；但子视图里写死的 `Color.primary` 还是会变白，要改成 `.primary`（iOS 上两者一样）。
+- `.toolbar(removing: .title)` 之后，`.primaryAction` 的按钮排到工具栏最左边（Mac 上它本来就靠前，原来是标题把它们推到了右边）：
+  去掉标题的同时补一个 `ToolbarSpacer(.flexible)`。

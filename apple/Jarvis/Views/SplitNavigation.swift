@@ -1,3 +1,4 @@
+import OSLog
 import SwiftUI
 
 /// A list and the pages it opens (Agents, 收件箱, 设置), laid out for the width there is (docs/ios.md「iPhone Duo」).
@@ -40,9 +41,18 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
                 NavigationStack(path: $path) {
                     empty.modifier(destinations)
                 }
+                .onGeometryChange(for: Bool.self) { $0.size.width < Theme.Size.macSplitSquished } action: { squished in
+                    SplitColumns.log.notice("detail squished: \(squished) (columns \(String(describing: columns), privacy: .public), depth \(path.count))")
+                }
             }
             .navigationSplitViewStyle(.balanced)
             .environment(\.splitDetail, SplitDetail(isFirstPage: path.count <= 1))
+            // The detail column once came out a few points wide, the chat squeezed into it (2026-11-02, not reproduced):
+            // what the columns and the stack did, for the next time (`log show --predicate 'category == "split"'`).
+            .onChange(of: columns) { old, new in
+                SplitColumns.log.notice("columns \(String(describing: old), privacy: .public) → \(String(describing: new), privacy: .public)")
+            }
+            .onChange(of: path.count) { old, new in SplitColumns.log.notice("depth \(old) → \(new)") }
             #else
             NavigationSplitView(columnVisibility: $columns) {
                 // No stack of its own: a value link in the sidebar column replaces the detail column's stack. A sidebar
@@ -79,6 +89,8 @@ enum SplitColumns {
 
     /// The empty sidebar column, and no system button to bring it out.
     static var noSidebar: some View { Color.clear.toolbar(removing: .sidebarToggle) }
+
+    static let log = Logger(subsystem: "jarvis", category: "split")
     #else
     static let shown = NavigationSplitViewVisibility.all
     #endif

@@ -166,6 +166,10 @@ private struct MacShell: View {
         // No toolbar band across the window: the sections column reaches up behind the traffic lights, and the bar's
         // backdrop and hairline cut it off at the toolbar (2026-11-02).
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        // No page title in the bar: the system puts it after the items beside the traffic lights, over this column, and
+        // a long one ran across the column's edge on a white backing (2026-11-02 user: 文字都超出去了). The selected
+        // section and the selected row say where you are; the window keeps its title for the Window menu.
+        .toolbar(removing: .title)
         // Next to the traffic lights, over the sections column: shows or hides that column (显示 › 显示/隐藏侧边栏,
         // ⌃⌘S). The pages' lists have no button of their own: one there sat over this column and hid the list.
         .toolbar {
@@ -175,6 +179,9 @@ private struct MacShell: View {
                 }
                 .help(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏")
             }
+            // What the title's room did: the pages' actions stay at the trailing end, by the search field (without
+            // it they lined up at the leading edge, over this column).
+            ToolbarSpacer(.flexible)
         }
         // Something moved the tab (a notification, ⌘K, a link): its section comes to the front.
         .onChange(of: model.selectedTab) { shell.section = nil }
@@ -191,7 +198,8 @@ private struct MacShell: View {
         let shown = MacSection.shown(override: shell.section, tab: model.selectedTab)
         return VStack(spacing: Theme.Space.xxs) {
             ForEach(MacSection.allCases) { section in
-                MacSectionRow(section: section, selected: section == shown, badge: badge(section)) { shell.go(section, model) }
+                MacSidebarRow(icon: section.icon, title: section.title, selected: section == shown, badge: badge(section),
+                              identifier: "mac.section.\(section.rawValue)") { shell.go(section, model) }
             }
             Spacer(minLength: 0)
             // The sidebar's foot: while the hub is out of reach, 等待网络 / 连接中… (a click explains), as the
@@ -211,7 +219,7 @@ private struct MacShell: View {
     }
 
     /// The iOS tab bar's badges (`RootView`).
-    private func badge(_ section: MacSection) -> MacSectionRow.Badge? {
+    private func badge(_ section: MacSection) -> MacSidebarRow.Badge? {
         let n: Int
         switch section {
         case .knowledge, .machines: return nil
@@ -232,53 +240,6 @@ private struct MacShell: View {
         case .machines: MacMachinesPage()
         case .settings: SettingsView()
         }
-    }
-}
-
-/// One section in the shell's sidebar: the row `AssistantSidebar` draws for 新对话 / 定时任务 / 知识库 (an icon in a
-/// fixed box, body type), selected with the same rounded well its current conversation has.
-struct MacSectionRow: View {
-    enum Badge: Equatable {
-        /// Things waiting for the user (the tab bar's red number).
-        case count(Int)
-        /// A word in place of a number (设置 in 体验模式).
-        case word(String)
-    }
-
-    var section: MacSection
-    var selected: Bool
-    var badge: Badge?
-    var go: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: go) {
-            HStack(spacing: Theme.Space.l) {
-                Image(systemName: section.icon).resizable().scaledToFit().foregroundStyle(Color.primary)
-                    .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
-                    .scaledFrame(width: Theme.Size.icon)
-                Text(section.title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
-                Spacer(minLength: 0)
-                switch badge {
-                case .count(let n): CountBadge(count: n, look: .solid(Theme.needsYou))
-                case .word(let w): Text(w).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
-                case nil: EmptyView()
-                }
-            }
-            .padding(.horizontal, Theme.Space.m)
-            .scaledFrame(minHeight: Theme.Size.avatarL)
-            .background {
-                if selected || hovering {
-                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                        .fill(selected ? Theme.Fill.well : Theme.Fill.macHover)
-                }
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("mac.section.\(section.rawValue)")
     }
 }
 

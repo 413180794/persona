@@ -182,17 +182,15 @@ struct MacInboxItemWindow: View {
 /// The inbox page until the window's three columns take the pieces over (docs/mac.md「三栏接口」): the filters, the
 /// list and the detail side by side, the list's width dragged and remembered.
 struct MacInboxPage: View {
-    @Bindable var state = MacInboxState.shared
     @AppStorage("mac.inbox.listWidth") private var listWidth: Double = Theme.Size.macInboxListIdeal
     @State private var dragging: Double?
 
     var body: some View {
         HStack(spacing: 0) {
-            List(selection: Binding(get: { state.filter }, set: { if let f = $0 { state.filter = f } })) {
-                MacInboxFilters()
-            }
-            .listStyle(.sidebar)
-            .frame(width: Theme.Size.macInboxFiltersWidth)
+            // On the window's white, as the lists beside the sections are on the other pages.
+            MacInboxFilters()
+                .frame(width: Theme.Size.macInboxFiltersWidth)
+                .frame(maxHeight: .infinity)
             Divider()
             MacInboxList()
                 .frame(width: min(max(dragging ?? listWidth, Theme.Size.macInboxListMin), Theme.Size.macInboxListMax))
@@ -205,5 +203,8 @@ struct MacInboxPage: View {
             MacInboxDetail()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // The pages' color, as Agents and Jarvis have: the window's own took the wallpaper's tint in dark mode, brown
+        // beside the other pages' gray (2026-11-02).
+        .background(Theme.pageBackground)
     }
 }

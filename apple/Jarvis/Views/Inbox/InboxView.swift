@@ -350,7 +350,10 @@ struct InboxRow: View {
                     if let summary = item.summary, !summary.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             (Text(Image(systemName: Theme.Icon.ai)).foregroundStyle(Theme.ai) + Text(" " + summary))
-                                .font(Theme.Font.secondary).foregroundStyle(item.isDone ? Color.secondary : Color.primary.opacity(0.9)).lineLimit(2)
+                                // The hierarchical styles, not `Color.primary`: a Mac list's selected row turns that
+                                // white, where the row sets the words' color for these (MacHoverRow).
+                                .font(Theme.Font.secondary)
+                                .foregroundStyle(item.isDone ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary.opacity(0.9))).lineLimit(2)
                             Text(from).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     } else {
@@ -546,7 +549,7 @@ struct InboxAgentRow: View {
                     Text(LarkTime.short(ix.createdAt)).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize()
                 }
                 if let asks, !asks.isEmpty {
-                    Text(asks).font(Theme.Font.secondary).foregroundStyle(Color.primary.opacity(0.9)).lineLimit(2)
+                    Text(asks).font(Theme.Font.secondary).foregroundStyle(.primary.opacity(0.9)).lineLimit(2) // see InboxRow
                     (Text(ix.title).fontWeight(.semibold).foregroundStyle(StatusPalette.needsYou.text)
                         + Text(" · " + machineName).foregroundStyle(.secondary))
                         .font(Theme.Font.caption).lineLimit(1)

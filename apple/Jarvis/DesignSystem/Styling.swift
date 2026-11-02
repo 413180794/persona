@@ -84,10 +84,10 @@ extension View {
         case .glass:
             // .glassProminent keeps its full color when disabled (iOS 26.0): an empty composer's send looked tappable.
             #if os(macOS)
-            // The Mac's glass prominent style drew the label cyan on the blue (about 3.2:1, 2026-11-02), and a
-            // foreground style does not reach it: the system's filled button, white on the tint, as a Mac dialog's
-            // default button is. It shows "disabled" by itself.
-            if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.glass) }
+            // The Mac's glass styles took their colors from the window, not from us: the prominent one drew its label
+            // cyan on the blue (about 3.2:1), the plain one turned solid blue in the active window (2026-11-02). Both
+            // drawn here (`MacCapsuleButton`).
+            buttonStyle(MacCapsuleButton(prominent: prominent))
             #else
             if prominent { buttonStyle(.glassProminent).modifier(DimWhenDisabled()) } else { buttonStyle(.glass) }
             #endif
