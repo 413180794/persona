@@ -22,6 +22,7 @@ enum RuntimeCLI {
     static let commands: [String: Command] = coreCommands.merging(navigationCommands) { core, _ in core }
         .merging(elementCommands) { core, _ in core }
         .merging(actionCommands) { core, _ in core }
+        .merging(motionCommands) { core, _ in core }
 
     private static let coreCommands: [String: Command] = [
         "ping": { _ in ["pong": true, "pid": Int(ProcessInfo.processInfo.processIdentifier)] },
@@ -156,34 +157,87 @@ enum RuntimeCLI {
 
     /// Waits until the screen stops changing: the windows drawn every `every` ms (at 1×) differ in at most `pixels`
     /// pixels (a working agent's dot keeps ~300 changing) `stable` times in a row, or `timeout` seconds pass. What a
-    /// fixed `sleep` after a launch stood for.
+    /// fixed `sleep` after a launch stood for. Left out of the comparison: the frames of the elements `ignore` finds
+    /// (one set of element filters or a list of them, found again every frame; `ignorePad` points around each,
+    /// default 6: a breathing dot's ring is drawn past its frame) and `ignoreRects` ([x, y, w, h] in points), for
+    /// what never stops on its own (machines' live curves). `box`: where the last frames still differed.
     private static func settle(_ a: Args) async -> Reply {
         let deadline = Date.now.addingTimeInterval(a["timeout"] as? Double ?? 8)
         let every = a["every"] as? Int ?? 150, stable = a["stable"] as? Int ?? 3, allowed = a["pixels"] as? Int ?? 0
+        let ignore = Ignore(a)
         var last: [UInt8]?
+        var lastMask: [CGRect] = []
         var same = 0, frames = 0, changed = 0
+        var box = CGRect.null
         while Date.now < deadline {
             try? await Task.sleep(for: .milliseconds(every))
+            let mask = ignore.rects()
             let now = pixels()
             frames += 1
-            if let now, let last, now == last {
-                changed = 0
-                same += 1
-            } else if let now, let last, now.count == last.count {
-                changed = 0
-                var i = 0
-                while i < now.count {
-                    if now[i] != last[i] || now[i + 1] != last[i + 1] || now[i + 2] != last[i + 2] { changed += 1 }
-                    i += 4
-                }
+            if let now, let last, now.count == last.count, let w = window.map({ Int($0.bounds.width) }), w > 0 {
+                (changed, box) = differ(now, last, width: w, skip: mask + lastMask)
                 same = changed <= allowed ? same + 1 : 0
             } else {
                 same = 0
             }
             last = now
-            if same >= stable { return ["settled": true, "frames": frames, "changed": changed] }
+            lastMask = mask
+            if same >= stable { return ["settled": true, "frames": frames, "changed": changed, "box": rect(box)] }
         }
-        return ["settled": false, "frames": frames, "changed": changed]
+        return ["settled": false, "frames": frames, "changed": changed, "box": rect(box)]
+    }
+
+    static func rect(_ r: CGRect) -> Any {
+        r.isNull ? NSNull() : [r.minX, r.minY, r.width, r.height].map { Double($0) }
+    }
+
+    /// What `settle` leaves out: element filters (`ignore`) and rects (`ignoreRects`), in points (= pixels at 1×).
+    struct Ignore {
+        var filters: [Args] = []
+        var fixed: [CGRect] = []
+        var pad: CGFloat = 6
+
+        init(_ a: Args) {
+            if let one = a["ignore"] as? Args { filters = [one] } else { filters = a["ignore"] as? [Args] ?? [] }
+            fixed = (a["ignoreRects"] as? [[Double]] ?? []).compactMap { r in
+                r.count == 4 ? CGRect(x: r[0], y: r[1], width: r[2], height: r[3]) : nil
+            }
+            pad = CGFloat(a["ignorePad"] as? Double ?? 6)
+        }
+
+        func rects() -> [CGRect] {
+            guard !filters.isEmpty else { return fixed }
+            return fixed + filters.flatMap { f in
+                RuntimeCLI.elements(matching: f).map(\.frame)
+                    .filter { $0.minX.isFinite && $0.minY.isFinite && !$0.isEmpty }
+                    .map { $0.insetBy(dx: -pad, dy: -pad) }
+            }
+        }
+    }
+
+    /// Pixels (RGB) that differ between two frames of `width` columns, outside `skip`, and the box around them.
+    private static func differ(_ a: [UInt8], _ b: [UInt8], width: Int, skip: [CGRect]) -> (Int, CGRect) {
+        if a == b { return (0, .null) }
+        let height = a.count / 4 / width
+        var masked = [Bool](repeating: false, count: skip.isEmpty ? 0 : width * height)
+        for r in skip {
+            let x0 = max(0, Int(r.minX.rounded(.down))), x1 = min(width, Int(r.maxX.rounded(.up)))
+            let y0 = max(0, Int(r.minY.rounded(.down))), y1 = min(height, Int(r.maxY.rounded(.up)))
+            guard x0 < x1, y0 < y1 else { continue }
+            for y in y0..<y1 { for x in x0..<x1 { masked[y * width + x] = true } }
+        }
+        var n = 0, minX = width, minY = height, maxX = -1, maxY = -1
+        var i = 0, p = 0
+        while i < a.count {
+            if a[i] != b[i] || a[i + 1] != b[i + 1] || a[i + 2] != b[i + 2], masked.isEmpty || !masked[p] {
+                n += 1
+                let x = p % width, y = p / width
+                minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+            }
+            i += 4
+            p += 1
+        }
+        return (n, n == 0 ? .null : CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1))
     }
 }
 #endif

@@ -44,7 +44,7 @@ if strings "$APP/Jarvis" | grep -qxE '(pairURL|openSession|showNewChat|openAssis
   echo "DEBUG switches found in the Release binary" >&2; exit 1
 fi
 # Nor the runtime CLI (apple/Jarvis/Debug/, docs/runtime-cli.md): its switches, its type, the accessibility hook it turns on.
-if strings "$APP/Jarvis" | grep -qE 'runtimeCLI|RuntimeCLI|_AXSSetAutomationEnabled'; then
+if strings "$APP/Jarvis" | grep -qE 'runtimeCLI|RuntimeCLI|_AXSSet(Automation|ReduceMotion)Enabled'; then
   echo "the runtime CLI found in the Release binary" >&2; exit 1
 fi
 

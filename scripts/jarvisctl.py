@@ -4,6 +4,8 @@
   jarvisctl.py launch --hub http://127.0.0.1:18760 [-- <more launch args>]   terminate, launch with the channel, wait
   jarvisctl.py ping | state
   jarvisctl.py settle [--timeout s] [--pixels n] [--stable n]                 wait until the screen stops changing
+               [--ignore-id prefix …] [--ignore-label-contains t …] [--ignore-rect x,y,w,h …]   … except there
+  jarvisctl.py freeze [--off] [--layers strip|pause|none] [--keep-motion]     hold still what animates (Reduce Motion…)
   jarvisctl.py online [--timeout s]                                           wait for the hub's live connection
   jarvisctl.py idle [--timeout s]                                             no request to the mock hub for 0.8 s
   jarvisctl.py screenshot <out.png> [--no-settle]                             settle, then `simctl io screenshot`
@@ -212,6 +214,13 @@ def filters(a):
     return {k: v for k, v in f.items() if v is not None}
 
 
+def ignored(a):
+    """settle's --ignore-id / --ignore-label-contains / --ignore-rect, as the app's `ignore` and `ignoreRects`."""
+    ignore = [{"idPrefix": p} for p in a.ignore_id] + [{"labelContains": t} for t in a.ignore_label_contains]
+    rects = [[float(v) for v in r.split(",")] for r in a.ignore_rect]
+    return {"ignore": ignore or None, "ignoreRects": rects or None}
+
+
 def value(v):
     """key=value from the command line: numbers and YES/NO as JSON, the rest as text."""
     if v in ("YES", "true"):
@@ -251,6 +260,12 @@ def main(argv):
         p.add_argument(f)
     p.add_argument("--index", type=int)
     p.add_argument("--visible", action="store_true")
+    p.add_argument("--ignore-id", action="append", default=[])
+    p.add_argument("--ignore-label-contains", action="append", default=[])
+    p.add_argument("--ignore-rect", action="append", default=[])
+    p.add_argument("--off", action="store_true")
+    p.add_argument("--layers")
+    p.add_argument("--keep-motion", action="store_true")
     p.add_argument("--gone", action="store_true")
     p.add_argument("--hid", action="store_true")
     p.add_argument("--text")
@@ -269,7 +284,9 @@ def main(argv):
     elif a.cmd in ("ping", "state"):
         r = c.call(a.cmd)
     elif a.cmd == "settle":
-        r = c.call("settle", timeout=a.timeout, pixels=a.pixels, stable=a.stable)
+        r = c.call("settle", timeout=a.timeout, pixels=a.pixels, stable=a.stable, **ignored(a))
+    elif a.cmd == "freeze":
+        r = c.call("freeze", on=not a.off, layers=a.layers, reduceMotion=False if a.keep_motion else None)
     elif a.cmd == "idle":
         r = c.idle(timeout=a.timeout or 10)
     elif a.cmd == "online":

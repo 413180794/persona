@@ -4,6 +4,9 @@ every combo (<style>:<light|dark>) × scene: set the style, the appearance, go t
 resets it, as a launch would), wait for the screen to settle, `simctl io screenshot`. Same file names as id-old.sh; the time per shot in <out dir>/times.tsv.
 
   JARVISCTL_UDID=<udid> id-cli.py out/cli glass:light glass:dark …    (mock hub on 127.0.0.1:18897, as id-old.sh)
+
+FREEZE=1: `freeze` before each shot (Reduce Motion, running animations removed: the same pixels run after run; a
+needs-you dot is then drawn still, so compare such shots with shots taken the same way, not with id-old.sh's).
 """
 import os
 import sys
@@ -40,6 +43,7 @@ def main():
     # Warm up as id-old.sh does (paired, sessions loaded): the Agents list, then wait for it to settle.
     c.navigate(scene="agents")
     c.call("settle", timeout=20, stable=6)
+    freeze = os.environ.get("FREEZE") == "1"
     times = []
     ap = None
     for combo in combos:
@@ -53,13 +57,19 @@ def main():
             c.call("online", timeout=15)
             flags = {"openWork": False}
             flags.update(nav.get("defaults", {}))
+            if freeze:
+                c.call("freeze", on=False)  # a transition must end: navigate first, freeze before the shot
             c.navigate(**dict(nav, defaults=flags, coldChats=os.environ.get("COLD", "1") == "1"))
             c.idle()  # the page's data in (machines' metrics come after the page)
             time.sleep(max(0.0, AT_LEAST.get(name, 0) - (time.time() - s)))
+            if freeze:
+                c.call("freeze")
             r = c.call("settle", timeout=10, stable=int(os.environ.get("STABLE", "4")), every=150, pixels=int(os.environ.get("PIXELS", "600")))
             f = f"{style}-{appear}-{name}.png"
             c.screenshot(os.path.join(out, f), settle=False)
             times.append((f, time.time() - s, r.get("settled"), r.get("frames")))
+    if freeze:
+        c.call("freeze", on=False)  # the simulator's Reduce Motion back as it was
     with open(os.path.join(out, "times.tsv"), "w") as fh:
         for f, t, ok, n in times:
             fh.write(f"{f}\t{t:.2f}\t{ok}\t{n}\n")

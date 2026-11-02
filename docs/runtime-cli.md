@@ -30,7 +30,8 @@ scripts/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命�
 |---|---|---|
 | `ping` | | `pong`、`pid` |
 | `state` | | `tab`、`openChat`、`assistant`、`visibleSession`、`settingsOpen`、`settingsDepth`、`style`、`color`、`appearance`、`connection`、`paired` |
-| `settle` | `timeout`（8 s）、`every`（150 ms）、`stable`（3 次）、`pixels`（0） | `settled`、`frames`、`changed` |
+| `settle` | `timeout`（8 s）、`every`（150 ms）、`stable`（3 次）、`pixels`（0）、`ignore`（元素过滤，一组或几组，它们的 frame 不比较）、`ignorePad`（6 pt）、`ignoreRects`（`[[x, y, w, h]]`，pt） | `settled`、`frames`、`changed`、`box`（最后两帧还不一样的地方） |
+| `freeze` | `on`（默认 true，false 恢复）、`reduceMotion`（默认 true）、`layers`（strip / pause / none，默认 strip） | `frozen`、`reduceMotion`、`paused`；见「一直在动的画面」 |
 | `online` | `timeout`（15 s） | `nudged`（是否主动重连过）；超时报错并带当前状态 |
 | `reset` | `coldChats`（内存里不留对话，和启动后一样从磁盘缓存再到 hub 重新加载）、`dropChatCache`（磁盘缓存也清掉，= `-openChatsFresh YES`） | 新的界面树，路由不动，和刚启动一样。回答同 `state` |
 | `tree` | 元素过滤（下面） | `elements`：每个无障碍元素的 `id`（accessibilityIdentifier）、`label`、`value`、`traits`、`frame`（屏幕坐标，pt）、`visible` |
@@ -67,10 +68,34 @@ scripts/jarvisctl.py idle && scripts/jarvisctl.py screenshot out.png
 `idle`（只在 `jarvisctl.py` 里）：等 mock hub（`scripts/mock_hub.py` 在 `/mock/hits` 数每个 GET）0.8 s 没有新请求。
 页面还在等数据时（机器页的指标）画面是静止的，`settle` 会以为好了，先 `idle` 再 `settle`。
 
+## 一直在动的画面
+
+`settle` 等“连续几帧不变”，有的页面自己停不下来。2026-11-02 实测（`settle --pixels 0`，4 s，液态玻璃和 BeautifulUI 各一遍）：
+
+| 页面 | 一直在动的是什么 | 怎么办 |
+|---|---|---|
+| Agents 列表 | “需要你”的圆点在呼吸（`StatusDot`，TimelineView） | `freeze`：打开“减弱动态效果”，圆点不动 |
+| BeautifulUI 的对话 | 尊重减弱动态效果的动画 | `freeze` |
+| 液态玻璃的对话 | 工作中的步骤里的转圈（UIKit），透过玻璃顶栏也在变 | `freeze`（`layers` strip / pause；减弱动态效果管不到） |
+| 机器页 | 实时指标隔几秒来一次，数字和曲线跟着变 | `settle --ignore-label-contains 在线、`（机器卡片）或 `--ignore-rect` |
+| 行里的“N 分钟前” | TimelineView 每 30 s 重画 | 一张图里不动；几遍之间不同，身份对比里算噪声 |
+
+- `freeze` 打开模拟器的“减弱动态效果”（私有的 `_AXSSetReduceMotionEnabled`，和打开无障碍树的开关在同一个库里），尊重它的视图
+  画成静止的样子；`layers` 管减弱动态效果管不到的 Core Animation 动画：`strip`（默认）把正在跑的动画一次拿掉，图层直接到终点，
+  几遍之间像素一样；`pause` 停住窗口的动画时钟，停在哪一相不一定，而且之后开始的转场不会结束，**导航前先 `freeze --off`**。
+  `freeze --off` 把减弱动态效果改回原样。
+- 打开减弱动态效果后“需要你”的圆点画法不同（没有外圈），所以 freeze 拍的图只和同样 freeze 拍的比，不和 `id-old.sh` 比。
+- 实测（每种 3 遍，两两比，任一通道差超过 2 算不同）：液态玻璃的对话不 freeze 时 4 s 内停不下、freeze 后 3/3 停下且 0 差；
+  BeautifulUI 的对话不 freeze 3 遍都停不下（几遍之间差 2026–8578 px），freeze 后 3/3 停下、只差顶栏的时间（748–1292 px）；
+  Agents 列表剩下的差别只在“N 分钟前”；机器页剩下的是实时指标。机器页（`scenario machines`）要求 6 s 不变：不忽略时要 55–69 帧
+  （中间有指标进来），`--ignore-label-contains 在线、` 时 41 帧（最少）。
+- `settle` 回答里的 `box` 是最后两帧还不一样的地方（pt），用来找是什么在动。
+
 ## 一次启动截完所有场景（身份对比）
 
 `scripts/jarvisctl-scenes/id-cli.py <输出目录> glass:light beautiful:dark …`：启动一次，然后每个“风格 × 深浅 × 场景”
-（`scenes-id1.txt` 的 7 个）`online` → `set-style` → `navigate --cold-chats` → `idle` → `settle` → `simctl io screenshot`。
+（`scenes-id1.txt` 的 7 个）`online` → `set-style` → `navigate --cold-chats` → `idle` → `settle` → `simctl io screenshot`
+（`FREEZE=1`：settle 前先 `freeze`，见上一节）。
 `id-old.sh` 是原来的拍法（每张重启 + 启动开关 + 固定 sleep）。`id-judge.py --old <目录>… --cli <目录>…` 判断两种拍法
 截的是否一样：规则同 `tools/shotdiff.py`（任一通道差超过 2 算不同，噪声向外扩 6 px），噪声取每种方法自己几遍之间的所有两两差
 （一直在动的地方：工作中的圆点、机器曲线，拍的遍数越多覆盖的相位越全）。要 numpy 和 Pillow。
