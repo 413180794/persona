@@ -470,7 +470,7 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 | C1 ✓ | 框架（#414）：`connector` 包（`Connector` 和可选能力 `Accounts` / `ReadTools` / `Actions` / `Events` / `Hosts`、`Registry`、闸门 `connector_gate`）；hub 持有 Registry，`GET /api/v1/connectors`、特性 `connectors`，连接器的工具只给助手、按前缀分发，写操作过闸门、默认走手机卡片；`Events` 踢收件箱 / 知识库。`Inbox`、`StreamSource`、凭据、`Poller` 随第一个用到它们的连接器（G1–G4）一起加 | 不注册连接器时 MCP golden 逐字节不变；假连接器的单元测试（工具只来自 `ok` 的、写操作等卡片、闸门 allow / deny、Watch 退避重启） |
 | M0–M6 | 迁移（第三节） | 每步：现有测试 + golden 逐字节 + 合成对照 + 真实数据对照一致；部署后一天日志同量级 |
 | G1 ✓ | GitHub（#421）：`credential.gh_token` RPC、`from_machine` 取 token（内存）、~~粘贴备选~~（先不做，等真有人不用 gh 时再加）、状态、`/api/v1/connectors`、设置页的 GitHub 行 | 设置页显示「来自 <机器> 的 gh 登录 · 账号」；那台机器离线时用内存里的、hub 重启后离线报「未授权（<机器> 离线）」、连上自动恢复；401 重新取一次；旧 node 报太旧；token 不出现在数据库、日志、响应、助手环境里（grep 验证）；粘贴假 token 报错；设置页深浅色截图 |
-| G2 | 只读工具 `github_search/read/diff/checks` | golden；对 mock GitHub（合成 JSON）的单元测试；用户的真 token 在 hub 上读一个自己的 PR（只看结果条数和截断是否生效） |
+| G2 ✓ | 只读工具 `github_search/read/diff/checks` | golden；对 mock GitHub（合成 JSON）的单元测试；用户的真 token 在 hub 上读一个自己的 PR（只看结果条数和截断是否生效） |
 | G3 | 通知轮询 + 收件箱（四种情形）+ `?sources=all` + App 的通用行和详情 | 合成通知的单元测试覆盖每种 `reason`、并入 / 另开、`done_by`；304 和 `X-Poll-Interval` 被遵守（测试里的假服务器计数）；旧 App 列表不变；新 App 截图 |
 | G4 | 知识库：PR / issue 会话、`remotes` 对项目、链接成条目 | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
 | G5 | 写：`github_comment`、`github_review` 过闸门；收件箱「发送」= 评论 | 闸门测试（confirm / allow / deny）；用户在自己的测试仓库实测一次评论（卡片截图里只有合成内容的测试仓库） |

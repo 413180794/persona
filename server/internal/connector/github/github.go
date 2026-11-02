@@ -182,9 +182,17 @@ func (c *Connector) currentToken(ctx context.Context, refresh bool) (string, err
 	return fresh, nil
 }
 
-// Get reads path of the REST API into out (when not nil), refetching the token once if GitHub refuses it.
+// Get reads path of the REST API into out (JSON; a *[]byte takes the body as it is; nil drops it), refetching the
+// token once if GitHub refuses it.
 func (c *Connector) Get(ctx context.Context, path string, out any) (http.Header, error) {
 	return c.request(ctx, http.MethodGet, path, nil, out)
+}
+
+// raw reads path as text (a job's log).
+func (c *Connector) raw(ctx context.Context, path string) (string, error) {
+	var b []byte
+	_, err := c.request(ctx, http.MethodGet, path, nil, &b)
+	return string(b), err
 }
 
 func (c *Connector) request(ctx context.Context, method, path string, body []byte, out any) (http.Header, error) {
@@ -206,7 +214,11 @@ func (c *Connector) request(ctx context.Context, method, path string, body []byt
 			continue
 		}
 		defer resp.Body.Close()
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		limit := int64(8 << 20)
+		if _, text := out.(*[]byte); text {
+			limit = 32 << 20 // a job's log, of which the end is kept
+		}
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
 		switch {
 		case resp.StatusCode == http.StatusUnauthorized:
 			return resp.Header, errUnauthorized
@@ -219,7 +231,9 @@ func (c *Connector) request(ctx context.Context, method, path string, body []byt
 			_ = json.Unmarshal(raw, &e)
 			return resp.Header, fmt.Errorf("GitHub %s %s: %d %s", method, path, resp.StatusCode, Scrub(e.Message))
 		}
-		if out != nil {
+		if text, ok := out.(*[]byte); ok {
+			*text = raw
+		} else if out != nil {
 			if err := json.Unmarshal(raw, out); err != nil {
 				return resp.Header, fmt.Errorf("GitHub %s %s: %v", method, path, err)
 			}

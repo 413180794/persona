@@ -598,6 +598,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | `phone_*` | iPhone App | 由 App `register_phone` 声明（通讯录、日历、提醒、位置、健康、照片、剪贴板、设备信息、通知……） |
 | `mail_accounts` / `mail_search` / `mail_read` | hub | 只读 |
 | `mail_send` | hub | 发送前创建 `permission` 交互，手机批准后才发 |
+| `github_search` / `github_read` / `github_diff` / `github_checks` | hub（GitHub 连接器） | 只读，见下一行 |
 | `<连接器 id>_*` | hub（连接器） | 只给助手、只给状态是 `ok` 的连接器。只读工具直接执行；写操作先过 hub.json 的 `connector_gate`，默认创建 `permission` 交互（卡片上写明谁会看到），手机批准后才执行（`server/internal/connector`） |
 
 ## 连接器 API
