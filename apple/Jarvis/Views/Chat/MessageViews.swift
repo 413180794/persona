@@ -420,6 +420,7 @@ struct AssistantText: View, Equatable {
     /// heaviest row there is).
     nonisolated static func == (a: Self, b: Self) -> Bool { a.item == b.item && a.quiet == b.quiet }
     @Environment(\.openFile) private var openFile
+    @Environment(\.rowMemoScope) private var memoScope
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
