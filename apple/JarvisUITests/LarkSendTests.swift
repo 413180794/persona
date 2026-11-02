@@ -122,21 +122,42 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(quotes.firstMatch.exists, "the copy quotes the message too")
     }
 
-    /// What is typed and not sent is still in the box, quote and all, after the app is gone and back (LarkDrafts).
-    /// In 周末徒步群, whose box no other test types into: a draft left by a failed run stays out of their way.
-    @MainActor func testDraftOutlivesTheApp() {
+    /// 周末徒步群, whose box only the draft and send-button tests type into: a draft a failed run left there stays out
+    /// of the other tests' way. That draft goes out first (to the mock), so the box starts empty, unless the test
+    /// opens the chat to find its own draft.
+    @MainActor private func openHikingChat(sendingLeftover: Bool = true) -> XCUIApplication {
+        let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        func open() -> XCUIApplication {
-            let app = XCUIApplication()
-            app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"]
-            app.launchPinned()
-            return app
-        }
-        var app = open()
+        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"]
+        app.launchPinned()
         let target = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "那我也带一个")).firstMatch
         XCTAssertTrue(target.waitForExistence(timeout: 20), "the 周末徒步群 chat did not open")
-        // A draft a failed run left behind goes out first (to the mock), so the box starts empty.
-        if app.buttons["lark.send"].isEnabled { app.buttons["lark.send"].tap() }
+        if sendingLeftover, app.buttons["lark.send"].exists { app.buttons["lark.send"].tap() }
+        return app
+    }
+
+    /// Like Feishu, the send button is only there with something to send; the empty box takes the whole row.
+    @MainActor func testSendButtonComesWithWords() {
+        let app = openHikingChat()
+        let send = app.buttons["lark.send"]
+        let box = app.textFields["lark.box"]
+        XCTAssertTrue(box.waitForExistence(timeout: 5))
+        XCTAssertTrue(send.waitForNonExistence(timeout: 3), "no send button by an empty box")
+        shot(app, "lark-box-empty")
+        box.tap()
+        box.typeText("  ")
+        XCTAssertFalse(send.exists, "spaces alone are nothing to send")
+        box.typeText("周六见")
+        XCTAssertTrue(send.waitForExistence(timeout: 2), "the send button comes with the words")
+        shot(app, "lark-box-words")
+        box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 5))
+        XCTAssertTrue(send.waitForNonExistence(timeout: 2), "and goes with them")
+    }
+
+    /// What is typed and not sent is still in the box, quote and all, after the app is gone and back (LarkDrafts).
+    @MainActor func testDraftOutlivesTheApp() {
+        var app = openHikingChat()
+        let target = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "那我也带一个")).firstMatch
         target.press(forDuration: 1.2)
         XCTAssertTrue(app.buttons["回复"].waitForExistence(timeout: 3), "the long-press menu has 回复")
         app.buttons["回复"].tap()
@@ -148,7 +169,7 @@ final class LarkSendTests: XCTestCase {
         sleep(3) // written a moment after the last keystroke
         app.terminate()
 
-        app = open()
+        app = openHikingChat(sendingLeftover: false)
         let back = app.textFields.matching(NSPredicate(format: "value == %@", text)).firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 20), "the draft is back in the box")
         XCTAssertTrue(app.staticTexts["回复 Mia"].exists, "the quote comes back with it")

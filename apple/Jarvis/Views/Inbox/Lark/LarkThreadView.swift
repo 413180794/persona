@@ -58,7 +58,7 @@ struct LarkThreadView: View {
             }
             .scrollPosition($position)
             .safeAreaInset(edge: .bottom) {
-                LarkComposer(placeholder: "回复话题", text: $text, focused: $boxFocused, sendID: "lark.thread.send", send: send)
+                LarkComposer(placeholder: "回复话题", text: $text, focused: $boxFocused, boxID: "lark.thread.box", sendID: "lark.thread.send", send: send)
             }
             .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
             .onAppear { if text.isEmpty { text = LarkDrafts.shared[.thread(root.id)].text } }

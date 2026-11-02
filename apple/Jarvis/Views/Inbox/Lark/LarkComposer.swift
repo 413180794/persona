@@ -14,14 +14,17 @@ struct LarkReplyHandler {
 }
 
 /// The box under a Feishu chat or thread: the text field and the send button, with the quote bar of the message
-/// being answered above it.
+/// being answered above it. Like Feishu, the send button is only there once there is something to send; until then
+/// the field takes the whole row.
 struct LarkComposer: View {
     var placeholder: String
     @Binding var text: String
     var focused: FocusState<Bool>.Binding
     var replyTo: LarkReplyTo? = nil
     var cancelReply: () -> Void = {}
-    /// Tells the chat's box from a thread sheet's (UI tests; the chat stays behind the sheet).
+    /// Tell the chat's box from a thread sheet's (UI tests; the chat stays behind the sheet). The field's placeholder
+    /// goes once it holds text, so tests find it by its id.
+    var boxID = "lark.box"
     var sendID = "lark.send"
     var send: () -> Void
 
@@ -35,23 +38,32 @@ struct LarkComposer: View {
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(1...5)
                     .focused(focused)
+                    .accessibilityIdentifier(boxID)
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.vertical, Theme.Space.s)
                     .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
-                Button(action: send) {
-                    Image(systemName: Theme.Icon.send).font(Theme.Font.heading)
-                        .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
+                if Self.canSend(text) {
+                    Button(action: send) {
+                        Image(systemName: Theme.Icon.send).font(Theme.Font.heading)
+                            .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
+                    }
+                    .themedButton(prominent: true)
+                    .clipShape(.circle)
+                    .accessibilityLabel("发送")
+                    .accessibilityIdentifier(sendID)
+                    .transition(.scale.combined(with: .opacity))
                 }
-                .themedButton(prominent: true)
-                .clipShape(.circle)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityLabel("发送")
-                .accessibilityIdentifier(sendID)
             }
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.bottom, Theme.Space.s)
         .animation(Theme.Motion.standard, value: replyTo)
+        .animation(Theme.Motion.standard, value: Self.canSend(text))
+    }
+
+    /// Words to send: blank lines and spaces alone are not.
+    static func canSend(_ text: String) -> Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
