@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             AppModel.shared.adopt(cfg)
         }
         let d = UserDefaults.standard
+        PopFrames.startIfAsked()
         // `-openChatsFresh YES`: no chat kept on disk from an earlier run (LiveUpdateTests: churned steps piled up).
         if d.bool(forKey: "openChatsFresh") { ChatCache.removeAll() }
         // `-openAgentsFresh YES`: the Agents list's saved look forgotten (AgentsListTests).

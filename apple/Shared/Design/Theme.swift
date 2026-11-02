@@ -384,6 +384,10 @@ nonisolated enum Theme {
         /// The switch's segments: width of each, and its height.
         static let segmentWidth: CGFloat = 72
         static let switchHeight: CGFloat = 44
+        /// The largest text size the top bars grow with (their buttons, the face, the switch: up to 1.35 ×): larger, the
+        /// bar reached into the search field pulled out under it on Agents, whose room is a line of the system's that
+        /// does not grow with the text (`ShellNavigationClearance`).
+        static let topBarLargestTypeSize: DynamicTypeSize = .xxxLarge
     }
 
     /// The page behind lists and chats.

@@ -151,9 +151,19 @@
   正好在顶栏的按钮下面，两层叠着谁也点不全（TestFlight 70「点击搜索组件直接冲突」）。搜索时不画自画顶栏（`searching` 为 true），让系统的搜索框和「取消」占满那一行；
   这种叠压 XCUITest 的 `exists` 看不出来，要比 frame 是否相交（`ShellSearchTests`）。
 - 搜索未激活、只是下拉展开时，系统导航栏仍只给标准按钮留高，放大一档的外壳按钮和头像的收件箱角标会压住搜索框（2026-11-02；模拟器复现头像 frame 底部 125pt、搜索框顶部 117pt）。
-  `safeAreaPadding` 不会移动 UIKit 的搜索栏；在导航容器外按顶栏的实际字号、按钮高度、角标外伸和设计系统间距预留布局高度（`ShellNavigationClearance`），
-  顶栏 overlay 保持原位置。预留区域必须带页面底色，否则浅色会露出白色横条；搜索激活、推出对话时归还空间，旧布局完全不应用。
+  `safeAreaPadding` 不会移动 UIKit 的搜索栏。让位要做在这一页自己的导航项上：Agents 根页的 `navigationItem.prompt` 放一个空格（`ShellNavigationClearance`），
+  这一页的导航栏高一行（34pt，不随字号变），搜索框和列表跟着往下；搜索激活时去掉，旧布局不加。外壳顶栏的按钮因此在 `Theme.Shell.topBarLargestTypeSize`
+  （xxxLarge，1.35 倍）封顶（`shellTopBarScaled()`），否则辅助功能大字号下头像角标压住搜索框。`subtitleView`（不长高）、两行 prompt（还是一行）都试过，没用。
   `ShellSearchTests` 覆盖小 / 标准 / 大字号的展开、输入、取消、搜索结果返回，深浅色都看截图。
+- **别在导航容器上做按页面开关的让位**（#340，2026-11-02）：先前的做法是导航容器外按 `path.isEmpty` 加 padding，推入对话时拿掉、返回时加回。
+  UINavigationController 在推入 / 返回的转场途中不会重新摆它的导航栏：返回开始时栏还停在对话那一刻的位置（容器 88 + 旧安全区 62 = y 150，应为 98），
+  列表的 inset 跟着错，`navigationBarDrawer` 的搜索框被当成滚到顶而展开（+54），转场结束 0.1–0.6 秒后才重排，整页上弹 52pt，最后停的位置也变了（搜索框开着）。
+  在返回开始那一帧（根页 `viewWillAppear`）就无动画地切、再 `setNeedsLayout` + `layoutIfNeeded` 都一样：容器的 safe area 当帧就对了，栏的 frame 不动。
+  旧布局没有让位，全程不动。规矩：导航容器的 frame 和 safe area 在推入、返回时一律不变（外壳状态行改的是窗口根控制器的 `additionalSafeAreaInsets`，整页一起动），
+  某一页要多的空间放在这一页自己的导航项上，UIKit 会在转场里原生地过渡。`AgentsReturnTests` 用 `probe.agents-scroll` 逐帧量（两种返回 × 搜索框收 / 开 × 两种布局）。
+- 逐帧查「动了一下」：DEBUG `-showPopFrames YES` 每帧把导航栏、搜索栏、列表（大于 300pt 的 collection / scroll view）在窗口里的位置和 inset 变了就打一行 `POPF`，
+  配合 `simctl io recordVideo` 和 `log stream --predicate 'eventMessage CONTAINS "POPF"'`。注意 UIKit 转场动画只改 presentation layer，日志里是 model 值（终点）；
+  SwiftUI 驱动的 frame 动画逐帧都在 model 上。
 
 - 不要写「PrimitiveButtonStyle 里 `Button(configuration).buttonStyle(.glass)`」来包装系统按钮样式：玻璃样式下递归到爆栈，
   打开对话页就崩（崩溃栈全在 Swift 运行时的类型解析里，看不到业务代码）。按风格切样式用 View 扩展在调用处直接选（`.themedButton()`）。

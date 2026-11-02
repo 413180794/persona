@@ -187,6 +187,11 @@ App 端 `apple/Jarvis/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
   - `page`：新外壳里这块在哪一页。两页都建着，测试按它挑。
 - 区域：
   - `agents-list`：`{states, last, asks}`；
+  - `agents-scroll`：Agents 列表顶部的位置，UIKit 每帧读（`AgentsScrollProbe`），窗口坐标：
+    - `now`：现在的位置 `{nav, search, inset, row, container, safe}`，依次是导航栏 y、搜索框高度（收起为 0）、列表顶部 inset、第一行 y、导航容器 y 和顶部 safe area；
+    - `left`：推入别的页之前那一帧的位置；
+    - `back`：最近一次返回的逐帧记录，从返回开始到之后 1 秒，每项 `{min, max}`，`rowStep` 是第一行相邻两帧最大的跳动，`n` 是第几次返回、`frames` 是帧数。
+    - 用法见 `AgentsReturnTests`：返回前后 `row`、`nav`、`search` 都等于 `left`，范围不超过 1pt；`container`、`safe` 不变。
   - `connection`：`{shown, network}`；
   - `chat`：`{key}`，打开的是哪个对话（page 是它所在的页）；
   - `shell`：live 车道，`{strip, selected, tab, position, moving, drawerOpen, chatRoot, workRoot, trace}`。

@@ -145,6 +145,9 @@ struct ChatsView: View {
         SplitNavigation(path: pushing, destinations: AgentsDestinations()) {
             AgentsList(path: $path, spaceAt: $spaceAt, query: $query, searching: $searching,
                        searchedBeforePush: $searchedBeforePush, showNew: $showNew, menuActions: menuActions)
+                // The shell's top bar floats over the navigation bar: this page's own bar makes room for it (not the
+                // navigation container: a chat pushed on it must not move, nor the list on the way back, #340).
+                .background { ShellNavigationClearance(active: shell != nil && !searching) }
                 #if os(macOS)
                 .onAppear { MacShellState.shared.agentsList = menuActions } // 显示 › 全部折叠 / 全部展开
                 #endif
@@ -204,7 +207,6 @@ struct ChatsView: View {
             SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
                              message: "左边列表里点一个 Agent，对话会在这里打开。")
         }
-        .modifier(ShellNavigationClearance(active: shell != nil && path.isEmpty && !searching && searchedBeforePush == nil))
         // While searching the field rises into the bar the shell's floats over: the bar makes way (the field has its
         // own 取消), as a system search takes the navigation bar, and comes back when the search closes (TestFlight 70:
         // the field was drawn under ☰, the switch and 新建会话). A result opened closes the search before the push
@@ -564,6 +566,9 @@ private struct AgentsList: View {
         .navigationBarTitleDisplayMode(.inline)
         .background { SearchCloseProbe(watcher: searchClose) }
         .onAppear { searchClose.foldOnce() } // the search field starts folded away; a pull shows it
+        #if (DEBUG || PERF_SIGNPOST) && os(iOS)
+        .background { if ScreenProbe.enabled { AgentsScrollProbe(page: shell == nil ? nil : "agents") } }
+        #endif
         // The search field folds away as the list scrolls and comes back on a pull (2026-11-01 user request: the
         // always-shown field crowded the top). Safe only because the filter bar is no longer pinned in the safe area
         // on a phone: pinned, it stayed under the folded field (TestFlight 35, ~120 pt of blurred list).
@@ -2032,7 +2037,7 @@ struct AgentsTopBar: View, Equatable {
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.xxs)
-        .shellScaled()
+        .shellTopBarScaled()
         .modifier(ShellBarAtRest()) // ShellMovingBar stands in while the strip slides
     }
 }

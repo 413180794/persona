@@ -267,29 +267,78 @@ extension View {
     /// and the composer grow together and keep their proportions, ChatGPT's roomier scale. The conversation's messages
     /// keep the reading size. 小 / 标准 / 大 and the system's size still apply under it.
     func shellScaled() -> some View { modifier(ShellScaled()) }
+
+    /// A top bar of the shell: a size up like the rest of its chrome, but no larger than
+    /// `Theme.Shell.topBarLargestTypeSize`, so it stays clear of Agents' search field at the accessibility sizes.
+    func shellTopBarScaled() -> some View { dynamicTypeSize(...Theme.Shell.topBarLargestTypeSize).shellScaled() }
 }
 
-/// 为浮动顶栏预留系统导航栏之外的高度；搜索激活时归还空间，让系统搜索框升到顶行。
-struct ShellNavigationClearance: ViewModifier {
-    @Environment(\.dynamicTypeSize) private var typeSize
+/// Room for the shell's floating top bar (`AgentsTopBar`) on a page that keeps the system navigation bar for its search
+/// field (Agents): a blank prompt line on the page's own navigation item, which makes that page's navigation bar taller
+/// by the line, so the search field the bar holds and the list under it start below the top bar. While searching the
+/// line goes, and the field rises into the top row.
+///
+/// The room is the page's, not the navigation container's: it used to be padding around the container, taken away for
+/// a chat pushed on the list and given back on the way back, and UIKit does not lay out its navigation bar again in the
+/// middle of a push or pop. Coming back, the bar sat where it had been for the chat (52 pt low), the list's inset with
+/// it, which unfolded the search field, and everything sprang up once the pop was over (#340). A page's own navigation
+/// item is carried through the transition by UIKit itself; the container keeps its frame and its safe area (which the
+/// shell's status row changes, ShellStatus).
+///
+/// The line's height is UIKit's, the same at every text size; the top bar stops growing at
+/// `Theme.Shell.topBarLargestTypeSize` to stay within it (`needed(at:)`, ShellNavigationClearanceTests).
+struct ShellNavigationClearance: View {
     var active: Bool
 
-    static func height(at size: DynamicTypeSize) -> CGFloat {
-        // 顶栏比正文大一档；头像的收件箱角标还会超出按钮的下沿。系统导航栏只保证一个标准点按区域。
-        let k = Theme.sizeScale(TextSize.large.applied(to: size))
-        let chrome = Theme.Size.tapTarget * k + Theme.Size.badge * k / 2 + Theme.Space.xxs * 2
-        return max(0, chrome + Theme.Space.s - Theme.Size.tapTarget)
+    /// How far below the status bar the search field must start at this text size: the top bar's height (its buttons
+    /// a size up, no larger than the top bars' largest; the inbox mark hanging off the face; the bar's top padding) and
+    /// a step of space. The navigation bar with the prompt line must be at least this tall.
+    static func needed(at size: DynamicTypeSize) -> CGFloat {
+        let all = DynamicTypeSize.allCases
+        let up = all[min((all.firstIndex(of: size) ?? 0) + 1, all.count - 1)]
+        let k = Theme.sizeScale(min(up, Theme.Shell.topBarLargestTypeSize))
+        return Theme.Size.tapTarget * k + Theme.Size.badge * k / 2 + Theme.Space.xxs * 2 + Theme.Space.s
     }
 
-    func body(content: Content) -> some View {
-        // 安全区 padding 只影响列表，不会移动 UIKit 的搜索栏；在导航容器外预留布局空间。
-        content
-            .padding(.top, active ? Self.height(at: typeSize) : 0)
-            .background {
-                if active { Theme.groupedPage.ignoresSafeArea() }
-            }
+    /// The blank prompt line.
+    static let line = " "
+
+    var body: some View {
+        #if os(iOS)
+        PromptLine(active: active)
+        #endif
     }
 }
+
+#if os(iOS)
+private struct PromptLine: UIViewControllerRepresentable {
+    var active: Bool
+
+    func makeUIViewController(context: Context) -> Line { Line() }
+    func updateUIViewController(_ line: Line, context: Context) { line.active = active }
+
+    /// A child of the page's controller (the representable's), which owns the navigation item.
+    final class Line: UIViewController {
+        var active = false { didSet { apply() } }
+
+        override func loadView() {
+            view = UIView()
+            view.isUserInteractionEnabled = false
+        }
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            apply()
+        }
+
+        private func apply() {
+            guard let item = parent?.navigationItem else { return }
+            let prompt = active ? ShellNavigationClearance.line : nil
+            if item.prompt != prompt { item.prompt = prompt }
+        }
+    }
+}
+#endif
 
 /// The text size the app settled on (the system's, moved by 小 / 标准 / 大), set once at the root. `shellScaled` goes one
 /// step up from this, not from the environment's own size: that one is not always what the page has. The drawer's

@@ -234,6 +234,16 @@ Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock
   `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797`。
 - 测试先配对一次、退出，再带要打开的页面启动：配对的 hub 和上次不同时，App 从头开始、停在助手页，`-app.tab`、`-dev.openChat` 都不起作用。
 
+### 进对话再返回不动（`AgentsReturnTests`）
+
+- 体验模式、`-probes YES`，读 `probe.agents-scroll`（`docs/ios-state.md`「探针」）。
+- 新外壳和旧布局各一个用例，每个依次走四趟：搜索框收着 / 拉开 × 点「返回」/ 边缘右滑。
+- 每趟返回的每一帧（从返回开始到之后 1 秒）都要满足：
+  - 第一行、导航栏不动（范围、相邻帧跳动都不超过 1pt），等于离开时的位置；
+  - 搜索框保持离开时的样子（收着还是拉开）；
+  - 导航容器的 y 和顶部 safe area 不变。
+- 两种风格各跑一遍（`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`）。#340：以前新外壳返回时列表先下滑、搜索框自己展开，再上弹 52pt。
+
 ### 真实性与及时性（`ScreenTruthTests`）
 
 屏幕上说的是 hub 的真实状态，而且及时（`docs/ios-state.md`「真实性与及时性」）。
