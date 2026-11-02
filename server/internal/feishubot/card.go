@@ -1,0 +1,307 @@
+package feishubot
+
+import (
+	"bytes"
+	"encoding/json"
+	"regexp"
+	"strings"
+)
+
+// Card is a message card (card JSON 2.0: Markdown with headings, tables and code blocks; Feishu 7.20 and later).
+// Buttons carry a value that comes back in the card.action.trigger callback (CardAction.Action.Value); buttons inside
+// a form submit it too (CardAction.Action.FormValue). 2.0 rejects unknown fields, so only documented ones are written.
+type Card struct {
+	Schema string         `json:"schema"`
+	Config map[string]any `json:"config"`
+	Header *cardHeader    `json:"header,omitempty"`
+	Body   cardBody       `json:"body"`
+}
+
+type cardHeader struct {
+	Title    plain  `json:"title"`
+	Template string `json:"template,omitempty"`
+}
+
+type cardBody struct {
+	Elements []any `json:"elements"`
+}
+
+type plain struct {
+	Tag     string `json:"tag"`
+	Content string `json:"content"`
+}
+
+func text(s string) plain { return plain{Tag: "plain_text", Content: s} }
+
+// Header colors.
+const (
+	Blue   = "blue"
+	Green  = "green"
+	Orange = "orange"
+	Red    = "red"
+	Grey   = "grey"
+	Purple = "purple"
+	Wathet = "wathet"
+)
+
+// NewCard starts a card; an empty title leaves the header out. summary is what the chat list shows for it.
+func NewCard(title, template, summary string) *Card {
+	cfg := map[string]any{"update_multi": true}
+	if s := strings.TrimSpace(summary); s != "" {
+		cfg["summary"] = map[string]any{"content": clipRunes(oneLine(s), 60)}
+	}
+	c := &Card{Schema: "2.0", Config: cfg, Body: cardBody{Elements: []any{}}}
+	if title != "" {
+		c.Header = &cardHeader{Title: text(title), Template: template}
+	}
+	return c
+}
+
+// Markdown adds a block of card Markdown (CardMarkdown for a model's answer, EscapeMarkdown for anything typed).
+func (c *Card) Markdown(s string) *Card {
+	if strings.TrimSpace(s) == "" {
+		return c
+	}
+	c.Body.Elements = append(c.Body.Elements, map[string]any{"tag": "markdown", "content": s})
+	return c
+}
+
+// Note adds a line of small grey text.
+func (c *Card) Note(s string) *Card {
+	if s == "" {
+		return c
+	}
+	c.Body.Elements = append(c.Body.Elements, map[string]any{"tag": "div",
+		"text": map[string]any{"tag": "plain_text", "content": s, "text_size": "notation", "text_color": "grey"}})
+	return c
+}
+
+func (c *Card) HR() *Card {
+	c.Body.Elements = append(c.Body.Elements, map[string]any{"tag": "hr"})
+	return c
+}
+
+// Button is one button of a card.
+type Button map[string]any
+
+// Button styles.
+const (
+	Primary = "primary"
+	Default = "default"
+	Danger  = "danger"
+)
+
+// Btn is a button that calls back with value.
+func Btn(label, style string, value map[string]any) Button {
+	return Button{"tag": "button", "text": text(label), "type": style, "behaviors": []any{map[string]any{"type": "callback", "value": value}}}
+}
+
+// Submit is a form's button: it calls back with value and the form's fields. name is unique in the card.
+func Submit(label, style, name string, value map[string]any) Button {
+	b := Btn(label, style, value)
+	b["form_action_type"], b["name"] = "submit", name
+	return b
+}
+
+// LinkBtn opens a page (http(s): what card links are documented to take).
+func LinkBtn(label, url string) Button {
+	open := map[string]any{"type": "open_url", "default_url": url, "pc_url": url, "android_url": url, "ios_url": url}
+	return Button{"tag": "button", "text": text(label), "type": Default, "behaviors": []any{open}}
+}
+
+// buttonRow lays buttons side by side, wrapping onto more lines on a narrow screen.
+func buttonRow(bs []Button) map[string]any {
+	cols := make([]any, len(bs))
+	for i, b := range bs {
+		cols[i] = map[string]any{"tag": "column", "width": "auto", "elements": []any{b}}
+	}
+	return map[string]any{"tag": "column_set", "flex_mode": "flow", "horizontal_spacing": "8px", "columns": cols}
+}
+
+// Buttons adds a row of buttons.
+func (c *Card) Buttons(bs ...Button) *Card {
+	if len(bs) == 0 {
+		return c
+	}
+	c.Body.Elements = append(c.Body.Elements, buttonRow(bs))
+	return c
+}
+
+// Form adds a form: its fields (Input, Select, MarkdownBlock) and the submit buttons under them.
+func (c *Card) Form(name string, fields []any, submit ...Button) *Card {
+	els := append([]any{}, fields...)
+	if len(submit) > 0 {
+		els = append(els, buttonRow(submit))
+	}
+	c.Body.Elements = append(c.Body.Elements, map[string]any{"tag": "form", "name": name, "elements": els})
+	return c
+}
+
+// Input is a text field of a form; multiline for longer answers.
+func Input(name, label, placeholder string, multiline bool) map[string]any {
+	m := map[string]any{"tag": "input", "name": name, "placeholder": text(placeholder), "width": "fill", "max_length": 1000}
+	if label != "" {
+		m["label"], m["label_position"] = text(label), "top"
+	}
+	if multiline {
+		m["input_type"], m["rows"] = "multiline_text", 2
+	}
+	return m
+}
+
+// Option is one choice of a Select: what it shows and the value it submits.
+type Option struct{ Label, Value string }
+
+// Select is a picker of a form; multi lets several be picked (their values come back as a list).
+func Select(name, placeholder string, options []Option, multi bool) map[string]any {
+	tag := "select_static"
+	if multi {
+		tag = "multi_select_static"
+	}
+	opts := make([]any, len(options))
+	for i, o := range options {
+		opts[i] = map[string]any{"text": text(o.Label), "value": o.Value}
+	}
+	return map[string]any{"tag": tag, "name": name, "placeholder": text(placeholder), "options": opts, "width": "fill"}
+}
+
+// MarkdownBlock is a Markdown block inside a form.
+func MarkdownBlock(s string) map[string]any { return map[string]any{"tag": "markdown", "content": s} }
+
+// JSON is the card as message content. HTML characters stay as they are: a card's limit is in bytes.
+func (c *Card) JSON() string {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(c)
+	return strings.TrimSuffix(b.String(), "\n")
+}
+
+// Raw is the card as a callback's new card (CardResponse.Card).
+func (c *Card) Raw() *CardPayload { return &CardPayload{Type: "raw", Data: c} }
+
+// --- Markdown ---
+
+var (
+	fenceRe  = regexp.MustCompile("(?s)```.*?(?:```|$)")
+	inlineRe = regexp.MustCompile("`[^`\n]+`")
+)
+
+// CardMarkdown turns GitHub Markdown (a model's answer) into what a card shows as written: outside code, "<" is
+// escaped, since cards read <at>, <font>, <link>… as their own tags (and drop what they do not know).
+func CardMarkdown(s string) string {
+	var b strings.Builder
+	last := 0
+	for _, loc := range fenceRe.FindAllStringIndex(s, -1) {
+		b.WriteString(cardProse(s[last:loc[0]]))
+		b.WriteString(s[loc[0]:loc[1]])
+		last = loc[1]
+	}
+	b.WriteString(cardProse(s[last:]))
+	return b.String()
+}
+
+func cardProse(s string) string {
+	var b strings.Builder
+	last := 0
+	for _, loc := range inlineRe.FindAllStringIndex(s, -1) {
+		b.WriteString(strings.ReplaceAll(s[last:loc[0]], "<", "&#60;"))
+		b.WriteString(s[loc[0]:loc[1]])
+		last = loc[1]
+	}
+	b.WriteString(strings.ReplaceAll(s[last:], "<", "&#60;"))
+	return b.String()
+}
+
+var mdEscaper = strings.NewReplacer("\\", "&#92;", "*", "&#42;", "_", "&#95;", "`", "&#96;", "[", "&#91;", "]", "&#93;",
+	"~", "&sim;", "<", "&#60;", ">", "&#62;", "#", "&#35;", "|", "&#124;")
+
+// EscapeMarkdown makes text show as it is in a card's Markdown (names, titles, what a user typed).
+func EscapeMarkdown(s string) string { return mdEscaper.Replace(s) }
+
+// Code puts text in an inline code span (backticks in it become quotes: a span cannot hold them).
+func Code(s string) string {
+	s = strings.ReplaceAll(oneLine(s), "`", "'")
+	if s == "" {
+		return ""
+	}
+	return "`" + s + "`"
+}
+
+// Split cuts long Markdown into pieces of at most n runes, at line breaks where it can and never inside a code
+// block without closing and reopening it.
+func Split(s string, n int) []string {
+	if len([]rune(s)) <= n {
+		return []string{s}
+	}
+	var out []string
+	var cur strings.Builder
+	curLen := 0
+	fence := ""
+	flush := func() {
+		if curLen == 0 {
+			return
+		}
+		piece := cur.String()
+		if fence != "" {
+			piece = strings.TrimRight(piece, "\n") + "\n```"
+		}
+		out = append(out, strings.TrimRight(piece, "\n"))
+		cur.Reset()
+		curLen = 0
+		if fence != "" {
+			cur.WriteString(fence + "\n")
+			curLen = len([]rune(fence)) + 1
+		}
+	}
+	room := n - 8 // what a closing fence takes
+	for _, line := range strings.SplitAfter(s, "\n") {
+		runes := []rune(line)
+		if curLen+len(runes) > room {
+			flush()
+		}
+		for curLen+len(runes) > room { // one line longer than a piece: cut it
+			cut := room - curLen
+			cur.WriteString(string(runes[:cut]))
+			curLen += cut
+			runes = runes[cut:]
+			flush()
+		}
+		cur.WriteString(string(runes))
+		curLen += len(runes)
+		if t := strings.TrimSpace(string(runes)); strings.HasPrefix(t, "```") {
+			if fence == "" {
+				fence = string([]rune(t)[:min(len([]rune(t)), 20)]) // reopened on every piece: keep it short
+			} else {
+				fence = ""
+			}
+		}
+	}
+	if curLen > 0 {
+		fence = ""
+		out = append(out, strings.TrimRight(cur.String(), "\n"))
+	}
+	return out
+}
+
+// PostMarkdown is a rich-text message whose one paragraph is Markdown: what is sent when a card is refused.
+func PostMarkdown(md string) string {
+	b, _ := json.Marshal(map[string]any{"zh_cn": map[string]any{"content": [][]map[string]string{{{"tag": "md", "text": md}}}}})
+	return string(b)
+}
+
+// TextContent is a plain text message.
+func TextContent(s string) string {
+	b, _ := json.Marshal(map[string]string{"text": s})
+	return string(b)
+}
+
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+func clipRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
+}

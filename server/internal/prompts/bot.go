@@ -1,0 +1,19 @@
+package prompts
+
+// BotMessage is a message the user sent the Feishu bot, as it goes into a conversation (bot/message): for a Jarvis
+// conversation a note that the answer goes back to Feishu; the message it quotes, a forwarded chat, and the paths of
+// the files it carried, saved on the machine the conversation runs on.
+type BotMessage struct {
+	Jarvis  bool   // a Jarvis conversation (not a coding agent): add the note about answering in Feishu
+	Owner   string // "" is 用户
+	Text    string
+	Quote   *BotQuote
+	Forward string // the forwarded messages, one line each
+	Files   []string
+}
+
+type BotQuote struct {
+	Who, Text string
+}
+
+func RenderBotMessage(m BotMessage) string { return render("bot/message", m) }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 // 设置 › 连接器 (2026-11-01): where Jarvis' data comes from and acts — this device's data (phone_* tools), the mail
-// accounts, 飞书 (the hub's lark-connector). Mail used to be managed from the inbox's ⋯ menu, this device's data was 手机数据.
+// accounts, 飞书 (the hub's lark-connector), and the 飞书机器人 the user talks to Jarvis through (FeishuBotView). Mail used to be managed from the inbox's ⋯ menu, this device's data was 手机数据.
 
 /// What a connector is called and says in the settings list.
 enum ConnectorText {
@@ -115,6 +115,7 @@ struct ConnectorsSection: View {
     @State private var accounts: [MailAccount]?
     @State private var lark: LarkStatus?
     @State private var hubConnectors: [HubConnector] = []
+    @State private var bot: FeishuBotStatus?
 
     var body: some View {
         Section {
@@ -177,6 +178,17 @@ struct ConnectorsSection: View {
                         }
                     }
                 }
+                NavigationLink(value: SettingsPage.feishuBot) {
+                    if AppStyle.current.usesBeautifulUI {
+                        SettingsRow(title: "飞书机器人", symbol: Theme.Icon.chatBot, tint: Theme.accent, value: FeishuBotModel.summary(bot))
+                    } else {
+                        LabeledContent {
+                            Text(FeishuBotModel.summary(bot)).lineLimit(1)
+                        } label: {
+                            Label("飞书机器人", systemImage: Theme.Icon.chatBot)
+                        }
+                    }
+                }
             }
             .bareListRow()
         } header: {
@@ -193,10 +205,12 @@ struct ConnectorsSection: View {
         async let l = try? api.larkStatus()
         // An older hub has no connectors (feature "connectors"): its list stays as it was.
         async let c = model.hubFeatures.contains("connectors") ? try? api.connectors() : nil
-        let (accs, st, list) = await (a, l, c)
+        async let b = try? api.feishuBot()
+        let (accs, st, list, bs) = await (a, l, c, b)
         if let accs { accounts = accs }
         if let st { lark = st }
         if let list { hubConnectors = list }
+        if let bs { bot = bs }
     }
 }
 

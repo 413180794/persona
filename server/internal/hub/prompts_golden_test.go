@@ -24,6 +24,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -542,4 +543,12 @@ func TestGoldenTranslateMail(t *testing.T) {
 func TestGoldenRelay(t *testing.T) {
 	golden(t, "relay", relayText(relayMsg{From: "b2e4d6f8-0000-4000-8000-000000000002", FromTitle: `1101 | 研究 | "示例"<主题>`,
 		Tool: "conversation_send", Text: "示例消息：把结果整理一下", Hop: 2}))
+}
+
+func TestGoldenBotMessage(t *testing.T) {
+	golden(t, "bot_message.jarvis", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Owner: "示例用户", Text: "今天有什么会？",
+		Quote: &prompts.BotQuote{Who: "Jarvis", Text: "上午 10 点有周会。"}}))
+	golden(t, "bot_message.agent_files", prompts.RenderBotMessage(prompts.BotMessage{Text: "看下这个日志",
+		Forward: "11-02 10:00 张三：构建挂了\n11-02 10:01 李四：我看下", Files: []string{"/tmp/jarvis-uploads/build.log"}}))
+	golden(t, "bot_message.only_files", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Files: []string{"/tmp/a.pdf", "/tmp/b.png"}}))
 }

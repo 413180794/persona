@@ -1,5 +1,5 @@
 // Package prompts holds every prompt jarvisd writes for a model: one file per prompt under a directory per scene
-// (assistant/, lark/, inbox/, kb/, tools/, shared/), Go text/template syntax, embedded in the binary. Callers pass
+// (assistant/, bot/, lark/, inbox/, kb/, tools/, shared/), Go text/template syntax, embedded in the binary. Callers pass
 // data (machines, the owner's name, collected context…) to a typed render function here; no prompt text is put
 // together with fmt or + anywhere else. See docs/prompts.md.
 //
@@ -20,7 +20,7 @@ import (
 	"text/template"
 )
 
-//go:embed assistant lark inbox kb tools shared mcp voice
+//go:embed assistant bot lark inbox kb tools shared mcp voice
 var files embed.FS
 
 var tmpl = parse()

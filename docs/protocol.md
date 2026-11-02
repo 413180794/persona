@@ -682,6 +682,10 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 `label` 是行上的标签，`url` 在 App 内打开，`open_url` 交给系统打开（`sms:` 这类），`reply_to` 说回复会发到哪、谁能看到，`can_reply` 为假时不能回复（CI 失败）。
 列表变化时 WebSocket 推 `{"type":"inbox"}`（不带内容，App 自己拉）。
 
+## 飞书机器人
+
+`/api/v1/bots/feishu`（读状态 / 改凭证、开关和功能）、`…/pair`（配对码）、`…/owner`（DELETE 解除配对）、`…/test`（测试消息），字段见 `docs/bots.md`「配置和接口」。
+
 ## 飞书 API（lark-connector）
 
 hub 经 hub 机器上 lark-connector 的 agent 接口（`/agent/v1`，token 从容器环境变量读）代理飞书数据，见 `server/internal/lark`。

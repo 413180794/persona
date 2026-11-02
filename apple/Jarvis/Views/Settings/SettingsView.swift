@@ -213,6 +213,7 @@ struct SettingsView: View {
             if d.bool(forKey: "openMessagesChats") || d.string(forKey: "openMessagesChat") != nil { p.append(MessagesChatsRoute()) }
             if let id = d.string(forKey: "openMessagesChat") { p.append(MessagesThreadRoute(id: id, name: "")) }
         }
+        else if d.bool(forKey: "openConnectorBot") { p.append(SettingsPage.feishuBot) }
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
         else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | icon | layout
@@ -262,7 +263,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case persona, themeColor, style, appIcon, layout, assistant, claude, codex, devices, phoneData, mail, feishu, notifications, storage, translation, modelConfiguration
+    case persona, themeColor, style, appIcon, layout, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
     case hub, skills
     /// A connector of the hub's by its id (GET /api/v1/connectors): GitHub…
     case connector(String)
@@ -309,6 +310,7 @@ private struct SettingsDestinations: ViewModifier {
         case .feishu: FeishuConnectorView()
         case .connector(let id):
             if id == "imessage" { MessagesConnectorView() } else { HubConnectorView(id: id) }
+        case .feishuBot: FeishuBotView()
         case .notifications: NotificationSettingsView()
         case .storage: StorageView()
         case .translation: TranslationSettingsView()

@@ -113,6 +113,8 @@ type Config struct {
 	LarkAgent LarkAgentConfig `json:"lark_agent,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
+	// Bots: talking to Jarvis through a chat app's bot (bots.go, docs/bots.md); switched on in the app.
+	Bots BotsConfig `json:"bots,omitempty"`
 
 	dir string
 }

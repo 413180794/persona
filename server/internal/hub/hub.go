@@ -95,6 +95,8 @@ type Hub struct {
 	kb       kbState // the knowledge base under ~/.jarvis/data (kb.go)
 	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).
 	larkAgent larkAgents
+	// bots: the chat apps' bots the user talks to Jarvis through (bots.go).
+	bots botHub
 	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
 	launchers     launcherState
 	launchersSeen map[string][]proto.Launcher
@@ -262,6 +264,7 @@ func Run(ctx context.Context, b update.Build) error {
 	go h.scheduleLoop(ctx)
 	go h.larkEvents(ctx)
 	go h.larkAgentLoop(ctx)
+	h.startBots(ctx)
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
@@ -533,6 +536,7 @@ func (h *Hub) announce(ix proto.Interaction) {
 	if !h.muted(ix.MachineID, ix.SessionID) {
 		h.push.notifyInteraction(ix, h.machineName(ix.MachineID))
 	}
+	h.botInteraction(ix)
 }
 
 func (h *Hub) machineName(id string) string {
@@ -702,6 +706,8 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		err := p.local(r)
 		if err != nil {
 			status = "failed"
+		} else {
+			h.botResolution(p.ix, r)
 		}
 		// What was typed into a terminal may be a password: the history keeps that something was, not what.
 		kept := redacted(p.ix, r)
@@ -714,6 +720,7 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 	}
 	kept := redacted(p.ix, r)
 	h.recordEnd(id, status, &kept)
+	h.botResolution(p.ix, r)
 	select {
 	case p.done <- r:
 	default:
@@ -758,6 +765,7 @@ func (h *Hub) finishInteraction(id string) {
 // finished tells everyone an interaction, already out of the pending set, is over.
 func (h *Hub) finished(p *pending) {
 	id := p.ix.ID
+	h.botInteractionDone(p.ix, "已结束")
 	h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 	if m := h.byID[p.ix.MachineID]; m != nil {
 		h.broadcastSessions(m, h.decorated(m))

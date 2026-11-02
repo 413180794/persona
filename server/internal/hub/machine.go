@@ -425,6 +425,7 @@ func (m *Machine) setSessions(list []proto.Session) {
 		case prev == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle):
 			go m.notifyFinished(s.SessionID, m.hub.turns.ended(key, now))
 			go m.hub.titleAfterTurn(m, s.SessionID) // a new assistant conversation is named after its first turn
+			go m.hub.botTurnEnded(m.cfg.ID, s.SessionID)
 		}
 	}
 	m.sessions = list
@@ -530,6 +531,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		m.mu.Unlock()
 		m.hub.itemsToSubscribers(m.cfg.ID, p.SessionID, p.Items, p.itemSpan)
+		m.hub.botItems(m.cfg.ID, p.SessionID, p.Items)
 	case "session.screen":
 		var p struct {
 			SessionID string `json:"session_id"`
@@ -565,6 +567,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		if json.Unmarshal(params, &p) == nil {
 			m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "delta", "machine_id": m.cfg.ID, "session_id": p.SessionID, "text": p.Text})
+			m.hub.botDelta(m.cfg.ID, p.SessionID, p.Text)
 		}
 	case "state.put":
 		var p struct {
@@ -699,8 +702,9 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	if ok && !s.Assistant && s.Status != proto.StatusWorking {
 		m.hub.kbAgentDone(m.cfg.ID, s)
 	}
-	// An inbox agent's result is the draft in the inbox; a /agent request's is its reply in Feishu.
-	if !ok || m.hub.isInboxAgent(id) || m.hub.isLarkAgent(id) {
+	// An inbox agent's result is the draft in the inbox; a /agent request's is its reply in Feishu; a turn asked for
+	// through the bot is answered there.
+	if !ok || m.hub.isInboxAgent(id) || m.hub.isLarkAgent(id) || m.hub.botAnswered(id) {
 		return
 	}
 	m.hub.mu.Lock()

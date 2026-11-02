@@ -209,6 +209,10 @@ extension Theme {
         static let feishuChats = "bubble.left.and.bubble.right"
         /// The mail accounts (管理邮箱).
         static let mailAccounts = "envelope.badge"
+        /// A chat app's bot the user talks to Jarvis through (设置 › 连接器 › 飞书机器人).
+        static let chatBot = "message.badge.waveform"
+        /// Pairing a device or a bot with a one-time code.
+        static let pairing = "link.badge.plus"
         /// 设置 › 连接器: the data sources Jarvis reads and acts in (this device, mail, 飞书).
         static let connectors = "point.3.connected.trianglepath.dotted"
         /// This device as a connector (its contacts, calendar, photos…): iPhone, iPad or Mac.

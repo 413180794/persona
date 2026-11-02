@@ -18,3 +18,12 @@
   表格里带下拉的格子 `sheet/edit` 一律报 `DOCUMENT_EDIT_UNSUPPORTED`，改值要用 `sheet/structure` 的 `choose`；多维表格 `base/edit` 的
   `expect` 指纹要按当前值算（`BaseCell.Fingerprint`），人员字段的 id 格式和 `accounts` 给的 userId 不一样（写不进去，读得出）。
   测试只拿自己建的 demo 文档（链接放环境变量），别动用户给的真表。
+
+## 飞书开放平台机器人（`docs/bots.md`）
+
+- 卡片 JSON 2.0 **多一个不认识的字段整张卡片被拒**（1.0 是忽略）：2.0 没有 `action` 模块和 `note`（按钮横排用 `column_set` + `flex_mode: flow`，
+  小字用 `div` + `text_size: notation`），按钮的回传要写在 `behaviors` 里；卡片回调里返回的新卡片也必须是 2.0，否则报 200830。写之前对着 2.0 的组件文档逐个字段核对。
+- 1.0 的 Markdown 不支持标题、表格、引用，模型的回答直接塞进去会显示成原始符号；要用 2.0。卡片会把 `<at>`、`<font>` 这类当成自己的标签：正文里的 `<` 先转义。
+- 卡片的链接按钮文档只写了 http(s) 和 AppLink，自定义 scheme（`jarvis://`）不要放，免得整张卡片被拒。
+- 长连接的事件要在 3 秒内回执，不然飞书重发同一事件：处理放后台，按 message_id 去重。
+- 一条消息发给正在忙的对话会排在当前这一轮后面：那一轮的结束不是它的回答，要在 transcript 里找到这条消息再取它后面的回答（`botRun.Probe`）。

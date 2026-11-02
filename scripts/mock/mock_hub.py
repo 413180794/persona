@@ -984,6 +984,16 @@ def phone_screen(cols, rows, typed="", tick=0):
 PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60,
          "island": {"preset": "a", "left": "", "right": "", "machine": ""}}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
+# 设置 › 连接器 › 飞书机器人 (GET/PUT /api/v1/bots/feishu); MOCK_BOT=pairing shows a code waiting, =off a fresh hub.
+FEISHU_BOT = {"enabled": True, "app_id": "cli_example0001", "domain": "https://open.feishu.cn", "has_secret": True,
+              "from_config": False, "connected": True, "bot_name": "Jarvis", "target": "主对话",
+              "features": {"main": True, "cards": True, "all_cards": False, "pushes": True, "sync": False, "agents": True},
+              "owner": {"name": "我", "paired_at": int(time.time()) - 86400 * 3},
+              "agents": [{"title": "jarvis › api「修登录」 · server", "machine_id": "server", "session_id": "s1"}]}
+if os.environ.get("MOCK_BOT") == "pairing":
+    FEISHU_BOT.update(owner=None, agents=[], target="", pairing={"code": "482913", "expires_at": int(time.time()) + 540})
+elif os.environ.get("MOCK_BOT") == "off":
+    FEISHU_BOT.update(enabled=False, app_id="", has_secret=False, connected=False, bot_name=None, owner=None, agents=[], target="")
 TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
     {"id": "dev_phone", "name": "我的 iPhone", "kind": "phone", "role": "full", "created_at": ago(days=12), "last_seen": ago()},
     {"id": "dev_watch", "name": "Apple Watch", "kind": "watch", "role": "answer", "created_at": ago(days=12), "last_seen": ago(hours=3)},
@@ -3166,6 +3176,9 @@ class H(BaseHTTPRequestHandler):
             msgs = IMESSAGE_MESSAGES.get(cid) or [{"id": cid[-4:], "at": chat["last"], "kind": "message", "text": chat["preview"],
                                                    "from_me": chat.get("from_me", False), "sender": None if chat.get("from_me") else chat["members"][0]}]
             return self.send_json({"chat": chat, "messages": msgs})
+        if p == "/api/v1/bots/feishu":  # 设置 › 连接器 › 飞书机器人
+            st = dict(FEISHU_BOT, last_event_at=int(time.time()) - 40 if FEISHU_BOT["connected"] else None)
+            return self.send_json({k: v for k, v in st.items() if v is not None})
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
         lark_read = p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") or (
@@ -3772,6 +3785,22 @@ class H(BaseHTTPRequestHandler):
                 if t["id"] == p.split("/")[-1]:
                     t["revoked_at"] = ago()
             return self.send_json({"ok": True})
+        if p == "/api/v1/bots/feishu" and self.command == "PUT":
+            body = json.loads(self.last_body or b"{}")
+            for k in ("enabled", "features", "domain"):
+                if k in body: FEISHU_BOT[k] = body[k]
+            if body.get("app_id"):
+                FEISHU_BOT.update(app_id=body["app_id"], has_secret=True, connected=True, bot_name="Jarvis")
+            if not FEISHU_BOT["enabled"]: FEISHU_BOT["connected"] = False
+            elif FEISHU_BOT["has_secret"]: FEISHU_BOT["connected"] = True
+            return self.send_json({k: v for k, v in FEISHU_BOT.items() if v is not None})
+        if p == "/api/v1/bots/feishu/pair":
+            FEISHU_BOT["pairing"] = {"code": "482913", "expires_at": int(time.time()) + 600}
+            return self.send_json({k: v for k, v in FEISHU_BOT.items() if v is not None})
+        if p == "/api/v1/bots/feishu/owner" and self.command == "DELETE":
+            FEISHU_BOT.update(owner=None, agents=[], target="", pairing=None)
+            return self.send_json({k: v for k, v in FEISHU_BOT.items() if v is not None})
+        if p == "/api/v1/bots/feishu/test": return self.send_json({"ok": True})
         if p.startswith("/api/v1/interactions/") and p.endswith("/resolve"):  # notification buttons (UI test reads it back)
             RESOLVED.append({"id": p.split("/")[4], "resolution": json.loads(self.last_body or b"{}")})
             if os.environ.get("MOCK_CODEX") and p.split("/")[4] == "cxa_orders_curl" and \

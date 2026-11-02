@@ -74,6 +74,7 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 			return "", fmt.Errorf("title and body are required")
 		}
 		h.push.notifyDone(m.cfg.ID, "Jarvis", sessionID, a.Title, a.Body, nil) // asked for explicitly: every device
+		h.botPush(m.cfg.ID, sessionID, a.Title, a.Body)
 		h.mu.Lock()
 		h.notified[sessionID] = time.Now()
 		h.mu.Unlock()

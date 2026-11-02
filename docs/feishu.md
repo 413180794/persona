@@ -14,6 +14,7 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
 | removed里和我有关的 | 收件箱（`hub/inbox_moments.go`）、知识库 | 评论我的帖子、回复我、@ 我：一个帖子一件事，AI 分拣、起草评论，点发送评论回去（`docs/inbox.md`「removed」） |
 | 其他飞书链接 | `LinkSheet` 的 WebView | 妙记、日程、任务、审批等链接在 App 内的网页卡片里打开 |
 | AI 的飞书能力 | hub（`server/internal/lark`、助手的 `lark_api` 工具） | 搜索 / 读取消息、文档、removed、日程、妙记…… 全部只读，作为 AI 的上下文 |
+| 在飞书里找 Jarvis | 飞书机器人（`docs/bots.md`） | 私聊自建应用的机器人 = 和主对话说话；不是飞书功能的搬运，是 Jarvis 多一个入口 |
 
 链接分流在 `FeishuLinks.route(_:)`：文档 → `.doc`，removed分享（`…/client/moments/detail?postId=`）→ `.momentsPost`，其余返回 nil 走网页。
 `FeishuRoute` 只剩 chat / doc / profile / momentsPost 四种，都是「从一条消息或一个链接点进去」的落点。
