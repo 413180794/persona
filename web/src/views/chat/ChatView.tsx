@@ -20,12 +20,12 @@ interface Pending {
   at: number;
 }
 
-export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { mid: string; sid: string; assistant?: boolean; starting?: boolean; onToggleSidebar?: () => void }) {
+export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar }: { mid: string; sid: string; assistant?: boolean; starting?: boolean; onToggleSidebar?: () => void }) {
   const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid) ?? s.assistant?.conversations.find((c) => c.session_id === sid));
   const machine = useStore((s) => s.machines.find((m) => m.id === mid));
   const siblings = useStore((s) => (session?.space_id ? (s.sessions[mid] ?? []).filter((x) => x.space_id === session.space_id && stateOf(x) !== "offline") : []));
   const interactions = useStore((s) => s.interactions.filter((i) => i.machine_id === mid && i.session_id === sid));
-  const tr = useTranscript(mid, sid, { starting });
+  const tr = useTranscript(mid, sid, { starting: launching });
   const [pending, setPending] = useState<Pending[]>(() => {
     const launch = Object.values(getState().launches).find((l) => l.phase === "ready" && l.machineId === mid && l.session?.session_id === sid);
     const out = launch?.outgoing;
@@ -35,6 +35,8 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
   const [draftRefusal, setDraftRefusal] = useState<{ out: Outgoing; id: string; draft: string; clearable?: string } | null>(null);
   const state = session ? stateOf(session) : "unknown";
   const working = state === "working" || Boolean(tr.streaming) || pending.length > 0;
+  // still starting only until the conversation has anything in it: the flag the caller passes may outlive the start
+  const starting = Boolean(launching) && !tr.items.length && !tr.streaming && state !== "working";
   const now = useNow(1000, working);
 
   const segs = useMemo(() => segments(tr.items), [tr.items]);
