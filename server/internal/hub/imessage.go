@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/chyroc/jarvis/server/internal/connector/imessage"
-	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
@@ -172,56 +171,9 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 	})
 }
 
-// imessageForgotten is what DELETE /api/v1/imessage/data removed.
-type imessageForgotten struct {
-	Chats  int `json:"chats"`
-	People int `json:"people"`
-	Inbox  int `json:"inbox"`
-}
-
-// forgetIMessage removes what the hub kept of iMessage: the knowledge base's chats and people (and their index rows,
-// their places in projects, the cursor) and the inbox's items.
-func (h *Hub) forgetIMessage(ctx context.Context) (imessageForgotten, error) {
-	var out imessageForgotten
-	if h.kb.eng != nil {
-		f, err := h.kb.eng.ForgetSource(imessage.ID)
-		if err != nil {
-			return out, err
-		}
-		out.Chats, out.People = len(f.Chats), len(f.People)
-		if idx, ok := h.store.(interface {
-			DeleteKBEntities(ctx context.Context, kind string, ids []string) error
-		}); ok {
-			if err := idx.DeleteKBEntities(ctx, kb.KindChat, f.Chats); err != nil {
-				return out, err
-			}
-			if err := idx.DeleteKBEntities(ctx, kb.KindPerson, f.People); err != nil {
-				return out, err
-			}
-		}
-	}
-	h.inbox.mu.Lock()
-	var ids []string
-	for id, it := range h.inbox.items {
-		if it.Source == imessage.ID {
-			ids = append(ids, id)
-			delete(h.inbox.items, id)
-			h.inbox.replies.Delete(id)
-		}
-	}
-	h.inbox.mu.Unlock()
-	out.Inbox = len(ids)
-	if del, ok := h.store.(interface {
-		DeleteInboxItems(ctx context.Context, ids []string) error
-	}); ok && len(ids) > 0 {
-		if err := del.DeleteInboxItems(ctx, ids); err != nil {
-			return out, err
-		}
-	}
-	if len(ids) > 0 {
-		h.broadcast(map[string]any{"type": "inbox"})
-	}
-	return out, nil
+// forgetIMessage removes what the hub kept of iMessage (forgetSource).
+func (h *Hub) forgetIMessage(ctx context.Context) (sourceForgotten, error) {
+	return h.forgetSource(ctx, imessage.ID)
 }
 
 // imessageFailed answers a read that failed, with a code the app acts on; only the kind of failure is logged.

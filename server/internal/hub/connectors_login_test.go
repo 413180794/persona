@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/chyroc/jarvis/server/internal/kb"
 )
 
 // keepStore is memStore with settings and connector secrets kept in memory.
@@ -241,5 +242,49 @@ func TestTelegramGetsTheUserZone(t *testing.T) {
 	h.userTZ = "Asia/Shanghai"
 	if got := string(h.telegramSettings()); got != `{"zone":"Asia/Shanghai"}` {
 		t.Fatalf("known: %s", got)
+	}
+}
+
+// 删除已存的数据: the connector is switched off (and stays off), its chats, people and inbox items go, the rest stays.
+func TestConnectorDataDelete(t *testing.T) {
+	h := newTestHub(t)
+	st := newKeepStore()
+	h.store = st
+	h.connectors = connector.NewRegistry(nil)
+	h.inbox.init()
+	_ = h.addConnector(&exampleConnector{})
+	mux := h.routes()
+	kst, err := kb.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.kb.eng = &kb.Engine{Store: kst}
+	_ = kst.PutChat(&kb.Chat{ID: "example-c1", Source: "example", Name: "示例群"})
+	_ = kst.PutChat(&kb.Chat{ID: "lark-f1", Source: "lark", Name: "需求群"})
+	_ = kst.PutPerson(&kb.Person{ID: "example-p1", Source: "example", Name: "示例用户"})
+	h.inbox.items["example:c1"] = &InboxItem{ID: "example:c1", Source: "example", Title: "示例群"}
+	h.inbox.items["lark:f1:1"] = &InboxItem{ID: "lark:f1:1", Source: "lark", Title: "需求群"}
+
+	if code, _ := call(t, mux, "DELETE", "/api/v1/connectors/nope/data", h.cfg.Token, ""); code != 404 {
+		t.Fatalf("an unknown connector: %d", code)
+	}
+	code, out := call(t, mux, "DELETE", "/api/v1/connectors/example/data", h.cfg.Token, "")
+	if code != 200 || out["chats"] != 1.0 || out["people"] != 1.0 || out["inbox"] != 1.0 {
+		t.Fatalf("delete: %d %v", code, out)
+	}
+	if h.connectors.Enabled("example") || !strings.Contains(st.settings[connectorSettingsKey], `"example":false`) {
+		t.Fatalf("not switched off for good: %s", st.settings[connectorSettingsKey])
+	}
+	if _, ok := kst.Chat("example-c1"); ok {
+		t.Error("the chat is still there")
+	}
+	if _, ok := kst.Chat("lark-f1"); !ok {
+		t.Error("Feishu's chat is gone")
+	}
+	if _, ok := h.inbox.items["example:c1"]; ok {
+		t.Error("the inbox item is still there")
+	}
+	if _, ok := h.inbox.items["lark:f1:1"]; !ok {
+		t.Error("Feishu's inbox item is gone")
 	}
 }

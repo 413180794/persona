@@ -14,6 +14,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/github"
 	"github.com/chyroc/jarvis/server/internal/connector/proc"
+	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
@@ -135,7 +136,81 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 			}
 		}
 	})
+	// 删除已存的数据 for any connector: switched off first (and kept off: on, the next sync would bring it back), then
+	// what the hub kept of it goes (forgetSource, as for iMessage). Signing out is apart (/logout).
+	api.HandleFunc("DELETE /api/v1/connectors/{id}/data", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if h.connectors.Get(id) == nil {
+			writeErr(w, http.StatusNotFound, fmt.Errorf("no connector %q", id))
+			return
+		}
+		if err := h.setConnectorEnabled(r.Context(), id, false); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		res, err := h.forgetSource(r.Context(), id)
+		if err != nil {
+			h.logf("connector %s: delete: %v", id, err)
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		h.logf("connector %s: deleted %d chat(s), %d person(s), %d inbox item(s)", id, res.Chats, res.People, res.Inbox)
+		writeJSON(w, res)
+	})
 	h.imessageRoutes(api)
+}
+
+// sourceForgotten is what deleting a source's data removed (DELETE /api/v1/connectors/{id}/data,
+// DELETE /api/v1/imessage/data).
+type sourceForgotten struct {
+	Chats  int `json:"chats"`
+	People int `json:"people"`
+	Inbox  int `json:"inbox"`
+}
+
+// forgetSource removes what the hub kept of a source (a connector's id): the knowledge base's chats and people (and
+// their index rows, their places in projects, the cursor) and the inbox's items. The caller stops the source first.
+func (h *Hub) forgetSource(ctx context.Context, source string) (sourceForgotten, error) {
+	var out sourceForgotten
+	if h.kb.eng != nil {
+		f, err := h.kb.eng.ForgetSource(source)
+		if err != nil {
+			return out, err
+		}
+		out.Chats, out.People = len(f.Chats), len(f.People)
+		if idx, ok := h.store.(interface {
+			DeleteKBEntities(ctx context.Context, kind string, ids []string) error
+		}); ok {
+			if err := idx.DeleteKBEntities(ctx, kb.KindChat, f.Chats); err != nil {
+				return out, err
+			}
+			if err := idx.DeleteKBEntities(ctx, kb.KindPerson, f.People); err != nil {
+				return out, err
+			}
+		}
+	}
+	h.inbox.mu.Lock()
+	var ids []string
+	for id, it := range h.inbox.items {
+		if it.Source == source {
+			ids = append(ids, id)
+			delete(h.inbox.items, id)
+			h.inbox.replies.Delete(id)
+		}
+	}
+	h.inbox.mu.Unlock()
+	out.Inbox = len(ids)
+	if del, ok := h.store.(interface {
+		DeleteInboxItems(ctx context.Context, ids []string) error
+	}); ok && len(ids) > 0 {
+		if err := del.DeleteInboxItems(ctx, ids); err != nil {
+			return out, err
+		}
+	}
+	if len(ids) > 0 {
+		h.broadcast(map[string]any{"type": "inbox"})
+	}
+	return out, nil
 }
 
 // connectorLogin is connector id's sign-in, or writes why there is none.
