@@ -8,7 +8,7 @@ import javax.net.ssl.SSLException
 object PairingInput {
     fun parse(link: String): PairingRequest {
         val uri = runCatching { URI(link.trim()) }.getOrNull()
-        if (uri?.scheme !in setOf("persona", "jarvis") || uri?.rawAuthority != "pair") invalid()
+        if (uri?.scheme !in Pairing.schemes || uri?.rawAuthority != "pair") invalid()
         val parsed = Pairing.parse(link) ?: invalid()
         val keys = uri.rawQuery.orEmpty().split('&').map { it.substringBefore('=') }
         if (keys.filter { it != "alt" }.groupingBy { it }.eachCount().any { it.value > 1 }) invalid()
@@ -16,9 +16,19 @@ object PairingInput {
         return validate(PairingRequest(parsed.url, parsed.token, parsed.hub, parsed.fp, parsed.tls, parsed.alt))
     }
 
+    /** A full pairing link (`persona://` or `jarvis://`) is parsed whole instead of being treated as a hub address. */
+    fun isLink(value: String): Boolean = Pairing.isLink(value)
+
     fun manual(address: String, token: String): PairingRequest =
-        if (listOf("persona:", "jarvis:").any(address.trim()::startsWith)) parse(address)
+        if (isLink(address)) parse(address)
         else validate(PairingRequest(address.trim(), token.trim()))
+
+    /**
+     * Metadata after the manual address field changes to [value]. A pairing link replaces all metadata
+     * (the caller parses it), so the raw link and the previous link's token, hub and fingerprint never survive.
+     */
+    fun editedAddress(metadata: PairingRequest?, value: String): PairingRequest? =
+        if (isLink(value)) null else metadata?.copy(url = value)
 
     private fun validate(request: PairingRequest): PairingRequest {
         if (request.token.isBlank() || request.tls?.let { it !in 1..65535 } == true) invalid()

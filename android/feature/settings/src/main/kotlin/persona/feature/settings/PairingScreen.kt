@@ -236,8 +236,8 @@ fun PairingScreen(
                     JCard {
                         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                             JTextField(address, { value ->
-                                address = value; metadata = metadata?.copy(url = value)
-                                if (value.trim().startsWith("jarvis:")) accept(value)
+                                address = value; metadata = PairingInput.editedAddress(metadata, value)
+                                if (PairingInput.isLink(value)) accept(value)
                             }, label = "hub 地址或配对链接", modifier = Modifier.fillMaxWidth(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), singleLine = true)
                             JTextField(token, { token = it; metadata = metadata?.copy(token = it) }, label = "配对码",

@@ -1,7 +1,9 @@
 package persona.core.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PairingTest {
@@ -12,6 +14,16 @@ class PairingTest {
         for (suffix in listOf("pair?url=https://hub.example.com", "other?url=https://hub.example.com&token=fixture",
             "pair?url=ftp://hub.example.com&token=fixture", "pair?url=https://hub.example.com&token=+")) {
             assertNull(Pairing.parse("persona://$suffix"))
+        }
+    }
+    @Test fun isLinkAcceptsBothSchemesButNotHubAddresses() {
+        for (link in listOf("persona://pair?url=x", " jarvis://pair?url=x ", "persona://open?target=inbox", "jarvis://")) {
+            assertTrue(link, Pairing.isLink(link))
+        }
+        // A bare host named after a scheme, with a port, is an address and not a link.
+        for (address in listOf("https://hub.example.com", "persona.example.com", "jarvis.local:18660",
+            "persona:18660", "jarvis:18660", "persona:", "")) {
+            assertFalse(address, Pairing.isLink(address))
         }
     }
     @Test fun legacyLinkKeepsItsUrlAndToken() {

@@ -1,6 +1,7 @@
 package persona.feature.settings
 
 import persona.core.contracts.api.PairingException
+import persona.core.contracts.api.PairingRequest
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -35,6 +36,39 @@ class SettingsCriticalPathTest {
             "pair?url=https://hub.example.com&token=fixture&token=duplicate", "other?url=https://hub.example.com&token=fixture")) {
             assertThrows(PairingException::class.java) { PairingInput.parse("persona://$suffix") }
         }
+    }
+
+    @Test fun manualAddressFieldParsesPersonaAndLegacyLinks() {
+        val scanned = PairingRequest("https://old.example.com", "old-token", hub = "old-hub", fp = "old-fingerprint", tls = 443)
+        for (scheme in listOf("persona", "jarvis")) {
+            val link = "$scheme://pair?url=https%3A%2F%2Fhub.example.com&token=fixture&hub=example-hub"
+            // Pasting into the address field: the link is detected, and no stale metadata keeps the raw link or old token.
+            assertTrue(PairingInput.isLink(link))
+            assertTrue(PairingInput.isLink("  $link  "))
+            assertNull(PairingInput.editedAddress(scanned, link))
+            assertNull(PairingInput.editedAddress(null, link))
+            val request = PairingInput.manual(link, "")
+            assertEquals("https://hub.example.com", request.url)
+            assertEquals("fixture", request.token)
+            assertEquals("example-hub", request.hub)
+        }
+        // A plain address only edits the URL and keeps the rest of the scanned metadata.
+        val edited = PairingInput.editedAddress(scanned, "https://new.example.com")
+        assertEquals(scanned.copy(url = "https://new.example.com"), edited)
+        assertNull(PairingInput.editedAddress(null, "https://new.example.com"))
+        for (address in listOf("https://hub.example.com", "hub.example.com", "persona.example.com", "jarvis.local:18660",
+            "persona:18660", "jarvis:18660", "")) {
+            assertFalse(address, PairingInput.isLink(address))
+        }
+        // A machine named "persona" is an address: typing it keeps the metadata, and without a scheme it fails
+        // exactly like any other scheme-less host:port instead of taking the pairing-link path.
+        assertEquals(scanned.copy(url = "persona:18660"), PairingInput.editedAddress(scanned, "persona:18660"))
+        val plain = assertThrows(PairingException::class.java) { PairingInput.manual("hub:18660", "tok") }.reason
+        for (address in listOf("persona:18660", "jarvis:18660")) {
+            assertEquals(plain, assertThrows(PairingException::class.java) { PairingInput.manual(address, "tok") }.reason)
+        }
+        assertEquals("https://persona:18660", PairingInput.manual("https://persona:18660", "tok").url)
+        assertEquals("https://hub.example.com", PairingInput.manual(" https://hub.example.com ", " fixture ").url)
     }
 
     @Test fun updateDigestRejectsCorruptionAndMissingChecksum() {
