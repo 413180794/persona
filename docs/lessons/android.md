@@ -35,6 +35,9 @@
 - `SaveableStateHolder.SaveableStateProvider(key)` 里面是 `ReusableContent(key)`：key 一变整棵子树重建，焦点、滚动位置、`remember` 都没了。key 里别放随输入变的值：收件箱曾把搜索词和折叠的分组放进 key，搜索框每打一个字就丢焦点（后面的字也丢了），折叠一组就跳回顶部（`InboxScreen`）。
 - `SwipeToDismissBox` 的 `backgroundContent` 不滑动时也在画：玻璃风格的半透明行下面会透出滑动操作的颜色（收件箱整行发绿），只在 `dismissDirection` 不是 `Settled` 时画（`JSwipeActions`）。
 - Phosphor 线条图标（`X` 等）的 fill 字重是「实心方块里镂空一个 X」：看板风格里 `JIcon(selected = true)` 取 fill，照片角上的移除叉号画成了白方块。叉号这类别给 `selected`，看板自动用 bold。
+- 玻璃背景每变一帧，上面所有浮层（顶栏、悬浮坞、输入框、滚动边缘）都要重新模糊，代价远大于画背景本身：状态光动起来以后（#959），模拟器上 Persona 页空闲时
+  24 fps 重画占一个核的 p50 12%，降到 12 fps 后 p50 7.4%（各 15 次采样）。慢速的装饰动画按「看不出步进」的最低帧率更新（帧时间量化后写状态，
+  只在 draw 里读），不要跟着屏幕刷新率跑；省电模式下停掉。
 - Compose 测试里 `Modifier.clickable(enabled = false)` 仍带 OnClick 语义动作，`assertHasNoClickAction()` 断言不了「不可点」，要用 `assertIsNotEnabled()`（`ComposerPartsTest`）。
 
 - 匿名 `BaseInputConnection` 里写 `override fun getEditable() = editable`，外层类的字段也叫 `editable`：Kotlin 先找到的是这个对象自己的 `getEditable()`（Java getter 对应的属性），于是自己调自己，输入法一连上（`finishComposingText` → `getEditable`）就栈溢出崩溃（终端键盘，2026-11-02）。外层字段别和框架 getter 同名（改叫 `buffer`）；这种问题 JVM 单测测不出，要在模拟器上真点一次键盘。
