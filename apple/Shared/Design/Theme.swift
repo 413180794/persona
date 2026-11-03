@@ -69,6 +69,7 @@ nonisolated enum Theme {
     static let loop = Color(light: 0x2E6FD0, dark: 0x5B9BFF)
     /// Count badges on rows (unread messages): white text on it is ≥ 4.5:1 in both appearances.
     static let countBadge = Color(light: 0x636366, dark: 0x636366)
+    static let onSolid = Color.white
     /// The disc behind a monogram that has no color of its own (a mail sender).
     #if os(watchOS)
     static let monogramFill = Color.white.opacity(0.16)

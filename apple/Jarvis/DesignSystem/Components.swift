@@ -343,9 +343,15 @@ extension View {
 /// 关闭 and 取消. (The system confirmation dialog was a wall of text with no cancel button.)
 struct CloseAgentConfirmation: ViewModifier {
     @Binding var session: Session?
+    var onClosed: (SessionKey) -> Void = { _ in }
+    @State private var completed: SessionKey?
 
     func body(content: Content) -> some View {
-        content.sheet(item: $session) { s in CloseAgentSheet(session: s) }
+        content.sheet(item: $session, onDismiss: {
+            if let key = completed { completed = nil; onClosed(key) }
+        }) { s in
+            CloseAgentSheet(session: s) { completed = $0 }
+        }
     }
 }
 
@@ -353,7 +359,9 @@ struct CloseAgentSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     var session: Session
+    var onClosed: (SessionKey) -> Void = { _ in }
     @State private var closing = false
+    @State private var failure: String?
     @State private var height: CGFloat = 380
 
     private var name: String {
@@ -382,7 +390,7 @@ struct CloseAgentSheet: View {
                 .scaledFrame(width: Theme.Size.box56, height: Theme.Size.box56)
                 .background(Theme.danger.opacity(0.12), in: .circle)
                 .padding(.top, 28)
-            Text("关闭这个 Agent？")
+            Text("停止并关闭这个 Agent？")
                 .font(Theme.Font.title)
                 .padding(.top, Theme.Space.l)
             VStack(spacing: Theme.Space.xs) {
@@ -402,8 +410,8 @@ struct CloseAgentSheet: View {
             .padding(.horizontal, Theme.Space.xl)
 
             VStack(alignment: .leading, spacing: Theme.Space.m) {
-                fact("power", "退出 \(session.agentLabel)，关掉它在 herdr 里的标签页（分屏时只关这个窗格）")
-                fact("clock.arrow.circlepath", "对话记录保留，之后可以用 \(session.resumeCommand) 接着聊")
+                fact(Theme.Icon.end, "停止当前任务并退出 \(session.agentLabel)，关闭它的终端标签（分屏时只关这个窗格）")
+                fact(Theme.Icon.retry, "对话记录保留，之后可以用 \(session.resumeCommand) 接着聊")
             }
             .padding(Theme.Space.l)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -411,17 +419,32 @@ struct CloseAgentSheet: View {
             .padding(.horizontal, Theme.Space.xl)
             .padding(.top, Theme.Space.xl)
 
+            if let failure {
+                Text(failure)
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(Theme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.Space.xl)
+                    .padding(.top, Theme.Space.m)
+                    .accessibilityIdentifier("agent.close.error")
+            }
             VStack(spacing: Theme.Space.m) {
                 Button {
                     closing = true
+                    failure = nil
                     Haptics.tap()
                     Task {
-                        await model.close(session.key)
-                        dismiss()
+                        if await model.close(session.key) {
+                            onClosed(session.key)
+                            dismiss()
+                        } else {
+                            failure = model.toast?.message ?? "停止失败，Agent 和标签已保留，请重试"
+                            closing = false
+                        }
                     }
                 } label: {
                     Group {
-                        if closing { ProgressView().tint(.white) } else { Text("关闭 Agent").lineLimit(1) }
+                        if closing { ProgressView().tint(Theme.onSolid) } else { Text("停止并关闭").lineLimit(1) }
                     }
                     .font(Theme.Font.heading)
                     .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
@@ -457,7 +480,9 @@ struct CloseAgentSheet: View {
 }
 
 extension View {
-    func confirmClose(_ session: Binding<Session?>) -> some View { modifier(CloseAgentConfirmation(session: session)) }
+    func confirmClose(_ session: Binding<Session?>, onClosed: @escaping (SessionKey) -> Void = { _ in }) -> some View {
+        modifier(CloseAgentConfirmation(session: session, onClosed: onClosed))
+    }
 }
 
 /// Someone without a picture (a mail sender): the first letter on a disc.

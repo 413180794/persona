@@ -11,6 +11,9 @@ final class SiblingTabsTests: XCTestCase {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
+        let reset = expectation(description: "重置标签测试数据")
+        URLSession.shared.dataTask(with: URL(string: hub + "/mock/reset")!) { _, _, _ in reset.fulfill() }.resume()
+        wait(for: [reset], timeout: 5)
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006",
@@ -19,22 +22,133 @@ final class SiblingTabsTests: XCTestCase {
     }
 
     @MainActor private func shot(_ name: String) {
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/sibling-\(name).png"))
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "sibling-\(name)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor private func tab(_ label: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label + "，")).firstMatch
+        let matches = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label + "，"))
+        return matches.allElementsBoundByIndex.first(where: \.isHittable) ?? matches.firstMatch
+    }
+
+    @MainActor private func mock(_ path: String) async throws -> [String: Any] {
+        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let (data, _) = try await URLSession.shared.data(from: URL(string: hub + path)!)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    @MainActor private func closeMenu(_ label: String) {
+        tab(label).press(forDuration: 0.8)
+        let close = app.buttons["停止并关闭 Agent"]
+        XCTAssertTrue(close.waitForExistence(timeout: 3))
+        close.tap()
+    }
+
+    @MainActor func testWorkingCloseCanBeCancelled() async throws {
+        openList()
+        closeMenu("widget")
+        XCTAssertTrue(app.staticTexts["停止并关闭这个 Agent？"].waitForExistence(timeout: 3))
+        shot("close-confirm")
+        app.buttons["取消"].tap()
+        XCTAssertTrue(tab("widget").waitForExistence(timeout: 3))
+        let state = try await mock("/mock/session_close")
+        XCTAssertEqual((state["attempts"] as? [String])?.count, 0)
+        XCTAssertTrue(tab("review").isSelected)
+    }
+
+    @MainActor func testFailedCloseKeepsConfirmationAndTab() async throws {
+        _ = try await mock("/mock/session_close?fail=1")
+        openList()
+        closeMenu("widget")
+        XCTAssertTrue(app.buttons["停止并关闭"].waitForExistence(timeout: 3))
+        app.buttons["停止并关闭"].tap()
+        XCTAssertTrue(app.staticTexts["agent.close.error"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["停止并关闭"].isEnabled)
+        shot("close-failed")
+        app.buttons["取消"].tap()
+        XCTAssertTrue(tab("widget").waitForExistence(timeout: 3))
+        let state = try await mock("/mock/session_close")
+        XCTAssertEqual((state["closed"] as? [String])?.count, 0)
+        XCTAssertEqual((state["attempts"] as? [String])?.count, 1)
+        XCTAssertTrue(tab("review").isSelected)
+    }
+
+    @MainActor func testQuietSwipeFailureKeepsTheTabAndShowsAnError() async throws {
+        _ = try await mock("/mock/session_close?fail=1")
+        openList()
+        tab("review").swipeLeft()
+        let close = app.buttons["停止并关闭 review"]
+        XCTAssertTrue(close.waitForExistence(timeout: 3))
+        close.tap()
+        XCTAssertTrue(app.staticTexts["agent.tabs.close.error"].waitForExistence(timeout: 5))
+        XCTAssertTrue(tab("review").isSelected)
+        XCTAssertTrue(app.buttons["空间 weather 的所有 Agent"].exists)
+        let state = try await mock("/mock/session_close")
+        XCTAssertEqual((state["closed"] as? [String])?.count, 0)
+        shot("close-quiet-failed")
+    }
+
+    @MainActor func testClosingCurrentQuietTabSelectsItsNeighbour() async throws {
+        openList()
+        tab("review").swipeLeft()
+        let close = app.buttons["停止并关闭 review"]
+        XCTAssertTrue(close.waitForExistence(timeout: 3))
+        shot("close-swipe")
+        close.tap()
+        XCTAssertTrue(app.buttons["空间 weather 的所有 Agent"].waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["停止并关闭这个 Agent？"].exists)
+        openList()
+        XCTAssertFalse(tab("review").exists)
+        XCTAssertTrue(tab("release").isSelected)
+        shot("close-selected")
+        let state = try await mock("/mock/session_close")
+        XCTAssertEqual(state["closed"] as? [String], ["macbook/a1f3c2d4-0000-4000-8000-000000000006"])
+    }
+
+    @MainActor func testClosingAnotherQuietTabKeepsTheCurrentTabAndList() async throws {
+        openList()
+        tab("widget").tap()
+        openList()
+        closeMenu("review")
+        XCTAssertTrue(tab("review").waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["空间 weather 的所有 Agent"].exists)
+        XCTAssertTrue(tab("widget").isSelected)
+    }
+
+    @MainActor func testClosingTheLastTabReturnsToTheList() async throws {
+        openList()
+        for label in ["widget", "tests"] {
+            closeMenu(label)
+            XCTAssertTrue(app.buttons["停止并关闭"].waitForExistence(timeout: 3))
+            app.buttons["停止并关闭"].tap()
+            XCTAssertTrue(app.staticTexts["停止并关闭这个 Agent？"].waitForNonExistence(timeout: 5))
+            XCTAssertTrue(tab(label).waitForNonExistence(timeout: 5))
+        }
+        closeMenu("release")
+        XCTAssertTrue(tab("release").waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 个标签页"].exists)
+        closeMenu("review")
+        XCTAssertTrue(app.buttons["空间 weather 的所有 Agent"].waitForNonExistence(timeout: 5))
+        let all = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "同一空间的")).firstMatch
+        XCTAssertTrue(all.waitForNonExistence(timeout: 5))
+        let filter = app.buttons["agents.filter.all"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 5))
+        XCTAssertTrue(filter.isHittable)
+        let state = try await mock("/mock/session_close")
+        XCTAssertEqual((state["closed"] as? [String])?.count, 4)
+        shot("close-last")
     }
 
     /// Opens ⋯'s list (the header folds itself after a few idle seconds, so it is unfolded before each try).
     @MainActor private func openList() {
         let slim = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch
-        _ = slim.waitForExistence(timeout: 15)
         let all = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "同一空间的")).firstMatch
+        _ = all.waitForExistence(timeout: 15)
         for _ in 0..<3 where !app.buttons["空间 weather 的所有 Agent"].exists {
             if slim.exists, slim.isHittable { slim.tap() }
-            usleep(600_000)
-            if all.exists { all.tap() }
+            if all.exists, all.isHittable { all.tap() }
             _ = app.buttons["空间 weather 的所有 Agent"].waitForExistence(timeout: 2)
         }
         XCTAssertTrue(app.buttons["空间 weather 的所有 Agent"].waitForExistence(timeout: 3), "the list did not open:\n\(app.debugDescription)")

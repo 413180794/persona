@@ -481,6 +481,7 @@ if os.environ.get("MOCK_TREE"):
                 TREE_MUTED.append("%s/%s" % (mid, sid))
 ORIG_STATE = {s["session_id"]: (s["state"], s["status"]) for s in SESSIONS}
 SEEN = []  # session ids marked seen (GET /mock/seen)
+SESSION_CLOSE = {"fail": False, "attempts": [], "closed": [], "interactions": []}
 PINS = {"spaces": ["macbook/weather"], "sessions": []}  # GET / PUT /api/v1/pins: what the Agents list keeps on top
 
 
@@ -3929,6 +3930,8 @@ class H(BaseHTTPRequestHandler):
                     m.update(online=False, error="ssh: connect to host lab port 22: Connection refused")
             SESSIONS[:] = [x for x in SESSIONS if not x["session_id"].startswith("d4e6f8a0-")]
             del RECONNECTS[:], STARTED[:], SEEN[:]
+            INTERACTIONS.extend(SESSION_CLOSE["interactions"])
+            SESSION_CLOSE.update(fail=False, attempts=[], closed=[], interactions=[])
             PINS.update(spaces=["macbook/weather"], sessions=[])
             for sid, items in CHURN_ITEMS.items(): ITEMS[sid] = list(items)  # LiveUpdateTests, ChatFollowTests: what churn / say added goes
             if CHURN_INBOX: INBOX[:] = copy.deepcopy(CHURN_INBOX)
@@ -3939,6 +3942,9 @@ class H(BaseHTTPRequestHandler):
             BUMPED["asks"].clear()
             TODOS[:] = copy.deepcopy(TODOS_INIT)
             return self.send_json({"ok": True})
+        if p == "/mock/session_close":
+            if "fail" in q: SESSION_CLOSE["fail"] = q["fail"][0] == "1"
+            return self.send_json({k: SESSION_CLOSE[k] for k in ("fail", "attempts", "closed")})
         if p == "/mock/seen": return self.send_json({"seen": SEEN})
         if p == "/mock/reconnects": return self.send_json({"reconnects": RECONNECTS})
         if p == "/mock/started": return self.send_json({"started": STARTED})
@@ -4632,6 +4638,25 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             SCHEDULE[i] = save_task(SCHEDULE[i], json.loads(self.last_body or b"{}"))
             return self.send_json({"task": SCHEDULE[i]})
+        if p.startswith("/api/v1/sessions/") and p.endswith("/close") and self.command == "POST":
+            if is_read_only(self): return self.send_json({"error": "只读角色不能关闭 Agent"}, 403)
+            mid, sid = p.split("/")[4:6]
+            key = mid + "/" + sid
+            SESSION_CLOSE["attempts"].append(key)
+            if SESSION_CLOSE["fail"]: return self.send_json({"error": "节点离线，停止失败，标签已保留"}, 503)
+            s = next((s for s in SESSIONS if s["machine_id"] == mid and s["session_id"] == sid), None)
+            if s is None: return self.send_json({"error": "没有这个 Agent"}, 404)
+            s.update(state="offline", status="offline")
+            SESSION_CLOSE["closed"].append(key)
+            ended = [x for x in INTERACTIONS if x["machine_id"] == mid and x["session_id"] == sid]
+            SESSION_CLOSE["interactions"].extend(ended)
+            for ix in ended:
+                INTERACTIONS.remove(ix)
+                for send, _ in list(LIVE):
+                    try: send({"type": "interaction_resolved", "id": ix["id"]})
+                    except Exception: pass
+            push_machine(mid)
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/sessions/") and p.endswith("/rename"):  # the hub keeps an assistant conversation's title
             body = json.loads(self.last_body or b"{}")
             sid = p.split("/")[5]

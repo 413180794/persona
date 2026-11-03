@@ -14,16 +14,49 @@ struct SiblingTabs: View {
     @Environment(\.openSpace) private var openSpace
     var current: SessionKey
     var select: (SessionKey) -> Void
+    var closed: (SessionKey, [SessionKey]) -> Void = { _, _ in }
     /// The strip's own scroll position (not ScrollViewReader: its scrollTo drags the page above along).
     @State private var shown: SessionKey?
     @State private var showAll = false
+    @State private var closing: Session?
+    @State private var stopping: SessionKey?
+    @State private var closeOrder: [SessionKey] = []
 
     var body: some View {
         let siblings = model.siblings(of: current)
-        if siblings.count > 1 {
-            HStack(spacing: Theme.Space.sm) {
+        HStack(spacing: Theme.Space.sm) {
+            if !siblings.isEmpty {
                 strip(siblings)
                 allButton(siblings)
+            }
+        }
+        .confirmClose($closing) { key in closed(key, closeOrder) }
+        .sheet(isPresented: $showAll) {
+            SiblingList(current: current, space: model.session(current)) { key in
+                showAll = false
+                if key != current { select(key) }
+            } openSpace: { space in
+                showAll = false
+                openSpace?(space)
+            } closed: { key, order in
+                if key == current { showAll = false }
+                closed(key, order)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private func requestClose(_ session: Session) {
+        guard stopping == nil, let latest = model.latest(session.key), latest.canTerminal else { return }
+        closeOrder = model.siblings(of: current).map(\.key)
+        if AgentCloseRules.needsConfirmation(latest) {
+            closing = latest
+        } else {
+            stopping = latest.key
+            Task {
+                if await model.close(latest.key) { closed(latest.key, closeOrder) }
+                stopping = nil
             }
         }
     }
@@ -61,6 +94,15 @@ struct SiblingTabs: View {
         }
         .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
         .accessibilityAddTraits(on ? .isSelected : [])
+        .contextMenu {
+            if s.canTerminal {
+                Button(role: .destructive) { requestClose(s) } label: {
+                    Label("停止并关闭 Agent", systemImage: Theme.Icon.end).lineLimit(1)
+                }
+                .disabled(stopping != nil)
+            }
+        }
+        .disabled(stopping == s.key)
         .id(s.key)
     }
 
@@ -96,17 +138,6 @@ struct SiblingTabs: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("同一空间的 \(siblings.count) 个 Agent" + (waiting ? "，有 Agent 需要你" : ""))
-        .sheet(isPresented: $showAll) {
-            SiblingList(siblings: siblings, current: current, space: model.session(current)) { key in
-                showAll = false
-                if key != current { select(key) }
-            } openSpace: { space in
-                showAll = false
-                openSpace?(space)
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
         #if DEBUG
         // `-showSpaceTabs YES`: open this sheet (screenshots); `new` opens its new-tab form on top.
         .task { if ["YES", "new"].contains(UserDefaults.standard.string(forKey: "showSpaceTabs")) { try? await Task.sleep(for: .seconds(2)); showAll = true } }
@@ -116,13 +147,39 @@ struct SiblingTabs: View {
 
 /// The ⋯ sheet of a space's tabs: the space's page on top, then each tab with its state's dot and words.
 private struct SiblingList: View {
-    var siblings: [Session]
+    @Environment(AppModel.self) private var model
     var current: SessionKey
     var space: Session?
     var pick: (SessionKey) -> Void
     var openSpace: (String) -> Void
+    var closed: (SessionKey, [SessionKey]) -> Void
 
     @State private var showNew = false
+    @State private var closing: Session?
+    @State private var stopping: SessionKey?
+    @State private var closeOrder: [SessionKey] = []
+    @State private var failure: String?
+
+    private var siblings: [Session] { model.siblings(of: current) }
+
+    private func requestClose(_ session: Session) {
+        guard stopping == nil, let latest = model.latest(session.key), latest.canTerminal else { return }
+        closeOrder = siblings.map(\.key)
+        failure = nil
+        if AgentCloseRules.needsConfirmation(latest) {
+            closing = latest
+        } else {
+            stopping = latest.key
+            Task {
+                if await model.close(latest.key) {
+                    closed(latest.key, closeOrder)
+                } else {
+                    failure = model.toast?.message ?? "停止失败，标签已保留，请重试"
+                }
+                stopping = nil
+            }
+        }
+    }
 
     /// Where a new tab goes: the space this chat is in (its machine, directory and herdr workspace).
     private var preset: SpacePreset? {
@@ -131,7 +188,7 @@ private struct SiblingList: View {
     }
 
     var body: some View {
-        ScrollView {
+        List {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: Theme.Space.s) {
                     Text("\(siblings.count) 个标签页").font(Theme.Font.heading).lineLimit(1)
@@ -145,6 +202,15 @@ private struct SiblingList: View {
                     }
                 }
                 .padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.l).padding(.bottom, Theme.Space.s)
+                if let failure {
+                    Text(failure)
+                        .font(Theme.Font.secondary)
+                        .foregroundStyle(Theme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, Theme.Space.l)
+                        .padding(.vertical, Theme.Space.s)
+                        .accessibilityIdentifier("agent.tabs.close.error")
+                }
                 if let s = space, let name = s.spaceName, let k = s.spaceKey {
                     Button { openSpace(k) } label: {
                         HStack(spacing: Theme.Space.m) {
@@ -160,7 +226,11 @@ private struct SiblingList: View {
                     .buttonStyle(.plain)
                     Divider().padding(.leading, Theme.Space.l)
                 }
-                ForEach(siblings) { s in
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            ForEach(siblings) { s in
                     let on = s.key == current
                     Button { pick(s.key) } label: {
                         HStack(spacing: Theme.Space.m) {
@@ -173,7 +243,8 @@ private struct SiblingList: View {
                                     .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
                             }
                             Spacer(minLength: 8)
-                            if on { Image(systemName: Theme.Icon.done).font(Theme.Font.captionStrong).foregroundStyle(Theme.accent) }
+                            if stopping == s.key { ProgressView().tint(Theme.danger) }
+                            else if on { Image(systemName: Theme.Icon.done).font(Theme.Font.captionStrong).foregroundStyle(Theme.accent) }
                         }
                         .padding(.horizontal, Theme.Space.l)
                         .scaledFrame(minHeight: Theme.Size.box50)
@@ -182,11 +253,33 @@ private struct SiblingList: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)" + (Fmt.model(s.model).map { "，\($0)" } ?? ""))
                     .accessibilityAddTraits(on ? .isSelected : [])
-                }
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if s.canTerminal {
+                            Button { requestClose(s) } label: {
+                                Label("关闭", systemImage: Theme.Icon.end).lineLimit(1)
+                            }
+                            .tint(Theme.danger)
+                            .accessibilityLabel("停止并关闭 \(s.slotLabel ?? s.displayTitle)")
+                        }
+                    }
+                    .contextMenu {
+                        if s.canTerminal {
+                            Button(role: .destructive) { requestClose(s) } label: {
+                                Label("停止并关闭 Agent", systemImage: Theme.Icon.end).lineLimit(1)
+                            }
+                        }
+                    }
             }
-            .padding(.vertical, Theme.Space.sm)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .scrollBounceBehavior(.basedOnSize)
+        .disabled(stopping != nil)
+        .interactiveDismissDisabled(stopping != nil)
+        .confirmClose($closing) { key in closed(key, closeOrder) }
         // The new tab opens in place of this one, like picking a tab (pick closes this sheet and the form with it).
         .sheet(isPresented: $showNew) {
             if let preset {

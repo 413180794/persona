@@ -221,7 +221,7 @@ struct ChatView: View {
             TerminalCover(key: key, switchTo: switchTo).presentationBackground(.clear)
         }
         .renameSessionAlert($renaming)
-        .confirmClose($closing)
+        .confirmClose($closing) { closedAgent($0, order: []) }
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
         #if DEBUG
         // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
@@ -1433,7 +1433,7 @@ struct ChatView: View {
                 }
                 if s.status.isLive && s.canTerminal {
                     Button(role: .destructive) { closing = s } label: {
-                        Label("关闭 Agent…", systemImage: Theme.Icon.end)
+                        Label("停止并关闭 Agent…", systemImage: Theme.Icon.end).lineLimit(1)
                     }
                 }
             }
@@ -1483,7 +1483,7 @@ struct ChatView: View {
     private func devSubtitle(_ s: Session) -> some View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             let words = stateWords(s, now: ctx.date)
-            let tabShown = model.siblings(of: key).count > 1
+            let tabShown = !model.siblings(of: key).isEmpty
             let place = [s.spaceName, tabShown ? nil : s.slotLabel].compactMap { $0 }.joined(separator: " › ")
             let machine = model.machine(s.machineRef)?.title ?? s.machineID
             HStack(spacing: Theme.Space.xs) {
@@ -1555,10 +1555,10 @@ struct ChatView: View {
                 // Row two, only when there is something for it: the space's other agents and a /loop or background
                 // work (small chips; a tap opens them). Files and Git are a swipe or the ··· menu away.
                 let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
-                if model.siblings(of: key).count > 1 || hasActivity {
+                if session?.spaceKey != nil || hasActivity {
                     HStack(spacing: Theme.Space.s) {
                         // The tabs take the width there is; without them the activity chips sit on the left.
-                        SiblingTabs(current: key) { next in switchTo(next) }
+                        SiblingTabs(current: key, select: switchTo, closed: closedAgent)
                         if hasActivity {
                             ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
                                 .fixedSize()
@@ -1630,9 +1630,9 @@ struct ChatView: View {
         VStack(spacing: Theme.Space.sm) {
             titleButton
             let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
-            if model.siblings(of: key).count > 1 || hasActivity {
+            if session?.spaceKey != nil || hasActivity {
                 HStack(spacing: Theme.Space.s) {
-                    SiblingTabs(current: key) { next in switchTo(next) }
+                    SiblingTabs(current: key, select: switchTo, closed: closedAgent)
                     if hasActivity {
                         ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
                             .fixedSize()
@@ -1967,6 +1967,16 @@ struct ChatView: View {
         menu.source = { [model, key] in
             let s = model.session(key)
             return [s?.spaceName, s?.slotLabel].compactMap { $0 }.joined(separator: " › ")
+        }
+    }
+
+    private func closedAgent(_ closed: SessionKey, order: [SessionKey]) {
+        guard closed == key else { return }
+        if let next = AgentCloseRules.next(after: closed, in: order, available: model.siblings(of: key).map(\.key)) {
+            switchTo(next)
+        } else {
+            pane = .chat
+            back()
         }
     }
 

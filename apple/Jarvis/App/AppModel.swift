@@ -1400,9 +1400,39 @@ final class AppModel {
         do { try await api(key.group)?.keys(key, keys: keys, text: text) } catch { show(error) }
     }
 
-    func close(_ key: SessionKey) async {
-        guard session(key)?.canTerminal == true else { return }
-        do { try await api(key.group)?.close(key); toast = Toast("已关闭会话", style: .success) } catch { show(error) }
+    @discardableResult
+    func close(_ key: SessionKey) async -> Bool {
+        guard let session = latest(key), session.canTerminal else {
+            toast = Toast("这个 Agent 不支持从手机停止并关闭", style: .error)
+            return false
+        }
+        guard let api = api(key.group) else {
+            toast = Toast("未连接到这个 Agent 的 hub，标签已保留", style: .error)
+            return false
+        }
+        do {
+            try await api.close(key)
+            func ended(_ list: [Session]) -> [Session] {
+                list.map { item in
+                    guard item.key == key || (session.paneID != nil && item.paneID == session.paneID) else { return item }
+                    var item = item
+                    item.status = .offline
+                    item.state = .offline
+                    return item
+                }
+            }
+            if let list = sessionsByMachine[key.machineRef] { sessionsByMachine[key.machineRef] = ended(list) }
+            if let list = pendingSessions[key.machineRef] { pendingSessions[key.machineRef] = ended(list) }
+            toast = Toast("已停止并关闭 Agent，对话记录已保留", style: .success)
+            Haptics.success()
+            return true
+        } catch {
+            toast = Toast(error.isCancellation
+                ? "尚未确认 Agent 已停止，标签已保留，请检查后重试"
+                : "停止并关闭失败：" + error.localizedDescription, style: .error)
+            Haptics.error()
+            return false
+        }
     }
 
     /// After a change in 设置 › 模型: the pickers read the machines' lists again.

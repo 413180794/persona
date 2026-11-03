@@ -206,6 +206,18 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
   改前 / 改后对比：在 `git worktree add --detach <目录> origin/master` 里放进同一个测试文件拍改前，两边同一份数据。
   带 `-openWelcome YES` 是为了去掉别的测试留下的配对（Keychain 里的 hub 优先于体验模式），`-demo.on YES` 让它直接进体验模式。
 
+### 空间标签的停止关闭（`SiblingTabsTests`）
+
+- 普通 mock，独立端口与模拟器：`PORT=<端口> python3 scripts/mock/mock_hub.py`，然后
+  `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口> TEST_RUNNER_JARVIS_LAYOUT=shell xcodebuild test … -only-testing:JarvisUITests/SiblingTabsTests`。
+  传给 `xcodebuild` 的变量要带 `TEST_RUNNER_`；测试进程读的是去掉前缀后的 `JARVIS_MOCK_HUB`，直接传后者会让整套用例跳过。
+- 验证左滑按钮、长按菜单、工作中取消、关闭失败时保留标签与确认卡片、关闭当前标签切到相邻标签、关闭其他标签不切换、最后一个标签关闭后返回。
+  原有的新建标签和点击切换回归一起跑；浅色、深色都看截图。截图以 `sibling-*` 附件保存在 `.xcresult`，
+  用 `xcrun xcresulttool export attachments --path <结果> --output-path <目录>` 导出；不要吞掉测试进程直接写宿主 `/tmp` 的失败。
+- mock 的 `GET /mock/session_close` 返回尝试和已关闭的目标；`?fail=1` 返回 503 且不改变会话。`/mock/reset` 恢复状态和记录。
+  `python3 -I scripts/mock/test_session_close_mock.py` 验证历史保留、其他 Agent 不变、失败和重置。
+- 不使用真实 hub 的会话测试关闭，也不以测试命令退出 0 代替检查实际执行／跳过数量。
+
 ### 实时更新不打断操作（`LiveUpdateTests`）
 
 用户正在做的事经得起 hub 一直推更新：Agents 的 ⋯ 菜单滚到机器那里开着（不跳、不回顶）、行的长按菜单开着、列表滚到中间（行不动）、
