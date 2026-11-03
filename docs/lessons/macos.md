@@ -2,6 +2,8 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- Persona Link 的界面和 helper 必须共用运行根（2026-11-03，#277）：只让 Go helper 支持 `PERSONA_HOME`，而界面继续固定读 `~/.jarvis/link.json`，会出现 helper 已配对、菜单却显示未配对。两端按新旧环境与默认软链解析同一目录；登录启动没有显式环境时，只从既有 `com.jarvis.node` 的环境字段恢复自定义根，并把解析结果同时传给常驻与一次性 helper。显式空的新变量不回退到旧环境或服务记录。解析器只查询路径，不读取凭据、不迁移文件、不启动真实 launchd 服务。
+
 - Mac 版（`JarvisMac`，`docs/mac.md`）和 iOS 共用页面：iOS 专用的 SwiftUI 修饰符 / 枚举成员在 `apple/Mac/Compat/` 里写同名的 Mac 版本（被标成 unavailable 的系统符号会让位给模块里的同名声明），
   UIKit 视图在 `apple/Mac/` 下写同名的 AppKit 类型；iOS 文件只加 `#if os(iOS)`。Mac target 和 App 一样默认 MainActor 隔离：Compat 里的纯数据类型、给解码线程用的 `NSImage` 辅助都要标 `nonisolated`。
 - 别把页面的分栏（`SplitNavigation`、Persona 页的 `NavigationSplitView`）放进另一个 `NavigationSplitView` 的详情栏：里面的详情栏会按外层侧栏还在前面来排，

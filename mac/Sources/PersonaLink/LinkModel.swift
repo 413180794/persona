@@ -195,8 +195,22 @@ enum LinkText {
     nonisolated static let jarvisdURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/jarvisd")
     /// Set once the app has set up (or found) the resident node by itself: later it only offers to.
     static let nodeSetUpKey = "nodeServiceSetUp"
-    nonisolated static let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".jarvis/link.json")
-    nonisolated static let logURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".jarvis/link.log")
+    nonisolated static let stateEnvironment = LinkStatePaths.serviceEnvironment(
+        home: FileManager.default.homeDirectoryForCurrentUser,
+        environment: ProcessInfo.processInfo.environment
+    )
+    nonisolated static let stateURL = LinkStatePaths.root(
+        home: FileManager.default.homeDirectoryForCurrentUser,
+        environment: stateEnvironment
+    )
+    nonisolated static var helperEnvironment: [String: String] {
+        var environment = stateEnvironment
+        environment["PERSONA_HOME"] = stateURL.path
+        environment["JARVIS_HOME"] = stateURL.path
+        return environment
+    }
+    nonisolated static let configURL = stateURL.appendingPathComponent("link.json")
+    nonisolated static let logURL = stateURL.appendingPathComponent("link.log")
 
     var look: LinkLook {
         if helperDown != nil { return .down }
@@ -238,6 +252,7 @@ enum LinkText {
         guard !quitting else { return }
         let p = Process()
         p.executableURL = Self.helperURL
+        p.environment = Self.helperEnvironment
         p.arguments = ["run", "--parent"] // exits when its stdin closes: when this app goes away, however it does
         let input = Pipe(), output = Pipe()
         p.standardInput = input
@@ -454,6 +469,7 @@ enum LinkText {
         await withCheckedContinuation { done in
             let p = Process()
             p.executableURL = helperURL
+            p.environment = helperEnvironment
             p.arguments = args
             let out = Pipe(), err = Pipe(), input = Pipe()
             p.standardOutput = out
