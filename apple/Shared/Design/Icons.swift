@@ -314,6 +314,25 @@ extension Theme {
         static let iosPhotos = "ios-app-photos"
         static let iosMaps = "ios-app-maps"
 
+        /// How much of its square box a mark's artwork fills, so marks of different shapes look the same size side by
+        /// side (`BrandMark`). The assets have no padding of their own (brand-lark's viewBox is cropped to the bird), and
+        /// they fit the box: a round or wide mark fills it (1), a full square looks bigger than a circle of the same
+        /// width, so it is drawn smaller, as on Material's keyline grid (18 of 24 for a square, 20 for a circle).
+        static func optical(_ asset: String) -> CGFloat {
+            asset == microsoft ? 0.88 : 1
+        }
+
+        /// Marks whose artwork is a circle: they fill a round badge (`BrandBadge`); any other shape is drawn at
+        /// `inCircle` of it, so its corners stay inside the circle (a 5:4 mark's corners reach the edge at 0.78).
+        static let round: Set<String> = [telegram, github, google]
+        static let inCircle: CGFloat = 0.72
+
+        /// A mark on a tile (`BrandTile`): the share of the tile's side it gets, about what a symbol has on its tile.
+        static let onTile: CGFloat = 0.62
+
+        /// iPhone apps' icons: drawn whole in an app icon's squircle with its edge, not fitted as a mark.
+        static func isAppIcon(_ asset: String) -> Bool { asset.hasPrefix("ios-app-") }
+
         /// A Linux distribution's mark; macOS uses the system's apple.logo.
         static func os(_ f: OSFamily) -> String? {
             switch f {

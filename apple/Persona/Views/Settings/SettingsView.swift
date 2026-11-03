@@ -469,25 +469,23 @@ struct PhoneDataView: View {
     }
 }
 
-/// A data source's icon: the iPhone app it comes from, else its symbol on a tile.
+/// A data source's icon: the iPhone app it comes from, else its symbol on a tile of the same size and shape.
 private struct SourceIcon: View {
     var source: PhoneDataSource
 
     var body: some View {
-        Group {
-            if let icon = source.appIcon {
-                Image(icon).resizable().scaledToFill()
-            } else {
-                Image(systemName: source.symbol)
-                    .font(Theme.Font.heading)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Theme.accent.gradient)
-            }
+        if let icon = source.appIcon {
+            BrandMark(icon, side: Theme.Size.wellS)
+        } else {
+            Image(systemName: source.symbol)
+                .font(Theme.Font.heading)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.accent.gradient)
+                .scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
+                .clipShape(AppIconShape())
+                .accessibilityHidden(true)
         }
-        .scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
-        .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
-        .accessibilityHidden(true)
     }
 }
 
@@ -916,8 +914,7 @@ private struct SettingsBrandMark: View {
     @Environment(\.buiTheme) private var theme
 
     var body: some View {
-        let side = Theme.Size.iconL * max(1, theme.typeScale * 0.9)
-        Image(asset).resizable().scaledToFit().frame(width: side, height: side).accessibilityHidden(true)
+        BrandMark(asset, side: Theme.Size.iconL * max(1, theme.typeScale * 0.9), scaled: false)
     }
 }
 

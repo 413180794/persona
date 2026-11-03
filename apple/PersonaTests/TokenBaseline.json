@@ -54,9 +54,6 @@
     "cornerRadius" : 1,
     "padding" : 1
   },
-  "Persona\/Views\/Inbox\/InboxView.swift" : {
-    "padding" : 1
-  },
   "Persona\/Views\/Inbox\/Lark\/LarkCard.swift" : {
     "cornerRadius" : 2,
     "hstackSpacing" : 1

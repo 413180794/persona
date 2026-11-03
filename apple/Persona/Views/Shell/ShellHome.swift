@@ -294,12 +294,7 @@ struct ShellNeedsYou: View {
     /// An inbox item's mark: Feishu's logo on a white tile, or its kind's symbol on the accent.
     @ViewBuilder private func beautifulMark(_ it: InboxItem) -> some View {
         if let brand = Self.brand(it) {
-            Image(brand).resizable().scaledToFit().foregroundStyle(.black)
-                .padding(Theme.Space.xs)
-                .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
-                .background(Color.white, in: .rect(cornerRadius: Theme.Radius.badge + 1, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.badge + 1, style: .continuous).strokeBorder(Theme.cardStroke, lineWidth: Theme.Size.hairline))
-                .accessibilityHidden(true)
+            BrandTile(brand)
         } else {
             BUIIconTile(Self.symbol(it), tint: Theme.accent)
         }
@@ -371,8 +366,7 @@ struct ShellNeedsYou: View {
 
     @ViewBuilder private func mark(_ it: InboxItem) -> some View {
         if let brand = Self.brand(it) {
-            Image(brand).resizable().scaledToFit()
-                .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
+            BrandMark(brand, side: Theme.Size.iconS)
                 .scaledFrame(width: Theme.Size.icon)
         } else {
             Image(systemName: Self.symbol(it))

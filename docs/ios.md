@@ -507,6 +507,13 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
     Gmail、Google 的 G、各 Linux 发行版。按官方原样用，不改颜色、不重画；发行版是单色模板，染发行版的颜色。用在：分享卡的头像
     （Claude / Codex，TRAEX 没有公开标志，仍是绿底终端）、收件箱的来源角标和手表收件箱（飞书）、邮箱账号（Gmail / 飞书邮箱）、
     「使用 Google 账号登录」按钮（照 Google 的规范：浅色白底灰边、深色 #131314，不用主色）、机器的系统图标（`OSBadge`）。
+  - 连接器、邮箱服务商、iPhone 数据来源的标志一律经 `BrandMark`（`apple/Persona/DesignSystem/BrandMark.swift`，#1003）画，
+    不直接 `Image(…).resizable()`：固定方框（`scaledFrame`，跟字号缩放），资源不带留白（飞书的 viewBox 裁到鸟本身），
+    再按形状做光学补偿（`Theme.Brand.optical`：圆形、横向的标志撑满，满版正方形 0.88），所以同一列里看起来一样大、中心对齐；
+    iPhone 应用图标按 App 图标画（`AppIconShape` 圆角 + 发丝边，白底的日历、健康在白卡片上也看得出边）。
+    BeautifulUI 行里和符号图块并排的用 `BrandTile`（白底，大小和圆角同 `BUIIconTile`），头像角上的圆形来源角标用 `BrandBadge`
+    （圆形标志撑满，其余按 `Theme.Brand.inCircle` 缩到圆里）。各处的方框：设置行 `icon`、详情页头 `wellM`、邮箱账号 `wellXS`、
+    数据来源 `wellS`、登录按钮 `iconXS`。加新的标志先量它的留白（`rsvg-convert` 后看不透明像素的范围），有留白就裁 viewBox。
   锁屏实时活动限到 `.large`（高度约 160pt，超出会被裁掉）。
 - 动效（`Theme.Motion`：状态切换 `.snappy` 0.25、布局 `.smooth` 0.3）：一直在动的只有「需要你」圆点的呼吸和工作中的系统转圈，
   打开「减少动态效果」时圆点也停（`accessibilityReduceMotion`，加载占位和「正在准备」同样停）；工作中的圆点是一圈静止的外环。

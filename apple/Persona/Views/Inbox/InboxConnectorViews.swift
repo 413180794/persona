@@ -21,7 +21,7 @@ struct InboxConnectorDetailView: View {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     HStack(spacing: Theme.Space.sm) {
                         if let brand = ConnectorText.brand(item.source) {
-                            Image(brand).resizable().scaledToFit().scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
+                            BrandMark(brand, side: Theme.Size.iconS)
                         }
                         Text([item.accountName, connector?.reference ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)

@@ -466,7 +466,7 @@ struct InboxRow: View {
             // connector without a mark, a neutral gray, not the accent.
             Group {
                 if let brand = item.isLark ? Theme.Brand.lark : item.connector != nil ? ConnectorText.brand(item.source) : nil {
-                    Image(brand).resizable().scaledToFit().foregroundStyle(.black).padding(1.5).background(.white, in: .circle)
+                    BrandBadge(brand)
                 } else {
                     Image(systemName: item.connector != nil ? Theme.Icon.connectors : Theme.Icon.mailFilled)
                         .font(Theme.Font.labelHeavy).imageScale(.small).dynamicTypeSize(...DynamicTypeSize.large)

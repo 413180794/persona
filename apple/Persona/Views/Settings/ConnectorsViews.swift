@@ -308,7 +308,7 @@ private struct ConnectorRowLabel: View {
                     Text(title)
                 } icon: {
                     if let brand {
-                        Image(brand).resizable().scaledToFit()
+                        BrandMark(brand, side: Theme.Size.icon)
                     } else {
                         Image(systemName: symbol)
                     }
@@ -333,7 +333,7 @@ struct FeishuConnectorView: View {
         List {
             Section {
                 HStack(spacing: Theme.Space.m) {
-                    Image(Theme.Brand.lark).resizable().scaledToFit().scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
+                    BrandMark(Theme.Brand.lark, side: Theme.Size.wellM)
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                         Text(status?.name ?? "飞书").font(Theme.Font.heading).lineLimit(1)
                         HStack(spacing: Theme.Space.sm) {
@@ -435,7 +435,7 @@ struct HubConnectorView: View {
         List {
             Section {
                 HStack(spacing: Theme.Space.m) {
-                    mark.scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
+                    mark
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                         Text(connector?.account ?? title).font(Theme.Font.heading).lineLimit(1)
                         HStack(spacing: Theme.Space.sm) {
@@ -516,9 +516,10 @@ struct HubConnectorView: View {
 
     @ViewBuilder private var mark: some View {
         if let brand = ConnectorText.brand(id) {
-            Image(brand).resizable().scaledToFit()
+            BrandMark(brand, side: Theme.Size.wellM)
         } else {
             Image(systemName: Theme.Icon.connectors).resizable().scaledToFit().foregroundStyle(Theme.accent)
+                .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
         }
     }
 

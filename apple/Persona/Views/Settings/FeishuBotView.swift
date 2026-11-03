@@ -47,7 +47,7 @@ struct FeishuBotView: View {
     private var statusSection: some View {
         Section {
             HStack(spacing: Theme.Space.m) {
-                Image(Theme.Brand.lark).resizable().scaledToFit().scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
+                BrandMark(Theme.Brand.lark, side: Theme.Size.wellM)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(model.status?.botName ?? "飞书机器人").font(Theme.Font.heading).lineLimit(1)
                     HStack(spacing: Theme.Space.sm) {

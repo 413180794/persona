@@ -102,7 +102,7 @@ export function ItemAvatar({ it, size = 40 }: { it: InboxItem; size?: number }) 
         style={{ width: badge, height: badge, right: -3, bottom: -3 }}
         title={isLark(it) ? "飞书" : "邮件"}
       >
-        {isLark(it) ? <img src={larkMark} alt="" className="size-[78%]" /> : <Icon name="mail" size={Math.round(badge * 0.62)} stroke={2.4} />}
+        {isLark(it) ? <img src={larkMark} alt="" className="size-[68%]" /> : <Icon name="mail" size={Math.round(badge * 0.62)} stroke={2.4} />}
       </span>
     </span>
   );

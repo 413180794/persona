@@ -473,13 +473,13 @@ struct MailProviderMark: View {
     var body: some View {
         Group {
             switch provider {
-            case "gmail": Image(Theme.Brand.gmail).resizable().scaledToFit()
-            case "outlook": Image(Theme.Brand.microsoft).resizable().scaledToFit()
-            case "feishu": Image(Theme.Brand.lark).resizable().scaledToFit()
+            case "gmail": BrandMark(Theme.Brand.gmail, side: Theme.Size.wellXS)
+            case "outlook": BrandMark(Theme.Brand.microsoft, side: Theme.Size.wellXS)
+            case "feishu": BrandMark(Theme.Brand.lark, side: Theme.Size.wellXS)
             default: Image(systemName: "envelope.circle.fill").resizable().scaledToFit().foregroundStyle(Theme.accent)
+                .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
             }
         }
-        .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
     }
 }
 
@@ -496,7 +496,7 @@ struct AccountSignInLabel: View {
         let dark = scheme == .dark
         HStack(spacing: Theme.Space.m) {
             if busy { ProgressView().controlSize(.small) } else {
-                Image(mark).resizable().scaledToFit().scaledFrame(width: Theme.Size.iconXS, height: Theme.Size.iconXS)
+                BrandMark(mark, side: Theme.Size.iconXS)
             }
             Text(title).font(Theme.Font.heading).lineLimit(1)
         }

@@ -168,6 +168,10 @@
 
 ## 布局与组件
 
+- 品牌标志大小不一（2026-11-03，#1003）：同一列里 `Image(…).resizable().scaledToFit()` 撑满一样的方框，看起来却差一圈。
+  原因在资源：飞书的 SVG 画布 88×88 里鸟只占 70% × 56%、还偏右，Telegram、Microsoft 是满版的；`scaledToFit` 只对齐画布不对齐图形。
+  做法：裁掉资源的留白（viewBox），统一经 `BrandMark` 画，满版正方形再按光学大小缩一点；量法是 `rsvg-convert` 渲染后找不透明像素的范围，
+  截图后按 @3x 像素量方框和中心，不靠肉眼。
 - 按「菜单里有没有项」决定画不画 ⋯ 时，别用 `items is EmptyView`（2026-11-03，#778）：ViewBuilder 里写 `if 条件 { Button … }`，
   条件为假时得到的是值为 nil 的 `Optional<…>`，不是 `EmptyView`，判断落空，画出一个点开什么都没有的 ⋯（Persona 侧栏「置顶」只置顶了主对话时）。
   `HeadingMenu.isEmpty` 只认这两种：`EmptyView`、单个为假的 `if`（nil 的 `Optional`）；几个 `if`、`if` / `else`、`ForEach`、`Group` 即使什么都不画也算有项，
