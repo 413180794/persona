@@ -276,6 +276,29 @@ final class LiveUpdateTests: XCTestCase {
         }
     }
 
+    // A card read off the terminal of the agent whose conversation is open is up within a second of the hub's push,
+    // while the hub is busy; answered on the computer, it is gone within a second too (#751: cards are never held).
+    @MainActor func testAScreenCardInTheOpenConversation() {
+        launch(chat: Self.widget)
+        XCTAssertTrue(app.buttons["work-head"].firstMatch.waitForExistence(timeout: 15))
+        sleep(1)
+        mock("churn?n=\(Self.rounds)&ms=400&steps=1&inbox=1") // a busy hub meanwhile
+        let session = String(Self.widget.split(separator: "/")[1])
+        for round in 1...3 {
+            guard let question = mock("bump?what=screen&session=" + session)["question"] as? String else {
+                return XCTFail("the mock made no card")
+            }
+            let card = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", question)).firstMatch
+            if let took = eventually("round \(round): the card is up", within: 1, poll: 0.05, { card.exists ? [] : ["no 「\(question)」"] }) {
+                print(String(format: "TRUTH card: up %.2f s after the push", took))
+            }
+            mock("bump?what=resolve")
+            if let took = eventually("round \(round): the card is gone", within: 1, poll: 0.05, { card.exists ? ["「\(question)」 still there"] : [] }) {
+                print(String(format: "TRUTH card: gone %.2f s after the answer on the computer", took))
+            }
+        }
+    }
+
     /// The Agents badge's number: the shell's (「N 个在等你」) or the Agents tab's value; 0 when there is none.
     private func agentsBadge() -> Int {
         let shell = app.descendants(matching: .any).matching(NSPredicate(format: "label ENDSWITH %@", "个在等你")).firstMatch

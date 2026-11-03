@@ -61,8 +61,9 @@ type Host interface {
 type Watcher interface {
 	// Watch calls changed for every change until ctx ends or the host ends the stream, and returns why it stopped.
 	// panes are the agent panes whose state changes to report (a different set needs a new Watch); the first call of
-	// changed means the stream is live (snapshot then, to cover the gap before it).
-	Watch(ctx context.Context, panes []PaneRef, changed func()) error
+	// changed means the stream is live (snapshot then, to cover the gap before it). urgent: an agent started or
+	// stopped waiting for the user, so a card comes or goes and the change skips the list's pacing (#751).
+	Watch(ctx context.Context, panes []PaneRef, changed func(urgent bool)) error
 }
 
 // PlainScreen is a host whose screens may come without colors: when PlainScreen is true, Read with ReadOpts.ANSI

@@ -32,13 +32,48 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
   退回 CLI。方法名以 `herdr api schema --json` 为准（`pane run` 对应 `pane.send_input` + `keys:["Enter"]`；`pane.process_info` 必须传
   `pane_id`，传 target 会回答当前聚焦的窗格）。
 - `events.subscribe` 一条长连接：生命周期事件（workspace / tab / pane 的增删改）加每个 Agent 窗格的 `pane.agent_status_changed`
-  （herdr 只按窗格订阅状态）。任何事件都让 `pollAgents` 马上取一次 snapshot（50ms 合并一串事件）；平时 10 秒兜底一次。
+  （herdr 只按窗格订阅状态）。事件让 `pollAgents` 取一次 snapshot：先等 50ms 合并一串事件，列表重建最多每秒一次；
+  Agent 进入或离开 blocked（卡片来了 / 没了）不受每秒一次的限制，50ms 后就取（见下面「卡片的快车道」）。平时 10 秒兜底一次。
   事件流没连上，或有 TRAEX 窗格（它的状态在标题的转圈字符里，只变转圈不发 `pane.updated`）时仍每秒一次。
 - 订阅的坑：同一条连接第二次 subscribe 会被静默忽略，窗格集合变了要带全集重开连接；herdr 会关掉跟不上的订阅者，`events_lost`
-  不一定送得到，以连接关闭为准重连（指数退避到 30 秒），重连后先取一次 snapshot 补齐。推来的事件名用下划线（`tab_created`），
-  订阅时的类型用点（`tab.created`）。
+  不一定送得到，以连接关闭为准重连（指数退避到 30 秒），重连后先取一次 snapshot 补齐。推来的事件名 herdr 0.9 和订阅时一样用点
+  （`pane.agent_status_changed`），更老的用下划线（`pane_agent_status_changed`），两种都认。
 - 本机实测（herdr 0.9.3，7 个 Agent）：稳定时 30 秒内零事件；tab 改名到 `sessions.changed` 发出 80–140ms（原来最多 1 秒）。
   联调：`./scripts/test/test-herdr.sh`（独立的 herdr 会话，见 `docs/testing.md`「herdr 联调」）。
+
+### 卡片的快车道（#751）
+
+提问、授权、计划审批这些卡片，以及它们的出现、答掉、被替换、消失，每一跳都直通，不经过节流、合并或批处理；别的变化照旧节流。
+
+| 一跳 | 怎么直通 |
+| --- | --- |
+| herdr 认出 Agent 在等你 | herdr 自己的事（实测 0–320 ms） |
+| node 上报 hub | 进入 / 离开 blocked 的状态事件不等每秒一次的列表重建，50 ms 合并后就取 snapshot、发 `sessions.changed` |
+| hub 建卡 | 没有 hook 的会话不等（有 hook 的等 1.5 s，见 `docs/protocol.md`「终端对话框」）；读屏幕、解析、`interaction` 事件立刻广播 |
+| 推到 App | WebSocket 直接排进每个连接；APNs 立刻发；灵动岛「需要你」的变化不合并、不受 30 s 间隔限制 |
+| App 画出来 | 收到就进模型；Agents 列表扣留时也立刻落「需要你」和提问（`landCritical`，`docs/ios-state.md`）；对话页直接读模型 |
+
+实测（2026-11-03，隔离的 herdr + 真实的 Claude Code 2.1.317、没有 Jarvis 的 hook，node 和 hub 在同一进程里按 SSH 那样接起来，
+`hub/cardlatency_live_test.go`）：
+
+| | 修之前 | 修之后 |
+| --- | --- | --- |
+| 对话框出现在终端 → App 收到卡片 | 4.0–10.4 s（6 次） | 0–0.35 s（8 次；屏幕每 25 ms 读一次，误差在这个量级） |
+| 其中 herdr 认出 → hub 知道 blocked | 2.2–8.9 s | 0–0.16 s |
+| 其中 hub 建卡 | 1.5 s | 0 ms |
+| 在电脑上答掉 → 卡片消失 | 8.5 s | 0.17–0.59 s |
+| 答完一道题 → 下一道题的卡（同一个 AskUserQuestion 两道题） | 没有新卡 | 0.61–0.72 s（含按键） |
+
+慢在哪：
+- #611（合并 herdr 和 Herdr App 两种引擎）以后，叫醒 `pollAgents` 的那个 select 自己吃掉了 herdr 的事件标记，接着又按标记找「谁有变化」，
+  找不到，这次就不取 snapshot，只剩 10 秒兜底；
+- herdr 0.9 推来的事件名带点，node 只认下划线的，分不出哪个是状态事件；
+- hub 给每张屏幕卡固定先等 1.5 s，等一张没有 hook 的会话永远不会来的 hook 卡。
+
+量法：`HERDR_SOCKET_PATH=<隔离 herdr 的 socket> JARVIS_LIVE_CARD_PANE=<跑 claude 的窗格> go test -tags herdrlive -run TestLiveCardLatency ./internal/hub/`
+（`JARVIS_LIVE_CARD_TWO=1`：一次问两道题；`JARVIS_LIVE_CARD_TRACE=1`：每一跳的时间线）。本机没有 Go 时在 hub 上交叉编译测试二进制再拷回来。
+App 那一跳由 UI 测试守住：`ScreenTruthTests.testWhatNeedsTheUserShowsUnderTheFinger`（手指按在列表上也 1 s 内上屏）、
+`LiveUpdateTests.testAScreenCardInTheOpenConversation`（对话页 1 s 内出现、在电脑上答掉后 1 s 内消失）。
 
 ## 和 herdr-core 的连接
 

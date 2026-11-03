@@ -469,12 +469,11 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// Hook dialogs flip the agent to blocked a moment before the hook reaches us; give them a head start. A Codex
-	// node reads its approvals off the screen once a second (codexcards.go): a little longer.
-	wait := 1500 * time.Millisecond
-	if s.Agent == "codex" || s.Agent == "traex" {
-		wait = 3 * time.Second
+	// node reads its approvals off the screen once a second (codexcards.go): a little longer. A Claude Code without
+	// Jarvis's hooks (the user's own profile) asks only on the screen: its card is made at once (#751).
+	if wait := screenCardWait(s, m.hasHooks(s)); wait > 0 {
+		time.Sleep(wait)
 	}
-	time.Sleep(wait)
 	if cur, ok := m.session(s.SessionID); !ok || cur.Status != proto.StatusBlocked {
 		return
 	}
@@ -523,12 +522,66 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == screen.PromptChanged {
 			go h.createScreenInteraction(m, s) // the card for what is on screen now
+		} else if err == nil {
+			go h.recheckScreen(m, s.SessionID, ix.ID)
 		}
 		return err
 	}}
 	h.mu.Unlock()
 	h.record(ix)
 	h.announce(ix)
+}
+
+// screenRecheck: how often, and screenRecheckFor how long, the screen is looked at again after a screen card's
+// answer (recheckScreen).
+var screenRecheck, screenRecheckFor = 250 * time.Millisecond, 2 * time.Second
+
+// recheckScreen: after a screen card's answer the agent may ask again at once (the next question of an
+// AskUserQuestion, the next permission) while herdr keeps calling it blocked, so no status change makes that card.
+// Look again until a dialog that is not the answered one shows (its card is made), the agent works again (a new
+// question then comes with its own change to blocked), or another card is up (#751).
+func (h *Hub) recheckScreen(m *Machine, session, answered string) {
+	for end := time.Now().Add(screenRecheckFor); time.Now().Before(end); {
+		time.Sleep(screenRecheck)
+		cur, ok := m.session(session)
+		if !ok || cur.Status != proto.StatusBlocked {
+			return
+		}
+		h.mu.Lock()
+		asked := false
+		for _, p := range h.interactions {
+			asked = asked || p.ix.MachineID == m.cfg.ID && p.ix.SessionID == session
+		}
+		h.mu.Unlock()
+		if asked {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		var scr struct {
+			Text string `json:"text"`
+		}
+		err := m.call(ctx, "session.screen", map[string]any{"session_id": session, "lines": 40}, &scr)
+		cancel()
+		if err != nil {
+			return
+		}
+		// No dialog (the screen between two) or the answered one (the keys not landed yet): look again.
+		if d := screen.ParseDialog(scr.Text); d != nil && "scr_"+m.cfg.ID+"_"+session+"_"+d.Rev != answered {
+			h.createScreenInteraction(m, cur)
+			return
+		}
+	}
+}
+
+// screenCardWait is how long a blocked session's screen card waits for a card its agent asks for itself.
+func screenCardWait(s proto.Session, hooks bool) time.Duration {
+	switch {
+	case s.Agent == "codex" || s.Agent == "traex":
+		return 3 * time.Second
+	case hooks:
+		return 1500 * time.Millisecond
+	}
+	return 0
 }
 
 // coversScreen: the interaction stands for what the terminal waits on (a hook's, a Codex approval or overlay

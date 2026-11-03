@@ -498,8 +498,8 @@ type Subscription map[string]string
 // SubscriptionStarted is the event Subscribe reports first, when herdr has accepted the subscriptions.
 const SubscriptionStarted = "subscription_started"
 
-// Event is one pushed event: its kind and payload. herdr names kinds with underscores ("pane_agent_status_changed")
-// though it takes subscriptions with dots ("pane.agent_status_changed").
+// Event is one pushed event: its kind and payload. herdr 0.9 names kinds as its subscriptions do
+// ("pane.agent_status_changed"); older ones with underscores ("pane_agent_status_changed").
 type Event struct {
 	Event string          `json:"event"`
 	Data  json.RawMessage `json:"data"`

@@ -286,6 +286,21 @@ func TestHerdrCoreEventsKickARefresh(t *testing.T) {
 	if !kicked() {
 		t.Fatal("missed events took no snapshot")
 	}
+	// A status into or out of blocked is a card's: urgent (#751); working → done is not.
+	sig.urgent.Store(false)
+	status := func(seq int, terminal, state string) bool {
+		hc.push("event", map[string]any{"type": "status", "terminal": terminal, "seq": seq,
+			"data": map[string]any{"status": map[string]any{"app": "claude-code", "state": state}}})
+		if !kicked() {
+			t.Fatalf("status %s took no snapshot", state)
+		}
+		return sig.urgent.Swap(false)
+	}
+	// t1 said a status (none) above; t2 is new.
+	if status(10, "t1", "working") || status(11, "t1", "done") || !status(12, "t1", "blocked") || status(13, "t1", "blocked") ||
+		!status(14, "t1", "working") || !status(15, "t2", "idle") {
+		t.Fatal("urgent only into or out of blocked, and on a terminal's first status")
+	}
 }
 
 // herdr-core not running: no sessions, at once, nothing logged (and the refresh succeeds: nothing runs there); one

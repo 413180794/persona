@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -1080,27 +1079,9 @@ func (n *Node) pollAgents(ctx context.Context) {
 	var listed time.Time
 	for {
 		sigs := n.signalSnapshot()
-		cases := []reflect.SelectCase{
-			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ctx.Done())},
-			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(t.C)},
-		}
-		for _, sig := range sigs {
-			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sig.kick)})
-		}
-		if chosen, _, _ := reflect.Select(cases); chosen == 0 {
+		kicked, ok := nextChange(ctx, t.C, sigs, listed)
+		if !ok {
 			return
-		}
-		// Collect every pending change marker (one per host): the select consumed one, drain the rest.
-		kicked := map[string]bool{}
-		for kind, sig := range sigs {
-			if sig.drained() {
-				kicked[kind] = true
-			}
-		}
-		if len(kicked) > 0 {
-			// One snapshot for the whole burst (a new tab sends several events), and at most one list rebuild a
-			// second however busy the agents are (as when it polled every second).
-			time.Sleep(max(50*time.Millisecond, time.Until(listed.Add(time.Second))))
 		}
 		var due []host.Host
 		for _, h := range n.hosts.All() {

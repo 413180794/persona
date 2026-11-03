@@ -578,6 +578,12 @@ TUI 回到了能作答的状态，输入后再确认 Codex 收下了才回成功
 
 Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`，40 行）建一张 `screen` 卡：
 
+- 什么时候建：没有 Jarvis hook 的 Claude Code（用户自己的 profile 启动的）一 blocked 就读屏幕建卡；有 hook 的会话（这次 hub 启动后发过 hook 事件，
+  或者是 Jarvis 起的）先等 1.5 s，让 hook 自己的卡先到（Codex / TRAEX 等 3 s）。hook 的卡晚到时照旧替掉屏幕卡。
+- 答完一张屏幕卡后 hub 每 250 ms 再看一次屏幕，最多 2 s：Agent 接着又问（AskUserQuestion 的下一道题、下一个授权）时 herdr 可能一直是 blocked、
+  没有状态变化，靠这一下给新的对话框建卡；看到的还是刚答的那个（按键还没落地）或没有对话框就接着看，Agent 不再 blocked 或已有别的卡就停。
+- 整条链路的实测和不限流的约定见 `docs/server.md`「卡片的快车道」（#751）。
+
 - hub 用 `server/internal/screen` 解析对话框，放进 `interaction.dialog`：`header`、`question`、`detail`、
   `options[{key,label,detail,kind,keys}]`（`kind`：`type_something` / `chat` / 空）、`rev`（问题和选项的哈希，不含光标和转圈）。
   有编号的选项按数字；Claude 2.1.312 信任目录那种不带编号的列表按光标算 `up/down` + `enter`。卡片 id 带上 `rev`：对话框换了就是新卡，

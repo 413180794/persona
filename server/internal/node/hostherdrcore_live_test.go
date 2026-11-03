@@ -136,7 +136,7 @@ func TestHerdrCoreLiveIsolated(t *testing.T) {
 	changes := make(chan struct{}, 64)
 	wctx, wcancel := context.WithCancel(ctx)
 	defer wcancel()
-	go func() { _ = h.Watch(wctx, nil, func() { changes <- struct{}{} }) }()
+	go func() { _ = h.Watch(wctx, nil, func(bool) { changes <- struct{}{} }) }()
 
 	waitAgent := func(status string) host.Agent {
 		t.Helper()

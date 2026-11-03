@@ -287,13 +287,16 @@ func (h *herdrCoreHost) PaneProcesses(ctx context.Context, pane host.PaneRef) ([
 }
 
 // Watch is one events.subscribe for every terminal (the core has no per-terminal subscriptions to keep up to date,
-// so panes are not needed). Size and keep changes do not change a session.
-func (h *herdrCoreHost) Watch(ctx context.Context, _ []host.PaneRef, changed func()) error {
-	return h.c.Subscribe(ctx, changed, func(ev herdrcore.Event) {
+// so panes are not needed). Size and keep changes do not change a session. A status into or out of blocked is
+// urgent.
+func (h *herdrCoreHost) Watch(ctx context.Context, _ []host.PaneRef, changed func(urgent bool)) error {
+	var w waits
+	return h.c.Subscribe(ctx, func() { changed(false) }, func(ev herdrcore.Event) {
 		if ev.Type == "size" || ev.Type == "keep" || strings.Contains(ev.Terminal, "/") {
 			return
 		}
-		changed()
+		blocked := ev.Data.Status != nil && ev.Data.Status.State == "blocked"
+		changed(ev.Type == "status" && w.changed(ev.Terminal, blocked))
 	})
 }
 

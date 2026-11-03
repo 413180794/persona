@@ -3880,7 +3880,7 @@ def push_machine(mid):
         except Exception: pass
 
 
-def bump(what):
+def bump(what, session=None):
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     BUMPED["n"] += 1
     n = BUMPED["n"]
@@ -3905,12 +3905,33 @@ def bump(what):
             try: send({"type": "interaction", "interaction": ix})
             except Exception: pass
         return {"ask": ix["id"]}
+    if what == "screen":  # a dialog read off a terminal (#751), as the hub sends it: the card, then the agent blocked
+        s = next((x for x in SESSIONS if x["session_id"] == session), None) or (working[0] if working else SESSIONS[0])
+        question = "你更喜欢哪个颜色？（第 %d 次）" % n
+        ix = {"id": "ix_bump_scr_%d" % n, "machine_id": s["machine_id"], "session_id": s["session_id"],
+              "session_title": s.get("title") or "", "cwd": s.get("cwd") or "", "kind": "screen", "created_at": now,
+              "expires_at": later(hours=24), "screen": " %s\n ❯ 1. 红色\n   2. 蓝色\n" % question,
+              "dialog": {"question": question, "rev": "bump%d" % n, "options": [
+                  {"key": "1", "label": "红色", "keys": ["1"]}, {"key": "2", "label": "蓝色", "keys": ["2"]}]}}
+        INTERACTIONS.append(ix)
+        BUMPED["asks"].append(ix["id"])
+        BUMPED.setdefault("blocked", {})[ix["id"]] = (s, s["state"], s.get("status"))
+        s.update(state="needs_you", status="blocked", state_since=now, updated_at=now)
+        for send, _ in list(LIVE):
+            try: send({"type": "interaction", "interaction": ix})
+            except Exception: pass
+        push_machine(s["machine_id"])
+        return {"ask": ix["id"], "question": question, "key": s["machine_id"] + "/" + s["session_id"]}
     if what == "resolve" and BUMPED["asks"]:
         ix_id = BUMPED["asks"].pop()
         INTERACTIONS[:] = [x for x in INTERACTIONS if x["id"] != ix_id]
         for send, _ in list(LIVE):
             try: send({"type": "interaction_resolved", "id": ix_id})
             except Exception: pass
+        if ix_id in BUMPED.get("blocked", {}):  # answered on the computer: the agent works again
+            s, state, status = BUMPED["blocked"].pop(ix_id)
+            s.update(state=state, status=status, state_since=now, updated_at=now)
+            push_machine(s["machine_id"])
         return {"resolved": ix_id}
     return {"error": "nothing to bump"}
 
@@ -4032,7 +4053,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
         if p == "/mock/truth": return self.send_json(truth())
-        if p == "/mock/bump": return self.send_json(bump(q.get("what", ["last"])[0]))
+        if p == "/mock/bump": return self.send_json(bump(q.get("what", ["last"])[0], q.get("session", [None])[0]))
         if p == "/mock/mark": return self.send_json({"ok": True})  # a test's marker in the request log (explore)
         if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
             # &steps=50&ms=80: the hub's own pace (a delta every 80 ms, node/assistant.go).
@@ -4112,6 +4133,7 @@ class H(BaseHTTPRequestHandler):
                     x["state"], x["status"] = ORIG_STATE[x["session_id"]]
             INTERACTIONS[:] = [x for x in INTERACTIONS if not x["id"].startswith(("ix_bump_", "ix_churn"))]
             BUMPED["asks"].clear()
+            BUMPED.pop("blocked", None)
             TODOS[:] = copy.deepcopy(TODOS_INIT)
             return self.send_json({"ok": True})
         if p == "/mock/session_close":

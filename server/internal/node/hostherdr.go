@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os/exec"
 	"sync"
@@ -96,13 +97,21 @@ func (h *herdrHost) PaneProcesses(ctx context.Context, pane host.PaneRef) ([]int
 }
 
 // Watch is one events.subscribe: the lifecycle events plus agent status for each pane (herdr only sends those per
-// pane).
-func (h *herdrHost) Watch(ctx context.Context, panes []host.PaneRef, changed func()) error {
+// pane). A status change into or out of blocked is urgent.
+func (h *herdrHost) Watch(ctx context.Context, panes []host.PaneRef, changed func(urgent bool)) error {
 	ids := make([]string, len(panes))
 	for i, p := range panes {
 		ids[i] = p.ID
 	}
-	return h.c.Subscribe(ctx, subscriptions(ids), func(herdr.Event) { changed() })
+	var w waits
+	return h.c.Subscribe(ctx, subscriptions(ids), func(e herdr.Event) {
+		var d struct {
+			PaneID      string `json:"pane_id"`
+			AgentStatus string `json:"agent_status"`
+		}
+		status := e.Event == "pane.agent_status_changed" || e.Event == "pane_agent_status_changed"
+		changed(status && json.Unmarshal(e.Data, &d) == nil && w.changed(d.PaneID, d.AgentStatus == "blocked"))
+	})
 }
 
 // herdrLifecycle are the events that change which sessions there are or how they are named.

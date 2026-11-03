@@ -170,12 +170,13 @@ final class ScreenTruthTests: XCTestCase {
         eventually("the list shows what the hub holds", within: 5) { differs() }
     }
 
-    // Timely, what matters: an agent starting to need the user, and a question coming, show while the finger is on
-    // the list, within 1 s; nothing waits for the finger to lift.
+    // Timely, what matters: an agent starting to need the user, a question coming, and a card read off a terminal
+    // (with its agent turning blocked, #751) show while the finger is on the list, within 1 s; nothing waits for the
+    // finger to lift.
     func testWhatNeedsTheUserShowsUnderTheFinger() {
         launch()
         eventually("at rest", within: 5) { differs() }
-        for what in ["needs", "ask"] {
+        for what in ["needs", "ask", "screen"] {
             let sent = Box()
             bumpLater(what, after: 0.8, sent: sent)
             holdFinger(3)

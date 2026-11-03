@@ -128,6 +128,10 @@ func (c *Client) Doc(ctx context.Context, name string, out any) error {
 type Event struct {
 	Type     string `json:"type"`
 	Terminal string `json:"terminal"`
+	// Data: a status event's new status (nil once the program cleared it).
+	Data struct {
+		Status *Status `json:"status"`
+	} `json:"data"`
 }
 
 // Subscribe keeps one events.subscribe stream open (a plain connection that then carries only notifications), calling

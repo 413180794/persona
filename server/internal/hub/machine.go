@@ -42,6 +42,7 @@ type Machine struct {
 	sessions []proto.Session
 	watchers map[string]int // session id -> subscribed clients
 	lastSeq  map[string]int // session id -> highest item seq seen
+	hooked   map[string]bool
 	kick     chan struct{}
 	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
 	deploying bool
@@ -490,10 +491,17 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 	case "hook.event":
 		var p map[string]any
 		if json.Unmarshal(params, &p) == nil {
+			if sid, _ := p["session_id"].(string); sid != "" {
+				m.mu.Lock()
+				if m.hooked == nil {
+					m.hooked = map[string]bool{}
+				}
+				m.hooked[sid] = true
+				m.mu.Unlock()
+			}
 			p["type"] = "hook_event"
 			p["machine_id"] = m.cfg.ID
 			m.hub.broadcast(p)
-
 		}
 	}
 }
@@ -623,4 +631,13 @@ func nodeMismatch(hub, node string) bool {
 		return false
 	}
 	return hub != node
+}
+
+// hasHooks: Jarvis's hooks run in the session — it sent a hook event since this hub started (m.hooked), or Jarvis
+// started it (with its hooks) — so they ask for most dialogs themselves and a screen card waits for them a little
+// (createScreenInteraction).
+func (m *Machine) hasHooks(s proto.Session) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.hooked[s.SessionID] || s.StartedByJarvis
 }

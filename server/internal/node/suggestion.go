@@ -87,7 +87,7 @@ func (n *Node) readSuggestion(ctx context.Context, id, pane string) {
 			}
 			n.mu.Unlock()
 			if n.events != nil {
-				n.events.poke() // a list rebuild carries it to the hub
+				n.events.poke(false) // a list rebuild carries it to the hub
 			}
 			return
 		}

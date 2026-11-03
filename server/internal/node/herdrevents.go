@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ type watcherSignals struct {
 	live   atomic.Int64 // the watcher whose subscription is streaming (watcherID), 0: none
 	nextID atomic.Int64
 	kick   chan struct{} // something changed: snapshot this host now (buffered 1)
+	urgent atomic.Bool   // the change is a card's (an agent started or stopped waiting for the user): no pacing
 }
 
 func newWatcherSignals() *watcherSignals { return &watcherSignals{kick: make(chan struct{}, 1)} }
@@ -38,7 +40,11 @@ func (s *watcherSignals) setLive(id int64)   { s.live.Store(id) }
 func (s *watcherSignals) clearLive(id int64) { s.live.CompareAndSwap(id, 0) }
 func (s *watcherSignals) isLive() bool       { return s.live.Load() != 0 }
 
-func (s *watcherSignals) poke() {
+// poke announces a change; urgent: a card comes or goes (Watcher.Watch).
+func (s *watcherSignals) poke(urgent bool) {
+	if urgent {
+		s.urgent.Store(true)
+	}
 	select {
 	case s.kick <- struct{}{}:
 	default:
@@ -91,9 +97,9 @@ func (n *Node) watchHerdr(ctx context.Context) {
 		for i, p := range panes {
 			refs[i] = n.hosts.Ref(p)
 		}
-		err := w.Watch(sctx, refs, func() {
+		err := w.Watch(sctx, refs, func(urgent bool) {
 			e.setLive(me) // the first one is SubscriptionStarted: snapshot to cover the gap before it
-			e.poke()
+			e.poke(urgent)
 		})
 		e.clearLive(me)
 		cancel()
@@ -226,9 +232,9 @@ func (n *Node) watchHost(ctx context.Context, w host.Watcher, sig *watcherSignal
 	backoff := time.Second
 	for ctx.Err() == nil {
 		started := time.Now()
-		_ = w.Watch(ctx, nil, func() {
+		_ = w.Watch(ctx, nil, func(urgent bool) {
 			sig.setLive(me) // the first one is the stream starting: snapshot to cover the gap before it
-			sig.poke()
+			sig.poke(urgent)
 		})
 		sig.clearLive(me)
 		if ctx.Err() != nil {
@@ -243,4 +249,85 @@ func (n *Node) watchHost(ctx context.Context, w host.Watcher, sig *watcherSignal
 		}
 		backoff = min(backoff*2, 30*time.Second)
 	}
+}
+
+// waits remembers, per pane, whether the host last said its agent was blocked, to tell a card's status change (into
+// or out of blocked) from the others. A pane it has not heard of yet counts as changed. One Watch call's, not shared.
+type waits map[string]bool
+
+func (w *waits) changed(pane string, blocked bool) bool {
+	if *w == nil {
+		*w = waits{}
+	}
+	was, known := (*w)[pane]
+	(*w)[pane] = blocked
+	return !known || was != blocked
+}
+
+// listEvery: the list is rebuilt at most this often on the hosts' events however busy the agents are, except for a
+// card's change (watcherSignals.urgent).
+var listEvery = time.Second
+
+// settle: how long a burst of events (a new tab sends several) is let arrive before the one snapshot it takes.
+const settle = 50 * time.Millisecond
+
+// nextChange waits for pollAgents' next turn: a tick, or a change a host's stream announced. It returns the hosts that
+// announced one (none on a plain tick), after pacing them (settle, and listEvery since the last rebuild unless the
+// change is urgent), and false once ctx ends.
+func nextChange(ctx context.Context, tick <-chan time.Time, sigs map[string]*watcherSignals, listed time.Time) (map[string]bool, bool) {
+	kinds := make([]string, 0, len(sigs))
+	cases := []reflect.SelectCase{
+		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ctx.Done())},
+		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(tick)},
+	}
+	for kind, sig := range sigs {
+		kinds = append(kinds, kind)
+		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sig.kick)})
+	}
+	chosen, _, _ := reflect.Select(cases)
+	if chosen == 0 {
+		return nil, false
+	}
+	kicked := map[string]bool{}
+	if chosen > 1 {
+		// The select took this host's marker: it is kicked though it has none left to drain (#751: since #611 a
+		// lone event, an agent turning blocked, waited for the slow snapshot, up to 10 s).
+		kicked[kinds[chosen-2]] = true
+		pace(sigs, listed)
+	}
+	// What came meanwhile goes into the same snapshot.
+	for kind, sig := range sigs {
+		if sig.drained() {
+			kicked[kind] = true
+		}
+	}
+	for kind := range kicked {
+		sigs[kind].urgent.Store(false)
+	}
+	return kicked, true
+}
+
+// pace waits settle, then until listEvery after the last rebuild unless a host's change is urgent (a card's).
+func pace(sigs map[string]*watcherSignals, listed time.Time) {
+	start := time.Now()
+	until := listed.Add(listEvery)
+	if until.Before(start.Add(settle)) {
+		until = start.Add(settle)
+	}
+	for {
+		now := time.Now()
+		if !now.Before(until) || now.Sub(start) >= settle && anyUrgent(sigs) {
+			return
+		}
+		time.Sleep(min(until.Sub(now), settle/2))
+	}
+}
+
+func anyUrgent(sigs map[string]*watcherSignals) bool {
+	for _, sig := range sigs {
+		if sig.urgent.Load() {
+			return true
+		}
+	}
+	return false
 }
