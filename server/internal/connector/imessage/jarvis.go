@@ -207,7 +207,8 @@ func (c *Remote) look(ctx context.Context, changed func(connector.Scope)) {
 func (c *Remote) thing(ctx context.Context, chat Chat) connector.InboxThing {
 	last := strconv.FormatInt(chat.Last.UnixNano(), 10)
 	t := connector.InboxThing{Thread: chat.ID, Kind: "dm", Title: chat.Name, Sender: chat.Name, Preview: MaskCodes(chat.Preview),
-		At: chat.Last, Last: last, ReplyTo: "在「信息」里回复（Jarvis 不替你发）", Tier: connector.TierAction}
+		At: chat.Last, Last: last, ReplyTo: "在「信息」里回复（Jarvis 不替你发）", Tier: connector.TierAction,
+		Tags: []connector.Tag{{Key: connector.TagChat, Value: chat.ID, Name: chat.Name}}}
 	if chat.Group {
 		t.Kind, t.Label, t.Tier = "group", "群聊", connector.TierFYI
 		if s, _, ok := strings.Cut(t.Preview, "："); ok {

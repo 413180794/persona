@@ -57,7 +57,8 @@ func (c *Conn) Collect(context.Context) ([]connector.InboxThing, error) {
 		}
 		key := d.Peer.key()
 		t := connector.InboxThing{Thread: key, Title: d.Name, Sender: d.TopFrom, Preview: d.TopText, At: d.TopAt,
-			OpenURL: openURL(d), Tier: connector.TierAction, Context: c.box.contexts[key].text}
+			OpenURL: openURL(d), Tier: connector.TierAction, Context: c.box.contexts[key].text,
+			Tags: []connector.Tag{{Key: connector.TagChat, Value: key, Name: d.Name}}}
 		switch d.Kind {
 		case "dm":
 			t.Kind, t.Label, t.Last = "dm", "私聊", strconv.Itoa(d.Top)

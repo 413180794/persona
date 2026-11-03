@@ -52,6 +52,7 @@ struct InboxPage: View {
     @State private var expanded: Set<String> = ["action", "fyi"]
     @State private var composing: ComposeDraft?
     @State private var editingDraft: InboxItem? // 修改 on the AI 分身's draft
+    @State private var showingMutes = false     // 已静音
     private var store: InboxStore { .shared }
 
     private func matches(_ it: InboxItem) -> Bool {
@@ -108,16 +109,20 @@ struct InboxPage: View {
                         Menu {
                             Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: Theme.Icon.compose) }
                                 .disabled(accounts.isEmpty)
+                            Button { showingMutes = true } label: { Label("已静音", systemImage: Theme.Icon.mute) }
                         } label: { Image(systemName: Theme.Icon.moreMenu) }
                         .accessibilityLabel("更多")
                     }
                 }
                 .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
                 .sheet(item: $editingDraft) { InboxDraftSheet(item: $0, accounts: accounts) }
+                .sheet(isPresented: $showingMutes) { InboxMutesView() }
                 .task {
                     store.reload()
                     await loadAccounts()
                     #if DEBUG
+                    // `-showInboxMutes YES`: the 已静音 list (screenshots).
+                    if UserDefaults.standard.bool(forKey: "showInboxMutes") { showingMutes = true }
                     // `-openInboxFirst YES`: open the first open item (detail screenshots).
                     if UserDefaults.standard.bool(forKey: "openInboxFirst") {
                         for _ in 0..<20 where store.open.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
@@ -237,7 +242,28 @@ struct InboxPage: View {
                     Button { store.setDone(it, true) } label: { Label("已处理", systemImage: Theme.Icon.done) }.tint(Theme.positive)
                 }
             }
+            .contextMenu { rowMenu(it) }
             .modifier(InboxRowLook())
+    }
+
+    /// A row's long-press menu: 已处理 (or 移回), then what the item can be muted by — its repository, chat or sender,
+    /// the name under each (docs/inbox.md「静音」).
+    @ViewBuilder private func rowMenu(_ it: InboxItem) -> some View {
+        if it.isDone {
+            Button { store.setDone(it, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }
+        } else {
+            Button { store.setDone(it, true) } label: { Label("已处理", systemImage: Theme.Icon.done) }
+        }
+        if let mutes = it.mutes, !mutes.isEmpty {
+            Section {
+                ForEach(mutes, id: \.self) { m in
+                    Button { store.mute(it, m) } label: {
+                        Label(m.title, systemImage: Theme.Icon.mute)
+                        Text(m.shortName)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: Filters

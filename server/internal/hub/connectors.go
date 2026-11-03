@@ -129,7 +129,7 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		for _, info := range h.connectors.Infos(r.Context()) {
+		for _, info := range h.listedConnectors(r.Context(), true) {
 			if info.ID == id {
 				writeJSON(w, info)
 				return
@@ -238,8 +238,19 @@ type connectorSettings struct {
 }
 
 // setConnectorOptions gives a connector the user's settings and keeps them for the next start; the inbox is
-// collected again under them.
+// collected again under them. GitHub's muted repositories go to the inbox's mutes (inbox_mutes.go).
 func (h *Hub) setConnectorOptions(ctx context.Context, id string, raw json.RawMessage) error {
+	if id == "github" {
+		var err error
+		if raw, err = h.setGitHubMutes(ctx, raw); err != nil {
+			return err
+		}
+	}
+	return h.applyConnectorOptions(ctx, id, raw)
+}
+
+// applyConnectorOptions is setConnectorOptions without the mutes.
+func (h *Hub) applyConnectorOptions(ctx context.Context, id string, raw json.RawMessage) error {
 	o, ok := connector.As[connector.Options](h.connectors.Get(id))
 	if !ok {
 		return fmt.Errorf("%s has no settings", id)
@@ -371,6 +382,7 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 func (h *Hub) startConnectors(ctx context.Context) {
 	h.registerConnectors()
 	h.restoreConnectorSwitches(ctx)
+	h.githubMutes(ctx)
 	h.connectors.Start(ctx, h.connectorChanged, h.logf)
 }
 

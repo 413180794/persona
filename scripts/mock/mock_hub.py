@@ -1604,6 +1604,49 @@ if os.environ.get("MOCK_IMESSAGE_INBOX"):
     ]
 
 
+# What each item can be muted by (the row's menu: 静音这个仓库 / 会话 / 发件人), as the hub lists it (`mutes`).
+ITEM_MUTES = {
+    "lark:f1:100": [{"tag": "chat", "value": "f1", "name": "韩梅梅"}],
+    "lark:f2:200": [{"tag": "chat", "value": "f2", "name": "设计评审"}, {"tag": "sender", "value": "u-lilei", "name": "李雷"}],
+    "lark:f3:300": [{"tag": "chat", "value": "f3", "name": "周末徒步群"}, {"tag": "sender", "value": "u-tom", "name": "Tom"}],
+    "moment:mp1:mn1": [{"tag": "sender", "value": "u-linxiaoyu", "name": "林小雨"}],
+    "mail:acc1:t1:501": [{"tag": "sender", "value": "lucy@example.com", "name": "Lucy Wang"}],
+    "mail:acc1:t2:502": [{"tag": "sender", "value": "shop@example.com", "name": "示例商城"}],
+    "mail:acc1:t3:503": [{"tag": "sender", "value": "news@example.com", "name": "Weekly Digest"}],
+    "github:review12": [{"tag": "repo", "value": "example-org/example-repo", "name": "example-org/example-repo"},
+                        {"tag": "sender", "value": "alice", "name": "alice"}],
+    "github:ci7": [{"tag": "repo", "value": "example-org/example-repo", "name": "example-org/example-repo"}],
+    "imessage:a1b2": [{"tag": "chat", "value": "imessage-0a1b2c3d4e5f", "name": "张三"}],
+}
+for _x in INBOX:
+    if _x["id"] in ITEM_MUTES: _x["mutes"] = ITEM_MUTES[_x["id"]]
+SOURCE_NAMES = {"lark": "飞书", "mail": "邮件", "github": "GitHub", "imessage": "信息", "telegram": "Telegram"}
+# The mutes the user set (GET/POST/DELETE /api/v1/inbox/mutes); MOCK_MUTES=1 starts with two.
+MUTES = [] if not os.environ.get("MOCK_MUTES") else [
+    {"id": "m1", "source": "github", "source_name": "GitHub", "tag": "repo", "value": "example-org/old-site", "name": "example-org/old-site", "created_at": ago(days=3)},
+    {"id": "m2", "source": "mail", "source_name": "邮件", "tag": "sender", "value": "news@example.com", "name": "Weekly Digest", "created_at": ago(hours=20)},
+]
+
+
+def mute_item(item_id, tag):
+    """POST /api/v1/inbox/mutes: mute what the item has under tag; its source's open items that match are done."""
+    it = next((x for x in INBOX if x["id"] == item_id), None)
+    opt = next((m for m in (it or {}).get("mutes") or [] if m["tag"] == tag), None)
+    if not opt: return None, 0
+    src = it["source"]
+    mute = next((m for m in MUTES if m["source"] == src and m["tag"] == tag and m["value"] == opt["value"]), None)
+    if not mute:
+        mute = {"id": "m%d" % (len(MUTES) + 100), "source": src, "source_name": SOURCE_NAMES.get(src, src), "tag": tag,
+                "value": opt["value"], "name": opt["name"], "created_at": ago(minutes=0)}
+        MUTES.append(mute)
+    settled = 0
+    for x in INBOX:
+        if x["source"] == src and not x.get("done_at") and any(m["tag"] == tag and m["value"] == opt["value"] for m in x.get("mutes") or []):
+            x["done_at"], x["done_by"], x["reason"] = ago(minutes=0), "read", "已静音：" + opt["name"]
+            settled += 1
+    return mute, settled
+
+
 def inbox_for(query):
     """The list as the hub gives it: connectors' items only with ?sources=all."""
     all_sources = (query.get("sources") or [""])[0] == "all"
@@ -3958,6 +4001,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/renamed": return self.send_json({"renamed": RENAMED})
         if p == "/mock/served": return self.send_json({"served": SERVED})
         if p == "/api/v1/inbox": return self.send_json({"items": inbox_for(q)})
+        if p == "/api/v1/inbox/mutes": return self.send_json({"mutes": MUTES})
         if p == "/api/v1/lark/moments/posts/mp1": return self.send_json(MOMENT_POST)
         if p == "/api/v1/lark/moments/posts/mp1/comments": return self.send_json({"comments": MOMENT_COMMENTS})
         if p.startswith("/api/v1/inbox/"):
@@ -4474,6 +4518,15 @@ class H(BaseHTTPRequestHandler):
                 SENT.append(body)
             return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": inbox_for(parse_qs(urlparse(self.path).query))})
+        if p == "/api/v1/inbox/mutes" and self.command == "POST":
+            body = json.loads(self.last_body or b"{}")
+            mute, settled = mute_item(body.get("item_id"), body.get("tag"))
+            if not mute: return self.send_json({"error": "这一条没有可静音的" + str(body.get("tag"))}, 400)
+            return self.send_json({"mute": mute, "settled": settled})
+        if p.startswith("/api/v1/inbox/mutes/") and self.command == "DELETE":
+            mid = p.rsplit("/", 1)[1]
+            MUTES[:] = [m for m in MUTES if m["id"] != mid]
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read"):  # 可见即读: the positions a page saw
             body = json.loads(self.last_body or b"{}")
             if not body.get("position"): return self.send_json({"error": "position is required"}, 400)

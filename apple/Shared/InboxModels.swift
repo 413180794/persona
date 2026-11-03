@@ -36,6 +36,27 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var agent: Agent?
     /// A thread of one of the hub's connectors (GitHub…): drawn the same for every source (docs/plan-connectors.md).
     var connector: Connector?
+    /// What it can be muted by (the row's menu: 静音这个仓库 / 会话 / 发件人); older hubs leave it out.
+    var mutes: [MuteOption]?
+
+    /// One thing an item can be muted by: a repository, a chat or a sender of its source.
+    nonisolated struct MuteOption: Codable, Hashable, Sendable {
+        var tag: String // repo | chat | sender
+        var value: String
+        var name: String
+
+        /// The name under the menu's words, on one line: a repository without its owner (example-repo).
+        var shortName: String { tag == "repo" ? String(name.split(separator: "/").last ?? Substring(name)) : name }
+
+        /// The menu's words for it.
+        var title: String {
+            switch tag {
+            case "repo": "静音这个仓库"
+            case "chat": "静音这个会话"
+            default: "静音这个发件人"
+            }
+        }
+    }
 
     nonisolated struct Connector: Codable, Hashable, Sendable {
         var thread: String
@@ -208,7 +229,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations, connector
+        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations, connector, mutes
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 
@@ -276,6 +297,22 @@ extension APIClient {
         try await post("/api/v1/inbox/" + id + "/done", body: ["done": done])
     }
 
+    private nonisolated struct InboxMutes: Decodable, Sendable { var mutes: [InboxMute] }
+    private nonisolated struct MuteBody: Encodable, Sendable { var itemID: String; var tag: String
+        enum CodingKeys: String, CodingKey { case tag, itemID = "item_id" }
+    }
+    private nonisolated struct MuteResult: Decodable, Sendable { var mute: InboxMute; var settled: Int? }
+
+    /// What the user muted, in every source.
+    func inboxMutes() async throws -> [InboxMute] { try await get("/api/v1/inbox/mutes", as: InboxMutes.self).mutes }
+
+    /// Mutes what the item has under `tag`: its source's open items that match are done, later ones do not come in.
+    func muteInbox(_ itemID: String, tag: String) async throws -> InboxMute {
+        try await post("/api/v1/inbox/mutes", body: MuteBody(itemID: itemID, tag: tag), as: MuteResult.self).mute
+    }
+
+    func unmuteInbox(_ id: String) async throws { try await delete("/api/v1/inbox/mutes/" + id) }
+
     private struct InboxText: Codable { var text: String }
     private struct InboxReplyBody: Encodable { var text: String; var changes: [InboxItem.DocChange]? }
     private struct InboxDraftBody: Encodable { var instruction: String }
@@ -296,3 +333,29 @@ extension APIClient {
         try await post("/api/v1/inbox/" + id + "/doc/status", body: change, timeout: 60, as: InboxItem.self)
     }
 }
+
+/// A mute the user set (GET /api/v1/inbox/mutes): nothing of `value` under `tag` in `source` comes into the inbox.
+nonisolated struct InboxMute: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var source: String
+    var sourceName: String?
+    var tag: String // repo | chat | sender
+    var value: String
+    var name: String
+    var createdAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, source, tag, value, name
+        case sourceName = "source_name", createdAt = "created_at"
+    }
+
+    /// What kind of thing it is, for people: 仓库 / 会话 / 发件人.
+    var tagName: String {
+        switch tag {
+        case "repo": "仓库"
+        case "chat": "会话"
+        default: "发件人"
+        }
+    }
+}
+

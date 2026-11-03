@@ -41,6 +41,9 @@ var legacyConnectors = map[string]bool{"lark": true, "mail": true}
 func (h *Hub) listedConnectors(ctx context.Context, all bool) []connector.Info {
 	out := []connector.Info{}
 	for _, info := range h.connectors.Infos(ctx) {
+		if info.ID == "github" && info.Options != nil {
+			info.Options = h.withGitHubMutes(info.Options)
+		}
 		if all || !legacyConnectors[info.ID] {
 			out = append(out, info)
 		}

@@ -1023,6 +1023,9 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 | GET | `/api/v1/inbox` | `{items:[InboxItem]}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context`。默认只有飞书和邮件；带 `?sources=all` 才有连接器（GitHub…）的条目（带 `connector` 块的），旧 App、手表、Android 不带，所以不会把 PR 当邮件画 |
 | GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用）；邮件额外带 `reply_target:{uid,version}` |
 | POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
+| GET | `/api/v1/inbox/mutes` | `{mutes:[{id, source, source_name, tag, value, name, created_at}]}`：用户的静音（`tag` 是 `repo` / `chat` / `sender`，`docs/inbox.md`「静音」）。列表里每件事带 `mutes:[{tag, value, name}]`，说它能按什么静音（旧 hub 没有） |
+| POST | `/api/v1/inbox/mutes` | `{item_id, tag}` → `{mute, settled}`：静音这件事在 `tag` 下的值（hub 从这件事上读），同一来源里被覆盖的打开条目收掉（`settled` 件），以后的进来就收掉；同一个静音只有一份 |
+| DELETE | `/api/v1/inbox/mutes/{id}` | 取消静音：以后的照常进来，已经收掉的不回来 |
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
 | POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。提供 `client_id` 时保存回执，飞书原样透传为上游 `clientId`；不提供时 `clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
 | POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |

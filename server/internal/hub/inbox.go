@@ -81,6 +81,8 @@ type InboxItem struct {
 	Connector *InboxConnector `json:"connector,omitempty"`
 	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
 	Agent *InboxAgent `json:"agent,omitempty"`
+	// Mutes are what it can be muted by (listed only; inbox_mutes.go).
+	Mutes []MuteOption `json:"mutes,omitempty"`
 
 	// Bookkeeping: persisted, not listed (GET /api/v1/inbox/{id} returns Context).
 	Last      string `json:"last,omitempty"`       // newest message position / mail uid in the item
@@ -103,6 +105,8 @@ type InboxLark struct {
 	// topic group's topic, "thread" in a thread of a normal group. A reply from the inbox goes there (replyInbox).
 	ReplyTo    string `json:"reply_to,omitempty"`
 	ThreadKind string `json:"thread_kind,omitempty"`
+	// SenderID is who sent the newest message from someone else (a group's sender, to mute them).
+	SenderID string `json:"sender_id,omitempty"`
 }
 
 // Values of InboxLark.ThreadKind.
@@ -140,6 +144,7 @@ func (it *InboxItem) open() bool { return it.DoneAt == nil }
 func (it *InboxItem) listed() InboxItem {
 	c := *it
 	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt = "", "", "", "", ""
+	c.Mutes = mutesOf(it)
 	if it.Agent != nil { // the copy is encoded after the lock is released
 		a := *it.Agent
 		c.Agent = &a
@@ -179,12 +184,14 @@ type inbox struct {
 	items       map[string]*InboxItem
 	kick        chan struct{}
 	once        sync.Once
-	running     sync.Mutex // one collection at a time
-	triaging    sync.Mutex // one triage pass at a time (inbox_triage.go)
-	handing     sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
-	translating sync.Mutex // one translation pass at a time (inbox_translate.go)
-	me          lark.Me    // the Feishu account (who @me is in documents), read once
-	replies     sync.Map   // item id -> *inboxReply: Feishu replies to one item, one at a time (inbox_triage.go)
+	running     sync.Mutex  // one collection at a time
+	triaging    sync.Mutex  // one triage pass at a time (inbox_triage.go)
+	handing     sync.Mutex  // one judge / agent pass at a time (inbox_agent.go)
+	translating sync.Mutex  // one translation pass at a time (inbox_translate.go)
+	me          lark.Me     // the Feishu account (who @me is in documents), read once
+	replies     sync.Map    // item id -> *inboxReply: Feishu replies to one item, one at a time (inbox_triage.go)
+	mutes       []InboxMute // what the user muted (inbox_mutes.go)
+	mutesMu     sync.Mutex  // one read-change-save of the kept mutes at a time
 }
 
 func (b *inbox) init() {
@@ -236,6 +243,7 @@ func (h *Hub) inboxLoop(ctx context.Context) {
 }
 
 func (h *Hub) loadInbox(ctx context.Context) {
+	h.loadInboxMutes(ctx)
 	if h.lark != nil {
 		h.inbox.mu.Lock()
 		h.inbox.larkAccount = h.lark.Account()
@@ -294,6 +302,7 @@ func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
 			h.inbox.replies.Delete(id)
 		}
 	}
+	changed = append(changed, h.inbox.applyMutes(time.Now())...)
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, changed)
 	h.triageInbox(ctx)
@@ -490,7 +499,7 @@ func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversatio
 		it.Title, it.Avatar = c.Name, c.Avatar
 		it.Lark.IsGroup, it.Lark.IsTopic, it.Lark.AtAll = c.IsGroup, c.IsTopic, c.AtAll
 		it.Lark.ReadPosition = c.ReadPosition
-		it.Lark.ReplyTo, it.Lark.ThreadKind = last.ID, larkThreadKind(c, last)
+		it.Lark.ReplyTo, it.Lark.ThreadKind, it.Lark.SenderID = last.ID, larkThreadKind(c, last), last.SenderID
 		if c.MentionAt != "" {
 			it.Lark.MentionPosition = c.MentionAt
 		}
@@ -764,6 +773,7 @@ var errCannotReply = errors.New("this item cannot be replied to")
 
 func (h *Hub) inboxRoutes(api *http.ServeMux) {
 	h.inbox.init()
+	h.inboxMuteRoutes(api)
 	// Items of connectors (GitHub…) only go to apps that draw them (?sources=all): an older app would show a PR as
 	// a mail and send a reply as one.
 	api.HandleFunc("GET /api/v1/inbox", func(w http.ResponseWriter, r *http.Request) {

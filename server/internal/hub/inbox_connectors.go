@@ -24,6 +24,8 @@ type InboxConnector struct {
 	CanReply bool   `json:"can_reply,omitempty"`
 	// RuleTier is the connector's tier for triage without a model.
 	RuleTier string `json:"rule_tier,omitempty"`
+	// Tags are what the thread is about (its repository, chat, sender…): what it can be muted by.
+	Tags []connector.Tag `json:"tags,omitempty"`
 }
 
 // collectConnectors applies the things of every signed-in connector with an inbox.
@@ -161,7 +163,7 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 func fillConnectorItem(it *InboxItem, t connector.InboxThing) {
 	it.Kind, it.Title, it.Sender, it.Preview, it.Context = t.Kind, t.Title, t.Sender, t.Preview, t.Context
 	it.UpdatedAt, it.Last = t.At, t.Last
-	it.Connector = &InboxConnector{Thread: t.Thread, Label: t.Label, URL: t.URL, OpenURL: t.OpenURL, ReplyTo: t.ReplyTo, CanReply: t.CanReply, RuleTier: string(t.Tier)}
+	it.Connector = &InboxConnector{Thread: t.Thread, Label: t.Label, URL: t.URL, OpenURL: t.OpenURL, ReplyTo: t.ReplyTo, CanReply: t.CanReply, RuleTier: string(t.Tier), Tags: t.Tags}
 	if t.Tier != "" {
 		setRuleTier(it, t)
 	}

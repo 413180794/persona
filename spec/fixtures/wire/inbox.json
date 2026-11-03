@@ -34,7 +34,14 @@
             "machine_id": "m1",
             "session_id": "s1",
             "draft": "已收到示例。"
-          }
+          },
+          "mutes": [
+            {
+              "tag": "chat",
+              "value": "feed_example",
+              "name": "示例讨论"
+            }
+          ]
         },
         {
           "id": "mail:account_example:thread_example:11",
@@ -63,7 +70,14 @@
             },
             "direct": true,
             "thread": "thread_example"
-          }
+          },
+          "mutes": [
+            {
+              "tag": "sender",
+              "value": "sender@example.com",
+              "name": "小王"
+            }
+          ]
         }
       ]
     },

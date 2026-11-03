@@ -180,6 +180,7 @@ func (c *Connector) applyNotifications(ctx context.Context, ns []notification, n
 			continue // read again next time
 		}
 		thing.Thread, thing.Kind, thing.Label, thing.Last = thread, kind, label, stamp
+		thing.Tags = tagsOf(n, run, kind, thing.Sender)
 		st.mu.Lock()
 		st.seen[n.ID] = stamp
 		st.things[thread] = &thing
@@ -197,6 +198,20 @@ func (c *Connector) applyNotifications(ctx context.Context, ns []notification, n
 		}
 	}
 	return moved
+}
+
+// tagsOf is what a notification's thing is about: its repository, who made the newest move (a person's PR / issue
+// move; CI has nobody), a CI failure's branch.
+func tagsOf(n notification, run ciRun, kind, sender string) []connector.Tag {
+	repo := n.Repository.FullName
+	tags := []connector.Tag{{Key: connector.TagRepo, Value: strings.ToLower(repo), Name: repo}}
+	if kind == "ci_failed" {
+		return append(tags, connector.Tag{Key: connector.TagBranch, Value: run.branch, Name: run.branch})
+	}
+	if sender != "" {
+		tags = append(tags, connector.Tag{Key: connector.TagSender, Value: strings.ToLower(sender), Name: sender})
+	}
+	return tags
 }
 
 // classify says whether a notification is for the inbox: its kind and its tag. The tier is the rules' (describe,

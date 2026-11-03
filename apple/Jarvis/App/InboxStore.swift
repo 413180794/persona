@@ -96,6 +96,30 @@ final class InboxStore {
         }
     }
 
+    /// 静音这个仓库 / 会话 / 发件人 (the row's menu): the item and the others of its source it covers are done at once;
+    /// the hub keeps the mute, so later ones do not come in. A failure puts them back.
+    func mute(_ item: InboxItem, _ option: InboxItem.MuteOption) {
+        let before = items
+        let covers = { (it: InboxItem) in
+            it.source == item.source && !it.isDone && (it.mutes ?? []).contains { $0.tag == option.tag && $0.value == option.value }
+        }
+        for i in items.indices where covers(items[i]) {
+            items[i].doneAt = .now
+            items[i].doneBy = "read"
+            items[i].reason = "已静音：" + option.name
+        }
+        Haptics.success()
+        Task {
+            do {
+                _ = try await AppModel.shared.api?.muteInbox(item.id, tag: option.tag)
+                AppModel.shared.toast = Toast("已静音「\(option.name)」，以后不再进收件箱", style: .success)
+            } catch {
+                items = before
+                AppModel.shared.show(error)
+            }
+        }
+    }
+
     /// Items whose reply is being sent from the list (the row shows a spinner, a second tap does nothing).
     private(set) var sending: Set<String> = []
 

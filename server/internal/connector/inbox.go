@@ -56,7 +56,25 @@ type InboxThing struct {
 	Done string
 	// Read: seen somewhere else (the notification read on GitHub); an item that does not need the user is done.
 	Read bool
+	// Tags are what the thing is about, for muting and rules: its repository, chat, sender (TagRepo, TagChat,
+	// TagSender: the row's menu offers to mute those), a CI failure's branch. The hub mutes by them for every source.
+	Tags []Tag
 }
+
+// Tag is one thing an inbox thing is about: Key (TagRepo…), the Value it matches by (an id), the Name people read.
+type Tag struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Name  string `json:"name,omitempty"`
+}
+
+// Tag keys. The user can mute by the first three (the inbox row's 静音这个仓库 / 会话 / 发件人).
+const (
+	TagRepo   = "repo"
+	TagChat   = "chat"
+	TagSender = "sender"
+	TagBranch = "branch"
+)
 
 // Inbox is a connector with things for the inbox. Collect answers from the connector's memory (it is called on
 // every inbox collection; a connector that polls does so in its own Watch and calls changed(ScopeInbox)). Reply

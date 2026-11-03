@@ -179,7 +179,8 @@
     "feed_id": "f_bot",
     "is_group": false,
     "start_position": "601",
-    "reply_to": "m601"
+    "reply_to": "m601",
+    "sender_id": "b_build"
   },
   "last": "601",
   "context": "飞书私聊（构建机器人）的新消息：\n[<D0> 10:50] 构建机器人：构建失败：示例服务 #128",
@@ -206,7 +207,8 @@
     "is_group": false,
     "start_position": "202",
     "read_position": "201",
-    "reply_to": "m203"
+    "reply_to": "m203",
+    "sender_id": "u_zs"
   },
   "last": "203",
   "context": "飞书私聊（张三）的新消息：\n[<D0> 10:00] 张三：方案在 https://example.feishu.cn/docx/DocA1 里，帮忙看下\n[<D0> 10:05] 张三：今天能给反馈吗？",
@@ -234,7 +236,8 @@
     "start_position": "304",
     "read_position": "302",
     "mention_position": "305",
-    "reply_to": "m305"
+    "reply_to": "m305",
+    "sender_id": "u_ls"
   },
   "last": "305",
   "context": "飞书群「示例项目群」的新消息：\n[<D0> 10:10] 李四：这张图是最新的吗\n[<D0> 10:15] 李四（@了我）：@示例用户 明天的评审你能来吗？",
@@ -261,7 +264,8 @@
     "is_group": true,
     "start_position": "501",
     "mention_position": "501",
-    "reply_to": "m501"
+    "reply_to": "m501",
+    "sender_id": "u_zj"
   },
   "last": "501",
   "context": "飞书群「兴趣小组」的新消息：\n[<D0> 10:45] 周九（@了我）：@示例用户 周末活动报名了吗",
@@ -289,7 +293,8 @@
     "is_topic": true,
     "start_position": "701",
     "reply_to": "m701",
-    "thread_kind": "topic"
+    "thread_kind": "topic",
+    "sender_id": "u_ws"
   },
   "last": "701",
   "context": "飞书群「话题讨论」的新消息：\n[<D0> 10:25] 吴十：新话题：示例工具怎么用？",

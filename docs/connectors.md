@@ -322,7 +322,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 | --- | --- | --- | --- | --- | --- |
 | V1 ✓ | 清单（`Manifest`）+ 按清单分派（`As`、`Check`）；档、scope 的常量；`Capabler`、`Hosts`、`Poller`、`AgentTools`、`Validator`、`InboxReplier` 并掉；种类在清单里声明并对照提示词。可选接口从 19 个减到 11 个能力接口加 `Runner`、`Machines`。**没做的**：`Runner` + `Events` + `Machines` 并成 `Run(ctx, Host)`（会把 hub 的 `Watch` 退避重启搬进各连接器，对外有变化，和 V5 的协议一起做）；`ReadTools` + `Actions` 两个能力保留（清单分得开读写，合并没有好处）；`Settle` 在 V3 改，知识库的三种在 V7 并 | 1、3 | 小到中 | 5 个都动（机械） | 对外不变：`GET /api/v1/connectors` 的能力和 MCP 工具的 golden 一致，真实 hub 的列表前后对照 |
 | ~~V2~~ | ~~skill 的命令闸门~~：**不做**（2026-11-03 用户决定：交给 Claude Code 自己的权限判断，见第 8 条；#654 关闭） | 8 | — | — | — |
-| V3 | 收件箱的 `Group`、`From`、`Tags`、`Supersedes`，hub 统一合并、静音、收尾；GitHub 先改，Telegram、信息跟上 | 5 | 中 | GitHub、Telegram、信息、hub 收件箱 | 老的 `github.inbox` 自动转成静音规则；App 新增「静音」菜单另一个 PR |
+| V3 ✓ | 收件箱的静音由 hub 统一做（#670）：`InboxThing.Tags`（`repo`、`chat`、`sender`、`branch`），所有来源（飞书、邮件、GitHub、信息、Telegram）按「来源 + 标签 + 值」静音，收集时收掉被覆盖的；App 每一行的长按菜单「静音这个仓库 / 会话 / 发件人」和「更多 › 已静音」；GitHub 的 `muted_repos` 变成静音（启动时搬过去，设置页照旧）。**没做**：`Group`、`From`、`Supersedes`——按 `Thread` 合并本来就是 hub 统一做的，GitHub 的 CI 后来成功、分支删了、PR 合了也已经由它自己报 `Done`，等有连接器真要用再加，不过度设计 | 5 | 中 | GitHub、Telegram、信息、hub 收件箱、App | 新字段和新接口；老 App 不画菜单、GitHub 设置页照旧；条目多了 `mutes`，连接器块多了 `tags`（wire 样例已更新） |
 | V4 | 身份线索（只记录） | 6 | 小到中 | 5 个都动一点、知识库 | 新字段，老数据不动 |
 | V5 | 协议 v2：Telegram 先换，信息的 node 侧再换，一致性测试 | 4 | 大 | Telegram、信息、node、hub | 子进程一个版本里两种都认；旧 node 照旧走 5 个方法 |
 | V6 | 通用登录（`open_url`、`device_code`）、App 的通用登录页；邮件多账号；GitHub 设备码（用户自己填 client ID） | 7 | 中 | Telegram、邮件、GitHub、App | 老的邮件 OAuth 接口保留 |
