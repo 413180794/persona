@@ -1,6 +1,6 @@
 // The Agents list's menus (iOS AgentRowMenu / SpaceMenuItems): a row's ⋯ or right click, a space's ⋯ on its header,
 // and the confirmation of 全部标为已读. What they do is in lib/agent-actions.ts.
-import { flipMute, flipPin, flipSpaceMute, flipSpacePin, handToJarvis } from "../lib/agent-actions";
+import { flipMute, flipPin, flipSpaceMute, flipSpacePin, handToPersona } from "../lib/agent-actions";
 import { isSpaceMuted, unreadOf, type SpaceLike } from "../lib/agent-filter";
 import { resumeCommand, sessionCan, sessionMenuActions } from "../lib/format";
 import { machineWithHub } from "../lib/mesh";
@@ -19,7 +19,7 @@ export function AgentRowMenu({ s, anchor, onClose, onRename }: { s: Session; anc
     { key: "pin", label: pinned ? "取消置顶" : "置顶", icon: "pin", onSelect: () => void flipPin(s) },
     ...(sessionCan(s, "send") && !s.source_kind ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => onRename(s) }] : []),
     { key: "mute", label: muted ? "恢复通知" : "屏蔽通知", icon: muted ? "bell" : "bellOff", onSelect: () => void flipMute(s) },
-    { key: "jarvis", label: "交给 Jarvis", icon: "spark", onSelect: () => void handToJarvis(s, machineWithHub(s.machine_id, getState().machines)) },
+    { key: "jarvis", label: "交给 Persona", icon: "spark", onSelect: () => void handToPersona(s, machineWithHub(s.machine_id, getState().machines)) },
     ...(s.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, onSelect: () => copyText(s.cwd) }] : []),
     ...(sessionMenuActions(s).includes("resume") ? [{ key: "resume", label: "拷贝恢复命令", icon: "terminal" as const, onSelect: () => copyText(resumeCommand(s)) }] : []),
   ];

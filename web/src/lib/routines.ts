@@ -145,7 +145,7 @@ export function untilLabel(d: Date, now: Date): string {
   return `${Math.max(daysBetween(now, d), 1)} 天后`;
 }
 
-/** Its title, or the first line of the prompt (a follow-up Jarvis scheduled without one). */
+/** Its title, or the first line of the prompt (a follow-up Persona scheduled without one). */
 export function taskTitle(t: Pick<Task, "title" | "prompt">): string {
   if (t.title?.trim()) return t.title.trim();
   const first = (t.prompt ?? "").split("\n").find((l) => l.trim()) ?? "";
@@ -395,7 +395,7 @@ export interface Upcoming {
   repeating: boolean;
 }
 
-/** What Jarvis will do on its own next, soonest first; what is switched off is not coming up. */
+/** What Persona will do on its own next, soonest first; what is switched off is not coming up. */
 export function upcoming(tasks: Task[], limit = 3): Upcoming[] {
   const out: Upcoming[] = [];
   for (const t of tasks) {

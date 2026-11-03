@@ -1,6 +1,6 @@
-// 知识库 (docs/knowledge.md): what Jarvis knows from the hub's ~/.jarvis/data — projects first, then chats, people,
-// docs, meetings and events, most important and most relevant first. Not a browser of Feishu: every row is Jarvis'
-// own digest, and the way out is handing it to Jarvis. The iOS app is the reference (KnowledgeView.swift).
+// 知识库 (docs/knowledge.md): what Persona knows from the hub's ~/.jarvis/data — projects first, then chats, people,
+// docs, meetings and events, most important and most relevant first. Not a browser of Feishu: every row is Persona'
+// own digest, and the way out is handing it to Persona. The iOS app is the reference (KnowledgeView.swift).
 //
 // Wide enough (the page, not the window: a side panel takes room) it is a list beside the open entry; narrower, the
 // entry replaces the list, which stays mounted underneath so its scroll, search and folds survive the round trip.

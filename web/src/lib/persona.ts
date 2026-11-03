@@ -1,4 +1,4 @@
-// Jarvis' persona (docs/persona.md): its name, its face and the animated dot, from a package on the hub
+// Persona's persona (docs/persona.md): its name, its face and the animated dot, from a package on the hub
 // (GET /personas, files under /personas/{id}/{file}). The choice is this browser's (the phone keeps its own, as the
 // app does), and the built-in is the web's own mark: with no package chosen nothing on the page changes.
 // The pure parts (checks, which file, which state) are here; the views and the list are views/assistant/Persona.tsx.
@@ -83,8 +83,8 @@ export function usablePersonas(list: PersonaInfo[] | null | undefined): PersonaI
 }
 
 /**
- * What the face shows for a Jarvis conversation (AppModel.personaState, docs/persona.md「状态」): 离线 while the hub or
- * Jarvis' computer is out of reach, 等你处理 when it waits on you, 思考中 / 工作中 while a turn runs (thinking until it
+ * What the face shows for a Persona conversation (AppModel.personaState, docs/persona.md「状态」): 离线 while the hub or
+ * Persona's computer is out of reach, 等你处理 when it waits on you, 思考中 / 工作中 while a turn runs (thinking until it
  * writes or calls a tool), else 空闲.
  */
 export function personaState(o: {

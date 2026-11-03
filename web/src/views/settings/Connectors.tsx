@@ -1,4 +1,4 @@
-// 设置 › 连接器 (iOS ConnectorsSection, docs/mail.md): where Jarvis' data comes from — the mail accounts (list, add
+// 设置 › 连接器 (iOS ConnectorsSection, docs/mail.md): where Persona's data comes from — the mail accounts (list, add
 // one with a password or 授权码, delete) and 飞书 (the hub's lark-connector: read-only status). 这台 iPhone (phone_* tools)
 // is the phone's own and has no place in a browser; Gmail signs in with Google through the phone app (its OAuth
 // client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone.
@@ -22,7 +22,7 @@ export function Connectors() {
   return (
     <>
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
-        Jarvis 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。
+        Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。
         手机上的「这台 iPhone」（通讯录、日历、提醒、照片、健康、位置）只在手机 App 里打开，网页上没有。
       </p>
       <Mail />
@@ -74,7 +74,7 @@ function Mail() {
             添加邮箱
           </Button>
         }
-        footer="账号存在 hub 上，密码加密保存、不会再返回；收件箱、助手和 AI 分身共用。也可以直接在 Jarvis 里说「帮我添加邮箱」。"
+        footer="账号存在 hub 上，密码加密保存、不会再返回；收件箱、助手和 AI 分身共用。也可以直接在 Persona 里说「帮我添加邮箱」。"
       >
         {!accounts && !error && (
           <div className="px-4 py-3">
@@ -228,7 +228,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
             <div className="text-[12.5px] leading-relaxed text-ink-2">
               <p className="font-medium text-ink">在手机上添加 Gmail</p>
               <p className="mt-1">
-                Gmail 用「使用 Google 账号登录」，不填密码。Google 授权完会跳回 iPhone 上的 Jarvis App，网页接不到这一步。
+                Gmail 用「使用 Google 账号登录」，不填密码。Google 授权完会跳回 iPhone 上的 Persona App，网页接不到这一步。
                 在手机上打开 设置 › 连接器 › 邮箱 › 添加邮箱 › Gmail；加好后这里和收件箱都能看到。
               </p>
             </div>
@@ -275,7 +275,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
 const USES: { icon: IconName; title: string; detail: string }[] = [
   { icon: "inbox", title: "收件箱", detail: "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复" },
   { icon: "book", title: "知识库", detail: "会话、人、群、项目归档下来，给助手和 AI 分身做上下文" },
-  { icon: "spark", title: "助手", detail: "Jarvis 能搜消息、读文档；发消息等写操作先在手机上问你" },
+  { icon: "spark", title: "助手", detail: "Persona 能搜消息、读文档；发消息等写操作先在手机上问你" },
   { icon: "agent", title: "/agent", detail: "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复" },
 ];
 
@@ -321,7 +321,7 @@ function Feishu() {
         </div>
       )}
       {(st?.error || error) && <p className="px-4 py-2.5 text-[12px] break-words text-red">{st?.error || `读不到飞书的状态：${error}`}</p>}
-      <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">Jarvis 用飞书做什么</div>
+      <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">Persona 用飞书做什么</div>
       {USES.map((u) => (
         <div key={u.title} className="flex items-start gap-3 px-4 py-2.5">
           <Icon name={u.icon} size={15} className="mt-0.5 shrink-0 text-accent" />

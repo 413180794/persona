@@ -46,7 +46,7 @@ export function docErrorText(status: number, code?: string, raw?: string): strin
     case "DOCUMENT_EXPORT_FORBIDDEN":
       return "作者禁止导出这篇文档";
     case "DOCUMENT_FORMAT_UNSUPPORTED":
-      return "这种文档暂不支持在 Jarvis 中阅读";
+      return "这种文档暂不支持在 Persona 中阅读";
     case "DOCUMENT_NOT_FOUND":
       return "文档不存在或已被删除";
     case "DOCUMENT_FORBIDDEN":
@@ -107,11 +107,11 @@ function fromTree(r: Record<string, unknown>, url: string, title?: string): DocC
   const kind = docKind(url);
   const name = (typeof r.title === "string" && r.title) || title || DOC_LABEL[kind];
   const copy = bool((r.authority as Authority | undefined)?.copy, true);
-  if ("base" in r) return { kind: "unsupported", title: name, doc: "bitable", message: "多维表格暂不支持在 Jarvis 中查看" };
+  if ("base" in r) return { kind: "unsupported", title: name, doc: "bitable", message: "多维表格暂不支持在 Persona 中查看" };
   const o = r.object as { kind?: string; token?: string; image?: string; empty?: boolean } | undefined;
   if (o?.kind === "file") return { kind: "unsupported", title: name, doc: "file", message: "云空间文件，可以下载后查看", file: o.token };
   if (o?.kind === "whiteboard") return { kind: "unsupported", title: name, doc: "whiteboard", message: o.empty ? "这是一个空白画板" : "画板", image: o.image };
-  if (o) return { kind: "unsupported", title: name, doc: kind, message: "这种内容暂不支持在 Jarvis 中查看" };
+  if (o) return { kind: "unsupported", title: name, doc: kind, message: "这种内容暂不支持在 Persona 中查看" };
   const doc = (r.content as DocNode | undefined) ?? { type: "doc" };
   if ("spreadsheet" in r && !(doc.content ?? []).length) return { kind: "unsupported", title: name, doc: "sheet", message: "作者禁止导出这个表格，请在飞书中查看" };
   // the panel draws the title itself: a first heading that repeats it goes
@@ -124,7 +124,7 @@ function fromTree(r: Record<string, unknown>, url: string, title?: string): DocC
 /** Markdown when the owner allows export, else the JSON tree; what neither can show becomes `unsupported`. */
 export async function readDoc(url: string, title: string | undefined, get: Get = hubGet): Promise<DocContent> {
   const kind = docKind(url);
-  if (kind === "bitable") return { kind: "unsupported", title: title || DOC_LABEL.bitable, doc: "bitable", message: "多维表格暂不支持在 Jarvis 中查看" };
+  if (kind === "bitable") return { kind: "unsupported", title: title || DOC_LABEL.bitable, doc: "bitable", message: "多维表格暂不支持在 Persona 中查看" };
   if (kind !== "file" && kind !== "whiteboard") {
     try {
       const r = await get(`documents/read?url=${enc(url)}&format=markdown`);
@@ -142,7 +142,7 @@ export async function readDoc(url: string, title: string | undefined, get: Get =
     return fromTree(await get(`documents/read?url=${enc(url)}&format=json`), url, title);
   } catch (e) {
     if (e instanceof DocError && (e.code === "DOCUMENT_FORMAT_UNSUPPORTED" || e.status === 422)) {
-      return { kind: "unsupported", title: title || DOC_LABEL[kind], doc: kind, message: "这种内容暂不支持在 Jarvis 中查看" };
+      return { kind: "unsupported", title: title || DOC_LABEL[kind], doc: kind, message: "这种内容暂不支持在 Persona 中查看" };
     }
     throw e;
   }

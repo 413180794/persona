@@ -16,7 +16,7 @@ vi.mock("./store", () => {
 });
 vi.mock("./router", () => ({ navigate: vi.fn() }));
 
-import { arrived, askJarvis, discardOutbox, noteSent, outboxMessage, retryOutbox, sendToSession, settle, settleOutbox, SENT_GRACE_MS, type OutboxEntry } from "./outbox";
+import { arrived, askPersona, discardOutbox, noteSent, outboxMessage, retryOutbox, sendToSession, settle, settleOutbox, SENT_GRACE_MS, type OutboxEntry } from "./outbox";
 import { pickLauncher } from "./assistant-chat";
 import { navigate } from "./router";
 import { getState } from "./store";
@@ -106,13 +106,13 @@ describe("sending from another page", () => {
   });
 });
 
-describe("问 Jarvis", () => {
+describe("问 Persona", () => {
   it("opens the main conversation at once and sends there, with its picked launcher", async () => {
     (getState() as { assistant: unknown }).assistant = { machine_id: "hub", main: "main1", conversations: [] };
     pickLauncher("hub/main1", "codex");
     const fetcher = vi.fn().mockResolvedValueOnce(response({ ok: true }));
     vi.stubGlobal("fetch", fetcher);
-    await askJarvis("说说进展");
+    await askPersona("说说进展");
     expect(navigate).toHaveBeenCalledWith({ name: "jarvis", sid: "main1" });
     expect(outbox()["hub/main1"][0].text).toBe("说说进展");
     expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ text: "说说进展", launcher: "codex" });
@@ -122,7 +122,7 @@ describe("问 Jarvis", () => {
   it("starts the main conversation when there is none, and shows the prompt there", async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(response({ session: { machine_id: "hub", session_id: "new1" } }));
     vi.stubGlobal("fetch", fetcher);
-    await askJarvis("说说进展");
+    await askPersona("说说进展");
     expect(fetcher.mock.calls[0][0]).toBe("/api/v1/assistant/conversations");
     expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ prompt: "说说进展", main: true });
     expect(outbox()["hub/new1"][0]).toMatchObject({ state: "sent", text: "说说进展" });

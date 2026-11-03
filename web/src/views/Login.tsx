@@ -35,8 +35,8 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
             <Icon name="spark" size={20} />
           </span>
           <div>
-            <h1 className="text-[18px] font-semibold tracking-tight text-ink">连接到 Jarvis</h1>
-            <p className="mt-1 text-[13px] leading-relaxed text-ink-2">在 hub 所在的机器上运行 <code className="rounded-[5px] bg-field px-1 py-0.5 font-mono text-[12px] shadow-hairline">jarvisd hub pair</code>，把打印出来的 token 贴到这里。</p>
+            <h1 className="text-[18px] font-semibold tracking-tight text-ink">连接到 Persona</h1>
+            <p className="mt-1 text-[13px] leading-relaxed text-ink-2">在 hub 所在的机器上运行 <code className="rounded-[5px] bg-field px-1 py-0.5 font-mono text-[12px] shadow-hairline">personad hub pair</code>（旧命令 <code className="font-mono text-[12px]">jarvisd</code> 仍可用），把打印出来的 token 贴到这里。</p>
           </div>
         </div>
         <div className="rounded-card bg-surface p-1.5 shadow-card">

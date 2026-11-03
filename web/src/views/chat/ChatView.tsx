@@ -1,4 +1,4 @@
-// One conversation: an agent in herdr on one of your computers, or a Jarvis assistant conversation.
+// One conversation: an agent in herdr on one of your computers, or a Persona assistant conversation.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
 import { ago, resumeCommand, sessionCan, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
@@ -59,7 +59,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     return [{ id: launch.id, at: Date.now(), msg: { id: `pending:${launch.id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${launch.id}#${i}`, seq: 0, role: "user", kind: "image", image })) } }];
   });
   const [draftRefusal, setDraftRefusal] = useState<{ out: Outgoing; id: string; draft: string; clearable?: string } | null>(null);
-  // what other pages sent here (问 Jarvis, 交给 AI…): shown like this page's own sending bubbles (lib/outbox.ts)
+  // what other pages sent here (问 Persona, 交给 AI…): shown like this page's own sending bubbles (lib/outbox.ts)
   const outbox = useStore((s) => s.outbox[outboxKey(mid, sid)] ?? []);
   // a message Claude queued shows in the queue strip, not as a sending bubble too (ChatView.swift chatScroll)
   const queued = session?.queued ?? [];
@@ -391,7 +391,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 }
 
 function ComposerFooter({ session, assistant }: { session: Session; assistant?: boolean }) {
-  // a Jarvis conversation's launcher and model are its chip (they switch there)
+  // a Persona conversation's launcher and model are its chip (they switch there)
   const parts = [sourceSubtitle(session), ...(assistant ? [] : [session.launcher, session.model?.split("/").pop(), shortPath(session.cwd)])].filter(Boolean);
   const modes = !assistant && hasModes(session) && stateOf(session) !== "offline";
   return (

@@ -254,8 +254,8 @@ export function TaskEditor({
               className={textareaClass}
               rows={6}
               value={draft.prompt}
-              placeholder="要 Jarvis 做什么"
-              aria-label="要 Jarvis 做什么"
+              placeholder="要 Persona 做什么"
+              aria-label="要 Persona 做什么"
               onChange={(e) => set({ prompt: e.target.value })}
             />
             <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">像在对话里一样写：看哪些数据、怎么汇报。它可以用 schedule_followup 再安排一次性的跟进，比如会前 10 分钟。</p>
@@ -392,7 +392,7 @@ export function TaskEditor({
             <p className={cx("mt-1.5 px-1 text-[11.5px] leading-relaxed", saved?.last_status === "failed" && saved.last_error ? "text-red" : "text-ink-3")}>
               {saved?.last_status === "failed" && saved.last_error
                 ? `上次没有跑起来：${saved.last_error}`
-                : `立即运行不改它的时间，${creating || changed ? "先保存再运行，" : ""}跑完在 Jarvis 的对话里看结果。`}
+                : `立即运行不改它的时间，${creating || changed ? "先保存再运行，" : ""}跑完在 Persona 的对话里看结果。`}
             </p>
           </section>
 

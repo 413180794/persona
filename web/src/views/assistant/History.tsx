@@ -1,5 +1,5 @@
 // 全部对话 (docs/assistant.md「管理自己的对话」, the iOS app's sidebar + ArchivedConversationsView): every conversation
-// Jarvis has, the main one first, the rest newest first by day; search on the title and the last message; a row's menu
+// Persona has, the main one first, the rest newest first by day; search on the title and the last message; a row's menu
 // renames it, copies its id, archives it (the main one can't be). The archived ones are folded at the end.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
@@ -72,7 +72,7 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
         <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
         <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">
-          Jarvis 的对话
+          Persona 的对话
           {total > 0 && <span className="ml-2 text-[12px] font-normal text-ink-3 tabular-nums">{total}</span>}
         </h1>
         <IconButton icon="retry" label="刷新" onClick={() => void after()} />
@@ -106,7 +106,7 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           )}
           {!loading && !error && all.length === 0 && (
             <Empty icon="chat" title="还没有对话">
-              在 Jarvis 里说句话，对话就会出现在这里。
+              在 Persona 里说句话，对话就会出现在这里。
             </Empty>
           )}
           {!loading && searching && hits.length === 0 && all.length > 0 && <Empty icon="search" title={`没有和「${query.trim()}」相关的对话`} />}

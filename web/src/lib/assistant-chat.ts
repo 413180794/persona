@@ -1,4 +1,4 @@
-// A Jarvis conversation's own controls (the app's AssistantTopBar): what 拷贝信息 copies, and switching its launcher
+// A Persona conversation's own controls (the app's AssistantTopBar): what 拷贝信息 copies, and switching its launcher
 // (the model) from the conversation itself (the 启动器 menu). A pick holds for that conversation's next messages, sent
 // as `launcher` with each (POST …/messages), and the hub resumes the conversation on it. It lasts for this page's life,
 // like the app's `assistantLaunchers`: after a reload the conversation's own launcher (the one the hub ran it on) shows.
@@ -39,7 +39,7 @@ export function shortModel(model?: string): string {
 export function assistantInfoText(o: { title?: string; isMain: boolean; sessionId: string; machine: string; machineId: string; cwd: string; launcher: string; model?: string }): string {
   const name = [o.isMain ? "主对话" : "", o.title ? `「${o.title}」` : ""].filter(Boolean).join(" ");
   return [
-    `Jarvis 助手的对话${name ? ` ${name}` : ""}`,
+    `Persona 助手的对话${name ? ` ${name}` : ""}`,
     `会话 ID：${o.sessionId}`,
     `所在机器：${o.machine && o.machine !== o.machineId ? `${o.machine}（${o.machineId}）` : o.machineId}`,
     `工作目录：${o.cwd}`,

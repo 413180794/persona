@@ -1,4 +1,4 @@
-// Jarvis' profile (/assistant, the app's AssistantProfileView), opened from the Jarvis page and a conversation's menu:
+// Persona's profile (/assistant, the app's AssistantProfileView), opened from the Persona page and a conversation's menu:
 // who it is and where it runs, what it will do on its own next, its persona, then what shapes it (设置 › 助手's
 // groups: 主动做事, 了解你, 运行在) and what it can reach.
 import { useEffect, useMemo, useState } from "react";
@@ -78,7 +78,7 @@ export function Profile({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             </Group>
           )}
 
-          <Group title="形象" footer="换形象只换 Jarvis 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。">
+          <Group title="形象" footer="换形象只换 Persona 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。">
             <PersonaPicker builtin={<BuiltinFace size={56} />} />
           </Group>
 

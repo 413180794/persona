@@ -1,4 +1,4 @@
-// ⌘K: Beautiful UI's Search, over every agent and Jarvis conversation.
+// ⌘K: Beautiful UI's Search, over every agent and Persona conversation.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { machineWithHub } from "../lib/mesh";
 import { createPortal } from "react-dom";
@@ -101,7 +101,7 @@ export function Palette({ open, onClose, onNewAgent }: { open: boolean; onClose:
           <span aria-hidden className="pointer-events-none absolute inset-x-1.5 rounded-[8px] bg-hover" style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 180ms ${EASE}, height 180ms ${EASE}` }} />
           {hits.map((h, i) => {
             const st = stateOf(h.s);
-            const meta = h.assistant ? "Jarvis" : [machineWithHub(h.s.machine_id, machines), h.s.space_name, tabLabel(h.s)].filter(Boolean).join(" › ");
+            const meta = h.assistant ? "Persona" : [machineWithHub(h.s.machine_id, machines), h.s.space_name, tabLabel(h.s)].filter(Boolean).join(" › ");
             return (
               <button
                 key={h.key}

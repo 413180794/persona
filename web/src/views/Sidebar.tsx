@@ -178,7 +178,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         />
         <div className="flex flex-col gap-px pt-1">
           <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.needs || undefined} badgeTone="red" />
-          <NavRow k="j:new" reg={reg} hover={setHovered} active={activeKey === "j:new"} to={{ name: "jarvis" }} go={go} icon="spark" label="Jarvis" />
+          <NavRow k="j:new" reg={reg} hover={setHovered} active={activeKey === "j:new"} to={{ name: "jarvis" }} go={go} icon="spark" label="Persona" />
           <NavRow k="inbox" reg={reg} hover={setHovered} active={activeKey === "inbox"} to={{ name: "inbox" }} go={go} icon="inbox" label="收件箱" badge={inbox || undefined} badgeTone="red" />
           <NavRow k="routines" reg={reg} hover={setHovered} active={activeKey === "routines"} to={{ name: "routines" }} go={go} icon="clock" label="定时任务" />
           <NavRow k="kb" reg={reg} hover={setHovered} active={activeKey === "kb"} to={{ name: "kb" }} go={go} icon="book" label="知识库" />
@@ -192,7 +192,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         <PersonalAgents reg={reg} hover={setHovered} activeKey={activeKey} go={go} />
 
         {convs.length > 0 && (
-          <Section title="Jarvis 对话" folded={jarvisFolded} onToggle={toggleJarvis}>
+          <Section title="Persona 对话" folded={jarvisFolded} onToggle={toggleJarvis}>
             {convs.map((c) => (
               <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={setHovered} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} label={c.session_id === assistant?.main ? "主对话" : undefined} showState={false} />
             ))}
@@ -398,7 +398,7 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
           <Icon name="spark" size={15} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] leading-tight font-medium text-ink">Jarvis</span>
+          <span className="block truncate text-[13px] leading-tight font-medium text-ink">Persona</span>
           <span className="flex items-center gap-1.5 truncate text-[11px] leading-tight text-ink-3">
             <span className={cx("size-1.5 rounded-full", conn === "online" ? "bg-green" : conn === "connecting" ? "bg-orange" : "bg-red")} style={conn === "connecting" ? { animation: "breathe 1.4s ease-in-out infinite" } : undefined} />
             {conn === "online" ? `${online} / ${total} 台电脑在线` : conn === "connecting" ? "连接中…" : "连不上 hub"}

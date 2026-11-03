@@ -1,5 +1,5 @@
 // Pure logic of a session's files / Git panels and the file viewer (docs/ios.md「文件查看器」, the session page's
-// 文件 / Git; iOS: FilesPane, GitPane, FileViewer, Jarvis/Code). No DOM here: tested in files.test.ts.
+// 文件 / Git; iOS: FilesPane, GitPane, FileViewer, Persona/Code). No DOM here: tested in files.test.ts.
 
 // ── wire types (docs/protocol.md: /machines/{mid}/fs, /file, /git/*) ─────────
 

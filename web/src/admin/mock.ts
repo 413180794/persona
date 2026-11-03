@@ -73,7 +73,7 @@ export function installMock(scenario: string) {
             id: "macbook", name: "MacBook", kind: "link", icon: "laptop", online: true, transport: "hub", node_version: VERSION, os: "darwin", state: "active", hub_id: OFFICE,
             paths: [
               { via: "hub", hub_id: OFFICE, id: "mbp", ok: true, rtt_ms: 57, active: true },
-              { via: "link", hub_id: SELF, id: "macbook", ok: false, error: "Jarvis Link 没有连上来（最后一次：连接被对方重置）" },
+              { via: "link", hub_id: SELF, id: "macbook", ok: false, error: "Persona Link 没有连上来（最后一次：连接被对方重置）" },
             ],
           },
           {

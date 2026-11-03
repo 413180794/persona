@@ -1,4 +1,4 @@
-// 设置 (docs/web.md): appearance, the assistant's launcher, 模型 (every launcher: ~/.zshrc ones synced, Jarvis ones
+// 设置 (docs/web.md): appearance, the assistant's launcher, 模型 (every launcher: ~/.zshrc ones synced, Persona ones
 // kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, enc, errorText, setToken } from "../lib/api";
@@ -196,11 +196,11 @@ function General({ onConfigure }: { onConfigure: () => void }) {
         </div>
       </Group>
 
-      <Group title="形象" footer="Jarvis 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。形象包放在 hub 机器上。">
+      <Group title="形象" footer="Persona 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。形象包放在 hub 机器上。">
         <PersonaPicker builtin={<BuiltinFace size={56} />} />
       </Group>
 
-      <Group title="Jarvis 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.jarvis/assistant"} 里后台运行。模型与启动器统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。`}>
+      <Group title="Persona 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.persona/assistant"} 里后台运行。模型与启动器统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。`}>
         <Row label="对话模型" hint={purpose ? modelSummary(purpose) : assistant?.launcher} onClick={onConfigure}>
           <span>模型配置</span>
         </Row>
@@ -283,7 +283,7 @@ function Models() {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate font-mono text-[13px] font-medium text-ink">{l.name}</span>
-          {l.source === "jarvis" && <Pill tone="accent">Jarvis</Pill>}
+          {l.source === "jarvis" && <Pill tone="accent">Persona</Pill>}
           {l.kind === "api" && <Pill>直接 API</Pill>}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11.5px] text-ink-3">
@@ -312,7 +312,7 @@ function Models() {
       {error && <p className="text-[13px] text-red">{error}</p>}
       {list && query && shown.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">没有和「{query}」相关的供应商</p>}
       {list && (!query || managed.length > 0) && (
-        <Group title={`Jarvis 管理 ${managed.length}`} footer={managed.length ? "Key 加密存在 hub；直接 API 由 hub 调用，启动器以 jarvisd launch <名字> 运行。" : undefined}>
+        <Group title={`Persona 管理 ${managed.length}`} footer={managed.length ? "Key 加密存在 hub；直接 API 由 hub 调用，启动器以 jarvisd launch <名字> 运行。" : undefined}>
           {managed.length ? managed.map(row) : <p className="px-4 py-3 text-[12.5px] text-ink-3">还没有。点「新增供应商」：填协议、网关地址、Key 和默认模型；用途在「模型配置」中选择。</p>}
         </Group>
       )}
@@ -322,7 +322,7 @@ function Models() {
         </Group>
       )}
       {hidden.length > 0 && (
-        <Group title={`已隐藏 ${hidden.length}`} footer="只是在 Jarvis 里不显示，~/.zshrc 没有改。点进去可以恢复。">
+        <Group title={`已隐藏 ${hidden.length}`} footer="只是在 Persona 里不显示，~/.zshrc 没有改。点进去可以恢复。">
           {hidden.map(row)}
         </Group>
       )}
@@ -429,7 +429,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
             ) : (
               <span className="relative">
                 <Button tone="quiet" icon={l.source === "jarvis" ? "x" : undefined} onClick={() => setConfirm((c) => !c)} className="text-red enabled:hover:text-red">
-                  {l.source === "jarvis" ? "删除供应商" : "在 Jarvis 里隐藏"}
+                  {l.source === "jarvis" ? "删除供应商" : "在 Persona 里隐藏"}
                 </Button>
                 {/* the confirmation comes up right at the button (like the app), not as another dialog */}
                 {confirm && (
@@ -459,7 +459,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
       {l && (
         <div className="flex max-h-[62vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? "Jarvis 管理" : "~/.zshrc 里的函数"}</Pill>
+            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? "Persona 管理" : "~/.zshrc 里的函数"}</Pill>
             {(l.machines ?? []).map((id) => (
               <Pill key={id}>{mname(id)}</Pill>
             ))}

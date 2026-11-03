@@ -1,5 +1,5 @@
 // What can be done with one item besides reading it (docs/inbox.md「对一件事能做什么」): AI 草拟回复 (a reply in the
-// user's voice, edited and sent from here) and 交给 AI (the item as <jarvis-context> to Jarvis or a running agent).
+// user's voice, edited and sent from here) and 交给 AI (the item as <jarvis-context> to Persona or a running agent).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText } from "../../lib/api";
 import { noteSent, sendToSession } from "../../lib/outbox";
@@ -90,7 +90,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
               type="button"
               onClick={() => {
                 onClose();
-                // The AI 分身 runs as the assistant (docs/inbox.md): its conversation is one of Jarvis's.
+                // The AI 分身 runs as the assistant (docs/inbox.md): its conversation is one of Persona's.
                 navigate(agent.machine_id === assistant?.machine_id ? { name: "jarvis", sid: agent.session_id! } : conversationRoute(agent.machine_id!, agent.session_id!, sessions, assistant));
               }}
               className="mt-1.5 flex items-center gap-1 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline"
@@ -162,7 +162,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
   );
 }
 
-/** Hands the item to Jarvis (a new conversation) or to a running agent, as a <jarvis-context> plus the ask. */
+/** Hands the item to Persona (a new conversation) or to a running agent, as a <jarvis-context> plus the ask. */
 export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () => void }) {
   const sessions = useStore((s) => s.sessions);
   const machines = useStore((s) => s.machines);
@@ -200,7 +200,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
       noteSent(r.session.machine_id, r.session.session_id, { text });
       void refreshAssistant().catch(() => {});
       if (markDone) void setDone(item, true);
-      toast("已交给 Jarvis", "ok");
+      toast("已交给 Persona", "ok");
       onClose();
       navigate({ name: "jarvis", sid: r.session.session_id });
     } catch (e) {
@@ -253,7 +253,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
 
       <p className="mt-4 mb-1.5 text-[12px] font-medium text-ink-2">交给谁</p>
       <div role="radiogroup" aria-label="交给谁" className="max-h-[300px] divide-y divide-line overflow-y-auto rounded-card bg-surface shadow-card">
-        <Target on={target === null} onPick={() => setTarget(null)} title="Jarvis（新对话）" sub="开一段新的 Jarvis 对话" icon={<span className="flex size-6 items-center justify-center rounded-[7px] bg-accent-tint text-accent-ink"><Icon name="spark" size={12} /></span>} />
+        <Target on={target === null} onPick={() => setTarget(null)} title="Persona（新对话）" sub="开一段新的 Persona 对话" icon={<span className="flex size-6 items-center justify-center rounded-[7px] bg-accent-tint text-accent-ink"><Icon name="spark" size={12} /></span>} />
         {agents.map((s) => (
           <Target
             key={`${s.machine_id}/${s.session_id}`}

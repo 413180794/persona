@@ -236,7 +236,7 @@ function AgentRow({ ix }: { ix: Interaction }) {
   const to = conversationRoute(ix.machine_id, ix.session_id, sessions, assistant);
   const ask = interactionAsk(ix);
   const glyph = IX_GLYPH[ix.kind];
-  const where = to.name === "jarvis" ? "Jarvis" : machineWithHub(ix.machine_id, machines);
+  const where = to.name === "jarvis" ? "Persona" : machineWithHub(ix.machine_id, machines);
   return (
     <a href={href(to)} onClick={(e) => onLinkClick(e, to)} className="flex gap-3 rounded-[14px] bg-surface p-3 shadow-card transition-colors duration-150 hover:bg-inset">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-red-tint text-red">

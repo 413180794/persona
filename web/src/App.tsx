@@ -8,7 +8,7 @@ import { cx, EASE, Spinner, Toasts } from "./ui/atoms";
 import { AgentsView } from "./views/agents/AgentsView";
 import { ChatView } from "./views/chat/ChatView";
 import { Home } from "./views/Home";
-import { Jarvis } from "./views/Jarvis";
+import { PersonaAssistant } from "./views/PersonaAssistant";
 import { Login } from "./views/Login";
 import { Machines } from "./views/Machines";
 import { NewAgent } from "./views/NewAgent";
@@ -114,11 +114,11 @@ function Shell() {
   }, [at]);
 
   const title =
-    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "history" ? "Jarvis 的对话" : route.name === "profile" ? "Jarvis 的资料" : route.name === "inbox" ? "收件箱"
+    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱"
       : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
       : route.name === "agents" ? "个人 Agent" : "总览";
   useEffect(() => {
-    document.title = `${title} · Jarvis`;
+    document.title = title === "Persona" ? title : `${title} · Persona`;
   }, [title]);
 
   let main: React.ReactNode;
@@ -127,7 +127,7 @@ function Shell() {
       main = launch ? <StartingAgent launch={launch} onToggleSidebar={toggle} /> : <ChatView key={`${route.mid}/${route.sid}`} mid={route.mid} sid={route.sid} starting={starting} onToggleSidebar={toggle} />;
       break;
     case "jarvis":
-      main = <Jarvis sid={route.sid} onToggleSidebar={toggle} />;
+      main = <PersonaAssistant sid={route.sid} onToggleSidebar={toggle} />;
       break;
     case "history":
       main = <History onToggleSidebar={toggle} />;
@@ -203,7 +203,7 @@ function Joining() {
     <div className="flex min-h-full items-center justify-center bg-page" role="status" aria-live="polite">
       <span className="flex items-center gap-2 text-[13px] text-ink-2">
         <Spinner />
-        正在连接 Jarvis…
+        正在连接 Persona…
       </span>
     </div>
   );

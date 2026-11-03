@@ -1,4 +1,4 @@
-// Jarvis' persona in the page (docs/persona.md, the app's PersonaStore / PersonaViews / PersonaPicker): the packages the
+// Persona's persona in the page (docs/persona.md, the app's PersonaStore / PersonaViews / PersonaPicker): the packages the
 // hub offers, the one chosen in this browser, and its face (a still avatar) and dot (the state's APNG, which the
 // browser animates by itself). With the built-in chosen, or no package (an older hub, an empty list), every place
 // keeps what it showed before: the views take that as `fallback`.
@@ -81,11 +81,11 @@ export interface CurrentPersona {
   chosen: string;
 }
 
-/** The persona on screen: the chosen package once the hub listed it, else the built-in named Jarvis. */
+/** The persona on screen: the chosen package once the hub listed it, else the built-in named Persona. */
 export function usePersona(): CurrentPersona {
   const s = usePersonaStore();
   const info = s.chosen === BUILTIN_PERSONA ? null : (s.list.find((p) => p.id === s.chosen) ?? null);
-  return { info, name: info?.manifest.name ?? "Jarvis", chosen: s.chosen };
+  return { info, name: info?.manifest.name ?? "Persona", chosen: s.chosen };
 }
 
 function useReducedMotion(): boolean {
@@ -211,7 +211,7 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
     void refreshPersonas();
   }, []);
   const cards: { id: string; title: string; sub: React.ReactNode; face: React.ReactNode }[] = [
-    { id: BUILTIN_PERSONA, title: "Jarvis", sub: <span className="text-[11px] text-ink-3">默认形象</span>, face: builtin },
+    { id: BUILTIN_PERSONA, title: "Persona", sub: <span className="text-[11px] text-ink-3">默认形象</span>, face: builtin },
     ...s.list.map((p) => ({ id: p.id, title: p.manifest.name, sub: <Swatches p={p} />, face: <PersonaAvatar size={56} persona={p} fallback={builtin} /> })),
   ];
   const missing = s.chosen !== BUILTIN_PERSONA && s.loaded && !s.list.some((p) => p.id === s.chosen);
@@ -226,7 +226,7 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
               type="button"
               role="radio"
               aria-checked={selected}
-              aria-label={c.id === BUILTIN_PERSONA ? "Jarvis，默认形象" : c.title}
+              aria-label={c.id === BUILTIN_PERSONA ? "Persona，默认形象" : c.title}
               onClick={() => choosePersona(c.id)}
               className={cx(
                 "flex flex-col items-center gap-2 rounded-card px-2 pt-3.5 pb-2.5 transition-[background-color,box-shadow] duration-150",
@@ -255,7 +255,7 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
       )}
       {missing && <p className="px-1 text-[11.5px] text-ink-3">选中的形象现在不在 hub 上，先用默认形象；回来后会自动换回。</p>}
       {s.error && <p role="alert" className="px-1 text-[11.5px] text-orange">{s.error}</p>}
-      {s.loaded && !s.error && !s.list.length && <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">hub 上还没有别的形象。形象包放在 hub 机器的 ~/.jarvis/personas/ 下（docs/persona.md）。</p>}
+      {s.loaded && !s.error && !s.list.length && <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">hub 上还没有别的形象。形象包放在 hub 机器的 ~/.persona/personas/ 下（docs/persona.md）。</p>}
     </div>
   );
 }

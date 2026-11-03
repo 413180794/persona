@@ -1,4 +1,4 @@
-// One knowledge entry (/kb/<kind>/<id>): its tile, name, badges, one line and tags, 问 Jarvis; then the places a
+// One knowledge entry (/kb/<kind>/<id>): its tile, name, badges, one line and tags, 问 Persona; then the places a
 // search found, the Agents on a project, the timeline, the profile, removed, related entries by kind, code directories,
 // a chat's last 7 days and the folder (docs/ios.md 信息架构 知识库). 打标 in the header.
 import { useEffect, useState } from "react";
@@ -6,7 +6,7 @@ import { api, enc, errorText, isAbort } from "../../lib/api";
 import { ago, sessionTitle, shortPath, stateOf, tabLabel } from "../../lib/format";
 import {
   agentPreset,
-  askJarvisText,
+  askPersonaText,
   dayTitle,
   dirsOf,
   entryFromDetail,
@@ -37,7 +37,7 @@ import { Button, Collapse, copyText, cx, IconButton, Loading, StatePill, StatusD
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { known, remember } from "./cache";
-import { askJarvis } from "../../lib/outbox";
+import { askPersona } from "../../lib/outbox";
 import { openNewAgent } from "../../lib/new-agent";
 import { DayDialog, MessageView, MomentDialog, TagEditor } from "./KBDialogs";
 import { ErrorBox } from "./KBList";
@@ -57,7 +57,7 @@ export function EmptyDetail() {
         <Icon name="book" size={20} />
       </span>
       <p className="text-[14px] font-medium text-ink">选一个条目</p>
-      <p className="mt-1 max-w-[320px] text-[12.5px] leading-relaxed text-ink-3">看它的档案、时间线和关联；「问 Jarvis」把它交给主对话。</p>
+      <p className="mt-1 max-w-[320px] text-[12.5px] leading-relaxed text-ink-3">看它的档案、时间线和关联；「问 Persona」把它交给主对话。</p>
     </div>
   );
 }
@@ -116,7 +116,7 @@ export function EntryDetail({
   const ask = async () => {
     setAsking(true);
     try {
-      await askJarvis(askJarvisText(e, d));
+      await askPersona(askPersonaText(e, d));
     } catch (err) {
       toast(`没发出去：${errorText(err)}`, "error");
     } finally {
@@ -147,7 +147,7 @@ export function EntryDetail({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[720px] px-4 pt-6 pb-20 sm:px-8">
-          {/* Header: what it is at a glance, and the way out (handing it to Jarvis). */}
+          {/* Header: what it is at a glance, and the way out (handing it to Persona). */}
           <div>
             <div className="flex items-center gap-3.5">
               <Tile entry={e} size={48} />
@@ -167,8 +167,8 @@ export function EntryDetail({
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button tone="accent" icon="spark" busy={asking} disabled={!d} onClick={ask} title="把这个条目的档案和最近进展带进 Jarvis 的主对话">
-                问 Jarvis
+              <Button tone="accent" icon="spark" busy={asking} disabled={!d} onClick={ask} title="把这个条目的档案和最近进展带进 Persona 的主对话">
+                问 Persona
               </Button>
               {kind === "projects" && (
                 <Button
@@ -409,7 +409,7 @@ export function EntryDetail({
                     <IconButton icon="copy" label="拷贝目录" onClick={() => void copyText(d.path)} />
                   </div>
                 </Card>
-                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">Jarvis、AI 分身和各台电脑上的 Agent 都能直接读这个目录。</p>
+                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">Persona、AI 分身和各台电脑上的 Agent 都能直接读这个目录。</p>
               </section>
             </div>
           )}

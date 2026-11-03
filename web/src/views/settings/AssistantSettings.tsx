@@ -1,5 +1,5 @@
 // 设置 › 助手 (docs/assistant.md「资料页和头像」, the iOS app's AssistantProfileView / AssistantNotesView /
-// AssistantMemoryView, Android's 助手设置): what Jarvis does on its own (a line into 定时任务), what it knows about you
+// AssistantMemoryView, Android's 助手设置): what Persona does on its own (a line into 定时任务), what it knows about you
 // (关于我 = `notes`, saved on 保存 or when leaving; 记忆 = its memory files: read, edit the whole file, delete), and where
 // it runs (read-only here) with its conversation model (模型配置).
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,7 +22,7 @@ interface AssistantState {
   launcher?: string;
   cwd?: string;
   timezone?: string;
-  /** Only once saved here (or in the app); `notes_effective` is what Jarvis is told (hub.json's otherwise). */
+  /** Only once saved here (or in the app); `notes_effective` is what Persona is told (hub.json's otherwise). */
   notes?: string;
   notes_effective?: string;
 }
@@ -95,7 +95,7 @@ export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => v
         </Row>
       </Group>
 
-      <Group title="了解你" footer="「关于我」是你告诉 Jarvis 的；「记忆」是它在对话里自己记下的，都可以改。">
+      <Group title="了解你" footer="「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。">
         {info && <AboutMe info={info} onSaved={(notes) => setInfo((i) => (i ? { ...i, notes, notes_effective: notes.trim() } : i))} />}
         <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
           <span className="flex-1 text-[13px] font-medium text-ink">记忆</span>
@@ -106,7 +106,7 @@ export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => v
             <Loading />
           </div>
         ) : entries.length === 0 ? (
-          <p className="px-4 py-4 text-[12.5px] leading-relaxed text-ink-3">{memoryError ? `读不到记忆：${memoryError}` : "还没有记忆。Jarvis 会把你的偏好、纠正过它的地方记在这里。"}</p>
+          <p className="px-4 py-4 text-[12.5px] leading-relaxed text-ink-3">{memoryError ? `读不到记忆：${memoryError}` : "还没有记忆。Persona 会把你的偏好、纠正过它的地方记在这里。"}</p>
         ) : (
           entries.map((e) => <MemoryRow key={e.file.name} e={e} onOpen={() => setOpen({ file: e.file })} />)
         )}
@@ -115,7 +115,7 @@ export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => v
             <Icon name="list" size={14} className="shrink-0 text-ink-3" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] text-ink">索引</span>
-              <span className="block truncate text-[11.5px] text-ink-3">MEMORY.md：Jarvis 自己维护的目录，删除记忆时会一起更新。只读</span>
+              <span className="block truncate text-[11.5px] text-ink-3">MEMORY.md：Persona 自己维护的目录，删除记忆时会一起更新。只读</span>
             </span>
             <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
           </button>
@@ -152,7 +152,7 @@ export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => v
   );
 }
 
-/** 关于我: what Jarvis is told about you. Until saved here it shows hub.json's text; saving (even empty) makes this the
+/** 关于我: what Persona is told about you. Until saved here it shows hub.json's text; saving (even empty) makes this the
  *  one. Saved with 保存, and when leaving the page with changes. */
 function AboutMe({ info, onSaved }: { info: AssistantState; onSaved: (notes: string) => void }) {
   const original = info.notes ?? info.notes_effective ?? "";
@@ -208,7 +208,7 @@ function AboutMe({ info, onSaved }: { info: AssistantState; onSaved: (notes: str
       />
       <div className="mt-2 flex items-start gap-3">
         <p className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-ink-3">
-          这些内容会附在 Jarvis 的说明最后；改了以后新对话生效。
+          这些内容会附在 Persona 的说明最后；改了以后新对话生效。
           {info.notes === undefined && original ? "现在用的是 hub 配置里的内容，在这里保存后以这里为准。" : ""}
         </p>
         {changed && <Button tone="quiet" disabled={busy} onClick={() => setText(base)}>还原</Button>}
@@ -285,7 +285,7 @@ function MemoryDialog({ file, title, readOnly, onClose, onChanged }: { file: Mem
     </>
   ) : confirm ? (
     <>
-      <span className="mr-auto min-w-0 text-[12px] text-ink-2">Jarvis 以后不再记得「{title}」。</span>
+      <span className="mr-auto min-w-0 text-[12px] text-ink-2">Persona 以后不再记得「{title}」。</span>
       <Button tone="quiet" disabled={busy} onClick={() => setConfirm(false)}>取消</Button>
       <Button tone="danger" busy={busy} onClick={() => void remove()}>删除</Button>
     </>

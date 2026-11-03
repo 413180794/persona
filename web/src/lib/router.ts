@@ -19,7 +19,7 @@ export type Route =
 export function parse(path: string): Route {
   const p = path.split("/").filter(Boolean).map(decodeURIComponent);
   if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2] };
-  if (p[0] === "j") return { name: "jarvis", sid: p[1] };
+  if (p[0] === "j" || p[0] === "persona") return { name: "jarvis", sid: p[1] };
   if (p[0] === "history") return { name: "history" };
   if (p[0] === "assistant") return { name: "profile" };
   if (p[0] === "inbox") return { name: "inbox", id: p[1] };

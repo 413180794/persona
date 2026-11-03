@@ -34,7 +34,7 @@ export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => 
   }, [page]);
 
   useEffect(() => {
-    document.title = `${NAV.find((n) => n.page === page)?.label ?? "管理"} · ${name || "Jarvis"} 管理`;
+    document.title = `${NAV.find((n) => n.page === page)?.label ?? "管理"} · ${name || "Persona"} 管理`;
   }, [page, name]);
 
   const logout = async () => {
@@ -118,7 +118,7 @@ function Brand({ name, compact }: { name: string; compact?: boolean }) {
         <AdminIcon name="shield" size={compact ? 14 : 16} />
       </span>
       <div className="min-w-0">
-        <div className="truncate text-[13px] font-semibold text-ink">{name || "Jarvis hub"}</div>
+        <div className="truncate text-[13px] font-semibold text-ink">{name || "Persona hub"}</div>
         <div className="truncate text-[11px] text-ink-3">hub 管理</div>
       </div>
     </div>

@@ -151,7 +151,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
             onChange={(e) => setDraft((d) => ({ ...d, effort: e.target.value }))} />
           <datalist id="model-efforts">{["low", "medium", "high", "xhigh", "max"].map((v) => <option key={v} value={v} />)}</datalist>
         </label>}
-        <p className="text-[11.5px] leading-relaxed text-ink-3">保存只修改配置，不会发起模型请求或打断正在运行的任务。{p.kind === "plugin" && "语音模型是 Jarvis 的默认选择，不改变插件自己的供应商或凭据。"}</p>
+        <p className="text-[11.5px] leading-relaxed text-ink-3">保存只修改配置，不会发起模型请求或打断正在运行的任务。{p.kind === "plugin" && "语音模型是 Persona 的默认选择，不改变插件自己的供应商或凭据。"}</p>
       </div>}
       {error && <p role="alert" className="mt-3 text-[12px] text-red">{error}</p>}
       {(conflict || (!p && error)) && <Button tone="secondary" disabled={busy} onClick={() => void load()}>{conflict ? "重新加载（丢弃编辑）" : "重试"}</Button>}

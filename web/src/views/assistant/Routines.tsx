@@ -1,4 +1,4 @@
-// 定时任务 (docs/assistant.md「定时任务」, the iOS app's AssistantRoutinesView): everything Jarvis does on its own on
+// 定时任务 (docs/assistant.md「定时任务」, the iOS app's AssistantRoutinesView): everything Persona does on its own on
 // one page — what repeats (every day at a time, every N minutes) and the one-offs it scheduled from a conversation, each
 // with its rule in words, next and last run, what it runs with and an on/off switch; what comes next and the history
 // of runs beside them. A row opens the editor; 新建 starts from a template or blank.
@@ -56,7 +56,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 
   useEffect(() => {
     void load();
-    // the hub says when the list changed (a run, Jarvis scheduling something, another device)
+    // the hub says when the list changed (a run, Persona scheduling something, another device)
     let timer: number | undefined;
     const off = onHubEvent("assistant_schedule", () => {
       clearTimeout(timer);
@@ -126,7 +126,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             )}
             {tasks !== null && tasks.length === 0 && (
               <Empty icon="clock" title="没有定时任务">
-                点右上角的「新建」，或者在对话里说「每天 9 点给我早报」「每 30 分钟巡检一次」，让 Jarvis 定时做一件事。
+                点右上角的「新建」，或者在对话里说「每天 9 点给我早报」「每 30 分钟巡检一次」，让 Persona 定时做一件事。
               </Empty>
             )}
             {repeating.length > 0 && (
@@ -138,7 +138,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                   ))}
                 </div>
                 <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">
-                  到点时 Jarvis 按提示词去做，跑完推送到手机。每天几点按{timezone ? ` ${timezone} ` : "你所在的"}时区
+                  到点时 Persona 按提示词去做，跑完推送到手机。每天几点按{timezone ? ` ${timezone} ` : "你所在的"}时区
                   {timezone && browserTZ && timezone !== browserTZ ? `；这里显示的下次时间是这个浏览器的时间（${browserTZ}）` : ""}。
                 </p>
               </section>
@@ -151,7 +151,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                     <TaskRow key={t.id} t={t} now={now} onOpen={() => setEditing(t)} onToggle={(on) => void toggle(t, on)} />
                   ))}
                 </div>
-                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">Jarvis 在对话里替自己安排的，到点自己醒来接着做。</p>
+                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">Persona 在对话里替自己安排的，到点自己醒来接着做。</p>
               </section>
             )}
           </div>
@@ -251,7 +251,7 @@ function TaskRow({ t, now, onOpen, onToggle }: { t: Task; now: Date; onOpen: () 
       <div className={cx("min-w-0 flex-1", !t.enabled && "opacity-75")}>
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[13.5px] font-medium text-ink">{taskTitle(t)}</span>
-          {t.created_by === "assistant" && t.repeat !== "once" && <Pill tone="accent">Jarvis 建的</Pill>}
+          {t.created_by === "assistant" && t.repeat !== "once" && <Pill tone="accent">Persona 建的</Pill>}
         </div>
         <div className="mt-0.5 truncate text-[12px] text-ink-2">{ruleText(t)}</div>
         {next && <div className="mt-0.5 truncate text-[11.5px] text-ink-3 tabular-nums">{next}</div>}

@@ -158,7 +158,7 @@ export function RenameDialog({ session, open, onClose }: { session: Session; ope
       >
         {hasTab && <Field label="标签名（herdr tab）" value={tab} onChange={setTab} autoFocus />}
         <Field label="会话名" value={title} onChange={setTitle} autoFocus={!hasTab} />
-        <p className="text-[12px] leading-relaxed text-ink-3">{session.assistant ? "只改这段对话在 Jarvis 里的标题。" : "标签名同步到 herdr；会话名用 Claude 的 /rename，电脑上 claude --resume 也看得到。"}</p>
+        <p className="text-[12px] leading-relaxed text-ink-3">{session.assistant ? "只改这段对话在 Persona 里的标题。" : "标签名同步到 herdr；会话名用 Claude 的 /rename，电脑上 claude --resume 也看得到。"}</p>
         <button type="submit" hidden />
       </form>
     </Dialog>

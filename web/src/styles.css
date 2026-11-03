@@ -150,7 +150,7 @@ body {
 
 .stream-caret{background:var(--ink);vertical-align:text-bottom;border-radius:1px;width:2px;height:1.05em;margin-left:1.5px;animation:caret-blink 1s step-end infinite;display:inline-block;translate:0 -.5px}
 
-/* ── Jarvis additions ──────────────────────────────────── */
+/* ── Persona additions ──────────────────────────────────── */
 :root { --status-needs: var(--red); --status-working: var(--orange); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: #f0f1f3; --term-magenta: #a347ba; --term-cyan: #0f8a9c; }
 .dark { --user-bubble: #2c2d31; --term-magenta: #c678dd; --term-cyan: #4fb6c4; }
 /* The machine page's load chart (iOS MetricColor.load): its own hue, apart from CPU / memory / network. */

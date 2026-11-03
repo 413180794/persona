@@ -144,13 +144,13 @@ describe("等你的 Agent", () => {
   it("等什么、问什么", () => {
     expect(interactionTitle(ix("a"))).toBe("Claude 在问你");
     expect(interactionTitle(ix("a", { kind: "plan" }))).toBe("计划等你审批");
-    expect(interactionTitle(ix("a", { tool_name: "ask_user" }))).toBe("Jarvis 在问你");
+    expect(interactionTitle(ix("a", { tool_name: "ask_user" }))).toBe("Persona 在问你");
     expect(interactionTitle(ix("a", { agent: "codex", kind: "permission" }))).toBe("Codex 需要你授权");
     expect(interactionAsk(ix("a", { questions: [{ question: "用哪种格式？", options: [] }] }))).toBe("用哪种格式？");
     expect(interactionAsk(ix("a", { kind: "permission", tool_name: "Bash", tool_input: { command: "swift test" } }))).toBe("swift test");
   });
 
-  it("助手的会话跳到 Jarvis，其余跳到会话页", () => {
+  it("助手的会话跳到 Persona，其余跳到会话页", () => {
     const assistant: AssistantInfo = { machine_id: "m1", conversations: [{ machine_id: "m1", session_id: "s-conv", title: "", cwd: "", status: "idle" }] };
     expect(conversationRoute("m1", "s-jarvis", sessions, null)).toEqual({ name: "jarvis", sid: "s-jarvis" });
     expect(conversationRoute("m1", "s-conv", {}, assistant)).toEqual({ name: "jarvis", sid: "s-conv" });

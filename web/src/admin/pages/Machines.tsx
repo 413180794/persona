@@ -93,7 +93,7 @@ function AddCard({ onPick, noTLS }: { onPick: (w: AddWay) => void; noTLS: boolea
       icon: "link",
       title: "电脑来连",
       fit: "笔记本、会换网络的电脑",
-      desc: "那台电脑上的 Jarvis Link 主动连 hub：在 NAT 后面、换了网络也能连上。",
+      desc: "那台电脑上的 Persona Link 主动连 hub：在 NAT 后面、换了网络也能连上。",
       note: noTLS ? "要先开 TLS" : undefined,
     },
     {
@@ -238,7 +238,7 @@ function MachineRow({
             </Button>
           )}
           {m.kind === "link" && active && (
-            <Button className="h-7 px-2.5" onClick={onPair} title={tls ? "给这台电脑的 Jarvis Link 生成配对链接" : "电脑来连只走 TLS，先在网络与访问开启"}>
+            <Button className="h-7 px-2.5" onClick={onPair} title={tls ? "给这台电脑的 Persona Link 生成配对链接" : "电脑来连只走 TLS，先在网络与访问开启"}>
               <AdminIcon name="link" size={13} />
               生成配对链接
             </Button>
@@ -398,7 +398,7 @@ function AddLink({ open, onClose, existing, onAdded }: { open: boolean; onClose:
       ) : (
         <form onSubmit={submit} className="space-y-3.5">
           <p className="text-[12.5px] leading-relaxed text-ink-2">
-            那台电脑上的 Jarvis Link 主动连这台 hub，适合笔记本、会换网络的电脑。加好之后马上生成配对链接，到那台电脑上粘贴。
+            那台电脑上的 Persona Link 主动连这台 hub，适合笔记本、会换网络的电脑。加好之后马上生成配对链接，到那台电脑上粘贴。
           </p>
           <MachineFields example={{ id: "laptop", name: "笔记本" }} id={id} setId={setId} name={name} setName={setName} icon={icon} setIcon={setIcon} existing={existing} autoFocus />
           {error && <FormError text={error} />}
@@ -483,8 +483,8 @@ function PairPanel({ machine, onClose }: { machine: AdminMachine; onClose: () =>
         <div className="mt-2.5 text-[12.5px] leading-relaxed text-ink-2" style={{ animation: "fade-in 160ms ease-out both" }} key={platform}>
           {platform === "mac" && (
             <ol className="list-decimal space-y-1 pl-4 marker:text-ink-3">
-              <li>装 Jarvis Link（菜单栏 App，自带 node 服务），打开它。</li>
-              <li>点菜单栏里的 Jarvis Link ›「配对 / 修改连接…」，粘贴上面的链接。</li>
+              <li>装 Persona Link（菜单栏 App，自带 node 服务），打开它。</li>
+              <li>点菜单栏里的 Persona Link ›「配对 / 修改连接…」，粘贴上面的链接。</li>
               <li>菜单里显示已连接，这里的列表里它就在线了。</li>
             </ol>
           )}

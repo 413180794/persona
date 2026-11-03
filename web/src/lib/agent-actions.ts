@@ -1,9 +1,9 @@
-// What the Agents list's menus do (iOS AgentRowMenu / SpaceMenuItems): pin, mute, hand to Jarvis. Each change shows at
+// What the Agents list's menus do (iOS AgentRowMenu / SpaceMenuItems): pin, mute, hand to Persona. Each change shows at
 // once and is put back if the hub refuses it.
 import { toast } from "../ui/atoms";
 import { agentHandoffText } from "./agent-handoff";
 import { api, errorText } from "./api";
-import { askJarvis } from "./outbox";
+import { askPersona } from "./outbox";
 import { isPinned, isSpacePinned, spaceKey, togglePin, toggleSpacePin, toggled, type AgentPins } from "./pins";
 import { isMuted, toggleMute } from "./session-actions";
 import { getState, setMutes, setPins } from "./store";
@@ -56,12 +56,15 @@ export function flipSpaceMute(machineId: string, spaceName: string) {
   return putMutes({ ...m, spaces: toggled(m.spaces, key) }, m.spaces.includes(key) ? "已恢复这个空间的通知" : "已屏蔽这个空间");
 }
 
-/** 交给 Jarvis: the agent goes to Jarvis' main conversation (a new one becomes it when there is none), and the page
- * moves there (the app's askJarvis). */
-export async function handToJarvis(s: Session, machineName?: string) {
+/** 交给 Persona: the agent goes to Persona's main conversation (a new one becomes it when there is none), and the page
+ * moves there (the app's askPersona). */
+export async function handToPersona(s: Session, machineName?: string) {
   try {
-    await askJarvis(agentHandoffText(s, machineName));
+    await askPersona(agentHandoffText(s, machineName));
   } catch (e) {
     toast(`没发出去：${errorText(e)}`, "error");
   }
 }
+
+// Source compatibility for integrations written before the product rename.
+export const handToJarvis = handToPersona;

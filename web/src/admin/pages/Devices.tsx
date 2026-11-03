@@ -45,7 +45,7 @@ export function Devices() {
         <Card title={`${data.length} 个凭据`} footer="撤销后那台设备马上断开，要再用得重新配对。主 token（hub.json 的 token）不在这里，换它要改 hub.json。">
           {data.length === 0 ? (
             <EmptyState icon="phone" title="还没有配对过设备" action={<Button onClick={() => setPairing(true)}>配对手机</Button>}>
-              用 Jarvis App 扫码配对，这里就会出现它的凭据。
+              用 Persona App 扫码配对，这里就会出现它的凭据。
             </EmptyState>
           ) : (
             data.map((d) => <DeviceRow key={d.id} d={d} onRevoked={() => set(data.filter((x) => x.id !== d.id))} />)
@@ -143,7 +143,7 @@ function PairPhone({ open, onClose }: { open: boolean; onClose: () => void }) {
             )}
           </div>
           <p className="mt-3 text-center text-[12.5px] leading-relaxed text-ink-2">
-            用 Jarvis App 扫码。只能配对一台，{left ? <>还有 <span className="font-mono text-ink">{left}</span> 过期。</> : "已过期。"}
+            用 Persona App 扫码。只能配对一台，{left ? <>还有 <span className="font-mono text-ink">{left}</span> 过期。</> : "已过期。"}
           </p>
           <div className="mt-4 w-full divide-y divide-line overflow-hidden rounded-control bg-inset shadow-hairline">
             <div className="flex items-center gap-3 px-3 py-2">

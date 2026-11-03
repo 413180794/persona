@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   agentPreset,
-  askJarvisText,
+  askPersonaText,
   contextXml,
   countLabel,
   dayTitle,
@@ -277,7 +277,7 @@ describe("detail", () => {
   });
 });
 
-describe("问 Jarvis", () => {
+describe("问 Persona", () => {
   it("writes the context tag the app parses (kind, title, url, in that order)", () => {
     expect(contextXml({ kind: "context", title: 'A & "B" <c>', text: "x</jarvis-context>y" })).toBe(
       '<jarvis-context kind="context" title="A &amp; &quot;B&quot; &lt;c&gt;" url="">\nxy\n</jarvis-context>',
@@ -286,11 +286,11 @@ describe("问 Jarvis", () => {
 
   it("carries the profile, the last ten timeline lines and the folder", () => {
     const log = Array.from({ length: 12 }, (_, i) => `- 2026-10-${String(i + 1).padStart(2, "0")} · 飞书 · ${i}`);
-    const t = askJarvisText({ name: "天气 App" }, { summary: "# 天气 App\n档案", log, path: "/home/me/.jarvis/data/projects/weather-app" });
+    const t = askPersonaText({ name: "天气 App" }, { summary: "# 天气 App\n档案", log, path: "/home/me/.jarvis/data/projects/weather-app" });
     expect(t.startsWith('<jarvis-context kind="context" title="知识库 · 天气 App" url="">\n# 天气 App\n档案\n\n时间线（最近）：\n- 2026-10-03')).toBe(true);
     expect(t).not.toContain("2026-10-02");
     expect(t).toContain("知识库目录：/home/me/.jarvis/data/projects/weather-app\n</jarvis-context>\n\n说说「天气 App」现在怎么样了");
-    expect(askJarvisText({ name: "韩梅梅", one_line: "产品经理" })).toContain('url="">\n产品经理\n</jarvis-context>');
+    expect(askPersonaText({ name: "韩梅梅", one_line: "产品经理" })).toContain('url="">\n产品经理\n</jarvis-context>');
   });
 });
 

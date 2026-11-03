@@ -1,6 +1,6 @@
-// Messages other pages send for a conversation (问 Jarvis from 知识库, 交给 AI from 收件箱, a new Jarvis conversation):
+// Messages other pages send for a conversation (问 Persona from 知识库, 交给 AI from 收件箱, a new Persona conversation):
 // the page moves to the conversation at once and the message shows there as a sending bubble until the transcript has
-// it, as the app's outbox does (AppModel.sendNow / askJarvis). A failed one stays with the reason, 重试 and 删除.
+// it, as the app's outbox does (AppModel.sendNow / askPersona). A failed one stays with the reason, 重试 and 删除.
 // The conversation's own composer keeps its local sending bubbles (ChatView); both look the same.
 import { api, ApiError, errorText, sessionPath } from "./api";
 import { pickedLauncher, conversationKey } from "./assistant-chat";
@@ -135,10 +135,10 @@ export function discardOutbox(mid: string, sid: string, id: string) {
 }
 
 /**
- * 问 Jarvis: the text goes to Jarvis' main conversation (AppModel.askJarvis), which opens at once with the message
+ * 问 Persona: the text goes to Persona's main conversation (AppModel.askPersona), which opens at once with the message
  * on its way; with no main conversation yet, this one starts it (and becomes it). Throws only when starting fails.
  */
-export async function askJarvis(text: string): Promise<void> {
+export async function askPersona(text: string): Promise<void> {
   let a = getState().assistant;
   if (!a?.main) {
     await refreshAssistant().catch(() => {});
@@ -154,3 +154,6 @@ export async function askJarvis(text: string): Promise<void> {
   void refreshAssistant().catch(() => {});
   navigate({ name: "jarvis", sid: r.session.session_id });
 }
+
+// Source compatibility for integrations written before the product rename.
+export const askJarvis = askPersona;

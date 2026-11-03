@@ -43,7 +43,7 @@ describe("拷贝信息", () => {
   it("says which conversation, where and how to go on with it", () => {
     const t = assistantInfoText({ title: "周报", isMain: true, sessionId: "s1", machine: "服务器", machineId: "srv", cwd: "~/.jarvis/assistant", launcher: "claude", model: "model-x" });
     expect(t.split("\n")).toEqual([
-      "Jarvis 助手的对话 主对话 「周报」",
+      "Persona 助手的对话 主对话 「周报」",
       "会话 ID：s1",
       "所在机器：服务器（srv）",
       "工作目录：~/.jarvis/assistant",
@@ -51,7 +51,7 @@ describe("拷贝信息", () => {
       "在那台机器上接着聊：cd ~/.jarvis/assistant && claude --resume s1",
     ]);
     const plain = assistantInfoText({ isMain: false, sessionId: "s2", machine: "srv", machineId: "srv", cwd: "/a", launcher: "codex" });
-    expect(plain.split("\n").slice(0, 3)).toEqual(["Jarvis 助手的对话", "会话 ID：s2", "所在机器：srv"]);
+    expect(plain.split("\n").slice(0, 3)).toEqual(["Persona 助手的对话", "会话 ID：s2", "所在机器：srv"]);
     expect(plain).toContain("启动器：codex\n");
   });
 });

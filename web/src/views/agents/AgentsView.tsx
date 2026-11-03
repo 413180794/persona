@@ -224,7 +224,7 @@ function AgentSessionView({ id, onToggleSidebar }: { id: string; onToggleSidebar
           ))}
         </div>
       </div>
-      <AgentComposer disabled={!canSend} reason={session ? "这个会话不能从 Jarvis 发消息" : "加载中…"} onSend={(text) => void deliver({ clientId: uuid(), text, at: Date.now(), status: "sending" })} />
+      <AgentComposer disabled={!canSend} reason={session ? "这个会话不能从 Persona 发消息" : "加载中…"} onSend={(text) => void deliver({ clientId: uuid(), text, at: Date.now(), status: "sending" })} />
     </div>
   );
 }

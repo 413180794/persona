@@ -1,7 +1,7 @@
 // The knowledge base (docs/knowledge.md「App 接口」): the hub's wire types and the pure logic of the 知识库 page —
 // list grouping and ranking, search results merged by entry with the words marked, which tags a row has room for,
-// the timeline, the profile without what the header shows, and the message 问 Jarvis sends. The iOS app is the
-// reference (apple/Jarvis/Views/Knowledge/KnowledgeView.swift, apple/Shared/Knowledge.swift).
+// the timeline, the profile without what the header shows, and the message 问 Persona sends. The iOS app is the
+// reference (apple/Persona/Views/Knowledge/KnowledgeView.swift, apple/Shared/Knowledge.swift).
 import type { Session } from "./types";
 
 export const KB_KINDS = ["projects", "chats", "people", "docs", "meetings", "events"] as const;
@@ -547,7 +547,7 @@ export function parseRecent(text?: string): RecentDay[] {
   return out.filter((d) => d.messages.length);
 }
 
-// ── 问 Jarvis ───────────────────────────────────────────
+// ── 问 Persona ───────────────────────────────────────────
 
 /**
  * `<jarvis-context kind="…" title="…" url="…">text</jarvis-context>`, attributes in this order: the app's parser
@@ -566,8 +566,8 @@ function entryText(e: Pick<KBEntry, "one_line">, d?: Pick<KBDetail, "summary" | 
   return text.trim();
 }
 
-/** What 问 Jarvis sends to the main conversation: the entry's profile, recent timeline and folder, then the ask. */
-export function askJarvisText(e: Pick<KBEntry, "name" | "one_line">, d?: Pick<KBDetail, "summary" | "log" | "path"> | null): string {
+/** What 问 Persona sends to the main conversation: the entry's profile, recent timeline and folder, then the ask. */
+export function askPersonaText(e: Pick<KBEntry, "name" | "one_line">, d?: Pick<KBDetail, "summary" | "log" | "path"> | null): string {
   return `${contextXml({ kind: "context", title: `知识库 · ${e.name}`, url: "", text: entryText(e, d) })}\n\n说说「${e.name}」现在怎么样了：最新进展、在等我的事、接下来该做什么，能替我处理的先处理。`;
 }
 
@@ -628,3 +628,6 @@ export function tagUpdate(kind: string, f: TagForm): KBUpdate {
   }
   return u;
 }
+
+// Source compatibility for integrations written before the product rename.
+export const askJarvisText = askPersonaText;

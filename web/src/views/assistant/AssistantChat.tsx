@@ -1,4 +1,4 @@
-// What a Jarvis conversation adds to the chat page (the app's AssistantTopBar): the persona's dot in the header,
+// What a Persona conversation adds to the chat page (the app's AssistantTopBar): the persona's dot in the header,
 // moving with the conversation's state; the header menu's 详细信息 / 知识库 / 回到主对话 / 拷贝信息; and the
 // launcher chip under the composer that switches the model for the next messages (AssistantTopBar's 启动器 menu).
 import { useEffect, useState } from "react";
@@ -50,11 +50,11 @@ function useAssistantLaunchers(mid: string | undefined, wanted: boolean): { list
 
 function launcherItems(list: AssistantLauncher[] | null, error: string, current: string, onPick: (name: string) => void): MenuItem[] {
   if (!list) return [{ key: "loading", label: error ? `读不到启动器：${error}` : "正在读取启动器…", disabled: true, onSelect: () => {} }];
-  if (!list.length) return [{ key: "none", label: "这台电脑上没有能运行 Jarvis 的启动器", disabled: true, onSelect: () => {} }];
+  if (!list.length) return [{ key: "none", label: "这台电脑上没有能运行 Persona 的启动器", disabled: true, onSelect: () => {} }];
   return list.map((l) => ({ key: l.name, label: l.name, hint: shortModel(l.model) || undefined, checked: l.name === current, onSelect: () => onPick(l.name) }));
 }
 
-/** The composer's 启动器 chip in a Jarvis conversation: the next message (and the ones after it) uses the pick. */
+/** The composer's 启动器 chip in a Persona conversation: the next message (and the ones after it) uses the pick. */
 export function AssistantLauncherChip({ session }: { session: Session }) {
   const menu = useMenu();
   const assistant = useStore((s) => s.assistant);
@@ -113,7 +113,7 @@ export function StarterLauncherChip() {
 
 // ── the header ──────────────────────────────────────────
 
-/** The persona's dot beside a Jarvis conversation's title, in the conversation's state; nothing for the built-in. */
+/** The persona's dot beside a Persona conversation's title, in the conversation's state; nothing for the built-in. */
 export function AssistantFace({ session, last }: { session?: Session; last?: Item }) {
   const persona = usePersona();
   const conn = useStore((s) => s.conn);
@@ -124,7 +124,7 @@ export function AssistantFace({ session, last }: { session?: Session; last?: Ite
   return <PersonaDot size={30} state={state} fallback={null} className="-my-1" />;
 }
 
-/** The header menu's Jarvis part: 详细信息 (the profile), 知识库, 回到主对话, 拷贝信息. Empty for an agent. */
+/** The header menu's Persona part: 详细信息 (the profile), 知识库, 回到主对话, 拷贝信息. Empty for an agent. */
 export function useAssistantMenu(session: Session | undefined): MenuItem[] {
   const assistant = useStore((s) => s.assistant);
   const machine = useStore((s) => (session ? s.machines.find((m) => m.id === session.machine_id)?.name ?? "" : ""));

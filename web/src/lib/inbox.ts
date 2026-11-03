@@ -306,9 +306,9 @@ export function interactionMuted(ix: Interaction, sessions: Record<string, Sessi
   return Boolean(space && mutes.spaces.includes(`${ix.machine_id}/${space}`));
 }
 
-/** What it waits for: 「Claude 在问你」, 「计划等你审批」…; Jarvis's ask_user and other agents by name. */
+/** What it waits for: 「Claude 在问你」, 「计划等你审批」…; Persona's ask_user and other agents by name. */
 export function interactionTitle(ix: Interaction): string {
-  if (ix.tool_name === "ask_user") return "Jarvis 在问你";
+  if (ix.tool_name === "ask_user") return "Persona 在问你";
   const name = ix.agent === "codex" ? "Codex" : ix.agent === "traex" ? "TRAEX" : ix.agent && ix.agent !== "claude" ? ix.agent : "";
   if (name && ix.kind === "question") return `${name} 在问你`;
   if (name && ix.kind === "permission") return `${name} 需要你授权`;
@@ -342,7 +342,7 @@ export function waitingAgents(interactions: Interaction[], sessions: Record<stri
     .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.id.localeCompare(b.id));
 }
 
-/** A conversation's page: the assistant's are in Jarvis (/j/<sid>), an agent's is /s/<machine>/<sid>. */
+/** A conversation's page: the assistant's are in Persona (/j/<sid>), an agent's is /s/<machine>/<sid>. */
 export function conversationRoute(mid: string, sid: string, sessions: Record<string, Session[]>, assistant: AssistantInfo | null): Route {
   const s = (sessions[mid] ?? []).find((x) => x.session_id === sid);
   const isAssistant = s?.assistant || (assistant?.machine_id === mid && assistant.conversations.some((c) => c.session_id === sid));
