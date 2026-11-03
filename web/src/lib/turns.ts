@@ -625,6 +625,15 @@ export function foldRecaps(lines: ChatLine[]): ChatLine[] {
   return out;
 }
 
+/** The chat with `shown` (the newest recap, open in full above the composer) taken out of the last line, so it is
+ *  not on screen twice; the older recaps folded with it stay as the line. Closing the strip brings the line back. */
+export function withoutShownRecap(lines: ChatLine[], shown?: Item): ChatLine[] {
+  const last = lines[lines.length - 1];
+  if (!shown || last?.kind !== "recaps" || last.items[last.items.length - 1]?.id !== shown.id) return lines;
+  const rest = last.items.slice(0, -1);
+  return rest.length ? [...lines.slice(0, -1), { ...last, items: rest }] : lines.slice(0, -1);
+}
+
 /** The drawer behind a wakes line: each wake (its task reports, then what the agent answered to them), newest wake
  *  first; the steps in between fold into one work row at the end. */
 export function wakeDrawer(t: Turn): { groups: { id: string; notices: Item[]; answer?: Item }[]; process: Item[] } {

@@ -15,7 +15,7 @@ import { outboxKey, settleOutbox } from "../../lib/outbox";
 import { conversationKey, pickedLauncher } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
-import { chatLines, parseUserText, segments, type UserMessage } from "../../lib/turns";
+import { chatLines, parseUserText, segments, withoutShownRecap, type UserMessage } from "../../lib/turns";
 import type { Item, Session, Subagent } from "../../lib/types";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -242,6 +242,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   useEffect(() => setRecapClosed(closedRecap(recapKey)), [recapKey]);
   const newestRecap = !assistant && !viewed && lastLine?.kind === "recaps" ? lastLine.items[lastLine.items.length - 1] : undefined;
   const pendingRecap = newestRecap && recapClosed !== newestRecap.id ? newestRecap : undefined;
+  // the strip has the newest recap in full: the chat does not show it a second time until the strip is closed
+  const shownLines = useMemo(() => withoutShownRecap(lines, pendingRecap), [lines, pendingRecap]);
   const dismissRecap = () => {
     if (!pendingRecap) return;
     closeRecap(recapKey, pendingRecap.id);
@@ -289,7 +291,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
               </div>
             )}
             <ChatContext.Provider value={ctx}>
-              {lines.map((line, i) => (
+              {shownLines.map((line, i) => (
                 <ChatLineView
                   key={line.id}
                   line={line}
@@ -301,7 +303,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                   expandFold={tr.expandFold}
                   onSplit={onSplit}
                   onUnsplit={onUnsplit}
-                  onRetry={canRetry && i === lines.length - 1 ? retry : undefined}
+                  onRetry={canRetry && i === shownLines.length - 1 ? retry : undefined}
                 />
               ))}
             </ChatContext.Provider>

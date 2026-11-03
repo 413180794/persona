@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatLines, isLoopTick, mergeItems, parseUserText, segments, toolChip, toolLabel, wakeDrawer, workSegment, workSummary } from "./turns";
+import { chatLines, isLoopTick, mergeItems, parseUserText, segments, toolChip, toolLabel, wakeDrawer, withoutShownRecap, workSegment, workSummary } from "./turns";
 import type { Item } from "./types";
 
 const u = (seq: number, text: string, extra: Partial<Item> = {}): Item => ({ id: `u${seq}#0`, seq, role: "user", kind: "text", text, ...extra });
@@ -112,6 +112,23 @@ describe("chatLines", () => {
     expect(kinds(ls)).toEqual(["segment", "recaps", "segment", "recaps"]);
     expect(ls[1].kind === "recaps" && ls[1].items.map((i) => i.text)).toEqual(["one", "two"]);
     expect(ls[1].id).toBe("rc3#0");
+  });
+
+  it("takes the recap shown above the composer out of the chat", () => {
+    const one = chatLines([u(1, "go"), a(2, "done"), recap(3, "one")]);
+    const last = one[one.length - 1];
+    const shown = last.kind === "recaps" ? last.items[0] : undefined;
+    expect(kinds(withoutShownRecap(one, shown))).toEqual(["segment"]);
+    expect(withoutShownRecap(one, undefined)).toBe(one);
+    // folded with older ones: only the newest goes, the rest stay one line
+    const two = chatLines([u(1, "go"), a(2, "done"), recap(3, "one"), recap(4, "two")]);
+    const l2 = two[two.length - 1];
+    const out = withoutShownRecap(two, l2.kind === "recaps" ? l2.items[1] : undefined);
+    expect(kinds(out)).toEqual(["segment", "recaps"]);
+    expect(out[1].kind === "recaps" && out[1].items.map((i) => i.text)).toEqual(["one"]);
+    // a recap that is not the newest thing is left alone
+    const mid = chatLines([u(1, "go"), a(2, "done"), recap(3, "one"), u(4, "back"), a(5, "ok")]);
+    expect(withoutShownRecap(mid, mid[1].kind === "recaps" ? mid[1].items[0] : undefined)).toBe(mid);
   });
 
   it("keeps work a background task woke the agent for in the exchange, behind a wakes chip", () => {
