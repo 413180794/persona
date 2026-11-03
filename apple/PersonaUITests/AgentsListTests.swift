@@ -104,6 +104,13 @@ final class AgentsListTests: XCTestCase {
         see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组：")).firstMatch, "the list menu")
     }
 
+    /// Back to the top of the list, where the quick filters are (a list scrolled to a row below the cards).
+    private func toTop() {
+        for _ in 0..<6 where !(filter("all").exists && filter("all").isHittable) {
+            app.collectionViews.firstMatch.swipeDown(velocity: .fast)
+        }
+    }
+
     /// The n-th agent row (card or compact).
     private func row(_ n: Int, compact: Bool = false) -> XCUIElement {
         app.buttons.matching(identifier: compact ? "agents.compactRow" : "agents.row").element(boundBy: n)
@@ -125,11 +132,13 @@ final class AgentsListTests: XCTestCase {
     @MainActor func testQuickFilters() throws {
         launch()
         XCTAssertEqual(filter("needsYou").label, "需要你 6")
-        XCTAssertEqual(filter("unread").label, "未读 47")
+        XCTAssertEqual(filter("unread").label, "未读 48")
         XCTAssertEqual(filter("working").label, "工作中 19")
-        see(text("给天气 App 加主屏幕小组件"), "a working agent under 全部")
         see(text("需要你处理"), "the cards that need you, under 全部")
+        // The cards that need you take most of the screen: the rows are below them.
+        reach(text("给天气 App 加主屏幕小组件"), "a working agent under 全部")
         shot("agents-all")
+        toTop()
 
         filter("unread").tap()
         XCTAssertTrue(filter("unread").isSelected)
@@ -144,15 +153,16 @@ final class AgentsListTests: XCTestCase {
         gone(text("platform 任务 4"), "finished ones leave under 工作中")
 
         filter("needsYou").tap()
-        see(text("补齐网络层的单元测试"), "an agent that needs you")
         see(text("需要你处理"), "the cards that need you, under 需要你")
+        reach(text("补齐网络层的单元测试"), "an agent that needs you")
         gone(text("给天气 App 加主屏幕小组件"), "working agents leave under 需要你")
+        toTop()
 
         // One machine: the counts are that machine's.
         listMenu().tap()
         see(app.buttons["MacBook"], "MacBook in the menu").tap()
         let unread = filter("unread")
-        wait("未读 counts MacBook's only (\(unread.label))") { unread.label == "未读 5" }
+        wait("未读 counts MacBook's only (\(unread.label))") { unread.label == "未读 6" }
         XCTAssertEqual(filter("needsYou").label, "需要你 1")
         filter("unread").tap()
         see(text("mobile 任务 1"), "MacBook's unread agent")
@@ -160,9 +170,9 @@ final class AgentsListTests: XCTestCase {
         shot("example-machine")
         listMenu().tap()
         see(app.buttons["全部机器"], "全部机器").tap()
-        wait("未读 counts every machine again") { filter("unread").label == "未读 47" }
+        wait("未读 counts every machine again") { filter("unread").label == "未读 48" }
         filter("all").tap()
-        see(text("给天气 App 加主屏幕小组件"), "everything again under 全部")
+        reach(text("给天气 App 加主屏幕小组件"), "everything again under 全部")
     }
 
     // MARK: Compact rows
@@ -182,17 +192,17 @@ final class AgentsListTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(Double(compact), Double(cards) * 2.5, "compact \(compact) vs cards \(cards)")
         shot("agents-compact-unread")
         filter("all").tap()
-        see(text("给天气 App 加主屏幕小组件"), "a working agent")
+        reach(text("给天气 App 加主屏幕小组件"), "a working agent")
         shot("agents-compact-all")
         for _ in 0..<4 { app.swipeUp(velocity: .fast) }
         shot("agents-compact-scrolled")
 
         app.terminate()
         launch(fresh: false)
-        see(row(0, compact: true), "still compact after a relaunch")
+        reach(row(0, compact: true), "still compact after a relaunch")
         listMenu().tap()
         see(app.buttons["卡片"], "卡片 in the menu").tap()
-        see(row(0), "card rows again")
+        reach(row(0), "card rows again")
         XCTAssertFalse(row(0, compact: true).exists)
     }
 
@@ -230,7 +240,7 @@ final class AgentsListTests: XCTestCase {
 
         // A folded space still opens from its menu.
         for _ in 0..<4 { app.swipeDown(velocity: .fast) }
-        header("weather").tap()
+        reach(header("weather"), "weather's header").tap()
         button("weather 的更多操作").tap()
         see(app.buttons["打开空间"], "打开空间 in the space's menu").tap()
         see(app.navigationBars["weather"], "the space page")
@@ -249,7 +259,7 @@ final class AgentsListTests: XCTestCase {
         wait("no finished-unread left on the header (\(h.label))") { !h.label.contains("完成未看") }
         // The filters are the first list row now; return to them after inspecting a lower space.
         for _ in 0..<4 where !filter("unread").exists { app.collectionViews.firstMatch.swipeDown(velocity: .fast) }
-        XCTAssertEqual(filter("unread").label, "未读 12")
+        XCTAssertEqual(filter("unread").label, "未读 13")
         shot("agents-space-read")
     }
 
@@ -266,7 +276,7 @@ final class AgentsListTests: XCTestCase {
         back.tap()
         see(text(title), "the opened agent stays in place under 未读")
         wait("the hub hears it was seen") { seen().count == 1 }
-        XCTAssertEqual(filter("unread").label, "未读 46")
+        XCTAssertEqual(filter("unread").label, "未读 47")
         let next = row(1)
         XCTAssertNotEqual(next.staticTexts.firstMatch.label, title, "the next one is below it")
         shot("agents-unread-walk")
@@ -276,8 +286,8 @@ final class AgentsListTests: XCTestCase {
         gone(text(title), "a seen agent leaves once the filter is chosen again")
 
         button("全部标为已读").tap()
-        see(app.buttons["全部标为已读（46）"], "the confirmation").tap()
-        wait("the hub hears of every one (\(seen().count))") { seen().count == 47 }
+        see(app.buttons["全部标为已读（47）"], "the confirmation").tap()
+        wait("the hub hears of every one (\(seen().count))") { seen().count == 48 }
         see(text("没有完成未看的会话"), "the empty filter")
         XCTAssertEqual(filter("unread").label, "未读 0")
         shot("agents-unread-empty")
