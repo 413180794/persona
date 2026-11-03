@@ -157,8 +157,8 @@ func ListenCandidates(listen string) ([]string, error) {
 func tunnelOrBridge(name string) bool {
 	name = strings.ToLower(name)
 	for _, prefix := range []string{"lo", "docker", "veth", "br-", "virbr", "bridge", "tun", "tap", "utun", "tailscale", "wg", "zt",
-		"ipsec", "vmnet", "vboxnet", "awdl", "llw", "anpi", "gif", "stf"} {
-		if strings.HasPrefix(name, prefix) {
+		"ipsec", "vmnet", "VBoxNet", "awdl", "llw", "anpi", "gif", "stf"} {
+		if strings.HasPrefix(name, strings.ToLower(prefix)) {
 			return true
 		}
 	}

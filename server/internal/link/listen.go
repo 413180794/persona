@@ -499,8 +499,17 @@ func (s *passive) info(w http.ResponseWriter, r *http.Request) {
 }
 
 func isUpgrade(r *http.Request) bool {
-	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
-		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	for _, value := range r.Header.Values("Connection") {
+		for _, token := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), "Upgrade") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // stream joins a WebSocket from the hub to the resident node: the node's socket first, so that a node that is not

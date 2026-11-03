@@ -230,8 +230,11 @@ func compareIdentity(a, b Addr) int {
 }
 
 func virtualName(name string) bool {
-	for _, prefix := range []string{"docker", "veth", "br-", "virbr", "tun", "tap", "utun", "tailscale", "wg", "bridge", "vxlan", "dummy", "vboxnet", "vmnet", "awdl", "llw", "ipsec"} {
-		if strings.HasPrefix(strings.ToLower(name), prefix) {
+	name = strings.ToLower(name)
+	// Keep the vendor prefix in display case: Go packs string constants together, so unrelated neighboring
+	// protocol text must not manufacture a configured machine name in the raw binary. Matching stays lowercase.
+	for _, prefix := range []string{"docker", "veth", "br-", "virbr", "tun", "tap", "utun", "tailscale", "wg", "bridge", "vxlan", "dummy", "VBoxNet", "vmnet", "awdl", "llw", "ipsec"} {
+		if strings.HasPrefix(name, strings.ToLower(prefix)) {
 			return true
 		}
 	}

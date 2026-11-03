@@ -100,6 +100,9 @@
 
 ## WebSocket 握手测试
 
+- `Connection` 是逗号分隔的 token 列表，不能用 `Contains(..., "upgrade")` 判断升级：`notupgrade` 也会命中。遍历 `Header.Values`，拆分、去空白后 `EqualFold` 匹配完整 token，测试大小写、多个字段及子串拒绝（#692）。
+- Go 的 printable rodata 可能把独立常量直接拼在一起，产物扫描会看到跨边界的短词（2026-11-03，#692：协议头 token 邻接 VirtualBox 网卡前缀）。先定位脱敏上下文并核对源码，不能当成真的写入了个人值，更不能删掉敏感词或加扫描豁免。品牌前缀按展示大小写存储、比较时规范化，回归确认网卡判断不变，再构建四个平台的实际产物扫描；只改请求头校验并不足以消除这次邻接。
+
 - Node 22 的内置 `WebSocket` 在握手被 HTTP 401 / 400 拒绝时可能只触发 `error`，不触发 `close`，`readyState` 仍是 CONNECTING。
   拒绝测试不要等 `close`，更不能把任意网络错误当成鉴权正确；用 HTTP upgrade 请求直接断言拒绝状态（错误 / 缺失 token 为 401、
   缺失 / 错误子协议为 400、错误路径为 404），意外收到 101 或连接错误均失败，设置总超时并回收 socket。成功握手仍用真实 WebSocket 验证。
