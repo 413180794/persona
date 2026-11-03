@@ -74,7 +74,7 @@ class ProactiveDebugActivity : ComponentActivity() {
                         }
                         opened?.let { key ->
                             JDialog(onDismiss = { opened = null }, title = "会打开这段对话",
-                                text = "接进设置后，这里会切到 Jarvis 打开 ${key.machineId} 上的对话 ${key.sessionId}。",
+                                text = "接进设置后，这里会切到 Persona 打开 ${key.machineId} 上的对话 ${key.sessionId}。",
                                 confirm = "知道了" to { opened = null }, dismiss = null)
                         }
                     }

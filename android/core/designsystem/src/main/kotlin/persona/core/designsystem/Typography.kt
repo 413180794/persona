@@ -55,7 +55,7 @@ data class PersonaType(
     val labelSmall: TextStyle,
     /** Large counters (the board's bay counts, hub facts). */
     val number: TextStyle,
-    /** Jarvis speaking: the briefing sentence on the home page. */
+    /** Persona speaking: the briefing sentence on the home page. */
     val voice: TextStyle,
     val code: TextStyle,
     val codeSmall: TextStyle,

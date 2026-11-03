@@ -62,12 +62,12 @@ fun pairingFailure(error: Throwable): PairingFailure = when (error) {
 }
 
 fun PairingFailure.explanation(): String = when (this) {
-    PairingFailure.InvalidCode -> "不是有效的 Jarvis 配对链接，请检查地址和配对码。"
+    PairingFailure.InvalidCode -> "不是有效的 Persona 配对链接，请检查地址和配对码。"
     PairingFailure.Dns -> "找不到这个地址，请检查域名或重新扫码。"
     PairingFailure.Refused -> "hub 没有在这个端口上监听，请确认 hub 正在运行。"
     PairingFailure.Unreachable -> "当前网络到不了 hub，请切换网络后重试。"
     PairingFailure.Timeout -> "连不上 hub。在外面时检查路由器是否放行 TLS 端口的 IPv6 入站；在家里检查是否连着同一个网络。"
-    PairingFailure.LocalPermission -> "在家里连 hub，需要允许 Jarvis 访问本地网络。"
+    PairingFailure.LocalPermission -> "在家里连 hub，需要允许 Persona 访问本地网络。"
     PairingFailure.Certificate -> "证书或 hub 身份不符。请在 hub 机器上重新运行 jarvisd hub pair，再扫码。"
     PairingFailure.Expired -> "配对码已失效或已被用过，请重新运行 jarvisd hub pair。"
     PairingFailure.Incompatible -> "当前连接组件或 hub 不支持这种配对方式，请更新后重试。"

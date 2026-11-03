@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 
 /**
  * 设置 › hub (docs/android.md「多 hub」): the phone's hub groups. A group is hubs linked by the hub mesh; the lists
- * show every group together, the hub-level pages (Jarvis, inbox, hub settings) show the selected one. Adding a hub
+ * show every group together, the hub-level pages (Persona, inbox, hub settings) show the selected one. Adding a hub
  * puts it into the group its mesh says, else it starts a new group.
  */
 @Composable
@@ -37,7 +37,7 @@ internal fun HubsScreen(hubs: HubGroups, onAdd: (() -> Unit)?, onBack: () -> Uni
     }
     JListPage(title = "hub", onBack = onBack) {
         item {
-            SettingsCaption(if (groups.size > 1) "Agents、机器和要你处理的请求把各组合在一起显示。Jarvis、收件箱和 hub 相关的设置用选中的那一组。"
+            SettingsCaption(if (groups.size > 1) "Agents、机器和要你处理的请求把各组合在一起显示。Persona、收件箱和 hub 相关的设置用选中的那一组。"
                 else "互相连通的几台 hub 算一组。再添加一台不相通的 hub，会单独成一组，列表合在一起显示。",
                 Modifier.padding(top = Tokens.Space.m))
         }
@@ -69,7 +69,7 @@ internal fun HubsScreen(hubs: HubGroups, onAdd: (() -> Unit)?, onBack: () -> Uni
     }
     menu?.let { group ->
         JActionSheet(listOfNotNull(
-            JAction("用于 Jarvis 和收件箱", PhIcons.Sparkle, checked = group.selected, enabled = !group.selected) {
+            JAction("用于 Persona 和收件箱", PhIcons.Sparkle, checked = group.selected, enabled = !group.selected) {
                 run("没能切换，请稍后再试。") { hubs.select(group.id) }
             }.takeIf { groups.size > 1 },
             JAction("改名", PhIcons.PencilSimple) { renaming = group },
@@ -107,7 +107,7 @@ private fun groupStateText(group: HubGroupInfo, several: Boolean): String {
     val paired = group.hubs.count { it.paired }
     val mesh = group.hubs.size - paired
     val hubs = if (mesh == 0) "$paired 台 hub" else "$paired 台已配对，$mesh 台经互联发现"
-    return if (several && group.selected) "$hubs，Jarvis 和收件箱在用" else hubs
+    return if (several && group.selected) "$hubs，Persona 和收件箱在用" else hubs
 }
 
 private fun hubText(hub: HubMemberInfo): String? = when {

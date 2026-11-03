@@ -119,7 +119,7 @@ fun AssistantScreen(
             if (it.key in ended) it.copy(status = "offline", state = "offline") else it
         }), query, pinnedConversations)
     }
-    // Jarvis's face (top bar and the conversation list) shows the conversation on screen, as on iOS: none on the
+    // Persona's face (top bar and the conversation list) shows the conversation on screen, as on iOS: none on the
     // new-conversation page.
     val faceState = personaState(active?.let { key -> snapshot.conversations.firstOrNull { it.key == key } }, hubOnline,
         machines, assistantMachine)
@@ -260,7 +260,7 @@ fun AssistantScreen(
     val body: @Composable (Boolean) -> Unit = { wide ->
         val hasComposer = active == null || !hasChat || demo
         JPage(
-            title = "Jarvis",
+            title = "Persona",
             modifier = Modifier.fillMaxSize().imePadding(),
             topBar = {
                 CompositionLocalProvider(LocalRootLeading provides {
@@ -269,7 +269,7 @@ fun AssistantScreen(
                     })
                 }) {
                     JTopBar(
-                        title = "Jarvis", subtitle = connectionLabel,
+                        title = "Persona", subtitle = connectionLabel,
                         titleBusy = !connectionLabel.isNullOrBlank(), onTitleClick = { menu = true },
                         actions = {
                             JIconButton(PhIcons.NotePencil, "新对话", ::startNewConversation, enabled = !sending)
@@ -295,7 +295,7 @@ fun AssistantScreen(
                             onSend = ::submit, onCommand = { composer.insert(it, composer.focused) },
                             onNotice = { message ->
                                 if (feedback?.notice(message) != true) scope.launch { snackbar.showSnackbar(message) }
-                            }, enabled = draftReady && !sending, placeholder = "问 Jarvis…")
+                            }, enabled = draftReady && !sending, placeholder = "问 Persona…")
                     }
                 }
             }) else null,
@@ -368,7 +368,7 @@ fun AssistantScreen(
         }
     }
     if (menu) JActionSheet(
-        title = "Jarvis", onDismiss = { menu = false },
+        title = "Persona", onDismiss = { menu = false },
         actions = listOf("助手设置", "知识库", "会话信息").map { label ->
             JAction(label, onClick = {
                 if (label == "知识库" && onKnowledge != null) onKnowledge()
@@ -399,10 +399,10 @@ fun AssistantScreen(
     info?.let { title ->
         JDialog(onDismiss = { info = null }, title = title,
             text = when (title) {
-                "定时任务" -> "体验模式里没有定时任务。连上自己的 hub 以后，可以在这里管理 Jarvis 的定时任务、跟进和运行记录。"
+                "定时任务" -> "体验模式里没有定时任务。连上自己的 hub 以后，可以在这里管理 Persona 的定时任务、跟进和运行记录。"
                 "知识库" -> "在这里查看人、群和项目的资料。知识库内容尚未接入。"
                 "资料页" -> "资料页连接尚未配置。接入后可管理定时任务、跟进、关于我和记忆。"
-                "助手设置" -> "体验模式里没有助手设置。连上自己的 hub 以后，可以选 Jarvis 在哪台机器上运行，改关于我和记忆。"
+                "助手设置" -> "体验模式里没有助手设置。连上自己的 hub 以后，可以选 Persona 在哪台机器上运行，改关于我和记忆。"
                 "会话信息" -> if (active == null) "当前还没有打开对话。" else "当前对话：${active.sessionId}"
                 else -> "启动器配置尚未接入。"
             }, confirm = "知道了" to { info = null }, dismiss = null)
@@ -483,7 +483,7 @@ private fun AssistantDrawer(
                 Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     PersonaFace(face)
-                    Text("Jarvis", style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
+                    Text("Persona", style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
                 }
             }
             item { JSearchField(query, onQuery, "搜索对话") }
@@ -506,7 +506,7 @@ private fun AssistantDrawer(
             }
             if (groups.main == null && groups.pinned.isEmpty() && groups.recent.isEmpty()) {
                 item { JEmptyState(if (query.isBlank()) "还没有对话" else "没有找到匹配的对话",
-                    if (query.isBlank()) "发一句话，开始和 Jarvis 聊聊。" else "换个关键词再试试。") }
+                    if (query.isBlank()) "发一句话，开始和 Persona 聊聊。" else "换个关键词再试试。") }
             }
             item { JSectionHeader("更多") }
             item { JGroupItem(GroupPosition.of(0, 6)) { DrawerItem("返回首页", PhIcons.House, onHome) } }

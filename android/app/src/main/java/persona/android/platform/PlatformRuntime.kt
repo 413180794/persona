@@ -30,7 +30,7 @@ class PlatformSessions @Inject constructor(application: Application) {
     internal val current = MutableStateFlow<PlatformSession?>(null)
     internal suspend fun requireSession(): PlatformSession {
         combine(app.pairingReady, app.pairingRestoreError) { ready, failed -> ready || failed }.first { it }
-        check(app.hub.value != null) { "请先打开 Jarvis 完成配对" }
+        check(app.hub.value != null) { "请先打开 Persona 完成配对" }
         return withTimeout(10_000) { current.filterNotNull().first { it.hub === app.hub.value } }
     }
 }

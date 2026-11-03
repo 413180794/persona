@@ -146,7 +146,7 @@ private fun MachineCard(machine: Machine?, metrics: MachineMetrics, sessions: Li
                 Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
             }
         }
-        if (machine?.nodeMismatch == true) Warning("这台电脑上的 Jarvis 和 hub 不是同一次部署")
+        if (machine?.nodeMismatch == true) Warning("这台电脑上的 Persona 和 hub 不是同一次部署")
         alerts.forEach { Warning(it.label) }
         val groups = listOf(listOf(MetricKind.Cpu), listOf(MetricKind.Memory), listOf(MetricKind.Rx, MetricKind.Tx))
         groups.forEach { kinds ->

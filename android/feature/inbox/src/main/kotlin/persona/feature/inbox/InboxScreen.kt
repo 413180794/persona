@@ -75,7 +75,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     }
     val displayGroups = buildList {
         triageGroups.firstOrNull { it.id == "action" }?.let { add(it) }
-        if (workingRows.isNotEmpty()) add(InboxGroup("working", "Jarvis 在办", workingRows, workingRows, false))
+        if (workingRows.isNotEmpty()) add(InboxGroup("working", "Persona 在办", workingRows, workingRows, false))
         addAll(triageGroups.filter { it.id != "action" })
     }
     val groups = displayGroups.filter { section.isEmpty() || it.id == section }
@@ -140,7 +140,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         val scroll = rememberLazyListState()
         JListPage(
             title = "收件箱",
-            summary = if (needsCount == 0) "都处理完了" else "$needsCount 条要回，Jarvis 在办 $workingCount 件",
+            summary = if (needsCount == 0) "都处理完了" else "$needsCount 条要回，Persona 在办 $workingCount 件",
             subtitle = inboxTitle(connection).takeIf { connection != ConnectionState.Online },
             titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
             onTitleClick = if (connection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
@@ -189,7 +189,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                     val position = GroupPosition.of(index, group.visibleRows.size)
                     if (row.type == InboxRowType.Interaction) {
                         interactions[row.id]?.let { interaction ->
-                            MessageItem(sender = "Jarvis", title = interaction.sessionTitle.ifBlank { interaction.title },
+                            MessageItem(sender = "Persona", title = interaction.sessionTitle.ifBlank { interaction.title },
                                 preview = interaction.summary ?: interaction.title, position = position, status = Status.NeedsYou,
                                 onClick = { navigator.navigate(ChatRoute(interaction.machineId, interaction.sessionId)) })
                         }
@@ -210,14 +210,14 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
 ) {
     val item = record.item
     var menu by remember { mutableStateOf(false) }
-    val handoff = rememberInboxAiButton(repository, item.id, InboxAiAction.Handoff, "交给 Jarvis", null, navigator)
+    val handoff = rememberInboxAiButton(repository, item.id, InboxAiAction.Handoff, "交给 Persona", null, navigator)
     if (menu) JActionSheet(title = item.title, onDismiss = { menu = false }, actions = listOf(
         JAction(if (done) "移回收件箱" else "已处理", PhIcons.Check, enabled = !busy, onClick = onDone),
-        JAction("交给 Jarvis", PhIcons.Sparkle, enabled = handoff.enabled, onClick = handoff.onClick),
+        JAction("交给 Persona", PhIcons.Sparkle, enabled = handoff.enabled, onClick = handoff.onClick),
     ))
     JSwipeActions(
         start = if (busy) null else SwipeAction(if (done) "移回收件箱" else "已处理", PhIcons.Check, Status.Unread, onDone),
-        end = if (handoff.enabled) SwipeAction("交给 Jarvis", PhIcons.Sparkle, Status.Working, handoff.onClick) else null,
+        end = if (handoff.enabled) SwipeAction("交给 Persona", PhIcons.Sparkle, Status.Working, handoff.onClick) else null,
     ) {
         MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = item.title,
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),

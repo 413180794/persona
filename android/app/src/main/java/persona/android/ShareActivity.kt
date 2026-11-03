@@ -68,7 +68,7 @@ class ShareActivity : ComponentActivity() {
                             .padding(horizontal = 24.dp).padding(bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text("发给 Jarvis", style = MaterialTheme.typography.titleLarge)
+                        Text("发给 Persona", style = MaterialTheme.typography.titleLarge)
                         Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                 Text(model.payload.title.ifBlank { "分享内容" }, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -88,7 +88,7 @@ class ShareActivity : ComponentActivity() {
                             maxLines = 4,
                         )
                         Text("发到", style = MaterialTheme.typography.labelLarge)
-                        ShareTarget("主对话", "Jarvis", model.target == null,
+                        ShareTarget("主对话", "Persona", model.target == null,
                             !model.busy && !model.locked && model.paired) { model.select(null) }
                         Column(Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState())) {
                             sessions.filter { it.isLive && !it.assistant && it.key != assistant.mainSession }
@@ -127,7 +127,7 @@ class ShareActivity : ComponentActivity() {
                                     })
                                     finish()
                                 }, enabled = !model.busy) {
-                                    Text(if (model.paired) "查看对话" else "打开 Jarvis", maxLines = 1)
+                                    Text(if (model.paired) "查看对话" else "打开 Persona", maxLines = 1)
                                 }
                             } else {
                                 if (model.error != null && !model.busy) {
@@ -243,7 +243,7 @@ class ShareViewModel @Inject constructor(
                 if (locked) completed = "已加入发送队列"
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) {
-                this@ShareViewModel.error = if (owner == null) "请先打开 Jarvis 完成配对，再重新分享"
+                this@ShareViewModel.error = if (owner == null) "请先打开 Persona 完成配对，再重新分享"
                     else "分享内容未能完整保存，请检查存储空间后从来源应用重新分享"
             } finally { busy = false }
             refresh()

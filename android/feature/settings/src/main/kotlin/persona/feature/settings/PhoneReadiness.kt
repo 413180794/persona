@@ -67,10 +67,10 @@ internal object PhoneReadiness {
             else -> "在应用电池设置里允许后台运行，检查锁屏通知设置。"
         }
         result += ReadyItem("autostart:${system.name}", "自启动",
-            "在应用启动管理中允许 Jarvis 自启动。跳过后，重启手机可能需要先手动打开 Jarvis。系统无法核验，请设置后确认。",
+            "在应用启动管理中允许 Persona 自启动。跳过后，重启手机可能需要先手动打开 Persona。系统无法核验，请设置后确认。",
             null, vendorTargets[system.name].orEmpty())
         result += ReadyItem("vendor:${system.name}", "${system.name} ${system.version} 后台设置", "$instruction 系统不能查询这些开关，请设置后点“已完成”。跳过可能漏收通知。", null, vendorTargets[system.name].orEmpty())
-        result += ReadyItem("task-lock", "最近任务加锁", "打开最近任务，长按 Jarvis 卡片或打开卡片菜单，选择加锁。跳过后，一键清理可能关闭连接。", null, listOf(appDetails))
+        result += ReadyItem("task-lock", "最近任务加锁", "打开最近任务，长按 Persona 卡片或打开卡片菜单，选择加锁。跳过后，一键清理可能关闭连接。", null, listOf(appDetails))
         if (Build.VERSION.SDK_INT >= 37 && context.applicationInfo.targetSdkVersion >= 37) {
             result += ReadyItem("local-network", "本地网络", "未允许时，在家里可能无法连接 hub。", context.checkSelfPermission("android.permission.ACCESS_LOCAL_NETWORK") == android.content.pm.PackageManager.PERMISSION_GRANTED, listOf(appDetails))
         }

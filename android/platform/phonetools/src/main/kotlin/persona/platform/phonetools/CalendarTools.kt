@@ -17,7 +17,7 @@ internal data class CalendarArguments(
     fun summary() = buildString {
         append("新建日程「$title」\n$start → $end")
         if (allDay) append("\n全天日程，结束日期不包含在内")
-        append("\n日历：${calendar ?: "默认可写日历；没有时创建 Jarvis 本地日历"}")
+        append("\n日历：${calendar ?: "默认可写日历；没有时创建 Persona 本地日历"}")
         location?.let { append("\n地点：$it") }; notes?.let { append("\n备注：$it") }
     }
     companion object {
@@ -112,7 +112,7 @@ internal class CalendarTools(context: Context) {
             .appendQueryParameter(Calendar.Calendars.ACCOUNT_TYPE, Calendar.ACCOUNT_TYPE_LOCAL).build()
         val values = ContentValues().apply {
             put(Calendar.Calendars.ACCOUNT_NAME, "Jarvis"); put(Calendar.Calendars.ACCOUNT_TYPE, Calendar.ACCOUNT_TYPE_LOCAL)
-            put(Calendar.Calendars.NAME, "Jarvis"); put(Calendar.Calendars.CALENDAR_DISPLAY_NAME, "Jarvis")
+            put(Calendar.Calendars.NAME, "Jarvis"); put(Calendar.Calendars.CALENDAR_DISPLAY_NAME, "Persona")
             put(Calendar.Calendars.OWNER_ACCOUNT, "Jarvis"); put(Calendar.Calendars.CALENDAR_ACCESS_LEVEL, Calendar.Calendars.CAL_ACCESS_OWNER)
             put(Calendar.Calendars.CALENDAR_COLOR, 0xff3f51b5.toInt()); put(Calendar.Calendars.VISIBLE, 1)
             put(Calendar.Calendars.SYNC_EVENTS, 1); put(Calendar.Calendars.CALENDAR_TIME_ZONE, ZoneId.systemDefault().id)

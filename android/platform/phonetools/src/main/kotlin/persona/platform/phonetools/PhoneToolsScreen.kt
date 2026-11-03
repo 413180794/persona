@@ -70,7 +70,7 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
                                 enabled = runtime.permissions.permissions(source).isNotEmpty())
                             JButton("系统设置", {
                                 try { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }
-                                catch (_: Exception) { error = "未能打开系统设置，请手动查看 Jarvis 的权限。" }
+                                catch (_: Exception) { error = "未能打开系统设置，请手动查看 Persona 的权限。" }
                             }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
                         }
                     }
@@ -78,7 +78,7 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
             }
         }
         item {
-            Text("Android 没有系统提醒事项接口。通知列表只包含 Jarvis 当前显示的通知；本模块不提供健康数据工具。",
+            Text("Android 没有系统提醒事项接口。通知列表只包含 Persona 当前显示的通知；本模块不提供健康数据工具。",
                 style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
         }
         error?.let { item { JNotice(it, Modifier.padding(top = 12.dp), status = Status.NeedsYou) } }

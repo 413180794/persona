@@ -59,7 +59,7 @@ class Notifier @Inject constructor(
             createNotificationChannels(listOf(
                 NotificationChannel(CH_INPUT, "需要你", NotificationManager.IMPORTANCE_HIGH),
                 NotificationChannel(CH_DONE, "做完了", NotificationManager.IMPORTANCE_DEFAULT),
-                NotificationChannel(CH_ASSISTANT, "Jarvis", NotificationManager.IMPORTANCE_DEFAULT),
+                NotificationChannel(CH_ASSISTANT, "Persona", NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CH_STATUS, "实时状态", NotificationManager.IMPORTANCE_LOW).apply {
                     setSound(null, null)
                     enableVibration(false)
@@ -134,7 +134,7 @@ class Notifier @Inject constructor(
         if (preferences.preferences.value?.input != true) return
         if (NotificationPolicy.expired(ix)) { retract(ix.id); return }
         val assistant = isAssistant(ix.sessionKey)
-        val title = if (assistant == true && ix.kind == "question") "Jarvis 在问你"
+        val title = if (assistant == true && ix.kind == "question") "Persona 在问你"
             else ix.sessionTitle?.takeIf { it.isNotBlank() } ?: "需要你"
         val detail = when (ix.kind) {
             "question" -> ix.questions.orEmpty().joinToString("\n") { it.question }
@@ -186,7 +186,7 @@ class Notifier @Inject constructor(
         if (channel == CH_DONE && settings.done == DoneNotification.Off) return
         val session = SessionKey(event.machineId, event.sessionId)
         post("${event.kind}:${session.path}", EVENT_ID, base(channel).forSession(session)
-            .setContentTitle(event.title.ifBlank { if (channel == CH_DONE) "做完了" else "Jarvis" })
+            .setContentTitle(event.title.ifBlank { if (channel == CH_DONE) "做完了" else "Persona" })
             .setContentText(event.body.ifBlank { event.subtitle })
             .setSubText(event.subtitle.takeIf { it.isNotBlank() })
             .setStyle(NotificationCompat.BigTextStyle().bigText(event.body.take(2000)))
@@ -253,7 +253,7 @@ class Notifier @Inject constructor(
         .setVisibility(if (showLockDetails) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_PRIVATE)
         .apply {
             if (!showLockDetails) setPublicVersion(NotificationCompat.Builder(context, channel)
-                .setSmallIcon(R.drawable.notify_status).setContentTitle("Jarvis 有新消息")
+                .setSmallIcon(R.drawable.notify_status).setContentTitle("Persona 有新消息")
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).build())
         }
 

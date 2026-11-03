@@ -44,7 +44,7 @@ enum class DecisionKind(val label: String, val icon: PhIcon) {
 
 /**
  * Something that needs the user, in a list (the Agents page). Glass shows a frosted card with an amber glow;
- * brief a wash card where Jarvis's advice is highlighted; the board a strip in an amber holder that expands in
+ * brief a wash card where Persona's advice is highlighted; the board a strip in an amber holder that expands in
  * place — collapsed it shows [summary] and [quickActions], tapping it opens the [body] and [actions].
  * [onOpen] opens the conversation (glass and brief: tapping the card; board: the 打开看 action).
  */
@@ -249,7 +249,7 @@ fun DecisionDock(
     }
 }
 
-/** Jarvis's suggestion: highlighted in brief, a tinted line in glass and on the board. */
+/** Persona's suggestion: highlighted in brief, a tinted line in glass and on the board. */
 @Composable
 fun DecisionAdvice(text: String, modifier: Modifier = Modifier) {
     val palette = PersonaTheme.palette
@@ -258,7 +258,7 @@ fun DecisionAdvice(text: String, modifier: Modifier = Modifier) {
         AppStyle.Brief -> Row(modifier, verticalAlignment = Alignment.Top) {
             JIcon(PhIcons.Sparkle, null, size = 16.dp, tint = palette.ink, selected = true, modifier = Modifier.padding(top = 3.dp))
             Spacer(Modifier.width(4.dp))
-            MarkerText("Jarvis：$text", type.callout.copy(fontWeight = FontWeight.SemiBold))
+            MarkerText("Persona：$text", type.callout.copy(fontWeight = FontWeight.SemiBold))
         }
         else -> Row(
             modifier.fillMaxWidth().clip(RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 6.dp else 16.dp)).background(palette.accentSoft)

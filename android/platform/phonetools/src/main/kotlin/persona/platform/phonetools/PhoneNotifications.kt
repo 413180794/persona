@@ -16,7 +16,7 @@ internal class PhoneNotifications(private val context: Context) {
     suspend fun schedule(args: JsonObject): PhoneToolResult {
         channel()
         check(manager.areNotificationsEnabled() && manager.getNotificationChannel(CHANNEL).importance != NotificationManager.IMPORTANCE_NONE) {
-            "请在系统设置中允许 Jarvis 通知及手机工具通知渠道。"
+            "请在系统设置中允许 Persona 通知及手机工具通知渠道。"
         }
         val id = UUID.randomUUID().toString()
         val title = requireNotNull(args.string("title"))

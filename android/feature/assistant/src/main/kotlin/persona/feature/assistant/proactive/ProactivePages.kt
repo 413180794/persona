@@ -32,7 +32,7 @@ private const val FollowupsShown = 3
 private const val RunsShown = 3
 
 /**
- * 主动做事: what runs next, the routines with their switches, the follow-ups Jarvis scheduled, and the latest runs
+ * 主动做事: what runs next, the routines with their switches, the follow-ups Persona scheduled, and the latest runs
  * (iOS AssistantRoutinesView). Each part opens a page of its own.
  */
 @Composable
@@ -61,7 +61,7 @@ internal fun OverviewPage(
         val nothing = routines?.isEmpty() == true && followups?.isEmpty() == true
         if (nothing) item("empty") {
             JEmptyState(
-                "还没有安排", "点右上角的 ＋ 新建定时任务，或者在对话里对 Jarvis 说「每天 9 点给我早报」「一小时后提醒我」。",
+                "还没有安排", "点右上角的 ＋ 新建定时任务，或者在对话里对 Persona 说「每天 9 点给我早报」「一小时后提醒我」。",
                 icon = PhIcons.CalendarBlank,
                 action = { JButton("新建定时任务", actions.newRoutine, icon = PhIcons.Plus) },
             )
@@ -85,7 +85,7 @@ internal fun OverviewPage(
             }
             if (routines?.isEmpty() == true) item("routines-empty") {
                 JGroupItem(GroupPosition.Single) {
-                    JRow("还没有定时任务", subtitle = "让 Jarvis 每天或每周固定的时间做一件事。", leadingIcon = PhIcons.Plus, onClick = actions.newRoutine)
+                    JRow("还没有定时任务", subtitle = "让 Persona 每天或每周固定的时间做一件事。", leadingIcon = PhIcons.Plus, onClick = actions.newRoutine)
                 }
             }
             itemsIndexed(routines.orEmpty(), key = { index, routine -> "routine-$index-${routine.id}" }) { index, routine ->
@@ -93,7 +93,7 @@ internal fun OverviewPage(
                     onToggle = { actions.toggle(routine.id, it) }, onOpen = { actions.openRoutine(routine.id) },
                     onMore = { actions.routineMenu(routine) })
             }
-            if (routines != null) item("routines-note") { SectionNote("到点 Jarvis 会开一段新对话做这件事，做完推送到手机。时间按助手设置里的时区。") }
+            if (routines != null) item("routines-note") { SectionNote("到点 Persona 会开一段新对话做这件事，做完推送到手机。时间按助手设置里的时区。") }
 
             item("followups-header") { JSectionHeader("已安排的跟进", count = followups?.size?.takeIf { it > 0 }) }
             state.followups.error?.let { error ->
@@ -101,7 +101,7 @@ internal fun OverviewPage(
             }
             if (followups?.isEmpty() == true) item("followups-empty") {
                 JGroupItem(GroupPosition.Single) {
-                    JRow("没有安排的跟进", subtitle = "在对话里说「一小时后提醒我」，Jarvis 会安排在这里。", leadingIcon = PhIcons.BellSimple)
+                    JRow("没有安排的跟进", subtitle = "在对话里说「一小时后提醒我」，Persona 会安排在这里。", leadingIcon = PhIcons.BellSimple)
                 }
             }
             val shown = followups.orEmpty().take(FollowupsShown)
@@ -112,7 +112,7 @@ internal fun OverviewPage(
                     onMore = { actions.followupMenu(followup) })
             }
             if (more) item("followups-more") { MoreRow("全部 ${followups.orEmpty().size} 个跟进", GroupPosition(first = false, last = true), actions.allFollowups) }
-            if (!followups.isNullOrEmpty()) item("followups-note") { SectionNote("Jarvis 在对话里替自己安排的一次性跟进，到点自己回来接着做。") }
+            if (!followups.isNullOrEmpty()) item("followups-note") { SectionNote("Persona 在对话里替自己安排的一次性跟进，到点自己回来接着做。") }
         }
         if (!runs.isNullOrEmpty()) {
             item("runs-header") { JSectionHeader("最近运行") }
@@ -129,7 +129,7 @@ internal fun OverviewPage(
     }
 }
 
-/** Every follow-up Jarvis has scheduled, soonest first. */
+/** Every follow-up Persona has scheduled, soonest first. */
 @Composable
 internal fun FollowupsPage(
     state: ProactiveState, machines: List<Machine>, now: Instant, zone: ZoneId, onBack: () -> Unit, actions: ProactiveActions,
@@ -145,14 +145,14 @@ internal fun FollowupsPage(
         when {
             followups == null -> if (state.followups.error == null) item("loading") { JLoading() }
             followups.isEmpty() -> item("empty") {
-                JEmptyState("没有安排的跟进", "在对话里说「一小时后提醒我……」「明早会前帮我准备」，Jarvis 会安排在这里。", icon = PhIcons.BellSimple)
+                JEmptyState("没有安排的跟进", "在对话里说「一小时后提醒我……」「明早会前帮我准备」，Persona 会安排在这里。", icon = PhIcons.BellSimple)
             }
             else -> {
                 itemsIndexed(followups, key = { index, followup -> "followup-$index-${followup.id}" }) { index, followup ->
                     FollowupRow(followup, machines, now, zone, GroupPosition.of(index, followups.size), state.followupBusy(followup.id),
                         onOpen = followup.conversation()?.let { key -> { actions.openConversation(key) } }, onMore = { actions.followupMenu(followup) })
                 }
-                item("note") { SectionNote("到点 Jarvis 自己回来接着做。点 ⋯ 可以立即运行或取消；接着原来对话的，点一下打开那段对话。") }
+                item("note") { SectionNote("到点 Persona 自己回来接着做。点 ⋯ 可以立即运行或取消；接着原来对话的，点一下打开那段对话。") }
             }
         }
     }

@@ -67,7 +67,7 @@ internal fun UpcomingRow(item: Upcoming, now: Instant, zone: ZoneId, position: G
 
 /**
  * A routine: its rule in words, the next and last run, who set it up, and its switch. The picture carries a mark
- * when the last run failed (danger) or when Jarvis made it in a conversation.
+ * when the last run failed (danger) or when Persona made it in a conversation.
  */
 @Composable
 internal fun RoutineRow(
@@ -80,7 +80,7 @@ internal fun RoutineRow(
         ScheduleText.sentence(routine.time, routine.weekdays),
         routine.nextLine(now, zone),
         lastRun?.line(now, zone),
-        "Jarvis 在对话里建的".takeIf { routine.byAssistant },
+        "Persona 在对话里建的".takeIf { routine.byAssistant },
     )
     JGroupItem(position) {
         JRow(
@@ -102,7 +102,7 @@ internal fun RoutineRow(
     }
 }
 
-/** A follow-up Jarvis scheduled for itself: when, where it goes, what it will do. ⋯ holds 立即运行 and 取消. */
+/** A follow-up Persona scheduled for itself: when, where it goes, what it will do. ⋯ holds 立即运行 and 取消. */
 @Composable
 internal fun FollowupRow(
     followup: Followup, machines: List<Machine>, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,

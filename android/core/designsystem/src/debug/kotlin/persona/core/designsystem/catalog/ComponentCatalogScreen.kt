@@ -200,7 +200,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             )
         }
         item { JSectionHeader("设置") }
-        item { HubCard("Jarvis hub", connected = true, statusText = "已连接，内网直连", facts = listOf("电脑在线" to "3 台", "证书" to "已钉扎"), onClick = {}) }
+        item { HubCard("Persona hub", connected = true, statusText = "已连接，内网直连", facts = listOf("电脑在线" to "3 台", "证书" to "已钉扎"), onClick = {}) }
         item { Spacer(Modifier.height(12.dp)) }
         item { JGroup(rows = listOf({ JRow("配对", leadingIcon = PhIcons.QrCode, subtitle = "扫码、粘贴链接或手动输入", onClick = {}) }, { JSwitchRow("锁屏实时状态", toggled, { toggled = it }, leadingIcon = PhIcons.Broadcast) })) }
         // A row with several lines (the slot JRow) and a long value under its label (rowPadding) line up with plain rows.

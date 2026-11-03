@@ -50,7 +50,7 @@ internal fun KnowledgeScreen(model: KnowledgeViewModel, navigator: Navigator) {
             page.filter.tag?.let { JTag("标签：#$it", Modifier.padding(bottom = 8.dp)) }
         }
         when {
-            !page.paired -> item { JEmptyState("还没连接 hub", "配对后，就能查看 Jarvis 整理的知识库。") }
+            !page.paired -> item { JEmptyState("还没连接 hub", "配对后，就能查看 Persona 整理的知识库。") }
             page.loading -> item { JLoading() }
             page.message != null -> item { RetryState(requireNotNull(page.message), model::refresh) }
             search && page.groups.isEmpty() -> item { JEmptyState("没有找到相关内容", "试试其他关键词，搜索会包含档案和聊天记录。") }
@@ -161,10 +161,10 @@ internal fun KnowledgeDetailScreen(model: KnowledgeDetailViewModel, navigator: N
                             EntryMetadata(entry)
                             entry.oneLine?.takeIf { it.isNotBlank() }?.let { Text(it, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink2) }
                             ComposerFrame(field = {
-                                ComposerTextField(question, { question = it }, "想问 Jarvis 什么", enabled = !sending.busy)
+                                ComposerTextField(question, { question = it }, "想问 Persona 什么", enabled = !sending.busy)
                             })
-                            JButton("问 Jarvis", { model.ask(question) }, Modifier.fillMaxWidth(), enabled = question.isNotBlank(),
-                                loading = sending.busy, loadingText = "正在交给 Jarvis…")
+                            JButton("问 Persona", { model.ask(question) }, Modifier.fillMaxWidth(), enabled = question.isNotBlank(),
+                                loading = sending.busy, loadingText = "正在交给 Persona…")
                             sending.message?.let { JNotice(it) }
                             linkMessage?.let { JNotice(it) }
                         }

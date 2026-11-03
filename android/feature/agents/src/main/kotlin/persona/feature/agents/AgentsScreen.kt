@@ -377,7 +377,7 @@ internal fun AgentSessionMenuItems(
         add(JAction(if (muted) "取消屏蔽" else "屏蔽", PhIcons.Prohibit, enabled = !busy, onClick = onMute))
         add(JAction("重命名", PhIcons.NotePencil, enabled = !busy, onClick = onRename))
         if (session.loop != null) add(JAction("停止循环", enabled = !busy, onClick = onStopLoop))
-        add(JAction("交给 Jarvis", onClick = onHandoff))
+        add(JAction("交给 Persona", onClick = onHandoff))
         if (row.state == AgentState.Unread) add(JAction("标为已读", PhIcons.Check, onClick = onRead))
         add(JAction("拷贝恢复命令", onClick = { clipboard.setText(AnnotatedString(session.recoveryCommand())) }))
         add(JAction("拷贝目录", enabled = session.cwd.isNotBlank(), onClick = { clipboard.setText(AnnotatedString(session.cwd)) }))

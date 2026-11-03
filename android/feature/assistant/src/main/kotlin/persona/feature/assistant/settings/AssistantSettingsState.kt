@@ -73,8 +73,8 @@ internal data class MachineMove(val fromName: String, val to: Machine) {
 /** Conversations and memory are files on the machine the assistant runs on: they never move with it. */
 internal fun machineMoveWarning(from: String, to: String, online: Boolean): String = buildString {
     append("记忆和会话记录在原来那台机器上，不会跟过去。")
-    append("换过去以后，Jarvis 在「$to」上从头开始：没有之前的记忆，主对话也重新开始；原来的记录留在「$from」上，换回来就还在。")
-    if (!online) append("\n\n「$to」现在离线，连上之前 Jarvis 不能回复。")
+    append("换过去以后，Persona 在「$to」上从头开始：没有之前的记忆，主对话也重新开始；原来的记录留在「$from」上，换回来就还在。")
+    if (!online) append("\n\n「$to」现在离线，连上之前 Persona 不能回复。")
 }
 
 internal data class SettingsNotice(val text: String, val error: Boolean)
@@ -156,11 +156,11 @@ internal class AssistantSettingsState(
     suspend fun confirmMove() {
         val move = state.value.move ?: return
         set { copy(move = null) }
-        val moved = perform("没换成，Jarvis 还在「${move.fromName}」上运行，请重试。") {
+        val moved = perform("没换成，Persona 还在「${move.fromName}」上运行，请重试。") {
             // The main conversation is a transcript on the old machine; the next message starts a new one here.
             val config = api.updateConfig(AssistantConfigUpdate(machineId = move.to.id, main = AssistantConfigUpdate.CLEAR_MAIN))
             set { copy(config = config, launchers = null, launchersFailed = false, memory = MemoryState()) }
-            done("Jarvis 换到「${move.to.displayName}」上了，新对话从这里开始。")
+            done("Persona 换到「${move.to.displayName}」上了，新对话从这里开始。")
         }
         if (!moved) return
         quietly { onMoved() }

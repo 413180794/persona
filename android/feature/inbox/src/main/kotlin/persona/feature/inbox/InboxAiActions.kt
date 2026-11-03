@@ -30,7 +30,7 @@ internal fun InboxAiActions(repository: InboxRepository, itemId: String, context
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { }
     }
-    val actions = listOf(InboxAiAction.Summarize to "总结", InboxAiAction.DraftReply to "拟回复", InboxAiAction.Handoff to "交给 Jarvis")
+    val actions = listOf(InboxAiAction.Summarize to "总结", InboxAiAction.DraftReply to "拟回复", InboxAiAction.Handoff to "交给 Persona")
     val buttons = actions.map { (action, label) ->
         key(action) {
             rememberInboxAiButton(repository, itemId, action, label, context ?: loaded, navigator,
@@ -134,6 +134,6 @@ private fun InboxActionBarPreview() {
     PersonaTheme(dynamicColor = false) {
         InboxActionBar(listOf(InboxAiButtonState("总结", pending = PendingStatus.Sending),
             InboxAiButtonState("拟回复", pending = PendingStatus.Waiting),
-            InboxAiButtonState("交给 Jarvis", pending = PendingStatus.NeedsReview)), Modifier.padding(Tokens.Space.m))
+            InboxAiButtonState("交给 Persona", pending = PendingStatus.NeedsReview)), Modifier.padding(Tokens.Space.m))
     }
 }

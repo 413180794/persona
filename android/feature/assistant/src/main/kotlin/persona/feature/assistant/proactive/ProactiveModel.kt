@@ -66,7 +66,7 @@ private val ShortHour = Regex("^\\d:[0-5]\\d$")
 /** "HH:MM" as the editor writes it. */
 internal fun validTime(time: String) = TimePattern.matches(time)
 
-/** The hub also takes "9:00" (Jarvis writes those); the editor shows and writes "09:00". */
+/** The hub also takes "9:00" (Persona writes those); the editor shows and writes "09:00". */
 internal fun normalizeTime(time: String) = time.trim().let { if (ShortHour.matches(it)) "0$it" else it }
 
 /** Days 1 = Monday … 7 = Sunday in order; all seven are written as none, which the hub reads as every day. */
@@ -93,7 +93,7 @@ private fun Routine.with(draft: RoutineDraft) = draft.normalized().let {
     copy(title = it.title, prompt = it.prompt, time = it.time, weekdays = it.weekdays, enabled = it.enabled)
 }
 
-/** Only what the person changed between [from] and [to]; fields changed on the hub meanwhile (by Jarvis) stay. */
+/** Only what the person changed between [from] and [to]; fields changed on the hub meanwhile (by Persona) stay. */
 private fun Routine.patched(from: RoutineDraft, to: RoutineDraft): Routine {
     val before = from.normalized()
     val after = to.normalized()
@@ -111,7 +111,7 @@ internal fun newRoutineId(): String = "rt_" + UUID.randomUUID().toString().repla
 
 /**
  * One edit to the routine table. The hub replaces the whole table on PUT, so every change is applied to a fresh read
- * right before writing: routines Jarvis added meanwhile survive, and nothing but the edited fields changes.
+ * right before writing: routines Persona added meanwhile survive, and nothing but the edited fields changes.
  */
 internal sealed interface RoutineChange {
     /** The routine it edits (a new one's id is made in the app, see [newRoutineId]). */

@@ -125,7 +125,7 @@ private fun SettingsContent(
             item { AppearanceSettings() }
             item { deviceFeedback() }
         }
-        "about" -> JListPage(title = "关于 Jarvis", onBack = back) {
+        "about" -> JListPage(title = "关于 Persona", onBack = back) {
             item { AboutSettingsPage() }
             item { deviceFeedback() }
         }
@@ -143,7 +143,7 @@ private fun SettingsContent(
                 }
             }
             item {
-                HubCard(name = "Jarvis hub", connected = paired && connection == ConnectionState.Online,
+                HubCard(name = "Persona hub", connected = paired && connection == ConnectionState.Online,
                     statusText = if (paired) connection.label() else "尚未配对",
                     facts = if (paired) listOf("电脑在线" to "${machines.count { it.online }} 台", "hub 地址" to (services.hubAddress ?: "未提供")) else emptyList(),
                     busy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
@@ -162,7 +162,7 @@ private fun SettingsContent(
             // The assistant page lives in the assistant module; only a navigation host can open it.
             if (onOpen != null) {
                 item { JSectionHeader("助手") }
-                item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Assistant), title = "Jarvis", leadingIcon = PhIcons.Sparkle, subtitle = "在哪台机器上运行、关于我、记忆和时区", onClick = { open(SettingsPage.Assistant) }) } }
+                item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Assistant), title = "Persona", leadingIcon = PhIcons.Sparkle, subtitle = "在哪台机器上运行、关于我、记忆和时区", onClick = { open(SettingsPage.Assistant) }) } }
             }
             item { JSectionHeader("交给 AI 的手机数据") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.PhoneData), title = "手机数据", leadingIcon = PhIcons.AddressBook, subtitle = "通讯录、日历、照片、位置和剪贴板", onClick = { if (onOpen == null && onPhoneData != null) onPhoneData() else open(SettingsPage.PhoneData) }) } }
@@ -301,7 +301,7 @@ fun ReadinessScreen(
                                     localNetwork.launch(PairingLocalNetwork.Permission)
                                 }
                                 else -> if (!PhoneReadiness.open(context, item.targets)) {
-                                    testMessage = "系统设置打不开，请从手机设置进入 Jarvis 应用详情。"
+                                    testMessage = "系统设置打不开，请从手机设置进入 Persona 应用详情。"
                                 }
                             }
                         }

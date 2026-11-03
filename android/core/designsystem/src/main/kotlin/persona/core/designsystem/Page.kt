@@ -51,7 +51,7 @@ import java.time.LocalTime
 
 /**
  * Room taken by app chrome that floats over pages: the glass dock at the bottom, the bar of a page that hosts this
- * one at the top (the Jarvis page around its conversation). The page still fills the whole area and its content
+ * one at the top (the Persona page around its conversation). The page still fills the whole area and its content
  * slides under that chrome; its own bars sit inside it. [handlesNavigationBar] means the chrome already sits above
  * the system navigation bar, so the page must not add that inset again.
  */
@@ -364,7 +364,7 @@ val LocalIconsRaised = compositionLocalOf { false }
 
 /**
  * A root or list page whose content is a lazy list. Glass and brief show a large title that scrolls away and
- * hands over to the bar; the board keeps a compact title. [summary] is Jarvis speaking about the page (brief
+ * hands over to the bar; the board keeps a compact title. [summary] is Persona speaking about the page (brief
  * sets it as the headline; glass shows it under the title). [greet] adds the date and a greeting (home only).
  */
 @OptIn(ExperimentalMaterial3Api::class)

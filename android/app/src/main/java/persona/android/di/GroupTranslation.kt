@@ -267,7 +267,7 @@ internal fun SessionFiles.inGroup(names: GroupNames): SessionFiles {
     }
 }
 
-/** The inbox items and Jarvis outbox of the selected group, whose own transports speak plain ids. */
+/** The inbox items and Persona outbox of the selected group, whose own transports speak plain ids. */
 internal fun InboxSnapshot.inGroup(names: GroupNames) = if (names.plain) this else copy(
     records = records.map { record -> record.agent?.let { agent ->
         record.copy(agent = agent.copy(machineId = agent.machineId?.let(names::machineId)))

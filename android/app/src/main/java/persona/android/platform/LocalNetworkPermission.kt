@@ -143,7 +143,7 @@ internal fun LocalNetworkPermissionDialog(permission: LocalNetworkPermission, co
         onDismissRequest = { pending?.complete(false); dismissed = true },
         title = { Text("允许访问本地网络") },
         text = { Text(if (permission.requestedBefore) "本地网络权限未开启。请到应用权限里允许访问本地网络，返回后继续配对。"
-            else "这个 hub 地址位于本地网络，需要允许 Jarvis 访问后才能配对。") },
+            else "这个 hub 地址位于本地网络，需要允许 Persona 访问后才能配对。") },
         confirmButton = { TextButton(onClick = {
             if (permission.requestedBefore) {
                 try {

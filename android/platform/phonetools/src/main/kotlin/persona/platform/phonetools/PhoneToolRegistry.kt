@@ -27,7 +27,7 @@ class PhoneToolRegistry(
         // Never re-execute a write when the same call is delivered again in this pairing scope.
         val result = try {
             val tool = PhoneToolCatalog.all.firstOrNull { it.spec.name == call.name } ?: error("手机不支持这个工具。")
-            check(usable(tool)) { "工具未开启、未授权或当前不可用，请打开 Jarvis 的「手机数据」检查。" }
+            check(usable(tool)) { "工具未开启、未授权或当前不可用，请打开 Persona 的「手机数据」检查。" }
             completed[call.callId]?.let { return@withLock it }
             PhoneToolCatalog.validate(tool, call.args)
             val approved = !tool.confirmation || confirm(CalendarArguments.parse(call.args).summary())

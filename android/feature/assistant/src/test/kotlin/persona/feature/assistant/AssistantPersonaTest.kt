@@ -27,10 +27,10 @@ class AssistantPersonaTest {
         assertEquals(PersonaState.Offline, personaState(session("working", "working"), hubOnline = false, online))
         assertEquals(PersonaState.Offline, personaState(null, hubOnline = false, online))
         assertEquals(PersonaState.Offline, personaState(session("blocked", "needs_you"), hubOnline = true, listOf(Machine("m", online = false))))
-        // The new-conversation page has no conversation: Jarvis's own machine decides.
+        // The new-conversation page has no conversation: Persona's own machine decides.
         assertEquals(PersonaState.Offline, personaState(null, hubOnline = true, listOf(Machine("m", online = false)), assistantMachine = "m"))
         assertEquals(PersonaState.Idle, personaState(null, hubOnline = true, online, assistantMachine = "m"))
-        // A machine the phone has not heard of yet does not make Jarvis look offline.
+        // A machine the phone has not heard of yet does not make Persona look offline.
         assertEquals(PersonaState.Working, personaState(session("working", "working"), hubOnline = true, emptyList()))
     }
 }

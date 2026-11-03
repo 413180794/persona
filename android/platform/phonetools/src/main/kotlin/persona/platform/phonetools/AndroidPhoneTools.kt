@@ -19,13 +19,13 @@ class AndroidPhoneTools(context: Context, private val foreground: () -> Boolean)
             "phone_calendar_create_event" -> CalendarTools(context).create(args)
             "phone_photos_recent" -> PhotosTool(context).recent(args)
             "phone_photo_get" -> PhotosTool(context).get(args)
-            "phone_location_current" -> { check(foreground()) { "请打开 Jarvis 后获取位置。" }; LocationTool(context).current() }
+            "phone_location_current" -> { check(foreground()) { "请打开 Persona 后获取位置。" }; LocationTool(context).current() }
             "phone_device_info" -> device()
             "phone_clipboard_get", "phone_clipboard_set" -> withContext(Dispatchers.Main.immediate) {
-                check(foreground()) { "请打开 Jarvis 后访问剪贴板。" }
+                check(foreground()) { "请打开 Persona 后访问剪贴板。" }
                 val clipboard = context.getSystemService(ClipboardManager::class.java)
                 if (name == "phone_clipboard_set") {
-                    clipboard.setPrimaryClip(ClipData.newPlainText("Jarvis", requireNotNull(args.string("text"))))
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Persona", requireNotNull(args.string("text"))))
                     PhoneToolResult.text("剪贴板已更新。")
                 } else {
                     val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()

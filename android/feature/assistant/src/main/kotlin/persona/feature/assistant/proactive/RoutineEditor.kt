@@ -57,7 +57,7 @@ internal fun RoutineEditorPage(
     val routine = found ?: known.takeIf { closing }
     val baseline = routine?.draft() ?: template ?: BlankRoutine
     var edited by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<RoutineDraft?>(null) }
-    // The routine as it was when the person started changing it: only their changes are written, so what Jarvis
+    // The routine as it was when the person started changing it: only their changes are written, so what Persona
     // changed meanwhile (it can edit routines from a conversation) stays.
     var editedFrom by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<RoutineDraft?>(null) }
     // A new routine's id is made once: a retry after a lost answer writes the same routine instead of a second one.
@@ -134,14 +134,14 @@ internal fun RoutineEditorPage(
                 }
                 state.routines.value == null -> item("loading") { JLoading() }
                 else -> item("gone") {
-                    JEmptyState("这个定时任务已经不在了", "可能刚在对话里被 Jarvis 删掉了。", icon = PhIcons.Clock,
+                    JEmptyState("这个定时任务已经不在了", "可能刚在对话里被 Persona 删掉了。", icon = PhIcons.Clock,
                         action = { JButton("返回", ::close, kind = JButtonKind.Secondary) })
                 }
             }
             return@JListPage
         }
         if (routine?.byAssistant == true) item("by-assistant") {
-            JNotice("Jarvis 在对话里替你建的，可以照常修改、关掉或删除。", icon = PhIcons.Sparkle)
+            JNotice("Persona 在对话里替你建的，可以照常修改、关掉或删除。", icon = PhIcons.Sparkle)
         }
         item("name") {
             JTextField(draft.title, { edit(draft.copy(title = it)) }, Modifier.padding(top = Tokens.Space.s), label = "名称",
@@ -165,11 +165,11 @@ internal fun RoutineEditorPage(
             SectionNote(next?.let { "下次运行：${ScheduleText.moment(it, now, zone)}（${ScheduleText.until(it, now, zone)}）" }
                 ?: "${ScheduleText.sentence(draft.time, draft.weekdays)}，按助手设置里的时区。")
         }
-        item("prompt-header") { JSectionHeader("要 Jarvis 做什么") }
+        item("prompt-header") { JSectionHeader("要 Persona 做什么") }
         item("prompt") {
             JTextField(draft.prompt, { edit(draft.copy(prompt = it)) }, Modifier.fillMaxWidth(),
                 placeholder = "像在对话里一样写：看哪些数据、怎么汇报。", minLines = 6, maxLines = Int.MAX_VALUE, enabled = !busy,
-                supportingText = "到点 Jarvis 开一段新对话照着做，做完推送到手机。它还可以再安排一次性的跟进，比如会前 10 分钟提醒你。")
+                supportingText = "到点 Persona 开一段新对话照着做，做完推送到手机。它还可以再安排一次性的跟进，比如会前 10 分钟提醒你。")
         }
         if (routine == null) return@JListPage
         val runs = state.runsOf(routine.id).orEmpty()
@@ -180,7 +180,7 @@ internal fun RoutineEditorPage(
         item("run-header") { JSectionHeader("运行") }
         item("run-now") {
             JGroupItem(GroupPosition.of(0, runRows)) {
-                JRow("立即运行", subtitle = if (dirty) "先保存修改，再开一段新对话" else "开一段新对话，跑完在 Jarvis 里看结果",
+                JRow("立即运行", subtitle = if (dirty) "先保存修改，再开一段新对话" else "开一段新对话，跑完在 Persona 里看结果",
                     leadingIcon = PhIcons.Play, onClick = ::runNow, enabled = !busy && draft.valid, chevron = false,
                     trailing = if (running) ({ JSpinner(Modifier.size(Tokens.Space.xxl)) }) else null)
             }

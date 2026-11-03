@@ -10,7 +10,9 @@ val appId = providers.gradleProperty("personaApplicationId")
     .orElse(providers.gradleProperty("jarvisApplicationId"))
     .getOrElse("com.example.jarvis")
 // A different label lets two builds sit side by side on one phone (with different application ids).
-val appLabel = providers.gradleProperty("jarvisAppLabel").getOrElse("Jarvis")
+val appLabel = providers.gradleProperty("personaAppLabel")
+    .orElse(providers.gradleProperty("jarvisAppLabel"))
+    .getOrElse("Persona")
 
 android {
     namespace = "persona.android"

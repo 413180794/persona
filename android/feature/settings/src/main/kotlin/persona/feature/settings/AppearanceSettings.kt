@@ -82,7 +82,7 @@ private fun StyleOption(style: AppStyle, selected: Boolean, onClick: () -> Unit)
 
 /** The app's four tabs, as the shell shows them, for the previews' navigation. */
 private val PreviewTabs = listOf(
-    NavItem("Jarvis", "Jarvis", PhIcons.Sparkle),
+    NavItem("Persona", "Persona", PhIcons.Sparkle),
     NavItem("Agents", "Agents", PhIcons.SquaresFour),
     NavItem("Inbox", "收件箱", PhIcons.Tray),
     NavItem("Settings", "设置", PhIcons.GearSix),

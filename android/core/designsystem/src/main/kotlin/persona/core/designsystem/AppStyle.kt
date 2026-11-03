@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 enum class AppStyle(val key: String, val label: String, val summary: String) {
     Glass("glass", "玻璃", "磨砂玻璃浮在状态光上，有事等你时泛起琥珀色"),
-    Brief("brief", "晨报", "白纸墨字，一支荧光笔只标 Jarvis 的建议和等你的事"),
+    Brief("brief", "晨报", "白纸墨字，一支荧光笔只标 Persona 的建议和等你的事"),
     Board("board", "看板", "每个 Agent 一条进程单，状态色一眼看清");
 
     companion object {

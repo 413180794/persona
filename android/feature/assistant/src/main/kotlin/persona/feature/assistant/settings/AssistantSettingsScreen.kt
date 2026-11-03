@@ -43,7 +43,7 @@ fun AssistantSettingsDestination(navigator: Navigator, onBack: () -> Unit) = Ass
     if (host == null) {
         JListPage(title = "助手", onBack = onBack) {
             item {
-                JEmptyState("体验模式里没有助手设置", "连上自己的 hub 以后，可以在这里选 Jarvis 在哪台机器上运行，改关于我和记忆。",
+                JEmptyState("体验模式里没有助手设置", "连上自己的 hub 以后，可以在这里选 Persona 在哪台机器上运行，改关于我和记忆。",
                     icon = PhIcons.Sparkle)
             }
         }
@@ -54,7 +54,7 @@ fun AssistantSettingsDestination(navigator: Navigator, onBack: () -> Unit) = Ass
         EntryPointAccessors.fromApplication(context, AssistantEntryPoint::class.java).assistantConversations()
     }
     AssistantSettingsScreen(host.management, host.machines, onBack, onMoved = { conversations.refresh() },
-        // An assistant conversation belongs to the Jarvis tab, which shows it on its home.
+        // An assistant conversation belongs to the Persona tab, which shows it on its home.
         onOpenConversation = { navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = ConversationKind.Assistant)) })
 }
 
@@ -76,7 +76,7 @@ internal fun AssistantSettingsScreen(
     machines: List<Machine>,
     onBack: () -> Unit,
     onMoved: suspend () -> Unit = {},
-    /** Shown in place of another page (the Jarvis tab) rather than as a navigation destination: back closes it here. */
+    /** Shown in place of another page (the Persona tab) rather than as a navigation destination: back closes it here. */
     inPlace: Boolean = false,
     /** Opens an assistant conversation (one a run of 主动做事 started, or a follow-up continues). */
     onOpenConversation: (SessionKey) -> Unit = {},
@@ -216,7 +216,7 @@ private fun SettingsHome(
     val ready = config != null && !state.busy
     JListPage(
         title = "助手", onBack = onBack, refreshing = state.loading && config != null, onRefresh = onRefresh,
-        summary = config?.let { "Jarvis 在「$machineName」上运行。" },
+        summary = config?.let { "Persona 在「$machineName」上运行。" },
     ) {
         if (state.loadFailed) item("load-failed") {
             JNotice("读不到助手的设置，请检查连接后下拉重试。", status = Status.NeedsYou,
@@ -240,7 +240,7 @@ private fun SettingsHome(
                     status = Status.NeedsYou, actionLabel = "选择启动器", onAction = { sheet(SettingsSheet.Launcher) })
             }
             if (machine != null && !machine.online) item("offline") {
-                JNotice("「$machineName」现在离线，连上之前 Jarvis 不能回复，记忆也读不到。", Modifier.padding(top = Tokens.Space.m),
+                JNotice("「$machineName」现在离线，连上之前 Persona 不能回复，记忆也读不到。", Modifier.padding(top = Tokens.Space.m),
                     status = Status.Offline)
             }
             item("where-caption") {
@@ -252,7 +252,7 @@ private fun SettingsHome(
                 { JRow("定时任务、跟进和运行记录", subtitle = "到点自己开始做事、回来跟进答应你的事，做完推送到手机",
                     leadingIcon = PhIcons.Clock, onClick = { open(SettingsPart.Proactive) }) },
             ))
-            item("proactive-caption") { Caption("在对话里说「每天 9 点给我早报」「一小时后提醒我」，Jarvis 会把它们加到这里。") }
+            item("proactive-caption") { Caption("在对话里说「每天 9 点给我早报」「一小时后提醒我」，Persona 会把它们加到这里。") }
 
             item("data") { JSectionHeader("数据存在哪里") }
             rows("data", listOf(
@@ -260,7 +260,7 @@ private fun SettingsHome(
                 { JRow("关于我、定时任务和设置", value = "hub", leadingIcon = PhIcons.SlidersHorizontal) },
                 { JRow("知识库", value = "hub 所在的机器", leadingIcon = PhIcons.BookOpen) },
             ))
-            item("data-caption") { Caption("会话记录和记忆跟着 Jarvis 所在的机器：换一台机器，它们留在原来那台上，不会跟过去。") }
+            item("data-caption") { Caption("会话记录和记忆跟着 Persona 所在的机器：换一台机器，它们留在原来那台上，不会跟过去。") }
 
             item("you") { JSectionHeader("了解你") }
             val memoryCount = state.memory.entries?.size
@@ -277,7 +277,7 @@ private fun SettingsHome(
                 }, leadingIcon = PhIcons.Brain, onClick = { open(SettingsPart.Memory) }) },
             ))
             item("you-caption") {
-                Caption("「关于我」是你告诉 Jarvis 的，存在 hub；「记忆」是它在对话里自己记下的，存在「$machineName」上。都可以改。")
+                Caption("「关于我」是你告诉 Persona 的，存在 hub；「记忆」是它在对话里自己记下的，存在「$machineName」上。都可以改。")
             }
 
             item("zone") { JSectionHeader("时区") }
@@ -294,7 +294,7 @@ private fun SettingsHome(
             if (state.followPhone && hubZone != null && hubZone != phoneZone) item("zone-behind") {
                 JNotice("hub 现在还按 ${zoneLabel(hubZone)} 算时间，下拉刷新会再同步一次。", Modifier.padding(top = Tokens.Space.m))
             }
-            item("zone-caption") { Caption("定时任务按这个时区的时刻运行，Jarvis 也按它理解「今天」「明早」。") }
+            item("zone-caption") { Caption("定时任务按这个时区的时刻运行，Persona 也按它理解「今天」「明早」。") }
 
             item("reach") { JSectionHeader("能访问") }
             rows("reach", listOf(
@@ -331,10 +331,10 @@ private fun NotesPart(state: AssistantSettingsUiState, onBack: () -> Unit, onSav
         }
     }) {
         item("intro") {
-            Caption("告诉 Jarvis 你的情况：代码放在哪、常用哪些工具查工作数据、哪些机器或目录别碰、你习惯的汇报方式。它每次开新对话都会读到，改了以后新对话生效。")
+            Caption("告诉 Persona 你的情况：代码放在哪、常用哪些工具查工作数据、哪些机器或目录别碰、你习惯的汇报方式。它每次开新对话都会读到，改了以后新对话生效。")
         }
         if (config != null && config.notes == null && config.notesEffective.isNotBlank()) item("from-hub") {
-            JNotice("现在 Jarvis 读到的是 hub 配置文件里写的内容。在这里保存以后，以这里为准。", Modifier.padding(top = Tokens.Space.m))
+            JNotice("现在 Persona 读到的是 hub 配置文件里写的内容。在这里保存以后，以这里为准。", Modifier.padding(top = Tokens.Space.m))
         }
         state.notice?.takeIf { it.error }?.let { notice -> item("notice") { JNotice(notice.text, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou) } }
         item("text") {
@@ -358,7 +358,7 @@ private fun MemoryPart(
     val entries = memory.entries.orEmpty()
     JListPage(title = "记忆", onBack = onBack, refreshing = memory.loading && memory.entries != null, onRefresh = onRefresh) {
         item("intro") {
-            Caption("Jarvis 记住的事，一条一个文件，存在「$machineName」上，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
+            Caption("Persona 记住的事，一条一个文件，存在「$machineName」上，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
         }
         if (memory.failed) item("failed") {
             JNotice(if (machine != null && !machine.online) "「$machineName」现在离线，连上以后才能看记忆。" else "读不到记忆，请稍后重试。",
@@ -366,7 +366,7 @@ private fun MemoryPart(
         }
         if (memory.entries == null && memory.loading) item("loading") { JLoading(text = "正在读取") }
         if (memory.entries != null && entries.isEmpty() && !memory.failed) item("empty") {
-            JEmptyState("还没有记忆", "Jarvis 会把你的偏好、纠正过它的地方记在这里。", icon = PhIcons.Brain)
+            JEmptyState("还没有记忆", "Persona 会把你的偏好、纠正过它的地方记在这里。", icon = PhIcons.Brain)
         }
         if (entries.isNotEmpty()) item("entries") { JSectionHeader("记住的事", count = entries.size) }
         itemsIndexed(entries, key = { _, entry -> entry.file.name }) { index, entry ->
@@ -380,7 +380,7 @@ private fun MemoryPart(
             item("index") { JSectionHeader("索引") }
             item("index-row") {
                 JGroupItem(GroupPosition.Single) {
-                    JRow(index.name, subtitle = "Jarvis 自己维护的目录，删除记忆时会一起更新", leadingIcon = PhIcons.ListChecks,
+                    JRow(index.name, subtitle = "Persona 自己维护的目录，删除记忆时会一起更新", leadingIcon = PhIcons.ListChecks,
                         onClick = { onOpen(index.name) })
                 }
             }
@@ -396,7 +396,7 @@ private fun MemoryFilePart(
     val scope = rememberCoroutineScope()
     val entry = state.memory.entries?.firstOrNull { it.file.name == name }
         ?: state.memory.index?.takeIf { it.name == name }?.let { parseMemory(it).copy(title = "索引") }
-    // The index is Jarvis's own table of contents: shown, not edited by hand.
+    // The index is Persona's own table of contents: shown, not edited by hand.
     val editable = entry != null && entry.file.name != MEMORY_INDEX
     var editing by remember { mutableStateOf(preview == "memory-edit") }
     var deleting by remember { mutableStateOf(preview == "memory-delete") }
@@ -410,7 +410,7 @@ private fun MemoryFilePart(
         },
     ) {
         if (entry == null) {
-            item("missing") { JEmptyState("这条记忆不在了", "可能已经被删除，或者 Jarvis 改了它的名字。", icon = PhIcons.Brain) }
+            item("missing") { JEmptyState("这条记忆不在了", "可能已经被删除，或者 Persona 改了它的名字。", icon = PhIcons.Brain) }
             return@JListPage
         }
         item("meta") {
@@ -437,7 +437,7 @@ private fun MemoryFilePart(
         JSheet(onDismiss = { if (!state.busy) editing = false }, title = "编辑「${entry.title}」", dismissible = !state.busy) {
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), contentPadding = PaddingValues(bottom = Tokens.Space.l),
                 verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                item { Caption("开头两行 --- 之间是 Jarvis 用的标题、说明和类型，可以一起改。") }
+                item { Caption("开头两行 --- 之间是 Persona 用的标题、说明和类型，可以一起改。") }
                 state.notice?.takeIf { it.error }?.let { notice -> item { JNotice(notice.text, status = Status.NeedsYou) } }
                 item {
                     JTextField(content, { content = it }, Modifier.fillMaxWidth(), label = "记忆内容", enabled = !state.busy,
@@ -453,7 +453,7 @@ private fun MemoryFilePart(
     }
     if (deleting && entry != null) JDialog(
         onDismiss = { deleting = false }, title = "删掉这条记忆？",
-        text = "Jarvis 以后不再记得「${entry.title}」。索引（$MEMORY_INDEX）里对应的那一行也会去掉。",
+        text = "Persona 以后不再记得「${entry.title}」。索引（$MEMORY_INDEX）里对应的那一行也会去掉。",
         destructive = true, confirmEnabled = !state.busy,
         confirm = "删除" to { deleting = false; scope.launch { onDelete(entry.file.name) }; Unit },
         dismiss = "取消" to { deleting = false },
@@ -501,7 +501,7 @@ private fun LauncherSheet(
                     JNotice("读不到「$machineName」的启动器，它可能不在线。", status = Status.NeedsYou, actionLabel = "重试", onAction = onRetry)
                 }
                 state.launchers != null && launchers.isEmpty() -> item {
-                    JEmptyState("没有 Claude 启动器", "「$machineName」上没有找到能运行 Jarvis 的 Claude 启动器。", icon = PhIcons.RocketLaunch)
+                    JEmptyState("没有 Claude 启动器", "「$machineName」上没有找到能运行 Persona 的 Claude 启动器。", icon = PhIcons.RocketLaunch)
                 }
             }
             itemsIndexed(shown, key = { _, launcher -> launcher.name }) { index, launcher ->

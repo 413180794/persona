@@ -27,7 +27,7 @@ internal fun AssistantPendingConversation(
         if (demo) item { AssistantDemoNotice() }
         item { StatusLine(assistantStatus(session, messages)) }
         if (messages.isEmpty()) item {
-            JEmptyState("问问 Jarvis", "发出的内容会先保存在本机，连上后继续发送。")
+            JEmptyState("问问 Persona", "发出的内容会先保存在本机，连上后继续发送。")
         }
         items(messages, key = { it.clientMessageId }) { message ->
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End,
@@ -45,7 +45,7 @@ internal fun AssistantPendingConversation(
 @Composable
 private fun PendingConversationPreview() {
     PersonaTheme(dynamicColor = false) {
-        JPage(title = "Jarvis") { padding ->
+        JPage(title = "Persona") { padding ->
             AssistantPendingConversation(listOf(OutboxMessage("preview", PendingMainConversation,
                 "帮我整理今天的日程。", DeliveryState.WaitingForNetwork, mainTarget = true)), null,
                 Modifier.fillMaxSize(), contentPadding = padding)

@@ -202,7 +202,7 @@ fun JPersonaButton(state: PersonaState, contentDescription: String, onClick: () 
     Box(
         modifier.size(48.dp).clip(CircleShape)
             .clickable(role = Role.Button, onClick = onClick)
-            .semantics { this.contentDescription = contentDescription; stateDescription = "Jarvis，${state.label}" },
+            .semantics { this.contentDescription = contentDescription; stateDescription = "Persona，${state.label}" },
         contentAlignment = Alignment.Center,
     ) { PersonaFace(state, size = 40.dp) }
 }

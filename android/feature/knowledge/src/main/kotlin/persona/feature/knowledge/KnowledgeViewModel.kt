@@ -127,11 +127,11 @@ internal class KnowledgeDetailViewModel(
                 sender.sendToMain(text, messageId)
                 checkCurrent(repository)
                 attempt = null
-                _sending.value = KnowledgeSending(message = "已交给 Jarvis，发送状态请在对话中查看")
+                _sending.value = KnowledgeSending(message = "已交给 Persona，发送状态请在对话中查看")
                 opened.send(Unit)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
-                _sending.value = KnowledgeSending(message = "暂时没能交给 Jarvis，请重试；已提交的消息会沿用同一发送标识")
+                _sending.value = KnowledgeSending(message = "暂时没能交给 Persona，请重试；已提交的消息会沿用同一发送标识")
             }
         }
     }

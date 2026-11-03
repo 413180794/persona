@@ -23,7 +23,7 @@ data class HubGroupInfo(
     val name: String,
     /** The machine id suffix ([GroupKeys]); null for the primary group, whose ids carry none. */
     val namespace: String?,
-    /** Hub-level pages (Jarvis, inbox, hub settings) show this group. */
+    /** Hub-level pages (Persona, inbox, hub settings) show this group. */
     val selected: Boolean,
     val state: ConnectionState,
     val hubs: List<HubMemberInfo>,

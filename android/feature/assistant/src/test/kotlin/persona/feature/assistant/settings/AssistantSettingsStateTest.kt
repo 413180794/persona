@@ -159,7 +159,7 @@ class AssistantSettingsStateTest {
         state.confirmMove()
         assertEquals("server", state.state.value.config?.machineId)
         assertEquals("main-id", state.state.value.config?.main)
-        assertEquals("没换成，Jarvis 还在「服务器」上运行，请重试。", state.state.value.notice?.text)
+        assertEquals("没换成，Persona 还在「服务器」上运行，请重试。", state.state.value.notice?.text)
         assertEquals(0, moved)
     }
 

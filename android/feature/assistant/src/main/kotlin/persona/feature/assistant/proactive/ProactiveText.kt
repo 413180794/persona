@@ -224,7 +224,7 @@ internal fun Followup.whereLine(machines: List<Machine>): String {
     return if (machine == null) what else "在 $machine 上$what"
 }
 
-/** One thing Jarvis will do on its own: a routine's next run or a follow-up. */
+/** One thing Persona will do on its own: a routine's next run or a follow-up. */
 internal data class Upcoming(
     val id: String,
     val at: Instant,
@@ -248,14 +248,14 @@ internal fun upcoming(routines: List<Routine>, followups: List<Followup>): List<
     return (next + later).sortedWith(compareBy<Upcoming> { it.at }.thenBy { it.id })
 }
 
-/** Jarvis's one line about the page; null until something is read. */
+/** Persona's one line about the page; null until something is read. */
 internal fun summaryLine(routines: List<Routine>?, followups: List<Followup>?, now: Instant, zone: ZoneId): String? {
     if (routines == null && followups == null) return null
     val on = routines.orEmpty().count { it.enabled }
     val next = upcoming(routines.orEmpty(), followups.orEmpty()).firstOrNull { !it.at.isBefore(now) }
     val nextText = next?.let { "下一件在${ScheduleText.moment(it.at, now, zone)}" }
     return when {
-        routines.orEmpty().isEmpty() && followups.orEmpty().isEmpty() -> "还没有安排，Jarvis 只在你开口时做事。"
+        routines.orEmpty().isEmpty() && followups.orEmpty().isEmpty() -> "还没有安排，Persona 只在你开口时做事。"
         on > 0 && nextText != null -> "$on 个定时任务开着，$nextText。"
         on > 0 -> "$on 个定时任务开着。"
         nextText != null -> "定时任务都关着，$nextText。"

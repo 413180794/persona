@@ -167,10 +167,10 @@ fun PairingScreen(
     } else JListPage(title = "配对", onBack = onBack, largeTitle = false) {
         when {
             welcome -> {
-                item { PairingHeading("欢迎使用 Jarvis", "把 hub 接到手机上，随时查看电脑上的 Agent，处理需要你确认的事。") }
+                item { PairingHeading("欢迎使用 Persona", "把 hub 接到手机上，随时查看电脑上的 Agent，处理需要你确认的事。") }
                 item { JGroupItem(GroupPosition.of(0, 3)) { JRow("Agents", leadingIcon = PhIcons.Robot, subtitle = "查看执行过程，回答提问、审批计划和工具操作。", subtitleLines = 3) } }
                 item { JGroupItem(GroupPosition.of(1, 3)) { JRow("收件箱", leadingIcon = PhIcons.Tray, subtitle = "集中查看飞书和邮件，让 AI 帮你分拣、草拟回复。", subtitleLines = 3) } }
-                item { JGroupItem(GroupPosition.of(2, 3)) { JRow("Jarvis 助手", leadingIcon = PhIcons.Sparkle, subtitle = "连接你的知识库，手机数据会在需要时单独申请授权。", subtitleLines = 3) } }
+                item { JGroupItem(GroupPosition.of(2, 3)) { JRow("Persona 助手", leadingIcon = PhIcons.Sparkle, subtitle = "连接你的知识库，手机数据会在需要时单独申请授权。", subtitleLines = 3) } }
                 item { SettingsCaption("没有 Google 服务也能收通知：手机通过常驻连接接收 hub 的消息。", Modifier.padding(vertical = Tokens.Space.m)) }
                 item { JButton("连接 hub", { welcome = false }, Modifier.fillMaxWidth()) }
             }

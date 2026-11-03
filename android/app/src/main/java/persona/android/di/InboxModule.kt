@@ -50,7 +50,7 @@ class InboxDataOwner @Inject constructor(
     private data class Repositories(val data: ScopedHubData, val inbox: persona.feature.inbox.InboxRepository,
         val assistant: AssistantConversations, val mail: StateFlow<MailTransport?>,
         val composers: ReplyComposers, val reading: LarkReadingStore, val names: GroupNames)
-    // The inbox and Jarvis are the selected group's (docs/android.md「多 hub」): its own transports speak its plain
+    // The inbox and Persona are the selected group's (docs/android.md「多 hub」): its own transports speak its plain
     // ids, which are moved into the merged lists' ids on the way out. Agent requests in the inbox stay merged.
     private val current = runtime.scopedData.mapLatest { data ->
         data?.coroutineScope?.async {
@@ -107,7 +107,7 @@ class InboxDataOwner @Inject constructor(
                 localMessages = realInbox::larkOutbox, onMessages = realInbox::acceptLarkWindow)
             data.messages.connectReconciler(OutboxReconciler { realInbox.reconcilePendingReplies() })
             val reading = LarkReadingStore.open(InboxReadingStorage(data), data.scope.path, data.coroutineScope)
-            // Jarvis' own transport gives plain ids, so it reads the group's own sessions and preferences.
+            // Persona' own transport gives plain ids, so it reads the group's own sessions and preferences.
             val assistant = RealAssistantRepository(connection, stack.repositories.sessions, data.coroutineScope, snapshots,
                 stack.repositories.preferences ?: preferences.takeIf { names.plain })
             Repositories(data, wrapped, assistant.inGroup(names, data.coroutineScope), mail,

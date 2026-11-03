@@ -10,7 +10,7 @@ enum class PhoneSource(val title: String, val detail: String) {
     Photos("照片", "读取照片和视频，可只授权部分照片"),
     Clipboard("剪贴板", "只能在 App 打开时读写"),
     Device("设备信息", "系统、电量、存储和网络"),
-    Notifications("通知", "发送本地通知，查看 Jarvis 当前通知"),
+    Notifications("通知", "发送本地通知，查看 Persona 当前通知"),
 }
 
 internal data class ToolDefinition(
@@ -38,7 +38,7 @@ internal object PhoneToolCatalog {
             mapOf("query" to string(256), "limit" to integer(1, 100)), listOf("query")),
         tool("phone_calendar_events", "读取日历事件，默认今天至七天后；时间使用带时区的 ISO 8601。", PhoneSource.Calendar,
             mapOf("start" to string(64), "end" to string(64), "query" to string(256), "limit" to integer(1, 100))),
-        tool("phone_calendar_create_event", "在手机确认后新建日程；没有可写日历时创建 Jarvis 本地日历。", PhoneSource.Calendar,
+        tool("phone_calendar_create_event", "在手机确认后新建日程；没有可写日历时创建 Persona 本地日历。", PhoneSource.Calendar,
             mapOf("title" to string(200), "start" to string(64), "end" to string(64), "location" to string(500),
                 "notes" to string(), "all_day" to boolean, "calendar" to string(200)),
             listOf("title", "start", "end"), confirmation = true),
@@ -51,9 +51,9 @@ internal object PhoneToolCatalog {
         tool("phone_clipboard_get", "仅在前台读取剪贴板文字，部分系统另有剪贴板权限。", PhoneSource.Clipboard, foreground = true),
         tool("phone_clipboard_set", "仅在前台覆盖剪贴板文字。", PhoneSource.Clipboard,
             mapOf("text" to string(16000)), listOf("text"), foreground = true),
-        tool("phone_notify", "发送 Jarvis 本地通知，可延迟至一天后；系统调度不保证准点。", PhoneSource.Notifications,
+        tool("phone_notify", "发送 Persona 本地通知，可延迟至一天后；系统调度不保证准点。", PhoneSource.Notifications,
             mapOf("title" to string(200), "body" to string(2000), "delay_seconds" to integer(0, 86400)), listOf("title", "body")),
-        tool("phone_notifications_list", "只列出 Jarvis 当前显示的通知，不读取其他 App 的通知或系统提醒事项。", PhoneSource.Notifications,
+        tool("phone_notifications_list", "只列出 Persona 当前显示的通知，不读取其他 App 的通知或系统提醒事项。", PhoneSource.Notifications,
             mapOf("limit" to integer(1, 100))),
     )
 

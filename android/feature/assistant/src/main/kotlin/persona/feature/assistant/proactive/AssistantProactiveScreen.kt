@@ -37,7 +37,7 @@ import java.time.ZoneId
  * (docs/assistant.md). The screen keeps its own sub-pages (a routine, a new one, all follow-ups, all runs) and back.
  *
  * [onOpenConversation] opens an assistant conversation: the one a run started, the one a follow-up continues, or the
- * new one 立即运行 started. [management] and [machines] default to the paired hub's (the Jarvis tab's host).
+ * new one 立即运行 started. [management] and [machines] default to the paired hub's (the Persona tab's host).
  * [initialPage] opens a sub-page directly, for debug captures: `routine:<id>`, `new`, `new:<template>`, `followups`,
  * `runs`, `runs:<routine id>`.
  */
@@ -53,7 +53,7 @@ fun AssistantProactiveScreen(
     if (management == null) {
         JListPage(title = "主动做事", modifier = modifier, onBack = onBack) {
             item("unconnected") {
-                JEmptyState("还没有连上 hub", "连上 hub 后，可以在这里管理 Jarvis 的定时任务、跟进和运行记录。", icon = PhIcons.PlugsConnected)
+                JEmptyState("还没有连上 hub", "连上 hub 后，可以在这里管理 Persona 的定时任务、跟进和运行记录。", icon = PhIcons.PlugsConnected)
             }
         }
         return

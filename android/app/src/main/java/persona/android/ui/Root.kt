@@ -145,7 +145,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     // Automated captures start from each tab's root instead of whatever the previous capture left open;
     // they still save, since scripts/android.sh waits for the saved position to know the shell is up.
     val saved = remember(store) { if (shell.automation) ShellPosition() else store.load() }
-    // With the embedded assistant chat (not in demo), assistant conversations open inside the Jarvis home.
+    // With the embedded assistant chat (not in demo), assistant conversations open inside the Persona home.
     val embeddedAssistant = session.demo == null
     val initialLaunch = remember { openNavigation.value }
     val initialRoute = remember {
@@ -186,7 +186,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         val conversation = SessionKey(chat.machineId, chat.sessionId)
         return conversation.takeIf { (chat.kind ?: currentKind(conversation)) == ConversationKind.Assistant }
     }
-    /** Show an assistant conversation in the Jarvis home rather than as a second chat page above it. */
+    /** Show an assistant conversation in the Persona home rather than as a second chat page above it. */
     fun openAssistant(key: NavKey, select: Boolean): Boolean {
         val conversation = assistantTarget(key) ?: return false
         if (select) {
@@ -395,7 +395,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         // flashed empty and loading states). A hidden tab is measured but never placed or drawn, and cannot take back.
         val visited = remember { mutableStateListOf<AppTab>() }
         LaunchedEffect(selected) { if (selected !in visited) visited += selected }
-        // Back on the first page of Agents, 收件箱 or 设置 goes to Jarvis; back on the Jarvis home leaves the app
+        // Back on the first page of Agents, 收件箱 or 设置 goes to Persona; back on the Persona home leaves the app
         // (2026-11-01, the user's call; it used to go back through the tabs shown before).
         BackHandler(selected != AppTab.Jarvis && stacks.getValue(selected).size <= 1) { navigator.selectTab(AppTab.Jarvis) }
         CompositionLocalProvider(LocalAmbience provides ambience, LocalWindowLayout provides windowLayout) {
@@ -450,7 +450,7 @@ private fun pretendFold(real: androidx.compose.material3.adaptive.WindowAdaptive
 
 /**
  * Which pane each destination takes when the window has room for two: the first page of Agents, 收件箱 and 设置 is
- * a list, what they open is its detail. Everything else (the Jarvis home, its knowledge base) stays one page.
+ * a list, what they open is its detail. Everything else (the Persona home, its knowledge base) stays one page.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 private fun paneMetadata(key: NavKey): Map<String, Any> = when (key) {
@@ -477,7 +477,7 @@ private fun navigationItems(badges: Map<AppTab, Int>, demo: String?): List<NavIt
     fun item(tab: AppTab, label: String, icon: persona.core.designsystem.icons.PhIcon) =
         NavItem(tab.name, label, icon, badge = badges[tab] ?: 0, badgeText = if (tab == AppTab.Settings) demo else null)
     return listOf(
-        item(AppTab.Jarvis, "Jarvis", PhIcons.Sparkle),
+        item(AppTab.Jarvis, "Persona", PhIcons.Sparkle),
         item(AppTab.Agents, "Agents", PhIcons.SquaresFour),
         item(AppTab.Inbox, "收件箱", PhIcons.Tray),
         item(AppTab.Settings, "设置", PhIcons.GearSix),

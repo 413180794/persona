@@ -103,7 +103,7 @@ class ProactiveStoreTest {
         val hub = FakeHub(listOf(byPersona, morning))
         val store = ProactiveStore(hub, this)
         store.refresh()
-        // Jarvis sets up another routine while the page is open; the write must not wipe it.
+        // Persona sets up another routine while the page is open; the write must not wipe it.
         val added = Routine(id = "rt_added", title = "巡检", prompt = "看看服务", time = "22:00", createdBy = "assistant")
         hub.table = hub.table + added
         store.toggle("morning", false)
@@ -188,7 +188,7 @@ class ProactiveStoreTest {
         val store = ProactiveStore(hub, this)
         store.refresh()
         val opened = morning.draft()
-        // While the page is open Jarvis moves the routine to 08:00 from a conversation; the person edits the prompt.
+        // While the page is open Persona moves the routine to 08:00 from a conversation; the person edits the prompt.
         hub.table = listOf(byPersona, morning.copy(time = "8:00"))
         assertTrue(store.save(RoutineChange.Edit("morning", opened, opened.copy(prompt = "早报，三条以内"))).isSuccess)
         val written = hub.puts.single()[1]
@@ -370,7 +370,7 @@ class ProactiveTextTest {
         assertEquals("准时", Run(status = "ok", due = "2026-11-02T01:00:00Z", at = "2026-11-02T01:00:02Z").detail())
         assertEquals("手动运行", Run(status = "ok", manual = true).detail())
         assertEquals("没跑起来：助手所在的机器离线（手动运行）", Run(status = "failed", error = "assistant machine is offline", manual = true).detail())
-        assertEquals("跳过了：Jarvis 停机，错过了时间", Run(status = "skipped", error = "Jarvis 停机，错过了时间").detail())
+        assertEquals("跳过了：Persona 停机，错过了时间", Run(status = "skipped", error = "Persona 停机，错过了时间").detail())
         assertEquals("已跳过", Run(status = "skipped").detail())
         assertEquals(SessionKey("server", "s"), Run(sessionId = "s").conversation("server"))
         assertNull(Run(sessionId = "s").conversation(null))
@@ -415,7 +415,7 @@ class ProactiveTextTest {
         assertEquals("每个工作日 上午 9:00", list[2].detail)
         assertEquals("2 个定时任务开着，下一件在今天 11:00。", summaryLine(listOf(byPersona, morning, off), listOf(review, ci), now, zone))
         assertEquals("定时任务都关着，下一件在今天 11:00。", summaryLine(listOf(off), listOf(review), now, zone))
-        assertEquals("还没有安排，Jarvis 只在你开口时做事。", summaryLine(emptyList(), emptyList(), now, zone))
+        assertEquals("还没有安排，Persona 只在你开口时做事。", summaryLine(emptyList(), emptyList(), now, zone))
         assertNull(summaryLine(null, null, now, zone))
     }
 

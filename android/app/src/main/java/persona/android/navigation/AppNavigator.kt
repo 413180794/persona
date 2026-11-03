@@ -9,7 +9,7 @@ internal class AppNavigator(
     private val selectedTab: () -> AppTab,
     private val onSelectTab: (AppTab) -> Unit,
     private val chatTab: (ChatRoute) -> AppTab? = { null },
-    /** Returns true when the Jarvis home shows this conversation itself; the flag says whether to switch to it. */
+    /** Returns true when the Persona home shows this conversation itself; the flag says whether to switch to it. */
     private val openAssistant: (ChatRoute, Boolean) -> Boolean = { _, _ -> false },
 ) : Navigator {
     override fun selectTab(tab: AppTab) = onSelectTab(tab)

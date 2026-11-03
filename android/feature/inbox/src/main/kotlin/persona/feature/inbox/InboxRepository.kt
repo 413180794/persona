@@ -33,7 +33,7 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun savePreferences(value: InboxPreferences) = Unit
     suspend fun refreshNow() = refresh()
     suspend fun askPersona(itemId: String, action: InboxAiAction) {
-        error("Jarvis entry is not connected")
+        error("Persona entry is not connected")
     }
     suspend fun askPersona(request: InboxPersonaRequest) = askPersona(request.itemId, request.action)
     suspend fun personaContext(itemId: String): String? = null
