@@ -351,7 +351,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 129 条 [x]、93 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 131 条 [x]、91 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -411,9 +411,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/JarvisApp.swift。Mac：`MacOpenURL`（有测试），open 打开那个对话（从别的页面也切过去，`-macOpenURL <链接>` 验过），pair 只在没配对 / 体验模式时接受；对话里的 jarvis:// 链接仍只拷贝（LinkPolicy）。外面来的链接交给已经开着的主窗口（`handlesExternalEvents`）：以前每来一个链接就多开一个主窗口（`open -a Jarvis.app jarvis://…` 两次 → 3 个，`-macWindowLog YES` 记数）
 - [ ] Scene phase: reconnect + refresh on active, disconnect socket on background — App/JarvisApp.swift
   - Mac（2026-11-03 Mac mini 真窗口：执行者操作，开发会话看假 hub 的请求日志）：⌘H 隐藏期间一个请求都没有；带回前台后依次 GET machines / interactions / sessions / pins / mutes / fleet（`refresh()`）。在后台不断开 WebSocket 是 Mac 有意的（见「阶段 0」）。还差：断了的连接回到前台会不会重连（比如隐藏期间重启假 hub，再带回前台）。
-- [ ] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
+- [x] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
   - 要到 Mac 前看：在对话里往上翻，⌘Q 后重开，看是不是回到同一行（⌘Q 不一定触发 onDisappear）。只带 `-app.tab chats -dev.openChat …` 启动时回到了 Agents 和那个对话，tab 和对话的恢复看过。
-  - Mac（2026-11-03 Mac mini 真窗口）：⌘Q 后不带参数重开，回到 Agents 和上次打开的对话；同一次运行里切到别的对话再切回来，回到原来看的那一行。还差冷启动后的阅读位置：⌘Q 时位置存上了（`chat.read.<会话>`），重开后却停在最底部，用启动参数 `-chat.read.<会话> <行 id>` 打开也一样（#597）。
+  - Mac（2026-11-03 Mac mini 真窗口）：⌘Q 后不带参数重开，回到 Agents 和上次打开的对话；同一次运行里切到别的对话再切回来，回到原来看的那一行。冷启动后的阅读位置原来停在最底部（#597：冷启动只有最近两轮，找不到那一行就放弃），修好后（2026-11-03）离屏截图复验：假 hub 像真 hub 一样分页（`/mock/paging?on=1`），先打开一次写下缓存，再带 `-chat.read.<会话> <「第 5 个问题」的行 id>` 冷启动，落在第 4–9 轮（修之前是第 15 轮和最底部）；iOS 上 `ChatFollowTests` 的冷启动用例管着。
 - [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/JarvisApp.swift + views
   - Mac 上截图一直靠它们：`-tab`、`-openSession`、`-openTerminal`、`-openTerminalSettings`、`-openAssistantPage`、`-showInboxAction`、`-showNewChat`、`-addMail`、`-openWelcome`、`-showKnowledgeEntry` 都试过；Mac 自己的另见各节（`-macSection`、`-macAgentAsk`、`-openChatWindow`、`-macWindowLog`…）。
 
@@ -433,13 +433,13 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Left button: history sidebar; right button: new chat (disabled on new-chat page) — AssistantTopBar.swift
   - Mac（2026-11-01 核对）深色截图：左边侧栏开关、右边新对话按钮都在（浅色下玻璃按钮只剩边框）；新对话页上按钮置灰没截，和 iOS 同一份代码。
 - [ ] Sidebar: search, new chat, Persona card (online/offline + machine → profile), 定时任务 / 知识库 tiles, 置顶 (main pinned, long-press pin, `assistant.pinned`), day groups 今天/昨天/最近7天/更早 (8 + 查看全部), row = title + preview + time + status dot (need-you red / unread blue / working spinner), long-press 拷贝会话 ID / 结束 / 置顶, 设置 row in drawer — Views/Assistant/AssistantSidebar.swift
-  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`。行尾：需要你红点、完成未看蓝点、工作中转圈，别的行没有标记。「最近」显示 30 条，末尾「查看全部（39）」展开到全部、变成「收起」。右键一行：置顶、重命名…、归档、拷贝会话 ID（剪贴板里是会话 id）、结束…（确认 sheet「关闭这个 Agent？」，取消后还在）；主对话只有拷贝会话 ID、结束…。置顶后排在「置顶」里主对话下面，取消置顶回到按时间的位置。搜索（见 §25）、底部 Persona 卡片（资料页）、定时任务、知识库都点过。清单里的按天分组和磁贴是旧设计（iOS 也一样），现在一行是标题加行尾标记。还差：Persona 卡片离线时的样子、点「新对话」、窄窗口抽屉（`AssistantDrawer+Mac.swift`）底部的「设置」。
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`。行尾：需要你红点、完成未看蓝点、工作中转圈，别的行没有标记。「最近」显示 30 条，末尾「查看全部（39）」展开到全部、变成「收起」。右键一行：置顶、重命名…、归档、拷贝会话 ID（剪贴板里是会话 id）、结束…（确认 sheet「关闭这个 Agent？」，取消后还在）；主对话只有拷贝会话 ID、结束…。置顶后排在「置顶」里主对话下面，取消置顶回到按时间的位置。搜索（见 §25）、底部 Persona 卡片（资料页）、定时任务、知识库都点过。清单里的按天分组和磁贴是旧设计（iOS 也一样），现在一行是标题加行尾标记。Persona 卡片离线（2026-11-03 离屏截图，假 hub 把助手的机器改成离线的 NAS：`PUT /api/v1/assistant {"machine_id":"nas"}`）：深浅色下底部卡片都是灰点「离线 · NAS」。抽屉底部的「设置」Mac 上没有：Mac 的 `horizontalSizeClass` 恒为 regular（`Mac/Compat/SwiftUICompat.swift`），Persona 页总是分栏、不出抽屉，设置在壳的分区里。还差：点「新对话」。
 - [ ] Drawer gesture: pan anywhere, 45° rule, yields to horizontally scrollable content, velocity/half settle, page card scale/offset, tab bar fade (UIKit host) — AssistantSidebar.swift (DrawerPan, DrawerPageMotion, DrawerSidebarHost), Views/Assistant/DrawerProbe.swift
-  - Mac 上没有：窗口恒为 regular，侧栏是分栏的一列加开关按钮；窄窗口才用的抽屉（`AssistantDrawer+Mac.swift`）没有拖动，`DrawerPan` / `DrawerProbe` 只在 iOS 编译。
+  - Mac 上没有：窗口恒为 regular，侧栏是分栏的一列加开关按钮；抽屉（`AssistantDrawer+Mac.swift`）没有拖动，而且主窗口里走不到（`horizontalSizeClass` 恒为 regular，窗口再窄也是分栏），`DrawerPan` / `DrawerProbe` 只在 iOS 编译。
 - [x] Regular width: sidebar = split view left column, toggle button — AssistantView.swift, SplitNavigation.swift
   - Mac（2026-11-01 核对）截图：Persona 侧栏是 NavigationSplitView 的左栏，顶部右侧有开关按钮。
-- [ ] Persona avatar (mask face, eyes move when working) — Views/Assistant/JarvisAvatar.swift
-  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：打开工作中、还没有回复的对话（「思考中」），顶栏头像上方思考泡泡里的三个点轮流动，连拍几张各不相同；空闲的主对话上不动。还差：工作中（回复正在出）时的眼睛扫动没亲眼看到，可以用 `-showPersonaState working` 固定成工作中再看。
+- [x] Persona avatar (mask face, eyes move when working) — Views/Assistant/JarvisAvatar.swift
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：打开工作中、还没有回复的对话（「思考中」），顶栏头像上方思考泡泡里的三个点轮流动，连拍几张各不相同；空闲的主对话上不动。工作中的眼睛（2026-11-03 离屏截图，`-showPersonaState working`，启动后第 5 / 5.4 / 5.8 / 6.3 秒各拍一张，裁出头像放大）：两只眼睛第 5 秒偏左、5.4 秒偏右、6.3 秒居中，在左右扫。
 - [x] Profile page: identity, machine, online/working, 「接下来」 3 items, 主动做事 (tasks, run history), 了解你 (关于我, 记忆), 设置 (launcher, 管理启动器), capabilities list — Views/Assistant/AssistantProfileView.swift (AssistantProfileView, AssistantUpcomingRow, AssistantRunsView, AssistantRunRow)
   - Mac 截图看到（1280×1500 窗口）：身份、所在机器、在线 + 下一件、接下来 3 项、主动做事（定时任务、运行记录）、了解你（关于我、记忆）、设置（启动器、管理启动器），底部的能力列表 2026-11-01 核对时也看到了。
 - [x] 「交给 Persona」 from other pages sends `<jarvis-context>` into main conversation — AppModel.askJarvis
