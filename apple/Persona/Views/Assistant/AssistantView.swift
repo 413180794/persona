@@ -519,6 +519,9 @@ struct StarterComposer: View {
 
     private func submit() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Nothing to send: a second ⏎ on the Mac before the field redraws (#785) would start a conversation with the
+        // recording placeholder.
+        guard !t.isEmpty || !images.isEmpty || !recordingContexts.isEmpty else { return }
         let body = t.isEmpty ? (images.isEmpty ? "参考录音内容。" : "请看图片") : t
         send(recordingContexts.isEmpty ? body : recordingContexts.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
         text = ""

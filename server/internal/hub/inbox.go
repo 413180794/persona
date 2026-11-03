@@ -102,6 +102,7 @@ type InboxLark struct {
 	ReadPosition    string `json:"read_position,omitempty"`    // the chat's read position in Feishu, as of the last collection
 	MentionPosition string `json:"mention_position,omitempty"` // the unread @me
 	AtAll           bool   `json:"at_all,omitempty"`
+	AtMe            bool   `json:"at_me,omitempty"` // an unread @me (not only @all): kept while the item is open
 	// ReplyTo is the newest message from someone else; ThreadKind says where it sits: "" in the chat, "topic" in a
 	// topic group's topic, "thread" in a thread of a normal group. A reply from the inbox goes there (replyInbox).
 	ReplyTo    string `json:"reply_to,omitempty"`
@@ -535,6 +536,7 @@ func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversatio
 		}
 		it.Title, it.Avatar = c.Name, c.Avatar
 		it.Lark.IsGroup, it.Lark.IsTopic, it.Lark.AtAll = c.IsGroup, c.IsTopic, c.AtAll
+		it.Lark.AtMe = c.AtMe || open != nil && lark-connector.AtMe
 		it.Lark.ReadPosition = c.ReadPosition
 		it.Lark.ReplyTo, it.Lark.ThreadKind, it.Lark.SenderID = last.ID, larkThreadKind(c, last), last.SenderID
 		if c.MentionAt != "" {
@@ -566,7 +568,9 @@ func (b *inbox) settleLark(convs []lark.Conversation, latest func(feed string, t
 	b.mu.Lock()
 	var stale []*InboxItem
 	for _, it := range b.items {
-		if it.Lark != nil && it.open() && !unread[it.Lark.FeedID] && !it.Read {
+		// Items already marked read come back once when they still show a count or sit in a rule tier the rules no
+		// longer give them (read before those fixes).
+		if it.Lark != nil && it.open() && !unread[it.Lark.FeedID] && (!it.Read || it.Count != 0 || retier(it)) {
 			stale = append(stale, it)
 		}
 	}
@@ -582,6 +586,9 @@ func (b *inbox) settleLark(convs []lark.Conversation, latest func(feed string, t
 		b.mu.Lock()
 		// Nothing in the chat is unread any more: drop the count so the row stops showing the old badge.
 		it.Read, it.Count = true, 0
+		if retier(it) {
+			it.Tier = ruleTier(it)
+		}
 		switch {
 		case replied:
 			it.done(now, "replied")
@@ -592,6 +599,11 @@ func (b *inbox) settleLark(convs []lark.Conversation, latest func(feed string, t
 		changed = append(changed, it)
 	}
 	return changed
+}
+
+// retier: the item's tier came from the rules (no model answer) and the rules now give it another one.
+func retier(it *InboxItem) bool {
+	return it.Reason == "按规则" && it.Tier != "" && ruleTier(it) != it.Tier
 }
 
 func (it *InboxItem) done(at time.Time, by string) {

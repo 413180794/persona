@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, attachSession } from "./api";
-import { resumeCommand, sessionCan, sessionMenuActions, sourceSubtitle } from "./format";
+import { resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle } from "./format";
 import type { Session, SessionCapabilities } from "./types";
 
 const legacy: Session = { machine_id: "m", session_id: "raw-thread", title: "", cwd: "/tmp/project", status: "working" };
@@ -44,6 +44,18 @@ describe("session capability contract", () => {
     expect(sourceSubtitle(dsh)).toBe("DSH");
     expect(sessionMenuActions(dsh)).toEqual(["stop"]);
     expect(sourceSubtitle({ ...dsh, capabilities: { read: true }, read_only_reason: "DSH 没有开放从手机发消息" })).toBe("DSH · 仅查看：DSH 没有开放从手机发消息");
+  });
+});
+
+describe("delete a conversation", () => {
+  it("offers it only for offline sessions that are not the assistant's or still starting", () => {
+    const offline: Session = { ...legacy, status: "offline" };
+    expect(sessionDeletable(offline)).toBe(true);
+    expect(sessionDeletable({ ...offline, start_error: "claude did not become ready" })).toBe(true);
+    expect(sessionDeletable(legacy)).toBe(false);
+    expect(sessionDeletable({ ...offline, status: "idle" })).toBe(false);
+    expect(sessionDeletable({ ...offline, assistant: true })).toBe(false);
+    expect(sessionDeletable({ ...offline, starting: true })).toBe(false);
   });
 });
 

@@ -320,6 +320,13 @@ export function setOutbox(key: string, list: OutboxEntry[]) {
   set({ outbox: next });
 }
 
+// A deleted conversation leaves the list right away; the hub's next sessions push agrees (docs/protocol.md DELETE /sessions).
+export function dropSession(mid: string, sid: string) {
+  const list = state.sessions[mid];
+  if (!list?.some((x) => x.session_id === sid)) return;
+  set({ sessions: { ...state.sessions, [mid]: list.filter((x) => x.session_id !== sid) } });
+}
+
 export function upsertSession(s: Session) {
   const list = state.sessions[s.machine_id] ?? [];
   const i = list.findIndex((x) => x.session_id === s.session_id);

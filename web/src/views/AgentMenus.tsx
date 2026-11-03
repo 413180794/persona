@@ -2,7 +2,7 @@
 // and the confirmation of 全部标为已读. What they do is in lib/agent-actions.ts.
 import { flipMute, flipPin, flipSpaceMute, flipSpacePin, handToPersona } from "../lib/agent-actions";
 import { isSpaceMuted, unreadOf, type SpaceLike } from "../lib/agent-filter";
-import { resumeCommand, sessionCan, sessionMenuActions } from "../lib/format";
+import { resumeCommand, sessionCan, sessionDeletable, sessionMenuActions } from "../lib/format";
 import { machineWithHub } from "../lib/mesh";
 import { isPinned, isSpacePinned } from "../lib/pins";
 import { isMuted } from "../lib/session-actions";
@@ -10,7 +10,7 @@ import { getState, markSeen, useStore } from "../lib/store";
 import type { Session } from "../lib/types";
 import { Button, copyText, Dialog, Menu, type MenuItem } from "../ui/atoms";
 
-export function AgentRowMenu({ s, anchor, onClose, onRename }: { s: Session; anchor: HTMLElement; onClose: () => void; onRename: (s: Session) => void }) {
+export function AgentRowMenu({ s, anchor, onClose, onRename, onDelete }: { s: Session; anchor: HTMLElement; onClose: () => void; onRename: (s: Session) => void; onDelete: (s: Session) => void }) {
   const pins = useStore((st) => st.pins);
   const mutes = useStore((st) => st.mutes);
   const pinned = isPinned(s, pins);
@@ -22,6 +22,7 @@ export function AgentRowMenu({ s, anchor, onClose, onRename }: { s: Session; anc
     { key: "jarvis", label: "交给 Persona", icon: "spark", onSelect: () => void handToPersona(s, machineWithHub(s.machine_id, getState().machines)) },
     ...(s.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, onSelect: () => copyText(s.cwd) }] : []),
     ...(sessionMenuActions(s).includes("resume") ? [{ key: "resume", label: "拷贝恢复命令", icon: "terminal" as const, onSelect: () => copyText(resumeCommand(s)) }] : []),
+    ...(sessionDeletable(s) ? [{ key: "delete", label: "删除对话…", icon: "trash" as const, danger: true, onSelect: () => onDelete(s) }] : []),
   ];
   return <Menu anchor={anchor} onClose={onClose} align="right" items={items} />;
 }

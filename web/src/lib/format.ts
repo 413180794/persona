@@ -30,6 +30,12 @@ export function sessionMenuActions(s: Session): string[] {
   ];
 }
 
+// 删除对话 only takes a conversation out of the list (the hub notes it; the transcript stays): offline ones, not the
+// assistant's (they archive) and not one still starting (issue #801).
+export function sessionDeletable(s: Session): boolean {
+  return !s.assistant && s.status === "offline" && !s.starting;
+}
+
 export const STATE_LABEL: Record<AgentState, string> = {
   needs_you: "需要你",
   working: "工作中",

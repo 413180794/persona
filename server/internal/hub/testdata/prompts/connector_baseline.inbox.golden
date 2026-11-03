@@ -236,6 +236,7 @@
     "start_position": "304",
     "read_position": "302",
     "mention_position": "305",
+    "at_me": true,
     "reply_to": "m305",
     "sender_id": "u_ls"
   },
@@ -264,6 +265,7 @@
     "is_group": true,
     "start_position": "501",
     "mention_position": "501",
+    "at_me": true,
     "reply_to": "m501",
     "sender_id": "u_zj"
   },

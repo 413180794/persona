@@ -130,7 +130,13 @@ func ruleTier(it *InboxItem) string {
 		return TierNoise
 	}
 	switch it.Kind {
-	case KindDM, KindMention, KindDoc:
+	case KindMention:
+		// An @所有人 without an @me is an announcement: worth knowing, not waiting on me.
+		if it.Lark != nil && it.Lark.AtAll && !it.Lark.AtMe {
+			return TierFYI
+		}
+		return TierAction
+	case KindDM, KindDoc:
 		return TierAction
 	case KindMoment: // an @ asks for me; a comment or a reply is mostly chatter
 		if it.Moment != nil && strings.HasPrefix(it.Moment.Notice, "atIn") {

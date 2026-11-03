@@ -101,6 +101,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.withClientOp("close", h.proxyBody("session.close")))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.withClientOp("rename", h.withMachine(h.renameSession)))
+	api.HandleFunc("DELETE /api/v1/sessions/{mid}/{sid}", h.withMachine(h.deleteSession))
 	// {"dry_run": true, "all": false}: rename the tabs of running agents nobody named after their task (tabname.go).
 	api.HandleFunc("POST /api/v1/tabs/autoname", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -542,7 +543,7 @@ func (h *Hub) listSessions(w http.ResponseWriter, r *http.Request) {
 		if mid != "" && m.cfg.ID != mid {
 			continue
 		}
-		out = append(out, h.decorated(m)...)
+		out = append(out, h.shown(m.cfg.ID, h.decorated(m))...)
 	}
 	writeJSON(w, map[string]any{"sessions": out})
 }
@@ -931,7 +932,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		if c.delta {
 			h.snapshotSessions(c, m)
 		} else {
-			c.sendJSON(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
+			c.sendJSON(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.shown(m.cfg.ID, h.decorated(m))})
 		}
 	}
 	h.sendPendingInteractions(c, false)

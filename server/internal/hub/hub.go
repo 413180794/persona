@@ -98,6 +98,7 @@ type Hub struct {
 	ports  portOpens // ports the user opened in the app (ports.go)
 	// archived and relays: archived assistant conversations, and messages between them (assistant_conversations.go).
 	archived archiveBook
+	deleted  deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
 	relays   relayBook
 	inbox    inbox   // the unified inbox (inbox.go)
 	kb       kbState // the knowledge base under ~/.jarvis/data (kb.go)

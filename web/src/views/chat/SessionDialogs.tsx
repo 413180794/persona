@@ -1,9 +1,10 @@
-// The chat's ⋯ menu dialogs: session info, rename (the agent / its space), and the run-mode chips under the composer.
+// The chat's ⋯ menu dialogs: session info, rename (the agent / its space), delete, and the run-mode chips under the composer.
 import { useEffect, useState } from "react";
 import { api, enc, errorText, sessionPath } from "../../lib/api";
-import { ago, resumeCommand, shortPath } from "../../lib/format";
+import { ago, resumeCommand, sessionTitle, shortPath } from "../../lib/format";
 import { EFFORTS, effortTitle, modeTitle, renameBody, SWITCHABLE_MODES } from "../../lib/session-actions";
-import { refresh, refreshAssistant, upsertSession } from "../../lib/store";
+import { href, navigate } from "../../lib/router";
+import { dropSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
 import type { Session } from "../../lib/types";
 import { Button, copyText, cx, Dialog, Loading, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -292,5 +293,46 @@ export function Chip({ label, onClick, active, danger, title }: { label: string;
       {label}
       <Icon name="chevron" size={9} stroke={2.4} />
     </button>
+  );
+}
+
+// 删除对话 (issue #801): the hub takes it out of every app's list; the transcript stays on the computer and the
+// conversation comes back once it is used again (claude --resume).
+export function DeleteSessionDialog({ session, machineName, open, onClose }: { session: Session; machineName: string; open: boolean; onClose: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try {
+      await api(sessionPath(session.machine_id, session.session_id), { method: "DELETE" });
+      dropSession(session.machine_id, session.session_id);
+      if (location.pathname === href({ name: "session", mid: session.machine_id, sid: session.session_id })) navigate({ name: "home" }, true);
+      toast("已删除", "ok");
+      onClose();
+    } catch (e) {
+      toast(`删除失败：${errorText(e)}`, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="删除这个对话？"
+      footer={
+        <>
+          <Button tone="quiet" onClick={onClose}>
+            取消
+          </Button>
+          <Button tone="danger" busy={busy} onClick={go}>
+            删除
+          </Button>
+        </>
+      }
+    >
+      <p className="text-[13px] leading-relaxed text-ink-2">
+        「{sessionTitle(session)}」会从各端的列表里移除。{machineName} 上的对话记录不会删除，之后在电脑上用 claude --resume 继续，它会重新出现。
+      </p>
+    </Dialog>
   );
 }

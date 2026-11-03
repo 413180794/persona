@@ -6,7 +6,7 @@ import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView,
 import { api, errorText, setToken } from "../lib/api";
 import { useInboxBadge } from "../lib/inbox";
 import { machineWithHub } from "../lib/mesh";
-import { ago, baseName, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
+import { ago, baseName, sessionDeletable, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
@@ -15,7 +15,7 @@ import { buildTodoAgentGroups, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoS
 import type { Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, toast, useMenu, type MenuItem } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
-import { RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
+import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { AgentAvatar } from "./agents/AgentAvatar";
@@ -93,6 +93,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [spaceMenu, setSpaceMenu] = useState<{ sp: Space; anchor: HTMLElement } | null>(null);
   const [renaming, setRenaming] = useState<Session | null>(null);
   const [renamingSpace, setRenamingSpace] = useState<Session | null>(null);
+  const [deleting, setDeleting] = useState<Session | null>(null);
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
   const onRowMenu = (s: Session, anchor: HTMLElement) => setRowMenu((m) => (m?.anchor === anchor ? null : { s, anchor }));
   const onSpaceMenu = (sp: Space, anchor: HTMLElement) => setSpaceMenu((m) => (m?.anchor === anchor ? null : { sp, anchor }));
@@ -284,10 +285,11 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           </Section>
         )}
       </div>
-      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} onClose={() => setRowMenu(null)} onRename={setRenaming} />}
+      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} />}
       {spaceMenu && <SpaceMenu sp={spaceMenu.sp} anchor={spaceMenu.anchor} onClose={() => setSpaceMenu(null)} onRename={setRenamingSpace} onMarkSeen={setConfirmSeen} />}
       {renaming && <RenameDialog open session={renaming} onClose={() => setRenaming(null)} />}
       {renamingSpace && <RenameSpaceDialog open session={renamingSpace} onClose={() => setRenamingSpace(null)} />}
+      {deleting && <DeleteSessionDialog open session={deleting} machineName={machineWithHub(deleting.machine_id, machines)} onClose={() => setDeleting(null)} />}
       <MarkSeenDialog list={confirmSeen} onClose={() => setConfirmSeen(null)} onDone={() => setKept(new Set())} />
 
       {sessionContextMenu && (
@@ -328,6 +330,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
                     onSelect: () => setLinkTargetSession(sessionContextMenu.s),
                   },
                 ]),
+            ...(sessionDeletable(sessionContextMenu.s) ? [{ key: "delete", label: "删除对话…", icon: "trash" as const, danger: true, onSelect: () => setDeleting(sessionContextMenu.s) }] : []),
           ]}
         />
       )}

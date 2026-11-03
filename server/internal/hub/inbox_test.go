@@ -238,6 +238,42 @@ func TestInboxLarkSettle(t *testing.T) {
 	}
 }
 
+// Items read before the settle pass cleared counts / before @所有人 left 需要你 are tidied on the next pass.
+func TestInboxLarkSettleTidiesReadItems(t *testing.T) {
+	now := time.Now()
+	b := newInbox()
+	mk := func(id string, it InboxItem) *InboxItem {
+		it.ID, it.Kind, it.Read, it.Count, it.Last = id, KindMention, true, 2, "5"
+		it.Lark = &InboxLark{FeedID: id, AtAll: it.Lark != nil && it.Lark.AtAll, AtMe: it.Lark != nil && it.Lark.AtMe}
+		b.items[id] = &it
+		return b.items[id]
+	}
+	ruleAll := mk("rule-all", InboxItem{Tier: TierAction, Reason: "按规则", Lark: &InboxLark{AtAll: true}})
+	ruleMe := mk("rule-me", InboxItem{Tier: TierAction, Reason: "按规则", Lark: &InboxLark{AtAll: true, AtMe: true}})
+	judged := mk("judged", InboxItem{Tier: TierAction, Reason: "问你要结论", Lark: &InboxLark{AtAll: true}})
+	calls := 0
+	latest := func(string, bool) (*lark.Message, error) {
+		calls++
+		m := larkMsg("5", "x", false, now)
+		return &m, nil
+	}
+	if ch := b.settleLark(nil, latest, now); len(ch) != 3 {
+		t.Fatalf("changed %d", len(ch))
+	}
+	if ruleAll.open() || ruleAll.Tier != TierFYI || ruleAll.DoneBy != "read" {
+		t.Errorf("a read @所有人 in its rule tier should be done: %+v", ruleAll)
+	}
+	if !ruleMe.open() || ruleMe.Tier != TierAction || ruleMe.Count != 0 {
+		t.Errorf("a read @me stays in 需要你 without its count: %+v", ruleMe)
+	}
+	if !judged.open() || judged.Tier != TierAction || judged.Count != 0 {
+		t.Errorf("the model's tier is kept: %+v", judged)
+	}
+	if ch := b.settleLark(nil, latest, now); len(ch) != 0 {
+		t.Errorf("tidied items come back: %d", len(ch))
+	}
+}
+
 func TestInboxMailThreads(t *testing.T) {
 	if mailThread("Re: 周报") != mailThread("周报") || mailThread("回复：[team] Fwd: 周报") != mailThread("周报") {
 		t.Fatal("reply prefixes should join the thread")
@@ -280,6 +316,8 @@ func TestInboxRuleTier(t *testing.T) {
 	}{
 		{InboxItem{Kind: KindDM}, TierAction},
 		{InboxItem{Kind: KindMention}, TierAction},
+		{InboxItem{Kind: KindMention, Lark: &InboxLark{AtAll: true}}, TierFYI},                // only @所有人: an announcement
+		{InboxItem{Kind: KindMention, Lark: &InboxLark{AtAll: true, AtMe: true}}, TierAction}, // @me as well
 		{InboxItem{Kind: KindGroup}, TierFYI},
 		{InboxItem{Kind: KindBot}, TierNoise},
 		{InboxItem{Kind: KindMail, Mail: &InboxMail{Direct: true}}, TierFYI},

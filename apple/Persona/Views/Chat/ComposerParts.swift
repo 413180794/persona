@@ -38,6 +38,7 @@ struct ComposerRow<MenuItems: View>: View {
                 .lineLimit(1...6)
                 #if os(macOS)
                 .textFieldStyle(.plain) // the surface below is the field's box; the Mac's own bezel drew a second one inside
+                .macComposerKeys(focused: focused.wrappedValue, canSend: canSend, send: send) // ⏎ sends, ⇧⏎ a new line
                 #endif
                 .focused(focused)
                 .padding(.horizontal, Theme.Space.l)

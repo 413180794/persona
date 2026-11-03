@@ -430,6 +430,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
 | GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
 | POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（herdr 里的任何 Agent，手动启动的也行；分屏的 tab 只关它自己的窗格） |
+| DELETE | `/api/v1/sessions/{mid}/{sid}` | 删除对话：只是从各端的会话列表里移除（hub 在 settings `sessions.deleted` 记下时间，`sessions` 推送和 `GET /api/v1/sessions` 都不再带它），电脑上的 transcript 不动；之后这个会话再被用到（`updated_at` 晚于删除时间，或又运行起来）会重新出现。启动失败的（`start_error`）也能删，立即消失。→ `{"ok":true}`；正在运行或还在启动 409，助手的对话 400（用归档），没有这个会话 404，只读设备 403 |
 | GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`） |
 | PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?}`，存 Postgres settings（`docs/assistant.md`）；只改带了的字段，`notes` 为空串也算改；`main` 为 `"-"` 时清掉主对话（换机器时 App 一起发） |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话 |

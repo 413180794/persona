@@ -1,7 +1,7 @@
 // One conversation: an agent in herdr on one of your computers, or a Persona assistant conversation.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
-import { ago, resumeCommand, sessionCan, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
+import { ago, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate } from "../../lib/router";
 import { togglePanel, usePanel } from "../../lib/panel";
 import { machineWithHub } from "../../lib/mesh";
@@ -26,7 +26,7 @@ import { ActivityChips, AgentStrip, SubagentFooter } from "./Activity";
 import { ChatContext, type ChatContextValue } from "./chat-context";
 import { ChatLineView, closedRecap, closeRecap, RecapStrip } from "./Lines";
 import { useTranscript } from "./useTranscript";
-import { ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
+import { DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
 import { ChatActionsContext, type ChatActions } from "./chat-actions";
 import { QueueStrip } from "./QueueStrip";
 import { chatFiles } from "../../lib/mentions";
@@ -429,7 +429,7 @@ function Header({
   const panel = usePanel();
   const mutes = useStore((s) => s.mutes);
   const [closing, setClosing] = useState(false);
-  const [dialog, setDialog] = useState<"info" | "rename" | "space" | null>(null);
+  const [dialog, setDialog] = useState<"info" | "rename" | "space" | "delete" | null>(null);
   const muted = Boolean(session && !assistant && isMuted(session, mutes));
   const pinned = useStore((s) => Boolean(session && isPinned(session, s.pins)));
   // 屏蔽通知: the hub stops pushing this agent's 需要你 / 做完了 (an agent's switch sits on top of its space's)
@@ -527,6 +527,7 @@ function Header({
         ...(session.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, onSelect: () => copyText(session.cwd) }] : []),
         ...(allowed.includes("resume") ? [{ key: "resume", label: "拷贝恢复命令", icon: "terminal" as const, onSelect: () => copyText(resumeCommand(session)) }] : []),
         ...(!assistant && allowed.includes("close") ? [{ key: "close", label: "关闭 Agent…", icon: "x" as const, danger: true, onSelect: () => setClosing(true) }] : []),
+        ...(sessionDeletable(session) ? [{ key: "delete", label: "删除对话…", icon: "trash" as const, danger: true, onSelect: () => setDialog("delete") }] : []),
       ]
     : [];
 
@@ -577,6 +578,7 @@ function Header({
       {session && <SessionInfoDialog open={dialog === "info"} onClose={() => setDialog(null)} session={session} machineName={machineName} />}
       {session && <RenameDialog open={dialog === "rename"} onClose={() => setDialog(null)} session={session} />}
       {session && <RenameSpaceDialog open={dialog === "space"} onClose={() => setDialog(null)} session={session} />}
+      {session && <DeleteSessionDialog open={dialog === "delete"} onClose={() => setDialog(null)} session={session} machineName={machineName} />}
       <LinkTodoDialog open={linkTodoOpen} session={session} onClose={() => setLinkTodoOpen(false)} />
     </header>
   );

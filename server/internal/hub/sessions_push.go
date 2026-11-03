@@ -93,7 +93,7 @@ func sessionsDelta(machine string, list []sentSession, have map[string][]byte) (
 // they last got (an interaction shown, a session seen, a node pass that changed nothing the app reads), a delta app
 // what changed for it. The lock is held until everything is queued, so what was recorded is what the apps got last.
 func (h *Hub) broadcastSessions(m *Machine, list []proto.Session) {
-	enc := encodeSessions(list)
+	enc := encodeSessions(h.shown(m.cfg.ID, list))
 	full := sessionsMessage(m.cfg.ID, enc)
 	h.sessionsMu.Lock()
 	defer h.sessionsMu.Unlock()
@@ -125,7 +125,7 @@ func (h *Hub) broadcastSessions(m *Machine, list []proto.Session) {
 func (h *Hub) snapshotSessions(c *client, m *Machine) {
 	h.sessionsMu.Lock()
 	defer h.sessionsMu.Unlock()
-	shown := forDelta(encodeSessions(h.decorated(m)), nil)
+	shown := forDelta(encodeSessions(h.shown(m.cfg.ID, h.decorated(m))), nil)
 	have := make(map[string][]byte, len(shown))
 	for _, s := range shown {
 		have[s.id] = s.raw

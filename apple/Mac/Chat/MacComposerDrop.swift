@@ -100,72 +100,27 @@ nonisolated enum MacPaste {
     }
 }
 
-/// ⌘V while this composer has focus: files and pictures are taken here; text goes on to the field as usual. A key
-/// monitor, because the focused SwiftUI text field takes `paste:` itself and drops pictures. Only the composer in
-/// the key window (a conversation can also be open in a window of its own) acts.
+/// ⌘V while this composer has focus: files and pictures are taken here; text goes on to the field as usual (the
+/// focused SwiftUI text field takes `paste:` itself and drops pictures, so this is a key monitor).
 struct MacComposerPaste: ViewModifier {
     var focused: Bool
     var image: (NSImage) -> Void
     var files: ([URL]) -> Void
-    @State private var window = WindowRef()
-    @State private var monitor: Any?
-
-    /// What the monitor reads when a key comes in: refreshed on every update, so it never acts on a stale focus.
-    final class WindowRef {
-        weak var window: NSWindow?
-        var focused = false
-        var image: (NSImage) -> Void = { _ in }
-        var files: ([URL]) -> Void = { _ in }
-    }
 
     func body(content: Content) -> some View {
-        window.focused = focused
-        window.image = image
-        window.files = files
-        return content
-            .background(WindowReader(ref: window))
-            .onAppear { install() }
-            .onDisappear {
-                if let monitor { NSEvent.removeMonitor(monitor) }
-                monitor = nil
-            }
-    }
-
-    private func install() {
-        guard monitor == nil else { return }
-        let ref = window
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard ref.focused, event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
-                  event.charactersIgnoringModifiers == "v", let w = ref.window, event.window === w else { return event }
+        content.modifier(MacComposerEventMonitor(focused: focused) { event in
+            guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
+                  event.charactersIgnoringModifiers == "v" else { return event }
             switch MacPaste.current() {
             case .text: return event
             case .image:
                 guard let img = NSImage(pasteboard: .general) else { return event }
-                ref.image(img)
+                image(img)
                 return nil
             case .files(let urls):
-                ref.files(urls)
+                files(urls)
                 return nil
             }
-        }
-    }
-
-    private struct WindowReader: NSViewRepresentable {
-        let ref: WindowRef
-        func makeNSView(context: Context) -> NSView { Probe(ref: ref) }
-        func updateNSView(_ nsView: NSView, context: Context) {}
-
-        final class Probe: NSView {
-            let ref: WindowRef
-            init(ref: WindowRef) {
-                self.ref = ref
-                super.init(frame: .zero)
-            }
-            required init?(coder: NSCoder) { nil }
-            override func viewDidMoveToWindow() {
-                super.viewDidMoveToWindow()
-                ref.window = window
-            }
-        }
+        })
     }
 }
