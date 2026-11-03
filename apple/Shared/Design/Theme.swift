@@ -285,6 +285,8 @@ nonisolated enum Theme {
         static let ruleWide: CGFloat = 2.5
         static let bar: CGFloat = 3
         static let barWide: CGFloat = 4
+        /// A share bar's thickness (the assistant's stacked-bar card).
+        static let meter: CGFloat = 12
         // Dots and small marks.
         static let grabber: CGFloat = 5
         static let dotXS: CGFloat = 6

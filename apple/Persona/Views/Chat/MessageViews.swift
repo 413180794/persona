@@ -33,14 +33,19 @@ extension MarkdownUI.Theme {
         }
         .listItem { config in config.label.markdownMargin(top: .em(0.2)) }
         .codeBlock { config in
-            ScrollView(.horizontal, showsIndicators: false) {
-                config.label
-                    .relativeLineSpacing(.em(0.2))
-                    .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(Theme.Level.code.size / Theme.Level.body.size)) }
-                    .padding(Theme.Space.m)
+            // A card the assistant drew in numbers (#886); one the app cannot read stays a code block.
+            if config.language == PersonaCard.language, let card = PersonaCard.parse(config.content) {
+                PersonaCardView(card: card).markdownMargin(top: 4, bottom: 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    config.label
+                        .relativeLineSpacing(.em(0.2))
+                        .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(Theme.Level.code.size / Theme.Level.body.size)) }
+                        .padding(Theme.Space.m)
+                }
+                .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                .markdownMargin(top: 4, bottom: 12)
             }
-            .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-            .markdownMargin(top: 4, bottom: 12)
         }
         .blockquote { config in
             config.label

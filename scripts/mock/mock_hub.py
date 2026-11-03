@@ -3591,6 +3591,27 @@ if os.environ.get("MOCK_CHAT_LINES") == "1":
 # MOCK_API_ERRORS=1: model API errors as Claude Code writes them when it gives up. The home conversation ends with the
 # same 502 three times (the user said 继续 twice in between); an idle Agent's last answer is a login error. The texts
 # follow real ones with every id, host and region replaced.
+# MOCK_CARDS=1: the main conversation ends with a health answer drawn as cards (#886, ```persona-card): a stacked bar
+# with a rest, a stat with a note, a line and bars, and a block the app cannot read (stays a code block).
+if os.environ.get("MOCK_CARDS") == "1":
+    _card = lambda d: "```persona-card\n" + json.dumps(d, ensure_ascii=False) + "\n```"
+    _days = ["10/28", "10/29", "10/30", "10/31", "11/1", "11/2", "11/3"]
+    ITEMS[ASK1] = ITEMS[ASK1] + [
+        it("user", "text", 2, text="大致给我分配一下午餐和晚餐的热量"),
+        it("assistant", "text", 1, text="\n\n".join([
+            "按今天的情况，**午餐 900 kcal 左右，晚餐 750 kcal 左右**；上午已经吃了约 555 kcal。",
+            _card({"type": "stacked_bar", "subtitle": "推荐全天摄入", "total": {"value": 2250, "unit": "kcal"},
+                   "segments": [{"label": "早餐", "value": 555, "note": "已吃"}, {"label": "午餐", "value": 900},
+                                {"label": "晚餐", "value": 750}], "rest": {"label": "弹性空间", "value": 45}}),
+            "今天走得比昨天多：",
+            _card({"type": "stat", "title": "今天步数", "value": 8432, "unit": "步", "note": "截至 18:53 · 昨天全天 7,520"}),
+            _card({"type": "line", "title": "近 7 天睡眠", "unit": "小时", "note": "平均 7.0 小时",
+                   "points": [{"label": d, "value": v} for d, v in zip(_days, [6.5, 7.2, 5.8, 7.9, 6.1, 8.4, 7.0])]}),
+            _card({"type": "bar", "title": "近 7 天活动能量", "unit": "千卡",
+                   "points": [{"label": d, "value": v} for d, v in zip(_days, [420, 380, 510, 460, 120, 530, 272])]}),
+            _card({"type": "pie", "segments": [{"label": "a", "value": 1}]}),
+        ])),
+    ]
 if os.environ.get("MOCK_API_ERRORS") == "1":
     _gpu = ("API Error: 502 upstream stream error: rpc error: code = 13 desc = Req 202610302115A1B2C3D4E5F6 "
             "Session 1ebd0000:7e470000 streamingcall loadbalance failed (target=default, roles=ROLE_DECODE,ROLE_PREFILL): "
