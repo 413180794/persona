@@ -902,6 +902,7 @@ struct AssistantSidebar: View {
                             .contentShape(.rect)
                     }
                     .tint(Color.secondary)
+                    .labelOnlyMenu()
                     .accessibilityLabel(text + "的更多操作")
                 }
             }
@@ -924,6 +925,7 @@ struct AssistantSidebar: View {
                         .contentShape(.rect)
                 }
                 .tint(Color.secondary) // a gray ⋯, not the accent
+                .labelOnlyMenu()
                 .accessibilityLabel(text + "的更多操作")
             }
         }

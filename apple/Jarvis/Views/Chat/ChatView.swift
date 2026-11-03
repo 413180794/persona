@@ -1583,6 +1583,7 @@ struct ChatView: View {
                             Image(systemName: Theme.Icon.more).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                                 .contentShape(.circle)
                         }
+                        .labelOnlyMenu()
                         .surface(interactive: true, in: .circle)
                         .accessibilityLabel("更多")
                     }

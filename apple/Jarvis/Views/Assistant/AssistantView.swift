@@ -791,6 +791,7 @@ struct StarterModelChip: View {
         } label: {
             ModeChip(symbol: Theme.Icon.model, text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
         }
+        .labelOnlyMenu()
         .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID))) ?? [] }
     }
 }

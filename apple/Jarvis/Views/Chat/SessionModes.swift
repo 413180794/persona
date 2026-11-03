@@ -70,6 +70,7 @@ struct SessionModeBar: View {
                 ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
                          text: SessionModes.modeLabel(mode) ?? "权限模式", tint: SessionModes.modeTint(mode), known: mode != nil)
             }
+            .labelOnlyMenu()
             .accessibilityLabel("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")")
             Menu {
                 Picker("思考强度", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
@@ -82,6 +83,7 @@ struct SessionModeBar: View {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
                          text: effort.map { "思考\(SessionModes.effortLabel($0) ?? $0)" } ?? "思考强度", tint: .secondary, known: effort != nil)
             }
+            .labelOnlyMenu()
             .accessibilityLabel("思考强度：\(SessionModes.effortLabel(effort) ?? "未知")")
             if changing { ProgressView().controlSize(.mini) }
             Spacer(minLength: 0)
@@ -180,6 +182,7 @@ struct NewSessionModePicker: View {
                 ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
                          text: SessionModes.mode(mode)?.title ?? "权限：默认", tint: SessionModes.modeTint(mode), known: !mode.isEmpty)
             }
+            .labelOnlyMenu()
             Menu {
                 Picker("思考强度", selection: $effort) {
                     Text("跟随启动器").tag("")
@@ -190,6 +193,7 @@ struct NewSessionModePicker: View {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
                          text: SessionModes.effort(effort).map { "思考\($0.title)" } ?? "思考：默认", tint: .secondary, known: !effort.isEmpty)
             }
+            .labelOnlyMenu()
         }
     }
 }

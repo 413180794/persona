@@ -76,6 +76,27 @@ private struct Surface<S: Shape>: ViewModifier {
 }
 
 extension View {
+    /// A `Menu` drawn as its label and nothing more, as on iOS (a ⋯, a chip that draws its own ⌃⌄). The Mac's default
+    /// is a bordered pop-up button with its own ⌄ beside the label: a second arrow and a frame around the chip, a wide
+    /// pill under the round ⋯ (#502). iOS unchanged.
+    @ViewBuilder func labelOnlyMenu() -> some View {
+        #if os(macOS)
+        menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        #else
+        self
+        #endif
+    }
+
+    /// A `Menu` that keeps the button the system draws for it, without the Mac's ⌄ beside the label: a ⋯ among a
+    /// toolbar's bordered buttons (the file viewer's, next to 完成). iOS unchanged.
+    @ViewBuilder func arrowlessMenu() -> some View {
+        #if os(macOS)
+        menuIndicator(.hidden).fixedSize()
+        #else
+        self
+        #endif
+    }
+
     /// Glass buttons in the glass styles, bordered ones in 飞书, soft raised pills in 黏土 / Island. Picks the system
     /// style directly: wrapping `Button(configuration)` in a PrimitiveButtonStyle that re-styles it recursed until the
     /// stack overflowed (crash on opening a chat in the glass styles).

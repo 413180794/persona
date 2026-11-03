@@ -29,7 +29,7 @@
   看上去像选不了（#303，2026-11-02）。⌘N 那条外面还套了一层带 `macSheet()` 的栈，所以没坏。
 - Mac 上的 `Menu` 画成带下拉箭头的按钮：iOS 那种 `.themedButton().clipShape(.circle)` 的圆形 + 菜单被裁成半个图形；`.buttonStyle(.glass)`
   也不给 `Menu` 画底，`.glassProminent` 裁成圆后连填充都没了。输入栏的圆钮在 Mac 上用 `.menuStyle(.button).menuIndicator(.hidden)`，
-  圆底自己画（`Mac/Design/MacRoundButton.swift`）。放在 `.surface` 胶囊里的 `TextField` 要 `.textFieldStyle(.plain)`，否则 Mac 自带的边框在里面再画一层。
+  圆底自己画（`Mac/Design/MacRoundButton.swift`）。只要标签本身的（⋯、自己画了 ⌃⌄ 的 chip）用 `.labelOnlyMenu()`（`DesignSystem/Styling.swift`，iOS 上原样返回）：对话顶栏的 ⋯、输入框上方和新对话页的 chip、侧栏分组和 Agents 列表空间行的 ⋯ 原来都画成带 ⌄ 的灰色弹出按钮（#502）。工具栏里和带边框的按钮并排的（文件查看器的 ⋯，挨着「完成」）用 `.arrowlessMenu()`：只去掉 ⌄，留着系统画的按钮。放在 `.surface` 胶囊里的 `TextField` 要 `.textFieldStyle(.plain)`，否则 Mac 自带的边框在里面再画一层。
 - 主窗口的 `.unified` 工具栏有底色和一条分隔线：伸到红绿灯后面的侧栏被它横着切断（2026-11-02）。壳上
   `.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)` 去掉。壳不是分栏，工具栏的 `.navigation` 项排在红绿灯旁边、压在壳的侧栏上，
   页面自己放在那里的按钮（原来的「隐藏列表」）会被当成壳的按钮；标题栏高度随页面的工具栏变（28 / 52pt），侧栏顶上的留白用固定的 `macToolbarHeight`。

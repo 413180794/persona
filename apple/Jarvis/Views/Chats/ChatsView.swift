@@ -776,6 +776,7 @@ private struct AgentsList: View {
             }
             // 细列表: as quiet as the counts beside it (a Menu's label takes the accent otherwise).
             .tint(compact ? Color.secondary : nil)
+            .labelOnlyMenu()
             .accessibilityLabel("\(g.name) 的更多操作")
         }
     }

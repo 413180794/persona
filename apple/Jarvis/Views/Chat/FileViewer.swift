@@ -248,6 +248,7 @@ struct FileViewer: View {
                 ShareLink(item: text, subject: Text(page?.file?.name ?? "")) { Label("分享", systemImage: Theme.Icon.share) }
             }
         } label: { Image(systemName: Theme.Icon.moreMenu) }
+        .arrowlessMenu()
     }
 
     /// The path, the size, and what is not shown yet: pages still on the machine, lines past the coloring caps, why

@@ -259,12 +259,8 @@ struct InteractionPanel: View {
                         .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
                         .contentShape(.rect)
                 }
+                .labelOnlyMenu() // just the ⋯, next to the fold ⌄
                 #if os(macOS)
-                // Just the ⋯ as on iOS: the Mac's default menu is a bordered pop-up with its own ⌄, next to the fold ⌄.
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
                 .help("更多")
                 #endif
                 Image(systemName: Theme.Icon.expand)
