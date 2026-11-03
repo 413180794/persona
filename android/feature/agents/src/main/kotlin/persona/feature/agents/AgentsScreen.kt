@@ -297,7 +297,8 @@ internal fun AgentsScreen(
                 navigator.navigate(TerminalRoute(request.machineId, request.sessionId))
             }), machine = page.machines.firstOrNull { it.id == request.machineId },
             blockedReason = page.sessions.firstOrNull { it.key == request.sessionKey }?.takeIf { !it.canApprove }
-                ?.let { "这个会话不允许在手机上审批，请打开会话或到电脑上处理。" })
+                ?.let { "这个会话不允许在手机上审批，请打开会话或到电脑上处理。" },
+            terminalHelp = page.sessions.firstOrNull { it.key == request.sessionKey }?.canTerminal != false)
     }
 }
 

@@ -26,4 +26,12 @@ internal class ReadinessRecords(context: Context) {
     fun enginePending(machineId: String?) {
         preferences.edit().apply { if (machineId == null) remove("engine-pending") else putString("engine-pending", machineId) }.apply()
     }
+
+    /**
+     * Set from saving a pairing's credentials until its next step (the engine or the checklist) is chosen. Saving
+     * replaces the pairing and, with it, the shell that a pairing page in Settings sits in: the root's pairing page
+     * that comes up instead sees the mark and takes the steps over.
+     */
+    fun finishing(): Boolean = preferences.getBoolean("pairing-finishing", false)
+    fun finishing(value: Boolean) { preferences.edit().putBoolean("pairing-finishing", value).apply() }
 }

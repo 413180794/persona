@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -378,12 +379,21 @@ fun JSegmented(options: List<JSegment>, selected: Int, onSelect: (Int) -> Unit, 
             options.forEachIndexed { index, segment ->
                 val on = index == selected
                 if (index > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(palette.line))
-                Box(Modifier.weight(1f, fill = false).clickable(role = Role.Tab) { onSelect(index) }.semantics { this.selected = on }) {
+                val accent = palette.accent
+                Box(
+                    Modifier.weight(1f, fill = false)
+                        // The selected one's underline is drawn, not laid out: a fillMaxWidth line widened that segment to
+                        // its whole share of the row (the image editor's 画笔 took the row's width, 框选 stayed small).
+                        .drawWithContent {
+                            drawContent()
+                            if (on) drawRect(accent, Offset(0f, size.height - 2.dp.toPx()), Size(size.width, 2.dp.toPx()))
+                        }
+                        .clickable(role = Role.Tab) { onSelect(index) }.semantics { this.selected = on },
+                ) {
                     Text(
                         text(segment), style = type.labelSmall.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Medium),
                         color = if (on) palette.ink else palette.ink2, maxLines = 1, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     )
-                    if (on) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp).background(palette.accent))
                 }
             }
         }

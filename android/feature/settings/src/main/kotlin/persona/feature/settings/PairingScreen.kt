@@ -82,6 +82,28 @@ fun PairingScreen(
         } catch (error: Exception) { failure = pairingFailure(error) }
     }
     LaunchedEffect(initialLink) { if (!readiness) initialLink?.let(::accept) }
+    // After the credentials: the hub's machine's engine when the hub reports engines, else the checklist. The list
+    // may reach the shared repository a moment after the refresh (or come with the first push): wait a little.
+    suspend fun nextStep() {
+        val listed: List<persona.core.contracts.Machine> = if (machines == null) emptyList()
+            else withTimeoutOrNull(3_000) { sessions.machines.first { it.isNotEmpty() } } ?: sessions.machines.value
+        val engine = Engines.pairingStep(listed)
+        records.enginePending(engine?.id)
+        records.finishing(false)
+        if (engine != null) engineStep = engine.id else readiness = true
+    }
+    // Re-pairing from Settings › 配对 replaces the shell that page sits in, and the root's pairing page comes up at
+    // 欢迎使用 instead: it takes over the steps the other page did not get to.
+    LaunchedEffect(paired) {
+        if (!paired || running || credentialsSaved || engineStep != null || readiness || !records.finishing()) return@LaunchedEffect
+        welcome = false; confirm = null; manual = false; failure = null; notice = null
+        running = true
+        progress = PairingStage.entries.map { PairingProgress(it) }
+        try {
+            records.pending(true)
+            nextStep()
+        } finally { running = false }
+    }
     fun connect(request: PairingRequest) {
         if (running) return
         lastRequest = request
@@ -99,6 +121,8 @@ fun PairingScreen(
                     return@launch
                 }
                 if (!credentialsSaved) {
+                    // Saving replaces the pairing, and the shell this page may sit in goes with it.
+                    records.finishing(true)
                     pairing.pair(request) { record(it) }
                     credentialsSaved = true
                     records.pending(true)
@@ -115,15 +139,10 @@ fun PairingScreen(
                 }
                 record(PairingProgress(PairingStage.Complete))
                 token = ""; metadata = null; lastRequest = null; manual = false
-                // Hubs that report engines ask which one the hub's machine uses before the checklist. The list may
-                // reach the shared repository a moment after the refresh (or come with the first push): wait a little.
-                val listed: List<persona.core.contracts.Machine> = if (machines == null) emptyList()
-                    else withTimeoutOrNull(3_000) { sessions.machines.first { it.isNotEmpty() } } ?: sessions.machines.value
-                val engine = Engines.pairingStep(listed)
-                records.enginePending(engine?.id)
-                if (engine != null) engineStep = engine.id else readiness = true
+                nextStep()
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
+                if (!credentialsSaved) records.finishing(false)
                 // Exception messages may contain pairing links or credentials: log only types and frames.
                 android.util.Log.w("JarvisPairing", generateSequence(error as Throwable) { it.cause }.take(4)
                     .joinToString(" <- ") { e -> e.javaClass.name + " @ " + e.stackTrace.take(3).joinToString(", ") })

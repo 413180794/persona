@@ -114,23 +114,28 @@ fun ChatLinkHost(
     }
     val picks = if (onHandToPersona != null) listOf(ChatLinkPick.HandToPersona)
         else listOfNotNull(ChatLinkPick.Edit.takeIf { onEdit != null }, ChatLinkPick.Context.takeIf { onContext != null })
+    // A web page is over the page: the page's glass goes opaque and the dock makes way (LocalWebSheets).
+    WebSheetShown(url != null)
+    // A conversation embedded under its host's bar (Persona's page) has the card start below that bar, not under it.
+    val hostBar = LocalChromeInsets.current.top
     CompositionLocalProvider(LocalUriHandler provides uriHandler, LocalChatLinkOpening provides opening) {
         BoxWithConstraints(modifier.fillMaxSize()) {
             val height = maxHeight
             val density = LocalDensity.current
             val pixels = with(density) { height.toPx() }
+            val above = with(density) { hostBar.toPx() }.coerceIn(0f, pixels)
             val drag = remember { AnchoredDraggableState(LinkDetent.Hidden) }
             SideEffect {
                 drag.updateAnchors(DraggableAnchors {
-                    LinkDetent.Full at 0f
-                    LinkDetent.Peek at pixels * 0.4f
+                    LinkDetent.Full at above
+                    LinkDetent.Peek at above + (pixels - above) * 0.4f
                     LinkDetent.Hidden at pixels
                 })
             }
             LaunchedEffect(opening) { if (url != null) drag.animateTo(LinkDetent.Full) }
             LaunchedEffect(closeRequest) { if (closeRequest > 0 && url != null) drag.animateTo(LinkDetent.Hidden) }
             LaunchedEffect(drag.settledValue) { if (drag.settledValue == LinkDetent.Hidden && !drag.isAnimationRunning) url = null }
-            content(if (url != null && drag.currentValue == LinkDetent.Peek) height * 0.6f else 0.dp)
+            content(if (url != null && drag.currentValue == LinkDetent.Peek) (height - hostBar.coerceAtMost(height)) * 0.6f else 0.dp)
             url?.let { target ->
                 // A page whose renderer went away is loaded anew (a new view) when the user asks.
                 var generation by remember(target) { mutableIntStateOf(0) }
@@ -159,6 +164,9 @@ fun ChatLinkHost(
                 val panelHeight = with(density) { (pixels - offset).coerceIn(0f, pixels).toDp() }
                 val palette = PersonaTheme.palette
                 val shape = PersonaTheme.shapes.sheetShape
+                // No glass inside the card either: its page would put the WebView in a glass source (LocalWebSheets).
+                // The card sits below the host's bar and over the dock, so its page keeps no room for them.
+                CompositionLocalProvider(LocalGlassLevel provides GlassLevel.Solid, LocalChromeInsets provides ChromeInsets()) {
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(panelHeight)
                     .shadow(Tokens.Space.s, shape).clip(shape).background(palette.surfaceOpaque)) {
                     Column(Modifier.fillMaxWidth().anchoredDraggable(drag, Orientation.Vertical)) {
@@ -217,6 +225,7 @@ fun ChatLinkHost(
                                 onRelease = { pool.release(it) })
                         }
                     } else Spacer(Modifier.fillMaxWidth().weight(1f))
+                }
                 }
                 editing?.let { selection ->
                     LinkPickDialog("让 Agent 改这段", selection, "怎么改？", onDismiss = { editing = null }) { instruction ->

@@ -29,6 +29,8 @@
   （「Asking for intrinsic measurements of SubcomposeLayout layouts is not supported」，看板风格的飞书会话踩过）：贴边的色块用 `drawBehind` 画（`Modifier.holder`）。
 - Haze 的 `GlassStyle.regular` 跟随**系统**深浅色，不看 App 自己的深浅色：调试固定深浅色时要连 `LocalConfiguration` 的 uiMode 一起改（`MainActivity.AppearanceOverride`），否则深色页面上出现浅色玻璃。
 - 玻璃风格的 `ComposerFrame`（`floatingSurface`）按 `LocalGlassSource` 采样它下面的内容：放进 `JSheet` 时 `LocalGlassSource` 还是页面的，输入框里透出浮层后面那一页的字（收件箱的「改一改」、邮件回复浮层都这样）。浮层是不透明的，内容外面套 `CompositionLocalProvider(LocalGlassSource provides null)`，输入框就画成实心（`InboxDraftSheet`）。以后要在 `JSheet` 里统一处理可以在组件里置空。
+- 晨报的 `surface` 是卡片灰，输入框和 chip 也拿它填底、没有边框：底部面板原来也是这个灰（`surfaceOpaque`），面板里的输入框和 chip 就看不见了（交给 AI、改一改、AI 草拟）。晨报的 `JSheet` 改用纸白（`background`），和页面一样。
+- `SaveableStateHolder.SaveableStateProvider(key)` 里面是 `ReusableContent(key)`：key 一变整棵子树重建，焦点、滚动位置、`remember` 都没了。key 里别放随输入变的值：收件箱曾把搜索词和折叠的分组放进 key，搜索框每打一个字就丢焦点（后面的字也丢了），折叠一组就跳回顶部（`InboxScreen`）。
 - `SwipeToDismissBox` 的 `backgroundContent` 不滑动时也在画：玻璃风格的半透明行下面会透出滑动操作的颜色（收件箱整行发绿），只在 `dismissDirection` 不是 `Settled` 时画（`JSwipeActions`）。
 - Phosphor 线条图标（`X` 等）的 fill 字重是「实心方块里镂空一个 X」：看板风格里 `JIcon(selected = true)` 取 fill，照片角上的移除叉号画成了白方块。叉号这类别给 `selected`，看板自动用 bold。
 - Compose 测试里 `Modifier.clickable(enabled = false)` 仍带 OnClick 语义动作，`assertHasNoClickAction()` 断言不了「不可点」，要用 `assertIsNotEnabled()`（`ComposerPartsTest`）。
@@ -59,6 +61,9 @@
 
 - hub 的 `fleet` 只在变化时推（`liveactivity.go` 和上次广播的比较），刚连上的客户端什么都收不到：常驻通知、小组件会一直是 0，直到哪个 Agent 状态变了。连接每次连上都要 `GET /api/v1/fleet` 一次（`FleetFeed`）。
 - 一个 PendingIntent 是不是「同一个」只看 action、data、组件和类别，不看 extras 和 flags：常驻通知上的「允许」如果和「需要你处理」通知上的用同一个 data URI，系统会把它们当成一个（一个可变带回复框、一个不可变），后创建的覆盖先创建的。常驻通知的按钮用自己的 `jarvis-notify://ongoing/…`。
+- 前台服务的 `onStartCommand` 不只跑一次：App 每次回到前台都会再 start 它，每次都要 `startForeground`。那时用的通知要是现在显示着的那条（`HubService.shown`），不能按当前数据重新算：重新算的没有「只剩做完未看满 5 分钟退回连接行」这一步，已经收起的「1 个做完了」又回来了，而收集器看到的状态没变，不会再改回去，一直挂到 fleet 下次变化（2026-11-02 模拟器上复现）。
+- 前台服务要停的时候别再更新它的通知：取消配对时连接状态、通知偏好先变（App 跟着发了两次「等待网络」），紧接着服务停下、`stopForeground(REMOVE)` 收走通知；系统处理通知是异步的（模拟器上用调用栈确认：两次 post 都在 onDestroy 之前），最后那次更新落在收走之后，成了一条普通的常驻通知，划不掉、也没人再管它（两次复现两次都留下）。`HubService.show` 在没配对时不再更新。
+- 通知上要求解锁的按钮（`setAuthenticationRequired(true)`）：锁屏上点了、输完 PIN，SystemUI 马上就把按钮的 PendingIntent 发出来，这时 `KeyguardManager.isDeviceLocked` 还是 true（Android 15 模拟器单次观察，约 0.8 秒后才变 false）。收到就读它再拒绝的话，锁屏上的「允许 / 批准」每次都回「请先解锁」，一次也成不了；常驻服务的「恢复」也一样被悄悄吞掉，手机工具确认通知上的「允许」被丢掉、90 秒后按拒绝回给 Claude。要给解锁一点时间落定再判断（`lockedAfterUnlockSettles`，`:platform:notify` 和 `:platform:phonetools` 各一份，最多等 3 秒，一直锁着才算锁着）。
 - 手机工具：hub 把各台手机同名的工具合并成一份定义（取说明更长的），调用却可能发给任一台声明了它的手机（`phoneClient`）。Android 的定义只要和 iOS 不一样，Claude 就会按 iOS 的参数调用 Android（新版曾经把超范围的 `limit` 当错误拒绝）：工具定义逐字照 iOS，用导出的夹具守着（`PhoneToolCatalogTest`）。
 
 - 用 `startForegroundService` 拉起的服务，在调 `startForeground` 之前被停掉（自己 `stopSelf`、外面 `stopService`），系统直接让 App 崩在 `ForegroundServiceDidNotStartInTimeException`。负载高时这段空档变长，配对时一闪的「未配对」就会撞上：`HubService` 一律先进前台再决定去留，只在已经进了前台时才停它（`ForegroundStarts`，`docs/android.md`）。
@@ -86,6 +91,9 @@
 
 ## 模拟器与真机
 
+- 测常驻通知时别用 `am force-stop` / `am start -S` 冷启动：系统把它记成用户强行停止（`ApplicationExitInfo.REASON_USER_REQUESTED`），App 下次启动就当成「后台连接被你停止了」，常驻服务不再起来，要在通知上点「恢复」。只想换个新进程用 `adb shell run-as <包名> kill -9 <pid>`（常驻服务会被系统很快拉起，`am start -W` 多半报 WARM）。
+- 通知栏里有走着的计时（常驻通知只剩工作中时的 chronometer），`uiautomator dump` 一直拿不到 idle、直接失败：那时只能截图看。
+- Pixel（Android 15）默认「锁屏上隐藏静默通知」：常驻通知用的「实时状态」频道是低重要性，默认设置下锁屏上根本不出现；看锁屏效果先 `settings put secure lock_screen_show_silent_notifications 1`，测完 `settings delete`。
 - 模拟器在充电状态下 `settings put global low_power 1` 不生效（省电模式开不了）：先 `dumpsys battery unplug`，测完 `dumpsys battery reset`。
 - 平板 AVD 拍手机布局：`wm size 1080x2400`、`wm density 420`，再 `settings put system accelerometer_rotation 0`、`user_rotation 0` 固定竖屏。这些写进 AVD 的数据、重启还在，用完要 `wm size reset`、`wm density reset` 并恢复旋转设置。
 - `scripts/mock/mock_hub.py` 每次启动的 `HUB_ID` 都是新的：换 `MOCK_*` 开关重启假 hub 后原配对失效，要 `pm clear` 再配对（草稿随配对目录一起没了）。`adb reverse --remove` 断不掉已建好的连接（OkHttp 复用连接），模拟不了上传途中断网。
@@ -114,7 +122,7 @@
 
 ## 文件和 Git
 
-- `JSectionHeader` 的 `trailing` / `action` 落在行的中间，不在最右：标题是 `weight(1f, fill = false)`，后面的 Spacer 也是 `weight(1f)`，剩余空间一家一半，标题短时右边的东西就停在中线附近。要放在最右，外面套一个 `Row`，标题给 `Modifier.weight(1f).alignByBaseline()`，右边的字 `alignByBaseline()`（Git 页「改动」的 +N −N）。
+- 一行里两个 `weight(1f)` 会平分剩余空间：`JSectionHeader` 曾让标题（`weight(1f, fill = false)`）和后面的 Spacer 各占一份，`trailing` / `action`（收件箱的「收起」「全部看过」）停在中线附近，长标题在半宽处就截断。现在标题和计数包在一个 `weight(1f)` 的 Row 里，右边的东西贴着行尾；要把东西推到最右，只给左边一个 weight。Git 页「改动」的 +N −N 要和标题按基线对齐，自己套 `Row`：标题 `Modifier.weight(1f).alignByBaseline()`，右边的字 `alignByBaseline()`。
 - 两个模块都在清单里声明 `androidx.core.content.FileProvider` 会在合并时撞名（provider 按 `android:name` 合并）：每个模块用自己的子类（`FilesShareProvider`、`InboxFileProvider`），authority 各起一个。
 - mikepenz Markdown 的 `LazyMarkdownSuccess` 自己建 LazyColumn，前面加不了别的行：长文档要在 `Markdown(success = { … })` 里自己写 LazyColumn，每个顶层块一行 `MarkdownElement(node, components, content, includeSpacer = index > 0)`。三个坑：`MarkdownElement` 把块间距画成自己前面的一个兄弟 Spacer，外面包 `Box` 会把两者叠在一起（间距全没了），要包 `Column`；顶层子节点里的 EOL / 空白和链接引用定义（`[api]: https://…`，什么都不画）要先滤掉，否则平白多出空隙；`ImageTransformer.intrinsicSize` 按像素给，README 里的图会按像素大小画（高密度屏上很小），乘上 density 才和浏览器一样按 dp 显示。
 - `PdfRenderer` 只能读文件描述符（base64 先写进 cache），而且同一时间只能开一页：渲染要加锁，关掉之后别再画（`PdfDocument`）。

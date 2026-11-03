@@ -252,16 +252,17 @@ private fun ChatPage(
     val preloadUrls by produceState(emptyList<String>(), snapshot.items) {
         value = withContext(Dispatchers.Default) { ChatLinks.toPreload(snapshot.items, java.time.Instant.now()) }
     }
+    // The items whose latest turn has its Markdown parsed. An unread conversation opens on its last question and waits
+    // for this: a reply drawn as plain text and then as Markdown grows after the list was placed, and in the reversed
+    // list that pushes the question off the top (the newest reply is the one that keeps its place).
+    var markdownReadyFor by remember { mutableStateOf<List<Item>?>(null) }
     LaunchedEffect(snapshot.items) {
         // Replies render each text part under "<item id>/<part index>" (MessageContent), so prewarm those keys.
-        val texts = withContext(Dispatchers.Default) {
-            snapshot.items.filter { it.kind == "text" && it.role == "assistant" }.takeLast(80).flatMap { item ->
-                messageParts(item.text.orEmpty(), item.from).mapIndexedNotNull { index, part ->
-                    (part as? MessagePart.Text)?.let { "${item.id}/$index" to it.text }
-                }
-            }
-        }
-        texts.forEach { (id, text) -> markdownCache.parse(id, text) }
+        val items = snapshot.items
+        val (latest, earlier) = withContext(Dispatchers.Default) { markdownPrewarm(items) }
+        latest.forEach { markdownCache.parse(it.key, it.text) }
+        markdownReadyFor = items
+        earlier.forEach { markdownCache.parse(it.key, it.text) }
     }
     DisposableEffect(loader) { onDispose { loader.shutdown() } }
     var folding by remember { mutableStateOf(emptySet<String>()) }
@@ -359,7 +360,8 @@ private fun ChatPage(
         line.holds(lastUserId) || (line is ChatLine.MergedUsers && line.users.any { it.id == lastUserId })
     }?.let { ChatListEntry(it.id, lastLineAtTop = true) } else null
     ChatListEffects(chatList, messages.asReversed().map { "outbox-${it.clientMessageId}" } + lines.map { it.id },
-        ready = !snapshot.loading && (snapshot.items.isEmpty() || lines.isNotEmpty()), entry = unreadEntry,
+        ready = !snapshot.loading && (snapshot.items.isEmpty() || lines.isNotEmpty()) &&
+            (unreadEntry == null || markdownReadyFor == snapshot.items), entry = unreadEntry,
         hasOlder = snapshot.hasOlder, loadingOlder = snapshot.loadingOlder,
         onFreeze = { timeline.freeze(currentItems, currentLive); timelineVersion++ },
         onFollow = { timeline.follow(); timelineVersion++ },
@@ -417,7 +419,9 @@ private fun ChatPage(
                             ChatTasks(projection.tasks, lines, chatList,
                                 onFreeze = { timeline.freeze(currentItems, currentLive); timelineVersion++ },
                                 onVisibilityChanged = { taskPageVisible = it },
-                                onExpandFold = ::expand, foldErrors = foldErrors)
+                                onExpandFold = ::expand, foldErrors = foldErrors,
+                                // While the link card peeks, the composer needs the room more (glass laid them over each other).
+                                showBar = linkInset.value <= 0f)
                         }
                     },
                     bottomBar = {
@@ -425,7 +429,8 @@ private fun ChatPage(
                             ChatSessionStatusLine(status, session, snapshot.turnDurationSeconds, projection.turns.lastOrNull()?.toolCount ?: 0,
                                 onDetails = { statusSheet = true }, terminal = terminal, draftSaveError = statusBindings.draftSaveError)
                             AnimatedVisibility(interactionFeedback != null, exit = fadeOut()) {
-                                JNotice(interactionFeedback?.notice.orEmpty())
+                                // Inset like the status line and the composer around it, not edge to edge.
+                                JNotice(interactionFeedback?.notice.orEmpty(), Modifier.padding(horizontal = Tokens.Space.m))
                             }
                             if (!readOnly) InteractionPanel(requests, machine, panelMax, busyId, uncertain, { interaction, resolution ->
                                 if (busyId == null && interaction.id !in uncertain && interaction.id !in resolved &&
@@ -449,7 +454,8 @@ private fun ChatPage(
                                 }
                             }, terminal, { overlay = it }, linkVisible = linkVisible,
                                 collapsed = requestCollapsed, onCollapsedChange = { requestCollapsed = it },
-                                blockedReason = if (canApprove) null else approvalBlockedReason(session))
+                                blockedReason = if (canApprove) null else approvalBlockedReason(session),
+                                terminalHelp = canTerminal)
                             (if (feedback == null) notice ?: snapshot.error else snapshot.error)?.let {
                                 Text(it, Modifier.padding(horizontal = Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             }
@@ -458,7 +464,10 @@ private fun ChatPage(
                             else if (readOnly) Text("子 Agent 对话只读", Modifier.padding(Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             else {
                                 // What waits in the agent's queue sits right above the composer, while the composer shows (Agents only, as iOS).
-                                if (renderStyle != ChatRenderStyle.Assistant && (requests.isEmpty() || requestCollapsed))
+                                // Not while a "/" quick message is being picked: the list opens above the field, and with the
+                                // keyboard up the queue, the list and the status line together climbed over the top bar.
+                                if (renderStyle != ChatRenderStyle.Assistant && (requests.isEmpty() || requestCollapsed) &&
+                                    SlashCommand.suggestions(composer.value.text, clear = true).isEmpty())
                                     ChatQueueStrip(session, chrome.actions, composer, { notice = it }, sessions::refresh)
                                 // A source that only lets the phone read says so where the typing would be.
                                 if (!canSend && session != null && (requests.isEmpty() || requestCollapsed)) ChatSourceNote(session)
@@ -477,7 +486,8 @@ private fun ChatPage(
                                     accessory = {
                                         if (linkContexts.isEmpty()) ComposerSuggestion(session, composer)
                                         if (linkContexts.isNotEmpty()) Column(Modifier.heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {
-                                            linkContexts.forEach { ref -> ChatContextCard(ref) { linkContexts = linkContexts.filterNot { it.id == ref.id } } }
+                                            // One line each while the link card peeks: the whole cards left no room for the composer.
+                                            linkContexts.forEach { ref -> ChatContextCard(ref, compact = linkInset.value > 0f) { linkContexts = linkContexts.filterNot { it.id == ref.id } } }
                                         }
                                     }, onOverlay = { composerOverlay = it }, agentName = session?.agentLabel ?: "Claude",
                                     canInterrupt = session?.canInterrupt ?: true)
@@ -539,7 +549,9 @@ private fun ChatPage(
                                     JTextButton("加载更早的记录", { scope.launch { try { repository.loadOlder(key) } catch (e: CancellationException) { throw e } catch (e: Exception) { if (feedback?.failure(e) != true) notice = operationFeedback(e).message } } })
                                 }
                             }
-                            WorkCollapseOverlay(lines, list, messages.size, ::toggle)
+                            // Under the top bar: in glass the list (and this box) runs under it, up to the status bar.
+                            WorkCollapseOverlay(lines, list, messages.size, ::toggle, Modifier.align(Alignment.TopStart)
+                                .padding(start = horizontalPadding, top = padding.calculateTopPadding() + Tokens.Space.s))
                             val settling = snapshot.loading || projectedFrom == null || (snapshot.items.isNotEmpty() && projectedFrom !== snapshot.items)
                             if (settling && lines.isEmpty() && messages.isEmpty()) JLoading(Modifier.align(Alignment.Center).padding(padding).padding(horizontal = horizontalPadding))
                             else if (!settling && lines.isEmpty() && messages.isEmpty() && snapshot.error == null)

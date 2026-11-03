@@ -1,6 +1,7 @@
 package persona.android.ui
 
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import persona.core.contracts.api.MainConversationSender
 import persona.core.designsystem.AppFeedback
 import persona.core.navigation.AppTab
@@ -19,7 +20,12 @@ import java.util.UUID
  */
 @Composable
 internal fun ShellLinkHost(session: ShellSession, navigator: Navigator, feedback: AppFeedback, content: @Composable () -> Unit) {
+    // The paired sender is the connection's forwarding wrapper, not the outbox itself, so it is no
+    // MainConversationSender: the main conversation comes from the pairing's chat wiring, as in a chat (ShellChat).
+    // Before, 交给 Persona never showed on these pages (only 体验模式's sender is one).
+    val activeWiring by chatWiringSource().current.collectAsStateWithLifecycle()
     val main = session.sender as? MainConversationSender
+        ?: activeWiring?.takeIf { it.scope.path == session.identity }?.mainSender
     val handToPersona: (suspend (String) -> Unit)? = remember(main, navigator) {
         main?.let { sender ->
             val send: suspend (String) -> Unit = { message ->

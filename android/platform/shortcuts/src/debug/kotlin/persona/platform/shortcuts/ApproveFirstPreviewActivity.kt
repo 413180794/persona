@@ -2,6 +2,7 @@ package persona.platform.shortcuts
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import persona.core.contracts.Interaction
@@ -21,10 +22,16 @@ import persona.core.designsystem.AppStyleStore
 class ApproveFirstPreviewActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         val state = state(intent.getStringExtra("debug.approveState"))
         val style = intent.getStringExtra("debug.style")?.let(AppStyle::fromKey) ?: AppStyleStore(this).style.value
         val dark = when (intent.getStringExtra("debug.theme")) { "dark" -> true; "light" -> false; else -> null }
+        // The status bar's icons follow the forced theme, as they follow the system's in the real dialog.
+        val transparent = android.graphics.Color.TRANSPARENT
+        enableEdgeToEdge(statusBarStyle = when (dark) {
+            true -> SystemBarStyle.dark(transparent)
+            false -> SystemBarStyle.light(transparent, transparent)
+            null -> SystemBarStyle.auto(transparent, transparent)
+        })
         setContent {
             ShortcutTheme(style, dark) { ApproveFirstDialog(state, onApprove = ::finish, onOpen = { finish() }, onDismiss = ::finish) }
         }

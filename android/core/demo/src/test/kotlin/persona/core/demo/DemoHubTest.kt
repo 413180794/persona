@@ -60,6 +60,8 @@ class DemoHubTest {
         assertEquals(MessageTransportResult.Accepted, hub.send(request))
         assertEquals(MessageTransportResult.Accepted, hub.send(request))
         assertEquals(listOf(request.text, DemoText.reply), hub.items(key, ItemsQuery()).items.map { it.text })
+        // The chat hides the outbox copy by this id.
+        assertEquals(request.clientMessageId, hub.items(key, ItemsQuery()).items.first().id)
         assertTrue(events.filterIsInstance<ItemsEvent>().any { !it.backlog && it.items.size == 2 })
         assertTrue(hub.send(request.copy(text = "不同内容")) is MessageTransportResult.HubError)
         assertTrue(hub.send(request.copy(scope = HubScope("demo", "another"))) is MessageTransportResult.HubError)

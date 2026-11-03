@@ -84,9 +84,11 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
                         val lines = withContext(parserDispatcher) {
                             TerminalGrid.rows(screen.text).let { rows -> rows.take(TerminalText.shownRows(rows)) }
                         }
+                        // Reading the screen is said under the title (每秒读一次屏幕), as iOS does: a card above the terminal
+                        // with a 重试 that only brought it back said it a second time, and changed the terminal's height.
                         if (version == revision) _state.update { it.copy(lines = lines, cols = lines.maxOfOrNull { row -> row.size } ?: 0,
                             rows = lines.size, cursor = null, screenStart = 0, loaded = true,
-                            note = if (screen.status == "offline") "没有终端：恢复会话后就能看到" else "只看 · 当前电脑不支持实时接管") }
+                            note = if (screen.status == "offline") "没有终端：恢复会话后就能看到" else null) }
                         pollAt = now + 1000
                     } catch (e: CancellationException) { throw e }
                     catch (_: Exception) { failed("读取终端失败，正在重试"); pollAt = retryAt }

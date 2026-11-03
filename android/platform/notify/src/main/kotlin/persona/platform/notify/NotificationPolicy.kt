@@ -32,7 +32,7 @@ internal object NotificationPolicy {
     fun expired(ix: Interaction, now: Instant = Instant.now()): Boolean = RequestExpiry.expired(ix.expiresAt, now)
 
     fun actions(ix: Interaction): List<NotificationAction> =
-        ApprovalPolicy.actions(AnswerEntry.Notification, ix.kind, locked = true).flatMap { policy ->
+        ApprovalPolicy.actions(AnswerEntry.Notification, ix.kind, locked = true).sortedBy { order(it.id) }.flatMap { policy ->
             fun action(key: String, label: String, answer: AnswerAction, draft: AnswerDraft = AnswerDraft()) = NotificationAction(
                 key, label, policy.authentication != Authentication.None,
                 when (policy.input) { "message" -> "拒绝原因"; "feedback" -> "修改意见"; else -> null },
@@ -58,6 +58,17 @@ internal object NotificationPolicy {
                 else -> emptyList()
             }
         }
+
+    /**
+     * Saying no on the left, yes on the right (拒绝 / 允许, 打回 / 批准), as in Android's dialogs and on the ongoing
+     * notification; a question's or a terminal dialog's options keep their own order. The policy's order only keeps its
+     * fixtures stable.
+     */
+    private fun order(id: ApprovalAction) = when (id) {
+        ApprovalAction.Deny, ApprovalAction.Reject -> 0
+        ApprovalAction.Allow, ApprovalAction.ApproveEdits -> 1
+        else -> 2
+    }
 
     fun resolution(ix: Interaction, key: String, reply: String?): Resolution? {
         val action = actions(ix).firstOrNull { it.key == key } ?: return null

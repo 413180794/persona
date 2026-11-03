@@ -9,11 +9,13 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.core.terminal.TerminalText
 
 /**
  * 选择文本: the terminal (the rows kept while driving it, then the screen) as plain text over the whole screen. Rows
@@ -37,7 +39,9 @@ internal fun TerminalSelectText(text: String, onDismiss: () -> Unit) {
             if (text.isEmpty()) Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 JEmptyState("终端里还没有文字", "等终端显示内容后再来选择。", icon = PhIcons.TerminalWindow)
             } else SelectionContainer(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
-                Text(text, style = PersonaTheme.type.code, color = palette.ink, softWrap = false,
+                // Shown with glyphs the monospaced face has (⏵ was an empty box); 全部拷贝 copies the terminal's own text.
+                val shown = remember(text) { TerminalText.readable(text) }
+                Text(shown, style = PersonaTheme.type.code, color = palette.ink, softWrap = false,
                     modifier = Modifier.padding(start = pagePadding, end = pagePadding,
                         top = padding.calculateTopPadding() + Tokens.Space.s, bottom = padding.calculateBottomPadding() + Tokens.Space.l))
             }

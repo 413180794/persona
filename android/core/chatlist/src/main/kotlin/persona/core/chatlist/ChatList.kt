@@ -151,8 +151,9 @@ fun ChatListEffects(
                 val visible = state.list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == target.rowId }
                 if (visible != null && !state.list.isScrollInProgress) {
                     val offset = when {
+                        // In the reversed list the content padding after the items is the top one, under the top bar.
                         target.lastLineAtTop -> lastLineScrollOffset(state.list.layoutInfo.viewportEndOffset,
-                            state.lastLineExtents[target.rowId] ?: 1)
+                            state.lastLineExtents[target.rowId] ?: 1, state.list.layoutInfo.afterContentPadding)
                         target.alignTop -> visible.size - state.list.layoutInfo.viewportEndOffset
                         else -> target.offsetPx
                     }

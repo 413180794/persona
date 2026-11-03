@@ -15,13 +15,16 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import persona.core.designsystem.*
@@ -30,7 +33,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.compose.elements.MarkdownBulletList
+import com.mikepenz.markdown.compose.elements.MarkdownOrderedList
+import com.mikepenz.markdown.compose.elements.listDepth
 import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 import com.mikepenz.markdown.model.State as MarkdownState
 import com.mikepenz.markdown.model.parseMarkdown
 import persona.core.contracts.AgentState
@@ -288,9 +297,9 @@ internal fun KnowledgeDetailScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                             EntryMetadata(entry, allTags = true)
                             entry.oneLine?.takeIf { it.isNotBlank() }?.let { Text(it, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink) }
-                            ComposerFrame(field = {
-                                ComposerTextField(question, { question = it }, "想问 Persona 什么", enabled = !sending.busy)
-                            })
+                            // A field of the page: the chat's composer frame brings its own inset (and the board's rule
+                            // across the page), so it stood out of line with the tags and the buttons.
+                            JTextField(question, { question = it }, placeholder = "想问 Persona 什么", enabled = !sending.busy)
                             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                                 JButton("问 Persona", { model.ask(question) }, Modifier.weight(1f), icon = PhIcons.Sparkle,
                                     enabled = question.isNotBlank(), loading = sending.busy, loadingText = "正在交给 Persona…")
@@ -304,9 +313,12 @@ internal fun KnowledgeDetailScreen(
                     agents(page.agents, navigator)
                     timeline(timeline(detail.log), allLog) { allLog = !allLog }
                     val profileText = profile(detail.summary, entry.oneLine)
+                    // A card like the other sections (and iOS): bare text sat at the card edge, left of every heading.
                     if (profileText.isNotBlank()) item("profile", contentType = "markdown") {
                         JSectionHeader("档案")
-                        KnowledgeMarkdown(profileText)
+                        JGroupItem(GroupPosition.Single) {
+                            Box(Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m)) { KnowledgeMarkdown(profileText) }
+                        }
                     }
                     links(linkGroups(detail.links), openLinks, { kind ->
                         openLinks = if (kind in openLinks) openLinks - kind else openLinks + kind
@@ -449,8 +461,32 @@ private fun KnowledgeMarkdown(text: String) {
     val parsed by produceState<MarkdownState?>(null, text) {
         value = withContext(Dispatchers.Default) { parseMarkdown(text) }
     }
+    val palette = PersonaTheme.palette
+    val type = PersonaTheme.type
+    val body = type.body
     SelectionContainer {
-        parsed?.let { Markdown(it, modifier = Modifier.fillMaxWidth()) } ?: Text(text, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
+        // The conversation's look (ChatMarkdown, FileMarkdown): the library's own Material styles drew small bullets
+        // sitting above the line and headings bigger than the page title.
+        parsed?.let {
+            Markdown(it, modifier = Modifier.fillMaxWidth(),
+                colors = markdownColor(text = palette.ink, codeBackground = palette.sunken, inlineCodeBackground = palette.sunken,
+                    dividerColor = palette.line, tableBackground = palette.surface, darkTheme = palette.dark,
+                    highlightText = palette.ink, highlightBackground = palette.marker),
+                typography = markdownTypography(h1 = type.largeTitle, h2 = type.title, h3 = type.headline,
+                    h4 = type.bodyStrong, h5 = type.callout, h6 = type.caption,
+                    text = body, paragraph = body, code = type.code, inlineCode = type.code,
+                    quote = type.callout.copy(color = palette.ink2), ordered = body,
+                    bullet = body, list = body, table = body, alertTitle = type.bodyStrong,
+                    textLink = TextLinkStyles(SpanStyle(color = palette.accent, textDecoration = TextDecoration.Underline))),
+                components = markdownComponents(
+                    orderedList = { model -> MarkdownOrderedList(model.content, model.node, depth = model.listDepth,
+                        markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = Tokens.Space.s) },
+                        listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
+                    unorderedList = { model -> MarkdownBulletList(model.content, model.node, depth = model.listDepth,
+                        markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = Tokens.Space.s) },
+                        listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
+                ))
+        } ?: Text(text, style = body, color = palette.ink)
     }
 }
 

@@ -355,12 +355,20 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         val chrome = remember(style, dockInsets) {
             NavEntryDecorator<NavKey> { entry ->
                 val glass = remember { HazeState() }
-                CompositionLocalProvider(LocalGlassSource provides glass) {
+                // A web page shown over this page (the link card): glass must not sample its WebView, so the page goes
+                // opaque while it shows, and the dock makes way for the card's bottom (LocalWebSheets).
+                val webSheets = remember { mutableIntStateOf(0) }
+                val web = webSheets.intValue > 0
+                val level = LocalGlassLevel.current
+                CompositionLocalProvider(LocalGlassSource provides glass, LocalWebSheets provides webSheets,
+                    LocalGlassLevel provides if (web) GlassLevel.Solid else level) {
                     when {
                         entry.contentKey !in rootKeys || expandedState.value -> entry.Content()
                         style == AppStyle.Glass -> Box(Modifier.fillMaxSize()) {
-                            CompositionLocalProvider(LocalChromeInsets provides dockInsets) { entry.Content() }
-                            dock.value(Modifier.align(Alignment.BottomCenter))
+                            // Without the dock the page keeps no room for it (a conversation over the card would float
+                            // a dock's height above it).
+                            CompositionLocalProvider(LocalChromeInsets provides if (web) ChromeInsets() else dockInsets) { entry.Content() }
+                            if (!web) dock.value(Modifier.align(Alignment.BottomCenter))
                         }
                         else -> Column(Modifier.fillMaxSize().background(PersonaTheme.palette.background)) {
                             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalChromeInsets provides dockInsets) { entry.Content() } }

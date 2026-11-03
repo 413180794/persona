@@ -85,7 +85,34 @@ class PhoneConfirmationReceiver : BroadcastReceiver() {
         if (intent.action != "jarvis.phone.confirm") return
         val token = intent.getStringExtra("token") ?: return
         val allowed = intent.getBooleanExtra("allowed", false)
-        if (allowed && context.getSystemService(KeyguardManager::class.java).isDeviceLocked) return
-        PhoneConfirmations.callbacks[token]?.invoke(allowed)
+        if (!allowed) { PhoneConfirmations.callbacks[token]?.invoke(false); return }
+        // 允许 needs an unlock, and the lock screen reports it a moment after it let the button through.
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        val pending = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
+            try { if (!lockedAfterUnlockSettles({ keyguard.isDeviceLocked })) PhoneConfirmations.callbacks[token]?.invoke(true) }
+            finally { pending.finish() }
+        }
     }
 }
+
+/**
+ * Whether the phone is still locked once an unlock in progress has had [settleMillis] to land. SystemUI sends a
+ * notification button that needs authentication as soon as the user's PIN is accepted, a moment before KeyguardManager
+ * stops reporting the device as locked: read at once, 允许 tapped on the lock screen was dropped and the call declined
+ * when the confirmation timed out (docs/lessons/android.md; the same as :platform:notify's).
+ */
+internal suspend fun lockedAfterUnlockSettles(
+    locked: () -> Boolean,
+    settleMillis: Long = UNLOCK_SETTLE_MILLIS,
+    pollMillis: Long = 100,
+): Boolean {
+    if (!locked()) return false
+    return withTimeoutOrNull(settleMillis) {
+        while (locked()) delay(pollMillis)
+        false
+    } ?: true
+}
+
+/** How long an unlock that let a button through may take to show (config value, not a measurement). */
+internal const val UNLOCK_SETTLE_MILLIS = 3_000L

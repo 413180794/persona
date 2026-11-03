@@ -80,6 +80,23 @@ internal fun messageModel(text: String, from: String? = null): MessageModel {
 
 internal fun messageParts(text: String, from: String? = null): List<MessagePart> = messageModel(text, from).parts
 
+/** A reply's Markdown to parse ahead: the cache key and the text [MessageContent] draws under it. */
+internal data class MarkdownText(val key: String, val text: String)
+
+/**
+ * The Markdown of a conversation's replies (at most [limit] of them), with the keys and the text the rows draw (a cut
+ * text without the hub's mark): first the latest turn's, which an unread conversation opens on, then the earlier ones,
+ * newest first.
+ */
+internal fun markdownPrewarm(items: List<Item>, limit: Int = 80): Pair<List<MarkdownText>, List<MarkdownText>> {
+    val replies = items.filter { it.kind == "text" && it.role == "assistant" }.takeLast(limit)
+    val lastUser = items.lastOrNull { it.role == "user" && it.kind == "text" }
+    fun texts(item: Item) = messageParts(item.text.orEmpty().let { if (item.fullSize != null) cutText(it) else it }, item.from)
+        .mapIndexedNotNull { index, part -> (part as? MessagePart.Text)?.let { MarkdownText("${item.id}/$index", it.text) } }
+    val (latest, earlier) = replies.partition { lastUser == null || chatItemOrder.compare(it, lastUser) > 0 }
+    return latest.flatMap(::texts) to earlier.asReversed().flatMap(::texts)
+}
+
 /**
  * What 编辑 puts back in the composer for a message: its words, and its photos as `<attached_images>` again, which the
  * composer turns back into (already uploaded) attachments.
@@ -227,11 +244,17 @@ internal fun toolPresentation(item: Item): ToolPresentation {
 }
 
 /**
+ * The steps a fold stands for, counted the way its work line counts them once open (and the 收起 line and iOS do): each
+ * tool call and each thought. `fold.items` also counts every tool result, so a fold of three calls read 「做了 6 步」.
+ */
+internal fun WorkItem.Folded.stepCount(): Int = item.fold?.let { it.tools + it.thoughts } ?: 1
+
+/**
  * The words on a work line. A running one says what it is doing and, given [now], how long it has run (R1, ticking
  * every second like iOS's 「正在工作 39 秒」).
  */
 internal fun workSummary(line: ChatLine.Work, recordedDuration: Long?, now: Instant? = null): String {
-    val count = line.steps.sumOf { if (it is WorkItem.Folded) it.item.fold?.items ?: 1 else 1 }
+    val count = line.steps.sumOf { if (it is WorkItem.Folded) it.stepCount() else 1 }
     if (line.live) {
         val current = line.steps.lastOrNull()
         val action = when (current) {

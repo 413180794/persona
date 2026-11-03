@@ -6,8 +6,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight as ComposeWeight
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.dp
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -58,7 +56,12 @@ import persona.core.domain.fleet.FleetText
  * Colours and type come from the design system: the user's interface style, light or dark with the system.
  */
 class PersonaWidget : GlanceAppWidget() {
-    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM, TALL, LARGE))
+    /**
+     * Laid out for the size the launcher gives it (each orientation), so the rows follow the real height at any width.
+     * Fixed responsive buckets did not: the taller ones were all 250dp wide, and a narrower widget (2 × 2 on a phone)
+     * always got the smallest layout, the summary alone however tall it was.
+     */
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val dependencies = SurfacesDependencies.of(context)
@@ -76,19 +79,24 @@ class PersonaWidget : GlanceAppWidget() {
     @Composable
     private fun Content(context: Context, look: WidgetLook, paired: Boolean, fleet: FleetState,
                         assistant: (persona.core.contracts.SessionKey) -> Boolean?) {
-        val rows = WidgetLayout.rows(LocalSize.current.height.value)
+        val height = LocalSize.current.height.value
+        val scale = context.resources.configuration.fontScale
+        val rows = WidgetLayout.rows(height, scale)
         Column(
             GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius)
                 .background(look.card).padding(Tokens.Space.m)
                 .clickable(actionStartActivity(SurfaceLinks.fleet(context, paired, fleet, assistant))),
         ) {
-            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Image(ImageProvider(persona.core.designsystem.R.drawable.ic_stat), contentDescription = null,
-                    modifier = GlanceModifier.size(look.markSize), colorFilter = ColorFilter.tint(look.accent))
-                Spacer(GlanceModifier.width(Tokens.Space.xs))
-                Text("Persona", style = look.caption, maxLines = 1)
+            // Unpaired, the line under the headline may take two lines.
+            if (WidgetLayout.mark(height, scale, captionLines = if (paired) 1 else 2)) {
+                Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Image(ImageProvider(persona.core.designsystem.R.drawable.ic_stat), contentDescription = null,
+                        modifier = GlanceModifier.size(look.markSize), colorFilter = ColorFilter.tint(look.accent))
+                    Spacer(GlanceModifier.width(Tokens.Space.xs))
+                    Text("Persona", style = look.caption, maxLines = 1)
+                }
+                Spacer(GlanceModifier.height(Tokens.Space.xs))
             }
-            Spacer(GlanceModifier.height(Tokens.Space.xs))
             if (!paired) {
                 Text("还没配对", style = look.headline, maxLines = 1)
                 Text("打开 Persona 扫 hub 的二维码", style = look.caption, maxLines = 2)
@@ -140,11 +148,6 @@ class PersonaWidget : GlanceAppWidget() {
     }
 
     companion object {
-        private val SMALL = DpSize(110.dp, 100.dp)
-        private val MEDIUM = DpSize(250.dp, 150.dp)
-        private val TALL = DpSize(250.dp, 200.dp)
-        private val LARGE = DpSize(250.dp, 260.dp)
-
         /** Redraws every placed widget (cheap when none is placed). */
         suspend fun refresh(context: Context) {
             runCatching { PersonaWidget().updateAll(context.applicationContext) }
@@ -157,16 +160,31 @@ class PersonaWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 /**
- * How many agents fit under the headline (each row is a name and a line, about 40dp, and the rest needs about 100dp):
- * none on the smallest widget, then one, two or three as it gets taller. Overflow would be cut off at the bottom.
+ * What fits in the widget's height, measured on the launcher at the system's default font size: the padding and spacers
+ * take 32dp, the mark, headline and other counts about 64dp of text (a caption line about 19dp of it), each agent 8dp of
+ * padding and about 37dp of text, 「+N 个」 about 17dp. Text grows with the system font size; whatever does not fit would
+ * be cut off at the bottom.
  */
 internal object WidgetLayout {
-    fun rows(heightDp: Float): Int = when {
-        heightDp < 140f -> 0
-        heightDp < 190f -> 1
-        heightDp < 240f -> 2
-        else -> 3
-    }
+    /** How many agents to list under the summary, room left for 「+N 个」: none on the smallest widget, at most three. */
+    fun rows(heightDp: Float, fontScale: Float = 1f): Int =
+        ((heightDp - summary(fontScale) - MORE * fontScale) / (ROW_PADDING + ROW * fontScale)).toInt().coerceIn(0, 3)
+
+    /**
+     * Whether the 「Persona」 mark fits above the headline and the [captionLines] under it; a widget squeezed below that
+     * keeps those and drops the mark.
+     */
+    fun mark(heightDp: Float, fontScale: Float = 1f, captionLines: Int = 1): Boolean =
+        heightDp >= summary(fontScale) + (captionLines - 1) * CAPTION * fontScale
+
+    private fun summary(fontScale: Float) = PADDING + SUMMARY * fontScale
+
+    private const val PADDING = 32f
+    private const val SUMMARY = 64f
+    private const val ROW_PADDING = 8f
+    private const val ROW = 37f
+    private const val MORE = 17f
+    private const val CAPTION = 19f
 }
 
 /** The design system's tokens for one style, as Glance's day / night colour pairs and text styles. */

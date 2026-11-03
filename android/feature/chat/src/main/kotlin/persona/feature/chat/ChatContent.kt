@@ -238,8 +238,8 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
             val item = step.item.item
             val loading = item.id in folding
             WorkGroup(
-                summary = if (loading) "正在载入 ${item.fold?.items ?: 0} 步…"
-                    else if (item.id in errors) "载入失败，点此重试" else "做了 ${item.fold?.items ?: 0} 步",
+                summary = if (loading) "正在载入 ${step.stepCount()} 步…"
+                    else if (item.id in errors) "载入失败，点此重试" else "做了 ${step.stepCount()} 步",
                 expanded = false, onToggle = { if (!loading) onFold(item) }, running = loading,
             ) {}
 

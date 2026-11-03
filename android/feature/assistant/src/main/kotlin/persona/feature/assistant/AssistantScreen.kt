@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -633,8 +634,10 @@ private fun ConversationRow(
 ) {
     var menu by remember { mutableStateOf(false) }
     JGroupItem(position) {
+        // The time goes on the line under the title, with the state: beside the title it left the title two or three
+        // characters in the wide window's 300dp list (2026-11-02), and a narrow drawer cut it short too.
         JRow(session.conversationTitle(), onClick = onOpen, onLongClick = { menu = true },
-            subtitle = session.lastText?.takeIf { it.isNotBlank() }, value = conversationTime(session.updated),
+            subtitle = session.lastText?.takeIf { it.isNotBlank() },
             leading = { JIcon(if (selected) PhIcons.CheckCircle else PhIcons.ChatCircle, null,
                 selected = selected, tint = if (selected) PersonaTheme.palette.accent else PersonaTheme.palette.ink2) },
             trailing = { JIconButton(PhIcons.DotsThree, "对话操作", { menu = true }) }, chevron = false)
@@ -642,6 +645,10 @@ private fun ConversationRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (main) JTag("主对话")
             StatusLabel(session.conversationStatus())
+            conversationTime(session.updated)?.let { time ->
+                Text(time, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)
+            }
         }
     }
     if (menu) JActionSheet(

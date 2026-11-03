@@ -3,6 +3,7 @@ package persona.feature.chat
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.*
@@ -27,14 +28,26 @@ fun ChatLinkText(text: String, modifier: Modifier = Modifier, style: TextStyle =
     Text(chatLinkAnnotations(text), modifier, style = style)
 }
 
+/**
+ * A context the next message carries (a page's picked text). [compact] is one line, for when the link card leaves
+ * the conversation four tenths of the screen: the whole card pushed the composer under the link card (2026-11-02).
+ */
 @Composable
-internal fun ChatContextCard(context: ChatLinkContext, onRemove: (() -> Unit)? = null) {
+internal fun ChatContextCard(context: ChatLinkContext, compact: Boolean = false, onRemove: (() -> Unit)? = null) {
     val uriHandler = LocalUriHandler.current
-    JCard(Modifier.fillMaxWidth()) {
+    val label = if (context.kind == "edit") "AI 修改" else "关联上下文"
+    val title = context.title.ifBlank { context.url.ifBlank { "网页选文" } }
+    if (compact) JCard(Modifier.fillMaxWidth(), padding = Tokens.Space.xs) {
+        Row(Modifier.padding(start = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
+            Text("$label：${context.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: title}", Modifier.weight(1f),
+                style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (onRemove != null) JTextButton("移除", onRemove)
+        }
+    } else JCard(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(Tokens.Space.s)) {
             Column(Modifier.weight(1f)) {
-                Text(if (context.kind == "edit") "AI 修改" else "关联上下文", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink2)
-                Text(context.title.ifBlank { context.url.ifBlank { "网页选文" } }, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(label, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink2)
+                Text(title, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(context.text, maxLines = 2, overflow = TextOverflow.Ellipsis, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                 if (ChatLinks.webUrl(context.url) != null) JTextButton("查看原文", { uriHandler.openUri(context.url) })
             }

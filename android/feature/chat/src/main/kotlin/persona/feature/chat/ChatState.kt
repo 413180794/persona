@@ -57,9 +57,13 @@ internal class ChatTimeline {
     @Synchronized fun newMessageCount(items: List<Item>, below: Item?, lastRead: Item?) = window.newMessageCount(items, below, lastRead)
     @Synchronized fun unfold(fold: Item, items: List<Item>) { expanded[fold.id] = fold to items }
 
+    /**
+     * A frozen window keeps the fold it froze with and also takes in the work the store put in its place when the fold
+     * was opened: the fold's own items then come twice, and every step of the open work line counted twice.
+     */
     @Synchronized fun searchItems(items: List<Item>): List<Item> = window.items(items).flatMap { item ->
         expanded[item.id]?.takeIf { it.first.fold == item.fold }?.second ?: listOf(item)
-    }
+    }.distinctBy { it.id }
 
     @Synchronized fun lines(items: List<Item>, liveId: String?, open: Set<String>): persona.core.domain.lines.ChatSnapshot {
         return chatLines(searchItems(items).filter { it.kind != "turn_duration" }.map(Item::asLineItem), LineOptions(

@@ -44,6 +44,8 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
     var target by remember { mutableStateOf<LarkLink?>(null) }
     val parentOccluded = LocalLarkReadOccluded.current
     val scope = rememberCoroutineScope()
+    // A web page over the page: no glass may sample its WebView, here or in the page around it (LocalWebSheets).
+    WebSheetShown(target != null)
     CompositionLocalProvider(LocalLarkLinkOpener provides { url, source ->
         larkWebUrl(url)?.let { target = LarkLink(it, source) }
     }, LocalLarkReadOccluded provides (parentOccluded || target != null)) {
@@ -63,6 +65,7 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
                 val height = with(LocalDensity.current) {
                     (pixels - (drag.offset.takeIf { it.isFinite() } ?: pixels)).coerceIn(0f, pixels).toDp()
                 }
+                CompositionLocalProvider(LocalGlassLevel provides GlassLevel.Solid) {
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(height)
                     .clip(PersonaTheme.shapes.sheetShape).background(PersonaTheme.palette.surfaceOpaque)) {
                     Column {
@@ -82,6 +85,7 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
                         }
                         LarkDocumentReader(link.url, link.source, repository, Modifier.weight(1f), showConnectionTitle = false)
                     }
+                }
                 }
             }
         }

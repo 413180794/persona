@@ -117,6 +117,33 @@ class MessageContentTest {
         assertFalse(workSummary(line.copy(live = false), 30, start.plusSeconds(80)).contains("正在"))
     }
 
+    @Test fun aFoldCountsItsCallsAndThoughtsNotItsItems() {
+        // Three calls with their results and a thought: the hub's fold has 7 items, the open work line 4 steps.
+        val wire = persona.core.contracts.Fold(items = 7, tools = 3, thoughts = 1, throughSeq = 8, throughId = "r3#0")
+        val fold = Item("fold:c1#0", 2, role = "assistant", kind = "fold", fold = wire)
+        val folded = persona.core.domain.lines.WorkItem.Folded(persona.core.domain.lines.LineItem(fold,
+            persona.core.domain.lines.Fold(wire.items, wire.tools, wire.thoughts, wire.throughSeq, wire.throughId)))
+        assertEquals(4, folded.stepCount())
+        val line = ChatLine.Work("w-1", listOf(folded), live = false, start = null, end = null, open = false)
+        assertEquals("做了 4 步", workSummary(line, null))
+    }
+
+    @Test fun theLatestTurnsMarkdownIsParsedFirstWithTheTextItsRowsDraw() {
+        val items = listOf(
+            Item("u1#0", 1, role = "user", kind = "text", text = "第一问"),
+            Item("a1#0", 2, role = "assistant", kind = "text", text = "## 第一答"),
+            Item("a2#0", 3, role = "assistant", kind = "text", text = "## 又一答"),
+            Item("u2#0", 4, role = "user", kind = "text", text = "第二问"),
+            Item("a3#0", 5, role = "assistant", kind = "text", text = "- 一\n- 二\n…（已截断，共 9000 字节）", fullSize = 9000),
+        )
+        val (latest, earlier) = markdownPrewarm(items)
+        // The reply an unread conversation opens on, under the key and with the words MessageContent draws.
+        assertEquals(listOf("a3#0/0"), latest.map { it.key })
+        assertEquals(messageParts(cutText(items[4].text!!)), listOf(MessagePart.Text(latest.single().text)))
+        assertEquals(listOf("a2#0/0", "a1#0/0"), earlier.map { it.key })
+        assertEquals(2, markdownPrewarm(items, limit = 2).let { it.first.size + it.second.size })
+    }
+
     @Test fun aCutTextLosesTheHubsMark() {
         assertEquals("开头", cutText("开头\n…（已截断，共 26000 字节）"))
         assertEquals("完整", cutText("完整"))

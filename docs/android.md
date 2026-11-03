@@ -28,7 +28,7 @@ Android 使用 `:platform:notify` 的前台服务共用 hub WebSocket，不依�
 真机记录（2026-10-31，ColorOS 16 / Android 16，单次观察）：前台服务在跑，App 切到后台约 6 秒 WebSocket 仍被断开，回前台自动重连；要在系统设置里给 App 打开「允许后台运行」「自启动」并把电池设为不优化（准备清单「后台保活」会引导）。放开后后台能连多久、耗电多少按验收清单 V03 实测，现在未实测。
 
 - 「做完了」由 hub 按与 iOS 相同的完成策略决定，经 `notify` 事件下发；客户端声明 `ws_notify` 后接收，不再自行推算完成。
-- 提问、计划、授权和屏幕选项可在通知作答；允许或批准要求解锁，拒绝或打回可输入原因。结果不明时提示待确认，不自动重复批准。
+- 提问、计划、授权和屏幕选项可在通知作答；允许或批准要求解锁，拒绝或打回可输入原因。按钮否定在左、肯定在右（「拒绝 / 允许」「打回 / 批准」），和常驻通知、安卓对话框一致；提问和屏幕选项按原来的顺序。结果不明时提示待确认，不自动重复批准。
 - 点击通知和会话深链走同一个导航入口（冷启动和 App 已打开时相同）。通知链接写明 `tab` 时直接按它落到 Persona 或 Agents，不等会话元数据；没写时等元数据到达再分流。终端兜底动作（`target=terminal`）打开该会话的终端，返回落在原对话。
 - 准备清单提供通知权限、电池限制、自启动等系统入口，以及锁屏测试预约、展示和回报。各 ROM 的锁屏存活、通知展示、重启恢复和耗电均未实测。
 
@@ -423,11 +423,11 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 iPhone 的实时活动、小组件和快捷指令在 Android 上的对应物。四处说同样的话：文案和挑选规则在 `core:domain` 的 `FleetSummary` / `FleetText`（照 iOS `FleetText` 和 hub `buildFleet`），数据都来自 `:platform:notify` 的 `FleetFeed`。
 
 - **数据**：`FleetFeed` 收 WS 的 `fleet` 事件，连接每次连上后再 `GET /api/v1/fleet` 一次（hub 只在变化时推），最后一份按配对存在 SharedPreferences `fleet`，进程没跑时小组件和磁贴照样能画；取消配对清掉，换了配对不显示上一个 hub 的。HTTP 和配对标识由 App 的 `FleetModule` 提供（`FleetSource`）。
-- **常驻汇总通知**（前台服务那条，`OngoingStatus` / `Notifier.ongoing`）：标题「N 个需要你 / 在工作 / 做完了」，副标题其余数量；「锁屏显示详情」开着时正文是第一个 Agent「名字 · 在做什么」，展开最多三行带「机器 · 空间 › 标签」再加「+N 个」；只剩工作中时走计时；第一个授权「拒绝 / 允许」、第一个计划「查看 / 批准」（`acceptEdits`，允许和批准要解锁，按钮走 `ActionReceiver` + `NotificationActionExecutor`）；只有一个 Agent 时点通知直达它，否则进 Agents。没东西、只剩做完未看满 5 分钟、没连上时退回连接行。「锁屏显示详情」关着（默认）时，正文和展开列表也只用泛化文字（「4 个需要你」「有个授权等你」「2 个授权等你」「1 个在工作」），不放 Agent 名字、位置和请求详情，即使系统设成「锁屏显示全部内容」锁屏上也看不到名字；按钮照旧。细节见 `platform/notify/README.md`。
-- **主屏小组件**（`PersonaWidget`，Glance 1.2.0）：「Persona」标志行，带状态色点的标题，其余数量，按高度画 0（< 140dp）/ 1（< 190dp）/ 2（< 240dp）/ 3 个 Agent（色点 + 名字 +「在做什么 · 机器 · 空间」）和「+N 个」（旧 App 在 150dp 高时画两个，会被切掉）；没东西「没有 Agent 需要你」，没配对「还没配对 / 打开 Persona 扫 hub 的二维码」。点某个 Agent 进它的对话，点别处和磁贴一样（唯一的 Agent 或 Agents）；只导航，不能在小组件上批准。尺寸 110×100 / 250×150 / 250×200 / 250×260，最小 110×100dp、默认 3×2 格、可横竖缩放、不定时刷新（`updatePeriodMillis=0`），汇总变化时 `SurfacesRuntime` 让它重画。配色和字号取自设计系统（`SystemSurfaces`：用户选的界面风格的色板和字号，浅色 / 深色一对交给 Glance 跟着系统换），圆角用系统的小组件圆角。
+- **常驻汇总通知**（前台服务那条，`OngoingStatus` / `Notifier.ongoing`）：标题「N 个需要你 / 在工作 / 做完了」，副标题其余数量；「锁屏显示详情」开着时正文是第一个 Agent「名字 · 在做什么」，展开最多三行带「机器 · 空间 › 标签」再加「+N 个」；只剩工作中时走计时；第一个授权「拒绝 / 允许」、第一个计划「查看 / 批准」（`acceptEdits`，允许和批准要解锁，按钮走 `ActionReceiver` + `NotificationActionExecutor`）；只有一个 Agent 时点通知直达它，否则进 Agents。没东西、只剩做完未看满 5 分钟、没连上时退回连接行。「锁屏显示详情」关着（默认）时，正文和展开列表也只用泛化文字（「4 个需要你」「有个授权等你」「2 个授权等你」「1 个在工作」），不放 Agent 名字、位置和请求详情，即使系统设成「锁屏显示全部内容」锁屏上也看不到名字；按钮照旧。开着时通知里有名字，但仍是私有通知、公开版本只有数量，系统设成隐藏敏感内容时锁屏上只有数量。细节见 `platform/notify/README.md`。
+- **主屏小组件**（`PersonaWidget`，Glance 1.2.0）：「Persona」标志行，带状态色点的标题，其余数量，下面是放得下的几个 Agent（最多 3 个，色点 + 名字 +「在做什么 · 机器 · 空间」）和「+N 个」；没东西「没有 Agent 需要你」，没配对「还没配对 / 打开 Persona 扫 hub 的二维码」。点某个 Agent 进它的对话，点别处和磁贴一样（唯一的 Agent 或 Agents）；只导航，不能在小组件上批准。按启动器给的实际尺寸排（`SizeMode.Exact`，横竖屏各一份）：画几个 Agent 只看高度（`WidgetLayout`，按启动器上量出来的行高算，给「+N 个」留好位置，系统字号调大时少画；手机上一行高的画 0 个、两行 2 个、三行 3 个），挤到放不下标志行时只留数量。原来用 Responsive 的四档尺寸（110×100 / 250×150 / 250×200 / 250×260），大的三档都是 250dp 宽：手机上 2×2 的小组件永远落在最小那档，多高都只有标题；150dp 那档还会切掉「+N 个」（2026-11-02 模拟器上发现）。最小 110×100dp、默认 3×2 格、可横竖缩放、不定时刷新（`updatePeriodMillis=0`），汇总变化时 `SurfacesRuntime` 让它重画。配色和字号取自设计系统（`SystemSurfaces`：用户选的界面风格的色板和字号，浅色 / 深色一对交给 Glance 跟着系统换），圆角用系统的小组件圆角。
 - **快速设置磁贴**（`PersonaTileService`）：标签「Persona」，副标题是汇总标题（「都处理完了」「还没配对」）；需要你或工作中时点亮，没配对不可用；点了和小组件一样打开。
 - **长按图标快捷方式**（`ShortcutPublisher`，运行时发布，静态快捷方式要写死 application id）：「问 Persona」打开 Persona tab 并把光标放进输入框、弹出键盘（`jarvis://open?target=tab&tab=jarvis&focus=composer`，冷启动和 App 开着都生效；在内嵌对话里时回到首页的输入框，发出去照样进主对话）；「批准待处理」；后面跟最近活跃的 2 个在线 Agent（不含 Persona 自己，按更新时间），点了直达对话，变了才重发，取消配对时去掉。
-- **批准待处理**（`ApproveFirstActivity`，不导出、透明、只显示设计系统的对话框）：从 hub 现拉待处理，取最早的一条。授权问「允许 <摘要>？」，计划问「批准这个计划？」并说明「批准后自动接受编辑，命令仍会先问你」（`ApprovalPolicy` 的快捷入口：计划只用 `acceptEdits`，要先解锁）；下面一行「会话 · 机器」。提问和终端对话框说明要打开 Persona 并给「打开 Persona」（进那个对话）；另有加载中、没有待处理、没配对、出错几种。按钮在发送时不可点，发送结果不明时说「结果待确认」而不是让人重试；成功后 Toast「已允许 Bash」/「已批准计划，开始执行」。
+- **批准待处理**（`ApproveFirstActivity`，不导出、透明、只显示设计系统的对话框，下面垫一层设计系统的遮罩 `palette.scrim`：没有它时，深色模式的白色状态栏图标落在浅色壁纸上看不清）：从 hub 现拉待处理，取最早的一条。授权问「允许 <摘要>？」，计划问「批准这个计划？」并说明「批准后自动接受编辑，命令仍会先问你」（`ApprovalPolicy` 的快捷入口：计划只用 `acceptEdits`，要先解锁）；下面一行「会话 · 机器」。提问和终端对话框说明要打开 Persona 并给「打开 Persona」（进那个对话）；另有加载中、没有待处理、没配对、出错几种。按钮在发送时不可点，发送结果不明时说「结果待确认」而不是让人重试；成功后 Toast「已允许 Bash」/「已批准计划，开始执行」。
 
 和旧 App 的差异：常驻通知的连接行和汇总共用一个「实时状态」频道（旧 App 连接行另有一个最低优先级频道）；「锁屏显示详情」关着时连通知正文也不放名字（旧 App 只靠公开版本，系统设成显示全部内容时锁屏上会有名字）；数据不再在手机上自己算，而是 hub 算好的 `fleet`；快捷方式批准计划用 `acceptEdits`（旧 App 和 iOS 是 `bypassPermissions`，按统一规格改）；最近 Agent 的快捷方式换成终端提示符图标。
 
@@ -436,7 +436,7 @@ iPhone 的实时活动、小组件和快捷指令在 Android 上的对应物。�
 ```sh
 # 「批准待处理」的各个状态：loading、nothing、unpaired、question、screen、permission、plan、sending、error
 adb shell am start -n <包名>/persona.platform.shortcuts.ApproveFirstPreviewActivity --es debug.approveState plan --es debug.style board --es debug.theme dark
-# 小组件的三种尺寸，像启动器一样托管在壁纸上；先给一次绑定权限
+# 小组件的几种尺寸（最小、1 / 2 / 3 个 Agent 的高度，2 个的那个是手机上两格宽），像启动器一样托管在壁纸上；先给一次绑定权限
 adb shell appwidget grantbind --package <包名> --user 0
 adb shell am start -n <包名>/persona.platform.shortcuts.WidgetPreviewActivity
 # 磁贴放进快速设置
@@ -445,9 +445,9 @@ adb shell cmd statusbar add-tile <包名>/persona.platform.shortcuts.PersonaTile
 adb shell "am start -a android.intent.action.VIEW -d 'jarvis://open?target=tab&tab=jarvis&focus=composer' <包名>"
 ```
 
-假 hub：`MOCK_FLEET=1`（或 `all`）连上就推 `fleet`、每次作答后再推，`GET /api/v1/fleet` 总是有；`MOCK_FLEET=permission` 只留授权（第一个请求带「拒绝 / 允许」），`working` 只有工作中和做完未看（计时），`done` 只有做完未看，`one` 只有一个工作中的 Agent（点了直达），`empty` 什么都没有（连接行）。默认数据下第一个请求是计划（「查看 / 批准」）。
+假 hub：`MOCK_FLEET=1`（或 `all`）连上就推 `fleet`、每次作答后再推，`GET /api/v1/fleet` 总是有；`MOCK_FLEET=permission` 只留授权（第一个请求带「拒绝 / 允许」），`working` 只有工作中和做完未看（计时），`done` 只有做完未看，`one` 只有一个工作中的 Agent（点了直达），`empty` 什么都没有（连接行）。默认数据下第一个请求是计划（「查看 / 批准」）。运行中切换不用重启（重启会换 `HUB_ID`，App 要重新配对）：`GET /mock/fleet?mode=<上面的值>` 换一种并推给 App；`GET /mock/notify?interaction=<id>` 像 hub 那样给声明了 `ws_notify` 的 App 发一条「需要你处理」的 `notify`；`GET /mock/renew?minutes=30` 让待处理的请求从现在起再过 N 分钟才过期（请求的期限按假 hub 启动时间算，开久了从通知、快捷方式作答只会得到「已过期」）。
 
-验证状态（2026-11-02）：单测 `FleetSummaryTest`、`OngoingStatusTest`、`ShortcutTextTest`、`ApproveFirstModelTest`、`ComposerFocusRequestsTest`、`RouterTest` 和 `:app:assembleDebug` 在车道里跑过一轮；之后几处小改动（小组件按高度排行数、对话框等列表刷新、连接行的通知类别、`FleetState` 存盘往返的单测）没再编译。通知、小组件、磁贴、快捷方式和对话框都还没在模拟器或真机上看过（按协调者要求统一截图验证），Live Update 胶囊要 Android 16 以上的设备。
+验证状态：单测 `FleetSummaryTest`、`OngoingStatusTest`、`ShortcutTextTest`、`ApproveFirstModelTest`、`ComposerFocusRequestsTest`、`RouterTest`、`UnlockSettleTest` 通过。2026-11-02 统一验证在 API 35 模拟器（Pixel 8、Pixel 启动器）上逐项看过，系统深浅色各一套：常驻通知的收起 / 展开、「查看 / 批准」「拒绝 / 允许」、计时、做完未看 5 分钟退回连接行、只有一个 Agent 点了直达、连接行、状态栏品牌小图标；锁屏上点「批准」先要解锁，解锁后假 hub 收到 `{"approve":true,"mode":"acceptEdits"}`，「拒绝」不用解锁；锁屏隐私（「锁屏显示详情」开 / 关 × 系统显示全部 / 隐藏敏感内容）；小组件（预览的四种尺寸 × 没配对 / 空 / 有 Agent，启动器里真加的 2 × 1、2 × 2、2 × 3、3 × 2）；磁贴（没配对 / 空 / 点亮，点了进 Agents）；长按图标菜单；「批准待处理」九种状态 × 三套风格 × 深浅色，从启动器真批一次授权和一次计划都弹了 Toast；「问 Persona」冷启动和停在 Agents 两种都进 Persona 首页、键盘弹起。验证时修了：锁屏上点按钮解锁后被当成还锁着（见经验）、App 回前台把已退回连接行的常驻通知又改回「N 个做完了」、取消配对后留下一条划不掉的「等待网络」、开着锁屏详情时通知整条公开、小组件在两格宽时一个 Agent 都不画。注意：Pixel 默认「锁屏上隐藏静默通知」，常驻通知（「实时状态」频道是低重要性）这时在锁屏上不出现。Live Update 胶囊要 Android 16 以上的设备，没验。
 
 ## 手机数据工具和 iOS 对齐（2026-11-02）
 
@@ -455,7 +455,7 @@ Claude 调 `phone_*` 时 hub 把同名工具合并成一份定义（说明更长
 
 照片取图的图片块以前写成 `mimeType`，hub 只认 `mime_type`，图到不了 Claude：已改，`PhotoContentTest` 守着。
 
-假 hub：`GET /mock/tool_call?name=phone_device_info&args=<JSON>` 给声明了这个工具的手机发一次调用（像 hub 那样），`GET /mock/phone` 看手机注册了什么、答了什么。验证状态：单测通过；真机 / 模拟器上的工具往返、权限弹窗、确认对话框和日历写入还没测。
+假 hub：`GET /mock/tool_call?name=phone_device_info&args=<JSON>` 给声明了这个工具的手机发一次调用（像 hub 那样），`GET /mock/phone` 看手机注册了什么、答了什么。验证状态：单测通过。2026-11-02 在 API 35 模拟器上验过：日历的授权弹窗、确认对话框（三套风格 × 深浅色）、点「拒绝」手机回 `The user declined on the phone.`、点「允许」写进本地的 Persona 日历、App 在后台时锁屏上的确认通知点「允许」再解锁也能写入（修过，见经验）；`phone_photos_recent` 和 `phone_photo_get`（图片块是 `mime_type: image/jpeg`，`max_size` 生效）。
 
 ## 看图和标注
 

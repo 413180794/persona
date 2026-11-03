@@ -198,6 +198,9 @@ class AppServices @Inject constructor(
         }
         val database = Room.inMemoryDatabaseBuilder(app, PersistentDatabase::class.java).build()
         val messages = OutboxMessageSender(demo.hubScope, RoomOutboxStore(database, demo.hubScope), demo, scope)
+        // 交给 Persona and the Persona tab write to the main conversation: without a resolver such a message waits for
+        // ever and holds every message queued after it (连上后自动发送), the Agents' included.
+        messages.connectMainConversation(AssistantMainConversationResolver(demo))
         val directory = File(app.noBackupFilesDir, "demo/${demo.hubScope.path}")
         val snapshots = ListSnapshotStore(File(directory, "lists"))
         val journal = InboxReplyJournal(File(directory, "replies"), demo.scope)

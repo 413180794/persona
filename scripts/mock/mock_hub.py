@@ -16,6 +16,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 PORT = int(os.environ.get("PORT", "18760"))
 NOW = datetime.now(timezone.utc)
 LOG = sys.stderr
+# MOCK_HUB_ID keeps the identity across restarts, so a paired App stays paired when the switches change.
 HUB_ID = os.environ.get("MOCK_HUB_ID") or str(uuid.uuid4())
 TLS = {"port": 0, "fp": "", "server": None}
 ENDPOINTS = []
@@ -1483,6 +1484,54 @@ def push_fleet():
     for out, _ in list(LIVE):
         try: out({"type": "fleet", "fleet": st})
         except Exception: pass
+
+
+FLEET_MODES = ("1", "all", "permission", "working", "done", "one", "empty")
+
+
+def set_fleet_mode(mode):
+    """GET /mock/fleet?mode=…: switch MOCK_FLEET while running and push the new fleet. Restarting the mock instead
+    changes HUB_ID, and the app's pairing no longer matches (docs/lessons/android.md)."""
+    global MOCK_FLEET
+    if mode not in FLEET_MODES:
+        return {"error": "mode is one of " + ", ".join(FLEET_MODES)}, 400
+    MOCK_FLEET = mode
+    push_fleet()
+    return {"mode": MOCK_FLEET, "fleet": mock_fleet()}, 200
+
+
+def mock_notify(interaction_id):
+    """GET /mock/notify?interaction=<id>: the hub's notify event for a pending request (server/internal/hub/notifyws.go),
+    sent to the apps that declared ws_notify: the phone's 需要你处理 notification, with its buttons."""
+    ix = next((x for x in mock_interactions() if x["id"] == interaction_id), None)
+    if ix is None:
+        return {"error": "no pending request " + interaction_id}, 404
+    machine = next((m["name"] for m in MACHINES if m["id"] == ix["machine_id"]), ix["machine_id"])
+    event = {"type": "notify", "kind": "interaction", "machine_id": ix["machine_id"], "session_id": ix["session_id"],
+             "title": ix.get("session_title") or "需要你", "subtitle": machine,
+             "body": _fleet_clip(_fleet_detail(ix), 120), "interaction_id": ix["id"]}
+    with FAULT_LOCK:
+        targets = [c["send"] for c in CLIENTS.values() if "ws_notify" in c["features"]]
+    for send in targets:
+        try: send(event)
+        except OSError: pass
+    return {"sent": len(targets)}, 200
+
+
+def renew_requests(minutes):
+    """GET /mock/renew?minutes=30: the pending requests expire [minutes] from now again (their deadlines count from
+    when the mock started) and go out to the open apps as updates, with the fleet: answering from a notification or a
+    shortcut later than that still works."""
+    with REQUEST_LOCK:
+        for ix in MOCK_INTERACTIONS:
+            ix["expires_at"] = later(minutes=minutes)
+        pending = list(MOCK_INTERACTIONS)
+    for out, _ in list(LIVE):
+        for ix in pending:
+            try: out({"type": "interaction", "interaction": ix})
+            except Exception: pass
+    push_fleet()
+    return {"renewed": len(pending), "expires_at": later(minutes=minutes)}, 200
 
 
 def resolve_mock_interaction(request_id, resolution):
@@ -3261,6 +3310,8 @@ if os.environ.get("MOCK_CHAT_CONTENT") == "1":
                "已加 12 个快照测试，全部通过。", 27)
         + [_cut]
     )
+    # The cut reply was made first (FULL needs its id); the hub numbers a transcript in order, so the last item has the largest seq.
+    for _i, _x in enumerate(ITEMS[CONTENT]): _x["seq"] = ITEMS[CONTENT][0]["seq"] + _i
     _patch = ("@@ -40,9 +40,11 @@ func (s *Store) List(ctx context.Context, userID int64, page int) ([]Order, error) {\n"
               " \trows, err := s.db.QueryContext(ctx, `\n"
               "-\t\tSELECT id, total, created_at FROM orders WHERE user_id = $1\n"
@@ -3447,6 +3498,10 @@ if os.environ.get("MOCK_LINKS") == "1":
                      "title": "评审材料", "sender": "Lucy Wang", "preview": "材料在 https://example.org/ ，评审前看一下",
                      "count": 1, "started_at": ago(minutes=8), "updated_at": ago(minutes=8), "tier": "action",
                      "summary": "评审材料的链接：https://example.org/", "read": False})
+    # A web page from a mail (the HTML mail about the talk) and from the knowledge base (天气 App's profile): both open
+    # in the app, where picked text goes to Jarvis (交给 Jarvis).
+    MAIL_MESSAGES[501]["html"] += '<p>议程放在 <a href="https://example.org/agenda">example.org/agenda</a>。</p>'
+    KB_DETAIL[("projects", "weather-app")]["summary"] += "\n- **设计稿**：[小组件设计稿 v3](https://example.com/design/widgets)"
 
 
 # MOCK_LINK_SCHEMES=1: a fresh reply in the first Agent conversation with a link of every kind the link sheet handles
@@ -4452,9 +4507,11 @@ def pins_route(handler, p):
     if not HISTORY_MODE or p != "/api/v1/pins":
         return False
     if handler.command == "PUT":
+        # The hub replaces the pins whole: a list left out is empty (server/internal/hub/pins.go). The app leaves out
+        # an empty list (it does not encode defaults), so 全部取消置顶 sends no "sessions" at all.
         body = json.loads(handler.last_body or b"{}")
-        HUB_PINS["spaces"] = list(body.get("spaces", HUB_PINS["spaces"]))
-        HUB_PINS["sessions"] = list(body.get("sessions", HUB_PINS["sessions"]))
+        HUB_PINS["spaces"] = list(body.get("spaces") or [])
+        HUB_PINS["sessions"] = list(body.get("sessions") or [])
     handler.send_json(HUB_PINS)
     return True
 
@@ -4482,6 +4539,7 @@ VOICE_VOICES = {
 # What --help lists after the options.
 MOCK_HELP = [
     "PORT=<端口>  监听端口，默认 18760；0 表示自动分配（启动时打印 mock hub on <地址>:<端口>）",
+    "MOCK_HUB_ID=<id>  固定 hub_id（默认每次启动随机）：换 MOCK_* 开关重启后，已配对的 App 不用重新配对",
     "MOCK_VOICE=1|drop|bad-model|missing-model|old-hub|error|off|slow  语音插件和它的 WebSocket（docs/android.md「语音对话」）",
     "MOCK_NEEDS=none|two  Jarvis 首页「现在要你处理的事」：什么都没有 / 一个请求加一件收件箱（默认超过三件）",
     "MOCK_HISTORY=1  很长的 Jarvis 对话历史（最近 30 个 + 查看全部）、一段交接对话、一个置顶，置顶写入会保存",
@@ -4764,6 +4822,9 @@ class H(BaseHTTPRequestHandler):
             with FAULT_LOCK:
                 return self.send_json({"registrations": [x["registration"] for x in PHONES.values()], "results": TOOL_RESULTS})
         if p == "/mock/tool_call": return self.send_json(mock_tool_call(q.get("name", [""])[0], q.get("args", ["{}"])[0]))
+        if p == "/mock/fleet": return self.send_json(*set_fleet_mode(q.get("mode", [""])[0]))
+        if p == "/mock/notify": return self.send_json(*mock_notify(q.get("interaction", [""])[0]))
+        if p == "/mock/renew": return self.send_json(*renew_requests(int(q.get("minutes", ["30"])[0] or 30)))
         if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
         if p == "/mock/lark_reads": return self.send_json({"reads": LARK_READS})

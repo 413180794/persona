@@ -55,6 +55,9 @@ data class ChatListEntry(val rowId: String, val lastLineAtTop: Boolean = false, 
 internal fun shouldPrefetch(dragged: Boolean, hasOlder: Boolean, loading: Boolean, lastVisible: Int, rows: Int, distance: Int): Boolean =
     dragged && hasOlder && !loading && rows > 0 && lastVisible >= (rows - 1 - distance).coerceAtLeast(0)
 
-/** Reverse layout coordinates grow from the latest end towards history. */
-internal fun lastLineScrollOffset(viewportEnd: Int, lastLineExtent: Int): Int =
-    -(viewportEnd - lastLineExtent).coerceAtLeast(0)
+/**
+ * Reverse layout coordinates grow from the latest end towards history. [topPadding] is the list's content padding at
+ * the top (the bar the page floats over it): the last line goes right under it, not behind it.
+ */
+internal fun lastLineScrollOffset(viewportEnd: Int, lastLineExtent: Int, topPadding: Int = 0): Int =
+    -(viewportEnd - topPadding - lastLineExtent).coerceAtLeast(0)

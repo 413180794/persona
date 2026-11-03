@@ -23,6 +23,7 @@ WKWebView ─ http://localhost:5173 ─▶ 本机 127.0.0.1:5173（App 监听）
   claude / codex 自己的监听（IDE 桥、MCP）不算。
 - **怎么扫**：Linux 直接读 `/proc`（`/proc/*/stat` 得进程树，`/proc/net/tcp{,6}` 里 LISTEN 的 socket 按 inode 对上进程的 fd），
   不起子进程；macOS 用 `ps -Ao pid=,ppid=,tty=,comm=` 加 `lsof -a -p <这些进程> -nP -iTCP -sTCP:LISTEN -Fpcn`。
+  `lsof` 在某个 pid 已退出 / 是僵尸时退出 1、结果照常给，按结果算；扫描真出错时同一个错误只记一行日志。
   macOS 上一次约 0.17 s CPU（约 3,700 个进程的机器，`ps` 占大头）。
 - **哪些算**：对每个 `pid:端口` 发一次 `GET /`（`Host: localhost:端口`，dev server 的 host 检查认这个），回 HTTP 的才列出来，
   顺便取首页的 `<title>`（最多 60 字）。接受连接但 3 秒没回话的（next dev 第一次编译）先列出、不带标题，下次扫描再问，最多 5 次。

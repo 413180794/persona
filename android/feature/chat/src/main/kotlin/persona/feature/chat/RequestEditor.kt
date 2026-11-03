@@ -88,6 +88,8 @@ fun RequestEditor(
     linkVisible: Boolean = false,
     /** Why this session's requests cannot be answered from the phone (its source does not approve). */
     blockedReason: String? = null,
+    /** False for a session without a terminal (a Codex thread, an agent runtime's): no 终端处理说明. */
+    terminalHelp: Boolean = true,
     onAnswer: (AnswerAction, AnswerDraft, Boolean) -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
@@ -123,5 +125,5 @@ fun RequestEditor(
             storageScope?.let { store.clear(it, request) }
             transient = AnswerDraft()
             onAnswer(action, submitted, read)
-        }, onTerminal, onExpand, items.items, readOnly, linkVisible, blockedReason = blockedReason)
+        }, onTerminal, onExpand, items.items, readOnly, linkVisible, blockedReason = blockedReason, showTerminalHelp = terminalHelp)
 }

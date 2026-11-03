@@ -14,11 +14,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import persona.core.designsystem.icons.PhIcon
+import kotlinx.coroutines.launch
 
 /** One action in a menu or action sheet. */
 @Immutable
@@ -49,16 +51,27 @@ fun JSheet(
 ) {
     val palette = PersonaTheme.palette
     val canDismiss by androidx.compose.runtime.rememberUpdatedState(dismissible)
+    // Brief's surface is its card grey, the fill of its text fields and chips: on a grey sheet they vanish (no border
+    // either), so its sheets are paper like its pages.
+    val container = if (PersonaTheme.style == AppStyle.Brief) palette.background else palette.surfaceOpaque
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = skipPartiallyExpanded, confirmValueChange = { it != SheetValue.Hidden || canDismiss })
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     ModalBottomSheet(
         onDismissRequest = { if (canDismiss) onDismiss() }, modifier = modifier,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = skipPartiallyExpanded, confirmValueChange = { it != SheetValue.Hidden || canDismiss }),
-        shape = PersonaTheme.shapes.sheetShape, containerColor = palette.surfaceOpaque, contentColor = palette.ink,
+        sheetState = sheetState,
+        shape = PersonaTheme.shapes.sheetShape, containerColor = container, contentColor = palette.ink,
         scrimColor = palette.scrim, tonalElevation = 0.dp,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(palette.ink3.copy(alpha = 0.5f))) },
     ) {
         // Opaque over a scrim: glass inside the sheet must not sample (and show through) the page behind it.
         androidx.compose.runtime.CompositionLocalProvider(LocalReadingInset provides 0.dp, LocalGlassSource provides null) {
-        Column(Modifier.fillMaxWidth().then(if (scrollable) Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()) else Modifier).padding(horizontal = pagePadding).padding(bottom = 16.dp)) {
+        Column(Modifier.fillMaxWidth()
+            // Content that grows once the sheet is open (会话信息 after it loads) would stay where the opening left the
+            // sheet, its rest below the screen and out of reach: settle the sheet again at its new height.
+            .onSizeChanged {
+                if (skipPartiallyExpanded && sheetState.targetValue == SheetValue.Expanded) scope.launch { sheetState.expand() }
+            }
+            .then(if (scrollable) Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()) else Modifier).padding(horizontal = pagePadding).padding(bottom = 16.dp)) {
             title?.let {
                 Text(it, style = PersonaTheme.type.title, color = palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(12.dp))
@@ -73,6 +86,8 @@ fun JSheet(
 @Composable
 fun JActionSheet(actions: List<JAction>, onDismiss: () -> Unit, title: String? = null, note: String? = null) {
     val palette = PersonaTheme.palette
+    // When some actions have an icon, the others keep its place, so every label starts in one column.
+    val iconColumn = actions.any { it.icon != null }
     JSheet(onDismiss, title = title) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
         actions.forEach { action ->
@@ -84,7 +99,9 @@ fun JActionSheet(actions: List<JAction>, onDismiss: () -> Unit, title: String? =
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val color = if (action.destructive) palette.danger.text else palette.ink
-                action.icon?.let { JIcon(it, null, size = 22.dp, tint = if (action.destructive) palette.danger.dot else palette.ink2); Spacer(Modifier.width(16.dp)) }
+                val icon = action.icon
+                if (icon != null) { JIcon(icon, null, size = 22.dp, tint = if (action.destructive) palette.danger.dot else palette.ink2); Spacer(Modifier.width(16.dp)) }
+                else if (iconColumn) Spacer(Modifier.width(22.dp + 16.dp))
                 Text(action.label, style = PersonaTheme.type.body, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (action.checked) JIcon(persona.core.designsystem.icons.PhIcons.Check, null, size = 18.dp, tint = palette.ink)
             }

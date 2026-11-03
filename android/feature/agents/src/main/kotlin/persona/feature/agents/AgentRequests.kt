@@ -137,6 +137,8 @@ internal fun RequestDetail(
     readOnly: Boolean = false, onTerminal: (() -> Unit)?, machine: Machine? = null,
     /** Why this session's requests cannot be answered from the phone (its source does not approve). */
     blockedReason: String? = null,
+    /** False for a session without a terminal: no 终端处理说明 in the request. */
+    terminalHelp: Boolean = true,
 ) {
     var linkVisible by remember(request) { mutableStateOf(false) }
     val feedback = LocalAppFeedback.current
@@ -153,7 +155,7 @@ internal fun RequestDetail(
                     Box(Modifier.weight(1f)) {
                         persona.feature.chat.RequestEditor(request, machine, busy = delivery != null, uncertain = delivery == RequestDelivery.Unknown,
                             online = online, readOnly = readOnly, onTerminal = onTerminal, linkVisible = linkVisible,
-                            blockedReason = blockedReason,
+                            blockedReason = blockedReason, terminalHelp = terminalHelp,
                             onAnswer = { action, draft, read -> if (!readOnly) onAnswer(request, action, draft, read) })
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

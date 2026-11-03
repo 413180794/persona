@@ -35,6 +35,8 @@ internal fun InteractionPanel(
     collapsed: Boolean = false, onCollapsedChange: (Boolean) -> Unit = {},
     /** Set when the session's source does not let the phone answer: everything is shown, nothing can be sent. */
     blockedReason: String? = null,
+    /** False for a session without a terminal (a Codex thread, an agent runtime's): no terminal to explain either. */
+    terminalHelp: Boolean = true,
 ) {
     var selected by rememberSaveable { mutableStateOf(0) }
     var full by rememberSaveable { mutableStateOf(false) }
@@ -49,7 +51,8 @@ internal fun InteractionPanel(
     val body: @Composable (Boolean) -> Unit = { complete ->
         key(request.id, request.dialog?.rev, complete) {
             RequestEditor(request, machine, busyId != null, request.id in uncertainIds, complete,
-                onTerminal = onTerminal, onExpand = { full = true }, linkVisible = linkVisible, blockedReason = blockedReason) { action, value, planRead ->
+                onTerminal = onTerminal, onExpand = { full = true }, linkVisible = linkVisible, blockedReason = blockedReason,
+                terminalHelp = terminalHelp) { action, value, planRead ->
                 AnswerBuilder.build(request, action, value, AnswerContext(fullPlanRead = planRead)).resolution?.let {
                     onResolve(request, it)
                 }
@@ -99,6 +102,8 @@ internal fun InteractionForm(
     readOnly: Boolean = false,
     linkVisible: Boolean = false,
     blockedReason: String? = null,
+    /** False for a session without a terminal: no 终端处理说明 (there is no terminal to go to). */
+    showTerminalHelp: Boolean = true,
 ) {
     val scroll = rememberScrollState()
     var planRead by rememberSaveable(interaction.id, interaction.plan) { mutableStateOf(false) }
@@ -294,7 +299,7 @@ internal fun InteractionForm(
             else -> Text("暂不支持在手机上处理这个请求，请在电脑上核对并处理。")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            JTextButton(if (onTerminal != null) RequestExpiry.terminalLabel else "终端处理说明",
+            if (onTerminal != null || showTerminalHelp) JTextButton(if (onTerminal != null) RequestExpiry.terminalLabel else "终端处理说明",
                 { password = ""; if (onTerminal != null) onTerminal() else terminalHelp = true })
             if (ApprovalPolicy.actions(AnswerEntry.Conversation, interaction.kind, false).any { it.id == ApprovalAction.Dismiss }) {
                 JTextButton("交给电脑处理", { act(AnswerAction.Dismiss) }, enabled = enabled(AnswerAction.Dismiss))

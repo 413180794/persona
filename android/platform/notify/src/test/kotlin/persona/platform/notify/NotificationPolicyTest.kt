@@ -70,6 +70,14 @@ class NotificationPolicyTest {
         assertNull(NotificationPolicy.resolution(screen, "option.unknown", null))
     }
 
+    @Test fun sayingNoComesBeforeSayingYes() {
+        // The same order as the ongoing notification and Android's dialogs: the negative button on the left.
+        assertEquals(listOf("拒绝", "允许"), NotificationPolicy.actions(interaction("permission")).map { it.label })
+        assertEquals(listOf("打回", "批准"), NotificationPolicy.actions(interaction("plan")).map { it.label })
+        // Options are choices, not yes and no: they stay in the order the question gives them.
+        assertEquals(listOf("选项 0", "选项 1", "选项 2"), NotificationPolicy.actions(interaction("question")).map { it.label })
+    }
+
     @Test fun onlyHubNotifyPostsCompletionAndOnlyVisibleConversationIsSuppressed() {
         assertEquals(Notifier.CH_DONE, NotificationPolicy.channel(NotifyEvent("done", "machine", "session")))
         assertEquals(Notifier.CH_ASSISTANT, NotificationPolicy.channel(NotifyEvent("assistant", "machine", "session")))

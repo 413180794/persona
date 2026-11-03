@@ -30,6 +30,8 @@ internal fun ChatTasks(
     onVisibilityChanged: (Boolean) -> Unit,
     onExpandFold: (Item) -> Unit,
     foldErrors: Map<String, String>,
+    /** False while the link card peeks and leaves the conversation four tenths: the bar goes, its page and state stay. */
+    showBar: Boolean = true,
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
     var target by remember { mutableStateOf<TaskProgressItem?>(null) }
@@ -70,7 +72,7 @@ internal fun ChatTasks(
             }
         }
     }
-    if (index.progress.isNotEmpty()) TaskProgressBar(index.progress) { open = true }
+    if (showBar && index.progress.isNotEmpty()) TaskProgressBar(index.progress) { open = true }
     if (origin != null) {
         JTextButton("返回查看任务前的位置", { target = null; returning = true },
             enabled = !returning, icon = PhIcons.ArrowLeft,

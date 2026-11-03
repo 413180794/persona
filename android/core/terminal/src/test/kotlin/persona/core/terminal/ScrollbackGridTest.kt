@@ -129,4 +129,14 @@ class ScrollbackGridTest {
         grid.feed("\u001B[2J\u001B[1;1H\u001B[31m$ ls\u001B[0m\u001B[2;1H中文 ok\u001B[4;1H")
         assertEquals("$ ls\n中文 ok", TerminalText.plain(grid.lines))
     }
+
+    @Test fun selectTextShowsClaudesSymbolsWithGlyphsTheFontHas() {
+        // The bundled JetBrains Mono has none of ⏺ ⏹ ⏸ ⏵ ⏴: Android drew ⏺ as an emoji tile and ⏵ as an empty box.
+        val text = "⏺ 读完了\n  ⏵⏵ accept edits on\n⏸ plan mode on · ⏹ ⏴"
+        assertEquals("● 读完了\n  ▶▶ accept edits on\n∥ plan mode on · ■ ◀", TerminalText.readable(text))
+        // One character for one: the columns of the page stay where the terminal had them.
+        assertEquals(text.length, TerminalText.readable(text).length)
+        val plain = "$ ls\n中文 ok"
+        assertTrue(TerminalText.readable(plain) === plain)
+    }
 }

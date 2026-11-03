@@ -92,8 +92,11 @@ fun PhotoThumbnail(
     description: String = "照片",
 ) {
     val palette = PersonaTheme.palette
+    // The photos sit in the user's bubble; brief's wells are that bubble's own colour (sunken == surface), so an empty
+    // box (loading, failed) would not show there: it takes the stronger fill instead.
+    val well = if (palette.sunken == palette.surface) palette.surfaceStrong else palette.sunken
     Box(
-        modifier.size(if (single) SinglePhoto else GroupPhoto).clip(PersonaTheme.shapes.controlShape).background(palette.sunken)
+        modifier.size(if (single) SinglePhoto else GroupPhoto).clip(PersonaTheme.shapes.controlShape).background(well)
             .clickable(role = Role.Button, onClickLabel = if (failed) "重试" else "查看大图", onClick = if (failed) onRetry else onClick)
             .semantics { contentDescription = if (failed) "$description，加载失败" else description },
         contentAlignment = Alignment.Center,

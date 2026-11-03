@@ -15,8 +15,14 @@ import kotlinx.coroutines.withTimeout
 /** Resolve through the shared interaction center; ambiguous failures are never retried automatically. */
 open class ActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
         if (intent.action == RESUME) {
-            if (!context.getSystemService(KeyguardManager::class.java).isDeviceLocked) Notify.resume(context)
+            // 恢复 needs an unlock, which the system reports a moment after it let the button through.
+            val pending = goAsync()
+            CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
+                try { if (!lockedAfterUnlockSettles({ keyguard.isDeviceLocked })) Notify.resume(context) }
+                finally { pending.finish() }
+            }
             return
         }
         if (intent.action != RESOLVE) return
@@ -47,7 +53,7 @@ open class ActionReceiver : BroadcastReceiver() {
                             }
                         },
                     ).execute(id, action, reply,
-                        locked = { context.getSystemService(KeyguardManager::class.java).isDeviceLocked },
+                        locked = { lockedAfterUnlockSettles({ keyguard.isDeviceLocked }) },
                         onInteraction = { session = it.sessionKey },
                         expiresAt = intent.getStringExtra(EXTRA_EXPIRES_AT),
                         onProgress = { if (!quiet) dependencies.notifier().pending(id, session, it, assistant) },

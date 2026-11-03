@@ -52,6 +52,13 @@ open class HubService : Service() {
     private var observing = false
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
+    /**
+     * What the ongoing notification shows now. Every start promotes with it (the app coming to the front starts the
+     * service again): a summary made afresh would bring back the finished agents the five minutes already put away, and
+     * the collector below, seeing nothing new, would leave them there until the fleet changed.
+     */
+    private var shown: OngoingStatus? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -59,8 +66,11 @@ open class HubService : Service() {
         // Promote before deciding anything: stopping first (not paired, stopped by the user, or a stop that came while
         // this start was pending) is what crashed the app (ForegroundStarts). stopSelf(startId) leaves a newer start alone.
         try {
-            ServiceCompat.startForeground(this, Notifier.ONGOING_ID, notifier.ongoing(connection.state.value, fleet.state.value),
+            val status = shown ?: OngoingStatus.from(connection.state.value, fleet.state.value,
+                details = notificationPreferences.preferences.value?.lockDetails == true)
+            ServiceCompat.startForeground(this, Notifier.ONGOING_ID, notifier.ongoing(status),
                 if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
+            shown = status
         } catch (failure: RuntimeException) {
             Log.w(TAG, "Foreground promotion failed: ${failure.javaClass.simpleName}")
             starts.promoted()
@@ -86,19 +96,14 @@ open class HubService : Service() {
                 // the same content is drawn (visibility, promotion), so a change redraws.
                 launch {
                     notificationPreferences.preferences.collect { preferences ->
-                        notifier.updateOngoing(OngoingStatus.from(connection.state.value, fleet.state.value, quiet.value,
+                        show(OngoingStatus.from(connection.state.value, fleet.state.value, quiet.value,
                             details = preferences?.lockDetails == true))
                     }
                 }
-                var displayed = OngoingStatus.from(connection.state.value, fleet.state.value,
-                    details = notificationPreferences.preferences.value?.lockDetails == true)
                 combine(connection.state, fleet.state, quiet, notificationPreferences.preferences) { state, snapshot, done, preferences ->
                     OngoingStatus.from(state, snapshot, done, details = preferences?.lockDetails == true)
                 }.throttleOngoing().collect { status ->
-                    if (status != displayed) {
-                        notifier.updateOngoing(status)
-                        displayed = status
-                    }
+                    if (status != shown) show(status)
                 }
             }
             scope.launch {
@@ -129,6 +134,18 @@ open class HubService : Service() {
             connection.reconnect()
         }
         return START_STICKY
+    }
+
+    /**
+     * Redraws the ongoing notification, unless the pairing is gone and the service is on its way out. Unpairing changes
+     * the connection state and the preferences just before the service stops, and the system may handle a post that
+     * late after stopForeground has taken the notification away: it stayed, 「等待网络」, ongoing and impossible to
+     * dismiss (2026-11-02 on the emulator).
+     */
+    private fun show(status: OngoingStatus) {
+        if (!pairing.isPaired.value) return
+        notifier.updateOngoing(status)
+        shown = status
     }
 
     private fun suppressed(session: SessionKey) =

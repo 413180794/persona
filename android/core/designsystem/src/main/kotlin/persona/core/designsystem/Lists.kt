@@ -65,7 +65,8 @@ fun JSectionHeader(
     val style = PersonaTheme.style
     Row(
         modifier.fillMaxWidth().then(if (onClick != null) Modifier.combinedClickable(role = Role.Button, onClick = onClick) else Modifier)
-            .padding(top = if (style == AppStyle.Board) 18.dp else 26.dp, bottom = 10.dp, start = if (style == AppStyle.Brief) 0.dp else 4.dp)
+            .padding(top = if (style == AppStyle.Board) 18.dp else 26.dp, bottom = 10.dp,
+                start = if (style == AppStyle.Brief) 0.dp else 4.dp, end = if (style == AppStyle.Brief) 0.dp else 4.dp)
             .semantics { heading() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -73,15 +74,19 @@ fun JSectionHeader(
             Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(palette.status(status).dot))
             Spacer(Modifier.width(8.dp))
         }
-        Text(
-            title,
-            style = if (style == AppStyle.Glass) PersonaTheme.type.caption.copy(fontWeight = FontWeight.SemiBold, fontSize = androidx.compose.ui.unit.TextUnit(14f, androidx.compose.ui.unit.TextUnitType.Sp))
-            else PersonaTheme.type.headline.copy(fontSize = androidx.compose.ui.unit.TextUnit(15f, androidx.compose.ui.unit.TextUnitType.Sp)),
-            color = if (style == AppStyle.Glass) palette.ink2 else palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        count?.let { Spacer(Modifier.width(6.dp)); Text("$it", style = PersonaTheme.type.micro, color = palette.ink3) }
-        Spacer(Modifier.weight(1f))
+        // The title and its count take the free width, so the trailing text and the action sit at the end of the row
+        // (two weights in one row split the space, which left them near the middle and cut long titles at half width).
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                style = if (style == AppStyle.Glass) PersonaTheme.type.caption.copy(fontWeight = FontWeight.SemiBold, fontSize = androidx.compose.ui.unit.TextUnit(14f, androidx.compose.ui.unit.TextUnitType.Sp))
+                else PersonaTheme.type.headline.copy(fontSize = androidx.compose.ui.unit.TextUnit(15f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                color = if (style == AppStyle.Glass) palette.ink2 else palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            count?.let { Spacer(Modifier.width(6.dp)); Text("$it", style = PersonaTheme.type.micro, color = palette.ink3) }
+        }
+        if (trailing != null || action != null) Spacer(Modifier.width(8.dp))
         trailing?.let { Text(it, style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1) }
         action?.invoke(this)
     }
@@ -426,7 +431,8 @@ fun JSwipeActions(
             scope.launch { state.reset() }
         },
         backgroundContent = {
-            // Only while dragging: translucent rows would otherwise show the action colour underneath.
+            // Only while dragging, and only in the gap the row leaves: rows without a fill of their own (the Agents
+            // tree in glass and brief) and translucent ones would otherwise show the action colour under their words.
             val action = when (state.dismissDirection) {
                 SwipeToDismissBoxValue.StartToEnd -> start
                 SwipeToDismissBoxValue.EndToStart -> end
@@ -434,14 +440,26 @@ fun JSwipeActions(
             }
             if (action != null) {
                 val tone = if (action.destructive) palette.danger else palette.status(action.status)
-                Row(
-                    Modifier.fillMaxSize().clip(PersonaTheme.shapes.cardShape).background(tone.dot).padding(horizontal = 24.dp),
-                    horizontalArrangement = if (state.dismissDirection == SwipeToDismissBoxValue.EndToStart) Arrangement.End else Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    JIcon(action.icon, null, size = 22.dp, tint = tone.onDot, selected = true)
-                    Spacer(Modifier.width(8.dp))
-                    Text(action.label, style = PersonaTheme.type.label, color = tone.onDot, maxLines = 1)
+                val fromEnd = state.dismissDirection == SwipeToDismissBoxValue.EndToStart
+                val gap = with(androidx.compose.ui.platform.LocalDensity.current) {
+                    kotlin.math.abs(runCatching { state.requireOffset() }.getOrDefault(0f)).toDp()
+                }
+                Box(Modifier.fillMaxSize(), contentAlignment = if (fromEnd) Alignment.CenterEnd else Alignment.CenterStart) {
+                    Box(
+                        Modifier.fillMaxHeight().width(gap).clip(PersonaTheme.shapes.cardShape).background(tone.dot),
+                        contentAlignment = if (fromEnd) Alignment.CenterEnd else Alignment.CenterStart,
+                    ) {
+                        // The words keep their size and show as the gap opens.
+                        Row(
+                            Modifier.wrapContentWidth(if (fromEnd) Alignment.End else Alignment.Start, unbounded = true)
+                                .padding(horizontal = 24.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            JIcon(action.icon, null, size = 22.dp, tint = tone.onDot, selected = true)
+                            Spacer(Modifier.width(8.dp))
+                            Text(action.label, style = PersonaTheme.type.label, color = tone.onDot, maxLines = 1)
+                        }
+                    }
                 }
             }
         },

@@ -38,7 +38,8 @@ internal fun DiffNavigation(diff: ToolDiff, list: LazyListState, expand: () -> U
 
 /** Reverse-layout lists need an overlay; regular sticky headers would attach to the wrong edge. */
 @Composable
-internal fun WorkCollapseOverlay(lines: List<ChatLine>, list: LazyListState, outboxCount: Int, onCollapse: (String) -> Unit) {
+internal fun WorkCollapseOverlay(lines: List<ChatLine>, list: LazyListState, outboxCount: Int, onCollapse: (String) -> Unit,
+    modifier: Modifier = Modifier) {
     val byId = remember(lines) { lines.associateBy { it.id } }
     val current by remember(lines, list) {
         derivedStateOf {
@@ -66,6 +67,6 @@ internal fun WorkCollapseOverlay(lines: List<ChatLine>, list: LazyListState, out
     }
     current?.let { work ->
         val count = lines.filterIsInstance<ChatLine.End>().firstOrNull { it.groupId == work.id }?.count ?: work.steps.size
-        JChip("收起 $count 步", onClick = { pending = work.id; onCollapse(work.id) }, icon = PhIcons.CaretUp)
+        JChip("收起 $count 步", modifier, onClick = { pending = work.id; onCollapse(work.id) }, icon = PhIcons.CaretUp)
     }
 }

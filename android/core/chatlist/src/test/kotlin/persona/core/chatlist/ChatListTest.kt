@@ -36,5 +36,8 @@ class ChatListTest {
         assertTrue(shouldPrefetch(true, true, false, 94, 100, 5))
         assertEquals(-672, lastLineScrollOffset(700, 28))
         assertEquals(0, lastLineScrollOffset(20, 28))
+        // Under a 100px top bar the last line sits right below it.
+        assertEquals(-572, lastLineScrollOffset(700, 28, topPadding = 100))
+        assertEquals(0, lastLineScrollOffset(120, 28, topPadding = 100))
     }
 }

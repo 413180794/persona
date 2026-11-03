@@ -84,10 +84,26 @@ class ShortcutTextTest {
     }
 
     @Test fun widgetRowsFollowItsHeight() {
-        assertEquals(0, WidgetLayout.rows(100f))
-        assertEquals(1, WidgetLayout.rows(150f))
-        assertEquals(2, WidgetLayout.rows(200f))
-        assertEquals(3, WidgetLayout.rows(260f))
+        // One launcher row, then two and three on a phone (2026-11-02, a 3 × 2 widget was 234dp tall).
+        assertEquals(0, WidgetLayout.rows(117f))
+        assertEquals(1, WidgetLayout.rows(160f))
+        assertEquals(2, WidgetLayout.rows(234f))
+        assertEquals(3, WidgetLayout.rows(351f))
+        // Nothing is cut off: an agent fits only with room for 「+N 个」 below it.
+        assertEquals(0, WidgetLayout.rows(150f))
+        assertEquals(1, WidgetLayout.rows(202f))
+        assertEquals(2, WidgetLayout.rows(247f))
+        // Larger text takes more of the same height.
+        assertEquals(1, WidgetLayout.rows(234f, fontScale = 1.3f))
+        assertEquals(0, WidgetLayout.rows(160f, fontScale = 1.3f))
+        // The mark above the counts goes first when the widget is squeezed below its usual height.
+        assertTrue(WidgetLayout.mark(100f))
+        assertFalse(WidgetLayout.mark(84f))
+        assertFalse(WidgetLayout.mark(100f, fontScale = 1.3f))
+        // Unpaired, the hint under 还没配对 may wrap: one launcher row high (about 109dp) keeps it whole without the mark.
+        assertTrue(WidgetLayout.mark(109f))
+        assertFalse(WidgetLayout.mark(109f, captionLines = 2))
+        assertTrue(WidgetLayout.mark(120f, captionLines = 2))
     }
 }
 

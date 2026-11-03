@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -238,6 +239,71 @@ func TestScanPortsFindsTheAgentsServer(t *testing.T) {
 	n.scanPorts(ctx)
 	if slices.ContainsFunc(n.portsOf("w1:p1"), func(p proto.Port) bool { return p.Port == port }) {
 		t.Fatal("a stopped server is still listed")
+	}
+}
+
+// lsof exits 1 when a pid it was given is gone or a zombie (an agent's short command that exited between ps and
+// lsof); the others' listeners are still found (#541).
+func TestLsofListenersWithAGonePid(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("lsof lists listeners on macOS")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	reaped := exec.Command("true")
+	if err := reaped.Run(); err != nil {
+		t.Fatal(err)
+	}
+	zombie := exec.Command("true")
+	if err := zombie.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer zombie.Wait()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		out, _ := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(zombie.Process.Pid)).Output()
+		if strings.HasPrefix(strings.TrimSpace(string(out)), "Z") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d is not a zombie: %q", zombie.Process.Pid, out)
+		}
+	}
+	ls, err := lsofListeners(context.Background(), []int{os.Getpid(), zombie.Process.Pid, reaped.Process.Pid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(ls, func(l listener) bool { return l.pid == os.Getpid() && l.port == port }) {
+		t.Fatalf("port %d not found in %+v", port, ls)
+	}
+}
+
+// A scan that keeps failing logs once, and once more when scans work again (#541: a line every 4 seconds).
+func TestScanPortsLogsAFailureOnce(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("on Linux the scan reads /proc and has no command to fail")
+	}
+	var logs strings.Builder
+	h := &procHost{bareHost: bareHost{kind: host.Herdr}, pids: []int{1 << 30, os.Getpid()}}
+	n := &Node{hosts: host.NewRegistry(h), agents: map[string]host.Agent{"s1": {Agent: "claude", PaneID: "w1:p1"}},
+		logger: log.New(&logs, "", 0)}
+	ctx := context.Background()
+	path := os.Getenv("PATH")
+	t.Setenv("PATH", t.TempDir()) // no ps, no lsof
+	for range 3 {
+		n.scanPorts(ctx)
+	}
+	if got := strings.Count(logs.String(), "\n"); got != 1 {
+		t.Fatalf("3 failed scans logged %d lines:\n%s", got, logs.String())
+	}
+	t.Setenv("PATH", path)
+	n.scanPorts(ctx)
+	n.scanPorts(ctx)
+	if lines := strings.Split(strings.TrimSpace(logs.String()), "\n"); len(lines) != 2 || lines[1] != "ports: scanning again" {
+		t.Fatalf("after recovering:\n%s", logs.String())
 	}
 }
 

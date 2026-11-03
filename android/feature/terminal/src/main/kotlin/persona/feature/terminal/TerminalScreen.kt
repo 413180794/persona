@@ -61,8 +61,9 @@ fun TerminalScreen(model: TerminalViewModel, onBack: () -> Unit, sessionTitle: S
     JPage(sessionTitle, modifier = Modifier.imePadding(), topBar = {
         JTopBar(sessionTitle, subtitle = terminalSubtitle(state), onBack = onBack, actions = {
             val watching = active || state.control == TerminalControl.Starting
+            // Taking over needs the stream: a screen read once a second (an old hub or node) can only be watched.
             JChip(when { active -> "已接管"; watching -> "接管中"; else -> "只读" }, selected = active,
-                onClick = if (watching) ({ model.watch() }) else if (state.online) ({ model.takeOver() }) else null)
+                onClick = if (watching) ({ model.watch() }) else if (state.online && state.streaming) ({ model.takeOver() }) else null)
             JIconButton(PhIcons.Copy, "选择文本", { selecting = model.screenText() }, enabled = state.loaded)
             JIconButton(PhIcons.SlidersHorizontal, "显示设置", { display = true })
         })

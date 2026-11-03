@@ -144,17 +144,21 @@ class DemoHub(
             code = "demo_missing", delivered = "no", error = DemoText.missing,
         )
         notice()
-        append(request.session, request.text)
+        append(request.session, request.text, request.clientMessageId)
         accepted[request.clientMessageId] = request
         MessageTransportResult.Accepted
     }
 
-    private suspend fun append(key: SessionKey, text: String?) {
+    /**
+     * The user's message keeps its client message id as its item id, as the hub records it: the chat hides the outbox
+     * copy once the transcript has that id, so a random id left a second 「已送达，等待对话记录」 bubble for ever.
+     */
+    private suspend fun append(key: SessionKey, text: String?, id: String? = null) {
         val old = list(key)
         val previousSeq = old.lastOrNull()?.seq ?: 0
         val timestamp = now().toString()
         val newItems = buildList {
-            if (text != null) add(Item(UUID.randomUUID().toString(), previousSeq + 1, timestamp, "user", "text", text))
+            if (text != null) add(Item(id ?: UUID.randomUUID().toString(), previousSeq + 1, timestamp, "user", "text", text))
             add(Item(UUID.randomUUID().toString(), previousSeq + size + 1, timestamp, "assistant", "text", DemoText.reply))
         }
         itemLists[key.sessionId] = old + newItems

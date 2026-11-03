@@ -53,19 +53,19 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     val pending = remember { mutableStateMapOf<String, Boolean>() }
     val records = snapshot.records.associateBy { it.item.id }
     val interactions = snapshot.interactions.associateBy { it.id }
-    val result = buildInboxList(
-        items = orderHubInbox(snapshot.records.map { record ->
-            pending[record.item.id]?.let { done ->
-                record.item.copy(doneAt = if (done) java.time.Instant.now().toString() else null)
-            } ?: record.item
-        }),
-        interactions = snapshot.interactions,
-        sessions = snapshot.sessions,
-        mutes = snapshot.mutes,
-        settings = InboxListSettings(source, kind, query, expanded.toSet() + section),
+    val items = orderHubInbox(snapshot.records.map { record ->
+        pending[record.item.id]?.let { done ->
+            record.item.copy(doneAt = if (done) java.time.Instant.now().toString() else null)
+        } ?: record.item
+    })
+    fun list(settings: InboxListSettings) = buildInboxList(
+        items = items, interactions = snapshot.interactions, sessions = snapshot.sessions, mutes = snapshot.mutes, settings = settings,
     )
+    val result = list(InboxListSettings(source, kind, query, expanded.toSet() + section))
     fun working(row: InboxRow) = row.type == InboxRowType.Item &&
         records[row.id]?.agent?.state in setOf("running", "queued")
+    // The summary speaks for the whole inbox, so it reads the unfiltered list.
+    val overall = if (query.isEmpty() && source.isEmpty() && kind.isEmpty()) result else list(InboxListSettings())
     val workingRows = result.groups.filter { it.id != "done" }.flatMap { it.rows }.filter(::working)
     val triageGroups = result.groups.mapNotNull { group ->
         if (group.id == "done") group else {
@@ -80,7 +80,6 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     }
     val groups = displayGroups.filter { section.isEmpty() || it.id == section }
     val needsCount = displayGroups.firstOrNull { it.id == "action" }?.count ?: 0
-    val workingCount = workingRows.size
     val doneCount = result.groups.firstOrNull { it.id == "done" }?.count ?: 0
     val allCount = result.groups.sumOf { it.count }
     val sources = listOf("" to "所有来源") + snapshot.records.map { record ->
@@ -137,11 +136,13 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             JAction(label, checked = kind == value) { filter(currentFilters.copy(kind = value)) }
         })
     val failedEmpty = snapshot.records.isEmpty() && !snapshot.loading && (error ?: snapshot.error) != null
-    listStates.SaveableStateProvider(listOf(query, source, kind, section, expanded.joinToString()).toString()) {
+    // One remembered list per filter. The query and the folds stay out of the key: a new key recreates the page, so
+    // typing would drop the search field's focus (and the keystroke) and folding a section would jump to the top.
+    listStates.SaveableStateProvider(listOf(source, kind, section).toString()) {
         val scroll = rememberLazyListState()
         JListPage(
             title = "收件箱",
-            summary = if (needsCount == 0) "都处理完了" else "$needsCount 条要回，Persona 在办 $workingCount 件",
+            summary = inboxSummary(overall, ::working),
             subtitle = inboxTitle(connection).takeIf { connection != ConnectionState.Online },
             titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
             onTitleClick = if (connection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
@@ -258,6 +259,17 @@ internal fun Avatar(text: String, needsYou: Boolean = false) {
 @Composable
 internal fun StatusText(text: String, isError: Boolean = false) {
     JNotice(text, Modifier.padding(vertical = Tokens.Space.s), status = if (isError) Status.NeedsYou else Status.Unknown)
+}
+
+/**
+ * The page's one line, for the whole inbox: give it the unfiltered list, since a search or a filter that shows nothing
+ * is not 「都处理完了」. Rows an agent is working on are Persona's, not the user's to answer.
+ */
+internal fun inboxSummary(inbox: InboxListResult, working: (InboxRow) -> Boolean): String {
+    val open = inbox.groups.filter { it.id != "done" }
+    val busy = open.sumOf { group -> group.rows.count(working) }
+    val needs = open.firstOrNull { it.id == "action" }?.rows?.count { !working(it) } ?: 0
+    return if (needs == 0) "都处理完了" else "$needs 条要回，Persona 在办 $busy 件"
 }
 
 private fun kindLabel(kind: String) = when (kind) {

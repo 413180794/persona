@@ -27,7 +27,8 @@ internal class NotificationActionExecutor(
         id: String,
         key: String,
         reply: String?,
-        locked: () -> Boolean,
+        /** Whether the phone is locked; may wait for an unlock in progress to land (lockedAfterUnlockSettles). */
+        locked: suspend () -> Boolean,
         onInteraction: (Interaction) -> Unit = {},
         expiresAt: String? = null,
         onProgress: (PendingStatus) -> Unit = {},

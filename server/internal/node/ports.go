@@ -48,6 +48,9 @@ type portState struct {
 	byPane map[string][]proto.Port // pane -> its ports, as last found
 	probes map[string]portProbe    // "pid:port" -> what asking it found
 	kick   chan struct{}
+	// scanErr: the last scan's error, logged when it first happens and when scans work again, not every scan
+	// (only scanPorts, on watchPorts' goroutine, touches it).
+	scanErr string
 }
 
 type portProbe struct {
@@ -127,9 +130,16 @@ func (n *Node) scanPorts(ctx context.Context) (changed bool) {
 	if len(roots) > 0 {
 		var err error
 		if found, err = scanListeners(ctx, roots); err != nil {
-			n.logger.Printf("ports: %v", err)
+			if e := err.Error(); e != n.ports.scanErr {
+				n.logger.Printf("ports: %v (logged again only if it changes)", err)
+				n.ports.scanErr = e
+			}
 			return false
 		}
+	}
+	if n.ports.scanErr != "" {
+		n.logger.Printf("ports: scanning again")
+		n.ports.scanErr = ""
 	}
 	next := map[string][]proto.Port{}
 	for pane, ls := range found {
@@ -434,8 +444,11 @@ func lsofListeners(ctx context.Context, pids []int) ([]listener, error) {
 		list[i] = strconv.Itoa(p)
 	}
 	out, err := exec.CommandContext(ctx, "lsof", "-a", "-p", strings.Join(list, ","), "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpcn").Output()
+	// lsof exits 1 when one of the pids has nothing to list: none listens, or one is gone or a zombie (ps saw it, a
+	// short-lived command has exited since) while it still prints what the others have. Its complaints go to
+	// stderr, so stdout is the listing either way.
 	var ee *exec.ExitError
-	if err != nil && !(errors.As(err, &ee) && len(out) == 0) { // lsof exits 1 when it found nothing
+	if err != nil && (ctx.Err() != nil || !errors.As(err, &ee) || ee.ExitCode() != 1) {
 		return nil, fmt.Errorf("lsof: %w", err)
 	}
 	return parseLsof(string(out)), nil

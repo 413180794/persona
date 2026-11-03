@@ -115,7 +115,7 @@ internal fun NotificationPreferences(controller: DeviceSettingsState, available:
             item {
                 JGroupItem(GroupPosition.of(1, 2)) {
                     JSwitchRow("锁屏显示详情", prefs.lockDetails, { scope.launch { controller.savePreferences(prefs.copy(lockDetails = it)) } }, enabled = enabled)
-                    SettingsCaption("关闭后，锁屏隐藏通知详情。", Modifier.padding(horizontal = Tokens.Space.m).padding(bottom = Tokens.Space.m))
+                    SettingsCaption("关闭后，常驻通知一律不显示 Agent 名字和请求内容。", Modifier.padding(horizontal = Tokens.Space.m).padding(bottom = Tokens.Space.m))
                 }
             }
         }

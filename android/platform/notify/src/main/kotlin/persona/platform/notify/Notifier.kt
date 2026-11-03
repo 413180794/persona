@@ -17,11 +17,9 @@ import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import persona.core.designsystem.PendingStatus
 import persona.core.designsystem.Status
-import persona.core.contracts.FleetState
 import persona.core.contracts.Interaction
 import persona.core.contracts.NotifyEvent
 import persona.core.contracts.SessionKey
-import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.DoneNotification
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
@@ -81,13 +79,11 @@ class Notifier @Inject constructor(
         return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    fun ongoing(state: ConnectionState, fleet: FleetState = FleetState()): Notification =
-        ongoing(OngoingStatus.from(state, fleet, details = showLockDetails))
-
     internal fun ongoing(status: OngoingStatus): Notification {
         val icon = persona.core.designsystem.R.drawable.ic_stat
-        // Locked, without 锁屏显示详情: counts and 「有个授权等你」 only, never an agent's name or what it asks. (Without it the
-        // private version is just as plain, see OngoingStatus.from: a phone may show that one on its lock screen too.)
+        // The lock screen's version: counts and 「有个授权等你」 only, never an agent's name or what it asks. The private one
+        // names agents only with 锁屏显示详情 (OngoingStatus.from: a phone may show it on the lock screen too), and the system
+        // shows it there only where the user lets sensitive content show; elsewhere this one.
         val public = NotificationCompat.Builder(context, CH_STATUS).setSmallIcon(icon)
             .setContentTitle(status.title).setContentText(status.publicText)
             .setShowWhen(false)
@@ -97,8 +93,9 @@ class Notifier @Inject constructor(
             .setContentText(status.text)
             .setSubText(status.subText)
             .apply { status.lines?.let { setStyle(NotificationCompat.BigTextStyle().bigText(it)) } }
-            .setVisibility(if (showLockDetails) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_PRIVATE)
-            .apply { if (!showLockDetails) setPublicVersion(public) }
+            // Never public: with 锁屏显示详情 on, a public notification put names on lock screens set to hide sensitive content.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(public)
             .setCategory(when {
                 status.needsYou > 0 -> NotificationCompat.CATEGORY_STATUS
                 status.summary -> NotificationCompat.CATEGORY_PROGRESS
@@ -165,8 +162,6 @@ class Notifier @Inject constructor(
         return NotificationCompat.Action.Builder(0, button.label, pending)
             .setAuthenticationRequired(button.authenticationRequired).build()
     }
-
-    fun updateOngoing(state: ConnectionState, fleet: FleetState) = post(null, ONGOING_ID, ongoing(state, fleet))
 
     internal fun updateOngoing(status: OngoingStatus) = post(null, ONGOING_ID, ongoing(status))
 

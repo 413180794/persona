@@ -6,15 +6,19 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import persona.core.contracts.Interaction
@@ -165,6 +169,10 @@ fun ApproveFirstDialog(
 ) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
+    // The window shows nothing but the dialog, over the launcher: the design system's scrim sets it apart from the home
+    // screen and gives the status bar's icons (light in dark mode) a background they can be read on, whatever the
+    // wallpaper. Without it, a light wallpaper left them white on white.
+    Box(Modifier.fillMaxSize().background(palette.scrim))
     when (state) {
         ApproveState.Loading -> JDialog(onDismiss, ShortcutText.TITLE, content = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {

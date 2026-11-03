@@ -80,4 +80,17 @@ object TerminalText {
 
     /** A line of plain text per row, without the blank lines at the end: columns line up in a monospaced font. */
     fun plain(rows: List<TermRow>): String = rows.joinToString("\n") { TerminalGrid.plain(it) }.trimEnd()
+
+    /**
+     * [text] for showing in the monospaced face: Claude Code's ⏺ ⏹ ⏸ ⏵ ⏴ become ● ■ ∥ ▶ ◀, which the bundled
+     * JetBrains Mono has. It has none of the former, so Android drew ⏺ as a coloured emoji tile and ⏵ as an empty box
+     * (the canvas draws them as shapes, [BoxDrawing.symbol]). One cell each either way, so columns still line up; what
+     * is copied stays the terminal's own text.
+     */
+    fun readable(text: String): String {
+        if (text.none { it in shown }) return text
+        return buildString(text.length) { text.forEach { append(shown[it] ?: it) } }
+    }
+
+    private val shown = mapOf('⏺' to '●', '⏹' to '■', '⏸' to '∥', '⏵' to '▶', '⏴' to '◀')
 }

@@ -9,6 +9,9 @@
   在那台 Mac 上装常驻 node（`scripts/deploy/node-launchd.sh install`，`docs/server.md`「常驻 node」）。
 - Go 的 `UnixListener.Close()` 默认会删掉 socket 文件：重新部署时旧 node 退出会把新 node 的 `~/.jarvis/node.sock` 删掉，
   hook / MCP 全部静默失效（hook 连不上就放行给 TUI）。已 `SetUnlinkOnClose(false)` 并每 15 秒自检重建。
+- macOS 的 `lsof -p a,b,c` 只要其中一个 pid 已经退出或是僵尸就退出 1，但照样把其余进程的结果打到 stdout（2026-11-03，#541）：
+  pid 没在监听不算（退出 0）。端口扫描从 `ps` 到 `lsof` 之间，Agent 跑完的短命令常常就没了，曾经每次都按出错丢掉结果，端口列表冻住、日志每 4 秒一行。
+  `lsof` 的抱怨只写 stderr，退出 1 时照常解析 stdout；同一个错误只记一次。
 - hub 的内存状态随时会被别的 agent 重新部署清掉（2026-10-25 两分钟内被部署三次）：跨请求的流程（比如 OAuth state）要自包含或落库。
 - 代理视频 / 音频必须转发 Range / Content-Range（AVPlayer 先要 2 个字节，拿到整个文件就拒播）；`URL.appending(path:)` 会把 `%`
   再编码一次，ID 里带 `/` 的路径要用 `percentEncodedPath` 自己拼。

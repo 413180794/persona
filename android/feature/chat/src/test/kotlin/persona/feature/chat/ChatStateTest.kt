@@ -60,6 +60,32 @@ class ChatStateTest {
         assertTrue(timeline.lines(updated, newerUser.id, emptySet()).lines.any { it.holds(newerUser.id) })
     }
 
+    @Test fun aFoldOpenedWhileReadingHistoryCountsEachStepOnce() {
+        val timeline = ChatTimeline()
+        val user = Item("user#0", 10, role = "user", kind = "text", text = "先出个计划")
+        val fold = Item("fold:plan#0", 11, role = "assistant", kind = "fold",
+            fold = Fold(items = 4, tools = 2, throughSeq = 14, throughId = "asked#0"))
+        val answer = Item("answer#0", 15, role = "assistant", kind = "text", text = "补好了")
+        timeline.freeze(listOf(user, fold, answer), null)
+        // Opening the fold: the store swaps it for its work, and the timeline is told to do the same.
+        val work = listOf(
+            Item("plan#0", 11, role = "assistant", kind = "tool_use", toolUseId = "p", toolName = "ExitPlanMode"),
+            Item("planned#0", 12, role = "user", kind = "tool_result", toolUseId = "p", text = "approved"),
+            Item("ask#0", 13, role = "assistant", kind = "tool_use", toolUseId = "q", toolName = "AskUserQuestion"),
+            Item("asked#0", 14, role = "user", kind = "tool_result", toolUseId = "q", text = "answered"),
+        )
+        timeline.unfold(fold, work)
+        val store = listOf(user) + work + answer
+        val closed = timeline.lines(store, null, emptySet()).lines.filterIsInstance<ChatLine.Work>().single()
+        assertEquals(2, closed.steps.size)
+        assertEquals("做了 2 步", workSummary(closed, null))
+        val open = timeline.lines(store, null, setOf(closed.id)).lines
+        assertEquals(2, open.filterIsInstance<ChatLine.Step>().size)
+        assertEquals(2, open.filterIsInstance<ChatLine.End>().single().count)
+        assertEquals(store.map { it.id }.toSet(), timeline.searchItems(store).map { it.id }.toSet())
+        assertEquals(store.size, timeline.searchItems(store).size)
+    }
+
     @Test fun statusPriorityAndApprovalRulesUseDomainPolicy() {
         val session = Session(sessionId = "session", status = "working")
         val key = SessionKey("machine", "session")

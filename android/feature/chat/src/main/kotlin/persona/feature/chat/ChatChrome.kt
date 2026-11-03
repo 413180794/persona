@@ -157,10 +157,14 @@ internal fun ChatHeader(
 /** A scrollable sheet until JActionSheet supports long action lists. */
 @Composable
 internal fun ChatActionsSheet(actions: List<JAction>, onDismiss: () -> Unit, title: String) {
+    // Actions without an icon keep the icon's place (its 22dp and the 16dp after it, less the 14dp JRow puts after a
+    // leading slot), so every label starts in one column.
+    val iconColumn = actions.any { it.icon != null }
     JSheet(onDismiss = onDismiss, title = title) {
         LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(bottom = 16.dp)) {
             items(actions) { action ->
                 JRow(action.label, leadingIcon = action.icon, enabled = action.enabled, destructive = action.destructive,
+                    leading = if (action.icon == null && iconColumn) ({ Spacer(Modifier.width(24.dp)) }) else null,
                     chevron = false, onClick = { onDismiss(); action.onClick() })
             }
         }
