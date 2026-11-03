@@ -42,13 +42,24 @@ PY
   echo "created $NAME"
 fi
 docker start "$NAME" >/dev/null
+# The port Postgres listens on inside the container, for the pg_isready / psql / createdb run there (they default to
+# 5432): 5432 in the container created above (published as 127.0.0.1:$PORT), but one on the host's network
+# (--network host, where publishing a port does not work) listens on the port the hub connects to, database_url's.
+INNER=5432
+if [ "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$NAME" 2>/dev/null)" = host ]; then
+  INNER=$(python3 -c 'import sys, urllib.parse as u
+try: print(u.urlsplit(sys.argv[1]).port or 5432)
+except ValueError: print(5432)' "$(url)")
+fi
+in_db() { docker exec -e PGPORT="$INNER" "$NAME" "$@"; }
 for _ in $(seq 1 30); do
-  docker exec "$NAME" pg_isready -U jarvis -d jarvis >/dev/null 2>&1 && break
+  in_db pg_isready -U jarvis -d jarvis >/dev/null 2>&1 && break
   sleep 1
 done
-docker exec "$NAME" pg_isready -U jarvis -d jarvis >/dev/null
+ready=$(in_db pg_isready -U jarvis -d jarvis 2>&1) ||
+  { echo "postgres in $NAME is not ready on port $INNER inside the container after 30s: $ready" >&2; exit 1; }
 # Throwaway database for scripts/test/test-server.sh.
-docker exec "$NAME" psql -U jarvis -d jarvis -tAc "SELECT 1 FROM pg_database WHERE datname='jarvis_test'" | grep -q 1 ||
-  docker exec "$NAME" createdb -U jarvis jarvis_test
+in_db psql -U jarvis -d jarvis -tAc "SELECT 1 FROM pg_database WHERE datname='jarvis_test'" | grep -q 1 ||
+  in_db createdb -U jarvis jarvis_test
 [ -n "$(url)" ] || { echo "hub.json has no database_url" >&2; exit 1; }
 echo "postgres ready on 127.0.0.1:$PORT"
