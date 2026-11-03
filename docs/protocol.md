@@ -404,6 +404,9 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | POST | `/api/v1/task-plans/{id}/start` | 开始计划 `{"tasks"?:[PlanTask],"remember"?:bool}`：`tasks` 按下标覆盖用户在卡片上改过的字段（空的不改），`remember` 记住「这类以后直接开」；每个任务建一个待办（`origin`、`plan_id`）、在后台开 Agent → 200 `{"plan":TaskPlan}`；已开始或不开了 409，不存在 404，只读设备 403 |
 | POST | `/api/v1/task-plans/{id}/dismiss` | 不开了 → 200 `{"plan":TaskPlan}`；已开始 409 |
 | GET | `/api/v1/assistant/conversations/{id}/feed?since=` | 对话动态：`since`（RFC3339）之后的条目，旧的在前，一次最多 500 → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan}}`（`plans` 是 `plan` 条目引用的计划的当前状态） |
+| POST | `/api/v1/assistant/conversations/{id}/today` | 这段对话今天的「今天」卡片：已有就回那张，没有就建一张（`today` 条目，`at` 是用户那天的零点）→ `{"item":FeedItem,"new":bool}`；只读设备 403 |
+| GET | `/api/v1/task-trust` | 「这类以后直接开」记住的几类 → `{"kinds":[{"key","machine","cwd","readonly"}]}` |
+| DELETE | `/api/v1/task-trust?key=` | 忘掉一类（以后又要先给计划）→ `{"ok":true}`；没记过 404；只读设备 403 |
 | POST | `/api/v1/assistant/conversations/{id}/route` | 直接对任务说话 `{"todo_id","text"}`：hub 发给这个任务最要紧的 Agent（等你 > 工作中 > 完成未看 > 最近的），追加 `routed` 条目 → 200 `{"item":FeedItem}`；不是这段对话的任务、没有在跑的 Agent 409；只读设备 403 |
 | DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 移出 Agent（软移出：置 `released_at` 和 `dismissed_at`，接口不再返回该行且不再自动挂回） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
@@ -1022,12 +1025,14 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
            "error":""}]}                 // Agent 没开起来的原因
 
 // FeedItem：hub 插进助手对话的条目，不在 transcript 里；客户端按 at 和 transcript 合在一起画
-{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed","ref":"plan_… 或 todo_…",
+{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today","ref":"plan_…、todo_… 或日期",
  "body":{…}}
 // plan：ref 是计划 id，没有 body；task：ref 是待办 id，没有 body
 // answered：{"question":"使用 Bash","answer":"批准了 · 以后同类不再问"}
 // receipt：{"title":"…","state":"done|failed","summary":"Agent 最后一段话","pr":"https://github.com/…/pull/N","machine":"…"}
 // routed：{"text":"…"}
+// today：ref 是用户那天的日期；{"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"working":2,
+//         "meetings":[{"start","end","title"}],"at_me":[{"name","unread","preview"}],"unread":5}（飞书没回应的那几项不带）
 ```
 
 任务卡、计划卡的实时状态不在动态里：客户端按 `ref` 读计划（`task_plan` 推送）和待办 + 挂着的 Agent 的会话状态（状态规则同 [todos.md](todos.md)）。

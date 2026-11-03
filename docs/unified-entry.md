@@ -116,6 +116,7 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 | `answered` | 任务的交互被处理 | 待办 id；问题、你的回答 |
 | `receipt` | 任务做完 / 失败 | 待办 id；摘要、改动文件数、测试、PR |
 | `routed` | 你直接对任务说了一句 | 待办 id；原文 |
+| `today` | 当天第一次打开这段对话（App 调 `POST …/today`） | 日期；夜里做完的任务、等你的任务、在做几个、飞书今天接下来的会、@我 的会话、其他未读数 |
 
 - `GET /api/v1/assistant/{id}/feed?since=`，WebSocket `assistant_feed` 推新条目。App 把它和 transcript 按时间合在一起画。
 - 计划卡、任务卡的实时状态不存在动态里：卡片按 `ref` 读计划 / 待办 / 会话的当前状态，所以原地更新。

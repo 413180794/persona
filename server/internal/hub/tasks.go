@@ -162,7 +162,12 @@ func (h *Hub) movePlan(ctx context.Context, p *TaskPlan, from string) (bool, err
 
 // appendFeed adds an item to a conversation's feed and tells the clients.
 func (h *Hub) appendFeed(ctx context.Context, conversation, kind, ref string, body any) (FeedItem, error) {
-	it := FeedItem{ID: "feed_" + randomHex(8), Conversation: conversation, At: time.Now().UTC(), Kind: kind, Ref: ref}
+	return h.appendFeedAt(ctx, conversation, kind, ref, body, time.Now())
+}
+
+// appendFeedAt is appendFeed for an item that belongs at another time (the 今天 card: the start of the day).
+func (h *Hub) appendFeedAt(ctx context.Context, conversation, kind, ref string, body any, at time.Time) (FeedItem, error) {
+	it := FeedItem{ID: "feed_" + randomHex(8), Conversation: conversation, At: at.UTC(), Kind: kind, Ref: ref}
 	if body != nil {
 		raw, err := json.Marshal(body)
 		if err != nil {

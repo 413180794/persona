@@ -310,3 +310,63 @@ func TestResolutionAnswer(t *testing.T) {
 		t.Errorf("plan question = %q", got)
 	}
 }
+
+// The 今天 card: one a day per conversation, at the start of the day, with what finished and what waits.
+func TestTodayCard(t *testing.T) {
+	h, _ := newTaskHub(t)
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
+	todo := taskTodos(h)[0]
+	h.byID["box"].setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusBlocked,
+		State: proto.StateNeedsYou, PendingInteractions: 1, UpdatedAt: time.Now()}})
+	if _, err := h.appendFeed(context.Background(), "conv1", feedReceipt, "todo_old", receiptBody{Title: "夜里的活", State: "done"}); err != nil {
+		t.Fatal(err)
+	}
+	it, made, err := h.ensureToday(context.Background(), "conv1")
+	if err != nil || !made || it.Kind != feedToday {
+		t.Fatalf("today = %+v made=%v err=%v", it, made, err)
+	}
+	var body todayBody
+	_ = json.Unmarshal(it.Body, &body)
+	if len(body.Done) != 1 || body.Done[0].Title != "夜里的活" || body.Date != it.Ref {
+		t.Fatalf("body = %+v", body)
+	}
+	if len(body.Waiting) != 1 || body.Waiting[0].ID != todo.ID {
+		t.Fatalf("waiting = %+v (state %s)", body.Waiting, taskState(todo, h.taskAgents(todo)))
+	}
+	loc := h.userLocation()
+	now := time.Now().In(loc)
+	if want := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc); !it.At.Equal(want) {
+		t.Fatalf("at %v, want the start of the day %v", it.At, want)
+	}
+	again, made, err := h.ensureToday(context.Background(), "conv1")
+	if err != nil || made || again.ID != it.ID {
+		t.Fatalf("second call made another: %+v made=%v err=%v", again, made, err)
+	}
+}
+
+// Kinds remembered with 这类以后直接开 are listed and can be forgotten (Postgres: on the hub machine).
+func TestTaskTrust(t *testing.T) {
+	database := setupTestDB(t)
+	h := newTestHub(t)
+	h.store = database
+	h.trustKinds(context.Background(), []PlanTask{{Machine: "box", Cwd: "/code/app"}, {Machine: "box", Cwd: "/code/docs", Readonly: true}})
+	list := h.trustList(context.Background())
+	if len(list) != 2 || list[0].Key != "box|/code/app|edit" || list[1].Readonly != true {
+		t.Fatalf("list = %+v", list)
+	}
+	if !h.planStartsAtOnce(context.Background(), []PlanTask{{Machine: "box", Cwd: "/code/app"}}) {
+		t.Fatal("a trusted kind should start at once")
+	}
+	if ok, err := h.forgetTrust(context.Background(), "box|/code/app|edit"); !ok || err != nil {
+		t.Fatalf("forget: %v %v", ok, err)
+	}
+	if h.planStartsAtOnce(context.Background(), []PlanTask{{Machine: "box", Cwd: "/code/app"}}) {
+		t.Fatal("a forgotten kind still starts at once")
+	}
+	if ok, _ := h.forgetTrust(context.Background(), "nope"); ok {
+		t.Fatal("forgot a kind that was never remembered")
+	}
+}

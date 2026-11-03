@@ -224,6 +224,7 @@ func (h *Hub) routes() http.Handler {
 	h.inboxRoutes(api)
 	h.todoRoutes(api)
 	h.taskRoutes(api)
+	h.todayRoutes(api)
 	h.connectorRoutes(api)
 	h.translateRoutes(api)
 	h.pluginRoutes(api)
