@@ -46,7 +46,7 @@ struct PromptComposer: View {
         o.showsMentionButton = true
         o.showsCommandButton = !commands.isEmpty
         o.controlSize = 34
-        o.inputSize = 17 / 1.2 // body size once the theme's ×1.2 applies
+        o.inputSize = Theme.Level.body.size / 1.2 // body size once the theme's ×1.2 applies
         o.cornerRadius = Theme.Radius.panel
         o.drawsSurface = false // the style's own surface (glass, paper…), below
         o.canSendExtra = hasAttachments

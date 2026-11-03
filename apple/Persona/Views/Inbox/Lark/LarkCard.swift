@@ -72,7 +72,7 @@ struct LarkCardView: View {
                     .padding(Theme.Space.m)
                 }
             }
-            .environment(\.larkTextBase, LarkTextBase(size: 15))
+            .environment(\.larkTextBase, LarkTextBase(size: Theme.Level.secondary.size))
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(LarkColor.cardBackground)
             .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
@@ -100,7 +100,7 @@ struct LarkCardHeader: View {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                 ForEach(Array(extras.enumerated()), id: \.offset) { _, e in LarkCardNodeView(node: e) }
                 if let title = texts.first {
-                    LarkInlineText(runs: LarkCardRuns.runs(title, inMarkdown: false), base: LarkTextBase(size: 17, bold: true))
+                    LarkInlineText(runs: LarkCardRuns.runs(title, inMarkdown: false), base: LarkTextBase(size: Theme.Level.heading.size, bold: true))
                 }
                 Spacer(minLength: 0)
             }
@@ -108,7 +108,7 @@ struct LarkCardHeader: View {
                 LarkFlowLayout(spacing: 6, lineSpacing: 6) { ForEach(Array(tags.enumerated()), id: \.offset) { _, t in LarkCardTag(node: t) } }
             }
             if texts.count > 1 {
-                LarkInlineText(runs: LarkCardRuns.runs(texts[1], inMarkdown: false), base: LarkTextBase(size: 13, color: .secondary))
+                LarkInlineText(runs: LarkCardRuns.runs(texts[1], inMarkdown: false), base: LarkTextBase(size: Theme.Level.caption.size, color: .secondary))
             }
         }
         .padding(.horizontal, Theme.Space.m)
@@ -835,7 +835,7 @@ struct LarkCardNote: View {
                 }
             }
         }
-        .environment(\.larkTextBase, LarkTextBase(size: 12, color: .secondary))
+        .environment(\.larkTextBase, LarkTextBase(size: Theme.Level.label.size, color: .secondary))
     }
 }
 
@@ -1049,7 +1049,7 @@ struct LarkCardTable: View {
                         Group {
                             if let cell { LarkCardFlow(nodes: cell.children.isEmpty ? [cell] : cell.children, inMarkdown: true) } else { Color.clear }
                         }
-                        .environment(\.larkTextBase, LarkTextBase(size: 13, bold: header))
+                        .environment(\.larkTextBase, LarkTextBase(size: Theme.Level.caption.size, bold: header))
                         .padding(.horizontal, Theme.Space.s)
                         .padding(.vertical, Theme.Space.sm)
                         .frame(width: cellWidth)

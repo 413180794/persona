@@ -2,6 +2,11 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- 同名的系统文字样式在 Mac 上比 iPhone 小一截，级差也不一样（2026-11-03，#779）：Mac 的 body 13、callout 12、subheadline 11、footnote 和 caption 都是 10。
+  照搬 iPhone 的选法（说明用 footnote、标签用 caption），时间、来源都只有 10pt；而 Markdown 的基础字号写死 17（iPhone 的 body），回答和档案比用户消息大一截，
+  同一页上忽大忽小。`Theme.Font` 在 Mac 上按自己的字号表画系统字体，`Theme.Level.size` 跟着分两套，凡是按「正文大小」算的地方（Markdown、表格、飞书的 `LarkTextBase`）取 `Theme.Level`。
+  另外 Mac 上系统文字样式和 `@ScaledMetric` 都不跟 `dynamicTypeSize` 变，靠它实现的「小 / 标准 / 大」在 Mac 上不改字号（#833）。
+
 - SwiftUI 的竖向 `TextField`（`axis: .vertical`）在 Mac 上底下是 AppKit 的字段编辑器，回车和滚轮都不按聊天输入框的习惯来（2026-11-03，#785）：
   ⏎ 和 ⇧⏎ 都是「结束编辑」，还会把框里的字全选，接着打的字就把原来的覆盖了；只有 ⌥⏎ 换行。超过 `lineLimit` 的行数以后，框只跟着光标滚，滚轮滚不动。
   输入框获焦时用本地事件监听（`MacComposerEventMonitor`，`Mac/Chat/MacComposerKeys.swift`，和 ⌘V 同一个）：⏎ 发送、⇧⏎ 调字段编辑器的

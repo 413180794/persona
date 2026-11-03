@@ -19,7 +19,7 @@ extension EnvironmentValues {
 extension MarkdownUI.Theme {
     /// Markdown messages inside a chat bubble: body size, tight paragraphs.
     @MainActor static let larkMessage = MarkdownUI.Theme.jarvis
-        .text { FontSize(17) } // the body level, as Lark messages are (LarkTextBase)
+        .text { FontSize(Theme.Level.body.size) } // the body level, as Lark messages are (LarkTextBase)
         .link { ForegroundColor(LarkColor.blue) }
         .paragraph { config in
             config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.15)).markdownMargin(top: 0, bottom: 6)
@@ -186,7 +186,7 @@ struct LarkNodeView: View {
                 .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: Theme.Size.bar) })
         case let t where t.hasPrefix("heading-"):
             let level = Int(t.dropFirst(8)) ?? 3
-            let size: CGFloat = level == 1 ? 22 : 17 // Persona' title and heading levels, as in a chat's Markdown
+            let size = level == 1 ? Theme.Level.title.size : Theme.Level.heading.size // as in a chat's Markdown
             return AnyView(LarkNodesView(nodes: children, structured: true, base: LarkTextBase(size: size, bold: true)))
         case "code-block":
             return AnyView(LarkNodesView(nodes: children, structured: true, base: base))
@@ -340,7 +340,7 @@ struct LarkSystemText: View {
     var part: LarkPart
 
     var body: some View {
-        LarkInlineText(runs: Self.runs(part), base: LarkTextBase(size: 13, color: .secondary), alignment: .center)
+        LarkInlineText(runs: Self.runs(part), base: LarkTextBase(size: Theme.Level.caption.size, color: .secondary), alignment: .center)
     }
 
     static func runs(_ part: LarkPart) -> [LarkInline] {

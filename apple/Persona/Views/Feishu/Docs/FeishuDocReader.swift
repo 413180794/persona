@@ -468,7 +468,7 @@ extension MarkdownUI.Theme {
 
     @MainActor static var feishuDocsSmall: MarkdownUI.Theme {
         MarkdownUI.Theme.jarvis
-            .text { FontSize(15) }
+            .text { FontSize(Theme.Level.secondary.size) }
             .paragraph { config in config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.15)).markdownMargin(top: 0, bottom: 6) }
     }
 }

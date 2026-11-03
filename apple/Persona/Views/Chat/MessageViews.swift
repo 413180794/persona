@@ -4,12 +4,14 @@ import SwiftUI
 
 extension MarkdownUI.Theme {
     /// Reading-first markdown: system body text, roomy lists, quiet code blocks.
-    /// The base size is body's (17); MarkdownUI scales it with Dynamic Type (a ScaledMetric relative to .body), so a
-    /// reply and the user's bubble are one size at every setting. Headings follow `Theme.Font`: the first is the title
-    /// level (22), the others the heading level (body size, semibold), told apart by the space above them; code
-    /// blocks are the code level (13). Paragraphs have the body's line height (1.45: 0.26 em over SF's own 1.19).
+    /// The base size is the body level's (`Theme.Level.body`: 17 on the iPhone, 13 on the Mac, where a fixed 17 put
+    /// replies and profiles a size above the user's bubble, #779); MarkdownUI scales it with Dynamic Type (a
+    /// ScaledMetric relative to .body), so a reply and the user's bubble are one size at every setting. Headings follow
+    /// `Theme.Font`: the first is the title level (1.3 em), the others the heading level (body size, semibold), told
+    /// apart by the space above them; code blocks are the code level. Paragraphs have the body's line height (1.45:
+    /// 0.26 em over SF's own 1.19).
     @MainActor static let jarvis = MarkdownUI.Theme()
-        .text { FontSize(17) }
+        .text { FontSize(Theme.Level.body.size) }
         .code {
             FontFamilyVariant(.monospaced)
             FontSize(.em(0.88))
@@ -34,7 +36,7 @@ extension MarkdownUI.Theme {
             ScrollView(.horizontal, showsIndicators: false) {
                 config.label
                     .relativeLineSpacing(.em(0.2))
-                    .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(13.0 / 17)) }
+                    .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(Theme.Level.code.size / Theme.Level.body.size)) }
                     .padding(Theme.Space.m)
             }
             .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))

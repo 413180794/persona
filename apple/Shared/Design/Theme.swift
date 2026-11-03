@@ -152,6 +152,30 @@ nonisolated enum Theme {
     /// The terminal grid (its own size setting), the Live Activity (system limits), the share card (a rendered
     /// image) and glyphs drawn to a frame are the exceptions.
     enum Font {
+        #if os(macOS)
+        // The Mac's text styles are smaller than the iPhone's and spaced differently (body 13, subheadline 11,
+        // footnote and caption 10): the iPhone's choices gave 10 pt times and sources next to 17 pt replies (#779).
+        // The Mac has its own sizes (`Level.size`; the user chose body 13, nothing under 11) in the system font. Text
+        // styles do not follow Dynamic Type on the Mac, so 小 / 标准 / 大 do not move these yet (#833).
+        /// The home page's greeting, the welcome page (24 bold).
+        static let display = SwiftUI.Font.system(size: Level.display.size, weight: .bold)
+        /// A detail page's or a sheet's title (18 semibold).
+        static let title = SwiftUI.Font.system(size: Level.title.size, weight: .semibold)
+        /// Titles of rows, cards, panels and Markdown headings below the first (13 semibold).
+        static let heading = SwiftUI.Font.system(size: Level.heading.size, weight: .semibold)
+        /// Messages, replies, mail and documents (13).
+        static let body = SwiftUI.Font.system(size: Level.body.size)
+        /// Previews, subtitles, descriptions in cards (12).
+        static let secondary = SwiftUI.Font.system(size: Level.secondary.size)
+        /// Times, places, states, meta lines (11).
+        static let caption = SwiftUI.Font.system(size: Level.caption.size)
+        /// A list's section header: the caption's size, semibold, in the secondary color (11).
+        static let sectionHeader = SwiftUI.Font.system(size: Level.caption.size, weight: .semibold)
+        /// Chips, badges, counts, small labels on controls (11).
+        static let label = SwiftUI.Font.system(size: Level.label.size)
+        /// Code, diffs, paths, terminal snippets (11).
+        static let code = SwiftUI.Font.system(size: Level.code.size, design: .monospaced)
+        #else
         /// The home page's greeting, the welcome page (28 bold).
         static let display = SwiftUI.Font.title.bold()
         /// A detail page's or a sheet's title: a mail's subject, a document, a profile, the settings header (22).
@@ -170,6 +194,7 @@ nonisolated enum Theme {
         static let label = SwiftUI.Font.caption
         /// Code, diffs, paths, terminal snippets (13).
         static let code = SwiftUI.Font.footnote.monospaced()
+        #endif
 
         // Emphasis inside a level: views use these, never `.weight(` on a level (TypeScaleTests). Strong is semibold,
         // the usual emphasis; medium and heavy (bold) are the weights in use today, kept so nothing moves.
@@ -191,6 +216,15 @@ nonisolated enum Theme {
         case display, title, heading, body, secondary, caption, label, code
 
         var size: CGFloat {
+            #if os(macOS)
+            switch self { // `Theme.Font` on the Mac (#779)
+            case .display: 24
+            case .title: 18
+            case .heading, .body: 13
+            case .secondary: 12
+            case .caption, .label, .code: 11
+            }
+            #else
             switch self {
             case .display: 28
             case .title: 22
@@ -199,6 +233,7 @@ nonisolated enum Theme {
             case .caption, .code: 13
             case .label: 12
             }
+            #endif
         }
 
         var lineHeight: CGFloat {

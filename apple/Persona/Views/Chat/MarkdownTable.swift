@@ -140,7 +140,7 @@ extension EnvironmentValues {
 /// while there is more to see (accessibility id `table-more`).
 struct FittedTable: View {
     let config: BlockConfiguration
-    @ScaledMetric(relativeTo: .body) private var fontSize: CGFloat = 17 * 0.88
+    @ScaledMetric(relativeTo: .body) private var fontSize: CGFloat = Theme.Level.body.size * 0.88
     @State private var available: CGFloat = 0
     @State private var atEnd = false
 

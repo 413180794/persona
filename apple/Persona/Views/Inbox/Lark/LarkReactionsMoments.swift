@@ -178,7 +178,7 @@ struct LarkMomentsPostView: View {
                     if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger) }
                     if let p = post {
                         author(name: p.userName ?? "", avatar: p.userAvatarUrl, id: p.userId, time: p.createTime)
-                        LarkInlineText(runs: Self.runs(p.content), base: LarkTextBase(size: 17)).textSelection(.enabled)
+                        LarkInlineText(runs: Self.runs(p.content), base: LarkTextBase(size: Theme.Level.body.size)).textSelection(.enabled)
                         images(p.images ?? [])
                         if let groups = p.reactionGroups, !groups.isEmpty {
                             LarkFlowLayout(spacing: 6, lineSpacing: 6) {
@@ -197,7 +197,7 @@ struct LarkMomentsPostView: View {
                         ForEach(comments) { c in
                             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                                 author(name: c.userName ?? "", avatar: c.userAvatarUrl, id: c.userId, time: c.createTime, small: true)
-                                LarkInlineText(runs: Self.runs(c.content), base: LarkTextBase(size: 15)).padding(.leading, 40)
+                                LarkInlineText(runs: Self.runs(c.content), base: LarkTextBase(size: Theme.Level.secondary.size)).padding(.leading, 40)
                             }
                             .padding(.vertical, Theme.Space.xs)
                         }

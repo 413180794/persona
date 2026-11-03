@@ -102,11 +102,11 @@ nonisolated enum LarkInline: Hashable {
     case image(url: String)
 }
 
-/// Base text appearance for a block of inline runs. Sizes are Feishu's, set on Persona' levels (17 body, 15
-/// secondary, 13 caption, 12 label); `scale` (`Theme.textScale`, set by `LarkInlineText`) makes them follow the
+/// Base text appearance for a block of inline runs. Sizes are Feishu's, set on Persona's levels (`Theme.Level`: body,
+/// secondary, caption, label; 17 / 15 / 13 / 12 on the iPhone, 13 / 12 / 11 / 11 on the Mac); `scale` (`Theme.textScale`, set by `LarkInlineText`) makes them follow the
 /// system's text size and 小 / 标准 / 大 like the rest of the app.
 nonisolated struct LarkTextBase: Hashable {
-    var size: CGFloat = 17
+    var size: CGFloat = Theme.Level.body.size
     var bold = false
     var color: Color?
     var scale: CGFloat = 1
