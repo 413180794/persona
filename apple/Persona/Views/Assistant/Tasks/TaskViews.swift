@@ -357,7 +357,7 @@ struct TaskCard: View {
                         .stroke(state.agentState.color, lineWidth: Theme.Size.lineMedium)
                 }
             }
-            .contentShape(.contextMenuPreview, .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .menuPreviewShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .contextMenu { TaskRemoveMenuItem(todo: todo, state: state, pending: $removing) }
             .confirmTaskRemoval($removing)
             .animation(Theme.Motion.state, value: state)
@@ -424,7 +424,7 @@ struct TaskLine: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .contentShape(.contextMenuPreview, .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+            .menuPreviewShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
             .contextMenu { TaskRemoveMenuItem(todo: todo, state: state, pending: $removing) }
             .confirmTaskRemoval($removing)
         }
@@ -700,7 +700,7 @@ struct TaskDock: View {
             .scaledFrame(maxWidth: Theme.Size.box200)
         }
         .buttonStyle(.plain)
-        .contentShape(.contextMenuPreview, .capsule)
+        .menuPreviewShape(.capsule)
         .contextMenu { TaskRemoveMenuItem(todo: todo, state: state, pending: $removing) }
         .transition(.scale.combined(with: .opacity))
     }
@@ -778,5 +778,17 @@ struct TaskMentionList: View {
         guard !rest.contains(where: \.isWhitespace) else { return nil }
         if at > draft.startIndex, !draft[draft.index(before: at)].isWhitespace { return nil } // an address, not a mention
         return at..<draft.endIndex
+    }
+}
+
+extension View {
+    /// The shape a long press lifts for the context menu's preview (iOS). The Mac's right-click menu has no preview,
+    /// and `ContentShapeKinds.contextMenuPreview` does not exist there (#1083).
+    @ViewBuilder func menuPreviewShape(_ shape: some Shape) -> some View {
+        #if os(iOS)
+        contentShape(.contextMenuPreview, shape)
+        #else
+        self
+        #endif
     }
 }
