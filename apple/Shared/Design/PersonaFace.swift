@@ -59,7 +59,7 @@ struct PersonaFace: View {
     }
 
     // MARK: 汇流: three pads on the left whose traces run into a core with two eyes (your computers' agents coming
-    // together in Jarvis), in the accent on a dark disc of it.
+    // together in Persona), in the accent on a dark disc of it.
 
     private var circuit: some View {
         let ground = accent.blended(with: .black, by: 0.82)

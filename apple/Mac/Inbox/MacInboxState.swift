@@ -198,7 +198,7 @@ final class MacInboxState {
         if done, ids == selection { selection = next.map { [$0] } ?? [] }
     }
 
-    /// The agent's chat (the assistant's in Jarvis), where the question / plan / approval waits.
+    /// The agent's chat (the assistant's in Persona), where the question / plan / approval waits.
     func open(_ ix: Interaction, model: AppModel) {
         if model.session(ix.sessionKey)?.assistant == true {
             model.selectHub(ix.group)

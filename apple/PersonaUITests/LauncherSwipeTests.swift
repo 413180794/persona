@@ -1,8 +1,8 @@
 import XCTest
 
 /// 设置 › 模型: swiping a ~/.zshrc launcher left hides it (it moves under 已隐藏), swiping a hidden one brings it back.
-/// A Jarvis launcher swiped left is deleted after a confirmation.
-/// Against scripts/mock/mock_hub.py with MOCK_MANAGED_LAUNCHER=1 (jv_strong added in Jarvis; cc_glm shown, cc_old and cc_test hidden):
+/// A Persona launcher swiped left is deleted after a confirmation.
+/// Against scripts/mock/mock_hub.py with MOCK_MANAGED_LAUNCHER=1 (jv_strong added in Persona; cc_glm shown, cc_old and cc_test hidden):
 ///   TEST_RUNNER_JARVIS_LAUNCHER_HUB=http://127.0.0.1:<port>
 final class LauncherSwipeTests: XCTestCase {
     @MainActor func testSwipeHidesAndRestores() throws {

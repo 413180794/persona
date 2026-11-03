@@ -209,7 +209,7 @@ nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
     var model: String?
     /// "codex" for plain codex or an alias running it (docs/codex.md「从手机新建」); nil: Claude Code.
     var agent: String? = nil
-    /// An agent runtime's launcher that can run the Jarvis assistant (DSH's, docs/runtimes.md「助手」).
+    /// An agent runtime's launcher that can run the Persona assistant (DSH's, docs/runtimes.md「助手」).
     var assistant: Bool? = nil
     var id: String { name }
     /// A Codex start sends its first message with it and waits for the thread Codex makes.
@@ -222,7 +222,7 @@ nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
 }
 
 extension Launcher {
-    /// Runs Claude Code or Codex, or is an agent runtime's launcher that says it can: what the Jarvis assistant can
+    /// Runs Claude Code or Codex, or is an agent runtime's launcher that says it can: what the Persona assistant can
     /// use (headless `claude -p`, `codex app-server`, the runtime). Other agents (TRAEX…) are left out; the node
     /// refuses them with a reason too.
     var runsAssistant: Bool {
@@ -307,7 +307,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var readOnlyReason: String? = nil
     var capabilities: SessionCapabilities? = nil
     var attached: Bool? = nil
-    /// How Jarvis reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」): "app_server" (joined on its shared
+    /// How Persona reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」): "app_server" (joined on its shared
     /// app-server) or "terminal" (its screen and session record); the note says why it is the terminal.
     var codexRoute: String? = nil
     var codexRouteNote: String? = nil
@@ -349,7 +349,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var rev: Int64?
     /// The next message Claude Code proposes after a turn (grey in its input box on the computer), until it works again.
     var suggestion: String?
-    /// Jarvis is still opening its tab and starting claude: messages sent now go in once it is ready.
+    /// Persona is still opening its tab and starting claude: messages sent now go in once it is ready.
     var starting: Bool? = nil
     /// Starting it failed (shown in the chat; sends get the same error).
     var startError: String? = nil
@@ -940,9 +940,9 @@ nonisolated struct DesktopDevice: Codable, Hashable, Sendable, Identifiable {
 
     var id: String { device.isEmpty ? "name:" + name : device }
 
-    /// The banner's line: 「Mac 上的 Jarvis 已登录」, or how many when there are several.
+    /// The banner's line: 「Mac 上的 Persona 已登录」, or how many when there are several.
     static func bannerTitle(_ list: [DesktopDevice]) -> String {
-        list.count > 1 ? "\(list.count) 台 Mac 上的 Jarvis 已登录" : "Mac 上的 Jarvis 已登录"
+        list.count > 1 ? "\(list.count) 台 Mac 上的 Persona 已登录" : "Mac 上的 Persona 已登录"
     }
 }
 

@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-/// Jarvis's profile, opened from its avatar on the Jarvis tab (and from 设置 › 助手): who it is and where it runs, what
+/// Persona's profile, opened from its avatar on the Persona tab (and from 设置 › 助手): who it is and where it runs, what
 /// it will do on its own next, and everything that shapes it — its scheduled tasks, the history of runs, what it
 /// remembers, what it is told about the user, and its launcher.
 struct AssistantProfileView: View {
@@ -14,6 +14,10 @@ struct AssistantProfileView: View {
     #endif
 
     private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
+    private var assistantCwd: String {
+        if let cwd = model.assistantConfig?.cwd, !cwd.isEmpty { return cwd }
+        return "~/.persona/assistant"
+    }
     private var machineName: String { model.machine(model.hubRef(machineID))?.name ?? machineID }
 
     /// The machines the hub connects to, by name ("服务器、笔记本…"), from the hub's own list.
@@ -24,7 +28,7 @@ struct AssistantProfileView: View {
 
     var body: some View {
         Group { if AppStyle.current.usesBeautifulUI { cards } else { list } }
-        .navigationTitle("Jarvis")
+        .navigationTitle("Persona")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
@@ -81,14 +85,14 @@ struct AssistantProfileView: View {
             } header: {
                 Text("了解你")
             } footer: {
-                Text("「关于我」是你告诉 Jarvis 的；「记忆」是它在对话里自己记下的，都可以改。")
+                Text("「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。")
             }
             Section {
                 ModelConfigurationLink(title: "对话模型", purposeID: "assistant", summary: model.assistantConfig?.launcher)
                 ModelConfigurationLink()
                 NavigationLink { SkillsPage() } label: { row("Skills", Theme.Icon.skills, detail: nil) }
                 LabeledContent("运行在", value: machineName)
-                LabeledContent("工作目录", value: "~/.jarvis/assistant")
+                LabeledContent("工作目录", value: assistantCwd)
             } header: {
                 Text("设置")
             } footer: {
@@ -131,7 +135,7 @@ struct AssistantProfileView: View {
                         buiRow("运行记录", "clock.arrow.circlepath", detail: runs.flatMap(\.first).map { AssistantRunText.statusWord($0) + " · " + Fmt.relative($0.at) })
                     }
                 }
-                BUIListSection("了解你", footer: "「关于我」是你告诉 Jarvis 的；「记忆」是它在对话里自己记下的，都可以改。") {
+                BUIListSection("了解你", footer: "「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。") {
                     NavigationLink { AssistantNotesView() } label: {
                         buiRow("关于我", "person.text.rectangle", detail: nil)
                     }
@@ -144,7 +148,7 @@ struct AssistantProfileView: View {
                     ModelConfigurationLink()
                     NavigationLink { SkillsPage() } label: { buiRow("Skills", Theme.Icon.skills, detail: nil) }
                     BUIListRow("运行在", value: machineName)
-                    BUIListRow("工作目录", value: "~/.jarvis/assistant")
+                    BUIListRow("工作目录", value: assistantCwd)
                 }
                 BUIListSection("能访问", footer: "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。") {
                     buiReach(machinesLine, Theme.Icon.machines)
@@ -217,7 +221,7 @@ struct AssistantProfileView: View {
         BUIListRow(title, value: detail, accessory: .disclosure) { BUIIconTile(symbol, tint: Theme.accent) }
     }
 
-    /// The BeautifulUI style's row for what Jarvis can reach.
+    /// The BeautifulUI style's row for what Persona can reach.
     private func buiReach(_ text: String, _ symbol: String) -> some View {
         BUIListRow(text) { BUIIconTile(symbol, tint: Theme.Hue.gray) }
     }
@@ -234,7 +238,7 @@ struct AssistantProfileView: View {
     }
 }
 
-/// One thing Jarvis will do on its own: a task's next run.
+/// One thing Persona will do on its own: a task's next run.
 struct AssistantUpcoming: Identifiable, Hashable {
     var id: String
     var at: Date

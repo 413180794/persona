@@ -9,7 +9,7 @@ final class ShellTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    /// `-newAssistant YES` (the empty chat) also picks the Jarvis tab: tests that open another page leave it out.
+    /// `-newAssistant YES` (the empty chat) also picks the Persona tab: tests that open another page leave it out.
     @MainActor private func launch(_ extra: [String] = [], emptyChat: Bool = true) {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO"] + (emptyChat ? ["-newAssistant", "YES"] : []) + extra

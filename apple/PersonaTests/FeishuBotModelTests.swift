@@ -13,6 +13,16 @@ import Testing
         FeishuBotModel(deps: .init(api: { hub.client }, toast: { toasts.value.append($0.message) }))
     }
 
+    @Test func brandMigrationDoesNotRewriteTheConfiguredBotName() async throws {
+        for name in ["Jarvis", "Persona", "我的助手"] {
+            let hub = FakeHub()
+            hub.on("GET", "/api/v1/bots/feishu", json: Self.status.replacingOccurrences(of: "\"bot_name\":\"Jarvis\"", with: "\"bot_name\":\"\(name)\""))
+            let m = model(hub)
+            await m.load()
+            #expect(m.status?.botName == name)
+        }
+    }
+
     @Test func loadsAndSummarizes() async throws {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/bots/feishu", json: Self.status)

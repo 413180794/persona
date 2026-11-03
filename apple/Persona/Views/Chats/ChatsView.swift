@@ -428,7 +428,7 @@ private struct AgentsList: View {
             }
             #if os(iOS)
             if !model.desktops.isEmpty && query.isEmpty {
-                Section { DesktopPresenceRow() } // 「Mac 上的 Jarvis 已登录」, WeChat's line over its chats
+                Section { DesktopPresenceRow() } // 「Mac 上的 Persona 已登录」, WeChat's line over its chats
             }
             if model.hubNotice != nil && query.isEmpty {
                 Section { HubNoticeRow() } // the hub's version: an update out, under way, or too old (docs/hub-update.md)
@@ -977,7 +977,7 @@ private struct AgentsList: View {
                 Button { openFromSearch(s.key) } label: {
                     HStack(spacing: Theme.Space.s) {
                         slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast)
-                        // 胶囊 draws its own chevron; 列表 and Jarvis' own rows get the one a link would show.
+                        // 胶囊 draws its own chevron; 列表 and Persona' own rows get the one a link would show.
                         if !capsules { Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary) }
                     }
                     .contentShape(.rect)
@@ -989,7 +989,7 @@ private struct AgentsList: View {
         }
             .accessibilityIdentifier(compact ? "agents.compactRow" : "agents.row")
             // BeautifulUI's 胶囊: each agent its own capsule on the page (no list card, line or system chevron); 列表 and
-            // Jarvis' own rows: the list's card.
+            // Persona' own rows: the list's card.
             .navigationLinkIndicatorVisibility(capsules ? .hidden : .automatic)
             .listRowBackground(capsules ? Color.clear : nil)
             .listRowSeparator(capsules ? .hidden : .automatic)
@@ -1415,7 +1415,7 @@ struct QuickFilterBar: View, Equatable {
         AgentFilter.allCases.filter { $0 == .all || $0 == selection || (counts[$0] ?? 0) > 0 }
     }
 
-    /// Jarvis' own chips: the state's dot, the name and the count on a tinted capsule.
+    /// Persona' own chips: the state's dot, the name and the count on a tinted capsule.
     @ViewBuilder private func plainChips(padding: CGFloat) -> some View {
         ForEach(shown) { f in
             let on = f == selection
@@ -1697,7 +1697,7 @@ nonisolated struct SlotRow: View, Equatable {
         .opacity(muted ? 0.8 : 1) // quieter than live agents, never fainter than the idle spaces below
     }
 
-    /// Jarvis' own row's line: "需要你 · Claude · app › tests · MacBook": the end gives way when the line is short.
+    /// Persona' own row's line: "需要你 · Claude · app › tests · MacBook": the end gives way when the line is short.
     @MainActor private var metaText: Text {
         var parts: [Text] = []
         if session.state == .needsYou && !muted && !hideState {

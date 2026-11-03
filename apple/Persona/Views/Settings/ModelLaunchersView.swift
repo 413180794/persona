@@ -5,7 +5,7 @@ struct ModelLaunchersRoute: Hashable {}
 /// One launcher's page.
 struct ModelLauncherRoute: Hashable { var name: String }
 
-/// 设置 › 模型 (docs/launchers.md): every launcher the machines can start — added here (Jarvis keeps the gateway, model
+/// 设置 › 模型 (docs/launchers.md): every launcher the machines can start — added here (Persona keeps the gateway, model
 /// and key) or found in a machine's ~/.zshrc (synced each time this opens) — and the hidden ones.
 struct ModelLaunchersView: View {
     @Environment(AppModel.self) private var model
@@ -15,7 +15,7 @@ struct ModelLaunchersView: View {
     @State private var query = ""
     /// 已隐藏 starts folded (2026-11-01): they are hidden for a reason. A search shows them anyway.
     @State private var showHidden = false
-    /// A Jarvis launcher swiped to 删除, waiting for the confirmation.
+    /// A Persona launcher swiped to 删除, waiting for the confirmation.
     @State private var pendingDelete: LauncherView?
 
     /// Name, model, gateway host, or a machine's name.
@@ -42,7 +42,7 @@ struct ModelLaunchersView: View {
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                     ForEach(managed) { row($0) }
-                } header: { header("Jarvis 管理", managed.count) } footer: {
+                } header: { header("Persona 管理", managed.count) } footer: {
                     if !managed.isEmpty { Text("Key 加密存在 hub，启动时才交给那台电脑，不写进文件。") }
                 } }
                 if !zshrc.isEmpty {
@@ -74,7 +74,7 @@ struct ModelLaunchersView: View {
                         .accessibilityLabel("已隐藏 \(hidden.count) 个，" + (open ? "已展开" : "已折叠"))
                         .accessibilityAddTraits(.isButton)
                     } footer: {
-                        if open { Text("只是在 Jarvis 里不显示，~/.zshrc 没有改。点进去可以恢复。") }
+                        if open { Text("只是在 Persona 里不显示，~/.zshrc 没有改。点进去可以恢复。") }
                     }
                 }
             } else if let error {
@@ -120,7 +120,7 @@ struct ModelLaunchersView: View {
             LauncherRow(launcher: l, machines: machineNames(l))
         }
         // Swipe left to hide a ~/.zshrc launcher or bring a hidden one back (2026-11-01 user request). No
-        // confirmation: it only changes what Jarvis lists and is undone the same way. A Jarvis one is deleted, key
+        // confirmation: it only changes what Persona lists and is undone the same way. A Persona one is deleted, key
         // and all, so that one asks first.
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if l.managed {
@@ -190,7 +190,7 @@ struct LauncherRow: View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: Theme.Space.sm) {
                 Text(launcher.name).font(Theme.Font.heading.monospaced()).lineLimit(1)
-                if launcher.managed { Chip(text: "Jarvis", look: .tint(Theme.accent)) }
+                if launcher.managed { Chip(text: "Persona", look: .tint(Theme.accent)) }
             }
             HStack(spacing: Theme.Space.sm) {
                 if let m = Fmt.model(launcher.model) ?? launcher.model, !m.isEmpty { Chip(text: m) }
@@ -206,7 +206,7 @@ struct LauncherRow: View {
     }
 }
 
-/// One launcher: its settings; a Jarvis one can be changed or deleted, a ~/.zshrc one shows its function (keys
+/// One launcher: its settings; a Persona one can be changed or deleted, a ~/.zshrc one shows its function (keys
 /// masked) on each machine and can be hidden or brought back.
 struct ModelLauncherDetailView: View {
     @Environment(AppModel.self) private var model
@@ -243,7 +243,7 @@ struct ModelLauncherDetailView: View {
         List {
             if let l = launcher {
                 Section {
-                    LabeledContent("来源", value: l.managed ? "Jarvis 管理" : "~/.zshrc 里的函数")
+                    LabeledContent("来源", value: l.managed ? "Persona 管理" : "~/.zshrc 里的函数")
                     if l.kind == "api" { LabeledContent("接入方式", value: "直接 API · \(l.api == "responses" ? "Responses" : "Messages")") }
                     // A ~/.zshrc launcher's gateway and models are in the sections it was probed into below.
                     if l.managed || (l.details ?? [:]).isEmpty {
@@ -259,7 +259,7 @@ struct ModelLauncherDetailView: View {
                 }
                 if l.managed {
                     Section {
-                        Text(l.kind == "api" ? "hub 直接请求此 API，不在电脑上启动 Agent。各用途在「模型配置」中选择它。" : "在任何电脑上都以 `jarvisd launch \(l.name)` 运行：从本机的 node 取到这些设置再启动 claude。")
+                        Text(l.kind == "api" ? "hub 直接请求此 API，不在电脑上启动 Agent。各用途在「模型配置」中选择它。" : "在任何电脑上都以 `personad launch \(l.name)` 运行：从本机的 node 取到这些设置再启动 claude。")
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
@@ -290,7 +290,7 @@ struct ModelLauncherDetailView: View {
                     } else {
                         // The confirmation comes up right where the button is (2026-10-31 user request), not as a sheet.
                         Button(role: .destructive) { confirmDelete = true } label: {
-                            Label(l.managed ? "删除启动器" : "在 Jarvis 里隐藏", systemImage: l.managed ? Theme.Icon.delete : Theme.Icon.hide).lineLimit(1)
+                            Label(l.managed ? "删除启动器" : "在 Persona 里隐藏", systemImage: l.managed ? Theme.Icon.delete : Theme.Icon.hide).lineLimit(1)
                         }
                         .popover(isPresented: $confirmDelete, arrowEdge: .top) {
                             Button(role: .destructive) {
@@ -336,7 +336,7 @@ struct ModelLauncherDetailView: View {
         }
     }
 
-    /// The machines to test on: a ~/.zshrc launcher's own (online ones), a Jarvis one on the hub's machine.
+    /// The machines to test on: a ~/.zshrc launcher's own (online ones), a Persona one on the hub's machine.
     private func testMachines(_ l: LauncherView) -> [String] {
         if l.managed { return [""] } // the hub picks (the assistant's machine)
         return (l.machines ?? []).filter { model.machine(model.hubRef($0))?.online != false }
@@ -411,7 +411,7 @@ struct ModelLauncherDetailView: View {
     }
 }
 
-/// Add a launcher, or change one Jarvis keeps.
+/// Add a launcher, or change one Persona keeps.
 struct LauncherEditor: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

@@ -191,9 +191,9 @@ struct ShellCircleButton: View {
     }
 }
 
-/// The top bar's left button on both pages (2026-11-01 user request, in place of ☰): the persona's face in Jarvis's
+/// The top bar's left button on both pages (2026-11-01 user request, in place of ☰): the persona's face in Persona's
 /// state, as the old layout's bar shows it in the middle (`PersonaDot`, docs/persona.md「状态」), opening the drawer
-/// (历史对话, 收件箱…). The state is that of Jarvis's conversation on 助手 (`assistantCurrent`), on Agents too, so the
+/// (历史对话, 收件箱…). The state is that of Persona's conversation on 助手 (`assistantCurrent`), on Agents too, so the
 /// face stays the same while the strip slides. A tray mark sits on the face's lower corner while the inbox has
 /// something for the user: a tray, not a dot, so it does not read as the face's state, and just outside the frame's
 /// corner, where it clears the round face and its rings (needs-you, working) with a gap, and the corners the packages

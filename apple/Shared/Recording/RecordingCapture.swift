@@ -80,7 +80,7 @@ final class RecordingCapture {
         state = .starting; error = nil
         let allowed = await Self.permission()
         guard generation == token, state == .starting else { return }
-        guard allowed else { state = .idle; error = "请在系统设置中允许 Jarvis 使用麦克风"; return }
+        guard allowed else { state = .idle; error = "请在系统设置中允许 Persona 使用麦克风"; return }
         if let problem = Self.resourceProblem(starting: true) { state = .idle; error = problem; return }
         guard RecordingMicrophone.shared.claim(microphoneOwner) else {
             state = .idle; error = "麦克风正在用于听写，请先结束听写再录音"; return

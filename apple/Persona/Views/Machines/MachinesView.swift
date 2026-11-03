@@ -423,9 +423,9 @@ struct DeployRow: View {
     }
 
     private func text(_ busy: Bool) -> String {
-        if busy { return "正在把 hub 这一版的 Jarvis 装到这台电脑…" }
+        if busy { return "正在把 hub 这一版的 Persona 装到这台电脑…" }
         if let e = machine.deployError, !e.isEmpty { return "上次部署没成：\(e)" }
-        return "这台电脑上的 Jarvis 和 hub 不是同一次部署"
+        return "这台电脑上的 Persona 和 hub 不是同一次部署"
     }
 
     private func deploy() async {

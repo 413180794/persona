@@ -50,7 +50,7 @@ enum NotificationsTool {
         #endif
         guard allowed else {
             throw ToolFailure(.denied,
-                "通知 / Notifications. The user has turned notifications off for Jarvis in iOS Settings, "
+                "通知 / Notifications. The user has turned notifications off for Persona in iOS Settings, "
                     + "so nothing was shown.")
         }
 

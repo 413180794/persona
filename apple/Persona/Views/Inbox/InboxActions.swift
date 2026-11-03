@@ -283,7 +283,7 @@ struct InboxHandOffSheet: View {
                 }
                 Section("交给谁") {
                     Picker("交给谁", selection: $target) {
-                        Label("Jarvis（新对话）", systemImage: Theme.Icon.ai).tag(SessionKey?.none)
+                        Label("Persona（新对话）", systemImage: Theme.Icon.ai).tag(SessionKey?.none)
                         ForEach(agents) { s in
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(s.displayTitle).lineLimit(1)

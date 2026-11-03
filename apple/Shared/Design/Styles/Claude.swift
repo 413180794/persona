@@ -1,7 +1,7 @@
 import SwiftUI
 
 nonisolated extension ColorSpec {
-    /// Claude's terracotta, the original Jarvis look. Once a style of its own (Liquid Glass in this color); since
+    /// Claude's terracotta, the original Persona look. Once a style of its own (Liquid Glass in this color); since
     /// 主题色 is a choice of its own it is only a color (`AppearanceChoice` moves a saved Claude to 液态玻璃 + this).
     static let coral = ColorSpec(
         title: "珊瑚橙", subtitle: "Claude",

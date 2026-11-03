@@ -128,7 +128,7 @@ struct TerminalSettingsView: View {
                 } header: {
                     Text("配色")
                 } footer: {
-                    Text("墨黑、深夜不随系统变化；Jarvis、Solarized 跟着系统的浅色 / 深色。")
+                    Text("墨黑、深夜不随系统变化；Persona、Solarized 跟着系统的浅色 / 深色。")
                 }
                 Section {
                     Picker("字体", selection: $fontID) {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A conversation in a window of its own (docs/mac.md「窗口」: `WindowGroup(for: SessionKey.self)`): the same chat page
-/// as in Agents / Jarvis, so a few agents can sit side by side or on another screen. The window's title is the chat's.
+/// as in Agents / Persona, so a few agents can sit side by side or on another screen. The window's title is the chat's.
 struct MacChatWindow: View {
     static let id = "chat"
     @Environment(AppModel.self) private var model

@@ -39,7 +39,7 @@ enum MacAgentCommands {
         }
     }
 
-    /// ⌃⌘N: the next agent or Jarvis conversation that needs you, longest waiting first, wrapping around.
+    /// ⌃⌘N: the next agent or Persona conversation that needs you, longest waiting first, wrapping around.
     static func nextNeedsYou(after current: SessionKey?, in sessions: [Session], muted: (Session) -> Bool) -> SessionKey? {
         let order = sessions.filter { $0.state == .needsYou && !muted($0) }
             .sorted { ($0.stateSince ?? .distantPast) < ($1.stateSince ?? .distantPast) }
@@ -97,7 +97,7 @@ struct MacAgentMenu: Commands {
             .disabled(!model.allSessions.contains { $0.state == .needsYou && !model.isMuted($0) })
             Button("在新窗口打开") { if let key { MacShellState.shared.chatWindow = key } }
                 .disabled(key == nil)
-            // Only an Agent in a herdr pane has a terminal (the Jarvis conversation runs headless).
+            // Only an Agent in a herdr pane has a terminal (the Persona conversation runs headless).
             if !terminalOff {
                 Button("在新窗口打开终端") { if let key { MacShellState.shared.terminalWindow = key } }
                     .disabled(current.map { $0.assistant || $0.paneID == nil || !$0.canTerminal } ?? true)
@@ -105,10 +105,10 @@ struct MacAgentMenu: Commands {
             if current?.canAttach == true {
                 Button("实时接入") { if let key { Task { await model.attach(key) } } }.lineLimit(1)
             }
-            // The row menu's 交给 Jarvis: the Agent's state and last answer go to the main conversation (AgentHandoff).
-            Button("交给 Jarvis") {
+            // The row menu's 交给 Persona: the Agent's state and last answer go to the main conversation (AgentHandoff).
+            Button("交给 Persona") {
                 if let key, let s = model.latest(key) { // its last line as it is now
-                    MacShellState.shared.willOpen() // 知识库 / 机器 make way for the Jarvis page
+                    MacShellState.shared.willOpen() // 知识库 / 机器 make way for the Persona page
                     Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
                 }
             }

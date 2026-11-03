@@ -2,7 +2,7 @@ import Testing
 @testable import Jarvis
 
 /// 设置 › 存储空间 on a Mac build without a sandbox (an ad-hoc debug build): ~/Library/Caches is every app's, so only
-/// Jarvis's own folders are counted and cleared there; in a sandbox the whole folder is the app's.
+/// Persona's own folders are counted and cleared there; in a sandbox the whole folder is the app's.
 struct MacStorageTests {
     @Test func outsideASandboxOnlyJarvisFolders() {
         // chats-v<N>: ChatCache's folder goes up a version whenever its items change (chats-v3 today).

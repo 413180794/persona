@@ -44,12 +44,12 @@ extension BUITheme {
         )
         let radii = BUIRadii(small: 4, chip: Theme.Radius.badge, control: Theme.Radius.control, card: Theme.Radius.card,
                              window: Theme.Radius.panel)
-        // The library's sizes are the web original's (13 pt labels); ×1.2 puts its labels at Jarvis' tool rows (15).
+        // The library's sizes are the web original's (13 pt labels); ×1.2 puts its labels at Persona' tool rows (15).
         // Entrances off: the chat list rebuilds rows as they scroll in, and an opened history would fade up at once.
         return BUITheme(colors: colors, radii: radii, typeScale: 1.2, entrances: false, strings: .jarvis)
     }
 
-    /// For code and diffs: on the code background, at the code size Jarvis already uses (12–13).
+    /// For code and diffs: on the code background, at the code size Persona already uses (12–13).
     var onCode: BUITheme {
         var t = self
         t.colors.surface = Theme.codeBackground

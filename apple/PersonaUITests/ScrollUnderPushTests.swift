@@ -13,7 +13,7 @@ final class ScrollUnderPushTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
     private static let widget = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // at work, long with MOCK_LONG_HISTORY
-    private static let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004"  // a long Jarvis conversation
+    private static let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004"  // a long Persona conversation
     private static let rounds = 10
 
     override func setUpWithError() throws {
@@ -145,10 +145,10 @@ final class ScrollUnderPushTests: XCTestCase {
         assertStill(scrollThroughPushes("Agent chat"), "Agent chat")
     }
 
-    // The Jarvis chat, while the agents and the inbox are pushed around it.
+    // The Persona chat, while the agents and the inbox are pushed around it.
     func testJarvisChatScrollsThroughPushes() {
         launch(tab: "assistant", ["-openAssistant", Self.jarvis, "-showScrollState", "YES"])
         waitForChat(Self.jarvis)
-        assertStill(scrollThroughPushes("Jarvis chat"), "Jarvis chat")
+        assertStill(scrollThroughPushes("Persona chat"), "Persona chat")
     }
 }

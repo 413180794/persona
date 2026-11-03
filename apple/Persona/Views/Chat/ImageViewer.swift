@@ -157,7 +157,7 @@ struct ImageViewer: View {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
             Haptics.error()
-            AppModel.shared.toast = Toast("没有相册权限：请在 设置 › Jarvis › 照片 里允许「仅添加照片」", style: .error)
+            AppModel.shared.toast = Toast("没有相册权限：请在 设置 › Persona › 照片 里允许「仅添加照片」", style: .error)
             return
         }
         do {

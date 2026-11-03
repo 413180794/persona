@@ -6,7 +6,7 @@ struct AssistantDeps {
     var api: () -> APIClient?
     var report: (Error) -> Void
     var toast: (Toast) -> Void
-    /// Show a conversation in the Jarvis tab (a task that was run now).
+    /// Show a conversation in the Persona tab (a task that was run now).
     var open: (SessionKey) -> Void
 
     static var live: AssistantDeps {
@@ -18,7 +18,7 @@ struct AssistantDeps {
 
 /// 定时任务's state and everything the page does with the hub (MVVM: ARCH-PLAN.md). The view draws what is here and
 /// calls its methods, so tests run it against a `FakeHub`. One list: what repeats (every day, every N minutes) and
-/// the one-offs Jarvis scheduled from a conversation.
+/// the one-offs Persona scheduled from a conversation.
 @Observable final class AssistantRoutinesModel {
     typealias Deps = AssistantDeps
     typealias Item = APIClient.ScheduledTask

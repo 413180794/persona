@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Jarvis tab's sidebar drag (docs/ios.md「Jarvis 顶栏和侧边栏」): it opens from wherever a finger starts a drag to the
+/// The Persona tab's sidebar drag (docs/ios.md「Persona 顶栏和侧边栏」): it opens from wherever a finger starts a drag to the
 /// right — the middle of the chat at a slant, on a message bubble, right after the list stopped scrolling — while a
 /// code block wider than the phone still scrolls sideways under the finger.
 /// Against scripts/mock/mock_hub.py started with MOCK_DRAWER=1 (JARVIS_MOCK_HUB): the main conversation ends with a wide
@@ -23,7 +23,7 @@ final class DrawerSwipeTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-openAssistant", open, "-showDrawerProbe", "YES"]
         app.launchPinned()
-        XCTAssertTrue(app.buttons["jarvis-avatar"].waitForExistence(timeout: 15), "the Jarvis tab did not open")
+        XCTAssertTrue(app.buttons["jarvis-avatar"].waitForExistence(timeout: 15), "the Persona tab did not open")
         return app
     }
 
@@ -135,9 +135,9 @@ final class DrawerSwipeTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5), "设置 did not open")
         XCTAssertTrue(agents.isHittable, "the tab bar did not come back on 设置")
         agents.tap()
-        app.tabBars.buttons["Jarvis"].tap()
+        app.tabBars.buttons["Persona"].tap()
         XCTAssertTrue(app.buttons["jarvis-avatar"].waitForExistence(timeout: 5))
-        XCTAssertFalse(sidebar(app).exists, "back on the Jarvis tab the sidebar is still out")
+        XCTAssertFalse(sidebar(app).exists, "back on the Persona tab the sidebar is still out")
         XCTAssertTrue(agents.isHittable)
     }
 

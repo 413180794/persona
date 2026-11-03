@@ -88,7 +88,7 @@ struct ChatView: View {
     @Environment(\.dismiss) private var dismissChat
     /// In the detail column of a split (iPhone Duo open): the list is beside the chat, the tab bar stays.
     @Environment(\.splitDetail) private var split
-    /// The Jarvis conversation in the shell (docs/ios.md「新外壳」).
+    /// The Persona conversation in the shell (docs/ios.md「新外壳」).
     @Environment(\.shellChat) private var shellChat
     /// The system presents bars down the side of the screen (iPhone Duo closed, or open in landscape).
     @State private var barsVertical = false
@@ -2046,7 +2046,7 @@ struct ChatView: View {
 
     private var title: String {
         let t = session?.title ?? ""
-        if style == .assistant { return t.isEmpty || t == "Claude Code" ? "Jarvis" : t }
+        if style == .assistant { return t.isEmpty || t == "Claude Code" ? "Persona" : t }
         return t.isEmpty ? "对话" : t
     }
 
@@ -2105,7 +2105,7 @@ struct ChatSkeleton: View {
 
 /// Message input: text, photos, quick slash commands; turns into a stop button while Claude works.
 /// Claude's suggested next message over the composer: a tap puts it in the box to edit, 直接发送 (long press) sends it.
-/// A session Jarvis is still starting (node/starting.go): what is sent now waits and goes in once it is ready. Or why
+/// A session Persona is still starting (node/starting.go): what is sent now waits and goes in once it is ready. Or why
 /// it did not start.
 struct StartingNote: View {
     var error: String?
@@ -2483,7 +2483,7 @@ struct Composer: View, Equatable {
     }
 }
 
-/// The composer's "/" menu: Claude Code's own commands, and Jarvis' quick messages under a short word. Picking one
+/// The composer's "/" menu: Claude Code's own commands, and Persona' quick messages under a short word. Picking one
 /// types `text` into the draft; send sends it.
 struct SlashCommand: Identifiable {
     /// The + menu's entry (the original input line).
@@ -2746,7 +2746,7 @@ struct SessionInfoSheet: View {
         }
     }
 
-    /// How Jarvis reaches this Codex (docs/codex.md「守护进程上的会话」): its shared app-server, or the terminal and why.
+    /// How Persona reaches this Codex (docs/codex.md「守护进程上的会话」): its shared app-server, or the terminal and why.
     private func routeRow(_ route: String, note: String?) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             row(Theme.Icon.link, "连接", route == "app_server" ? "app-server（结构化）" : "终端（读屏幕）")
@@ -3053,7 +3053,7 @@ struct WorkCardSlice: View {
             .padding(.bottom, bottom ? 0 : -Self.bridge)
     }
 
-    /// BeautifulUI's card (the style's card color, a 1 pt ring); Jarvis' own is the gray well with a hairline.
+    /// BeautifulUI's card (the style's card color, a 1 pt ring); Persona' own is the gray well with a hairline.
     private static var beautiful: Bool { AppStyle.current.usesBeautifulUI }
 
     /// The hairline between two steps, in the gap above a row, from the words' column (none on the timeline: the rail
@@ -3255,7 +3255,7 @@ struct WorkLine: View, Equatable {
         }
     }
 
-    /// Jarvis' own: the counts and the time in secondary words, the chevron after them.
+    /// Persona' own: the counts and the time in secondary words, the chevron after them.
     private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.m) {
@@ -3306,7 +3306,7 @@ struct WorkLine: View, Equatable {
         let parts = short ? counts.short : counts.full
         let took = Self.duration(from: start, to: now)
         guard AppStyle.current.usesBeautifulUI else {
-            // Jarvis' own: "工具 3 · 思考 1 · 1 分 20 秒", "正在工作 39 秒 · 工具 2".
+            // Persona' own: "工具 3 · 思考 1 · 1 分 20 秒", "正在工作 39 秒 · 工具 2".
             var p = parts
             if live { p.insert("正在工作 \(took)", at: 0) } else if !took.isEmpty { p.append(took) }
             return p.isEmpty ? "已完成" : p.joined(separator: " · ")

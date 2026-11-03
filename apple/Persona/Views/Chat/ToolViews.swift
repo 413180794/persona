@@ -42,7 +42,7 @@ enum ToolPresentation {
         if n.hasPrefix("phone_") { return "iPhone" }
         if n.hasPrefix("mail_") { return "邮件" }
         switch n {
-        // Jarvis managing its own conversations (docs/assistant.md「管理自己的对话」).
+        // Persona managing its own conversations (docs/assistant.md「管理自己的对话」).
         case "conversations_list": return "查看对话列表"
         case "conversation_read": return "读对话"
         case "conversation_rename": return "重命名对话"
@@ -838,7 +838,7 @@ struct TodoList: View {
         }
     }
 
-    /// Jarvis' own: a check, a dotted ring or an empty one, the finished ones struck through.
+    /// Persona' own: a check, a dotted ring or an empty one, the finished ones struck through.
     private var checklist: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ForEach(Array(todos.enumerated()), id: \.offset) { _, t in

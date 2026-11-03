@@ -250,7 +250,7 @@ nonisolated enum IslandSlot: String, Codable, Hashable, Sendable, CaseIterable {
         case .tpm: "每分钟 token"
         case .tokens: "今日 token"
         case .requests: "今日请求数"
-        case .assistant: "Jarvis 助手"
+        case .assistant: "Persona 助手"
         case .load: "机器负载"
         case .timer: "最久那一轮的计时"
         case .none: "不显示"

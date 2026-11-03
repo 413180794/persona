@@ -11,7 +11,7 @@ struct PersonaMacApp: App {
     @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
-        WindowGroup("Jarvis", id: "main") {
+        WindowGroup("Persona", id: "main") {
             MacRootView()
                 .environment(model)
                 .onOpenURL { url in model.openURL(url) }
@@ -108,12 +108,12 @@ struct MacCommands: Commands {
     let model: AppModel
 
     var body: some Commands {
-        // 文件: 新建 Agent 对话 ⌘N, 新建 Jarvis 对话 ⇧⌘N (docs/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
+        // 文件: 新建 Agent 对话 ⌘N, 新建 Persona 对话 ⇧⌘N (docs/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
         CommandGroup(replacing: .newItem) {
             Button("新建 Agent 对话…") { MacShellState.shared.newAgent = true }
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(!model.isPaired)
-            Button("新建 Jarvis 对话") {
+            Button("新建 Persona 对话") {
                 MacShellState.shared.willOpen()
                 model.selectedTab = .assistant
                 model.assistantCurrent = nil

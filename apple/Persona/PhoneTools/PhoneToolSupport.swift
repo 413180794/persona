@@ -26,8 +26,8 @@ nonisolated enum ToolErrors {
         if let failure = error as? ToolFailure {
             switch failure.kind {
             case .denied:
-                return "没有权限：\(failure.message)。请在 iPhone 的 Jarvis › 设置 › 连接器 › 这台 iPhone 里授权。"
-                    + "\nPermission denied: \(failure.message). Grant access in Jarvis › Settings › Phone data on the iPhone."
+                return "没有权限：\(failure.message)。请在 iPhone 的 Persona › 设置 › 连接器 › 这台 iPhone 里授权。"
+                    + "\nPermission denied: \(failure.message). Grant access in Persona › Settings › Phone data on the iPhone."
             case .invalidArgument:
                 return "参数错误 / Invalid argument: \(failure.message)"
             case .unavailable:

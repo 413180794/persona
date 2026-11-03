@@ -36,7 +36,7 @@ struct MenuView: View {
             }
             .padding(.horizontal, 6)
             Divider().padding(.vertical, 6)
-            MenuRow(title: "退出 Jarvis Link", symbol: "power", shortcut: "⌘Q") { model.quit() }
+            MenuRow(title: "退出 Persona Link", symbol: "power", shortcut: "⌘Q") { model.quit() }
                 .keyboardShortcut("q")
                 .padding(.horizontal, 6)
                 .padding(.bottom, 6)
@@ -57,7 +57,7 @@ struct MenuView: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(StatusBlock.tint(model.look))
                 .frame(width: 20)
-            Text("Jarvis Link").font(.headline)
+            Text("Persona Link").font(.headline)
             Spacer(minLength: 8)
             StatePill(look: model.look)
         }

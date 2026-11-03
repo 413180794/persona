@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 设置 › hub (docs/multi-hub.md「设置」): every hub this device paired with, by group. Hubs that know each other (their
 /// hellos list each other) are one group, reached over one connection; separate groups are shown side by side
-/// everywhere. Here: add a hub, rename a group, pick the group Jarvis / 收件箱 / the hub's settings show, disconnect a
+/// everywhere. Here: add a hub, rename a group, pick the group Persona / 收件箱 / the hub's settings show, disconnect a
 /// hub or a whole group.
 struct HubsView: View {
     @Environment(AppModel.self) private var model
@@ -111,7 +111,7 @@ struct HubsView: View {
         let n = model.registry.members(g).count + meshOnly(g).count
         let state = model.isLive(g) ? "已连接" : model.socket(g)?.state == .connecting ? "连接中" : "未连接"
         let group = n > 1 ? "组里 \(n) 台 hub 互联，看到的是整组的机器；连着的那台掉了会换组里别的。" : ""
-        let current = model.isMultiHub && model.hub?.group == g ? "Jarvis、收件箱和 hub 相关的设置用这一组。" : ""
+        let current = model.isMultiHub && model.hub?.group == g ? "Persona、收件箱和 hub 相关的设置用这一组。" : ""
         return state + "。" + group + current
     }
 

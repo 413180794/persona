@@ -54,7 +54,7 @@ struct AppearanceSection: View {
     }
 }
 
-/// 设置 › 外观 › 形象: Jarvis' name, face and status dot (its colors are the 主题色 跟随形象).
+/// 设置 › 外观 › 形象: Persona' name, face and status dot (its colors are the 主题色 跟随形象).
 struct PersonaSettingsPage: View {
     @Environment(AppModel.self) private var model
 
@@ -66,10 +66,10 @@ struct PersonaSettingsPage: View {
             } footer: {
                 #if os(macOS)
                 Text(model.isDemo ? "体验模式只有默认形象。" :
-                    "Jarvis 的名字、头像和顶栏的状态圆点跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到这台 Mac。")
+                    "Persona 的名字、头像和顶栏的状态圆点跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到这台 Mac。")
                 #else
                 Text(model.isDemo ? "体验模式只有默认形象。" :
-                    "Jarvis 的名字、头像和顶栏的状态圆点跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到手机。")
+                    "Persona 的名字、头像和顶栏的状态圆点跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到手机。")
                 #endif
             }
         }
@@ -152,7 +152,7 @@ struct LayoutSettingsPage: View {
                 }
                 .accessibilityIdentifier("old-layout")
             } footer: {
-                Text("打开后回到底部四个标签（Jarvis、Agents、收件箱、设置）。新布局是顶部「助手 | Agents」，收件箱、定时任务、知识库在左上角的侧边栏里。过渡几天后会去掉这个开关。")
+                Text("打开后回到底部四个标签（Persona、Agents、收件箱、设置）。新布局是顶部「助手 | Agents」，收件箱、定时任务、知识库在左上角的侧边栏里。过渡几天后会去掉这个开关。")
             }
         }
         .themedGroupedPage()

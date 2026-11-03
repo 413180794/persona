@@ -101,14 +101,14 @@ targets:
     info:
       path: Persona/Resources/Info.plist
       properties:
-        CFBundleName: Jarvis
+        CFBundleName: Persona
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
-            CFBundleURLSchemes: [jarvis]
+            CFBundleURLSchemes: [jarvis, persona]
         ITSAppUsesNonExemptEncryption: false
         # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
@@ -136,19 +136,19 @@ targets:
         # The hub is usually reached over plain HTTP inside a private network (docs/config.md).
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-        NSCameraUsageDescription: "Jarvis uses the camera to scan the pairing QR code printed by `jarvisd hub pair`, for example when you first connect to your hub."
-        NSContactsUsageDescription: "Jarvis lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message."
-        NSCalendarsFullAccessUsageDescription: "Jarvis lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting."
-        NSCalendarsWriteOnlyAccessUsageDescription: "Jarvis adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you."
-        NSRemindersFullAccessUsageDescription: "Jarvis lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list."
-        NSLocationWhenInUseUsageDescription: "Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
-        NSHealthShareUsageDescription: "Jarvis lets Claude read health summaries when you ask, for example how many steps you walked this week or how long you slept last night."
+        NSCameraUsageDescription: "Persona uses the camera to scan the pairing QR code printed by `personad hub pair`, for example when you first connect to your hub."
+        NSContactsUsageDescription: "Persona lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message."
+        NSCalendarsFullAccessUsageDescription: "Persona lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Persona adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you."
+        NSRemindersFullAccessUsageDescription: "Persona lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list."
+        NSLocationWhenInUseUsageDescription: "Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
+        NSHealthShareUsageDescription: "Persona lets Claude read health summaries when you ask, for example how many steps you walked this week or how long you slept last night."
         # Required by App Store processing whenever the HealthKit entitlement is present, even though Jarvis only reads.
-        NSHealthUpdateUsageDescription: "Jarvis only reads health data and never writes it; if a future version saves data, for example a workout Claude logs for you, it will ask here first."
-        NSPhotoLibraryUsageDescription: "Jarvis lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
-        NSPhotoLibraryAddUsageDescription: "Jarvis saves images Claude produces to your library when you ask, for example a chart it generated."
-        NSMicrophoneUsageDescription: "Jarvis records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
-        NSSpeechRecognitionUsageDescription: "Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
+        NSHealthUpdateUsageDescription: "Persona only reads health data and never writes it; if a future version saves data, for example a workout Claude logs for you, it will ask here first."
+        NSPhotoLibraryUsageDescription: "Persona lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
+        NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
+        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
+        NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # The native macOS app (docs/mac.md): the iOS app's logic and content views, compiled for macOS, inside a Mac
   # shell (Mac/): windows, sidebar, toolbar, menus, keyboard shortcuts, Settings, the menu bar. iOS-only parts are
   # behind `#if os(iOS)`; Mac/Compat gives the iOS-only modifiers Mac meanings.
@@ -209,14 +209,14 @@ targets:
     info:
       path: Mac/Resources/Info.plist
       properties:
-        CFBundleName: Jarvis
+        CFBundleName: Persona
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
-            CFBundleURLSchemes: [jarvis]
+            CFBundleURLSchemes: [jarvis, persona]
         ITSAppUsesNonExemptEncryption: false
         # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
@@ -225,17 +225,17 @@ targets:
         LSMinimumSystemVersion: "26.0"
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-        NSCameraUsageDescription: "Jarvis uses the camera to scan the pairing QR code printed by `jarvisd hub pair`, for example when you first connect to your hub."
-        NSContactsUsageDescription: "Jarvis lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message."
-        NSCalendarsFullAccessUsageDescription: "Jarvis lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting."
-        NSCalendarsWriteOnlyAccessUsageDescription: "Jarvis adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you."
-        NSRemindersFullAccessUsageDescription: "Jarvis lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list."
-        NSLocationWhenInUseUsageDescription: "Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
-        NSLocationUsageDescription: "Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
-        NSPhotoLibraryUsageDescription: "Jarvis lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
-        NSPhotoLibraryAddUsageDescription: "Jarvis saves images Claude produces to your library when you ask, for example a chart it generated."
-        NSMicrophoneUsageDescription: "Jarvis records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
-        NSSpeechRecognitionUsageDescription: "Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
+        NSCameraUsageDescription: "Persona uses the camera to scan the pairing QR code printed by `personad hub pair`, for example when you first connect to your hub."
+        NSContactsUsageDescription: "Persona lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message."
+        NSCalendarsFullAccessUsageDescription: "Persona lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Persona adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you."
+        NSRemindersFullAccessUsageDescription: "Persona lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list."
+        NSLocationWhenInUseUsageDescription: "Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
+        NSLocationUsageDescription: "Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
+        NSPhotoLibraryUsageDescription: "Persona lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
+        NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
+        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
+        NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # Draws the Fleet Live Activity. The app starts it and reports its tokens; the hub pushes its content.
   PersonaWidgets:
     type: app-extension
@@ -257,7 +257,7 @@ targets:
     info:
       path: PersonaWidgets/Info.plist
       properties:
-        CFBundleName: JarvisWidgets
+        CFBundleName: PersonaWidgets
         JarvisAppGroup: $(JARVIS_APP_GROUP)
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -337,7 +337,7 @@ targets:
     info:
       path: PersonaWatch/Info.plist
       properties:
-        CFBundleName: Jarvis
+        CFBundleName: Persona
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -345,7 +345,7 @@ targets:
         WKApplication: true
         WKCompanionAppBundleIdentifier: $(JARVIS_BUNDLE_ID)
         UIBackgroundModes: [audio]
-        NSMicrophoneUsageDescription: "Jarvis records audio you start on Apple Watch, for example a meeting or a spoken note, then transfers it to your iPhone for on-device transcription before you choose to share the text with your assistant."
+        NSMicrophoneUsageDescription: "Persona records audio you start on Apple Watch, for example a meeting or a spoken note, then transfers it to your iPhone for on-device transcription before you choose to share the text with your assistant."
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     settings:

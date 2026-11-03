@@ -4,10 +4,10 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
     var url: URL
     var token: String
 
-    /// Parses `jarvis://pair?url=…&token=…`.
+    /// Parses both `persona://pair?url=…&token=…` and the legacy `jarvis://` link.
     init?(pairURL: String) {
         guard let comps = URLComponents(string: pairURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-              comps.scheme == "jarvis",
+              ["persona", "jarvis"].contains(comps.scheme?.lowercased() ?? ""),
               let u = comps.queryItems?.first(where: { $0.name == "url" })?.value, let url = URL(string: u),
               let token = comps.queryItems?.first(where: { $0.name == "token" })?.value, !token.isEmpty
         else { return nil }
@@ -527,7 +527,7 @@ nonisolated struct APIClient: Sendable {
         /// What the assistant is told about the user (设置 › 助手 › 关于我).
         var notes: String?
         var timezone: String?
-        /// The main conversation's session id (the Jarvis tab opens it); nil until there is one.
+        /// The main conversation's session id (the Persona tab opens it); nil until there is one.
         var main: String?
         enum CodingKeys: String, CodingKey {
             case launcher, cwd, conversations, timezone, main; case machineID = "machine_id", notes = "notes_effective"
@@ -575,7 +575,7 @@ nonisolated struct APIClient: Sendable {
         var permissionMode: String?
         var effort: String?
         var includesModelSettings = true
-        var createdBy: String?    // "assistant": Jarvis set it up from a conversation
+        var createdBy: String?    // "assistant": Persona set it up from a conversation
         var lastRun: Date?        // read-only, set by the hub
         var lastSessionID: String?
         var lastStatus: String?   // of the last run: ok / failed / skipped

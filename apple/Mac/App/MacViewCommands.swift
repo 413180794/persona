@@ -10,7 +10,7 @@ enum MacViewCommands {
     }
 
     /// The agent above / below in the Agents list's order (AgentListOrder: needs you → unread → working → seen),
-    /// wrapping around; Jarvis conversations are not in that list. From nothing, the first.
+    /// wrapping around; Persona conversations are not in that list. From nothing, the first.
     static func neighbour(of key: SessionKey?, by delta: Int, in sessions: [Session], order: AgentListOrder) -> SessionKey? {
         let list = order.ordered(sessions.filter { !$0.assistant }).map(\.key)
         guard !list.isEmpty else { return nil }

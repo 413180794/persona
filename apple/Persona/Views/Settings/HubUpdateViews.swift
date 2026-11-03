@@ -269,9 +269,9 @@ struct HubSettingsPage: View {
                 }
             }
         } header: {
-            SettingsHeading("各台电脑上的 jarvisd")
+            SettingsHeading("各台电脑上的 personad")
         } footer: {
-            Text("hub 更新后会把各台电脑上的 jarvisd 也换成同一个版本；没换上的可以点进去「重新部署」。")
+            Text("hub 更新后会把各台电脑上的 personad 也换成同一个版本；没换上的可以点进去「重新部署」。")
         }
     }
 
@@ -307,7 +307,7 @@ struct HubSettingsPage: View {
     }
 }
 
-/// The one quiet line about the hub over the Agents list, like 「Mac 上的 Jarvis 已登录」 (docs/hub-update.md「App 里」):
+/// The one quiet line about the hub over the Agents list, like 「Mac 上的 Persona 已登录」 (docs/hub-update.md「App 里」):
 /// 自动更新已开启 (once), a newer version when auto-update is off, an update under way, one that went back, or that the
 /// hub or the app is too old. No dialog; a tap opens the hub page.
 struct HubNoticeRow: View {
@@ -423,7 +423,7 @@ struct SkillsPage: View {
             if model.loaded && model.skills.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.skills, title: model.error == nil ? "还没有 skill" : "读不到 skill",
-                                   message: model.error ?? "把 skill 放进跑助手的那台电脑的 ~/.jarvis/skills/，每个一个目录（里面有 SKILL.md）。")
+                                   message: model.error ?? "把 skill 放进跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。")
                 }
             } else {
                 Section {
@@ -440,7 +440,7 @@ struct SkillsPage: View {
                         }
                     }
                 } footer: {
-                    Text("放在\(model.machine.map { " \($0) " } ?? "跑助手的那台电脑")的 ~/.jarvis/skills/，每个一个目录（里面有 SKILL.md）。更新 jarvisd 不会动它们；改了以后，下一段新对话起生效。")
+                    Text("放在\(model.machine.map { " \($0) " } ?? "跑助手的那台电脑")的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。")
                 }
             }
         }

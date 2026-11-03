@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// GET / PUT /api/v1/bots/feishu (docs/bots.md): the Feishu bot the user talks to Jarvis through.
+/// GET / PUT /api/v1/bots/feishu (docs/bots.md): the Feishu bot the user talks to Persona through.
 nonisolated struct FeishuBotStatus: Codable, Hashable, Sendable {
     var enabled: Bool
     var appID: String

@@ -1,7 +1,7 @@
 import SwiftUI
 
 #if os(iOS)
-/// 「Mac 上的 Jarvis 已登录」 over the Agents list, like WeChat's line over its chats (docs/ios.md「Mac 已登录」): one
+/// 「Mac 上的 Persona 已登录」 over the Agents list, like WeChat's line over its chats (docs/ios.md「Mac 已登录」): one
 /// quiet row while a desktop app is connected, 手机静音 beside it when on. A tap opens `DesktopPresenceSheet`.
 struct DesktopPresenceRow: View {
     @Environment(AppModel.self) private var model
@@ -55,7 +55,7 @@ struct DesktopPresenceSheet: View {
                     }
                     .accessibilityIdentifier("desktops.mute")
                 } footer: {
-                    Text("Mac 上的 Jarvis 在线时，这台 iPhone 不再推送「需要你处理」和「Agent 做完」的通知，由 Mac 提醒你；你让 Jarvis 定的提醒照常推送。")
+                    Text("Mac 上的 Persona 在线时，这台 iPhone 不再推送「需要你处理」和「Agent 做完」的通知，由 Mac 提醒你；你让 Persona 定的提醒照常推送。")
                 }
 
                 ForEach(model.desktops) { d in
@@ -69,7 +69,7 @@ struct DesktopPresenceSheet: View {
                         }
                         if !d.device.isEmpty {
                             Button(role: .destructive) { signingOut = d } label: {
-                                Text("退出这台 Mac 上的 Jarvis").lineLimit(1)
+                                Text("退出这台 Mac 上的 Persona").lineLimit(1)
                             }
                         }
                     } footer: {
@@ -84,14 +84,14 @@ struct DesktopPresenceSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
             }
-            .confirmationDialog(signingOut.map { "退出「\($0.name)」上的 Jarvis？" } ?? "",
+            .confirmationDialog(signingOut.map { "退出「\($0.name)」上的 Persona？" } ?? "",
                                 isPresented: Binding(get: { signingOut != nil }, set: { if !$0 { signingOut = nil } }),
                                 titleVisibility: .visible) {
                 Button("退出", role: .destructive) {
                     if let d = signingOut { Task { await model.signOutDesktop(d) } }
                 }
             } message: {
-                Text("退出后，那台 Mac 要重新配对才能再用 Jarvis。")
+                Text("退出后，那台 Mac 要重新配对才能再用 Persona。")
             }
             .onChange(of: model.desktops.isEmpty) { _, none in if none { dismiss() } }
         }

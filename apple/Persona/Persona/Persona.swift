@@ -1,14 +1,14 @@
 import Foundation
 
-/// A look for Jarvis (docs/persona.md): its name, its face, the animated dot in the Jarvis tab's top bar and its
+/// A look for Persona (docs/persona.md): its name, its face, the animated dot in the Persona tab's top bar and its
 /// colors. The built-in ones are the app's own drawings (JarvisAvatar, in the style's accent); every other one is a
 /// package on the hub (~/.jarvis/personas/<id>/) that the phone downloads and keeps (`PersonaStore`).
 nonisolated struct Persona: Identifiable, Sendable, Hashable {
     static let builtinID = "jarvis"
     /// The default: 面罩.
-    static let builtin = Persona(id: builtinID, name: "Jarvis", subtitle: "默认形象，颜色随主题色", rev: "", manifest: nil)
-    /// 汇流 (three traces running into a core with two eyes), a choice next to the default; still named Jarvis.
-    static let circuit = Persona(id: "jarvis-circuit", name: "Jarvis", subtitle: "汇流，颜色随主题色", rev: "", manifest: nil,
+    static let builtin = Persona(id: builtinID, name: "Persona", subtitle: "默认形象，颜色随主题色", rev: "", manifest: nil)
+    /// 汇流 (three traces running into a core with two eyes), a choice next to the default; still named Persona.
+    static let circuit = Persona(id: "jarvis-circuit", name: "Persona", subtitle: "汇流，颜色随主题色", rev: "", manifest: nil,
                                  design: "circuit", title: "汇流")
     /// What 设置 › 外观 › 形象 offers before the hub's packages, the default first.
     static let builtins = [builtin, circuit]
@@ -22,7 +22,7 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     var manifest: PersonaManifest?
     /// A built-in's JarvisAvatar.Design (raw value); nil: the default's.
     var design: String?
-    /// The card's name in 设置 when it is not `name` (the built-ins are all called Jarvis).
+    /// The card's name in 设置 when it is not `name` (the built-ins are all called Persona).
     var title: String?
 
     var isBuiltin: Bool { manifest == nil }

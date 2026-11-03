@@ -153,7 +153,7 @@ enum AssistantScheduleText {
 
 // MARK: - 定时任务
 
-/// Everything Jarvis does on its own, on one page: what runs next, what repeats (every day at a time, every N
+/// Everything Persona does on its own, on one page: what runs next, what repeats (every day at a time, every N
 /// minutes; the rule in words, next and last run, an on/off switch), the one-offs it scheduled from a conversation,
 /// and the history of runs. Each opens the same editor: when, the prompt, and what it runs with.
 struct AssistantRoutinesView: View {
@@ -179,9 +179,9 @@ struct AssistantRoutinesView: View {
                 } footer: {
                     #if os(macOS)
                     // The Mac writes its own time zone to the hub too (AppModel), so not "the phone's".
-                    Text("到点时 Jarvis 按提示词去做，跑完推送到手机。时间按你所在的时区。")
+                    Text("到点时 Persona 按提示词去做，跑完推送到手机。时间按你所在的时区。")
                     #else
-                    Text("到点时 Jarvis 按提示词去做，跑完推送到手机。时间按手机所在的时区。")
+                    Text("到点时 Persona 按提示词去做，跑完推送到手机。时间按手机所在的时区。")
                     #endif
                 }
             }
@@ -193,9 +193,9 @@ struct AssistantRoutinesView: View {
                 } footer: {
                     #if os(macOS)
                     // The Mac's long press is the right click (the row's contextMenu).
-                    Text("Jarvis 在对话里替自己安排的，到点自己醒来接着做。右键可以立即运行或删除。")
+                    Text("Persona 在对话里替自己安排的，到点自己醒来接着做。右键可以立即运行或删除。")
                     #else
-                    Text("Jarvis 在对话里替自己安排的，到点自己醒来接着做。左滑删除，长按可以立即运行。")
+                    Text("Persona 在对话里替自己安排的，到点自己醒来接着做。左滑删除，长按可以立即运行。")
                     #endif
                 }
             }
@@ -216,7 +216,7 @@ struct AssistantRoutinesView: View {
                 ContentUnavailableView("读不到定时任务", systemImage: Theme.Icon.error, description: Text(error))
             } else if page.tasks.isEmpty {
                 ContentUnavailableView("没有定时任务", systemImage: Theme.Icon.schedule,
-                                       description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」「每 30 分钟巡检一次」，让 Jarvis 定时做一件事。"))
+                                       description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」「每 30 分钟巡检一次」，让 Persona 定时做一件事。"))
             }
         }
         .navigationTitle("定时任务")
@@ -297,7 +297,7 @@ struct AssistantTaskRow: View {
         let next = t.enabled ? (t.nextRun ?? t.at) : nil
         let notes = [t.enabled ? next.map { "下次 \(AssistantScheduleText.moment($0))" } : "已关闭",
                      with?.text, AssistantScheduleText.lastRun(t)?.text,
-                     t.createdBy == "assistant" && t.repeats != .once ? "Jarvis 建的" : nil].compactMap { $0 }
+                     t.createdBy == "assistant" && t.repeats != .once ? "Persona 建的" : nil].compactMap { $0 }
         return TaskRow(TaskItem(id: t.id, title: AssistantScheduleText.title(t),
                                 subtitle: t.repeats == .once ? (t.sessionID == nil ? "一次 · 新对话" : "一次 · 接着原来的对话") : AssistantScheduleText.sentence(t),
                                 footnote: notes.joined(separator: " · "), status: .pending(step: 0)),
@@ -331,7 +331,7 @@ struct AssistantTaskRow: View {
                 HStack(spacing: Theme.Space.sm) {
                     Text(AssistantScheduleText.title(t)).font(Theme.Font.heading).lineLimit(1)
                     if t.createdBy == "assistant" && t.repeats != .once {
-                        Text("Jarvis 建的").font(Theme.Font.labelMedium).foregroundStyle(Theme.accent)
+                        Text("Persona 建的").font(Theme.Font.labelMedium).foregroundStyle(Theme.accent)
                             .padding(.horizontal, Theme.Space.sm).padding(.vertical, 1)
                             .background(Theme.accent.opacity(0.12), in: .capsule)
                             .lineLimit(1)
@@ -457,11 +457,11 @@ struct AssistantTaskEditor: View {
             Section {
                 #if os(macOS)
                 // A grouped Mac form shows a titled field as label + trailing value: the prompt took the right half.
-                TextField("要 Jarvis 做什么", text: $draft.prompt, prompt: Text("要 Jarvis 做什么"), axis: .vertical)
+                TextField("要 Persona 做什么", text: $draft.prompt, prompt: Text("要 Persona 做什么"), axis: .vertical)
                     .labelsHidden()
                     .lineLimit(8...)
                 #else
-                TextField("要 Jarvis 做什么", text: $draft.prompt, axis: .vertical)
+                TextField("要 Persona 做什么", text: $draft.prompt, axis: .vertical)
                     .lineLimit(8...)
                 #endif
             } header: {
@@ -790,7 +790,7 @@ struct AssistantTaskEditor: View {
 
     private func open(_ key: SessionKey) {
         if creating { dismiss() }
-        model.openAssistantConversation(model.inHub(key)) // a task's conversation is the hub-level group's Jarvis
+        model.openAssistantConversation(model.inHub(key)) // a task's conversation is the hub-level group's Persona
     }
 }
 
@@ -974,7 +974,7 @@ struct AssistantMemoryView: View {
                         #endif
                     }
                 } footer: {
-                    Text("Jarvis 记住的事，一条一个文件，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
+                    Text("Persona 记住的事，一条一个文件，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
                 }
             }
             if let index, !entries.isEmpty {
@@ -985,7 +985,7 @@ struct AssistantMemoryView: View {
                         Label { Text("索引").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.list) }
                     }
                 } footer: {
-                    Text("MEMORY.md：Jarvis 自己维护的目录，删除记忆时会一起更新。")
+                    Text("MEMORY.md：Persona 自己维护的目录，删除记忆时会一起更新。")
                 }
             }
         }
@@ -997,7 +997,7 @@ struct AssistantMemoryView: View {
                 ContentUnavailableView("读不到记忆", systemImage: Theme.Icon.error, description: Text(error))
             } else if entries.isEmpty {
                 ContentUnavailableView("还没有记忆", systemImage: Theme.Icon.memory,
-                                       description: Text("Jarvis 会把你的偏好、纠正过它的地方记在这里。"))
+                                       description: Text("Persona 会把你的偏好、纠正过它的地方记在这里。"))
             }
         }
         .navigationTitle("记忆")
@@ -1005,7 +1005,7 @@ struct AssistantMemoryView: View {
                             titleVisibility: .visible, presenting: pendingDelete) { e in
             Button("删除", role: .destructive) { Task { await delete(e) } }
         } message: { e in
-            Text("Jarvis 以后不再记得「\(titles[e.file.name]?.title ?? e.name ?? e.file.name)」。")
+            Text("Persona 以后不再记得「\(titles[e.file.name]?.title ?? e.name ?? e.file.name)」。")
         }
         .navigationDestination(item: $debugOpen) { e in
             AssistantMemoryDetail(entry: e, title: titles[e.file.name]?.title, onSaved: { await load() })
@@ -1192,7 +1192,7 @@ struct AssistantNotesView: View {
                     .focused($focused)
                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             } footer: {
-                Text("这些内容会附在 Jarvis 的说明最后；改了以后新对话生效。可以写代码放在哪、常用哪些 skills、哪些机器或目录别碰、你习惯的汇报方式。")
+                Text("这些内容会附在 Persona 的说明最后；改了以后新对话生效。可以写代码放在哪、常用哪些 skills、哪些机器或目录别碰、你习惯的汇报方式。")
             }
         }
         .themedPage()

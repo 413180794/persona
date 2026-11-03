@@ -448,6 +448,6 @@ struct FleetFace: View {
         .frame(width: size, height: size)
         .id(state)
         .transition(.opacity)
-        .accessibilityLabel("Jarvis \(state.title)")
+        .accessibilityLabel("Persona \(state.title)")
     }
 }

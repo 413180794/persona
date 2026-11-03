@@ -147,7 +147,7 @@ struct LarkChatView: View {
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { Task { await askJarvis() } } label: { Label("让 Jarvis 总结", systemImage: Theme.Icon.ai) }
+                Button { Task { await askJarvis() } } label: { Label("让 Persona 总结", systemImage: Theme.Icon.ai) }
             }
         }
         .task {

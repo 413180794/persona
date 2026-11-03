@@ -1,7 +1,7 @@
 import SwiftUI
 
 // 设置 › 连接器 › 信息: one Mac's Messages, read through the hub (docs/plan-connectors.md「五」). The user reads every
-// conversation here; 交给 Jarvis (on by default) also gives the real ones to the knowledge base, the inbox and the
+// conversation here; 交给 Persona (on by default) also gives the real ones to the knowledge base, the inbox and the
 // assistant, and can be turned off, and what the hub kept deleted. Nothing is marked read, nothing is sent.
 
 struct MessagesChatsRoute: Hashable {}
@@ -63,7 +63,7 @@ struct MessagesConnectorView: View {
             if let ai = status?.ai {
                 Section {
                     Toggle(isOn: Binding(get: { ai }, set: { on in Task { await setAI(on) } })) {
-                        Label("交给 Jarvis（知识库、收件箱、助手）", systemImage: Theme.Icon.ai).lineLimit(2)
+                        Label("交给 Persona", systemImage: Theme.Icon.ai).lineLimit(1)
                     }
                     .disabled(saving)
                     .accessibilityIdentifier("messages-ai")
@@ -77,13 +77,13 @@ struct MessagesConnectorView: View {
                     }
                 } footer: {
                     Text(ai ? "通讯录里的人和你回复过的会话会进知识库和收件箱（和飞书一样分拣），助手能查、能总结；验证码会打码。关掉立刻停止；要删 hub 上已存的，先关掉。"
-                            : "现在不交给 Jarvis：不同步、不进收件箱，助手读不到。hub 上之前存下的还在，可以删除。")
+                            : "现在不交给 Persona：不同步、不进收件箱，助手读不到。hub 上之前存下的还在，可以删除。")
                 }
             }
             Section {
             } footer: {
-                Text(status?.ai == nil ? "消息只在这里给你自己看：不存到 hub、不交给 AI，看了也不会标成已读。Jarvis 只读，不会替你发消息。"
-                                       : "这里能看全部会话（直接读那台 Mac，看了也不会标成已读）。Jarvis 只读，不会替你发消息。")
+                Text(status?.ai == nil ? "消息只在这里给你自己看：不存到 hub、不交给 AI，看了也不会标成已读。Persona 只读，不会替你发消息。"
+                                       : "这里能看全部会话（直接读那台 Mac，看了也不会标成已读）。Persona 只读，不会替你发消息。")
             }
         }
         .confirmationDialog("删除 hub 上已存的信息？", isPresented: $confirmDelete, titleVisibility: .visible) {

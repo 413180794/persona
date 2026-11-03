@@ -406,7 +406,7 @@ final class AgentsListTests: XCTestCase {
         app.activate()
         see(filter("all"), "the list after coming back")
         XCTAssertLessThan(gapAboveFilters("foreground", searchShown: true), limit)
-        app.buttons["Jarvis"].firstMatch.tap()
+        app.buttons["Persona"].firstMatch.tap()
         sleep(1)
         app.buttons["Agents"].firstMatch.tap()
         see(filter("all"), "the list after switching tabs")

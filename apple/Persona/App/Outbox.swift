@@ -23,7 +23,7 @@ extension AppModel {
         chats.values.reduce(0) { n, s in n + s.pending.count { $0.state == .waiting || $0.state == .sending } }
     }
 
-    /// A message the hub already has, on screen as sent until its transcript copy arrives: a new Jarvis conversation's
+    /// A message the hub already has, on screen as sent until its transcript copy arrives: a new Persona conversation's
     /// first one went with the start request, and the node shows no transcript until claude has written it (#511).
     func showSent(_ key: SessionKey, text: String, images: [ImagePayload]) {
         let msg = PendingMessage(text: text, images: images)

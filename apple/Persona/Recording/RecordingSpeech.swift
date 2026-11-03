@@ -19,7 +19,7 @@ nonisolated enum RecordingSpeechError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedLanguage: "这台设备没有适用于所选语言的本机转写模型"
-        case .noSpeechPermission: "语音识别权限未开启，请到系统设置中允许 Jarvis 使用"
+        case .noSpeechPermission: "语音识别权限未开启，请到系统设置中允许 Persona 使用"
         case .modelUnavailable: "本机语音模型下载失败，请检查网络后重试"
         case .empty: "录音中没有识别到语音"
         }

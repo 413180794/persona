@@ -468,7 +468,7 @@ private struct SystemFacts: View {
         }
         if let h = machine?.herdrVersion, !h.isEmpty { out.append(("herdr", h)) }
         if let c = machine?.claudeVersion, !c.isEmpty { out.append(("Claude Code", c)) }
-        if let n = machine?.nodeVersion, !n.isEmpty { out.append(("Jarvis node", n)) }
+        if let n = machine?.nodeVersion, !n.isEmpty { out.append(("Persona node", n)) }
         return out
     }
 }

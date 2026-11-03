@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The Jarvis tab's top bar (docs/ios.md「Jarvis 顶栏和侧边栏」), floating over the conversation with a fog under it
-/// instead of a solid bar: 历史对话 (the sidebar) on the left, Jarvis's face and name in the middle, 新对话 on the right.
+/// The Persona tab's top bar (docs/ios.md「Persona 顶栏和侧边栏」), floating over the conversation with a fog under it
+/// instead of a solid bar: 历史对话 (the sidebar) on the left, Persona's face and name in the middle, 新对话 on the right.
 /// The face opens a menu: 知识库, 详细信息 (the profile), the copy items (the working directory, a block of facts to
 /// paste to another agent, the session id), the launcher, the session info card, 中断. While the hub is out of reach
 /// the name pill shows the spinner and 等待网络 / 连接中… / 更新中….
@@ -199,7 +199,7 @@ struct AssistantTopBar: View {
         .connectionDetails($showLink)
     }
 
-    /// The pill's name: the persona's (Jarvis's) on the main conversation and the new-conversation page, a side
+    /// The pill's name: the persona's (Persona's) on the main conversation and the new-conversation page, a side
     /// conversation's title.
     private var name: String {
         let persona = model.persona.name
@@ -219,12 +219,12 @@ struct AssistantTopBar: View {
     private var cwd: String {
         if let c = session?.cwd, !c.isEmpty { return c }
         if let c = model.assistantConfig?.cwd, !c.isEmpty { return c }
-        return "~/.jarvis/assistant"
+        return "~/.persona/assistant"
     }
 
     @ViewBuilder private func menuItems(_ link: ConnectionStatus.Phase) -> some View {
         if model.isMultiHub, let current = model.hub?.group {
-            // Several groups of hubs: each has its own Jarvis (docs/multi-hub.md「hub 级页面」); pick whose.
+            // Several groups of hubs: each has its own Persona (docs/multi-hub.md「hub 级页面」); pick whose.
             Section("hub") {
                 Picker("hub", selection: Binding(get: { current }, set: { model.selectHub($0) })) {
                     ForEach(model.groupIDs, id: \.self) { g in
@@ -314,7 +314,7 @@ nonisolated enum AssistantCopyText {
                      launcher: String, model: String?) -> String {
         var lines: [String] = []
         let name = [isMain ? "主对话" : nil, title.map { "「\($0)」" }].compactMap { $0 }.joined(separator: " ")
-        lines.append(sessionID == nil ? "Jarvis 助手（hub 上的 Claude）" : "Jarvis 助手的对话" + (name.isEmpty ? "" : " " + name))
+        lines.append(sessionID == nil ? "Persona 助手（hub 上的 Claude）" : "Persona 助手的对话" + (name.isEmpty ? "" : " " + name))
         if let sessionID { lines.append("会话 ID：\(sessionID)") }
         lines.append("所在机器：" + (machine.map { $0 == machineID ? $0 : "\($0)（\(machineID)）" } ?? machineID))
         lines.append("工作目录：\(cwd)")
@@ -337,13 +337,13 @@ private struct TopBarDot: View {
 }
 
 extension AppModel {
-    /// The machine Jarvis's conversation `key` runs on; on the new-conversation page (nil) the assistant's.
+    /// The machine Persona's conversation `key` runs on; on the new-conversation page (nil) the assistant's.
     func assistantMachineID(_ key: SessionKey?) -> String {
         key?.machineID ?? assistantConfig?.machineID ?? hubMachineID
     }
 
-    /// What the persona's face shows for Jarvis's conversation `key` (docs/persona.md「状态」): 离线 when the hub or
-    /// Jarvis's machine is out of reach, 等你处理 when the conversation waits on the user, 思考中 / 工作中 while a turn
+    /// What the persona's face shows for Persona's conversation `key` (docs/persona.md「状态」): 离线 when the hub or
+    /// Persona's machine is out of reach, 等你处理 when the conversation waits on the user, 思考中 / 工作中 while a turn
     /// runs (thinking until it writes or calls a tool), else 空闲. Read only by the face's own view (`TopBarDot`,
     /// `ShellPersonaButton`): every hub push changes what it reads.
     func personaState(_ key: SessionKey?, machineID: String) -> PersonaState {

@@ -13,7 +13,7 @@ struct JarvisShortcuts: AppShortcutsProvider {
                 "Ask \(.applicationName)",
                 "Ask \(.applicationName) a question",
             ],
-            shortTitle: "问 Jarvis",
+            shortTitle: "问 Persona",
             systemImageName: "sparkles"
         )
         AppShortcut(

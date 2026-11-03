@@ -27,7 +27,7 @@ struct MenuBarIcon: View {
 
     var body: some View {
         Image(systemName: model.look.symbol)
-            .accessibilityLabel("Jarvis Link")
+            .accessibilityLabel("Persona Link")
     }
 }
 

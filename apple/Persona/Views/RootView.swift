@@ -98,7 +98,7 @@ private struct TabPage<Page: View>: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("AssistantRootTab")
         #endif
-        Tab("Jarvis", systemImage: Theme.Icon.ai, value: AppTab.assistant) {
+        Tab("Persona", systemImage: Theme.Icon.ai, value: AppTab.assistant) {
             TabPage {
                 AssistantView()
                     .modifier(TabActivityScope(tab: .assistant))

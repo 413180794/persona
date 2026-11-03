@@ -92,15 +92,15 @@ nonisolated enum StorageUsage {
         return out
     }
 
-    /// Whether an entry of the caches folder is Jarvis's to count and clear. In a sandbox (iOS, a signed Mac build)
+    /// Whether an entry of the caches folder is Persona's to count and clear. In a sandbox (iOS, a signed Mac build)
     /// the folder is the app's own; a Mac build without one (an ad-hoc debug build) shares ~/Library/Caches with
-    /// every other app, so only the folders Jarvis writes count there.
+    /// every other app, so only the folders Persona writes count there.
     static func owned(cachesEntry name: String, sandboxed: Bool, bundleID: String) -> Bool {
         sandboxed || name == bundleID || ChatCache.isFolder(name)
             || ["chat-images", "lark-media", "state"].contains(name)
     }
 
-    /// Whether an entry of the temp folder is Jarvis's: all of it in a sandbox; outside one $TMPDIR is the user's
+    /// Whether an entry of the temp folder is Persona's: all of it in a sandbox; outside one $TMPDIR is the user's
     /// (another program's lark- folder could be there), so none of it.
     static func owned(tempEntry name: String, sandboxed: Bool) -> Bool { sandboxed }
 
@@ -113,12 +113,12 @@ nonisolated enum StorageUsage {
         #endif
     }
 
-    /// The caches folder's entries that are Jarvis's (all of them in a sandbox).
+    /// The caches folder's entries that are Persona's (all of them in a sandbox).
     private static func ownCaches() -> [URL] {
         children(caches).filter { owned(cachesEntry: $0.lastPathComponent, sandboxed: sandboxed, bundleID: bundleID) }
     }
 
-    /// The temp folder's entries that are Jarvis's (`owned(tempEntry:)`).
+    /// The temp folder's entries that are Persona's (`owned(tempEntry:)`).
     private static func ownTemp() -> [URL] {
         children(URL.temporaryDirectory).filter { owned(tempEntry: $0.lastPathComponent, sandboxed: sandboxed) }
     }
@@ -210,9 +210,9 @@ struct StorageView: View {
                 .padding(.vertical, Theme.Space.sm)
             } footer: {
                 #if os(macOS)
-                Text("Jarvis 在这台 Mac 上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
+                Text("Persona 在这台 Mac 上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
                 #else
-                Text("Jarvis 在这台手机上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
+                Text("Persona 在这台手机上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
                 #endif
             }
 

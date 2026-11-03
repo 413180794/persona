@@ -45,17 +45,17 @@ final class MessagesConnectorTests: XCTestCase {
         shot(app, "thread")
     }
 
-    /// 交给 Jarvis: on to begin with; off lets the hub's copy be deleted, after a confirmation.
+    /// 交给 Persona: on to begin with; off lets the hub's copy be deleted, after a confirmation.
     @MainActor func testTheSwitchAndDelete() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py") }
         let app = launch(hub, ["-openConnectorMessages", "YES"])
         let toggle = app.switches["messages-ai"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 10), "no 交给 Jarvis:\n\(app.debugDescription)")
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10), "no 交给 Persona:\n\(app.debugDescription)")
         let delete = app.buttons["messages-delete"]
         XCTAssertFalse(delete.isEnabled, "delete while on")
         shot(app, "switch-on")
         toggle.switches.firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["现在不交给 Jarvis：不同步、不进收件箱，助手读不到。hub 上之前存下的还在，可以删除。"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["现在不交给 Persona：不同步、不进收件箱，助手读不到。hub 上之前存下的还在，可以删除。"].waitForExistence(timeout: 10))
         XCTAssertTrue(delete.isEnabled)
         delete.tap()
         app.buttons["删除"].firstMatch.tap()

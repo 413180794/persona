@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 设置 › 连接器 › 飞书机器人 (docs/bots.md): talk to Jarvis from Feishu. The user makes a custom app with a bot on the
+/// 设置 › 连接器 › 飞书机器人 (docs/bots.md): talk to Persona from Feishu. The user makes a custom app with a bot on the
 /// open platform, enters its id and secret here, pairs by sending the bot a code, and switches on what it may do.
 struct FeishuBotView: View {
     @State private var model = FeishuBotModel()
@@ -72,7 +72,7 @@ struct FeishuBotView: View {
                 Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled)
             }
         } footer: {
-            Text("在飞书里私聊这个机器人，就是在和 Jarvis 说话。机器人只回应配对过的你，群里不回应。")
+            Text("在飞书里私聊这个机器人，就是在和 Persona 说话。机器人只回应配对过的你，群里不回应。")
         }
     }
 
@@ -153,11 +153,11 @@ struct FeishuBotView: View {
 
     private var featuresSection: some View {
         Section {
-            feature(\.main, Theme.Icon.jarvis, "和 Jarvis 对话", "消息发进主对话（/new、/list 换一段），回答发回飞书")
-            feature(\.cards, Theme.Icon.needsYou, "提问和批准", "Jarvis 和飞书里驱动的 Agent 要你回答、批准时，在飞书里发卡片，点一下就行")
+            feature(\.main, Theme.Icon.jarvis, "和 Persona 对话", "消息发进主对话（/new、/list 换一段），回答发回飞书")
+            feature(\.cards, Theme.Icon.needsYou, "提问和批准", "Persona 和飞书里驱动的 Agent 要你回答、批准时，在飞书里发卡片，点一下就行")
             feature(\.allCards, Theme.Icon.notifications, "所有 Agent 的提问", "各台电脑上所有 Agent 的提问和批准都发到飞书")
                 .disabled(!features.cards)
-            feature(\.pushes, Theme.Icon.unmute, "推送也发到飞书", "Jarvis 的通知、定时任务的结果也发一份到飞书")
+            feature(\.pushes, Theme.Icon.unmute, "推送也发到飞书", "Persona 的通知、定时任务的结果也发一份到飞书")
             feature(\.sync, Theme.Icon.inProgress, "同步主对话", "在 App 里、定时任务在主对话里的回答，也发到飞书")
             feature(\.agents, Theme.Icon.agents, "驱动 Agent", "/agents 选各台电脑上的 Claude Code / Codex，在飞书里和它聊；/start 开新的")
         } header: {

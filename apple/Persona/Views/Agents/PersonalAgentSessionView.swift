@@ -66,7 +66,7 @@ struct PersonalAgentSessionView: View {
     @ViewBuilder private var composer: some View {
         VStack(spacing: Theme.Space.xs) {
             if !session.canSend {
-                Text("这个会话不能从 Jarvis 发送（canSend=false），请到 lark-connector 网页处理。")
+                Text("这个会话不能从 Persona 发送（canSend=false），请到 lark-connector 网页处理。")
                     .font(Theme.Font.caption).foregroundStyle(.secondary)
             }
             HStack(alignment: .bottom, spacing: Theme.Space.s) {

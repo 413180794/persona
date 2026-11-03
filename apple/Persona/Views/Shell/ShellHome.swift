@@ -2,7 +2,7 @@ import BeautifulUI
 import SwiftUI
 
 /// A new conversation in the shell (docs/ios.md「新外壳」): the same welcome as the old layout's (`AssistantWelcome`:
-/// greeting, what Jarvis can reach, things to ask), and over the composer what needs the user right now — agents
+/// greeting, what Persona can reach, things to ask), and over the composer what needs the user right now — agents
 /// waiting on them and the inbox's 需要你 — one quiet line each, as many as fit under the welcome's first row of things
 /// to ask (`NeedsRoom`). While the conversation spins up, the first message and a typing line so the send feels instant.
 struct ShellHome: View {
@@ -440,6 +440,6 @@ struct ShellDestinations: ViewModifier {
 }
 
 extension EnvironmentValues {
-    /// The Jarvis conversation is in the shell (docs/ios.md「新外壳」): neutral bubbles, the shell's composer, modes in it.
+    /// The Persona conversation is in the shell (docs/ios.md「新外壳」): neutral bubbles, the shell's composer, modes in it.
     @Entry var shellChat = false
 }

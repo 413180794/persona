@@ -2,7 +2,7 @@ import SwiftUI
 
 // Design tokens only the Mac shell uses (windows, sheets, columns). Same rule as `Theme`: pages read these, never literals.
 extension Theme.Size {
-    /// The Jarvis drawer's widest (narrow windows only; wide ones show it as a column).
+    /// The Persona drawer's widest (narrow windows only; wide ones show it as a column).
     static let macDrawer: CGFloat = 380
     /// The smallest a sheet standing in for an iOS full-screen cover opens.
     static let macSheetMinWidth: CGFloat = 640
@@ -16,7 +16,7 @@ extension Theme.Size {
     static let macWindowHeight: CGFloat = 820
     /// A window's title bar with a unified toolbar: where the shell's sections start, whatever the page's toolbar holds.
     static let macToolbarHeight: CGFloat = 52
-    /// The shell's sidebar column (Jarvis / Agents / 收件箱 / 设置).
+    /// The shell's sidebar column (Persona / Agents / 收件箱 / 设置).
     static let macSidebarMin: CGFloat = 180
     static let macSidebarIdeal: CGFloat = 210
     static let macSidebarMax: CGFloat = 280

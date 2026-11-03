@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」): 助手 (the Jarvis assistant) and Agents (the Agents list)
+/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」): 助手 (the Persona assistant) and Agents (the Agents list)
 /// under one top switch, the drawer on the left (收件箱, 定时任务, 知识库, 机器, the conversations, 设置), 设置 as a sheet.
 /// `旧布局` (AppModel.oldLayout) brings the four tabs back unchanged.
 ///
 /// The pages read this from the environment (`\.shell`): nil means they are in the old layout, on an iPad or on the
 /// Mac, and look exactly as before.
 @MainActor @Observable final class ShellState {
-    /// The drawer is the shell's (it used to be the Jarvis tab's own): it slides both pages aside.
+    /// The drawer is the shell's (it used to be the Persona tab's own): it slides both pages aside.
     let drawer = AssistantDrawer()
     /// 助手 and Agents side by side: a drag sideways moves from one to the other (`ShellPager`).
     let pager = ShellPager()

@@ -26,7 +26,7 @@ nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
     var subtitle: String { component.subtitle }
     /// Liquid Glass surfaces and buttons; the other styles draw solid ones of their own.
     var usesGlass: Bool { component.surface == .glass }
-    /// BeautifulUI's components (`.beautiful` only); every other style keeps Jarvis' own.
+    /// BeautifulUI's components (`.beautiful` only); every other style keeps Persona' own.
     var usesBeautifulUI: Bool { component.components == .beautiful }
     var fontDesign: Font.Design { component.fontDesign }
     /// Corner radius of the cards in the style picker's preview.
@@ -48,9 +48,9 @@ nonisolated enum Theme {
 
     static var accent: Color { spec.accent }
     /// The persona's own color (主色, docs/persona.md): its face's glow and backdrop, never something to tap (that is
-    /// `accent`). The accent when the persona brings none (the built-in Jarvis is drawn in the accent).
+    /// `accent`). The accent when the persona brings none (the built-in Persona is drawn in the accent).
     static var persona: Color { spec.personaPrimary ?? spec.accent }
-    /// The app icon's coral. Only for Jarvis' own mark (the glyph in 设置 / 对话, the Live Activity's star), never for
+    /// The app icon's coral. Only for Persona' own mark (the glyph in 设置 / 对话, the Live Activity's star), never for
     /// something to tap: that is `accent`, whatever the style.
     static let brand = Palette.coral
     static let danger = Color(light: 0xD93A3A, dark: 0xFF5F57)
@@ -100,7 +100,7 @@ nonisolated enum Theme {
         static let bubble: CGFloat = 20
         /// Floating panels over the chat (interactions, strips, the key bar), the terminal card, the composer's field.
         static let panel: CGFloat = 22
-        /// A whole page pushed aside as a card (the Jarvis tab's page beside its sidebar): about the screen's own
+        /// A whole page pushed aside as a card (the Persona tab's page beside its sidebar): about the screen's own
         /// corners on a current iPhone, so the card reads as the screen slid over, not a smaller box.
         static let page: CGFloat = 55
         /// An app icon's corner for an icon `side` points wide: the home screen's squircle (about 22.4% of the side).
@@ -317,7 +317,7 @@ nonisolated enum Theme {
     static let systemSidebar = Color(light: 0xE6E9EE, dark: 0x191C20)
 
     /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot, the work spinner and
-    /// the persona's dot in the Jarvis tab's top bar (docs/persona.md), and those stop with Reduce Motion (the spinner
+    /// the persona's dot in the Persona tab's top bar (docs/persona.md), and those stop with Reduce Motion (the spinner
     /// is the system's).
     enum Motion {
         static let state = Animation.snappy(duration: 0.25)
@@ -333,7 +333,7 @@ nonisolated enum Theme {
         static let concealTime = 0.2
         static let reveal = Animation.easeOut(duration: revealTime)
         static let conceal = Animation.easeIn(duration: concealTime)
-        /// A drawer let go by the finger (the Jarvis tab's sidebar): no bounce, carrying on at the finger's speed.
+        /// A drawer let go by the finger (the Persona tab's sidebar): no bounce, carrying on at the finger's speed.
         /// `velocity` is the share of the remaining way covered per second when it lets go (0 from a button).
         static func drawer(velocity: Double = 0) -> Animation {
             .interpolatingSpring(duration: 0.32, bounce: 0, initialVelocity: velocity)

@@ -21,12 +21,12 @@ struct RecordingContextSheet: View {
                 Section {
                     captureControls
                 } footer: {
-                    Text("音频留在本机，手表录音会回传这里。本机转写后选为上下文，点发送才交给 Jarvis。")
+                    Text("音频留在本机，手表录音会回传这里。本机转写后选为上下文，点发送才交给 Persona。")
                 }
                 #endif
                 Section("可用录音") {
                     if library.entries.isEmpty {
-                        Text("还没有录音。用手机或 Apple Watch 录下要交给 Jarvis 的内容。")
+                        Text("还没有录音。用手机或 Apple Watch 录下要交给 Persona 的内容。")
                             .font(Theme.Font.secondary).foregroundStyle(.secondary)
                     }
                     ForEach(library.entries) { entry in

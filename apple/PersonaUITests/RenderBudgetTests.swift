@@ -103,7 +103,7 @@ final class RenderBudgetTests: XCTestCase {
 
     func testJarvisChat() {
         launch(["-app.tab", "assistant", "-tab", "assistant", "-openAssistant", Self.jarvis])
-        measure("Jarvis chat", "rev")
-        measure("Jarvis chat", "last")
+        measure("Persona chat", "rev")
+        measure("Persona chat", "last")
     }
 }

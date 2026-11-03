@@ -1,10 +1,10 @@
 import AppIntents
 import Foundation
 
-/// "Jarvis 状态": how many sessions are working and how many are waiting, plus the first question.
+/// "Persona 状态": how many sessions are working and how many are waiting, plus the first question.
 // Compatibility: the system addresses this type by its original module/type identity.
 struct JarvisStatusIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "Jarvis 状态"
+    nonisolated static let title: LocalizedStringResource = "Persona 状态"
     nonisolated static let description = IntentDescription(
         "有几个 Claude 在工作、几个在等你处理，以及第一个问题是什么。",
         categoryName: "状态",

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 设置 › 模型 › a launcher › 额度 (docs/launchers.md「额度」): what its key may still spend at relay-history or FAKEMODEL —
 /// a budget on the key, each account / provider it draws on with its windows (5 小时, 每周, 每月…), and the key's own use.
-/// Read by the hub (a Jarvis launcher) or by a machine that has the launcher (a ~/.zshrc one: the key stays there).
+/// Read by the hub (a Persona launcher) or by a machine that has the launcher (a ~/.zshrc one: the key stays there).
 struct LauncherQuotaSection: View {
     @Environment(AppModel.self) private var model
     var name: String

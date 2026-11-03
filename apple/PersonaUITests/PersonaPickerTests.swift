@@ -1,8 +1,8 @@
 import XCTest
 
 /// 设置 › 外观 › 形象 (docs/persona.md), against scripts/mock/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
-/// hub's persona is offered next to the built-in Jarvis; choosing it downloads it, and the Jarvis tab's top bar takes
-/// its name and face; choosing Jarvis again brings the name back. The built-in 汇流 is offered too and keeps the name.
+/// hub's persona is offered next to the built-in Persona; choosing it downloads it, and the Persona tab's top bar takes
+/// its name and face; choosing Persona again brings the name back. The built-in 汇流 is offered too and keeps the name.
 final class PersonaPickerTests: XCTestCase {
     private var hub: String!
     /// mock_hub's main conversation: its name pill shows the persona's name (a side conversation's shows its title).
@@ -16,7 +16,7 @@ final class PersonaPickerTests: XCTestCase {
         self.hub = hub
     }
 
-    /// Whatever happened, the simulator is left on the built-in: other tests read "Jarvis" in the bar.
+    /// Whatever happened, the simulator is left on the built-in: other tests read "Persona" in the bar.
     override func tearDown() {
         if let hub {
             // `-openPersona jarvis` takes effect as the app starts.
@@ -30,7 +30,7 @@ final class PersonaPickerTests: XCTestCase {
         super.tearDown()
     }
 
-    /// On the Jarvis tab's main conversation. `-openPersona jarvis`: from the built-in, whatever the last run chose.
+    /// On the Persona tab's main conversation. `-openPersona jarvis`: from the built-in, whatever the last run chose.
     @MainActor private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
@@ -49,7 +49,7 @@ final class PersonaPickerTests: XCTestCase {
     }
 
     @MainActor private func topBarName(_ app: XCUIApplication) -> String {
-        app.tabBars.buttons["Jarvis"].tap()
+        app.tabBars.buttons["Persona"].tap()
         let face = app.buttons["jarvis-avatar"]
         XCTAssertTrue(face.waitForExistence(timeout: 15), "no face in the top bar:\n\(app.debugDescription)")
         return face.label
@@ -66,7 +66,7 @@ final class PersonaPickerTests: XCTestCase {
 
     @MainActor func testChoosingAPersonaChangesJarvis() throws {
         let app = launch()
-        XCTAssertTrue(topBarName(app).hasPrefix("Jarvis"), "the bar should start on the built-in")
+        XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "the bar should start on the built-in")
         openAppearance(app)
         let builtin = app.buttons["persona-jarvis"]
         let demo = app.buttons["persona-demo"]
@@ -87,11 +87,11 @@ final class PersonaPickerTests: XCTestCase {
         let back = app.buttons["persona-jarvis"]
         XCTAssertTrue(back.waitForExistence(timeout: 10))
         back.tap()
-        waitSelected(app.buttons["persona-jarvis"], "choosing Jarvis again did not take")
-        XCTAssertTrue(topBarName(app).hasPrefix("Jarvis"), "the top bar did not go back to Jarvis")
+        waitSelected(app.buttons["persona-jarvis"], "choosing Persona again did not take")
+        XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "the top bar did not go back to Persona")
     }
 
-    /// 汇流 is a built-in next to the default (no download): choosing it keeps the name Jarvis.
+    /// 汇流 is a built-in next to the default (no download): choosing it keeps the name Persona.
     @MainActor func testChoosingCircuitKeepsTheName() throws {
         let app = launch()
         openAppearance(app)
@@ -101,7 +101,7 @@ final class PersonaPickerTests: XCTestCase {
         circuit.tap()
         waitSelected(app.buttons["persona-jarvis-circuit"], "choosing 汇流 did not take")
         shot(app, "settings-circuit")
-        XCTAssertTrue(topBarName(app).hasPrefix("Jarvis"), "汇流 should keep the name Jarvis")
+        XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "汇流 should keep the name Persona")
         shot(app, "topbar-circuit")
     }
 }

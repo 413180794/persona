@@ -10,7 +10,7 @@ import WebKit
 
 extension View {
     /// Shows `link` in a panel at the trailing edge. `key` is the conversation 「AI 修改」 / 「作为上下文」 go to; without
-    /// one (收件箱, 知识库) they go to Jarvis' main conversation.
+    /// one (收件箱, 知识库) they go to Persona' main conversation.
     func macLinkPanel(_ link: Binding<LinkTarget?>, key: SessionKey? = nil) -> some View {
         modifier(MacLinkPanelHost(link: link, key: key))
     }
@@ -114,7 +114,7 @@ struct MacLinkPanel: View {
 
     private var isFeishuDoc: Bool { FeishuLinks.isDoc(target.url) }
     private var feishuRoute: FeishuRoute? { FeishuLinks.route(target.url) }
-    /// Where 「AI 修改」 and 「作为上下文」 go: the conversation the link came from, else Jarvis' main one.
+    /// Where 「AI 修改」 and 「作为上下文」 go: the conversation the link came from, else Persona' main one.
     private var destination: SessionKey? { key ?? model.assistantMain ?? model.assistantCurrent }
 
     var body: some View {
@@ -217,7 +217,7 @@ struct MacLinkPanel: View {
             editing = ref
         } else if let destination {
             model.composerContexts[destination, default: []].append(ref)
-            model.toast = Toast(key == nil ? "已作为上下文，会随下一条发给 Jarvis 的消息发送" : "已作为上下文，会随下一条消息发送", style: .success)
+            model.toast = Toast(key == nil ? "已作为上下文，会随下一条发给 Persona 的消息发送" : "已作为上下文，会随下一条消息发送", style: .success)
         } else {
             Task { await model.askJarvis(ref.xml + "\n\n先记下这段，我接着说。") }
         }
@@ -234,7 +234,7 @@ struct MacLinkPanel: View {
 }
 
 /// A link in a window of its own (dragged out of the panel with 「在单独窗口打开」): the same panel, closed with the
-/// window. Its 「AI 修改」 / 「作为上下文」 go to Jarvis.
+/// window. Its 「AI 修改」 / 「作为上下文」 go to Persona.
 struct MacLinkWindow: View {
     static let id = "link"
     @Environment(AppModel.self) private var model

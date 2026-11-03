@@ -1,7 +1,7 @@
 import SwiftUI
 
-// 设置 › 连接器 (2026-11-01): where Jarvis' data comes from and acts — this device's data (phone_* tools), the mail
-// accounts, 飞书 (the hub's lark-connector), and the 飞书机器人 the user talks to Jarvis through (FeishuBotView). Mail used to be managed from the inbox's ⋯ menu, this device's data was 手机数据.
+// 设置 › 连接器 (2026-11-01): where Persona' data comes from and acts — this device's data (phone_* tools), the mail
+// accounts, 飞书 (the hub's lark-connector), and the 飞书机器人 the user talks to Persona through (FeishuBotView). Mail used to be managed from the inbox's ⋯ menu, this device's data was 手机数据.
 
 /// What a connector is called and says in the settings list.
 enum ConnectorText {
@@ -252,7 +252,7 @@ struct ConnectorsSection: View {
         } header: {
             SettingsHeading("连接器")
         } footer: {
-            Text("Jarvis 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。")
+            Text("Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。")
         }
         .task(id: model.settingsPath.count) { await load() } // again when a page closes: it may have changed them
     }
@@ -300,7 +300,7 @@ private struct ConnectorRowLabel: View {
     }
 }
 
-/// 设置 › 连接器 › 飞书: whether the hub reaches lark-connector, who is signed in, and what Jarvis does with it. The account
+/// 设置 › 连接器 › 飞书: whether the hub reaches lark-connector, who is signed in, and what Persona does with it. The account
 /// itself is signed in on the hub's machine (docs/feishu.md), not here.
 struct FeishuConnectorView: View {
     @Environment(AppModel.self) private var model
@@ -340,10 +340,10 @@ struct FeishuConnectorView: View {
                      : "飞书账号在 hub 所在机器的 lark-connector 里登录，这里只看连接状态。")
             }
 
-            Section("Jarvis 用飞书做什么") {
+            Section("Persona 用飞书做什么") {
                 use(Theme.Icon.inbox, "收件箱", "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复")
                 use(Theme.Icon.knowledge, "知识库", "会话、人、群、项目归档下来，给助手和 AI 分身做上下文")
-                use(Theme.Icon.ai, "助手", "Jarvis 能搜消息、读文档；发消息等写操作先在手机上问你")
+                use(Theme.Icon.ai, "助手", "Persona 能搜消息、读文档；发消息等写操作先在手机上问你")
                 use(Theme.Icon.agents, "/agent", "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复")
                 ModelConfigurationLink(title: "/agent 模型", purposeID: "lark.agent")
             }

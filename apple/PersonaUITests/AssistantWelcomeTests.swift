@@ -1,6 +1,6 @@
 import XCTest
 
-/// A new Jarvis conversation opens on the welcome (`AssistantWelcome`: a greeting, what Jarvis can reach, things to ask),
+/// A new Persona conversation opens on the welcome (`AssistantWelcome`: a greeting, what Persona can reach, things to ask),
 /// in the shell and the old layout, from launch and from the sidebar's 新对话. The shell once showed nothing but the
 /// composer there (2026-11-02, the user: 「之前设计的挺好的助手空状态，现在咋全空白了？」). Runs in the BeautifulUI
 /// style too (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`).
@@ -38,7 +38,7 @@ final class AssistantWelcomeTests: XCTestCase {
         let greeting = app.staticTexts.matching(NSPredicate(format: "label IN %@", ["早上好", "中午好", "下午好", "晚上好"])).firstMatch
         XCTAssertTrue(greeting.exists, "\(layout): no greeting")
         let reach = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "我能看你的电脑")).firstMatch
-        XCTAssertTrue(reach.exists, "\(layout): no line on what Jarvis can reach")
+        XCTAssertTrue(reach.exists, "\(layout): no line on what Persona can reach")
         let ask = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "今天的安排")).firstMatch
         XCTAssertTrue(ask.exists, "\(layout): no things to ask")
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch

@@ -174,7 +174,7 @@ struct AgentRowMenu: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("RowMenu.content")
         #endif
-        // The session as it is when an item is tapped (all of it: 交给 Jarvis sends its last line).
+        // The session as it is when an item is tapped (all of it: 交给 Persona sends its last line).
         let now = { model.latest(key) }
         #if os(macOS)
         MacOpenInWindowButton(key: key)
@@ -196,7 +196,7 @@ struct AgentRowMenu: View, Equatable {
             guard let s = now() else { return }
             Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
         } label: {
-            Label("交给 Jarvis", systemImage: Theme.Icon.ai)
+            Label("交给 Persona", systemImage: Theme.Icon.ai)
         }
         Button { UIPasteboard.general.string = now()?.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
         if attachable {

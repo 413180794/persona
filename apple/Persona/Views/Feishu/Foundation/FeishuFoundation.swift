@@ -25,7 +25,7 @@ extension APIClient {
 
 // MARK: - Routes
 
-/// What a Feishu view can open from another: a chat, a document, a person, a removed post. Jarvis is not a second
+/// What a Feishu view can open from another: a chat, a document, a person, a removed post. Persona is not a second
 /// Feishu: there are no browsing screens, only what a link or a message leads to. The navigation stack that owns a
 /// Feishu view resolves these with `.feishuRoutes()`.
 enum FeishuRoute: Hashable {

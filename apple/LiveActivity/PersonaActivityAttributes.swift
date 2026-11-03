@@ -1,7 +1,7 @@
 import ActivityKit
 import Foundation
 
-/// The one Live Activity Jarvis runs: the "Fleet" (docs/live-activity.md). Built into the app (starts it, reports its
+/// The one Live Activity Persona runs: the "Fleet" (docs/live-activity.md). Built into the app (starts it, reports its
 /// tokens) and the widget extension (draws it). The hub push-starts it with `attributes-type: JarvisActivityAttributes`
 /// and `attributes: {"kind": "fleet"}`, so neither name may change.
 // Compatibility: the system addresses this type by its original module/type identity.
@@ -30,7 +30,7 @@ nonisolated enum FleetLink {
 
     /// The session a link opens, or nil for anything else (`jarvis://open` alone just opens the app).
     static func session(_ url: URL) -> (machine: String, session: String)? {
-        guard url.scheme == "jarvis", url.host == "open",
+        guard ["persona", "jarvis"].contains(url.scheme?.lowercased() ?? ""), url.host == "open",
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
               let m = items.first(where: { $0.name == "machine" })?.value, !m.isEmpty,
               let s = items.first(where: { $0.name == "session" })?.value, !s.isEmpty else { return nil }

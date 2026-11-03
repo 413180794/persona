@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Jarvis</string>
+	<string>Persona</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -26,6 +26,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>jarvis</string>
+				<string>persona</string>
 			</array>
 		</dict>
 	</array>
@@ -47,29 +48,29 @@
 		<true/>
 	</dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Jarvis lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting.</string>
+	<string>Persona lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>Jarvis adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you.</string>
+	<string>Persona adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Jarvis uses the camera to scan the pairing QR code printed by `jarvisd hub pair`, for example when you first connect to your hub.</string>
+	<string>Persona uses the camera to scan the pairing QR code printed by `personad hub pair`, for example when you first connect to your hub.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Jarvis lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message.</string>
+	<string>Persona lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Jarvis lets Claude read health summaries when you ask, for example how many steps you walked this week or how long you slept last night.</string>
+	<string>Persona lets Claude read health summaries when you ask, for example how many steps you walked this week or how long you slept last night.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Jarvis only reads health data and never writes it; if a future version saves data, for example a workout Claude logs for you, it will ask here first.</string>
+	<string>Persona only reads health data and never writes it; if a future version saves data, for example a workout Claude logs for you, it will ask here first.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in.</string>
+	<string>Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Jarvis records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant.</string>
+	<string>Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Jarvis saves images Claude produces to your library when you ask, for example a chart it generated.</string>
+	<string>Persona saves images Claude produces to your library when you ask, for example a chart it generated.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Jarvis lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo.</string>
+	<string>Persona lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Jarvis lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list.</string>
+	<string>Persona lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude.</string>
+	<string>Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Jarvis' agent colors: the dots of StatusPalette (Shared/StatusPalette.swift, which the extension builds too; it does
+/// Persona' agent colors: the dots of StatusPalette (Shared/StatusPalette.swift, which the extension builds too; it does
 /// not build the app's Theme). Shared by the widget and the island preview in 设置 › 通知 › 灵动岛.
 enum FleetPalette {
     static var needsYou: Color { StatusPalette.needsYou.dot }

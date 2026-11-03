@@ -23,7 +23,7 @@ nonisolated struct TerminalTheme: Sendable {
     func side(_ dark: Bool) -> Side { dark ? self.dark : light }
 
     static let jarvis = TerminalTheme(
-        id: "jarvis", name: "Jarvis",
+        id: "jarvis", name: "Persona",
         light: Side(background: 0xFBFAF7, foreground: 0x1F2328, cursor: 0x0A84FF, selection: 0x0A84FF,
                     ansi: [0x24292F, 0xCF222E, 0x116329, 0x9A6700, 0x0550AE, 0x8250DF, 0x1B7C83, 0x6E7781,
                            0x57606A, 0xA40E26, 0x1A7F37, 0x7D4E00, 0x0969DA, 0xA475F9, 0x3192AA, 0x8C959F]),

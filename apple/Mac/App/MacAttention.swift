@@ -9,7 +9,7 @@ import UserNotifications
 enum MacAttention {
     /// The notifications to post for a session-list change: agents that turned needs-you or finished. Not for the
     /// chat on screen while the app is in front, a muted agent, a session the list just learned about, or a finish
-    /// right after a needs-you (the same stop). Jarvis's own conversations ping when they ask, not when they reply.
+    /// right after a needs-you (the same stop). Persona's own conversations ping when they ask, not when they reply.
     static func transitions(old: [Session], new: [Session], open: SessionKey?, appActive: Bool, prefs: NotifyPrefs,
                             now: Date, muted: (Session) -> Bool) -> [(Session, AgentState)] {
         let before = Dictionary(old.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
@@ -36,7 +36,7 @@ enum MacAttention {
         }
     }
 
-    /// The Dock badge: agents and Jarvis conversations waiting on you, muted ones left out (the sidebar's badges).
+    /// The Dock badge: agents and Persona conversations waiting on you, muted ones left out (the sidebar's badges).
     static func badge(_ sessions: [Session], muted: (Session) -> Bool) -> String? {
         let n = sessions.filter { $0.state == .needsYou && !muted($0) }.count
         return n > 0 ? "\(n)" : nil

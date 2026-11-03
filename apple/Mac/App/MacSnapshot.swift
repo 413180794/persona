@@ -135,7 +135,7 @@ import SwiftUI
         defer { zip(blended, saved).forEach { $0.compositingFilter = $1.0; $0.filters = $1.1 } }
         window.effectiveAppearance.performAsCurrentDrawingAppearance { frameView.cacheDisplay(in: bounds, to: rep) }
         // A split's sidebar column floats in a glass container whose content holder is a bare layer: drawn as part of
-        // the window it comes out as an empty white card (the Jarvis sidebar, 2026-11-01). Each view held in one is
+        // the window it comes out as an empty white card (the Persona sidebar, 2026-11-01). Each view held in one is
         // drawn again on its own, over the window background, and laid over its place.
         let glass = descendants(of: frameView).filter { String(describing: type(of: $0)).contains("ConcentricGlassEffectView") && isShown($0) }
         var heldRects: [CGRect] = []

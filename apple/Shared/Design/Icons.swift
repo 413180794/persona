@@ -146,9 +146,9 @@ extension Theme {
 
         // MARK: Things
 
-        /// Jarvis itself (the brand's four-point star).
+        /// Persona itself (the brand's four-point star).
         static let jarvis = "sparkle"
-        /// AI does it: summaries, drafts, AI edits, hand to Jarvis.
+        /// AI does it: summaries, drafts, AI edits, hand to Persona.
         static let ai = "sparkles"
         /// The Agents tab and what stands for it.
         static let agents = "chevron.left.forwardslash.chevron.right"
@@ -184,7 +184,7 @@ extension Theme {
         static let laptop = "laptopcomputer"
         /// Signing in with a code entered on a web page instead of a computer's login (GitHub's device flow).
         static let deviceCode = "key"
-        /// This Mac out of the hub's reach (the Jarvis page's device chip on the Mac).
+        /// This Mac out of the hub's reach (the Persona page's device chip on the Mac).
         static let laptopOffline = "laptopcomputer.slash"
         static let server = "server.rack"
         /// A group of hubs that know each other (设置 › hub, the group filter and labels of the merged lists;
@@ -218,11 +218,11 @@ extension Theme {
         static let feishuChats = "bubble.left.and.bubble.right"
         /// The mail accounts (管理邮箱).
         static let mailAccounts = "envelope.badge"
-        /// A chat app's bot the user talks to Jarvis through (设置 › 连接器 › 飞书机器人).
+        /// A chat app's bot the user talks to Persona through (设置 › 连接器 › 飞书机器人).
         static let chatBot = "message.badge.waveform"
         /// Pairing a device or a bot with a one-time code.
         static let pairing = "link.badge.plus"
-        /// 设置 › 连接器: the data sources Jarvis reads and acts in (this device, mail, 飞书).
+        /// 设置 › 连接器: the data sources Persona reads and acts in (this device, mail, 飞书).
         static let connectors = "point.3.connected.trianglepath.dotted"
         /// This device as a connector (its contacts, calendar, photos…): iPhone, iPad or Mac.
         #if os(macOS)
@@ -232,7 +232,7 @@ extension Theme {
         #endif
         /// AI 草拟回复: a reply drafted in the user's voice.
         static let draftReply = "pencil.and.scribble"
-        /// 交给 AI: an inbox item handed to Jarvis or an agent.
+        /// 交给 AI: an inbox item handed to Persona or an agent.
         static let handToAI = "paperplane"
         /// Mentions of the user (@我).
         static let mention = "at"
@@ -272,7 +272,7 @@ extension Theme {
         static let gmail = "brand-gmail"
         /// Microsoft's four squares, only on the 使用 Microsoft 账号登录 button and Outlook accounts.
         static let microsoft = "brand-microsoft"
-        /// iPhone's own apps, for the data Jarvis reads from them (设置 › 连接器 › 这台 iPhone): their App Store artwork.
+        /// iPhone's own apps, for the data Persona reads from them (设置 › 连接器 › 这台 iPhone): their App Store artwork.
         static let iosContacts = "ios-app-contacts"
         static let iosCalendar = "ios-app-calendar"
         static let iosReminders = "ios-app-reminders"

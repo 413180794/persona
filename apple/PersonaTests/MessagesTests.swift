@@ -37,11 +37,11 @@ struct MessagesTests {
     @Test func withoutPermissionTheListSaysSo() async {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/imessage/chats") { _ in
-            throw APIError(status: 403, message: "macOS 不让 Jarvis 读", fields: ["code": "no_permission"])
+            throw APIError(status: 403, message: "macOS 不让 Persona 读", fields: ["code": "no_permission"])
         }
         let page = MessagesChatsModel(deps: deps(hub))
         await page.load()
-        #expect(page.loaded && page.chats.isEmpty && page.failure == .noPermission("macOS 不让 Jarvis 读"))
+        #expect(page.loaded && page.chats.isEmpty && page.failure == .noPermission("macOS 不让 Persona 读"))
     }
 
     @Test func olderMessagesGoInFront() async throws {
@@ -82,7 +82,7 @@ struct MessagesTests {
         #expect(plain.allSatisfy { $0.sender == nil && $0.service == nil })
     }
 
-    /// 交给 Jarvis: the switch's state from the hub, turned off and on, and what a delete removed.
+    /// 交给 Persona: the switch's state from the hub, turned off and on, and what a delete removed.
     @Test func theSwitchAndDelete() async throws {
         let hub = FakeHub()
         hub.on("PUT", "/api/v1/imessage/settings") { req in

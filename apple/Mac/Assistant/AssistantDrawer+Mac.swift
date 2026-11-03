@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-// The Mac's Jarvis sidebar drawer (iOS: `Views/Assistant/AssistantSidebar.swift`). A Mac window is wide, so the
-// Jarvis page shows the sidebar as a split column (`horizontalSizeClass` is `.regular` here); the drawer below is
+// The Mac's Persona sidebar drawer (iOS: `Views/Assistant/AssistantSidebar.swift`). A Mac window is wide, so the
+// Persona page shows the sidebar as a split column (`horizontalSizeClass` is `.regular` here); the drawer below is
 // only the narrow-window fallback: it slides in over the page and a click on the page closes it. No drag: a
 // trackpad has no edge swipe to follow.
 

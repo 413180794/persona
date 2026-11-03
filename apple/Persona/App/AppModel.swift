@@ -21,9 +21,9 @@ final class AppModel {
     private(set) var links: [HubLink] = []
     /// The group hub-level pages show (`selectHub`); the first group when it is not one of them.
     var hubGroup: String
-    /// The hub-level group's hub (what Jarvis, 收件箱 and the hub's settings talk to); nil when not paired.
+    /// The hub-level group's hub (what Persona, 收件箱 and the hub's settings talk to); nil when not paired.
     var config: ServerConfig? { hub?.config }
-    /// Jarvis's looks (docs/persona.md): the chosen one, what the hub offers, the packages on the phone.
+    /// Persona's looks (docs/persona.md): the chosen one, what the hub offers, the packages on the phone.
     let personas = PersonaStore()
     /// Which paths conversations mention are there on their machines (only those are linked).
     let filePresence = FilePresence()
@@ -107,7 +107,7 @@ final class AppModel {
         }
     }
     var debugShowNewChat = false
-    /// Bumped whenever another page hands the user to a Jarvis conversation (`askJarvis`): the Jarvis tab goes back
+    /// Bumped whenever another page hands the user to a Persona conversation (`askJarvis`): the Persona tab goes back
     /// to its conversation even when it is the one already shown (a pushed 知识库 page would otherwise stay on top).
     var assistantReveal = 0
 
@@ -119,7 +119,7 @@ final class AppModel {
     /// By group and machine.
     @ObservationIgnored private(set) var launcherCache: [MachineRef: [Launcher]] = [:]
 
-    /// The hub-level group's client: for pages about the hub (Jarvis, 收件箱, its settings). A session's, a machine's
+    /// The hub-level group's client: for pages about the hub (Persona, 收件箱, its settings). A session's, a machine's
     /// or an interaction's requests go to its own group (`api(_:)`).
     var api: APIClient? { hub?.api }
     var isPaired: Bool { !links.isEmpty }
@@ -347,7 +347,7 @@ final class AppModel {
         InboxStore.shared.forget()
         forgetDemoChats()
         chats = [:]
-        assistantCurrent = DemoHub.shared.mainConversation // Jarvis opens on a conversation, not a blank new one
+        assistantCurrent = DemoHub.shared.mainConversation // Persona opens on a conversation, not a blank new one
         UserDefaults.standard.set(true, forKey: Self.demoKey)
         let demo = makeLink("", .demo)
         links = [demo]
@@ -461,7 +461,7 @@ final class AppModel {
     }
 
     /// One session as the hub last sent it, all of it, without watching it: for an action when it is tapped (交给
-    /// Jarvis sends its last line), not for a view.
+    /// Persona sends its last line), not for a view.
     func latest(_ key: SessionKey) -> Session? { sessionIndex[key] }
 
     /// A session this app just started, until the hub's next list for its machine (which replaces it) has it: its
@@ -474,7 +474,7 @@ final class AppModel {
     func machine(_ ref: MachineRef) -> Machine? { machines.first { $0.id == ref.id && $0.group == ref.group } }
     /// A machine of the hub-level group (the assistant's, a hub setting's).
     func hubRef(_ id: String) -> MachineRef { MachineRef(group: hub?.group ?? "", id: id) }
-    /// The hub-level group's machines (pages about the hub: Jarvis, its settings).
+    /// The hub-level group's machines (pages about the hub: Persona, its settings).
     var hubMachines: [Machine] { let g = hub?.group ?? ""; return machines.filter { $0.group == g } }
     /// The machine the hub runs on (it reports itself as "local"): where the assistant lives by default.
     var hubMachineID: String { hubMachines.first { $0.kind == "local" }?.id ?? hubMachines.first?.id ?? "" }
@@ -483,7 +483,7 @@ final class AppModel {
         interactions.values.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
     }
 
-    /// The hub-level group's Jarvis conversations (each hub has its own Jarvis), newest first.
+    /// The hub-level group's Persona conversations (each hub has its own Persona), newest first.
     var assistantConversations: [Session] {
         let g = hub?.group ?? ""
         return allSessions.filter { $0.assistant && $0.archived != true && $0.group == g }
@@ -519,13 +519,13 @@ final class AppModel {
         }
     }
 
-    /// The main conversation (the Jarvis tab's long-running one), when the hub has one.
+    /// The main conversation (the Persona tab's long-running one), when the hub has one.
     var assistantMain: SessionKey? {
         guard let st = assistantConfig, let id = st.main, !id.isEmpty else { return nil }
         return SessionKey(group: hub?.group ?? "", machineID: st.machineID, sessionID: id)
     }
 
-    /// Shows a Jarvis conversation from another page (定时任务's 立即运行 / its own conversation): the Jarvis tab or the
+    /// Shows a Persona conversation from another page (定时任务's 立即运行 / its own conversation): the Persona tab or the
     /// shell's 助手, back at the conversation even from a page pushed on it or the shell's 设置 sheet.
     func openAssistantConversation(_ key: SessionKey) {
         shellSettings = false
@@ -535,8 +535,8 @@ final class AppModel {
         assistantReveal += 1
     }
 
-    /// Sends text to Jarvis' main conversation (starting it when there is none) and opens the Jarvis tab: how other
-    /// pages hand something to Jarvis with its context.
+    /// Sends text to Persona' main conversation (starting it when there is none) and opens the Persona tab: how other
+    /// pages hand something to Persona with its context.
     func askJarvis(_ text: String) async {
         guard let api else { return }
         selectedTab = .assistant
@@ -571,7 +571,7 @@ final class AppModel {
             assistantConfig = try await api.setAssistant(launcher: launcher)
             // The main conversation follows the setting (the hub resumes it on this launcher): drop a one-off pick.
             if let main = assistantMain { assistantLaunchers[main] = nil }
-            toast = Toast("Jarvis 下一条消息起使用 \(launcher)", style: .success)
+            toast = Toast("Persona 下一条消息起使用 \(launcher)", style: .success)
         } catch { show(error) }
     }
 
@@ -580,7 +580,7 @@ final class AppModel {
         if latestAnswer { latestAnswerFor = key }
         if session(key)?.assistant == true {
             selectedTab = .assistant
-            selectHub(key.group) // a conversation of another group's Jarvis: that group's Jarvis
+            selectHub(key.group) // a conversation of another group's Persona: that group's Persona
             assistantCurrent = key
         } else {
             selectedTab = .chats
@@ -666,7 +666,7 @@ final class AppModel {
     func features(_ group: String) -> Set<String> { link(group)?.features ?? [] }
     /// What the hub-level group's hub listed (hub-level pages: connectors, skills…).
     var hubFeatures: Set<String> { hub?.features ?? [] }
-    /// The desktop apps (the Mac app) connected to the hub-level group's hub: the iPhone's 「Mac 上的 Jarvis 已登录」
+    /// The desktop apps (the Mac app) connected to the hub-level group's hub: the iPhone's 「Mac 上的 Persona 已登录」
     /// (DesktopPresence.swift).
     var desktops: [DesktopDevice] { hub?.desktops ?? [] }
     /// What the hub-level group's hub said it is in its hello: build and protocol, for the compatibility notices
@@ -1528,7 +1528,7 @@ final class AppModel {
     }
 
     @ObservationIgnored private let snapshotWriter = Debouncer(.seconds(2))
-    /// The other groups' Jarvis settings, kept for when one of them is picked (`assistantConfig` is the hub-level one).
+    /// The other groups' Persona settings, kept for when one of them is picked (`assistantConfig` is the hub-level one).
     @ObservationIgnored private var assistantByGroup: [String: APIClient.AssistantState] = [:]
 
     /// Each group's snapshot: "dev" for the default group (what it always was), "dev.<group>" for the others.
@@ -1854,7 +1854,7 @@ enum Haptics {
     init(_ value: Session?) { self.value = value }
 }
 
-/// Questions and approvals waiting, as the tab bar counts them: the Jarvis tab's (its conversations') and the Agents
+/// Questions and approvals waiting, as the tab bar counts them: the Persona tab's (its conversations') and the Agents
 /// tab's (the agents', muted ones left out).
 nonisolated struct TabBadges: Equatable, Sendable {
     var assistant = 0

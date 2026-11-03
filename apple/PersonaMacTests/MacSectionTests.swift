@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct MacSectionTests {
     @Test func orderAndShortcuts() {
-        #expect(MacSection.allCases.map(\.title) == ["Jarvis", "Agents", "收件箱", "知识库", "机器", "设置"])
+        #expect(MacSection.allCases.map(\.title) == ["Persona", "Agents", "收件箱", "知识库", "机器", "设置"])
     }
 
     @Test func tabSectionsFollowTheTab() {

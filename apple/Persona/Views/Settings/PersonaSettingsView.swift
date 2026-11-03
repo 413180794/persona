@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 设置 › 外观 › 形象 (docs/persona.md): the built-ins (Jarvis's default 面罩, then 汇流) and the packages on the hub, in a
-/// grid like the styles, and the chosen one's top-bar dot in each state under it. Choosing one changes Jarvis's name, face and dot; the app's
+/// 设置 › 外观 › 形象 (docs/persona.md): the built-ins (Persona's default 面罩, then 汇流) and the packages on the hub, in a
+/// grid like the styles, and the chosen one's top-bar dot in each state under it. Choosing one changes Persona's name, face and dot; the app's
 /// colors only under 主题色「跟随形象」 (`ThemeColorPicker`). The tree is rebuilt, as for a style; 外观 stays open because
 /// the settings path is AppModel's. A package is downloaded first and kept on the phone.
 struct PersonaPicker: View {

@@ -109,7 +109,7 @@ enum PromptItems {
         return out
     }
 
-    /// Jarvis' quick messages under short "/" words (picking one types its message, sent with send), then Claude
+    /// Persona' quick messages under short "/" words (picking one types its message, sent with send), then Claude
     /// Code's own commands.
     static func commands(clear: Bool) -> [PromptCommand] {
         var out = SlashCommand.all.map { PromptCommand($0.word, detail: $0.detail, insert: $0.text) }
@@ -189,7 +189,7 @@ final class Dictation {
         #if os(iOS)
         guard RecordingCapture.shared.state == .idle else { return "录音正在进行，请先结束录音再听写" }
         #endif
-        guard await Self.allowed() else { return "没有麦克风或语音识别的权限，可以到 设置 › Jarvis 打开" }
+        guard await Self.allowed() else { return "没有麦克风或语音识别的权限，可以到 设置 › Persona 打开" }
         #if os(iOS)
         guard RecordingCapture.shared.state == .idle else { return "录音正在进行，请先结束录音再听写" }
         #endif

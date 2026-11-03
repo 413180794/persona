@@ -1,6 +1,6 @@
 import XCTest
 
-/// Archiving Jarvis's conversations (docs/assistant.md「管理自己的对话」): a conversation in the sidebar swipes left to
+/// Archiving Persona's conversations (docs/assistant.md「管理自己的对话」): a conversation in the sidebar swipes left to
 /// 归档 (the open drawer leaves the drag to the row), it shows up under 已归档, and a swipe there brings it back. In
 /// the new shell and the old layout, on demo data.
 final class AssistantArchiveTests: XCTestCase {

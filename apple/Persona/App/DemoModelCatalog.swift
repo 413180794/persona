@@ -8,7 +8,7 @@ enum DemoModelCatalog {
             ["id": "legacy.ai", "name": "演示 API", "kind": "api", "api": "messages", "model": "model-fast"]
         ]
         let definitions = [
-            ("assistant", "Jarvis 对话", "对话与 Agent", "launcher"),
+            ("assistant", "Persona 对话", "对话与 Agent", "launcher"),
             ("inbox.agent", "AI 分身", "对话与 Agent", "launcher"),
             ("lark.agent", "飞书 /agent", "对话与 Agent", "launcher"),
             ("agent.new", "新建 Agent", "对话与 Agent", "launcher"),

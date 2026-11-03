@@ -2,11 +2,11 @@ import BeautifulUI
 import SwiftUI
 
 #if os(iOS)
-/// The iPhone's ChatGPT-style shell (docs/ios.md「新外壳」): no tab bar. 助手 (the Jarvis assistant) and Agents (the Agents
+/// The iPhone's ChatGPT-style shell (docs/ios.md「新外壳」): no tab bar. 助手 (the Persona assistant) and Agents (the Agents
 /// list) are two pages under the top switch, both kept alive like tabs (switching keeps each one's place); the drawer
 /// slides both aside; 收件箱 / 定时任务 / 知识库 / 机器 push onto 助手; 设置 is a sheet.
 ///
-/// Every route in the app still goes through `AppModel.selectedTab` (notifications, Siri, 交给 Jarvis, the inbox's
+/// Every route in the app still goes through `AppModel.selectedTab` (notifications, Siri, 交给 Persona, the inbox's
 /// rows…): `.assistant` / `.chats` pick the page, `.mail` opens the inbox on 助手, `.settings` the sheet.
 struct ShellView: View {
     @Environment(AppModel.self) private var model

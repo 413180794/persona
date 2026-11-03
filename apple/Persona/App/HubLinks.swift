@@ -14,7 +14,7 @@ final class HubLink: Identifiable {
     private(set) var features: Set<String> = []
     /// The group's last Fleet state (hub/liveactivity.go): merged with the other groups' for the Live Activity.
     var fleet: FleetState?
-    /// The desktop apps connected to the hub (the 「Mac 上的 Jarvis 已登录」 banner shows the hub-level group's).
+    /// The desktop apps connected to the hub (the 「Mac 上的 Persona 已登录」 banner shows the hub-level group's).
     var desktops: [DesktopDevice] = []
     /// Pinned and muted spaces / agents: each hub keeps its own.
     @ObservationIgnored let pins: PinsStore
@@ -49,7 +49,7 @@ extension AppModel {
 
     func link(_ group: String) -> HubLink? { links.first { $0.group == group } }
 
-    /// The group hub-level pages (Jarvis, 收件箱, the hub's settings) show: the one picked, else the first.
+    /// The group hub-level pages (Persona, 收件箱, the hub's settings) show: the one picked, else the first.
     var hub: HubLink? { link(hubGroup) ?? links.first }
 
     /// A client for the group a session, machine or interaction is from.

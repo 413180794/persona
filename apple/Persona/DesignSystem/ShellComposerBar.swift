@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-/// The shell's composer (docs/ios.md「新外壳」), ChatGPT's: one line — [+] 问 Jarvis… [mic] — that grows into a card
+/// The shell's composer (docs/ios.md「新外壳」), ChatGPT's: one line — [+] 问 Persona… [mic] — that grows into a card
 /// while typing, the field on top and a row under it: [+] … [mode & effort] [mic] [send]. The field is one view in both
 /// shapes (only the buttons around it come and go), so focus and the IME's marked text survive the change.
 /// The callers keep their own state (drafts, uploads, SendSafety in `Composer`; the starter's text in StarterComposer).

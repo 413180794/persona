@@ -1,6 +1,6 @@
 import Foundation
 
-/// 设置 › 模型 (docs/launchers.md): every launcher, from each machine's ~/.zshrc or added in Jarvis.
+/// 设置 › 模型 (docs/launchers.md): every launcher, from each machine's ~/.zshrc or added in Persona.
 nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var name: String
     var source: String // zshrc | jarvis
@@ -100,7 +100,7 @@ extension APIClient {
     func saveLauncher(_ input: LauncherInput, isNew: Bool) async throws {
         _ = try await request(isNew ? "POST" : "PUT", isNew ? "/api/v1/launchers" : "/api/v1/launchers/\(input.name)", body: input)
     }
-    /// A launcher added in Jarvis is deleted; a ~/.zshrc one is hidden in Jarvis (the file is not touched).
+    /// A launcher added in Persona is deleted; a ~/.zshrc one is hidden in Persona (the file is not touched).
     func deleteLauncher(_ name: String) async throws {
         _ = try await request("DELETE", "/api/v1/launchers/\(name)")
     }

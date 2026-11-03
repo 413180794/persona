@@ -8,11 +8,11 @@ struct AskJarvisControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "jarvis.control.ask") {
             ControlWidgetButton(action: OpenJarvisAssistantIntent()) {
-                Label("问 Jarvis", systemImage: "sparkles")
+                Label("问 Persona", systemImage: "sparkles")
             }
         }
-        .displayName("问 Jarvis")
-        .description("打开 Jarvis 助手。")
+        .displayName("问 Persona")
+        .description("打开 Persona 助手。")
     }
 }
 
@@ -25,7 +25,7 @@ struct JarvisAgentsControl: ControlWidget {
                 Label("Agents", systemImage: "person.crop.circle.badge.checkmark")
             }
         }
-        .displayName("Jarvis Agents")
-        .description("打开 Jarvis 的 Agents 页。")
+        .displayName("Persona Agents")
+        .description("打开 Persona 的 Agents 页。")
     }
 }

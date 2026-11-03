@@ -87,7 +87,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 
 - 服务端：`./scripts/test/test-server.sh`（在 hub 机器上连真实 Postgres 跑全部测试）；部署 `./scripts/deploy/deploy.sh [机器 id…]`（默认配置里的全部机器）。
 - iOS：`./scripts/app/sim.sh [-openSession <machine>/<session>]` 编译、装到配置里的模拟器、自动配对 hub；截图 `xcrun simctl io <udid> screenshot`。
-  直接用 xcodegen / Xcode 前先 `python3 scripts/jarvis_config.py xcconfig`（生成 bundle id、团队）。
+  直接用 xcodegen / Xcode 前先 `python3 scripts/persona_config.py xcconfig`（生成 bundle id、团队）。
 - Android：`./scripts/app/android.sh [install|apk|test|lint]`（`docs/android.md`）。
 - 网页：`cd web && npm test && npm run build`；部署 `./scripts/deploy/deploy.sh web`（`docs/web.md`）。
 - 发布：`docs/release.md`。**每次发 TestFlight 都内部、外部两个一起发**（2026-10-30 用户要求）：`release.sh` 上传后跑
@@ -102,8 +102,8 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
   主工作区有别人未提交的改动时在 `git worktree add --detach /tmp/x origin/master` 里做；只暂存自己的文件，rebase 冲突只改冲突块，
   push 前 `git diff origin/master...HEAD --stat` 只能有自己的文件。数据库迁移号挑之前先看所有 worktree。（`workflow.md`）
 - 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论。
-- 手动 `xcodebuild` 前先 `eval "$(python3 scripts/jarvis_config.py env)"`（`DEVELOPER_DIR`），否则用的是旧 Xcode，报一堆像别人代码坏了的错。（`testing.md`）
-- UI 测试一律 `app.launchPinned()` 启动：固定风格（默认液态玻璃，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 整套换），布局同 `launchJarvis()`。（`testing.md`）
+- 手动 `xcodebuild` 前先 `eval "$(python3 scripts/persona_config.py env)"`（`DEVELOPER_DIR`），否则用的是旧 Xcode，报一堆像别人代码坏了的错。（`testing.md`）
+- UI 测试一律 `app.launchPinned()` 启动：固定风格（默认液态玻璃，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 整套换），布局同 `launchPersona()`（`launchJarvis()` 兼容入口保留）。（`testing.md`）
 - DEBUG 启动参数的名字不能和任何 Swift 标识符（类型成员、存储属性）同名，否则 `release.sh` 的 strings 检查拦下 TestFlight；新开关用 `open…` / `show…` 并加进 release.sh 的列表。（`ios.md`）
 - App 和扩展共享的钥匙串组（灵动岛的形象、推送私钥）缺了就静默退回默认值、模拟器上却总是好的：发版的 ipa 要过 `scripts/release/entitlements.py check`，Info.plist 的组名用 `$(DEVELOPMENT_TEAM).` 不用 `$(AppIdentifierPrefix)`。（`release.md`）
 - 实时活动要画的东西放进 ContentState（hub 的推送里也带上），放不下的图放 App Group 容器的文件：实时活动的扩展在手机上读写不了钥匙串，模拟器上却可以（`live-activity.md`「为什么 build 103 的形象包还不对」）。
@@ -119,7 +119,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - **最低兼容编译器仍是 Xcode 26.0（Swift 6.2）**：保留 iOS、Mac、手表和扩展的兼容目标，新 Xcode 编过不能宣称已验证 26.0。
   只有新 SDK 才有的 API（`isDynamicIslandLimitedInWidth`、`toolbarVerticalEdge`、`ShowsSnippetView` / `view:` 都踩过）用 `#if compiler(>=6.3)` 包起来、`#else` 走旧行为；
   `#available` / `@available` 只管运行时，符号编译时找不到照样报错。**有可用的 Xcode 26.0 环境时合入前编一遍；没有该环境时不强制实编，不因此阻塞合并或发布**，
-  用现有工具链完成构建与测试，PR 中注明实际 Xcode 版本和「26.0 未验证」，不必逐次询问豁免（`DEVELOPER_DIR` 见 `jarvis_config.py env`）；
+  用现有工具链完成构建与测试，PR 中注明实际 Xcode 版本和「26.0 未验证」，不必逐次询问豁免（`DEVELOPER_DIR` 见 `persona_config.py env`）；
   要抬高最低版本仍是产品决定，先问用户，并同步改这一条和 `docs/lessons/ios.md`。（`ios.md`「最低兼容编译器」）
 - 手表 App 最低 watchOS 10（不少旧表停在 10.6，2026-11-02 用户的表装不上），`Shared/` 整个编进手表：里面只能用 watchOS 10 就有的 API，
   新的要 `#available` 兜底（`Color.mix` 是 watchOS 11，用 `Color.blended`）。
@@ -139,14 +139,14 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 图标、标志 | `Theme.Icon`（一个意思一个 SF Symbol）、`Theme.Brand`（官方标志，原样用） |
 | 风格、主题色 | `StyleSpec.current`：界面风格（`ComponentSpec`）× 主题色（`ColorSpec`）组合成的一个值；`Shared/Design/Styles/` 每种风格一个文件（连同它自己的颜色）；形象的配色是主题色的一个选项「跟随形象」（`docs/persona.md`） |
 
-- **组件和配方**在 `apple/Jarvis/DesignSystem`：表面 `.surface(…)`、按钮 `.themedButton(…)`、页面 `.themedPage()` / `.themedGroupedPage()`、plain 列表行 `.themedRow()`；
+- **组件和配方**在 `apple/Persona/DesignSystem`：表面 `.surface(…)`、按钮 `.themedButton(…)`、页面 `.themedPage()` / `.themedGroupedPage()`、plain 列表行 `.themedRow()`；
   `Chip`、`CountBadge`、`EmptyStateView`、`Monogram`、`Loadable`。不直接写 `glassEffect` / `.glass`，不在页面里拼一个同样的小组件。
 - **缺什么先加**：先在设计系统里加一个有名字的 token 或组件，再用。加风格就是写一个 `ComponentSpec` 加一个 `AppStyle` case，加主题色就是写一个 `ColorSpec` 加一个 `ThemeColor` case，
   别处只读 `StyleSpec.current`、不 `switch AppStyle` / `ThemeColor`。
   换视觉风格只能做成新风格（见上面「不许直接改已有界面的样子」）；BeautifulUI 的组件只在 BeautifulUI 风格下用，库代码不在 Persona 里改。
   做法：视图里按 `AppStyle.current.usesBeautifulUI` 二选一，原来的画法原样留着（`plain`）。能放进设计系统组件的就放在组件里，
   页面不用各自判断：`Chip`、`.card()`、`EmptyStateView`、`LoadableContent` 在 BeautifulUI 风格下画 `BUIPill`、BUI 卡片、`BUIEmptyState`、`LoadingState`。
-- **检查**（JarvisTests 扫源码）：`TypeScaleTests`（字号级别、强调、竖向间距在网格上）、`IconVocabularyTests`（图标登记）、
+- **检查**（PersonaTests 扫源码）：`TypeScaleTests`（字号级别、强调、竖向间距在网格上）、`IconVocabularyTests`（图标登记）、
   `TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；减少后删掉 `TokenBaseline.json` 重跑记下新基线）、
   `StyleSpecTests`（每种风格 × 每种主题色深浅色的对比度）。不许为了过测试加豁免或调高基线。
 - **全局**：滚动条隐藏（RootView 的 `.scrollIndicators(.hidden)`，UIKit 的滚动视图自己关）；字号跟随动态字体和设置里的小 / 标准 / 大（`TextSize`）。
@@ -161,12 +161,12 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 路径 | 内容 |
 | --- | --- |
 | `server/` | Go 服务端 `personad`（hub / node / hook / mcp 四种模式），见 `docs/server.md` |
-| `apple/` | XcodeGen 工程：Persona 的 iOS / macOS / 手表 App；兼容 target 名 `Jarvis`、`JarvisMac`（`Mac/`，`docs/mac.md`）、`JarvisWatch`，共享代码 `Shared/`、单元测试 |
+| `apple/` | XcodeGen 工程：Persona 的 iOS / macOS / 手表 App；target / scheme `Persona`、`PersonaMac`（`Mac/`，`docs/mac.md`）、`PersonaWatch`，旧 `Jarvis` 系列 scheme 和工程入口保留，共享代码 `Shared/`、单元测试 |
 | `android/` | Kotlin + Compose 多模块：`:app` 装配，`core` 承载协议 / 网络 / 存储 / 列表 / 设计系统，`feature` 承载页面，`platform` 承载通知和手机工具；部分扩展模块尚未接入 App，见 `docs/android.md` |
-| `mac/` | Mac 菜单栏 App「Persona Link」（和 `apple/` 里的 Mac App `JarvisMac` 是两个东西）：装着 jarvis-link（`server/cmd/jarvis-link`）和 personad，这台 Mac 的 node 服务（主动连 hub 或让 hub 来连），见 `docs/link.md` |
+| `mac/` | Mac 菜单栏 App「Persona Link」（和 `apple/` 里的 Mac App `PersonaMac` 是两个东西）：装着 jarvis-link（`server/cmd/jarvis-link`）和 personad，这台 Mac 的 node 服务（主动连 hub 或让 hub 来连），见 `docs/link.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
 | `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md` |
-| `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 personad（`deploy/publish.sh`、`deploy/install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock/mock_hub.py`） |
+| `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 personad（`deploy/publish.sh`、`deploy/install.sh`）、读配置（`persona_config.py`，旧 `jarvis_config.py` 软链兼容）、截图用的假 hub（`mock/mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
 | `deploy/docker/` | hub 的 Docker 部署：`compose.yaml`、`.env.example`、镜像的入口脚本（镜像是仓库根的 `Dockerfile`，`.github/workflows/hub-image.yml` 构建推到 ghcr），见 `docs/docker.md` |
@@ -254,7 +254,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 文档 | 内容 |
 | --- | --- |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
-| `docs/runtime-cli.md` | DEBUG 构建里的命令通道（`scripts/app/jarvisctl.py`）：运行中读状态、等画面停下、截图，协议和安全约束 |
+| `docs/runtime-cli.md` | DEBUG 构建里的命令通道（`scripts/app/personactl.py`，旧 `jarvisctl.py` 兼容）：运行中读状态、等画面停下、截图，协议和安全约束 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 
 ### 计划和经验

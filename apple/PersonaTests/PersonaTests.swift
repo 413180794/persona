@@ -147,14 +147,14 @@ struct PersonaTests {
     }
 
     /// 汇流 is offered next to the default before the hub answers (or with no hub at all), is chosen without a
-    /// download, and stays chosen across launches; it is still called Jarvis, with its own card title.
+    /// download, and stays chosen across launches; it is still called Persona, with its own card title.
     @Test func circuitIsABuiltInChoice() async throws {
         let (s, _, defaults) = store()
         #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.circuit.id])
         #expect(s.current.id == Persona.builtinID) // the default stays 面罩
         let circuit = try #require(s.offered.last)
         #expect(circuit.isBuiltin && s.isOnPhone(circuit))
-        #expect(circuit.name == "Jarvis" && circuit.cardTitle == "汇流")
+        #expect(circuit.name == "Persona" && circuit.cardTitle == "汇流")
         #expect(circuit.avatarDesign == .circuit && Persona.builtin.avatarDesign == .visor)
 
         await s.choose(circuit, api: nil)

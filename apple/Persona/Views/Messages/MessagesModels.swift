@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 // 信息 (docs/plan-connectors.md「五」): one Mac's Messages, read through the hub. The app shows every conversation;
-// with 交给 Jarvis on (the hub's switch, on by default) the real ones also go to the knowledge base, the inbox and the
+// with 交给 Persona on (the hub's switch, on by default) the real ones also go to the knowledge base, the inbox and the
 // assistant. Nothing is marked read, nothing is sent.
 
 /// GET /api/v1/imessage: the connector's status, with the steps on the Mac when it may not read.
@@ -12,7 +12,7 @@ nonisolated struct MessagesStatus: Codable, Hashable, Sendable {
     var error: String?
     var guide: [String]?
     var via: String?
-    /// 交给 Jarvis: the knowledge base, the inbox and the assistant read the real conversations (nil from a hub
+    /// 交给 Persona: the knowledge base, the inbox and the assistant read the real conversations (nil from a hub
     /// before it: they did not).
     var ai: Bool?
 }

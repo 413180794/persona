@@ -156,7 +156,7 @@ final class CodexCardsTests: XCTestCase {
         shot("beautiful")
     }
 
-    /// 会话信息 says how Jarvis reaches this Codex: its app-server, or the terminal and why (TEST_RUNNER_JARVIS_CODEX_ROUTE
+    /// 会话信息 says how Persona reaches this Codex: its app-server, or the terminal and why (TEST_RUNNER_JARVIS_CODEX_ROUTE
     /// says which the mock was started with: MOCK_CODEX_ROUTE).
     @MainActor func testSessionInfoShowsTheRoute() throws {
         let hub = try hub()

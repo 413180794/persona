@@ -33,7 +33,7 @@ struct SettingsView: View {
                     HStack(spacing: Theme.Space.l) {
                         AppGlyph(size: 54)
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                            Text("Jarvis").font(Theme.Font.title)
+                            Text("Persona").font(Theme.Font.title)
                             if model.isDemo {
                                 Text("体验模式 · 数据都是编造的").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                             } else {
@@ -258,7 +258,7 @@ struct SettingsView: View {
                         WatchSync.shared.push(config: cfg)
                         WatchSync.shared.push(summary: model.watchSummary())
                         Haptics.success()
-                        model.toast = Toast("已发送到 Apple Watch，打开手表上的 Jarvis 即可", style: .success)
+                        model.toast = Toast("已发送到 Apple Watch，打开手表上的 Persona 即可", style: .success)
                     }
                 } label: {
                     if AppStyle.current.usesBeautifulUI {
@@ -271,7 +271,7 @@ struct SettingsView: View {
             }
             .bareListRow()
         } footer: {
-            Text("手表上的 Jarvis 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。")
+            Text("手表上的 Persona 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。")
         }
     }
 }
@@ -406,7 +406,7 @@ struct PhoneDataView: View {
                     .padding(.vertical, Theme.Space.xxs)
                 }
             } footer: {
-                Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。打开时会请求系统权限，以前拒绝过的会跳到系统设置。Jarvis 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
+                Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。打开时会请求系统权限，以前拒绝过的会跳到系统设置。Persona 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
             }
         }
         .themedPage()
@@ -445,7 +445,7 @@ struct PhoneDataView: View {
             Haptics.tap()
         } else {
             // Refused: iOS asks only once, so the rest is in its Settings; the switch stays off until it is allowed there.
-            model.toast = Toast("在系统设置里允许 Jarvis 访问\(s.title)", style: .info)
+            model.toast = Toast("在系统设置里允许 Persona 访问\(s.title)", style: .info)
             s.isEnabled = true // on its own once allowed there
             enabled[s] = true
             if let url = URL(string: UIApplication.openSettingsURLString) { await UIApplication.shared.open(url) }
@@ -494,15 +494,15 @@ struct WelcomeView: View {
     @Environment(AppModel.self) private var model
     @State private var showPair = false
     @State private var appear = false
-    // The iPhone scans the QR code `jarvisd hub pair` prints; the Mac has no camera and pastes the link it prints.
+    // The iPhone scans the QR code `personad hub pair` prints; the Mac has no camera and pastes the link it prints.
     #if os(macOS)
     private static let tagline = "把每台电脑上的 Claude 收进一个窗口"
     private static let pairIcon = Theme.Icon.link
-    private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `jarvisd hub pair`，拷贝它打印的链接"
+    private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `personad hub pair`，拷贝它打印的链接"
     #else
     private static let tagline = "把每台电脑上的 Claude 装进口袋"
     private static let pairIcon = "qrcode.viewfinder"
-    private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `jarvisd hub pair` 显示二维码"
+    private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `personad hub pair` 显示二维码"
     #endif
 
     var body: some View {
@@ -511,7 +511,7 @@ struct WelcomeView: View {
             AppGlyph(size: 96)
                 .scaleEffect(appear ? 1 : 0.8)
                 .opacity(appear ? 1 : 0)
-            Text("Jarvis")
+            Text("Persona")
                 .font(Theme.Font.display)
                 .padding(.top, Theme.Space.xl)
             Text(Self.tagline)
@@ -524,8 +524,8 @@ struct WelcomeView: View {
                 #if os(macOS)
                 // A Mac decides in its own window and has no health data (PhoneDataSource.onThisDevice).
                 feature(Theme.Icon.click, "在一个窗口里拍板", "回答提问、审批计划、授权工具，不用切到终端")
-                // The phone's data comes from the iPhone's Jarvis; the Mac is a desktop (AppModel.registration).
-                feature(Theme.Icon.mailAccounts, "带上邮箱和你的 iPhone", "Gmail 等邮箱；日历、通讯录、照片来自 iPhone 上的 Jarvis")
+                // The phone's data comes from the iPhone's Persona; the Mac is a desktop (AppModel.registration).
+                feature(Theme.Icon.mailAccounts, "带上邮箱和你的 iPhone", "Gmail 等邮箱；日历、通讯录、照片来自 iPhone 上的 Persona")
                 #else
                 feature("hand.tap", "在手机上拍板", "回答提问、审批计划、授权工具，手表也行")
                 feature("iphone.gen3", "带上你的手机和邮箱", "日历、提醒、通讯录、健康、照片、Gmail")
@@ -618,9 +618,9 @@ struct PairView: View {
                         #endif
                     } footer: {
                         #if os(iOS)
-                        Text("扫描 `jarvisd hub pair` 打印的二维码。")
+                        Text("扫描 `personad hub pair` 打印的二维码。")
                         #else
-                        Text("拷贝 `jarvisd hub pair` 打印的配对链接（jarvis://pair?…），再点「粘贴配对链接」。")
+                        Text("拷贝 `personad hub pair` 打印的配对链接（jarvis://pair?…），再点「粘贴配对链接」。")
                         #endif
                     }
                 }

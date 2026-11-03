@@ -168,7 +168,7 @@ extension View {
 }
 
 extension Theme {
-    /// The user's bubble: the style's, or the shell's neutral gray in its Jarvis conversation (docs/ios.md「新外壳」).
+    /// The user's bubble: the style's, or the shell's neutral gray in its Persona conversation (docs/ios.md「新外壳」).
     static func userBubbleFill(shell: Bool) -> AnyShapeStyle { shell ? AnyShapeStyle(Shell.userBubble) : userBubbleFill }
     static func userBubbleText(shell: Bool) -> Color { shell ? .primary : userBubbleText }
 

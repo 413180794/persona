@@ -2,9 +2,9 @@ import BeautifulUI
 import MarkdownUI
 import SwiftUI
 
-/// What Jarvis knows (the hub's ~/.jarvis/data, docs/knowledge.md): projects first, then chats, people, docs, meetings and
-/// events, most important and most relevant first. Not a browser of Feishu: every row is Jarvis' own digest, and the
-/// way out is handing it to Jarvis or an Agent.
+/// What Persona knows (the hub's ~/.jarvis/data, docs/knowledge.md): projects first, then chats, people, docs, meetings and
+/// events, most important and most relevant first. Not a browser of Feishu: every row is Persona' own digest, and the
+/// way out is handing it to Persona or an Agent.
 ///
 /// Layout (2026-10-31 redo): a row of kind chips instead of a six-way segmented control, a tag menu instead of a second
 /// chip row, projects grouped into 重点 / 进行中 / 已完成 / 不是项目, and search hits that open their entry.
@@ -547,7 +547,7 @@ struct KnowledgeDetailView: View {
                 } header: {
                     Text("目录")
                 } footer: {
-                    Text("Jarvis、AI 分身和各台电脑上的 Agent 都能直接读这个目录。")
+                    Text("Persona、AI 分身和各台电脑上的 Agent 都能直接读这个目录。")
                 }
             } else if let error {
                 Section { Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
@@ -566,7 +566,7 @@ struct KnowledgeDetailView: View {
             }
         }
         #if os(macOS)
-        .macLinkPanel($link) // the Mac's panel at the trailing edge; picks go to Jarvis
+        .macLinkPanel($link) // the Mac's panel at the trailing edge; picks go to Persona
         #else
         .sheet(item: $link) { t in
             if let key = model.assistantMain ?? model.assistantCurrent { LinkSheet(target: t, key: key) }
@@ -631,7 +631,7 @@ struct KnowledgeDetailView: View {
             HStack(spacing: Theme.Space.m) {
                 Button { Task { await ask() } } label: {
                     // White on the prominent fill: the symbol took the tint and vanished into the blue.
-                    Label("问 Jarvis", systemImage: Theme.Icon.ai).lineLimit(1).frame(maxWidth: .infinity)
+                    Label("问 Persona", systemImage: Theme.Icon.ai).lineLimit(1).frame(maxWidth: .infinity)
                         .foregroundStyle(.white)
                 }
                 .themedButton(prominent: true)
@@ -1313,7 +1313,7 @@ struct KBTagEditor: View {
     }
 }
 
-/// An Agent handed to Jarvis: who it is and where it runs, so Jarvis can read it, follow up, and file its result
+/// An Agent handed to Persona: who it is and where it runs, so Persona can read it, follow up, and file its result
 /// under the right project (the knowledge base's project dirs).
 enum AgentHandoff {
     static func prompt(_ s: Session, machine: String?) -> String {

@@ -8,7 +8,7 @@ struct AssistantTopBarTests {
         let t = AssistantCopyText.info(title: "早报", isMain: false, sessionID: "abc-123", machine: "Server", machineID: "server",
                                        cwd: "/home/me/.jarvis/assistant", launcher: "claude", model: "Opus")
         #expect(t == """
-        Jarvis 助手的对话 「早报」
+        Persona 助手的对话 「早报」
         会话 ID：abc-123
         所在机器：Server（server）
         工作目录：/home/me/.jarvis/assistant
@@ -18,7 +18,7 @@ struct AssistantTopBarTests {
         // The new-conversation page: no session lines.
         let home = AssistantCopyText.info(title: nil, isMain: false, sessionID: nil, machine: nil, machineID: "server",
                                           cwd: "~/.jarvis/assistant", launcher: "claude", model: nil)
-        #expect(home == "Jarvis 助手（hub 上的 Claude）\n所在机器：server\n工作目录：~/.jarvis/assistant\n启动器：claude")
+        #expect(home == "Persona 助手（hub 上的 Claude）\n所在机器：server\n工作目录：~/.jarvis/assistant\n启动器：claude")
     }
 
     @Test func dragSettles() {

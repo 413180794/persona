@@ -1,6 +1,6 @@
 import XCTest
 
-/// Jarvis's profile (详细信息 in its avatar's menu on the Jarvis tab) and its schedule: one list of tasks (every day, every
+/// Persona's profile (详细信息 in its avatar's menu on the Persona tab) and its schedule: one list of tasks (every day, every
 /// 30 minutes, once), a task's page, 立即运行 for a daily task and for a follow-up, and a task's permission mode (全部放行
 /// asks first). Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which records what was run at /mock/schedule.
 final class AssistantProfileTests: XCTestCase {
@@ -37,7 +37,7 @@ final class AssistantProfileTests: XCTestCase {
     @MainActor private func openProfile(_ app: XCUIApplication) {
         // The face in the top bar opens a menu; 详细信息 is the profile.
         let avatar = app.buttons["jarvis-avatar"]
-        XCTAssertTrue(avatar.waitForExistence(timeout: 15), "no avatar on the Jarvis tab:\n\(app.debugDescription)")
+        XCTAssertTrue(avatar.waitForExistence(timeout: 15), "no avatar on the Persona tab:\n\(app.debugDescription)")
         avatar.tap()
         XCTAssertTrue(app.buttons["详细信息"].waitForExistence(timeout: 3), "no 详细信息 in the avatar's menu")
         app.buttons["详细信息"].tap()
@@ -141,7 +141,7 @@ final class AssistantProfileTests: XCTestCase {
                        "the task's own conversation is listed twice")
         shot(app, "own-\(name)")
         own.tap()
-        // The conversation it runs in, on 助手 / the Jarvis tab, with the task's page gone.
+        // The conversation it runs in, on 助手 / the Persona tab, with the task's page gone.
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3 封邮件需要回复")).firstMatch.waitForExistence(timeout: 8),
                       "the task's conversation did not open:\n\(app.debugDescription)")
         XCTAssertFalse(app.staticTexts["什么时候"].exists, "still on the task's page")
@@ -163,7 +163,7 @@ final class AssistantProfileTests: XCTestCase {
         let runNow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "立即运行")).firstMatch
         reach(runNow)
         runNow.tap()
-        // The shell's top bar has the 助手 | Agents switch where the old one has Jarvis's face.
+        // The shell's top bar has the 助手 | Agents switch where the old one has Persona's face.
         XCTAssertTrue(app.buttons[shell ? "shell-assistant" : "jarvis-avatar"].waitForExistence(timeout: 8), "not back on the conversation")
         XCTAssertTrue(app.staticTexts["什么时候"].waitForNonExistence(timeout: 5), "still on the task's page")
         XCTAssertNotNil(try tasks().first(where: { $0["id"] as? String == "morning" })?["run_session_id"], "the run's conversation is not the task's")
@@ -175,7 +175,7 @@ final class AssistantProfileTests: XCTestCase {
         return (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["tasks"] as? [[String: Any]] ?? []
     }
 
-    /// A patrol Jarvis set up in a conversation is on the page like any task: every 30 minutes, its next run, what it
+    /// A patrol Persona set up in a conversation is on the page like any task: every 30 minutes, its next run, what it
     /// runs with. Its page changes the permission mode; 全部放行 asks first, says so under the picker, and is saved when
     /// leaving the page.
     @MainActor func testRepeatingTaskAndItsPermissionMode() throws {

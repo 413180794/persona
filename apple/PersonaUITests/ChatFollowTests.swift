@@ -3,7 +3,7 @@ import XCTest
 /// The chat stays at the newest message (scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1, JARVIS_MOCK_HUB): a long chat
 /// opens at the bottom; at the bottom a new reply is followed; scrolled up, ↓ (回到最新) shows and brings you back; a
 /// reply that arrives while you read history does not pull you down. On an Agent's chat (working, 完成未看, and opened
-/// where you left off) and on the Jarvis page. Replies come from `/mock/say`. Where the list is comes from the app's `-showScrollState` probe:
+/// where you left off) and on the Persona page. Replies come from `/mock/say`. Where the list is comes from the app's `-showScrollState` probe:
 /// XCUITest's frames of rows in the flipped list are wrong (docs/lessons/ios.md).
 final class ChatFollowTests: XCTestCase {
     private var hub: String!
@@ -21,7 +21,7 @@ final class ChatFollowTests: XCTestCase {
     }
 
     /// The chat the test opened ("<machine>/<session>"): in the shell both pages are alive, the other one's chat
-    /// (the Jarvis conversation behind the Agents page) has a probe too.
+    /// (the Persona conversation behind the Agents page) has a probe too.
     private var opened: String?
 
     @MainActor private func launch(_ open: [String], keepCache: Bool = false) -> XCUIApplication {
@@ -76,7 +76,7 @@ final class ChatFollowTests: XCTestCase {
         XCTFail("\(why): \(app.staticTexts["chat.scrollState"].exists ? app.staticTexts["chat.scrollState"].label : "no probe") \(last)")
     }
 
-    /// A reply arrives (after `user`'s message); `stream`: as growing text first, like the Jarvis assistant's.
+    /// A reply arrives (after `user`'s message); `stream`: as growing text first, like the Persona assistant's.
     private func say(_ text: String, user: String? = nil, stream: Bool = false) {
         var c = URLComponents(string: hub + "/mock/say")!
         c.queryItems = [URLQueryItem(name: "text", value: text), URLQueryItem(name: "stream", value: stream ? "1" : "0")]
@@ -216,7 +216,7 @@ final class ChatFollowTests: XCTestCase {
 
     /// A real hub's long chats: `JARVIS_REAL_PAIR` (a pairing URL), `JARVIS_REAL_AGENT` (machine/session of an agent whose
     /// transcript grows while the test runs), `JARVIS_REAL_SAVED` (a line near its end, the user's case: where it was left;
-    /// a work line `w-<message id>` stays put while the agent goes on), `JARVIS_REAL_JARVIS` (a Jarvis conversation),
+    /// a work line `w-<message id>` stays put while the agent goes on), `JARVIS_REAL_JARVIS` (a Persona conversation),
     /// `JARVIS_REAL_CASES` (which of agent,saved,jarvis). Opens each at the bottom, waits for new lines to show, reads
     /// up, ↓. At the bottom with nothing held back is what counts: a reply taller than the screen is never "visible".
     @MainActor func testRealHubChats() throws {

@@ -30,7 +30,7 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
                 SplitColumns.noSidebar
             } content: {
                 // The look the list had in the sidebar column (no row lines, footers as before) on the window's white,
-                // as the Jarvis and Agents lists beside the sections are; lists that pick a style keep it. Inside the
+                // as the Persona and Agents lists beside the sections are; lists that pick a style keep it. Inside the
                 // destinations, so the style stays in this column whichever environment the pushed pages are built in.
                 sidebar
                     .listStyle(.sidebar)

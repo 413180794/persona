@@ -12,7 +12,7 @@ struct ShareMessage: Identifiable {
     var id: String { text }
 }
 
-/// The message laid out as a card: who said it, where, the words, and a quiet Jarvis mark — drawn into an image.
+/// The message laid out as a card: who said it, where, the words, and a quiet Persona mark — drawn into an image.
 struct MessageShareCard: View {
     var message: ShareMessage
     var dark: Bool
@@ -47,7 +47,7 @@ struct MessageShareCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 6) {
                 Image(systemName: Theme.Icon.ai).font(.system(size: 11, weight: .semibold))
-                Text("Jarvis").font(.system(size: 12, weight: .semibold))
+                Text("Persona").font(.system(size: 12, weight: .semibold))
                 Spacer()
             }
             .foregroundStyle(.tertiary)
@@ -192,7 +192,7 @@ struct MessageShareSheet: View {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
             Haptics.error()
-            AppModel.shared.toast = Toast("没有相册权限：请在 设置 › Jarvis › 照片 里允许「仅添加照片」", style: .error)
+            AppModel.shared.toast = Toast("没有相册权限：请在 设置 › Persona › 照片 里允许「仅添加照片」", style: .error)
             return
         }
         do {

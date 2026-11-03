@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Jarvis › 定时任务: the rules in words, the times, and what runs next (docs/assistant.md).
+/// Persona › 定时任务: the rules in words, the times, and what runs next (docs/assistant.md).
 @MainActor
 struct AssistantScheduleTests {
     private func routine(_ time: String, _ days: [Int], enabled: Bool = true, next: Date? = nil) -> APIClient.ScheduledTask {

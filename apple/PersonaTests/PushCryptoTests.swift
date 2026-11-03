@@ -14,7 +14,7 @@ struct PushCryptoTests {
     static let sealedAt = Date(timeIntervalSince1970: 1_798_000_000)
 
     var key: P256.KeyAgreement.PrivateKey { try! P256.KeyAgreement.PrivateKey(rawRepresentation: Data(base64Encoded: Self.priv)!) }
-    var push: [AnyHashable: Any] { ["aps": ["alert": ["title": "Jarvis", "body": "有新消息"], "mutable-content": 1], "e": Self.sealed] }
+    var push: [AnyHashable: Any] { ["aps": ["alert": ["title": "Persona", "body": "有新消息"], "mutable-content": 1], "e": Self.sealed] }
 
     @Test func opensWhatTheHubSealed() throws {
         let out = try PushCrypto.open(Data(base64Encoded: Self.sealed)!, with: key)
@@ -38,7 +38,7 @@ struct PushCryptoTests {
     @Test func appliesTextsButtonsAndIds() throws {
         let payload = try #require(PushCrypto.payload(push, key: key, now: Self.sealedAt))
         let content = UNMutableNotificationContent()
-        content.title = "Jarvis"
+        content.title = "Persona"
         content.body = "有新消息"
         content.userInfo = push
         PushCrypto.apply(payload, to: content)

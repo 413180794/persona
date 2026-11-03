@@ -720,7 +720,7 @@ nonisolated struct FeishuDocsFailure: LocalizedError, Sendable {
     var errorDescription: String? {
         switch code {
         case "DOCUMENT_EXPORT_FORBIDDEN": "作者禁止导出这篇文档"
-        case "DOCUMENT_FORMAT_UNSUPPORTED": "这种文档暂不支持在 Jarvis 中阅读"
+        case "DOCUMENT_FORMAT_UNSUPPORTED": "这种文档暂不支持在 Persona 中阅读"
         case "DOCUMENT_NOT_FOUND": "文档不存在或已被删除"
         case "DOCUMENT_FORBIDDEN", "DOCUMENT_PERMISSION_DENIED": "没有这篇文档的访问权限"
         case "DOCUMENT_TIMEOUT": "飞书响应超时，请稍后重试"

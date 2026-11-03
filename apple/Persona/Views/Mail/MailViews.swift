@@ -533,7 +533,7 @@ struct AddMailAccountView: View {
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets())
                     } footer: {
-                        Text("跳到 Google 选择账号并授权 Jarvis 收发邮件，不需要密码。授权随时可以在 Google 账号的「第三方应用和服务」里撤销；授权失效时再登录一次即可恢复。")
+                        Text("跳到 Google 选择账号并授权 Persona 收发邮件，不需要密码。授权随时可以在 Google 账号的「第三方应用和服务」里撤销；授权失效时再登录一次即可恢复。")
                     }
                 } else if form.kind == .outlook {
                     OutlookSignInSection(error: $error) { dismiss() }
@@ -560,8 +560,8 @@ struct AddMailAccountView: View {
                 if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
                 Section {
                 } footer: {
-                    // 2026-11-01: 「AI 一键添加」 (paste and recognize) is gone; Jarvis adds accounts itself (mail_account_add).
-                    Label("也可以直接在 Jarvis 里说「帮我添加邮箱」，把邮箱和密码告诉它，在手机上确认后就加好了。", systemImage: Theme.Icon.ai)
+                    // 2026-11-01: 「AI 一键添加」 (paste and recognize) is gone; Persona adds accounts itself (mail_account_add).
+                    Label("也可以直接在 Persona 里说「帮我添加邮箱」，把邮箱和密码告诉它，在手机上确认后就加好了。", systemImage: Theme.Icon.ai)
                 }
             }
             .themedPage()

@@ -2,7 +2,7 @@ import BeautifulUI
 import PhotosUI
 import SwiftUI
 
-/// The Jarvis tab: one personal assistant (a Claude session in ~/.jarvis/assistant on the hub's machine) that can reach the
+/// The Persona tab: one personal assistant (a Claude session in ~/.jarvis/assistant on the hub's machine) that can reach the
 /// user's computers, iPhone data, mail, company data and the knowledge base. One conversation is the main one (where the
 /// user usually talks to it, and where other pages hand things to it); the others are side conversations.
 struct AssistantView: View {
@@ -20,7 +20,7 @@ struct AssistantView: View {
     @State private var showProfile = false
     @State private var showKnowledge = false
     @State private var showRoutines = false
-    /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Jarvis 顶栏和侧边栏」.
+    /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Persona 顶栏和侧边栏」.
     @State private var drawer = AssistantDrawer()
     /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; 历史对话 shows or hides it.
     @State private var columns = SplitColumns.shown
@@ -154,7 +154,7 @@ struct AssistantView: View {
                 show(shell?.request?.page)
             }
             .onChange(of: atRoot, initial: true) { _, root in shell?.chatAtRoot = root }
-            // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does 问 Jarvis
+            // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does 问 Persona
             // from the knowledge base, even when its conversation is the one already open.
             .onChange(of: model.assistantCurrent) { backToRoot() }
             .onChange(of: model.assistantReveal) { backToRoot(); activeDrawer.close() }
@@ -249,7 +249,7 @@ struct PendingStart: Equatable {
     var imageCount: Int
 }
 
-/// The old layout's new conversation: `AssistantWelcome` (greeting, what Jarvis can reach, one-tap suggestions); while
+/// The old layout's new conversation: `AssistantWelcome` (greeting, what Persona can reach, one-tap suggestions); while
 /// a conversation spins up it shows the first message and a typing indicator so the send feels instant.
 struct AssistantHome: View {
     @Environment(AppModel.self) private var model
@@ -279,7 +279,7 @@ struct AssistantHome: View {
                         }
                     }
                     .padding(.top, Theme.Space.m)
-                    TypingIndicator(text: "Jarvis 正在准备…")
+                    TypingIndicator(text: "Persona 正在准备…")
                 } else {
                     AssistantWelcome(error: error, send: send)
                 }
@@ -321,13 +321,13 @@ struct AssistantHome: View {
             // machine chips scrolled under them read through.
             .background(Theme.groupedPage.ignoresSafeArea(edges: .bottom))
         }
-        .navigationTitle("Jarvis")
+        .navigationTitle("Persona")
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
     }
 }
 
 /// What a new conversation opens on, in both layouts (2026-11-02 the user wanted it back in the shell, which had shown
-/// only the composer): a greeting, what Jarvis can reach, one-tap things to ask.
+/// only the composer): a greeting, what Persona can reach, one-tap things to ask.
 struct AssistantWelcome: View {
     @Environment(AppModel.self) private var model
     var error: String? = nil

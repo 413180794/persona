@@ -33,7 +33,7 @@ final class ShellAvatarTests: XCTestCase {
         XCTAssertTrue(face.waitForExistence(timeout: 15), "no face on 助手")
         XCTAssertEqual(face.label, "历史对话")
         // The face's state first, then the inbox's mark: 体验模式's inbox has things that need the user.
-        XCTAssertTrue(value(face).hasPrefix("Jarvis，"), "the face's state: \(value(face))")
+        XCTAssertTrue(value(face).hasPrefix("Persona，"), "the face's state: \(value(face))")
         XCTAssertTrue(value(face).contains("收件箱有事等你"), "no inbox mark: \(value(face))")
         openAndCloseDrawer(face, "助手")
 

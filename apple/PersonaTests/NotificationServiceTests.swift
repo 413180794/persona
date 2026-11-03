@@ -13,13 +13,13 @@ struct NotificationServiceTests {
     static func relayed(_ payload: [String: Any], to key: P256.KeyAgreement.PublicKey) throws -> [AnyHashable: Any] {
         var sender = try HPKE.Sender(recipientKey: key, ciphersuite: PushCrypto.suite, info: PushCrypto.info)
         let sealed = try sender.encapsulatedKey + sender.seal(JSONSerialization.data(withJSONObject: payload))
-        return ["aps": ["alert": ["title": "Jarvis", "body": "有新消息"], "mutable-content": 1, "sound": "default"],
+        return ["aps": ["alert": ["title": "Persona", "body": "有新消息"], "mutable-content": 1, "sound": "default"],
                 "e": sealed.base64EncodedString()]
     }
 
     static func deliver(_ userInfo: [AnyHashable: Any]) async -> UNNotificationContent {
         let content = UNMutableNotificationContent()
-        content.title = "Jarvis"
+        content.title = "Persona"
         content.body = "有新消息"
         content.userInfo = userInfo
         return PushCrypto.service(content).0

@@ -424,6 +424,6 @@ nonisolated enum HubStore {
 
     /// No hub paired (what a notification or Live Activity button says when it has nothing to talk to).
     struct NotPaired: LocalizedError, Sendable {
-        var errorDescription: String? { "还没配对。先打开 Jarvis 连接 hub。" }
+        var errorDescription: String? { "还没配对。先打开 Persona 连接 hub。" }
     }
 }

@@ -38,7 +38,7 @@ struct OutlookSignInSection: View {
             .listRowInsets(EdgeInsets())
         } footer: {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                Text("个人的 Outlook / Hotmail 和公司的 Microsoft 365 邮箱都可以：跳到 Microsoft 登录并授权 Jarvis 收发邮件，不需要密码。授权失效时再登录一次即可恢复。")
+                Text("个人的 Outlook / Hotmail 和公司的 Microsoft 365 邮箱都可以：跳到 Microsoft 登录并授权 Persona 收发邮件，不需要密码。授权失效时再登录一次即可恢复。")
                 Button {
                     clientID = config.clientID ?? ""
                     editing = true

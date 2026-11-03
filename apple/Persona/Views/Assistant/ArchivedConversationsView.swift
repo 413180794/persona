@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 已归档: the conversations swiped out of the sidebar (or archived by Jarvis), newest first. A tap opens one, a swipe
+/// 已归档: the conversations swiped out of the sidebar (or archived by Persona), newest first. A tap opens one, a swipe
 /// or a long press brings it back into the list. Nothing here deletes: archiving only hides (docs/assistant.md).
 struct ArchivedConversationsView: View {
     @Environment(AppModel.self) private var model

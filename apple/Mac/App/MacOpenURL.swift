@@ -10,7 +10,7 @@ nonisolated enum MacOpenURL {
     }
 
     static func route(_ url: URL) -> Route {
-        guard url.scheme?.lowercased() == "jarvis" else { return .ignore }
+        guard ["persona", "jarvis"].contains(url.scheme?.lowercased() ?? "") else { return .ignore }
         switch url.host()?.lowercased() {
         case "open":
             // The same query as the iPhone's Live Activity links (FleetLink).

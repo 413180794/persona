@@ -36,7 +36,7 @@ enum MacMenuBar {
     static func count(needsYou: Int) -> String? { needsYou > 0 ? "\(needsYou)" : nil }
 }
 
-/// The icon in the menu bar: the Jarvis mark and how many need you.
+/// The icon in the menu bar: the Persona mark and how many need you.
 struct MacMenuBarLabel: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
@@ -50,7 +50,7 @@ struct MacMenuBarLabel: View {
             Image(systemName: Theme.Icon.ai)
             if let c = MacMenuBar.count(needsYou: n) { Text(c).monospacedDigit() }
         }
-        .accessibilityLabel(n > 0 ? "Jarvis，\(n) 个需要你" : "Jarvis")
+        .accessibilityLabel(n > 0 ? "Persona，\(n) 个需要你" : "Persona")
         // Always there (unlike the main window): what reopens the main window for the Dock menu and notifications.
         .onAppear { MacShellState.shared.openMain = { openWindow(id: "main") } }
         // Also always there: opens the windows the menus ask for, with or without a main window.
@@ -86,14 +86,14 @@ struct MacMenuBarMenu: View {
             }
         }
         Divider()
-        Button("打开 Jarvis") { show() }
+        Button("打开 Persona") { show() }
         Button("新建 Agent 对话…") {
             show()
             MacShellState.shared.newAgent = true
         }
         .disabled(!model.isPaired)
         Divider()
-        Button("退出 Jarvis") { NSApp.terminate(nil) }
+        Button("退出 Persona") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 

@@ -302,7 +302,7 @@ struct FeishuDocsBlock: View {
 
     private var heading: some View {
         let level = Int(node.number("level") ?? 1)
-        // Jarvis' levels: the first heading is a title, the rest headings, told apart by the space above them.
+        // Persona' levels: the first heading is a title, the rest headings, told apart by the space above them.
         let font: Font = level == 1 ? Theme.Font.title : Theme.Font.heading
         return FeishuDocsText(text: FeishuDocsInline.attributed(node.children))
             .font(font)

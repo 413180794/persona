@@ -52,7 +52,7 @@ final class DemoHub {
         })
     }
 
-    /// The Jarvis tab's main conversation.
+    /// The Persona tab's main conversation.
     var mainConversation: SessionKey? {
         load()
         return data["assistant"]?["main"]?.string.map { SessionKey(machineID: data["assistant"]?["machine_id"]?.string ?? "server", sessionID: $0) }

@@ -98,7 +98,7 @@ enum PhoneToolError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .denied(let s): "没有权限：\(s)。请在 iPhone 的 Jarvis › 设置 › 连接器 › 这台 iPhone 里授权。"
+        case .denied(let s): "没有权限：\(s)。请在 iPhone 的 Persona › 设置 › 连接器 › 这台 iPhone 里授权。"
         case .invalidArgument(let s): "参数错误：\(s)"
         case .unavailable(let s): s
         }

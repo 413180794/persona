@@ -2,7 +2,7 @@ import BeautifulUI
 import SwiftUI
 
 /// The window's sidebar sections: the iPhone's four tabs, plus 知识库 and 机器 (on the phone a page inside
-/// Jarvis, and 机器 inside Agents / 设置), which a Mac with room for a sidebar shows as sections of their own
+/// Persona, and 机器 inside Agents / 设置), which a Mac with room for a sidebar shows as sections of their own
 /// (docs/mac.md「主窗口」). ⌘1…⌘6 in this order.
 enum MacSection: String, CaseIterable, Identifiable {
     case assistant, agents, inbox, knowledge, machines, settings
@@ -52,7 +52,7 @@ enum MacSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .assistant: "Jarvis"
+        case .assistant: "Persona"
         case .agents: "Agents"
         case .inbox: "收件箱"
         case .knowledge: "知识库"
@@ -141,7 +141,7 @@ extension View {
 }
 
 /// The sections column and the section's page side by side. Not a `NavigationSplitView`: the pages are split views
-/// themselves (Agents, Jarvis, 收件箱 in regular width), and a split nested in another one's detail column laid its
+/// themselves (Agents, Persona, 收件箱 in regular width), and a split nested in another one's detail column laid its
 /// own detail out as if the outer sidebar were still in front of it (the chat sat a sidebar's width to the right,
 /// its composer cut off). The page's split is the window's; this column sits at its leading edge.
 private struct MacShell: View {
@@ -201,7 +201,7 @@ private struct MacShell: View {
     /// The section on screen: the one picked in the column, else the tab's.
     private var shown: MacSection { MacSection.shown(override: shell.section, tab: model.selectedTab) }
 
-    /// The sections, with the rows the Jarvis page's own list draws (`AssistantSidebar`): the same icon box, type and
+    /// The sections, with the rows the Persona page's own list draws (`AssistantSidebar`): the same icon box, type and
     /// rounded selection (2026-11-02 user: the system's source list beside it looked unstyled). Flush with the window's
     /// edges, up behind the traffic lights; inset from them it looked like a card on a backing board (same day).
     private var sections: some View {

@@ -112,7 +112,7 @@ struct UserBubble: View, Equatable {
     @Environment(\.rowMemoScope) private var memoScope
     var item: Item
     /// Only the message itself: the chat page re-evaluates its body on every hub push, and without this every row on
-    /// screen (and in the lazy list's buffer) ran its body again too (about 45 a push on a long Jarvis conversation).
+    /// screen (and in the lazy list's buffer) ran its body again too (about 45 a push on a long Persona conversation).
     nonisolated static func == (a: Self, b: Self) -> Bool { a.item == b.item }
     @Environment(\.openFile) private var openFile
     @Environment(\.loadImage) private var loadImage
@@ -491,7 +491,7 @@ struct ThinkingRow: View {
         if !AppStyle.current.usesBeautifulUI { plain } else if compact { chipRow } else { trace }
     }
 
-    /// Jarvis' own: the memory mark, the first line, a chevron; opened, the text beside a rule.
+    /// Persona' own: the memory mark, the first line, a chevron; opened, the text beside a rule.
     private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Button {

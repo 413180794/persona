@@ -284,7 +284,7 @@ struct WatchRootView: View {
                     }
                     }
                 }
-                .navigationTitle("Jarvis")
+                .navigationTitle("Persona")
                 .refreshable { await model.refresh() }
                 .navigationDestination(item: $openedItem) { WatchInboxItemView(item: $0) }
                 #if DEBUG
@@ -561,7 +561,7 @@ struct WatchPairView: View {
             VStack(spacing: 10) {
                 Image(systemName: Theme.Icon.handoff).font(.title2).foregroundStyle(Theme.accent)
                 Text("还没有配对").font(.headline)
-                Text("iPhone 上的 Jarvis 配对好之后，点下面从 iPhone 同步。").font(.footnote).foregroundStyle(.secondary)
+                Text("iPhone 上的 Persona 配对好之后，点下面从 iPhone 同步。").font(.footnote).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                 Button {
                     syncing = true
@@ -580,7 +580,7 @@ struct WatchPairView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(syncing)
                 if failed {
-                    Text("连不上 iPhone：打开 iPhone 上的 Jarvis，或在 设置 › 同步到 Apple Watch。").font(.caption2).foregroundStyle(Theme.cautionText)
+                    Text("连不上 iPhone：打开 iPhone 上的 Persona，或在 设置 › 同步到 Apple Watch。").font(.caption2).foregroundStyle(Theme.cautionText)
                         .multilineTextAlignment(.center)
                 }
             }

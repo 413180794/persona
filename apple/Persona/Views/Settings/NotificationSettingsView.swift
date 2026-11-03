@@ -22,7 +22,7 @@ struct NotificationSettingsView: View {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text("通知没有打开").font(Theme.Font.heading)
-                            Text("下面的设置要在系统设置里允许 Jarvis 发通知后才生效。").font(Theme.Font.caption).foregroundStyle(.secondary)
+                            Text("下面的设置要在系统设置里允许 Persona 发通知后才生效。").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: Theme.Icon.muted).foregroundStyle(Theme.caution)
@@ -102,7 +102,7 @@ struct NotificationSettingsView: View {
                 .disabled(prefs?.liveActivity == false)
                 if !activitiesAllowed {
                     Label {
-                        Text("系统设置里关掉了 Jarvis 的实时活动").font(Theme.Font.caption)
+                        Text("系统设置里关掉了 Persona 的实时活动").font(Theme.Font.caption)
                     } icon: {
                         Image(systemName: Theme.Icon.errorFilled).foregroundStyle(Theme.caution)
                     }

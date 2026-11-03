@@ -56,7 +56,7 @@ struct MacViewCommandsTests {
         """.utf8))
     }
 
-    /// The Agents list's order (needs you → unread → working → seen), Jarvis conversations left out, wrapping.
+    /// The Agents list's order (needs you → unread → working → seen), Persona conversations left out, wrapping.
     @Test func neighboursInTheListsOrder() {
         let list = [session("seen", .idle), session("w", .working), session("n", .needsYou), session("j", .needsYou, assistant: true)]
         let order = AgentListOrder(isPinned: { _ in false }, isMuted: { _ in false })

@@ -53,9 +53,9 @@ nonisolated enum IntentText {
     /// Only permission and plan can be settled without looking at the screen.
     static func needsApp(_ kind: InteractionKind) -> String {
         switch kind {
-        case .question: "这是个提问，需要打开 Jarvis 回答。"
-        case .screen: "终端在等你输入，需要打开 Jarvis。"
-        case .plan, .permission: "需要打开 Jarvis 处理。"
+        case .question: "这是个提问，需要打开 Persona 回答。"
+        case .screen: "终端在等你输入，需要打开 Persona。"
+        case .plan, .permission: "需要打开 Persona 处理。"
         }
     }
 
@@ -93,15 +93,15 @@ nonisolated enum IntentFailure: LocalizedError {
     var sentence: String {
         switch self {
         case .notPaired:
-            "还没配对。先打开 Jarvis 扫 `jarvisd hub pair` 的二维码。"
+            "还没配对。先打开 Persona 扫 `personad hub pair` 的二维码。"
         case .noMachine:
-            "现在没有在线的机器。看看 hub 上的 jarvisd 和各台电脑的 SSH 连接。"
+            "现在没有在线的机器。看看 hub 上的 personad 和各台电脑的 SSH 连接。"
         case .offline(let name):
-            "\(name) 现在离线，看看 jarvisd 和 SSH 隧道。"
+            "\(name) 现在离线，看看 personad 和 SSH 隧道。"
         case .noSession(let name):
-            "\(name) 上没有运行中的会话。打开 Jarvis 新建一个，或者说「新会话」。"
+            "\(name) 上没有运行中的会话。打开 Persona 新建一个，或者说「新会话」。"
         case .noLauncher(let name):
-            "还没在 \(name) 上用过新对话。打开 Jarvis 新建一次，之后 Siri 就知道用哪个目录和启动器了。"
+            "还没在 \(name) 上用过新对话。打开 Persona 新建一次，之后 Siri 就知道用哪个目录和启动器了。"
         case .noPending:
             "没有等你处理的事。"
         }
@@ -112,7 +112,7 @@ nonisolated enum IntentFailure: LocalizedError {
         if let failure = error as? IntentFailure { return failure.sentence }
         if let api = error as? APIError {
             switch api.status {
-            case 401, 403: return "配对已失效，打开 Jarvis 重新配对。"
+            case 401, 403: return "配对已失效，打开 Persona 重新配对。"
             case 410: return "这个已经处理过了。"
             default: return api.message
             }

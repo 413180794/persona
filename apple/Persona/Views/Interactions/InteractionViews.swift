@@ -23,10 +23,10 @@ extension InteractionKind {
 }
 
 extension Interaction {
-    /// The assistant asks through its ask_user tool: it is Jarvis asking, not a Claude Code agent; a Codex card names
+    /// The assistant asks through its ask_user tool: it is Persona asking, not a Claude Code agent; a Codex card names
     /// Codex.
     var title: String {
-        if toolName == "ask_user" { return "Jarvis 在问你" }
+        if toolName == "ask_user" { return "Persona 在问你" }
         if let name = agentName {
             switch kind {
             case .question: return "\(name) 在问你"

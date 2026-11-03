@@ -209,7 +209,7 @@ final class LiveActivityController {
         do {
             watch(try Activity.request(attributes: JarvisActivityAttributes(), content: content, pushType: .token))
         } catch {
-            // The simulator without APNs, or the user turned Live Activities off for Jarvis.
+            // The simulator without APNs, or the user turned Live Activities off for Persona.
             if let local = try? Activity.request(attributes: JarvisActivityAttributes(), content: content, pushType: nil) {
                 watch(local)
             }

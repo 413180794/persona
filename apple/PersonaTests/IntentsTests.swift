@@ -96,9 +96,9 @@ struct IntentsTests {
     }
 
     @Test func phrasesCarryTheAppName() {
-        #expect(IntentPhrases.fill(IntentPhrases.askClaude, appName: "Jarvis") == "用 Jarvis 问 Claude")
-        #expect(IntentPhrases.fill(IntentPhrases.status, appName: "Jarvis") == "Jarvis 状态")
-        #expect(IntentPhrases.fill(IntentPhrases.approve, appName: "Jarvis") == "用 Jarvis 批准第一个")
+        #expect(IntentPhrases.fill(IntentPhrases.askClaude, appName: "Persona") == "用 Persona 问 Claude")
+        #expect(IntentPhrases.fill(IntentPhrases.status, appName: "Persona") == "Persona 状态")
+        #expect(IntentPhrases.fill(IntentPhrases.approve, appName: "Persona") == "用 Persona 批准第一个")
         // Every template needs the placeholder, otherwise Siri cannot address the app by name.
         for template in [IntentPhrases.askClaude, IntentPhrases.status, IntentPhrases.approve] {
             #expect(template.contains("%@"))
@@ -179,7 +179,7 @@ struct IntentsTests {
     @Test func approveRepliesDescribeWhatHappened() {
         #expect(ApproveFirstIntent.doneText(for: interaction(.permission, tool: "Bash")) == "已允许 Bash")
         #expect(ApproveFirstIntent.doneText(for: interaction(.plan)) == IntentText.approvedPlan)
-        #expect(ApproveFirstIntent.doneText(for: interaction(.question)).contains("打开 Jarvis"))
+        #expect(ApproveFirstIntent.doneText(for: interaction(.question)).contains("打开 Persona"))
     }
 
     // MARK: Entities

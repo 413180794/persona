@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Jarvis tab's top bar and its sidebar (docs/ios.md「Jarvis 顶栏和侧边栏」): the avatar's menu (知识库, 详细信息, the
+/// The Persona tab's top bar and its sidebar (docs/ios.md「Persona 顶栏和侧边栏」): the avatar's menu (知识库, 详细信息, the
 /// copy items), 历史对话 on the left opening the sidebar, a swipe to the right anywhere on the page doing the same,
 /// 新对话 on the right, picking a conversation in the sidebar, and the bar staying put while a long chat scrolls.
 /// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): its main conversation is「今天要处理的事」, the long one is ASK4.
@@ -94,22 +94,22 @@ final class AssistantTopBarTests: XCTestCase {
         let new = app.buttons["新对话"].firstMatch
         XCTAssertTrue(new.exists && new.isHittable, "no 新对话 on the right:\n\(app.debugDescription)")
         new.tapCenter()
-        // The conversation's own composer says 问 Jarvis… too: the page changed when its messages are gone and 新对话
+        // The conversation's own composer says 问 Persona… too: the page changed when its messages are gone and 新对话
         // (nothing to start anew from) is off.
         XCTAssertTrue(app.staticTexts["今天有什么需要我处理的？"].waitForNonExistence(timeout: 5) && !new.isEnabled,
                       "新对话 did not open the new-conversation page:\n\(app.debugDescription)")
-        XCTAssertTrue(app.textViews["问 Jarvis…"].exists || app.textFields["问 Jarvis…"].exists, "no composer on the new-conversation page")
+        XCTAssertTrue(app.textViews["问 Persona…"].exists || app.textFields["问 Persona…"].exists, "no composer on the new-conversation page")
         shot(app, "home")
 
         let history = app.buttons["历史对话"]
         XCTAssertTrue(history.isHittable, "no 历史对话 on the left")
         history.tapCenter()
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "历史对话 did not open the sidebar:\n\(app.debugDescription)")
-        // 豆包's layout (2026-10-31): what to start, 置顶 with the main conversation, 最近, Jarvis and 设置 at the foot.
+        // 豆包's layout (2026-10-31): what to start, 置顶 with the main conversation, 最近, Persona and 设置 at the foot.
         for row in ["新对话", "定时任务", "知识库", "置顶", "最近", "主对话"] {
             XCTAssertTrue(app.staticTexts[row].firstMatch.exists, "no \(row) in the sidebar:\n\(app.debugDescription)")
         }
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Jarvis，")).firstMatch.exists, "no Jarvis at the foot")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Persona，")).firstMatch.exists, "no Persona at the foot")
         XCTAssertTrue(app.buttons["搜索对话"].exists, "no search button")
         shot(app, "sidebar")
         let pick = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "早报 · 周三")).firstMatch

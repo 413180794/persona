@@ -53,7 +53,7 @@ final class FeishuDocsReaderModel {
     static func read(_ api: APIClient, url: String, title: String?) async throws -> FeishuDocsContent {
         let kind = FeishuDocsKind.from(url: url)
         if kind == .bitable {
-            return .unsupported(.init(kind: .bitable, title: title ?? "多维表格", message: "多维表格暂不支持在 Jarvis 中查看", file: nil, image: nil))
+            return .unsupported(.init(kind: .bitable, title: title ?? "多维表格", message: "多维表格暂不支持在 Persona 中查看", file: nil, image: nil))
         }
         if kind != .file && kind != .whiteboard {
             do {
@@ -67,11 +67,11 @@ final class FeishuDocsReaderModel {
         do {
             view = try await api.feishuDocsGet("documents/read", query: ["url": url, "format": "json"])
         } catch let e as FeishuDocsFailure where e.code == "DOCUMENT_FORMAT_UNSUPPORTED" || e.status == 422 {
-            return .unsupported(.init(kind: kind, title: title ?? kind.label, message: "这种内容暂不支持在 Jarvis 中查看", file: nil, image: nil))
+            return .unsupported(.init(kind: kind, title: title ?? kind.label, message: "这种内容暂不支持在 Persona 中查看", file: nil, image: nil))
         }
         let name = view.title.isEmpty ? (title ?? kind.label) : view.title
         if view.isBase {
-            return .unsupported(.init(kind: .bitable, title: name, message: "多维表格暂不支持在 Jarvis 中查看", file: nil, image: nil))
+            return .unsupported(.init(kind: .bitable, title: name, message: "多维表格暂不支持在 Persona 中查看", file: nil, image: nil))
         }
         if let o = view.object {
             switch o.kind {
@@ -80,7 +80,7 @@ final class FeishuDocsReaderModel {
             case "whiteboard":
                 return .unsupported(.init(kind: .whiteboard, title: name, message: o.empty == true ? "这是一个空白画板" : "画板", file: nil, image: o.image))
             default:
-                return .unsupported(.init(kind: kind, title: name, message: "这种内容暂不支持在 Jarvis 中查看", file: nil, image: nil))
+                return .unsupported(.init(kind: kind, title: name, message: "这种内容暂不支持在 Persona 中查看", file: nil, image: nil))
             }
         }
         if view.isSpreadsheet && view.content.children.isEmpty {

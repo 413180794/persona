@@ -186,7 +186,7 @@ struct LarkNodeView: View {
                 .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: Theme.Size.bar) })
         case let t where t.hasPrefix("heading-"):
             let level = Int(t.dropFirst(8)) ?? 3
-            let size: CGFloat = level == 1 ? 22 : 17 // Jarvis' title and heading levels, as in a chat's Markdown
+            let size: CGFloat = level == 1 ? 22 : 17 // Persona' title and heading levels, as in a chat's Markdown
             return AnyView(LarkNodesView(nodes: children, structured: true, base: LarkTextBase(size: size, bold: true)))
         case "code-block":
             return AnyView(LarkNodesView(nodes: children, structured: true, base: base))

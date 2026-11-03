@@ -70,7 +70,11 @@ class AppleRenameTests(unittest.TestCase):
         self.assertNotIn("PersonaPushKeychainGroup:", PROJECT)
         self.assertNotIn("PersonaPushRelay:", PROJECT)
         self.assertNotIn("PersonaAppGroup:", PROJECT)
-        self.assertIn("CFBundleURLSchemes: [jarvis]", PROJECT)
+        for relative in ("Persona/Resources/Info.plist", "Mac/Resources/Info.plist"):
+            info = plistlib.loads((APPLE / relative).read_bytes())
+            schemes = info["CFBundleURLTypes"][0]["CFBundleURLSchemes"]
+            self.assertIn("jarvis", schemes)
+            self.assertIn("persona", schemes)
 
     def test_avatar_names_do_not_collide_with_persona_model(self):
         source = (APPLE / "Persona/Views/Assistant/AssistantAvatar.swift").read_text()

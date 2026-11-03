@@ -1,6 +1,6 @@
 import Foundation
 
-/// ⌘K 快速打开 (docs/mac.md「搜索」): one field over the agents, the Jarvis conversations, the inbox, the window's
+/// ⌘K 快速打开 (docs/mac.md「搜索」): one field over the agents, the Persona conversations, the inbox, the window's
 /// sections and the two "new" actions, like Xcode's Open Quickly. ↑↓ choose, ⏎ opens, Esc closes.
 enum MacQuickOpen {
     enum Target: Hashable {
@@ -46,7 +46,7 @@ enum MacQuickOpen {
         return !words.isEmpty && words.allSatisfy { h.contains($0) } ? 40 : 0
     }
 
-    /// The groups to list, empty ones dropped: Agent, Jarvis 对话, 收件箱, 前往, 动作 — unless a later group has a
+    /// The groups to list, empty ones dropped: Agent, Persona 对话, 收件箱, 前往, 动作 — unless a later group has a
     /// better kind of match (typing 设置 puts the section above an agent that merely mentions it).
     static func sections(_ query: String, sessions: [Session], machines: [Machine], inbox: [InboxItem]) -> [Group] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -57,7 +57,7 @@ enum MacQuickOpen {
             let sc = score(title: s.displayTitle, hay: [s.cwd, s.spaceName, machine, s.lastText], query: q)
             guard sc > 0 else { continue }
             if s.assistant {
-                conversations.append(Hit(id: "j:\(s.machineID)/\(s.sessionID)", title: s.displayTitle, subtitle: "Jarvis",
+                conversations.append(Hit(id: "j:\(s.machineID)/\(s.sessionID)", title: s.displayTitle, subtitle: "Persona",
                                          icon: Theme.Icon.ai, state: s.state, target: .conversation(s.key), score: sc,
                                          date: s.updatedAt, urgent: s.state == .needsYou))
             } else {
@@ -75,7 +75,7 @@ enum MacQuickOpen {
         }
         let groups = [
             Group(title: "Agent", hits: Array(ranked(agents).prefix(agentLimit))),
-            Group(title: "Jarvis 对话", hits: Array(ranked(conversations).prefix(otherLimit))),
+            Group(title: "Persona 对话", hits: Array(ranked(conversations).prefix(otherLimit))),
             Group(title: "收件箱", hits: Array(ranked(mail).prefix(otherLimit))),
             Group(title: "前往", hits: places(q)),
             Group(title: "动作", hits: actions(q)),
@@ -118,7 +118,7 @@ enum MacQuickOpen {
     private static func actions(_ q: String) -> [Hit] {
         let all: [(String, String, String, Target, [String])] = [
             ("a:new-agent", "新建 Agent", "在一台电脑上启动 Claude Code / Codex  ⌘N", .newAgent, ["new agent", "start", "启动", "claude", "codex"]),
-            ("a:new-jarvis", "新建 Jarvis 对话", "问 Jarvis  ⇧⌘N", .newConversation, ["new chat", "jarvis", "对话", "助手"]),
+            ("a:new-jarvis", "新建 Persona 对话", "问 Persona  ⇧⌘N", .newConversation, ["new chat", "jarvis", "对话", "助手"]),
         ]
         return all.compactMap { id, title, sub, target, words in
             let sc = score(title: title, hay: words, query: q)

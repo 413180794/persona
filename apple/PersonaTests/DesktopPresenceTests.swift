@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 「Mac 上的 Jarvis 已登录」(docs/protocol.md「桌面端」): the hub says which desktops are connected; a phone may
+/// 「Mac 上的 Persona 已登录」(docs/protocol.md「桌面端」): the hub says which desktops are connected; a phone may
 /// choose 手机静音 while one is.
 struct DesktopPresenceTests {
     @Test func decodesTheDesktopsEvent() throws {
@@ -35,8 +35,8 @@ struct DesktopPresenceTests {
     /// The banner's line: one desktop by kind, several by count.
     @Test func bannerTitle() {
         let one = [DesktopDevice(device: "d1", name: "MacBook", since: nil)]
-        #expect(DesktopDevice.bannerTitle(one) == "Mac 上的 Jarvis 已登录")
-        #expect(DesktopDevice.bannerTitle(one + [DesktopDevice(device: "d2", name: "iMac", since: nil)]) == "2 台 Mac 上的 Jarvis 已登录")
+        #expect(DesktopDevice.bannerTitle(one) == "Mac 上的 Persona 已登录")
+        #expect(DesktopDevice.bannerTitle(one + [DesktopDevice(device: "d2", name: "iMac", since: nil)]) == "2 台 Mac 上的 Persona 已登录")
     }
 
     #if os(iOS)

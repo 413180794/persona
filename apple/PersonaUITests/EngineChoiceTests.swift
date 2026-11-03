@@ -60,7 +60,7 @@ final class EngineChoiceTests: XCTestCase {
 
     /// UIKit renders the four tabs in a side rail on Duo's cover, without a TabBar accessibility parent.
     @MainActor private func pairedRoot() {
-        for title in ["Jarvis", "Agents", "收件箱", "设置"] {
+        for title in ["Persona", "Agents", "收件箱", "设置"] {
             XCTAssertTrue(app.buttons[title].firstMatch.waitForExistence(timeout: 10), "no paired root control: \(title)")
         }
         XCTAssertFalse(app.buttons["engine.save"].exists, "the engine step did not finish")

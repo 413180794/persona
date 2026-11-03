@@ -147,7 +147,7 @@ struct MacInboxItemDetail: View {
                 }
                 .help(current.agentDraft == nil ? "让 AI 用你的口吻草拟一条回复" : "AI 分身草拟好了回复，看看再发")
                 Button { handingOff = true } label: { Label("交给 AI", systemImage: Theme.Icon.handToAI) }
-                    .help("把这件事交给 Jarvis 或一个 Agent")
+                    .help("把这件事交给 Persona 或一个 Agent")
             }
             if current.isDone {
                 Button { InboxStore.shared.setDone(current, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }
@@ -203,7 +203,7 @@ struct MacInboxPage: View {
             MacInboxDetail()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        // The pages' color, as Agents and Jarvis have: the window's own took the wallpaper's tint in dark mode, brown
+        // The pages' color, as Agents and Persona have: the window's own took the wallpaper's tint in dark mode, brown
         // beside the other pages' gray (2026-11-02).
         .background(Theme.pageBackground)
     }

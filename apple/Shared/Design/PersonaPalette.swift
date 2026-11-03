@@ -3,7 +3,7 @@ import SwiftUI
 /// The colors a persona brings (docs/persona.md「色系」): the accent (what can be tapped; BeautifulUI's accent and
 /// 飞书's links follow it), the user's bubble and its words, and the persona's own primary for decoration
 /// (`Theme.persona`). They color the app only when 主题色 is 跟随形象 (`ColorSpec(persona:over:)`); what a persona leaves
-/// out stays the style's, and the built-in Jarvis brings nothing. Held to the same floors as every color
+/// out stays the style's, and the built-in Persona brings nothing. Held to the same floors as every color
 /// (StyleSpecTests): a color that misses one is darkened until it passes, so a package can't make a button unreadable.
 nonisolated struct PersonaPalette: Sendable, Hashable {
     /// A light / dark pair of sRGB values (0xRRGGBB).

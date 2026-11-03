@@ -5,7 +5,7 @@ import UIKit
 #endif
 
 #if os(iOS)
-/// How far the Jarvis tab's sidebar is out (0 closed … 1 open). Its own object so following the finger only redraws
+/// How far the Persona tab's sidebar is out (0 closed … 1 open). Its own object so following the finger only redraws
 /// the page's motion modifier (offset, scale, opacities) and moves two UIKit views, never the conversation or the sidebar.
 @Observable final class AssistantDrawer {
     var progress: CGFloat = 0 {
@@ -592,8 +592,8 @@ private struct SidebarClosed: View {
     }
 }
 
-/// What the sidebar lists (2026-10-31, laid out like 豆包's): Jarvis's name with a search button; the things to start
-/// (新对话, 定时任务, 知识库); 置顶 (the main conversation first) and 最近, one line each with a round mark; Jarvis's face,
+/// What the sidebar lists (2026-10-31, laid out like 豆包's): Persona's name with a search button; the things to start
+/// (新对话, 定时任务, 知识库); 置顶 (the main conversation first) and 最近, one line each with a round mark; Persona's face,
 /// where it runs and 设置 at the foot.
 struct AssistantSidebar: View {
     @Environment(AppModel.self) private var model
@@ -750,7 +750,7 @@ struct AssistantSidebar: View {
 
     @ViewBuilder private var actions: some View {
         if let openInbox, let openMachines {
-            // The shell's: Jarvis's own page first (认识 Jarvis, like ChatGPT's 认识 Dot), then the places to go.
+            // The shell's: Persona's own page first (认识 Persona, like ChatGPT's 认识 Dot), then the places to go.
             VStack(alignment: .leading, spacing: 0) {
                 Button(action: openProfile) {
                     HStack(spacing: Theme.Space.l) {
@@ -945,7 +945,7 @@ struct AssistantSidebar: View {
         }
     }
 
-    /// A conversation: a round mark (Jarvis's face for the main one), its title on one line, its state on the right.
+    /// A conversation: a round mark (Persona's face for the main one), its title on one line, its state on the right.
     private func row(_ s: Session) -> some View {
         let selected = s.key == current
         let isMain = s.key == model.assistantMain
@@ -1049,11 +1049,11 @@ struct AssistantSidebar: View {
         Haptics.tap()
     }
 
-    // MARK: Foot: Jarvis, 设置
+    // MARK: Foot: Persona, 设置
 
     private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
 
-    /// Jarvis's face and name with where it runs (a tap: its profile), 设置 on the right (the tab bar is hidden while
+    /// Persona's face and name with where it runs (a tap: its profile), 设置 on the right (the tab bar is hidden while
     /// the drawer is out).
     @ViewBuilder private var footer: some View {
         if isShell { shellFooter } else { profileFooter }

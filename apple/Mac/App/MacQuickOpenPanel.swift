@@ -56,7 +56,7 @@ struct MacQuickOpenPanel: View {
                 Image(systemName: Theme.Icon.search)
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                TextField("快速打开：Agent、Jarvis 对话、收件箱…", text: $query)
+                TextField("快速打开：Agent、Persona 对话、收件箱…", text: $query)
                     .textFieldStyle(.plain)
                     .font(Theme.Font.title)
                     .focused($focused)

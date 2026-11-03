@@ -61,6 +61,17 @@ struct FleetStateTests {
         #expect(FleetLink.session(URL(string: "jarvis://pair?url=x&token=y")!) == nil)
     }
 
+    @Test func renamedDeepLinksKeepLegacyOutput() throws {
+        for scheme in ["persona", "jarvis", "PERSONA", "JARVIS"] {
+            let session = try #require(FleetLink.session(URL(string: "\(scheme)://open?machine=box&session=abc-123")!))
+            #expect(session.machine == "box" && session.session == "abc-123")
+            #expect(FleetLink.session(URL(string: "\(scheme)://open?machine=box")!) == nil)
+            #expect(FleetLink.session(URL(string: "\(scheme)://pair?machine=box&session=abc-123")!) == nil)
+        }
+        #expect(FleetLink.session(URL(string: "https://open?machine=box&session=abc-123")!) == nil)
+        #expect(FleetLink.url(nil)?.absoluteString == "jarvis://open")
+    }
+
     // MARK: Island
 
     /// What hub forDevice pushes to a device with preset b, read with a plain decoder like ActivityKit does.

@@ -228,7 +228,7 @@ struct InboxPage: View {
 
     /// The agent's chat (the assistant's in 对话), where the question / plan / approval waits.
     private func open(_ ix: Interaction) {
-        model.open(ix.sessionKey) // in its own group (another group's Jarvis: that group's)
+        model.open(ix.sessionKey) // in its own group (another group's Persona: that group's)
     }
 
     private func row(_ it: InboxItem) -> some View {

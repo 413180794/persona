@@ -28,7 +28,7 @@ struct IslandSettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Theme.Space.sm)
             } footer: {
-                Text("有 Agent 需要你时，左侧总是换成红色的数量。别的 App 也有实时活动时，灵动岛只留给 Jarvis 一小块，只显示最急的一类的数量（需要你 > 在工作 > 做完未看），不受上面的样式影响。")
+                Text("有 Agent 需要你时，左侧总是换成红色的数量。别的 App 也有实时活动时，灵动岛只留给 Persona 一小块，只显示最急的一类的数量（需要你 > 在工作 > 做完未看），不受上面的样式影响。")
             }
 
             Section("样式") {
