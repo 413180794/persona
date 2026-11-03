@@ -8,7 +8,30 @@
 # the node starts runs in the login session and can read the login keychain. Set up for tailcat
 # (`jarvisd node tailcat init`), the resident node is also how the hub reaches the machine when ssh cannot.
 set -euo pipefail
-BIN="$HOME/.jarvis/bin/jarvisd"
+ROOT="${PERSONA_HOME-${JARVIS_HOME-}}"
+if [ -z "$ROOT" ]; then
+  if [ -d "$HOME/.jarvis" ] || [ -L "$HOME/.jarvis" ]; then ROOT="$HOME/.jarvis"; else ROOT="$HOME/.persona"; fi
+fi
+case "$ROOT" in '~') ROOT="$HOME" ;; '~/'*) ROOT="$HOME/${ROOT#\~/}" ;; esac
+case "$ROOT" in /*) ;; *) ROOT="$HOME/$ROOT" ;; esac
+rest="$ROOT"; ROOT=
+while [ -n "$rest" ]; do
+  part="${rest%%/*}"
+  if [ "$rest" = "$part" ]; then rest=; else rest="${rest#*/}"; fi
+  case "$part" in '' | .) ;; ..) ROOT="${ROOT%/*}" ;; *) ROOT="$ROOT/$part" ;; esac
+done
+ROOT="${ROOT:-/}"
+BIN="$ROOT/bin/jarvisd"
+xml_escape() {
+  local value="$1"
+  value="${value//&/\&amp;}"; value="${value//</\&lt;}"; value="${value//>/\&gt;}"
+  printf '%s' "$value"
+}
+systemd_quote() {
+  local value="$1"
+  value="${value//\\/\\\\}"; value="${value//\"/\\\"}"; value="${value//%/%%}"
+  printf '"%s"' "$value"
+}
 
 if [ "$(uname -s)" = Linux ]; then
   UNIT=jarvisd-node.service
@@ -16,17 +39,19 @@ if [ "$(uname -s)" = Linux ]; then
   case "${1:-install}" in
     install)
       [ -x "$BIN" ] || { echo "no $BIN: deploy this machine first (scripts/deploy/deploy.sh)" >&2; exit 1; }
-      mkdir -p "$(dirname "$UNIT_FILE")" "$HOME/.jarvis"
+      mkdir -p "$(dirname "$UNIT_FILE")" "$ROOT"
       cat > "$UNIT_FILE" <<UN
 [Unit]
 Description=Jarvis resident node (docs/server.md)
 After=network-online.target
 
 [Service]
-ExecStart=$BIN node --attach
+ExecStart=$(systemd_quote "${BIN//\$/\$\$}") node --attach
+Environment=$(systemd_quote "PERSONA_HOME=$ROOT")
+Environment=$(systemd_quote "JARVIS_HOME=$ROOT")
 Restart=always
 RestartSec=10
-StandardError=append:$HOME/.jarvis/node-attach.log
+StandardError=append:${ROOT//%/%%}/node-attach.log
 
 [Install]
 WantedBy=default.target
@@ -41,7 +66,7 @@ UN
       if systemctl --user is-enabled "$UNIT" >/dev/null 2>&1; then systemctl --user restart "$UNIT" && echo "restarted $UNIT"; fi ;;
     uninstall)
       systemctl --user disable --now "$UNIT" 2>/dev/null || true
-      rm -f "$UNIT_FILE" "$HOME/.jarvis/node-attach.sock"
+      rm -f "$UNIT_FILE" "$ROOT/node-attach.sock"
       systemctl --user daemon-reload 2>/dev/null || true
       echo "removed $UNIT" ;;
     *) echo "usage: $0 [install|restart|uninstall]" >&2; exit 2 ;;
@@ -55,17 +80,21 @@ DOMAIN="gui/$(id -u)"
 case "${1:-install}" in
   install)
     [ -x "$BIN" ] || { echo "no $BIN: deploy this machine first (scripts/deploy/deploy.sh)" >&2; exit 1; }
-    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.jarvis"
+    mkdir -p "$HOME/Library/LaunchAgents" "$ROOT"
     cat > "$PLIST" <<PL
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array><string>$BIN</string><string>node</string><string>--attach</string></array>
+  <key>ProgramArguments</key><array><string>$(xml_escape "$BIN")</string><string>node</string><string>--attach</string></array>
+  <key>EnvironmentVariables</key><dict>
+    <key>PERSONA_HOME</key><string>$(xml_escape "$ROOT")</string>
+    <key>JARVIS_HOME</key><string>$(xml_escape "$ROOT")</string>
+  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
-  <key>StandardErrorPath</key><string>$HOME/.jarvis/node-attach.log</string>
+  <key>StandardErrorPath</key><string>$(xml_escape "$ROOT/node-attach.log")</string>
 </dict></plist>
 PL
     launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
@@ -75,7 +104,7 @@ PL
     if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then launchctl kickstart -k "$DOMAIN/$LABEL" && echo "restarted $LABEL"; fi ;;
   uninstall)
     launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
-    rm -f "$PLIST" "$HOME/.jarvis/node-attach.sock"
+    rm -f "$PLIST" "$ROOT/node-attach.sock"
     echo "removed $LABEL" ;;
   *) echo "usage: $0 [install|restart|uninstall]" >&2; exit 2 ;;
 esac

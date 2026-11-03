@@ -39,7 +39,7 @@ Description=Jarvis link: keeps this computer reachable from the Jarvis hub
 
 [Service]
 ExecStart=` + systemdQuote(bin) + ` run --log ` + systemdQuote(logPath) + `
-Restart=always
+` + stateEnvironment(filepath.Dir(logPath)) + `Restart=always
 RestartSec=5
 StandardOutput=null
 
@@ -52,6 +52,17 @@ WantedBy=default.target
 func systemdQuote(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `%`, `%%`, `$`, `$$`)
 	return `"` + r.Replace(s) + `"`
+}
+
+// Environment= expands systemd specifiers, but never ExecStart's dollar variables.
+func systemdEnvironmentQuote(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `%`, `%%`)
+	return `"` + r.Replace(s) + `"`
+}
+
+func stateEnvironment(root string) string {
+	return "Environment=" + systemdEnvironmentQuote("PERSONA_HOME="+root) + "\n" +
+		"Environment=" + systemdEnvironmentQuote("JARVIS_HOME="+root) + "\n"
 }
 
 func (e *env) systemctl(args ...string) (string, error) {

@@ -52,7 +52,7 @@ Description=Jarvis resident node (docs/server.md)
 
 [Service]
 ExecStart=` + systemdQuote(bin) + ` node --attach
-Restart=always
+` + stateEnvironment(filepath.Dir(logPath)) + `Restart=always
 RestartSec=10
 StandardError=append:` + strings.ReplaceAll(logPath, "%", "%%") + `
 
@@ -69,6 +69,10 @@ func nodePlist(bin, logPath string) string {
 <plist version="1.0"><dict>
   <key>Label</key><string>` + nodeLabel + `</string>
   <key>ProgramArguments</key><array><string>` + x(bin) + `</string><string>node</string><string>--attach</string></array>
+  <key>EnvironmentVariables</key><dict>
+    <key>PERSONA_HOME</key><string>` + x(filepath.Dir(logPath)) + `</string>
+    <key>JARVIS_HOME</key><string>` + x(filepath.Dir(logPath)) + `</string>
+  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
