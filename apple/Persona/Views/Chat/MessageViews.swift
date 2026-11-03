@@ -132,6 +132,7 @@ struct UserBubble: View, Equatable {
             if !images.isEmpty, let loadImage {
                 AttachedImages(paths: images, load: loadImage)
             }
+            if !d.attached.isEmpty { AttachedFileCards(files: d.attached) }
             if !shown.isEmpty {
                 HStack {
                     Spacer(minLength: 48)
@@ -164,7 +165,7 @@ extension UserBubble {
     nonisolated static func display(_ text: String) -> String { displayMemo(text, computeDisplay) }
 
     nonisolated private static func computeDisplay(_ text: String) -> String {
-        var t = text
+        var t = AttachedFile.parse(text).rest // the videos sent with it are cards
         for pattern in notePatterns {
             while let r = t.range(of: pattern, options: .regularExpression) { t.replaceSubrange(r, with: "\n") }
         }
@@ -230,6 +231,8 @@ struct PendingBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: Theme.Space.sm) {
+            let files = AttachedFile.parse(msg.text).files
+            if !files.isEmpty { AttachedFileCards(files: files) }
             if !msg.images.isEmpty {
                 HStack(spacing: Theme.Space.sm) {
                     Spacer(minLength: 48)
@@ -273,7 +276,7 @@ struct PendingBubble: View {
                     }
                     .accessibilityLabel("发送失败，重发或删除")
                 }
-                Text(ContextRef.parse(msg.text).rest)
+                Text(AttachedFile.parse(ContextRef.parse(msg.text).rest).rest)
                     .font(Theme.Font.body).lineHeight(.body)
                     .foregroundStyle(Theme.userBubbleText(shell: shellChat))
                     .padding(.horizontal, Theme.Space.l)
@@ -298,6 +301,14 @@ struct MergedUserBubble: View {
 
     var body: some View {
         let texts = items.map { UserBubble.display(ContextRef.parse($0.text ?? "").rest) }.filter { !$0.isEmpty }
+        let files = items.flatMap { AttachedFile.parse(ContextRef.parse($0.text ?? "").rest).files }
+        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
+            if !files.isEmpty { AttachedFileCards(files: files) } // the videos sent with them, as on one message
+            bubble(texts)
+        }
+    }
+
+    private func bubble(_ texts: [String]) -> some View {
         HStack {
             Spacer(minLength: 48)
             VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -991,8 +1002,10 @@ nonisolated struct AssistantRowText {
 nonisolated struct UserRowText {
     let refs: [ContextRef]
     let text: String   // without the context tags
-    let shown: String  // without the image notes
+    let shown: String  // without the image notes and the files' tags
     let images: [String]
+    /// The files sent with it (videos), drawn as cards.
+    let attached: [AttachedFile]
     let files: [String]
     init(_ raw: String) {
         let parsed = ContextRef.parse(raw)
@@ -1001,6 +1014,8 @@ nonisolated struct UserRowText {
         shown = UserBubble.display(parsed.rest)
         let images = UserBubble.imagePaths(parsed.rest)
         self.images = images
-        files = FilePaths.find(in: parsed.rest).filter { !images.contains($0) }
+        let sent = AttachedFile.parse(parsed.rest)
+        attached = sent.files
+        files = FilePaths.find(in: sent.rest).filter { !images.contains($0) }
     }
 }

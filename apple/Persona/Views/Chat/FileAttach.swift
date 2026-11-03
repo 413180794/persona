@@ -172,30 +172,46 @@ struct UploadsBar: View {
     var body: some View {
         VStack(spacing: Theme.Space.sm) {
             ForEach(uploads.items) { item in
-                HStack(spacing: Theme.Space.m) {
-                    Image(systemName: Theme.Icon.file).font(Theme.Font.body).foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                        HStack {
-                            Text(item.name).font(Theme.Font.secondary).lineLimit(1).truncationMode(.middle)
-                            Spacer(minLength: 8)
-                            Text(item.waiting ? "等待中" : "\(item.sent.storageText) / \(item.size.storageText)")
-                                .font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        ProgressView(value: item.size > 0 ? Double(min(item.sent, item.size)) / Double(item.size) : 0)
-                            .tint(Theme.accent)
-                    }
-                    Button { uploads.cancel(item.id) } label: {
-                        Image(systemName: Theme.Icon.clear).font(Theme.Font.title).symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("取消上传 \(item.name)")
-                }
-                .padding(.horizontal, Theme.Space.m)
-                .padding(.vertical, Theme.Space.s)
-                .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+                AttachmentRow(symbol: Theme.Icon.file, name: item.name,
+                              status: item.waiting ? "等待中" : "\(item.sent.storageText) / \(item.size.storageText)",
+                              progress: item.size > 0 ? Double(min(item.sent, item.size)) / Double(item.size) : 0,
+                              removeLabel: "取消上传 \(item.name)") { uploads.cancel(item.id) }
             }
         }
+    }
+}
+
+/// One row above the input box (a file uploading, a video on its way or ready): icon, name, status, the progress bar
+/// while there is one (nil: none), and the button that cancels or removes it.
+struct AttachmentRow: View {
+    var symbol: String
+    var name: String
+    var status: String
+    var progress: Double?
+    var removeLabel: String
+    var remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Space.m) {
+            Image(systemName: symbol).font(Theme.Font.body).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                HStack {
+                    Text(name).font(Theme.Font.secondary).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    Text(status).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if let progress { ProgressView(value: progress).tint(Theme.accent) }
+            }
+            Button(action: remove) {
+                Image(systemName: Theme.Icon.clear).font(Theme.Font.title).symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(removeLabel)
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.s)
+        .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 }
 

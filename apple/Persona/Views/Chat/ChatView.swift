@@ -2327,6 +2327,7 @@ struct Composer: View, Equatable {
     @State private var showFiles = false
     @State private var showRecording = false
     @State private var uploads = FileUploads()
+    @State private var videos = VideoAttachments()
     @State private var selection: TextSelection?
     @State private var confirmClear = false
     @State private var clearing = false
@@ -2344,8 +2345,12 @@ struct Composer: View, Equatable {
     private var allowsSend: Bool { model.session(key)?.canSend == true }
 
     private var canSend: Bool {
-        allowsSend && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty)
+        allowsSend && !videos.busy && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !videos.ready.isEmpty
+            || !(model.composerContexts[key] ?? []).isEmpty)
     }
+
+    /// Something rides along besides the text (photos, videos, quotes): the bar opens and sends without text.
+    private var hasAttachments: Bool { !images.isEmpty || !videos.items.isEmpty || !(model.composerContexts[key] ?? []).isEmpty }
 
     /// Claude in a herdr pane takes `/model`; Codex and TRAEX pick theirs in a full-screen menu the phone cannot drive.
     private var canPickModel: Bool {
@@ -2361,7 +2366,7 @@ struct Composer: View, Equatable {
 
     /// Claude's suggested next message, while the box is empty and the agent waits.
     private var suggestion: String? {
-        guard !status.isActive, text.isEmpty, images.isEmpty, let s = model.session(key)?.suggestion, !s.isEmpty else { return nil }
+        guard !status.isActive, text.isEmpty, images.isEmpty, videos.items.isEmpty, let s = model.session(key)?.suggestion, !s.isEmpty else { return nil }
         return s
     }
 
@@ -2390,6 +2395,7 @@ struct Composer: View, Equatable {
             }
             if !(model.composerContexts[key] ?? []).isEmpty { ContextChips(refs: contexts) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
+            if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty {
                 ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
             }
@@ -2397,7 +2403,7 @@ struct Composer: View, Equatable {
                 // The shell's composer (docs/ios.md「新外壳」), whatever the style.
                 ShellComposerBar(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? "问 \(model.persona.name)"),
                                  text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
-                                 hasAttachments: !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty,
+                                 hasAttachments: hasAttachments,
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                  modesWarn: model.session(key)?.permissionMode == "bypassPermissions",
                                  send: { Task { await sendText(text) } }) {
@@ -2414,7 +2420,7 @@ struct Composer: View, Equatable {
                 // The BeautifulUI style's prompt bar; every other style keeps the original input line.
                 PromptComposer(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
                                text: textBinding, selection: $selection, focused: $focused,
-                               hasAttachments: !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty,
+                               hasAttachments: hasAttachments,
                                stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                attach: PromptItems.attachments(camera: UIImagePickerController.isSourceTypeAvailable(.camera)),
                                mentions: mentions,
@@ -2441,7 +2447,11 @@ struct Composer: View, Equatable {
                                    confirmClear = true
                                    return true
                                },
-                               send: { let t = text; Task { await sendText(t) } }) // the bar clears the draft right after
+                               send: { // the bar clears the draft right after
+                                   let t = text
+                                   if videos.busy { return holdForVideos(restoring: t) }
+                                   Task { await sendText(t) }
+                               })
             } else {
                 ComposerRow(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
                             text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
@@ -2506,7 +2516,7 @@ struct Composer: View, Equatable {
             Text("\(model.session(key)?.agentLabel ?? "Claude") 会开一个新会话，这段对话留在历史里，页面会跳到新会话。")
         }
         .recordingContextSheet(isPresented: $showRecording) { contexts.wrappedValue.append($0) }
-        .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
+        .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             uploads.start(urls, machine: key.machineRef, model: model) { insertPath($0) }
         }
@@ -2560,14 +2570,17 @@ struct Composer: View, Equatable {
 
     private func sendText(_ raw: String) async {
         guard model.allowSend(key) else { return }
+        if videos.busy { return holdForVideos() }
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let ctx = model.composerContexts[key] ?? []
-        guard !t.isEmpty || !images.isEmpty || !ctx.isEmpty else { return }
-        // Picked page excerpts ride along as <jarvis-context> tags before what was typed.
-        let body = t.isEmpty ? (images.isEmpty ? "参考上面的内容。" : "请看图片") : t
+        let files = videos.ready
+        guard !t.isEmpty || !images.isEmpty || !files.isEmpty || !ctx.isEmpty else { return }
+        // Picked page excerpts ride along as <jarvis-context> tags before what was typed, videos as <jarvis-file> after.
+        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? "参考上面的内容。" : "请看视频") : "请看图片") : t, files: files)
         let message = ctx.isEmpty ? body : ctx.map(\.xml).joined(separator: "\n") + "\n\n" + body
         // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
-        if images.isEmpty, key.group == (model.hub?.group ?? ""), TasksStore.shared.sendRouted(key.sessionID, text: message) {
+        // Not with videos: they are on this conversation's machine, the task's agent may be on another.
+        if images.isEmpty, files.isEmpty, key.group == (model.hub?.group ?? ""), TasksStore.shared.sendRouted(key.sessionID, text: message) {
             if raw == text { text = "" }
             model.composerContexts[key] = nil
             return
@@ -2576,7 +2589,15 @@ struct Composer: View, Equatable {
         model.sendNow(key, text: message, images: images.map(\.1))
         if raw == text { text = "" }
         images = []
+        videos.sent()
         model.composerContexts[key] = nil
+    }
+
+    /// A send while a video is still on its way: nothing goes; what was typed goes back in the box (the prompt bar
+    /// clears it right after asking to send).
+    private func holdForVideos(restoring raw: String? = nil) {
+        model.toast = Toast("视频还在上传，传完再发送")
+        if let raw, text.isEmpty { Task { text = raw } }
     }
 
     #if os(macOS)
@@ -2597,8 +2618,10 @@ struct Composer: View, Equatable {
     }
 
     private func load(_ items: [PhotosPickerItem]) async {
+        let movies = items.filter(PickedMovie.isVideo) // sent as files (VideoAttach.swift)
+        if !movies.isEmpty { videos.start(movies, machine: key.machineRef, model: model) }
         var failed = 0
-        for item in items {
+        for item in items where !PickedMovie.isVideo(item) {
             // iCloud-only photos are downloaded here; HEIC and others are re-encoded to JPEG below.
             guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
                 failed += 1

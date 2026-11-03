@@ -521,22 +521,31 @@ struct StarterComposer: View {
     @State private var showRecording = false
     @State private var recordingContexts: [ContextRef] = []
     @State private var uploads = FileUploads()
+    @State private var videos = VideoAttachments()
     @State private var selection: TextSelection?
     @FocusState private var focused: Bool
 
-    private var canSend: Bool { !disabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !recordingContexts.isEmpty) }
+    private var canSend: Bool {
+        !disabled && !videos.busy
+            && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !videos.ready.isEmpty || !recordingContexts.isEmpty)
+    }
 
     private func submit() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let files = videos.ready
         // Nothing to send: a second ⏎ on the Mac before the field redraws (#785) would start a conversation with the
         // recording placeholder.
-        guard !t.isEmpty || !images.isEmpty || !recordingContexts.isEmpty else { return }
-        let body = t.isEmpty ? (images.isEmpty ? "参考录音内容。" : "请看图片") : t
+        guard !videos.busy, !t.isEmpty || !images.isEmpty || !files.isEmpty || !recordingContexts.isEmpty else { return }
+        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? "参考录音内容。" : "请看视频") : "请看图片") : t, files: files)
         send(recordingContexts.isEmpty ? body : recordingContexts.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
         text = ""
         images = []
+        videos.sent()
         recordingContexts = []
     }
+
+    /// The assistant's machine (the hub's unless set otherwise): files and videos go to its temp directory.
+    private var machine: MachineRef { model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID) }
 
     /// A PhotosPicker inside a Menu never presents (the menu dismisses first): the buttons present it from here.
     @ViewBuilder private var attachments: some View {
@@ -549,10 +558,12 @@ struct StarterComposer: View {
         VStack(spacing: Theme.Space.s) {
             if !recordingContexts.isEmpty { ContextChips(refs: $recordingContexts) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
+            if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty { ComposerImages(images: $images) }
             if let shell {
                 ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
-                                 canSend: canSend, hasAttachments: !images.isEmpty || !recordingContexts.isEmpty, modesWarn: shell.mode == "bypassPermissions",
+                                 canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty || !recordingContexts.isEmpty,
+                                 modesWarn: shell.mode == "bypassPermissions",
                                  send: submit) {
                     attachments
                 } modes: {
@@ -567,7 +578,7 @@ struct StarterComposer: View {
             }
         }
         .recordingContextSheet(isPresented: $showRecording) { recordingContexts.append($0) }
-        .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
+        .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
             uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
@@ -585,7 +596,9 @@ struct StarterComposer: View {
         .onChange(of: picks) { _, items in
             Task {
                 guard !items.isEmpty else { return }
-                for item in items {
+                let movies = items.filter(PickedMovie.isVideo) // sent as files (VideoAttach.swift)
+                if !movies.isEmpty { videos.start(movies, machine: machine, model: model) }
+                for item in items where !PickedMovie.isVideo(item) {
                     guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
                         AppModel.shared.toast = Toast("有照片读不出来（可能还在 iCloud 里没下载完）", style: .error)
                         continue
@@ -617,11 +630,14 @@ struct BeautifulStarterComposer: View {
     @State private var showFiles = false
     @State private var showRecording = false
     @State private var uploads = FileUploads()
+    @State private var videos = VideoAttachments()
     @State private var selection: TextSelection?
     @FocusState private var focused: Bool
 
     private var launcherMachine: String { model.assistantConfig?.machineID ?? model.hubMachineID }
     private var currentLauncher: String { launcher ?? model.assistantConfig?.launcher ?? "ccc" }
+    /// Where files and videos go: the assistant's machine.
+    private var machine: MachineRef { model.hubRef(launcherMachine) }
 
     /// The machine's launchers; until they load, the current one alone, so the button shows what a new
     /// conversation starts with.
@@ -634,9 +650,10 @@ struct BeautifulStarterComposer: View {
         VStack(spacing: Theme.Space.s) {
             if !quotes.isEmpty { ContextChips(refs: $quotes) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
+            if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty { ComposerImages(images: $images) }
             PromptComposer(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused,
-                           hasAttachments: !images.isEmpty || !quotes.isEmpty, disabled: disabled,
+                           hasAttachments: !images.isEmpty || !videos.items.isEmpty || !quotes.isEmpty, disabled: disabled,
                            attach: PromptItems.attachments(camera: false),
                            mentions: { PromptItems.sessions(model.sessionsNow, except: nil) },
                            models: models,
@@ -658,19 +675,28 @@ struct BeautifulStarterComposer: View {
                                return true
                            },
                            send: {
-                               let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                               let body = t.isEmpty ? (images.isEmpty ? "参考上面的内容。" : "请看图片") : t
+                               let typed = text
+                               let t = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+                               if videos.busy { // nothing goes; the bar clears the box right after this, so it is put back
+                                   model.toast = Toast("视频还在上传，传完再发送")
+                                   Task { text = typed }
+                                   return
+                               }
+                               let files = videos.ready
+                               let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? "参考上面的内容。" : "请看视频") : "请看图片") : t,
+                                                               files: files)
                                // Quoted sessions ride along as <jarvis-context> tags before what was typed, as in a chat.
                                send(quotes.isEmpty ? body : quotes.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
                                text = ""
                                images = []
+                               videos.sent()
                                quotes = []
                            })
         }
         // Again once the hub is paired: on a fresh launch the first try runs before there is one.
         .task(id: launcherMachine) { launchers = (try? await model.launchers(model.hubRef(launcherMachine))) ?? [] }
         .recordingContextSheet(isPresented: $showRecording) { quotes.append($0) }
-        .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
+        .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
             uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model) { path in
@@ -688,7 +714,9 @@ struct BeautifulStarterComposer: View {
         .onChange(of: picks) { _, items in
             Task {
                 guard !items.isEmpty else { return }
-                for item in items {
+                let movies = items.filter(PickedMovie.isVideo) // sent as files (VideoAttach.swift)
+                if !movies.isEmpty { videos.start(movies, machine: machine, model: model) }
+                for item in items where !PickedMovie.isVideo(item) {
                     guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
                         AppModel.shared.toast = Toast("有照片读不出来（可能还在 iCloud 里没下载完）", style: .error)
                         continue

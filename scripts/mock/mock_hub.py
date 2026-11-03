@@ -4092,6 +4092,15 @@ if os.environ.get("MOCK_VIDEO_FILE"):
         FILES[VIDEO_PATH] = video.read()
     ITEMS[WIDGET].append(it("assistant", "text", 0, text="视频已生成：`" + VIDEO_PATH + "`。"))
 
+# MOCK_SENT_VIDEO=<file>: a video the user sent from another device (#981): a <jarvis-file> card in the chat whose
+# file is only on the machine, so a tap downloads it before the system player opens.
+SENT_VIDEO_PATH = "/tmp/录屏-20261103-101500.mov"
+if os.environ.get("MOCK_SENT_VIDEO"):
+    with open(os.environ["MOCK_SENT_VIDEO"], "rb") as video:
+        FILES[SENT_VIDEO_PATH] = video.read()
+    ITEMS[WIDGET].append(it("user", "text", 0, text="上次的录屏，你看下按钮那里\n\n<jarvis-file kind=\"video\" path=\"%s\" name=\"录屏.mov\" size=\"%d\" duration=\"6.0\"/>"
+                            % (SENT_VIDEO_PATH, len(FILES[SENT_VIDEO_PATH]))))
+
 
 def file_read(path, cwd, offset):
     p = file_path(path, cwd)
@@ -5683,14 +5692,18 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"error": "MacBook 上的 jarvisd 太旧，不能接收文件，需要重新部署", "code": "node_outdated"}, 409)
         kbps = int(os.environ.get("MOCK_UPLOAD_KBPS", "2048"))
         left = n
+        video = name.lower().rsplit(".", 1)[-1] in ("mov", "mp4", "m4v")
+        body = []
         while left > 0:
             got = self.rfile.read(min(left, 64 << 10))
             if not got: return
             left -= len(got)
+            if video: body.append(got)
             time.sleep(len(got) / 1024 / kbps)
         stem, dot, ext = name.rpartition(".")
         if not stem: stem, dot, ext = ext, "", ""
         path = "/tmp/%s-%s%s%s" % (stem, datetime.now().strftime("%Y%m%d-%H%M%S"), dot, ext)
+        if video: FILES[path] = b"".join(body)  # downloadable again, like a node's temp file (#981)
         UPLOADS.append({"name": name, "size": n, "path": path})
         return self.send_json({"path": path, "name": path.rsplit("/", 1)[1], "size": n})
 

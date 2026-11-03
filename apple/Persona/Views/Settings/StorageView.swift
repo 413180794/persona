@@ -97,7 +97,7 @@ nonisolated enum StorageUsage {
     /// every other app, so only the folders Persona writes count there.
     static func owned(cachesEntry name: String, sandboxed: Bool, bundleID: String) -> Bool {
         sandboxed || name == bundleID || ChatCache.isFolder(name)
-            || ["chat-images", "lark-media", "state"].contains(name)
+            || ["chat-images", "lark-media", "state", "attached-videos"].contains(name)
     }
 
     /// Whether an entry of the temp folder is Persona's: all of it in a sandbox; outside one $TMPDIR is the user's

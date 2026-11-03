@@ -551,3 +551,10 @@ alignment: .top)` 也拦不住（外层按内容的高度排）。做法：`Geom
 发送中的气泡带着图，transcript 那条一到气泡就被替换，图跟着消失。修法：同一行里用户的图排到文字后面（`ChatStore.picturesAfterTheirText`）。
 要放在 `rebuild` 按最后一条消息切开**之前**：只放在 `buildRows` 里不够，切的时候图还在前面，照样落进已经建好的上一段。
 另：mock 的 `MOCK_ECHO_SENT=1` 按 claude -p 的顺序把发出的消息写回对话；UI 测试里全新安装的通知权限框什么时候弹不一定，弹着的时候下面的元素都不在树里，用 `addUIInterruptionMonitor` 接住。
+
+## 视频压缩的进度：先拿 states 再进 Task（2026-11-03，#981）
+
+`AVAssetExportSession` 不是 Sendable：`Task { for await s in session.states(updateInterval:) … }` 在 Swift 6 下报
+「passing closure as a 'sending' parameter risks causing data races」。在 Task 外面先 `let states = session.states(updateInterval: 0.25)`，
+Task 里只遍历这个序列，就能编过。选择器用 `preferredItemEncoding: .current`，否则系统可能先把 HEVC 转一遍才交给 App（4K 视频要等很久），
+要不要转码由 App 自己按大小决定（`VideoPrep`，docs/protocol.md「发送视频」）。

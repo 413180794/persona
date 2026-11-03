@@ -23,6 +23,7 @@ struct LayoutIsland<Content: View & Equatable>: View {
     var body: some View {
         IslandHost(content: content) { h in if h != height { height = h } }
             .frame(height: height)
+            .accessibilityIdentifier("layout-island") // UI tests: what is inside does not show in their tree (#995)
     }
 }
 

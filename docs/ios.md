@@ -233,7 +233,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   toast 说原因。BeautifulUI 风格里是它的审批卡（`BUIPermissionForm`）：问「同意 Bash 吗？」，选项同意 / 总是同意（说明放行什么）/ 拒绝，
   Codex 的理由在命令上面，输入框里写字就是拒绝并说明理由。DEBUG：`-showSampleCodexApproval YES`、`-showSampleCodexQuestion YES`；
   UI 测试 `CodexCardsTests`（mock `MOCK_CODEX=1`，含 BeautifulUI）。
-- 输入框：见上面「输入框」一条（照片最多 4 张，压缩到 1600px；「/」里是快捷消息和指令；工作中发送换成红色中断）。
+- 输入框：见上面「输入框」一条（照片最多 4 张，压缩到 1600px；图库里的视频当文件传到那台电脑、消息里是文件卡片，见 protocol.md「发送视频」；「/」里是快捷消息和指令；工作中发送换成红色中断）。
 - 导航副标题：机器 · 模型 · 状态。
 
 ## 新外壳（ChatGPT 式，2026-11-01）

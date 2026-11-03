@@ -297,3 +297,13 @@
 卸载也清不掉；弹框让 App 处于非活跃状态，WebSocket 不连，截出来的任务全是「正在开」、机器名是 id。`simctl privacy` 不支持通知。
 单元测试和截图各用一台模拟器；已经弄脏的直接删掉重建。
 
+## 在 UI 测试里选图库里的视频（2026-11-03，#981）
+
+- 测试视频自己合成（这台机器没有 ffmpeg，用 AVAssetWriter 写一段渐变加竖条的 H.264 MOV），`xcrun simctl addmedia <udid> <文件>` 放进模拟器图库。
+  模拟器自带的几张风景照也在图库里，按 `label CONTAINS "Video"`（中文系统是「视频」）找格子，选到的就是自己放的那段。
+- PHPicker 在另一个进程，但它的元素在 `app` 的树里能找到。模拟器的选择器是英文的：确认是右上角的 ✓，**identifier `Add`、label `Done`**；
+  按 label「添加」找会先匹配到被选择器盖住的 App 自己的「+」（它的 label 也是「添加」），点下去什么也没选上，测试只看到「附件没出现」。
+  横幅「Private Access to Photos」上还有一个 `Close`，别和播放器的关闭键混了。
+- 系统播放器（AVPlayerViewController）左上角的关闭键 label 是 `Close`，等它出现就说明播放器开了。
+- 经典布局 + 液态玻璃的对话输入框套着 `layoutIsland`，里面的「+」「发送」不在无障碍树里（#995，master 上 `FileUploadTests/testMenuHasFiles` 也因此失败）：
+  测试先找 `layout-island`，按位置点它的左右两端。
