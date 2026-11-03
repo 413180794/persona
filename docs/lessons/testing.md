@@ -89,6 +89,10 @@
   `check_bundle_privacy.py --whole-short` 只对带 `public` 构建标记、未 replace 且 checksum 与 `server/go.sum` 一致的依赖，按精确协议 / HTML / 网段上下文分类；
   `publish.sh` 先 `go mod verify`。配置和私词表仍在原始文本上优先匹配，依赖缺失、校验和不符、上下文变化都拒绝；不能放行整个邮箱域名或整个私网段。
   回归：`python3 -B -m unittest discover -s scripts/release -p 'test*privacy*.py' && python3 -B -m unittest discover -s scripts/test -p 'test_privacy*.py'`，另跑四个平台的 `NO_DEPLOY=1 ./scripts/release/publish.sh`。
+- 2026-11-03，#963：Swift 归档里的 SSH 算法名和证书密钥类型名也含 `@`，会被通用邮箱检测误报。先核对完整可打印字段与公开依赖源码，不把命中值输出到日志。
+  `check_bundle_privacy.py` 只分类 `swift-nio-ssh` 中已核对的 7 个固定名称，要求原始字段完整匹配；移除 bundle / team ID 等内容后拼出的名称不算。
+  这不是邮箱域名豁免，也不改变通用邮箱检测的 TLD 范围。私词照常匹配；前后上下文、URL、变体及同域普通邮箱不参与协议分类。
+  用字段级和真实扫描入口回归验证，再只读检查失败归档。原冻结、退出码和已部署／未上传状态保留；后续发布用新冻结和新构建号，不复用失败构建。
 - 手表 Release 二进制可能是 arm64 + arm64_32 的通用 Mach-O；签名里的证书邮箱 / 个人名不是业务数据，隐私扫描只排除每个切片中经过结构和边界验证的嵌入签名 blob。
   `LC_CODE_SIGNATURE` 的偏移相对于切片，不能按第一个切片的签名位置截断整个文件；也不能因为是通用文件就把证书扫描误报后删掉私词。
   两个架构的签名前后、签名占位区剩余字节及文件尾照常扫描；畸形签名、越界 / 重叠切片不排除。回归覆盖薄 / 通用 32、64 位及大小端，另用真实手表归档验证。
