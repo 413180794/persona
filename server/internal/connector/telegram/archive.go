@@ -21,6 +21,13 @@ var (
 	firstMax     = 500
 	dialogsLimit = 200             // conversations listed per round, per folder: newest first, so what moved is at the top
 	newsSettle   = 3 * time.Second // Telegram's updates come in bursts: one kick for each
+	// What Telegram's news sets off (the archive's kick, the inbox's refresh) goes in rounds, at most one every
+	// newsEvery: an account in busy groups is told of something new every few seconds, and the inbox lists the
+	// conversations, which Telegram limits tightly (messages.getDialogs). The gap doubles after a flood wait, up to
+	// newsEveryMost, and halves back after each round without one (#1024).
+	newsEvery     = time.Minute
+	newsEveryMost = 16 * time.Minute
+	inboxDialogs  = 100 // conversations the inbox lists per folder: plenty for the last inboxDays
 )
 
 type archiveCursor struct {
@@ -151,8 +158,12 @@ func (c *Conn) updated() {
 	}
 }
 
-// Watch kicks the hub's archive and inbox when Telegram tells of something new (connector.Events).
+// Watch kicks the hub's archive and inbox when Telegram tells of something new (connector.Events): in rounds, at most
+// one a gap (newsEvery…), whatever came meanwhile going into the next round.
 func (c *Conn) Watch(ctx context.Context, changed func(connector.Scope)) error {
+	gap := newsEvery
+	var last time.Time // when the last round started
+	_, _, seen := c.gate.flood()
 	for {
 		select {
 		case <-ctx.Done():
@@ -162,14 +173,31 @@ func (c *Conn) Watch(ctx context.Context, changed func(connector.Scope)) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-time.After(newsSettle):
+		case <-time.After(max(newsSettle, time.Until(last.Add(gap)))):
 		}
-		select { // what came while it settled is in this kick
-		case <-c.news:
-		default:
-		}
-		changed(connector.ScopeChats)
-		c.refreshInbox(ctx) // the inbox answers from memory: bring it up to date first
+		c.drainNews() // what came meanwhile is in this round
+		last = time.Now()
+		changed(connector.ScopeChats) // the hub archives when it is due
+		c.refreshInbox(ctx)           // the inbox answers from memory: bring it up to date first
 		changed(connector.ScopeInbox)
+		_, _, until := c.gate.flood()
+		gap = newsGap(gap, until != seen) // any flood wait since the last round: Telegram's limit is the account's
+		seen = until
 	}
+}
+
+func (c *Conn) drainNews() {
+	select {
+	case <-c.news:
+	default:
+	}
+}
+
+// newsGap is the next gap between the rounds: doubled after a flood wait, halved back toward newsEvery after a round
+// without one.
+func newsGap(gap time.Duration, flooded bool) time.Duration {
+	if flooded {
+		return min(gap*2, newsEveryMost)
+	}
+	return max(gap/2, newsEvery)
 }

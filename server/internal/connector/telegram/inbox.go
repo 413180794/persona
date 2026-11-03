@@ -130,7 +130,7 @@ func (c *Conn) refreshInbox(ctx context.Context) {
 	}
 	c.box.refresh.Lock()
 	defer c.box.refresh.Unlock()
-	ds, err := cl.Dialogs(ctx, dialogsLimit)
+	ds, err := cl.Dialogs(ctx, inboxDialogs)
 	if err != nil {
 		return
 	}

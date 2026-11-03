@@ -2,10 +2,13 @@ package telegram
 
 import (
 	"context"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/gotd/td/tgerr"
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
@@ -106,5 +109,111 @@ func TestOpenURL(t *testing.T) {
 		if got := openURL(c.d); got != c.want {
 			t.Errorf("%+v: %q, want %q", c.d, got, c.want)
 		}
+	}
+}
+
+// The gap between the rounds Telegram's news sets off doubles after a flood wait, up to newsEveryMost, and halves back
+// to newsEvery after each round without one.
+func TestNewsGap(t *testing.T) {
+	gap := newsEvery
+	for _, c := range []struct {
+		flooded bool
+		want    time.Duration
+	}{{false, time.Minute}, {true, 2 * time.Minute}, {true, 4 * time.Minute}, {true, 8 * time.Minute}, {true, 16 * time.Minute},
+		{true, 16 * time.Minute}, {false, 8 * time.Minute}, {false, 4 * time.Minute}, {false, 2 * time.Minute}, {false, time.Minute},
+		{false, time.Minute}} {
+		if gap = newsGap(gap, c.flooded); gap != c.want {
+			t.Fatalf("flooded %v: %s, want %s", c.flooded, gap, c.want)
+		}
+	}
+}
+
+// Telegram telling of something new all the time (an account in busy groups) does not set off work each time: the
+// archive's kick and the inbox's refresh (which lists the conversations) come at most once a gap, and the gap doubles
+// after a flood wait.
+func TestNewsRoundsAreThrottled(t *testing.T) {
+	newsEvery, newsEveryMost = 200*time.Millisecond, 800*time.Millisecond
+	t.Cleanup(func() { newsEvery, newsEveryMost = time.Minute, 16*time.Minute })
+	c, f, ctx := archiveAccount(t)
+	wctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var mu sync.Mutex
+	var kicks []time.Time // the archive's
+	go c.Watch(wctx, func(s connector.Scope) {
+		if s == connector.ScopeChats {
+			mu.Lock()
+			kicks = append(kicks, time.Now())
+			mu.Unlock()
+		}
+	})
+	f.mu.Lock()
+	updated := f.updated
+	f.mu.Unlock()
+	lists := func() []sentRequest {
+		var out []sentRequest
+		for _, r := range f.requests() {
+			if r.method == "Dialogs" {
+				out = append(out, r)
+			}
+		}
+		return out
+	}
+	news := func(d time.Duration) {
+		for end := time.Now().Add(d); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
+			updated()
+		}
+	}
+	spaced := func(what string, at []time.Time, least time.Duration) {
+		t.Helper()
+		for i := 1; i < len(at); i++ {
+			if d := at[i].Sub(at[i-1]); d < least-5*time.Millisecond {
+				t.Fatalf("%s %s apart", what, d)
+			}
+		}
+	}
+	before := len(lists())
+	news(time.Second)
+	got := lists()[before:]
+	if len(got) < 3 || len(got) > 6 {
+		t.Fatalf("%d refreshes in a second of news every 20 ms, with a 200 ms gap", len(got))
+	}
+	var starts []time.Time
+	for _, r := range got {
+		starts = append(starts, r.start)
+	}
+	spaced("refreshes", starts, newsEvery)
+	mu.Lock()
+	spaced("archive kicks", slices.Clone(kicks), newsEvery)
+	n := len(kicks)
+	mu.Unlock()
+	if n < 3 || n > 6 {
+		t.Fatalf("%d archive kicks in a second of news", n)
+	}
+
+	var once sync.Once
+	flooded := make(chan struct{})
+	f.mu.Lock()
+	f.fail = func(method string) error {
+		var err error
+		if method == "Dialogs" {
+			once.Do(func() { err = tgerr.New(420, "FLOOD_WAIT_0"); close(flooded) })
+		}
+		return err
+	}
+	f.mu.Unlock()
+	go news(2 * time.Second)
+	select {
+	case <-flooded:
+	case <-time.After(3 * time.Second):
+		t.Fatal("no refresh met the flood wait")
+	}
+	at := len(lists())
+	time.Sleep(1500 * time.Millisecond)
+	after := lists()[at-1:] // the flooded one, then the next ones
+	if len(after) < 2 {
+		t.Fatalf("no refresh after the flood wait")
+	}
+	if d := after[1].start.Sub(after[0].start); d < 2*newsEvery-5*time.Millisecond {
+		t.Fatalf("the round after a flood wait came %s later, not twice the gap", d)
 	}
 }
