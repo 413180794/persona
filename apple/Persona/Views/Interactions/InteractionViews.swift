@@ -158,9 +158,11 @@ struct InteractionPreviewCard: View {
         case .screen:
             // Only when the hub read the dialog too (it checks the screen before pressing the key).
             if interaction.dialog != nil, let d = interaction.screenDialog {
-                // Short ones only ("Yes"): a long label ("Yes, and don't ask again for … in /path") is cut off in a
-                // card; it and the rest are one tap away in the chat.
-                let plain = d.options.filter { $0.kind == .plain && $0.label.count <= 24 }
+                // Every plain option: a length cap here silently dropped options whose labels ran long — wrapped
+                // terminal rows rejoin into one label, and a "(Recommended)" suffix (drawn as the 推荐 chip, not
+                // words) pushed the first option over most often — and the row still looked complete (#1069).
+                // Long labels scroll in the row, single-line, as the hook path's already do.
+                let plain = d.options.filter { $0.kind == .plain }
                 if !d.multi, (1...4).contains(plain.count) { // several ticks go together: in the full card
                     FlowButtons(labels: plain.map(\.label)) { label in
                         guard let opt = plain.first(where: { $0.label == label }) else { return }
