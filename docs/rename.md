@@ -8,7 +8,7 @@
 
 ## 源码位置、构建入口与兼容名字
 
-源码的新名字与已安装产品的身份分别维护。#729 的 Apple 源码 / 构建入口、#750 的 Watch 编译修复、#746 的 Android 链接兼容和 #756 的原生品牌 / 输入兼容均已合入。文档复验先后使用 `b5a902f98eb30ddc6ab47e109039b14bc01f9549`、`b8cf3a10d475c12577c43f1c524332b8c1aa8bd8`（包含 #753、#758、#761、#745、#760 和 #771）及 #773 合入后的 `4768b019ac665207ba0e5a7a7f81cddb6879b6c7`。本轮最终文档基准固定为 `09584f34fe6eb29f91ddc2a3c2a8df94017cb3ab`，再包含 #786 的链接输入与静态防回退检查。源码状态不代替 App 构建、真实升级或产物检查；固定快照的全量 open PR 只读审计已完成，见 [PR 改名残留审计记录](rename-pr-audit.md)；未修项协作、最终冻结及发布仍待完成，不能据此宣称整个 #277 完结。
+源码的新名字与已安装产品的身份分别维护。#729 的 Apple 源码 / 构建入口、#750 的连接器模式监听启动竞态修复、#746 的 Android 链接兼容和 #756 的原生品牌 / 输入兼容均已合入。文档复验先后使用 `b5a902f98eb30ddc6ab47e109039b14bc01f9549`、`b8cf3a10d475c12577c43f1c524332b8c1aa8bd8`（包含 #753、#758、#761、#745、#760 和 #771）及 #773 合入后的 `4768b019ac665207ba0e5a7a7f81cddb6879b6c7`。本轮最终文档基准固定为 `09584f34fe6eb29f91ddc2a3c2a8df94017cb3ab`，再包含 #786 的链接输入与静态防回退检查。源码状态不代替 App 构建、真实升级或产物检查；固定快照的全量 open PR 只读审计及后续 08:59 快照的 11 项 delta 复核已完成，见 [PR 改名残留审计记录](rename-pr-audit.md)。后者主线固定为 `0e02f0f7fc6aec48cc73197642917c382294ae81`，未重审未变化 PR，也不抹去既有问题；未修项协作仍待完成，最终冻结尚未开始，不能据此宣称整个 #277 完结。
 
 | 用途 | 推荐入口 | 保留的兼容入口 / 身份 |
 | --- | --- | --- |
@@ -44,7 +44,7 @@
 | 缓存与数据 | UserDefaults / AppStorage / StateCache / ChatCache 键、缓存目录版本、数据库角色 / 库 / 容器 / 数据卷、machine UID、形象 ID | 改品牌不生成第二份账户、数据库或个人数据；根目录的兼容另见下节 |
 | 服务与公开地址 | systemd / launchd 单元、helper 进程、安装 / 更新 / 中继 URL、联系邮箱 | 显示名称可以更新，真实运维 / 外部身份按原配置保留；不在文档中放个人值 |
 
-私有 runtime 的 npm `package.json.name` 与自动更新包 ID 不是同一身份。#753 已将源码私有包名改为 `persona-runtime-sdk`、`persona-dsh-runtime`、`persona-pi-runtime`；但 DSH / pi 的更新清单、安装目录和已安装 loader 仍使用 `jarvis-dsh-runtime` / `jarvis-pi-runtime`。SDK 的相对源码引用与 `jarvis-runtime.v1` 子协议也不能按 npm 名称盲改。运行时品牌、#773 的脚本 / PI / 新变量补洞和 #786 的链接输入均已合入，不代表 open PR 审计及冻结发布已完成；不能据此宣称整个 #277 已无残留。
+私有 runtime 的 npm `package.json.name` 与自动更新包 ID 不是同一身份。#753 已将源码私有包名改为 `persona-runtime-sdk`、`persona-dsh-runtime`、`persona-pi-runtime`；但 DSH / pi 的更新清单、安装目录和已安装 loader 仍使用 `jarvis-dsh-runtime` / `jarvis-pi-runtime`。SDK 的相对源码引用与 `jarvis-runtime.v1` 子协议也不能按 npm 名称盲改。运行时品牌、#773 的脚本 / PI / 新变量补洞和 #786 的链接输入均已合入，不代表既有未修迁移项已解决或冻结发布已完成；不能据此宣称整个 #277 已无残留。
 
 ## URL scheme：接收兼容，生成保旧
 
@@ -59,7 +59,7 @@
 | Web 会话链接 / 管理输入 | #786 的 `web/src/lib/links.ts` 会话链接与 `web/src/admin/logic.ts` connector 输入均接收 `persona://` / `jarvis://`，peer 表单与 mock 的输入检查也已同步 | 本轮核对已合源码及静态契约，不声称重跑 Web 全套测试或浏览器验收；生成仍保留旧 scheme |
 | hub / 连接器的 link、pair、connector、peer 输入 | #786 的 `server/internal/link/client.go`、`server/internal/link/passive.go` 与 `server/internal/hub/peer_pair.go` 接收新旧 scheme | `jarvis://link` / `jarvis://pair` / `jarvis://connector` / `jarvis://peer` 的生成保旧；Go 全套验证归独立车道，不由文档检查替代 |
 
-#758 的 Android Debug metadata / 完整链接包装、#770 的手填共用判定、#773 的环境 / 脚本兼容和 #786 的最终链接输入检查均已合入。#761 的匿名官网截图和 #760 的测试误报修复也已合入，各自证据仍归对应 PR；本文档车道没有刷新截图或重跑业务全套测试。#786 的 canonical Go 重跑及独立失败定位已完成，归属和 skip 边界见下文；不能把文档检查说成 Go 全套通过。全量 open PR 审计、最终冻结和发布仍待完成。
+#758 的 Android Debug metadata / 完整链接包装、#770 的手填共用判定、#773 的环境 / 脚本兼容和 #786 的最终链接输入检查均已合入。#761 的匿名官网截图和 #760 的测试误报修复也已合入，各自证据仍归对应 PR；本文档车道没有刷新截图或重跑业务全套测试。#786 的 canonical Go 重跑及独立失败定位已完成，归属和 skip 边界见下文；不能把文档检查说成 Go 全套通过。固定快照审计和后续 11 项 delta 复核已完成，未修项协作仍待处理，最终冻结和发布未完成。
 
 hub / 连接器 / 消息中的配对、会话、互联等链接仍生成 `jarvis://…`，让旧 App 继续可用。新 scheme 是新增的接收别名，不是全量改写已有 URL；`jarvis://pair`、`jarvis://session`、`jarvis://peer`、`jarvis://connector` 等原示例和历史 QR 内容保留。未完成双注册或双解析的入口要列为未验收，不能在文档中宣称已支持。
 
@@ -91,7 +91,7 @@ node socket 使用同一个存储中较短的旧路径，避免新名字多一�
 
 ## 部署脚本按服务恢复运行目录
 
-#773 的 `scripts/persona_identity.py` 只恢复运行身份，不读构建配置或 hub.json；外部环境文件只提取 HOME 字段，其他字段不返回、不记录、不用于认证。部署 / 测试脚本用 `--service hub`、`--service node`、`--service link` 选择对应服务，避免同机 hub 与 node / Link 使用不同根时借错目录：
+#773 引入的 `scripts/persona_identity.py` 只恢复运行身份，不读构建配置或 hub.json；#837 已补齐外部环境文件的 HOME-only 恢复，merge 为 `62039ebc4d17285a4ffd39e3631e96e18e65c70d`。只提取 `PERSONA_HOME` / `JARVIS_HOME`，其他字段不返回、不记录、不用于认证；没有 HOME 的其他设置不再仅因文件存在而阻止恢复原默认存储。部署 / 测试脚本用 `--service hub`、`--service node`、`--service link` 选择对应服务，避免同机 hub 与 node / Link 使用不同根时借错目录：
 
 - 环境里显式定义 `PERSONA_HOME` 或 `JARVIS_HOME` 时，直接使用该环境；新名优先，包括空值，不再从已安装服务借一个根。
 - systemd 从 `XDG_CONFIG_HOME/systemd/user`（未设置时为 `~/.config/systemd/user`）读取对应旧单元。hub 只查 `jarvisd.service`；node 先查 `jarvisd-node.service`、再查 `jarvis-link.service`；link 顺序相反。没有 systemd 单元时，node / link 可按对应角色查询原 launchd plist，不变更单元身份。
@@ -120,7 +120,7 @@ node socket 使用同一个存储中较短的旧路径，避免新名字多一�
 
 **已合代码车道的验证，不是本文档车道重跑**：#786 最终记录 108 项 Python 迁移 / 脚本测试、448 项 Web 测试及生产构建通过；Go 在短 canonical `/private/tmp` 测试根下退出 0，2,167 个 test / subtest pass 事件、72 个明确 skip、0 fail。Postgres / 平台 / fixture 的 skip 不算真实 Postgres 集成通过。最初的 Codex / 端口失败日志保留：Codex fixture 直接传 `/tmp` 别名绕过正常 Home canonicalization，端口用已合 #728 处理 lsof 的有效输出；独立对照已定位，不删除身份比较，也不延长 timeout。该结论不推广成任意 Home 不匹配都只是测试问题。
 
-本轮文档只重验当前源码 / 兼容 guard、隔离服务根回归、Markdown 链接和隐私，不冒充重跑上述 Go / Web 全套或原生截图。固定 `09584f34` 的 25 个 open PR 只读审计已完成，完整快照、后续部分修复和安全 / 发布边界见 [PR 改名残留审计记录](rename-pr-audit.md)。后续 PR 协作、未修迁移项和最终发布冻结仍由 leader 继续：
+前一轮文档只重验当前源码 / 兼容 guard、隔离服务根回归、Markdown 链接和隐私，不冒充重跑上述 Go / Web 全套或原生截图。固定 `09584f34` 的 25 个 open PR 只读审计及固定 `0e02f0f7` 的 11 项 delta 复核已完成；完整历史表、迁移项修复、#764 的继承残留、#837 已合支持和安全 / 发布边界见 [PR 改名残留审计记录](rename-pr-audit.md)。此次追加只做轻量引用和隐私检查，不重跑对应车道的审计或测试。后续 PR 协作、未修迁移项和最终发布冻结仍由 leader 继续；数据库 URL query 覆盖测试路径的隔离问题尚在处理，**真实服务端测试、部署和上传暂停，最终冻结尚未开始**。下面保留待验收清单，不代表现在可以执行生产操作：
 
 - 临时 HOME 下覆盖新装、旧目录、新目录、外部软链、悬空软链、循环、两份独立存储、重复启动、并发首次启动。
 - 同一个 token / hub.json 与 node socket 经两种路径访问，内容与文件身份相同；自定义环境之间不串数据。
@@ -128,4 +128,4 @@ node socket 使用同一个存储中较短的旧路径，避免新名字多一�
 - 服务端真实 Postgres 全套测试、各运行时单测与实际新旧入口构建；各客户端编译 / 测试和深浅色截图。
 - 所有本地迁移完成后逐个重查 open PR，重点查新建的旧目录文件、旧 module imports、包名、类型名和文案；不要把刻意保留的兼容契约当成遗漏删掉。
 
-用户允许本地验证通过后合并、CI 环境故障不阻塞，但必须记录实际故障与未完成的验证，不能声称失败的测试通过。最后从已合并的干净版本统一部署和发布，不能用中间半迁移版本发版。
+用户允许本地验证通过后合并、CI 环境故障不阻塞，但必须记录实际故障与未完成的验证，不能声称失败的测试通过。最后须在隔离暂停解除、未修项处理和冻结验证完成后，从已合并的干净版本统一部署和发布，不能用中间半迁移版本发版。#837 的本地验证与合入不解除生产操作暂停，也不证明完整事故影响已恢复。
