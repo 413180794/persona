@@ -326,9 +326,8 @@ func TestLinkHeartbeatDropsADeadLink(t *testing.T) {
 	hello(t, c, "laptop") // and never read again: pongs are only sent while reading
 	eventually(t, 3*time.Second, "link up", func() bool { return m.currentLink() != nil })
 	eventually(t, 3*time.Second, "dead link dropped", func() bool { return m.currentLink() == nil })
-	if !strings.Contains(m.snapshot().Error, "no pong") {
-		t.Fatalf("machine error %q", m.snapshot().Error)
-	}
+	// The link is gone once its context is cancelled; the machine says why a moment later (dropLink).
+	eventually(t, 3*time.Second, "the machine says why", func() bool { return strings.Contains(m.snapshot().Error, "no pong") })
 }
 
 func TestLinkPairing(t *testing.T) {
