@@ -25,6 +25,8 @@ import SwiftUI
 
     private struct Held { var key: String; var at: Spot; var base: CGFloat; var until: Date; var slow: Bool }
     private var held: Held?
+    /// The offset that puts the held header back, when the list could not go there yet (`settle`).
+    private var want: CGFloat?
     private var last: [String: Spot] = [:]
 
     /// Before opening or closing: keep `key` where `from` (the header before, if it changes id) is now. `slow`: what
@@ -33,6 +35,7 @@ import SwiftUI
     func hold(_ key: String, from: String? = nil, slow: Bool = false) {
         guard let list, let at = last[from ?? key] else { return }
         held = Held(key: key, at: at, base: list.contentOffset.y, until: .now.addingTimeInterval(1.5), slow: slow)
+        want = nil
         letGo()
     }
 
@@ -48,9 +51,35 @@ import SwiftUI
         if !h.slow, abs(spot.y - h.at.y) < 0.5 { held = nil; return }
         // The content runs newest first: rows opening under the header on screen push it further into the content,
         // and the offset has to grow by as much to keep it on screen where it was (as far as the list can go).
-        let target = Self.within(list, h.base + spot.content - h.at.content)
-        guard abs(target - list.contentOffset.y) >= 0.5 else { return }
-        list.contentOffset.y = target
+        let wanted = h.base + spot.content - h.at.content
+        let settling = want != nil
+        want = wanted
+        put(list)
+        if !settling { settle() }
+    }
+
+    /// The list goes as near `want` as it can now.
+    private func put(_ list: UIScrollView) {
+        guard let want else { return }
+        let target = Self.within(list, want)
+        if abs(target - list.contentOffset.y) >= 0.5 { list.contentOffset.y = target }
+        if abs(target - want) < 0.5 { self.want = nil }
+    }
+
+    /// The list's content size follows its rows a pass late: just after a work line's steps came in, the list could not
+    /// go as far as the header needed (a conversation that fit on one screen could not move at all), and the header
+    /// moved no more, so nothing asked again: one blank frame on the steps still fading in, then the header gone off
+    /// the top (#754). Asked again on the next passes, while the hold lasts.
+    private func settle() {
+        Task { @MainActor [weak self] in
+            for _ in 0..<30 {
+                try? await Task.sleep(for: .milliseconds(16))
+                guard let self, self.want != nil, let h = self.held, let list = self.list else { return }
+                if Date.now > h.until || list.isTracking || list.isDecelerating { self.held = nil; self.want = nil; return }
+                self.put(list)
+            }
+            self?.want = nil
+        }
     }
 
     /// An offset the list can be at.

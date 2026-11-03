@@ -3905,7 +3905,136 @@ def persona_file(rest):
 # arrives (a reply then folds into the work line), 12 times. For checking that reading history holds still.
 STREAM = os.environ.get("MOCK_STREAM") == "1"
 STREAM_STATE = {"started": False}
-GAP_STATE = {"started": False, "grown": False}
+
+# MOCK_ASSISTANT_RUN=1: Jarvis's main conversation is in the middle of a long turn, like a real one checking
+# something across machines: a user message, then tool calls one after another. Once the app opens it, every second
+# a call starts (its tool_use alone, running) or ends (its result: long output, a cat of a memory file), and the
+# session list of its machine is pushed with a new rev, time and last line, as the real hub does on every step.
+# MOCK_ASSISTANT_RUN_STEPS caps the calls (default 120). For the chat page holding still through a running turn.
+# MOCK_ASSISTANT_RUN=alone: the turn is all the conversation holds (a new one): folded, it fits on one screen.
+ASSISTANT_RUN = os.environ.get("MOCK_ASSISTANT_RUN") in ("1", "flip", "alone")
+ASSISTANT_RUN_STATE = {"started": False}
+_RUN_OUT = "\n".join(["---", "name: example-note", "description: 一条示例记忆，用来撑出长输出。", "metadata:",
+                      "  node_type: memory", "  type: user"] + ["  line_%02d: 这一行只是填充，看列表在长输出下是否稳定。" % i for i in range(52)] + ["---"])
+
+
+def assistant_run_call(n, ts_min=0):
+    """The nth call of the running turn: its tool_use, and its result."""
+    tid = "toolu_run_%04d" % n
+    use = it("assistant", "tool_use", ts_min, tool_use_id=tid, tool_name="Bash",
+             tool_input={"command": "cat ~/notes/memory/example-%02d.md" % n, "description": "Read example note %d on the hub machine" % n})
+    res = it("user", "tool_result", ts_min, tool_use_id=tid, text=_RUN_OUT)
+    return use, res
+
+
+if ASSISTANT_RUN:
+    _run = [it("user", "text", 3, text="帮我看一下这几台机器上的记忆文件，挑出和这个连接器有关的，告诉我该怎么配置，然后用一次性的会话测一下。")]
+    for _n in range(12):
+        if _n == 6:
+            _run.append(it("assistant", "text", 3, text="前几处看完了，接着看剩下的。"))
+        _run.append(it("assistant", "thinking", 3, text="先看看第 %d 处。" % _n))
+        _run += list(assistant_run_call(_n, 3))
+    # it() numbers seqs in creation order: these come after everything else
+    ITEMS[ASK1] = _run if os.environ.get("MOCK_ASSISTANT_RUN") == "alone" else ITEMS[ASK1] + _run
+    ASSISTANT[0].update(state="working", status="working", state_since=ago(minutes=3), updated_at=ago(),
+                        last_text="Read example note 11 on the hub machine")
+
+
+# MOCK_ASSISTANT_REPLAY=<items.json>:<seq>: Jarvis's main conversation is a recorded turn (a file of items as the hub
+# serves them, kept outside the repo) up to <seq>, still running; GET /mock/replay?n=N pushes the next N items as the
+# hub would (a text item streams as deltas for a second and a half first). For replaying what one phone saw.
+REPLAY = {"left": [], "sid": None, "mid": None}
+if os.environ.get("MOCK_ASSISTANT_REPLAY"):
+    _path, _upto = os.environ["MOCK_ASSISTANT_REPLAY"].rsplit(":", 1)
+    with open(_path) as _f:
+        _all = json.load(_f)["items"]
+    ITEMS[ASK1] = [x for x in _all if x["seq"] <= int(_upto)]
+    REPLAY["left"] = [x for x in _all if x["seq"] > int(_upto)]
+    ASSISTANT[0].update(state="working", status="working", state_since=ago(minutes=3), updated_at=ago())
+
+
+def replay_next(n):
+    import time
+    sid, mid = ASK1, "server"
+
+    def send_all(msg):
+        for out, subs in list(LIVE):
+            try:
+                if sid in subs:
+                    out(msg)
+            except Exception:
+                pass
+    for _ in range(n):
+        if not REPLAY["left"]:
+            return
+        x = REPLAY["left"].pop(0)
+        if x["kind"] == "text" and x.get("role") == "assistant":
+            words = x.get("text") or ""
+            for k in range(1, 9):
+                send_all({"type": "delta", "machine_id": mid, "session_id": sid, "text": words[:len(words) * k // 8]})
+                time.sleep(0.19)
+        before = ITEMS[sid][-1]["seq"]
+        ITEMS[sid] = ITEMS[sid] + [x]
+        send_all({"type": "items", "machine_id": mid, "session_id": sid, "items": [x], **span([x], before)})
+        ASSISTANT[0].update(rev=(ASSISTANT[0].get("rev") or 1000) + 1,
+                            updated_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+        push_machine(mid)
+        if x["kind"] == "text":
+            time.sleep(0.3)
+            send_all({"type": "delta", "machine_id": mid, "session_id": sid, "text": ""})
+
+
+def assistant_run(sid, mid):
+    """The running turn, in the rhythm of a real one (thinking, a call, its result; now and then a few words to the user
+    streamed as deltas, then written, then more calls)."""
+    import time
+    steps = int(os.environ.get("MOCK_ASSISTANT_RUN_STEPS", "120"))
+    # MOCK_ASSISTANT_RUN=flip: the session's transcript exists twice (two config dirs) and the pushes come from one
+    # file, then the other: their `history` differs.
+    flip = os.environ.get("MOCK_ASSISTANT_RUN") == "flip"
+    pushed = [0]
+
+    def send_all(msg):
+        for out, subs in list(LIVE):
+            try:
+                if sid in subs:
+                    out(msg)
+            except Exception:
+                pass
+
+    def add(new):
+        before = ITEMS[sid][-1]["seq"]
+        for i, x in enumerate(new):
+            x["seq"] = before + 1 + i
+        ITEMS[sid] = ITEMS[sid] + new
+        sp = span(new, before)
+        pushed[0] += 1
+        if flip and pushed[0] % 2:
+            sp["history"] = HISTORY + "-other"
+        send_all({"type": "items", "machine_id": mid, "session_id": sid, "items": new, **sp})
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        ASSISTANT[0].update(rev=(ASSISTANT[0].get("rev") or 1000) + 1, updated_at=now)
+        push_machine(mid)
+
+    for n in range(12, 12 + steps):
+        if n % 4 == 0:  # a few words to the user, streamed, then written; the next request clears the live copy
+            words = "在核对第 %d 处要哪些凭据，以及这台机器上的服务能不能给出这些凭据，然后接着看下一处。" % n
+            for k in range(1, 11):
+                time.sleep(0.2)
+                send_all({"type": "delta", "machine_id": mid, "session_id": sid, "text": words[:len(words) * k // 10]})
+            time.sleep(0.6)
+            add([it("assistant", "text", 0, text=words)])
+            ASSISTANT[0]["last_text"] = words
+            time.sleep(0.4)
+            send_all({"type": "delta", "machine_id": mid, "session_id": sid, "text": ""})
+        time.sleep(0.8)
+        add([it("assistant", "thinking", 0, text="先看看第 %d 处。" % n)])
+        time.sleep(0.4)
+        use, res = assistant_run_call(n)
+        add([use])
+        ASSISTANT[0]["last_text"] = "Read example note %d on the hub machine" % n
+        time.sleep(1.2)
+        add([res])
 
 
 def last_turns(items, n):
@@ -4939,6 +5068,10 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/paging":
             PAGING["on"] = q.get("on", ["0"])[0] == "1"
             return self.send_json({"ok": True, **PAGING})
+        if p == "/mock/replay":
+            n = int((parse_qs(urlparse(self.path).query).get("n") or ["1"])[0])
+            threading.Thread(target=replay_next, args=(n,), daemon=True).start()
+            return self.send_json({"left": len(REPLAY["left"])})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
             # A test that died before putting them back: the start-up delay (MOCK_DELAY), no paging.
             NET["delay"], PAGING["on"] = float(os.environ.get("MOCK_DELAY", "0")), False
@@ -6297,6 +6430,9 @@ class H(BaseHTTPRequestHandler):
                             LOG.write("  GAP: pushing %d items from seq %d, %d left out\n" % (len(tail), lost[-1]["seq"], len(lost))); LOG.flush()
                             send({"type": "items", "machine_id": mid, "session_id": sid, "items": tail, **span(tail, lost[-1]["seq"])})
                         threading.Thread(target=later_push, daemon=True).start()
+                    if ASSISTANT_RUN and sid == ASK1 and not ASSISTANT_RUN_STATE["started"]:
+                        ASSISTANT_RUN_STATE["started"] = True
+                        threading.Thread(target=assistant_run, args=(sid, mid), daemon=True).start()
                     if STREAM and sid == SESSIONS[0]["session_id"] and not STREAM_STATE["started"]:
                         STREAM_STATE["started"] = True
 

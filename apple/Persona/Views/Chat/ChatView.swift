@@ -45,6 +45,8 @@ struct ChatView: View {
     /// line's id, but those ids change as a turn goes on (the answer folds into the work line, a finished turn's work
     /// lines merge), and losing the id let everything in at once.
     @State private var frozen: Frozen?
+    /// Bumped to build the chat's scroll view again (after a fold that left it drawing nothing).
+    @State private var listBuild = 0
 
     struct Frozen: Equatable {
         var seq: Int
@@ -532,6 +534,11 @@ struct ChatView: View {
 
     private func changeWork(_ id: String, fromHeader: Bool, run: Bool, wasOpen: Bool) {
         if fromHeader { pin.hold(headLine(id, open: !wasOpen), from: headLine(id, open: wasOpen), slow: true) }
+        if wasOpen { scratch.foldedAt = .now }
+        // The user took the list, as with a drag: what they opened or closed stays where it is, and the newest no longer
+        // pulls it away. At the newest of a running turn it did, as soon as the pin let go: the header went off the
+        // top, came back with the next tap, and so on (#754). Back at the newest, it follows again.
+        followsEnd = false
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
@@ -774,7 +781,10 @@ struct ChatView: View {
         #if os(iOS)
         if pin.list?.isTracking == true { return }
         #endif
-        if !followsEnd, atBottom, !scratch.userDragging, !scratch.landingInFlight { followsEnd = true }
+        // At the newest by the scroll geometry too, and no header held: the end marker's visibility and the geometry lag
+        // a list the pin moved directly (both still said so right after a work line opened from its header, and
+        // following came back on: #754).
+        if !followsEnd, atBottom, scratch.atNewest, !pin.holding, !scratch.userDragging, !scratch.landingInFlight { followsEnd = true }
         guard followsEnd, !pin.holding else { return }
         scrollToEnd()
         if foldChrome, userScrolled { hideChrome() }
@@ -934,6 +944,7 @@ struct ChatView: View {
                     .overlay(alignment: .topLeading) { if Self.scrollProbe { scrollState } }
                     .screenProbe("chat", page: style == .assistant ? "assistant" : "agents",
                                  ChatShown(key: shownKey.machineID + "/" + shownKey.sessionID, appeared: appearCount))
+                    .overlay(alignment: .topLeading) { if ScreenProbe.enabled { rowsProbe } }
                     #endif
             }
             ChatRegion(name: "ChatFooter.body") { footer }
@@ -1003,6 +1014,24 @@ struct ChatView: View {
     }
 
     #if DEBUG
+    /// `probe.chat-rows` (`-probes YES`): what the list has and shows, sampled ten times a second (which lines are on
+    /// screen is the list's, written as it scrolls and not observed): the chat must not go blank or move by itself.
+    private var rowsProbe: some View {
+        TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+            let order = currentLines().map(\.id)
+            let index = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+            let visible = scratch.visibleLines.filter { index[$0] != nil }.sorted { index[$0]! < index[$1]! }
+            Color.clear.frame(width: Theme.Size.line, height: Theme.Size.line)
+                .screenProbe("chat-rows", page: style == .assistant ? "assistant" : "agents",
+                             ChatRowsShown(items: store.items.count, lines: order.count, visible: visible.count,
+                                           top: visible.first, topY: visible.first.flatMap { scratch.lineY[$0] }.map { Int($0.rounded()) },
+                                           newest: scratch.atNewest, follows: followsEnd,
+                                           offset: Int(scratch.scrollY.rounded()), content: Int(scratch.contentHeight.rounded()),
+                                           frozen: frozen != nil, ids: order.suffix(4).map { String($0.suffix(16)) },
+                                           x: Int(scratch.offsetX.rounded())))
+        }
+    }
+
     /// `-showScrollState YES`: where the list is, for UI tests (`ChatFollowTests`). XCUITest's frames of rows in the
     /// flipped list are wrong; the list itself knows which lines are on screen.
     static let scrollProbe = UserDefaults.standard.bool(forKey: "showScrollState") || scrollProbeVisible
@@ -1138,7 +1167,10 @@ struct ChatView: View {
                     .id(Self.bottomID)
                     .onScrollVisibilityChange(threshold: 0.01) { visible in
                         atBottom = visible
-                        if visible { followsEnd = true } // back at the newest: follow new messages again
+                        // Back at the newest: follow new messages again. Not while a tapped header is held: the rows it
+                        // opened come in at the newest end first, and following came back on just as the pin moved the
+                        // list away (#754).
+                        if visible && !pin.holding { followsEnd = true }
                     }
                 if let err = store.error {
                     Label(err, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).flippedBack()
@@ -1186,6 +1218,7 @@ struct ChatView: View {
             .coordinateSpace(.named(ChatPin.space))
             .background { ChatPin.Finder(pin: pin) }
         }
+        .id(listBuild) // built again after a fold that left it drawing nothing (`listBuild`)
         // Side margins as scroll content margins, not padding: jumping to a row aligns its leading edge with the
         // margin instead of the screen edge (padding shifted the page 16pt sideways after landing on a row).
         .contentMargins(.horizontal, 16, for: .scrollContent)
@@ -1205,8 +1238,22 @@ struct ChatView: View {
         .scrollDismissesKeyboard(.interactively)
         .simultaneousGesture(TapGesture().onEnded { menu.dismiss(); Keyboard.dismiss() })
         // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
-        .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height, x: $0.contentOffset.x, top: $0.contentInsets.top) }) { old, new in
+        .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height, x: $0.contentOffset.x, top: $0.contentInsets.top, content: $0.contentSize.height) }) { old, new in
             scratch.offsetX = new.x
+            #if DEBUG
+            scratch.scrollY = new.offset
+            scratch.contentHeight = new.content
+            #endif
+            // A work line folded with hundreds of points of it open, and what is left fits on one screen: the scroll view
+            // put its offset back inside the shorter content (from far up to the newest end) and the upside-down lazy
+            // list drew nothing there, ever: the content area blank, nothing to drag, no new line arriving in a held-back
+            // chat to lay it out again, until the app was killed (#686). It is built again; all of it fits, so nothing
+            // of where it was is lost. Nothing above to read any more either: it follows again.
+            if new.content < old.content, new.content <= new.height, old.content > old.height,
+               Date.now.timeIntervalSince(scratch.foldedAt) < 1.5, !scratch.userDragging {
+                listBuild += 1
+                followsEnd = true
+            }
             scratch.atNewest = new.offset <= -new.top + 0.5
             scratch.newestGap = new.offset + new.top
             chrome.offset = new.offset
@@ -3348,6 +3395,7 @@ private struct ListScroll: Equatable {
     var x: CGFloat
     /// The content inset at the newest end (the offset there is minus this).
     var top: CGFloat = 0
+    var content: CGFloat = 0
 }
 
 private struct ChatRegion<Content: View>: View {
@@ -3474,6 +3522,13 @@ final class ChatScratch {
     var frozenSettled: ChatStore.SettledRows?
     /// Rows on screen (for remembering where you left off), written by the list as it scrolls.
     var visibleLines: [String] = []
+    /// When a work line was last folded (the list may follow again if that leaves it at the newest end).
+    var foldedAt = Date.distantPast
+    #if DEBUG
+    /// Where the list is and how tall its content is (`probe.chat-rows`).
+    var scrollY: CGFloat = 0
+    var contentHeight: CGFloat = 0
+    #endif
     /// The finger is on the list (or it is gliding after a flick): only then does the chrome follow it.
     var userDragging = false
     /// The list sits exactly at its newest end (offset at the content inset).
@@ -3505,10 +3560,11 @@ final class ChatScratch {
 }
 
 extension View {
-    /// DEBUG, with -showFoldProbe: records the line's top on screen (fold probe). Otherwise nothing.
+    /// DEBUG, with -showFoldProbe or -probes: records the line's top on screen (fold probe, `probe.chat-rows`).
+    /// Otherwise nothing.
     @ViewBuilder func debugLineY(_ id: String, _ scratch: ChatScratch) -> some View {
         #if DEBUG
-        if ChatView.foldProbe {
+        if ChatView.foldProbe || ScreenProbe.enabled {
             onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).minY }) { scratch.lineY[id] = $0 }
         } else {
             self
@@ -3576,5 +3632,23 @@ nonisolated struct ChatShown: Encodable, Equatable {
     var key: String
     /// How many times this conversation has appeared since launch (`ChatView.appearances`).
     var appeared: Int
+}
+
+/// `probe.chat-rows`: the items and lines the chat has, how many lines are on screen, the top one and where it is.
+nonisolated struct ChatRowsShown: Encodable, Equatable {
+    var items: Int
+    var lines: Int
+    var visible: Int
+    var top: String?
+    var topY: Int?
+    var newest: Bool
+    var follows: Bool
+    var offset: Int
+    var content: Int
+    var frozen: Bool
+    /// The newest few lines' ids (their ends).
+    var ids: [String]
+    /// The list's horizontal offset (-16 at rest: the side margins).
+    var x: Int
 }
 #endif
