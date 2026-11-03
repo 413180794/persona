@@ -3,6 +3,8 @@ import { stateOf } from "./format";
 import { splitAgentSessions, type AgentGroup, type AgentMutes } from "./agent-groups";
 import type { AgentState, Machine, Session } from "./types";
 
+export type TodoAgentSource = "manual" | "space" | "spawned";
+
 export interface TodoAgent {
   machine_id: string;
   session_id: string;
@@ -12,6 +14,14 @@ export interface TodoAgent {
   cwd?: string;
   agent?: string;
   start_error?: string;
+  source?: TodoAgentSource;
+  via?: string;
+}
+
+export interface TodoSpace {
+  machine_id: string;
+  space: string;
+  linked_at: string;
 }
 
 export interface Todo {
@@ -22,6 +32,7 @@ export interface Todo {
   created_at: string;
   updated_at: string;
   agents?: TodoAgent[];
+  spaces?: TodoSpace[];
 }
 
 export type TodoStatus = "done" | "needs_you" | "unread" | "working" | "follow_up" | "not_started";
@@ -315,3 +326,93 @@ export async function linkAgentToTodo(todoId: string, mid: string, sid: string):
 export async function unlinkAgentFromTodo(todoId: string, mid: string, sid: string): Promise<void> {
   await api(`/todos/${enc(todoId)}/agents/${enc(mid)}/${enc(sid)}`, { method: "DELETE" });
 }
+
+export async function linkSpaceToTodo(
+  todoId: string,
+  mid: string,
+  space: string,
+): Promise<{ ok: boolean; linked: number }> {
+  return await api<{ ok: boolean; linked: number }>(`/todos/${enc(todoId)}/spaces/${enc(mid)}/${enc(space)}`, {
+    method: "PUT",
+  });
+}
+
+export async function unlinkSpaceFromTodo(todoId: string, mid: string, space: string): Promise<void> {
+  await api(`/todos/${enc(todoId)}/spaces/${enc(mid)}/${enc(space)}`, { method: "DELETE" });
+}
+
+/**
+ * 查某个项目挂在哪个待办上：
+ * 返回包含该项目 (machineId, spaceName) 且未完成的 Todo。
+ */
+export function findTodoForSpace(todos: Todo[], machineId: string, spaceName: string): Todo | undefined {
+  if (!machineId || !spaceName) return undefined;
+  for (const t of todos) {
+    if (t.done_at) continue;
+    if (t.spaces?.some((sp) => sp.machine_id === machineId && sp.space === spaceName)) {
+      return t;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 判断当前 todos 数据是否支持 spaces 字段（兼容旧 hub）
+ */
+export function isSpacesSupported(todos: Todo[]): boolean {
+  if (todos.length === 0) return true;
+  return todos.some((t) => "spaces" in t && Array.isArray(t.spaces));
+}
+
+/**
+ * 生成来源文案：
+ * - 随项目挂上的标「随项目 <工作区名>」；
+ * - 派生的标「由 <父 Agent 标题> 派出」；父 Agent 不在会话列表里时只写「派生」；
+ * - 手动挂的不标（返回 undefined）。
+ */
+export function formatAgentSource(
+  agent: TodoAgent,
+  spaces?: TodoSpace[],
+  lookup?: SessionLookup,
+): string | undefined {
+  if (!agent.source || agent.source === "manual") return undefined;
+
+  if (agent.source === "space") {
+    let spaceName = "";
+    if (agent.via) {
+      const slash = agent.via.indexOf("/");
+      if (slash >= 0) {
+        spaceName = agent.via.slice(slash + 1);
+      } else {
+        spaceName = agent.via;
+      }
+    }
+    if (!spaceName && spaces) {
+      const sp = spaces.find((s) => s.machine_id === agent.machine_id);
+      if (sp?.space) spaceName = sp.space;
+    }
+    if (!spaceName && lookup) {
+      const s = lookup(agent.machine_id, agent.session_id);
+      if (s?.space_name) spaceName = s.space_name;
+    }
+    return spaceName ? `随项目 ${spaceName}` : "随项目";
+  }
+
+  if (agent.source === "spawned") {
+    if (agent.via && lookup) {
+      const slash = agent.via.indexOf("/");
+      if (slash >= 0) {
+        const mid = agent.via.slice(0, slash);
+        const sid = agent.via.slice(slash + 1);
+        const parent = lookup(mid, sid);
+        if (parent?.title) {
+          return `由 ${parent.title} 派出`;
+        }
+      }
+    }
+    return "派生";
+  }
+
+  return undefined;
+}
+

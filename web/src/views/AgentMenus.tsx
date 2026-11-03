@@ -2,13 +2,15 @@
 // and the confirmation of 全部标为已读. What they do is in lib/agent-actions.ts.
 import { flipMute, flipPin, flipSpaceMute, flipSpacePin, handToPersona } from "../lib/agent-actions";
 import { isSpaceMuted, unreadOf, type SpaceLike } from "../lib/agent-filter";
+import { errorText } from "../lib/api";
 import { resumeCommand, sessionCan, sessionDeletable, sessionMenuActions } from "../lib/format";
 import { machineWithHub } from "../lib/mesh";
 import { isPinned, isSpacePinned } from "../lib/pins";
 import { isMuted } from "../lib/session-actions";
-import { getState, markSeen, useStore } from "../lib/store";
+import { getState, markSeen, refresh, refreshTodos, useStore } from "../lib/store";
+import { findTodoForSpace, isSpacesSupported, unlinkSpaceFromTodo } from "../lib/todos";
 import type { Session } from "../lib/types";
-import { Button, copyText, Dialog, Menu, type MenuItem } from "../ui/atoms";
+import { Button, copyText, Dialog, Menu, toast, type MenuItem } from "../ui/atoms";
 
 export function AgentRowMenu({ s, anchor, onClose, onRename, onDelete }: { s: Session; anchor: HTMLElement; onClose: () => void; onRename: (s: Session) => void; onDelete: (s: Session) => void }) {
   const pins = useStore((st) => st.pins);
@@ -27,16 +29,70 @@ export function AgentRowMenu({ s, anchor, onClose, onRename, onDelete }: { s: Se
   return <Menu anchor={anchor} onClose={onClose} align="right" items={items} />;
 }
 
-export function SpaceMenu({ sp, anchor, onClose, onRename, onMarkSeen }: { sp: SpaceLike; anchor: HTMLElement; onClose: () => void; onRename: (s: Session) => void; onMarkSeen: (list: Session[]) => void }) {
+export function SpaceMenu({
+  sp,
+  anchor,
+  onClose,
+  onRename,
+  onMarkSeen,
+  onLinkTodo,
+}: {
+  sp: SpaceLike;
+  anchor: HTMLElement;
+  onClose: () => void;
+  onRename: (s: Session) => void;
+  onMarkSeen: (list: Session[]) => void;
+  onLinkTodo?: (sp: SpaceLike) => void;
+}) {
   const pins = useStore((st) => st.pins);
   const mutes = useStore((st) => st.mutes);
+  const todos = useStore((st) => st.todos);
+  const todosSupported = useStore((st) => st.todosSupported);
   const pinned = isSpacePinned(sp.machineId, sp.name, pins);
   const muted = isSpaceMuted(sp, mutes);
   const unread = unreadOf(sp.sessions);
   const first = sp.sessions[0];
+
+  const supportSpaces = todosSupported !== false && isSpacesSupported(todos);
+  const linkedTodo = supportSpaces ? findTodoForSpace(todos, sp.machineId, sp.name) : undefined;
+
   const items: MenuItem[] = [
     ...(unread.length ? [{ key: "seen", label: `全部标为已读（${unread.length}）`, icon: "check" as const, onSelect: () => onMarkSeen(unread) }] : []),
     ...(first?.space_id && !first.source_kind ? [{ key: "rename", label: "重命名空间…", icon: "pencil" as const, onSelect: () => onRename(first) }] : []),
+    ...(supportSpaces
+      ? linkedTodo
+        ? [
+            {
+              key: "relink-todo",
+              label: "改挂到其他待办…",
+              icon: "todo" as const,
+              onSelect: () => onLinkTodo?.(sp),
+            },
+            {
+              key: "unlink-todo",
+              label: "移出待办",
+              icon: "x" as const,
+              onSelect: async () => {
+                try {
+                  await unlinkSpaceFromTodo(linkedTodo.id, sp.machineId, sp.name);
+                  await refreshTodos();
+                  await refresh();
+                  toast("已移出待办", "ok");
+                } catch (e) {
+                  toast(`移出失败：${errorText(e)}`, "error");
+                }
+              },
+            },
+          ]
+        : [
+            {
+              key: "link-todo",
+              label: "挂到待办…",
+              icon: "todo" as const,
+              onSelect: () => onLinkTodo?.(sp),
+            },
+          ]
+      : []),
     { key: "pin", label: pinned ? "取消置顶空间" : "置顶空间", icon: "pin", onSelect: () => void flipSpacePin(sp.machineId, sp.name) },
     { key: "mute", label: muted ? "取消屏蔽空间" : "屏蔽这个空间", icon: muted ? "bell" : "bellOff", onSelect: () => void flipSpaceMute(sp.machineId, sp.name) },
   ];

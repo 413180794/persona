@@ -2,12 +2,17 @@ import { describe, expect, it } from "vitest";
 import type { Machine, Session } from "./types";
 import {
   buildTodoAgentGroups,
+  findTodoForSpace,
+  formatAgentSource,
   formatTodoContext,
+  isSpacesSupported,
   makeSessionLookup,
   mostUrgentAgent,
   sortTodos,
   todoStatus,
   type Todo,
+  type TodoAgent,
+  type TodoSpace,
 } from "./todos";
 import type { AgentMutes } from "./agent-groups";
 
@@ -308,3 +313,145 @@ describe("格式化上下文标签 (formatTodoContext)", () => {
     );
   });
 });
+
+describe("查某个项目挂在哪个待办上 (findTodoForSpace)", () => {
+  it("返回挂了该项目的未完成待办", () => {
+    const todos: Todo[] = [
+      {
+        id: "todo-1",
+        title: "天气项目待办",
+        created_at: "",
+        updated_at: "",
+        spaces: [
+          { machine_id: "mac-1", space: "weather", linked_at: "" },
+        ],
+      },
+      {
+        id: "todo-2",
+        title: "博客待办",
+        created_at: "",
+        updated_at: "",
+        spaces: [
+          { machine_id: "mac-1", space: "blog", linked_at: "" },
+        ],
+      },
+    ];
+
+    expect(findTodoForSpace(todos, "mac-1", "weather")?.id).toBe("todo-1");
+    expect(findTodoForSpace(todos, "mac-1", "blog")?.id).toBe("todo-2");
+    expect(findTodoForSpace(todos, "mac-1", "other")).toBeUndefined();
+    expect(findTodoForSpace(todos, "server-1", "weather")).toBeUndefined();
+  });
+
+  it("已完成的待办不返回", () => {
+    const todos: Todo[] = [
+      {
+        id: "todo-done",
+        title: "已完成待办",
+        created_at: "",
+        updated_at: "",
+        done_at: "2026-11-02T12:00:00Z",
+        spaces: [
+          { machine_id: "mac-1", space: "weather", linked_at: "" },
+        ],
+      },
+    ];
+
+    expect(findTodoForSpace(todos, "mac-1", "weather")).toBeUndefined();
+  });
+
+  it("空入参安全返回 undefined", () => {
+    expect(findTodoForSpace([], "mac-1", "weather")).toBeUndefined();
+    expect(findTodoForSpace([], "", "")).toBeUndefined();
+  });
+});
+
+describe("生成来源文案 (formatAgentSource)", () => {
+  const spaces: TodoSpace[] = [
+    { machine_id: "mac-1", space: "weather", linked_at: "" },
+  ];
+
+  it("手动挂的不标（返回 undefined）", () => {
+    const a1: TodoAgent = { machine_id: "mac-1", session_id: "s1", linked_at: "", source: "manual" };
+    const a2: TodoAgent = { machine_id: "mac-1", session_id: "s2", linked_at: "" };
+    expect(formatAgentSource(a1)).toBeUndefined();
+    expect(formatAgentSource(a2)).toBeUndefined();
+  });
+
+  it("随项目挂上的标「随项目 <项目名>」", () => {
+    const a: TodoAgent = {
+      machine_id: "mac-1",
+      session_id: "s1",
+      linked_at: "",
+      source: "space",
+      via: "mac-1/weather",
+    };
+    expect(formatAgentSource(a, spaces)).toBe("随项目 weather");
+  });
+
+  it("随项目挂上但在 spaces 未命中时从 lookup 取 space_name", () => {
+    const s = mockSession("mac-1", "s1", "idle", { space_name: "custom-space" });
+    const lookup = makeSessionLookup([s]);
+    const a: TodoAgent = {
+      machine_id: "mac-1",
+      session_id: "s1",
+      linked_at: "",
+      source: "space",
+      via: "mac-1/custom-space",
+    };
+    expect(formatAgentSource(a, spaces, lookup)).toBe("随项目 custom-space");
+  });
+
+  it("派生的标「由 <父 Agent 标题> 派出」；父 Agent 找不到时只写「派生」", () => {
+    const parent = mockSession("mac-1", "p1", "working", { title: "给天气 App 加主屏幕小组件" });
+    const lookup = makeSessionLookup([parent]);
+
+    const childWithParent: TodoAgent = {
+      machine_id: "mac-1",
+      session_id: "c1",
+      linked_at: "",
+      source: "spawned",
+      via: "mac-1/p1",
+    };
+    expect(formatAgentSource(childWithParent, spaces, lookup)).toBe("由 给天气 App 加主屏幕小组件 派出");
+
+    const childOrphan: TodoAgent = {
+      machine_id: "mac-1",
+      session_id: "c2",
+      linked_at: "",
+      source: "spawned",
+      via: "mac-1/unknown-parent",
+    };
+    expect(formatAgentSource(childOrphan, spaces, lookup)).toBe("派生");
+
+    const childNoVia: TodoAgent = {
+      machine_id: "mac-1",
+      session_id: "c3",
+      linked_at: "",
+      source: "spawned",
+      via: "",
+    };
+    expect(formatAgentSource(childNoVia, spaces, lookup)).toBe("派生");
+  });
+});
+
+describe("旧 hub 兼容判定 (isSpacesSupported)", () => {
+  it("待办为空时默认 true", () => {
+    expect(isSpacesSupported([])).toBe(true);
+  });
+
+  it("有待办且待办中包含 spaces 数组时为 true", () => {
+    const modernTodos: Todo[] = [
+      { id: "t1", title: "现代待办", created_at: "", updated_at: "", spaces: [] },
+    ];
+    expect(isSpacesSupported(modernTodos)).toBe(true);
+  });
+
+  it("待办列表中各项均无 spaces 字段（旧 hub 格式）时为 false", () => {
+    const legacyTodos: Todo[] = [
+      { id: "t1", title: "旧待办", created_at: "", updated_at: "" },
+    ];
+    expect(isSpacesSupported(legacyTodos)).toBe(false);
+  });
+});
+

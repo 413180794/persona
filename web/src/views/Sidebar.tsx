@@ -11,7 +11,7 @@ import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { reset, refresh, refreshTodos, useStore } from "../lib/store";
-import { buildTodoAgentGroups, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
+import { buildTodoAgentGroups, findTodoForSpace, isSpacesSupported, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
 import type { Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, toast, useMenu, type MenuItem } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
@@ -19,7 +19,7 @@ import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/Ses
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { AgentAvatar } from "./agents/AgentAvatar";
-import { LinkTodoDialog } from "./LinkTodoDialog";
+import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 
 function useFolded(key: string, initial = false): [boolean, () => void] {
   const [v, setV] = useState(() => {
@@ -109,6 +109,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
   const [sessionContextMenu, setSessionContextMenu] = useState<{ s: Session; el: HTMLElement } | null>(null);
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
+  const [linkTargetSpace, setLinkTargetSpace] = useState<LinkTargetSpace | undefined>();
 
   const activeKey =
     route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new")
@@ -286,7 +287,16 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         )}
       </div>
       {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} />}
-      {spaceMenu && <SpaceMenu sp={spaceMenu.sp} anchor={spaceMenu.anchor} onClose={() => setSpaceMenu(null)} onRename={setRenamingSpace} onMarkSeen={setConfirmSeen} />}
+      {spaceMenu && (
+        <SpaceMenu
+          sp={spaceMenu.sp}
+          anchor={spaceMenu.anchor}
+          onClose={() => setSpaceMenu(null)}
+          onRename={setRenamingSpace}
+          onMarkSeen={setConfirmSeen}
+          onLinkTodo={(sp) => setLinkTargetSpace({ machineId: sp.machineId, space: sp.name })}
+        />
+      )}
       {renaming && <RenameDialog open session={renaming} onClose={() => setRenaming(null)} />}
       {renamingSpace && <RenameSpaceDialog open session={renamingSpace} onClose={() => setRenamingSpace(null)} />}
       {deleting && <DeleteSessionDialog open session={deleting} machineName={machineWithHub(deleting.machine_id, machines)} onClose={() => setDeleting(null)} />}
@@ -339,6 +349,12 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         open={Boolean(linkTargetSession)}
         session={linkTargetSession}
         onClose={() => setLinkTargetSession(undefined)}
+      />
+
+      <LinkTodoDialog
+        open={Boolean(linkTargetSpace)}
+        space={linkTargetSpace}
+        onClose={() => setLinkTargetSpace(undefined)}
       />
     </aside>
   );
@@ -506,6 +522,12 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3);
   const states = sp.sessions.map(stateOf);
   const dots = (["needs_you", "unread", "working"] as const).filter((s) => states.includes(s));
+
+  const todos = useStore((st) => st.todos);
+  const todosSupported = useStore((st) => st.todosSupported);
+  const supportSpaces = todosSupported !== false && isSpacesSupported(todos);
+  const linkedTodo = supportSpaces ? findTodoForSpace(todos, sp.machineId, sp.name) : undefined;
+
   return (
     <Section
       folded={folded}
@@ -515,6 +537,20 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
           <span className="truncate normal-case tracking-normal text-[11.5px] text-ink-2">{sp.name}</span>
           {pinned && <span title="已置顶" className="shrink-0 text-accent"><Icon name="pin" size={10} stroke={2.2} /><span className="sr-only">已置顶</span></span>}
           {muted && <span title="已屏蔽通知" className="shrink-0"><Icon name="bellOff" size={10} stroke={2.2} /><span className="sr-only">已屏蔽通知</span></span>}
+          {linkedTodo && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                go({ name: "todos", id: linkedTodo.id })(e);
+              }}
+              className="relative z-10 flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3 hover:bg-hover-2 hover:text-ink transition-colors cursor-pointer"
+              title={`待办：${linkedTodo.title}`}
+              aria-label={`待办：${linkedTodo.title}`}
+            >
+              <Icon name="todo" size={10} stroke={2} />
+            </button>
+          )}
           {machineName && <span className="truncate normal-case tracking-normal text-[11px] font-normal text-ink-3">{machineName}</span>}
         </span>
       }

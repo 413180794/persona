@@ -770,6 +770,18 @@ TODOS_INIT = [
         "done_at": None,
         "created_at": ago(hours=2),
         "updated_at": ago(minutes=2),
+        "spaces": [
+            {
+                "machine_id": "macbook",
+                "space": "weather",
+                "linked_at": ago(minutes=60),
+            },
+            {
+                "machine_id": "studio",
+                "space": "docs",
+                "linked_at": ago(minutes=30),
+            },
+        ],
         "agents": [
             {
                 "machine_id": "macbook",
@@ -780,6 +792,8 @@ TODOS_INIT = [
                 "cwd": "/Users/me/code/weather",
                 "agent": "claude",
                 "start_error": "",
+                "source": "space",
+                "via": "macbook/weather",
             },
             {
                 "machine_id": "macbook",
@@ -790,6 +804,8 @@ TODOS_INIT = [
                 "cwd": "/Users/me/code/weather",
                 "agent": "claude",
                 "start_error": "",
+                "source": "spawned",
+                "via": f"macbook/{WIDGET}",
             },
             {
                 "machine_id": "macbook",
@@ -800,6 +816,8 @@ TODOS_INIT = [
                 "cwd": "/Users/me/code/weather",
                 "agent": "claude",
                 "start_error": "",
+                "source": "space",
+                "via": "macbook/weather",
             },
             {
                 "machine_id": "macbook",
@@ -810,6 +828,8 @@ TODOS_INIT = [
                 "cwd": "/Users/me/code/weather",
                 "agent": "claude",
                 "start_error": "",
+                "source": "manual",
+                "via": "",
             },
         ],
     },
@@ -820,6 +840,7 @@ TODOS_INIT = [
         "done_at": None,
         "created_at": ago(hours=3),
         "updated_at": ago(minutes=6),
+        "spaces": [],
         "agents": [
             {
                 "machine_id": "studio",
@@ -830,6 +851,8 @@ TODOS_INIT = [
                 "cwd": "/Users/me/code/photo-sync",
                 "agent": "claude",
                 "start_error": "",
+                "source": "manual",
+                "via": "",
             },
         ],
     },
@@ -840,6 +863,7 @@ TODOS_INIT = [
         "done_at": None,
         "created_at": ago(hours=5),
         "updated_at": ago(minutes=12),
+        "spaces": [],
         "agents": [
             {
                 "machine_id": "studio",
@@ -850,6 +874,8 @@ TODOS_INIT = [
                 "cwd": "/Users/me/code/blog",
                 "agent": "claude",
                 "start_error": "",
+                "source": "manual",
+                "via": "",
             },
         ],
     },
@@ -860,6 +886,7 @@ TODOS_INIT = [
         "done_at": None,
         "created_at": ago(hours=6),
         "updated_at": ago(minutes=1),
+        "spaces": [],
         "agents": [
             {
                 "machine_id": "server",
@@ -870,6 +897,8 @@ TODOS_INIT = [
                 "cwd": "/home/me/code/shop-api",
                 "agent": "codex",
                 "start_error": "",
+                "source": "manual",
+                "via": "",
             },
         ],
     },
@@ -880,6 +909,7 @@ TODOS_INIT = [
         "done_at": None,
         "created_at": ago(hours=8),
         "updated_at": ago(minutes=95),
+        "spaces": [],
         "agents": [
             {
                 "machine_id": "macbook",
@@ -890,6 +920,8 @@ TODOS_INIT = [
                 "cwd": "/Users/me/code/weather",
                 "agent": "claude",
                 "start_error": "",
+                "source": "manual",
+                "via": "",
             },
         ],
     },
@@ -900,6 +932,7 @@ TODOS_INIT = [
         "done_at": None,
         "created_at": ago(days=1),
         "updated_at": ago(days=1),
+        "spaces": [],
         "agents": [],
     },
     {
@@ -909,6 +942,7 @@ TODOS_INIT = [
         "done_at": ago(days=1),
         "created_at": ago(days=3),
         "updated_at": ago(days=1),
+        "spaces": [],
         "agents": [],
     },
     {
@@ -955,11 +989,13 @@ def decorated_session(s):
 
 def format_todo(t):
     t_copy = copy.deepcopy(t)
-    curr = [a for a in t_copy.get("agents", []) if not a.get("released_at")]
+    agents = [a for a in t_copy.get("agents", []) if not a.get("dismissed_at")]
+    curr = [a for a in agents if not a.get("released_at")]
     curr.sort(key=lambda a: a.get("linked_at") or "", reverse=True)
-    past = [a for a in t_copy.get("agents", []) if a.get("released_at")]
+    past = [a for a in agents if a.get("released_at")]
     past.sort(key=lambda a: a.get("released_at") or "", reverse=True)
     t_copy["agents"] = curr + past
+    t_copy.setdefault("spaces", [])
     return t_copy
 
 
@@ -5270,6 +5306,82 @@ class H(BaseHTTPRequestHandler):
             TODOS.insert(0, new_todo)
             push_todos()
             return self.send_json({"todo": new_todo})
+        if p.startswith("/api/v1/todos/") and "/spaces/" in p:
+            if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
+            prefix = "/api/v1/todos/"
+            rest = p[len(prefix):]
+            parts = rest.split("/spaces/")
+            if len(parts) == 2:
+                tid = parts[0]
+                tail = parts[1].split("/", 1)
+                if len(tail) == 2:
+                    mid = tail[0]
+                    space = unquote(tail[1])
+                    t = next((x for x in TODOS if x["id"] == tid), None)
+                    if not t: return self.send_json({"error": "待办不存在"}, 404)
+                    now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                    via_key = f"{mid}/{space}"
+                    if self.command == "PUT":
+                        if t.get("done_at"): return self.send_json({"error": "待办已完成"}, 409)
+                        for other in TODOS:
+                            if other["id"] != tid:
+                                other_spaces = [sp for sp in other.get("spaces", []) if sp["machine_id"] == mid and sp["space"] == space]
+                                if other_spaces:
+                                    other["spaces"] = [sp for sp in other.get("spaces", []) if not (sp["machine_id"] == mid and sp["space"] == space)]
+                                    other["agents"] = [a for a in other.get("agents", []) if not (a.get("source") == "space" and a.get("via") == via_key)]
+                                    other["updated_at"] = now_str
+                        sp_entry = next((sp for sp in t.setdefault("spaces", []) if sp["machine_id"] == mid and sp["space"] == space), None)
+                        if not sp_entry:
+                            t["spaces"].append({
+                                "machine_id": mid,
+                                "space": space,
+                                "linked_at": now_str,
+                            })
+                        linked_count = 0
+                        for s_obj in SESSIONS:
+                            s_space = s_obj.get("space_name") or s_obj.get("space_id")
+                            if s_obj["machine_id"] == mid and s_space == space and s_obj.get("state") != "offline":
+                                sid = s_obj["session_id"]
+                                for other in TODOS:
+                                    if other["id"] != tid:
+                                        for a in other.get("agents", []):
+                                            if a["machine_id"] == mid and a["session_id"] == sid and not a.get("released_at"):
+                                                a["released_at"] = now_str
+                                                other["updated_at"] = now_str
+                                target = next((a for a in t.setdefault("agents", []) if a["machine_id"] == mid and a["session_id"] == sid), None)
+                                if target:
+                                    if target.get("released_at") or target.get("dismissed_at") or target.get("source") != "space":
+                                        linked_count += 1
+                                    target["released_at"] = None
+                                    target.pop("dismissed_at", None)
+                                    target["linked_at"] = now_str
+                                    target["source"] = "space"
+                                    target["via"] = via_key
+                                else:
+                                    t["agents"].append({
+                                        "machine_id": mid,
+                                        "session_id": sid,
+                                        "linked_at": now_str,
+                                        "released_at": None,
+                                        "title": s_obj.get("title", ""),
+                                        "cwd": s_obj.get("cwd", ""),
+                                        "agent": s_obj.get("agent", "claude"),
+                                        "start_error": "",
+                                        "source": "space",
+                                        "via": via_key,
+                                    })
+                                    linked_count += 1
+                        t["updated_at"] = now_str
+                        push_machine(mid)
+                        push_todos()
+                        return self.send_json({"ok": True, "linked": linked_count})
+                    elif self.command == "DELETE":
+                        t["spaces"] = [sp for sp in t.get("spaces", []) if not (sp["machine_id"] == mid and sp["space"] == space)]
+                        t["agents"] = [a for a in t.get("agents", []) if not (a.get("source") == "space" and a.get("via") == via_key)]
+                        t["updated_at"] = now_str
+                        push_machine(mid)
+                        push_todos()
+                        return self.send_json({"ok": True})
         if p.startswith("/api/v1/todos/") and "/agents/" in p:
             if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
             parts = p.split("/")  # ['', 'api', 'v1', 'todos', id, 'agents', mid, sid]
@@ -5293,7 +5405,10 @@ class H(BaseHTTPRequestHandler):
                     s_agent = s_obj.get("agent", "claude") if s_obj else "claude"
                     if target:
                         target["released_at"] = None
+                        target.pop("dismissed_at", None)
                         target["linked_at"] = now_str
+                        target["source"] = "manual"
+                        target["via"] = ""
                         if s_title: target["title"] = s_title
                         if s_cwd: target["cwd"] = s_cwd
                         if s_agent: target["agent"] = s_agent
@@ -5301,16 +5416,19 @@ class H(BaseHTTPRequestHandler):
                         t.setdefault("agents", []).append({
                             "machine_id": mid, "session_id": sid, "linked_at": now_str, "released_at": None,
                             "title": s_title, "cwd": s_cwd, "agent": s_agent, "start_error": "",
+                            "source": "manual", "via": "",
                         })
                     t["updated_at"] = now_str
                     push_machine(mid)
                     push_todos()
                     return self.send_json({"ok": True})
                 elif self.command == "DELETE":
-                    agent = next((a for a in t.get("agents", []) if a["machine_id"] == mid and a["session_id"] == sid), None)
+                    agent = next((a for a in t.get("agents", []) if a["machine_id"] == mid and a["session_id"] == sid and not a.get("dismissed_at")), None)
                     if agent:
-                        t["agents"].remove(agent)
-                        t["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                        now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                        agent["released_at"] = now_str
+                        agent["dismissed_at"] = now_str
+                        t["updated_at"] = now_str
                         push_machine(mid)
                         push_todos()
                     return self.send_json({"ok": True})

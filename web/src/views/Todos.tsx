@@ -9,13 +9,16 @@ import { refresh, refreshTodos, useStore } from "../lib/store";
 import {
   createTodo,
   deleteTodo,
+  formatAgentSource,
   formatTodoContext,
+  isSpacesSupported,
   makeSessionLookup,
   mostUrgentAgent,
   sortTodos,
   TODO_STATUS_INFO,
   todoStatus,
   unlinkAgentFromTodo,
+  unlinkSpaceFromTodo,
   updateTodo,
   type Todo,
   type TodoAgent,
@@ -421,6 +424,29 @@ function TodoDetail({
   const [savingTitle, setSavingTitle] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const menu = useMenu();
+  const allSessions = useAgentSessions();
+  const todos = useStore((s) => s.todos);
+
+  const hasLiveAgent = (mid: string, spaceName: string) => {
+    return allSessions.some(
+      (s) =>
+        s.machine_id === mid &&
+        (s.space_name || s.space_id) === spaceName &&
+        stateOf(s) !== "offline" &&
+        machines.some((m) => m.id === mid && m.online),
+    );
+  };
+
+  const removeSpace = async (mid: string, space: string) => {
+    try {
+      await unlinkSpaceFromTodo(todo.id, mid, space);
+      await refreshTodos();
+      await refresh();
+      toast("已移出项目", "ok");
+    } catch (e) {
+      toast(`移出失败：${errorText(e)}`, "error");
+    }
+  };
 
   useEffect(() => {
     setTitle(todo.title);
@@ -552,6 +578,45 @@ function TodoDetail({
         </div>
       </div>
 
+      {/* Spaces Section */}
+      {isSpacesSupported(todos) && todo.spaces && todo.spaces.length > 0 && (
+        <div className="mt-6">
+          <div className="mb-2 text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">
+            项目 · {todo.spaces.length}
+          </div>
+          <div className="flex flex-col gap-2">
+            {todo.spaces.map((sp) => {
+              const mName = machines.find((m) => m.id === sp.machine_id)?.name || sp.machine_id;
+              const live = hasLiveAgent(sp.machine_id, sp.space);
+              return (
+                <div
+                  key={`${sp.machine_id}/${sp.space}`}
+                  className="flex items-center justify-between gap-3 rounded-control border border-line bg-canvas p-3"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[13px] font-semibold text-ink">
+                      {sp.space} · {mName}
+                    </span>
+                    {!live && (
+                      <span className="shrink-0 rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">
+                        当前没有 Agent
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    tone="quiet"
+                    className="shrink-0 text-ink-3 hover:bg-red-tint/50 hover:text-red whitespace-nowrap px-2 py-1 text-[12px]"
+                    onClick={() => void removeSpace(sp.machine_id, sp.space)}
+                  >
+                    移出
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Current Agents */}
       <div className="mt-6 flex-1">
         <div className="mb-2 text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">
@@ -579,6 +644,7 @@ function TodoDetail({
 
               const ix = interactions.find((i) => i.machine_id === agent.machine_id && i.session_id === agent.session_id);
               const kicker = ix?.kind === "plan" ? "计划待批准" : ix?.kind === "permission" ? "需要授权" : ix?.kind === "screen" ? "终端对话框" : "在问你";
+              const sourceLabel = formatAgentSource(agent, todo.spaces, lookup);
 
               return (
                 <div
@@ -599,6 +665,11 @@ function TodoDetail({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-[13.5px] font-semibold text-ink">{displayTitle}</span>
+                      {sourceLabel && (
+                        <span className="shrink-0 rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">
+                          {sourceLabel}
+                        </span>
+                      )}
                       {isExpired && (
                         <span className="rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">已结束</span>
                       )}
