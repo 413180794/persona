@@ -96,69 +96,77 @@ func (c *Client) key() (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
-// Complete sends one user message with a system prompt and returns the text reply.
+// Complete sends one user message with a system prompt and returns the text reply. A reply the upstream cut off at
+// maxTokens comes back as far as it got.
 func (c *Client) Complete(ctx context.Context, system, user string, maxTokens int) (string, error) {
+	text, _, err := c.complete(ctx, system, user, maxTokens)
+	return text, err
+}
+
+// complete is Complete that also says whether the reply stopped at maxTokens (the Messages API's stop_reason).
+func (c *Client) complete(ctx context.Context, system, user string, maxTokens int) (text string, truncated bool, err error) {
 	if c.resolve != nil {
 		resolved, err := c.resolve(ctx)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
-		return resolved.Complete(ctx, system, user, maxTokens)
+		return resolved.complete(ctx, system, user, maxTokens)
 	}
 	if !c.cfg.configured() {
-		return "", errNotConfigured
+		return "", false, errNotConfigured
 	}
 	key, err := c.key()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	// Every client of one address and key goes through the same gate, which holds requests back while the upstream
 	// is out of quota or busy (limit.go).
 	g := gateFor(c.cfg.BaseURL, key)
 	probe, err := g.admit(ctx)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	var text string
 	var answered bool
 	if c.cfg.API == "responses" {
 		text, answered, err = c.respond(ctx, key, system, user)
 	} else {
-		text, answered, err = c.messages(ctx, key, system, user, maxTokens)
+		text, truncated, answered, err = c.messages(ctx, key, system, user, maxTokens)
 	}
-	return text, g.done(probe, answered, err)
+	return text, truncated, g.done(probe, answered, err)
 }
 
-// messages calls the Messages API; answered is whether the upstream said 200.
-func (c *Client) messages(ctx context.Context, key, system, user string, maxTokens int) (text string, answered bool, err error) {
+// messages calls the Messages API; answered is whether the upstream said 200, truncated whether the reply stopped at
+// maxTokens. A model that thinks spends its thinking from the same maxTokens, so a long answer can stop half written.
+func (c *Client) messages(ctx context.Context, key, system, user string, maxTokens int) (text string, truncated, answered bool, err error) {
 	body, _ := json.Marshal(map[string]any{
 		"model": c.cfg.Model, "max_tokens": maxTokens, "system": system,
 		"messages": []any{map[string]any{"role": "user", "content": user}},
 	})
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.cfg.BaseURL, "/")+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
-		return "", false, err
+		return "", false, false, err
 	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("x-api-key", key)
 	req.Header.Set("anthropic-version", "2023-06-01")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", false, fmt.Errorf("ai: %w", err)
+		return "", false, false, fmt.Errorf("ai: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode != 200 {
-		return "", false, newHTTPError(resp, raw)
+		return "", false, false, newHTTPError(resp, raw)
 	}
 	var out struct {
 		Content []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
+		StopReason string `json:"stop_reason"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", true, fmt.Errorf("ai: decode: %w", err)
+		return "", false, true, fmt.Errorf("ai: decode: %w", err)
 	}
 	var b strings.Builder
 	for _, part := range out.Content {
@@ -166,7 +174,7 @@ func (c *Client) messages(ctx context.Context, key, system, user string, maxToke
 			b.WriteString(part.Text)
 		}
 	}
-	return b.String(), true, nil
+	return b.String(), out.StopReason == "max_tokens", true, nil
 }
 
 // respond calls the Responses API. It always streams: some compatible endpoints (Codex-backed relays) reject
@@ -248,18 +256,31 @@ func (c *Client) JSON(ctx context.Context, system, user string, out any) error {
 	return c.JSONMax(ctx, system, user, 1024, out)
 }
 
-// JSONMax is JSON with room for a longer answer (summaries).
+// JSONMax is JSON with room for a longer answer (summaries). A reply cut off at maxTokens before its object closed is
+// asked for once more with twice the room; cut off again, the error says so (ErrTruncated) instead of blaming the JSON.
 func (c *Client) JSONMax(ctx context.Context, system, user string, maxTokens int, out any) error {
-	text, err := c.Complete(ctx, prompts.RenderJSONOnly(system), user, maxTokens)
-	if err != nil {
-		return err
+	system = prompts.RenderJSONOnly(system)
+	for attempt := 0; ; attempt++ {
+		text, truncated, err := c.complete(ctx, system, user, maxTokens)
+		if err != nil {
+			return err
+		}
+		obj, err := FirstObject(text)
+		if err == nil {
+			return json.Unmarshal([]byte(obj), out)
+		}
+		if !truncated {
+			return err
+		}
+		if attempt > 0 {
+			return fmt.Errorf("%w (max_tokens %d)", ErrTruncated, maxTokens)
+		}
+		maxTokens *= 2
 	}
-	obj, err := FirstObject(text)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal([]byte(obj), out)
 }
+
+// ErrTruncated: the reply stopped at max_tokens before the answer was complete, even with the room doubled.
+var ErrTruncated = errors.New("ai: reply cut off at max_tokens")
 
 // FirstObject extracts the first balanced {...} from model output (tolerating fences and chatter).
 func FirstObject(s string) (string, error) {

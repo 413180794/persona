@@ -131,6 +131,10 @@
 
 - 中转的额度用完时回 `HTTP 429 account_quota_exhausted`，并发满时回 `HTTP 503 account_concurrency_full`。以前每个调用方各自把它当普通失败：知识处理和收件箱分拣一个条目一个条目地试，15 分钟打了 429 次请求、429 行日志，收件箱的条目还被当成「按规则」分过，额度恢复后也不再分。
   限流要在共用的客户端那一层按连接处理（`ai/limit.go`，`docs/model-config.md`「上游限流」）：暂停期间直接返回 `ai.PausedError`、不发请求；调用方遇到 `ai.IsPaused` 就停下这一轮、不打日志、不把条目标成处理过。新加循环调用模型的地方也要这样处理。
+- 会思考的模型（如 `claude-haiku-5-5` 默认就思考）思考用的 token 也算在 `max_tokens` 里（2026-11-03，#1000）：约 2000 字的项目档案要 3.7–4.7K，
+  `kb.project` 原来的 4000 常被截断，回复是一段思考加半个 JSON，以前报成「unterminated JSON object」、项目每 2 分钟重试一次。
+  Messages 的回复要看 `stop_reason`：`ai.JSONMax` 拿不到完整对象且是 `max_tokens` 停的，上限加倍再问一次，还截断就报 `ai.ErrTruncated`。
+  给 JSON 任务定上限时按「正文 + 思考」留余量。
 
 ## 时区
 
