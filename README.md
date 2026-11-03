@@ -129,7 +129,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 
 | 客户端 | 最低版本 | 能做什么 | 怎么装 |
 | --- | --- | --- | --- |
-| iPhone | iOS 26 | 全部功能，加上灵动岛、Siri 和快捷指令 | 自己编译，或发到自己的 TestFlight（[docs/release.md](docs/release.md)） |
+| iPhone | iOS 26 | 全部功能，加上灵动岛、Siri 和快捷指令 | [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)（商店名 Persona Side），或自己编译（[docs/release.md](docs/release.md)） |
 | Apple Watch | watchOS 10 | 抬腕看谁在等你，直接批准或回答 | 随 iPhone App 安装 |
 | Mac | macOS 26 | 和 iOS 同一套逻辑层的原生 App；菜单栏 App「Persona Link」把这台 Mac 接进 hub | Xcode 编 `PersonaMac`；`./scripts/app/mac-link.sh install`（[指南](docs/persona-link-install.md)） |
 | Android | Android 12 | 助手、Agents、收件箱、知识库、文件、语音入口和部分手机工具，后台通知不依赖推送服务 | `./scripts/app/android.sh install` |
@@ -157,7 +157,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 ## 目前的限制
 
 - 界面只有中文。
-- Apple 平台只能自己编译或发到自己的 TestFlight，没有上架 App Store。
+- Apple 平台没有上架 App Store：iPhone 用 [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)安装（不限人数），或自己编译。
 - hub 的原生装法只支持 Linux（systemd + Docker 里的 Postgres）；别的系统用 Docker 跑 hub，那台机器不能同时跑 Agent。
 - Android 还没和 iOS 完全对齐：健康工具没做，后台通知要在系统设置里放开后台运行（[docs/android.md](docs/android.md)）。
 

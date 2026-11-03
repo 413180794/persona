@@ -156,7 +156,7 @@ python3 scripts/release/asc.py GET /v1/appInfos/<appInfo id>/appInfoLocalization
 （`public_link: true`）：把 `https://testflight.apple.com/join/…` 发到群里，谁点开都能装。2026-11-03 起**不限人数**（`public_link_limit: 0`，原来是 50，满了以后链接不再收人）：`public_link_limit` 为 0 或不写时关掉人数上限，只受 Apple 每个 App 最多 10,000 名外部测试员的限制；写正数就是上限。
 当前的公开链接：<https://testflight.apple.com/join/vsjfy3hE>（`asc_testflight.py external` 每次都会打印，变了就更新这里；2026-11-03 核对，是最早那个 Friends 组的链接）。
 iPhone 和 Mac 是同一个链接（同一个 Friends 组），在 Mac 上用 TestFlight 打开它就是 Mac 版。
-**只私下发给要测的人，不放到官网（`site/`）或任何公开页面上**（2026-10-31 用户要求）。
+这个链接 2026-11-03 起可以明文写进仓库（用户要求，README 的安装方式就写着它）；官网（`site/`）上放不放另外问用户，现在不放。链接换了（比如组被重建）要把 README 和这里一起改。
 不用收集邮箱；`app_store.external.testers` 仍然可以写，列出的邮箱另外收到邀请邮件。`public_link: false` 时只有这些邮箱能加入。
 
 ```sh
