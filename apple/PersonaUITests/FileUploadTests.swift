@@ -43,5 +43,9 @@ final class FileUploadTests: XCTestCase {
         XCTAssertFalse(cancel.exists, "the bar goes once the file is there")
         let value = field.value as? String ?? ""
         XCTAssertTrue(value.hasPrefix("look at /tmp/季度报告-") && value.hasSuffix(".pdf "), value)
+        // Drafts are kept: leave the box empty for the next test on this chat (VideoSendTests sends what is in it),
+        // and let the draft be saved before the app goes (`AppModel.saveDrafts` waits a moment).
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count + 2))
+        sleep(2)
     }
 }

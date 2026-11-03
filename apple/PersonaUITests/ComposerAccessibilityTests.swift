@@ -1,0 +1,105 @@
+import XCTest
+
+/// The chat's composer in the liquid glass style is laid out on its own (`LayoutIsland`, a hosting controller of its
+/// own): its field, + and send must still be in the accessibility tree, where VoiceOver and the UI tests find them.
+/// The island showed as an `Other` with nothing under it in every launch (#995: an agent's chat, #1006: Jarvis's in
+/// the four tabs). Against scripts/mock/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>).
+final class ComposerAccessibilityTests: XCTestCase {
+    private let widget = "macbook/a1f3c2d4-0000-4000-8000-000000000001"
+    private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
+    private var app: XCUIApplication!
+
+    override func setUp() {
+        continueAfterFailure = true
+    }
+
+    private func pairURL() throws -> String {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        }
+        return "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+    }
+
+    @MainActor private func attachScreen(_ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    /// The composer's controls are in the tree and the field takes typing: + (its menu offers 照片), the field, and
+    /// send (中断 in its place while the agent works and nothing is typed, 发送 once something is).
+    @MainActor private func expectComposer(_ what: String) {
+        let plus = app.buttons["添加"].firstMatch
+        let send = app.buttons["发送"].firstMatch, stop = app.buttons["中断"].firstMatch
+        let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
+        guard plus.waitForExistence(timeout: 15) else {
+            attachScreen("no + (\(what))")
+            return XCTFail("no + (\(what))\n\(composerTree())")
+        }
+        attachScreen(what)
+        XCTAssertTrue(send.exists || stop.exists, "neither 发送 nor 中断 (\(what))\n\(composerTree())")
+        XCTAssertTrue(field.exists, "no input field (\(what))\n\(composerTree())")
+        XCTAssertTrue(plus.isHittable, "+ is not hittable (\(what))")
+
+        plus.tap()
+        XCTAssertTrue(app.buttons["照片"].waitForExistence(timeout: 5), "the + menu did not open (\(what))")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap() // closes the menu
+        XCTAssertTrue(app.buttons["照片"].waitForNonExistence(timeout: 5), "the + menu stayed open (\(what))")
+
+        guard field.exists else { return }
+        // At the end of what is there: a tap in the middle put the cursor before a draft an earlier run left, and the
+        // deletes took nothing.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9)).tap()
+        clear(field)
+        field.typeText("hi")
+        XCTAssertTrue(send.waitForExistence(timeout: 3) && send.isEnabled, "发送 is not there once something is typed (\(what))")
+        clear(field)
+        // Drafts are saved a moment after the last change (`AppModel.saveDrafts`): terminated sooner, the next launch
+        // found the typed text still there.
+        sleep(2)
+    }
+
+    /// Empties the field: as many deletes as it holds (its value is the placeholder while it is empty).
+    @MainActor private func clear(_ field: XCUIElement) {
+        let value = field.value as? String ?? ""
+        let typed = value == field.placeholderValue ? 0 : value.count
+        if typed > 0 { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed + 2)) }
+        let now = field.value as? String ?? ""
+        XCTAssertTrue(now.isEmpty || now == field.placeholderValue, "the field is not empty: \(now)")
+    }
+
+    /// The bottom of the tree, where the composer is.
+    @MainActor private func composerTree() -> String {
+        app.debugDescription.split(separator: "\n").filter { $0.contains("{{") }.suffix(25).joined(separator: "\n")
+    }
+
+    /// An agent's chat, in the shell and in the four tabs, launched twice each (#995).
+    @MainActor func testAnAgentsComposerIsInTheTree() throws {
+        let pair = try pairURL()
+        for layout in ["NO", "YES"] {
+            for round in 1...2 {
+                let what = (layout == "NO" ? "agent, shell" : "agent, four tabs") + " #\(round)"
+                app = XCUIApplication()
+                app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", layout, "-openSession", widget]
+                app.launchPinned()
+                expectComposer(what)
+                app.terminate()
+            }
+        }
+    }
+
+    /// Jarvis's main conversation in the four tabs, where its composer is in an island too (#1006; in the shell 助手
+    /// has a composer of its own).
+    @MainActor func testTheAssistantsComposerIsInTheTreeInTheFourTabs() throws {
+        let pair = try pairURL()
+        for round in 1...2 {
+            app = XCUIApplication()
+            app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "YES", "-app.tab", "assistant", "-tab", "assistant",
+                                   "-openAssistant", main]
+            app.launchPinned()
+            expectComposer("Jarvis, four tabs #\(round)")
+            app.terminate()
+        }
+    }
+}

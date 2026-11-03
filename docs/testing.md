@@ -498,7 +498,7 @@ mock 加 `MOCK_LONG_ASSISTANT=1`（主对话是 60 轮：每轮几个工具、�
 侧边栏关着时不读 `assistantConversations`（它读所有机器的所有会话）；顶栏的状态圆点拆成单独的视图（顶栏和它的菜单不再跟着推送重建）；
 流式回复按块切开（`StreamChunks`），写完的块不再重新解析排版，间距按主题的 margin 补；已经停在最新端时流式的「跟到最新」不再写 `ScrollPosition`。
 打字：每个字都让整页从根重新排版一次（输入框和列表在同一个 VStack 里，懒加载列表会重新量可见行）。现在输入框在自己的
-hosting controller 里排版（旧布局、BeautifulUI 以外的风格使用 `LayoutIsland`，`DesignSystem/LayoutIsland.swift`；BeautifulUI 的输入框菜单挂在输入框外面，放进去就点不到），页面只在它的高度变了（折行、上面多一个提示）时才重新排；
+hosting controller 里排版（旧布局、BeautifulUI 以外的风格使用 `LayoutIsland`，`DesignSystem/LayoutIsland.swift`；BeautifulUI 的输入框菜单挂在输入框外面，放进去就点不到；页面的环境按值传进去，整份覆盖会让里面的控件不在无障碍树里，`ComposerAccessibilityTests`），页面只在它的高度变了（折行、上面多一个提示）时才重新排；
 新外壳的输入框保留原来的视图树：它从单行切成带按键栏的卡片，放进独立 hosting controller 后长文字会让无障碍快照卡死，不能套用旧布局的优化。
 `ComposerGrowTests` 查多行时它会长高、一直在键盘上面、删回一行会缩回去（新外壳和旧布局各一遍）。
 

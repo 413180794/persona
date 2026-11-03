@@ -105,6 +105,12 @@
   新外壳的 `ShellComposerBar` 从一行展开成卡片，不用这个隔离：长文字下反复请求 UI 快照超时（新模拟器也复现），保留原视图树，只在旧布局启用。
   画到自己边界外面的内容不能放进 island：hosting controller 的视图只接边界里的点击，溢出去的部分看得见、点不到，点击落到下面的页面上。
   BeautifulUI 风格的输入框（`PromptBar`）的 `/`、`@`、+、模型菜单就挂在输入框上方，放进去后全都点不了（2026-11-02，`BeautifulStyleTests.testCommandMenuTakesTaps`），所以这个风格也不用 island。
+  往自己的 hosting controller 里传环境别用 `.environment(\.self, context.environment)` 整份覆盖（2026-11-04，#995、#1006）：整份里还带着外面那个 hosting controller 自己的项
+  （渲染到哪个根视图 `RenderingRootViewKey`、当前的 hosting controller、工具栏上下文），island 自己的被盖掉。在对话页里（导航栈的 hosting controller 下面）
+  island 里的东西整个不在无障碍树里：输入框、+、发送都是一个没有子元素的 `Other`，VoiceOver 和 UI 测试都够不到（每次启动都这样，`ComposerAccessibilityTests`）。
+  现在按值传（`IslandEnvironment`：AppModel、shell、shellChat、buiTheme、字号、配色、语言、方向、tint），island 里的视图要读页面设的别的值就加进去。
+  侧栏（`DrawerSidebarHost`）也是整份传，但它在根上，树里正常。查法：两边各把 `String(describing: env)` 写到文件，比 key 和值（只有宿主相关的几项不同）；
+  试过不行的：把 hosting controller 放进一个容器控制器、去掉 `EquatableView`、去掉量高度的 `fixedSize` / `frame`、在根上加 `.accessibilityElement(children: .contain)`。
 - 输入框「只显示最后一行」先量截图里卡片的高度（2026-11-03，#909）：真机上换行后卡片已经是两行高，字只有一行、下面空一行，
   是 TextField 底下的文本视图（SwiftUI 的 `VerticalTextView`，一个 `UITextView`）还停在往下滚了一行的位置，不是没长高。
   模拟器上系统键盘、拼音的 marked text、自己写的第三方键盘扩展都复现不了；`ShellComposerBar` 在高度变化后把有焦点的文本视图

@@ -307,5 +307,5 @@
   按 label「添加」找会先匹配到被选择器盖住的 App 自己的「+」（它的 label 也是「添加」），点下去什么也没选上，测试只看到「附件没出现」。
   横幅「Private Access to Photos」上还有一个 `Close`，别和播放器的关闭键混了。
 - 系统播放器（AVPlayerViewController）左上角的关闭键 label 是 `Close`，等它出现就说明播放器开了。
-- 经典布局 + 液态玻璃的对话输入框套着 `layoutIsland`，里面的「+」「发送」不在无障碍树里（#995，master 上 `FileUploadTests/testMenuHasFiles` 也因此失败）：
-  测试先找 `layout-island`，按位置点它的左右两端。
+- 经典布局 + 液态玻璃的对话输入框套着 `layoutIsland`，里面的「+」「发送」曾经不在无障碍树里，测试只能按位置点（#995，已修，见 `lessons/ios.md`）：
+  现在按 label 找就行，别再给 island 加 identifier 去按位置点。

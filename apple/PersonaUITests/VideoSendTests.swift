@@ -62,13 +62,8 @@ final class VideoSendTests: XCTestCase {
         XCTAssertEqual(try sent(hub).count, sentBefore, "nothing is sent before 发送")
 
         let send = app.buttons.matching(NSPredicate(format: "label IN %@", ["发送", "Send"])).firstMatch
-        let island = app.otherElements["layout-island"].firstMatch
-        if send.waitForExistence(timeout: 5) {
-            send.tapCenter()
-        } else { // the classic composer (#995): send is its right end
-            XCTAssertTrue(island.exists, "no send button:\n\(app.debugDescription)")
-            island.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -26, dy: 0)).tap()
-        }
+        XCTAssertTrue(send.waitForExistence(timeout: 5), "no send button:\n\(app.debugDescription)")
+        send.tapCenter()
         let deadline = Date.now.addingTimeInterval(15)
         while Date.now < deadline, try sent(hub).count == sentBefore { usleep(100_000) }
         let text = try sent(hub).last ?? ""
@@ -89,16 +84,8 @@ final class VideoSendTests: XCTestCase {
     /// + › 照片, the made-up video, 添加.
     @MainActor private func pickTheVideo(_ app: XCUIApplication) throws {
         let plus = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label IN %@", "shell-composer-add", ["添加", "Add"])).firstMatch
-        let island = app.otherElements["layout-island"].firstMatch
-        let deadline = Date.now.addingTimeInterval(30)
-        while Date.now < deadline, !plus.exists, !island.exists { usleep(200_000) }
-        if plus.exists {
-            plus.tap()
-        } else {
-            // The classic composer's own layout island keeps its controls out of the tree (#995): + is its left end.
-            XCTAssertTrue(island.exists, "no + button:\n\(app.debugDescription)")
-            island.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 26, dy: 0)).tap()
-        }
+        XCTAssertTrue(plus.waitForExistence(timeout: 30), "no + button:\n\(app.debugDescription)")
+        plus.tap()
         let photos = app.buttons["照片"].firstMatch
         XCTAssertTrue(photos.waitForExistence(timeout: 5), "no 照片 item:\n\(app.debugDescription)")
         photos.tap()
