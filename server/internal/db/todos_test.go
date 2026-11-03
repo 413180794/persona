@@ -169,14 +169,16 @@ func TestTodos(t *testing.T) {
 		}
 	}
 
-	// UnlinkTodoAgent
+	// UnlinkTodoAgent marks dismissed_at and released_at (soft unlink #762)
 	if err := d.UnlinkTodoAgent(ctx, "t1", "macbook", "s1"); err != nil {
 		t.Fatalf("UnlinkTodoAgent: %v", err)
 	}
 	agents, _ = d.ListAllTodoAgents(ctx)
 	for _, a := range agents {
 		if a.TodoID == "t1" && a.SessionID == "s1" {
-			t.Fatalf("expected t1 s1 to be unlinked")
+			if a.DismissedAt == nil || a.ReleasedAt == nil {
+				t.Fatalf("expected t1 s1 to have dismissed_at and released_at set, got %+v", a)
+			}
 		}
 	}
 
@@ -193,5 +195,67 @@ func TestTodos(t *testing.T) {
 		if a.TodoID == "t1" {
 			t.Fatalf("expected links for t1 to be deleted via cascade")
 		}
+	}
+}
+
+func TestTodoSpaces(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	now := time.Now().Truncate(time.Millisecond)
+
+	_ = d.CreateTodo(ctx, TodoRow{ID: "td1", Title: "Todo 1", CreatedAt: now, UpdatedAt: now})
+	_ = d.CreateTodo(ctx, TodoRow{ID: "td2", Title: "Todo 2", CreatedAt: now, UpdatedAt: now})
+
+	// 1. Link td1 to space "proj1"
+	oldID, err := d.LinkTodoSpace(ctx, "td1", "macbook", "proj1", now)
+	if err != nil {
+		t.Fatalf("LinkTodoSpace: %v", err)
+	}
+	if oldID != "" {
+		t.Fatalf("expected empty oldID, got %q", oldID)
+	}
+	spaces, err := d.ListAllTodoSpaces(ctx)
+	if err != nil || len(spaces) != 1 || spaces[0].TodoID != "td1" || spaces[0].Space != "proj1" {
+		t.Fatalf("unexpected spaces: %+v, err: %v", spaces, err)
+	}
+
+	// Add space agent to td1 and manual agent to td1
+	_, _ = d.LinkTodoAgentWithSource(ctx, "td1", "macbook", "s_space", "S1", "/cwd", "claude", "", "space", "macbook/proj1", now)
+	_, _ = d.LinkTodoAgentWithSource(ctx, "td1", "macbook", "s_manual", "S2", "/cwd", "claude", "", "manual", "", now)
+
+	// 2. Transfer "proj1" to td2
+	oldID, err = d.LinkTodoSpace(ctx, "td2", "macbook", "proj1", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("LinkTodoSpace transfer: %v", err)
+	}
+	if oldID != "td1" {
+		t.Fatalf("expected oldID td1, got %q", oldID)
+	}
+	// td1's space agent should be deleted, manual agent remains
+	agents, _ := d.ListAllTodoAgents(ctx)
+	for _, a := range agents {
+		if a.TodoID == "td1" && a.SessionID == "s_space" {
+			t.Fatalf("expected td1 s_space to be deleted on transfer")
+		}
+		if a.TodoID == "td1" && a.SessionID == "s_manual" {
+			// OK
+		}
+	}
+
+	// 3. Rename space via hub
+	if err := d.RenameTodoSpace(ctx, "macbook", "proj1", "proj_renamed"); err != nil {
+		t.Fatalf("RenameTodoSpace: %v", err)
+	}
+	spaces, _ = d.ListAllTodoSpaces(ctx)
+	if len(spaces) != 1 || spaces[0].Space != "proj_renamed" {
+		t.Fatalf("expected renamed space, got %+v", spaces)
+	}
+
+	// 4. Unlink space
+	if err := d.UnlinkTodoSpace(ctx, "td2", "macbook", "proj_renamed"); err != nil {
+		t.Fatalf("UnlinkTodoSpace: %v", err)
+	}
+	spaces, _ = d.ListAllTodoSpaces(ctx)
+	if len(spaces) != 0 {
+		t.Fatalf("expected 0 spaces, got %+v", spaces)
 	}
 }

@@ -404,6 +404,7 @@ func (m *Machine) detach(err error, planned bool) {
 	m.mu.Lock()
 	m.peer, m.streams = nil, nil
 	m.active, m.transport = nil, ""
+	m.lastTodoTokens = nil
 	if !planned {
 		m.online = false
 		m.via, m.path = "", ""
@@ -434,6 +435,7 @@ func (m *Machine) markOffline(err error) {
 	m.mu.Lock()
 	was := m.online
 	m.online = false
+	m.lastTodoTokens = nil
 	if err != nil {
 		m.err = err.Error()
 	}

@@ -429,6 +429,7 @@ func (s *meshStore) ConnectorSecret(context.Context, string) (string, bool, erro
 func (s *meshStore) PutConnectorSecret(context.Context, string, string) error     { return nil }
 func (s *meshStore) DeleteConnectorSecret(context.Context, string) error          { return nil }
 func (s *meshStore) ListTodos(context.Context) ([]db.TodoRow, error)              { return nil, nil }
+func (s *meshStore) ListAllTodoSpaces(context.Context) ([]db.TodoSpaceRow, error) { return nil, nil }
 func (s *meshStore) ListAllTodoAgents(context.Context) ([]db.TodoAgentRow, error) { return nil, nil }
 func (s *meshStore) GetTodo(context.Context, string) (*db.TodoRow, error)         { return nil, nil }
 func (s *meshStore) CreateTodo(context.Context, db.TodoRow) error                 { return nil }
@@ -436,7 +437,15 @@ func (s *meshStore) UpdateTodo(context.Context, string, *string, *string, *bool,
 	return nil, nil
 }
 func (s *meshStore) DeleteTodo(context.Context, string) error { return nil }
+func (s *meshStore) LinkTodoSpace(context.Context, string, string, string, time.Time) (string, error) {
+	return "", nil
+}
+func (s *meshStore) UnlinkTodoSpace(context.Context, string, string, string) error { return nil }
+func (s *meshStore) RenameTodoSpace(context.Context, string, string, string) error { return nil }
 func (s *meshStore) LinkTodoAgent(context.Context, string, string, string, string, string, string, string, time.Time) ([]string, error) {
+	return nil, nil
+}
+func (s *meshStore) LinkTodoAgentWithSource(context.Context, string, string, string, string, string, string, string, string, string, time.Time) ([]string, error) {
 	return nil, nil
 }
 func (s *meshStore) UnlinkTodoAgent(context.Context, string, string, string) error { return nil }

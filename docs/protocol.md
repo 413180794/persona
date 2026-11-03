@@ -302,8 +302,9 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 // Todo：待办事项（docs/todos.md）
 {"id":"todo_…","title":"天气 App 发 1.3 版","notes":"说明","done_at":null,
  "created_at":"...","updated_at":"...",
+ "spaces":[{"machine_id":"…","space":"group/alpha","linked_at":"..."}],
  "agents":[{"machine_id":"…","session_id":"…","linked_at":"...","released_at":null,
-           "title":"…","cwd":"…","agent":"claude","start_error":""}]}
+           "title":"…","cwd":"…","agent":"claude","start_error":"","source":"manual|space|spawned","via":""}]}
 
 // Item：transcript 规范化后的一条（一个内容块一条）
 {"id":"<entry uuid>#<block idx>","seq":123,            // seq = transcript 行号，单调递增，用于增量和分页
@@ -388,12 +389,14 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
 | PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
 | GET | `/api/v1/machines/{mid}/launchers` | `{"launchers":[Launcher]}` |
-| GET | `/api/v1/todos` | 全部待办（新建的在前）：`{"todos":[Todo]}`，每个待办带 `agents`（当前的在前按 `linked_at` 降序，然后是参与过的按 `released_at` 降序） |
+| GET | `/api/v1/todos` | 全部待办（新建的在前）：`{"todos":[Todo]}`，每个待办带 `spaces` 和 `agents`（过滤 dismissed，当前的在前按 `linked_at` 降序，然后是参与过的按 `released_at` 降序） |
 | POST | `/api/v1/todos` | 新建待办 `{"title","notes"?}` → 200 `{"todo":Todo}`；`title` 不能为空（400）；只读设备 403 |
 | PATCH | `/api/v1/todos/{id}` | 修改待办 `{"title"?,"notes"?,"done"?}` → 200 `{"todo":Todo}`；`done: true` 标记完成，`false` 重新打开；不存在 404；只读设备 403 |
 | DELETE | `/api/v1/todos/{id}` | 删除待办及关联（Agent 本身不动） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
-| PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 关联已有 Agent → 200 `{"ok":true}`；同一 Agent 原挂在别处标 released，已完成 409，不存在 404，只读设备 403 |
-| DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 解除关联（删掉这一行） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
+| PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 整组挂工作区项目到待办 → 200 `{"ok":true,"linked":N}`；`space` 为 URL 编码的项目名（通配接住）；已完成 409，不存在 404，只读设备 403 |
+| DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → 200 `{"ok":true}`；不存在 404，只读设备 403 |
+| PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 关联已有 Agent → 200 `{"ok":true}`；同一 Agent 原挂在别处标 released，清掉 dismissed，已完成 409，不存在 404，只读设备 403 |
+| DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 移出 Agent（软移出：置 `released_at` 和 `dismissed_at`，接口不再返回该行且不再自动挂回） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
 | POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","agent_type"?,"prompt"?,"resume_session_id"?,"workspace_id"?,"permission_mode"?,"effort"?,"tab_name"?,"async"?,"name_hint"?,"todo_id"?}` → `{"session":Session}`。可选 `X-Jarvis-Op-Id` 接入 `start` 持久回执。`todo_id` 可选：新建成功后在同一请求内挂上（不存在 404、已完成 409、只读设备 403）。`tab_name` 是 herdr 标签页的名字；不给时 hub 用小任务模型按 `prompt` 起一个短英文名（`hub/tabname.go`，约 2 秒，失败就不起），node 再兜底成 `agent-<n>`，同一空间里重名加 `-2`、`-3`（`node.tabLabel`）。新建空间时它的第一个标签页也用这个名字。助手的 `agent_start` 同样自动起名。`"async": true`（App 都带）：立刻回会话（新会话 id、目录、启动器，`starting: true`），开标签页、等 Claude 就绪在后台做，见下面「新建会话」；这时 hub 不等起名，标签页先叫 `agent-<n>`，名字出来后再 `session.rename`。`name_hint`：App 把第一条消息当普通消息发（马上上屏）时，用它起名、不进 `prompt` |

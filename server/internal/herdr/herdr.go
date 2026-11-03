@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -257,7 +258,8 @@ type Agent struct {
 	WorkspaceID   string        `json:"workspace_id"`
 	Title         string        `json:"terminal_title_stripped"`
 	// RawTitle keeps what the stripped title drops, e.g. the spinner a busy TUI puts in front ("⠸ fix the build").
-	RawTitle string `json:"terminal_title"`
+	RawTitle string            `json:"terminal_title"`
+	Tokens   map[string]string `json:"tokens,omitempty"`
 }
 
 // PaneProcesses returns the pids of a pane's foreground processes, claude first.
@@ -563,4 +565,28 @@ func (c *Client) Subscribe(ctx context.Context, subs []Subscription, fn func(Eve
 			fn(ev.Event)
 		}
 	}
+}
+
+// PaneReportMetadata reports metadata tokens for a pane (e.g. todo tokens).
+// tokens contains keys to set (value != nil) and keys to clear (value == nil).
+func (c *Client) PaneReportMetadata(ctx context.Context, paneID, source string, tokens map[string]*string) error {
+	params := map[string]any{
+		"pane_id": paneID,
+		"source":  source,
+		"tokens":  tokens,
+	}
+	cliArgs := []string{"pane", "report-metadata", paneID, "--source", source}
+	keys := make([]string, 0, len(tokens))
+	for k := range tokens {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if v := tokens[k]; v != nil {
+			cliArgs = append(cliArgs, "--token", fmt.Sprintf("%s=%s", k, *v))
+		} else {
+			cliArgs = append(cliArgs, "--clear-token", k)
+		}
+	}
+	return c.call(ctx, "pane.report_metadata", params, nil, cliArgs...)
 }

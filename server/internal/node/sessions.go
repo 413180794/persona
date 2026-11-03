@@ -838,6 +838,9 @@ func (n *Node) placeIn(s *proto.Session, a host.Agent) {
 	if tok {
 		s.SlotName, s.SlotIndex = t.Label, t.Number
 	}
+	if a.Tokens != nil && a.Tokens["persona_from"] != "" {
+		s.SpawnFrom = a.Tokens["persona_from"]
+	}
 }
 
 // setAgents maps live claude agents to session ids: the host's own report when it knows (herdr's claude integration),

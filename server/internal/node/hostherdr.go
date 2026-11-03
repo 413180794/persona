@@ -96,6 +96,10 @@ func (h *herdrHost) PaneProcesses(ctx context.Context, pane host.PaneRef) ([]int
 	return h.c.PaneProcesses(ctx, pane.ID)
 }
 
+func (h *herdrHost) ReportMetadata(ctx context.Context, pane host.PaneRef, source string, tokens map[string]*string) error {
+	return h.c.PaneReportMetadata(ctx, pane.ID, source, tokens)
+}
+
 // Watch is one events.subscribe: the lifecycle events plus agent status for each pane (herdr only sends those per
 // pane). A status change into or out of blocked is urgent.
 func (h *herdrHost) Watch(ctx context.Context, panes []host.PaneRef, changed func(urgent bool)) error {
@@ -257,7 +261,7 @@ func fromHerdrAgents(agents []herdr.Agent) []host.Agent {
 // fromHerdrAgent: herdr's pane ids are herdr PaneRefs as they are (no prefix).
 func fromHerdrAgent(a herdr.Agent) host.Agent {
 	out := host.Agent{Agent: a.Agent, Name: a.Name, AgentStatus: a.AgentStatus, Cwd: a.Cwd, ForegroundCwd: a.ForegroundCwd,
-		PaneID: a.PaneID, TabID: a.TabID, WorkspaceID: a.WorkspaceID, Title: a.Title, RawTitle: a.RawTitle}
+		PaneID: a.PaneID, TabID: a.TabID, WorkspaceID: a.WorkspaceID, Title: a.Title, RawTitle: a.RawTitle, Tokens: a.Tokens}
 	if a.AgentSession != nil {
 		out.AgentSession = &host.AgentSession{Kind: a.AgentSession.Kind, Value: a.AgentSession.Value}
 	}

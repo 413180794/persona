@@ -456,6 +456,8 @@ type Session struct {
 	StartError string `json:"start_error,omitempty"`
 	// Todo is the active (uncompleted, unreleased) todo this session is linked to (hub/todos.go).
 	Todo *TodoRef `json:"todo,omitempty"`
+	// SpawnFrom is persona_from reported by node for todo derivation (#762), stripped by hub before client push.
+	SpawnFrom string `json:"spawn_from,omitempty"`
 }
 
 // TodoRef is a session's link to an active todo (docs/todos.md).

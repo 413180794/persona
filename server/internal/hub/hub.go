@@ -199,12 +199,17 @@ type Store interface {
 	PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error
 	InboxItems(ctx context.Context, doneSince time.Time) ([][]byte, error)
 	ListTodos(ctx context.Context) ([]db.TodoRow, error)
+	ListAllTodoSpaces(ctx context.Context) ([]db.TodoSpaceRow, error)
 	ListAllTodoAgents(ctx context.Context) ([]db.TodoAgentRow, error)
 	GetTodo(ctx context.Context, id string) (*db.TodoRow, error)
 	CreateTodo(ctx context.Context, t db.TodoRow) error
 	UpdateTodo(ctx context.Context, id string, title *string, notes *string, done *bool, updatedAt time.Time) (*db.TodoRow, error)
 	DeleteTodo(ctx context.Context, id string) error
+	LinkTodoSpace(ctx context.Context, todoID, machineID, space string, linkedAt time.Time) (string, error)
+	UnlinkTodoSpace(ctx context.Context, todoID, machineID, space string) error
+	RenameTodoSpace(ctx context.Context, machineID, oldSpace, newSpace string) error
 	LinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError string, linkedAt time.Time) ([]string, error)
+	LinkTodoAgentWithSource(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) ([]string, error)
 	UnlinkTodoAgent(ctx context.Context, todoID, machineID, sessionID string) error
 	UpdateTodoAgentSnapshot(ctx context.Context, machineID, sessionID, title, startError string) error
 }
@@ -414,11 +419,16 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		}
 	}
 	h.todos.mu.RUnlock()
+	for i := range list {
+		list[i].SpawnFrom = "" // stripped before push to client (#762)
+	}
 	h.markStates(m.cfg.ID, list, time.Now())
 	return list
 }
 
 func (h *Hub) sessionsChanged(m *Machine) {
+	h.autoLinkTodos(m)
+	h.syncTodoTokensToNode(m)
 	list := h.decorated(m)
 	h.checkAndUpdateTodoSnapshots(m, list)
 	h.broadcastSessions(m, list)

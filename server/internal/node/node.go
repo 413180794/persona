@@ -90,6 +90,10 @@ type Node struct {
 	// codexStarting: panes a Codex start is opening (codex_start.go): no thread is guessed for them meanwhile.
 	codexStarting map[string]bool
 
+	expectedTokensMu sync.Mutex
+	expectedTokens   map[string]map[string]string
+	expectedSynced   bool
+
 	// ctxSent: assistant conversation → the snapshot sections it has seen; ctxTools: the tools its process last
 	// started with (assistant_context.go).
 	ctxSent  map[string]map[string]string
@@ -216,6 +220,7 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	go n.meterUsage(ctx)
 	go n.sampleMetrics(ctx)
 	go n.watchPorts(ctx)
+	n.startTodoTokensReconciler(ctx)
 	return n.peer.Serve(ctx, r)
 }
 
@@ -718,6 +723,14 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return ok(n.renameSpace(ctx, p.WorkspaceID, p.Name))
 	case "session.rename":
 		return ok(n.renameSession(ctx, p.SessionID, p.TabName, p.Title))
+	case "todo.sync_tokens":
+		var in struct {
+			Tokens map[string]map[string]string `json:"tokens"`
+		}
+		if err := json.Unmarshal(params, &in); err != nil {
+			return nil, err
+		}
+		return ok(n.syncTodoTokens(ctx, in.Tokens))
 	case "fs.list":
 		return n.listDir(p.Path, p.Cwd)
 	case "git.status":

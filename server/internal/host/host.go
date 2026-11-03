@@ -120,6 +120,11 @@ type Controller interface {
 	Control(ctx context.Context, pane PaneRef, cols, rows int, takeover bool, fn func(Frame)) (Control, error)
 }
 
+// MetadataReporter reports and clears pane metadata tokens (docs/todos.md, #762).
+type MetadataReporter interface {
+	ReportMetadata(ctx context.Context, pane PaneRef, source string, tokens map[string]*string) error
+}
+
 // Control is a terminal being driven (Controller.Control).
 type Control interface {
 	Input(text string) error
@@ -212,6 +217,8 @@ type Agent struct {
 	// Title is the terminal title without escapes; RawTitle as set (with the spinner a busy TUI puts in front).
 	Title    string
 	RawTitle string
+	// Tokens are metadata tokens reported by herdr (#762).
+	Tokens map[string]string
 }
 
 // SessionID is the session id the host reported, "" when none. A reported file names its session: pi's are

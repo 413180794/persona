@@ -148,6 +148,14 @@ func (h *Hub) renameSpace(w http.ResponseWriter, r *http.Request, m *Machine) {
 		callErr(w, err)
 		return
 	}
+	if old != "" && old != name {
+		h.renameTodoSpaceInMemory(m.cfg.ID, old, name)
+		if h.store != nil {
+			if err := h.store.RenameTodoSpace(ctx, m.cfg.ID, old, name); err != nil {
+				h.logf("rename space: migrate todo spaces in db from %s/%s to %s failed: %v", m.cfg.ID, old, name, err)
+			}
+		}
+	}
 	if old != "" && old != name && h.store != nil {
 		from, to := m.cfg.ID+"/"+old, m.cfg.ID+"/"+name
 		for _, key := range []string{"pins", "mutes"} {

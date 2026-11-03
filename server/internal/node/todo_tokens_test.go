@@ -1,0 +1,275 @@
+package node
+
+import (
+	"context"
+	"sync"
+	"testing"
+
+	"github.com/nwverse/persona/server/internal/host"
+)
+
+type fakeMetadataHost struct {
+	mu          sync.Mutex
+	agents      []host.Agent
+	reportCalls []map[string]any
+}
+
+func (f *fakeMetadataHost) Kind() string                       { return host.Herdr }
+func (f *fakeMetadataHost) Version(ctx context.Context) string { return "0.9.5" }
+func (f *fakeMetadataHost) Snapshot(ctx context.Context) (*host.Layout, error) {
+	return &host.Layout{}, nil
+}
+func (f *fakeMetadataHost) Agents(ctx context.Context) ([]host.Agent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	res := make([]host.Agent, len(f.agents))
+	for i, a := range f.agents {
+		res[i] = a
+		if a.Tokens != nil {
+			res[i].Tokens = make(map[string]string, len(a.Tokens))
+			for k, v := range a.Tokens {
+				res[i].Tokens[k] = v
+			}
+		}
+	}
+	return res, nil
+}
+func (f *fakeMetadataHost) Agent(ctx context.Context, pane host.PaneRef) (*host.Agent, error) {
+	return nil, nil
+}
+func (f *fakeMetadataHost) Read(ctx context.Context, pane host.PaneRef, opts host.ReadOpts) (string, error) {
+	return "", nil
+}
+func (f *fakeMetadataHost) SendText(ctx context.Context, pane host.PaneRef, text string) error {
+	return nil
+}
+func (f *fakeMetadataHost) SendKeys(ctx context.Context, pane host.PaneRef, keys ...string) error {
+	return nil
+}
+func (f *fakeMetadataHost) Prompt(ctx context.Context, pane host.PaneRef, text string) error {
+	return nil
+}
+func (f *fakeMetadataHost) PaneProcesses(ctx context.Context, pane host.PaneRef) ([]int, error) {
+	return nil, nil
+}
+func (f *fakeMetadataHost) PaneEnv() string { return "HERDR_PANE_ID" }
+
+func (f *fakeMetadataHost) ReportMetadata(ctx context.Context, pane host.PaneRef, source string, tokens map[string]*string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reportCalls = append(f.reportCalls, map[string]any{
+		"pane":   pane.ID,
+		"source": source,
+		"tokens": tokens,
+	})
+	for i := range f.agents {
+		if f.agents[i].PaneID == pane.ID {
+			if f.agents[i].Tokens == nil {
+				f.agents[i].Tokens = make(map[string]string)
+			}
+			for k, v := range tokens {
+				if v != nil {
+					f.agents[i].Tokens[k] = *v
+				} else {
+					delete(f.agents[i].Tokens, k)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func TestNodeTodoTokensReconciliation(t *testing.T) {
+	fh := &fakeMetadataHost{
+		agents: []host.Agent{
+			{
+				PaneID: "w1:p1",
+				Tokens: map[string]string{
+					"role":         "leader",
+					"persona_todo": "旧待办",
+				},
+			},
+			{
+				PaneID: "w1:p2",
+				Tokens: map[string]string{
+					"role":         "worker",
+					"persona_from": "todo_1@m1/s1",
+				},
+			},
+			{
+				PaneID: "w1:p3",
+				Tokens: map[string]string{
+					"persona_from": "todo_1@m1/s1", // child not yet linked
+				},
+			},
+		},
+	}
+
+	n := &Node{
+		hosts: host.NewRegistry(fh),
+	}
+
+	ctx := context.Background()
+
+	// 1. Sync expected tokens:
+	// w1:p1 expected: new title, todo_ref
+	// w1:p2 expected: todo_ref and todo title (active link, should consume persona_from)
+	// w1:p3 expected: none yet (persona_from should NOT be cleared yet)
+	expected := map[string]map[string]string{
+		"w1:p1": {
+			"persona_todo":     "新待办",
+			"persona_todo_ref": "todo_1@m1/s1",
+		},
+		"w1:p2": {
+			"persona_todo":     "新待办",
+			"persona_todo_ref": "todo_1@m1/s2",
+		},
+	}
+
+	if err := n.syncTodoTokens(ctx, expected); err != nil {
+		t.Fatalf("syncTodoTokens: %v", err)
+	}
+
+	agents, _ := fh.Agents(ctx)
+	agentMap := make(map[string]map[string]string)
+	for _, a := range agents {
+		agentMap[a.PaneID] = a.Tokens
+	}
+
+	// Case 1: 缺的补上、多的清掉 (w1:p1 persona_todo updated, persona_todo_ref added)
+	p1Tokens := agentMap["w1:p1"]
+	if p1Tokens["persona_todo"] != "新待办" || p1Tokens["persona_todo_ref"] != "todo_1@m1/s1" {
+		t.Fatalf("w1:p1 tokens mismatch: %+v", p1Tokens)
+	}
+	// Case 2: 不碰别的标记 ("role" still "leader")
+	if p1Tokens["role"] != "leader" {
+		t.Fatalf("w1:p1 other token 'role' was modified: %+v", p1Tokens)
+	}
+
+	// Case 3: 消费 persona_from (w1:p2 has active link, persona_from cleared)
+	p2Tokens := agentMap["w1:p2"]
+	if _, ok := p2Tokens["persona_from"]; ok {
+		t.Fatalf("w1:p2 expected persona_from to be consumed and cleared, got: %+v", p2Tokens)
+	}
+	if p2Tokens["persona_todo"] != "新待办" || p2Tokens["persona_todo_ref"] != "todo_1@m1/s2" {
+		t.Fatalf("w1:p2 tokens mismatch: %+v", p2Tokens)
+	}
+
+	// w1:p3 has no active link yet, persona_from preserved
+	p3Tokens := agentMap["w1:p3"]
+	if p3Tokens["persona_from"] != "todo_1@m1/s1" {
+		t.Fatalf("w1:p3 expected persona_from preserved, got: %+v", p3Tokens)
+	}
+
+	// Case 4: herdr 重启、标记清空后能补回来
+	fh.mu.Lock()
+	for i := range fh.agents {
+		// Simulating herdr restart: all custom tokens wiped, only base host tokens (role) remain
+		cleanTokens := make(map[string]string)
+		if r, ok := fh.agents[i].Tokens["role"]; ok {
+			cleanTokens["role"] = r
+		}
+		fh.agents[i].Tokens = cleanTokens
+	}
+	fh.mu.Unlock()
+
+	// Reconcile again (as background timer would do)
+	if err := n.reconcileTodoTokens(ctx); err != nil {
+		t.Fatalf("reconcileTodoTokens after restart: %v", err)
+	}
+
+	agents, _ = fh.Agents(ctx)
+	agentMap = make(map[string]map[string]string)
+	for _, a := range agents {
+		agentMap[a.PaneID] = a.Tokens
+	}
+
+	p1Recovered := agentMap["w1:p1"]
+	if p1Recovered["persona_todo"] != "新待办" || p1Recovered["persona_todo_ref"] != "todo_1@m1/s1" {
+		t.Fatalf("w1:p1 failed to recover tokens after restart: %+v", p1Recovered)
+	}
+	p2Recovered := agentMap["w1:p2"]
+	if p2Recovered["persona_todo"] != "新待办" || p2Recovered["persona_todo_ref"] != "todo_1@m1/s2" {
+		t.Fatalf("w1:p2 failed to recover tokens after restart: %+v", p2Recovered)
+	}
+}
+
+func TestNodeReconcileDoesNotClearTokensBeforeFirstSync(t *testing.T) {
+	fh := &fakeMetadataHost{
+		agents: []host.Agent{
+			{
+				PaneID: "w1:p1",
+				Tokens: map[string]string{
+					"persona_todo":     "待办保留测试",
+					"persona_todo_ref": "todo_1@m1/s1",
+					"role":             "worker",
+				},
+			},
+		},
+	}
+
+	n := &Node{
+		hosts: host.NewRegistry(fh),
+	}
+
+	ctx := context.Background()
+
+	// 1. Before any syncTodoTokens call, reconcile should be read-only and NOT clear tokens
+	if err := n.reconcileTodoTokens(ctx); err != nil {
+		t.Fatalf("reconcileTodoTokens before sync: %v", err)
+	}
+
+	agents, _ := fh.Agents(ctx)
+	if len(agents) != 1 || agents[0].Tokens["persona_todo"] != "待办保留测试" {
+		t.Fatalf("expected tokens untouched before first sync, got: %+v", agents[0].Tokens)
+	}
+
+	// 2. Once syncTodoTokens is called (even with empty map), it should now clear obsolete tokens
+	if err := n.syncTodoTokens(ctx, map[string]map[string]string{}); err != nil {
+		t.Fatalf("syncTodoTokens empty: %v", err)
+	}
+
+	agents, _ = fh.Agents(ctx)
+	if _, ok := agents[0].Tokens["persona_todo"]; ok {
+		t.Fatalf("expected persona_todo to be cleared after empty sync, got: %+v", agents[0].Tokens)
+	}
+	if agents[0].Tokens["role"] != "worker" {
+		t.Fatalf("role token modified: %+v", agents[0].Tokens)
+	}
+}
+
+func TestNodeReconcileSkipsNonHerdrPanes(t *testing.T) {
+	fh := &fakeMetadataHost{
+		agents: []host.Agent{
+			{PaneID: "w1:p1", Tokens: map[string]string{}},
+		},
+	}
+	n := &Node{
+		hosts: host.NewRegistry(fh),
+	}
+	ctx := context.Background()
+
+	// Expected contains an orca pane and a herdr pane
+	expected := map[string]map[string]string{
+		"orca:t1:p1": {
+			"persona_todo":     "Orca 待办",
+			"persona_todo_ref": "todo_1@m1/s_orca",
+		},
+		"w1:p1": {
+			"persona_todo":     "Herdr 待办",
+			"persona_todo_ref": "todo_1@m1/s_herdr",
+		},
+	}
+
+	if err := n.syncTodoTokens(ctx, expected); err != nil {
+		t.Fatalf("syncTodoTokens: %v", err)
+	}
+
+	fh.mu.Lock()
+	defer fh.mu.Unlock()
+	for _, call := range fh.reportCalls {
+		if call["pane"] == "orca:t1:p1" || call["pane"] == "t1:p1" {
+			t.Fatalf("herdr reporter should not receive report for orca pane: %+v", call)
+		}
+	}
+}

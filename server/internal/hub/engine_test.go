@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -49,6 +50,14 @@ func (s *settingsStore) PutSetting(_ context.Context, key string, v any) error {
 	s.vals[key] = b
 	s.puts++
 	return nil
+}
+
+func (s *settingsStore) ListTodos(context.Context) ([]db.TodoRow, error) { return nil, nil }
+func (s *settingsStore) ListAllTodoSpaces(context.Context) ([]db.TodoSpaceRow, error) {
+	return nil, nil
+}
+func (s *settingsStore) ListAllTodoAgents(context.Context) ([]db.TodoAgentRow, error) {
+	return nil, nil
 }
 
 // engineNode is a node answering the hub over pipes, recording the methods it was called with.

@@ -79,6 +79,8 @@ type Machine struct {
 	parked    string // why the run loop does not connect now (mesh_paths.go parkReason)
 	// svc: the connector of a computer of kind service (service.go).
 	svc serviceState
+
+	lastTodoTokens map[string]map[string]string
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {
