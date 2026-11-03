@@ -75,8 +75,9 @@ func (c mailConnector) Changes(ctx context.Context, cursor string, _ int) ([]con
 			batches = append(batches, connector.ChatBatch{
 				Chat: kb.SourceChat{ID: a.ID + "-" + addr, Name: name + " · 邮件", Kind: "mail"},
 				Messages: []kb.SourceMessage{{ID: fmt.Sprint(m.UID), SenderID: addr, SenderName: name, At: at, Type: "TEXT",
-					Mine: strings.EqualFold(addr, a.Email),
-					Text: "【" + m.Subject + "】" + clipRunes(strings.TrimSpace(text), 4000)}},
+					SenderHandles: []kb.Handle{{Kind: kb.HandleEmail, Value: addr}},
+					Mine:          strings.EqualFold(addr, a.Email),
+					Text:          "【" + m.Subject + "】" + clipRunes(strings.TrimSpace(text), 4000)}},
 			})
 		}
 		cursors[a.ID] = top

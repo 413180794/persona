@@ -30,6 +30,9 @@ type SourceMessage struct {
 	Text       string
 	At         time.Time
 	Media      []string // source paths of images / files, for Download
+	// SenderHandles are hints of who the sender is (their address, number, login: handles.go), raw and in memory
+	// only: the person keeps them hashed.
+	SenderHandles []Handle
 }
 
 // Source is where chats come from (Feishu through lark-connector).
@@ -56,6 +59,8 @@ type Engine struct {
 	ExtraDirs []string
 	// Index mirrors an entity into the hub's Postgres index (optional).
 	Index func(kind, id, name string, t Tagging, oneLine string, updated time.Time)
+	// HandleKey is the hub's key for the senders' identity hints (handles.go); without it none are kept.
+	HandleKey []byte
 
 	// Limits (zero: defaults).
 	ChatsPerRun  int // how many recently active chats an archive run looks at (100)
@@ -285,6 +290,7 @@ func (e *Engine) notePerson(c *Chat, source string, m SourceMessage) {
 		p.LastSeen = m.At
 	}
 	c.People = addUnique(c.People, pid)
+	e.addHandles(pid, m.SenderHandles)
 	// Only write when something a reader cares about changed (not on every message of a busy group).
 	if !ok || len(p.Chats) != before || p.LastSeen.Sub(seen) > time.Hour {
 		if err := e.Store.PutPerson(p); err == nil {

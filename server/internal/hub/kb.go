@@ -84,6 +84,11 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	}
 	e := &kb.Engine{Store: st, Model: model, ModelFor: func(id string) kb.Model { return h.purposeModel(id) }, Owner: h.ownerName(), Logf: h.logf,
 		TextDays: cfg.TextDays, AttachmentDays: cfg.AttachmentDays}
+	if key, err := handleKey(dir); err != nil {
+		h.logf("kb: identity hints off: %v", err) // never the key
+	} else {
+		e.HandleKey = key
+	}
 	for _, d := range cfg.ExtraDirs {
 		if d = expandHome(strings.TrimSpace(d)); filepath.IsAbs(d) {
 			e.ExtraDirs = append(e.ExtraDirs, d)
@@ -303,7 +308,7 @@ func (s *larkSource) Messages(ctx context.Context, c kb.SourceChat, after string
 			continue
 		}
 		sm := kb.SourceMessage{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName, Mine: m.IsMine,
-			Type: m.Type, Text: m.Text, At: m.CreatedAt}
+			Type: m.Type, Text: m.Text, At: m.CreatedAt, SenderHandles: larkHandles(m.SenderID)}
 		if m.ReplyTo != nil && m.ReplyTo.Text != "" {
 			sm.Text = fmt.Sprintf("（回复 %s：%s）%s", m.ReplyTo.SenderName, clipRunes(m.ReplyTo.Text, 60), sm.Text)
 		}
@@ -815,7 +820,15 @@ func (s *larkSource) Older(ctx context.Context, c kb.SourceChat, before string, 
 			continue
 		}
 		out = append(out, kb.SourceMessage{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
-			Mine: m.IsMine, Type: m.Type, Text: m.Text, At: m.CreatedAt})
+			Mine: m.IsMine, Type: m.Type, Text: m.Text, At: m.CreatedAt, SenderHandles: larkHandles(m.SenderID)})
 	}
 	return out, p.OlderCursor, p.HasOlder, nil
+}
+
+// larkHandles is a Feishu sender's identity hint (kb/handles.go): their user id.
+func larkHandles(senderID string) []kb.Handle {
+	if senderID == "" {
+		return nil
+	}
+	return []kb.Handle{{Kind: kb.HandleLark, Value: senderID}}
 }

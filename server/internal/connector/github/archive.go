@@ -104,7 +104,7 @@ func (c *Connector) threadMessages(ctx context.Context, it issue, after time.Tim
 			text = string(r[:archiveText]) + "…"
 		}
 		out = append(out, kb.SourceMessage{ID: id, SenderID: u.Login, SenderName: who(u), Mine: me != "" && strings.EqualFold(u.Login, me),
-			Type: "TEXT", Text: text, At: at})
+			Type: "TEXT", Text: text, At: at, SenderHandles: []kb.Handle{{Kind: kb.HandleGitHub, Value: u.Login}}})
 	}
 	add("body", it.User, it.CreatedAt, "【"+it.Title+"】\n"+it.Body)
 

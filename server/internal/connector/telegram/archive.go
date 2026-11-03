@@ -132,8 +132,11 @@ func sourceMessages(msgs []message) []kb.SourceMessage {
 				t = "回复一条消息：" + t
 			}
 		}
-		out = append(out, kb.SourceMessage{ID: strconv.Itoa(m.ID), SenderID: m.FromKey, SenderName: m.From, Mine: m.Out,
-			Type: m.Type, Text: t, At: m.At})
+		sm := kb.SourceMessage{ID: strconv.Itoa(m.ID), SenderID: m.FromKey, SenderName: m.From, Mine: m.Out, Type: m.Type, Text: t, At: m.At}
+		if m.FromKey != "" {
+			sm.SenderHandles = []kb.Handle{{Kind: kb.HandleTelegram, Value: m.FromKey}}
+		}
+		out = append(out, sm)
 	}
 	return out
 }

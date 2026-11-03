@@ -82,10 +82,19 @@ func kbBatch(b Batch) connector.ChatBatch {
 		}
 		if m.Sender != nil {
 			sm.SenderID, sm.SenderName = PersonKey(m.Sender.Handle), m.Sender.shown()
+			sm.SenderHandles = []kb.Handle{handleOf(m.Sender.Handle)} // hashed by the knowledge base, never kept as it is
 		}
 		out.Messages = append(out.Messages, sm)
 	}
 	return out
+}
+
+// handleOf is a Messages handle as an identity hint: an Apple ID's address or a number.
+func handleOf(h string) kb.Handle {
+	if strings.Contains(h, "@") {
+		return kb.Handle{Kind: kb.HandleEmail, Value: h}
+	}
+	return kb.Handle{Kind: kb.HandlePhone, Value: h}
 }
 
 // PersonKey is a person's id in the knowledge base: a hash of their number or address, never the number itself.
