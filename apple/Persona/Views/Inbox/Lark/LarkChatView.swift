@@ -108,7 +108,10 @@ struct LarkChatView: View {
         .navigationTitle(conversation.name)
         .navigationSubtitle(isTopic ? "飞书话题群" : "飞书")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
+        // Keep the bar's material during push/pop instead of resolving its scroll-edge state after arrival.
+        .toolbarBackground(.bar, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .hidesTabBarWhenShown()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await askJarvis() } } label: { Label("让 Persona 总结", systemImage: Theme.Icon.ai) }

@@ -165,6 +165,9 @@
   底下列表的导航栏和搜索框同一帧跟着消失，点进对话「闪一下」（2026-10-31）。用 UIKit 的 `setTabBarHidden(_:animated:)` 跟着页面出现 / 消失
   （`hidesTabBarWhenShown`）；`hidesBottomBarWhenPushed` 在 SwiftUI 里设得太晚，不生效。这种闪动 XCUITest 看不出来：
   `xcrun simctl io <udid> recordVideo` 录下来，用 ffmpeg 把点击后 0.3 秒的帧拼成一排看。
+- 飞书聊天从隐藏系统导航栏的消息列表推入时，iOS 27 的自动 scroll-edge 背景会在动画结束后才加上模糊，缓存图片会先清晰透到标题后面（#952）。
+  单独 `.toolbarBackground(.visible, for: .navigationBar)` 不够；聊天页同时指定 `.toolbarBackground(.bar, for: .navigationBar)`，保留系统磨砂材质。
+  用已有缓存、导航栏下面有彩色图片的会话录制中间帧，空白加载页的截图看不出差异。底栏继续用 `hidesTabBarWhenShown`，并回归取消右滑时仍留在聊天、完整右滑回到原入口。
 
 ## 布局与组件
 
