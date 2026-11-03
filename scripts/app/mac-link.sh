@@ -1,14 +1,15 @@
 #!/bin/bash
-# Jarvis Link: the menu bar app around jarvis-link on a Mac (apple/PersonaLink/, docs/link.md).
+# Persona Link: the menu bar app around jarvis-link on a Mac (apple/PersonaLink/, docs/link.md, docs/persona-link-install.md).
+# The bundle keeps its old name "Jarvis Link.app" and executable JarvisLink (docs/rename.md).
 #   ./scripts/app/mac-link.sh build            apple/PersonaLink/build/Jarvis Link.app, jarvis-link and jarvisd inside, signed to run locally
 #   ./scripts/app/mac-link.sh install          build, put it in /Applications and open it
 #   ./scripts/app/mac-link.sh snapshot <dir>   draw the menu and the pairing window, light and dark, as PNGs
-# The bundle id is mac.link_bundle_id in ~/.config/jarvis/config.json (or JARVIS_LINK_BUNDLE_ID), else the
-# placeholder com.example.jarvis.link. UNIVERSAL=1 builds for Apple silicon and Intel together.
+# The bundle id is mac.link_bundle_id in ~/.config/persona/config.json (or PERSONA_LINK_BUNDLE_ID / JARVIS_LINK_BUNDLE_ID),
+# else the placeholder com.example.jarvis.link. UNIVERSAL=1 builds for Apple silicon and Intel together.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT=$PWD
-ID=${PERSONA_LINK_BUNDLE_ID-${JARVIS_LINK_BUNDLE_ID:-$(python3 scripts/jarvis_config.py get mac.link_bundle_id 2>/dev/null || true)}}
+ID=${PERSONA_LINK_BUNDLE_ID-${JARVIS_LINK_BUNDLE_ID:-$(python3 scripts/persona_config.py get mac.link_bundle_id 2>/dev/null || true)}}
 ID=${ID:-com.example.jarvis.link}
 PKG="$ROOT/apple/PersonaLink"
 OUT="$PKG/build"
@@ -37,6 +38,16 @@ build() {
   rm -rf "$APP"
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers"
   cp "$bin" "$APP/Contents/MacOS/JarvisLink"
+  # xcodebuild links the package with the SDK version left at the deployment target (vtool -show-build: sdk 15.0),
+  # and macOS keeps an app linked against an old SDK in the old look: a square, bordered menu bar panel instead of
+  # the system's own on macOS 26 and later. Record the SDK it was really built against.
+  local minos sdk
+  minos=$(/usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$PKG/Info.plist")
+  sdk=$(xcrun --sdk macosx --show-sdk-version)
+  vtool -set-build-version macos "$minos" "$sdk" -replace -output "$APP/Contents/MacOS/JarvisLink" "$APP/Contents/MacOS/JarvisLink" 2>/dev/null
+  if vtool -show-build "$APP/Contents/MacOS/JarvisLink" | awk '$1 == "sdk" { print $2 }' | grep -qvx "$sdk"; then
+    echo "JarvisLink: the SDK version is not $sdk after vtool" >&2; exit 1
+  fi
   lipo -create "${helpers[@]}" -output "$APP/Contents/Helpers/jarvis-link"
   lipo -create "${nodes[@]}" -output "$APP/Contents/Helpers/jarvisd"
   sed -e "s/__BUNDLE_ID__/$ID/" -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$PKG/Info.plist" > "$APP/Contents/Info.plist"

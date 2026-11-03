@@ -95,3 +95,7 @@
 - 窗口工具栏里一个 `.principal` 项（哪怕是空的）会把分栏里列表栏声明的 `.primaryAction` 按钮挤出这一栏，摆到右边那一栏它的前面，左边空出一大块（#907）。
   想让按钮留在列表栏的右端，就别在这一栏放 `.principal`。在详情栏的 `NavigationStack` 或它的根视图上加 `.navigation` 项没用：对话页隐藏了导航栏
   （`.toolbarVisibility(.hidden, for: .navigationBar)`），推进对话后这些项一起消失；`ToolbarSpacer(.flexible)` 只和壳里的那个平分空白，也贴不过去。
+- Persona Link 的面板是老样子（直角、一圈浅色细边框，不是系统别的菜单栏面板那种圆角玻璃，2026-11-03，#956）：`xcodebuild` 编 SwiftPM 包的可执行文件时，
+  `LC_BUILD_VERSION` 里的 sdk 记成了部署目标（`vtool -show-build` 看到 `sdk 15.0`），虽然实际用的是 Xcode 27 的 SDK；直接 `swiftc` 编同样的 target 是对的。
+  系统按这个 sdk 版本决定给不给新外观，记成 15.0 就一直是老样子，离屏截图（`mac-link.sh snapshot`）看不出来，因为截的只是内容不是窗口。
+  `scripts/app/mac-link.sh` 编完用 `vtool -set-build-version macos <最低版本> <SDK 版本> -replace` 改回真实的 SDK（胖二进制两个架构一起改），再签名，并检查改对了。

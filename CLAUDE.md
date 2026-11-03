@@ -203,6 +203,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/admin.md` | hub 管理界面（`/admin`）：访问范围 `admin.access`（loopback / lan / cidrs / any）和来源判断、管理员密码 / 会话 / CSRF / 限流、改 hub.json、页面和接口、部署时怎么选 |
 | `docs/mesh.md` | hub 互联（单中心）：互联码配对、链路、中心和任期（加入组、设为中心、中心不可达）、成员把 App 请求和电脑交给中心、凭据交接、一台电脑多条路的去重和选路、kind service（hub 拨连接器）、ssh 迁移、管理接口和命令行、怎么验证 |
 | `docs/link.md` | 连接器 jarvis-link 和 node 服务：一条命令 / 一个 App 装好常驻 node + 连接器；主动模式（电脑连 hub 的链路）和被动模式（hub 连电脑：监听、配对码、接口、限流、安全边界）；Mac 菜单栏 App「Persona Link」；Linux headless 的 `jarvis-link install / status / mode / node / logs / uninstall` |
+| `docs/persona-link-install.md` | 给仓库里其他人的指南：在 Mac 上构建、安装 Persona Link，配对、升级、卸载、常见问题 |
 
 ### Agent、运行时和终端
 

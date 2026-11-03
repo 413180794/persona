@@ -35,7 +35,7 @@ curl -fsSL <站点>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 
 - Mac 上跑 `--node` 只装常驻 node 的 launchd agent 和配对，连接器用菜单栏 App。
 - 发布：`scripts/publish.sh` 在 personad 旁边多编四个 `jarvis-link-<os>-<arch>.gz`，进同一份 `SHA256SUMS`。
 
-**Mac**：装菜单栏 App「Persona Link」（`./scripts/app/mac-link.sh install`）。App 里带着 personad（`Contents/Helpers/jarvisd`），**第一次运行**就用
+**Mac**：装菜单栏 App「Persona Link」（`./scripts/app/mac-link.sh install`，给别人看的一步步指南在 [persona-link-install.md](persona-link-install.md)）。App 里带着 personad（`Contents/Helpers/jarvisd`），**第一次运行**就用
 `jarvis-link node install --jarvisd <App 里的>` 装好常驻 node 的 LaunchAgent `com.jarvis.node`：没有 `~/.persona/bin/personad` 时先复制过去，
 已经装了的（比如以前跑过 `scripts/deploy/node-launchd.sh install`）保持原样。之后只在菜单里提供「安装本机 node 服务」，用户删掉的不会自己装回来。
 App 更新不替换 `~/.persona/bin/personad`（经连接器推送 node 更新是 #284）。
@@ -255,7 +255,9 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 - jarvis-link 和 personad 编进 `Contents/Helpers/`（personad 给常驻 node 用，见「装 node 服务」；App 因此大了约 37 MB）。
 - 用本机 ad-hoc 签名（Sign to Run Locally），不写死团队。
 - bundle id 默认用占位的 `com.example.jarvis.link`，可以用 `~/.config/persona/config.json` 的 `mac.link_bundle_id` 或环境变量
-  `JARVIS_LINK_BUNDLE_ID` 覆盖。
+  `PERSONA_LINK_BUNDLE_ID`（旧名 `JARVIS_LINK_BUNDLE_ID`）覆盖。
+- 编完用 `vtool` 把可执行文件记下的 SDK 版本改成真正用的 SDK：xcodebuild 编 Swift package 时记成了部署目标 15.0，系统就按旧 SDK 的老样子画菜单栏面板
+  （[lessons/macos.md](lessons/macos.md)「Persona Link 的面板是老样子」）。
 - `UNIVERSAL=1` 时同时编 Intel 版。
 
 **系统设置**
