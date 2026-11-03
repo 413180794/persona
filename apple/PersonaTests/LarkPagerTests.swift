@@ -105,6 +105,13 @@ import Testing
         #expect(p.readCursor == "10", "the message itself is not read yet")
     }
 
+    @Test func theNewMessagesCountTakesOthersPastTheAnchor() {
+        #expect(LarkPager.countsAsNew(msg(8), past: "7"))
+        #expect(!LarkPager.countsAsNew(msg(7), past: "7"), "at the anchor: read already")
+        #expect(!LarkPager.countsAsNew(msg(6), past: "7"))
+        #expect(!LarkPager.countsAsNew(msg(9, mine: true), past: "7"), "mine are not new to me")
+    }
+
     @Test func openingAgainDoesNotMoveTheCursorBack() {
         var p = LarkPager()
         p.replace(with: page([10, 11, 12]))

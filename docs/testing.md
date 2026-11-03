@@ -488,6 +488,20 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 改了什么：会话和话题的消息页改在后台线程解码（`APIClient.getDecodedOffMain`）；
 打开的会话最多每秒收到一次自己的变化通知（`LarkSync.chatGap`、`LarkChangeGate`），一阵推送合成一次，安静之后的第一条立刻送到。
 
+2026-11-03 P-20（会话页滑动时，每一行出现和消失都会写页面的 `@State`，整页 body 跟着重算）。master `995e33a5`（#777 之后），
+改前、改后交替跑 2 轮，每轮各 3 次，负载 16–60：
+
+| 段 | 指标 | 改前 | 改后 |
+| --- | --- | --- | --- |
+| glide | 掉帧 | 17 / 10 / 21，8 / 10 / 13 | 6 / 4 / 5，3 / 3 / 5 |
+| glide | 主线程超过 16 ms 的帧（6 次合计） | 48 | 11 |
+| glide | 主线程忙 p95 | 10.6–15.4 ms | 6.9–7.8 ms |
+| idle（14 轮推送） | 掉帧 | 1 / 0 / 0，0 / 1 / 0 | 全是 0 |
+
+改了什么：已看到的记录、上报已读的计时、回执的记账，都放进 `@State` 里的一个 class（`LarkChatBook`），写它不会让视图失效；
+会显示的（「N 条新消息」计数、回执）仍然放 state，只在真的变了时写。两次测量里 mock 收到的已读上报完全一样。
+剩下的掉帧主要是 SwiftUI 给新进来的卡片行排版：只放卡片时 5–7，只放图片或富文本时 0–4。
+
 ## 侧边栏拖动（Persona tab）
 
 量拖动时每帧主线程的耗时，不用 Instruments（这台 Mac 上 xctrace 卡在授权）：DEBUG 的 `DrawerProbe`（`-showDrawerProbe YES`）在拖动开始到松手后

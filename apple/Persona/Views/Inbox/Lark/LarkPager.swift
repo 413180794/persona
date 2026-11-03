@@ -73,6 +73,11 @@ struct LarkPager: Equatable {
     /// A message reached the screen; false if it had already.
     mutating func see(_ m: LarkMessage) -> Bool { seen.insert(m.position).inserted }
 
+    /// Counted by 「N 条新消息」 once on screen: someone else's message past where the chat was opened (`anchor`).
+    static func countsAsNew(_ m: LarkMessage, past anchor: String) -> Bool {
+        !m.isMine && !m.isSystem && LarkPosition.less(anchor, m.position)
+    }
+
     /// What to tell 飞书 is read now: up to the newest message seen past the read cursor, with the ids of others'
     /// unread messages up to it. Moves the cursor; nil when nothing new was seen.
     mutating func readReport() -> APIClient.LarkReadReport? {
@@ -85,4 +90,17 @@ struct LarkPager: Equatable {
         readCursor = top.position
         return APIClient.LarkReadReport(position: top.position, badgeCount: top.badgeCount, messageIDs: ids.isEmpty ? nil : ids)
     }
+}
+
+/// What a chat's rows keep track of as they come on and off screen: the messages seen, read receipts being asked
+/// for, the pending read report. A class kept in `@State`, so writing it does not re-run the chat's body: a row
+/// scrolling past wrote view state, and every write laid the page out again (half the hitches of a glide, #674).
+/// What shows stays view state: `LarkPager.seen` for the jump buttons, the receipts once answered.
+final class LarkChatBook {
+    /// Every message seen on screen this visit; `LarkPager.seen` gets the ones the jump buttons count at once and
+    /// the rest before a read report.
+    var seen: Set<String> = []
+    var receipts = LarkReadReceipts()
+    var reportTask: Task<Void, Never>?
+    var receiptTask: Task<Void, Never>?
 }

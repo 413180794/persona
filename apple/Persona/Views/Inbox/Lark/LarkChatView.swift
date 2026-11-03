@@ -53,8 +53,6 @@ struct LarkChatView: View {
     @State private var fileRequest: (url: String, name: String)?
     /// Read position when the chat was opened: the divider sits above the first message after it. Frozen for the visit.
     @State private var anchor: String?
-    /// Highest position already reported as read.
-    @State private var reportTask: Task<Void, Never>?
     @State private var atBottom = true
     /// The list stays at its newest end as it changes (larkFollowsEnd): on opening at the latest, after sending,
     /// after 回到最新; off once the user scrolls up or the page opens at a message.
@@ -65,9 +63,10 @@ struct LarkChatView: View {
     @State private var person: LarkPersonRef?
     @State private var debugPick: LarkMessage?
     @State private var debugPost: String?
-    /// Read receipts of my messages on screen (LarkReadReceipts) and the request in flight.
-    @State private var receipts = LarkReadReceipts()
-    @State private var receiptTask: Task<Void, Never>?
+    /// Read receipts of my messages, as shown; the asking is kept in `book`.
+    @State private var receiptStates: [String: LarkReadState] = [:]
+    /// What rows coming on and off screen keep track of (LarkChatBook).
+    @State private var book = LarkChatBook()
 
     init(conversation: LarkConversation) {
         self.conversation = conversation
@@ -99,14 +98,14 @@ struct LarkChatView: View {
                         if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
                         let grouped = LarkChatLayout.continues(m, after: prev)
                         LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id,
-                                       readState: receipts.states[m.id])
+                                       readState: receiptStates[m.id])
                             .padding(.top, LarkChatLayout.gap(grouped: grouped))
                     }
                     .onAppear {
                         markSeen(m)
                         receiptAppeared(m)
                     }
-                    .onDisappear { receipts.disappeared(m.id) }
+                    .onDisappear { book.receipts.disappeared(m.id) }
                 }
                 if pager.hasNewer {
                     ProgressView().controlSize(.small).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
@@ -194,6 +193,9 @@ struct LarkChatView: View {
         }
         // Back in front: what came on screen while it was in the back is reported now.
         .onTabVisibility(appear: reportSoon, disappear: flushRead)
+        // What the jump buttons count is set once the page is in: rows already on screen (the cached page) count.
+        .onChange(of: anchor) { pager.seen.formUnion(book.seen) }
+        .onChange(of: mention) { pager.seen.formUnion(book.seen) }
     }
 
     private var composer: some View {
@@ -208,7 +210,7 @@ struct LarkChatView: View {
     /// Unread messages from others that have not been on screen yet.
     private var unseenNew: Int {
         guard let anchor else { return 0 }
-        let seenUnread = pager.messages.filter { !$0.isMine && !$0.isSystem && pager.seen.contains($0.position) && LarkPosition.less(anchor, $0.position) }.count
+        let seenUnread = pager.messages.filter { pager.seen.contains($0.position) && LarkPager.countsAsNew($0, past: anchor) }.count
         return max(0, conversation.unread - seenUnread)
     }
 
@@ -415,16 +417,18 @@ struct LarkChatView: View {
     // MARK: Read reporting
 
     /// A message reached the screen: once rows stop arriving, report everything up to the newest one seen.
+    /// Only a message the jump buttons count goes into `pager` at once; the rest wait in `book` for the report.
     private func markSeen(_ m: LarkMessage) {
-        guard pager.see(m) else { return }
+        guard !pager.seen.contains(m.position), book.seen.insert(m.position).inserted else { return }
+        if anchor.map({ LarkPager.countsAsNew(m, past: $0) }) == true || m.position == mention { _ = pager.see(m) }
         reportSoon()
     }
 
     /// Read state goes to Feishu 400 ms after the last row came on screen, and only while the chat's tab is in front.
     private func reportSoon() {
         guard tabActive, !isTopic else { return }
-        reportTask?.cancel()
-        reportTask = Task {
+        book.reportTask?.cancel()
+        book.reportTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             flushRead()
@@ -432,6 +436,7 @@ struct LarkChatView: View {
     }
 
     private func flushRead() {
+        if !book.seen.isSubset(of: pager.seen) { pager.seen.formUnion(book.seen) }
         guard !isTopic, let api = model.api, let report = pager.readReport() else { return }
         let feed = conversation.id
         Task { try? await api.larkRead(feed, report) }
@@ -441,32 +446,34 @@ struct LarkChatView: View {
 
     private func receiptAppeared(_ m: LarkMessage) {
         guard LarkReadReceipts.tracks(m) else { return }
-        receipts.appeared(m)
+        book.receipts.appeared(m)
         askReceipts()
     }
 
     /// The chat changed (a push, the fallback poll): receipts of mine on screen that not everyone has read may have too.
     private func askReceiptsAgain() {
-        receipts.chatChanged()
+        book.receipts.chatChanged()
         askReceipts()
     }
 
     /// One request at a time, no sooner than LarkReadReceipts.minGap after the last; rows that come on screen
     /// together go in one request.
     private func askReceipts() {
-        guard receiptTask == nil, let wait = receipts.wait(now: .now), let api = model.api else { return }
+        guard book.receiptTask == nil, let wait = book.receipts.wait(now: .now), let api = model.api else { return }
         let feed = conversation.id
-        receiptTask = Task {
+        let book = book
+        book.receiptTask = Task {
             try? await Task.sleep(for: .seconds(max(wait, 0.4)))
-            let ids = receipts.take(now: .now)
+            let ids = book.receipts.take(now: .now)
             if !ids.isEmpty {
                 do {
-                    receipts.record(try await api.larkReadStates(feed, ids: ids))
+                    book.receipts.record(try await api.larkReadStates(feed, ids: ids))
                 } catch {
-                    receipts.failed(status: (error as? APIError)?.status)
+                    book.receipts.failed(status: (error as? APIError)?.status)
                 }
             }
-            receiptTask = nil
+            if receiptStates != book.receipts.states { receiptStates = book.receipts.states }
+            book.receiptTask = nil
             askReceipts() // what came due meanwhile
         }
     }
