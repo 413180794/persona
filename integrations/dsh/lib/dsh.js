@@ -6,6 +6,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { basename, isAbsolute, relative, resolve } from 'node:path'
+import { isAssistantDir } from '../../runtime-sdk/lib/identity.js'
 import { createRuntime, interactionId, RpcError, summaryOf } from '../../runtime-sdk/index.js'
 import { attachmentOf, dshSeq, eventItems, itemsOf, jarvisSeq, lastText, streamText, toolInput, toolName } from './map.js'
 
@@ -21,7 +22,7 @@ const OL_IN_SHELL = /(^|[\s;&|(`$])(ol|[^\s;&|]*lark-connector\/scripts\/ol\.sh)
 
 /** cwd is the Jarvis assistant's directory (~/.jarvis/assistant, as the node and the hub tell its conversations). */
 function assistantDir(cwd) {
-  return typeof cwd === 'string' && cwd.replace(/\/+$/, '').endsWith('/.jarvis/assistant')
+  return isAssistantDir(cwd)
 }
 
 

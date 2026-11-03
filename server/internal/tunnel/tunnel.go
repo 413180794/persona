@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,7 +32,7 @@ const (
 
 func dataDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis")
+	return identity.DataDir(home)
 }
 
 // NodeKeyPath is where a node keeps its tailcat identity.
@@ -207,7 +208,7 @@ func (k *HubKey) Public() string {
 // Logf is tailscale's logging for this package: silent unless JARVIS_TAILCAT_DEBUG=1, magicsock and wireguard
 // log a few lines a second while a path is being worked out.
 func Logf(to logger.Logf) logger.Logf {
-	if os.Getenv("JARVIS_TAILCAT_DEBUG") == "1" && to != nil {
+	if identity.Getenv("JARVIS_TAILCAT_DEBUG") == "1" && to != nil {
 		return to
 	}
 	return logger.Discard

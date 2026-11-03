@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"net"
 	"os"
@@ -23,7 +24,7 @@ import (
 // AttachSocketPath is where a resident node listens for relays.
 func AttachSocketPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis", "node-attach.sock")
+	return filepath.Join(identity.SocketDir(home), "node-attach.sock")
 }
 
 // Relay pipes r / w to a resident node if one is listening. ok is false when there is none (the caller serves the

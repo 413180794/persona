@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io/fs"
 	"os"
 	"path"
@@ -96,7 +97,7 @@ func Load(name string) (*Package, error) {
 	if !NameRe.MatchString(name) {
 		return nil, fmt.Errorf("bad package name %q", name)
 	}
-	if dir := os.Getenv(OverrideEnv); dir != "" {
+	if dir := identity.Getenv(OverrideEnv); dir != "" {
 		root := filepath.Join(dir, name)
 		if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
 			return nil, nil

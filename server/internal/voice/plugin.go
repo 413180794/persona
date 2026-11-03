@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"log"
 	"net"
 	"net/http"
@@ -87,7 +88,7 @@ func writeHTTPJSON(w http.ResponseWriter, status int, v any) {
 // Run is `jarvisd voice`: serve on JARVIS_PLUGIN_SOCKET until ctx ends.
 func Run(ctx context.Context) error {
 	logger := log.New(os.Stderr, "", 0)
-	socket := os.Getenv("JARVIS_PLUGIN_SOCKET")
+	socket := identity.Getenv("JARVIS_PLUGIN_SOCKET")
 	if socket == "" {
 		return errors.New("JARVIS_PLUGIN_SOCKET is not set: this runs under the Jarvis hub (plugins in ~/.jarvis/hub.json, docs/plugins.md)")
 	}
@@ -95,11 +96,11 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	hubURL := os.Getenv("JARVIS_HUB_URL")
+	hubURL := identity.Getenv("JARVIS_HUB_URL")
 	if hubURL == "" {
 		hubURL = "http://127.0.0.1:18660"
 	}
-	pl := New(cfg, hubURL, os.Getenv("JARVIS_HUB_TOKEN"), logger)
+	pl := New(cfg, hubURL, identity.Getenv("JARVIS_HUB_TOKEN"), logger)
 	_ = os.Remove(socket)
 	ln, err := net.Listen("unix", socket)
 	if err != nil {

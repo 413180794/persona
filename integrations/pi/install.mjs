@@ -5,15 +5,15 @@
 //
 //   node integrations/pi/install.mjs [--socket <runtime.sock>]
 
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { installCurrent, PACKAGES, packageHash, readShipped } from '../runtime-sdk/index.js'
+import { prepareSocketDirectory } from '../runtime-sdk/lib/identity.js'
+import { defaultSocketPath, installCurrent, PACKAGES, packageHash, readShipped } from '../runtime-sdk/index.js'
 
 const NAME = 'jarvis-pi-runtime'
 const i = process.argv.indexOf('--socket')
-const socket = (i > 0 && process.argv[i + 1]) || process.env.JARVIS_RUNTIME_SOCKET || join(homedir(), '.jarvis', 'runtime.sock')
-const store = join(dirname(socket), 'runtime-packages', NAME)
+const socket = (i > 0 && process.argv[i + 1]) || defaultSocketPath()
+const store = join(prepareSocketDirectory(socket), 'runtime-packages', NAME)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const files = readShipped(root, PACKAGES[NAME])
 const hash = packageHash(files)

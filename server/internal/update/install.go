@@ -3,6 +3,7 @@ package update
 import (
 	"encoding/json"
 	"errors"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
 	"path/filepath"
@@ -131,7 +132,7 @@ type RolledBack struct {
 // Dir is where the markers and downloads live: ~/.jarvis/update.
 func Dir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis", "update")
+	return filepath.Join(identity.DataDir(home), "update")
 }
 
 func PendingPath(dir string) string    { return filepath.Join(dir, "pending.json") }

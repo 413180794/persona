@@ -56,6 +56,7 @@
   而且 squash 合并时 GitHub 会把和合并人不同的作者写成 `Co-authored-by` 带进 master 的提交信息（2026-11-02）。worktree 共用仓库级配置。
 - `gh pr merge <号> --squash --delete-branch` 连本地分支一起删；那个分支正在某个 worktree 里检出时，gh 2.99 把**整个 worktree 目录也删了**（2026-11-03，叠起来的 PR 在 `/tmp` 的临时 worktree 里 rebase，合并后目录没了）。
   合并前先让那个 worktree 离开这个分支（`git checkout --detach`），或者合并用的 worktree 不检出 PR 的分支；里面有没提交的东西会一起丢。
+- `gh pr merge --delete-branch` 也可能在 GitHub 已合并之后，本地切回 master 时因 master 正在另一棵 worktree 中而退出失败（2026-11-03，#277）。先查 PR 的 `merged` / `merge_commit_sha`，不要把本地收尾错误当作合并失败反复重试；用主工作区执行合并或分开处理本地分支清理。
 
 ## 把长期的集成分支合进 master
 

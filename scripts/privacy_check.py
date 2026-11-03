@@ -66,23 +66,27 @@ def example_values():
 def config_values():
     """The config's values, and the subset that is published on purpose (PUBLIC_KEYS)."""
     out, public = set(), set()
-    try:
-        cfg = json.load(open(os.path.join(HOME, ".config/jarvis/config.json")))
-    except (OSError, ValueError):
-        return out, public
+    paths = {os.path.join(HOME, ".config", brand, "config.json") for brand in ("persona", "jarvis")}
+    paths.update(os.path.expanduser(os.environ[key]) for key in ("PERSONA_CONFIG", "JARVIS_CONFIG") if os.environ.get(key))
     defaults = example_values()
-    for key, o in strings(cfg):
-        if key in ("os", "simulator") or o in defaults:
+    for path in paths:
+        try:
+            with open(path) as source:
+                cfg = json.load(source)
+        except (OSError, ValueError):
             continue
-        if key == "url" or key.endswith("_url"):
-            o = url_term(o)
-            if not o:
+        for key, o in strings(cfg):
+            if key in ("os", "simulator") or o in defaults:
                 continue
-        elif key.endswith("path"):
-            o = o.replace(HOME, "~")
-        out.add(o)
-        if key in PUBLIC_KEYS:
-            public.add(o)
+            if key == "url" or key.endswith("_url"):
+                o = url_term(o)
+                if not o:
+                    continue
+            elif key.endswith("path"):
+                o = o.replace(HOME, "~")
+            out.add(o)
+            if key in PUBLIC_KEYS:
+                public.add(o)
     return out, public
 
 
@@ -103,13 +107,15 @@ def private_looking(span):
 
 def word_list():
     out = set()
-    try:
-        for line in open(os.path.join(HOME, ".config/jarvis/private-words.txt")):
-            line = line.strip()
-            if line and not line.startswith("#"):
-                out.add(line)
-    except OSError:
-        pass
+    for brand in ("persona", "jarvis"):
+        try:
+            with open(os.path.join(HOME, ".config", brand, "private-words.txt")) as source:
+                for line in source:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        out.add(line)
+        except OSError:
+            pass
     local = os.path.join(ROOT, "CLAUDE.local.md")
     if os.path.exists(local):
         for span in re.findall(r"`([^`\n]{4,})`", open(local).read()):

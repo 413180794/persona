@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -86,6 +87,9 @@ func (m *Machine) assistantCwd() string {
 	if m.info.Home == "" {
 		return ""
 	}
+	if m.info.DataDir != "" {
+		return path.Join(m.info.DataDir, "assistant")
+	}
 	return path.Join(m.info.Home, assistantDir)
 }
 
@@ -95,7 +99,7 @@ func isAssistant(s proto.Session, dir string) bool {
 		return false
 	}
 	// The working directory may go through a symlinked home; runtimes and offline assistants have no host pane.
-	return s.Cwd == dir || strings.HasSuffix(s.Cwd, "/"+assistantDir)
+	return s.Cwd == dir || identity.IsAssistantDir(s.Cwd)
 }
 
 // assistantClaudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md); lark-connector: the assistant's

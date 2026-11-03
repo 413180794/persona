@@ -192,6 +192,7 @@ type NodeInfo struct {
 	OS                 string  `json:"os"`
 	Arch               string  `json:"arch"`
 	Home               string  `json:"home"`
+	DataDir            string  `json:"data_dir,omitempty"`
 	HerdrVersion       string  `json:"herdr_version"`
 	ClaudeVersion      string  `json:"claude_version"`
 	Version            string  `json:"version"`

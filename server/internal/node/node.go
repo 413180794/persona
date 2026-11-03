@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"log"
 	"os"
@@ -131,8 +132,8 @@ func New(version string) (*Node, error) {
 	// ssh sessions get a minimal PATH; herdr and claude usually live in ~/.local/bin.
 	extra := []string{filepath.Join(home, ".local/bin"), filepath.Join(home, "bin"), filepath.Join(home, "go/bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/local/go/bin"}
 	os.Setenv("PATH", strings.Join(append(extra, os.Getenv("PATH")), string(os.PathListSeparator)))
-	dir := filepath.Join(home, ".jarvis")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	dir, err := identity.PrepareHome(home)
+	if err != nil {
 		return nil, err
 	}
 	n := &Node{
@@ -829,6 +830,7 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		OS:                 runtime.GOOS,
 		Arch:               runtime.GOARCH,
 		Home:               n.home,
+		DataDir:            n.dir,
 		HerdrVersion:       hv,
 		ClaudeVersion:      claudeVersion(ctx),
 		Version:            n.Version,

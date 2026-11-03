@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
 	"os/exec"
@@ -22,11 +23,11 @@ import (
 // nodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own; JARVIS_NODE_BINARIES points
 // elsewhere (the Docker image carries them in /opt/jarvis/nodes: ~/.jarvis is the data volume there).
 func nodeBinaryDir() string {
-	if d := os.Getenv("JARVIS_NODE_BINARIES"); d != "" {
+	if d := identity.Getenv("JARVIS_NODE_BINARIES"); d != "" {
 		return d
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis", "bin", "nodes")
+	return filepath.Join(identity.DataDir(home), "bin", "nodes")
 }
 
 // nodeBinary is the hub's build for a machine's OS and architecture.

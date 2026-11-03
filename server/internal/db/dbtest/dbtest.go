@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"net/url"
 	"os"
 	"regexp"
@@ -41,7 +42,11 @@ func ownedBy(u string) bool {
 
 // Main runs m on a database of its own and returns the exit code (os.Exit(dbtest.Main(m))).
 func Main(m *testing.M) int {
-	base := os.Getenv(Env)
+	base := identity.Getenv(Env)
+	if base != "" {
+		_ = os.Setenv(Env, base)
+		_ = os.Setenv("PERSONA_TEST_DATABASE_URL", base)
+	}
 	if base == "" || ownedBy(base) {
 		// A test binary a test started again (a fake node, a plugin) runs on its parent's database, which the parent
 		// drops: its child is often killed before it could.
@@ -56,6 +61,7 @@ func Main(m *testing.M) int {
 	}
 	defer done()
 	_ = os.Setenv(Env, own)
+	_ = os.Setenv("PERSONA_TEST_DATABASE_URL", own)
 	return m.Run()
 }
 

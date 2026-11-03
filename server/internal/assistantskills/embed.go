@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -37,11 +38,11 @@ const (
 
 // UserDir is the user's skill space: ~/.jarvis/skills (JARVIS_SKILLS_DIR elsewhere, for tests).
 func UserDir() string {
-	if d := os.Getenv("JARVIS_SKILLS_DIR"); d != "" {
+	if d := identity.Getenv("JARVIS_SKILLS_DIR"); d != "" {
 		return d
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis", "skills")
+	return filepath.Join(identity.DataDir(home), "skills")
 }
 
 // Skill is one skill the assistant gets.

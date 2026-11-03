@@ -143,7 +143,7 @@ func TestInstallWritesTheUnitStartsItAndWaitsForTheLink(t *testing.T) {
 		t.Fatalf("%v\n%s", err, f.out)
 	}
 	unit, err := os.ReadFile(f.unitPath())
-	if err != nil || !strings.Contains(string(unit), filepath.Join(f.home, ".jarvis", "bin", "jarvis-link")) {
+	if err != nil || !strings.Contains(string(unit), f.binPath()) {
 		t.Fatalf("unit %s %v", unit, err)
 	}
 	if f.unitPath() != filepath.Join(f.home, ".config", "systemd", "user", "jarvis-link.service") {

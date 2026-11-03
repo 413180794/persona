@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"log"
 	"os"
@@ -192,7 +193,7 @@ func main() {
 	case "tab-start": // a command a runtime gave to resume its session in a new tab (`pi --session …`, node/pi.go)
 		err = node.CodexStart(os.Args[2:])
 	case "relay":
-		path := os.ExpandEnv("$HOME/.jarvis/relay.json")
+		path := filepath.Join(identity.HomeDir(), "relay.json")
 		if len(os.Args) > 2 {
 			path = os.Args[2]
 		}
@@ -328,7 +329,7 @@ func resetMachineUID() error {
 	if err != nil {
 		return err
 	}
-	uid, err := node.ResetMachineUID(filepath.Join(home, ".jarvis"))
+	uid, err := node.ResetMachineUID(identity.DataDir(home))
 	if err != nil {
 		return err
 	}

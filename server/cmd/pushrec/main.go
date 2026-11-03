@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ func main() {
 
 func record(dur time.Duration, path string) error {
 	home, _ := os.UserHomeDir()
-	raw, err := os.ReadFile(filepath.Join(home, ".jarvis/hub.json"))
+	raw, err := os.ReadFile(filepath.Join(identity.DataDir(home), "hub.json"))
 	if err != nil {
 		return err
 	}

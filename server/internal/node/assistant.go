@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
 	"os/exec"
@@ -112,14 +113,14 @@ func (n *Node) isAssistantSession(id string) bool {
 	if a.PaneID != "" {
 		return false
 	}
-	if st, ok := n.state.get(id); ok && strings.HasSuffix(st.Cwd, "/.jarvis/assistant") {
+	if st, ok := n.state.get(id); ok && identity.IsAssistantDir(st.Cwd) {
 		return true
 	}
 	if p := n.transcriptPath(id); p != "" && strings.Contains(filepath.Base(filepath.Dir(p)), "-jarvis-assistant") {
 		return true
 	}
 	// A conversation an agent runtime runs (assistant_runtime.go), listed before this node kept its state.
-	if s, _, ok := n.runtimes.rowOf(id); ok && strings.HasSuffix(s.Cwd, "/.jarvis/assistant") {
+	if s, _, ok := n.runtimes.rowOf(id); ok && identity.IsAssistantDir(s.Cwd) {
 		return true
 	}
 	return false
@@ -210,7 +211,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		cwd = st.Cwd
 	}
 	if cwd == "" {
-		cwd = filepath.Join(n.home, ".jarvis", "assistant")
+		cwd = identity.AssistantDir(n.home)
 	}
 	// The live snapshot the message starts with, asked for while the process starts (assistant_context.go). A new
 	// Codex conversation has no id yet: it can't be the main one.
@@ -390,7 +391,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	}
 	// Per-process MCP config: the assistant-only tools (ask_user, agents_*, lark_*…) and the conversation they act for.
 	mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{
-		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"JARVIS_ASSISTANT": "1", "JARVIS_SESSION_ID": id},
+		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
 	}}})
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--include-partial-messages",
@@ -421,8 +422,8 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	cmd := exec.Command(shell, append([]string{"-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)...)
 	cmd.Dir = cwd
 	// Jarvis's own tools are few and used all the time: load them up front instead of behind ToolSearch.
-	cmd.Env = append(os.Environ(), "JARVIS_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
-	cmd.Env = append(cmd.Env, n.assistantLarkEnv(cwd)...)
+	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
+	cmd.Env = identity.Environment(cmd.Env, n.assistantLarkEnv(cwd)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stop() can kill the whole group
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -725,7 +726,7 @@ func (n *Node) recoverAssistantTasks(send func(id, text string) error) {
 	n.state.mu.Lock()
 	lost := map[string][]string{}
 	for id, st := range n.state.Sessions {
-		if len(st.Tasks) > 0 && strings.HasSuffix(st.Cwd, "/.jarvis/assistant") {
+		if len(st.Tasks) > 0 && identity.IsAssistantDir(st.Cwd) {
 			lost[id] = st.Tasks
 		}
 	}

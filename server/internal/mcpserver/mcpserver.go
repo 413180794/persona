@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
 	"time"
@@ -121,10 +122,10 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 
 // The assistant's processes start this server with JARVIS_ASSISTANT / JARVIS_SESSION_ID (node/assistant.go):
 // they get the assistant-only tools, and the hub knows which conversation a call (e.g. ask_user) belongs to.
-func isAssistant() bool { return os.Getenv("JARVIS_ASSISTANT") == "1" }
+func isAssistant() bool { return identity.Getenv("JARVIS_ASSISTANT") == "1" }
 
 func sessionID() string {
-	if id := os.Getenv("JARVIS_SESSION_ID"); id != "" {
+	if id := identity.Getenv("JARVIS_SESSION_ID"); id != "" {
 		return id
 	}
 	return os.Getenv("CLAUDE_SESSION_ID")

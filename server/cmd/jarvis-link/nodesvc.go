@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/nwverse/persona/server/internal/identity"
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -86,10 +88,10 @@ func nodeInstall(e *env, from string) error {
 		fmt.Fprintf(e.stdout, "常驻 node 的服务已经装了（%s），保持原样。\n", file)
 		return nil
 	}
-	bin := e.nodeBin()
-	if err := os.MkdirAll(e.jarvisDir(), 0o700); err != nil {
+	if _, err := identity.PrepareHome(e.home); err != nil {
 		return err
 	}
+	bin := e.nodeBin()
 	if !fileExists(bin) {
 		if from == "" {
 			return fmt.Errorf("没有 %s：先装 jarvisd（安装脚本会一起装），或者用 --jarvisd <路径> 指定", bin)

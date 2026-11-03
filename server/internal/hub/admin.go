@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"io/fs"
 	"net/http"
@@ -281,7 +282,7 @@ func readAdminJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 // supervised is whether something restarts the hub when it exits: systemd (INVOCATION_ID), a container's restart
 // policy, or JARVIS_SUPERVISED=1 for anything else that does.
 func (h *Hub) supervised() bool {
-	return os.Getenv("INVOCATION_ID") != "" || os.Getenv("JARVIS_SUPERVISED") == "1" || h.adminContainer()
+	return os.Getenv("INVOCATION_ID") != "" || identity.Getenv("JARVIS_SUPERVISED") == "1" || h.adminContainer()
 }
 
 // restartHub ends this process the way systemctl stop / docker stop would (SIGTERM: a clean shutdown); systemd's

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -64,7 +65,7 @@ func (n *Node) assistantSendRuntime(ctx context.Context, h *runtimeConn, id, cwd
 		cwd = st.Cwd
 	}
 	if cwd == "" {
-		cwd = filepath.Join(n.home, ".jarvis", "assistant")
+		cwd = identity.AssistantDir(n.home)
 	}
 	if launcher == "" {
 		launcher = st.Launcher
@@ -189,7 +190,7 @@ func (n *Node) lark-connectorScript(cwd string) string {
 
 // lark-connectorAvailable: the lark-connector skill is on this machine (the user's skills, or already in the assistant's directory).
 func (n *Node) lark-connectorAvailable() bool {
-	return fileExists(assistantskills.OlScript(assistantskills.UserDir())) || n.lark-connectorScript(filepath.Join(n.home, ".jarvis", "assistant")) != ""
+	return fileExists(assistantskills.OlScript(assistantskills.UserDir())) || n.lark-connectorScript(identity.AssistantDir(n.home)) != ""
 }
 
 func fileExists(p string) bool {
@@ -216,7 +217,7 @@ func (n *Node) assistantlark-connector(ctx context.Context, session string, raw 
 	st, _ := n.state.get(session)
 	cwd := st.Cwd
 	if cwd == "" {
-		cwd = filepath.Join(n.home, ".jarvis", "assistant")
+		cwd = identity.AssistantDir(n.home)
 	}
 	env := n.assistantLarkEnv(cwd) // also syncs the skills into .claude/skills
 	script := n.lark-connectorScript(cwd)

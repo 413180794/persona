@@ -59,6 +59,7 @@ RUN ln -s /opt/jarvis/nodes/jarvisd-linux-$TARGETARCH /opt/jarvis/jarvisd && /op
 COPY --from=build /out/jarvisd-telegram /opt/jarvis/nodes/jarvisd-telegram
 RUN [ "$(/opt/jarvis/nodes/jarvisd-telegram version -v)" = "$(/opt/jarvis/jarvisd version -v)" ]
 COPY deploy/docker/jarvisd.sh /usr/local/bin/jarvisd
+RUN ln -s jarvisd /usr/local/bin/personad
 COPY deploy/docker/entrypoint.sh /usr/local/bin/jarvis-entrypoint
 # ~/.jarvis is the data volume (hub.json, keys, the knowledge base): the node builds live outside it. No local node:
 # this machine has no herdr or claude for the hub to drive.

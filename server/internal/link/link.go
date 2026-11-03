@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	appidentity "github.com/nwverse/persona/server/internal/identity"
 	"net"
 	"net/netip"
 	"net/url"
@@ -108,13 +109,13 @@ var ErrUnpaired = fmt.Errorf("not paired for this mode: %w", os.ErrNotExist)
 // DefaultPath is where the credential lives.
 func DefaultPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis", "link.json")
+	return filepath.Join(appidentity.DataDir(home), "link.json")
 }
 
 // AttachSocket is the resident node's socket (internal/node/attach.go), the one place streams go.
 func AttachSocket() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis", "node-attach.sock")
+	return filepath.Join(appidentity.SocketDir(home), "node-attach.sock")
 }
 
 // Load reads active mode's credential; the error wraps fs.ErrNotExist before pairing (ErrUnpaired when the file only
@@ -150,6 +151,15 @@ func Read(path string) (*Config, error) {
 // Update changes the file under a lock: the running link (new endpoints from the hub) and `jarvis-link address`
 // may write it at the same time.
 func Update(path string, change func(*Config) error) error {
+	if filepath.Dir(path) == appidentity.HomeDir() {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		if _, err := appidentity.PrepareHome(home); err != nil {
+			return err
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}

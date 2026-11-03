@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // env is what the commands that look after jarvis-link (install, status, logs, uninstall) need from this computer;
@@ -38,7 +40,7 @@ type env struct {
 func newEnv() *env {
 	home, _ := os.UserHomeDir()
 	e := &env{home: home, goos: runtime.GOOS, uid: os.Getuid(), stdin: os.Stdin, stdout: os.Stdout, stderr: os.Stderr,
-		getenv: os.Getenv, exe: os.Executable, lookPath: exec.LookPath, now: time.Now, sleep: time.Sleep,
+		getenv: identity.Getenv, exe: os.Executable, lookPath: exec.LookPath, now: time.Now, sleep: time.Sleep,
 		exists: func(p string) bool { _, err := os.Stat(p); return err == nil }, wait: 20 * time.Second}
 	if u, err := user.Current(); err == nil {
 		e.user = u.Username
@@ -75,7 +77,7 @@ func (e *env) commandEnv() []string {
 
 func (e *env) stdinIsTerminal() bool { return e.terminal }
 
-func (e *env) jarvisDir() string  { return filepath.Join(e.home, ".jarvis") }
+func (e *env) jarvisDir() string  { return identity.DataDir(e.home) }
 func (e *env) configPath() string { return filepath.Join(e.jarvisDir(), "link.json") }
 func (e *env) logPath() string    { return filepath.Join(e.jarvisDir(), "link.log") }
 func (e *env) binPath() string    { return filepath.Join(e.jarvisDir(), "bin", "jarvis-link") }
@@ -106,7 +108,7 @@ func (e *env) installBinary() (path string, copied bool, err error) {
 			return dst, false, nil
 		}
 	}
-	if err := os.MkdirAll(e.jarvisDir(), 0o700); err != nil {
+	if _, err := identity.PrepareHome(e.home); err != nil {
 		return "", false, err
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {

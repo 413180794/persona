@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"net"
 	"net/http"
@@ -148,7 +149,7 @@ type Config struct {
 
 func dataDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis")
+	return identity.DataDir(home)
 }
 
 // defaultConfig is what a first run writes to ~/.jarvis/hub.json: this machine only, reachable by its host name.
@@ -159,7 +160,7 @@ func defaultConfig() *Config {
 	host, _ := os.Hostname()
 	short := strings.Split(host, ".")[0]
 	machines := []MachineConfig{{ID: short, Name: short, Kind: "local", Icon: "server"}}
-	if os.Getenv("JARVIS_LOCAL_NODE") == "0" {
+	if identity.Getenv("JARVIS_LOCAL_NODE") == "0" {
 		machines = []MachineConfig{}
 	}
 	return &Config{
@@ -184,7 +185,7 @@ var envOverrides = []struct {
 
 func (c *Config) applyEnv() {
 	for _, e := range envOverrides {
-		if v := os.Getenv(e.name); v != "" {
+		if v := identity.Getenv(e.name); v != "" {
 			*e.to(c) = v
 		}
 	}
@@ -192,8 +193,12 @@ func (c *Config) applyEnv() {
 
 // LoadConfig reads ~/.jarvis/hub.json, creating it with defaults (and a fresh token) on first run.
 func LoadConfig() (*Config, error) {
-	dir := dataDir()
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	dir, err := identity.PrepareHome(home)
+	if err != nil {
 		return nil, err
 	}
 	path := filepath.Join(dir, "hub.json")

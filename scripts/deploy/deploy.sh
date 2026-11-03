@@ -11,8 +11,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 # The question and its explanations live in install.sh (the public installer asks the same).
 eval "$(sed -n '/^# >>> admin access/,/^# <<< admin access/p' scripts/deploy/install.sh)"
-ADMIN_ACCESS="${JARVIS_ADMIN_ACCESS:-}"
-ADMIN_CIDRS="${JARVIS_ADMIN_CIDRS:-}"
+ADMIN_ACCESS="${PERSONA_ADMIN_ACCESS-${JARVIS_ADMIN_ACCESS:-}}"
+ADMIN_CIDRS="${PERSONA_ADMIN_CIDRS-${JARVIS_ADMIN_CIDRS:-}}"
 ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -80,6 +80,7 @@ install_bin() { # machine-id binary
   via=$(field "$id" via)
   if is_here "$id"; then
     mkdir -p ~/.jarvis/bin && cp "$bin" ~/.jarvis/bin/jarvisd.new && mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd
+    [ ! -d ~/.jarvis/bin/personad ] && ln -sfn jarvisd ~/.jarvis/bin/personad
     restart_resident
   elif [ -n "$via" ]; then
     # Only reachable from another machine of the config (keys or routes this one lacks): copy through it; `ssh` is
@@ -89,11 +90,11 @@ install_bin() { # machine-id binary
     ssh -o ConnectTimeout=10 "$vh" 'mkdir -p ~/.jarvis/bin' && scp -q "$bin" "$vh:$tmp" &&
       ssh "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host 'mkdir -p ~/.jarvis/bin' &&
         scp -q ~/$tmp $host:.jarvis/bin/jarvisd.new &&
-        ssh -o BatchMode=yes $host 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd'; rc=\$?; rm -f ~/$tmp; exit \$rc"
+        ssh -o BatchMode=yes $host 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd && [ ! -d ~/.jarvis/bin/personad ] && ln -sfn jarvisd ~/.jarvis/bin/personad'; rc=\$?; rm -f ~/$tmp; exit \$rc"
   else
     ssh -o ConnectTimeout=10 "$host" 'mkdir -p ~/.jarvis/bin' &&
       scp -q "$bin" "$host:.jarvis/bin/jarvisd.new" &&
-      ssh "$host" 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd' &&
+      ssh "$host" 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd && [ ! -d ~/.jarvis/bin/personad ] && ln -sfn jarvisd ~/.jarvis/bin/personad' &&
       ssh "$host" 'bash -s restart' < ../scripts/deploy/node-launchd.sh 2>/dev/null || true
   fi
 }
@@ -106,9 +107,10 @@ install_telegram() {
   GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" ./cmd/personad-telegram || return 1
   if is_here "$id"; then
     cp "$bin" ~/.jarvis/bin/jarvisd-telegram.new && mv ~/.jarvis/bin/jarvisd-telegram.new ~/.jarvis/bin/jarvisd-telegram
+    [ ! -d ~/.jarvis/bin/personad-telegram ] && ln -sfn jarvisd-telegram ~/.jarvis/bin/personad-telegram
   else
     scp -q "$bin" "$JARVIS_HUB_SSH:.jarvis/bin/jarvisd-telegram.new" &&
-      ssh "$JARVIS_HUB_SSH" 'chmod 755 ~/.jarvis/bin/jarvisd-telegram.new && mv ~/.jarvis/bin/jarvisd-telegram.new ~/.jarvis/bin/jarvisd-telegram'
+      ssh "$JARVIS_HUB_SSH" 'chmod 755 ~/.jarvis/bin/jarvisd-telegram.new && mv ~/.jarvis/bin/jarvisd-telegram.new ~/.jarvis/bin/jarvisd-telegram && [ ! -d ~/.jarvis/bin/personad-telegram ] && ln -sfn jarvisd-telegram ~/.jarvis/bin/personad-telegram'
   fi
 }
 

@@ -1,6 +1,7 @@
 package node
 
 import (
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 	"slices"
 	"strings"
@@ -15,7 +16,7 @@ func (n *Node) ownedAssistantSource(id string) bool {
 		return true
 	}
 	if n.state != nil {
-		if st, ok := n.state.get(id); ok && strings.HasSuffix(st.Cwd, "/.jarvis/assistant") {
+		if st, ok := n.state.get(id); ok && identity.IsAssistantDir(st.Cwd) {
 			return true
 		}
 	}

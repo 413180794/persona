@@ -7,9 +7,10 @@
 // the one the node sent when it carries another (docs/runtimes.md「自动更新」) — and is swapped without DSH's plugin
 // manager. config.autoUpdate: take the node's versions (default: yes, except as a daemon with config.listen).
 
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { prepareSocketDirectory } from '../runtime-sdk/lib/identity.js'
+import { defaultSocketPath } from '../runtime-sdk/index.js'
 import { createLoader } from '../runtime-sdk/lib/loader.js'
 
 export const name = 'jarvis-dsh-runtime'
@@ -25,9 +26,17 @@ export function apply(ctx, config = {}) {
   ctx.inject(['sessionController'], (scope) => {
     const log = (message) => scope.logger?.info?.(message)
     const socket = typeof config.socket === 'string' && config.socket !== ''
-      ? config.socket : process.env.JARVIS_RUNTIME_SOCKET || join(homedir(), '.jarvis', 'runtime.sock')
+      ? config.socket : defaultSocketPath()
     const daemon = config.listen !== undefined && config.listen !== null && config.listen !== false
     const autoUpdate = typeof config.autoUpdate === 'boolean' ? config.autoUpdate : !daemon
+    let store
+    if (autoUpdate) {
+      try {
+        store = join(prepareSocketDirectory(socket), 'runtime-packages', name)
+      } catch (err) {
+        log(`Persona runtime cache unavailable: ${err.message}`)
+      }
+    }
     const loader = createLoader({
       name,
       root: ROOT,
@@ -35,7 +44,7 @@ export function apply(ctx, config = {}) {
       // The versions (the shipped one too: a reload in the same process must not get cached code) live beside the
       // node's socket, in the user's own ~/.jarvis. Without updates (a daemon) there is none: the shipped files run in
       // place, and a new copy takes a DSH restart.
-      store: autoUpdate ? join(dirname(socket), 'runtime-packages', name) : undefined,
+      store,
       autoUpdate,
       context: { ctx: scope, config },
       log,

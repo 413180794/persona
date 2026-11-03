@@ -2,6 +2,7 @@ package node
 
 import (
 	"errors"
+	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -51,7 +52,7 @@ func (n *Node) memoryDir(cwd string) string {
 }
 
 func (n *Node) assistantMemory(a memoryOp) (any, error) {
-	if a.Cwd == "" || !strings.HasSuffix(filepath.Clean(a.Cwd), "/.jarvis/assistant") {
+	if a.Cwd == "" || !identity.IsAssistantDir(filepath.Clean(a.Cwd)) {
 		return nil, errors.New("memory is only available for the assistant directory")
 	}
 	dir := n.memoryDir(a.Cwd)

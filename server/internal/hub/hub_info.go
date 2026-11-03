@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"regexp"
 	"strings"
@@ -29,7 +30,7 @@ func (h *Hub) hubName() string {
 func (h *Hub) defaultHubName() string {
 	host, _ := hostname()
 	short := strings.TrimSpace(strings.Split(host, ".")[0])
-	if short == "" || short == "localhost" || containerHost.MatchString(strings.ToLower(short)) || os.Getenv("JARVIS_LOCAL_NODE") == "0" {
+	if short == "" || short == "localhost" || containerHost.MatchString(strings.ToLower(short)) || identity.Getenv("JARVIS_LOCAL_NODE") == "0" {
 		id := h.hubID()
 		return "hub-" + id[:min(6, len(id))]
 	}

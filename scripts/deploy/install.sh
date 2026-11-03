@@ -78,6 +78,10 @@ admin_access_reminder() {
 }
 # <<< admin access
 
+for suffix in ADMIN_ACCESS ADMIN_CIDRS ROLE PAIR MACHINE LISTEN DL HERDR_INSTALL WITH SKIP_HERDR HOME; do
+	eval 'if [ "${PERSONA_'"$suffix"'+x}" = x ]; then export JARVIS_'"$suffix"'="${PERSONA_'"$suffix"'}"; elif [ "${JARVIS_'"$suffix"'+x}" = x ]; then export PERSONA_'"$suffix"'="${JARVIS_'"$suffix"'}"; fi'
+done
+
 ADMIN_ACCESS="${JARVIS_ADMIN_ACCESS:-}"
 ADMIN_CIDRS="${JARVIS_ADMIN_CIDRS:-}"
 ROLE="${JARVIS_ROLE:-}"
@@ -121,13 +125,98 @@ if [ -n "$ADMIN_ACCESS" ] && ! admin_access_valid "$ADMIN_ACCESS" "$ADMIN_CIDRS"
 	exit 2
 fi
 
+lexical_path() {
+	rest="$1"
+	result=
+	while [ -n "$rest" ]; do
+		part="${rest%%/*}"
+		if [ "$rest" = "$part" ]; then rest=; else rest="${rest#*/}"; fi
+		case "$part" in '' | .) ;; ..) result="${result%/*}" ;; *) result="$result/$part" ;; esac
+	done
+	printf '%s' "${result:-/}"
+}
+
 DL="${JARVIS_DL:-@JARVIS_DL@}"
 HERDR_INSTALL="${JARVIS_HERDR_INSTALL:-https://herdr.dev/install.sh}"
-DEST="$HOME/.jarvis/bin"
+STATE="${JARVIS_HOME:-}"
+if [ -z "$STATE" ]; then
+	if [ -e "$HOME/.jarvis" ] || [ -L "$HOME/.jarvis" ]; then STATE="$HOME/.jarvis"; else STATE="$HOME/.persona"; fi
+fi
+case "$STATE" in '~') STATE="$HOME" ;; '~/'*) STATE="$HOME/${STATE#\~/}" ;; esac
+case "$STATE" in /*) ;; *) STATE="$HOME/$STATE" ;; esac
+STATE="$(lexical_path "$STATE")"
+DEST="$STATE/bin"
 
 fail() {
 	echo "jarvisd: $*" >&2
 	exit 1
+}
+
+state_alias() {
+	if ln -s "${1##*/}" "$2"; then
+		[ "$1" -ef "$2" ] || fail "state directories changed during initialization: retry without moving either directory"
+		return 0
+	fi
+	if [ -e "$2" ] || [ -L "$2" ]; then
+		[ "$1" -ef "$2" ] || fail "state directories changed during initialization: retry without moving either directory"
+	elif [ -d "$STATE" ]; then
+		return 0
+	elif [ -z "${JARVIS_HOME:-}" ] && [ -d "$1" ]; then
+		STATE="$1"
+		DEST="$STATE/bin"
+	else
+		fail "could not create state alias $2"
+	fi
+}
+
+prepare_state() {
+	case "$STATE" in
+	"$HOME/.persona" | "$HOME/.jarvis")
+		if [ ! -e "$HOME/.persona" ] && [ ! -L "$HOME/.persona" ] && [ ! -e "$HOME/.jarvis" ] && [ ! -L "$HOME/.jarvis" ]; then
+			mkdir -p "$HOME/.jarvis"
+			state_alias "$HOME/.jarvis" "$HOME/.persona"
+		elif [ ! -e "$HOME/.jarvis" ] && [ ! -L "$HOME/.jarvis" ] && [ -d "$HOME/.persona" ]; then
+			state_alias "$HOME/.persona" "$HOME/.jarvis"
+		elif [ ! -e "$HOME/.persona" ] && [ ! -L "$HOME/.persona" ] && [ -d "$HOME/.jarvis" ]; then
+			state_alias "$HOME/.jarvis" "$HOME/.persona"
+		fi ;;
+	esac
+	if [ -L "$STATE" ] && [ ! -d "$STATE" ]; then
+		case "$STATE" in "$HOME/.persona" | "$HOME/.jarvis") ;; *) fail "unavailable state symlink $STATE: restore its target before upgrading" ;; esac
+		target="$(readlink "$STATE")"
+		case "$target" in /*) raw="$target" ;; *) raw="${STATE%/*}/$target" ;; esac
+		while [ "${raw%/}" != "$raw" ] || [ "${raw%/.}" != "$raw" ]; do
+			if [ "${raw%/.}" != "$raw" ]; then raw="${raw%/.}"; else raw="${raw%/}"; fi
+		done
+		target="$(lexical_path "$raw")"
+		case "$target" in "$HOME/.persona" | "$HOME/.jarvis") ;; *) fail "unavailable state symlink $STATE: restore its target before upgrading" ;; esac
+		actual_parent="$(CDPATH= cd -P "${raw%/*}" 2>/dev/null && pwd -P)" || fail "unavailable state symlink $STATE"
+		expected_parent="$(CDPATH= cd -P "${target%/*}" 2>/dev/null && pwd -P)" || fail "unavailable state symlink $STATE"
+		[ "$actual_parent" = "$expected_parent" ] || fail "unavailable state symlink $STATE: restore its target before upgrading"
+		[ ! -e "$target" ] && [ ! -L "$target" ] || fail "unavailable state symlink $STATE"
+		mkdir -p "$target"
+	fi
+	mkdir -p "$STATE"
+	case "$STATE" in
+	"$HOME/.jarvis") alias="$HOME/.persona" ;;
+	"$HOME/.persona") alias="$HOME/.jarvis" ;;
+	*) return 0 ;;
+	esac
+	if [ ! -e "$alias" ] && [ ! -L "$alias" ]; then
+		state_alias "$STATE" "$alias"
+	fi
+}
+
+binary_alias() {
+	[ ! -d "$DEST/$1" ] || fail "$DEST/$1 is a directory, not a binary alias"
+	stage="$DEST/.$1.${tmp##*/}.alias"
+	[ ! -e "$stage" ] && [ ! -L "$stage" ] || fail "binary alias staging path already exists"
+	if ! ln -s "$2" "$stage"; then
+		[ ! -e "$stage" ] && [ ! -L "$stage" ] || fail "binary alias staging path changed"
+		printf '%s\n' '#!/bin/sh' "exec \"\$(dirname \"\$0\")/$2\" \"\$@\"" > "$stage"
+		chmod 755 "$stage"
+	fi
+	mv -f "$stage" "$DEST/$1"
 }
 
 case "$(uname -s)" in
@@ -172,12 +261,14 @@ get() {
 	[ "$(sum "$tmp/$archive")" = "$want" ] || fail "checksum mismatch for $archive: not installed"
 	gzip -dc "$tmp/$archive" > "$tmp/$1" || fail "could not unpack $archive: not installed"
 	[ -s "$tmp/$1" ] || fail "$archive contains an empty binary: not installed"
+	prepare_state
 	mkdir -p "$DEST"
 	chmod 755 "$tmp/$1"
 	mv "$tmp/$1" "$DEST/$2"
 }
 
 get "$name" jarvisd
+binary_alias personad jarvisd
 version="$("$DEST/jarvisd" version 2>/dev/null || echo unknown)"
 echo "jarvisd $version installed at $DEST/jarvisd"
 case ":$PATH:" in
@@ -191,6 +282,7 @@ esac
 case ",${JARVIS_WITH:-}," in
 *,telegram,*)
 	get "jarvisd-telegram-$os-$arch" jarvisd-telegram
+	binary_alias personad-telegram jarvisd-telegram
 	echo "jarvisd-telegram installed at $DEST/jarvisd-telegram"
 	;;
 esac
@@ -287,7 +379,7 @@ if [ "$ROLE" = node ]; then
 fi
 if [ -n "$ADMIN_ACCESS" ]; then
 	set_admin_access
-elif [ -f "$HOME/.jarvis/hub.json" ]; then
+elif [ -f "$STATE/hub.json" ]; then
 	if [ -z "$("$DEST/jarvisd" hub admin access --get 2>/dev/null || true)" ]; then
 		if ask_admin_access; then set_admin_access; else admin_access_reminder; fi
 	fi

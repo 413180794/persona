@@ -10,6 +10,7 @@ import { createServer } from 'node:http'
 import { createConnection } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { envValue, socketDir } from './identity.js'
 import { upgrade } from './listen.js'
 import { Peer, RpcError } from './wire.js'
 
@@ -32,7 +33,7 @@ export const DEFAULT_LISTEN_PATH = '/jarvis/runtime'
 
 /** The node's runtime socket for the user this process runs as. */
 export function defaultSocketPath() {
-  return process.env.JARVIS_RUNTIME_SOCKET || join(homedir(), '.jarvis', 'runtime.sock')
+  return envValue('PERSONA_RUNTIME_SOCKET') || join(socketDir(), 'runtime.sock')
 }
 
 /**

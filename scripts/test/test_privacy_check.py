@@ -87,6 +87,20 @@ class NpmSourceTests(unittest.TestCase):
 
 
 class LoopbackTests(unittest.TestCase):
+    def test_persona_and_legacy_config_words_are_both_scanned(self):
+        with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
+            home = Path(temp)
+            for brand in ("persona", "jarvis"):
+                directory = home / ".config" / brand
+                directory.mkdir(parents=True)
+                (directory / "config.json").write_text(json.dumps({"machine_label": brand + "-private-label"}))
+                (directory / "private-words.txt").write_text(brand + "-private-word\n")
+            with patch.object(pc, "HOME", str(home)), patch.object(pc, "ROOT", str(home)):
+                words, _ = pc.terms()
+            for brand in ("persona", "jarvis"):
+                self.assertIn(brand + "-private-label", words)
+                self.assertIn(brand + "-private-word", words)
+
     def test_loopback_values(self):
         for value in ["127.0.0.1", "127.1.2.3", "::1", "[::1]", "0:0:0:0:0:0:0:1"]:
             with self.subTest(value=value):

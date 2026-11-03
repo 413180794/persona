@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"net"
 	"net/http"
 	"os"
@@ -788,7 +789,7 @@ type imageView struct {
 
 // dockerImage is the image this Docker hub runs: the compose file's JARVIS_IMAGE, else the one it was built as.
 func (u *updater) dockerImage() (update.Image, error) {
-	s := os.Getenv("JARVIS_IMAGE")
+	s := identity.Getenv("JARVIS_IMAGE")
 	if s == "" {
 		s = u.h.build.Image
 	}
@@ -809,7 +810,7 @@ func (u *updater) checkImage(ctx context.Context) error {
 	u.setState("checking")
 	cctx, cancel := context.WithTimeout(ctx, updateRequestLimit)
 	defer cancel()
-	newest, err := update.LatestVersion(cctx, u.client, im, os.Getenv("JARVIS_REGISTRY_TOKEN"))
+	newest, err := update.LatestVersion(cctx, u.client, im, identity.Getenv("JARVIS_REGISTRY_TOKEN"))
 	u.mu.Lock()
 	u.lastCheck = time.Now()
 	if err == nil {

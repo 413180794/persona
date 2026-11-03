@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -72,7 +73,7 @@ var (
 
 // LoadConfig reads JARVIS_PLUGIN_CONFIG.
 func LoadConfig() (Config, error) {
-	raw := strings.TrimSpace(os.Getenv("JARVIS_PLUGIN_CONFIG"))
+	raw := strings.TrimSpace(identity.Getenv("JARVIS_PLUGIN_CONFIG"))
 	if raw == "" {
 		return Config{}, errors.New("JARVIS_PLUGIN_CONFIG is empty: give the plugin entry in hub.json a config with providers (docs/plugins.md)")
 	}

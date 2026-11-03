@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,7 +36,7 @@ const RuntimeProtocol = 1
 // RuntimeSocketPath is where runtimes reach the node.
 func RuntimeSocketPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis", "runtime.sock")
+	return filepath.Join(identity.SocketDir(home), "runtime.sock")
 }
 
 // runtimeCallTimeout bounds one node → runtime call; a history page of a long session is the slow one.

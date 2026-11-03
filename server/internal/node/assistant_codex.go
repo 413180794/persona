@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
 	"os/exec"
@@ -157,7 +158,7 @@ func codexArgs(bin, key string) []string {
 	return []string{
 		"-c", "mcp_servers.jarvis.command=" + q(bin),
 		"-c", `mcp_servers.jarvis.args=["mcp"]`,
-		"-c", fmt.Sprintf("mcp_servers.jarvis.env={JARVIS_ASSISTANT=%s,JARVIS_SESSION_ID=%s}", q("1"), q(key)),
+		"-c", fmt.Sprintf("mcp_servers.jarvis.env={PERSONA_ASSISTANT=%s,JARVIS_ASSISTANT=%s,PERSONA_SESSION_ID=%s,JARVIS_SESSION_ID=%s}", q("1"), q("1"), q(key), q(key)),
 		"-c", fmt.Sprintf("mcp_servers.jarvis.tool_timeout_sec=%d", codexToolTimeout),
 		"-c", "mcp_servers.jarvis.startup_timeout_sec=30",
 		// Commands get the process's environment like Claude's Bash does: the default excludes (*KEY*, *TOKEN*…)
@@ -196,8 +197,8 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	}
 	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "jarvis"}, codexArgs(n.bin, key)...)...)
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "JARVIS_ASSISTANT=1")
-	cmd.Env = append(cmd.Env, n.assistantLarkEnv(cwd)...)
+	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1")
+	cmd.Env = identity.Environment(cmd.Env, n.assistantLarkEnv(cwd)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

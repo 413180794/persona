@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"net"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ import (
 // SocketPath is where hook and mcp subprocesses reach the node.
 func SocketPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".jarvis", "node.sock")
+	return filepath.Join(identity.SocketDir(home), "node.sock")
 }
 
 // HookTimeout is how long a hook waits for the phone before handing the dialog back to the terminal.

@@ -2,11 +2,11 @@ package hub
 
 import (
 	"errors"
+	"github.com/nwverse/persona/server/internal/identity"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -49,7 +49,7 @@ func (h *Hub) adminNetworkView(r *http.Request) map[string]any {
 		allowed[access] = h.adminWouldAllow(r, s)
 	}
 	return map[string]any{
-		"listen": h.cfg.Listen, "public_url": publicURL, "public_url_from_env": os.Getenv("JARVIS_PUBLIC_URL") != "",
+		"listen": h.cfg.Listen, "public_url": publicURL, "public_url_from_env": identity.Getenv("JARVIS_PUBLIC_URL") != "",
 		"tls": tls, "advertise": advertise,
 		"advertise_ipv6": public.AdvertiseIPv6 == nil || *public.AdvertiseIPv6,
 		"advertise_lan":  public.AdvertiseLAN == nil || *public.AdvertiseLAN,
@@ -158,7 +158,7 @@ func (h *Hub) adminNetworkRoutes(mux *http.ServeMux) {
 		}
 		// JARVIS_PUBLIC_URL (Docker's .env) wins over the file and is never written into it: the page shows its value,
 		// sends it back unchanged with the other fields, and a change of it belongs in the deployment.
-		if env := os.Getenv("JARVIS_PUBLIC_URL"); env != "" && in.PublicURL != nil {
+		if env := identity.Getenv("JARVIS_PUBLIC_URL"); env != "" && in.PublicURL != nil {
 			if strings.TrimSpace(*in.PublicURL) != env {
 				writeErrCode(w, http.StatusConflict, "from_env", errors.New("public_url comes from JARVIS_PUBLIC_URL: change it where the hub is deployed"))
 				return

@@ -19,6 +19,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // PluginConfig is a process the hub runs next to itself to add something to the app (docs/plugins.md). The hub
@@ -178,7 +180,7 @@ func (p *plugin) once(ctx context.Context, env []string, logf func(string, ...an
 	}
 	_ = os.Remove(p.socket) // left by a previous run that was killed
 	command := expandHome(p.cfg.Command)
-	if command == "jarvisd" {
+	if command == "personad" || command == "jarvisd" {
 		// The built-in plugins (`jarvisd voice`): this very binary, wherever it is installed.
 		if self, err := os.Executable(); err == nil {
 			command = self
@@ -186,12 +188,14 @@ func (p *plugin) once(ctx context.Context, env []string, logf func(string, ...an
 	}
 	cmd := exec.Command(command, p.cfg.Args...)
 	cmd.Dir = expandHome(p.cfg.Dir)
-	cmd.Env = append(append(os.Environ(), env...), "JARVIS_PLUGIN_ID="+p.cfg.ID, "JARVIS_PLUGIN_SOCKET="+p.socket)
+	cmd.Env = identity.Environment(os.Environ(), append(env, "PERSONA_PLUGIN_ID="+p.cfg.ID, "PERSONA_PLUGIN_SOCKET="+p.socket)...)
+	configured := make([]string, 0, len(p.cfg.Env))
 	for k, v := range p.cfg.Env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+		configured = append(configured, k+"="+v)
 	}
+	cmd.Env = identity.Environment(cmd.Env, configured...)
 	if len(p.cfg.Config) > 0 {
-		cmd.Env = append(cmd.Env, "JARVIS_PLUGIN_CONFIG="+string(p.cfg.Config))
+		cmd.Env = identity.Environment(cmd.Env, "PERSONA_PLUGIN_CONFIG="+string(p.cfg.Config))
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stopping it takes its children too
 	out, err := cmd.StdoutPipe()

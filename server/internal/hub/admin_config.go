@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"net/netip"
 	"os"
@@ -78,11 +79,11 @@ func splitList(s string) []string {
 // adminEnv is the scope a deployment gave in the environment (JARVIS_ADMIN_ACCESS, JARVIS_ADMIN_CIDRS; Docker's
 // .env): it wins over hub.json, like the other JARVIS_* overrides, and is never written back. nil when unset.
 func adminEnv() *AdminConfig {
-	access := strings.TrimSpace(os.Getenv("JARVIS_ADMIN_ACCESS"))
+	access := strings.TrimSpace(identity.Getenv("JARVIS_ADMIN_ACCESS"))
 	if access == "" {
 		return nil
 	}
-	return &AdminConfig{Access: access, CIDRs: splitList(os.Getenv("JARVIS_ADMIN_CIDRS"))}
+	return &AdminConfig{Access: access, CIDRs: splitList(identity.Getenv("JARVIS_ADMIN_CIDRS"))}
 }
 
 // --- hub.json edits ---------------------------------------------------------------------------------------------

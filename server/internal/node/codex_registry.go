@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"path/filepath"
 	"slices"
@@ -367,7 +368,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		if src.path != "" {
 			if st, err := os.Stat(src.path); err == nil {
 				m := n.meta(src.path, st)
-				if strings.HasSuffix(m.cwd, "/.jarvis/assistant") {
+				if identity.IsAssistantDir(m.cwd) {
 					continue
 				}
 				s.Cwd, s.Model, s.LastText, s.UpdatedAt, s.Rev = m.cwd, m.model, snippet(m.lastText), lastUsed(m, st), st.Size()

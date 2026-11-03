@@ -10,11 +10,12 @@
 // (pi reads extensions afresh on reload), so the new code runs in this same process. Installed from anywhere else (a
 // checkout), it never updates itself.
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
+import { envValue } from '../runtime-sdk/lib/identity.js'
 import { selfPackage } from '../runtime-sdk/index.js'
 import { createPiHost, piWebOf } from './lib/pi.js'
 
@@ -23,7 +24,8 @@ const SELF = selfPackage(import.meta.url, 'jarvis-pi-runtime')
 function config() {
   const dir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent')
   try {
-    return JSON.parse(readFileSync(join(dir, 'jarvis.json'), 'utf8'))
+    const current = join(dir, 'persona.json')
+    return JSON.parse(readFileSync(existsSync(current) ? current : join(dir, 'jarvis.json'), 'utf8'))
   } catch {
     return {}
   }
@@ -52,7 +54,7 @@ function host() {
     web,
     // A pi in a herdr pane: the node shows it as herdr's session (pi-web's server may run in a pane too: not it).
     paneId: web ? undefined : process.env.HERDR_PANE_ID || undefined,
-    log: (m) => { if (process.env.JARVIS_PI_DEBUG) console.error(m) },
+    log: (m) => { if (envValue('PERSONA_PI_DEBUG')) console.error(m) },
   }, {
     socketPath: typeof c.socket === 'string' && c.socket ? c.socket : undefined,
     answerFirst: ['auto', 'phone', 'local'].includes(c.answerFirst) ? c.answerFirst : 'auto',
