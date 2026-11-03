@@ -19,7 +19,9 @@ export function StartingAgent({ launch, onToggleSidebar }: { launch: AgentLaunch
   const retry = () => {
     if (launch.uncertain && !confirm(launch.session ? "不确定第一条消息是否已经送达。你已经查看会话，确认没有收到，要重新发送吗？" : "电脑上可能已经创建了 Agent。你已经查看列表，确认没有重复，要重新启动吗？")) return;
     if (launch.retryNeedsNewId) putLaunch({ ...launch, messageId: uuid(), retryNeedsNewId: false });
-    if (editable) putLaunch({ ...launch, text: text.trim(), launcher: launcher.trim(), outgoing: undefined });
+    // the model and effort were picked for the launcher it had: another launcher starts with its own
+    const other = launcher.trim() !== launch.launcher;
+    if (editable) putLaunch({ ...launch, text: text.trim(), launcher: launcher.trim(), outgoing: undefined, ...(other && { model: undefined, effort: undefined }) });
     void deliverLaunch(launch.id, launch.clearable);
   };
   const label = launch.phase === "creating" ? "正在启动 Agent" : launch.phase === "uploading" ? "正在准备附件" : "正在发送第一条消息";
@@ -27,7 +29,7 @@ export function StartingAgent({ launch, onToggleSidebar }: { launch: AgentLaunch
     <div className="flex h-full min-w-0 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-page/85 px-3 backdrop-blur-md sm:px-4">
         {onToggleSidebar && <button type="button" aria-label="侧边栏" onClick={onToggleSidebar} className="flex size-7 items-center justify-center rounded-control text-ink-3 hover:bg-hover lg:hidden"><Icon name="sidebar" /></button>}
-        <div className="min-w-0 flex-1"><h1 className="truncate text-[14px] font-semibold text-ink">新 Agent</h1><p className="truncate text-[11.5px] text-ink-3">{[machine?.name ?? launch.machineId, shortPath(launch.cwd), launch.launcher].filter(Boolean).join(" · ")}</p></div>
+        <div className="min-w-0 flex-1"><h1 className="truncate text-[14px] font-semibold text-ink">新 Agent</h1><p className="truncate text-[11.5px] text-ink-3">{[machine?.name ?? launch.machineId, shortPath(launch.cwd), launch.launcher, launch.model].filter(Boolean).join(" · ")}</p></div>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">

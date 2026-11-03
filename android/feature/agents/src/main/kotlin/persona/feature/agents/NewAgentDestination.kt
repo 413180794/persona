@@ -5,6 +5,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.flow.first
 import persona.core.contracts.api.ConnectionState
 import persona.core.designsystem.JListPage
 import persona.core.designsystem.JNotice
@@ -46,5 +47,20 @@ internal fun NewAgentDestination(route: NewAgentRoute, navigator: Navigator, dep
             navigator.navigate(ChatRoute(session.machineId, session.sessionId, kind = ConversationKind.Agent))
         }
     }
-    NewAgentPage(model, machines, connection == ConnectionState.Online, onBack = navigator::back)
+    // Captures (debug builds): the steps NewAgentPreview asks for, each once the form can take it.
+    val preview = remember { NewAgentPreview.steps.also { NewAgentPreview.steps = null } }
+    var modelQuery by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(model, preview) {
+        preview?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.forEach { step ->
+            val value = step.substringAfter(':', "")
+            model.state.first { it.initialized && !it.loading && it.machineId.isNotEmpty() }
+            when (step.substringBefore(':')) {
+                "launcher" -> model.selection(model.state.value.selection.copy(launcher = value))
+                "effort" -> model.selection(model.state.value.selection.copy(effort = value))
+                "model" -> { model.state.first { it.modelList != null }; model.pickModel(value) }
+                "models" -> { model.state.first { it.modelList != null }; modelQuery = value }
+            }
+        }
+    }
+    NewAgentPage(model, machines, connection == ConnectionState.Online, onBack = navigator::back, initialModelQuery = modelQuery)
 }

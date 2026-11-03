@@ -18,6 +18,39 @@ interface AgentCreationService {
      * unified model configuration.
      */
     suspend fun newAgentModel(): ModelPurposeDetail? = null
+
+    /**
+     * The models [launcher]'s agent offers in its own /model menu, for 新建 Agent's model picker: the node keeps the
+     * list a while, [refresh] asks the CLI again. Null from hubs without the list (404).
+     */
+    suspend fun launcherModels(machineId: String, launcher: String, refresh: Boolean = false): LauncherModels? = null
+}
+
+/** What a launcher's agent lists in its /model menu (`GET …/launchers/{name}/models`). No [models]: it has no list. */
+@Serializable
+data class LauncherModels(
+    /** What the launcher runs: claude, codex, traex, a runtime's. */
+    val agent: String = "",
+    val models: List<AgentModel> = emptyList(),
+    /** Why a model picked here would not reach the agent (the launcher passes its own --model); null: it would. */
+    val locked: String? = null,
+)
+
+@Serializable
+data class AgentModel(
+    /** What a start sends as `model`. */
+    val id: String,
+    val name: String = "",
+    val description: String? = null,
+    /** The concrete model an alias stands for with this launcher's settings (opus → its model id). */
+    val resolved: String? = null,
+    /** What the agent runs when it is given no model: picking it is the same as picking none. */
+    @SerialName("default") val isDefault: Boolean = false,
+    /** The thinking efforts it takes, weakest first; empty: no effort setting. */
+    val efforts: List<String> = emptyList(),
+    @SerialName("default_effort") val defaultEffort: String? = null,
+) {
+    val label: String get() = name.ifBlank { id }
 }
 
 @Serializable
@@ -59,6 +92,8 @@ data class AgentStartRequest(
     val async: Boolean? = null,
     /** What the tab is named after when the first message goes as an ordinary message rather than [prompt]. */
     @SerialName("name_hint") val nameHint: String? = null,
+    /** The model picked for this start (an id of [AgentCreationService.launcherModels]); null: the default one. */
+    val model: String? = null,
 )
 
 sealed interface AgentStartResult {

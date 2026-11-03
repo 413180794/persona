@@ -46,6 +46,7 @@ const P: Record<string, React.ReactNode> = {
   download: <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />,
   retry: <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />,
   undo: <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
+  lock: <g><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></g>,
   key: <g><circle cx="7.5" cy="15.5" r="5.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" /></g>,
   terminal: <g><rect x="2" y="4" width="20" height="16" rx="2.5" /><path d="m6 9 3 3-3 3M12 15h5" /></g>,
   inbox: <g><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></g>,

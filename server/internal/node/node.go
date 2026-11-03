@@ -333,6 +333,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		PermissionMode   string          `json:"permission_mode"`
 		Effort           string          `json:"effort"`
 		ResumeOnly       bool            `json:"resume_only"`
+		Refresh          bool            `json:"refresh"` // launchers.models: ask again, not the kept list
 		Raw              json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -460,6 +461,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.launcherCheck(ctx, p.Name), nil
 	case "launchers.probe":
 		return map[string]any{"detail": n.launcherProbeCached(ctx, p.Name)}, nil
+	case "launchers.models":
+		return n.launcherModels(ctx, p.Name, p.AgentType, p.Refresh)
 	case "launchers.quota":
 		r, err := n.launcherQuota(ctx, p.Name, p.TZ)
 		return map[string]any{"quota": r}, err

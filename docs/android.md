@@ -770,7 +770,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
   - 对话页输入框上方：「正在启动 Claude，消息会在它就绪后发出」/「没有启动起来：原因」（`ChatStartingNote`）。
   - `NewAgentRoute(machineId, cwd, prompt)` 是同一张表单的页面版，给知识库的「开 Agent」：那台机器在线时预选机器和目录（都能改），不在线就选别的并写明；开好后页面关掉，对话在 Agents 打开。
 - **设备**（设置 › 设备）：已撤销的凭据单独一组（灰，「撤销于 …」），没用过的设备显示「添加于」，写明凭据的意思；hub 不支持设备凭据（404）、没有数据库（503）时直接说明。
-- 调试直达：`--es debug.openPage machine:<机器 id>`、`engine:<机器 id>`、`purpose:<用途 id>`、`new-agent` 或 `new-agent:<机器 id>:<目录>`（预填）。配对后的引擎一步要用配对链接走配对页（`debug.mockAddress` 是静默配对，看不到这一步）。
+- 调试直达：`--es debug.openPage machine:<机器 id>`、`engine:<机器 id>`、`purpose:<用途 id>`、`new-agent` 或 `new-agent:<机器 id>:<目录>`（预填）；新建会话加 `--es debug.newAgent '<步骤>'`，加载完依次做：`launcher:<名字>`、`effort:<档位>`、`model:<id>`、`models[:<搜索词>]`（打开模型列表，可带搜索），多个步骤用逗号分开。配对后的引擎一步要用配对链接走配对页（`debug.mockAddress` 是静默配对，看不到这一步）。
 - 假 hub 开关：`MOCK_NODE_MISMATCH=1`（Mac Studio 的 jarvisd 不是 hub 这一版）、`MOCK_DEPLOY_ERROR=<原因>`（重新部署失败）、`MOCK_ENGINE_ERROR=1`（保存引擎 503）、`MOCK_MODEL_CONFLICT=1`（保存模型配置 409）、`MOCK_START_SECONDS=<秒>`（新会话「正在启动」多久）、`MOCK_START_ERROR=<原因>`（到时间后启动失败，对话页显示「没有启动起来」）、`MOCK_MACHINES=1`（离线的实验室主机，重新连接后上线）。
 - 单测：`core:contracts` 的 `MachineManagementContractTest`；`core:hub` 的 `HttpMachineManagementTest`、`HttpModelConfigurationTest`、`AgentCreationModelTest`、`DeviceCredentialsTest`；`core:data` 的 `SessionsAdoptTest`；`core:domain` 的 `EnginesTest`；`feature:machines` 的 `MachineActionsTest`；`feature:settings` 的 `SettingsMachinesTest`（引擎选择、Claude Code 设置、模型配置）、`DeviceCredentialsStateTest`；`feature:agents` 的 `NewAgentAsyncTest`（第一条消息只发一次、跟随模型配置、Codex、预填）；`feature:chat` 的 `ChatStartingNoteTest`。
 

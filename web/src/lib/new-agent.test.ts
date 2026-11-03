@@ -123,6 +123,22 @@ describe("本地优先启动", () => {
     expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({ prompt: input.text });
   });
 
+  it("sends the picked model and effort with the start, and only the model to a Codex", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({}));
+    vi.stubGlobal("fetch", fetcher);
+    launchAgent({ ...input, launcher: "claude", model: "opus", effort: "high" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ launcher: "claude", model: "opus", effort: "high" });
+
+    const codex = vi.fn().mockResolvedValueOnce(response({ error: "needs prompt", code: "codex_needs_prompt" }, 409)).mockResolvedValueOnce(response({ session: { ...session, agent: "codex" } }));
+    vi.stubGlobal("fetch", codex);
+    launchAgent({ ...input, launcher: "codex", model: "gpt-5.5-mini", effort: "high" });
+    await vi.advanceTimersByTimeAsync(0);
+    const body = JSON.parse(codex.mock.calls[1][1].body);
+    expect(body).toMatchObject({ launcher: "codex", model: "gpt-5.5-mini", prompt: input.text });
+    expect(body).not.toHaveProperty("effort");
+  });
+
   it("does not replace a Codex multimodal first message with a fake initialization prompt", async () => {
     const fetcher = vi.fn().mockResolvedValue(response({ error: "needs prompt", code: "codex_needs_prompt" }, 409));
     vi.stubGlobal("fetch", fetcher);

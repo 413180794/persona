@@ -44,6 +44,7 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"ok": true})
 	}))
 	api.HandleFunc("GET /api/v1/machines/{mid}/launchers", h.withMachine(h.listLaunchers))
+	api.HandleFunc("GET /api/v1/machines/{mid}/launchers/{name}/models", h.withMachine(h.launcherModels))
 	h.launcherRoutes(api)
 	h.modelConfigRoutes(api)
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
@@ -554,6 +555,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		Cwd             string `json:"cwd"`
 		Launcher        string `json:"launcher"`
 		AgentType       string `json:"agent_type,omitempty"`
+		Model           string `json:"model,omitempty"` // picked in 新建 Agent for this start; empty: applyModel's
 		Prompt          string `json:"prompt"`
 		ResumeSessionID string `json:"resume_session_id"`
 		WorkspaceID     string `json:"workspace_id"`

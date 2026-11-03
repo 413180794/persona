@@ -11,6 +11,9 @@ export interface AgentLaunch {
   machineId: string;
   cwd: string;
   launcher: string;
+  /** Picked in 新建 Agent for this start only (launcher-models.ts startPicks); none: the launcher's own. */
+  model?: string;
+  effort?: string;
   text: string;
   attachments: LocalAttachment[];
   todoId?: string;
@@ -26,7 +29,7 @@ export interface AgentLaunch {
   draft?: string;
 }
 
-export function launchAgent(input: Pick<AgentLaunch, "machineId" | "cwd" | "launcher" | "text" | "attachments" | "todoId">) {
+export function launchAgent(input: Pick<AgentLaunch, "machineId" | "cwd" | "launcher" | "model" | "effort" | "text" | "attachments" | "todoId">) {
   const launch: AgentLaunch = { ...input, id: `local-${uuid()}`, phase: "creating", uploaded: {} };
   putLaunch(launch);
   navigate({ name: "session", mid: launch.machineId, sid: launch.id });
@@ -61,13 +64,14 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
     if (!launch.session) {
       let session: Session;
       try {
-        const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, async: true, name_hint: launch.text || undefined, todo_id: launch.todoId || undefined } });
+        const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, model: launch.model || undefined, effort: launch.effort || undefined, async: true, name_hint: launch.text || undefined, todo_id: launch.todoId || undefined } });
         session = r.session;
       } catch (e) {
         if (!(e instanceof ApiError) || e.code !== "codex_needs_prompt") throw e;
         if (launch.attachments.length) throw new Error("这个启动器暂不支持首条消息带附件，请选择其他启动器；也可以先用文字启动，再在会话里发送附件。");
         if (!launch.text) throw new Error("这个启动器需要第一条消息，请填写后再启动。");
-        const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, prompt: launch.text, todo_id: launch.todoId || undefined } });
+        // A Codex start takes the picked model but no effort.
+        const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, model: launch.model || undefined, prompt: launch.text, todo_id: launch.todoId || undefined } });
         session = r.session;
         update({ outgoing: { text: "", images: [] } });
       }

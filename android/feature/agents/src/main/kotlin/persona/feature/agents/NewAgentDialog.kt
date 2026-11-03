@@ -21,15 +21,18 @@ import java.net.URI
 internal fun NewAgentDialog(model: NewAgentViewModel, machines: List<Machine>, online: Boolean, onDismiss: () -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    // Outside the list: the model list stays open whatever the form below it scrolls away.
+    var picking by remember { mutableStateOf(false) }
     val close = { if (!state.starting) { if (state.browsing) model.closeBrowser() else onDismiss() } }
     JSheet(onDismiss = { if (!state.starting) onDismiss() }, title = "新建会话") {
         BackHandler(onBack = close)
         Column(Modifier.fillMaxWidth().weight(1f).imePadding()) {
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                newAgentItems(state, model, machines, query, { query = it }, close)
+                newAgentItems(state, model, machines, query, { query = it }, close, onModels = { picking = true })
             }
             NewAgentFooter(state, model, machines, online, Modifier.fillMaxWidth().padding(top = 8.dp))
         }
+        if (picking) NewAgentModelSheet(state, model::pickModel, model::reloadModels, onDismiss = { picking = false })
     }
 }
 
@@ -38,20 +41,28 @@ internal fun NewAgentDialog(model: NewAgentViewModel, machines: List<Machine>, o
  * base's 开 Agent). Back closes the folder browser first.
  */
 @Composable
-internal fun NewAgentPage(model: NewAgentViewModel, machines: List<Machine>, online: Boolean, onBack: () -> Unit) {
+internal fun NewAgentPage(
+    model: NewAgentViewModel, machines: List<Machine>, online: Boolean, onBack: () -> Unit,
+    /** Opens the model list at once, searching for this (captures). */
+    initialModelQuery: String? = null,
+) {
     val state by model.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    var picking by remember(initialModelQuery) { mutableStateOf(initialModelQuery != null) }
     val close = { if (!state.starting) { if (state.browsing) model.closeBrowser() else onBack() } }
     BackHandler(onBack = close)
     JListPage(title = "新建会话", onBack = close, largeTitle = false, bottomBar = {
         NewAgentFooter(state, model, machines, online, Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s))
     }) {
-        newAgentItems(state, model, machines, query, { query = it }, close)
+        newAgentItems(state, model, machines, query, { query = it }, close, onModels = { picking = true })
     }
+    if (picking) NewAgentModelSheet(state, model::pickModel, model::reloadModels, onDismiss = { picking = false },
+        initialQuery = initialModelQuery.orEmpty())
 }
 
 private fun LazyListScope.newAgentItems(
     state: NewAgentState, model: NewAgentViewModel, machines: List<Machine>, query: String, onQuery: (String) -> Unit, close: () -> Unit,
+    onModels: () -> Unit,
 ) {
     val editable = !state.locked && !state.loading
     if (state.loading) item("loading") { JLinearProgress(null) }
@@ -158,10 +169,14 @@ private fun LazyListScope.newAgentItems(
                 enabled = editable, onClick = { model.selection(state.selection.copy(launcher = launcher.name)) }, chevron = false)
         }
     }
+    newAgentModelItems(state, editable, onModels, model::reloadModels)
     if (state.agentType == "claude") item("claude-options") {
         ChoiceMenu("权限模式", state.selection.mode, permissionModes, editable) { model.selection(state.selection.copy(mode = it)) }
         if (state.selection.mode == "bypassPermissions") Text("全部放行后，改文件和执行命令都不会再询问你。", color = PersonaTheme.palette.danger.text, style = PersonaTheme.type.caption)
-        ChoiceMenu("思考强度", state.selection.effort, effortLevels, editable) { model.selection(state.selection.copy(effort = it)) }
+        // Only the levels the model that will run takes; none: it has no effort setting.
+        val efforts = state.modelEfforts
+        if (efforts?.isEmpty() == true) JRow("思考强度", subtitle = "这个模型不能调思考强度", enabled = false)
+        else ChoiceMenu("思考强度", state.selection.effort, effortChoices(efforts), editable) { model.selection(state.selection.copy(effort = it)) }
     }
     item("prompt") {
         JTextField(state.prompt, model::prompt, enabled = !state.locked,
@@ -200,9 +215,9 @@ private fun startable(state: NewAgentState, machines: List<Machine>): Boolean =
     state.selection.cwd.isNotBlank() && (state.selection.launcher.isNotBlank() || state.following) &&
         machines.any { it.id == state.machineId && it.online } && (state.agentType != "codex" || state.prompt.isNotBlank())
 
-private fun String.agentLabel() = when (this) { "claude" -> "Claude Code"; "codex" -> "Codex"; "traex" -> "TRAEX"; else -> this }
+internal fun String.agentLabel() = when (this) { "claude" -> "Claude Code"; "codex" -> "Codex"; "traex" -> "TRAEX"; else -> this }
 private val permissionModes = listOf("" to "跟随启动器", "default" to "手动确认", "acceptEdits" to "自动改文件", "plan" to "只做计划", "auto" to "自动", "bypassPermissions" to "全部放行")
-private val effortLevels = listOf("" to "跟随启动器", "low" to "低", "medium" to "中", "high" to "高", "xhigh" to "很高", "max" to "最高")
+internal val effortLevels = listOf("" to "跟随启动器", "low" to "低", "medium" to "中", "high" to "高", "xhigh" to "很高", "max" to "最高")
 
 @Composable
 private fun ChoiceMenu(title: String, value: String, options: List<Pair<String, String>>, enabled: Boolean, onSelect: (String) -> Unit) {

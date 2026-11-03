@@ -228,6 +228,9 @@ export interface Interaction {
 export interface Launcher {
   name: string;
   model?: string;
+  /** What it starts when not Claude Code ("codex"); agent_type: what the hub's machine config says it runs. */
+  agent?: string;
+  agent_type?: string;
 }
 
 export interface AssistantInfo {

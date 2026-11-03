@@ -24,6 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // 设置 › 模型 (docs/launchers.md): every launcher in one list. Those in each machine's ~/.zshrc are found by its node and
@@ -619,6 +620,36 @@ func sessionLaunchers(discovered, configured []sessionLauncher) []sessionLaunche
 		}
 	}
 	return list
+}
+
+// launcherModels is GET /api/v1/machines/{mid}/launchers/{name}/models: the models the launcher's agent offers in its
+// /model menu, for 新建 Agent's model picker (node/launcher_models.go). The node keeps a list 10 minutes; ?refresh=1
+// asks the CLI again.
+func (h *Hub) launcherModels(w http.ResponseWriter, r *http.Request, m *Machine) {
+	name := r.PathValue("name")
+	params := map[string]any{"name": name, "refresh": r.URL.Query().Get("refresh") == "1"}
+	for _, l := range m.cfg.Launchers {
+		if l.Name == name && l.AgentType != "" {
+			params["agent_type"] = l.AgentType // what the user said it runs
+		}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 70*time.Second)
+	defer cancel()
+	var res proto.LauncherModels
+	if err := m.call(ctx, "launchers.models", params, &res); err != nil {
+		var re *rpc.Error
+		if errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method") {
+			// 404 like an older hub: the apps leave the picker out instead of offering a retry that cannot work.
+			writeCode(w, http.StatusNotFound, proto.CodeNodeOutdated, "这台机器上的 personad 太旧，列不出模型，需要重新部署", nil)
+			return
+		}
+		callErr(w, err)
+		return
+	}
+	if res.Models == nil {
+		res.Models = []proto.AgentModel{}
+	}
+	writeJSON(w, res)
 }
 
 func (h *Hub) listLaunchers(w http.ResponseWriter, r *http.Request, m *Machine) {

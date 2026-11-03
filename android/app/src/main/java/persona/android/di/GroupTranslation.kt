@@ -238,6 +238,8 @@ internal fun AgentCreationService.inGroup(names: GroupNames): AgentCreationServi
             result(source.start(request.copy(machineId = names.rawMachine(request.machineId)), operationId))
         override suspend fun operation(operationId: String) = result(source.operation(operationId))
         override suspend fun newAgentModel() = source.newAgentModel()
+        override suspend fun launcherModels(machineId: String, launcher: String, refresh: Boolean) =
+            source.launcherModels(names.rawMachine(machineId), launcher, refresh)
     }
 }
 

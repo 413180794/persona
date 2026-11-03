@@ -314,6 +314,29 @@ type LauncherModel struct {
 	Model string `json:"model"`
 }
 
+// LauncherModels is what a launcher's agent offers in its /model menu, for 新建 Agent's model picker
+// (node/launcher_models.go). No models: its agent has no list to ask for (TRAEX, a runtime's).
+type LauncherModels struct {
+	Agent  string       `json:"agent"`
+	Models []AgentModel `json:"models"`
+	// Locked: why a model picked here would not reach the agent (the launcher fixes its own --model); empty: it would.
+	Locked string `json:"locked,omitempty"`
+}
+
+// AgentModel is one model of the list: Claude Code's initialize, Codex's model/list.
+type AgentModel struct {
+	ID          string `json:"id"` // what --model takes (Claude's aliases too: opus, sonnet…)
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// Resolved: the model an alias stands for with this launcher's settings (opus → its model id).
+	Resolved string `json:"resolved,omitempty"`
+	// Default: what the agent runs when no model is given; picking it is the same as picking none.
+	Default bool `json:"default,omitempty"`
+	// Efforts: the thinking efforts it takes, weakest first; none: no effort setting.
+	Efforts       []string `json:"efforts,omitempty"`
+	DefaultEffort string   `json:"default_effort,omitempty"`
+}
+
 type LauncherEnv struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

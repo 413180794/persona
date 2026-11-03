@@ -2996,6 +2996,30 @@ def model_configuration(include_uses=False):
     return {"purposes": purposes, "providers": providers}
 
 
+# 新建 Agent's model picker: what each launcher's agent lists in its /model menu (node/launcher_models.go). Claude
+# Code's aliases resolved with the launcher's settings, then its gateway's models; Codex's model/list. sonnetcc passes
+# its own --model, so a pick would not reach it. MOCK_MODELS_SECONDS: how long the CLI takes to answer.
+_CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
+LAUNCHER_MODELS = {
+    "claude": {"agent": "claude", "models": [
+        {"id": "default", "name": "Default (recommended)", "description": "Use the default model (currently claude-opus-5-5)", "resolved": "claude-opus-5-5", "default": True, "efforts": _CLAUDE_EFFORTS},
+        {"id": "fable", "name": "Fable", "description": "Fable 5.1 · Most capable for your hardest and longest-running tasks", "resolved": "claude-fable-5-1", "efforts": _CLAUDE_EFFORTS},
+        {"id": "opus", "name": "Opus 5.5", "description": "Opus 5.5 · Best for everyday complex work", "resolved": "claude-opus-5-5", "efforts": _CLAUDE_EFFORTS},
+        {"id": "sonnet", "name": "Sonnet 5.5", "description": "Sonnet 5.5 · Fast and capable", "resolved": "claude-sonnet-5-5", "efforts": ["low", "medium", "high", "max"]},
+        {"id": "haiku", "name": "Haiku 5.5", "description": "Haiku 5.5 · Fastest for quick answers", "resolved": "claude-haiku-5-5"},
+        {"id": "gateway/glm-5.3", "name": "glm-5.3", "description": "From gateway", "efforts": ["low", "medium", "high"]},
+        {"id": "gateway/deepseek-v4", "name": "deepseek-v4", "description": "From gateway", "efforts": ["low", "medium", "high"]},
+        {"id": "gateway/qwen-4-coder", "name": "qwen-4-coder", "description": "From gateway"},
+    ]},
+    "codex": {"agent": "codex", "models": [
+        {"id": "gpt-5.5", "name": "GPT-5.5", "description": "Latest model for coding and everyday work", "default": True, "efforts": ["low", "medium", "high", "xhigh"], "default_effort": "medium"},
+        {"id": "gpt-5.5-codex", "name": "GPT-5.5-Codex", "description": "Tuned for long agentic coding", "efforts": ["low", "medium", "high", "xhigh"], "default_effort": "medium"},
+        {"id": "gpt-5.5-mini", "name": "GPT-5.5-Mini", "description": "Smaller and cheaper", "efforts": ["low", "medium", "high"], "default_effort": "medium"},
+    ]},
+}
+LAUNCHER_MODELS["sonnetcc"] = dict(LAUNCHER_MODELS["claude"], locked="启动器固定了模型参数，不能覆盖具体模型")
+
+
 # 设置 › 模型供应商: two ~/.zshrc launchers, one through relay-history and one through FAKEMODEL, with their quota.
 LAUNCHERS = [
     {"name": "cc_kiro", "source": "zshrc", "base_url": "http://gateway.example.com:18000", "model": "kiro/claude-opus-5-5", "machines": ["macbook"]},
@@ -4767,6 +4791,7 @@ MOCK_HELP = [
     "MOCK_VOICE=1|drop|bad-model|missing-model|old-hub|error|off|slow  语音插件和它的 WebSocket（docs/android.md「语音对话」）",
     "MOCK_NEEDS=none|two  Jarvis 首页「现在要你处理的事」：什么都没有 / 一个请求加一件收件箱（默认超过三件）",
     "MOCK_HISTORY=1  很长的 Jarvis 对话历史（最近 30 个 + 查看全部）、一段交接对话、一个置顶，置顶写入会保存",
+    "MOCK_MODELS_SECONDS=<秒>  新建 Agent 里列一个启动器的模型要多久（默认 0.8，CLI 起来回答的时间）",
 ]
 
 _features_without_voice = features
@@ -5264,6 +5289,9 @@ class H(BaseHTTPRequestHandler):
             n = p.split("/")[4]
             l = next((x for x in LAUNCHERS if x["name"] == n), None)
             if l: return self.send_json({"launcher": l})
+        if p.startswith("/api/v1/machines/") and "/launchers/" in p and p.endswith("/models"):  # 新建 Agent's model picker
+            time.sleep(float(os.environ.get("MOCK_MODELS_SECONDS", "0.8")))
+            return self.send_json(LAUNCHER_MODELS.get(unquote(p.split("/")[6]), {"agent": "traex", "models": []}))
         if p.startswith("/api/v1/machines/") and p.endswith("/launchers"):
             return self.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "sonnetcc", "model": "sonnet"},
                                                  {"name": "codex", "model": "gpt-5.5", "agent": "codex", "agent_type": "codex"}]})  # Codex: 从手机新建
@@ -6063,6 +6091,7 @@ class H(BaseHTTPRequestHandler):
                      "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, body.get("tab_name") or "agent-%d" % n, n, 0, "",
                      agent="codex" if codex else "claude")
             s["launcher"] = body.get("launcher") or "claude"
+            if body.get("model"): s["model"] = body["model"]  # picked in 新建 Agent
             if codex:  # the node answers once the first message is in the thread's rollout
                 ITEMS[s["session_id"]] = [it("user", "text", 0, text=body["prompt"])]
             if body.get("async"):  # answered at once, claude still starting (node/starting.go); MOCK_START_SECONDS later it is up

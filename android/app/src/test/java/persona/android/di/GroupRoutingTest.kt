@@ -87,9 +87,12 @@ class GroupRoutingTest {
                 return AgentStartResult.Created(Session(request.machineId, "new"))
             }
             override suspend fun operation(operationId: String) = AgentStartResult.Pending
+            override suspend fun launcherModels(machineId: String, launcher: String, refresh: Boolean) =
+                LauncherModels(machineId, listOf(AgentModel(launcher)))
         }
         val wrapped = service.inGroup(other)
         assertEquals("m", wrapped.launchers("m~g0a1b2c3d").single().name)
+        assertEquals(LauncherModels("m", listOf(AgentModel("claude"))), wrapped.launcherModels("m~g0a1b2c3d", "claude"))
         val created = wrapped.start(AgentStartRequest("m~g0a1b2c3d", "/", "claude"), "op") as AgentStartResult.Created
         assertEquals("m", requested!!.machineId)
         assertEquals(SessionKey("m~g0a1b2c3d", "new"), created.session.key)

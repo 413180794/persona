@@ -35,6 +35,18 @@ internal sealed interface NewAgentModelConfig {
     data class Failed(val reason: String) : NewAgentModelConfig
 }
 
+/**
+ * The model list of the launcher that will run ([launcher] on [machineId]), for the 模型 row. [list] stays while it
+ * is asked again; null while the first answer is on its way, after a failure, and from hubs without the list.
+ */
+internal data class NewAgentModels(
+    val machineId: String = "",
+    val launcher: String = "",
+    val list: LauncherModels? = null,
+    val loading: Boolean = false,
+    val error: String? = null,
+)
+
 internal data class NewAgentState(
     val initialized: Boolean = false,
     val space: AgentSpacePreset? = null,
@@ -54,6 +66,9 @@ internal data class NewAgentState(
     val modelConfig: NewAgentModelConfig = NewAgentModelConfig.Unknown,
     /** The prefilled machine was not online, so another one was picked (named here for the form to say so). */
     val prefillOffline: String? = null,
+    val models: NewAgentModels = NewAgentModels(),
+    /** The model picked for this start, an id of [modelList]; "": the default. Never saved, like a launcher override. */
+    val model: String = "",
 ) {
     val locked get() = !initialized || starting || pending != null || created != null
     val follow: ModelPurposeDetail? get() = (modelConfig as? NewAgentModelConfig.Follow)?.detail
@@ -64,6 +79,43 @@ internal data class NewAgentState(
         ?.let { name -> launchers.firstOrNull { it.name == name } }
     val agentType: String get() = if (following) configuredLauncher?.agentType ?: "claude"
         else launchers.firstOrNull { it.name == selection.launcher }?.agentType ?: "claude"
+    /** The launcher that will run, whose models the 模型 row lists: the one picked, or the configuration's. */
+    val modelLauncher: String get() = if (following) configuredLauncher?.name.orEmpty() else selection.launcher
+    /** [modelLauncher]'s models, once there are some to show. */
+    val modelList: LauncherModels? get() = models.list?.takeIf {
+        it.models.isNotEmpty() && models.machineId == machineId && models.launcher == modelLauncher
+    }
+    /** There is a list and a pick reaches the agent (the launcher does not pass its own --model). */
+    val canPickModel: Boolean get() = modelList.let { it != null && it.locked == null }
+    val pickedModel: AgentModel? get() = model.takeIf { it.isNotEmpty() && canPickModel }
+        ?.let { id -> modelList?.models?.firstOrNull { it.id == id } }
+    /** The `model` a start sends: only a picked one that is not the default (picking the default is picking none). */
+    val sentModel: String? get() = pickedModel?.takeUnless { it.isDefault }?.id
+    /** 模型配置 › 新建 Agent's model: what runs with no pick when its launcher is the one that runs. */
+    val configuredModel: String get() = follow?.takeIf { configuredLauncher?.name == modelLauncher }
+        ?.purpose?.effective?.model.orEmpty()
+    /** The thinking efforts the model that will run takes, weakest first; null: not known, every level is offered. */
+    val modelEfforts: List<String>? get() {
+        val list = modelList ?: return null
+        val running = pickedModel ?: if (configuredModel.isEmpty()) list.models.firstOrNull { it.isDefault }
+            else list.models.firstOrNull { it.id == configuredModel }
+        return running?.efforts
+    }
+}
+
+/**
+ * The form kept consistent with the model list: a pick the list no longer has goes back to the default, and an
+ * effort the model that will run does not take back to 跟随启动器.
+ */
+private fun NewAgentState.settled(): NewAgentState {
+    var next = this
+    val list = modelList
+    if (model.isNotEmpty() && list != null && list.models.none { it.id == model }) next = next.copy(model = "")
+    val efforts = next.modelEfforts
+    if (efforts != null && next.selection.effort.isNotEmpty() && next.selection.effort !in efforts) {
+        next = next.copy(selection = next.selection.copy(effort = ""))
+    }
+    return next
 }
 
 internal class NewAgentViewModel(
@@ -80,6 +132,7 @@ internal class NewAgentViewModel(
     val state = mutable.asStateFlow()
     private var machineJob: Job? = null
     private var browseJob: Job? = null
+    private var modelsJob: Job? = null
     init {
         viewModelScope.launch {
             try {
@@ -87,7 +140,7 @@ internal class NewAgentViewModel(
                 if (pending != null) {
                     val r = pending.request
                     mutable.value = NewAgentState(initialized = true, machineId = r.machineId,
-                        selection = AgentDefaults(r.cwd, r.launcher, r.permissionMode.orEmpty(), r.effort.orEmpty()),
+                        selection = AgentDefaults(r.cwd, r.launcher, r.permissionMode.orEmpty(), r.effort.orEmpty()), model = r.model.orEmpty(),
                         prompt = pending.firstMessage ?: r.prompt.orEmpty(), pending = pending, error = "上次启动的结果待确认，请核对结果")
                 } else {
                     val last = store.lastMachine(service.scope)
@@ -129,8 +182,9 @@ internal class NewAgentViewModel(
         state.value.space?.let { if (it.machineId != id) return }
         machineJob?.cancel()
         browseJob?.cancel()
+        modelsJob?.cancel()
         mutable.update { it.copy(machineId = id, selection = AgentDefaults(), launchers = emptyList(), recent = emptyList(),
-            browser = null, browsing = false, loading = true, error = null) }
+            browser = null, browsing = false, loading = true, error = null, models = NewAgentModels(), model = "") }
         machineJob = viewModelScope.launch {
             try {
                 val defaults = store.defaults(service.scope, id)
@@ -149,14 +203,56 @@ internal class NewAgentViewModel(
                     error = (config as? NewAgentModelConfig.Failed)?.let { failed -> "读不到新 Agent 模型配置：${failed.reason}" }) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { mutable.update { it.copy(loading = false, error = "未能加载目录和启动器，请重试") } }
+            loadModels()
         }
+    }
+    /**
+     * Reads the model list of the launcher that will run, unless it is already there (or on its way) for that
+     * launcher; [refresh] asks the launcher's CLI again. It never holds up starting: the default stays possible.
+     */
+    private fun loadModels(refresh: Boolean = false) {
+        val current = state.value
+        val machine = current.machineId
+        val launcher = current.modelLauncher
+        val same = current.models.machineId == machine && current.models.launcher == launcher
+        if (same && !refresh) return
+        modelsJob?.cancel()
+        if (machine.isEmpty() || launcher.isEmpty()) {
+            mutable.update { it.copy(models = NewAgentModels(machine, launcher)) }
+            return
+        }
+        mutable.update { it.copy(models = NewAgentModels(machine, launcher, list = it.models.list.takeIf { same }, loading = true)) }
+        modelsJob = viewModelScope.launch {
+            val next = try {
+                NewAgentModels(machine, launcher, list = service.launcherModels(machine, launcher, refresh))
+            } catch (e: CancellationException) { throw e }
+            catch (error: Exception) {
+                NewAgentModels(machine, launcher, list = state.value.models.list.takeIf { same }, error = failureReason(error))
+            }
+            mutable.update { if (it.machineId == machine && it.modelLauncher == launcher) it.copy(models = next).settled() else it }
+        }
+    }
+    /** Asks the launcher's CLI for its models again (the node keeps the list a while). */
+    fun reloadModels() {
+        if (!state.value.locked) loadModels(refresh = true)
+    }
+    /** Picks the model for this start; the default entry, or "", is no pick. */
+    fun pickModel(id: String) {
+        val current = state.value
+        if (current.locked || !current.canPickModel) return
+        val entry = current.modelList?.models?.firstOrNull { it.id == id }
+        mutable.update { it.copy(model = entry?.takeUnless { m -> m.isDefault }?.id.orEmpty(), error = null).settled() }
     }
     private suspend fun modelConfig(): NewAgentModelConfig = try {
         service.newAgentModel()?.let { NewAgentModelConfig.Follow(it) } ?: NewAgentModelConfig.Unsupported
     } catch (e: CancellationException) { throw e }
     catch (error: Exception) { NewAgentModelConfig.Failed(failureReason(error)) }
     fun selection(value: AgentDefaults) {
-        if (!state.value.locked && !state.value.loading) mutable.update { it.copy(selection = value, error = null) }
+        if (state.value.locked || state.value.loading) return
+        // Another launcher has its own models: back to its default, and its list.
+        mutable.update { val next = it.copy(selection = value, error = null)
+            (if (next.modelLauncher != it.modelLauncher) next.copy(model = "") else next).settled() }
+        loadModels()
     }
     fun prompt(value: String) { if (!state.value.locked) mutable.update { it.copy(prompt = value) } }
     fun browse(path: String = state.value.selection.cwd) {
@@ -238,11 +334,14 @@ internal class NewAgentViewModel(
     private fun newOperation(current: NewAgentState, agentType: String): AgentStartOperation {
         val first = current.prompt.trim().takeIf { it.isNotEmpty() }
         val async = sender != null && agentType == "claude"
+        val efforts = current.modelEfforts
         val request = AgentStartRequest(
             current.machineId, current.selection.cwd, current.selection.launcher,
             first.takeUnless { async }, current.selection.mode.takeIf { it.isNotEmpty() && agentType == "claude" },
-            current.selection.effort.takeIf { it.isNotEmpty() && agentType == "claude" }, current.space?.workspaceId,
-            agentType.takeIf { it != "claude" }, async = true.takeIf { async }, nameHint = first.takeIf { async },
+            // Codex starts take no effort; Claude's only one the model that will run takes.
+            current.selection.effort.takeIf { it.isNotEmpty() && agentType == "claude" && (efforts == null || it in efforts) },
+            current.space?.workspaceId, agentType.takeIf { it != "claude" }, async = true.takeIf { async },
+            nameHint = first.takeIf { async }, model = current.sentModel,
         )
         return AgentStartOperation(UUID.randomUUID().toString(), request,
             firstMessage = first.takeIf { async }, firstMessageId = UUID.randomUUID().toString().takeIf { async && first != null })

@@ -27,6 +27,8 @@ class HttpAgentCreationService(
         .retryOnConnectionFailure(false).build()
     // Match the start endpoint's timeout budget; actual startup latency has not been measured.
     private val startHttp = http.newBuilder().readTimeout(130, TimeUnit.SECONDS).build()
+    // The hub gives the node 70 s to ask the launcher's CLI for its models (it starts it once, then caches the list).
+    private val modelsHttp = http.newBuilder().readTimeout(75, TimeUnit.SECONDS).build()
     private fun url(vararg segments: String) = base.newBuilder().apply { segments.forEach(::addPathSegment) }.build()
     private fun checkScope() { if (!isCurrent()) throw CancellationException("Pairing changed") }
     private suspend fun read(request: Request, client: OkHttpClient = http): JsonObject {
@@ -89,6 +91,14 @@ class HttpAgentCreationService(
         JsonCodec.decodeFromJsonElement<ModelPurposeDetail>(read(request("api", "v1", "model-config", "purposes", "agent.new").build()))
     } catch (failure: HubFailure) {
         // Hubs without unified model configuration: the launcher is picked here as before.
+        if (failure.status == 404) null else throw failure
+    }
+    override suspend fun launcherModels(machineId: String, launcher: String, refresh: Boolean): LauncherModels? = try {
+        val url = url("api", "v1", "machines", machineId, "launchers", launcher, "models").newBuilder()
+            .apply { if (refresh) addQueryParameter("refresh", "1") }.build()
+        JsonCodec.decodeFromJsonElement<LauncherModels>(read(request().url(url).build(), modelsHttp))
+    } catch (failure: HubFailure) {
+        // Hubs without the list: no model picker, the launcher's own model as before.
         if (failure.status == 404) null else throw failure
     }
     private fun outcome(body: JsonObject): AgentStartResult {
