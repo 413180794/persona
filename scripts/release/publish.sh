@@ -10,12 +10,62 @@
 #
 #   ./scripts/release/publish.sh            # build, check, deploy
 #   NO_DEPLOY=1 ./scripts/release/publish.sh  # build and check only (build-publish/site)
+#   SITE_ONLY=1 ./scripts/release/publish.sh  # the pages only: site/ as committed with the release already served
+#   SITE_ONLY_FROM=<dir>                      # with SITE_ONLY: that release's downloads already fetched into <dir>
+#
+# Never deploy site/ with a plain `wrangler deploy`: it serves without dl/ and install.sh, and every hub's update
+# check and the install script 404 (docs/lessons/server.md).
 #
 # Only the newest version is served (dl/ is replaced on every deploy). release.sh runs this after uploading to TestFlight.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 eval "$(python3 scripts/jarvis_config.py env)"
 [ -n "$JARVIS_PUBLISH_URL" ] || { echo "publish.site_url is not set in the config (docs/config.md)" >&2; exit 2; }
+WRANGLER="${JARVIS_WRANGLER:-}"
+# deploy_site <dir>: deploy that copy of site/ (with dl/ and install.sh in it), the log in <dir>/../deploy.log.
+deploy_site() {
+  local dir="$1" log="$1/../deploy.log"
+  # cf's OAuth token lasts about an hour and wrangler does not renew it; any cf call that finds it stale does (twice a
+  # release failed here with "Authentication error" until `cf auth whoami` ran).
+  command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true
+  (cd "$dir" && if [ -n "$WRANGLER" ]; then "$WRANGLER" deploy; else npx wrangler deploy; fi) >"$log" 2>&1 \
+    || { tail -20 "$log" >&2; echo "deploy failed; see $log (only run cf auth login for authentication errors)" >&2; exit 1; }
+}
+
+# SITE_ONLY: no new build. The release served now (every file in its SHA256SUMS, plus VERSION, latest.json and
+# install.sh) is fetched back, checked against its SHA256SUMS and deployed again next to site/ as committed.
+if [ -n "${SITE_ONLY:-}" ]; then
+  if [ -z "${NO_DEPLOY:-}" ] && [ -n "$(git status --porcelain -- site)" ]; then
+    echo "site/ has changes not committed: commit them first" >&2; exit 1
+  fi
+  OUT=build-publish-site
+  rm -rf "$OUT"
+  mkdir -p "$OUT/dl"
+  get() { curl -fsSL -C - --retry 20 --retry-all-errors --retry-delay 3 --max-time 900 "$JARVIS_PUBLISH_URL/$1" -o "$2"; }
+  for f in VERSION SHA256SUMS latest.json; do get "dl/$f" "$OUT/dl/$f"; done
+  get install.sh "$OUT/install.sh"
+  # SITE_ONLY_FROM=<dir>: the downloads are already in <dir> (fetched where the network is steadier); the small files
+  # above still come from the site, and the check below holds them to its SHA256SUMS all the same.
+  while read -r _ name; do
+    case "$name" in */*|""|.*) echo "unexpected name in the served SHA256SUMS: $name" >&2; exit 1 ;; esac
+    if [ -n "${SITE_ONLY_FROM:-}" ]; then cp "$SITE_ONLY_FROM/$name" "$OUT/dl/$name"; else get "dl/$name" "$OUT/dl/$name"; fi
+  done < "$OUT/dl/SHA256SUMS"
+  (cd "$OUT/dl" && shasum -a 256 -c SHA256SUMS >/dev/null) || { echo "the served files do not match their SHA256SUMS" >&2; exit 1; }
+  VERSION="$(cat "$OUT/dl/VERSION")"
+  cp -R site "$OUT/site"
+  cp -R "$OUT/dl" "$OUT/site/public/dl"
+  cp "$OUT/install.sh" "$OUT/site/public/install.sh"
+  python3 scripts/deploy/check_asset_sizes.py "$OUT/site/public"
+  if [ -n "${NO_DEPLOY:-}" ]; then echo "site with jarvisd $VERSION ready in $OUT/site (not deployed)."; exit 0; fi
+  deploy_site "$OUT/site"
+  for f in VERSION SHA256SUMS latest.json; do
+    curl -fsSL "$JARVIS_PUBLISH_URL/dl/$f" | cmp -s - "$OUT/dl/$f" || { echo "served dl/$f differs after the deploy" >&2; exit 1; }
+  done
+  curl -fsSL "$JARVIS_PUBLISH_URL/install.sh" | cmp -s - "$OUT/install.sh" || { echo "served install.sh differs after the deploy" >&2; exit 1; }
+  echo "site deployed with jarvisd $VERSION unchanged: $JARVIS_PUBLISH_URL"
+  exit 0
+fi
+
 # The build number orders releases (UTC YYYYMMDDHHMM): hubs install only a larger one.
 BUILD="$(date -u +%Y%m%d%H%M)"
 VERSION="${VERSION:-$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD}"
@@ -104,12 +154,7 @@ if [ -n "${NO_DEPLOY:-}" ]; then
   echo "jarvisd $VERSION built and checked in $OUT (not deployed)."
   exit 0
 fi
-WRANGLER="${JARVIS_WRANGLER:-}"
-# cf's OAuth token lasts about an hour and wrangler does not renew it; any cf call that finds it stale does (twice a
-# release failed here with "Authentication error" until `cf auth whoami` ran).
-command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true
-(cd "$OUT/site" && if [ -n "$WRANGLER" ]; then "$WRANGLER" deploy; else npx wrangler deploy; fi) >"$OUT/deploy.log" 2>&1 \
-  || { tail -20 "$OUT/deploy.log" >&2; echo "deploy failed; see $OUT/deploy.log (only run cf auth login for authentication errors)" >&2; exit 1; }
+deploy_site "$OUT/site"
 
 # What is served now is what was built.
 served="$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/VERSION" 2>/dev/null || true)"

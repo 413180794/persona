@@ -18,6 +18,7 @@ florak/
 /apple/PersonaLink/.build/
 /apple/PersonaLink/build/
 /build-publish/
+/build-publish-site/
 /repos/
 /server/internal/hub/webdist/*
 !/server/internal/hub/webdist/README.md

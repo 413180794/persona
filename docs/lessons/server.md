@@ -230,5 +230,6 @@
 - `site/` 的 Worker 同时提供公开的 personad（`/dl/`）和 `install.sh`，它们不在仓库里：`publish.sh` 把它们加进 `site/` 的副本再部署。
   在 `site/` 里直接 `wrangler deploy`（换域名时就这么做了）会整个替换静态资源，`/dl/*`、`/install.sh` 立刻 404，各 hub 的检查更新和安装都失败。
   补救：`wrangler deployments list` 找到上一次发布的版本，`wrangler rollback <版本>`（自定义域名不跟着版本走，不受影响），约 3 分钟恢复。
-- 改了 `site/` 的东西（域名、页面）就跑一次 `publish.sh`（或整套 `release.sh`）把它带上，不单独部署 `site/`。
+- 只改了 `site/`（域名、页面）用 `SITE_ONLY=1 ./scripts/release/publish.sh`：沿用线上已发布的产物重新部署，不发新版（#951）。
+  这台机器下载线上的大文件常被重置连接，所以它的 curl 带 `--retry-all-errors`（默认的 `--retry` 不重试「Connection reset」）。
 - 换域名时旧域名要留着：已发出的 App 里写死了推送中继地址，已部署的 personad 也从旧域名的 `/dl/` 检查更新。

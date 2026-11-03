@@ -1,306 +1,346 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Persona · 你的每台电脑，都在口袋里</title>
-<meta name="description" content="Persona 是一个自建 hub 的 iPhone、Apple Watch 与网页助手：在手机上驱动各台电脑上的 Claude Code / Codex，回答提问、审批计划；一个能读你的日程、飞书、邮件和知识库的 AI 助手；收件箱和 AI 分身替你分拣、起草回复。">
-<meta property="og:title" content="Persona · 你的每台电脑，都在口袋里">
-<meta property="og:description" content="在手机上驱动各台电脑上的 Claude Code / Codex，一个懂你工作的 AI 助手，数据只在你自己的机器上。">
+<title>Persona · 自建的 AI 指挥中心：所有电脑上的 Agent，收进一部手机</title>
+<meta name="description" content="Persona 是自建 hub 的 AI 指挥中心：在 iPhone、Apple Watch、Mac、Android 和网页上驱动各台电脑上的 Claude Code、Codex、DSH、pi；一个读得懂你日程、飞书、邮件和知识库的助手；收件箱和 AI 分身替你分拣、起草回复。数据只在你自己的机器上。">
+<meta property="og:title" content="Persona · 所有电脑上的 Agent，收进一部手机">
+<meta property="og:description" content="自建 hub，一条命令装好。实时看 Agent 干活、在手机上回答提问和审批计划，再配一个懂你工作的 AI 助手。">
 <meta property="og:image" content="https://personaside.com/img/agents-dark.webp">
-<meta name="theme-color" content="#0c0b0a" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f6f2ec" media="(prefers-color-scheme: light)">
-<link rel="icon" href="/favicon.png">
-<link rel="apple-touch-icon" href="/img/icon.png">
+<meta name="theme-color" content="#140f0d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f1e6da" media="(prefers-color-scheme: light)">
+<link rel="icon" href="/favicon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="/favicon-dark.png" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/unbounded-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/home.css">
 </head>
 <body>
-<div class="grain" aria-hidden="true"></div>
+<div class="sky" aria-hidden="true"><div class="grid"></div><div class="glow g1"></div><div class="glow g2"></div><div class="grain"></div></div>
 
 <header class="top">
-  <a class="brand" href="/"><img src="/img/icon.png" alt="" width="28" height="28"><span>Persona</span></a>
+  <a class="brand" href="/" aria-label="Persona 首页"><picture><source srcset="/img/icon-dark.png" media="(prefers-color-scheme: dark)"><img src="/img/icon.png" alt="" width="26" height="26"></picture><span>Persona</span></a>
   <nav aria-label="页面导航">
-    <a href="#agents">Agents</a>
-    <a href="#assistant">助手</a>
-    <a href="#inbox">收件箱</a>
-    <a href="#how">工作原理</a>
+    <a href="#arch">架构</a>
+    <a href="#features">功能</a>
+    <a href="#screens">界面</a>
+    <a href="#start">快速开始</a>
     <a href="#privacy">隐私</a>
   </nav>
+  <a class="ver" href="#start" data-version hidden><span class="dot"></span><span class="ver-text">personad</span></a>
 </header>
 
 <main>
-<!-- ───────── hero ───────── -->
+<!-- ═══════════ hero ═══════════ -->
 <section class="hero">
   <div class="hero-copy">
-    <p class="eyebrow reveal"><span class="pulse"></span>hub 在线 · 3 台电脑 · 23 个 Agent</p>
-    <h1 class="reveal"><span>你的每台电脑，</span><br><em>都在口袋里。</em></h1>
-    <p class="lede reveal">Persona 把散在公司、家里、服务器上的 Claude Code 和 Codex 收进一部 iPhone。
-      看它们实时干活，替它们回答问题、批准计划；再配一个读得懂你日程、消息、邮件和项目的 AI 助手。</p>
-    <div class="cta reveal">
-      <a class="btn" href="#how">看看它怎么工作 →</a>
+    <p class="kicker rise"><span class="led"></span><span class="mono">PERSONA</span>自建的 AI 指挥中心</p>
+    <h1 class="rise"><span class="line">所有电脑上的 Agent，</span><span class="line hl">收进一部手机。</span></h1>
+    <p class="lede rise">公司的笔记本、家里的 Mac、机房的服务器，各自开着 Claude Code 和 Codex。
+      Persona 用一台常开的 hub 把它们连起来：实时看它们干活，在手机上回答提问、审批计划、批准工具；
+      再配一个读得懂你日程、飞书、邮件和项目的 AI 助手。</p>
+
+    <div class="install rise" data-tabs>
+      <div class="install-tabs" role="tablist" aria-label="安装方式">
+        <button role="tab" aria-selected="true" data-tab="hub">hub</button>
+        <button role="tab" aria-selected="false" data-tab="node">其他电脑</button>
+        <button role="tab" aria-selected="false" data-tab="pair">配对手机</button>
+      </div>
+      <div class="install-body">
+        <pre data-pane="hub"><code><span class="pr">$</span> curl -fsSL https://personaside.com/install.sh | sh -s -- --hub</code></pre>
+        <pre data-pane="node" hidden><code><span class="pr">$</span> curl -fsSL https://personaside.com/install.sh | sh -s -- --node --pair '<span class="ph">&lt;配对链接&gt;</span>'</code></pre>
+        <pre data-pane="pair" hidden><code><span class="pr">$</span> personad hub pair    <span class="cm"># 打印二维码，App 扫一下</span></code></pre>
+        <button class="copy" type="button" aria-label="复制命令"><span>复制</span></button>
+      </div>
     </div>
-    <p class="fine reveal">iPhone · Apple Watch · 网页 · Android　|　自建 hub，数据不经过任何第三方服务器</p>
+
+    <ul class="platforms rise" aria-label="支持的平台">
+      <li>iPhone</li><li>Apple Watch</li><li>Mac</li><li>Android</li><li>网页</li><li>飞书</li>
+    </ul>
   </div>
-  <div class="hero-stage" aria-label="App 截图">
-    <figure class="phone p-left reveal"><picture><source srcset="/img/chat-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/chat.webp" alt="一个 Agent 的对话页：实时显示工作过程和回复" loading="eager"></picture></figure>
-    <figure class="phone p-center reveal"><picture><source srcset="/img/agents-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/agents.webp" alt="Agents 列表：需要你处理的排在最前" loading="eager"></picture></figure>
-    <figure class="phone p-right reveal"><picture><source srcset="/img/plan-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/plan.webp" alt="在手机上审批 Claude 写好的计划" loading="eager"></picture></figure>
+
+  <div class="hero-stage rise" aria-hidden="true">
+    <div class="orbit o1"></div><div class="orbit o2"></div>
+    <figure class="device">
+      <picture><source srcset="/img/agents-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/agents.webp" alt="" width="460" height="1000" fetchpriority="high"></picture>
+    </figure>
+    <div class="console">
+      <div class="console-bar"><i></i><i></i><i></i><span>hub · 实时事件</span></div>
+      <ol class="console-log" data-feed>
+        <li><b class="t-ok">工作中</b> MacBook › weather · 跑测试</li>
+        <li><b class="t-hot">需要你</b> Mac Studio › photo-sync · 计划等你审批</li>
+        <li><b class="t-ai">助手</b> 今天有 3 件事需要你</li>
+      </ol>
+    </div>
+    <div class="chip-float c1"><span class="led hot"></span>Claude 在问你</div>
+    <div class="chip-float c2"><span class="led"></span>3 / 3 台电脑在线</div>
   </div>
 </section>
 
-<!-- ───────── ticker ───────── -->
-<div class="ticker" aria-hidden="true">
-  <div class="ticker-track">
-    <span><b>MacBook</b> 天气 › widget · 工具 5 · 正在工作 15 分</span>
-    <span class="hot"><b>Mac Studio</b> photo-sync · 计划等你审批</span>
-    <span><b>server</b> 排查 /orders 接口变慢 · 读日志</span>
-    <span class="hot"><b>MacBook</b> weather › tests · Claude 在问你</span>
-    <span><b>Persona</b> 今天有 3 件事需要你</span>
-    <span><b>收件箱</b> AI 分身起草了 2 条回复</span>
-    <span><b>MacBook</b> 天气 › widget · 工具 5 · 正在工作 15 分</span>
-    <span class="hot"><b>Mac Studio</b> photo-sync · 计划等你审批</span>
-    <span><b>server</b> 排查 /orders 接口变慢 · 读日志</span>
-    <span class="hot"><b>MacBook</b> weather › tests · Claude 在问你</span>
-    <span><b>Persona</b> 今天有 3 件事需要你</span>
-    <span><b>收件箱</b> AI 分身起草了 2 条回复</span>
+<!-- ═══════════ runtimes marquee ═══════════ -->
+<div class="marquee" aria-label="支持的 Agent、引擎和数据源">
+  <div class="marquee-track">
+    <span>Claude Code</span><span>Codex</span><span>TRAEX</span><span>DSH</span><span>pi</span><span>pi-web</span><span>herdr</span><span>Herdr App</span><span>Orca</span><span>飞书</span><span>Gmail</span><span>IMAP / SMTP</span><span>GitHub</span><span>Telegram</span><span>iMessage</span><span>MCP</span><span>App Intents</span>
+    <span aria-hidden="true">Claude Code</span><span aria-hidden="true">Codex</span><span aria-hidden="true">TRAEX</span><span aria-hidden="true">DSH</span><span aria-hidden="true">pi</span><span aria-hidden="true">pi-web</span><span aria-hidden="true">herdr</span><span aria-hidden="true">Herdr App</span><span aria-hidden="true">Orca</span><span aria-hidden="true">飞书</span><span aria-hidden="true">Gmail</span><span aria-hidden="true">IMAP / SMTP</span><span aria-hidden="true">GitHub</span><span aria-hidden="true">Telegram</span><span aria-hidden="true">iMessage</span><span aria-hidden="true">MCP</span><span aria-hidden="true">App Intents</span>
   </div>
 </div>
 
-<!-- ───────── agents ───────── -->
-<section class="chapter" id="agents">
-  <div class="chapter-head reveal">
-    <span class="num">01</span>
-    <h2>Agents<small>离开电脑，工作不停</small></h2>
+<!-- ═══════════ numbers ═══════════ -->
+<section class="numbers reveal" aria-label="概览">
+  <div><b>5</b><span>个客户端<br><em>iPhone · Watch · Mac · Android · 网页</em></span></div>
+  <div><b>5</b><span>种 Agent 运行时<br><em>Claude Code · Codex · TRAEX · DSH · pi</em></span></div>
+  <div><b>3</b><span>种终端引擎<br><em>herdr · Herdr App · Orca</em></span></div>
+  <div><b>1</b><span>条命令装好<br><em>hub 和每台电脑都是</em></span></div>
+</section>
+
+<!-- ═══════════ architecture ═══════════ -->
+<section class="chapter" id="arch">
+  <header class="chapter-head reveal">
+    <p class="idx mono">01 / 架构</p>
+    <h2>一台 hub，<span class="hl">连起你所有的机器。</span></h2>
+    <p class="sub">hub 是一个 Go 写的服务 <code>personad</code>，跑在家里或公司一台常开的机器上（原生二进制或 Docker / NAS）。
+      手机、手表、网页都只连它；电脑上装 node 服务，经连接器 <code>jarvis-link</code> 主动连 hub，或让 hub 来连，不用 SSH、不用 VPN。</p>
+  </header>
+
+  <div class="arch reveal" data-arch>
+    <svg viewBox="0 0 1200 600" role="img" aria-labelledby="arch-title arch-desc">
+      <title id="arch-title">Persona 架构图</title>
+      <desc id="arch-desc">左边是各个客户端，经 WSS 连到中间的 hub；hub 经 jarvis-link 连到右边各台电脑上的 node 服务，node 在 herdr 或 Orca 里驱动 Claude Code、Codex、DSH 和 pi；推送经端到端加密的中继到手机；多台 hub 可以互联成组。</desc>
+      <defs>
+        <linearGradient id="wire" x1="0" x2="1"><stop offset="0" stop-color="var(--acc)" stop-opacity=".15"/><stop offset=".5" stop-color="var(--acc)" stop-opacity=".9"/><stop offset="1" stop-color="var(--acc)" stop-opacity=".15"/></linearGradient>
+        <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+      </defs>
+
+      <!-- wires: clients → hub -->
+      <g class="wires" fill="none">
+        <path id="w1" d="M228 92 C 360 92, 380 250, 470 262"/>
+        <path id="w2" d="M228 182 C 350 182, 390 270, 470 280"/>
+        <path id="w3" d="M228 272 C 340 272, 400 296, 470 298"/>
+        <path id="w4" d="M228 362 C 350 362, 390 322, 470 316"/>
+        <path id="w5" d="M228 452 C 360 452, 380 340, 470 334"/>
+        <!-- hub → computers -->
+        <path id="w6" d="M730 262 C 820 250, 840 92, 972 92"/>
+        <path id="w7" d="M730 284 C 830 280, 850 212, 972 212"/>
+        <path id="w8" d="M730 310 C 830 314, 850 332, 972 332"/>
+        <path id="w9" d="M730 334 C 820 346, 840 452, 972 452"/>
+        <!-- hub → relay, mesh -->
+        <path id="w10" d="M560 380 C 560 450, 420 500, 330 540"/>
+        <path id="w11" d="M640 380 C 640 450, 780 500, 870 540"/>
+      </g>
+      <g class="wires-lit" fill="none">
+        <use href="#w1"/><use href="#w2"/><use href="#w3"/><use href="#w4"/><use href="#w5"/>
+        <use href="#w6"/><use href="#w7"/><use href="#w8"/><use href="#w9"/><use href="#w10"/><use href="#w11"/>
+      </g>
+
+      <!-- packets -->
+      <g class="packets">
+        <circle r="4"><animateMotion dur="3.2s" repeatCount="indefinite"><mpath href="#w1"/></animateMotion></circle>
+        <circle r="4" class="hot"><animateMotion dur="2.6s" begin=".8s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#w3"/></animateMotion></circle>
+        <circle r="4"><animateMotion dur="3.6s" begin="1.4s" repeatCount="indefinite"><mpath href="#w5"/></animateMotion></circle>
+        <circle r="4"><animateMotion dur="2.9s" begin=".3s" repeatCount="indefinite"><mpath href="#w6"/></animateMotion></circle>
+        <circle r="4" class="hot"><animateMotion dur="3.1s" begin="1.1s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#w8"/></animateMotion></circle>
+        <circle r="4"><animateMotion dur="3.4s" begin="2s" repeatCount="indefinite"><mpath href="#w9"/></animateMotion></circle>
+        <circle r="4" class="ai"><animateMotion dur="4s" begin=".5s" repeatCount="indefinite"><mpath href="#w10"/></animateMotion></circle>
+        <circle r="4" class="ai"><animateMotion dur="4.4s" begin="1.6s" repeatCount="indefinite"><mpath href="#w11"/></animateMotion></circle>
+      </g>
+
+      <!-- clients -->
+      <g class="col-label"><text x="40" y="40">你在哪</text><text x="1160" y="40" text-anchor="end">你的电脑</text></g>
+      <g class="node client" transform="translate(40 66)"><rect width="188" height="52" rx="12"/><text x="18" y="32">iPhone · 灵动岛</text></g>
+      <g class="node client" transform="translate(40 156)"><rect width="188" height="52" rx="12"/><text x="18" y="32">Apple Watch</text></g>
+      <g class="node client" transform="translate(40 246)"><rect width="188" height="52" rx="12"/><text x="18" y="32">Mac · 网页</text></g>
+      <g class="node client" transform="translate(40 336)"><rect width="188" height="52" rx="12"/><text x="18" y="32">Android</text></g>
+      <g class="node client" transform="translate(40 426)"><rect width="188" height="52" rx="12"/><text x="18" y="32">飞书 · Siri</text></g>
+
+      <!-- hub -->
+      <g class="hub" transform="translate(470 196)">
+        <rect class="hub-halo" x="-14" y="-14" width="288" height="226" rx="30" filter="url(#soft)"/>
+        <rect width="260" height="198" rx="22"/>
+        <text class="hub-title" x="22" y="40">hub</text>
+        <text class="hub-sub" x="22" y="62">personad · Go</text>
+        <g class="hub-chips">
+          <g transform="translate(22 80)"><rect width="104" height="28" rx="8"/><text x="10" y="19">助手主对话</text></g>
+          <g transform="translate(134 80)"><rect width="104" height="28" rx="8"/><text x="10" y="19">收件箱</text></g>
+          <g transform="translate(22 114)"><rect width="104" height="28" rx="8"/><text x="10" y="19">连接器</text></g>
+          <g transform="translate(134 114)"><rect width="104" height="28" rx="8"/><text x="10" y="19">知识库</text></g>
+          <g transform="translate(22 148)"><rect width="104" height="28" rx="8"/><text x="10" y="19">Postgres</text></g>
+          <g transform="translate(134 148)"><rect width="104" height="28" rx="8"/><text x="10" y="19">管理界面</text></g>
+        </g>
+      </g>
+
+      <!-- computers -->
+      <g class="node pc" transform="translate(972 62)"><rect width="188" height="60" rx="12"/><text x="18" y="27">MacBook</text><text class="small" x="18" y="46">主动连 hub · herdr</text></g>
+      <g class="node pc" transform="translate(972 182)"><rect width="188" height="60" rx="12"/><text x="18" y="27">Mac Studio</text><text class="small" x="18" y="46">菜单栏 App · Orca</text></g>
+      <g class="node pc" transform="translate(972 302)"><rect width="188" height="60" rx="12"/><text x="18" y="27">Linux 服务器</text><text class="small" x="18" y="46">被动模式 · herdr</text></g>
+      <g class="node pc" transform="translate(972 422)"><rect width="188" height="60" rx="12"/><text x="18" y="27">daemon</text><text class="small" x="18" y="46">容器 · 别的用户</text></g>
+
+      <!-- bottom -->
+      <g class="node infra" transform="translate(150 530)"><rect width="200" height="52" rx="12"/><text x="18" y="22">推送中继</text><text class="small" x="18" y="40">端到端加密 → APNs</text></g>
+      <g class="node infra" transform="translate(850 530)"><rect width="200" height="52" rx="12"/><text x="18" y="22">另一台 hub</text><text class="small" x="18" y="40">互联 · 单中心</text></g>
+
+      <!-- wire labels -->
+      <g class="wire-label"><text x="330" y="236">WSS · TLS 公钥钉扎</text><text x="804" y="236" text-anchor="middle">jarvis-link</text><text x="600" y="430" text-anchor="middle">推送 · 互联</text></g>
+    </svg>
   </div>
-  <div class="split">
-    <div class="copy reveal">
-      <h3>所有电脑上的 Agent，一个列表。</h3>
-      <p>Persona 经 SSH 接入你的每台电脑，读取 herdr 里正在跑的 Claude Code、Codex 和 TRAEX。谁在工作、谁卡住了、谁做完了还没看，一眼分清：需要你的排在最前，并且推到锁屏和灵动岛。</p>
-      <ul class="ticks">
-        <li><b>实时流式</b>每一次读文件、跑命令、改代码都在对话里展开，思考和工具调用折叠成一行，点开才看细节。</li>
-        <li><b>从手机开工</b>选机器、目录和启动器，发一句话就在那台电脑上新开一个 Agent；带图、带文件、带链接都行。</li>
-        <li><b>真终端</b>不改窗格尺寸就能看 Agent 的屏幕，需要时接管键盘，滑动就是滚轮。</li>
-        <li><b>排队与续聊</b>Agent 工作时发的话会排队，等它这一轮做完自动送进去。</li>
-      </ul>
-    </div>
-    <figure class="phone solo reveal"><picture><source srcset="/img/agents-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/agents.webp" alt="Agents 列表" loading="lazy"></picture></figure>
+
+  <div class="arch-notes">
+    <article class="reveal"><p class="mono tag">hub</p><h3>状态都在 Postgres</h3><p>会话、收件箱、设备、配置都在 hub 机器的 Postgres 容器里；聊天、人、群、项目沉淀成 <code>~/.persona/data</code> 里的文件，文件为主、库做索引。</p></article>
+    <article class="reveal"><p class="mono tag">node</p><h3>读 transcript，不抢屏幕</h3><p>node 在 herdr / Orca 里启动和驱动 Agent，用 hooks 接住提问和审批，读 transcript 流式推给手机；终端走 observe 流，不 attach、不改窗格尺寸。</p></article>
+    <article class="reveal"><p class="mono tag">link</p><h3>不用 SSH，不用 VPN</h3><p>笔记本主动拨 hub、断了自己重连；地址固定的机器让 hub 来连。一台电脑有几条路时自动去重、选最快的那条。</p></article>
+    <article class="reveal"><p class="mono tag">relay</p><h3>推送端到端加密</h3><p>没有 APNs 密钥的 hub 经中继推送：通知正文用手机的公钥加密，中继只看得到密文，通知扩展在手机上解密；锁屏的实时活动是明文。</p></article>
   </div>
 </section>
 
-<!-- ───────── approvals ───────── -->
-<section class="chapter alt">
-  <div class="split reverse">
-    <div class="pair reveal">
-      <figure class="phone"><picture><source srcset="/img/question-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/question.webp" alt="Claude 在问你：选择测试框架" loading="lazy"></picture></figure>
-      <figure class="phone lower"><picture><source srcset="/img/plan-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/plan.webp" alt="计划等你审批" loading="lazy"></picture></figure>
-    </div>
-    <div class="copy reveal">
-      <h3>它问你，你在地铁上就能答。</h3>
-      <p>Claude 用 AskUserQuestion 提问、写好计划等批准、要跑一条有风险的命令：这些原本只能坐回电脑前处理的时刻，现在变成手机上的一张卡片。</p>
-      <ul class="ticks">
-        <li><b>回答提问</b>点选项，或者写自己的答案，Agent 立刻接着干。</li>
-        <li><b>审批计划</b>批准并自动执行、只自动接受编辑，或者带着修改意见打回。</li>
-        <li><b>批准工具</b>Bash、写文件、外部操作，逐个放行或拒绝。</li>
-        <li><b>不打开 App</b>在通知、Apple Watch 和 Siri 里也能批准第一个待处理。</li>
-      </ul>
-    </div>
-  </div>
-</section>
+<!-- ═══════════ features ═══════════ -->
+<section class="chapter" id="features">
+  <header class="chapter-head reveal">
+    <p class="idx mono">02 / 功能</p>
+    <h2>不只是遥控，<span class="hl">是一整套工作台。</span></h2>
+  </header>
 
-<!-- ───────── assistant ───────── -->
-<section class="chapter" id="assistant">
-  <div class="chapter-head reveal">
-    <span class="num">02</span>
-    <h2>Persona<small>一个真正了解你工作的助手</small></h2>
-  </div>
-  <div class="split">
-    <div class="copy reveal">
-      <h3>“今天有什么需要我处理的？”</h3>
-      <p>「Persona」是跑在 hub 机器上的一个 Claude，有一个常驻的主对话。它能看到你的 Agents、日程、飞书消息、邮件和知识库，也能读写这部 iPhone 上的数据，所以它的回答从你真实的一天出发。</p>
-      <div class="chips">
-        <span>日历</span><span>提醒事项</span><span>通讯录</span><span>照片</span><span>健康</span><span>位置</span>
-        <span>飞书</span><span>Gmail</span><span>IMAP / SMTP</span><span>知识库</span><span>Agents</span>
-      </div>
-      <ul class="ticks">
-        <li><b>定时任务</b>“每天早上九点看一眼线上告警”，重复的事交给它，到点在手机上汇报。</li>
-        <li><b>会问你</b>需要你拍板时它在手机上提问，替你出面的操作（发消息、发邮件）一律先确认。</li>
-        <li><b>有记忆</b>你的习惯、项目、常打交道的人，它会记住并越用越准。</li>
-      </ul>
-    </div>
-    <figure class="phone solo reveal"><picture><source srcset="/img/jarvis-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/jarvis.webp" alt="Persona 助手汇总今天需要处理的事" loading="lazy"></picture></figure>
-  </div>
-</section>
-
-<!-- ───────── inbox ───────── -->
-<section class="chapter alt" id="inbox">
-  <div class="chapter-head reveal">
-    <span class="num">03</span>
-    <h2>收件箱<small>一行一件事</small></h2>
-  </div>
-  <div class="split reverse">
-    <figure class="phone solo reveal"><picture><source srcset="/img/inbox-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/inbox.webp" alt="收件箱：AI 分身起草的回复，点一下发送" loading="lazy"></picture></figure>
-    <div class="copy reveal">
-      <h3>飞书、邮件、Agent 的待办，合成一个列表。</h3>
-      <p>Persona 不做第二个飞书，也不做第二个邮件客户端。它把各处找你的事收到一起，让 AI 先分拣：要你处理的在上面，通知和群聊归到一边。</p>
-      <ul class="ticks">
-        <li><b>AI 分身</b>读完上下文，判断这件事该怎么回，必要时派一个 Agent 去查，再起草一条回复。你改一改，点一下发送。</li>
-        <li><b>交给 AI</b>任何一条消息都能一键交给助手处理，处理完自动标记。</li>
-        <li><b>文档里的 @我</b>飞书表格、文档里提及你、评论你的地方也会进来，并直接定位到那一行。</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- ───────── /agent ───────── -->
-<section class="chapter">
-  <div class="chapter-head reveal">
-    <span class="num">04</span>
-    <h2>/agent<small>在飞书任何地方召唤</small></h2>
-  </div>
-  <div class="split">
-    <div class="copy reveal">
-      <h3>在群里打一行字，Agent 就开始干活。</h3>
-      <p>在群聊、私聊、话题或文档评论里以 <code>/agent</code> 开头说一句话，hub 会收集所在会话的上下文：前后的消息、引用、话题、提到的文档和知识库，用你配置的最强模型起一个 Agent 处理，再以你的身份回复。</p>
-      <p class="muted">上下文感知是关键：它不是一个只看到一句话的机器人，而是知道这句话在什么场合说的。</p>
-    </div>
-    <div class="lark reveal" aria-label="示意：在飞书群里使用 /agent">
-      <div class="lark-head"><span class="dot"></span>发布筹备群 · 话题</div>
-      <div class="msg"><span class="av a1">产</span><div><b>产品</b><p>周五的发布清单还差哪些？上次评审的结论在这个文档里 <u>发布评审纪要</u></p></div></div>
-      <div class="msg me"><span class="av a2">我</span><div><b>我</b><p><code>/agent</code> 对照纪要和仓库的 milestone，列一下还没完成的项和负责人</p></div></div>
-      <div class="msg me bot"><span class="av a2">我</span><div><b>我</b>
-        <p>还剩 3 项没完成：</p>
-        <ol><li>离线缓存的迁移脚本：后端，PR 已提，待评审</li><li>新版图标导出：设计，周四交付</li><li>灰度开关的回滚预案：还没有负责人</li></ol>
-        <blockquote>🤖</blockquote></div></div>
-    </div>
-  </div>
-</section>
-
-<!-- ───────── knowledge ───────── -->
-<section class="chapter alt">
-  <div class="chapter-head reveal">
-    <span class="num">05</span>
-    <h2>知识库<small>让 AI 认识你的世界</small></h2>
-  </div>
-  <div class="split reverse">
-    <figure class="phone solo reveal"><picture><source srcset="/img/kb-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/kb.webp" alt="知识库：项目、会话、人和文档" loading="lazy"></picture></figure>
-    <div class="copy reveal">
-      <h3>聊天、人、群、项目，自动沉淀。</h3>
-      <p>Persona 把各处的会话全量归档到 hub 机器上的一个目录：文件为主，数据库做索引。AI 会给项目打标、整理压缩后的上下文、记下每个人和每个群在做什么。</p>
-      <p>助手、AI 分身和你的 Agents 共用这份知识，所以它们回答“这个项目进行到哪了”“上次和谁聊过这件事”时，有据可查。</p>
-    </div>
-  </div>
-</section>
-
-<!-- ───────── everywhere ───────── -->
-<section class="chapter">
-  <div class="chapter-head reveal">
-    <span class="num">06</span>
-    <h2>随处可见<small>不用打开 App 的那些时刻</small></h2>
-  </div>
   <div class="bento">
+    <article class="cell xl reveal">
+      <div class="cell-copy">
+        <p class="mono tag">Agents</p>
+        <h3>实时看它们干活，<br>在手机上替它们做决定。</h3>
+        <ul class="ticks">
+          <li>流式显示每一步：工具、思考、回复，长输出点开看全文</li>
+          <li>Claude 提问、计划审批、工具批准，直接点卡片作答</li>
+          <li>需要你 · 工作中 · 完成未看 · 已看，四种状态一眼分清</li>
+          <li>新建 Agent 时挑电脑、目录、启动器和模型</li>
+        </ul>
+      </div>
+      <figure class="shot"><picture><source srcset="/img/plan-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/plan.webp" alt="在手机上审批 Claude 写好的计划" width="460" height="1000" loading="lazy"></picture></figure>
+    </article>
+
     <article class="cell tall reveal">
-      <figure class="phone mini"><picture><source srcset="/img/machines-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/machines.webp" alt="机器监控" loading="lazy"></picture></figure>
-      <h4>机器监控</h4>
-      <p>每台电脑的 CPU、内存、网络、磁盘和 24 小时历史，以及上面跑着几个 Agent。</p>
+      <p class="mono tag">Persona 助手</p>
+      <h3>一个常驻的主对话</h3>
+      <p>hub 上一个专用目录里的 Claude，能查你的日程、飞书、邮件、知识库，能看各台电脑上的 Agent、替你开新的。定时任务、跟进提醒，到点主动来找你。</p>
+      <figure class="shot sm"><picture><source srcset="/img/jarvis-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/jarvis.webp" alt="Persona 助手的主对话" width="460" height="1000" loading="lazy"></picture></figure>
     </article>
-    <article class="cell reveal">
-      <div class="island" aria-hidden="true"><span class="i-dot"></span><span>2 工作中</span><span class="i-sep"></span><span class="i-hot">1 需要你</span></div>
-      <h4>灵动岛与锁屏</h4>
-      <p>实时活动显示各台电脑的状态，有事需要你时亮起；点一下回到离开时的那一页、那个位置。</p>
+
+    <article class="cell tall reveal">
+      <p class="mono tag">收件箱 · AI 分身</p>
+      <h3>先分拣，再起草</h3>
+      <p>飞书和邮件合成一个列表，一行一件事。AI 分身判断要不要你管、交给 Agent 处理并起草回复，你点一下发送。</p>
+      <figure class="shot sm"><picture><source srcset="/img/inbox-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/inbox.webp" alt="收件箱：飞书和邮件在一个列表里" width="460" height="1000" loading="lazy"></picture></figure>
     </article>
-    <article class="cell reveal">
-      <div class="watch" aria-hidden="true"><div class="w-face"><span class="w-t">需要你</span><b>计划等你审批</b><span class="w-s">photo-sync</span><span class="w-btn">批准</span></div></div>
-      <h4>Apple Watch</h4>
-      <p>抬腕看谁在等你，直接批准或回答。</p>
+
+    <article class="cell wide reveal term">
+      <p class="mono tag">飞书 /agent</p>
+      <h3>在任何群里叫它干活</h3>
+      <p>自己发一条 <code>/agent 看看哪里被拦截了</code>：hub 收好所在会话、话题、引用的消息、链接的文档和知识库档案，起一个 Agent 处理，做完以你的身份回复。上下文在 App 里折成一行，展开再看。</p>
+      <div class="mini-chat" aria-hidden="true">
+        <p class="me"><span>/agent 看看哪里被拦截了</span></p>
+        <p class="ctx"><span>上下文 · 7 项</span></p>
+        <p class="bot"><span>lint 被新加的隐私扫描拦下了，已换成占位图，重跑通过。<em>🤖</em></span></p>
+      </div>
     </article>
-    <article class="cell reveal">
-      <div class="siri" aria-hidden="true">“嘿 Siri，问 Persona 服务器怎么样了”</div>
-      <h4>Siri 与快捷指令</h4>
-      <p>问 Claude、查状态、批准第一个待处理，都能用一句话完成。</p>
-    </article>
-    <article class="cell reveal">
-      <div class="browser" aria-hidden="true"><span></span><span></span><span></span><i>&lt;hub 地址&gt;</i></div>
-      <h4>网页版与 Android</h4>
-      <p>hub 自己托管一个网页版，坐在别人的电脑前也能接着聊；Android App 用同一套协议，后台通知不依赖推送服务。</p>
-    </article>
+
+    <article class="cell reveal"><p class="mono tag">待办</p><h3>分给几个 Agent</h3><p>记下要做的事，整组交出去，在待办里看每个 Agent 的进展；Agents 页按待办分组。</p></article>
+    <article class="cell reveal"><p class="mono tag">知识库</p><h3>越用越懂你</h3><p>会话全量归档、压缩成上下文，人、群、项目各有档案，助手和每个 Agent 共用。</p></article>
+    <article class="cell reveal"><p class="mono tag">终端 · 文件 · Git</p><h3>口袋里的工作站</h3><p>真终端实时流，文件预览，一键拉取；Agent 回答里的 localhost 链接经 hub 端口转发，在手机上直接打开。</p></article>
+    <article class="cell reveal"><p class="mono tag">手机数据</p><h3>Claude 读得到你的手机</h3><p>通讯录、日历、提醒、照片、健康、位置；写操作先问你。录音（手机和手表）本机转写，确认后作为上下文。</p></article>
+    <article class="cell reveal"><p class="mono tag">随处可见</p><h3>灵动岛 · 手表 · Siri</h3><p>实时活动显示整支队伍的状态，Apple Watch 上直接批准，Siri 和快捷指令问 Persona、批准第一个待处理。</p></article>
+    <article class="cell reveal"><p class="mono tag">多 hub</p><h3>互联成组</h3><p>公司一台、家里一台：互联码配对，一台当中心，其余把电脑交给它；App 一次连多组，合并显示。</p></article>
+    <article class="cell wide reveal"><p class="mono tag">模型</p><h3>按用途选模型</h3><p>助手、AI 分身、飞书 /agent 各用各的供应商和模型；启动器从 <code>~/.zshrc</code> 自动同步，Key 加密存在 hub。</p></article>
+    <article class="cell wide reveal"><p class="mono tag">运行时 SDK</p><h3>接入你自己的 Agent</h3><p>通用的运行时协议和 SDK：自己写一个 driver，或者把常驻服务注册成 daemon，就能出现在 App 里。</p></article>
   </div>
 </section>
 
-<!-- ───────── how ───────── -->
-<section class="chapter alt" id="how">
-  <div class="chapter-head reveal">
-    <span class="num">07</span>
-    <h2>工作原理<small>一台常开的机器就够了</small></h2>
-  </div>
-  <div class="arch reveal" role="img" aria-label="架构：手机、手表和网页连接 hub，hub 经 SSH 连接各台电脑上的 node，node 驱动 herdr 里的 Claude Code 和 Codex">
-    <div class="tier">
-      <div class="node-card"><b>iPhone</b><span>Persona App</span></div>
-      <div class="node-card"><b>Apple Watch</b><span>手表 App</span></div>
-      <div class="node-card"><b>浏览器</b><span>网页版</span></div>
-      <div class="node-card"><b>Android</b><span>App</span></div>
-    </div>
-    <div class="link"><span>HTTPS · WebSocket · APNs</span></div>
-    <div class="tier hub">
-      <div class="node-card big"><b>hub</b><span>personad · 你那台常开的机器</span>
-        <em>Postgres　助手 Claude　知识库　收件箱　飞书 / 邮件</em></div>
-    </div>
-    <div class="link"><span>SSH</span></div>
-    <div class="tier">
-      <div class="node-card"><b>公司的 Mac</b><span>node · herdr</span><em>Claude Code ×6</em></div>
-      <div class="node-card"><b>家里的 Mac</b><span>node · herdr</span><em>Codex ×2</em></div>
-      <div class="node-card"><b>Linux 服务器</b><span>node · herdr</span><em>Claude Code ×4</em></div>
-    </div>
-  </div>
-  <div class="steps">
-    <div class="step reveal"><span>1</span><h4>部署 hub</h4><p>在一台常开的机器上运行 <code>personad hub</code>（旧命令 <code>jarvisd hub</code> 仍兼容），配好要接入的电脑。</p></div>
-    <div class="step reveal"><span>2</span><h4>接入电脑</h4><p>hub 经 SSH 在每台电脑上起一个 node，读 herdr 和 transcript，挂上 hook。</p></div>
-    <div class="step reveal"><span>3</span><h4>手机配对</h4><p>扫码或输入 hub 地址，设备拿到自己的 token，之后一切在你自己的网络里。</p></div>
+<!-- ═══════════ screens ═══════════ -->
+<section class="chapter" id="screens">
+  <header class="chapter-head reveal">
+    <p class="idx mono">03 / 界面</p>
+    <h2>为单手设计，<span class="hl">按榜首 App 打磨。</span></h2>
+    <p class="sub">液态玻璃、晨报、看板……多套界面风格和主题色，深色浅色都逐屏截图检查。左右滑动看看。</p>
+  </header>
+  <div class="reel reveal" tabindex="0" aria-label="App 截图，可左右滚动">
+    <figure><picture><source srcset="/img/agents-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/agents.webp" alt="Agents 列表" width="460" height="1000" loading="lazy"></picture><figcaption><b>Agents</b>需要你的排在最前</figcaption></figure>
+    <figure><picture><source srcset="/img/chat-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/chat.webp" alt="Agent 对话" width="460" height="1000" loading="lazy"></picture><figcaption><b>对话</b>工作过程折成一行</figcaption></figure>
+    <figure><picture><source srcset="/img/question-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/question.webp" alt="回答 Claude 的提问" width="460" height="1000" loading="lazy"></picture><figcaption><b>提问</b>点一下就答</figcaption></figure>
+    <figure><picture><source srcset="/img/plan-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/plan.webp" alt="审批计划" width="460" height="1000" loading="lazy"></picture><figcaption><b>计划</b>批准或让它改</figcaption></figure>
+    <figure><picture><source srcset="/img/jarvis-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/jarvis.webp" alt="Persona 助手" width="460" height="1000" loading="lazy"></picture><figcaption><b>Persona</b>常驻的主对话</figcaption></figure>
+    <figure><picture><source srcset="/img/inbox-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/inbox.webp" alt="收件箱" width="460" height="1000" loading="lazy"></picture><figcaption><b>收件箱</b>飞书和邮件一起看</figcaption></figure>
+    <figure><picture><source srcset="/img/kb-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/kb.webp" alt="知识库" width="460" height="1000" loading="lazy"></picture><figcaption><b>知识库</b>人、群、项目</figcaption></figure>
+    <figure><picture><source srcset="/img/machines-dark.webp" media="(prefers-color-scheme: dark)"><img src="/img/machines.webp" alt="机器监控" width="460" height="1000" loading="lazy"></picture><figcaption><b>机器</b>CPU、内存、网络</figcaption></figure>
   </div>
 </section>
 
-<!-- ───────── privacy ───────── -->
+<!-- ═══════════ quick start ═══════════ -->
+<section class="chapter" id="start">
+  <header class="chapter-head reveal">
+    <p class="idx mono">04 / 快速开始</p>
+    <h2>三步，<span class="hl">十分钟。</span></h2>
+  </header>
+  <ol class="steps">
+    <li class="reveal">
+      <span class="step-n">1</span>
+      <h3>在常开的机器上装 hub</h3>
+      <p>一台就够一个家。会问谁能打开管理界面；需要的话顺便装好默认的终端引擎 herdr。也可以用 Docker 跑在 NAS 上。</p>
+      <div class="cmd"><pre><code><span class="pr">$</span> curl -fsSL https://personaside.com/install.sh | sh -s -- --hub</code></pre><button class="copy" type="button" aria-label="复制命令"><span>复制</span></button></div>
+    </li>
+    <li class="reveal">
+      <span class="step-n">2</span>
+      <h3>每台电脑装 node 服务</h3>
+      <p>在 hub 上 <code>personad hub pair --machine &lt;id&gt;</code> 拿到配对链接，在那台电脑上执行；Mac 也可以用菜单栏 App「Persona Link」点几下装好。</p>
+      <div class="cmd"><pre><code><span class="pr">$</span> curl -fsSL https://personaside.com/install.sh | sh -s -- --node --pair '<span class="ph">&lt;配对链接&gt;</span>'</code></pre><button class="copy" type="button" aria-label="复制命令"><span>复制</span></button></div>
+    </li>
+    <li class="reveal">
+      <span class="step-n">3</span>
+      <h3>手机扫码配对</h3>
+      <p>hub 打印二维码（或在管理界面的「设备」里生成），App 扫一下；二维码里带着公钥指纹，公网直连也能确认连的是你的 hub。</p>
+      <div class="cmd"><pre><code><span class="pr">$</span> personad hub pair</code></pre><button class="copy" type="button" aria-label="复制命令"><span>复制</span></button></div>
+    </li>
+  </ol>
+  <p class="start-note reveal">每次下载都会对照发布的 <code>SHA256SUMS</code> 校验；hub 之后自己检查更新、等空闲时重启，失败自动回滚。</p>
+</section>
+
+<!-- ═══════════ privacy ═══════════ -->
 <section class="chapter" id="privacy">
-  <div class="chapter-head reveal">
-    <span class="num">08</span>
-    <h2>隐私<small>数据只在你自己的机器上</small></h2>
-  </div>
-  <div class="trust">
-    <div class="t reveal"><h4>没有我们的服务器</h4><p>App 只连接你自己部署的 hub。开发者收不到你的代码、消息、邮件或任何使用数据。</p></div>
-    <div class="t reveal"><h4>凭据加密存储</h4><p>邮箱凭据和模型 Key 用 AES-GCM 加密后存进 hub 的数据库，密钥文件留在机器上、不进数据库。</p></div>
-    <div class="t reveal"><h4>替你出面先问你</h4><p>发消息、发邮件、写手机数据、在飞书里写东西，这些操作都要你在手机上确认。</p></div>
-    <div class="t reveal"><h4>Google 登录授权</h4><p>添加 Gmail 走 Google 官方的 OAuth 登录，不需要也不会保存你的 Google 密码。</p></div>
+  <div class="vault reveal">
+    <div class="vault-copy">
+      <p class="idx mono">05 / 隐私</p>
+      <h2>你的数据，<span class="hl">只在你的机器上。</span></h2>
+      <p class="sub">Persona 没有账号体系，也不收集、不出售任何数据。hub 是你自己部署的，内容都存在你自己的机器里；只有你让 AI 处理某件事时，相关内容才作为对话发给你选的模型服务。</p>
+    </div>
+    <ul class="vault-list">
+      <li><b>自建</b>状态在 hub 的 Postgres，知识库是你磁盘上的文件。</li>
+      <li><b>加密</b>邮箱凭据和模型 Key 用 AES-GCM 加密存储，密钥文件不进数据库。</li>
+      <li><b>钉扎</b>公网直连走 TLS，App 钉住配对时拿到的公钥，优先 IPv6。</li>
+      <li><b>端到端</b>通知正文用手机的公钥加密，中继只转发密文（实时活动是明文，可自建中继）。</li>
+      <li><b>写操作要你点头</b>改日历、发消息、往飞书写，先在手机上确认。</li>
+    </ul>
   </div>
 </section>
 
-<!-- ───────── cta ───────── -->
-<section class="final reveal">
-  <img src="/img/icon.png" alt="" width="88" height="88">
-  <h2>把电脑留在桌上，<br>把工作带在身边。</h2>
-  <p>Persona 目前只在小范围内测试，不在 App Store 上架。需要一台常开的机器跑 hub。</p>
-  <div class="cta">
-    <a class="btn" href="mailto:person@example.com">联系 person@example.com</a>
+<!-- ═══════════ faq ═══════════ -->
+<section class="chapter" id="faq">
+  <header class="chapter-head reveal"><p class="idx mono">06 / 常见问题</p><h2>常见问题</h2></header>
+  <div class="faq reveal">
+    <details><summary>要开 VPN 或内网穿透吗？</summary><p>不用。hub 开着 TLS 端口时，手机经公网直连（优先 IPv6），靠配对时钉住的公钥确认身份；在内网里也照常能连。电脑那边由 jarvis-link 主动拨 hub，不需要公网地址。</p></details>
+    <details><summary>支持哪些 Agent？</summary><p>Claude Code、Codex 和 TRAEX、DSH（DeepSeek Harness）、pi / pi-web，跑在 herdr、Herdr App 或 Orca 里。按运行时协议写一个 driver，或者把常驻服务注册成 daemon，就能接入别的。</p></details>
+    <details><summary>手机不在身边时 Agent 卡住了怎么办？</summary><p>需要你的事会推送到手机和手表，锁屏和灵动岛上能看到是哪台电脑的哪个 Agent；点开直接作答。你也可以让 Persona 助手替你巡检。</p></details>
+    <details><summary>数据会经过你们的服务器吗？</summary><p>只有推送。没有自己 APNs 密钥的 hub 经开发者运营的推送中继发送：普通通知的正文用手机的公钥端到端加密，中继看不到；锁屏和灵动岛的实时活动是 iOS 要求的明文，经中继时它能看到。在意的话给 hub 配上自己的 APNs 密钥，或者自己搭一个中继。详见<a href="/privacy/">隐私政策</a>。</p></details>
+    <details><summary>怎么拿到 App？</summary><p>iPhone 和 Apple Watch 版现在通过 TestFlight 分发；网页版由 hub 托管，Android 安装包也从 hub 下载。想试用请写信给我们。</p></details>
   </div>
+</section>
+
+<!-- ═══════════ final ═══════════ -->
+<section class="final reveal">
+  <h2>把电脑留在桌上，<br><span class="hl">把它们带在身边。</span></h2>
+  <a class="btn" href="mailto:person@example.com">联系 person@example.com</a>
 </section>
 </main>
 
-<footer>
-  <span>© 2026 chirpet.com</span>
+<footer class="foot">
+  <span class="brand-sm"><picture><source srcset="/img/icon-dark.png" media="(prefers-color-scheme: dark)"><img src="/img/icon.png" alt="" width="18" height="18"></picture>Persona</span>
+  <span class="muted">© 2026 personaside.com</span>
   <nav><a href="/privacy/">隐私政策</a><a href="/terms/">服务条款</a><a href="mailto:person@example.com">联系我们</a></nav>
 </footer>
 
-<script>
-  // Reveal sections as they scroll into view; everything is visible without JS or with reduced motion.
-  (() => {
-    const els = document.querySelectorAll('.reveal');
-    if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      els.forEach(e => e.classList.add('in')); return;
-    }
-    document.documentElement.classList.add('js');
-    const io = new IntersectionObserver(entries => entries.forEach(e => {
-      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
-    }), { rootMargin: '0px 0px -8% 0px' });
-    els.forEach(e => io.observe(e));
-  })();
-</script>
+<script src="/home.js" defer></script>
 </body>
 </html>

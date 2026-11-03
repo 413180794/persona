@@ -261,6 +261,7 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.persona/bin/personad
 
 - `release.sh` 传完 TestFlight 后接着跑它，版本号是 `<提交>-<构建号>`，和这一版 TestFlight 对得上；`NO_PUBLISH=1` 只发 TestFlight，
   配置里没有 `publish.site_url` 也不发。单独跑：`./scripts/release/publish.sh`，`NO_DEPLOY=1` 只编译和检查（产物在 `build-publish/`）。
+- 只改了官网页面（`site/`）：`SITE_ONLY=1 ./scripts/release/publish.sh`，不编译新版，把线上正在发的版本（`SHA256SUMS` 里的每个文件、`VERSION`、`latest.json`、`install.sh`）下载回来、按 `SHA256SUMS` 校验，和已提交的 `site/` 一起部署，部署后核对线上文件没变。这台机器下载大文件常被重置连接时，先在网络稳的机器上把 `SHA256SUMS` 里的文件下到一个目录、拷回来，加 `SITE_ONLY_FROM=<目录>`：小文件照样从线上取，大文件照样按线上的 `SHA256SUMS` 校验。**不要在 `site/` 里直接 `wrangler deploy`**：会让 `/dl/` 和 `install.sh` 404（`docs/lessons/server.md`）。
 - 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`，写进 `channel=release`、build 号（UTC `YYYYMMDDHHMM`）和 `updateURL`：
   - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.persona/web` 时就用二进制里的；有就照旧用目录里的。
   - **不带任何 skill**：lark-connector 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.persona/skills/`，
