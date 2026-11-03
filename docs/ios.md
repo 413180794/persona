@@ -502,8 +502,13 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 - **App 图标可以换**（设置 › 外观 › App 图标，iPhone / iPad；手表和 Mac 只有一个图标）：
   - 选项：默认（上面这个）、「p.」（Didot 小写 p 加红色句号，米白纸底，深色是墨底米白字）、「气场」（珊瑚、紫、青绿的光晕加颗粒，不画物体）。
     都是按新名字 Persona 设计的第二轮方案里挑的，只在用户选了时生效。
+  - 配色变体「余烬」（暖红）、「薄荷」（青绿）、「石墨」（黑白）：默认图标原样换色，图形一像素不动，只对颜色做一次通道混合
+    （余烬：色相 -14° 再加饱和、偏暖；薄荷：色相 +150°；石墨：去饱和、略偏冷），any / dark 用同一个变换，tinted 只留灰度（系统给它上色）。
+    仓库里存的是生成好的 PNG，不是画法：换素材就直接覆盖 `AppIcon-Ember|Mint|Graphite.appiconset` 里的 `icon.png`、`icon-dark.png`、
+    `icon-tinted.png`（1024×1024、RGB、不带 alpha，tinted 用黑底灰度），再跑一次 `scripts/assets/make_alt_icons.py` 刷新预览，`AppIconChoiceTests` 查尺寸和 alpha。
   - 资源：`scripts/assets/make_alt_icons.py` 画出 `AppIcon-Didot`、`AppIcon-Aura` 两个图标集（any / dark / tinted），
     再从每个图标集（含默认的）缩出设置页用的预览 `AppIcons/app-icon-*`（any / dark），改了画法重跑脚本。
+    这个脚本每次重画 Didot，深色那张的字节会变（图一样）：只为刷新预览跑的话，只提交自己改的文件。
   - 工程：iOS 目标的 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` 列出备用图标集，构建时写进 Info.plist 的 `CFBundleAlternateIcons`；
     不在列表里的图标集不会打进包，加一个图标要同时改 `AppIconChoice`、这一行和脚本（`AppIconChoiceTests` 查三者一致、资源都在）。
   - 选择由系统记住，App 不存：当前是哪个读 `alternateIconName`（`AppIconModel`），换的时候系统弹自己的提示框。

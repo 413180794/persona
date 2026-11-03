@@ -78,7 +78,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # 设置 › 外观 › App 图标 (AppIconChoice, scripts/assets/make_alt_icons.py); the Mac target shares the catalog but not these.
-        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Didot AppIcon-Aura"
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Didot AppIcon-Aura AppIcon-Ember AppIcon-Mint AppIcon-Graphite"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES

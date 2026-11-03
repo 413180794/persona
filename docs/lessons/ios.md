@@ -364,6 +364,9 @@
   Codex 没有 id 的行是 `line<seq>#n`，只在会话内唯一。DSH 里从同一处分出的两个分支，第一条分叉的消息序号相同、id 相同：iPad 先看了一个分支，
   再打开另一个，后者那条显示成了前者的（网页版没有这层缓存，所以正常；服务端推送和分页都对）。现在 key 是「机器/会话 + id」（`MemoScope`），
   聊天页用 environment `rowMemoScope` 往下传、挂在 body 最外层（它弹出的 sheet 也在里面），预热按同一个 key 填。新加按 id 的缓存照此办理。
+- 换 App 图标在 Xcode 26.0 + iOS 26.0 模拟器上验证不了（2026-11-03 实测，master 和改动后的分支都一样）：`supportsAlternateIcons` 为 false，
+  设置 › 外观 里不显示「App 图标」那一行，从 `-openAppearance icon` 进去点别的图标没反应，`AppIconTests` 在第 44 行失败；
+  构建出的 Info.plist 有 `CFBundleAlternateIcons`、Assets.car 里有各图标集。#313 的验证不是在这套环境做的。在 26.0 上只能验证网格和预览，切换要换新的模拟器运行时或真机。
 
 ## `APIClient.get` 的路径里不能带 `?`（2026-11-03，连接器迁移 M6）
 

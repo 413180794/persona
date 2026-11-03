@@ -33,6 +33,7 @@ import UIKit
 
     @Test func startsOnWhatTheSystemHas() {
         #expect(AppIconModel(system: FakeSystem("AppIcon-Aura")).current == .aura)
+        #expect(AppIconModel(system: FakeSystem("AppIcon-Graphite")).current == .graphite)
         #expect(AppIconModel(system: FakeSystem()).current == .standard)
         #expect(!AppIconModel(system: nil).available)
     }
@@ -73,6 +74,32 @@ import UIKit
                 #expect(img.size.width * img.scale == 1024, "\(c) \(f)")
             }
             #expect(UIImage(named: c.preview) != nil, "preview \(c.preview) not in the app's catalog")
+        }
+    }
+
+    /// Two tiles that read the same, or two choices on one icon set, would make the picker lie about what is on.
+    @Test func everyChoiceIsDistinct() {
+        let all = AppIconChoice.allCases
+        #expect(Set(all.map(\.iconName)).count == all.count)
+        #expect(Set(all.map(\.preview)).count == all.count)
+        #expect(Set(all.map(\.title)).count == all.count)
+        #expect(Set(all.map { "\($0.title) \($0.subtitle)" }).count == all.count)
+    }
+
+    /// App Store icons must be 1024 square and opaque. UIImage loads an icon with alpha just the same, so read the PNG's
+    /// IHDR: width, height, colour type 2 (RGB, no alpha).
+    @Test func everyIconIsOpaque1024() throws {
+        for c in AppIconChoice.allCases {
+            let set = Self.assets.appending(path: "\(c.iconName ?? "AppIcon").appiconset")
+            #expect(FileManager.default.fileExists(atPath: set.appending(path: "Contents.json").path), "\(c)")
+            for f in ["icon.png", "icon-dark.png", "icon-tinted.png"] {
+                let head = try [UInt8](Data(contentsOf: set.appending(path: f)).prefix(26))
+                try #require(head.count == 26 && head[..<8].elementsEqual([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+                             "\(c) \(f) is not a PNG")
+                let be = { (i: Int) in head[i ..< i + 4].reduce(0) { $0 << 8 | Int($1) } }
+                #expect(be(16) == 1024 && be(20) == 1024, "\(c) \(f) is \(be(16))x\(be(20))")
+                #expect(head[25] == 2, "\(c) \(f) colour type \(head[25]), want 2 (RGB, no alpha)")
+            }
         }
     }
 

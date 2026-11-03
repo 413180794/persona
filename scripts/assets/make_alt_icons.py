@@ -83,7 +83,10 @@ ICONS = {
 }
 
 # Preview image set: the icon set it shows.
-PREVIEW_OF = {"app-icon-default": "AppIcon", "app-icon-didot": "AppIcon-Didot", "app-icon-aura": "AppIcon-Aura"}
+# Ember / Mint / Graphite are not drawn here: they are the default icon recoloured, kept as plain PNGs in their icon sets
+# (docs/ios.md「App 图标」); this script only refreshes their previews, so swapping their art is: replace the PNGs, rerun.
+PREVIEW_OF = {"app-icon-default": "AppIcon", "app-icon-didot": "AppIcon-Didot", "app-icon-aura": "AppIcon-Aura",
+              "app-icon-ember": "AppIcon-Ember", "app-icon-mint": "AppIcon-Mint", "app-icon-graphite": "AppIcon-Graphite"}
 
 
 def write_json(path, data):
