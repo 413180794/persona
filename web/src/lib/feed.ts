@@ -1,0 +1,315 @@
+// Tasks dispatched from an assistant conversation (docs/unified-entry.md, iOS TasksStore / Shared/Tasks.swift): the plans,
+// each conversation's feed (what the hub inserted into it), where those go among the chat's lines, the day lines and
+// the quick results. A task is a todo whose `origin` is the conversation; its state is the todo's (lib/todos.ts).
+import { useSyncExternalStore } from "react";
+import { api, enc } from "./api";
+import { onHubEvent, refreshTodos } from "./store";
+import type { ChatLine } from "./turns";
+import type { Item } from "./types";
+
+export interface PlanTask {
+  title: string;
+  prompt: string;
+  machine: string;
+  cwd: string;
+  launcher?: string;
+  model?: string;
+  permission?: string;
+  readonly?: boolean;
+  why?: string;
+  todo_id?: string;
+  error?: string;
+}
+
+export interface TaskPlan {
+  id: string;
+  conversation: string;
+  tasks: PlanTask[];
+  state: "open" | "started" | "dismissed";
+  created_at?: string;
+}
+
+export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message";
+
+export interface FeedItem {
+  id: string;
+  conversation: string;
+  at: string;
+  kind: FeedKind;
+  ref?: string;
+  body?: Record<string, unknown>;
+}
+
+export interface TodayBody {
+  date: string;
+  done?: { id: string; title: string }[];
+  waiting?: { id: string; title: string }[];
+  working?: number;
+  meetings?: { start: string; end: string; title: string }[];
+  at_me?: { name: string; unread?: number; preview?: string }[];
+  unread?: number;
+}
+
+/** A string field of an item's body. */
+export function field(it: FeedItem, key: string): string | undefined {
+  const v = it.body?.[key];
+  return typeof v === "string" ? v : undefined;
+}
+
+// ── state ──
+
+interface FeedState {
+  feeds: Record<string, FeedItem[]>;
+  plans: Record<string, TaskPlan>;
+  /** Conversation → the task the next message goes to (「对「xx」说」). */
+  routes: Record<string, string>;
+  busy: Record<string, boolean>;
+  /** Message cards put off with 稍后, and the ones sent from their card. */
+  later: Record<string, boolean>;
+  sent: Record<string, boolean>;
+}
+
+let st: FeedState = { feeds: {}, plans: {}, routes: {}, busy: {}, later: {}, sent: {} };
+const listeners = new Set<() => void>();
+function set(patch: Partial<FeedState>) {
+  st = { ...st, ...patch };
+  listeners.forEach((l) => l());
+}
+
+export function useFeed<T>(select: (s: FeedState) => T): T {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    () => select(st),
+  );
+}
+
+export function getFeedState() {
+  return st;
+}
+
+/** Puts items into a conversation's feed, oldest first, without repeats. */
+export function mergeInto(list: FeedItem[], items: FeedItem[]): FeedItem[] {
+  const have = new Set(list.map((i) => i.id));
+  const fresh = items.filter((i) => !have.has(i.id));
+  if (!fresh.length) return list;
+  return [...list, ...fresh].sort((a, b) => (a.at === b.at ? a.id.localeCompare(b.id) : Date.parse(a.at) - Date.parse(b.at)));
+}
+
+function received(items: FeedItem[], plans?: Record<string, TaskPlan>) {
+  const feeds = { ...st.feeds };
+  for (const it of items) feeds[it.conversation] = mergeInto(feeds[it.conversation] ?? [], [it]);
+  set({ feeds, plans: plans ? { ...st.plans, ...plans } : st.plans });
+  if (items.some((i) => i.kind === "task" || i.kind === "receipt")) void refreshTodos();
+}
+
+const loading = new Set<string>();
+const todayAsked = new Map<string, string>();
+
+/** A conversation's feed: what came since the newest item it has. */
+export async function loadFeed(conversation: string) {
+  if (loading.has(conversation)) return;
+  loading.add(conversation);
+  try {
+    const last = st.feeds[conversation]?.at(-1)?.at;
+    const res = await api<{ items: FeedItem[]; plans?: Record<string, TaskPlan> }>(
+      `/assistant/conversations/${enc(conversation)}/feed${last ? `?since=${encodeURIComponent(last)}` : ""}`,
+    );
+    if (!st.feeds[conversation]) set({ feeds: { ...st.feeds, [conversation]: [] } });
+    received(res.items ?? [], res.plans ?? undefined);
+  } catch {
+    // an older hub has no feed: the conversation shows as before
+  } finally {
+    loading.delete(conversation);
+  }
+}
+
+/** The main conversation's 今天 card, once a day (the hub makes it on the first ask). */
+export async function loadToday(conversation: string) {
+  const day = new Date().toLocaleDateString("sv");
+  if (todayAsked.get(conversation) === day) return;
+  todayAsked.set(conversation, day);
+  try {
+    const res = await api<{ item: FeedItem }>(`/assistant/conversations/${enc(conversation)}/today`, { method: "POST" });
+    if (res.item) received([res.item]);
+  } catch {
+    todayAsked.delete(conversation);
+  }
+}
+
+onHubEvent("assistant_feed", (m) => {
+  const it = m.item as FeedItem | undefined;
+  if (it) received([it]);
+});
+onHubEvent("task_plan", (m) => {
+  const p = m.plan as TaskPlan | undefined;
+  if (p) set({ plans: { ...st.plans, [p.id]: p } });
+});
+
+// ── actions ──
+
+export async function startPlan(plan: TaskPlan, remember: boolean, edits?: Partial<PlanTask>[]) {
+  if (st.busy[plan.id]) return;
+  set({ busy: { ...st.busy, [plan.id]: true } });
+  try {
+    const res = await api<{ plan: TaskPlan }>(`/task-plans/${enc(plan.id)}/start`, { method: "POST", json: { tasks: edits, remember } });
+    set({ plans: { ...st.plans, [res.plan.id]: res.plan } });
+    void refreshTodos();
+  } finally {
+    set({ busy: { ...st.busy, [plan.id]: false } });
+  }
+}
+
+export async function dismissPlan(plan: TaskPlan) {
+  if (st.busy[plan.id]) return;
+  set({ busy: { ...st.busy, [plan.id]: true } });
+  try {
+    const res = await api<{ plan: TaskPlan }>(`/task-plans/${enc(plan.id)}/dismiss`, { method: "POST" });
+    set({ plans: { ...st.plans, [res.plan.id]: res.plan } });
+  } finally {
+    set({ busy: { ...st.busy, [plan.id]: false } });
+  }
+}
+
+export function setRoute(conversation: string, todoId: string | null) {
+  const routes = { ...st.routes };
+  if (todoId) routes[conversation] = todoId;
+  else delete routes[conversation];
+  set({ routes });
+}
+
+/** Sends text straight to the task the conversation is routed to; false when none (send it to Persona as usual). */
+export async function sendRouted(conversation: string, text: string): Promise<boolean> {
+  const todoId = st.routes[conversation];
+  if (!todoId) return false;
+  setRoute(conversation, null);
+  const res = await api<{ item: FeedItem }>(`/assistant/conversations/${enc(conversation)}/route`, { method: "POST", json: { todo_id: todoId, text } });
+  if (res.item) received([res.item]);
+  return true;
+}
+
+/** 发送 on a message card: the (edited) draft goes out through the inbox, which files the item as done. */
+export async function sendMessage(itemId: string, text: string) {
+  await api(`/inbox/${itemId}/reply`, { method: "POST", json: { text } });
+  set({ sent: { ...st.sent, [itemId]: true } });
+}
+
+export function later(itemId: string) {
+  set({ later: { ...st.later, [itemId]: true } });
+}
+
+// ── the conversation's lines ──
+
+export interface QuickResult {
+  kind: "reminder" | "event";
+  callId: string;
+  title: string;
+  when?: string;
+  place?: string;
+}
+
+export type DisplayLine =
+  | { kind: "chat"; id: string; line: ChatLine }
+  | { kind: "feed"; id: string; item: FeedItem }
+  | { kind: "quick"; id: string; result: QuickResult }
+  | { kind: "day"; id: string; date: Date };
+
+/** When the user sent the line's message (feed items go before the first message sent after them). */
+function inputTime(line: ChatLine): number | undefined {
+  if (line.kind !== "segment" || !line.seg.user?.ts) return undefined;
+  return Date.parse(line.seg.user.ts);
+}
+
+/** When a line happened, for the day lines. */
+function lineTime(l: DisplayLine): number | undefined {
+  switch (l.kind) {
+    case "feed":
+      return Date.parse(l.item.at);
+    case "chat": {
+      const c = l.line;
+      if (c.kind === "segment") return Date.parse(c.seg.user?.ts ?? c.seg.start ?? "") || undefined;
+      if (c.kind === "notice" || c.kind === "apiError") return Date.parse(c.item.ts ?? "") || undefined;
+      return undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** A reminder or an event the assistant added on the phone, from its tool call. */
+export function quickResult(use: Item, result?: Item): QuickResult | undefined {
+  const short = (use.tool_name ?? "").split("__").at(-1);
+  const kind = short === "phone_reminders_create" ? "reminder" : short === "phone_calendar_create_event" ? "event" : undefined;
+  if (!kind || !result || result.is_error || !result.text) return undefined;
+  try {
+    const o = JSON.parse(result.text) as Record<string, unknown>;
+    if (typeof o.id !== "string" || !o.id) return undefined;
+    const when = kind === "reminder" ? o.due : o.start;
+    const place = kind === "reminder" ? o.list : o.calendar;
+    return { kind, callId: use.id, title: String(o.title ?? ""), when: typeof when === "string" ? when : undefined, place: typeof place === "string" ? place : undefined };
+  } catch {
+    return undefined;
+  }
+}
+
+/** The chat's lines with the feed among them (each item at the end of the exchange it happened in), each exchange's
+ *  quick results after it, and a day line over the first line of each day. */
+export function displayLines(lines: ChatLine[], feed: FeedItem[]): DisplayLine[] {
+  const out: DisplayLine[] = [];
+  let next = 0;
+  for (const line of lines) {
+    const at = inputTime(line);
+    if (at !== undefined) {
+      while (next < feed.length && Date.parse(feed[next].at) < at) {
+        out.push({ kind: "feed", id: "feed-" + feed[next].id, item: feed[next] });
+        next++;
+      }
+    }
+    out.push({ kind: "chat", id: line.id, line });
+    if (line.kind === "segment") {
+      for (const step of line.seg.steps) {
+        if (step.kind !== "tool") continue;
+        const q = quickResult(step.use, step.result);
+        if (q) out.push({ kind: "quick", id: "quick-" + q.callId, result: q });
+      }
+    }
+  }
+  for (; next < feed.length; next++) out.push({ kind: "feed", id: "feed-" + feed[next].id, item: feed[next] });
+  return withDays(out);
+}
+
+export function withDays(lines: DisplayLine[]): DisplayLine[] {
+  const out: DisplayLine[] = [];
+  let last = "";
+  for (const l of lines) {
+    const t = lineTime(l);
+    if (t !== undefined && !Number.isNaN(t)) {
+      const d = new Date(t);
+      const day = d.toLocaleDateString("sv");
+      if (day !== last) {
+        out.push({ kind: "day", id: "day-" + day, date: new Date(d.getFullYear(), d.getMonth(), d.getDate()) });
+        last = day;
+      }
+    }
+    out.push(l);
+  }
+  return out;
+}
+
+/** 今天 · 11月3日 周二, 昨天 · …, or the date. */
+export function dayLabel(date: Date, now = new Date()): string {
+  const day = date.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" });
+  const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  if (same(date, now)) return `今天 · ${day}`;
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  if (same(date, y)) return `昨天 · ${day}`;
+  if (date.getFullYear() !== now.getFullYear()) return date.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+  return day;
+}
+
+export function isToday(iso: string, now = new Date()): boolean {
+  return new Date(iso).toDateString() === now.toDateString();
+}

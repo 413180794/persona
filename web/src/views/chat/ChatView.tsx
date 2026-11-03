@@ -35,6 +35,10 @@ import { sameMessage } from "../../lib/queue";
 import { OutboxBubbles } from "./OutboxBubbles";
 import { AssistantFace, AssistantLauncherChip, useAssistantMenu } from "../assistant/AssistantChat";
 import { usePersona } from "../assistant/Persona";
+import { displayLines, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
+import { DayLine, FeedLineView, QuickResultCard, RouteChip, TaskDock, TaskQuestions } from "../assistant/Tasks";
+
+const NO_FEED: FeedItem[] = [];
 
 interface Pending {
   /** The client_msg_id it went with. */
@@ -206,7 +210,36 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     [mid, sid, session, assistant],
   );
 
-  const onSend = (out: Outgoing) => deliver(out, uuid());
+  const onSend = async (out: Outgoing): Promise<boolean> => {
+    // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
+    if (assistant && !out.images.length && out.text.trim()) {
+      try {
+        if (await sendRouted(sid, out.text)) return true;
+      } catch (e) {
+        toast(`没送到：${errorText(e)}`, "error");
+        return false;
+      }
+    }
+    return deliver(out, uuid());
+  };
+  // The assistant's tasks (docs/unified-entry.md): the conversation's feed, and the main one's 今天 card.
+  const mainConversation = useStore((s) => s.assistant?.main);
+  const feed = useFeed((s) => (assistant ? (s.feeds[sid] ?? NO_FEED) : NO_FEED));
+  useEffect(() => {
+    if (!assistant) return;
+    void loadFeed(sid);
+    if (sid === mainConversation) void loadToday(sid);
+  }, [assistant, sid, mainConversation]);
+  // The 今天 card's actions say something to Persona here.
+  useEffect(() => {
+    if (!assistant) return;
+    const say = (e: Event) => {
+      const d = (e as CustomEvent<{ mid: string; sid: string; text: string }>).detail;
+      if (d.mid === mid && d.sid === sid) void deliver({ text: d.text, images: [] }, uuid());
+    };
+    window.addEventListener("persona:say", say);
+    return () => window.removeEventListener("persona:say", say);
+  }, [assistant, mid, sid, deliver]);
 
   const interrupt = async () => {
     if (!sessionCan(getSession(mid, sid), "interrupt")) return;
@@ -299,7 +332,30 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
               </div>
             )}
             <ChatContext.Provider value={ctx}>
-              {shownLines.map((line, i) => (
+              {assistant
+                ? displayLines(shownLines, feed).map((d) =>
+                    d.kind === "feed" ? (
+                      <FeedLineView key={d.id} item={d.item} />
+                    ) : d.kind === "quick" ? (
+                      <QuickResultCard key={d.id} result={d.result} />
+                    ) : d.kind === "day" ? (
+                      <DayLine key={d.id} date={d.date} />
+                    ) : (
+                      <ChatLineView
+                        key={d.id}
+                        line={d.line}
+                        now={(d.line.kind === "segment" || d.line.kind === "wakes") && d.line.live ? now : 0}
+                        mid={mid}
+                        sid={shownSid}
+                        streaming={d.line.kind === "segment" && d.line.live ? tr.streaming || undefined : undefined}
+                        expandFold={tr.expandFold}
+                        onSplit={onSplit}
+                        onUnsplit={onUnsplit}
+                        onRetry={canRetry && d.line.id === shownLines.at(-1)?.id ? retry : undefined}
+                      />
+                    ),
+                  )
+                : shownLines.map((line, i) => (
                 <ChatLineView
                   key={line.id}
                   line={line}
@@ -349,6 +405,13 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       )}
       <div className={cx("mx-auto flex w-full max-w-[760px] flex-col gap-2 px-4 pb-4 sm:px-7", viewed && "hidden")} onInput={pendingRecap ? dismissRecap : undefined}>
         {pendingRecap && <RecapStrip item={pendingRecap} onClose={dismissRecap} />}
+        {assistant && (
+          <>
+            <TaskQuestions conversation={sid} />
+            <TaskDock conversation={sid} />
+            <RouteChip conversation={sid} />
+          </>
+        )}
         {interactions.map((ix) => (
           <InteractionCard key={ix.id} ix={ix} />
         ))}

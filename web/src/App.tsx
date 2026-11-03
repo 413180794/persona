@@ -117,11 +117,12 @@ function Shell() {
   }, []);
 
   useEffect(() => setDrawer(false), [route.name, route.name === "session" ? route.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
-  // a session's terminal / files / Git belong to that conversation: moving to another page closes them (a link stays)
+  // a session's terminal / files / Git belong to that conversation: moving to another page closes them (a link and a
+  // task stay)
   const at = route.name === "session" ? `${route.mid}/${route.sid}` : route.name;
   useEffect(() => {
     const p = getPanel();
-    if (p && p.kind !== "link" && !(p.kind !== "file" && route.name === "session" && p.mid === route.mid && p.sid === route.sid)) closePanel();
+    if (p && p.kind !== "link" && p.kind !== "task" && !(p.kind !== "file" && route.name === "session" && p.mid === route.mid && p.sid === route.sid)) closePanel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [at]);
 

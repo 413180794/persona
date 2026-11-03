@@ -34,6 +34,9 @@ export interface Todo {
   updated_at: string;
   agents?: TodoAgent[];
   spaces?: TodoSpace[];
+  /** The assistant conversation that opened it as a task, and the plan (docs/unified-entry.md); unset for a todo made by hand. */
+  origin?: string;
+  plan_id?: string;
 }
 
 export type TodoStatus = "done" | "needs_you" | "unread" | "working" | "follow_up" | "not_started";

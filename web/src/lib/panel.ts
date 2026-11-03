@@ -8,7 +8,9 @@ export type Panel =
   | { kind: "files"; mid: string; sid: string; cwd: string; path?: string }
   | { kind: "git"; mid: string; sid: string; cwd: string }
   | { kind: "file"; mid: string; path: string; cwd?: string; line?: number }
-  | { kind: "link"; url: string; title?: string };
+  | { kind: "link"; url: string; title?: string }
+  /** A task of the assistant's conversation: its agent's chat (docs/unified-entry.md). */
+  | { kind: "task"; todo: string };
 
 let current: Panel | null = null;
 const listeners = new Set<() => void>();

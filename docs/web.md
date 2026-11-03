@@ -161,6 +161,15 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   #433 加了「负载（1 分钟）」曲线（四张图 2×2，虚线标出核数，颜色 token `--chart-load` 取 iOS `MetricColor.load`）和「每个核心」柱状图（`latest.cores` 有两个以上且在线时，即 Linux 的 node，
   右上「最忙 X%」，悬停看每核数值）。
 
+### 主对话统一入口（#930）
+
+和 iOS 同一套（[unified-entry.md](unified-entry.md)）：助手对话里排进 hub 的对话动态（`lib/feed.ts` 的 `displayLines`：每条放在它发生的那一轮末尾，
+每天第一行上面一行日期，`phone_reminders_create` / `phone_calendar_create_event` 的结果画成「已加提醒 / 已加到日历」，网页上没有撤销，写「在 iPhone 上」）；
+卡片在 `views/assistant/Tasks.tsx`：计划卡、任务卡（不是今天的折成一行）、答过的问题、回执、直接对任务说的话、「今天」卡片（主对话每天第一次打开时
+`POST …/today`，「准备」「过一遍」替你对 Persona 说一句）、消息卡（发送走收件箱的回复）。输入框上方：任务的 Agent 最早的那个提问（「还有 N 件」）、
+任务坞（「全部」去待办页）、路由标签（任务卡上点「说一句」，下一条直接发给那个 Agent）。任务详情在侧边面板（`kind: "task"`，`TaskPanel` 里就是那个 Agent 的对话），
+换页不关。开发时 `?task=<待办 id>` 直接打开某个任务的面板；`MOCK_TASKS=1` 的 mock 有整套假数据。
+
 ### 侧边面板
 
 会话的终端、文件、Git，和在页面里打开的链接，都在页面右边的面板里（`src/views/SidePanel.tsx`，选哪个在 `src/lib/panel.ts`）：一次一个，开新的替换旧的。
