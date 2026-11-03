@@ -38,10 +38,20 @@ VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD"
 TARGETS=("$@")
 [ ${#TARGETS[@]} -eq 0 ] && read -ra TARGETS <<< "$JARVIS_MACHINES"
 
+# web_deps (in web/): npm ci when there is no node_modules or package-lock.json changed since the last install, so a
+# pull that adds or bumps a dependency builds with it. npm's own node_modules/.package-lock.json never equals
+# package-lock.json (no root entry, no optional packages for other platforms): the lockfile's hash is kept instead.
+web_deps() {
+  local want
+  want=$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' package-lock.json)
+  [ -d node_modules ] && [ "$(cat node_modules/.persona-lock-sha256 2>/dev/null)" = "$want" ] && return 0
+  npm ci --no-audit --no-fund && printf '%s\n' "$want" > node_modules/.persona-lock-sha256
+}
+
 # The web client is replaced atomically within the hub's selected state root.
 deploy_web() {
   [ -f ../web/package.json ] || return 0
-  (cd ../web && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build) >/dev/null
+  (cd ../web && web_deps && npm run build) >/dev/null
   # COPYFILE_DISABLE: macOS tar would add a ._<name> AppleDouble entry per file, which GNU tar unpacks as files.
   local root script
   root=$(python3 ../scripts/persona_identity.py --service hub --prepare --prefix -)
