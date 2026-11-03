@@ -298,6 +298,9 @@ func (h *Hub) loadInbox(ctx context.Context) {
 	for _, raw := range rows {
 		var it InboxItem
 		if json.Unmarshal(raw, &it) == nil && it.ID != "" && h.inbox.acceptsAccount(&it) {
+			// Saved before the hub proxied lark-connector's /agent/v1 media paths, a chat's avatar stays such a path until
+			// its next message (applyLark): map it like a fresh one; a proxied or other URL is left as it is.
+			it.Avatar = lark.MediaURL(it.Avatar)
 			h.inbox.items[it.ID] = &it
 		}
 	}

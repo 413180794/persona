@@ -393,3 +393,46 @@ func TestInboxLarkReplyTarget(t *testing.T) {
 		t.Fatalf("dm: %+v", ch[0].Lark)
 	}
 }
+
+// storedInboxStore hands loadInbox the rows Postgres keeps.
+type storedInboxStore struct {
+	*modelTestStore
+	rows [][]byte
+}
+
+func (s storedInboxStore) InboxItems(context.Context, time.Time) ([][]byte, error) {
+	return s.rows, nil
+}
+
+// Items saved before the hub proxied lark-connector's /agent/v1 media paths (#775) keep that avatar until the chat's next
+// message: loading maps it to the hub's proxy like a fresh one (#807), and leaves the others as they are.
+func TestLoadInboxProxiesAvatarsSavedWithlark-connectorPaths(t *testing.T) {
+	want := map[string][2]string{ // id: saved avatar, loaded avatar
+		"lark:agent":   {"/agent/v1/media/img_k1?width=72", "/api/v1/lark/media/img_k1?width=72"},
+		"lark:legacy":  {"/api/media/img_k2", "/api/v1/lark/media/img_k2"},
+		"lark:proxied": {"/api/v1/lark/media/img_k3", "/api/v1/lark/media/img_k3"},
+		"mail:other":   {"https://example.com/a.png", "https://example.com/a.png"},
+	}
+	var rows [][]byte
+	for id, avatar := range want {
+		it := InboxItem{ID: id, Source: strings.Split(id, ":")[0], Avatar: avatar[0], UpdatedAt: time.Now()}
+		if it.Source == "lark" {
+			it.Lark = &InboxLark{FeedID: id}
+		}
+		raw, _ := json.Marshal(it)
+		rows = append(rows, raw)
+	}
+	h := newTestHub(t)
+	h.store = storedInboxStore{&modelTestStore{values: map[string]json.RawMessage{}}, rows}
+	h.inbox.init()
+	h.loadInbox(context.Background())
+	for id, avatar := range want {
+		it := h.inbox.items[id]
+		if it == nil {
+			t.Fatalf("%s was not loaded", id)
+		}
+		if it.Avatar != avatar[1] {
+			t.Errorf("%s: avatar %q, want %q", id, it.Avatar, avatar[1])
+		}
+	}
+}
