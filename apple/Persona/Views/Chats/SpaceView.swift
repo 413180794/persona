@@ -44,6 +44,11 @@ struct SiblingTabs: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+            #if os(macOS)
+            // A Mac sheet ignores detents and opens at its content's minimum size: the list came up as its header and
+            // one row (#906).
+            .macSheet()
+            #endif
         }
     }
 
@@ -148,6 +153,7 @@ struct SiblingTabs: View {
 /// The ⋯ sheet of a space's tabs: the space's page on top, then each tab with its state's dot and words.
 private struct SiblingList: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     var current: SessionKey
     var space: Session?
     var pick: (SessionKey) -> Void
@@ -200,6 +206,10 @@ private struct SiblingList: View {
                         .themedButton()
                         .accessibilityLabel("在这个空间开新标签")
                     }
+                    #if os(macOS)
+                    // A Mac sheet has no swipe down or tap outside to close it; Esc presses this.
+                    Button("完成") { dismiss() }.lineLimit(1).keyboardShortcut(.cancelAction)
+                    #endif
                 }
                 .padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.l).padding(.bottom, Theme.Space.s)
                 if let failure {
