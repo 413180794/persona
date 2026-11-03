@@ -9,7 +9,7 @@
 形象（这一篇）、主题色（`ThemeColor`）、界面风格（`AppStyle`，只管组件的画法），见 `docs/ios.md`「设计语言」。
 形象带的配色只在主题色选「跟随形象」时用上；以前选了形象就会盖掉界面风格的颜色（选了黏土再选奶娃，紫色就没了）。
 
-- **内置形象**：App 自己画的（`JarvisAvatar`），画成当前主题色，不带配色，名字都是 Persona。仓库里只有它们：
+- **内置形象**：App 自己画的（`AssistantAvatar`），画成当前主题色，不带配色，名字都是 Persona。仓库里只有它们：
   - **默认形象**（id `jarvis`）：面罩。
   - **汇流**（id `jarvis-circuit`，2026-11-01 用户定为可选项、不当默认）：三条走线汇进一个带两只眼的核心。选它不用下载，卡片上写「汇流」。
 - **其他形象**：放在 hub 机器的 `~/.persona/personas/<id>/`，手机选中时下载并缓存。
@@ -116,12 +116,12 @@
 
 一个状态 144 px × 24 帧，解码后约 2 MB；整个包约 1–2 MB。
 
-内置形象（面罩、汇流）不走位图，用 `JarvisAvatar` 画同样的五个状态：
+内置形象（面罩、汇流）不走位图，用 `AssistantAvatar` 画同样的五个状态：
 
 - 空闲每 3.6 秒眨一次眼：用 periodic 的 TimelineView 加一个短的 phase 动画，两次眨眼之间不重画。
 - 思考、工作、等你处理三个状态以 15 fps 动。
 - 离线是灰色、不动。
-- 绘制在 `Shared/Design/PersonaFace.swift`（给定时刻的一帧），`JarvisAvatar` 只负责时钟；锁屏 / 灵动岛的实时活动用同一份画静止帧（`docs/live-activity.md`「形象」）。
+- 绘制在 `Shared/Design/PersonaFace.swift`（给定时刻的一帧），`AssistantAvatar` 只负责时钟；锁屏 / 灵动岛的实时活动用同一份画静止帧（`docs/live-activity.md`「形象」）。
 
 ## 色系 → 设计 token
 
@@ -221,8 +221,8 @@
 | 测试 | 内容 |
 | --- | --- |
 | `server/internal/hub/persona_test.go` | 只列出完整的包；rev 跟着内容变；文件不出包目录；没有令牌拿不到 |
-| `apple/JarvisTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；作为主题色「跟随形象」时用形象的主色、气泡和飞书链接（飞书风格也是），没给的用风格自己的；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
-| `apple/JarvisUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Persona 又变回来 |
+| `apple/PersonaTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；作为主题色「跟随形象」时用形象的主色、气泡和飞书链接（飞书风格也是），没给的用风格自己的；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
+| `apple/PersonaUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Persona 又变回来 |
 
 截图和录屏用的 DEBUG 启动参数：
 

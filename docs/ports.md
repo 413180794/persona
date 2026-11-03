@@ -33,7 +33,7 @@ WKWebView ─ http://localhost:5173 ─▶ 本机 127.0.0.1:5173（App 监听）
 - **怎么推**：结果放在 `Session.ports`，跟会话列表一起走；端口集合（端口、pid、标题）没变就不推（`listKey` 带上了它），
   不会因为扫描多出推送（#178 的教训：没变的东西不推、不让界面重算）。
 
-## 识别回答里的链接（App，`apple/Jarvis/Code/PortLinks.swift`）
+## 识别回答里的链接（App，`apple/Persona/Code/PortLinks.swift`）
 
 - `http(s)://localhost|127.0.0.1|0.0.0.0|[::1]|*.localhost|这台机器的主机名（带不带 .local）:端口/路径` 都算「这台机器的端口 + 路径」，
   也认服务器常打印的不带 scheme 的 `localhost:3000/x`。没写端口的、局域网地址、别的主机都不算（局域网地址照常当网页打开）。
@@ -55,7 +55,7 @@ WKWebView ─ http://localhost:5173 ─▶ 本机 127.0.0.1:5173（App 监听）
 和 Moshi 一样：页面在手机上就是 `http://localhost:5173/`，和在电脑上一模一样，字节原样转发，HTTP / WebSocket（HMR）/
 重定向 / Cookie 都不用改写；不改 DNS、不开新端口，走的是 App 已经在用的 hub 地址和设备 token。
 
-### 手机（`apple/Jarvis/Code/PortForwarder.swift`）
+### 手机（`apple/Persona/Code/PortForwarder.swift`）
 
 - 每个（机器，端口）一个转发：先在 `127.0.0.1` 绑同一个端口号，被占（手机上别的转发、模拟器所在的 Mac 上已有程序）就随机一个；
   再在 `::1` 绑同一个号（`localhost` 先解析成 ::1，没有它 WebKit 也会退回 127.0.0.1）。只绑回环，局域网里谁也连不到。

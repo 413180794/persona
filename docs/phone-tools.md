@@ -1,11 +1,11 @@
 # 手机数据工具
 
-`apple/Jarvis/PhoneTools/`：把 iPhone 能力包装成 MCP 工具，让 Claude 在电脑上操作手机数据。开关和授权在 设置 › 连接器 › 这台 iPhone（2026-11-01 以前叫「手机数据」）。
+`apple/Persona/PhoneTools/`：把 iPhone 能力包装成 MCP 工具，让 Claude 在电脑上操作手机数据。开关和授权在 设置 › 连接器 › 这台 iPhone（2026-11-01 以前叫「手机数据」）。
 
 链路：Claude 调 `phone_*` 工具 → `personad mcp` → node.sock → hub → 在线的 iPhone（WebSocket `tool_call`）→
 App 在本地查询/写入 → `tool_result` 原路返回。
 
-工具的描述和 schema 由 App 注册（iOS `apple/Jarvis/PhoneTools/`，Android `android/.../phone/PhoneTools.kt`），不在服务端的 `server/internal/prompts/mcp/`（`docs/prompts.md`「MCP 工具」）。
+工具的描述和 schema 由 App 注册（iOS `apple/Persona/PhoneTools/`，Android `android/.../phone/PhoneTools.kt`），不在服务端的 `server/internal/prompts/mcp/`（`docs/prompts.md`「MCP 工具」）。
 
 ## 注册与开关
 

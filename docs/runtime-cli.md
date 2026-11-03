@@ -1,7 +1,9 @@
 # Runtime CLI（DEBUG 构建里的命令通道）
 
-在模拟器里跑着的 DEBUG App 里开一个本地端口，脚本用 `scripts/app/jarvisctl.py` 发命令：读状态、等画面停下、截图、
+在模拟器里跑着的 DEBUG App 里开一个本地端口，脚本用 `scripts/app/personactl.py` 发命令：读状态、等画面停下、截图、
 导航、切风格，（后续）读无障碍树、点按、注入状态。不用为每个场景加一个启动开关、每张截图重启一次 App。
+
+`personactl.py` 与旧 `jarvisctl.py` 是同一实现；已有 `JARVISCTL_*`、命令参数及缓存位置保留，不因 CLI 文件名变化推断出一套新的环境变量。#773 后，bundle fallback 优先读取 `PERSONA_BUNDLE_ID`、兼容 `JARVIS_BUNDLE_ID`；`--via-hub` 在需要默认 hub 运行根时按服务角色 `hub` 解析，不借同机 node / Link 的目录。服务解析器不读取凭据，真正请求的凭据仍由 CLI 的专用来源处理，不能混淆二者。配置脚本的新入口是 `scripts/persona_config.py`（旧入口软链兼容），运行根规则见 [兼容迁移](rename.md#部署脚本按服务恢复运行目录)。
 
 为什么做、和其他方案（URL scheme、运行时重读启动开关）的取舍、实测数字：见 2026-11-02 的评估（spike 分支
 `spike/runtime-cli`）。结论：App 内 JSON 服务是唯一能“问” App 的方案；身份截图实测每张 3.1 s（老方法 9.3 s）。
@@ -10,12 +12,12 @@
 
 ```sh
 export JARVISCTL_UDID=<模拟器 udid>            # 不设就是 booted
-scripts/app/jarvisctl.py launch --hub http://127.0.0.1:18760   # 结束并重新启动 App（带一次性 token），等它应答
-scripts/app/jarvisctl.py state                      # 当前 tab、打开的会话、风格、主题色、深浅色、连接状态
-scripts/app/jarvisctl.py online                     # 等 hub 的实时连接（2 s 还没连上就主动重连一次）
-scripts/app/jarvisctl.py settle --pixels 600        # 等画面停下（连续几帧变化不超过 600 个像素）
-scripts/app/jarvisctl.py screenshot out.png         # settle 之后 simctl io screenshot
-scripts/app/jarvisctl.py call <命令> k=v …           # 任何 App 认识的命令
+scripts/app/personactl.py launch --hub http://127.0.0.1:18760   # 结束并重新启动 App（带一次性 token），等它应答
+scripts/app/personactl.py state                      # 当前 tab、打开的会话、风格、主题色、深浅色、连接状态
+scripts/app/personactl.py online                     # 等 hub 的实时连接（2 s 还没连上就主动重连一次）
+scripts/app/personactl.py settle --pixels 600        # 等画面停下（连续几帧变化不超过 600 个像素）
+scripts/app/personactl.py screenshot out.png         # settle 之后 simctl io screenshot
+scripts/app/personactl.py call <命令> k=v …           # 任何 App 认识的命令
 ```
 
 脚本里：`from jarvisctl import Ctl; c = Ctl(); c.launch(hub); c.call("settle", pixels=600)`。
@@ -55,11 +57,11 @@ scripts/app/jarvisctl.py call <命令> k=v …           # 任何 App 认识的�
 ## 导航和风格
 
 ```sh
-scripts/app/jarvisctl.py set-style beautiful            # 整棵树按新风格重建
-scripts/app/jarvisctl.py appearance dark                # 整个模拟器（状态栏一起），--in-app 只改 App
-scripts/app/jarvisctl.py navigate machines              # = -tab settings -openMachines YES，不用重启
-scripts/app/jarvisctl.py navigate chat --session <机器>/<会话> --flag openWork=YES
-scripts/app/jarvisctl.py idle && scripts/app/jarvisctl.py screenshot out.png
+scripts/app/personactl.py set-style beautiful            # 整棵树按新风格重建
+scripts/app/personactl.py appearance dark                # 整个模拟器（状态栏一起），--in-app 只改 App
+scripts/app/personactl.py navigate machines              # = -tab settings -openMachines YES，不用重启
+scripts/app/personactl.py navigate chat --session <机器>/<会话> --flag openWork=YES
+scripts/app/personactl.py idle && scripts/app/personactl.py screenshot out.png
 ```
 
 `navigate` 换一棵新的界面树，而不是在原来的树上改路由：评估时在原树上导航，Agents 页推进去的对话关不掉、收件箱顶栏的
@@ -116,9 +118,9 @@ scripts/app/jarvisctl.py idle && scripts/app/jarvisctl.py screenshot out.png
 `tree` / `find` / `wait` 读的就是 XCUITest 看到的那棵树：`accessibilityIdentifier`、label、frame、traits。
 
 ```sh
-scripts/app/jarvisctl.py find --id agents.filter.unread          # {"count": 1, "element": {"label": "未读 47", "frame": [...], ...}}
-scripts/app/jarvisctl.py wait --label-contains 收起过程 --timeout 5
-scripts/app/jarvisctl.py tree --id-prefix agents. --visible
+scripts/app/personactl.py find --id agents.filter.unread          # {"count": 1, "element": {"label": "未读 47", "frame": [...], ...}}
+scripts/app/personactl.py wait --label-contains 收起过程 --timeout 5
+scripts/app/personactl.py tree --id-prefix agents. --visible
 ```
 
 元素过滤：`--id`（全等）、`--id-prefix`、`--label`（全等）、`--label-contains`、`--label-prefix`、`--trait`（button / text /
@@ -136,11 +138,11 @@ header / selected / search / image / disabled）、`--visible`（点得到）、
 ## 动作和截图
 
 ```sh
-scripts/app/jarvisctl.py tap --id agents.filter.unread          # 无障碍激活
-scripts/app/jarvisctl.py tap --id shell-agents && scripts/app/jarvisctl.py tap --label 细列表 --trait button   # 菜单项：自动退回真实触摸
-scripts/app/jarvisctl.py scroll --pages 2 ; scripts/app/jarvisctl.py scroll --to top
-scripts/app/jarvisctl.py type --trait search --text platform ; scripts/app/jarvisctl.py dismiss-keyboard
-scripts/app/jarvisctl.py snapshot app.png
+scripts/app/personactl.py tap --id agents.filter.unread          # 无障碍激活
+scripts/app/personactl.py tap --id shell-agents && scripts/app/personactl.py tap --label 细列表 --trait button   # 菜单项：自动退回真实触摸
+scripts/app/personactl.py scroll --pages 2 ; scripts/app/personactl.py scroll --to top
+scripts/app/personactl.py type --trait search --text platform ; scripts/app/personactl.py dismiss-keyboard
+scripts/app/personactl.py snapshot app.png
 ```
 
 - `tap` 先做无障碍激活；元素不吃（菜单项）或带 `--hid` 时，等画面停下、重新取 frame，用 `idb ui tap` 在中心点一下真的触摸
@@ -152,10 +154,10 @@ scripts/app/jarvisctl.py snapshot app.png
 都是 `jarvisctl.py` 在宿主机上用 `idb` 发的真实触摸（和 `tap` 的兜底一样，App 里不合成事件）；先等画面停下、重新取元素的 frame。
 
 ```sh
-scripts/app/jarvisctl.py longpress --label-contains "、给天气 App 加主屏幕小组件、"          # 行的长按菜单（默认按 1.2 s）
-scripts/app/jarvisctl.py swipe --label-contains "、给天气 App 加主屏幕小组件、" --dir left  # 横滑出「关闭」
-scripts/app/jarvisctl.py drag --from 201,300 --to 201,520 --duration 0.8                   # 下拉露出 Agents 的搜索框
-scripts/app/jarvisctl.py background --seconds 2 && scripts/app/jarvisctl.py foreground         # 回桌面再回来，同一个进程
+scripts/app/personactl.py longpress --label-contains "、给天气 App 加主屏幕小组件、"          # 行的长按菜单（默认按 1.2 s）
+scripts/app/personactl.py swipe --label-contains "、给天气 App 加主屏幕小组件、" --dir left  # 横滑出「关闭」
+scripts/app/personactl.py drag --from 201,300 --to 201,520 --duration 0.8                   # 下拉露出 Agents 的搜索框
+scripts/app/personactl.py background --seconds 2 && scripts/app/personactl.py foreground         # 回桌面再回来，同一个进程
 ```
 
 - `longpress`：在元素中心按住 `--duration` 秒（`idb ui tap --duration`），等于 XCUITest 的 `press(forDuration:)`。
@@ -174,11 +176,11 @@ scripts/app/jarvisctl.py background --seconds 2 && scripts/app/jarvisctl.py fore
 
 ```sh
 python3 scripts/mock/mock_scenarios.py --port 18897 --scenario default &   # 控制端口 18896
-scripts/app/jarvisctl.py launch --hub http://127.0.0.1:18897
-scripts/app/jarvisctl.py scenario agents        # ~120 个 Agent（AgentsListTests 的数据），等 App 重连上
-scripts/app/jarvisctl.py scenario offline       # 没有 hub：顶栏下出现 连接中… / 等待网络
-scripts/app/jarvisctl.py scenario --env MOCK_MACHINES=1,MOCK_LONG_OS=1   # 任意 MOCK_* 组合
-scripts/app/jarvisctl.py scenario               # 现在跑的是哪个
+scripts/app/personactl.py launch --hub http://127.0.0.1:18897
+scripts/app/personactl.py scenario agents        # ~120 个 Agent（AgentsListTests 的数据），等 App 重连上
+scripts/app/personactl.py scenario offline       # 没有 hub：顶栏下出现 连接中… / 等待网络
+scripts/app/personactl.py scenario --env MOCK_MACHINES=1,MOCK_LONG_OS=1   # 任意 MOCK_* 组合
+scripts/app/personactl.py scenario               # 现在跑的是哪个
 ```
 
 场景：default、quiet、agents、churn（`/mock/churn` 按需推送，LiveUpdateTests）、machines、errors（身份截图的出错卡片）、
@@ -211,11 +213,11 @@ App：DEBUG 包用启动参数 `-runtimeCLIHub YES` 启动（Xcode 的 scheme �
 ```sh
 export JARVISCTL_VIA_HUB=<hub 地址>          # 或每条命令带 --via-hub <hub 地址>
 export JARVISCTL_HUB_TOKEN_FILE=<存着设备令牌的文件>   # 或 JARVISCTL_HUB_TOKEN；在 hub 那台机器上默认读 ~/.persona/hub.json；不会打印
-scripts/app/jarvisctl.py state
-scripts/app/jarvisctl.py settle --pixels 600
-scripts/app/jarvisctl.py tree --id-prefix agents. --visible
-scripts/app/jarvisctl.py tap --id agents.filter.unread
-scripts/app/jarvisctl.py screenshot shot.jpg        # App 自己画的窗口（没有状态栏），.jpg 走 JPEG，.png 原样
+scripts/app/personactl.py state
+scripts/app/personactl.py settle --pixels 600
+scripts/app/personactl.py tree --id-prefix agents. --visible
+scripts/app/personactl.py tap --id agents.filter.unread
+scripts/app/personactl.py screenshot shot.jpg        # App 自己画的窗口（没有状态栏），.jpg 走 JPEG，.png 原样
 ```
 
 - 经 hub 能用：`state`、`settle`、`tree`、`find`、`wait`、`tap`（只有无障碍激活）、`scroll`、`type`、`navigate`、`set-style`、`snapshot` / `screenshot`、`freeze`、`wait-loaded`。
@@ -228,7 +230,7 @@ scripts/app/jarvisctl.py screenshot shot.jpg        # App 自己画的窗口（�
 
 ## 协议和安全
 
-- 只在 DEBUG 构建里：`apple/Jarvis/Debug/` 下的文件整个包在 `#if DEBUG && os(iOS)` 里，入口是 `AppDelegate` 原有
+- 只在 DEBUG 构建里：`apple/Persona/Debug/` 下的文件整个包在 `#if DEBUG && os(iOS)` 里，入口是 `AppDelegate` 原有
   `#if DEBUG` 块里的一行 `RuntimeCLI.startIfAsked()`。
 - 默认关：不带 `-runtimeCLI <端口>` 启动就不监听。
 - 只听回环：`127.0.0.1:<端口>`（模拟器和 Mac 共用回环）。
@@ -238,6 +240,6 @@ scripts/app/jarvisctl.py screenshot shot.jpg        # App 自己画的窗口（�
 
 ## 加命令
 
-一类命令一个文件 `apple/Jarvis/Debug/RuntimeCLI+<类>.swift`（同样包在 `#if DEBUG && os(iOS)` 里），在
+一类命令一个文件 `apple/Persona/Debug/RuntimeCLI+<类>.swift`（同样包在 `#if DEBUG && os(iOS)` 里），在
 `RuntimeCLI.commands` 里登记名字；回答里不能有 NaN / 无穷（JSON 写不出来，会变成 `reply is not JSON` 的错误）。
 `jarvisctl.py` 不认识的命令用 `call` 就能发，常用的再加成子命令。

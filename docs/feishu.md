@@ -79,7 +79,7 @@ raw 代理不透传客户端的 `x-lark-connector-account` 请求头，默认使
   `documents/ai-summary`（只读缓存）、`documents/comments`。
 - Markdown 导出开头固定是 `# 标题` + `[Source](<url>)`；图片是 lark-connector 的绝对地址，客户端改写到 `/api/v1/lark/raw/documents/…`。
 - JSON 树：每个列表项单独一个 `bulletList` / `orderedList`，编号要跨兄弟节点连续数；表格 `colwidth` 是像素，`rowspan` 占位要自己补。
-  渲染细节见 `FeishuDocRenderer.swift` 和 `JarvisTests/FeishuDocsTests.swift`。
+  渲染细节见 `FeishuDocRenderer.swift` 和 `PersonaTests/FeishuDocsTests.swift`。
 - `authority.copy=false` 时正文不可选择。
 
 ### 日历 / 会议 / 妙记

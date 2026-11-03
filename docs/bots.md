@@ -5,7 +5,7 @@
 点一下就答了；推送和主对话在别处的回答也可以发一份到飞书。每一项单独开关，默认全关（2026-11-02 用户要求：「P1/2/3 都做吧，可选开启」，issue #322）。
 
 代码：`server/internal/feishubot`（长连接、REST、事件和消息内容、卡片）、`server/internal/hub/bots*.go`（配对、路由、跟踪回答、卡片、推送）；
-提示词 `server/internal/prompts/bot/message.md`；App 的页面 `apple/Jarvis/Views/Settings/FeishuBotView.swift`（设置 › 连接器 › 飞书机器人）。
+提示词 `server/internal/prompts/bot/message.md`；App 的页面 `apple/Persona/Views/Settings/FeishuBotView.swift`（设置 › 连接器 › 飞书机器人）。
 
 ## 和飞书 `/agent` 的区别
 

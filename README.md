@@ -3,7 +3,7 @@
 Persona 是一个 iPhone + Apple Watch 助手：在手机上用聊天的方式，看着、指挥你各台电脑上正在干活的 Claude Code 和 Codex，
 还有一个能读你的邮件、飞书消息和手机数据的 AI 助手。
 
-产品现名 **Persona**（原 Jarvis），仓库是 [`nwverse/persona`](https://github.com/nwverse/persona)。迁移版本优先使用服务端 `personad`、运行目录 `~/.persona`、构建配置 `~/.config/persona/config.json` 和 `PERSONA_*` 环境变量；`jarvisd`、`~/.jarvis`、`~/.config/jarvis/config.json` 与 `JARVIS_*` 继续兼容。本文使用新默认名称，升级前先核对 [配置与兼容说明](docs/config.md#命名与兼容)。现有配对、签名、数据库身份及公开安装 / 中继地址不因产品改名而改变。
+产品现名 **Persona**（原 Jarvis），仓库是 [`nwverse/persona`](https://github.com/nwverse/persona)。迁移版本优先使用服务端 `personad`、运行目录 `~/.persona`、构建配置 `~/.config/persona/config.json` 和 `PERSONA_*` 环境变量；`jarvisd`、`~/.jarvis`、`~/.config/jarvis/config.json` 与 `JARVIS_*` 继续兼容。本文使用新默认名称，升级前先核对 [配置与兼容说明](docs/config.md#命名与兼容) 和 [源码 / 系统身份迁移清单](docs/rename.md)。现有配对、签名、数据库身份及公开安装 / 中继地址不因产品改名而改变。
 
 Claude Code 始终跑在你自己的电脑上（[herdr](https://herdr.dev) 里的一个普通会话）。手机只是另一块屏幕：
 出门时在手机上回答它的提问、批准计划，回到电脑前打开 herdr，接着用的还是同一个会话。
@@ -54,8 +54,8 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 | --- | --- |
 | hub 机器 | 一台常开的机器，手机能访问 hub：同一网络、用户自配 VPN，或公网直连（优先 IPv6，放行 TLS 端口）。两种装法：Linux 上用原生二进制（docker 跑数据库 + systemd），或任何能跑 Docker 的机器（NAS 等）用 compose 跑 hub 和数据库（[docs/docker.md](docs/docker.md)） |
 | 电脑 | 装好 Claude Code（或 Codex）的 Mac / Linux。经 SSH 接入的电脑，hub 机器要能用 SSH 密钥免密码登录它们（用连接器 jarvis-link 接入的不需要 SSH）。[herdr](https://herdr.dev) 没装的话，部署 / 安装时会一起装上（`JARVIS_SKIP_HERDR=1` 跳过） |
-| iPhone | iOS 26；Apple Watch 需要 watchOS 26（可选） |
-| 开发机 | 一台装了 Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 的 Mac、Go 1.23+，用来编译服务端和 App |
+| iPhone | iOS 26；Apple Watch 需要 watchOS 10（可选，按 `apple/project.yml` 的最低部署版本） |
+| 开发机 | 一台装了 Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 的 Mac、Go 1.27.1+（按 `server/go.mod`），用来编译服务端和 App |
 | Apple 开发者账号 | 自己编译安装 App 用；推送和 HealthKit 需要付费账号 |
 
 邮箱、飞书都是可选的：邮箱支持任意 IMAP / SMTP 和 Gmail；飞书需要你自己部署 [lark-connector](https://github.com/Eric-2369/lark-connector)。
@@ -69,7 +69,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 2. **部署服务端**：`./scripts/deploy/deploy.sh`。它会编译 `personad`，装到每台电脑上（没有 herdr 的顺便装上），在 hub 机器上启动 Postgres 和 hub 服务。
    hub 想放在 NAS 上的话改用 Docker：`deploy/docker/compose.yaml`（[docs/docker.md](docs/docker.md)），`deploy.sh` 只用来往各台电脑装 `personad`。
 3. **告诉 hub 接入哪些电脑**：在 hub 机器的 `~/.persona/hub.json` 里填上各台电脑和手机访问用的地址：`public_url` 保留旧 App 可访问的地址，公网入口配置 `public.tls_listen` 和 `public.advertise`，然后重启 hub（[网络配置](docs/network.md)）。
-4. **安装 App**：模拟器上跑 `./scripts/app/sim.sh`；装到真机就用 Xcode 打开生成的工程，或者用 `./scripts/release/release.sh` 发到你自己的
+4. **安装 App**：模拟器上跑 `./scripts/app/sim.sh`；装到真机就用 Xcode 打开生成的 `apple/Persona.xcodeproj`（旧 `apple/Jarvis.xcodeproj` 和旧 schemes 保留兼容），或者用 `./scripts/release/release.sh` 发到你自己的
    TestFlight（[docs/release.md](docs/release.md)）。
 5. **配对**：在 hub 机器上运行 `~/.persona/bin/personad hub pair`，用 App 扫描它打印的二维码。默认是有效期 10 分钟、只能兑换一次设备凭据的临时 token；hub 必须正在运行。现有 iOS 可在内网照常扫码，`--legacy` 仅供确需主 token 的场景。
 

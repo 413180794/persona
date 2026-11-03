@@ -8,7 +8,9 @@ minSdk 31（Android 12），compileSdk 37，targetSdk 36。界面中文。
 
 ## 当前实现
 
-本页按 2026-10-31 的提交 `f3a13fdb7672927197cb8ac38bccb9c65671677b` 核对。当前是多模块重设计版本；逐项状态见 [Android P0 状态](redesign/android-p0-status.md)，旧版验证记录留在后文，不能代替本版验收。
+本页主体按 2026-10-31 的提交 `f3a13fdb7672927197cb8ac38bccb9c65671677b` 核对。当前是多模块重设计版本；逐项状态见 [Android P0 状态](redesign/android-p0-status.md)，旧版验证记录留在后文，不能代替本版验收。
+
+#277 的后续品牌 / 输入兼容已分批合入：#745 只更新人类可见品牌，保留 `AppTab.Jarvis`、序列化值和旧系统组件；#746 注册并接收 `persona://` 与 `jarvis://`；#758 从 canonical Activity 读取 Debug launch metadata，并在权限检查和联网前统一解析完整配对链接。生成的通知链接仍用旧 scheme。各 PR 的构建和截图证据按对应车道记录；本说明不改写上面的历史核对日期，也不表示最终 open PR 全审计或冻结发布已完成。#770 的手填共用判定、#773 的环境变量 / 脚本兼容和 #786 的静态 guard 已合入，完整边界见 [兼容迁移](rename.md)。
 
 | 入口 | 当前实现 |
 | --- | --- |
@@ -201,7 +203,7 @@ plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-
 - Application ID 走配置：`~/.config/persona/config.json` 的 `android.application_id`，没写就用 `app.bundle_id`，再没有就是 `com.example.jarvis`。
 - 同一台手机上并排装两个版本（比如主线和新版对比）：直接调 Gradle，给不同的 `-PjarvisApplicationId` 和应用名 `-PjarvisAppLabel`（默认「Persona」），例如 `./gradlew -PjarvisApplicationId=<包名>.next -PjarvisAppLabel="Persona 新版" :app:assembleDebug`。两个版本都注册 `persona://` 和 `jarvis://` 的 `pair` / `open` 深链，扫配对码时系统会问用哪个 App 打开。配对的深链、扫码、「粘贴链接」和手动输入框都同时接受 `persona://pair` 和 `jarvis://pair`（判断统一走 `Pairing.isLink`），hub 生成的链接仍是 `jarvis://`（见 [rename.md](rename.md)）。85 MB 左右的 debug 包经 USB 流式安装时，个别手机会中途断开 adb，重装一次即可。
 - 明文 HTTP 仅用于本地或受信任网络；公网使用 HTTPS / WSS 和配对指纹钉扎，优先 IPv6。实际目标由 `HubHttpClient` 校验，见 [network.md](network.md)。
-- App 图标和 iOS 是同一张（`apple/Jarvis/Resources/Assets.xcassets/AppIcon.appiconset/icon.png`）：自适应图标的前景是这张图缩进到 108 dp 画布中间的 72 dp 安全区
+- App 图标和 iOS 是同一张（`apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset/icon.png`）：自适应图标的前景是这张图缩进到 108 dp 画布中间的 72 dp 安全区
   （`drawable/ic_launcher_fg.xml` 内缩 18 dp，图在 `drawable-nodpi/ic_launcher_art.png`），背景是图边缘的深棕 `#1B110D`，桌面裁成圆形还是圆角方形都不会切到圆环；
   主题图标（Android 13+）用 iOS 的 tinted 版当遮罩。通知栏小图标 `ic_stat` 是同一个标志（圆环 + 四角星）的白色剪影，放在 `core/designsystem/src/main/res/drawable/`，所有通知（常驻、需要你、做完了、手机工具、锁屏测试）和磁贴都用它。iOS 换图标时这两张 PNG 要重新导出。
 - 装到真机：手机开 USB 调试连上电脑跑 `./scripts/app/android.sh`，或者把 APK 发到手机上直接装。
@@ -679,7 +681,7 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 
 ## 主动做事（设置 › 助手 › 主动做事）
 
-用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。「设置 › 助手」拆成两块，这一块管 Persona 自己主动做的事：定时任务、它替自己安排的跟进、运行记录（iOS 的同名页面在 `ios/Jarvis/Views/Settings/AssistantProactiveViews.swift`）。代码在 `feature/assistant/…/proactive/`，对外只有 `AssistantProactiveScreen(onBack, onOpenConversation)`：`onOpenConversation` 打开一段助手对话（运行开出来的、跟进接着的、立即运行新开的）；接口和协程作用域默认取 Persona tab 宿主（`LocalAssistantHost`）里当前配对的。子页面（某个定时任务、新建、全部跟进、运行记录）和返回在页面里自己管，转场和 App 的页面一样从右边推入。
+用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。「设置 › 助手」拆成两块，这一块管 Persona 自己主动做的事：定时任务、它替自己安排的跟进、运行记录（iOS 的同名页面在 `ios/Persona/Views/Settings/AssistantProactiveViews.swift`）。代码在 `feature/assistant/…/proactive/`，对外只有 `AssistantProactiveScreen(onBack, onOpenConversation)`：`onOpenConversation` 打开一段助手对话（运行开出来的、跟进接着的、立即运行新开的）；接口和协程作用域默认取 Persona tab 宿主（`LocalAssistantHost`）里当前配对的。子页面（某个定时任务、新建、全部跟进、运行记录）和返回在页面里自己管，转场和 App 的页面一样从右边推入。
 
 - 入口：设置 › 助手的「主动做事」一节（在助手设置页里原地打开，打开的对话经 `ChatRoute(kind = Assistant)` 落到 Persona tab）；Persona 抽屉的「定时任务」在 Persona tab 里原地打开同一页，打开的对话直接显示在 Persona 首页。
 - 首页：Persona 的一句话（几个定时任务开着、下一件在什么时候）；「接下来」时间线（左边大号时刻，定时任务的下次运行和跟进混排，最多 4 件）；定时任务（规则的人话「每个工作日 上午 9:00」、下次、上次结果和开关；`created_by: "assistant"` 的头像角上有火花并写明「Persona 在对话里建的」，上次没跑起来的角上是红色警告）；已安排的跟进（时间、在哪台机器、接着原对话还是开新对话，⋯ 里立即运行 / 打开原对话 / 取消，取消要确认）；最近 3 次运行。右上角 ＋ 从模板新建（会前准备、周报、下班前盘点，和 iOS 同一套）或空白。长按定时任务：立即运行、编辑、删除。

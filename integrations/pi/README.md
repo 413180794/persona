@@ -1,6 +1,6 @@
 # Persona：pi / pi-web 接入
 
-包 ID `jarvis-pi-runtime` 和安装 / 加载标识保留兼容身份。本文使用迁移版本的 `personad` 和 `~/.persona`；旧 `jarvisd`、`~/.jarvis` 与 `JARVIS_*` 继续兼容，已迁移的 `PERSONA_*` 优先，见 [配置与兼容说明](../../docs/config.md#命名与兼容)。
+私有 npm 包名为 `persona-pi-runtime`（#753）；自动更新包 ID 与安装 / 加载标识 `jarvis-pi-runtime` 保留。`package.json.name` 改名不改变更新目录和旧 loader 身份；#773 已让 host kind 优先读取 `PERSONA_PI_HOST`、兼容 `JARVIS_PI_HOST`，新变量显式空值不回退。此项输入兼容不代表整个迁移或最终发布已验收。本文使用迁移版本的 `personad` 和 `~/.persona`；旧 `jarvisd`、`~/.jarvis` 与 `JARVIS_*` 继续兼容，已迁移的 `PERSONA_*` 优先，见 [配置与兼容说明](../../docs/config.md#命名与兼容) 和 [完整保留清单](../../docs/rename.md)。
 
 pi（`@earendil-works/pi-coding-agent`）和 pi-web（`@agegr/pi-web`）接入 Persona：pi 扩展加 pi-web 伴随进程，建在
 [`integrations/runtime-sdk`](../runtime-sdk/README.md) 上。说明、安装、配置和限制见 [`docs/pi.md`](../../docs/pi.md)。

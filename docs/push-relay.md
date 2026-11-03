@@ -3,7 +3,7 @@
 自己搭的 hub 没有 App 所属 Apple Team 的 APNs key，发不了推送。推送中继是 App 发布方跑的一个 `personad relay`：
 它持有 APNs key，替各家 hub 把推送交给 APNs。通知正文由 hub 用手机的公钥加密，中继只转发密文，
 手机在「通知服务扩展」里解密后再显示。自己有 APNs key 的 hub（`~/.persona/apns.json`）照旧直连 APNs，不经过中继。
-Mac 版一样：它的通知服务扩展是 `JarvisMacNotify`（`docs/mac.md`「远程推送（Mac）」，#432），私钥在 data protection 钥匙串里和扩展共用。
+Mac 版一样：它的通知服务扩展 target 是 `PersonaMacNotify`（产物 `PersonaNotify.appex`、module 和通知主类仍用 `JarvisNotify`，`docs/mac.md`「远程推送（Mac）」，#432），私钥在 data protection 钥匙串里和扩展共用。
 
 ```
 hub ──(HPKE 密文 + 授权凭据)──▶ 中继 ──(APNs key)──▶ APNs ──▶ 手机：通知服务扩展解密 → 显示

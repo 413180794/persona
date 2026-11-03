@@ -29,7 +29,7 @@
 
 - 操作按钮（Action Button）：设置 › 操作按钮 › 快捷指令，直接选「问 Persona」或「让 Agent 去做」（App Shortcuts 自动出现）。
 - 控制中心 / 锁屏：`JarvisWidgets` 扩展里加了两个 `ControlWidget`（`AskJarvisControl`、`JarvisAgentsControl`），打开 App 的助手页 / Agents 页。
-  控件的 intent 放在 `LiveActivity/JarvisControlIntents.swift`（App 和扩展都编译，`perform` 只在 App 里改 `AppModel`）。
+  控件的 intent 放在 `LiveActivity/PersonaControlIntents.swift`（App 和扩展都编译，`perform` 只在 App 里改 `AppModel`）。
 
 ## 没做 / 推迟
 
@@ -47,5 +47,5 @@
 5. 快捷指令 App › Persona 能看到这些动作；操作按钮里能选；控制中心 › 添加控件 › Persona 有两个控件。
 6. Spotlight 搜个人 Agent 会话名能搜到。
 
-单元测试：`JarvisTests/SiriIntentsTests.swift`（回答提取、轮询结束判断、读出文案、会话选择、未读文案）。
-编译后 `Jarvis.app/Metadata.appintents/extract.actionsdata` 里能看到新的 action 和 autoShortcut。
+单元测试：`PersonaTests/SiriIntentsTests.swift`（回答提取、轮询结束判断、读出文案、会话选择、未读文案）。
+编译后 `Persona.app/Metadata.appintents/extract.actionsdata` 里能看到新的 action 和 autoShortcut。

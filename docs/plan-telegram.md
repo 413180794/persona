@@ -19,9 +19,9 @@
 
 gotd 让二进制大 35 MB，所以 Telegram 不编进 personad，单独一个程序，personad 本身不变大。
 
-- **代码**：连接器在 `server/internal/connector/telegram`（用 gotd），程序是 `server/cmd/jarvisd-telegram`，同一个 Go module、同一次构建出来。
+- **代码**：连接器在 `server/internal/connector/telegram`（用 gotd），程序是 `server/cmd/personad-telegram`，同一个 Go module、同一次构建出来。
   hub 不传任何 Telegram 的配置给它：凭据和会话都在 `connector_secrets` 里，它经 `secrets.*` 读写。
-  personad 不 import 它：测试守住 `go list -deps ./cmd/jarvisd` 里没有 gotd。
+  personad 不 import 它：测试守住 `go list -deps ./cmd/personad` 里没有 gotd。
 - **hub 怎么用它**：开关开着时，hub 起 `jarvisd-telegram`（和 personad 放在同一个目录），用 stdin / stdout 跑现有的双向 JSON-lines RPC
   （`internal/rpc`，hub↔node 用的那个）。hub 这边是一个通用的「子进程连接器」适配器（`connector/proc`），把 Connector 的各项能力
   （状态、登录、归档、收件箱、只读工具、事件）一一转成 RPC 调用；子进程那边一个 `connector/serve` 把任意 Go 连接器挂到 stdio 上。

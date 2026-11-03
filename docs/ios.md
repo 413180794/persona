@@ -1,6 +1,6 @@
 # iOS / watchOS App
 
-XcodeGen 工程 `apple/project.yml`（`Jarvis.xcodeproj` 不入库）。iOS 26 / watchOS 10（手表 App 要能装在停在 watchOS 10 的旧表上），Swift 6，默认 MainActor 隔离。依赖 MarkdownUI。
+XcodeGen 源头是 `apple/project.yml`，生成 `apple/Persona.xcodeproj`（生成内容不入库）；旧 `apple/Jarvis.xcodeproj` 软链指向它，新旧 schemes 的关系见 [兼容迁移](rename.md)。iOS 26 / watchOS 10（手表 App 要能装在停在 watchOS 10 的旧表上），Swift 6，默认 MainActor 隔离。依赖 MarkdownUI。
 Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/config.md`）。界面中文。
 
 ## 信息架构
@@ -240,7 +240,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 
 用户要求（2026-11-01）：照 ChatGPT 的 iOS App 重排 iPhone 的外壳，「聊天是 Persona（大改），工作是 Agents（改个入口）」，
 两页叫「助手」「Agents」（2026-11-01 用户要求，原来叫「聊天」「工作」）；新对话页和旧布局一样是欢迎页（2026-11-02 用户要回来的，原来没有待办时什么都不放，整页空白）；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
-只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变。代码在 `Jarvis/Views/Shell/`，组件在
+只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变。代码在 `Persona/Views/Shell/`，组件在
 `DesignSystem/ShellComponents.swift`、`ShellComposerBar.swift`，颜色和尺寸是 `Theme.Shell`（各风格都用这一套中性色）。
 
 | 部分 | 做法 |
@@ -261,7 +261,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 路由不变：所有跳转仍然写 `AppModel.selectedTab`（通知、Siri、交给 Persona、收件箱的行…），壳把 `.assistant` / `.chats` 当成两页，
 `.mail` 变成「在助手页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。
 
-UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`JarvisUITests/LaunchLayout.swift`，默认带 `-ui.oldLayout YES`）；
+UI 测试一律用 `launchPinned()` 固定风格；布局包装在 `PersonaUITests/LaunchLayout.swift` 的 `launchPersona()`（默认带 `-ui.oldLayout YES`），旧 `launchJarvis()` 仍转发到同一实现。
 壳自己的在 `ShellTests`、`ShellAvatarTests`（左上角的头像和收件箱角标）、`ShellPagerTests`（翻页）、`ShellSwitchTests`、`ShellSearchTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`；`-showShellPagerAt 0.3` 把横条停在三成处截图；`-showHomeState empty|error`（新对话页：什么都不用你处理 / 一条开始失败的提示，截图用）。
 
 ## 只在前台做的事（轮询和上报已读）
@@ -279,7 +279,7 @@ UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`Ja
 
 ## Persona 顶栏和侧边栏（2026-10-30）
 
-参考 dot 和 ChatGPT App（用户给的截图）。代码在 `Jarvis/Views/Assistant/AssistantTopBar.swift`、`AssistantSidebar.swift`。
+参考 dot 和 ChatGPT App（用户给的截图）。代码在 `Persona/Views/Assistant/AssistantTopBar.swift`、`AssistantSidebar.swift`。
 
 - **顶栏**浮在对话上方，没有系统导航栏，也没有实心的栏：下面是一层由上往下渐隐的雾（`TopFog`：页面底色 + 材质，延伸到状态栏下），对话从下面滚过去。
   对话列表顶端留出 `AssistantTopBar.height`（70pt），首页用 `contentMargins(.top)` 留出同样的高度。滚动时顶栏不动（不像 Agents 的页头会折叠）。
@@ -322,7 +322,7 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 `developer.apple.com/iphone-duo`、HIG「Designing for iPhone Duo」。要用 Xcode 27 及以上编译（配置 `xcode`，`docs/config.md`），
 旧 Xcode 编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面。
 
-- **按宽度分两种布局，不看机型**（`Jarvis/Views/SplitNavigation.swift`）。compact（所有普通 iPhone、Duo 合上）还是原来的单个
+- **按宽度分两种布局，不看机型**（`Persona/Views/SplitNavigation.swift`）。compact（所有普通 iPhone、Duo 合上）还是原来的单个
   NavigationStack，行为一点不变；regular（Duo 打开）用 `NavigationSplitView`：左栏是列表，右栏是它打开的页面，像 Mail。
   两种布局共用同一个 `path`，开合时正在看的页面不丢；半折时系统自动让两栏避开折痕。Agents、收件箱、设置都用它。
   - 左栏的 `NavigationLink(value:)` 替换右栏（左栏自己有一个永远不推的栈，把要推的值转给右栏）；列表里用代码打开的页面也要替换：
@@ -402,7 +402,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 - 代码结构（2026-10-31，方案见 bui-adopt 的 ARCH-PLAN）：
   - `Shared/Design/`：token，手表也编译。`Theme`（字体级别和强调、间距、圆角、行高、动画、颜色角色）、`Icons`（`Theme.Icon` 和 `Theme.Brand`）、
     `Palette`（基础色，小组件 / 实时活动也编译它）、`StyleSpec`（组合后的一个值）、`ColorSpec`（主题色、迁移）和 `Styles/` 下每种风格一个文件。
-  - `Jarvis/DesignSystem/`：只有 iOS 的配方和组件：`Styling`（表面、按钮、页面底色按 `spec.surface` / `spec.buttons` 画）、`Components`
+  - `Persona/DesignSystem/`：只有 iOS 的配方和组件：`Styling`（表面、按钮、页面底色按 `spec.surface` / `spec.buttons` 画）、`Components`
     （Chip、CountBadge、EmptyStateView、Monogram、`Loadable` / `LoadableContent`……）、`TextSize`。
   - **加一种风格**：在 `Shared/Design/Styles/` 写一个 `ComponentSpec`（表面画法、按钮、字体设计、组件套件、底色怎么来、描边、飞书卡片、
     它自己的颜色），`AppStyle` 加一个 case，`component` 里对上。**加一种主题色**：写一个 `ColorSpec`（主色、气泡和字、要不要压暗、
@@ -529,7 +529,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   `AgentListOrder`（Agents 列表的排序和分组），再改成 reducer。
 - 单元测试不连 hub：`APIClient.transport` 换成 `FakeHub`（JarvisTests）按「方法 路径」回固定的 JSON，记下发了什么，view model 走真实的请求和解码。
   体验模式仍用全局的 `APIClient.local`。
-- `AppModel`（`Jarvis/App`）：配对信息存 Keychain；`LiveConnection`（WebSocket，指数退避重连，重连后按 `since_seq` 重新订阅）；
+- `AppModel`（`Persona/App`）：配对信息存 Keychain；`LiveConnection`（WebSocket，指数退避重连，重连后按 `since_seq` 重新订阅）；
   每个会话一个 `ChatStore`（按 id 去重、按 seq 排序、`buildRows` 生成展示行）。
 - 进入对话页 `subscribe`，离开 `unsubscribe`；hub 推 `items` / `screen` / `sessions` / `interaction`。
 - 手机工具：hub 推 `tool_call` → `PhoneToolRegistry.call`（写操作先弹确认）→ `tool_result`。连上就 `register_phone` 声明工具（`docs/phone-tools.md`）。
@@ -555,9 +555,9 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 
 - **挂在数据层下面，页面不分叉**：体验模式的配对信息是 `ServerConfig.demo`（`https://demo.invalid`，永远解析不了，漏网的请求也到不了网络）。
   `APIClient.request`（以及 `image` / `fullItem`）对它不走 URLSession，交给 `APIClient.local`；`LiveConnection` 对它不开 WebSocket，
-  用 `LiveConnection.makeLocal` 做的本地 socket。两者都由 `DemoHub`（`Jarvis/App/DemoHub.swift`）注册和回答，回的是和 hub 一样的 JSON，
+  用 `LiveConnection.makeLocal` 做的本地 socket。两者都由 `DemoHub`（`Persona/App/DemoHub.swift`）注册和回答，回的是和 hub 一样的 JSON，
   所以页面、`ChatStore`、`AppModel.handle` 都不知道自己在体验模式里。没有的接口回 404「体验模式里没有这项数据」，DEBUG 下记一行 `DemoHub miss`。
-- **数据**：`scripts/mock/make_demo_data.py` 从 `scripts/mock/mock_hub.py`（UI 测试用的假 hub）导出 `apple/Jarvis/Resources/Demo.json`，再加几个 Agent
+- **数据**：`scripts/mock/make_demo_data.py` 从 `scripts/mock/mock_hub.py`（UI 测试用的假 hub）导出 `apple/Persona/Resources/Demo.json`，再加几个 Agent
   （每种状态、几个空间都有）、飞书会话的消息、邮件正文、知识库条目，终端是按手机宽度排好的 Claude 屏幕（`phone_screen`，96 列的帧在手机上每行都折）。
   全是编造的；时间存成相对值（`@rel:<秒>`、`@unix:<秒>`），载入时换成「现在」附近，演示永远是新的。机器页的曲线由 `DemoHub` 现算（`mock_hub.metric_at` 的移植）。
   改了 mock 的数据就重跑脚本、提交 JSON；`DemoHubTests` 让每个接口都经 `APIClient` 解码成 App 的模型，模型改了形状会在这里挂。
@@ -587,7 +587,7 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 参考 Telegram：网络有问题时不弹横幅，**页面标题位直接换成「小转圈 + 状态」**，好了以后无声换回（2026-10-29 用户要求，原来列表顶上的
 `ConnectionBanner` 横幅已删掉）。
 
-- 三种状态（`Jarvis/App/ConnectionStatus.swift`）：**等待网络**（`NWPathMonitor` 说手机没网）、**连接中…**（有网但 WebSocket 没连上、
+- 三种状态（`Persona/App/ConnectionStatus.swift`）：**等待网络**（`NWPathMonitor` 说手机没网）、**连接中…**（有网但 WebSocket 没连上、
   正在重连，或者连着但 ping 5 秒没回 / 回得比 5 秒还慢 = 弱网）、**更新中…**（刚连上，正在补拉：待处理交互和打开着的对话的 backlog 都到了才算完，
   最多 8 秒）。没配对、App 在后台（socket 是主动断开的）不算问题。
 - 去抖：从正常变成有问题后要持续 1.5 秒才显示，回到前台、切网络这种一秒内完成的重连什么都不显示；恢复时立刻换回标题。
@@ -611,7 +611,7 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 
 ## 文件查看器（2026-10-31）
 
-会话里提到的文件、工具行里的文件、会话页「文件」里点开的文件，都在 `FileViewer` 里看（`Views/Chat/FileViewer.swift`，`Jarvis/Code/`）。
+会话里提到的文件、工具行里的文件、会话页「文件」里点开的文件，都在 `FileViewer` 里看（`Views/Chat/FileViewer.swift`，`Persona/Code/`）。
 
 **只链接真的打得开的路径。**
 - **以前的问题**：消息里识别出的路径（`FilePaths`）一律做成文件块，点开时按会话所在的机器去读。路径要是别的机器的（比如 hub 上的 `~/.persona/…`），或者文件早删了，点开只会看到「打不开这个文件」。
@@ -715,7 +715,7 @@ Markdown 的情况再说两点：
 `-perfCounts YES` 计数：各视图 body 被算了几次、每次 hub 推送到主线程空闲用了多久，写在隐藏文字 `perf.counts` 里（JSON）给 UI 测试读
 （`PerfSignpost.swift`；同一处也发 os_signpost，Instruments 的 Points of Interest 能看到每个 body 和每次推送）。
 
-## 飞书消息渲染（`Jarvis/Views/Inbox/Lark/`）
+## 飞书消息渲染（`Persona/Views/Inbox/Lark/`）
 
 照搬 lark-connector（github.com/Eric-2369/lark-connector，`src/ui/message-renderers/`）的消息渲染，数据是 hub 原样转发的 `parts`：
 

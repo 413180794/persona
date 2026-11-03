@@ -84,7 +84,7 @@ herdr 窗格 ──observe(窗格尺寸)──▶ node（每窗格一个 observe
 ## 五、实现备忘
 
 - 文件：node `server/internal/node/terminal.go`、hub `server/internal/hub/terminal.go`、herdr `server/internal/herdr/observe.go`；
-  App `apple/Jarvis/Views/Session/Terminal/`（`TerminalGrid` 解析、`TerminalFeed` 订阅 / 续传 / 回退、`TerminalView` 渲染、`TerminalWrap` 折行、
+  App `apple/Persona/Views/Session/Terminal/`（`TerminalGrid` 解析、`TerminalFeed` 订阅 / 续传 / 回退、`TerminalView` 渲染、`TerminalWrap` 折行、
   `TerminalInput` 直接打字、`BoxDrawing`、`TerminalTheme`）。
 - 配色默认「墨黑」（近黑底 0x0C0C0E，不随 App 浅色 / 深色变；对照 Moshi 默认纯黑）。终端卡片里的按钮、键栏、键盘都按配色的底色取深 / 浅外观。
   另有深夜（深灰）、Persona、Solarized（后两套跟随系统）。
@@ -95,12 +95,12 @@ herdr 窗格 ──observe(窗格尺寸)──▶ node（每窗格一个 observe
 - 有 emoji 形式的符号（⏺ ⏵ 等，Claude Code 常用）画的时候加 U+FE0E 要文字形式，否则会画成彩色 emoji，不是格子的颜色。
 - 屏幕只画到最后一行有字的地方或光标处：`clear` 后提示符在第一行、下面四十多行是空的，跟着末尾会只看到空白。
 - 宽字符宽度按 East Asian Width（Wide / Fullwidth）+ emoji 表现形式算；和 herdr 算的不一致时只错一行的后半段，下一次 CUP 就对齐了。
-- 实测数据：真实帧的夹具 `apple/JarvisTests/Fixtures/terminal-observe.jsonl`（草稿窗格跑示例脚本录的，没有个人信息）；
+- 实测数据：真实帧的夹具 `apple/PersonaTests/Fixtures/terminal-observe.jsonl`（草稿窗格跑示例脚本录的，没有个人信息）；
   `go test -tags herdrlive -run TestLiveObserve ./internal/herdr/` 在有 herdr 的机器上验证 observe 本身。
 
 ## 六、字体（拍板 D）
 
-默认 **JetBrains Mono**（OFL-1.1，v2.304 的 Regular / Bold 两个 ttf，共约 550 KB，`apple/Jarvis/Resources/Fonts`，许可证全文在
+默认 **JetBrains Mono**（OFL-1.1，v2.304 的 Regular / Bold 两个 ttf，共约 550 KB，`apple/Persona/Resources/Fonts`，许可证全文在
 `THIRD_PARTY_NOTICES.md`），设置里可换回系统的 SF Mono。第一次用到时 `CTFontManagerRegisterFontsForURL` 注册，不用改 Info.plist。
 中文、符号用系统回退字体，每个字放进自己的两格。
 

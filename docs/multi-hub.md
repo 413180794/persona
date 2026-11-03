@@ -91,7 +91,7 @@
 - 手表：手机把每组的凭据和组名一起发过去（`WatchConfigs`；旧版手表 App 仍读 `config`，是默认组的）。手表分别请求各组、合并显示，
   机器名带组名，回答 / 发送 / 中断发给那一组；收件箱只显示第一组的。
 - Siri / 快捷指令：机器和会话的实体覆盖所有组（id 用 `path`，机器名带组名）；「问 Claude」发到所选机器那一组；「状态」各组相加；「批准第一个」取各组里最早的，在它自己那组批准。
-- Mac App 和 iOS 共用这些逻辑（`Jarvis/` 和 `Shared/`），通知和深链同样按组路由；顺带补上了 Mac 编不过的 `NSScrollView.isTracking`（#243 引入）。
+- Mac App 和 iOS 共用这些逻辑（`Persona/` 和 `Shared/`），通知和深链同样按组路由；顺带补上了 Mac 编不过的 `NSScrollView.isTracking`（#243 引入）。
 - 体验模式照常：它是一个假的组（默认组），只能单独存在；配对真实 hub 就退出。
 
 ## 没做的 / 限制
@@ -105,8 +105,8 @@
 
 ## 测试
 
-- 单测 `apple/JarvisTests/MultiHubTests.swift`：默认组的键和 JSON 不变、别的组的键、mesh 字段解码、分组（合并 / 单边 / 传递 / 拆分 / 同一台配两次）、
+- 单测 `apple/PersonaTests/MultiHubTests.swift`：默认组的键和 JSON 不变、别的组的键、mesh 字段解码、分组（合并 / 单边 / 传递 / 拆分 / 同一台配两次）、
   新组 id、候选地址和选路、hello 解码、事件打组、Fleet 合并、多组的连接状态、各组推送密钥。
-- UI 测试 `apple/JarvisUITests/MultiHubTests.swift`：三台假 hub、两组（其中一组两台）：合并列表标明组、允许发到对应的 hub、断开一组另一组不受影响、
+- UI 测试 `apple/PersonaUITests/MultiHubTests.swift`：三台假 hub、两组（其中一组两台）：合并列表标明组、允许发到对应的 hub、断开一组另一组不受影响、
   同组一台挂了换到另一台。怎么起假 hub 见 [testing.md](testing.md)「多 hub」。
 - 只有一组时的零变化：同一份 mock、同一组启动参数，改动前后各拍 14 个界面 × 深浅色逐像素对比，差异只在系统菊花和玻璃高光的随机噪声里（testing.md「多 hub」）。

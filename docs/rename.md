@@ -6,6 +6,65 @@
 
 形象仍然使用既有 `persona` 数据模型与 `personas/` 目录，已有形象 ID 不改。产品入口使用 `PersonaApp` 等完整名字，避免与形象模型混淆。
 
+## 源码位置、构建入口与兼容名字
+
+源码的新名字与已安装产品的身份分别维护。#729 的 Apple 源码 / 构建入口、#750 的 Watch 编译修复、#746 的 Android 链接兼容和 #756 的原生品牌 / 输入兼容均已合入。文档复验先后使用 `b5a902f98eb30ddc6ab47e109039b14bc01f9549`、`b8cf3a10d475c12577c43f1c524332b8c1aa8bd8`（包含 #753、#758、#761、#745、#760 和 #771）及 #773 合入后的 `4768b019ac665207ba0e5a7a7f81cddb6879b6c7`。本轮最终文档基准固定为 `09584f34fe6eb29f91ddc2a3c2a8df94017cb3ab`，再包含 #786 的链接输入与静态防回退检查。源码状态不代替 App 构建、真实升级或产物检查；全量 open PR 审计、最终冻结及发布仍待完成，不能据此宣称整个 #277 完结。
+
+| 用途 | 推荐入口 | 保留的兼容入口 / 身份 |
+| --- | --- | --- |
+| Go module | `github.com/nwverse/persona/server` | 这是源码 import 路径；不据此改数据库、协议或服务单元 |
+| hub / node / hook / MCP 程序源码 | `server/cmd/personad` | `server/cmd/jarvisd` 指向同一实现；`personad` / `jarvisd` 均保留 |
+| Telegram 连接器程序源码 | `server/cmd/personad-telegram` | `server/cmd/jarvisd-telegram` 是旧入口别名 |
+| 配置脚本 | `scripts/persona_config.py` | `scripts/jarvis_config.py` 是指向新实现的软链；配置格式、签名值不变 |
+| 服务运行根解析器 | `scripts/persona_identity.py --service hub\|node\|link` | 按服务角色恢复已安装根目录；不读取构建配置或凭据，规则见下文 |
+| DEBUG App 命令工具 | `scripts/app/personactl.py` | `scripts/app/jarvisctl.py` 仍是同一实现；命令语义和旧缓存位置不变 |
+| iOS App 源码 | `apple/Persona/` | 旧 `apple/Jarvis/` 是历史源码位置，不承诺为整个源码目录创建别名 |
+| Watch / Widgets / Notify 源码 | `apple/PersonaWatch/`、`apple/PersonaWidgets/`、`apple/PersonaNotify/` | `apple/Shared/`、`apple/LiveActivity/` 仍共用；系统身份见下表 |
+| 原生 Mac / 测试源码 | `apple/Mac/`、`apple/PersonaTests/`、`apple/PersonaUITests/`、`apple/PersonaMacTests/` | Mac 壳仍在 `apple/Mac/`，不是把每个路径都改成产品名 |
+| XcodeGen 工程 | `apple/Persona.xcodeproj` | `apple/Jarvis.xcodeproj → Persona.xcodeproj`；先生成工程才能使用入口 |
+| scheme / target | `Persona`、`PersonaMac`、`PersonaWatch` | 旧 `Jarvis`、`JarvisMac`、`JarvisWatch` scheme 指向新 target；scheme alias 不代表旧 target 仍存在 |
+| 扩展 / 测试 target | `PersonaWidgets`、`PersonaNotify`、`PersonaMacNotify`、`PersonaTests`、`PersonaUITests`、`PersonaMacTests` | `-only-testing:` 使用新测试 target；`@testable import Jarvis` 仍按旧 module 编译 |
+| 菜单栏 App 的 Swift package target | `PersonaLink` | 包装器的旧 `JarvisLink` 进程路径、helper 和服务身份保留；它与原生 Mac App 是两个产品入口 |
+
+更新当前命令示例时使用新路径；历史 SHA、当时的源码行号、日志、测量和验收结论保留。尤其不能把「新目录存在」写成真机升级、已保存快捷指令、真实推送或发布签名已经验证。
+
+#786 的 `scripts/test/test_apple_rename.py` 加入旧源码目录防回退：新文件不能重新落进 `apple/Jarvis{,Watch,Widgets,Notify,Tests,MacTests,UITests}` 或 `mac/Sources/JarvisLink`，但旧 `apple/Jarvis.xcodeproj` 工程软链仍保留。Android 的 MainActivity / PairingLinks 改为共用完整链接判定，`scripts/test/test_persona_identifiers.py` 的静态 guard 同步验证这条调用链。源码目录禁用规则不影响旧 module、Intent / ActivityAttributes 或系统身份。
+
+## 必须保留的系统与持久化身份
+
+| 层 | 保留内容 | 原因 / 检查方法 |
+| --- | --- | --- |
+| Apple module | 主 App、Watch、Mac 保留 `Jarvis`；Widgets 保留 `JarvisWidgets`；Notify / MacNotify 保留 `JarvisNotify` | target 和产物名字可以变，通知主类如 `JarvisNotify.NotificationService`、AppIntents metadata 不能因此失效；检查实际 bundle，不只 grep 源码 |
+| Swift 系统类型 | `AskJarvisIntent`、`JarvisStatusIntent`、`JarvisShortcuts`、`OpenJarvisAssistantIntent`、`OpenJarvisAgentsIntent`、`AskJarvisControl`、`JarvisAgentsControl` | 是快捷指令 / Siri / Control 的既有类型身份；文件可改名，真实类型不能当纯文案替换 |
+| ActivityKit / APNs | `JarvisActivityAttributes`、既有 Widget kind、push-start 的 `attributes-type` | hub 实际按该类型寻址；不能只改 Swift struct 或单独改 server 字符串 |
+| 安装与签名 | Bundle ID、applicationId、App Store 记录、App Group、钥匙串组、签名 profile、通知扩展身份 | 继续升级同一个 App，沿用配对、公钥和推送权限；不注册第二套身份 |
+| Android 序列化 | `AppTab.Jarvis`、已有 `@SerialName`、rawValue 和存储键 | 新源码包为 `persona.android` / `persona.*`，不让 kotlinx.serialization 的默认完整类名变成新的 wire / 数据库值 |
+| Android 系统组件 | 旧 Activity / alias、receiver、HubService、ComponentName、PendingIntent、WorkManager Worker 的持久化类名、`Theme.Jarvis` | 老通知、排队任务和 OS 注册仍要能找到组件；不能只看 Gradle 编译或改新 manifest 类名 |
+| 线上协议 | HTTP / WebSocket 字段、`jarvis-runtime.v1`、`X-Jarvis-Peer-Source` 等旧头、MCP 工具全名、`jarvis-context` 等消息标签 | 混合版本继续互通；必须按各协议显式兼容，不批量替换 `jarvis` 字符串 |
+| 缓存与数据 | UserDefaults / AppStorage / StateCache / ChatCache 键、缓存目录版本、数据库角色 / 库 / 容器 / 数据卷、machine UID、形象 ID | 改品牌不生成第二份账户、数据库或个人数据；根目录的兼容另见下节 |
+| 服务与公开地址 | systemd / launchd 单元、helper 进程、安装 / 更新 / 中继 URL、联系邮箱 | 显示名称可以更新，真实运维 / 外部身份按原配置保留；不在文档中放个人值 |
+
+私有 runtime 的 npm `package.json.name` 与自动更新包 ID 不是同一身份。#753 已将源码私有包名改为 `persona-runtime-sdk`、`persona-dsh-runtime`、`persona-pi-runtime`；但 DSH / pi 的更新清单、安装目录和已安装 loader 仍使用 `jarvis-dsh-runtime` / `jarvis-pi-runtime`。SDK 的相对源码引用与 `jarvis-runtime.v1` 子协议也不能按 npm 名称盲改。运行时品牌、#773 的脚本 / PI / 新变量补洞和 #786 的链接输入均已合入，不代表 open PR 审计及冻结发布已完成；不能据此宣称整个 #277 已无残留。
+
+## URL scheme：接收兼容，生成保旧
+
+下面列出的迁移入口在此固定基准中已接收新旧 scheme。Apple 的 `CFBundleURLTypes`、App 的 URL / 配对解析器、Android 的 intent-filter 和导航解析器，以及 Web / 管理界面的手动输入解析仍要逐入口核验；不能只改一个 `scheme ==`，也不能由某个客户端通过就推断所有入口或真机升级均已验收。
+
+**固定基准 `09584f34` 的集成边界**：
+
+| 入口 | 已合入源码中的行为 | 本轮文档验收边界 |
+| --- | --- | --- |
+| Apple iOS / Mac 注册与配对输入 | #756 已在 `apple/project.yml` 注册 `[jarvis, persona]`，`apple/Shared/APIClient.swift` 的配对 parser 和 `apple/Mac/App/MacOpenURL.swift` 接收新旧 scheme | 本轮核对已合源码；#756 的构建、全单测和截图验收由原生车道执行，不算本文档车道重跑 |
+| Android 配对 / open | #746 已加入新旧 scheme 的 manifest 注册、配对 parser 和路由输入；#758 补齐 canonical Activity 的 Debug metadata 读取及完整配对链接在权限 / 联网前的解析；#770 统一手填配对输入，完整链接要求 `://`，不把 `persona:端口` 这样的普通地址当配对链接；#745 更新人类可见品牌。输出通知路由仍用 `jarvis://open` | 本轮对齐已合源码状态；各 PR 的 Android 构建、真实截图与测试记录属于对应车道，本文档车道不冒充重跑 |
+| Web 会话链接 / 管理输入 | #786 的 `web/src/lib/links.ts` 会话链接与 `web/src/admin/logic.ts` connector 输入均接收 `persona://` / `jarvis://`，peer 表单与 mock 的输入检查也已同步 | 本轮核对已合源码及静态契约，不声称重跑 Web 全套测试或浏览器验收；生成仍保留旧 scheme |
+| hub / 连接器的 link、pair、connector、peer 输入 | #786 的 `server/internal/link/client.go`、`server/internal/link/passive.go` 与 `server/internal/hub/peer_pair.go` 接收新旧 scheme | `jarvis://link` / `jarvis://pair` / `jarvis://connector` / `jarvis://peer` 的生成保旧；Go 全套验证归独立车道，不由文档检查替代 |
+
+#758 的 Android Debug metadata / 完整链接包装、#770 的手填共用判定、#773 的环境 / 脚本兼容和 #786 的最终链接输入检查均已合入。#761 的匿名官网截图和 #760 的测试误报修复也已合入，各自证据仍归对应 PR；本文档车道没有刷新截图或重跑业务全套测试。#786 的 canonical Go 重跑及独立失败定位已完成，归属和 skip 边界见下文；不能把文档检查说成 Go 全套通过。全量 open PR 审计、最终冻结和发布仍待完成。
+
+hub / 连接器 / 消息中的配对、会话、互联等链接仍生成 `jarvis://…`，让旧 App 继续可用。新 scheme 是新增的接收别名，不是全量改写已有 URL；`jarvis://pair`、`jarvis://session`、`jarvis://peer`、`jarvis://connector` 等原示例和历史 QR 内容保留。未完成双注册或双解析的入口要列为未验收，不能在文档中宣称已支持。
+
+品牌文本的解析也有输入兼容：会话来源 / 运行时标题中识别产品前缀的 parser 要同时认识旧 `Jarvis` 和新 `Persona`。只改 Persona 自己生成的标题或演示默认名称，不重写用户命名的会话、用户消息、人名，或外部 bot / 联系人的名字。经验见 [改名与兼容身份](lessons/rename.md)。
+
 ## 运行目录：一个存储，两种入口
 
 默认通过 `~/.persona` 访问运行数据；`~/.jarvis` 保持兼容。启动 hub / node 和安装器仅创建缺失的目录别名，不递归复制，不搬动已有目录，也不覆盖现有软链。
@@ -24,6 +83,23 @@ node socket 使用同一个存储中较短的旧路径，避免新名字多一�
 
 不要通过复制一份 hub.json 来迁移：它会让两边的知识库、machine UID、socket、更新状态和加密密钥逐渐分叉。数据库继续是原来的数据库，目录别名使 token 和 `secret.key` 也是原来的文件。
 
+## 菜单栏 Link 的运行目录
+
+#771 已让 `mac/Sources/PersonaLink/LinkStatePaths.swift` 与 helper 使用同一运行目录。菜单栏进程显式提供 `PERSONA_HOME` 或 `JARVIS_HOME` 时按新名优先；没有显式指定时，从旧 `com.jarvis.node.plist` 的 `EnvironmentVariables` 读取已安装服务的根目录。新旧默认入口指向同一对象时使用新入口，两份独立目录存在时仍用原存储。路径按词法规范化，不凭产品改名复制或合并数据。
+
+此修复不改旧 launchd 单元、`JarvisLink` 可执行路径或 helper 身份；也不证明脚本 / PI / 新环境变量的其他调用方已全部补齐。本轮只更新已合源码状态，菜单栏 XCTest / 预览 / 截图属于 #771 的验证记录。
+
+## 部署脚本按服务恢复运行目录
+
+#773 的 `scripts/persona_identity.py` 只解析运行身份，不读构建配置、hub.json 或凭据。部署 / 测试脚本用 `--service hub`、`--service node`、`--service link` 选择对应服务，避免同机 hub 与 node / Link 使用不同根时借错目录：
+
+- 环境里显式定义 `PERSONA_HOME` 或 `JARVIS_HOME` 时，直接使用该环境；新名优先，包括空值，不再从已安装服务借一个根。
+- systemd 从 `XDG_CONFIG_HOME/systemd/user`（未设置时为 `~/.config/systemd/user`）读取对应旧单元。hub 只查 `jarvisd.service`；node 先查 `jarvisd-node.service`、再查 `jarvis-link.service`；link 顺序相反。没有 systemd 单元时，node / link 可按对应角色查询原 launchd plist，不变更单元身份。
+- **旧服务存在但没有根目录 Environment 时，继续原默认存储**；找到该角色单元就不借其他角色或后备服务的根。不会因为同机另一个服务有自定义根，悄悄把旧服务迁过去。
+- 解析主 unit 与按文件名排序的 `.d/*.conf`，支持 `Environment=` 清空重置、后续覆盖、行续接，以及 `%h` / `%%`。只保留 `PERSONA_HOME` / `JARVIS_HOME`，不提取其他环境值。自动模式遇到不同独立根会拒绝，要求定向选择服务；两个根经 SameFile 校验指向同一默认存储时不误报冲突。
+- 遇到非空 `EnvironmentFile=` 或 `UnsetEnvironment=`，不尝试读取外部文件或猜最终环境，要求先显式指定实际 `PERSONA_HOME`。解析错误同样停止，不能退回另一份空存储。
+- 查询默认不创建目录；`--prepare` 才初始化缺失的默认别名，保留既有数据、独立根和自定义路径。`--prefix` 将解析器和指定脚本组合给远端，在远端解析并传递新旧根变量，不把本机根误传给远端，也不在生成文本中展开凭据。
+
 ## 环境变量
 
 `PERSONA_*` 是新写法，所有已有 `JARVIS_*` 仍识别。**新变量已定义时优先，包括显式空值**，防止空的新 token 又回退到旧凭据。Go 调用统一经 `internal/identity` 读取；给助手 MCP / 插件子进程的受控变量同时写新旧两名，并去掉重复项，避免继承的旧 session ID 或新 session ID 抢走本次设置。
@@ -32,7 +108,7 @@ node socket 使用同一个存储中较短的旧路径，避免新名字多一�
 
 配置脚本每次都按选中的配置重算派生的 hub、bundle、团队等导出值，同时导出新旧两名；不会把上一次 `env` 导出的值当作覆盖，否则同一 shell 切换环境会仍操作旧部署。对其他运行时环境变量，只将显式 `PERSONA_*` 用 shell 变量引用桥接到旧名，不打印其值，也不自动为仅有旧名的变量制造新名覆盖；插件 token 等不会出现在导出脚本中。xcconfig 同时保留新旧构建设置，配置里的签名与 App 身份不改变。
 
-运行时 SDK、DSH 和 pi 也认识新旧 socket / HOME 环境变量。pi 的新配置文件叫 `persona.json`，没有新文件时仍读 `jarvis.json`。运行时包的旧更新 ID、session 条目与热加载的状态身份暂保留，保证已经安装的插件可以接收新版而不需要重装。
+运行时 SDK、DSH 和 pi 也认识新旧 socket / HOME 环境变量。pi 的新配置文件叫 `persona.json`，没有新文件时仍读 `jarvis.json`。#773 补齐 `PERSONA_PI_HOST` / `JARVIS_PI_HOST` 和 echo daemon 的 `PERSONA_DAEMON_TOKEN` / `JARVIS_DAEMON_TOKEN` 新名优先读取。App 命令 CLI 的 bundle fallback 优先 `PERSONA_BUNDLE_ID`、兼容 `JARVIS_BUNDLE_ID`；既有 `JARVISCTL_*` 名、命令参数和 `~/.cache/jarvisctl` 保留，不凭工具改名虚构一套 `PERSONACTL_*`。运行时包的旧更新 ID、session 条目与热加载状态身份保留，保证已安装插件可以接收新版而不需要重装。
 
 ## 分阶段的契约
 
@@ -41,6 +117,10 @@ node socket 使用同一个存储中较短的旧路径，避免新名字多一�
 源码包重命名尤其注意 Android 序列化默认的完整类名、旧通知的 ComponentName / PendingIntent、WorkManager 的持久化 Worker 名、Swift rawValue 与归档缓存。源码换名字，不等于持久化名字可以一起换。
 
 ## 验证与收尾
+
+**已合代码车道的验证，不是本文档车道重跑**：#786 最终记录 108 项 Python 迁移 / 脚本测试、448 项 Web 测试及生产构建通过；Go 在短 canonical `/private/tmp` 测试根下退出 0，2,167 个 test / subtest pass 事件、72 个明确 skip、0 fail。Postgres / 平台 / fixture 的 skip 不算真实 Postgres 集成通过。最初的 Codex / 端口失败日志保留：Codex fixture 直接传 `/tmp` 别名绕过正常 Home canonicalization，端口用已合 #728 处理 lsof 的有效输出；独立对照已定位，不删除身份比较，也不延长 timeout。该结论不推广成任意 Home 不匹配都只是测试问题。
+
+本轮文档只重验当前源码 / 兼容 guard、隔离服务根回归、Markdown 链接和隐私，不冒充重跑上述 Go / Web 全套或原生截图。后续全量 open PR 审计和最终发布冻结仍由 leader 继续：
 
 - 临时 HOME 下覆盖新装、旧目录、新目录、外部软链、悬空软链、循环、两份独立存储、重复启动、并发首次启动。
 - 同一个 token / hub.json 与 node socket 经两种路径访问，内容与文件身份相同；自定义环境之间不串数据。

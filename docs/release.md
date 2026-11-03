@@ -4,7 +4,7 @@ TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及�
 
 ## 账号与标识
 
-产品名为 Persona（原 Jarvis），但已有 Bundle ID、App Group、钥匙串组、签名 profile 名称和 App Store Connect App 记录不变；不要因改名重新创建 App。下文的「Jarvis App Store」「Jarvis Watch App Store」以及 archive / `.app` / target 名称是实际签名或构建标识，保留兼容 / 历史引用。新默认配置和 `personad` / `jarvisd` 的兼容见 [命名与兼容](config.md#命名与兼容)。
+产品名为 Persona（原 Jarvis），但已有 Bundle ID、App Group、钥匙串组、签名 profile 名称和 App Store Connect App 记录不变；不要因改名重新创建 App。下文的「Jarvis App Store」「Jarvis Watch App Store」是已有签名 profile 名，保留不改；当前生成工程 / target 和 archive / `.app` 产物使用 Persona 名称，旧工程 / scheme 别名与 module 身份见 [兼容迁移](rename.md)。历史构建记录保留当时名称。新默认配置和 `personad` / `jarvisd` 的兼容见 [命名与兼容](config.md#命名与兼容)。
 
 都在构建配置里（`docs/config.md`）：`app.bundle_id` / `app.team_id`、`app_store.key_id` / `issuer_id` / `key_path`（API key 文件只放在
 仓库外，比如 `~/.appstoreconnect/`）、`app_store.app_id`（App 记录的数字 ID）、`app_store.testers`、`app_store.feedback_email`。
@@ -18,7 +18,7 @@ TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及�
 | App Store Connect App ID | 网页建好 App 记录后填进配置的 `app_store.app_id` |
 
 API key 的角色是 App Manager，用不了 cloud-managed signing（`-allowProvisioningUpdates` 云签名会失败），所以
-归档走自动签名，导出时 `release.sh` 按配置生成 ExportOptions（`scripts/jarvis_config.py export-options`），手动指定两个 App Store 描述文件重签。
+归档走自动签名，导出时 `release.sh` 按配置生成 ExportOptions（`scripts/persona_config.py export-options`），手动指定两个 App Store 描述文件重签。
 
 ## 首次准备（顺序）
 
@@ -45,10 +45,10 @@ git push --tags
 
 `release.sh` 做的事：
 
-1. `xcodegen generate`（工程由 `apple/project.yml` 生成，`.xcodeproj` 不入库）。
-2. Release 归档到 `~/Library/Developer/Xcode/Archives/<日期>/Jarvis <构建号>.xcarchive`（dSYM 留给 Organizer 符号化），
+1. `xcodegen generate`（源头是 `apple/project.yml`，生成 `Persona.xcodeproj`；旧 `Jarvis.xcodeproj` 是工程入口软链，生成内容不入库）。
+2. Release 归档到 `~/Library/Developer/Xcode/Archives/<日期>/Persona <构建号>.xcarchive`（dSYM 留给 Organizer 符号化），
    同时嵌入手表 App。
-3. `check_bundle_strings.py` 检查 `Jarvis.app` 和 `Jarvis.app/Watch/Jarvis.app`：Info.plist 里的 `*UsageDescription`
+3. `check_bundle_strings.py` 检查 `Persona.app` 和 `Persona.app/Watch/Persona.app`：Info.plist 里的 `*UsageDescription`
    不能为空或等于 key，`*.lproj/InfoPlist.strings` 同理（占位符文案会被 App Review 自动拒）。
 4. `strings` 检查 Release 二进制里没有 `pairURL`、`openSession`、`showNewChat` 这些只在 `#if DEBUG` 里的模拟器开关。
    `check_bundle_privacy.py` 检查整个 bundle 里没有个人的值（外部测试是公开链接，见文末）。
@@ -147,7 +147,7 @@ python3 scripts/release/asc_testflight.py external   # 建群组、按配置开 
 ```
 
 - **公开链接 = 任何拿到链接的人都能装**：构建里不能有任何个人的东西（hub 地址、主机名、邮箱、路径……）。`release.sh` 在上传前跑
-  `scripts/release/check_bundle_privacy.py <Jarvis.app>`（用 `privacy_check.py` 的同一份敏感词，查二进制的字符串、plist、lzfse 元数据；
+  `scripts/release/check_bundle_privacy.py <Persona.app>`（用 `privacy_check.py` 的同一份敏感词，查二进制的字符串、plist、lzfse 元数据；
   bundle id、team id、签名数据本来就在每个构建里，不算）。自己写的发版脚本也要在上传前跑它。
 - **每次发版不用另跑命令**：配置里有 `app_store.external` 时，`wait`、`info` 在挂好 Internal 之后会顺带把这个构建挂到 Friends、
   提交审核（有列出的测试员就补邀请）。这一步出错只打印一行（附重试命令 `external`），不会让发版失败。
@@ -169,7 +169,7 @@ python3 scripts/release/asc_testflight.py external   # 建群组、按配置开 
 
 ## Mac 版（2026-11-02）
 
-Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store Connect 里**同一个 App 记录**（加了 macOS 平台，版本 1.0），
+Mac App（target `PersonaMac`，旧 `JarvisMac` scheme 兼容）和 iPhone 用同一个 bundle id，所以是 App Store Connect 里**同一个 App 记录**（加了 macOS 平台，版本 1.0），
 进同一个 TestFlight：同样的 Internal / Friends 组、同一个公开链接；测试员在 Mac 上装 TestFlight 就能看到 Mac 构建。
 
 - **构建号**：一个号在每个平台里只能用一次，不同平台可以重号。规则：**一次发布的 Mac 构建和这次的 iPhone 构建用同一个号**
@@ -181,12 +181,12 @@ Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store 
   另有 `idiom: mac` 的 16–512（1x / 2x），由 `python3 scripts/assets/make_icon.py mac` 从 iPhone 的图生成（全部重画时也会一起写）。
   缺了它 Mac 包里没有图标，Mac App Store 拒收。Xcode 26 编出来的 `AppIcon.icns` 只有 16 和 128 两档，完整的各档在 `Assets.car` 里
   （系统按 `CFBundleIconName` 去那里取），所以检查看的是 `Assets.car`（`xcrun assetutil --info`）里有没有 512 和 512@2x。
-- **Info.plist**：`LSApplicationCategoryType`（效率）、各项权限说明都在 `apple/project.yml` 的 JarvisMac 里。
+- **Info.plist**：`LSApplicationCategoryType`（效率）、各项权限说明都在 `apple/project.yml` 的 `PersonaMac` target 源头里。
 - **沙盒**：`com.apple.security.app-sandbox` 加网络（客户端、端口转发的本机服务端）、用户选的文件、通讯录 / 日历 / 位置 / 照片、
   麦克风 / 摄像头（`project.yml` 的 entitlements）。
 - **推送**（2026-11-02 起，`docs/mac.md`「远程推送（Mac）」）：`com.apple.developer.aps-environment`（macOS 上的名字，iOS 是 `aps-environment`）。
   App ID 是 UNIVERSAL、早就开着 Push Notifications，开发者账号不用改；归档里是 `development`，App Store 导出时云签名改成 `production`。
-  包里另有通知服务扩展 `JarvisNotify.appex`（target `JarvisMacNotify`，`Contents/PlugIns/`，沙盒 + `.push` 钥匙串组，#432），
+  包里另有通知服务扩展 `PersonaNotify.appex`（target `PersonaMacNotify`，module / 通知主类仍用 `JarvisNotify`，`Contents/PlugIns/`，沙盒 + `.push` 钥匙串组，#432），
   bundle id 和 iPhone 的扩展同一个（UNIVERSAL 的 App ID），导出时云签名给它建 Mac 的描述文件；`entitlements.py sign / check` 一起签、一起查。
 - **发布前检查**和 iPhone 一样：权限说明（`check_bundle_strings.py`）、隐私扫描（`check_bundle_privacy.py`，认 Mac 的
   `Contents/` 结构，跳过 `embedded.provisionprofile`，通用二进制整个扫）、Release 里没有 DEBUG 开关；另外查分类和图标里有 512 / 512@2x。
@@ -198,7 +198,7 @@ Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store 
   「files that are only readable by the root user」（macOS 以运行 App 的用户身份验签名）。自动发版（auto-tf）的 umask 是 077，
   脚本里 `cp -R` 复制的归档全成了 0700 / 0600；在交互 shell（umask 022）里试永远看不出来。发版脚本开头 `umask 022`、复制归档用 `ditto`（保留原权限），
   导出前对 `.app`、导出后对 `.pkg` 展开的 App 查一遍：所有文件 a+r、所有目录 a+rx，不满足就不传。iPhone 的脚本也一样改了（ipa 不查这个，110 照样过）。
-- **自动发布**：发完 iPhone 构建后，这次的提交里有 Mac App 用到的改动（`apple/Mac`、`apple/Shared`、`apple/Jarvis` 除了只属于 iOS 的
+- **自动发布**：发完 iPhone 构建后，这次的提交里有 Mac App 用到的改动（`apple/Mac`、`apple/Shared`、`apple/Persona` 除了只属于 iOS 的
   几个文件、`apple/Packages`、`project.yml`、`Package.resolved`）就用同一个号接着发 Mac；Mac 的结果另外报，失败不影响 iPhone 那次。
 
 ## 发布 personad（`scripts/release/publish.sh`，2026-10-31）

@@ -4,7 +4,7 @@
 
 ```sh
 cd server && go test ./... && go vet ./...                    # 服务端
-cd apple && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
+cd apple && xcodegen generate -q && xcodebuild -project Persona.xcodeproj -scheme Persona \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
 ./scripts/app/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
 ```
@@ -78,7 +78,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   `chat.scrollState`：bottom / follows / frozen / arrow / newestShown / withheld…，`visible` 时画在屏幕上），XCUITest 读不准倒置列表里行的位置。
   `testRealHubChats` 连真实 hub 拍改前改后（`TEST_RUNNER_JARVIS_REAL_PAIR` 等环境变量，不给就跳过；只开自己的会话，打开会标已读）。
 - 终端实时流：`MOCK_TERMINAL_STREAM=1` 启动 mock（hello 带 `terminal_stream`，订阅后先发一个编造的 Claude 界面整帧，再每秒一帧让 spinner 走秒；
-  再加 `MOCK_TERMINAL_FIXTURE=apple/JarvisTests/Fixtures/terminal-observe.jsonl` 改为回放从 herdr 录下的真实帧：颜色、框里的中文、emoji、链接、200 字的长行），
+  再加 `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe.jsonl` 改为回放从 herdr 录下的真实帧：颜色、框里的中文、emoji、链接、200 字的长行），
   `-openPane terminal`，`-terminalWrap NO` 看不换行，`-terminalPages 1` 加载一页（mock 的 `/screen/before` 回一段带颜色的历史）。
 - 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
   `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。
@@ -120,42 +120,42 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 
 ## UI 测试（`scripts/app/ui-test.sh`）
 
-`apple/JarvisUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
+`apple/PersonaUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
 `SIM=<udid> ./scripts/app/ui-test.sh [machine/session]`。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
 长按消息的操作条（`MessageMenuTests`，按 0.4 / 0.8 / 1.5 / 2.5 秒松手都要留下，点列表、滑动会关）连 `scripts/mock/mock_hub.py`，不用真实 hub：
-`TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/MessageMenuTests`。
+`TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests`。
 写 UI 测试时先在没有修复的代码上跑一次确认它会失败，再上修复。
 
 通知按钮（`NotificationActionTests`）不连真实 hub，连 `scripts/mock/mock_hub.py`：
-`PORT=18791 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:JarvisUITests/NotificationActionTests`。
+`PORT=18791 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/NotificationActionTests`。
 它在 SpringBoard 上长按横幅、点「拒绝」，再读 mock 的 `GET /mock/resolved` 确认 hub 收到了 resolve。
 `LiveActivityActionTests` 同样连 mock：开一个示例实时活动、锁屏、点活动上的「拒绝」。模拟器系统语言是英文时授权弹窗的按钮叫「Allow」；
 授权会保留到下次，所以 App 要等进了后台才排这条通知，否则它在测试还在等弹窗时就弹过去了。
 
 终端直接打字（`TerminalTypingTests`：点终端弹出键盘、打的字和回车按顺序发出且被合并成少数几个请求、键栏的 ctrl 作用于键盘打的下一个字、键盘按钮收起键盘）同样连 mock。
-`MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=apple/JarvisTests/Fixtures/terminal-observe-mixed.jsonl`
+`MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe-mixed.jsonl`
 （中英混排长回答）或 `-permission.jsonl`（权限框）截终端的样子。
 终端键栏和选择（`TerminalKeysTests`：单击 / 双击锁定 / 按住 ctrl、alt、shift，输入框里打的字带 ctrl，⌃C，发出的键名和顺序；长按出「拷贝」；快捷命令双击直接发送、输入框的补全）也连 mock：
-`PORT=18792 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:JarvisUITests/TerminalKeysTests`
+`PORT=18792 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:PersonaUITests/TerminalKeysTests`
 （mock 的 `GET /mock/keys` 回放收到的按键）。
 
 从搜索结果打开会话只有一行标题、返回后搜索结果还在、搜索时折叠的空间里的 Agent 也搜得到点得开（`SearchOpenTests`，另有不搜索的对照，对照里再右滑返回列表；
 测试带 `-openAgentsFresh YES`，不受别的测试留下的折叠影响）连普通 mock：
-`PORT=18793 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:JarvisUITests/SearchOpenTests`。
+`PORT=18793 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:PersonaUITests/SearchOpenTests`。
 
 端口转发（`PortForwardTests`，`docs/ports.md`）：会话顶部和回复里的 `:端口` Badge 带页面标题、停掉的变灰，点开在网页卡片里经 mock 的
 `…/ports/{port}/connect` 加载 mock 自己起的页面（`GET /mock/ports` 看连接记录），点灰的提示「已经没有在监听」：
-`MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:JarvisUITests/PortForwardTests`；
+`MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`；
 深浅色 × 新外壳 / 旧布局用 `TEST_RUNNER_JARVIS_LAYOUT`、`TEST_RUNNER_SHOT_SUFFIX` 各跑一遍，截图在 `/tmp/jarvis-ports-*`。
 
 发消息和终端对话框的安全检查（`SendSafetyTests`）也连 mock：
 `PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock/mock_hub.py &`，再
-`TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:JarvisUITests/SendSafetyTests`：
+`TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/SendSafetyTests`：
 点终端对话框的选项，确认 hub 收到的是 `option` 而不是按键、并提示「对话框已经变了」；电脑上有草稿时点「清空并发送」，确认重发带
 `clear_draft` 且 `client_msg_id` 不变（`GET /mock/resolved`、`GET /mock/sent`）。截图：`-openSendMessage <文字>` 打开会话 3 秒后发一条（`-openSendDelay <秒>` 改这个等待）。
 
 弱网 / 断网（`ConnectionTests`，`docs/ios.md`「连接状态」）连普通 mock：`PORT=18760 python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/ConnectionTests`：hub 断 10 秒标题变「连接中…」、
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/ConnectionTests`：hub 断 10 秒标题变「连接中…」、
 恢复后换回；断 0.2 秒（重连约一秒）标题完全不变；断网时发的消息显示「连上后自动发送」，恢复后 hub 只收到一次：
 中间再断几次、进后台（后台不重连，hub 回来了也要等回到前台才发）、退出 App 再打开（发件箱在磁盘上）都恰好一次。hub 重启后的去重在服务端测试（`TestSendRetryAfterRestartAndRefusal`）。
 mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、新连接不应答就关）、`GET /mock/delay?s=<秒>`（之后每个请求和 pong 都晚这么久，0 关掉；
@@ -163,7 +163,7 @@ mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、�
 `lsof -i :18760` 还会列出连着它的模拟器 App，一起杀掉 App 就没了。截图：`-showConnection …`（见 `docs/ios.md`）。
 
 发送文件（`FileUploadTests`：「+」菜单里有「文件」；上传时输入框上方有进度和取消，传完路径插在打的字后面、不发送）也连 mock：
-`PORT=18771 MOCK_UPLOAD_KBPS=1024 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:JarvisUITests/FileUploadTests`
+`PORT=18771 MOCK_UPLOAD_KBPS=1024 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/FileUploadTests`
 （`GET /mock/uploads` 是收到的文件；`MOCK_UPLOAD_OLD_NODE=1` 模拟没升级的 node）。截图：`-openUploadDemo <文件名>` 打开会话 3 秒后传一个 24 MB 的假文件。
 系统的文件选择器 XCUITest 点不稳，选文件这一步没自动化。
 
@@ -175,13 +175,13 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 
 - mock：`PORT=18773 MOCK_MACHINES=1 python3 scripts/mock/mock_hub.py &`（多一台离线的「实验室主机」，`POST …/reconnect` 后变在线；
   Mac Studio 有 36 个 Agent；`GET /mock/hits`、`/mock/reconnects`、`/mock/started`，`/mock/reset` 恢复初始状态；cwd 以 `/broken` 结尾的新会话回 502），
-  再 `TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:JarvisUITests/MachinePagesTests`，
+  再 `TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:PersonaUITests/MachinePagesTests`，
   深色再跑一遍（`simctl ui <udid> appearance dark`、`JARVIS_STYLE=dark`），每一步的截图存到 `JARVIS_SHOTS`，失败时附截图和视图树。
 - 真实接口：本机起一个测试 hub，**不要连线上 hub 做重连、新建、关闭**。在 hub 机器上 `GOOS=darwin` 编 personad 拷回来；
   `docker exec jarvis-postgres createdb -U jarvis <自己的库>`，经 `ssh -L <本地端口>:127.0.0.1:18661` 连；假 HOME 里的 `~/.persona/hub.json`
   （0600）只放 `listen`、`token`、`database_url` 和两台机器：一台 `kind: local`，一台连不上的 ssh；`herdr --session <名字> server` 起一个独立的 herdr，
   `HERDR_SOCKET_PATH` 指向它（别指向正在用的那个）。假 HOME 里建 `code/demo`，然后
-  `TEST_RUNNER_JARVIS_LIVE_MACHINES_HUB=… TEST_RUNNER_JARVIS_LIVE_MACHINES_TOKEN=… TEST_RUNNER_JARVIS_LIVE_MACHINES_CODE=<假 HOME>/code xcodebuild test … -only-testing:JarvisUITests/MachinePagesLiveTests`。
+  `TEST_RUNNER_JARVIS_LIVE_MACHINES_HUB=… TEST_RUNNER_JARVIS_LIVE_MACHINES_TOKEN=… TEST_RUNNER_JARVIS_LIVE_MACHINES_CODE=<假 HOME>/code xcodebuild test … -only-testing:PersonaUITests/MachinePagesLiveTests`。
   node 的「最近目录」来自这台机器真实的 Claude 记录，所以测试用 `-cwd.<机器 id>` 指定目录浏览的起点。跑完关掉测试 hub、隧道和 herdr 会话，删掉库。
 - 别的车道收尾时会 `pkill -f mock_hub.py`：长时间跑的 mock 复制一份改个名再起（`/tmp/<车道>_fakehub.py`），套个 while 循环被杀了自己起来。
 - 测试中途失败时 XCTest 会结束 App，App 的请求被取消：hub 日志里那次 `POST /api/v1/sessions` 记 502，其实 node 已经把会话起好了（node 不随 hub 的请求取消）。
@@ -199,20 +199,20 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 
 - mock：`PORT=18775 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py &`（约 130 个会话：platform 空间 3 需要你 / 35 完成未看 / 12 工作中，
   另有空闲多的空间和全空闲的空间；`seen`（WebSocket 或 `POST …/seen`）把完成未看改成已看，`GET /mock/seen` 列出，`/mock/reset` 复原），
-  `TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:JarvisUITests/AgentsListTests`，深色再跑一遍。
+  `TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/AgentsListTests`，深色再跑一遍。
 - `-openAgentsFresh YES` 启动时清掉列表记住的样子（机器筛选、分组、细列表、折叠）：这些值测试里要在界面上改，不能用启动参数固定（启动参数会盖过 App 写进去的值）。
 - 列表行（`NavigationLink`）上的 `accessibilityIdentifier` 在视图树里出现两次（cell 和里面的 button），数行数、取第 n 行用 `app.buttons.matching(identifier:)`。
 - `SearchOpenTests` 以前不带 `-dev.openChat ""`：上一次测试留下打开的对话，启动后恢复进去，右滑返回回不到列表，两个用例都挂（master 上也一样）。
 - 细列表截图（`CompactListShots`，不用 mock，用体验模式的数据）：全部（空间多）、Mac Studio（未读多、空闲的空间）、未读筛选、需要你筛选、Mac mini（全部空闲）、
   按状态分组、卡片对照，每种三档字号（`-ui.textSize small|standard|large`；`TEST_RUNNER_JARVIS_TEXT_SIZES=standard` 只拍一档）。
-  `TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:JarvisUITests/CompactListShots`，深色再跑一遍。
+  `TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/CompactListShots`，深色再跑一遍。
   改前 / 改后对比：在 `git worktree add --detach <目录> origin/master` 里放进同一个测试文件拍改前，两边同一份数据。
   带 `-openWelcome YES` 是为了去掉别的测试留下的配对（Keychain 里的 hub 优先于体验模式），`-demo.on YES` 让它直接进体验模式。
 
 ### 空间标签的停止关闭（`SiblingTabsTests`）
 
 - 普通 mock，独立端口与模拟器：`PORT=<端口> python3 scripts/mock/mock_hub.py`，然后
-  `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口> TEST_RUNNER_JARVIS_LAYOUT=shell xcodebuild test … -only-testing:JarvisUITests/SiblingTabsTests`。
+  `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口> TEST_RUNNER_JARVIS_LAYOUT=shell xcodebuild test … -only-testing:PersonaUITests/SiblingTabsTests`。
   传给 `xcodebuild` 的变量要带 `TEST_RUNNER_`；测试进程读的是去掉前缀后的 `JARVIS_MOCK_HUB`，直接传后者会让整套用例跳过。
 - 验证左滑按钮、长按菜单、工作中取消、关闭失败时保留标签与确认卡片、关闭当前标签切到相邻标签、关闭其他标签不切换、最后一个标签关闭后返回。
   原有的新建标签和点击切换回归一起跑；浅色、深色都看截图。截图以 `sibling-*` 附件保存在 `.xcresult`，
@@ -230,7 +230,7 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 - mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock/mock_hub.py &`，`GET /mock/churn?n=12&ms=400` 推 n 轮（每轮：各机器的会话列表——工作中的换一句、
   两个工作中的轮流变成最新——、机器列表、每个打开的对话一个新步骤，每 4 轮夹一句话），`&steps=N` 每轮每个对话加 N 步，`&final=1` 推完后这一轮结束（最后一句回复、工作中的变成完成）；`/mock/churned` 看推到第几轮；`MOCK_CHURN=1` 还在第一个对话的过程里放一张截图、多加 5 台机器（菜单要能滚）；`&inbox=1` 每轮再改一条收件箱、重推等你处理的事，`&waiting=1` 每轮多一个等你的 Agent、
   下一轮又答完（角标每轮变；真实的 hub 一直在推这两样，只推会话列表测不出角标带来的重建，`docs/lanes/live-updates.md`「又回来了」）。
-- `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:JarvisUITests/LiveUpdateTests`。
+- `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/LiveUpdateTests`。
 - 新外壳和旧布局都要跑：UI 测试默认用旧布局（`launchJarvis` 加 `-ui.oldLayout YES`），设 `TEST_RUNNER_JARVIS_LAYOUT=shell` 改用新外壳（iPhone 的默认），
   `LiveUpdateTests`、`ChatFollowTests`、`ScrollUnderPushTests` 两种都过才算。
 
@@ -286,7 +286,7 @@ Agents 列表、Agent 对话、Persona 对话各拖、甩约 20 秒，同时 moc
 
 ### 体验模式（`DemoModeTests`、`DemoHubTests`）
 
-不用 mock hub：`TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:JarvisUITests/DemoModeTests`，深色再跑一遍。
+不用 mock hub：`TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:PersonaUITests/DemoModeTests`，深色再跑一遍。
 `testWalkThroughAndLeave` 从配对页（`-openWelcome YES`）进体验模式，走一遍 Agents（筛选、细列表、Claude 会话发消息收到演示回复、终端、提问卡片作答、
 计划卡片、Codex 会话、表格和链接）、机器页和机器的 24 小时曲线、Persona（主对话、侧边栏、定时任务）、收件箱（飞书会话、邮件），
 每页断言没有「体验模式里没有这项数据」，最后从设置退出、重启后还在配对页；`testStaysAcrossLaunches` 断言体验模式重启后还在。
@@ -315,7 +315,7 @@ PORT=18762 MOCK_HUB_ID=hub-c MOCK_HUB_NAME="公司 2" \
   MOCK_MACHINE_OWNER='{"server":"hub-b"}' MOCK_MACHINES_KEEP=server,macbook \
   MOCK_MACHINE_NAMES='{"server":"工作服务器","macbook":"工作 MacBook"}' python3 scripts/mock/mock_hub.py &
 TEST_RUNNER_JARVIS_HUB_A=http://127.0.0.1:18760 TEST_RUNNER_JARVIS_HUB_B=http://127.0.0.1:18761 \
-  TEST_RUNNER_JARVIS_HUB_C=http://127.0.0.1:18762 xcodebuild test … -only-testing:JarvisUITests/MultiHubTests
+  TEST_RUNNER_JARVIS_HUB_C=http://127.0.0.1:18762 xcodebuild test … -only-testing:PersonaUITests/MultiHubTests
 ```
 
 - 截图：`-pairURL <A> -pairURL2 <B> -pairURL3 <C>` 配三台（DEBUG；同一地址和凭据的 hub 重启后保持原来的组 id），再加页面参数：
@@ -496,7 +496,7 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
   每轮拖开松手、拖回、半路松手（弹回）、快甩、点页面关闭，经过和手指一样的 `AssistantDrawer.dragBegan / drag / letGo`，每个显示帧一步。
   用开了优化的 Debug 构建（`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`，单独的 derivedData）。对照组用 `git worktree`
   在旧提交上加同样的 `DrawerProbe.swift` 和三个同名方法。
-- 看主线程在忙什么：`sample <pid> 30 1`，pid 要按自己模拟器的设备目录找（`pgrep -f "Devices/<udid>/.*Jarvis.app/Jarvis"`，别的车道的模拟器也在跑 Persona）。
+- 看主线程在忙什么：`sample <pid> 30 1`，pid 要按自己模拟器的设备目录找（`pgrep -f "Devices/<udid>/.*Persona.app/Persona"`，别的车道的模拟器也在跑 Persona）。
 
 2026-10-31 改前（master e4fca3b）/ 改后，模拟器 iPhone 18 Pro Max（60 Hz），长对话，每种 10 次（5 轮 × 2 次启动）：
 
@@ -545,7 +545,7 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 回到主屏拍紧凑态（隔 0.4 秒两张，比对有没有动画）、长按灵动岛拍展开态（长按偶尔不生效，会再试一次存成 `expanded2`）、锁屏再点亮拍锁屏（首次会有系统的「允许实时活动」提示，测试会点允许），最后解锁：
 
 ```sh
-TEST_RUNNER_JARVIS_FLEET_SAMPLE=needsYou TEST_RUNNER_JARVIS_FLEET_DETAILS=YES TEST_RUNNER_JARVIS_FLEET_ISLAND=custom:assistant,load xcodebuild test … -only-testing:JarvisUITests/LiveActivityShots \
+TEST_RUNNER_JARVIS_FLEET_SAMPLE=needsYou TEST_RUNNER_JARVIS_FLEET_DETAILS=YES TEST_RUNNER_JARVIS_FLEET_ISLAND=custom:assistant,load xcodebuild test … -only-testing:PersonaUITests/LiveActivityShots \
   -resultBundlePath /tmp/shots.xcresult
 xcrun xcresulttool export attachments --path /tmp/shots.xcresult --output-path /tmp/shots
 ```

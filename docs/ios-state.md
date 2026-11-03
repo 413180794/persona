@@ -237,7 +237,7 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 
 ## 探针和断言（msg-render 和 live 共用）
 
-App 端 `apple/Jarvis/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
+App 端 `apple/Persona/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
 
 - `view.screenProbe("<区域>", page:, value)`：`value` 是 `Encodable & Equatable`。
   - 挂一个 1×1 元素，`accessibilityIdentifier("probe.<区域>")`；
@@ -257,7 +257,7 @@ App 端 `apple/Jarvis/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
   - `chat`：`{key}`，打开的是哪个对话（page 是它所在的页）；
   - `shell`：live 车道，`{strip, selected, tab, position, moving, drawerOpen, chatRoot, workRoot, trace}`。
 
-测试端 `apple/JarvisUITests/ScreenProbe.swift`：
+测试端 `apple/PersonaUITests/ScreenProbe.swift`：
 
 - `app.probe(area, as:, page:)`、`app.probeSeq`、`app.probeChanged`（`at` 转成 `Date`）；
 - `eventually(what, within:, poll:) { 差异 }`：反复读直到没有差异，返回用时，超时失败并带上最后的差异。`within: 0` 就是「现在一致」；

@@ -167,9 +167,9 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 
 ## App
 
-- `InboxStore`（`Jarvis/App/InboxStore.swift`）：列表存在本地（`inbox-items`），冷启动先画缓存；`inbox` 事件、重连、进入页面时拉。
+- `InboxStore`（`Persona/App/InboxStore.swift`）：列表存在本地（`inbox-items`），冷启动先画缓存；`inbox` 事件、重连、进入页面时拉。
   标已处理先改本地再发请求，失败恢复。Tab 角标 = 未处理里「需要你」的件数。
-- 页面（`Jarvis/Views/Inbox/InboxView.swift`）：顶部一行筛选（全部 / 飞书 / 每个邮箱 | @我 / 私聊 / 群聊 / 邮件），搜索标题、发件人、
+- 页面（`Persona/Views/Inbox/InboxView.swift`）：顶部一行筛选（全部 / 飞书 / 每个邮箱 | @我 / 私聊 / 群聊 / 邮件），搜索标题、发件人、
   内容、摘要。分三段：需要你（展开）、知悉即可（展开，标题右边「全部看过」）、已折叠（收起，「全部清除」），最后是已处理（收起）；
   段标题点一下展开 / 收起。行：头像 40（右下角 18pt 来源小标：飞书蓝，邮件中性灰）、标题（headline）+ 类型标签（`Chip`，@我 红色）、时间；
   有摘要时第二行是 ✦ 摘要、第三行小字「发件人：内容」（次要灰，不用 tertiary），没分拣时直接是「发件人：内容」；件数（普通是灰底，@我 是主色底）。
@@ -183,7 +183,7 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
   导航栏下面是操作条（`InboxActionBar`）：✦ 摘要 +「AI 草拟回复」「交给 AI」。
 - DEBUG：`-tab mail`（打开收件箱）、`-openInboxFirst YES`（打开第一件未处理的）、`-showInboxAction draft|handoff`（再打开那个浮层）。
 
-## 对一件事能做什么（`Jarvis/Views/Inbox/InboxActions.swift`）
+## 对一件事能做什么（`Persona/Views/Inbox/InboxActions.swift`）
 
 - **AI 草拟回复**：`POST /api/v1/inbox/{id}/draft {instruction}`，hub 用小任务模型按用户口吻起草（飞书口语、短；邮件按来信的语言和正式程度；
   不知道的事实用【】标出来让用户补，不编；`assistant.notes` 作为「关于用户」附上）。浮层里可以直接改，也可以输入「让 AI 改：…」再重写。

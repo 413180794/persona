@@ -1,6 +1,6 @@
 # Persona：DSH 接入
 
-包 ID `jarvis-dsh-runtime` 保留兼容身份。本文使用迁移版本的 `personad` 和 `~/.persona`；旧 `jarvisd`、`~/.jarvis` 与 `JARVIS_*` 继续兼容，已迁移的 `PERSONA_*` 优先，见 [配置与兼容说明](../../docs/config.md#命名与兼容)。
+私有 npm 包名为 `persona-dsh-runtime`（#753）；自动更新包 ID 与已安装 loader 身份 `jarvis-dsh-runtime` 保留。`package.json.name` 改名不改变更新目录、加载标识或 `jarvis-runtime.v1` 子协议。本文使用迁移版本的 `personad` 和 `~/.persona`；旧 `jarvisd`、`~/.jarvis` 与 `JARVIS_*` 继续兼容，已迁移的 `PERSONA_*` 优先，见 [配置与兼容说明](../../docs/config.md#命名与兼容) 和 [完整保留清单](../../docs/rename.md)。
 
 DSH（DeepSeek Harness）的 Web 插件：把这台电脑上 `dsh web` 的会话接进 Persona（连 personad node 的 `~/.persona/runtime.sock`）。
 它是按 `docs/runtimes.md` 规范接入的第一个 runtime，建在 [`integrations/runtime-sdk`](../runtime-sdk/README.md) 上。

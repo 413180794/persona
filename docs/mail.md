@@ -128,7 +128,7 @@ hub 的 OAuth 客户端是 iOS 类型，回调是反向 client ID 的自定义 s
   「已发送」，hub 不再追加一份。
 - **refresh token 会轮换**：Microsoft 每次刷新都发一个新的（旧的随之失效），hub 拿到就立刻加密存回 `oauth_enc`（Google 不轮换）。
 - 凭据：`{provider: "microsoft", client_id, refresh_token}` 加密存 `mail_accounts.oauth_enc`，同 Gmail。
-- 代码：`server/internal/mail/microsoft.go`；App：`apple/Jarvis/Views/Mail/MailOutlookViews.swift`。
+- 代码：`server/internal/mail/microsoft.go`；App：`apple/Persona/Views/Mail/MailOutlookViews.swift`。
 - 接口：`GET` / `PUT /api/v1/mail/oauth/microsoft/config`（`{configured, client_id, source: app|config, redirect_uri}`；PUT `{client_id}`，空串清掉）、
   `POST …/microsoft/start`（`{login_hint?}` → `{auth_url, callback_scheme, state}`）、`POST …/microsoft/finish`（回调的 `{state, code}` 或
   `{state, error, error_description}` → `{account}`）。回调带着错误也交给 hub：它把 Microsoft 的错误码翻成该怎么办（见下面）。

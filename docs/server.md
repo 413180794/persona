@@ -2,7 +2,7 @@
 
 `personad` 是新名称，`jarvisd` 继续作为兼容别名；新默认运行目录 `~/.persona`，旧 `~/.jarvis` 继续兼容。本文的 systemd / launchd、数据库 / 容器 / 数据卷及发布文件名保留现有身份，不随产品改名强行重建。迁移版本与旧版本的区别见 [配置与兼容说明](config.md#命名与兼容)。
 
-Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`，协议见 `docs/protocol.md`。
+Go，单一二进制，`server/cmd/personad`。模式见 `docs/architecture.md`，协议见 `docs/protocol.md`。
 
 ## 代码
 
@@ -148,7 +148,7 @@ DSM 上的坑：docker 要写全路径 `sudo /usr/local/bin/docker`（非交互 
 ```sh
 git worktree add --detach /tmp/jarvis-build <提交>
 (cd /tmp/jarvis-build/server && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
-  -ldflags "-s -w -X main.version=$(git describe --always)-$(date +%Y%m%d%H%M)" -o /tmp/jarvisd-linux-amd64 ./cmd/jarvisd)
+  -ldflags "-s -w -X main.version=$(git describe --always)-$(date +%Y%m%d%H%M)" -o /tmp/jarvisd-linux-amd64 ./cmd/personad)
 git worktree remove /tmp/jarvis-build
 ssh <nas> 'umask 077; mkdir -p ~/.jarvis/bin && cat > ~/.jarvis/bin/jarvisd.new && chmod 755 ~/.jarvis/bin/jarvisd.new' < /tmp/jarvisd-linux-amd64
 ```

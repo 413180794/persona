@@ -1,7 +1,7 @@
 # 锁屏 / 灵动岛实时活动（Fleet）
 
 整台手机只有一个实时活动「Fleet」：把所有需要你、在工作、做完未看的 Agent 汇总到锁屏和灵动岛。hub 算内容、经 APNs 推送；
-App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）负责画。设计依据见车道笔记（ChatGPT Codex / Sand 的活动分析），
+App 负责开始活动、上报 token；Widget 扩展（源码 `apple/PersonaWidgets`、module 仍为 `JarvisWidgets`）负责画。设计依据见车道笔记（ChatGPT Codex / Sand 的活动分析），
 这里只写实现和约定。
 
 ## 显示什么
@@ -55,7 +55,7 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
   App 进程里更拿不到；`relevanceScore` 只排自家的活动。
 - 所以每种呈现都要自己就能看懂，不能指望另一半。
 
-**做法**（`IslandGlyph`、`IslandSide`，`apple/LiveActivity/FleetIslandViews.swift`、`apple/JarvisWidgets/FleetLiveActivity.swift`）
+**做法**（`IslandGlyph`、`IslandSide`，`apple/LiveActivity/FleetIslandViews.swift`、`apple/PersonaWidgets/FleetLiveActivity.swift`）
 
 - 最小态和限宽时的 leading 是同一个图形：最急的那一类（需要你 > 在工作 > 做完未看），完整显示，不受「样式」设置影响；限宽时 trailing 为空，系统把它藏掉。
   非限宽的紧凑态照旧按设置显示两侧。
@@ -114,7 +114,7 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 - 「出错」：Fleet 没有单独的出错状态，最接近的是 hub 断了导致内容过期，所以过期用离线（灰）。
 - 「思考中」：Fleet 分不出 Agent 在思考还是在写，只有助手在回答时才用；`assistant` 只推给灵动岛显示助手的设备，别的设备看到的是空闲。
 - **不动，只在状态变时淡入淡出**：实时活动里 TimelineView、重复的 symbol 动画都不跑（见「坑」），所以画的是每个状态的静止帧（和「减弱动态效果」时 App 里的一样，`PersonaFace(moving: false)`），状态变时 `.transition(.opacity)`。不用位图序列帧，不为动画加推送。
-- **画法共用**：面罩、汇流的绘制在 `apple/Shared/Design/PersonaFace.swift`，App 的 `JarvisAvatar` 在外面套 TimelineView 让它动，扩展直接画静止帧；扩展只多编译这一个文件。
+- **画法共用**：面罩、汇流的绘制在 `apple/Shared/Design/PersonaFace.swift`，App 的 `AssistantAvatar` 在外面套 TimelineView 让它动，扩展直接画静止帧；扩展只多编译这一个文件。
 - **选的哪个、什么颜色**：扩展读不到 App 的设置。`FleetLook` 是形象的画法 + 主色的浅色 / 深色值，形象包再加 `<id>/<rev>`。
   它放在实时活动的内容里（`FleetState.look`，build 99 之后）：
   - App 自己更新活动时带上它；

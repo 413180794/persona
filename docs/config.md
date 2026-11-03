@@ -4,7 +4,7 @@
 
 | 配置 | 位置 | 谁读 | 管什么 |
 | --- | --- | --- | --- |
-| 构建 / 部署配置 | 开发机上的 `~/.config/persona/config.json`（可用 `PERSONA_CONFIG` 指到别处，旧 `JARVIS_CONFIG` 兼容），模板是仓库根目录的 `config.example.json` | `scripts/*`（经 `scripts/jarvis_config.py`）、XcodeGen（经生成的 `apple/Config.xcconfig`） | App 的 bundle id 和团队、App Store Connect 账号、TestFlight 测试员、hub 在哪台机器 / 地址、要部署的机器、模拟器 |
+| 构建 / 部署配置 | 开发机上的 `~/.config/persona/config.json`（可用 `PERSONA_CONFIG` 指到别处，旧 `JARVIS_CONFIG` 兼容），模板是仓库根目录的 `config.example.json` | `scripts/*`（经 `scripts/persona_config.py`）、XcodeGen（经生成的 `apple/Config.xcconfig`） | App 的 bundle id 和团队、App Store Connect 账号、TestFlight 测试员、hub 在哪台机器 / 地址、要部署的机器、模拟器 |
 | hub 运行配置 | hub 所在机器的 `~/.persona/hub.json`（0600，含 token、数据库密码，第一次运行 `personad hub` 自动生成） | `personad hub` | 监听地址、对外地址、接入哪些机器、助手是谁的助手和它该知道什么、Gmail 代理、AI 网关、lark-connector |
 
 配置放在仓库外面：发布在干净的 worktree 里跑（`docs/release.md`），worktree 里没有仓库外的东西就会缺；也避免误提交。
@@ -20,7 +20,12 @@
 | 默认运行目录 | `~/.persona` | `~/.jarvis`；升级时保留原配置、密钥、知识库和配对身份 |
 | 默认构建 / 部署配置 | `~/.config/persona/config.json` | `~/.config/jarvis/config.json` |
 | 配置文件覆盖 | `PERSONA_CONFIG` | `JARVIS_CONFIG` |
-| 已迁移的环境变量 | 对应的 `PERSONA_*` | `JARVIS_*`；新旧同时提供时新名优先 |
+| 已迁移的环境变量 | 对应的 `PERSONA_*` | `JARVIS_*`；新旧同时提供时新名优先，包括显式空值 |
+| 配置脚本 | `scripts/persona_config.py` | `scripts/jarvis_config.py` 软链到同一实现 |
+| 服务运行根解析器 | `scripts/persona_identity.py --service hub\|node\|link` | 恢复该角色已安装服务的根，不读构建配置或凭据；旧无根 Environment 的服务继续原默认存储 |
+| DEBUG App 命令工具 | `scripts/app/personactl.py` | `scripts/app/jarvisctl.py` 同一实现，原命令与缓存位置保留 |
+
+源码路径、Xcode 工程 / scheme 与系统身份的完整清单见 [兼容迁移](rename.md#源码位置构建入口与兼容名字)。#773 的 [按服务恢复运行目录](rename.md#部署脚本按服务恢复运行目录) 说明 role、reset / drop-in / XDG、SameFile 和外部 EnvironmentFile / UnsetEnvironment 的边界；后两者需要显式指定实际根，不读取外部凭据。新旧 URL scheme 的接收与旧格式生成分别验证，不以文档改名代替客户端验收。
 
 旧目录的兼容和迁移由运行时 / 安装器负责。升级前备份实际使用的数据目录与 Postgres；不要仅为改名手动删除旧目录、合并两份目录或重新生成密钥。两套目录已经同时存在、或者使用自定义路径时，先确认实际加载的是哪一份，避免启动一个空 hub。文档中的历史测量、签名 profile、源码路径、包 ID、协议字段、缓存键以及 systemd / launchd 名称仍可能保留 Jarvis；它们不是新的对外产品名，也不应靠全文替换迁移。
 
@@ -140,12 +145,12 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
 | `publish.site_url` | `publish.sh` 把 `personad` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 personad」）；不写就不发布 |
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
-| `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`jarvis_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
+| `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`persona_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
 | `android.application_id` | Android App 的 application id（`scripts/app/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
 | `android.google_oauth_scheme` | Android App 接 Gmail 的 Google 登录回调用的 scheme：hub `google.client_id` 的反向 client ID（`docs/mail.md`「Android」）；不写就只能用应用专用密码加 Gmail |
 
-`python3 scripts/jarvis_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `apple/Config.xcconfig`；
-`sim.sh` / `release.sh` 会自动生成。直接跑 `xcodegen` 或打开 Xcode 之前先跑一次 `python3 scripts/jarvis_config.py xcconfig`。
+`python3 scripts/persona_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `apple/Config.xcconfig`；
+`sim.sh` / `release.sh` 会自动生成。直接跑 `xcodegen` 或打开 Xcode 之前先跑一次 `python3 scripts/persona_config.py xcconfig`。
 仓库里提交的 `project.yml` 和 `Info.plist` 只写 `$(JARVIS_BUNDLE_ID)` / `$(PRODUCT_BUNDLE_IDENTIFIER)`，钥匙串的 service 用运行时的 bundle id。
 
 ## Codex app-server 多实例

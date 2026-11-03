@@ -1,6 +1,6 @@
 # macOS App
 
-原生 macOS 版 Persona（`apple/` 里的 `JarvisMac` target）：和 iOS App 同一套逻辑层（`Shared/`、`Jarvis/App`）和内容视图，
+原生 macOS 版 Persona（`apple/` 里的 `PersonaMac` target，旧 `JarvisMac` scheme 指向它）：和 iOS App 同一套逻辑层（`Shared/`、`Persona/App`）和内容视图，
 外面是 Mac 自己的壳（`apple/Mac/`）：窗口、侧边栏、工具栏、菜单、快捷键、设置窗口、菜单栏。目标是 iOS App 的全部功能一个不少，
 交互按 macOS 原生的方式做，滚动和动画 60 fps 起（ProMotion 屏 120 fps）。
 
@@ -100,18 +100,18 @@
     停在体验模式默认打开的收件箱是 0。来源是「需要你」圆点的呼吸圈（`StatusDot`）：iOS 用 30 Hz 的 `TimelineView` 画，
     Mac 上每一帧都让托管视图重新算约束、整个窗口重新布局。Mac 改成 Core Animation 画同一个圈（`Mac/Design/MacBreathingRing.swift`，
     同样的缓动、最多 30 帧、所有圆点同相），同一条量法降到 0.1%。只量了 App 进程；锁屏时 WindowServer 不合成窗口，它那边的开销没量。
-    同类没改的：Persona 形象（`JarvisAvatar`）在思考中、工作中、需要你时也是 `TimelineView(.animation)`，BeautifulUI 风格下工作中的
+    同类没改的：Persona 形象（`AssistantAvatar`）在思考中、工作中、需要你时也是 `TimelineView(.animation)`，BeautifulUI 风格下工作中的
     `SpinningArc`、`repeatForever` 动画，在 Mac 上会不会同样整窗重排，没量。
 
 ## 构建、运行、截图
 
 ```sh
 cd apple
-python3 ../scripts/jarvis_config.py xcconfig && xcodegen generate
-eval "$(python3 ../scripts/jarvis_config.py env)"
-xcodebuild build -project Jarvis.xcodeproj -scheme JarvisMac -configuration Debug -destination "platform=macOS" \
+python3 ../scripts/persona_config.py xcconfig && xcodegen generate
+eval "$(python3 ../scripts/persona_config.py env)"
+xcodebuild build -project Persona.xcodeproj -scheme PersonaMac -configuration Debug -destination "platform=macOS" \
   -derivedDataPath ../../build/DerivedDataMac CODE_SIGNING_ALLOWED=NO
-open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑 Contents/MacOS/Jarvis 带启动参数
+open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接跑 Contents/MacOS/Persona 带启动参数
 ```
 
 - 配置里没有 `app.bundle_id` 时编出来的 App 一启动就崩（Info.plist 没有 bundle id），本机自用可以在 xcodebuild 后面加 `JARVIS_BUNDLE_ID=<反向域名>`（`docs/lessons/macos.md`）。
@@ -187,7 +187,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 
 Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要你」「做完了」两组（和菜单栏列表同一个排序，各最多 8 个，点一下打开对话），再是「新建 Agent 对话…」。
 
-`apple/Mac/App/MacAttention.swift`、`MacMenuBar.swift`，测试 `apple/JarvisMacTests`（`JarvisMac` scheme 的 test）。
+`apple/Mac/App/MacAttention.swift`、`MacMenuBar.swift`，测试 `apple/PersonaMacTests`（`JarvisMac` scheme 的 test）。
 
 - App 开着、连着 hub 时：`MacAttentionWatcher` 盯着 AppModel 的会话列表（WebSocket 一直连着），
   有 Agent 刚变成「需要你」/「完成未看」就发一条本地通知，规则和 hub 给手机推送的一样，读同一份 设置 › 通知（`NotifyPrefs`：需要你处理时、
@@ -205,7 +205,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 
 ## 远程推送（Mac）
 
-2026-11-02 起（#420）。`apple/Jarvis/App/PushRegistrar.swift`（和 iPhone 共用）、`MacAppDelegate`，hub 在 `hub/push.go`、`hub/desktops.go`。
+2026-11-02 起（#420）。`apple/Persona/App/PushRegistrar.swift`（和 iPhone 共用）、`MacAppDelegate`，hub 在 `hub/push.go`、`hub/desktops.go`。
 
 - **账号**：iPhone 和 Mac 是同一个 bundle id，App ID 是 UNIVERSAL、本来就开着 Push Notifications，开发者账号不用改。
   entitlement 在 macOS 上叫 `com.apple.developer.aps-environment`（`project.yml`）；本机编的不签名的版本没有它，注册失败、只有本地通知。
@@ -220,7 +220,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 - **退出**：在 iPhone 上退出这台 Mac（或 设置 › 设备 里撤销）时，hub 连它登记的推送设备一起删掉（登记时记下了是哪个设备凭据），之后不再推；
   它的通知设置也跟着没了，重新配对从默认值开始。iPhone 的撤销也一样。
 - **推送中继**（2026-11-02 起，#432）：没有自己 APNs key 的 hub 走中继，正文是密文（`docs/push-relay.md`），由 Mac 的通知服务扩展
-  `JarvisMacNotify` 解密后再显示（和 iPhone 的 `JarvisNotify` 同一份代码、同一个 Info.plist、同一个 bundle id `<bundle id>.notify`，App ID 是 UNIVERSAL）。
+  target `PersonaMacNotify`（module 仍为 `JarvisNotify`）解密后再显示（和 iPhone 的 `PersonaNotify` target 同一份代码、同一个 Info.plist、同一个 bundle id `<bundle id>.notify`，App ID 是 UNIVERSAL）。
   - 为什么不在 App 里解密：hub 不给连着的 Mac 推提醒，中继推来的只会在 App 关着或断开时到，系统直接显示，App 改不了内容。
   - 私钥在 App 和扩展共用的钥匙串组 `<team>.<bundle id>.push`（两边的 `keychain-access-groups`）。macOS 上 `PushCrypto` 要加
     `kSecUseDataProtectionKeychain`：默认的老式文件钥匙串不认访问组，条目只属于创建它的 App，扩展读不到，只能显示「有新消息」。
@@ -404,7 +404,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 
 ## 0. App shell / navigation
-- [x] 4 tabs with badges: Persona (pending assistant questions), Agents (pending interactions, excluding muted), 收件箱 (inbox action count), 设置 (「体验」 badge in demo) — Jarvis/Views/RootView.swift
+- [x] 4 tabs with badges: Persona (pending assistant questions), Agents (pending interactions, excluding muted), 收件箱 (inbox action count), 设置 (「体验」 badge in demo) — Persona/Views/RootView.swift
   - Mac（2026-11-01 核对）：侧边栏角标和 RootView 同口径，截图里 Agents 2、收件箱 3、设置「体验」；体验数据里没有助手的待答问题，所以 Persona 没有角标，是对的。
 - [x] Toast overlay (success / info-blue / error), haptics (success/warning/error) — Views/RootView.swift (ToastOverlay), App/AppModel.swift。Mac：浮层照常（拖入、链接拷贝等截图里看过），没有触感
 - [x] Rebuild whole tree when style/persona changes, keep tab + open chat — Views/RootView.swift
@@ -413,13 +413,13 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：Mac 上 `horizontalSizeClass` 恒为 regular，只走 NavigationSplitView（compact 本来就走不到）；2000pt 宽窗口截图里列表栏约 400pt，对话在详情栏、没有返回箭头。
 - [x] Readable width cap (chat 760pt, welcome 560pt) — Views/Chat/ChatView.swift, Shared/Design/Theme.swift
   - Mac（2026-11-01 核对）：2000pt 宽窗口截图：对话栏约 760pt 居中，欢迎页（`-openWelcome`）约 560pt 居中。
-- [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/JarvisApp.swift。Mac：`MacOpenURL`（有测试），open 打开那个对话（从别的页面也切过去，`-macOpenURL <链接>` 验过），pair 只在没配对 / 体验模式时接受；对话里的 jarvis:// 链接仍只拷贝（LinkPolicy）。外面来的链接交给已经开着的主窗口（`handlesExternalEvents`）：以前每来一个链接就多开一个主窗口（`open -a Jarvis.app jarvis://…` 两次 → 3 个，`-macWindowLog YES` 记数）
-- [x] Scene phase: reconnect + refresh on active, disconnect socket on background — App/JarvisApp.swift
+- [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/PersonaApp.swift。Mac：`MacOpenURL`（有测试），open 打开那个对话（从别的页面也切过去，`-macOpenURL <链接>` 验过），pair 只在没配对 / 体验模式时接受；对话里的 jarvis:// 链接仍只拷贝（LinkPolicy）。外面来的链接交给已经开着的主窗口（`handlesExternalEvents`）：以前每来一个链接就多开一个主窗口（`open -a Jarvis.app jarvis://…` 两次 → 3 个，`-macWindowLog YES` 记数）
+- [x] Scene phase: reconnect + refresh on active, disconnect socket on background — App/PersonaApp.swift
   - Mac（2026-11-03 Mac mini 真窗口：执行者操作，开发会话看假 hub 的请求日志）：⌘H 隐藏期间一个请求都没有；带回前台后依次 GET machines / interactions / sessions / pins / mutes / fleet（`refresh()`）。在后台不断开 WebSocket 是 Mac 有意的（见「阶段 0」）。断线重连（2026-11-03 第 5 批）：假 hub `GET /mock/down?s=20` 断开所有连接、20 秒不应答，4 秒后侧栏底部和头像下都是转圈加「连接中…」；随即 ⌘H 隐藏，等 25 秒，假 hub 恢复后隐藏期间 App 自己重连上 `/api/v1/ws`，带回前台再拉一遍 pins / interactions / sessions / machines / fleet，「连接中…」消失、内容和隐藏前一样。
 - [x] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
   - 要到 Mac 前看：在对话里往上翻，⌘Q 后重开，看是不是回到同一行（⌘Q 不一定触发 onDisappear）。只带 `-app.tab chats -dev.openChat …` 启动时回到了 Agents 和那个对话，tab 和对话的恢复看过。
   - Mac（2026-11-03 Mac mini 真窗口）：⌘Q 后不带参数重开，回到 Agents 和上次打开的对话；同一次运行里切到别的对话再切回来，回到原来看的那一行。冷启动后的阅读位置原来停在最底部（#597：冷启动只有最近两轮，找不到那一行就放弃），修好后（2026-11-03）离屏截图复验：假 hub 像真 hub 一样分页（`/mock/paging?on=1`），先打开一次写下缓存，再带 `-chat.read.<会话> <「第 5 个问题」的行 id>` 冷启动，落在第 4–9 轮（修之前是第 15 轮和最底部）；iOS 上 `ChatFollowTests` 的冷启动用例管着。
-- [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/JarvisApp.swift + views
+- [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/PersonaApp.swift + views
   - Mac 上截图一直靠它们：`-tab`、`-openSession`、`-openTerminal`、`-openTerminalSettings`、`-openAssistantPage`、`-showInboxAction`、`-showNewChat`、`-addMail`、`-openWelcome`、`-showKnowledgeEntry` 都试过；Mac 自己的另见各节（`-macSection`、`-macAgentAsk`、`-openChatWindow`、`-macWindowLog`…）。
 
 ## 1. Persona tab (assistant)
@@ -443,7 +443,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac 上没有：窗口恒为 regular，侧栏是分栏的一列加开关按钮；抽屉（`AssistantDrawer+Mac.swift`）没有拖动，而且主窗口里走不到（`horizontalSizeClass` 恒为 regular，窗口再窄也是分栏），`DrawerPan` / `DrawerProbe` 只在 iOS 编译。
 - [x] Regular width: sidebar = split view left column, toggle button — AssistantView.swift, SplitNavigation.swift
   - Mac（2026-11-01 核对）截图：Persona 侧栏是 NavigationSplitView 的左栏，顶部右侧有开关按钮。
-- [x] Persona avatar (mask face, eyes move when working) — Views/Assistant/JarvisAvatar.swift
+- [x] Persona avatar (mask face, eyes move when working) — Views/Assistant/AssistantAvatar.swift
   - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：打开工作中、还没有回复的对话（「思考中」），顶栏头像上方思考泡泡里的三个点轮流动，连拍几张各不相同；空闲的主对话上不动。工作中的眼睛（2026-11-03 离屏截图，`-showPersonaState working`，启动后第 5 / 5.4 / 5.8 / 6.3 秒各拍一张，裁出头像放大）：两只眼睛第 5 秒偏左、5.4 秒偏右、6.3 秒居中，在左右扫。
 - [x] Profile page: identity, machine, online/working, 「接下来」 3 items, 主动做事 (tasks, run history), 了解你 (关于我, 记忆), 设置 (launcher, 管理启动器), capabilities list — Views/Assistant/AssistantProfileView.swift (AssistantProfileView, AssistantUpcomingRow, AssistantRunsView, AssistantRunRow)
   - Mac 截图看到（1280×1500 窗口）：身份、所在机器、在线 + 下一件、接下来 3 项、主动做事（定时任务、运行记录）、了解你（关于我、记忆）、设置（启动器、管理启动器），底部的能力列表 2026-11-01 核对时也看到了。
@@ -776,17 +776,17 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Request permission + APNs registration, POST /devices — App/PushRegistrar.swift (registerIfPossible；iOS 和 Mac 共用)
   - Mac（2026-11-02）：`com.apple.developer.aps-environment`，`MacAppDelegate` 收 token，以 kind `mac` 登记（「远程推送（Mac）」）；也登记推送中继，`JarvisMacNotify` 解密（#432）。要用 TestFlight 包在真 Mac 上验证。
 - [x] Categories INTERACTION_PERMISSION (允许 auth-required / 拒绝) and INTERACTION_PLAN (批准 / 打回修改 text input) — App/NotificationActions.swift
-- [ ] Background resolve from action, failure local notification — App/JarvisApp.swift (resolveFromNotification)
+- [ ] Background resolve from action, failure local notification — App/PersonaApp.swift (resolveFromNotification)
   - 要到 Mac 前看：有 Agent 等授权时，悬停系统通知 › 选项 › 允许，hub 处理掉、窗口不出来；hub 断开时再来一次，应出一条失败通知。读代码：`MacAppDelegate` 走和 iOS 一样的 `NotificationActions.resolution` / `reportFailure`，`NotificationActionsTests` 在 Mac 上通过。
-- [x] Tap opens session (main-queue completion handler), suppress while viewing — JarvisApp.swift（Mac：`MacAppDelegate`，本地通知见「菜单栏、Dock 角标、通知」）
-- [ ] Silent push handling (wake / disconnect) — JarvisApp.swift
+- [x] Tap opens session (main-queue completion handler), suppress while viewing — PersonaApp.swift（Mac：`MacAppDelegate`，本地通知见「菜单栏、Dock 角标、通知」）
+- [ ] Silent push handling (wake / disconnect) — PersonaApp.swift
   - Mac 上没有：静默唤醒是叫醒 iPhone 跑 phone_* 工具的，hub 不发给 Mac；App 开着时 WebSocket 一直连着，`MacAttentionWatcher` 按会话列表发本地通知。
 - [x] Settings: 需要你处理时, Agent 做完时 (不推送/只推长任务/每次都推), per-device prefs on hub, system-disabled warning + open settings — Views/Settings/NotificationSettingsView.swift
   - Mac（2026-11-01 核对）：截图看到「通知没有打开」+ 系统通知设置、需要你处理时、Agent 做完时三选一；在假 hub 上改这台设备的设置（PUT …/prefs）后页面跟着变，`NotifyPrefsTests` 在 Mac 上通过。在页面上点选写回 hub 没试。
 
 ## 19. Live Activity
-- [x] Fleet activity (needsYou/working/done), push-to-start + push token upload, start/update/end (1 min grace), stale handling — App/LiveActivityController.swift, LiveActivity/JarvisActivityAttributes.swift, Shared/FleetState.swift（Mac：菜单栏 `MacMenuBar`，从会话列表算，不用 fleet 推送）
-- [ ] Lock screen + Dynamic Island views, watch smart stack — JarvisWidgets/FleetLiveActivity.swift, LiveActivity/FleetIslandViews.swift
+- [x] Fleet activity (needsYou/working/done), push-to-start + push token upload, start/update/end (1 min grace), stale handling — App/LiveActivityController.swift, LiveActivity/PersonaActivityAttributes.swift, Shared/FleetState.swift（Mac：菜单栏 `MacMenuBar`，从会话列表算，不用 fleet 推送）
+- [ ] Lock screen + Dynamic Island views, watch smart stack — PersonaWidgets/FleetLiveActivity.swift, LiveActivity/FleetIslandViews.swift
   - Mac 上没有：macOS 没有 ActivityKit、锁屏实时活动、灵动岛和手表智能叠放；对应的是菜单栏图标（上面 Fleet 那条）。
 - [x] Buttons: Allow/Deny permission, Approve plan (LiveActivityIntent run in app) — LiveActivity/FleetIntents.swift, App/FleetActions.swift（Mac：菜单栏的子菜单）
 - [ ] Island settings (presets A/B/C/custom, load machine, previews), lock details toggle — Views/Settings/IslandSettingsView.swift, NotificationSettingsView.swift
@@ -795,7 +795,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 ## 20. Siri / App Intents
 - [ ] 问 Claude (machine param, new session, returns OpenSession) — Intents/AskClaudeIntent.swift
   - 要到 Mac 前看：在 Mac 的「快捷指令」App 里跑「问 Claude」，填一句、选机器，那台机器上开了新会话。`IntentsTests`（机器优先用记住的、退到在线的；发出去的说法）在 Mac 上通过。
-- [ ] Persona 状态 — Intents/JarvisStatusIntent.swift
+- [ ] Persona 状态 — Intents/PersonaStatusIntent.swift
   - 要到 Mac 前看：在快捷指令里跑「Persona 状态」，读出来的数量和侧栏一致。对应的 `IntentsTests` 在 Mac 上通过。
 - [ ] 批准第一个待处理 — Intents/ApproveFirstIntent.swift
   - 要到 Mac 前看：有授权或计划等着时在快捷指令里跑「批准第一个待处理」，等得最久的那个被批准，回复说清做了什么。对应的 `IntentsTests` 在 Mac 上通过。
@@ -803,7 +803,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 要到 Mac 前看：侧栏选着「机器」时从快捷指令跑「打开会话」，Persona 到前台、Agents 里打开那个对话。对应的 `IntentsTests` 在 Mac 上通过。
 - [ ] MachineEntity query — Intents/MachineEntity.swift
   - 要到 Mac 前看：在快捷指令里编辑「问 Claude」的机器参数，列表里是你的各台电脑并标在线 / 离线。查询要问 hub，得在快捷指令的选择器里看。
-- [x] Shortcuts phrases — Intents/JarvisShortcuts.swift; texts / picker / errors — Intents/IntentSupport.swift
+- [x] Shortcuts phrases — Intents/PersonaShortcuts.swift; texts / picker / errors — Intents/IntentSupport.swift
   - Mac（2026-11-01 核对）：Mac 构建的 `Metadata.appintents` 有 3 条带 App 名的自动短语；IntentSupport 的说法、等待提示、失败和 hub 报错的句子在 `IntentsTests` 里跑。JarvisMacTests 现在也编进 `IntentsTests`、`KnowledgeTests`、`MachineMetricsTests`、`NotificationActionsTests`、`NotifyPrefsTests`（`apple/project.yml`），都通过。
   Mac：同一份代码编进 JarvisMac，构建产物的 `Metadata.appintents` 里有这 4 个动作、3 条自动短语、`MachineEntity` / `SessionEntity`（2026-11-01 查过）；
   「打开会话」在 Mac 上清掉 知识库 / 机器 的侧栏覆盖再打开对话。还没在 Mac 的「快捷指令」App 里实际跑过。
@@ -850,7 +850,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：设备列表、本机 / 只能回答 chip、撤销、已撤销分组截图看过（假 hub）；Mac 原来按 kind "phone" 换凭据、被列成 iPhone，现在要 "desktop"（`MacDeviceCredentialTests`），hub 存成 "other"。要到 Mac 前看：真配对一次，设置 › 设备 里这台 Mac 显示电脑图标、撤销会确认（`-pairURL` 启动不换凭据，截图里看不到）。
 - [ ] 重新配对, 断开并忘记服务器 — SettingsView.swift
   - 要到 Mac 前看：点「重新配对」看 sheet 弹出；点「断开并忘记服务器」确认后回到欢迎页。两个按钮在设置 › 服务器 的截图里。
-- [x] Sync to Apple Watch (WCSession) — Shared/WatchSync.swift, SettingsView.swift; watch app — JarvisWatch/JarvisWatchApp.swift (macOS: n/a)
+- [x] Sync to Apple Watch (WCSession) — Shared/WatchSync.swift, SettingsView.swift; watch app — PersonaWatch/PersonaWatchApp.swift (macOS: n/a)
   - Mac（2026-11-01 核对）：Mac 不和手表配对，`WatchSync` 是空的；设置里原来还显示「同步到 Apple Watch」、点了提示已发送，现在只在 iOS 显示（深浅色截图看过）。
 
 ## 24. Offline / outbox / connection
@@ -901,15 +901,15 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 
 
-## UIKit dependencies (`Jarvis/App` and `Shared`)
+## UIKit dependencies (`Persona/App` and `Shared`)
 
 | File | What it uses |
 | --- | --- |
-| `Jarvis/App/AppModel.swift` | `UIImpactFeedbackGenerator`, `UINotificationFeedbackGenerator` (haptics), `UIImage` (`composerInbox`), `UIDevice.current` |
-| `Jarvis/App/JarvisApp.swift` | `UIApplicationDelegate` / `UIApplicationDelegateAdaptor`, `UIApplication.shared` (`registerForRemoteNotifications`, `applicationState`, background task id), `UIBackgroundFetchResult` (silent push), `didEnterBackgroundNotification`, `UIDevice.current` |
-| `Jarvis/App/LiveActivityController.swift` | `UIApplication.shared` (foreground state) |
-| `Jarvis/App/PerfSignpost.swift` | `UIView`, `UIViewRepresentable`, `UITraitCollection` (debug probe) |
-| `Jarvis/App/DeviceCredentials.swift` | `UIDevice.current` (device name) |
+| `Persona/App/AppModel.swift` | `UIImpactFeedbackGenerator`, `UINotificationFeedbackGenerator` (haptics), `UIImage` (`composerInbox`), `UIDevice.current` |
+| `Persona/App/PersonaApp.swift` | `UIApplicationDelegate` / `UIApplicationDelegateAdaptor`, `UIApplication.shared` (`registerForRemoteNotifications`, `applicationState`, background task id), `UIBackgroundFetchResult` (silent push), `didEnterBackgroundNotification`, `UIDevice.current` |
+| `Persona/App/LiveActivityController.swift` | `UIApplication.shared` (foreground state) |
+| `Persona/App/PerfSignpost.swift` | `UIView`, `UIViewRepresentable`, `UITraitCollection` (debug probe) |
+| `Persona/App/DeviceCredentials.swift` | `UIDevice.current` (device name) |
 | `Shared/StatusPalette.swift` | `UIColor` dynamic provider + `UIColor(hex:)` extension (`#if !os(watchOS)`) |
 | `Shared/Design/Theme.swift` | `Color(uiColor:)` with `.systemBackground`, `.secondarySystemBackground`, `.quaternary/tertiary/secondarySystemFill` |
 | `Shared/WatchSync.swift` | WatchConnectivity, not UIKit (`#if os(iOS)` / `os(watchOS)` branches) |
@@ -938,7 +938,7 @@ There are also many iOS-only SwiftUI modifiers: `navigationBarTitleDisplayMode`,
 | Framework | Used in |
 | --- | --- |
 | HealthKit | `PhoneTools/HealthTool.swift`, `PhoneAccess.swift`, `PhoneToolRegistry.swift` |
-| ActivityKit | `App/LiveActivityController.swift`, `Views/Settings/NotificationSettingsView.swift`, `LiveActivity/JarvisActivityAttributes.swift`, `JarvisWidgets/FleetLiveActivity.swift` (WidgetKit too) |
+| ActivityKit | `App/LiveActivityController.swift`, `Views/Settings/NotificationSettingsView.swift`, `LiveActivity/PersonaActivityAttributes.swift`, `PersonaWidgets/FleetLiveActivity.swift` (WidgetKit too) |
 | WatchConnectivity | `Shared/WatchSync.swift`, `App/DeviceCredentials.swift` |
 | PhotosUI (`PhotosPicker`) | `Views/Chat/ChatView.swift`, `Views/Assistant/AssistantView.swift` |
 | Photos | `PhoneTools/PhotosTool.swift`, `PhoneAccess.swift`, `PhoneToolRegistry.swift`, `Views/Chat/ImageViewer.swift` (save), `Views/Chat/ShareCard.swift` (save) |
@@ -948,8 +948,8 @@ There are also many iOS-only SwiftUI modifiers: `navigationBarTitleDisplayMode`,
 | CoreLocation | `PhoneTools/LocationTool.swift`, `PhoneAccess.swift`, `PhoneToolRegistry.swift` |
 | Contacts | `PhoneTools/ContactsTool.swift`, `PhoneAccess.swift`, `PhoneToolRegistry.swift` |
 | EventKit | `PhoneTools/CalendarTool.swift`, `RemindersTool.swift`, `PhoneAccess.swift`, `PhoneToolRegistry.swift` |
-| AppIntents | `Jarvis/Intents/*.swift` (7 files), `LiveActivity/FleetIntents.swift` |
-| UserNotifications | `App/AppModel.swift`, `App/FleetActions.swift`, `App/JarvisApp.swift`, `App/NotificationActions.swift`, `PhoneTools/NotificationsTool.swift`, `PhoneAccess.swift`, `PhoneToolRegistry.swift`, `Views/Settings/NotificationSettingsView.swift` |
+| AppIntents | `Persona/Intents/*.swift` (7 files), `LiveActivity/FleetIntents.swift` |
+| UserNotifications | `App/AppModel.swift`, `App/FleetActions.swift`, `App/PersonaApp.swift`, `App/NotificationActions.swift`, `PhoneTools/NotificationsTool.swift`, `PhoneAccess.swift`, `PhoneToolRegistry.swift`, `Views/Settings/NotificationSettingsView.swift` |
 | WebKit | `Views/Link/LinkSheet.swift`, `Views/Mail/MailViews.swift`, `Views/Settings/StorageView.swift` |
 | Other | QuickLook and AVKit in `Views/Inbox/Lark/LarkMedia.swift`; PDFKit in `Views/Chat/FileViewer.swift`; Charts in `Lark/LarkCard.swift` and `Machines/MetricCharts.swift`; NaturalLanguage in `App/Translator.swift`; Network (`NWPathMonitor`) in `App/ConnectionStatus.swift` and `PhoneTools/DeviceTool.swift`; ImageIO in `Persona/PersonaStore.swift` and `LarkMedia.swift`; AuthenticationServices via the SwiftUI `webAuthenticationSession` for Google sign-in in `Views/Mail/MailViews.swift`; UniformTypeIdentifiers in `Chat/FileAttach.swift` |
 
