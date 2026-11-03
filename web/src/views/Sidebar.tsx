@@ -20,6 +20,7 @@ import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
+import { hubMenuItems, useHubs } from "./Hubs";
 
 function useFolded(key: string, initial = false): [boolean, () => void] {
   const [v, setV] = useState(() => {
@@ -397,6 +398,7 @@ function FilterBar({ selection, counts, onChoose }: { selection: AgentFilter; co
 function AccountRow({ conn, online, total }: { conn: string; online: number; total: number }) {
   const menu = useMenu();
   const theme = useTheme();
+  const otherHubs = hubMenuItems(useHubs());
   const themes: { k: Theme; label: string; icon: IconName }[] = [
     { k: "system", label: "跟随系统", icon: "monitor" },
     { k: "light", label: "浅色", icon: "sun" },
@@ -433,7 +435,9 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
           header="外观"
           items={[
             ...themes.map((t) => ({ key: t.k, label: t.label, icon: t.icon, checked: theme === t.k, onSelect: () => setTheme(t.k) })),
-            { key: "settings", label: "设置", icon: "gear", onSelect: () => navigate({ name: "settings" }) },
+            // the other hubs in this browser's list (#1014); none, and the menu is as before
+            ...otherHubs,
+            { key: "settings", label: "设置", icon: "gear", divider: otherHubs.length > 0, onSelect: () => navigate({ name: "settings" }) },
             { key: "logout", label: "断开这个浏览器", icon: "logout", danger: true, onSelect: () => void logout() },
           ]}
         />

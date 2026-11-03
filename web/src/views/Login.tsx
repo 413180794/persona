@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { errorText } from "../lib/api";
 import { pair } from "../lib/auth";
+import { rememberHub } from "../lib/hubs";
 import { Button, Spinner } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { OtherHubs } from "./Hubs";
 
 // Pair with the hub's token (`jarvisd hub pair` prints it) or a device token (lib/auth.ts). `error` is what went
 // wrong with a token that came in the link.
@@ -10,6 +12,7 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
   const [token, setTok] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(linkError);
+  useEffect(() => void rememberHub(location.origin), []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +64,7 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
           {error}
         </p>
         <p className="text-center text-[11.5px] leading-relaxed text-ink-3">这个浏览器会拿到自己的凭据，可以在手机上的「设置 › 设备」里随时撤销。</p>
+        <OtherHubs />
       </form>
     </div>
   );

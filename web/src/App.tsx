@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
 import { pair, takeToken } from "./lib/auth";
+import { acceptHubs, rememberHub, takeHubs } from "./lib/hubs";
 import { closePanel, getPanel } from "./lib/panel";
 import { useRoute } from "./lib/router";
 import { connect, disconnect, reset, useStore } from "./lib/store";
@@ -30,6 +31,14 @@ import { TodosView } from "./views/Todos";
 // before anything else runs (history, bookmarks, a copied link), and is traded for this browser's own one.
 const linked = typeof window === "undefined" ? null : takeToken(window.location.href);
 if (linked) window.history.replaceState(window.history.state, "", linked.rest);
+
+// Switching from another hub's page hands its list of hubs over in the fragment (`#hubs=`, lib/hubs.ts): take it into
+// this browser's list and out of the address bar the same way.
+const carried = typeof window === "undefined" ? null : takeHubs(window.location.href);
+if (carried) {
+  acceptHubs(carried.hubs);
+  window.history.replaceState(window.history.state, "", carried.rest);
+}
 
 export function App() {
   const [authed, setAuthed] = useState(() => !linked?.token && Boolean(getToken()));
@@ -81,6 +90,9 @@ export function App() {
 function Shell() {
   const route = useRoute();
   const conn = useStore((s) => s.conn);
+  // this hub goes on the list of hubs to switch between, under the name it gives itself
+  const hubName = useStore((s) => s.hubName);
+  useEffect(() => void rememberHub(location.origin, hubName), [hubName]);
   const launch = useStore((s) => route.name === "session" ? s.launches[route.sid] : undefined);
   const starting = useStore((s) => route.name === "session" ? (s.sessions[route.mid] ?? []).find((session) => session.session_id === route.sid)?.starting : undefined);
   const [palette, setPalette] = useState(false);

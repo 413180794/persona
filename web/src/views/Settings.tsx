@@ -8,6 +8,7 @@ import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from ".
 import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { Group, Row, Pill } from "./settings/SettingsParts";
+import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
 import { AgentSettings } from "./settings/AgentSettings";
 import { AssistantSettings } from "./settings/AssistantSettings";
@@ -207,6 +208,7 @@ function General({ onConfigure }: { onConfigure: () => void }) {
         <Row label="运行在">{machineName ?? "—"}</Row>
       </Group>
 
+      <HubList />
       <About />
     </>
   );
