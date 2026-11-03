@@ -299,15 +299,6 @@ private struct AgentsList: View {
     /// The agents, the questions and the machines the list shows (`AgentsFeed`): held still while it is scrolled or
     /// out of sight.
     @State private var feed = AgentsFeed()
-    /// Where the scrolling is (not observed: starting or stopping a scroll does not draw the list again).
-    @State private var scroll = ScrollState()
-    /// How long the list rests before what the hub sent meanwhile lands (docs/ios-state.md「及时性」).
-    private static let settle = Duration.milliseconds(500)
-
-    private final class ScrollState {
-        var phase = ScrollPhase.idle
-        var scrolling = false
-    }
 
     /// The machines and agents the rows name, as the body last saw them (`Lookup`).
     @State private var lookup = Lookup()
@@ -623,21 +614,10 @@ private struct AgentsList: View {
             #if os(iOS) && (DEBUG || PERF_SIGNPOST)
             PerfScroll.mark("Agents list \(phase)")
             #endif
-            scroll.phase = phase
-            if phase != .idle {
-                feed.reader.cancel()
-                scroll.scrolling = true
-                feed.hold(true, scrolling: true)
-                return
-            }
-            Task {
-                try? await Task.sleep(for: Self.settle)
-                guard scroll.phase == .idle else { return }
-                scroll.scrolling = false
-                feed.hold(covered, scrolling: false)
-            }
+            if phase != .idle { feed.reader.cancel() }
+            feed.hold.set(.scrolling, phase != .idle)
         }
-        .onChange(of: covered, initial: true) { _, covered in feed.hold(covered || scroll.scrolling, scrolling: scroll.scrolling) }
+        .onChange(of: covered, initial: true) { _, covered in feed.hold.set(.outOfSight, covered) }
         // The row being read, brought back when a change took it off screen (`ReaderAnchor.reveal`). Around a local:
         // the chain above in a closure is type-checked with all of it.
         ScrollViewReader { proxy in
@@ -1150,19 +1130,18 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
 #endif
 
 /// What the Agents list shows of the hub (docs/ios-state.md): the agents, the questions and the machines, passed on
-/// from the model as they change, except while the list holds them (scrolled, or out of sight); then what came
+/// from the model as they change, except while the list is held (`Hold`: scrolled, or out of sight); then what came
 /// meanwhile lands at once when it lets go.
 ///
 /// Its own object: the list reads only this, so holding is a flag nobody observes. A busy hub pushes the agents every
 /// two seconds, and any update of a `List` mid-glide (the same rows or not) has it measure its rows anew: the content
 /// jumped by their difference from its estimate. Holding by the list's own state drew it again at every scroll's start.
 ///
-/// Held is not stale for long (docs/ios-state.md「及时性」):
-/// - What needs the user, or says something is wrong, is never held: a question or approval coming or going, an agent
-///   starting or stopping to need the user, one going offline, a machine going offline or failing. It lands at once,
-///   even mid-glide, alone (`landCritical`): the list may still move under the finger (a card put in at the top, a
-///   space moving up), which is the price of showing it now.
-/// - Anything else waits at most `cap` while the list is being scrolled, then lands anyway.
+/// How long anything waits is `Hold`'s (docs/ios-state.md「及时性」); what may not wait is this feed's: what needs the
+/// user, or says something is wrong, is never held: a question or approval coming or going, an agent starting or
+/// stopping to need the user, one going offline, a machine going offline or failing. It lands at once, even mid-glide,
+/// alone (`landCritical`): the list may still move under the finger (a card put in at the top, a space moving up),
+/// which is the price of showing it now.
 @MainActor @Observable final class AgentsFeed {
     /// The agents as the list's structure last changed (`shape`): the body reads this, each row its own `Row`.
     private(set) var sessions: [Session] = []
@@ -1172,11 +1151,9 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     private(set) var following = false
     /// The row being read, kept in place when what the list shows changes.
     @ObservationIgnored let reader = ReaderAnchor()
+    /// Scrolled or out of sight: the list says which (`Hold.set`), the hold says when what waits lands.
+    @ObservationIgnored let hold = Hold("Agents list")
     @ObservationIgnored private weak var model: AppModel?
-    @ObservationIgnored private var held = false
-    @ObservationIgnored private var scrolling = false
-    @ObservationIgnored private var missedSince: Date?
-    @ObservationIgnored private var capTask: Task<Void, Never>?
     @ObservationIgnored private var watching = false
     /// What the rows show: the latest that landed (`sessions` may be older in what only rows show).
     @ObservationIgnored private var shown: [Session] = []
@@ -1186,27 +1163,15 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     @ObservationIgnored var searching = false {
         didSet { if searching != oldValue { restructure(force: true) } }
     }
-    /// The longest a change waits while the list is being scrolled.
-    static let cap: Duration = .seconds(5)
+    init() {
+        hold.land = { [weak self] in self?.land() }
+    }
 
     func follow(_ model: AppModel) {
         guard self.model == nil else { return }
         self.model = model
         pull()
         following = true
-    }
-
-    /// Holds what the list shows (true), or lets what came meanwhile land (false). `scrolling`: held for the scrolling
-    /// (what waits is capped), not only out of sight.
-    func hold(_ on: Bool, scrolling: Bool) {
-        self.scrolling = on && scrolling
-        capIfScrolling()
-        guard on != held else { return }
-        held = on
-        #if os(iOS) && (DEBUG || PERF_SIGNPOST)
-        PerfScroll.mark("Agents list \(on ? "holds" : "lets go")")
-        #endif
-        if !on, missedSince != nil { land() }
     }
 
     /// One agent as its row shows it. The row reads this: a change only rows show (the last line, the time, a new
@@ -1231,9 +1196,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
 
     /// Copies what changed.
     private func pull() {
-        missedSince = nil
-        capTask?.cancel()
-        capTask = nil
+        hold.landed()
         guard let (s, i, m) = current() else { return }
         show(s)
         if i != interactions { reader.willChange(); interactions = i }
@@ -1326,18 +1289,16 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     /// What was held lands now, while the list may still be held.
     private func land() {
         #if os(iOS) && (DEBUG || PERF_SIGNPOST)
-        if held { PerfScroll.mark("Agents list lands while held") }
+        if hold.held { PerfScroll.mark("Agents list lands while held") }
         PerfScroll.shared.released()
         #endif
         pull()
     }
 
     private func changed() {
-        guard held else { return pull() }
+        guard hold.wait() else { return pull() }
         guard let (s, i, m) = current() else { return }
-        if missedSince == nil { missedSince = .now }
         if Self.critical(s, i, m) != Self.critical(shown, interactions, machines) { landCritical(s, i, m) }
-        capIfScrolling()
     }
 
     /// While held, only what must show at once, onto the rows as shown: the states of the agents that start or stop
@@ -1363,18 +1324,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         show(next)
         if i != interactions { reader.willChange(); interactions = i }
         if m != machines { reader.willChange(); machines = m }
-        if next == s { missedSince = nil }
-    }
-
-    /// What waits while the list is being scrolled lands after `cap` at most, however it started waiting.
-    private func capIfScrolling() {
-        guard scrolling, missedSince != nil, capTask == nil else { return }
-        capTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.cap)
-            guard !Task.isCancelled, let self else { return }
-            self.capTask = nil
-            if self.held, self.missedSince != nil { self.land() }
-        }
+        if next == s { hold.landed() }
     }
 
     /// What must show at once: who needs the user, which questions wait, what is offline or failing.
