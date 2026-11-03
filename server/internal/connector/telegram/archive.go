@@ -11,7 +11,6 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/gotd/td/tgerr"
 )
 
 // The knowledge base's reading (connector.Archive): one cursor for the account, which holds, for each conversation,
@@ -20,8 +19,7 @@ import (
 var (
 	firstDays    = 30 * 24 * time.Hour
 	firstMax     = 500
-	dialogsLimit = 200 // conversations listed per round, per folder: newest first, so what moved is at the top
-	readPause    = 400 * time.Millisecond
+	dialogsLimit = 200             // conversations listed per round, per folder: newest first, so what moved is at the top
 	newsSettle   = 3 * time.Second // Telegram's updates come in bursts: one kick for each
 )
 
@@ -38,16 +36,16 @@ func (c *Conn) client() client {
 
 var errNotConnected = errors.New("not connected to Telegram")
 
-// Changes gives the conversations with messages newer than the cursor, at most limit of them. A Telegram error
-// part way keeps what was read (and the cursor up to it) for the hub to ingest; a flood wait sets the status and
-// holds the archive until it is over.
+// Changes gives the conversations with messages newer than the cursor, at most limit of them. The gate paces every
+// request (gate.go). A Telegram error part way ends the round: what was read (and the cursor up to it) goes to the
+// hub, the rest waits for the next round; during a flood wait it asks nothing.
 func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connector.ChatBatch, string, bool, error) {
 	cl := c.client()
 	if cl == nil {
 		return nil, cursor, false, errNotConnected
 	}
-	if wait := c.floodLeft(); wait > 0 {
-		return nil, cursor, false, fmt.Errorf("Telegram 限流，%d 秒后再读", int(wait.Seconds())+1)
+	if left := c.gate.left(); left > 0 {
+		return nil, cursor, false, heldError{left}
 	}
 	var cur archiveCursor
 	if cursor != "" {
@@ -60,7 +58,6 @@ func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connect
 	}
 	ds, err := cl.Dialogs(ctx, dialogsLimit)
 	if err != nil {
-		c.noteFlood(err)
 		return nil, cursor, false, scrubbed(err)
 	}
 	c.noteDialogs(ds) // the inbox reads the same list
@@ -82,7 +79,6 @@ func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connect
 		}
 		msgs, err := cl.History(ctx, d, seen, since, firstMax)
 		if err != nil {
-			c.noteFlood(err)
 			log.Printf("archive: %s: %s", key, explain(err))
 			if len(batches) == 0 {
 				return nil, cursor, false, scrubbed(err)
@@ -98,10 +94,8 @@ func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connect
 			batches = append(batches, connector.ChatBatch{Chat: kb.SourceChat{ID: key, Name: d.Name, Kind: d.Kind, UpdatedAt: d.TopAt},
 				Messages: sourceMessages(msgs)})
 		}
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return batches, encodeCursor(cur), true, nil
-		case <-time.After(readPause): // slow and steady: Telegram limits accounts that pull history fast
 		}
 	}
 	c.mu.Lock()
@@ -147,25 +141,6 @@ func clip(s string, n int) string {
 		return s
 	}
 	return string(r[:n]) + "…"
-}
-
-// noteFlood holds the archive and says so in the status when Telegram asked to wait.
-func (c *Conn) noteFlood(err error) {
-	d, ok := tgerr.AsFloodWait(err)
-	if !ok {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.until = time.Now().Add(d)
-	c.status.State = connector.StateRateLimited
-	c.status.Error = fmt.Sprintf("Telegram 限流，%d 秒后继续", int(d.Seconds()))
-}
-
-func (c *Conn) floodLeft() time.Duration {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return time.Until(c.until)
 }
 
 // updated is Telegram telling of something new: Watch kicks the hub once the burst settles.

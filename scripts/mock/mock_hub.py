@@ -2165,7 +2165,8 @@ LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilit
 
 # Telegram (docs/plan-telegram.md): the user's own account, signed in from 设置 › 连接器 › Telegram a step at a time.
 # All made up: api_id 1234567 (a hash of 32 zeros is refused), any phone starting with +, the code 12345, the 2FA
-# password example-password. MOCK_TELEGRAM=off|signed_out|signed_in|2fa (unset: no Telegram connector at all);
+# password example-password. MOCK_TELEGRAM=off|signed_out|signed_in|2fa|limited (unset: no Telegram connector at all;
+# limited: signed in and waiting out a flood wait Telegram asked for);
 # MOCK_TELEGRAM_2FA=1 gives the account two-step verification in any mode; MOCK_TELEGRAM_INBOX=1 adds its two kinds
 # of inbox items. As a hub from before #669 (the harder case for the app): its program has not run while off since the
 # hub started, so it lists no capabilities (and has no sign-in, 409) until switched on and started (TELEGRAM_START
@@ -2267,7 +2268,8 @@ def github_area(h, method, p, raw):
 
 
 TELEGRAM_MODE = os.environ.get("MOCK_TELEGRAM", "")
-TELEGRAM = {"enabled": TELEGRAM_MODE not in ("", "off"), "creds": TELEGRAM_MODE == "signed_in", "signed_in": TELEGRAM_MODE == "signed_in",
+TELEGRAM = {"enabled": TELEGRAM_MODE not in ("", "off"), "creds": TELEGRAM_MODE in ("signed_in", "limited"),
+            "signed_in": TELEGRAM_MODE in ("signed_in", "limited"), "limited": TELEGRAM_MODE == "limited",
             "two_fa": TELEGRAM_MODE == "2fa" or bool(os.environ.get("MOCK_TELEGRAM_2FA")),
             "ran": TELEGRAM_MODE not in ("", "off"), "started": 0.0}
 TELEGRAM_START = 1.5
@@ -2293,6 +2295,10 @@ def telegram_connector():
         c.update(status="disabled")
     elif not described:
         c.update(status="error", error="Telegram 进程还没启动")
+    elif t["signed_in"] and t["limited"]:  # as the connector says it (connector/telegram Status)
+        c.update(status="rate_limited", account="示例用户（@example）", via=TELEGRAM_VIA,
+                 last_sync=ago(minutes=12),
+                 error="Telegram 限流：14:05:01 起要求等 300 秒，还要 248 秒（14:10:02 恢复）。这期间不发任何请求。")
     elif t["signed_in"]:
         c.update(status="ok", account="示例用户（@example）", via=TELEGRAM_VIA,
                  last_sync=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))

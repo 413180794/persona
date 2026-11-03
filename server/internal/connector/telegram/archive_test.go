@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/gotd/td/tgerr"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // archiveAccount is a signed-in made-up account: a private chat, a supergroup, and three conversations the
 // archive leaves out (a bot, Saved Messages, a broadcast channel).
 func archiveAccount(t *testing.T) (*Conn, *fakeTelegram, context.Context) {
 	t.Helper()
-	readPause, newsSettle = 0, 10*time.Millisecond
-	t.Cleanup(func() { readPause, newsSettle = 400*time.Millisecond, 3*time.Second })
+	newsSettle = 10 * time.Millisecond
+	t.Cleanup(func() { newsSettle = 3 * time.Second })
 	now := time.Now()
 	f := &fakeTelegram{
 		dialogs: []dialog{
@@ -110,27 +110,56 @@ func TestArchiveLimits(t *testing.T) {
 	}
 }
 
-// Telegram's flood wait holds the archive and says so; once it is over the connector is ok again.
+// Telegram's flood wait ends the round that met it (what was read before it is kept) and holds everything until it is
+// over: the archive, the inbox and the tools send nothing, and the status says when it came, what Telegram asked for
+// and how long is left. Once it is over, the next round goes on from where the last one stopped.
 func TestArchiveFloodWait(t *testing.T) {
 	c, f, ctx := archiveAccount(t)
+	c.zone = time.FixedZone("UTC+8", 8*3600)
+	histories := 0
 	f.mu.Lock()
-	f.dialogs = f.dialogs[:1]
+	f.fail = func(method string) error {
+		if method == "History" {
+			if histories++; histories == 2 {
+				return tgerr.New(420, "FLOOD_WAIT_30")
+			}
+		}
+		return nil
+	}
 	f.mu.Unlock()
-	c.noteFlood(tgerr.New(420, "FLOOD_WAIT_30"))
-	if st := c.Status(ctx); st.State != connector.StateRateLimited || !strings.Contains(st.Error, "30 秒") {
+	batches, cursor, more, err := c.Changes(ctx, "", 20)
+	if err != nil || len(batches) != 1 || batches[0].Chat.ID != "c2" || more {
+		t.Fatalf("the round that met the wait: %d batches, more %v, %v", len(batches), more, err)
+	}
+	st := c.Status(ctx)
+	if st.State != connector.StateRateLimited || !strings.Contains(st.Error, "要求等 30 秒") || !strings.Contains(st.Error, "还要 3") ||
+		!strings.Contains(st.Error, "恢复") || strings.Contains(st.Error, "UTC") {
 		t.Fatalf("status %+v", st)
 	}
-	if _, _, _, err := c.Changes(ctx, "", 20); err == nil {
-		t.Fatal("read during a flood wait")
+	sent := len(f.requests())
+	if _, _, _, err := c.Changes(ctx, cursor, 20); err == nil || !strings.Contains(err.Error(), "限流中") {
+		t.Fatalf("archive during the wait: %v", err)
 	}
-	c.mu.Lock()
-	c.until = time.Now().Add(-time.Second)
-	c.mu.Unlock()
-	if st := c.Status(ctx); st.State != connector.StateOK {
+	if _, err := c.Call(ctx, "telegram_chats", nil); err == nil || !strings.Contains(err.Error(), "Telegram 限流中") {
+		t.Fatalf("tool during the wait: %v", err)
+	}
+	c.refreshInbox(ctx)
+	if p, err := c.LoginStep(ctx, "", nil); err != nil || !p.Done {
+		t.Fatalf("still signed in during the wait: %+v %v", p, err)
+	}
+	if got := f.requests()[sent:]; len(got) != 0 {
+		t.Fatalf("%d request(s) during the wait: %+v", len(got), got)
+	}
+
+	c.gate.mu.Lock()
+	c.gate.until = time.Now().Add(-time.Millisecond)
+	c.gate.mu.Unlock()
+	if st := c.Status(ctx); st.State != connector.StateOK || st.Error != "" {
 		t.Fatalf("after the wait %+v", st)
 	}
-	if batches, _, _, err := c.Changes(ctx, "", 20); err != nil || len(batches) != 1 {
-		t.Fatalf("after the wait %d %v", len(batches), err)
+	batches, _, _, err = c.Changes(ctx, cursor, 20)
+	if err != nil || len(batches) != 1 || batches[0].Chat.ID != "u1" {
+		t.Fatalf("after the wait: %d batches %v", len(batches), err)
 	}
 }
 

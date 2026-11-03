@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/gotd/td/tgerr"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 const (
@@ -66,9 +66,48 @@ type fakeTelegram struct {
 	history map[string][]message // peer key -> messages, oldest first
 	reads   []string             // "<key> after <minID>": what History was asked
 	updated func()
+	// Every request goes through the connector's gate, as gotd's do (client.go): sent is each one's method, start and
+	// end; latency is how long one takes; fail is what Telegram answers instead (a flood wait).
+	sent     []sentRequest
+	inFlight int
+	most     int // the most requests in flight at once
+	latency  time.Duration
+	fail     func(method string) error
 }
 
-func (f *fakeTelegram) dial(ctx context.Context, c creds, store sessionStore, updated func()) (client, error) {
+type sentRequest struct {
+	method     string
+	start, end time.Time
+}
+
+// rpc is one request to the made-up Telegram, through the gate.
+func (c *fakeClient) rpc(ctx context.Context, method string) error {
+	return c.g.do(ctx, func(context.Context) error {
+		f := c.f
+		f.mu.Lock()
+		f.inFlight++
+		f.most = max(f.most, f.inFlight)
+		start, latency, fail := time.Now(), f.latency, f.fail
+		f.mu.Unlock()
+		time.Sleep(latency)
+		f.mu.Lock()
+		f.inFlight--
+		f.sent = append(f.sent, sentRequest{method, start, time.Now()})
+		f.mu.Unlock()
+		if fail != nil {
+			return fail(method)
+		}
+		return nil
+	})
+}
+
+func (f *fakeTelegram) requests() []sentRequest {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]sentRequest(nil), f.sent...)
+}
+
+func (f *fakeTelegram) dial(ctx context.Context, c creds, store sessionStore, g *gate, updated func()) (client, error) {
 	f.mu.Lock()
 	f.dials++
 	f.mu.Unlock()
@@ -82,7 +121,7 @@ func (f *fakeTelegram) dial(ctx context.Context, c creds, store sessionStore, up
 	f.mu.Lock()
 	f.updated = updated
 	f.mu.Unlock()
-	return &fakeClient{f: f, store: store, done: done, creds: c}, nil
+	return &fakeClient{f: f, store: store, done: done, creds: c, g: g}, nil
 }
 
 type fakeClient struct {
@@ -90,19 +129,26 @@ type fakeClient struct {
 	store sessionStore
 	done  chan struct{}
 	creds creds
+	g     *gate
 }
 
 func (c *fakeClient) Done() <-chan struct{} { return c.done }
 
 // Check: like Telegram, made-up credentials connect fine and are refused when asked about.
-func (c *fakeClient) Check(context.Context) error {
+func (c *fakeClient) Check(ctx context.Context) error {
+	if err := c.rpc(ctx, "Check"); err != nil {
+		return err
+	}
 	if c.creds.hash != exampleHash {
 		return tgerr.New(400, "API_ID_INVALID")
 	}
 	return nil
 }
 
-func (c *fakeClient) SendCode(_ context.Context, phone string) (string, string, error) {
+func (c *fakeClient) SendCode(ctx context.Context, phone string) (string, string, error) {
+	if err := c.rpc(ctx, "SendCode"); err != nil {
+		return "", "", err
+	}
 	if !strings.HasPrefix(phone, "+") {
 		return "", "", tgerr.New(400, "PHONE_NUMBER_INVALID")
 	}
@@ -110,6 +156,9 @@ func (c *fakeClient) SendCode(_ context.Context, phone string) (string, string, 
 }
 
 func (c *fakeClient) SignIn(ctx context.Context, _, code, hash string) (string, error) {
+	if err := c.rpc(ctx, "SignIn"); err != nil {
+		return "", err
+	}
 	if hash != "hash-1" || code != "12345" {
 		return "", tgerr.New(400, "PHONE_CODE_INVALID")
 	}
@@ -126,16 +175,24 @@ func (c *fakeClient) signIn(ctx context.Context) (string, error) {
 	return "示例用户（@example）", c.store.StoreSession(ctx, []byte("example session"))
 }
 
-func (c *fakeClient) PasswordHint(context.Context) (string, error) { return "示例提示", nil }
+func (c *fakeClient) PasswordHint(ctx context.Context) (string, error) {
+	return "示例提示", c.rpc(ctx, "PasswordHint")
+}
 
 func (c *fakeClient) Password(ctx context.Context, p string) (string, error) {
+	if err := c.rpc(ctx, "Password"); err != nil {
+		return "", err
+	}
 	if p != "example-password" {
 		return "", tgerr.New(400, "PASSWORD_HASH_INVALID")
 	}
 	return c.signIn(ctx)
 }
 
-func (c *fakeClient) Me(context.Context) (string, bool, error) {
+func (c *fakeClient) Me(ctx context.Context) (string, bool, error) {
+	if err := c.rpc(ctx, "Me"); err != nil {
+		return "", false, err
+	}
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()
 	if !c.f.signedIn {
@@ -144,13 +201,19 @@ func (c *fakeClient) Me(context.Context) (string, bool, error) {
 	return "示例用户（@example）", true, nil
 }
 
-func (c *fakeClient) Dialogs(context.Context, int) ([]dialog, error) {
+func (c *fakeClient) Dialogs(ctx context.Context, _ int) ([]dialog, error) {
+	if err := c.rpc(ctx, "Dialogs"); err != nil {
+		return nil, err
+	}
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()
 	return append([]dialog(nil), c.f.dialogs...), nil
 }
 
-func (c *fakeClient) History(_ context.Context, d dialog, minID int, since time.Time, max int) ([]message, error) {
+func (c *fakeClient) History(ctx context.Context, d dialog, minID int, since time.Time, max int) ([]message, error) {
+	if err := c.rpc(ctx, "History"); err != nil {
+		return nil, err
+	}
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()
 	c.f.reads = append(c.f.reads, fmt.Sprintf("%s after %d", d.Peer.key(), minID))
@@ -166,7 +229,10 @@ func (c *fakeClient) History(_ context.Context, d dialog, minID int, since time.
 	return out, nil
 }
 
-func (c *fakeClient) Older(_ context.Context, d dialog, before, limit int) ([]message, error) {
+func (c *fakeClient) Older(ctx context.Context, d dialog, before, limit int) ([]message, error) {
+	if err := c.rpc(ctx, "Older"); err != nil {
+		return nil, err
+	}
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()
 	var out []message
@@ -181,7 +247,10 @@ func (c *fakeClient) Older(_ context.Context, d dialog, before, limit int) ([]me
 	return out, nil
 }
 
-func (c *fakeClient) Search(_ context.Context, query string, in *dialog, limit int) ([]found, error) {
+func (c *fakeClient) Search(ctx context.Context, query string, in *dialog, limit int) ([]found, error) {
+	if err := c.rpc(ctx, "Search"); err != nil {
+		return nil, err
+	}
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()
 	var out []found
@@ -199,7 +268,10 @@ func (c *fakeClient) Search(_ context.Context, query string, in *dialog, limit i
 	return out, nil
 }
 
-func (c *fakeClient) UnreadMentions(_ context.Context, d dialog, limit int) ([]message, error) {
+func (c *fakeClient) UnreadMentions(ctx context.Context, d dialog, limit int) ([]message, error) {
+	if err := c.rpc(ctx, "UnreadMentions"); err != nil {
+		return nil, err
+	}
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()
 	var out []message
@@ -211,15 +283,26 @@ func (c *fakeClient) UnreadMentions(_ context.Context, d dialog, limit int) ([]m
 	return out, nil
 }
 
-func (c *fakeClient) LogOut(context.Context) error {
+func (c *fakeClient) LogOut(ctx context.Context) error {
+	if err := c.rpc(ctx, "LogOut"); err != nil {
+		return err
+	}
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()
 	c.f.signedIn, c.f.loggedOut = false, true
 	return nil
 }
 
+// quickPace makes the gate's gap 0–1 ms for a test that does not measure it.
+func quickPace(t *testing.T) {
+	t.Helper()
+	paceMin, paceMax = 0, time.Millisecond
+	t.Cleanup(func() { paceMin, paceMax = 500*time.Millisecond, time.Second })
+}
+
 func running(t *testing.T, sec *memSecrets, f *fakeTelegram) (*Conn, context.Context) {
 	t.Helper()
+	quickPace(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	c := newConn(sec, f.dial)

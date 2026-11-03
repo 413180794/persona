@@ -440,7 +440,10 @@ struct HubConnectorView: View {
                     }
                 }
                 if let e = connector?.error ?? failure, !e.isEmpty {
-                    Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled)
+                    // Waiting out a rate limit is not something broken: said in gray beside the yellow dot.
+                    Text(e).font(Theme.Font.label)
+                        .foregroundStyle(connector?.status == "rate_limited" ? Color.secondary : Theme.danger)
+                        .textSelection(.enabled)
                 }
             } footer: {
                 if let connector, !connector.signsInHere, !connector.undescribed {

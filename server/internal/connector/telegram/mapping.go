@@ -320,11 +320,7 @@ func (g *gotdClient) History(ctx context.Context, d dialog, minID int, since tim
 		if stop || len(msgs) == 0 {
 			break
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(readPause):
-		}
+		// The next page waits its turn at the gate (client.go), like every request.
 	}
 	for i, j := 0, len(got)-1; i < j; i, j = i+1, j-1 { // oldest first
 		got[i], got[j] = got[j], got[i]

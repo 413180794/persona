@@ -124,14 +124,13 @@ func (c *Conn) noteDialogs(ds []dialog) {
 // refreshInbox lists the conversations and reads the context of the things that moved, then the hub is told.
 func (c *Conn) refreshInbox(ctx context.Context) {
 	cl := c.client()
-	if cl == nil {
+	if cl == nil || c.gate.left() > 0 { // during a flood wait the inbox stays as last read
 		return
 	}
 	c.box.refresh.Lock()
 	defer c.box.refresh.Unlock()
 	ds, err := cl.Dialogs(ctx, dialogsLimit)
 	if err != nil {
-		c.noteFlood(err)
 		return
 	}
 	c.noteDialogs(ds)
@@ -166,8 +165,7 @@ func (c *Conn) readContexts(ctx context.Context, cl client) {
 		} else {
 			msgs, err = cl.Older(ctx, d, 0, contextLines)
 		}
-		if err != nil {
-			c.noteFlood(err)
+		if err != nil { // a flood wait among them: the rest next time
 			return
 		}
 		var b strings.Builder
@@ -182,10 +180,8 @@ func (c *Conn) readContexts(ctx context.Context, cl client) {
 		c.box.mu.Lock()
 		c.box.contexts[t.Thread] = threadContext{last: t.Last, text: b.String()}
 		c.box.mu.Unlock()
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		case <-time.After(readPause):
 		}
 	}
 }

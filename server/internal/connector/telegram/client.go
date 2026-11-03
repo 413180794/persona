@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/gotd/td/bin"
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
@@ -13,10 +14,12 @@ import (
 )
 
 // dialGotd connects a gotd client with c and keeps it running until ctx ends (it does not tell whether Telegram knows c:
-// Check does). It logs nothing: no logger is given.
-func dialGotd(ctx context.Context, c creds, store sessionStore, updated func()) (client, error) {
+// Check does). It logs nothing: no logger is given. Every request goes through g, gotd's own too (its config, the
+// sign-in's).
+func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated func()) (client, error) {
 	cl := telegram.NewClient(c.id, c.hash, telegram.Options{
 		SessionStorage: gotdSession{store},
+		Middlewares:    []telegram.Middleware{gated(g)},
 		// How the session shows in the user's Telegram devices.
 		Device: telegram.DeviceConfig{DeviceModel: "Persona", SystemVersion: runtime.GOOS, AppVersion: "Persona"},
 		// What Telegram pushes only kicks the archive and the inbox: they read what is new themselves, by message id,
@@ -26,10 +29,10 @@ func dialGotd(ctx context.Context, c creds, store sessionStore, updated func()) 
 			return nil
 		}),
 	})
-	g := &gotdClient{c: cl, creds: c, done: make(chan struct{})}
+	gc := &gotdClient{c: cl, creds: c, done: make(chan struct{})}
 	ready := make(chan error, 1)
 	go func() {
-		defer close(g.done)
+		defer close(gc.done)
 		err := cl.Run(ctx, func(ctx context.Context) error {
 			ready <- nil
 			<-ctx.Done()
@@ -45,10 +48,23 @@ func dialGotd(ctx context.Context, c creds, store sessionStore, updated func()) 
 		if err != nil {
 			return nil, err
 		}
-		return g, nil
+		return gc, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// gated sends every request of the client through g. One gotd makes while another is in the gate (a data center's
+// authorization transfer) is part of that one: it goes straight on, or it would wait for itself.
+func gated(g *gate) telegram.Middleware {
+	return telegram.MiddlewareFunc(func(next tg.Invoker) telegram.InvokeFunc {
+		return func(ctx context.Context, input bin.Encoder, output bin.Decoder) error {
+			if inGate(ctx) {
+				return next.Invoke(ctx, input, output)
+			}
+			return g.do(ctx, func(ctx context.Context) error { return next.Invoke(ctx, input, output) })
+		}
+	})
 }
 
 // gotdSession is gotd's session.Storage on the connector's store.

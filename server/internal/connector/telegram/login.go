@@ -64,7 +64,7 @@ func (c *Conn) LoginStep(ctx context.Context, step string, v map[string]string) 
 		if !st.hasCredentials() {
 			return credentialsPrompt(""), nil
 		}
-		if s := c.Status(ctx); s.State == connector.StateOK {
+		if s := c.Status(ctx); s.State == connector.StateOK || s.State == connector.StateRateLimited { // signed in, waiting
 			return connector.Prompt{Done: true, Account: s.Account}, nil
 		}
 		return phonePrompt(""), nil
@@ -139,7 +139,7 @@ func (c *Conn) stepCredentials(ctx context.Context, v map[string]string) (connec
 	}
 	cctx, cancel := context.WithTimeout(ctx, connectWait)
 	defer cancel()
-	probe, err := c.dial(cctx, creds{id, hash}, &memSession{}, func() {})
+	probe, err := c.dial(cctx, creds{id, hash}, &memSession{}, c.gate, func() {}) // the same gate: the same account's machine
 	if err == nil {
 		err = probe.Check(cctx)
 	}
@@ -147,6 +147,9 @@ func (c *Conn) stepCredentials(ctx context.Context, v map[string]string) (connec
 	if err != nil {
 		if isError(err, "API_ID_INVALID", "API_ID_PUBLISHED_FLOOD") {
 			return credentialsPrompt("Telegram 不认这个 api_id / api_hash"), nil
+		}
+		if why, ok := userError(err); ok { // a flood wait
+			return credentialsPrompt(why), nil
 		}
 		return credentialsPrompt("连不上 Telegram，稍后再试（" + explain(err) + "）"), nil
 	}

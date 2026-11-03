@@ -71,12 +71,12 @@ type found struct {
 	Message message
 }
 
-// dialer connects with c, keeping the session in store, until ctx ends (Check says whether Telegram knows c).
-// updated is called whenever Telegram tells of something new (a message, a read): the connector's realtime kick.
-
 var errPasswordNeeded = errors.New("2FA password needed")
 
-type dialer func(ctx context.Context, c creds, store sessionStore, updated func()) (client, error)
+// dialer connects with c, keeping the session in store, until ctx ends (Check says whether Telegram knows c). Every
+// request goes through g. updated is called whenever Telegram tells of something new (a message, a read): the
+// connector's realtime kick.
+type dialer func(ctx context.Context, c creds, store sessionStore, g *gate, updated func()) (client, error)
 
 // sessionStore is where gotd keeps its session (session.Storage's two methods).
 type sessionStore interface {
@@ -99,10 +99,10 @@ type Conn struct {
 	pending struct{ phone, hash string }
 	// wake makes Run connect again (the credentials changed, or the user signed out).
 	wake chan struct{}
-	// news is Telegram telling of something new, for Watch; until is when Telegram lets the archive go on after a
-	// flood wait.
-	news  chan struct{}
-	until time.Time
+	// news is Telegram telling of something new, for Watch.
+	news chan struct{}
+	// gate is the one way to Telegram (gate.go), kept across connections: a flood wait outlasts a reconnect.
+	gate *gate
 	// zone is the user's, for the times the tools show; nil while the hub does not know it (never the machine's:
 	// the hub runs in UTC).
 	zone *time.Location
@@ -117,8 +117,10 @@ func New(secrets connector.Secrets, zone *time.Location) *Conn {
 }
 
 func newConn(secrets connector.Secrets, dial dialer) *Conn {
-	return &Conn{secrets: secrets, dial: dial, wake: make(chan struct{}, 1), news: make(chan struct{}, 1),
+	c := &Conn{secrets: secrets, dial: dial, wake: make(chan struct{}, 1), news: make(chan struct{}, 1), gate: newGate(),
 		status: connector.Status{State: connector.StateNotSignedIn, Error: "还没填 Telegram 的 API 凭据"}}
+	c.gate.flooded = func(d time.Duration) { log.Printf("Telegram asked to wait %d s: no request until then", seconds(d)) }
+	return c
 }
 
 func (*Conn) ID() string   { return spec.ID }
@@ -127,14 +129,22 @@ func (*Conn) Name() string { return spec.Name }
 // Manifest is spec's: the hub registers the program with the same before it runs.
 func (*Conn) Manifest() connector.Manifest { return spec.Manifest() }
 
-// Status answers from memory; a flood wait that is over is over here (the hub reads only an ok connector).
+// Status answers from memory. A signed-in account is rate_limited while a flood wait is not over: when it came, what
+// Telegram asked for, how long is left (the hub reads only an ok connector, so nothing is asked of it meanwhile).
 func (c *Conn) Status(context.Context) connector.Status {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.status.State == connector.StateRateLimited && !time.Now().Before(c.until) {
-		c.status.State, c.status.Error = connector.StateOK, ""
+	st := c.status
+	c.mu.Unlock()
+	if st.State != connector.StateOK {
+		return st
 	}
-	return c.status
+	at, asked, until := c.gate.flood()
+	if left := until.Sub(c.gate.now()); left > 0 {
+		st.State = connector.StateRateLimited
+		st.Error = fmt.Sprintf("Telegram 限流：%s 起要求等 %d 秒，还要 %d 秒（%s 恢复）。这期间不发任何请求。",
+			c.clock(at), seconds(asked), seconds(left), c.clock(until))
+	}
+	return st
 }
 
 func (c *Conn) setStatus(st connector.Status) {
@@ -221,7 +231,7 @@ func (c *Conn) Run(ctx context.Context) {
 			continue
 		}
 		cctx, stop := context.WithCancel(ctx)
-		cl, err := c.dial(cctx, creds{st.APIID, st.APIHash}, sessionOf{c}, c.updated)
+		cl, err := c.dial(cctx, creds{st.APIID, st.APIHash}, sessionOf{c}, c.gate, c.updated)
 		if err != nil {
 			stop()
 			c.setStatus(connector.Status{State: connector.StateError, Via: st.via(), Error: "连不上 Telegram：" + explain(err)})

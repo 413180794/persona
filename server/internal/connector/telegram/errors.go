@@ -17,6 +17,10 @@ func isError(err error, types ...string) bool {
 
 // userError is a mistake the user can fix, said for people (the sign-in asks the same step again with it).
 func userError(err error) (string, bool) {
+	var held heldError
+	if errors.As(err, &held) {
+		return held.Error(), true
+	}
 	if d, ok := tgerr.AsFloodWait(err); ok {
 		return fmt.Sprintf("Telegram 说请求太频繁，%d 秒后再试", int(d.Seconds())), true
 	}
@@ -49,7 +53,7 @@ func explain(err error) string {
 		return ""
 	}
 	if d, ok := tgerr.AsFloodWait(err); ok {
-		return fmt.Sprintf("限流，%d 秒后再试", int(d.Seconds()))
+		return fmt.Sprintf("限流，%d 秒后再试", seconds(d))
 	}
 	if rpc, ok := tgerr.As(err); ok {
 		return rpc.Type

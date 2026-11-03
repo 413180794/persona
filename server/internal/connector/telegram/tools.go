@@ -25,18 +25,25 @@ func (c *Conn) Tools() []proto.Tool {
 	return out
 }
 
-// Limits of an answer, so one call does not fill the model's context.
+// Limits of an answer, so one call does not fill the model's context nor ask Telegram much: one page each, and at
+// most three requests a call (the list, when the conversation is not in the last one, and the read).
 const (
-	lineCap     = 600 // one message
-	chatsDef    = 30
-	messagesDef = 30
-	searchDef   = 20
+	lineCap      = 600 // one message
+	chatsDef     = 30
+	chatsMost    = 100
+	messagesDef  = 30
+	messagesMost = 50
+	searchDef    = 20
+	searchMost   = 30
 )
 
 func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	cl := c.client()
 	if cl == nil {
 		return "", errNotConnected
+	}
+	if left := c.gate.left(); left > 0 { // a flood wait is not over: no request at all
+		return "", heldError{left}
 	}
 	var a struct {
 		Limit      int    `json:"limit"`
@@ -54,16 +61,15 @@ func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (str
 	var err error
 	switch name {
 	case "telegram_chats":
-		out, err = c.toolChats(ctx, cl, bound(a.Limit, chatsDef, 100), a.UnreadOnly)
+		out, err = c.toolChats(ctx, cl, bound(a.Limit, chatsDef, chatsMost), a.UnreadOnly)
 	case "telegram_messages":
-		out, err = c.toolMessages(ctx, cl, a.Chat, bound(a.Limit, messagesDef, 100), a.Before)
+		out, err = c.toolMessages(ctx, cl, a.Chat, bound(a.Limit, messagesDef, messagesMost), a.Before)
 	case "telegram_search":
-		out, err = c.toolSearch(ctx, cl, a.Query, a.Chat, bound(a.Limit, searchDef, 50))
+		out, err = c.toolSearch(ctx, cl, a.Query, a.Chat, bound(a.Limit, searchDef, searchMost))
 	default:
 		return "", fmt.Errorf("unknown tool %s", name)
 	}
 	if err != nil {
-		c.noteFlood(err)
 		if why, ok := userError(err); ok {
 			return "", fmt.Errorf("%s", why)
 		}
@@ -188,16 +194,28 @@ func (c *Conn) toolSearch(ctx context.Context, cl client, query, chat string, li
 	return b.String(), nil
 }
 
-// find is the conversation a tool names: its key (u…, g…, c…), or its exact name.
+// find is the conversation a tool names: its key (u…, g…, c…), or its exact name. It looks in the list as last read
+// (the archive's, the inbox's) first, and asks Telegram for it only when the conversation is not there.
 func (c *Conn) find(ctx context.Context, cl client, chat string) (dialog, error) {
 	chat = strings.TrimSpace(chat)
 	if chat == "" {
 		return dialog{}, fmt.Errorf("chat is required")
 	}
+	c.box.mu.Lock()
+	last := c.box.dialogs
+	c.box.mu.Unlock()
+	if d, err := pick(last, chat); err == nil {
+		return d, nil
+	}
 	ds, err := cl.Dialogs(ctx, dialogsLimit)
 	if err != nil {
 		return dialog{}, err
 	}
+	return pick(ds, chat)
+}
+
+// pick is the conversation in ds a tool names.
+func pick(ds []dialog, chat string) (dialog, error) {
 	var named []dialog
 	for _, d := range ds {
 		if !d.kept() {
@@ -225,6 +243,14 @@ func (c *Conn) when(t time.Time) string {
 		return t.UTC().Format("2006-01-02 15:04 UTC")
 	}
 	return t.In(c.zone).Format("2006-01-02 15:04")
+}
+
+// clock is a time of day as the status says it, in the user's zone (UTC, saying so, while the hub does not know it).
+func (c *Conn) clock(t time.Time) string {
+	if c.zone == nil {
+		return t.UTC().Format("15:04:05 UTC")
+	}
+	return t.In(c.zone).Format("15:04:05")
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
