@@ -7,12 +7,14 @@
   python3 scripts/release/asc_testflight.py info "<What to Test>"   # write "What to Test" on the newest build, attach it
   python3 scripts/release/asc_testflight.py external           # group "Friends": newest build, Beta App Review, public link
   python3 scripts/release/asc_testflight.py next-build         # the next build number (both platforms, docs/release.md)
+  python3 scripts/release/asc_testflight.py catch-up           # newest build not submitted yet (another was in review): Friends + review
 
 Add --platform mac (anywhere) for the Mac app's builds: same App Store Connect record and groups, its own builds.
 Without it every command means the iPhone builds, so a Mac build never gets the iPhone build's notes or vice versa.
 
 "wait" and "info" also hand the build to the external group when the config has app_store.external, so every new
 TestFlight build reaches the external testers too (after Beta App Review); a failure there never fails the release.
+A build can't be submitted while another of its version is in review; "catch-up" submits it once that is over.
 
 Internal testers (app_store.testers in the config) must be users of the team in App Store Connect.
 External testers join the group by its public link when app_store.external.public_link is true (at most
@@ -256,10 +258,18 @@ def write_review_details() -> bool:
     return True
 
 
+# A build in one of these has been submitted for Beta App Review (or got through it).
+SUBMITTED = ("WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW", "BETA_APPROVED", "IN_BETA_TESTING")
+
+
+def external_state(build) -> str | None:
+    return request("GET", f"/v1/builds/{build['id']}/buildBetaDetail")["data"]["attributes"].get("externalBuildState")
+
+
 def submit_for_review(build):
     """Asks for Beta App Review; a build already submitted (or approved) answers 409/422, which is fine."""
-    state = request("GET", f"/v1/builds/{build['id']}/buildBetaDetail")["data"]["attributes"].get("externalBuildState")
-    if state in ("WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW", "BETA_APPROVED", "IN_BETA_TESTING"):
+    state = external_state(build)
+    if state in SUBMITTED:
         print("build", build["attributes"]["version"], "beta review:", state)
         return
     request("POST", "/v1/betaAppReviewSubmissions",
@@ -307,6 +317,30 @@ def external(build=None):
     share(build)
 
 
+def catch_up():
+    """The newest build to the external group and Beta App Review if that has not happened yet, its "What to Test" as
+    it is. A build of a version that has another one in review can't be submitted (422 ANOTHER_BUILD_IN_REVIEW: "submit
+    it again once it gets completed"), and nothing else comes back for it: Mac 111–127 sat in Friends unsubmitted
+    behind 110 (#792). Run every round by the local auto-tf, so the newest build goes once the review is over."""
+    if not EXTERNAL:
+        return
+    build = newest_valid()
+    if not build:
+        print("no VALID", PLATFORM, "build yet")
+        return
+    version = build["attributes"]["version"]
+    state = external_state(build)
+    if state != "READY_FOR_BETA_SUBMISSION":  # submitted, through, rejected (by hand from here), or still processing
+        print(PLATFORM, "build", version, "external:", state)
+        return
+    try:
+        share(build)
+    except APIError as e:
+        if "ANOTHER_BUILD_IN_REVIEW" not in str(e):
+            raise
+        print(PLATFORM, "build", version, "waits: another build of its version is in Beta App Review")
+
+
 def main():
     global PLATFORM
     args = sys.argv[1:]
@@ -332,6 +366,8 @@ def main():
         share_external(build)
     elif args[:1] == ["external"]:
         external()
+    elif args[:1] == ["catch-up"]:
+        catch_up()
     elif args[:1] in ([], ["setup"]):
         gid = group_id()
         for t in TESTERS:

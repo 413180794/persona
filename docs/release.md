@@ -151,6 +151,10 @@ python3 scripts/release/asc_testflight.py external   # 建群组、按配置开 
   bundle id、team id、签名数据本来就在每个构建里，不算）。自己写的发版脚本也要在上传前跑它。
 - **每次发版不用另跑命令**：配置里有 `app_store.external` 时，`wait`、`info` 在挂好 Internal 之后会顺带把这个构建挂到 Friends、
   提交审核（有列出的测试员就补邀请）。这一步出错只打印一行（附重试命令 `external`），不会让发版失败。
+- **同一版本有构建在审时，新构建交不上去**（422 `ANOTHER_BUILD_IN_REVIEW`，「审完再交」），也没有东西会在审完后再交：
+  Mac 110 在审的那段时间，111–127 都挂在 Friends、停在 `READY_FOR_BETA_SUBMISSION`，外部测试员一直拿不到（2026-11-03，#792）。
+  `asc_testflight.py [--platform mac] catch-up`：最新的 VALID 构建还没交就挂 Friends、提交审核（不改它的「测试什么」），
+  有别的在审就说一声等下一次，已经交过 / 过审 / 被拒的什么都不写。本机的 auto-tf 每轮（等新提交的每 10 分钟）对 iPhone 和 Mac 各跑一次。
 - 外部测试的构建要过 **Beta App Review**（第一次约一天，同一版本后面的构建多数自动通过）。提交前必须有联系人：
   `app_store.external.review` 的 `first_name` / `last_name` / `phone` / `email`，缺了脚本只挂构建、不提交，也不加测试员。
 - 公开链接在没有通过审核的构建之前就能打开（API 直接给出地址），但页面显示「This beta isn't accepting any new testers right now」，
@@ -171,7 +175,7 @@ Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store 
 - **构建号**：一个号在每个平台里只能用一次，不同平台可以重号。规则：**一次发布的 Mac 构建和这次的 iPhone 构建用同一个号**
   （同一个号 = 同一个提交，查问题时一眼对上）；iPhone 的号、单独发的 Mac 都取**两个平台里最大的号加一**
   （`python3 scripts/release/asc_testflight.py next-build`），这样不会有一个号在两个平台上指两个不同的提交。
-- **`asc_testflight.py --platform mac`**：`status` / `wait` / `info` / `external` 都只看 Mac 的构建；不带时只看 iPhone 的。
+- **`asc_testflight.py --platform mac`**：`status` / `wait` / `info` / `external` / `catch-up` 都只看 Mac 的构建；不带时只看 iPhone 的。
   以前不分平台，有了 Mac 构建以后「最新的 VALID 构建」可能是另一个平台的，「测试什么」会写错地方。
 - **图标**：系统不给 Mac 图标切圆角，图标自己带圆角方块和阴影（macOS 的网格：1024 里居中 824）。`AppIcon` 图标集里 iOS 的单尺寸图之外
   另有 `idiom: mac` 的 16–512（1x / 2x），由 `python3 scripts/assets/make_icon.py mac` 从 iPhone 的图生成（全部重画时也会一起写）。
