@@ -154,6 +154,11 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 测试带 `-openAgentsFresh YES`，不受别的测试留下的折叠影响）连普通 mock：
 `PORT=18793 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:PersonaUITests/SearchOpenTests`。
 
+助手的 `ask_user` 在对话里画成「提问」（`AskUserRowTests`，#677）：工具行是「提问 + 第一个问题」不是原名，展开后列出问题和选项、勾上用户选的（含多选），
+用户没回答的写「没有回答」；测试带 `-openWork YES -showToolDetails YES` 把工作行和工具行都展开（倒着的对话列表里的行点不准）：
+`MOCK_ASK_USER=1 PORT=18797 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests`，
+截图在 `/tmp/persona-ask-user-*`（`TEST_RUNNER_SHOT_SUFFIX` 区分深浅色和风格）。
+
 端口转发（`PortForwardTests`，`docs/ports.md`）：会话顶部和回复里的 `:端口` Badge 带页面标题、停掉的变灰，点开在网页卡片里经 mock 的
 `…/ports/{port}/connect` 加载 mock 自己起的页面（`GET /mock/ports` 看连接记录），点灰的提示「已经没有在监听」：
 `MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`；

@@ -3439,6 +3439,25 @@ if os.environ.get("MOCK_LONG_SLOTS"):
         x["slot_name"] = name
 
 
+# MOCK_ASK_USER=1: Jarvis's main conversation ends with two ask_user calls (#677): one answered (a pick, and a
+# multi-select), one the user let go; the hub's answers to the model are as hub/assistant_tools.go writes them.
+if os.environ.get("MOCK_ASK_USER"):
+    ITEMS[ASK1] = ITEMS[ASK1] + [it("user", "text", 2, text="用 ask user 问我一下先做什么")] + tool(
+        "mcp__jarvis__ask_user", {"questions": [
+            {"question": "先处理哪项？", "header": "下一步", "options": [
+                {"label": "看日程", "description": "今天 2 个会"}, {"label": "回邮件", "description": "3 封待回"},
+                {"label": "看未读消息", "description": "飞书 4 条"}, {"label": "都不用"}]},
+            {"question": "整理完发给谁？", "header": "发送", "multiSelect": True, "options": [
+                {"label": "组里"}, {"label": "老板"}, {"label": "只给我"}]}]},
+        "The user answered:\n- 先处理哪项？ → 看未读消息\n- 整理完发给谁？ → 组里, 只给我\n", 2) + [
+        it("assistant", "text", 2, text="好，先看未读消息，整理好发到组里，也给你留一份。"),
+        it("user", "text", 1, text="再问一次，这次我不回答")] + tool(
+        "mcp__jarvis__ask_user", {"questions": [{"question": "要把明早的会挪到下午吗？", "header": "日程", "options": [
+            {"label": "挪"}, {"label": "不挪"}]}]},
+        "The user did not answer (dismissed or timed out). Don't go ahead with what you asked about; say what is waiting for them.", 1) + [
+        it("assistant", "text", 1, text="你没有回答，明早的会先不动，等你决定。")]
+
+
 # MOCK_SUGGESTION=1: the idle review session has Claude's suggested next message (grey in its input box).
 if os.environ.get("MOCK_SUGGESTION"):
     for s in SESSIONS:

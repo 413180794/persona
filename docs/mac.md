@@ -530,7 +530,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Work trace expand/collapse in place (timeline style for glass, card style for others), 「收起 N 步」, pin tapped row under finger — ChatView.swift, Views/Chat/ChatPin.swift
   - Mac（2026-11-02 Mac mini 真窗口核对）：长对话（`MOCK_LONG_HISTORY=1`）里真点工作行：原地展开成时间线，被点的那行留在指针下面不动，再点收起也不动（不满一屏的短对话贴底排，钉不住是预期）。
 - [ ] Tool views: tool groups, tool call rows, detail, Bash command/output, full output sheet, TodoWrite list, base64 images, folded work row — Views/Chat/ToolViews.swift
-  - 要到 Mac 前看：点开「完整输出」的 sheet（`-showFullOutput sheet` 没打开）。新开关 `-showToolDetails YES`（只在 Mac 的 DEBUG，已加进 release.sh 的列表）把每个工具行展开，截图里 TodoWrite、Bash 输出、搜索 / 读取详情、base64 图片、折叠行都对。
+  - 要到 Mac 前看：点开「完整输出」的 sheet（`-showFullOutput sheet` 没打开）。新开关 `-showToolDetails YES`（DEBUG，原先只在 Mac，#677 起 iPhone 也认；已加进 release.sh 的列表）把每个工具行展开，截图里 TodoWrite、Bash 输出、搜索 / 读取详情、base64 图片、折叠行都对。
   - Mac（2026-11-02 Mac mini 真窗口）：「已截断，看全文（22 KB）」打开的「工具输出」sheet 只有 470×113、内容是空的（`GET …/full` 发了），见 #508。
 - [ ] Unified DiffView (Edit/MultiEdit/Write + Codex unified diff), +N −N, 40-line truncation, horizontal scroll — ToolViews.swift (DiffView), Views/Session/GitPane.swift (DiffText)
   - Mac（2026-11-01 核对）：截图里只看到 Edit 的标题（+6）和一行红色删除行，在画面底边被截掉，没看到绿色新增行；40 行截断、横向滚动、Codex 的 unified diff 都没跑到。

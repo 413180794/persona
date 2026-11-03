@@ -28,7 +28,7 @@ enum ToolPresentation {
         case "WebSearch": return "magnifyingglass"
         case "Task", "Agent": return "person.2"
         case "TodoWrite", "TaskCreate", "TaskUpdate": return "checklist"
-        case "AskUserQuestion": return "questionmark.bubble"
+        case "AskUserQuestion", "ask_user": return "questionmark.bubble"
         case "ExitPlanMode", "EnterPlanMode": return "list.bullet.clipboard"
         case "ToolSearch": return "wrench.and.screwdriver"
         case "Skill": return "sparkles"
@@ -60,7 +60,7 @@ enum ToolPresentation {
         case "WebSearch": return "网页搜索"
         case "Task", "Agent": return "子任务"
         case "TodoWrite": return "更新待办"
-        case "AskUserQuestion": return "提问"
+        case "AskUserQuestion", "ask_user": return "提问"
         case "ExitPlanMode": return "提交计划"
         case "EnterPlanMode": return "进入计划模式"
         case "ToolSearch": return "加载工具"
@@ -90,7 +90,8 @@ enum ToolPresentation {
         case "conversation_new", "conversation_send": return firstLine(s("text") ?? "")
         case "conversation_read", "conversation_archive", "conversation_unarchive": return String((s("id") ?? "").prefix(8))
         case "ToolSearch": return s("query") ?? ""
-        case "AskUserQuestion": return i["questions"]?.array?.first?["question"]?.string ?? ""
+        // ask_user is the Jarvis assistant's own question tool (docs/assistant.md); it takes the same questions.
+        case "AskUserQuestion", "ask_user": return i["questions"]?.array?.first?["question"]?.string ?? ""
         case "ExitPlanMode": return PlanText.title(s("plan") ?? "")
         case "TodoWrite":
             let todos = i["todos"]?.array ?? []
@@ -310,8 +311,9 @@ struct ToolCallRow: View {
             || Self.debugDetails)
     }
 
-    /// Mac screenshots (docs/mac.md): `-showToolDetails YES` opens every tool row (diffs, Bash output) without a click.
-    #if DEBUG && os(macOS)
+    /// Screenshots (docs/mac.md, docs/testing.md): `-showToolDetails YES` opens every tool row (diffs, Bash output,
+    /// an answered ask_user) without a tap.
+    #if DEBUG
     static let debugDetails = UserDefaults.standard.bool(forKey: "showToolDetails")
     #else
     static let debugDetails = false
@@ -476,12 +478,15 @@ struct ToolDetail: View {
                 ForEach(Array((i["questions"]?.array ?? []).enumerated()), id: \.offset) { _, q in
                     Text(q["question"]?.string ?? "").font(Theme.Font.captionMedium)
                 }
+            case "ask_user":
+                AskUserDetail(call: call)
             case "Task", "Agent":
                 Text(i["prompt"]?.string ?? "").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(8)
             default:
                 if i != .object([:]) { CodeBlock(text: ToolTextMemo.input(call.use, scope: memoScope), maxLines: 14) }
             }
-            if let result = call.result, base != "Edit" || result.isError == true {
+            // An answered ask_user shows the picks under its questions (AskUserDetail), not the text the model got.
+            if let result = call.result, (base != "Edit" && base != "ask_user") || result.isError == true {
                 ResultBlock(text: result.cutText, isError: result.isError ?? false, cut: result.fullSize.map { (result.id, $0) })
                 if base == "Bash" { PortChips(text: result.cutText) } // a dev server saying where it listens
             } else if call.isRunning {
@@ -557,9 +562,94 @@ nonisolated enum ToolTextMemo {
         switch ToolPresentation.baseName(item.toolName ?? "") {
         case "Bash": _ = codeLines("$ " + (input["command"]?.string ?? ""))
         case "ExitPlanMode": _ = MarkdownMemo.content(input["plan"]?.string ?? "")
-        case "Edit", "MultiEdit", "Write", "Read", "NotebookEdit", "AskUserQuestion", "Task", "Agent": break
+        case "Edit", "MultiEdit", "Write", "Read", "NotebookEdit", "AskUserQuestion", "ask_user", "Task", "Agent": break
         default: _ = codeLines(self.input(item, scope: scope))
         }
+    }
+}
+
+/// What the user picked in an ask_user card, read back from the tool's result: the hub answers the model with
+/// "The user answered:\n- <question> → <answer>\n" per question (hub/assistant_tools.go), and with "The user did
+/// not answer …" when the card was dismissed or expired. A multi-select answer joins its labels with ", ".
+nonisolated enum AskUserAnswers {
+    struct Question: Equatable, Sendable {
+        var question: String
+        var options: [String]
+        var multiSelect: Bool
+    }
+
+    static func questions(_ input: JSONValue) -> [Question] {
+        (input["questions"]?.array ?? []).map { q in
+            Question(question: q["question"]?.string ?? "",
+                     options: (q["options"]?.array ?? []).compactMap { $0["label"]?.string },
+                     multiSelect: q["multiSelect"]?.bool ?? false)
+        }
+    }
+
+    /// Each question's answer; empty when the result says nobody answered (or is not the hub's answer at all).
+    static func parse(_ result: String, questions: [Question]) -> [String: String] {
+        guard result.hasPrefix("The user answered:") else { return [:] }
+        let marks = questions.compactMap { q -> (String, Range<String.Index>)? in
+            result.range(of: "\n- \(q.question) → ").map { (q.question, $0) }
+        }.sorted { $0.1.lowerBound < $1.1.lowerBound }
+        var out: [String: String] = [:]
+        for (n, (question, mark)) in marks.enumerated() {
+            let end = n + 1 < marks.count ? marks[n + 1].1.lowerBound : result.endIndex
+            let answer = result[mark.upperBound..<end].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !answer.isEmpty { out[question] = answer }
+        }
+        return out
+    }
+
+    /// Whether an option is among what was picked.
+    static func picked(_ label: String, answer: String?, multiSelect: Bool) -> Bool {
+        guard let answer else { return false }
+        if answer == label { return true }
+        return multiSelect && answer.components(separatedBy: ", ").contains(label)
+    }
+
+    /// An answer typed instead of picking an option.
+    static func typed(_ q: Question, answer: String?) -> String? {
+        guard let answer, !q.options.contains(where: { picked($0, answer: answer, multiSelect: q.multiSelect) }) else { return nil }
+        return answer
+    }
+}
+
+/// The assistant's ask_user once opened: each question with its options, what the user picked ticked. The card itself
+/// is gone once answered, so this is where the conversation keeps what was asked and what came back.
+struct AskUserDetail: View {
+    var call: ToolCall
+
+    var body: some View {
+        let questions = AskUserAnswers.questions(call.input)
+        let answers = call.result.map { AskUserAnswers.parse($0.cutText, questions: questions) } ?? [:]
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            ForEach(Array(questions.enumerated()), id: \.offset) { _, q in
+                let answer = answers[q.question]
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Text(q.question).font(Theme.Font.captionMedium)
+                    ForEach(Array(q.options.enumerated()), id: \.offset) { _, label in
+                        choice(label, picked: AskUserAnswers.picked(label, answer: answer, multiSelect: q.multiSelect))
+                    }
+                    if let typed = AskUserAnswers.typed(q, answer: answer) { choice(typed, picked: true) }
+                }
+            }
+            if let result = call.result, result.isError != true, answers.isEmpty {
+                Text("没有回答").font(Theme.Font.label).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityIdentifier("ask-user-detail")
+    }
+
+    private func choice(_ label: String, picked: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+            Image(systemName: picked ? Theme.Icon.successFilled : Theme.Icon.unchecked)
+                .font(Theme.Font.label)
+                .foregroundStyle(picked ? Theme.accent : Color.secondary)
+            Text(label).font(Theme.Font.caption).foregroundStyle(picked ? Color.primary : Color.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(picked ? .isSelected : [])
     }
 }
 

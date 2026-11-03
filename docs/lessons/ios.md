@@ -590,3 +590,11 @@ Task 里只遍历这个序列，就能编过。选择器用 `preferredItemEncodi
   - 上一轮的「#fail」消息留在发件箱里，排在新发的那条下面，「刚发的在输入框正上方」就差了 141 pt。
   - 用例自己收尾（取消回复）；查失败前先 `simctl uninstall` 换一份干净数据，再和 master 比。
 - 后台等 `gh pr checks` 的脚本在这台机器上会提前报「完成」，输出却是空的：等待脚本单独写成文件，自己写 log，用 perl 的 `select` 代替 `sleep`。
+
+## Persona 自己的 MCP 工具要在 `ToolPresentation` 里登记（2026-11-03，#677）
+
+对话里的工具行按工具名取标签、参数（`ToolPresentation.verb` / `subject`）和展开的样子（`ToolDetail`），不认识的名字走默认：
+标签是原名，参数取输入里第一个字符串值。`ask_user` 的输入只有 `questions` 数组，参数就是空字符串，BeautifulUI 的 `ToolChipRow` 照样画出参数框，
+于是成了「ask_user + 一个空灰框」；卡片答完一收，对话里再也看不到问了什么、选了什么，看着像「没显示问题」。
+当时线上 hub 的交互记录里问题建了、推了、21 秒后答了，问题出在 App 怎么画。给助手加只给它用的工具（`hub/assistant_tools.go`）时，
+顺手在 `ToolPresentation` 里给它起中文名、挑参数；它的结果是给模型看的英文时，展开后换成用户看得懂的（`AskUserDetail` 从结果里读回选了哪项）。
