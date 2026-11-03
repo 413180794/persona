@@ -188,7 +188,7 @@ class PersonaScriptIdentityTests(unittest.TestCase):
             (dropins / '30-empty.conf').write_text('[Service]\nEnvironment="PERSONA_HOME="\n')
             self.assertEqual(identity.data_dir(home, identity.service_environment(home, {}, 'hub')), str(home / '.persona'))
             (dropins / '40-external.conf').write_text('[Service]\nEnvironmentFile=/unread/fixture.env\n')
-            with self.assertRaisesRegex(OSError, 'explicitly'):
+            with self.assertRaisesRegex(FileNotFoundError, 'unavailable'):
                 identity.service_environment(home, {}, 'hub')
 
     def test_hub_unit_writer_and_reader_agree_with_xdg_config_home(self):

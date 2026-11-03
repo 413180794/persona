@@ -15,7 +15,7 @@
 
 ## 顶层公共脚本
 
-- `persona_identity.py`：运行根目录的公共解析器；不读取构建配置或凭据。`--service hub|node|link` 在没有显式新旧 HOME 环境时恢复对应角色的已安装用户服务根目录，尊重环境清空、用户 drop-in 和 `XDG_CONFIG_HOME`；省略角色时，多服务根冲突会停止而不猜测。外部 `EnvironmentFile` 或 `UnsetEnvironment` 不能可靠恢复根时，先显式设置 `PERSONA_HOME`，脚本不会读取其中的凭据。`--prepare` 补默认兼容软链，`--prefix` 将同一解析逻辑带到远端执行。所有远端路径使用远端自己的 HOME。
+- `persona_identity.py`：运行根目录的公共解析器；不读取构建配置，也不使用环境文件中的凭据。`--service hub|node|link` 在没有显式新旧 HOME 环境时恢复对应角色的已安装用户服务根目录，尊重环境清空、用户 drop-in 和 `XDG_CONFIG_HOME`；省略角色时，多服务根冲突会停止而不猜测。外部 `EnvironmentFile` 只提取 `PERSONA_HOME` / `JARVIS_HOME`，支持按顺序覆盖、可选文件、通配符和列表清空；`UnsetEnvironment` 在文件之后生效。文件内容不会执行，其他字段不会返回或记录；必需文件缺失会在创建数据之前停止，显式 HOME 可直接选择根。`--prepare` 补默认兼容软链，`--prefix` 将同一解析逻辑带到远端执行。所有远端路径使用远端自己的 HOME。
 - `jarvis_config.py`：所有脚本共用的配置读取与 Xcode 配置生成，位置不变。
 - `privacy_check.py`：仓库和暂存内容的隐私检查，位置不变；Git hooks、网页构建和 CI 继续调用它。
 - 常用 shell 命令保留顶层兼容入口：`sim.sh`、`android.sh`、`ui-test.sh`、`mac_shot.sh`、`deploy.sh`、`publish.sh`、`release.sh`、`test-server.sh`。

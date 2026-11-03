@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Resolve runtime state roots without reading build configuration or credentials."""
 import argparse
+import glob
 import os
 import pathlib
 import plistlib
+import re
 import shlex
 
 
@@ -70,8 +72,133 @@ def prepare_dir(home=None, environment=None):
     return data_dir(home, environment)
 
 
+def _file_environment(path):
+    """Consume complete systemd-style assignments while retaining only HOME values."""
+    values, key, value = {}, [], []
+    state, wanted, trailing = "before_key", False, None
+    whitespace, newline = " \t\n\r", "\n\r"
+
+    def append(character):
+        if wanted:
+            value.append(character)
+
+    def emit(trim=False):
+        if wanted:
+            result = value[:trailing] if trim and trailing is not None else value
+            values["".join(key).rstrip(whitespace)] = "".join(result)
+
+    with path.open(newline="") as stream:
+        ended = False
+        for line in stream:
+            for character in line:
+                if character == "\0":
+                    ended = True
+                    break
+                if state == "before_key":
+                    if character in "#;":
+                        state = "comment"
+                    elif character not in whitespace:
+                        key, state = [character], "key"
+                elif state == "key":
+                    if character in newline:
+                        key, state = [], "before_key"
+                    elif character == "=":
+                        wanted = "".join(key).rstrip(whitespace) in ("PERSONA_HOME", "JARVIS_HOME")
+                        value, trailing, state = [], None, "before_value"
+                    else:
+                        key.append(character)
+                elif state in ("before_value", "plain") and character in newline:
+                    emit(trim=state == "plain")
+                    key, value, wanted, trailing, state = [], [], False, None, "before_key"
+                elif state == "before_value":
+                    if character == "'":
+                        state = "single"
+                    elif character == '"':
+                        state = "double"
+                    elif character == "\\":
+                        state = "plain_escape"
+                    elif character not in whitespace:
+                        append(character)
+                        state = "plain"
+                elif state == "plain":
+                    if character == "\\":
+                        trailing, state = None, "plain_escape"
+                    else:
+                        if character not in whitespace:
+                            trailing = None
+                        elif trailing is None:
+                            trailing = len(value)
+                        append(character)
+                elif state == "plain_escape":
+                    state = "plain"
+                    if character not in newline:
+                        append(character)
+                elif state == "single":
+                    if character == "'":
+                        state = "before_value"
+                    else:
+                        append(character)
+                elif state == "double":
+                    if character == '"':
+                        state = "before_value"
+                    elif character == "\\":
+                        state = "double_escape"
+                    else:
+                        append(character)
+                elif state == "double_escape":
+                    state = "double"
+                    if character in ('"', "\\", "`", "$"):
+                        append(character)
+                    elif character != "\n":
+                        append("\\")
+                        append(character)
+                elif state == "comment":
+                    if character == "\\":
+                        state = "comment_escape"
+                    elif character in newline:
+                        state = "before_key"
+                elif state == "comment_escape":
+                    state = "before_key" if character in newline else "comment"
+            if ended:
+                break
+    if state in ("before_value", "plain", "plain_escape", "single", "double", "double_escape"):
+        emit(trim=state == "plain")
+    return values
+
+
+def _unit_words(text):
+    """Unquote unit words without turning C-escaped whitespace into word boundaries."""
+    decoded, ordinal = {}, 0xE000
+    simple = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v",
+              "s": " ", "e": "\x1b", "\\": "\\", '"': '"', "'": "'"}
+
+    def protect(match):
+        nonlocal ordinal
+        escape = match.group(0)[1:]
+        if escape in simple:
+            value = simple[escape].encode("utf-8")
+        elif escape[0] in "uU":
+            value = chr(int(escape[1:], 16)).encode("utf-8")
+        elif escape[0] == "x":
+            value = bytes([int(escape[1:], 16)])
+        else:
+            value = bytes([int(escape, 8)])
+        if b"\0" in value:
+            raise ValueError("NUL is not valid in a unit environment")
+        while chr(ordinal) in text:
+            ordinal += 1
+        marker = chr(ordinal)
+        ordinal += 1
+        decoded[marker] = value
+        return marker
+
+    encoded = re.sub(r"\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[0-7]{3}|[abfnrtvse\\\"'])", protect, text)
+    return [b"".join(decoded.get(character, character.encode("utf-8")) for character in word).decode("utf-8")
+            for word in shlex.split(encoded)]
+
+
 def _unit_environment(unit, home):
-    values = {}
+    values, environment_files, unset = {}, [], []
     files = [unit, *sorted(unit.with_name(unit.name + ".d").glob("*.conf"))]
     for file in files:
         try:
@@ -94,25 +221,52 @@ def _unit_environment(unit, home):
             if section != "[Service]":
                 continue
             setting, sep, text = line.partition("=")
+            setting = setting.strip()
             if not sep:
                 continue
-            if setting in ("EnvironmentFile", "UnsetEnvironment") and text:
-                raise OSError("service environment uses external or removed values; set PERSONA_HOME explicitly before deployment")
-            if setting != "Environment":
+            if setting not in ("Environment", "EnvironmentFile", "UnsetEnvironment"):
                 continue
-            if not text:
-                values.clear()
+            if setting == "EnvironmentFile":
+                if not text.strip():
+                    environment_files.clear()
+                else:
+                    environment_files.append(text.strip())
                 continue
             try:
-                entries = shlex.split(text)
-            except ValueError as error:
-                raise OSError("service environment could not be parsed; set PERSONA_HOME explicitly") from error
+                entries = _unit_words(text)
+            except ValueError:
+                raise OSError("service environment could not be parsed; set PERSONA_HOME explicitly") from None
+            if setting == "UnsetEnvironment":
+                if not entries:
+                    unset.clear()
+                unset.extend(entries)
+                continue
             if not entries:
                 values.clear()
             for entry in entries:
                 key, sep, value = entry.partition("=")
                 if sep and key in ("PERSONA_HOME", "JARVIS_HOME"):
                     values[key] = value.replace("%%", "\0").replace("%h", home).replace("\0", "%")
+    for entry in environment_files:
+        optional = entry.startswith("-")
+        pattern = entry[1:] if optional else entry
+        pattern = pattern.replace("%%", "\0").replace("%h", home).replace("\0", "%")
+        if not os.path.isabs(pattern):
+            raise OSError("EnvironmentFile must name an absolute path")
+        matches = sorted(glob.glob(pattern))
+        if not matches and not optional:
+            raise FileNotFoundError("required service environment file is unavailable")
+        for path in matches:
+            try:
+                values.update(_file_environment(pathlib.Path(path)))
+            except (OSError, UnicodeError):
+                if not optional:
+                    raise
+    for entry in unset:
+        entry = entry.replace("%%", "\0").replace("%h", home).replace("\0", "%")
+        key, sep, value = entry.partition("=")
+        if key in values and (not sep or values[key] == value):
+            del values[key]
     return values
 
 

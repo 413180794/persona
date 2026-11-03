@@ -22,10 +22,10 @@
 | 配置文件覆盖 | `PERSONA_CONFIG` | `JARVIS_CONFIG` |
 | 已迁移的环境变量 | 对应的 `PERSONA_*` | `JARVIS_*`；新旧同时提供时新名优先，包括显式空值 |
 | 配置脚本 | `scripts/persona_config.py` | `scripts/jarvis_config.py` 软链到同一实现 |
-| 服务运行根解析器 | `scripts/persona_identity.py --service hub\|node\|link` | 恢复该角色已安装服务的根，不读构建配置或凭据；旧无根 Environment 的服务继续原默认存储 |
+| 服务运行根解析器 | `scripts/persona_identity.py --service hub\|node\|link` | 恢复该角色已安装服务的根，不读构建配置；环境文件只提取 HOME，旧无 HOME 的服务继续原默认存储 |
 | DEBUG App 命令工具 | `scripts/app/personactl.py` | `scripts/app/jarvisctl.py` 同一实现，原命令与缓存位置保留 |
 
-源码路径、Xcode 工程 / scheme 与系统身份的完整清单见 [兼容迁移](rename.md#源码位置构建入口与兼容名字)。#773 的 [按服务恢复运行目录](rename.md#部署脚本按服务恢复运行目录) 说明 role、reset / drop-in / XDG、SameFile 和外部 EnvironmentFile / UnsetEnvironment 的边界；后两者需要显式指定实际根，不读取外部凭据。新旧 URL scheme 的接收与旧格式生成分别验证，不以文档改名代替客户端验收。
+源码路径、Xcode 工程 / scheme 与系统身份的完整清单见 [兼容迁移](rename.md#源码位置构建入口与兼容名字)。#773 的 [按服务恢复运行目录](rename.md#部署脚本按服务恢复运行目录) 说明 role、reset / drop-in / XDG、SameFile 和外部 EnvironmentFile / UnsetEnvironment 的边界；后两者只处理 HOME 字段与移除规则，不执行或返回其他环境字段；必需文件缺失或根字段无法解析时停止，也可显式指定实际根。新旧 URL scheme 的接收与旧格式生成分别验证，不以文档改名代替客户端验收。
 
 旧目录的兼容和迁移由运行时 / 安装器负责。升级前备份实际使用的数据目录与 Postgres；不要仅为改名手动删除旧目录、合并两份目录或重新生成密钥。两套目录已经同时存在、或者使用自定义路径时，先确认实际加载的是哪一份，避免启动一个空 hub。文档中的历史测量、签名 profile、源码路径、包 ID、协议字段、缓存键以及 systemd / launchd 名称仍可能保留 Jarvis；它们不是新的对外产品名，也不应靠全文替换迁移。
 

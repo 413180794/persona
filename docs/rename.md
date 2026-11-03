@@ -91,13 +91,13 @@ node socket 使用同一个存储中较短的旧路径，避免新名字多一�
 
 ## 部署脚本按服务恢复运行目录
 
-#773 的 `scripts/persona_identity.py` 只解析运行身份，不读构建配置、hub.json 或凭据。部署 / 测试脚本用 `--service hub`、`--service node`、`--service link` 选择对应服务，避免同机 hub 与 node / Link 使用不同根时借错目录：
+#773 的 `scripts/persona_identity.py` 只恢复运行身份，不读构建配置或 hub.json；外部环境文件只提取 HOME 字段，其他字段不返回、不记录、不用于认证。部署 / 测试脚本用 `--service hub`、`--service node`、`--service link` 选择对应服务，避免同机 hub 与 node / Link 使用不同根时借错目录：
 
 - 环境里显式定义 `PERSONA_HOME` 或 `JARVIS_HOME` 时，直接使用该环境；新名优先，包括空值，不再从已安装服务借一个根。
 - systemd 从 `XDG_CONFIG_HOME/systemd/user`（未设置时为 `~/.config/systemd/user`）读取对应旧单元。hub 只查 `jarvisd.service`；node 先查 `jarvisd-node.service`、再查 `jarvis-link.service`；link 顺序相反。没有 systemd 单元时，node / link 可按对应角色查询原 launchd plist，不变更单元身份。
-- **旧服务存在但没有根目录 Environment 时，继续原默认存储**；找到该角色单元就不借其他角色或后备服务的根。不会因为同机另一个服务有自定义根，悄悄把旧服务迁过去。
+- **旧服务存在，但 unit 和外部环境文件都没有 HOME 时，继续原默认存储**；找到该角色单元就不借其他角色或后备服务的根。不会因为同机另一个服务有自定义根，悄悄把旧服务迁过去。
 - 解析主 unit 与按文件名排序的 `.d/*.conf`，支持 `Environment=` 清空重置、后续覆盖、行续接，以及 `%h` / `%%`。只保留 `PERSONA_HOME` / `JARVIS_HOME`，不提取其他环境值。自动模式遇到不同独立根会拒绝，要求定向选择服务；两个根经 SameFile 校验指向同一默认存储时不误报冲突。
-- 遇到非空 `EnvironmentFile=` 或 `UnsetEnvironment=`，不尝试读取外部文件或猜最终环境，要求先显式指定实际 `PERSONA_HOME`。解析错误同样停止，不能退回另一份空存储。
+- `EnvironmentFile=` 支持按顺序覆盖同名 unit 环境、可选文件的 `-` 前缀、通配符以及空赋值重置文件列表，只提取新旧 HOME；不执行 shell 展开，不返回或记录其他字段。`UnsetEnvironment=` 在全部文件之后移除匹配变量，空赋值重置移除列表。必需文件缺失或根字段解析错误时停止；显式 HOME 可以直接指定实际根，不能因无法恢复而切到另一份空存储。
 - 查询默认不创建目录；`--prepare` 才初始化缺失的默认别名，保留既有数据、独立根和自定义路径。`--prefix` 将解析器和指定脚本组合给远端，在远端解析并传递新旧根变量，不把本机根误传给远端，也不在生成文本中展开凭据。
 
 ## 环境变量
