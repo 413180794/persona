@@ -144,6 +144,7 @@ final class AppModel {
     static let demoKey = "demo.on"
 
     init() {
+        TextSize.current.applyToMacFonts() // what `textSize` starts at
         Task.detached(priority: .utility) { LarkAttachment.staging.sweep() }
         connection = ConnectionStatus()
         DemoHub.install()
@@ -1582,9 +1583,13 @@ final class AppModel {
     /// 设置 › 外观 › App 图标: the home screen icon (the system keeps the choice; this mirrors it).
     let appIcon = AppIconModel.live()
 
-    /// 小 / 标准 / 大 on top of the system's text size (设置 › 界面风格 › 字号); RootView applies it.
+    /// 小 / 标准 / 大 on top of the system's text size (设置 › 界面风格 › 字号); RootView applies it. On the Mac the
+    /// fonts read it from `Theme.Font.scale` (text styles there do not follow Dynamic Type, #833).
     var textSize: TextSize = TextSize.current {
-        didSet { UserDefaults.standard.set(textSize.rawValue, forKey: "ui.textSize") }
+        didSet {
+            UserDefaults.standard.set(textSize.rawValue, forKey: "ui.textSize")
+            textSize.applyToMacFonts()
+        }
     }
 
     /// 跟随系统 / 浅色 / 深色 (设置 › 外观 › 深浅色), on the app's windows; RootView puts it on a new window. Nothing is

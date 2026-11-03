@@ -21,3 +21,42 @@ struct MacTypeScaleTests {
         #expect(LarkTextBase().size == Theme.Level.body.size)
     }
 }
+
+/// 小 / 标准 / 大 on the Mac (#833): text styles there do not follow Dynamic Type, so the fonts, Markdown and the sizes
+/// that go with text (frames, line spacing, Feishu text) move by the Mac's own step, a point at the body (12 / 13 / 14).
+@MainActor @Suite(.serialized)
+struct MacTextSizeTests {
+    /// The scale goes through iOS's 17 (`Theme.textScale`), so it is not bit for bit 12 / 13.
+    private func near(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) < 1e-9 }
+
+    @Test func aPointAStepAtTheBody() {
+        #expect(near(Theme.textScale(TextSize.small.applied(to: .large)) * Theme.Level.body.size, 12))
+        #expect(near(Theme.textScale(TextSize.standard.applied(to: .large)), 1))
+        #expect(near(Theme.textScale(TextSize.large.applied(to: .large)) * Theme.Level.body.size, 14))
+        // Frames and icon boxes keep the same ratio, not iOS's 16 / 17 / 19.
+        #expect(near(Theme.sizeScale(TextSize.large.applied(to: .large)), 14.0 / 13))
+    }
+
+    @Test func theFontsFollowTheSetting() {
+        defer { TextSize.standard.applyToMacFonts() }
+        TextSize.large.applyToMacFonts()
+        #expect(near(Theme.Font.scale, 14.0 / 13))
+        TextSize.small.applyToMacFonts()
+        #expect(near(Theme.Font.scale, 12.0 / 13))
+        TextSize.standard.applyToMacFonts()
+        #expect(near(Theme.Font.scale, 1))
+    }
+
+    @Test func markdownThemesAreMadeAgainForANewSize() {
+        defer { TextSize.standard.applyToMacFonts() }
+        var made = 0
+        let theme = PerTextScale { made += 1; return Theme.Font.scale }
+        TextSize.standard.applyToMacFonts()
+        #expect(theme.value == 1)
+        #expect(theme.value == 1)
+        #expect(made == 1) // kept while the size stays
+        TextSize.large.applyToMacFonts()
+        #expect(near(theme.value, 14.0 / 13))
+        #expect(made == 2)
+    }
+}

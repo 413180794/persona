@@ -195,7 +195,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
     这次改动之前已经换过凭据的 Mac 在列表里还标成 phone，只是标签，撤销后重新配对就对了（不改）。
 - 临时实现，等后面打磨：外层侧栏和页面自己的分栏是两层（六项是 HStack 里的一列，页面是第一栏空着的三栏分栏）；分页的 `TabView(.page)` 换成了默认样式 / 箭头翻页；
   `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；代码行只有整行选择；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
-  字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体（`UIFontMetrics` 按 iOS 的 body 表换算）。
+  字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体：`Theme.Font` 每一级、Markdown 的基础字号乘 `Theme.Font.scale`（`AppModel.textSize` 设），图标框、行距、飞书正文按兼容层的 `UIFontMetrics`（Mac 自己的表 `macBody`，正文 12 / 13 / 14）换算，两边同一个比例（#833）。
 
 ## SSH 隧道（Mac）
 
@@ -293,7 +293,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 分区上的数量角标也跟着收起：Agents 的需要你还有 Dock 角标和菜单栏图标，收件箱的待处理数收起时就看不到了（review 第 7 轮记下，没改：收起本来就是不要这一栏）。
 
 `apple/Mac/App/MacViewCommands.swift`（有测试）。显示 › 放大字号 ⌘+ / 缩小字号 ⌘- / 标准字号 ⌘0：在 设置 › 字号 的 小 / 标准 / 大 之间走一步，到头就停，
-和设置里改是同一个值（整棵视图按新字号重建）。前往 › 上一个 / 下一个 Agent ⌘[ ⌘]：按 Agents 列表的顺序（`AgentListOrder`：需要你 → 完成未看 → 工作中 → 已看），
+和设置里改是同一个值（整棵视图按新字号重建：`macLook` 的 `.id(model.textSize)`，字体读的是 SwiftUI 不观察的 `Theme.Font.scale`）。前往 › 上一个 / 下一个 Agent ⌘[ ⌘]：按 Agents 列表的顺序（`AgentListOrder`：需要你 → 完成未看 → 工作中 → 已看），
 循环，不含 Persona 对话；没开着 Agent 时从第一个开始。
 编辑 › 查找… ⌘F（`apple/Mac/App/MacFind.swift`，有测试）：当前窗口的搜索框获焦（工具栏的搜索项优先，再是页面里的；Agents、知识库用 `-macFind YES` 验过），
 没有搜索框的页面什么都不做；焦点在自带查找栏的文本视图（diff、输出）里时打开它的查找栏。

@@ -18,12 +18,15 @@ extension EnvironmentValues {
 
 extension MarkdownUI.Theme {
     /// Markdown messages inside a chat bubble: body size, tight paragraphs.
-    @MainActor static let larkMessage = MarkdownUI.Theme.jarvis
-        .text { FontSize(Theme.Level.body.size) } // the body level, as Lark messages are (LarkTextBase)
-        .link { ForegroundColor(LarkColor.blue) }
-        .paragraph { config in
-            config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.15)).markdownMargin(top: 0, bottom: 6)
-        }
+    @MainActor static var larkMessage: MarkdownUI.Theme { larkMessageAtScale.value }
+    @MainActor private static let larkMessageAtScale = PerTextScale {
+        MarkdownUI.Theme.jarvis
+            .text { FontSize(Theme.Level.body.size * Theme.Font.scale) } // the body level, as Lark messages are (LarkTextBase)
+            .link { ForegroundColor(LarkColor.blue) }
+            .paragraph { config in
+                config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.15)).markdownMargin(top: 0, bottom: 6)
+            }
+    }
 }
 
 // MARK: - Rich-text tree

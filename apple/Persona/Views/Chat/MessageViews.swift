@@ -9,52 +9,58 @@ extension MarkdownUI.Theme {
     /// ScaledMetric relative to .body), so a reply and the user's bubble are one size at every setting. Headings follow
     /// `Theme.Font`: the first is the title level (1.3 em), the others the heading level (body size, semibold), told
     /// apart by the space above them; code blocks are the code level. Paragraphs have the body's line height (1.45:
-    /// 0.26 em over SF's own 1.19).
-    @MainActor static let jarvis = MarkdownUI.Theme()
-        .text { FontSize(Theme.Level.body.size) }
-        .code {
-            FontFamilyVariant(.monospaced)
-            FontSize(.em(0.88))
-            BackgroundColor(Theme.codeBackground)
-        }
-        .strong { FontWeight(.semibold) }
-        .link { ForegroundColor(Theme.accent) }
-        .heading1 { config in
-            config.label.markdownMargin(top: 16, bottom: 8).markdownTextStyle { FontWeight(.bold); FontSize(.em(1.3)) }
-        }
-        .heading2 { config in
-            config.label.markdownMargin(top: 14, bottom: 6).markdownTextStyle { FontWeight(.semibold); FontSize(.em(1)) }
-        }
-        .heading3 { config in
-            config.label.markdownMargin(top: 12, bottom: 4).markdownTextStyle { FontWeight(.semibold); FontSize(.em(1)) }
-        }
-        .paragraph { config in
-            config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.26)).markdownMargin(top: 0, bottom: 10)
-        }
-        .listItem { config in config.label.markdownMargin(top: .em(0.2)) }
-        .codeBlock { config in
-            // A card the assistant drew in numbers (#886); one the app cannot read stays a code block.
-            if config.language == PersonaCard.language, let card = PersonaCard.parse(config.content) {
-                PersonaCardView(card: card).markdownMargin(top: 4, bottom: 12)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    config.label
-                        .relativeLineSpacing(.em(0.2))
-                        .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(Theme.Level.code.size / Theme.Level.body.size)) }
-                        .padding(Theme.Space.m)
-                }
-                .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-                .markdownMargin(top: 4, bottom: 12)
+    /// 0.26 em over SF's own 1.19). On the Mac, where ScaledMetric does not follow 小 / 标准 / 大, the base size is
+    /// times `Theme.Font.scale` (#833) and the theme is made again when it changes (once on the iPhone).
+    @MainActor static var jarvis: MarkdownUI.Theme { jarvisAtScale.value }
+    @MainActor private static let jarvisAtScale = PerTextScale { makeJarvis() }
+
+    @MainActor private static func makeJarvis() -> MarkdownUI.Theme {
+        MarkdownUI.Theme()
+            .text { FontSize(Theme.Level.body.size * Theme.Font.scale) }
+            .code {
+                FontFamilyVariant(.monospaced)
+                FontSize(.em(0.88))
+                BackgroundColor(Theme.codeBackground)
             }
-        }
-        .blockquote { config in
-            config.label
-                .padding(.leading, Theme.Space.m)
-                .overlay(alignment: .leading) { Rectangle().fill(Theme.accent.opacity(0.5)).frame(width: Theme.Size.bar) }
-                .markdownTextStyle { ForegroundColor(.secondary) }
-        }
-        .table { config in FittedTable(config: config) } // fits the width it gets; scrolls only when it cannot
-        .tableCell { config in FittedTableCell(config: config) }
+            .strong { FontWeight(.semibold) }
+            .link { ForegroundColor(Theme.accent) }
+            .heading1 { config in
+                config.label.markdownMargin(top: 16, bottom: 8).markdownTextStyle { FontWeight(.bold); FontSize(.em(1.3)) }
+            }
+            .heading2 { config in
+                config.label.markdownMargin(top: 14, bottom: 6).markdownTextStyle { FontWeight(.semibold); FontSize(.em(1)) }
+            }
+            .heading3 { config in
+                config.label.markdownMargin(top: 12, bottom: 4).markdownTextStyle { FontWeight(.semibold); FontSize(.em(1)) }
+            }
+            .paragraph { config in
+                config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.26)).markdownMargin(top: 0, bottom: 10)
+            }
+            .listItem { config in config.label.markdownMargin(top: .em(0.2)) }
+            .codeBlock { config in
+                // A card the assistant drew in numbers (#886); one the app cannot read stays a code block.
+                if config.language == PersonaCard.language, let card = PersonaCard.parse(config.content) {
+                    PersonaCardView(card: card).markdownMargin(top: 4, bottom: 12)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        config.label
+                            .relativeLineSpacing(.em(0.2))
+                            .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(Theme.Level.code.size / Theme.Level.body.size)) }
+                            .padding(Theme.Space.m)
+                    }
+                    .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                    .markdownMargin(top: 4, bottom: 12)
+                }
+            }
+            .blockquote { config in
+                config.label
+                    .padding(.leading, Theme.Space.m)
+                    .overlay(alignment: .leading) { Rectangle().fill(Theme.accent.opacity(0.5)).frame(width: Theme.Size.bar) }
+                    .markdownTextStyle { ForegroundColor(.secondary) }
+            }
+            .table { config in FittedTable(config: config) } // fits the width it gets; scrolls only when it cannot
+            .tableCell { config in FittedTableCell(config: config) }
+    }
 }
 
 /// Offers its content at most `max` points of width (the whole `max` when the parent leaves width open), so text wraps

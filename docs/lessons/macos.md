@@ -105,4 +105,7 @@
 - Mac 窗口工具栏去掉了系统标题以后（#830），推进去的页面的 `navigationTitle` 没地方显示（#855）：推入页面用 `pageTitle(_:subtitle:)`（iOS 上就是 `navigationTitle`），
   Mac 上它把标题画在这一页顶上的标题栏那一行，并用 `MacTitleRowTaken` 告诉外壳别再画分区名。左边距是标题自己量的（这一页是否贴着窗口左边缘），
   不读 `macTitleRowLeading`：分栏详情栏里推进去的页面拿到的是整页的值，环境值加在 `navigationDestination` 外面、`NavigationStack` 外面都试过，没用。
-
+- Mac 上 SwiftUI 的系统文字样式（`.body`、`.subheadline`…）和 `@ScaledMetric` 都不跟 `.dynamicTypeSize(...)` 变（#833，2026-11-03 实测：套 `.medium` 到 `.xxxLarge`，`Font.body` 行高一直 16，ScaledMetric 一直 13），
+  `Font.system(size:relativeTo:)` 也一样。所以 小 / 标准 / 大 在 Mac 上只能自己乘：`Theme.Font` 的每一级在 Mac 上是读 `Theme.Font.scale` 的计算属性，
+  Markdown 主题的基础字号也乘它（主题是点数，`PerTextScale` 按比例缓存），改设置后 `macLook` 用 `.id(model.textSize)` 让整窗重画（SwiftUI 不观察这个静态值）。
+  在别处把 `Theme.Font.xxx` 存进 `static let` 会停在第一次的字号（`CompactList` 改成了计算属性）；兼容层的 `UIFontMetrics` 原来按 iOS 的 body 表（16 / 17 / 19）换算，一档 6–12%，和 Mac 的一点一档对不上，改成 Mac 自己的表。

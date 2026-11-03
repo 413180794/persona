@@ -3,17 +3,17 @@ import SwiftUI
 /// 细列表's one scale (docs/ios.md「Agents 列表」): every row in it — an agent, 还有 N 个空闲, 收起, a quiet space —
 /// is one line of the same height with its mark (state dot, fold chevron, space icon) in one column, so the titles
 /// start at one edge; three levels of type: section titles, row titles, meta. All Dynamic Type levels, so the three
-/// text sizes (小 / 标准 / 大) keep the ratios. The cards (卡片) do not use it.
+/// text sizes (小 / 标准 / 大) keep the ratios; read each time, since the Mac's move with `Theme.Font.scale`. The cards (卡片) do not use it.
 enum CompactList {
     /// A space's name, and the list's other section titles (需要你处理, 空闲的空间, a state, a machine).
-    static let sectionTitle = Theme.Font.heading
+    static var sectionTitle: Font { Theme.Font.heading }
     /// What a row is: an agent's title, a quiet space's name, 还有 N 个空闲.
-    static let title = Theme.Font.secondary
+    static var title: Font { Theme.Font.secondary }
     /// A finished-unseen agent's title.
-    static let titleUnread = Theme.Font.secondaryStrong
+    static var titleUnread: Font { Theme.Font.secondaryStrong }
     /// Where and when, the tab names behind 还有 N 个空闲, a header's counts.
-    static let meta = Theme.Font.caption
-    static let metaStrong = Theme.Font.captionMedium
+    static var meta: Font { Theme.Font.caption }
+    static var metaStrong: Font { Theme.Font.captionMedium }
     /// The column the marks sit in (`scaledFrame`: it grows with the text).
     static let mark = Theme.Size.markM
     /// Between the mark and the title, and between the things on a line.

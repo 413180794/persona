@@ -106,30 +106,32 @@ nonisolated enum UIContentSizeCategory: Sendable {
         }
     }
 
-    /// iOS's body size at this category (the Dynamic Type table), which is what the shared code scales against.
-    var body: CGFloat {
+    /// The Mac's body size at this category (`Theme.Level.body` is 13 at the default, .large): a point a step, as the
+    /// Mac's text sizes go (#779, #833). 小 / 标准 / 大 are .medium / .large / .extraLarge.
+    var macBody: CGFloat {
         switch self {
-        case .extraSmall: 14
-        case .small: 15
-        case .medium: 16
-        case .large: 17
-        case .extraLarge: 19
-        case .extraExtraLarge: 21
-        case .extraExtraExtraLarge: 23
-        case .accessibilityMedium: 28
-        case .accessibilityLarge: 33
-        case .accessibilityExtraLarge: 40
-        case .accessibilityExtraExtraLarge: 47
-        case .accessibilityExtraExtraExtraLarge: 53
+        case .extraSmall: 10
+        case .small: 11
+        case .medium: 12
+        case .large: 13
+        case .extraLarge: 14
+        case .extraExtraLarge: 15
+        case .extraExtraExtraLarge: 16
+        case .accessibilityMedium: 18
+        case .accessibilityLarge: 20
+        case .accessibilityExtraLarge: 22
+        case .accessibilityExtraExtraLarge: 24
+        case .accessibilityExtraExtraExtraLarge: 26
         }
     }
 }
 
-/// macOS has no Dynamic Type; the app's own 小 / 标准 / 大 still moves the size category, and this scales the same way iOS's body does.
+/// macOS has no Dynamic Type; the app's own 小 / 标准 / 大 still moves the size category, and this scales by the Mac's
+/// body at it (`macBody`: a point a step around 13), not iOS's table, which made a step 6–12 % on the Mac (#833).
 nonisolated struct UIFontMetrics {
     init(forTextStyle: NSFont.TextStyle) {}
     func scaledValue(for value: CGFloat, compatibleWith traits: UITraitCollection?) -> CGFloat {
-        value * (traits?.preferredContentSizeCategory.body ?? 17) / 17
+        value * (traits?.preferredContentSizeCategory.macBody ?? 13) / 13
     }
     func scaledValue(for value: CGFloat) -> CGFloat { value }
 }

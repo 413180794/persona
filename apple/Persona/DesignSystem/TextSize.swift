@@ -36,6 +36,14 @@ enum TextSize: String, CaseIterable, Identifiable {
 
     /// `ui.textSize` (also a launch argument: `-ui.textSize large`).
     static var current: TextSize { TextSize(rawValue: UserDefaults.standard.string(forKey: "ui.textSize") ?? "") ?? .standard }
+
+    /// The Mac's fonts at this size (`Theme.Font.scale`: body 12 / 13 / 14); the Mac has no system text size under it,
+    /// so it applies to `.large` as `macLook` does. Nothing on the iPhone, where the text styles follow Dynamic Type.
+    func applyToMacFonts() {
+        #if os(macOS)
+        Theme.Font.scale = Theme.textScale(applied(to: .large))
+        #endif
+    }
 }
 
 extension Theme {
@@ -51,6 +59,22 @@ extension Theme {
 
     /// Rows in long lists ask for every redraw; there are twelve sizes.
     private static var textScales: [DynamicTypeSize: CGFloat] = [:]
+}
+
+/// A value made for the current text size (`Theme.Font.scale`) and kept until it changes: Markdown themes, whose sizes
+/// are points, follow 小 / 标准 / 大 on the Mac that way (#833). The scale never changes on the iPhone: made once.
+@MainActor final class PerTextScale<Value> {
+    private let make: () -> Value
+    private var made: (scale: CGFloat, value: Value)?
+
+    init(_ make: @escaping () -> Value) { self.make = make }
+
+    var value: Value {
+        if let made, made.scale == Theme.Font.scale { return made.value }
+        let v = make()
+        made = (Theme.Font.scale, v)
+        return v
+    }
 }
 
 extension View {

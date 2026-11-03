@@ -155,26 +155,44 @@ nonisolated enum Theme {
         #if os(macOS)
         // The Mac's text styles are smaller than the iPhone's and spaced differently (body 13, subheadline 11,
         // footnote and caption 10): the iPhone's choices gave 10 pt times and sources next to 17 pt replies (#779).
-        // The Mac has its own sizes (`Level.size`; the user chose body 13, nothing under 11) in the system font. Text
-        // styles do not follow Dynamic Type on the Mac, so 小 / 标准 / 大 do not move these yet (#833).
+        // The Mac has its own sizes (`Level.size`; the user chose body 13, nothing under 11) in the system font, times
+        // `scale`. Text styles do not follow Dynamic Type on the Mac, so 小 / 标准 / 大 move these through `scale`
+        // (#833), and the window is drawn again when it changes (`macLook`).
+        /// 小 / 标准 / 大 on the Mac: how much larger the text is than the sizes at 标准 (`Theme.textScale` of the
+        /// app's text size: body 12 / 13 / 14). Set by `AppModel.textSize`, on the main thread.
+        nonisolated(unsafe) static var scale: CGFloat = 1
+        private static func sized(_ level: Level, _ weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
+            .system(size: level.size * scale, weight: weight, design: design)
+        }
         /// The home page's greeting, the welcome page (24 bold).
-        static let display = SwiftUI.Font.system(size: Level.display.size, weight: .bold)
+        static var display: SwiftUI.Font { sized(.display, .bold) }
         /// A detail page's or a sheet's title (18 semibold).
-        static let title = SwiftUI.Font.system(size: Level.title.size, weight: .semibold)
+        static var title: SwiftUI.Font { sized(.title, .semibold) }
         /// Titles of rows, cards, panels and Markdown headings below the first (13 semibold).
-        static let heading = SwiftUI.Font.system(size: Level.heading.size, weight: .semibold)
+        static var heading: SwiftUI.Font { sized(.heading, .semibold) }
         /// Messages, replies, mail and documents (13).
-        static let body = SwiftUI.Font.system(size: Level.body.size)
+        static var body: SwiftUI.Font { sized(.body) }
         /// Previews, subtitles, descriptions in cards (12).
-        static let secondary = SwiftUI.Font.system(size: Level.secondary.size)
+        static var secondary: SwiftUI.Font { sized(.secondary) }
         /// Times, places, states, meta lines (11).
-        static let caption = SwiftUI.Font.system(size: Level.caption.size)
+        static var caption: SwiftUI.Font { sized(.caption) }
         /// A list's section header: the caption's size, semibold, in the secondary color (11).
-        static let sectionHeader = SwiftUI.Font.system(size: Level.caption.size, weight: .semibold)
+        static var sectionHeader: SwiftUI.Font { sized(.caption, .semibold) }
         /// Chips, badges, counts, small labels on controls (11).
-        static let label = SwiftUI.Font.system(size: Level.label.size)
+        static var label: SwiftUI.Font { sized(.label) }
         /// Code, diffs, paths, terminal snippets (11).
-        static let code = SwiftUI.Font.system(size: Level.code.size, design: .monospaced)
+        static var code: SwiftUI.Font { sized(.code, design: .monospaced) }
+
+        static var bodyStrong: SwiftUI.Font { sized(.body, .semibold) }
+        static var bodyHeavy: SwiftUI.Font { sized(.body, .bold) }
+        static var secondaryStrong: SwiftUI.Font { sized(.secondary, .semibold) }
+        static var secondaryMedium: SwiftUI.Font { sized(.secondary, .medium) }
+        static var captionStrong: SwiftUI.Font { sized(.caption, .semibold) }
+        static var captionMedium: SwiftUI.Font { sized(.caption, .medium) }
+        static var captionHeavy: SwiftUI.Font { sized(.caption, .bold) }
+        static var labelStrong: SwiftUI.Font { sized(.label, .semibold) }
+        static var labelMedium: SwiftUI.Font { sized(.label, .medium) }
+        static var labelHeavy: SwiftUI.Font { sized(.label, .bold) }
         #else
         /// The home page's greeting, the welcome page (28 bold).
         static let display = SwiftUI.Font.title.bold()
@@ -194,7 +212,9 @@ nonisolated enum Theme {
         static let label = SwiftUI.Font.caption
         /// Code, diffs, paths, terminal snippets (13).
         static let code = SwiftUI.Font.footnote.monospaced()
-        #endif
+
+        /// Text styles follow Dynamic Type on the iPhone: nothing to multiply.
+        static let scale: CGFloat = 1
 
         // Emphasis inside a level: views use these, never `.weight(` on a level (TypeScaleTests). Strong is semibold,
         // the usual emphasis; medium and heavy (bold) are the weights in use today, kept so nothing moves.
@@ -208,6 +228,7 @@ nonisolated enum Theme {
         static let labelStrong = label.weight(.semibold)
         static let labelMedium = label.weight(.medium)
         static let labelHeavy = label.weight(.bold)
+        #endif
     }
 
     /// The levels' sizes at the default text size and their line heights (a multiple of the size, as in CSS), for

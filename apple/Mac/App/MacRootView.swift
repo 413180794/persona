@@ -137,9 +137,11 @@ struct MacRootView: View {
 
 extension View {
     /// What RootView sets on the whole tree on iOS: the spec's tint, font design and theme, the text size, and a
-    /// rebuild when the style, color or persona changes (tokens are static).
+    /// rebuild when the style, color or persona changes (tokens are static). The text size rebuilds it too on the
+    /// Mac: the fonts read `Theme.Font.scale`, which SwiftUI does not watch (#833).
     func macLook(_ model: AppModel) -> some View {
         id(model.look)
+            .id(model.textSize)
             .tint(Theme.accent)
             .fontDesign(model.style.fontDesign)
             .dynamicTypeSize(model.textSize.applied(to: .large))
