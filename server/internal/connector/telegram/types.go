@@ -52,3 +52,17 @@ type message struct {
 	Text      string // with a reply's, a forward's and a media's words
 	ReplyTo   int    // the message it replies to
 }
+
+// chatInfo is a conversation's profile, beyond what the list has.
+type chatInfo struct {
+	About   string // the bio of a person, the description of a group
+	Members int    // how many members a group has; 0 when Telegram does not say
+}
+
+// member is one of a group's members.
+type member struct {
+	Key      string // the peer key ("u123")
+	Name     string
+	Username string
+	Bot      bool
+}

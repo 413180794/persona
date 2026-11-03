@@ -20,8 +20,8 @@ hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/c
 2. 程序回清单：
 
    ```json
-   {"protocol": 2, "id": "example", "name": "Example", "capabilities": ["status", "tools", "inbox", "archive", "login"],
-    "hosts": ["example.com"], "agent_tools": ["example_read"], "poll_seconds": 600, "kinds": ["dm", "mention"]}
+   {"protocol": 2, "id": "example", "name": "Example", "capabilities": ["status", "tools", "actions", "inbox", "archive", "login"],
+    "hosts": ["example.com"], "agent_tools": ["example_read"], "unlisted": ["example_send"], "poll_seconds": 600, "kinds": ["dm", "mention"]}
    ```
 
    - `protocol` 不一致：程序回错误 `wrong_protocol`，或者 hub 看到清单里的版本不对就停掉它，设置页写明原因。
@@ -32,9 +32,10 @@ hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/c
 
 | 字段 | 意思 |
 | --- | --- |
-| `capabilities` | `status`、`tools`、`actions`（只在 hub 里的连接器有，见下）、`events`、`inbox`、`archive`、`login`、`options`；hub 只调声明了的 |
+| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`login`、`options`；hub 只调声明了的 |
 | `hosts` | 链接所在的主机名（App 认链接） |
 | `agent_tools` | 哪些工具也给编程 Agent，按名字的通配（不写就只给助手） |
+| `unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行）。不是权限：按名字调照常能调，写的照常过闸门，Agent 能不能调照旧看 `agent_tools` |
 | `poll_seconds` | 多久问一次 `archive.changes`，0 用 hub 的默认 |
 | `kinds` | 收件箱条目的种类；hub 收到没声明的记一行日志 |
 
@@ -45,6 +46,9 @@ hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/c
 | `status` | `{}` → `{state, account?, via?, error?, guide?, last_sync?, last_event?}` | 从内存回答，不联网（hub 每 30 秒问一次）。`state`：`ok`、`not_configured`、`not_signed_in`、`no_permission`、`rate_limited`、`error` |
 | `tools.list` | `{}` → `{tools: [{name, description, input_schema}]}` | 只读工具，名字都以 `<id>_` 开头 |
 | `tools.call` | `{name, args}` → `{text}` | |
+| `actions.list` | `{}` → `{tools: [{name, description, input_schema}]}` | 写操作，名字都以 `<id>_` 开头 |
+| `actions.describe` | `{name, args}` → `{action: {name, visible}, summary}` | 手机卡片上的话：做什么、全文；`visible` 是谁会看到。不联网。出错就是参数不对：hub 把错误回给调用方，不弹卡片 |
+| `actions.do` | `{name, args, request_id}` → `{text}` | **只在 hub 的闸门放行之后调**，`args` 就是卡片用的那一份。`request_id` 是 hub 为这一次生成的：同一个 id 程序只做一次（再来就回第一次的结果）；hub 超时后也不重发 |
 | `inbox.collect` | `{}` → `{things: [InboxThing]}` | 从内存回答 |
 | `inbox.reply` | `{thread, item_id?, last?, text}` → `{}` | 用户在手机上按了发送（发送本身就是确认） |
 | `archive.changes` | `{cursor, limit}` → `{batches: [{chat, messages}], next, more}` | 游标是程序自己的，hub 原样存、原样还；第一次是 `""` |
@@ -76,7 +80,9 @@ hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/c
 
 ## 硬性规定
 
-- **写操作不在协议里**：程序不提供 `actions`。要写（发消息、评论）就把连接器做进 hub，写操作做成工具、过 `connector_gate` 的闸门，卡片写明发给谁、全文。
+- **写操作只响应 `actions.do`**：程序可以声明 `actions`，但只在 hub 的闸门（`connector_gate`，默认手机上确认）放行之后才会被调
+  `actions.do`；程序不能自己发起写。`actions.describe` 的 summary 由 hub 截断后上卡片（`connector.cardMost`），卡片写明发给谁、全文。
+  （2026-11-03 起，#988：Telegram 只能以子进程跑，原来「写操作不在协议里」的规定改成这样，和 ovis 对过。）
 - 密钥只能存 `secrets.*`；不写本地文件，不写日志。
 - 日志、错误里不出现正文、号码、token。
 - `status`、`inbox.collect` 从内存回答，不联网；自己的轮询放在程序自己的循环里，有新东西发 `changed`。

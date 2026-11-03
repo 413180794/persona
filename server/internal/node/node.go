@@ -120,6 +120,9 @@ type Node struct {
 	// lark-cli (larkcligate.go): each command's risk level as lark-cli reported it, and where the binary is.
 	larkRisks    map[string]string
 	larkCLIPaths map[string]string
+
+	// connectors are the hub's signed in, as the last assistant.prepare said (clicall.go).
+	connectors []string
 }
 
 func New(version string) (*Node, error) {
@@ -768,11 +771,13 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		list, err := n.gitLog(ctx, p.Cwd, p.Skip, p.Limit)
 		return map[string]any{"commits": list}, err
 	case "skills.list": // the skills the assistant gets on this machine (docs/hub-update.md「skill 从二进制里拿出来」)
-		return map[string]any{"skills": assistantskills.List(assistantskills.UserDir())}, nil
+		return map[string]any{"skills": assistantskills.List(assistantskills.UserDir(), n.signedInConnectors())}, nil
 	case "assistant.prepare":
 		var a struct {
 			Dir      string `json:"dir"`
 			ClaudeMD string `json:"claude_md"`
+			// Connectors are the hub's signed in: their built-in skills go in the directory (Telegram's tg).
+			Connectors []string `json:"connectors"`
 		}
 		if err := json.Unmarshal(params, &a); err != nil || a.Dir == "" || strings.Contains(a.Dir, "..") {
 			return nil, fmt.Errorf("bad assistant dir")
@@ -787,6 +792,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 				return nil, err
 			}
 		}
+		// Before every message: a connector signed out since the last one takes its skill (and tg) away.
+		n.mu.Lock()
+		n.connectors = a.Connectors
+		n.mu.Unlock()
+		n.syncAssistantSkills(dir)
 		return map[string]any{"cwd": dir}, nil
 	case "session.info":
 		f, err := n.file(p.SessionID)

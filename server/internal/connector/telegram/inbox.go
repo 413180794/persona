@@ -32,6 +32,7 @@ type inboxState struct {
 	dialogs  []dialog
 	contexts map[string]threadContext // peer key -> the context read for a move
 	marks    map[string]markState     // group key -> when its mentions last went up
+	seen     map[string]dialog        // conversations the tg CLI's reads listed, for its writes to name (cli.go)
 	refresh  sync.Mutex               // one refresh at a time
 }
 
@@ -163,7 +164,7 @@ func (c *Conn) readContexts(ctx context.Context, cl client) {
 		if t.Kind == "mention" {
 			msgs, err = cl.UnreadMentions(ctx, d, contextLines)
 		} else {
-			msgs, err = cl.Older(ctx, d, 0, contextLines)
+			msgs, err = cl.Older(ctx, d, 0, time.Time{}, contextLines)
 		}
 		if err != nil { // a flood wait among them: the rest next time
 			return

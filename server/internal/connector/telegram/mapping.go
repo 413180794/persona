@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -341,8 +342,12 @@ func messagesOf(res tg.MessagesMessagesClass) ([]tg.MessageClass, entities) {
 	return nil, entitiesOf(nil, nil)
 }
 
-func (g *gotdClient) Older(ctx context.Context, d dialog, before, limit int) ([]message, error) {
-	res, err := g.c.API().MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{Peer: inputPeer(d.Peer), OffsetID: before, Limit: limit})
+func (g *gotdClient) Older(ctx context.Context, d dialog, before int, until time.Time, limit int) ([]message, error) {
+	req := &tg.MessagesGetHistoryRequest{Peer: inputPeer(d.Peer), OffsetID: before, Limit: limit}
+	if !until.IsZero() {
+		req.OffsetDate = int(until.Unix())
+	}
+	res, err := g.c.API().MessagesGetHistory(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -354,14 +359,16 @@ func (g *gotdClient) Older(ctx context.Context, d dialog, before, limit int) ([]
 	return out, nil
 }
 
-func (g *gotdClient) Search(ctx context.Context, query string, in *dialog, limit int) ([]found, error) {
+func (g *gotdClient) Search(ctx context.Context, query string, in *dialog, since, until time.Time, limit int) ([]found, error) {
+	minDate, maxDate := unixOr0(since), unixOr0(until)
 	var res tg.MessagesMessagesClass
 	var err error
 	if in != nil {
-		res, err = g.c.API().MessagesSearch(ctx, &tg.MessagesSearchRequest{Peer: inputPeer(in.Peer), Q: query, Filter: &tg.InputMessagesFilterEmpty{}, Limit: limit})
+		res, err = g.c.API().MessagesSearch(ctx, &tg.MessagesSearchRequest{Peer: inputPeer(in.Peer), Q: query, Filter: &tg.InputMessagesFilterEmpty{},
+			MinDate: minDate, MaxDate: maxDate, Limit: limit})
 	} else {
 		res, err = g.c.API().MessagesSearchGlobal(ctx, &tg.MessagesSearchGlobalRequest{Q: query, Filter: &tg.InputMessagesFilterEmpty{},
-			OffsetPeer: &tg.InputPeerEmpty{}, Limit: limit})
+			MinDate: minDate, MaxDate: maxDate, OffsetPeer: &tg.InputPeerEmpty{}, Limit: limit})
 	}
 	if err != nil {
 		return nil, err
@@ -399,4 +406,179 @@ func (g *gotdClient) UnreadMentions(ctx context.Context, d dialog, limit int) ([
 		out = append(out, messageOf(msgs[i], e))
 	}
 	return out, nil
+}
+
+// unixOr0 is t as Telegram's dates, 0 (no bound) for a zero t.
+func unixOr0(t time.Time) int {
+	if t.IsZero() {
+		return 0
+	}
+	return int(t.Unix())
+}
+
+func inputChannel(p peer) *tg.InputChannel {
+	return &tg.InputChannel{ChannelID: p.ID, AccessHash: p.Hash}
+}
+
+func (g *gotdClient) Messages(ctx context.Context, d dialog, ids []int) ([]message, error) {
+	in := make([]tg.InputMessageClass, len(ids))
+	for i, id := range ids {
+		in[i] = &tg.InputMessageID{ID: id}
+	}
+	var res tg.MessagesMessagesClass
+	var err error
+	if d.Peer.Kind == 'c' {
+		res, err = g.c.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: inputChannel(d.Peer), ID: in})
+	} else {
+		res, err = g.c.API().MessagesGetMessages(ctx, in)
+	}
+	if err != nil {
+		return nil, err
+	}
+	msgs, e := messagesOf(res)
+	out := make([]message, 0, len(msgs))
+	for _, m := range msgs {
+		if _, empty := m.(*tg.MessageEmpty); !empty {
+			out = append(out, messageOf(m, e))
+		}
+	}
+	return out, nil
+}
+
+func (g *gotdClient) Info(ctx context.Context, d dialog) (chatInfo, error) {
+	switch d.Peer.Kind {
+	case 'u':
+		full, err := g.c.API().UsersGetFullUser(ctx, &tg.InputUser{UserID: d.Peer.ID, AccessHash: d.Peer.Hash})
+		if err != nil {
+			return chatInfo{}, err
+		}
+		return chatInfo{About: full.FullUser.About}, nil
+	case 'g':
+		full, err := g.c.API().MessagesGetFullChat(ctx, d.Peer.ID)
+		if err != nil {
+			return chatInfo{}, err
+		}
+		info := chatInfo{}
+		if cf, ok := full.FullChat.(*tg.ChatFull); ok {
+			info.About = cf.About
+			if ps, ok := cf.Participants.(*tg.ChatParticipants); ok {
+				info.Members = len(ps.Participants)
+			}
+		}
+		return info, nil
+	}
+	full, err := g.c.API().ChannelsGetFullChannel(ctx, inputChannel(d.Peer))
+	if err != nil {
+		return chatInfo{}, err
+	}
+	info := chatInfo{}
+	if cf, ok := full.FullChat.(*tg.ChannelFull); ok {
+		info.About = cf.About
+		info.Members, _ = cf.GetParticipantsCount()
+	}
+	return info, nil
+}
+
+func (g *gotdClient) Members(ctx context.Context, d dialog, limit int) ([]member, int, error) {
+	var ids []int64
+	var users []tg.UserClass
+	count := 0
+	switch d.Peer.Kind {
+	case 'u':
+		return nil, 0, errors.New("私聊没有成员列表")
+	case 'g':
+		full, err := g.c.API().MessagesGetFullChat(ctx, d.Peer.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		if cf, ok := full.FullChat.(*tg.ChatFull); ok {
+			if ps, ok := cf.Participants.(*tg.ChatParticipants); ok {
+				for _, p := range ps.Participants {
+					ids = append(ids, p.GetUserID())
+				}
+			}
+		}
+		users, count = full.Users, len(ids)
+	default:
+		res, err := g.c.API().ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{Channel: inputChannel(d.Peer),
+			Filter: &tg.ChannelParticipantsRecent{}, Limit: limit})
+		if err != nil {
+			return nil, 0, err
+		}
+		ps, ok := res.(*tg.ChannelsChannelParticipants)
+		if !ok {
+			return nil, 0, nil
+		}
+		for _, p := range ps.Participants {
+			if u, ok := p.(interface{ GetUserID() int64 }); ok {
+				ids = append(ids, u.GetUserID())
+			}
+		}
+		users, count = ps.Users, ps.Count
+	}
+	e := entitiesOf(users, nil)
+	out := make([]member, 0, min(len(ids), limit))
+	for _, id := range ids {
+		if len(out) == limit {
+			break
+		}
+		m := member{Key: peer{Kind: 'u', ID: id}.key()}
+		if u := e.users[id]; u != nil {
+			m.Name, m.Username, m.Bot = userName(u), u.Username, u.Bot
+		}
+		out = append(out, m)
+	}
+	return out, count, nil
+}
+
+func (g *gotdClient) Send(ctx context.Context, d dialog, text string, replyTo int, random int64) (int, error) {
+	req := &tg.MessagesSendMessageRequest{Peer: inputPeer(d.Peer), Message: text, RandomID: random}
+	if replyTo != 0 {
+		req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: replyTo}
+	}
+	up, err := g.c.API().MessagesSendMessage(ctx, req)
+	if err != nil {
+		return 0, err
+	}
+	return sentID(up, random), nil
+}
+
+// sentID is the id Telegram gave the message sent with random (0 when the answer does not say).
+func sentID(up tg.UpdatesClass, random int64) int {
+	var list []tg.UpdateClass
+	switch u := up.(type) {
+	case *tg.UpdateShortSentMessage:
+		return u.ID
+	case *tg.Updates:
+		list = u.Updates
+	case *tg.UpdatesCombined:
+		list = u.Updates
+	}
+	for _, x := range list {
+		if m, ok := x.(*tg.UpdateMessageID); ok && m.RandomID == random {
+			return m.ID
+		}
+	}
+	return 0
+}
+
+func (g *gotdClient) Forward(ctx context.Context, from dialog, ids []int, to dialog, random []int64) error {
+	_, err := g.c.API().MessagesForwardMessages(ctx, &tg.MessagesForwardMessagesRequest{FromPeer: inputPeer(from.Peer), ID: ids,
+		RandomID: random, ToPeer: inputPeer(to.Peer)})
+	return err
+}
+
+func (g *gotdClient) React(ctx context.Context, d dialog, id int, emoji string) error {
+	_, err := g.c.API().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{Peer: inputPeer(d.Peer), MsgID: id,
+		Reaction: []tg.ReactionClass{&tg.ReactionEmoji{Emoticon: emoji}}})
+	return err
+}
+
+func (g *gotdClient) MarkRead(ctx context.Context, d dialog, upTo int) error {
+	if d.Peer.Kind == 'c' {
+		_, err := g.c.API().ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{Channel: inputChannel(d.Peer), MaxID: upTo})
+		return err
+	}
+	_, err := g.c.API().MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{Peer: inputPeer(d.Peer), MaxID: upTo})
+	return err
 }

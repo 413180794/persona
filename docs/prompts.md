@@ -67,7 +67,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 | `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |
 | `mcp/github/` | `github_search`、`github_read`、`github_diff`、`github_checks`（只读）；`github_comment`、`github_review`（写，过闸门） | 助手，GitHub 连接器状态是 `ok` 时（`connector/github/tools.go`；golden `mcp_tools.assistant_with_github`） |
 | `mcp/voice/` | `search_knowledge`、`list_agents`、`send_to_agent`、`ask_jarvis` | 内置语音插件开了 `tools` 的上游（`voice/tools.go`，作为 GPT-Live 的函数工具声明在 `session.start` 里） |
-| `mcp/telegram/` | `telegram_chats`、`telegram_messages`、`telegram_search`（只读，实时读 Telegram，不标已读） | 助手，Telegram 连接器开着、已登录时（`connector/telegram/tools.go`，在 jarvisd-telegram 里；经 `connector/proc` 转给 hub） |
+| `mcp/telegram/` | `telegram_chats`、`telegram_messages`、`telegram_search`（只读，实时读 Telegram，不标已读）；`tg` 命令行的读和写（`telegram_list_chats`、`telegram_send` 等，`Unlisted`：不进模型的工具列表） | 助手，Telegram 连接器开着、已登录时（`connector/telegram/tools.go`、`cli.go`，在 jarvisd-telegram 里；经 `connector/proc` 转给 hub） |
 
 工具的**列表和顺序**还在代码里（上面两个函数按名字取 `prompts.Tool(name)`），处理调用的代码也在原处。加一个工具：在对应目录加文件，
 把名字加进列表，写处理代码，`UPDATE_GOLDEN=1` 更新 `mcp_tools.*` / `mail_tools` 的 golden。`TestEveryMCPToolIsUsed` 抓没人提供的工具文件。

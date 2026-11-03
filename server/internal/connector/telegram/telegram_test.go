@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -73,6 +74,10 @@ type fakeTelegram struct {
 	most     int // the most requests in flight at once
 	latency  time.Duration
 	fail     func(method string) error
+	// The CLI's (cli_test.go): profiles and members by peer key, and every write as it reached Telegram.
+	infos   map[string]chatInfo
+	members map[string][]member
+	writes  []string
 }
 
 type sentRequest struct {
@@ -229,7 +234,7 @@ func (c *fakeClient) History(ctx context.Context, d dialog, minID int, since tim
 	return out, nil
 }
 
-func (c *fakeClient) Older(ctx context.Context, d dialog, before, limit int) ([]message, error) {
+func (c *fakeClient) Older(ctx context.Context, d dialog, before int, until time.Time, limit int) ([]message, error) {
 	if err := c.rpc(ctx, "Older"); err != nil {
 		return nil, err
 	}
@@ -237,7 +242,7 @@ func (c *fakeClient) Older(ctx context.Context, d dialog, before, limit int) ([]
 	defer c.f.mu.Unlock()
 	var out []message
 	for _, m := range c.f.history[d.Peer.key()] {
-		if before == 0 || m.ID < before {
+		if (before == 0 || m.ID < before) && (until.IsZero() || m.At.Before(until)) {
 			out = append(out, m)
 		}
 	}
@@ -247,7 +252,7 @@ func (c *fakeClient) Older(ctx context.Context, d dialog, before, limit int) ([]
 	return out, nil
 }
 
-func (c *fakeClient) Search(ctx context.Context, query string, in *dialog, limit int) ([]found, error) {
+func (c *fakeClient) Search(ctx context.Context, query string, in *dialog, since, until time.Time, limit int) ([]found, error) {
 	if err := c.rpc(ctx, "Search"); err != nil {
 		return nil, err
 	}
@@ -260,7 +265,8 @@ func (c *fakeClient) Search(ctx context.Context, query string, in *dialog, limit
 		}
 		h := c.f.history[d.Peer.key()]
 		for i := len(h) - 1; i >= 0; i-- {
-			if strings.Contains(h[i].Text, query) && len(out) < limit {
+			inTime := (since.IsZero() || !h[i].At.Before(since)) && (until.IsZero() || h[i].At.Before(until))
+			if strings.Contains(h[i].Text, query) && inTime && len(out) < limit {
 				out = append(out, found{Dialog: d, Message: h[i]})
 			}
 		}
@@ -281,6 +287,80 @@ func (c *fakeClient) UnreadMentions(ctx context.Context, d dialog, limit int) ([
 		}
 	}
 	return out, nil
+}
+
+func (c *fakeClient) Messages(ctx context.Context, d dialog, ids []int) ([]message, error) {
+	if err := c.rpc(ctx, "Messages"); err != nil {
+		return nil, err
+	}
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	var out []message
+	for _, id := range ids {
+		for _, m := range c.f.history[d.Peer.key()] {
+			if m.ID == id {
+				out = append(out, m)
+			}
+		}
+	}
+	return out, nil
+}
+
+func (c *fakeClient) Info(ctx context.Context, d dialog) (chatInfo, error) {
+	if err := c.rpc(ctx, "Info"); err != nil {
+		return chatInfo{}, err
+	}
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	return c.f.infos[d.Peer.key()], nil
+}
+
+func (c *fakeClient) Members(ctx context.Context, d dialog, limit int) ([]member, int, error) {
+	if err := c.rpc(ctx, "Members"); err != nil {
+		return nil, 0, err
+	}
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	ms := c.f.members[d.Peer.key()]
+	return ms[:min(limit, len(ms))], len(ms), nil
+}
+
+func (c *fakeClient) write(ctx context.Context, method, what string) error {
+	if err := c.rpc(ctx, method); err != nil {
+		return err
+	}
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	c.f.writes = append(c.f.writes, what)
+	return nil
+}
+
+func (c *fakeClient) Send(ctx context.Context, d dialog, text string, replyTo int, random int64) (int, error) {
+	if random == 0 {
+		return 0, errors.New("no random_id")
+	}
+	return 900 + len(c.f.writes), c.write(ctx, "Send", fmt.Sprintf("send %s reply %d: %s", d.Peer.key(), replyTo, text))
+}
+
+func (c *fakeClient) Forward(ctx context.Context, from dialog, ids []int, to dialog, random []int64) error {
+	if len(random) != len(ids) {
+		return errors.New("one random_id per message")
+	}
+	return c.write(ctx, "Forward", fmt.Sprintf("forward %s %v to %s", from.Peer.key(), ids, to.Peer.key()))
+}
+
+func (c *fakeClient) React(ctx context.Context, d dialog, id int, emoji string) error {
+	return c.write(ctx, "React", fmt.Sprintf("react %s %d %s", d.Peer.key(), id, emoji))
+}
+
+func (c *fakeClient) MarkRead(ctx context.Context, d dialog, upTo int) error {
+	return c.write(ctx, "MarkRead", fmt.Sprintf("read %s up to %d", d.Peer.key(), upTo))
+}
+
+func (f *fakeTelegram) written() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.writes...)
 }
 
 func (c *fakeClient) LogOut(ctx context.Context) error {

@@ -596,7 +596,7 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 // from the hub, ol says the agent API is not reachable.
 func (n *Node) assistantLarkEnv(cwd string) []string {
 	skills := filepath.Join(cwd, ".claude", "skills")
-	if err := assistantskills.Sync(skills, assistantskills.UserDir(), n.logger.Printf); err != nil {
+	if err := assistantskills.Sync(skills, assistantskills.UserDir(), n.signedInConnectors(), n.logger.Printf); err != nil {
 		n.logger.Printf("assistant: skills: %v", err)
 	}
 	bin := filepath.Join(n.dir, "assistant-bin")

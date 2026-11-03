@@ -37,19 +37,22 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// exampleProgram signs in by phone and code, archives one made-up chat, reads, and tells about changes; no inbox.
+// exampleProgram signs in by phone and code, archives one made-up chat, reads, sends (an unlisted action) and tells
+// about changes; no inbox.
 type exampleProgram struct {
 	secrets  connector.Secrets
 	exitSoon bool
 	once     sync.Once
+	sent     int
 }
 
 func (*exampleProgram) ID() string   { return "example" }
 func (*exampleProgram) Name() string { return "Example" }
 
 func (*exampleProgram) Manifest() connector.Manifest {
-	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapEvents,
-		connector.CapArchive, connector.CapLogin}, AgentTools: []string{"example_chats"}, Poll: 3 * time.Minute}
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions,
+		connector.CapEvents, connector.CapArchive, connector.CapLogin}, AgentTools: []string{"example_chats"},
+		Unlisted: []string{"example_send"}, Poll: 3 * time.Minute}
 }
 
 func (p *exampleProgram) Status(ctx context.Context) connector.Status {
@@ -91,6 +94,19 @@ func (*exampleProgram) Changes(_ context.Context, cursor string, _ int) ([]conne
 func (*exampleProgram) Tools() []proto.Tool { return []proto.Tool{{Name: "example_chats"}} }
 func (*exampleProgram) Call(_ context.Context, name string, _ json.RawMessage) (string, error) {
 	return name + ": 2 chats", nil
+}
+
+func (*exampleProgram) Actions() []proto.Tool { return []proto.Tool{{Name: "example_send"}} }
+func (*exampleProgram) Describe(_ context.Context, name string, args json.RawMessage) (connector.Action, string, error) {
+	var a struct{ Text string }
+	if err := json.Unmarshal(args, &a); err != nil || a.Text == "" {
+		return connector.Action{}, "", fmt.Errorf("text is required")
+	}
+	return connector.Action{Name: name, Visible: "示例群的所有人"}, "发到示例群：" + a.Text, nil
+}
+func (p *exampleProgram) Do(_ context.Context, _ string, args json.RawMessage) (string, error) {
+	p.sent++
+	return fmt.Sprintf("sent #%d: %s", p.sent, args), nil
 }
 
 func (*exampleProgram) Watch(ctx context.Context, changed func(connector.Scope)) error {
@@ -162,10 +178,10 @@ func TestProgram(t *testing.T) {
 	}
 	go c.Run(ctx)
 	waitUntil(t, "the program's status", func() bool { return c.Status(ctx).State == connector.StateNotSignedIn })
-	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "events", "archive", "login"}) {
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "login"}) {
 		t.Fatalf("the registry lists %v", got)
 	}
-	if m := c.Manifest(); !m.Proxy || !m.ForAgents("example_chats") || m.Poll != 3*time.Minute {
+	if m := c.Manifest(); !m.Proxy || !m.ForAgents("example_chats") || m.Poll != 3*time.Minute || m.Listed("example_send") {
 		t.Fatalf("manifest %+v", m)
 	}
 	if _, ok := connector.As[connector.Inbox](c); ok {
@@ -201,6 +217,22 @@ func TestProgram(t *testing.T) {
 	}
 	if out, err := c.Call(ctx, "example_chats", json.RawMessage(`{}`)); err != nil || out != "example_chats: 2 chats" {
 		t.Fatalf("call %q %v", out, err)
+	}
+	// A write: described for the card, then run with the very args; each run is its own (a new request id).
+	if acts := c.Actions(); len(acts) != 1 || acts[0].Name != "example_send" {
+		t.Fatalf("actions %+v", acts)
+	}
+	if act, summary, err := c.Describe(ctx, "example_send", json.RawMessage(`{"text":"示例回复"}`)); err != nil ||
+		act.Visible != "示例群的所有人" || summary != "发到示例群：示例回复" {
+		t.Fatalf("describe %+v %q %v", act, summary, err)
+	}
+	if _, _, err := c.Describe(ctx, "example_send", json.RawMessage(`{}`)); err == nil || err.Error() != "text is required" {
+		t.Fatalf("describe without text: %v", err)
+	}
+	for i := 1; i <= 2; i++ {
+		if out, err := c.Do(ctx, "example_send", json.RawMessage(`{"text":"示例回复"}`)); err != nil || out != fmt.Sprintf(`sent #%d: {"text":"示例回复"}`, i) {
+			t.Fatalf("do %d: %q %v", i, out, err)
+		}
 	}
 	got := make(chan connector.Scope, 4)
 	wctx, wcancel := context.WithCancel(ctx)
@@ -275,7 +307,7 @@ func TestNeverStartedDeclaresItsManifest(t *testing.T) {
 	cfg := program(t, sec)
 	cfg.Manifest = (&exampleProgram{}).Manifest()
 	c := New(cfg)
-	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "events", "archive", "login"}) {
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "login"}) {
 		t.Fatalf("before it ever ran: %v", got)
 	}
 	l, ok := connector.As[connector.Login](c)

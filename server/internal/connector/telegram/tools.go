@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,13 +17,14 @@ import (
 
 var readTools = []string{"telegram_chats", "telegram_messages", "telegram_search"}
 
+// Tools are the assistant's read tools, then the tg CLI's (unlisted, cli.go).
 func (c *Conn) Tools() []proto.Tool {
 	out := make([]proto.Tool, 0, len(readTools))
 	for _, n := range readTools {
 		t := prompts.Tool(n)
 		out = append(out, proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema})
 	}
-	return out
+	return append(out, cliTools()...)
 }
 
 // Limits of an answer, so one call does not fill the model's context nor ask Telegram much: one page each, and at
@@ -44,6 +46,13 @@ func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (str
 	}
 	if left := c.gate.left(); left > 0 { // a flood wait is not over: no request at all
 		return "", heldError{left}
+	}
+	if !slices.Contains(readTools, name) {
+		out, err := c.cliCall(ctx, cl, name, args)
+		if err != nil {
+			return "", c.writeError(err)
+		}
+		return out, nil
 	}
 	var a struct {
 		Limit      int    `json:"limit"`
@@ -137,7 +146,7 @@ func (c *Conn) toolMessages(ctx context.Context, cl client, chat string, limit, 
 	if err != nil {
 		return "", err
 	}
-	msgs, err := cl.Older(ctx, d, before, limit)
+	msgs, err := cl.Older(ctx, d, before, time.Time{}, limit)
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +180,7 @@ func (c *Conn) toolSearch(ctx context.Context, cl client, query, chat string, li
 		}
 		in = &d
 	}
-	found, err := cl.Search(ctx, query, in, limit)
+	found, err := cl.Search(ctx, query, in, time.Time{}, time.Time{}, limit)
 	if err != nil {
 		return "", err
 	}

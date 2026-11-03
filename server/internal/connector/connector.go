@@ -70,8 +70,8 @@ type ReadTools interface {
 // Action is what the user is shown before a write: Visible says who will see it (「example-org/example-repo#12
 // 的所有参与者」), and the card always says so.
 type Action struct {
-	Name    string
-	Visible string
+	Name    string `json:"name,omitempty"`
+	Visible string `json:"visible,omitempty"`
 }
 
 // Actions are tools that write (comment, send). They never run without the gate letting them through (Gate): by

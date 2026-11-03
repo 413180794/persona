@@ -59,6 +59,31 @@ func Check(t testing.TB, c connector.Connector) {
 		decode(t, call(serve.MTools, struct{}{}), &got)
 		same(t, "tools", serve.ToolsResult{Tools: t2.Tools()}, got)
 	}
+	if a, ok := connector.As[connector.Actions](c); ok {
+		var got serve.ToolsResult
+		decode(t, call(serve.MActions, struct{}{}), &got)
+		same(t, "actions", serve.ToolsResult{Tools: a.Actions()}, got)
+		// Describe only: actions.do writes, and only ever after the hub's gate.
+		for _, act := range a.Actions() {
+			var through serve.DescribeResult
+			var throughErr string
+			var raw json.RawMessage
+			if err := hub.Call(ctx, serve.MDescribe, serve.CallParams{Name: act.Name, Args: json.RawMessage(`{}`)}, &raw); err != nil {
+				throughErr = err.Error()
+			} else {
+				decode(t, raw, &through)
+			}
+			action, summary, err := a.Describe(ctx, act.Name, json.RawMessage(`{}`))
+			directErr := ""
+			if err != nil {
+				directErr, action, summary = err.Error(), connector.Action{}, ""
+			}
+			same(t, "describe "+act.Name, serve.DescribeResult{Action: action, Summary: summary}, through)
+			if directErr != throughErr {
+				t.Errorf("describe %s: %q directly, %q through the protocol", act.Name, directErr, throughErr)
+			}
+		}
+	}
 	if in, ok := connector.As[connector.Inbox](c); ok {
 		var got serve.CollectResult
 		decode(t, call(serve.MCollect, struct{}{}), &got)

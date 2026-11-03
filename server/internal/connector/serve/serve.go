@@ -4,11 +4,13 @@
 //
 // The hub calls the methods below; the program calls back for its secret (secrets.*: the hub binds them to this
 // program's connector) and tells the hub what changed (the changed event). Nothing here logs what crosses the pipe.
+// A write (actions.do) comes only once the hub's gate let it through; the program never starts one itself.
 package serve
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -32,6 +34,9 @@ const (
 	MReply     = "inbox.reply"
 	MTools     = "tools.list"
 	MCall      = "tools.call"
+	MActions   = "actions.list"
+	MDescribe  = "actions.describe"
+	MDo        = "actions.do" // only once the hub's gate let it through
 )
 
 // Methods the program calls on the hub, and its event.
@@ -54,6 +59,7 @@ type Manifest struct {
 	Capabilities []string `json:"capabilities"`
 	Hosts        []string `json:"hosts,omitempty"`
 	AgentTools   []string `json:"agent_tools,omitempty"`
+	Unlisted     []string `json:"unlisted,omitempty"`
 	PollSeconds  int      `json:"poll_seconds,omitempty"`
 	Kinds        []string `json:"kinds,omitempty"`
 }
@@ -90,6 +96,18 @@ type (
 	}
 	CallResult struct {
 		Text string `json:"text,omitempty"`
+	}
+	// DescribeResult is what the card says about a write (connector.Actions.Describe).
+	DescribeResult struct {
+		Action  connector.Action `json:"action"`
+		Summary string           `json:"summary"`
+	}
+	// DoParams is a write the gate let through: the very args the card was made from, and the hub's id for this one
+	// run, the same if the hub ever sends it again (the program runs it at most once).
+	DoParams struct {
+		Name      string          `json:"name"`
+		Args      json.RawMessage `json:"args,omitempty"`
+		RequestID string          `json:"request_id"`
 	}
 	SecretData struct {
 		Data []byte `json:"data,omitempty"` // nil: nothing stored
@@ -148,6 +166,8 @@ type server struct {
 
 	mu sync.Mutex
 	c  connector.Connector
+	// once runs each actions.do once by its request id.
+	once writes
 }
 
 func (s *server) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
@@ -233,6 +253,39 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		}
 		text, err := t.Call(ctx, p.Name, p.Args)
 		return CallResult{Text: text}, err
+	case MActions:
+		a, ok := connector.As[connector.Actions](c)
+		if !ok {
+			return ToolsResult{}, nil
+		}
+		return ToolsResult{Tools: a.Actions()}, nil
+	case MDescribe:
+		a, ok := connector.As[connector.Actions](c)
+		if !ok {
+			return nil, noCapability(c, "actions")
+		}
+		var p CallParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		act, summary, err := a.Describe(ctx, p.Name, p.Args)
+		return DescribeResult{Action: act, Summary: summary}, err
+	case MDo:
+		a, ok := connector.As[connector.Actions](c)
+		if !ok {
+			return nil, noCapability(c, "actions")
+		}
+		var p DoParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		if p.RequestID == "" {
+			return nil, errors.New("actions.do without a request_id")
+		}
+		return s.once.do(p.RequestID, func() (CallResult, error) {
+			text, err := a.Do(ctx, p.Name, p.Args)
+			return CallResult{Text: text}, err
+		})
 	}
 	return nil, &rpc.Error{Code: CodeUnknownMethod, Message: "unknown method " + method}
 }
@@ -286,11 +339,51 @@ func (s *server) watch(e connector.Events) {
 	}
 }
 
+// doneMost is how many writes the program remembers by request id.
+const doneMost = 256
+
+// writes runs each write (actions.do) once by its request id: the same id again answers what the first run did,
+// waiting for it if it is still running.
+type writes struct {
+	mu    sync.Mutex
+	runs  map[string]*write
+	order []string
+}
+
+type write struct {
+	done chan struct{}
+	res  CallResult
+	err  error
+}
+
+func (w *writes) do(id string, run func() (CallResult, error)) (CallResult, error) {
+	w.mu.Lock()
+	if prev, ok := w.runs[id]; ok {
+		w.mu.Unlock()
+		<-prev.done
+		return prev.res, prev.err
+	}
+	if w.runs == nil {
+		w.runs = map[string]*write{}
+	}
+	cur := &write{done: make(chan struct{})}
+	w.runs[id] = cur
+	w.order = append(w.order, id)
+	if len(w.order) > doneMost {
+		delete(w.runs, w.order[0])
+		w.order = w.order[1:]
+	}
+	w.mu.Unlock()
+	cur.res, cur.err = run()
+	close(cur.done)
+	return cur.res, cur.err
+}
+
 // ManifestOf is c's manifest on the wire.
 func ManifestOf(c connector.Connector) Manifest {
 	cm := c.Manifest()
 	m := Manifest{Protocol: Protocol, ID: c.ID(), Name: c.Name(), Capabilities: []string{}, Hosts: cm.Hosts, AgentTools: cm.AgentTools,
-		PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds}
+		Unlisted: cm.Unlisted, PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds}
 	for _, cp := range cm.Capabilities {
 		m.Capabilities = append(m.Capabilities, string(cp))
 	}
@@ -299,7 +392,7 @@ func ManifestOf(c connector.Connector) Manifest {
 
 // Of is the connector.Manifest a program sent (a proxy's: it answers for the program).
 func (m Manifest) Of() connector.Manifest {
-	out := connector.Manifest{Hosts: m.Hosts, AgentTools: m.AgentTools, Poll: time.Duration(m.PollSeconds) * time.Second,
+	out := connector.Manifest{Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted, Poll: time.Duration(m.PollSeconds) * time.Second,
 		Kinds: m.Kinds, Proxy: true}
 	for _, cp := range m.Capabilities {
 		out.Capabilities = append(out.Capabilities, connector.Capability(cp))

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -107,6 +108,25 @@ func isAssistant(s proto.Session, dir string) bool {
 // runs: the ssh_host names are the hub machine's ssh aliases, which work only for an assistant on the hub's own
 // machine, and a link (or tailcat) machine has no ssh at all; from anywhere else there is no command to give, only the
 // Agents tools.
+// assistantPrepare is what the node is told before a message to the assistant: its directory, its CLAUDE.md, and the
+// connectors signed in (rate limited counts: still signed in), whose built-in skills it puts in the directory (the
+// telegram skill and tg, node/clicall.go) or takes out.
+func (h *Hub) assistantPrepare(ctx context.Context, m *Machine) map[string]any {
+	return map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector")),
+		"connectors": h.signedInConnectors(ctx)}
+}
+
+// signedInConnectors are the connectors that are ok or rate limited (switched on and signed in).
+func (h *Hub) signedInConnectors(ctx context.Context) []string {
+	out := []string{}
+	for _, c := range h.connectors.All() {
+		if st := connector.StatusOf(ctx, c).State; st == connector.StateOK || st == connector.StateRateLimited {
+			out = append(out, c.ID())
+		}
+	}
+	return out
+}
+
 func (h *Hub) assistantClaudeMD(ctx context.Context, lark-connector bool) string {
 	lc := h.cfg.Lark
 	if lc.CLI != nil && !lc.lark-connectorConfigured() {
@@ -326,7 +346,7 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector"))}, &prep); err != nil {
+	if err := m.call(ctx, "assistant.prepare", h.assistantPrepare(ctx, m), &prep); err != nil {
 		return nil, err
 	}
 	// Headless claude (node/assistant.go): no herdr tab, streamed tokens, any launcher per message.
@@ -367,7 +387,7 @@ func (h *Hub) warmAssistant(launcher string) {
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector"))}, &prep); err != nil {
+	if err := m.call(ctx, "assistant.prepare", h.assistantPrepare(ctx, m), &prep); err != nil {
 		return
 	}
 	params := map[string]any{"cwd": prep.Cwd, "launcher": launcher}

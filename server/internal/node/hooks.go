@@ -143,6 +143,8 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		} else {
 			resp = res
 		}
+	case "cli.call": // personad tg: the node, not the caller, says whether it is the assistant (clicall.go)
+		resp = n.cliCall(ctx, c, req)
 	case "mcp.call":
 		var res proto.ToolResult
 		if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": req.SessionID,

@@ -91,6 +91,27 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 personad，单独一个�
 
 描述放 `server/internal/prompts/mcp/telegram/`，golden 加一种「有 Telegram」的工具列表。已经归档的内容也能用知识库的工具查（`kb_*`）。
 
+## tg 命令行和 telegram skill（#988）
+
+用户要求：「参考 feishu-cli 的 cli 设计……再制作一个 skill 来让 agent 在 hub 对接了 telegram 之后，支持用 skill 更灵活地操作（对接成功了才有 skill）」。
+
+- **`personad tg …`**（`server/internal/tgcli`；助手的 PATH 上叫 `tg`）只经过 hub：它和 MCP 一样连本机 node 的 socket（kind `cli.call`），
+  node 再调 hub 的 `mcp.call`，最后由 Telegram 连接器发请求，所以每个请求都过 #965 的闸门。CLI 不连 Telegram，也没有 token。
+  **谁是助手由 node 判定**（`node/clicall.go`）：socket 对端的进程（Linux `SO_PEERCRED`、macOS `LOCAL_PEERPID`）要是 node 为助手起的进程，
+  或者是它的子孙（助手的 Bash），才按助手的身份调；判断不了就拒绝（Agent 读不到用户的私聊）。node 也只转发 `telegram_` 开头的调用。
+- **读**：`tg chats` / `unread` / `messages`（分页 `next_before`，`--since` / `--until`）/ `search` / `message` / `chat`（资料）/ `members`。
+  **写**：`tg send` / `reply` / `forward` / `react` / `read`（标已读）。写操作是连接器的 actions（`telegram_send`、`telegram_forward`、
+  `telegram_react`、`telegram_mark_read`），过 `connector_gate`：默认在手机上确认，卡片写明会话、全文、谁会看到；不另加闸门。
+  写操作只认会话的 id 或 @用户名，而且要是读命令或收件箱列过的（只看内存里的，不问 Telegram），所以卡片上的会话就是实际写到的会话。
+- 这些工具在 Manifest 的 `Unlisted` 里：不进模型的工具列表（助手照旧只看到三个只读工具），只按名字调。描述和参数在
+  `prompts/mcp/telegram/`，实现在 `connector/telegram/cli.go`；读的回 JSON（snake_case，时间是用户时区的 RFC 3339），上限和三个工具一样，一次一页。
+- **输出**照 feishu-cli 的做法：stdout 一行 JSON（`--format text` 给人看）；失败时 stderr 一行 `{error, kind, retry_after}`，退出码
+  0 成功、1 出错、2 用法、3 用不了（没登录、关着、没 hub、不是助手）、4 限流（`retry_after`）、5 用户拒绝或规则不许。
+- **skill**：内置的 `assistantskills/builtin/telegram/SKILL.md`。只有 hub 上 Telegram 是 ok 或限流（开着、登录着）时才装：hub 每次
+  `assistant.prepare` 带上登录着的连接器（`connectors`），node 据此装上或撤掉 skill 和 `tg`（`assistantskills.Requires`）。
+  退出登录、关掉开关之后，下一条消息之前就撤掉。
+- 子进程协议为此加了 `actions.list` / `actions.describe` / `actions.do`（`docs/connector-protocol.md`），2026-11-03 和 ovis 对过。
+
 ## 设置 › 连接器 › Telegram
 
 - 状态：关着 / 未登录 / 已登录 · 显示名（@用户名）· 「api_id 1234567 · api_hash ••••a1b2」/ 限流 / 出错。

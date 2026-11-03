@@ -5,12 +5,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/connector/telegram/spec"
 )
 
 func TestToolsAreDescribed(t *testing.T) {
 	c := newConn(&memSecrets{}, nil)
-	tools := c.Tools()
-	if len(tools) != 3 {
+	tools := append(c.Tools(), c.Actions()...)
+	if len(tools) != 3+len(spec.CLITools)+len(spec.CLIActions) {
 		t.Fatalf("%d tools", len(tools))
 	}
 	for _, tl := range tools {

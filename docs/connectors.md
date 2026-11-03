@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `github` | GitHub | hub 里（`connector/github`） | `Archive`（`updated_at` 游标） | 有，规则定档 + 降噪（`rules.go`） | `github_search/read/diff/checks` | `github_comment`、`github_review`（过闸门） | 读某台电脑上 `gh` 的登录（`credential.gh_token`） |
 | `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 personad 完全磁盘访问权限） |
-| `telegram` | Telegram | 单独的程序 `jarvisd-telegram`，hub 经 stdin / stdout 调（`connector/proc` + `connector/serve`） | `Archive` | 有 | 只读工具 | 没有 | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
+| `telegram` | Telegram | 单独的程序 `jarvisd-telegram`，hub 经 stdin / stdout 调（`connector/proc` + `connector/serve`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
 | `lark` | 飞书 | hub 里（`hub/lark_connector.go`，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | hub 自己的收件箱块（`inbox_own.go`） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
 | `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
 
@@ -33,6 +33,7 @@
 | `Capabilities` | 有类型的能力（`CapStatus`、`CapTools`、`CapActions`、`CapEvents`、`CapInbox`、`CapSettle`、`CapArchive`、`CapChats`、`CapItems`、`CapLogin`、`CapOptions`），每个对应一个接口 |
 | `Hosts` | 链接所在的主机名（App 认链接） |
 | `AgentTools` | 哪些工具也给 Agent（不只给助手），按名字的通配（邮件是 `mail_*`） |
+| `Unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行和 skill，`docs/plan-telegram.md`「tg 命令行」）。不是权限 |
 | `Poll` | 多久问一次 `Archive`（0 是 hub 的默认；邮件 6 分钟） |
 | `Kinds` | 收件箱条目的种类；每个种类在 `prompts/inbox/kinds/<id>.md` 里要有自己的说明（`connector.CheckKinds`，各连接器的 `TestKindsAreDescribed`），收到没声明的种类记一行日志 |
 | `Proxy` | 它替一个程序回答（子进程的 `proc.Conn`）：实现了全部接口，只有声明的那些是真的 |
@@ -322,7 +323,8 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 曾经的提案是把 `larkgate.go` 的「按命令判断」推广到所有 skill（skill 在 `jarvis.json` 里声明写脚本，执行时手机上确认，#654 / #657）。
 用户的决定：skill 写操作的鉴权 Claude Code 自己已经有了，Claude 会自己判断，需要用户判断的时候会问用户，「这块千万别过度设计」。所以不做，代码没有合入。
 
-要写就做成连接器的 action 这条照旧：Telegram 的发送在 Telegram 连接器的第二期做成 `telegram_send`，过闸门，卡片写明发给谁、全文。
+要写就做成连接器的 action 这条照旧：Telegram 的发送、回复、转发、reaction、标已读做成了 `telegram_send` 等 actions（#988），
+经 `tg` 命令行调，过闸门，卡片写明发给谁、全文；子进程协议为此加了 `actions.*`（`docs/connector-protocol.md`）。
 
 ## 三、迁移顺序
 

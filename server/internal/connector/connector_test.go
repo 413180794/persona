@@ -19,6 +19,7 @@ type fake struct {
 	id     string
 	status Status
 	did    []string
+	args   []string // what each Do was given
 	watch  func(ctx context.Context, changed func(Scope)) error
 }
 
@@ -47,7 +48,60 @@ func (f *fake) Describe(_ context.Context, name string, args json.RawMessage) (A
 
 func (f *fake) Do(_ context.Context, name string, args json.RawMessage) (string, error) {
 	f.did = append(f.did, name)
+	f.args = append(f.args, string(args))
 	return "done", nil
+}
+
+// unlistedFake is fake with its action unlisted.
+type unlistedFake struct{ *fake }
+
+func (f unlistedFake) Manifest() Manifest {
+	m := f.fake.Manifest()
+	m.Unlisted = []string{"*_comment"}
+	return m
+}
+
+// An unlisted tool is not in the models' lists, yet is called by name like any other: an action still goes through
+// the gate and runs with the very arguments the card was made from.
+func TestUnlistedTools(t *testing.T) {
+	ctx := context.Background()
+	f := &fake{id: "example", status: Status{State: StateOK}}
+	r := NewRegistry(nil)
+	if err := r.Add(unlistedFake{f}); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, tl := range r.Tools(ctx) {
+		names = append(names, tl.Name)
+	}
+	if !slices.Equal(names, []string{"example_read"}) {
+		t.Fatalf("listed %v", names)
+	}
+	if !r.Offers("example_comment") {
+		t.Fatal("an unlisted action cannot be called by name")
+	}
+	if res := r.Call(ctx, "example_comment", json.RawMessage(`{"text":"示例"}`), nil); !res.IsError || len(f.did) != 0 {
+		t.Fatalf("an unlisted action ran without the gate: %+v", res)
+	}
+	var cardArgs string
+	yes := func(_ context.Context, _ string, in json.RawMessage) bool { cardArgs = string(in); return true }
+	if res := r.Call(ctx, "example_comment", json.RawMessage(`{"text":"示例"}`), yes); res.IsError || len(f.did) != 1 {
+		t.Fatalf("allowed but did not run: %+v", res)
+	}
+	if cardArgs != `{"text":"示例"}` || f.args[0] != cardArgs {
+		t.Fatalf("the card was made from %s, it ran with %s", cardArgs, f.args[0])
+	}
+}
+
+// A card shows at most cardMost of Describe's words and says how many it left out.
+func TestCardIsCut(t *testing.T) {
+	if s := card("评论 example-org/example-repo#12"); s != "评论 example-org/example-repo#12" {
+		t.Fatalf("a short one changed: %q", s)
+	}
+	s := card(strings.Repeat("字", cardMost+5))
+	if len([]rune(s)) > cardMost+40 || !strings.HasSuffix(s, "（后面还有 5 字，卡片只显示前 16000 字）") {
+		t.Fatalf("cut to %d runes, ending %q", len([]rune(s)), string([]rune(s)[len([]rune(s))-30:]))
+	}
 }
 
 // plain has no capability at all.

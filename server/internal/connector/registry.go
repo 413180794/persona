@@ -232,7 +232,7 @@ func (r *Registry) Tools(ctx context.Context) []proto.Tool {
 }
 
 // ToolsFor are the tools of the connectors that are ok that go to the agents too (agents), or only to the
-// assistant (!agents), in the order added.
+// assistant (!agents), in the order added; not the unlisted ones (Manifest.Unlisted), which are called by name.
 func (r *Registry) ToolsFor(ctx context.Context, agents bool) []proto.Tool {
 	var out []proto.Tool
 	for _, c := range r.All() {
@@ -241,7 +241,7 @@ func (r *Registry) ToolsFor(ctx context.Context, agents bool) []proto.Tool {
 		}
 		m := c.Manifest()
 		for _, t := range owned(c, allTools(c)) {
-			if m.ForAgents(t.Name) == agents {
+			if m.ForAgents(t.Name) == agents && m.Listed(t.Name) {
 				out = append(out, t)
 			}
 		}

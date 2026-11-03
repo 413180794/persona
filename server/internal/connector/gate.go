@@ -100,9 +100,22 @@ func Decide(rules []Rule, id, name string, args json.RawMessage) string {
 	return Confirm
 }
 
+// cardMost is the most of Describe's words the card shows (a program's could be any length): more than a Telegram
+// message or a long comment, and the card says when it was cut.
+const cardMost = 16000
+
+// card is Describe's words as the card shows them: at most cardMost runes, saying how much was left out.
+func card(summary string) string {
+	r := []rune(summary)
+	if len(r) <= cardMost {
+		return summary
+	}
+	return string(r[:cardMost]) + fmt.Sprintf("\n\n（后面还有 %d 字，卡片只显示前 %d 字）", len(r)-cardMost, cardMost)
+}
+
 // gate lets the action name of c through or answers instead of it: Deny refuses, Confirm asks the user with the
 // card's words (Describe, and who will see it) and refuses unless they allow it, Allow says nothing. A nil result
-// means run it.
+// means run it, with the very args the card was made from.
 func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string, args json.RawMessage, ask Ask) *proto.ToolResult {
 	switch Decide(rules, c.ID(), name, args) {
 	case Deny:
@@ -114,6 +127,7 @@ func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string
 			res := proto.TextResult(err.Error(), true)
 			return &res
 		}
+		summary = card(summary)
 		if act.Visible != "" {
 			summary += "\n\n谁会看到：" + act.Visible
 		}

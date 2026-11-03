@@ -21,6 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/node"
 	"github.com/nwverse/persona/server/internal/relay"
 	"github.com/nwverse/persona/server/internal/sysmon"
+	"github.com/nwverse/persona/server/internal/tgcli"
 	"github.com/nwverse/persona/server/internal/tunnel"
 	"github.com/nwverse/persona/server/internal/update"
 	"github.com/nwverse/persona/server/internal/voice"
@@ -73,6 +74,7 @@ const usage = `usage:
                            with another's home directory, which hubs would take for that one (docs/mesh.md)
   personad hook             Claude Code hook entry (reads hook JSON on stdin)
   personad mcp              Claude Code MCP server (stdio)
+  personad tg …             the user's Telegram through the hub, for the assistant (the telegram skill): personad tg --help
   personad codex-start <file>
                            run the Codex launcher in file (written by the node, removed once read) with the first
                            message as its last argument, no shell in between (docs/codex.md「从手机新建」)
@@ -200,6 +202,8 @@ func main() {
 		err = relay.Run(ctx, path)
 	case "mcp":
 		err = mcpserver.Serve(ctx, version, os.Stdin, os.Stdout)
+	case "tg":
+		os.Exit(tgcli.Main(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	case "voice":
 		err = voice.Run(ctx)
 	case "sysmon":

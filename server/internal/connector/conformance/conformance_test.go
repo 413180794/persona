@@ -37,7 +37,7 @@ func TestWireTypesAreTagged(t *testing.T) {
 		}
 	}
 	for _, v := range []any{serve.Manifest{}, serve.InitParams{}, serve.LoginParams{}, serve.ChangesParams{}, serve.ChangesResult{},
-		serve.CollectResult{}, serve.ReplyParams{}, serve.ToolsResult{}, serve.CallParams{}, serve.CallResult{}, serve.SecretData{},
+		serve.CollectResult{}, serve.ReplyParams{}, serve.ToolsResult{}, serve.CallParams{}, serve.CallResult{}, serve.DescribeResult{}, serve.DoParams{}, serve.SecretData{},
 		serve.ChangedEvent{}, connector.Status{}, connector.Prompt{}, connector.InboxThing{}, connector.ChatBatch{}, kb.SourceMessage{}} {
 		walk(reflect.TypeOf(v), reflect.TypeOf(v).String())
 	}

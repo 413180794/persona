@@ -3,6 +3,8 @@ package assistantskills
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -28,7 +30,7 @@ func TestSyncLinksTheUsersSkills(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "beta"), 0o755); err != nil { // the user's own, in place
 		t.Fatal(err)
 	}
-	if err := Sync(dir, user, quiet); err != nil {
+	if err := Sync(dir, user, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
 	if target, err := os.Readlink(filepath.Join(dir, "alpha")); err != nil || target != filepath.Join(user, "alpha") {
@@ -43,7 +45,7 @@ func TestSyncLinksTheUsersSkills(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(user, "alpha")); err != nil {
 		t.Fatal(err)
 	}
-	if err := Sync(dir, user, quiet); err != nil {
+	if err := Sync(dir, user, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(filepath.Join(dir, "alpha")); !os.IsNotExist(err) {
@@ -62,7 +64,7 @@ func TestSyncMovesTheOldCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 	var said []string
-	if err := Sync(dir, user, func(f string, a ...any) { said = append(said, f) }); err != nil {
+	if err := Sync(dir, user, nil, func(f string, a ...any) { said = append(said, f) }); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(user, "lark-connector", "scripts", "ol.sh")); err != nil {
@@ -90,7 +92,7 @@ func TestSyncOldCopyGivesWayToTheUsers(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, legacyStamp), []byte("abc\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := Sync(dir, user, quiet); err != nil {
+	if err := Sync(dir, user, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
 	if target, _ := os.Readlink(filepath.Join(dir, "lark-connector")); target != filepath.Join(user, "lark-connector") {
@@ -102,7 +104,7 @@ func TestSyncOldCopyGivesWayToTheUsers(t *testing.T) {
 func TestNoStampNoMove(t *testing.T) {
 	user, dir := t.TempDir(), t.TempDir()
 	skill(t, dir, "lark-connector", "placed by hand")
-	if err := Sync(dir, user, quiet); err != nil {
+	if err := Sync(dir, user, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(user, "lark-connector")); !os.IsNotExist(err) {
@@ -139,8 +141,44 @@ func TestListAndDescriptions(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(user, "no-skill-md"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	got := List(user)
+	got := List(user, nil)
 	if len(got) != 2 || got[0] != (Skill{"alpha", "quoted one", "user"}) || got[1] != (Skill{"folded", "first line second line", "user"}) {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// The telegram skill is in while Telegram is signed in on the hub and out once it is not; the user's own skill of the
+// name wins.
+func TestConnectorSkillFollowsItsConnector(t *testing.T) {
+	user, dir := t.TempDir(), t.TempDir()
+	if err := Sync(dir, user, nil, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if Has(dir, "telegram") || slices.ContainsFunc(List(user, nil), func(s Skill) bool { return s.Name == "telegram" }) {
+		t.Fatal("the telegram skill is in with Telegram not signed in")
+	}
+	if err := Sync(dir, user, []string{"telegram"}, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if !Has(dir, "telegram") {
+		t.Fatal("Telegram signed in, no telegram skill")
+	}
+	listed := List(user, []string{"telegram"})
+	if i := slices.IndexFunc(listed, func(s Skill) bool { return s.Name == "telegram" }); i < 0 || listed[i].Source != "builtin" ||
+		!strings.Contains(listed[i].Description, "tg") {
+		t.Fatalf("listed %+v", listed)
+	}
+	if err := Sync(dir, user, nil, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "telegram")); !os.IsNotExist(err) {
+		t.Fatalf("signed out, the telegram skill stayed: %v", err)
+	}
+	skill(t, user, "telegram", "mine")
+	if err := Sync(dir, user, []string{"telegram"}, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if target, _ := os.Readlink(filepath.Join(dir, "telegram")); target != filepath.Join(user, "telegram") {
+		t.Fatalf("the user's telegram skill gave way to the built-in one: %q", target)
 	}
 }

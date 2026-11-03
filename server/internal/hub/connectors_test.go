@@ -203,7 +203,7 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 		"mail tools,actions,archive hosts=[] options=false",
 		"github status,tools,actions,events,hosts,inbox,archive,login,options hosts=[github.com] options=true",
 		"imessage status,tools,events,inbox,archive hosts=[] options=false",
-		"telegram status,tools,events,inbox,archive,login hosts=[] options=false",
+		"telegram status,tools,actions,events,inbox,archive,login hosts=[] options=false", // actions: the tg CLI's writes
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -239,7 +239,7 @@ func TestSwitchedOffProgramSignsInAndOut(t *testing.T) {
 	}
 	_, out = call(t, mux, "GET", "/api/v1/connectors", h.cfg.Token, "")
 	list := out["connectors"].([]any)
-	if len(list) != 1 || fmt.Sprint(list[0].(map[string]any)["capabilities"]) != "[status tools events inbox archive login]" ||
+	if len(list) != 1 || fmt.Sprint(list[0].(map[string]any)["capabilities"]) != "[status tools actions events inbox archive login]" ||
 		list[0].(map[string]any)["status"] != "disabled" {
 		t.Fatalf("listed %v", list)
 	}

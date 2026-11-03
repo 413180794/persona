@@ -60,6 +60,10 @@ type Manifest struct {
 	Hosts []string
 	// AgentTools are the tools (patterns, path.Match: "mail_*") the coding agents get too, not only the assistant.
 	AgentTools []string
+	// Unlisted are the tools (patterns, path.Match) left out of the models' tool lists: a front end of the
+	// connector's own calls them by name (Telegram's tg CLI and its skill). It is not a permission: called by name,
+	// one runs like any other (an action through the gate), and an agent only gets those AgentTools gives it.
+	Unlisted []string
 	// Poll is how often the hub asks Archive for changes; 0 is the hub's default.
 	Poll time.Duration
 	// Kinds are the kinds its inbox things have (InboxThing.Kind): prompts/inbox/kinds/<id>.md tells the models what
@@ -75,7 +79,15 @@ func (m Manifest) Has(cp Capability) bool { return slices.Contains(m.Capabilitie
 
 // ForAgents says whether the coding agents get the tool name too.
 func (m Manifest) ForAgents(name string) bool {
-	return slices.ContainsFunc(m.AgentTools, func(p string) bool { ok, err := path.Match(p, name); return err == nil && ok })
+	return slices.ContainsFunc(m.AgentTools, matching(name))
+}
+
+// Listed says whether the tool name goes in the models' tool lists (Unlisted).
+func (m Manifest) Listed(name string) bool { return !slices.ContainsFunc(m.Unlisted, matching(name)) }
+
+// matching is whether a pattern (path.Match) matches name.
+func matching(name string) func(string) bool {
+	return func(p string) bool { ok, err := path.Match(p, name); return err == nil && ok }
 }
 
 // As is c as the capability interface T, when its manifest declares that capability: the one way the hub's pipes

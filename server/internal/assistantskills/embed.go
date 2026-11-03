@@ -1,8 +1,8 @@
 // Package assistantskills puts the assistant's skills in its directory (<assistant dir>/.claude/skills,
 // docs/hub-update.md「skill 从二进制里拿出来」): the user's own, kept in ~/.jarvis/skills/<name> on the machine that runs
 // the assistant and linked in, and the built-in ones this binary carries, copied in. Built-in skills are only those
-// Persona may redistribute (none yet): a copied one, like lark-connector, lives in the user's space. jarvisd never writes
-// that space, so an update cannot touch the user's skills.
+// Persona may redistribute (telegram, the tg CLI's): a copied one, like lark-connector, lives in the user's space. jarvisd
+// never writes that space, so an update cannot touch the user's skills.
 package assistantskills
 
 import (
@@ -25,7 +25,19 @@ var embedded embed.FS
 var builtin, _ = fs.Sub(embedded, "builtin")
 
 // Redistributable is every built-in skill and why Persona may ship it (TestBuiltinsAreRedistributable).
-var Redistributable = map[string]string{}
+var Redistributable = map[string]string{
+	"telegram": "Persona's own (the tg CLI's skill, docs/plan-telegram.md「tg 命令行」)",
+}
+
+// Requires are the built-in skills that need a connector of the hub signed in (its id): put in while it is, taken
+// out once it is not (the hub says which are with assistant.prepare).
+var Requires = map[string]string{"telegram": "telegram"}
+
+// wanted says whether the built-in skill name goes in with the connectors signed in.
+func wanted(name string, connectors []string) bool {
+	need, ok := Requires[name]
+	return !ok || slices.Contains(connectors, need)
+}
 
 // legacyBundled are the skills older jarvisd binaries copied into the assistant's directory: moved to the user's
 // space once (migrate).
@@ -80,15 +92,16 @@ func userNames(user string) []string {
 }
 
 // Sync makes dir (<assistant dir>/.claude/skills) hold the user's skills, as links into user, and the built-in ones
-// the user has none of, as copies. A link into user whose skill is gone is removed; a directory the user put in dir
-// themselves is left alone. logf reports what changed.
-func Sync(dir, user string, logf func(string, ...any)) error {
+// the user has none of, as copies: those that need a connector (Requires) only while it is among connectors, the hub's
+// signed in. A link into user whose skill is gone is removed; a directory the user put in dir themselves is left
+// alone. logf reports what changed.
+func Sync(dir, user string, connectors []string, logf func(string, ...any)) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	migrate(dir, user, logf)
 	mine := userNames(user)
-	if err := installBuiltins(dir, mine); err != nil {
+	if err := installBuiltins(dir, mine, connectors); err != nil {
 		return err
 	}
 	for _, name := range mine {
@@ -166,12 +179,13 @@ func builtinVersion() string {
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
-// installBuiltins copies the built-in skills into dir, except those the user has their own of; the stamp (version
-// and what was copied) skips an identical install and lets a copy no longer carried be removed.
-func installBuiltins(dir string, mine []string) error {
+// installBuiltins copies the built-in skills into dir, except those the user has their own of and those whose
+// connector is not signed in; the stamp (version and what was copied) skips an identical install and lets a copy no
+// longer carried, or no longer wanted, be removed.
+func installBuiltins(dir string, mine, connectors []string) error {
 	var names []string
 	for _, n := range builtinNames() {
-		if !slices.Contains(mine, n) {
+		if !slices.Contains(mine, n) && wanted(n, connectors) {
 			names = append(names, n)
 		}
 	}
@@ -223,8 +237,9 @@ func installBuiltins(dir string, mine []string) error {
 	return os.WriteFile(stamp, []byte(want+"\n"), 0o644)
 }
 
-// List is the skills the assistant gets on this machine: the user's, then the built-in ones they have none of.
-func List(user string) []Skill {
+// List is the skills the assistant gets on this machine: the user's, then the built-in ones they have none of whose
+// connector, if they need one, is signed in.
+func List(user string, connectors []string) []Skill {
 	out := []Skill{}
 	mine := userNames(user)
 	for _, n := range mine {
@@ -232,7 +247,7 @@ func List(user string) []Skill {
 		out = append(out, Skill{Name: n, Description: description(string(b)), Source: "user"})
 	}
 	for _, n := range builtinNames() {
-		if !slices.Contains(mine, n) {
+		if !slices.Contains(mine, n) && wanted(n, connectors) {
 			b, _ := fs.ReadFile(builtin, n+"/SKILL.md")
 			out = append(out, Skill{Name: n, Description: description(string(b)), Source: "builtin"})
 		}

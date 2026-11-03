@@ -8,6 +8,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -61,11 +63,12 @@ type Conn struct {
 	cfg    Config
 	events chan connector.Scope // scopes the program reported, for Watch
 
-	mu     sync.Mutex
-	peer   *rpc.Peer // nil while the program is not running
-	man    serve.Manifest
-	tools  []proto.Tool
-	status connector.Status
+	mu      sync.Mutex
+	peer    *rpc.Peer // nil while the program is not running
+	man     serve.Manifest
+	tools   []proto.Tool
+	actions []proto.Tool
+	status  connector.Status
 }
 
 // New is the connector of the program cfg describes; nothing runs until Run.
@@ -109,7 +112,7 @@ func sameManifest(declared, said connector.Manifest) bool {
 	}
 	a, b := norm(declared), norm(said)
 	return slices.Equal(a.Capabilities, b.Capabilities) && slices.Equal(a.Hosts, b.Hosts) && slices.Equal(a.AgentTools, b.AgentTools) &&
-		a.Poll == b.Poll && slices.Equal(a.Kinds, b.Kinds)
+		slices.Equal(a.Unlisted, b.Unlisted) && a.Poll == b.Poll && slices.Equal(a.Kinds, b.Kinds)
 }
 
 // Status answers from memory: the program's last status, or why it is not running.
@@ -193,11 +196,14 @@ func (c *Conn) refresh(ctx context.Context) {
 	if err := peer.Call(ctx, serve.MStatus, struct{}{}, &st); err != nil {
 		return
 	}
-	var tools serve.ToolsResult
+	var tools, actions serve.ToolsResult
 	_ = peer.Call(ctx, serve.MTools, struct{}{}, &tools)
+	if c.Manifest().Has(connector.CapActions) {
+		_ = peer.Call(ctx, serve.MActions, struct{}{}, &actions)
+	}
 	c.mu.Lock()
 	if c.peer == peer {
-		c.status, c.tools = st, tools.Tools
+		c.status, c.tools, c.actions = st, tools.Tools, actions.Tools
 	}
 	c.mu.Unlock()
 }
@@ -439,6 +445,29 @@ func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (str
 	return out.Text, err
 }
 
+// Actions answers from memory, as Tools.
+func (c *Conn) Actions() []proto.Tool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.actions)
+}
+
+func (c *Conn) Describe(ctx context.Context, name string, args json.RawMessage) (connector.Action, string, error) {
+	var out serve.DescribeResult
+	err := c.call(ctx, serve.MDescribe, serve.CallParams{Name: name, Args: args}, &out)
+	return out.Action, out.Summary, err
+}
+
+// Do sends the write once, with an id of its own: the program runs one id at most once, and Do never sends it again
+// (a run that timed out may have happened; only the user asks again).
+func (c *Conn) Do(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	var id [16]byte
+	_, _ = rand.Read(id[:])
+	var out serve.CallResult
+	err := c.call(ctx, serve.MDo, serve.DoParams{Name: name, Args: args, RequestID: hex.EncodeToString(id[:])}, &out)
+	return out.Text, err
+}
+
 func firstLine(s string) string {
 	line, _, _ := bytes.Cut([]byte(s), []byte("\n"))
 	return string(line)
@@ -451,6 +480,7 @@ var (
 	_ connector.Archive   = (*Conn)(nil)
 	_ connector.Inbox     = (*Conn)(nil)
 	_ connector.ReadTools = (*Conn)(nil)
+	_ connector.Actions   = (*Conn)(nil)
 	_ connector.Events    = (*Conn)(nil)
 	_ connector.Runner    = (*Conn)(nil)
 )

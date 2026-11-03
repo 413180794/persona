@@ -57,10 +57,30 @@ type client interface {
 	// History is a conversation's messages newer than minID, oldest first. With minID 0 (a first read) it goes back
 	// to since, at most max messages.
 	History(ctx context.Context, d dialog, minID int, since time.Time, max int) ([]message, error)
-	// Older is a conversation's limit messages before the id before (0: the newest), oldest first.
-	Older(ctx context.Context, d dialog, before, limit int) ([]message, error)
-	// Search finds messages with query, in one conversation (in) or across the account, newest first.
-	Search(ctx context.Context, query string, in *dialog, limit int) ([]found, error)
+	// Older is a conversation's limit messages before the id before (0: the newest) and sent before until (zero: no
+	// bound), oldest first: one request.
+	Older(ctx context.Context, d dialog, before int, until time.Time, limit int) ([]message, error)
+	// Search finds messages with query, in one conversation (in) or across the account, sent in [since, until) (zero:
+	// no bound), newest first.
+	Search(ctx context.Context, query string, in *dialog, since, until time.Time, limit int) ([]found, error)
+	// Messages are a conversation's messages by id, in that order; one Telegram does not have is left out.
+	Messages(ctx context.Context, d dialog, ids []int) ([]message, error)
+	// Info is a conversation's profile (one request).
+	Info(ctx context.Context, d dialog) (chatInfo, error)
+	// Members are a group's members, at most limit, and how many it has (one request).
+	Members(ctx context.Context, d dialog, limit int) ([]member, int, error)
+
+	// The writes: only ever from an action the hub's gate let through (cli.go).
+
+	// Send sends text, as a reply to the message replyTo unless it is 0, and says the sent message's id. random is
+	// Telegram's random_id: the same message sent again with it is dropped.
+	Send(ctx context.Context, d dialog, text string, replyTo int, random int64) (int, error)
+	// Forward forwards from's messages ids to to; random has one random_id each.
+	Forward(ctx context.Context, from dialog, ids []int, to dialog, random []int64) error
+	// React puts the emoji on the message id (replacing the account's reaction there).
+	React(ctx context.Context, d dialog, id int, emoji string) error
+	// MarkRead marks the conversation read up to the message upTo (0: all of it).
+	MarkRead(ctx context.Context, d dialog, upTo int) error
 	// UnreadMentions is a group's unread messages that @ me or reply to me, oldest first; it marks nothing as read.
 	UnreadMentions(ctx context.Context, d dialog, limit int) ([]message, error)
 }
