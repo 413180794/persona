@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TestFlight setup for Jarvis (idempotent): an internal group, and an external one for anybody else.
+"""TestFlight setup for Persona Side (idempotent): an internal group, and an external one for anybody else.
 
   python3 scripts/release/asc_testflight.py                    # group "Internal" + testers, then status
   python3 scripts/release/asc_testflight.py status             # the last few builds and their processing state
@@ -18,7 +18,7 @@ A build can't be submitted while another of its version is in review; "catch-up"
 
 Internal testers (app_store.testers in the config) must be users of the team in App Store Connect.
 External testers join the group by its public link when app_store.external.public_link is true (at most
-public_link_limit people), and/or get an email invitation when listed in app_store.external.testers. Without the
+public_link_limit people; 0 or unset means no limit), and/or get an email invitation when listed in app_store.external.testers. Without the
 public link only those emails can join. The first build of a version goes through Beta App Review, which needs the
 contact in app_store.external.review (docs/release.md). The App ID comes from app_store.app_id in the config (docs/config.md).
 """
@@ -41,11 +41,11 @@ PLATFORMS = {"ios": "IOS", "mac": "MAC_OS"}
 PLATFORM = "IOS"  # which platform's builds the commands look at (--platform)
 
 BETA_INFO = {
-    "en-US": "Jarvis drives the Claude Code and Codex sessions on your own computers from the iPhone, the Apple Watch and the Mac: "
+    "en-US": "Persona Side drives the Claude Code and Codex sessions on your own computers from the iPhone, the Apple Watch and the Mac: "
              "watch every step stream in, answer questions, approve plans and tool calls. Its assistant can also read your "
              "mail and calendar and, when you ask, your contacts, reminders, photos and health data. It connects to a hub "
              "you run yourself (see the README of the project).",
-    "zh-Hans": "Jarvis 让你在 iPhone、Apple Watch 和 Mac 上驱动自己各台电脑里的 Claude Code 和 Codex：实时看每一步、回答提问、"
+    "zh-Hans": "Persona Side 让你在 iPhone、Apple Watch 和 Mac 上驱动自己各台电脑里的 Claude Code 和 Codex：实时看每一步、回答提问、"
                "审批计划和工具调用；助手还能读你的邮件和日历，在你需要时读写通讯录、提醒事项、照片和健康数据。"
                "需要连接你自己部署的 hub（见项目 README）。",
 }
@@ -220,7 +220,7 @@ def external_group_id() -> str:
 
 
 def public_link(g):
-    """Turn the group's public link on (app_store.external.public_link, capped at public_link_limit people) or off.
+    """Turn the group's public link on (app_store.external.public_link, capped at public_link_limit people, 0 = no limit) or off.
 
     Anyone who has the link can install, but only once a build of the group has passed Beta App Review."""
     want = bool(EXTERNAL.get("public_link"))
@@ -234,7 +234,7 @@ def public_link(g):
         g = request("PATCH", f"/v1/betaGroups/{g['id']}",
                     {"data": {"type": "betaGroups", "id": g["id"], "attributes": attrs}})["data"]
         print("public link of", EXTERNAL_GROUP, "turned", "on" if want else "off",
-              f"(at most {limit} testers)" if want and limit else "")
+              (f"(at most {limit} testers)" if limit else "(no tester limit)") if want else "")
     if want and g["attributes"].get("publicLink"):
         print("public link:", g["attributes"]["publicLink"])
 

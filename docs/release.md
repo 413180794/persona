@@ -4,7 +4,8 @@ TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及�
 
 ## 账号与标识
 
-产品名为 Persona（原 Jarvis），但已有 Bundle ID、App Group、钥匙串组、签名 profile 名称和 App Store Connect App 记录不变；不要因改名重新创建 App。下文的「Jarvis App Store」「Jarvis Watch App Store」是已有签名 profile 名，保留不改；当前生成工程 / target 和 archive / `.app` 产物使用 Persona 名称，旧工程 / scheme 别名与 module 身份见 [兼容迁移](rename.md)。历史构建记录保留当时名称。新默认配置和 `personad` / `jarvisd` 的兼容见 [命名与兼容](config.md#命名与兼容)。
+产品名为 Persona（原 Jarvis），但已有 Bundle ID、App Group、钥匙串组、签名 profile 名称和 App Store Connect App 记录不变；不要因改名重新创建 App。
+App Store Connect 里的商店名 2026-11-03 起是 **Persona Side**（原「Jarvis Herd」；桌面上显示的仍是 `CFBundleDisplayName` 的 Persona），隐私政策地址同 `app_store.external.privacy_url`（官网的隐私政策页）。商店名在 App 信息的本地化（`appInfoLocalizations` 的 `name`）里，版本还没提交审核时可以用 API 直接改，见下面「改商店名」。下文的「Jarvis App Store」「Jarvis Watch App Store」是已有签名 profile 名，保留不改；当前生成工程 / target 和 archive / `.app` 产物使用 Persona 名称，旧工程 / scheme 别名与 module 身份见 [兼容迁移](rename.md)。历史构建记录保留当时名称。新默认配置和 `personad` / `jarvisd` 的兼容见 [命名与兼容](config.md#命名与兼容)。
 
 都在构建配置里（`docs/config.md`）：`app.bundle_id` / `app.team_id`、`app_store.key_id` / `issuer_id` / `key_path`（API key 文件只放在
 仓库外，比如 `~/.appstoreconnect/`）、`app_store.app_id`（App 记录的数字 ID）、`app_store.testers`、`app_store.feedback_email`。
@@ -110,6 +111,18 @@ App 和灵动岛扩展（JarvisWidgets）靠 App Group 容器里的文件交形�
    它检查每个描述文件里有没有这个组，没有就打印上面的步骤并非零退出。
 5. 发版导出后 `scripts/release/entitlements.py check` 查 ipa 里 App 和 JarvisWidgets 的签名都带着这个组。
 
+## 改商店名
+
+商店名（App Store / TestFlight 里显示的名字，和桌面上的 `CFBundleDisplayName` 无关）要全局唯一，在 App 信息的本地化里。版本还在 `PREPARE_FOR_SUBMISSION` 时 App Manager 的 API key 就能改：
+
+```sh
+python3 scripts/release/asc.py GET /v1/apps/<app id>/appInfos                    # 取 appInfo 的 id
+python3 scripts/release/asc.py GET /v1/appInfos/<appInfo id>/appInfoLocalizations # 每种语言一条，取 id
+# PATCH /v1/appInfoLocalizations/<id>，attributes 写 name（和 privacyPolicyUrl），名字被占用时报 409
+```
+
+改名不换 App 记录：Bundle ID、测试组、公开链接、已发的构建和已经装了的人都不受影响。
+
 ## 踩坑
 
 - **`bundleIdCapabilities` 不能带自造的 settings**：给 `PUSH_NOTIFICATIONS` 传
@@ -136,7 +149,7 @@ App 和灵动岛扩展（JarvisWidgets）靠 App Group 容器里的文件交形�
 ## 外部测试（公开链接）
 
 内部测试员必须是团队成员；给朋友用走外部测试：群组「Friends」（`app_store.external.group`）。2026-10-30 用户定的是**公开链接**
-（`public_link: true`，`public_link_limit: 50`）：把 `https://testflight.apple.com/join/…` 发到群里，谁点开都能装，满 50 人后链接不再收人。
+（`public_link: true`）：把 `https://testflight.apple.com/join/…` 发到群里，谁点开都能装。2026-11-03 起**不限人数**（`public_link_limit: 0`，原来是 50，满了以后链接不再收人）：`public_link_limit` 为 0 或不写时关掉人数上限，只受 Apple 每个 App 最多 10,000 名外部测试员的限制；写正数就是上限。
 当前的公开链接：<https://testflight.apple.com/join/Nb5DjHXf>（`asc_testflight.py external` 每次都会打印，变了就更新这里；2026-11-02 核对）。
 iPhone 和 Mac 是同一个链接（同一个 Friends 组），在 Mac 上用 TestFlight 打开它就是 Mac 版。
 **只私下发给要测的人，不放到官网（`site/`）或任何公开页面上**（2026-10-31 用户要求）。
