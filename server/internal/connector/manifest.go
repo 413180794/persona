@@ -27,6 +27,7 @@ const (
 	CapItems   Capability = "items"   // Items
 	CapLogin   Capability = "login"   // Login
 	CapOptions Capability = "options" // Options
+	CapThreads Capability = "threads" // Threads
 )
 
 type capability struct {
@@ -49,6 +50,7 @@ var capabilities = []capability{
 	{CapItems, reflect.TypeFor[Items](), true},
 	{CapLogin, reflect.TypeFor[Login](), true},
 	{CapOptions, reflect.TypeFor[Options](), true},
+	{CapThreads, reflect.TypeFor[Threads](), true},
 }
 
 // Manifest is what a connector says it is and does, in one place (docs/connectors.md「二 · 1」): read whenever the

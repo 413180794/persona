@@ -468,6 +468,18 @@ func (c *Conn) Do(ctx context.Context, name string, args json.RawMessage) (strin
 	return out.Text, err
 }
 
+func (c *Conn) Thread(ctx context.Context, thread, before string, limit int) (connector.ThreadPage, error) {
+	var out connector.ThreadPage
+	err := c.call(ctx, serve.MThread, serve.ThreadParams{Thread: thread, Before: before, Limit: limit}, &out)
+	return out, err
+}
+
+func (c *Conn) Media(ctx context.Context, ref string) (connector.Media, error) {
+	var out connector.Media
+	err := c.call(ctx, serve.MMedia, serve.MediaParams{Ref: ref}, &out)
+	return out, err
+}
+
 func firstLine(s string) string {
 	line, _, _ := bytes.Cut([]byte(s), []byte("\n"))
 	return string(line)
@@ -481,6 +493,7 @@ var (
 	_ connector.Inbox     = (*Conn)(nil)
 	_ connector.ReadTools = (*Conn)(nil)
 	_ connector.Actions   = (*Conn)(nil)
+	_ connector.Threads   = (*Conn)(nil)
 	_ connector.Events    = (*Conn)(nil)
 	_ connector.Runner    = (*Conn)(nil)
 )

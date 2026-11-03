@@ -32,7 +32,7 @@ hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/c
 
 | 字段 | 意思 |
 | --- | --- |
-| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`login`、`options`；hub 只调声明了的 |
+| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）；hub 只调声明了的 |
 | `hosts` | 链接所在的主机名（App 认链接） |
 | `agent_tools` | 哪些工具也给编程 Agent，按名字的通配（不写就只给助手） |
 | `unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行）。不是权限：按名字调照常能调，写的照常过闸门，Agent 能不能调照旧看 `agent_tools` |
@@ -46,6 +46,8 @@ hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/c
 | `status` | `{}` → `{state, account?, via?, error?, guide?, last_sync?, last_event?}` | 从内存回答，不联网（hub 每 30 秒问一次）。`state`：`ok`、`not_configured`、`not_signed_in`、`no_permission`、`rate_limited`、`error` |
 | `tools.list` | `{}` → `{tools: [{name, description, input_schema}]}` | 只读工具，名字都以 `<id>_` 开头 |
 | `tools.call` | `{name, args}` → `{text}` | |
+| `thread.page` | `{thread, before?, limit}` → `{chat, messages, before?}` | 收件箱一个会话的一页消息，旧的在前；`before` 为空是最新一页，往前翻带上一页给的 `before`；`limit` 最多 50。字段见 `connector/threads.go`（`ThreadChat`、`ThreadMessage`、`ThreadMedia`…）。`chat.reply` 是能在这里回复的 action，参数 `{chat, text, reply_to}` |
+| `thread.media` | `{ref}` → `{mime, data}` | 页面里头像和媒体的 ref 对应的字节（base64），最多 4 MB。一个 ref 永远指同一份字节，hub 存盘、App 永久缓存；会变的（头像）把版本写进 ref |
 | `actions.list` | `{}` → `{tools: [{name, description, input_schema}]}` | 写操作，名字都以 `<id>_` 开头 |
 | `actions.describe` | `{name, args}` → `{action: {name, visible}, summary}` | 手机卡片上的话：做什么、全文；`visible` 是谁会看到。不联网。出错就是参数不对：hub 把错误回给调用方，不弹卡片 |
 | `actions.do` | `{name, args, request_id}` → `{text}` | **只在 hub 的闸门放行之后调**，`args` 就是卡片用的那一份。`request_id` 是 hub 为这一次生成的：同一个 id 程序只做一次（再来就回第一次的结果）；hub 超时后也不重发 |

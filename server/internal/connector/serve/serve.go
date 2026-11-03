@@ -37,6 +37,8 @@ const (
 	MActions   = "actions.list"
 	MDescribe  = "actions.describe"
 	MDo        = "actions.do" // only once the hub's gate let it through
+	MThread    = "thread.page"
+	MMedia     = "thread.media"
 )
 
 // Methods the program calls on the hub, and its event.
@@ -101,6 +103,14 @@ type (
 	DescribeResult struct {
 		Action  connector.Action `json:"action"`
 		Summary string           `json:"summary"`
+	}
+	ThreadParams struct {
+		Thread string `json:"thread"`
+		Before string `json:"before,omitempty"`
+		Limit  int    `json:"limit,omitempty"`
+	}
+	MediaParams struct {
+		Ref string `json:"ref"`
 	}
 	// DoParams is a write the gate let through: the very args the card was made from, and the hub's id for this one
 	// run, the same if the hub ever sends it again (the program runs it at most once).
@@ -270,6 +280,30 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		}
 		act, summary, err := a.Describe(ctx, p.Name, p.Args)
 		return DescribeResult{Action: act, Summary: summary}, err
+	case MThread:
+		th, ok := connector.As[connector.Threads](c)
+		if !ok {
+			return nil, noCapability(c, "threads")
+		}
+		var p ThreadParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return th.Thread(ctx, p.Thread, p.Before, min(max(p.Limit, 1), connector.ThreadMost))
+	case MMedia:
+		th, ok := connector.As[connector.Threads](c)
+		if !ok {
+			return nil, noCapability(c, "threads")
+		}
+		var p MediaParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		m, err := th.Media(ctx, p.Ref)
+		if err == nil && len(m.Data) > connector.MediaMost {
+			return nil, fmt.Errorf("media %d bytes, more than %d", len(m.Data), connector.MediaMost)
+		}
+		return m, err
 	case MDo:
 		a, ok := connector.As[connector.Actions](c)
 		if !ok {

@@ -67,6 +67,7 @@ func (h *Hub) callConnector(ctx context.Context, machineID, name string, args js
 
 func (h *Hub) connectorRoutes(api *http.ServeMux) {
 	h.githubAuthRoutes(api)
+	h.connectorThreadRoutes(api)
 	api.HandleFunc("GET /api/v1/connectors", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"connectors": h.listedConnectors(r.Context(), r.URL.Query().Get("all") == "1")})
 	})

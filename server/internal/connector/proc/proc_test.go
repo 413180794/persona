@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -51,7 +52,7 @@ func (*exampleProgram) Name() string { return "Example" }
 
 func (*exampleProgram) Manifest() connector.Manifest {
 	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions,
-		connector.CapEvents, connector.CapArchive, connector.CapLogin}, AgentTools: []string{"example_chats"},
+		connector.CapEvents, connector.CapArchive, connector.CapLogin, connector.CapThreads}, AgentTools: []string{"example_chats"},
 		Unlisted: []string{"example_send"}, Poll: 3 * time.Minute}
 }
 
@@ -107,6 +108,18 @@ func (*exampleProgram) Describe(_ context.Context, name string, args json.RawMes
 func (p *exampleProgram) Do(_ context.Context, _ string, args json.RawMessage) (string, error) {
 	p.sent++
 	return fmt.Sprintf("sent #%d: %s", p.sent, args), nil
+}
+
+func (*exampleProgram) Thread(_ context.Context, thread, before string, limit int) (connector.ThreadPage, error) {
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	return connector.ThreadPage{Chat: connector.ThreadChat{ID: thread, Name: "示例群", Kind: "group", Reply: "example_send"},
+		Messages: []connector.ThreadMessage{{ID: "7", At: at, Sender: connector.ThreadPerson{ID: "u1", Name: "示例用户", Avatar: "avatar:u1"},
+			Text: "示例消息", Media: []connector.ThreadMedia{{Kind: "sticker", Ref: "sticker:7", Emoji: "👍", Width: 512, Height: 512}},
+			ReplyTo: &connector.ThreadQuote{ID: "6", From: "我", Text: "示例问题"}}}, Before: before + "6"}, nil
+}
+
+func (*exampleProgram) Media(_ context.Context, ref string) (connector.Media, error) {
+	return connector.Media{Mime: "image/webp", Data: []byte{0, 1, 2, 255}}, nil
 }
 
 func (*exampleProgram) Watch(ctx context.Context, changed func(connector.Scope)) error {
@@ -178,7 +191,7 @@ func TestProgram(t *testing.T) {
 	}
 	go c.Run(ctx)
 	waitUntil(t, "the program's status", func() bool { return c.Status(ctx).State == connector.StateNotSignedIn })
-	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "login"}) {
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "login", "threads"}) {
 		t.Fatalf("the registry lists %v", got)
 	}
 	if m := c.Manifest(); !m.Proxy || !m.ForAgents("example_chats") || m.Poll != 3*time.Minute || m.Listed("example_send") {
@@ -233,6 +246,18 @@ func TestProgram(t *testing.T) {
 		if out, err := c.Do(ctx, "example_send", json.RawMessage(`{"text":"示例回复"}`)); err != nil || out != fmt.Sprintf(`sent #%d: {"text":"示例回复"}`, i) {
 			t.Fatalf("do %d: %q %v", i, out, err)
 		}
+	}
+	// A thread's page and a media's bytes over the wire, every field as the program gave it.
+	page, err := c.Thread(ctx, "g1", "", 20)
+	if err != nil || page.Chat.Reply != "example_send" || len(page.Messages) != 1 || page.Before != "6" {
+		t.Fatalf("thread %+v %v", page, err)
+	}
+	if m := page.Messages[0]; m.ReplyTo == nil || m.ReplyTo.Text != "示例问题" || m.Media[0].Emoji != "👍" || m.Sender.Avatar != "avatar:u1" ||
+		!m.At.Equal(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)) {
+		t.Fatalf("message %+v", m)
+	}
+	if m, err := c.Media(ctx, "sticker:7"); err != nil || m.Mime != "image/webp" || !bytes.Equal(m.Data, []byte{0, 1, 2, 255}) {
+		t.Fatalf("media %+v %v", m, err)
 	}
 	got := make(chan connector.Scope, 4)
 	wctx, wcancel := context.WithCancel(ctx)
@@ -307,7 +332,7 @@ func TestNeverStartedDeclaresItsManifest(t *testing.T) {
 	cfg := program(t, sec)
 	cfg.Manifest = (&exampleProgram{}).Manifest()
 	c := New(cfg)
-	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "login"}) {
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "login", "threads"}) {
 		t.Fatalf("before it ever ran: %v", got)
 	}
 	l, ok := connector.As[connector.Login](c)

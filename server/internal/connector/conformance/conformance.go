@@ -84,6 +84,7 @@ func Check(t testing.TB, c connector.Connector) {
 			}
 		}
 	}
+	var threads []string // the inbox's, for the thread's page
 	if in, ok := connector.As[connector.Inbox](c); ok {
 		var got serve.CollectResult
 		decode(t, call(serve.MCollect, struct{}{}), &got)
@@ -92,6 +93,38 @@ func Check(t testing.TB, c connector.Connector) {
 			t.Fatalf("collect: %v", err)
 		}
 		same(t, "inbox", serve.CollectResult{Things: things}, got)
+		for _, th := range things {
+			threads = append(threads, th.Thread)
+		}
+	}
+	if th, ok := connector.As[connector.Threads](c); ok && len(threads) > 0 {
+		var got connector.ThreadPage
+		decode(t, call(serve.MThread, serve.ThreadParams{Thread: threads[0], Limit: 20}), &got)
+		page, err := th.Thread(ctx, threads[0], "", 20)
+		if err != nil {
+			t.Fatalf("thread: %v", err)
+		}
+		same(t, "thread", page, got)
+		var refs []string
+		for _, m := range page.Messages {
+			refs = append(refs, m.Sender.Avatar)
+			for _, md := range m.Media {
+				refs = append(refs, md.Ref, md.Thumb)
+			}
+		}
+		for _, ref := range refs {
+			if ref == "" {
+				continue
+			}
+			var got connector.Media
+			decode(t, call(serve.MMedia, serve.MediaParams{Ref: ref}), &got)
+			m, err := th.Media(ctx, ref)
+			if err != nil {
+				t.Fatalf("media %s: %v", ref, err)
+			}
+			same(t, "media", m, got)
+			break // one is enough: the wire is the same for all
+		}
 	}
 	if a, ok := connector.As[connector.Archive](c); ok {
 		var got serve.ChangesResult
