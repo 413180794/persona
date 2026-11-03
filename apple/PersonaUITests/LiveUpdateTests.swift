@@ -130,11 +130,13 @@ final class LiveUpdateTests: XCTestCase {
     }
 
     // A row's long-press menu stays open through updates of that very agent (it is working: a new line every push).
-    func testRowMenuHoldsStillThroughUpdates() {
+    @MainActor func testRowMenuHoldsStillThroughUpdates() {
         launch()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "给天气 App 加主屏幕小组件")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["agents.filter.all"].waitForExistence(timeout: 15))
         sleep(2)
+        // Below the cards that need you, out of sight and not built yet (#836).
+        app.bringAboveTabBar(row)
         row.press(forDuration: 1.2)
         let rename = app.buttons["重命名…"]
         XCTAssertTrue(rename.waitForExistence(timeout: 5), "the long-press menu opened")
@@ -243,9 +245,10 @@ final class LiveUpdateTests: XCTestCase {
     @MainActor func testSwipedRowStaysOpenThroughUpdates() {
         launch()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "给天气 App 加主屏幕小组件")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["agents.filter.all"].waitForExistence(timeout: 15))
         sleep(2)
-        // On a smaller iPhone the row starts under the tab bar, where a swipe switches tabs instead (#488).
+        // The row starts below the cards that need you (#836), or under the tab bar on a smaller iPhone, where a swipe
+        // switches tabs instead (#488).
         app.bringAboveTabBar(row)
         let agents = app.tabBars.buttons["Agents"]
         row.swipeLeft()

@@ -97,9 +97,10 @@ final class ScreenTruthTests: XCTestCase {
     /// only while a chat is open), the drawer's close, a drag to the left from 助手 in the shell. (A drag from the left
     /// edge with no chat open is not it: in the shell it pages to 助手, and there it opens the drawer.)
     private func backToList() {
-        // The filter bar scrolls away with the list: a row in reach says it as well.
+        // The filter bar scrolls away with the list: a row in reach says it as well. Any of its chips: BeautifulUI's
+        // floating menu button covers 全部 in the old layout, while the cards that need you keep the rows out of sight (#836).
         func onList() -> Bool {
-            app.buttons["agents.filter.all"].firstMatch.isHittable
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "agents.filter.")).allElementsBoundByIndex.contains { $0.isHittable }
                 || app.buttons.matching(identifier: "agents.row").allElementsBoundByIndex.contains { $0.isHittable }
         }
         let w = app.windows.firstMatch

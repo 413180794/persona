@@ -18,16 +18,18 @@ extension XCUIApplication {
 extension XCUIApplication {
     /// Scrolls the list until `element` is clear of the floating tab bar (and the home indicator), so a swipe or tap
     /// lands on it. On a smaller iPhone a row can sit under the Liquid Glass tab bar while still `hittable`: a swipe
-    /// at its middle then drags the tab bar's selection to another tab instead (#488).
+    /// at its middle then drags the tab bar's selection to another tab instead (#488). A row not built yet (the cards
+    /// that need you fill the first screen, and the lazy list builds only what is near it, #836) is scrolled to first.
     @MainActor func bringAboveTabBar(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         let bar = tabBars.firstMatch
         let bottom = bar.exists ? bar.frame.minY : windows.firstMatch.frame.maxY - 40
-        let list = collectionViews.firstMatch
-        for _ in 0..<6 where element.frame.maxY > bottom - 8 {
+        // The window, not the first collection view: in the shell that may be the other page's list, out of sight.
+        let from = windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+        for _ in 0..<12 where !element.exists || element.frame.maxY > bottom - 8 {
             // A short, slow drag from the middle of the list: far enough to lift a row, never past the top.
-            let from = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
             from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -160)), withVelocity: .slow, thenHoldForDuration: 0.3)
         }
+        XCTAssertTrue(element.exists, "\(element) is not in the list", file: file, line: line)
         XCTAssertLessThanOrEqual(element.frame.maxY, bottom - 8, "\(element) is still under the tab bar", file: file, line: line)
     }
 }
