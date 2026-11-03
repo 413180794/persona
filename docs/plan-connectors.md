@@ -3,6 +3,7 @@
 状态：进行中。Telegram 连接器的方案单独写在 `docs/plan-telegram.md`（#533）。用户 2026-11-01：「派个车道先写连接器的计划，先接 GitHub 和 iMessage」；2026-11-02 开始做：先做框架（C1），再接 GitHub，再接 iMessage（iMessage 交给 terminal 车道，#449），
 飞书和邮件的迁移（M0–M6）放后面。还没拍板的两项先按保守的默认值做，留好开关（见「需要用户拍板」2、7）。
 用户对本计划点头后按「分步计划」做，做完的步骤打勾；全部做完后把设计部分并进 `docs/connectors.md`（新）、`docs/knowledge.md`、`docs/inbox.md`，删掉这份计划。
+2026-11-03：迁移 M0–M6 做完，现在的结构已经写进 `docs/connectors.md`「一」，那里还有 v2 的设计（2026-11-03 已拍板，按 V1–V7 做）；这份计划留着记过程和没做完的步骤（I5、Telegram 的后几步）。
 
 ## 背景：现在各接各的
 
