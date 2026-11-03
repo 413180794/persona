@@ -42,9 +42,10 @@ struct MacInboxDetail: View {
     }
 }
 
-/// One inbox item opened, in the detail column or a window of its own: the AI's summary on top, the content under it,
-/// and the item's actions in the toolbar (AI 草拟回复 / 查看草稿, 交给 AI, 已处理 / 移回). Links in it open in the panel at
-/// the trailing edge; Feishu pages (a profile, another chat) push in the column's own stack.
+/// One inbox item opened, in the detail column or a window of its own: the content, and beside it a column with the
+/// AI's summary and the item's actions as labelled buttons (`MacInboxActions`: AI 草拟回复 / 查看草稿, 交给 AI,
+/// 已处理 / 移回; over the item when there is no room). Links in it open in the panel at the trailing edge; Feishu
+/// pages (a profile, another chat) push in the column's own stack.
 struct MacInboxItemDetail: View {
     @Environment(AppModel.self) private var model
     var item: InboxItem
@@ -62,16 +63,16 @@ struct MacInboxItemDetail: View {
                 .feishuRoutes()
                 .navigationDestination(for: InboxItem.self) { MacInboxItemDetail(item: $0, accounts: accounts) }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { summary }
         .environment(\.feishuOpen) { route in
             // Documents read beside the item; people and chats replace it (back returns).
             if case .doc(let url, _) = route, let u = URL(string: url) { link = LinkTarget(url: u) } else { path.append(route) }
         }
         .macOpensLinksInPanel($link)
         .macLinkPanel($link)
+        // Outside the link panel: the actions stay at the window's edge, the document opens between them and the item.
+        .macInboxActions(current, draft: { drafting = true }, handOff: { handingOff = true })
         .navigationTitle(current.title)
         .navigationSubtitle(subtitle)
-        .toolbar { toolbar }
         .sheet(isPresented: $drafting) { InboxDraftSheet(item: current, accounts: accounts).macSheet() }
         .sheet(isPresented: $handingOff) { InboxHandOffSheet(item: current).macSheet() }
         .onChange(of: MacInboxState.shared.drafting, initial: true) { _, d in
@@ -108,54 +109,6 @@ struct MacInboxItemDetail: View {
             MailDetailView(summary: m, accounts: accounts)
         } else {
             EmptyStateView(symbol: Theme.Icon.info, title: item.title, message: item.preview)
-        }
-    }
-
-    /// The AI's summary of the item, a line over the content (the iPhone's action bar, whose buttons are the toolbar's
-    /// here); the AI 分身 at work, when it is.
-    @ViewBuilder private var summary: some View {
-        let s = current.summary ?? ""
-        if !s.isEmpty || current.agentWorking {
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                if !s.isEmpty {
-                    (Text(Image(systemName: Theme.Icon.ai)).foregroundStyle(Theme.ai) + Text(" " + s))
-                        .font(Theme.Font.secondary)
-                        .lineLimit(3)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                if current.agentWorking {
-                    HStack(spacing: Theme.Space.sm) {
-                        ProgressView().controlSize(.mini)
-                        Text(current.agent?.state == "queued" ? "AI 分身排队中" : "AI 分身正在处理" + (current.agent?.task.map { "：" + $0 } ?? ""))
-                            .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                }
-            }
-            .padding(.horizontal, Theme.Space.l)
-            .padding(.vertical, Theme.Space.s)
-            .background(.bar)
-            .overlay(alignment: .bottom) { Divider() }
-        }
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
-            if !current.isDone {
-                Button { drafting = true } label: {
-                    Label(current.agentDraft == nil ? "AI 草拟回复" : "查看草稿", systemImage: Theme.Icon.draftReply)
-                }
-                .help(current.agentDraft == nil ? "让 AI 用你的口吻草拟一条回复" : "AI 分身草拟好了回复，看看再发")
-                Button { handingOff = true } label: { Label("交给 AI", systemImage: Theme.Icon.handToAI) }
-                    .help("把这件事交给 Persona 或一个 Agent")
-            }
-            if current.isDone {
-                Button { InboxStore.shared.setDone(current, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }
-                    .help("移回收件箱")
-            } else {
-                Button { MacInboxState.shared.toggleDone([.item(current.id)], model: model) } label: { Label("已处理", systemImage: Theme.Icon.done) }
-                    .help("标为已处理（列表里按 E）")
-            }
         }
     }
 }

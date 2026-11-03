@@ -31,9 +31,13 @@ extension Theme.Size {
     static let macResizeHitWidth: CGFloat = 8
     /// The inbox's list column (until the window's three columns take it over) and its filters column.
     static let macInboxListMin: CGFloat = 300
-    static let macInboxListIdeal: CGFloat = 380
+    static let macInboxListIdeal: CGFloat = 340 // 380 left no room for the item's actions column at the default size (#831)
     static let macInboxListMax: CGFloat = 520
     static let macInboxFiltersWidth: CGFloat = 190
+    /// An opened inbox item's actions column at the detail's trailing edge (#831), and the least it leaves the item:
+    /// narrower than both, the actions sit over the item as a strip.
+    static let macInboxActionsWidth: CGFloat = 180
+    static let macInboxActionsPageMin: CGFloat = 340
     /// ⌘K 快速打开: the panel's width, the most its list grows to, and how far below the window's top it sits.
     static let macQuickOpenWidth: CGFloat = 600
     static let macQuickOpenListMax: CGFloat = 420
