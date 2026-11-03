@@ -25,6 +25,32 @@ struct ChatStoreTests {
         if case .call(let c) = steps[0] { #expect(c.result?.text == "ok") } else { Issue.record("expected call") }
     }
 
+    /// `backlogBuilt` turns true only once the first backlog is in `blocks` (#597): a cold start with the chat cached looked
+    /// for the saved reading place in the cache's lines, the page already merged, and gave up on it.
+    @Test func backlogBuiltWaitsForTheBacklogsLines() async throws {
+        let s = ChatStore(key: SessionKey(machineID: "test", sessionID: UUID().uuidString)) // nothing on disk
+        s.merge([item(9, .text, role: "user", text: "最后一问"), item(10, .text, text: "最后一答")]) // the cache's tail
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!s.loadedOnce && !s.backlogBuilt)
+
+        let page = (1...10).map { item($0, .text, role: $0 % 2 == 1 ? "user" : "assistant", text: "第 \($0) 条") }
+        s.merge(page, backlog: true, hasMore: false)
+        #expect(s.loadedOnce)
+        #expect(!s.backlogBuilt && s.isRebuilding) // merged, its lines not built yet
+        for _ in 0..<50 where !s.backlogBuilt { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(s.backlogBuilt && !s.isRebuilding)
+        #expect(s.rows.count == 10) // built from the whole page
+    }
+
+    @Test func aBacklogWithNothingNewIsBuiltAtOnce() async throws {
+        let s = ChatStore(key: SessionKey(machineID: "test", sessionID: UUID().uuidString))
+        let items = [item(1, .text, role: "user", text: "问"), item(2, .text, text: "答")]
+        s.merge(items)
+        for _ in 0..<50 where s.rows.count < 2 { try await Task.sleep(for: .milliseconds(20)) }
+        s.merge(items, backlog: true, hasMore: false) // the hub's page holds what the cache had: no rebuild comes
+        #expect(s.backlogBuilt)
+    }
+
     @Test func parsesSpinnerAndOptions() {
         let screen = """
         ⏺ Working on it

@@ -3315,6 +3315,13 @@ STREAM_STATE = {"started": False}
 GAP_STATE = {"started": False, "grown": False}
 
 
+def last_turns(items, n):
+    """The last n turns of items (each from a user's message on) and whether anything is left before them."""
+    starts = [i for i, x in enumerate(items) if x.get("role") == "user" and x.get("kind") == "text"]
+    cut = starts[-n] if len(starts) >= n else 0
+    return items[cut:], cut > 0
+
+
 def span(items, frm=None, to=None):
     out = {"history": HISTORY, "to_seq": to if to is not None else (items[-1]["seq"] if items else 0)}
     if frm is not None:
@@ -3327,6 +3334,10 @@ def span(items, frm=None, to=None):
 #   GET /mock/delay?s=3   the same, from now on (0 turns it off)
 #   GET /mock/down?s=8    the hub is gone for that long: open WebSockets drop, new connections are closed unanswered
 NET = {"delay": float(os.environ.get("MOCK_DELAY", "0")), "down_until": 0.0}
+# /mock/paging?on=1: pages of history as the hub cuts them (node.go PageTurns): the latest page and the backlog of a
+# first subscribe hold the last 2 whole turns, an older page `turns` more; otherwise the whole history comes at once.
+# ChatFollowTests' cold start at a saved place far up needs it (#597). /mock/reset turns it off.
+PAGING = {"on": False}
 SOCKETS = set()
 
 
@@ -3951,7 +3962,12 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/hub_update":  # HubNoticeUITests: ?mode=<a MOCK_HUB_UPDATE mode>, from the start
             set_hub_update_mode((q.get("mode") or [""])[0])
             return self.send_json({"ok": True})
+        if p == "/mock/paging":
+            PAGING["on"] = q.get("on", ["0"])[0] == "1"
+            return self.send_json({"ok": True, **PAGING})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
+            # A test that died before putting them back: the start-up delay (MOCK_DELAY), no paging.
+            NET["delay"], PAGING["on"] = float(os.environ.get("MOCK_DELAY", "0")), False
             for m in MACHINES:
                 m["engine"] = "herdr"
                 if m["id"] == "lab":
@@ -4141,7 +4157,10 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json(out)
             b = q.get("before_seq", [""])[0]
             if b: items = [x for x in items if x["seq"] < int(b)]
-            out = {"items": fold_work(items) if q.get("fold_work") == ["1"] else items, "has_more": False,
+            more = False
+            if PAGING["on"]:
+                items, more = last_turns(items, int(q.get("turns", ["2"])[0] or 2))
+            out = {"items": fold_work(items) if q.get("fold_work") == ["1"] else items, "has_more": more,
                    **span(items, None, int(b) - 1 if b else last)}
             served(sid, "page", out)
             return self.send_json(out)
@@ -5198,8 +5217,9 @@ class H(BaseHTTPRequestHandler):
                         send({"type": "items", "machine_id": mid, "session_id": sid, "items": newer, "backlog": True,
                               **span(items, since, max(since, items[-1]["seq"] if items else 0))})
                     else:
-                        out = {"type": "items", "machine_id": mid, "session_id": sid, "backlog": True, "has_more": False, **span(items),
-                               "items": fold_work(items) if msg.get("fold_work") else items}
+                        page, more = last_turns(items, 2) if PAGING["on"] else (items, False)
+                        out = {"type": "items", "machine_id": mid, "session_id": sid, "backlog": True, "has_more": more, **span(items),
+                               "items": fold_work(page) if msg.get("fold_work") else page}
                         served(sid, "backlog", out)
                         send(out)
         except Exception as e:

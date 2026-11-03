@@ -73,7 +73,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   等待中看气泡和「Persona 正在准备…」。`scripts/mock/test_assistant_mock.py` 管着 mock 的这几件事。
 - Persona 侧栏：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`，「最近」多 36 个对话（超过显示的 30 个，出「查看全部」），前三个依次是需要你（红点）、未读（蓝点）、工作中（转圈）。
 - 跟到最新（`ChatFollowTests`，`MOCK_LONG_HISTORY=1`）：长会话打开在底部；在底部时来回复会跟到底（Persona 页的回复先按 `delta` 流式出）；往上翻出现「回到最新」、
-  这时来回复不拽人；点了回到底部、之后照常跟随。Agent 对话页分三种打开方式测：普通、完成未看（`-showAsUnread YES`）、停在上次的位置（`-chat.read.<会话> <行 id>`）。
+  这时来回复不拽人；点了回到底部、之后照常跟随。Agent 对话页分四种打开方式测：普通、完成未看（`-showAsUnread YES`）、停在上次的位置（`-chat.read.<会话> <行 id>`），以及有磁盘缓存时冷启动回到离末尾很远的位置（mock 开 `/mock/paging?on=1` 像 hub 一样分页、`/mock/delay?s=3` 让缓存先上屏，#597；`/mock/reset` 会把两者关掉）。
   回复由 mock 的 `GET /mock/say?text=…&user=…&stream=1` 推给所有打开的对话；列表在哪由 App 的 `-showScrollState YES` 报（无障碍标签
   `chat.scrollState`：bottom / follows / frozen / arrow / newestShown / withheld…，`visible` 时画在屏幕上），XCUITest 读不准倒置列表里行的位置。
   `testRealHubChats` 连真实 hub 拍改前改后（`TEST_RUNNER_JARVIS_REAL_PAIR` 等环境变量，不给就跳过；只开自己的会话，打开会标已读）。

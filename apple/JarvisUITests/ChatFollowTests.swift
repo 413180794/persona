@@ -24,13 +24,15 @@ final class ChatFollowTests: XCTestCase {
     /// (the Jarvis conversation behind the Agents page) has a probe too.
     private var opened: String?
 
-    @MainActor private func launch(_ open: [String]) -> XCUIApplication {
+    @MainActor private func launch(_ open: [String], keepCache: Bool = false) -> XCUIApplication {
         if let i = open.firstIndex(where: { $0 == "-openSession" || $0 == "-openAssistant" }), i + 1 < open.count { opened = open[i + 1] }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        // No chat kept on disk from an earlier run: the mock starts its conversations over at each reset, and a cached
-        // one from another test (its churned steps) took the seqs this test's replies get; they did not show.
-        app.launchArguments = ["-pairURL", pair, "-showScrollState", "YES", "-dev.openChat", "", "-openChatsFresh", "YES"] + open
+        // No chat kept on disk from an earlier run (unless `keepCache`, a cold start of this test's own): the mock starts
+        // its conversations over at each reset, and a cached one from another test (its churned steps) took the seqs
+        // this test's replies get; they did not show.
+        app.launchArguments = ["-pairURL", pair, "-showScrollState", "YES", "-dev.openChat", ""]
+            + (keepCache ? [] : ["-openChatsFresh", "YES"]) + open
         app.launchPinned()
         return app
     }
@@ -162,9 +164,44 @@ final class ChatFollowTests: XCTestCase {
         followAndReturn(launch(["-tab", "dev", "-openSession", working, "-chat.read.\(working)", id]), "agent-saved")
     }
 
+    /// Where you left off far from the end, after a cold start with the chat on disk (#597). The mock pages like the hub
+    /// (`/mock/paging`): the cache and the first page hold the last two turns, the saved line is ten turns further up and
+    /// takes older pages to reach. The hub answers slowly so the cached chat is on screen before the page, as on a
+    /// phone: the page used to be judged on the cached lines, and then nothing looked further up. Then a reply arrives:
+    /// the list stays at the saved line (the landing used to turn following back on).
+    @MainActor func testAgentAtASavedPlaceFarFromTheEndAfterAColdStart() throws {
+        let id = try userMessage(working, startingWith: "第 5 个问题", turns: 40)
+        addTeardownBlock { [hub] in
+            _ = try? Data(contentsOf: URL(string: hub! + "/mock/delay?s=0")!)
+            _ = try? Data(contentsOf: URL(string: hub! + "/mock/paging?on=0")!)
+        }
+        _ = try Data(contentsOf: URL(string: hub + "/mock/paging?on=1")!)
+        let first = launch(["-tab", "dev", "-openSession", working]) // fills the cache
+        expect(first, "agent-cold: did not open at the newest", timeout: 20) { $0["bottom"] == 1 }
+        sleep(4) // ChatStore writes its cache 2 s after the last change
+        first.terminate()
+
+        _ = try Data(contentsOf: URL(string: hub + "/mock/delay?s=3")!)
+        let app = launch(["-tab", "dev", "-openSession", working, "-chat.read.\(working)", id], keepCache: true)
+        let saved = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "第 5 个问题")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 40), "agent-cold: the saved line is not drawn: \(state(app))")
+        expect(app, "agent-cold: not held at the saved line (at the newest, or following again)", timeout: 10) {
+            $0["bottom"] == 0 && $0["follows"] == 0 && $0["newestShown"] == 0
+        }
+        shot(app, "agent-cold-landed")
+
+        _ = try Data(contentsOf: URL(string: hub + "/mock/delay?s=0")!)
+        say("冷启动之后的新回复")
+        sleep(3)
+        expect(app, "agent-cold: a reply pulled the list down from the saved line") {
+            $0["bottom"] == 0 && $0["newestShown"] == 0 && ($0["withheld"] ?? 0) > 0
+        }
+        XCTAssertTrue(saved.exists, "agent-cold: the saved line left the screen after a reply: \(state(app))")
+    }
+
     /// The id of the user's last message in a chat of the mock hub that starts with `prefix`.
-    private func userMessage(_ chat: String, startingWith prefix: String) throws -> String {
-        let data = try Data(contentsOf: URL(string: hub + "/api/v1/sessions/\(chat)/items?limit=80&turns=2")!)
+    private func userMessage(_ chat: String, startingWith prefix: String, turns: Int = 2) throws -> String {
+        let data = try Data(contentsOf: URL(string: hub + "/api/v1/sessions/\(chat)/items?limit=80&turns=\(turns)")!)
         let items = try XCTUnwrap((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["items"] as? [[String: Any]])
         return try XCTUnwrap(items.last {
             $0["role"] as? String == "user" && $0["kind"] as? String == "text" && ($0["text"] as? String ?? "").hasPrefix(prefix)

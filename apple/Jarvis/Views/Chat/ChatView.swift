@@ -689,10 +689,16 @@ struct ChatView: View {
         case .line(let saved):
             if lines.contains(where: { $0.id == saved }) {
                 id = saved
-            } else if store.loadedOnce {
-                // Not in the latest page either: stay at the newest. Left waiting, it used to yank the list there
-                // (and stop following) whenever paging up later happened to load that line.
-                entry = nil
+            } else if store.backlogBuilt {
+                // Further up than what is loaded: a cold start has the last two turns (the cache, the hub's first
+                // page). Older pages until it shows, a few at most (#597); judged only on built lines, the page merges
+                // before they are. Not found: stay at the newest. Left waiting, it used to yank the list there (and
+                // stop following) whenever paging up later happened to load that line.
+                if store.hasMore, scratch.entryPages < Self.entryPageLimit {
+                    searchOlderForEntry()
+                } else {
+                    entry = nil
+                }
                 return
             }
         }
@@ -715,11 +721,40 @@ struct ChatView: View {
         }
     }
 
+    /// The saved place's search (`landEntry`): turns per older page, and pages at most.
+    static let entryPageTurns = 10
+    static let entryPageLimit = 10
+
+    /// One older page for the saved place, then the look again once its lines are built. A page that fails or brings
+    /// nothing ends the search (stay at the newest), as does leaving for another chat; each wait gives up after 10 s.
+    private func searchOlderForEntry() {
+        guard !scratch.entrySearching else { return }
+        scratch.entrySearching = true
+        scratch.entryPages += 1
+        let store = store, key = shownKey
+        Task { @MainActor in
+            defer { scratch.entrySearching = false }
+            let deadline = ContinuousClock.now + .seconds(10)
+            while store.isLoadingOlder, ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(50)) }
+            let before = store.items.count
+            let loaded = await model.loadOlder(key, turns: Self.entryPageTurns)
+            guard shownKey == key, entry != nil else { return } // another chat, or the user took the list
+            guard loaded, store.items.count > before else { entry = nil; return }
+            while store.isRebuilding, ContinuousClock.now < deadline + .seconds(10) { try? await Task.sleep(for: .milliseconds(20)) }
+            scratch.entrySearching = false
+            landEntry(currentLines())
+        }
+    }
+
     /// A landing is over. A line in the last screenful lands at the newest end (the list cannot go further): follow from
     /// there. The landing stopped following and the sentinel never left the screen, so nothing turned it back on: what
     /// arrived after it was held back, with no ↓ either (TestFlight 50/51, 2026-10-31).
     private func landed() {
         scratch.landingInFlight = false
+        // A jump far away takes the end sentinel out of the lazy stack without its visibility turning off: more than a
+        // screen from the newest end the list is not at the bottom, whatever the sentinel last said. `atBottom` stayed
+        // true, following went back on, and the next reply pulled the list down from the saved place (#597).
+        if scratch.listFrame.height > 0, scratch.newestGap > scratch.listFrame.height { atBottom = false }
         if atBottom { followsEnd = true }
     }
 
@@ -769,6 +804,8 @@ struct ChatView: View {
     /// Remembers the top line on screen when leaving (nothing when at the newest: open at the newest again).
     private func rememberReadPosition() {
         guard viewing == nil else { return }
+        // Still on the way to the saved place (an older page loading): what is on screen is not where you read.
+        if case .line = entry { return }
         if atBottom || scratch.visibleLines.isEmpty {
             UserDefaults.standard.removeObject(forKey: readKey)
             return
@@ -1165,6 +1202,7 @@ struct ChatView: View {
         .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height, x: $0.contentOffset.x, top: $0.contentInsets.top) }) { old, new in
             scratch.offsetX = new.x
             scratch.atNewest = new.offset <= -new.top + 0.5
+            scratch.newestGap = new.offset + new.top
             chrome.offset = new.offset
             // A height change (keyboard) moves the offset too: that is not the user scrolling.
             if old.height != new.height { return }
@@ -1215,7 +1253,7 @@ struct ChatView: View {
         }
         .onChange(of: rows.last?.id) { _, _ in contentArrived(foldChrome: false) }
         .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
-        .onChange(of: store.loadedOnce) { _, _ in landEntry(lines) }
+        .onChange(of: store.backlogBuilt) { _, _ in landEntry(lines) }
         .onChange(of: liveTurnID) { _, _ in contentArrived(foldChrome: false) }
         // Following the newest as it streams in folds the chrome too (once the user has taken the list).
         // Not while a tapped header is held in place (`ChatPin`): opening a work line loads its steps.
@@ -1987,6 +2025,8 @@ struct ChatView: View {
         if viewing != nil { model.unsubscribe(shownKey, by: owner); viewing = nil }
         model.unsubscribe(key, by: owner)
         key = next
+        entry = nil // a saved place not reached in the last chat is not looked for in this one
+        scratch.entryPages = 0
         userScrolled = false
         settled = false
         followsEnd = true
@@ -3427,6 +3467,11 @@ final class ChatScratch {
     var atNewest = false
     /// Between a landing's first jump and its end (`ChatView.landed`): the list is not where it is going yet.
     var landingInFlight = false
+    /// How far the list is from its newest end (pt; the flipped list's offset past its inset).
+    var newestGap: CGFloat = 0
+    /// The saved place's search for older pages (`ChatView.searchOlderForEntry`).
+    var entryPages = 0
+    var entrySearching = false
     /// Last time the user scrolled or touched the header: the chrome folds itself after a few idle seconds.
     var lastActivity = Date.now
     var linesKey: LinesKey?

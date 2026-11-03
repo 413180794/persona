@@ -853,16 +853,21 @@ final class AppModel {
     }
     @ObservationIgnored private var unfolding: [String: Task<[Item], Error>] = [:]
 
-    func loadOlder(_ key: SessionKey) async {
+    /// The page before the oldest item; `turns` whole exchanges (the saved reading place's search asks for more).
+    /// False when no page came (nothing older, already loading, or an error).
+    @discardableResult
+    func loadOlder(_ key: SessionKey, turns: Int = 2) async -> Bool {
         let store = chat(key)
-        guard let api = api(key.group), store.hasMore, !store.isLoadingOlder, let first = store.items.first else { return }
+        guard let api = api(key.group), store.hasMore, !store.isLoadingOlder, let first = store.items.first else { return false }
         store.isLoadingOlder = true
         defer { store.isLoadingOlder = false }
         do {
-            let res = try await api.items(key, beforeSeq: first.seq)
+            let res = try await api.items(key, beforeSeq: first.seq, turns: turns)
             store.prepend(res.items, hasMore: res.hasMore)
+            return true
         } catch {
             if !error.isOffline { show(error) } // scrolling up while offline: the title says why nothing comes
+            return false
         }
     }
 

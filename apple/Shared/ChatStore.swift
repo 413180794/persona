@@ -373,6 +373,11 @@ final class ChatStore {
     @ObservationIgnored private(set) var version = 0
     private(set) var hasMore = false
     private(set) var loadedOnce = false
+    /// `blocks` (so the chat's lines) are built from items that include the first backlog. `loadedOnce` turns true as
+    /// the backlog merges, before its lines are built (`scheduleRebuild` builds off the main actor): what is looked up
+    /// in the lines on screen waits for this one. A cold start with the chat cached gave up on the saved reading place
+    /// while the lines were still the cache's last two turns (#597).
+    private(set) var backlogBuilt = false
     var screen: String = ""
     /// Text of the assistant message being generated (headless sessions stream it token by token).
     var liveText: String = ""
@@ -461,6 +466,7 @@ final class ChatStore {
         covered = 0
         hasMore = false
         loadedOnce = false
+        backlogBuilt = false
         scheduleRebuild()
     }
 
@@ -481,7 +487,10 @@ final class ChatStore {
         let reachesStart = new.map(\.seq).min().map { $0 <= (items.first?.seq ?? .max) } ?? false
         if let hasMore, backlog, !loadedOnce || items.count <= new.count, hasMore || reachesStart { self.hasMore = hasMore }
         if backlog { loadedOnce = true }
-        guard changed else { return }
+        guard changed else {
+            if backlog, !rebuildScheduled, !backlogBuilt { backlogBuilt = true } // nothing new: the built lines have it all
+            return
+        }
         if !pending.isEmpty { // the real message arrived: drop the local copy, one per message
             let before = pending.count
             for it in added where it.role == "user" && it.kind == .text {
@@ -519,6 +528,8 @@ final class ChatStore {
     }
 
     @ObservationIgnored private var rebuildScheduled = false
+    /// A rebuild is on its way: `blocks` do not hold every item yet (not observed: asked, not watched).
+    var isRebuilding: Bool { rebuildScheduled }
     @ObservationIgnored private var rebuildRevision = 0
     @ObservationIgnored private var settled: SettledRows?
 
@@ -586,6 +597,8 @@ final class ChatStore {
                 guard revision == self.rebuildRevision else { continue }
                 self.rows = built.rows
                 self.blocks = built.blocks
+                // No item changed since the snapshot (same revision): these blocks hold everything loaded so far.
+                if self.backlogBuilt != self.loadedOnce { self.backlogBuilt = self.loadedOnce }
                 self.settled = built.settled
                 if images.map(\.identity) != self.images.map(\.identity) { self.images = images }
                 if tasks != self.tasks { self.tasks = tasks }
