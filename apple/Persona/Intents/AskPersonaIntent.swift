@@ -21,16 +21,16 @@ struct AskJarvisIntent: AppIntent {
 
     nonisolated static var parameterSummary: some ParameterSummary { Summary("问 Persona \(\.$question)") }
 
-    // The snippet view's `ShowsSnippetView` / `view:` result is not in the Xcode 26.0 (Swift 6.2) SDK, so it is only
-    // compiled with Swift 6.3+; before that the answer comes back as the dialog, as on macOS.
-    #if os(iOS) && compiler(>=6.3)
+    // The snippet view's `ShowsSnippetView` / `view:` result does not build with the iOS 26 SDKs (Xcode 26.x, Swift 6.2–6.3),
+    // so it is only compiled with Swift 6.4+ (Xcode 27); before that the answer comes back as the dialog, as on macOS.
+    #if os(iOS) && compiler(>=6.4)
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> & ShowsSnippetView {
         let (body, answer, spoken) = try await ask()
         return .result(value: answer ?? "", dialog: IntentSupport.dialog(spoken),
                        view: IntentAnswerSnippet(title: body, answer: answer ?? AskPersonaText.pending))
     }
     #else
-    // macOS (and iOS before Swift 6.3) has no snippet views for intents: the answer comes back as the dialog only.
+    // macOS (and iOS before Swift 6.4) has no snippet views for intents: the answer comes back as the dialog only.
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
         let (_, answer, spoken) = try await ask()
         return .result(value: answer ?? "", dialog: IntentSupport.dialog(spoken))

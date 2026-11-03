@@ -117,7 +117,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - Claude Code 的配置目录不一定是 `~/.claude`（`CLAUDE_CONFIG_DIR`），同一会话 id 可能在两个目录各有一份，按 id 找一律取最近修改的。（`agents.md`）
 - 改 transcript 解析或同步协议用真实语料验证；改了 item 结构把 App 的 `ChatCache` 目录版本号加一。（`transcript.md`）
 - **最低兼容编译器仍是 Xcode 26.0（Swift 6.2）**：保留 iOS、Mac、手表和扩展的兼容目标，新 Xcode 编过不能宣称已验证 26.0。
-  只有新 SDK 才有的 API（`isDynamicIslandLimitedInWidth`、`toolbarVerticalEdge`、`ShowsSnippetView` / `view:` 都踩过）用 `#if compiler(>=6.3)` 包起来、`#else` 走旧行为；
+  只有新 SDK 才有的 API（`isDynamicIslandLimitedInWidth`、`toolbarVerticalEdge`、`ShowsSnippetView` / `view:` 都踩过）用 `#if compiler(>=6.4)` 包起来（Xcode 26.4–26.6 是 Swift 6.3 + iOS 26 SDK，不能用 6.3 判断，#453）、`#else` 走旧行为；
   `#available` / `@available` 只管运行时，符号编译时找不到照样报错。**有可用的 Xcode 26.0 环境时合入前编一遍；没有该环境时不强制实编，不因此阻塞合并或发布**，
   用现有工具链完成构建与测试，PR 中注明实际 Xcode 版本和「26.0 未验证」，不必逐次询问豁免（`DEVELOPER_DIR` 见 `persona_config.py env`）；
   要抬高最低版本仍是产品决定，先问用户，并同步改这一条和 `docs/lessons/ios.md`。（`ios.md`「最低兼容编译器」）

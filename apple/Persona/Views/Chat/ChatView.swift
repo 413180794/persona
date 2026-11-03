@@ -3546,7 +3546,7 @@ private struct VerticalBarsReader: ViewModifier {
     @Binding var vertical: Bool
 
     func body(content: Content) -> some View {
-        #if compiler(>=6.3) && os(iOS) // `toolbarVerticalEdge` is in the iOS 27.1 SDK; Xcode 26 (Swift 6.2) has no such key path
+        #if compiler(>=6.4) && os(iOS) // `toolbarVerticalEdge` is in the iOS 27.1 SDK; Xcode 26 (Swift ≤ 6.3) has no such key path
         if #available(iOS 27.1, *) {
             content.modifier(VerticalBarsEdgeReader(vertical: $vertical))
         } else {
@@ -3558,7 +3558,7 @@ private struct VerticalBarsReader: ViewModifier {
     }
 }
 
-#if compiler(>=6.3) && os(iOS)
+#if compiler(>=6.4) && os(iOS)
 @available(iOS 27.1, *)
 private struct VerticalBarsEdgeReader: ViewModifier {
     @Environment(\.toolbarVerticalEdge) private var edge

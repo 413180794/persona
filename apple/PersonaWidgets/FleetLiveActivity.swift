@@ -114,9 +114,9 @@ struct IslandWidth<Content: View>: View {
     @ViewBuilder var content: (Bool) -> Content
 
     var body: some View {
-        // `isDynamicIslandLimitedInWidth` is in the iOS 27 SDK; Xcode 26 (Swift 6.2) has no such key path, and
+        // `isDynamicIslandLimitedInWidth` is in the iOS 27 SDK; Xcode 26 (Swift 6.2, and 6.3 from 26.4) has no such key path, and
         // `#available` only guards the run time, so it is left out at compile time there.
-        #if compiler(>=6.3)
+        #if compiler(>=6.4)
         if #available(iOS 27.0, *) {
             Reader(content: content)
         } else {
@@ -127,7 +127,7 @@ struct IslandWidth<Content: View>: View {
         #endif
     }
 
-    #if compiler(>=6.3)
+    #if compiler(>=6.4)
     @available(iOS 27.0, *)
     private struct Reader: View {
         @Environment(\.isDynamicIslandLimitedInWidth) private var limited
