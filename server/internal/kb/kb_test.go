@@ -72,7 +72,10 @@ func TestPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t0 := time.Now().Add(-time.Hour).Truncate(time.Minute)
+	// Noon yesterday in the archive's zone (time.Local here), not "an hour ago": the messages span t0..t0+3m and are
+	// read back from t0's day file, so a t0 just before midnight put the later ones in the next day's file (#656).
+	y, m, d := time.Now().AddDate(0, 0, -1).Date()
+	t0 := time.Date(y, m, d, 12, 0, 0, 0, time.Local)
 	src := &fakeSource{
 		chats: []SourceChat{{ID: "f1", Name: "X 项目群", Kind: "group", UpdatedAt: t0.Add(2 * time.Minute)}},
 		msgs: map[string][]SourceMessage{"f1": {

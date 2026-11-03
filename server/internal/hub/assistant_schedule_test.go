@@ -453,7 +453,10 @@ func TestTasksMovedFromTheOldLists(t *testing.T) {
 	ctx := context.Background()
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	due := time.Now().Add(-time.Minute).Truncate(time.Second)
-	if err := store.PutSetting(ctx, routinesKey, []Routine{{ID: "morning", Title: "早报", Prompt: "x", Time: "09:00", Enabled: true,
+	// The 早报 twelve hours from now, never a fixed 09:00: with no last run a daily routine catches up the last couple of
+	// minutes, so a run just after 09:00 Shanghai time ran it too and saw two runs (#664).
+	morning := time.Now().In(loc).Add(12 * time.Hour).Format("15:04")
+	if err := store.PutSetting(ctx, routinesKey, []Routine{{ID: "morning", Title: "早报", Prompt: "x", Time: morning, Enabled: true,
 		LastStatus: runOK}}); err != nil {
 		t.Fatal(err)
 	}
