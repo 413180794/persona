@@ -247,6 +247,9 @@ data class Item(
     val task: TaskNote? = null,
     val fold: Fold? = null,
     @SerialName("turn_duration") val turnDuration: TurnDuration? = null,
+    /** The client message id of the message sent from a phone that this item came from (#968): its text, images,
+     *  queued copy, or the notice it became. Older hubs never send it. */
+    @SerialName("client_msg_id") val clientMsgId: String? = null,
 )
 
 @KeepGeneratedSerializer

@@ -602,6 +602,43 @@ func TestSentMessages(t *testing.T) {
 	}
 }
 
+// Where a sent message landed (node/echo.go): kept with the send, a found line not replaced by a late "expected"
+// record, handed back per machine for a day.
+func TestSentEcho(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	for _, id := range []string{"m1", "m2", "m3"} {
+		if _, err := d.ClaimSend(ctx, id, "box", "s1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _ = d.ClaimSend(ctx, "o1", "other", "s9")
+	expected := json.RawMessage(`{"session_id":"s1","client_msg_id":"m1","text":"hi","after_seq":3}`)
+	found := json.RawMessage(`{"session_id":"s1","client_msg_id":"m1","text":"hi","after_seq":3,"line":"u1"}`)
+	for _, e := range []json.RawMessage{expected, found, expected} {
+		if err := d.RecordEcho(ctx, "m1", "box", e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = d.RecordEcho(ctx, "m2", "box", json.RawMessage(`{"client_msg_id":"m2"}`))
+	_ = d.RecordEcho(ctx, "o1", "box", json.RawMessage(`{"client_msg_id":"o1"}`)) // another machine's send
+	_ = d.RecordEcho(ctx, "nope", "box", json.RawMessage(`{"client_msg_id":"nope"}`))
+	got, err := d.Echoes(ctx, "box")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("echoes %s %v", got, err)
+	}
+	var first struct {
+		Line string `json:"line"`
+	}
+	_ = json.Unmarshal(got[0], &first)
+	if first.Line != "u1" {
+		t.Fatalf("the found line was replaced: %s", got[0])
+	}
+	_, _ = d.pool.Exec(ctx, `UPDATE sent_messages SET created_at = now() - interval '2 days' WHERE client_msg_id = 'm2'`)
+	if got, _ := d.Echoes(ctx, "box"); len(got) != 1 {
+		t.Fatalf("a send older than a day was handed back: %s", got)
+	}
+}
+
 // A connector's secret: stored sealed by the hub, replaced, read back, deleted; another connector has none.
 func TestConnectorSecrets(t *testing.T) {
 	d, ctx := open(t), context.Background()

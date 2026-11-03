@@ -1,0 +1,355 @@
+package node
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/transcript"
+)
+
+// echoItems parses Claude Code transcript lines the way the node serves them.
+func echoItems(t *testing.T, lines ...string) []proto.Item {
+	t.Helper()
+	var meta transcript.Meta
+	var out []proto.Item
+	for i, l := range lines {
+		out = append(out, transcript.ParseLine(i+1, []byte(l), &meta)...)
+	}
+	return out
+}
+
+func userLine(uuid string, at time.Time, content string) string {
+	b, _ := json.Marshal(content)
+	return fmt.Sprintf(`{"type":"user","uuid":%q,"timestamp":%q,"message":{"role":"user","content":%s}}`, uuid, at.UTC().Format(time.RFC3339Nano), b)
+}
+
+func userBlocks(uuid string, at time.Time, blocks string) string {
+	return fmt.Sprintf(`{"type":"user","uuid":%q,"timestamp":%q,"message":{"role":"user","content":%s}}`, uuid, at.UTC().Format(time.RFC3339Nano), blocks)
+}
+
+func queuedLine(uuid string, at time.Time, prompt string) string {
+	b, _ := json.Marshal(prompt)
+	return fmt.Sprintf(`{"type":"attachment","uuid":%q,"timestamp":%q,"attachment":{"type":"queued_command","prompt":%s,"commandMode":"prompt","origin":{"kind":"human"}}}`, uuid, at.UTC().Format(time.RFC3339Nano), b)
+}
+
+func assistantLine(uuid string, at time.Time, text string) string {
+	b, _ := json.Marshal(text)
+	return fmt.Sprintf(`{"type":"assistant","uuid":%q,"timestamp":%q,"message":{"role":"assistant","content":[{"type":"text","text":%s}]}}`, uuid, at.UTC().Format(time.RFC3339Nano), b)
+}
+
+func tagsOf(items []proto.Item) map[string]string {
+	out := map[string]string{}
+	for _, it := range items {
+		if it.ClientMsgID != "" {
+			out[it.ID] = it.ClientMsgID
+		}
+	}
+	return out
+}
+
+func sameTags(t *testing.T, got []proto.Item, want map[string]string) {
+	t.Helper()
+	g := tagsOf(got)
+	if len(g) != len(want) {
+		t.Fatalf("tags %v, want %v", g, want)
+	}
+	for id, c := range want {
+		if g[id] != c {
+			t.Fatalf("tags %v, want %v", g, want)
+		}
+	}
+}
+
+// Two sends with the same words ("继续") are tied to their own lines, in the order sent; a line from before the send
+// (an older 继续) and one typed at the computer with other words get nothing.
+func TestEchoTiesSendsInOrder(t *testing.T) {
+	t0 := time.Now()
+	var l echoLog
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "A", Text: "继续", SentAt: t0, AfterSeq: 1})
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "B", Text: "继续", SentAt: t0.Add(time.Second), AfterSeq: 1})
+	items := echoItems(t,
+		userLine("old", t0.Add(-time.Minute), "继续"),
+		userLine("mine1", t0.Add(time.Second), "继续"),
+		userLine("desk", t0.Add(2*time.Second), "我在电脑上打的"),
+		assistantLine("a1", t0.Add(3*time.Second), "好的"),
+		userLine("mine2", t0.Add(4*time.Second), "继续"),
+	)
+	from, ok := l.waitingFrom("s")
+	if !ok || from != 1 {
+		t.Fatalf("waiting from %d %v", from, ok)
+	}
+	found := l.match("s", items[1:])
+	if len(found) != 2 || found[0].Line != "mine1" || found[1].Line != "mine2" {
+		t.Fatalf("found %+v", found)
+	}
+	sameTags(t, l.tag("s", items), map[string]string{"mine1#0": "A", "mine2#0": "B"})
+	if _, ok := l.waitingFrom("s"); ok {
+		t.Fatal("nothing should be expected any more")
+	}
+	if got := l.tag("other", items); len(tagsOf(got)) != 0 {
+		t.Fatalf("another session's items tagged: %v", tagsOf(got))
+	}
+}
+
+// A message with a picture is one line, several items: every one of them carries the id. Claude's [Image #n] chip and
+// the phone's line breaks do not stop the words fitting.
+func TestEchoTagsEveryItemOfTheLine(t *testing.T) {
+	t0 := time.Now()
+	var l echoLog
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "P", Text: "看一下这个报错，\n是不是构建脚本的问题", Images: 1, SentAt: t0})
+	items := echoItems(t, userBlocks("u1", t0.Add(time.Second),
+		`[{"type":"text","text":"[Image #1] 看一下这个报错， 是不是构建脚本的问题"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]`))
+	if len(items) < 2 {
+		t.Fatalf("want words and a picture, got %+v", items)
+	}
+	l.match("s", items)
+	want := map[string]string{}
+	for _, it := range items {
+		want[it.ID] = "P"
+	}
+	sameTags(t, l.tag("s", items), want)
+}
+
+// Input typed while the agent works comes back as a queued_command attachment: that is the copy too.
+func TestEchoTiesAQueuedMessage(t *testing.T) {
+	t0 := time.Now()
+	var l echoLog
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "Q", Text: "顺便把测试也跑一下", SentAt: t0, AfterSeq: 1})
+	items := echoItems(t,
+		assistantLine("a0", t0.Add(-time.Second), "正在改"),
+		queuedLine("q1", t0.Add(30*time.Second), "顺便把测试也跑一下"),
+	)
+	l.match("s", items)
+	got := l.tag("s", items)
+	sameTags(t, got, map[string]string{"q1#0": "Q"})
+	if !got[1].Queued {
+		t.Fatalf("not the queued item: %+v", got[1])
+	}
+}
+
+// /compact leaves no user line, only the notice it became: that notice is its copy. A message that leaves nothing
+// (or something else) is never tied, and stops being looked for after echoWithin.
+func TestEchoTiesCompactToItsNotice(t *testing.T) {
+	t0 := time.Now()
+	var l echoLog
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "C", Text: "/compact", SentAt: t0})
+	items := echoItems(t, userLine("c1", t0.Add(time.Second), "<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args></command-args>"))
+	if len(items) != 1 || items[0].Kind != proto.KindNotice {
+		t.Fatalf("want a notice, got %+v", items)
+	}
+	l.match("s", items)
+	sameTags(t, l.tag("s", items), map[string]string{"c1#0": "C"})
+
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "gone", Text: "/clear", SentAt: t0.Add(-echoWithin - time.Minute)})
+	if from, ok := l.waitingFrom("s"); ok {
+		t.Fatalf("an expired send is still looked for from %d", from)
+	}
+}
+
+// Rewritten words do not fit (the apps fall back to theirs), a short text must be the same, a long one only its
+// start (the page cuts long texts); lines from before the send by the clock are not it.
+func TestEchoFits(t *testing.T) {
+	t0 := time.Now()
+	long := "请把 server/internal/node 里的发送流程重新梳理一遍，写成文档"
+	cases := []struct {
+		name string
+		sent string
+		line string
+		at   time.Time
+		want bool
+	}{
+		{"same", "好", "好", t0, true},
+		{"short text inside another", "好", "好的，我先看看日志", t0, false},
+		{"long text cut by the page", long, "请把 server/internal/node 里的发送\n…（已截断，共 9999 字节）", t0, true},
+		{"other words", "帮我看看构建", "完全不同的一句话", t0, false},
+		{"pasted wrapper", "第一行\n第二行很长很长很长很长", `<pasted_content id="a1">第一行 第二行很长很长很长很长</pasted_content id="a1">`, t0, true},
+		{"written before the send", "继续", "继续", t0.Add(-time.Minute), false},
+		{"a command with the arguments its picker chose", "/model", "<command-name>/model</command-name>\n<command-args>opus</command-args>", t0, true},
+		{"a command is not another one", "/mod", "<command-name>/model</command-name>\n<command-args>opus</command-args>", t0, false},
+		{"hook context on the user's line", "部署到测试环境", "<system-reminder>\nhook says hi\n</system-reminder>\n部署到测试环境", t0, true},
+	}
+	for _, c := range cases {
+		var l echoLog
+		l.expect(echoRecord{SessionID: "s", ClientMsgID: "x", Text: c.sent, SentAt: t0})
+		found := l.match("s", echoItems(t, userLine("u", c.at, c.line)))
+		if got := len(found) == 1; got != c.want {
+			t.Errorf("%s: tied %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Lines looked at and passed over are not looked at again: a later push only reads what is new.
+func TestEchoScansEachLineOnce(t *testing.T) {
+	t0 := time.Now()
+	var l echoLog
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "x", Text: "第三条消息的内容在这里", SentAt: t0})
+	first := echoItems(t, userLine("u1", t0, "别的"), userLine("u2", t0, "也是别的"))
+	if found := l.match("s", first); len(found) != 0 {
+		t.Fatalf("found %+v", found)
+	}
+	if from, _ := l.waitingFrom("s"); from != 2 {
+		t.Fatalf("waiting from %d, want 2", from)
+	}
+}
+
+// echoHub records what the node notifies the hub of.
+type echoHub struct {
+	mu     sync.Mutex
+	echoes []echoRecord
+}
+
+func (h *echoHub) got() []echoRecord {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]echoRecord(nil), h.echoes...)
+}
+
+func withEchoHub(t *testing.T, n *Node) *echoHub {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	n2hR, n2hW := io.Pipe()
+	h2nR, h2nW := io.Pipe()
+	n.peer = rpc.New("n", n2hW)
+	hub := rpc.New("h", h2nW)
+	end := &echoHub{}
+	hub.OnEvent = func(event string, params json.RawMessage) {
+		if event != "session.echo" {
+			return
+		}
+		var r echoRecord
+		_ = json.Unmarshal(params, &r)
+		end.mu.Lock()
+		end.echoes = append(end.echoes, r)
+		end.mu.Unlock()
+	}
+	go func() { _ = hub.Serve(ctx, n2hR) }()
+	go func() { _ = n.peer.Serve(ctx, h2nR) }()
+	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
+	return end
+}
+
+func pageItems(t *testing.T, n *Node, id string) []proto.Item {
+	t.Helper()
+	res, err := request(t, n, "session.items", map[string]any{"session_id": id, "limit": 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(res["items"])
+	var items []proto.Item
+	_ = json.Unmarshal(b, &items)
+	return items
+}
+
+// End to end on the node: a send into a Claude pane (the fake herdr's prompt makes Claude write the line) is tied to
+// that line in pages, and the hub is told what was expected and what was found. A node started again knows nothing
+// until the hub hands its records back (session.echoes): then the same page carries the id again, and a message it
+// was still waiting for when it stopped is found.
+func TestEchoAcrossSendPagesAndRestart(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := mkdir(t, home+"/proj")
+	t0 := time.Now()
+	path := writeTranscript(t, home, cwd, sidA, t0, assistantLine("a0", t0.Add(-time.Minute), "上一轮的回答"))
+	seedAgents(t, n, f, claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", cwd, ""))
+	f.setScreens("w1:p1", screenFixture(t, "claude-2.1.312-empty-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.ansi"))
+	withSubmitGrace(t, 10*time.Millisecond)
+	appendLine := func(line string) {
+		fh, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = fh.WriteString(line + "\n")
+		fh.Close()
+	}
+	claudeWrites := true // Claude writes the prompted line at once
+	f.after(func(c herdrCall) {
+		if c.Method == "agent.prompt" && claudeWrites {
+			var p struct {
+				Text string `json:"text"`
+			}
+			b, _ := json.Marshal(c.Params)
+			_ = json.Unmarshal(b, &p)
+			appendLine(userLine(fmt.Sprintf("u-%d", time.Now().UnixNano()), time.Now(), p.Text))
+		}
+	})
+	hub := withEchoHub(t, n)
+	if _, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "把发送流程梳理一遍", "client_msg_id": "m-1"}); err != nil {
+		t.Fatal(err)
+	}
+	items := pageItems(t, n, sidA)
+	var mine string
+	for _, it := range items {
+		if it.ClientMsgID == "m-1" {
+			mine = it.ID
+		}
+	}
+	if mine == "" || len(tagsOf(items)) != 1 {
+		t.Fatalf("tags %v in %+v", tagsOf(items), items)
+	}
+	waitFor(t, "the hub to hear of it", func() bool { return len(hub.got()) >= 2 })
+	got := hub.got()
+	if got[0].Line != "" || got[0].AfterSeq != 1 || got[0].Text != "把发送流程梳理一遍" || got[1].Line != echoLineKey(mine) {
+		t.Fatalf("hub heard %+v", got)
+	}
+
+	// A second send whose line is written only after the node stopped.
+	claudeWrites = false
+	if _, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "再补一个测试用例", "client_msg_id": "m-2"}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the second record", func() bool { return len(hub.got()) >= 3 })
+	kept := hub.got()
+
+	n2, f2, _ := herdrNode(t)
+	n2.home = home
+	seedAgents(t, n2, f2, claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", cwd, ""))
+	appendLine(userLine("late", time.Now(), "再补一个测试用例"))
+	if got := pageItems(t, n2, sidA); len(tagsOf(got)) != 0 {
+		t.Fatalf("a new node tagged %v before it was told", tagsOf(got))
+	}
+	if _, err := request(t, n2, "session.echoes", map[string]any{"echoes": kept}); err != nil {
+		t.Fatal(err)
+	}
+	sameTags(t, pageItems(t, n2, sidA), map[string]string{mine: "m-1", "late#0": "m-2"})
+}
+
+// Codex writes a message as one UserMessage item, its pictures as paths under the words (a message sent mid-turn
+// when the turn ends): tied all the same.
+func TestEchoTiesACodexMessage(t *testing.T) {
+	t0 := time.Now()
+	var l echoLog
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "X", Text: "这张截图里的按钮为什么换行了", Images: 1, SentAt: t0})
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "Y", Images: 1, SentAt: t0.Add(time.Second)})
+	at := t0.Add(time.Minute).UTC().Format(time.RFC3339Nano)
+	items := echoItems(t,
+		`{"timestamp":"`+at+`","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"um1","content":[{"type":"text","text":"这张截图里的按钮为什么换行了"},{"type":"local_image","path":"/tmp/a.jpg"}]}}}`,
+		`{"timestamp":"`+at+`","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"um2","content":[{"type":"local_image","path":"/tmp/b.jpg"}]}}}`,
+	)
+	l.match("s", items)
+	sameTags(t, l.tag("s", items), map[string]string{"um1#0": "X", "um2#0": "Y"})
+}
+
+// A runtime that put the client_msg_id on its own item is taken at its word: that line is the record's, and no other
+// record takes it by its words.
+func TestEchoKeepsARuntimesOwnTie(t *testing.T) {
+	t0 := time.Now()
+	var l echoLog
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "A", Text: "继续", SentAt: t0})
+	l.expect(echoRecord{SessionID: "s", ClientMsgID: "B", Text: "继续", SentAt: t0.Add(time.Second)})
+	items := []proto.Item{
+		{ID: "r1", Seq: 1, Role: "user", Kind: proto.KindText, Text: "继续", ClientMsgID: "B"},
+		{ID: "r2", Seq: 2, Role: "user", Kind: proto.KindText, Text: "继续"},
+	}
+	found := l.match("s", items)
+	if len(found) != 2 {
+		t.Fatalf("found %+v", found)
+	}
+	sameTags(t, l.tag("s", items), map[string]string{"r1": "B", "r2": "A"})
+}

@@ -19,6 +19,8 @@ export interface OutboxImage {
 export interface OutboxEntry {
   /** The client_msg_id: a retry sends the same one, so the hub takes it once. */
   id: string;
+  /** It went in another way (the prompt that started a conversation), not with `id`: only its words find it. */
+  wordsOnly?: boolean;
   text: string;
   images: OutboxImage[];
   at: number;
@@ -48,15 +50,18 @@ export function outboxMessage(e: OutboxEntry): UserMessage {
   };
 }
 
-const seenAs = (e: Pick<OutboxEntry, "text" | "images" | "at">): Sent => ({ text: parseUserText(e.text).text, images: e.images, at: e.at });
+type Described = Pick<OutboxEntry, "text" | "images" | "at"> & Partial<Pick<OutboxEntry, "id" | "wordsOnly">>;
 
-/** The transcript has this message: one of its latest user messages is its copy (lib/echo.ts). */
-export function arrived(e: Pick<OutboxEntry, "text" | "images" | "at">, users: Seen[]): boolean {
+const seenAs = (e: Described): Sent => ({ id: e.wordsOnly ? undefined : e.id, text: parseUserText(e.text).text, images: e.images, at: e.at });
+
+/** The transcript has this message: one of its latest user messages, or an item the hub tied to it, is its copy (lib/echo.ts). */
+export function arrived(e: Described, users: Seen[]): boolean {
   return users.some((u) => isEcho(seenAs(e), u));
 }
 
 /** What stays once the transcript moved: arrived ones go (one copy each), and sent ones past the grace; sending and
- *  failed stay. `claimed`: the user messages that already answered one, kept across calls. */
+ *  failed stay. `users`: the latest user messages and the items the hub tied to a message (taggedSeen). `claimed`: the
+ *  ones that already answered one, kept across calls. */
 export function settle(list: OutboxEntry[], users: Seen[], now: number, claimed = new Set<string>()): OutboxEntry[] {
   const shown = echoed(list.filter((e) => e.state !== "failed"), users, seenAs, claimed);
   return list.filter((e) => !shown.has(e) && (e.state !== "sent" || now - e.at < SENT_GRACE_MS));
@@ -82,7 +87,7 @@ function update(key: string, id: string, patch: Partial<OutboxEntry>) {
 
 const claimedBy = new Map<string, Set<string>>();
 
-/** Drops what the transcript now has (ChatView calls it with the latest user messages). */
+/** Drops what the transcript now has (ChatView calls it with the latest user messages and the tagged items). */
 export function settleOutbox(mid: string, sid: string, users: Seen[]) {
   const key = outboxKey(mid, sid);
   const before = list(key);
@@ -124,7 +129,7 @@ export function sendToSession(mid: string, sid: string, out: { text: string; ima
 /** A message that already went in another way (the prompt that started a conversation): its bubble until the transcript has it. */
 export function noteSent(mid: string, sid: string, out: { text: string; images?: OutboxImage[] }) {
   const key = outboxKey(mid, sid);
-  setOutbox(key, [...list(key), { id: uuid(), text: out.text, images: out.images ?? [], at: Date.now(), state: "sent" }]);
+  setOutbox(key, [...list(key), { id: uuid(), wordsOnly: true, text: out.text, images: out.images ?? [], at: Date.now(), state: "sent" }]);
 }
 
 export function retryOutbox(mid: string, sid: string, id: string, clearDraft?: string): Promise<boolean> {

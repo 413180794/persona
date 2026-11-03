@@ -64,6 +64,7 @@ func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
 	m.sendManaged(ctx, func(ctx context.Context, method string, params, out any) error {
 		return peer.Call(ctx, method, params, out)
 	})
+	m.sendEchoes(ctx, peer)
 }
 
 // rememberClaudeDirs stores the directories the node found (claude.dirs event), added to what was known; blocked ones

@@ -85,6 +85,16 @@ class HttpMessageTransportTest {
                     responses.send(MockResponse().setBody("""{"items":[{"id":"claude-uuid","role":"user","kind":"text","text":"hello","ts":"2026-11-03T09:00:00Z"}]}"""))
                     assertEquals(MessageEvidence.Shown, transport.reconcile(message, 0))
                     repeat(2) { withTimeout(5000) { requests.receive() } }
+                    // Hubs since #968 tag the items a message became: a notice with other words is its copy…
+                    responses.send(MockResponse().setBody("""{"state":"done","result":{"status":200,"body":"$storedBody"}}"""))
+                    responses.send(MockResponse().setBody("""{"items":[{"id":"notice-1","role":"system","kind":"notice","text":"压缩上下文","client_msg_id":"stable-id"}]}"""))
+                    assertEquals(MessageEvidence.Shown, transport.reconcile(message, 0))
+                    repeat(2) { withTimeout(5000) { requests.receive() } }
+                    // …and an item tagged for another message is not, even with the same words.
+                    responses.send(MockResponse().setBody("""{"state":"done","result":{"status":200,"body":"$storedBody"}}"""))
+                    responses.send(MockResponse().setBody("""{"items":[{"id":"claude-uuid","role":"user","kind":"text","text":"hello","ts":"2026-11-03T09:00:00Z","client_msg_id":"other-id"}]}"""))
+                    assertEquals(MessageEvidence.Receipt(MessageTransportResult.Accepted), transport.reconcile(message, 0))
+                    repeat(2) { withTimeout(5000) { requests.receive() } }
 
                     val results = listOf(
                         MockResponse().setBody("""{"ok":true}""") to MessageTransportResult.Accepted,

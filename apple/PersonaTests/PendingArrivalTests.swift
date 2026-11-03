@@ -12,6 +12,13 @@ struct PendingArrivalTests {
         return it
     }
 
+    private func tagged(_ seq: Int, _ text: String, _ id: UUID, role: String = "user", kind: ItemKind = .text) -> Item {
+        var it = Item(id: "t\(seq)#0", seq: seq, ts: Date(), role: role, kind: kind, text: text, toolUseID: nil, toolName: nil,
+                      toolInput: nil, isError: nil, image: nil)
+        it.clientMsgID = id.uuidString.lowercased() // the app sends upper case; a hub that lowered it still ties it
+        return it
+    }
+
     private func store() -> ChatStore { ChatStore(key: SessionKey(machineID: "box", sessionID: "s1")) }
 
     // A long message comes back cut for the page (it ends in the 已截断 line): it is still the message, and the bubble
@@ -66,6 +73,51 @@ struct PendingArrivalTests {
         #expect(s.pending.count == 1)
         s.merge([user(1, "帮我看看今天的安排", at: Date().addingTimeInterval(-2))])
         #expect(s.pending.isEmpty)
+    }
+
+    // The hub ties an item to the message it came from (client_msg_id, #968): that settles the bubble even when the words
+    // are not the message's (the hub rewrote them) or the message became a notice (/compact → 「压缩上下文」).
+    @Test func theHubsTieSettlesWhateverTheWords() {
+        let s = store()
+        let rewritten = PendingMessage(text: "/agent 看看这个群在聊什么", images: [])
+        let compact = PendingMessage(text: "/compact", images: [])
+        s.pending = [rewritten, compact]
+        s.merge([tagged(4, "<jarvis-context>…</jarvis-context>\n看看这个群在聊什么", rewritten.id)])
+        #expect(s.pending.map(\.id) == [compact.id])
+        s.merge([tagged(5, "压缩上下文", compact.id, role: "system", kind: .notice)])
+        #expect(s.pending.isEmpty)
+    }
+
+    // Two 「继续」 sent one after the other: each tied copy takes its own bubble, never the other's by its words.
+    @Test func aTiedItemTakesOnlyItsOwnBubble() {
+        let s = store()
+        let a = PendingMessage(text: "继续", images: []), b = PendingMessage(text: "继续", images: [])
+        s.pending = [a, b]
+        s.merge([tagged(6, "继续", b.id)])
+        #expect(s.pending.map(\.id) == [a.id])
+        // Another item of B's message (a queued copy) finds its bubble gone and takes none: not A's by its words.
+        s.merge([tagged(7, "继续", b.id)])
+        #expect(s.pending.map(\.id) == [a.id])
+        s.merge([tagged(8, "继续", a.id)])
+        #expect(s.pending.isEmpty)
+    }
+
+    // Older hubs send no tie: the words still settle the bubble.
+    @Test func anUntiedItemSettlesByItsWords() {
+        let s = store()
+        let p = PendingMessage(text: "继续", images: [])
+        s.pending = [p]
+        s.merge([user(9, "继续", at: Date())])
+        #expect(s.pending.isEmpty)
+        #expect(PendingMessage.tied(user(9, "继续", at: nil), to: p.id) == nil)
+    }
+
+    // The field decodes from the hub's JSON and is absent from an older hub's.
+    @Test func theTieDecodes() throws {
+        let tied = #"{"id":"a#0","seq":1,"role":"user","kind":"text","text":"好","client_msg_id":"6F9619FF-8B86-D011-B42D-00C04FC964FF"}"#
+        let old = #"{"id":"a#0","seq":1,"role":"user","kind":"text","text":"好"}"#
+        #expect(try JSONDecoder().decode(Item.self, from: Data(tied.utf8)).clientMsgID == "6F9619FF-8B86-D011-B42D-00C04FC964FF")
+        #expect(try JSONDecoder().decode(Item.self, from: Data(old.utf8)).clientMsgID == nil)
     }
 
     // Outboxes saved before createdAt was kept still load.

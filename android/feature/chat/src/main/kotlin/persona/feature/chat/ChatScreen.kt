@@ -148,7 +148,9 @@ private fun ChatPage(
     var busyId by remember { mutableStateOf<String?>(null) }
     val requests = allRequests.filter { it.sessionKey == key && it.id !in resolved }
         .sortedBy { if (it.id == chrome.requestId) 0 else 1 }
-    val messages = allMessages.filter { it.session == key && snapshot.items.none { item -> item.id == it.clientMessageId } }
+    val messages = allMessages.filter {
+        it.session == key && snapshot.items.none { item -> item.id == it.clientMessageId || MessageEcho.tag(item) == it.clientMessageId }
+    }
     val currentMessageCount by rememberUpdatedState(messages.size)
     val composerDeliveries by (composerService?.deliveries ?: remember {
         kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, ComposerDelivery>())

@@ -166,6 +166,10 @@ var ContextRe = regexp.MustCompile(`(?s)<jarvis-context>.*?</jarvis-context>\s*`
 
 var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>(.*?)</(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>`)
 
+// CompactNotice is the notice a /compact without instructions becomes (no user line): a /compact sent from the phone
+// is tied to it (node/echo.go).
+const CompactNotice = "压缩上下文"
+
 // ParseLine converts one JSONL line (1-based seq) into items, updating meta.
 func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	var items []proto.Item
@@ -760,7 +764,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 			// Persona compacts an idle assistant conversation itself (node/assistant.go): a notice, not a message the
 			// user sent, and not activity that would make the conversation unread.
 			it := mk(0, "system", proto.KindNotice)
-			it.Text = "压缩上下文"
+			it.Text = CompactNotice
 			return []proto.Item{it}
 		}
 		it := mk(0, "user", proto.KindText)

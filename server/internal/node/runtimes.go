@@ -656,6 +656,13 @@ func (b *runtimeRegistry) unwatch(id string) {
 }
 
 // pushed moves a watched session's seq forward (the items a runtime pushed reached the hub).
+// lastPushed is the last seq pushed for a watched session (0: not watched, or nothing yet).
+func (b *runtimeRegistry) lastPushed(id string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.watching[id]
+}
+
 func (b *runtimeRegistry) pushed(id string, seq int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -715,7 +722,7 @@ func (n *Node) runtimeEvent(h *runtimeConn, event string, params json.RawMessage
 		}
 		n.runtimes.pushed(p.SessionID, last)
 		if n.peer != nil {
-			_ = n.peer.Notify("session.items", params)
+			_ = n.peer.Notify("session.items", n.echoedRaw(p.SessionID, params, "items")) // echo.go
 		}
 	case "session.delta":
 		var p struct {
@@ -1087,6 +1094,7 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 		if err != nil {
 			return nil, err, true
 		}
+		out = n.echoedRaw(p.SessionID, out, "items") // echo.go
 		if !p.FoldWork || p.AfterSeq != nil || p.ThroughSeq > 0 {
 			return out, nil, true
 		}
@@ -1125,8 +1133,16 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 		var opts sendOpts
 		_ = json.Unmarshal(params, &opts)
 		err := n.sends.once(opts.ClientMsgID, func() error {
+			var after int
+			at := time.Now()
+			if opts.ClientMsgID != "" {
+				after = n.runtimes.lastPushed(p.SessionID)
+			}
 			_, err := call("session.send", map[string]any{"session_id": p.SessionID, "text": p.Text, "images": p.Images,
 				"client_msg_id": opts.ClientMsgID})
+			if opts.ClientMsgID != "" && (err == nil || maybeDelivered(err)) { // echo.go
+				n.expectEcho(p.SessionID, opts.ClientMsgID, p.Text, len(p.Images), at, after)
+			}
 			return err
 		})
 		if rpcCode(err) == runtimeHandover && ctx.Value(handingOver{}) == nil {

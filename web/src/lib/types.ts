@@ -158,6 +158,9 @@ export interface Item {
   image?: { mime: string; data?: string; lazy?: boolean; width?: number; height?: number };
   /** Sent by another Claude session (cross-session messaging), not typed by you: its name. */
   from?: string;
+  /** The client_msg_id of the message this came from, as the hub tied it (every item of it: the text, its images, a
+   *  queued copy, or the notice it became); older hubs never send it (lib/echo.ts). */
+  client_msg_id?: string;
 }
 
 export interface ItemsPage {

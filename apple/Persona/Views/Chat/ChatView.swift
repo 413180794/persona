@@ -1364,8 +1364,9 @@ struct ChatView: View {
         // used to pull you out of the history you were reading too), and only if you have not scrolled since sending it:
         // Claude can take it in seconds later, while you went back up to read (2026-10-30).
         .onChange(of: lastPromptID) { old, new in
-            guard old != nil, let new, let text = store.items.last(where: { $0.id == new })?.text,
-                  let i = scratch.sentHere.firstIndex(where: { PendingMessage.same(text, $0) }) else { return }
+            guard old != nil, let new, let item = store.items.last(where: { $0.id == new }), let text = item.text,
+                  let i = scratch.sentHere.firstIndex(where: { PendingMessage.tied(item, to: $0.id) ?? PendingMessage.same(text, $0.text) })
+            else { return }
             scratch.sentHere.remove(at: i)
             guard scratch.lastUserScroll < scratch.sentAt else { return }
             followsEnd = true
@@ -1373,7 +1374,7 @@ struct ChatView: View {
         }
         .onChange(of: store.pending.count) { old, new in
             guard new > old else { return }
-            scratch.sentHere = Array((scratch.sentHere + store.pending.map(\.text)).suffix(20))
+            scratch.sentHere = Array((scratch.sentHere + store.pending.map { (id: $0.id, text: $0.text) }).suffix(20))
             scratch.sentAt = .now
             followsEnd = true
             scrollToEnd(animated: true)
@@ -3573,7 +3574,7 @@ final class ChatScratch {
         var feed: [String] = []
     }
     /// What was sent from this chat lately: its transcript copy arriving brings you to the newest, others do not.
-    var sentHere: [String] = []
+    var sentHere: [(id: UUID, text: String)] = []
     /// When the last message went out from here, and when the user last took the list (a drag): a message's
     /// transcript copy only brings you to the newest if you have not scrolled since sending it.
     var sentAt = Date.distantPast

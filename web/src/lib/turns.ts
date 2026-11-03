@@ -24,6 +24,8 @@ export interface UserMessage {
   from?: string;
   /** A finished exchange that took several messages: each message's text, shown in one bubble. */
   parts?: string[];
+  /** The message sent from here it came from, as the hub tied it (Item.client_msg_id). */
+  client_msg_id?: string;
 }
 
 export interface Context {
@@ -118,6 +120,7 @@ export function segments(items: Item[]): Segment[] {
         cur.start = it.ts;
       }
       lastUserEntry = entry;
+      cur.user!.client_msg_id ??= it.client_msg_id || undefined;
       if (it.kind === "image") cur.user!.images.push(it);
       else {
         const p = parseUserText(it.text ?? "");

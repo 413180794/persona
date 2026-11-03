@@ -776,10 +776,15 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var fold: Fold?
     /// kind == .notice: a background task reporting back.
     var task: TaskNote?
+    /// The id the app sent the message this item came from with (`PendingMessage.id`): on every item of it — its text,
+    /// its images, a queued copy, or the notice it became (`/compact`). Nil from older hubs, or when the node could not
+    /// tie it to one.
+    var clientMsgID: String?
 
     enum CodingKeys: String, CodingKey {
         case id, seq, ts, role, kind, text, image, queued, from, wake, fold, task
-        case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error", fullSize = "full_size"
+        case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error", fullSize = "full_size",
+             clientMsgID = "client_msg_id"
     }
 
     /// The text without the line the hub adds where it cut it (the app offers the whole text itself).

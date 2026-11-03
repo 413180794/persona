@@ -60,6 +60,21 @@ describe("which bubbles stay", () => {
     expect(settle(list.slice(1), [older, copy], 1_003_000, claimed).map((e) => e.id)).toEqual(["b"]);
   });
 
+  it("goes when the hub ties an item to its id, whatever the item says; a tie to another bubble leaves it", () => {
+    expect(arrived(entry({ id: "a", text: "/compact" }), [{ id: "n1", client_msg_id: "a", text: "压缩上下文", images: [] }])).toBe(true);
+    expect(arrived(entry({ id: "a" }), [{ id: "u1", client_msg_id: "b", text: "你好", images: [] }])).toBe(false);
+    const list = [entry({ id: "a", text: "继续" }), entry({ id: "b", text: "继续", at: 2000 })];
+    const claimed = new Set<string>();
+    expect(settle(list, [{ id: "u2", client_msg_id: "b", text: "继续", images: [] }], 3000, claimed).map((e) => e.id)).toEqual(["a"]);
+    expect(settle(list, [{ id: "u1", text: "继续", images: [] }], 3000, claimed).map((e) => e.id)).toEqual(["b"]);
+  });
+
+  it("finds the prompt that started a conversation by its words (it went in without the bubble's id)", () => {
+    noteSent("m", "s", { text: "帮我看看" });
+    settleOutbox("m", "s", [{ id: "u1", client_msg_id: "hub-made", text: "帮我看看", images: [] }]);
+    expect(outbox()["m/s"]).toBeUndefined();
+  });
+
   it("shows contexts as cards and images as images", () => {
     const m = outboxMessage(entry({ text: '<jarvis-context kind="context" title="项目" url="">档案</jarvis-context>\n\n问题', images: [{ mime: "image/png", data: "AQID" }] }));
     expect(m.text).toBe("问题");

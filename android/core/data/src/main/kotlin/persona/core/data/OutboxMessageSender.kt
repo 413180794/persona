@@ -213,21 +213,23 @@ class OutboxMessageSender(
 
     /**
      * The session's transcript holds [items]: authoritative (from the hub), never an optimistic local echo. A message
-     * sent from here that is among them is shown, and its bubble goes. Claude Code keeps its own id for the message,
-     * so it is found by its words ([MessageEcho]) unless the runtime kept the client message id. One transcript item
-     * shows one message (the oldest it can be), so a second identical message stays until its own copy arrives.
+     * sent from here that is among them is shown, and its bubble goes. An item the hub tagged with a client message id
+     * shows that message only, whatever its kind (a /compact becomes a notice). Untagged, Claude Code keeps its own id
+     * for the message, so it is found by its words ([MessageEcho]) unless the runtime kept the client message id. One
+     * transcript item shows one message (the oldest it can be), so a second identical message stays until its own copy
+     * arrives.
      */
     suspend fun observeTranscript(session: SessionKey, items: List<Item>) {
         // Not the `outbox` flow: it lags the store, and an echo that beats it would be passed over.
-        if (items.none { it.role == "user" && it.kind == "text" }) return
+        if (items.none(MessageEcho::candidate)) return
         lifecycle.withLock {
             check(job.isActive) { "Pairing scope is closed" }
             val pending = store.entries.first().filter { it.session == session && it.state in reconcilable }
                 .sortedBy { it.createdAt }.toMutableList()
             for (item in items) {
                 if (pending.isEmpty()) break
-                if (item.role != "user" || item.kind != "text" || (session to item.id) in claimed) continue
-                val entry = pending.firstOrNull { it.clientMessageId == item.id }
+                if (!MessageEcho.candidate(item) || (session to item.id) in claimed) continue
+                val entry = pending.firstOrNull { MessageEcho.carries(item, it.clientMessageId) }
                     ?: pending.firstOrNull { MessageEcho.arrived(it.text, it.createdAt, item) } ?: continue
                 pending.remove(entry)
                 if (store.transition(entry.clientMessageId, reconcilable, OutboxState.Shown)) {

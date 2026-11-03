@@ -71,6 +71,7 @@ type Node struct {
 	codices   *codexRegistry
 	machineID string
 	sends     sentLog         // recent client_msg_ids (sendsafe.go)
+	echoes    echoLog         // sends tied to their transcript lines (echo.go)
 	typing    typingLocks     // one send at a time per session (sendsafe.go)
 	cx        codexCards      // Codex questions and approvals listed to the hub (codexask.go)
 	kept      map[string]bool // sessions always listed (node.configure keep_sessions)
@@ -508,12 +509,31 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		var opts sendOpts
 		_ = json.Unmarshal(params, &opts)
 		return ok(n.sends.once(opts.ClientMsgID, func() error {
-			if n.isAssistantSession(p.SessionID) {
-				_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
-				return err
+			var after int
+			at := time.Now()
+			if opts.ClientMsgID != "" {
+				after = n.echoBase(p.SessionID)
 			}
-			return n.send(ctx, p.SessionID, p.Text, p.Images, opts)
+			var err error
+			if n.isAssistantSession(p.SessionID) {
+				_, err = n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
+			} else {
+				err = n.send(ctx, p.SessionID, p.Text, p.Images, opts)
+			}
+			if opts.ClientMsgID != "" && (err == nil || maybeDelivered(err)) { // echo.go
+				n.expectEcho(p.SessionID, opts.ClientMsgID, p.Text, len(p.Images), at, after)
+			}
+			return err
 		}))
+	case "session.echoes": // what the hub kept of earlier sends (echo.go), after this node started
+		var a struct {
+			Echoes []echoRecord `json:"echoes"`
+		}
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
+		n.restoreEchoes(a.Echoes)
+		return ok(nil)
 	case "session.keys":
 		var dl struct {
 			Rev    string `json:"rev"`
@@ -624,7 +644,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, fmt.Errorf("session %s: %w", p.SessionID, err)
 		}
 		it.Image = nil // images come from session.image
-		return it, nil
+		return n.echoed(p.SessionID, f, []proto.Item{it})[0], nil
 	case "session.items":
 		f, err := n.file(p.SessionID)
 		if err != nil {
@@ -636,10 +656,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.refresh(p.SessionID, f)
 		// Items are kept without their image data; a caller that did not ask for lazy images (an older hub) gets it.
 		items := func(items []proto.Item) []proto.Item {
-			if p.LazyImages {
-				return nonNil(items)
+			if !p.LazyImages {
+				items = f.WithImages(items)
 			}
-			return nonNil(f.WithImages(items))
+			return nonNil(n.echoed(p.SessionID, f, items))
 		}
 		limit := p.Limit
 		if limit <= 0 || limit > 500 {

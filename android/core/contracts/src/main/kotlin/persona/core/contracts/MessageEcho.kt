@@ -3,9 +3,10 @@ package persona.core.contracts
 import java.time.Instant
 
 /**
- * Finds a message sent from the phone in the agent's transcript. Claude Code keeps its own id for the user's message
- * (not the client message id), so the transcript's copy is found by its words: the same rules as iOS
- * (`PendingMessage.arrived` / `same` in apple/Shared/ChatStore.swift).
+ * Finds a message sent from the phone in the agent's transcript. Hubs since #968 tag every item a message became with
+ * its client message id ([Item.clientMsgId]), which decides alone. Older hubs don't, and Claude Code keeps its own id
+ * for the user's message (not the client message id), so there the transcript's copy is found by its words: the same
+ * rules as iOS (`PendingMessage.arrived` / `same` in apple/Shared/ChatStore.swift).
  */
 object MessageEcho {
     /** The computer's clock may be behind the phone's by this much. */
@@ -36,13 +37,27 @@ object MessageEcho {
         return x == y || (minOf(x.length, y.length) >= 8 && (x.contains(y) || y.contains(x)))
     }
 
+    /** The client message id the hub tagged [item] with (#968); null from older hubs and for items typed elsewhere. */
+    fun tag(item: Item): String? = item.clientMsgId?.takeIf { it.isNotEmpty() }
+
+    /** [item] may be the copy of a message sent from here: tagged (whatever its kind: a notice, an image), or a user text. */
+    fun candidate(item: Item): Boolean = tag(item) != null || (item.role == "user" && item.kind == "text")
+
     /**
-     * [item] is the message [text] written at [createdAt] (epoch millis): a user message that arrived after it was
-     * written (with [CLOCK_SLACK_MILLIS] for the computer's clock), with its words — when the page cut a long one, its
-     * start. An older message with the same words (a second "继续") is not it.
+     * [item] carries the message sent as [clientMessageId]: tagged with it (a tagged item is no other message's), or,
+     * untagged, a user text with it as its own id (runtimes that keep the client message id).
+     */
+    fun carries(item: Item, clientMessageId: String): Boolean =
+        tag(item)?.let { it == clientMessageId } ?: (item.role == "user" && item.kind == "text" && item.id == clientMessageId)
+
+    /**
+     * [item] is the message [text] written at [createdAt] (epoch millis): an untagged user message (a tagged one is
+     * matched by [carries] only) that arrived after it was written (with [CLOCK_SLACK_MILLIS] for the computer's
+     * clock), with its words — when the page cut a long one, its start. An older message with the same words (a second
+     * "继续") is not it.
      */
     fun arrived(text: String, createdAt: Long, item: Item): Boolean {
-        if (item.role != "user" || item.kind != "text") return false
+        if (tag(item) != null || item.role != "user" || item.kind != "text") return false
         val at = item.ts?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
         if (at != null && at < createdAt - CLOCK_SLACK_MILLIS) return false
         val words = item.text.orEmpty()

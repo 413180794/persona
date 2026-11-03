@@ -74,8 +74,8 @@ class HttpMessageTransport(
                 if (status != null && body != null) {
                     val result = decodeResult(status, String(Base64.getDecoder().decode(body), Charsets.UTF_8))
                     if (result != MessageTransportResult.Accepted) return MessageEvidence.Receipt(result)
-                    // A successful receipt still needs the transcript to replace the local bubble. Claude Code keeps its
-                    // own id for the message, so the transcript's copy is found by its words.
+                    // A successful receipt still needs the transcript to replace the local bubble: an item tagged with
+                    // this id, or (older hubs; Claude Code keeps its own id for the message) one with its words.
                     val shown = transcriptEvidence(request, createdAt, allowTextMatch)
                     return shown ?: MessageEvidence.Receipt(result)
                 }
@@ -87,8 +87,8 @@ class HttpMessageTransport(
     private suspend fun transcriptEvidence(request: MessageRequest, createdAt: Long, allowTextMatch: Boolean): MessageEvidence? {
         val items = HubChatTransport(connection).items(request.session, ItemsQuery()).items
         val shown = items.any { item ->
-            item.role == "user" && item.kind == "text" && (item.id == request.clientMessageId ||
-                allowTextMatch && MessageEcho.arrived(request.text, createdAt, item))
+            MessageEcho.carries(item, request.clientMessageId) ||
+                allowTextMatch && MessageEcho.arrived(request.text, createdAt, item)
         }
         return MessageEvidence.Shown.takeIf { shown }
     }

@@ -607,6 +607,10 @@ type Item struct {
 	IsError   bool            `json:"is_error,omitempty"`
 	Image     *Image          `json:"image,omitempty"`
 	Queued    bool            `json:"queued,omitempty"` // user input typed while the agent worked, absorbed mid-turn
+	// ClientMsgID: this item came from the message an app sent with this client_msg_id (session.send): its words,
+	// its pictures, or the notice it became (/compact). Set by the node, which ties the transcript's line to the send
+	// (node/echo.go); absent for anything else and from older nodes. docs/protocol.md「待发消息的对应」.
+	ClientMsgID string `json:"client_msg_id,omitempty"`
 	// FullSize: Text was cut for pages and pushes (it ends in a "已截断，点开看全文" line); the whole of it, this many
 	// bytes, comes from GET /api/v1/sessions/{mid}/{sid}/items/{item id}/full.
 	FullSize int `json:"full_size,omitempty"`

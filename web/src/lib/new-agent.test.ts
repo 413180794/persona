@@ -104,6 +104,16 @@ describe("本地优先启动", () => {
     expect(getState().launches[id].outgoing).toBeUndefined();
   });
 
+  it("clears the first message when the hub ties an item to its id, and not for a tie to another message", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({})));
+    const id = launchAgent(input);
+    await vi.advanceTimersByTimeAsync(0);
+    acknowledgeLaunch("desktop", "remote-id", { id: "u1", client_msg_id: "someone-else", text: input.text, images: [] });
+    expect(getState().launches[id].outgoing).toBeDefined();
+    acknowledgeLaunch("desktop", "remote-id", { id: "u2", client_msg_id: id, text: "改过的字", images: [] });
+    expect(getState().launches[id].outgoing).toBeUndefined();
+  });
+
   it("starts without a first message and never calls messages", async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(response({ session }));
     vi.stubGlobal("fetch", fetcher);

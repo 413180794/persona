@@ -322,6 +322,10 @@ func TestDaemonIsARuntimeUnderTheConfigNames(t *testing.T) {
 	if err != nil || !strings.Contains(string(raw), `"text":"hi"`) {
 		t.Fatalf("items %s %v", raw, err)
 	}
+	// The message sent above is its first line (it had none before): the page ties it (echo.go).
+	if !strings.Contains(string(raw), `"client_msg_id":"m-1"`) {
+		t.Fatalf("the sent message is not tied: %s", raw)
+	}
 }
 
 func TestDaemonPushesAndAsksCarryTheHubsIDs(t *testing.T) {

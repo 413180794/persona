@@ -8,10 +8,10 @@ import { machineWithHub } from "../../lib/mesh";
 import { hasModes, isMuted, toggleMute } from "../../lib/session-actions";
 import { flipPin } from "../../lib/agent-actions";
 import { isPinned } from "../../lib/pins";
-import { acknowledgeLaunch } from "../../lib/new-agent";
+import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
 import { getSession, getState, markSeenLocally, refresh, refreshTodos, setMutes, useStore } from "../../lib/store";
 import { buildTaskIndex, STOP_LOOP_MESSAGE, visibleSubagents } from "../../lib/tasks";
-import { echoed } from "../../lib/echo";
+import { echoed, taggedSeen } from "../../lib/echo";
 import { outboxKey, settleOutbox } from "../../lib/outbox";
 import { conversationKey, pickedLauncher } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
@@ -37,6 +37,7 @@ import { AssistantFace, AssistantLauncherChip, useAssistantMenu } from "../assis
 import { usePersona } from "../assistant/Persona";
 
 interface Pending {
+  /** The client_msg_id it went with. */
   id: string;
   msg: UserMessage;
   at: number;
@@ -57,7 +58,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     const launch = Object.values(getState().launches).find((l) => l.phase === "ready" && l.machineId === mid && l.session?.session_id === sid);
     const out = launch?.outgoing;
     if (!launch || !out || (!out.text && !out.images.length)) return [];
-    return [{ id: launch.id, at: Date.now(), msg: { id: `pending:${launch.id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${launch.id}#${i}`, seq: 0, role: "user", kind: "image", image })) } }];
+    const id = launchMessageId(launch);
+    return [{ id, at: Date.now(), msg: { id: `pending:${id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${id}#${i}`, seq: 0, role: "user", kind: "image", image })) } }];
   });
   const [draftRefusal, setDraftRefusal] = useState<{ out: Outgoing; id: string; draft: string; clearable?: string } | null>(null);
   // what other pages sent here (问 Persona, 交给 AI…): shown like this page's own sending bubbles (lib/outbox.ts)
@@ -86,16 +88,16 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const actions = useMemo<ChatActions>(() => ({ draftKey, canCompose, images: () => items.current.filter((i) => i.kind === "image") }), [draftKey, canCompose]);
   const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current) }), [session?.cwd, draftKey]);
 
-  // a sent message stays as a "sending" bubble until the transcript has it (lib/echo.ts); a user message that answered
-  // one answers no other
+  // a sent message stays as a "sending" bubble until the transcript has it (lib/echo.ts): an item the hub tied to it
+  // (any kind, a notice too), or else a latest user message with its words; one that answered one answers no other
   const claimed = useRef(new Set<string>());
   useEffect(() => {
-    const users = segs.slice(-4).flatMap((seg) => seg.user ? [seg.user] : []);
+    const users = [...segs.slice(-4).flatMap((seg) => seg.user ? [seg.user] : []), ...taggedSeen(tr.items)];
     users.forEach((user) => acknowledgeLaunch(mid, sid, user));
     settleOutbox(mid, sid, users);
     if (!pending.length) return;
     setPending((ps) => {
-      const shown = echoed(ps, users, (p) => ({ text: p.msg.text, images: p.msg.images, at: p.at }), claimed.current);
+      const shown = echoed(ps, users, (p) => ({ id: p.id, text: p.msg.text, images: p.msg.images, at: p.at }), claimed.current);
       return ps.filter((p) => !shown.has(p) && Date.now() - p.at < 30_000);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

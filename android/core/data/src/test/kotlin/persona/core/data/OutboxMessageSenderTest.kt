@@ -337,6 +337,47 @@ class OutboxMessageSenderTest {
         sender.close()
     }
 
+    @Test fun anItemTaggedWithTheClientMessageIdShowsThatMessageOnly() = runTest {
+        // Hubs since #968 tag every item a sent message became: it decides, whatever the words or the kind.
+        val store = FakeStore()
+        val transport = FakeTransport(online = true, supportsClientOps = true)
+        val sentAt = java.time.Instant.parse("2026-11-03T09:00:00Z")
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope, now = { sentAt.toEpochMilli() })
+        fun user(id: String, text: String, tag: String?) =
+            Item(id, 1, sentAt.plusSeconds(5).toString(), role = "user", kind = "text", text = text, clientMsgId = tag)
+
+        repeat(4) { transport.answers += MessageTransportResult.Accepted }
+        sender.send(session, "/compact", "compact")
+        sender.send(session, "继续", "again-1")
+        sender.send(session, "继续", "again-2")
+        sender.send(session, "看看状态", "status")
+        runCurrent()
+        // A /compact became a notice: no user row ever comes, the tagged notice shows it.
+        sender.observeTranscript(session, listOf(
+            Item("notice-1", 2, role = "system", kind = "notice", text = "压缩上下文", clientMsgId = "compact")))
+        runCurrent()
+        assertEquals(OutboxState.Shown, store.state("compact"))
+
+        // The copy tagged for the second "继续" shows that one, not the older one with the same words.
+        sender.observeTranscript(session, listOf(user("claude-uuid-2", "继续", "again-2")))
+        runCurrent()
+        assertEquals(OutboxState.Sent, store.state("again-1"))
+        assertEquals(OutboxState.Shown, store.state("again-2"))
+        // Other words (the runtime rewrote it), still the tag decides; an image of an already shown message settles nothing.
+        sender.observeTranscript(session, listOf(
+            Item("image-1", 3, role = "user", kind = "image", clientMsgId = "again-2"),
+            user("claude-uuid-1", "[Image #1] 继续下一步", "again-1")))
+        runCurrent()
+        assertEquals(OutboxState.Shown, store.state("again-1"))
+        assertEquals(OutboxState.Sent, store.state("status"))
+
+        // Untagged (an older hub): words still find it.
+        sender.observeTranscript(session, listOf(user("claude-uuid-3", "看看状态", null)))
+        runCurrent()
+        assertEquals(OutboxState.Shown, store.state("status"))
+        sender.close()
+    }
+
     @Test fun aDeliveredMessageWhoseCopyNeverShowsGoesOnceItsSessionRests() = runTest {
         // A /compact becomes a notice, Codex writes its queue at the end of the turn: no copy ever comes (#950).
         val store = FakeStore()

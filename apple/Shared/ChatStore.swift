@@ -493,7 +493,7 @@ final class ChatStore {
         }
         if !pending.isEmpty { // the real message arrived: drop the local copy, one per message
             let before = pending.count
-            for it in added where it.role == "user" && it.kind == .text {
+            for it in added {
                 if let i = pending.firstIndex(where: { PendingMessage.arrived($0, as: it) }) { pending.remove(at: i) }
             }
             if pending.count != before { onArrived?() }
@@ -974,10 +974,11 @@ nonisolated enum ChatCache {
     /// v5: several groups of hubs (docs/multi-hub.md): the default group's copies at the top, another group's in
     /// `group-<id>/`. v6: a Feishu /agent request's first message is rewritten by the hub (its instructions in a
     /// <jarvis-context> block, #876), so v5's copies would keep showing the old text: they are dropped, not moved
-    /// (`dropOlder`). Bump it whenever the item structure or the text the hub gives an item changes.
-    static let folder = "chats-v6"
+    /// (`dropOlder`). v7: items carry `client_msg_id`, the message sent from the phone they came from (#968).
+    /// Bump it whenever the item structure or the text the hub gives an item changes.
+    static let folder = "chats-v7"
     /// The folder before, removed on the first launch with this one.
-    private static let previous = "chats-v5"
+    private static let previous = "chats-v6"
 
     /// Once per launch, before the first copy is read or written (a static let runs once, on whichever thread asks first).
     private static let dropOlder: Void = {
@@ -1094,15 +1095,25 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Codable, Sendable {
         }
     }
 
-    /// This transcript item is the message: a user message that arrived after it was written (two minutes' slack for
-    /// the computer's clock), with its text — when the page cut a long one, its start. An older message with the same
-    /// words (a second "继续") is not it: the bubble of one never sent stayed gone.
+    /// This transcript item is the message. An item the hub tied to a message (`Item.clientMsgID`) is the one with that
+    /// id, whatever its role, kind or words (a rewritten text, the notice `/compact` became), and no other: two "继续"
+    /// each take their own bubble. One it tied to none: a user message that arrived after it was written (two minutes'
+    /// slack for the computer's clock), with its text — when the page cut a long one, its start. An older message with
+    /// the same words (a second "继续") is not it: the bubble of one never sent stayed gone.
     static func arrived(_ p: PendingMessage, as item: Item) -> Bool {
+        if let tied = tied(item, to: p.id) { return tied }
         guard item.role == "user", item.kind == .text else { return false }
         if let created = p.createdAt, let ts = item.ts, ts < created.addingTimeInterval(-120) { return false }
         guard item.fullSize != nil else { return same(item.text ?? "", p.text) }
         let start = normalize(item.cutText), whole = normalize(p.text)
         return start.count >= 8 && whole.hasPrefix(start)
+    }
+
+    /// Whether the hub says this item came from the message with this id; nil when it says nothing (older hubs, or
+    /// the node could not tie it) and only the words can tell. The app sends `uuidString` (upper case): compared
+    /// ignoring case.
+    static func tied(_ item: Item, to id: UUID) -> Bool? {
+        item.clientMsgID.map { $0.caseInsensitiveCompare(id.uuidString) == .orderedSame }
     }
 
     /// The transcript's copy of a message sent from here (equal once normalized, or one containing the other:

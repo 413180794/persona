@@ -656,6 +656,10 @@ func (n *Node) pushItems(id string, items []proto.Item, span transcript.Span) {
 	if n.peer == nil {
 		return
 	}
+	n.mu.Lock()
+	f := n.files[id]
+	n.mu.Unlock()
+	items = n.echoed(id, f, items)
 	_ = n.peer.Notify("session.items", withSpan(map[string]any{"session_id": id, "items": nonNil(items)}, span, true))
 }
 

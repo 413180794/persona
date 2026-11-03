@@ -319,6 +319,8 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
                                                       // 截断的 text 末尾是一行说明：工具输出是「…（已截断，点开看全文，共 N 字节）」（App 有「看全文」按钮），
                                                       // 其他文字是「…（已截断，共 N 字节）」；旧 App 照样能看懂
  "queued":true,                                       // 仅 user text：工作中输入、被中途吸收的消息
+ "client_msg_id":"…",                                 // 这条来自 App 带这个 client_msg_id 发的消息（文字、图片，或 /compact 变成的 notice），
+                                                      // 由 node 认出，见「待发消息的对应」；旧 hub / node 不带
  "wake":true,                                         // 仅 notice：后台任务完成时 Claude 已空闲，这条通知开启了新的一轮
  "task":{"kind":"shell|monitor|agent|task",              // 仅 notice：后台任务的通知（命令、Monitor 事件 / 结束、子 Agent），text 是一行摘要
          "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description 或命令第一行",
@@ -681,6 +683,29 @@ hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/s
 - Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择），不查草稿：输入框里有字时消息会接在后面。旧 App 只认 `error` 字段，看到的就是拒绝原因。
 - 链路和耗时见 `docs/archive/lanes/session-verify.md`。
 
+### 待发消息的对应
+
+App 发出的消息在对话记录里出现之前显示一个待发气泡。Claude Code、Codex、runtime 给用户那一行的 item id 都是自己的，不是
+`client_msg_id`，以前三端只能按字认（文字被改写、一样的话连发、`/compact` 变成通知时只能靠「送达 60 秒后收起」兜底）。
+现在由 node 认出那一行，给它的每个 item 带上 `client_msg_id`（`server/internal/node/echo.go`），推送（`items` 事件）和分页（`/items`）都带：
+
+- **什么时候记**：`session.send` 带 `client_msg_id`、送到了（或 `delivered: "unknown"`，可能送到了）时，node 记下这次发送：
+  会话、发送前 transcript 的最后一行（打字前先读一遍新行）、文字的开头 200 字（去掉 `<jarvis-context>`、图片说明这些附加的东西）、图片张数、时间。
+  runtime 的会话没有本地 transcript，「最后一行」是 node 正在推送时推到的 seq，没有就只看时间。
+- **怎么认**：按发送的顺序，各自取发送之后、还没被认领的第一行**用户行**里字对得上的：文字少于 12 个字（去掉空白）要完全一样，
+  否则比前 12 个字（页会截长文本，Claude 把图片变成 `[Image #1]`）；只有图片的消息对没有字的那一行；只发了命令（`/model`）的对
+  在终端里补了参数的那条（`/model opus`）；`/compact` 对它变成的「压缩上下文」通知。用户行包括 mid-turn 被吸收的 `queued` 那条，
+  不包括别的会话发来的（`from`）和后台任务通知。时间早于发送 5 秒以上、或晚于发送 2 小时的行不算（Codex 在一轮结束时才写排队的消息）；
+  2 小时没认到就不再找。
+- **一条消息拆成几个 item**：同一行的 item 共用 id 里 `#` 前面那段（Claude 的 uuid、Codex 的 item id），这一行的文字、图片都带上。
+- **没落成用户行**：`/compact` 之外没有对应行的（别的命令、被丢掉的输入）认不到，item 不带字段，App 照旧兜底；两条一样的话、
+  前一条没落成用户行时，后一条那一行会被前一条认走（只是气泡收早了）。
+- **node 重启**：node 把记下的和认到的告诉 hub（事件 `session.echo`），hub 跟这次发送一起存在 `sent_messages.echo`（一天）；
+  node 连上时 hub 先把这台机器一天内的交回去（`session.echoes`），再列会话、恢复推送。所以 node 重启（ssh 的 node 随 hub 重启）后
+  认过的行照样带字段，重启前还没认到的接着认。hub 没有数据库时只在 node 进程的内存里。
+- **App 怎么用**：带 `client_msg_id` 的 item 收起 id 相同的那条待发消息（不管 role、kind），也不会再按字去认另一条；
+  不带的照旧按字认（旧 hub、node 没认出来的）。iOS `PendingMessage.tied`、Android `MessageEcho.tag`、网页 `lib/echo.ts`。
+
 ### 发送文件
 
 App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的助手都有）：选的文件传到**会话所在那台电脑**的临时目录（node 的
@@ -813,7 +838,8 @@ hub → node 请求：
 | `dirs.list` | `{path}` → 同 REST |
 | `sessions.list` | → `{sessions}` |
 | `session.start` | `{cwd, launcher, agent_type?, prompt?, resume_session_id?, workspace_id?, permission_mode?, effort?, tab_name?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`）；Codex 启动器同步、必须带 `prompt`（`node/codex_start.go`） |
-| `session.send` | `{session_id, text, images?}` |
+| `session.send` | `{session_id, text, images?, client_msg_id?}`（`client_msg_id` 见「待发消息的对应」） |
+| `session.echoes` | `{echoes: [{session_id, client_msg_id, text, images, sent_at, after_seq, line?}]}` → `{ok}`：hub 交回这台机器一天内记下的发送（node 每次连上时，在 `sessions.list` 之前）；node 已经知道的跳过。旧 node 回 unknown method，hub 不管 |
 | `session.keys` | `{session_id, keys, text}` |
 | `session.interrupt` | `{session_id}` |
 | `session.screen` | `{session_id, lines, source, format?}` → `{text, status}`（`format: "ansi"` 带颜色） |
@@ -848,7 +874,7 @@ hub → node 事件（按发出顺序处理）：`terminal.input {session_id, te
 node 拆成 `lines` 个一行的事件，落在 `column` / `row` 那一格，没给就落在屏幕正中间，`docs/terminal.md` 第十六节）、`terminal.click {session_id, column, row}`（左键按下 + 松开）、`terminal.keepalive {session_ids}`（每 20 s，接管中的终端；node 75 s 没听到就放手）。
 
 node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`（相隔不到 30 ms 的帧由 node 合成一帧：diff 的字节接起来，整帧丢掉它前面的 diff）、`terminal.end {session_id, error, control?, taken?}`（流停了且起不来：会话不在跑、herdr 一直拒绝；`control` 时是接管结束了：`taken` 被别人抢走，否则租约到期）、
-`session.items {session_id, items, history, from_seq, to_seq}`、`sessions.changed {sessions}`、
+`session.items {session_id, items, history, from_seq, to_seq}`、`session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}`（node 记下一次发送、认到它的那一行时各推一次，hub 存进 `sent_messages.echo`；已认到的不会被晚到的「还在等」盖掉）、`sessions.changed {sessions}`、
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
 `usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，
 连上后第一次 `full: true` 带最近 26 小时全部；`docs/live-activity.md`「用量」）、
@@ -960,7 +986,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | `session.items` | 参数和返回同 hub → node 的 `session.items`（`before_seq` / `turns` / `limit` / `after_seq` / `from_seq` + `through_seq`），图片一律是占位（`lazy`），内容从 `session.image` 取。`fold_work` 由 node 在返回上做（`transcript.FoldWork`），runtime 不管 |
 | `session.image {session_id, item_id}` → `{mime, data}`、`session.item {session_id, item_id}` → `Item` | 图片原始数据、被截断的 item 全文 |
 | `session.watch {session_id, since_seq}` / `session.unwatch` | 开始 / 停止推这个会话的新内容；`since_seq > 0` 时先补发其后的全部。node 记着每个被看着的会话推到了哪，runtime 重连后列出它时按那个 seq 再 watch |
-| `session.send {session_id, text, images, client_msg_id, assistant?, context?, mode?, memory_dir?}` | 发消息（`assistant` 和后面几个只发给声明了 `caps.assistant` 的 runtime 的助手对话：`docs/runtimes.md`「助手」）；`client_msg_id` 交给 runtime 做幂等（node 自己也按它去重 10 分钟）。runtime 回错误 `code: handover`（`data.delivered: "none"`）表示它不接这个会话、已经让能跑它的程序起来（只读磁盘的伴随进程）：node 等另一条连接把这个会话列成非 `offline`，或者每 2 秒问一遍别的 runtime 有没有这个会话（`session.items {limit: 1}`），先到的那个收到这条消息；45 秒内都没有就回 `not_running`，什么都没发 |
+| `session.send {session_id, text, images, client_msg_id, assistant?, context?, mode?, memory_dir?}` | 发消息（`assistant` 和后面几个只发给声明了 `caps.assistant` 的 runtime 的助手对话：`docs/runtimes.md`「助手」）；`client_msg_id` 交给 runtime 做幂等（node 自己也按它去重 10 分钟），node 也按它在 runtime 推来的 item 里认出这条消息（「待发消息的对应」）；runtime 自己知道哪个 item 是这条消息时可以直接在 item 上带 `client_msg_id`，node 原样转发。runtime 回错误 `code: handover`（`data.delivered: "none"`）表示它不接这个会话、已经让能跑它的程序起来（只读磁盘的伴随进程）：node 等另一条连接把这个会话列成非 `offline`，或者每 2 秒问一遍别的 runtime 有没有这个会话（`session.items {limit: 1}`），先到的那个收到这条消息；45 秒内都没有就回 `not_running`，什么都没发 |
 | `session.interrupt {session_id}`、`session.rename {session_id, title}`、`session.close {session_id}` | 各按 `caps` 放行，没有的回错误 `code: unsupported`（文字以 `unsupported` 开头，同宿主缺能力）。只带 `tab_name` 的改名直接成功（这些会话没有标签页） |
 | `session.start {cwd, prompt?, assistant?}` → `{session}` | 选了它的 launcher 时；返回的会话马上进列表。`assistant: true`：助手用它的启动器开新对话（`cwd` 是助手目录，不带 `prompt`，第一条消息随后用 `session.send` 发） |
 

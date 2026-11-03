@@ -39,11 +39,17 @@ export function launchAgent(input: Pick<AgentLaunch, "machineId" | "cwd" | "laun
   return launch.id;
 }
 
+/** The client_msg_id the first message goes with (a retry the hub may have taken gets a new one, StartingAgent). */
+export function launchMessageId(launch: Pick<AgentLaunch, "id" | "messageId">): string {
+  return launch.messageId ?? launch.id;
+}
+
+/** `user` (a user message, or an item the hub tied to a message) is the copy of a started conversation's first message. */
 export function acknowledgeLaunch(mid: string, sid: string, user: Seen) {
   for (const launch of Object.values(getState().launches)) {
     if (launch.phase !== "ready" || launch.machineId !== mid || launch.session?.session_id !== sid || !launch.outgoing) continue;
     // the conversation's first message: nothing older in it can say the same, so no time to compare
-    if (isEcho({ text: parseUserText(launch.outgoing.text).text, images: launch.outgoing.images, at: 0 }, user)) putLaunch({ ...launch, outgoing: undefined });
+    if (isEcho({ id: launchMessageId(launch), text: parseUserText(launch.outgoing.text).text, images: launch.outgoing.images, at: 0 }, user)) putLaunch({ ...launch, outgoing: undefined });
   }
 }
 
@@ -105,7 +111,7 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
     const out = launch.outgoing!;
     if (out.text || out.images.length) {
       update({ phase: "sending" });
-      const payload = { ...out, client_msg_id: launch.messageId ?? launch.id, clear_draft: clearDraft, todo_id: launch.todoId || undefined };
+      const payload = { ...out, client_msg_id: launchMessageId(launch), clear_draft: clearDraft, todo_id: launch.todoId || undefined };
       if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > 32 * 1024 * 1024) throw new Error("附件总大小超过消息上限，请减少图片后重试。");
       await api(`${sessionPath(launch.machineId, launch.session!.session_id)}/messages`, {
         method: "POST", signal: controller.signal, json: payload,
