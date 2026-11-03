@@ -37,4 +37,15 @@ struct ClaudeDirsLogicTests {
         #expect(ClaudeDirsLogic.problem(" ~/.bots/* ", existing: []) == nil)
         #expect(ClaudeDirsLogic.cleaned(" ~/.bots/ ") == "~/.bots")
     }
+
+    /// A load that failed says so, with 重试 under it: a timeout or no network too, which left the section spinning
+    /// for good (#744); a cancelled one (the page went away) says nothing.
+    @Test func loadFailures() {
+        let timeout = URLError(.timedOut), offline = URLError(.notConnectedToInternet), cancelled = CancellationError()
+        #expect(ClaudeDirsLogic.loadFailure(timeout) == "连不上 hub，读不到这台电脑的配置目录")
+        #expect(ClaudeDirsLogic.loadFailure(offline) == "连不上 hub，读不到这台电脑的配置目录")
+        #expect(ClaudeDirsLogic.loadFailure(cancelled) == nil)
+        let other = NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "node 太旧"])
+        #expect(ClaudeDirsLogic.loadFailure(other) == "读不到这台电脑的配置目录：node 太旧")
+    }
 }

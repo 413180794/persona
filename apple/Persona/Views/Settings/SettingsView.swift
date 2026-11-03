@@ -230,6 +230,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
+        else if d.bool(forKey: "openClaudeSettings") { p.append(SettingsPage.claude) } // with its 屏蔽的配置目录
         else if d.bool(forKey: "openConnectorMail") || d.bool(forKey: "addMail") { p.append(SettingsPage.mail) }
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
         else if d.bool(forKey: "openConnectorGitHub") { p.append(SettingsPage.connector("github")) }

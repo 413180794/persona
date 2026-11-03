@@ -56,6 +56,18 @@ nonisolated enum ClaudeDirsLogic {
         if existing.contains(p) { return "已经屏蔽了" }
         return nil
     }
+
+    /// What the section says when the directories could not be loaded, with 重试 under it; nil for a cancelled load
+    /// (the page went away). A timeout or no network is said too: the page has nothing else to show in their place,
+    /// and saying nothing left it spinning for good (#744).
+    static func loadFailure(_ error: Error) -> String? {
+        if error.isCancellation { return nil }
+        if error.isTimeout || error.isOffline { return "连不上 hub，读不到这台电脑的配置目录" }
+        return "读不到这台电脑的配置目录：\(error.localizedDescription)"
+    }
+
+    /// No connection to this machine's hub at all (not paired, or its group gone).
+    static let noHub = "还没连上这台电脑所在的 hub"
 }
 
 /// 设置 › Claude Code › 屏蔽的配置目录 (docs/claude-integration.md「屏蔽配置目录」): the machine's Claude Code config
@@ -69,6 +81,7 @@ struct ClaudeDirsSection: View {
     @State private var error: String?
     @State private var busy: String?
     @State private var input = ""
+    @State private var loading = false
 
     private typealias L = ClaudeDirsLogic
 
@@ -76,6 +89,11 @@ struct ClaudeDirsSection: View {
         Section {
             if let error {
                 Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption)
+                if state == nil {
+                    Button { Task { await load() } } label: { Label("重试", systemImage: Theme.Icon.retry).lineLimit(1) }
+                        .themedButton()
+                        .disabled(loading)
+                }
             }
             if let state {
                 ForEach(state.dirs) { d in
@@ -164,12 +182,17 @@ struct ClaudeDirsSection: View {
     }
 
     private func load() async {
-        guard let api = model.api(ref.group) else { return }
+        guard let api = model.api(ref.group) else {
+            error = L.noHub
+            return
+        }
+        loading = true
+        defer { loading = false }
         do {
             state = try await api.claudeDirs(machine: ref.id)
             error = nil
         } catch {
-            if !error.isCancellation, let shown = error.shown { self.error = "读不到这台电脑的配置目录：\(shown)" }
+            if let message = L.loadFailure(error) { self.error = message }
         }
     }
 
