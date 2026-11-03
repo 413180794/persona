@@ -997,7 +997,7 @@ struct LarkMessageRow: View {
                     } else {
                         content
                     }
-                    LarkTranslationLine(message: m, feedID: feedID)
+                    if m.olk == nil { LarkTranslationLine(message: m, feedID: feedID) }
                     footer
                 }
                 .frame(maxWidth: .infinity, alignment: side.alignment)
@@ -1025,6 +1025,13 @@ struct LarkMessageRow: View {
             Text(m.isMine ? "你撤回了一条消息" : "\(m.senderName) 撤回了一条消息").font(Theme.Font.caption).foregroundStyle(.tertiary).italic()
                 .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                 .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+        } else if let encryption = m.olk {
+            bubble {
+                VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                    if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
+                    LarkEncryptedContent(encryption: encryption)
+                }
+            }
         } else if parts.isEmpty {
             bubble {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
@@ -1093,7 +1100,7 @@ struct LarkMessageRow: View {
             Button { picking = true } label: { Label("表情回复", systemImage: "face.smiling") }
         }
         Button {
-            UIPasteboard.general.string = message.text
+            UIPasteboard.general.string = message.displayText
             Haptics.success()
         } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
         if let id = message.senderID, !id.isEmpty, openProfile != nil {
@@ -1175,7 +1182,7 @@ struct LarkReplyQuote: View {
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
             Capsule().fill(Color.primary.opacity(0.2)).frame(width: Theme.Size.ruleWide)
-            Text(reply.recalled == true ? "\(reply.senderName)：消息已撤回" : "\(reply.senderName)：\(Fmt.plain(reply.text))")
+            Text(reply.recalled == true ? "\(reply.senderName)：消息已撤回" : "\(reply.senderName)：\(Fmt.plain(reply.displayText))")
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)

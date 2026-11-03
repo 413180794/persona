@@ -215,28 +215,77 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	return json.Unmarshal(raw, out)
 }
 
+// OLKPresentation is an authorized read projection, never a stored key or envelope.
+type OLKPresentation struct {
+	Version     int             `json:"version"`
+	State       string          `json:"state"`
+	PublicParts json.RawMessage `json:"publicParts"`
+	BodyParts   json.RawMessage `json:"bodyParts,omitempty"`
+	KeyHandout  bool            `json:"keyHandout,omitempty"`
+}
+
+// Malformed optional presentation fields cannot invalidate the surrounding message page.
+// Absent or unknown versions remain closed and never expose bodyParts.
+func (p *OLKPresentation) UnmarshalJSON(data []byte) error {
+	*p = OLKPresentation{}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil
+	}
+	_ = json.Unmarshal(fields["version"], &p.Version)
+	_ = json.Unmarshal(fields["state"], &p.State)
+	p.PublicParts = fields["publicParts"]
+	p.BodyParts = fields["bodyParts"]
+	_ = json.Unmarshal(fields["keyHandout"], &p.KeyHandout)
+	return nil
+}
+
+func olkParts(raw json.RawMessage) json.RawMessage {
+	var parts []json.RawMessage
+	if json.Unmarshal(raw, &parts) != nil || parts == nil {
+		return json.RawMessage(`[]`)
+	}
+	return rewriteMedia(raw)
+}
+
+func (p *OLKPresentation) normalize() *OLKPresentation {
+	if p == nil {
+		return nil
+	}
+	out := *p
+	out.PublicParts = olkParts(p.PublicParts)
+	if p.Version == 1 && p.State == "decrypted" {
+		out.BodyParts = olkParts(p.BodyParts)
+	} else {
+		out.BodyParts = nil
+		out.KeyHandout = false
+	}
+	return &out
+}
+
 type Message struct {
-	ID               string          `json:"id"`
-	ClientID         string          `json:"client_id,omitempty"`
-	LocalState       string          `json:"local_state,omitempty"`
-	Position         string          `json:"position"`
-	SenderID         string          `json:"sender_id,omitempty"`
-	SenderName       string          `json:"sender_name"`
-	SenderAvatar     string          `json:"sender_avatar,omitempty"`
-	SenderType       string          `json:"sender_type,omitempty"` // user, bot…
-	IsMine           bool            `json:"is_mine"`
-	Type             string          `json:"type"` // TEXT, POST, IMAGE, CARD, SYSTEM, FILE…
-	Text             string          `json:"text"`
-	CreatedAt        time.Time       `json:"created_at"`
-	Recalled         bool            `json:"recalled"`
-	Edited           bool            `json:"edited,omitempty"`
-	ReplyCount       int             `json:"reply_count"`
-	ThreadReplyCount int             `json:"thread_reply_count,omitempty"`
-	BadgeCount       *int            `json:"badge_count,omitempty"` // for read reports
-	AtMe             bool            `json:"at_me,omitempty"`       // mentions me or @all
-	IsRead           bool            `json:"is_read,omitempty"`
-	Parts            json.RawMessage `json:"parts,omitempty"` // lark-connector MessagePart[], media URLs rewritten to the hub
-	ReplyTo          *ReplyTo        `json:"reply_to,omitempty"`
+	OLK              *OLKPresentation `json:"olk,omitempty"`
+	ClientID         string           `json:"client_id,omitempty"`
+	LocalState       string           `json:"local_state,omitempty"`
+	ID               string           `json:"id"`
+	Position         string           `json:"position"`
+	SenderID         string           `json:"sender_id,omitempty"`
+	SenderName       string           `json:"sender_name"`
+	SenderAvatar     string           `json:"sender_avatar,omitempty"`
+	SenderType       string           `json:"sender_type,omitempty"` // user, bot…
+	IsMine           bool             `json:"is_mine"`
+	Type             string           `json:"type"` // TEXT, POST, IMAGE, CARD, SYSTEM, FILE…
+	Text             string           `json:"text"`
+	CreatedAt        time.Time        `json:"created_at"`
+	Recalled         bool             `json:"recalled"`
+	Edited           bool             `json:"edited,omitempty"`
+	ReplyCount       int              `json:"reply_count"`
+	ThreadReplyCount int              `json:"thread_reply_count,omitempty"`
+	BadgeCount       *int             `json:"badge_count,omitempty"` // for read reports
+	AtMe             bool             `json:"at_me,omitempty"`       // mentions me or @all
+	IsRead           bool             `json:"is_read,omitempty"`
+	Parts            json.RawMessage  `json:"parts,omitempty"` // lark-connector MessagePart[], media URLs rewritten to the hub
+	ReplyTo          *ReplyTo         `json:"reply_to,omitempty"`
 	// ThreadID is the thread (topic) the message is in; ThreadKind is "root", "reply" or "" (a plain message).
 	ThreadID   string     `json:"thread_id,omitempty"`
 	ThreadKind string     `json:"thread_kind,omitempty"`
@@ -245,11 +294,12 @@ type Message struct {
 
 // ReplyTo is the message a reply quotes.
 type ReplyTo struct {
-	ID         string          `json:"id"`
-	SenderName string          `json:"sender_name"`
-	Text       string          `json:"text"`
-	Recalled   bool            `json:"recalled,omitempty"`
-	Parts      json.RawMessage `json:"parts,omitempty"`
+	OLK        *OLKPresentation `json:"olk,omitempty"`
+	ID         string           `json:"id"`
+	SenderName string           `json:"sender_name"`
+	Text       string           `json:"text"`
+	Recalled   bool             `json:"recalled,omitempty"`
+	Parts      json.RawMessage  `json:"parts,omitempty"`
 }
 
 // Reaction is one emoji under a message; Key resolves through Emojis.
@@ -261,36 +311,38 @@ type Reaction struct {
 }
 
 type rawMessage struct {
-	ID                string          `json:"id"`
-	ClientID          string          `json:"clientId"`
-	LocalState        string          `json:"localState"`
-	Position          string          `json:"position"`
-	SenderID          string          `json:"senderId"`
-	SenderName        string          `json:"senderName"`
-	SenderAvatarURL   string          `json:"senderAvatarUrl"`
-	SenderType        string          `json:"senderType"`
-	IsMine            bool            `json:"isMine"`
-	MessageTypeName   string          `json:"messageTypeName"`
-	TextPreview       string          `json:"textPreview"`
-	CreatedAt         time.Time       `json:"createdAt"`
-	IsRecalled        bool            `json:"isRecalled"`
-	IsDeleted         bool            `json:"isDeleted"`
-	IsEdited          bool            `json:"isEdited"`
-	ReplyCount        int             `json:"replyCount"`
-	ThreadReplyCount  int             `json:"threadReplyCount"`
-	BadgeCount        *int            `json:"badgeCount"`
-	IsAtMe            bool            `json:"isAtMe"`
-	IsAtAll           bool            `json:"isAtAll"`
-	IsRead            bool            `json:"isRead"`
-	Parts             json.RawMessage `json:"parts"`
-	ThreadID          string          `json:"threadId"`
-	ThreadMessageType string          `json:"threadMessageType"`
+	OLK               *OLKPresentation `json:"olk"`
+	ClientID          string           `json:"clientId"`
+	LocalState        string           `json:"localState"`
+	ID                string           `json:"id"`
+	Position          string           `json:"position"`
+	SenderID          string           `json:"senderId"`
+	SenderName        string           `json:"senderName"`
+	SenderAvatarURL   string           `json:"senderAvatarUrl"`
+	SenderType        string           `json:"senderType"`
+	IsMine            bool             `json:"isMine"`
+	MessageTypeName   string           `json:"messageTypeName"`
+	TextPreview       string           `json:"textPreview"`
+	CreatedAt         time.Time        `json:"createdAt"`
+	IsRecalled        bool             `json:"isRecalled"`
+	IsDeleted         bool             `json:"isDeleted"`
+	IsEdited          bool             `json:"isEdited"`
+	ReplyCount        int              `json:"replyCount"`
+	ThreadReplyCount  int              `json:"threadReplyCount"`
+	BadgeCount        *int             `json:"badgeCount"`
+	IsAtMe            bool             `json:"isAtMe"`
+	IsAtAll           bool             `json:"isAtAll"`
+	IsRead            bool             `json:"isRead"`
+	Parts             json.RawMessage  `json:"parts"`
+	ThreadID          string           `json:"threadId"`
+	ThreadMessageType string           `json:"threadMessageType"`
 	ReplyTo           *struct {
-		ID          string          `json:"id"`
-		SenderName  string          `json:"senderName"`
-		TextPreview string          `json:"textPreview"`
-		IsRecalled  bool            `json:"isRecalled"`
-		Parts       json.RawMessage `json:"parts"`
+		OLK         *OLKPresentation `json:"olk"`
+		ID          string           `json:"id"`
+		SenderName  string           `json:"senderName"`
+		TextPreview string           `json:"textPreview"`
+		IsRecalled  bool             `json:"isRecalled"`
+		Parts       json.RawMessage  `json:"parts"`
 	} `json:"replyTo"`
 	Reactions []struct {
 		Key       string   `json:"key"`
@@ -301,8 +353,7 @@ type rawMessage struct {
 }
 
 func (m rawMessage) normalize() Message {
-	out := Message{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
-		ClientID: m.ClientID, LocalState: m.LocalState,
+	out := Message{OLK: m.OLK.normalize(), ID: m.ID, ClientID: m.ClientID, LocalState: m.LocalState, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
 		SenderAvatar: MediaURL(m.SenderAvatarURL), SenderType: m.SenderType, IsMine: m.IsMine,
 		Type: m.MessageTypeName, Text: m.TextPreview, CreatedAt: m.CreatedAt, Recalled: m.IsRecalled, Edited: m.IsEdited,
 		ReplyCount: m.ReplyCount, ThreadReplyCount: m.ThreadReplyCount, BadgeCount: m.BadgeCount, AtMe: m.IsAtMe || m.IsAtAll,
@@ -311,7 +362,7 @@ func (m rawMessage) normalize() Message {
 		out.ThreadKind = m.ThreadMessageType
 	}
 	if r := m.ReplyTo; r != nil {
-		out.ReplyTo = &ReplyTo{ID: r.ID, SenderName: r.SenderName, Text: r.TextPreview, Recalled: r.IsRecalled, Parts: rewriteMedia(r.Parts)}
+		out.ReplyTo = &ReplyTo{OLK: r.OLK.normalize(), ID: r.ID, SenderName: r.SenderName, Text: r.TextPreview, Recalled: r.IsRecalled, Parts: rewriteMedia(r.Parts)}
 	}
 	for _, r := range m.Reactions {
 		if r.Count > 0 {

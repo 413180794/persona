@@ -247,6 +247,7 @@ extension Theme {
         /// Send someone a message.
         static let message = "bubble.left.fill"
         static let credentials = "key"
+        static let locked = "lock"
         static let memory = "brain"
         /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"

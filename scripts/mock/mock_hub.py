@@ -2393,6 +2393,32 @@ LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {
     {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
 ]}}
 
+# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
+if os.environ.get("MOCK_LARK_OLK"):
+    def _olk(pos, state, body, cover, handout=False):
+        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
+        m["parts"] = [{"kind": "text", "text": m["text"]}]
+        m["olk"] = {"version": 1, "state": state,
+                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
+        if state == "decrypted":
+            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
+        return m
+    LARK_MESSAGES["f2"] = [
+        _olk(200, "decrypted", "", "稍等", True),
+        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
+        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
+        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
+        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
+    ]
+    LARK_MESSAGES["f2"][2]["reply_to"] = {
+        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
+        "olk": LARK_MESSAGES["f2"][1]["olk"],
+    }
+    LARK_MESSAGES["f2"][4]["reply_to"] = {
+        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
+        "olk": LARK_MESSAGES["f2"][3]["olk"],
+    }
+
 # The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
 # one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
 # thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.

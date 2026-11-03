@@ -116,7 +116,7 @@ enum LarkReply {
 
     /// What the quote bar and the sending row show of the message answered: one line of its text.
     static func summary(of m: LarkMessage) -> String {
-        let line = Fmt.plain(m.text).split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        let line = Fmt.plain(m.displayText).split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }.joined(separator: " ")
         if !line.isEmpty { return line }
         switch m.type.uppercased() {
@@ -131,7 +131,7 @@ enum LarkReply {
 
     /// The quote an outgoing reply carries.
     static func quote(_ m: LarkMessage) -> LarkReplyTo {
-        LarkReplyTo(id: m.id, senderName: m.senderName, text: summary(of: m))
+        LarkReplyTo(olk: m.olk, id: m.id, senderName: m.senderName, text: summary(of: m))
     }
 }
 

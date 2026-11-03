@@ -150,7 +150,7 @@ struct LarkReplyBar: View {
             Capsule().fill(LarkColor.blue).frame(width: Theme.Size.ruleWide)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text("回复 \(reply.senderName)").font(Theme.Font.labelMedium).foregroundStyle(LarkColor.blue).lineLimit(1)
-                Text(reply.text).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(reply.displayText).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Button(action: cancel) {

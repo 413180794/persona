@@ -109,6 +109,7 @@ nonisolated struct LarkRichBlock: Hashable, Sendable {
 }
 
 nonisolated struct LarkReplyTo: Codable, Hashable, Sendable {
+    var olk: LarkEncryption? = nil
     var id: String
     var senderName: String
     var text: String
@@ -116,7 +117,7 @@ nonisolated struct LarkReplyTo: Codable, Hashable, Sendable {
     var parts: [LarkPart]?
 
     enum CodingKeys: String, CodingKey {
-        case id, text, recalled, parts
+        case id, text, recalled, parts, olk
         case senderName = "sender_name"
     }
 }
@@ -129,6 +130,7 @@ nonisolated struct LarkReaction: Codable, Hashable, Sendable {
 }
 
 nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
+    var olk: LarkEncryption? = nil
     var id: String
     var position: String
     var senderID: String?
@@ -153,7 +155,7 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var localState: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, position, type, text, recalled, edited, parts, reactions
+        case id, position, type, text, recalled, edited, parts, reactions, olk
         case senderID = "sender_id", senderName = "sender_name", senderAvatar = "sender_avatar", senderType = "sender_type"
         case isMine = "is_mine", createdAt = "created_at", replyCount = "reply_count"
         case threadReplyCount = "thread_reply_count", replyTo = "reply_to"

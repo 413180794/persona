@@ -198,7 +198,7 @@ private struct PersonalAgentRow: View {
             .padding(.leading, session.parentSessionKey == nil ? 0 : Theme.Space.l)
             Spacer(minLength: Theme.Space.s)
             if !session.canSend {
-                Image(systemName: "lock").foregroundStyle(.secondary)
+                Image(systemName: Theme.Icon.locked).foregroundStyle(.secondary)
             }
             if session.unreadCount > 0 {
                 Text("\(session.unreadCount)")
