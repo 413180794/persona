@@ -156,8 +156,8 @@ final class RunningChatTests: XCTestCase {
 
     /// Opening a running work line from its header and folding it again, in a conversation that fits on one screen
     /// folded (a new one, MOCK_ASSISTANT_RUN=alone), as the user did (2026-11-03): folded, the chat went blank and
-    /// stayed so until the app was killed (#686). Opened, the header stays on screen and nothing stays blank (the frame
-    /// right after the tap can still be blank about once in 12 runs: #754).
+    /// stayed so until the app was killed (#686). Opened, the header stays on screen and the chat is never blank, not
+    /// even for the frame right after the tap (#754).
     func testFoldingARunningWorkLineKeepsTheChat() throws {
         guard ProcessInfo.processInfo.environment["JARVIS_RUN_ALONE"] == "1" else {
             throw XCTSkip("needs MOCK_ASSISTANT_RUN=alone (JARVIS_RUN_ALONE=1)")
@@ -176,7 +176,7 @@ final class RunningChatTests: XCTestCase {
         let y0 = work.frame.minY
         work.tap() // open
         if ProcessInfo.processInfo.environment["JARVIS_TRACE"] == "1" { trace(seconds: 4, label: "open") }
-        sample(seconds: 3, label: "opened", settle: 0.3) // the frame right after the tap: #754, down from 4 in 12 to 1
+        sample(seconds: 3, label: "opened")
         XCTAssertTrue(work.exists && work.isHittable, "the header stays on screen when its work line opens")
         if work.exists {
             print(String(format: "TRUTH opened: header moved %.0f pt", work.frame.minY - y0))

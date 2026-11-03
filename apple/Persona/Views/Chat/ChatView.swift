@@ -496,7 +496,10 @@ struct ChatView: View {
         Haptics.tap()
         let wasOpen = run ? isRunOpen(id) : isOpen(id)
         guard run || !wasOpen else { return concealWork(id, fromHeader: fromHeader) }
-        if !run { revealUntil[id] = .now.addingTimeInterval(Self.stepsArrive) }
+        // Its steps reveal themselves (a fade from nothing) as they appear, unless the list is at its newest end: the
+        // steps come in there first and the pin brings the header back a frame later, and for that frame the screen
+        // held nothing but steps still fading in: blank (#754). They show at once instead.
+        if !run { revealUntil[id] = scratch.atNewest ? nil : .now.addingTimeInterval(Self.stepsArrive) }
         changeWork(id, fromHeader: fromHeader, run: run, wasOpen: wasOpen)
     }
 
