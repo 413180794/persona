@@ -65,6 +65,35 @@ git push --tags
 （原因在 App Store Connect 的构建页面里）。**要带上 release.sh 打印的构建号**：刚上传完新构建还查不到，不带构建号时
 「最新的构建」是上一个（早已 VALID），会把 What to Test 写到旧构建上（2026-10-25 踩过）。
 
+## 用 asc 发版
+
+`scripts/release/asc_cli.py` 用你自己的 App Store Connect API key 跑 [App Store Connect CLI](https://github.com/rorkai/App-Store-Connect-CLI)（`asc`），上传、TestFlight、提审、元数据、签名都能做。
+key 和上面的发版脚本是同一份配置，配一次就都能用。脚本 pin 了 asc 的版本和 sha256，第一次运行时下载到 `~/.cache/persona/asc/<版本>/`，校验不过就不装。遥测始终关闭。
+
+1. **配 key**：在 App Store Connect › 用户和访问 › 集成 › App Store Connect API 建一个团队 key（角色 App Manager 就够传构建和提审），下载 `AuthKey_<Key ID>.p8`
+   放到仓库外（如 `~/.appstoreconnect/`，`chmod 600`）。把 Key ID、Issuer ID、文件路径和 App 记录的数字 ID 填进 `~/.config/persona/config.json` 的
+   `app_store.key_id` / `issuer_id` / `key_path` / `app_id`。也可以用环境变量 `ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_PRIVATE_KEY_PATH`（或 `ASC_KEY_PATH`）、`ASC_APP_ID`，环境变量优先。
+   仓库的 `.gitignore` 忽略 `*.p8` 和 `.asc/`。
+2. **检查**：`python3 scripts/release/asc_cli.py check`。只在本机读配置，不发任何请求：列出 asc 的版本和位置、Key ID 的末四位、key 文件和它的权限、App ID，最后一行是 `ok`。
+   缺什么就报出环境变量名和配置项名。要确认 key 在 Apple 那边有效，跑 `python3 scripts/release/asc_cli.py auth status --validate`（会发请求）。
+3. **用**：
+   ```sh
+   UPLOADER=asc ./scripts/release/release.sh                         # 归档、导出、检查 ipa，用 asc 上传到 TestFlight
+   python3 scripts/release/asc_testflight.py wait 45 <构建号>           # 之后照旧：进 Internal 组、写 What to Test、挂外部组
+   python3 scripts/release/asc_cli.py review submit --version <版本> --build-number <构建号> --dry-run   # 提审前先看要做哪几步，不改任何东西
+   python3 scripts/release/asc_cli.py review submit --version <版本> --build-number <构建号> --confirm   # 把已上传的构建挂到 App Store 版本上，提交审核
+   python3 scripts/release/asc_cli.py <任何 asc 命令>                 # 例如 builds list --output table、review status、validate --version <版本>
+   ```
+   `UPLOADER=asc` 走 `NO_UPLOAD=1` 的导出和 ipa 检查（`aps-environment` 是 `production`、entitlements），再用 `asc builds upload` 上传；不设时仍是 `xcodebuild` 导出时直接上传。
+   asc 自己的帮助：`python3 scripts/release/asc_cli.py --help`、`… <命令> --help`（不需要 key）。
+
+**二开**：改 asc 本身就 fork 上游，在 fork 里 `go build -o ~/bin/asc .`（要 `go.mod` 写的 Go 版本），然后 `ASC_BIN=~/bin/asc python3 scripts/release/asc_cli.py …`，key 和遥测的处理不变。
+Persona 自己的发版逻辑（测试组、What to Test、外部测试）继续写在 `asc_testflight.py` 这些脚本里，或者在 `asc_cli.py` 里组合 asc 命令。
+**升级 asc**：改 `asc_cli.py` 的 `VERSION` 和 `SHA256`（取自 release 里的 `asc_<版本>_checksums.txt`），跑 `python3 -B -m unittest discover -s scripts/release -p 'test_asc_cli.py'`。
+
+asc 只用 Persona 配置里的这把 key：`asc_cli.py` 运行时去掉 `ASC_PROFILE`、`ASC_CONFIG_PATH`、`ASC_BYPASS_KEYCHAIN`、`ASC_PRIVATE_KEY`、`ASC_PRIVATE_KEY_B64`，
+`asc auth login` 存进钥匙串的 profile 不会和它混用。App Store 版本（版本号、截图、描述）要先在网页或用 `asc versions`、`asc metadata` 准备好，`review submit` 才能提交。
+
 ## 为什么这样签名
 
 | 环节 | 签名方式 | 描述文件 |

@@ -4,6 +4,7 @@
 #   ./scripts/release/release.sh [build-number]            # archive + check + upload
 #   NO_UPLOAD=1 ./scripts/release/release.sh               # archive + check + export only (build-release/export)
 #   NO_PUBLISH=1 ./scripts/release/release.sh              # TestFlight only, no jarvisd at publish.site_url (publish.sh)
+#   UPLOADER=asc ./scripts/release/release.sh              # export the ipa, check it, upload it with asc (asc_cli.py)
 #
 # The App Store Connect API key, bundle id and team come from the config (docs/config.md). Builds into build-release/
 # so it never touches the simulator build. The export re-signs manually with the "Jarvis App Store" / "Jarvis Watch
@@ -15,6 +16,13 @@ python3 scripts/jarvis_config.py xcconfig
 echo "Building with $(xcodebuild -version | head -1) (config \"xcode\" picks another, docs/config.md)"
 # No private values in what is about to ship from this tree (CLAUDE.md).
 python3 scripts/privacy_check.py
+# Export the ipa and check it like NO_UPLOAD does, then upload it with asc instead of xcodebuild.
+EXPORT_ONLY="${NO_UPLOAD:-}"
+if [ "${UPLOADER:-}" = asc ]; then
+  # Stop on a missing key now, not after a ten-minute archive.
+  [ -n "${NO_UPLOAD:-}" ] || python3 scripts/release/asc_cli.py check >/dev/null
+  EXPORT_ONLY=1
+fi
 OUT=build-release
 BUILD="${1:-$(date +%Y%m%d%H%M)}"
 # Keep every archive where Xcode Organizer looks, so each version's dSYMs stay around for symbolicating crashes.
@@ -53,7 +61,7 @@ fi
 python3 scripts/release/entitlements.py check "$ARCHIVE"
 
 OPTS=$(mktemp -t export).plist
-if [ -n "${NO_UPLOAD:-}" ]; then
+if [ -n "$EXPORT_ONLY" ]; then
   python3 scripts/jarvis_config.py export-options "$OPTS" export
   rm -rf "$OUT/export"
 else
@@ -65,7 +73,7 @@ fi
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OPTS" -exportPath "$OUT/export" "${AUTH[@]}" \
   | grep -E "error:|EXPORT (SUCCEEDED|FAILED)|Upload"
 
-if [ -n "${NO_UPLOAD:-}" ]; then
+if [ -n "$EXPORT_ONLY" ]; then
   # Check the binary that would have been uploaded: re-signed entitlements must carry production push.
   rm -rf "$OUT/ipa"
   unzip -o -q "$OUT/export/Persona.ipa" -d "$OUT/ipa"
@@ -76,6 +84,9 @@ if [ -n "${NO_UPLOAD:-}" ]; then
   fi
   rm -rf "$OUT/ipa"
   python3 scripts/release/entitlements.py check "$OUT/export/Persona.ipa"
+fi
+if [ -z "${NO_UPLOAD:-}" ] && [ "${UPLOADER:-}" = asc ]; then
+  python3 scripts/release/asc_cli.py builds upload --ipa "$OUT/export/Persona.ipa" --build-number "$BUILD" --output table
 fi
 git tag -f "testflight/$BUILD" >/dev/null 2>&1 || true
 if [ -n "${NO_UPLOAD:-}" ]; then
