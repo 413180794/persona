@@ -48,6 +48,7 @@ private struct LarkConversationsPage: View {
                     ForEach(filtered) { conversation in
                         NavigationLink(value: conversation) { row(conversation) }
                             .accessibilityIdentifier("feishu-chat-" + conversation.id)
+                            .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page))
                             .themedRow()
                     }
                     if store.nextCursor != nil, query.isEmpty {
@@ -114,7 +115,7 @@ private struct LarkConversationsPage: View {
 
     private func row(_ conversation: LarkConversation) -> some View {
         HStack(spacing: Theme.Space.m) {
-            LarkAvatarImage(name: conversation.name, url: conversation.avatar, isGroup: conversation.isGroup, size: Theme.Size.avatarL)
+            LarkAvatarImage(name: conversation.name, url: conversation.avatar, isGroup: conversation.isGroup, size: Theme.Size.avatarXL)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.s) {
                     Text(conversation.name).font(Theme.Font.bodyStrong).foregroundStyle(.primary).lineLimit(1)
