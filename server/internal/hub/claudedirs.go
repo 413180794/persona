@@ -163,7 +163,13 @@ type claudeDirsState struct {
 
 func (m *Machine) claudeDirsState(ctx context.Context) claudeDirsState {
 	blocked, home := m.blockedClaudeDirs(ctx), m.nodeHome()
-	st := claudeDirsState{Blocked: blocked, Home: home, Dirs: []proto.ClaudeDir{}}
+	// JSON serializes a nil slice as null; the contract is a JSON array (the web settings page calls .filter on it),
+	// so an empty blocklist must be [] like Dirs below.
+	blockedJSON := blocked
+	if blockedJSON == nil {
+		blockedJSON = []string{}
+	}
+	st := claudeDirsState{Blocked: blockedJSON, Home: home, Dirs: []proto.ClaudeDir{}}
 	var res struct {
 		Dirs []proto.ClaudeDir `json:"dirs"`
 	}

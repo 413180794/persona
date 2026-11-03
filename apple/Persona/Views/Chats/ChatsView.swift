@@ -452,10 +452,12 @@ private struct AgentsList: View {
                                 .listRowInsets(Self.capsuleInsets)
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
+                                .accessibilityIdentifier("agents.interaction")
                         } else {
                             InteractionPreviewCard(interaction: ix, machine: machine(ix.machineRef)?.title,
                                                    agentLabel: session(ix.sessionKey)?.agentLabel ?? "Claude", inCell: true) { openFromList(ix.sessionKey) }
                                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 } // rows of different shapes: one line
+                                .accessibilityIdentifier("agents.interaction")
                         }
                     }
                 } header: {

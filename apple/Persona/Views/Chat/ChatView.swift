@@ -105,6 +105,8 @@ struct ChatView: View {
     /// Safari-style chrome (title row, agent strip, tabs): it follows the finger as the list scrolls and settles
     /// open or folded when the finger lifts. Its own object so the per-frame updates only redraw the header.
     @State private var chrome = ChatChrome()
+    /// The page's height, read by the pending cards only (#926).
+    @State private var footerRoom = FooterRoom()
     @Environment(\.openSpace) private var openSpace
     @State private var link: LinkTarget?
     /// The image viewer, shown by the page rather than the row it was opened from (`viewImages`).
@@ -976,6 +978,12 @@ struct ChatView: View {
             }
             ChatRegion(name: "ChatFooter.body") { footer }
         }
+        // The height the page offers, even when what is in it is taller: the pending cards size themselves by it. A
+        // frame with both bounds takes the offered size whatever the content (not a design value: no token for it).
+        .frame(minHeight: .zero, maxHeight: .infinity)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+            if abs(footerRoom.height - h) >= 1 { footerRoom.height = h }
+        }
         .environment(\.openSubagent, actions.openSubagent)
         .environment(\.openFold, actions.openFold)
         .environment(\.taskIndex, store.tasks)
@@ -1116,29 +1124,28 @@ struct ChatView: View {
         RouteChip(conversation: conversation)
     }
 
+    /// The agent's pending cards, and in DEBUG the sample ones the screenshot switches add (`-showSampleQuestion YES`…).
+    private var pendingCards: [PendingCards.Card] {
+        var cards = model.interactions(for: key).map { PendingCards.Card(interaction: $0, enabled: session?.canApprove == true) }
+        #if DEBUG
+        let samples: [(String, (SessionKey) -> Interaction?)] = [
+            ("showSampleQuestion", Interaction.sampleQuestion), ("showSampleScreen", Interaction.sampleScreen),
+            ("showSamplePermission", Interaction.samplePermission), ("showSampleCodexApproval", Interaction.sampleCodexApproval),
+            ("showSampleCodexQuestion", Interaction.sampleCodexQuestion),
+        ]
+        for (flag, sample) in samples where UserDefaults.standard.bool(forKey: flag) {
+            if let ix = sample(key) { cards.append(PendingCards.Card(interaction: ix, enabled: true)) }
+        }
+        #endif
+        return cards
+    }
+
     private var mainFooter: some View {
             VStack(spacing: Theme.Space.m) {
                 if style == .assistant, viewing == nil { taskFooter }
-                ForEach(model.interactions(for: key)) { ix in
-                    InteractionPanel(interaction: ix).disabled(session?.canApprove != true)
+                if !pendingCards.isEmpty {
+                    PendingCards(cards: pendingCards, room: footerRoom)
                 }
-                #if DEBUG
-                if UserDefaults.standard.bool(forKey: "showSampleQuestion"), let ix = Interaction.sampleQuestion(key) {
-                    InteractionPanel(interaction: ix) // `-showSampleQuestion YES`: the question UI, for screenshots
-                }
-                if UserDefaults.standard.bool(forKey: "showSampleScreen"), let ix = Interaction.sampleScreen(key) {
-                    InteractionPanel(interaction: ix) // `-showSampleScreen YES`: a terminal dialog, for screenshots
-                }
-                if UserDefaults.standard.bool(forKey: "showSamplePermission"), let ix = Interaction.samplePermission(key) {
-                    InteractionPanel(interaction: ix) // `-showSamplePermission YES`: a permission request, for screenshots
-                }
-                if UserDefaults.standard.bool(forKey: "showSampleCodexApproval"), let ix = Interaction.sampleCodexApproval(key) {
-                    InteractionPanel(interaction: ix) // `-showSampleCodexApproval YES`: a Codex approval, for screenshots
-                }
-                if UserDefaults.standard.bool(forKey: "showSampleCodexQuestion"), let ix = Interaction.sampleCodexQuestion(key) {
-                    InteractionPanel(interaction: ix) // `-showSampleCodexQuestion YES`: a Codex question, for screenshots
-                }
-                #endif
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
                 }

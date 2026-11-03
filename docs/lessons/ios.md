@@ -519,3 +519,15 @@ mock 和真 hub 上试了很多种都不出，最后是拿那一轮的真实条�
 alignment: .top)` 也拦不住（外层按内容的高度排）。做法：`GeometryReader` 读出浮层的高度，把整列 `frame(height:)` 钉死、顶部对齐、`clipped()`，
 放不下时只裁对话页的底部。浮层里嵌页面都这样做，别指望对齐参数。
 
+## 对话页的待处理卡片把顶栏顶出屏幕（2026-11-03，#926）
+
+- 现象：同一个 Agent 有三张待处理卡片（BeautifulUI 的卡片是展开的，一张约 320 pt）时，对话页整页约 1300 pt，屏幕 956 pt：
+  对话区被压到 110 pt，顶栏和返回键在 y ≈ -144，点不到。根因是 `mainFooter` 把卡片原样叠在输入框上，没有高度上限。
+- **内容比给的高时，`VStack` 报的是内容的高度**，父视图把它居中，于是上下一起出屏幕（界面树里容器是 `{{0, -157}, {440, 1299}}`）。
+  要按「页面给了多高」排版时，量 `.frame(minHeight: .zero, maxHeight: .infinity)` 之后的尺寸（两头都给了就等于给的高度，不管里面多高；只给 max 还是报内容的高度），别量 `VStack` 自己，不然是循环。
+- 量出来的高度放进一个只有读它的视图才观察的 `@Observable`（`FooterRoom`），别放 `ChatView` 的 `@State`：键盘滑动时每帧都在变。
+- **`containerRelativeFrame` 认最近的滚动视图当容器**：卡片自己用它把表单限在「页面的 55%」，一放进卡片区的 `ScrollView`，
+  容器就成了这个滚动区，每张卡把自己限在滚动区的一半，按钮被裁掉。外面量出原来的容器长度（`Color.clear.containerRelativeFrame(.vertical)` 放在
+  滚动区外的 `background` 里量），用环境值（`cardRoom`）传进去。
+- 卡片自己的 `@State` 存着打了一半的回答：放得下 / 放不下用同一个 `ScrollView`，别分两个分支，不然跨过上限时（新到一张卡）打的字没了。
+- 「放得下时一像素不变」的滚动区：放得下时 `.scrollDisabled`、`.scrollClipDisabled`（不裁卡片的阴影），超出时才加 `contentMargins` 给裁开的边留阴影。改前改后同一个截图测试逐像素比（`PendingCardsTests.testOneCardAsBefore`，只差时钟和计时），测试里查卡片区的元素都在它的框里（裁掉的会露出来）。

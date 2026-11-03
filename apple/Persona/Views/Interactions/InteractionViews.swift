@@ -223,6 +223,9 @@ struct InteractionPanel: View {
     var interaction: Interaction
     @State private var collapsed = false
     @State private var formHeight: CGFloat = 0
+    /// What the page has (PendingCards measures it): the form's cap. Not `containerRelativeFrame`: inside the cards'
+    /// scroll area the container is that area, and every card cut itself off at half of it (#926).
+    @Environment(\.cardRoom) private var room
     /// The plan full screen. Its button sits in this header: floating over the plan it covered the last line.
     @State private var showFullPlan = false
 
@@ -277,7 +280,7 @@ struct InteractionPanel: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 // At most a little over half of what the page has (not the screen: iPhone Duo's displays differ).
-                .containerRelativeFrame(.vertical) { length, _ in min(formHeight == 0 ? length : formHeight, length * 0.55) }
+                .frame(height: room > 0 ? min(formHeight == 0 ? room : formHeight, room * 0.55) : nil)
                 .transition(.opacity)
             }
         }

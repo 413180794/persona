@@ -192,6 +192,21 @@ func TestClaudeDirsOffline(t *testing.T) {
 	}
 }
 
+// An empty blocklist serializes as [] (not null): the web settings page treats blocked as a JSON array and crashes
+// rendering .filter on null (#977).
+func TestClaudeDirsEmptyBlocklistIsArray(t *testing.T) {
+	_, _, m, mux := dirsHub(t)
+	connectDirsNode(t, m)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/machines/m1/claude-dirs", nil))
+	if rec.Code != 200 {
+		t.Fatalf("GET = %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"blocked":[]`) {
+		t.Fatalf("blocklist is not an empty JSON array: %s", rec.Body.String())
+	}
+}
+
 // jarvis_settings blocks a directory only after the phone approves, and removes it the same way.
 func TestSelfSettingsBlocksClaudeDirs(t *testing.T) {
 	h, _, m, _ := dirsHub(t)
