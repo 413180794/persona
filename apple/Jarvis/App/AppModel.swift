@@ -54,7 +54,8 @@ final class AppModel {
                 }
             }
             sessionIndex = index
-            for (key, cell) in sessionCells where !Session.sameApartFromTicks(cell.value, index[key]) { cell.value = index[key] }
+            for (key, cell) in sessionCells where !Session.sameForItsPage(cell.value, index[key]) { cell.value = index[key] }
+            countBadges()
             saveSnapshot()
         }
     }
@@ -65,7 +66,7 @@ final class AppModel {
     /// for each machine's list, 2026-10-31). `allSessions` is still there for views about all of them.
     @ObservationIgnored private var sessionCells: [SessionKey: SessionCell] = [:]
     /// Pending interactions by `uid` (the hub's id, with the group for another group).
-    private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot() } }
+    private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
     var pairingEngineMachine: MachineRef?
     var toast: Toast?
@@ -184,6 +185,7 @@ final class AppModel {
         }
         #endif
         DemoHub.shared.onNotSent = { [weak self] in self?.toast = Toast(DemoText.notSent) }
+        countBadges()
     }
 
     /// Saves the registry, unless it could not be read: writing then would replace the real one (or delete it, empty).
@@ -449,13 +451,18 @@ final class AppModel {
 
     // MARK: Derived
 
-    /// One session, for views about it: its `rev` and `updatedAt` may be older than the list's (`SessionCell`).
+    /// One session, for views about it: its `rev`, `updatedAt` and last line may be older than the list's
+    /// (`SessionCell`). An action that sends what the session is now reads `latest(_:)`.
     func session(_ key: SessionKey) -> Session? {
         if let cell = sessionCells[key] { return cell.value }
         let cell = SessionCell(sessionIndex[key])
         sessionCells[key] = cell
         return cell.value
     }
+
+    /// One session as the hub last sent it, all of it, without watching it: for an action when it is tapped (交给
+    /// Jarvis sends its last line), not for a view.
+    func latest(_ key: SessionKey) -> Session? { sessionIndex[key] }
 
     /// A session this app just started, until the hub's next list for its machine (which replaces it) has it: its
     /// chat opened with no title (「对话 · 对话」) and no machine until then.
@@ -1455,9 +1462,7 @@ final class AppModel {
     }
 
     /// Agents (not the assistant) waiting on the user, not muted: the Agents tab's badge, the shell's Agents.
-    var agentsWaiting: Int {
-        pendingInteractions.filter { session($0.sessionKey)?.assistant != true && !isMuted($0.sessionKey) }.count
-    }
+    var agentsWaiting: Int { badges.agents }
 
     /// 设置 › 外观 › 旧布局 (2026-11-01, docs/ios.md「新外壳」): on, the iPhone keeps the four tabs exactly as before;
     /// off (the default), it is the ChatGPT-style shell (助手 | Agents, the drawer, 设置 as a sheet). Kept for a few days
@@ -1559,6 +1564,37 @@ final class AppModel {
         applyPersonaPalette()
     }
 
+    // MARK: Badges
+
+    /// The tab badges' numbers, counted here when what they count changes and published only when a number does
+    /// (docs/ios-state.md「第 3 步」): the tabs read two numbers, not every pending question and its session.
+    private(set) var badges = TabBadges()
+    @ObservationIgnored private var watchingMutes = false
+
+    private func countBadges() {
+        var b = TabBadges()
+        for ix in interactions.values {
+            let s = sessionIndex[ix.sessionKey]
+            if s?.assistant == true {
+                b.assistant += 1
+            } else if pinsStore(ix.sessionKey.group)?.isMuted(session: Self.pinKey(session: ix.sessionKey),
+                                                              space: s?.spaceName.map { "\(ix.sessionKey.machineID)/\($0)" }) != true {
+                b.agents += 1
+            }
+        }
+        if b != badges { badges = b }
+        if !watchingMutes { watchingMutes = true; watchMutes() }
+    }
+
+    /// Muting an agent or a space takes its questions off the Agents badge (each group's hub keeps its own mutes).
+    private func watchMutes() {
+        withObservationTracking { for l in links { _ = l.pins.mutes } } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.countBadges()
+                self?.watchMutes()
+            }
+        }
+    }
 
     // MARK: Pins and mutes
 
@@ -1774,10 +1810,18 @@ enum Haptics {
     static func attention() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
 }
 
-/// One session's latest state, observed on its own (`AppModel.session(_:)`). Its `rev` and `updatedAt` are as of its
-/// last other change: a push of only those (most of a working agent's) draws nothing that reads the cell
-/// (`Session.sameApartFromTicks`); what shows the time reads the lists (`allSessions`, `AgentsFeed.Row.time`).
+/// One session's latest state, observed on its own (`AppModel.session(_:)`). Its `rev`, `updatedAt` and last line are
+/// as of its last other change: a push of only those (most of a working agent's) draws nothing that reads the cell
+/// (`Session.sameForItsPage`); what shows them reads the lists (`allSessions`, `AgentsFeed.Row`), what sends them
+/// `AppModel.latest(_:)`.
 @Observable final class SessionCell {
     var value: Session?
     init(_ value: Session?) { self.value = value }
+}
+
+/// Questions and approvals waiting, as the tab bar counts them: the Jarvis tab's (its conversations') and the Agents
+/// tab's (the agents', muted ones left out).
+nonisolated struct TabBadges: Equatable, Sendable {
+    var assistant = 0
+    var agents = 0
 }

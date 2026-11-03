@@ -257,4 +257,35 @@ final class LiveUpdateTests: XCTestCase {
         churn()
         XCTAssertTrue(close.exists, "the swipe actions are still open")
     }
+
+    // The Agents badge (the switch's in the shell, the tab's in the old layout) is the hub's: a question coming adds
+    // one within 2 s, its answer takes it off again (docs/ios-state.md「第 3 步」: counted in the model, published
+    // when the number changes).
+    @MainActor func testTheAgentsBadgeIsTheHubs() {
+        launch()
+        let hubAsks = { (self.mock("truth")["asks"] as? [Any])?.count ?? -1 }
+        eventually("the badge shows the hub's questions", within: 5) { self.badgeDiffers(hubAsks()) }
+        let before = agentsBadge()
+        mock("bump?what=ask")
+        if let took = eventually("a question adds one", within: 2, { self.badgeDiffers(before + 1) }) {
+            print(String(format: "TRUTH badge: a question counted %.2f s after the push", took))
+        }
+        mock("bump?what=resolve")
+        if let took = eventually("its answer takes it off", within: 2, { self.badgeDiffers(before) }) {
+            print(String(format: "TRUTH badge: an answer counted %.2f s after the push", took))
+        }
+    }
+
+    /// The Agents badge's number: the shell's (「N 个在等你」) or the Agents tab's value; 0 when there is none.
+    private func agentsBadge() -> Int {
+        let shell = app.descendants(matching: .any).matching(NSPredicate(format: "label ENDSWITH %@", "个在等你")).firstMatch
+        let text = shell.exists ? shell.label : (app.tabBars.buttons["Agents"].firstMatch.value as? String ?? "")
+        return Int(text.prefix(while: \.isNumber)) ?? 0
+    }
+
+    private func badgeDiffers(_ want: Int) -> [String] {
+        let got = agentsBadge()
+        return got == want ? [] : ["badge \(got), hub \(want)"]
+    }
+
 }

@@ -83,8 +83,8 @@ import Testing
         // While searching the last lines are what it filters by.
         #expect(AgentsFeed.shape([a], searching: true) != AgentsFeed.shape([b], searching: true))
         var c = a
-        c.updatedAt = Date(timeIntervalSince1970: 700) // the next minute: a header's「n 分钟前」
-        #expect(AgentsFeed.shape([a], searching: false) != AgentsFeed.shape([c], searching: false))
+        c.updatedAt = Date(timeIntervalSince1970: 700) // the next minute: only time passed (step 3)
+        #expect(AgentsFeed.shape([a], searching: false) == AgentsFeed.shape([c], searching: false))
         var d = a
         d.state = .needsYou
         #expect(AgentsFeed.shape([a], searching: false) != AgentsFeed.shape([d], searching: false))
@@ -106,5 +106,40 @@ import Testing
         #expect(!Session.sameApartFromTicks(a, d))
         #expect(Session.sameApartFromTicks(nil, nil))
         #expect(!Session.sameApartFromTicks(a, nil))
+    }
+
+    /// Views about one session (its chat, its top bar) show neither the ticks nor its last line: a new last line is
+    /// no change for them; what they show is (docs/ios-state.md「第 3 步」).
+    @Test func aNewLastLineIsNoChangeForItsPage() {
+        let a = session("a", state: "working", updated: 600)
+        var b = a
+        b.rev = 7
+        b.updatedAt = Date(timeIntervalSince1970: 900)
+        b.lastText = "a new line"
+        #expect(Session.sameForItsPage(a, b))
+        var c = b
+        c.permissionMode = "plan"
+        #expect(!Session.sameForItsPage(a, c))
+        var d = a
+        d.state = .needsYou
+        #expect(!Session.sameForItsPage(a, d))
+        #expect(!Session.sameForItsPage(a, nil))
+    }
+
+    /// Time changes the list only through the order it puts agents in (rows, and spaces by their agents): a minute
+    /// passing is no change, an agent moving ahead of another is (docs/ios-state.md「第 3 步」).
+    @Test func timeIsStructureOnlyThroughTheOrder() {
+        let a = session("a", state: "unread", updated: 600), b = session("b", state: "unread", updated: 500)
+        var a2 = a
+        a2.updatedAt = Date(timeIntervalSince1970: 660) // later, still ahead of b
+        #expect(AgentsFeed.shape([a, b], searching: false) == AgentsFeed.shape([a2, b], searching: false))
+        var b2 = b
+        b2.updatedAt = Date(timeIntervalSince1970: 700) // b moves ahead of a
+        #expect(AgentsFeed.shape([a, b], searching: false) != AgentsFeed.shape([a, b2], searching: false))
+        // A working agent sorts by when it started working: its steps never reorder.
+        let w = session("w", state: "working", updated: 800, since: 100)
+        var w2 = w
+        w2.updatedAt = Date(timeIntervalSince1970: 400)
+        #expect(AgentsFeed.shape([w, a], searching: false) == AgentsFeed.shape([w2, a], searching: false))
     }
 }

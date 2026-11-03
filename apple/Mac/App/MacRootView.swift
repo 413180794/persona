@@ -232,8 +232,8 @@ private struct MacShell: View {
         let n: Int
         switch section {
         case .knowledge, .machines: return nil
-        case .assistant: n = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count
-        case .agents: n = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey) }.count
+        case .assistant: n = model.badges.assistant
+        case .agents: n = model.badges.agents
         case .inbox: n = InboxStore.shared.actionCount
         case .settings: return model.isDemo ? .word("体验") : nil
         }

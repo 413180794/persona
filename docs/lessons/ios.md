@@ -385,3 +385,9 @@
 - 钥匙串读失败不等于没有：`SecItemCopyMatching` 在开机后第一次解锁前返回 `errSecInteractionNotAllowed`（后台推送唤醒、通知扩展都可能遇到），
   以前 `Keychain.load` 把它和 `errSecItemNotFound` 一样当 nil。存配对这类丢了就要重新扫码的东西，要分开「没有」和「读不出」，读不出时别写回、
   更别因为「空」去删；迁移旧项先写新的、读回确认再删旧的（`HubStore`，`HubStoreTests` 用假钥匙串测写失败和读出错）。
+
+## 会话格子显示用，发送别用（2026-11-03，#624）
+
+`model.session(key)`（会话格子）为了少重画，故意不跟 `rev`、`updated_at`、最后一句（`docs/ios-state.md`「第 3 步」）：
+拿它显示没问题（读它的页面本来就不显示这几样），拿它**发出去**就会发旧的。点下去要把会话现在的样子发出去（交给 Jarvis 带最后一句、按 `rev` 拉 transcript）
+一律读 `model.latest(key)` 或整份列表（`allSessions`），别读格子。

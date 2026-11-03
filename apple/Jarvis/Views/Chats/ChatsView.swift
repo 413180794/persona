@@ -15,6 +15,11 @@ struct SpaceGroup: Identifiable {
 
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
+    /// The same from the rows' times while the Agents list follows them (`AgentsFeed.time`): the list's structure
+    /// does not change for time passing, so its agents' `updatedAt` may be older (docs/ios-state.md「第 3 步」).
+    @MainActor func updatedAt(_ feed: AgentsFeed?) -> Date {
+        sessions.compactMap { feed?.time($0.id) ?? $0.updatedAt }.max() ?? .distantPast
+    }
     /// Where it sorts among spaces in the same state: its agents' `sortDate`, so a working agent's every line does not
     /// move the space (a busy hub pushes every two seconds: the spaces changed places under the finger, 2026-11-01).
     var sortDate: Date { sessions.map(\.sortDate).max() ?? .distantPast }
@@ -628,6 +633,7 @@ private struct AgentsList: View {
         ScrollViewReader { proxy in
             list.onAppear { feed.reader.reveal = { id, at in proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: at)) } }
         }
+        .environment(feed) // a quiet space's line reads its agents' times from the rows (`SpaceGroup.updatedAt(_:)`)
     }
 
     /// The quick filter bar. Equal while the counts are: the bar is not drawn again for pushes that change none of
@@ -1163,7 +1169,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     @ObservationIgnored private var watching = false
     /// What the rows show: the latest that landed (`sessions` may be older in what only rows show).
     @ObservationIgnored private var shown: [Session] = []
-    @ObservationIgnored private var shaped: [Session] = []
+    @ObservationIgnored private var shaped = Shape()
     @ObservationIgnored private var rows: [String: Row] = [:]
     /// The list filters by the agents' last lines while it is searched: they are structure then.
     @ObservationIgnored var searching = false {
@@ -1250,12 +1256,25 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         if shown != sessions { reader.willChange(); sessions = shown }
     }
 
+    /// What the list's structure reads of the agents: the agents with what only rows show taken out, and the order
+    /// their times put them in.
+    struct Shape: Equatable {
+        var sessions: [Session] = []
+        /// The agents' ids, latest first by `sortDate`: what the time decides in the list (the order of rows and of
+        /// spaces), without the time itself, which moves on every step of a working agent and which only rows (and a
+        /// quiet space's line, from the rows') show.
+        var byTime: [String] = []
+    }
+
     /// What the list's structure reads of the agents (the groups, the order, the folds, the counts, the headers; the
-    /// last lines while searching), with what only rows show taken out.
-    /// - The time: a working agent's moves on every step; headers show it in minutes (「4 分钟前」), so the minute.
+    /// last lines while searching), with what only rows show taken out (docs/ios-state.md「第 3 步」).
+    /// - The time: only the order it puts agents in (`Shape.byTime`); a minute passing changes nothing else.
     /// - Subagents and background work: only whether any runs (a row with one stays out of the idle fold).
-    nonisolated static func shape(_ list: [Session], searching: Bool) -> [Session] {
-        list.map { s in
+    nonisolated static func shape(_ list: [Session], searching: Bool) -> Shape {
+        let byTime = list.map { (id: $0.id, at: $0.sortDate) }
+            .sorted { $0.at != $1.at ? $0.at > $1.at : $0.id < $1.id }
+            .map(\.id)
+        return Shape(sessions: list.map { s in
             var x = s
             x.rev = nil
             x.suggestion = nil
@@ -1266,12 +1285,16 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
             x.model = nil
             x.seenAt = nil
             if !searching { x.lastText = nil }
-            x.updatedAt = s.updatedAt.map { Date(timeIntervalSince1970: ($0.timeIntervalSince1970 / 60).rounded(.down) * 60) }
+            x.updatedAt = nil
             x.subagents = (s.subagents ?? []).contains(where: \.running) ? [] : nil
             x.background = (s.background ?? []).isEmpty ? nil : []
             return x
-        }
+        }, byTime: byTime)
     }
+
+    /// When an agent last moved, as its row shows it (nil before the list has seen it): a quiet space's line reads
+    /// its agents' times from here, not from the list's structure.
+    func time(_ id: String) -> Date? { rows[id]?.time.updatedAt }
 
     /// The model's now, watching it for the next change if nothing is watching yet (`withObservationTracking` tells
     /// once; watched again at every change, held or not, never twice at a time).
@@ -1807,6 +1830,7 @@ struct QuietSpaceRow: View {
     var group: SpaceGroup
     var machine: Machine?
     var showMachine: Bool
+    @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
     var body: some View {
         HStack(spacing: Theme.Space.m) {
@@ -1819,7 +1843,7 @@ struct QuietSpaceRow: View {
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Text(Fmt.relative(group.updatedAt)).font(Theme.Font.label).foregroundStyle(.secondary)
+            Text(Fmt.relative(group.updatedAt(feed))).font(Theme.Font.label).foregroundStyle(.secondary)
         }
     }
 }
@@ -1850,6 +1874,7 @@ struct QuietSpaceCardHead: View {
     var machine: Machine?
     var showMachine: Bool
     var open: Bool
+    @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
     var body: some View {
         TaskRow(TaskItem(id: group.id, title: group.name,
@@ -1862,7 +1887,7 @@ struct QuietSpaceCardHead: View {
                 .scaledFrame(width: Theme.Size.icon)
         } trailing: {
             HStack(spacing: Theme.Space.s) {
-                Text(Fmt.relative(group.updatedAt)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Text(Fmt.relative(group.updatedAt(feed))).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
                     .rotationEffect(.degrees(open ? 90 : 0))
             }

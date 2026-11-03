@@ -174,8 +174,8 @@ struct AgentRowMenu: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("RowMenu.content")
         #endif
-        // The session as it is when an item is tapped.
-        let now = { model.session(key) }
+        // The session as it is when an item is tapped (all of it: 交给 Jarvis sends its last line).
+        let now = { model.latest(key) }
         #if os(macOS)
         MacOpenInWindowButton(key: key)
         Divider()

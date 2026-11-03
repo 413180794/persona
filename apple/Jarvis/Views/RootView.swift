@@ -108,7 +108,7 @@ private struct TabPage<Page: View>: View, Equatable {
             }
             .equatable()
         }
-        .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count)
+        .badge(model.badges.assistant)
     }
 }
 
@@ -129,9 +129,7 @@ private struct TabPage<Page: View>: View, Equatable {
             }
             .equatable()
         }
-        .badge(model.pendingInteractions.filter {
-            model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey)
-        }.count)
+        .badge(model.badges.agents)
     }
 }
 

@@ -77,8 +77,10 @@ struct CompactQuietSpaceRow: View {
     var machine: Machine?
     var showMachine: Bool
     var expanded: Bool
+    @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
     var body: some View {
+        let at = Fmt.relative(group.updatedAt(feed))
         HStack(spacing: CompactList.gap) {
             Image(systemName: Theme.Icon.space)
                 .font(CompactList.meta)
@@ -90,14 +92,14 @@ struct CompactQuietSpaceRow: View {
                     .font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: Theme.Space.xs)
-            Text(Fmt.relative(group.updatedAt)).font(CompactList.meta.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+            Text(at).font(CompactList.meta.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
                 .fixedSize()
             FoldChevron(folded: !expanded)
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([group.name, expanded ? "已展开" : "已折叠", showMachine ? machine?.name ?? "" : "",
-                             "\(group.sessions.count) 个标签", Fmt.relative(group.updatedAt)].filter { !$0.isEmpty }.joined(separator: "，"))
+                             "\(group.sessions.count) 个标签", at].filter { !$0.isEmpty }.joined(separator: "，"))
         .accessibilityAddTraits(.isButton)
     }
 }

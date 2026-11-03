@@ -107,7 +107,7 @@ struct MacAgentMenu: Commands {
             }
             // The row menu's 交给 Jarvis: the Agent's state and last answer go to the main conversation (AgentHandoff).
             Button("交给 Jarvis") {
-                if let key, let s = model.session(key) {
+                if let key, let s = model.latest(key) { // its last line as it is now
                     MacShellState.shared.willOpen() // 知识库 / 机器 make way for the Jarvis page
                     Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
                 }

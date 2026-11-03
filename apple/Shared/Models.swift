@@ -575,6 +575,12 @@ nonisolated extension Session {
         b.updatedAt = nil
         return a == b
     }
+
+    /// The same as far as views about this one session show it (`AppModel.session(_:)`: its chat, its top bar, its
+    /// menus): apart from the ticks and the last line, which only the lists show (docs/ios-state.md「第 3 步」).
+    static func sameForItsPage(_ a: Session?, _ b: Session?) -> Bool {
+        sameApartFromTicks(a.map { var x = $0; x.lastText = nil; return x }, b.map { var x = $0; x.lastText = nil; return x })
+    }
 }
 
 extension Session {
