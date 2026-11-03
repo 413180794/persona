@@ -53,7 +53,7 @@ final class PortForwarder {
         if base.hasSuffix("/") { base.removeLast() }
         comps.percentEncodedPath = base + "/api/v1/machines/\(key.machine)/ports/\(key.port)/connect"
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
-        var req = URLRequest(url: comps.url!, timeoutInterval: 15)
+        var req = URLRequest(url: HubTransport.resolve(comps.url!, hub: config.url), timeoutInterval: 15)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         return req
     }

@@ -1,7 +1,8 @@
-import { api, enc } from "./api";
+import { api, ApiError, enc } from "./api";
 import { stateOf } from "./format";
 import { splitAgentSessions, type AgentGroup, type AgentMutes } from "./agent-groups";
 import type { AgentState, Machine, Session } from "./types";
+import type { Route } from "./router";
 
 export type TodoAgentSource = "manual" | "space" | "spawned";
 
@@ -357,22 +358,67 @@ export function findTodoForSpace(todos: Todo[], machineId: string, spaceName: st
 }
 
 /**
- * 判断当前 todos 数据是否支持 spaces 字段（兼容旧 hub）
+ * Navigate to a todo detail view and trigger drawer close callback if provided.
+ */
+export function openTodoFromTag(
+  todoId: string,
+  nav: (to: Route) => void,
+  onNavigate?: () => void,
+) {
+  nav({ name: "todos", id: todoId });
+  onNavigate?.();
+}
+
+/**
+ * Check if an error from the spaces endpoints is a legacy hub 404 (route does not exist).
+ * In Persona hub, jsonRouteErrors produces code === "not_found" and error === "Not Found"
+ * for unregistered routes. Handlers themselves return specific messages like "todo not found"
+ * or "待办不存在". Only a route-level 404 (code === "not_found" and error === "Not Found", or non-JSON 404)
+ * marks the hub as legacy; other 404s are ordinary business failures (#881 review).
+ */
+export function isLegacySpacesRouteError(e: unknown): boolean {
+  if (!(e instanceof ApiError) || e.status !== 404) return false;
+  if (!e.isJson) return true;
+  return e.body?.code === "not_found" && e.body?.error === "Not Found";
+}
+
+/**
+ * Check whether todos data supports the spaces field (legacy hub compatibility).
+ * An empty list is treated as unknown/unsupported (returns false).
+ * Only returns true if at least one todo explicitly contains a spaces array.
  */
 export function isSpacesSupported(todos: Todo[]): boolean {
-  if (todos.length === 0) return true;
+  if (todos.length === 0) return false;
   return todos.some((t) => "spaces" in t && Array.isArray(t.spaces));
 }
 
 /**
- * 生成来源文案：
- * - 随项目挂上的标「随项目 <工作区名>」；
- * - 派生的标「由 <父 Agent 标题> 派出」；父 Agent 不在会话列表里时只写「派生」；
- * - 手动挂的不标（返回 undefined）。
+ * Resolve the current todo ID for LinkTodoDialog target.
+ * For a space, looks up from the todos list.
+ * For a session, uses session.todo?.id directly so the unlink control
+ * does not disappear if /todos hasn't loaded or failed (#874 item 4).
+ */
+export function resolveLinkCurrentTodoId(
+  space?: { machineId: string; space: string },
+  session?: Session,
+  todos: Todo[] = [],
+): string | undefined {
+  if (space) {
+    return findTodoForSpace(todos, space.machineId, space.space)?.id;
+  }
+  return session?.todo?.id;
+}
+
+/**
+ * Format agent source label:
+ * - Spawned from project: "随项目 <space>" (resolved from via, or agent's own session lookup as fallback);
+ *   "随项目" if neither is available;
+ * - Spawned from parent agent: "由 <parent title> 派出"; "派生" if parent is not in session list;
+ * - Manual: undefined (not labeled).
  */
 export function formatAgentSource(
   agent: TodoAgent,
-  spaces?: TodoSpace[],
+  _spaces?: TodoSpace[],
   lookup?: SessionLookup,
 ): string | undefined {
   if (!agent.source || agent.source === "manual") return undefined;
@@ -386,10 +432,6 @@ export function formatAgentSource(
       } else {
         spaceName = agent.via;
       }
-    }
-    if (!spaceName && spaces) {
-      const sp = spaces.find((s) => s.machine_id === agent.machine_id);
-      if (sp?.space) spaceName = sp.space;
     }
     if (!spaceName && lookup) {
       const s = lookup(agent.machine_id, agent.session_id);

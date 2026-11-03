@@ -11,7 +11,7 @@ import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { reset, refresh, refreshTodos, useStore } from "../lib/store";
-import { buildTodoAgentGroups, findTodoForSpace, isSpacesSupported, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
+import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
 import type { Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, toast, useMenu, type MenuItem } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
@@ -248,7 +248,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
 
         {grouping === "space" ? <>
         {active.map((sp) => (
-          <SpaceSection key={sp.key} sp={sp} machineName={machines.length > 1 ? machineWithHub(sp.machineId, machines) : undefined} reg={reg} hover={setHovered} activeKey={activeKey} go={go} pinned={isSpacePinned(sp.machineId, sp.name, pins)} muted={isSpaceMuted(sp, mutes)} onMenu={onSpaceMenu} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
+          <SpaceSection key={sp.key} sp={sp} machineName={machines.length > 1 ? machineWithHub(sp.machineId, machines) : undefined} reg={reg} hover={setHovered} activeKey={activeKey} go={go} pinned={isSpacePinned(sp.machineId, sp.name, pins)} muted={isSpaceMuted(sp, mutes)} onMenu={onSpaceMenu} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
         ))}
 
         {idle.length > 0 && (
@@ -270,7 +270,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         )}
 
         </> : groups.map((group) => (
-          <AgentSection key={group.key} group={group} machines={machines} byMachine={grouping === "machine"} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
+          <AgentSection key={group.key} group={group} machines={machines} byMachine={grouping === "machine"} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
         ))}
 
         {recent.length > 0 && (
@@ -459,7 +459,7 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
   );
 }
 
-function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { group: AgentGroup; machines: Machine[]; byMachine: boolean; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void }) {
+function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKey, go, onRowMenu, onSessionMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byMachine: boolean; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void; onNavigate?: () => void }) {
   const [folded, toggle] = useFolded(group.key, group.folded);
   const [showIdle, setShowIdle] = useState(false);
   const idle = byMachine ? group.sessions.filter((s) => isQuiet(s) && activeKey !== `s:${s.machine_id}/${s.session_id}`) : [];
@@ -480,7 +480,7 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
       <span
         onClick={(e) => {
           e.stopPropagation();
-          go({ name: "todos", id: group.todoId })(e);
+          openTodoFromTag(group.todoId!, navigate, onNavigate);
         }}
         className="truncate normal-case tracking-normal hover:underline hover:text-ink cursor-pointer"
       >
@@ -517,7 +517,7 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
   );
 }
 
-function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onSessionMenu }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void }) {
+function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onSessionMenu, onNavigate }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void; onNavigate?: () => void }) {
   const allIdle = sp.sessions.every(isQuiet);
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3);
   const states = sp.sessions.map(stateOf);
@@ -525,7 +525,9 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
 
   const todos = useStore((st) => st.todos);
   const todosSupported = useStore((st) => st.todosSupported);
-  const supportSpaces = todosSupported !== false && isSpacesSupported(todos);
+  const todosLoaded = useStore((st) => st.todosLoaded);
+  const spacesSupported = useStore((st) => st.spacesSupported);
+  const supportSpaces = todosLoaded && todosSupported !== false && spacesSupported !== false;
   const linkedTodo = supportSpaces ? findTodoForSpace(todos, sp.machineId, sp.name) : undefined;
 
   return (
@@ -537,12 +539,17 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
           <span className="truncate normal-case tracking-normal text-[11.5px] text-ink-2">{sp.name}</span>
           {pinned && <span title="已置顶" className="shrink-0 text-accent"><Icon name="pin" size={10} stroke={2.2} /><span className="sr-only">已置顶</span></span>}
           {muted && <span title="已屏蔽通知" className="shrink-0"><Icon name="bellOff" size={10} stroke={2.2} /><span className="sr-only">已屏蔽通知</span></span>}
+          {machineName && <span className="truncate normal-case tracking-normal text-[11px] font-normal text-ink-3">{machineName}</span>}
+        </span>
+      }
+      right={
+        <span className="flex items-center gap-1">
           {linkedTodo && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                go({ name: "todos", id: linkedTodo.id })(e);
+                openTodoFromTag(linkedTodo.id, navigate, onNavigate);
               }}
               className="relative z-10 flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3 hover:bg-hover-2 hover:text-ink transition-colors cursor-pointer"
               title={`待办：${linkedTodo.title}`}
@@ -551,11 +558,6 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
               <Icon name="todo" size={10} stroke={2} />
             </button>
           )}
-          {machineName && <span className="truncate normal-case tracking-normal text-[11px] font-normal text-ink-3">{machineName}</span>}
-        </span>
-      }
-      right={
-        <span className="flex items-center gap-1">
           {folded && dots.length ? (
             <span className="flex items-center gap-1">
               {dots.map((d) => (

@@ -995,7 +995,10 @@ def format_todo(t):
     past = [a for a in agents if a.get("released_at")]
     past.sort(key=lambda a: a.get("released_at") or "", reverse=True)
     t_copy["agents"] = curr + past
-    t_copy.setdefault("spaces", [])
+    if os.environ.get("MOCK_LEGACY_HUB") or os.environ.get("MOCK_NO_SPACES"):
+        t_copy.pop("spaces", None)
+    else:
+        t_copy.setdefault("spaces", [])
     return t_copy
 
 
@@ -5541,6 +5544,8 @@ class H(BaseHTTPRequestHandler):
             push_todos()
             return self.send_json({"todo": new_todo})
         if p.startswith("/api/v1/todos/") and "/spaces/" in p:
+            if os.environ.get("MOCK_LEGACY_HUB") or os.environ.get("MOCK_NO_SPACES"):
+                return self.send_json({"error": "Not Found", "code": "not_found", "retryable": False}, 404)
             if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
             prefix = "/api/v1/todos/"
             rest = p[len(prefix):]

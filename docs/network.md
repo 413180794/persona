@@ -2,7 +2,7 @@
 
 手机经公网直连 hub，优先使用 IPv6；VPN 由用户自行配置。hub 提供独立的 TLS 监听，保留 HTTP 给内网和旧客户端。**公网只放行 TLS 端口**，客户端在发送 token 前必须确认使用 HTTPS / WSS。
 
-本文以 `server/internal/hub/` 和 `server/internal/netaddr/` 的现有实现为准。现有 iOS / Watch 尚不能据此获得自签证书钉扎能力，仍使用原内网 / VPN 地址。DDNS 和 doctor 的独立实现见下文说明。
+本文以 `server/internal/hub/` 和 `server/internal/netaddr/` 的现有实现为准。现有 iOS / Watch 尚不能据此获得自签证书钉扎能力，仍使用原内网 / VPN 地址。DDNS 和 doctor 的独立实现见下文说明。直连都不通时，iOS / macOS App 还可以[经 SSH 隧道连 hub](#经-ssh-隧道连-hub直连不通时的后备)。
 
 ## hub.json 网络配置
 
@@ -124,6 +124,69 @@ hub 只信任连接的来源地址和本地接收地址，**不读取 `X-Forward
 本地反向代理终止 TLS 后再连 hub，会让来源变成回环；远端代理也会让来源变成代理地址。这会影响公网明文限制、主 token 限制、health 裁剪和限流。增加转发头不能恢复这些检查。若使用反向代理，需要由代理承担公网 TLS、访问控制和限流，并阻止公网借代理访问仅限本机的配对码接口；优先直接使用 hub 自带 TLS 监听。
 
 公网明文 API 默认返回 `403 tls_required`，仅 `GET /api/v1/health` 放行。这个拒绝发生在请求到达之后，不能撤回已经明文发出的 token；客户端必须在发出请求前选对协议。
+
+## 经 SSH 隧道连 hub（直连不通时的后备）
+
+iOS 和 macOS App 可以经一台 SSH 服务器连 hub（#891）：设备上没有能到达 hub 的 VPN、hub 也没有公网入口，但手里有一个能从外面登录的 SSH 入口（跳板机、Warpgate 这类堡垒机、自己的服务器）时用。hub 不用改。它是 [#868](https://github.com/nwverse/persona/issues/868) 的直连 / 内嵌 Tailscale / 内嵌 tailcat 之外的另一种连法。
+
+```text
+App ──HTTP / WebSocket──▶ 127.0.0.1:<随机端口>（App 进程里）
+     ══SSH（direct-tcpip，一个连接一个通道）══▶ SSH 服务器 ──TCP──▶ hub（隧道目标，默认 127.0.0.1:18660）
+```
+
+- **进程内实现**（`apple/Packages/PersonaSSH`，swift-nio-ssh + Network.framework）：不调系统 ssh。TestFlight 的 Mac App 在沙盒里，调不了 `/usr/bin/ssh`，也读不到 `~/.ssh`。App 在本机回环的一个端口上监听（下次优先用同一个端口），每个连进来的连接开一个 `direct-tcpip` 通道，HTTP 和 WebSocket 都走它；一台 hub 一条 SSH 连接。
+- **App 里不改地址**：配对、候选、比较用的仍是 hub 自己的地址；只有发出去的请求（`APIClient`、WebSocket、端口转发）在 `HubTransport` 里换成隧道的回环地址。
+- **密钥**：App 自己生成 Ed25519 密钥，一台设备一把，私钥只存这台设备的钥匙串（`ThisDeviceOnly`：不同步、不随备份恢复到别的设备、不进日志）。
+- **选路**：每次（重新）连接先按原来的方式直连（配对地址和组里的候选，`GET /api/v1/health`，3 秒）；都不应答才走 SSH 隧道。走隧道期间每 2 分钟再问一次直连，通了就换回来、关掉隧道。打开「总是走 SSH」则先走隧道，隧道起不来再试直连。
+- **断线**：SSH 连接断了，下一个请求重新拨号；拨号失败按 1、2、4…最多 30 秒退避，退避期间的请求立刻失败（socket 自己也有退避）。TCP keepalive（20 秒空闲后每 5 秒探一次，3 次）发现无声断开的连接，网络说连接不可用时立刻关掉重拨；一个通道 10 秒打不开就当这条 SSH 连接已经死了。
+- **iOS 进后台**：隧道和 socket 一起关；回到前台重新选路、重建（模拟器实测约 1 秒）。静默推送唤醒时也会按需建隧道。
+- **手表**不支持：手表自己直连 hub，跑不了隧道；hub 只能经 SSH 到达时，手表上直接拉数据的功能不可用，推送不受影响（推送不经过这条连接）。网页版、Android 暂不支持。
+
+### 设置
+
+App 里：设置 › hub › SSH 隧道（每台配对的 hub 各一份）；还没配对时在配对页点「经 SSH 隧道连接」。
+
+| 项 | 说明 |
+| --- | --- |
+| 主机、端口 | SSH 服务器，端口默认 22 |
+| 用户名 | 原样发给服务器；Warpgate 的目标登录写成 `user:target` |
+| 隧道目标 | 从 SSH 服务器上看 hub 的地址，默认 `127.0.0.1:18660`（hub 就在这台服务器上） |
+| 总是走 SSH | 关：直连不通才走；开：每次都走 |
+
+「复制 authorized_keys 行」拷出的是带限制的一行，贴到服务器上该用户的 `~/.ssh/authorized_keys`：
+
+```text
+restrict,port-forwarding,permitopen="127.0.0.1:18660" ssh-ed25519 AAAA… persona-<设备名>
+```
+
+`restrict` 关掉 shell、pty、agent / X11 转发和 `~/.ssh/rc`，`port-forwarding` 只把端口转发加回来，`permitopen` 只许转发到隧道目标。服务器的 `sshd_config` 里 `AllowTcpForwarding` 不能是 `no`，也不能设 `DisableForwarding yes`（它们优先于 authorized_keys 的选项）。专门开一个受限用户更好：`Match User <用户>` 里再加 `PermitOpen 127.0.0.1:18660`、`X11Forwarding no`、`PermitTTY no`、`ForceCommand /usr/bin/false`（不影响 `-N` 式的转发）。
+
+「测试连接并保存」会登录一次并打开一次到隧道目标的转发，成功才保存。
+
+### 主机密钥
+
+第一次连接时 App 把服务器的指纹（`ED25519 SHA256:…`，与 `ssh-keygen -lf <主机公钥>` 打印的一致）弹给用户确认，确认后钉住。之后指纹变了一律拒绝连接，设置页和连接详情写「SSH 服务器的指纹变了，已拒绝连接」；用户在「测试连接并保存」弹出的新旧指纹对比里点「信任新指纹」才会接受，不会静默换掉。换了 SSH 服务器（主机或端口）要重新确认。
+
+支持的算法（swift-nio-ssh）：密钥交换 `curve25519-sha256`、`ecdh-sha2-nistp256/384/521`；主机密钥 Ed25519、ECDSA（**不支持 RSA 主机密钥**）；加密 AES-128-GCM、AES-256-GCM（OpenSSH 的 aes128-gcm、aes256-gcm）。现在的 OpenSSH 默认都有。
+
+### 安全说明
+
+- **隧道终点在 SSH 服务器上**：hub 看到的来源是 SSH 服务器（hub 就在这台服务器上时是回环，否则是它的内网地址），**按内网处理**：可以用主 token、走明文 HTTP、拿到 health 的完整字段（[来源判断](#来源判断与反向代理)）。
+- 这在 SSH 已经鉴权的前提下可以接受：能到达 hub 的只有持有这台设备私钥、并被服务器放行的人，SSH 段全程加密，App 还钉住了服务器的主机密钥。但前提是**服务器上那把 key 必须用 `permitopen` 限制成只能转发到 hub 的端口**：不加限制的 key 能把这台服务器当跳板打开内网里的任何地址、开 shell。App 给的 authorized_keys 行已经带好了，不要只贴「复制公钥」那一行。
+- 隧道段是明文 HTTP 的只有两处：设备自己的回环（只在 App 进程和本机之间），以及 SSH 服务器到 hub 这一跳（隧道目标是回环时不出这台机器；是内网地址时走内网，和内网直连一样）。
+- 丢了设备：在服务器的 authorized_keys 里删掉 `persona-<设备名>` 那一行，并在 设置 › 设备 撤销它的 hub 凭据。
+
+### 排查
+
+| 现象（设置页 / 连接详情） | 检查方向 |
+| --- | --- |
+| 连不上 SSH 服务器 | 主机、端口；这台设备能不能访问它（换网络试） |
+| 第一次连这台 SSH 服务器，需要先确认它的指纹 | 去 设置 › hub › SSH 隧道点「测试连接并保存」确认 |
+| SSH 服务器的指纹变了，已拒绝连接 | 在服务器上核对 `ssh-keygen -lf`；确认是服务器换了密钥再信任，否则不要连 |
+| SSH 服务器没有接受这台设备的公钥 | authorized_keys 那一行加到了对的用户下；文件权限（`StrictModes`）；Warpgate 里把公钥加给这个用户 |
+| SSH 服务器打不开到 hub 的转发（administratively prohibited） | `permitopen` 的地址和隧道目标不一致，或服务器禁止了 TCP 转发 |
+| SSH 服务器打不开到 hub 的转发（connect failed） | 从 SSH 服务器上看隧道目标不对，或 hub 没在那个端口上监听 |
+| SSH 握手失败（没有双方都支持的算法） | 服务器只有 RSA 主机密钥或只开了 chacha20：加一把 Ed25519 主机密钥、放开 AES-GCM |
 
 ## 网络排查
 

@@ -296,6 +296,10 @@ final class AppModel {
             }
         }
         r.groupNames = registry.groupNames
+        // `-seedSSHTunnel <base64 of the SSHRoute JSON>`: the first hub's SSH tunnel (end-to-end runs, screenshots;
+        // docs/network.md). Base64: a launch argument that looks like a dictionary is read as a property list.
+        if let s = UserDefaults.standard.string(forKey: "seedSSHTunnel"), !r.hubs.isEmpty, let json = Data(base64Encoded: s),
+           let route = try? JSONDecoder().decode(SSHRoute.self, from: json) { r.hubs[0].ssh = route }
         registry = HubGrouping.regroup(r)
         saveRegistry(registry)
         buildLinks()
@@ -320,12 +324,27 @@ final class AppModel {
     /// Adds a hub (scanned / pasted pairing link). Another group's hub, or a hub already paired again, joins what is
     /// there; any other hub starts a group of its own beside the others (docs/multi-hub.md「添加 hub」). The other
     /// groups keep everything.
-    func pair(_ new: ServerConfig) async throws {
+    /// `ssh`: the SSH tunnel set up on the pairing page (docs/network.md「经 SSH 隧道连 hub」): pairing goes through it
+    /// when the address does not answer (or always, with 总是走 SSH), and the hub keeps it.
+    func pair(_ new: ServerConfig, ssh: SSHRoute? = nil) async throws {
         retryRegistry()
         // Unknown pairings would be written over (the keychain is not readable before the first unlock).
         guard !registryUnreadable else { throw APIError(status: 0, message: "现在读不到已保存的配对，解锁手机后再试") }
+        let tunnels = SSHTunnels.shared
+        // Paired again: the tunnel it has, unless the pairing page set one.
+        let ssh = ssh ?? registry.hubs.first { $0.config.url == new.url }?.ssh
+        if let ssh, ssh.isUsable {
+            let direct = ssh.always ? false : await HubRoute.healthProbe(new)
+            if !direct { try await tunnels.open(SSHTunnels.pairingID, route: ssh, hub: new.url) }
+        }
         let client = APIClient(config: new)
-        let pairedMachines = try await client.machines()
+        let pairedMachines: [Machine]
+        do {
+            pairedMachines = try await client.machines()
+        } catch {
+            tunnels.close(SSHTunnels.pairingID)
+            throw error
+        }
         let identity = try? await client.identity()
         if isDemo { leaveDemo() } // a real hub ends 体验模式
         var r = registry
@@ -339,9 +358,13 @@ final class AppModel {
             r.hubs[i].config = new
             r.hubs[i].deviceID = nil
             r.hubs[i].watch = nil
+            if let ssh { r.hubs[i].ssh = ssh }
             group = r.hubs[i].group
+            tunnels.adopt(SSHTunnels.pairingID, as: r.hubs[i].id)
         } else {
             var hub = PairedHub(config: new, hubID: identity?.hubID, hubName: identity?.hubName)
+            hub.ssh = ssh
+            tunnels.adopt(SSHTunnels.pairingID, as: hub.id)
             // Listed in a group's mesh already: it joins that group (shown once, not as a group of its own).
             hub.group = identity?.hubID.flatMap { r.group(hubID: $0) } ?? r.newGroupID()
             r.hubs.append(hub)

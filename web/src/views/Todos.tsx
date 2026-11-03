@@ -11,7 +11,6 @@ import {
   deleteTodo,
   formatAgentSource,
   formatTodoContext,
-  isSpacesSupported,
   makeSessionLookup,
   mostUrgentAgent,
   sortTodos,
@@ -425,7 +424,7 @@ function TodoDetail({
   const [savingNotes, setSavingNotes] = useState(false);
   const menu = useMenu();
   const allSessions = useAgentSessions();
-  const todos = useStore((s) => s.todos);
+  const spacesSupported = useStore((s) => s.spacesSupported);
 
   const hasLiveAgent = (mid: string, spaceName: string) => {
     return allSessions.some(
@@ -579,7 +578,7 @@ function TodoDetail({
       </div>
 
       {/* Spaces Section */}
-      {isSpacesSupported(todos) && todo.spaces && todo.spaces.length > 0 && (
+      {spacesSupported !== false && todo.spaces && todo.spaces.length > 0 && (
         <div className="mt-6">
           <div className="mb-2 text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">
             项目 · {todo.spaces.length}

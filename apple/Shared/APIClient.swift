@@ -104,14 +104,16 @@ nonisolated struct APIClient: Sendable {
         return URLSession(configuration: c)
     }()
 
-    func url(_ path: String, query: [String: String] = [:]) -> URL {
+    /// Where a request goes: under the hub's address, through its SSH tunnel when the app routes it there
+    /// (HubTransport). `direct`: the hub's own address all the same (the probe that asks whether it answers there).
+    func url(_ path: String, query: [String: String] = [:], direct: Bool = false) -> URL {
         var comps = URLComponents(url: config.url, resolvingAgainstBaseURL: false)!
         var base = comps.percentEncodedPath
         if base.hasSuffix("/") { base.removeLast() }
         comps.percentEncodedPath = base + Self.encodedPath(path)
         let items = query.filter { !$0.value.isEmpty }.map { URLQueryItem(name: $0.key, value: $0.value) }
         if !items.isEmpty { comps.queryItems = items.sorted { $0.name < $1.name } }
-        return comps.url!
+        return direct ? comps.url! : HubTransport.resolve(comps.url!, hub: config.url)
     }
 
     /// A path for the request line. Callers escape ids themselves (`kbDetail`: a slug with Chinese in it, an id with
@@ -408,7 +410,7 @@ nonisolated struct APIClient: Sendable {
         var base = comps.percentEncodedPath
         if base.hasSuffix("/") { base.removeLast() }
         comps.percentEncodedPath = base + "/api/v1/sessions/\(machine)/\(session)/items/\(id)/\(what)"
-        return comps.url!
+        return HubTransport.resolve(comps.url!, hub: config.url)
     }
 
     struct NewerResponse: Decodable, Sendable {

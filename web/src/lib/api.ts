@@ -14,10 +14,12 @@ export function setToken(token: string) {
 export class ApiError extends Error {
   status: number;
   body: Record<string, unknown>;
-  constructor(status: number, message: string, body: Record<string, unknown>) {
+  isJson: boolean;
+  constructor(status: number, message: string, body: Record<string, unknown>, isJson = true) {
     super(message);
     this.status = status;
     this.body = body;
+    this.isJson = isJson;
   }
   get code(): string | undefined {
     return typeof this.body.code === "string" ? this.body.code : undefined;
@@ -40,15 +42,18 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown;
   const res = await fetch(`/api/v1${path}`, { ...init, headers, body });
   const text = await res.text();
   let data: Record<string, unknown> = {};
+  let isJson = false;
   try {
     data = text ? JSON.parse(text) : {};
+    isJson = typeof data === "object" && data !== null && !Array.isArray(data);
   } catch {
     data = { error: text };
+    isJson = false;
   }
   if (!res.ok) {
     if (res.status === 401 && init.token === undefined) onUnauthorized();
     const msg = typeof data.error === "string" && data.error ? data.error : `HTTP ${res.status}`;
-    throw new ApiError(res.status, msg, data);
+    throw new ApiError(res.status, msg, data, isJson);
   }
   return data as T;
 }

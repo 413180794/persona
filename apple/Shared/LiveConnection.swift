@@ -345,7 +345,7 @@ final class LiveConnection {
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
         // A hub that has it sends session lists as deltas (an older one ignores the question and sends whole lists).
         comps.queryItems = [URLQueryItem(name: "features", value: "sessions_delta")]
-        var req = URLRequest(url: comps.url!)
+        var req = URLRequest(url: HubTransport.resolve(comps.url!, hub: config.url))
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         req.timeoutInterval = 15
         let t = session.webSocketTask(with: req)

@@ -196,6 +196,13 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；代码行只有整行选择；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
   字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体（`UIFontMetrics` 按 iOS 的 body 表换算）。
 
+## SSH 隧道（Mac）
+
+和 iOS 同一套（`apple/Packages/PersonaSSH`，见 [network.md「经 SSH 隧道连 hub」](network.md#经-ssh-隧道连-hub直连不通时的后备)、[ios.md「SSH 隧道」](ios.md#ssh-隧道直连不通时的后备891)）：设置 › hub › SSH 隧道，配对页的「经 SSH 隧道连接」。
+沙盒里的 App 调不了 `/usr/bin/ssh`、读不到 `~/.ssh`，所以隧道在进程里实现、密钥由 App 自己生成；本机回环上的监听用已有的 `com.apple.security.network.server`
+权限（端口转发也用它）。Mac 不进后台，隧道一直开着，直连通了会在 2 分钟内换回直连。
+截图：`mac_shot.sh` 的 `-macSnapshot` 不读钥匙串，用 `-seedSSHKey` 给定测试密钥（`docs/testing.md`「SSH 隧道」）。
+
 ## 菜单栏、Dock 角标、通知（Mac）
 
 Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要你」「做完了」两组（和菜单栏列表同一个排序，各最多 8 个，点一下打开对话），再是「新建 Agent 对话…」。

@@ -6,14 +6,16 @@ nonisolated enum Keychain {
     private static let service = (Bundle.main.bundleIdentifier ?? "jarvis").replacingOccurrences(of: ".watchkitapp", with: "")
 
     /// Whether it was written (callers that must not lose what they replace read it back: HubStore).
+    /// `thisDeviceOnly`: never leaves this device (not restored onto another one from a backup, not synced): the SSH
+    /// tunnel's private key (docs/network.md「经 SSH 隧道连 hub」).
     @discardableResult
-    static func save(_ data: Data, account: String) -> Bool {
+    static func save(_ data: Data, account: String, thisDeviceOnly: Bool = false) -> Bool {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                     kSecAttrAccount as String: account]
         SecItemDelete(query as CFDictionary)
         var add = query
         add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        add[kSecAttrAccessible as String] = thisDeviceOnly ? kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly : kSecAttrAccessibleAfterFirstUnlock
         return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
     }
 

@@ -45,7 +45,7 @@ struct SettingsView: View {
                                 }
                                 HStack(spacing: Theme.Space.sm) {
                                     Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
-                                    Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(Theme.Font.label).foregroundStyle(.secondary)
+                                    Text(linkState).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                                 }
                             }
                         }
@@ -198,6 +198,13 @@ struct SettingsView: View {
         Task { storage = await Task.detached(priority: .utility) { StorageUsage.scan().values.reduce(0, +) }.value }
     }
 
+    /// The header's line about the link: connected (and how, when it goes through the hub's SSH tunnel), or why not.
+    private var linkState: String {
+        guard model.live.state == .connected else { return model.connection.phase == .online ? "未连接" : model.connection.phase.title }
+        let tunneled = model.hub.flatMap { model.tunnel($0.group) }?.routed == true
+        return tunneled ? "已连接 hub · 经 SSH 隧道" : "已连接 hub"
+    }
+
     #if DEBUG
     /// Once per launch: a new look rebuilds the tree (and this view's state), and the route would undo a page opened since.
     @MainActor private static var debugOpened = false
@@ -215,7 +222,11 @@ struct SettingsView: View {
         else if d.bool(forKey: "openNotificationSettings") { p.append(SettingsPage.notifications) }
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
-        else if d.bool(forKey: "openHubs") { p.append(SettingsPage.hubs) }
+        else if d.bool(forKey: "openHubs") || d.bool(forKey: "openSSHTunnel") {
+            p.append(SettingsPage.hubs)
+            // `-openSSHTunnel YES`: the first hub's 设置 › hub › SSH 隧道 (screenshots).
+            if d.bool(forKey: "openSSHTunnel"), let first = model.registry.hubs.first { p.append(SettingsPage.sshTunnel(first.id)) }
+        }
         else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
@@ -285,6 +296,8 @@ enum SettingsPage: Hashable {
     case hub, skills
     /// A connector of the hub's by its id (GET /api/v1/connectors): GitHub…
     case connector(String)
+    /// 设置 › hub › SSH 隧道 of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
+    case sshTunnel(String)
 
 }
 
@@ -335,6 +348,7 @@ private struct SettingsDestinations: ViewModifier {
         case .translation: TranslationSettingsView()
         case .modelConfiguration: ModelConfigurationView()
         case .hubs: HubsView()
+        case .sshTunnel(let id): HubSSHTunnelPage(hubID: id)
         case .hub: HubSettingsPage()
         case .skills: SkillsPage()
         }
@@ -596,6 +610,8 @@ struct PairView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var url = ""
     @State private var token = ""
+    /// The SSH tunnel set up here, for a hub this device cannot reach directly (docs/network.md「经 SSH 隧道连 hub」).
+    @State private var ssh: SSHRoute?
     @State private var connecting = false
     @State private var error: String?
     @State private var scanning = DataScannerViewController.isSupported && DataScannerViewController.isAvailable
@@ -634,8 +650,22 @@ struct PairView: View {
                     SecureField("Token", text: $token, prompt: Text("配对链接里的 token"))
                     #else
                     TextField("服务器地址", text: $url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField("Token", text: $token)
+                    // A one-time credential, not a password: iOS would otherwise offer to save it as one ("Save
+                    // Password?") the moment the page moves on, e.g. to 经 SSH 隧道连接.
+                    SecureField("Token", text: $token).textContentType(.oneTimeCode)
                     #endif
+                }
+                Section {
+                    NavigationLink {
+                        SSHTunnelForm(saved: ssh, dismissOnSave: true) { ssh = $0 }.navigationTitle("SSH 隧道")
+                    } label: {
+                        SettingsRow(title: "经 SSH 隧道连接", symbol: Theme.Icon.sshTunnel, tint: Theme.Hue.green,
+                                    value: ssh.map { $0.label } ?? "", look: .oneLine)
+                    }
+                    .accessibilityIdentifier("pair.ssh")
+                } footer: {
+                    Text(ssh == nil ? "这台设备访问不到 hub 的地址时（不在同一个网络、没开 VPN），可以经一台能访问 hub 的 SSH 服务器转过去。"
+                                    : ssh!.always ? "总是经 SSH 隧道连接这台 hub。" : "先直连这个地址，连不上再经 SSH 隧道。")
                 }
                 if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
             }
@@ -670,15 +700,19 @@ struct PairView: View {
         connecting = true
         defer { connecting = false }
         do {
-            try await model.pair(ServerConfig(url: u, token: token.trimmingCharacters(in: .whitespaces)))
+            try await model.pair(ServerConfig(url: u, token: token.trimmingCharacters(in: .whitespaces)), ssh: ssh)
             Haptics.success()
             dismiss()
         } catch {
+            if ssh != nil {
+                if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)" }
+            } else {
             #if os(macOS)
-            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认这台 Mac 能访问这个地址（比如在同一个网络或 VPN 上）。" }
+            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认这台 Mac 能访问这个地址（比如在同一个网络或 VPN 上），或者经 SSH 隧道连接。" }
             #else
-            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认手机能访问这个地址（比如在同一个网络或 VPN 上）。" }
+            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认手机能访问这个地址（比如在同一个网络或 VPN 上），或者经 SSH 隧道连接。" }
             #endif
+            }
             Haptics.error()
         }
     }

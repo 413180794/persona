@@ -17,6 +17,9 @@ packages:
     from: 2.4.1
   BeautifulUI:
     path: Packages/BeautifulUI
+  # The SSH tunnel to the hub (docs/network.md「经 SSH 隧道连 hub」): the iOS and Mac apps only, not the watch.
+  PersonaSSH:
+    path: Packages/PersonaSSH
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -54,6 +57,7 @@ targets:
       - target: PersonaNotify
       - package: MarkdownUI
       - package: BeautifulUI
+      - package: PersonaSSH
     entitlements:
       path: Persona/Resources/Persona.entitlements
       properties:
@@ -165,6 +169,7 @@ targets:
       - target: PersonaMacNotify
       - package: MarkdownUI
       - package: BeautifulUI
+      - package: PersonaSSH
     entitlements:
       path: Mac/Resources/PersonaMac.entitlements
       properties:

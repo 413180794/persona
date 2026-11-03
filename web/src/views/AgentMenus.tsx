@@ -7,8 +7,8 @@ import { resumeCommand, sessionCan, sessionDeletable, sessionMenuActions } from 
 import { machineWithHub } from "../lib/mesh";
 import { isPinned, isSpacePinned } from "../lib/pins";
 import { isMuted } from "../lib/session-actions";
-import { getState, markSeen, refresh, refreshTodos, useStore } from "../lib/store";
-import { findTodoForSpace, isSpacesSupported, unlinkSpaceFromTodo } from "../lib/todos";
+import { getState, markSeen, refresh, refreshTodos, setSpacesSupported, useStore } from "../lib/store";
+import { findTodoForSpace, isLegacySpacesRouteError, unlinkSpaceFromTodo } from "../lib/todos";
 import type { Session } from "../lib/types";
 import { Button, copyText, Dialog, Menu, toast, type MenuItem } from "../ui/atoms";
 
@@ -48,12 +48,14 @@ export function SpaceMenu({
   const mutes = useStore((st) => st.mutes);
   const todos = useStore((st) => st.todos);
   const todosSupported = useStore((st) => st.todosSupported);
+  const todosLoaded = useStore((st) => st.todosLoaded);
+  const spacesSupported = useStore((st) => st.spacesSupported);
   const pinned = isSpacePinned(sp.machineId, sp.name, pins);
   const muted = isSpaceMuted(sp, mutes);
   const unread = unreadOf(sp.sessions);
   const first = sp.sessions[0];
 
-  const supportSpaces = todosSupported !== false && isSpacesSupported(todos);
+  const supportSpaces = todosLoaded && todosSupported !== false && spacesSupported !== false;
   const linkedTodo = supportSpaces ? findTodoForSpace(todos, sp.machineId, sp.name) : undefined;
 
   const items: MenuItem[] = [
@@ -79,7 +81,11 @@ export function SpaceMenu({
                   await refresh();
                   toast("已移出待办", "ok");
                 } catch (e) {
+                  if (isLegacySpacesRouteError(e)) {
+                    setSpacesSupported(false);
+                  }
                   toast(`移出失败：${errorText(e)}`, "error");
+                  void refreshTodos();
                 }
               },
             },

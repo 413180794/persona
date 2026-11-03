@@ -202,6 +202,12 @@ extension Theme {
         /// A group of hubs that know each other (设置 › hub, the group filter and labels of the merged lists;
         /// docs/multi-hub.md).
         static let hubGroup = "network"
+        /// A hub reached through an SSH tunnel (设置 › hub › SSH 隧道, docs/network.md「经 SSH 隧道连 hub」).
+        static let sshTunnel = "network.badge.shield.half.filled"
+        /// This device's own SSH key (its public half, to copy onto the server).
+        static let sshKey = "key.horizontal"
+        /// The SSH server's key fingerprint, confirmed and pinned.
+        static let hostKeyTrusted = "touchid"
         /// The hub has a newer version, or is updating itself (docs/hub-update.md).
         static let hubUpdate = "arrow.down.to.line.circle"
         /// The assistant's skills (~/.jarvis/skills).

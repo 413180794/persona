@@ -9,7 +9,7 @@ import { stateOf } from "./format";
 import { NO_PINS, pinsOf, type AgentPins } from "./pins";
 import type { AssistantInfo, Interaction, Item, Machine, MeshHub, Session } from "./types";
 import type { AgentLaunch } from "./new-agent";
-import type { Todo } from "./todos";
+import { isSpacesSupported, type Todo } from "./todos";
 import { releaseAttachments } from "./attachments";
 import type { OutboxEntry } from "./outbox";
 
@@ -37,6 +37,7 @@ export interface State {
   todos: Todo[];
   todosSupported: boolean;
   todosLoaded: boolean;
+  spacesSupported: boolean;
 }
 
 let state: State = {
@@ -57,6 +58,7 @@ let state: State = {
   todos: [],
   todosSupported: true,
   todosLoaded: false,
+  spacesSupported: true,
 };
 
 const listeners = new Set<() => void>();
@@ -371,26 +373,38 @@ export async function refresh() {
   if (mutes.status === "fulfilled") patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
   if (pins.status === "fulfilled") patch.pins = pinsOf(pins.value);
   if (todos.status === "fulfilled") {
-    patch.todos = todos.value.todos ?? [];
+    const list = todos.value.todos ?? [];
+    patch.todos = list;
     patch.todosSupported = true;
     patch.todosLoaded = true;
+    patch.spacesSupported = computeSpacesSupported(list);
   } else {
     const reason = todos.reason;
     if (reason instanceof ApiError && reason.status === 404) {
       patch.todosSupported = false;
+      patch.spacesSupported = false;
     }
     patch.todosLoaded = true;
   }
   set(patch);
 }
 
+export function computeSpacesSupported(todos: Todo[]): boolean {
+  return todos.length > 0 ? isSpacesSupported(todos) : true;
+}
+
+export function setSpacesSupported(supported: boolean) {
+  set({ spacesSupported: supported });
+}
+
 export async function refreshTodos() {
   try {
     const res = await api<{ todos: Todo[] }>("/todos");
-    set({ todos: res.todos ?? [], todosSupported: true, todosLoaded: true });
+    const todos = res.todos ?? [];
+    set({ todos, todosSupported: true, todosLoaded: true, spacesSupported: computeSpacesSupported(todos) });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
-      set({ todosSupported: false, todosLoaded: true });
+      set({ todosSupported: false, todosLoaded: true, spacesSupported: false });
     }
   }
 }
@@ -420,6 +434,7 @@ export function reset() {
     todos: [],
     todosSupported: true,
     todosLoaded: false,
+    spacesSupported: true,
     loaded: false,
     conn: "connecting",
   });

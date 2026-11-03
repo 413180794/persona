@@ -330,6 +330,42 @@ TEST_RUNNER_JARVIS_HUB_A=http://127.0.0.1:18760 TEST_RUNNER_JARVIS_HUB_B=http://
   改动后再拍一遍逐像素比；同一个包连拍几次得到噪声（系统菊花、液态玻璃的边缘高光每次启动都不一样），比较时排除噪声，剩下的差异要逐张看。
   设置首页「服务器」一节多出的「hub」一行是唯一允许的变化。
 
+## SSH 隧道（`apple/Packages/PersonaSSH`，[network.md](network.md#经-ssh-隧道连-hub直连不通时的后备)）
+
+**package 测试**（真 sshd + mock hub，不要 root、不碰本机的 ssh 配置）：
+
+```sh
+cd apple/Packages/PersonaSSH
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # Command Line Tools 里没有 Testing 模块
+```
+
+每个用例在临时目录里起一个 `/usr/sbin/sshd -D`（当前用户、随机回环端口、自己的主机密钥和 authorized_keys，带 `restrict,port-forwarding,permitopen=` 的那一行），
+再起 `scripts/mock/mock_hub.py`（`PORT=0`）。覆盖：连接成功和 20 个并发请求、首次连接要确认指纹（指纹和 `ssh-keygen -lf` 一致）、指纹变了被拒且不自动重试、
+公钥未授权、目标端口不通、permitopen 不许的地址、服务器不可达、会话被杀后自动重拨、服务器停了再起来（退避后恢复、本机端口不变）、WebSocket 流式（经隧道收 hello 等推送、发 ping 收 pong）、停止后不再监听。
+全套约 7 秒。`swift test` 的输出要等跑完才出来，看进度设 `PERSONA_SSH_TRACE=<文件>`（夹具逐行写起停）。
+
+**端到端**（真 hub）：本机另起一个专用 sshd（同上的配置，`ListenAddress 127.0.0.1`，authorized_keys 只放带 `permitopen="<hub 地址>:18660"` 的行），
+模拟器里的 App 用 DEBUG 参数指过去：
+
+```sh
+# SSHRoute 的 JSON（字段见 Shared/HubTransport.swift）base64 后传，直接传 JSON 会被当成 plist 解析掉
+SEED=$(python3 -c 'import base64,json;print(base64.b64encode(json.dumps({"host":"127.0.0.1","port":<sshd 端口>,"user":"<用户>",
+  "target_host":"<hub 地址>","target_port":18660,"host_key":"SHA256:…","always":False}).encode()).decode())')
+scripts/app/personactl.py launch -- -pairURL "jarvis://pair?url=<直连不通的地址>&token=<token>" -seedSSHTunnel "$SEED" -tab settings -openSSHTunnel YES
+```
+
+App 自己生成的公钥从 `personactl.py find --id ssh.publicKey` 读（或用 `-seedSSHKey` 给一把测试密钥）。配对地址故意写成直连不通的（如 `http://hub.invalid:18660`）就是测后备；`"always": true` 加真 hub 地址测「总是走 SSH」。
+杀掉 sshd 的会话进程（`pgrep -P <sshd>` 及其子进程，权限分离下 socket 在子进程里）测重连；换 sshd 的主机密钥测拒绝。
+
+**经隧道配对的 UI 测试**（`SSHTunnelPairingTests`，没有下列环境变量就跳过）：配对页填地址和 token → 「经 SSH 隧道连接」填服务器 → 系统弹窗里核对指纹、点「信任并保存」→「连接」。
+
+```sh
+TEST_RUNNER_PERSONA_SSH_HOST=127.0.0.1 TEST_RUNNER_PERSONA_SSH_PORT=<sshd 端口> TEST_RUNNER_PERSONA_SSH_USER=<用户> \
+TEST_RUNNER_PERSONA_SSH_TARGET_HOST=<hub 地址> TEST_RUNNER_PERSONA_SSH_TARGET_PORT=18660 TEST_RUNNER_PERSONA_SSH_FP=SHA256:… \
+TEST_RUNNER_PERSONA_SSH_KEY=<测试密钥种子 base64> TEST_RUNNER_PERSONA_SSH_HUB_URL=http://hub.invalid:18660 TEST_RUNNER_PERSONA_SSH_HUB_TOKEN=<token> \
+xcodebuild test … -only-testing:PersonaUITests/SSHTunnelPairingTests
+```
+
 ## iOS 兼容验证（App 不改代码，验 hub 的改动）
 
 改 hub 的配对、鉴权、WebSocket 时，用当前的 iOS App 原样连一个本机测试 hub 验一遍（2026-10-31 P0 这样验过，`docs/archive/ios-p0-verification.md`）：

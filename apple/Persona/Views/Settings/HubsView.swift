@@ -77,6 +77,14 @@ struct HubsView: View {
             meshRow(m, inUse: model.isLive(g) && on.map { cfg in m.endpoints?.contains { $0.hasPrefix(cfg.url.absoluteString) } == true } == true)
         }
         Group {
+            // Each paired hub's SSH tunnel (docs/network.md「经 SSH 隧道连 hub」).
+            ForEach(members) { h in
+                NavigationLink(value: SettingsPage.sshTunnel(h.id)) {
+                    SettingsRow(title: members.count > 1 ? "SSH 隧道 · \(h.displayName)" : "SSH 隧道", symbol: Theme.Icon.sshTunnel,
+                                tint: Theme.Hue.green, value: sshValue(h), look: .oneLine)
+                }
+                .accessibilityIdentifier("hubs.ssh.\(h.id)")
+            }
             if model.isMultiHub, model.hub?.group != g {
                 Button { model.selectHub(g) } label: {
                     SettingsRow(title: "设为当前 hub", symbol: Theme.Icon.successFilled, tint: Theme.positive)
@@ -107,9 +115,17 @@ struct HubsView: View {
         .accessibilityIdentifier("hubs.group.\(g)")
     }
 
+    /// What the SSH 隧道 row says: not set, used now, or there as the fallback / for every connection.
+    private func sshValue(_ h: PairedHub) -> String {
+        guard let route = h.ssh, route.isUsable else { return "未设置" }
+        if SSHTunnels.shared.routed.contains(h.id) { return "使用中" }
+        return route.always ? "总是" : "后备"
+    }
+
     private func footer(_ g: String) -> String {
         let n = model.registry.members(g).count + meshOnly(g).count
-        let state = model.isLive(g) ? "已连接" : model.socket(g)?.state == .connecting ? "连接中" : "未连接"
+        let via = model.tunnel(g)?.routed == true ? "（经 SSH 隧道）" : ""
+        let state = model.isLive(g) ? "已连接" + via : model.socket(g)?.state == .connecting ? "连接中" + via : "未连接"
         let group = n > 1 ? "组里 \(n) 台 hub 互联，看到的是整组的机器；连着的那台掉了会换组里别的。" : ""
         let current = model.isMultiHub && model.hub?.group == g ? "Persona、收件箱和 hub 相关的设置用这一组。" : ""
         return state + "。" + group + current
@@ -139,6 +155,7 @@ struct HubsView: View {
                 HStack(spacing: Theme.Space.sm) {
                     Text(h.displayName).lineLimit(1)
                     if inUse { Chip(text: "在用", look: .outline) }
+                    if SSHTunnels.shared.routed.contains(h.id) { Chip(text: "SSH", look: .neutral) }
                 }
                 Text(h.config.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }

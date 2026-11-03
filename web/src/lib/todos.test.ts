@@ -8,6 +8,7 @@ import {
   isSpacesSupported,
   makeSessionLookup,
   mostUrgentAgent,
+  resolveLinkCurrentTodoId,
   sortTodos,
   todoStatus,
   type Todo,
@@ -389,7 +390,7 @@ describe("生成来源文案 (formatAgentSource)", () => {
     expect(formatAgentSource(a, spaces)).toBe("随项目 weather");
   });
 
-  it("随项目挂上但在 spaces 未命中时从 lookup 取 space_name", () => {
+  it("来源是 space 且 via 缺失时，通过 lookup 兜底取 Agent 会话自身 space_name", () => {
     const s = mockSession("mac-1", "s1", "idle", { space_name: "custom-space" });
     const lookup = makeSessionLookup([s]);
     const a: TodoAgent = {
@@ -397,9 +398,21 @@ describe("生成来源文案 (formatAgentSource)", () => {
       session_id: "s1",
       linked_at: "",
       source: "space",
-      via: "mac-1/custom-space",
+      via: "",
     };
     expect(formatAgentSource(a, spaces, lookup)).toBe("随项目 custom-space");
+  });
+
+  it("来源是 space 且 via 和 lookup 都缺失时只返回「随项目」，不随机挑同机第一个项目", () => {
+    const aWithoutVia: TodoAgent = {
+      machine_id: "mac-1",
+      session_id: "s1",
+      linked_at: "",
+      source: "space",
+      via: "",
+    };
+    // Even if spaces has a space on mac-1, we must NOT pick spaces[0]
+    expect(formatAgentSource(aWithoutVia, spaces)).toBe("随项目");
   });
 
   it("派生的标「由 <父 Agent 标题> 派出」；父 Agent 找不到时只写「派生」", () => {
@@ -436,8 +449,8 @@ describe("生成来源文案 (formatAgentSource)", () => {
 });
 
 describe("旧 hub 兼容判定 (isSpacesSupported)", () => {
-  it("待办为空时默认 true", () => {
-    expect(isSpacesSupported([])).toBe(true);
+  it("待办为空时算不确定，返回 false (#874 item 1)", () => {
+    expect(isSpacesSupported([])).toBe(false);
   });
 
   it("有待办且待办中包含 spaces 数组时为 true", () => {
@@ -452,6 +465,35 @@ describe("旧 hub 兼容判定 (isSpacesSupported)", () => {
       { id: "t1", title: "旧待办", created_at: "", updated_at: "" },
     ];
     expect(isSpacesSupported(legacyTodos)).toBe(false);
+  });
+});
+
+describe("弹窗关联目标判定 (resolveLinkCurrentTodoId)", () => {
+  it("对于 space 目标，从 todos 列表中匹配对应项目的待办 ID", () => {
+    const todos: Todo[] = [
+      {
+        id: "t_space",
+        title: "项目待办",
+        created_at: "",
+        updated_at: "",
+        spaces: [{ machine_id: "mac-1", space: "weather", linked_at: "" }],
+      },
+    ];
+    expect(resolveLinkCurrentTodoId({ machineId: "mac-1", space: "weather" }, undefined, todos)).toBe("t_space");
+    expect(resolveLinkCurrentTodoId({ machineId: "mac-1", space: "other" }, undefined, todos)).toBeUndefined();
+  });
+
+  it("对于 session 目标，即使 todos 尚未加载或加载失败（空列表），依然保留 session.todo.id (#874 item 4)", () => {
+    const session = mockSession("mac-1", "s1", "idle");
+    session.todo = { id: "todo_123", title: "关联待办" };
+
+    // When todos is empty (not yet loaded), resolveLinkCurrentTodoId still returns session.todo.id
+    expect(resolveLinkCurrentTodoId(undefined, session, [])).toBe("todo_123");
+  });
+
+  it("对于未关联待办的 session 目标，返回 undefined", () => {
+    const session = mockSession("mac-1", "s2", "idle");
+    expect(resolveLinkCurrentTodoId(undefined, session, [])).toBeUndefined();
   });
 });
 

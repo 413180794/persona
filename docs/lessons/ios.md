@@ -499,3 +499,12 @@ mock 和真 hub 上试了很多种都不出，最后是拿那一轮的真实条�
   pin 保持期间别拿它们把「跟着最新处」重新打开（以前保持一结束，下一次推送就把列表拉回最新处，标题没了；录屏里「没碰屏幕也来回跳」就是这个）。
 - 查法：XCUITest 给倒着的列表里的行报的位置是错的，点行会点到别处（打开了侧栏），只点标题这类在顶上的、或者用启动参数（`-showFullOutput card`、`-openWork YES`）；
   第二个模拟器之间来回测时，关着的模拟器上 `simctl uninstall` 会静默失败，先 `boot`。
+
+## SSH 隧道（2026-11-03，#891，docs/network.md「经 SSH 隧道连 hub」）
+
+- **DEBUG 启动参数传 JSON 会被吃掉**：`-key '{"a":1}'` 这种以 `{` 开头的值，UserDefaults 的参数域按 plist 解析，`string(forKey:)` 拿到 nil。要传结构化的值就 base64（`-seedSSHTunnel`）。
+- **配对页带 SecureField 时，iOS 会弹「Save Password?」**：页面一离开（推到「经 SSH 隧道连接」）就弹，挡住后面的点按（UI 测试里表现为「Neither element nor any descendant has keyboard focus」）。token 是一次性凭据，SecureField 标 `.textContentType(.oneTimeCode)` 就不弹。
+- **URLSessionWebSocketTask 的 `sendPing` 要有一个挂着的 `receive()` 才会回调**：只发 ping、不再 receive，pong 永远等不到（测试里卡了十几分钟，以为是隧道）。App 的 `LiveConnection` 一直挂着 receive，不受影响。
+- **加新的 Swift package 后 xcodebuild 解析失败**：`Revision … for swift-markdown-ui … does not match previously recorded value`。上游把 2.4.1 的 tag 移了，而本机 `~/Library/org.swift.swiftpm/security/fingerprints` 记着旧的；只要不重新解析就没事，一加 package 就全部重新解析。不动全机共用的指纹记录：把已有的 `Package.resolved`（别的 worktree 生成的工程里有）拷进 `Persona.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/`，合并上新 package 的 pin，再用 `xcodebuild -disableAutomaticPackageResolution`。`xcodegen generate` 会重建工程，拷的文件要再放回去。
+- **swift-nio-ssh 的连接要等 `UserAuthSuccessEvent` 才算好**：TCP 连上、握手完都不代表能开通道；登录结果靠这个 user event，失败从 `errorCaught` 来。主机密钥校验失败、公钥被拒的原因 NIOSSH 包得看不出来，在自己的 delegate 里记下 verdict 再分类。
+- **Glue 两边必须在同一个 event loop**：本机监听的子连接和 SSH 的子通道互相写，隧道用一个单线程的 `NIOTSEventLoopGroup`；listener 的 `childChannelInitializer` 返回的 future 完成前不会读这个连接，所以可以在里面等 SSH 拨号和开通道，不会丢请求的头几个字节。

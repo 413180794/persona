@@ -122,5 +122,61 @@ class TodoSpacesMockTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, 409)
 
 
+class LegacyHubMockTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        cls.base = f"http://127.0.0.1:{port}"
+        cls.log = tempfile.TemporaryFile()
+        cls.process = subprocess.Popen(
+            ["python3", "-I", str(Path(__file__).with_name("mock_hub.py"))],
+            env=dict(os.environ, PORT=str(port), MOCK_LEGACY_HUB="1"),
+            stdout=cls.log,
+            stderr=cls.log,
+        )
+        cls.addClassCleanup(cls.stop)
+        for _ in range(60):
+            if cls.process.poll() is not None:
+                raise RuntimeError("mock hub 启动失败")
+            try:
+                with urlopen(cls.base + "/api/v1/health", timeout=1):
+                    return
+            except (URLError, TimeoutError):
+                time.sleep(0.1)
+        raise RuntimeError("mock hub 启动超时")
+
+    @classmethod
+    def stop(cls):
+        cls.process.terminate()
+        try:
+            cls.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            cls.process.kill()
+            cls.process.wait(timeout=5)
+        cls.log.close()
+
+    def request(self, path, method="GET"):
+        req = Request(self.base + path, method=method, headers={"Authorization": "Bearer mock"})
+        with urlopen(req, timeout=3) as response:
+            return json.load(response)
+
+    def test_legacy_hub_omits_spaces_and_returns_404(self):
+        data = self.request("/api/v1/todos")
+        todos = data["todos"]
+        # Legacy hub todos do not have spaces property
+        for t in todos:
+            self.assertNotIn("spaces", t)
+
+        # Calling PUT spaces returns JSON 404 matching real hub route error
+        with self.assertRaises(HTTPError) as cm:
+            self.request("/api/v1/todos/todo_weather/spaces/macbook/weather", method="PUT")
+        self.assertEqual(cm.exception.code, 404)
+        body = json.loads(cm.exception.read().decode("utf-8"))
+        self.assertEqual(body.get("code"), "not_found")
+        self.assertEqual(body.get("error"), "Not Found")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -69,6 +69,8 @@ extension AppModel {
             link.live.suspended = true
             link.live.disconnect()
         }
+        // iOS cuts them in the background anyway; back in front each socket picks its way again (docs/network.md).
+        SSHTunnels.shared.closeAll()
     }
 
     /// A silent push in the background: the group that sent it connects for its call (nil: every group).
@@ -133,11 +135,14 @@ extension AppModel {
     // MARK: Routes, hellos, groups changing
 
     /// What a group's socket asks before each attempt when the group has more than one place to go: the quickest
-    /// hub that answers (HubRoute). One place: nil, the socket goes where it was told.
+    /// hub that answers (HubRoute), or its SSH tunnel when none does (`sshRoute`, docs/network.md「经 SSH 隧道连
+    /// hub」). One place and no tunnel: nil, the socket goes where it was told.
     func routePicker(_ group: String) -> (@MainActor () async -> ServerConfig?)? {
-        guard HubRoute.candidates(registry, group: group).count > 1 else { return nil }
+        let ssh = !sshHubs(group).isEmpty
+        guard ssh || HubRoute.candidates(registry, group: group).count > 1 else { return nil }
         return { [weak self] in
             guard let self else { return nil }
+            if !self.sshHubs(group).isEmpty { return await self.sshRoute(group) }
             let candidates = HubRoute.candidates(self.registry, group: group)
             return await HubRoute.pick(candidates)?.config
         }

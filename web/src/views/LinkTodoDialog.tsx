@@ -1,12 +1,13 @@
 // Dialog to link an agent session or project space to an uncompleted todo
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../lib/api";
-import { refresh, refreshTodos, useStore } from "../lib/store";
+import { refresh, refreshTodos, setSpacesSupported, useStore } from "../lib/store";
 import {
   createTodo,
-  findTodoForSpace,
+  isLegacySpacesRouteError,
   linkAgentToTodo,
   linkSpaceToTodo,
+  resolveLinkCurrentTodoId,
   unlinkAgentFromTodo,
   unlinkSpaceFromTodo,
   type Todo,
@@ -18,6 +19,12 @@ import { Icon } from "../ui/icons";
 export interface LinkTargetSpace {
   machineId: string;
   space: string;
+}
+
+export function getLinkDialogTargetKey(space?: LinkTargetSpace, session?: Session): string {
+  if (space) return `sp:${space.machineId}/${space.space}`;
+  if (session) return `s:${session.machine_id}/${session.session_id}`;
+  return "";
 }
 
 export function LinkTodoDialog({
@@ -37,15 +44,20 @@ export function LinkTodoDialog({
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
 
+  // Reset dialog state when opened or when target changes (#874 item 3)
+  const targetKey = getLinkDialogTargetKey(space, session);
+  useEffect(() => {
+    if (open) {
+      setCreating(false);
+      setNewTitle("");
+      setBusy(false);
+    }
+  }, [open, targetKey]);
+
   if (!session && !space) return null;
 
-  const currentTodo = space
-    ? findTodoForSpace(todos, space.machineId, space.space)
-    : session?.todo?.id
-      ? todos.find((t) => t.id === session.todo?.id)
-      : undefined;
-
-  const currentTodoId = currentTodo?.id;
+  // Keep session.todo?.id as source for sessions so controls don't disappear if /todos hasn't loaded (#874 item 4)
+  const currentTodoId = resolveLinkCurrentTodoId(space, session, todos);
 
   const handleSelect = async (todo: Todo) => {
     setBusy(true);
@@ -63,7 +75,13 @@ export function LinkTodoDialog({
       }
       onClose();
     } catch (e) {
-      toast(`${space ? "挂到待办" : "关联"}失败：${errorText(e)}`, "error");
+      if (space && isLegacySpacesRouteError(e)) {
+        setSpacesSupported(false);
+        toast("当前服务不支持整组挂入待办", "error");
+      } else {
+        toast(`${space ? "挂到待办" : "关联"}失败：${errorText(e)}`, "error");
+      }
+      void refreshTodos();
     } finally {
       setBusy(false);
     }
@@ -86,7 +104,11 @@ export function LinkTodoDialog({
       }
       onClose();
     } catch (e) {
+      if (space && isLegacySpacesRouteError(e)) {
+        setSpacesSupported(false);
+      }
       toast(`${space ? "移出待办" : "解除关联"}失败：${errorText(e)}`, "error");
+      void refreshTodos();
     } finally {
       setBusy(false);
     }
@@ -98,12 +120,21 @@ export function LinkTodoDialog({
     setBusy(true);
     try {
       const created = await createTodo(trimmed);
-      if (space) {
-        await linkSpaceToTodo(created.id, space.machineId, space.space);
-        toast(`已新建并挂到待办「${created.title}」`, "ok");
-      } else if (session) {
-        await linkAgentToTodo(created.id, session.machine_id, session.session_id);
-        toast(`已新建并关联到待办「${created.title}」`, "ok");
+      try {
+        if (space) {
+          await linkSpaceToTodo(created.id, space.machineId, space.space);
+          toast(`已新建并挂到待办「${created.title}」`, "ok");
+        } else if (session) {
+          await linkAgentToTodo(created.id, session.machine_id, session.session_id);
+          toast(`已新建并关联到待办「${created.title}」`, "ok");
+        }
+      } catch (linkErr) {
+        if (space && isLegacySpacesRouteError(linkErr)) {
+          setSpacesSupported(false);
+          toast(`待办已创建，但当前服务不支持整组挂入：${errorText(linkErr)}`, "error");
+        } else {
+          toast(`待办已创建，但${space ? "挂到待办" : "关联"}失败：${errorText(linkErr)}`, "error");
+        }
       }
       await refreshTodos();
       await refresh();
@@ -208,7 +239,7 @@ export function LinkTodoDialog({
           ) : (
             <div />
           )}
-          <Button tone="secondary" onClick={onClose} whitespace-nowrap>
+          <Button tone="secondary" onClick={onClose} className="whitespace-nowrap">
             取消
           </Button>
         </div>

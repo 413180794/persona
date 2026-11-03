@@ -81,7 +81,7 @@ struct ConnectionDetails: View {
                      : Self.explanation(phase, stalled: model.live.stalled)).font(Theme.Font.secondary).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 let lines = Self.facts(phase: phase, link: model.live.state, nextTry: model.live.nextTry, lastOnline: status.lastOnline,
-                                       rtt: model.live.rtt, outbox: model.outboxCount, now: ctx.date)
+                                       rtt: model.live.rtt, outbox: model.outboxCount, now: ctx.date, ssh: sshFact)
                 if !lines.isEmpty {
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         ForEach(lines, id: \.self) { Text($0) }
@@ -106,6 +106,14 @@ struct ConnectionDetails: View {
         }
     }
 
+    /// The hub-level group's SSH tunnel, when its hub has one.
+    private var sshFact: SSHFact? {
+        guard let group = model.hub?.group, let t = model.tunnel(group) else { return nil }
+        var problem: String?
+        if case .down(let why) = t.state { problem = why }
+        return SSHFact(server: t.hub.ssh?.label ?? "", routed: t.routed, problem: problem)
+    }
+
     static func explanation(_ phase: ConnectionStatus.Phase, stalled: Bool) -> String {
         switch phase {
         case .online: "消息和状态都是最新的。"
@@ -121,10 +129,23 @@ struct ConnectionDetails: View {
         }
     }
 
-    /// Short lines under the explanation: why the last try failed, when the next is, since when, what is waiting.
+    /// The hub's SSH tunnel as the details mention it (docs/network.md「经 SSH 隧道连 hub」): which server, whether the
+    /// traffic goes through it now, and why it is not up.
+    struct SSHFact: Equatable {
+        var server: String
+        var routed: Bool
+        var problem: String?
+    }
+
+    /// Short lines under the explanation: why the last try failed, when the next is, since when, what is waiting, and
+    /// the way to the hub when it has an SSH tunnel (straight, or through it).
     static func facts(phase: ConnectionStatus.Phase, link: LiveConnection.State, nextTry: Date?, lastOnline: Date?,
-                      rtt: TimeInterval?, outbox: Int, now: Date) -> [String] {
+                      rtt: TimeInterval?, outbox: Int, now: Date, ssh: SSHFact? = nil) -> [String] {
         var out: [String] = []
+        if let ssh {
+            out.append(ssh.routed ? "线路：经 SSH 隧道（\(ssh.server)）" : "线路：直连")
+            if phase != .online, let why = ssh.problem { out.append("SSH 隧道：\(why)") }
+        }
         if phase == .connecting, case .failed(let why) = link { out.append("上次失败：\(why)") }
         if phase == .connecting, let nextTry {
             let s = Int(ceil(nextTry.timeIntervalSince(now)))

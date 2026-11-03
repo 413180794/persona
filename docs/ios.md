@@ -642,6 +642,26 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - 调试：`-showConnection waiting|connecting|updating` 固定显示某个状态，再加 `-openConnectionDetails YES` 打开说明；
   `-simulateOffline YES` 让 NWPathMonitor 视为没网（模拟器总是有 Mac 的网）。mock 的断网 / 弱网开关见 `docs/testing.md`。
 
+## SSH 隧道（直连不通时的后备，#891）
+
+设备访问不到 hub 的地址时，经一台 SSH 服务器连过去。原理、服务器上怎么配、安全说明见 [network.md「经 SSH 隧道连 hub」](network.md#经-ssh-隧道连-hub直连不通时的后备)，这里是 App 这一侧。
+
+- **代码**：隧道本身在共享 package `apple/Packages/PersonaSSH`（swift-nio-ssh + Network.framework，iOS 和 Mac 共用，手表不链接）；
+  App 侧 `Persona/App/SSHTunnels.swift`（每台 hub 一个隧道、密钥 `SSHKeys`、选路 `AppModel.sshRoute`）、
+  `Shared/HubTransport.swift`（hub 地址 → 隧道回环地址的映射，`SSHRoute` 配置）、`Persona/Views/Settings/SSHTunnelView.swift`。
+- **只换发出去的 URL**：`APIClient.url`、对话条目的 URL、`LiveConnection` 的 socket、端口转发拼地址时过一遍 `HubTransport.resolve`；
+  `ServerConfig`、配对注册表、`currentConfig` 和所有比较都还是 hub 自己的地址，所以多 hub 的分组、选路、凭据升级都不用知道隧道。
+  `HubRoute.healthProbe` 用 `direct: true`，问的永远是直连。
+- **选路**：组里有可用的 SSH 设置（主机、用户、已确认的指纹都有）时，`routePicker` 总是有值：每次连接前先 `HubRoute.answering` 问直连（单个地址也问），
+  都不应答才 `SSHTunnels.open`；「总是走 SSH」先开隧道。走隧道期间 `watchDirect` 每 2 分钟问一次直连，通了 `reroute()` 换回来。
+- **配置**存在 `PairedHub.ssh`（钥匙串里的配对注册表，按 hub）；私钥单独存钥匙串（`ssh.identity`，`AfterFirstUnlockThisDeviceOnly`）。
+  配对页设的 SSH 设置随新配对的 hub 保存，配对时开的隧道直接交给这台 hub（`SSHTunnels.adopt`），设备凭据升级接着走它。
+- **状态显示**（和现有口径一致）：连接详情多一行「线路：直连 / 经 SSH 隧道（user@host）」，隧道起不来时「SSH 隧道：<原因>」；
+  设置顶部「已连接 hub · 经 SSH 隧道」；设置 › hub 的在用 hub 带「SSH」小标签、页脚「已连接（经 SSH 隧道）」，「SSH 隧道」一行写 未设置 / 后备 / 总是 / 使用中。
+- **后台**：`suspendLinks` 关掉所有隧道（`SSHTunnels.closeAll`），回前台各组重新选路、重建（模拟器实测约 1 秒）。
+- **调试**：`-seedSSHTunnel <SSHRoute JSON 的 base64>` 给第一台 hub 预置 SSH 设置，`-seedSSHKey <32 字节种子的 base64>` 用给定的测试密钥（只在 DEBUG），
+  `-tab settings -openSSHTunnel YES` 打开第一台 hub 的 SSH 隧道页。端到端测试的搭法见 `docs/testing.md`「SSH 隧道」。
+
 ## 文件查看器（2026-10-31）
 
 会话里提到的文件、工具行里的文件、会话页「文件」里点开的文件，都在 `FileViewer` 里看（`Views/Chat/FileViewer.swift`，`Persona/Code/`）。

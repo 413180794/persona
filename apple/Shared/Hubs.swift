@@ -77,6 +77,8 @@ nonisolated struct PairedHub: Codable, Hashable, Sendable, Identifiable {
     /// The hubs its last hello listed in its group (itself included).
     var mesh: [MeshHub]?
     var addedAt: Date = .now
+    /// Its SSH tunnel, when the user set one up (docs/network.md「经 SSH 隧道连 hub」).
+    var ssh: SSHRoute?
 
     init(id: String = PairedHub.newID(), config: ServerConfig, group: String = "", hubID: String? = nil, hubName: String? = nil,
          deviceID: String? = nil, watch: ServerConfig? = nil, mesh: [MeshHub]? = nil, addedAt: Date = .now) {
@@ -271,6 +273,13 @@ nonisolated enum HubRoute {
     /// the socket's own retries. One candidate: no probe.
     static func pick(_ candidates: [Candidate], grace: Duration = centerGrace, probe: @escaping Probe = healthProbe) async -> Candidate? {
         guard candidates.count > 1 else { return candidates.first }
+        return await answering(candidates, grace: grace, probe: probe) ?? candidates.first
+    }
+
+    /// `pick`, but nil when none answers, and a single candidate is asked too: whether the group can be reached
+    /// directly at all (its SSH tunnel is the way when not, docs/network.md「经 SSH 隧道连 hub」).
+    static func answering(_ candidates: [Candidate], grace: Duration = centerGrace, probe: @escaping Probe = healthProbe) async -> Candidate? {
+        guard !candidates.isEmpty else { return nil }
         enum Answer: Sendable { case reached(Candidate), missed(Candidate), graceOver }
         return await withTaskGroup(of: Answer.self) { group in
             for c in candidates { group.addTask { await probe(c.config) ? .reached(c) : .missed(c) } }
@@ -297,12 +306,14 @@ nonisolated enum HubRoute {
                     return member
                 }
             }
-            return member ?? candidates.first
+            return member
         }
     }
 
+    /// Whether the hub answers at its own address (never through its SSH tunnel: this is how the app finds out it
+    /// does not need it).
     static let healthProbe: Probe = { config in
-        var req = URLRequest(url: APIClient(config: config).url("/api/v1/health"), timeoutInterval: 3)
+        var req = URLRequest(url: APIClient(config: config).url("/api/v1/health", direct: true), timeoutInterval: 3)
         req.httpMethod = "GET"
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200,

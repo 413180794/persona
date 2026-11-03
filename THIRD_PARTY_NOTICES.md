@@ -181,3 +181,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## SwiftNIO SSH and its dependencies
+
+The iOS and macOS apps link `apple/Packages/PersonaSSH` (the SSH tunnel to the hub, docs/network.md), which depends on
+the packages below. `Glue` and `ChannelDataUnwrapper` in `apple/Packages/PersonaSSH/Sources/PersonaSSH/Handlers.swift`
+follow the `GlueHandler` and `SSHWrapperHandler` of swift-nio-ssh's `NIOSSHClient` example.
+
+| Package | Source | License |
+| --- | --- | --- |
+| swift-nio-ssh | https://github.com/apple/swift-nio-ssh | Apache License 2.0 |
+| swift-nio | https://github.com/apple/swift-nio | Apache License 2.0 |
+| swift-nio-transport-services | https://github.com/apple/swift-nio-transport-services | Apache License 2.0 |
+| swift-crypto | https://github.com/apple/swift-crypto | Apache License 2.0 |
+| swift-atomics | https://github.com/apple/swift-atomics | Apache License 2.0 |
+| swift-collections | https://github.com/apple/swift-collections | Apache License 2.0 |
+| swift-system | https://github.com/apple/swift-system | Apache License 2.0 |
+| swift-asn1 | https://github.com/apple/swift-asn1 | Apache License 2.0 |
+
+Copyright (c) Apple Inc. and the SwiftNIO / Swift project authors. Licensed under the Apache License, Version 2.0
+(https://www.apache.org/licenses/LICENSE-2.0); each package's LICENSE.txt and NOTICE.txt apply.

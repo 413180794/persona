@@ -260,3 +260,11 @@
 - 三页外壳的右滑回归要在消息行的同一高度结束手势，不能从顶部一行拖到窗口中心。顶栏布局变化后这条轨迹可能超过 45°，实际是在测试垂直滚动；改为行内水平轨迹，再验证目标页，不能把这种失败当成缺少翻页能力。
 
 - 新增 `proto.Features` 能力后，连接 hello / manifest 的共享 wire 样例也要更新（`go test ./internal/hub -run '^TestWireSamples$' -update`），检查差异只有预期能力标记；只跑能力自己的处理器测试会漏掉协议快照失败。
+
+## 起 sshd 做测试（2026-11-03，#891）
+
+- macOS 自带的 `/usr/sbin/sshd` 可以不要 root 跑：`sshd -D -e -f <配置>`，配置里 `UsePAM no`、`StrictModes no`、自己的 `HostKey` / `PidFile` / `AuthorizedKeysFile`，只能登录当前用户。OpenSSH 10 要加 `PerSourcePenalties no`，否则同一来源连得多了会被罚等。
+- 端口刚打开就会有别的东西来连（本机的端口探测会发 `GET / HTTP/1.1`），日志里大量 `invalid format [preauth]` 是正常的，过滤掉再看。
+- 权限分离下每个会话是两个进程（`sshd-session: user [priv]` 和它的子进程），socket 在子进程里：模拟断线要把监听进程的子孙一起杀；只杀 `[priv]` 那个，连接还在。停 sshd 时不杀子孙，会话会变成父进程为 1 的孤儿一直挂着。
+- `swift test` 的输出跑完才出来；卡住的用例要靠写文件的 trace 或 `sample <pid>` 找。Swift Testing 的 `.timeLimit` 管不住卡在不可取消的等待上的用例。
+- 系统弹窗（`.alert`）的按钮用无障碍激活点不到，`personactl.py tap` 会退到 idb（本机没装）；要点弹窗的流程写成 XCUITest（`app.alerts[...].buttons[...]`）。

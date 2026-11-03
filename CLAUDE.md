@@ -186,7 +186,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/rename.md` | Jarvis → Persona 兼容迁移：哪些身份不变、新旧名字和目录的对应、防回退检查；验收和发布边界见 `docs/rename-acceptance.md`，open PR 审计快照 `docs/rename-pr-audit.md` |
 | `docs/architecture.md` | 整体架构、数据流、为什么这样设计（herdr + hooks + transcript） |
 | `docs/protocol.md` | hub HTTP / WebSocket API、hub↔node RPC、事件和交互模型（前后端契约） |
-| `docs/network.md` | 公网直连：TLS、公钥钉扎、IPv6 入站、配对、来源判断和限流 |
+| `docs/network.md` | 公网直连：TLS、公钥钉扎、IPv6 入站、配对、来源判断和限流；iOS / Mac 经 SSH 隧道连 hub（直连不通时的后备） |
 
 ### 服务端和部署
 
