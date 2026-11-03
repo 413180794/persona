@@ -22,6 +22,60 @@ METADATA = str(ipaddress.ip_address(0xA9FEA9FE))
 CONTACT = '<a href="mailto:support+webclient@' + 'tailscale.com" class="link">contact us</a>'
 SSH_REQUEST = "ping@" + "openssh.com"
 EMAIL = "person@" + "example.dev"
+SSH_NAMES = (
+    "aes128-gcm@" + "openssh.com",
+    "aes256-gcm@" + "openssh.com",
+    "curve25519-sha256@" + "libssh.org",
+    "ecdsa-sha2-nistp256-cert-v01@" + "openssh.com",
+    "ecdsa-sha2-nistp384-cert-v01@" + "openssh.com",
+    "ecdsa-sha2-nistp521-cert-v01@" + "openssh.com",
+    "ssh-ed25519-cert-v01@" + "openssh.com",
+)
+
+
+class SSHFieldTests(unittest.TestCase):
+    def test_complete_known_names_and_name_lists_are_classified(self):
+        for text in (*SSH_NAMES, ",".join(SSH_NAMES), ",".join(reversed(SSH_NAMES))):
+            for public in (False, True):
+                with self.subTest(length=len(text), public=public):
+                    self.assertEqual(cbp.text_kinds(text, (), whole_short=public), set())
+
+    def test_url_and_other_contexts_are_not_protocol_fields(self):
+        for name in SSH_NAMES:
+            samples = ("mailto:" + name, "https://" + name, "prefix" + name, name + "-suffix.com",
+                       " " + name, name + " ", '"' + name + '"', "<string>" + name + "</string>",
+                       name + ".cn", name.upper(), name.replace("@", "+account@"))
+            for text in samples:
+                with self.subTest(name_length=len(name), field_length=len(text)):
+                    self.assertEqual(cbp.generic_text(text, frozenset()), text)
+                    self.assertIn("email", cbp.text_kinds(text, ()))
+        for domain in ("openssh.com", "libssh.org"):
+            self.assertIn("email", cbp.text_kinds("person@" + domain, ()))
+
+    def test_partial_and_unknown_name_lists_are_not_classified(self):
+        name = SSH_NAMES[0]
+        for text in ("," + name, name + ",", name + ",," + name, name + ",unknown",
+                     "unknown," + name, name + "," + EMAIL, name + ", " + name,
+                     "mailto:" + name + "," + name):
+            with self.subTest(field_length=len(text)):
+                self.assertEqual(cbp.generic_text(text, frozenset()), text)
+                self.assertIn("email", cbp.text_kinds(text, ()))
+
+    def test_registered_values_win_for_names_and_lists(self):
+        for name in SSH_NAMES:
+            for word in (name, *name.split("@")):
+                for text in (name, SSH_NAMES[0] + "," + name):
+                    for public in (False, True):
+                        with self.subTest(field_length=len(text), word_length=len(word), public=public):
+                            self.assertIn(f"private value ({len(word)} chars)",
+                                          cbp.text_kinds(text, (word,), whole_short=public))
+
+    def test_unknown_tld_suffix_is_not_removed_by_protocol_classification(self):
+        for name in SSH_NAMES:
+            text = name + "suffix"
+            self.assertEqual(cbp.generic_text(text, frozenset()), text)
+            # Preserve the generic detector's existing TLD policy, while registered values still fail.
+            self.assertIn(f"private value ({len(name)} chars)", cbp.text_kinds(text, (name,)))
 
 
 class PublicConstantTests(unittest.TestCase):
@@ -240,6 +294,32 @@ class BundleScanIntegrationTests(unittest.TestCase):
         for other in ("person@" + "openssh.com", "xaes256-gcm@" + "openssh.com", "aes256-gcm@" + "openssh.com.cn"):
             with self.subTest(other=other):
                 code, output = self.scan(other, public=False)
+                self.assertNotEqual(code, 0)
+                self.assertIn("email", output)
+
+    def test_original_field_boundaries_survive_inherent_id_normalization(self):
+        config = {"app": {"bundle_id": "public.bundle", "team_id": "PUBLIC_TEAM"}}
+        for name in (*SSH_NAMES, ",".join(SSH_NAMES)):
+            for value in ("public.bundle", "PUBLIC_TEAM"):
+                for text in (value + name, name + value):
+                    code, output = self.scan(text, public=False, config=config)
+                    self.assertNotEqual(code, 0)
+                    self.assertIn("email", output)
+
+    def test_protocol_fields_do_not_hide_unrelated_data_or_registered_values(self):
+        for public in (False, True):
+            code, output = self.scan("\0".join(SSH_NAMES), public=public)
+            self.assertEqual(code, 0, output)
+            code, output = self.scan("\0".join((*SSH_NAMES, EMAIL)), public=public)
+            self.assertNotEqual(code, 0)
+            self.assertIn("email", output)
+            self.assertNotIn(EMAIL, output)
+            for name in SSH_NAMES:
+                code, output = self.scan(name, words=(name,), public=public)
+                self.assertNotEqual(code, 0)
+                self.assertIn("private value", output)
+                self.assertNotIn(name, output)
+                code, output = self.scan("mailto:" + name, public=public)
                 self.assertNotEqual(code, 0)
                 self.assertIn("email", output)
 

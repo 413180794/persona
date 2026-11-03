@@ -24,6 +24,8 @@ up inside ordinary words: a surname inside "touchend"); app bundles keep the str
 Prints the file and the kind of hit, never the value.
 For public Go builds, narrowly scoped dependency constants are classified separately from private data. This requires
 unreplaced dependencies whose build-info checksums match server/go.sum; registered personal values always win.
+The seven known SSH algorithm/certificate names are classified only as a complete original printable field or a
+complete comma-separated list of those names; URLs, surrounding context and normalized fragments are not classified.
 """
 import ipaddress
 import os
@@ -44,13 +46,12 @@ PRINTABLE = re.compile(rb"[\x20-\x7e]{4,}")
 # These are protocol and standards constants, not accounts or deployment addresses. Keep contexts narrow:
 # OpenSSH's global request name, the upstream web client's exact contact link, and complete RFC 1918 networks.
 SSH_REQUEST = re.compile(r"(?<![A-Za-z0-9._%+-])ping@openssh[.]com(?![A-Za-z0-9._%+-])")
-# The SSH algorithm names swift-nio-ssh carries (the app's SSH tunnel, #938): RFC 4251 "name@domain" identifiers, not
-# addresses. Exactly these, so any other address at those domains is still an email.
-SSH_ALGORITHMS = re.compile(r"(?<![A-Za-z0-9._%+-])(?:" + "|".join(re.escape(name) + "@" + domain for name, domain in (
-    ("aes128-gcm", "openssh[.]com"), ("aes256-gcm", "openssh[.]com"), ("curve25519-sha256", "libssh[.]org"),
-    ("ecdsa-sha2-nistp256-cert-v01", "openssh[.]com"), ("ecdsa-sha2-nistp384-cert-v01", "openssh[.]com"),
-    ("ecdsa-sha2-nistp521-cert-v01", "openssh[.]com"), ("ssh-ed25519-cert-v01", "openssh[.]com"),
-)) + r")(?![A-Za-z0-9._%+-])")
+# Fixed wire names from swift-nio-ssh. A whole field may be one name or a complete known name-list, never a URL.
+SSH_ALGORITHM_NAMES = frozenset(name + "@" + domain for name, domain in (
+    ("aes128-gcm", "openssh.com"), ("aes256-gcm", "openssh.com"), ("curve25519-sha256", "libssh.org"),
+    ("ecdsa-sha2-nistp256-cert-v01", "openssh.com"), ("ecdsa-sha2-nistp384-cert-v01", "openssh.com"),
+    ("ecdsa-sha2-nistp521-cert-v01", "openssh.com"), ("ssh-ed25519-cert-v01", "openssh.com"),
+))
 TAILSCALE_CONTACT = re.compile(r'<a href="mailto:support\+webclient@tailscale[.]com" class="link">contact us</a>')
 RFC1918_NETWORKS = tuple(ipaddress.ip_network((address, prefix)) for address, prefix in (
     (0x0A000000, 8), (0xAC100000, 12), (0xC0A80000, 16),
@@ -88,9 +89,11 @@ def go_dependencies(path, sums_path=None):
     return dependencies if public_build else set()
 
 
-def generic_text(text, dependencies):
-    """Remove proven public constant occurrences only for generic IP/email detection, never private-word matching."""
-    text = SSH_ALGORITHMS.sub("", text)
+def generic_text(text, dependencies, original_text=None):
+    """Classify public constants only for generic IP/email detection, never private-word matching."""
+    if original_text is None or text == original_text:
+        if text in SSH_ALGORITHM_NAMES or ("," in text and all(name in SSH_ALGORITHM_NAMES for name in text.split(","))):
+            return ""
     if "golang.org/x/crypto" in dependencies:
         text = SSH_REQUEST.sub("", text)
     if "github.com/tailscale/web-client-prebuilt" in dependencies:
@@ -127,7 +130,7 @@ def generic_text(text, dependencies):
     return pc.IPV4.sub(public_address, text)
 
 
-def text_kinds(text, words, whole_short=False, dependencies=frozenset()):
+def text_kinds(text, words, whole_short=False, dependencies=frozenset(), original_text=None):
     kinds = set()
     for word in words:
         if whole_short and len(word) <= 4:
@@ -135,7 +138,7 @@ def text_kinds(text, words, whole_short=False, dependencies=frozenset()):
                 kinds.add("private value (%d chars)" % len(word))
         elif word in text or word.lower() in text:
             kinds.add("private value (%d chars)" % len(word))
-    for word in pc.problems(generic_text(text, dependencies), []):
+    for word in pc.problems(generic_text(text, dependencies, original_text), []):
         kinds.add("private IP" if pc.IPV4.fullmatch(word) else "email")
     return kinds
 
@@ -304,6 +307,7 @@ def main():
             kinds = set()
             dependencies = go_dependencies(path) if whole_short else set()
             for t in texts(path):
+                original_text = t
                 if not whole_short:
                     t = remove_public_relay_url(t, jarvis_config.get(cfg, "app.push_relay", ""))
                 else:  # the update URL every published jarvisd carries (-X main.updateURL, scripts/release/publish.sh)
@@ -312,7 +316,7 @@ def main():
                     t = t.replace(v, "")
                 if modules:
                     t = modules.sub("", t)
-                kinds.update(text_kinds(t, words, whole_short, dependencies))
+                kinds.update(text_kinds(t, words, whole_short, dependencies, original_text))
             bad += [(os.path.relpath(path, root), k) for k in sorted(kinds)]
     for f, k in bad:
         print("%s: %s" % (f, k))
