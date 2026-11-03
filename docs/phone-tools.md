@@ -30,7 +30,8 @@ App 在本地查询/写入 → `tool_result` 原路返回。
 | `phone_reminders_create {title, due?, notes?, list?, priority?}` | 提醒事项 | **是** | 新建提醒，优先级 0/1–4/5/6–9 |
 | `phone_reminders_complete {id}` | 提醒事项 | **是** | 标记完成（用 `phone_reminders_list` 返回的 id） |
 | `phone_location_current {}` | 位置（使用期间） | 否 | 一次性定位，最多等 15 秒；返回经纬度、精度、海拔、时间、时区、反向地理编码地址 |
-| `phone_health_summary {metrics?, days?}` | 健康（只读） | 否 | 默认步数、近 7 天；指标 steps / distance / active_energy / heart_rate / resting_heart_rate / sleep / weight |
+| `phone_health_summary {metrics?, days?}` | 健康（读） | 否 | 默认步数、近 7 天；指标 steps / distance / active_energy / heart_rate / resting_heart_rate / sleep / weight |
+| `phone_health_write_sample {metric, value?, start, end?}` | 健康（写） | **是** | 写一条：steps（整数）/ distance（米）/ active_energy（千卡）/ weight（千克，一个时刻）/ sleep（一段睡着的时间，不要 value）；一段最长 24 小时、不能是将来；一次一条，不批量导入、不删数据 |
 | `phone_photos_recent {limit?, days?, screenshots_only?}` | 照片（读） | 否 | 最近照片和视频的元数据：本地 id、时间、类型、尺寸、截图/收藏、时长、经纬度 |
 | `phone_photo_get {id, max_size?}` | 照片（读） | 否 | 返回 JPEG 图片本身（长边默认 1280，质量 0.7）+ 一段元数据 |
 | `phone_device_info {}` | 无 | 否 | 机型标识、iOS 版本、电量与充电状态、低电量模式、存储、网络类型、时区、语言、热状态 |
@@ -43,8 +44,8 @@ App 在本地查询/写入 → `tool_result` 原路返回。
 
 ## 确认流程
 
-写操作（建日程、建提醒、完成提醒）带 `confirmation` 闭包，执行前 App 弹确认卡片，展示「新建日程『…』14:00 → 15:00」
-这种摘要；用户点拒绝时工具返回 `isError=true`，内容是 `The user declined on the phone.`。确认只针对单次调用，
+写操作（建日程、建提醒、完成提醒、写健康数据）带 `confirmation` 闭包，执行前 App 弹确认卡片，展示「新建日程『…』14:00 → 15:00」
+「写入健康：体重 72.5 千克」这种摘要；用户点拒绝时工具返回 `isError=true`，内容是 `The user declined on the phone.`。确认只针对单次调用，
 Claude 再调一次会再问一次。
 
 读操作不打扰用户，但每一次调用都会在会话里留下 `tool_call` / `tool_result` 记录。
@@ -62,9 +63,11 @@ Claude 再调一次会再问一次。
 | 日历 | `NSCalendarsFullAccessUsageDescription` | iOS 17+ `requestFullAccessToEvents()` |
 | 提醒事项 | `NSRemindersFullAccessUsageDescription` | iOS 17+ `requestFullAccessToReminders()` |
 | 位置 | `NSLocationWhenInUseUsageDescription` | `requestWhenInUseAuthorization()` |
-| 健康 | `NSHealthShareUsageDescription`（+ entitlement） | `requestAuthorization(toShare: [], read: …)`，**只请求读** |
+| 健康 | `NSHealthShareUsageDescription`、`NSHealthUpdateUsageDescription`（+ entitlement） | `requestAuthorization(toShare: 五种写入类型, read: …)` |
 | 照片 | `NSPhotoLibraryUsageDescription` | `.readWrite`，可能是 limited（只能读到用户选中的照片） |
 | 通知 | 无（运行时授权） | `requestAuthorization([.alert, .sound, .badge])` |
+
+写健康数据只写他在手机上确认过的那一条：确认卡片的摘要和写入的数据出自同一份参数解析（`HealthSample`，数值最多两位小数，确认卡上显示的就是写进去的），参数不对时卡片直接说「参数有误，不会写入」。写入的样本标成手动输入（`HKMetadataKeyWasUserEntered`）。写权限和读不一样，系统会告诉 App：以前只授权过读的（写入功能之前），第一次写时在他确认之后再弹一次系统的健康授权；被拒绝时返回错误，告诉他去 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开。
 
 健康有一个 iOS 的硬限制：**系统永远不告诉 App 读权限有没有被授予**（防泄漏）。所以设置页显示的是「是否已经
 请求过」，实际的拒绝会表现为查询结果为空。工具描述里已经写明这一点，模型不会把空结果当成「没数据」以外的结论。

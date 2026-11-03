@@ -70,6 +70,7 @@ struct PhoneToolsTests {
             "phone_reminders_complete",
             "phone_location_current",
             "phone_health_summary",
+            "phone_health_write_sample",
             "phone_photos_recent",
             "phone_photo_get",
             "phone_device_info",
@@ -163,6 +164,7 @@ struct PhoneToolsTests {
             "phone_calendar_create_event",
             "phone_reminders_create",
             "phone_reminders_complete",
+            "phone_health_write_sample",
         ])
         for tool in PhoneToolRegistry.all where tool.confirmation != nil {
             #expect(writes.contains(tool.spec.name), "unexpected confirmation on \(tool.spec.name)")

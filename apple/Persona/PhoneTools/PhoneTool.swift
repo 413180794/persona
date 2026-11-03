@@ -71,7 +71,7 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
         case .calendar: "查看日程，经你确认后新建日程"
         case .reminders: "查看和新建提醒事项"
         case .location: "当前位置和地址"
-        case .health: "步数、心率、睡眠、活动能量等汇总"
+        case .health: "步数、心率、睡眠等汇总，经你确认后写入"
         case .photos: "最近的照片和截图"
         case .device: "电量、存储、系统版本、网络"
         case .clipboard: "读取和写入剪贴板"

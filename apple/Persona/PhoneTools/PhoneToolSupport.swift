@@ -100,6 +100,10 @@ nonisolated enum Schema {
         return .object(out)
     }
 
+    static func number(_ description: String) -> JSONValue {
+        .object(["type": .string("number"), "description": .string(description)])
+    }
+
     static func boolean(_ description: String) -> JSONValue {
         .object(["type": .string("boolean"), "description": .string(description)])
     }

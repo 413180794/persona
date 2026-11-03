@@ -2,10 +2,10 @@ import Foundation
 import HealthKit
 
 /// `phone_health_summary`: per-day aggregates, one HealthKit collection query
-/// per metric.
+/// per metric. `phone_health_write_sample`: one sample the user approved on the
+/// phone; nothing is imported in bulk or deleted.
 enum HealthTool {
-    /// The only types the app ever asks for. Read-only: the app never writes
-    /// health data.
+    /// What the summary reads.
     static var readTypes: Set<HKObjectType> {
         var types: Set<HKObjectType> = []
         for identifier in quantityIdentifiers.values {
@@ -25,6 +25,9 @@ enum HealthTool {
     ]
 
     private static var metricNames: [String] { Array(quantityIdentifiers.keys) + ["sleep"] }
+
+    /// What `phone_health_write_sample` may save, one approved sample at a time.
+    static var writeTypes: Set<HKSampleType> { Set(HealthSample.metrics.compactMap(HealthSample.type(of:))) }
 
     static var tools: [PhoneTool] {
         [
@@ -50,8 +53,66 @@ enum HealthTool {
                 ),
                 source: .health,
                 run: { args in try await summary(args) }
-            )
+            ),
+            PhoneTool(
+                spec: ToolSpec(
+                    name: "phone_health_write_sample",
+                    description: """
+                    Save one health sample the user gave you to Apple Health: steps (a whole number), \
+                    distance (meters walked or run), active_energy (kcal), weight (kg), or sleep (a period \
+                    asleep, from start to end; value is not used). steps, distance and active_energy may \
+                    cover a period from start to end, at most 24 hours; nothing in the future. The user \
+                    approves the exact value and time on the phone before it is saved. One sample per call: \
+                    no bulk import, and nothing is ever deleted. Returns the saved sample's id.
+                    """,
+                    inputSchema: Schema.object([
+                        "metric": Schema.string("What to save.", values: HealthSample.metrics),
+                        "value": Schema.number("The amount: steps as a whole number, distance in meters, active_energy in kcal, weight in kg. Not used for sleep."),
+                        "start": Schema.string("When, ISO 8601 with a timezone: the moment a weight was measured, or the start of the period."),
+                        "end": Schema.string("End of the period, ISO 8601 with a timezone. Required for sleep; defaults to start; not used for weight."),
+                    ], required: ["metric", "start"])
+                ),
+                source: .health,
+                confirmation: { args in
+                    do {
+                        return try HealthSample(args).summary
+                    } catch {
+                        return "参数有误，不会写入健康：\(ToolErrors.describe(error))"
+                    }
+                },
+                run: { args in try await write(args) }
+            ),
         ]
+    }
+
+    /// Saves the sample the user approved (the confirmation showed `HealthSample.summary` of the same arguments).
+    static func write(_ args: JSONValue) async throws -> [ToolContent] {
+        try HealthAccess.requireAccess()
+        let sample = try HealthSample(args)
+        guard let type = HealthSample.type(of: sample.metric), let object = sample.object() else {
+            throw ToolFailure(.unavailable, "此设备不能写入 \(sample.metric) / This device cannot save \(sample.metric)")
+        }
+        let store = HKHealthStore()
+        if store.authorizationStatus(for: type) == .notDetermined {
+            // Health was allowed before the app could write (reading only): the system asks for writing now, right
+            // after the user approved this sample on the phone.
+            _ = try? await store.requestAuthorization(toShare: writeTypes, read: readTypes)
+        }
+        guard store.authorizationStatus(for: type) == .sharingAuthorized else {
+            throw ToolFailure(.unavailable, "健康没有允许 Persona 写入 \(sample.metric)：可在 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开"
+                + " / Health does not allow Persona to save \(sample.metric): turn it on in iOS Settings › Health › Data Access & Devices › Persona.")
+        }
+        let id = object.uuid.uuidString
+        try await store.save(object)
+        return Output.json(Output.object([
+            ("saved", .bool(true)),
+            ("id", .string(id)),
+            ("metric", .string(sample.metric)),
+            ("value", Output.opt(sample.value)),
+            ("unit", Output.opt(HealthSample.units[sample.metric])),
+            ("start", .string(ToolDate.string(sample.start))),
+            ("end", .string(ToolDate.string(sample.end))),
+        ]))
     }
 
     static func summary(_ args: JSONValue) async throws -> [ToolContent] {
@@ -223,5 +284,104 @@ enum HealthTool {
 
     private static func round1(_ value: Double) -> Double {
         (value * 10).rounded() / 10
+    }
+}
+
+/// One sample for `phone_health_write_sample`, read from the tool's arguments. The confirmation shows `summary` and the
+/// tool saves this same sample: what the user approves is what lands in Health (values keep two decimals at most).
+struct HealthSample {
+    static let metrics = ["steps", "distance", "active_energy", "weight", "sleep"]
+
+    /// The units of `value`, as the tool returns them.
+    static let units = ["steps": "count", "distance": "m", "active_energy": "kcal", "weight": "kg"]
+
+    /// What one sample can hold: more is a slip (grams for kilograms, a week's steps at once).
+    private static let limits: [String: Double] = ["steps": 100_000, "distance": 300_000, "active_energy": 10_000, "weight": 500]
+
+    private static let names = ["steps": "步数", "distance": "步行和跑步距离", "active_energy": "活动能量", "weight": "体重", "sleep": "睡眠"]
+    private static let shownUnits = ["steps": "步", "distance": "米", "active_energy": "千卡", "weight": "千克"]
+
+    var metric: String
+    /// The amount in the metric's unit; nil for sleep, whose length is the period.
+    var value: Double?
+    var start: Date
+    var end: Date
+
+    init(_ args: JSONValue, now: Date = Date()) throws {
+        guard let metric = ToolArgs.string(args, "metric"), Self.metrics.contains(metric) else {
+            throw ToolFailure(.invalidArgument, "metric must be one of \(Self.metrics.joined(separator: ", "))")
+        }
+        guard let start = try ToolDate.parse(ToolArgs.string(args, "start")) else {
+            throw ToolFailure(.invalidArgument, "start is required (ISO 8601 with a timezone)")
+        }
+        let end: Date
+        if metric == "weight" {
+            end = start // a measurement, not a period
+        } else {
+            end = try ToolDate.parse(ToolArgs.string(args, "end")) ?? start
+        }
+        guard end >= start else { throw ToolFailure(.invalidArgument, "end must not be before start") }
+        guard end <= now.addingTimeInterval(60) else { throw ToolFailure(.invalidArgument, "a sample cannot be in the future") }
+        guard end.timeIntervalSince(start) <= 24 * 3600 else { throw ToolFailure(.invalidArgument, "one sample covers 24 hours at most") }
+        if metric == "sleep" {
+            guard end > start else { throw ToolFailure(.invalidArgument, "sleep needs an end after its start") }
+            value = nil
+        } else {
+            guard let raw = args["value"]?.double, raw.isFinite else {
+                throw ToolFailure(.invalidArgument, "value is required: a number in \(Self.units[metric] ?? "")")
+            }
+            let rounded = (raw * 100).rounded() / 100
+            guard rounded > 0 else { throw ToolFailure(.invalidArgument, "value must be above 0") }
+            if metric == "steps", rounded != rounded.rounded() { throw ToolFailure(.invalidArgument, "steps must be a whole number") }
+            if let limit = Self.limits[metric], rounded > limit {
+                throw ToolFailure(.invalidArgument, "\(Self.format(rounded)) \(Self.units[metric] ?? "") is more than one sample of \(metric) can be (at most \(Self.format(limit)))")
+            }
+            value = rounded
+        }
+        self.metric = metric
+        self.start = start
+        self.end = end
+    }
+
+    /// The confirmation's text: what will be saved, and when.
+    var summary: String {
+        let name = Self.names[metric] ?? metric
+        let what = value.map { "\(name) \(Self.format($0)) \(Self.shownUnits[metric] ?? "")" }
+            ?? "\(name) \(Self.format(end.timeIntervalSince(start) / 3600)) 小时"
+        let when = start == end ? ToolDate.string(start) : "\(ToolDate.string(start)) → \(ToolDate.string(end))"
+        return "写入健康：\(what)\n\(when)"
+    }
+
+    static func type(of metric: String) -> HKSampleType? {
+        switch metric {
+        case "steps": HKQuantityType.quantityType(forIdentifier: .stepCount)
+        case "distance": HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)
+        case "active_energy": HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)
+        case "weight": HKQuantityType.quantityType(forIdentifier: .bodyMass)
+        case "sleep": HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)
+        default: nil
+        }
+    }
+
+    /// The HealthKit sample, marked as entered by the user (Health lists it as added from Persona).
+    func object() -> HKSample? {
+        let metadata: [String: Any] = [HKMetadataKeyWasUserEntered: true]
+        if let type = Self.type(of: metric) as? HKQuantityType, let value {
+            let unit: HKUnit = switch metric {
+            case "steps": .count()
+            case "distance": .meter()
+            case "active_energy": .kilocalorie()
+            default: .gramUnit(with: .kilo)
+            }
+            return HKQuantitySample(type: type, quantity: HKQuantity(unit: unit, doubleValue: value), start: start, end: end, metadata: metadata)
+        }
+        if let type = Self.type(of: metric) as? HKCategoryType {
+            return HKCategorySample(type: type, value: HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue, start: start, end: end, metadata: metadata)
+        }
+        return nil
+    }
+
+    private static func format(_ number: Double) -> String {
+        number.formatted(.number.precision(.fractionLength(0...2)).grouping(.never).locale(Locale(identifier: "en_US_POSIX")))
     }
 }

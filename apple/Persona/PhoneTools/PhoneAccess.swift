@@ -167,7 +167,8 @@ enum HealthAccess {
         guard HKHealthStore.isHealthDataAvailable() else { return .notNeeded }
         let read = HealthTool.readTypes
         do {
-            _ = try await store.requestAuthorization(toShare: Set<HKSampleType>(), read: read)
+            // Writing too (phone_health_write_sample, each sample approved on the phone); the system lists both.
+            _ = try await store.requestAuthorization(toShare: HealthTool.writeTypes, read: read)
             UserDefaults.standard.set(true, forKey: askedKey)
         } catch {
             // Leave the flag alone so the settings screen can offer to try again.

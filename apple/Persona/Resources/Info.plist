@@ -58,7 +58,7 @@
 	<key>NSHealthShareUsageDescription</key>
 	<string>Persona lets Claude read health summaries when you ask, for example how many steps you walked this week or how long you slept last night.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Persona only reads health data and never writes it; if a future version saves data, for example a workout Claude logs for you, it will ask here first.</string>
+	<string>Persona saves health data only after you approve it on your iPhone, one entry at a time, for example a weight or last night's sleep you told Claude about.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in.</string>
 	<key>NSMicrophoneUsageDescription</key>
