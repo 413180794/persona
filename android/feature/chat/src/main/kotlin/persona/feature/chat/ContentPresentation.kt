@@ -2,8 +2,11 @@ package persona.feature.chat
 
 import persona.core.contracts.Item
 import persona.core.domain.lines.ChatLine
+import persona.core.domain.MessageContext
+import persona.core.domain.decodeXmlEntities
 import persona.core.domain.lines.WorkItem
 import persona.core.domain.messageText
+import persona.core.domain.parseContexts
 import java.time.Instant
 import kotlinx.serialization.json.*
 
@@ -24,29 +27,32 @@ data class ChatTextUpdate(val text: String, val streaming: Boolean = false)
 
 internal sealed interface MessagePart {
     data class Text(val text: String) : MessagePart
-    data class Reference(val title: String, val kind: String, val url: String?, val quote: String) : MessagePart
     data class Source(val name: String, val text: String) : MessagePart
 }
 
-private val messageTag = Regex("<(jarvis-context|cross-session-message)\\b([^>]*)>([\\s\\S]*?)</\\1>")
+private val messageTag = Regex("<cross-session-message\\b([^>]*)>([\\s\\S]*?)</cross-session-message>")
 private val attribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
 
 /**
  * A message as a row draws it: its [parts] in order, the photos it carries (`<attached_images>` and the older notes,
- * thumbnails above the text; never 「[图片]」, R3), and the file paths in its text (chips under it, at most six).
+ * thumbnails above the text; never 「[图片]」, R3), the file paths in its text (chips under it, at most six), and its
+ * `<jarvis-context>` blocks ([contexts]), which are not what the user wrote: one folded row beside the bubble (#876).
  */
-internal data class MessageModel(val parts: List<MessagePart>, val images: List<String>, val files: List<String>) {
-    /** What it says without its context cards: what the long-press menu copies, shares and quotes. */
+internal data class MessageModel(
+    val parts: List<MessagePart>, val images: List<String>, val files: List<String>,
+    val contexts: List<MessageContext> = emptyList(),
+) {
+    /** What it says without its contexts: what the long-press menu copies, shares and quotes. */
     val plain: String get() = parts.mapNotNull {
         when (it) {
             is MessagePart.Text -> it.text
             is MessagePart.Source -> it.text.takeIf(String::isNotBlank)
-            is MessagePart.Reference -> null
         }
     }.joinToString("\n\n")
 }
 
-internal fun messageModel(text: String, from: String? = null): MessageModel {
+internal fun messageModel(raw: String, from: String? = null): MessageModel {
+    val (contexts, text) = parseContexts(raw)
     val images = mutableListOf<String>()
     val files = mutableListOf<String>()
     val parts = buildList {
@@ -59,14 +65,10 @@ internal fun messageModel(text: String, from: String? = null): MessageModel {
         }
         messageTag.findAll(text).forEach { match ->
             plain(text.substring(offset, match.range.first))
-            val attributes = attribute.findAll(match.groupValues[2]).associate {
-                it.groupValues[1] to decodeEntities(it.groupValues[2].ifEmpty { it.groupValues[3] })
+            val attributes = attribute.findAll(match.groupValues[1]).associate {
+                it.groupValues[1] to decodeXmlEntities(it.groupValues[2].ifEmpty { it.groupValues[3] })
             }
-            val body = decodeEntities(match.groupValues[3]).trim()
-            if (match.groupValues[1] == "jarvis-context") {
-                add(MessagePart.Reference(attributes["title"].orEmpty().ifBlank { "引用内容" },
-                    attributes["kind"].orEmpty(), attributes["url"]?.takeIf { it.isNotBlank() }, body))
-            } else add(MessagePart.Source(attributes["from-name"].orEmpty().ifBlank { "其他会话" }, body))
+            add(MessagePart.Source(attributes["from-name"].orEmpty().ifBlank { "其他会话" }, decodeXmlEntities(match.groupValues[2]).trim()))
             offset = match.range.last + 1
         }
         plain(text.substring(offset))
@@ -75,7 +77,7 @@ internal fun messageModel(text: String, from: String? = null): MessageModel {
             listOf(MessagePart.Source(from, "")) + parts else parts
     }
     val photos = images.distinct()
-    return MessageModel(parts, photos, files.distinct().filterNot { it in photos }.take(6))
+    return MessageModel(parts, photos, files.distinct().filterNot { it in photos }.take(6), contexts)
 }
 
 internal fun messageParts(text: String, from: String? = null): List<MessagePart> = messageModel(text, from).parts
@@ -103,10 +105,6 @@ internal fun markdownPrewarm(items: List<Item>, limit: Int = 80): Pair<List<Mark
  */
 internal fun MessageModel.editText(): String =
     if (images.isEmpty()) plain else plain + "\n\n<attached_images>\n" + images.joinToString("\n") + "\n</attached_images>"
-
-private fun decodeEntities(value: String): String = value
-    .replace("&quot;", "\"").replace("&apos;", "'")
-    .replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
 
 internal data class DiffLine(val text: String, val sign: Char, val old: Int?, val new: Int?)
 internal data class ToolDiff(val lines: List<DiffLine>) {

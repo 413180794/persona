@@ -39,3 +39,5 @@
 - App 的会话磁盘缓存按 item id 合并，hub 换了某类 item 的内容（比如给 notice 加字段），缓存里的旧 item 不会被新页覆盖：改 item 结构就把
   `ChatCache` 的目录版本号加一（`chats-v3`）。
 - 往前翻页有解析预算，但前面还有内容时不能回空页：空页 + `has_more: true` 让 App 没有 seq 可以接着取，更早的历史就再也看不到（大 Codex rollout 两轮之间夹着几十 MB 不出条目的行）。
+- `<jarvis-context>` 的解析不能假定属性齐全、顺序固定（2026-11-03，#876）：iOS 曾只认 `kind` `title` `url` 三个都在的，飞书 /agent 的上下文没有 `url`，标签没被认出，气泡里留下整段提示词和大片空白。
+  分页截断用户消息也要避开标签：从中间截断会留下没闭合的 `<jarvis-context`，各端都会把半截标签当正文显示（`transcript/contexts.go` 的 `lightContexts` 只削减各块的正文）。

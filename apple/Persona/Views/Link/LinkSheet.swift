@@ -30,27 +30,50 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
         return "<jarvis-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\">\n\(text.replacingOccurrences(of: "</jarvis-context>", with: ""))\n</jarvis-context>"
     }
 
-    private static let tagRe = try! NSRegularExpression(
-        pattern: #"<jarvis-context\s+kind="([^"]*)"\s+title="([^"]*)"\s+url="([^"]*)">\s*([\s\S]*?)\s*</jarvis-context>\s*"#)
+    /// One block, its attributes in any order and any of them missing (a Feishu /agent request's context has no url).
+    private static let tagRe = try! NSRegularExpression(pattern: #"<jarvis-context\b([^>]*)>\s*([\s\S]*?)\s*</jarvis-context>\s*"#)
+    private static let attrRe = try! NSRegularExpression(pattern: #"(\w+)="([^"]*)""#)
 
     /// The contexts in a message and the message without them.
     private static let memo = TextMemo<(refs: [ContextRef], rest: String)>()
 
     static func parse(_ text: String) -> (refs: [ContextRef], rest: String) { memo(text, scan) }
 
+    private static func unescape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">").replacingOccurrences(of: "&amp;", with: "&")
+    }
+
     private static func scan(_ text: String) -> (refs: [ContextRef], rest: String) {
         let ns = text as NSString
         var refs: [ContextRef] = []
         for m in tagRe.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
-            func g(_ i: Int) -> String {
-                ns.substring(with: m.range(at: i)).replacingOccurrences(of: "&quot;", with: "\"")
-                    .replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">")
-                    .replacingOccurrences(of: "&amp;", with: "&")
+            let attrs = ns.substring(with: m.range(at: 1)) as NSString
+            var a: [String: String] = [:]
+            for am in attrRe.matches(in: attrs as String, range: NSRange(location: 0, length: attrs.length)) {
+                a[attrs.substring(with: am.range(at: 1))] = unescape(attrs.substring(with: am.range(at: 2)))
             }
-            refs.append(ContextRef(kind: g(1), title: g(2), url: g(3), text: g(4)))
+            refs.append(ContextRef(kind: a["kind"] ?? "context", title: a["title"] ?? "", url: a["url"] ?? "", text: ns.substring(with: m.range(at: 2))))
         }
         let rest = tagRe.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
         return (refs, rest.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// What the row of a message's contexts says, folded: the one context's title, or how many.
+    static func summary(_ refs: [ContextRef]) -> String {
+        if refs.count == 1, let r = refs.first { return "\(r.kind == "edit" ? "要改的内容" : "上下文") · \(r.label)" }
+        return "上下文 · \(refs.count) 项"
+    }
+
+    var label: String { title.isEmpty ? (url.isEmpty ? "引用" : host) : title }
+
+    var icon: String {
+        switch kind {
+        case "instructions": Theme.Icon.info
+        case "doc": Theme.Icon.document
+        case "edit": Theme.Icon.ai
+        default: Theme.Icon.quote
+        }
     }
 }
 
@@ -294,48 +317,134 @@ struct PooledWebView: UIViewRepresentable {
 
 // MARK: - In messages
 
-/// The contexts a message carries, as quote cards above it (the raw tag never shows).
-struct ContextCards: View {
+/// The contexts a message carries (picked page excerpts, everything a Feishu /agent request hands its agent): one
+/// folded row by the bubble, the raw tags never show. Open, a list of titles; a title opens to its text. One context
+/// opens straight to its text.
+struct ContextGroup: View {
     var refs: [ContextRef]
-    @Environment(\.openLink) private var openLink
+    /// The message's id: the row stays put in the chat when it opens or closes (`ChatPin`).
+    var key: String
+    @Environment(\.chatPin) private var pin
+    @State private var open = ContextGroup.shownOpen
+    @State private var unfold = Unfolding()
+    private var pinKey: String { "contexts-\(key)" }
+
+    /// DEBUG `-showContexts YES`: groups and their first context start open (screenshots).
+    static var shownOpen: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "showContexts")
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
-        if AppStyle.current.usesBeautifulUI { cards } else { plain }
-    }
-
-    /// The BeautifulUI style: its context cards, one per quote — what it is (上下文 / 要改的内容) and its page's title on
-    /// top, three lines of the text, the site as the source chip. A tap on the chip opens the page.
-    private var cards: some View {
-        BeautifulUI.ContextCards(title: nil, chunks: refs.map { r in
-            ContextChunk(id: r.id.uuidString, title: r.title, size: r.kind == "edit" ? "要改的内容" : "上下文", body: r.text, source: r.host,
-                         badge: "", badgeTint: r.kind == "edit" ? Theme.ai : Theme.accent, url: URL(string: r.url))
-        }, maxWidth: nil, bodyLines: 3) { chunk in
-            if let u = chunk.url { openLink?(u) }
-        }
-        .scaledFrame(maxWidth: Theme.Size.box300, alignment: .trailing)
-        .frame(maxWidth: .infinity, alignment: .trailing)
-    }
-
-    private var plain: some View {
-        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
-            ForEach(refs) { r in
-                Button { if let u = URL(string: r.url) { openLink?(u) } } label: {
-                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                        Label(r.kind == "edit" ? "要改的内容 · \(r.title)" : "上下文 · \(r.title)",
-                              systemImage: r.kind == "edit" ? Theme.Icon.ai : "text.quote")
-                            .font(Theme.Font.labelStrong).foregroundStyle(Theme.accent).lineLimit(1)
-                        Text(r.text).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.leading)
-                        Text(r.host).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
-                    }
-                    .padding(Theme.Space.m)
-                    .scaledFrame(maxWidth: Theme.Size.box300, alignment: .leading)
-                    .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-                    .overlay(alignment: .leading) { Capsule().fill(Theme.accent.opacity(0.5)).frame(width: Theme.Size.bar).padding(.vertical, Theme.Space.s) }
+        VStack(alignment: .trailing, spacing: Theme.Space.xs) {
+            Button {
+                Haptics.tap()
+                toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
+            } label: {
+                HStack(spacing: Theme.Space.sm) {
+                    Image(systemName: refs.count == 1 ? refs[0].icon : Theme.Icon.contexts).font(Theme.Font.label)
+                    Text(ContextRef.summary(refs)).font(Theme.Font.labelMedium).lineLimit(1).truncationMode(.middle)
+                    Image(systemName: open ? Theme.Icon.collapse : Theme.Icon.expand).font(Theme.Font.label)
                 }
-                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.sm)
+                .background(Theme.Fill.well, in: .capsule)
+                .contentShape(.capsule)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(ContextRef.summary(refs))
+            .accessibilityValue(open ? "已展开" : "已折叠")
+
+            if open {
+                VStack(alignment: .leading, spacing: 0) {
+                    if refs.count == 1 {
+                        ContextBody(ref: refs[0])
+                    } else {
+                        ForEach(Array(refs.enumerated()), id: \.offset) { n, r in
+                            if n > 0 { Divider() }
+                            ContextRow(ref: r, key: "\(pinKey)-\(n)", open: n == 0 && ContextGroup.shownOpen)
+                        }
+                    }
+                }
+                .scaledFrame(maxWidth: Theme.Size.box380, alignment: .leading)
+                .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+                .unfolding(unfold)
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .chatPinned(pinKey)
+    }
+}
+
+/// One context in an open group: its title; a tap shows its text.
+private struct ContextRow: View {
+    var ref: ContextRef
+    var key: String
+    @Environment(\.chatPin) private var pin
+    @State var open = false
+    @State private var unfold = Unfolding()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                Haptics.tap()
+                toggleInPlace(pin, key, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
+            } label: {
+                HStack(spacing: Theme.Space.s) {
+                    Image(systemName: ref.icon).font(Theme.Font.label).foregroundStyle(.secondary)
+                        .scaledFrame(width: Theme.Size.markM)
+                    Text(ref.label).font(Theme.Font.secondary).foregroundStyle(Color.primary).lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: Theme.Space.s)
+                    if ref.text.isEmpty { Text("空").font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1) }
+                    Image(systemName: Theme.Icon.disclosure).font(Theme.Font.label).foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                }
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.s)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(open ? "已展开" : "已折叠")
+            if open { ContextBody(ref: ref).unfolding(unfold) }
+        }
+        .chatPinned(key)
+    }
+}
+
+/// A context's text (scrolls inside a fixed height when long) and its page, when it has one.
+private struct ContextBody: View {
+    var ref: ContextRef
+    @Environment(\.openLink) private var openLink
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            if ref.text.isEmpty {
+                Text("没有内容").font(Theme.Font.caption).foregroundStyle(.tertiary)
+            } else if ref.text.count > 1200 {
+                ScrollView { text }.scaledFrame(height: Theme.Size.box300)
+            } else {
+                text
+            }
+            if let u = URL(string: ref.url), !ref.url.isEmpty {
+                Button { openLink?(u) } label: {
+                    Label("打开 \(ref.host)", systemImage: Theme.Icon.open).font(Theme.Font.labelMedium).lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.accent)
+            }
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.bottom, Theme.Space.m)
+        .padding(.top, Theme.Space.xs)
+    }
+
+    private var text: some View {
+        Text(ref.text).font(Theme.Font.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -348,7 +457,7 @@ struct ContextChips: View {
             HStack(spacing: Theme.Space.sm) {
                 ForEach(refs) { r in
                     HStack(spacing: Theme.Space.sm) {
-                        Image(systemName: "text.quote").font(Theme.Font.label)
+                        Image(systemName: Theme.Icon.quote).font(Theme.Font.label)
                         Text(r.text == "（整篇）" ? r.title : String(r.text.prefix(24))).font(Theme.Font.label).lineLimit(1)
                         Button { refs.removeAll { $0.id == r.id } } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.labelHeavy) }
                             .buttonStyle(.plain)

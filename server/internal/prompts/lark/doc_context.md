@@ -8,7 +8,9 @@
 {{range $i, $l := .Lines}}{{if $i}}
 {{end}}{{template "lark/line" $l}}{{end}}
 </jarvis-context>
-{{if .DocErr}}（文档正文读不到：{{.DocErr}}；需要的话用 lark-connector 的 documents/read 自己读，表格 / 多维表格按它们的接口读。）
+{{if .DocErr}}<jarvis-context kind="doc" title="文档正文" url="{{attr .URL}}">
+（读不到：{{.DocErr}}；需要的话用 lark-connector 的 documents/read 自己读，表格 / 多维表格按它们的接口读。）
+</jarvis-context>
 {{else}}<jarvis-context kind="doc" title="文档 · {{attr .DocTitle}}" url="{{attr .URL}}">
 {{.Markdown}}
 </jarvis-context>

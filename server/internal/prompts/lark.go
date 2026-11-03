@@ -11,9 +11,13 @@ type LarkAgent struct {
 	Owner   string // "" is 我
 	Title   string // the chat's / document's name
 	Task    string // what was asked after /agent; "" lets the agent work it out
+	Prefix  string // what starts a request ("/agent"): the message's own text when nothing else was written
 	Context string // RenderLarkChatContext / RenderLarkDocContext
 	Resumed bool   // the same thread asked before: the conversation goes on
 }
+
+// The instructions and every piece of context are <jarvis-context> blocks; the only text outside them, at the end,
+// is what the user wrote, so the apps show just that as the message and fold the rest (docs/lark-agent.md).
 
 func RenderLarkChatAgent(a LarkAgent) string { return render("lark/chat_agent", a) }
 func RenderLarkDocAgent(a LarkAgent) string  { return render("lark/doc_agent", a) }

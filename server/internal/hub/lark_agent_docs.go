@@ -85,7 +85,7 @@ func (h *Hub) runLarkAgentDoc(ctx context.Context, cfg LarkAgentConfig, d lark.R
 
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	contextText := h.larkAgentDocContext(cctx, d, t, at)
-	prompt := larkAgentDocPrompt(h.ownerName(), d.Title, task, contextText, resume != "")
+	prompt := larkAgentDocPrompt(h.ownerName(), d.Title, cfg.prefix(), task, contextText, resume != "")
 	machineID, sessionID, err := h.startLarkAgent(cctx, cfg, resumeMachine, resume, prompt)
 	cancel()
 
@@ -125,8 +125,8 @@ func (h *Hub) larkAgentDocContext(ctx context.Context, d lark.RecentDoc, t lark.
 	return prompts.RenderLarkDocContext(c)
 }
 
-func larkAgentDocPrompt(owner, title, task, contextText string, resumed bool) string {
-	return prompts.RenderLarkDocAgent(prompts.LarkAgent{Owner: owner, Title: title, Task: task, Context: contextText, Resumed: resumed})
+func larkAgentDocPrompt(owner, title, prefix, task, contextText string, resumed bool) string {
+	return prompts.RenderLarkDocAgent(prompts.LarkAgent{Owner: owner, Title: title, Prefix: prefix, Task: task, Context: contextText, Resumed: resumed})
 }
 
 var (

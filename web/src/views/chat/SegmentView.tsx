@@ -1,11 +1,11 @@
 import { memo } from "react";
 import { clock } from "../../lib/format";
-import { clickLink, linkHref } from "../../lib/links";
 import { isLoopTick, type Segment, type UserMessage } from "../../lib/turns";
 import type { Item } from "../../lib/types";
 import { EASE } from "../../ui/atoms";
 import { Markdown } from "../../ui/Markdown";
 import { LoopTick, MergedBubble, PeerMessage } from "./Messages";
+import { ContextGroup } from "./ContextGroup";
 import { MessageActions } from "./MessageActions";
 import { Thumb, WorkRow } from "./Steps";
 
@@ -19,19 +19,7 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
           ))}
         </div>
       )}
-      {msg.contexts.map((c, i) => (
-        <a
-          key={i}
-          href={c.url ? linkHref(c.url) : undefined}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => clickLink(e, c.url, c.title)}
-          className="flex max-w-full flex-col gap-0.5 rounded-[10px] border-l-2 border-accent bg-inset px-2.5 py-1.5 text-left shadow-hairline"
-        >
-          <span className="truncate text-[11.5px] font-medium text-ink-2">{c.kind === "edit" ? "AI 修改 · " : "上下文 · "}{c.title || c.url || "引用"}</span>
-          <span className="line-clamp-2 text-[12px] text-ink-3">{c.text}</span>
-        </a>
-      ))}
+      {msg.contexts.length > 0 && <ContextGroup contexts={msg.contexts} />}
       {msg.text && (pending ? (
         <div className="max-w-full rounded-[14px] bg-user-bubble px-3.5 py-2 text-[14px] leading-[1.55] whitespace-pre-wrap text-ink opacity-60 [overflow-wrap:anywhere]">{msg.text}</div>
       ) : (

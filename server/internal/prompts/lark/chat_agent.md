@@ -1,12 +1,7 @@
-{{$owner := or .Owner "我"}}{{if .Resumed}}{{$owner}}在同一个话题里又发了一条 /agent 请求（下面是最新的上下文）。{{else}}{{$owner}}在飞书「{{.Title}}」里用 /agent 叫你。这不是在电脑上开的会话，你只知道下面给出的上下文；不够就自己查（lark_*、kb_*、读文档、看各台电脑上的 Agent）。{{end}}
+{{$owner := or .Owner "我"}}<jarvis-context kind="instructions" title="给 Agent 的说明">
+{{if .Resumed}}{{$owner}}在同一个话题里又发了一条 /agent 请求（下面是最新的上下文）。{{else}}{{$owner}}在飞书「{{.Title}}」里用 /agent 叫你。这不是在电脑上开的会话，你只知道下面给出的上下文；不够就自己查（lark_*、kb_*、读文档、看各台电脑上的 Agent）。{{end}}
 
-## 请求
-
-{{or .Task "（没写具体要求：看上下文和引用的消息，判断他想让你做什么，比如回答问题、总结、给结论。）"}}
-
-## 上下文
-
-{{.Context}}
+他的请求是这条消息最后、所有 <jarvis-context> 标签外面的那段文字{{if not .Task}}（只写了 {{.Prefix}}，没写具体要求：看上下文和引用的消息，判断他想让你做什么，比如回答问题、总结、给结论）{{end}}；其余标签里是 hub 收集好的上下文。
 
 ## 怎么做
 
@@ -17,4 +12,5 @@
   要么现在就做掉再写，要么写成建议（「建议先下掉这个泳道」）。排期、答应别人的事、要花钱或影响别人的操作，一律只给建议。
 - 别用 lark_send 或别的方式自己往飞书发消息，别 ask_user / notify_user 打扰{{$owner}}：这里的回复就是交付。
 - 有新结论（项目进展、谁负责什么、截止时间）用 kb_update 写回知识库。
-
+</jarvis-context>
+{{.Context}}{{or .Task .Prefix}}

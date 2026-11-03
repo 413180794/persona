@@ -71,6 +71,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 新建 Persona 对话（#511）：mock 照 hub 的样子做，会话列表立刻推，transcript 先是空的，`MOCK_ASSISTANT_TRANSCRIPT_SECONDS`（默认 1）秒后才有第一句并推给打开的对话。
   App 里发出后对话页一直是这句（不出「还没有消息」）、侧栏的新对话选中、带工作中转圈。`MOCK_ASSISTANT_START_SECONDS=<秒>` 让这个 POST 晚回，
   等待中看气泡和「Persona 正在准备…」。`scripts/mock/test_assistant_mock.py` 管着 mock 的这几件事。
+- 飞书 /agent 的上下文（#876）：mock 加 `MOCK_LARK_AGENT=1`，「帮我约周五…」变成一条飞书 /agent 请求（说明和 7 项上下文在 `<jarvis-context>` 里，标签外只有请求）；`-openSession server/b2e4d6f8-0000-4000-8000-000000000003`，`-showContexts YES` 让上下文组和第一项打开。
 - Persona 侧栏：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`，「最近」多 36 个对话（超过显示的 30 个，出「查看全部」），前三个依次是需要你（红点）、未读（蓝点）、工作中（转圈）。
 - 跟到最新（`ChatFollowTests`，`MOCK_LONG_HISTORY=1`）：长会话打开在底部；在底部时来回复会跟到底（Persona 页的回复先按 `delta` 流式出）；往上翻出现「回到最新」、
   这时来回复不拽人；点了回到底部、之后照常跟随。Agent 对话页分四种打开方式测：普通、完成未看（`-showAsUnread YES`）、停在上次的位置（`-chat.read.<会话> <行 id>`），以及有磁盘缓存时冷启动回到离末尾很远的位置（mock 开 `/mock/paging?on=1` 像 hub 一样分页、`/mock/delay?s=3` 让缓存先上屏，#597；`/mock/reset` 会把两者关掉）。

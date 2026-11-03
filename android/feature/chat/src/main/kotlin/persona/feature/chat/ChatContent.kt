@@ -199,7 +199,7 @@ internal fun ChatLineContent(
         is ChatLine.Row -> when (line.row.type) {
             "user" -> line.row.item?.item?.let {
                 MergedUserBubble(listOf(it), textUpdates, onLastLine.takeIf { line.row.id == lastUserId },
-                    images = { userImages.forEach { image -> ChatPicture(session, image, loader, alignEnd = true) } })
+                    images = userPictures(userImages, session, loader))
             }
             "reply" -> line.row.item?.item?.let { MessageContent(it, false, textUpdates[it.id]) }
             "thinking" -> if (!style.hideThoughts) ThoughtContent(line.row.item?.text.orEmpty(), line.id, style.collapseThoughts)
@@ -214,7 +214,7 @@ internal fun ChatLineContent(
         }
         is ChatLine.MergedUsers -> MergedUserBubble(line.users.mapNotNull { it.item?.item }, textUpdates,
             onLastLine.takeIf { line.users.any { it.id == lastUserId } },
-            images = { userImages.forEach { image -> ChatPicture(session, image, loader, alignEnd = true) } })
+            images = userPictures(userImages, session, loader))
         is ChatLine.SplitHeader -> JTextButton("合并 ${line.count} 条输入", { onToggle(line.groupId) })
         is ChatLine.Work -> {
             // The running line counts its time up every second (R1); a finished one is still.
@@ -294,6 +294,10 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
         else ChatSystemLine(step.item.task?.detail ?: step.item.text.orEmpty(), step.item.task?.failed == true)
     }
 }
+
+/** The pictures shown inside a user bubble, or null when there are none (a message of only contexts has no bubble). */
+private fun userPictures(images: List<Item>, session: SessionKey, loader: ImageLoader): (@Composable () -> Unit)? =
+    if (images.isEmpty()) null else ({ images.forEach { image -> ChatPicture(session, image, loader, alignEnd = true) } })
 
 /** A message not in the transcript yet (the outbox): no long-press menu, its own status line has the actions. */
 @Composable

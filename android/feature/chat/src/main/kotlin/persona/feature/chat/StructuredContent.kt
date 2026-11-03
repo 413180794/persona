@@ -1,7 +1,6 @@
 package persona.feature.chat
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.*
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -19,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.Item
 import persona.core.designsystem.*
@@ -38,7 +36,9 @@ internal fun MessageContent(item: Item, user: Boolean, update: ChatTextUpdate? =
     val cut = item.fullSize != null && whole == null && update?.streaming != true
     val text = whole ?: update?.text ?: item.text.orEmpty().let { if (item.fullSize != null) cutText(it) else it }
     val model = remember(text, item.from) { messageModel(text, item.from) }
+    val uri = LocalUriHandler.current
     Column(Modifier.fillMaxWidth().messageMenu(MessageTarget(item.id, model.plain, user, model.editText()))) {
+        MessageContextGroup(model.contexts, "${item.id}/contexts", uri::openUri, alignEnd = user)
         MessageParts(model.parts, user, item.id)
         if (cut) FullTextButton(item) { whole = it } else ReaderEntry(text)
         if (update?.streaming == true) StreamingCursor()
@@ -66,7 +66,6 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
                         onLastLine?.invoke((layout.size.height - layout.getLineTop(layout.lineCount - 1)).toInt() + bottomPadding)
                 })
                 else ChatMarkdown(part.text, "$id/$index", selectable = false)
-            is MessagePart.Reference -> ReferenceCard(part)
             is MessagePart.Source -> JGroupItem(GroupPosition.Single) {
                 Column(Modifier.fillMaxWidth().padding(10.dp)) {
                     Text("来自 ${part.name}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
@@ -77,34 +76,17 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
     }
 }
 
-@Composable
-private fun ReferenceCard(reference: MessagePart.Reference) {
-    val uri = LocalUriHandler.current
-    val url = reference.url
-    val canOpen = url?.let { runCatching { java.net.URI(it).scheme?.lowercase() in setOf("http", "https") }.getOrDefault(false) } == true
-    JGroupItem(GroupPosition.Single, Modifier.clickable(enabled = canOpen) { if (canOpen) uri.openUri(url!!) }) {
-        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            Text(if (reference.kind == "edit") "待修改内容" else "关联上下文", style = PersonaTheme.type.micro,
-                color = PersonaTheme.palette.ink2)
-            Text(reference.title, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (reference.quote.isNotBlank()) Text(reference.quote, maxLines = 4, overflow = TextOverflow.Ellipsis,
-                style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-            if (canOpen) JTextButton("查看原文", { uri.openUri(url!!) }, icon = PhIcons.ArrowSquareOut)
-            else if (url != null) Text(url, color = PersonaTheme.palette.ink2,
-                style = PersonaTheme.type.micro, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
 /**
  * Your message (several queued ones read as one): the photos it carries above its text (`<attached_images>`, read from
- * the session's machine, R3), its file paths as chips under the bubble, a long press for the message menu.
+ * the session's machine, R3), its file paths as chips under the bubble, a long press for the message menu. Its
+ * `<jarvis-context>` blocks fold into one row above the bubble; a message of nothing but blocks has no bubble (#876).
  */
 @Composable
 internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUpdate> = emptyMap(),
     onLastLine: ((Int) -> Unit)? = null, images: (@Composable () -> Unit)? = null, menu: Boolean = true) {
     val models = remember(items, updates) { items.map { messageModel(updates[it.id]?.text ?: it.text.orEmpty(), it.from) } }
     val parts = remember(models) { models.flatMap { it.parts } }
+    val contexts = remember(models) { models.flatMap { it.contexts } }
     val photos = remember(models) { models.flatMap { it.images }.distinct() }
     val files = remember(models) { models.flatMap { it.files }.distinct().take(6) }
     val target = remember(models, items) {
@@ -122,15 +104,22 @@ internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUp
             time?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
         }
     })
-    UserBubbleFrame(Modifier.messageMenu(target.takeIf { menu }), footer = footer) {
-        images?.invoke()
-        if (photos.isNotEmpty()) {
-            AttachedPhotoRow(photos)
-            if (parts.isNotEmpty()) Spacer(Modifier.height(Tokens.Space.s))
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            MessageParts(parts, true, items.firstOrNull()?.id.orEmpty(), onLastLine)
-            if (items.any { updates[it.id]?.streaming == true }) StreamingCursor()
+    val uri = LocalUriHandler.current
+    val streaming = items.any { updates[it.id]?.streaming == true }
+    // Only blocks, no words, photos or cursor: the folded row alone, no empty bubble.
+    val bubble = contexts.isEmpty() || parts.isNotEmpty() || photos.isNotEmpty() || images != null || streaming
+    Column(Modifier.fillMaxWidth()) {
+        MessageContextGroup(contexts, "${items.firstOrNull()?.id.orEmpty()}/contexts", uri::openUri)
+        if (bubble) UserBubbleFrame(Modifier.messageMenu(target.takeIf { menu }), footer = footer) {
+            images?.invoke()
+            if (photos.isNotEmpty()) {
+                AttachedPhotoRow(photos)
+                if (parts.isNotEmpty()) Spacer(Modifier.height(Tokens.Space.s))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                MessageParts(parts, true, items.firstOrNull()?.id.orEmpty(), onLastLine)
+                if (streaming) StreamingCursor()
+            }
         }
     }
 }

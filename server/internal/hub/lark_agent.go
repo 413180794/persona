@@ -223,7 +223,7 @@ func (h *Hub) runLarkAgent(ctx context.Context, cfg LarkAgentConfig, feedID stri
 	}
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	chat, contextText := h.larkAgentContext(cctx, cfg, feedID, m)
-	prompt := larkAgentPrompt(h.ownerName(), chat, task, contextText, resume != "")
+	prompt := larkAgentPrompt(h.ownerName(), chat, cfg.prefix(), task, contextText, resume != "")
 	machineID, sessionID, err := h.startLarkAgent(cctx, cfg, resumeMachine, resume, prompt)
 	cancel()
 
@@ -375,8 +375,8 @@ func larkTranscript(msgs []lark.Message, requestID string, limit int, loc *time.
 	return prompts.RenderLarkTranscript(lines, limit)
 }
 
-func larkAgentPrompt(owner, chat, task, contextText string, resumed bool) string {
-	return prompts.RenderLarkChatAgent(prompts.LarkAgent{Owner: owner, Title: chat, Task: task, Context: contextText, Resumed: resumed})
+func larkAgentPrompt(owner, chat, prefix, task, contextText string, resumed bool) string {
+	return prompts.RenderLarkChatAgent(prompts.LarkAgent{Owner: owner, Title: chat, Prefix: prefix, Task: task, Context: contextText, Resumed: resumed})
 }
 
 // --- replying ---

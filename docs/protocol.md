@@ -1183,6 +1183,6 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | 标签 | 谁写 | 含义 / 显示 |
 | --- | --- | --- |
 | `<attached_images>` 每行一个路径 `</attached_images>` | hub（手机发图） | 消息附带的图片；气泡上方方形缩略图 |
-| `<jarvis-context kind="context\|edit" title="…" url="…">文字</jarvis-context>` | 手机（链接卡片里选中文字） | 关联上下文 / 要改的内容；气泡上方引用卡片 |
+| `<jarvis-context kind="context\|edit\|doc\|instructions" title="…" url="…">文字</jarvis-context>` | 手机（链接卡片里选中文字）、hub（飞书 /agent 的说明和上下文） | 不是用户写的：所有块收成气泡旁一行「上下文 · N 项」（只有一块时「上下文 · 标题」），默认折叠；展开是标题列表，每项再点开看正文和链接。属性顺序任意、可以缺（`url` 常缺）；标签外的文字才是用户写的 |
 | `<cross-session-message from-name="…">…</cross-session-message>` | Claude Code（会话间消息） | 左侧「来自 名字」卡片 |
 

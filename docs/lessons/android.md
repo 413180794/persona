@@ -137,3 +137,4 @@
 - 对话页给每一行的能力（`LocalChatRowActions`）要在流式更新时保持同一个对象：读它的行（几乎每一行）会在它换对象时全部重组。会随消息变的东西（这段对话的图片列表）做成打开时才读的函数，不要放进 `remember` 的键（`ChatScreen` 里的 `pictures`）。
 
 - 逐像素截图（`android.sh shots` 的 `SHOTS_*`，`docs/android.md`「改前改后逐像素比对」）：Android 15 的 SystemUI 演示模式隐藏移动网络后约 5 秒会冒出一个卫星图标，演示命令和 `icon_blacklist` 都去不掉，只能等它出现后再截（每张图都带着它）；`adb root` 会重启 adbd，之前的 `adb reverse` 跟着没了，要先 root 再转发；macOS 的 `sips -Z` 直接改原图，看图前先拷一份；macOS 自带 bash 3.2 在 `set -u` 下展开空数组报错，写成 `${arr[@]+"${arr[@]}"}`。
+- 用 Homebrew 装的 Android SDK 在 `/opt/homebrew/share/android-commandlinetools`（不是 `~/Library/Android/sdk`），默认 Java 是 JDK 8：跑 `android.sh` 前设 `ANDROID_HOME` 为它、`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`。自建 AVD 用单独的 `ANDROID_AVD_HOME`，别动别人在跑的模拟器。准备清单（首次启动）挡着时，先跑一遍 `android.sh shots`，它会清数据、配对、跳过准备，之后用 `DebugEntryActivity --es debug.mockAddress …` 换到自己的假 hub。

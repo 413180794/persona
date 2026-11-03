@@ -52,7 +52,9 @@ class MessageTextTest {
     @Test fun previewsSayPicture() {
         assertEquals("[图片]\nlook", cleanText("<attached_images>\n/tmp/a.png\n</attached_images>\nlook"))
         assertEquals("[图片]", cleanText("<attached_images>\n/tmp/a.png\n</attached_images>"))
-        assertEquals("「引用」\n看看", cleanText("<jarvis-context kind=\"context\" title=\"t\" url=\"\">引用</jarvis-context>看看"))
+        // A context block is not what the user wrote: previews leave it out (#876).
+        assertEquals("看看", cleanText("<jarvis-context kind=\"context\" title=\"t\" url=\"\">引用</jarvis-context>看看"))
+        assertEquals("", cleanText("<jarvis-context kind=\"doc\" title=\"t\">正文</jarvis-context>"))
         assertEquals("hey", cleanText("<cross-session-message from-name=\"other\">hey</cross-session-message>"))
     }
 }

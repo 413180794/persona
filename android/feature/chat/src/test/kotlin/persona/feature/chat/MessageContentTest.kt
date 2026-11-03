@@ -50,7 +50,21 @@ class MessageContentTest {
             "改了 src/a.kt 和 /w/p/b.md\n<attached_images>\n/w/p/shot.png\n</attached_images>")
         assertEquals(listOf("src/a.kt", "/w/p/b.md"), model.files)
         assertEquals("改了 src/a.kt 和 /w/p/b.md", model.plain)
-        assertTrue(model.parts.first() is MessagePart.Reference)
+        // The context is not a part of the words: it folds into its own row (#876).
+        assertEquals(listOf(MessagePart.Text("改了 src/a.kt 和 /w/p/b.md")), model.parts)
+        assertEquals("/x/y/quoted.kt", model.contexts.single().body)
+    }
+
+    @Test fun aFeishuAgentRequestShowsOnlyWhatWasAsked() {
+        val model = messageModel("<jarvis-context kind=\"instructions\" title=\"给 Agent 的说明\">\n很长的说明\n</jarvis-context>\n" +
+            "<jarvis-context kind=\"context\" title=\"请求的位置\">\n位置：群聊「发布群」\n</jarvis-context>\n" +
+            "<jarvis-context kind=\"context\" title=\"项目 · 发布\">\n</jarvis-context>\n看下构建为什么挂了")
+        assertEquals(listOf(MessagePart.Text("看下构建为什么挂了")), model.parts)
+        assertEquals("看下构建为什么挂了", model.plain)
+        assertEquals(listOf("instructions", "context", "context"), model.contexts.map { it.kind })
+        val onlyContexts = messageModel("<jarvis-context kind=\"doc\" title=\"文档\">正文</jarvis-context>")
+        assertTrue(onlyContexts.parts.isEmpty())
+        assertEquals(1, onlyContexts.contexts.size)
     }
 
     @Test fun anotherSessionsMessageKeepsItsWords() {

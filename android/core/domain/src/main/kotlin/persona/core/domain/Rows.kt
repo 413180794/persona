@@ -41,11 +41,12 @@ fun buildRows(items: List<Item>): List<Row> {
 
 /**
  * A message as one plain text for previews (docs/protocol.md「消息里的标签」): what the hub / Claude Code wrap around
- * typed text unwrapped, photos as 「[图片]」. A conversation row draws photos as thumbnails instead ([messageText]).
+ * typed text unwrapped, photos as 「[图片]」. `<jarvis-context>` blocks are not what the user wrote and are left out
+ * ([parseContexts]); a message of nothing but blocks previews as empty. A conversation row draws photos as thumbnails
+ * instead ([messageText]) and folds the blocks into one row.
  */
 fun cleanText(s: String): String {
-    val shown = messageText(s
-        .replace(Regex("<jarvis-context[^>]*>([\\s\\S]*?)</jarvis-context>"), "「$1」\n")
+    val shown = messageText(parseContexts(s).second
         .replace(Regex("<cross-session-message[^>]*>([\\s\\S]*?)</cross-session-message>"), "$1"), files = false)
     return if (shown.images.isEmpty()) shown.text else ("[图片]\n" + shown.text).trim()
 }

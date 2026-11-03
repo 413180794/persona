@@ -715,7 +715,7 @@ func markWake(items []proto.Item) {
 }
 
 func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []proto.Item {
-	trimmed := strings.TrimSpace(caveatRe.ReplaceAllString(pastedRe.ReplaceAllString(ContextRe.ReplaceAllString(s, ""), ""), ""))
+	trimmed := legacyLarkAgent(strings.TrimSpace(caveatRe.ReplaceAllString(pastedRe.ReplaceAllString(ContextRe.ReplaceAllString(s, ""), ""), "")))
 	if trimmed == "" {
 		return nil
 	}
@@ -919,6 +919,12 @@ func light(it proto.Item, keepImage bool) (_ proto.Item, cut bool) {
 	limit, note := pageTextLen, "\n…（已截断，共 %d 字节）"
 	if it.Kind == proto.KindToolResult {
 		limit, note = pageOutputLen, "\n…（已截断，点开看全文，共 %d 字节）"
+	}
+	if len(it.Text) > limit && it.Role == "user" && it.Kind == proto.KindText {
+		if t, ok := lightContexts(it.Text, limit); ok { // what the user wrote stays whole, the blocks' bodies are cut
+			it.FullSize, it.Text = len(it.Text), t
+			cut = true
+		}
 	}
 	if len(it.Text) > limit {
 		end := limit

@@ -128,7 +128,7 @@ struct UserBubble: View, Equatable {
         let shown = d.shown
         let images = d.images
         VStack(alignment: .trailing, spacing: Theme.Space.sm) {
-            if !parsed.refs.isEmpty { ContextCards(refs: parsed.refs) }
+            if !parsed.refs.isEmpty { ContextGroup(refs: parsed.refs, key: item.id) }
             if !images.isEmpty, let loadImage {
                 AttachedImages(paths: images, load: loadImage)
             }

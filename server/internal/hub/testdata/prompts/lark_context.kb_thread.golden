@@ -2,6 +2,7 @@
 ---
 <jarvis-context kind="context" title="请求的位置">
 位置：群聊里的一个话题「发布群」（feed_id f1）；请求消息 id req，2026-10-31 09:05 发出。
+知识库里这个会话的 id：lark-f1（kb_get / kb_search 查更多）。
 </jarvis-context>
 <jarvis-context kind="context" title="这个话题里的消息">
 10-31 09:00 张三：构建挂了，看下 https://example.feishu.cn/docx/AbC123 里的步骤
@@ -31,5 +32,3 @@
 周五灰度
 
 </jarvis-context>
-
-知识库里这个会话的 id：lark-f1（kb_get / kb_search 查更多）。

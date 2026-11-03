@@ -972,19 +972,17 @@ nonisolated enum ChatCache {
     /// they scrolled out. v3: notices carry `task` (a page's copy of an item never replaces the cached one: old
     /// notices stayed centered blocks). v4: Codex unknown events are retained and external sources have distinct identities.
     /// v5: several groups of hubs (docs/multi-hub.md): the default group's copies at the top, another group's in
-    /// `group-<id>/`. The items did not change, so v4's copies are moved over as they are (`moveOlder`): an upgrade
-    /// keeps the cached chats. Bump it whenever the item structure changes.
-    static let folder = "chats-v5"
-    /// The folder before, whose copies are the default group's (same items, same names).
-    private static let previous = "chats-v4"
+    /// `group-<id>/`. v6: a Feishu /agent request's first message is rewritten by the hub (its instructions in a
+    /// <jarvis-context> block, #876), so v5's copies would keep showing the old text: they are dropped, not moved
+    /// (`dropOlder`). Bump it whenever the item structure or the text the hub gives an item changes.
+    static let folder = "chats-v6"
+    /// The folder before, removed on the first launch with this one.
+    private static let previous = "chats-v5"
 
     /// Once per launch, before the first copy is read or written (a static let runs once, on whichever thread asks first).
-    private static let moveOlder: Void = {
+    private static let dropOlder: Void = {
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
-        let old = base.appending(path: previous), new = base.appending(path: folder)
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) else { return }
-        try? fm.moveItem(at: old, to: new)
+        try? FileManager.default.removeItem(at: base.appending(path: previous))
     }()
 
     /// Whether a caches folder is one of ChatCache's, this version or an older one ("chats", "chats-v<N>"): what
@@ -1005,7 +1003,7 @@ nonisolated enum ChatCache {
     }
 
     private static func directory(_ group: String) -> URL? {
-        _ = moveOlder
+        _ = dropOlder
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
         let dir = base.appending(path: folder)
         guard !group.isEmpty else { return dir }
@@ -1028,7 +1026,7 @@ nonisolated enum ChatCache {
     }
 
     static func removeAll() {
-        _ = moveOlder
+        _ = dropOlder
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
         try? FileManager.default.removeItem(at: base.appending(path: folder))
     }

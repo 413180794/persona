@@ -468,5 +468,39 @@ struct TurnTests {
         #expect(parsed.rest == "按要求修改上面选中的内容：更短")
         #expect(ContextRef.parse("没有标签").refs.isEmpty)
     }
-}
 
+    /// A Feishu /agent request (prompts/lark): instructions and context in blocks without a url, the request outside.
+    static let larkAgentMessage = """
+        <jarvis-context kind="instructions" title="给 Agent 的说明">
+        示例用户在飞书「发布群」里用 /agent 叫你。
+
+        ## 怎么做
+
+        - 做完回复一次。
+        </jarvis-context>
+        <jarvis-context kind="context" title="请求的位置">
+        位置：群聊「发布群」
+        </jarvis-context>
+        <jarvis-context kind="doc" title="文档 · 手册" url="https://example.com/d">
+        第一步
+        </jarvis-context>
+        <jarvis-context kind="context" title="项目 · 发布">
+        </jarvis-context>
+        看下构建为什么挂了
+        """
+
+    @Test func larkAgentRequestShowsOnlyWhatWasWritten() {
+        let parsed = ContextRef.parse(Self.larkAgentMessage)
+        #expect(parsed.rest == "看下构建为什么挂了")
+        #expect(parsed.refs.map(\.kind) == ["instructions", "context", "doc", "context"])
+        #expect(parsed.refs.map(\.title) == ["给 Agent 的说明", "请求的位置", "文档 · 手册", "项目 · 发布"])
+        #expect(parsed.refs[2].url == "https://example.com/d" && parsed.refs[1].url.isEmpty && parsed.refs[3].text.isEmpty)
+        #expect(ContextRef.summary(parsed.refs) == "上下文 · 4 项")
+        #expect(ContextRef.summary([parsed.refs[1]]) == "上下文 · 请求的位置")
+        #expect(UserRowText(Self.larkAgentMessage).shown == "看下构建为什么挂了")
+        // Attributes in another order still read.
+        let swapped = ContextRef.parse("<jarvis-context url=\"https://x\" title=\"T\" kind=\"edit\">x</jarvis-context>改短")
+        #expect(swapped.refs.first?.kind == "edit" && swapped.refs.first?.title == "T" && swapped.rest == "改短")
+        #expect(WatchText.shown(Self.larkAgentMessage) == "〔上下文 4 项〕\n看下构建为什么挂了")
+    }
+}

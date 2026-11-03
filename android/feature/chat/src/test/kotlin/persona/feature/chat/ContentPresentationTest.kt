@@ -29,13 +29,13 @@ class ContentPresentationTest {
 
     @Test fun preservesReferenceMetadataAndMergesQueuedUsersIntoOneLine() {
         val text = """<jarvis-context kind="edit" title="页面 &amp; 说明" url="https://example.com/document?a=1&amp;b=2">待修改内容</jarvis-context>请修改<pasted_content id="sample">这段</pasted_content>"""
-        val parts = messageParts(text)
-        val reference = parts.filterIsInstance<MessagePart.Reference>().single()
+        val model = messageModel(text)
+        val reference = model.contexts.single()
         assertEquals("页面 & 说明", reference.title)
         assertEquals("edit", reference.kind)
         assertEquals("https://example.com/document?a=1&b=2", reference.url)
-        assertEquals("待修改内容", reference.quote)
-        assertEquals("请修改这段", parts.filterIsInstance<MessagePart.Text>().single().text)
+        assertEquals("待修改内容", reference.body)
+        assertEquals(listOf<MessagePart>(MessagePart.Text("请修改这段")), model.parts)
         val source = messageParts("""<cross-session-message from-name="其他会话">内容</cross-session-message>""").single() as MessagePart.Source
         assertEquals("其他会话", source.name)
         assertEquals("内容", source.text)

@@ -336,10 +336,10 @@ func TestGoldenDefaultRoutines(t *testing.T) {
 
 func TestGoldenLarkAgentPrompts(t *testing.T) {
 	ctxText := "<jarvis-context kind=\"context\" title=\"请求的位置\">\n位置：群聊「发布群」\n</jarvis-context>\n"
-	golden(t, "lark_agent.chat_new", larkAgentPrompt("示例用户", "发布群", "看下构建为什么挂了", ctxText, false))
-	golden(t, "lark_agent.chat_resumed_notask", larkAgentPrompt("", "发布群", "", ctxText, true))
-	golden(t, "lark_agent.doc_new", larkAgentDocPrompt("示例用户", "构建手册", "这段对吗", ctxText, false))
-	golden(t, "lark_agent.doc_resumed_notask", larkAgentDocPrompt("", "构建手册", "", ctxText, true))
+	golden(t, "lark_agent.chat_new", larkAgentPrompt("示例用户", "发布群", "/agent", "看下构建为什么挂了", ctxText, false))
+	golden(t, "lark_agent.chat_resumed_notask", larkAgentPrompt("", "发布群", "/agent", "", ctxText, true))
+	golden(t, "lark_agent.doc_new", larkAgentDocPrompt("示例用户", "构建手册", "/agent", "这段对吗", ctxText, false))
+	golden(t, "lark_agent.doc_resumed_notask", larkAgentDocPrompt("", "构建手册", "/agent", "", ctxText, true))
 }
 
 func TestGoldenLarkAgentContext(t *testing.T) {

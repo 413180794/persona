@@ -66,6 +66,17 @@ describe("parseUserText", () => {
     expect(p.text).toBe("fix it");
     expect(p.contexts).toEqual([{ kind: "edit", title: "Doc & co", url: "https://x", text: "sel" }]);
   });
+
+  it("leaves only the request of a Feishu /agent prompt as the text", () => {
+    const raw =
+      '<jarvis-context kind="instructions" title="给 Agent 的说明">\n示例用户在飞书「发布群」里用 /agent 叫你。\n\n## 怎么做\n\n- 做完回复一次。\n</jarvis-context>\n' +
+      '<jarvis-context kind="context" title="请求的位置">\n位置：群聊「发布群」\n</jarvis-context>\n' +
+      '<jarvis-context kind="context" title="项目 · 发布">\n</jarvis-context>\n看下构建为什么挂了';
+    const p = parseUserText(raw);
+    expect(p.text).toBe("看下构建为什么挂了");
+    expect(p.contexts.map((c) => [c.kind, c.title])).toEqual([["instructions", "给 Agent 的说明"], ["context", "请求的位置"], ["context", "项目 · 发布"]]);
+    expect(p.contexts[2].text).toBe("");
+  });
 });
 
 it("toolChip shows the first line of a command", () => {
