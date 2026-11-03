@@ -564,7 +564,6 @@ struct StarterComposer: View {
 
     var body: some View {
         VStack(spacing: Theme.Space.s) {
-            if !recordingContexts.isEmpty { ContextChips(refs: $recordingContexts) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty { ComposerImages(images: $images) }
@@ -572,7 +571,7 @@ struct StarterComposer: View {
                 ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
                                  canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty || !recordingContexts.isEmpty,
                                  modesWarn: shell.mode == "bypassPermissions",
-                                 send: submit) {
+                                 quotes: $recordingContexts, send: submit) {
                     attachments
                 } modes: {
                     StarterModesMenu(modes: shell, launchers: launchers)
@@ -580,7 +579,7 @@ struct StarterComposer: View {
                 .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID)))?.filter(\.runsAssistant) ?? [] }
             } else {
                 ComposerRow(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
-                            send: submit) {
+                            send: submit, quotes: $recordingContexts) {
                     attachments
                 }
             }
@@ -656,7 +655,6 @@ struct BeautifulStarterComposer: View {
 
     var body: some View {
         VStack(spacing: Theme.Space.s) {
-            if !quotes.isEmpty { ContextChips(refs: $quotes) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty { ComposerImages(images: $images) }
@@ -682,6 +680,7 @@ struct BeautifulStarterComposer: View {
                                quotes.append(ref)
                                return true
                            },
+                           quotes: $quotes,
                            send: {
                                let typed = text
                                let t = typed.trimmingCharacters(in: .whitespacesAndNewlines)

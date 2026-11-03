@@ -17,6 +17,8 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var stop: (() -> Void)?
     /// Mode / effort warns (全部放行): the gauge is red.
     var modesWarn = false
+    /// What goes with the message, quoted at the top of the card (#986); quotes keep it open (`hasAttachments`).
+    var quotes: Binding<[ContextRef]>? = nil
     var send: () -> Void
     @ViewBuilder var attach: () -> Attach
     @ViewBuilder var modes: () -> Modes
@@ -39,6 +41,12 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if expanded, let quotes, !quotes.wrappedValue.isEmpty {
+                QuoteBar(refs: quotes)
+                    .padding(.leading, Theme.Space.l)
+                    .padding(.trailing, Theme.Space.s)
+                    .padding(.top, Theme.Space.m)
+            }
             HStack(alignment: .bottom, spacing: Theme.Space.xs) {
                 if !expanded { plus }
                 TextField(placeholder, text: $text, selection: $selection, axis: .vertical)

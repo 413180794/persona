@@ -53,8 +53,20 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   卡片升到 60% 时后面的对话照常可滚动、可输入（`presentationBackgroundInteraction`）。飞书文档 / 知识库走原生阅读器（`FeishuDocReader`），
   其他网页用 `WebViewPool`：每条回复出现时预加载其中前 3 个链接，最多常驻 6 个 WKWebView（LRU），共用默认的磁盘网站数据（缓存、登录态），
   请求用 `returnCacheDataElseLoad`，打开时直接拿已加载好的视图。网页里选中文字，系统菜单多「AI 修改」（填修改要求后立即发给 Agent）和
-  「作为上下文」（输入框上方出现上下文标签，随下一条消息发送）；原生飞书文档用标题栏的「作为上下文」带整篇。上下文在消息里是
-  `<jarvis-context kind="context|edit" title="…" url="…">选中文字</jarvis-context>`，气泡里解析成引用卡片（点开回到那个链接），原始标签不显示。
+  「作为上下文」（输入框上方出现引用条，随下一条消息发送）；原生飞书文档用标题栏的「作为上下文」带整篇。上下文在消息里是
+  `<jarvis-context kind="context|edit" title="…" url="…">选中文字</jarvis-context>`，原始标签不显示。
+- 引用（#986，2026-11-03 用户要求，参考 Telegram 的回复；组件在 `DesignSystem/QuoteViews.swift`）：
+  - **输入框上方**：长按消息 › 引用、链接页的「作为上下文」、@ 会话、录音上下文，都以引用条的样子放进输入框里、文字框上面。
+    一条引用由这几部分组成：一道强调色竖线；标题，如「引用 Claude」「引用 你的消息」「引用选中的文字 · 页面」「引用会话 …」；摘要；右边的 × 取消。
+    一条时摘要两行；有几条就竖着叠起来，每条一行摘要。
+  - **发出后**：自己的气泡顶部嵌同样的引用块，气泡和最宽的一块一样宽。点引用块：
+    - 引用的是这个对话里的消息（`kind="quote"`，带 `msg="<消息 id>"` 属性），就滚到原消息，并给那一行亮一下（`QuoteFlash`）；
+    - 原消息不在已加载的对话里，就展开全文；
+    - 网页摘录则打开那一页。
+  - **两套样式**：液态玻璃等风格画 Telegram 的竖线加文字（气泡里垫一层淡色）；BeautifulUI 画一张小卡片，竖线贴在卡片左边。
+  - **不算引用的**：hub 给飞书 /agent 请求带的说明和文档（kind instructions / doc）还是折成一行（`ContextGroup`）。
+  - **飞书聊天页**：回复条也放进输入框里，气泡里的引用块点了跳回原消息。
+  - 截图：`-showSampleQuotes YES` 在输入框上方加一段网页摘录和一个会话；端到端的用例是 `QuoteBubbleTests`。
 - 文件：消息里出现的路径显示成可点的文件标签，工具卡片里 Read / Edit / Write 的路径也能点；在会话所在机器上读取
   （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
 - 同空间的其他 Agent（Agents 页）：顶栏第二行是 tab 条（`SiblingTabs`，2026-10-31 用户要求恢复平铺）：每个 tab 一个胶囊，胶囊的底色就是状态色

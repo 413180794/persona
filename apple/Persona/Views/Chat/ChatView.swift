@@ -117,6 +117,8 @@ struct ChatView: View {
     @State private var openTools = OpenTools()
     /// What the environment's actions call (`ChatActions`).
     @State private var actions = ChatActions()
+    /// The line a quote just led back to, lit up for a moment (`QuoteFlash`).
+    @State private var quoteFlash: QuoteFlashMark?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -518,7 +520,8 @@ struct ChatView: View {
                 if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
             },
             openFold: openFold,
-            jumpToCall: { jumpToCall($0) })
+            jumpToCall: { jumpToCall($0) },
+            openQuote: { jumpToQuoted($0) })
     }
 
     /// Folds or opens a work line without moving what you were reading. In the upside-down list the newest end holds
@@ -1008,6 +1011,48 @@ struct ChatView: View {
         .environment(\.openFold, actions.openFold)
         .environment(\.taskIndex, store.tasks)
         .environment(\.jumpToCall, actions.jumpToCall)
+        .environment(\.openQuote, actions.openQuote)
+    }
+
+    /// From a quote in a sent bubble to the message it quotes (#986): brought to the middle of the list and lit up
+    /// for a moment. False when it is not in the loaded chat (an older page, another conversation): the block shows
+    /// its whole text instead.
+    private func jumpToQuoted(_ ref: ContextRef) -> Bool {
+        guard ref.kind == "quote", !ref.msg.isEmpty else { return false }
+        var target: String?
+        for line in currentLines() {
+            switch line.content {
+            case .row, .recaps:
+                if line.holds(ref.msg) { target = line.id }
+            case .mergedUsers(_, let rows):
+                if rows.contains(where: { $0.id == ref.msg }) { target = line.id }
+            case .work(let wid, let items, _, _, _):
+                // The agent's words before its last ones are in the work line: open it, go to that step.
+                if let item = items.first(where: { if case .text(let i) = $0 { i.id == ref.msg } else { false } }) {
+                    if !isOpen(wid) {
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) { if Self.debugOpenAll { openWork.remove(wid) } else { openWork.insert(wid) } }
+                    }
+                    target = wid + "/" + item.id
+                }
+            case .workStep(let group, let item, _):
+                if case .text(let i) = item, i.id == ref.msg { target = group + "/" + item.id }
+            default: break
+            }
+            if target != nil { break }
+        }
+        guard let target else { return false }
+        wakeDrawer = nil
+        userScrolled = true
+        followsEnd = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120)) // an opened work line's steps are laid out first
+            withAnimation(Theme.Motion.standard) { position.scrollTo(id: target, anchor: .center) }
+            try? await Task.sleep(for: .milliseconds(250))
+            quoteFlash = QuoteFlashMark(line: target)
+        }
+        return true
     }
 
     /// From a background task's notice to the call that started it: opens the work line it is folded in and brings
@@ -1278,6 +1323,7 @@ struct ChatView: View {
                 let prefetch = Set(lines.prefix(12).map(\.id))
                 ForEach(lines.reversed()) { line in
                     lineView(line)
+                        .background { if quoteFlash?.line == line.id { QuoteFlash().id(quoteFlash?.id) } }
                         .flippedBack()
                         .debugLineY(line.id, scratch)
                         .landingFrame(line.id == landing, scratch)
@@ -2150,12 +2196,16 @@ struct ChatView: View {
         return blocks
     }
 
-    /// 引用 puts the message as a quote in front of the draft; 编辑 replaces the draft with your old message.
+    /// 引用 puts the message over the box as a quote that goes with the next message (#986); 编辑 replaces the draft
+    /// with your old message.
     private func bindMenu() {
-        menu.quote = { [model, key] text in
-            let quoted = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n")
-            let draft = model.drafts[key] ?? ""
-            model.drafts[key] = quoted + "\n\n" + draft
+        menu.quote = { [model, key] text, id, isUser in
+            let from = isUser ? "我" : (model.session(key)?.agentLabel ?? "Claude")
+            var quotes = model.composerContexts[key] ?? []
+            guard !quotes.contains(where: { $0.kind == "quote" && $0.msg == id && !id.isEmpty }) else { return }
+            quotes.append(.quote(text, from: from, msg: id))
+            withAnimation(Theme.Motion.state) { model.composerContexts[key] = quotes }
+            Haptics.tap()
         }
         menu.edit = { [model, key] text in model.drafts[key] = text }
         menu.agent = { [model, key] in model.session(key)?.agentLabel ?? "Claude" }
@@ -2413,7 +2463,6 @@ struct Composer: View, Equatable {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            if !(model.composerContexts[key] ?? []).isEmpty { ContextChips(refs: contexts) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty {
@@ -2426,6 +2475,7 @@ struct Composer: View, Equatable {
                                  hasAttachments: hasAttachments,
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                  modesWarn: model.session(key)?.permissionMode == "bypassPermissions",
+                                 quotes: contexts,
                                  send: { Task { await sendText(text) } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -2467,6 +2517,7 @@ struct Composer: View, Equatable {
                                    confirmClear = true
                                    return true
                                },
+                               quotes: contexts,
                                send: { // the bar clears the draft right after
                                    let t = text
                                    if videos.busy { return holdForVideos(restoring: t) }
@@ -2476,7 +2527,7 @@ struct Composer: View, Equatable {
                 ComposerRow(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
                             text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                             stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
-                            send: { Task { await sendText(text) } }) {
+                            send: { Task { await sendText(text) } }, quotes: contexts) {
                     // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -2500,6 +2551,12 @@ struct Composer: View, Equatable {
         }
         .disabled(!allowsSend)
         #if DEBUG
+        .task { // `-showSampleQuotes YES`: a page's text and another session quoted over the box (#986, screenshots)
+            guard UserDefaults.standard.bool(forKey: "showSampleQuotes") else { return }
+            try? await Task.sleep(for: .seconds(3))
+            let have = contexts.wrappedValue
+            contexts.wrappedValue += ContextRef.samples.filter { s in !have.contains { $0.url == s.url } } // the task may run again
+        }
         .task { // `-focusComposer YES`: the keyboard up, for screenshots of the chat while typing
             if UserDefaults.standard.bool(forKey: "focusComposer") {
                 try? await Task.sleep(for: .seconds(6))
@@ -3170,6 +3227,7 @@ struct WorkStepView: View, Equatable {
         var openSubagent: (String) -> Void = { _ in }
         var openFold: (Item) async throws -> Void = { _ in }
         var jumpToCall: (String) -> Void = { _ in }
+        var openQuote: (ContextRef) -> Bool = { _ in false }
     }
 
     private var handlers = Handlers()
@@ -3196,6 +3254,7 @@ struct WorkStepView: View, Equatable {
         try await open(item)
     }
     private(set) lazy var jumpToCall: (String) -> Void = { [weak self] in self?.handlers.jumpToCall($0) }
+    private(set) lazy var openQuote: (ContextRef) -> Bool = { [weak self] in self?.handlers.openQuote($0) ?? false }
     /// Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
     private(set) lazy var openURL = OpenURLAction { [weak self] url in
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let self else {

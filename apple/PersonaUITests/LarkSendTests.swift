@@ -200,7 +200,8 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(app.staticTexts[text].exists)
         XCTAssertTrue(bar.waitForNonExistence(timeout: 2), "the quote bar goes with the message")
         assertAtEnd(app, app.staticTexts[text], "the sending reply shows right above the box")
-        let quotes = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "李雷：我先看了一下"))
+        // The quote at the top of the bubble is a button (it goes back to the message, #986), its label who and what.
+        let quotes = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "李雷：我先看了一下"))
         XCTAssertTrue(quotes.firstMatch.exists, "the sending row quotes the message")
         shot(app, "lark-reply-sending")
         sleep(6) // sent, and the copy replaces it: one reply, quoting the message

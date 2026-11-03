@@ -558,3 +558,17 @@ alignment: .top)` 也拦不住（外层按内容的高度排）。做法：`Geom
 「passing closure as a 'sending' parameter risks causing data races」。在 Task 外面先 `let states = session.states(updateInterval: 0.25)`，
 Task 里只遍历这个序列，就能编过。选择器用 `preferredItemEncoding: .current`，否则系统可能先把 HEVC 转一遍才交给 App（4K 视频要等很久），
 要不要转码由 App 自己按大小决定（`VideoPrep`，docs/protocol.md「发送视频」）。
+## 引用改成 Telegram 式的回复气泡（2026-11-03，#986）
+
+- **气泡和最宽的一块一样宽**：引用块用 `frame(maxWidth: .infinity)` 铺满，放进普通 `VStack` 会把气泡撑到整行宽。
+  `WidestColumn`（`DesignSystem/QuoteViews.swift`）的做法：先按各块不受限的理想宽度取最大的，不超过给的宽度；再按这个宽度排每一块。
+  没有引用的气泡照旧走原来的 `Text.padding.background`：长文字换行后，新布局会让气泡比原来宽几个点，违反「默认样子一像素不变」。
+- **辅助功能的 combine 会改掉测试找得到的东西**：
+  - 引用条要是整条 `.accessibilityElement(children: .combine)`，× 就不再是单独的按钮，标题也不再是单独的 static text，
+    `LarkSendTests` 用的 `staticTexts["回复 我"]` 就找不到了。
+  - 所以只给气泡里整块可点的引用设 label（它本来就是一个按钮），输入框上方的引用条让标题、摘要、× 各自是元素。
+- **飞书的草稿和发件箱跨 UI 测试留在模拟器上**：
+  - 上一轮没取消的回复存成会话草稿，下一轮一打开回复条就在。它的摘要和原消息文字一样，于是 `label BEGINSWITH` 先匹配到回复条里那一行，长按落空。
+  - 上一轮的「#fail」消息留在发件箱里，排在新发的那条下面，「刚发的在输入框正上方」就差了 141 pt。
+  - 用例自己收尾（取消回复）；查失败前先 `simctl uninstall` 换一份干净数据，再和 master 比。
+- 后台等 `gh pr checks` 的脚本在这台机器上会提前报「完成」，输出却是空的：等待脚本单独写成文件，自己写 log，用 perl 的 `select` 代替 `sleep`。

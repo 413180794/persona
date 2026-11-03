@@ -3,6 +3,8 @@ import SwiftUI
 extension EnvironmentValues {
     /// 回复 in a message's long-press menu; set by the chat and the thread sheet. Nil: no 回复 item.
     @Entry var larkReply: LarkReplyHandler? = nil
+    /// A reply's quote was tapped: the chat goes to the message it answers and says whether it could.
+    @Entry var larkJump: ((String) -> Bool)? = nil
 }
 
 /// What 回复 does where the message is shown: the page says whether it is a topic group or a thread sheet, and takes
@@ -70,10 +72,6 @@ struct LarkComposer: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            if let replyTo {
-                LarkReplyBar(reply: replyTo, cancel: cancelReply)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
             HStack(alignment: .bottom, spacing: Theme.Space.s) {
                 if let attachmentPicker {
                     Menu {
@@ -86,13 +84,23 @@ struct LarkComposer: View {
                     .disabled(preparingAttachment || !canAddAttachments)
                     .accessibilityLabel("添加附件")
                 }
-                TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
-                    .lineLimit(1...5)
-                    .focused(focused)
-                    .accessibilityIdentifier(boxID)
-                    .padding(.horizontal, Theme.Space.l)
-                    .padding(.vertical, Theme.Space.s)
-                    .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                // The message answered is quoted inside the box, over the field (Telegram's reply, #986).
+                VStack(alignment: .leading, spacing: 0) {
+                    if let replyTo {
+                        LarkReplyBar(reply: replyTo, cancel: cancelReply)
+                            .padding(.leading, Theme.Space.l)
+                            .padding(.trailing, Theme.Space.xs)
+                            .padding(.top, Theme.Space.s)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
+                        .lineLimit(1...5)
+                        .focused(focused)
+                        .accessibilityIdentifier(boxID)
+                        .padding(.horizontal, Theme.Space.l)
+                        .padding(.vertical, Theme.Space.s)
+                }
+                .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                 if showsSend {
                     Button(action: send) {
                         Image(systemName: Theme.Icon.send).font(Theme.Font.heading)
@@ -140,30 +148,14 @@ struct LarkComposer: View {
     }
 }
 
-/// 回复 某某 over the box: who is answered, one line of what they wrote, and a button to drop it.
+/// 回复 某某 at the top of the box: who is answered, a line of what they wrote, and × to drop it (`QuoteBarRow`).
 struct LarkReplyBar: View {
     var reply: LarkReplyTo
     var cancel: () -> Void
 
     var body: some View {
-        HStack(spacing: Theme.Space.s) {
-            Capsule().fill(LarkColor.blue).frame(width: Theme.Size.ruleWide)
-            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text("回复 \(reply.senderName)").font(Theme.Font.labelMedium).foregroundStyle(LarkColor.blue).lineLimit(1)
-                Text(reply.displayText).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Button(action: cancel) {
-                Image(systemName: Theme.Icon.clear).font(Theme.Font.heading).foregroundStyle(.tertiary)
-                    .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("取消回复")
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.leading, Theme.Space.m)
-        .surface(in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("lark.replyBar")
+        QuoteBarRow(heading: "回复 \(reply.senderName)", summary: Fmt.plain(reply.displayText), lines: 1, tint: LarkColor.blue,
+                    removeLabel: "取消回复", remove: cancel)
+            .accessibilityIdentifier("lark.replyBar")
     }
 }

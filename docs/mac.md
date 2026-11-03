@@ -594,7 +594,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：读取行的路径显示成链接；存在的路径变卡片、不存在的不变，在 §8 FilePresence 那张截图里看到，这一条自己的截图没拍到不存在的那一边，点卡片 / 链接也没试。
   - Mac（2026-11-02 Mac mini 真窗口）：BeautifulUI 风格下回复里存在的 6 个路径都成了文件 chip，不存在的两个保持文字。还剩点 chip / 链接。
   - Mac（2026-11-02 Mac mini 真窗口核对）：点回复里的文件 chip、工具行展开后的「查看文件」都打开文件查看器（假 hub `GET …/file`）。
-- [ ] Context reference cards in bubbles (`<jarvis-context>`) — Views/Link/LinkSheet.swift (ContextCards, ContextChips)
+- [ ] Context reference cards in bubbles (`<jarvis-context>`) — DesignSystem/QuoteViews.swift (QuoteBlock), Views/Link/LinkSheet.swift (ContextGroup)
   - 要到 Mac 前看：在链接面板里选字「作为上下文」后发出，看气泡里的引用卡片。`-openSendMessage` 发了一条带 `<jarvis-context>` 的消息，但截图里没出现这条消息。
   - Mac（2026-11-02 Mac mini 真窗口）：行菜单「交给 Persona」发出的消息气泡里有引用卡片（上下文 · Agent · 标题，机器 / 会话 / 目录）。还剩链接面板选字「作为上下文」那条路径。
 - [x] Send-safety: refusal when computer input has draft → show / clear-and-send — App/SendSafety.swift
@@ -616,8 +616,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 要到 Mac 前看：点每个 chip 选一个值，看 chip 跟着变，再看新会话的选择器。chip 截图里都画出来了。
 - [x] Drafts persisted per session — AppModel.drafts
   - Mac（2026-11-01 核对）读代码：`AppModel.drafts` 存 UserDefaults、没有平台限制，Mac 的输入框绑的是同一个 Composer。
-- [ ] Context chips above input (from web selection / doc / other session) — LinkSheet.swift (ContextChips)
-  - 要到 Mac 前看：在 Mac 的链接面板里选一段字点「作为上下文」，输入框上方出 chip。要先选字才有，没截到。
+- [ ] Quote bars inside the input box (from 引用, web selection / doc / other session) — DesignSystem/QuoteViews.swift (QuoteBar)
+  - 要到 Mac 前看：在 Mac 的链接面板里选一段字点「作为上下文」，输入框里出引用条。要先选字才有，没截到。
 - [ ] Optimistic send with pending bubble, client_msg_id, retry/discard — Shared/ChatStore.swift, AppModel.send/retry/discard
   - Mac（2026-11-01 核对）：只读了代码（`AppModel.send/retry/discard` 和 ChatStore 共用，没有平台限制）；§4 截到过发送失败的气泡、§24 截到过离线的待发气泡，重发 / 删除没点过。
 

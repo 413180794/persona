@@ -30,6 +30,8 @@ struct PromptComposer: View {
     var onMention: (PromptSource) -> Bool = { _ in false }
     /// True when the caller took the command (/clear asks first); otherwise its `insert` is typed.
     var onCommand: (PromptCommand) -> Bool = { _ in false }
+    /// What goes with the message, quoted over the draft inside the bar's surface (#986).
+    var quotes: Binding<[ContextRef]>? = nil
     var send: () -> Void
 
     @State private var bar = PromptBarModel(selectedModelID: "")
@@ -58,8 +60,15 @@ struct PromptComposer: View {
         o.onAttachSource = onAttach
         o.onPickSource = onMention
         o.onPickCommand = onCommand
-        return PromptBar(model: bar, sources: mentionRows, commands: commands, models: models, placeholder: placeholder,
-                         options: o, onSend: { _ in if !disabled { stopDictation(); send() } })
+        return VStack(alignment: .leading, spacing: 0) {
+            if let quotes, !quotes.wrappedValue.isEmpty {
+                QuoteBar(refs: quotes)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.top, Theme.Space.m)
+            }
+            PromptBar(model: bar, sources: mentionRows, commands: commands, models: models, placeholder: placeholder,
+                      options: o, onSend: { _ in if !disabled { stopDictation(); send() } })
+        }
             .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
             .onAppear { bar.selectedModelID = modelID }
             .onChange(of: modelID) { _, id in bar.selectedModelID = id }

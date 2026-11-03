@@ -132,21 +132,18 @@ struct UserBubble: View, Equatable {
         let parsed = (refs: d.refs, rest: d.text)
         let shown = d.shown
         let images = d.images
+        // What the user picked to go with it opens the bubble as quotes; the hub's own context folds above it.
+        let quotes = ContextRef.quotes(parsed.refs) ?? []
         VStack(alignment: .trailing, spacing: Theme.Space.sm) {
-            if !parsed.refs.isEmpty { ContextGroup(refs: parsed.refs, key: item.id) }
+            if quotes.isEmpty, !parsed.refs.isEmpty { ContextGroup(refs: parsed.refs, key: item.id) }
             if !images.isEmpty, let loadImage {
                 AttachedImages(paths: images, load: loadImage)
             }
             if !d.attached.isEmpty { AttachedFileCards(files: d.attached) }
-            if !shown.isEmpty {
+            if !shown.isEmpty || !quotes.isEmpty {
                 HStack {
                     Spacer(minLength: 48)
-                    Text(shown)
-                        .font(Theme.Font.body).lineHeight(.body)
-                        .foregroundStyle(Theme.userBubbleText(shell: shellChat))
-                        .padding(.horizontal, Theme.Space.l)
-                        .padding(.vertical, Theme.Space.m)
-                        .background(Theme.userBubbleFill(shell: shellChat), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                    UserBubbleBody(quotes: quotes, text: shown, shell: shellChat)
                         .messageLongPress(id: item.id)
                 }
             }
@@ -281,12 +278,8 @@ struct PendingBubble: View {
                     }
                     .accessibilityLabel("发送失败，重发或删除")
                 }
-                Text(AttachedFile.parse(ContextRef.parse(msg.text).rest).rest)
-                    .font(Theme.Font.body).lineHeight(.body)
-                    .foregroundStyle(Theme.userBubbleText(shell: shellChat))
-                    .padding(.horizontal, Theme.Space.l)
-                    .padding(.vertical, Theme.Space.m)
-                    .background(Theme.userBubbleFill(shell: shellChat), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                let parsed = ContextRef.parse(msg.text)
+                UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: AttachedFile.parse(parsed.rest).rest, shell: shellChat)
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
             }
             if msg.state == .waiting {

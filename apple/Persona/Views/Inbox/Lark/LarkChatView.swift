@@ -44,6 +44,8 @@ struct LarkChatView: View {
     @State private var text: String
     /// The message 回复 picked: quoted over the box and by what is sent next.
     @State private var replyTo: LarkReplyTo?
+    /// The message a reply's quote just led back to (`QuoteFlash`).
+    @State private var flash: QuoteFlashMark?
     /// Picked with the @ picker since the last send.
     @State private var mentions: [LarkMention]
     @FocusState private var composerFocused: Bool
@@ -186,6 +188,7 @@ struct LarkChatView: View {
                                        readState: receiptStates[m.id])
                             .padding(.top, LarkChatLayout.gap(grouped: grouped))
                     }
+                    .background { if flash?.line == m.id { QuoteFlash().id(flash?.id).padding(.horizontal, -Theme.Space.m) } }
                     .onAppear {
                         markSeen(m)
                         receiptAppeared(m)
@@ -219,6 +222,7 @@ struct LarkChatView: View {
         .environment(\.larkRefresh, { Task { await refreshLatest() } })
         .environment(\.larkOpenProfile, { person = $0 })
         .environment(\.larkReact, { m, key in react(m, key) })
+        .environment(\.larkJump, { id in jump(to: id) })
         .environment(\.larkReply, LarkReplyHandler(inTopicGroup: isTopic) { m in
             replyTo = LarkReply.quote(m)
             composerFocused = true
@@ -467,6 +471,18 @@ struct LarkChatView: View {
         } catch {
             problem = LarkLoadProblem.of(error)
         }
+    }
+
+    /// A reply's quote was tapped: to the message it answers, lit up for a moment. False when it is not loaded here.
+    private func jump(to id: String) -> Bool {
+        guard visibleMessages.contains(where: { $0.id == id }) else { return false }
+        following = false
+        withAnimation(Theme.Motion.standard) { position.scrollTo(id: id, anchor: .center) }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            flash = QuoteFlashMark(line: id)
+        }
+        return true
     }
 
     /// Scrolls once the rows exist (the lazy stack lays them out after the data lands).
@@ -1179,19 +1195,17 @@ extension LarkMessage {
     }
 }
 
-/// The message a reply quotes: a bar, the author, one or two lines of it.
+/// The message a reply quotes, at the top of the bubble: its author and a line or two of it (`QuoteCard`). A tap goes
+/// back to it in the chat, lit up for a moment, when it is loaded there.
 struct LarkReplyQuote: View {
     var reply: LarkReplyTo
+    @Environment(\.larkJump) private var jump
 
     var body: some View {
-        HStack(spacing: Theme.Space.sm) {
-            Capsule().fill(Color.primary.opacity(0.2)).frame(width: Theme.Size.ruleWide)
-            Text(reply.recalled == true ? "\(reply.senderName)：消息已撤回" : "\(reply.senderName)：\(Fmt.plain(reply.displayText))")
-                .font(Theme.Font.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+        QuoteCard(heading: reply.senderName, summary: reply.recalled == true ? "消息已撤回" : Fmt.plain(reply.displayText),
+                  tint: LarkColor.blue, ink: .primary) {
+            if jump?(reply.id) == true { Haptics.tap() } else { Haptics.attention() }
         }
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

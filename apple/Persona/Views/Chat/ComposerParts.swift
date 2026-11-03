@@ -13,6 +13,8 @@ struct ComposerRow<MenuItems: View>: View {
     /// Set while the agent works: shown instead of send when there is nothing to send.
     var stop: (() -> Void)?
     var send: () -> Void
+    /// What goes with the message, quoted over the field inside its box (#986).
+    var quotes: Binding<[ContextRef]>? = nil
     @ViewBuilder var menu: () -> MenuItems
 
     /// The symbols' frame: the button styles pad it to about 44 pt, the field's height.
@@ -34,17 +36,25 @@ struct ComposerRow<MenuItems: View>: View {
             .clipShape(.circle)
             #endif
 
-            TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
-                .lineLimit(1...6)
-                #if os(macOS)
-                .textFieldStyle(.plain) // the surface below is the field's box; the Mac's own bezel drew a second one inside
-                .macComposerKeys(focused: focused.wrappedValue, canSend: canSend, send: send) // ⏎ sends, ⇧⏎ a new line
-                #endif
-                .focused(focused)
-                .padding(.horizontal, Theme.Space.l)
-                .padding(.vertical, Theme.Space.m)
-                .scaledFrame(minHeight: Theme.Size.tapTarget)
-                .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
+            VStack(alignment: .leading, spacing: 0) {
+                if let quotes, !quotes.wrappedValue.isEmpty {
+                    QuoteBar(refs: quotes)
+                        .padding(.leading, Theme.Space.l)
+                        .padding(.trailing, Theme.Space.xs)
+                        .padding(.top, Theme.Space.s)
+                }
+                TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
+                    .lineLimit(1...6)
+                    #if os(macOS)
+                    .textFieldStyle(.plain) // the surface below is the field's box; the Mac's own bezel drew a second one inside
+                    .macComposerKeys(focused: focused.wrappedValue, canSend: canSend, send: send) // ⏎ sends, ⇧⏎ a new line
+                    #endif
+                    .focused(focused)
+                    .padding(.horizontal, Theme.Space.l)
+                    .padding(.vertical, Theme.Space.m)
+                    .scaledFrame(minHeight: Theme.Size.tapTarget)
+            }
+            .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
 
             if let stop, !canSend {
                 Button(action: stop) {

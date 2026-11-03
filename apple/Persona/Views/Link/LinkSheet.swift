@@ -19,6 +19,8 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
     var title: String
     var url: String
     var text: String
+    /// A quoted message's id in its chat (`kind` "quote"), so its block in the sent bubble leads back to it.
+    var msg = ""
 
     var host: String { URL(string: url)?.host ?? url }
 
@@ -27,7 +29,8 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
             s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "\"", with: "&quot;")
                 .replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
         }
-        return "<jarvis-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\">\n\(text.replacingOccurrences(of: "</jarvis-context>", with: ""))\n</jarvis-context>"
+        let msgAttr = msg.isEmpty ? "" : " msg=\"\(esc(msg))\""
+        return "<jarvis-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)>\n\(text.replacingOccurrences(of: "</jarvis-context>", with: ""))\n</jarvis-context>"
     }
 
     /// One block, its attributes in any order and any of them missing (a Feishu /agent request's context has no url).
@@ -53,7 +56,8 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
             for am in attrRe.matches(in: attrs as String, range: NSRange(location: 0, length: attrs.length)) {
                 a[attrs.substring(with: am.range(at: 1))] = unescape(attrs.substring(with: am.range(at: 2)))
             }
-            refs.append(ContextRef(kind: a["kind"] ?? "context", title: a["title"] ?? "", url: a["url"] ?? "", text: ns.substring(with: m.range(at: 2))))
+            refs.append(ContextRef(kind: a["kind"] ?? "context", title: a["title"] ?? "", url: a["url"] ?? "",
+                                   text: ns.substring(with: m.range(at: 2)), msg: a["msg"] ?? ""))
         }
         let rest = tagRe.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
         return (refs, rest.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -445,31 +449,6 @@ private struct ContextBody: View {
     private var text: some View {
         Text(ref.text).font(Theme.Font.caption).foregroundStyle(.secondary).textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// Pending contexts in the composer: chips that go with the next message.
-struct ContextChips: View {
-    @Binding var refs: [ContextRef]
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.Space.sm) {
-                ForEach(refs) { r in
-                    HStack(spacing: Theme.Space.sm) {
-                        Image(systemName: Theme.Icon.quote).font(Theme.Font.label)
-                        Text(r.text == "（整篇）" ? r.title : String(r.text.prefix(24))).font(Theme.Font.label).lineLimit(1)
-                        Button { refs.removeAll { $0.id == r.id } } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.labelHeavy) }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("移除这个上下文")
-                    }
-                    .padding(.horizontal, Theme.Space.m)
-                    .padding(.vertical, Theme.Space.sm)
-                    .background(Theme.accent.opacity(0.12), in: .capsule)
-                    .foregroundStyle(Theme.accent)
-                }
-            }
-        }
     }
 }
 

@@ -19,7 +19,8 @@ final class MessageMenu {
     @ObservationIgnored var source: () -> String = { "" }
     /// Who answers in this chat ("Claude" / "Codex" / "TRAEX"), for share cards.
     @ObservationIgnored var agent: () -> String = { "Claude" }
-    @ObservationIgnored var quote: ((String) -> Void)?
+    /// 引用: the message's text, its id, and whether it is the user's own.
+    @ObservationIgnored var quote: ((String, String, Bool) -> Void)?
     @ObservationIgnored var edit: ((String) -> Void)?
     /// The press that opened the bar. Its own lift must not close it: the list's simultaneous tap-to-close gesture
     /// recognizes that lift as a tap (only presses longer than ~2 s fail it), and a held finger's small drift shows
@@ -158,7 +159,7 @@ private struct MessageActionBarHost: ViewModifier {
                             // Above the finger; below it when that would go under the navigation bar.
                             let above = frame.minY + menu.anchor.y - MessageActionBar.height - 16 > 140
                             let y = menu.anchor.y + (above ? -(MessageActionBar.height / 2 + 16) : MessageActionBar.height / 2 + 24)
-                            MessageActionBar(text: text, isUser: isUser, date: date, menu: menu)
+                            MessageActionBar(id: id, text: text, isUser: isUser, date: date, menu: menu)
                                 .position(x: x, y: y)
                                 .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
@@ -172,6 +173,7 @@ private struct MessageActionBarHost: ViewModifier {
 }
 
 struct MessageActionBar: View {
+    var id = ""
     var text: String
     var isUser: Bool
     var date: Date?
@@ -188,7 +190,7 @@ struct MessageActionBar: View {
                 Haptics.success()
             }
             action("选择", "selection.pin.in.out") { menu.selecting = SelectableText(text: text) }
-            action("引用", "quote.opening") { menu.quote?(text) }
+            action("引用", "quote.opening") { menu.quote?(text, id, isUser) }
             action("分享", "square.and.arrow.up") {
                 menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date, agent: menu.agent())
             }
