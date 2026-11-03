@@ -97,8 +97,9 @@ class InboxDataOwner @Inject constructor(
                 },
                 sendThread = { root, request -> transport.replyInThread(root, request.text, request.clientId) },
                 download = media::download,
-                // 交给 AI to an Agent uses the same outbox as the Agents tab.
-                messageSender = data.messages)
+                // 交给 AI to an Agent uses the same outbox as the Agents tab, and its targets come from the merged list:
+                // the app-wide sender takes the session to its own group (by the merged id's suffix).
+                messageSender = runtime.messages)
             val lark = socket.route.map { route -> route?.let {
                 HttpLarkConversationTransport(transport, it.endpoint.url, data.credentials.deviceToken,
                     socket.http.client) { isCurrent() && socket.route.value == route }

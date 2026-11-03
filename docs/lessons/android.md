@@ -83,6 +83,8 @@
 
 - 给接口加带默认实现的方法（`ChatActions.editQueue` / `info`、`AgentOperations.attachSession`）时，`by delegate` 的包装会自动转发，手写的转发对象不会：`core:data` 的 `trackActions`、App 的 `AgentsWiringModule` 里那个匿名 `AgentOperations` 都是逐个方法写的，漏一行新方法就悄悄走默认实现（「尚未接入」），编译不报错。加方法时 `git grep ': ChatActions\b\|object : AgentOperations'` 把手写的转发都补上。
 - Claude Code 的 transcript 不留 `client_msg_id`（2026-11-03，#895）：用户那一行的 item id 是 Claude 自己的 uuid，hub 和 node 都不改写。hub 有 `client_ops` 时 Android 曾只按 id 认「对话里已经有这条」，发到 Claude Code 的消息全都一直挂着「已送达，等待对话记录」。待发消息按文字找对话里的那一条（`MessageEcho`，规则同 iOS 的 `PendingMessage.arrived`：归一化、电脑时钟最多慢 2 分钟、截断的按开头），只对发出了或结果不明的消息做，一条对话记录只认一条待发消息；聊天仓库每次拿到新 item（事件、翻页、补洞）都交给 outbox 对一遍（`HubChatRepository` 的 `transcript`）。
+- 送达不等于对话里一定会出现一条一样的用户消息（2026-11-03，#950）：手机发 `/compact` 在 transcript 里只是一条「压缩上下文」通知，Codex 到轮次结束才写排队的消息。只等回显，气泡就永远挂着；iOS（`settleSend`）和网页都是送达 60 秒后、会话不在工作（最多再等 15 分钟）就收起，Android 同样（`OutboxMessageSender.sentGraceMillis`、`connectActivity`）。给构造函数加参数时别加在 `now` 后面：调用处把时钟写成尾随 lambda。
+- 多 hub 下收件箱「交给 AI」的目标会话来自合并列表（带组后缀），要用按组路由的 `ConnectionRuntime.messages`，不能直接用某一组的 `data.messages`（#950）。
 - 来源会话的 `read_only_reason` 有的 node 自己就以「仅查看：」开头，客户端再拼「 · 仅查看：原因」会出现两遍（iOS 也是这样拼的）：`SessionSource` 先去掉这个前缀。
 
 ## 网络

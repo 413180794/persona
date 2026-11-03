@@ -25,7 +25,7 @@ extension AppModel {
         guard let session = session(key) else { return .waiting }
         guard session.canSend else { return .failed }
         guard msg.mayHaveArrived != true else { return .failed }
-        guard let api else { return .failed }
+        guard let api = api(key.group) else { return .failed }
         do {
             try await api.send(key, text: msg.text, images: msg.images, launcher: assistantLaunchers[key],
                                clientMsgID: msg.id.uuidString, clearDraft: clearDraft)

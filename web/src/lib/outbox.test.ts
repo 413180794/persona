@@ -46,7 +46,18 @@ describe("which bubbles stay", () => {
     const users = [{ text: "别的", images: [] }];
     const list = [entry({ id: "a" }), entry({ id: "b", state: "failed" }), entry({ id: "c", state: "sending" }), entry({ id: "d", at: 1000 - SENT_GRACE_MS })];
     expect(settle(list, users, 1000).map((e) => e.id)).toEqual(["a", "b", "c"]);
-    expect(settle(list, [{ text: "你好", images: [] }], 1000).map((e) => e.id)).toEqual(["b"]);
+    const copies = ["u1", "u2", "u3"].map((id) => ({ id, text: "你好", images: [] }));
+    expect(settle(list, copies, 1000).map((e) => e.id)).toEqual(["b"]);
+  });
+
+  it("takes one bubble per copy, never an older message's copy, and a copy only once", () => {
+    const list = [entry({ id: "a", at: 1_000_000 }), entry({ id: "b", at: 1_001_000 })];
+    const older = { id: "u0", text: "你好", images: [], ts: new Date(1_000_000 - 600_000).toISOString() };
+    const copy = { id: "u1", text: "你好", images: [], ts: new Date(1_000_500).toISOString() };
+    expect(settle(list, [older], 1_002_000).map((e) => e.id)).toEqual(["a", "b"]);
+    const claimed = new Set<string>();
+    expect(settle(list, [older, copy], 1_002_000, claimed).map((e) => e.id)).toEqual(["b"]);
+    expect(settle(list.slice(1), [older, copy], 1_003_000, claimed).map((e) => e.id)).toEqual(["b"]);
   });
 
   it("shows contexts as cards and images as images", () => {

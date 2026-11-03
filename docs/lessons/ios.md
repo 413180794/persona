@@ -455,6 +455,7 @@
 
 ## 多 hub（docs/multi-hub.md）
 
+- 按会话发的请求一律用 `api(key.group)`，别用当前选中组的 `api`（#950）：`sendPending`（outbox 发出 / 重发）曾用 `api`，别的组的会话的消息发到了选中的那组 hub。`api` 只给 hub 级的页面（Persona、收件箱、hub 的设置）用。
 - 给线上类型（`Session`、`Machine`、`Interaction`、`SessionKey`）加客户端自己的字段：合成的 `Decodable` 对**有默认值的非可选属性**也要求 JSON 里有这个键，
   旧数据和 hub 的 JSON 一解就失败。存成可选（`hubGroup: String?`）再给一个非可选的计算属性（`group`），nil 时合成的 `Encodable` 也不写这个键：
   默认组的快照、草稿、待发消息的 JSON 和以前逐字节一样。

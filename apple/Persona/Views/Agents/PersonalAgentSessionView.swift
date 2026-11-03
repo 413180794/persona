@@ -148,12 +148,13 @@ struct PersonalAgentSessionView: View {
     }
 
     /// The stored copy of a sent message has no `local` field (observed 2026-10-31): a sent bubble goes away once a
-    /// user message with the same text shows up after it was sent.
+    /// user message with the same words (as the agent chat compares them, `PendingMessage.same`) shows up after it was
+    /// sent.
     private func settlePending() {
         pending.removeAll { p in
             guard p.state == .sent else { return false }
             let since = Int64((p.sentAt.timeIntervalSince1970 - 60) * 1000)
-            return messages.contains { $0.role == "user" && $0.plainText == p.text && ($0.createTimeMs ?? 0) >= since }
+            return messages.contains { $0.role == "user" && PendingMessage.same($0.plainText, p.text) && ($0.createTimeMs ?? 0) >= since }
                 || messages.contains { $0.local?.clientId == p.id }
         }
     }

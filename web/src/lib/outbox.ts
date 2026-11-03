@@ -7,6 +7,7 @@ import { pickedLauncher, conversationKey } from "./assistant-chat";
 import { uuid } from "./format";
 import { navigate } from "./router";
 import { getState, refreshAssistant, setOutbox } from "./store";
+import { echoed, isEcho, type Seen, type Sent } from "./echo";
 import { parseUserText, type UserMessage } from "./turns";
 import type { Item, Session } from "./types";
 
@@ -47,15 +48,18 @@ export function outboxMessage(e: OutboxEntry): UserMessage {
   };
 }
 
-/** The transcript has this message: one of its latest user messages says the same, with at least as many images. */
-export function arrived(e: Pick<OutboxEntry, "text" | "images">, users: { text: string; images: unknown[] }[]): boolean {
-  const text = parseUserText(e.text).text;
-  return users.some((u) => u.text === text && u.images.length >= e.images.length);
+const seenAs = (e: Pick<OutboxEntry, "text" | "images" | "at">): Sent => ({ text: parseUserText(e.text).text, images: e.images, at: e.at });
+
+/** The transcript has this message: one of its latest user messages is its copy (lib/echo.ts). */
+export function arrived(e: Pick<OutboxEntry, "text" | "images" | "at">, users: Seen[]): boolean {
+  return users.some((u) => isEcho(seenAs(e), u));
 }
 
-/** What stays once the transcript moved: arrived ones go, and sent ones past the grace; sending and failed stay. */
-export function settle(list: OutboxEntry[], users: { text: string; images: unknown[] }[], now: number): OutboxEntry[] {
-  return list.filter((e) => e.state !== "sent" ? !(e.state === "sending" && arrived(e, users)) : !arrived(e, users) && now - e.at < SENT_GRACE_MS);
+/** What stays once the transcript moved: arrived ones go (one copy each), and sent ones past the grace; sending and
+ *  failed stay. `claimed`: the user messages that already answered one, kept across calls. */
+export function settle(list: OutboxEntry[], users: Seen[], now: number, claimed = new Set<string>()): OutboxEntry[] {
+  const shown = echoed(list.filter((e) => e.state !== "failed"), users, seenAs, claimed);
+  return list.filter((e) => !shown.has(e) && (e.state !== "sent" || now - e.at < SENT_GRACE_MS));
 }
 
 /** Why it didn't go, in words. */
@@ -76,12 +80,16 @@ function update(key: string, id: string, patch: Partial<OutboxEntry>) {
   setOutbox(key, list(key).map((e) => (e.id === id ? { ...e, ...patch } : e)));
 }
 
+const claimedBy = new Map<string, Set<string>>();
+
 /** Drops what the transcript now has (ChatView calls it with the latest user messages). */
-export function settleOutbox(mid: string, sid: string, users: { text: string; images: unknown[] }[]) {
+export function settleOutbox(mid: string, sid: string, users: Seen[]) {
   const key = outboxKey(mid, sid);
   const before = list(key);
   if (!before.length) return;
-  const after = settle(before, users, Date.now());
+  const claimed = claimedBy.get(key) ?? new Set<string>();
+  claimedBy.set(key, claimed);
+  const after = settle(before, users, Date.now(), claimed);
   if (after.length !== before.length) setOutbox(key, after);
 }
 

@@ -1,3 +1,4 @@
+import { isEcho, type Seen } from "./echo";
 import { api, ApiError, enc, errorText, sessionPath } from "./api";
 import { parseUserText } from "./turns";
 import { imagePayload, quotePath, releaseAttachments, type LocalAttachment } from "./attachments";
@@ -38,10 +39,11 @@ export function launchAgent(input: Pick<AgentLaunch, "machineId" | "cwd" | "laun
   return launch.id;
 }
 
-export function acknowledgeLaunch(mid: string, sid: string, user: { text: string; images: unknown[] }) {
+export function acknowledgeLaunch(mid: string, sid: string, user: Seen) {
   for (const launch of Object.values(getState().launches)) {
     if (launch.phase !== "ready" || launch.machineId !== mid || launch.session?.session_id !== sid || !launch.outgoing) continue;
-    if (parseUserText(launch.outgoing.text).text === user.text && user.images.length >= launch.outgoing.images.length) putLaunch({ ...launch, outgoing: undefined });
+    // the conversation's first message: nothing older in it can say the same, so no time to compare
+    if (isEcho({ text: parseUserText(launch.outgoing.text).text, images: launch.outgoing.images, at: 0 }, user)) putLaunch({ ...launch, outgoing: undefined });
   }
 }
 

@@ -45,6 +45,9 @@ class OutboxMessageSender(
     parentScope: CoroutineScope,
     private val reviewTimeoutMillis: Long = 30_000,
     private val reconciliationTimeoutMillis: Long = 3_000,
+    /** How long a delivered message waits for its copy in the transcript before its bubble goes anyway (iOS, web). */
+    private val sentGraceMillis: Long = 60_000,
+    // Last: callers pass the clock as a trailing lambda.
     private val now: () -> Long = System::currentTimeMillis,
 ) : MessageSender, DraftMessageSender, MainConversationSender {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
@@ -57,6 +60,8 @@ class OutboxMessageSender(
     @Volatile private var mainResolver: MainConversationResolver? = null
     /** Transcript items that already showed a message (observeTranscript): the same item never shows a second. */
     private val claimed = mutableSetOf<Pair<SessionKey, String>>()
+    /** Whether a session is at work (connectActivity): its turn may write a delivered message only when it ends. */
+    @Volatile private var busy: (SessionKey) -> Boolean = { false }
 
     override val outbox = store.entries.map { entries ->
         entries.filter { it.state !in hidden }.map {
@@ -89,7 +94,28 @@ class OutboxMessageSender(
                 }
             }
         }
+        scope.launch {
+            // A delivered message whose copy never shows (a /compact becomes a notice, Codex writes its queue when the
+            // turn ends, other words) would wait for ever: after the grace, and once its session is not at work (for
+            // up to 15 more minutes), its bubble goes, as on iOS (AppModel.settleSend) and the web.
+            val waits = mutableMapOf<String, Job>()
+            store.entries.collect { entries ->
+                val sent = entries.filter { it.state == OutboxState.Sent }.associateBy { it.clientMessageId }
+                waits.keys.toList().filter { it !in sent }.forEach { waits.remove(it)?.cancel() }
+                for ((id, entry) in sent) if (id !in waits) {
+                    waits[id] = scope.launch {
+                        delay(sentGraceMillis)
+                        var checks = 0
+                        while (checks++ < 90 && busy(entry.session)) delay(10_000)
+                        store.transition(id, setOf(OutboxState.Sent), OutboxState.Shown)
+                    }
+                }
+            }
+        }
     }
+
+    /** Tells the outbox which sessions are at work (the pairing's session list). */
+    fun connectActivity(busy: (SessionKey) -> Boolean) { this.busy = busy }
 
     override suspend fun send(session: SessionKey, text: String, clientMessageId: String, clearDraft: String?) = lifecycle.withLock {
         check(job.isActive) { "Pairing scope is closed" }
@@ -192,7 +218,8 @@ class OutboxMessageSender(
      * shows one message (the oldest it can be), so a second identical message stays until its own copy arrives.
      */
     suspend fun observeTranscript(session: SessionKey, items: List<Item>) {
-        if (outbox.value.none { it.session == session && it.state in awaitingTranscript }) return
+        // Not the `outbox` flow: it lags the store, and an echo that beats it would be passed over.
+        if (items.none { it.role == "user" && it.kind == "text" }) return
         lifecycle.withLock {
             check(job.isActive) { "Pairing scope is closed" }
             val pending = store.entries.first().filter { it.session == session && it.state in reconcilable }
@@ -315,7 +342,6 @@ class OutboxMessageSender(
         private val reconcilable = uncertain + setOf(OutboxState.Sent, OutboxState.NeedsConfirmation)
         private val dispatchable = setOf(OutboxState.Queued, OutboxState.WaitingForNetwork)
         private val hidden = setOf(OutboxState.Cancelled, OutboxState.Shown)
-        private val awaitingTranscript = reconcilable.map { it.delivery }.toSet()
         private val refusals = setOf("input_draft", "dialog_open", "op_id_reused", "invalid", "stale_session")
 
         fun classify(result: MessageTransportResult): OutboxState = when (result) {

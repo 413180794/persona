@@ -11,6 +11,7 @@ import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch } from "../../lib/new-agent";
 import { getSession, getState, markSeenLocally, refresh, refreshTodos, setMutes, useStore } from "../../lib/store";
 import { buildTaskIndex, STOP_LOOP_MESSAGE, visibleSubagents } from "../../lib/tasks";
+import { echoed } from "../../lib/echo";
 import { outboxKey, settleOutbox } from "../../lib/outbox";
 import { conversationKey, pickedLauncher } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
@@ -85,13 +86,18 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const actions = useMemo<ChatActions>(() => ({ draftKey, canCompose, images: () => items.current.filter((i) => i.kind === "image") }), [draftKey, canCompose]);
   const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current) }), [session?.cwd, draftKey]);
 
-  // a sent message stays as a "sending" bubble until the transcript has it
+  // a sent message stays as a "sending" bubble until the transcript has it (lib/echo.ts); a user message that answered
+  // one answers no other
+  const claimed = useRef(new Set<string>());
   useEffect(() => {
     const users = segs.slice(-4).flatMap((seg) => seg.user ? [seg.user] : []);
     users.forEach((user) => acknowledgeLaunch(mid, sid, user));
     settleOutbox(mid, sid, users);
     if (!pending.length) return;
-    setPending((ps) => ps.filter((p) => !users.some((user) => user.text === parseUserText(p.msg.text).text && user.images.length >= p.msg.images.length) && Date.now() - p.at < 30_000));
+    setPending((ps) => {
+      const shown = echoed(ps, users, (p) => ({ text: p.msg.text, images: p.msg.images, at: p.at }), claimed.current);
+      return ps.filter((p) => !shown.has(p) && Date.now() - p.at < 30_000);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segs]);
 
@@ -172,7 +178,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         return false;
       }
       // a sending bubble shows picked contexts as quote cards, like the transcript will (not the raw tags)
-      const p: Pending = { id, at: Date.now(), msg: { id: `pending:${id}`, ...parseUserText(out.text), images: [] } };
+      const p: Pending = { id, at: Date.now(), msg: { id: `pending:${id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${id}#${i}`, seq: 0, role: "user", kind: "image", image })) } };
       setPending((ps) => [...ps.filter((x) => x.id !== id), p]);
       atEnd.current = true;
       try {

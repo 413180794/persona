@@ -36,6 +36,9 @@ class ChatDataRepositories private constructor(
         foreground, preferenceTransport, transcript = data.messages::observeTranscript) {
         data.checkActive()
         data.openWindowReconciliation.register(scope, chats::reconcileOpened)
+        data.messages.connectActivity { key ->
+            sessions.sessions.value.firstOrNull { it.key == key }?.status in setOf("working", "blocked")
+        }
     }
 
     @Deprecated("Assemble with ScopedHubData so all stores share the pairing lifetime")

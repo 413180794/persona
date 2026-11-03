@@ -337,6 +337,30 @@ class OutboxMessageSenderTest {
         sender.close()
     }
 
+    @Test fun aDeliveredMessageWhoseCopyNeverShowsGoesOnceItsSessionRests() = runTest {
+        // A /compact becomes a notice, Codex writes its queue at the end of the turn: no copy ever comes (#950).
+        val store = FakeStore()
+        val transport = FakeTransport(online = true, supportsClientOps = true)
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope, sentGraceMillis = 60_000)
+        var working = true
+        sender.connectActivity { it == session && working }
+        transport.answers += MessageTransportResult.Accepted
+        sender.send(session, "/compact", "compact")
+        runCurrent()
+        assertEquals(OutboxState.Sent, store.state("compact"))
+        advanceTimeBy(59_000)
+        runCurrent()
+        assertEquals(OutboxState.Sent, store.state("compact"))
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertEquals(OutboxState.Sent, store.state("compact")) // the session still works on it
+        working = false
+        advanceTimeBy(10_001)
+        runCurrent()
+        assertEquals(OutboxState.Shown, store.state("compact"))
+        sender.close()
+    }
+
     private class FakeTransport(online: Boolean, override val supportsClientOps: Boolean = false) : MessageTransport {
         override val readyToSend = MutableStateFlow(online)
         val answers = ArrayDeque<MessageTransportResult>()

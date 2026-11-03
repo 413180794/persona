@@ -34,5 +34,6 @@ fun inboxReplyReceipt(document: JsonObject): InboxReplyReceipt {
         document.text("state") == "failed" -> OutboxState.Refused
         else -> OutboxState.Unknown
     }
-    return InboxReplyReceipt(state, (body?.get("message") as? JsonObject)?.text("id") ?: body?.text("id"), body?.text("error"))
+    return InboxReplyReceipt(state, (body?.get("message") as? JsonObject)?.text("id") ?: body?.text("message_id") ?: body?.text("id"),
+        body?.text("error"))
 }

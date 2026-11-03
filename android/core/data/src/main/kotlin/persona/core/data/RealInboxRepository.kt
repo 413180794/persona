@@ -331,7 +331,8 @@ class RealInboxRepository(
                 throw ReplyUnconfirmed()
             }
             val accepted = journal.update(transport.scope) { it.confirm(request.clientId,
-                if (feed != null) result.optional("id") else null) }
+                // A Feishu send answers {"ok":true,"message_id":…} (hub lark.go); older replies said "id".
+                if (feed != null) result.optional("message_id") ?: result.optional("id") else null) }
             if (owns(transport)) {
                 publishLocal(accepted)
                 if (actualTarget is ReplyTarget.Inbox) {
