@@ -209,3 +209,42 @@ func TestParseMultiSelect(t *testing.T) {
 		t.Fatalf("single %+v / typed %+v", one, oneTyped.Options[2])
 	}
 }
+
+// Claude Code 2.1.316's permission prompt for a dangerous rm in auto mode (a real capture; the command is a
+// placeholder): a boxed warning, then a countdown to blocking the request by itself. The countdown moved the
+// revision every second, so every answer was refused as a changed prompt (#564). Now the warning and the deadline
+// are told apart from the question and stay out of the revision.
+func TestParseDangerousCommandPrompt(t *testing.T) {
+	d := ParseDialog(fixture(t, "claude-2.1.316-danger-rm-120.txt"))
+	later := ParseDialog(fixture(t, "claude-2.1.316-danger-rm-later-120.txt"))
+	if d == nil || later == nil {
+		t.Fatal("no dialog")
+	}
+	if d.Question != "Do you want to proceed?" ||
+		d.Detail != "Bash command\nDelete all files directly inside the lab scratch directory\nrm -f $LAB_SCRATCH/*" ||
+		!strings.HasPrefix(d.Warning, "Dangerous rm operation on possibly-empty variable path: $LAB_SCRATCH/*") ||
+		d.Deadline != "Claude Code will automatically block this request in 1:46, to avoid holding up an unattended session" {
+		t.Fatalf("dialog: question %q\ndetail %q\nwarning %q\ndeadline %q", d.Question, d.Detail, d.Warning, d.Deadline)
+	}
+	if len(d.Options) != 2 || d.Options[0].Key != "1" || d.Options[0].Label != "Yes" || d.Options[1].Key != "2" || d.Options[1].Label != "No" {
+		t.Fatalf("options %+v", d.Options)
+	}
+	if later.Deadline == d.Deadline || later.Rev != d.Rev {
+		t.Fatalf("three seconds later: deadline %q, rev %s → %s", later.Deadline, d.Rev, later.Rev)
+	}
+	// Blocked when the countdown ran out: no dialog left, the card goes.
+	if after := ParseDialog(fixture(t, "claude-2.1.316-danger-rm-blocked-120.txt")); after != nil {
+		t.Fatalf("a dialog after the request was blocked: %+v", after)
+	}
+	// The same prompt without the clock (another mode): the same card.
+	noClock := strings.Replace(fixture(t, "claude-2.1.316-danger-rm-120.txt"),
+		" ⚠ Claude Code will automatically block this request in 1:46, to avoid holding up an unattended session\n", "", 1)
+	if nd := ParseDialog(noClock); nd == nil || nd.Rev != d.Rev || nd.Deadline != "" {
+		t.Fatalf("without the countdown: %+v", nd)
+	}
+	// A different command is a different card.
+	other := strings.ReplaceAll(fixture(t, "claude-2.1.316-danger-rm-120.txt"), "$LAB_SCRATCH/*", "$OTHER/*")
+	if od := ParseDialog(other); od == nil || od.Rev == d.Rev {
+		t.Fatalf("another command, same rev: %+v", od)
+	}
+}

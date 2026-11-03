@@ -101,3 +101,37 @@ func TestLiveMultiSelect(t *testing.T) {
 		t.Fatalf("the question is still there:\n%s", text)
 	}
 }
+
+// JARVIS_LIVE_PANE=<pane> JARVIS_LIVE_OPTION=<1 or 2> on Claude Code's dangerous-command prompt with its countdown
+// running (#564): the card's revision is taken, the clock moves on for a few seconds (as a person reads the card),
+// and the answer still goes in; afterwards the prompt is gone.
+func TestLiveAnswerDangerousPrompt(t *testing.T) {
+	pane, option := os.Getenv("JARVIS_LIVE_PANE"), os.Getenv("JARVIS_LIVE_OPTION")
+	if pane == "" || option == "" || os.Getenv("JARVIS_LIVE_DANGER") == "" {
+		t.Skip("JARVIS_LIVE_PANE / JARVIS_LIVE_OPTION / JARVIS_LIVE_DANGER not set")
+	}
+	n := &Node{hosts: herdrHosts(herdr.New()), agents: map[string]host.Agent{"live": {PaneID: pane}}}
+	ctx := context.Background()
+	text, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := screen.ParseDialog(text)
+	if d == nil || d.Deadline == "" || d.Warning == "" {
+		t.Fatalf("no dangerous-command prompt with a countdown on\n%s", text)
+	}
+	t.Logf("question %q rev %s deadline %q", d.Question, d.Rev, d.Deadline)
+	time.Sleep(4 * time.Second)
+	keys, pre, err := n.dialogKeys(ctx, "live", d.Rev, option)
+	if err != nil {
+		t.Fatalf("refused after the countdown moved: %v", err)
+	}
+	if err := n.sendKeys(ctx, pane, append(pre, keys...)...); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Second)
+	text, _ = n.readPane(ctx, pane, "visible", screen.DialogLines)
+	if after := screen.ParseDialog(text); after != nil && after.Rev == d.Rev {
+		t.Fatalf("the prompt is still there:\n%s", text)
+	}
+}

@@ -1,0 +1,18 @@
+❯ 示例：清理构建目录
+⏺ Running 1 shell command…
+  ⎿  $ rm -rf $BUILD_DIR/*
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Delete the example build output
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ rm -rf $BUILD_DIR/*
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ │ Dangerous rm operation on possibly-empty variable path: $BUILD_DIR/* in `rm -rf $BUILD_DIR/*` (rewrite it
+ │ as "${BUILD_DIR:?}"/* or use a literal path)
+ ⚠ Claude Code will automatically deny this request in 0:42, to avoid holding up an unattended session
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+
+ Esc to cancel · Tab to amend

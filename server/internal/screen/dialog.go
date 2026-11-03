@@ -14,9 +14,14 @@ import (
 // read off its screen: header chip, question, options, and Rev, a hash of what it asks. The node checks Rev again
 // right before pressing keys, so an answer never lands in a dialog that changed after the card was made.
 type Dialog struct {
-	Header   string   `json:"header,omitempty"`
-	Question string   `json:"question"`
-	Detail   string   `json:"detail,omitempty"` // lines above the question that belong to it (the command asked about)
+	Header   string `json:"header,omitempty"`
+	Question string `json:"question"`
+	Detail   string `json:"detail,omitempty"` // lines above the question that belong to it (the command asked about)
+	// Warning is what the agent adds in a box above the question about why it asks (Claude Code's 「Dangerous rm
+	// operation on possibly-empty variable…」); Deadline its 「⚠ … will automatically block this request in 1:59」,
+	// whose countdown moves every second. Neither is in Rev: a card stays answerable while the clock runs.
+	Warning  string   `json:"warning,omitempty"`
+	Deadline string   `json:"deadline,omitempty"`
 	Options  []Option `json:"options"`
 	// Multi: a multi-select question (AskUserQuestion's multiSelect, Claude Code 2.1.316): its options are check
 	// boxes ("[ ]" / "[✔]") that enter or their number toggles, and the row under them sends what is checked —
@@ -289,7 +294,9 @@ func (d *Dialog) describe(lines []string, first int) {
 		t := strings.TrimSpace(l)
 		m := tabsRE.FindStringSubmatch(t)
 		switch {
-		case t == "":
+		case t == "" || dashedRE.MatchString(t): // the dashed rules around a command (╌╌╌)
+		case deadlineRE.MatchString(t):
+			d.Deadline = strings.TrimSpace(strings.TrimPrefix(t, "⚠"))
 		case m != nil:
 			// One question: its tab is the header. Several: which one is shown is only told by color, so no header;
 			// the steps say which are answered.
@@ -310,7 +317,14 @@ func (d *Dialog) describe(lines []string, first int) {
 			plain = append(plain, t)
 		}
 	}
+	asks := len(plain) > 0 && strings.ContainsAny(plain[len(plain)-1], "?？")
 	switch {
+	case len(quoted) > 0 && asks:
+		// A boxed note above a question that is asked in plain words (a permission prompt's warning): the note is
+		// the warning, the question is the question.
+		d.Warning = joinWrapped(quoted)
+		d.Question = plain[len(plain)-1]
+		d.Detail = strings.Join(plain[:len(plain)-1], "\n")
 	case len(quoted) > 0:
 		d.Question = joinWrapped(quoted)
 		d.Detail = strings.Join(plain, "\n")
@@ -339,6 +353,14 @@ func (d *Dialog) describe(lines []string, first int) {
 	}
 	d.Rev = hex.EncodeToString(h.Sum(nil))[:12]
 }
+
+// The countdown Claude Code adds when it will answer for the user (auto mode: 「⚠ Claude Code will automatically
+// block this request in 1:59, to avoid holding up an unattended session」; earlier builds say deny), and the dashed
+// rules it draws around the command asked about.
+var (
+	deadlineRE = regexp.MustCompile(`(?i)^⚠?\s*.*\bwill automatically (block|deny|allow|approve|accept|reject)\b.*\bin \d+:\d{2}\b`)
+	dashedRE   = regexp.MustCompile(`^[╌┄┈╍┅┉-]{8,}$`)
+)
 
 // Option by key, or nil.
 func (d *Dialog) Option(key string) *Option {

@@ -1,0 +1,23 @@
+{
+  "question": "Do you want to proceed?",
+  "detail": "Bash command\nDelete the example build output\nrm -rf $BUILD_DIR/*",
+  "warning": "Dangerous rm operation on possibly-empty variable path: $BUILD_DIR/* in `rm -rf $BUILD_DIR/*` (rewrite it as \"${BUILD_DIR:?}\"/* or use a literal path)",
+  "deadline": "Claude Code will automatically deny this request in 0:42, to avoid holding up an unattended session",
+  "options": [
+    {
+      "key": "1",
+      "label": "Yes",
+      "keys": [
+        "1"
+      ]
+    },
+    {
+      "key": "2",
+      "label": "No",
+      "keys": [
+        "2"
+      ]
+    }
+  ],
+  "rev": "a6f580e79a40"
+}
