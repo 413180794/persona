@@ -45,6 +45,13 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   （`launcher.env`），去掉 shell 里已有的 `ANTHROPIC_*` 等变量，设上 `ANTHROPIC_BASE_URL`、`ANTHROPIC_API_KEY`、各档模型
   （`ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_*_MODEL`、`CLAUDE_CODE_SUBAGENT_MODEL`，小模型给 haiku / small fast），再 exec claude。
   Key 不进文件、不进终端、不在命令行上。终端里也能直接敲 `jarvisd launch <名字>`。
+- 交互模式的 Claude Code 第一次见到 `ANTHROPIC_API_KEY` 里的 Key 会问「Do you want to use this API key?」，默认选中「No (recommended)」，
+  回车（或手机上的对话框卡片点了默认项）就把这个 Key 记成拒绝，之后这个启动器起的会话都没有凭据。Key 是用户在 设置 › 模型 里自己填的，
+  所以 `jarvisd launch` 在 exec claude 前把它记成已允许，和在对话框里选 Yes 一样：Key 的最后 20 个字符（Claude Code 用它认 Key）写进
+  Claude 全局配置（`$CLAUDE_CONFIG_DIR` 或 home 下的 `.claude.json`，旧版的 `~/.claude/.config.json` 在用时写它）的
+  `customApiKeyResponses.approved`，并从 `rejected` 里去掉（`node/apikeyapproval.go`）。写的时候拿 Claude 自己的配置锁
+  （`<配置路径>.lock` 目录，超过 10 秒算过期），不会和正在运行的 claude 同时写。已经允许过就不写；还没有配置文件（第一次运行，
+  Claude 自己会走引导）也不写；写失败只在 stderr 提示一行，照常启动。无头的 `-p`（助手）本来就不问。
 - hub 重启或 node 重连之前没收到设置时，`jarvisd launch` 报「hub 还没发过来」。
 
 ## 启动器页面上的参数（`node/launcherprobe.go`）

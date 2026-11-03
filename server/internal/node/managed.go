@@ -115,6 +115,9 @@ func Launch(ctx context.Context, name string, args []string) error {
 		}
 	}
 	env = append(env, resp.Env...)
+	if err := approveClaudeAPIKey(env); err != nil { // apikeyapproval.go: else Claude asks whether to use the key, default No
+		fmt.Fprintf(os.Stderr, "jarvisd launch %s: could not mark the API key as approved for Claude Code: %v\n", name, err)
+	}
 	for _, arg := range args {
 		if arg == "--model" || strings.HasPrefix(arg, "--model=") {
 			resp.Args = withoutModelArgs(resp.Args)
