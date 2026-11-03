@@ -1,6 +1,7 @@
 package persona.core.designsystem
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -20,6 +21,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -368,7 +371,10 @@ fun JDivider(modifier: Modifier = Modifier, inset: Dp = 0.dp) {
     Box(modifier.padding(start = inset).fillMaxWidth().height(1.dp).background(PersonaTheme.palette.line))
 }
 
-/** A person, group or source. [badge] is a small corner mark (飞书 / 邮件). */
+/**
+ * A person, group or source. [badge] is a small corner mark (飞书 / 邮件). [image] is their picture, filling the same
+ * shape; without one (none, still loading, failed) the initial or [icon] stands in.
+ */
 @Composable
 fun JAvatar(
     text: String,
@@ -377,6 +383,7 @@ fun JAvatar(
     icon: PhIcon? = null,
     badge: PhIcon? = null,
     badgeColor: Color? = null,
+    image: Painter? = null,
 ) {
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
@@ -387,7 +394,8 @@ fun JAvatar(
                 .then(if (style == AppStyle.Glass) Modifier.border(1.dp, Brush.verticalGradient(listOf(palette.strokeTop, palette.strokeBottom)), shape) else Modifier),
             contentAlignment = Alignment.Center,
         ) {
-            if (icon != null) JIcon(icon, null, size = size * 0.5f, tint = palette.ink2)
+            if (image != null) Image(image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            else if (icon != null) JIcon(icon, null, size = size * 0.5f, tint = palette.ink2)
             else Text(text.trim().take(1), style = PersonaTheme.type.label.copy(fontSize = androidx.compose.ui.unit.TextUnit(size.value * 0.4f, androidx.compose.ui.unit.TextUnitType.Sp)), color = palette.ink2)
         }
         badge?.let {

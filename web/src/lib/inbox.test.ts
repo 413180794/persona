@@ -11,8 +11,8 @@ vi.mock("../ui/atoms", () => ({ toast: vi.fn() }));
 
 import {
   badgeCount, cardText, contextXML, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
-  interactionMuted, interactionTitle, itemPath, kindLabel, labelIsUrgent, mailAccounts, mergeMessages, momentText, partRuns, reloadInbox,
-  resetInboxForTests, sections, sendReply, setDocStatus, setDone, shortTime, triage, unsentReplies, waitingAgents, withToken,
+  interactionMuted, interactionTitle, itemPath, kindLabel, labelIsUrgent, mailAccounts, mergeMessages, momentText, nextLarkPosition, partRuns, reloadInbox,
+  replyLarkMessage, resetInboxForTests, sections, sendLarkMessage, sendReply, setDocStatus, setDone, shortTime, triage, unsentReplies, waitingAgents, withToken,
   type InboxFilter, type InboxItem, type LarkMessage,
 } from "./inbox";
 import { toast } from "../ui/atoms";
@@ -309,5 +309,25 @@ describe("列表状态", () => {
     await setDocStatus(getInbox().items[1], row, { ...st, value: "已完成" }, "进行中");
     expect(getInbox().items[1].doc!.rows![0].status![0].value).toBe("已完成");
     expect(toast).toHaveBeenLastCalledWith("没改成：文档刚被改过", "error");
+  });
+
+  it("发送飞书原生消息与回复接口正确构造请求", async () => {
+    fetcher.mockResolvedValueOnce(ok({ message_id: "m_new_123" }));
+    const res = await sendLarkMessage("feed-xyz", "你好", "client-1");
+    expect(res).toEqual({ message_id: "m_new_123" });
+    expect(fetcher.mock.calls[1][0]).toBe("/api/v1/lark/conversations/feed-xyz/messages");
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ text: "你好", client_id: "client-1" });
+
+    fetcher.mockResolvedValueOnce(ok({ message_id: "m_reply_456" }));
+    const rep = await replyLarkMessage("root-msg", "收到", false, "client-2");
+    expect(rep).toEqual({ message_id: "m_reply_456" });
+    expect(fetcher.mock.calls[2][0]).toBe("/api/v1/lark/messages/root-msg/replies");
+    expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({ text: "收到", thread: false, client_id: "client-2" });
+  });
+
+  it("nextLarkPosition 能够基于现有消息计算下一个位置", () => {
+    expect(nextLarkPosition([])).toBeTruthy();
+    expect(nextLarkPosition([{ id: "1", position: "10" }])).toBe("11");
+    expect(nextLarkPosition([{ id: "1", position: "10" }, { id: "2", position: "25" }])).toBe("26");
   });
 });

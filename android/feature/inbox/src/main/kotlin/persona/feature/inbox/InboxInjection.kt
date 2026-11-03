@@ -20,5 +20,11 @@ internal fun injectedInboxRepository(): InboxRepository {
     return remember(context) { EntryPointAccessors.fromApplication(context, InboxEntryPoint::class.java).inboxRepository() }
 }
 
-/** The reader is bound to the original pairing; Coil never receives pairing credentials. */
-class AuthenticatedLarkImage(val cacheKey: String, val read: suspend () -> ByteArray)
+/**
+ * The reader is bound to the original pairing; Coil never receives pairing credentials. Two with the same [cacheKey]
+ * (pairing scope and path) are the same picture, so rebuilding a record or a message does not make it a new one.
+ */
+class AuthenticatedLarkImage(val cacheKey: String, val read: suspend () -> ByteArray) {
+    override fun equals(other: Any?) = other is AuthenticatedLarkImage && other.cacheKey == cacheKey
+    override fun hashCode() = cacheKey.hashCode()
+}

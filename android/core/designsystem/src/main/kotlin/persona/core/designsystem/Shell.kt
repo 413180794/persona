@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -35,7 +36,8 @@ enum class MessageSource { Lark, Mail, Other }
 
 /**
  * An inbox item. Items that need a reply ([status] NeedsYou) are cards of their own in glass and strips with
- * an amber holder on the board; the rest are rows of a group. [extra] holds the draft and its actions.
+ * an amber holder on the board; the rest are rows of a group. [extra] holds the draft and its actions. [avatar] is the
+ * chat's or sender's picture once it has loaded; until then (and without one) the avatar shows the initial.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -56,6 +58,7 @@ fun MessageItem(
     tags: List<String> = emptyList(),
     onLongClick: (() -> Unit)? = null,
     selected: Boolean = false,
+    avatar: Painter? = null,
     extra: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
@@ -67,7 +70,7 @@ fun MessageItem(
     val click = Modifier.selectedRow(selected).onSecondaryClick(onLongClick).combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onLongClick)
     val body: @Composable ColumnScope.() -> Unit = {
         Row(verticalAlignment = Alignment.Top) {
-            JAvatar(group ?: sender, size = if (prominent) 42.dp else 38.dp, badge = badge, badgeColor = badgeColor)
+            JAvatar(group ?: sender, size = if (prominent) 42.dp else 38.dp, badge = badge, badgeColor = badgeColor, image = avatar)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

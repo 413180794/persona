@@ -64,7 +64,7 @@ class RealInboxRepository(
     private suspend fun restore(transport: InboxAssistantTransport) {
         if (restoredScope == transport.scope) return
         quietly { snapshots.restore<JsonObject>("${transport.scope}:inbox")?.let { data ->
-            val records = data.array("items").map { record(it.jsonObject) }
+            val records = data.array("items").map { record(it.jsonObject, transport) }
             if (owns(transport)) current.update { it.copy(records = records, loading = false) }
         } }
         restoredScope = transport.scope
@@ -188,7 +188,7 @@ class RealInboxRepository(
             val data = transport.inbox().array("items").map { it.jsonObject }
             val mute = if (hubPreferences == null) transport.mutes() else null
             if (!owns(transport)) return@withLock
-            val records = data.map(::record)
+            val records = data.map { record(it, transport) }
             val newVersions = data.associate { it.string("id") to (it.obj("agent")?.toString().orEmpty()) }
             val saved = journal.update(transport.scope) { document ->
                 document.copy(drafts = document.drafts.filter { (key, draft) ->
@@ -233,7 +233,7 @@ class RealInboxRepository(
         }) }
         try {
             val result = transport.setDone(itemId, done)
-            if (owns(transport)) replaceRecord(record(result.obj("item") ?: result))
+            if (owns(transport)) replaceRecord(record(result.obj("item") ?: result, transport))
         } catch (e: Exception) {
             if (owns(transport) && old != null) replaceRecord(old)
             throw e
@@ -337,7 +337,7 @@ class RealInboxRepository(
                 publishLocal(accepted)
                 if (actualTarget is ReplyTarget.Inbox) {
                     val item = response.obj("item") ?: response
-                    if (item.optional("id") != null) replaceRecord(record(item))
+                    if (item.optional("id") != null) replaceRecord(record(item, transport))
                     else current.update { it.copy(records = it.records.map { record ->
                         if (record.item.id == actualTarget.itemId) record.copy(item = record.item.copy(doneAt = Instant.now().toString())) else record
                     }) }
@@ -789,7 +789,7 @@ class RealInboxRepository(
         }
         return record.copy(localStatus = status, localDelivery = pending?.outboxState?.delivery, aiDraft = draft?.ai == true)
     }
-    private fun record(data: JsonObject): InboxRecord {
+    private fun record(data: JsonObject, transport: InboxAssistantTransport): InboxRecord {
         val lark = data.obj("lark")
         val agent = data.obj("agent")
         val mail = data.obj("mail")
@@ -809,8 +809,12 @@ class RealInboxRepository(
                     // The hub omits direct when false: a mail the user was only copied on (or got through a list).
                     direct = it.flag("direct"))
             },
+            // Only a Feishu chat has a picture on the hub; a mail row keeps its initial, as on iOS.
+            avatar = if (data.string("source") == "lark") avatar(data.optional("avatar"), transport) else null,
         )
     }
+    private fun avatar(ref: String?, transport: InboxAssistantTransport) =
+        larkAvatar(ref, transport.scope) { sized -> images.get("${transport.scope}:$sized") { transport.media(sized) } }
     private fun message(data: JsonObject, window: Window): LarkMessage {
         val source = LarkContentSource(window.transport)
         val id = data.string("id")
@@ -841,7 +845,8 @@ class RealInboxRepository(
                 "failed" -> LarkDelivery.Failed
                 "sending", "pending" -> LarkDelivery.Sending
                 else -> LarkDelivery.Sent
-            }, replyCount = maxOf(0L, data.number("reply_count") ?: 0L, data.number("thread_reply_count") ?: 0L),
+            }, avatar = avatar(data.optional("sender_avatar"), window.transport),
+            replyCount = maxOf(0L, data.number("reply_count") ?: 0L, data.number("thread_reply_count") ?: 0L),
             thread = larkThreadSource(data, window.transport, window.feedId))
     }
 }

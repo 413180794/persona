@@ -403,6 +403,9 @@ export interface LarkMessage {
   badge_count?: number;
   parts?: LarkPart[];
   reply_to?: { id?: string; sender_name?: string; text?: string; recalled?: boolean };
+  sending?: boolean;
+  failed?: boolean;
+  client_id?: string;
 }
 
 export interface LarkPage {
@@ -717,4 +720,37 @@ export function resetInboxForTests() {
   inFlight = null;
   again = false;
   unsentReplies.clear();
+}
+
+/** Sends a message to a Feishu conversation via the native hub API. */
+export async function sendLarkMessage(feed: string, text: string, clientID?: string): Promise<{ message_id?: string }> {
+  return api<{ message_id?: string }>(`/lark/conversations/${enc(feed)}/messages`, {
+    method: "POST",
+    json: { text, client_id: clientID },
+    token: getToken(),
+  });
+}
+
+/** Replies to a Feishu message (either quoted in chat or in its topic thread). */
+export async function replyLarkMessage(
+  messageID: string,
+  text: string,
+  thread = false,
+  clientID?: string,
+): Promise<{ message_id?: string }> {
+  return api<{ message_id?: string }>(`/lark/messages/${enc(messageID)}/replies`, {
+    method: "POST",
+    json: { text, thread, client_id: clientID },
+    token: getToken(),
+  });
+}
+
+/** Computes the next position string for an optimistic LarkMessage in the list. */
+export function nextLarkPosition(messages: LarkMessage[]): string {
+  let max = 0;
+  for (const m of messages) {
+    const n = Number(m.position);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return String(max > 0 ? max + 1 : Date.now());
 }

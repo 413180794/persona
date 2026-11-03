@@ -374,6 +374,42 @@ class InboxRepositoryTest {
         }
     }
 
+    @Test fun feishuRowsCarryTheChatsPictureAtThumbnailSizeAndMailRowsDoNot() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-avatar-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(
+                    buildJsonObject { put("id", "lark:chat:1"); put("source", "lark"); put("kind", "group"); put("title", "群")
+                        put("avatar", "/api/v1/lark/media/key"); put("lark", buildJsonObject { put("feed_id", "chat") }) },
+                    buildJsonObject { put("id", "lark:dm:1"); put("source", "lark"); put("kind", "dm"); put("title", "人")
+                        put("lark", buildJsonObject { put("feed_id", "dm") }) },
+                    buildJsonObject { put("id", "mail:1"); put("source", "mail"); put("kind", "mail"); put("title", "信")
+                        put("avatar", "/api/v1/lark/media/other") },
+                ))
+            }
+            val repository = repository(transport, directory, owner, FakeHub())
+            // The pairing's first emission clears the list; refresh after it, not before.
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            val avatars = repository.snapshot.value.records.associate { it.item.id to it.avatar }
+            assertEquals("hub/generation:/api/v1/lark/media/key?size=144", avatars["lark:chat:1"]?.cacheKey)
+            assertNull(avatars["lark:dm:1"])
+            assertNull(avatars["mail:1"])
+            avatars["lark:chat:1"]!!.read()
+            avatars["lark:chat:1"]!!.read()
+            // Read with the pairing at the thumbnail size, and once: the second comes from the bytes cache.
+            assertEquals(listOf("/api/v1/lark/media/key?size=144"), transport.mediaRefs)
+            // A refresh rebuilds the records; the same picture is the same value, so unchanged rows stay equal.
+            val before = repository.snapshot.value.records
+            repository.refresh()
+            assertEquals(before, repository.snapshot.value.records)
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     private suspend fun awaitState(state: StateFlow<LarkConversation>, predicate: (LarkConversation) -> Boolean) =
         withTimeout(5_000) { state.first(predicate) }
 
@@ -414,17 +450,19 @@ class InboxRepositoryTest {
 
     private class FakeTransport(override val scope: String = "hub/generation") : InboxAssistantTransport {
         var onReply: suspend (String) -> JsonObject = { JsonObject(emptyMap()) }
+        var items = JsonArray(emptyList())
+        val mediaRefs = mutableListOf<String>()
         var onMessages: suspend (Long?, String?, String?) -> JsonObject = { _, _, _ -> buildJsonObject {
             put("messages", JsonArray(emptyList())); put("sync_state", "complete")
         } }
         override suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String) = onReply(clientId)
-        override suspend fun inbox() = JsonObject(emptyMap())
+        override suspend fun inbox() = buildJsonObject { put("items", items) }
         override suspend fun setDone(itemId: String, done: Boolean) = JsonObject(emptyMap())
         override suspend fun messages(feedId: String, around: Long?, before: String?, after: String?) = onMessages(around, before, after)
         override suspend fun assistant() = JsonObject(emptyMap())
         override suspend fun createConversation(main: Boolean) = JsonObject(emptyMap())
         override suspend fun pins() = JsonObject(emptyMap())
         override suspend fun mutes() = JsonObject(emptyMap())
-        override suspend fun media(ref: String) = byteArrayOf()
+        override suspend fun media(ref: String) = byteArrayOf(1).also { mediaRefs += ref }
     }
 }

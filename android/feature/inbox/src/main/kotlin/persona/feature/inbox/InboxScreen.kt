@@ -232,7 +232,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
     ) {
         MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = item.title,
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
-            position = position,
+            position = position, avatar = rememberLarkAvatar(record.avatar),
             source = if (record.feedId != null) MessageSource.Lark else MessageSource.Mail,
             sourceLabel = if (record.feedId != null) "飞书" else "邮件",
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
@@ -249,11 +249,6 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
                 if (!done) AgentDraftCard(record, composers, navigator, repository = repository)
             })
     }
-}
-
-@Composable
-internal fun Avatar(text: String, needsYou: Boolean = false) {
-    JAvatar(text, badge = if (needsYou) PhIcons.Sparkle else null)
 }
 
 @Composable

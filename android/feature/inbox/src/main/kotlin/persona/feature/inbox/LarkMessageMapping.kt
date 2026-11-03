@@ -41,7 +41,7 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
             "sending", "pending" -> LarkDelivery.Sending
             else -> LarkDelivery.Sent
         },
-        avatar = data.cursor("sender_avatar")?.let { image(it) }, bot = data.text("sender_type") == "bot",
+        avatar = larkAvatar(data.cursor("sender_avatar"), transport.scope, transport::media), bot = data.text("sender_type") == "bot",
         system = data.text("type") == "SYSTEM" || data.flag("recalled"), edited = data.flag("edited"),
         quote = quote?.let { LarkQuote(it.text("id"), it.text("sender_name"), if (it.flag("recalled")) "消息已撤回" else it.text("text")) },
         badgeCount = data.number("badge_count"), isRead = data.flag("is_read"),

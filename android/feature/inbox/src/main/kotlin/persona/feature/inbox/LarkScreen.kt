@@ -336,8 +336,7 @@ internal fun LarkBubble(message: LarkMessage, showSender: Boolean, repository: I
     if (message.mine) UserBubbleFrame(modifier, footer = footer, content = body)
     else IncomingBubbleFrame(modifier, author = message.senderName.takeIf { showSender },
         time = larkTime(message.time).takeIf { showSender }, avatar = {
-            if (message.avatar != null) Box(Modifier.size(40.dp)) { LarkPartContent(message.avatar, repository, onError) }
-            else JAvatar(message.senderName.ifBlank { if (message.bot) "机器人" else "信" })
+            LarkAvatar(message.senderName.ifBlank { if (message.bot) "机器人" else "信" }, message.avatar)
         }, footer = footer, content = body)
 }
 

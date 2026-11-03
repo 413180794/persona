@@ -1,25 +1,30 @@
-// A Feishu chat, read-only, opened at the item's first new message (docs/inbox.md: 「点开：飞书会话停在这件事的第一条新消息」).
-// Not a second Feishu (docs/feishu.md): no reactions, profiles or chat settings here; replying goes through
-// AI 草拟回复 → 发送 (/inbox/{id}/reply). Rich text and cards are simplified to text.
-// What was really seen is reported read to Feishu (docs/inbox.md「看过的飞书消息按可见即读上报」, lark-read.ts): a message
-// counts once at least half of it is in the list while the page is in front, placed, and no dialog covers it. With
-// 设置 › 翻译 on for this chat, others' messages in another language get their translation under them.
+// A Feishu chat, opened at the item's first new message (docs/inbox.md: 「点开：飞书会话停在这件事的第一条新消息」).
+// Supports native Feishu messaging interactions: direct replies, quoting messages, copying, asking Persona for summary,
+// and reporting seen messages to Feishu (docs/inbox.md「看过的飞书消息按可见即读上报」, lark-read.ts).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, enc, errorText, getToken } from "../../lib/api";
 import { clock } from "../../lib/format";
 import {
-  cardText, comparePosition, emojiLabel, isDone, mergeMessages, partRuns, withToken,
-  type InboxItem, type LarkMessage, type LarkPage, type LarkPart,
+  cardText, comparePosition, emojiLabel, isDone, mergeMessages, nextLarkPosition, partRuns, replyLarkMessage,
+  sendLarkMessage, withToken, type InboxItem, type LarkMessage, type LarkPage, type LarkPart,
 } from "../../lib/inbox";
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
 import { clickLink, linkHref, prefetchLink } from "../../lib/links";
+import { navigate } from "../../lib/router";
 import { onHubEvent } from "../../lib/store";
 import { isForeignCached, requestTranslation, translatesChat, translationOf, useTranslatePrefs, useTranslations } from "../../lib/translate";
-import { Button, cx, Loading, Spinner } from "../../ui/atoms";
+import type { Session } from "../../lib/types";
+import { Button, cx, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
 
 const PAGE = 30;
+
+export interface LarkReplyTarget {
+  id: string;
+  sender_name?: string;
+  text?: string;
+}
 
 export function LarkThread({ item }: { item: InboxItem }) {
   const feed = item.lark!.feed_id;
@@ -27,7 +32,9 @@ export function LarkThread({ item }: { item: InboxItem }) {
   const [page, setPage] = useState<LarkPage | null>(null);
   const [error, setError] = useState("");
   const [more, setMore] = useState<"" | "older" | "newer">("");
+  const [replyTo, setReplyTo] = useState<LarkReplyTarget | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const anchor = useRef<{ height: number; top: number } | null>(null);
   const placed = useRef(false);
   const base = `/lark/conversations/${enc(feed)}/messages`;
@@ -42,6 +49,7 @@ export function LarkThread({ item }: { item: InboxItem }) {
     tracker.current = null;
     setPage(null);
     setError("");
+    setReplyTo(null);
     api<LarkPage>(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`)
       .then((r) => {
         if (!live) return;
@@ -110,38 +118,174 @@ export function LarkThread({ item }: { item: InboxItem }) {
     }
   }, [base]);
 
+  const handleReply = useCallback((m: LarkMessage) => {
+    setReplyTo({
+      id: m.id,
+      sender_name: m.is_mine ? "我" : (m.sender_name || "未知"),
+      text: m.text || (m.parts ?? []).map((p) => p.text).join(""),
+    });
+    inputRef.current?.focus();
+  }, []);
+
+  const handleAskPersona = useCallback(async () => {
+    const chatTitle = item.title || "飞书会话";
+    const prompt = `读取我飞书会话「${chatTitle}」（lark-connector feedId ${feed}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`;
+    toast("正在交给 Persona 总结…", "ok");
+    try {
+      const r = await api<{ session: Session }>("/assistant/conversations", {
+        method: "POST",
+        json: { prompt },
+      });
+      navigate({ name: "jarvis", sid: r.session.session_id });
+    } catch (e) {
+      toast(`总结失败：${errorText(e)}`, "error");
+    }
+  }, [item.title, feed]);
+
+  const handleCopy = useCallback((m: LarkMessage) => {
+    const text = m.text || (m.parts ?? []).map((p) => p.text ?? "").join("");
+    if (text) {
+      navigator.clipboard?.writeText(text).then(() => {
+        toast("已拷贝", "ok");
+      }).catch(() => {
+        toast("拷贝失败", "error");
+      });
+    }
+  }, []);
+
+  const handleSend = useCallback(async (content: string, replyTarget?: LarkReplyTarget) => {
+    const clientID = "wmsg-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
+    const tempId = "temp-" + clientID;
+    const currentMessages = pageRef.current?.messages ?? [];
+    const optMsg: LarkMessage = {
+      id: tempId,
+      client_id: clientID,
+      position: nextLarkPosition(currentMessages),
+      is_mine: true,
+      sender_name: "我",
+      created_at: new Date().toISOString(),
+      text: content,
+      parts: [{ kind: "text", text: content }],
+      sending: true,
+      reply_to: replyTarget ? { id: replyTarget.id, sender_name: replyTarget.sender_name, text: replyTarget.text } : undefined,
+    };
+
+    setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, [optMsg]) });
+    setReplyTo(null);
+    setTimeout(() => {
+      const el = scroller.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 10);
+
+    try {
+      let res: { message_id?: string };
+      if (replyTarget?.id) {
+        res = await replyLarkMessage(replyTarget.id, content, false, clientID);
+      } else {
+        res = await sendLarkMessage(feed, content, clientID);
+      }
+      setPage((cur) => {
+        if (!cur) return cur;
+        const updated = cur.messages.map((m) =>
+          m.id === tempId ? { ...m, id: res.message_id || tempId, sending: false, failed: false } : m,
+        );
+        return { ...cur, messages: updated };
+      });
+    } catch (e) {
+      setPage((cur) => {
+        if (!cur) return cur;
+        const updated = cur.messages.map((m) =>
+          m.id === tempId ? { ...m, sending: false, failed: true } : m,
+        );
+        return { ...cur, messages: updated };
+      });
+      toast(`发送失败：${errorText(e)}`, "error");
+    }
+  }, [feed]);
+
+  const handleRetry = useCallback(async (m: LarkMessage) => {
+    const clientID = m.client_id || ("wmsg-" + Date.now().toString(36));
+    setPage((cur) => {
+      if (!cur) return cur;
+      const updated = cur.messages.map((msg) =>
+        msg.id === m.id ? { ...msg, sending: true, failed: false } : msg,
+      );
+      return { ...cur, messages: updated };
+    });
+    try {
+      let res: { message_id?: string };
+      if (m.reply_to?.id) {
+        res = await replyLarkMessage(m.reply_to.id, m.text ?? "", false, clientID);
+      } else {
+        res = await sendLarkMessage(feed, m.text ?? "", clientID);
+      }
+      setPage((cur) => {
+        if (!cur) return cur;
+        const updated = cur.messages.map((msg) =>
+          msg.id === m.id ? { ...msg, id: res.message_id || msg.id, sending: false, failed: false } : msg,
+        );
+        return { ...cur, messages: updated };
+      });
+    } catch (e) {
+      setPage((cur) => {
+        if (!cur) return cur;
+        const updated = cur.messages.map((msg) =>
+          msg.id === m.id ? { ...msg, sending: false, failed: true } : msg,
+        );
+        return { ...cur, messages: updated };
+      });
+      toast(`重试失败：${errorText(e)}`, "error");
+    }
+  }, [feed]);
+
   if (!page) {
     return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label="正在读飞书消息" />}</div>;
   }
   const firstNew = focus ? page.messages.find((m) => comparePosition(m.position, focus) >= 0)?.id : undefined;
   return (
-    <div ref={scroller} className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[760px] px-2 py-3 sm:px-4">
-        {page.has_older && (
-          <div className="flex justify-center pb-2">
-            <Button tone="quiet" busy={more === "older"} onClick={() => void loadMore("older")}>更早的消息</Button>
-          </div>
-        )}
-        {!page.messages.length && <p className="py-10 text-center text-[12.5px] text-ink-3">没有消息</p>}
-        {page.messages.map((m, i) => (
-          <div key={m.id}>
-            {m.id === firstNew && (
-              <div className="my-2 flex items-center gap-2 px-2 text-[11px] font-medium text-accent-ink">
-                <span className="h-px flex-1 bg-accent/40" />
-                以下是新消息
-                <span className="h-px flex-1 bg-accent/40" />
-              </div>
-            )}
-            <Message m={m} prev={m.id === firstNew ? undefined : page.messages[i - 1]} translateTo={translateTo} />
-          </div>
-        ))}
-        {page.has_newer && (
-          <div className="flex justify-center pt-2">
-            <Button tone="quiet" busy={more === "newer"} onClick={() => void loadMore("newer")}>更新的消息</Button>
-          </div>
-        )}
-        {error && <p className="px-2 pt-2 text-[12px] text-red">{error}</p>}
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[760px] px-2 py-3 sm:px-4">
+          {page.has_older && (
+            <div className="flex justify-center pb-2">
+              <Button tone="quiet" busy={more === "older"} onClick={() => void loadMore("older")}>更早的消息</Button>
+            </div>
+          )}
+          {!page.messages.length && <p className="py-10 text-center text-[12.5px] text-ink-3">没有消息</p>}
+          {page.messages.map((m, i) => (
+            <div key={m.id}>
+              {m.id === firstNew && (
+                <div className="my-2 flex items-center gap-2 px-2 text-[11px] font-medium text-accent-ink">
+                  <span className="h-px flex-1 bg-accent/40" />
+                  以下是新消息
+                  <span className="h-px flex-1 bg-accent/40" />
+                </div>
+              )}
+              <Message
+                m={m}
+                prev={m.id === firstNew ? undefined : page.messages[i - 1]}
+                translateTo={translateTo}
+                onReply={handleReply}
+                onAskPersona={handleAskPersona}
+                onCopy={handleCopy}
+                onRetry={handleRetry}
+              />
+            </div>
+          ))}
+          {page.has_newer && (
+            <div className="flex justify-center pt-2">
+              <Button tone="quiet" busy={more === "newer"} onClick={() => void loadMore("newer")}>更新的消息</Button>
+            </div>
+          )}
+          {error && <p className="px-2 pt-2 text-[12px] text-red">{error}</p>}
+        </div>
       </div>
+      <LarkComposer
+        replyTo={replyTo}
+        onClearReply={() => setReplyTo(null)}
+        onSend={handleSend}
+        inputRef={inputRef}
+      />
     </div>
   );
 }
@@ -245,8 +389,26 @@ function TranslationLine({ m, target }: { m: LarkMessage; target: string }) {
   );
 }
 
-/** One message: who and when (left out under the same sender's message a moment before), what it answers, the parts. */
-function Message({ m, prev, nested, translateTo }: { m: LarkMessage; prev?: LarkMessage; nested?: boolean; translateTo?: string }) {
+/** One message: who and when, quoted reply, the content, hover action bar, and retry for failed sends. */
+function Message({
+  m,
+  prev,
+  nested,
+  translateTo,
+  onReply,
+  onAskPersona,
+  onCopy,
+  onRetry,
+}: {
+  m: LarkMessage;
+  prev?: LarkMessage;
+  nested?: boolean;
+  translateTo?: string;
+  onReply?: (m: LarkMessage) => void;
+  onAskPersona?: () => void;
+  onCopy?: (m: LarkMessage) => void;
+  onRetry?: (m: LarkMessage) => void;
+}) {
   const [thread, setThread] = useState<LarkMessage[] | null>(null);
   const [opening, setOpening] = useState(false);
   if (isSystem(m)) {
@@ -269,7 +431,15 @@ function Message({ m, prev, nested, translateTo }: { m: LarkMessage; prev?: Lark
     }
   };
   return (
-    <div data-pos={m.position} data-seen-pos={nested ? undefined : m.position} className={cx("flex gap-2.5 rounded-[10px] px-2", compact ? "py-0.5" : "pt-2 pb-0.5", m.at_me && "bg-accent-tint/60")}>
+    <div
+      data-pos={m.position}
+      data-seen-pos={nested ? undefined : m.position}
+      className={cx(
+        "group/msg relative flex gap-2.5 rounded-[10px] px-2",
+        compact ? "py-0.5" : "pt-2 pb-0.5",
+        m.at_me && "bg-accent-tint/60",
+      )}
+    >
       <span className="w-8 shrink-0">{!compact && <Monogram name={name} size={nested ? 24 : 32} src={m.sender_avatar} />}</span>
       <div className="min-w-0 flex-1">
         {!compact && (
@@ -278,6 +448,23 @@ function Message({ m, prev, nested, translateTo }: { m: LarkMessage; prev?: Lark
             {m.sender_type === "bot" && <span className="shrink-0 rounded-[4px] bg-field px-1 text-[10px] text-ink-3">机器人</span>}
             <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{clock(m.created_at)}</span>
             {m.edited && <span className="shrink-0 text-[11px] text-ink-3">已编辑</span>}
+            {m.sending && (
+              <span className="flex items-center gap-1 text-[11px] text-ink-3">
+                <Spinner size={10} />
+                <span>发送中…</span>
+              </span>
+            )}
+            {m.failed && (
+              <button
+                type="button"
+                onClick={() => onRetry?.(m)}
+                className="flex items-center gap-1 text-[11px] font-medium text-red hover:underline"
+                title="点击重试"
+              >
+                <Icon name="retry" size={11} />
+                <span>发送失败，点击重试</span>
+              </button>
+            )}
           </p>
         )}
         {m.reply_to && (
@@ -298,6 +485,133 @@ function Message({ m, prev, nested, translateTo }: { m: LarkMessage; prev?: Lark
             {thread.length ? thread.map((t) => <Message key={t.id} m={t} nested translateTo={translateTo} />) : <p className="px-2 py-1 text-[11.5px] text-ink-3">读不到回复</p>}
           </div>
         )}
+      </div>
+
+      {/* Hover action bar */}
+      {!isSystem(m) && !m.recalled && !m.sending && (
+        <div className="absolute right-2 top-1.5 z-10 hidden items-center gap-0.5 rounded-[6px] border border-line bg-surface/95 px-1 py-0.5 shadow-hairline backdrop-blur-sm group-hover/msg:flex">
+          {onReply && (
+            <button
+              type="button"
+              onClick={() => onReply(m)}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-ink-2 hover:bg-surface-hover hover:text-ink"
+              title="回复"
+            >
+              <Icon name="quote" size={11} />
+              <span>回复</span>
+            </button>
+          )}
+          {onAskPersona && !nested && (
+            <button
+              type="button"
+              onClick={onAskPersona}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-accent-ink hover:bg-accent-tint/40"
+              title="让 Persona 总结"
+            >
+              <Icon name="spark" size={11} />
+              <span>总结</span>
+            </button>
+          )}
+          {onCopy && (
+            <button
+              type="button"
+              onClick={() => onCopy(m)}
+              className="flex items-center rounded p-1 text-ink-3 hover:bg-surface-hover hover:text-ink"
+              title="拷贝"
+            >
+              <Icon name="copy" size={11} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Bottom composer for native Feishu chat replies. */
+function LarkComposer({
+  replyTo,
+  onClearReply,
+  onSend,
+  inputRef,
+}: {
+  replyTo: LarkReplyTarget | null;
+  onClearReply: () => void;
+  onSend: (text: string, replyToMessage?: LarkReplyTarget) => Promise<void>;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+}) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const submit = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+    setSending(true);
+    const toReply = replyTo ?? undefined;
+    setText("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
+    try {
+      await onSend(trimmed, toReply);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      if (e.nativeEvent.isComposing) return;
+      e.preventDefault();
+      void submit();
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+    const el = e.target;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  };
+
+  return (
+    <div className="shrink-0 border-t border-line bg-surface px-3 py-2 sm:px-4">
+      <div className="mx-auto max-w-[760px]">
+        {replyTo && (
+          <div className="mb-2 flex items-center justify-between rounded-[8px] bg-field/60 px-3 py-1.5 text-[12px] text-ink-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Icon name="quote" size={12} className="shrink-0 text-accent-ink" />
+              <span className="shrink-0 font-medium text-ink">{replyTo.sender_name}：</span>
+              <span className="truncate text-ink-3">{replyTo.text || "引用消息"}</span>
+            </div>
+            <button
+              type="button"
+              onClick={onClearReply}
+              className="ml-2 shrink-0 rounded p-0.5 text-ink-3 hover:bg-surface hover:text-ink"
+              title="取消引用"
+            >
+              <Icon name="x" size={12} />
+            </button>
+          </div>
+        )}
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={inputRef}
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder={replyTo ? `回复 ${replyTo.sender_name}…` : "回复飞书消息…"}
+            rows={1}
+            className="min-h-[36px] max-h-[120px] flex-1 resize-none rounded-[10px] border border-line bg-field px-3 py-1.5 text-[13px] leading-relaxed text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+          />
+          <Button
+            tone="accent"
+            busy={sending}
+            disabled={!text.trim() || sending}
+            onClick={() => void submit()}
+            className="h-[36px] shrink-0"
+          >
+            发送
+          </Button>
+        </div>
       </div>
     </div>
   );

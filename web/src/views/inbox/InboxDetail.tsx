@@ -4,7 +4,7 @@ import { useState } from "react";
 import { agentDraft, agentWorking, isDone, kindLabel, labelIsUrgent, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
 import { navigate } from "../../lib/router";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
-import { Button, Loading } from "../../ui/atoms";
+import { Button, cx, Loading } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { DocBody, MailBody, MomentBody } from "./InboxBodies";
 import { DraftDialog, HandOffDialog } from "./InboxDialogs";
@@ -66,7 +66,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
           </div>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className={cx("min-h-0 flex-1", item.lark ? "flex flex-col overflow-hidden" : "overflow-y-auto")}>
         {item.doc ? <DocBody item={item} /> : item.moment ? <MomentBody item={item} /> : item.lark ? <LarkThread item={item} /> : item.mail ? <MailBody item={item} /> : (
           <div className="mx-auto max-w-[760px] px-6 py-5 text-[13.5px] whitespace-pre-wrap text-ink">{item.preview}</div>
         )}

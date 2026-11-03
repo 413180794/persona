@@ -98,6 +98,8 @@ data class InboxRecord(
     val mail: InboxMailRef? = null,
     /** A saved reply that AI wrote (AI 草拟): its row shows it as a draft card, not as 「草稿 · …」. */
     val aiDraft: Boolean = false,
+    /** A Feishu chat's picture (the group's, or the other person's), at the thumbnail size. */
+    val avatar: AuthenticatedLarkImage? = null,
 ) {
     val isLark: Boolean get() = feedId != null || source == "lark"
 }
@@ -161,7 +163,7 @@ data class LarkMessage(
     val clientId: String? = null,
     val delivery: LarkDelivery = LarkDelivery.Sent,
     val pendingDelivery: persona.core.contracts.api.DeliveryState? = null,
-    val avatar: LarkPart.Image? = null,
+    val avatar: AuthenticatedLarkImage? = null,
     val bot: Boolean = false,
     val system: Boolean = false,
     val edited: Boolean = false,
