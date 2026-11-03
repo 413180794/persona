@@ -29,7 +29,7 @@ import tempfile
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PROJECT = os.path.join(ROOT, "apple", "Jarvis.xcodeproj")
+PROJECT = os.path.join(ROOT, "apple", "Persona.xcodeproj")
 VAR = re.compile(r"\$[({](\w+)[)}]")
 APP_GROUPS = "com.apple.security.application-groups"
 APS = ("aps-environment", "com.apple.developer.aps-environment")  # iOS, macOS
@@ -97,8 +97,17 @@ def team_prefix(settings):
     return team + "."
 
 
+def app_bundle(directory):
+    """Find the renamed product or a legacy archive without guessing when both are present."""
+    found = [os.path.join(directory, name) for name in ("Persona.app", "Jarvis.app")
+             if os.path.isdir(os.path.join(directory, name))]
+    if len(found) != 1:
+        sys.exit("entitlements: expected one Persona.app or Jarvis.app in %s" % directory)
+    return found[0]
+
+
 def sign(archive):
-    app = os.path.join(archive, "Products", "Applications", "Jarvis.app")
+    app = app_bundle(os.path.join(archive, "Products", "Applications"))
     known = targets()
     for b in bundles(app):
         _, key = identity(b)
@@ -128,15 +137,16 @@ def check(path):
             with zipfile.ZipFile(path) as z:
                 z.extractall(tmp)
             subprocess.run(["chmod", "-R", "u+rwX", tmp], check=True)  # zipfile drops the modes codesign reads
-            app = os.path.join(tmp, "Payload", "Jarvis.app")
+            app = app_bundle(os.path.join(tmp, "Payload"))
         elif path.endswith(".pkg"):
             subprocess.run(["pkgutil", "--expand-full", path, os.path.join(tmp, "x")], check=True, capture_output=True)
-            found = [os.path.join(r, d) for r, ds, _ in os.walk(os.path.join(tmp, "x")) for d in ds if d == "Jarvis.app"]
-            if not found:
-                sys.exit("entitlements: no Jarvis.app in %s" % path)
+            found = [os.path.join(r, d) for r, ds, _ in os.walk(os.path.join(tmp, "x"))
+                     for d in ds if d in ("Persona.app", "Jarvis.app")]
+            if len(found) != 1:
+                sys.exit("entitlements: expected one Persona.app or Jarvis.app in %s" % path)
             app = found[0]
         elif path.endswith(".xcarchive"):
-            app = os.path.join(path, "Products", "Applications", "Jarvis.app")
+            app = app_bundle(os.path.join(path, "Products", "Applications"))
         else:
             app = path
         known = targets()

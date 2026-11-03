@@ -18,7 +18,7 @@ python3 scripts/privacy_check.py
 OUT=build-release
 BUILD="${1:-$(date +%Y%m%d%H%M)}"
 # Keep every archive where Xcode Organizer looks, so each version's dSYMs stay around for symbolicating crashes.
-ARCHIVE="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)/Jarvis $BUILD.xcarchive"
+ARCHIVE="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)/Persona $BUILD.xcarchive"
 AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 
 mkdir -p "$OUT"
@@ -26,12 +26,12 @@ cd apple
 xcodegen generate -q
 cd ..
 
-xcodebuild -project apple/Jarvis.xcodeproj -scheme Jarvis -configuration Release \
+xcodebuild -project apple/Persona.xcodeproj -scheme Persona -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -derivedDataPath "$OUT/DerivedData" \
   CURRENT_PROJECT_VERSION="$BUILD" "${AUTH[@]}" clean archive | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)"
 
-APP="$ARCHIVE/Products/Applications/Jarvis.app"
-WATCH="$APP/Watch/Jarvis.app"
+APP="$ARCHIVE/Products/Applications/Persona.app"
+WATCH="$APP/Watch/Persona.app"
 # Placeholder purpose strings get the build rejected automatically: stop before uploading.
 python3 scripts/release/check_bundle_strings.py "$APP"
 if [ -d "$WATCH" ]; then python3 scripts/release/check_bundle_strings.py "$WATCH"; fi
@@ -39,12 +39,12 @@ if [ -d "$WATCH" ]; then python3 scripts/release/check_bundle_strings.py "$WATCH
 python3 scripts/release/check_bundle_privacy.py "$APP"
 # Siri / Shortcuts only see the intents if their metadata was extracted at build time.
 [ -f "$APP/Metadata.appintents/extract.actionsdata" ] || { echo "missing AppIntents metadata in $APP"; exit 1; }
-# Release must not contain the DEBUG-only simulator switches (apple/Jarvis/App/JarvisApp.swift).
-if strings "$APP/Jarvis" | grep -qxE '(pairURL|openSession|showNewChat|openAssistant|openAssistantSidebar|newAssistant|openFirstImage|openTerminal|showPad|showKeyMods|focusTerminalInput|openShortcutsPanel|openTerminalSettings|openTerminalTips|showInfo|loadAll|fromSeq|lark-connector|lark-connectorName|larkTop|lark-connectorTopic|larkFocus|inboxDrawer|larkProfile|larkPicker|lark-connectorAt|larkMoments|openWorkbench|addMail|dropUsers|openPane|simulateTap|showMenu|openFile|jumpEnd|showOldest|openWork|openAgent|focusComposer|terminalPages|openEditor|openLinkURL|openChatInfo|openChatInfoPage|openChatInfoFrom|openThreadAt|openPeople|openMomentsTab|openMailLabel|openPeopleQuery|openFeishuDoc|openFeishuDocHeading|showFeishuDocSheet|openFeishuWikiSpace|openFeishuWikiNode|showFeishuWikiUpdates|openSearch|openSearchTab|openSearchFeed|openSearchFilter|openSearchFirst|openCalendarDate|openCalendarEvent|showCalendarNow|showDetailBottom|openMeeting|openMinutes|showMinutesTab|showMinutesPlaying|showMinutesSearch|openTask|openTaskScope|openOKR|showWorkBottom|showFeishuDocTableEnd|openMailThread|showMailAttachment|showMailBottom|showCloseAgent|openSpaceFromChat|showShareCard|showCompactChrome|showWakeDrawer|showSampleQuestion|showRecapDrawer|openAssistantPage|showAutoScroll|showScrollToOldest|openStorage|showFoldProbe|openInboxFirst|showInboxAction|showInboxMutes|openMachinePage|showAsUnread|showSampleScreen|showTestNotification|openNotificationSettings|openSendMessage|openUploadDemo|showFleetSample|fleetDetails|fleetIsland|showFleetCount|openIslandSettings|openIslandDiagnostics|showConnection|simulateOffline|openConnectionDetails|openSendDelay|openMonitor|openAgentsFresh|openChatsFresh|perfCounts|openWelcome|openMonitorRange|openMonitorScrub|openMachines|openMachineDetail|openDevices|openConnectorMail|openConnectorFeishu|openConnectorBot|openConnectorGitHub|openConnectorTelegram|openConnectorMessages|openMessagesChats|openMessagesChat|openConnectorDevice|showFullOutput|showFreezeProbe|showScrollState|showChatDump|showClearConfirm|showPromptMenu|openModelLaunchers|openModelConfiguration|openModelPurpose|showModelSearch|showDeleteConfirm|showLauncherCheck|openModelLauncher|showKnowledgeEntry|showKnowledgeSearch|showKnowledgeLower|showKnowledgeKind|openFromDoneNotice|holdChromeOpen|showErrorDetails|openPersona|showPersonaState|openTranslationSettings|openLauncherPage|openAppearance|showFilePerf|showFileAutoScroll|showFileAutoScrollSpeed|showSpaceTabs|showDrawerProbe|showDrawerAutoDrag|openInboxItem|openShellPage|showShellPagerAt|showDesktopSample|openDesktopSheet|showSamplePermission|showSampleCodexApproval|showSampleCodexQuestion|showKnowledgeDay|showToolDetails|showMailAskClaude|openPairSheet|openEngineStep|showPushKey|showRunsOpen|openQuietSpaces|showHomeState|openCodexSettings|showPagePerf|showPopFrames|openRecording|showRecordingSample|openHubUpdate|openSkills|openHub|openHubs|pairURL2|pairURL3)'; then
+# Release must not contain the DEBUG-only simulator switches (apple/Persona/App/PersonaApp.swift).
+if strings "$APP/Persona" | grep -qxE '(pairURL|openSession|showNewChat|openAssistant|openAssistantSidebar|newAssistant|openFirstImage|openTerminal|showPad|showKeyMods|focusTerminalInput|openShortcutsPanel|openTerminalSettings|openTerminalTips|showInfo|loadAll|fromSeq|lark-connector|lark-connectorName|larkTop|lark-connectorTopic|larkFocus|inboxDrawer|larkProfile|larkPicker|lark-connectorAt|larkMoments|openWorkbench|addMail|dropUsers|openPane|simulateTap|showMenu|openFile|jumpEnd|showOldest|openWork|openAgent|focusComposer|terminalPages|openEditor|openLinkURL|openChatInfo|openChatInfoPage|openChatInfoFrom|openThreadAt|openPeople|openMomentsTab|openMailLabel|openPeopleQuery|openFeishuDoc|openFeishuDocHeading|showFeishuDocSheet|openFeishuWikiSpace|openFeishuWikiNode|showFeishuWikiUpdates|openSearch|openSearchTab|openSearchFeed|openSearchFilter|openSearchFirst|openCalendarDate|openCalendarEvent|showCalendarNow|showDetailBottom|openMeeting|openMinutes|showMinutesTab|showMinutesPlaying|showMinutesSearch|openTask|openTaskScope|openOKR|showWorkBottom|showFeishuDocTableEnd|openMailThread|showMailAttachment|showMailBottom|showCloseAgent|openSpaceFromChat|showShareCard|showCompactChrome|showWakeDrawer|showSampleQuestion|showRecapDrawer|openAssistantPage|showAutoScroll|showScrollToOldest|openStorage|showFoldProbe|openInboxFirst|showInboxAction|showInboxMutes|openMachinePage|showAsUnread|showSampleScreen|showTestNotification|openNotificationSettings|openSendMessage|openUploadDemo|showFleetSample|fleetDetails|fleetIsland|showFleetCount|openIslandSettings|openIslandDiagnostics|showConnection|simulateOffline|openConnectionDetails|openSendDelay|openMonitor|openAgentsFresh|openChatsFresh|perfCounts|openWelcome|openMonitorRange|openMonitorScrub|openMachines|openMachineDetail|openDevices|openConnectorMail|openConnectorFeishu|openConnectorBot|openConnectorGitHub|openConnectorTelegram|openConnectorMessages|openMessagesChats|openMessagesChat|openConnectorDevice|showFullOutput|showFreezeProbe|showScrollState|showChatDump|showClearConfirm|showPromptMenu|openModelLaunchers|openModelConfiguration|openModelPurpose|showModelSearch|showDeleteConfirm|showLauncherCheck|openModelLauncher|showKnowledgeEntry|showKnowledgeSearch|showKnowledgeLower|showKnowledgeKind|openFromDoneNotice|holdChromeOpen|showErrorDetails|openPersona|showPersonaState|openTranslationSettings|openLauncherPage|openAppearance|showFilePerf|showFileAutoScroll|showFileAutoScrollSpeed|showSpaceTabs|showDrawerProbe|showDrawerAutoDrag|openInboxItem|openShellPage|showShellPagerAt|showDesktopSample|openDesktopSheet|showSamplePermission|showSampleCodexApproval|showSampleCodexQuestion|showKnowledgeDay|showToolDetails|showMailAskClaude|openPairSheet|openEngineStep|showPushKey|showRunsOpen|openQuietSpaces|showHomeState|openCodexSettings|showPagePerf|showPopFrames|openRecording|showRecordingSample|openHubUpdate|openSkills|openHub|openHubs|pairURL2|pairURL3)'; then
   echo "DEBUG switches found in the Release binary" >&2; exit 1
 fi
-# Nor the runtime CLI (apple/Jarvis/Debug/, docs/runtime-cli.md): its switches, its type, the accessibility hook it turns on.
-if strings "$APP/Jarvis" | grep -qE 'runtimeCLI|RuntimeCLI|_AXSSet(Automation|ReduceMotion)Enabled'; then
+# Nor the runtime CLI (apple/Persona/Debug/, docs/runtime-cli.md): its switches, its type, the accessibility hook it turns on.
+if strings "$APP/Persona" | grep -qE 'runtimeCLI|RuntimeCLI|_AXSSet(Automation|ReduceMotion)Enabled'; then
   echo "the runtime CLI found in the Release binary" >&2; exit 1
 fi
 
@@ -68,14 +68,14 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OPTS" -e
 if [ -n "${NO_UPLOAD:-}" ]; then
   # Check the binary that would have been uploaded: re-signed entitlements must carry production push.
   rm -rf "$OUT/ipa"
-  unzip -o -q "$OUT/export/Jarvis.ipa" -d "$OUT/ipa"
-  if ! codesign -d --entitlements :- "$OUT/ipa/Payload/Jarvis.app" 2>/dev/null | grep -q "<key>aps-environment</key><string>production</string>"; then
+  unzip -o -q "$OUT/export/Persona.ipa" -d "$OUT/ipa"
+  if ! codesign -d --entitlements :- "$OUT/ipa/Payload/Persona.app" 2>/dev/null | grep -q "<key>aps-environment</key><string>production</string>"; then
     echo "aps-environment is not production in the exported ipa:" >&2
-    codesign -d --entitlements :- "$OUT/ipa/Payload/Jarvis.app" 2>/dev/null >&2
+    codesign -d --entitlements :- "$OUT/ipa/Payload/Persona.app" 2>/dev/null >&2
     exit 1
   fi
   rm -rf "$OUT/ipa"
-  python3 scripts/release/entitlements.py check "$OUT/export/Jarvis.ipa"
+  python3 scripts/release/entitlements.py check "$OUT/export/Persona.ipa"
 fi
 git tag -f "testflight/$BUILD" >/dev/null 2>&1 || true
 if [ -n "${NO_UPLOAD:-}" ]; then

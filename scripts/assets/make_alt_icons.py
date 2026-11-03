@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 S = 1024
 PREVIEW = 384
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-ASSETS = os.path.join(ROOT, "apple/Jarvis/Resources/Assets.xcassets")
+ASSETS = os.path.join(ROOT, "apple/Persona/Resources/Assets.xcassets")
 PREVIEWS = os.path.join(ASSETS, "AppIcons")
 DIDOT = "/System/Library/Fonts/Supplemental/Didot.ttc"
 DIDOT_BOLD = 2

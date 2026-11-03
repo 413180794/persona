@@ -18,5 +18,5 @@ print(live[0]["machine_id"]+"/"+live[0]["session_id"] if live else "")')
 fi
 cd apple && xcodegen generate -q
 TEST_RUNNER_JARVIS_PAIR_URL="jarvis://pair?url=$URL&token=$TOKEN" TEST_RUNNER_JARVIS_OPEN_SESSION="$SESSION" \
-  xcodebuild test -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" -derivedDataPath ../build/DerivedData \
-  -only-testing:JarvisUITests 2>&1 | grep -E "error:|Test Case|✘|✔|TEST (SUCCEEDED|FAILED)|XCTAssert" | sed 's/token=[^ &]*/token=…/g'
+  xcodebuild test -project Persona.xcodeproj -scheme Persona -destination "id=$SIM" -derivedDataPath ../build/DerivedData \
+  -only-testing:PersonaUITests 2>&1 | grep -E "error:|Test Case|✘|✔|TEST (SUCCEEDED|FAILED)|XCTAssert" | sed 's/token=[^ &]*/token=…/g'

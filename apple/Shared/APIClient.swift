@@ -20,7 +20,7 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
         self.token = token
     }
 
-    /// 体验模式: the made-up hub inside the app (Jarvis/App/DemoHub.swift). Its host can never resolve, so nothing
+    /// 体验模式: the made-up hub inside the app (Persona/App/DemoHub.swift). Its host can never resolve, so nothing
     /// that slipped past `APIClient.local` reaches a network.
     static let demo = ServerConfig(url: URL(string: "https://demo.invalid")!, token: "demo")
     var isDemo: Bool { url.host() == "demo.invalid" }

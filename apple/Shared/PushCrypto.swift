@@ -150,7 +150,7 @@ nonisolated enum PushCrypto {
 
     enum Outcome: String { case notSealed, noKey, unopened, opened }
 
-    /// What the notification service extension shows for a delivered push (JarvisNotify/NotificationService.swift):
+    /// What the notification service extension shows for a delivered push (PersonaNotify/NotificationService.swift):
     /// the decrypted content, or the push as it came (the relay's 「有新消息」).
     static func service(_ content: UNNotificationContent, key: () -> P256.KeyAgreement.PrivateKey? = { loadKey() },
                         now: Date = .now) -> (UNNotificationContent, Outcome) {

@@ -2,7 +2,7 @@
 import Foundation
 
 /// Find in the code viewer (⌘F over an open file, `CodeLinesView`): what matches and in which order. Pure, so the
-/// find bar and the drawing only ask it (`JarvisMacTests/CodeFindTests`).
+/// find bar and the drawing only ask it (`PersonaMacTests/CodeFindTests`).
 nonisolated enum CodeFind {
     /// One match: its line and where in that line's text (UTF-16, as the drawn attributed string counts).
     struct Match: Equatable, Sendable {

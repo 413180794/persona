@@ -2,7 +2,7 @@
 import AppKit
 import SwiftUI
 
-/// The Mac's `MonoTextView` (iOS: `Jarvis/Views/Chat/MonoTextView.swift`): monospaced, unwrapped text that scrolls
+/// The Mac's `MonoTextView` (iOS: `Persona/Views/Chat/MonoTextView.swift`): monospaced, unwrapped text that scrolls
 /// both ways — files, diffs, the terminal. An `NSScrollView` around a non-scrolling, selectable `NSTextView` sized to
 /// the longest line, `inset` around it as on iOS. Selecting with the mouse and ⌘C / ⌘A / ⌘F work as in any text view.
 struct MonoTextView: NSViewRepresentable {

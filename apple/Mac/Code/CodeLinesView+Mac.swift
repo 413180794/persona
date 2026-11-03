@@ -2,7 +2,7 @@
 import AppKit
 import SwiftUI
 
-/// The Mac's `CodeLinesView` (the iOS one is a UIScrollView of reused labels, `Jarvis/Code/CodeLinesView.swift`):
+/// The Mac's `CodeLinesView` (the iOS one is a UIScrollView of reused labels, `Persona/Code/CodeLinesView.swift`):
 /// a flipped document view inside an `NSScrollView` that draws only the lines in the dirty rect, so a file of
 /// 100 000 lines opens and scrolls like one of ten. The gutter (line numbers, JSON's fold arrows) is drawn at the
 /// visible left edge, so it stays put while the code scrolls sideways under it. A click goes to the source (JSON

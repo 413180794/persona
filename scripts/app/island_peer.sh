@@ -4,7 +4,7 @@
 # (docs/live-activity.md「和其他 App 共用灵动岛」). Simulator only, unsigned; never shipped.
 #
 #   scripts/app/island_peer.sh <simulator udid>...
-#   TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer … -only-testing:JarvisUITests/LiveActivityShots
+#   TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer … -only-testing:PersonaUITests/LiveActivityShots
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 eval "$(python3 scripts/jarvis_config.py env)"

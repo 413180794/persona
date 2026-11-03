@@ -288,18 +288,18 @@ func TestResolutionFixturesIOS(t *testing.T) {
 		return string(b)
 	}
 	models := read("apple/Shared/Models.swift")
-	views := read("apple/Jarvis/Views/Interactions/InteractionViews.swift")
+	views := read("apple/Persona/Views/Interactions/InteractionViews.swift")
 	chat := read("apple/Shared/ChatStore.swift")
-	notification := read("apple/Jarvis/App/NotificationActions.swift")
+	notification := read("apple/Persona/App/NotificationActions.swift")
 	source := "import Foundation\n" + read("apple/Shared/JSONValue.swift") + "\n"
 	for _, marker := range []string{"nonisolated struct SessionKey", "nonisolated enum InteractionKind", "nonisolated struct QuestionOption", "nonisolated struct Question:", "nonisolated struct Interaction:", "nonisolated struct Resolution:", "nonisolated struct ScreenDialog:"} {
 		source += swiftBlock(t, models, marker) + "\n"
 	}
 	source += swiftBlock(t, chat, "nonisolated enum ScreenParser") + "\n" + swiftBlock(t, chat, "nonisolated private extension Character") + "\n"
 	source += "enum NotificationActions {\n" + notification[strings.Index(notification, "    static let allow"):strings.Index(notification, "    static func category")] + swiftBlock(t, notification, "static func resolution(action:") + "\n}\n"
-	source += "enum ApproveFirstIntent {\n" + swiftBlock(t, read("apple/Jarvis/Intents/ApproveFirstIntent.swift"), "static func resolution(for ix:") + "\n}\n"
+	source += "enum ApproveFirstIntent {\n" + swiftBlock(t, read("apple/Persona/Intents/ApproveFirstIntent.swift"), "static func resolution(for ix:") + "\n}\n"
 	source += swiftQuestionSupport + "\n"
-	source += swiftResolveSupport + "\n@MainActor final class ResolveProbe {\n" + swiftResolveFields + swiftBlock(t, read("apple/Jarvis/App/AppModel.swift"), "func resolve(_ ix:") + "\n}\n"
+	source += swiftResolveSupport + "\n@MainActor final class ResolveProbe {\n" + swiftResolveFields + swiftBlock(t, read("apple/Persona/App/AppModel.swift"), "func resolve(_ ix:") + "\n}\n"
 	question := swiftBlock(t, views, "struct QuestionForm:")
 	source += "@MainActor final class QuestionProbe {\n" + swiftQuestionFields
 	for _, marker := range []string{"private var questions:", "private var needsFooter:", "private func pick(", "private var isLast:", "private func advance(", "private func answer(", "private var allAnswered:", "private var canAdvance:", "private func submit("} {
@@ -321,7 +321,7 @@ func TestResolutionFixturesIOS(t *testing.T) {
 		source += "case \"" + pair[0] + "\": return " + src[pos:pos+len(pair[1])] + "\n"
 	}
 	source += "default: fatalError(action)\n}\n}\n"
-	watch := read("apple/JarvisWatch/JarvisWatchApp.swift")
+	watch := read("apple/PersonaWatch/PersonaWatchApp.swift")
 	watchExpr := "Resolution(approve: true, mode: \"bypassPermissions\")"
 	at := strings.Index(watch, watchExpr)
 	if at < 0 {
@@ -498,31 +498,31 @@ func show(_ error: Error) {}
 func TestResolutionFixtureSourceEvidence(t *testing.T) {
 	root := answerFixtureRoot(t)
 	evidence := map[string][]string{
-		"apple/Jarvis/Views/Interactions/InteractionViews.swift": {
+		"apple/Persona/Views/Interactions/InteractionViews.swift": {
 			".disabled(!canAdvance || sending)", ".disabled(sending)", "if interaction.sessionID != \"\" {",
 			"if rejecting {", "rejecting = false", ".disabled(text.isEmpty)",
 			"if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {",
 			"let t = text.trimmingCharacters(in: .whitespacesAndNewlines)",
 			"Resolution(keys: [\"enter\"], text: t)", "Resolution(keys: keys)",
 		},
-		"apple/JarvisWatch/JarvisWatchApp.swift": {
+		"apple/PersonaWatch/PersonaWatchApp.swift": {
 			"Resolution(approve: true, mode: \"bypassPermissions\")", "Resolution(approve: false, feedback: \"请重新考虑这个计划\")",
 			"Resolution(allow: true)", "Resolution(allow: false)", "Resolution(option: opt.key)", "Resolution(keys: [opt.key])",
 			"Button(\"提交\") { submit() }", "act(.dismissed)",
 		},
-		"apple/JarvisTests/NotificationActionsTests.swift": {
+		"apple/PersonaTests/NotificationActionsTests.swift": {
 			"#expect(allow.options.contains(.authenticationRequired))",
 			"#expect(!deny.options.contains(.authenticationRequired))",
 			"#expect(plan.actions.allSatisfy { $0.options.contains(.authenticationRequired) })",
 			"#expect(cats[\"INTERACTION_QUESTION\"]?.actions.isEmpty == true)",
 			"#expect(cats[\"INTERACTION_SCREEN\"]?.actions.isEmpty == true)",
 		},
-		"apple/JarvisTests/FleetIntentsTests.swift": {
+		"apple/PersonaTests/FleetIntentsTests.swift": {
 			"#expect(AllowPermissionIntent.authenticationPolicy == .requiresAuthentication)",
 			"#expect(ApprovePlanIntent.authenticationPolicy == .requiresAuthentication)",
 			"#expect(DenyPermissionIntent.authenticationPolicy == .alwaysAllowed)",
 		},
-		"apple/JarvisWidgets/FleetLiveActivity.swift": {
+		"apple/PersonaWidgets/FleetLiveActivity.swift": {
 			"Button(intent: ApprovePlanIntent(interactionID: id))", "Link(destination: FleetLink.url(item)!)", ".widgetURL(FleetLink.whole(context.state))",
 		},
 	}
@@ -548,7 +548,7 @@ func TestResolutionFixtureSourceEvidence(t *testing.T) {
 			t.Errorf("authentication policy changed: %s", name)
 		}
 	}
-	notifications, err := os.ReadFile(filepath.Join(root, "apple/Jarvis/App/NotificationActions.swift"))
+	notifications, err := os.ReadFile(filepath.Join(root, "apple/Persona/App/NotificationActions.swift"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -563,7 +563,7 @@ func TestResolutionFixtureSourceEvidence(t *testing.T) {
 		}
 	}
 	// The existing Siri and watch code does not declare an unlock policy; never infer one from omission.
-	data, err := os.ReadFile(filepath.Join(root, "apple/Jarvis/Intents/ApproveFirstIntent.swift"))
+	data, err := os.ReadFile(filepath.Join(root, "apple/Persona/Intents/ApproveFirstIntent.swift"))
 	if err != nil {
 		t.Fatal(err)
 	}

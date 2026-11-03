@@ -134,11 +134,13 @@ class ScriptLayoutTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stdout.strip(), "1234567890")
 
-    def test_runtime_cli_help_uses_the_canonical_entry(self):
-        result = subprocess.run([sys.executable, "-I", str(SCRIPTS / "app/jarvisctl.py"), "--help"],
-                                capture_output=True, text=True, timeout=15)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("usage:", result.stdout)
+    def test_runtime_cli_help_preserves_both_entries(self):
+        for name in ("personactl.py", "jarvisctl.py"):
+            with self.subTest(entry=name):
+                result = subprocess.run([sys.executable, "-I", str(SCRIPTS / "app" / name), "--help"],
+                                        capture_output=True, text=True, timeout=15)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("usage:", result.stdout)
 
     def test_mock_scenarios_starts_its_relocated_child(self):
         reservations = []

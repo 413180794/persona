@@ -7,7 +7,7 @@
 #   SIM=<udid> scripts/test/relay_sim_e2e.sh
 #
 # Needs `xcodebuild build-for-testing` done for $SIM (DERIVED: its derived data, default build/DerivedData) and the
-# key exported once: JarvisUITests/PushRelayTests/testAllowNotificationsAndExportKey (it also taps 允许).
+# key exported once: PersonaUITests/PushRelayTests/testAllowNotificationsAndExportKey (it also taps 允许).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 : "${SIM:?set SIM=<simulator udid>}"
@@ -85,7 +85,7 @@ p["e"] = base64.b64encode(bytes(raw)).decode(); json.dump(p, open(sys.argv[2], "
 PY
 eval "$(python3 scripts/jarvis_config.py env)"
 (cd apple && TEST_RUNNER_RELAY_PAYLOADS="$OUT/apns-1.json=Bash: swift test|$OUT/apns-2.json=改好了，测试全过|$OUT/garbage.json=有新消息" \
-  xcodebuild test-without-building -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" \
-  -derivedDataPath "${DERIVED:-../build/DerivedData}" -only-testing:JarvisTests/NotificationServiceTests >"$OUT/open.log" 2>&1) \
+  xcodebuild test-without-building -project Persona.xcodeproj -scheme Persona -destination "id=$SIM" \
+  -derivedDataPath "${DERIVED:-../build/DerivedData}" -only-testing:PersonaTests/NotificationServiceTests >"$OUT/open.log" 2>&1) \
   || { say "FAIL: the phone side did not open them (see $OUT/open.log)"; grep -E '✘' "$OUT/open.log" | head; exit 1; }
 say "OK: hub sealed → relay → APNs request → phone opened all three as expected ($OUT)"

@@ -3,10 +3,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "JarvisLink",
+    name: "PersonaLink",
     platforms: [.macOS(.v15)],
     targets: [
-        .executableTarget(name: "JarvisLink", path: "Sources/JarvisLink")
+        .executableTarget(name: "PersonaLink", path: "Sources/PersonaLink")
     ],
     swiftLanguageModes: [.v5]
 )

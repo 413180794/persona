@@ -9,7 +9,7 @@
 #
 # Writes $OUT/<name>-light.png and $OUT/<name>-dark.png (OUT defaults to /tmp/jarvis-mac-shots) and prints the paths.
 # Always 体验模式 (`-demo.on YES`, made-up data, nothing leaves the Mac) unless DEMO=0 (then pass -pairURL for
-# scripts/mock/mock_hub.py yourself). SIZE=1280x820, DELAY=4 (seconds before the shot), APP=<path to Jarvis.app>,
+# scripts/mock/mock_hub.py yourself). SIZE=1280x820, DELAY=4 (seconds before the shot), APP=<path to Persona.app>,
 # APPEARANCES="light dark".
 set -euo pipefail
 
@@ -20,7 +20,7 @@ out=${OUT:-/tmp/jarvis-mac-shots}
 size=${SIZE:-1280x820}
 delay=${DELAY:-4}
 derived=${DERIVED:-$root/../build/DerivedDataMac}
-app=${APP:-$derived/Build/Products/Debug/Jarvis.app}
+app=${APP:-$derived/Build/Products/Debug/Persona.app}
 
 if [[ "${BUILD:-0}" == 1 ]]; then
     (
@@ -28,12 +28,12 @@ if [[ "${BUILD:-0}" == 1 ]]; then
         python3 ../scripts/jarvis_config.py xcconfig >/dev/null
         xcodegen generate -q
         eval "$(python3 ../scripts/jarvis_config.py env)"
-        xcodebuild build -project Jarvis.xcodeproj -scheme JarvisMac -configuration Debug -destination "platform=macOS" \
+        xcodebuild build -project Persona.xcodeproj -scheme PersonaMac -configuration Debug -destination "platform=macOS" \
             -derivedDataPath "$derived" CODE_SIGNING_ALLOWED=NO -quiet
     )
 fi
 
-bin="$app/Contents/MacOS/Jarvis"
+bin="$app/Contents/MacOS/Persona"
 [[ -x "$bin" ]] || { echo "mac_shot: no app at $app (BUILD=1 to build it, or APP=…)" >&2; exit 1; }
 mkdir -p "$out"
 

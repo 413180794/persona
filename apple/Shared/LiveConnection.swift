@@ -200,7 +200,7 @@ nonisolated extension ServerEvent {
     }
 }
 
-/// The 体验模式 hub's end of the socket (Jarvis/App/DemoHub.swift): what the app sends goes to `receive`, and it
+/// The 体验模式 hub's end of the socket (Persona/App/DemoHub.swift): what the app sends goes to `receive`, and it
 /// answers through `deliver` with the same JSON a hub sends.
 protocol LocalSocket: AnyObject {
     func open(deliver: @escaping (Data) -> Void)

@@ -12,7 +12,7 @@ import unittest
 from urllib.error import URLError
 from urllib.request import urlopen
 
-# LarkConversation's non-optional properties (apple/Jarvis/Views/Inbox/Lark/LarkModels.swift), by their JSON keys.
+# LarkConversation's non-optional properties (apple/Persona/Views/Inbox/Lark/LarkModels.swift), by their JSON keys.
 REQUIRED = {"id", "name", "is_group", "unread", "at_me", "muted", "preview", "is_mine"}
 
 

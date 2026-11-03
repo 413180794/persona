@@ -3,6 +3,7 @@
 /build/
 /build-release/
 /apple/*.xcodeproj
+!/apple/Jarvis.xcodeproj
 /apple/IslandPeer/*.xcodeproj
 /apple/build/
 *.xcuserstate

@@ -18,9 +18,9 @@ build() {
   version="$(git describe --always --dirty)-$(date +%Y%m%d%H%M)"
   if [ "${UNIVERSAL:-}" = 1 ]; then archs=(arm64 x86_64); else archs=("$(uname -m)"); fi
   # xcodebuild builds the Swift package (swift build's default backend can't find the developer directory here).
-  (cd mac && xcodebuild -quiet -scheme JarvisLink -configuration Release -derivedDataPath build/dd \
+  (cd mac && xcodebuild -quiet -scheme PersonaLink -configuration Release -derivedDataPath build/dd \
     -destination 'generic/platform=macOS' ARCHS="${archs[*]}" ONLY_ACTIVE_ARCH=NO build)
-  local bin="$OUT/dd/Build/Products/Release/JarvisLink"
+  local bin="$OUT/dd/Build/Products/Release/PersonaLink"
   mkdir -p "$OUT"
   for a in "${archs[@]}"; do
     local goarch=$a
