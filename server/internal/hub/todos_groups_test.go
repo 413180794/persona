@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -188,15 +189,19 @@ func TestTodoSpaceAutoLinkAndDismissed(t *testing.T) {
 	}
 
 	// Agent s_existing is manually on t_other
+	m.mu.Lock()
 	m.sessions = []proto.Session{
 		{MachineID: "macbook", SessionID: "s_existing", Title: "Existing", SpaceName: "work", Status: proto.StatusWorking},
 	}
+	m.mu.Unlock()
 	_ = h.linkTodoAgent(context.Background(), "t_other", "macbook", "s_existing", "Existing", "/cwd", "claude", "")
 
 	// 1. New agent s_new appears in space "work"
+	m.mu.Lock()
 	m.sessions = append(m.sessions, proto.Session{
 		MachineID: "macbook", SessionID: "s_new", Title: "New Agent", SpaceName: "work", Status: proto.StatusWorking,
 	})
+	m.mu.Unlock()
 	h.sessionsChanged(m)
 
 	// Verify s_new is auto-linked to t_main, and s_existing is NOT stolen
@@ -278,9 +283,11 @@ func TestTodoSpaceAutoLinkAndDismissed(t *testing.T) {
 	}
 
 	// Agent s_after appears in "work"
+	m.mu.Lock()
 	m.sessions = append(m.sessions, proto.Session{
 		MachineID: "macbook", SessionID: "s_after", Title: "After Done", SpaceName: "work", Status: proto.StatusWorking,
 	})
+	m.mu.Unlock()
 	h.sessionsChanged(m)
 	dec = h.decorated(m)
 	for _, s := range dec {
@@ -540,7 +547,7 @@ func TestTodoTokensSyncToNodeCalculation(t *testing.T) {
 	nodeIn, hubOut := io.Pipe()
 	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)
 	nodePeer.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
-		if method == "todo.sync_tokens" {
+		if method == "todo.sync_session_tokens" {
 			var p map[string]any
 			_ = json.Unmarshal(params, &p)
 			syncCalls <- p
@@ -565,15 +572,15 @@ func TestTodoTokensSyncToNodeCalculation(t *testing.T) {
 	select {
 	case call := <-syncCalls:
 		tokensRaw, ok := call["tokens"].(map[string]any)
-		if !ok || tokensRaw["w1:p1"] == nil {
-			t.Fatalf("expected w1:p1 in tokens: %+v", call)
+		if !ok || tokensRaw["s1"] == nil {
+			t.Fatalf("expected s1 in tokens: %+v", call)
 		}
-		paneToks := tokensRaw["w1:p1"].(map[string]any)
+		paneToks := tokensRaw["s1"].(map[string]any)
 		if paneToks["persona_todo"] != "待办标记测试" || paneToks["persona_todo_ref"] != "td_tok@macbook/s1" {
 			t.Fatalf("tokens mismatch: %+v", paneToks)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for todo.sync_tokens")
+		t.Fatal("timed out waiting for todo.sync_session_tokens")
 	}
 
 	// When td_tok is completed, activeBySession is cleared and sync_tokens pushes empty map for w1:p1
@@ -593,7 +600,7 @@ func TestTodoTokensSyncToNodeCalculation(t *testing.T) {
 			t.Fatalf("expected empty tokens after todo is done, got: %+v", tokensRaw)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for empty todo.sync_tokens after completion")
+		t.Fatal("timed out waiting for empty todo.sync_session_tokens after completion")
 	}
 }
 
@@ -658,9 +665,11 @@ func TestTodoF1F2F3(t *testing.T) {
 
 	// --- F3: A completed -> X moved to B -> reopen A -> X stays ONLY on B ---
 	// 1. Session X is on td_A
+	m.mu.Lock()
 	m.sessions = append(m.sessions, proto.Session{
 		MachineID: "macbook", SessionID: "s_x", Title: "Agent X", Status: proto.StatusWorking,
 	})
+	m.mu.Unlock()
 	if err := h.linkTodoAgent(context.Background(), "td_A", "macbook", "s_x", "Agent X", "/cwd", "claude", ""); err != nil {
 		t.Fatalf("link s_x to td_A: %v", err)
 	}
@@ -737,7 +746,7 @@ func TestHubRestartAndTokensPushLifecycle(t *testing.T) {
 	nodeIn, hubOut := io.Pipe()
 	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)
 	nodePeer.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
-		if method == "todo.sync_tokens" {
+		if method == "todo.sync_session_tokens" {
 			var p map[string]any
 			_ = json.Unmarshal(params, &p)
 			syncCalls <- p
@@ -752,21 +761,21 @@ func TestHubRestartAndTokensPushLifecycle(t *testing.T) {
 	m.peer, m.online = hubPeer, true
 	m.mu.Unlock()
 
-	// 1. First sessionsChanged after hub restart: should calculate and push expected tokens
+	// 1. First sessionsChanged after hub restart: should calculate and push expected tokens (keyed by session ID)
 	h.sessionsChanged(m)
 
 	select {
 	case call := <-syncCalls:
 		tokensRaw, ok := call["tokens"].(map[string]any)
-		if !ok || tokensRaw["w1:p1"] == nil {
-			t.Fatalf("expected tokens for w1:p1 on first push, got: %+v", call)
+		if !ok || tokensRaw["s1"] == nil {
+			t.Fatalf("expected tokens for s1 on first push, got: %+v", call)
 		}
-		paneTokens := tokensRaw["w1:p1"].(map[string]any)
+		paneTokens := tokensRaw["s1"].(map[string]any)
 		if paneTokens["persona_todo"] != "重启恢复测试" || paneTokens["persona_todo_ref"] != "td_restart@macbook/s1" {
 			t.Fatalf("tokens mismatch: %+v", paneTokens)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for initial todo.sync_tokens push")
+		t.Fatal("timed out waiting for initial todo.sync_session_tokens push")
 	}
 
 	// 2. Second sessionsChanged with same sessions: expected tokens unchanged, should NOT push
@@ -778,33 +787,30 @@ func TestHubRestartAndTokensPushLifecycle(t *testing.T) {
 		// Expected: no push
 	}
 
-	// 3. Session changes pane ID from w1:p1 to w1:p2
+	// 3. Session changes pane ID from w1:p1 to w1:p2: expected tokens are keyed by session ID so unchanged, no duplicate push
+	m.mu.Lock()
 	m.sessions = []proto.Session{
 		{MachineID: "macbook", SessionID: "s1", PaneID: "w1:p2", Status: proto.StatusWorking},
 	}
+	m.mu.Unlock()
 	h.sessionsChanged(m)
-
 	select {
 	case call := <-syncCalls:
-		tokensRaw, ok := call["tokens"].(map[string]any)
-		if !ok || tokensRaw["w1:p2"] == nil || tokensRaw["w1:p1"] != nil {
-			t.Fatalf("expected tokens re-keyed to w1:p2, got: %+v", call)
-		}
-		paneTokens := tokensRaw["w1:p2"].(map[string]any)
-		if paneTokens["persona_todo"] != "重启恢复测试" {
-			t.Fatalf("tokens mismatch: %+v", paneTokens)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for updated todo.sync_tokens push after pane change")
+		t.Fatalf("unexpected push when session tokens unchanged: %+v", call)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no push
 	}
 
 	// 4. Node disconnect resets lastTodoTokens, guaranteeing push on reconnect
 	m.detach(nil, false)
-	m.mu.Lock()
+	m.todoTokensMu.Lock()
 	if m.lastTodoTokens != nil {
+		m.todoTokensMu.Unlock()
 		t.Fatalf("expected lastTodoTokens to be cleared on detach")
 	}
+	m.todoTokensMu.Unlock()
 	// Reconnect
+	m.mu.Lock()
 	m.peer, m.online = hubPeer, true
 	m.mu.Unlock()
 
@@ -812,10 +818,316 @@ func TestHubRestartAndTokensPushLifecycle(t *testing.T) {
 	select {
 	case call := <-syncCalls:
 		tokensRaw, ok := call["tokens"].(map[string]any)
-		if !ok || tokensRaw["w1:p2"] == nil {
+		if !ok || tokensRaw["s1"] == nil {
 			t.Fatalf("expected push on reconnect, got: %+v", call)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for todo.sync_tokens push after reconnect")
+		t.Fatal("timed out waiting for todo.sync_session_tokens push after reconnect")
+	}
+}
+
+// TestTodoImmediateUnlinkRaceDoesNotReviveLink verifies finding 1 / #873 issue 1:
+// An immediate unlink right after an auto-link succeeds (200, not 404),
+// and subsequent async DB write does not revive the link back to active.
+func TestTodoImmediateUnlinkRaceDoesNotReviveLink(t *testing.T) {
+	database := setupTestDB(t)
+	h := newTestHub(t)
+	h.store = database
+	h.initTodos(context.Background())
+	handler := h.routes()
+
+	m := newMachine(h, MachineConfig{ID: "macbook", Name: "MacBook"})
+	h.machines = append(h.machines, m)
+	h.byID["macbook"] = m
+
+	now := time.Now().UTC()
+	_ = database.CreateTodo(context.Background(), db.TodoRow{ID: "t_race", Title: "Race Todo", CreatedAt: now, UpdatedAt: now})
+	h.initTodos(context.Background())
+
+	// Link space "workspace_race" to t_race
+	_, err := h.linkTodoSpace(context.Background(), "t_race", "macbook", "workspace_race")
+	if err != nil {
+		t.Fatalf("linkTodoSpace: %v", err)
+	}
+
+	// 1. New agent appears in "workspace_race" -> auto-linked in memory, async DB write started
+	m.sessions = []proto.Session{
+		{MachineID: "macbook", SessionID: "s_fast", Title: "Fast Agent", SpaceName: "workspace_race", Status: proto.StatusWorking},
+	}
+	h.sessionsChanged(m)
+
+	// 2. Immediately DELETE (unlink) the agent before or while DB write is happening
+	req := todoRequest("DELETE", "/api/v1/todos/t_race/agents/macbook/s_fast", nil)
+	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("immediate DELETE agent failed with status %d (wanted 200, not 404): %s", w.Code, w.Body.String())
+	}
+
+	// 3. Wait for any async goroutines to settle
+	time.Sleep(200 * time.Millisecond)
+
+	// 4. Verify in DB that the agent is dismissed/released and not revived
+	agents, err := database.ListAllTodoAgents(context.Background())
+	if err != nil {
+		t.Fatalf("ListAllTodoAgents: %v", err)
+	}
+	if len(agents) == 1 {
+		if agents[0].ReleasedAt == nil || agents[0].DismissedAt == nil {
+			t.Fatalf("agent was revived by async write! %+v", agents[0])
+		}
+	}
+
+	// 5. Verify GET /api/v1/todos does not list dismissed agent
+	req = todoRequest("GET", "/api/v1/todos", nil)
+	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var res struct{ Todos []Todo }
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	for _, td := range res.Todos {
+		if td.ID == "t_race" {
+			for _, a := range td.Agents {
+				if a.SessionID == "s_fast" {
+					t.Fatalf("dismissed agent appears in GET /todos: %+v", a)
+				}
+			}
+		}
+	}
+
+	// 6. Another sessionsChanged turn: s_fast must NOT be auto-linked back
+	h.sessionsChanged(m)
+	dec := h.decorated(m)
+	for _, s := range dec {
+		if s.SessionID == "s_fast" && s.Todo != nil {
+			t.Fatalf("s_fast was re-linked after being unlinked: %+v", s.Todo)
+		}
+	}
+}
+
+// TestTodoSpaceGroupLinkKeepsManualLink verifies issue 3 / #873:
+// When a space is group-linked, any agent already manually linked to the same todo
+// retains source=manual and is NOT converted to source=space. Unlinking the space
+// retains the manual link.
+func TestTodoSpaceGroupLinkKeepsManualLink(t *testing.T) {
+	database := setupTestDB(t)
+	h := newTestHub(t)
+	h.store = database
+	h.initTodos(context.Background())
+
+	m := newMachine(h, MachineConfig{ID: "macbook", Name: "MacBook"})
+	h.machines = append(h.machines, m)
+	h.byID["macbook"] = m
+
+	now := time.Now().UTC()
+	_ = database.CreateTodo(context.Background(), db.TodoRow{ID: "td_grp", Title: "Group Todo", CreatedAt: now, UpdatedAt: now})
+	h.initTodos(context.Background())
+
+	m.sessions = []proto.Session{
+		{MachineID: "macbook", SessionID: "s_manual", Title: "Manual Agent", SpaceName: "proj_x", Status: proto.StatusWorking},
+	}
+
+	// 1. Manually link s_manual to td_grp
+	err := h.linkTodoAgent(context.Background(), "td_grp", "macbook", "s_manual", "Manual Agent", "/cwd", "claude", "")
+	if err != nil {
+		t.Fatalf("linkTodoAgent: %v", err)
+	}
+
+	h.todos.mu.RLock()
+	td := h.todos.todos["td_grp"]
+	var origSource string
+	for _, a := range td.Agents {
+		if a.SessionID == "s_manual" {
+			origSource = a.Source
+		}
+	}
+	h.todos.mu.RUnlock()
+	if origSource != "manual" {
+		t.Fatalf("expected initial source=manual, got %q", origSource)
+	}
+
+	// 2. Group link space "proj_x" to td_grp
+	_, err = h.linkTodoSpace(context.Background(), "td_grp", "macbook", "proj_x")
+	if err != nil {
+		t.Fatalf("linkTodoSpace: %v", err)
+	}
+
+	// 3. Verify s_manual's source is still "manual" (not rewritten to "space")
+	h.todos.mu.RLock()
+	td = h.todos.todos["td_grp"]
+	var postGroupSource string
+	for _, a := range td.Agents {
+		if a.SessionID == "s_manual" {
+			postGroupSource = a.Source
+		}
+	}
+	h.todos.mu.RUnlock()
+	if postGroupSource != "manual" {
+		t.Fatalf("expected source to remain 'manual' after group link, got %q", postGroupSource)
+	}
+
+	// 4. Unlink space "proj_x"
+	err = h.unlinkTodoSpace(context.Background(), "td_grp", "macbook", "proj_x")
+	if err != nil {
+		t.Fatalf("unlinkTodoSpace: %v", err)
+	}
+
+	// 5. Verify s_manual is STILL linked to td_grp
+	h.todos.mu.RLock()
+	td = h.todos.todos["td_grp"]
+	var stillLinked bool
+	for _, a := range td.Agents {
+		if a.SessionID == "s_manual" && a.ReleasedAt == nil {
+			stillLinked = true
+		}
+	}
+	h.todos.mu.RUnlock()
+	if !stillLinked {
+		t.Fatalf("s_manual was unexpectedly removed or released when space unlinked!")
+	}
+}
+
+// TestTodoSpaceRenameConflictVoidsOldLink verifies issue 5 / #873:
+// When a space is renamed through hub and the target name conflicts with another todo's space,
+// the old space link is voided and cleaned up in memory, and {"type":"todos"} is broadcast.
+func TestTodoSpaceRenameConflictVoidsOldLink(t *testing.T) {
+	database := setupTestDB(t)
+	h := newTestHub(t)
+	h.store = database
+	h.initTodos(context.Background())
+	handler := h.routes()
+
+	m := newMachine(h, MachineConfig{ID: "macbook", Name: "MacBook"})
+	m.sessions = []proto.Session{
+		{MachineID: "macbook", SessionID: "s1", SpaceID: "w_alpha", SpaceName: "alpha", Status: proto.StatusWorking},
+	}
+	h.machines = append(h.machines, m)
+	h.byID["macbook"] = m
+
+	now := time.Now().UTC()
+	_ = database.CreateTodo(context.Background(), db.TodoRow{ID: "t1", Title: "Todo 1", CreatedAt: now, UpdatedAt: now})
+	_ = database.CreateTodo(context.Background(), db.TodoRow{ID: "t2", Title: "Todo 2", CreatedAt: now, UpdatedAt: now})
+	h.initTodos(context.Background())
+
+	_, _ = h.linkTodoSpace(context.Background(), "t1", "macbook", "alpha")
+	_, _ = h.linkTodoSpace(context.Background(), "t2", "macbook", "beta")
+
+	// Mock node peer to respond to space.rename
+	hubIn, nodeOut := io.Pipe()
+	nodeIn, hubOut := io.Pipe()
+	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)
+	nodePeer.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+		return map[string]any{"ok": true}, nil
+	}
+	connCtx, connCancel := context.WithCancel(context.Background())
+	t.Cleanup(connCancel)
+	go func() { _ = hubPeer.Serve(connCtx, hubIn) }()
+	go func() { _ = nodePeer.Serve(connCtx, nodeIn) }()
+	m.mu.Lock()
+	m.peer, m.online = hubPeer, true
+	m.mu.Unlock()
+
+	// Rename workspace "w_alpha" (name: "alpha") to "beta" (which conflicts with t2)
+	req := todoRequest("POST", "/api/v1/machines/macbook/spaces/w_alpha/rename", strings.NewReader(`{"name":"beta"}`))
+	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("rename space failed: %d (%s)", w.Code, w.Body.String())
+	}
+
+	// Verify t1's space link for alpha is voided from memory
+	h.todos.mu.RLock()
+	td1 := h.todos.todos["t1"]
+	for _, sp := range td1.Spaces {
+		if sp.Space == "alpha" || sp.Space == "beta" {
+			t.Fatalf("expected alpha/beta space to be voided on t1, got: %+v", td1.Spaces)
+		}
+	}
+	h.todos.mu.RUnlock()
+}
+
+// TestTodoSyncTokensSerialSender verifies issue 6 / #873:
+// Multiple rapid token sync triggers on the same machine are serialized by a single sender,
+// always delivering the latest snapshot without out-of-order race conditions.
+func TestTodoSyncTokensSerialSender(t *testing.T) {
+	database := setupTestDB(t)
+	h := newTestHub(t)
+	h.store = database
+	h.initTodos(context.Background())
+
+	m := newMachine(h, MachineConfig{ID: "macbook", Name: "MacBook"})
+	m.sessions = []proto.Session{
+		{MachineID: "macbook", SessionID: "s1", PaneID: "w1:p1", Status: proto.StatusWorking},
+		{MachineID: "macbook", SessionID: "s2", PaneID: "w1:p2", Status: proto.StatusWorking},
+	}
+	h.machines = append(h.machines, m)
+	h.byID["macbook"] = m
+
+	now := time.Now().UTC()
+	_ = database.CreateTodo(context.Background(), db.TodoRow{ID: "t_serial1", Title: "First", CreatedAt: now, UpdatedAt: now})
+	_ = database.CreateTodo(context.Background(), db.TodoRow{ID: "t_serial2", Title: "Second", CreatedAt: now, UpdatedAt: now})
+	h.initTodos(context.Background())
+
+	var mu sync.Mutex
+	var receivedCalls []map[string]map[string]string
+
+	hubIn, nodeOut := io.Pipe()
+	nodeIn, hubOut := io.Pipe()
+	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)
+	nodePeer.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+		if method == "todo.sync_session_tokens" {
+			var in struct {
+				Tokens map[string]map[string]string `json:"tokens"`
+			}
+			_ = json.Unmarshal(params, &in)
+			// Artificial latency to exercise concurrent queueing
+			time.Sleep(20 * time.Millisecond)
+			mu.Lock()
+			receivedCalls = append(receivedCalls, in.Tokens)
+			mu.Unlock()
+		}
+		return map[string]any{"ok": true}, nil
+	}
+	connCtx, connCancel := context.WithCancel(context.Background())
+	t.Cleanup(connCancel)
+	go func() { _ = hubPeer.Serve(connCtx, hubIn) }()
+	go func() { _ = nodePeer.Serve(connCtx, nodeIn) }()
+	m.mu.Lock()
+	m.peer, m.online = hubPeer, true
+	m.mu.Unlock()
+
+	// 1. Link s1 to t_serial1
+	_ = h.linkTodoAgent(context.Background(), "t_serial1", "macbook", "s1", "Agent 1", "/cwd", "claude", "")
+
+	// 2. Immediately link s2 to t_serial2 (rapid succession)
+	_ = h.linkTodoAgent(context.Background(), "t_serial2", "macbook", "s2", "Agent 2", "/cwd", "claude", "")
+
+	// 3. Immediately unlink s1
+	req := todoRequest("DELETE", "/api/v1/todos/t_serial1/agents/macbook/s1", nil)
+	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	w := httptest.NewRecorder()
+	h.routes().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("DELETE agent failed: %d", w.Code)
+	}
+
+	// Wait for the single sender loop to drain
+	time.Sleep(300 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(receivedCalls) == 0 {
+		t.Fatal("expected at least one sync call")
+	}
+
+	// Final call must reflect latest state: s1 is unlinked, s2 is on t_serial2
+	lastCall := receivedCalls[len(receivedCalls)-1]
+	if _, ok := lastCall["s1"]; ok {
+		t.Fatalf("latest snapshot should not have s1, got: %+v", lastCall)
+	}
+	if s2Toks, ok := lastCall["s2"]; !ok || s2Toks["persona_todo"] != "Second" {
+		t.Fatalf("latest snapshot should have s2 on Second, got: %+v", lastCall)
 	}
 }

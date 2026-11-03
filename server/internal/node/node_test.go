@@ -267,6 +267,11 @@ func TestListKeyIgnoresSmallTimeChurn(t *testing.T) {
 	if listKey([]proto.Session{base}) == listKey([]proto.Session{changed}) {
 		t.Fatal("a status change must be visible")
 	}
+	withSpawn := base
+	withSpawn.SpawnFrom = "todo_1@macbook/parent_s"
+	if listKey([]proto.Session{base}) == listKey([]proto.Session{withSpawn}) {
+		t.Fatal("a spawn_from change must be visible in listKey (#873)")
+	}
 }
 
 func TestLastLines(t *testing.T) {

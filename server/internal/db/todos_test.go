@@ -242,8 +242,9 @@ func TestTodoSpaces(t *testing.T) {
 	}
 
 	// 3. Rename space via hub
-	if err := d.RenameTodoSpace(ctx, "macbook", "proj1", "proj_renamed"); err != nil {
-		t.Fatalf("RenameTodoSpace: %v", err)
+	voided, err := d.RenameTodoSpace(ctx, "macbook", "proj1", "proj_renamed")
+	if err != nil || voided {
+		t.Fatalf("RenameTodoSpace: voided=%v, err=%v", voided, err)
 	}
 	spaces, _ = d.ListAllTodoSpaces(ctx)
 	if len(spaces) != 1 || spaces[0].Space != "proj_renamed" {
@@ -257,5 +258,85 @@ func TestTodoSpaces(t *testing.T) {
 	spaces, _ = d.ListAllTodoSpaces(ctx)
 	if len(spaces) != 0 {
 		t.Fatalf("expected 0 spaces, got %+v", spaces)
+	}
+}
+
+func TestAutoLinkTodoAgentDoesNotOverwriteDismissed(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	now := time.Now().Truncate(time.Millisecond)
+
+	_ = d.CreateTodo(ctx, TodoRow{ID: "t_race", Title: "Race Todo", CreatedAt: now, UpdatedAt: now})
+
+	// 1. User unlinks first (e.g. before async auto-link arrives in DB) -> creates dismissed row
+	if err := d.UnlinkTodoAgent(ctx, "t_race", "macbook", "s_fast"); err != nil {
+		t.Fatalf("UnlinkTodoAgent: %v", err)
+	}
+
+	agents, err := d.ListAllTodoAgents(ctx)
+	if err != nil || len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %+v (err: %v)", agents, err)
+	}
+	if agents[0].DismissedAt == nil || agents[0].ReleasedAt == nil {
+		t.Fatalf("expected dismissed and released timestamps, got %+v", agents[0])
+	}
+	originalDismissedAt := *agents[0].DismissedAt
+
+	// 2. Later, async auto-link arrives -> AutoLinkTodoAgent with ON CONFLICT DO NOTHING
+	inserted, _, err := d.AutoLinkTodoAgent(ctx, "t_race", "macbook", "s_fast", "Title", "/cwd", "claude", "", "space", "macbook/work", now)
+	if err != nil {
+		t.Fatalf("AutoLinkTodoAgent: %v", err)
+	}
+	if inserted {
+		t.Fatalf("expected inserted=false because row already existed as dismissed")
+	}
+
+	// 3. Verify row was NOT overwritten into active
+	agents, err = d.ListAllTodoAgents(ctx)
+	if err != nil || len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %+v", agents)
+	}
+	if agents[0].DismissedAt == nil || !agents[0].DismissedAt.Equal(originalDismissedAt) {
+		t.Fatalf("dismissed_at was altered or wiped: %+v", agents[0])
+	}
+	if agents[0].ReleasedAt == nil {
+		t.Fatalf("released_at was cleared: %+v", agents[0])
+	}
+}
+
+func TestRenameTodoSpaceConflictVoidsOldLink(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	now := time.Now().Truncate(time.Millisecond)
+
+	_ = d.CreateTodo(ctx, TodoRow{ID: "t1", Title: "Todo 1", CreatedAt: now, UpdatedAt: now})
+	_ = d.CreateTodo(ctx, TodoRow{ID: "t2", Title: "Todo 2", CreatedAt: now, UpdatedAt: now})
+
+	// Link t1 to space "alpha", t2 to space "beta"
+	_, _ = d.LinkTodoSpace(ctx, "t1", "macbook", "alpha", now)
+	_, _ = d.LinkTodoSpace(ctx, "t2", "macbook", "beta", now)
+
+	// Add space-sourced agent to t1 for "alpha"
+	_, _ = d.LinkTodoAgentWithSource(ctx, "t1", "macbook", "s_alpha", "Alpha Agent", "/cwd", "claude", "", "space", "macbook/alpha", now)
+
+	// Rename "alpha" to "beta", which conflicts with t2's existing link on "beta"
+	voided, err := d.RenameTodoSpace(ctx, "macbook", "alpha", "beta")
+	if err != nil {
+		t.Fatalf("RenameTodoSpace: %v", err)
+	}
+	if !voided {
+		t.Fatalf("expected voided=true due to unique constraint conflict on beta")
+	}
+
+	// Verify "alpha" is deleted from todo_spaces and t1's space agent is deleted
+	spaces, _ := d.ListAllTodoSpaces(ctx)
+	for _, sp := range spaces {
+		if sp.Space == "alpha" {
+			t.Fatalf("expected alpha space to be removed, got %+v", spaces)
+		}
+	}
+	agents, _ := d.ListAllTodoAgents(ctx)
+	for _, a := range agents {
+		if a.TodoID == "t1" && a.SessionID == "s_alpha" {
+			t.Fatalf("expected s_alpha to be removed after voiding, got %+v", a)
+		}
 	}
 }

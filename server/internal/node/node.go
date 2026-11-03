@@ -726,7 +726,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return ok(n.renameSpace(ctx, p.WorkspaceID, p.Name))
 	case "session.rename":
 		return ok(n.renameSession(ctx, p.SessionID, p.TabName, p.Title))
-	case "todo.sync_tokens":
+	case "todo.sync_session_tokens":
 		var in struct {
 			Tokens map[string]map[string]string `json:"tokens"`
 		}

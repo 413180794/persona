@@ -60,6 +60,23 @@ type todosState struct {
 	spacesByKey     map[string]string    // "<machine_id>/<space>" -> todo_id
 }
 
+// spaceKey computes the unified space key string ("machineID/space").
+func spaceKey(machineID, space string) string {
+	if machineID == "" || space == "" {
+		return ""
+	}
+	return machineID + "/" + space
+}
+
+// sessionSpaceKey computes the unified space key string for a session.
+func sessionSpaceKey(machineID string, s proto.Session) string {
+	space := s.SpaceName
+	if space == "" {
+		space = s.SpaceID
+	}
+	return spaceKey(machineID, space)
+}
+
 func newTodosState() todosState {
 	return todosState{
 		todos:           make(map[string]*Todo),
@@ -143,7 +160,7 @@ func (h *Hub) loadTodosLocked(ctx context.Context) error {
 				Space:     sr.Space,
 				LinkedAt:  sr.LinkedAt,
 			})
-			spaces[sr.MachineID+"/"+sr.Space] = sr.TodoID
+			spaces[spaceKey(sr.MachineID, sr.Space)] = sr.TodoID
 		}
 	}
 
@@ -705,7 +722,7 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 // linkTodoSpace links a space to todoID and attaches all current online agents in that space.
 func (h *Hub) linkTodoSpace(ctx context.Context, todoID, mid, space string) (int, error) {
 	now := time.Now().UTC()
-	spaceKey := mid + "/" + space
+	spKey := spaceKey(mid, space)
 
 	var oldTodoID string
 	if h.store != nil {
@@ -724,7 +741,7 @@ func (h *Hub) linkTodoSpace(ctx context.Context, todoID, mid, space string) (int
 		if t.DoneAt != nil {
 			return 0, db.ErrTodoCompleted
 		}
-		if oldID, ok := h.todos.spacesByKey[spaceKey]; ok && oldID != todoID {
+		if oldID, ok := h.todos.spacesByKey[spKey]; ok && oldID != todoID {
 			oldTodoID = oldID
 		}
 	}
@@ -742,7 +759,7 @@ func (h *Hub) linkTodoSpace(ctx context.Context, todoID, mid, space string) (int
 			oldT.Spaces = keptSpaces
 			var keptAgents []TodoAgent
 			for _, a := range oldT.Agents {
-				if a.Source == "space" && a.Via == spaceKey {
+				if a.Source == "space" && a.Via == spKey {
 					delete(h.todos.activeBySession, [2]string{a.MachineID, a.SessionID})
 					continue
 				}
@@ -771,7 +788,7 @@ func (h *Hub) linkTodoSpace(ctx context.Context, todoID, mid, space string) (int
 				LinkedAt:  now,
 			})
 		}
-		h.todos.spacesByKey[spaceKey] = todoID
+		h.todos.spacesByKey[spKey] = todoID
 		target.UpdatedAt = now
 	}
 	h.todos.mu.Unlock()
@@ -781,13 +798,16 @@ func (h *Hub) linkTodoSpace(ctx context.Context, todoID, mid, space string) (int
 	if m := h.localMachine(mid); m != nil {
 		sessions := m.sessionList()
 		for _, s := range sessions {
-			sSpace := s.SpaceName
-			if sSpace == "" {
-				sSpace = s.SpaceID
-			}
-			if sSpace == space && s.Status != proto.StatusOffline {
+			if sessionSpaceKey(mid, s) == spKey && s.Status != proto.StatusOffline {
+				h.todos.mu.RLock()
+				curTodoID := h.todos.activeBySession[[2]string{mid, s.SessionID}]
+				h.todos.mu.RUnlock()
+				if curTodoID == todoID {
+					// Keep existing active link untouched (manual or spawned, #873)
+					continue
+				}
 				// Link to target todo
-				if err := h.linkTodoAgentWithSource(ctx, todoID, mid, s.SessionID, s.Title, s.Cwd, s.Agent, s.StartError, "space", spaceKey); err == nil {
+				if err := h.linkTodoAgentWithSource(ctx, todoID, mid, s.SessionID, s.Title, s.Cwd, s.Agent, s.StartError, "space", spKey); err == nil {
 					linkedCount++
 				}
 			}
@@ -807,7 +827,7 @@ func (h *Hub) linkTodoSpace(ctx context.Context, todoID, mid, space string) (int
 
 // unlinkTodoSpace unlinks a space from todoID and physically deletes source=space agents linked via this space.
 func (h *Hub) unlinkTodoSpace(ctx context.Context, todoID, mid, space string) error {
-	spaceKey := mid + "/" + space
+	spKey := spaceKey(mid, space)
 
 	h.todos.mu.RLock()
 	t, ok := h.todos.todos[todoID]
@@ -843,11 +863,11 @@ func (h *Hub) unlinkTodoSpace(ctx context.Context, todoID, mid, space string) er
 			}
 		}
 		cur.Spaces = keptSpaces
-		delete(h.todos.spacesByKey, spaceKey)
+		delete(h.todos.spacesByKey, spKey)
 
 		var keptAgents []TodoAgent
 		for _, a := range cur.Agents {
-			if a.Source == "space" && a.Via == spaceKey {
+			if a.Source == "space" && a.Via == spKey {
 				if actTid, ok := h.todos.activeBySession[[2]string{a.MachineID, a.SessionID}]; ok && actTid == todoID {
 					delete(h.todos.activeBySession, [2]string{a.MachineID, a.SessionID})
 				}
@@ -869,8 +889,8 @@ func (h *Hub) unlinkTodoSpace(ctx context.Context, todoID, mid, space string) er
 
 // renameTodoSpaceInMemory carries todo_spaces and agent via over when space is renamed.
 func (h *Hub) renameTodoSpaceInMemory(machineID, oldSpace, newSpace string) {
-	oldKey := machineID + "/" + oldSpace
-	newKey := machineID + "/" + newSpace
+	oldKey := spaceKey(machineID, oldSpace)
+	newKey := spaceKey(machineID, newSpace)
 	now := time.Now().UTC()
 
 	h.todos.mu.Lock()
@@ -891,6 +911,40 @@ func (h *Hub) renameTodoSpaceInMemory(machineID, oldSpace, newSpace string) {
 					t.Agents[i].Via = newKey
 				}
 			}
+			t.UpdatedAt = now
+		}
+	}
+}
+
+// voidTodoSpaceInMemory cleans up a space link and its space-derived agents from memory when voided due to unique conflict (#873).
+func (h *Hub) voidTodoSpaceInMemory(machineID, oldSpace string) {
+	oldKey := spaceKey(machineID, oldSpace)
+	now := time.Now().UTC()
+
+	h.todos.mu.Lock()
+	defer h.todos.mu.Unlock()
+
+	if tid, ok := h.todos.spacesByKey[oldKey]; ok {
+		delete(h.todos.spacesByKey, oldKey)
+		if t, ok := h.todos.todos[tid]; ok {
+			var keptSpaces []TodoSpace
+			for _, sp := range t.Spaces {
+				if !(sp.MachineID == machineID && sp.Space == oldSpace) {
+					keptSpaces = append(keptSpaces, sp)
+				}
+			}
+			t.Spaces = keptSpaces
+			var keptAgents []TodoAgent
+			for _, a := range t.Agents {
+				if a.Source == "space" && a.Via == oldKey {
+					if actTid, ok := h.todos.activeBySession[[2]string{a.MachineID, a.SessionID}]; ok && actTid == tid {
+						delete(h.todos.activeBySession, [2]string{a.MachineID, a.SessionID})
+					}
+					continue
+				}
+				keptAgents = append(keptAgents, a)
+			}
+			t.Agents = keptAgents
 			t.UpdatedAt = now
 		}
 	}
@@ -1068,16 +1122,16 @@ func (h *Hub) autoLinkTodos(m *Machine) {
 		}
 		key := [2]string{m.cfg.ID, s.SessionID}
 
-		// 1. 派生跟随 (Spawned derivation)
+		// 1. Spawned derivation
 		if s.SpawnFrom != "" {
 			parts := strings.SplitN(s.SpawnFrom, "@", 2)
 			if len(parts) == 2 {
 				targetTodoID := parts[0]
 				parentRef := parts[1] // parent <mid>/<sid>
 				if target, ok := h.todos.todos[targetTodoID]; ok && target.DoneAt == nil {
-					// 只有子 Agent 当前没有活跃关联时才挂上
+					// Only link child if it has no active link currently
 					if h.todos.activeBySession[key] == "" {
-						// 检查这个待办里是否出现过这一对的任何行（活跃、参与过、被移出都算）
+						// Check if any row for this (machine, session) exists in target todo (active, released, or dismissed)
 						hasAny := false
 						for _, a := range target.Agents {
 							if a.MachineID == m.cfg.ID && a.SessionID == s.SessionID {
@@ -1118,14 +1172,10 @@ func (h *Hub) autoLinkTodos(m *Machine) {
 			}
 		}
 
-		// 2. 随项目自动挂 (Space auto link)
+		// 2. Space auto link
 		if h.todos.activeBySession[key] == "" {
-			spaceName := s.SpaceName
-			if spaceName == "" {
-				spaceName = s.SpaceID
-			}
-			if spaceName != "" {
-				spKey := m.cfg.ID + "/" + spaceName
+			spKey := sessionSpaceKey(m.cfg.ID, s)
+			if spKey != "" {
 				if targetTodoID, ok := h.todos.spacesByKey[spKey]; ok {
 					if target, ok := h.todos.todos[targetTodoID]; ok && target.DoneAt == nil {
 						hasAny := false
@@ -1175,8 +1225,26 @@ func (h *Hub) autoLinkTodos(m *Machine) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			for _, item := range pending {
-				if _, err := h.store.LinkTodoAgentWithSource(ctx, item.todoID, item.machineID, item.sessionID, item.title, item.cwd, item.agent, item.startError, item.source, item.via, item.linkedAt); err != nil {
-					h.logf("todos: auto-link db write failed for %s on %s/%s (memory linked, db out of sync): %v", item.todoID, item.machineID, item.sessionID, err)
+				if _, _, err := h.store.AutoLinkTodoAgent(ctx, item.todoID, item.machineID, item.sessionID, item.title, item.cwd, item.agent, item.startError, item.source, item.via, item.linkedAt); err != nil {
+					h.logf("todos: auto-link db write failed for %s on %s/%s, rolling back: %v", item.todoID, item.machineID, item.sessionID, err)
+					h.todos.mu.Lock()
+					key := [2]string{item.machineID, item.sessionID}
+					if curTid, ok := h.todos.activeBySession[key]; ok && curTid == item.todoID {
+						delete(h.todos.activeBySession, key)
+						if target, ok := h.todos.todos[item.todoID]; ok {
+							var kept []TodoAgent
+							for _, a := range target.Agents {
+								if a.MachineID == item.machineID && a.SessionID == item.sessionID && a.LinkedAt.Equal(item.linkedAt) {
+									continue
+								}
+								kept = append(kept, a)
+							}
+							target.Agents = kept
+							target.UpdatedAt = time.Now().UTC()
+						}
+					}
+					h.todos.mu.Unlock()
+					h.broadcast(map[string]any{"type": "todos"})
 				}
 			}
 		}()
@@ -1191,8 +1259,8 @@ func sameTokens(a, b map[string]map[string]string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for pane, m1 := range a {
-		m2, ok := b[pane]
+	for id, m1 := range a {
+		m2, ok := b[id]
 		if !ok || len(m1) != len(m2) {
 			return false
 		}
@@ -1210,61 +1278,94 @@ func cloneTokens(m map[string]map[string]string) map[string]map[string]string {
 		return nil
 	}
 	out := make(map[string]map[string]string, len(m))
-	for pane, tokens := range m {
+	for id, tokens := range m {
 		inner := make(map[string]string, len(tokens))
 		for k, v := range tokens {
 			inner[k] = v
 		}
-		out[pane] = inner
+		out[id] = inner
 	}
 	return out
 }
 
-// syncTodoTokensToNode calculates expected tokens for active todos and sends them to the node if changed.
-func (h *Hub) syncTodoTokensToNode(m *Machine) {
-	if m == nil {
-		return
-	}
+// computeExpectedTokens calculates expected tokens keyed by session ID for online sessions (#873).
+func (h *Hub) computeExpectedTokens(m *Machine) map[string]map[string]string {
 	h.todos.mu.RLock()
+	defer h.todos.mu.RUnlock()
 	expected := make(map[string]map[string]string)
 	for key, todoID := range h.todos.activeBySession {
 		if key[0] == m.cfg.ID {
 			if t, ok := h.todos.todos[todoID]; ok && t.DoneAt == nil {
-				if s, ok := m.session(key[1]); ok && s.PaneID != "" {
-					// F4: only herdr host panes receive metadata tokens
-					if s.SpaceKind != "" && s.SpaceKind != host.Herdr {
-						continue
-					}
-					ref := host.ParsePane(s.PaneID)
-					if ref.Kind != host.Herdr {
-						continue
-					}
-					expected[s.PaneID] = map[string]string{
-						"persona_todo":     t.Title,
-						"persona_todo_ref": fmt.Sprintf("%s@%s/%s", t.ID, m.cfg.ID, s.SessionID),
-					}
+				sessionID := key[1]
+				s, ok := m.session(sessionID)
+				if !ok || s.Status == proto.StatusOffline || s.PaneID == "" {
+					continue
+				}
+				// F4: only herdr host panes receive metadata tokens
+				if s.SpaceKind != "" && s.SpaceKind != host.Herdr {
+					continue
+				}
+				ref := host.ParsePane(s.PaneID)
+				if ref.Kind != host.Herdr {
+					continue
+				}
+				expected[sessionID] = map[string]string{
+					"persona_todo":     t.Title,
+					"persona_todo_ref": fmt.Sprintf("%s@%s/%s", t.ID, m.cfg.ID, sessionID),
 				}
 			}
 		}
 	}
-	h.todos.mu.RUnlock()
+	return expected
+}
 
-	m.mu.Lock()
-	if sameTokens(m.lastTodoTokens, expected) {
-		m.mu.Unlock()
+// syncTodoTokensToNode sends expected tokens snapshot to node serialized per machine (#873).
+func (h *Hub) syncTodoTokensToNode(m *Machine) {
+	if m == nil {
 		return
 	}
-	m.lastTodoTokens = cloneTokens(expected)
-	m.mu.Unlock()
+
+	m.todoTokensMu.Lock()
+	m.todoTokensDirty = true
+	if m.todoTokensSending {
+		m.todoTokensMu.Unlock()
+		return
+	}
+	m.todoTokensSending = true
+	m.todoTokensMu.Unlock()
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := m.call(ctx, "todo.sync_tokens", map[string]any{"tokens": expected}, nil); err != nil {
-			h.logf("todos: sync tokens to %s failed: %v", m.cfg.ID, err)
-			m.mu.Lock()
-			m.lastTodoTokens = nil
-			m.mu.Unlock()
+		for {
+			m.todoTokensMu.Lock()
+			if !m.todoTokensDirty {
+				m.todoTokensSending = false
+				m.todoTokensMu.Unlock()
+				return
+			}
+			m.todoTokensDirty = false
+			m.todoTokensMu.Unlock()
+
+			expected := h.computeExpectedTokens(m)
+
+			m.todoTokensMu.Lock()
+			if sameTokens(m.lastTodoTokens, expected) {
+				m.todoTokensMu.Unlock()
+				continue
+			}
+			m.todoTokensMu.Unlock()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err := m.call(ctx, "todo.sync_session_tokens", map[string]any{"tokens": expected}, nil)
+			cancel()
+
+			m.todoTokensMu.Lock()
+			if err != nil {
+				h.logf("todos: sync tokens to %s failed: %v", m.cfg.ID, err)
+				m.lastTodoTokens = nil
+			} else {
+				m.lastTodoTokens = cloneTokens(expected)
+			}
+			m.todoTokensMu.Unlock()
 		}
 	}()
 }

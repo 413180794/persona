@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/host"
 )
 
-// syncTodoTokens receives expected persona_* tokens for panes from hub and triggers reconciliation.
+// syncTodoTokens receives expected persona_* tokens for sessions from hub and triggers reconciliation.
 func (n *Node) syncTodoTokens(ctx context.Context, expected map[string]map[string]string) error {
 	n.expectedTokensMu.Lock()
 	if expected == nil {
@@ -32,13 +32,13 @@ func (n *Node) reconcileTodoTokens(ctx context.Context) error {
 		n.expectedTokensMu.Unlock()
 		return nil
 	}
-	expected := make(map[string]map[string]string, len(n.expectedTokens))
-	for pane, m := range n.expectedTokens {
+	expectedBySession := make(map[string]map[string]string, len(n.expectedTokens))
+	for sid, m := range n.expectedTokens {
 		cp := make(map[string]string, len(m))
 		for k, v := range m {
 			cp[k] = v
 		}
-		expected[pane] = cp
+		expectedBySession[sid] = cp
 	}
 	n.expectedTokensMu.Unlock()
 
@@ -61,11 +61,51 @@ func (n *Node) reconcileTodoTokens(ctx context.Context) error {
 		return err
 	}
 
-	// pane_id -> live tokens
-	livePanes := make(map[string]map[string]string)
+	// livePaneIDs tracks all live panes reported by host (even if Tokens is nil, e.g. fresh pane).
+	// livePanes maps pane ID to its live metadata token map.
+	livePaneIDs := make(map[string]bool, len(agents))
+	livePanes := make(map[string]map[string]string, len(agents))
 	for _, a := range agents {
 		if a.PaneID != "" {
+			livePaneIDs[a.PaneID] = true
 			livePanes[a.PaneID] = a.Tokens
+		}
+	}
+
+	// Resolve session IDs to live pane IDs (#873, #892).
+	// Seed from n.agents first because its keys are the public session IDs sent by hub.
+	// Only fall back to host-reported AgentSession for panes not covered by n.agents.
+	paneToLiveSession := make(map[string]string)
+	sessionToPane := make(map[string]string)
+
+	// 1. From n.agents: authoritative for the public session IDs hub sends.
+	n.mu.Lock()
+	for sid, a := range n.agents {
+		if a.PaneID != "" && livePaneIDs[a.PaneID] {
+			paneToLiveSession[a.PaneID] = sid
+			sessionToPane[sid] = a.PaneID
+		}
+	}
+	n.mu.Unlock()
+
+	// 2. Fall back to host-reported AgentSession only for panes n.agents does not cover:
+	for _, a := range agents {
+		if a.PaneID != "" && livePaneIDs[a.PaneID] {
+			if _, covered := paneToLiveSession[a.PaneID]; !covered {
+				if a.AgentSession != nil && a.AgentSession.Kind == "id" && a.AgentSession.Value != "" {
+					paneToLiveSession[a.PaneID] = a.AgentSession.Value
+					sessionToPane[a.AgentSession.Value] = a.PaneID
+				}
+			}
+		}
+	}
+
+	expected := make(map[string]map[string]string)
+	for sid, tokens := range expectedBySession {
+		if paneID, ok := sessionToPane[sid]; ok && paneID != "" {
+			if activeSid, ok := paneToLiveSession[paneID]; ok && activeSid == sid {
+				expected[paneID] = tokens
+			}
 		}
 	}
 
@@ -114,7 +154,7 @@ func (n *Node) reconcileTodoTokens(ctx context.Context) error {
 		}
 
 		// Check persona_from:
-		// pane 上有 persona_from，而它的会话已经有活跃关联（不管挂在哪个待办）时，清掉 persona_from
+		// If pane has persona_from and the session already has an active link (on any todo), consume persona_from.
 		if live != nil {
 			if fromVal, ok := live["persona_from"]; ok && fromVal != "" {
 				// Has active todo if it has expected persona_todo_ref

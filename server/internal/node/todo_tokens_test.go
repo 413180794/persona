@@ -84,13 +84,21 @@ func TestNodeTodoTokensReconciliation(t *testing.T) {
 		agents: []host.Agent{
 			{
 				PaneID: "w1:p1",
+				AgentSession: &host.AgentSession{
+					Kind:  "id",
+					Value: "s1",
+				},
 				Tokens: map[string]string{
 					"role":         "leader",
-					"persona_todo": "旧待办",
+					"persona_todo": "old_todo",
 				},
 			},
 			{
 				PaneID: "w1:p2",
+				AgentSession: &host.AgentSession{
+					Kind:  "id",
+					Value: "s2",
+				},
 				Tokens: map[string]string{
 					"role":         "worker",
 					"persona_from": "todo_1@m1/s1",
@@ -98,6 +106,10 @@ func TestNodeTodoTokensReconciliation(t *testing.T) {
 			},
 			{
 				PaneID: "w1:p3",
+				AgentSession: &host.AgentSession{
+					Kind:  "id",
+					Value: "s3",
+				},
 				Tokens: map[string]string{
 					"persona_from": "todo_1@m1/s1", // child not yet linked
 				},
@@ -111,17 +123,17 @@ func TestNodeTodoTokensReconciliation(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 1. Sync expected tokens:
-	// w1:p1 expected: new title, todo_ref
-	// w1:p2 expected: todo_ref and todo title (active link, should consume persona_from)
-	// w1:p3 expected: none yet (persona_from should NOT be cleared yet)
+	// 1. Sync expected tokens (keyed by session ID):
+	// s1 expected: new title, todo_ref
+	// s2 expected: todo_ref and todo title (active link, should consume persona_from)
+	// s3 expected: none yet (persona_from should NOT be cleared yet)
 	expected := map[string]map[string]string{
-		"w1:p1": {
-			"persona_todo":     "新待办",
+		"s1": {
+			"persona_todo":     "new_todo",
 			"persona_todo_ref": "todo_1@m1/s1",
 		},
-		"w1:p2": {
-			"persona_todo":     "新待办",
+		"s2": {
+			"persona_todo":     "new_todo",
 			"persona_todo_ref": "todo_1@m1/s2",
 		},
 	}
@@ -136,22 +148,22 @@ func TestNodeTodoTokensReconciliation(t *testing.T) {
 		agentMap[a.PaneID] = a.Tokens
 	}
 
-	// Case 1: 缺的补上、多的清掉 (w1:p1 persona_todo updated, persona_todo_ref added)
+	// Case 1: add missing tokens, update changed ones (w1:p1 persona_todo updated, persona_todo_ref added)
 	p1Tokens := agentMap["w1:p1"]
-	if p1Tokens["persona_todo"] != "新待办" || p1Tokens["persona_todo_ref"] != "todo_1@m1/s1" {
+	if p1Tokens["persona_todo"] != "new_todo" || p1Tokens["persona_todo_ref"] != "todo_1@m1/s1" {
 		t.Fatalf("w1:p1 tokens mismatch: %+v", p1Tokens)
 	}
-	// Case 2: 不碰别的标记 ("role" still "leader")
+	// Case 2: do not touch other tokens ("role" still "leader")
 	if p1Tokens["role"] != "leader" {
 		t.Fatalf("w1:p1 other token 'role' was modified: %+v", p1Tokens)
 	}
 
-	// Case 3: 消费 persona_from (w1:p2 has active link, persona_from cleared)
+	// Case 3: consume persona_from (w1:p2 has active link, persona_from cleared)
 	p2Tokens := agentMap["w1:p2"]
 	if _, ok := p2Tokens["persona_from"]; ok {
 		t.Fatalf("w1:p2 expected persona_from to be consumed and cleared, got: %+v", p2Tokens)
 	}
-	if p2Tokens["persona_todo"] != "新待办" || p2Tokens["persona_todo_ref"] != "todo_1@m1/s2" {
+	if p2Tokens["persona_todo"] != "new_todo" || p2Tokens["persona_todo_ref"] != "todo_1@m1/s2" {
 		t.Fatalf("w1:p2 tokens mismatch: %+v", p2Tokens)
 	}
 
@@ -161,7 +173,7 @@ func TestNodeTodoTokensReconciliation(t *testing.T) {
 		t.Fatalf("w1:p3 expected persona_from preserved, got: %+v", p3Tokens)
 	}
 
-	// Case 4: herdr 重启、标记清空后能补回来
+	// Case 4: tokens restored after herdr restart wipes them
 	fh.mu.Lock()
 	for i := range fh.agents {
 		// Simulating herdr restart: all custom tokens wiped, only base host tokens (role) remain
@@ -185,12 +197,152 @@ func TestNodeTodoTokensReconciliation(t *testing.T) {
 	}
 
 	p1Recovered := agentMap["w1:p1"]
-	if p1Recovered["persona_todo"] != "新待办" || p1Recovered["persona_todo_ref"] != "todo_1@m1/s1" {
+	if p1Recovered["persona_todo"] != "new_todo" || p1Recovered["persona_todo_ref"] != "todo_1@m1/s1" {
 		t.Fatalf("w1:p1 failed to recover tokens after restart: %+v", p1Recovered)
 	}
 	p2Recovered := agentMap["w1:p2"]
-	if p2Recovered["persona_todo"] != "新待办" || p2Recovered["persona_todo_ref"] != "todo_1@m1/s2" {
+	if p2Recovered["persona_todo"] != "new_todo" || p2Recovered["persona_todo_ref"] != "todo_1@m1/s2" {
 		t.Fatalf("w1:p2 failed to recover tokens after restart: %+v", p2Recovered)
+	}
+}
+
+// TestNodeTodoTokensPaneIDChanged verifies that when pane ID changes (e.g. after herdr restart),
+// tokens are written to the new pane and cleared from the old pane, never remaining on the old pane (#873).
+func TestNodeTodoTokensPaneIDChanged(t *testing.T) {
+	fh := &fakeMetadataHost{
+		agents: []host.Agent{
+			{
+				PaneID: "w1:p1",
+				AgentSession: &host.AgentSession{
+					Kind:  "id",
+					Value: "s1",
+				},
+				Tokens: map[string]string{},
+			},
+		},
+	}
+
+	n := &Node{
+		hosts: host.NewRegistry(fh),
+	}
+
+	ctx := context.Background()
+
+	// 1. Sync expected tokens for session s1
+	expected := map[string]map[string]string{
+		"s1": {
+			"persona_todo":     "todo_title",
+			"persona_todo_ref": "todo_1@m1/s1",
+		},
+	}
+	if err := n.syncTodoTokens(ctx, expected); err != nil {
+		t.Fatalf("syncTodoTokens: %v", err)
+	}
+
+	// Verify w1:p1 got tokens
+	agents, _ := fh.Agents(ctx)
+	if agents[0].Tokens["persona_todo"] != "todo_title" {
+		t.Fatalf("expected w1:p1 to have todo_title, got: %+v", agents[0].Tokens)
+	}
+
+	// 2. Simulate herdr restart: pane id changes from w1:p1 to w2:p5
+	// Suppose w1:p1 was left with stale tokens on another process, while s1 is now running on w2:p5
+	fh.mu.Lock()
+	fh.agents = []host.Agent{
+		{
+			PaneID: "w1:p1", // old pane
+			Tokens: map[string]string{
+				"persona_todo":     "todo_title",
+				"persona_todo_ref": "todo_1@m1/s1",
+			},
+		},
+		{
+			PaneID: "w2:p5", // new pane where s1 now runs
+			AgentSession: &host.AgentSession{
+				Kind:  "id",
+				Value: "s1",
+			},
+			Tokens: map[string]string{},
+		},
+	}
+	fh.mu.Unlock()
+
+	// 3. Reconcile
+	if err := n.reconcileTodoTokens(ctx); err != nil {
+		t.Fatalf("reconcileTodoTokens: %v", err)
+	}
+
+	// 4. Verify tokens on live agents:
+	// New pane w2:p5 has the tokens; Old pane w1:p1 has tokens cleared!
+	agents, _ = fh.Agents(ctx)
+	agentMap := make(map[string]map[string]string)
+	for _, a := range agents {
+		agentMap[a.PaneID] = a.Tokens
+	}
+
+	oldPaneTokens := agentMap["w1:p1"]
+	if _, ok := oldPaneTokens["persona_todo"]; ok {
+		t.Fatalf("expected old pane w1:p1 persona_todo to be cleared, got: %+v", oldPaneTokens)
+	}
+	if _, ok := oldPaneTokens["persona_todo_ref"]; ok {
+		t.Fatalf("expected old pane w1:p1 persona_todo_ref to be cleared, got: %+v", oldPaneTokens)
+	}
+
+	newPaneTokens := agentMap["w2:p5"]
+	if newPaneTokens["persona_todo"] != "todo_title" || newPaneTokens["persona_todo_ref"] != "todo_1@m1/s1" {
+		t.Fatalf("expected new pane w2:p5 to have tokens, got: %+v", newPaneTokens)
+	}
+}
+
+// TestNodeTodoTokensDeadSessionDoesNotPolluteLivePane verifies that when lastPanes contains a stale
+// mapping from dead session sA to a pane currently occupied by live session sB, and expected tokens
+// only contain sA, sA's tokens are NOT written to the pane (#892 review).
+func TestNodeTodoTokensDeadSessionDoesNotPolluteLivePane(t *testing.T) {
+	fh := &fakeMetadataHost{
+		agents: []host.Agent{
+			{
+				PaneID: "w1:p1",
+				AgentSession: &host.AgentSession{
+					Kind:  "id",
+					Value: "sB", // live agent in w1:p1 is sB (e.g. after claude /clear or restart)
+				},
+				Tokens: map[string]string{},
+			},
+		},
+	}
+
+	n := &Node{
+		hosts: host.NewRegistry(fh),
+		lastPanes: map[string]string{
+			"sA": "w1:p1", // sA was historically in w1:p1
+			"sB": "w1:p1", // sB is currently in w1:p1
+		},
+	}
+
+	ctx := context.Background()
+
+	// Expected tokens only has sA (which is dead/offline), not sB.
+	expected := map[string]map[string]string{
+		"sA": {
+			"persona_todo":     "dead_todo",
+			"persona_todo_ref": "td_dead@m1/sA",
+		},
+	}
+
+	if err := n.syncTodoTokens(ctx, expected); err != nil {
+		t.Fatalf("syncTodoTokens: %v", err)
+	}
+
+	// Verify that w1:p1 did NOT get sA's tokens
+	agents, _ := fh.Agents(ctx)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if tok, ok := agents[0].Tokens["persona_todo"]; ok {
+		t.Fatalf("pane w1:p1 unexpectedly received dead session sA's persona_todo: %q", tok)
+	}
+	if tok, ok := agents[0].Tokens["persona_todo_ref"]; ok {
+		t.Fatalf("pane w1:p1 unexpectedly received dead session sA's persona_todo_ref: %q", tok)
 	}
 }
 
@@ -200,7 +352,7 @@ func TestNodeReconcileDoesNotClearTokensBeforeFirstSync(t *testing.T) {
 			{
 				PaneID: "w1:p1",
 				Tokens: map[string]string{
-					"persona_todo":     "待办保留测试",
+					"persona_todo":     "todo_retain_test",
 					"persona_todo_ref": "todo_1@m1/s1",
 					"role":             "worker",
 				},
@@ -220,7 +372,7 @@ func TestNodeReconcileDoesNotClearTokensBeforeFirstSync(t *testing.T) {
 	}
 
 	agents, _ := fh.Agents(ctx)
-	if len(agents) != 1 || agents[0].Tokens["persona_todo"] != "待办保留测试" {
+	if len(agents) != 1 || agents[0].Tokens["persona_todo"] != "todo_retain_test" {
 		t.Fatalf("expected tokens untouched before first sync, got: %+v", agents[0].Tokens)
 	}
 
@@ -241,22 +393,33 @@ func TestNodeReconcileDoesNotClearTokensBeforeFirstSync(t *testing.T) {
 func TestNodeReconcileSkipsNonHerdrPanes(t *testing.T) {
 	fh := &fakeMetadataHost{
 		agents: []host.Agent{
-			{PaneID: "w1:p1", Tokens: map[string]string{}},
+			{
+				PaneID: "w1:p1",
+				AgentSession: &host.AgentSession{
+					Kind:  "id",
+					Value: "s_herdr",
+				},
+				Tokens: map[string]string{},
+			},
 		},
 	}
 	n := &Node{
 		hosts: host.NewRegistry(fh),
+		agents: map[string]host.Agent{
+			"s_herdr": {PaneID: "w1:p1"},
+			"s_orca":  {PaneID: "orca:t1:p1"},
+		},
 	}
 	ctx := context.Background()
 
-	// Expected contains an orca pane and a herdr pane
+	// Expected contains an orca session and a herdr session
 	expected := map[string]map[string]string{
-		"orca:t1:p1": {
-			"persona_todo":     "Orca 待办",
+		"s_orca": {
+			"persona_todo":     "orca_todo",
 			"persona_todo_ref": "todo_1@m1/s_orca",
 		},
-		"w1:p1": {
-			"persona_todo":     "Herdr 待办",
+		"s_herdr": {
+			"persona_todo":     "herdr_todo",
 			"persona_todo_ref": "todo_1@m1/s_herdr",
 		},
 	}
@@ -271,5 +434,92 @@ func TestNodeReconcileSkipsNonHerdrPanes(t *testing.T) {
 		if call["pane"] == "orca:t1:p1" || call["pane"] == "t1:p1" {
 			t.Fatalf("herdr reporter should not receive report for orca pane: %+v", call)
 		}
+	}
+}
+
+// TestNodeTodoTokensFreshPaneNilTokens verifies that when a live pane has Tokens==nil (fresh pane in herdr),
+// and n.agents tracks the session, expected tokens are still successfully written on first sync (#892).
+func TestNodeTodoTokensFreshPaneNilTokens(t *testing.T) {
+	fh := &fakeMetadataHost{
+		agents: []host.Agent{
+			{
+				PaneID: "w1:p1",
+				Tokens: nil, // herdr returns no tokens key for a fresh pane with no metadata
+			},
+		},
+	}
+
+	n := &Node{
+		hosts: host.NewRegistry(fh),
+		agents: map[string]host.Agent{
+			"s1": {PaneID: "w1:p1"},
+		},
+	}
+
+	ctx := context.Background()
+
+	expected := map[string]map[string]string{
+		"s1": {
+			"persona_todo":     "fresh_todo",
+			"persona_todo_ref": "td_fresh@m1/s1",
+		},
+	}
+
+	if err := n.syncTodoTokens(ctx, expected); err != nil {
+		t.Fatalf("syncTodoTokens: %v", err)
+	}
+
+	agents, _ := fh.Agents(ctx)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].Tokens["persona_todo"] != "fresh_todo" || agents[0].Tokens["persona_todo_ref"] != "td_fresh@m1/s1" {
+		t.Fatalf("fresh pane failed to receive tokens: %+v", agents[0].Tokens)
+	}
+}
+
+// TestNodeTodoTokensCodexPublicIDMismatch verifies that when a Codex pane has a raw thread ID in AgentSession
+// but the node public session ID (in n.agents) is different (e.g. c0de-...), tokens are resolved by public ID (#892).
+func TestNodeTodoTokensCodexPublicIDMismatch(t *testing.T) {
+	fh := &fakeMetadataHost{
+		agents: []host.Agent{
+			{
+				PaneID: "w1:p2",
+				AgentSession: &host.AgentSession{
+					Kind:  "id",
+					Value: "019a-raw-thread-uuid", // herdr's raw thread ID
+				},
+				Tokens: map[string]string{},
+			},
+		},
+	}
+
+	n := &Node{
+		hosts: host.NewRegistry(fh),
+		agents: map[string]host.Agent{
+			"c0de-deadbeef1234": {PaneID: "w1:p2"}, // node's public session ID known to hub
+		},
+	}
+
+	ctx := context.Background()
+
+	// Hub keys expected tokens by the public session ID "c0de-deadbeef1234"
+	expected := map[string]map[string]string{
+		"c0de-deadbeef1234": {
+			"persona_todo":     "codex_todo",
+			"persona_todo_ref": "td_cx@m1/c0de-deadbeef1234",
+		},
+	}
+
+	if err := n.syncTodoTokens(ctx, expected); err != nil {
+		t.Fatalf("syncTodoTokens: %v", err)
+	}
+
+	agents, _ := fh.Agents(ctx)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].Tokens["persona_todo"] != "codex_todo" || agents[0].Tokens["persona_todo_ref"] != "td_cx@m1/c0de-deadbeef1234" {
+		t.Fatalf("codex pane failed to receive tokens via public ID: %+v", agents[0].Tokens)
 	}
 }

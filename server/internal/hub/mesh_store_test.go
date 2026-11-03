@@ -453,12 +453,17 @@ func (s *meshStore) LinkTodoSpace(context.Context, string, string, string, time.
 	return "", nil
 }
 func (s *meshStore) UnlinkTodoSpace(context.Context, string, string, string) error { return nil }
-func (s *meshStore) RenameTodoSpace(context.Context, string, string, string) error { return nil }
+func (s *meshStore) RenameTodoSpace(context.Context, string, string, string) (bool, error) {
+	return false, nil
+}
 func (s *meshStore) LinkTodoAgent(context.Context, string, string, string, string, string, string, string, time.Time) ([]string, error) {
 	return nil, nil
 }
 func (s *meshStore) LinkTodoAgentWithSource(context.Context, string, string, string, string, string, string, string, string, string, time.Time) ([]string, error) {
 	return nil, nil
+}
+func (s *meshStore) AutoLinkTodoAgent(context.Context, string, string, string, string, string, string, string, string, string, time.Time) (bool, []string, error) {
+	return true, nil, nil
 }
 func (s *meshStore) UnlinkTodoAgent(context.Context, string, string, string) error { return nil }
 func (s *meshStore) UpdateTodoAgentSnapshot(context.Context, string, string, string, string) error {

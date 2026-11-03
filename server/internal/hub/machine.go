@@ -80,7 +80,10 @@ type Machine struct {
 	// svc: the connector of a computer of kind service (service.go).
 	svc serviceState
 
-	lastTodoTokens map[string]map[string]string
+	todoTokensMu      sync.Mutex
+	todoTokensDirty   bool
+	todoTokensSending bool
+	lastTodoTokens    map[string]map[string]string
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {

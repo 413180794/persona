@@ -288,14 +288,36 @@ func (d *DB) UnlinkTodoSpace(ctx context.Context, todoID, machineID, space strin
 }
 
 // RenameTodoSpace migrates todo_spaces and todo_agents via when a space is renamed via hub.
-func (d *DB) RenameTodoSpace(ctx context.Context, machineID, oldSpace, newSpace string) error {
+// If newSpace is already linked to another todo (unique constraint conflict), the old space's
+// link is voided (deleted) rather than migrating, returning (voided: true, err: nil).
+func (d *DB) RenameTodoSpace(ctx context.Context, machineID, oldSpace, newSpace string) (bool, error) {
 	conn, err := d.pool.Acquire(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer conn.Release()
 
-	return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+	var voided bool
+	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+		// Check if newSpace already exists in todo_spaces for this machine.
+		var existingTodoID string
+		err := tx.QueryRow(ctx, `SELECT todo_id FROM todo_spaces WHERE machine_id = $1 AND space = $2 FOR UPDATE`, machineID, newSpace).Scan(&existingTodoID)
+		if err == nil {
+			// Conflict: newSpace is already linked to existingTodoID.
+			// Void old link to avoid violating unique constraint.
+			voided = true
+			oldVia := machineID + "/" + oldSpace
+			if _, err := tx.Exec(ctx, `DELETE FROM todo_spaces WHERE machine_id = $1 AND space = $2`, machineID, oldSpace); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `DELETE FROM todo_agents WHERE source = 'space' AND via = $1`, oldVia); err != nil {
+				return err
+			}
+			return nil
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+
 		if _, err := tx.Exec(ctx, `UPDATE todo_spaces SET space = $3 WHERE machine_id = $1 AND space = $2`, machineID, oldSpace, newSpace); err != nil {
 			return err
 		}
@@ -306,6 +328,88 @@ func (d *DB) RenameTodoSpace(ctx context.Context, machineID, oldSpace, newSpace 
 		}
 		return nil
 	})
+	if err != nil {
+		return false, err
+	}
+	return voided, nil
+}
+
+// AutoLinkTodoAgent links an agent automatically if not already present.
+// Unlike LinkTodoAgentWithSource, it uses INSERT ... ON CONFLICT DO NOTHING so that
+// any existing row (such as a dismissed link from an immediate unlink) is NOT overwritten.
+// Returns (inserted bool, releasedTodoIDs []string, err error).
+func (d *DB) AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) (bool, []string, error) {
+	conn, err := d.pool.Acquire(ctx)
+	if err != nil {
+		return false, nil, err
+	}
+	defer conn.Release()
+
+	var inserted bool
+	var releasedTodoIDs []string
+	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+		var targetDoneAt *time.Time
+		err := tx.QueryRow(ctx, `SELECT done_at FROM todos WHERE id = $1 FOR UPDATE`, todoID).Scan(&targetDoneAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrTodoNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if targetDoneAt != nil {
+			return ErrTodoCompleted
+		}
+
+		// Try insert with DO NOTHING so we never overwrite an existing/dismissed row.
+		tag, err := tx.Exec(ctx, `INSERT INTO todo_agents (todo_id, machine_id, session_id, linked_at, released_at, title, cwd, agent, start_error, source, via, dismissed_at)
+			VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, NULL)
+			ON CONFLICT (todo_id, machine_id, session_id) DO NOTHING`,
+			todoID, machineID, sessionID, linkedAt, title, cwd, agent, startError, source, via)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			// Row already exists (e.g. dismissed by immediate user unlink); do not change anything.
+			return nil
+		}
+		inserted = true
+
+		// Find other active links for this agent and release them.
+		rows, err := tx.Query(ctx, `SELECT todo_id FROM todo_agents WHERE machine_id = $1 AND session_id = $2 AND released_at IS NULL AND todo_id != $3`,
+			machineID, sessionID, todoID)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var oid string
+			if err := rows.Scan(&oid); err != nil {
+				rows.Close()
+				return err
+			}
+			releasedTodoIDs = append(releasedTodoIDs, oid)
+		}
+		rows.Close()
+
+		if len(releasedTodoIDs) > 0 {
+			_, err = tx.Exec(ctx, `UPDATE todo_agents SET released_at = $3 WHERE machine_id = $1 AND session_id = $2 AND released_at IS NULL AND todo_id != $4`,
+				machineID, sessionID, linkedAt, todoID)
+			if err != nil {
+				return err
+			}
+			for _, oid := range releasedTodoIDs {
+				if _, err = tx.Exec(ctx, `UPDATE todos SET updated_at = $2 WHERE id = $1`, oid, linkedAt); err != nil {
+					return err
+				}
+			}
+		}
+
+		_, err = tx.Exec(ctx, `UPDATE todos SET updated_at = $2 WHERE id = $1`, todoID, linkedAt)
+		return err
+	})
+	if err != nil {
+		return false, nil, err
+	}
+	return inserted, releasedTodoIDs, nil
 }
 
 // LinkTodoAgent links an agent manually to a todo.

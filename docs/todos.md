@@ -111,7 +111,7 @@ hub 收到某台电脑的会话列表时，检查处于已整组挂项目中的�
 自动挂在收到会话时首先同步更新内存索引，保证同一次推送的会话列表中立即呈现关联，数据库写入在后台异步完成。
 待办标记完成后，自动挂机制停止生效；待办重新打开后恢复。
 
-经 hub 改名（与置顶、屏蔽共用改名接口）时，`todo_spaces` 中的空间名及 `todo_agents` 中对应的 `via` 字段一并迁移。
+经 hub 改名（与置顶、屏蔽共用改名接口）时，`todo_spaces` 中的空间名及 `todo_agents` 中对应的 `via` 字段一并迁移。改名先写库再改内存并广播 `{"type":"todos"}`。若改名后的目标名称已被其他待办关联（唯一索引冲突），该项目原有的待办挂靠作废并清理，并记录日志。
 
 ## 派生跟随
 
@@ -138,7 +138,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
   - `persona_todo_ref`：`<todo_id>@<machine_id>/<session_id>`。
 - **清除标记**：当待办完成、待办被删除或 Agent 关联被解除时，node 清空对应的 `persona_todo` 和 `persona_todo_ref` 标记。
 - **来源与命名空间保护**：node 写入与清理标记一律使用 `--source persona`。对账操作仅针对 `persona_todo`、`persona_todo_ref` 和 `persona_from` 三个名字，绝不触碰用户或其它插件的 metadata。
-- **定期对账机制**：hub 将期望标记集合下发给 node；node 对比 herdr 当前标记与期望集合，补齐缺失标记、清理多余标记。node 每隔 30 秒执行一次对账检查，在 herdr 服务重启或热交接导致标记被清空后，自动恢复全部标记。
+- **定期对账机制**：hub 将期望标记集合按会话 ID 下发（RPC 方法 `todo.sync_session_tokens`）；node 仅基于当前活着的会话与宿主实时报上来的 Agent 会话信息动态解析对应的 live pane，对比 herdr 当前标记与期望集合，补齐缺失标记、清理多余标记。两个会话映射到同一 pane 时只认当前存活者。node 每隔 30 秒执行一次对账检查，在 herdr 服务重启、pane ID 变更或热交接后，自动将标记恢复到正确的新 pane 上，已退出的旧会话不会污染当前 pane。
 
 ## 状态计算规则
 
