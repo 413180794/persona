@@ -75,7 +75,7 @@ struct LinkSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let target: LinkTarget
-    let key: SessionKey
+    var key: SessionKey? = nil
     @State private var title = ""
     @State private var editing: ContextRef?
     @State private var instruction = ""
@@ -124,7 +124,7 @@ struct LinkSheet: View {
                 Text(target.forwarded ?? target.url.host ?? target.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 6)
-            if isFeishuDoc {
+            if isFeishuDoc, key != nil {
                 // The native reader has no custom selection menu: the whole doc can still go along.
                 Button { pick("", kind: "context") } label: { Image(systemName: Theme.Icon.addContext) }
                     .accessibilityLabel("把这篇文档作为上下文")
@@ -135,6 +135,7 @@ struct LinkSheet: View {
             } label: { Image(systemName: Theme.Icon.moreMenu) }
             Button { dismiss() } label: { Image(systemName: Theme.Icon.clear).symbolRenderingMode(.hierarchical) }
                 .accessibilityLabel("关闭")
+                .accessibilityIdentifier("link-close")
         }
         .font(Theme.Font.title)
         .padding(.horizontal, Theme.Space.l)
@@ -152,6 +153,10 @@ struct LinkSheet: View {
     }
 
     private func pick(_ text: String, kind: String) {
+        guard let key else {
+            model.toast = Toast("请从会话打开链接，再交给 Agent 处理", style: .info)
+            return
+        }
         let ref = ContextRef(kind: kind, title: title.isEmpty ? (target.url.host ?? "") : title, url: target.url.absoluteString,
                              text: text.isEmpty ? "（整篇）" : text)
         if kind == "edit" {
@@ -165,7 +170,7 @@ struct LinkSheet: View {
     }
 
     private func sendEdit() {
-        guard let ref = editing else { return }
+        guard let ref = editing, let key else { return }
         let ask = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         model.sendNow(key, text: ref.xml + "\n\n" + (ask.isEmpty ? "按上面选中的内容修改。" : "按要求修改上面选中的内容：" + ask))
         instruction = ""

@@ -228,7 +228,7 @@ struct ChatView: View {
         }
         .renameSessionAlert($renaming)
         .confirmClose($closing) { closedAgent($0, order: []) }
-        .sheet(item: $file) { ref in FileViewer(ref: ref) }
+        .sheet(item: $file) { ref in FileViewer(ref: ref, key: key) }
         #if DEBUG
         // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
         .onChange(of: store.rows.count) { _, _ in
@@ -880,7 +880,7 @@ struct ChatView: View {
         // Files and Git come in from the right (a swipe to the left), the chat back from the left.
         case .git: GitPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
             .transition(.move(edge: .trailing))
-        case .files: FilesPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", git: git).padding(.top, headerRoom)
+        case .files: FilesPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", git: git, key: key).padding(.top, headerRoom)
             .transition(.move(edge: .trailing))
         }
     }

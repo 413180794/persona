@@ -133,8 +133,10 @@ struct FileViewer: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State var ref: FileRef
+    var key: SessionKey? = nil
     @State private var page: FileViewerModel?
     @State private var history: [FileRef] = []
+    @State private var link: LinkTarget?
 
     var body: some View {
         NavigationStack {
@@ -148,6 +150,8 @@ struct FileViewer: View {
                             Button { history.removeLast(); ref = back } label: { Label("返回", systemImage: Theme.Icon.back) }
                         } else {
                             Button("完成") { dismiss() }
+                                .lineLimit(1)
+                                .accessibilityIdentifier("file-close")
                         }
                     }
                     ToolbarItem(placement: .primaryAction) { menu }
@@ -158,6 +162,40 @@ struct FileViewer: View {
                 #if os(macOS)
                 .macLargeSheet(bars: true) // code wants the room; sized to its toolbar the sheet was 470 × 280
                 #endif
+        }
+        .environment(\.openLink, openLink)
+        .environment(\.openURL, OpenURLAction { url in
+            guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+                #if os(macOS)
+                return LinkPolicy.system(url)
+                #else
+                return .systemAction
+                #endif
+            }
+            openLink(url)
+            return .handled
+        })
+        #if os(macOS)
+        .macLinkPanel($link, key: key)
+        #else
+        .sheet(item: $link) { target in LinkSheet(target: target, key: key) }
+        #endif
+    }
+
+    private func openLink(_ url: URL) {
+        let machine = ref.machineRef
+        if let port = PortLinks.link(url, hostnames: model.hostnames(of: machine)) {
+            Task {
+                do {
+                    let forwarded = try await model.forwardedURL(port, machine: machine)
+                    let name = model.machine(machine)?.title ?? machine.id
+                    link = LinkTarget(url: forwarded, forwarded: "\(name) :\(port.port)")
+                } catch {
+                    model.toast = Toast(error.localizedDescription, style: .error)
+                }
+            }
+        } else {
+            link = LinkTarget(url: url)
         }
     }
 

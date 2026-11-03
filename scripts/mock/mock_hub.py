@@ -3987,6 +3987,14 @@ MOCK_TREE = {
     "notes.txt": "Remember to water the plants.\n",
 }
 MOCK_REPO = "code/weather"
+if os.environ.get("MOCK_FILE_LINKS"):
+    preview = "# 文件预览链接回归\n\n" + "这段内容用于检查关闭链接后保留文件的阅读位置。\n\n" * 12
+    preview += "[示例网页](https://example.com/file-preview)\n\n"
+    if os.environ.get("MOCK_PORTS") == "1":
+        preview += "[开发预览](http://localhost:%d/)\n\n" % DEV_PORT
+    MOCK_TREE[MOCK_REPO + "/README.md"] = preview + MOCK_TREE[MOCK_REPO + "/README.md"]
+    if os.environ.get("MOCK_FILES"):
+        FILES[ROOT + "/README.md"] = preview + FILES[ROOT + "/README.md"]
 MOCK_COMMITS = [{"hash": "%040x" % (0xa1b2c3d0 + i), "short": "%07x" % (0xa1b2c3d0 + i),
                  "subject": s, "author": "Sample Dev", "date": ago(hours=3 * i + 1),
                  **({"refs": "HEAD -> main, origin/main"} if i == 0 else {})}
@@ -6025,6 +6033,7 @@ class H(BaseHTTPRequestHandler):
         if not listed: return self.send_json({"error": "port %d is not an agent's and was not opened" % port}, 403)
         try:
             tcp = socket.create_connection(("127.0.0.1", port), timeout=3)
+            tcp.settimeout(None)
         except OSError:
             return self.send_json({"error": "nothing is listening on port %d" % port}, 404)
         PORT_LOG.append({"machine_id": mid, "port": port})

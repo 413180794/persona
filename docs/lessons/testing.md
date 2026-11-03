@@ -147,6 +147,9 @@
 
 ## 新加的 UI 测试
 
+- 文件预览的 mock 有两套入口（2026-11-03，#796）：文件树用 `MOCK_TREE`，完整文本 / 分页用 `FILES`。新增 Markdown fixture 要同时更新两者，否则列表里文件名与大小是新内容、点开仍是旧长文，UI 测试找不到新链接。
+- `socket.create_connection(timeout=3)` 的超时也留在返回的 socket 上；转发 mock 建连后要 `settimeout(None)`，由 WebSocket 断开结束流。模拟器在创建 WebView / 建立 HTTP 请求前停顿超过 3 秒时，旧 mock 已在等响应的线程中提前关掉 TCP，抽屉正确打开却是白页，不要因此放宽页面加载断言。
+
 - DEBUG 启动参数触发的动作（发一条消息、打开某页）不要写在 `onAppear` 里每次都跑（2026-11-02）：带 `-openSession` 启动时对话页 0.2 秒内出现、消失、再出现三次，
   `-openSendMessage` 就写了三条消息（各自新的 id），`ConnectionTests` 看到 hub 收到三次，像是断网重发的 bug。会产生副作用的触发一次启动只做一次（`ChatView.debugSent`）。
   判断是不是真重复：看 mock `/mock/sent` 里的 `client_msg_id`，同一条消息的重发 id 相同，服务端和 mock 都按它去重。

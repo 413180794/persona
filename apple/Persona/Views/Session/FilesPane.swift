@@ -8,6 +8,7 @@ struct FilesPane: View {
     var group: String = ""
     let cwd: String
     var git: GitStatus?
+    var key: SessionKey? = nil
     @State private var stack: [String] = [] // folders entered below cwd
     @State private var listing: FileListing?
     @State private var listed = "" // the path `listing` belongs to (the server returns it cleaned)
@@ -42,7 +43,7 @@ struct FilesPane: View {
             .refreshable { await load() }
         }
         .task(id: path) { await load() }
-        .sheet(item: $file) { ref in FileViewer(ref: ref) }
+        .sheet(item: $file) { ref in FileViewer(ref: ref, key: key) }
         #if os(macOS)
         .toolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac
         #endif
