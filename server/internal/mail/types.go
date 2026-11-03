@@ -142,6 +142,13 @@ type ListOptions struct {
 type ListResult struct {
 	Messages []MailSummary `json:"messages"`
 	HasMore  bool          `json:"has_more"`
+	// NextBeforeUID is the before_uid of the next page of a one-account listing, set whenever HasMore is. A local
+	// search (HeadersOnly) can stop before it has looked at the whole mailbox, so the next page may start below the
+	// last message it looked at rather than below the last one it returned; Messages can then be empty.
+	NextBeforeUID uint32 `json:"next_before_uid,omitempty"`
+	// HeadersOnly means the server's search found nothing for the query (some, like NetEase 163, do not search at
+	// all), so the results come from matching subjects, senders and recipients here, which does not look into bodies.
+	HeadersOnly bool `json:"headers_only,omitempty"`
 }
 
 // SetFlagsRequest updates the seen/flagged flags of one message.

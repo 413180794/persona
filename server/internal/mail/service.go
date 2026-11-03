@@ -58,6 +58,8 @@ type Service struct {
 	access                        map[string]*accessCache // access tokens, by refresh token
 	// verify replaces the IMAP + SMTP login check of new accounts in tests.
 	verify func(ctx context.Context, a *MailAccount) error
+	// scan bounds one page of a local header search; tests shrink it.
+	scan localScan
 	// refreshAccess replaces the Google token endpoint in tests.
 	refreshAccess func(*OAuthCreds) (string, error)
 	// sendMail delivers a rendered message over SMTP; nil uses the real network.
@@ -86,6 +88,7 @@ func New(dataDir string, recs Records) (*Service, error) {
 		access:     make(map[string]*accessCache),
 		stop:       make(chan struct{}),
 		now:        time.Now,
+		scan:       defaultLocalScan,
 	}
 	accounts, err := st.load()
 	if err != nil {

@@ -20,6 +20,7 @@
   hub 的 `SendRequest` 只收字符串，手动回复会被 400 拒掉（#587，读代码发现）。改请求体的字段类型时 hub 两种都收（`mail.MessageIDs`），
   并加一个按各端真实形状 POST 的 HTTP 测试（`TestHTTPSendReferences`）。
 - IMAP 扩展要先看服务端声明的能力再用：QQ 邮箱不声明 LIST-EXTENDED，收到带 `RETURN` 的 `LIST` 直接不回，只能等超时（`docs/mail.md`「注意事项」）。
+- 服务端回「搜索成功、0 条」不代表真的没有：163 对任何关键词 `SEARCH`（`TEXT`、`BODY`、`SUBJECT`、`FROM`，中英文、加不加 `CHARSET UTF-8`）都回 0 条，只有 `ALL`、日期这类条件生效（2026-11-03 实测）。所以关键词搜索回 0 条时要在本地匹配邮件头（`docs/mail.md`「搜索」）；测试里用 `blindSearch` 模拟这种服务端。
 - 飞书文档 / 表格 / 多维表格里 @我、评论我，不进 IM 会话列表（没有「云文档助手」会话），只在 lark-connector 的文档通知中心
   `documents/notifications`，而且卡片只说「谁提及了你」，不说哪一行：要自己读表按「@名字」找（`docs/inbox.md`「云文档」）。
   表格里带下拉的格子 `sheet/edit` 一律报 `DOCUMENT_EDIT_UNSUPPORTED`，改值要用 `sheet/structure` 的 `choose`；多维表格 `base/edit` 的

@@ -29,6 +29,15 @@ const (
 	snippetBytes = 2048
 )
 
+// localScan bounds one page of a local header search (searchLocally).
+type localScan struct {
+	batch  int           // envelopes per FETCH
+	budget int           // messages looked at per page
+	time   time.Duration // time spent per page, well inside networkTimeout so the page still gets fetched
+}
+
+var defaultLocalScan = localScan{batch: 500, budget: 2000, time: 8 * time.Second}
+
 // accountMutex returns the mutex serializing IMAP use of one account. IMAP
 // connections are stateful (SELECT), so commands must not interleave.
 func (s *Service) accountMutex(id string) *sync.Mutex {
@@ -212,7 +221,7 @@ func (s *Service) ListMessages(ctx context.Context, opts ListOptions) (*ListResu
 	wg.Wait()
 
 	var all []MailSummary
-	hasMore := false
+	hasMore, headersOnly := false, false
 	var firstErr error
 	for _, r := range results {
 		if r.err != nil {
@@ -223,6 +232,7 @@ func (s *Service) ListMessages(ctx context.Context, opts ListOptions) (*ListResu
 		}
 		all = append(all, r.res.Messages...)
 		hasMore = hasMore || r.res.HasMore
+		headersOnly = headersOnly || r.res.HeadersOnly
 	}
 	if len(all) == 0 && firstErr != nil {
 		return nil, firstErr
@@ -237,36 +247,151 @@ func (s *Service) ListMessages(ctx context.Context, opts ListOptions) (*ListResu
 		all = all[:limit]
 		hasMore = true
 	}
-	return &ListResult{Messages: all, HasMore: hasMore}, nil
+	// No NextBeforeUID here: UIDs belong to one mailbox, so there is no single place to continue.
+	return &ListResult{Messages: all, HasMore: hasMore, HeadersOnly: headersOnly}, nil
 }
 
-// searchUIDs returns matching UIDs sorted ascending.
-func (s *Service) searchUIDs(ctx context.Context, c *imapclient.Client, a *MailAccount, mailbox string, beforeUID uint32, query string) ([]imap.UID, error) {
+// uidSearch is what a search found: the matching UIDs, ascending.
+type uidSearch struct {
+	uids []imap.UID
+	// scannedTo is set when a local search stopped before the oldest message: it is the lowest UID looked at, and
+	// the messages below it have not been looked at yet.
+	scannedTo imap.UID
+	// headersOnly: the server found nothing, so the headers were matched here (searchLocally).
+	headersOnly bool
+}
+
+// searchUIDs finds the messages below beforeUID that match query (all of them for an empty query). want is how many
+// matches the caller can use (a page and one more); only a local search stops early on it.
+func (s *Service) searchUIDs(ctx context.Context, c *imapclient.Client, a *MailAccount, mailbox string, beforeUID uint32, query string, want int) (uidSearch, error) {
 	if query != "" && a.Provider == ProviderGmail {
 		// Gmail query syntax needs X-GM-RAW, which the IMAP client library
 		// cannot express; use a short-lived raw connection.
 		if uids, err := s.gmailSearch(ctx, a, mailbox, query, beforeUID); err == nil {
-			return uids, nil
+			return uidSearch{uids: uids}, nil
 		} else {
 			logf("mail: X-GM-RAW search failed, falling back to TEXT search: %v", err)
 		}
 	}
+	criteria := belowUID(beforeUID)
+	if query != "" {
+		criteria.Text = append(criteria.Text, query)
+	}
+	data, err := c.UIDSearch(criteria, nil).Wait()
+	if query != "" {
+		// Not every server searches on its side: NetEase 163 answers every keyword SEARCH (TEXT, BODY, SUBJECT,
+		// FROM, any language) with nothing, even for a word in the subject; others refuse some queries with NO.
+		// Match the headers here then. A server that does search and found nothing costs one bounded scan.
+		var ie *imap.Error
+		switch {
+		case err == nil && len(data.AllUIDs()) == 0:
+			return s.searchLocally(c, beforeUID, query, want)
+		case errors.As(err, &ie):
+			logf("mail: keyword search refused, matching headers locally: %v", err)
+			return s.searchLocally(c, beforeUID, query, want)
+		}
+	}
+	if err != nil {
+		return uidSearch{}, err
+	}
+	uids := data.AllUIDs()
+	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
+	return uidSearch{uids: uids}, nil
+}
+
+// belowUID selects the messages with a UID lower than beforeUID (all of them for 0).
+func belowUID(beforeUID uint32) *imap.SearchCriteria {
 	criteria := &imap.SearchCriteria{}
 	if beforeUID > 1 {
 		var set imap.UIDSet
 		set.AddRange(1, imap.UID(beforeUID-1))
 		criteria.UID = append(criteria.UID, set)
 	}
-	if query != "" {
-		criteria.Text = append(criteria.Text, query)
+	return criteria
+}
+
+// localScanLimits is s.scan with the defaults filled in (a zero Service has none).
+func (s *Service) localScanLimits() localScan {
+	l := s.scan
+	if l.batch <= 0 {
+		l.batch = defaultLocalScan.batch
 	}
-	data, err := c.UIDSearch(criteria, nil).Wait()
+	if l.budget <= 0 {
+		l.budget = defaultLocalScan.budget
+	}
+	if l.time <= 0 {
+		l.time = defaultLocalScan.time
+	}
+	return l
+}
+
+// searchLocally matches query against the envelopes of the messages below beforeUID, newest first, in batches. It
+// stops once it has want matches or when the page's budget (messages looked at, time) is spent; scannedTo then says
+// where the next page continues.
+func (s *Service) searchLocally(c *imapclient.Client, beforeUID uint32, query string, want int) (uidSearch, error) {
+	data, err := c.UIDSearch(belowUID(beforeUID), nil).Wait()
 	if err != nil {
-		return nil, err
+		return uidSearch{}, err
 	}
-	uids := data.AllUIDs()
-	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-	return uids, nil
+	all := data.AllUIDs()
+	sort.Slice(all, func(i, j int) bool { return all[i] < all[j] })
+
+	limits := s.localScanLimits()
+	terms := strings.Fields(strings.ToLower(query))
+	out := uidSearch{headersOnly: true}
+	deadline := time.Now().Add(limits.time)
+	looked := 0
+	end := len(all) // all[:end] is still to look at
+	// The budget is checked after each batch, so every page looks at one batch at least and moves on.
+	for end > 0 && len(out.uids) < want {
+		n := min(limits.batch, limits.budget-looked, end)
+		var set imap.UIDSet
+		set.AddNum(all[end-n : end]...)
+		msgs, err := c.Fetch(set, &imap.FetchOptions{UID: true, Envelope: true}).Collect()
+		if err != nil {
+			return uidSearch{}, fmt.Errorf("fetch envelopes: %w", err)
+		}
+		for _, m := range msgs {
+			if headerMatch(m.Envelope, terms) {
+				out.uids = append(out.uids, m.UID)
+			}
+		}
+		looked += n
+		end -= n
+		if looked >= limits.budget || time.Now().After(deadline) {
+			break
+		}
+	}
+	if end > 0 {
+		out.scannedTo = all[end] // the lowest UID looked at
+	}
+	sort.Slice(out.uids, func(i, j int) bool { return out.uids[i] < out.uids[j] })
+	return out, nil
+}
+
+// headerMatch reports whether every term occurs, ignoring case, in the subject or in the name or address of a
+// sender or recipient.
+func headerMatch(env *imap.Envelope, terms []string) bool {
+	if env == nil || len(terms) == 0 {
+		return false
+	}
+	var b strings.Builder
+	b.WriteString(env.Subject)
+	for _, list := range [][]imap.Address{env.From, env.Sender, env.ReplyTo, env.To, env.Cc} {
+		for _, addr := range list {
+			b.WriteByte('\n')
+			b.WriteString(addr.Name)
+			b.WriteByte(' ')
+			b.WriteString(addr.Addr())
+		}
+	}
+	hay := strings.ToLower(b.String())
+	for _, t := range terms {
+		if !strings.Contains(hay, t) {
+			return false
+		}
+	}
+	return true
 }
 
 // listOne pages one mailbox of one account.
@@ -277,15 +402,20 @@ func (s *Service) listOne(ctx context.Context, a *MailAccount, mailbox string, l
 		if _, err := c.Select(mailbox, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
 			return fmt.Errorf("select %s: %w", mailbox, err)
 		}
-		uids, err := s.searchUIDs(ctx, c, a, mailbox, beforeUID, query)
+		found, err := s.searchUIDs(ctx, c, a, mailbox, beforeUID, query, limit+1)
 		if err != nil {
 			return fmt.Errorf("search: %w", err)
 		}
-		hasMore := len(uids) > limit
-		if hasMore {
+		uids := found.uids
+		res := &ListResult{Messages: []MailSummary{}, HeadersOnly: found.headersOnly}
+		switch {
+		case len(uids) > limit:
 			uids = uids[len(uids)-limit:]
+			res.HasMore, res.NextBeforeUID = true, uint32(uids[0])
+		case found.scannedTo > 0:
+			// A local search ran out of its page's budget: carry on below the last message it looked at.
+			res.HasMore, res.NextBeforeUID = true, uint32(found.scannedTo)
 		}
-		res := &ListResult{Messages: []MailSummary{}, HasMore: hasMore}
 		if len(uids) == 0 {
 			out = res
 			return nil

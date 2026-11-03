@@ -68,17 +68,33 @@ func (s *Service) Call(ctx context.Context, name string, args json.RawMessage, a
 		if err != nil {
 			return proto.TextResult(err.Error(), true)
 		}
-		if len(res.Messages) == 0 {
-			return proto.TextResult("No messages matched.", false)
-		}
 		var b strings.Builder
-		for _, m := range res.Messages {
-			fmt.Fprintf(&b, "- uid=%d account=%s mailbox=%s date=%s from=%s <%s> subject=%q\n  %s\n",
-				m.UID, m.AccountID, m.Mailbox, m.Date, m.From.Name, m.From.Email, m.Subject, m.Snippet)
+		switch {
+		case len(res.Messages) > 0:
+			for _, m := range res.Messages {
+				fmt.Fprintf(&b, "- uid=%d account=%s mailbox=%s date=%s from=%s <%s> subject=%q\n  %s\n",
+					m.UID, m.AccountID, m.Mailbox, m.Date, m.From.Name, m.From.Email, m.Subject, m.Snippet)
+			}
+			switch {
+			case res.HasMore && res.NextBeforeUID > 0:
+				fmt.Fprintf(&b, "(more results available; pass before_uid=%d to continue)\n", res.NextBeforeUID)
+			case res.HasMore:
+				// Every account's inbox at once: a UID only means something in its own account, so there is no
+				// before_uid that continues them all.
+				b.WriteString("(more results available; search one account with account_id to page further back)\n")
+			}
+		case res.HasMore && res.NextBeforeUID > 0:
+			fmt.Fprintf(&b, "No messages matched among the ones looked at; the headers of older messages were not "+
+				"matched yet (pass before_uid=%d to continue).\n", res.NextBeforeUID)
+		case res.HasMore:
+			b.WriteString("No messages matched among the ones looked at; the headers of older messages were not " +
+				"matched yet (search one account with account_id to continue).\n")
+		default:
+			b.WriteString("No messages matched.\n")
 		}
-		if res.HasMore {
-			b.WriteString("(more results available; pass before_uid=")
-			fmt.Fprintf(&b, "%d to continue)\n", res.Messages[len(res.Messages)-1].UID)
+		if res.HeadersOnly {
+			b.WriteString("(The server's search found nothing for this query (some servers, such as NetEase 163, do not search " +
+				"at all), so subjects, senders and recipients were matched here instead; that does not look into message bodies.)\n")
 		}
 		return proto.TextResult(b.String(), false)
 

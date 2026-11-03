@@ -3,8 +3,10 @@ package mail
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMCPTools(t *testing.T) {
@@ -68,6 +70,50 @@ func TestMCPAccountsAndSearch(t *testing.T) {
 	res = s.Call(ctx, ToolSearch, json.RawMessage(`not json`), nil)
 	if !res.IsError {
 		t.Error("malformed arguments should be an error")
+	}
+}
+
+// When the server cannot search (NetEase 163), mail_search says the headers were matched instead and, when a page
+// stopped before the older mail, which before_uid carries on, also when it found nothing yet.
+func TestMCPSearchServerCannotSearch(t *testing.T) {
+	srv := newTestIMAP(t)
+	srv.blindSearch.Store(true)
+	s := newServiceWithAccount(t, srv)
+	s.scan = localScan{batch: 1, budget: 1, time: time.Minute}
+	ctx := context.Background()
+
+	srv.appendMessage(t, "INBOX", rawMessage("Quarterly report", "boss@example.com", "Numbers are attached"))
+	newer := srv.appendMessage(t, "INBOX", rawMessage("Lunch", "friend@example.com", "See you at noon"))
+
+	res := s.Call(ctx, ToolSearch, json.RawMessage(`{"account_id":"acc_test","query":"quarterly"}`), nil)
+	out := resultText(t, res)
+	if res.IsError || !strings.Contains(out, "No messages matched among the ones looked at") ||
+		!strings.Contains(out, fmt.Sprintf("pass before_uid=%d", newer)) || !strings.Contains(out, "senders and recipients were matched here") {
+		t.Fatalf("first page = %q", out)
+	}
+
+	res = s.Call(ctx, ToolSearch, json.RawMessage(fmt.Sprintf(`{"account_id":"acc_test","query":"quarterly","before_uid":%d}`, newer)), nil)
+	out = resultText(t, res)
+	if res.IsError || !strings.Contains(out, "Quarterly report") || strings.Contains(out, "before_uid=") ||
+		!strings.Contains(out, "does not look into message bodies") {
+		t.Fatalf("second page = %q", out)
+	}
+}
+
+// Every account's inbox at once has no before_uid that continues them all (UIDs are per account): mail_search
+// sends the agent to one account instead.
+func TestMCPSearchAllAccountsPaging(t *testing.T) {
+	srv := newTestIMAP(t)
+	s := newServiceWithAccount(t, srv)
+	for _, subject := range []string{"One", "Two", "Three"} {
+		srv.appendMessage(t, "INBOX", rawMessage(subject, "a@example.com", "x"))
+	}
+
+	res := s.Call(context.Background(), ToolSearch, json.RawMessage(`{"limit":2}`), nil)
+	out := resultText(t, res)
+	if res.IsError || !strings.Contains(out, "Three") || !strings.Contains(out, "search one account with account_id") ||
+		strings.Contains(out, "before_uid=") {
+		t.Fatalf("all inboxes = %q", out)
 	}
 }
 

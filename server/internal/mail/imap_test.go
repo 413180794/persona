@@ -2,6 +2,8 @@ package mail
 
 import (
 	"context"
+	"fmt"
+	"mime"
 	"strings"
 	"testing"
 	"time"
@@ -113,6 +115,136 @@ func TestListMessagesSearch(t *testing.T) {
 	}
 	if len(res.Messages) != 0 || res.HasMore {
 		t.Fatalf("empty search = %+v", res)
+	}
+}
+
+// A server that searches gives its own answer: the headers are not matched locally on top of it.
+func TestListMessagesSearchUsesServerHits(t *testing.T) {
+	srv := newTestIMAP(t)
+	s := newServiceWithAccount(t, srv)
+	srv.appendMessage(t, "INBOX", rawMessage("Lunch", "friend@example.com", "the invoice is only in the body"))
+
+	res, err := s.ListMessages(context.Background(), ListOptions{AccountID: "acc_test", Query: "invoice"})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if got := subjectsOf(res.Messages); strings.Join(got, "|") != "Lunch" || res.HeadersOnly {
+		t.Fatalf("search = %v, headers only %v; want the server's body hit", got, res.HeadersOnly)
+	}
+}
+
+// NetEase 163 answers every keyword SEARCH with nothing; other servers refuse some with NO. The query is then matched
+// against subjects, senders and recipients: every word, any case, newest first; bodies are not looked at.
+func TestListMessagesSearchServerCannotSearch(t *testing.T) {
+	for _, refuse := range []bool{false, true} {
+		srv := newTestIMAP(t)
+		if refuse {
+			srv.refuseSearch.Store(true)
+		} else {
+			srv.blindSearch.Store(true)
+		}
+		s := newServiceWithAccount(t, srv)
+		ctx := context.Background()
+
+		srv.appendMessage(t, "INBOX", rawMessage("Invoice for March", "Billing <billing@example.com>", "Please pay"))
+		srv.appendMessage(t, "INBOX", rawMessage(mime.BEncoding.Encode("UTF-8", "新设备登录提醒"), "网易邮箱 <safe@example.com>", "账号安全"))
+		srv.appendMessage(t, "INBOX", rawMessage("Lunch", "friend@example.com", "the invoice is only in the body"))
+
+		for _, c := range []struct{ query, want string }{
+			{"invoice", "Invoice for March"},                      // any case; the body-only mention is not found
+			{"登录", "新设备登录提醒"},                                     // an encoded Chinese subject
+			{"网易", "新设备登录提醒"},                                     // the sender's name
+			{"FRIEND@example", "Lunch"},                           // the sender's address
+			{"march  billing", "Invoice for March"},               // every word, in different headers
+			{"march lunch", ""},                                   // the words are in different messages
+			{"me@example.com", "Lunch|新设备登录提醒|Invoice for March"}, // the recipient
+		} {
+			res, err := s.ListMessages(ctx, ListOptions{AccountID: "acc_test", Query: c.query})
+			if err != nil {
+				t.Fatalf("refuse=%v %q: %v", refuse, c.query, err)
+			}
+			if got := strings.Join(subjectsOf(res.Messages), "|"); got != c.want || !res.HeadersOnly || res.HasMore {
+				t.Errorf("refuse=%v %q = %q (headers only %v, has more %v), want %q from the headers, complete",
+					refuse, c.query, got, res.HeadersOnly, res.HasMore, c.want)
+			}
+		}
+	}
+}
+
+// Matching locally pages like a server search, and a page that has looked at as many messages as it may says where
+// to carry on, even when it found nothing.
+func TestListMessagesSearchLocalPaging(t *testing.T) {
+	srv := newTestIMAP(t)
+	srv.blindSearch.Store(true)
+	s := newServiceWithAccount(t, srv)
+	s.scan = localScan{batch: 2, budget: 4, time: time.Minute}
+	ctx := context.Background()
+
+	// UIDs 1–12, oldest first: reports at 1, 2, 5 and 12; nothing between 6 and 11.
+	var uids []imap.UID
+	for i := 1; i <= 12; i++ {
+		subject := fmt.Sprintf("Note %d", i)
+		if i == 1 || i == 2 || i == 5 || i == 12 {
+			subject = fmt.Sprintf("Report %d", i)
+		}
+		uids = append(uids, srv.appendMessage(t, "INBOX", rawMessage(subject, "a@example.com", "x")))
+	}
+
+	var pages []string
+	before := uint32(0)
+	for range 12 {
+		res, err := s.ListMessages(ctx, ListOptions{AccountID: "acc_test", Query: "report", Limit: 1, BeforeUID: before})
+		if err != nil {
+			t.Fatalf("page below %d: %v", before, err)
+		}
+		pages = append(pages, strings.Join(subjectsOf(res.Messages), "|"))
+		if !res.HasMore {
+			break
+		}
+		if res.NextBeforeUID == 0 || before != 0 && res.NextBeforeUID >= before {
+			t.Fatalf("page below %d: next before_uid %d does not move back", before, res.NextBeforeUID)
+		}
+		before = res.NextBeforeUID
+	}
+	// 12 and 11–9 fill the first page's budget of four; 8–5 the second; 4–1 then has two reports for a page of one.
+	want := []string{"Report 12", "Report 5", "Report 2", "Report 1"}
+	if strings.Join(pages, ",") != strings.Join(want, ",") {
+		t.Fatalf("pages = %q, want %q", pages, want)
+	}
+
+	// A page whose time is up before it starts still looks at one batch and moves on: no page repeats or skips.
+	s.scan = localScan{batch: 3, budget: 100, time: time.Nanosecond}
+	var seen []string
+	before = 0
+	for range 12 {
+		res, err := s.ListMessages(ctx, ListOptions{AccountID: "acc_test", Query: "a@example.com", Limit: 50, BeforeUID: before})
+		if err != nil {
+			t.Fatalf("timed-out page below %d: %v", before, err)
+		}
+		if len(res.Messages) > 3 {
+			t.Fatalf("timed-out page below %d returned %d messages, want one batch of 3 at most", before, len(res.Messages))
+		}
+		seen = append(seen, subjectsOf(res.Messages)...)
+		if !res.HasMore {
+			break
+		}
+		if res.NextBeforeUID == 0 || before != 0 && res.NextBeforeUID >= before {
+			t.Fatalf("timed-out page below %d: next before_uid %d does not move back", before, res.NextBeforeUID)
+		}
+		before = res.NextBeforeUID
+	}
+	if len(seen) != 12 || seen[0] != "Report 12" || seen[11] != "Report 1" {
+		t.Fatalf("timed-out pages saw %q, want all 12 newest first", seen)
+	}
+	s.scan = localScan{batch: 2, budget: 4, time: time.Minute}
+
+	// Nothing among the newest: the page is empty but says where the older messages start.
+	res, err := s.ListMessages(ctx, ListOptions{AccountID: "acc_test", Query: "note 6", Limit: 5})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if len(res.Messages) != 0 || !res.HasMore || res.NextBeforeUID != uint32(uids[8]) {
+		t.Fatalf("empty first page = %+v, want has_more and next before_uid %d", res, uids[8])
 	}
 }
 

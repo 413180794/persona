@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/emersion/go-imap/v2"
@@ -22,6 +23,47 @@ type testIMAP struct {
 	host   string
 	port   int
 	ln     net.Listener
+	// blindSearch makes sessions opened from now on answer every keyword SEARCH with nothing, refuseSearch with NO
+	// (see keywordSearchSession).
+	blindSearch, refuseSearch atomic.Bool
+}
+
+// keywordSearchSession answers every SEARCH that looks for words (TEXT, BODY, a header) with no results, the way
+// NetEase 163's IMAP server does, or refuses it with NO; searches without words (ALL, UID ranges, dates, flags) work.
+type keywordSearchSession struct {
+	imapserver.SessionIMAP4rev2 // the memory server's session, so the server keeps advertising IMAP4rev2
+	refuse                      bool
+}
+
+func (s keywordSearchSession) Search(kind imapserver.NumKind, criteria *imap.SearchCriteria, options *imap.SearchOptions) (*imap.SearchData, error) {
+	switch {
+	case !hasKeyword(criteria):
+		return s.SessionIMAP4rev2.Search(kind, criteria, options)
+	case s.refuse:
+		return nil, &imap.Error{Type: imap.StatusResponseTypeNo, Text: "keyword search is not supported"}
+	case kind == imapserver.NumKindUID:
+		return &imap.SearchData{All: imap.UIDSet{}}, nil
+	default:
+		return &imap.SearchData{All: imap.SeqSet{}}, nil
+	}
+}
+
+// hasKeyword reports whether criteria looks for words anywhere, including under NOT and OR.
+func hasKeyword(criteria *imap.SearchCriteria) bool {
+	if len(criteria.Text) > 0 || len(criteria.Body) > 0 || len(criteria.Header) > 0 {
+		return true
+	}
+	for i := range criteria.Not {
+		if hasKeyword(&criteria.Not[i]) {
+			return true
+		}
+	}
+	for i := range criteria.Or {
+		if hasKeyword(&criteria.Or[i][0]) || hasKeyword(&criteria.Or[i][1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // newTestIMAP starts an in-memory IMAP server with one user and a few mailboxes.
@@ -42,8 +84,12 @@ func newTestIMAPCaps(t *testing.T, caps imap.CapSet) *testIMAP {
 	}
 	mem.AddUser(user)
 
+	ts := &testIMAP{server: mem, user: user, host: "127.0.0.1"}
 	srv := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
+			if blind, refuse := ts.blindSearch.Load(), ts.refuseSearch.Load(); blind || refuse {
+				return keywordSearchSession{SessionIMAP4rev2: mem.NewSession().(imapserver.SessionIMAP4rev2), refuse: refuse}, nil, nil
+			}
 			return mem.NewSession(), nil, nil
 		},
 		InsecureAuth: true,
@@ -56,8 +102,8 @@ func newTestIMAPCaps(t *testing.T, caps imap.CapSet) *testIMAP {
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { srv.Close() })
 
-	addr := ln.Addr().(*net.TCPAddr)
-	return &testIMAP{server: mem, user: user, host: "127.0.0.1", port: addr.Port, ln: ln}
+	ts.port, ts.ln = ln.Addr().(*net.TCPAddr).Port, ln
+	return ts
 }
 
 // ignoreListReturn puts a proxy in front of the server that drops every LIST

@@ -10,8 +10,8 @@ Gmail 用「使用 Google 账号登录」（OAuth2 + XOAUTH2），额外支持�
 | 多账号 | 每个账号独立的 IMAP / SMTP 主机（域名预设自动填），可同时挂 Gmail、QQ、163、Outlook、iCloud…… |
 | 测试连接 | 新增账号时先真正登录一次 IMAP 和 SMTP，成功才落盘；失败返回错误，不入库 |
 | 邮箱列表 | `LIST`，服务端支持时带 `RETURN (SPECIAL-USE STATUS)`（要有 LIST-EXTENDED 或 IMAP4rev2），映射出 `inbox/sent/drafts/trash/archive/junk` 角色，带未读数与总数；不支持的服务端发普通 `LIST`，角色按名字猜、计数逐个 `STATUS` |
-| 收件箱浏览 | 按 UID 倒序分页（`before_uid`），一次取 `limit` 条 |
-| 搜索 | Gmail 用 `X-GM-RAW`（支持 `from:`、`subject:`、`has:attachment`、`newer_than:7d` 等）；其他服务商用 `SEARCH TEXT` |
+| 收件箱浏览 | 按 UID 倒序分页（`before_uid`），一次取 `limit` 条；只看一个账号时结果带 `next_before_uid`（下一页的 `before_uid`） |
+| 搜索 | Gmail 用 `X-GM-RAW`（支持 `from:`、`subject:`、`has:attachment`、`newer_than:7d` 等）；其他服务商用 `SEARCH TEXT`。服务端回 0 条或拒绝（NO / BAD）时改在本地匹配邮件头（`headers_only`）：从 `before_uid` 往前每批取 500 封的 ENVELOPE，空格分开的每个词都要出现在主题、发件人或收件人 / 抄送的名字或地址里（不区分大小写，不看正文）；一页最多看 2000 封、8 秒，没看完就 `has_more`，`next_before_uid` 是接着翻的位置（这时 `messages` 可能为空）。163 的服务端不做关键词搜索，全靠这一步 |
 | 摘要 | 只取 2048 字节正文片段，不下载整封信；摘要取正文前 160 个字符 |
 | 合并收件箱 | 不传 `account_id` 时并发拉取所有账号的 INBOX，按日期倒序合并 |
 | 读信 | `BODY.PEEK` 取全文，go-message 解析纯文本 / HTML / 附件元数据；**不会**自动标记已读 |
@@ -237,6 +237,7 @@ API 响应里只有 `status` / `error`，永远拿不到密码或 refresh token�
 - **非 Gmail 的发件箱留存是尽力而为**：`APPEND` 失败只打日志；有的服务商不允许 APPEND 到 `Sent`。
 - **MCP 发信必须等手机批准**：没批准不会发出；但批准后真的发出去，没有撤销。
 - **每账号一条连接**：多账号合并收件箱是并发拉的，但同一账号只能串行；账号多、搜索复杂时首次会比较慢。
+- **服务端不做关键词搜索的邮箱只能匹配邮件头**：163 对任何词都回 0 条（2026-11-03 实测 `TEXT` / `BODY` / `SUBJECT` / `FROM`，中英文都一样），只能按主题、发件人、收件人 / 抄送找，正文里的词搜不到；一页只看最新的 2000 封，更早的按 `next_before_uid` 接着翻。多账号合并搜索没有接着翻的位置（UID 各账号各算），`mail_search` 会让 Agent 单独搜那个账号。代价：能搜的服务端真没搜到时，同样会在本地多看一遍邮件头（一页最多 2000 封的 ENVELOPE），这时「接着翻」只是接着匹配更早邮件的邮件头，服务端的全文搜索已经搜过了。
 - **IMAP `ID` 只在服务端声明了 `ID` 能力时发送**（163/126 需要），不要指望它做客户端标识用途。
 - **`LIST` 的 RETURN 选项只在服务端声明了 LIST-EXTENDED（或 IMAP4rev2）时带**：QQ 邮箱三个能力都不声明，收到带 `RETURN` 的 `LIST` 不应答，会一直挂到 20 秒超时（列文件夹、发信后找 `Sent` 都中招，2026-10-30 实测）。
 - 邮件内容会原样进入 Claude 的上下文，等于把信件内容交给模型；敏感信箱建议单独建一个账号只给它必要的信。

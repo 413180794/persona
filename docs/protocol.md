@@ -1018,7 +1018,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | DELETE | `/api/v1/mail/accounts/{aid}` | |
 | POST | `/api/v1/mail/accounts/{aid}/test` | `{"ok":true}` / `{"error"}` |
 | GET | `/api/v1/mail/accounts/{aid}/mailboxes` | `{"mailboxes":[{"name","role","unseen","total"}]}`，role ∈ inbox/sent/drafts/trash/archive/junk/"" |
-| GET | `/api/v1/mail/messages?account_id=&mailbox=INBOX&limit=50&before_uid=&q=` | `{"messages":[MailSummary],"has_more"}`；`account_id` 为空 = 所有账号收件箱合并（按日期倒序） |
+| GET | `/api/v1/mail/messages?account_id=&mailbox=INBOX&limit=50&before_uid=&q=` | `{"messages":[MailSummary],"has_more","next_before_uid"?,"headers_only"?}`；`account_id` 为空 = 所有账号收件箱合并（按日期倒序，不带 `next_before_uid`）。`next_before_uid`：`has_more` 时下一页的 `before_uid`；本地匹配（见下）一页没看完时 `messages` 可以为空、`has_more` 仍为真。`headers_only`：服务端对 `q` 什么也没搜到（163 之类不做关键词搜索），结果来自在 hub 上匹配主题、发件人、收件人 / 抄送，不看正文（`docs/mail.md`「搜索」） |
 | GET | `/api/v1/mail/messages/{aid}/{uid}?mailbox=INBOX` | `{"message":MailMessage}` |
 | GET | `/api/v1/mail/messages/{aid}/{uid}/attachments/{attachment_id}?mailbox=INBOX` | 按账号、邮箱、UID 和详情中的稳定附件 ID 下载；Bearer 鉴权与邮件读取一致；支持 `Range`／`If-Range`，返回 `Accept-Ranges`／`Content-Range`、206 或 416 |
 | POST | `/api/v1/mail/messages/{aid}/{uid}/flags` | `{"mailbox","seen"?,"flagged"?}` |
