@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import plistlib
 import re
+import subprocess
 import tempfile
 import unittest
 
@@ -25,7 +26,11 @@ class AppleRenameTests(unittest.TestCase):
         for legacy in ("Jarvis", "JarvisWatch", "JarvisWidgets", "JarvisNotify", "JarvisTests", "JarvisMacTests", "JarvisUITests"):
             with self.subTest(directory=legacy):
                 self.assertFalse((APPLE / legacy).exists(), "new files must use the canonical Persona source directory")
-        self.assertFalse((ROOT / "mac/Sources/JarvisLink").exists())
+        self.assertFalse((APPLE / "PersonaLink/Sources/JarvisLink").exists())
+        # Persona Link lives beside the other Apple products (#883); a top-level mac/ is easy to take for the Mac app.
+        # Tracked files only: a checkout that built it before still has the ignored mac/build/ lying around.
+        tracked = subprocess.run(["git", "ls-files", "--", "mac"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        self.assertEqual(tracked, "", "the menu bar app is apple/PersonaLink/")
         self.assertTrue((APPLE / "Jarvis.xcodeproj").is_symlink())
 
     def test_targets_keep_original_product_modules(self):
@@ -108,10 +113,10 @@ class AppleRenameTests(unittest.TestCase):
         self.assertEqual(alias.readlink(), Path("jarvisctl.py"))
 
     def test_menu_bar_package_keeps_installed_process_name(self):
-        package = (ROOT / "mac/Package.swift").read_text()
+        package = (APPLE / "PersonaLink/Package.swift").read_text()
         self.assertIn('name: "PersonaLink"', package)
         self.assertIn('path: "Sources/PersonaLink"', package)
-        info = plistlib.loads((ROOT / "mac/Info.plist").read_bytes())
+        info = plistlib.loads((APPLE / "PersonaLink/Info.plist").read_bytes())
         self.assertEqual(info["CFBundleExecutable"], "JarvisLink")
         script = (ROOT / "scripts/app/mac-link.sh").read_text()
         self.assertIn("-scheme PersonaLink", script)

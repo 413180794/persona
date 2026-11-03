@@ -164,8 +164,8 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | --- | --- |
 | `server/` | Go 服务端 `personad`（hub / node / hook / mcp 四种模式），见 `docs/server.md` |
 | `apple/` | XcodeGen 工程：Persona 的 iOS / macOS / 手表 App；target / scheme `Persona`、`PersonaMac`（`Mac/`，`docs/mac.md`）、`PersonaWatch`，旧 `Jarvis` 系列 scheme 和工程入口保留，共享代码 `Shared/`、单元测试 |
+| `apple/PersonaLink/` | Mac 菜单栏 App「Persona Link」（和 Mac App `PersonaMac` 是两个东西；独立的 SwiftPM 包，不在 `project.yml` 里，`scripts/app/mac-link.sh` 构建）：装着 jarvis-link（`server/cmd/jarvis-link`）和 personad，这台 Mac 的 node 服务（主动连 hub 或让 hub 来连），见 `docs/link.md` |
 | `android/` | Kotlin + Compose 多模块：`:app` 装配，`core` 承载协议 / 网络 / 存储 / 列表 / 设计系统，`feature` 承载页面，`platform` 承载通知和手机工具；部分扩展模块尚未接入 App，见 `docs/android.md` |
-| `mac/` | Mac 菜单栏 App「Persona Link」（和 `apple/` 里的 Mac App `PersonaMac` 是两个东西）：装着 jarvis-link（`server/cmd/jarvis-link`）和 personad，这台 Mac 的 node 服务（主动连 hub 或让 hub 来连），见 `docs/link.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
 | `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md` |
 | `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 personad（`deploy/publish.sh`、`deploy/install.sh`）、读配置（`persona_config.py`，旧 `jarvis_config.py` 软链兼容）、截图用的假 hub（`mock/mock_hub.py`） |

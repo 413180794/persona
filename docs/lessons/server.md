@@ -38,6 +38,9 @@
   给了它 = 任何 ssh 登录都有完全磁盘访问权限（能读 `~/Library/Messages/chat.db` 等）。只想给一个程序，就让 launchd 起它（LaunchAgent），见 `docs/plan-connectors.md`。
 - 机器的 node 不是 hub 这一版（`node_mismatch`）时，App 的「重新部署」让 hub 自己装：`deploy.sh` 部署 hub 时把各平台的 node 二进制留在 hub 机器的
   `~/.jarvis/bin/nodes/`，hub 经 ssh 装进去、杀掉常驻 node 让 launchd 重启、重新连接（`hub/deploy.go`）。只部署了某一台、没部署 hub 时那里还是旧版，按钮会装回旧版本。
+- 从 Mac 用 tar 往 hub 传文件，macOS 的 tar 会把每个文件的扩展属性带上（2026-11-03，#665 / #884）：构建产物都有 `com.apple.provenance`，
+  下载来的文件还有下载来源网址。它走两条路：`._<名字>` AppleDouble 文件（hub 的 GNU tar 当成普通文件解出来）要 `COPYFILE_DISABLE=1`，
+  每个条目 pax 头里的 `LIBARCHIVE.xattr.*`（GNU tar 丢掉并逐个报 `Ignoring unknown extended header keyword`）要 `--no-xattrs`，两个都加。
 - 国内网络的 hub 机器上编译 jarvisd：`proxy.golang.org` 可能完全不通（TCP 超时，系统软件源 / Docker Hub 能不能用都不代表它能用），
   构建前 `go env -w GOPROXY=https://goproxy.cn,direct`。Postgres 镜像拉不下来同理，用 `public.ecr.aws/docker/library/postgres:18-alpine`（`docs/server.md`）。
 - 云主机的公网 IP / EIP 前面通常有外层防火墙或 NAT（实测 UCloud 机器：22、8080 等所有端口从公网都连不上，但本机 ss 显示在监听，

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Jarvis Link: the menu bar app around jarvis-link on a Mac (mac/, docs/link.md).
-#   ./scripts/app/mac-link.sh build            mac/build/Jarvis Link.app, jarvis-link and jarvisd inside, signed to run locally
+# Jarvis Link: the menu bar app around jarvis-link on a Mac (apple/PersonaLink/, docs/link.md).
+#   ./scripts/app/mac-link.sh build            apple/PersonaLink/build/Jarvis Link.app, jarvis-link and jarvisd inside, signed to run locally
 #   ./scripts/app/mac-link.sh install          build, put it in /Applications and open it
 #   ./scripts/app/mac-link.sh snapshot <dir>   draw the menu and the pairing window, light and dark, as PNGs
 # The bundle id is mac.link_bundle_id in ~/.config/jarvis/config.json (or JARVIS_LINK_BUNDLE_ID), else the
@@ -10,7 +10,8 @@ cd "$(dirname "$0")/../.."
 ROOT=$PWD
 ID=${PERSONA_LINK_BUNDLE_ID-${JARVIS_LINK_BUNDLE_ID:-$(python3 scripts/jarvis_config.py get mac.link_bundle_id 2>/dev/null || true)}}
 ID=${ID:-com.example.jarvis.link}
-OUT="$ROOT/mac/build"
+PKG="$ROOT/apple/PersonaLink"
+OUT="$PKG/build"
 APP="$OUT/Jarvis Link.app"
 
 build() {
@@ -18,7 +19,7 @@ build() {
   version="$(git describe --always --dirty)-$(date +%Y%m%d%H%M)"
   if [ "${UNIVERSAL:-}" = 1 ]; then archs=(arm64 x86_64); else archs=("$(uname -m)"); fi
   # xcodebuild builds the Swift package (swift build's default backend can't find the developer directory here).
-  (cd mac && xcodebuild -quiet -scheme PersonaLink -configuration Release -derivedDataPath build/dd \
+  (cd "$PKG" && xcodebuild -quiet -scheme PersonaLink -configuration Release -derivedDataPath build/dd \
     -destination 'generic/platform=macOS' ARCHS="${archs[*]}" ONLY_ACTIVE_ARCH=NO build)
   local bin="$OUT/dd/Build/Products/Release/PersonaLink"
   mkdir -p "$OUT"
@@ -38,7 +39,7 @@ build() {
   cp "$bin" "$APP/Contents/MacOS/JarvisLink"
   lipo -create "${helpers[@]}" -output "$APP/Contents/Helpers/jarvis-link"
   lipo -create "${nodes[@]}" -output "$APP/Contents/Helpers/jarvisd"
-  sed -e "s/__BUNDLE_ID__/$ID/" -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" mac/Info.plist > "$APP/Contents/Info.plist"
+  sed -e "s/__BUNDLE_ID__/$ID/" -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$PKG/Info.plist" > "$APP/Contents/Info.plist"
   # Sign to run locally (ad-hoc): the helpers first, then the bundle that seals them.
   codesign --force --sign - --identifier "$ID.helper" "$APP/Contents/Helpers/jarvis-link"
   codesign --force --sign - --identifier "$ID.jarvisd" "$APP/Contents/Helpers/jarvisd"

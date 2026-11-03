@@ -28,7 +28,7 @@
 
 更新当前命令示例时使用新路径；历史 SHA、当时的源码行号、日志、测量和验收结论保留。尤其不能把「新目录存在」写成真机升级、已保存快捷指令、真实推送或发布签名已经验证。
 
-#786 的 `scripts/test/test_apple_rename.py` 加入旧源码目录防回退：新文件不能重新落进 `apple/Jarvis{,Watch,Widgets,Notify,Tests,MacTests,UITests}` 或 `mac/Sources/JarvisLink`，但旧 `apple/Jarvis.xcodeproj` 工程软链仍保留。Android 的 MainActivity / PairingLinks 改为共用完整链接判定，`scripts/test/test_persona_identifiers.py` 的静态 guard 同步验证这条调用链。源码目录禁用规则不影响旧 module、Intent / ActivityAttributes 或系统身份。
+#786 的 `scripts/test/test_apple_rename.py` 加入旧源码目录防回退：新文件不能重新落进 `apple/Jarvis{,Watch,Widgets,Notify,Tests,MacTests,UITests}` 或 `apple/PersonaLink/Sources/JarvisLink`（#883 起菜单栏 App 在 `apple/PersonaLink/`，顶层 `mac/` 也不能再出现），但旧 `apple/Jarvis.xcodeproj` 工程软链仍保留。Android 的 MainActivity / PairingLinks 改为共用完整链接判定，`scripts/test/test_persona_identifiers.py` 的静态 guard 同步验证这条调用链。源码目录禁用规则不影响旧 module、Intent / ActivityAttributes 或系统身份。
 
 ## 必须保留的系统与持久化身份
 
@@ -85,7 +85,7 @@ node socket 使用同一个存储中较短的旧路径，避免新名字多一�
 
 ## 菜单栏 Link 的运行目录
 
-#771 已让 `mac/Sources/PersonaLink/LinkStatePaths.swift` 与 helper 使用同一运行目录。菜单栏进程显式提供 `PERSONA_HOME` 或 `JARVIS_HOME` 时按新名优先；没有显式指定时，从旧 `com.jarvis.node.plist` 的 `EnvironmentVariables` 读取已安装服务的根目录。新旧默认入口指向同一对象时使用新入口，两份独立目录存在时仍用原存储。路径按词法规范化，不凭产品改名复制或合并数据。
+#771 已让 `apple/PersonaLink/Sources/PersonaLink/LinkStatePaths.swift`（#883 前在顶层 `mac/`） 与 helper 使用同一运行目录。菜单栏进程显式提供 `PERSONA_HOME` 或 `JARVIS_HOME` 时按新名优先；没有显式指定时，从旧 `com.jarvis.node.plist` 的 `EnvironmentVariables` 读取已安装服务的根目录。新旧默认入口指向同一对象时使用新入口，两份独立目录存在时仍用原存储。路径按词法规范化，不凭产品改名复制或合并数据。
 
 此修复不改旧 launchd 单元、`JarvisLink` 可执行路径或 helper 身份；也不证明脚本 / PI / 新环境变量的其他调用方已全部补齐。本轮只更新已合源码状态，菜单栏 XCTest / 预览 / 截图属于 #771 的验证记录。
 

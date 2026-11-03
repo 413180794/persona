@@ -52,12 +52,14 @@ web_deps() {
 deploy_web() {
   [ -f ../web/package.json ] || return 0
   (cd ../web && web_deps && npm run build) >/dev/null
-  # COPYFILE_DISABLE: macOS tar would add a ._<name> AppleDouble entry per file, which GNU tar unpacks as files.
+  # macOS tar packs each file's extended attributes (build output carries com.apple.provenance), useless on the hub:
+  # COPYFILE_DISABLE stops the ._<name> AppleDouble entries GNU tar unpacks as files, --no-xattrs the LIBARCHIVE.xattr
+  # pax headers GNU tar drops with a warning per file. GNU tar takes --no-xattrs too.
   local root script
   root=$(python3 ../scripts/persona_identity.py --service hub --prepare --prefix -)
   script="$root
 "'set -e; root=$PERSONA_HOME; rm -rf "$root/web.new"; mkdir -p "$root/web.new"; tar -xzf - -C "$root/web.new"; rm -rf "$root/web.old"; [ ! -d "$root/web" ] || mv "$root/web" "$root/web.old"; mv "$root/web.new" "$root/web"; rm -rf "$root/web.old"'
-  COPYFILE_DISABLE=1 tar -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" "$script"
+  COPYFILE_DISABLE=1 tar --no-xattrs -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" "$script"
   echo "web: deployed to the hub state root"
 }
 if [ "${TARGETS[*]}" = web ]; then deploy_web; exit 0; fi

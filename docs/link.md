@@ -57,7 +57,7 @@ App 更新不替换 `~/.persona/bin/personad`（经连接器推送 node 更新�
   - hub.json 里这台的 kind 是 `link`，hub 不会 ssh 它；
   - 链路一说 hello，hub 就开一条流去连 node，流上跑的 node 协议和 ssh 完全一样（`Machine.connect`，只有拿字节流的 `Machine.dial` 分两种）；
   - 链路一断，这台马上离线。
-- **Mac** 上是菜单栏 App「Persona Link」（`mac/`）：jarvis-link 作为 helper 打包在 App 里，由 App 启动和看护。
+- **Mac** 上是菜单栏 App「Persona Link」（`apple/PersonaLink/`）：jarvis-link 作为 helper 打包在 App 里，由 App 启动和看护。
   **Linux**（服务器、NAS、树莓派，不要图形界面）上 `jarvis-link install` 把它自己装成 systemd 用户服务，见「Linux（headless）」。
 
 ## 链路（主动模式）
@@ -247,11 +247,11 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 
 Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-link install --pair -` 一条命令配对、装好、等它连上。
 
-## 菜单栏 App（`mac/`）
+## 菜单栏 App（`apple/PersonaLink/`）
 
 **构建**
 - `./scripts/app/mac-link.sh build|install|snapshot <目录>`。
-- SwiftPM 包，用 `xcodebuild` 编：这台开发机上 `swift build` 默认的构建系统报「找不到开发者目录」。
+- 独立的 SwiftPM 包（不在 `apple/project.yml` 里，和 Persona 的 App 不共用代码），用 `xcodebuild` 编：这台开发机上 `swift build` 默认的构建系统报「找不到开发者目录」。
 - jarvis-link 和 personad 编进 `Contents/Helpers/`（personad 给常驻 node 用，见「装 node 服务」；App 因此大了约 37 MB）。
 - 用本机 ad-hoc 签名（Sign to Run Locally），不写死团队。
 - bundle id 默认用占位的 `com.example.jarvis.link`，可以用 `~/.config/persona/config.json` 的 `mac.link_bundle_id` 或环境变量

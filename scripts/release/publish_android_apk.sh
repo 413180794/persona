@@ -108,6 +108,7 @@ PY
 # Stage each upload separately, then expose the complete release by renaming its manifest.
 REMOTE_STAGE=".upload-$(basename "$STAGING")"
 RESOLVER=$(python3 "$SCRIPT_DIR/../persona_identity.py" --service hub --prepare --prefix -)
-COPYFILE_DISABLE=1 tar -C "$STAGING" -czf - . | ssh -- "$JARVIS_HUB_SSH" "$RESOLVER
+# No macOS extended attributes in the archive (see deploy_web in scripts/deploy/deploy.sh).
+COPYFILE_DISABLE=1 tar --no-xattrs -C "$STAGING" -czf - . | ssh -- "$JARVIS_HUB_SSH" "$RESOLVER
 set -e; stage=\"\$PERSONA_HOME/apps/android/$REMOTE_STAGE\"; umask 077; mkdir -p \"\$stage\"; tar -xzf - -C \"\$stage\"; cd \"\$PERSONA_HOME/apps/android\"; mv \"\$stage\"/*.apk .; mv \"\$stage/latest.json\" latest.json; rmdir \"\$stage\""
 echo "Android 安装包已发布。"
