@@ -301,5 +301,16 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
         self.assert_blocked(result)
 
 
+class URLTermTests(unittest.TestCase):
+    def test_a_shared_host_keeps_the_path(self):
+        self.assertEqual(pc.url_term("https://docs.google.com/document/d/abc123/edit?usp=sharing"),
+                         "docs.google.com/document/d/abc123/edit")
+        self.assertEqual(pc.url_term("https://docs.google.com/"), "")
+
+    def test_an_own_host_is_the_host(self):
+        self.assertEqual(pc.url_term("https://hub.example.test:18660/path"), "hub.example.test")
+        self.assertEqual(pc.url_term("someone.github.io/privacy"), "someone.github.io")
+
+
 if __name__ == "__main__":
     unittest.main()

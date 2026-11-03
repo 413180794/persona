@@ -27,6 +27,20 @@ SKIP_FILES = {"scripts/privacy_check.py"}
 # Config keys whose values are published on purpose (App Store contact, the site's address, where jarvisd is published):
 # fine in PUBLIC_DIRS.
 PUBLIC_KEYS = {"feedback_email", "privacy_url", "site_url"}
+# Hosts many people publish on: a URL there is told apart by its path, so the term keeps the path (a privacy policy that
+# is a Google Doc must not make every docs.google.com link private).
+SHARED_HOSTS = {"docs.google.com", "drive.google.com", "sites.google.com", "github.com", "gist.github.com",
+                "raw.githubusercontent.com", "notion.so", "www.notion.so"}
+
+
+def url_term(url):
+    """What of a URL value to look for: its host, or host + path on a shared host."""
+    rest = re.sub(r"^\w+://", "", url)
+    host = rest.split("/")[0].split(":")[0]
+    if host in SHARED_HOSTS:
+        path = rest[len(rest.split("/")[0]):].split("?")[0].split("#")[0].rstrip("/")
+        return host + path if path else ""
+    return host
 
 
 def strings(o, key=""):
@@ -60,7 +74,9 @@ def config_values():
         if key in ("os", "simulator") or o in defaults:
             continue
         if key == "url" or key.endswith("_url"):
-            o = re.sub(r"^\w+://", "", o).split("/")[0].split(":")[0]
+            o = url_term(o)
+            if not o:
+                continue
         elif key.endswith("path"):
             o = o.replace(HOME, "~")
         out.add(o)
