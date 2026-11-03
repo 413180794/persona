@@ -132,8 +132,12 @@ fun PersonaRoot(
                     val displayed = LocalDeveloperTools.current?.session(active) ?: active
                     key(displayed.identity) {
                         // Demo mode has only the default face (docs/persona.md), like iOS.
-                        val face = if (displayed.demo != null) persona.core.designsystem.PersonaDesign.Default else persona.core.designsystem.LocalPersonaDesign.current
-                        CompositionLocalProvider(persona.core.designsystem.LocalPersonaDesign provides face) {
+                        val demo = displayed.demo != null
+                        CompositionLocalProvider(
+                            persona.core.designsystem.LocalPersonaDesign provides if (demo) persona.core.designsystem.PersonaDesign.Default else persona.core.designsystem.LocalPersonaDesign.current,
+                            persona.core.designsystem.LocalPersonaPack provides if (demo) null else persona.core.designsystem.LocalPersonaPack.current,
+                            persona.core.designsystem.LocalPersonaName provides if (demo) "Persona" else persona.core.designsystem.LocalPersonaName.current,
+                        ) {
                             PersonaShell(displayed, openNavigation, services.copy(connection = displayed.connection, sessions = displayed.sessions, demo = displayed.demo != null), shell)
                         }
                     }

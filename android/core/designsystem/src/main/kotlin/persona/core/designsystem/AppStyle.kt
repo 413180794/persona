@@ -42,8 +42,11 @@ class AppStyleStore(context: Context) {
     private val currentGlass = MutableStateFlow(GlassPreference.fromKey(preferences.getString(KEY_GLASS, null)))
     val style: StateFlow<AppStyle> = currentStyle.asStateFlow()
     val glass: StateFlow<GlassPreference> = currentGlass.asStateFlow()
-    private val currentFace = MutableStateFlow(PersonaDesign.fromId(preferences.getString(KEY_PERSONA, null)))
-    /** 设置 › 外观 › 形象, one of the built-ins for now. */
+    private val currentPersona = MutableStateFlow(preferences.getString(KEY_PERSONA, null) ?: PersonaDesign.Default.id)
+    /** 设置 › 外观 › 形象: a built-in's id or a hub package's ([PersonaStore]), kept while the package is away. */
+    val personaId: StateFlow<String> = currentPersona.asStateFlow()
+    private val currentFace = MutableStateFlow(PersonaDesign.fromId(currentPersona.value))
+    /** The built-in face to draw: the chosen one, or the default while a package is chosen (it shows over this). */
     val face: StateFlow<PersonaDesign> = currentFace.asStateFlow()
 
     init { ActiveStyle.value = currentStyle.value }
@@ -59,9 +62,12 @@ class AppStyleStore(context: Context) {
         currentGlass.value = preference
     }
 
-    fun setFace(design: PersonaDesign) {
-        preferences.edit().putString(KEY_PERSONA, design.id).apply()
-        currentFace.value = design
+    fun setFace(design: PersonaDesign) = setPersonaId(design.id)
+
+    fun setPersonaId(id: String) {
+        preferences.edit().putString(KEY_PERSONA, id).apply()
+        currentPersona.value = id
+        currentFace.value = PersonaDesign.fromId(id)
     }
 
     /** The level glass actually renders at, before any runtime downgrade. */

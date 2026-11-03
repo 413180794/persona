@@ -20,6 +20,21 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import persona.core.contracts.api.PersonaInfo
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
@@ -149,31 +164,57 @@ private fun StylePreview(style: AppStyle) {
 }
 
 /**
- * 设置 › 外观 › 形象 (docs/persona.md): the built-in faces, the default first, applied at once and remembered on this
- * phone, with the chosen one in each state under them. The hub's persona packs are not offered yet.
+ * 设置 › 外观 › 形象 (docs/persona.md): the built-in faces, the default first, then the hub's packages (a package is
+ * downloaded when chosen and kept on the phone), applied at once and remembered on this phone, with the chosen one
+ * in each state under them. Demo mode has only the default.
  */
 @Composable
 fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
-    val store = LocalAppStyleStore.current ?: return
-    val chosen by store.face.collectAsState()
-    val current = if (demo) PersonaDesign.Default else chosen
+    val appearance = LocalAppStyleStore.current ?: return
+    val packs = LocalPersonaStore.current?.takeUnless { demo }
+    val chosenId by appearance.personaId.collectAsState()
+    val offered by (packs?.offered ?: remember { MutableStateFlow(emptyList()) }).collectAsState()
+    val downloading by (packs?.downloading ?: remember { MutableStateFlow(emptySet()) }).collectAsState()
+    val error by (packs?.error ?: remember { MutableStateFlow(null) }).collectAsState()
+    val scope = rememberCoroutineScope()
+    // Shown at once on tap: the choice may wait for a refresh already fetching thumbnails.
+    var asked by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(packs) { packs?.refresh() }
+    val chosen = if (demo) PersonaDesign.Default.id else chosenId
+    val pack = offered.firstOrNull { it.id == chosen }?.takeIf { packs?.onPhone(it) == true }
+    val design = PersonaDesign.fromId(chosen)
     val palette = PersonaTheme.palette
     Column(modifier.fillMaxWidth()) {
-        Text(if (demo) "体验模式只有默认形象。" else "顶栏和对话列表里 Persona 的脸。颜色跟着界面风格走，不另外改 App 的颜色。",
+        Text(if (demo) "体验模式只有默认形象。" else "顶栏和对话列表里 Persona 的名字和脸。颜色跟着界面风格走，不另外改 App 的颜色。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到手机。",
             style = PersonaTheme.type.callout, color = palette.ink2)
         Spacer(Modifier.height(Tokens.Space.l))
-        (if (demo) listOf(PersonaDesign.Default) else PersonaDesign.entries).forEach { design ->
-            PersonaOption(design, selected = design == current) { store.setFace(design) }
+        (if (demo) listOf(PersonaDesign.Default) else PersonaDesign.entries).forEach { d ->
+            PersonaOption(d.title, d.summary, selected = d.id == chosen, tag = "默认".takeIf { d == PersonaDesign.Default },
+                onClick = { if (!demo) packs?.choose(d) ?: appearance.setFace(d) }) {
+                PersonaFace(PersonaState.Idle, size = Tokens.Space.xxxl * 2, design = d, pack = null)
+            }
             Spacer(Modifier.height(Tokens.Space.m))
         }
-        JSectionHeader("${current.title}的五种状态")
+        if (packs != null) offered.forEach { p ->
+            val busy = p.id in downloading || p.id == asked
+            PersonaOption(p.manifest.name, p.manifest.subtitle ?: if (packs.onPhone(p)) "hub 上的形象" else "选中后下载", selected = p.id == chosen,
+                onClick = { if (!busy) scope.launch { asked = p.id; try { packs.choose(p) } finally { if (asked == p.id) asked = null } } }) {
+                Box(contentAlignment = Alignment.Center) {
+                    PackAvatar(packs, p, Tokens.Space.xxxl * 2)
+                    if (busy) JSpinner(Modifier.size(Tokens.Space.xxl))
+                }
+            }
+            Spacer(Modifier.height(Tokens.Space.m))
+        }
+        error?.let { JNotice(it, status = Status.NeedsYou); Spacer(Modifier.height(Tokens.Space.m)) }
+        JSectionHeader("${pack?.manifest?.name ?: design.title}的五种状态")
         Row(
             Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(palette.surface).padding(vertical = Tokens.Space.m)
                 .semantics(mergeDescendants = true) {},
         ) {
             PersonaState.entries.forEach { state ->
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    PersonaFace(state, size = Tokens.Space.xxxl + Tokens.Space.s, design = current)
+                    PersonaFace(state, size = Tokens.Space.xxxl + Tokens.Space.s, design = design, pack = pack)
                     Spacer(Modifier.height(Tokens.Space.xs))
                     Text(state.label, style = PersonaTheme.type.caption, color = palette.ink2, maxLines = 1)
                 }
@@ -182,22 +223,35 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
+/** A package's still face: from the package once on the phone, else the thumbnail the store fetched for this card. */
 @Composable
-private fun PersonaOption(design: PersonaDesign, selected: Boolean, onClick: () -> Unit) {
+private fun PackAvatar(store: PersonaStore, p: PersonaInfo, size: Dp) {
+    val pictures by store.pictures.collectAsState()
+    val pixels = with(LocalDensity.current) { size.roundToPx() }
+    val image by produceState<ImageBitmap?>(null, p.id, p.rev, pictures) { value = store.avatar(p, pixels)?.asImageBitmap() }
+    Box(Modifier.size(size).clip(CircleShape).background(PersonaTheme.palette.surfaceStrong)) {
+        image?.let { Image(it, contentDescription = null, Modifier.matchParentSize()) }
+    }
+}
+
+@Composable
+private fun PersonaOption(
+    title: String, summary: String, selected: Boolean, onClick: () -> Unit, tag: String? = null, face: @Composable () -> Unit,
+) {
     val palette = PersonaTheme.palette
     Row(
         Modifier.option(selected, onClick).padding(Tokens.Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PersonaFace(PersonaState.Idle, size = Tokens.Space.xxxl * 2, design = design)
+        face()
         Spacer(Modifier.width(Tokens.Space.l))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(design.title, style = PersonaTheme.type.title, color = palette.ink)
-                if (design == PersonaDesign.Default) { Spacer(Modifier.width(Tokens.Space.s)); JTag("默认") }
+                Text(title, style = PersonaTheme.type.title, color = palette.ink)
+                tag?.let { Spacer(Modifier.width(Tokens.Space.s)); JTag(it) }
             }
             Spacer(Modifier.height(Tokens.Space.xs))
-            Text(design.summary, style = PersonaTheme.type.callout, color = palette.ink2)
+            Text(summary, style = PersonaTheme.type.callout, color = palette.ink2)
         }
         Spacer(Modifier.width(Tokens.Space.s))
         JRadio(selected, null)

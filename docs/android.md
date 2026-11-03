@@ -377,9 +377,16 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - 五个状态：空闲（每 3.6 秒眨眼）、思考中（眼睛看右上，思考气泡三个点轮流亮）、工作中（眼睛左右扫）、等你处理（呼吸的环）、离线（灰，眼睛闭成线）。只有后三个每帧动（约 12 帧/秒），空闲只在眨眼时动；「减少动画」或省电模式时每个状态停在静止的一帧（同 iOS 的低电量模式）。
 - 状态的取法（`feature/assistant` 的 `personaState`，规则同 iOS `AppModel.personaState`）：hub 连不上（连接中、等待网络等，「更新中」不算）或这段对话的机器离线是离线；对话等你（`needs_you` 或有待处理的交互）是等你处理；正在跑一轮是工作中；其他空闲。看的是当前打开的对话；新对话页没有对话，只看 Persona 所在的机器在不在线，其他时候空闲。
 - 和 iOS 的差别：这一页拿不到对话的最后一条，分不出思考中和工作中，跑着的一轮都显示工作中；等你处理的环用 Android 设计系统的「需要你」色（橙），不是 iOS 的红；晨报风格的主题色就是墨色（近黑 / 近白），面罩和星标会糊掉，所以晨报里脸用次级墨色（中灰），不给这个风格加颜色；iOS 在收件箱有事时给脸挂托盘标记，Android 的收件箱是底部的独立 tab、自带提醒，脸上不再挂。
-- 选哪个：设置 › 外观 › 形象（`feature/settings` 的 `PersonaSettings`），两张卡片加选中那个的五种状态，马上生效。选择存在手机上（`AppStyleStore.face`，和界面风格同一份偏好，记的是 iOS 同款 id `jarvis` / `jarvis-circuit`），换 hub、重新配对都不丢；`LocalPersonaDesign` 把它传给每个 `PersonaFace`。体验模式同 iOS 只有默认形象（面罩）。
+- 选哪个：设置 › 外观 › 形象（`feature/settings` 的 `PersonaSettings`），内置的两张卡片、hub 上的包，加选中那个的五种状态，马上生效。选择存在手机上（`AppStyleStore.personaId`，和界面风格同一份偏好，记的是 iOS 同款 id：内置的 `jarvis` / `jarvis-circuit`，或者包的 id），换 hub、重新配对都不丢；`LocalPersonaDesign` 把它传给每个 `PersonaFace`。体验模式同 iOS 只有默认形象（面罩）。
 - 汇流：深色圆底上三条走线汇进带两只眼的核心，工作中每条线上有一个光点跑进核心；没有星标。几何同 iOS 的 `Circuit`。
-- 还没做：hub 上的形象包（`~/.persona/personas/`，APNG 帧），选择页暂时只有两个内置形象。
+- hub 上的形象包（`docs/persona.md`「包格式」，规则同 iOS 的 `PersonaStore`）：`core/designsystem` 的 `PersonaStore`，全机一份，不跟 hub 走。
+  - 列表：每次连上 hub 和打开形象页时各取一次 `GET /api/v1/personas`（`core/hub` 的 `HttpPersonaPacks`），存进 `files/personas/index.json`，下次启动先显示。手机端再查一遍 hub 的检查规则（`PersonaManifest.problem`）；旧 hub 没有这个接口时提示「这个 hub 还不能放形象：更新 hub 后再看」。
+  - 下载：选中时才下整个包，先写到 `files/personas/<id>/.<rev>.part`，全部到齐再整个改名成 `<rev>`，所以不会用到半个包；没选的包只下一张头像当卡片的缩略图。rev 变了就下新的，新的没下下来就接着用旧的；没人用的旧 rev 和缩略图在刷新后删掉。rev 必须是 hub 给的 16 位十六进制（它当目录名用）。下载中又选了别的，以后选的为准。
+  - 选中的包在手机上就直接从磁盘显示，不等 hub（断网启动也是它）；hub 上没有了就用内置面罩，但保留选择（`AppStyleStore.personaId`），包回来了就恢复。
+  - 播放：Android 只解 PNG 的第一帧，所以 `decodeApng` 自己拆 APNG：每帧的数据包成一张单独的 PNG 交给 `BitmapFactory`，再按帧的偏移、dispose 和 blend 合到画布上（生成脚本写的 APNG 只有第 0 帧是整张，后面都是局部帧）。只解当前用到的状态，最多缓存 6 个；帧按文件里的时长轮换，没写时长用 `fps`；「减少动画」或省电模式时停在第 0 帧。状态色画在帧里，App 不再叠环。
+  - 选了包以后，Persona 页顶栏、对话列表顶部、菜单里的名字和输入框的「问 xxx…」换成包的 `name`（`LocalPersonaName`）；底部 tab、启动器快捷方式这些产品入口仍叫 Persona。
+  - 和 iOS 的差别：Android 没有主题色「跟随形象」，包里的 `colors` 不读。
+- 测试：`ApngTest`（局部帧按 dispose / blend 合成、时长回退到 fps、单帧 PNG、非 PNG），`PersonaManifestTest`（解析 hub 列表、hub 会拒的包手机也拒、挑头像尺寸、缺的状态用 idle）。实机：`make_persona.py demo` 出的演示包装进 hub 的 personas 目录，在形象页选它。
 - 截图核对：组件目录（调试包 `--es debug.openPage catalog`）的「形象」一节按形象各一行，并排画五个状态。
 
 ## 助手设置（设置 › 助手）
@@ -837,11 +844,13 @@ Agent 对话页 ⋯「文件」「Git · N」打开会话目录的文件和 Git�
 
 ## 主线旧 App 新增、待移植到新架构
 
-主线（`origin/master`）在 `81dc6928` 之后给旧单模块 App 加的功能和改动。本分支已经用多模块新架构重做了 Android，下面这些新架构还没有对应实现，逐项待移植，不混进上面的新架构描述。PR 号来自 `git log 81dc6928..origin/master --format='%h %s' -- android docs/android.md`。
+主线在 `81dc6928` 之后给旧单模块 App 加的功能和改动（PR 号来自 `git log 81dc6928..origin/master --format='%h %s' -- android docs/android.md`）。port 车道读的是 `81dc6928`，这些没有一起移植。2026-11-03 对照新架构的代码逐项核对了一遍：已经有的写明在哪，缺的各开了 issue，做完一项就从这里删掉。
 
-- 待办（todos，#427）：侧边栏「待办」（带未完成数）、待办列表和详情、「交给 Agent」（新开或交给已有的，带 `todo_id`）、Agents 的「按待办」分组和关联 / 解除关联、对话和会话信息里显示关联的待办；hub 没有待办接口时入口隐藏。
-- 邮件阅读和写信、设置 › 连接器（#320）：邮件详情（线程、锁住的 WebView 渲染 HTML、显示图片后才放行、打开即已读、加星标）、写信（回复 / 回复全部 / 转发、收件人校验、有内容返回要确认）、「交给 AI」和 AI 草拟回复；设置 › 连接器（这台手机、邮箱的添加 / 测试 / 删除、飞书的 lark-connector 状态）；Gmail 用 Google 账号登录，要 `config.json` 的 `android.google_oauth_scheme`（`OAuthRedirectActivity`），没配时提示改用应用专用密码。
-- 飞书会话和removed，收件箱里点开进页面（#365）：飞书会话页（富文本、卡片、合并转发、回复、表情回应、话题、`start_position` 分页、已读上报、缓存最后一页）、removed帖子页、图片和表情缓存（`LarkMedia`）、飞书自己的色板和尺寸。
-- 手机数据：Health Connect 的 `phone_health_summary`（#278）：读每日汇总（七种指标，按本地自然日切分），权限走 Health Connect 授权框，缺的指标列在结果的 `not_granted` 里；依赖 `connect-client:1.1.0-alpha08`，Android 8–13 要装 Health Connect App。
-- 收件箱：在别处已经读过的事项不再标成 @all / 未读（#246）。
-- 脚本目录调整（#505）：`scripts/` 按用途分了子目录，本文档统一写成 `scripts/app/android.sh`、`scripts/mock/mock_hub.py`。
+- 待办（旧 App #427）：**没有**，`android/` 下没有任何待办的接口、页面或分组。→ #815（侧边栏入口、列表和详情、交给 Agent、Agents 按待办分组、对话里的关联待办）。
+- 邮件阅读和写信（旧 App #320）：**读信已有**，`feature/inbox/MailScreen.kt`：线程按「第 N 封 / 最新一封」切换、锁住的 WebView + jsoup 清洗渲染 HTML（`MailHtml.kt`）、附件下载、手动标已读 / 未读、AI 摘要、AI 草拟回复、交给 AI、已处理。**缺**写信（新邮件、回复全部、转发、抄送 / 密送、信里的 `mailto:`）、「显示图片」（现在远程图片一律屏蔽）、打开即已读、星标 → #816。
+- 设置 › 连接器（旧 App #320）：**没有**，设置里只有单独的「手机数据」页；邮箱的添加 / 测试 / 删除、Gmail 登录（`android.google_oauth_scheme`、`OAuthRedirectActivity`）、飞书 lark-connector 状态都没有 → #817（按 iOS 当前的连接器分组做，hub 后来还加了通用的 `/api/v1/connectors` 和 Microsoft 登录）。
+- 飞书会话（旧 App #365）：**会话页已有**，`feature/inbox/LarkScreen.kt` 等：按 `start_position` 打开、上下翻页、可见即上报已读、`lark` 事件刷新、窗口缓存、跳到 @我、引用、撤回 / 系统消息、话题浮层（`feature/inbox/LARK_THREAD.md`）、图片和文件、卡片的静态展示、发送。**缺**表情回应、富文本（现在按纯文本 + 链接）、合并转发 / 语音 / 视频 / 表情包（现在是「在飞书中打开」）、卡片按钮回调（现在禁用）、名片、媒体的磁盘缓存、飞书色板的设计 token → #818。
+- removed（旧 App #365）：**没有**，`InboxItem` 不解析 `moment`，收件箱里removed那件打不开帖子 → #819。
+- 手机数据：Health Connect 的 `phone_health_summary`（旧 App #278）：**没有**，`platform/phonetools` 没有健康，`PhoneToolRegistryTest` 还断言没有 `phone_health_*` → #820（新架构 compileSdk 37，可以用 `connect-client` 1.1.0 正式版）。
+- 收件箱：别处已读的 @我 / @所有人 不再显示 @ 标签（旧 App #246）：**没有**，hub 那一半（清零 `Count`）已经生效，客户端的 `kindLabel(record)` 不看 `read`，`RealInboxRepository` 也没把 `read` 带进 `InboxRecord` → #821。
+- 脚本目录调整（#505）：已经跟上，本文档统一写成 `scripts/app/android.sh`、`scripts/mock/mock_hub.py`。

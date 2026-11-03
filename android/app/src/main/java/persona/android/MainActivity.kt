@@ -91,6 +91,7 @@ class MainActivity : ComponentActivity() {
             val style by app.appearance.style.collectAsStateWithLifecycle()
             val glassPreference by app.appearance.glass.collectAsStateWithLifecycle()
             val face by app.appearance.face.collectAsStateWithLifecycle()
+            val pack by app.personas.current.collectAsStateWithLifecycle()
             // Levels are ordered best first, so the lower of the two choices is the later one.
             val glassLevel = maxOf(app.appearance.deviceLevel(glassPreference), GlassThrottle.ceiling.value)
             AppearanceOverride(forced) { CompositionLocalProvider(
@@ -98,6 +99,9 @@ class MainActivity : ComponentActivity() {
                 LocalAppStyleStore provides app.appearance,
                 LocalGlassLevel provides glassLevel,
                 LocalPersonaDesign provides face,
+                persona.core.designsystem.LocalPersonaStore provides app.personas,
+                persona.core.designsystem.LocalPersonaPack provides pack,
+                persona.core.designsystem.LocalPersonaName provides (pack?.manifest?.name ?: "Persona"),
             ) {
                 val dark = isSystemInDarkTheme()
                 SideEffect {

@@ -322,7 +322,7 @@ fun AssistantScreen(
     val body: @Composable (Boolean) -> Unit = { wide ->
         val hasComposer = active == null || !hasChat || demo
         JPage(
-            title = "Persona",
+            title = LocalPersonaName.current,
             modifier = Modifier.fillMaxSize().imePadding(),
             topBar = {
                 CompositionLocalProvider(LocalRootLeading provides {
@@ -331,7 +331,7 @@ fun AssistantScreen(
                     })
                 }) {
                     JTopBar(
-                        title = "Persona", subtitle = connectionLabel,
+                        title = LocalPersonaName.current, subtitle = connectionLabel,
                         titleBusy = !connectionLabel.isNullOrBlank(), onTitleClick = { menu = true },
                         actions = {
                             JIconButton(PhIcons.NotePencil, "新对话", ::startNewConversation, enabled = !sending)
@@ -357,7 +357,7 @@ fun AssistantScreen(
                             onSend = ::submit, onCommand = { composer.insert(it, composer.focused) },
                             onNotice = { message ->
                                 if (feedback?.notice(message) != true) scope.launch { snackbar.showSnackbar(message) }
-                            }, enabled = draftReady && !sending, placeholder = "问 Persona…")
+                            }, enabled = draftReady && !sending, placeholder = "问 ${LocalPersonaName.current}…")
                     }
                 }
             }) else null,
@@ -431,7 +431,7 @@ fun AssistantScreen(
         }
     }
     if (menu) JActionSheet(
-        title = "Persona", onDismiss = { menu = false },
+        title = LocalPersonaName.current, onDismiss = { menu = false },
         actions = buildList {
             listOf("助手设置", "知识库").forEach { label ->
                 add(JAction(label, onClick = {
@@ -558,7 +558,7 @@ private fun AssistantDrawer(
                 Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     PersonaFace(face)
-                    Text("Persona", style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
+                    Text(LocalPersonaName.current, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
                 }
             }
             item { JSearchField(query, onQuery, "搜索对话") }

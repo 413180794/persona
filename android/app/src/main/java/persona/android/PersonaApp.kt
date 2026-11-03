@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** Holds the one hub connection for the process: the activity and the foreground service share it. */
 @HiltAndroidApp
@@ -36,6 +38,13 @@ class PersonaApp : Application() {
     /** 设置 › 界面风格; device-wide, kept across pairings. */
     val appearance: persona.core.designsystem.AppStyleStore by lazy { persona.core.designsystem.AppStyleStore(this) }
 
+    /** 设置 › 外观 › 形象's hub packages; device-wide, listed again whenever the hub comes online. */
+    val personas: persona.core.designsystem.PersonaStore by lazy {
+        persona.core.designsystem.PersonaStore(this, appearance) {
+            runtime.scopedData.value?.let { persona.core.hub.HttpPersonaPacks(runtime.connectionFor(it)) }
+        }
+    }
+
     private val _hub = MutableStateFlow<Hub?>(null)
     val hub: StateFlow<Hub?> = _hub.asStateFlow()
 
@@ -47,6 +56,10 @@ class PersonaApp : Application() {
         platform.start()
         surfaces.start()
         restorePairing()
+        scope.launch {
+            connection.state.map { it == persona.core.contracts.api.ConnectionState.Online }.distinctUntilChanged()
+                .collect { online -> if (online) runCatching { personas.refresh() } }
+        }
     }
 
     val deviceName: String get() = "${Build.MANUFACTURER} ${Build.MODEL}".trim()

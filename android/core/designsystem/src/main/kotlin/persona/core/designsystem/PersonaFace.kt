@@ -6,6 +6,7 @@ import android.os.PowerManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
@@ -35,6 +38,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -51,6 +55,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import persona.core.contracts.api.PersonaInfo
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -95,8 +100,15 @@ val LocalPersonaDesign = compositionLocalOf { PersonaDesign.Default }
 @Composable
 fun PersonaFace(
     state: PersonaState, modifier: Modifier = Modifier, size: Dp = 40.dp, tint: Color? = null,
-    design: PersonaDesign = LocalPersonaDesign.current,
+    design: PersonaDesign = LocalPersonaDesign.current, pack: PersonaInfo? = LocalPersonaPack.current,
 ) {
+    val store = LocalPersonaStore.current
+    if (pack != null && store != null) {
+        // Keyed on the package only: the last state's frames stay up while the next state's load, instead of the built-in.
+        val frames = remember(pack.id, pack.rev) { mutableStateOf<PersonaFrames?>(null) }
+        LaunchedEffect(pack.id, pack.rev, state) { store.frames(pack, state)?.let { frames.value = it } }
+        frames.value?.let { PackFace(it, modifier.size(size)); return }
+    }
     val palette = PersonaTheme.palette
     val context = LocalContext.current
     // Held still with Reduce Motion and in Battery Saver, like iOS (Low Power Mode) and the glass fallback.
@@ -149,6 +161,27 @@ fun PersonaFace(
                 size = size * 0.22f, tint = Color.White.copy(alpha = if (state == PersonaState.Offline) 0.5f else 0.92f), selected = true)
         }
     }
+}
+
+/**
+ * A hub package's dot: its frames in turn at their own delays (frame 0 alone with Reduce Motion or in Battery
+ * Saver: the package makes frame 0 tell the state on its own). The state colours are drawn into the frames.
+ */
+@Composable
+private fun PackFace(frames: PersonaFrames, modifier: Modifier) {
+    val context = LocalContext.current
+    val still = PersonaTheme.reduceMotion || context.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
+    var index by remember(frames) { mutableIntStateOf(0) }
+    LaunchedEffect(frames, still) {
+        index = 0
+        if (still || frames.bitmaps.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(frames.delaysMs[index].coerceAtLeast(20).toLong())
+            index = (index + 1) % frames.bitmaps.size
+        }
+    }
+    val bitmaps = remember(frames) { frames.bitmaps.map { it.asImageBitmap() } }
+    Image(bitmaps[index], contentDescription = null, modifier.clearAndSetSemantics {})
 }
 
 /** Draws 面罩 at time t; [paint] and [rect] are reused across frames for the glowing eyes. */

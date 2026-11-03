@@ -191,7 +191,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 PersonaState.entries.forEach { state ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        PersonaFace(state, size = 46.dp, design = design)
+                        PersonaFace(state, size = 46.dp, design = design, pack = null)
                         Spacer(Modifier.height(6.dp))
                         Text(state.label, style = PersonaTheme.type.caption, color = palette.ink2, maxLines = 1)
                     }
