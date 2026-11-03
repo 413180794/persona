@@ -153,7 +153,10 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   （`MacPageTitle`，只是一个标签，那一行照样能拖动窗口；这一列收起时排在红绿灯和按钮后面），页面的按钮和搜索在右边，内容紧接着往下排。
   Persona 页的两栏自己的头（列表的形象名和搜索、对话的顶栏）上移进这一行，不另画标题；这一列收起时从红绿灯后面开始（壳经 environment `macTitleRowLeading` 告诉页面从哪开始）。
   收件箱、知识库的工具栏加一个空的 `.principal` 占住中间（`MacToolbarMiddle`，同 Agents 的 `ConnectionTitle`），按钮靠到搜索框旁边，最窄的窗口里不盖住标题；
-  Agents、机器的 `ConnectionTitle` 不画玻璃（连着时它是空的，玻璃在这一行中间画出一条细线）。收件箱筛选栏第一组的小标题从「收件箱」改成「来源」。
+  机器的 `ConnectionTitle` 不画玻璃（连着时它是空的，玻璃在这一行中间画出一条细线）。
+  Agents 在 Mac 上不放 `ConnectionTitle`（#907，2026-11-03 用户：新建按钮没贴左边）：占住中间的 `.principal` 把列表栏的 `.primaryAction`
+  挤到对话那一栏的中间，左边空出一块；去掉后「新建会话」在列表栏的右端、紧挨对话（同「邮件」的写邮件）。连接状态在分区列底部（收起时在页面底部）。
+  「个人 Agent」不再放工具栏，挪进 ≡ 菜单「机器」下面。收件箱筛选栏第一组的小标题从「收件箱」改成「来源」。
   知识库的筛选 chip 在 Mac 上不放进 Section（Mac 的 inset 列表给它留了一条空的分组头和一条线）。
   白色凸起：分区列右边的分隔线原来停在这一行下面，页面的白底在那里越过了这一列几个点；分隔线现在画到顶。侧栏按钮也不画系统的玻璃圆底（`.sharedBackgroundVisibility(.hidden)`）。
   还没做：推进去的页面（Persona 里的档案、定时任务，知识库的某一天）的标题，系统的标题去掉以后它们没有地方显示。

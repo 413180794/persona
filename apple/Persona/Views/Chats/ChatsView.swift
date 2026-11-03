@@ -172,19 +172,19 @@ struct ChatsView: View {
                         ToolbarItem(placement: .principal) { Color.clear.frame(width: Theme.Size.hairline) }
                             .sharedBackgroundVisibility(.hidden)
                     } else {
-                        #if os(macOS)
-                        // Empty while connected: its glass drew a thin line in the middle of the title bar's row (#830).
-                        ToolbarItem(placement: .principal) { ConnectionTitle() }.sharedBackgroundVisibility(.hidden)
-                        #else
-                        ToolbarItem(placement: .principal) { ConnectionTitle() }
-                        #endif
                         #if os(iOS)
+                        // Not on the Mac (#907): the connection state is at the foot of the window's sections column (and
+                        // the page's while that is hidden), and holding the bar's middle this empty item pushed 新建会话
+                        // out of the list column, an empty stretch to its left over the conversation. Without it the
+                        // button sits at the list column's trailing edge, by the conversation, as Mail's compose does.
+                        ToolbarItem(placement: .principal) { ConnectionTitle() }
                         // On the Mac the shell shows it, next to its sidebar button (MacShell).
                         ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
-                        #endif
+                        // On the Mac it is in the ≡ menu (#907: the toolbar button was seldom used).
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button { openFromList(PersonalAgentsRoute()) } label: { Label("个人 Agent", systemImage: "person.crop.circle.badge.checkmark") }
+                            Button { openFromList(PersonalAgentsRoute()) } label: { Label("个人 Agent", systemImage: Theme.Icon.personalAgents) }
                         }
+                        #endif
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
                         }
@@ -409,7 +409,8 @@ private struct AgentsList: View {
         let _ = menuActions.update(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned),
                                    foldAll: { setFolded(folding($0, true, in: folded)); expandedQuiet = [] },
                                    unfoldAll: { setFolded(Set(Self.foldedByDefault.map { "!" + $0 })) },
-                                   onMachines: { openFromList(MachineListRoute()) })
+                                   onMachines: { openFromList(MachineListRoute()) },
+                                   onPersonalAgents: { openFromList(PersonalAgentsRoute()) })
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
 
         let list = List {

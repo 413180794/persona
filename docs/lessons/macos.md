@@ -92,3 +92,6 @@
   即窗口左下角，SwiftUI 的 `context.converter` 也是从它换算的。Mac 上消息右键的操作条就这样被摆到左下角、压在输入框底下看不见（#501，2026-11-03）。
   子类要在事件里记下 `event.locationInWindow`，覆盖 `location(in:)` 返回它（`SecondaryClickRecognizer`）。单元测试要经 `window.sendEvent(_:)` 发事件：
   直接调 `rightMouseDown(with:)` 时 AppKit 不认状态变化，`state` 停在 `.possible`；按住 Control 的左键在测试里送不到识别器（窗口不是 key，视图 `acceptsFirstMouse` 返回 true 也一样），所以单测只测了右键，Control 点击在真窗口里验。
+- 窗口工具栏里一个 `.principal` 项（哪怕是空的）会把分栏里列表栏声明的 `.primaryAction` 按钮挤出这一栏，摆到右边那一栏它的前面，左边空出一大块（#907）。
+  想让按钮留在列表栏的右端，就别在这一栏放 `.principal`。在详情栏的 `NavigationStack` 或它的根视图上加 `.navigation` 项没用：对话页隐藏了导航栏
+  （`.toolbarVisibility(.hidden, for: .navigationBar)`），推进对话后这些项一起消失；`ToolbarSpacer(.flexible)` 只和壳里的那个平分空白，也贴不过去。
