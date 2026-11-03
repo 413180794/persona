@@ -127,6 +127,8 @@ func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
 func TestHerdrStartCreatesTheWorkspaceAndResumes(t *testing.T) {
 	n, f, home := herdrNode(t)
 	cwd := mkdir(t, filepath.Join(home, "fresh"))
+	writeTranscript(t, home, cwd, startID, time.Now(),
+		`{"type":"user","timestamp":"2026-01-01T00:00:00Z","cwd":"`+cwd+`","message":{"role":"user","content":"hello"}}`)
 	f.reply("workspace.list", map[string]any{"workspaces": []any{}})
 	f.reply("workspace.create", map[string]any{"workspace": map[string]any{"workspace_id": "w7"},
 		"tab": map[string]any{"tab_id": "w7:t1"}, "root_pane": map[string]any{"pane_id": "w7:p1"}})
@@ -153,6 +155,29 @@ func TestHerdrStartCreatesTheWorkspaceAndResumes(t *testing.T) {
 		call("agent.rename", map[string]any{"target": "w7:p1", "name": "j-0e0000"}),
 		call("session.snapshot", nil),
 	})
+}
+
+// A resume of a session whose first start failed (claude never came up, so it wrote no transcript) starts it under
+// its id: `claude --resume` would answer "No conversation found" (issue #861).
+func TestHerdrResumeWithoutTranscriptStartsUnderItsID(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := mkdir(t, filepath.Join(home, "fresh"))
+	f.reply("workspace.list", map[string]any{"workspaces": []any{}})
+	f.reply("workspace.create", map[string]any{"workspace": map[string]any{"workspace_id": "w7"},
+		"tab": map[string]any{"tab_id": "w7:t1"}, "root_pane": map[string]any{"pane_id": "w7:p1"}})
+	startHerdr(f, "w7:p1", proto.StatusDone)
+	f.setScreen("w7:p1", screenFixture(t, "claude-2.1.312-empty-162.txt"))
+	if _, err := request(t, n, "session.start", map[string]any{"cwd": cwd, "launcher": "claude", "resume_session_id": startID}); err != nil {
+		t.Fatal(err)
+	}
+	want := call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
+		"text": startCmd("claude", "--session-id "+startID, jarvisDir(home))})
+	for _, c := range f.trace() {
+		if c == want {
+			return
+		}
+	}
+	t.Fatalf("no --session-id start in %v", f.trace())
 }
 
 // A workspace given (a tab next to another agent): no workspace lookup. A claude that comes up blocked (a dialog of

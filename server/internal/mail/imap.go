@@ -31,12 +31,34 @@ const (
 
 // localScan bounds one page of a local header search (searchLocally).
 type localScan struct {
-	batch  int           // envelopes per FETCH
-	budget int           // messages looked at per page
-	time   time.Duration // time spent per page, well inside networkTimeout so the page still gets fetched
+	batch  int // envelopes per FETCH: small, since one batch of old mail can take seconds (NetEase 163)
+	budget int // messages looked at per page
+	// time is how long a page may search, counted from the start of its IMAP work (SELECT and the server's own
+	// search included), so the matches can still be fetched inside networkTimeout.
+	time time.Duration
 }
 
-var defaultLocalScan = localScan{batch: 500, budget: 2000, time: 8 * time.Second}
+var defaultLocalScan = localScan{batch: 100, budget: 2000, time: 6 * time.Second}
+
+// pageFetch bounds the summary fetch of one page (listOne).
+type pageFetch struct {
+	batch   int           // summaries per FETCH
+	reserve time.Duration // no further batch once the operation has less than this left
+}
+
+var defaultPageFetch = pageFetch{batch: 50, reserve: 6 * time.Second}
+
+// pageFetchLimits is s.fetch with the defaults filled in (a zero Service has none).
+func (s *Service) pageFetchLimits() pageFetch {
+	l := s.fetch
+	if l.batch <= 0 {
+		l.batch = defaultPageFetch.batch
+	}
+	if l.reserve <= 0 {
+		l.reserve = defaultPageFetch.reserve
+	}
+	return l
+}
 
 // accountMutex returns the mutex serializing IMAP use of one account. IMAP
 // connections are stateful (SELECT), so commands must not interleave.
@@ -262,8 +284,9 @@ type uidSearch struct {
 }
 
 // searchUIDs finds the messages below beforeUID that match query (all of them for an empty query). want is how many
-// matches the caller can use (a page and one more); only a local search stops early on it.
-func (s *Service) searchUIDs(ctx context.Context, c *imapclient.Client, a *MailAccount, mailbox string, beforeUID uint32, query string, want int) (uidSearch, error) {
+// matches the caller can use (a page and one more); only a local search stops early on it, or at the page's
+// deadline (localScan.time after started, when the page's IMAP work began).
+func (s *Service) searchUIDs(ctx context.Context, c *imapclient.Client, a *MailAccount, mailbox string, beforeUID uint32, query string, want int, started time.Time) (uidSearch, error) {
 	if query != "" && a.Provider == ProviderGmail {
 		// Gmail query syntax needs X-GM-RAW, which the IMAP client library
 		// cannot express; use a short-lived raw connection.
@@ -285,10 +308,10 @@ func (s *Service) searchUIDs(ctx context.Context, c *imapclient.Client, a *MailA
 		var ie *imap.Error
 		switch {
 		case err == nil && len(data.AllUIDs()) == 0:
-			return s.searchLocally(c, beforeUID, query, want)
+			return s.searchLocally(c, beforeUID, query, want, started)
 		case errors.As(err, &ie):
 			logf("mail: keyword search refused, matching headers locally: %v", err)
-			return s.searchLocally(c, beforeUID, query, want)
+			return s.searchLocally(c, beforeUID, query, want, started)
 		}
 	}
 	if err != nil {
@@ -328,7 +351,7 @@ func (s *Service) localScanLimits() localScan {
 // searchLocally matches query against the envelopes of the messages below beforeUID, newest first, in batches. It
 // stops once it has want matches or when the page's budget (messages looked at, time) is spent; scannedTo then says
 // where the next page continues.
-func (s *Service) searchLocally(c *imapclient.Client, beforeUID uint32, query string, want int) (uidSearch, error) {
+func (s *Service) searchLocally(c *imapclient.Client, beforeUID uint32, query string, want int, started time.Time) (uidSearch, error) {
 	data, err := c.UIDSearch(belowUID(beforeUID), nil).Wait()
 	if err != nil {
 		return uidSearch{}, err
@@ -339,7 +362,7 @@ func (s *Service) searchLocally(c *imapclient.Client, beforeUID uint32, query st
 	limits := s.localScanLimits()
 	terms := strings.Fields(strings.ToLower(query))
 	out := uidSearch{headersOnly: true}
-	deadline := time.Now().Add(limits.time)
+	deadline := started.Add(limits.time)
 	looked := 0
 	end := len(all) // all[:end] is still to look at
 	// The budget is checked after each batch, so every page looks at one batch at least and moves on.
@@ -397,12 +420,15 @@ func headerMatch(env *imap.Envelope, terms []string) bool {
 // listOne pages one mailbox of one account.
 func (s *Service) listOne(ctx context.Context, a *MailAccount, mailbox string, limit int, beforeUID uint32, query string) (*ListResult, error) {
 	var out *ListResult
-	err := s.withConn(ctx, a, func(c *imapclient.Client) error {
+	err := s.withConnAt(ctx, a, func(c *imapclient.Client, deadline time.Time) error {
 		out = nil
+		// When the operation began, connecting included (a cold login to a slow server takes seconds), and not again
+		// on a retry: the page's time counts from here. A sooner context deadline makes it earlier, which is safe.
+		started := deadline.Add(-networkTimeout)
 		if _, err := c.Select(mailbox, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
 			return fmt.Errorf("select %s: %w", mailbox, err)
 		}
-		found, err := s.searchUIDs(ctx, c, a, mailbox, beforeUID, query, limit+1)
+		found, err := s.searchUIDs(ctx, c, a, mailbox, beforeUID, query, limit+1, started)
 		if err != nil {
 			return fmt.Errorf("search: %w", err)
 		}
@@ -421,25 +447,36 @@ func (s *Service) listOne(ctx context.Context, a *MailAccount, mailbox string, l
 			return nil
 		}
 
-		var set imap.UIDSet
-		set.AddNum(uids...)
-		msgs, err := c.Fetch(set, &imap.FetchOptions{
-			UID:           true,
-			Envelope:      true,
-			Flags:         true,
-			InternalDate:  true,
-			RFC822Size:    true,
-			BodyStructure: &imap.FetchItemBodyStructure{Extended: true},
-			BodySection: []*imap.FetchItemBodySection{
-				{Specifier: imap.PartSpecifierHeader, HeaderFields: []string{"Content-Type", "Content-Transfer-Encoding"}, Peek: true},
-				{Specifier: imap.PartSpecifierText, Partial: &imap.SectionPartial{Offset: 0, Size: snippetBytes}, Peek: true},
-			},
-		}).Collect()
-		if err != nil {
-			return fmt.Errorf("fetch: %w", err)
-		}
-		for _, m := range msgs {
-			res.Messages = append(res.Messages, s.summaryFrom(a, mailbox, m))
+		// Newest first, a batch at a time: a slow server (NetEase 163 takes seconds for a batch of old mail) could
+		// otherwise run the page past its deadline. Once little time is left the page ends here and the rest comes
+		// with the next one.
+		fetch := s.pageFetchLimits()
+		sort.Slice(uids, func(i, j int) bool { return uids[i] > uids[j] })
+		for i := 0; i < len(uids); i += fetch.batch {
+			if i > 0 && time.Now().After(deadline.Add(-fetch.reserve)) {
+				res.HasMore, res.NextBeforeUID = true, uint32(uids[i-1])
+				break
+			}
+			var set imap.UIDSet
+			set.AddNum(uids[i:min(i+fetch.batch, len(uids))]...)
+			msgs, err := c.Fetch(set, &imap.FetchOptions{
+				UID:           true,
+				Envelope:      true,
+				Flags:         true,
+				InternalDate:  true,
+				RFC822Size:    true,
+				BodyStructure: &imap.FetchItemBodyStructure{Extended: true},
+				BodySection: []*imap.FetchItemBodySection{
+					{Specifier: imap.PartSpecifierHeader, HeaderFields: []string{"Content-Type", "Content-Transfer-Encoding"}, Peek: true},
+					{Specifier: imap.PartSpecifierText, Partial: &imap.SectionPartial{Offset: 0, Size: snippetBytes}, Peek: true},
+				},
+			}).Collect()
+			if err != nil {
+				return fmt.Errorf("fetch: %w", err)
+			}
+			for _, m := range msgs {
+				res.Messages = append(res.Messages, s.summaryFrom(a, mailbox, m))
+			}
 		}
 		sort.SliceStable(res.Messages, func(i, j int) bool {
 			return res.Messages[i].UID > res.Messages[j].UID

@@ -58,8 +58,9 @@ type Service struct {
 	access                        map[string]*accessCache // access tokens, by refresh token
 	// verify replaces the IMAP + SMTP login check of new accounts in tests.
 	verify func(ctx context.Context, a *MailAccount) error
-	// scan bounds one page of a local header search; tests shrink it.
-	scan localScan
+	// scan bounds one page of a local header search, fetch a page's summary fetch; tests shrink them.
+	scan  localScan
+	fetch pageFetch
 	// refreshAccess replaces the Google token endpoint in tests.
 	refreshAccess func(*OAuthCreds) (string, error)
 	// sendMail delivers a rendered message over SMTP; nil uses the real network.
@@ -89,6 +90,7 @@ func New(dataDir string, recs Records) (*Service, error) {
 		stop:       make(chan struct{}),
 		now:        time.Now,
 		scan:       defaultLocalScan,
+		fetch:      defaultPageFetch,
 	}
 	accounts, err := st.load()
 	if err != nil {
@@ -579,6 +581,13 @@ func (s *Service) dropConn(id string) {
 // withConn runs fn on the cached connection; a transport-level error closes the
 // connection and fn is retried once on a fresh one.
 func (s *Service) withConn(ctx context.Context, a *MailAccount, fn func(*imapclient.Client) error) error {
+	return s.withConnAt(ctx, a, func(c *imapclient.Client, _ time.Time) error { return fn(c) })
+}
+
+// withConnAt is withConn handing fn the operation's deadline: networkTimeout after the account was free (connecting
+// included), or the context's if that is sooner, and the same one when it retries. Work done in steps (a page of a
+// slow mailbox) stops in time with it.
+func (s *Service) withConnAt(ctx context.Context, a *MailAccount, fn func(c *imapclient.Client, deadline time.Time) error) error {
 	// IMAP is stateful (SELECT), so a cached connection can only serve one
 	// command sequence at a time.
 	mu := s.accountMutex(a.ID)
@@ -595,7 +604,7 @@ func (s *Service) withConn(ctx context.Context, a *MailAccount, fn func(*imapcli
 			return err
 		}
 		done := make(chan error, 1)
-		go func() { done <- fn(c) }()
+		go func() { done <- fn(c, deadline) }()
 		select {
 		case err := <-done:
 			return err

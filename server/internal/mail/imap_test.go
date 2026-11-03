@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/emersion/go-imap/v2"
+	"github.com/emersion/go-imap/v2/imapclient"
 )
 
 // newServiceWithAccount builds a Service whose only account points at the test
@@ -167,6 +168,100 @@ func TestListMessagesSearchServerCannotSearch(t *testing.T) {
 				t.Errorf("refuse=%v %q = %q (headers only %v, has more %v), want %q from the headers, complete",
 					refuse, c.query, got, res.HeadersOnly, res.HasMore, c.want)
 			}
+		}
+	}
+}
+
+// A page's time counts from the start of its IMAP work, the server's own (empty) search included: when that search
+// takes all of it, the page still looks at one batch and says where to carry on, rather than running past the
+// operation's timeout the way it did on NetEase 163, which is slow to search and to fetch old mail.
+func TestListMessagesSearchSlowServer(t *testing.T) {
+	srv := newTestIMAP(t)
+	srv.blindSearch.Store(true)
+	srv.searchDelay.Store(int64(50 * time.Millisecond))
+	s := newServiceWithAccount(t, srv)
+	s.scan = localScan{batch: 2, budget: 100, time: 30 * time.Millisecond}
+	var uids []imap.UID
+	for i := 1; i <= 6; i++ {
+		uids = append(uids, srv.appendMessage(t, "INBOX", rawMessage(fmt.Sprintf("Note %d", i), "a@example.com", "x")))
+	}
+
+	res, err := s.ListMessages(context.Background(), ListOptions{AccountID: "acc_test", Query: "note", Limit: 50})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if got := strings.Join(subjectsOf(res.Messages), "|"); got != "Note 6|Note 5" || !res.HasMore || res.NextBeforeUID != uint32(uids[4]) {
+		t.Fatalf("page = %q (has more %v, next %d), want one batch, Note 6|Note 5, then below %d", got, res.HasMore, res.NextBeforeUID, uids[4])
+	}
+}
+
+// Connecting counts too: a cold login that takes the page's whole time still leaves it one batch and a place to carry
+// on, rather than a full scan started late.
+func TestListMessagesSearchSlowConnect(t *testing.T) {
+	srv := newTestIMAP(t)
+	srv.blindSearch.Store(true)
+	s := newServiceWithAccount(t, srv)
+	s.scan = localScan{batch: 2, budget: 100, time: 30 * time.Millisecond}
+	s.imapDial = func(*MailAccount) (*imapclient.Client, error) {
+		time.Sleep(60 * time.Millisecond)
+		c, err := imapclient.DialInsecure(fmt.Sprintf("%s:%d", srv.host, srv.port), nil)
+		if err != nil {
+			return nil, err
+		}
+		if err := c.Login("me@example.com", "secret").Wait(); err != nil {
+			c.Close()
+			return nil, err
+		}
+		return c, nil
+	}
+	var uids []imap.UID
+	for i := 1; i <= 6; i++ {
+		uids = append(uids, srv.appendMessage(t, "INBOX", rawMessage(fmt.Sprintf("Note %d", i), "a@example.com", "x")))
+	}
+
+	res, err := s.ListMessages(context.Background(), ListOptions{AccountID: "acc_test", Query: "note", Limit: 50})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if got := strings.Join(subjectsOf(res.Messages), "|"); got != "Note 6|Note 5" || !res.HasMore || res.NextBeforeUID != uint32(uids[4]) {
+		t.Fatalf("page = %q (has more %v, next %d), want one batch, Note 6|Note 5, then below %d", got, res.HasMore, res.NextBeforeUID, uids[4])
+	}
+}
+
+// A page fetches its summaries a batch at a time, newest first; once the operation is short of time it ends early
+// and says where to carry on, and paging still returns every message once. (NetEase 163 can take tens of seconds
+// for a page of old mail.)
+func TestListMessagesPageFetchStopsInTime(t *testing.T) {
+	srv := newTestIMAP(t)
+	s := newServiceWithAccount(t, srv)
+	s.fetch = pageFetch{batch: 2, reserve: networkTimeout} // short of time from the start: one batch per page
+	ctx := context.Background()
+	for i := 1; i <= 5; i++ {
+		srv.appendMessage(t, "INBOX", rawMessage(fmt.Sprintf("Msg %d", i), "a@example.com", "x"))
+	}
+
+	for _, query := range []string{"", "msg"} {
+		var seen []string
+		before := uint32(0)
+		for range 10 {
+			res, err := s.ListMessages(ctx, ListOptions{AccountID: "acc_test", Query: query, Limit: 5, BeforeUID: before})
+			if err != nil {
+				t.Fatalf("query %q below %d: %v", query, before, err)
+			}
+			if len(res.Messages) > 2 {
+				t.Fatalf("query %q below %d: %d summaries, want one batch of 2 at most", query, before, len(res.Messages))
+			}
+			seen = append(seen, subjectsOf(res.Messages)...)
+			if !res.HasMore {
+				break
+			}
+			if res.NextBeforeUID == 0 || before != 0 && res.NextBeforeUID >= before {
+				t.Fatalf("query %q below %d: next before_uid %d does not move back", query, before, res.NextBeforeUID)
+			}
+			before = res.NextBeforeUID
+		}
+		if got := strings.Join(seen, ","); got != "Msg 5,Msg 4,Msg 3,Msg 2,Msg 1" {
+			t.Fatalf("query %q: pages saw %q, want every message once, newest first", query, got)
 		}
 	}
 }

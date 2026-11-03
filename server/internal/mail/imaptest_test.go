@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
@@ -24,8 +25,9 @@ type testIMAP struct {
 	port   int
 	ln     net.Listener
 	// blindSearch makes sessions opened from now on answer every keyword SEARCH with nothing, refuseSearch with NO
-	// (see keywordSearchSession).
+	// (see keywordSearchSession); searchDelay (nanoseconds) makes them take that long to answer it.
 	blindSearch, refuseSearch atomic.Bool
+	searchDelay               atomic.Int64
 }
 
 // keywordSearchSession answers every SEARCH that looks for words (TEXT, BODY, a header) with no results, the way
@@ -33,12 +35,15 @@ type testIMAP struct {
 type keywordSearchSession struct {
 	imapserver.SessionIMAP4rev2 // the memory server's session, so the server keeps advertising IMAP4rev2
 	refuse                      bool
+	delay                       time.Duration
 }
 
 func (s keywordSearchSession) Search(kind imapserver.NumKind, criteria *imap.SearchCriteria, options *imap.SearchOptions) (*imap.SearchData, error) {
-	switch {
-	case !hasKeyword(criteria):
+	if !hasKeyword(criteria) {
 		return s.SessionIMAP4rev2.Search(kind, criteria, options)
+	}
+	time.Sleep(s.delay)
+	switch {
 	case s.refuse:
 		return nil, &imap.Error{Type: imap.StatusResponseTypeNo, Text: "keyword search is not supported"}
 	case kind == imapserver.NumKindUID:
@@ -88,7 +93,8 @@ func newTestIMAPCaps(t *testing.T, caps imap.CapSet) *testIMAP {
 	srv := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			if blind, refuse := ts.blindSearch.Load(), ts.refuseSearch.Load(); blind || refuse {
-				return keywordSearchSession{SessionIMAP4rev2: mem.NewSession().(imapserver.SessionIMAP4rev2), refuse: refuse}, nil, nil
+				return keywordSearchSession{SessionIMAP4rev2: mem.NewSession().(imapserver.SessionIMAP4rev2), refuse: refuse,
+					delay: time.Duration(ts.searchDelay.Load())}, nil, nil
 			}
 			return mem.NewSession(), nil, nil
 		},

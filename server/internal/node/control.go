@@ -125,8 +125,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		_ = renameSlot(ctx, launch, created.SlotID, name)
 	}
 
+	// A session whose first start failed (claude never came up) has no transcript to resume: start it under its id.
 	args := "--session-id " + id
-	if resume != "" {
+	if resume != "" && n.transcriptPath(id) != "" {
 		args = "--resume " + id
 	}
 	cmd := fmt.Sprintf("%s %s%s --settings %s --mcp-config %s", n.launcherCommand(launcher), args, modeFlags(mode, effort),
