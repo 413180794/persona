@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """The README's pictures in docs/assets/readme/: banner, feature icons, badges, and the moving hero.
 
-  python3 scripts/assets/make_readme_assets.py svg                  # banner, architecture, icons, badges (no inputs)
+  python3 scripts/assets/make_readme_assets.py svg                  # banner, architecture, icons, badges
   python3 scripts/assets/make_readme_assets.py shoot <dir>          # screenshots + demo recordings from the simulator
   python3 scripts/assets/make_readme_assets.py hero <dir>           # hero-light.webp / hero-dark.webp from <dir>
 
 `svg` reads the version floors from apple/project.yml, android/gradle/libs.versions.toml and server/go.mod, so the
-badges follow the code. `shoot` drives a DEBUG build in demo mode (made-up data, no hub) that is already installed on
+badges follow the code, and puts the app icon's own picture (AppIcon.appiconset) in the banner; it needs Pillow. `shoot` drives a DEBUG build in demo mode (made-up data, no hub) that is already installed on
 the simulator given by JARVISCTL_UDID, over the Runtime CLI (docs/runtime-cli.md): it relaunches the app with
 `-demo.on YES`, takes every scene in light and dark, and records the demo once per appearance. `hero` needs ffmpeg
 and Pillow; it puts the demo in the middle phone and four still screens beside it.
 """
+import base64
+import io
 import math
 import os
 import re
@@ -22,16 +24,17 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "docs/assets/readme")
+APP_ICON = os.path.join(ROOT, "apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset")
 
 # The app icon's colors (scripts/assets/make_icon.py) and the site's (site/public/home.css).
 CORAL, PEACH, EMBER = "#ee7c54", "#ffc4a0", "#b03e22"
 THEMES = {
     "light": dict(bg1="#fbf7f1", bg2="#f1e7da", glow="#f6b48f", glow_op=0.55, fg="#1c1814", muted="#6f665c",
-                  card="#fffdf9", card_op=0.92, stroke="#e6d9c8", ring="#e0784f", tick="#c9603a", dot_op=0.07,
-                  dots="#b03e22", spark=("#f6a57e", "#d4683f", "#a83e1f")),
+                  card="#fffdf9", card_op=0.92, stroke="#e6d9c8", dot_op=0.07, dots="#b03e22",
+                  spark=("#f6a57e", "#d4683f", "#a83e1f"), icon="icon.png", lift="#3c1e0a", lift_op=0.16),
     "dark": dict(bg1="#2a1913", bg2="#0c0b0a", glow="#ee7c54", glow_op=0.30, fg="#f3ede4", muted="#a89c8f",
-                 card="#1d1915", card_op=0.88, stroke="#3b312a", ring=PEACH, tick=PEACH, dot_op=0.06,
-                 dots=PEACH, spark=(PEACH, CORAL, EMBER)),
+                 card="#1d1915", card_op=0.88, stroke="#3b312a", dot_op=0.06, dots=PEACH,
+                 spark=(PEACH, CORAL, EMBER), icon="icon-dark.png", lift="#000000", lift_op=0.5),
 }
 SERIF = "Georgia, 'Times New Roman', serif"
 SERIF_CJK = "'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', STSong, SimSun, serif"
@@ -54,6 +57,15 @@ def spark_path(cx, cy, r, n=96):
         c, s = math.cos(a), math.sin(a)
         pts.append((cx + math.copysign(abs(c) ** exp, c) * r, cy + math.copysign(abs(s) ** exp, s) * r))
     return "M" + " L".join(f"{x:.1f} {y:.1f}" for x, y in pts) + " Z"
+
+
+def app_icon(theme, px=320):
+    """The app icon's picture for the theme as a JPEG data URI: an SVG shown with <img> loads no other files."""
+    from PIL import Image
+    img = Image.open(os.path.join(APP_ICON, THEMES[theme]["icon"])).convert("RGB").resize((px, px), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=85, optimize=True, progressive=True)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
 def text_width(s, size):
@@ -84,14 +96,8 @@ CHIPS = [  # the site's hero (site/public/index.html): demo data, not counts fro
 def banner(theme):
     t = THEMES[theme]
     W, H = 1280, 320
-    cx, cy, S = 176, 160, 280  # the logo: drawn in the app icon's proportions of a side S
-    ticks = []
-    for i in range(12):
-        a = 2 * math.pi * i / 12
-        inner, outer = S * (0.37 if i % 3 == 0 else 0.375), S * 0.395
-        w = 3.4 if i % 3 == 0 else 2.0
-        ticks.append(f'<line x1="{cx + inner * math.sin(a):.1f}" y1="{cy - inner * math.cos(a):.1f}" '
-                     f'x2="{cx + outer * math.sin(a):.1f}" y2="{cy - outer * math.cos(a):.1f}" stroke-width="{w}"/>')
+    cx, cy, S = 176, 160, 200  # the app icon, a side S, corners as on the home screen
+    x0, y0, r = cx - S // 2, cy - S // 2, S * 0.2237
     chips, y = [], 40
     for i, (dot, title, rest, pulse) in enumerate(CHIPS):
         x = 812 + (30, 64, 0, 44)[i]
@@ -104,14 +110,14 @@ def banner(theme):
                 mark += (f'<circle class="pulse" cx="{x + 30}" cy="{y + h / 2}" r="7" fill="none" stroke="{dot}" '
                          f'stroke-width="2"/>')
         else:
-            mark = f'<path d="{spark_path(x + 30, y + h / 2, 10, 48)}" fill="url(#spark)"/>'
+            mark = (f'<g transform="translate({x + 16} {y + 11}) scale({28 / S})" clip-path="url(#iconMask)">'
+                    f'<use href="#icon"/></g>')
         chips.append(
             f'<g class="chip c{i}"><rect x="{x}" y="{y}" width="{w:.0f}" height="{h}" rx="{h / 2}" fill="{t["card"]}" '
             f'fill-opacity="{t["card_op"]}" stroke="{t["stroke"]}"/>{mark}'
             f'<text x="{x + 50}" y="{y + 32}" font-family="{SANS}" font-size="20" font-weight="600" fill="{t["fg"]}">{title}</text>'
             f'<text x="{x + 50 + tw + 14:.0f}" y="{y + 32}" font-family="{SANS}" font-size="19" fill="{t["muted"]}">{rest}</text></g>')
         y += 64
-    s1, s2, s3 = t["spark"]
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
 <title>Persona</title>
 <style>
@@ -127,23 +133,19 @@ def banner(theme):
 <defs>
   <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{t["bg1"]}"/><stop offset="1" stop-color="{t["bg2"]}"/></linearGradient>
   <radialGradient id="glow" cx="{cx}" cy="{cy}" r="260" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{t["glow"]}" stop-opacity="{t["glow_op"]}"/><stop offset="1" stop-color="{t["glow"]}" stop-opacity="0"/></radialGradient>
-  <linearGradient id="spark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{s1}"/><stop offset=".55" stop-color="{s2}"/><stop offset="1" stop-color="{s3}"/></linearGradient>
   <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" fill="{t["dots"]}" fill-opacity="{t["dot_op"]}"/></pattern>
-  <filter id="bloom" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter>
+  <filter id="lift" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="{t["lift"]}" flood-opacity="{t["lift_op"]}"/></filter>
+  <image id="icon" width="{S}" height="{S}" href="{app_icon(theme)}"/>
+  <clipPath id="iconMask"><rect width="{S}" height="{S}" rx="{r:.1f}"/></clipPath>
   <clipPath id="frame"><rect width="{W}" height="{H}" rx="24"/></clipPath>
 </defs>
 <g clip-path="url(#frame)">
   <rect width="{W}" height="{H}" fill="url(#bg)"/>
   <rect width="{W}" height="{H}" fill="url(#dots)"/>
   <rect class="halo" width="{W}" height="{H}" fill="url(#glow)"/>
-  <g fill="none" stroke="{t["ring"]}">
-    <circle cx="{cx}" cy="{cy}" r="{S * 0.335:.1f}" stroke-width="{S * 0.03:.1f}" opacity=".55" filter="url(#bloom)"/>
-    <circle cx="{cx}" cy="{cy}" r="{S * 0.335:.1f}" stroke-width="{S * 0.022:.1f}" opacity=".9"/>
-  </g>
-  <g stroke="{t["tick"]}" stroke-linecap="round" opacity=".6">{"".join(ticks)}</g>
-  <path d="{spark_path(cx, cy, S * 0.25)}" fill="{s2}" opacity=".55" filter="url(#bloom)"/>
-  <path d="{spark_path(cx, cy, S * 0.25)}" fill="url(#spark)"/>
-  <path d="{spark_path(cx + S * 0.165, cy - S * 0.165, S * 0.045, 48)}" fill="{s1}"/>
+  <rect x="{x0}" y="{y0}" width="{S}" height="{S}" rx="{r:.1f}" fill="{t["bg1"]}" filter="url(#lift)"/>
+  <g transform="translate({x0} {y0})" clip-path="url(#iconMask)"><use href="#icon"/></g>
+  <rect x="{x0 + .5}" y="{y0 + .5}" width="{S - 1}" height="{S - 1}" rx="{r - .5:.1f}" fill="none" stroke="{t["stroke"]}"/>
   <text x="330" y="176" font-family="{SERIF}" font-size="104" font-weight="700" letter-spacing="-1" fill="{t["fg"]}">Persona</text>
   <text x="334" y="232" font-family="{SERIF_CJK}" font-size="32" letter-spacing="2" fill="{t["muted"]}">你的每台电脑，都在口袋里。</text>
   {"".join(chips)}
