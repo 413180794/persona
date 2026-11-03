@@ -10,6 +10,8 @@ import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import java.util.Base64
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -92,6 +94,7 @@ class HubHttpClient(
     val localAddressPolicy: LocalAddressPolicy = LocalAddressPolicy(),
     dns: Dns = Dns.SYSTEM,
     pins: Set<String> = emptySet(),
+    socketFactory: SocketFactory = SocketFactory.getDefault(),
 ) : AutoCloseable {
     val client: OkHttpClient
     private val trust = SpkiTrustManager(fingerprint, pins)
@@ -132,6 +135,7 @@ class HubHttpClient(
                 }
             }
             .dns(dns)
+            .socketFactory(socketFactory)
             .proxy(Proxy.NO_PROXY)
             .followRedirects(false)
             .followSslRedirects(false)
@@ -197,10 +201,16 @@ class HubHttpClient(
         }
     }
 
+    private val closed = AtomicBoolean()
+
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
         client.dispatcher.cancelAll()
-        client.connectionPool.evictAll()
-        client.dispatcher.executorService.shutdown()
+        // Closing a TLS connection writes close_notify, and callers close from the main thread (pairing's finally):
+        // NetworkOnMainThreadException, thrown after the pairing was saved. The dispatcher's thread evicts instead.
+        val executor = client.dispatcher.executorService
+        executor.execute { client.connectionPool.evictAll() }
+        executor.shutdown()
     }
 }
 

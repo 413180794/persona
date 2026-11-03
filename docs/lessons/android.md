@@ -93,6 +93,7 @@
 - 两台 hub 的 id 空间是独立的：交互 id、会话 id 都可能一样（假 hub 的夹具完全一样）。合并列表时只给机器 id 加组后缀不够，「等你定」的 LazyColumn 用 `request:<交互 id>` 当 key，两组同 id 直接崩（`Key … was already used`）；交互 id 也要带后缀，作答时去掉。
 - 一组的数据在页面还开着它的对话时关掉（合并、断开），对话流结束时 `SessionItemsCache.release` 在已关闭的 Room 上开事务，抛「Database is closed」，从 LaunchedEffect 里冒出来直接崩（模拟器上合并时踩过）。现在：先把这组从列表里拿掉、等页面换走再关库；`release` 在库已关时什么都不做；门面里组已关时的失败改成取消。以前只有一份配对时重新配对也有同样的竞态，只是很少撞上。
 - 多 hub 的会话键：给非主组的机器 id 加 `~<组 id>`，而不是给 `SessionKey` 加字段。从路由、深链、通知、旧数据构造键的地方太多，漏一处就串组；后缀编进机器 id，哪里都带着。代价是每个带机器 id 的接口都要在门面里翻译（`GroupNames`），新接口别忘了（`docs/android.md`「多 hub」）。
+- 关 OkHttp 客户端也会联网：`connectionPool.evictAll()` 关 TLS 连接时要写 close_notify，在主线程上就是 `NetworkOnMainThreadException`。配对在主线程的 `finally` 里关 `HubPairingClient`，这个异常在凭据保存之后才抛，盖掉了成功的结果：配对页说「连接未完成」，强制重启后其实已经连上（#955）。明文连接关闭不写网络，只走内网明文地址时一直没暴露。`HubHttpClient.close()` 现在把清池交给调度器自己的线程；自己写的客户端别在调用方线程上 `evictAll`。
 
 ## 模拟器与真机
 
@@ -103,6 +104,7 @@
 - 平板 AVD 拍手机布局：`wm size 1080x2400`、`wm density 420`，再 `settings put system accelerometer_rotation 0`、`user_rotation 0` 固定竖屏。这些写进 AVD 的数据、重启还在，用完要 `wm size reset`、`wm density reset` 并恢复旋转设置。
 - `scripts/mock/mock_hub.py` 每次启动的 `HUB_ID` 都是新的：换 `MOCK_*` 开关重启假 hub 后原配对失效，要 `pm clear` 再配对（草稿随配对目录一起没了）。`adb reverse --remove` 断不掉已建好的连接（OkHttp 复用连接），模拟不了上传途中断网。
 - `adb shell am start … --es k "jarvis://open?a=1&b=2"`：adb 把参数拼成一行交给设备上的 shell，`&` 会把命令截断，链接要再套一层单引号（`scripts/android.sh` 的 shots）。
+- ColorOS 的 logcat 里看不到第三方 App 自己的 `Log.*`（只有系统打的行），真机上查异常拿不到堆栈：在模拟器 + 假 hub 上复现（要走 TLS 就 `mock_hub.py --tls-port`，配对链接带 `fp` 和 `tls`），#955 就是这样找到的。
 - ColorOS 上 `adb install` 要在手机上点确认「USB 安装」：手机熄屏或没人点时 adb 一直卡住，几分钟后报失败。装到用户手机上要先让用户在手机旁边。
 - `debug.mockAddress` 是静默配对（`platformPairing.pair`，不经过配对页），配对完成之后的步骤（选择引擎、准备清单）都看不到：要看这些就用 `jarvis://pair?url=…&token=mock` 链接打开配对页，再点「确认配对」。
 - 想让一次保存失败，别靠 `adb reverse --remove` 断掉假 hub：App 的 OkHttp 连接池里已经建好的长连接照样能用，请求还是成功了。用假 hub 的失败开关（`MOCK_ENGINE_ERROR`、`MOCK_MODEL_CONFLICT`、`MOCK_DEPLOY_ERROR`）。
