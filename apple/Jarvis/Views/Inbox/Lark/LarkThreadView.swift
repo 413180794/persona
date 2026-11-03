@@ -21,6 +21,8 @@ struct LarkThreadView: View {
     @State private var fileRequest: (url: String, name: String)?
     /// What is typed in the box, kept as the thread's draft (LarkDrafts) until it is sent.
     @State private var text = ""
+    /// Picked with the @ picker since the last send.
+    @State private var mentions: [LarkMention] = []
     @FocusState private var boxFocused: Bool
     /// Replies on their way (LarkOutgoing, `thread` true), under the loaded ones until their copies arrive.
     @State private var outgoing: [LarkOutgoing] = []
@@ -58,11 +60,20 @@ struct LarkThreadView: View {
             }
             .scrollPosition($position)
             .safeAreaInset(edge: .bottom) {
-                LarkComposer(placeholder: "回复话题", text: $text, focused: $boxFocused, boxID: "lark.thread.box", sendID: "lark.thread.send", send: send)
+                LarkComposer(placeholder: "回复话题", text: $text, focused: $boxFocused, boxID: "lark.thread.box", sendID: "lark.thread.send",
+                             mentionFeed: isGroup ? feedID : nil, me: (replies + [root]).last(where: \.isMine)?.senderID,
+                             mentions: $mentions, send: send)
             }
             .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
-            .onAppear { if text.isEmpty { text = LarkDrafts.shared[.thread(root.id)].text } }
-            .onChange(of: text) { _, now in LarkDrafts.shared.set(LarkDraft(text: now), for: .thread(root.id)) }
+            .onAppear {
+                guard text.isEmpty else { return }
+                let draft = LarkDrafts.shared[.thread(root.id)]
+                text = draft.text
+                mentions = draft.mentions ?? []
+            }
+            .onChange(of: LarkDraft(text: text, mentions: mentions.isEmpty ? nil : mentions)) { _, draft in
+                LarkDrafts.shared.set(draft, for: .thread(root.id))
+            }
             .onDisappear { LarkDrafts.shared.flush() }
             .environment(\.larkReply, LarkReplyHandler(inThread: true) { _ in boxFocused = true })
             .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
@@ -117,7 +128,11 @@ struct LarkThreadView: View {
             if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
             LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
                             retry: { resend(o.id) },
-                            edit: { discard(o.id); text = text.isEmpty ? o.text : text + "\n" + o.text },
+                            edit: {
+                                discard(o.id)
+                                text = text.isEmpty ? o.text : text + "\n" + o.text
+                                mentions += o.mentions
+                            },
                             discard: { discard(o.id) })
                 .padding(.top, LarkChatLayout.gap(grouped: grouped))
                 .id(o.id)
@@ -128,7 +143,8 @@ struct LarkThreadView: View {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         text = ""
-        let o = LarkOutgoing(text: t, replyTo: LarkReply.quote(root), thread: true)
+        let o = LarkOutgoing(text: t, replyTo: LarkReply.quote(root), thread: true, mentions: LarkMentions.mentions(in: t, picked: mentions))
+        mentions = []
         withAnimation(Theme.Motion.standard) { outgoing.append(o) }
         Haptics.tap()
         deliver(o.id)

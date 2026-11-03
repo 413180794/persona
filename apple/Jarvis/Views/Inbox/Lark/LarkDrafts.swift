@@ -4,6 +4,8 @@ import Foundation
 nonisolated struct LarkDraft: Codable, Hashable, Sendable {
     var text = ""
     var replyTo: LarkReplyTo?
+    /// Picked with the @ picker (their `@name` is in `text`); nil in drafts kept before there was one.
+    var mentions: [LarkMention]?
 
     /// Nothing worth keeping: no words (blank lines do not count) and no quote.
     var isEmpty: Bool { replyTo == nil && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

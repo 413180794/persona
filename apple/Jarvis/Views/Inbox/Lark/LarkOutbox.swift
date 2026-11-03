@@ -13,6 +13,8 @@ struct LarkOutgoing: Identifiable, Equatable {
     var replyTo: LarkReplyTo? = nil
     /// With `replyTo`: true goes into its thread, false quotes it in the chat.
     var thread = false
+    /// Who Feishu notifies (the @ picker), kept for 重发 and 放回输入框.
+    var mentions: [LarkMention] = []
 
     /// What the hub gets as `client_id`: this message's id, unchanged by retries.
     var clientID: String { id.uuidString.lowercased() }
@@ -38,9 +40,9 @@ enum LarkOutbox {
     /// Hands one outgoing message to the hub: a reply when it answers a message, else a plain send to the chat.
     static func deliver(_ o: LarkOutgoing, feed: String, api: APIClient) async throws {
         if let reply = o.replyTo {
-            try await api.larkReply(messageID: reply.id, text: o.text, thread: o.thread, clientID: o.clientID)
+            try await api.larkReply(messageID: reply.id, text: o.text, thread: o.thread, clientID: o.clientID, mentions: o.mentions)
         } else {
-            try await api.larkSend(feed, text: o.text, clientID: o.clientID)
+            try await api.larkSend(feed, text: o.text, clientID: o.clientID, mentions: o.mentions)
         }
     }
 

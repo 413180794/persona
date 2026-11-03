@@ -3649,7 +3649,8 @@ def truth():
     keys = {s["session_id"]: s["machine_id"] + "/" + s["session_id"] for s in agents}
     return {"states": {keys[s["session_id"]]: s["state"] for s in agents},
             "last": {keys[s["session_id"]]: s.get("last_text") or "" for s in agents},
-            "asks": sorted(ix["id"] for ix in INTERACTIONS if ix["session_id"] in keys),
+            # What GET /api/v1/interactions serves (the expanded inbox too), not only INTERACTIONS: the app shows those.
+            "asks": sorted(ix["id"] for ix in mock_interactions() if ix["session_id"] in keys),
             "titles": {keys[s["session_id"]]: s.get("title") or "" for s in agents}}
 
 

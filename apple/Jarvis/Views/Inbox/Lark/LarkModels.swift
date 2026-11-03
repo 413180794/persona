@@ -259,24 +259,37 @@ extension APIClient {
         var text: String
         /// The same for every try of one message, so the hub sends it once however often it is retried.
         var clientID: String?
-        enum CodingKeys: String, CodingKey { case text, clientID = "client_id" }
+        /// Who Feishu notifies; each one's `@name` is in `text`. Left out when nobody is mentioned (an older hub
+        /// ignores it anyway).
+        var mentions: [LarkMention]?
+        enum CodingKeys: String, CodingKey { case text, mentions, clientID = "client_id" }
     }
     /// lark-connector can take a while to confirm a send; a retry after an early timeout is what sent twice.
     static let larkSendTimeout: TimeInterval = 45
-    func larkSend(_ id: String, text: String, clientID: String? = nil) async throws {
-        try await post("/api/v1/lark/conversations/\(id)/messages", body: LarkText(text: text, clientID: clientID), timeout: Self.larkSendTimeout)
+    func larkSend(_ id: String, text: String, clientID: String? = nil, mentions: [LarkMention] = []) async throws {
+        try await post("/api/v1/lark/conversations/\(id)/messages",
+                       body: LarkText(text: text, clientID: clientID, mentions: mentions.isEmpty ? nil : mentions),
+                       timeout: Self.larkSendTimeout)
     }
     struct LarkReplyBody: Encodable {
         var text: String
         /// True: a reply in the message's thread; false: a quoted reply in its chat.
         var thread: Bool
         var clientID: String?
-        enum CodingKeys: String, CodingKey { case text, thread, clientID = "client_id" }
+        var mentions: [LarkMention]?
+        enum CodingKeys: String, CodingKey { case text, thread, mentions, clientID = "client_id" }
     }
     /// A reply to one message: quoted in its chat, or in its thread. Same idempotency and timeout as `larkSend`.
-    func larkReply(messageID: String, text: String, thread: Bool, clientID: String? = nil) async throws {
-        try await post("/api/v1/lark/messages/\(messageID)/replies", body: LarkReplyBody(text: text, thread: thread, clientID: clientID),
+    func larkReply(messageID: String, text: String, thread: Bool, clientID: String? = nil, mentions: [LarkMention] = []) async throws {
+        try await post("/api/v1/lark/messages/\(messageID)/replies",
+                       body: LarkReplyBody(text: text, thread: thread, clientID: clientID, mentions: mentions.isEmpty ? nil : mentions),
                        timeout: Self.larkSendTimeout)
+    }
+    struct LarkMembers: Decodable { var members: [LarkMember] }
+    /// A chat's members for the @ picker: all of them for an empty `query`, else the hub's search (name, group
+    /// nickname, pinyin).
+    func larkMembers(_ id: String, query: String, limit: Int = 30) async throws -> LarkMembers {
+        try await get("/api/v1/lark/conversations/\(id)/members", query: ["q": query, "limit": String(limit)])
     }
     /// Reports what the reader has seen (never sent just for opening a chat).
     func larkRead(_ id: String, _ report: LarkReadReport) async throws { try await post("/api/v1/lark/conversations/\(id)/read", body: report) }

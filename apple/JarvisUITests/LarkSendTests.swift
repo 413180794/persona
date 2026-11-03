@@ -180,6 +180,43 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(send.waitForNonExistence(timeout: 2), "and goes with them")
     }
 
+    /// @ in a group's box lists the members; picking one writes `@name ` and the message goes out mentioning them
+    /// (the mock keeps the mention as an at part with their user id, as Feishu does).
+    @MainActor func testAtPicksSomeoneToMention() throws {
+        let app = openHikingChat()
+        let box = app.textFields["lark.box"]
+        XCTAssertTrue(box.waitForExistence(timeout: 5))
+        box.tap()
+        box.typeText("@")
+        let picker = app.descendants(matching: .any)["lark.mentionPicker"] // a scroll view once the list is long
+        XCTAssertTrue(picker.waitForExistence(timeout: 5), "@ lists the members")
+        XCTAssertTrue(app.buttons["@所有人"].exists, "所有人 comes first")
+        shot(app, "lark-mention-picker")
+        box.typeText("M")
+        let mia = app.buttons["@Mia"]
+        XCTAssertTrue(mia.waitForExistence(timeout: 5), "the lookup narrows to Mia")
+        mia.tap()
+        XCTAssertEqual(app.textFields["lark.box"].value as? String, "@Mia ", "picking writes the name and a space")
+        XCTAssertTrue(picker.waitForNonExistence(timeout: 3))
+        let words = "周六见 " + UUID().uuidString.prefix(6)
+        app.textFields["lark.box"].typeText(words)
+        app.buttons["lark.send"].tap()
+        sleep(6) // the mock takes 2 s to send, then the copy comes in
+        shot(app, "lark-mention-sent")
+
+        // What the mock got: the message with an at part for Mia's user id.
+        var request = URLRequest(url: URL(string: hub + "/api/v1/lark/conversations/f3/messages")!)
+        request.setValue("Bearer mock", forHTTPHeaderField: "Authorization")
+        let done = expectation(description: "messages")
+        var body = Data()
+        URLSession.shared.dataTask(with: request) { data, _, _ in body = data ?? Data(); done.fulfill() }.resume()
+        wait(for: [done], timeout: 10)
+        let messages = (try JSONSerialization.jsonObject(with: body) as? [String: Any])?["messages"] as? [[String: Any]] ?? []
+        let sent = try XCTUnwrap(messages.last { ($0["text"] as? String) == "@Mia " + words }, "the message reached the mock")
+        let parts = sent["parts"] as? [[String: Any]] ?? []
+        XCTAssertTrue(parts.contains { $0["kind"] as? String == "at" && $0["refId"] as? String == "u-Mia" }, "\(parts)")
+    }
+
     /// What is typed and not sent is still in the box, quote and all, after the app is gone and back (LarkDrafts).
     @MainActor func testDraftOutlivesTheApp() {
         var app = openHikingChat()

@@ -1,0 +1,109 @@
+import Foundation
+import Testing
+@testable import Jarvis
+
+@MainActor
+struct LarkMentionsTests {
+    private let zhou = LarkMention(userID: "u-zhou", name: "小周")
+    private let otherZhou = LarkMention(userID: "u-zhou2", name: "小周")
+    private let tom = LarkMention(userID: "u-tom", name: "Tom")
+    private let tommy = LarkMention(userID: "u-tommy", name: "Tommy")
+
+    // MARK: The @ being typed
+
+    @Test func anAtAtTheEndOpensTheLookup() {
+        #expect(LarkMentions.query(in: "@") == "")
+        #expect(LarkMentions.query(in: "周六 @小") == "小")
+        #expect(LarkMentions.query(in: "你好@Mi") == "Mi", "Chinese is written without a space before @")
+        #expect(LarkMentions.query(in: "@小周 @To") == "To", "the last @ counts")
+    }
+
+    @Test func noLookupWithoutAnAtBeingTyped() {
+        #expect(LarkMentions.query(in: "") == nil)
+        #expect(LarkMentions.query(in: "周六见") == nil)
+        #expect(LarkMentions.query(in: "mail me@example") == nil, "an address is not a mention")
+        #expect(LarkMentions.query(in: "@小周 ") == nil, "the space after a picked name ends it")
+        #expect(LarkMentions.query(in: "@小周\n") == nil)
+        #expect(LarkMentions.query(in: "@" + String(repeating: "长", count: LarkMentions.maxQuery + 1)) == nil)
+    }
+
+    @Test func pickingWritesTheNameAndASpace() {
+        #expect(LarkMentions.inserting(zhou, into: "周六 @小") == "周六 @小周 ")
+        #expect(LarkMentions.inserting(.everyone, into: "@") == "@所有人 ")
+        #expect(LarkMentions.inserting(tom, into: "@小周 一起 @") == "@小周 一起 @Tom ")
+    }
+
+    @Test func everyoneIsOfferedUntilTheLookupRulesItOut() {
+        #expect(LarkMentions.offersEveryone(""))
+        #expect(LarkMentions.offersEveryone("所"))
+        #expect(LarkMentions.offersEveryone("Al"))
+        #expect(!LarkMentions.offersEveryone("小"))
+    }
+
+    // MARK: Text + picked → mentions
+
+    @Test func thoseStillInTheTextAreMentioned() {
+        let text = "@小周 @Tom 周六见"
+        #expect(LarkMentions.mentions(in: text, picked: [zhou, tom]) == [zhou, tom])
+    }
+
+    @Test func deletingANameDropsItsMention() {
+        #expect(LarkMentions.mentions(in: "@Tom 周六见", picked: [zhou, tom]) == [tom])
+        #expect(LarkMentions.mentions(in: "@小 周六见", picked: [zhou]) == [], "half a name is not a mention")
+        #expect(LarkMentions.mentions(in: "周六见", picked: [zhou, tom]) == [])
+    }
+
+    @Test func sameNamesCountAsOftenAsTheTextHasThem() {
+        #expect(LarkMentions.mentions(in: "@小周 @小周 好", picked: [zhou, otherZhou]) == [zhou, otherZhou])
+        // One deleted: one stays, the first picked.
+        #expect(LarkMentions.mentions(in: "@小周 好", picked: [zhou, otherZhou]) == [zhou])
+        // Someone picked twice is mentioned once.
+        #expect(LarkMentions.mentions(in: "@小周 @小周", picked: [zhou, zhou]) == [zhou])
+    }
+
+    @Test func aLongerNameDoesNotKeepAShorterOne() {
+        #expect(LarkMentions.mentions(in: "@Tommy 来", picked: [tom, tommy]) == [tommy])
+        #expect(LarkMentions.mentions(in: "@Tommy @Tom 来", picked: [tom, tommy]) == [tom, tommy])
+    }
+
+    @Test func everyoneIsAMentionLikeAnyOther() {
+        #expect(LarkMentions.mentions(in: "@所有人 周六集合", picked: [.everyone]) == [.everyone])
+        #expect(LarkMentions.mentions(in: "周六集合", picked: [.everyone]) == [])
+    }
+
+    // MARK: On the wire
+
+    @Test func mentionsGoWithASendAndAReply() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/lark/conversations/f3/messages", json: "{}")
+        hub.on("POST", "/api/v1/lark/messages/m1/replies", json: #"{"ok":true}"#)
+        let plain = LarkOutgoing(text: "@所有人 @小周 集合", mentions: [.everyone, zhou])
+        let reply = LarkOutgoing(text: "@Tom 好", replyTo: LarkReplyTo(id: "m1", senderName: "Tom", text: "几点"), thread: true, mentions: [tom])
+        try await LarkOutbox.deliver(plain, feed: "f3", api: hub.client)
+        try await LarkOutbox.deliver(reply, feed: "f3", api: hub.client)
+        let sent = try hub.sent("POST", "/api/v1/lark/conversations/f3/messages").map {
+            try JSONSerialization.jsonObject(with: $0.body ?? Data()) as? NSDictionary
+        }
+        #expect(sent.first??["mentions"] as? [[String: String]] == [["user_id": "all", "name": "所有人"], ["user_id": "u-zhou", "name": "小周"]])
+        let replied = try hub.sent("POST", "/api/v1/lark/messages/m1/replies").map {
+            try JSONSerialization.jsonObject(with: $0.body ?? Data()) as? NSDictionary
+        }
+        #expect(replied.first??["mentions"] as? [[String: String]] == [["user_id": "u-tom", "name": "Tom"]])
+    }
+
+    @Test func membersDecodeWithOrWithoutAnAvatar() throws {
+        let json = #"{"members":[{"user_id":"u-tom","name":"Tom","avatar":"/api/v1/lark/media/avatar-tom"},{"user_id":"u-jie","name":"杰哥"}]}"#
+        let r = try JSON.decoder.decode(APIClient.LarkMembers.self, from: Data(json.utf8))
+        #expect(r.members.map(\.name) == ["Tom", "杰哥"])
+        #expect(r.members[0].avatar != nil && r.members[1].avatar == nil)
+    }
+
+    @Test func aDraftKeepsItsMentions() throws {
+        let d = LarkDraft(text: "@小周 ", mentions: [zhou])
+        let back = try JSON.decoder.decode(LarkDraft.self, from: JSON.encoder.encode(d))
+        #expect(back == d)
+        // A draft kept before mentions existed still reads.
+        let old = try JSON.decoder.decode(LarkDraft.self, from: Data(#"{"text":"八点"}"#.utf8))
+        #expect(old.mentions == nil && old.text == "八点")
+    }
+}

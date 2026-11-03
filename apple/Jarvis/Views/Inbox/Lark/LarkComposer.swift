@@ -15,8 +15,9 @@ struct LarkReplyHandler {
 
 /// The box under a Feishu chat or thread: the text field and the send button, with the quote bar of the message
 /// being answered above it. Like Feishu, the send button is only there once there is something to send; until then
-/// the field takes the whole row.
+/// the field takes the whole row. In a group, typing @ lists the members to mention (LarkMentionPicker).
 struct LarkComposer: View {
+    @Environment(AppModel.self) private var model
     var placeholder: String
     @Binding var text: String
     var focused: FocusState<Bool>.Binding
@@ -26,10 +27,29 @@ struct LarkComposer: View {
     /// goes once it holds text, so tests find it by its id.
     var boxID = "lark.box"
     var sendID = "lark.send"
+    /// The group whose members @ offers; nil in a 1:1 chat (no picker).
+    var mentionFeed: String? = nil
+    /// My user id there (I am not offered).
+    var me: String? = nil
+    /// Those picked so far; what is sent keeps the ones whose `@name` is still in the text (LarkMentions).
+    var mentions: Binding<[LarkMention]> = .constant([])
     var send: () -> Void
+    /// The members matching the @ being typed, and whether the hub answered for it (an older hub without the route
+    /// does not: no picker, the box works as before).
+    @State private var members: [LarkMember] = []
+    @State private var membersAnswered = false
+
+    private var mentionQuery: String? { mentionFeed == nil ? nil : LarkMentions.query(in: text) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
+            if let q = mentionQuery, membersAnswered, !members.isEmpty || LarkMentions.offersEveryone(q) {
+                LarkMentionPicker(query: q, members: members) { m in
+                    text = LarkMentions.inserting(m, into: text)
+                    mentions.wrappedValue.append(m)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             if let replyTo {
                 LarkReplyBar(reply: replyTo, cancel: cancelReply)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -59,6 +79,27 @@ struct LarkComposer: View {
         .padding(.bottom, Theme.Space.s)
         .animation(Theme.Motion.standard, value: replyTo)
         .animation(Theme.Motion.standard, value: Self.canSend(text))
+        .animation(Theme.Motion.standard, value: mentionQuery == nil)
+        .task(id: mentionQuery) { await lookUp(mentionQuery) }
+    }
+
+    /// Asks the hub for members a moment after the last keystroke after @.
+    private func lookUp(_ query: String?) async {
+        guard let query, let feed = mentionFeed else {
+            membersAnswered = false
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(200))
+        guard !Task.isCancelled, let api = model.api else { return }
+        do {
+            let found = try await api.larkMembers(feed, query: query).members
+            members = found.filter { $0.userID != me }
+            membersAnswered = true
+        } catch {
+            guard !error.isCancellation else { return }
+            members = []
+            membersAnswered = false
+        }
     }
 
     /// Words to send: blank lines and spaces alone are not.

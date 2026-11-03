@@ -41,6 +41,8 @@ struct LarkChatView: View {
     @State private var text: String
     /// The message 回复 picked: quoted over the box and by what is sent next.
     @State private var replyTo: LarkReplyTo?
+    /// Picked with the @ picker since the last send.
+    @State private var mentions: [LarkMention]
     @FocusState private var composerFocused: Bool
     /// What I wrote that is on its way (on screen at once, sent one after another in the background).
     @State private var outgoing: [LarkOutgoing] = []
@@ -66,6 +68,7 @@ struct LarkChatView: View {
         let draft = LarkDrafts.shared[.chat(conversation.id)]
         _text = State(initialValue: draft.text)
         _replyTo = State(initialValue: draft.replyTo)
+        _mentions = State(initialValue: draft.mentions ?? [])
     }
 
     private var isTopic: Bool { conversation.isTopic == true }
@@ -130,7 +133,7 @@ struct LarkChatView: View {
             if let id = debugPost { LarkMomentsPostView(postID: id) }
         }
         .safeAreaInset(edge: .bottom) { composer }
-        .onChange(of: LarkDraft(text: text, replyTo: replyTo)) { _, draft in
+        .onChange(of: LarkDraft(text: text, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)) { _, draft in
             LarkDrafts.shared.set(draft, for: .chat(conversation.id))
         }
         .onDisappear { LarkDrafts.shared.flush() }
@@ -182,7 +185,9 @@ struct LarkChatView: View {
 
     private var composer: some View {
         LarkComposer(placeholder: "回复 \(conversation.name)", text: $text, focused: $composerFocused,
-                     replyTo: replyTo, cancelReply: { replyTo = nil }, send: send)
+                     replyTo: replyTo, cancelReply: { replyTo = nil },
+                     mentionFeed: conversation.isGroup ? conversation.id : nil,
+                     me: pager.messages.last(where: \.isMine)?.senderID, mentions: $mentions, send: send)
     }
 
     // MARK: Jumps
@@ -461,6 +466,7 @@ struct LarkChatView: View {
                                 discard(o.id)
                                 text = text.isEmpty ? o.text : text + "\n" + o.text
                                 if replyTo == nil { replyTo = o.replyTo }
+                                mentions += o.mentions
                             },
                             discard: { discard(o.id) })
                 .padding(.top, LarkChatLayout.gap(grouped: grouped))
@@ -473,8 +479,9 @@ struct LarkChatView: View {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         text = ""
-        let o = LarkOutgoing(text: t, replyTo: replyTo)
+        let o = LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))
         replyTo = nil
+        mentions = []
         withAnimation(Theme.Motion.standard) { outgoing.append(o) }
         Haptics.tap()
         deliver(o.id)
