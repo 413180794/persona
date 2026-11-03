@@ -61,6 +61,7 @@ fun AssistantScreen(
     startConversation: suspend () -> SessionKey,
     pinnedConversations: Set<SessionKey> = emptySet(),
     connectionLabel: String? = null,
+    hubOnline: Boolean = true,
     chatContent: (@Composable (SessionKey) -> Unit)? = null,
     demo: Boolean = false,
     machines: List<Machine> = LocalAssistantHost.current?.machines.orEmpty(),
@@ -118,6 +119,10 @@ fun AssistantScreen(
             if (it.key in ended) it.copy(status = "offline", state = "offline") else it
         }), query, pinnedConversations)
     }
+    // Jarvis's face (top bar and the conversation list) shows the conversation on screen, as on iOS: none on the
+    // new-conversation page.
+    val faceState = personaState(active?.let { key -> snapshot.conversations.firstOrNull { it.key == key } }, hubOnline,
+        machines, assistantMachine)
     fun openConversation(key: SessionKey) {
         if (key == PendingMainConversation) {
             viewingMainQueue = true
@@ -232,7 +237,7 @@ fun AssistantScreen(
         if (drawerOpen) scope.launch { drawerOpen = false } else newConversation()
     }
     val sidebar: @Composable () -> Unit = {
-        AssistantDrawer(query, { query = it }, groups, active, snapshot.mainSession != null,
+        AssistantDrawer(faceState, query, { query = it }, groups, active, snapshot.mainSession != null,
             onEnd = if (management != null) ({ ending = it }) else null,
             onMain = {
                 openedMain = true
@@ -259,7 +264,7 @@ fun AssistantScreen(
             modifier = Modifier.fillMaxSize().imePadding(),
             topBar = {
                 CompositionLocalProvider(LocalRootLeading provides {
-                    JIconButton(PhIcons.SidebarSimple, "对话列表", {
+                    JPersonaButton(faceState, "对话列表", {
                         if (wide) sidebarVisible = !sidebarVisible else drawerOpen = true
                     })
                 }) {
@@ -466,6 +471,7 @@ private fun AssistantHome(
 
 @Composable
 private fun AssistantDrawer(
+    face: PersonaState,
     query: String, onQuery: (String) -> Unit, groups: ConversationGroups, active: SessionKey?, hasMain: Boolean,
     onEnd: ((Session) -> Unit)?,
     onMain: () -> Unit, onOpen: (SessionKey) -> Unit, onInfo: (String) -> Unit,
@@ -476,7 +482,7 @@ private fun AssistantDrawer(
             item {
                 Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AssistantAvatar()
+                    PersonaFace(face)
                     Text("Jarvis", style = JarvisTheme.type.title, color = JarvisTheme.palette.ink)
                 }
             }
@@ -547,9 +553,6 @@ private fun ConversationRow(
 private fun DrawerItem(title: String, icon: PhIcon, onClick: () -> Unit) {
     JRow(title, leadingIcon = icon, onClick = onClick)
 }
-
-@Composable
-private fun AssistantAvatar() = JAvatar(text = "J")
 
 @Composable
 internal fun AssistantDemoNotice() = JNotice("内容仅保存在本次体验中。", title = "体验模式", icon = PhIcons.Info)

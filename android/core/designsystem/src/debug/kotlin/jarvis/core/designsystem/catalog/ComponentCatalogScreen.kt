@@ -160,6 +160,19 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
                 time = "2 小时前", compact = true, muted = true, flags = listOf(RowFlag("已屏蔽", PhIcons.Prohibit)),
             )
         }
+        item { JSectionHeader("形象") }
+        item {
+            // The default persona's face in each state, as iOS's PersonaGallery shows its dot (docs/persona.md「状态」).
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                PersonaState.entries.forEach { state ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        PersonaFace(state, size = 46.dp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(state.label, style = JarvisTheme.type.caption, color = palette.ink2, maxLines = 1)
+                    }
+                }
+            }
+        }
         item { JSectionHeader("对话") }
         item { UserBubble("给天气 App 加一个主屏幕小组件：显示当前温度和接下来 6 小时的降雨概率。", time = "08:01") }
         item {

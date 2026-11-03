@@ -354,7 +354,8 @@ private fun JarvisShell(session: ShellSession, openNavigation: MutableState<((Ro
         val provider = entryProvider<NavKey> {
             assistantEntries(navigator) {
                 AssistantScreen(assistantNavigator, session.assistant, session.sender, session.assistant::startConversation,
-                    pins, connectionLabel = connection.title(), demo = session.demo != null,
+                    pins, connectionLabel = connection.title(),
+                    hubOnline = connection == ConnectionState.Online || connection == ConnectionState.Updating, demo = session.demo != null,
                     requestedSession = assistantRequest, onKnowledge = { navigator.navigate(KnowledgeRoute) })
             }
             agentsEntries(navigator, agents, machine, { machine = it })
