@@ -116,11 +116,23 @@ class ScriptLayoutTests(unittest.TestCase):
                 "assert pathlib.Path(asc.jarvis_config.ROOT)==pathlib.Path(sys.argv[2]); "
                 "print(asc_testflight.APP_ID)"
             )
-            result = subprocess.run([sys.executable, "-I", "-c", code, str(SCRIPTS / "release"), str(ROOT)],
-                                    cwd=directory, env={**os.environ, "JARVIS_CONFIG": str(config)},
-                                    capture_output=True, text=True, timeout=15)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.strip(), "1234567890")
+            legacy_config = Path(directory) / "legacy-config.json"
+            legacy_config.write_text(json.dumps({"app": {"bundle_id": "com.example.jarvis", "team_id": "ABCDE12345"},
+                                                 "app_store": {"app_id": "9876543210"}}))
+            environment = {key: value for key, value in os.environ.items()
+                           if key not in {"PERSONA_CONFIG", "JARVIS_CONFIG"}}
+            cases = {
+                "legacy fallback": {"JARVIS_CONFIG": str(config)},
+                "current config": {"PERSONA_CONFIG": str(config)},
+                "current takes precedence": {"PERSONA_CONFIG": str(config), "JARVIS_CONFIG": str(legacy_config)},
+            }
+            for name, variables in cases.items():
+                with self.subTest(name=name):
+                    result = subprocess.run([sys.executable, "-I", "-c", code, str(SCRIPTS / "release"), str(ROOT)],
+                                            cwd=directory, env={**environment, **variables},
+                                            capture_output=True, text=True, timeout=15)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.strip(), "1234567890")
 
     def test_runtime_cli_help_uses_the_canonical_entry(self):
         result = subprocess.run([sys.executable, "-I", str(SCRIPTS / "app/jarvisctl.py"), "--help"],
