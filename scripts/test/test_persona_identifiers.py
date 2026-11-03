@@ -71,7 +71,13 @@ class PersonaIdentifiersTest(unittest.TestCase):
 
     def test_pairing_wrappers_parse_both_link_schemes_before_permission_and_networking(self):
         helper = (ROOT / 'android/app/src/main/java/persona/android/platform/PairingLinks.kt').read_text()
-        self.assertIn('listOf("persona:", "jarvis:").any(url.trim()::startsWith)', helper)
+        self.assertIn('if (PairingInput.isLink(url)) PairingInput.parse(url) else null', helper)
+        pairing_input = (ROOT / 'android/feature/settings/src/main/kotlin/persona/feature/settings/PairingInput.kt').read_text()
+        self.assertIn('fun isLink(value: String): Boolean = Pairing.isLink(value)', pairing_input)
+        self.assertIn('if (isLink(address)) parse(address)', pairing_input)
+        pairing = (ROOT / 'android/core/domain/src/main/kotlin/persona/core/domain/Pairing.kt').read_text()
+        self.assertIn('val schemes = listOf("persona", "jarvis")', pairing)
+        self.assertIn('schemes.any { value.startsWith("$it://") }', pairing)
         self.assertIn('PairingInput.parse(url)', helper)
         platform = (ROOT / 'android/app/src/main/java/persona/android/platform/LocalNetworkPermission.kt').read_text()
         self.assertEqual(2, platform.count('val parsed = request.parsedPairingLink() ?: request'))

@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
     /** Installed only by the debug manifest; release builds have no launch adapter or developer pages. */
     private val launchAdapter: LaunchAdapter? by lazy {
-        // 启动组件可能是 legacy alias；alias 不继承 target 的 metadata，应查询真实 Activity。
+        // A legacy launcher alias does not inherit target metadata; always query the canonical Activity.
         packageManager.getActivityInfo(ComponentName(this, MainActivity::class.java), PackageManager.GET_META_DATA).metaData
             ?.getString("jarvis.launchAdapter")
             ?.let { Class.forName(it).getDeclaredConstructor().newInstance() as LaunchAdapter }

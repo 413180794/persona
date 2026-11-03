@@ -4,6 +4,8 @@
 
 ## 界面与 Compose
 
+- `activity-alias` 不继承目标 Activity 的 metadata（2026-11-03，#758）：保留旧 launcher alias 后，读取 `componentName` 会拿到 alias 的空 metadata，DEBUG 启动适配器因此不加载，假 hub、风格与深浅色参数都被忽略。查询 canonical `MainActivity` 的 metadata，保留原 key 和唯一 launcher；Release 仍不注册 DEBUG 适配器。截图脚本必须核对配对状态、实际 mock 请求和每个子进程退出码，不能把欢迎页或后续 `printf` 的成功退出算作截图验收。
+
 - Android 的 `AndroidView` 不会按自己的布局边界裁剪：里面的 View 在 `onDraw` 里 `drawColor` 会盖住上面的兄弟组件（终端的工具栏整条被背景色盖掉），要加 `Modifier.clipToBounds()`。
 - Compose 的 `Dialog(usePlatformDefaultWidth = false)` 做整页时，窗口默认不铺到系统栏下面：状态栏和手势条处各露出一条灰带（是背后的遮罩）。
   加 `decorFitsSystemWindows = false` 铺满以后，对话框窗口的状态栏图标又不跟 Activity 走，浅色页面上是白字（历史会话页踩过）。整页弹层一律用 `JFullScreen`。

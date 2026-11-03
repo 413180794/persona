@@ -247,7 +247,7 @@ export function installMock(scenario: string) {
           return json({ machine: m, restart });
         }
         const link = String(body.pair_link ?? "");
-        if (!link.startsWith("jarvis://connector")) return fail(502, "pair_failed", "这不是连接器的配对链接（jarvis://connector?…）");
+        if (!/^(?:jarvis|persona):\/\/connector/.test(link)) return fail(502, "pair_failed", "这不是连接器的配对链接（jarvis://connector?…）");
         if (body.proxy && !/^socks5h?:\/\//.test(body.proxy)) return fail(400, "invalid_proxy", "proxy 要写成 socks5://主机:端口");
         await wait(1400);
         const addr = body.address || new URLSearchParams(link.split("?")[1] ?? "").get("addr") || "";
@@ -290,7 +290,7 @@ export function installMock(scenario: string) {
         return json({ hub_id: d.hub_id, name: d.name, tls_port: 18662, fp: d.fp, version: d.version });
       }
       case "POST /peers": {
-        if (!String(body.code ?? "").startsWith("jarvis://peer?")) return fail(400, "invalid_code", "not a peer code");
+        if (!/^(?:jarvis|persona):\/\/peer\?/.test(String(body.code ?? ""))) return fail(400, "invalid_code", "not a peer code");
         const p: Peer = { hub_id: "a24d77c0-91e2-4f1b-8f2d-5c0b3e6a9d42", name: "书房 NAS", state: "connecting", address: "https://192.0.2.20:18662", machines: 0 };
         peers = [...peers, p];
         return json(p);
@@ -304,7 +304,7 @@ export function installMock(scenario: string) {
       if (m[2] === "/connector") {
         if (machine.kind !== "service") return fail(400, "not_service");
         const link = String(body.pair_link ?? "");
-        if (!link.startsWith("jarvis://connector")) return fail(502, "pair_failed", "这不是连接器的配对链接（jarvis://connector?…）");
+        if (!/^(?:jarvis|persona):\/\/connector/.test(link)) return fail(502, "pair_failed", "这不是连接器的配对链接（jarvis://connector?…）");
         await wait(1200);
         if (link.includes("fail")) return fail(502, "pair_failed", "配对码不对、用过了或过期了：在那台电脑上重新生成");
         const address = body.address || machine.address || "";

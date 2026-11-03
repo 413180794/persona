@@ -307,7 +307,7 @@ func ConnectorLink(addrs []string, fp, code string) string {
 // ParseConnectorLink reads a link ConnectorLink made: the addresses (host:port, best first), the pin and the code.
 func ParseConnectorLink(raw string) (addrs []string, fp, code string, err error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "jarvis" || u.Host != "connector" {
+	if err != nil || (u.Scheme != "jarvis" && u.Scheme != "persona") || u.Host != "connector" {
 		return nil, "", "", errors.New("这不是 jarvis-link pair --listen 给的链接（jarvis://connector?…）")
 	}
 	q := u.Query()

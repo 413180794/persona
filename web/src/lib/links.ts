@@ -94,7 +94,7 @@ export function linkRoute(url: string): LinkRoute {
   const u = parse(url.trim());
   if (!u) return { kind: "none" };
   const scheme = u.protocol.toLowerCase();
-  if (scheme === "jarvis:") {
+  if (scheme === "jarvis:" || scheme === "persona:") {
     // jarvis://session/<mid>/<sid>: the host is "session"
     const parts = `${u.host}${u.pathname}`.split("/").filter(Boolean).map(decodeURIComponent);
     if (parts[0] === "session" && parts[1] && parts[2]) return { kind: "session", mid: parts[1], sid: parts[2] };

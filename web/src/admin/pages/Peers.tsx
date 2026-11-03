@@ -399,7 +399,7 @@ function AddPeer({ target, onClose, onJoined }: { target: DiscoveredHub | true |
           <Button tone="quiet" onClick={onClose}>
             取消
           </Button>
-          <Button tone="primary" busy={busy} disabled={!ok || !code.trim().startsWith("jarvis://")} onClick={join}>
+          <Button tone="primary" busy={busy} disabled={!ok || !/^(?:jarvis|persona):\/\//.test(code.trim())} onClick={join}>
             互联
           </Button>
         </>

@@ -67,8 +67,14 @@ describe("where a link opens", () => {
   });
 
   it("moves to a conversation for jarvis://session links, and gives them an in-app href", () => {
-    expect(linkRoute("jarvis://session/macbook/abc-1")).toEqual({ kind: "session", mid: "macbook", sid: "abc-1" });
-    expect(linkHref("jarvis://session/mac%20book/abc-1")).toBe("/s/mac%20book/abc-1");
+    for (const scheme of ["jarvis", "persona"]) {
+      expect(linkRoute(`${scheme}://session/macbook/abc-1`)).toEqual({ kind: "session", mid: "macbook", sid: "abc-1" });
+      expect(linkHref(`${scheme}://session/mac%20book/abc-1`)).toBe("/s/mac%20book/abc-1");
+      expect(opensInApp(`${scheme}://session/macbook/abc-1`)).toBe(true);
+      expect(linkRoute(`${scheme}://pair?token=x`).kind).toBe("none");
+      expect(linkRoute(`${scheme}://session/macbook`).kind).toBe("none");
+    }
+    expect(linkRoute("other://session/macbook/abc-1").kind).toBe("none");
     expect(linkHref("https://example.com/a")).toBe("https://example.com/a");
     expect(linkRoute("jarvis://pair?token=x").kind).toBe("none");
   });

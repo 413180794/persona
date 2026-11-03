@@ -21,6 +21,13 @@ def blocks(text):
 
 
 class AppleRenameTests(unittest.TestCase):
+    def test_new_sources_do_not_recreate_retired_directories(self):
+        for legacy in ("Jarvis", "JarvisWatch", "JarvisWidgets", "JarvisNotify", "JarvisTests", "JarvisMacTests", "JarvisUITests"):
+            with self.subTest(directory=legacy):
+                self.assertFalse((APPLE / legacy).exists(), "new files must use the canonical Persona source directory")
+        self.assertFalse((ROOT / "mac/Sources/JarvisLink").exists())
+        self.assertTrue((APPLE / "Jarvis.xcodeproj").is_symlink())
+
     def test_targets_keep_original_product_modules(self):
         targets = blocks(TARGETS)
         expected = {

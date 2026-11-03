@@ -220,7 +220,7 @@ func race[T any](ctx context.Context, eps []Endpoint, try func(context.Context, 
 // (the apps' link; then the machine is named on the command line).
 func parsePairLink(raw string) (token string, c Config, err error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "jarvis" || (u.Host != "link" && u.Host != "pair") {
+	if err != nil || (u.Scheme != "jarvis" && u.Scheme != "persona") || (u.Host != "link" && u.Host != "pair") {
 		return "", c, errors.New("这不是 jarvisd hub pair 给的配对链接（jarvis://link?… 或 jarvis://pair?…）")
 	}
 	q := u.Query()

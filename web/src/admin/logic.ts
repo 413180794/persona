@@ -268,7 +268,7 @@ export interface ConnectorLink {
 // parseConnectorLink reads what `jarvis-link pair --listen` prints: jarvis://connector?addr=<host:port>&…&fp=…&code=…
 // (the hub checks it again). null when it is not one or misses the key fingerprint or the code.
 export function parseConnectorLink(raw: string): ConnectorLink | null {
-  const m = /^jarvis:\/\/connector\/?\?(.*)$/is.exec(raw.trim());
+  const m = /^(?:jarvis|persona):\/\/connector\/?\?(.*)$/is.exec(raw.trim());
   if (!m) return null;
   const q = new URLSearchParams(m[1]);
   const fp = q.get("fp")?.trim() ?? "";

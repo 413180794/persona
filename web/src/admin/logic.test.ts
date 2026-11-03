@@ -223,6 +223,13 @@ describe("connector links", () => {
       fp: "abc_-1",
       code: "ABCD-EFGH",
     });
+    for (const scheme of ["persona", "jarvis"]) {
+      expect(parseConnectorLink(`${scheme}://connector?addr=192.0.2.30:18663&fp=abc_-1&code=ABCD-EFGH`)).toEqual({
+        addrs: ["192.0.2.30:18663"], fp: "abc_-1", code: "ABCD-EFGH",
+      });
+      expect(parseConnectorLink(`${scheme}://connector?addr=192.0.2.30:18663&code=ABCD-EFGH`)).toBeNull();
+      expect(parseConnectorLink(`${scheme}://link?addr=192.0.2.30:18663&fp=f&code=c`)).toBeNull();
+    }
     expect(parseConnectorLink("jarvis://connector/?fp=f&code=c")).toEqual({ addrs: [], fp: "f", code: "c" });
     expect(parseConnectorLink("jarvis://connector?addr=bad&fp=f&code=c")?.addrs).toEqual([]);
   });

@@ -101,7 +101,7 @@ type parsedPeerCode struct {
 
 func parsePeerCode(raw string) (*parsedPeerCode, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "jarvis" || u.Host != "peer" {
+	if err != nil || (u.Scheme != "jarvis" && u.Scheme != "persona") || u.Host != "peer" {
 		return nil, errors.New("这不是互联码（jarvis://peer?…）")
 	}
 	q := u.Query()
