@@ -111,7 +111,7 @@ final class RunningChatTests: XCTestCase {
 
     /// Samples the content area's ink and `probe.chat-rows` for `seconds`: fails on a blank content area, a line-less
     /// list, or the top line moving by itself (away from the newest).
-    /// `settle`: a blank in the first seconds does not count (#754: opening a work line can still show one blank frame).
+    /// `settle`: a blank in the first seconds does not count.
     private func sample(seconds: Double, label: String, settle: Double = 0, file: StaticString = #filePath, line: UInt = #line) {
         var blank: [Double] = [], jumps: [String] = [], inks: [Double] = []
         var last: Rows?
@@ -156,8 +156,8 @@ final class RunningChatTests: XCTestCase {
 
     /// Opening a running work line from its header and folding it again, in a conversation that fits on one screen
     /// folded (a new one, MOCK_ASSISTANT_RUN=alone), as the user did (2026-11-03): folded, the chat went blank and
-    /// stayed so until the app was killed (#686). Opened, the header stays on screen and nothing stays blank (one
-    /// blank frame right after the tap is #754, still open).
+    /// stayed so until the app was killed (#686). Opened, the header stays on screen and nothing stays blank (the frame
+    /// right after the tap can still be blank about once in 12 runs: #754).
     func testFoldingARunningWorkLineKeepsTheChat() throws {
         guard ProcessInfo.processInfo.environment["JARVIS_RUN_ALONE"] == "1" else {
             throw XCTSkip("needs MOCK_ASSISTANT_RUN=alone (JARVIS_RUN_ALONE=1)")
@@ -176,7 +176,7 @@ final class RunningChatTests: XCTestCase {
         let y0 = work.frame.minY
         work.tap() // open
         if ProcessInfo.processInfo.environment["JARVIS_TRACE"] == "1" { trace(seconds: 4, label: "open") }
-        sample(seconds: 3, label: "opened", settle: 0.5) // one blank frame on opening is #754, still open
+        sample(seconds: 3, label: "opened", settle: 0.3) // the frame right after the tap: #754, down from 4 in 12 to 1
         XCTAssertTrue(work.exists && work.isHittable, "the header stays on screen when its work line opens")
         if work.exists {
             print(String(format: "TRUTH opened: header moved %.0f pt", work.frame.minY - y0))

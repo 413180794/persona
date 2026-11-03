@@ -27,6 +27,9 @@ import SwiftUI
     private var held: Held?
     /// The offset that puts the held header back, when the list could not go there yet (`settle`).
     private var want: CGFloat?
+    /// How far into the content the held header's far edge is now: the content is at least that long, even before the
+    /// scroll view's content size says so.
+    private var reach: CGFloat = 0
     private var last: [String: Spot] = [:]
 
     /// Before opening or closing: keep `key` where `from` (the header before, if it changes id) is now. `slow`: what
@@ -36,6 +39,7 @@ import SwiftUI
         guard let list, let at = last[from ?? key] else { return }
         held = Held(key: key, at: at, base: list.contentOffset.y, until: .now.addingTimeInterval(1.5), slow: slow)
         want = nil
+        reach = 0
         letGo()
     }
 
@@ -54,6 +58,7 @@ import SwiftUI
         let wanted = h.base + spot.content - h.at.content
         let settling = want != nil
         want = wanted
+        reach = spot.content
         put(list)
         if !settling { settle() }
     }
@@ -61,7 +66,7 @@ import SwiftUI
     /// The list goes as near `want` as it can now.
     private func put(_ list: UIScrollView) {
         guard let want else { return }
-        let target = Self.within(list, want)
+        let target = Self.within(list, want, content: reach)
         if abs(target - list.contentOffset.y) >= 0.5 { list.contentOffset.y = target }
         if abs(target - want) < 0.5 { self.want = nil }
     }
@@ -82,10 +87,13 @@ import SwiftUI
         }
     }
 
-    /// An offset the list can be at.
-    private static func within(_ list: UIScrollView, _ y: CGFloat) -> CGFloat {
+    /// An offset the list can be at. `content`: how long the content is known to be (the header's far edge in it): the
+    /// rows are laid out a pass before the scroll view's content size follows, and capped by the old size the list
+    /// stayed at the newest end for a frame, on steps still fading in: blank (#754).
+    private static func within(_ list: UIScrollView, _ y: CGFloat, content: CGFloat = 0) -> CGFloat {
         let inset = list.adjustedContentInset
-        return min(max(y, -inset.top), max(-inset.top, list.contentSize.height + inset.bottom - list.bounds.height))
+        let height = max(list.contentSize.height, content)
+        return min(max(y, -inset.top), max(-inset.top, height + inset.bottom - list.bounds.height))
     }
 
     /// Sits in the list's content and hands the scroll view around it to the pin.
