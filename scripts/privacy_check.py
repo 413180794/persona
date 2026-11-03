@@ -10,7 +10,8 @@ What counts as private comes from this machine, never from the repo: the values 
 internal project names, people, anything else) and CLAUDE.local.md's `code spans`. On top of that, any private IPv4
 address and any email outside example.* domains. Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
 
-Not private: values config.example.json ships as defaults, the repo's own Go module path (it names the GitHub owner),
+Not private: loopback addresses (127.0.0.0/8, ::1) even when the config holds one, values config.example.json ships
+as defaults, the repo's own Go module path (it names the GitHub owner),
 CLAUDE.local.md spans that only name repo files, commands or config keys, and in site/ the contact address and domain
 the App Store and the OAuth consent screen publish anyway.
 """
@@ -117,10 +118,18 @@ def word_list():
     return out
 
 
+def loopback(value):
+    """127.0.0.0/8 and ::1 are every machine's own address, not anybody's private value."""
+    try:
+        return ipaddress.ip_address(value.strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
 def terms():
     """Words to look for, longest first, and those of them allowed in PUBLIC_DIRS."""
     config, public = config_values()
-    vals = {v for v in config | word_list() if len(v) >= 4 and v.lower() not in IGNORE}
+    vals = {v for v in config | word_list() if len(v) >= 4 and v.lower() not in IGNORE and not loopback(v)}
     user = os.path.basename(HOME)
     if len(user) >= 3:
         vals.add("/Users/" + user)

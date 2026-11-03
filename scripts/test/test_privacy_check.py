@@ -17,6 +17,8 @@ spec.loader.exec_module(pc)
 
 PUBLIC_URL = "https://registry.npmjs.org/sample/-/sample-1.0.0.tgz"
 UNAPPROVED_URL = "https://registry.example.invalid/sample/-/sample-1.0.0.tgz"
+# Split so the repository scan of this file does not flag it.
+PRIVATE_IP = "10." + "20.30.40"
 
 
 def lockfile(source=PUBLIC_URL, version=3, link=False):
@@ -82,6 +84,31 @@ class NpmSourceTests(unittest.TestCase):
         for source in ["", None, False, 1, {}, []]:
             with self.subTest(source=source):
                 self.assertFalse(pc.npm_source_allowed(source))
+
+
+class LoopbackTests(unittest.TestCase):
+    def test_loopback_values(self):
+        for value in ["127.0.0.1", "127.1.2.3", "::1", "[::1]", "0:0:0:0:0:0:0:1"]:
+            with self.subTest(value=value):
+                self.assertTrue(pc.loopback(value))
+        for value in [PRIVATE_IP, "192.0.2.1", "0.0.0.0", "127.0.0.1:18660", "hub-host", ""]:
+            with self.subTest(value=value):
+                self.assertFalse(pc.loopback(value))
+
+    def test_config_loopback_is_not_a_word(self):
+        with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
+            home = Path(temp)
+            config = home / ".config/jarvis/config.json"
+            config.parent.mkdir(parents=True)
+            config.write_text(json.dumps({"hub": {"url": "http://127.0.0.1:18660"}, "lan_host": PRIVATE_IP,
+                                          "local_ipv6": "[::1]"}))
+            with patch.object(pc, "HOME", str(home)), patch.object(pc, "ROOT", str(home)):
+                words, _ = pc.terms()
+        self.assertNotIn("127.0.0.1", words)
+        self.assertNotIn("[::1]", words)
+        self.assertIn(PRIVATE_IP, words)
+        self.assertEqual(pc.problems("hub at http://127.0.0.1:18660 or [::1]", words), [])
+        self.assertIn(PRIVATE_IP, pc.problems("other machine at " + PRIVATE_IP, words))
 
 
 class NpmLockTests(unittest.TestCase):
@@ -216,6 +243,23 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
         self.git("add", "web/package-lock.json")
         result = self.scan()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_config_loopback_is_not_flagged_but_private_ip_is(self):
+        config = self.home / ".config/jarvis/config.json"
+        config.parent.mkdir(parents=True)
+        config.write_text(json.dumps({"hub": {"url": "http://127.0.0.1:18660"}, "lan_host": PRIVATE_IP}))
+        (self.repo / "notes.md").write_text("The hub listens on 127.0.0.1:18660.\n")
+        self.git("add", "notes.md")
+        result = self.scan()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        (self.repo / "hosts.md").write_text("The other machine is " + PRIVATE_IP + ".\n")
+        self.git("add", "hosts.md")
+        result = self.scan()
+        self.assertNotEqual(result.returncode, 0)
+        output = result.stdout + result.stderr
+        self.assertIn("hosts.md:1: private IP", output)
+        self.assertNotIn("notes.md", output)
+        self.assertNotIn(PRIVATE_IP, output)
 
     def test_staged_unsafe_worktree_safe(self):
         self.write_lock(UNAPPROVED_URL)
