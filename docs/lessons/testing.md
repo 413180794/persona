@@ -19,6 +19,10 @@
 - 模拟器会被 XCUITest 的 typeText 切成「硬件键盘」模式：之后软键盘不再弹出（键盘按钮显示已弹起，但屏幕上没有键盘），依赖键盘高度的测试全挂。
   这台机器没有 Simulator.app，`defaults write com.apple.iphonesimulator …ConnectHardwareKeyboard` 改不回来：`simctl create` 一台新的跑。
 - XCUITest 在键盘弹起的动画中点键栏会点空（键栏正跟着键盘移动）：先等键盘出现、停一下再点。
+- XCUITest 的 `typeText` 绕过输入法直接插字，测不到拼音的 marked text：要走输入法就点屏幕键盘的键（`app.keys["y"].tap()`，空格选第一个候选）。
+  第三方键盘（2026-11-03，#909）：在仓库外做一个只有键盘扩展的小 App，按钮里用 `textDocumentProxy` 的 `setMarkedText` / `unmarkText` / `insertText` 打一段固定的字；
+  `simctl install` 后在 UI 测试里开「设置 › 通用 › 键盘 › 键盘 › 添加新键盘」加上它，回到 App 长按「下一个键盘」从列表选（点一下只在最近两个键盘间切）。
+  第三方键盘不在 `app.keyboards` 里，用完卸掉它，否则后面等键盘的测试都报「no keyboard」。
 - 按时间排的列表要有确定的次序（同一时间再按 id）：两个空间最后更新时间相同时，每次渲染顺序都可能对调，UI 测试点到的是另一行。
 - XCUITest 的启动参数（`-key value`）会盖过 UserDefaults / `@AppStorage` 的读取，App 自己写进去的值读不出来：只能用来固定测试不会改的值
   （新对话上次的机器），会在界面上改的（Agents 的分组、筛选）要在测试开头用界面恢复。`-dev.openChat ""` 让 App 不打开上次的对话。

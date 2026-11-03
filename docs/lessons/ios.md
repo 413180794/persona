@@ -98,6 +98,11 @@
   新外壳的 `ShellComposerBar` 从一行展开成卡片，不用这个隔离：长文字下反复请求 UI 快照超时（新模拟器也复现），保留原视图树，只在旧布局启用。
   画到自己边界外面的内容不能放进 island：hosting controller 的视图只接边界里的点击，溢出去的部分看得见、点不到，点击落到下面的页面上。
   BeautifulUI 风格的输入框（`PromptBar`）的 `/`、`@`、+、模型菜单就挂在输入框上方，放进去后全都点不了（2026-11-02，`BeautifulStyleTests.testCommandMenuTakesTaps`），所以这个风格也不用 island。
+- 输入框「只显示最后一行」先量截图里卡片的高度（2026-11-03，#909）：真机上换行后卡片已经是两行高，字只有一行、下面空一行，
+  是 TextField 底下的文本视图（SwiftUI 的 `VerticalTextView`，一个 `UITextView`）还停在往下滚了一行的位置，不是没长高。
+  模拟器上系统键盘、拼音的 marked text、自己写的第三方键盘扩展都复现不了；`ShellComposerBar` 在高度变化后把有焦点的文本视图
+  超出内容末端的偏移拉回来（`TextViewScroll`，偏移在内容范围内时什么都不做）。别用隐藏的 `Text` 量行数来定高度：
+  `Text` 不压缩全角标点，输入框压缩，折行位置差一两个字。
 - `List` 的行别为了 `Equatable` 包成自定义视图、再把 `.swipeActions` / `.contextMenu` 放进它的 body：试过（2026-11-01），推送和滑动都更慢
   （UIKit 那边每次都要重新配置 cell 的滑动操作）。Agents 列表推送的开销靠合并推送降下来（`AppModel.applyPendingSessions`）。
 
