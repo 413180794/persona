@@ -224,3 +224,11 @@
   按会话判断（这次 hub 启动后发过 hook 事件，或 Jarvis 起的）。
 - 量链路：在 hub 包里起一个真的 node（同一进程、自己的 HOME，`~/.claude` 链到真的那份），和 hub 按 SSH 那样用管道接起来，对隔离 herdr 里的真实 Claude
   逐跳打时间戳（`hub/cardlatency_live_test.go`）。时间线里所有上报都落在整秒的同一个零头上（.57 s、.58 s），说明走的是每秒的 tick，不是事件。
+
+## 官网 Worker 只能经 publish.sh 部署（2026-11-03，#940）
+
+- `site/` 的 Worker 同时提供公开的 personad（`/dl/`）和 `install.sh`，它们不在仓库里：`publish.sh` 把它们加进 `site/` 的副本再部署。
+  在 `site/` 里直接 `wrangler deploy`（换域名时就这么做了）会整个替换静态资源，`/dl/*`、`/install.sh` 立刻 404，各 hub 的检查更新和安装都失败。
+  补救：`wrangler deployments list` 找到上一次发布的版本，`wrangler rollback <版本>`（自定义域名不跟着版本走，不受影响），约 3 分钟恢复。
+- 改了 `site/` 的东西（域名、页面）就跑一次 `publish.sh`（或整套 `release.sh`）把它带上，不单独部署 `site/`。
+- 换域名时旧域名要留着：已发出的 App 里写死了推送中继地址，已部署的 personad 也从旧域名的 `/dl/` 检查更新。

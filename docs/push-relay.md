@@ -124,7 +124,7 @@ hub 选路（`push.go`）：有 `apns.json` → 直连（和以前一模一样�
    （`wrangler.jsonc` 的 `run_worker_first`），其余照旧是静态文件。中继的地址和密钥不进仓库：
    用 Cloudflare Tunnel（`cloudflared`）把本机 18670 暴露成一个只给 Worker 用的主机名，再在 `site/` 里
    `npx wrangler secret put RELAY_ORIGIN`（值如 `https://<tunnel 主机名>`）和 `npx wrangler secret put RELAY_PROXY_SECRET`
-   （同 `proxy_secret`），然后照常部署 `site/`（`scripts/release/publish.sh` 或 `npx wrangler deploy`，wrangler 4 要 Node 22+）。
+   （同 `proxy_secret`），然后照常部署 `site/`（只用 `scripts/release/publish.sh`：它在副本里加上 `dl/` 和 `install.sh` 再部署；在 `site/` 里直接 `wrangler deploy` 会让下载和安装脚本 404。wrangler 4 要 Node 22+）。
    两个都没设时 `/relay/*` 回 503，站点其余部分不受影响。部署后 `curl https://<官网域名>/relay/v1/health` 应回 `{"ok":true,"apns":true}`。
 4. 发 App：`python3 scripts/release/asc_signing.py --only <bundle id>.notify` 注册通知服务扩展的 bundle id、建「Jarvis Notify App Store」
    profile（`release.sh` 导出时要用）；`config.json` 填 `app.push_relay`（如 `https://<官网域名>/relay`）；照常发 TestFlight。

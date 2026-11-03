@@ -1,4 +1,6 @@
 {
+  // Deploy it only with scripts/release/publish.sh: it adds dl/ (the public personad) and install.sh to a copy of this
+  // directory. A plain `wrangler deploy` here serves without them, and every hub's update check and install.sh 404.
   "name": "jarvis-site",
   "compatibility_date": "2026-10-01",
   "account_id": "2de3432934ff3b7c3cb742a2f09635a1",
@@ -6,6 +8,8 @@
   "main": "worker.mjs",
   "assets": { "directory": "public", "binding": "ASSETS", "html_handling": "auto-trailing-slash", "not_found_handling": "404-page",
               "run_worker_first": ["/relay/*"] },
-  "routes": [{ "pattern": "jarvis.chirpet.com", "custom_domain": true }],
+  // personaside.com is the address; the old one stays for builds and hubs that already have it written in (their
+  // push relay and update URLs).
+  "routes": [{ "pattern": "personaside.com", "custom_domain": true }, { "pattern": "jarvis.chirpet.com", "custom_domain": true }],
   "workers_dev": false
 }
