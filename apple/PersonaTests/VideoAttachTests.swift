@@ -91,13 +91,46 @@ struct VideoAttachTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let src = try await Self.makeClip(in: dir)
         let out = dir.appending(path: "out.mp4")
-        try await VideoPrep.export(AVURLAsset(url: src), preset: AVAssetExportPreset960x540, to: out) { _ in }
+        let progress = ProgressLog()
+        try await VideoPrep.export(src, preset: AVAssetExportPreset960x540, to: out) { progress.append($0) }
+        #expect(progress.values.last == 1)
+        #expect(progress.values.allSatisfy { (0...1).contains($0) })
         let asset = AVURLAsset(url: out)
         let track = try #require(try await asset.loadTracks(withMediaType: .video).first)
         let formats = try await track.load(.formatDescriptions)
         #expect(formats.first.map(CMFormatDescriptionGetMediaSubType) == kCMVideoCodecType_H264)
         let seconds = try await asset.load(.duration).seconds
         #expect(abs(seconds - 1) < 0.2, "\(seconds)")
+    }
+
+    @Test func cancelledExportDoesNotStartOrReportProgress() async throws {
+        let dir = try Self.scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let src = try await Self.makeClip(in: dir)
+        let out = dir.appending(path: "cancelled.mp4")
+        let progress = ProgressLog()
+        let job = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await VideoPrep.export(src, preset: AVAssetExportPreset960x540, to: out) { progress.append($0) }
+        }
+        await #expect(throws: CancellationError.self) { try await job.value }
+        #expect(progress.values.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: out.path))
+    }
+
+    @Test func failedExportStopsReportingBeforeItThrows() async throws {
+        let dir = try Self.scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let src = try await Self.makeClip(in: dir)
+        let progress = ProgressLog()
+        do {
+            // An existing directory is not an output movie file.
+            try await VideoPrep.export(src, preset: AVAssetExportPreset960x540, to: dir) { progress.append($0) }
+            Issue.record("Export to an existing directory unexpectedly succeeded")
+        } catch {}
+        let samples = progress.values
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(progress.values == samples)
     }
 
     @Test func playedCopiesAreKeptWithinABudget() throws {
@@ -121,6 +154,14 @@ struct VideoAttachTests {
     }
 
     // MARK: -
+
+    private nonisolated final class ProgressLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var samples: [Double] = []
+
+        func append(_ value: Double) { lock.withLock { samples.append(value) } }
+        var values: [Double] { lock.withLock { samples } }
+    }
 
     private static func scratch() throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appending(path: "video-tests-" + UUID().uuidString)

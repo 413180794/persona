@@ -5,6 +5,13 @@
 - 共享视图引用的辅助扩展也必须编进每个目标：watchOS 10 兼容把 `Color.mix` 换成 `blended` 后，扩展若仍留在 `Theme.swift`，
   只编入 `PersonaFace` 的灵动岛小组件会在 Release 归档失败。辅助扩展随 `PersonaFace.swift` 编入每个目标；不要把整套 App 主题拖进扩展，也不要在两个文件里重复声明。
 
+## 视频导出
+
+- 2026-11-04，#1045：生成的灰色视频在真实压缩测试中触发 `EXC_BREAKPOINT / SIGTRAP`，调用栈位于 Swift AVFoundation 的 `AVAssetExportSession.ProgressStates.Iterator.StateInternal.init`。
+  不要把进度观察器的崩溃当成编码校验失败，也不要跳过 H.264／时长断言。改为可取消地读取 session 的标量 `progress`，导出成功或失败后都取消并等待观察任务结束，再报告完成或抛出错误；已经取消的操作不启动导出。
+  验证真实 MP4／H.264、时长、成功时最终进度、取消时不写文件，以及失败后不再回调。`progress` 在新 SDK 上虽已弃用，但仍可用，保留现有 Xcode 26.0 兼容政策；实际崩溃环境是 Xcode 27.1。
+  轮询也要保持 session 的 actor 所有权：只把可 Sendable 的文件 URL 传给内部 `ExportJob` actor，由它创建并独占 asset／session；观察任务访问 `self.session`，与异步导出使用同一隔离。不要把整个非 Sendable SDK 对象强行标成 `unchecked Sendable`。
+
 ## 聊天列表与滚动
 
 - 新外壳的侧边栏菜单、会话名和正文用同一档 Dynamic Type，不给整个侧边栏套 `.shellScaled()`：它会额外放大一档（标准设置下 17pt → 19pt），

@@ -4,6 +4,8 @@
 
 - macOS 的 Unix socket 回归使用 canonical 的短临时目录（2026-11-03，#277）：系统 `TMPDIR` 的长路径会超过 socket 地址长度；换成 `/tmp` 仍可能因它实际指向 `/private/tmp`，让 Codex fixture 的原始 HOME 与初始化后读回的 canonical HOME 不相等，表现为握手超时。用独立 `/private/tmp/<短目录>` 作为测试 `TMPDIR`，不因此改变运行根目录的词法兼容规则。先保留原失败日志，再在固定源码上复验；端口扫描的真实 `lsof` 缺陷单独按 #541 / #728 修复，不能归为临时目录问题。
 
+- 同一个 worktree 的 `xcodegen` 与 `xcodebuild` 不能同时读写工程（2026-11-04，#1045）：iOS 复验重新生成工程时，Mac 构建读到暂缺的 `project.pbxproj`，退出 74，编译未开始。先完整生成一次工程，再串行构建；需要并行验证则用各自的工程／worktree，不能只隔离 DerivedData。保留原退出码，生成完成后的串行复验单独记结果。
+
 - 截图验证别靠 computer-use 点模拟器（Mac 锁屏时拿不到窗口，没锁时会抢用户的鼠标）：用 DEBUG 启动参数（`docs/ios.md`）直达页面再截图。
 - `xcodebuild test` 会启动不带 `-pairURL` 的 App 申请通知权限，之后这台模拟器的截图都会被授权弹窗挡住，跑完测试要重启模拟器再截图。
 - 新装（或换了签名重装）的 App 第一次带 `-pairURL` 启动就弹通知授权，弹框在的时候 App 一直不是活跃状态，收件箱不刷新：

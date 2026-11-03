@@ -119,7 +119,7 @@ nonisolated enum VideoPrep {
             try Task.checkCancellation()
             try? FileManager.default.removeItem(at: dir)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            try await export(asset, preset: preset, to: out, progress: progress)
+            try await export(url, preset: preset, to: out, progress: progress)
             if size(out) <= limit { return out }
         }
         try? FileManager.default.removeItem(at: dir)
@@ -127,19 +127,46 @@ nonisolated enum VideoPrep {
     }
 
     /// asset as H.264 MP4 at preset's size, its index up front (the machine may stream it).
-    static func export(_ asset: AVAsset, preset: String, to out: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
-        guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
-            throw APIError(status: 0, message: "这个视频没法压缩")
-        }
-        session.shouldOptimizeForNetworkUse = true
-        let states = session.states(updateInterval: 0.25)
-        let watch = Task {
-            for await state in states {
-                if case .exporting(let p) = state { progress(p.fractionCompleted) }
+    static func export(_ url: URL, preset: String, to out: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
+        try Task.checkCancellation()
+        // Only Sendable file coordinates cross into the job; the non-Sendable asset/session stay inside it.
+        let job = try ExportJob(url: url, preset: preset)
+        try await job.export(to: out, progress: progress)
+    }
+
+    private actor ExportJob {
+        private let session: AVAssetExportSession
+
+        init(url: URL, preset: String) throws {
+            let asset = AVURLAsset(url: url)
+            guard let created = AVAssetExportSession(asset: asset, presetName: preset) else {
+                throw APIError(status: 0, message: "这个视频没法压缩")
             }
+            created.shouldOptimizeForNetworkUse = true
+            session = created
         }
-        defer { watch.cancel() }
-        try await session.export(to: out, as: .mp4)
+
+        func export(to out: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
+            try Task.checkCancellation()
+            // The Swift ProgressStates iterator can trap while snapshotting the session.
+            // Scalar observation and export share this actor; join the observer before returning or throwing.
+            let watch = Task { [self] in
+                while !Task.isCancelled {
+                    progress(Double(self.session.progress))
+                    do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
+                }
+            }
+            do {
+                try await session.export(to: out, as: .mp4)
+            } catch {
+                watch.cancel()
+                await watch.value
+                throw error
+            }
+            watch.cancel()
+            await watch.value
+            progress(1)
+        }
     }
 }
 
