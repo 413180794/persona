@@ -148,6 +148,7 @@ var Features = []string{
 	"terminal_click",         // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
 	"file_download",          // GET /api/v1/machines/{mid}/file/download
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
+	"lark_attachments",       // Feishu image/file sends with stable client IDs and receipts
 	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",              // authenticated address discovery and capability-gated updates
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/plugins.md)

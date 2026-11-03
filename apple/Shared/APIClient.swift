@@ -153,6 +153,22 @@ nonisolated struct APIClient: Sendable {
         return data
     }
 
+    /// A bounded, staged attachment sent from disk. The fake transport reads it only in tests.
+    func uploadBytes(file: URL, path: String, query: [String: String], timeout: TimeInterval = 180) async throws -> Data {
+        if config.isDemo { throw APIError(status: 403, message: DemoText.notSent) }
+        if let transport {
+            return try await transport(LocalRequest(method: "POST", path: path, query: query, body: Data(contentsOf: file)))
+        }
+        var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        let requestID = String(UUID().uuidString.prefix(8)).lowercased()
+        req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
+        let (data, response) = try await session.upload(for: req, fromFile: file)
+        return try checked(data, response, requestID: requestID)
+    }
+
     nonisolated struct UploadedFile: Codable, Sendable {
         var path: String
         var name: String

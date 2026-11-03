@@ -13,6 +13,8 @@ struct LarkOutgoing: Identifiable, Equatable {
     var replyTo: LarkReplyTo? = nil
     /// With `replyTo`: true goes into its thread, false quotes it in the chat.
     var thread = false
+    var attachment: LarkAttachment?
+    var messageID: String?
     /// Who Feishu notifies (the @ picker), kept for 重发 and 放回输入框.
     var mentions: [LarkMention] = []
 
@@ -38,20 +40,41 @@ enum LarkOutbox {
     static let copyWait: TimeInterval = 20
 
     /// Hands one outgoing message to the hub: a reply when it answers a message, else a plain send to the chat.
-    static func deliver(_ o: LarkOutgoing, feed: String, api: APIClient) async throws {
+    @discardableResult
+    static func deliver(_ o: LarkOutgoing, feed: String, api: APIClient) async throws -> LarkSendReceipt {
+        if let attachment = o.attachment {
+            return try await api.larkSendAttachment(feed, attachment: attachment, clientID: o.clientID)
+        }
         if let reply = o.replyTo {
-            try await api.larkReply(messageID: reply.id, text: o.text, thread: o.thread, clientID: o.clientID, mentions: o.mentions)
+            return try await api.larkReply(messageID: reply.id, text: o.text, thread: o.thread, clientID: o.clientID, mentions: o.mentions)
         } else {
-            try await api.larkSend(feed, text: o.text, clientID: o.clientID, mentions: o.mentions)
+            return try await api.larkSend(feed, text: o.text, clientID: o.clientID, mentions: o.mentions)
         }
     }
 
-    /// What is still shown: a sent message goes once the chat has my message with its text (written since it was
-    /// sent), or after `copyWait`; sending and failed ones stay.
+    /// Confirmed IDs replace optimistic rows, including a request whose response was lost.
+    /// Only legacy text without a receipt falls back to text/time matching; media waits for its exact copy.
     static func remaining(_ out: [LarkOutgoing], messages: [LarkMessage], now: Date = .now) -> [LarkOutgoing] {
         var mine = messages.filter(\.isMine)
         return out.filter { o in
+            // A push can arrive before the request finishes (or after its response was lost).
+            // A confirmed client ID is stronger evidence than a local timeout; pending copies are not.
+            if let i = mine.firstIndex(where: {
+                $0.clientID?.lowercased() == o.clientID && !$0.id.hasPrefix("local:") && $0.localState != "pending" && $0.localState != "failed"
+            }) {
+                mine.remove(at: i)
+                return false
+            }
             guard o.state == .sent else { return true }
+            if let id = o.messageID {
+                // Media has no unique text. Keep its local row until this exact acknowledged copy is visible.
+                if let i = mine.firstIndex(where: { $0.id == id && $0.localState != "pending" && $0.localState != "failed" }) {
+                    mine.remove(at: i)
+                    return false
+                }
+                return true
+            }
+            if o.attachment != nil { return true }
             if now.timeIntervalSince(o.at) > copyWait { return false }
             let text = o.text.trimmingCharacters(in: .whitespacesAndNewlines)
             // One copy answers one message (the same words sent twice need two). A quoted reply's copy quotes the
@@ -120,7 +143,8 @@ struct LarkOutgoingRow: View {
 
     var body: some View {
         LarkMessageRow(message: message, grouped: grouped, isGroup: isGroup,
-                       sending: LarkSendMark(state: outgoing.state, retry: retry, edit: edit, discard: discard))
+                       sending: LarkSendMark(state: outgoing.state, retry: retry, edit: edit, discard: discard),
+                       localAttachment: outgoing.attachment)
             .environment(\.larkReact, nil) // not in Feishu yet: nothing to react to
     }
 }

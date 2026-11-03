@@ -27,6 +27,10 @@ struct LarkComposer: View {
     /// goes once it holds text, so tests find it by its id.
     var boxID = "lark.box"
     var sendID = "lark.send"
+    var attachmentPicker: ((Bool) -> Void)? = nil
+    var canAddAttachments = true
+    var hasAttachments = false
+    var preparingAttachment = false
     /// The group whose members @ offers; nil in a 1:1 chat (no picker).
     var mentionFeed: String? = nil
     /// My user id there (I am not offered).
@@ -53,6 +57,8 @@ struct LarkComposer: View {
 
     private var mentionQuery: String? { typing?.query }
 
+    private var showsSend: Bool { Self.canSend(text) || (hasAttachments && replyTo == nil) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if let q = mentionQuery, membersAnswered, !members.isEmpty || LarkMentions.offersEveryone(q) {
@@ -69,6 +75,17 @@ struct LarkComposer: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: Theme.Space.s) {
+                if let attachmentPicker {
+                    Menu {
+                        Button { attachmentPicker(true) } label: { Label("照片", systemImage: Theme.Icon.photos).lineLimit(1) }
+                        Button { attachmentPicker(false) } label: { Label("文件", systemImage: Theme.Icon.file).lineLimit(1) }
+                    } label: {
+                        Image(systemName: Theme.Icon.add).font(Theme.Font.heading)
+                            .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                    }
+                    .disabled(preparingAttachment || !canAddAttachments)
+                    .accessibilityLabel("添加附件")
+                }
                 TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
                     .lineLimit(1...5)
                     .focused(focused)
@@ -76,13 +93,14 @@ struct LarkComposer: View {
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.vertical, Theme.Space.s)
                     .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
-                if Self.canSend(text) {
+                if showsSend {
                     Button(action: send) {
                         Image(systemName: Theme.Icon.send).font(Theme.Font.heading)
                             .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
                     }
                     .themedButton(prominent: true)
                     .clipShape(.circle)
+                    .disabled(preparingAttachment)
                     .accessibilityLabel("发送")
                     .accessibilityIdentifier(sendID)
                     .transition(.scale.combined(with: .opacity))
@@ -92,7 +110,7 @@ struct LarkComposer: View {
         .padding(.horizontal, Theme.Space.m)
         .padding(.bottom, Theme.Space.s)
         .animation(Theme.Motion.standard, value: replyTo)
-        .animation(Theme.Motion.standard, value: Self.canSend(text))
+        .animation(Theme.Motion.standard, value: showsSend)
         .animation(Theme.Motion.standard, value: mentionQuery == nil)
         .task(id: mentionQuery) { await lookUp(mentionQuery) }
     }

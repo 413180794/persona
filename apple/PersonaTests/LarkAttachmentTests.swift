@@ -1,0 +1,168 @@
+import Foundation
+import Testing
+@testable import Jarvis
+
+@MainActor struct LarkAttachmentTests {
+    private func file(_ name: String = "notes.txt", text: String = "notes") throws -> URL {
+        let dir = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appending(path: name)
+        try Data(text.utf8).write(to: url)
+        return url
+    }
+
+    @Test func selectedFileIsAnImmutableSnapshotAndOnlyThatCopyIsRemoved() async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        var item: LarkAttachment? = try await .stageFile(source)
+        let copy = item!.file
+        #expect(copy.path.hasPrefix(URL.applicationSupportDirectory.path))
+        #expect(try copy.deletingLastPathComponent().resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+        try Data("changed".utf8).write(to: source)
+        #expect(try String(contentsOf: copy, encoding: .utf8) == "notes")
+        item = nil
+        #expect(!FileManager.default.fileExists(atPath: copy.path))
+        #expect(FileManager.default.fileExists(atPath: source.path))
+    }
+
+    @Test func rejectsEmptyDirectoryAndOversizedFile() async throws {
+        let empty = try file(text: "")
+        defer { try? FileManager.default.removeItem(at: empty.deletingLastPathComponent()) }
+        await #expect(throws: LarkAttachment.Failure.empty) { try await LarkAttachment.stageFile(empty) }
+        await #expect(throws: LarkAttachment.Failure.invalid) { try await LarkAttachment.stageFile(empty.deletingLastPathComponent()) }
+        let handle = try FileHandle(forWritingTo: empty)
+        try handle.truncate(atOffset: UInt64(LarkAttachment.fileLimit + 1)); try handle.close()
+        await #expect(throws: LarkAttachment.Failure.tooLarge) { try await LarkAttachment.stageFile(empty) }
+    }
+
+    @Test func photoUsesBoundedJPEGAndStableIDOnRetry() async throws {
+        let source = Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")!
+        let photo = try await LarkAttachment.stagePhoto(source)
+        #expect(photo.kind == .image && photo.mime == "image/jpeg" && photo.size <= LarkAttachment.imageLimit)
+        #expect(photo.thumbnail != nil)
+        #expect(photo.file.path.hasPrefix(URL.applicationSupportDirectory.path))
+        let hub = FakeHub()
+        let path = "/api/v1/lark/conversations/123/images"
+        hub.on("POST", path, json: #"{"message_id":"999"}"#)
+        var item = LarkOutgoing(text: "", attachment: photo)
+        let first = try await hub.client.larkSendAttachment("123", attachment: photo, clientID: item.clientID)
+        item.retry()
+        let second = try await hub.client.larkSendAttachment("123", attachment: photo, clientID: item.clientID)
+        #expect(first.messageID == second.messageID)
+        let bodies = try hub.sent("POST", path).map { try JSONSerialization.jsonObject(with: $0.body!) as! [String: String] }
+        #expect(bodies.count == 2 && bodies[0] == bodies[1])
+        #expect(bodies[0]["client_id"] == item.clientID)
+    }
+
+    @Test func fileUsesRawBytesAndItsExactAcknowledgement() async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        let attachment = try await LarkAttachment.stageFile(source)
+        let hub = FakeHub(), path = "/api/v1/lark/conversations/123/files"
+        hub.on("POST", path, json: #"{"message_id":"999"}"#)
+        var outgoing = LarkOutgoing(text: "", attachment: attachment)
+        let receipt = try await hub.client.larkSendAttachment("123", attachment: attachment, clientID: outgoing.clientID)
+        let sent = hub.sent("POST", path)
+        #expect(sent.count == 1 && sent[0].body == Data("notes".utf8))
+        #expect(sent[0].query["name"] == "notes.txt" && sent[0].query["client_id"] == outgoing.clientID)
+        outgoing.messageID = receipt.messageID; outgoing.state = .sent
+        let unrelated = LarkMessage(id: "998", position: "1", senderName: "我", isMine: true, type: "FILE", text: "", recalled: false, replyCount: 0)
+        // Empty text, identical file names, and elapsed time must never remove an unconfirmed attachment.
+        #expect(LarkOutbox.remaining([outgoing], messages: [unrelated], now: .now.addingTimeInterval(120)).count == 1)
+        var echoed = unrelated; echoed.id = "999"
+        #expect(LarkOutbox.remaining([outgoing], messages: [echoed]).isEmpty)
+    }
+
+    @Test func queueDoesNotWaitForEchoBeforeSendingNextAndSurvivesReopening() async throws {
+        let hub = FakeHub(), path = "/api/v1/lark/conversations/123/messages"
+        hub.on("POST", path, json: #"{"message_id":"999"}"#)
+        let queue = LarkChatOutbox.shared(config: hub.client.config, feed: "123")
+        queue.items = [LarkOutgoing(text: "first"), LarkOutgoing(text: "second")]
+        for item in queue.items { queue.deliver(item.id, using: hub.client, feed: "123") {} }
+        for _ in 0..<100 where hub.sent("POST", path).count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(hub.sent("POST", path).count == 2)
+        #expect(queue === LarkChatOutbox.shared(config: hub.client.config, feed: "123"))
+        var other = hub.client.config; other.token = "other-user"
+        #expect(LarkChatOutbox.shared(config: other, feed: "123").items.isEmpty)
+        queue.items = []
+    }
+
+    @Test func queuePreservesQuoteRoutingAndAcknowledgement() async throws {
+        let hub = FakeHub(), path = "/api/v1/lark/messages/source/replies"
+        hub.on("POST", path, json: #"{"message_id":"reply-copy"}"#)
+        let quote = LarkReplyTo(id: "source", senderName: "Sender", text: "Question")
+        let item = LarkOutgoing(text: "Answer", replyTo: quote)
+        let queue = LarkChatOutbox()
+        queue.items = [item]
+        queue.deliver(item.id, using: hub.client, feed: "123") {}
+        for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(queue.items.first?.state == .sent)
+        #expect(queue.items.first?.messageID == "reply-copy")
+        #expect(hub.sent("POST", "/api/v1/lark/conversations/123/messages").isEmpty)
+        let sent = try #require(hub.sent("POST", path).first)
+        let body = try JSONSerialization.jsonObject(with: sent.body!) as! [String: Any]
+        #expect(body["thread"] as? Bool == false)
+        #expect(body["client_id"] as? String == item.clientID)
+        #expect(queue.items.first?.message(like: nil).replyTo == quote)
+    }
+
+    @Test func confirmedPushAfterTimeoutReplacesFailedRowButPendingEchoDoesNot() {
+        var outgoing = LarkOutgoing(text: "hello")
+        outgoing.state = .failed("timeout")
+        var echo = LarkMessage(id: "local:" + outgoing.clientID, position: "1", senderName: "我", isMine: true,
+                               type: "TEXT", text: "hello", recalled: false, replyCount: 0,
+                               clientID: outgoing.clientID, localState: "pending")
+        #expect(LarkOutbox.remaining([outgoing], messages: [echo]).count == 1)
+        echo.id = "999"; echo.localState = "synced"
+        #expect(LarkOutbox.remaining([outgoing], messages: [echo]).isEmpty)
+    }
+
+    @Test func failedSendRetainsAttachmentAndRetryKeepsClientID() async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        let attachment = try await LarkAttachment.stageFile(source)
+        let queue = LarkChatOutbox(), hub = FakeHub(), path = "/api/v1/lark/conversations/123/files"
+        hub.on("POST", path) { _ in throw URLError(.timedOut) }
+        let item = LarkOutgoing(text: "", attachment: attachment)
+        queue.items = [item]; queue.deliver(item.id, using: hub.client, feed: "123") {}
+        for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
+        guard case .failed = queue.items.first?.state else { Issue.record("Expected a failed upload"); return }
+        #expect(FileManager.default.fileExists(atPath: attachment.file.path))
+        hub.on("POST", path, json: #"{"message_id":"999"}"#)
+        queue.items[0].retry(); queue.deliver(item.id, using: hub.client, feed: "123") {}
+        for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(queue.items.first?.state == .sent)
+        #expect(hub.sent("POST", path).allSatisfy { $0.query["client_id"] == item.clientID })
+    }
+    @Test func abandonedStagingIsSweptOnceWithoutRemovingCurrentFilesOrDurableMedia() throws {
+        let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let staging = LarkAttachmentStaging(root: root.appending(path: "staging"))
+        let old = staging.root.appending(path: UUID().uuidString)
+        let durable = root.appending(path: "durable")
+        try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: durable, withIntermediateDirectories: true)
+        staging.sweep()
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+        let current = staging.root.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: current, withIntermediateDirectories: true)
+        staging.sweep()
+        #expect(FileManager.default.fileExists(atPath: current.path))
+        #expect(FileManager.default.fileExists(atPath: durable.path))
+        #expect(LarkAttachment.uploadTimeout(bytes: LarkAttachment.fileLimit) > 13 * 60)
+        #expect(LarkAttachment.uploadTimeout(bytes: 1) == 180)
+    }
+
+    @Test func orphanedlark-connectorPendingAndFailedCopiesAreNeverRenderedAsSent() {
+        let queue = LarkChatOutbox()
+        var message = LarkMessage(id: "local:orphan", position: "1", senderName: "我", isMine: true, type: "IMAGE", text: "", recalled: false, replyCount: 0)
+        #expect(queue.hidesEcho(message))
+        message.id = "confirmed"; message.localState = "failed"
+        #expect(queue.hidesEcho(message))
+        message.localState = "pending"
+        #expect(queue.hidesEcho(message))
+        message.localState = "synced"
+        #expect(!queue.hidesEcho(message))
+    }
+
+}

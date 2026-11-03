@@ -147,6 +147,7 @@ final class AppModel {
     static let demoKey = "demo.on"
 
     init() {
+        Task.detached(priority: .utility) { LarkAttachment.staging.sweep() }
         connection = ConnectionStatus()
         DemoHub.install()
         #if DEBUG

@@ -149,6 +149,8 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var parts: [LarkPart]?
     var replyTo: LarkReplyTo?
     var reactions: [LarkReaction]?
+    var clientID: String?
+    var localState: String?
 
     enum CodingKeys: String, CodingKey {
         case id, position, type, text, recalled, edited, parts, reactions
@@ -156,6 +158,7 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
         case isMine = "is_mine", createdAt = "created_at", replyCount = "reply_count"
         case threadReplyCount = "thread_reply_count", replyTo = "reply_to"
         case badgeCount = "badge_count", atMe = "at_me", isRead = "is_read"
+        case clientID = "client_id", localState = "local_state"
     }
 
     var isSystem: Bool { type == "SYSTEM" || (parts?.first?.metaBool("system") ?? false) }
@@ -269,7 +272,8 @@ extension APIClient {
     }
     /// lark-connector can take a while to confirm a send; a retry after an early timeout is what sent twice.
     static let larkSendTimeout: TimeInterval = 45
-    func larkSend(_ id: String, text: String, clientID: String? = nil, mentions: [LarkMention] = []) async throws {
+    @discardableResult
+    func larkSend(_ id: String, text: String, clientID: String? = nil, mentions: [LarkMention] = []) async throws -> LarkSendReceipt {
         try await post("/api/v1/lark/conversations/\(id)/messages",
                        body: LarkText(text: text, clientID: clientID, mentions: mentions.isEmpty ? nil : mentions),
                        timeout: Self.larkSendTimeout)
@@ -283,7 +287,8 @@ extension APIClient {
         enum CodingKeys: String, CodingKey { case text, thread, mentions, clientID = "client_id" }
     }
     /// A reply to one message: quoted in its chat, or in its thread. Same idempotency and timeout as `larkSend`.
-    func larkReply(messageID: String, text: String, thread: Bool, clientID: String? = nil, mentions: [LarkMention] = []) async throws {
+    @discardableResult
+    func larkReply(messageID: String, text: String, thread: Bool, clientID: String? = nil, mentions: [LarkMention] = []) async throws -> LarkSendReceipt {
         try await post("/api/v1/lark/messages/\(messageID)/replies",
                        body: LarkReplyBody(text: text, thread: thread, clientID: clientID, mentions: mentions.isEmpty ? nil : mentions),
                        timeout: Self.larkSendTimeout)

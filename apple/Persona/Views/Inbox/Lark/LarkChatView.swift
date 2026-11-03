@@ -47,8 +47,11 @@ struct LarkChatView: View {
     @State private var mentions: [LarkMention]
     @FocusState private var composerFocused: Bool
     /// What I wrote that is on its way (on screen at once, sent one after another in the background).
-    @State private var outgoing: [LarkOutgoing] = []
-    @State private var sendChain: Task<Void, Never>?
+    @State private var outbox = LarkChatOutbox()
+    @State private var attachments: [LarkAttachment] = []
+    @State private var showPhotos = false
+    @State private var showFiles = false
+    @State private var preparingAttachment = false
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var fileRequest: (url: String, name: String)?
     /// Read position when the chat was opened: the divider sits above the first message after it. Frozen for the visit.
@@ -81,18 +84,20 @@ struct LarkChatView: View {
     private var isTopic: Bool { conversation.isTopic == true || foundTopic }
     /// Opens at a message (first unread / a flagged message) rather than at the bottom.
     private var opensAtMessage: Bool { Self.opensAtMessage(conversation) }
+    private var visibleMessages: [LarkMessage] { pager.messages.filter { !outbox.hidesEcho($0) } }
     private var openingAnchor: UnitPoint { Self.debugTop || opensAtMessage ? .top : .bottom }
     private static func opensAtMessage(_ c: LarkConversation) -> Bool { c.focus != nil || (c.isTopic != true && c.unread > 0) }
 
     var body: some View {
+        let messages = visibleMessages
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if pager.hasOlder {
                     LarkLoadOlderButton(title: "加载更早的消息", loading: loadingOlder) { Task { await loadOlder() } }
                 }
                 if hasContent, let line = problem?.inline { Label(line, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, Theme.Space.s) }
-                ForEach(Array(pager.messages.enumerated()), id: \.element.id) { i, m in
-                    let prev = i > 0 ? pager.messages[i - 1] : nil
+                ForEach(Array(messages.enumerated()), id: \.element.id) { i, m in
+                    let prev = i > 0 ? messages[i - 1] : nil
                     VStack(alignment: .leading, spacing: 0) {
                         if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
                         if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
@@ -149,6 +154,7 @@ struct LarkChatView: View {
             LarkDrafts.shared.set(draft, for: .chat(conversation.id))
         }
         .onDisappear { LarkDrafts.shared.flush() }
+        .modifier(LarkAttachmentPicker(attachments: $attachments, photos: $showPhotos, files: $showFiles, preparing: $preparingAttachment))
         .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
         .themedPage()
         .navigationTitle(conversation.name)
@@ -161,6 +167,10 @@ struct LarkChatView: View {
             }
         }
         .task {
+            if let config = model.api?.config { outbox = .shared(config: config, feed: conversation.id) }
+            #if DEBUG
+            if attachments.isEmpty { attachments = await LarkAttachmentFixture.load(config: model.api?.config) }
+            #endif
             LarkMedia.shared.loadEmojiCatalog()
             // The last messages seen here paint at once (offline too); the network only brings them up to date.
             // Background sync (LarkSync) keeps this cache current, so it is usually already the latest. An unread chat
@@ -176,6 +186,10 @@ struct LarkChatView: View {
                 if opensAtMessage, let first = cached.first(where: { LarkPosition.less(read, $0.position) }) { await scroll(to: first.id) }
             }
             await load()
+            if !outbox.items.isEmpty {
+                try? await Task.sleep(for: .milliseconds(60))
+                position.scrollTo(edge: .bottom)
+            }
         }
         // A fallback: changes arrive as pushes (below). It polls only while the chat's page is in front.
         .tabActiveTask {
@@ -199,10 +213,49 @@ struct LarkChatView: View {
     }
 
     private var composer: some View {
-        LarkComposer(placeholder: "回复 \(conversation.name)", text: $text, focused: $composerFocused,
-                     replyTo: replyTo, cancelReply: { replyTo = nil },
-                     mentionFeed: conversation.isGroup ? conversation.id : nil,
-                     me: pager.messages.last(where: \.isMine)?.senderID, mentions: $mentions, send: send)
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            if !attachments.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: Theme.Space.s) {
+                        ForEach(attachments) { attachment in
+                            HStack(spacing: Theme.Space.xs) {
+                                LarkAttachmentView(attachment: attachment, compact: true)
+                                Button { attachments.removeAll { $0.id == attachment.id } } label: {
+                                    Image(systemName: Theme.Icon.close).font(Theme.Font.secondary)
+                                        .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                                }
+                                .buttonStyle(.plain).accessibilityLabel("移除 \(attachment.name)")
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, Theme.Space.m)
+                .accessibilityIdentifier("lark.draft.attachments")
+                if replyTo != nil || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(replyTo == nil ? "文字和附件将分别发送" : "添加回复文字，或取消引用后发送附件").font(Theme.Font.label).foregroundStyle(.secondary)
+                        .padding(.horizontal, Theme.Space.m)
+                }
+            }
+            if preparingAttachment {
+                HStack(spacing: Theme.Space.s) {
+                    ProgressView().controlSize(.small)
+                    Text("正在准备附件…").font(Theme.Font.label).foregroundStyle(.secondary)
+                }
+            }
+            LarkComposer(placeholder: "回复 \(conversation.name)", text: $text, focused: $composerFocused,
+                         replyTo: replyTo, cancelReply: { replyTo = nil },
+                         attachmentPicker: { pickAttachment(photo: $0) },
+                         canAddAttachments: attachments.count < LarkAttachment.selectionLimit,
+                         hasAttachments: !attachments.isEmpty, preparingAttachment: preparingAttachment,
+                          mentionFeed: conversation.isGroup ? conversation.id : nil,
+                          me: pager.messages.last(where: \.isMine)?.senderID, mentions: $mentions, send: send)
+        }
+        .padding(.top, !attachments.isEmpty || preparingAttachment ? Theme.Space.s : 0)
+        .background {
+            if !attachments.isEmpty || preparingAttachment {
+                Theme.pageBackground.ignoresSafeArea(edges: .bottom)
+            }
+        }
     }
 
     // MARK: Jumps
@@ -273,7 +326,7 @@ struct LarkChatView: View {
     }
 
     /// Messages, or mine on their way: a problem is then one line on top rather than the page's placeholder.
-    private var hasContent: Bool { !pager.messages.isEmpty || !outgoing.isEmpty }
+    private var hasContent: Bool { !visibleMessages.isEmpty || !outbox.items.isEmpty }
 
     /// Loading, empty, or what went wrong, while there are no messages to show (BeautifulUI draws its own).
     @ViewBuilder private var placeholder: some View {
@@ -480,21 +533,23 @@ struct LarkChatView: View {
 
     // MARK: Sending
 
+    private func pickAttachment(photo: Bool) {
+        guard model.hubFeatures.isEmpty || model.hubFeatures.contains("lark_attachments") else {
+            model.toast = Toast("请先更新 Hub，再发送附件", style: .error)
+            return
+        }
+        if photo { showPhotos = true } else { showFiles = true }
+    }
+
     @ViewBuilder private var outgoingRows: some View {
         let mine = pager.messages.last(where: \.isMine)
-        ForEach(Array(outgoing.enumerated()), id: \.element.id) { i, o in
+        ForEach(Array(outbox.items.enumerated()), id: \.element.id) { i, o in
             let m = o.message(like: mine)
-            let prev = i > 0 ? outgoing[i - 1].message(like: mine) : pager.messages.last
+            let prev = i > 0 ? outbox.items[i - 1].message(like: mine) : pager.messages.last
             let grouped = LarkChatLayout.continues(m, after: prev)
             if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
             LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: conversation.isGroup,
-                            retry: { resend(o.id) },
-                            edit: {
-                                discard(o.id)
-                                text = text.isEmpty ? o.text : text + "\n" + o.text
-                                if replyTo == nil { replyTo = o.replyTo }
-                                mentions += o.mentions
-                            },
+                            retry: { resend(o.id) }, edit: { restore(o) },
                             discard: { discard(o.id) })
                 .padding(.top, LarkChatLayout.gap(grouped: grouped))
                 .id(o.id)
@@ -503,59 +558,55 @@ struct LarkChatView: View {
 
     /// On screen at once; Feishu gets it in the background, after what was written before it.
     private func send() {
+        guard model.api != nil else { model.toast = Toast("请先连接 Hub", style: .error); return }
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
+        guard !preparingAttachment, !t.isEmpty || (!attachments.isEmpty && replyTo == nil) else { return }
+        var batch: [LarkOutgoing] = []
+        if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
+        batch += attachments.map { LarkOutgoing(text: "", attachment: $0) }
         text = ""
-        let o = LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))
         replyTo = nil
         mentions = []
-        withAnimation(Theme.Motion.standard) { outgoing.append(o) }
+        attachments = []
+        withAnimation(Theme.Motion.standard) { outbox.items += batch }
         Haptics.tap()
-        deliver(o.id)
+        for item in batch { deliver(item.id) }
         // The row shows right above the box (and the quote bar going away): larkFollowsEnd.
         if pager.hasNewer { Task { await jumpToLatest() } } else { following = true }
     }
 
     private func resend(_ id: UUID) {
-        guard let i = outgoing.firstIndex(where: { $0.id == id }) else { return }
-        outgoing[i].retry()
+        guard let i = outbox.items.firstIndex(where: { $0.id == id }) else { return }
+        outbox.items[i].retry()
         deliver(id)
     }
 
     private func discard(_ id: UUID) {
-        withAnimation(Theme.Motion.standard) { outgoing.removeAll { $0.id == id } }
+        withAnimation(Theme.Motion.standard) { outbox.items.removeAll { $0.id == id } }
+    }
+
+    private func restore(_ outgoing: LarkOutgoing) {
+        if let attachment = outgoing.attachment {
+            guard attachments.count < LarkAttachment.selectionLimit else {
+                model.toast = Toast("请先移除一个附件，再放回输入框", style: .error)
+                return
+            }
+            attachments.append(attachment)
+        } else {
+            text = text.isEmpty ? outgoing.text : text + "\n" + outgoing.text
+            if replyTo == nil { replyTo = outgoing.replyTo }
+            mentions += outgoing.mentions
+        }
+        discard(outgoing.id)
     }
 
     private func deliver(_ id: UUID) {
-        let before = sendChain
-        sendChain = Task {
-            await before?.value // in the order written
-            guard let api = model.api, let o = outgoing.first(where: { $0.id == id }), o.state == .sending else { return }
-            do {
-                try await LarkOutbox.deliver(o, feed: conversation.id, api: api)
-                setState(id, .sent)
-                // Its copy replaces it (settleOutgoing); the push usually brings it, a refresh makes sure.
-                await refreshLatest()
-                try? await Task.sleep(for: .seconds(2))
-                await refreshLatest()
-                try? await Task.sleep(for: .seconds(LarkOutbox.copyWait))
-                settleOutgoing(pager.messages)
-            } catch {
-                setState(id, .failed(error.shown ?? error.localizedDescription))
-                Haptics.error()
-            }
-        }
-    }
-
-    private func setState(_ id: UUID, _ state: LarkOutgoing.State) {
-        guard let i = outgoing.firstIndex(where: { $0.id == id }) else { return }
-        outgoing[i].state = state
-        settleOutgoing(pager.messages)
+        guard let api = model.api else { return }
+        outbox.deliver(id, using: api, feed: conversation.id) { await refreshLatest(); settleOutgoing(pager.messages) }
     }
 
     private func settleOutgoing(_ messages: [LarkMessage]) {
-        let left = LarkOutbox.remaining(outgoing, messages: messages)
-        if left != outgoing { outgoing = left }
+        outbox.settle(messages)
     }
 
     private func askJarvis() async {
@@ -660,6 +711,7 @@ struct LarkMessageRow: View {
     var inThread = false
     /// A message of mine on its way: its spinner or failed mark beside the bubble (LarkOutgoingRow).
     var sending: LarkSendMark? = nil
+    var localAttachment: LarkAttachment?
     /// The read receipt of a message of mine (LarkReadReceipts), shown beside it once there is one.
     var readState: LarkReadState? = nil
     @Environment(\.larkOpenProfile) private var openProfile
@@ -740,7 +792,9 @@ struct LarkMessageRow: View {
     @ViewBuilder private var content: some View {
         let m = message
         let parts = m.parts ?? []
-        if m.recalled {
+        if let localAttachment {
+            LarkAttachmentView(attachment: localAttachment)
+        } else if m.recalled {
             Text(m.isMine ? "你撤回了一条消息" : "\(m.senderName) 撤回了一条消息").font(Theme.Font.caption).foregroundStyle(.tertiary).italic()
                 .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                 .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))

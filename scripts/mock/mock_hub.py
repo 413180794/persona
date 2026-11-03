@@ -29,7 +29,7 @@ def features():
     # Match proto.Features, retaining the existing terminal fixture switches.
     return ["error_codes", "client_hello", "heartbeat", "app_ping", "client_msg_id", "send_refusals",
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
-            "tls", "endpoints", "connectors"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
+            "tls", "endpoints", "connectors", "lark_attachments"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])
 
 
@@ -1074,6 +1074,10 @@ KB_DETAIL = {
                                   "meta": {"name": "天气 App", "importance": "P0", "relevance": 92, "tags": ["iOS", "小组件"], "kind": "short",
                                            "status": "active", "dirs": ["macbook:/Users/me/code/weather"]}},
 }
+
+LARK_UPLOADS = {}
+LARK_UPLOAD_BYTES = {}
+LARK_UPLOAD_ATTEMPTS = {}
 
 # The archived messages of a chat (chats/<id>/messages/<day>.md), for search and its day page.
 KB_DAYS = {
@@ -5214,6 +5218,11 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(lark_window(LARK_MESSAGES.get(p.split("/")[5], []), q))
         if p.startswith("/api/v1/lark/messages/") and p.endswith("/thread"):
             return self.send_json(lark_window(LARK_THREADS.get(p.split("/")[5], []), q))
+        if p.startswith("/api/v1/lark/media/") and p.rsplit("/", 1)[-1] in LARK_UPLOAD_BYTES:
+            body, mime = LARK_UPLOAD_BYTES[p.rsplit("/", 1)[-1]]
+            self.send_response(200); self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+            return
         if p == "/api/v1/lark/raw/documents/read": return self.send_json(LARK_DOCUMENT)
         if p.startswith("/api/v1/lark/media/") and p.split("/")[5] in LARK_MEDIA:
             key = p.split("/")[5]
@@ -5678,6 +5687,30 @@ class H(BaseHTTPRequestHandler):
                 if kind == "projects": meta["kind"], meta["status"] = e["extra"].split(" · ")
             KB_UPDATES.append({"kind": kind, "id": eid, **body})
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith(("/images", "/files")):
+            image = p.endswith("/images")
+            body = json.loads(self.last_body or b"{}") if image else {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+            key = body.get("client_id", "")
+            if key in LARK_UPLOADS:
+                return self.send_json({"message_id": LARK_UPLOADS[key]})
+            time.sleep(float(os.environ.get("MOCK_LARK_SEND_SECONDS", "2")))
+            LARK_UPLOAD_ATTEMPTS[key] = LARK_UPLOAD_ATTEMPTS.get(key, 0) + 1
+            if body.get("name") == "retry-once.txt" and LARK_UPLOAD_ATTEMPTS[key] == 1:
+                return self.send_json({"error": "网络暂时不可用，请重试"}, 502)
+            feed = p.split("/")[5]
+            msgs = LARK_MESSAGES.setdefault(feed, [])
+            pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
+            m = _lm(pos, "我", body.get("name", "附件"), mine=True, mins=0)
+            m["type"] = "IMAGE" if image else "FILE"
+            m["client_id"], m["local_state"] = key, "synced"
+            m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            media_key = "upload-" + key
+            LARK_UPLOAD_BYTES[media_key] = (base64.b64decode(body["data"]) if image else self.last_body, body.get("mime", "application/octet-stream"))
+            m["parts"] = [{"kind": "image" if image else "file", "text": body.get("name", "附件"),
+                           "url": "/api/v1/lark/media/" + media_key, "metadata": {"size": len(self.last_body), **({"width": 1024, "height": 1024} if image else {})}}]
+            msgs.append(m)
+            LARK_UPLOADS[key] = m["id"]
+            return self.send_json({"message_id": m["id"]})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # 飞书发消息: lark-connector takes a moment
             body, feed = json.loads(self.last_body or b"{}"), p.split("/")[5]
             if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
@@ -5690,7 +5723,7 @@ class H(BaseHTTPRequestHandler):
             if body.get("mentions"): m["parts"] = lark_mention_parts(m["text"], body["mentions"])
             m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # now, not the mock's start
             msgs.append(m)
-            return self.send_json({"ok": True})
+            return self.send_json({"ok": True, "message_id": m["id"]})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read-states"):  # 飞书已读回执 of my messages
             ids = json.loads(self.last_body or b"{}").get("message_ids") or []
             if len(ids) > 100: return self.send_json({"error": "at most 100 message_ids"}, 400)

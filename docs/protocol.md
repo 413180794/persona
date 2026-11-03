@@ -1107,6 +1107,8 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?,"mentions"?}` 以本人身份发送，回 `{"ok":true,"message_id"?}`。`client_id` 是 App 生成的 UUID，原样交给 lark-connector 的 `clientId` 并在 hub 保存回执：同一条消息重发时带同一个，只会发出一条；不传或不是 UUID 时 hub 自己生成。`mentions` 是 `[{"user_id","name"}]`（最多 100 个，超过或缺 `user_id` / `name` 回 400），`text` 里要有字面的 `@name`，hub 不改写文字，原样交给 lark-connector 的 `mentions`；@所有人是 `{"user_id":"all","name":"所有人"}` |
 | POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?,"mentions"?}` 以本人身份回复这条消息，回 `{"ok":true,"message_id"?}`。`thread=false`（默认）在原会话里引用这条；`thread=true` 发进这条所在的话题（是普通群里的顶层消息时以它为根开一个话题；话题群里落进它的话题）。代理 lark-connector `POST /messages/{id}/replies`，`client_id` 原样透传为 `clientId` 并保存回执，`mentions` 同上一行；目标可以是根消息或话题中的回复，由上游解析话题归属。`text` 为空 400 |
 | GET | `/api/v1/lark/conversations/{id}/members?q=&limit=` | @人用的成员：`{"members":[{"user_id","name","avatar"?}]}`。`q` 为空列出成员，不为空按名字 / 群昵称 / 拼音搜；`limit` 默认 50，最多 200；`name` 群昵称优先，没有时用显示名 |
+| POST | `/api/v1/lark/conversations/{id}/images` | `{"client_id","name","mime","data"}`；data 为 base64，解码后最大 7.5 MiB，校验图片格式；回 `{"message_id"}` |
+| POST | `/api/v1/lark/conversations/{id}/files?client_id=&name=&mime=` | `application/octet-stream` 原始字节，必须有 Content-Length，1 字节至 100 MiB；回 `{"message_id"}`；Hub 流式转发 |
 | POST | `/api/v1/lark/conversations/{id}/read` | `{"position","badge_count"?,"message_ids"?}`：上报看到的消息（最高位置、该条的 badge_count、其间别人发的未读消息 id），只在消息真正上屏后发 |
 | POST | `/api/v1/lark/conversations/{id}/read-states` | `{"message_ids":[…]}`（最多 100 个，超过 400）：这些消息的已读回执，回 `{"states":[{"message_id","read_count","unread_count"}]}`。lark-connector 没给回执的（还在发送、不认识的）不出现在 `states` 里；旧 hub 没有这条路由时 App 不显示回执 |
 | GET | `/api/v1/lark/media/{key}?size=` | 图片 / 贴纸 / 头像 / 视频 / 文件原样转发（`size` 为 24 的倍数、≤624 时返回缩略图） |
@@ -1144,6 +1146,9 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 {"kind":"text|at|link|image|file|code|emotion|media|card|docs|interactive|table",
  "text","url","refId","metadata":{…}}   // 卡片的整棵元素树在 metadata.body / header；富文本块祖先在 metadata.blocks
 ```
+
+附件发送要求完整设备权限（answer-only 不可用），共用 Hub 绑定的 lark-connector 账号；不接受调用方覆盖账号。Hub 在 hello/health 中声明 `lark_attachments`。
+`client_id` 必须为 UUID，同一消息重试保持不变；消息读取额外保留可选 `client_id`、`local_state`，用于消除发送超时后的迟到回显。`local:` 和 pending/failed 副本不算发送确认。
 
 媒体改写规则：parts JSON 里所有 `"/api/media/` → `"/api/v1/lark/media/`，`"/api/messages/` → `"/api/v1/lark/messages/`
 （合并转发卡片里嵌套的消息也一并改写）。

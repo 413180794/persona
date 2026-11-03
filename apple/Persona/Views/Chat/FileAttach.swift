@@ -132,9 +132,9 @@ final class FileUploads {
     }
 
     /// A private copy to upload from: the picker's URL may be an iCloud placeholder or lose its access mid-upload.
-    nonisolated static func stage(_ url: URL) async throws -> URL {
+    nonisolated static func stage(_ url: URL, directory: URL? = nil) async throws -> URL {
         try await Task.detached {
-            let dir = FileManager.default.temporaryDirectory.appending(path: "uploads/" + UUID().uuidString)
+            let dir = directory ?? FileManager.default.temporaryDirectory.appending(path: "uploads/" + UUID().uuidString)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let dest = dir.appending(path: url.lastPathComponent)
             var coordError: NSError?
