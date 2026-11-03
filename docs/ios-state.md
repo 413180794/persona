@@ -129,8 +129,8 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 | 2（#620，已合） | 易变字段拆出去：`rev`、`updated_at`、token、端口放进单独的小对象，只给显示它的叶子视图（相对时间、最后一句）读，照 `WaitingBadge` 的做法 | `rev` / `updated_at` 抖动的推送：除了显示时间的那个 `Text`，0 个视图重算 |
 | 3（#639，已合） | 派生数据进模型层：排序、分组、筛选计数、角标在模型里算，结果真变了才发布（`AgentListOrder` 搬进 `AgentsFeed`） | 列表 body 只在顺序 / 分组 / 计数变了时跑；角标只在数字变了时跑 |
 | 4（#880，已合） | 「用户正在操作」做成模型层统一策略：拖动、惯性、菜单开着、键盘在输入时，非关键更新合并、延后；关键的立刻；最长延迟有上限。`AgentsFeed` 的扣留抽成通用的 `Hold`，各页登记自己的状态 | 现有的 `LiveUpdateTests`、`ScrollUnderPushTests`、`ScreenTruthTests` 全绿；页面里不再有各自的扣留代码（源码检查） |
-| 5（本 PR） | 护栏：性能测试「一次只改一个会话一个字段的推送，最多 N 个视图重算」，超了就失败；源码检查「列表以外的视图不读 `allSessions`」 | 两个检查进 `JarvisTests` / UI 测试 |
-| 6（要改 hub，先算收益） | hub 只在语义变化时推（`rev`、`updated_at` 抖动不推，改走 `revs`），或者推增量 | 用录下的 10 分钟推送回放：推送条数、App 主线程耗时的改前改后 |
+| 5（#913，已合） | 护栏：性能测试「一次只改一个会话一个字段的推送，最多 N 个视图重算」，超了就失败；源码检查「列表以外的视图不读 `allSessions`」 | 两个检查进 `JarvisTests` / UI 测试 |
+| 6（#270，已合，testflight 车道） | hub 只在语义变化时推（`rev`、`updated_at` 抖动不推，改走 `revs`），或者推增量。做成了增量协议 `sessions_delta`：hub 按设备记住发过的每个会话，只推变了的和删了的 | 会话推送每分钟 2605 KB → 79 KB |
 
 ### 第 1 步：列表的结构和行分开
 
@@ -141,7 +141,7 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 - 扣留、关键直通照旧：`Row` 和结构一起落地，关键更新也只改列着的行（`landCritical`）；
 - 探针 `probe.agents-list` 从各行读（`AgentsListProbe`），量的是画出来的，不是列表结构。
 
-模型里的 `SessionStore` 等 testflight 车道的会话增量（第 6 步）合了再做：增量合回 `sessionsByMachine` 的入口统一成一个函数，换实现只改那里。
+模型里的 `SessionStore` 原定等 testflight 车道的会话增量（第 6 步）合了再做；增量已由 #270 做完（`sessions_delta`，App 里合回 `sessionsByMachine` 的入口是 `SessionPatch`），第 1–5 步之后列表和对话页的重算已经只剩叶子视图，`SessionStore` 没有再做。
 
 ### 第 2 步：`rev`、`updated_at` 只叫醒显示时间的那个视图
 
