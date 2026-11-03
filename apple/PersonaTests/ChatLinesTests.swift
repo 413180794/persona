@@ -108,4 +108,43 @@ struct ChatLinesTests {
         #expect(kept.filter { if case .row(.recap) = $0.content { true } else { false } }.count == 2)
         #expect(!kept.contains { if case .recaps = $0.content { true } else { false } })
     }
+
+    /// A picture sent with a message to Jarvis: claude -p writes the message's line with the picture first and the
+    /// text after it (an image block, then the text), where a pasted one in an Agents chat comes after the text. The
+    /// picture belongs to that message, above its bubble, as it showed while it was being sent: it went to the
+    /// exchange before (folded into its work, out of sight).
+    @Test func aPictureSentBeforeItsTextStaysWithItsMessage() {
+        var photo = item(3, .image, role: "user", id: nil)
+        photo.image = ImagePayload(mime: "image/png", data: "iVBORw0KGgo=")
+        var text = item(3, .text, role: "user", text: "看看这张")
+        text.id = "3#1"
+        let items = [item(1, .text, role: "user", text: "早"), item(2, .text, text: "早上好"), photo, text, item(4, .text, text: "是一张截图")]
+        let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
+        #expect(kinds(lines) == ["user", "answer", "other", "user", "answer"], "\(lines.map(\.id))")
+        guard case .userImages(_, let shown)? = lines.first(where: { if case .userImages = $0.content { true } else { false } })?.content else {
+            Issue.record("no picture line: \(lines.map(\.id))")
+            return
+        }
+        #expect(shown.map(\.id) == ["3#0"])
+    }
+
+    /// The same picture after its text (a pasted image in an Agents chat) shows as it did.
+    @Test func aPictureAfterItsTextStaysWithItsMessage() {
+        var photo = item(3, .image, role: "user", id: nil)
+        photo.image = ImagePayload(mime: "image/png", data: "iVBORw0KGgo=")
+        photo.id = "3#1"
+        let items = [item(1, .text, role: "user", text: "早"), item(2, .text, text: "早上好"),
+                     item(3, .text, role: "user", text: "看看这张"), photo, item(4, .text, text: "是一张截图")]
+        #expect(kinds(ChatLines(openWork: []).build(blocks(items), live: nil)) == ["user", "answer", "other", "user", "answer"])
+    }
+
+    /// A picture sent to Jarvis with no text: its line holds the picture alone. It is a message of its own, shown as
+    /// a sent picture, not the end of the exchange before it.
+    @Test func aPictureSentAloneIsAMessageOfItsOwn() {
+        var photo = item(3, .image, role: "user", id: nil)
+        photo.image = ImagePayload(mime: "image/png", data: "iVBORw0KGgo=")
+        let items = [item(1, .text, role: "user", text: "早"), item(2, .text, text: "早上好"), photo, item(4, .text, text: "是一张截图")]
+        let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
+        #expect(kinds(lines) == ["user", "answer", "other", "answer"], "\(lines.map(\.id))")
+    }
 }

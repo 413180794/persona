@@ -270,6 +270,7 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
             current = nil
         }
 
+        var messageSeq: Int? // the last message's line: its pictures come after its text (`picturesAfterTheirText`)
         for row in rows {
             switch row {
             case .user(let item):
@@ -308,11 +309,17 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
                     current!.process.append(row)
                     current!.ordered.append(row)
                 }
+            case .image(let item) where item.role == "user" && item.toolUseID == nil && item.seq != messageSeq:
+                // A picture sent with no text (claude -p writes Jarvis such a message as image blocks alone): a
+                // message of its own, not the end of the exchange before it.
+                close()
+                current = Turn(id: row.id, ordered: [row])
             default:
                 if current == nil { current = Turn(id: row.id) }
                 current!.process.append(row)
                 current!.ordered.append(row)
             }
+            if case .user(let item) = row { messageSeq = item.seq }
         }
         close()
         return blocks
@@ -547,6 +554,9 @@ final class ChatStore {
     /// starts at a prompt and nothing before it changes when items are appended — unless a tool result (or a tool's
     /// image) arrives for a call before it; then everything is built again.
     nonisolated static func rebuild(_ items: [Item], settled: SettledRows?) -> (rows: [ChatRow], blocks: [ChatBlock], settled: SettledRows?) {
+        // Before the cut at the last message: a picture sent with it comes first in its line, and went to the rows
+        // before it, already built (`picturesAfterTheirText`).
+        let items = picturesAfterTheirText(items)
         func full() -> (rows: [ChatRow], blocks: [ChatBlock], settled: SettledRows?) {
             let rows = buildRows(items)
             return (rows, ChatBlock.build(rows), nil)
@@ -665,7 +675,39 @@ final class ChatStore {
     var livePreview: [String] { ScreenParser.activity(screen) }
     var spinnerLine: String? { ScreenParser.spinner(screen) }
 
+    /// Pictures the user sent come after the text of their message. claude -p writes a message sent to Jarvis with its
+    /// pictures first (image blocks, then the text), where a picture pasted in an Agents chat comes after the text:
+    /// first, a picture went to the exchange before its own message (into its work, out of sight) and the chat no
+    /// longer showed what was sent once the transcript's copy replaced the one being sent.
+    nonisolated static func picturesAfterTheirText(_ items: [Item]) -> [Item] {
+        func isPhoto(_ it: Item) -> Bool { it.kind == .image && it.role == "user" && it.toolUseID == nil }
+        guard items.contains(where: isPhoto) else { return items }
+        var out: [Item] = []
+        out.reserveCapacity(items.count)
+        var held: [Item] = [] // the pictures of one line, waiting for its text
+        for it in items {
+            if isPhoto(it) {
+                if let first = held.first, first.seq != it.seq { out += held; held.removeAll() }
+                held.append(it)
+                continue
+            }
+            if let first = held.first {
+                if it.kind == .text, it.role == "user", it.seq == first.seq {
+                    out.append(it) // the message, then its pictures
+                    out += held
+                    held.removeAll()
+                    continue
+                }
+                out += held
+                held.removeAll()
+            }
+            out.append(it)
+        }
+        return out + held
+    }
+
     nonisolated static func buildRows(_ items: [Item]) -> [ChatRow] {
+        let items = picturesAfterTheirText(items)
         var results: [String: Item] = [:]
         var images: [String: [ImagePayload]] = [:]
         for it in items {

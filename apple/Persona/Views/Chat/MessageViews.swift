@@ -225,17 +225,27 @@ struct PendingBubble: View {
     var msg: PendingMessage
     var retry: () -> Void
     var discard: () -> Void
+    @Environment(\.viewImages) private var viewImages
+    @Environment(\.chatImages) private var chatImages
 
     var body: some View {
         VStack(alignment: .trailing, spacing: Theme.Space.sm) {
             if !msg.images.isEmpty {
                 HStack(spacing: Theme.Space.sm) {
                     Spacer(minLength: 48)
-                    ForEach(Array(msg.images.enumerated()), id: \.offset) { _, p in
-                        Theme.Fill.chip
-                            .scaledFrame(width: msg.images.count == 1 ? Theme.Size.box120 : Theme.Size.box76, height: msg.images.count == 1 ? Theme.Size.box120 : Theme.Size.box76)
-                            .overlay { ChatThumbnail(payload: p) }
-                            .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                    ForEach(Array(msg.images.enumerated()), id: \.offset) { i, p in
+                        // The same viewer as a picture the transcript has (`SentPhotos`), while it is being sent.
+                        Button {
+                            viewImages?(ImageViewing(images: msg.images, index: i, conversation: chatImages, source: p.identity))
+                        } label: {
+                            Theme.Fill.chip
+                                .scaledFrame(width: msg.images.count == 1 ? Theme.Size.box120 : Theme.Size.box76, height: msg.images.count == 1 ? Theme.Size.box120 : Theme.Size.box76)
+                                .overlay { ChatThumbnail(payload: p) }
+                                .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewImages == nil)
+                        .accessibilityLabel("图片 \(i + 1)，点按查看大图")
                     }
                 }
             }

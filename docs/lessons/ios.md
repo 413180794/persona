@@ -540,3 +540,11 @@ alignment: .top)` 也拦不住（外层按内容的高度排）。做法：`Geom
   滚动区外的 `background` 里量），用环境值（`cardRoom`）传进去。
 - 卡片自己的 `@State` 存着打了一半的回答：放得下 / 放不下用同一个 `ScrollView`，别分两个分支，不然跨过上限时（新到一张卡）打的字没了。
 - 「放得下时一像素不变」的滚动区：放得下时 `.scrollDisabled`、`.scrollClipDisabled`（不裁卡片的阴影），超出时才加 `contentMargins` 给裁开的边留阴影。改前改后同一个截图测试逐像素比（`PendingCardsTests.testOneCardAsBefore`，只差时钟和计时），测试里查卡片区的元素都在它的框里（裁掉的会露出来）。
+
+## 发给 Jarvis 的图片在对话里看不到（2026-11-03，#987）
+
+数据一路都在（claude -p 收到 image 块，transcript 和 hub 的条目里都有这张图），丢在 App 归位上：claude -p 写的那一行是**先图后字**
+（`[image, text]`），Agents 里粘贴的图是先字后图。App 按用户的文字切每一轮，排在文字前面的图被分进了上一轮、折进上一轮的过程，看不见；
+发送中的气泡带着图，transcript 那条一到气泡就被替换，图跟着消失。修法：同一行里用户的图排到文字后面（`ChatStore.picturesAfterTheirText`）。
+要放在 `rebuild` 按最后一条消息切开**之前**：只放在 `buildRows` 里不够，切的时候图还在前面，照样落进已经建好的上一段。
+另：mock 的 `MOCK_ECHO_SENT=1` 按 claude -p 的顺序把发出的消息写回对话；UI 测试里全新安装的通知权限框什么时候弹不一定，弹着的时候下面的元素都不在树里，用 `addUIInterruptionMonitor` 接住。

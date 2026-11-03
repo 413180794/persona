@@ -4238,6 +4238,37 @@ def replay_next(n):
             send_all({"type": "delta", "machine_id": mid, "session_id": sid, "text": ""})
 
 
+# MOCK_ECHO_SENT=1: a message sent to a session lands in its transcript a moment later, as claude writes it: for
+# Jarvis's conversations (claude -p) its pictures first, as image blocks, then its text; elsewhere the text, then the
+# pictures (a pasted image Claude inlined). For the chat showing what was sent once the transcript has it.
+def echo_sent(parts, body):
+    if len(parts) < 7 or body.get("clear_draft"):
+        return
+    mid, sid = parts[4], parts[5]
+    text, images = body.get("text") or "", body.get("images") or []
+    if any(x.get("client_msg_id") and x.get("client_msg_id") == body.get("client_msg_id") for x in SENT):
+        return
+
+    def written():
+        before = ITEMS.get(sid, [])[-1]["seq"] if ITEMS.get(sid) else 0
+        seq = before + 1
+        pics = [{"id": "%s#%d" % (uuid.uuid4(), 0), "seq": seq, "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                 "role": "user", "kind": "image", "image": {"mime": im.get("mime") or "image/jpeg", "data": im.get("data") or ""}}
+                for im in images]
+        words = [{"id": "", "seq": seq, "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                  "role": "user", "kind": "text", "text": text, **({"client_msg_id": body["client_msg_id"]} if body.get("client_msg_id") else {})}] if text else []
+        line = (pics + words) if any(a["session_id"] == sid for a in ASSISTANT) else (words + pics)
+        base = line[0]["id"].split("#")[0] if line and line[0]["id"] else str(uuid.uuid4())
+        for n, x in enumerate(line):
+            x["id"] = "%s#%d" % (base, n)
+        ITEMS[sid] = ITEMS.get(sid, []) + line
+        for out, subs in list(LIVE):
+            if sid in subs:
+                try: out({"type": "items", "machine_id": mid, "session_id": sid, "items": line, **span(line, before)})
+                except Exception: pass
+    threading.Timer(float(os.environ.get("MOCK_ECHO_SECONDS", "1.5")), written).start()
+
+
 def assistant_run(sid, mid):
     """The running turn, in the rhythm of a real one (thinking, a call, its result; now and then a few words to the user
     streamed as deltas, then written, then more calls)."""
@@ -6061,6 +6092,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"session": session})
         if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
             body = json.loads(self.last_body or b"{}")
+            if os.environ.get("MOCK_ECHO_SENT") and not body.get("todo_id"):
+                echo_sent(p.split("/"), body)
             todo_id = body.get("todo_id")
             if todo_id:
                 if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)

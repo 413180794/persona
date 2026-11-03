@@ -257,6 +257,11 @@ struct ChatView: View {
         .confirmClose($closing) { closedAgent($0, order: []) }
         .sheet(item: $file) { ref in FileViewer(ref: ref, key: key) }
         #if DEBUG
+        // Simulator automation: `-showComposerPhoto YES` puts a made-up picture in the composer, as if picked from
+        // 照片 (the UI tests of a sent picture showing in the chat).
+        #if os(iOS)
+        .task { if UserDefaults.standard.bool(forKey: "showComposerPhoto") { model.composerInbox[key, default: []].append(Self.debugPhoto) } }
+        #endif
         // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
         .onChange(of: store.rows.count) { _, _ in
             guard UserDefaults.standard.bool(forKey: "openFirstImage"), debugImages == nil else { return }
@@ -1055,6 +1060,16 @@ struct ChatView: View {
     }
 
     #if DEBUG
+    #if os(iOS)
+    /// The made-up picture `-showComposerPhoto` attaches: a blue square with a white bar, easy to tell in a screenshot.
+    static let debugPhoto: UIImage = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 240)).image { c in
+        UIColor.systemBlue.setFill()
+        c.fill(CGRect(x: 0, y: 0, width: 240, height: 240))
+        UIColor.white.setFill()
+        c.fill(CGRect(x: 40, y: 104, width: 160, height: 32))
+    }
+    #endif
+
     /// `probe.chat-rows` (`-probes YES`): what the list has and shows, sampled ten times a second (which lines are on
     /// screen is the list's, written as it scrolls and not observed): the chat must not go blank or move by itself.
     private var rowsProbe: some View {
