@@ -626,9 +626,12 @@ struct ResultBlock: View {
                     .sheet(isPresented: $showFull) { FullOutputSheet(itemID: cut.id, load: loadFullText) }
                     #if DEBUG
                     .task {
+                        // Taken only by a card still there a second later: the first one drawn can be rebuilt away
+                        // (a work line's steps arriving) and took the only turn without showing anything.
                         guard Self.debugSheet, !Self.debugFullShown else { return }
-                        Self.debugFullShown = true
                         try? await Task.sleep(for: .seconds(1))
+                        guard !Task.isCancelled, !Self.debugFullShown else { return }
+                        Self.debugFullShown = true
                         showFull = true
                     }
                     #endif
@@ -668,6 +671,10 @@ struct FullOutputSheet: View {
                     }
                 }
             }
+            #if os(macOS)
+            // Sized to its bars a Mac sheet was 470 × 113, the text squeezed to nothing (#508): a reader wants the room.
+            .macLargeSheet(bars: true)
+            #endif
         }
         .task {
             guard text == nil, let load else { return }
