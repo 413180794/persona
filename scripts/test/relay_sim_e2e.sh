@@ -16,7 +16,7 @@ BUNDLE=$(python3 scripts/jarvis_config.py get app.bundle_id)
 TMP=$(mktemp -d)
 rm -rf "$OUT" && mkdir -p "$OUT"
 pids=()
-cleanup() { for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done; rm -rf "$TMP"; }
+cleanup() { for p in ${pids[@]+"${pids[@]}"}; do kill "$p" 2>/dev/null || true; done; rm -rf "$TMP"; }
 trap cleanup EXIT
 
 say() { echo "relay-e2e: $*"; }

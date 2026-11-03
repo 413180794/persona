@@ -86,8 +86,8 @@ case "$COMMAND" in
   apk) ./gradlew -q -PjarvisApplicationId="$APP_ID" :app:assembleDebug && ls -la app/build/outputs/apk/debug/app-debug.apk ;;
   install)
     ./gradlew -q -PjarvisApplicationId="$APP_ID" :app:assembleDebug
-    "$ADB" "${ADB_ARGS[@]}" install -r app/build/outputs/apk/debug/app-debug.apk
-    "$ADB" "${ADB_ARGS[@]}" shell am start -n "$APP_ID/jarvis.android.MainActivity" >/dev/null ;;
+    "$ADB" ${ADB_ARGS[@]+"${ADB_ARGS[@]}"} install -r app/build/outputs/apk/debug/app-debug.apk
+    "$ADB" ${ADB_ARGS[@]+"${ADB_ARGS[@]}"} shell am start -n "$APP_ID/jarvis.android.MainActivity" >/dev/null ;;
   shots)
     ./gradlew -q -PjarvisApplicationId="$APP_ID" -Pkotlin.compiler.execution.strategy=in-process :app:assembleDebug
     "$ADB" -s "$SERIAL" install -r app/build/outputs/apk/debug/app-debug.apk >/dev/null
