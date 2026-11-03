@@ -55,6 +55,7 @@ class ProactiveDebugActivity : ComponentActivity() {
         val management = HttpAssistantManagement(address, "mock", client)
         setContent {
             val style by app.appearance.style.collectAsStateWithLifecycle()
+            val glass by app.appearance.glass.collectAsStateWithLifecycle()
             ForcedNight(forced) {
                 val dark = isSystemInDarkTheme()
                 SideEffect {
@@ -63,7 +64,7 @@ class ProactiveDebugActivity : ComponentActivity() {
                         isAppearanceLightNavigationBars = !dark
                     }
                 }
-                CompositionLocalProvider(LocalGlassLevel provides app.appearance.deviceLevel(app.appearance.glass.value)) {
+                CompositionLocalProvider(LocalGlassLevel provides app.appearance.deviceLevel(glass)) {
                     PersonaTheme(darkTheme = dark, style = style) {
                         var machines by remember { mutableStateOf(emptyList<Machine>()) }
                         LaunchedEffect(Unit) { machines = withContext(Dispatchers.IO) { runCatching { machines(client, address) }.getOrDefault(emptyList()) } }

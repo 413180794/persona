@@ -113,7 +113,9 @@ private fun ChatPage(
         else null
     }
     val sessionSource = remember(renamer, sessions) { renamer?.project(sessions.sessions) ?: sessions.sessions }
-    val sessionList by sessionSource.collectAsStateWithLifecycle(sessions.sessions.value)
+    // Read once per source, not on every recomposition: only the first value seeds the collected state.
+    val initialSessions = remember(sessionSource) { sessions.sessions.value }
+    val sessionList by sessionSource.collectAsStateWithLifecycle(initialSessions)
     val machines by sessions.machines.collectAsStateWithLifecycle()
     val allRequests by interactions.pending.collectAsStateWithLifecycle()
     val allMessages by sender.outbox.collectAsStateWithLifecycle()

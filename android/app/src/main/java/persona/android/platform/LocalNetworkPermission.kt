@@ -48,7 +48,9 @@ class LocalNetworkPermission @Inject constructor(private val application: Applic
         return withContext(Dispatchers.IO) {
             val manager = application.getSystemService(ConnectivityManager::class.java)
             val properties = manager.activeNetwork?.let(manager::getLinkProperties)
-            val prefixes = properties?.linkAddresses.orEmpty().map { IpPrefix(it.address, it.prefixLength) }
+            // granted() is always true below 37; the SDK check spells out IpPrefix(InetAddress, Int), public from 33.
+            val prefixes = if (Build.VERSION.SDK_INT < 33) emptyList()
+                else properties?.linkAddresses.orEmpty().map { IpPrefix(it.address, it.prefixLength) }
             HubPairingClient.addresses(pairing).any { endpoint ->
                 val host = endpoint.toHttpUrl().host
                 host.endsWith(".local", ignoreCase = true) || runCatching { InetAddress.getAllByName(host).toList() }

@@ -113,11 +113,14 @@ class Notifier @Inject constructor(
         status.action?.let { request -> request.buttons.forEach { builder.addAction(ongoingAction(request, it)) } }
         val notification = builder.build()
         val enabled = preferences.preferences.value?.liveActivity == true
-        if (Build.VERSION.SDK_INT < 36 || !enabled) return notification
+        // setRequestPromotedOngoing is Android 16 QPR1 (36.1): on 36.0 it throws NoSuchMethodError, which the catch
+        // below does not take. SDK_INT_FULL itself only exists from 36.
+        if (Build.VERSION.SDK_INT < 36 || Build.VERSION.SDK_INT_FULL < Build.VERSION_CODES_FULL.BAKLAVA_1 || !enabled)
+            return notification
         // Promotion is optional: OEM policy or user settings must never break the foreground service.
         return try {
             val allowed = context.getSystemService(NotificationManager::class.java).canPostPromotedNotifications()
-            if (!status.shouldPromote(Build.VERSION.SDK_INT, allowed, enabled)) notification
+            if (!status.shouldPromote(Build.VERSION.SDK_INT_FULL, allowed, enabled)) notification
             else Notification.Builder.recoverBuilder(context, notification)
                 .setRequestPromotedOngoing(true)
                 .setShortCriticalText(status.criticalText)

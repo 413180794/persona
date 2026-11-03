@@ -1,5 +1,6 @@
 package persona.platform.notify
 
+import android.os.Build
 import persona.core.contracts.FleetState
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ConnectionState
@@ -44,8 +45,9 @@ internal data class OngoingStatus(
     /** The fleet summed up, not the connection line. */
     val summary: Boolean get() = criticalText != null
 
-    fun shouldPromote(sdk: Int, allowed: Boolean, enabled: Boolean = true): Boolean =
-        sdk >= 36 && allowed && enabled && criticalText != null
+    /** [sdkFull]: Build.VERSION.SDK_INT_FULL; promoted notifications came in Android 16 QPR1 (36.1), not 36.0. */
+    fun shouldPromote(sdkFull: Int, allowed: Boolean, enabled: Boolean = true): Boolean =
+        sdkFull >= Build.VERSION_CODES_FULL.BAKLAVA_1 && allowed && enabled && criticalText != null
 
     companion object {
         /**

@@ -584,7 +584,8 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
             val granted = !needsPermission || app.checkSelfPermission(LOCAL_NETWORK_PERMISSION) == PackageManager.PERMISSION_GRANTED
             for (group in open) {
                 val connection = group.connectionOrNull ?: continue
-                val localHosts = if (granted) emptySet() else connection.allCandidates().mapNotNull { endpoint ->
+                // granted is always true below 37; the SDK check spells out IpPrefix(InetAddress, Int), public from 33.
+                val localHosts = if (granted || Build.VERSION.SDK_INT < 33) emptySet() else connection.allCandidates().mapNotNull { endpoint ->
                     val host = runCatching { endpoint.url.toHttpUrl().host }.getOrNull() ?: return@mapNotNull null
                     val addresses = runCatching { InetAddress.getAllByName(host).toList() }.getOrDefault(emptyList())
                     host.takeIf { addresses.any { address ->

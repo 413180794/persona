@@ -15,6 +15,9 @@ import org.junit.Assert.*
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
+/** Build.VERSION.SDK_INT_FULL of Android 16 QPR1: SDK_INT * 100 000 + the minor release. */
+private const val Android16Qpr1 = 36 * 100_000 + 1
+
 class OngoingStatusTest {
     private val permission = FleetItem("mac/tests", "补齐网络层的单元测试", "MacBook · weather › tests", "permission",
         "Bash: swift test", "ix_build", 100.0)
@@ -89,7 +92,7 @@ class OngoingStatusTest {
         assertNull(offline.lines)
         assertNull(offline.action)
         assertEquals(listOf(0, 0, 0), listOf(offline.needsYou, offline.working, offline.unread))
-        assertFalse(offline.shouldPromote(36, true))
+        assertFalse(offline.shouldPromote(Android16Qpr1, true))
     }
 
     @Test fun withoutLockScreenDetailsNoNameOrRequestShowsAnywhere() {
@@ -126,14 +129,16 @@ class OngoingStatusTest {
         assertNull(OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 1, items = listOf(question))).lines)
     }
 
-    @Test fun promotionNeedsAndroid16PermissionAndSomethingToShow() {
+    @Test fun promotionNeedsAndroid16Qpr1PermissionAndSomethingToShow() {
         val status = OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 2, items = listOf(permission)))
-        assertFalse(status.shouldPromote(35, true))
-        assertFalse(status.shouldPromote(36, false))
-        assertTrue(status.shouldPromote(36, true))
-        assertFalse(status.shouldPromote(36, true, enabled = false))
-        assertTrue(status.shouldPromote(37, true, enabled = true))
-        assertFalse(OngoingStatus.from(ConnectionState.Online, FleetState()).shouldPromote(36, true))
+        assertFalse(status.shouldPromote(35 * 100_000, true))
+        // Android 16.0 has no setRequestPromotedOngoing: calling it there throws NoSuchMethodError.
+        assertFalse(status.shouldPromote(36 * 100_000, true))
+        assertFalse(status.shouldPromote(Android16Qpr1, false))
+        assertTrue(status.shouldPromote(Android16Qpr1, true))
+        assertFalse(status.shouldPromote(Android16Qpr1, true, enabled = false))
+        assertTrue(status.shouldPromote(37 * 100_000, true, enabled = true))
+        assertFalse(OngoingStatus.from(ConnectionState.Online, FleetState()).shouldPromote(Android16Qpr1, true))
         assertEquals("⚙999+", OngoingStatus.from(ConnectionState.Online, FleetState("working", working = 1000)).criticalText)
     }
 
