@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 import Testing
 @testable import Jarvis
 
@@ -172,6 +173,19 @@ struct PhoneToolsTests {
         for name in writes {
             let tool = PhoneToolRegistry.all.first { $0.spec.name == name }
             #expect(tool?.confirmation != nil, "\(name) changes data and must ask first")
+        }
+    }
+
+    @Test func everyHealthSummaryQueryAsksWhatItsTypeCanAnswer() {
+        // Summing a discrete type (weight, resting heart rate) raises inside HealthKit and took the app down (#914).
+        for (metric, identifier) in HealthTool.quantityIdentifiers {
+            let type = HKQuantityType(identifier)
+            let options = HealthTool.statisticsOptions(for: type, metric: metric)
+            if type.aggregationStyle == .cumulative {
+                #expect(options == .cumulativeSum, "\(metric)")
+            } else {
+                #expect(!options.contains(.cumulativeSum), "\(metric) is discrete: summing it raises in HealthKit")
+            }
         }
     }
 

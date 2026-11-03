@@ -17,7 +17,9 @@ struct LarkThreadView: View {
     @State private var pager = LarkPager()
     @State private var loading = true
     @State private var loadingOlder = false
-    @State private var error: String?
+    /// Why the replies did not load: the replies' placeholder while none are shown, a line over them otherwise
+    /// (LarkLoadProblem, as on the chat page).
+    @State private var problem: LarkLoadProblem?
     @State private var fileRequest: (url: String, name: String)?
     /// What is typed in the box, kept as the thread's draft (LarkDrafts) until it is sent.
     @State private var text = ""
@@ -40,11 +42,16 @@ struct LarkThreadView: View {
                     LarkTimeSeparator(date: root.createdAt)
                     LarkMessageRow(message: root, grouped: false, isGroup: isGroup, feedID: feedID, inThread: true)
                     HStack {
-                        Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(Theme.Font.labelMedium).foregroundStyle(.secondary)
+                        Text(loading ? "加载回复…" : hasReplies || problem == nil ? "\(replies.count) 条回复" : "回复")
+                            .font(Theme.Font.labelMedium).foregroundStyle(.secondary)
                         Rectangle().fill(Color.primary.opacity(0.08)).frame(height: Theme.Size.line)
                     }
                     .padding(.vertical, Theme.Space.m)
-                    if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
+                    if let state = LarkChatPlaceholder.of(hasContent: hasReplies, loading: loading, problem: problem) {
+                        placeholder(state)
+                    } else if let line = problem?.inline {
+                        Label(line, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
+                    }
                     if pager.hasOlder {
                         LarkLoadOlderButton(title: "加载更早的回复", loading: loadingOlder) { Task { await loadOlder() } }
                     }
@@ -100,9 +107,7 @@ struct LarkThreadView: View {
                         boxFocused = true
                     }
                 }
-                defer { loading = false }
-                guard let api = model.api else { return }
-                do { pager.replace(with: try await api.larkThread(root.id).replies(of: root.id)) } catch { self.error = error.shown }
+                await load()
             }
             // A reply in the thread is a change in its chat: bring the newest replies in while the sheet is open.
             .task(id: feedID) {
@@ -110,6 +115,40 @@ struct LarkThreadView: View {
                 for await _ in LarkSync.shared.changes(of: feedID) { await refreshLatest() }
             }
         }
+    }
+
+    /// Replies, or mine on their way: a problem is then one line over them rather than the placeholder.
+    private var hasReplies: Bool { !replies.isEmpty || !outgoing.isEmpty }
+
+    /// Under the 条回复 line while there are no replies to show: loading, none yet, or what went wrong with 重试
+    /// (the chat page's states; BeautifulUI draws its own).
+    @ViewBuilder private func placeholder(_ state: LarkChatPlaceholder) -> some View {
+        switch state {
+        case .loading:
+            LoadableContent(state: Loadable<Void>.loading, retry: nil) { _ in EmptyView() }
+                .padding(.vertical, Theme.Space.xl)
+        case .empty:
+            EmptyStateView(symbol: Theme.Icon.conversation, title: "还没有回复", message: "在下面回复，开始这个话题。")
+        case .failed(let p):
+            EmptyStateView(symbol: p.symbol, title: p.title, message: p.message, action: (title: "重试", run: retry))
+        }
+    }
+
+    private func load() async {
+        defer { loading = false }
+        guard let api = model.api else { return }
+        do {
+            pager.replace(with: try await api.larkThread(root.id).replies(of: root.id))
+            problem = nil
+        } catch {
+            problem = LarkLoadProblem.of(error, subject: "这个话题")
+        }
+    }
+
+    private func retry() {
+        problem = nil
+        loading = true
+        Task { await load() }
     }
 
     private func loadOlder() async {
@@ -198,6 +237,7 @@ struct LarkThreadView: View {
 
     private func refreshLatest() async {
         guard !loading, let api = model.api, let r = try? await api.larkThread(root.id) else { return }
+        problem = nil // it answers again (lark-connector signed in again, the network is back)
         let fresh = pager.refresh(with: r.replies(of: root.id))
         guard !fresh.isEmpty else { return }
         withAnimation(Theme.Motion.standard) { pager.add(fresh) }

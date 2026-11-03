@@ -15,7 +15,7 @@ enum HealthTool {
         return types
     }
 
-    private static let quantityIdentifiers: [String: HKQuantityTypeIdentifier] = [
+    static let quantityIdentifiers: [String: HKQuantityTypeIdentifier] = [
         "steps": .stepCount,
         "distance": .distanceWalkingRunning,
         "active_energy": .activeEnergyBurned,
@@ -186,7 +186,7 @@ enum HealthTool {
               let type = HKQuantityType.quantityType(forIdentifier: identifier) else {
             throw ToolFailure(.invalidArgument, "this iPhone does not support the metric \"\(metric)\"")
         }
-        let options: HKStatisticsOptions = metric == "heart_rate" ? [.discreteAverage, .discreteMin, .discreteMax] : .cumulativeSum
+        let options = statisticsOptions(for: type, metric: metric)
         let units: HKUnit = switch metric {
         case "steps": .count()
         case "distance": .meter()
@@ -230,11 +230,20 @@ enum HealthTool {
                     ("max", maxValue.map { JSONValue.number(round1($0)) }),
                 ])
             default:
-                guard let sum = statistics.sumQuantity()?.doubleValue(for: units) else { return }
-                out[day] = .number(round1(sum))
+                let quantity = options.contains(.cumulativeSum) ? statistics.sumQuantity() : statistics.averageQuantity()
+                guard let value = quantity?.doubleValue(for: units) else { return }
+                out[day] = .number(round1(value))
             }
         }
         return out
+    }
+
+    /// What a day's statistics hold: the sum of a cumulative type (steps, distance, energy), the average of a discrete one
+    /// (weight, resting heart rate), heart rate's range too. An option the type cannot answer (summing weight) raises an
+    /// exception inside HealthKit when the query runs, which takes the app down.
+    static func statisticsOptions(for type: HKQuantityType, metric: String) -> HKStatisticsOptions {
+        if metric == "heart_rate" { return [.discreteAverage, .discreteMin, .discreteMax] }
+        return type.aggregationStyle == .cumulative ? .cumulativeSum : .discreteAverage
     }
 
     /// Sleep is a category type: sum every sample whose value counts as asleep,

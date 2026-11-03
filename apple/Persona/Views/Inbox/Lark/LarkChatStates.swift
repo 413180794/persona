@@ -22,7 +22,8 @@ nonisolated struct LarkLoadProblem: Equatable, Sendable {
     /// The hub's code for lark-connector without a Feishu login (docs/protocol.md, Feishu routes).
     static let notLoggedInCode = "lark_not_logged_in"
 
-    static func of(_ error: Error) -> LarkLoadProblem {
+    /// `subject` names what did not load in the catch-all title (这个会话, 这个话题).
+    static func of(_ error: Error, subject: String = "这个会话") -> LarkLoadProblem {
         if isNotLoggedIn(error) {
             return LarkLoadProblem(kind: .notLoggedIn, title: "飞书登录已失效",
                                    message: "hub 所在机器上的 lark-connector 没有登录飞书。在那台机器上重新登录 lark-connector，再回来重试。",
@@ -37,7 +38,7 @@ nonisolated struct LarkLoadProblem: Equatable, Sendable {
             return LarkLoadProblem(kind: .timeout, title: "加载超时", message: "hub 一直没有回应，稍后重试。",
                                    symbol: Theme.Icon.error, inline: nil)
         }
-        return LarkLoadProblem(kind: .other, title: "没能加载这个会话", message: error.localizedDescription,
+        return LarkLoadProblem(kind: .other, title: "没能加载\(subject)", message: error.localizedDescription,
                                symbol: Theme.Icon.error, inline: error.shown)
     }
 

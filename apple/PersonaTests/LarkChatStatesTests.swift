@@ -34,6 +34,18 @@ struct LarkChatStatesTests {
         #expect(p.symbol == Theme.Icon.error)
     }
 
+    @Test func theThreadSheetSaysWhatDidNotLoad() {
+        let e = hub(502, "lark-connector: upstream said no")
+        let thread = LarkLoadProblem.of(e, subject: "这个话题")
+        #expect(thread.title == "没能加载这个话题")
+        #expect(thread.message == e.localizedDescription)
+        #expect(LarkLoadProblem.of(e).title == "没能加载这个会话", "the chat page keeps its words")
+        // Everything else reads the same on both pages: the login hint, no network.
+        let loggedOut = hub(502, "lark-connector 未登录飞书", code: "lark_not_logged_in")
+        #expect(LarkLoadProblem.of(loggedOut, subject: "这个话题") == LarkLoadProblem.of(loggedOut))
+        #expect(LarkLoadProblem.of(URLError(.cannotConnectToHost), subject: "这个话题") == LarkLoadProblem.of(URLError(.cannotConnectToHost)))
+    }
+
     @Test func noNetworkAndTimeoutsStayQuietOverMessages() {
         let offline = LarkLoadProblem.of(URLError(.cannotConnectToHost))
         #expect(offline.kind == .offline)
