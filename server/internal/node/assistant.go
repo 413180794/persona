@@ -102,9 +102,15 @@ func (p *assistantProc) alive() bool {
 func (n *Node) isAssistantSession(id string) bool {
 	n.mu.Lock()
 	_, ok := n.procs[id]
+	a := n.agents[id]
 	n.mu.Unlock()
 	if ok {
 		return true
+	}
+	// A real host pane is stronger evidence than a working directory: users may resume a terminal session there.
+	// Keep owned headless processes above this check, even if a stale host snapshot still mentions the session.
+	if a.PaneID != "" {
+		return false
 	}
 	if st, ok := n.state.get(id); ok && strings.HasSuffix(st.Cwd, "/.jarvis/assistant") {
 		return true

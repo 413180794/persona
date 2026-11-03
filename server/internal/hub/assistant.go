@@ -89,12 +89,13 @@ func (m *Machine) assistantCwd() string {
 	return path.Join(m.info.Home, assistantDir)
 }
 
-// isAssistant reports whether a session runs in the assistant directory (cwd may go through a symlinked home).
-func isAssistant(cwd, dir string) bool {
-	if dir == "" || cwd == "" {
+// isAssistant identifies headless conversations. A host pane is stronger evidence than a shared working directory.
+func isAssistant(s proto.Session, dir string) bool {
+	if s.PaneID != "" || dir == "" || s.Cwd == "" {
 		return false
 	}
-	return cwd == dir || strings.HasSuffix(cwd, "/"+assistantDir)
+	// The working directory may go through a symlinked home; runtimes and offline assistants have no host pane.
+	return s.Cwd == dir || strings.HasSuffix(s.Cwd, "/"+assistantDir)
 }
 
 // assistantClaudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md); lark-connector: the assistant's

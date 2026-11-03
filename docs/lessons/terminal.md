@@ -29,3 +29,9 @@
 - herdr 的 observe 流要按窗格本身的尺寸开（`--cols/--rows` 小了是裁左上角，不是重排），窗格变尺寸后要重开；`terminal attach` 会改窗格尺寸、占唯一槽位，别用（`docs/terminal.md`）。
 - node 往 hub 写帧和回包共用一个同步写（`rpc.Peer.write` 拿着锁写 stdout）：链路慢时写会卡住，卡住的地方不能拿着别的锁、不能堵住 herdr 的读取。
   慢链路上该合并的是「正在写的时候来的帧」，不只是「30 ms 内来的帧」（`docs/terminal.md` 第十七节）。
+- 会话有真实宿主窗格，却报 `has no terminal`，先查 `isAssistantSession`，不要只查 WebSocket 或 Herdr 版本。
+  工作目录 `~/.jarvis/assistant` 和 transcript 目录只是无头助手的兜底线索，用户也能在这些目录里恢复一个终端会话；
+  当前宿主快照中非空的 `PaneID` 应优先于目录推断，但 node 明确持有的无头助手进程仍优先（避免陈旧窗格覆盖所有权）。
+  验证要经 hub 订阅拿到完整终端帧，不能只看 WebSocket 握手成功或会话列表带 `pane_id`。
+  Hub 的 `decorated` 也会重新判断 `assistant`，手机 Agents 又按这个字段过滤；只修 node 能打开终端，但列表仍会消失。
+  Hub 的列表、发送和重命名分类要共用含 `PaneID` 的判断，验收同时检查 HTTP、普通 WebSocket 和增量 WebSocket 快照中的 `assistant:false`，无窗格助手仍为 true。

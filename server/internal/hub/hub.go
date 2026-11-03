@@ -386,7 +386,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	for i := range list {
 		list[i].MachineID = m.cfg.ID
 		list[i].PendingInteractions = counts[list[i].SessionID]
-		list[i].Assistant = isAssistant(list[i].Cwd, dir)
+		list[i].Assistant = isAssistant(list[i], dir)
 		if t := titles[list[i].SessionID]; t != "" && list[i].Assistant {
 			list[i].Title = t // not the first line of the prompt the hub wrote for it
 		} else if t := named[list[i].SessionID]; t != "" && list[i].Assistant {

@@ -177,7 +177,7 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	p["session_id"] = sid
 	title, _ := p["title"].(string)
 	s, _ := m.session(sid)
-	assistant := isAssistant(s.Cwd, m.assistantCwd())
+	assistant := isAssistant(s, m.assistantCwd())
 	if assistant && s.Agent == "codex" {
 		delete(p, "title") // only the hub's title for Codex (renameConversation)
 	}

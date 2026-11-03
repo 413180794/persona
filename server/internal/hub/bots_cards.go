@@ -354,18 +354,18 @@ func (h *Hub) openButton(machine, session string) feishubot.Button {
 	web := strings.TrimRight(h.cfg.PublicURL, "/")
 	if session != "" {
 		// A Jarvis conversation has its own page (/j/<id>, web/src/lib/router.ts); an agent is /s/<machine>/<id>.
-		if m := h.localMachine(machine); m != nil && isAssistant(sessionCwd(m, session), m.assistantCwd()) {
+		s := proto.Session{}
+		m := h.localMachine(machine)
+		if m != nil {
+			s, _ = m.session(session)
+		}
+		if m != nil && isAssistant(s, m.assistantCwd()) {
 			web += "/j/" + url.PathEscape(session)
 		} else {
 			web += "/s/" + url.PathEscape(machine) + "/" + url.PathEscape(session)
 		}
 	}
 	return feishubot.LinkBtn("打开网页版", web)
-}
-
-func sessionCwd(m *Machine, id string) string {
-	s, _ := m.session(id)
-	return s.Cwd
 }
 
 // --- card buttons ---

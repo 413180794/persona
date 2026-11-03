@@ -98,7 +98,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			return
 		}
 	}
-	if s, ok := m.session(sid); ok && isAssistant(s.Cwd, m.assistantCwd()) {
+	if s, ok := m.session(sid); ok && isAssistant(s, m.assistantCwd()) {
 		h.unarchiveOnSend(m.cfg.ID, sid) // the user is talking in it again: back in the list
 		h.userSpoke(sid)                 // and it works for them, not for a chain of conversations
 	}
