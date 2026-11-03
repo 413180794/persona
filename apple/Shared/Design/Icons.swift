@@ -259,6 +259,8 @@ extension Theme {
         static let lark = "brand-lark"
         /// GitHub's mark (primer/octicons mark-github), a template image: it takes the foreground color.
         static let github = "brand-github"
+        /// Telegram's logo (telegram.org/img/t_logo.svg), as it is.
+        static let telegram = "brand-telegram"
         /// Google's G, only on the 使用 Google 账号登录 button.
         static let google = "brand-google"
         static let gmail = "brand-gmail"

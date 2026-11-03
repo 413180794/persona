@@ -91,6 +91,10 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
 - **删除已存的数据**：知识库里 `telegram-*` 的会话和人、收件箱里 Telegram 的条目、游标；要二次确认。
 - **退出登录**：凭据和会话一起删（见上）；要换凭据就退出再登录。
 - 收件箱的行用通用的连接器块（GitHub 已经在用），标志 `Theme.Brand.telegram`（官方标志，加资源）。
+- 收件箱：连接器不能回复（只读）的条目，操作栏里是「在 Telegram 里回复」（`open_url`，`tg://` 或 `t.me` 链接；和信息的「在信息里回复」是同一个按钮，`InboxActionBar.openTitle`），不出回复框。
+- App 这边是通用的（`ConnectorSignInSections` / `ConnectorSignInModel`，`HubConnector.signsInHere` = 有 `login` 能力）：页面不认 Telegram，
+  只照 hub 给的字段画；单元测试 `ConnectorSignInTests`（`FakeHub`），UI 测试 `TelegramConnectorTests`（mock hub 的 `MOCK_TELEGRAM=2fa`：
+  凭据 → 手机号 → 错的验证码 → 验证码 → 密码 → 已登录 → 退出），mock 还有 `MOCK_TELEGRAM=off|signed_out|signed_in`、`MOCK_TELEGRAM_INBOX=1`。
 
 ## 接口改动（`server/internal/connector`，2026-11-03 和 ovis 对过）
 

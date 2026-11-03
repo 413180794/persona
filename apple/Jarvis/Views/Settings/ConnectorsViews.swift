@@ -32,7 +32,8 @@ enum ConnectorText {
         return st.connected ? (st.name ?? "已连接") : "连不上"
     }
 
-    /// A hub connector's state in a word or two (its row, its page).
+    /// A hub connector's state in a word or two (its row, its page). Only "error" is 出错了: a state this app does not
+    /// know yet (a newer hub's) is not one.
     static func state(_ c: HubConnector) -> String {
         switch c.status {
         case "ok": "已连接"
@@ -40,7 +41,19 @@ enum ConnectorText {
         case "not_signed_in": "未登录"
         case "no_permission": "没有权限"
         case "rate_limited": "请求太多，暂停中"
-        default: "出错了"
+        case "disabled": "已关闭"
+        case "error": "出错了"
+        default: "状态未知"
+        }
+    }
+
+    /// The dot beside the state: red only for what is broken; switched off, not set up yet, unknown or still loading are gray.
+    static func tone(_ c: HubConnector?) -> Color {
+        switch c?.status {
+        case "ok": Theme.positive
+        case "rate_limited": Theme.caution
+        case "error", "no_permission": Theme.danger
+        default: .secondary
         }
     }
 
@@ -57,6 +70,7 @@ enum ConnectorText {
     static func brand(_ id: String) -> String? {
         switch id {
         case "github": Theme.Brand.github
+        case "telegram": Theme.Brand.telegram
         default: nil
         }
     }
@@ -93,16 +107,65 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     var hosts: [String]?
     /// Its own settings (GitHub's: GitHubInboxOptions), as the hub gives them.
     var options: JSONValue?
+    /// Switched on in 设置 (nil: a hub from before the switch, always on).
+    var enabled: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, status, account, via, error, guide, capabilities, hosts, options
+        case id, name, status, account, via, error, guide, capabilities, hosts, options, enabled
         case lastSync = "last_sync"
         case lastEvent = "last_event"
     }
+
+    /// The user signs in to it here, a step at a time (Telegram), rather than on the hub's side.
+    var signsInHere: Bool { capabilities?.contains("login") == true }
+
+    /// A program the hub runs (Telegram) that has not said what it has: switched off since the hub started, or still
+    /// starting. Its capabilities come from the program, so an empty list (nil is a hub from before them) does not
+    /// mean it signs in on the hub's side.
+    var undescribed: Bool { capabilities?.isEmpty == true }
+}
+
+/// One step of a connector's sign-in (POST /api/v1/connectors/{id}/login): the fields to fill in, or done.
+nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
+    nonisolated struct Field: Codable, Equatable, Sendable, Identifiable {
+        var name: String
+        var label: String
+        var secret: Bool?
+        var placeholder: String?
+        var id: String { name }
+    }
+    var step: String?
+    var fields: [Field]?
+    var hint: String?
+    var error: String?
+    var done: Bool?
+    var account: String?
+}
+
+/// What deleting a connector's data removed (DELETE /api/v1/connectors/{id}/data).
+nonisolated struct ConnectorDataDeleted: Codable, Sendable {
+    var chats: Int?
+    var people: Int?
+    var inbox: Int?
 }
 
 extension APIClient {
     func larkStatus() async throws -> LarkStatus { try await get("/api/v1/lark/status") }
+
+    func connectorLogin(_ id: String, step: String, values: [String: String]) async throws -> ConnectorPrompt {
+        struct Body: Encodable { var step: String; var values: [String: String] }
+        return try await post("/api/v1/connectors/\(id)/login", body: Body(step: step, values: values), timeout: 90)
+    }
+
+    func connectorLogout(_ id: String) async throws { _ = try await post("/api/v1/connectors/\(id)/logout", timeout: 60) }
+
+    func setConnector(_ id: String, enabled: Bool) async throws -> HubConnector {
+        try JSON.decoder.decode(HubConnector.self, from: try await request("PUT", "/api/v1/connectors/\(id)/settings", body: ["enabled": enabled]))
+    }
+
+    func deleteConnectorData(_ id: String) async throws -> ConnectorDataDeleted {
+        try JSON.decoder.decode(ConnectorDataDeleted.self, from: try await request("DELETE", "/api/v1/connectors/\(id)/data"))
+    }
 
     /// The hub's connectors; `all` takes Feishu and mail too (a hub from before M6 leaves them out anyway).
     func connectors(all: Bool = false) async throws -> [HubConnector] {
@@ -315,7 +378,8 @@ struct FeishuConnectorView: View {
 }
 
 /// 设置 › 连接器 › GitHub (any connector of the hub's, GET /api/v1/connectors): whether it is signed in, as whom, where
-/// the sign-in comes from, what is wrong. The sign-in itself is set up on the hub's side (docs/config.md), not here.
+/// the sign-in comes from, what is wrong. GitHub's sign-in is set up on the hub's side (docs/config.md); one the user
+/// signs in to here (Telegram) also gets its switch, sign-in, sign-out and delete (ConnectorSignInSections).
 struct HubConnectorView: View {
     var id: String
     @Environment(AppModel.self) private var model
@@ -353,7 +417,13 @@ struct HubConnectorView: View {
                     Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled)
                 }
             } footer: {
-                Text("登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。")
+                if let connector, !connector.signsInHere, !connector.undescribed {
+                    Text("登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。")
+                }
+            }
+            // Telegram switched off lists nothing until it runs: its switch is here all the same.
+            if let connector, connector.signsInHere || connector.undescribed {
+                ConnectorSignInSections(connector: connector, reload: { await load() })
             }
             if connector?.status != "ok", let guide = connector?.guide, !guide.isEmpty {
                 Section {
@@ -378,9 +448,20 @@ struct HubConnectorView: View {
         .themedPage()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        // Again once paired (opened at launch, before the hub's address is known) or paired to another hub.
+        .task(id: model.config) { await load() }
+        // Switched on, its program takes a moment to start and say it signs in: asked again until it has (15 s at most).
+        .task(id: starting) {
+            for _ in 0..<15 where starting {
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+                await load(quietly: true)
+            }
+        }
         .refreshable { await load() }
     }
+
+    private var starting: Bool { connector?.enabled != false && connector?.undescribed == true }
 
     private var title: String { connector?.name ?? (id == "github" ? "GitHub" : id) }
 
@@ -392,26 +473,20 @@ struct HubConnectorView: View {
         }
     }
 
-    private var tint: Color {
-        switch connector?.status {
-        case nil: .secondary
-        case "ok": Theme.positive
-        case "not_configured": .secondary
-        case "rate_limited": Theme.caution
-        default: Theme.danger
-        }
-    }
+    private var tint: Color { ConnectorText.tone(connector) }
 
     private var stateText: String {
         guard let connector else { return loading ? "正在检查…" : "读不到状态" }
         return ConnectorText.state(connector)
     }
 
-    private func load() async {
-        loading = true
+    /// `quietly`: no spinner (asked again every second while the program starts).
+    private func load(quietly: Bool = false) async {
+        guard let api = model.api else { return } // not paired yet: still 正在检查…
+        if !quietly { loading = true }
         defer { loading = false }
         do {
-            connector = try await model.api?.connectors().first { $0.id == id }
+            connector = try await api.connectors().first { $0.id == id }
             failure = connector == nil ? "hub 上没有这个连接器" : nil
         } catch {
             failure = error.shown.map { "读不到连接器的状态：\($0)" }

@@ -50,6 +50,8 @@
 - 提交前用 `git var GIT_AUTHOR_IDENT` 确认作者是 GitHub 身份（比如 noreply 邮箱，仓库级 `git config --local` 设）：全局 git 身份如果是公司的真名和邮箱，
   它会留在 PR 的提交记录里（`refs/pull/<n>/head`，PR 合并后改不掉、删不了，只有 GitHub 支持能清），
   而且 squash 合并时 GitHub 会把和合并人不同的作者写成 `Co-authored-by` 带进 master 的提交信息（2026-11-02）。worktree 共用仓库级配置。
+- `gh pr merge <号> --squash --delete-branch` 连本地分支一起删；那个分支正在某个 worktree 里检出时，gh 2.99 把**整个 worktree 目录也删了**（2026-11-03，叠起来的 PR 在 `/tmp` 的临时 worktree 里 rebase，合并后目录没了）。
+  合并前先让那个 worktree 离开这个分支（`git checkout --detach`），或者合并用的 worktree 不检出 PR 的分支；里面有没提交的东西会一起丢。
 
 ## 把长期的集成分支合进 master
 

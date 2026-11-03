@@ -23,9 +23,10 @@ struct InboxActionBar: View {
                 if item.connector.map({ $0.canReply == true }) ?? true {
                     action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
                 } else if let open = item.connector?.openURL, let url = Self.systemURL(open, draft: item.agentDraft) {
-                    // Answered in the source's own app (在信息里回复: Messages with the number, and the AI 分身's draft).
+                    // Answered in the source's own app (在信息里回复: Messages with the number, and the AI 分身's draft;
+                    // 在 Telegram 里回复: the conversation in Telegram).
                     let sms = url.scheme == "sms"
-                    action(sms ? "在信息里回复" : "打开", symbol: sms ? Theme.Icon.messagesApp : Theme.Icon.openExternal, prominent: true) {
+                    action(Self.openTitle(item, sms: sms), symbol: sms ? Theme.Icon.messagesApp : Theme.Icon.openExternal, prominent: true) {
                         openURL(url)
                     }
                 }
@@ -36,6 +37,13 @@ struct InboxActionBar: View {
         .padding(.vertical, Theme.Space.m)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    /// What the button that opens the item's `open_url` says: where the user answers it, else just 打开.
+    nonisolated static func openTitle(_ item: InboxItem, sms: Bool) -> String {
+        if sms { return "在信息里回复" }
+        if item.source == "telegram" { return "在 Telegram 里回复" }
+        return "打开"
     }
 
     /// The item's `open_url` for the system; an sms: one carries the draft as its body.

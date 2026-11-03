@@ -1638,6 +1638,136 @@ if os.environ.get("MOCK_GITHUB") == "guide":  # a status with the steps to fix i
 LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilities": ["tools", "inbox", "archive"], "enabled": True},
                      {"id": "mail", "name": "邮件", "status": "ok", "capabilities": ["tools", "actions", "inbox", "archive"], "enabled": True}]
 
+# Telegram (docs/plan-telegram.md): the user's own account, signed in from 设置 › 连接器 › Telegram a step at a time.
+# All made up: api_id 1234567 (a hash of 32 zeros is refused), any phone starting with +, the code 12345, the 2FA
+# password example-password. MOCK_TELEGRAM=off|signed_out|signed_in|2fa (unset: no Telegram connector at all);
+# MOCK_TELEGRAM_2FA=1 gives the account two-step verification in any mode; MOCK_TELEGRAM_INBOX=1 adds its two kinds
+# of inbox items. As a hub from before #669 (the harder case for the app): its program has not run while off since the
+# hub started, so it lists no capabilities (and has no sign-in, 409) until switched on and started (TELEGRAM_START
+# seconds; meanwhile 进程还没启动). A hub from #669 on lists Telegram's declared capabilities from the start.
+TELEGRAM_MODE = os.environ.get("MOCK_TELEGRAM", "")
+TELEGRAM = {"enabled": TELEGRAM_MODE not in ("", "off"), "creds": TELEGRAM_MODE == "signed_in", "signed_in": TELEGRAM_MODE == "signed_in",
+            "two_fa": TELEGRAM_MODE == "2fa" or bool(os.environ.get("MOCK_TELEGRAM_2FA")),
+            "ran": TELEGRAM_MODE not in ("", "off"), "started": 0.0}
+TELEGRAM_START = 1.5
+TELEGRAM_VIA = "api_id 1234567 · api_hash ••••cd9f"
+TELEGRAM_GUIDE = ("去 my.telegram.org，用你的 Telegram 账号登录，进 API development tools 建一个应用，把 api_id 和 api_hash 填到这里。"
+                  "它们和登录后的会话一起加密存在 hub 上，退出登录时一起删掉。")
+
+
+def telegram_described():
+    """The program has run since the hub started: what it has is known (and kept while it is off again)."""
+    t = TELEGRAM
+    if not t["ran"] and t["enabled"] and time.monotonic() - t["started"] >= TELEGRAM_START:
+        t["ran"] = True
+    return t["ran"]
+
+
+def telegram_connector():
+    t = TELEGRAM
+    described = telegram_described()
+    c = {"id": "telegram", "name": "Telegram", "enabled": t["enabled"],
+         "capabilities": ["status", "login", "archive", "inbox", "tools", "events"] if described else []}
+    if not t["enabled"]:
+        c.update(status="disabled")
+    elif not described:
+        c.update(status="error", error="Telegram 进程还没启动")
+    elif t["signed_in"]:
+        c.update(status="ok", account="示例用户（@example）", via=TELEGRAM_VIA,
+                 last_sync=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    elif t["creds"]:
+        c.update(status="not_signed_in", via=TELEGRAM_VIA, error="还没登录 Telegram")
+    else:
+        c.update(status="not_signed_in", error="还没填 Telegram 的 API 凭据")
+    return c
+
+
+def telegram_prompt(step, error=""):
+    fields = {"credentials": [{"name": "api_id", "label": "api_id", "placeholder": "1234567"},
+                              {"name": "api_hash", "label": "api_hash", "secret": True, "placeholder": "32 位字母和数字"}],
+              "phone": [{"name": "phone", "label": "手机号", "placeholder": "+1 555 0100"}],
+              "code": [{"name": "code", "label": "验证码", "placeholder": "12345"}],
+              "password": [{"name": "password", "label": "两步验证密码", "secret": True}]}[step]
+    hint = {"credentials": TELEGRAM_GUIDE, "phone": "带国家区号，比如 +86 开头。",
+            "code": "验证码发到了你别的 Telegram 设备上（Telegram 官方账号发来的消息）",
+            "password": "这个账号开了两步验证，填它的密码。密码提示：示例提示"}[step]
+    p = {"step": step, "fields": fields, "hint": hint}
+    if error:
+        p["error"] = error
+    return p
+
+
+def telegram_area(h, method, p, raw):
+    """Telegram's connector routes; True when it answered."""
+    if not TELEGRAM_MODE or not p.startswith("/api/v1/connectors/telegram/"):
+        return False
+    t, body = TELEGRAM, json.loads(raw or b"{}")
+    what = p.rsplit("/", 1)[1]
+    if what in ("login", "logout") and not telegram_described():
+        return h.send_json({"error": "Telegram has no sign-in"}, 409) or True
+    if what == "login" and method == "POST":
+        step, v = body.get("step") or "", body.get("values") or {}
+        if not t["enabled"]:
+            return h.send_json({"step": step, "error": "先打开「同步 Telegram」再登录"}) or True
+        if step == "":
+            return h.send_json({"done": True, "account": "示例用户（@example）"} if t["signed_in"] else
+                               telegram_prompt("phone" if t["creds"] else "credentials")) or True
+        if step == "credentials":
+            hid, hh = (v.get("api_id") or "").strip(), (v.get("api_hash") or "").strip()
+            if not hid.isdigit() or len(hh) != 32:
+                return h.send_json(telegram_prompt("credentials", "api_id 是一串数字，api_hash 是 32 位字母和数字，照 my.telegram.org 上的填")) or True
+            if hh == "0" * 32:
+                return h.send_json(telegram_prompt("credentials", "Telegram 不认这个 api_id / api_hash")) or True
+            t["creds"] = True
+            return h.send_json(telegram_prompt("phone")) or True
+        if step == "phone":
+            if not (v.get("phone") or "").strip().startswith("+"):
+                return h.send_json(telegram_prompt("phone", "手机号不对（要带国家区号）")) or True
+            return h.send_json(telegram_prompt("code")) or True
+        if step == "code":
+            if (v.get("code") or "").strip() != "12345":
+                return h.send_json(telegram_prompt("code", "验证码不对")) or True
+            if t["two_fa"]:
+                return h.send_json(telegram_prompt("password")) or True
+        elif step == "password" and v.get("password") != "example-password":
+            return h.send_json(telegram_prompt("password", "密码不对")) or True
+        t["signed_in"] = True
+        return h.send_json({"done": True, "account": "示例用户（@example）"}) or True
+    if what == "logout" and method == "POST":
+        t.update(creds=False, signed_in=False)
+        return h.send_json({"ok": True}) or True
+    if what == "settings" and method == "PUT":
+        if "enabled" in body:
+            if body["enabled"] and not t["enabled"]:
+                t["started"] = time.monotonic()
+            t["enabled"] = bool(body["enabled"])
+        return h.send_json(telegram_connector()) or True
+    if what == "data" and method == "DELETE":
+        t["enabled"] = False
+        gone = [x for x in INBOX if x.get("source") == "telegram"]
+        for x in gone:
+            INBOX.remove(x)
+        return h.send_json({"chats": 3, "people": 5, "inbox": len(gone)}) or True
+    return False
+
+
+if os.environ.get("MOCK_TELEGRAM_INBOX"):
+    INBOX[1:1] = [
+        {"id": "telegram:dm1", "source": "telegram", "kind": "dm", "account": "telegram", "account_name": "Telegram",
+         "title": "示例用户", "sender": "示例用户", "preview": "周末的示例活动还去吗？", "count": 1,
+         "started_at": ago(minutes=12), "updated_at": ago(minutes=12), "tier": "action",
+         "summary": "示例用户问你周末的活动还去不去", "reason": "等你回复", "read": False,
+         "context": "示例用户（Telegram 私聊）\n昨天 20:15 我：好的，到时候见\n今天 09:40 示例用户：周末的示例活动还去吗？",
+         "connector": {"thread": "u1", "label": "私聊", "open_url": "tg://resolve?domain=example"}},
+        {"id": "telegram:mention2", "source": "telegram", "kind": "mention", "account": "telegram", "account_name": "Telegram",
+         "title": "示例群", "sender": "另一个示例用户", "preview": "@example 这个示例方案你怎么看？", "count": 1,
+         "started_at": ago(minutes=40), "updated_at": ago(minutes=40), "tier": "action",
+         "summary": "群里有人问你对示例方案的看法", "reason": "@你", "read": False,
+         "context": "示例群（Telegram 群）\n今天 09:12 另一个示例用户：@example 这个示例方案你怎么看？",
+         "connector": {"thread": "c2", "label": "@你", "open_url": "https://t.me/c/2/12"}},
+    ]
+
+
 # 信息 (GET /api/v1/imessage…, docs/plan-connectors.md「五」): one Mac's Messages, read for the user's own eyes. Every
 # name, number (+1 555 01xx) and text is made up. MOCK_IMESSAGE=denied: that Mac's node has no Full Disk Access.
 IMESSAGE_DENIED = os.environ.get("MOCK_IMESSAGE") == "denied"
@@ -3826,7 +3956,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
         if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
-            listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}]
+            listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}] + ([telegram_connector()] if TELEGRAM_MODE else [])
             return self.send_json({"connectors": (LEGACY_CONNECTORS if q.get("all") == ["1"] else []) + listed})
         if p == "/api/v1/imessage":  # 设置 › 连接器 › 信息; MOCK_IMESSAGE=denied: no Full Disk Access on the Mac
             return self.send_json(IMESSAGE_STATUS)
@@ -4047,6 +4177,7 @@ class H(BaseHTTPRequestHandler):
                 if not s["can_update"]: return self.send_json({"error": "这个 hub 不能自己更新：" + s.get("why_not", "")}, 409)
                 s.update(state="restarting" if body.get("now") else "waiting_idle")
             return self.send_json(s)
+        if telegram_area(self, self.command, p, self.last_body): return
         if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
         if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page
         if p == "/api/v1/todos" and self.command == "POST":

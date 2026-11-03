@@ -51,7 +51,7 @@ type Connector interface {
 
 ```go
 type Status struct {
-    State     string    // ok | not_configured | not_signed_in | no_permission | rate_limited | error
+    State     string    // ok | not_configured | not_signed_in | no_permission | rate_limited | error | disabled（用户关掉的，#533）
     Account   string    // 显示的账号名（飞书的名字、GitHub 的 login、「这台 Mac 上的信息」）
     Error     string    // 给人看的一句话（「lark-connector 未登录飞书」「没有完全磁盘访问权限」）
     LastSync  time.Time
@@ -71,6 +71,10 @@ type Credentials interface {
   `connector_accounts(connector, account, config jsonb, secret_enc text, created_at, updated_at)`；新迁移号挑之前先看所有 worktree。
   明文只在内存，任何接口都不返回（只回「已设置」和账号名）。也可以写 hub.json 的 `<connector>.token_file`（0600），给不想经过 App 的人用。
 - `not_signed_in` 这类状态统一出现在：设置 › 连接器、收件箱顶部的错误条、助手快照（「GitHub 未登录」时它就不会去调工具）。
+  App 里（`ConnectorText.state` / `tone`）：只有 `error` 写「出错了」，红点只给 `error`、`no_permission`；关掉的（「已关闭」）、未配置、未登录是灰点，
+  App 还不认识的状态（更新的 hub 加的）写「状态未知」、灰点，不当成出错。
+  hub 跑的程序（Telegram）在 #669 以前的 hub 上，关着、还没跑过时列不出能力（空列表，能力是程序自己报的；#669 起 hub 先按静态声明列）：
+  App 照样给开关、不写「在 hub.json 设置」，打开后每秒再问一次，直到程序启动、报出 `login`（最多 15 秒）。
 - 飞书的 `lark.ErrNotLoggedIn` → `not_signed_in`，`/api/v1/lark/status` 保留（旧 App 用），数据从同一个 `Status` 来。
 
 ### 2. 会话（`Conversations`）和往回补（`Backfill`）

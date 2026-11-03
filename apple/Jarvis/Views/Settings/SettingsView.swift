@@ -222,6 +222,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorMail") || d.bool(forKey: "addMail") { p.append(SettingsPage.mail) }
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
         else if d.bool(forKey: "openConnectorGitHub") { p.append(SettingsPage.connector("github")) }
+        else if d.bool(forKey: "openConnectorTelegram") { p.append(SettingsPage.connector("telegram")) }
         else if d.bool(forKey: "openConnectorMessages") || d.string(forKey: "openMessagesChat") != nil { // 信息 (› 会话 › one)
             p.append(SettingsPage.connector("imessage"))
             if d.bool(forKey: "openMessagesChats") || d.string(forKey: "openMessagesChat") != nil { p.append(MessagesChatsRoute()) }
