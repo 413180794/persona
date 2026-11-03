@@ -129,6 +129,10 @@ python3 scripts/release/asc.py GET /v1/appInfos/<appInfo id>/appInfoLocalization
   `settings: [{"key": "PUSH_NOTIFICATIONS", ...}]` 会被 409 拒（`settings/0/key` 只接受 `ICLOUD_VERSION`、
   `DATA_PROTECTION_PERMISSION_LEVEL`、`APPLE_ID_AUTH_APP_CONSENT`）。推送和 HealthKit 直接传空 `settings: []`。
 - **同名描述文件会挡住重建**：改能力后旧描述文件变成 `INVALID`，同名新文件创建会 409。`asc_signing.py` 先删同名再建。
+- **测试组的列表偶尔不完整**（#945）：`GET /v1/apps/{id}/betaGroups` 有时返回空列表、缺几个组或者读超时，脚本以前当成组不存在就新建，
+  2026-11-03 一天多出 4 个同名的 Friends，构建挂进了空组、测试员却都在最早那个组里。现在按名字和内外部找组，同名的取最早建的；
+  列表要问三次都没有才算没有；只有 `setup`、`external` 会新建，`wait` / `info` / `catch-up` 找不到就报错（发版时只打印一行，附重试命令）。
+  已经多出来的空组脚本不删，删不删由人定。
 - **内部测试员要用 `POST /v1/betaTesters` 带群组关系创建**：同一个邮箱在别的 App 下已有测试员记录时，直接关联会 409；
   脚本遇到 409 会提示去网页把这个人加进本 App 的 `Internal` 群组。
 - **归档里的 `aps-environment` 总是 `development`**：归档用的是开发描述文件，最终签名在导出环节完成，别在归档产物上检查。
@@ -150,7 +154,7 @@ python3 scripts/release/asc.py GET /v1/appInfos/<appInfo id>/appInfoLocalization
 
 内部测试员必须是团队成员；给朋友用走外部测试：群组「Friends」（`app_store.external.group`）。2026-10-30 用户定的是**公开链接**
 （`public_link: true`）：把 `https://testflight.apple.com/join/…` 发到群里，谁点开都能装。2026-11-03 起**不限人数**（`public_link_limit: 0`，原来是 50，满了以后链接不再收人）：`public_link_limit` 为 0 或不写时关掉人数上限，只受 Apple 每个 App 最多 10,000 名外部测试员的限制；写正数就是上限。
-当前的公开链接：<https://testflight.apple.com/join/Nb5DjHXf>（`asc_testflight.py external` 每次都会打印，变了就更新这里；2026-11-02 核对）。
+当前的公开链接：<https://testflight.apple.com/join/vsjfy3hE>（`asc_testflight.py external` 每次都会打印，变了就更新这里；2026-11-03 核对，是最早那个 Friends 组的链接）。
 iPhone 和 Mac 是同一个链接（同一个 Friends 组），在 Mac 上用 TestFlight 打开它就是 Mac 版。
 **只私下发给要测的人，不放到官网（`site/`）或任何公开页面上**（2026-10-31 用户要求）。
 不用收集邮箱；`app_store.external.testers` 仍然可以写，列出的邮箱另外收到邀请邮件。`public_link: false` 时只有这些邮箱能加入。

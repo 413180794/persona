@@ -20,7 +20,9 @@ Internal testers (app_store.testers in the config) must be users of the team in 
 External testers join the group by its public link when app_store.external.public_link is true (at most
 public_link_limit people; 0 or unset means no limit), and/or get an email invitation when listed in app_store.external.testers. Without the
 public link only those emails can join. The first build of a version goes through Beta App Review, which needs the
-contact in app_store.external.review (docs/release.md). The App ID comes from app_store.app_id in the config (docs/config.md).
+contact in app_store.external.review (docs/release.md).
+Groups are found by name and kind, the oldest one when several share a name; only "setup" and "external" create
+a missing group, because App Store Connect sometimes lists them incompletely (#945). The App ID comes from app_store.app_id in the config (docs/config.md).
 """
 from __future__ import annotations
 
@@ -59,10 +61,46 @@ def default_whats_new() -> str:
             "在「手机数据」里打开要允许的数据源，然后让 Claude 查一下通讯录或这周的日程。有问题请在 TestFlight 里反馈。")
 
 
+# Only the commands that set groups up ("setup", "external") create a missing group; "wait", "info" and "catch-up"
+# stop instead (#945).
+CREATE_GROUPS = False
+
+
+def find_group(name: str, internal: bool):
+    """The app's beta group of this name and kind; the earliest created one when there are several.
+
+    App Store Connect now and then answers the group listing with an empty or partial list, or times out. A group that
+    exists then looks missing, and creating it on the spot made five groups called Friends (#945): the builds went into
+    an empty group while the testers sat in the first one. So the listing is asked up to three times before the group
+    counts as missing, and duplicates resolve to the oldest, which is the one people joined."""
+    for attempt in range(3):
+        if attempt:
+            time.sleep(5)
+        try:
+            groups = get_all(f"/v1/apps/{APP_ID}/betaGroups")
+        except (APIError, OSError) as e:  # a read timeout is an OSError
+            print(f"listing beta groups failed ({e}); retrying")
+            continue
+        matches = [g for g in groups
+                   if g["attributes"]["name"] == name and bool(g["attributes"].get("isInternalGroup")) == internal]
+        if matches:
+            return min(matches, key=lambda g: g["attributes"].get("createdDate") or "")
+    return None
+
+
+class GroupMissing(APIError):
+    def __init__(self, name: str):
+        super().__init__(404, f"no beta group {name!r} in the listing (App Store Connect sometimes returns an incomplete "
+                              "one); not creating it here. Retry, or create it with "
+                              "python3 scripts/release/asc_testflight.py setup / external")
+
+
 def group_id() -> str:
-    for g in get_all(f"/v1/apps/{APP_ID}/betaGroups"):
-        if g["attributes"]["name"] == GROUP:
-            return g["id"]
+    g = find_group(GROUP, internal=True)
+    if g:
+        return g["id"]
+    if not CREATE_GROUPS:
+        raise GroupMissing(GROUP)
     print("create group", GROUP)
     body = {"data": {"type": "betaGroups",
                      "attributes": {"name": GROUP, "isInternalGroup": True, "hasAccessToAllBuilds": True},
@@ -205,10 +243,12 @@ def wait(minutes: int, version: str | None = None):
 
 def external_group_id() -> str:
     """The external group, its public link on or off as the config says."""
-    for g in get_all(f"/v1/apps/{APP_ID}/betaGroups"):
-        if g["attributes"]["name"] == EXTERNAL_GROUP:
-            public_link(g)
-            return g["id"]
+    g = find_group(EXTERNAL_GROUP, internal=False)
+    if g:
+        public_link(g)
+        return g["id"]
+    if not CREATE_GROUPS:
+        raise GroupMissing(EXTERNAL_GROUP)
     print("create group", EXTERNAL_GROUP)
     body = {"data": {"type": "betaGroups",
                      "attributes": {"name": EXTERNAL_GROUP, "isInternalGroup": False, "publicLinkEnabled": False,
@@ -342,7 +382,7 @@ def catch_up():
 
 
 def main():
-    global PLATFORM
+    global PLATFORM, CREATE_GROUPS
     args = sys.argv[1:]
     if "--platform" in args:
         i = args.index("--platform")
@@ -365,10 +405,12 @@ def main():
         attach(build, group_id())
         share_external(build)
     elif args[:1] == ["external"]:
+        CREATE_GROUPS = True
         external()
     elif args[:1] == ["catch-up"]:
         catch_up()
     elif args[:1] in ([], ["setup"]):
+        CREATE_GROUPS = True
         gid = group_id()
         for t in TESTERS:
             add_tester(gid, t["email"], t.get("first_name") or t["email"].split("@")[0])
