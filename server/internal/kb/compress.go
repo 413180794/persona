@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // Model is the small model that compresses and tags (the hub's ai.Client).

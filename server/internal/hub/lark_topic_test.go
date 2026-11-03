@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // topiclark-connector is an lark-connector with one topic group (f-topic): its messages endpoint holds only the

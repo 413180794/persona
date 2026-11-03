@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // Kinds of entities, also the directory names under the data dir.

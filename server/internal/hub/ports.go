@@ -13,8 +13,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
-	"github.com/chyroc/jarvis/server/internal/streams"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/streams"
 )
 
 // Forwarding a machine's port to the apps (docs/ports.md「转发」): the app listens on the phone's loopback and opens

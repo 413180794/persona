@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
-	"github.com/chyroc/jarvis/server/internal/runtimepkg"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/runtimepkg"
 )
 
 // RuntimeHost is the runtime socket (runtime.sock, runtimes.go) and the runtimes connected to it. A resident node

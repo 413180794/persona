@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/gotd/td/tgerr"
 )
 

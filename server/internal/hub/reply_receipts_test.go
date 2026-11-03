@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 func TestReplyReceiptsPersist(t *testing.T) {

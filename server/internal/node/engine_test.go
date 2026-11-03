@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // The herdr engine's hosts are what every node had before engines: one herdr host, nothing of herdr-core.

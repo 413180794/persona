@@ -15,7 +15,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
-        android:name=".JarvisApp"
+        android:name=".PersonaApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="${appLabel}"
@@ -29,10 +29,6 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize|stateAlwaysHidden">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- jarvis://pair?url=…&token=… from `jarvisd hub pair` -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -56,6 +52,21 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <activity-alias
+            android:name="jarvis.android.MainActivity"
+            android:targetActivity=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name="jarvis.android.ShareActivity"
+            android:targetActivity=".ShareActivity"
+            android:exported="true" />
 
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"

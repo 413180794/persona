@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 func TestLarkReadStatesRoute(t *testing.T) {

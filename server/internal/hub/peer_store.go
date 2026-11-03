@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // peerStore is where the mesh keeps its peers and pairing codes (internal/db/peers.go on Postgres; tests have their

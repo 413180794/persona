@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // isRefusal: err is a refusal with this code that says nothing was sent.

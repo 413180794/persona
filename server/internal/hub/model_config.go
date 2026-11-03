@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/ai"
 )
 
 // ModelBinding is a sparse, non-secret selection; missing fields inherit a declared baseline.

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/ai"
 )
 
 // An upstream out of quota (docs/model-config.md「上游限流」): the first triage pass sends a few requests at most and

@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/connector/telegram/spec"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/telegram/spec"
 )
 
 // stored is what the hub keeps for the connector, sealed.

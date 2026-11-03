@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "jarvis.core.designsystem"
+    namespace = "persona.core.designsystem"
     testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 

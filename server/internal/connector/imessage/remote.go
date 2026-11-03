@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // The hub's side: the connector reads through the node of one Mac (Reader runs there), so it is a thin adapter over

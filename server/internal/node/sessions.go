@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // stateFile remembers which sessions Jarvis started and with which launcher. It lives in the hub's Postgres:

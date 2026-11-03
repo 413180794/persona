@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/netaddr"
+	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
 // Passive mode (docs/link.md「被动模式」): the hub dials this computer instead. jarvis-link listens on a TLS port with its

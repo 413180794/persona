@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // removed for projects (docs/knowledge.md「项目的removed」). The archive (moments/, the crawler) is never summarized post

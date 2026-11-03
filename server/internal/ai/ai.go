@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 type Config struct {

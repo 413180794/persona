@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/connector/github"
-	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/github"
+	"github.com/nwverse/persona/server/internal/mail"
 )
 
 // muteStore keeps settings in memory and takes inbox items without keeping them.

@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Subagents: Claude Code keeps each agent a session launches in <transcript dir>/<session>/subagents/

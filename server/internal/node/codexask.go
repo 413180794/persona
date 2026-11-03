@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/screen"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Codex questions and approvals as cards (docs/codex.md「提问和审批」). Codex in a terminal has no hook Jarvis can

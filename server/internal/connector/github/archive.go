@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/kb"
 )
 
 // The knowledge base (docs/plan-connectors.md「四 · 知识库」): the PRs and issues the user is involved in

@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/screen"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Codex questions and approvals answered the way a card's answer is (codexAnswer), against a real Codex TUI in an

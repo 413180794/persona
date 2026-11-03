@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // Starting a Codex from the phone (docs/codex.md「从手机新建」). A Codex launcher (plain `codex`, or an alias whose

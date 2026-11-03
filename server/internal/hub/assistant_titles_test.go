@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // replies is a model that answers each call with the next of its replies (the last one again when they run out).

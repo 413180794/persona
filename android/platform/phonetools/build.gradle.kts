@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-android { namespace = "jarvis.platform.phonetools" }
+android { namespace = "persona.platform.phonetools" }
 
 dependencies {
     implementation(project(":core:contracts"))

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/feishubot"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Cards for what Jarvis and the agents ask (bots.go BotFeatures.Cards): a question, a plan, a permission or a terminal

@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector/imessage"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/connector/imessage"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Connectors whose data is only on this computer (docs/plan-connectors.md「第三种：node 当本地连接器」): the hub

@@ -17,9 +17,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/link"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/link"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // newLinkHub is a hub with a link machine "laptop" and an ssh machine "box", served over TLS as on the public port.

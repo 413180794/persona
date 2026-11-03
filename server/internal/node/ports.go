@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // The ports the agents listen on (docs/ports.md): each live agent's processes — what runs under it and what else

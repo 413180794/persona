@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // The terminal tab's live stream (docs/terminal.md): while the hub watches a session's terminal, one

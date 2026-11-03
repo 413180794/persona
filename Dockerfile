@@ -39,13 +39,13 @@ COPY integrations/runtime-sdk/ /src/integrations/runtime-sdk/
 RUN go generate ./internal/runtimepkg
 RUN for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do \
       CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
-        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/jarvisd || exit 1; \
+        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/personad || exit 1; \
     done
 # The Telegram connector's program (docs/plan-telegram.md), for this image's platform only: the hub runs it next to
 # jarvisd, and starts it only when its `version -v` is jarvisd's (the same -X).
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
-      -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker" -o /out/jarvisd-telegram ./cmd/jarvisd-telegram
+      -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker" -o /out/jarvisd-telegram ./cmd/personad-telegram
 
 FROM alpine:3.22
 ARG TARGETARCH

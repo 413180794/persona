@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Starting a session in the background (docs/protocol.md「新建会话」). Opening a herdr tab and waiting for claude's

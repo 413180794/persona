@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/connector/serve"
-	"github.com/chyroc/jarvis/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/kb"
 )
 
 var snake = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)

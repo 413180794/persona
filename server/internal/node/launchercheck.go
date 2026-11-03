@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // launcherCheck answers 设置 › 模型's 测试可用性: runs the launcher once, headless, with a one-word prompt in an empty

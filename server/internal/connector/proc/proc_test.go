@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/connector/serve"
-	"github.com/chyroc/jarvis/server/internal/kb"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The test binary is also the program: run with JARVIS_PROC_CHILD=1 it serves exampleProgram on stdin / stdout.

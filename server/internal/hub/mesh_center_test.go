@@ -22,7 +22,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The single-center mesh end to end (docs/plan-hub-center.md): hubs in this process on 127.0.0.1 over TLS, nodes in

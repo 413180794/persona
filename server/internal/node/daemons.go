@@ -40,7 +40,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // DaemonSubprotocol is the WebSocket subprotocol a daemon's endpoint must answer with.

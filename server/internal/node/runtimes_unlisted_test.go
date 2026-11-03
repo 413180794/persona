@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // An older session a runtime stopped listing (DSH lists its latest 80 of thousands) is still its own: a send goes to

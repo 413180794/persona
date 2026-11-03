@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 var uploadNow = time.Date(2026, 10, 29, 15, 30, 12, 0, time.Local)

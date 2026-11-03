@@ -19,8 +19,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The assistant on a Codex launcher runs `codex app-server` (Codex's JSON-RPC server for IDEs, newline-delimited JSON

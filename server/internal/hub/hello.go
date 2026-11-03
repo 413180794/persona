@@ -3,7 +3,7 @@ package hub
 import (
 	"net/http"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // health answers GET /api/v1/health, the one route without authentication.

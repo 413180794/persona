@@ -6,9 +6,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
-	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // Codex question and approval cards (docs/codex.md「提问和审批」). A node lists the ones open on its machine whenever the

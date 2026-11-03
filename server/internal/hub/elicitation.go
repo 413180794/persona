@@ -3,7 +3,7 @@ package hub
 import (
 	"net/http"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 func (h *Hub) hasElicitationClient() bool {

@@ -6,12 +6,14 @@ plugins {
 }
 
 // The application id is personal (docs/config.md): scripts/android.sh passes it from ~/.config/jarvis/config.json.
-val appId = providers.gradleProperty("jarvisApplicationId").getOrElse("com.example.jarvis")
+val appId = providers.gradleProperty("personaApplicationId")
+    .orElse(providers.gradleProperty("jarvisApplicationId"))
+    .getOrElse("com.example.jarvis")
 // A different label lets two builds sit side by side on one phone (with different application ids).
 val appLabel = providers.gradleProperty("jarvisAppLabel").getOrElse("Jarvis")
 
 android {
-    namespace = "jarvis.android"
+    namespace = "persona.android"
     lint {
         baseline = file("lint-baseline.xml")
     }

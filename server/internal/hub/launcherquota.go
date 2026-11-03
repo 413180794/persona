@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/quota"
+	"github.com/nwverse/persona/server/internal/quota"
 )
 
 // A launcher's quota at its gateway (docs/launchers.md「额度」): relay-history and FAKEMODEL keys. A launcher added in

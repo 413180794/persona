@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // agentState maps a host status plus Jarvis' own knowledge onto the unified states (docs/agent-states.md):

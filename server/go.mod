@@ -1,4 +1,4 @@
-module github.com/chyroc/jarvis/server
+module github.com/nwverse/persona/server
 
 go 1.27.1
 

@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/kb"
-	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/mail"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The connector baseline (issue #522): what the hub makes today of Feishu (through lark-connector) and mail, the inbox items

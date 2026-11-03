@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // A Codex pane on a shared app-server (docs/codex.md「守护进程上的会话」): joined on its own, then its messages, async

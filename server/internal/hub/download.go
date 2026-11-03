@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 func (h *Hub) downloadFile(w http.ResponseWriter, r *http.Request, m *Machine) {

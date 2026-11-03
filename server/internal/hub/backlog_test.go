@@ -7,8 +7,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // fakeNode answers session.items after_seq from n items (seq 1..n, one item per line) the way the node does: at most

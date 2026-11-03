@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/quota"
+	"github.com/nwverse/persona/server/internal/quota"
 )
 
 // launcherQuota reads a ~/.zshrc launcher's quota at its gateway (relay-history, FAKEMODEL): the probe gives the base URL

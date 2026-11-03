@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // methodHerdr is a herdr socket answering by method; it records what was typed into panes.

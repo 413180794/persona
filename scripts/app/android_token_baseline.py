@@ -15,9 +15,9 @@ PATTERNS = {
     'dp': rf'(?<![\w.]){NUMBER}\s*\.\s*dp\b',
 }
 TOKEN_PATTERNS = {
-    'color': r'\b(?:Tokens\.(?:Common|Status|System|Semantic)|JarvisTheme\.(?:colors|palette)|MaterialTheme\.colorScheme)\.[\w.]+',
-    'font': r'\b(?:Tokens\.Type|JarvisTypography|JarvisTheme\.type|MaterialTheme\.typography)\.[\w.]+',
-    'dp': r'\b(?:Tokens\.(?:Space|Radius|MinTouch|Shape|Surface)|JarvisTheme\.shapes|MaterialTheme\.shapes)\.[\w.]+',
+    'color': r'\b(?:Tokens\.(?:Common|Status|System|Semantic)|(?:PersonaTheme|JarvisTheme)\.(?:colors|palette)|MaterialTheme\.colorScheme)\.[\w.]+',
+    'font': r'\b(?:Tokens\.Type|(?:PersonaTypography|JarvisTypography)|(?:PersonaTheme|JarvisTheme)\.type|MaterialTheme\.typography)\.[\w.]+',
+    'dp': r'\b(?:Tokens\.(?:Space|Radius|MinTouch|Shape|Surface)|(?:PersonaTheme|JarvisTheme)\.shapes|MaterialTheme\.shapes)\.[\w.]+',
 }
 
 

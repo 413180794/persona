@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db/dbtest"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/db/dbtest"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // TestMain runs the tests on a database of their own (dbtest, #583): other runs on the same machine do not touch it.

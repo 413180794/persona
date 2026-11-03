@@ -5,7 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-android { namespace = "jarvis.feature.inbox" }
+android { namespace = "persona.feature.inbox" }
 
 dependencies {
     implementation(project(":core:chatlist"))

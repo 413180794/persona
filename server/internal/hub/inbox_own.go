@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // The inbox of the hub's own connectors, Feishu and mail (docs/plan-connectors.md M3): their items keep their own

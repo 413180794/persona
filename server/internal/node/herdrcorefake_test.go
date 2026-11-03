@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdrcore"
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/herdrcore"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // fakeHC is a scriptable herdr-core socket (JSON-RPC 2.0, one message per line): it serves connections at once (an

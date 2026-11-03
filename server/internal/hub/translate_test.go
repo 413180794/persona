@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/ai"
 )
 
 func TestTranslateTextsKeepsOrderAndCaches(t *testing.T) {

@@ -19,12 +19,12 @@ import (
 
 	"github.com/mdp/qrterminal/v3"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/connector/github"
-	"github.com/chyroc/jarvis/server/internal/connector/imessage"
-	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/github"
+	"github.com/nwverse/persona/server/internal/connector/imessage"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 type MachineConfig struct {

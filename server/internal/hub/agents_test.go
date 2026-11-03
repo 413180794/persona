@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/agents"
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/agents"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 const bridgeKey = "agent:grok_bot:a6094fe692a7b:8f798b0c-5cb9-4d5f-bdf5-fde194dbe5a3/"

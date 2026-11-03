@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 func thingOf(things []connector.InboxThing, key string) *connector.InboxThing {

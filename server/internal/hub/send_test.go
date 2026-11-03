@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // sentStore keeps sent_messages like the table does.

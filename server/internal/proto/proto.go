@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 type Machine struct {

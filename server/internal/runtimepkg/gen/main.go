@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/chyroc/jarvis/server/internal/runtimepkg"
+	"github.com/nwverse/persona/server/internal/runtimepkg"
 )
 
 func main() {

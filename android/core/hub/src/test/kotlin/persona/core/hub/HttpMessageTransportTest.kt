@@ -1,0 +1,116 @@
+package persona.core.hub
+
+import persona.core.contracts.Endpoint
+import persona.core.contracts.HubScope
+import persona.core.contracts.JsonCodec
+import persona.core.contracts.SessionKey
+import persona.core.contracts.api.MessageRequest
+import persona.core.contracts.api.MessageEvidence
+import persona.core.contracts.api.MessageTransportResult
+import java.net.InetAddress
+import java.security.MessageDigest
+import java.util.Base64
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.*
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
+import org.junit.Assert.*
+import org.junit.Test
+
+class HttpMessageTransportTest {
+    @Test fun waitsForCatchUpPreservesOperationIdentityAndReturnsDeliveryEvidence() = runBlocking {
+        val certificate = HeldCertificate.Builder().commonName("example.com").build()
+        val fingerprint = Base64.getUrlEncoder().withoutPadding().encodeToString(
+            MessageDigest.getInstance("SHA-256").digest(certificate.certificate.publicKey.encoded))
+        val ready = CompletableDeferred<Unit>()
+        val enteredReady = CompletableDeferred<Unit>()
+        val responses = Channel<MockResponse>(Channel.UNLIMITED)
+        val requests = Channel<RecordedRequest>(Channel.UNLIMITED)
+        val expired = AtomicBoolean()
+        val jobs = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        MockWebServer().use { server ->
+            server.useHttps(HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(), false)
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
+                    "/api/v1/health" -> MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
+                    "/api/v1/ws" -> MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                        override fun onOpen(webSocket: WebSocket, response: Response) {
+                            webSocket.send("""{"type":"hello","hub_id":"test-hub","features":["client_ops"]}""")
+                        }
+                    })
+                    else -> {
+                        requests.trySend(request)
+                        runBlocking { responses.receive() }
+                    }
+                }
+            }
+            server.start(InetAddress.getLoopbackAddress(), 0)
+            val origin = server.url("/").newBuilder().host(InetAddress.getLoopbackAddress().hostAddress!!).build().toString()
+            lateinit var transport: HttpMessageTransport
+            OkHttpHubConnection(HubConnectionConfig("test-hub", fingerprint, "test-token",
+                listOf(Endpoint(origin, "lan")), "test"), HubNetwork("initial", available = false),
+                onReady = { enteredReady.complete(Unit); ready.await(); transport.onReady() }).use { connection ->
+                try {
+                    val pairing = HubScope("test-hub", "generation")
+                    transport = HttpMessageTransport(pairing, connection, "test-token", jobs) { expired.set(true) }
+                    val message = MessageRequest(pairing, SessionKey("machine", "session/encoded"), "hello", "stable-id", "draft")
+                    assertEquals(MessageTransportResult.NotSent, transport.send(message))
+                    connection.updateNetwork(HubNetwork("online"))
+                    withTimeout(5000) { enteredReady.await() }
+                    assertFalse(transport.readyToSend.value)
+                    ready.complete(Unit)
+                    withTimeout(5000) { transport.readyToSend.first { it } }
+                    assertTrue(transport.supportsClientOps)
+
+                    val storedBody = Base64.getEncoder().encodeToString("""{"ok":true}""".toByteArray())
+                    responses.send(MockResponse().setBody("""{"state":"done","result":{"status":200,"body":"$storedBody"}}"""))
+                    responses.send(MockResponse().setBody("""{"items":[{"id":"stable-id","role":"user","kind":"text","text":"hello"}]}"""))
+                    assertEquals(MessageEvidence.Shown, transport.reconcile(message, 0))
+                    assertEquals("/api/v1/ops/stable-id", withTimeout(5000) { requests.receive() }.path)
+                    assertTrue(withTimeout(5000) { requests.receive() }.path!!.startsWith(
+                        "/api/v1/sessions/machine/session%2Fencoded/items?"))
+
+                    val results = listOf(
+                        MockResponse().setBody("""{"ok":true}""") to MessageTransportResult.Accepted,
+                        MockResponse().setResponseCode(202).setBody("""{"state":"pending"}""") to MessageTransportResult.NoReceipt,
+                        MockResponse().setResponseCode(202).setBody("""{"state":"unknown"}""") to MessageTransportResult.NoReceipt,
+                        MockResponse().setResponseCode(409).setBody("""{"error":"draft","code":"input_draft","delivered":"none","retryable":false}""") to
+                            MessageTransportResult.HubError("input_draft", "none", "draft", false),
+                        MockResponse().setResponseCode(502).setBody("""{"error":"uncertain","code":"send_failed","delivered":"unknown","retryable":false}""") to
+                            MessageTransportResult.HubError("send_failed", "unknown", "uncertain", false),
+                        MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST) to MessageTransportResult.NoReceipt,
+                    )
+                    for ((response, expected) in results) {
+                        responses.send(response)
+                        assertEquals(expected, transport.send(message))
+                        val sent = withTimeout(5000) { requests.receive() }
+                        assertEquals("/api/v1/sessions/machine/session%2Fencoded/messages", sent.path)
+                        assertEquals("Bearer test-token", sent.getHeader("Authorization"))
+                        assertEquals("stable-id", sent.getHeader("X-Jarvis-Op-Id"))
+                        val body = JsonCodec.parseToJsonElement(sent.body.readUtf8()).jsonObject
+                        assertEquals("stable-id", body["client_msg_id"]?.jsonPrimitive?.content)
+                        assertEquals("draft", body["clear_draft"]?.jsonPrimitive?.content)
+                    }
+                    responses.send(MockResponse().setResponseCode(401).setBody("""{"error":"expired","code":"invalid_token"}"""))
+                    assertTrue(transport.send(message) is MessageTransportResult.HubError)
+                    assertTrue(expired.get())
+                    try {
+                        transport.send(message.copy(scope = HubScope("test-hub", "other-generation")))
+                        fail("Expected scope mismatch")
+                    } catch (_: IllegalArgumentException) { }
+                } finally { jobs.cancel() }
+            }
+        }
+    }
+}

@@ -1,0 +1,40 @@
+package persona.core.chatlist
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class ChatListTest {
+    private data class Message(val id: String, val seq: Int, val text: String = "原文", val incoming: Boolean = true)
+
+    @Test fun frozenWindowAdmitsPagesAndInteriorHolesButDefersNewIncomingMessages() {
+        val window = ChatListWindow<Message>({ it.id }, compareBy { it.seq }, { it.incoming })
+        val first = Message("first", 10)
+        val last = Message("last", 30)
+        window.freeze(listOf(first, last))
+        val old = Message("old", 1)
+        val hole = Message("hole", 20)
+        val new = Message("new", 31)
+        val own = Message("own", 32, incoming = false)
+        val live = listOf(old, first.copy(text = "修改"), hole, last, new, new, own)
+        assertEquals(listOf(old, first, hole, last), window.items(live))
+        assertEquals(1, window.newMessageCount(live))
+        assertEquals(2, window.newMessageCount(live, below = hole))
+        assertEquals(1, window.newMessageCount(live, below = hole, lastRead = last))
+        window.freeze(live)
+        assertFalse(window.items(live).any { it.id == "new" })
+        assertTrue(window.items(listOf(last)).any { it.id == "hole" })
+        window.follow()
+        assertEquals(live, window.items(live))
+        assertEquals(0, window.newMessageCount(live))
+    }
+
+    @Test fun prefetchRequiresUserIntentWhileLastLineUsesMeasuredExtent() {
+        assertFalse(shouldPrefetch(false, true, false, 95, 100, 5))
+        assertFalse(shouldPrefetch(true, true, true, 95, 100, 5))
+        assertFalse(shouldPrefetch(true, false, false, 95, 100, 5))
+        assertFalse(shouldPrefetch(true, true, false, 93, 100, 5))
+        assertTrue(shouldPrefetch(true, true, false, 94, 100, 5))
+        assertEquals(-672, lastLineScrollOffset(700, 28))
+        assertEquals(0, lastLineScrollOffset(20, 28))
+    }
+}

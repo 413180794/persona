@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/feishubot"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Commands in the bot's chat (docs/bots.md「命令」): which conversation or agent messages go to, the lists to pick one

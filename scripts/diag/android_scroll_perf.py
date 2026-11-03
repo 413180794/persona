@@ -25,7 +25,7 @@ x = w // 2
 
 def launch(style, extras):
     adb("shell", "am", "force-stop", package)
-    args = ["shell", "am", "start", "-W", "-n", f"{package}/jarvis.android.debug.DebugEntryActivity",
+    args = ["shell", "am", "start", "-W", "-n", f"{package}/persona.android.debug.DebugEntryActivity",
             "--es", "debug.automation", "true", "--es", "debug.style", style]
     for i in range(0, len(extras), 2):
         args += ["--es", extras[i], extras[i + 1]]

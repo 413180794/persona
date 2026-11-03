@@ -48,7 +48,7 @@ PY
 trap cleanup EXIT
 
 if command -v go >/dev/null; then
-  (cd server && go test -c -tags codexlive -o "$WORK/node.test" ./internal/node/ && go build -o "$WORK/jarvisd" ./cmd/jarvisd) || exit 1
+  (cd server && go test -c -tags codexlive -o "$WORK/node.test" ./internal/node/ && go build -o "$WORK/jarvisd" ./cmd/personad) || exit 1
 else
   eval "$(python3 scripts/jarvis_config.py env)"
   d=".cache/jarvis-test-$(basename "$PWD")"
@@ -56,7 +56,7 @@ else
   rsync -a --delete --exclude bin server/ "$JARVIS_HUB_SSH":"$d/server/" || exit 1
   ssh "$JARVIS_HUB_SSH" "cd ~/$d/server && export GOOS=$(uname -s | tr A-Z a-z) GOARCH=$(uname -m | sed s/x86_64/amd64/) \
     CGO_ENABLED=0 && /usr/local/go/bin/go test -c -tags codexlive -o /tmp/jarvis-$$-node.test ./internal/node/ && \
-    /usr/local/go/bin/go build -o /tmp/jarvis-$$-jarvisd ./cmd/jarvisd" || exit 1
+    /usr/local/go/bin/go build -o /tmp/jarvis-$$-jarvisd ./cmd/personad" || exit 1
   scp -q "$JARVIS_HUB_SSH:/tmp/jarvis-$$-node.test" "$WORK/node.test" && scp -q "$JARVIS_HUB_SSH:/tmp/jarvis-$$-jarvisd" "$WORK/jarvisd" &&
     ssh "$JARVIS_HUB_SSH" "rm -f /tmp/jarvis-$$-node.test /tmp/jarvis-$$-jarvisd"
 fi

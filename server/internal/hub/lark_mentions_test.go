@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 func TestLarkSendAndReplyMentions(t *testing.T) {

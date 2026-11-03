@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // The streamed background-task scan finds what parsing every short marker line finds, across a line far larger than

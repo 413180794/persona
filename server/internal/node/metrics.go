@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/sysmon"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/sysmon"
 )
 
 // The machine pages (docs/machines.md): what this machine is goes out once with node.info, how busy it is as a

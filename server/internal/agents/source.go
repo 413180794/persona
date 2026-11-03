@@ -9,7 +9,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // Unified models: the bridge's shapes are already the right ones, so they are reused, with the public id added.

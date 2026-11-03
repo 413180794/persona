@@ -3,7 +3,7 @@
 // declares the same (connector/telegram).
 package spec
 
-import "github.com/chyroc/jarvis/server/internal/connector"
+import "github.com/nwverse/persona/server/internal/connector"
 
 // ID and Name of the connector.
 const (

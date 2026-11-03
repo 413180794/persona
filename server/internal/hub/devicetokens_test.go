@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // tokenStore keeps device tokens in memory, like the device_tokens table.

@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "jarvis.platform.notify"
+    namespace = "persona.platform.notify"
     testOptions.unitTests.all {
         it.systemProperty("jarvis.repo.root", rootProject.projectDir.parentFile.absolutePath)
     }

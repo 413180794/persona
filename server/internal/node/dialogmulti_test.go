@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // tui plays a multi-select question the way Claude Code 2.1.316 does (measured in herdr): a digit toggles its option

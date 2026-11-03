@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/kb"
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // The removed crawler (docs/knowledge.md「removed全量」): every so often, page through each feed tab (推荐 and every

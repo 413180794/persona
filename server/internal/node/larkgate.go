@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/assistantskills"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/assistantskills"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The assistant drives Feishu through lark-connector's own skill (lark-connector, in the user's ~/.jarvis/skills): Bash runs `ol METHOD PATH

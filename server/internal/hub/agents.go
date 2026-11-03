@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/agents"
+	"github.com/nwverse/persona/server/internal/agents"
 )
 
 // agentsPollFallback re-lists agent sessions in case realtime agent-bridge.updated events are missed (the stream

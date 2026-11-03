@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Collector samples the machine; rates (CPU, network) are measured between two calls.

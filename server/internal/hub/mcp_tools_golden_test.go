@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/connector/github"
-	"github.com/chyroc/jarvis/server/internal/connector/imessage"
-	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/github"
+	"github.com/nwverse/persona/server/internal/connector/imessage"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/mail"
 )
 
 // The MCP tools the hub offers, as they go over the wire (json.Marshal compacts the schemas; the golden is indented

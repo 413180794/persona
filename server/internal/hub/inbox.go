@@ -17,8 +17,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/mail"
 )
 
 // The unified inbox (docs/inbox.md): Feishu messages and mail in one list, one row per "thing" — the new messages

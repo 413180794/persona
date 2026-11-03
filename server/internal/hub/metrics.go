@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Machine monitoring (docs/machines.md): every node sends a sample every 10 s (sysmon); the hub keeps the latest in

@@ -19,8 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/link"
-	"github.com/chyroc/jarvis/server/internal/netaddr"
+	"github.com/nwverse/persona/server/internal/link"
+	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
 var version = "dev"

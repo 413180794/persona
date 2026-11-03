@@ -18,9 +18,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/chyroc/jarvis/server/internal/assistantskills"
-	"github.com/chyroc/jarvis/server/internal/prompts"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/assistantskills"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // assistantOnRuntime is assistantAgent's answer for a launcher a runtime offers as an assistant launcher.

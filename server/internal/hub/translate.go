@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/mail"
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // Translation (docs/ios.md「翻译」): the app decides what needs translating (its own setting, its own language

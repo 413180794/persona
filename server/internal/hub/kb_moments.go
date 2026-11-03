@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/kb"
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // momentsSource puts the removed posts I am part of into the knowledge base (docs/knowledge.md): my own posts and the

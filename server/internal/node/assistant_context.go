@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // The assistant's live snapshot (the time, agents waiting, unread chats, today's meetings…) goes at the start of each

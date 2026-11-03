@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // TRAEX support. TRAEX (`traex`, an in-house fork of Codex) is an agent no host recognizes (it runs in herdr panes

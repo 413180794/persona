@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 // fakeEnv is a Linux computer with a systemd user instance, unless the test changes it; nothing it does reaches the

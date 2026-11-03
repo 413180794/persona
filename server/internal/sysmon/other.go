@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // ReadSystem knows only what Go knows on other systems.

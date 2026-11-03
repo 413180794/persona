@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chyroc/jarvis/server/internal/connector/imessage"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/connector/imessage"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // 信息 (connector/imessage, docs/plan-connectors.md「五」): the app reads one Mac's Messages through that Mac's node;

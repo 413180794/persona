@@ -12,9 +12,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/chyroc/jarvis/server/internal/herdrcore"
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/herdrcore"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // herdrCoreHost is herdr-core (hc), the runtime behind the Herdr desktop app (docs/plan-orca-support.md「herdr-core

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Tool names exposed to Claude through MCP. The hub intercepts anything with a

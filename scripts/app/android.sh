@@ -81,15 +81,15 @@ fi
 cd android
 [ -f local.properties ] || echo "sdk.dir=$SDK" > local.properties
 case "$COMMAND" in
-  test) ./gradlew -q -PjarvisApplicationId="$APP_ID" test ;;
-  lint) ./gradlew -q -PjarvisApplicationId="$APP_ID" lint ;;
-  apk) ./gradlew -q -PjarvisApplicationId="$APP_ID" :app:assembleDebug && ls -la app/build/outputs/apk/debug/app-debug.apk ;;
+  test) ./gradlew -q -PpersonaApplicationId="$APP_ID" test ;;
+  lint) ./gradlew -q -PpersonaApplicationId="$APP_ID" lint ;;
+  apk) ./gradlew -q -PpersonaApplicationId="$APP_ID" :app:assembleDebug && ls -la app/build/outputs/apk/debug/app-debug.apk ;;
   install)
-    ./gradlew -q -PjarvisApplicationId="$APP_ID" :app:assembleDebug
+    ./gradlew -q -PpersonaApplicationId="$APP_ID" :app:assembleDebug
     "$ADB" ${ADB_ARGS[@]+"${ADB_ARGS[@]}"} install -r app/build/outputs/apk/debug/app-debug.apk
-    "$ADB" ${ADB_ARGS[@]+"${ADB_ARGS[@]}"} shell am start -n "$APP_ID/jarvis.android.MainActivity" >/dev/null ;;
+    "$ADB" ${ADB_ARGS[@]+"${ADB_ARGS[@]}"} shell am start -n "$APP_ID/persona.android.MainActivity" >/dev/null ;;
   shots)
-    ./gradlew -q -PjarvisApplicationId="$APP_ID" -Pkotlin.compiler.execution.strategy=in-process :app:assembleDebug
+    ./gradlew -q -PpersonaApplicationId="$APP_ID" -Pkotlin.compiler.execution.strategy=in-process :app:assembleDebug
     "$ADB" -s "$SERIAL" install -r app/build/outputs/apk/debug/app-debug.apk >/dev/null
     "$ADB" -s "$SERIAL" shell pm clear "$APP_ID" >/dev/null
     MOCK_PID=""
@@ -256,7 +256,7 @@ SHOTS_PY
     "$ADB" -s "$SERIAL" shell pm grant "$APP_ID" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
     freeze_clock
     # debug.style is saved, but pm clear above wiped it, so every launch passes it again.
-    "$ADB" -s "$SERIAL" shell am start -W -n "$APP_ID/jarvis.android.debug.DebugEntryActivity" \
+    "$ADB" -s "$SERIAL" shell am start -W -n "$APP_ID/persona.android.debug.DebugEntryActivity" \
       --es debug.mockAddress "$MOCK_ADDRESS" --es debug.openTab Agents --es debug.automation true \
       ${STYLE_ARGS[@]+"${STYLE_ARGS[@]}"} >/dev/null
     # Poll the private navigation checkpoint (the pairing-scoped shell position) to wait for pairing and shell creation.
@@ -276,7 +276,7 @@ SHOTS_PY
       shift 2
       "$ADB" -s "$SERIAL" shell am force-stop "$APP_ID"
       freeze_clock
-      "$ADB" -s "$SERIAL" shell am start -W -n "$APP_ID/jarvis.android.debug.DebugEntryActivity" \
+      "$ADB" -s "$SERIAL" shell am start -W -n "$APP_ID/persona.android.debug.DebugEntryActivity" \
         --es debug.theme "$theme" --es debug.automation true ${STYLE_ARGS[@]+"${STYLE_ARGS[@]}"} "$@" >/dev/null
       sleep "$SETTLE"
       freeze_clock

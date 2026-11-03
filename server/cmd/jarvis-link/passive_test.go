@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 func TestPairListenPrintsOnlyTheLinkOnStdout(t *testing.T) {

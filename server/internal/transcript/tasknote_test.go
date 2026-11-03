@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Background tasks reporting back (testdata/claude-background.jsonl, redacted from real sessions): a heredoc command

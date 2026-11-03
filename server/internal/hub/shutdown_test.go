@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/update"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/update"
 	"github.com/coder/websocket"
 )
 

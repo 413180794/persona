@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/tunnel"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/tunnel"
 )
 
 // The whole way with real jarvisd binaries over Tailscale's public relays: a machine the hub cannot ssh to is set up

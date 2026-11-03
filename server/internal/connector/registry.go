@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 var validID = regexp.MustCompile(`^[a-z][a-z0-9]*$`)

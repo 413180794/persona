@@ -3,7 +3,7 @@ plugins {
     id("jarvis.compose")
 }
 
-android { namespace = "jarvis.core.chatlist" }
+android { namespace = "persona.core.chatlist" }
 
 dependencies {
     api(libs.compose.material3)

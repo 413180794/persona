@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/orcart"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/orcart"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // orcaHost is the Orca desktop app (docs/plan-orca-support.md「Orca 来源」), through its runtime's unix socket. A pane

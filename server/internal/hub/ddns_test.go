@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/netaddr"
+	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
 func ddnsTestAddress(last byte) netaddr.Addr {

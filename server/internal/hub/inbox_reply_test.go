@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // replyHub is a hub with one open Feishu inbox item and a fake lark-connector that records the clientId of each send.

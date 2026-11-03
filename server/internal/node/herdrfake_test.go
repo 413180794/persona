@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // fakeHerdr is a scriptable herdr API socket for node tests. It answers one JSON line per connection (like herdr),

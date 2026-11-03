@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/link"
-	"github.com/chyroc/jarvis/server/internal/mdns"
+	"github.com/nwverse/persona/server/internal/link"
+	"github.com/nwverse/persona/server/internal/mdns"
 )
 
 // `jarvis-link discover`: the hubs on this LAN, as they advertise themselves over mDNS (_jarvis-hub._tcp, docs/mesh.md).

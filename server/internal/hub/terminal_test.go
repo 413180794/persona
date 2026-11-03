@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 func frames(seqs ...int) []termFrame {

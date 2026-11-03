@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Characterization tests of what the node does to herdr to start, prompt, key, close and rename sessions: the exact

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/apns"
+	"github.com/nwverse/persona/server/internal/apns"
 )
 
 type fakeAPNs struct {

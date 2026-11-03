@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 func writeErr(w http.ResponseWriter, status int, err error) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // /agent in a document's comment (docs/lark-agent.md): no realtime event and no notification for a comment of one's

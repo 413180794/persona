@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // A multi-select question of Claude Code's AskUserQuestion read off the screen (screen.Dialog.Multi, 2.1.316):

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/mail"
 )
 
 func TestForeignScript(t *testing.T) {

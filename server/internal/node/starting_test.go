@@ -3,8 +3,8 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/transcript"
 	"strings"
 	"testing"
 )

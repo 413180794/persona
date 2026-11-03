@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Questions a Codex agent asks the user, followed through its rollout (docs/codex.md「提问和审批」):

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // fixture reads testdata/home: a made-up Mac home with Messages' chat.db and an address book (testdata/gen/make.py),

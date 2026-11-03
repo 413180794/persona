@@ -4,7 +4,7 @@ plugins {
     id("jarvis.hilt")
 }
 
-android { namespace = "jarvis.feature.assistant" }
+android { namespace = "persona.feature.assistant" }
 
 dependencies {
     implementation(project(":core:contracts"))

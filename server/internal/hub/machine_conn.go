@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
-	"github.com/chyroc/jarvis/server/internal/streams"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/streams"
 )
 
 // A machine's connection to its node, over one of its paths at a time (mesh_paths.go): the run loop picks the best

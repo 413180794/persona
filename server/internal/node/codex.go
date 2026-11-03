@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/nwverse/persona/server/internal/host"
 )
 
 // Codex support: herdr reports Codex panes as agent "codex"; their conversations are rollouts under

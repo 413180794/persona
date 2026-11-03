@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // lark-cli (Feishu's official open-platform CLI, docs/plan-lark-cli.md) in the assistant's Bash passes the same gate

@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/rpc"
-	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 func screenFixture(t *testing.T, name string) string {

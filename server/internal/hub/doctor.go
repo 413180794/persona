@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/netaddr"
+	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
 // Doctor inspects local state without creating configuration, renewing certificates or changing network rules.

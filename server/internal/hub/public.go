@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/netaddr"
+	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
 type publicState struct {

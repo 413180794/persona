@@ -1,0 +1,71 @@
+package persona.feature.chat
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import persona.core.designsystem.*
+import persona.core.designsystem.icons.PhIcons
+import persona.core.domain.lines.ChatLine
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+
+@Composable
+internal fun DiffNavigation(diff: ToolDiff, list: LazyListState, expand: () -> Unit) {
+    val changes = remember(diff) { diffChangeStarts(diff) }
+    var selected by remember(diff) { mutableIntStateOf(-1) }
+    val scope = rememberCoroutineScope()
+    if (changes.isEmpty()) return
+    fun jump(delta: Int) {
+        selected = if (selected < 0) (if (delta > 0) 0 else changes.lastIndex)
+            else (selected + delta).coerceIn(changes.indices)
+        expand()
+        val target = changes[selected]
+        scope.launch {
+            // Wait for the expanded list to expose changes beyond its preview.
+            snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > target }
+            list.scrollToItem(target)
+        }
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        JTextButton("上一处", { jump(-1) }, enabled = selected != 0)
+        Text("${selected + 1}/${changes.size} 处改动", Modifier.weight(1f), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink2, maxLines = 1)
+        JTextButton("下一处", { jump(1) }, enabled = selected < changes.lastIndex)
+    }
+}
+
+/** Reverse-layout lists need an overlay; regular sticky headers would attach to the wrong edge. */
+@Composable
+internal fun WorkCollapseOverlay(lines: List<ChatLine>, list: LazyListState, outboxCount: Int, onCollapse: (String) -> Unit) {
+    val byId = remember(lines) { lines.associateBy { it.id } }
+    val current by remember(lines, list) {
+        derivedStateOf {
+            val layout = list.layoutInfo
+            val visible = layout.visibleItemsInfo.filter {
+                it.offset < layout.viewportEndOffset && it.offset + it.size > layout.viewportStartOffset
+            }
+            val top = visible.maxByOrNull { it.index }?.key
+            val group = when (val line = byId[top]) {
+                is ChatLine.Step -> line.groupId
+                is ChatLine.End -> line.groupId
+                else -> null
+            }
+            (byId[group] as? ChatLine.Work)?.takeIf { work -> work.open && visible.none { it.key == work.id } }
+        }
+    }
+    var pending by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(lines, pending) {
+        val id = pending ?: return@LaunchedEffect
+        if ((byId[id] as? ChatLine.Work)?.open != false) return@LaunchedEffect
+        withFrameNanos { }
+        val index = lines.indexOfFirst { it.id == id }
+        if (index >= 0) list.scrollToItem(index + outboxCount)
+        pending = null
+    }
+    current?.let { work ->
+        val count = lines.filterIsInstance<ChatLine.End>().firstOrNull { it.groupId == work.id }?.count ?: work.steps.size
+        JChip("收起 $count 步", onClick = { pending = work.id; onCollapse(work.id) }, icon = PhIcons.CaretUp)
+    }
+}

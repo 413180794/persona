@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // A runtime's session (docs/runtimes.md) has no terminal: when it is blocked (waiting in the runtime's own UI) the hub

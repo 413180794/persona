@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/chyroc/jarvis/server/internal/apns"
+	"github.com/nwverse/persona/server/internal/apns"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 func TestBuildFleet(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // Every Feishu route answers 502 with code lark_not_logged_in when lark-connector has lost its Feishu session, and

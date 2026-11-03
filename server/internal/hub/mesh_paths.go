@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The computers the center drives and the ways to each (docs/plan-hub-center.md 5, docs/mesh.md「多条路」). A way —

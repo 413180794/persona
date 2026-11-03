@@ -3,7 +3,7 @@ package hub
 import (
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The app registers exactly these categories (apple/Jarvis/App/NotificationActions.swift); a different spelling would

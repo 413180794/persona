@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // A turn that ends reads the screen and keeps Claude's grey suggestion until the agent works again or input goes in.

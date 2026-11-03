@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // When a "finished" push is worth sending (docs/server.md 推送). Borrowed from Ovis (github.com/devswha/ovis,

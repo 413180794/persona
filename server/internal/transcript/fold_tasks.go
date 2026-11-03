@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 var foldCreatedTask = regexp.MustCompile(`Task #([A-Za-z0-9_-]+) created successfully`)

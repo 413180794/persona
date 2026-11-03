@@ -28,9 +28,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/apns"
-	"github.com/chyroc/jarvis/server/internal/pushcrypto"
-	"github.com/chyroc/jarvis/server/internal/relayproto"
+	"github.com/nwverse/persona/server/internal/apns"
+	"github.com/nwverse/persona/server/internal/pushcrypto"
+	"github.com/nwverse/persona/server/internal/relayproto"
 )
 
 // Config is ~/.jarvis/relay.json.

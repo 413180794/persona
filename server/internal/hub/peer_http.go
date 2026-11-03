@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 // HTTP between hubs over their links (docs/mesh.md「成员转发」). Each stream a hub opens on a link is one HTTP/1.1

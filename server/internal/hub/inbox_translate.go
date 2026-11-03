@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/ai"
 )
 
 // New mail is translated as it comes in, not when it is opened (docs/ios.md「翻译」, 2026-11-01): after each mail

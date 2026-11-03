@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/mail"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // jarvis_settings: Jarvis changes its own settings for the user (docs/assistant.md「操作 Jarvis 自己」, 2026-11-01).

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // larkRoutes exposes Feishu chats from the user's lark-connector instance to the app's 信息 tab.

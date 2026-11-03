@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/nwverse/persona/server/internal/host"
 )
 
 // A directory is only a fallback signal: a real host pane can run from the same directory as a headless assistant.

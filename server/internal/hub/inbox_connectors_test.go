@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // inboxConnector is a connector with an inbox, on made-up data.

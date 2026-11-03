@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 // On Linux jarvis-link runs as a systemd user service (docs/link.md「Linux（headless）」): `install` writes the unit,

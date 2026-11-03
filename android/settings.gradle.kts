@@ -25,7 +25,7 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Jarvis"
+rootProject.name = "Persona"
 include(":core:demo")
 include(":feature:machines")
 include(":feature:files")

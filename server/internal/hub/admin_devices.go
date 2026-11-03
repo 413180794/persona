@@ -7,7 +7,7 @@ import (
 
 	"rsc.io/qr"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // The devices page: the credentials the hub has handed out, revoking one, and a QR code to pair a phone.

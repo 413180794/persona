@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/kb"
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // A fake lark-connector with two tabs: the crawler archives every post once, reads comments only where the count moved,

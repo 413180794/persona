@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/feishubot"
-	"github.com/chyroc/jarvis/server/internal/prompts"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Messages to the bot (docs/bots.md「一条消息怎么走」): who may talk to it, pairing, where a message goes, what of it is

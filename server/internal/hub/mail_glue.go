@@ -1,6 +1,6 @@
 package hub
 
-import "github.com/chyroc/jarvis/server/internal/mail"
+import "github.com/nwverse/persona/server/internal/mail"
 
 func init() {
 	NewMail = func(dir string, store Store, google GoogleConfig, microsoft MicrosoftConfig) (Mail, error) {

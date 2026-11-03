@@ -4,7 +4,7 @@ plugins {
     id("jarvis.hilt")
 }
 
-android { namespace = "jarvis.feature.terminal" }
+android { namespace = "persona.feature.terminal" }
 
 dependencies {
     implementation(project(":core:contracts"))

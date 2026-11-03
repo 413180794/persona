@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The assistant (the app's 对话 tab) runs Claude Code headless — `<launcher> -p --input-format stream-json

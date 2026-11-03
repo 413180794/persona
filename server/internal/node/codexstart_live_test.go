@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/herdr"
 )
 
 // Codex started from the phone (docs/codex.md「从手机新建」), the way session.start does it, against real Codex in the

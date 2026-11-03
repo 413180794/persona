@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // A plan answered in the terminal can outlive its PermissionRequest hook. Reconcile the pending card with the

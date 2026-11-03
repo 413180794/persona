@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Token usage of every agent on this machine, for the Dynamic Island's TPM / today's tokens / requests (docs/live-activity.md).

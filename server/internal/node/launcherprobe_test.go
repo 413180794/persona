@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // probe runs probeScript against testdata/launchers.zsh (zsh, as on the machines).

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/netaddr"
+	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
 // Endpoint is a hub URL, ordered by the preferred connection path.

@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The Codex desktop App keeps a local message bus at <CODEX_HOME>/ipc/ipc.sock: its windows ask each other to run a

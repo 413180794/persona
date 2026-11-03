@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "jarvis.core.data"
+    namespace = "persona.core.data"
     defaultConfig { testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
 }
 

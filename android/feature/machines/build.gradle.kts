@@ -3,7 +3,7 @@ plugins {
     id("jarvis.compose")
 }
 
-android { namespace = "jarvis.feature.machines" }
+android { namespace = "persona.feature.machines" }
 
 dependencies {
     implementation(project(":core:contracts"))

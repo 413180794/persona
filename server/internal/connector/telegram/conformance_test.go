@@ -3,7 +3,7 @@ package telegram
 import (
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/connector/conformance"
+	"github.com/nwverse/persona/server/internal/connector/conformance"
 )
 
 // Telegram is one implementation of the connector protocol: what it gives directly, it gives through the wire.

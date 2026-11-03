@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // ReadSystem reads /etc/os-release, the kernel release, DMI and /proc/cpuinfo.

@@ -21,8 +21,8 @@ import (
 	"github.com/coder/websocket"
 	"golang.org/x/net/proxy"
 
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 // Computers of kind service (docs/plan-hub-center.md 4, docs/link.md「被动模式」): the computer's connector

@@ -3,8 +3,8 @@ package telegram
 import (
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // Every inbox kind the manifest declares has its own description for the models (prompts/inbox/kinds/telegram.md).

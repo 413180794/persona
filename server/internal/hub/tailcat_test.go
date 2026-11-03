@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // silentNode answers node.info and then nothing: a connection whose other end went away without a word (a

@@ -1,0 +1,57 @@
+package persona.core.contracts.api
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import java.io.OutputStream
+
+/** Bound to one pairing; replace the transport when the pairing changes. */
+interface MailTransport {
+    val scope: String
+    suspend fun item(itemId: String): MailInboxItem
+    suspend fun message(ref: MailReference, uid: Long): MailMessage
+    suspend fun setSeen(ref: MailReference, uid: Long, seen: Boolean)
+    suspend fun refreshInbox()
+    suspend fun downloadAttachment(ref: MailReference, uid: Long, attachmentId: String, output: OutputStream,
+        offset: Long = 0, progress: (Long, Long?) -> Unit = { _, _ -> }): Unit =
+        throw UnsupportedOperationException("Attachment downloads unavailable")
+}
+
+@Serializable
+data class MailReference(
+    @SerialName("account_id") val accountId: String,
+    val mailbox: String = "INBOX",
+    val uids: List<Long> = emptyList(),
+)
+
+@Serializable
+data class MailInboxItem(val id: String, val mail: MailReference? = null,
+    @SerialName("reply_target") val replyTarget: MailReplyTarget? = null)
+
+@Serializable
+data class MailReplyTarget(val uid: Long, val version: String)
+
+class MailReplyTargetChanged : java.io.IOException("邮件回复对象已变化，请查看最新邮件后确认发送")
+
+@Serializable
+data class MailAddress(val name: String = "", val email: String = "") {
+    fun display(): String = if (name.isBlank()) email else "$name <$email>"
+}
+
+@Serializable
+data class MailAttachment(val filename: String = "", val mime: String = "", val size: Long = 0, val id: String = "")
+
+@Serializable
+data class MailMessage(
+    @SerialName("account_id") val accountId: String,
+    val mailbox: String = "INBOX",
+    val uid: Long,
+    val subject: String = "",
+    val from: MailAddress = MailAddress(),
+    val to: List<MailAddress> = emptyList(),
+    val cc: List<MailAddress> = emptyList(),
+    val date: String = "",
+    val seen: Boolean = false,
+    val text: String = "",
+    val html: String = "",
+    val attachments: List<MailAttachment> = emptyList(),
+)

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // scripted is a Mac's node answering each method with fixed JSON, recording the params it was asked with.

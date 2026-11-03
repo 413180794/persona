@@ -20,6 +20,21 @@ class TokenBaselineTest(unittest.TestCase):
         ''')
         self.assertEqual({k: {'hardcoded': 1, 'token': 1} for k in ('color', 'font', 'dp')}, counts)
 
+    def test_persona_names_keep_legacy_token_counts(self):
+        legacy = '''
+            import jarvis.core.designsystem.JarvisTheme as Theme
+            import jarvis.core.designsystem.Tokens.Space as Spacing
+            val color = Theme.palette.ink
+            val font = JarvisTypography.body
+            val size = JarvisTheme.shapes.card
+            val gap = Spacing.m
+        '''
+        renamed = legacy.replace('jarvis.core', 'persona.core').replace('Jarvis', 'Persona')
+        self.assertEqual(count(legacy), count(renamed))
+        self.assertEqual(1, count(renamed)['color']['token'])
+        self.assertEqual(1, count(renamed)['font']['token'])
+        self.assertEqual(2, count(renamed)['dp']['token'])
+
     def test_new_file_or_category_cannot_spend_another_files_reduction(self):
         baseline = {'files': {'a.kt': count('1.dp 2.dp')}}
         current = {'files': {'a.kt': count('1.dp'), 'b.kt': count('2.dp')}}

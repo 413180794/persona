@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // node answers the connector's calls the way a Mac's node would, from list (connector.list) or with err.

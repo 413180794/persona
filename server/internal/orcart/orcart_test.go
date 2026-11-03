@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/orcart"
-	"github.com/chyroc/jarvis/server/internal/orcart/orcarttest"
+	"github.com/nwverse/persona/server/internal/orcart"
+	"github.com/nwverse/persona/server/internal/orcart/orcarttest"
 )
 
 // logs collects a client's log lines.

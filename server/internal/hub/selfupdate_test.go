@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/update"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/update"
 )
 
 // fakePublisher serves a release whose binary is a shell script answering `version -v` as the real one does.

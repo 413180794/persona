@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-android { namespace = "jarvis.core.navigation" }
+android { namespace = "persona.core.navigation" }
 
 dependencies {
     api(libs.androidx.navigation3.runtime)

@@ -17,7 +17,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // `jarvisd hub admin …` on the hub's machine (docs/admin.md): widen or set the admin UI's scope, reset its password.

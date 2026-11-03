@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // 设置 › 连接器 › 飞书 with no lark-connector in hub.json says so, without trying to reach one.

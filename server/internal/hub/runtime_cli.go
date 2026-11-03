@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The runtime CLI over the hub (docs/runtime-cli.md「经 hub 连真机」): a DEBUG build of the app, started with the CLI

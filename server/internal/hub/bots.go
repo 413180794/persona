@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/feishubot"
 )
 
 // The bot channel (docs/bots.md): the user talks to Jarvis through a chat app's bot — a Feishu / Lark custom app.

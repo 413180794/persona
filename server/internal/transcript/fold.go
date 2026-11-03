@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // A run of work shorter than this (and lighter than foldMinBytes) stays on the page: opening it would cost a round

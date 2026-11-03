@@ -13,8 +13,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/chyroc/jarvis/server/internal/link"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/link"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // jarvis-link (internal/link, docs/link.md): a computer the hub cannot reach — a laptop on whatever network it is on —

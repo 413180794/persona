@@ -20,11 +20,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/apns"
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/pushcrypto"
-	"github.com/chyroc/jarvis/server/internal/relayproto"
+	"github.com/nwverse/persona/server/internal/apns"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/pushcrypto"
+	"github.com/nwverse/persona/server/internal/relayproto"
 )
 
 // Device is an iPhone, a Mac or a Watch that wants push notifications.

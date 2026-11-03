@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // Calls between hubs of a group (docs/mesh.md「调用」): a call for a hub the caller has no link to goes hop by hop along

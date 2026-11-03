@@ -30,7 +30,7 @@ build() {
     helpers+=("$OUT/jarvis-link-$a")
     # The resident node the app sets up when this Mac has none (jarvis-link node install, docs/link.md).
     (cd server && GOOS=darwin GOARCH=$goarch CGO_ENABLED=0 go build -buildvcs=false -trimpath \
-      -ldflags "-s -w -X main.version=$version" -o "$OUT/jarvisd-$a" ./cmd/jarvisd)
+      -ldflags "-s -w -X main.version=$version" -o "$OUT/jarvisd-$a" ./cmd/personad)
     nodes+=("$OUT/jarvisd-$a")
   done
   rm -rf "$APP"

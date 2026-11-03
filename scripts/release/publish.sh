@@ -50,7 +50,7 @@ LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$B
 # check_bundle_privacy.py, which then knows the dependency constants it may skip.
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
-    -o "../$OUT/bin/jarvisd-${t%/*}-${t#*/}" ./cmd/jarvisd)
+    -o "../$OUT/bin/jarvisd-${t%/*}-${t#*/}" ./cmd/personad)
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/jarvis-link-${t%/*}-${t#*/}" ./cmd/jarvis-link)
 done
@@ -58,7 +58,7 @@ done
 # them with jarvisd (docs/plan-telegram.md「架构」). jarvisd-telegram is Telegram's connector, too big to go into jarvisd.
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
-    -o "../$OUT/bin/jarvisd-telegram-${t%/*}-${t#*/}" ./cmd/jarvisd-telegram)
+    -o "../$OUT/bin/jarvisd-telegram-${t%/*}-${t#*/}" ./cmd/personad-telegram)
 done
 cleanup
 sed "s|@JARVIS_DL@|$JARVIS_PUBLISH_URL/dl|" scripts/deploy/install.sh > "$OUT/install.sh"

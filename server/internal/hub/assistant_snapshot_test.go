@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // The snapshot goes with every message now: it says the time of the message, and a slow source doesn't hold the

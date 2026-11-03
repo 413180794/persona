@@ -4,7 +4,7 @@ plugins {
     id("jarvis.hilt")
 }
 
-android { namespace = "jarvis.feature.agents" }
+android { namespace = "persona.feature.agents" }
 
 dependencies {
     implementation(project(":core:contracts"))

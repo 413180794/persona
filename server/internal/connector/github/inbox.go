@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // The inbox (docs/plan-connectors.md「四 · 收件箱」): GitHub's unread notifications that ask something of the user —

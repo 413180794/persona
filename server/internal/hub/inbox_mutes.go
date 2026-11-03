@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // Muting (docs/inbox.md「静音」, docs/connectors.md「二 · 5」): the user mutes a repository, a chat or a sender from an

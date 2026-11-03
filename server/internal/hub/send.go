@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Sending a message from the phone (docs/protocol.md「发消息」). The app sends each message with its own

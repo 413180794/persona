@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // pi (docs/pi.md). A pi in a herdr pane is a herdr session, as a Claude there is: the pane, its space and tab, the

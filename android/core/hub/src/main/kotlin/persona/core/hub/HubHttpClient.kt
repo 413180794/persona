@@ -1,0 +1,241 @@
+package persona.core.hub
+
+import persona.core.contracts.Endpoint
+import persona.core.contracts.Health
+import persona.core.contracts.JsonCodec
+import java.net.InetAddress
+import java.net.Proxy
+import java.security.MessageDigest
+import java.security.cert.CertificateException
+import java.security.cert.X509Certificate
+import java.util.Base64
+import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.ConnectionPool
+import okhttp3.Dns
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.IOException
+import kotlin.coroutines.resumeWithException
+
+/**
+ * Trust is established by pairing, never by the unauthenticated health response. [pins] are further fingerprints this
+ * client accepts: the other hubs of a group, which were learned from a paired hub's authenticated hello. Which of them
+ * an endpoint must present is checked per request ([HubHttpClient.health], [spkiFingerprint]).
+ */
+class SpkiTrustManager(fingerprint: String?, pins: Set<String> = emptySet()) : X509TrustManager {
+    private val expected = fingerprint?.let(::decodePin)
+    @Volatile private var extra: List<ByteArray> = decodePins(pins)
+
+    internal fun updatePins(pins: Set<String>) { extra = decodePins(pins) }
+
+    fun matches(certificate: X509Certificate): Boolean {
+        val digest = MessageDigest.getInstance("SHA-256").digest(certificate.publicKey.encoded)
+        return expected?.let { MessageDigest.isEqual(it, digest) } == true || extra.any { MessageDigest.isEqual(it, digest) }
+    }
+
+    override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+        if (chain.isNullOrEmpty() || !matches(chain[0])) throw CertificateException("Hub SPKI mismatch")
+    }
+
+    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+        throw CertificateException("Client certificates are not supported")
+    }
+
+    override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+
+    private companion object {
+        fun decodePin(pin: String): ByteArray {
+            require(pin.matches(Regex("[A-Za-z0-9_-]{43}"))) { "Invalid SPKI fingerprint" }
+            return Base64.getUrlDecoder().decode(pin).also { bytes ->
+                require(bytes.size == 32 && Base64.getUrlEncoder().withoutPadding().encodeToString(bytes) == pin)
+            }
+        }
+
+        /** Mesh-provided pins that are malformed are ignored rather than failing the whole client. */
+        fun decodePins(pins: Set<String>) = pins.mapNotNull { runCatching { decodePin(it) }.getOrNull() }
+    }
+}
+
+/** The SPKI fingerprint (SHA-256, unpadded base64url) of [certificate]. */
+internal fun spkiFingerprint(certificate: X509Certificate): String =
+    Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(certificate.publicKey.encoded))
+
+/** How TLS pins are keyed: the host as OkHttp hands it to the hostname verifier, and the port. */
+internal fun tlsKey(host: String, port: Int) = "${host.lowercase()}:$port"
+
+/** Additional VPN ranges must be supplied by the caller; endpoint labels are not trusted. */
+class LocalAddressPolicy(private val isVpnAddress: (InetAddress) -> Boolean = { false }) {
+    fun allows(address: InetAddress): Boolean {
+        val bytes = address.address
+        val ula = bytes.size == 16 && (bytes[0].toInt() and 0xfe) == 0xfc
+        return address.isLoopbackAddress || address.isSiteLocalAddress || address.isLinkLocalAddress || ula || isVpnAddress(address)
+    }
+}
+
+/**
+ * One instance owns all HTTP and WebSocket traffic for one paired hub, or for one group of hubs: [pins] adds the other
+ * hubs' fingerprints to the trust manager, and callers check per endpoint which hub answered.
+ */
+class HubHttpClient(
+    val hubId: String?,
+    val fingerprint: String?,
+    version: String,
+    val localAddressPolicy: LocalAddressPolicy = LocalAddressPolicy(),
+    dns: Dns = Dns.SYSTEM,
+    pins: Set<String> = emptySet(),
+) : AutoCloseable {
+    val client: OkHttpClient
+    private val trust = SpkiTrustManager(fingerprint, pins)
+    @Volatile private var extraPins = pins
+    /** For a group: which hub's pin each TLS endpoint must present, set by the connection. */
+    private val expectedPins = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** The leaf pin each TLS endpoint presented last. OkHttp's cleaned handshake has no certificates for a pinned self-signed hub. */
+    private val seenPins = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** The other hubs of the group changed. */
+    internal fun updatePins(pins: Set<String>) {
+        extraPins = pins
+        trust.updatePins(pins)
+    }
+
+    /** Per endpoint (`url` of a candidate) the pin its hub must present; endpoints not listed accept any trusted pin. */
+    internal fun expectPins(pins: Map<HttpUrl, String>) {
+        val keys = pins.entries.filter { it.key.isHttps }.associate { tlsKey(it.key.host, it.key.port) to it.value }
+        expectedPins.keys.retainAll(keys.keys)
+        expectedPins.putAll(keys)
+    }
+
+    /** The pin the endpoint at [url] presented in its last TLS handshake. */
+    internal fun seenPin(url: HttpUrl): String? = seenPins[tlsKey(url.host, url.port)]
+
+    init {
+        val tls = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), null) }
+        client = OkHttpClient.Builder()
+            .sslSocketFactory(tls.socketFactory, trust)
+            .hostnameVerifier { host, session ->
+                val leaf = session.peerCertificates.firstOrNull() as? X509Certificate
+                if (leaf == null || !trust.matches(leaf)) false else {
+                    val key = tlsKey(host, session.peerPort)
+                    val pin = spkiFingerprint(leaf)
+                    seenPins[key] = pin
+                    // A group's client trusts every hub's pin; an endpoint of a known hub must present that hub's.
+                    expectedPins[key]?.let { it == pin } ?: true
+                }
+            }
+            .dns(dns)
+            .proxy(Proxy.NO_PROXY)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .retryOnConnectionFailure(false)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .pingInterval(0, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val request = chain.request()
+                if (request.url.username.isNotEmpty() || request.url.password.isNotEmpty()) {
+                    throw HubFailure(HubError.Protocol, retryable = false)
+                }
+                val builder = request.newBuilder().header("X-Jarvis-Client", "android/$version")
+                if (!request.url.isHttps) {
+                    // WebSocket upgrades skip network interceptors. Freeze the checked DNS
+                    // result into the URL so the upgrade cannot resolve to a different peer.
+                    val peer = dns.lookup(request.url.host).firstOrNull(localAddressPolicy::allows)
+                        ?: throw HubFailure(HubError.TlsRequired, retryable = false)
+                    val authority = request.url.toString().substringAfter("://").substringBefore('/')
+                    builder.url(request.url.newBuilder().host(peer.hostAddress!!).build()).header("Host", authority)
+                }
+                chain.proceed(builder.build())
+            }
+            .addNetworkInterceptor { chain ->
+                // Inspect the actual peer before sending headers, including after DNS resolution.
+                if (!chain.request().url.isHttps) {
+                    val peer = chain.connection()?.route()?.socketAddress?.address
+                    if (peer == null || !localAddressPolicy.allows(peer)) {
+                        throw HubFailure(HubError.TlsRequired, retryable = false)
+                    }
+                }
+                chain.proceed(chain.request())
+            }
+            .build()
+    }
+
+    /**
+     * The unauthenticated identity check: TLS pin (or a local peer for http), then the hub id. [fresh] uses a new
+     * connection pool so the time includes connecting and the TLS handshake (settings tests); pinning and the
+     * plaintext guard apply as always.
+     */
+    suspend fun health(
+        endpoint: Endpoint, fresh: Boolean = false,
+        /** The hub this endpoint belongs to; another group member's id answering here is a mismatch. */
+        expectedHubId: String? = hubId,
+        /** The pin the TLS leaf must have. Defaults to this client's own when it also trusts other hubs' pins. */
+        expectedPin: String? = null,
+    ): Health {
+        val url = endpoint.baseUrl().newBuilder().encodedPath("/api/v1/health").query(null).build()
+        val caller = if (!fresh) client else client.newBuilder().connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS)).build()
+        caller.newCall(Request.Builder().url(url).build()).awaitResponse().use { response ->
+            if (url.isHttps) {
+                // The trust manager accepts every pin of the group; the leaf must be this endpoint's own hub's.
+                val pin = expectedPin ?: fingerprint.takeIf { extraPins.isNotEmpty() }
+                if (pin != null && seenPin(url) != pin) throw HubFailure(HubError.CertificateMismatch, retryable = false)
+            }
+            if (!response.isSuccessful) throw HubFailure.from(response)
+            val health = runCatching { JsonCodec.decodeFromString<Health>(response.body!!.string()) }
+                .getOrElse { throw HubFailure(HubError.Protocol, cause = it) }
+            if (!health.ok) throw HubFailure(HubError.Server)
+            if (expectedHubId != null && health.hubId != expectedHubId) throw HubFailure(HubError.HubMismatch, retryable = false)
+            return health
+        }
+    }
+
+    override fun close() {
+        client.dispatcher.cancelAll()
+        client.connectionPool.evictAll()
+        client.dispatcher.executorService.shutdown()
+    }
+}
+
+internal fun Endpoint.baseUrl(): HttpUrl = try {
+    url.toHttpUrl().also {
+        require(it.username.isEmpty() && it.password.isEmpty() && it.query == null && it.fragment == null)
+        require(it.encodedPath == "/")
+    }
+} catch (error: IllegalArgumentException) {
+    throw HubFailure(HubError.Protocol, retryable = false, cause = error)
+}
+
+/**
+ * Callers parse the response wherever they run, often on the main thread (Android forbids network reads there:
+ * NetworkOnMainThreadException), so by default the body is read here on OkHttp's thread. Streaming downloads pass
+ * buffered = false and read inside Dispatchers.IO themselves.
+ */
+internal suspend fun Call.awaitResponse(buffered: Boolean = true): Response = suspendCancellableCoroutine { continuation ->
+    continuation.invokeOnCancellation { cancel() }
+    enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            if (!continuation.isCancelled) continuation.resumeWithException(HubFailure.from(e))
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+            val ready = if (!buffered) response else try {
+                val body = response.body
+                if (body == null) response
+                else response.newBuilder().body(body.use { it.bytes() }.toResponseBody(body.contentType())).build()
+            } catch (e: IOException) {
+                response.close()
+                if (!continuation.isCancelled) continuation.resumeWithException(HubFailure.from(e))
+                return
+            }
+            continuation.resume(ready) { _, value, _ -> value.close() }
+        }
+    })
+}

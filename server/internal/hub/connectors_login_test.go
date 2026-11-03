@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/kb"
 )
 
 // keepStore is memStore with settings and connector secrets kept in memory.

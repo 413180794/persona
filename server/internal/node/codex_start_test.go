@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Starting a Codex from the phone (codex_start.go) against a fake herdr: the launcher runs through codex-start with the

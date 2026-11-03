@@ -9,7 +9,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The session lists the apps get (docs/protocol.md「会话增量」, docs/server.md「推送给 App 的量」). An app that asks for

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // Feishu documents in the inbox (docs/inbox.md「云文档」): the docs notification center's @me / comment / reply

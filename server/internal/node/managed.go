@@ -12,7 +12,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Launchers kept by the hub (设置 › 模型, docs/launchers.md): the hub sends them (keys included) on connect and on

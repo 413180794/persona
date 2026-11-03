@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // ip4 builds private addresses from their numbers, so fixtures do not look like someone's real hosts (like

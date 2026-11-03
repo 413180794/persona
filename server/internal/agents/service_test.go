@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 type fakeBridge struct {

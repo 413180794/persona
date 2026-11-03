@@ -54,7 +54,7 @@ cat > "$TMP/relay.json" <<JSON
 JSON
 # -mod=readonly: a GOFLAGS=-mod=mod in the environment must not rewrite go.mod here.
 export GOFLAGS=-mod=readonly
-(cd server && go build -o "$TMP/jarvisd" ./cmd/jarvisd)
+(cd server && go build -o "$TMP/jarvisd" ./cmd/personad)
 "$TMP/jarvisd" relay "$TMP/relay.json" > "$OUT/relay.log" 2>&1 & pids+=($!)
 for _ in $(seq 50); do curl -fs "http://127.0.0.1:$RELAY_PORT/relay/v1/health" >/dev/null && break; sleep 0.1; done
 curl -fs "http://127.0.0.1:$RELAY_PORT/relay/v1/health" >/dev/null || { say "FAIL: relay did not start"; cat "$OUT/relay.log"; exit 1; }

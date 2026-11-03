@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
-	"github.com/chyroc/jarvis/server/internal/lark"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // With only lark-cli in hub.json (docs/plan-lark-cli.md), the assistant's machine learns how to run it, and there is

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // removed (Feishu Moments, once 头条圈) in the inbox (docs/inbox.md「removed」): what concerns me there — a comment on my

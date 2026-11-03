@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/rpc"
-	"github.com/chyroc/jarvis/server/internal/tunnel"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/tunnel"
 )
 
 // Reaching a machine (docs/server.md「tailcat 打洞」): ssh when the hub can, tailcat when it cannot. A machine with

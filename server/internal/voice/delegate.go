@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // Handing a task to the Jarvis tab's main conversation (the assistant with the user's data and skills) and hearing

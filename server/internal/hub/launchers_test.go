@@ -7,8 +7,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // A runtime's launcher (DSH) is offered in the new-chat picker under its own source, and is not listed among

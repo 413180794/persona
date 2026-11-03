@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Token usage across the machines, for the Dynamic Island (docs/live-activity.md): every node meters its

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Permission mode and effort level of a Claude session, chosen from the app (docs/ios.md「思考强度和权限模式」).

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 // report is `jarvis-link status --json`: what is known here about the link, without asking the running jarvis-link

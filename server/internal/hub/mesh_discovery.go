@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/mdns"
+	"github.com/nwverse/persona/server/internal/mdns"
 )
 
 // Finding other hubs on the LAN (docs/plan-hub-mesh.md 2.1): every hub with TLS advertises _jarvis-hub._tcp over

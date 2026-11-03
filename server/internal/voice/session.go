@@ -13,7 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // One voice conversation: the app's WebSocket on one side (docs/plugins.md「语音」), a GPT-Live session on the other.

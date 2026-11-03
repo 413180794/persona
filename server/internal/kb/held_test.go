@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/ai"
 )
 
 // heldModel is a model whose connection is held (its quota used up) until open; then it answers like next.

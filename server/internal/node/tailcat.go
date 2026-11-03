@@ -11,7 +11,7 @@ import (
 
 	"github.com/tailscale/tailcat"
 
-	"github.com/chyroc/jarvis/server/internal/tunnel"
+	"github.com/nwverse/persona/server/internal/tunnel"
 )
 
 // ServeTailcat brings up this machine's tailcat endpoint for a resident node, when it was set up for it

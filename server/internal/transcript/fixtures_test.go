@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Fixtures are real transcripts / rollouts run through scripts/diag/redact_transcript.py (testdata/README.md). Each one has

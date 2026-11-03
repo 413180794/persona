@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/nwverse/persona/server/internal/host"
 )
 
 // bareHost is a host with only the core methods (no Launcher, Organizer, Streamer…), recording the keys it was sent.

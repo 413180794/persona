@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/mail"
-	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 func errorResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]any {

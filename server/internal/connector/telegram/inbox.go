@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // The inbox (connector.Inbox): what in the account needs the user. Collect answers from memory — the conversations

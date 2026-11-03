@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // hubClient calls the Jarvis hub's API with the credential the hub hands its plugins (JARVIS_HUB_URL / JARVIS_HUB_TOKEN).

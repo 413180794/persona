@@ -1,6 +1,6 @@
 package transcript
 
-import "github.com/chyroc/jarvis/server/internal/proto"
+import "github.com/nwverse/persona/server/internal/proto"
 
 // shimFull gives the item whole (pages carry light copies: long text cut, images without data).
 func shimFull(f *File, it proto.Item) proto.Item {

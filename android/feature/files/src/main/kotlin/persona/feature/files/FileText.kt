@@ -1,0 +1,118 @@
+package persona.feature.files
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import persona.core.designsystem.PersonaTheme
+import persona.core.designsystem.JLoading
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+internal enum class FileLineKind { Code, Context, Add, Delete, Info }
+internal data class FileTextLine(val text: String, val old: Int? = null, val new: Int? = null, val kind: FileLineKind = FileLineKind.Code)
+
+internal fun fileLines(text: String, diff: Boolean): List<FileTextLine> {
+    if (!diff) return text.split('\n').mapIndexed { index, line -> FileTextLine(line.removeSuffix("\r").replace("\t", "    "), new = index + 1) }
+    var old = 0
+    var new = 0
+    var inHunk = false
+    val header = Regex("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@.*")
+    return text.split('\n').map { raw ->
+        val line = raw.removeSuffix("\r").replace("\t", "    ")
+        val match = header.matchEntire(line)
+        when {
+            match != null -> {
+                old = match.groupValues[1].toInt(); new = match.groupValues[2].toInt(); inHunk = true
+                FileTextLine(line, kind = FileLineKind.Info)
+            }
+            line.startsWith("diff --git ") -> { inHunk = false; FileTextLine(line, kind = FileLineKind.Info) }
+            inHunk && line.startsWith('+') -> FileTextLine(line.drop(1), new = new++, kind = FileLineKind.Add)
+            inHunk && line.startsWith('-') -> FileTextLine(line.drop(1), old = old++, kind = FileLineKind.Delete)
+            inHunk && line.startsWith(' ') -> FileTextLine(line.drop(1), old = old++, new = new++, kind = FileLineKind.Context)
+            else -> FileTextLine(line, kind = FileLineKind.Info)
+        }
+    }
+}
+
+// One ordered scan keeps comment and string tokens from receiving overlapping keyword spans.
+private val syntax = Regex("\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|//.*|#.*|\\b(?:fun|func|val|var|let|const|class|struct|interface|enum|object|import|package|return|if|else|for|while|when|switch|case|break|continue|try|catch|throw|throws|async|await|suspend|public|private|internal|static|final|override|def|from|in|true|false|null|nil|None|True|False)\\b|\\b\\d+(?:\\.\\d+)?\\b")
+
+private fun highlighted(text: String, keyword: Color, string: Color, comment: Color): AnnotatedString {
+    val result = AnnotatedString.Builder(text)
+    syntax.findAll(text).forEach { match ->
+        val color = when {
+            match.value.startsWith("//") || match.value.startsWith('#') -> comment
+            match.value.startsWith('"') || match.value.startsWith('\'') -> string
+            else -> keyword
+        }
+        result.addStyle(SpanStyle(color), match.range.first, match.range.last + 1)
+    }
+    return result.toAnnotatedString()
+}
+
+/** Each visible row shares the same horizontal offset and width; gutters stay fixed. */
+@Composable
+internal fun FileText(text: String, diff: Boolean = false, modifier: Modifier = Modifier, contentPadding: PaddingValues = PaddingValues(0.dp), header: LazyListScope.() -> Unit = {}) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val style = PersonaTheme.type.code
+    val colors = PersonaTheme.palette
+    val normal = colors.ink
+    val muted = colors.ink3
+    val keyword = colors.accent
+    val string = colors.done.text
+    data class Prepared(val lines: List<FileTextLine>, val spans: List<AnnotatedString>, val widthPx: Int)
+    val prepared by produceState<Prepared?>(null, text, diff, density, style, keyword, string, muted) {
+        value = null
+        value = withContext(Dispatchers.Default) {
+            val lines = fileLines(text, diff)
+            val spans = lines.map { if (diff) AnnotatedString(it.text) else highlighted(it.text, keyword, string, muted) }
+            val width = lines.maxOfOrNull { measurer.measure(it.text.ifEmpty { " " }, style, softWrap = false, maxLines = 1).size.width } ?: 0
+            Prepared(lines, spans, width)
+        }
+    }
+    val data = prepared
+    if (data == null) {
+        Box(modifier.fillMaxSize().padding(contentPadding), contentAlignment = androidx.compose.ui.Alignment.Center) { JLoading() }
+        return
+    }
+    val horizontal = rememberScrollState()
+    val gutter = if (diff) 104.dp else 60.dp
+    BoxWithConstraints(modifier.background(colors.sunken)) {
+        val width = maxOf(with(density) { data.widthPx.toDp() } + 24.dp, (maxWidth - gutter).coerceAtLeast(1.dp))
+        SelectionContainer {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
+                header()
+                itemsIndexed(data.lines, key = { index, _ -> index }, contentType = { _, _ -> "line" }) { index, line ->
+                    val tone = when (line.kind) { FileLineKind.Add -> colors.diffAdd; FileLineKind.Delete -> colors.diffDel; else -> colors.sunken.copy(alpha = 0f) }
+                    Row(Modifier.fillMaxWidth().background(tone.copy(alpha = if (line.kind != FileLineKind.Add && line.kind != FileLineKind.Delete) 0f else .12f))) {
+                        val marker = when (line.kind) { FileLineKind.Add -> "+"; FileLineKind.Delete -> "−"; else -> " " }
+                        val number = if (diff) "${line.old?.toString().orEmpty().padStart(4)} ${line.new?.toString().orEmpty().padStart(4)} $marker"
+                            else line.new?.toString().orEmpty()
+                        Text(number, Modifier.width(gutter).padding(end = 8.dp), style = style,
+                            color = muted, textAlign = TextAlign.End, maxLines = 1, softWrap = false)
+                        Box(Modifier.weight(1f).horizontalScroll(horizontal)) {
+                            Text(data.spans[index], Modifier.width(width).padding(end = 16.dp), style = style,
+                                color = if (line.kind == FileLineKind.Info) muted else normal, maxLines = 1, softWrap = false)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

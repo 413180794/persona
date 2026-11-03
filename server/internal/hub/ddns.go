@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/netaddr"
+	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
 // DDNSConfig optionally publishes the hub's stable addresses.

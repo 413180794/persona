@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // The inbox items of connectors (GitHub…): their things become items with one generic block the apps draw without

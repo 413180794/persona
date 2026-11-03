@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // Against a real claude pane: JARVIS_LIVE_PANE=<pane> JARVIS_LIVE_WANT=<code or ""> [JARVIS_LIVE_CLEAR=<draft>]

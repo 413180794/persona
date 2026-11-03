@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // The hub mesh (docs/mesh.md): hubs paired with each other keep a link each (peer_link.go) and flood records of

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 func (n *Node) readFileChunk(p proto.FileChunkRequest) (*proto.FileChunk, error) {

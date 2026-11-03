@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // What of GitHub's notifications reaches the inbox, and how urgent it is (docs/inbox.md「连接器：GitHub」): the

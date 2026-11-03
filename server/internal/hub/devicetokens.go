@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 // One credential per device (docs/protocol.md「鉴权」). The pairing token in hub.json still opens everything (the CLI,

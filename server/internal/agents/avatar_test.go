@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 const svgCircle = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 8a42 42 0 1 1 0 84a42 42 0 0 1 0-84z" fill="#FF309B"/></svg>`

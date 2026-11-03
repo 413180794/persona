@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
-	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/nwverse/persona/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/host"
 )
 
 // herdrHost is the herdr host: every method is one herdr client call (Close: the tab's pane count, then a close).

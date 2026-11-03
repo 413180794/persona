@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // The function tools the voice model may call (live dialect with tools): what Jarvis knows and the agents on the

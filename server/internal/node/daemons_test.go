@@ -19,9 +19,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/rpc"
-	"github.com/chyroc/jarvis/server/internal/runtimepkg"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/runtimepkg"
 )
 
 // fakeDaemon is a daemon's WebSocket endpoint speaking the runtime protocol: what it was asked, and how it answers.

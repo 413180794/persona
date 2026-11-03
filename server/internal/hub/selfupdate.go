@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/update"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/update"
 )
 
 // The hub updating itself to the publisher's release (docs/hub-update.md「更新」): check the manifest every 6 hours, download and verify, wait until the assistant and every agent are idle, swap the binary (keeping the old

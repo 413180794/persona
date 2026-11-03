@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/node"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/node"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 type request struct {

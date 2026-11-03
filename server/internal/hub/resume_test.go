@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // memStore keeps interaction outcomes like the interactions table; other Store methods are not used here.

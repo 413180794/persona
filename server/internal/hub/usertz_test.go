@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // The user's time zone in tests: times are built in UTC and read in it, so a test gives the same result whatever zone

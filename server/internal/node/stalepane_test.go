@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/nwverse/persona/server/internal/host"
 )
 
 // The panes of sessions Jarvis started are kept in the hub's database and come back when node restarts. After a

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/nwverse/persona/server/internal/host"
 )
 
 func TestCodexLegacyCollisionDoesNotTargetClaudeOrServer(t *testing.T) {

@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "jarvis.core.demo"
+    namespace = "persona.core.demo"
     sourceSets.getByName("test").resources.srcDir("src/main/assets")
 }
 

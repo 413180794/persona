@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/host"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // lsof -a -p … -nP -iTCP -sTCP:LISTEN -Fpcn on macOS: vite on IPv6 localhost, a Python server on every address,

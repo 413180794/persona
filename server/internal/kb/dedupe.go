@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // Project dedupe (docs/knowledge.md「项目去重」). The same work is often discussed in several groups under different

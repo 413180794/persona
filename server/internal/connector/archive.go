@@ -3,7 +3,7 @@ package connector
 import (
 	"context"
 
-	"github.com/chyroc/jarvis/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/kb"
 )
 
 // ChatBatch is one conversation's new messages, oldest first.

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // macHub is testLive's hub (an iPhone "devtok" on a fake APNs) plus a Mac registered for pushes ("mactok"),

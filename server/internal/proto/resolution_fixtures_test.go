@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 type answerFixture struct {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // Sign-in steps (connector.Login): the API credentials, the phone number, the code, the 2FA password.

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Characterization tests of the TUI driving (session.modes: permission mode, effort) and the screen reads

@@ -4,7 +4,7 @@ plugins {
     id("jarvis.hilt")
 }
 
-android { namespace = "jarvis.feature.settings" }
+android { namespace = "persona.feature.settings" }
 
 dependencies {
     implementation(libs.androidx.activity)

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/ai"
 )
 
 // mutableModel changes replies without changing the provider configuration, to distinguish cache hits from invalidation.

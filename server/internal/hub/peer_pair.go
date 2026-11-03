@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // Pairing two hubs (docs/plan-hub-mesh.md 2.2, docs/mesh.md「配对」): hub B makes a one-time code good for 10 minutes

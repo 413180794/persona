@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 func TestManagedLauncherRunsThroughJarvisd(t *testing.T) {

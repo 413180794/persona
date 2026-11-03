@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 func (h *Hub) lockTestRoutes(api *http.ServeMux) {

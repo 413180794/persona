@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // ItemSource lists documents, meetings and calendar events (Feishu through lark-connector).

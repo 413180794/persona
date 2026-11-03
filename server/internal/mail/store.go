@@ -15,7 +15,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // Records is where accounts are persisted: Postgres (internal/db) in production, memory in tests.

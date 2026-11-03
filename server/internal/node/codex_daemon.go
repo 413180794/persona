@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
-	"github.com/chyroc/jarvis/server/internal/transcript"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Codex panes on a shared app-server (docs/codex.md「守护进程上的会话」). From 0.163 a plain `codex` runs its thread on

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The machines page: what hub.json lists and how each one is doing (with every path the center has to it, and the

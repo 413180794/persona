@@ -3,7 +3,7 @@ package hub
 import (
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // pushWants is which devices' settings take a push.

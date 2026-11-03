@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // asNode runs script the way the node does (loginShell: `zsh -ic`), with defs as the ~/.zshrc it sources first

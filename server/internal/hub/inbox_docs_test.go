@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 var testMe = lark.Me{UserID: "u-me", Name: "我自己"}

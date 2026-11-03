@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/link"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 // Passive mode on the command line (docs/link.md「被动模式」): `pair --listen` makes the link the hub's admin page

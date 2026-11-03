@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/db"
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The "Fleet" Live Activity (docs/live-activity.md): one activity per phone, on the lock screen and in the Dynamic

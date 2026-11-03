@@ -1,0 +1,231 @@
+package persona.core.hub
+
+import persona.core.contracts.*
+import persona.core.contracts.api.*
+import java.io.OutputStream
+import java.security.MessageDigest
+import java.time.Instant
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.*
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+
+data class PairedHub(
+    val hubId: String, val token: String, val deviceId: String?, val address: String,
+    val fingerprint: String?, val candidates: List<String>,
+) {
+    override fun toString() = "PairedHub(<redacted>)"
+}
+
+/** Networking for pairing and settings. Credentials are persisted by the application. */
+class HubPairingClient private constructor(
+    private val expectedHubId: String?,
+    val fingerprint: String?,
+    addresses: List<String>,
+    version: String,
+    private val connection: OkHttpHubConnection?,
+) : AutoCloseable {
+    /** Pairing uses temporary credentials before a live connection exists. */
+    constructor(expectedHubId: String?, fingerprint: String?, addresses: List<String>, version: String) :
+        this(expectedHubId, fingerprint, addresses, version, null)
+
+    /** Settings and downloads share the running connection's route and credentials. */
+    constructor(connection: OkHttpHubConnection) : this(connection.http.hubId, connection.http.fingerprint,
+        connection.candidates().map { it.url }, "", connection)
+
+    val http = connection?.http ?: HubHttpClient(expectedHubId, fingerprint, version)
+    private val selector = HubRouteSelector(http)
+    private var endpoints = addresses.distinct().map(::endpoint)
+    private var pairedAddress: String = endpoints.first().url
+    val address: String get() = connection?.activeRoute()?.endpoint?.url ?: pairedAddress
+    private var candidates = endpoints.map { ConnectionCandidate(it.url, it.kind, "尚未探测") }
+    private var lastFailure: String? = null
+
+    suspend fun probe(progress: (PairingProgress) -> Unit = {}): HubRoute {
+        if (connection != null) return connection.activeRoute()
+        candidates = endpoints.map { ConnectionCandidate(it.url, it.kind, "探测中") }
+        progress(PairingProgress(PairingStage.Probe, candidates = candidates))
+        try {
+            val route = selector.select(orderEndpoints(endpoints)) { target, result ->
+                candidates = candidates.map {
+                    if (it.url != target.url) it else it.copy(
+                        result = endpointResultLabel(result.exceptionOrNull()?.let { error -> HubFailure.from(error).kind }),
+                        checkedAt = Instant.now().toString(),
+                    )
+                }
+                progress(PairingProgress(PairingStage.Probe, candidates = candidates))
+            }
+            pairedAddress = route.endpoint.url
+            candidates = candidates.map { if (it.result == "探测中") it.copy(result = "已停止探测") else it }
+            lastFailure = null
+            return route
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            lastFailure = endpointResultLabel(HubFailure.from(error).kind)
+            throw error
+        }
+    }
+
+    suspend fun pair(token: String, deviceName: String, progress: (PairingProgress) -> Unit): PairedHub {
+        check(connection == null) { "Pairing requires a new client" }
+        val route = probe(progress)
+        progress(PairingProgress(PairingStage.VerifyIdentity, candidates = candidates))
+        val hubId = route.health.hubId ?: expectedHubId ?: legacyHubId(address)
+        require(hubId.matches(Regex("[A-Za-z0-9_-]{1,128}")))
+        progress(PairingProgress(PairingStage.ExchangeCredentials))
+        val exchanged = try {
+            json("/api/v1/auth/tokens", token, buildJsonObject { put("name", deviceName); put("kind", "phone") })
+        } catch (error: HubFailure) {
+            if (error.status == 404) null else throw error
+        }
+        val deviceToken = exchanged?.get("token")?.jsonPrimitive?.contentOrNull
+            ?.takeIf { it.isNotBlank() } ?: if (exchanged == null) token else throw HubFailure(HubError.Protocol)
+        progress(PairingProgress(PairingStage.LoadMachines))
+        val machines = json("/api/v1/machines", deviceToken)
+        if (machines["machines"] !is JsonArray) throw HubFailure(HubError.Protocol)
+        refreshEndpoints(deviceToken)
+        return PairedHub(hubId, deviceToken, exchanged?.get("id")?.jsonPrimitive?.contentOrNull,
+            address, fingerprint, endpoints.map { it.url })
+    }
+
+    suspend fun refreshEndpoints(token: String) {
+        val response = try { json("/api/v1/endpoints", token) }
+        catch (error: HubFailure) { if (error.status == 404) return else throw error }
+        val metadata = JsonCodec.decodeFromJsonElement<EndpointsResponse>(response)
+        if (expectedHubId != null && metadata.hubId != expectedHubId) throw HubFailure(HubError.HubMismatch)
+        // The discovery response may add routes, but cannot replace the trusted pairing pin.
+        if (fingerprint != null && !metadata.fp.isNullOrBlank() && metadata.fp != fingerprint) {
+            throw HubFailure(HubError.CertificateMismatch)
+        }
+        val discovered = metadata.endpoints.map { endpoint(it.url) }
+            .filter { fingerprint != null || !it.url.startsWith("https://") }
+        endpoints = (endpoints + discovered).distinctBy { endpointKey(it.url) }
+        candidates = endpoints.map { item -> candidates.firstOrNull { it.url == item.url }
+            ?: ConnectionCandidate(item.url, item.kind, "尚未探测") }
+    }
+
+    suspend fun diagnostics(token: String, deviceId: String?): ConnectionDiagnostics {
+        val snapshot = ConnectionDiagnostics(
+            currentPath = "${endpoint(address).kind} · $address", candidates = candidates,
+            fingerprint = fingerprint, lastDisconnectReason = lastFailure, legacyHub = fingerprint == null,
+        )
+        if (deviceId == null) return snapshot
+        val path = "/api/v1/devices/${deviceId.encodeSegment()}/sessions"
+        val rows = try { json(path, token)["sessions"] as? JsonArray }
+        catch (error: HubFailure) { if (error.status == 404) return snapshot else throw error }
+        return snapshot.copy(sessions = rows.orEmpty().map { row ->
+            val obj = row.jsonObject
+            DeviceConnectionSession(obj.text("connected_at").orEmpty(), obj.text("disconnected_at"), obj.text("reason"))
+        })
+    }
+
+    suspend fun checkUpdate(token: String): AppUpdate? {
+        val metadata = try { json("/api/v1/app/android/latest", token) }
+        catch (error: HubFailure) { if (error.status == 404 || error.status == 204) return null else throw error }
+        val checksum = metadata.text("sha256")?.takeIf { it.matches(Regex("[A-Fa-f0-9]{64}")) }
+            ?: throw HubFailure(HubError.Protocol)
+        return AppUpdate(
+            metadata.getValue("version_code").jsonPrimitive.long,
+            metadata.getValue("version_name").jsonPrimitive.content,
+            metadata.text("download_url")?.takeIf { it.isNotBlank() } ?: "/api/v1/app/android/apk",
+            checksum, metadata.text("notes") ?: metadata.text("release_notes").orEmpty(),
+        )
+    }
+
+    suspend fun download(token: String, update: AppUpdate, destination: OutputStream) = withContext(Dispatchers.IO) {
+        val base = updateOrigin()
+        val target = base.resolve(update.downloadUrl) ?: throw HubFailure(HubError.Protocol)
+        require(target.scheme == base.scheme && target.host == base.host && target.port == base.port &&
+            target.username.isEmpty() && target.password.isEmpty() && target.fragment == null) { "Invalid APK origin" }
+        val checksum = update.sha256?.takeIf { it.matches(Regex("[A-Fa-f0-9]{64}")) }
+            ?: throw HubFailure(HubError.Protocol)
+        val digest = MessageDigest.getInstance("SHA-256")
+        val response = if (connection != null) connection.request(
+            target.encodedPath + (target.encodedQuery?.let { "?$it" } ?: ""), buffered = false,
+        ) else http.client.newCall(authorized(target, token).build()).awaitResponse(buffered = false)
+        response.use { response ->
+            if (!response.isSuccessful) throw HubFailure.from(response)
+            response.body!!.byteStream().use { input ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                    destination.write(buffer, 0, count)
+                }
+            }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        check(actual.equals(checksum, ignoreCase = true)) { "APK checksum mismatch" }
+    }
+
+    private suspend fun updateOrigin(): HttpUrl {
+        if (fingerprint == null) throw HubFailure(HubError.TlsRequired, retryable = false)
+        if (connection != null) return connection.activeRoute().endpoint.baseUrl().also {
+            if (!it.isHttps) throw HubFailure(HubError.TlsRequired, retryable = false)
+        }
+        val tlsEndpoints = endpoints.filter { it.url.startsWith("https://") }
+        return selector.select(orderEndpoints(tlsEndpoints)).endpoint.baseUrl()
+    }
+
+    suspend fun json(path: String, token: String, body: JsonObject? = null, headers: Map<String, String> = emptyMap()): JsonObject {
+        if (connection != null) {
+            return connection.request(path, if (body == null) "GET" else "POST",
+                body?.toString()?.toRequestBody("application/json".toMediaType()), headers).use { response ->
+                if (response.code == 204) throw HubFailure.from(response)
+                JsonCodec.parseToJsonElement(response.body!!.string()).jsonObject
+            }
+        }
+        val target = address.toHttpUrl().resolve(path) ?: throw HubFailure(HubError.Protocol)
+        require(path.startsWith("/api/") && target.host == address.toHttpUrl().host)
+        val builder = authorized(target, token)
+        headers.forEach { (name, value) -> builder.header(name, value) }
+        if (body != null) builder.post(body.toString().toRequestBody("application/json".toMediaType()))
+        http.client.newCall(builder.build()).awaitResponse().use { response ->
+            if (!response.isSuccessful || response.code == 204) throw HubFailure.from(response)
+            return JsonCodec.parseToJsonElement(response.body!!.string()).jsonObject
+        }
+    }
+
+    private fun authorized(url: HttpUrl, token: String) = Request.Builder().url(url).header("Authorization", "Bearer $token")
+    override fun close() { if (connection == null) http.close() }
+
+    companion object {
+        fun addresses(request: PairingRequest): List<String> {
+            require(request.token.isNotBlank())
+            require(request.hub?.matches(Regex("[A-Za-z0-9_-]{1,128}")) != false)
+            require(request.tls == null || request.tls in 1..65535)
+            SpkiTrustManager(request.fp)
+            val primary = endpoint(request.url).url.toHttpUrl()
+            val urls = buildList {
+                request.tls?.let { port ->
+                    if (request.fp != null) add(primary.newBuilder().scheme("https").port(port).build().toString())
+                }
+                add(primary.toString())
+                addAll(request.alt.map { endpoint(it).url })
+            }.distinct()
+            if (request.fp == null && urls.any { it.startsWith("https://") }) throw PairingException(PairingFailure.Certificate)
+            return urls
+        }
+
+        fun legacyHubId(address: String): String = "legacy-" + MessageDigest.getInstance("SHA-256")
+            .digest(endpoint(address).url.toByteArray()).take(16).joinToString("") { "%02x".format(it) }
+
+        private fun endpoint(address: String): Endpoint {
+            val normalized = address.trim().trimEnd('/').toHttpUrl()
+            Endpoint(normalized.toString()).baseUrl()
+            return Endpoint(normalized.toString(), endpointKind(normalized.toString()), normalized.port, normalized.scheme)
+        }
+
+        private fun String.encodeSegment() = "https://example.com/".toHttpUrl().newBuilder().addPathSegment(this).build().encodedPath.removePrefix("/")
+        private fun JsonObject.text(key: String) = this[key]?.jsonPrimitive?.contentOrNull
+    }
+}

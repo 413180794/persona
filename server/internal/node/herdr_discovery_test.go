@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Characterization tests of how the node discovers sessions in herdr: which sessions a herdr state lists, and the

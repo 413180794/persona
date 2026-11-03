@@ -63,8 +63,8 @@ COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
 LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$COMMIT${JARVIS_PUBLISH_URL:+ -X main.updateURL=$JARVIS_PUBLISH_URL/dl}"
 # The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md「自动更新」), from integrations/.
 go generate ./internal/runtimepkg
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-linux-amd64 ./cmd/jarvisd
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-darwin-arm64 ./cmd/jarvisd
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-linux-amd64 ./cmd/personad
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-darwin-arm64 ./cmd/personad
 echo "built $VERSION"
 
 # is_here <machine id>: the config lists this computer's host name for it.
@@ -103,7 +103,7 @@ install_bin() { # machine-id binary
 install_telegram() {
   local id=$1 plat=$2 bin
   bin="bin/jarvisd-telegram-$plat"
-  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" ./cmd/jarvisd-telegram || return 1
+  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" ./cmd/personad-telegram || return 1
   if is_here "$id"; then
     cp "$bin" ~/.jarvis/bin/jarvisd-telegram.new && mv ~/.jarvis/bin/jarvisd-telegram.new ~/.jarvis/bin/jarvisd-telegram
   else

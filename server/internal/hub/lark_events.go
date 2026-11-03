@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/agents"
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/agents"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // larkEvents relays lark-connector's realtime events to the apps as {"type":"lark","feed_ids":[…]}: the push half of

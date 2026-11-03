@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/lark"
 )
 
 func notice(id, kind, post, comment, actor, text string, at time.Time, unread bool) lark.MomentNotice {

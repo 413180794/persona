@@ -16,7 +16,7 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
-	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 // The administrator's password and browser sessions (docs/admin.md「管理员密码和会话」).

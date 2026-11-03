@@ -4,7 +4,7 @@ plugins {
     id("jarvis.hilt")
 }
 
-android { namespace = "jarvis.feature.chat" }
+android { namespace = "persona.feature.chat" }
 
 dependencies {
     implementation(project(":core:contracts"))

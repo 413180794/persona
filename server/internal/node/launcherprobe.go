@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // What a ~/.zshrc launcher really sets, for its page in 设置 › 模型: reading the function's text misses everything a
