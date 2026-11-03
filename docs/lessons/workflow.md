@@ -68,3 +68,24 @@
 - 两边的测试各自带着对方不知道的前提：`httptest.NewRequest` 的来源 192.0.2.1 是公网地址，集成分支的入口会拦明文和主 token（403），
   master 的测试要改成从回环来；集成分支的错误都带 `code`；新配对会给已有设备推一条「有新设备配对」。别为了过测试改实现，先弄清是哪边的前提。
 - 两个模块共用的东西跟着读它的测试走：`spec/fixtures` 是服务端测试的 golden，跟服务端模块一起合，不放在 Android 模块里。
+
+## Rootless Docker CI fixtures
+
+Keep Compose data in a run-specific temporary directory and always remove its
+containers and synthetic data, including after a failed smoke. A persistent
+executor does not get a fresh host after each job. Rootless Docker maps the
+container's nonzero PUID into a subordinate host UID, so the smoke verifies the
+mapped data-directory owner and checks the JSON owner and mode inside the
+container. Keep the existing direct-host checks for rootful executors. Never
+set PUID to zero or weaken the JSON mode check to make a runner pass.
+
+Cache upload is an optimization, not a smoke-test prerequisite. Bound remote
+cache exports and tolerate their upload errors so a slow cache service cannot
+consume the job's test budget. Build, image-load, and smoke failures remain
+fatal; do not use step-level continue-on-error for this.
+
+Capture short `docker compose exec` output before checking it with `grep -q`.
+An early-closing grep can make Docker's output forwarding fail with exit 255
+under pipefail even when the expected text was printed. Command substitution
+keeps the command's own failure fatal and consumes its complete output before
+applying the same content assertion.
