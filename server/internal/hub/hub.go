@@ -103,7 +103,7 @@ type Hub struct {
 	kb       kbState // the knowledge base under ~/.jarvis/data (kb.go)
 	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).
 	larkAgent larkAgents
-	// bots: the chat apps' bots the user talks to Jarvis through (bots.go).
+	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots botHub
 	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
 	launchers     launcherState
@@ -217,7 +217,7 @@ type pending struct {
 	// orphaned is set while no hook waits on a resumable interaction (its node went away, or the hub restarted): it
 	// ends the interaction unless the hook claims it again in time.
 	orphaned *time.Timer
-	// checkedAt / checking bound transcript reads for a plan answered outside Jarvis.
+	// checkedAt / checking bound transcript reads for a plan answered outside Persona.
 	checkedAt time.Time
 	checking  bool
 	// codex: a card a node listed for a Codex TUI (codexcards.go); it lasts as long as the node lists it.
@@ -994,7 +994,7 @@ func (h *Hub) callTool(ctx context.Context, machineID, name string, args json.Ra
 func (h *Hub) approve(ctx context.Context, machineID, tool, summary string, input json.RawMessage) bool {
 	ix := proto.Interaction{
 		ID: "ix_" + randomHex(6), MachineID: machineID, Kind: proto.IxPermission, ToolName: tool, Summary: summary,
-		ToolInput: input, SessionTitle: "Jarvis", CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC(),
+		ToolInput: input, SessionTitle: "Persona", CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC(),
 	}
 	r, _ := h.waitInteraction(ctx, ix)
 	return r.Allow != nil && *r.Allow
@@ -1006,7 +1006,7 @@ func (h *Hub) callPhone(ctx context.Context, name string, args json.RawMessage) 
 		c = h.wakePhone(ctx, name)
 	}
 	if c == nil {
-		return proto.TextResult("The user's iPhone is not connected and did not wake up in the background: ask them to open the Jarvis app, then retry.", true)
+		return proto.TextResult("The user's iPhone is not connected and did not wake up in the background: ask them to open the Persona app, then retry.", true)
 	}
 	id := randomHex(8)
 	ch := make(chan proto.ToolResult, 1)
@@ -1025,7 +1025,7 @@ func (h *Hub) callPhone(ctx context.Context, name string, args json.RawMessage) 
 	case r := <-ch:
 		return r
 	case <-ctx.Done():
-		return proto.TextResult("Timed out waiting for the iPhone (is the Jarvis app still open?).", true)
+		return proto.TextResult("Timed out waiting for the iPhone (is the Persona app still open?).", true)
 	}
 }
 

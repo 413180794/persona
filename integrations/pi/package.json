@@ -1,8 +1,8 @@
 {
-  "name": "jarvis-pi-runtime",
+  "name": "persona-pi-runtime",
   "version": "0.1.0",
   "private": true,
-  "description": "Jarvis runtime for pi and pi-web: pi sessions in the Jarvis apps (built on jarvis-runtime-sdk).",
+  "description": "Persona runtime for pi and pi-web: pi sessions in the Persona apps (built on persona-runtime-sdk).",
   "license": "MIT",
   "type": "module",
   "pi": {

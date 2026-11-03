@@ -1,8 +1,8 @@
 {
-  "name": "jarvis-runtime-sdk",
+  "name": "persona-runtime-sdk",
   "version": "0.1.0",
   "private": true,
-  "description": "Plug an agent runtime without a terminal into Jarvis: the runtime side of the runtime.sock protocol.",
+  "description": "Plug an agent runtime without a terminal into Persona: the runtime side of the runtime.sock protocol.",
   "license": "MIT",
   "type": "module",
   "exports": {

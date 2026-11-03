@@ -63,7 +63,7 @@ func TestOpenMacLeavesAgentAlertsToTheApp(t *testing.T) {
 	if got := pushedTo(t, f, 0, 1); !same(got, "devtok") {
 		t.Fatalf("an agent's alert with the Mac open went to %v", got)
 	}
-	h.push.notifyDone("m1", "Jarvis", "s1", "提醒", "该走了", nil)
+	h.push.notifyDone("m1", "Persona", "s1", "提醒", "该走了", nil)
 	if got := pushedTo(t, f, 1, 2); !same(got, "devtok", "mactok") {
 		t.Fatalf("an explicit reminder went to %v", got)
 	}
@@ -121,7 +121,7 @@ func TestRevokedCredentialGetsNoPushes(t *testing.T) {
 	if d, _ := h.push.device("mac2"); d.Credential != cred["id"] {
 		t.Fatalf("registered by %q, want %q", d.Credential, cred["id"])
 	}
-	h.push.notifyDone("m1", "Jarvis", "s1", "提醒", "该走了", nil)
+	h.push.notifyDone("m1", "Persona", "s1", "提醒", "该走了", nil)
 	// The new credential was announced to the devices already there (有新设备配对): two more before the reminder's three.
 	if got := pushedTo(t, f, 0, 5); !same(got, "devtok", "devtok", "mac2tok", "mactok", "mactok") {
 		t.Fatalf("before signing out: %v", got)
@@ -133,7 +133,7 @@ func TestRevokedCredentialGetsNoPushes(t *testing.T) {
 	if _, ok := h.push.device("mac2"); ok {
 		t.Fatal("the signed-out Mac is still registered")
 	}
-	h.push.notifyDone("m1", "Jarvis", "s1", "提醒", "该走了", nil)
+	h.push.notifyDone("m1", "Persona", "s1", "提醒", "该走了", nil)
 	if got := pushedTo(t, f, 5, 2); !same(got, "devtok", "mactok") {
 		t.Fatalf("after signing out: %v", got)
 	}

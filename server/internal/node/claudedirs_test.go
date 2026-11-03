@@ -190,7 +190,7 @@ func mustRel(t *testing.T, base, p string) string {
 }
 
 // A session resumed under another profile has a file in both config directories: the old one stops, the new one
-// grows. Jarvis read whichever the directory order gave — a session running for two days showed its chat and its
+// grows. Persona read whichever the directory order gave — a session running for two days showed its chat and its
 // "updated" time from before the move (2026-10-31, 45 sessions on one machine) — and listed an offline one twice.
 func TestTheNewestCopyOfATranscriptWins(t *testing.T) {
 	n, profile := claudeHome(t)

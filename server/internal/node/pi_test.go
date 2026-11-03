@@ -144,7 +144,7 @@ func TestPiInHerdrWithoutTheExtension(t *testing.T) {
 		t.Fatalf("%+v", s)
 	}
 	res, err := request(t, n, "session.items", map[string]any{"session_id": piSID, "turns": 2})
-	if err != nil || !strings.Contains(string(mustJSON(res)), "Jarvis 的扩展") {
+	if err != nil || !strings.Contains(string(mustJSON(res)), "Persona 的扩展") {
 		t.Fatalf("items %v %v", res, err)
 	}
 	f.reset()

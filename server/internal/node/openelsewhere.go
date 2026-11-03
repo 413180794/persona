@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// A Claude session already open in another client — Claude's desktop app, a terminal Jarvis does not drive — is not
+// A Claude session already open in another client — Claude's desktop app, a terminal Persona does not drive — is not
 // resumed from the phone: a second `claude --resume` would write the same transcript as the one running. Without a
-// terminal host Jarvis cannot see those as live (they list as not running), so the check is on the session files
+// terminal host Persona cannot see those as live (they list as not running), so the check is on the session files
 // every running claude writes (sessions/<pid>.json in its config directory).
 
 // Refusals of a start or resume, with nothing started or typed (the app shows the reason): a running claude has the
@@ -20,7 +20,7 @@ const (
 	engineMissing = "engine_missing"
 )
 
-// claudeOpenElsewhere is the running claude that has session id open, outside any pane Jarvis drives (callers ask
+// claudeOpenElsewhere is the running claude that has session id open, outside any pane Persona drives (callers ask
 // for sessions with no live agent), and where it runs, in the app's words.
 func (n *Node) claudeOpenElsewhere(id string) (pid int, where string, ok bool) {
 	if id == "" {
@@ -78,6 +78,6 @@ func (n *Node) openElsewhereRefusal(id string) error {
 	if w != "" && w[0] < 0x80 {
 		w = " " + w // 「正在 Claude 桌面版里」: a space between Chinese and a Latin word
 	}
-	return refusal(openElsewhere, "这个会话正在"+w+"里开着，Jarvis 不会再起一个 Claude 同时写它：在"+w+
+	return refusal(openElsewhere, "这个会话正在"+w+"里开着，Persona 不会再起一个 Claude 同时写它：在"+w+
 		"里接着用，或者先在那边关掉它再从手机发。这次没有发送。", map[string]any{"pid": pid})
 }

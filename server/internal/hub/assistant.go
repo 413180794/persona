@@ -28,7 +28,7 @@ type AssistantConfig struct {
 	Timezone string `json:"timezone,omitempty"`
 	// Notes, once edited in the app, replace hub.json's assistant.notes.
 	Notes *string `json:"notes,omitempty"`
-	// Main is the main conversation (the Jarvis tab opens it): one long-running conversation, the others are side ones.
+	// Main is the main conversation (the Persona tab opens it): one long-running conversation, the others are side ones.
 	Main string `json:"main,omitempty"`
 }
 
@@ -118,6 +118,15 @@ func (h *Hub) assistantClaudeMD(ctx context.Context, lark-connector bool) string
 		lark-connector: lark-connector, LarkCLI: lc.CLI != nil, lark-connectorConfigured: lc.lark-connectorConfigured(), LarkPrefer: lc.Prefer}
 	here := h.assistantConfig(ctx).MachineID
 	onHub := h.localMachine(here) != nil && h.localMachine(here).cfg.Kind == "local"
+	d.OnHub = onHub
+	if h.cfg.dir != "" {
+		d.KnowledgeDir = path.Join(h.cfg.dir, "data")
+	}
+	if machine := h.localMachine(here); machine != nil {
+		if cwd := machine.assistantCwd(); cwd != "" {
+			d.StateDir = path.Dir(cwd)
+		}
+	}
 	for _, m := range h.machinesNow() {
 		local := m.cfg.ID == here
 		d.Machines = append(d.Machines, prompts.AssistantMachine{Name: m.cfg.Name, ID: m.cfg.ID, Local: local, SSHHost: m.cfg.SSHHost,
@@ -387,7 +396,7 @@ func (h *Hub) assistantMemory(ctx context.Context, op map[string]any, out any) e
 
 // keptSessions are the sessions machine id's node lists however long they have been quiet: the assistant's main
 // conversation and scheduled tasks' own ones, on the assistant's machine. Otherwise a busy machine's 80 newest
-// transcripts crowd it out of the list and the Jarvis tab has no 主对话 (2026-11-01: the main one, quiet for two days, was gone).
+// transcripts crowd it out of the list and the Persona tab has no 主对话 (2026-11-01: the main one, quiet for two days, was gone).
 func (h *Hub) keptSessions(ctx context.Context, machine string) []string {
 	cfg := h.assistantConfig(ctx)
 	out := []string{}

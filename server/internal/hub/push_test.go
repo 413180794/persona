@@ -6,7 +6,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The app registers exactly these categories (apple/Jarvis/App/NotificationActions.swift); a different spelling would
+// The app registers exactly these categories (apple/Persona/App/NotificationActions.swift); a different spelling would
 // silently drop the buttons from every notification.
 func TestInteractionPayloadCategory(t *testing.T) {
 	want := map[string]string{

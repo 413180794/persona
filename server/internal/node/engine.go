@@ -233,7 +233,7 @@ func (n *Node) logf(format string, args ...any) {
 // file is there or its binary is on PATH — when herdr is not a registered host it is not asked: its version comes from
 // `herdr --version`. herdr-core when its socket answers hello (the one herdr-core call a node without it makes, once
 // per connection). The combined engine when both are there. Orca when its runtime metadata is there and its socket
-// answers status.get with a protocol Jarvis speaks (Note says why not when it answers with another). herdrVersion is
+// answers status.get with a protocol Persona speaks (Note says why not when it answers with another). herdrVersion is
 // what the registered herdr host already said ("" when not registered).
 func (n *Node) engines(ctx context.Context, herdrVersion string) []proto.Engine {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -260,7 +260,7 @@ func (n *Node) engines(ctx context.Context, herdrVersion string) []proto.Engine 
 // orcaClient is the Orca runtime node.info asks; tests point it at a fake one.
 var orcaClient = orcart.New
 
-// orcaEngine is Orca as found on this machine: available when its runtime answers with a protocol Jarvis speaks.
+// orcaEngine is Orca as found on this machine: available when its runtime answers with a protocol Persona speaks.
 func orcaEngine(ctx context.Context, c *orcart.Client) proto.Engine {
 	e := proto.Engine{ID: proto.EngineOrca, Name: proto.EngineNames[proto.EngineOrca]}
 	st, err := c.Probe(ctx)
@@ -271,7 +271,7 @@ func orcaEngine(ctx context.Context, c *orcart.Client) proto.Engine {
 	case err == nil:
 		e.Available = true
 	case errors.Is(err, orcart.ErrIncompatible):
-		e.Note = "这个版本的 Orca 和 Jarvis 不兼容，请把两边都更新到最新版"
+		e.Note = "这个版本的 Orca 和 Persona 不兼容，请把两边都更新到最新版"
 	}
 	return e
 }

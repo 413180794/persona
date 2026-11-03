@@ -24,7 +24,7 @@ func (s *assistantStore) Setting(_ context.Context, key string, out any) (bool, 
 	return true, json.Unmarshal(b, out)
 }
 
-// A message to Jarvis' main conversation without a launcher goes out on 设置 › 助手's launcher (it used to keep the
+// A message to Persona' main conversation without a launcher goes out on 设置 › 助手's launcher (it used to keep the
 // one it started with, so switching seemed to do nothing); a launcher the app picked wins; other conversations are
 // left alone.
 func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {

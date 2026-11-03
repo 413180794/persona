@@ -15,9 +15,9 @@ import (
 	"github.com/nwverse/persona/server/internal/feishubot"
 )
 
-// The bot channel (docs/bots.md): the user talks to Jarvis through a chat app's bot — a Feishu / Lark custom app.
-// A message to the bot goes into Jarvis' main conversation (or the conversation / coding agent the chat is on now) and
-// the answer comes back as a card; Jarvis' questions and approvals can be answered there, its pushes can go there too,
+// The bot channel (docs/bots.md): the user talks to Persona through a chat app's bot — a Feishu / Lark custom app.
+// A message to the bot goes into Persona' main conversation (or the conversation / coding agent the chat is on now) and
+// the answer comes back as a card; Persona' questions and approvals can be answered there, its pushes can go there too,
 // and agents on every computer can be driven from it. Only the paired user is answered, only in the bot's private
 // chat. Everything is off until switched on in the app (设置 › 连接器 › 飞书机器人).
 
@@ -47,7 +47,7 @@ type FeishuBotSettings struct {
 
 // BotFeatures are the parts that can be switched on one by one.
 type BotFeatures struct {
-	Main     bool `json:"main"`      // messages go to Jarvis: the main conversation, unless the chat switched to another
+	Main     bool `json:"main"`      // messages go to Persona: the main conversation, unless the chat switched to another
 	Cards    bool `json:"cards"`     // questions and approvals of what the chat drives show there as cards
 	AllCards bool `json:"all_cards"` // and those of every agent and conversation
 	Pushes   bool `json:"pushes"`    // notify_user and scheduled tasks' results go there too
@@ -78,8 +78,8 @@ const (
 	botPairTries   = 5
 )
 
-// botTarget is where a message goes: Jarvis' main conversation (whichever it is when the message is sent), another
-// Jarvis conversation, or a coding agent.
+// botTarget is where a message goes: Persona' main conversation (whichever it is when the message is sent), another
+// Persona conversation, or a coding agent.
 type botTarget struct {
 	Kind      string `json:"kind"` // main | jarvis | agent
 	MachineID string `json:"machine_id,omitempty"`
@@ -432,7 +432,7 @@ func (h *Hub) botRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusConflict, errors.New("机器人没打开或还没配对"))
 			return
 		}
-		card := feishubot.NewCard("", "", "测试消息").Markdown("这是来自 Jarvis 的测试消息：机器人能联系到你。")
+		card := feishubot.NewCard("", "", "测试消息").Markdown("这是来自 Persona 的测试消息：机器人能联系到你。")
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
 		if _, err := h.botPost(ctx, api, set.Owner.ChatID, "", card, ""); err != nil {

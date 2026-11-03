@@ -467,7 +467,7 @@ func TestOrcaPollsEverySecond(t *testing.T) {
 	}
 }
 
-// node.info finds Orca when its runtime answers with a protocol Jarvis speaks; an incompatible one is there, not
+// node.info finds Orca when its runtime answers with a protocol Persona speaks; an incompatible one is there, not
 // available, with a note.
 func TestOrcaEngineDetection(t *testing.T) {
 	o := orcarttest.New(t)

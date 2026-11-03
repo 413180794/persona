@@ -62,7 +62,7 @@ type Task struct {
 	ModelRevision  int64  `json:"model_revision,omitempty"`
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Effort         string `json:"effort,omitempty"`
-	// CreatedBy is "assistant" for tasks Jarvis set up from a conversation.
+	// CreatedBy is "assistant" for tasks Persona set up from a conversation.
 	CreatedBy string    `json:"created_by,omitempty"`
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Set by the hub.
@@ -407,7 +407,7 @@ func parseWhen(s string, now time.Time, loc *time.Location) (time.Time, error) {
 
 // scheduleHeader is the first line of a run's message (taskPrompt, prompts/assistant/task_run.md) and the notes under it. A patrol told to
 // "schedule the next one with the same prompt" copies them along; they are dropped so they don't pile up.
-var scheduleHeader = regexp.MustCompile(`^(?:⏰[^\n]*（[^\n]*(?:跟进|定时任务)[^\n]*）|（本该[^\n]*）|（Jarvis 会[^\n]*）)\s*`)
+var scheduleHeader = regexp.MustCompile(`^(?:⏰[^\n]*（[^\n]*(?:跟进|定时任务)[^\n]*）|（本该[^\n]*）|（(?:Jarvis|Persona) 会[^\n]*）)\s*`)
 
 func stripScheduleHeader(p string) string {
 	p = strings.TrimSpace(p)
@@ -552,7 +552,7 @@ func (h *Hub) scheduleOwn(ctx context.Context, sessionID, title, prompt, atArg s
 		t.At, t.Enabled = at.UTC(), true
 		if every > 0 {
 			t.Repeat, t.EveryMinutes = repeatInterval, every
-			out = fmt.Sprintf("%s「%s」 now repeats every %s by itself (next %s, %s); the user sees it in Jarvis › 定时任务. "+
+			out = fmt.Sprintf("%s「%s」 now repeats every %s by itself (next %s, %s); the user sees it in Persona › 定时任务. "+
 				"Don't schedule its next run from now on.", t.ID, t.label(), everyText(every), at.In(loc).Format("01-02 15:04 Mon"), until(at))
 		} else {
 			out = fmt.Sprintf("Rescheduled %s「%s」 for %s (%s).", t.ID, t.label(), at.In(loc).Format("01-02 15:04 Mon"), until(at))
@@ -602,7 +602,7 @@ func (h *Hub) describeSchedule(ctx context.Context) string {
 	}
 	defer s.mu.Unlock()
 	var b strings.Builder
-	b.WriteString("Scheduled tasks (the user sees and edits them in Jarvis › 定时任务; launcher / permission mode are theirs to set):\n")
+	b.WriteString("Scheduled tasks (the user sees and edits them in Persona › 定时任务; launcher / permission mode are theirs to set):\n")
 	n := 0
 	for _, t := range s.tasks {
 		if t.done() {
@@ -698,7 +698,7 @@ func (h *Hub) toolScheduleRoutine(ctx context.Context, args json.RawMessage) (st
 		state = "next run " + next.In(loc).Format("01-02 15:04 Mon") + " (" + until(next) + ")"
 	}
 	return fmt.Sprintf("Saved %s「%s」: %s, %s. Each run is a new conversation and the user gets a push with the answer; "+
-		"they see and edit it in the app (Jarvis › 定时任务).", t.ID, t.label(), ruleText(t, loc), state), nil
+		"they see and edit it in the app (Persona › 定时任务).", t.ID, t.label(), ruleText(t, loc), state), nil
 }
 
 var launcherName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
@@ -868,7 +868,7 @@ func (h *Hub) runDue(ctx context.Context, now time.Time) {
 			if now.Sub(next) < 30*time.Minute {
 				due = append(due, dueTask{*t, next})
 			} else { // missed by a long hub outage: skip rather than send a stale 早报 at noon
-				t.LastStatus, t.LastError = runSkipped, "Jarvis 停机，错过了时间"
+				t.LastStatus, t.LastError = runSkipped, "Persona 停机，错过了时间"
 				skipped = append(skipped, ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: next.UTC(), At: now.UTC(),
 					Status: runSkipped, Error: t.LastError, of: now.UTC()})
 			}

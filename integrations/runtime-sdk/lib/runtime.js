@@ -1,4 +1,4 @@
-// The runtime side of Jarvis's runtime protocol (docs/runtimes.md, wire in docs/protocol.md「Runtime ↔ node」), shared
+// The runtime side of Persona's runtime protocol (docs/runtimes.md, wire in docs/protocol.md「Runtime ↔ node」), shared
 // by every runtime: connecting to the node's runtime.sock and reconnecting, runtime.hello, pushing the session list,
 // watching sessions with continuous seq batches, throttled live text, asking the phone (surviving a node restart) and
 // the "who answers first" policy. A runtime supplies a driver with what only it knows: its sessions, their pages, and
@@ -64,7 +64,7 @@ export function defaultSocketPath() {
  *   listen?: { port?: number, host?: string, path?: string, token: string | (() => string) } | boolean,
  *   token?: string | (() => string), package?: { name: string, hash: string }, instance?: string,
  *   onUpdate?: (offer: { name: string, hash: string, version?: string }) => void }} options -
- *   assistant: its launcher may run the Jarvis assistant (caps.assistant; docs/runtimes.md「助手」). requires: node
+ *   assistant: its launcher may run the Persona assistant (caps.assistant; docs/runtimes.md「助手」). requires: node
  *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
  *   connected, and tries again once the node restarts (its socket file is replaced) or after 10 minutes. onHub: called
  *   after every hello and whenever the node's hub comes or goes (a runtime fetching the hub's tools does it then).
@@ -184,7 +184,7 @@ export function createRuntime(driver, options) {
       interrupt: typeof driver.interrupt === 'function',
       rename: typeof driver.rename === 'function',
       close: typeof driver.close === 'function',
-      // It runs the Jarvis assistant's conversations (docs/runtimes.md「助手」): what that asks of it is the runtime's.
+      // It runs the Persona assistant's conversations (docs/runtimes.md「助手」): what that asks of it is the runtime's.
       assistant: options.assistant === true && typeof driver.start === 'function' && typeof driver.send === 'function',
     }
     const h = { runtime: options.runtime, name: options.name ?? options.runtime, version: options.version ?? '', instance, caps }
@@ -735,7 +735,7 @@ export function createRuntime(driver, options) {
      */
     async callTool(params, { signal } = {}) {
       const p = peer
-      if (!p) return { content: [{ type: 'text', text: 'Jarvis is not connected on this machine' }], is_error: true }
+      if (!p) return { content: [{ type: 'text', text: 'Persona is not connected on this machine' }], is_error: true }
       const call = { name: params.name, args: params.args ?? {}, session_id: params.session_id ?? '' }
       if (params.assistant) call.assistant = true
       return p.call('mcp.call', call, { timeoutMs: 0, signal })

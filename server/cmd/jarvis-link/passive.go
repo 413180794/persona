@@ -34,7 +34,7 @@ func pairListen(e *env, listen string, addrs []string) error {
 	case e.goos == "linux":
 		fmt.Fprintln(w, "接下来：jarvis-link install --listen（装成 systemd 用户服务，一直监听），或者前台跑 jarvis-link run。")
 	default:
-		fmt.Fprintln(w, "接下来让 jarvis-link 跑起来（Mac 上是菜单栏 App「Jarvis Link」；也可以前台跑 jarvis-link run）。")
+		fmt.Fprintln(w, "接下来让 jarvis-link 跑起来（Mac 上是菜单栏 App「Persona Link」；也可以前台跑 jarvis-link run）。")
 	}
 	return nil
 }

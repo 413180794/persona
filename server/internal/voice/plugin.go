@@ -90,7 +90,7 @@ func Run(ctx context.Context) error {
 	logger := log.New(os.Stderr, "", 0)
 	socket := identity.Getenv("JARVIS_PLUGIN_SOCKET")
 	if socket == "" {
-		return errors.New("JARVIS_PLUGIN_SOCKET is not set: this runs under the Jarvis hub (plugins in ~/.jarvis/hub.json, docs/plugins.md)")
+		return errors.New("JARVIS_PLUGIN_SOCKET is not set: this runs under the Persona hub (plugins in ~/.jarvis/hub.json, docs/plugins.md)")
 	}
 	cfg, err := LoadConfig()
 	if err != nil {

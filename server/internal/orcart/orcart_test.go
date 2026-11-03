@@ -279,7 +279,7 @@ func TestReadOnly(t *testing.T) {
 	}
 }
 
-// The fake refuses what Orca's schemas refuse: a send naming a client without its id (Jarvis's first send bug).
+// The fake refuses what Orca's schemas refuse: a send naming a client without its id (Persona's first send bug).
 func TestFakeValidatesLikeOrca(t *testing.T) {
 	f := orcarttest.New(t)
 	f.SetTerminals(orcarttest.Terminal("term_1", "tab1", "leaf1", "wt1", "/tmp/p", "", "x", "claude"))

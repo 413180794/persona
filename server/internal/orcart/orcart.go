@@ -305,7 +305,7 @@ func (c *Client) checkCompat(ctx context.Context, m *runtimeMeta) error {
 	return cp.err
 }
 
-// Status is status.get (the fields Jarvis reads).
+// Status is status.get (the fields Persona reads).
 type Status struct {
 	AppVersion string `json:"appVersion"`
 	// RuntimeProtocolVersion is the runtime's protocol; MinCompatibleRuntimeClientVersion the oldest client it serves.
@@ -323,10 +323,10 @@ func (s Status) compatible() error {
 	}
 	switch {
 	case v < MinServerVersion:
-		return fmt.Errorf("%w: Orca %s speaks runtime protocol %d, Jarvis needs %d or later", ErrIncompatible, s.AppVersion, v,
+		return fmt.Errorf("%w: Orca %s speaks runtime protocol %d, Persona needs %d or later", ErrIncompatible, s.AppVersion, v,
 			MinServerVersion)
 	case s.MinCompatibleRuntimeClientVersion > ProtocolVersion:
-		return fmt.Errorf("%w: Orca %s needs runtime clients of protocol %d or later, Jarvis speaks %d", ErrIncompatible,
+		return fmt.Errorf("%w: Orca %s needs runtime clients of protocol %d or later, Persona speaks %d", ErrIncompatible,
 			s.AppVersion, s.MinCompatibleRuntimeClientVersion, ProtocolVersion)
 	}
 	return nil

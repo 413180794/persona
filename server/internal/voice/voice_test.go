@@ -96,7 +96,7 @@ func (u *fakeUpstream) next(typ string) map[string]any {
 	}
 }
 
-// fakeHub is the Jarvis hub's API as the plugin uses it.
+// fakeHub is the Persona hub's API as the plugin uses it.
 type fakeHub struct {
 	mu       sync.Mutex
 	sent     []string
@@ -283,7 +283,7 @@ func TestLiveDialectConversation(t *testing.T) {
 	}
 
 	// The delegation goes to the main conversation; its answer comes back as the delegation's commentary.
-	a.until(func(f map[string]any) bool { return f["type"] == "tool" && f["label"] == "Jarvis 主对话处理中" })
+	a.until(func(f map[string]any) bool { return f["type"] == "tool" && f["label"] == "Persona 主对话处理中" })
 	if f := up.next("session.thinking.append"); f["delegation_id"] != "dlg1" {
 		t.Fatalf("progress: %v", f)
 	}

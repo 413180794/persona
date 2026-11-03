@@ -1,4 +1,4 @@
-// Package mail implements the Jarvis mail module: encrypted account storage,
+// Package mail implements the Persona mail module: encrypted account storage,
 // IMAP reading, SMTP sending and the /api/v1/mail HTTP API.
 //
 // The JSON shapes mirror docs/protocol.md ("邮件 API"); keep them in sync.

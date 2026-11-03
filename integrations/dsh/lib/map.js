@@ -1,16 +1,16 @@
-// Pure mapping from DSH session events to Jarvis items (docs/dsh.md「映射」). No I/O here: the runtime (dsh.js) pages
+// Pure mapping from DSH session events to Persona items (docs/dsh.md「映射」). No I/O here: the runtime (dsh.js) pages
 // DSH and hands the events to these functions; the tests feed them recorded event shapes. The generic item helpers
 // (page limits, clipping, one-line summaries) are the runtime SDK's.
 
 import { appToolName, clipInput, light, snippet } from '../../runtime-sdk/index.js'
 
-// The live snapshot the Jarvis assistant starts each message with (node/assistant_context.go; a bare <jarvis-context>
+// The live snapshot the Persona assistant starts each message with (node/assistant_context.go; a bare <jarvis-context>
 // tag, unlike the phone's quoted context, which carries attributes): context for the model, not shown in the chat.
 const SNAPSHOT_RE = /<jarvis-context>[\s\S]*?<\/jarvis-context>\s*/g
 
-/** Jarvis seq of a DSH event: DSH counts from 0, Jarvis treats 0 as "nothing yet". */
+/** Persona seq of a DSH event: DSH counts from 0, Persona treats 0 as "nothing yet". */
 export const jarvisSeq = (dshSeq) => dshSeq + 1
-/** DSH seq of a Jarvis seq. */
+/** DSH seq of a Persona seq. */
 export const dshSeq = (seq) => seq - 1
 
 // DSH's tools under the names the apps draw (the SDK's common ones, plus DSH's own); DSH's arguments are already the

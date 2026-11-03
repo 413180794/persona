@@ -15,7 +15,7 @@ import (
 
 // pi (docs/pi.md). A pi in a herdr pane is a herdr session, as a Claude there is: the pane, its space and tab, the
 // terminal and the keys are herdr's. Its conversation and its control (send, interrupt, cards, live text) come from
-// the Jarvis extension in that same pi process, a runtime (runtimes.go) that lists the session with the pane it runs
+// the Persona extension in that same pi process, a runtime (runtimes.go) that lists the session with the pane it runs
 // in; the node joins the two into one row. pi run elsewhere — pi-web, a terminal outside herdr — is only the runtime's.
 // A pi session that ran in herdr and has stopped is resumed in herdr (`pi --session`, the runtime's resume_argv),
 // never in pi-web.
@@ -62,7 +62,7 @@ func (n *Node) mergePiRow(s *proto.Session) {
 	}
 }
 
-const piNoExtension = "这个 pi 没有装 Jarvis 的扩展：手机上只能看终端。装上（pi install <Jarvis>/integrations/pi）再重开 pi，就能看对话、发消息"
+const piNoExtension = "这个 pi 没有装 Persona 的扩展：手机上只能看终端。装上（pi install <Persona>/integrations/pi）再重开 pi，就能看对话、发消息"
 
 // piInPane: the pi pane of session id that no extension serves (runtimeFor found none).
 func (n *Node) piInPane(id string) bool {

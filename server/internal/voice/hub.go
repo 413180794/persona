@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// hubClient calls the Jarvis hub's API with the credential the hub hands its plugins (JARVIS_HUB_URL / JARVIS_HUB_TOKEN).
+// hubClient calls the Persona hub's API with the credential the hub hands its plugins (JARVIS_HUB_URL / JARVIS_HUB_TOKEN).
 type hubClient struct {
 	url, token string
 	http       *http.Client
@@ -76,7 +76,7 @@ func (h *hubClient) searchKnowledge(ctx context.Context, query string) ([]kbHit,
 	return out.Hits, err
 }
 
-// agents: the coding agents on every machine, without the Jarvis tab's own conversations.
+// agents: the coding agents on every machine, without the Persona tab's own conversations.
 func (h *hubClient) agents(ctx context.Context) ([]proto.Session, error) {
 	var out struct {
 		Sessions []proto.Session `json:"sessions"`
@@ -114,7 +114,7 @@ func (h *hubClient) send(ctx context.Context, machine, session, text string) err
 	return h.call(ctx, "POST", path, map[string]string{"text": text}, nil)
 }
 
-// assistant: where the Jarvis tab's assistant runs and its main conversation (empty until there is one).
+// assistant: where the Persona tab's assistant runs and its main conversation (empty until there is one).
 func (h *hubClient) assistant(ctx context.Context) (machine, main string, err error) {
 	var out struct {
 		MachineID string `json:"machine_id"`

@@ -96,7 +96,7 @@ func TestRealMessagesCounts(t *testing.T) {
 	t.Logf("messages %d in %d conversations: with text %d, undecoded %d, events %d, unsent %d, attachments %d; %s, slowest #%d %s",
 		msgs, min(30, len(ids)), texts, undecoded, events, unsent, files, time.Since(start).Round(time.Millisecond), slowest, slow.Round(time.Millisecond))
 
-	// What would go to Jarvis: 30 days of changes, kept (contacts or written in) and all, and a search.
+	// What would go to Persona: 30 days of changes, kept (contacts or written in) and all, and a search.
 	for _, keep := range []string{KeepContacts, KeepAll} {
 		start = time.Now()
 		var pages, batches, kept, masked int

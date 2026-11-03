@@ -159,7 +159,7 @@ func msTime(s string) time.Time {
 
 // --- message content ---
 
-// Content is a message read into what Jarvis passes on: its text (Markdown-ish) and the media in it to download.
+// Content is a message read into what Persona passes on: its text (Markdown-ish) and the media in it to download.
 type Content struct {
 	Text  string
 	Media []Media

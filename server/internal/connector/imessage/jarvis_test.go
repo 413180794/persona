@@ -150,7 +150,7 @@ func TestTheInboxSeesUnreadConversations(t *testing.T) {
 		t.Errorf("off: %d things", len(things))
 	}
 	if err := c.Reply(ctx, connector.InboxReply{Thread: "imessage-000000000001", Text: "好"}); err == nil {
-		t.Error("Jarvis sent a message")
+		t.Error("Persona sent a message")
 	}
 }
 

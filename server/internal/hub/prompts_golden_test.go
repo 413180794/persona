@@ -191,30 +191,32 @@ func goldenMachines(h *Hub) {
 }
 
 func TestGoldenAssistantClaudeMD(t *testing.T) {
-	ctx := context.Background()
+	instructions := func(h *Hub, lark-connector bool) string {
+		return strings.ReplaceAll(h.assistantClaudeMD(context.Background(), lark-connector), h.cfg.dir, "<hub>")
+	}
 	h := newTestHub(t)
 	goldenMachines(h)
 	h.cfg.Assistant.Owner = "示例用户"
 	h.cfg.Assistant.Notes = "  我在示例公司做后端。\n常用 skills：demo-skill。  "
 	h.kb.cfg.ExtraDirs = []string{"/home/me/notes", "/home/me/facts"}
-	golden(t, "assistant_claude_md.full", h.assistantClaudeMD(ctx, true))
+	golden(t, "assistant_claude_md.full", instructions(h, true))
 
 	bare := newTestHub(t)
 	m := newMachine(bare, MachineConfig{ID: "server", Name: "服务器", Kind: "local"})
 	bare.machines, bare.byID["server"] = []*Machine{m}, m
-	golden(t, "assistant_claude_md.bare", bare.assistantClaudeMD(ctx, true))
+	golden(t, "assistant_claude_md.bare", instructions(bare, true))
 	// No lark-connector skill on the assistant's machine (~/.jarvis/skills): no ol, Feishu through the MCP tools.
-	golden(t, "assistant_claude_md.no_lark-connector", bare.assistantClaudeMD(ctx, false))
+	golden(t, "assistant_claude_md.no_lark-connector", instructions(bare, false))
 	// lark-cli only (docs/plan-lark-cli.md): no lark-connector configured, no lark-connector skill.
 	bare.cfg.Lark.CLI = &lark.CLIConfig{}
-	golden(t, "assistant_claude_md.lark_cli", bare.assistantClaudeMD(ctx, false))
+	golden(t, "assistant_claude_md.lark_cli", instructions(bare, false))
 	// An lark-connector skill left on the machine changes nothing without lark-connector: no ol to offer.
-	if got := bare.assistantClaudeMD(ctx, true); got != bare.assistantClaudeMD(ctx, false) {
+	if got := instructions(bare, true); got != instructions(bare, false) {
 		t.Error("lark-cli only: the lark-connector skill alone should not bring ol back")
 	}
 	// Both sources, lark-cli preferred.
 	bare.cfg.Lark.Token, bare.cfg.Lark.Prefer = "test-token", "cli"
-	golden(t, "assistant_claude_md.both", bare.assistantClaudeMD(ctx, true))
+	golden(t, "assistant_claude_md.both", instructions(bare, true))
 }
 
 var (
@@ -403,7 +405,7 @@ func goldenItems() map[string]*InboxItem {
 				ReplyTo: "评论到 example-org/example-repo#12（仓库可见的人都能看到）", CanReply: true, RuleTier: TierAction}, Agent: agent},
 		"imessage_dm": {ID: "imessage:1", Source: "imessage", Kind: "dm", Title: "张三", UpdatedAt: at,
 			Context: "我（10-30 07:58）：在吗\n张三（10-30 07:59）：示例：周五下午三点见，地方你定",
-			Connector: &InboxConnector{Thread: "imessage-0123456789ab", OpenURL: "sms:+15550100", ReplyTo: "在「信息」里回复（Jarvis 不替你发）",
+			Connector: &InboxConnector{Thread: "imessage-0123456789ab", OpenURL: "sms:+15550100", ReplyTo: "在「信息」里回复（Persona 不替你发）",
 				RuleTier: TierAction}, Agent: agent},
 		"imessage_group": {ID: "imessage:2", Source: "imessage", Kind: "group", Title: "周末徒步", UpdatedAt: at,
 			Context: "李四（10-30 08:01）：示例：明天十点出发", Connector: &InboxConnector{Thread: "imessage-ba9876543210", Label: "群聊", RuleTier: TierFYI}},
@@ -553,7 +555,7 @@ func TestGoldenRelay(t *testing.T) {
 
 func TestGoldenBotMessage(t *testing.T) {
 	golden(t, "bot_message.jarvis", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Owner: "示例用户", Text: "今天有什么会？",
-		Quote: &prompts.BotQuote{Who: "Jarvis", Text: "上午 10 点有周会。"}}))
+		Quote: &prompts.BotQuote{Who: "Persona", Text: "上午 10 点有周会。"}}))
 	golden(t, "bot_message.agent_files", prompts.RenderBotMessage(prompts.BotMessage{Text: "看下这个日志",
 		Forward: "11-02 10:00 张三：构建挂了\n11-02 10:01 李四：我看下", Files: []string{"/tmp/jarvis-uploads/build.log"}}))
 	golden(t, "bot_message.only_files", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Files: []string{"/tmp/a.pdf", "/tmp/b.png"}}))

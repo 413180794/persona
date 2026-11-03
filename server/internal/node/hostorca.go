@@ -633,7 +633,7 @@ func orcaInputErr(err error) error {
 	return err
 }
 
-// errOrcaRename: Orca owns its worktrees' and tabs' names; Jarvis does not rename them.
+// errOrcaRename: Orca owns its worktrees' and tabs' names; Persona does not rename them.
 var errOrcaRename = fmt.Errorf("%w: Orca 里的工作区和标签页暂时不能从手机改名", host.ErrUnsupported)
 
 func (h *orcaHost) RenameSpace(context.Context, string, string) error { return errOrcaRename }

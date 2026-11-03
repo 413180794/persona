@@ -1,4 +1,4 @@
-// End-to-end check of pi-web in Jarvis (docs/pi.md「验证」): a real pi-web on a spare port with this package installed
+// End-to-end check of pi-web in Persona (docs/pi.md「验证」): a real pi-web on a spare port with this package installed
 // the way a user installs it (settings.json packages), the companion (companion.mjs), a real `jarvisd node --stdio`
 // played as the hub by the runtime SDK's harness, and DSH's llm-mock-server as the model. pi-web's idle reaping is
 // cut to a few seconds so the run sees a session go back to disk and wake up again on the next send.

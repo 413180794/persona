@@ -277,7 +277,7 @@ type Launcher struct {
 	// Agent is what it starts when not Claude Code: "codex" (plain codex, or an alias running it; docs/codex.md
 	// 「从手机新建」). A Codex start needs its first message with it.
 	Agent string `json:"agent,omitempty"`
-	// Assistant: a runtime's launcher that may run the Jarvis assistant (docs/runtimes.md「助手」), whatever its agent.
+	// Assistant: a runtime's launcher that may run the Persona assistant (docs/runtimes.md「助手」), whatever its agent.
 	Assistant bool `json:"assistant,omitempty"`
 }
 
@@ -388,7 +388,7 @@ type Session struct {
 	TabID            string               `json:"tab_id,omitempty"`
 	WorkspaceID      string               `json:"workspace_id,omitempty"`
 	AgentName        string               `json:"agent_name,omitempty"`
-	// CodexRoute: how Jarvis reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」) — "app_server" (joined on
+	// CodexRoute: how Persona reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」) — "app_server" (joined on
 	// the shared app-server: questions, approvals and messages go through its protocol) or "terminal" (its rollout and
 	// screen, keys and typing); CodexRouteNote says why when it is the terminal.
 	CodexRoute     string `json:"codex_route,omitempty"`
@@ -450,7 +450,7 @@ type Session struct {
 	// Suggestion is the next message Claude Code proposes after a turn (grey in its empty input box), read off the
 	// screen; gone once the agent works again or a message is sent.
 	Suggestion string `json:"suggestion,omitempty"`
-	// Starting: Jarvis is opening its tab and waiting for claude (node/starting.go); messages sent now go in once it is
+	// Starting: Persona is opening its tab and waiting for claude (node/starting.go); messages sent now go in once it is
 	// ready. StartError: the start failed (shown in the chat for a while).
 	Starting   bool   `json:"starting,omitempty"`
 	StartError string `json:"start_error,omitempty"`

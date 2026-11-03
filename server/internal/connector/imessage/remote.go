@@ -12,7 +12,7 @@ import (
 )
 
 // The hub's side: the connector reads through the node of one Mac (Reader runs there), so it is a thin adapter over
-// that node's connector.* RPCs. The app reads every conversation for the user (hub/imessage.go); with 交给 Jarvis on
+// that node's connector.* RPCs. The app reads every conversation for the user (hub/imessage.go); with 交给 Persona on
 // (jarvis.go) the real ones also go to the knowledge base, the inbox and the assistant.
 
 // Config is hub.json's "imessage".
@@ -48,7 +48,7 @@ type Remote struct {
 	// Zone is the user's time zone, for the times the models read (the hub's userLocation).
 	Zone func() *time.Location
 
-	ai       atomic.Bool // 交给 Jarvis (jarvis.go)
+	ai       atomic.Bool // 交给 Persona (jarvis.go)
 	inboxMu  sync.Mutex
 	things   []connector.InboxThing
 	contexts map[string]string // conversation + newest message → its last messages as text
@@ -92,7 +92,7 @@ type Detail struct {
 	Error   string   `json:"error,omitempty"`
 	Guide   []string `json:"guide,omitempty"`
 	Via     string   `json:"via,omitempty"` // ssh | launchd
-	// AI: 交给 Jarvis is on (the knowledge base, the inbox, the assistant's tools).
+	// AI: 交给 Persona is on (the knowledge base, the inbox, the assistant's tools).
 	AI bool `json:"ai"`
 }
 
@@ -178,7 +178,7 @@ func (c *Remote) explain(err error) string {
 	case errors.Is(err, ErrNodeTooOld):
 		return c.machine + " 上的 jarvisd 太旧，更新后才能读「信息」"
 	case errors.Is(err, ErrNoPermission):
-		return "macOS 不让 Jarvis 读 " + c.machine + " 上的「信息」：要给它「完全磁盘访问权限」"
+		return "macOS 不让 Persona 读 " + c.machine + " 上的「信息」：要给它「完全磁盘访问权限」"
 	case errors.Is(err, ErrNoChat):
 		return "没有这个会话"
 	}

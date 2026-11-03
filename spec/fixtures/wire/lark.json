@@ -5,7 +5,7 @@
     "source": [
       "server/internal/hub/lark.go: Hub.larkRoutes",
       "server/internal/lark/lark.go: Client.Messages, rawMessage.normalize, rewriteMedia",
-      "apple/Jarvis/Views/Inbox/Lark/LarkModels.swift: LarkMessage, LarkPart"
+      "apple/Persona/Views/Inbox/Lark/LarkModels.swift: LarkMessage, LarkPart"
     ],
     "derived": true,
     "decoder": "lark",

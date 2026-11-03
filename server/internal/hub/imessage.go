@@ -15,11 +15,11 @@ import (
 )
 
 // 信息 (connector/imessage, docs/plan-connectors.md「五」): the app reads one Mac's Messages through that Mac's node;
-// the hub passes the pages along and keeps none of them. With 交给 Jarvis on (the user's switch, on by default,
+// the hub passes the pages along and keeps none of them. With 交给 Persona on (the user's switch, on by default,
 // imessageAIKey) the real conversations also go to the knowledge base, the inbox and the assistant's tools
 // (connector/imessage/jarvis.go). No number or message is logged (only the connector, the Mac and the kind of failure).
 
-// imessageAIKey is the settings key of 交给 Jarvis: absent means on.
+// imessageAIKey is the settings key of 交给 Persona: absent means on.
 const imessageAIKey = "imessage.ai"
 
 func (h *Hub) addIMessage(cfg imessage.Config) error {
@@ -33,7 +33,7 @@ func (h *Hub) addIMessage(cfg imessage.Config) error {
 	return h.addConnector(c)
 }
 
-// imessageAI is the user's 交给 Jarvis choice: on unless they turned it off.
+// imessageAI is the user's 交给 Persona choice: on unless they turned it off.
 func (h *Hub) imessageAI(ctx context.Context) bool {
 	on := true
 	if h.store != nil {
@@ -89,7 +89,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 		c.Check(r.Context())
 		writeJSON(w, c.Detail(r.Context()))
 	})
-	// PUT /api/v1/imessage/settings {"ai": bool}: 交给 Jarvis on or off. Off stops what goes to Jarvis at once; what
+	// PUT /api/v1/imessage/settings {"ai": bool}: 交给 Persona on or off. Off stops what goes to Persona at once; what
 	// the hub already keeps stays until DELETE /api/v1/imessage/data.
 	api.HandleFunc("PUT /api/v1/imessage/settings", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
@@ -113,7 +113,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 			return
 		}
 		c.SetAI(*in.AI)
-		h.logf("imessage: 交给 Jarvis %v", *in.AI)
+		h.logf("imessage: 交给 Persona %v", *in.AI)
 		if *in.AI {
 			h.kbKick()
 			h.kickInbox()
@@ -121,7 +121,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 		writeJSON(w, c.Detail(r.Context()))
 	})
 	// DELETE /api/v1/imessage/data: what the hub kept of iMessage (the knowledge base's chats and people, inbox items),
-	// once 交给 Jarvis is off — on, the next sync would bring it back.
+	// once 交给 Persona is off — on, the next sync would bring it back.
 	api.HandleFunc("DELETE /api/v1/imessage/data", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
@@ -129,7 +129,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 			return
 		}
 		if c.AI() {
-			writeCode(w, http.StatusConflict, "ai_on", "先关掉「交给 Jarvis」再删除", nil)
+			writeCode(w, http.StatusConflict, "ai_on", "先关掉「交给 Persona」再删除", nil)
 			return
 		}
 		res, err := h.forgetIMessage(r.Context())

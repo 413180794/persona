@@ -536,7 +536,7 @@ func wireLark(t *testing.T, add wireAdder) {
 	h.larkRoutes(mux)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/lark/conversations/feed_example/messages", nil))
-	add("lark", "lark_message_parts", "飞书消息保留 parts 和嵌套键名，并将媒体地址改写到 hub。", "lark", wireBody(t, w, 200), map[string]any{"/messages/0/parts/0/kind": "text", "/messages/0/parts/1/url": "/api/v1/lark/media/image_example", "/messages/0/parts/1/refId": "image_example", "/messages/0/parts/2/metadata/custom_Key/keep_snake_case": true, "/has_older": true, "/has_newer": false, "/older_cursor": "10", "/newer_cursor": "10"}, "server/internal/hub/lark.go: Hub.larkRoutes", "server/internal/lark/lark.go: Client.Messages, rawMessage.normalize, rewriteMedia", "apple/Jarvis/Views/Inbox/Lark/LarkModels.swift: LarkMessage, LarkPart")
+	add("lark", "lark_message_parts", "飞书消息保留 parts 和嵌套键名，并将媒体地址改写到 hub。", "lark", wireBody(t, w, 200), map[string]any{"/messages/0/parts/0/kind": "text", "/messages/0/parts/1/url": "/api/v1/lark/media/image_example", "/messages/0/parts/1/refId": "image_example", "/messages/0/parts/2/metadata/custom_Key/keep_snake_case": true, "/has_older": true, "/has_newer": false, "/older_cursor": "10", "/newer_cursor": "10"}, "server/internal/hub/lark.go: Hub.larkRoutes", "server/internal/lark/lark.go: Client.Messages, rawMessage.normalize, rewriteMedia", "apple/Persona/Views/Inbox/Lark/LarkModels.swift: LarkMessage, LarkPart")
 }
 
 func wireErrors(t *testing.T, add wireAdder) {

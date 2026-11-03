@@ -409,7 +409,7 @@ func TestHerdrKeysWithPreKeys(t *testing.T) {
 }
 
 // session.close: ctrl+c twice, then the pane alone in a split tab, else the whole tab — also when the panes cannot be
-// counted. A session Jarvis started that is gone is already closed; one herdr never had cannot be closed.
+// counted. A session Persona started that is gone is already closed; one herdr never had cannot be closed.
 func TestHerdrClose(t *testing.T) {
 	n, f, _ := herdrNode(t)
 	seedAgents(t, n, f,

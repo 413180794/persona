@@ -1,4 +1,4 @@
-// Command jarvisd is the Jarvis server: hub, node, hook and mcp modes in one binary.
+// Command jarvisd is the Persona server: hub, node, hook and mcp modes in one binary.
 package main
 
 import (
@@ -46,45 +46,45 @@ func buildInfo() update.Build {
 }
 
 const usage = `usage:
-  jarvisd launch <name> …   run claude with a launcher kept in 设置 › 模型 (from the local node)
-  jarvisd hub [run]        run the hub (config ~/.jarvis/hub.json)
-  jarvisd hub pair [--legacy] [--android] print a pairing QR code and optional Android download link
-  jarvisd hub pair --machine <id>          print a pairing link for that link machine's jarvis-link (docs/link.md)
-  jarvisd hub pair --peer  print a code another hub pairs with this one by (hub mesh, docs/mesh.md)
-  jarvisd hub peer add <code>|-   pair this hub with the hub whose code it is
-  jarvisd hub peer list           the paired hubs and the ones found on the LAN
-  jarvisd hub peer remove <hub_id>
-  jarvisd hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
+  personad launch <name> …   run claude with a launcher kept in 设置 › 模型 (from the local node)
+  personad hub [run]        run the hub (config ~/.persona/hub.json)
+  personad hub pair [--legacy] [--android] print a pairing QR code and optional Android download link
+  personad hub pair --machine <id>          print a pairing link for that link machine's jarvis-link (docs/link.md)
+  personad hub pair --peer  print a code another hub pairs with this one by (hub mesh, docs/mesh.md)
+  personad hub peer add <code>|-   pair this hub with the hub whose code it is
+  personad hub peer list           the paired hubs and the ones found on the LAN
+  personad hub peer remove <hub_id>
+  personad hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
                            unpair a hub (its credential is revoked on both sides)
-  jarvisd hub doctor       只读检查 hub 配置、网络和证书
-  jarvisd hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/admin.md)
-  jarvisd hub tailcat-key  print the hub's tailcat key (created the first time), for "node tailcat init --hub"
-  jarvisd node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
+  personad hub doctor       只读检查 hub 配置、网络和证书
+  personad hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/admin.md)
+  personad hub tailcat-key  print the hub's tailcat key (created the first time), for "node tailcat init --hub"
+  personad node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
                            node running on this machine, relay to it instead
-  jarvisd node --attach    resident node (launchd, in the login session): serves what --stdio relays, so what it
+  personad node --attach    resident node (launchd, in the login session): serves what --stdio relays, so what it
                            starts can use the login keychain (docs/server.md「常驻 node」); set up for tailcat,
                            also reachable by the hub over tailcat
-  jarvisd node tailcat init --hub <key> [--derp-map-url <url>]
+  personad node tailcat init --hub <key> [--derp-map-url <url>]
                            let the hub reach this machine over tailcat when it cannot ssh here; prints the address
                            for hub.json (docs/server.md「tailcat 打洞」)
-  jarvisd node tailcat addr
+  personad node tailcat addr
                            print this machine's tailcat address again
-  jarvisd node reset-uid   give this computer a new machine uid (~/.jarvis/machine-uid): for a virtual machine cloned
+  personad node reset-uid   give this computer a new machine uid (~/.persona/machine-uid): for a virtual machine cloned
                            with another's home directory, which hubs would take for that one (docs/mesh.md)
-  jarvisd hook             Claude Code hook entry (reads hook JSON on stdin)
-  jarvisd mcp              Claude Code MCP server (stdio)
-  jarvisd codex-start <file>
+  personad hook             Claude Code hook entry (reads hook JSON on stdin)
+  personad mcp              Claude Code MCP server (stdio)
+  personad codex-start <file>
                            run the Codex launcher in file (written by the node, removed once read) with the first
                            message as its last argument, no shell in between (docs/codex.md「从手机新建」)
-  jarvisd relay [config]   run the push relay (config ~/.jarvis/relay.json): pushes for hubs without the app's APNs
+  personad relay [config]   run the push relay (config ~/.persona/relay.json): pushes for hubs without the app's APNs
                            key, payloads sealed to the phone (docs/push-relay.md)
-  jarvisd voice            the built-in voice plugin: the hub runs it (hub.json plugins, docs/plugins.md「内置语音插件」)
-  jarvisd sysmon [n]       print this machine's system info and n metric samples, with what they cost
-  jarvisd release manifest|check-next …
+  personad voice            the built-in voice plugin: the hub runs it (hub.json plugins, docs/plugins.md「内置语音插件」)
+  personad sysmon [n]       print this machine's system info and n metric samples, with what they cost
+  personad release manifest|check-next …
                            the publisher's release manifest and checks (scripts/release/publish.sh, docs/hub-update.md「发布」)
-  jarvisd update-watch <pending>
+  personad update-watch <pending>
                            the watchdog the hub starts over its own update (docs/hub-update.md「回滚」)
-  jarvisd version [-v]     the version; -v adds the channel and build number`
+  personad version [-v]     the version; -v adds the channel and build number`
 
 func main() {
 	if len(os.Args) < 2 {

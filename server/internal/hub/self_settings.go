@@ -13,13 +13,13 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// jarvis_settings: Jarvis changes its own settings for the user (docs/assistant.md「操作 Jarvis 自己」, 2026-11-01).
+// jarvis_settings: Persona changes its own settings for the user (docs/assistant.md「操作 Persona 自己」, 2026-11-01).
 // One tool over a registry: each setting says what it is, how to read it and how a change is made. Reads are free;
 // every change is a card on the phone that says what changes (before → after) and is applied only when approved.
 // What the card needs filled in (a password) is typed on the phone and never passes through the model. Some things
 // are never here: the hub's and devices' tokens, pairing, which machines the hub reaches, permission modes.
 
-// selfSetting is one thing Jarvis may change. A value setting has set; a list has add / remove.
+// selfSetting is one thing Persona may change. A value setting has set; a list has add / remove.
 type selfSetting struct {
 	key, title, about string
 	value             string // what set / add take as value, for the model
@@ -68,12 +68,12 @@ func (h *Hub) selfSettings() []selfSetting {
 				return h.textSetting(ctx, v, "AI 分身的规则", h.inboxAgentRules, "inbox.agent_rules")
 			}},
 		{key: "assistant.notes", title: "关于我",
-			about: "what Jarvis knows about the user (设置 › 助手 › 关于我), Markdown appended to the assistant's instructions; new conversations read it",
+			about: "what Persona knows about the user (设置 › 助手 › 关于我), Markdown appended to the assistant's instructions; new conversations read it",
 			value: "a string (Markdown; the whole text)",
 			get:   func(ctx context.Context) (string, error) { return orNone(h.assistantNotes(ctx)), nil },
 			set:   h.setAssistantNotes},
-		{key: "assistant.launcher", title: "Jarvis 的启动器",
-			about: "which launcher (model) new Jarvis conversations start with by default",
+		{key: "assistant.launcher", title: "Persona 的启动器",
+			about: "which launcher (model) new Persona conversations start with by default",
 			value: "a launcher name from this setting's get",
 			get:   h.getAssistantLauncher,
 			set:   h.setAssistantLauncher},
@@ -83,7 +83,7 @@ func (h *Hub) selfSettings() []selfSetting {
 	}
 	if h.mail != nil {
 		out = append(out, selfSetting{key: "mail.accounts", title: "邮箱",
-			about: "the user's mail accounts: Jarvis reads them in the inbox and mail_* use them. add connects (IMAP and SMTP) before saving; " +
+			about: "the user's mail accounts: Persona reads them in the inbox and mail_* use them. add connects (IMAP and SMTP) before saving; " +
 				"the password is typed on the phone, never pass one. Gmail can only be added in the app (Google sign-in)",
 			value: `add: {"email", "provider": "imap|feishu" (default imap; feishu = Feishu / Lark mail), "name"?, "username"?, "imap_host"?, ` +
 				`"imap_port"?, "smtp_host"?, "smtp_port"?, "smtp_security"?: "tls|starttls"}; most providers need only the email. remove: the account id`,
@@ -149,7 +149,7 @@ func (h *Hub) toolJarvisSettings(ctx context.Context, m *Machine, sessionID stri
 	}
 	shown, _ := json.Marshal(map[string]string{"setting": s.title, "action": a.Action})
 	ix := proto.Interaction{ID: "ix_" + randomHex(6), MachineID: m.cfg.ID, SessionID: sessionID, Kind: proto.IxPermission,
-		ToolName: "jarvis_settings", Summary: change.summary, ToolInput: shown, Fields: change.fields, SessionTitle: "Jarvis",
+		ToolName: "jarvis_settings", Summary: change.summary, ToolInput: shown, Fields: change.fields, SessionTitle: "Persona",
 		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC()}
 	r, err := h.waitInteraction(ctx, ix)
 	if err != nil {
@@ -298,14 +298,14 @@ func (h *Hub) setAssistantLauncher(ctx context.Context, v json.RawMessage) (*sel
 	}
 	binding := record.Binding
 	binding.Provider = "launcher." + name
-	return &selfChange{summary: fmt.Sprintf("Jarvis 的默认启动器：%s → %s", before, name),
+	return &selfChange{summary: fmt.Sprintf("Persona 的默认启动器：%s → %s", before, name),
 		apply: func(ctx context.Context, _ map[string]string) (string, error) {
 			h.modelMu.Lock()
 			defer h.modelMu.Unlock()
 			if err := h.saveModelRecord(ctx, "assistant", record.Revision, binding); err != nil {
 				return "", err
 			}
-			return "New Jarvis conversations start with " + name + ".", nil
+			return "New Persona conversations start with " + name + ".", nil
 		}}, nil
 }
 
@@ -404,7 +404,7 @@ func (h *Hub) removeMailAccount(_ context.Context, id string) (*selfChange, erro
 	for _, a := range as {
 		if a.ID == id || strings.EqualFold(a.Email, id) {
 			acct := a
-			return &selfChange{summary: fmt.Sprintf("删除邮箱 %s（Jarvis 不再收它的邮件，邮箱里的邮件不受影响）", acct.Email),
+			return &selfChange{summary: fmt.Sprintf("删除邮箱 %s（Persona 不再收它的邮件，邮箱里的邮件不受影响）", acct.Email),
 				apply: func(context.Context, map[string]string) (string, error) {
 					if err := h.mail.DeleteAccount(acct.ID); err != nil {
 						return "", err

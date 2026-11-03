@@ -10,11 +10,11 @@ import (
 )
 
 // A launcher alias can bring its own settings (`alias work="claude --settings ~/.claude/settings.work.json …"`, with
-// the gateway, its token and the model in that file's env). Every claude start Jarvis makes adds its own --settings
+// the gateway, its token and the model in that file's env). Every claude start Persona makes adds its own --settings
 // after the launcher's words (the hooks that bring questions, permission requests and turn ends to the phone), and
 // Claude Code keeps only the last --settings it is given: the launcher's file was dropped, and the claude it started
 // answered every prompt with "Not logged in". So the start passes one file that is both: the launcher's settings
-// with Jarvis's hooks added to its own, as the last --settings.
+// with Persona's hooks added to its own, as the last --settings.
 
 // claudeSettings is the --settings a claude start of launcher passes: ours (a file in n.dir), or, when the launcher
 // is an alias with its own --settings, the two merged into launcher-settings/<launcher>-<ours>. cwd is where claude
@@ -27,7 +27,7 @@ func (n *Node) claudeSettings(ctx context.Context, launcher, ours, cwd string) s
 	path, err := n.mergeLauncherSettings(launcher, own, ours, cwd)
 	if err != nil {
 		// Not the value: an inline --settings '{…}' can hold a token.
-		n.logger.Printf("launcher %s: its own --settings not merged with Jarvis's, it will be ignored: %v", launcher, err)
+		n.logger.Printf("launcher %s: its own --settings not merged with Persona's, it will be ignored: %v", launcher, err)
 		return ours
 	}
 	return path

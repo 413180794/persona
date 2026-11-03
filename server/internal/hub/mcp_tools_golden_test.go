@@ -41,7 +41,7 @@ func TestGoldenMCPTools(t *testing.T) {
 	}
 	golden(t, "mcp_tools.assistant_with_github", show(h.mcpTools(true)))
 	golden(t, "mcp_tools.agent", show(h.mcpTools(false)))
-	// With iMessage handed to Jarvis (the switch is on by default): its read tools too.
+	// With iMessage handed to Persona (the switch is on by default): its read tools too.
 	register()
 	if err := h.addConnector(readableIMessage{imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil)}); err != nil {
 		t.Fatal(err)

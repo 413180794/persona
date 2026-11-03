@@ -14,7 +14,7 @@ package node
 //   - its session ids reach the hub as "<id>.<its id>" and its interaction ids are replaced, so its sessions never
 //     collide with this machine's or another runtime's — and a call about a session without its prefix (the node
 //     asking every runtime who has an unknown session) is answered by the link, never shown to the daemon;
-//   - only the protocol's caps (start, send, interrupt, rename, close), no mcp.* (phone and Jarvis tools), and no
+//   - only the protocol's caps (start, send, interrupt, rename, close), no mcp.* (phone and Persona tools), and no
 //     pane_id / resume_argv (a pane to claim, a command to run in the terminal engine).
 
 import (
@@ -592,7 +592,7 @@ func (l *daemonLink) fromDaemon(ctx context.Context, method string, params json.
 	case "mcp.tools":
 		return map[string]any{"tools": []any{}}, nil
 	case "mcp.call":
-		return nil, errUnsupportedForDaemons("Jarvis tools")
+		return nil, errUnsupportedForDaemons("Persona tools")
 	}
 	return nil, &rpc.Error{Message: "unsupported: unknown method " + method, Code: "unsupported"}
 }

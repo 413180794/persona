@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The pi-web companion (docs/pi.md「pi-web」): pi-web loads extensions only when a session opens, so after it starts
-// Jarvis would see none of its sessions until one is opened in a browser. This small resident process lists the recent
+// Persona would see none of its sessions until one is opened in a browser. This small resident process lists the recent
 // pi sessions on disk, pages them, and starts or wakes them through pi-web's HTTP API; the extension inside pi-web takes
 // over a session while it runs there (the node prefers the runtime running a session).
 //

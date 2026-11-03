@@ -59,7 +59,7 @@ const (
 	regPerMin  = 20
 	regBurst   = 10
 	// Fallback is what the phone shows when it cannot open the payload (no key yet, timeout, garbage, too old).
-	FallbackTitle = "Jarvis"
+	FallbackTitle = "Persona"
 	FallbackBody  = "有新消息"
 )
 

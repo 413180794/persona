@@ -7,7 +7,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// agentState maps a host status plus Jarvis' own knowledge onto the unified states (docs/agent-states.md):
+// agentState maps a host status plus Persona' own knowledge onto the unified states (docs/agent-states.md):
 //
 //	herdr blocked, or a pending question / plan / permission  → needs_you (red)
 //	herdr working                                              → working

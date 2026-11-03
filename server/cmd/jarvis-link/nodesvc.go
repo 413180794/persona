@@ -48,7 +48,7 @@ func (e *env) nodeServiceFile() string {
 func nodeUnitFile(bin, logPath string) string {
 	return `# Written by jarvis-link (docs/link.md); jarvis-link node uninstall removes it.
 [Unit]
-Description=Jarvis resident node (docs/server.md)
+Description=Persona resident node (docs/server.md)
 
 [Service]
 ExecStart=` + systemdQuote(bin) + ` node --attach

@@ -16,6 +16,7 @@ func TestParseImage(t *testing.T) {
 		pinned                        bool
 	}{
 		{"ghcr.io/Owner/Jarvis:latest", "ghcr.io", "owner/jarvis", "latest", "ghcr.io/owner/jarvis", false},
+		{"ghcr.io/Owner/Persona:latest", "ghcr.io", "owner/persona", "latest", "ghcr.io/owner/persona", false},
 		{"ghcr.io/owner/jarvis", "ghcr.io", "owner/jarvis", "latest", "ghcr.io/owner/jarvis", false},
 		{"ghcr.io/owner/jarvis:1.2.0", "ghcr.io", "owner/jarvis", "1.2.0", "ghcr.io/owner/jarvis", true},
 		{"ghcr.io/owner/jarvis:edge@sha256:0123", "ghcr.io", "owner/jarvis", "edge", "ghcr.io/owner/jarvis", false},

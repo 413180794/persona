@@ -214,7 +214,7 @@ func (h *Hub) terminalSyncOnce(ctx context.Context, m *Machine, key [2]string, r
 			r.controller, r.takeover = nil, false
 		}
 		r.synced, r.observing = nil, true // it ignored control and watches
-		controller.sendTerm(termControlMessage(key[0], key[1], "unsupported", nil, "这台电脑的 Jarvis 或 herdr 太旧，只能看不能接管"))
+		controller.sendTerm(termControlMessage(key[0], key[1], "unsupported", nil, "这台电脑的 Persona 或 herdr 太旧，只能看不能接管"))
 	case controller != nil:
 		r.synced, r.observing = &termCtl{ctl.Cols, ctl.Rows}, false
 		if r.controller == controller {

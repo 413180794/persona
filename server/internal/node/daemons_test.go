@@ -385,7 +385,7 @@ func TestDaemonPushesAndAsksCarryTheHubsIDs(t *testing.T) {
 	}
 }
 
-// A daemon never sees, and cannot claim, a session that is not its own; it gets no Jarvis tools.
+// A daemon never sees, and cannot claim, a session that is not its own; it gets no Persona tools.
 func TestDaemonStaysInItsCorner(t *testing.T) {
 	d := startFakeDaemon(t, "tok", map[string]any{"runtime": "x", "caps": map[string]any{"send": true}})
 	rh, _ := daemonHost(t, map[string]any{"id": "acme", "url": d.url(), "token": "tok"})

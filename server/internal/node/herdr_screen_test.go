@@ -179,7 +179,7 @@ func TestHerdrTUISetEffortRefusesADraftAndEscapesWithoutAPicker(t *testing.T) {
 	assertTrace(t, f.trace(), append(want, sendKeys("w1:p2", "esc")))
 }
 
-// While Jarvis drives the effort picker herdr reports the agent blocked; the list shows it idle until the change is
+// While Persona drives the effort picker herdr reports the agent blocked; the list shows it idle until the change is
 // done, then as herdr says.
 func TestHerdrTUIDrivingShowsBlockedAsIdle(t *testing.T) {
 	n, f, _ := herdrNode(t)

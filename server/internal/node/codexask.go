@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// Codex questions and approvals as cards (docs/codex.md「提问和审批」). Codex in a terminal has no hook Jarvis can
+// Codex questions and approvals as cards (docs/codex.md「提问和审批」). Codex in a terminal has no hook Persona can
 // answer through, so the node follows each live Codex / TRAEX session's rollout for the questions it asks
 // (transcript.CodexAsks) and, while the host says it waits on the user, reads its screen for an approval
 // (screen.ReadCodex). The open ones go to the hub as one list (codex.interactions) whenever it changes; the hub keeps
@@ -127,7 +127,7 @@ func (n *Node) codexCardsNow(ctx context.Context, only string) []codexCard {
 	}
 	n.mu.Unlock()
 	for id, a := range agents {
-		// A joined thread's app-server hands Jarvis its approvals and overlay questions itself (codex_remote_asks.go):
+		// A joined thread's app-server hands Persona its approvals and overlay questions itself (codex_remote_asks.go):
 		// only its async questions, which are messages rather than requests, are read here.
 		a.joined = n.codexJoined(id)
 		agents[id] = a
@@ -171,7 +171,7 @@ type codexAgent struct {
 	joined                  bool // on its app-server (codex_daemon.go)
 }
 
-// codexJoined: Jarvis has joined the session's thread on the app-server that runs it (codex_remote.go,
+// codexJoined: Persona has joined the session's thread on the app-server that runs it (codex_remote.go,
 // codex_daemon.go), which sends its approvals and overlay questions as cards of their own; reading the TUI for those too
 // would ask twice.
 func (n *Node) codexJoined(id string) bool {

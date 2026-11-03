@@ -144,11 +144,11 @@ func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	at := func(hh, mm int) time.Time { return time.Date(2026, 10, 26, hh, mm, 0, 0, loc) }
 	setTasks(h, Task{ID: "r", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Enabled: true,
-		LastRun: at(11, 0).UTC(), LastStatus: runSkipped, LastError: "Jarvis 停机，错过了时间"})
+		LastRun: at(11, 0).UTC(), LastStatus: runSkipped, LastError: "Persona 停机，错过了时间"})
 
 	h.recordRun(ScheduleRun{Kind: "routine", RefID: "r", Status: runFailed, Error: "assistant machine is not configured", of: at(9, 1).UTC()})
 	r, _ := taskByID(h, "r")
-	if r.LastStatus != runSkipped || r.LastError != "Jarvis 停机，错过了时间" {
+	if r.LastStatus != runSkipped || r.LastError != "Persona 停机，错过了时间" {
 		t.Fatalf("the late run overwrote the newer status: %+v", r)
 	}
 	s := h.loadSchedule(context.Background())
@@ -398,9 +398,26 @@ func TestScheduleRoutineTool(t *testing.T) {
 	}
 }
 
+func TestStripScheduleHeaderPreservesLegacyTaskIdentity(t *testing.T) {
+	const body = "巡检"
+	for _, brand := range []string{"Jarvis", "Persona"} {
+		prompt := "⏰ 巡检（定时任务，每 30 分钟）\n（" + brand + " 会按时再运行它，不用再用 schedule_followup 安排下一次。）\n\n" + body
+		if got := stripScheduleHeader(prompt); got != body {
+			t.Fatalf("%s task header remained: %q", brand, got)
+		}
+		if !sameText(prompt, body) {
+			t.Fatalf("%s task no longer matches its saved prompt", brand)
+		}
+		mixed := "（Persona 会按时再运行它。）\n（Jarvis 会按时再运行它。）\n\n" + prompt
+		if got := stripScheduleHeader(mixed); got != body {
+			t.Fatalf("mixed task headers remained: %q", got)
+		}
+	}
+}
+
 func TestStripScheduleHeader(t *testing.T) {
-	in := "⏰ 30 分钟巡检（你之前安排的跟进）\n（本该 10-31 11:00 运行，Jarvis 当时没在运行，晚了 25 分钟；看看还有没有必要按原计划做。）\n\n" +
-		"⏰ 30 分钟巡检（定时任务，每 30 分钟）\n（Jarvis 会按时再运行它，不用再用 schedule_followup 安排下一次。）\n\n跑 detect.sh"
+	in := "⏰ 30 分钟巡检（你之前安排的跟进）\n（本该 10-31 11:00 运行，Persona 当时没在运行，晚了 25 分钟；看看还有没有必要按原计划做。）\n\n" +
+		"⏰ 30 分钟巡检（定时任务，每 30 分钟）\n（Persona 会按时再运行它，不用再用 schedule_followup 安排下一次。）\n\n跑 detect.sh"
 	if got := stripScheduleHeader(in); got != "跑 detect.sh" {
 		t.Fatalf("%q", got)
 	}

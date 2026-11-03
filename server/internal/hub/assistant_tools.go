@@ -73,7 +73,7 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Title+a.Body) == "" {
 			return "", fmt.Errorf("title and body are required")
 		}
-		h.notifyDone("assistant", m.cfg.ID, "Jarvis", sessionID, a.Title, a.Body, pushWants{}) // asked for explicitly: every device
+		h.notifyDone("assistant", m.cfg.ID, "Persona", sessionID, a.Title, a.Body, pushWants{}) // asked for explicitly: every device
 		h.botPush(m.cfg.ID, sessionID, a.Title, a.Body)
 		h.mu.Lock()
 		h.notified[sessionID] = time.Now()
@@ -208,7 +208,7 @@ func (h *Hub) toolAskUser(ctx context.Context, m *Machine, sessionID string, arg
 		return "", fmt.Errorf("questions are required")
 	}
 	ix := proto.Interaction{
-		ID: "ix_" + randomHex(6), MachineID: m.cfg.ID, SessionID: sessionID, SessionTitle: "Jarvis", Kind: proto.IxQuestion,
+		ID: "ix_" + randomHex(6), MachineID: m.cfg.ID, SessionID: sessionID, SessionTitle: "Persona", Kind: proto.IxQuestion,
 		ToolName: "ask_user", ToolInput: args, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(30 * time.Minute).UTC(),
 	}
 	if s, ok := m.session(sessionID); ok {

@@ -139,7 +139,7 @@ type Config struct {
 	LarkAgent LarkAgentConfig `json:"lark_agent,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
-	// Bots: talking to Jarvis through a chat app's bot (bots.go, docs/bots.md); switched on in the app.
+	// Bots: talking to Persona through a chat app's bot (bots.go, docs/bots.md); switched on in the app.
 	Bots BotsConfig `json:"bots,omitempty"`
 	// Mesh tunes the links to other hubs (docs/mesh.md, config_mesh.go).
 	Mesh MeshConfig `json:"mesh,omitempty"`
@@ -278,7 +278,7 @@ func (c *Config) printPair(ctx context.Context, legacy bool, out io.Writer, andr
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "地址：%s\n配对链接：%s\n\n用 Jarvis App 扫码配对：\n\n", p.URL, p.PairURL)
+	fmt.Fprintf(out, "地址：%s\n配对链接：%s\n\n用 Persona App 扫码配对：\n\n", p.URL, p.PairURL)
 	qrterminal.GenerateHalfBlock(p.PairURL, qrterminal.L, out)
 	fmt.Fprintf(out, "\n有效期至：%s\n", p.ExpiresAt.UTC().Format(time.RFC3339))
 	if p.FP != "" {
@@ -307,7 +307,7 @@ func (c *Config) printLinkPair(ctx context.Context, machine string, out, help io
 	}
 	fmt.Fprintln(out, p.PairURL)
 	fmt.Fprintf(help, "\n这是给「%s」的 jarvis-link 用的配对链接，%d 分钟内有效，只能用一次。\n"+
-		"在那台电脑上：菜单栏的 Jarvis Link › 配对 / 修改连接… 里粘贴；或者运行 jarvis-link pair '<链接>'。\n",
+		"在那台电脑上：菜单栏的 Persona Link › 配对 / 修改连接… 里粘贴；或者运行 jarvis-link pair '<链接>'。\n",
 		machine, max(1, int(time.Until(p.ExpiresAt).Round(time.Minute).Minutes())))
 	return nil
 }
@@ -362,7 +362,7 @@ func (c *Config) requestPairCodeFor(ctx context.Context, machine string) (*pairC
 // writePair prints the server, token, the pairing QR code for the iPhone and the same link for the Mac (no camera:
 // it pastes the link into 连接 hub).
 func writePair(w io.Writer, cfg *Config) {
-	fmt.Fprintf(w, "Server: %s\nToken:  %s\n\n用 Jarvis App 扫码配对：\n\n", cfg.PublicURL, cfg.Token)
+	fmt.Fprintf(w, "Server: %s\nToken:  %s\n\n用 Persona App 扫码配对：\n\n", cfg.PublicURL, cfg.Token)
 	qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, w)
-	fmt.Fprintf(w, "\nMac 上拷贝这条链接，在 Jarvis 的「连接 hub」里粘贴：\n%s\n", cfg.PairURL())
+	fmt.Fprintf(w, "\nMac 上拷贝这条链接，在 Persona 的「连接 hub」里粘贴：\n%s\n", cfg.PairURL())
 }

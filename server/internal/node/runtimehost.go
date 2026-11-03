@@ -230,8 +230,8 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		}
 		return n.runtimeAsk(ctx, h, params)
 	case "mcp.tools":
-		if h.isDaemon() { // its link answers these itself; a daemon gets no phone or Jarvis tools
-			return nil, errUnsupportedForDaemons("Jarvis tools")
+		if h.isDaemon() { // its link answers these itself; a daemon gets no phone or Persona tools
+			return nil, errUnsupportedForDaemons("Persona tools")
 		}
 		n := rh.current()
 		if n == nil || n.peer == nil {
@@ -259,11 +259,11 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		return res, nil
 	case "mcp.call":
 		if h.isDaemon() {
-			return nil, errUnsupportedForDaemons("Jarvis tools")
+			return nil, errUnsupportedForDaemons("Persona tools")
 		}
 		n := rh.current()
 		if n == nil || n.peer == nil {
-			return proto.TextResult("Jarvis hub is not connected", true), nil
+			return proto.TextResult("Persona hub is not connected", true), nil
 		}
 		var p struct {
 			Name      string          `json:"name"`

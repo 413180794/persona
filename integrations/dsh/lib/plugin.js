@@ -31,10 +31,10 @@ function idOf(config, key, fallback) {
 
 const MODES = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions']
 
-/** config.presets: Jarvis permission mode -> DSH preset name; anything else fails the load. */
+/** config.presets: Persona permission mode -> DSH preset name; anything else fails the load. */
 function presetsOf(p) {
   if (p === undefined || p === null) return undefined
-  if (typeof p !== 'object' || Array.isArray(p)) throw new Error('jarvis-dsh-runtime: config.presets must map Jarvis permission modes to DSH presets')
+  if (typeof p !== 'object' || Array.isArray(p)) throw new Error('jarvis-dsh-runtime: config.presets must map Persona permission modes to DSH presets')
   for (const [mode, name] of Object.entries(p)) {
     if (!MODES.includes(mode) || typeof name !== 'string' || name === '') {
       throw new Error(`jarvis-dsh-runtime: config.presets.${mode}: a mode of ${MODES.join(' / ')} to a DSH preset name`)
@@ -65,9 +65,9 @@ function listenOf(l) {
  *   onUpdate?: Function, log?: (msg: string) => void }} host - from the loader: ctx is the scope that has DSH's
  *   sessionController; config is the plugin's config: { socket?, interactions?: 'auto'|'phone'|'browser', listDays?,
  *   maxSessions?, runtime?, name?, launcher?, phoneTools?, assistant?, presets?, listen?, autoUpdate? }.
- *   runtime / name / launcher: how this DSH appears in Jarvis (default dsh / DSH / dsh); a second DSH on the same
- *   machine needs its own. assistant (default true): its launcher may run the Jarvis assistant (docs/dsh.md「助手」);
- *   presets: the DSH permission preset per Jarvis permission mode there. listen: be a daemon the node dials instead
+ *   runtime / name / launcher: how this DSH appears in Persona (default dsh / DSH / dsh); a second DSH on the same
+ *   machine needs its own. assistant (default true): its launcher may run the Persona assistant (docs/dsh.md「助手」);
+ *   presets: the DSH permission preset per Persona permission mode there. listen: be a daemon the node dials instead
  *   (listenOf). autoUpdate is the loader's.
  * @returns {{ stop(): void, busy(): boolean, fetchPackage(name: string): Promise<object> }}
  */

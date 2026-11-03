@@ -147,7 +147,7 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		var res proto.ToolResult
 		if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": req.SessionID,
 			"assistant": req.Assistant}, &res); err != nil {
-			res = proto.TextResult("Jarvis hub error: "+err.Error(), true)
+			res = proto.TextResult("Persona hub error: "+err.Error(), true)
 		}
 		resp = res
 	default:

@@ -361,7 +361,7 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 // LocalMachine is the id the hub gave this node's machine (set by the node): links to its sessions name it.
 var LocalMachine atomic.Value
 
-// The Codex app's directive for a thread it just created (its sidebar shows a card for it); in Jarvis a link that
+// The Codex app's directive for a thread it just created (its sidebar shows a card for it); in Persona a link that
 // opens that thread's chat (jarvis://session/<machine>/<session>, the in-chat link the apps navigate by).
 var codexCreatedThreadRe = regexp.MustCompile(`::created-thread\{threadId="([0-9a-fA-F-]+)"\}`)
 
@@ -381,7 +381,7 @@ var (
 	codexAmbientRe = regexp.MustCompile(`(?s)<in-app-browser-context[^>]*>.*?</in-app-browser-context>`)
 )
 
-// codexUserText cleans what Codex records as the user's message: ambient context (and Jarvis's) goes, and the answer to a question
+// codexUserText cleans what Codex records as the user's message: ambient context (and Persona's) goes, and the answer to a question
 // Codex asked (request_user_input, stored as JSON) reads as the answer itself ("question：answer" when several).
 func codexUserText(s string) string {
 	s = ContextRe.ReplaceAllString(codexAmbientRe.ReplaceAllString(s, ""), "")

@@ -34,7 +34,7 @@ import (
 //   - live text: item/agentMessage/delta → session.delta;
 //   - stop: turn/interrupt (the process stays);
 //   - approvals come to the node as requests (commands, file changes, MCP tool calls, permissions, request_user_input):
-//     the lark-connector gate first (larkCheck), Jarvis's own MCP tools pass, the rest by the conversation's mode, asking
+//     the lark-connector gate first (larkCheck), Persona's own MCP tools pass, the rest by the conversation's mode, asking
 //     the phone like Claude's PermissionRequest hook does. The approval policy is always one that asks (codexPolicy),
 //     so the gate sees every command that is not on Codex's read-only list, bypassPermissions included.
 
@@ -284,7 +284,7 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 		CodexHome string `json:"codexHome"`
 	}
 	if err := c.call(ctx, "initialize", map[string]any{
-		"clientInfo":   map[string]any{"name": "jarvis", "title": "Jarvis", "version": "1"},
+		"clientInfo":   map[string]any{"name": "jarvis", "title": "Persona", "version": "1"},
 		"capabilities": map[string]any{"experimentalApi": true, "requestAttestation": false},
 	}, &init); err != nil {
 		return err
@@ -774,7 +774,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 			return map[string]any{"action": "decline", "content": nil, "_meta": nil}, nil // forms: nobody to fill them in
 		}
 		accept := map[string]any{"action": "accept", "content": map[string]any{}, "_meta": nil}
-		// Jarvis's own tools run unasked; the hub asks before the ones that act for the user (mail_send, phone writes).
+		// Persona's own tools run unasked; the hub asks before the ones that act for the user (mail_send, phone writes).
 		if r.ServerName == "jarvis" || mode == proto.ModeBypass {
 			return accept, nil
 		}

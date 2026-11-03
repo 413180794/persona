@@ -69,8 +69,8 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 			"protocolVersion": p.ProtocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
 			"serverInfo":      map[string]any{"name": "jarvis", "version": version},
-			"instructions": "Jarvis tools reach the user's iPhone (phone_* tools: contacts, calendar, reminders, location, health, photos, " +
-				"clipboard, notifications) and email accounts (mail_* tools). phone_* tools need the Jarvis app to be open on the iPhone. " +
+			"instructions": "Persona tools reach the user's iPhone (phone_* tools: contacts, calendar, reminders, location, health, photos, " +
+				"clipboard, notifications) and email accounts (mail_* tools). phone_* tools need the Persona app to be open on the iPhone. " +
 				"mail_send asks the user to approve on the phone before sending." + assistantInstructions(),
 		}, nil
 	case "ping":
@@ -109,11 +109,11 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		line, err := node.DialSocket(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
 			"session_id": sessionID(), "assistant": isAssistant()})
 		if err != nil {
-			return toolResult(proto.TextResult(fmt.Sprintf("Jarvis node is not reachable (%v). Is the hub connected to this machine?", err), true)), nil
+			return toolResult(proto.TextResult(fmt.Sprintf("Persona node is not reachable (%v). Is the hub connected to this machine?", err), true)), nil
 		}
 		var res proto.ToolResult
 		if err := json.Unmarshal(line, &res); err != nil {
-			return toolResult(proto.TextResult("bad response from Jarvis node", true)), nil
+			return toolResult(proto.TextResult("bad response from Persona node", true)), nil
 		}
 		return toolResult(res), nil
 	}
@@ -135,7 +135,7 @@ func assistantInstructions() string {
 	if !isAssistant() {
 		return ""
 	}
-	return " As the Jarvis assistant you also have: ask_user (questions shown on the phone; AskUserQuestion does not work here), " +
+	return " As the Persona assistant you also have: ask_user (questions shown on the phone; AskUserQuestion does not work here), " +
 		"notify_user (push notification), schedule_followup / list_followups / cancel_followup (wake yourself up later), " +
 		"agents_* (the coding agents on the user's computers) and lark_* (Feishu chats, calendar, docs, search)."
 }

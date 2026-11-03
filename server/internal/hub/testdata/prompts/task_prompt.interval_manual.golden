@@ -1,4 +1,4 @@
 ⏰ 巡检（定时任务，每 30 分钟）
-（Jarvis 会按时再运行它，不用再用 schedule_followup 安排下一次。）
+（Persona 会按时再运行它，不用再用 schedule_followup 安排下一次。）
 
 巡检

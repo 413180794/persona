@@ -181,7 +181,7 @@ func (h *Hub) notifyPairing(name string) {
 		return
 	}
 	h.push.send(map[string]any{"aps": map[string]any{
-		"alert": map[string]any{"title": "Jarvis", "body": "有新设备配对：" + name},
+		"alert": map[string]any{"title": "Persona", "body": "有新设备配对：" + name},
 		"sound": "default",
 	}}, "", nil)
 }

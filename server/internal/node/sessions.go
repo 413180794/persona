@@ -22,7 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// stateFile remembers which sessions Jarvis started and with which launcher. It lives in the hub's Postgres:
+// stateFile remembers which sessions Persona started and with which launcher. It lives in the hub's Postgres:
 // loaded with `state.load` when the node starts and written through with `state.put` events.
 type stateFile struct {
 	mu       sync.Mutex
@@ -259,7 +259,7 @@ func lineTime(line []byte) time.Time {
 }
 
 // startingSession reports whether a session without a transcript is one that exists but has not written its first
-// line yet (a headless conversation, or an agent that is live or that Jarvis started), rather than an unknown id.
+// line yet (a headless conversation, or an agent that is live or that Persona started), rather than an unknown id.
 func (n *Node) startingSession(id string) bool {
 	if n.isAssistantSession(id) {
 		return true
@@ -889,7 +889,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	}
 	for _, a := range unknown {
 		// Without herdr's claude integration the pane's claude process says which session it runs. A pane binding
-		// (our start, a hook) comes after it: the bindings of sessions Jarvis started are kept in the hub's
+		// (our start, a hook) comes after it: the bindings of sessions Persona started are kept in the hub's
 		// database and come back when node restarts, long after another claude took the pane (2026-10-31: after a
 		// redeploy two panes showed sessions they had run days earlier). A guess (title, then newest transcript in
 		// the directory) is the last resort — six agents in one repo got each other's tab names that way.
@@ -1300,7 +1300,7 @@ func (n *Node) cachedLaunchers() []proto.Launcher {
 	return launcherCache.list
 }
 
-// inferLauncher names the launcher of a claude Jarvis did not start (typed in a terminal), from the
+// inferLauncher names the launcher of a claude Persona did not start (typed in a terminal), from the
 // ANTHROPIC_BASE_URL / ANTHROPIC_MODEL the scan saw in its environment; "" when unknown.
 func (n *Node) inferLauncher(id string) string {
 	env, ok := n.sessionEnv(id)

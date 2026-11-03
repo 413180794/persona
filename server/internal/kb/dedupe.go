@@ -271,7 +271,7 @@ func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {
 	if err := e.mergeLogs(keep.Slug, drop.Slug); err != nil {
 		return err
 	}
-	_ = e.Store.AppendLog(keep.Slug, time.Now(), "Jarvis", fmt.Sprintf("合并了项目「%s」（%s）", drop.Name, why))
+	_ = e.Store.AppendLog(keep.Slug, time.Now(), "Persona", fmt.Sprintf("合并了项目「%s」（%s）", drop.Name, why))
 	keep.Dirty = true
 	if err := e.Store.PutProject(keep); err != nil {
 		return err

@@ -704,7 +704,7 @@ func (h *Hub) toolConversationSend(ctx context.Context, self string, args json.R
 // relayFrom is the sending conversation's name and the hop its message would be.
 func (h *Hub) relayFrom(ctx context.Context, self string) (string, int, error) {
 	if self == "" {
-		return "", 0, errors.New("only a Jarvis conversation can do this")
+		return "", 0, errors.New("only a Persona conversation can do this")
 	}
 	name := "另一段对话"
 	if _, s, err := h.assistantConversation(ctx, self); err == nil {

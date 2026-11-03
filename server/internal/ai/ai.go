@@ -1,6 +1,6 @@
 // Package ai calls an Anthropic-compatible Messages API, or an OpenAI-compatible Responses API, for small structured
 // tasks in the app (e.g. turning a pasted blob into a mail account). The key is read from its key file at call time
-// and never stored by Jarvis.
+// and never stored by Persona.
 package ai
 
 import (

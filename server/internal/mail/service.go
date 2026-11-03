@@ -490,7 +490,7 @@ func dialAndLogin(a *MailAccount, token string, proxy *url.URL) (*imapclient.Cli
 
 // sendClientID announces the client to the server (RFC 2971), best effort.
 func sendClientID(c *imapclient.Client) {
-	data := &imap.IDData{Name: "Jarvis", Version: "1.0", Vendor: "Jarvis"}
+	data := &imap.IDData{Name: "Persona", Version: "1.0", Vendor: "Persona"}
 	cmd := c.ID(data)
 	_, _ = cmd.Wait()
 }

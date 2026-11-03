@@ -16,7 +16,7 @@ import (
 
 func botHelp(f BotFeatures) string {
 	var b strings.Builder
-	b.WriteString("直接发消息就是和 Jarvis 说话（文字、图片、文件、转发的聊天记录都行）；回复我的某条消息，就是接着那段对话说。\n\n")
+	b.WriteString("直接发消息就是和 Persona 说话（文字、图片、文件、转发的聊天记录都行）；回复我的某条消息，就是接着那段对话说。\n\n")
 	if f.Main {
 		b.WriteString("- `/main` 回到主对话\n- `/new` 开一段新对话（下一条消息开始）\n- `/list` 最近的对话，点一下切换\n")
 	}
@@ -49,14 +49,14 @@ func (h *Hub) botCommand(ctx context.Context, api *feishubot.Client, set FeishuB
 		reply(feishubot.NewCard("怎么用", feishubot.Blue, "怎么用").Markdown(botHelp(set.Features)))
 	case "/main", "/jarvis", "/主对话":
 		if !set.Features.Main {
-			h.botNote(ctx, api, messageID, "和 Jarvis 对话没有打开。")
+			h.botNote(ctx, api, messageID, "和 Persona 对话没有打开。")
 			return true, ""
 		}
 		setCurrent(botTarget{Kind: targetMain})
 		h.botNote(ctx, api, messageID, "好，现在发给主对话。")
 	case "/new", "/新对话":
 		if !set.Features.Main {
-			h.botNote(ctx, api, messageID, "和 Jarvis 对话没有打开。")
+			h.botNote(ctx, api, messageID, "和 Persona 对话没有打开。")
 			return true, ""
 		}
 		setCurrent(botTarget{Kind: targetJarvis})
@@ -67,7 +67,7 @@ func (h *Hub) botCommand(ctx context.Context, api *feishubot.Client, set FeishuB
 		return false, rest // "/new 帮我…": the rest starts it
 	case "/list", "/对话":
 		if !set.Features.Main {
-			h.botNote(ctx, api, messageID, "和 Jarvis 对话没有打开。")
+			h.botNote(ctx, api, messageID, "和 Persona 对话没有打开。")
 			return true, ""
 		}
 		reply(h.conversationsCard(ctx))
@@ -112,7 +112,7 @@ func (h *Hub) botCommand(ctx context.Context, api *feishubot.Client, set FeishuB
 	return true, ""
 }
 
-// conversationsCard lists recent Jarvis conversations with a button to switch to each.
+// conversationsCard lists recent Persona conversations with a button to switch to each.
 func (h *Hub) conversationsCard(ctx context.Context) *feishubot.Card {
 	v := h.assistantState(ctx, false)
 	list := v.Conversations

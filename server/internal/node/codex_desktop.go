@@ -21,7 +21,7 @@ import (
 )
 
 // The Codex desktop App keeps a local message bus at <CODEX_HOME>/ipc/ipc.sock: its windows ask each other to run a
-// turn in a thread one of them owns. Jarvis joins that bus as one more client, so a message from the phone runs in the
+// turn in a thread one of them owns. Persona joins that bus as one more client, so a message from the phone runs in the
 // App window that owns the thread — it shows in the App, and no second writer opens the rollout.
 //
 // Frames are a 4-byte little-endian length and a JSON object. Every request carries the version the App expects for
@@ -115,7 +115,7 @@ func (c *codexDesktop) read() (codexDesktopFrame, error) {
 	return f, json.Unmarshal(b, &f)
 }
 
-// request sends one request and waits for its response; broadcasts are skipped, and the bus asking whether Jarvis
+// request sends one request and waits for its response; broadcasts are skipped, and the bus asking whether Persona
 // handles someone else's request is told no at once (it would otherwise wait out its timeout for every request).
 func (c *codexDesktop) request(method string, params any, target string) (codexDesktopFrame, error) {
 	id := newUUID()
@@ -196,7 +196,7 @@ func (n *Node) sendCodexDesktop(ctx context.Context, src codexSource, text strin
 
 // The Codex App's threads are listed like its sidebar: grouped by its projects, newest first, and those of the last
 // few days with a state like herdr's — working while a turn runs; after it, done (完成未看) while the App's sidebar
-// still marks the thread unread, idle once it was looked at in the App (or, as for any agent, in Jarvis).
+// still marks the thread unread, idle once it was looked at in the App (or, as for any agent, in Persona).
 // A process holding the rollout open only ever said "unknown", which the phone folds away with the quiet ones.
 const codexDesktopRecent = 72 * time.Hour
 

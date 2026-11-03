@@ -13,7 +13,7 @@ import (
 )
 
 // A launcher's quota at its gateway (docs/launchers.md「额度」): relay-history and FAKEMODEL keys. A launcher added in
-// Jarvis is read here with its sealed key; a ~/.zshrc one by the machine that has it (node/launcherquota.go), so the
+// Persona is read here with its sealed key; a ~/.zshrc one by the machine that has it (node/launcherquota.go), so the
 // key stays on that machine. Answers are kept a minute: the page opens often, the gateways count every read.
 
 const quotaFresh = time.Minute

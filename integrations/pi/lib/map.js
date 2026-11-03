@@ -1,4 +1,4 @@
-// Pure mapping from pi session entries to Jarvis items (docs/pi.md「映射」). No I/O: the runtime (pi.js) hands in the
+// Pure mapping from pi session entries to Persona items (docs/pi.md「映射」). No I/O: the runtime (pi.js) hands in the
 // session's entries (file order) and its current branch; the tests feed recorded shapes.
 //
 // seq: an entry's 1-based position in the session file (pi appends only, so it is stable and grows). A page shows only

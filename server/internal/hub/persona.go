@@ -17,7 +17,7 @@ import (
 	"strings"
 )
 
-// Personas (docs/persona.md): a look for Jarvis — its name, face, the animated dot in the Jarvis tab's top bar and the
+// Personas (docs/persona.md): a look for Persona — its name, face, the animated dot in the Persona tab's top bar and the
 // colors — as a package in ~/.jarvis/personas/<id>/: persona.json and the files it names. They live on the hub and
 // not in the app because a look may be someone else's character: the phone pulls the one it shows and caches it.
 // The hub only lists and serves them. A package that does not parse, names a file it does not have or is too big is

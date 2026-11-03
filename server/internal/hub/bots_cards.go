@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Cards for what Jarvis and the agents ask (bots.go BotFeatures.Cards): a question, a plan, a permission or a terminal
+// Cards for what Persona and the agents ask (bots.go BotFeatures.Cards): a question, a plan, a permission or a terminal
 // dialog shows in the chat as a card with the same choices as the app's card; answering it in either place answers it
 // (h.resolve), and the card in Feishu then says how it was answered. Cards go out for what the chat drives (its target,
 // and the conversations of its runs), or for everything with AllCards.
@@ -76,7 +76,7 @@ func (h *Hub) botDrives(machine, session string) bool {
 			return true
 		}
 		// The hub's own approvals (mail_send) do not name the conversation: one on the assistant's machine while a
-		// Jarvis run goes on is most likely that run's.
+		// Persona run goes on is most likely that run's.
 		if session == "" && !r.Target.agent() && r.Target.MachineID == machine {
 			b.mu.Unlock()
 			return true
@@ -178,9 +178,9 @@ func resolutionText(ix proto.Interaction, r proto.Resolution) string {
 func (h *Hub) ixWhere(ix proto.Interaction) string {
 	where := ix.SessionTitle
 	if where == "" {
-		where = "Jarvis"
+		where = "Persona"
 	}
-	if m := h.localMachine(ix.MachineID); m != nil && where != "Jarvis" {
+	if m := h.localMachine(ix.MachineID); m != nil && where != "Persona" {
 		where += " · " + m.cfg.Name
 	}
 	return where
@@ -353,7 +353,7 @@ func (h *Hub) answeredCard(ix proto.Interaction, how string) *feishubot.Card {
 func (h *Hub) openButton(machine, session string) feishubot.Button {
 	web := strings.TrimRight(h.cfg.PublicURL, "/")
 	if session != "" {
-		// A Jarvis conversation has its own page (/j/<id>, web/src/lib/router.ts); an agent is /s/<machine>/<id>.
+		// A Persona conversation has its own page (/j/<id>, web/src/lib/router.ts); an agent is /s/<machine>/<id>.
 		s := proto.Session{}
 		m := h.localMachine(machine)
 		if m != nil {

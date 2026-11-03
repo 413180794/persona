@@ -1,10 +1,10 @@
 package prompts
 
-// BotMessage is a message the user sent the Feishu bot, as it goes into a conversation (bot/message): for a Jarvis
+// BotMessage is a message the user sent the Feishu bot, as it goes into a conversation (bot/message): for a Persona
 // conversation a note that the answer goes back to Feishu; the message it quotes, a forwarded chat, and the paths of
 // the files it carried, saved on the machine the conversation runs on.
 type BotMessage struct {
-	Jarvis  bool   // a Jarvis conversation (not a coding agent): add the note about answering in Feishu
+	Jarvis  bool   // a Persona conversation (not a coding agent): add the note about answering in Feishu
 	Owner   string // "" is 用户
 	Text    string
 	Quote   *BotQuote

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The DSH companion (docs/dsh.md「DSH 没在运行时」): the Jarvis plugin lives in `dsh web`, so while DSH is not running
-// Jarvis would see none of its sessions. This small resident process lists the recent sessions in DSH's store as
+// The DSH companion (docs/dsh.md「DSH 没在运行时」): the Persona plugin lives in `dsh web`, so while DSH is not running
+// Persona would see none of its sessions. This small resident process lists the recent sessions in DSH's store as
 // offline and pages them, read-only. Sending to one runs the wake command (how this machine starts DSH: a launchd or
 // systemd service, say) and hands the message over to the plugin once DSH runs; while it runs, the plugin's rows win.
 //

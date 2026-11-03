@@ -388,7 +388,7 @@ test('the hub\'s tools become DSH tools; a call goes through the node with the c
   const value = await def.execute({ day: 'today' }, { agent: { session: { id: 'session-c' } }, signal: AbortSignal.timeout(5000) })
   assert.deepEqual(n.toolCalls.at(-1), { name: 'phone_calendar_events', args: { day: 'today' }, session_id: 'session-c' })
   assert.deepEqual(def.output.render({}, value), [{ type: 'text', text: 'phone_calendar_events ran' }])
-  n.callTool = () => ({ content: [{ type: 'text', text: 'iPhone 不在线，请打开 Jarvis' }], is_error: true })
+  n.callTool = () => ({ content: [{ type: 'text', text: 'iPhone 不在线，请打开 Persona' }], is_error: true })
   await assert.rejects(def.execute({}, { agent: { session: { id: 'session-c' } } }), /iPhone 不在线/)
 
   // The same tools: nothing re-registered; a changed list replaces them; the hub away keeps them.

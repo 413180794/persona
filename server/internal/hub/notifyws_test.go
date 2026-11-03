@@ -108,7 +108,7 @@ func TestWSNotifyInteractionAndAssistant(t *testing.T) {
 	select {
 	case raw := <-c.out:
 		var got map[string]string
-		if err := json.Unmarshal(raw, &got); err != nil || got["kind"] != "assistant" || got["title"] != "提醒" || got["subtitle"] != "Jarvis" || got["body"] != "任务有新进展" {
+		if err := json.Unmarshal(raw, &got); err != nil || got["kind"] != "assistant" || got["title"] != "提醒" || got["subtitle"] != "Persona" || got["body"] != "任务有新进展" {
 			t.Fatalf("assistant notification: %s (%v)", raw, err)
 		}
 	default:

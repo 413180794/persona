@@ -83,7 +83,7 @@ func hookCommands(t *testing.T, s map[string]any, event string) []string {
 }
 
 // A claude start of a launcher with its own settings passes one file that is both: the launcher's env (its token)
-// and keys, and Jarvis's hooks after its own. Claude Code keeps only the last --settings: before, the launcher's
+// and keys, and Persona's hooks after its own. Claude Code keeps only the last --settings: before, the launcher's
 // was dropped and claude was "Not logged in".
 func TestClaudeSettingsMergesTheLaunchers(t *testing.T) {
 	home, cwd := t.TempDir(), t.TempDir()
@@ -110,7 +110,7 @@ func TestClaudeSettingsMergesTheLaunchers(t *testing.T) {
 		t.Errorf("the launcher's settings are not all there: %v", s)
 	}
 	if c := hookCommands(t, s, "PreToolUse"); len(c) != 2 || c[0] != "their-hook" || c[1] != "jarvisd hook" {
-		t.Errorf("PreToolUse %v, want its own then Jarvis's", c)
+		t.Errorf("PreToolUse %v, want its own then Persona's", c)
 	}
 	if c := hookCommands(t, s, "Stop"); len(c) != 1 || c[0] != "jarvisd hook" {
 		t.Errorf("Stop %v", c)
@@ -124,7 +124,7 @@ func TestClaudeSettingsMergesTheLaunchers(t *testing.T) {
 			t.Errorf("%s: %v", launcher, s)
 		}
 	}
-	// Nothing to merge, or nothing that can be: Jarvis's file, as before.
+	// Nothing to merge, or nothing that can be: Persona's file, as before.
 	for _, launcher := range []string{"claude", "plain", "gone", "broken"} {
 		if got := n.claudeSettings(ctx, launcher, ours, cwd); got != ours {
 			t.Errorf("%s: %s, want %s", launcher, got, ours)

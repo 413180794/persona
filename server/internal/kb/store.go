@@ -1,4 +1,4 @@
-// Package kb is Jarvis' knowledge base under ~/.jarvis/data (docs/knowledge.md): every chat's full text by day,
+// Package kb is Persona' knowledge base under ~/.jarvis/data (docs/knowledge.md): every chat's full text by day,
 // AI-compressed context per chat, person and project, and the tags (importance, relevance, free tags) that rank them.
 // Files are the source of truth so that Claude Code (the assistant, the inbox agent, any herdr agent) can read and
 // grep them directly; the hub keeps only an index in Postgres.

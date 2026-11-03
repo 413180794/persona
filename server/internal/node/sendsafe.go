@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/screen"
 )
 
-// Typing into someone's terminal is the riskiest thing Jarvis does. Before a message goes into a running agent's
+// Typing into someone's terminal is the riskiest thing Persona does. Before a message goes into a running agent's
 // pane the node reads the screen and refuses — nothing typed — when
 //   - a dialog has the keyboard (permission prompt, picker, rewind): the text would pick an option (dialog_open);
 //   - Claude's input box holds a draft typed at the computer, or bash mode: the message would be appended to it and

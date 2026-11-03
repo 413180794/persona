@@ -18,13 +18,13 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// 交给 Jarvis (#528; the user, 2026-11-03: iMessage's texts may go to AI like Feishu's): while the switch is on, the
+// 交给 Persona (#528; the user, 2026-11-03: iMessage's texts may go to AI like Feishu's): while the switch is on, the
 // Mac's real conversations (KeepContacts) go into the knowledge base (connector.Archive, by ROWID), unread ones into
 // the inbox (connector.Inbox, triaged like Feishu's), and the assistant reads them (ReadTools). Codes are masked in
-// all of it. Off: none of it — nothing is read for Jarvis, the tools are gone; what the hub kept stays until the
+// all of it. Off: none of it — nothing is read for Persona, the tools are gone; what the hub kept stays until the
 // user deletes it (hub/imessage.go).
 
-// SetAI turns 交给 Jarvis on or off (the hub keeps the choice).
+// SetAI turns 交给 Persona on or off (the hub keeps the choice).
 func (c *Remote) SetAI(on bool) {
 	c.ai.Store(on)
 	if !on {
@@ -34,7 +34,7 @@ func (c *Remote) SetAI(on bool) {
 	}
 }
 
-// AI says whether the messages go to Jarvis.
+// AI says whether the messages go to Persona.
 func (c *Remote) AI() bool { return c.ai.Load() }
 
 // zone is the user's time zone (the hub sets Zone); never the machine's, which for a hub is UTC.
@@ -50,7 +50,7 @@ func (c *Remote) zone() *time.Location {
 // changesPage is how many messages one connector.changes call asks for.
 const changesPage = 300
 
-// Changes is connector.Archive: the new messages of the conversations that go to Jarvis, as knowledge-base chats
+// Changes is connector.Archive: the new messages of the conversations that go to Persona, as knowledge-base chats
 // "imessage-<12 hex>" (the conversation's id) with people "imessage-<hash of their number>".
 func (c *Remote) Changes(ctx context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {
 	if !c.AI() {
@@ -149,9 +149,9 @@ func (c *Remote) Collect(context.Context) ([]connector.InboxThing, error) {
 	return slices.Clone(c.things), nil
 }
 
-var errNoReply = errors.New("在「信息」里回复：Jarvis 不替你发信息")
+var errNoReply = errors.New("在「信息」里回复：Persona 不替你发信息")
 
-// Reply: Jarvis does not send messages (the item's 在信息里回复 opens Messages with the number).
+// Reply: Persona does not send messages (the item's 在信息里回复 opens Messages with the number).
 func (c *Remote) Reply(context.Context, connector.InboxReply) error { return errNoReply }
 
 // How often Watch looks at the Mac for new messages, how many conversations it looks at, and how many of a
@@ -216,7 +216,7 @@ func (c *Remote) look(ctx context.Context, changed func(connector.Scope)) {
 func (c *Remote) thing(ctx context.Context, chat Chat) connector.InboxThing {
 	last := strconv.FormatInt(chat.Last.UnixNano(), 10)
 	t := connector.InboxThing{Thread: chat.ID, Kind: "dm", Title: chat.Name, Sender: chat.Name, Preview: MaskCodes(chat.Preview),
-		At: chat.Last, Last: last, ReplyTo: "在「信息」里回复（Jarvis 不替你发）", Tier: connector.TierAction,
+		At: chat.Last, Last: last, ReplyTo: "在「信息」里回复（Persona 不替你发）", Tier: connector.TierAction,
 		Tags: []connector.Tag{{Key: connector.TagChat, Value: chat.ID, Name: chat.Name}}}
 	if chat.Group {
 		t.Kind, t.Label, t.Tier = "group", "群聊", connector.TierFYI
@@ -295,10 +295,10 @@ func (c *Remote) Tools() []proto.Tool {
 	return out
 }
 
-// Call runs one of the read tools on the Mac's messages (the conversations that go to Jarvis, codes masked).
+// Call runs one of the read tools on the Mac's messages (the conversations that go to Persona, codes masked).
 func (c *Remote) Call(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	if !c.AI() {
-		return "", errors.New("「信息」没有交给 Jarvis（设置 › 连接器 › 信息）")
+		return "", errors.New("「信息」没有交给 Persona（设置 › 连接器 › 信息）")
 	}
 	var a struct {
 		Chat   string `json:"chat"`

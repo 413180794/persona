@@ -30,7 +30,7 @@ func writeClaudeSession(t *testing.T, home string, pid int, id, entrypoint strin
 	}
 }
 
-// A Claude session open in Claude's desktop app (no pane Jarvis drives, so it lists as not running) is not resumed
+// A Claude session open in Claude's desktop app (no pane Persona drives, so it lists as not running) is not resumed
 // from the phone: that would start a second claude writing the same transcript. A file left by a claude that exited
 // does not count.
 func TestResumeRefusedWhileOpenElsewhere(t *testing.T) {

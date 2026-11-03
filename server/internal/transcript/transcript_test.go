@@ -145,7 +145,7 @@ func TestSystemReminderIsStrippedFromUserText(t *testing.T) {
 	}
 }
 
-// The live snapshot Jarvis starts an assistant message with (node/assistant_context.go) isn't what the user wrote:
+// The live snapshot Persona starts an assistant message with (node/assistant_context.go) isn't what the user wrote:
 // neither as its own block nor inside the text.
 func TestJarvisContextIsStripped(t *testing.T) {
 	block := `<jarvis-context>\n实时快照（这条消息发出时的；之后的变化用工具查）：\n- 现在：2026-11-01 周日 15:04（Asia/Shanghai）\n</jarvis-context>`
@@ -164,7 +164,7 @@ func TestJarvisContextIsStripped(t *testing.T) {
 	}
 }
 
-// /compact (typed, or sent by Jarvis to an idle assistant conversation) is a notice, not a message: it must not count
+// /compact (typed, or sent by Persona to an idle assistant conversation) is a notice, not a message: it must not count
 // as activity either, or a compacted conversation would turn up unread.
 func TestCompactCommandIsANotice(t *testing.T) {
 	items, meta := parse(t, `{"type":"user","uuid":"u1","timestamp":"2026-11-01T07:00:00Z","message":{"role":"user","content":"<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>"}}`)

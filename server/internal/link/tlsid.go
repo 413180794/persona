@@ -154,7 +154,7 @@ func (id *identity) renew(now time.Time) error {
 		return err
 	}
 	tmpl := &x509.Certificate{
-		SerialNumber: serial, Subject: pkix.Name{CommonName: "Jarvis connector"},
+		SerialNumber: serial, Subject: pkix.Name{CommonName: "Persona connector"},
 		NotBefore: now.Add(-5 * time.Minute), NotAfter: now.Add(certLife),
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true, DNSNames: []string{tlsName},

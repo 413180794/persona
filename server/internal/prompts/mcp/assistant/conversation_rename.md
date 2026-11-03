@@ -1,4 +1,4 @@
-Rename a Jarvis conversation. Titles read 「MMDD | 类型 | 主题」: give `kind` and `topic` and the hub puts the day the conversation started in front. A title the user gave stays: renaming one fails unless the user asked for this rename in so many words (then pass `user_asked`). The main conversation has no title to change.
+Rename a Persona conversation. Titles read 「MMDD | 类型 | 主题」: give `kind` and `topic` and the hub puts the day the conversation started in front. A title the user gave stays: renaming one fails unless the user asked for this rename in so many words (then pass `user_asked`). The main conversation has no title to change.
 
 ```json
 {

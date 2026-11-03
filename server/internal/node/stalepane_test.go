@@ -9,14 +9,14 @@ import (
 	"github.com/nwverse/persona/server/internal/host"
 )
 
-// The panes of sessions Jarvis started are kept in the hub's database and come back when node restarts. After a
+// The panes of sessions Persona started are kept in the hub's database and come back when node restarts. After a
 // redeploy (2026-10-31) two panes showed sessions they had run days earlier: one pane's claude had since been
 // replaced, the other had resumed another session, and the remembered binding won over what the claude in the pane
 // said in its sessions/<pid>.json. The process wins; the binding is for a claude that has not written its file yet.
 func TestAPaneShowsWhatItsClaudeRunsNotWhatItOnceRan(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	const (
-		before = "0c000000-0000-4000-8000-000000000001" // started by Jarvis in w:p1 days ago
+		before = "0c000000-0000-4000-8000-000000000001" // started by Persona in w:p1 days ago
 		now    = "0c000000-0000-4000-8000-000000000002" // what w:p1's claude runs today
 		fresh  = "0c000000-0000-4000-8000-000000000003" // just started in w:p2, no pid file yet
 	)

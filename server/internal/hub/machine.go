@@ -299,7 +299,7 @@ func (m *Machine) setSessions(list []proto.Session) {
 	}
 	now := time.Now()
 	for _, s := range list {
-		// Any agent (herdr or headless, started by Jarvis or not) finishing a turn may notify the phone (notify.go).
+		// Any agent (herdr or headless, started by Persona or not) finishing a turn may notify the phone (notify.go).
 		prev, key := before[s.SessionID], m.cfg.ID+"/"+s.SessionID
 		switch {
 		case s.Status == proto.StatusWorking && prev != proto.StatusWorking:

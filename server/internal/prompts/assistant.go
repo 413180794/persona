@@ -14,11 +14,14 @@ type AssistantMachine struct {
 
 // AssistantClaudeMD is the assistant directory's CLAUDE.md (assistant/claude_md).
 type AssistantClaudeMD struct {
-	Owner     string // "" is 用户
-	Machines  []AssistantMachine
-	Notes     string // 设置 › 助手 › 关于我, trimmed
-	ExtraDirs []string
-	lark-connector  bool // the assistant's machine has the lark-connector skill (~/.jarvis/skills/lark-connector): ol is on its PATH
+	Owner        string // "" is 用户
+	Machines     []AssistantMachine
+	Notes        string // 设置 › 助手 › 关于我, trimmed
+	ExtraDirs    []string
+	StateDir     string
+	KnowledgeDir string
+	OnHub        bool
+	lark-connector     bool // the assistant's machine has the lark-connector skill (~/.jarvis/skills/lark-connector): ol is on its PATH
 	// LarkCLI: hub.json configures lark-cli (docs/plan-lark-cli.md), on the assistant's PATH; lark-connectorConfigured: Open
 	// Lark is configured too (lark.token / lark.container); LarkPrefer: "cli" when lark-cli is the primary source.
 	LarkCLI            bool

@@ -731,7 +731,7 @@ func liveActivityPayload(event string, st FleetState, now time.Time) map[string]
 	if event == "start" {
 		aps["attributes-type"] = "JarvisActivityAttributes"
 		aps["attributes"] = map[string]any{"kind": "fleet"}
-		aps["alert"] = map[string]any{"title": "Jarvis", "body": fleetSentence(st)}
+		aps["alert"] = map[string]any{"title": "Persona", "body": fleetSentence(st)}
 	}
 	return map[string]any{"aps": aps}
 }

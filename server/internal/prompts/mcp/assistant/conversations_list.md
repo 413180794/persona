@@ -1,4 +1,4 @@
-List Jarvis's own conversations (the 对话 sidebar), newest activity first: id, title, last activity, whether it is the main conversation, whether it is running now, and the gist of its last message. Archived ones are left out unless `include_archived`. This conversation is marked. Use it to find a conversation the user means ("the one about the trip") before reading, renaming, archiving or messaging it.
+List Persona's own conversations (the 对话 sidebar), newest activity first: id, title, last activity, whether it is the main conversation, whether it is running now, and the gist of its last message. Archived ones are left out unless `include_archived`. This conversation is marked. Use it to find a conversation the user means ("the one about the trip") before reading, renaming, archiving or messaging it.
 
 ```json
 {

@@ -1,5 +1,5 @@
-// Jarvis runtime for pi (docs/pi.md): a pi extension that puts the sessions of this pi process — a terminal, an RPC
-// host, or pi-web's server — into the Jarvis apps through the jarvisd node on this machine
+// Persona runtime for pi (docs/pi.md): a pi extension that puts the sessions of this pi process — a terminal, an RPC
+// host, or pi-web's server — into the Persona apps through the jarvisd node on this machine
 // (~/.jarvis/runtime.sock, docs/runtimes.md). It does nothing visible until a node listens.
 //
 // Configuration (optional): <agent dir>/jarvis.json — { "approve": ["bash"], "askUser": true, "answerFirst": "auto",

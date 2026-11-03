@@ -102,7 +102,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		h.unarchiveOnSend(m.cfg.ID, sid) // the user is talking in it again: back in the list
 		h.userSpoke(sid)                 // and it works for them, not for a chain of conversations
 	}
-	// Jarvis' main conversation follows 设置 › 助手's launcher (the next message resumes it on that one) unless the
+	// Persona' main conversation follows 设置 › 助手's launcher (the next message resumes it on that one) unless the
 	// app picked one for this send; side conversations keep the launcher they started with.
 	if l, _ := p["launcher"].(string); l == "" {
 		if cfg := h.assistantConfig(r.Context()); cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID {

@@ -7,7 +7,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Handing a task to the Jarvis tab's main conversation (the assistant with the user's data and skills) and hearing
+// Handing a task to the Persona tab's main conversation (the assistant with the user's data and skills) and hearing
 // back when it is done: the voice model is quick but can do little, the main conversation can do a lot, slowly. The
 // answer comes back into the voice conversation if it is still open; it stays in the main one anyway.
 

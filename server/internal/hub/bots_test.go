@@ -102,7 +102,7 @@ func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 		case p == "/open-apis/auth/v3/tenant_access_token/internal":
 			reply(map[string]any{"code": 0, "tenant_access_token": "t-1", "expire": 7200})
 		case p == "/open-apis/bot/v3/info":
-			reply(map[string]any{"code": 0, "bot": map[string]any{"app_name": "Jarvis", "open_id": "ou_bot"}})
+			reply(map[string]any{"code": 0, "bot": map[string]any{"app_name": "Persona", "open_id": "ou_bot"}})
 		case p == "/callback/ws/endpoint":
 			reply(map[string]any{"code": 1, "msg": "no long connection in tests"})
 		case strings.HasPrefix(p, "/open-apis/contact/v3/users/"):
@@ -350,7 +350,7 @@ func TestBotMessageGoesToTheMainConversationAndTheAnswerComesBack(t *testing.T) 
 	}
 	w.api.find(t, "/messages/om_q1/reactions", "OnIt")
 
-	// The turn: Jarvis works, then answers.
+	// The turn: Persona works, then answers.
 	w.node.mu.Lock()
 	w.node.items = []proto.Item{
 		{Seq: 11, Role: "user", Kind: proto.KindText, Text: text},
@@ -379,12 +379,12 @@ func TestBotMessageGoesToTheMainConversationAndTheAnswerComesBack(t *testing.T) 
 	}
 }
 
-// A question Jarvis asks shows as a card in the chat; a button there answers it like the app would, and the card says
+// A question Persona asks shows as a card in the chat; a button there answers it like the app would, and the card says
 // what was answered.
 func TestBotQuestionCardAnswersTheInteraction(t *testing.T) {
 	w := newBotWorld(t)
 	w.pair(t)
-	ix := proto.Interaction{ID: "ix_q", MachineID: "box", SessionID: "main-1", SessionTitle: "Jarvis", Kind: proto.IxQuestion,
+	ix := proto.Interaction{ID: "ix_q", MachineID: "box", SessionID: "main-1", SessionTitle: "Persona", Kind: proto.IxQuestion,
 		ToolName: "ask_user", Questions: []proto.Question{{Question: "发给谁？", Options: []proto.QuestionOption{{Label: "张三"}, {Label: "李四"}}}},
 		ExpiresAt: time.Now().Add(time.Minute)}
 	got := make(chan proto.Resolution, 1)

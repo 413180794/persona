@@ -353,7 +353,7 @@ func probeHub(ctx context.Context, address string) (map[string]any, error) {
 			Version string `json:"version"`
 		}
 		if err := json.Unmarshal(b, &hv); err != nil || hv.HubID == "" {
-			last = errors.New("那里不是 Jarvis hub")
+			last = errors.New("那里不是 Persona hub")
 			continue
 		}
 		return map[string]any{"hub_id": hv.HubID, "name": hv.Name, "tls_port": hv.TLSPort, "fp": hv.FP, "version": hv.Version}, nil

@@ -29,11 +29,11 @@ import (
 // 设置 › 模型 (docs/launchers.md): every launcher in one list. Those in each machine's ~/.zshrc are found by its node and
 // remembered here (the last list of every machine, so an offline one's still show); those added in the app are kept
 // by the hub — base URL, model, and the API key AES-GCM sealed with ~/.jarvis/secret.key — and sent to every node,
-// which runs them as `jarvisd launch <name>`. Deleting a ~/.zshrc launcher only hides it in Jarvis.
+// which runs them as `jarvisd launch <name>`. Deleting a ~/.zshrc launcher only hides it in Persona.
 
 const (
 	launchersManagedKey = "launchers.managed" // []storedLauncher
-	launchersHiddenKey  = "launchers.hidden"  // []string: ~/.zshrc launcher names hidden in Jarvis
+	launchersHiddenKey  = "launchers.hidden"  // []string: ~/.zshrc launcher names hidden in Persona
 	launchersZshrcKey   = "launchers.zshrc"   // map machine id → []proto.Launcher, the last list seen
 )
 
@@ -449,7 +449,7 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		writeErr(w, http.StatusNotFound, errors.New("只能改 Jarvis 里加的启动器；~/.zshrc 里的请在那台电脑上改"))
+		writeErr(w, http.StatusNotFound, errors.New("只能改 Persona 里加的启动器；~/.zshrc 里的请在那台电脑上改"))
 	})
 	api.HandleFunc("DELETE /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
 		ctx, name := r.Context(), r.PathValue("name")
@@ -475,7 +475,7 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 			writeJSON(w, map[string]any{"ok": true, "deleted": true})
 			return
 		}
-		hidden := h.hiddenLaunchers(ctx) // a ~/.zshrc launcher: hidden in Jarvis, the file is not touched
+		hidden := h.hiddenLaunchers(ctx) // a ~/.zshrc launcher: hidden in Persona, the file is not touched
 		if !slices.Contains(hidden, name) {
 			hidden = append(hidden, name)
 		}

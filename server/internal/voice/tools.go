@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// The function tools the voice model may call (live dialect with tools): what Jarvis knows and the agents on the
+// The function tools the voice model may call (live dialect with tools): what Persona knows and the agents on the
 // user's machines, through the hub's API. Their descriptions are prompts (prompts/mcp/voice).
 var toolNames = []string{"search_knowledge", "list_agents", "send_to_agent", "ask_jarvis"}
 
@@ -19,7 +19,7 @@ var toolLabels = map[string]string{
 	"search_knowledge": "查知识库",
 	"list_agents":      "看 Agents",
 	"send_to_agent":    "发给 Agent",
-	"ask_jarvis":       "交给 Jarvis",
+	"ask_jarvis":       "交给 Persona",
 }
 
 func toolDecls() []toolDecl {

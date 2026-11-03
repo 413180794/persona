@@ -9,7 +9,7 @@ import (
 )
 
 // Codex's TUI (codex-cli 0.153 / 0.163, TRAEX alike) read off its screen: which view has the keyboard, what its input
-// box holds, and the two dialogs Jarvis answers from the phone — an approval ("Would you like to run the following
+// box holds, and the two dialogs Persona answers from the phone — an approval ("Would you like to run the following
 // command?") and request_user_input's question overlay ("Question 1/2"). Layouts are the ones recorded in
 // testdata/codex-*; docs/codex.md「提问和审批」.
 
@@ -65,7 +65,7 @@ const (
 )
 
 // Role says what an approval option does, from Codex's wording (tui/src/bottom_pane/approval_overlay.rs, the same in
-// 0.153 and 0.163); "" for one Jarvis does not offer (block a host, strict auto review).
+// 0.153 and 0.163); "" for one Persona does not offer (block a host, strict auto review).
 func (o CodexOption) Role() string {
 	l := strings.ToLower(o.Label)
 	switch {

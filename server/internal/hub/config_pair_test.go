@@ -76,8 +76,8 @@ func TestPairCLIOfflineAndLegacy(t *testing.T) {
 	}
 	var qr bytes.Buffer
 	qrterminal.GenerateHalfBlock(oldURL, qrterminal.L, &qr)
-	want := "Server: " + cfg.PublicURL + "\nToken:  " + cfg.Token + "\n\n用 Jarvis App 扫码配对：\n\n" + qr.String() +
-		"\nMac 上拷贝这条链接，在 Jarvis 的「连接 hub」里粘贴：\n" + oldURL + "\n"
+	want := "Server: " + cfg.PublicURL + "\nToken:  " + cfg.Token + "\n\n用 Persona App 扫码配对：\n\n" + qr.String() +
+		"\nMac 上拷贝这条链接，在 Persona 的「连接 hub」里粘贴：\n" + oldURL + "\n"
 	if out.String() != want {
 		t.Fatal("legacy output changed")
 	}

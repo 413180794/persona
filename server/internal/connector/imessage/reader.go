@@ -153,7 +153,7 @@ func (r *Reader) Status(ctx context.Context) Status {
 
 func (r *Reader) denied(st Status) Status {
 	st.State = connector.StateNoPermission
-	st.Error = "macOS 不让 Jarvis 读这台 Mac 上的「信息」：要给它「完全磁盘访问权限」"
+	st.Error = "macOS 不让 Persona 读这台 Mac 上的「信息」：要给它「完全磁盘访问权限」"
 	if r.Via == "launchd" {
 		exe := r.Executable
 		if exe == "" {
@@ -162,13 +162,13 @@ func (r *Reader) denied(st Status) Status {
 		st.Guide = []string{
 			"在这台 Mac 上打开「系统设置 › 隐私与安全性 › 完全磁盘访问权限」",
 			"点「+」，按 ⇧⌘G 输入 " + exe + "，选中它，打开它的开关",
-			"回到 Jarvis 刷新。jarvisd 更新后如果又读不了，把它的开关关了再打开",
+			"回到 Persona 刷新。jarvisd 更新后如果又读不了，把它的开关关了再打开",
 		}
 	} else {
 		st.Guide = []string{
 			"在这台 Mac 上打开「系统设置 › 通用 › 共享」",
 			"点「远程登录」右边的 ⓘ，打开「允许远程用户完全访问磁盘」",
-			"回到 Jarvis 刷新。注意：这样经 ssh 登录这台 Mac 的任何会话都能读整个磁盘",
+			"回到 Persona 刷新。注意：这样经 ssh 登录这台 Mac 的任何会话都能读整个磁盘",
 		}
 	}
 	return st
@@ -372,7 +372,7 @@ func (m msgRow) text() (string, bool) {
 }
 
 // Chats is a page of conversations, newest first, before the cursor a previous page returned. keep KeepContacts
-// leaves out what does not go to Jarvis (Changes); anything else lists them all (the app's own view).
+// leaves out what does not go to Persona (Changes); anything else lists them all (the app's own view).
 func (r *Reader) Chats(ctx context.Context, limit int, before, keep string) (ChatsPage, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -647,7 +647,7 @@ GROUP BY j.chat_id`, &rows); err != nil {
 }
 
 // Messages is a page of a conversation's messages, the newest ones or those before the cursor a previous page
-// returned, oldest first. Tapbacks are left out. keep KeepContacts refuses a conversation that does not go to Jarvis.
+// returned, oldest first. Tapbacks are left out. keep KeepContacts refuses a conversation that does not go to Persona.
 func (r *Reader) Messages(ctx context.Context, id string, limit int, before, keep string) (MessagesPage, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50

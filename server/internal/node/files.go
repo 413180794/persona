@@ -190,8 +190,8 @@ func explainDenied(path, home string, err error) error {
 	if !ok {
 		return err
 	}
-	return fmt.Errorf("macOS 不让 Jarvis 读「%s」文件夹里的文件。要读的话，在这台 Mac 的「系统设置 › 隐私与安全性 › 完全磁盘访问权限」里"+
-		"打开 sshd-keygen-wrapper（Jarvis 经 ssh 在这台 Mac 上运行），或者把文件放到别的文件夹（%w）", name, err)
+	return fmt.Errorf("macOS 不让 Persona 读「%s」文件夹里的文件。要读的话，在这台 Mac 的「系统设置 › 隐私与安全性 › 完全磁盘访问权限」里"+
+		"打开 sshd-keygen-wrapper（Persona 经 ssh 在这台 Mac 上运行），或者把文件放到别的文件夹（%w）", name, err)
 }
 
 // trimPartialRune drops a UTF-8 sequence cut in half at the end of a truncated read.

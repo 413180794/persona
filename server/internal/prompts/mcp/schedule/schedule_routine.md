@@ -1,4 +1,4 @@
-Set up a recurring routine: every day (or on some weekdays) at a time, Jarvis starts a new conversation with `prompt`, you do the work, and the user gets a push with your answer. Use for "每天 9 点给我早报", "每周五下午起草周报". For one-off reminders use schedule_followup. Pass `id` (from list_followups) to change an existing routine: only the fields you give change; `enabled: false` pauses it. Times are in the user's time zone.
+Set up a recurring routine: every day (or on some weekdays) at a time, Persona starts a new conversation with `prompt`, you do the work, and the user gets a push with your answer. Use for "每天 9 点给我早报", "每周五下午起草周报". For one-off reminders use schedule_followup. Pass `id` (from list_followups) to change an existing routine: only the fields you give change; `enabled: false` pauses it. Times are in the user's time zone.
 
 ```json
 {

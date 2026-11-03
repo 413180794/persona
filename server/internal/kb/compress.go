@@ -248,7 +248,7 @@ func applyTags(t *Tagging, importance string, relevance int, tags []string, now 
 
 var slugRe = regexp.MustCompile(`[^\p{L}\p{N}]+`)
 
-// Slug is the directory name of a project name ("Jarvis 2.0 发布" → "jarvis-2-0-发布").
+// Slug is the directory name of a project name ("Persona 2.0 发布" → "jarvis-2-0-发布").
 func Slug(name string) string {
 	s := strings.Trim(slugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
 	if r := []rune(s); len(r) > 40 {

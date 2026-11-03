@@ -1,6 +1,6 @@
-// End-to-end check of the Jarvis assistant on DSH (docs/dsh.md「助手」, docs/runtimes.md「助手」): a real `dsh web` with
+// End-to-end check of the Persona assistant on DSH (docs/dsh.md「助手」, docs/runtimes.md「助手」): a real `dsh web` with
 // the plugin (isolated DSH_HOME, DSH's own mock model), a real `jarvisd node --stdio` (the harness plays the hub). The
-// "hub" sends assistant messages with the DSH launcher, as the Jarvis tab, AI 分身, Feishu /agent and scheduled tasks
+// "hub" sends assistant messages with the DSH launcher, as the Persona tab, AI 分身, Feishu /agent and scheduled tasks
 // do (all go through assistant.send): a new conversation in the assistant's directory, the live snapshot and the
 // memory with the first message, ask_user and the other assistant tools, Feishu through lark-connector (reads run, a write
 // is confirmed on the phone and a refusal is not run, ol in the shell is stopped), the permission mode, an interrupt,
@@ -135,7 +135,7 @@ try {
   check('DSH offers its launcher for the assistant', launchers.some((l) => l.name === 'dsh' && l.assistant === true && l.agent === 'dsh'))
   await node.call('assistant.prepare', { dir: '.jarvis/assistant', claude_md: '# 助手（e2e）\n' })
 
-  // A new conversation, as the Jarvis tab starts one.
+  // A new conversation, as the Persona tab starts one.
   await model.script({ sequence: ['success'], successText: 'Hello from the DSH assistant' })
   const { session_id: sid } = await node.call('assistant.send', { launcher: 'dsh', cwd: assistantDir, text: 'hello assistant' }, 60_000)
   check('a new assistant conversation starts on DSH', typeof sid === 'string' && sid.startsWith('session-'), sid)

@@ -94,7 +94,7 @@ func loadOrCreateTLS(dir string, names []string, now time.Time) (tls.Certificate
 		return tls.Certificate{}, "", err
 	}
 	template := &x509.Certificate{
-		SerialNumber: serial, Subject: pkix.Name{CommonName: "Jarvis hub"},
+		SerialNumber: serial, Subject: pkix.Name{CommonName: "Persona hub"},
 		NotBefore: now.Add(-5 * time.Minute), NotAfter: now.Add(365 * 24 * time.Hour),
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true, DNSNames: dns, IPAddresses: ips,

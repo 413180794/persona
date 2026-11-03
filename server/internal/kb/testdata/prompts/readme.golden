@@ -1,4 +1,4 @@
-# Jarvis 知识库
+# Persona 知识库
 
 hub 自动维护的数据（说明见仓库 docs/knowledge.md）。可以直接读、grep；改 summary.md 也可以，下次压缩会接着用。
 

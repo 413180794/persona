@@ -1,5 +1,5 @@
-// Package agents is Jarvis' single view of the agents it can reach: lark-connector's paired personal agents
-// (agent-bridge, source "removedbridge") now; Jarvis' own /agent and OLAP may join as further Sources.
+// Package agents is Persona' single view of the agents it can reach: lark-connector's paired personal agents
+// (agent-bridge, source "removedbridge") now; Persona' own /agent and OLAP may join as further Sources.
 // A session's public id is "<source>:<sessionKey>" (lark-connector's own keys already start with "agent:").
 package agents
 

@@ -436,5 +436,5 @@ func pollNode(t *testing.T, n *Node) (pushes <-chan hubPush, stop func()) {
 	return out, stop
 }
 
-// rememberStarted is what the hub's state store says after a node restart: Jarvis started this session.
+// rememberStarted is what the hub's state store says after a node restart: Persona started this session.
 func rememberStarted(n *Node, id string) { n.state.put(id, sessionState{Launcher: "claude"}) }

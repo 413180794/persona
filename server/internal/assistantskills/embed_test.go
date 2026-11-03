@@ -110,7 +110,7 @@ func TestNoStampNoMove(t *testing.T) {
 	}
 }
 
-// A built-in skill is one Jarvis may redistribute: anything else goes in the user's space.
+// A built-in skill is one Persona may redistribute: anything else goes in the user's space.
 func TestBuiltinsAreRedistributable(t *testing.T) {
 	for _, n := range builtinNames() {
 		if Redistributable[n] == "" {

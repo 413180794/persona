@@ -1,4 +1,4 @@
-// Helpers every runtime needs to turn its own content into Jarvis items the way the apps expect (docs/runtimes.md
+// Helpers every runtime needs to turn its own content into Persona items the way the apps expect (docs/runtimes.md
 // 「内容」): the page limits and the notes of server/internal/transcript, interaction ids that survive a node
 // restart, one-line summaries.
 

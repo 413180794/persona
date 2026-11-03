@@ -295,7 +295,7 @@ func fnv32(b []byte) uint32 {
 	return h
 }
 
-// validate checks a request's params the way Orca's zod schemas do (src/shared/rpc-contract), for the methods Jarvis
+// validate checks a request's params the way Orca's zod schemas do (src/shared/rpc-contract), for the methods Persona
 // calls: "" when valid, else the reason (answered as invalid_argument). Unknown keys pass, as zod strips them.
 func validate(method string, p map[string]any) string {
 	str := func(k string, required bool) string {

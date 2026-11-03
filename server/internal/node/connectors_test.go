@@ -93,7 +93,7 @@ func TestLocalConnectorReadsMessages(t *testing.T) {
 		t.Errorf("unknown chat = %v", err)
 	}
 
-	// What goes to Jarvis: changes after a cursor (the first from days back), and a search.
+	// What goes to Persona: changes after a cursor (the first from days back), and a search.
 	res, err = serveLocalConnector(ctx, r, true, "connector.changes", json.RawMessage(`{"id":"imessage","days":4000,"limit":100}`))
 	if err != nil {
 		t.Fatal(err)

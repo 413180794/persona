@@ -271,7 +271,7 @@ func TestDocsLive(t *testing.T) {
 				}
 			}
 			if cfg.Comment {
-				if err := h.replyDoc(ctx, *it.Doc, "Jarvis 收件箱测试评论（"+time.Now().Format("15:04:05")+"）"); err != nil {
+				if err := h.replyDoc(ctx, *it.Doc, "Persona 收件箱测试评论（"+time.Now().Format("15:04:05")+"）"); err != nil {
 					t.Fatalf("comment (%s): %v", it.Doc.Reply.Kind, err)
 				}
 			}

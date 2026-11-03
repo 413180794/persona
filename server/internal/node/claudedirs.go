@@ -44,7 +44,7 @@ type claudeDirs struct {
 }
 
 // procEnv is what the scan keeps from a running claude's environment: its config directory, and the API endpoint
-// and model a launcher function exported (used to tell which launcher started a claude Jarvis did not start).
+// and model a launcher function exported (used to tell which launcher started a claude Persona did not start).
 type procEnv struct {
 	ConfigDir string // CLAUDE_CONFIG_DIR
 	BaseURL   string // ANTHROPIC_BASE_URL

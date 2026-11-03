@@ -333,7 +333,7 @@ func TestCodexApprovals(t *testing.T) {
 		return len(s) == 1 && strings.Contains(string(s[0].Params), "别删")
 	})
 
-	// MCP tool calls: Jarvis's own run unasked, others are asked about.
+	// MCP tool calls: Persona's own run unasked, others are asked about.
 	elicit := func(id int, server string) string {
 		res := f.request(id, "mcpServer/elicitation/request", map[string]any{"threadId": testThread, "turnId": "turn-1",
 			"serverName": server, "mode": "form", "message": "Allow?", "requestedSchema": map[string]any{"type": "object"},

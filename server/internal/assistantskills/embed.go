@@ -1,7 +1,7 @@
 // Package assistantskills puts the assistant's skills in its directory (<assistant dir>/.claude/skills,
 // docs/hub-update.md「skill 从二进制里拿出来」): the user's own, kept in ~/.jarvis/skills/<name> on the machine that runs
 // the assistant and linked in, and the built-in ones this binary carries, copied in. Built-in skills are only those
-// Jarvis may redistribute (none yet): a copied one, like lark-connector, lives in the user's space. jarvisd never writes
+// Persona may redistribute (none yet): a copied one, like lark-connector, lives in the user's space. jarvisd never writes
 // that space, so an update cannot touch the user's skills.
 package assistantskills
 
@@ -24,7 +24,7 @@ var embedded embed.FS
 // builtin is the skills this binary carries: one directory each under builtin/ (its README is not one).
 var builtin, _ = fs.Sub(embedded, "builtin")
 
-// Redistributable is every built-in skill and why Jarvis may ship it (TestBuiltinsAreRedistributable).
+// Redistributable is every built-in skill and why Persona may ship it (TestBuiltinsAreRedistributable).
 var Redistributable = map[string]string{}
 
 // legacyBundled are the skills older jarvisd binaries copied into the assistant's directory: moved to the user's

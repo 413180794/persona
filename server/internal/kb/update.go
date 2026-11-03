@@ -184,7 +184,7 @@ type Update struct {
 	Tags       []string `json:"tags,omitempty"`
 	Summary    string   `json:"summary,omitempty"` // replaces summary.md
 	Log        string   `json:"log,omitempty"`     // projects: appended to the timeline
-	Source     string   `json:"source,omitempty"`  // who writes the log line (default Jarvis)
+	Source     string   `json:"source,omitempty"`  // who writes the log line (default Persona)
 	Aliases    []string `json:"aliases,omitempty"`
 	Chats      []string `json:"chats,omitempty"`    // projects: chat ids to link
 	People     []string `json:"people,omitempty"`   // projects: person ids to link
@@ -278,7 +278,7 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 		if u.Log != "" {
 			src := u.Source
 			if src == "" {
-				src = "Jarvis"
+				src = "Persona"
 			}
 			_ = e.Store.AppendLog(p.Slug, now, src, u.Log)
 			if u.Summary == "" {

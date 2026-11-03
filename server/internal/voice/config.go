@@ -57,9 +57,9 @@ type Provider struct {
 	// Models offered; empty lists the service's own (live: GET <url>/models) or the dialect's default.
 	Models       []string `json:"models,omitempty"`
 	DefaultModel string   `json:"default_model,omitempty"`
-	// Tools (live dialect): declare Jarvis's function tools in session.start, for a deployment that accepts them
+	// Tools (live dialect): declare Persona's function tools in session.start, for a deployment that accepts them
 	// there. The public GPT-Live API refuses session.tools: without them the model's client delegations go to the
-	// Jarvis main conversation, as with the codex dialect.
+	// Persona main conversation, as with the codex dialect.
 	Tools bool `json:"tools,omitempty"`
 	// InputRate is the microphone's sample rate (16000 or 24000); 0 is the dialect's (live 16000, codex 24000).
 	InputRate int `json:"input_rate,omitempty"`

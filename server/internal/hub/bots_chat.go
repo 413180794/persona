@@ -87,7 +87,7 @@ func (h *Hub) botTell(api *feishubot.Client, openID, chatID, text string) {
 
 var regexpDigits = regexp.MustCompile(`^\d{4,8}$`)
 
-const botPairHint = "还没配对：在 Jarvis App 的「设置 › 连接器 › 飞书机器人」里点「配对」，把显示的 6 位配对码发给我。"
+const botPairHint = "还没配对：在 Persona App 的「设置 › 连接器 › 飞书机器人」里点「配对」，把显示的 6 位配对码发给我。"
 
 func (h *Hub) botWelcome(openID, chatID string) {
 	b := &h.bots
@@ -112,7 +112,7 @@ func (h *Hub) botMessage(ev feishubot.MessageEvent) {
 		return
 	}
 	if msg.ChatType != "p2p" {
-		return // only its private chat: in a group anyone could reach the owner's Jarvis
+		return // only its private chat: in a group anyone could reach the owner's Persona
 	}
 	content := feishubot.ParseContent(msg.MessageType, msg.Content, msg.Mentions)
 	if set.Owner == nil {
@@ -185,7 +185,7 @@ func (h *Hub) botPair(api *feishubot.Client, openID, chatID, text string) {
 		h.saveBotSettingsLocked()
 	}
 	b.mu.Unlock()
-	card := feishubot.NewCard("已配对", feishubot.Green, "已配对").Markdown("以后在这里说的话会交给 Jarvis。\n\n" + botHelp(h.botFeatures()))
+	card := feishubot.NewCard("已配对", feishubot.Green, "已配对").Markdown("以后在这里说的话会交给 Persona。\n\n" + botHelp(h.botFeatures()))
 	if _, err := h.botPost(ctx, api, chatID, "", card, ""); err != nil {
 		h.logf("bots: paired note: %v", err)
 	}
@@ -243,7 +243,7 @@ func (h *Hub) botAllowed(f BotFeatures, t botTarget) error {
 		return errors.New("在飞书里驱动 Agent 没有打开（App 设置 › 连接器 › 飞书机器人）。发 /main 回到主对话。")
 	case !t.agent() && !f.Main:
 		if f.Agents {
-			return errors.New("和 Jarvis 对话没有打开，只能驱动 Agent：发 /agents 选一个。")
+			return errors.New("和 Persona 对话没有打开，只能驱动 Agent：发 /agents 选一个。")
 		}
 		return errors.New("飞书机器人的对话功能没有打开（App 设置 › 连接器 › 飞书机器人）。")
 	}
@@ -543,7 +543,7 @@ func (h *Hub) botQuote(ctx context.Context, api *feishubot.Client, id string) *p
 	}
 	it := items[0]
 	c := feishubot.ParseContent(it.MsgType, it.Body.Content, nil)
-	who := "Jarvis"
+	who := "Persona"
 	if it.Sender.SenderType == "user" {
 		who = h.botName(ctx, api, it.Sender.ID)
 	}

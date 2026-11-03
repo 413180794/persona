@@ -18,7 +18,7 @@ func dialGotd(ctx context.Context, c creds, store sessionStore, updated func()) 
 	cl := telegram.NewClient(c.id, c.hash, telegram.Options{
 		SessionStorage: gotdSession{store},
 		// How the session shows in the user's Telegram devices.
-		Device: telegram.DeviceConfig{DeviceModel: "Jarvis", SystemVersion: runtime.GOOS, AppVersion: "Jarvis"},
+		Device: telegram.DeviceConfig{DeviceModel: "Persona", SystemVersion: runtime.GOOS, AppVersion: "Persona"},
 		// What Telegram pushes only kicks the archive and the inbox: they read what is new themselves, by message id,
 		// so a gap in the updates loses nothing.
 		UpdateHandler: telegram.UpdateHandlerFunc(func(context.Context, tg.UpdatesClass) error {

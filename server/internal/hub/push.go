@@ -558,7 +558,7 @@ func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
 }
 
 // interactionPayload is the alert for a new interaction. `category` must match a UNNotificationCategory the app
-// registers (apple/Jarvis/App/NotificationActions.swift): that is what puts 允许 / 拒绝 / 批准 on the notification, and the
+// registers (apple/Persona/App/NotificationActions.swift): that is what puts 允许 / 拒绝 / 批准 on the notification, and the
 // buttons answer `interaction_id` through the resolve API.
 func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	title := map[string]string{
@@ -566,7 +566,7 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 		proto.IxQuestion:    "Claude 在问你", proto.IxPlan: "计划等你审批", proto.IxPermission: "需要你授权", proto.IxScreen: "终端等你处理",
 	}[ix.Kind]
 	if ix.ToolName == "ask_user" {
-		title = "Jarvis 在问你"
+		title = "Persona 在问你"
 	}
 	name := map[string]string{"codex": "Codex", "traex": "TRAEX"}[ix.Agent]
 	if name == "" && ix.Agent != "" && ix.Agent != "claude" {
@@ -589,12 +589,12 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	case proto.IxPlan:
 		body = firstLine(ix.Plan)
 	case proto.IxScreen:
-		body = "打开 Jarvis 查看屏幕并操作"
+		body = "打开 Persona 查看屏幕并操作"
 	}
 	category := "INTERACTION_" + strings.ToUpper(ix.Kind)
 	if len(ix.Fields) > 0 { // something to fill in first: no buttons on the notification, a tap opens the card
 		category = "INTERACTION_INPUT"
-		body += "（打开 Jarvis 填写）"
+		body += "（打开 Persona 填写）"
 	}
 	return map[string]any{
 		"aps": map[string]any{

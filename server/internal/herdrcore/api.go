@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Terminal is one terminal of terminal.list / terminal.get (the fields Jarvis reads).
+// Terminal is one terminal of terminal.list / terminal.get (the fields Persona reads).
 type Terminal struct {
 	// Address is the terminal's id on its core ("t7", "t1b"; "machine/t7" for another machine's): never reused on
 	// that core, it resets only when the core's state is wiped.

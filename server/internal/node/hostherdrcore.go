@@ -210,7 +210,7 @@ func (h *herdrCoreHost) SendText(context.Context, host.PaneRef, string) error {
 	return fmt.Errorf("%w: herdr-core cannot type text without submitting it", host.ErrUnsupported)
 }
 
-// SendKeys passes Jarvis's key names through: herdr-core takes the same spelling ("enter", "esc", "shift+tab",
+// SendKeys passes Persona's key names through: herdr-core takes the same spelling ("enter", "esc", "shift+tab",
 // "ctrl+u", "up", "backspace"…).
 func (h *herdrCoreHost) SendKeys(ctx context.Context, pane host.PaneRef, keys ...string) error {
 	return inputErr(h.c.Keys(ctx, pane.ID, keys...))
@@ -245,7 +245,7 @@ func inputErr(err error) error {
 	return err
 }
 
-// errHerdrCoreRename: the Herdr app owns its spaces' and tabs' names (its layout document); Jarvis does not write it.
+// errHerdrCoreRename: the Herdr app owns its spaces' and tabs' names (its layout document); Persona does not write it.
 var errHerdrCoreRename = fmt.Errorf("%w: Herdr App 里的空间和标签页暂时不能从手机改名", host.ErrUnsupported)
 
 func (h *herdrCoreHost) RenameSpace(context.Context, string, string) error { return errHerdrCoreRename }

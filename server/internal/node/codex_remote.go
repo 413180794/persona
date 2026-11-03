@@ -204,7 +204,7 @@ func (c *codexRemote) run() {
 	var init struct {
 		CodexHome string `json:"codexHome"`
 	}
-	err = wire.call(ctx, "initialize", map[string]any{"clientInfo": map[string]any{"name": "jarvis", "title": "Jarvis", "version": c.n.Version}, "capabilities": map[string]any{"experimentalApi": true}}, &init)
+	err = wire.call(ctx, "initialize", map[string]any{"clientInfo": map[string]any{"name": "jarvis", "title": "Persona", "version": c.n.Version}, "capabilities": map[string]any{"experimentalApi": true}}, &init)
 	cancel()
 	if err != nil {
 		return
@@ -546,7 +546,7 @@ func (n *Node) sendCodex(ctx context.Context, id, text string, images []proto.Im
 	method := "turn/start"
 	if t.status == proto.StatusWorking || t.status == proto.StatusBlocked {
 		if t.turn == "" {
-			t.turn = c.activeTurn(ctx, t.id) // a turn already running when Jarvis joined (codex_daemon.go)
+			t.turn = c.activeTurn(ctx, t.id) // a turn already running when Persona joined (codex_daemon.go)
 		}
 		if t.turn == "" {
 			return refusal("codex_busy", "这个轮次仍在运行，但尚未收到轮次标识：稍后再发", nil)

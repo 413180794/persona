@@ -40,7 +40,7 @@ func (s *Service) Call(ctx context.Context, name string, args json.RawMessage, a
 			return proto.TextResult(err.Error(), true)
 		}
 		if len(accounts) == 0 {
-			return proto.TextResult("No mail accounts are configured. Ask the user to add one in the Jarvis app.", true)
+			return proto.TextResult("No mail accounts are configured. Ask the user to add one in the Persona app.", true)
 		}
 		var b strings.Builder
 		for _, a := range accounts {

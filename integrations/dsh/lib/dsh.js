@@ -1,4 +1,4 @@
-// The DSH runtime (docs/dsh.md): DSH's sessions in Jarvis through the runtime SDK (docs/runtimes.md). Only what is
+// The DSH runtime (docs/dsh.md): DSH's sessions in Persona through the runtime SDK (docs/runtimes.md). Only what is
 // DSH's own lives here — listing and paging through sessionController, mapping its session events (map.js), and
 // putting its approval / question waterfalls in front of the phone; the SDK does the connection, watching, batching,
 // live text, asking and the who-answers-first policy. Everything DSH-specific comes in through `deps`, so the tests
@@ -12,7 +12,7 @@ import { attachmentOf, dshSeq, eventItems, itemsOf, jarvisSeq, lastText, streamT
 
 export const RUNTIME_VERSION = '0.5.0'
 
-// The DSH permission preset for each Jarvis permission mode of an assistant conversation (config presets overrides):
+// The DSH permission preset for each Persona permission mode of an assistant conversation (config presets overrides):
 // Codex's mapping, in DSH's presets (docs/dsh.md「助手」). DSH has no auto mode: as the default.
 const DEFAULT_PRESETS = { default: 'workspace-write', acceptEdits: 'workspace-write', auto: 'workspace-write',
   plan: 'read-only', bypassPermissions: 'danger-full-access' }
@@ -20,7 +20,7 @@ const DEFAULT_PRESETS = { default: 'workspace-write', acceptEdits: 'workspace-wr
 // ol (the lark-connector skill's helper) run in the shell, as a command word.
 const OL_IN_SHELL = /(^|[\s;&|(`$])(ol|[^\s;&|]*lark-connector\/scripts\/ol\.sh)(\s|$)/
 
-/** cwd is the Jarvis assistant's directory (~/.jarvis/assistant, as the node and the hub tell its conversations). */
+/** cwd is the Persona assistant's directory (~/.jarvis/assistant, as the node and the hub tell its conversations). */
 function assistantDir(cwd) {
   return isAssistantDir(cwd)
 }
@@ -51,7 +51,7 @@ const LEARN_EVERY = 5 * 60_000 // ms: read a parent's subagent catalog again at 
 const STARTED_SUBAGENT = /^started subagent (\S+)/ // DSH's subagent tool result: the child it started
 
 /**
- * A subagent's id as Jarvis sees it, "<parent>@<child>" (docs/runtimes.md「子 Agent」), split; undefined for another id.
+ * A subagent's id as Persona sees it, "<parent>@<child>" (docs/runtimes.md「子 Agent」), split; undefined for another id.
  * @param {string} id
  */
 export function splitChild(id) {
@@ -66,8 +66,8 @@ export function splitChild(id) {
  *   retryMs?: number, assistant?: boolean, presets?: Record<string, string>, listen?: { port: number, host?: string,
  *   path?: string, token: string | (() => string) }, package?: { name: string, hash: string },
  *   onUpdate?: Function }} [options] - runtime / name / launcher:
- *   how this DSH shows in Jarvis (dsh / DSH / dsh). assistant: it may run the Jarvis assistant (docs/dsh.md「助手」);
- *   presets: the DSH permission preset for each Jarvis permission mode of an assistant conversation. listen: be a
+ *   how this DSH shows in Persona (dsh / DSH / dsh). assistant: it may run the Persona assistant (docs/dsh.md「助手」);
+ *   presets: the DSH permission preset for each Persona permission mode of an assistant conversation. listen: be a
  *   daemon the node dials (docs/daemons.md) instead of connecting to runtime.sock: DSH running as another user, in a
  *   container, on another machine (the node's daemons.json names it then, and a daemon does not run the assistant).
  *   package / onUpdate: from the loader (lib/plugin.js), passed on to createRuntime (docs/runtimes.md「自动更新」).
@@ -89,7 +89,7 @@ export function createDshRuntime(deps, options = {}) {
   const openCalls = new Map() // session id -> Set(callId): tool calls still waiting for their result
   const disposers = []
   const tools = { key: '', disposers: [], refreshing: false, timer: undefined }
-  // The Jarvis assistant's conversations (their directory is the assistant's): id -> { memoryDir, mode }.
+  // The Persona assistant's conversations (their directory is the assistant's): id -> { memoryDir, mode }.
   const assistants = new Map()
   const presets = { ...DEFAULT_PRESETS, ...(options.presets ?? {}) }
   const isAssistant = (id) => assistants.has(id)
@@ -174,7 +174,7 @@ export function createDshRuntime(deps, options = {}) {
   }
 
   /**
-   * A session's subagents as Jarvis lists them: every running one, then the latest finished, MAX_SUBAGENTS in all.
+   * A session's subagents as Persona lists them: every running one, then the latest finished, MAX_SUBAGENTS in all.
    * Their labels and the tool calls that started them come from the parent's events (live) or its catalog (read once).
    */
   function subagentsOf(parent, summaries) {
@@ -318,7 +318,7 @@ export function createDshRuntime(deps, options = {}) {
         const sessionId = String(agent?.session?.id ?? agent?.id ?? '')
         const call = { name: t.name, args: args && typeof args === 'object' ? args : {}, session_id: sessionId }
         if (isAssistant(sessionId)) call.assistant = true
-        else if (assistantOnly) throw new Error(`${t.name} is the Jarvis assistant's`)
+        else if (assistantOnly) throw new Error(`${t.name} is the Persona assistant's`)
         const res = await rt.callTool(call, { signal: exec?.signal })
         const text = resultText(res?.content)
         if (res?.is_error) throw new Error(text || `${t.name} failed`)
@@ -350,7 +350,7 @@ export function createDshRuntime(deps, options = {}) {
           log(`jarvis: tool ${t.name}: ${err.message}`)
         }
       }
-      log(`jarvis: ${tools.disposers.length} Jarvis tools for DSH's agents`)
+      log(`jarvis: ${tools.disposers.length} Persona tools for DSH's agents`)
     } catch (err) {
       log(`jarvis: the hub's tools: ${err.message}`)
     } finally {
@@ -369,7 +369,7 @@ export function createDshRuntime(deps, options = {}) {
     tools.key = ''
   }
 
-  /** DSH's own session id for a Jarvis id (a subagent's "<parent>@<child>" is the child's). */
+  /** DSH's own session id for a Persona id (a subagent's "<parent>@<child>" is the child's). */
   function dshID(id) {
     return splitChild(id)?.child ?? id
   }
@@ -517,7 +517,7 @@ export function createDshRuntime(deps, options = {}) {
     if (assistant) applyPreset(params.session_id)
   }
 
-  /** The DSH permission preset for an assistant conversation's Jarvis mode, set once its agent is live. */
+  /** The DSH permission preset for an assistant conversation's Persona mode, set once its agent is live. */
   function applyPreset(id) {
     const a = assistants.get(id)
     const name = presets[a?.mode || 'default'] ?? presets.default
@@ -588,7 +588,7 @@ export function createDshRuntime(deps, options = {}) {
     return parents.get(id)
   }
 
-  /** The id Jarvis knows a DSH session by: a subagent's is "<parent>@<child>". */
+  /** The id Persona knows a DSH session by: a subagent's is "<parent>@<child>". */
   function jarvisID(id, session) {
     const parent = parentOf(id, session)
     return parent ? `${parent}@${id}` : id
@@ -759,7 +759,7 @@ export function createDshRuntime(deps, options = {}) {
 
   /**
    * A refusal with words: DSH's approval carries no reason, so the words go into the running turn right after the
-   * rejection (steer), as Jarvis does for Codex — the agent reads why, the way Claude reads a hook's deny message.
+   * rejection (steer), as Persona does for Codex — the agent reads why, the way Claude reads a hook's deny message.
    */
   function steerReason(sessionId, ixId, tool, message) {
     const text = typeof message === 'string' ? message.trim() : ''

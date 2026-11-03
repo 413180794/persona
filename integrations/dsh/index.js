@@ -1,5 +1,5 @@
-// Jarvis runtime for DeepSeek Harness (docs/dsh.md): a Host plugin for the `dsh web` profile that hangs DSH's sessions
-// into the jarvisd node on this machine (~/.jarvis/runtime.sock, docs/runtimes.md), so the Jarvis apps list them, show
+// Persona runtime for DeepSeek Harness (docs/dsh.md): a Host plugin for the `dsh web` profile that hangs DSH's sessions
+// into the jarvisd node on this machine (~/.jarvis/runtime.sock, docs/runtimes.md), so the Persona apps list them, show
 // their work, send to them and answer their approvals and questions. It does nothing until a jarvisd node listens.
 //
 // This file is only the loader, and stays as it is: DSH keeps it for as long as the plugin is enabled. The runtime
@@ -52,6 +52,6 @@ export function apply(ctx, config = {}) {
     scope.effect(() => {
       loader.start().catch((err) => (scope.logger?.warn ?? log)(`jarvis-dsh-runtime: ${err.message}`))
       return () => void loader.stop()
-    }, 'jarvis-dsh-runtime: DSH sessions in Jarvis')
+    }, 'jarvis-dsh-runtime: DSH sessions in Persona')
   })
 }

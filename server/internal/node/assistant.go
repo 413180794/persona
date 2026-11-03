@@ -44,7 +44,7 @@ const (
 // what wakes the conversation up again. Past this long without a turn it is let go anyway (a forgotten `tail -f`).
 const assistantTaskMaxIdle = 12 * time.Hour
 
-// assistantAllowedTools run without asking: Jarvis's own tools (the hub asks the phone itself before the ones that
+// assistantAllowedTools run without asking: Persona's own tools (the hub asks the phone itself before the ones that
 // send something on the user's behalf — mail_send, phone writes; Feishu writes through the lark-connector skill pass larkgate.go). Without this every notify_user or
 // schedule_followup waited for a tap on the phone, so a follow-up firing at night just stalled.
 const assistantAllowedTools = "mcp__jarvis"
@@ -421,7 +421,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	// An interactive shell so ~/.zshrc defines the launcher function; "$@" passes our flags through.
 	cmd := exec.Command(shell, append([]string{"-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)...)
 	cmd.Dir = cwd
-	// Jarvis's own tools are few and used all the time: load them up front instead of behind ToolSearch.
+	// Persona's own tools are few and used all the time: load them up front instead of behind ToolSearch.
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
 	cmd.Env = identity.Environment(cmd.Env, n.assistantLarkEnv(cwd)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stop() can kill the whole group
@@ -871,7 +871,7 @@ func (n *Node) assistantAgent(ctx context.Context, launcher string) (string, err
 	case "codex":
 		return "codex", nil
 	}
-	return "", fmt.Errorf("启动器 %s 跑的是 %s，Jarvis 助手只能用启动 Claude Code、Codex 或能当助手的 runtime 的启动器（比如 DSH 插件的）：在 设置 › 助手 换一个", launcher, d.Agent)
+	return "", fmt.Errorf("启动器 %s 跑的是 %s，Persona 助手只能用启动 Claude Code、Codex 或能当助手的 runtime 的启动器（比如 DSH 插件的）：在 设置 › 助手 换一个", launcher, d.Agent)
 }
 
 // launcherOr is launcher, or the conversation's own when none is given.

@@ -399,7 +399,7 @@ func TestCodexAnswerOverlayFromLaterQuestion(t *testing.T) {
 	})
 }
 
-// A thread Jarvis joined on its app-server gets its approvals and overlay questions from there (codex_remote_asks.go):
+// A thread Persona joined on its app-server gets its approvals and overlay questions from there (codex_remote_asks.go):
 // the TUI is not read for those. Its async questions are messages, not requests, and stay cards of the rollout.
 func TestCodexCardsOfJoinedThreads(t *testing.T) {
 	n, f, _ := codexNode(t, proto.StatusBlocked, cxAsyncCall, cxSyncCall)

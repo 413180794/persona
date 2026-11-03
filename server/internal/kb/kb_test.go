@@ -265,6 +265,9 @@ func TestArchiveKeepsToTheTextRetention(t *testing.T) {
 }
 
 func TestSlug(t *testing.T) {
+	if s := Slug("Persona 2.0 发布!"); s != "persona-2-0-发布" {
+		t.Fatal(s)
+	}
 	if s := Slug("Jarvis 2.0 发布!"); s != "jarvis-2-0-发布" {
 		t.Fatal(s)
 	}

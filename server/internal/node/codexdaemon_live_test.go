@@ -646,7 +646,7 @@ func (dc *daemonCases) ranOnce(off int64, host string) error {
 }
 
 // The app-server restarts: the pane falls back to the terminal route while it is gone, the TUI reconnects to the new
-// one, Jarvis joins again, and an approval goes through the protocol again.
+// one, Persona joins again, and an approval goes through the protocol again.
 func (dc *daemonCases) caseRestart(n int) error {
 	lc := dc.lc
 	dc.d.stop()

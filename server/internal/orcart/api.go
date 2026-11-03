@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Terminal is one terminal of terminal.list (the fields Jarvis reads).
+// Terminal is one terminal of terminal.list (the fields Persona reads).
 type Terminal struct {
 	// Handle is the runtime's id for the terminal ("term_<uuid>"), what terminal.read / send / close take.
 	Handle string `json:"handle"`
@@ -242,10 +242,10 @@ func (c *Client) AgentStatus(ctx context.Context, t Target) (*AgentStatus, error
 	return res.AgentStatus, nil
 }
 
-// ClientID is how Jarvis names itself to Orca as the driver of its input (terminal.send's client.id, required).
+// ClientID is how Persona names itself to Orca as the driver of its input (terminal.send's client.id, required).
 const ClientID = "jarvis"
 
-// client is the driver terminal.send names: Jarvis as a desktop client (the only type Orca pastes agent prompts for).
+// client is the driver terminal.send names: Persona as a desktop client (the only type Orca pastes agent prompts for).
 func client() map[string]any { return map[string]any{"id": ClientID, "type": "desktop"} }
 
 // ErrRefused: Orca accepted the request but wrote nothing (terminal.send's accepted false); Reason says why.

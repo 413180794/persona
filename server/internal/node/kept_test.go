@@ -10,7 +10,7 @@ import (
 )
 
 // The assistant's main conversation stays listed when 80 newer transcripts and a week of quiet would push it out
-// (2026-11-01: the Jarvis tab had no 主对话 on a busy machine).
+// (2026-11-01: the Persona tab had no 主对话 on a busy machine).
 func TestKeptSessionOutlastsTheOfflineCut(t *testing.T) {
 	n, _ := claudeHome(t)
 	n.metas, n.bgScans = map[string]quickMeta{}, map[string]*bgScan{}

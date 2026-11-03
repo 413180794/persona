@@ -44,7 +44,7 @@ func TestRemoteStatus(t *testing.T) {
 		t.Errorf("ok: %+v", st)
 	}
 
-	n.list = `{"connectors":[{"id":"imessage","status":"no_permission","error":"macOS 不让 Jarvis 读","guide":["一","二","三"],"via":"launchd"}]}`
+	n.list = `{"connectors":[{"id":"imessage","status":"no_permission","error":"macOS 不让 Persona 读","guide":["一","二","三"],"via":"launchd"}]}`
 	c.Check(ctx)
 	if d := c.Detail(ctx); d.Status != connector.StateNoPermission || len(d.Guide) != 3 || d.Via != "launchd" || d.Machine != "示例 Mac" {
 		t.Errorf("no permission: %+v", d)
@@ -69,10 +69,10 @@ func TestRemoteStatus(t *testing.T) {
 	if st := c.Status(ctx); st.State != connector.StateNotConfigured {
 		t.Errorf("not a Mac: %+v", st)
 	}
-	// The assistant reads the messages only while they are handed to Jarvis.
+	// The assistant reads the messages only while they are handed to Persona.
 	c.SetAI(false)
 	if c.Tools() != nil {
-		t.Error("tools while 交给 Jarvis is off")
+		t.Error("tools while 交给 Persona is off")
 	}
 }
 

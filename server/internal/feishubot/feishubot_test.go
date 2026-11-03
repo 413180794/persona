@@ -42,8 +42,8 @@ func TestFrameMatchesTheSDK(t *testing.T) {
 }
 
 func TestParseContent(t *testing.T) {
-	mentions := []Mention{{Key: "@_user_1", Name: "Jarvis"}}
-	if c := ParseContent("text", `{"text":"@_user_1 帮我看下"}`, mentions); c.Text != "@Jarvis 帮我看下" {
+	mentions := []Mention{{Key: "@_user_1", Name: "Persona"}}
+	if c := ParseContent("text", `{"text":"@_user_1 帮我看下"}`, mentions); c.Text != "@Persona 帮我看下" {
 		t.Fatalf("text: %q", c.Text)
 	}
 	post := `{"title":"周报","content":[[{"tag":"text","text":"见 "},{"tag":"a","text":"文档","href":"https://example.com/d"}],[{"tag":"img","image_key":"img_1"}],[{"tag":"code_block","language":"GO","text":"x := 1\n"}]]}`

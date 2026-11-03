@@ -128,7 +128,7 @@ func Launch(ctx context.Context, name string, args []string) error {
 func (n *Node) launcherEnv(name string) map[string]any {
 	l, ok := n.managedLauncher(name)
 	if !ok {
-		return map[string]any{"error": "no launcher " + name + " in Jarvis (设置 › 模型), or the hub has not sent it yet"}
+		return map[string]any{"error": "no launcher " + name + " in Persona (设置 › 模型), or the hub has not sent it yet"}
 	}
 	return map[string]any{"env": managedEnv(l), "args": l.Args}
 }

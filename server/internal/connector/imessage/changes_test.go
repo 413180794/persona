@@ -140,7 +140,7 @@ func TestMaskCodes(t *testing.T) {
 	}
 }
 
-// The assistant and the inbox list and read only what goes to Jarvis; the app's own view lists everything.
+// The assistant and the inbox list and read only what goes to Persona; the app's own view lists everything.
 func TestChatsAndMessagesKept(t *testing.T) {
 	r := fixture(t)
 	ctx := context.Background()
@@ -166,7 +166,7 @@ func TestChatsAndMessagesKept(t *testing.T) {
 		t.Fatalf("all %d, kept %v", len(all.Chats), names)
 	}
 	if _, err := r.Messages(ctx, code, 10, "", KeepContacts); !errors.Is(err, ErrNoChat) {
-		t.Errorf("the short code's conversation for Jarvis: %v", err)
+		t.Errorf("the short code's conversation for Persona: %v", err)
 	}
 	if p, err := r.Messages(ctx, code, 10, "", ""); err != nil || len(p.Messages) != 3 {
 		t.Errorf("the short code's conversation in the app: %v", err)

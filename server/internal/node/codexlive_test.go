@@ -72,7 +72,7 @@ func TestLiveCodexCards(t *testing.T) {
 			start := time.Now()
 			err := c.run(lc, r*100+i)
 			if why := serviceError(lc.plain()); err != nil && err != errSkip && why != "" {
-				// Codex's model service failed the turn (not Jarvis): logged, and the case runs once more.
+				// Codex's model service failed the turn (not Persona): logged, and the case runs once more.
 				t.Logf("LIVE %s round %d %s: SERVICE-RETRY: Codex's model service failed the turn (%s)", lc.version, r, c.name, why)
 				lc.recover()
 				start, err = time.Now(), c.run(lc, r*100+i+50)

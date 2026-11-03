@@ -74,7 +74,7 @@ type runtimeHello struct {
 		Interrupt bool `json:"interrupt"`
 		Rename    bool `json:"rename"`
 		Close     bool `json:"close"`
-		// Assistant: its launcher may run the Jarvis assistant (assistant_runtime.go; docs/runtimes.md「助手」).
+		// Assistant: its launcher may run the Persona assistant (assistant_runtime.go; docs/runtimes.md「助手」).
 		Assistant bool `json:"assistant"`
 	} `json:"caps"`
 }
@@ -123,7 +123,7 @@ func (h *runtimeConn) agent() string {
 	return h.hello.Runtime
 }
 
-// assistant: the runtime runs the Jarvis assistant's conversations (caps.assistant).
+// assistant: the runtime runs the Persona assistant's conversations (caps.assistant).
 func (h *runtimeConn) assistant() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -607,7 +607,7 @@ func (b *runtimeRegistry) launchers() []proto.Launcher {
 	for _, h := range b.launcherOwners() {
 		h.mu.Lock()
 		// Agent, as for a Codex launcher (proto.Launcher.Agent): what it starts is not Claude Code, so the apps do
-		// not offer it where only Claude Code or Codex can run (the Jarvis assistant).
+		// not offer it where only Claude Code or Codex can run (the Persona assistant).
 		agent := h.hello.Agent
 		if agent == "" {
 			agent = h.hello.Runtime
@@ -1027,7 +1027,7 @@ func (n *Node) hasOwnSession(id string) bool {
 // errRuntimeAway: a session of a runtime that is not connected (its app is closed, the plugin is off). Nothing was
 // sent; the hub may let the app send it again.
 func errRuntimeAway(label string) error {
-	return &rpc.Error{Message: fmt.Sprintf("%s 没有连上这台电脑的 Jarvis（%s 没在运行，或插件没装好），没有发出去", label, label),
+	return &rpc.Error{Message: fmt.Sprintf("%s 没有连上这台电脑的 Persona（%s 没在运行，或插件没装好），没有发出去", label, label),
 		Code: "runtime_away", Data: json.RawMessage(`{"delivered":"none"}`)}
 }
 

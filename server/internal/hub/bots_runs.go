@@ -321,7 +321,7 @@ func (h *Hub) botItems(machine, session string, items []proto.Item) {
 	}
 }
 
-// botDelta: the text a Jarvis conversation is writing right now.
+// botDelta: the text a Persona conversation is writing right now.
 func (h *Hub) botDelta(machine, session, text string) {
 	b := &h.bots
 	b.mu.Lock()

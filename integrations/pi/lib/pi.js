@@ -1,5 +1,5 @@
 // The pi runtime (docs/pi.md): the sessions of one pi process — a pi in a terminal, `pi --mode rpc`, or pi-web's
-// server, which hosts many — in Jarvis through the runtime SDK (docs/runtimes.md). pi loads the extension once per
+// server, which hosts many — in Persona through the runtime SDK (docs/runtimes.md). pi loads the extension once per
 // session, but there is one runtime connection per process: index.js registers each session's API with the host made
 // here, once per process.
 //
@@ -312,7 +312,7 @@ export function createPiHost(deps, options = {}) {
     if (typeof pi.registerCommand === 'function' && typeof pi.sendUserMessage === 'function') {
       try {
         pi.registerCommand(RELOAD_COMMAND, {
-          description: 'Jarvis: load the new version of its extension (run by the extension itself)',
+          description: 'Persona: load the new version of its extension (run by the extension itself)',
           handler: async (_args, ctx) => ctx.reload(),
         })
         commandReady = true

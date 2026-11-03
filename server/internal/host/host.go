@@ -44,7 +44,7 @@ type Host interface {
 	Read(ctx context.Context, pane PaneRef, opts ReadOpts) (string, error)
 	// SendText types text into a pane as is (no enter).
 	SendText(ctx context.Context, pane PaneRef, text string) error
-	// SendKeys presses keys in a pane, by Jarvis's key names (herdr's: "enter", "esc", "shift+tab", "ctrl+u", "up"…);
+	// SendKeys presses keys in a pane, by Persona's key names (herdr's: "enter", "esc", "shift+tab", "ctrl+u", "up"…);
 	// each host translates them.
 	SendKeys(ctx context.Context, pane PaneRef, keys ...string) error
 	// Prompt submits text to the agent in a pane the way the host does it best (herdr: agent.prompt, a paste and a

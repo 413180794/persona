@@ -74,7 +74,7 @@ func TestIMessageThroughTheHub(t *testing.T) {
 		case method == "connector.list" && permission:
 			return json.RawMessage(`{"connectors":[{"id":"imessage","status":"ok","via":"ssh"}]}`), nil
 		case method == "connector.list":
-			return json.RawMessage(`{"connectors":[{"id":"imessage","status":"no_permission","error":"macOS 不让 Jarvis 读","guide":["一","二","三"],"via":"ssh"}]}`), nil
+			return json.RawMessage(`{"connectors":[{"id":"imessage","status":"no_permission","error":"macOS 不让 Persona 读","guide":["一","二","三"],"via":"ssh"}]}`), nil
 		case !permission:
 			return nil, &rpc.Error{Code: proto.CodeNoPermission, Message: "denied"}
 		case method == "connector.chats":
@@ -120,11 +120,11 @@ func TestIMessageThroughTheHub(t *testing.T) {
 		t.Errorf("capabilities %v", caps)
 	}
 	if n := len(h.connectors.Tools(context.Background())); n != 3 {
-		t.Errorf("%d tools with 交给 Jarvis on", n)
+		t.Errorf("%d tools with 交给 Persona on", n)
 	}
 	h.imessage().SetAI(false)
 	if n := len(h.connectors.Tools(context.Background())); n != 0 {
-		t.Errorf("%d tools with 交给 Jarvis off", n)
+		t.Errorf("%d tools with 交给 Persona off", n)
 	}
 	h.imessage().SetAI(true)
 
@@ -181,7 +181,7 @@ func TestIMessageOldOrOfflineMac(t *testing.T) {
 	}
 }
 
-// 交给 Jarvis: on unless the user turned it off; the choice is kept and applied at once.
+// 交给 Persona: on unless the user turned it off; the choice is kept and applied at once.
 func TestIMessageAISwitch(t *testing.T) {
 	h, _ := modelTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
@@ -269,7 +269,7 @@ func TestIMessageArchive(t *testing.T) {
 	}
 }
 
-// Deleting what the hub kept: only once 交给 Jarvis is off; the knowledge base's iMessage chats and people and the
+// Deleting what the hub kept: only once 交给 Persona is off; the knowledge base's iMessage chats and people and the
 // inbox's iMessage items go, the rest stays.
 func TestIMessageDelete(t *testing.T) {
 	h, _ := modelTestHub(t)

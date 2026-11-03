@@ -13,7 +13,7 @@ import (
 // Codex panes on a shared app-server (docs/codex.md「守护进程上的会话」). From 0.163 a plain `codex` runs its thread on
 // the shared daemon (<CODEX_HOME>/app-server-control/app-server-control.sock) and its TUI is one client of it; the
 // node keeps a connection to every app-server it finds (codex_remote.go). A herdr pane whose thread is loaded on one is
-// joined — Jarvis becomes a second client of that thread, asking it for nothing and changing none of its settings —
+// joined — Persona becomes a second client of that thread, asking it for nothing and changing none of its settings —
 // and from then on the thread's questions, approvals and the phone's messages go through the protocol: whoever answers
 // first wins, and serverRequest/resolved takes the other side's card away. A pane that is not on one (a launcher with
 // -c, a session running in its own process, 0.153 without a daemon, TRAEX) keeps the terminal route (codexask.go); so
@@ -95,7 +95,7 @@ func (c *codexCards) joinNote(id string) string {
 	return c.joins[id].note
 }
 
-// codexRoute says how Jarvis reaches a live Codex pane now, and why when it is the terminal.
+// codexRoute says how Persona reaches a live Codex pane now, and why when it is the terminal.
 func (n *Node) codexRoute(id string) (route, note string) {
 	_, t, err := n.codexOwner(id)
 	switch {

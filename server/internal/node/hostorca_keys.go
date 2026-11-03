@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Orca's terminal.send writes raw bytes, so Jarvis's key names ("enter", "shift+tab", "ctrl+u", "alt+left", "f5"…)
+// Orca's terminal.send writes raw bytes, so Persona's key names ("enter", "shift+tab", "ctrl+u", "alt+left", "f5"…)
 // become the bytes an xterm-compatible terminal sends for them. Modified cursor and function keys use xterm's
 // parameter (1 + shift 1 + alt 2 + ctrl 4); alt alone on a character is ESC before it.
 
@@ -28,7 +28,7 @@ var orcaPlainKeys = map[string]string{
 	"space": " ", "ctrl+space": "\x00", "alt+space": "\x1b ",
 }
 
-// orcaKeyBytes is a key name's bytes; false for a key with no bytes Jarvis knows.
+// orcaKeyBytes is a key name's bytes; false for a key with no bytes Persona knows.
 func orcaKeyBytes(k string) (string, bool) {
 	name := strings.ToLower(strings.TrimSpace(k))
 	if b, ok := orcaPlainKeys[name]; ok {

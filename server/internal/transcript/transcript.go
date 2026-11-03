@@ -160,7 +160,7 @@ type Meta struct {
 // the phone, e.g. a WeChat voice-input transcript, turns into): <pasted_content id="ae9b">…</pasted_content id="ae9b">.
 var pastedRe = regexp.MustCompile(`<[\\/]*pasted_content(?:\s+id="[^"]*")?\s*>`) // also <\pasted…> / <\/pasted…> from nested pastes
 
-// ContextRe matches the live snapshot Jarvis starts each message to its assistant with (node/assistant_context.go):
+// ContextRe matches the live snapshot Persona starts each message to its assistant with (node/assistant_context.go):
 // context for the model, not something the user wrote.
 var ContextRe = regexp.MustCompile(`(?s)<jarvis-context>.*?</jarvis-context>\s*`)
 
@@ -757,7 +757,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 		name := firstTag(trimmed, "command-name")
 		args := firstTag(trimmed, "command-args")
 		if name == "/compact" && strings.TrimSpace(args) == "" {
-			// Jarvis compacts an idle assistant conversation itself (node/assistant.go): a notice, not a message the
+			// Persona compacts an idle assistant conversation itself (node/assistant.go): a notice, not a message the
 			// user sent, and not activity that would make the conversation unread.
 			it := mk(0, "system", proto.KindNotice)
 			it.Text = "压缩上下文"

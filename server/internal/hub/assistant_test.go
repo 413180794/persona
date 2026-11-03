@@ -94,6 +94,33 @@ func TestCompactJSONPrunes(t *testing.T) {
 // The assistant's instructions said 「就是你所在的这台」 only of the hub's own machine and gave everything else an
 // `ssh <alias>` command, but the aliases are the hub machine's and a link machine has no ssh: an assistant on a laptop
 // was told to ssh into itself through a name only the hub knows (2026-10-31).
+func TestAssistantPromptUsesReportedStorageRoots(t *testing.T) {
+	h := newTestHub(t)
+	h.cfg.dir = "/var/lib/hub state"
+	h.cfg.Assistant.Machine = "server"
+	m := newMachine(h, MachineConfig{ID: "server", Name: "服务器", Kind: "local"})
+	m.info = proto.NodeInfo{Home: "/home/example", DataDir: "/var/lib/assistant-state"}
+	h.machines = append(h.machines, m)
+	h.byID["server"] = m
+	text := h.assistantClaudeMD(context.Background(), false)
+	for _, want := range []string{"/var/lib/assistant-state/assistant", "/var/lib/assistant-state/skills/lark-connector", "/var/lib/hub state/data"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("reported storage root missing: %s", want)
+		}
+	}
+	if strings.Contains(text, "~/.jarvis/") || strings.Contains(text, "~/.persona/") {
+		t.Fatal("hardcoded default root overrides reported storage roots")
+	}
+	if !strings.Contains(text, "也可以用文件工具直接读取此目录") {
+		t.Fatal("a local assistant was not allowed to read its local knowledge directory")
+	}
+	m.cfg.Kind = "link"
+	text = h.assistantClaudeMD(context.Background(), false)
+	if strings.Contains(text, "也可以用文件工具直接读取此目录") || !strings.Contains(text, "通过 `kb_*` 工具读取") {
+		t.Fatal("a remote assistant was told to read the hub's local files directly")
+	}
+}
+
 func TestAssistantMachinesFromWhereItRuns(t *testing.T) {
 	machines := []MachineConfig{
 		{ID: "server", Name: "服务器", Kind: "local"},

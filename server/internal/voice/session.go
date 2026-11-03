@@ -513,7 +513,7 @@ func (c *conversation) delegateTask(task, delegationID string, gen int) {
 	}
 	c.tasks++
 	id := fmt.Sprintf("d%d", c.tasks)
-	c.sendApp(map[string]any{"type": "tool", "id": id, "label": "Jarvis 主对话处理中", "done": false})
+	c.sendApp(map[string]any{"type": "tool", "id": id, "label": "Persona 主对话处理中", "done": false})
 	recent := c.history
 	if len(recent) > 6 {
 		recent = recent[len(recent)-6:]

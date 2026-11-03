@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Agents other than Claude Code that Jarvis starts without Claude's flags: TRAEX (on the PATH as traex), and a
+// Agents other than Claude Code that Persona starts without Claude's flags: TRAEX (on the PATH as traex), and a
 // launcher the hub says runs Codex or TRAEX (hub.json machines[].launchers, a wrapper the login shell's list does not
 // show as one). A Codex launcher the login shell lists starts through codex_start.go instead.
 

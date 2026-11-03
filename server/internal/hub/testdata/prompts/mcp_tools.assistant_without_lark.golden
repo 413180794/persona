@@ -210,7 +210,7 @@
   },
   {
     "name": "schedule_followup",
-    "description": "Wake yourself up later: at the given time Jarvis sends `prompt` into this conversation (or a new one) as if the user wrote it, you do the work, and the user gets a push with your answer. Use for \"remind me…\", \"check again in an hour\", meeting prep 10 minutes before a meeting, watching something until it changes. `at` is RFC 3339 (2026-10-27T09:50:00+08:00) or relative (\"30m\", \"2h\", \"1d\"). For something to do again and again (a patrol every 30 minutes) pass `every` (\"30m\", \"2h\", at least 5m) once: Jarvis repeats it by itself and the user sees, edits and stops it in the app; never schedule the next run from inside a run. Which model and permission mode a task runs with is the user's choice in the app.",
+    "description": "Wake yourself up later: at the given time Persona sends `prompt` into this conversation (or a new one) as if the user wrote it, you do the work, and the user gets a push with your answer. Use for \"remind me…\", \"check again in an hour\", meeting prep 10 minutes before a meeting, watching something until it changes. `at` is RFC 3339 (2026-10-27T09:50:00+08:00) or relative (\"30m\", \"2h\", \"1d\"). For something to do again and again (a patrol every 30 minutes) pass `every` (\"30m\", \"2h\", at least 5m) once: Persona repeats it by itself and the user sees, edits and stops it in the app; never schedule the next run from inside a run. Which model and permission mode a task runs with is the user's choice in the app.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -242,7 +242,7 @@
   },
   {
     "name": "schedule_routine",
-    "description": "Set up a recurring routine: every day (or on some weekdays) at a time, Jarvis starts a new conversation with `prompt`, you do the work, and the user gets a push with your answer. Use for \"每天 9 点给我早报\", \"每周五下午起草周报\". For one-off reminders use schedule_followup. Pass `id` (from list_followups) to change an existing routine: only the fields you give change; `enabled: false` pauses it. Times are in the user's time zone.",
+    "description": "Set up a recurring routine: every day (or on some weekdays) at a time, Persona starts a new conversation with `prompt`, you do the work, and the user gets a push with your answer. Use for \"每天 9 点给我早报\", \"每周五下午起草周报\". For one-off reminders use schedule_followup. Pass `id` (from list_followups) to change an existing routine: only the fields you give change; `enabled: false` pauses it. Times are in the user's time zone.",
     "input_schema": {
       "type": "object",
       "properties": {
@@ -669,7 +669,7 @@
   },
   {
     "name": "jarvis_settings",
-    "description": "Read and change Jarvis's own settings for the user: their inbox sorting rules, the AI 分身's rules, 关于我 (what you know about them), your default launcher (model), their mail accounts, which Claude Code config directories each machine keeps out of Agents. Start with action list (what there is, what each takes); get reads one. set / add / remove put a card on the user's phone that says what changes (before → after) and nothing changes until they approve; what the card needs filled in, like a mail password, the user types there, so never ask for passwords in the conversation. Change only what the user asked for.",
+    "description": "Read and change Persona's own settings for the user: their inbox sorting rules, the AI 分身's rules, 关于我 (what you know about them), your default launcher (model), their mail accounts, which Claude Code config directories each machine keeps out of Agents. Start with action list (what there is, what each takes); get reads one. set / add / remove put a card on the user's phone that says what changes (before → after) and nothing changes until they approve; what the card needs filled in, like a mail password, the user types there, so never ask for passwords in the conversation. Change only what the user asked for.",
     "input_schema": {
       "type": "object",
       "properties": {
@@ -701,7 +701,7 @@
   },
   {
     "name": "conversations_list",
-    "description": "List Jarvis's own conversations (the 对话 sidebar), newest activity first: id, title, last activity, whether it is the main conversation, whether it is running now, and the gist of its last message. Archived ones are left out unless `include_archived`. This conversation is marked. Use it to find a conversation the user means (\"the one about the trip\") before reading, renaming, archiving or messaging it.",
+    "description": "List Persona's own conversations (the 对话 sidebar), newest activity first: id, title, last activity, whether it is the main conversation, whether it is running now, and the gist of its last message. Archived ones are left out unless `include_archived`. This conversation is marked. Use it to find a conversation the user means (\"the one about the trip\") before reading, renaming, archiving or messaging it.",
     "input_schema": {
       "type": "object",
       "properties": {
@@ -722,7 +722,7 @@
   },
   {
     "name": "conversation_read",
-    "description": "Read the recent part of another Jarvis conversation (an id from conversations_list): the user's messages, what was answered, tool calls in short form, cut like agent_read. `turns` = how many recent exchanges (default 2, max 10).",
+    "description": "Read the recent part of another Persona conversation (an id from conversations_list): the user's messages, what was answered, tool calls in short form, cut like agent_read. `turns` = how many recent exchanges (default 2, max 10).",
     "input_schema": {
       "type": "object",
       "required": [
@@ -741,7 +741,7 @@
   },
   {
     "name": "conversation_rename",
-    "description": "Rename a Jarvis conversation. Titles read 「MMDD | 类型 | 主题」: give `kind` and `topic` and the hub puts the day the conversation started in front. A title the user gave stays: renaming one fails unless the user asked for this rename in so many words (then pass `user_asked`). The main conversation has no title to change.",
+    "description": "Rename a Persona conversation. Titles read 「MMDD | 类型 | 主题」: give `kind` and `topic` and the hub puts the day the conversation started in front. A title the user gave stays: renaming one fails unless the user asked for this rename in so many words (then pass `user_asked`). The main conversation has no title to change.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -782,7 +782,7 @@
   },
   {
     "name": "conversation_archive",
-    "description": "Archive a Jarvis conversation: it leaves the sidebar's list (it is kept, and listed under 已归档), nothing is deleted. Only when the user asks to tidy up or archive. The main conversation can't be archived. Archiving this conversation itself is allowed: the current turn finishes, and a new message from the user brings it back.",
+    "description": "Archive a Persona conversation: it leaves the sidebar's list (it is kept, and listed under 已归档), nothing is deleted. Only when the user asks to tidy up or archive. The main conversation can't be archived. Archiving this conversation itself is allowed: the current turn finishes, and a new message from the user brings it back.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -798,7 +798,7 @@
   },
   {
     "name": "conversation_unarchive",
-    "description": "Bring an archived Jarvis conversation back into the sidebar's list (find it with conversations_list and include_archived).",
+    "description": "Bring an archived Persona conversation back into the sidebar's list (find it with conversations_list and include_archived).",
     "input_schema": {
       "type": "object",
       "required": [
@@ -814,7 +814,7 @@
   },
   {
     "name": "conversation_new",
-    "description": "Start a new Jarvis conversation with an opening message and return its id at once (it does not wait for the answer). For work that deserves its own thread, when the user asks for one. The message arrives marked as coming from this conversation; it is named after its first turn like any new conversation.",
+    "description": "Start a new Persona conversation with an opening message and return its id at once (it does not wait for the answer). For work that deserves its own thread, when the user asks for one. The message arrives marked as coming from this conversation; it is named after its first turn like any new conversation.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -830,7 +830,7 @@
   },
   {
     "name": "conversation_send",
-    "description": "Send a message to another Jarvis conversation (not this one). If it is running, the message waits until its current turn ends. The message arrives marked as coming from this conversation, so the other side can answer with conversation_send. Conversations passing messages back and forth are limited (a few hops from the user's message, a few messages per pair in ten minutes): don't reply just to acknowledge.",
+    "description": "Send a message to another Persona conversation (not this one). If it is running, the message waits until its current turn ends. The message arrives marked as coming from this conversation, so the other side can answer with conversation_send. Conversations passing messages back and forth are limited (a few hops from the user's message, a few messages per pair in ten minutes): don't reply just to acknowledge.",
     "input_schema": {
       "type": "object",
       "required": [
