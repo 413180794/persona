@@ -40,9 +40,9 @@
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`file_upload`。
 - 另有：`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](plugins.md)）、`desktops`（桌面端登记，见下文 `register_desktop`）。
 
-能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 jarvisd 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
+能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
-`POST /api/v1/machines/{id}/deploy`：hub 把自己这次部署的 node（`deploy.sh` 留在 hub 机器的 `~/.jarvis/bin/nodes/jarvisd-<os>-<arch>`）经 ssh 装到那台电脑（正走 tailcat 时经 tailcat 发给常驻 node，它换掉自己后退出、由 launchd / systemd 重启），杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。App 在「设置 › 机器」里提示并给一个「重新部署」按钮。
+`POST /api/v1/machines/{id}/deploy`：hub 把自己这次部署的 node（`deploy.sh` 留在 hub 机器的 `~/.persona/bin/nodes/jarvisd-<os>-<arch>`）经 ssh 装到那台电脑（正走 tailcat 时经 tailcat 发给常驻 node，它换掉自己后退出、由 launchd / systemd 重启），杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。App 在「设置 › 机器」里提示并给一个「重新部署」按钮。
 
 ### 临时配对
 
@@ -67,7 +67,7 @@ jarvis-link 用的配对码（返回多一个 `machine`，`pair_url` 是 `jarvis
 
 它只能通过 `POST /api/v1/auth/tokens` **兑换一次**设备 token，重复兑换返回 `401 invalid_token`。兑换后其他 API 仍可使用至 `min(原到期时间, 兑换时间 + 2 分钟)`；到期后失效，已建立的临时 token WS 也会被取消。有效期与宽限均为协议策略，不是性能实测。新设备配对成功后，hub 尝试发配对通知；推送不可用时记日志。
 
-`jarvisd hub pair` 调用上述本机接口，打印临时链接和二维码；运行中的 hub 必须可经 IPv4 回环 HTTP 访问。`--legacy` 才离线打印主 token 的旧格式。现有 iOS 忽略新参数，可继续在内网扫默认临时码，不必改用 `--legacy`。
+`personad hub pair` 调用上述本机接口，打印临时链接和二维码；运行中的 hub 必须可经 IPv4 回环 HTTP 访问。`--legacy` 才离线打印主 token 的旧格式。现有 iOS 忽略新参数，可继续在内网扫默认临时码，不必改用 `--legacy`。
 
 二维码保持 `url` / `token`，附加字段遵循 redesign/hub-changes.md 1.3：
 
@@ -417,11 +417,11 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | POST | `/api/v1/hub/update` | `{"now"?: true}` 开始更新：下载、校验、等助手和 Agent 都空闲、替换、重启；`now` 是二级确认后的「现在就更新」，不等空闲。不是发布版（`dev` / `docker`）、没有更新的版本时 409（`error` 说明，Docker 给出 `docker compose pull` 的命令） |
 | PUT | `/api/v1/hub/update/settings` | `{"auto"?: bool, "auto_notice_seen"?: bool}`：自动更新开关（默认开），改了开关也算告诉过了 |
 | GET | `/api/v1/hub/update/history` | `{"history":[{from_version, to_version, to_build, started, ended, result: updated\|rolled_back\|failed\|held, reason?, auto}]}`，新的在前，留 50 条；`held`：更新的版本没有自动装（`reason` 写原因），每个版本记一次 |
-| GET | `/api/v1/skills` | 跑助手那台机器上的 skill（只读）：`{"machine_id","machine","skills":[{"name","description","source":"user\|builtin"}]}`；用户的在那台机器的 `~/.jarvis/skills/`（`docs/hub-update.md`）。node 太旧（没有 `skills.list`）或不在线时 502 |
+| GET | `/api/v1/skills` | 跑助手那台机器上的 skill（只读）：`{"machine_id","machine","skills":[{"name","description","source":"user\|builtin"}]}`；用户的在那台机器的 `~/.persona/skills/`（`docs/hub-update.md`）。node 太旧（没有 `skills.list`）或不在线时 502 |
 | GET / PUT | `/api/v1/pins` | 开发列表置顶：`{"spaces":["server/app"],"sessions":["server/<session id>"]}`，空间用「机器/空间名」（herdr 重启后 workspace id 会变），存 Postgres settings |
 | GET | `/api/v1/machines/{mid}/file?path=&cwd=&offset=` | 读一个文件（文件查看器，`docs/ios.md`「文件查看器」）：`{"path","name","size","mime","text"\|"data","truncated","offset","next","is_dir","entries"?}`。文本文件每次最多 2 MB，从 `offset` 读起，没读完时停在最后一个完整行的末尾，`next` 是下一页的起点（读完为 0）；二进制文件整个给（上限 2 MB），不能从中间读；目录给前 500 项。`~` 是 home，相对路径在 `cwd` 里；拒绝 iCloud |
 | GET | `/api/v1/machines/{mid}/file/download?path=&cwd=` | 完整文件的原始字节，使用同一 Bearer 鉴权，不把 token 放进 URL；hub 用 node 的 `file.chunk` 每次最多 1 MiB 读取，单次请求不把整个文件放进内存。支持 HTTP Range / Content-Range（包括文件末尾范围），附带 Content-Length、ETag 和附件文件名；空路径 400、旧 node 409 `node_outdated`，非普通文件、iCloud 和读取错误拒绝。后续块必须匹配首次读取的文件大小和版本，文件中途变更或请求取消就停止下载。旧 `/file` 的 2 MiB 二进制预览行为不变 |
-| GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | 会话里提到的路径在这台机器上在不在：`paths` 一行一个（也收 `path=a&path=b`），最多 200 个 → `{"stats":[{"path"(原样),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`。`denied` 是 macOS 不让 jarvisd 读的文件夹（打开时会说怎么授权）；相对路径没有 `cwd`、iCloud 里的路径一律 `missing`。手机只给 file / dir / denied 的路径做可点的文件块 |
+| GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | 会话里提到的路径在这台机器上在不在：`paths` 一行一个（也收 `path=a&path=b`），最多 200 个 → `{"stats":[{"path"(原样),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`。`denied` 是 macOS 不让 personad 读的文件夹（打开时会说怎么授权）；相对路径没有 `cwd`、iCloud 里的路径一律 `missing`。手机只给 file / dir / denied 的路径做可点的文件块 |
 | GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud |
 | GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[最近 30 条]}`（只读，`GIT_OPTIONAL_LOCKS=0`） |
 | GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`；未跟踪文件对 /dev/null 出 diff，最多 512 KB |
@@ -457,7 +457,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | GET | `/api/v1/machines/{id}/metrics?range=1h\|6h\|24h` | `{"metrics": {同上一台}, "range", "step"}`：机器详情的曲线，步长 10 / 60 / 240 秒（约 360 个点）；没有这台机器 404，range 不对 400 |
 | GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, machines:[{id, tpm, tokens, load}]}}`：所有机器的 token 用量（今天按手机时区算，`load` 是 1 分钟负载 / 核数），见 `docs/live-activity.md`「用量」 |
 | GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，另有 `translate`（设置 › 翻译：`{enabled,target,mail}`，hub 据此提前翻译新邮件）、`live_activity`（默认 true）、`lock_details`（锁屏显示详情，默认 false）、`island`（灵动岛两侧：`{"preset":"a|b|c|custom","left","right","machine"}`，默认 `a`）、`mute_while_desktop`（手机静音，默认 false：有桌面端连着时不给这台设备推「需要你处理」「Agent 做完」；助手按你的要求发的提醒照推）；`look`（这台手机的实时活动画哪个形象：`{"design","light","dark","package"?}`，App 换形象时单独 PUT，hub 原样放进这台设备推送的 content-state，见 `docs/live-activity.md`「形象」；design 超过 32 字节或 package 超过 160 字节的不存）；PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
-| GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，hub 机器 `~/.jarvis/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。没有目录时是空列表 |
+| GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，hub 机器 `~/.persona/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。没有目录时是空列表 |
 | GET | `/api/v1/personas/{id}/{file…}` | 包里的一个文件（PNG / persona.json），只给包目录里的普通文件（不跟软链、不给点开头的） |
 | GET | `/api/v1/plugins` | hub 的插件：`{"plugins":[{"id","name","kind","status","error"?}]}`，`status` 是 `starting / running / error / disabled`（`docs/plugins.md`）；`features` 带 `plugins` 时才有 |
 | GET | `/api/v1/machines/{mid}/ports/{port}` | 端口探测（`docs/ports.md`）：`{"port","listening","http","title"?}`，只看不放行 |
@@ -495,7 +495,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | `fleet` | `fleet`（实时活动汇总，与 HTTP `/api/v1/fleet` 的内容对应） |
 | `hook_event` | node hook 事件的原字段，hub 补 `machine_id` 并置 `type: hook_event`；用于刷新会话运行状态 |
 | `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 且提供该工具的手机） |
-| `desktops` | `desktops`：连着的桌面端（Mac App），`[{"device","name","since"}]`，`device` 是它的设备凭据 id（用配对凭据连的为空，不能单独退出）。连上时发一次，之后有桌面端连上 / 断开就推给所有客户端（feature `desktops`）。iPhone 据此显示「Mac 上的 Jarvis 已登录」 |
+| `desktops` | `desktops`：连着的桌面端（Mac App），`[{"device","name","since"}]`，`device` 是它的设备凭据 id（用配对凭据连的为空，不能单独退出）。连上时发一次，之后有桌面端连上 / 断开就推给所有客户端（feature `desktops`）。iPhone 据此显示「Mac 上的 Persona 已登录」 |
 | `notify` | `kind: interaction / done / assistant`、`machine_id`、`session_id`、`title`、`subtitle`、`body`，交互另带 `interaction_id`；只发给声明 `ws_notify` 的连接，见下文 |
 | `lock_test` | `lock_test_id`、`lock_test_due_at`、`lock_test_sent_at`、`lock_test_title`、`lock_test_body`；只发给本设备声明 `lock_test` 的选定连接，见「锁屏测试」 |
 | `inbox` | 无内容载荷；列表变化提示，客户端重新拉取收件箱 |
@@ -637,7 +637,7 @@ hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/s
 | --- | --- | --- |
 | `dialog_open` | 有对话框占着键盘：权限确认、信任目录、模型选择、rewind…（底部有 `Esc to cancel` / `Enter to confirm`，或输入框下面有带光标的编号选项） | `delivered: "none"` |
 | `input_draft` | Claude 的输入框里有电脑上没发出去的字、bash 模式（`!`）、粘贴占位、被窗格截掉的长草稿 | `delivered: "none"`、`draft`（输入框里的字）、`clearable`（只有一行字时才有） |
-| `open_elsewhere` | 要恢复的 Claude 会话正在别处开着：有活着的 claude 在 `sessions/<pid>.json` 里开着它（Claude 桌面版、Jarvis 不驱动的终端）。再 `claude --resume` 会让两个进程同时写这个会话 | `delivered: "none"`、`pid` |
+| `open_elsewhere` | 要恢复的 Claude 会话正在别处开着：有活着的 claude 在 `sessions/<pid>.json` 里开着它（Claude 桌面版、Persona 不驱动的终端）。再 `claude --resume` 会让两个进程同时写这个会话 | `delivered: "none"`、`pid` |
 | `engine_missing` | 要新开或恢复会话，这台电脑的引擎（herdr）却没在运行或没装 | `delivered: "none"`、`detail`（引擎自己的报错） |
 | `runtime_away` | 会话属于一个 Agent 运行时（DSH…），它现在没连上 node（「Runtime ↔ node」） | `delivered: "none"` |
 
@@ -670,7 +670,7 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
   App 取消上传（或断线）时 hub 发 `file.upload.abort`，node 删掉写了一半的文件；node 2 分钟收不到块也自己删。
 - node 先写 `.jarvis-upload-*` 隐藏文件（0600），收齐后核对字节数，再改名为 `原名-YYYYMMDD-HHMMSS.扩展名`（`.tar.gz` 这类整体算扩展名），
   同一秒重名再加 `-xxxx` 随机串。文件名里的 `/`、`\`、控制字符换成 `_`，超长的截短。
-- 旧 node 不认 `file.upload.*`：409 `code: node_outdated`（「<机器> 上的 jarvisd 太旧…需要重新部署」）；旧 hub 没有这个接口（404），
+- 旧 node 不认 `file.upload.*`：409 `code: node_outdated`（「<机器> 上的 personad 太旧…需要重新部署」）；旧 hub 没有这个接口（404），
   hello 的 `features` 里也没有 `file_upload`：App 提示更新 hub。
 - 路径带空格或引号时 App 用单引号包起来，多个路径空格分隔。输入框没在编辑时插到末尾（未聚焦的 TextField 报的选区不可靠）。
 - 前面挡着反向代理时注意它的请求体上限（有的 CDN 免费版只放 100 MB）。
@@ -767,7 +767,7 @@ Android 按关联消息定位已加载历史中的用户轮次或后台唤醒段
 
 ## hub ↔ node RPC
 
-`ssh <host> ~/.jarvis/bin/jarvisd node --stdio`（hub 机器本机直接起子进程）。stdin/stdout 每行一个 JSON。
+`ssh <host> ~/.persona/bin/personad node --stdio`（hub 机器本机直接起子进程）。stdin/stdout 每行一个 JSON。
 双向都能发请求：`{"id":"h12","method":"…","params":{}}` → `{"id":"h12","result":{}}` / `{"id":"h12","error":{"message":"…"}}`；
 单向事件 `{"event":"…","params":{}}`。hub 发的 id 以 `h` 开头，node 发的以 `n` 开头。stderr 是 node 日志。
 
@@ -778,7 +778,7 @@ hub → node 请求：
 | `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}`（`system` 见 Machine，node 启动时读一次；`engine` 是 node 现在用的引擎，`engines` 是它找到的，见「引擎」；旧 node 没有这两个） |
 | `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent（切换前开始、切换后才回来的刷新结果作废）、结束所有终端流（每个推 `terminal.end`，error 说引擎换了）、换事件流，并推一次 `sessions.changed`。多个 `engine.use` 依次执行 |
 | `launchers.list` | → `{launchers}` |
-| `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.jarvis/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
+| `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
 | `dirs.list` | `{path}` → 同 REST |
 | `sessions.list` | → `{sessions}` |
 | `session.start` | `{cwd, launcher, agent_type?, prompt?, resume_session_id?, workspace_id?, permission_mode?, effort?, tab_name?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`）；Codex 启动器同步、必须带 `prompt`（`node/codex_start.go`） |
@@ -803,9 +803,9 @@ hub → node 请求：
 | `port.dial` | `{id, port}` → `{}`：连上本机这个端口（扫描时它绑的地址，否则 127.0.0.1 再 ::1，只连本机），开一条流 `id`；没在听时报错 `code: port_gone`。之后两边用下面的 `stream.*` 事件传字节 |
 | `credential.gh_token` | `{host}` → `{token}`：这台机器上非交互地跑 `gh auth token --hostname <host>`，给 GitHub 连接器（`github.auth.from_machine`）。只有 hub 能调（hook / MCP 的 `node.sock` 不认）；token 不写日志。没装 gh 报 `code: no_gh`，没登录（或登录在钥匙串里、经 ssh 读不到）报 `code: not_signed_in`；旧 node 报 unknown method |
 | `connector.list` | → `{connectors:[{id, status, error?, guide?, via}]}`：这台电脑自己能提供的连接器（现在只有 Mac 上的 `imessage`；别的系统回空列表）。`status` 是 `ok` / `not_configured`（没有「信息」的数据）/ `no_permission`（没有完全磁盘访问权限，`guide` 是在这台 Mac 上一步步怎么开，按 `via` 是 `ssh` 还是 `launchd` 常驻 node 分两种说法）/ `error` |
-| `connector.chats` | `{id, limit?, before?, keep?}` → `{chats:[{id, name, group?, members:[{handle, name?}], services, last, preview?, from_me?, unread?}], more?, before?}`：会话，新的在前；一个人在 iMessage / 短信 / RCS 上的几个会话算一个，群各算一个；`id` 是哈希（`imessage-<12 位>`），不含号码。只读。`keep: contacts`（收件箱、助手用）只列交给 Jarvis 的会话（见 `connector.changes`），App 自己看时不带 |
-| `connector.older` | `{id, chat, limit?, before?, keep?}` → `{chat, messages:[{id, at, kind: message\|event, from_me?, sender?, text?, service?, attachments?:[{kind, name, mime, size}], reply_to?, edited?, unsent?, unread?, undecoded?}], more?, before?}`：一个会话最新的一页或 `before` 之前的一页，旧的在前；点按回应不算消息，附件只有描述。没有权限报 `code: no_permission`，没有这个会话（或 `keep: contacts` 时它不交给 Jarvis）报 `code: no_chat`。只有 hub 能调、不写日志（不记号码和正文）；旧 node 报 unknown method |
-| `connector.changes` | `{id, cursor?, limit?, days?, keep?}` → `{batches:[{chat, messages}], next, more?}`：`cursor`（消息 ROWID）之后进来的消息，按会话分批、旧的在前，给 hub 的知识库和收件箱（「交给 Jarvis」开着时）。第一次（没有 `cursor`）从 `days`（默认 30）天前开始；`keep` 默认 `contacts`：只给成员里有通讯录里的人、或者我说过话的会话，`all` 全给；验证码打码；`next` 越过所有读过的（包括没给的） |
+| `connector.chats` | `{id, limit?, before?, keep?}` → `{chats:[{id, name, group?, members:[{handle, name?}], services, last, preview?, from_me?, unread?}], more?, before?}`：会话，新的在前；一个人在 iMessage / 短信 / RCS 上的几个会话算一个，群各算一个；`id` 是哈希（`imessage-<12 位>`），不含号码。只读。`keep: contacts`（收件箱、助手用）只列交给 Persona 的会话（见 `connector.changes`），App 自己看时不带 |
+| `connector.older` | `{id, chat, limit?, before?, keep?}` → `{chat, messages:[{id, at, kind: message\|event, from_me?, sender?, text?, service?, attachments?:[{kind, name, mime, size}], reply_to?, edited?, unsent?, unread?, undecoded?}], more?, before?}`：一个会话最新的一页或 `before` 之前的一页，旧的在前；点按回应不算消息，附件只有描述。没有权限报 `code: no_permission`，没有这个会话（或 `keep: contacts` 时它不交给 Persona）报 `code: no_chat`。只有 hub 能调、不写日志（不记号码和正文）；旧 node 报 unknown method |
+| `connector.changes` | `{id, cursor?, limit?, days?, keep?}` → `{batches:[{chat, messages}], next, more?}`：`cursor`（消息 ROWID）之后进来的消息，按会话分批、旧的在前，给 hub 的知识库和收件箱（「交给 Persona」开着时）。第一次（没有 `cursor`）从 `days`（默认 30）天前开始；`keep` 默认 `contacts`：只给成员里有通讯录里的人、或者我说过话的会话，`all` 全给；验证码打码；`next` 越过所有读过的（包括没给的） |
 | `connector.search` | `{id, query, limit?, days?, keep?}` → `{hits:[{chat, message}]}`：最近 `days`（默认 365）天里文字含 `query` 的消息，新的在前（助手的 `imessage_search`）；`keep`、打码同上。只匹配，不把 `query` 拼进 SQL |
 | `codex.answer` | `{session_id, id, resolution}`：回答 node 列出的 Codex 卡片（`docs/codex.md`「提问和审批」）；拒绝时是带 `code` 的错误，什么都没输入 |
 
@@ -847,7 +847,7 @@ hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS �
 - `GET /api/v1/peer`（WebSocket，只走 TLS，`role: peer` 的凭据，permessage-deflate）：二进制消息，内容是上面 hub ↔ node 那套 JSON 行 RPC 的字节流：
   - 调用：`hello {hub_id,name,version,epoch}`（两边各一次）、`stream.open {id}`（流上是一条到对方 peer 服务器的 HTTP/1.1 连接）、
     `relay {to,from,ttl,method,params}`（`creds.import {tokens:[{id,name,kind,role,created_at,last_seen,hash}]}` → `{added}`：成员把凭据交给中心；
-    `pair.code {}` → 配对码：成员上的 `jarvisd hub pair`）、`unpair {}`；
+    `pair.code {}` → 配对码：成员上的 `personad hub pair`）、`unpair {}`；
   - 单向：`rec`（hub 的记录：链路、`center`、`term`、hub.json 里的电脑）、`stream.data` / `stream.ack` / `stream.close`。
   - 关闭码：4011 重复的链路、4012 断开了互联、4013 发不过来、1001 hub 停机。两边每 10 秒 ping，5 秒没 pong 断开（配置值）。
 - 流上的 HTTP 都带 `X-Jarvis-Peer-Ttl`（8 起，每跳减一，到 0 回 `508 mesh_loop`），一跳一跳转到要去的 hub：
@@ -865,7 +865,7 @@ hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS �
   之后 `GET /api/v1/connector/info`（每 30 秒，探活和 RTT）、`GET /api/v1/connector/stream`（WebSocket，node 的字节流），都带 `Authorization: Bearer <凭据>`。
 - 401：5 分钟内不再拨；429：按 `Retry-After`；503 `node_unavailable`：显示原因、照常退避；流以 4002 关：要重新配对，不再试；1001：照常退避。
 
-## hook / mcp ↔ node（unix socket `~/.jarvis/node.sock`）
+## hook / mcp ↔ node（unix socket `~/.persona/node.sock`）
 
 一次连接一问一答，各一行 JSON：
 
@@ -887,17 +887,17 @@ hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS �
 - **hub**：`resumable` 的交互在 node 连接断开时不撤销，留 3 分钟（`resumeGrace`）等 hook 重新认领；同 id 的 `interaction.create`
   挂回原来的那张卡（不重复推送，App 按 id 去重），这期间手机上答了的，回来的 hook 直接从数据库拿到答案。启动时数据库里
   pending 的 `resumable` 交互重新载入（同样等 3 分钟），其余标 cancelled。旧 node 不带 `resumable`，行为不变。
-- 本机实测（假 hub + 沙箱 node + 真 `jarvisd hook`）：提问时杀掉 node、2 秒后起新 node，hook 3.1 秒后拿到手机的回答，hub 只看到一个 id。
+- 本机实测（假 hub + 沙箱 node + 真 `personad hook`）：提问时杀掉 node、2 秒后起新 node，hook 3.1 秒后拿到手机的回答，hub 只看到一个 id。
 
-## Runtime ↔ node（unix socket `~/.jarvis/runtime.sock`，或 node 去连的 daemon）
+## Runtime ↔ node（unix socket `~/.persona/runtime.sock`，或 node 去连的 daemon）
 
 **Runtime** 是没有终端、自己管会话的 Agent 运行时（目前是 DSH，`docs/dsh.md`）。它不是「宿主」：宿主是终端开在哪（herdr / Herdr App / Orca，
 见「引擎」），node 从窗格和 transcript 认会话；runtime 自己报会话、自己给内容，和这台机器选的引擎并存。怎么接一个新的 runtime、
 SDK 和验收清单见 `docs/runtimes.md`；这里是线上的协议（`server/internal/node/runtimes.go`）。
 
-runtime 连 node 的 `~/.jarvis/runtime.sock`（0600，所以必须和 node 是同一个系统用户），一条长连接，帧格式和 hub ↔ node 完全一样（`internal/rpc`：
+runtime 连 node 的 `~/.persona/runtime.sock`（0600，所以必须和 node 是同一个系统用户），一条长连接，帧格式和 hub ↔ node 完全一样（`internal/rpc`：
 每行一个 JSON，请求 / 应答 / 单向事件，两边都能发请求）。hub 和 App 不知道有 runtime：看到的就是普通会话、items 和交互卡片。
-**socket 跟着谁**：常驻 node（`jarvisd node --attach`）一启动就开着 `runtime.sock`，hub 的每条连接共用它（`node/runtimehost.go`）：
+**socket 跟着谁**：常驻 node（`personad node --attach`）一启动就开着 `runtime.sock`，hub 的每条连接共用它（`node/runtimehost.go`）：
 runtime 不用等 hub，hub 重连期间连接也不断，下一条连接的第一份会话列表里就有它的会话。没有常驻 node、由 `--stdio` 自己服务时，socket
 只在这条 hub 连接期间存在，和以前一样。
 
@@ -910,13 +910,13 @@ runtime → node：
 
 | 消息 | 说明 |
 | --- | --- |
-| 请求 `runtime.hello {runtime, name?, agent?, version?, instance?, launcher?, launcher_model?, caps: {start, send, interrupt, rename, close, assistant?}, package?: {name, hash}}` → `{protocol, node_version, hub, features, update?: {name, hash, version}}` | 必须第一个发；`instance` 是这个进程的标识（SDK 每个 runtime 一个，重连不变）：同一个 runtime id 已有一条活连接、它的 `instance` 不同时，回错误 `code: runtime_conflict`（另一个进程配了同样的 id，连不上，SDK 每 30 秒再试一次、不抢）；相同时是这个进程重连了，旧连接被关掉；没带 `instance` 的旧 runtime 照旧（最新的连接为准）；`hub` 是 node 现在有没有连着 hub（旧 node 不带，当作有）；`features` 是 node 在第一版协议之外支持的能力：`prefer_running`（两个 runtime 列同一个会话时，列成非 `offline` 的那个负责它，所以 runtime 可以把只在磁盘上的会话列成 `offline`）、`resume_argv`（认会话行里的 `resume_argv`）、`handover`（发消息被回 `code: handover` 时交给接手的 runtime，见下面 `session.send`）；之前的事件 node 一律丢掉。`runtime` 是 id（`[A-Za-z0-9][A-Za-z0-9_.-]*`，如 `dsh`），也是会话的 `space_kind`；`agent` 是它的会话跑的 Agent，不填就是 `runtime` 自己；`name` 是 App 里的叫法（`DSH`），这种会话带 `agent_label: name`，App 不用为新 runtime 发版。`caps` 说明支持哪些操作，没声明的 node 直接回 `unsupported`。`launcher` 非空且 `caps.start` 时，node 的 `launchers.list` 多一项 `{name: launcher, model: launcher_model, source: runtime}`，新建会话选它就交给这个 runtime。两个 runtime 报同一个启动器名时只有先连上的那个提供（另一个记一行日志）；和登录 shell 里的启动器同名时 shell 的那个为准，runtime 的不列。`caps.assistant`（要有 start 和 send）：它的启动器能跑 Jarvis 的助手，`launchers.list` 里带 `assistant: true`；node 怎么驱动它见 `docs/runtimes.md`「助手」 |
+| 请求 `runtime.hello {runtime, name?, agent?, version?, instance?, launcher?, launcher_model?, caps: {start, send, interrupt, rename, close, assistant?}, package?: {name, hash}}` → `{protocol, node_version, hub, features, update?: {name, hash, version}}` | 必须第一个发；`instance` 是这个进程的标识（SDK 每个 runtime 一个，重连不变）：同一个 runtime id 已有一条活连接、它的 `instance` 不同时，回错误 `code: runtime_conflict`（另一个进程配了同样的 id，连不上，SDK 每 30 秒再试一次、不抢）；相同时是这个进程重连了，旧连接被关掉；没带 `instance` 的旧 runtime 照旧（最新的连接为准）；`hub` 是 node 现在有没有连着 hub（旧 node 不带，当作有）；`features` 是 node 在第一版协议之外支持的能力：`prefer_running`（两个 runtime 列同一个会话时，列成非 `offline` 的那个负责它，所以 runtime 可以把只在磁盘上的会话列成 `offline`）、`resume_argv`（认会话行里的 `resume_argv`）、`handover`（发消息被回 `code: handover` 时交给接手的 runtime，见下面 `session.send`）；之前的事件 node 一律丢掉。`runtime` 是 id（`[A-Za-z0-9][A-Za-z0-9_.-]*`，如 `dsh`），也是会话的 `space_kind`；`agent` 是它的会话跑的 Agent，不填就是 `runtime` 自己；`name` 是 App 里的叫法（`DSH`），这种会话带 `agent_label: name`，App 不用为新 runtime 发版。`caps` 说明支持哪些操作，没声明的 node 直接回 `unsupported`。`launcher` 非空且 `caps.start` 时，node 的 `launchers.list` 多一项 `{name: launcher, model: launcher_model, source: runtime}`，新建会话选它就交给这个 runtime。两个 runtime 报同一个启动器名时只有先连上的那个提供（另一个记一行日志）；和登录 shell 里的启动器同名时 shell 的那个为准，runtime 的不列。`caps.assistant`（要有 start 和 send）：它的启动器能跑 Persona 的助手，`launchers.list` 里带 `assistant: true`；node 怎么驱动它见 `docs/runtimes.md`「助手」 |
 | 事件 `runtime.sessions {sessions: [Session]}` | 它的全部会话，变化时推全量。字段是 `Session` 的子集：`session_id`（`[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`，比 Claude 的 uuid 宽，DSH 是 `session-<uuid>`）、`title`、`cwd`、`status`（`working / blocked / done / idle / offline`，别的当 `unknown`）、`agent`、`model`、`updated_at`、`last_text`、`rev`（变了 App 就拉新内容）、`space_*`，以及还在跑的子 Agent 和后台任务 `subagents` / `background`（`docs/runtimes.md`「子 Agent 和后台任务」：子 Agent 的 `session_id` 由 node 写成 `<会话>@<id>`，这个 id 的调用交给父会话所属的 runtime，它推内容也用这个 id；后台任务的 `output_file` 清掉）。node 清掉 `machine_id`、`state` 这些 hub 算的字段，补 `agent` / `agent_label` / `space_kind`，并按「Codex 来源与能力」的同一套字段标来源：`source_kind: "runtime"`、`source_instance_id` 是 runtime id、`capabilities` = `{read: true, send: caps.send, interrupt: caps.interrupt, approve: true, terminal: false, attach: false}`（没声明 `send` 的带 `read_only_reason`），App 和 hub 按它们开关按钮、守发送；合并进 `sessions.list` 立刻推 `sessions.changed`；同一个 id 两条连接都报时，列成非 `offline` 的那条负责，同等时新的为准（`prefer_running`）。两个 node 用、App 看不到的字段：`pane_id`（这个会话跑在这台机器终端引擎的哪个窗格：herdr 窗格里的 pi，node 把它和引擎的窗格合成一行 herdr 会话，调用里终端那部分给引擎，其余给 runtime，`docs/pi.md`）、`resume_argv`（列成 `offline` 的会话怎么在终端引擎里接着：手机发消息时 node 在引擎里开新标签、经 `jarvisd tab-start` 运行它、等 runtime 再列出这个会话为运行中后把消息发过去；引擎不在就拒绝，`resume_argv` 特性）。连接断开，它的会话就从列表里消失。**列表只是「现在给 App 看哪些」，不是归属**：runtime 只列它最近的会话（DSH 是几千个里最近的 80 个），node 记着每个会话是哪个 runtime 列过的（按 runtime id，重连后还是它），对一个不在列表里的老会话的调用照样交给它；这台机器上什么都没有（没有 Agent、没有 transcript）的会话，`session.send` / `items` / `watch` 这类调用先用 `session.items {session_id, limit: 1}` 问一遍连着的 runtime，答得上来的就归它（问不到的一分钟内不再问）。属于某个 runtime、它却没连着时，回错误 `code: runtime_away`（`delivered: none`），不会当成 Claude 会话去终端里恢复 |
 | 事件 `session.items {session_id, items, history, from_seq, to_seq}` | 被看着的会话的新内容，原样转给 hub（形状同 node → hub 的 `session.items`，连续性规则见「items 的连续性」）。它没列出的会话不转 |
 | 事件 `session.delta {session_id, text}` | 正在生成的整段文字，空串表示这段结束；原样转给 hub，App 画成逐字输出 |
 | 请求 `interaction.create {interaction, timeout_seconds?}` → `Resolution` | 提问（`question`）、计划（`plan`）、授权（`permission`）三种，形状同上面的 `Interaction`；node 补 `created_at` / `expires_at`（默认同 hook 的 30 分钟，`timeout_seconds` 只能更短）、会话标题、目录，以及 `agent` / `agent_label`（runtime 跑的 Agent 和它的名字；跑 Claude Code 的不标，App 画成 Claude 的卡），经 hub 推给手机，阻塞到回答。没人回答（过期、手机「交回电脑」、没有 hub）回 `{dismiss: true}`，runtime 就交给自己的界面。带 `tool_use_id` 的交互 `resumable`：runtime 给的 `id`（或 node 按 runtime + 会话 + 种类 + tool_use_id 算的）不变，node 中途没了时回错误 `code: node_gone`，runtime 连上下一个 node 后用同一个 id 再问，hub 挂回原来的卡 |
 | 事件 `interaction.cancel {id}` | runtime 那边这次交互没了（工具调用被取消）：撤掉手机上的卡 |
-| 请求 `runtime.package {name}` → `{name, hash, version, files: [{path, data}]}` | 自动更新（`docs/runtimes.md`「自动更新」）：hello 里 `package` 说 runtime 跑的代码（包名和哈希）；node 带着这个名字、哈希不同的包时，回复带 `update`，runtime 用这个请求取文件（`data` 是 base64），自己核对哈希后换上。包在 jarvisd 里（`internal/runtimepkg`，构建时从 `integrations/` 生成）；daemon 拿不到（不带 `update`，这个请求回 `unsupported`）；没有这个包回 `not_found` |
+| 请求 `runtime.package {name}` → `{name, hash, version, files: [{path, data}]}` | 自动更新（`docs/runtimes.md`「自动更新」）：hello 里 `package` 说 runtime 跑的代码（包名和哈希）；node 带着这个名字、哈希不同的包时，回复带 `update`，runtime 用这个请求取文件（`data` 是 base64），自己核对哈希后换上。包在 personad 里（`internal/runtimepkg`，构建时从 `integrations/` 生成）；daemon 拿不到（不带 `update`，这个请求回 `unsupported`）；没有这个包回 `not_found` |
 | 请求 `mcp.tools {assistant?}` → `{tools: [{name, description, input_schema}]}`、`mcp.call {name, args, session_id, assistant?}` → `ToolResult` | hub 的工具（手机的 `phone_*`、`mail_*`），转给 hub；没有 hub 时 `mcp.tools` 是空的、`mcp.call` 回一个出错的结果。runtime 把它们给自己的 Agent 用（DSH：`docs/dsh.md`「手机工具」）。`assistant: true` 只对声明了 `caps.assistant` 的 runtime 有用：`mcp.tools` 多出助手专用的工具和 node 自己的 `lark-connector`；`mcp.call` 只在会话归这个 runtime、而且是助手对话时按助手的调用处理（否则当普通调用），`lark-connector` 由 node 自己跑（`docs/runtimes.md`「助手」） |
 
 node → runtime 的事件：`runtime.hub {connected}`，hub 连上 / 断开时发给每个 runtime。
@@ -951,7 +951,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
   - 本机 socket 上的 runtime 用 `daemons.json` 里的 id 说 hello，回错误 `code: runtime_conflict`；
   - 某个 id 已被连着的 runtime 占用时，同 id 的 daemon 的 hello 也回 `runtime_conflict`，node 随后断开它，稍后再连。
 
-## MCP 工具（`jarvisd mcp`）
+## MCP 工具（`personad mcp`）
 
 | 工具 | 执行方 | 说明 |
 | --- | --- | --- |
@@ -969,8 +969,8 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/imessage` | `{machine, status, error?, guide?:[…], via?, ai}`：信息连接器（hub.json `imessage.machine`）的状态，当场问那台 Mac（刚开了权限，刷新就是新的）；没有完全磁盘访问权限时 `guide` 是在那台 Mac 上一步步怎么开，`via` 是那台 Mac 的 node 怎么跑（`ssh` / `launchd`，两种开法不一样）。没设置是 404 `not_configured` |
-| PUT | `/api/v1/imessage/settings` | `{ai: bool}`：「交给 Jarvis」开关（存在 hub，默认开）；开着时真正的会话进知识库、收件箱，助手有 `imessage_*` 工具；关掉立刻停。回 `GET /api/v1/imessage` 的样子（多一个 `ai`） |
-| DELETE | `/api/v1/imessage/data` | 删掉 hub 上存下的信息：知识库里的信息会话和人（连同索引、项目里的引用和它们写的时间线、归档游标，项目标成待重写）、收件箱里的信息条目 → `{chats, people, inbox}`。「交给 Jarvis」开着时 409 `ai_on`（先关掉，不然下一轮又同步回来）；那台 Mac 上的消息不受影响 |
+| PUT | `/api/v1/imessage/settings` | `{ai: bool}`：「交给 Persona」开关（存在 hub，默认开）；开着时真正的会话进知识库、收件箱，助手有 `imessage_*` 工具；关掉立刻停。回 `GET /api/v1/imessage` 的样子（多一个 `ai`） |
+| DELETE | `/api/v1/imessage/data` | 删掉 hub 上存下的信息：知识库里的信息会话和人（连同索引、项目里的引用和它们写的时间线、归档游标，项目标成待重写）、收件箱里的信息条目 → `{chats, people, inbox}`。「交给 Persona」开着时 409 `ai_on`（先关掉，不然下一轮又同步回来）；那台 Mac 上的消息不受影响 |
 | GET | `/api/v1/imessage/chats?limit=&before=` | 那台 Mac 的会话，新的在前（node 的 `connector.chats`，字段见下面「hub ↔ node」）。只读、不存、不交给模型。没权限 403 `no_permission`，Mac 不在线 503 `offline`，node 太旧 409 `node_outdated` |
 | GET | `/api/v1/imessage/chats/{id}/messages?limit=&before=` | 一个会话的一页消息，旧的在前（node 的 `connector.older`）；`id` 不像会话 id（`imessage-<12 位十六进制>`）的不发给 Mac，404 `no_chat` |
 | GET | `/api/v1/connectors?all=1` | `{"connectors":[{id, name, status, account?, via?, error?, guide?:[…], last_sync?, last_event?, capabilities:[…], hosts?:[…], enabled}]}`：hub 上注册的连接器。不带 `all=1` 时不含飞书（`lark`）和邮件（`mail`）：M6 以前的 App 把列表里每一项都画成一行，它们又各有一行，会出现两次；带上的 App 自己把这两项画成原来的飞书、邮箱行（状态还读 `/api/v1/lark/status`、`/api/v1/mail/accounts`）。`guide` 是出问题时一步一句怎么修好（信息连接器没有权限时在那台 Mac 上怎么开）。`status` 是 `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error` / `disabled`（用户在设置里关掉了，`enabled` 为 false）；`via` 说登录从哪来（「来自 <机器> 的 gh 登录」）；`error` 是给人看的一句话，不含密钥；`capabilities` 取 `status` / `tools` / `actions` / `events` / `hosts` / `inbox` / `archive` / `login`；`hosts` 是这个连接器的链接所在的主机名（App 用来认链接） |

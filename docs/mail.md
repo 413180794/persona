@@ -1,7 +1,7 @@
 # 邮件
 
 `server/internal/mail`：让 Claude 和 App 都能收发用户的邮箱。走标准 IMAP + SMTP，不依赖任何第三方中转服务；
-Gmail 用「使用 Google 账号登录」（OAuth2 + XOAUTH2），额外支持用 Gmail 搜索语法（`X-GM-RAW`）检索。凭据加密后存在 hub 的 `dataDir`（默认 `~/.jarvis`）里。
+Gmail 用「使用 Google 账号登录」（OAuth2 + XOAUTH2），额外支持用 Gmail 搜索语法（`X-GM-RAW`）检索。凭据加密后存在 hub 的 `dataDir`（默认 `~/.persona`）里。
 
 ## 能力
 
@@ -73,9 +73,9 @@ App                         hub                                Google
 ### 一次性配置：Google Cloud OAuth 客户端
 
 开源邮件客户端（Thunderbird、K-9、FairEmail、Mailspring、GNOME Online Accounts）都是项目方注册好客户端、写死在源码里，
-并通过了 Google 对受限 scope 的验证；Thunderbird 源码里明确写着「别复制这些值，自己注册一个」。Jarvis 只给自己用，建一个自己的就行。
+并通过了 Google 对受限 scope 的验证；Thunderbird 源码里明确写着「别复制这些值，自己注册一个」。Persona 只给自己用，建一个自己的就行。
 
-建好的客户端是同意屏幕「Jarvis」外部 / 正式版（未验证，登录时会看到「此应用未经 Google 验证」，点「高级 → 转至 Jarvis」），
+建好的客户端是同意屏幕「Persona」外部 / 正式版（未验证，登录时会看到「此应用未经 Google 验证」，点「高级 → 转至 Persona」），
 client ID 只写在 hub 的 `hub.json`（`google.client_id`），不进仓库和文档。
 发布成正式版要求品牌页有首页、隐私政策、服务条款链接，且域名在「已获授权的网域」里，所以建了一个静态站（仓库 `site/`，域名在 `site/wrangler.jsonc`）。
 
@@ -90,7 +90,7 @@ client ID 只写在 hub 的 `hub.json`（`google.client_id`），不进仓库和
    未经验证的应用最多 100 个用户，登录时 Google 会提示「此应用未经验证」，点「高级 → 继续」即可，自己用不需要走验证 / CASA 安全评估。
 6. 「客户端」→ 创建 OAuth 客户端，类型 **iOS**，Bundle ID 和团队 ID 填配置里的 `app.bundle_id` / `app.team_id`，得到
    `<数字>-<串>.apps.googleusercontent.com`。
-7. 写进 hub 机器的 `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy/deploy.sh <hub 机器 id>`）。
+7. 写进 hub 机器的 `~/.persona/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy/deploy.sh <hub 机器 id>`）。
    iOS 客户端的 client ID 是公开信息，不算密钥。
 
 没配 `google.client_id` 时，点按钮会提示「Google sign-in is not configured」。
@@ -102,7 +102,7 @@ hub 的 OAuth 客户端是 iOS 类型，回调是反向 client ID 的自定义 s
 `<scheme>:/oauth2redirect?code&state` 后交给 hub 的 `finish`，再把 App 拉回前台。只认这次流程的 `state`（别的 App 伪造的回调不理）；
 流程跨进程：等的 `state` 存在 SharedPreferences，浏览器在前台时进程被杀，回调照样能完成。
 
-- Android 不能在运行时注册任意 scheme：intent filter 的 scheme 来自构建配置 `~/.config/jarvis/config.json` 的
+- Android 不能在运行时注册任意 scheme：intent filter 的 scheme 来自构建配置 `~/.config/persona/config.json` 的
   `android.google_oauth_scheme`（`scripts/app/android.sh` 传给 gradle；也认环境变量 `JARVIS_GOOGLE_OAUTH_SCHEME`），不进仓库。没配时是占位值，
   App 用 `PackageManager.queryIntentActivities` 判断接不接得住 hub 返回的 `callback_scheme`，接不住就说明原因，
   退到「Gmail + 应用专用密码」（hub 仍支持 `auth: password`）。hub 没配 `google.client_id` 时同样退到这个表单。
@@ -166,9 +166,9 @@ hub 的 OAuth 客户端是 iOS 类型，回调是反向 client ID 的自定义 s
 | SMTP 认证被关（`5.7.139 SmtpClientAuthentication is disabled`） | 请管理员在 Microsoft 365 管理中心为你的邮箱打开「经过身份验证的 SMTP」；收信不受影响 |
 | 授权过期或被撤销（刷新时 `invalid_grant`：`AADSTS70008`、`50173`、要求重新多重验证等） | 在 App 里再点「使用 Microsoft 账号登录」选同一个邮箱，账号原地更新（ID 不变） |
 
-## 让 Jarvis 添加（2026-11-01）
+## 让 Persona 添加（2026-11-01）
 
-App 的「添加邮箱」页去掉了「AI 一键添加」（粘贴一段文字让模型认，`POST /api/v1/ai/mail-account` 也删了）。现在直接在 Jarvis 里说
+App 的「添加邮箱」页去掉了「AI 一键添加」（粘贴一段文字让模型认，`POST /api/v1/ai/mail-account` 也删了）。现在直接在 Persona 里说
 「帮我添加邮箱」：助手用 `jarvis_settings` 的 `mail.accounts`（`hub/self_settings.go`，只给助手）加，手机卡片让用户填写密码 / 授权码，
 确认后 hub 用 `AddAccount` 连一遍再保存，和 App 表单走同一条路。密码不经过模型、不进对话；交互历史只存 `<redacted>`。
 需要填写的卡片没有通知快捷允许按钮，手表和 Siri 提示到 iPhone 填写；缺少必填字段的批准不会消耗卡片。Gmail 仍然只能在 App 里登录。
@@ -215,7 +215,7 @@ SMTP 不给时按端口推断（465 = TLS，587/25 = STARTTLS，其余 TLS）。
 - 每次保存都用新 nonce 重新加密（同一份明文不会产生同一段密文）。
 - 整组账号在一个事务里替换写入。
 - 换机器 / 重装 hub 时，只要 `secret.key` 丢了，所有密码都要重填。
-- hub 的 `~/.jarvis` 目录建议 `chmod 700`。
+- hub 的 `~/.persona` 目录建议 `chmod 700`。
 
 API 响应里只有 `status` / `error`，永远拿不到密码或 refresh token。
 

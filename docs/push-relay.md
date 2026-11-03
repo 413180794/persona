@@ -1,8 +1,8 @@
 # 推送中继（端到端加密）
 
-自己搭的 hub 没有 App 所属 Apple Team 的 APNs key，发不了推送。推送中继是 App 发布方跑的一个 `jarvisd relay`：
+自己搭的 hub 没有 App 所属 Apple Team 的 APNs key，发不了推送。推送中继是 App 发布方跑的一个 `personad relay`：
 它持有 APNs key，替各家 hub 把推送交给 APNs。通知正文由 hub 用手机的公钥加密，中继只转发密文，
-手机在「通知服务扩展」里解密后再显示。自己有 APNs key 的 hub（`~/.jarvis/apns.json`）照旧直连 APNs，不经过中继。
+手机在「通知服务扩展」里解密后再显示。自己有 APNs key 的 hub（`~/.persona/apns.json`）照旧直连 APNs，不经过中继。
 Mac 版一样：它的通知服务扩展是 `JarvisMacNotify`（`docs/mac.md`「远程推送（Mac）」，#432），私钥在 data protection 钥匙串里和扩展共用。
 
 ```
@@ -73,7 +73,7 @@ Live Activity 的远程更新由 iOS 直接读推送里的 `content-state`，没
 
 ## 接口
 
-中继（`jarvisd relay`，配置 `~/.jarvis/relay.json`）：
+中继（`personad relay`，配置 `~/.persona/relay.json`）：
 
 ```
 POST /relay/v1/register   {"apns_token":"<hex>","env":"production|sandbox","topic":"<bundle id>"}
@@ -103,14 +103,14 @@ hub 选路（`push.go`）：有 `apns.json` → 直连（和以前一模一样�
 
 ## 部署（发布方）
 
-1. 在一台能出外网的机器上放 `~/.jarvis/relay.json`（0600）：
+1. 在一台能出外网的机器上放 `~/.persona/relay.json`（0600）：
 
    ```json
    {
      "listen": "127.0.0.1:18670",
-     "apns": { "key_id": "<Key ID>", "team_id": "<Team ID>", "key_path": "~/.jarvis/AuthKey_<Key ID>.p8" },
+     "apns": { "key_id": "<Key ID>", "team_id": "<Team ID>", "key_path": "~/.persona/AuthKey_<Key ID>.p8" },
      "topics": ["<App 的 bundle id>"],
-     "secret_path": "~/.jarvis/relay.secret",
+     "secret_path": "~/.persona/relay.secret",
      "proxy_secret": "<随机长串，和 Worker 的 RELAY_PROXY_SECRET 一样>"
    }
    ```
@@ -118,7 +118,7 @@ hub 选路（`push.go`）：有 `apns.json` → 直连（和以前一模一样�
    `secret_path` 不存在时第一次启动生成（32 字节随机数，0600）；**丢了它所有手机要重新登记**（App 启动时自动做）。
    `proxy_secret`：设了以后，不带 `X-Relay-Proxy-Secret` 的请求一律 403（绕不过 Worker 直连源站），登记的限流按 Worker 给的
    `X-Forwarded-For`（客户端地址）算；不设就按直连地址算，适合不经 Worker、自己配 TLS 直接对外的部署。
-2. 跑 `jarvisd relay`（systemd / launchd 常驻），本机请求 `http://127.0.0.1:18670/relay/v1/health` 应看到 `"apns":true`。
+2. 跑 `personad relay`（systemd / launchd 常驻），本机请求 `http://127.0.0.1:18670/relay/v1/health` 应看到 `"apns":true`。
    配置了 `proxy_secret` 时，健康检查同样受保护：本机请求要带 `X-Relay-Proxy-Secret`，否则回 403；官网请求由 Worker 自动补这个头。
 3. 挂到官网域名下：官网是 Cloudflare Workers 的静态站（`site/`），`site/worker.mjs` 把 `/relay/*` 转给中继
    （`wrangler.jsonc` 的 `run_worker_first`），其余照旧是静态文件。中继的地址和密钥不进仓库：
@@ -135,7 +135,7 @@ hub 选路（`push.go`）：有 `apns.json` → 直连（和以前一模一样�
 远程管理的 Tunnel 在 Cloudflare 配置两条 ingress：第一条是源站主机名 → `http://127.0.0.1:18670`，最后一条是
 `http_status:404`；源站 DNS 用开启代理的 CNAME 指向 `<Tunnel ID>.cfargotunnel.com`。不要复用已有业务的 Tunnel 或覆盖它的 ingress。
 
-把经过官方发布 SHA-256 校验的 `cloudflared` 放进 `~/.jarvis/bin/`，Tunnel token 放进 `~/.jarvis/relay-tunnel.token`（0600），
+把经过官方发布 SHA-256 校验的 `cloudflared` 放进 `~/.persona/bin/`，Tunnel token 放进 `~/.persona/relay-tunnel.token`（0600），
 新建 `~/.config/systemd/user/jarvis-relay-tunnel.service`：
 
 ```ini
@@ -155,7 +155,7 @@ UMask=0077
 WantedBy=default.target
 ```
 
-`jarvis-relay.service` 是这台机器上运行 `jarvisd relay` 的 unit 名；若不同，改成实际名字。执行
+`jarvis-relay.service` 是这台机器上运行 `personad relay` 的 unit 名；若不同，改成实际名字。执行
 `systemctl --user daemon-reload`、`systemctl --user enable --now jarvis-relay-tunnel.service`，并确认用户已开启 linger，
 退出 SSH 后服务才会继续运行。`--token-file` 避免 token 出现在进程参数或日志里；部署机的 UDP/7844 不通时显式用 HTTP/2，
 仍需允许 TCP/7844 出站。单看 unit 是 `active` 不够，还要看到 Tunnel 已登记连接、远程 ingress 已加载。
@@ -186,7 +186,7 @@ WantedBy=default.target
 - `server/internal/hub`：没有 `apns.json` 时普通通知 / 交互 / 完成 / 静默唤醒 / Live Activity 都打到假中继、请求里没有明文；有 `apns.json` 时照旧直连。
 - `server/internal/pushcrypto` 生成的密文由 JarvisTests 用 CryptoKit 解开（跨语言测试向量）。
 - `site/worker.test.mjs`（`node --test`）：静态路径不变、没配置时 503、转发时带上密钥和客户端地址、丢掉伪造的密钥和 cookie。
-- 模拟器端到端：`scripts/test/relay_sim_e2e.sh` 用 App 导出的公钥，由 hub 的 Go 代码加密 → 本机 `jarvisd relay` → 假 APNs
+- 模拟器端到端：`scripts/test/relay_sim_e2e.sh` 用 App 导出的公钥，由 hub 的 Go 代码加密 → 本机 `personad relay` → 假 APNs
   收下请求（检查里面没有明文）→ App 进程里跑扩展的逻辑（`PushCrypto.service`，`NotificationServiceTests`）逐条解开；
   改坏一个字节的仍是「有新消息」。
   **`simctl push` 不运行通知服务扩展**（模拟器把它当本地通知直接加进通知中心，2026-11-01 Xcode 27.1 / iOS 27.0 实测：

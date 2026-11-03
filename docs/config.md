@@ -4,33 +4,51 @@
 
 | 配置 | 位置 | 谁读 | 管什么 |
 | --- | --- | --- | --- |
-| 构建 / 部署配置 | 开发机上的 `~/.config/jarvis/config.json`（可用 `JARVIS_CONFIG` 指到别处），模板是仓库根目录的 `config.example.json` | `scripts/*`（经 `scripts/jarvis_config.py`）、XcodeGen（经生成的 `apple/Config.xcconfig`） | App 的 bundle id 和团队、App Store Connect 账号、TestFlight 测试员、hub 在哪台机器 / 地址、要部署的机器、模拟器 |
-| hub 运行配置 | hub 所在机器的 `~/.jarvis/hub.json`（0600，含 token、数据库密码，第一次运行 `jarvisd hub` 自动生成） | `jarvisd hub` | 监听地址、对外地址、接入哪些机器、助手是谁的助手和它该知道什么、Gmail 代理、AI 网关、lark-connector |
+| 构建 / 部署配置 | 开发机上的 `~/.config/persona/config.json`（可用 `PERSONA_CONFIG` 指到别处，旧 `JARVIS_CONFIG` 兼容），模板是仓库根目录的 `config.example.json` | `scripts/*`（经 `scripts/jarvis_config.py`）、XcodeGen（经生成的 `apple/Config.xcconfig`） | App 的 bundle id 和团队、App Store Connect 账号、TestFlight 测试员、hub 在哪台机器 / 地址、要部署的机器、模拟器 |
+| hub 运行配置 | hub 所在机器的 `~/.persona/hub.json`（0600，含 token、数据库密码，第一次运行 `personad hub` 自动生成） | `personad hub` | 监听地址、对外地址、接入哪些机器、助手是谁的助手和它该知道什么、Gmail 代理、AI 网关、lark-connector |
 
 配置放在仓库外面：发布在干净的 worktree 里跑（`docs/release.md`），worktree 里没有仓库外的东西就会缺；也避免误提交。
 `apple/Config.xcconfig` 和 `CLAUDE.local.md` 在 `.gitignore` 里。
 
+## 命名与兼容
+
+产品名统一为 **Persona**（原 Jarvis），仓库为 `nwverse/persona`。本文的新默认名称适用于 #277 的迁移版本；仅更新文档不会改变已经安装的二进制或脚本，旧版本仍使用旧入口。
+
+| 用途 | 新名称（优先） | 兼容名称 |
+| --- | --- | --- |
+| 服务端二进制 | `personad` | `jarvisd`；现有子命令语义不变 |
+| 默认运行目录 | `~/.persona` | `~/.jarvis`；升级时保留原配置、密钥、知识库和配对身份 |
+| 默认构建 / 部署配置 | `~/.config/persona/config.json` | `~/.config/jarvis/config.json` |
+| 配置文件覆盖 | `PERSONA_CONFIG` | `JARVIS_CONFIG` |
+| 已迁移的环境变量 | 对应的 `PERSONA_*` | `JARVIS_*`；新旧同时提供时新名优先 |
+
+旧目录的兼容和迁移由运行时 / 安装器负责。升级前备份实际使用的数据目录与 Postgres；不要仅为改名手动删除旧目录、合并两份目录或重新生成密钥。两套目录已经同时存在、或者使用自定义路径时，先确认实际加载的是哪一份，避免启动一个空 hub。文档中的历史测量、签名 profile、源码路径、包 ID、协议字段、缓存键以及 systemd / launchd 名称仍可能保留 Jarvis；它们不是新的对外产品名，也不应靠全文替换迁移。
+
+Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数据库角色 / 库 / 容器 / 数据卷、公开域名、安装 / 中继地址均保留已有身份。形象（`persona`）还是名字 / 头像 / 状态圆点的概念，不随产品改名重命名。
+
+下文仍列出旧 `JARVIS_*`、xcconfig / Gradle 标识符和协议名供兼容配置及查源码；这不表示每一个代码标识符都能机械换成 `PERSONA_*`。具体入口以迁移版本实现为准。
+
 ## 快速开始：接入多台机器
 
 一台常开的 Linux 机器跑 hub，其他电脑都由 hub 通过 SSH 接入。其他电脑上不用常驻服务：hub 连上时执行
-`ssh <主机> ~/.jarvis/bin/jarvisd node --stdio`，在 SSH 的标准输入输出上跑 node 协议，断了自动重连（`server/internal/hub/machine.go`）。
+`ssh <主机> ~/.persona/bin/personad node --stdio`，在 SSH 的标准输入输出上跑 node 协议，断了自动重连（`server/internal/hub/machine.go`）。
 
 ### 准备
 
 | 机器 | 要有 |
 | --- | --- |
 | hub 机器（Linux） | docker（Postgres 容器；不想装 Docker 就用系统自带的 Postgres，见 `docs/server.md`「数据库」）、systemd 用户服务、herdr；手机能访问 hub：同一网络、用户自配 VPN，或公网直连（优先 IPv6，放行 TLS 端口）。放在 NAS 上、或只当 hub 不跑 Agent 时，也可以整个用 Docker 跑（`docs/docker.md`），下面的第 1、2 步只用来往各台电脑装 `jarvisd` |
-| 每台要接入的电脑 | Claude Code（或 Codex）；`~/.jarvis/bin/jarvisd` 和 herdr（第 2 步部署脚本会拷过去；herdr 没有的话用它的官方安装器装到 `~/.local/bin`，用别的引擎不想装就 `JARVIS_SKIP_HERDR=1`） |
+| 每台要接入的电脑 | Claude Code（或 Codex）；`~/.persona/bin/personad` 和 herdr（第 2 步部署脚本会拷过去；herdr 没有的话用它的官方安装器装到 `~/.local/bin`，用别的引擎不想装就 `JARVIS_SKIP_HERDR=1`） |
 | SSH | hub 机器能**免密码**登录每台电脑（hub 用 `BatchMode=yes`，只能用密钥），在 hub 机器的 `~/.ssh/config` 里给每台起个别名；开发机也要能 SSH 到每台（部署用） |
 
 在 NAT 后面、hub 连不进去的电脑（比如家里的 Mac、另一个内网里的机器），用 **tailcat**（`docs/server.md`「tailcat 打洞」）：
-那台电脑上装常驻 node、跑一次 `jarvisd node tailcat init`，把打印的地址填进 hub.json 那台的 `tailcat_addr`。两边都不需要公网 IP、
+那台电脑上装常驻 node、跑一次 `personad node tailcat init`，把打印的地址填进 hub.json 那台的 `tailcat_addr`。两边都不需要公网 IP、
 开端口或 Tailscale 账号；hub 先试 ssh，连不上再走 tailcat。也可以照旧从那台电脑建一条到 hub 机器的反向隧道
 （`ssh -R 2222:localhost:22 hub机器`，用 launchd / autossh 保活），hub 机器的 `~/.ssh/config` 里把别名指到 `localhost:2222`。
 
 ### 步骤
 
-1. **开发机：写构建 / 部署配置** `~/.config/jarvis/config.json`（从 `config.example.json` 复制，字段见下一节）。
+1. **开发机：写构建 / 部署配置** `~/.config/persona/config.json`（从 `config.example.json` 复制，字段见下一节）。
    和接入机器有关的是这两段：
 
    ```json
@@ -45,10 +63,10 @@
    开发机连不上、只有另一台（通常是 hub 机器）连得上的电脑（密钥只在那台上、路由不通）写 `"via": "<那台的 id>"`：
    部署时先拷到那台、再从那台装过去，这时 `ssh` 是**那台**上的主机名。
 
-2. **部署**：`./scripts/deploy/deploy.sh`。编译 Linux / macOS 两份 `jarvisd`，按 `os` 装到每台电脑的 `~/.jarvis/bin/`；在 hub 机器上
-   起 Postgres 容器、把 `jarvisd hub` 装成 systemd 用户服务并启动。
+2. **部署**：`./scripts/deploy/deploy.sh`。编译 Linux / macOS 两份 `personad`，按 `os` 装到每台电脑的 `~/.persona/bin/`；在 hub 机器上
+   起 Postgres 容器、把 `personad hub` 装成 systemd 用户服务并启动。
 
-3. **hub 机器：告诉 hub 接入哪些电脑**。第一次启动会生成 `~/.jarvis/hub.json`（0600），里面只有它自己。补上其他电脑和手机访问的地址：
+3. **hub 机器：告诉 hub 接入哪些电脑**。第一次启动会生成 `~/.persona/hub.json`（0600），里面只有它自己。补上其他电脑和手机访问的地址：
 
    ```json
    "public_url": "http://server.example.com:18660",
@@ -59,25 +77,25 @@
    ```
 
    `ssh_host` 是 **hub 机器** SSH 到这台的主机名（两边各自的 `~/.ssh/config`，可以和第 1 步的 `ssh` 不同）；`id` 最好和第 1 步一致；
-   `name` 是 App 里显示的名字；`icon` 取 `server` / `laptop` / `desktop`。`jarvisd` 不在 `~/.jarvis/bin/jarvisd` 时用 `remote_bin` 指定。
+   `name` 是 App 里显示的名字；`icon` 取 `server` / `laptop` / `desktop`。`personad` 不在 `~/.persona/bin/personad` 时用 `remote_bin` 指定。
    顺便可以填 `assistant`（见下文 hub.json 一节）。公网直连另加 `public.tls_listen`、`public.advertise`，按 [网络文档](network.md) 放行 TLS 端口；`public_url` 保留旧 App 能用的地址。
 
 4. **重启 hub 让它读到新配置**：`./scripts/deploy/deploy.sh <hub 机器 id>`（或在 hub 机器上 `systemctl --user restart jarvisd`）。
 
-5. **配对手机**：在 hub 机器上跑 `~/.jarvis/bin/jarvisd hub pair`，用 App 扫二维码。命令通过本机运行中的 hub 生成临时 token；有效期 10 分钟，只能兑换一次设备 token，兑换后最多宽限 2 分钟供配对中的请求使用。`--legacy` 才会打印主 token。
+5. **配对手机**：在 hub 机器上跑 `~/.persona/bin/personad hub pair`，用 App 扫二维码。命令通过本机运行中的 hub 生成临时 token；有效期 10 分钟，只能兑换一次设备 token，兑换后最多宽限 2 分钟供配对中的请求使用。`--legacy` 才会打印主 token。
 
 6. **检查**：App「设置 › 机器」每台显示在线；「Agents」tab 里能看到每台电脑上 herdr 里的会话。某台不在线时先在 hub 机器上手动跑
-   `ssh -o BatchMode=yes <ssh_host> '~/.jarvis/bin/jarvisd node --stdio'`，看是 SSH 不通还是二进制不在。
+   `ssh -o BatchMode=yes <ssh_host> '~/.persona/bin/personad node --stdio'`，看是 SSH 不通还是二进制不在。
 
 之后加一台电脑：两份配置的 `machines` 各加一行，跑 `./scripts/deploy/deploy.sh <新机器 id> <hub 机器 id>`。
 
 **推荐：其他电脑装 node 服务**（2026-11-02，[plan-hub-center.md](plan-hub-center.md) 第 0 节）：全家只装一台 hub，其他电脑不走 SSH，
 装常驻 node 加连接器 jarvis-link，一条命令或一个 App 装好，见 [link.md](link.md)「装 node 服务」：
 
-- Linux：`curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<jarvisd hub pair --machine <id> 给的链接>'`（这台去连 hub，`machines` 里是
+- Linux：`curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<personad hub pair --machine <id> 给的链接>'`（这台去连 hub，`machines` 里是
   `{"id":"laptop","name":"笔记本","kind":"link","icon":"laptop"}`，hub 要开 `public.tls_listen`），或者 `… --node --listen`（让 hub 来连，
   打印的链接粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」，`machines` 里是 kind `service`）。
-- Mac：装菜单栏 App「Jarvis Link」（`./scripts/app/mac-link.sh install`），它带着 jarvisd，第一次运行就装好常驻 node；配对在它的菜单里。
+- Mac：装菜单栏 App「Persona Link」（`./scripts/app/mac-link.sh install`），它带着 personad，第一次运行就装好常驻 node；配对在它的菜单里。
 
 不写 `ssh_host`，也不用给 hub 配 SSH。上面 1–6 步的 SSH 接入还能用，以后只当兼容。
 
@@ -118,9 +136,9 @@
 | `app_store.*` | `release.sh` / `asc*.py`：API key（`key_id`、`issuer_id`、`key_path`）、App 记录的数字 ID、内部测试员、TestFlight 反馈邮箱；`external` 是外部测试（群组名、公开链接开关和人数上限、隐私政策地址、另外按邮箱邀请的测试员、Beta App Review 联系人和备注，`docs/release.md`）。环境变量 `ASC_KEY_ID` 等仍可覆盖 |
 | `hub.machine` | hub 跑在哪台机器（`machines` 里的 id）：`deploy.sh` 在它上面起 Postgres 和 systemd 服务，`test-server.sh` 在它上面跑测试，`sim.sh` 从它上面读 token |
 | `hub.url` | `sim.sh` 配对模拟器用的地址；示例中的 HTTP 仅用于内网 / VPN，公网入口另配 `hub.json` 的 `public` |
-| `machines[]` | `deploy.sh` 要装 `jarvisd` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh） |
+| `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh） |
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
-| `publish.site_url` | `publish.sh` 把 `jarvisd` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 jarvisd」）；不写就不发布 |
+| `publish.site_url` | `publish.sh` 把 `personad` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 personad」）；不写就不发布 |
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
 | `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`jarvis_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
 | `android.application_id` | Android App 的 application id（`scripts/app/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
@@ -188,7 +206,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   在管理界面「概览」里改的立刻生效（[admin.md](admin.md)）。
 - `admin`（可选）：hub 管理界面（`<hub 地址>/admin`，[admin.md](admin.md)）。`access` 是谁能打开：`loopback` / `lan`（默认）/ `cidrs` / `any`
   （必须 TLS）；`cidrs` 是 `access: cidrs` 时放进来的网段；`session_hours` 是登录多久过期（默认 12）。放宽只能在 hub 机器上
-  `jarvisd hub admin access <范围>`（或部署脚本），网页里只能收窄；环境变量 `JARVIS_ADMIN_ACCESS` / `JARVIS_ADMIN_CIDRS` 优先于它。
+  `personad hub admin access <范围>`（或部署脚本），网页里只能收窄；环境变量 `JARVIS_ADMIN_ACCESS` / `JARVIS_ADMIN_CIDRS` 优先于它。
   管理界面改 hub.json 时原子写、保留不认识的字段（[admin.md](admin.md)「改 hub.json」）。
 - `mesh`（可选，hub 互联，[mesh.md](mesh.md)）：`discovery`（默认 true：在局域网里用 mDNS 广播自己、列出发现的 hub；Docker 桥接网络里收不到）、
   `path_switch_seconds`（默认 60：一台电脑有更好的路时，要一直更好这么久中心才换过去；断了的路马上换，不等）。互联的对端、组的中心和任期存在
@@ -199,8 +217,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   machine_uid 认出是同一台，只列一次、用最好的那条（[mesh.md](mesh.md)「一台电脑多条路」）。
 - `machines[].address`、`machines[].proxy`（kind `service`）：连接器的 `主机:端口`（`jarvis-link pair --listen` 的链接里带着，管理界面「添加电脑 ›
   hub 来连」粘贴链接就填好）；`proxy` 可选，`socks5://[用户:密码@]主机:端口`，hub 经这个 SOCKS 代理去连（这台只能从某台机器后面到达时）。
-  连接器的公钥指纹和 hub 给它的凭据不在 hub.json：配对时存进 Postgres（凭据用 `~/.jarvis/secret.key` 加密）。
-- `machines[].tailcat_addr`（可选）：那台电脑 `jarvisd node tailcat init` 打印的 `tc…` 地址，hub ssh 不过去时经 tailcat 连
+  连接器的公钥指纹和 hub 给它的凭据不在 hub.json：配对时存进 Postgres（凭据用 `~/.persona/secret.key` 加密）。
+- `machines[].tailcat_addr`（可选）：那台电脑 `personad node tailcat init` 打印的 `tc…` 地址，hub ssh 不过去时经 tailcat 连
   （`docs/server.md`「tailcat 打洞」）。地址是密钥（带 WireGuard 的预共享密钥），和 token 一样只放 hub.json。`kind: "tailcat"` 表示
   只走 tailcat、不试 ssh（没有 `ssh_host`）；`kind: "ssh"` 加 `tailcat_addr` 是先 ssh、不行再 tailcat。
 - 环境变量 `JARVIS_DATABASE_URL`、`JARVIS_PUBLIC_URL`、`JARVIS_LISTEN`、`JARVIS_ADMIN_ACCESS` 覆盖同名的设置（不写回文件），Docker 部署靠它们
@@ -249,10 +267,10 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `muted_repos`（`["owner/name"]`）、`ignore_branches`（不提醒的分支，`path.Match` 模式，默认 `["train/*"]`）。
 - `imessage`（可选）：信息连接器。`{"machine": "<机器 id>"}`：App 里能看哪台 Mac 的「信息」（经那台 Mac 的 node 只读 `~/Library/Messages/chat.db`，
   要给它完全磁盘访问权限，App 的 设置 › 连接器 › 信息 会说怎么开）。只写一台（同一个 Apple ID 的几台 Mac 消息是同一份）。
-  App 里能看所有会话。开关「交给 Jarvis」（设置 › 连接器 › 信息，默认开，存在 hub）开着时，真正的会话（成员里有通讯录里的人、或者你说过话的）
+  App 里能看所有会话。开关「交给 Persona」（设置 › 连接器 › 信息，默认开，存在 hub）开着时，真正的会话（成员里有通讯录里的人、或者你说过话的）
   按 ROWID 增量进知识库和收件箱（和飞书一样分拣），助手有 `imessage_chats` / `imessage_read` / `imessage_search`；验证码打码。关掉就都停，
   hub 上已经存下的另外可以删。日志里没有号码和正文（`docs/plan-connectors.md`「五」）。
-- `assistant.owner`：「对话」tab 的助手称呼你什么；`assistant.notes`：附在助手说明（`~/.jarvis/assistant/CLAUDE.md`）最后的
+- `assistant.owner`：「对话」tab 的助手称呼你什么；`assistant.notes`：附在助手说明（`~/.persona/assistant/CLAUDE.md`）最后的
   Markdown，写只有你这套环境才有的东西：代码在哪、用哪些 skills / CLI 访问工作数据、哪些目录不能碰。
 - 模型设置的日常入口是 **设置 › 模型供应商 / 模型配置**（`docs/model-config.md`）：前者管理连接和凭据，后者管理对话、分类、翻译、知识处理、`/agent`、定时任务等用途。旧 `ai`、`inbox.*_ai`、`kb.ai`、各启动器默认作为兼容基线保留；统一用途覆盖存 Postgres，不写回 `hub.json`。没有覆盖时保持原模型，不会因为打开设置而迁移成其他供应商。
 - `assistant.machine` / `assistant.launcher`：助手默认跑在哪台机器、用哪个启动器（默认 hub 自己那台、`claude`）；App 设置里改过以后以 App 为准。
@@ -271,8 +289,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 
   ```json
   "inbox": {
-    "triage_ai": { "base_url": "<网关地址>", "api_key_file": "removed-secret-value", "model": "<模型>" },
-    "judge_ai":  { "base_url": "<网关地址>", "api_key_file": "removed-secret-value", "model": "<模型>" },
+    "triage_ai": { "base_url": "<网关地址>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<模型>" },
+    "judge_ai":  { "base_url": "<网关地址>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<模型>" },
     "agent": { "enabled": true, "launcher": "<启动器>" }
   }
   ```
@@ -280,10 +298,10 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `ai`（压缩和打标的模型，字段同 `ai`；不写用 `inbox.triage_ai`，再没有用 `ai`）、`extra_dirs`（hub 机器上你自己维护的笔记目录，
   比如一个记事实 / 经验的 git 仓库：`kb_search` 也搜这些目录里的 Markdown（只读，跳过 `.git` 这类点开头的目录），助手的 CLAUDE.md 会提到它们；`~/` 是那台的家目录）。
 - `inbox.rules`：收件箱 AI 分拣的个人规则（自然语言，比如「某某找我的都算需要我」「某告警群只算噪音」），附在分拣提示词最后、优先于默认判断（`docs/inbox.md`）。
-- `bots.feishu`（可选）：在飞书里和 Jarvis 对话的机器人的应用凭证 `app_id`、`app_secret`、`domain`（`feishu` / `lark` / 开放平台地址），
+- `bots.feishu`（可选）：在飞书里和 Persona 对话的机器人的应用凭证 `app_id`、`app_secret`、`domain`（`feishu` / `lark` / 开放平台地址），
   给不想在 App 里填的人用；App 里（设置 › 连接器 › 飞书机器人）存过的优先，开关、配对、各项功能都在 App 里（`docs/bots.md`）。
 - `plugins`：hub 跑起来、转发给 App 的插件（语音对话等），`id`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的插件）、`config`（插件自己的设置），见 `docs/plugins.md`；
-  jarvisd 自带的语音插件（GPT-Live）写 `"command": "jarvisd", "args": ["voice"]`，上游放 `config.providers`（`docs/plugins.md`「内置语音插件」）。
+  personad 自带的语音插件（GPT-Live）写 `"command": "jarvisd", "args": ["voice"]`，上游放 `config.providers`（`docs/plugins.md`「内置语音插件」）。
 
 ## DDNS（public.ddns）
 

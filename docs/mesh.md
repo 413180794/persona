@@ -25,28 +25,28 @@
 
 ## 机器身份 machine_uid
 
-- node 第一次运行生成 `~/.jarvis/machine-uid`（UUIDv4，0600），之后一直用它；`node.info` 带 `machine_uid`（`internal/node/machineuid.go`）。
+- node 第一次运行生成 `~/.persona/machine-uid`（UUIDv4，0600），之后一直用它；`node.info` 带 `machine_uid`（`internal/node/machineuid.go`）。
   文件坏了（不是 UUIDv4）就换一个新的。
-- 克隆出来的虚拟机会带着同一个文件：在那台上跑 `jarvisd node reset-uid`，再重启常驻 node。
+- 克隆出来的虚拟机会带着同一个文件：在那台上跑 `personad node reset-uid`，再重启常驻 node。
 - 旧 node 没有这个字段：不参与去重，每条路各算一台。
 
 ## 配对和信任
 
-- **互联码**：在 hub B 上生成（管理界面「高级 › 互联 › 生成互联码」，或 `jarvisd hub pair --peer`），一次性、10 分钟：
+- **互联码**：在 hub B 上生成（管理界面「高级 › 互联 › 生成互联码」，或 `personad hub pair --peer`），一次性、10 分钟：
   `jarvis://peer?hub=<hub_id>&name=<名字>&fp=<公钥指纹>&tls=<TLS 端口>&url=<https 候选>…&code=jx_<64 位十六进制>`。
   只存 hash（`peer_codes`）。没开 TLS 的 hub 生成不了，也用不了别人的码（409，提示去开 TLS）。
-- **兑换**（A 拿到 B 的码，`POST /api/v1/admin/peers {"code"}` 或 `jarvisd hub peer add`）：
+- **兑换**（A 拿到 B 的码，`POST /api/v1/admin/peers {"code"}` 或 `personad hub peer add`）：
   1. A 先给 B 签一个互联凭据（设备凭据，kind / role 都是 `peer`，`machine_id` 存 B 的 hub_id）；
   2. A 按码里的 `fp` 钉扎、按候选地址赛跑（内网 → 公网 IPv6 → 域名 → 公网 IPv4，每 300 ms 起一个），
      `POST /api/v1/peer/pair`（`Authorization: Bearer jx_…`），带上 A 的 hub_id、名字、版本、指纹、TLS 端口、https 候选和第 1 步的凭据；
   3. B 在一个事务里用掉这个码、给 A 签凭据、撤销以前给 A 签过的、存下 A（`RedeemPeerCode`），回 B 自己的同样几项、给 A 的凭据，
      **和 B 所在组的中心、任期**；
   4. A 核对回来的 hub_id 就是码里的那台，**加入 B 的组**（下面「中心」），存下 B。失败时撤销第 1 步的凭据。
-  结果是双向钉扎、双向凭据：两边都存对方的指纹、地址、对方签给自己的凭据（用 `~/.jarvis/secret.key` AES-GCM 加密后进 `peers.token`），
+  结果是双向钉扎、双向凭据：两边都存对方的指纹、地址、对方签给自己的凭据（用 `~/.persona/secret.key` AES-GCM 加密后进 `peers.token`），
   以及自己签给对方的那个的 id（`peers.credential_id`）。
 - `peer` 凭据只能开 `GET /api/v1/peer`，`jx_` 码只能 `POST /api/v1/peer/pair`，别的接口一律 403；码错 / 过期 / 用过回 401，公网来源按
   `security` 现有规矩限流。
-- **断开**（`DELETE /api/v1/admin/peers/{hub_id}`、`jarvisd hub peer remove`）：先在链路上告诉对方（`unpair`），再删自己这边、撤销自己签出的凭据、
+- **断开**（`DELETE /api/v1/admin/peers/{hub_id}`、`personad hub peer remove`）：先在链路上告诉对方（`unpair`），再删自己这边、撤销自己签出的凭据、
   关链路（4012）。对方收到后做同样的事；当时连不上的，它下次拨号被拒（401），管理界面显示「对方不认这台的凭据」。断开后一个对端都没有的 hub
   自己当中心（见下）。在「设备」里直接撤销一个互联凭据，等于断开那台。
 
@@ -85,7 +85,7 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
   （只在两边同时改时才会遇到）；收到更大的就采纳并存库。
 - **加入组 = 贴对方的互联码**：A 贴 B 的码，A 把中心改成 B 所在组的中心（B 回包里说的），任期取两边见过的最大值再加一。A 的组里别的 hub
   从 A 的记录里看到更大的任期，跟着并入。所以「贴码的一方连同它的组并入发码方的组」。
-- **设为中心**（管理界面「高级 › 互联 › 组里的 hub › 设为中心」、`POST /api/v1/admin/peers/{hub_id}/center`、`jarvisd hub peer center [<hub_id>] [--confirm]`）：
+- **设为中心**（管理界面「高级 › 互联 › 组里的 hub › 设为中心」、`POST /api/v1/admin/peers/{hub_id}/center`、`personad hub peer center [<hub_id>] [--confirm]`）：
   任期加一、中心改成那台。只能设一台现在连得上的 hub（或自己）。原中心在线：它从记录里看到更大的任期，变成成员，把凭据交给新中心（下面「凭据」）。
   **原中心连不上**：要确认（`{"confirm": true}`，否则 409 `confirm_required`），提示原中心回来后会变成成员。
 - **中心连不上时不自动换**：自动换会在网络分区时出现两台中心、状态各写一份。成员对 App 回 `503 {"code":"center_unreachable","center":{"hub_id","name"}}`，
@@ -102,14 +102,14 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
 
 - 成员收到的 `/api/` 请求（含 WebSocket）除了它自己回答的，**原样**（`Authorization` 也在）经链路转给中心（多跳就一跳一跳转）。
   成员自己回答的：`/api/v1/health`、jarvis-link 的 `/api/v1/link`、`/api/v1/link/stream`、hub 之间的 `/api/v1/peer`、`/api/v1/peer/pair`、
-  管理界面 `/api/v1/admin/…`、`/api/v1/auth/pair-codes`（`jarvisd hub pair`），以及**它自己的 link 电脑**拿配对码换凭据的 `/api/v1/auth/tokens`
+  管理界面 `/api/v1/admin/…`、`/api/v1/auth/pair-codes`（`personad hub pair`），以及**它自己的 link 电脑**拿配对码换凭据的 `/api/v1/auth/tokens`
   （码是它发的、带机器 id）。网页静态文件和 `/admin` 页面不转。
 - **来源判断在成员这一端做完**：明文从公网来的已经在成员的 gate 里拒掉；成员把结论放进 `X-Jarvis-Peer-Source: <lan|public> <客户端地址> <tls|plain>`，
   中心照单全收（链路两端是配过对的，这个头只能从链路上来，外面带来的同名头和 `X-Forwarded-For` 在转发前去掉）。中心拿这个地址当 `RemoteAddr`，
   所以日志、来源相关的判断都按真实客户端走；回环在成员那边算局域网（主 token 只认中心自己机器上的回环）。
 - **限流在成员**：被封的来源成员直接 429；中心回 401 时成员给这个来源记一次失败（`codeWriter`）。中心对转来的请求不再计数，避免两边重复计。
 - 中心换了：成员断开正在转的请求（WebSocket 也断），App 重连后到新的中心。
-- **App 配对**：成员上的 `jarvisd hub pair` 经链路请中心生成配对码（`pair.code`），二维码里是中心的地址，App 直接配对到中心。
+- **App 配对**：成员上的 `personad hub pair` 经链路请中心生成配对码（`pair.code`），二维码里是中心的地址，App 直接配对到中心。
   成员管理界面的「设备」页回 409 `member_hub`，指向中心的管理界面。
 
 ## 凭据和推送
@@ -163,7 +163,7 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
 （`service.go`；连接器那一侧见 [link.md](link.md)「被动模式」。）
 
 - hub.json：`{"id":"example-workstation","name":"开发机","kind":"service","address":"<主机>:18663","proxy":"socks5://<主机>:1080"}`，`proxy` 可选。
-  连接器的指纹和凭据不在 hub.json，在 Postgres 的 `connector_credentials`（迁移 0191）：凭据用 `~/.jarvis/secret.key` AES-GCM 封好再存，和模型供应商的 key、
+  连接器的指纹和凭据不在 hub.json，在 Postgres 的 `connector_credentials`（迁移 0191）：凭据用 `~/.persona/secret.key` AES-GCM 封好再存，和模型供应商的 key、
   邮箱凭据同一套做法。
 - **配对**：电脑上 `jarvis-link pair --listen`（或安装器 `--node --listen`、菜单栏「让 hub 来连」）打印 `jarvis://connector?addr=…&fp=…&code=…`；
   管理界面「电脑 › 添加电脑 › hub 来连」粘贴（可以改地址、填代理）。hub 用 `link.ParseConnectorLink` 解析，按 `fp` 钉扎（TLS 1.2+、ALPN http/1.1、
@@ -184,12 +184,12 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
   电脑列表标「ssh 已不推荐」。以后再删。
 - link / service / 经成员的电脑，「重新部署」改成提示到那台电脑上更新 node 服务（经连接器推更新是 #284）。
 - **从 ssh 迁到 service（id 不变）**：
-  1. 在那台电脑上装 node 服务、让 hub 来连：`install.sh --node --listen`（Linux）或 Jarvis Link 菜单栏 App，`jarvis-link pair --listen` 拿到链接；
+  1. 在那台电脑上装 node 服务、让 hub 来连：`install.sh --node --listen`（Linux）或 Persona Link 菜单栏 App，`jarvis-link pair --listen` 拿到链接；
   2. 把 hub.json 里这台的 `kind` 改成 `service`，`ssh_host` 换成 `"address": "<主机>:18663"`，重启 hub；
   3. 管理界面这台显示「连接器还没配对…重新配对」，点「重新配对」粘贴链接。
   不在乎 id 变的话更简单：管理界面「添加电脑 › hub 来连」用一个新 id 加上，两条路到的是同一台电脑会自动合成一台（id 用 hub.json 里靠前的那条），
   确认能连后删掉 ssh 那条、重启。
-- **迁到 link**（电脑来连）：「添加电脑 › 电脑来连」用新 id 加，或把 kind 改成 `link`、删掉 `ssh_host` 后用 `jarvisd hub pair --machine <id>` 配对。
+- **迁到 link**（电脑来连）：「添加电脑 › 电脑来连」用新 id 加，或把 kind 改成 `link`、删掉 `ssh_host` 后用 `personad hub pair --machine <id>` 配对。
 
 ## 发现（mDNS）
 
@@ -215,8 +215,8 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
 | `POST /api/v1/admin/machines` | kind `link`（电脑来连）或 `service`（`pair_link`、可选 `address`、`proxy`）；加完立刻开始连 |
 | `POST /api/v1/admin/machines/{id}/connector` | service 电脑重新配对：`{"pair_link","address"?}` |
 
-命令行在 hub 机器上走同一套接口（前缀 `/api/v1/admin/cli/`，只收回环 + 主 token）：`jarvisd hub pair --peer`、`jarvisd hub peer add '<互联码>'|-`、
-`jarvisd hub peer list`（先说这台是中心还是成员）、`jarvisd hub peer remove <hub_id>`、`jarvisd hub peer center [<hub_id>] [--confirm]`。
+命令行在 hub 机器上走同一套接口（前缀 `/api/v1/admin/cli/`，只收回环 + 主 token）：`personad hub pair --peer`、`personad hub peer add '<互联码>'|-`、
+`personad hub peer list`（先说这台是中心还是成员）、`personad hub peer remove <hub_id>`、`personad hub peer center [<hub_id>] [--confirm]`。
 NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub …`。
 
 ## 配置（hub.json）
@@ -254,11 +254,11 @@ NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin
   - 还有 `TestMeshDuplicateLink`、`TestMeshPairingCode`；`internal/db` 的 `TestPeersAndPeerCodes`、`TestMeshGroupAndConnectors`、
     `TestAppTokensMoveToTheCenter`（要数据库）；`internal/mdns` 的单元测试。
   - 跑：`cd server && go test -count=1 -p 1 -run 'TestCenter|TestMesh|TestPeer' ./internal/hub/`；`JARVIS_MESH_LOG=1` 打印各台 hub 的日志。
-- 本机两台真 hub 冒烟（2026-11-02，不碰真实的 `~/.jarvis`）：各自一个临时 HOME，hub.json 用不同的端口、`public.tls_listen` 和测试库里各自的 schema
+- 本机两台真 hub 冒烟（2026-11-02，不碰真实的 `~/.persona`）：各自一个临时 HOME，hub.json 用不同的端口、`public.tls_listen` 和测试库里各自的 schema
   （`database_url` 加 `&search_path=<schema>`），`public.advertise` 写 `https://localhost:<TLS 端口>`，`JARVIS_LOCAL_NODE=0`，`env -i` 起；
-  第三个临时 HOME 里跑真的 `jarvisd node --attach` 和 `jarvis-link pair --listen 127.0.0.1:<端口>` + `jarvis-link run`。验证了：
-  管理接口粘贴连接器链接 → 配对、立刻经 service 在线；App 凭据列出这台、经它读目录；`jarvisd hub pair --peer | jarvisd hub peer add -` 后
-  `peer list` 一台中心一台成员；成员签的凭据交给中心后经成员、在中心都能用；成员上 `jarvisd hub pair` 出的是中心的码；中心停了成员回 503；
+  第三个临时 HOME 里跑真的 `personad node --attach` 和 `jarvis-link pair --listen 127.0.0.1:<端口>` + `jarvis-link run`。验证了：
+  管理接口粘贴连接器链接 → 配对、立刻经 service 在线；App 凭据列出这台、经它读目录；`personad hub pair --peer | personad hub peer add -` 后
+  `peer list` 一台中心一台成员；成员签的凭据交给中心后经成员、在中心都能用；成员上 `personad hub pair` 出的是中心的码；中心停了成员回 503；
   `peer center --confirm` 换中心；旧中心重启后变成员，新中心经它（它的连接器）连那台电脑。无头 Chrome 看了中心的「电脑」「互联」、成员的「概览」「电脑」（深浅色）。
   没在这台电脑上起 herdr / claude（会碰到真实环境），所以真连接器那条没测发消息和终端（进程内测试测了）。
 

@@ -1,4 +1,4 @@
-# Jarvis Android：国产系统（ROM）与 Android 版本适配调研
+# Persona Android：国产系统（ROM）与 Android 版本适配调研
 
 - 调研日期：**2026-10-30**（下文「查询日期」未单独写的，都是这一天）。
 - 标记：✅ 事实（有来源 URL）；💭 判断 / 推断（没有直接来源，引用前要复核）；❓ 未查到。
@@ -58,9 +58,9 @@
 
 ### 1.2 各候选 minSdk 失去的能力和要多写的分支
 
-先列和 Jarvis 有关的 API 级别（✅ 官方文档，见本节末尾来源）：
+先列和 Persona 有关的 API 级别（✅ 官方文档，见本节末尾来源）：
 
-| API | Jarvis 用得到的能力 |
+| API | Persona 用得到的能力 |
 | --- | --- |
 | 26 | 通知渠道；`startForegroundService` |
 | 28 | `FOREGROUND_SERVICE` 权限；`ActivityManager.isBackgroundRestricted()`（能查出用户在系统里限制了后台） |
@@ -78,7 +78,7 @@
 | minSdk | 覆盖 | 和 31 比，多出来的兼容分支 / 失去的能力 |
 | --- | --- | --- |
 | 26（PR #84 现状） | 98.6% / 99.0% | 下面 28、29、30、31 的全部分支：锁屏通知按钮不能要求解锁（只能不放「允许 / 批准」，或点了先进 App）；没有动态取色、没有模糊；29 以下后台能读剪贴板（行为两套）；30 以下没有 `ApplicationExitInfo`，被杀原因查不到；从后台起前台服务在 31 以下不受限，31 起受限——两套启动逻辑都要测 |
-| 28 | 97.7% / 97.0% | 同上，只省掉 Android 8.x 的几处（`FOREGROUND_SERVICE` 权限、`isBackgroundRestricted`）。💭 对 Jarvis 收益很小 |
+| 28 | 97.7% / 97.0% | 同上，只省掉 Android 8.x 的几处（`FOREGROUND_SERVICE` 权限、`isBackgroundRestricted`）。💭 对 Persona 收益很小 |
 | 29 | 96.2% / 93.9% | 省掉剪贴板和前台服务类型属性的分支；还差 30、31 的能力。💭 会把鸿蒙 2 的老华为机算进来（兼容层 Android 10，来源弱） |
 | 30 | 94.9% / 88.2% | 有了键盘动画、`getCurrentLocation`、`ApplicationExitInfo`；还差 31 的通知按钮需解锁、动态取色、模糊 |
 | **31** | **91.3% / 77.7%** | 基线。**包含鸿蒙 3/4（API 31）**；锁屏「允许 / 批准」能要求解锁；后台启动前台服务只有一套规则。仍要写的分支：33（通知权限、照片选择器、Geocoder）、34（前台服务类型常量、FGS 通知可被划掉、Health Connect 是否内置）、35（BOOT_COMPLETED 规则）、36（Live Updates）、37（MetricStyle、本地网络权限） |
@@ -161,17 +161,17 @@
 | 荣耀 | MagicOS | **MagicOS 11**：2026-09-15 发布，Magic9 首发 | Android 17 | MagicOS 10：Android 16 |
 | 华为 | 鸿蒙 | 鸿蒙 6 / 7（不能装 APK，见上） | 不是 Android | 鸿蒙 4.2 / 4.3：Android 兼容层 = Android 12（API 31） |
 
-- 💭 结论：**这一年里各家「当前大版本」都是 Android 17，存量主力是 Android 16**（中国 StatCounter：16 占 42%）。Jarvis 真机验证要覆盖 Android 16 和 17 两代 ROM，再加一台鸿蒙 4.x。
+- 💭 结论：**这一年里各家「当前大版本」都是 Android 17，存量主力是 Android 16**（中国 StatCounter：16 占 42%）。Persona 真机验证要覆盖 Android 16 和 17 两代 ROM，再加一台鸿蒙 4.x。
 - 来源：
   - 澎湃 OS 4：https://www.sohu.com/a/1064544461_115831 ，https://baike.baidu.com/item/%E5%B0%8F%E7%B1%B3%E6%BE%8E%E6%B9%83OS%204/67391378 ；澎湃 OS 3：https://9to5google.com/2025/09/26/xiaomi-android-16-list-schedule/
   - ColorOS 17：https://www.news.cn/photo/20260917/6e4a5b6e027341059efe0d7af0d78d19/c.html ，https://finance.sina.com.cn/tech/roll/2026-10-14/doc-inivcxxn0419857.shtml ；ColorOS 16：https://en.wikipedia.org/wiki/ColorOS
   - OriginOS 7：https://www.androidheadlines.com/2026/09/vivo-just-announced-global-originos-7-based-on-android-17-heres-whats-new.html ，https://www.gizmochina.com/2026/09/19/originos-7-update-timeline-for-vivo-and-iqoo-devices/ ；OriginOS 6：https://www.91mobiles.com/hub/android-16-release-date-eligible-phones/
   - MagicOS 11：https://www.ithome.com/0/999/493.htm ，https://phone.cnmo.com/news/820473.html （MagicOS 10 基于 Android 16：❓ 本次没单独查到来源，是常识性判断）
 
-## 3. 各系统影响 Jarvis 的限制，以及怎么跳到设置页
+## 3. 各系统影响 Persona 的限制，以及怎么跳到设置页
 
 > 先说结论（💭）：**没有任何一家国产系统给第三方 App 提供「查询 / 打开自启动、省电白名单」的公开接口**，各家的设置页组件名都是社区逆向出来的、随版本变；官方文档要么只有用户路径，要么停在 MIUI / EMUI 时代。
-> 所以 Jarvis 的做法只能是：能用 API 查的就查（通知、渠道、电池优化、后台限制），查不了的给「去设置」按钮 + 文字步骤 + 自检（锁屏后发测试通知、hub 记录连接断开时长），并把每家每个版本的实际表现写进 `docs/android.md` 的「经验」。
+> 所以 Persona 的做法只能是：能用 API 查的就查（通知、渠道、电池优化、后台限制），查不了的给「去设置」按钮 + 文字步骤 + 自检（锁屏后发测试通知、hub 记录连接断开时长），并把每家每个版本的实际表现写进 `docs/android.md` 的「经验」。
 
 ### 3.1 所有系统通用：能查什么、怎么跳
 
@@ -210,7 +210,7 @@
 | 系统级杀进程 | MIUI 进程管理有 AutoPowerKill（过度耗电）、AutoThermalKill（发热）；用户划掉后台后，官方建议「引导用户在安全中心中打开自启动开关」 | ✅ https://dev.mi.com/xiaomihyperos/documentation/detail?pId=1607 |
 | 冻结 | 有开发者在小米 14 Ultra（澎湃 OS）上发现 GreezeManager 会在无障碍服务没有事件约 1 秒后用 cgroup 冻结它，冻结期间 wakelock 被强制失效、后台白名单无效。**这是无障碍服务，不是前台服务**；前台服务会不会被冻结 ❓ 没查到 | ✅（个人开发者报告）https://github.com/madeye/ad-skipper/releases/tag/v1.1 |
 | 加锁 | 最近任务里把卡片下拉（或长按点锁） | ✅ https://dontkillmyapp.com/xiaomi |
-| 锁屏清理 | 手机管家 › 省电与电池 › 右上角设置 › 「锁屏后清理内存」（有 1 / 5 / 10 / 30 分钟等档；有文章说默认「从不」）；博主测试说会保留微信、电话、闹钟。Jarvis 不在保留名单里，要靠加锁 / 无限制 | 💭 自媒体（澎湃 OS 3）https://www.toutiao.com/article/7639927547056112191/ ；其他家「锁屏清理」开关 ❓ 没查到可靠来源 |
+| 锁屏清理 | 手机管家 › 省电与电池 › 右上角设置 › 「锁屏后清理内存」（有 1 / 5 / 10 / 30 分钟等档；有文章说默认「从不」）；博主测试说会保留微信、电话、闹钟。Persona 不在保留名单里，要靠加锁 / 无限制 | 💭 自媒体（澎湃 OS 3）https://www.toutiao.com/article/7639927547056112191/ ；其他家「锁屏清理」开关 ❓ 没查到可靠来源 |
 | `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Android 11+ 的 MIUI / 澎湃 OS 把系统弹窗换成了小米自己的页面；返回后要等约 1 秒再查结果（澎湃 OS 2 + Android 15 上 200ms 就行） | ✅ XXPermissions 源码注释 https://github.com/getActivity/XXPermissions |
 | 已知跳转 | 自启动：`com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity`（PR #84 在用）；App 权限页：action `miui.intent.action.APP_PERM_EDITOR` + extra `extra_pkgname`；安全中心首页：action `miui.intent.action.SECURITY_CENTER`；省电策略（老）：`com.miui.powerkeeper/.ui.HiddenAppsConfigActivity` + extras `package_name` / `package_label`（MIUI 9–12 时代的博客，澎湃 OS ❓） | ✅ https://github.com/judemanutd/AutoStarter ；XXPermissions `PermissionSettingPage`；CSDN 旧文 https://blog.csdn.net/u010098889/article/details/72823013 |
 | 读剪贴板 | 小米把它当成 AppOps 权限管理，商店审核要求「仅前台触发」 | ✅ https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2225 （2025-12-30） |
@@ -243,7 +243,7 @@
 | --- | --- | --- |
 | 新装 App 的通知 | ❓ 没查到 MagicOS 的默认值 | — |
 | 应用启动管理 | 设置 › 应用 › **应用启动管理** › 关掉该 App 的「自动管理」› 打开允许自启动、允许关联启动、允许后台活动（MagicOS 7.0+）；电池优化 › 不允许；多任务卡片下滑加锁 | ✅ 荣耀官方 https://www.honor.com/cn/support/content/zh-cn00428704/ ；https://consumer.huawei.com/cn/support/content/zh-cn15967050/ |
-| **智能省流量** | 「将阻止应用在后台使用移动数据」：设置 › 移动网络 › 流量管理 › 关掉。**对 Jarvis 的常驻连接是致命项**（流量下后台断网） | ✅ 荣耀官方，同上 |
+| **智能省流量** | 「将阻止应用在后台使用移动数据」：设置 › 移动网络 › 流量管理 › 关掉。**对 Persona 的常驻连接是致命项**（流量下后台断网） | ✅ 荣耀官方，同上 |
 | 其他 | 电池模式选「均衡 / 性能」，关省电 / 低电量模式；系统管家 › 扩展业务 › 打开「智能维护」 | ✅ 同上 |
 | 已知跳转 | 分家前的荣耀机型沿用 `com.huawei.systemmanager/...`；新机型系统管家包名是 `com.hihonor.systemmanager`，具体组件名 ❓ 没查到可靠来源 | ✅（包名，来源弱）https://www.volcengine.com/article/174693 |
 
@@ -252,7 +252,7 @@
 | 项 | 现状 | 来源 / 置信度 |
 | --- | --- | --- |
 | **本地通知被分类、限频** | 2023-09-15 起华为对「应用自己调系统接口发的通知」按《华为消息分类标准》灰度管控：**没有申请「自分类权益」的 App，本地通知按「资讯营销」处理**——静默（只在下拉通知栏，没有横幅、锁屏、声音），而且和云端推送共用每天 2 或 5 条的资讯营销配额，超了可能「甚至无法弹出」。自分类权益在 AppGallery Connect 申请；申请到后用 `Notification.category` 标类型（融云示例是 `CATEGORY_MESSAGE`）。❓ **不上华为应用市场的 App 能不能申请，没查到** | ✅ 华为公告（经融云、腾讯云转引）https://help.rongcloud.cn/t/topic/1085 ，https://cloud.tencent.com/document/product/548/97927 ；华为原文 https://developer.huawei.com/consumer/cn/doc/HMSCore-Guides/message-classification-0000001149358835 （JS 渲染，未能直接读到） |
-| 用户侧补救 | 设置 › 应用管理 › Jarvis › 通知管理：打开允许通知；按类别打开通知铃声、横幅、锁屏、允许打扰；**关掉「静默通知」** | ✅ 华为官方 https://consumer.huawei.com/cn/support/content/zh-cn15872069/ |
+| 用户侧补救 | 设置 › 应用管理 › Persona › 通知管理：打开允许通知；按类别打开通知铃声、横幅、锁屏、允许打扰；**关掉「静默通知」** | ✅ 华为官方 https://consumer.huawei.com/cn/support/content/zh-cn15872069/ |
 | 应用启动管理 | 设置 › 应用启动管理 › 关掉自动管理 › 打开允许自启动、允许关联启动、允许后台活动 | ✅ 同上（鸿蒙 4.x 及更早） |
 | 电池 | 电池优化 › 所有应用 › 不允许；**电池 › 更多电池设置 › 「休眠时始终保持网络连接」打开**（对常驻连接是关键项）；关智能省流量 | ✅ 同上 |
 | 已知跳转 | `com.huawei.systemmanager/.startupmgr.ui.StartupNormalAppListActivity`（Android 9+ 的 EMUI，多个来源一致）；`.appcontrol.activity.StartupAppControlActivity`（Android 8）；`.optimize.process.ProtectActivity`（更老）；`.optimize.bootstart.BootStartActivity`（EMUI 5） | ✅ https://gist.github.com/ru-huawei-android/7296148b24e0079c40073efc34f628a4 ，AutoStarter；P-Pass 在鸿蒙 4.2 真机上验证过「应用启动管理」三个开关 https://github.com/hawkeye-xb/P-Pass/pull/1086 （2026-10-21） |
@@ -262,7 +262,7 @@
 
 见 2.1：要用户装「卓易通」，App 跑在容器里；通知要在卓易通里单独打开，而且 App 要在后台活着。DeviceCompat 能识别这种环境（`isHarmonyOsNextAndroidCompatible`）。💭 **首版不承诺支持**，识别到时在配对页直接说明「需要在卓易通里允许通知、并保持在后台；体验可能不完整」。
 
-### 3.3 对 Jarvis 的建议（💭）
+### 3.3 对 Persona 的建议（💭）
 
 1. **准备清单分两类**：
    - 能自动检查的（通知总开关、`input` 渠道级别、电池优化、`isBackgroundRestricted`）：显示真实状态，回到 App（`onResume`）时重查。
@@ -277,10 +277,10 @@
 
 ### 4.1 平台规则（✅ 事实）
 
-| 规则 | 内容 | 对 Jarvis 的含义 |
+| 规则 | 内容 | 对 Persona 的含义 |
 | --- | --- | --- |
 | `specialUse` 类型 | 34 起必须声明类型；`specialUse` 要 `FOREGROUND_SERVICE_SPECIAL_USE`，**没有运行时前提、没有时间上限**（时间上限只有 `shortService` 约 3 分钟、`dataSync` / `mediaProcessing` 每 24 小时 6 小时）；`PROPERTY_SPECIAL_USE_FGS_SUBTYPE` 只在 Play 审核时看 | PR #84 的选择是对的，不上 Play 没有审核问题 |
-| 后台启动前台服务（target 31+） | 后台不能起前台服务，除 14 条豁免外抛 `ForegroundServiceStartNotAllowedException`。豁免里和 Jarvis 有关的：从可见状态转入、**用户点了通知 / 小组件**、**收到 `BOOT_COMPLETED` / `LOCKED_BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`**、**用户关了这个 App 的电池优化** | 开机、升级后都能起；**电池优化白名单不只是为了 Doze，它也是「随时能从后台起前台服务」的豁免** |
+| 后台启动前台服务（target 31+） | 后台不能起前台服务，除 14 条豁免外抛 `ForegroundServiceStartNotAllowedException`。豁免里和 Persona 有关的：从可见状态转入、**用户点了通知 / 小组件**、**收到 `BOOT_COMPLETED` / `LOCKED_BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`**、**用户关了这个 App 的电池优化** | 开机、升级后都能起；**电池优化白名单不只是为了 Doze，它也是「随时能从后台起前台服务」的豁免** |
 | `START_STICKY` | 官方豁免列表里**没有**「系统重启粘性服务」。社区实测：进程被杀后系统把服务拉起在后台，`onStartCommand` 里 `startForeground` 抛 `ForegroundServiceStartNotAllowedException`（`mAllowStartForeground false`），除非当时正好有别的豁免（比如关了电池优化） | 重启时 intent 为 null；`startForeground` 必须 try/catch，失败就 `stopSelf()`，等下一个豁免时机（用户打开 App、点通知、开机、App 升级）；网络变化不是豁免 |
 | `BOOT_COMPLETED`（target 35+） | 开机广播里不能起 dataSync、camera、mediaPlayback、phoneCall、mediaProjection、microphone 类前台服务；**`specialUse` 不在列表里** | PR #84 的 `BootReceiver` 在 target 35/36/37 下仍可用。国产系统上收不收得到开机广播取决于「自启动」（小米默认关） |
 | Doze 下的网络 | 官方 Doze 文档只写「Suspends network access」，没说前台服务例外；耗电限制总表里「App process is running a foreground service」一行的网络是「No restrictions」。**AOSP 源码**：Doze / 省电模式下放行网络的条件是 `procState <= PROCESS_STATE_BOUND_FOREGROUND_SERVICE`（或有 `POWER_RESTRICTED_NETWORK` 能力）；Doze 下禁用 partial wakelock 的条件也是 `procState > BOUND_FOREGROUND_SERVICE` 且不在白名单 | 原生系统上，**有前台服务的进程在 Doze 里仍能联网、能持锁**。厂商可以改（冻结、断网），所以要真机测 |
@@ -326,7 +326,7 @@
   来源：https://docs.ntfy.sh/faq/ ，https://github.com/binwiederhier/ntfy-android/releases/tag/v1.25.2
 - ✅ 微信 Mars 团队（2017 年前后的文章）：心跳太密会频繁把基带拉进高功耗状态，建议心跳间隔最短 4.5 分钟；实测某地区移动、联通的 NAT 超时 5 分钟，电信大于 28 分钟；Mars 的自适应心跳区间是 4.5 分钟到 9 分 50 秒。
   来源：https://blog.csdn.net/byeweiyang/article/details/73296619 （转载），https://www.cnblogs.com/xifengcoder/p/15340365.html （源码参数解读）
-- ❓ **没有找到国产系统上「前台服务 + WebSocket」的耗电实测**。Jarvis 只能自己测（`docs/redesign/android.md` 第 10 节已列为 A1 必测项）。
+- ❓ **没有找到国产系统上「前台服务 + WebSocket」的耗电实测**。Persona 只能自己测（`docs/redesign/android.md` 第 10 节已列为 A1 必测项）。
 
 ### 4.4 可行性和风险（💭 判断）
 
@@ -351,7 +351,7 @@
 
 | 系统 | 名字 | 标准 Live Updates（`setRequestPromotedOngoing`） | 厂商私有接口 | 来源 / 置信度 |
 | --- | --- | --- | --- | --- |
-| 澎湃 OS 3.0 | 超级岛 | ❌（3.0.300 以前不显示原生 Live Updates） | 焦点通知 / 超级岛模板：要先完成小米开发者认证、选择**已在小米应用商店上架**的应用开通服务、配证书指纹，提交场景预审和完整方案，白名单设备（按 OAID，最多 10 台、30 天过期）测试后再申请上线验证——**审核 + 白名单制，Jarvis 用不了**（文档 2025-12-05 更新） | ✅ 小米官方 https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2132 ，https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2141 |
+| 澎湃 OS 3.0 | 超级岛 | ❌（3.0.300 以前不显示原生 Live Updates） | 焦点通知 / 超级岛模板：要先完成小米开发者认证、选择**已在小米应用商店上架**的应用开通服务、配证书指纹，提交场景预审和完整方案，白名单设备（按 OAID，最多 10 台、30 天过期）测试后再申请上线验证——**审核 + 白名单制，Persona 用不了**（文档 2025-12-05 更新） | ✅ 小米官方 https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2132 ，https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2141 |
 | 澎湃 OS 3.1（OS3.0.300+）/ 4 | 超级岛 | ✅ 3.1 起超级岛支持 Android 16 Live Updates，第三方 App 不用小米代码 | 同上 | 💭 新闻 + 开源项目实测（Capsulyric 标「Verified」：「For HyperOS, version 3.0.300+ is required」）：https://www.huaweicentral.com/hyperos-3-1-finally-brings-a-stacked-recent-apps-layout-option/ ，https://github.com/FrancoGiudans/Capsulyric/wiki ；没有小米官方文档 |
 | ColorOS 16 / 17 | 流体云 | ✅ **官方表态**：流体云「全面兼容」Android 16 实时活动 API，遵循谷歌规范的应用可直接适配（「双兼容」：标准接口和 OPPO 自己的接口都行） | OPPO 自有接口要申请 serviceId | ✅ IT之家 2025-10-17（OPPO 设计负责人表态）https://www.ithome.com/0/890/345.htm ；💭 社区 https://github.com/huverse/SuperXD/pull/93 |
 | OriginOS 6 / 7 | 原子岛 / 原子通知 | 海外版：与 Android 16 Live Updates 深度集成；**国行版对标准接口的支持 ❓ 没查到官方说法**（社区有「原子岛也读标准通知」的说法，未验证） | 国行上第三方要和 vivo 合作接入（京东外卖、12306、高德、支付宝等都是逐个宣布的） | 💭 https://tech.udn.com/tech/story/123151/9075516 ，https://github.com/ccch1mneyyy/dsh-go/issues/70 ，https://finance.sina.com.cn/tech/digi/2025-06-11/doc-ineztfhw4487045.shtml |
@@ -364,7 +364,7 @@
   - OriginOS 国行、MagicOS：标准接口大概率能显示在通知栏和锁屏的「提升」位置，能不能上岛要真机看；
   - 厂商私有接口（小米焦点通知、OPPO serviceId、vivo 合作、荣耀 / 华为的 `notification.live.*`）都是白名单或非公开协议，**首版不碰**。
 
-### 5.3 对 Jarvis 的影响（💭）
+### 5.3 对 Persona 的影响（💭）
 
 1. PR #84 的常驻通知渠道是 `IMPORTANCE_MIN`，**按规则不能被提升**；渠道级别建好后 App 改不了。重组时新建一个 `IMPORTANCE_LOW`（不响、能提升）的「实时状态」渠道，常驻通知改用它；旧渠道删掉。
 2. 有活动（需要你 / 工作中）时才请求提升，空闲时取消提升（重设计 5.10 已有），这也减少被厂商「降级」的概率。
@@ -375,7 +375,7 @@
 
 总原则（💭）：**凡是包名 `com.google.android.gms` 或「经 Google Play 服务下发 / 更新」的东西，国行手机上都当不存在**。没有 GMS 的手机也收不到「Google Play 系统更新」（Mainline 模块），这些模块只能跟着厂商 OTA 更新。
 
-| 能力 | 国行（无 GMS）现状 | Jarvis 怎么做 | 来源 / 置信度 |
+| 能力 | 国行（无 GMS）现状 | Persona 怎么做 | 来源 / 置信度 |
 | --- | --- | --- | --- |
 | 推送（FCM） | 没有 | 常驻连接为默认（PR #84 已是），FCM 只给有 GMS 的手机做可选项 | 已定 |
 | **Health Connect** | 官方：「requires … Google Play services installed」「exclusive to Android and Google Play」；14+ 是系统的一部分。OPPO 健康**国行版完全没有 Health Connect 集成**（Manifest 没有 health 权限、dex 里没有相关引用，用的是签名级私有接口）；小米 / vivo / 荣耀国行的情况 ❓ 没查到；华为用自己的 Health Kit | `phone_health_summary` 在国行上**基本拿不到数据**：先 `HealthConnectClient.getSdkStatus()`，不可用就不注册这个工具（或回「这台手机没有健康数据来源」）；**建议首版对国行去掉**（iOS 不受影响） | ✅ https://developer.android.com/health-and-fitness/health-connect/availability ；✅（开源项目逆向）https://github.com/svip886/OHSync |
@@ -384,7 +384,7 @@
 | `Geocoder` | AOSP 文档：后端服务不在核心框架里，没有后端时查询返回空列表，用 `isPresent()` 判断。国行上一般由 GMS 提供，**国行有没有后端 ❓ 没查到** | 先 `isPresent()`，结果为空就只回坐标；以后需要地址再在 hub 侧接一个可配置的逆地理服务（P2） | ✅ AOSP 注释（经 Geocoder 源码 / 文档转述）https://developer.android.com/reference/android/location/Geocoder |
 | 系统 WebView | 小米 / OPPO / vivo / 荣耀新机预装 Google 的 Android System WebView，但**有说法称厂商应用商店不提供它的更新，只能跟 OTA**（一年不到 4 次）；也有教程说小米、vivo 商店能搜到——**两种说法冲突 ❓**。华为（鸿蒙 4）由华为浏览器提供 WebView 内核，在华为应用市场更新华为浏览器；鸿蒙 NEXT 用自研内核 | androidx.webkit 的新能力（`startUpWebView`、`prerenderUrlAsync`、`NavigationListener`）一律先 `WebViewFeature.isFeatureSupported()` 判断，不支持就退回普通加载；设置 › 诊断里显示 `WebViewCompat.getCurrentWebViewPackage()` 的包名和版本 | 💭 知乎（403 未能直接读，来自搜索摘要）https://zhuanlan.zhihu.com/p/2077738698548982270 ；https://www.cnblogs.com/reachteam/p/22796594/android-webview-update-guide （2026-09-01） |
 | 通讯录 | `ContactsContract` 是 AOSP 提供者，国行都有；没查到国产系统的额外限制 | 照原方案；真机验证读取和搜索 | 💭 |
-| 日历 | `CalendarContract` 是 AOSP 提供者。没有 Google 账号时可能没有可写的日历：官方做法是用 sync adapter 身份（URI 带 `CALLER_IS_SYNCADAPTER=true`、`ACCOUNT_TYPE_LOCAL`）建一个本地日历 | 新建日程前先找可写日历，没有就建「Jarvis」本地日历；❓ 各家日历 App 会不会显示它，要真机看 | ✅ https://developer.android.com/identity/providers/calendar-provider |
+| 日历 | `CalendarContract` 是 AOSP 提供者。没有 Google 账号时可能没有可写的日历：官方做法是用 sync adapter 身份（URI 带 `CALLER_IS_SYNCADAPTER=true`、`ACCOUNT_TYPE_LOCAL`）建一个本地日历 | 新建日程前先找可写日历，没有就建「Persona」本地日历；❓ 各家日历 App 会不会显示它，要真机看 | ✅ https://developer.android.com/identity/providers/calendar-provider |
 | 剪贴板 | AOSP：10 起只有前台 App 能读，12 起读的时候系统提示。小米把读剪贴板当 AppOps 权限管（商店政策：只能前台触发）；ColorOS 14 有按 App 的「剪贴板读取权限」和读取提醒；鸿蒙 4 ❓ | 只在前台读；读到 null 时提示「检查系统设置里的读取剪贴板权限」 | ✅ https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2225 ；💭 https://bbs.oneplus.com/thread/6223871 |
 | 扫码 | zxing-android-embedded：只依赖 `zxing:core`，不依赖 GMS（实际要 API 24+，最新 4.3.0，版权年份 2022，更新慢）。另一个选择：ML Kit **bundled** 模型 `com.google.mlkit:barcode-scanning`（模型静态打进 APK，约 +2.4 MB）；**unbundled** 版（`play-services-mlkit-barcode-scanning`）和 Google code scanner 都要 GMS | 保留 zxing（PR #84 已验证）。以后要 Compose 取景框：CameraX + ML Kit bundled（❓ bundled 版在无 GMS 机上是否完全不碰 GMS，官方页面没明说，要真机测） | ✅ https://github.com/journeyapps/zxing-android-embedded ，https://developers.google.com/ml-kit/vision/barcode-scanning/android |
 | 可下载字体 | Compose 的 Google Fonts 下载用的 provider 包名就是 `com.google.android.gms`，国行没有 | 5 套风格用到的字体全部打进 APK（`R.font`），不用可下载字体 | ✅ https://developer.android.com/develop/ui/compose/text/fonts |
@@ -410,19 +410,19 @@
 | 鸿蒙 5/6/7 | 只能经「卓易通」安装（下载 APK 后「用卓易通打开」）；部分设备默认开着纯净模式要先关 | 💭 见 2.1 |
 | ColorOS / OriginOS / MagicOS | 都有安装前的风险扫描 / 提示；具体开关名和默认值 ❓ 没查到官方说法（网上大量同模板的「纯净模式横评」软文，互相矛盾，不可引用） | ❓ |
 
-💭 对 Jarvis：首次安装是一次性的，可以接受。配对页 / 下载页写一份「按品牌的安装说明」，并说明为什么会提示风险（没上架应用商店）。
+💭 对 Persona：首次安装是一次性的，可以接受。配对页 / 下载页写一份「按品牌的安装说明」，并说明为什么会提示风险（没上架应用商店）。
 
 ### 7.2 App 内自更新（hub 托管 APK）
 
 **平台规则（✅ AOSP 源码，镜像约等于 Android 16；Android 16 / 17 的新条目源码里没有）**：
 
-- `REQUEST_INSTALL_PACKAGES` + 用户给 Jarvis 打开「安装未知应用」（`Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES`，`canRequestPackageInstalls()` 可查）。
+- `REQUEST_INSTALL_PACKAGES` + 用户给 Persona 打开「安装未知应用」（`Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES`，`canRequestPackageInstalls()` 可查）。
 - `setRequireUserAction(USER_ACTION_NOT_REQUIRED)`（31+）在**同时满足**时不弹确认：
   - 被装的 App 的 target：Android 12 上 ≥ 29、13 上 ≥ 30、14 上 ≥ 31、15 上 ≥ 33（「The target API level requirement will advance in future Android versions」）；
   - 安装者是现有版本的 update owner（开了更新归属时）/ installer of record（没开时）/ **或者在更新它自己（「Updating itself」）**；
   - 安装者声明了 `UPDATE_PACKAGES_WITHOUT_USER_ACTION`。
   - 文档原话：「Session owners should always be prepared to handle STATUS_PENDING_USER_ACTION」。
-- `setRequestUpdateOwnership(true)`（34+）：**只在首次安装时有效**，更新时设置是空操作，要 `ENFORCE_UPDATE_OWNERSHIP` 权限；作用是让「别的安装器」更新这个包时必须用户确认。**Jarvis 第一次是由浏览器 / 文件管理器装的，自己拿不到更新归属，这个 API 对自更新没用**（它是给应用商店用的）。
+- `setRequestUpdateOwnership(true)`（34+）：**只在首次安装时有效**，更新时设置是空操作，要 `ENFORCE_UPDATE_OWNERSHIP` 权限；作用是让「别的安装器」更新这个包时必须用户确认。**Persona 第一次是由浏览器 / 文件管理器装的，自己拿不到更新归属，这个 API 对自更新没用**（它是给应用商店用的）。
 - 来源：https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/main/core/java/android/content/pm/PackageInstaller.java （`SessionParams.setRequireUserAction` / `setRequestUpdateOwnership` 的注释）
 
 **国产系统上的实际表现**：
@@ -442,7 +442,7 @@
 - ✅ 官方：要求只在「certified Android devices」上执行；2026-09-30 起先在巴西、印尼、新加坡、泰国，2027 年扩展到全球；「It will apply to all certified Android devices running Android 7 or higher. These updates are delivered through Google Play services」；**adb 安装不受影响**（「The waiting period does not apply to ADB installs」）；未验证开发者的 App 走「高级流程」（开开发者模式、确认没被人指使、重启重新认证、**等 24 小时**后用生物识别确认，之后可选 7 天或永久允许）；有限分发账号（最多 20 台设备、不要证件和费用）2026-08 已上线。
   来源：https://developer.android.com/developer-verification ，https://developer.android.com/developer-verification/guides/faq
 - 💭 判断：检查逻辑经 Google Play 服务下发、只在认证设备上跑；**国行机没有 GMS、也不是 Google 认证设备，基本不受影响**。FAQ 没有直接写「无 GMS / 中国」的情况，❓ 有说法称部分国行机隐藏了 GMS 组件（https://www.chinesephoneguy.com/blog/how-to-enable-google-play-on-chinese-phones ，来源弱），即便打开了也通常不是认证设备，要真机确认。
-- 💭 对 Jarvis：给有 GMS 的海外版手机装时才需要注册（有限分发账号够用，重设计第 9 节已有）；国行用户不用管。
+- 💭 对 Persona：给有 GMS 的海外版手机装时才需要注册（有限分发账号够用，重设计第 9 节已有）；国行用户不用管。
 
 ## 8. 测试：最小真机矩阵与云真机
 
@@ -483,7 +483,7 @@
 | 腾讯 WeTest 云真机 | 上千台，主流机型免费公有云 | **远程 adb 只对付费用户**；约 1 元 / 分钟 | ✅ https://wetest.qq.com/product/cloudphone ；💭 价格来自博客 |
 | Testin 云测 | 2500+ 机型，含鸿蒙 NEXT | 约 3 元 / 分钟，新用户 20 分钟免费 | 💭 https://cloud.tencent.com/developer/article/2586389 （2025 末） |
 
-- 💭 **云真机测不了 Jarvis 最关心的东西**：会话最长 1 小时（小米），测不了过夜存活；机器通常一直插着电（插电时 Doze 不生效，耗电也没法测，❓ 各家没明说是否插电）；没有 SIM 卡，测不了流量下的后台限制（荣耀的智能省流量这类）；锁屏通知也不好看。
+- 💭 **云真机测不了 Persona 最关心的东西**：会话最长 1 小时（小米），测不了过夜存活；机器通常一直插着电（插电时 Doze 不生效，耗电也没法测，❓ 各家没明说是否插电）；没有 SIM 卡，测不了流量下的后台限制（荣耀的智能省流量这类）；锁屏通知也不好看。
 - 💭 **云真机适合测的**：安装拦截、首次打开的通知授权弹窗、准备清单里每个跳转能不能到对的页面（组件名在各版本上还在不在）、界面在各家字体 / 分辨率下的样子、照片选择器和 WebView 版本。这些正好是「组件名会烂掉」的部分，可以每个大版本跑一遍。
 
 ## 9. 没查清 / 需要实测

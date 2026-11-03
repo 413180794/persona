@@ -11,7 +11,7 @@
   只测某一种风格的测试自己传 `-ui.style`。它经 `launchJarvis()` 启动，没选布局的测试照旧跑在四个 tab 的旧布局上。`UITestStyleTests` 查源码（`launch()`、`launchJarvis()` 都算漏）。
 - JarvisTests 别跑在配对过真 hub 的模拟器上（`jarvis-sim` / `sim.sh` 配对的那台）：iOS 的测试宿主不跳过钥匙串（只有 Mac 跳过，`Shared/Keychain.swift`），
   一启动就拿配对连 hub、以模拟器身份注册手机工具、弹通知授权。2026-11-02 在这样一台上连着三次「test runner hung before establishing connection」
-  （没锁屏，重启模拟器也一样），换一台从没装过 App 的模拟器第一次就过了，卡住的具体原因没再追。用 `simctl list devices` 挑一台没跑过 Jarvis 的。
+  （没锁屏，重启模拟器也一样），换一台从没装过 App 的模拟器第一次就过了，卡住的具体原因没再追。用 `simctl list devices` 挑一台没跑过 Persona 的。
 - UI 测试锁了模拟器屏幕却没解锁（模拟器上按 Home 不解锁，要上滑），下一次 `xcodebuild test` 报「test runner hung before establishing connection」。
   模拟器系统语言是英文时，系统授权弹窗的按钮叫「Allow」，UI 测试两种都要认。
 - 模拟器会被 XCUITest 的 typeText 切成「硬件键盘」模式：之后软键盘不再弹出（键盘按钮显示已弹起，但屏幕上没有键盘），依赖键盘高度的测试全挂。
@@ -46,9 +46,9 @@
 - 量界面的跳动 / 闪动要看画面：`simctl io recordVideo` 录下来、ffmpeg 拆帧，逐帧跟踪一条像素；只闪一帧的跳只有这样看得到。
   App 里记的位置日志可能和屏幕上的不一致（2026-10-31 日志说表头在原位，画面上整页偏了 10pt），以画面为准。
 - XCUITest 的 `element.tap()` 在 iOS 27.0 模拟器上点在 frame 左上角往里约 4pt（27.1 上点在圆里）：圆形 `contentShape(.circle)` 的按钮
-  （Jarvis 顶栏的玻璃圆钮「历史对话」「新对话」）点在圆外，什么都不发生，看上去像按钮坏了（2026-10-31 iPhone 17 Pro 上 `testButtonsAndPickingAConversation`
+  （Persona 顶栏的玻璃圆钮「历史对话」「新对话」）点在圆外，什么都不发生，看上去像按钮坏了（2026-10-31 iPhone 17 Pro 上 `testButtonsAndPickingAConversation`
   在 master 上就挂）。手指和 VoiceOver 都点在中间，真机不受影响。这类按钮用 `tapCenter()`（`JarvisUITests/TapCenter.swift`）。
-  点完要断言页面真的变了，别只找两个页面都有的东西（新对话页和对话页都有「问 Jarvis…」，点空了也过，错报到下一步）。
+  点完要断言页面真的变了，别只找两个页面都有的东西（新对话页和对话页都有「问 Persona…」，点空了也过，错报到下一步）。
 - 量滚动帧率别用 XCUITest 的拖动：它每次手势前要在 App 主线程上抓一次无障碍快照，自己就造成 40–100 ms 的长帧（每 3 秒一次，像是卡顿）。
   用 App 内的匀速滚动（`AutoScroller`，`-showFileAutoScroll`）加帧计数（`FrameMeter`），从一个空闲的会话打开（在跑的会话在后面每秒重画）。
 - 带输入框的 alert：输入时键盘弹起，alert 跟着往上挪，紧接着点「保存」会点空（alert 还在、什么都没发生，看起来像保存没生效，2026-11-01 `AssistantTitlesTests` 差点因此去改 App）。
@@ -135,7 +135,7 @@
   `app.staticTexts["来自 MacBook 的 gh 登录"]` 找不到，测试报失败、截图上却明明有这行字。按值找要用
   `descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", 值))`；同一页里单独的 `Text`（账号、状态）照常是 staticText。
 - **小一点的 iPhone 上，列表里的行可能在浮动标签栏底下**（2026-11-02，#488）：`row.swipeLeft()` 从行的中间开始滑，
-  落在 Liquid Glass 的标签栏上就成了拖动标签栏的选中项，切到最左边的「Jarvis」，测试只看到「拉不出关闭按钮」。行这时照样是
+  落在 Liquid Glass 的标签栏上就成了拖动标签栏的选中项，切到最左边的「Persona」，测试只看到「拉不出关闭按钮」。行这时照样是
   `exists` / `hittable`。同一个测试在 iPhone 18 Pro Max 上过、在 iPhone 18 Pro 上 100% 挂，一度被当成 #382 的回归（#382 之前的提交在 Pro 上一样挂）。
   对行做滑动、点按前先 `app.bringAboveTabBar(row)`（`JarvisUITests/AgentsSearch.swift`）；查「只在某个车道挂」的 UI 测试，先比一下各自模拟器的机型。
 - 模拟器和 Mac 共用回环：App 在模拟器里监听 `127.0.0.1:<端口>` 时，Mac 上已有程序占着这个号就会冲突（端口转发会退到随机端口，正好测到这条路径）。
@@ -153,7 +153,7 @@
   BeautifulUI 的新外壳里要知道对话是否开着，用 `probe.chat`（page `agents`），不靠「返回」按钮。
 - 看对话内容的 UI 测试一律带 `-openChatsFresh YES`（清掉磁盘上的对话缓存）：mock 每次重置，对话都从同一个 seq 重新开始，前面测试 churn 出来的步骤
   还在 App 的缓存里，占着这次 `/mock/say` 拿到的 seq，新回复「已经有了」就不显示，屏幕上是上一次的「工具 21 · 回复 5」。
-  2026-11-02 `ChatFollowTests.testJarvisChatFollows` 在跑过 `ScrollUnderPushTests` / `ScreenTruthTests` 的模拟器上挂，看着像新外壳的 Jarvis 对话不显示回复，其实是测试环境；真实 hub 的 seq 是 transcript 里的位置，只增不重用。
+  2026-11-02 `ChatFollowTests.testJarvisChatFollows` 在跑过 `ScrollUnderPushTests` / `ScreenTruthTests` 的模拟器上挂，看着像新外壳的 Persona 对话不显示回复，其实是测试环境；真实 hub 的 seq 是 transcript 里的位置，只增不重用。
 - 测试按「滑一下停在哪」挑行的，别处改了行高或字号（#245 改了新外壳的字号档）就会滑到另一处，结果跟着变（2026-11-02，#339）：
   `testScrolledListHoldsStillThroughUpdates` 以前碰巧停在不换名次的空间，没测到读者那一屏被换掉；二分落在一个只改字号的提交上，真正的问题是 App 没保住读者那一行。
   二分找到的提交只说明「从这里开始暴露」，先看它改的东西能不能解释现象。找回一行用标题，别用整条无障碍标签（里面有「3 分钟前」，跨分钟就对不上）。
@@ -180,10 +180,10 @@
   之后按原始坐标点就被放大了 1.5 倍，点到了墙纸。点墙纸会触发 macOS 的「显示桌面」，把所有窗口推到屏幕边上，再点一次墙纸才回来。
   整屏截图一律用原始分辨率（`max_image_dimension: 0`）；用坐标点之前，先确认它落在自己的窗口或弹出的菜单里。
 - 「只在 mock 下坏」先拿体验模式对照，再去看 hub 的代码到底怎么走（#511）：两个假 hub 都可能不像 hub，而且可能一个比 hub 好、一个比 hub 坏。
-  新建 Jarvis 对话：mock 原来根本不写第一句、不推会话列表（App 显示「还没有消息」、新对话不选中）；DemoHub 立刻写好第一句（一切正常）；
+  新建 Persona 对话：mock 原来根本不写第一句、不推会话列表（App 显示「还没有消息」、新对话不选中）；DemoHub 立刻写好第一句（一切正常）；
   hub 是先推会话列表，node 对还没写 transcript 的会话回空的 items，等 claude 写下第一行（watch 每 0.5 秒看一次）才推。所以真 hub 上也会闪一下「还没有消息」，
   这才是 App 该修的（第一句按「已发送」留在屏幕上）。当初写「体验模式也复现」，其实是副本钥匙串里留着 mock 的配对、`-demo.on YES` 没生效（见上面「钥匙串里留着以前配对过的 hub」）。
-- cua 的 `tree_format: "elements"` 不列只有值、没有标签的静态文字（新对话页的乐观气泡、「Jarvis 正在准备…」都在里面），拿它判断「没显示」会误判；
+- cua 的 `tree_format: "elements"` 不列只有值、没有标签的静态文字（新对话页的乐观气泡、「Persona 正在准备…」都在里面），拿它判断「没显示」会误判；
   判断某段文字在不在，用 `get_window_state` 带 `query`（树里有 `AXStaticText = "…"`）或截图。
 - cua 的 `type_text` 默认在后台用辅助功能插入文字（`AXSelectedText`）：主窗口工具栏的搜索框能筛选，sheet 里 `.searchable` 的框（新建对话 › 启动器）
   字显示出来了、列表却不筛，看着像 App 的 bug；用 `delivery_mode: "foreground"`（真按键）打同样的字就筛了（2026-11-03）。sheet 里打字一律前台投递，

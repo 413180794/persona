@@ -1,6 +1,6 @@
 # 终端引擎：herdr、Herdr App、Orca
 
-**一机一引擎**：Jarvis 通过「引擎」看到并驱动电脑上的 Claude Code / Codex。每台电脑选一个引擎，Agents 里只显示这个引擎里开着的会话；
+**一机一引擎**：Persona 通过「引擎」看到并驱动电脑上的 Claude Code / Codex。每台电脑选一个引擎，Agents 里只显示这个引擎里开着的会话；
 别处开的会话（其他引擎、普通终端）只显示成「未运行」的对话记录。默认是 herdr，以前的机器不选也照旧工作。
 
 下文的「引擎」都指这个选择；接口、存储和 node 怎么切换见 `docs/protocol.md`「引擎」，设计和取舍见 `docs/plan-orca-support.md`。
@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | `herdr` | herdr | 终端里运行 `herdr`，在它的窗格里开 `claude` / `codex` | herdr 的 socket 能连上，或装了 `herdr` 命令 |
 | `herdr-core` | Herdr App | Herdr 桌面 App 里开的终端（App 背后的 herdr-core） | herdr-core 的 socket 有回应 |
-| `orca` | Orca | Orca 桌面 App 里开的终端 | Orca 在运行，而且它的版本 Jarvis 认得 |
+| `orca` | Orca | Orca 桌面 App 里开的终端 | Orca 在运行，而且它的版本 Persona 认得 |
 
 herdr 和 Herdr App 是同一家的两个产品，但互不相通：在 Herdr App 里开的会话 herdr 看不到，反过来也一样，所以要按你实际在哪开 Claude 来选。
 
@@ -52,6 +52,6 @@ iOS 和 Android App 都有这两处入口（Android 在设置 › 电脑 › 机
 
 - **显示「没检测到」**：这个引擎在那台电脑上没运行。herdr 要先在终端里运行一次 `herdr`；Herdr App、Orca 要打开 App。打开后过一会儿，
   或者在 App 里对那台机器「重新连接」，检测结果会刷新。
-- **Orca 显示「这个版本的 Orca 和 Jarvis 不兼容」**：Orca 和 jarvisd 的版本对不上，把两边都更新到最新版。
-- **选了引擎却看不到会话**：确认 Claude 真的开在这个引擎里（比如开在普通终端或另一个 App 里，Jarvis 只会把它显示成「未运行」）。
-- **hub 机器上的 node 是旧版本**（机器信息里提示版本不一致）：旧 node 不认识引擎切换，照旧只用 herdr；先更新那台电脑的 jarvisd。
+- **Orca 显示「这个版本的 Orca 和 Persona 不兼容」**：Orca 和 personad 的版本对不上，把两边都更新到最新版。
+- **选了引擎却看不到会话**：确认 Claude 真的开在这个引擎里（比如开在普通终端或另一个 App 里，Persona 只会把它显示成「未运行」）。
+- **hub 机器上的 node 是旧版本**（机器信息里提示版本不一致）：旧 node 不认识引擎切换，照旧只用 herdr；先更新那台电脑的 personad。

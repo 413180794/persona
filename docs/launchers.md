@@ -8,12 +8,12 @@ node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都
 
 | 来源 | 在哪定义 | 能做什么 |
 | --- | --- | --- |
-| **Jarvis 管理** | App 里新增：名字、Base URL、API Key、模型、小模型、额外参数 | 改、删 |
-| **~/.zshrc** | 各台电脑 `~/.zshrc` 里的函数，打开这页时同步（node 缓存 1 分钟） | 看每台电脑上的函数定义（Key / Token 打码）、在 Jarvis 里隐藏 / 恢复 |
+| **Persona 管理** | App 里新增：名字、Base URL、API Key、模型、小模型、额外参数 | 改、删 |
+| **~/.zshrc** | 各台电脑 `~/.zshrc` 里的函数，打开这页时同步（node 缓存 1 分钟） | 看每台电脑上的函数定义（Key / Token 打码）、在 Persona 里隐藏 / 恢复 |
 
-- 范围是**全局一份**：Jarvis 管理的每台电脑都能用；~/.zshrc 的标出来自哪几台（同名的合成一行）。离线电脑的列表用上次同步的（settings `launchers.zshrc`）。
-- 删除 ~/.zshrc 的启动器**只在 Jarvis 里隐藏**（settings `launchers.hidden`），文件不动；新对话、助手的选择器里不再出现。
-- 同名时 Jarvis 管理的优先（~/.zshrc 的那个被盖住）。名字只能是字母、数字、`_`、`-`，不能叫 `claude`。
+- 范围是**全局一份**：Persona 管理的每台电脑都能用；~/.zshrc 的标出来自哪几台（同名的合成一行）。离线电脑的列表用上次同步的（settings `launchers.zshrc`）。
+- 删除 ~/.zshrc 的启动器**只在 Persona 里隐藏**（settings `launchers.hidden`），文件不动；新对话、助手的选择器里不再出现。
+- 同名时 Persona 管理的优先（~/.zshrc 的那个被盖住）。名字只能是字母、数字、`_`、`-`，不能叫 `claude`。
 
 ## ~/.zshrc 里怎么认（`node/sessions.go` 的 `launcherScript`）
 
@@ -31,15 +31,15 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
 - 列表里只有名字、网关、模型；alias 里的 Key / Token 不出 node。「查看定义」对 alias 显示的是 `whence -f` 给的原文，Key 照样打码。
 - 函数写的启动器还是要靠 `_claude_launchers` 列出来：函数体里最后跑什么，不真跑一遍看不出来（见下「启动器页面上的参数」）。
 - **alias 自带 `--settings`**（`alias work="claude --settings ~/.claude/settings.work.json …"`，网关、Token、模型在那个文件的 `env` 里）：
-  Jarvis 起 claude 时自己也要传一个 `--settings`（把提问、授权、做完转到手机的 hooks），而 Claude Code 只认**最后一个** `--settings`。
-  所以 node 启动时把 alias 的那份和 Jarvis 的合成一个文件（alias 的所有设置 + 两边的 hooks，Jarvis 的排在后面），写到
-  `~/.jarvis/launcher-settings/<启动器>-<claude|assistant>-settings.json`（0600，里面有 Token），作为最后一个 `--settings` 传进去；
-  每次启动重写一遍（`node/launcher_settings.go`）。`~`、`$HOME`、相对路径（按会话目录）、`--settings '{…}'` 都认；文件读不了时退回只传 Jarvis 的。
+  Persona 起 claude 时自己也要传一个 `--settings`（把提问、授权、做完转到手机的 hooks），而 Claude Code 只认**最后一个** `--settings`。
+  所以 node 启动时把 alias 的那份和 Persona 的合成一个文件（alias 的所有设置 + 两边的 hooks，Persona 的排在后面），写到
+  `~/.persona/launcher-settings/<启动器>-<claude|assistant>-settings.json`（0600，里面有 Token），作为最后一个 `--settings` 传进去；
+  每次启动重写一遍（`node/launcher_settings.go`）。`~`、`$HOME`、相对路径（按会话目录）、`--settings '{…}'` 都认；文件读不了时退回只传 Persona 的。
   函数写的启动器里的 `--settings` 看不到，照样会被顶掉。
 
-## Jarvis 管理的怎么跑
+## Persona 管理的怎么跑
 
-- 存在 settings `launchers.managed`；API Key 用 `~/.jarvis/secret.key`（和邮箱凭据同一把）AES-GCM 加密，**接口从不返回 Key**。
+- 存在 settings `launchers.managed`；API Key 用 `~/.persona/secret.key`（和邮箱凭据同一把）AES-GCM 加密，**接口从不返回 Key**。
 - hub 在 node 连上时、每次改动后把完整设置（含 Key）推给所有 node（`launchers.managed`），node 只放内存。
 - 启动时 node 敲进 herdr 窗格（或无头助手执行）的是 `jarvisd launch <名字> …`：这个子命令经本机 node.sock 取设置
   （`launcher.env`），去掉 shell 里已有的 `ANTHROPIC_*` 等变量，设上 `ANTHROPIC_BASE_URL`、`ANTHROPIC_API_KEY`、各档模型
@@ -65,16 +65,16 @@ stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.z
 
 ## 测试可用性（`node/launchercheck.go`）
 
-详情页「测试可用性」：在有这个启动器的每台在线电脑上（Jarvis 管理的在 hub 所在的机器上）真的发一个只回答一个词的请求
+详情页「测试可用性」：在有这个启动器的每台在线电脑上（Persona 管理的在 hub 所在的机器上）真的发一个只回答一个词的请求
 （`claude -p … --output-format json --max-turns 1`，Codex 是 `codex exec`），在空目录里跑，90 秒超时；显示 ✓ / ✗、用时、哪个模型答的、
 失败的原因（打码）。会花几个 token。`POST /api/v1/launchers/{name}/check?machine=`。
 
 ## 删除
 
-详情页的「删除启动器 / 在 Jarvis 里隐藏」点一下，在按钮那里弹出「确认删除 / 确认隐藏」（popover，2026-10-31 用户要求），再点才执行。
+详情页的「删除启动器 / 在 Persona 里隐藏」点一下，在按钮那里弹出「确认删除 / 确认隐藏」（popover，2026-10-31 用户要求），再点才执行。
 
-列表里 ~/.zshrc 的启动器左滑「隐藏」，「已隐藏」里的左滑「恢复」（2026-11-01 用户要求），不再确认：只改 Jarvis 里显不显示，随时能滑回来。
-Jarvis 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不能恢复，所以先弹确认。`LauncherSwipeTests` 对着 mock hub（`MOCK_MANAGED_LAUNCHER=1`）覆盖。
+列表里 ~/.zshrc 的启动器左滑「隐藏」，「已隐藏」里的左滑「恢复」（2026-11-01 用户要求），不再确认：只改 Persona 里显不显示，随时能滑回来。
+Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不能恢复，所以先弹确认。`LauncherSwipeTests` 对着 mock hub（`MOCK_MANAGED_LAUNCHER=1`）覆盖。
 
 ## 接口
 
@@ -84,17 +84,17 @@ Jarvis 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不能
 | `GET /api/v1/launchers/{name}` | 一个；~/.zshrc 的带 `definitions`（每台电脑的函数，打码）和 `details`（跑一遍得到的参数） |
 | `POST /api/v1/launchers/{name}/check?machine=` | 测试可用性 |
 | `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, args?, api_key}` |
-| `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Jarvis 管理的 |
-| `DELETE /api/v1/launchers/{name}` | Jarvis 管理的删除；~/.zshrc 的隐藏 |
+| `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的 |
+| `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
 | `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度（见下）：`{machine, checked_at, quota}`，查不了时 `{error, unsupported}`；hub 缓存一分钟，`refresh=1` 重读 |
-| `GET /api/v1/machines/{mid}/launchers` | 这台能启动的（选择器用）：它的 ~/.zshrc 去掉隐藏的，加上 Jarvis 管理的；每项带 `source` |
+| `GET /api/v1/machines/{mid}/launchers` | 这台能启动的（选择器用）：它的 ~/.zshrc 去掉隐藏的，加上 Persona 管理的；每项带 `source` |
 
 「设置 › 助手」中的对话模型入口和定时任务的模型入口都打开统一的「模型配置」。供应商负责接入与默认值，用途负责具体选择，见 `docs/model-config.md`。
 
 ## 直接 API 供应商
 
-Jarvis 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧的启动器行为）和 `api`（`messages` / `responses`）字段。
+Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧的启动器行为）和 `api`（`messages` / `responses`）字段。
 `kind: api` 由 hub 直接发请求，不下发给 node，也不会出现在新建 Agent 的启动器列表中；小模型和 CLI 额外参数不用于这类接入。
 认证仍使用原有的加密 Key 存储，不需要把 API Key 放进用途配置。原有 `/launchers` 接口与供应商名称保持兼容。
 
@@ -109,7 +109,7 @@ Jarvis 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧的
 - FAKEMODEL（Key 以 `fm_` 开头）：`POST /auth/key-login {"key"}` 换一个只读会话，`GET /api/quota`，用完 `POST /auth/logout`。
   每个供应商只列**有上限**的窗口（网关自己的计数没有上限，说明不了还剩多少），按模型的放在「按模型 N」里。
 - 其他网关、没设网关地址（官方接口、codex）：说明查不了，不报错。
-- 谁去读：Jarvis 管理的启动器由 hub 用解封的 Key 读；~/.zshrc 的由**有这个启动器的那台电脑**读（node 的 `launchers.quota`：跑一遍探测拿到地址和 Key，就地请求网关），
+- 谁去读：Persona 管理的启动器由 hub 用解封的 Key 读；~/.zshrc 的由**有这个启动器的那台电脑**读（node 的 `launchers.quota`：跑一遍探测拿到地址和 Key，就地请求网关），
   Key 不离开那台电脑，地址也是那台电脑能到的地址。优先 hub 自己那台。
 - App：`LauncherQuotaSection`，放在「可用性」上面；用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。mock：`scripts/mock/mock_hub.py` 的 `cc_kiro` / `example-cli` / `cc_glm`，
   DEBUG `-openLauncherPage <名字>` 直接打开。实测：`TestQuotaLive`（`JARVIS_LIVE_QUOTA=<探测写出的 env 文件>`）。

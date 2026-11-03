@@ -13,7 +13,7 @@ minSdk 31（Android 12），compileSdk 37，targetSdk 36。界面中文。
 | 入口 | 当前实现 |
 | --- | --- |
 | 配对 | 扫码、手填、配对深链，临时 token 换设备 token；TLS 公钥钉扎、候选探测和重新配对；完成后进入准备清单 |
-| Jarvis | 首页、主对话、历史抽屉和共用对话页；主对话首句可先进入持久 outbox，恢复连接后解析目标；助手身份确定后保留在 Jarvis tab |
+| Persona | 首页、主对话、历史抽屉和共用对话页；主对话首句可先进入持久 outbox，恢复连接后解析目标；助手身份确定后保留在 Persona tab |
 | Agents | 页面最上面是搜索框，下面一排电脑芯片（全部机器 + 每台电脑，带在线状态和计数，可横滑），再下面是快速筛选；默认按电脑 → 空间（herdr workspace）→ 会话三层树，靠缩进、字号字重和细线分层，不给每层垫底板（`docs/android-design.md` 2.4 节），电脑和空间都能折叠、栏头带计数；全是已看会话的空闲空间留在所属电脑下面、排在有动静的空间后面，默认收起、样式弱一点，收起时标出会话数；也可按状态分组；置顶 / 屏蔽、请求卡和作答；会话重命名（标签名走 herdr，会话名走 Claude 的 /rename，入口在会话行菜单、空间页和对话页菜单）和空间重命名（空间栏头菜单）发出后列表、空间页、对话页标题立即更新，失败回滚；置顶、屏蔽、重命名、关闭由 App 的 `AgentsWiringModule` 接到 hub |
 | 对话 | 连续性补洞、历史分页、实时 delta、折叠工作过程、Markdown、diff、待办、图片缓存、阅读锚点、待发气泡及人工核对；附件和会话控制需要补齐服务注入 |
 | 收件箱 | 飞书和邮件事项统一列表、筛选持久化、AI 操作、回复日志；飞书有窗口缓存、事件刷新、可见已读和基础消息渲染；邮件正文页已有，但 MailTransport 尚未接到 App |
@@ -29,7 +29,7 @@ Android 使用 `:platform:notify` 的前台服务共用 hub WebSocket，不依�
 
 - 「做完了」由 hub 按与 iOS 相同的完成策略决定，经 `notify` 事件下发；客户端声明 `ws_notify` 后接收，不再自行推算完成。
 - 提问、计划、授权和屏幕选项可在通知作答；允许或批准要求解锁，拒绝或打回可输入原因。结果不明时提示待确认，不自动重复批准。
-- 点击通知和会话深链走同一个导航入口（冷启动和 App 已打开时相同）。通知链接写明 `tab` 时直接按它落到 Jarvis 或 Agents，不等会话元数据；没写时等元数据到达再分流。终端兜底动作（`target=terminal`）打开该会话的终端，返回落在原对话。
+- 点击通知和会话深链走同一个导航入口（冷启动和 App 已打开时相同）。通知链接写明 `tab` 时直接按它落到 Persona 或 Agents，不等会话元数据；没写时等元数据到达再分流。终端兜底动作（`target=terminal`）打开该会话的终端，返回落在原对话。
 - 准备清单提供通知权限、电池限制、自启动等系统入口，以及锁屏测试预约、展示和回报。各 ROM 的锁屏存活、通知展示、重启恢复和耗电均未实测。
 
 ## 连接地址（设置 › 连接诊断）
@@ -68,7 +68,7 @@ Android 使用 `:platform:notify` 的前台服务共用 hub WebSocket，不依�
 
 #295，方案和各路的接口约定见 [plan-hub-mesh.md](plan-hub-mesh.md) 第 4 节和 2.6 节，iOS 是 #256。手机可以配对多台 hub：
 互相连通（hub 互联）的几台算一**组**，同组只保持一条连接、组内换线路；不同组（工作 / 生活这类要隔离的环境）各一条连接，互不影响。
-Agents、机器、要你处理的请求把各组合在一起显示；Jarvis、收件箱和 hub 相关的设置是每组自己的，用「选中的组」。
+Agents、机器、要你处理的请求把各组合在一起显示；Persona、收件箱和 hub 相关的设置是每组自己的，用「选中的组」。
 
 ### 原来默认只有一台 hub 的地方
 
@@ -83,7 +83,7 @@ Agents、机器、要你处理的请求把各组合在一起显示；Jarvis、�
 | `OkHttpHubConnection` / `HubHttpClient` | 一台 hub 的 id、指纹、token | 组内多台：`HubConnectionConfig.members`，每台自己的 id、指纹、token 和候选地址（`HubMembers.kt`） |
 | `PairingModule` | 配对就是替换 | 原来的配对页仍是替换；设置 › hub › 添加 hub 是 `WiredPairingService.addHub` |
 | `ChatDataOwner`、`AgentsWiringModule`、`AppServices` 的终端 / 文件 / 动作 / 机器监控 | 按唯一的作用域构造 | 每组一份（`GroupStacks`），再合并（`MergedServices.kt`） |
-| `InboxDataOwner`（收件箱、Jarvis 会话列表）、设备设置、检查更新、锁屏测试、分享、手机数据工具、知识库 | 唯一的 hub | 选中的组 |
+| `InboxDataOwner`（收件箱、Persona 会话列表）、设备设置、检查更新、锁屏测试、分享、手机数据工具、知识库 | 唯一的 hub | 选中的组 |
 | 连接诊断的候选地址 | 唯一的配对 | 选中的组自己的 hub（组里第一台已配对的 hub）；同组别的 hub 的候选也参与选路，诊断里一起列出 |
 | `Notify.install(connection.events)`、前台服务 | 一条 WebSocket 的事件 | 各组事件合成一条流（ID 已加后缀，见下）；常驻通知的状态是选中组的，Agent 计数各组相加 |
 | `ScopedListPreferences`（Agents 列表设置）、对话阅读位置 | 唯一的作用域 | 第一组的作用域：切换选中组不会动它们 |
@@ -105,7 +105,7 @@ Agents、机器、要你处理的请求把各组合在一起显示；Jarvis、�
 plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-11-02 定）：
 
 - **主组**（旧的单份配对迁移来的组，或第一次配对的组）的机器 id、会话键、路由、深链、通知和现在逐字节一样。**其余每组**的机器 id 在合并列表里带稳定的 `~<组 id>`（`GroupKeys`，如 `macbook~g0a1b2c3d`），会话键因此是「组 + 机器 + 会话」。后缀只认合法的组 id，hub 自己的撞名后缀 `@<hub>` 是机器 id 的一部分，照样保留。
-- 后缀**不跟选中组走**：切换 Jarvis / 收件箱用的组，任何键都不变，打开着的页面、返回栈、通知深链、草稿、置顶、缓存都不错位。主组断开后别的组保持原样，不提拔新主组；全部断开后，下一次配对的组重新成为主组。
+- 后缀**不跟选中组走**：切换 Persona / 收件箱用的组，任何键都不变，打开着的页面、返回栈、通知深链、草稿、置顶、缓存都不错位。主组断开后别的组保持原样，不提拔新主组；全部断开后，下一次配对的组重新成为主组。
 - 交互（要你定的事）的 id 是各台 hub 自己起的，两台 hub 可能用同一个（两个假 hub 的夹具就完全一样，列表因为 LazyColumn 的 key 重复直接崩过）：非主组的交互 id 也带同样的后缀，作答时去掉；`interaction_resolved`、`notify` 的 `interaction_id`、fleet 条目里的交互 id 一起改。
 - 每组自己的仓库、数据库、传输只用不带后缀的 id。门面（`GroupNames`、`MergedServices.kt`、`GroupTranslation.kt`）在往上给列表时加后缀，在把调用交给那一组时去掉。这样 `Session` / `Interaction` / `SessionKey` / `ChatActions` 的签名都不用改，feature 页面、路由、深链、通知几乎不用动。
 - 取舍：没有像 iOS 那样给 `SessionKey` 加字段。那样每个从路由、深链、通知构造键的地方都要带上组，漏一处就串组；后缀把组编进机器 id，经过哪里都不丢。代价是门面要逐个接口翻译（列表、事件、偏好路径、草稿键、创建会话的结果……），新增带机器 id 的接口时要记得在 `GroupNames` 里补上。
@@ -121,8 +121,8 @@ plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-
 
 - **只有一组时界面一像素不变**，唯一的例外是设置首页「连接」一节多了一行「hub」（要从这里添加第二台，主持人 2026-11-02 定）。三套风格 × 深浅色逐像素比过，见下面的验证。
 - 多于一组时：Agents 的电脑栏头多一个组标签（`AgentTreeHeader(tag)`）；会话行的机器、请求卡、电脑芯片的名字写成「MacBook（家里）」；搜索框下面多一排组筛选（全部 hub + 每组，带在线点和会话数），筛选同时作用于列表和「等你定」。组筛选只在这次打开的页面里有效，不存。
-- 设置 › hub（`HubsScreen`）：每组一节，列出组的状态和每台 hub（已配对的、经互联发现的、正在使用哪台）；组的菜单里「用于 Jarvis 和收件箱」（选中组）、改名（只在这台手机上）、断开这一组；同组有两台以上已配对的 hub 时可以单独断开一台；「添加 hub」走原来的配对页（跳过欢迎页，完成后回到 hub 列表），配对成功的 hub 按 mesh 并进已有的组或成为新的一组。
-- Jarvis 的「在哪运行」只列选中组的机器。机器监控的总览把各组拼在一起（每台机器 id 带后缀），详情按机器的组取。
+- 设置 › hub（`HubsScreen`）：每组一节，列出组的状态和每台 hub（已配对的、经互联发现的、正在使用哪台）；组的菜单里「用于 Persona 和收件箱」（选中组）、改名（只在这台手机上）、断开这一组；同组有两台以上已配对的 hub 时可以单独断开一台；「添加 hub」走原来的配对页（跳过欢迎页，完成后回到 hub 列表），配对成功的 hub 按 mesh 并进已有的组或成为新的一组。
+- Persona 的「在哪运行」只列选中组的机器。机器监控的总览把各组拼在一起（每台机器 id 带后缀），详情按机器的组取。
 - 切换选中组时，外壳按新组重建（和以前换配对一样，各 tab 回到首页）：hub 级页面换成新组的，合并列表里的键一个都不变，各组的连接也不重连。
 - 一组在页面开着时没了（并进别的组、被断开）：那一组先从列表里拿掉、等各页面不再用它的数据再关（`GroupStacks.awaitDropped`）；还在路上的调用当作「连接已切换」的取消，不当失败报；开着的对话页换到同一会话的新 id（合并后机器 id 去掉了后缀），找不到就返回。
 - 对话页、终端、文件、分享到某个会话、会话里上传附件都按会话所在的组走（`ChatWiringSource.bindingsFor`、`ShellChat`、`ShareQueue`）；以前它们直接用唯一配对的服务，多组时会把别组的会话发到选中组的 hub 上（实测踩过：对话页的草稿版本拿选中组的仓库去读别组会话，选中组的 hub 收到了带后缀的请求）。
@@ -141,7 +141,7 @@ plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-
 - 截图：只有一组时，三套风格 × 深浅色各 36 张逐像素比对（`SHOTS_STYLE=… SHOTS_MOCK_PORT=18771 SHOTS_FROZEN=2026-11-02T04:00:00+00:00 SHOTS_SETTLE=3`），每套只有设置首页深浅色两张不同（新加的「hub」一行，下面的内容整体下移），其余 34 张逐像素相同（连接诊断里实测耗时那一行按上面的办法忽略）。
 - 多组（模拟器，下面的假 hub 包装，2026-11-02）：
   - 两组（家里、公司，两个假 hub 数据完全一样）：列表合在一起，组筛选、电脑栏头的组标签、「MacBook（公司）」都对；在「公司」的请求卡上点「允许」，只有公司那台假 hub 收到 `POST /api/v1/interactions/ix_tests_build/resolve`（不带后缀），家里那台什么都没收到；打开公司的会话，只有公司那台收到 `/items` 和 `/seen`（不带后缀）。
-  - 把「公司」设为 Jarvis 和收件箱用的组：`/api/v1/assistant`、`/api/v1/inbox`、设备偏好改向公司那台，家里那台的 WebSocket 没有重连，列表里的键不变。
+  - 把「公司」设为 Persona 和收件箱用的组：`/api/v1/assistant`、`/api/v1/inbox`、设备偏好改向公司那台，家里那台的 WebSocket 没有重连，列表里的键不变。
   - 断开「公司」：它的数据目录被删掉，列表回到只有一组的样子（没有组筛选和组标签），家里那台的 WebSocket 没有重连。
   - 两组合并（先各自成组，公司那台停掉时在公司的会话里发一条、再写一段草稿，然后两台的 mesh 互相列出对方）：合并后对话页没有崩，草稿出现在合并后的同一会话里；那条消息在一次运行里由公司那台在合并前发出，在另一次（合并时 App 崩过、重启后补搬）里搬进合并后的组、带原来的 `client_msg_id` 发给了家里那台，都只发了一次。
   - 同组两台（家里 A、家里 B 的 mesh 互相列出对方，只配对了 A）：hub 列表里 B 显示「经互联发现」；停掉 A，连接换到 B（B 收到 health 和 WebSocket，hub 列表里 B「正在使用」，单次观察约 2 秒，未实测）。A 恢复后靠 5 分钟一次的复查换回，没有等。
@@ -165,8 +165,8 @@ plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-
 - `test` 用 Gradle 的任务选择器执行各模块单测；`lint` 只跑 Android lint，尚未引入 ktlint / detekt。构建缓存和配置缓存已开启。
 - `app/lint-baseline.xml` 只记录两处原有的通知权限误报：调用前已有 `allowed()` 检查，调用本身在 `runCatching` 内。保留原通知代码，其余错误仍阻断构建，已有 warning 继续显示。
 - target 暂停在 36，本轮不申请 Android 17 的本地网络权限；配对与连接流程补齐权限处理后再升到 37。
-- Application ID 走配置：`~/.config/jarvis/config.json` 的 `android.application_id`，没写就用 `app.bundle_id`，再没有就是 `com.example.jarvis`。
-- 同一台手机上并排装两个版本（比如主线和新版对比）：直接调 Gradle，给不同的 `-PjarvisApplicationId` 和应用名 `-PjarvisAppLabel`（默认「Jarvis」），例如 `./gradlew -PjarvisApplicationId=<包名>.next -PjarvisAppLabel="Jarvis 新版" :app:assembleDebug`。两个版本都注册 `jarvis://` 深链，扫配对码时系统会问用哪个 App 打开。85 MB 左右的 debug 包经 USB 流式安装时，个别手机会中途断开 adb，重装一次即可。
+- Application ID 走配置：`~/.config/persona/config.json` 的 `android.application_id`，没写就用 `app.bundle_id`，再没有就是 `com.example.jarvis`。
+- 同一台手机上并排装两个版本（比如主线和新版对比）：直接调 Gradle，给不同的 `-PjarvisApplicationId` 和应用名 `-PjarvisAppLabel`（默认「Persona」），例如 `./gradlew -PjarvisApplicationId=<包名>.next -PjarvisAppLabel="Persona 新版" :app:assembleDebug`。两个版本都注册 `jarvis://` 深链，扫配对码时系统会问用哪个 App 打开。85 MB 左右的 debug 包经 USB 流式安装时，个别手机会中途断开 adb，重装一次即可。
 - 明文 HTTP 仅用于本地或受信任网络；公网使用 HTTPS / WSS 和配对指纹钉扎，优先 IPv6。实际目标由 `HubHttpClient` 校验，见 [network.md](network.md)。
 - App 图标和 iOS 是同一张（`apple/Jarvis/Resources/Assets.xcassets/AppIcon.appiconset/icon.png`）：自适应图标的前景是这张图缩进到 108 dp 画布中间的 72 dp 安全区
   （`drawable/ic_launcher_fg.xml` 内缩 18 dp，图在 `drawable-nodpi/ic_launcher_art.png`），背景是图边缘的深棕 `#1B110D`，桌面裁成圆形还是圆角方形都不会切到圆环；
@@ -222,7 +222,7 @@ python3 scripts/app/test_android_token_baseline.py
 | `:feature:chat` | 共用对话、Markdown、工具 / diff / 待办、交互面板、附件组件和应用内链接阅读 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:chatlist`、`:core:navigation` |
 | `:feature:files` | 文件树、文本 / 图片预览和路径插入；从 Agent 对话 ⋯ 菜单进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
 | `:feature:inbox` | 统一收件箱、飞书会话、邮件详情、AI 操作和回复组件；邮件传输仍待装配 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
-| `:feature:knowledge` | 知识库列表、阅读和导航；从 Jarvis 抽屉进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
+| `:feature:knowledge` | 知识库列表、阅读和导航；从 Persona 抽屉进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
 | `:feature:machines` | 机器 Dashboard、详情和指标图；从 Agents 机器菜单进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
 | `:feature:settings` | 配对、准备清单、诊断、设备与通知偏好、关于和 APK 安装；设备设置服务仍待装配 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
 | `:feature:terminal` | 终端 Canvas、流式帧消费、接管和输入；从对话页和通知的终端兜底进入 | `:core:contracts`、`:core:terminal`、`:core:designsystem`、`:core:navigation` |
@@ -289,7 +289,7 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 （`debug.style` 切风格，`debug.automation` 关掉掉帧降级，量的是玻璃本身的开销），等 3.5 秒后清零 `dumpsys gfxinfo`，上下各滑两次，
 读 framestats。帧时间 = `FrameCompleted − IntendedVsync`，每次取 framestats 里最后约 120 帧（未完成和异常的行剔除），每个场景 10 次。
 卡顿帧占比是 gfxinfo 自己的「Janky frames ÷ Total frames」，10 次合计，括号里是单次的 min / p50 / max。
-对话场景是手机上最长的一个 Agent 会话（transcript 最大）；第一轮用的 Jarvis 主对话每次只渲染约 20 帧（没滚动起来），不作数。
+对话场景是手机上最长的一个 Agent 会话（transcript 最大）；第一轮用的 Persona 主对话每次只渲染约 20 帧（没滚动起来），不作数。
 
 模糊输入是 Haze 默认分辨率（约 0.78）时：
 
@@ -331,30 +331,30 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 - 配对、列表、对话页正常；claude 的提问在手机上回答，电脑上的 claude 收到
 - 「需要你处理」的通知系统里有（channel `input`，重要级别最高），但默认不在通知栏显示：澎湃 OS 给新装的 App 关掉了悬浮 / 锁屏通知，
-  要在「设置 › 通知与控制中心 › 通知管理 › Jarvis」里打开。锁屏后长时间的后台连接还没在真机上测
+  要在「设置 › 通知与控制中心 › 通知管理 › Persona」里打开。锁屏后长时间的后台连接还没在真机上测
 
-## 形象（Jarvis 的脸）
+## 形象（Persona 的脸）
 
 照 iOS（`docs/persona.md`）复刻内置的默认形象「面罩」（#638）：`core/designsystem` 的 `PersonaFace` 用 Canvas 画，几何、配色比例和动作取自 iOS 的 `PersonaFace.swift`，按当前主题色着色，任意尺寸都清楚，不用位图。
 
-- 用在：Jarvis 页顶栏左上角（`JPersonaButton`，替换原来的「对话列表」图标，点它照旧打开对话列表；读屏读「对话列表」和「Jarvis，<状态>」），对话列表顶部（原来的字母头像，宽屏常驻的侧栏也是它）。两处显示同一个状态。
+- 用在：Persona 页顶栏左上角（`JPersonaButton`，替换原来的「对话列表」图标，点它照旧打开对话列表；读屏读「对话列表」和「Persona，<状态>」），对话列表顶部（原来的字母头像，宽屏常驻的侧栏也是它）。两处显示同一个状态。
 - 五个状态：空闲（每 3.6 秒眨眼）、思考中（眼睛看右上，思考气泡三个点轮流亮）、工作中（眼睛左右扫）、等你处理（呼吸的环）、离线（灰，眼睛闭成线）。只有后三个每帧动（约 12 帧/秒），空闲只在眨眼时动；「减少动画」或省电模式时每个状态停在静止的一帧（同 iOS 的低电量模式）。
-- 状态的取法（`feature/assistant` 的 `personaState`，规则同 iOS `AppModel.personaState`）：hub 连不上（连接中、等待网络等，「更新中」不算）或这段对话的机器离线是离线；对话等你（`needs_you` 或有待处理的交互）是等你处理；正在跑一轮是工作中；其他空闲。看的是当前打开的对话；新对话页没有对话，只看 Jarvis 所在的机器在不在线，其他时候空闲。
+- 状态的取法（`feature/assistant` 的 `personaState`，规则同 iOS `AppModel.personaState`）：hub 连不上（连接中、等待网络等，「更新中」不算）或这段对话的机器离线是离线；对话等你（`needs_you` 或有待处理的交互）是等你处理；正在跑一轮是工作中；其他空闲。看的是当前打开的对话；新对话页没有对话，只看 Persona 所在的机器在不在线，其他时候空闲。
 - 和 iOS 的差别：这一页拿不到对话的最后一条，分不出思考中和工作中，跑着的一轮都显示工作中；等你处理的环用 Android 设计系统的「需要你」色（橙），不是 iOS 的红；晨报风格的主题色就是墨色（近黑 / 近白），面罩和星标会糊掉，所以晨报里脸用次级墨色（中灰），不给这个风格加颜色；iOS 在收件箱有事时给脸挂托盘标记，Android 的收件箱是底部的独立 tab、自带提醒，脸上不再挂。
-- 还没做：内置的「汇流」、hub 上的形象包（`~/.jarvis/personas/`，APNG 帧）、设置 › 外观 › 形象的选择页。
+- 还没做：内置的「汇流」、hub 上的形象包（`~/.persona/personas/`，APNG 帧）、设置 › 外观 › 形象的选择页。
 - 截图核对：组件目录（调试包 `--es debug.openPage catalog`）的「形象」一节并排画五个状态。
 
 ## 助手设置（设置 › 助手）
 
 用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。代码在 `feature/assistant/…/settings/`：页面 `AssistantSettingsScreen`，状态和请求 `AssistantSettingsState`，接口用 `AssistantManagement` 的 `config` / `updateConfig` / `launchers`（`GET` / `PUT /api/v1/assistant`、`GET /api/v1/machines/{id}/launchers`）和原有的记忆接口。
 
-- 入口：设置列表「助手 › Jarvis」（`SettingsPage.Assistant`，深链 `jarvis://open?target=settings&page=assistant`；宽窗口在设置列表右栏打开，页内的子页也在右栏）。Jarvis tab 标题菜单的「助手设置」、右上角的「助手资料」按钮、抽屉里的「资料页」「启动器」在 Jarvis tab 里原地打开同一页。体验模式没有这页，显示说明。
-- 在哪运行：机器（在线状态；`kind: local` 的写「hub 所在的机器」）、启动器和模型、工作目录（按那台机器的 home 缩成 `~/.jarvis/assistant`）。启动器列表取那台机器的 launchers，只列 Claude 类型：助手是无头的 `claude -p`，Codex / TRAEX 的启动器起不了它。保存的启动器不在那台机器的列表里时提示换一个，否则新对话起不来。
-- 换机器：先确认，确认框写明「记忆和会话记录在原来那台机器上，不会跟过去」，目标离线时另外写明；确认后 `PUT {"machine_id":…,"main":"-"}`。主对话是原来那台机器上的 transcript，换过去接不上，所以一起清掉，下一条消息在新机器上开新的主对话；原来的会话和记忆留在那台机器上，换回来还在（原来的主对话成了普通会话）。换完刷新 Jarvis 的会话列表，重新读启动器和记忆。
-- 数据存在哪里：会话记录和记忆在助手所在的机器；关于我、定时任务和设置在 hub；知识库在 hub 所在的机器（`~/.jarvis/data`）。
+- 入口：设置列表「助手 › Persona」（`SettingsPage.Assistant`，深链 `jarvis://open?target=settings&page=assistant`；宽窗口在设置列表右栏打开，页内的子页也在右栏）。Persona tab 标题菜单的「助手设置」、右上角的「助手资料」按钮、抽屉里的「资料页」「启动器」在 Persona tab 里原地打开同一页。体验模式没有这页，显示说明。
+- 在哪运行：机器（在线状态；`kind: local` 的写「hub 所在的机器」）、启动器和模型、工作目录（按那台机器的 home 缩成 `~/.persona/assistant`）。启动器列表取那台机器的 launchers，只列 Claude 类型：助手是无头的 `claude -p`，Codex / TRAEX 的启动器起不了它。保存的启动器不在那台机器的列表里时提示换一个，否则新对话起不来。
+- 换机器：先确认，确认框写明「记忆和会话记录在原来那台机器上，不会跟过去」，目标离线时另外写明；确认后 `PUT {"machine_id":…,"main":"-"}`。主对话是原来那台机器上的 transcript，换过去接不上，所以一起清掉，下一条消息在新机器上开新的主对话；原来的会话和记忆留在那台机器上，换回来还在（原来的主对话成了普通会话）。换完刷新 Persona 的会话列表，重新读启动器和记忆。
+- 数据存在哪里：会话记录和记忆在助手所在的机器；关于我、定时任务和设置在 hub；知识库在 hub 所在的机器（`~/.persona/data`）。
 - 了解你：「关于我」编辑 `notes`。还没在 App 里保存过时打开的是 hub.json 的内容，并说明保存后以这里为准；清空也照样保存（告诉助手什么都不写）。记忆列出 `memory/*.md`，新的在前，标题先取 `MEMORY.md` 索引行，其次 front matter 的 name，类型标成用户 / 反馈 / 项目 / 参考；点开看正文，可以编辑整个文件（含 front matter）或删除（hub 同时删索引行）。`MEMORY.md` 只能看。
-- 时区：默认「跟随手机」，和 iOS 一样：打开 Jarvis tab 或这一页时，hub 的 `timezone` 和手机不同就 `PUT timezone`。关掉以后从列表里挑（当前的和手机的排在最前，可搜城市名、中文名、UTC 偏移），之后不再自动同步。这个选择存在本机（SharedPreferences `jarvis-assistant`），不跟 hub 走。
-- 主动做事：「在哪运行」下面一节，一行「定时任务、跟进和运行记录」打开 `AssistantProactiveScreen`（在这一页里原地打开，返回回到这一页），见下文「主动做事」。Jarvis 抽屉的「定时任务」在 Jarvis tab 里原地打开同一页；旧的资料页 `AssistantProfile` 已删掉。
+- 时区：默认「跟随手机」，和 iOS 一样：打开 Persona tab 或这一页时，hub 的 `timezone` 和手机不同就 `PUT timezone`。关掉以后从列表里挑（当前的和手机的排在最前，可搜城市名、中文名、UTC 偏移），之后不再自动同步。这个选择存在本机（SharedPreferences `jarvis-assistant`），不跟 hub 走。
+- 主动做事：「在哪运行」下面一节，一行「定时任务、跟进和运行记录」打开 `AssistantProactiveScreen`（在这一页里原地打开，返回回到这一页），见下文「主动做事」。Persona 抽屉的「定时任务」在 Persona tab 里原地打开同一页；旧的资料页 `AssistantProfile` 已删掉。
 - 截图：`debug.assistantSettings` 直达页内一部分（notes、memory、memory-file、memory-edit、memory-delete、machine、launcher、timezone、move 即换机器确认框，proactive 即主动做事），和 `debug.openLink 'jarvis://open?target=settings&page=assistant'` 一起传。假 hub 支持 `PUT /api/v1/assistant` 和 `PUT` / `DELETE /api/v1/assistant/memory/{name}`；`MOCK_MACHINES=1` 多一台离线机器，可以看离线的样子。
 - 单测：`AssistantSettingsStateTest`（读写配置、换机器的提示和清主对话、启动器缺失、跟随手机的时区、关于我、记忆的读取 / 修改 / 删除）、`AssistantConfigTest`（`PUT` 只带改了的字段，空的关于我也发）。
 
@@ -399,9 +399,9 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - 折叠屏开合会改 `screenSize` / `smallestScreenSize`，没声明 `configChanges` 时 Activity 整个重建：Compose 的 `rememberSaveable` 能恢复，
   但放在 Activity 字段里的状态（`MainActivity.openSession`，通知打开的对话）不会，开合一次对话就关了；重建时还会把启动 intent 再处理一遍，
   重新打开用户已经关掉的通知会话。现在声明了 `configChanges`，打开的对话也写进 `onSaveInstanceState`，启动 intent 只在第一次 `onCreate` 处理。
-- 自己画的面板（双栏的右栏、占位、Jarvis 的左栏）底色要用 `Surface(color = …)`，不能用 `Modifier.background`：只有 Surface 会设 `LocalContentColor`，
+- 自己画的面板（双栏的右栏、占位、Persona 的左栏）底色要用 `Surface(color = …)`，不能用 `Modifier.background`：只有 Surface 会设 `LocalContentColor`，
   没写颜色的 `Text` 默认是黑的，深色模式下标题、正文黑字压在黑底上看不见（原来的底部浮层、Scaffold 自带 Surface，所以单栏没这个问题）。
-- 同一个页面在两种布局里处在 Compose 树的不同位置，位置决定的 `rememberSaveable` 会丢（草稿、Jarvis 正在看的对话）：按页面用 `SaveableStateHolder.SaveableStateProvider(key)` 包住，
+- 同一个页面在两种布局里处在 Compose 树的不同位置，位置决定的 `rememberSaveable` 会丢（草稿、Persona 正在看的对话）：按页面用 `SaveableStateHolder.SaveableStateProvider(key)` 包住，
   不再画的页面 `removeState`，否则关掉再开的对话会回到上次的滚动位置，而不是最新处。
 - 全屏看图别放进 Compose 的 `Dialog`：对话框窗口停在状态栏和导航栏之间（`decorFitsSystemWindows = false`、`FLAG_LAYOUT_NO_LIMITS` 都试过，上下照样露出底下的页面），
   直接画在对话页上面（`ImageViewerOverlay`），状态栏图标打开时改成浅色、关掉时还原。
@@ -421,7 +421,7 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
   `prefers-color-scheme: dark` / 算法变暗。池里的 WebView 包一层 `ContextThemeWrapper(app, Theme.Jarvis)`，`values-night` 里的 `Theme.Jarvis` 是深色并写明 `isLightTheme=false`。
 - 往 WebView 的选中菜单加项：Chromium 在 `onPrepareActionMode` 里（每次选区变化）填菜单，它的项都要求显示成按钮，浮动工具栏先排这种；
   自己的项也要 `SHOW_AS_ACTION_ALWAYS`、order 比它小，才排在 Copy 前面。点了以后先 `evaluateJavascript` 读到选区再 `mode.finish()`，先 finish 的话选区已经清掉，读到空字符串。
-- `scripts/mock/mock_hub.py` 带 `MOCK_RICH=1 MOCK_LINKS=1` 时给对话、Jarvis 主对话、收件箱各放了几个链接。
+- `scripts/mock/mock_hub.py` 带 `MOCK_RICH=1 MOCK_LINKS=1` 时给对话、Persona 主对话、收件箱各放了几个链接。
 - 截图测试（Paparazzi）只画一帧：`LaunchedEffect` 里同步改的状态画得出来，要等网络或 `delay` 的画不出来。所以页面要能先装好数据再画：hub 的状态在 `Hub` 的
   StateFlow 里（测试里先 `refresh()`），对话在 `hub.chat(key)`（先等它 `loading = false`），助手的状态在 `AssistantModel`（测试里先 `reload()` 再传给 `ShellRoot`）。
   对话页离开时会 `hub.release(key)` 把对话还掉，同一个测试拍第二张（深色）前要再装一次。页面自己的网络请求有时又会在拍之前回来，盖掉装进去的数据：
@@ -441,7 +441,7 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 - hub 只存一份 phone_* 工具列表（`setPhoneTools`），每台手机 `register_phone` 时整个替换，调用发给最后注册的那台（`phoneClient`）。
   所以安卓声明的工具要和 iOS 一模一样，不能多也不能改参数。安卓 10 以后只有在前台的 App 能读剪贴板，后台调 `phone_clipboard_get` 读到的是空，结果里会说明。
-- 两台手机同时连着 hub 时，phone_* 调用发给最后注册的那台：测模拟器上的工具时要关掉真机上的 Jarvis，不然调用发到真机、它那边没开这个数据源就超时。
+- 两台手机同时连着 hub 时，phone_* 调用发给最后注册的那台：测模拟器上的工具时要关掉真机上的 Persona，不然调用发到真机、它那边没开这个数据源就超时。
   Claude Code 只在启动时读一次工具列表，新加的工具要新开会话才看得到。
 - 模拟器默认没有能写的日历账号，`phone_calendar_create_event` 会报「no writable calendar」；测的时候用 `content insert` 建一个 LOCAL 日历。
 - 已配对时打开配对链接：配对页要等配对做完再清掉 `pendingPair`。先清掉的话 Root 立刻换回正常页面，配对页和它的协程一起被丢掉，链接等于没点。
@@ -454,9 +454,9 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 ## App 外壳与页面直达
 
-当前组合根使用 `:core:designsystem` 的 `JarvisTheme`，风格来自 `AppStyleStore`（设置 › 界面风格）。底部固定四个 tab：Jarvis / Agents / 收件箱 / 设置，三套风格顺序相同、都带文字，样子各按各的风格（玻璃是悬浮坞，晨报和看板是底栏）；dock 属于每个 tab 的第一页，推进去的页面（对话、文档、二级设置）盖住它；访问过的 tab 保持组合，切回来不重建（详见 `docs/android-design.md` 第 3 节）。平板和折叠屏按窗口宽度分布局：expanded 时四个 tab 进左侧导航栏，列表和详情分两栏，桌面姿态把对话放上半屏、输入框放下半屏（第 3.1 节）。四个 tab 各自保留返回栈，Agents 角标统计普通 Agent 的待处理交互数，并按 hub 的会话／空间屏蔽及例外规则过滤；Jarvis 角标统计助手待处理交互数，同一会话的多个请求分别计数。收件箱角标统计「需要你」分组中的未处理事项和未屏蔽请求。当前 tab、Agents 机器筛选及各 tab 打开的会话保存在配对目录内，正常冷启动恢复；退出、撤销或重新配对时一并删除，已退出的写入者不能重建位置文件。旧版外部 shell 偏好及准备清单等兼容全局记录在退出配对时清除。
+当前组合根使用 `:core:designsystem` 的 `JarvisTheme`，风格来自 `AppStyleStore`（设置 › 界面风格）。底部固定四个 tab：Persona / Agents / 收件箱 / 设置，三套风格顺序相同、都带文字，样子各按各的风格（玻璃是悬浮坞，晨报和看板是底栏）；dock 属于每个 tab 的第一页，推进去的页面（对话、文档、二级设置）盖住它；访问过的 tab 保持组合，切回来不重建（详见 `docs/android-design.md` 第 3 节）。平板和折叠屏按窗口宽度分布局：expanded 时四个 tab 进左侧导航栏，列表和详情分两栏，桌面姿态把对话放上半屏、输入框放下半屏（第 3.1 节）。四个 tab 各自保留返回栈，Agents 角标统计普通 Agent 的待处理交互数，并按 hub 的会话／空间屏蔽及例外规则过滤；Persona 角标统计助手待处理交互数，同一会话的多个请求分别计数。收件箱角标统计「需要你」分组中的未处理事项和未屏蔽请求。当前 tab、Agents 机器筛选及各 tab 打开的会话保存在配对目录内，正常冷启动恢复；退出、撤销或重新配对时一并删除，已退出的写入者不能重建位置文件。旧版外部 shell 偏好及准备清单等兼容全局记录在退出配对时清除。
 
-连接状态显示在各页自己的标题位（Agents、收件箱、Jarvis 和对话页），外壳不再在页面上方另加横幅，避免重复和顶部多出空白。轻量刷新失败不另弹提示；用户操作失败由统一出口处理，断网提示共用 4 秒去重窗口。这是提示策略配置，性能未实测。操作结果未知时仍保留会话内的核对入口。
+连接状态显示在各页自己的标题位（Agents、收件箱、Persona 和对话页），外壳不再在页面上方另加横幅，避免重复和顶部多出空白。轻量刷新失败不另弹提示；用户操作失败由统一出口处理，断网提示共用 4 秒去重窗口。这是提示策略配置，性能未实测。操作结果未知时仍保留会话内的核对入口。
 
 第二批模块入口：
 
@@ -465,9 +465,9 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - Agents「列表设置」面板里的「机器监控」进入机器列表；树里每台电脑栏头右边的仪表按钮直接进这台电脑的详情。
 - Agents 操作和对话页菜单确认关闭成功后，从所有 tab 移除该会话的聊天、请求和终端页面；结果未知时保留页面供核对。分享目标与 Agents 共用 `agentRank`，同状态再按时间和稳定标识排序。
 - Agent 对话页 ⋯ 菜单进入文件；确认是仓库后显示 Git 和改动数。文件和 Git 在原会话内切换，插入路径保留草稿和有效选区，并返回输入框。
-- Jarvis 抽屉的「知识库」进入档案、搜索及详情，链接在应用内打开。
+- Persona 抽屉的「知识库」进入档案、搜索及详情，链接在应用内打开。
 - 设置 › 手机数据进入工具权限和开关。应用前台状态与常驻服务实际运行状态共同决定工具可用性；定位和剪贴板仍要求前台。旧配对若没有设备标识，须重新配对。
-- 设置 › 助手（`SettingsPage.Assistant`）是 Jarvis 的设置页，Jarvis tab 的标题菜单「助手设置」、右上角头像也打开它，见上文「助手设置」。
+- 设置 › 助手（`SettingsPage.Assistant`）是 Persona 的设置页，Persona tab 的标题菜单「助手设置」、右上角头像也打开它，见上文「助手设置」。
 - 未配对时可选「没有 hub？先体验一下」。体验模式使用独立数据、缓存及待发队列，设置中可退出；缺少演示数据的终端、机器监控和知识库显示说明，不调用真实 hub。
 
 Debug 直达入口及启动参数解析适配器只存在于 `src/debug/`，复用 `:core:navigation` 的 debug 解析，Release 不注册开发入口。示例中的包名替换为实际构建使用的 Application ID：
@@ -480,7 +480,7 @@ adb -s emulator-5600 shell am start -W -n com.example.jarvis/jarvis.android.debu
 adb -s emulator-5600 shell am start -W -n com.example.jarvis/jarvis.android.debug.DebugEntryActivity --es debug.openDiagnostics true
 ```
 
-每次只传一种 `debug.open…` 目标。`debug.openTab` 可选 Jarvis、Agents、Inbox、Settings；`debug.conversationKind` 可选 agent 或 assistant；`debug.openCatalog true` 打开设计系统组件目录；`debug.openLink '<jarvis:// 链接>'` 按 MainActivity 的规则打开任意深链（终端兜底、通知 tab、收件箱事项、设置子页）；`debug.openPage` 可选 machines、knowledge、phone、catalog，直达没有公开深链的页面。链接里有 `&` 时要再套一层单引号，adb shell 会把整条命令交给设备上的 shell。`debug.theme` 可选 light 或 dark，只影响本应用（含各页面自己套的 JarvisTheme），不更改模拟器系统主题。`debug.style` 可选 glass、brief、board，切换界面风格并保存（和在设置里选一样）。`debug.posture` 可选 tabletop、book，在窗口正中假装有一条半折的铰链（只给截图用：android-35 的 Pixel Fold 模拟器不给 App 报 FoldingFeature）。
+每次只传一种 `debug.open…` 目标。`debug.openTab` 的兼容参数值可选 `Jarvis`（Persona 助手页）、`Agents`、`Inbox`、`Settings`；`debug.conversationKind` 可选 agent 或 assistant；`debug.openCatalog true` 打开设计系统组件目录；`debug.openLink '<jarvis:// 链接>'` 按 MainActivity 的规则打开任意深链（终端兜底、通知 tab、收件箱事项、设置子页）；`debug.openPage` 可选 machines、knowledge、phone、catalog，直达没有公开深链的页面。链接里有 `&` 时要再套一层单引号，adb shell 会把整条命令交给设备上的 shell。`debug.theme` 可选 light 或 dark，只影响本应用（含各页面自己套的 JarvisTheme），不更改模拟器系统主题。`debug.style` 可选 glass、brief、board，切换界面风格并保存（和在设置里选一样）。`debug.posture` 可选 tabletop、book，在窗口正中假装有一条半折的铰链（只给截图用：android-35 的 Pixel Fold 模拟器不给 App 报 FoldingFeature）。
 
 状态预览使用 `debug.state`，只在 debug 包解析。请使用未配对的独立测试包；入口会自动进入本地体验模式并跳过准备清单，不访问真实 hub。已配对时不自动退出或替换配对，需要改用独立测试包。状态固定，刷新不会结束预览；不传该参数重新启动即可回到普通体验模式。可同时传 `debug.openTab`、`debug.openSession` 和 `debug.theme` 等既有目标及主题参数，每次仍只选一个目标，不能与 `debug.mockAddress` 同传。
 
@@ -516,7 +516,7 @@ Debug 包的设置页底部另有一行「组件目录（调试版）」，自�
 ./scripts/app/android.sh shots -s emulator-5600 --out /tmp/jarvis-android-shots
 ```
 
-命令构建并安装独立测试包 `com.example.jarvis.shots`，只清理该包的数据。随后用 `scripts/mock/mock_hub.py` 在自动分配的本地端口启动假 hub，通过指定设备的 `adb reverse` 自动配对，逐页冷启动并输出深浅色 PNG。覆盖四个 tab、Agent 对话、助手对话（落在 Jarvis 首页的内嵌对话）、请求、终端、飞书会话、邮件详情、配对、连接诊断、通知和准备清单两个设置子页、机器监控、知识库、手机数据及组件目录。假 hub 为这些页面提供了飞书窗口 / 话题 / 文档、邮件正文、知识库、会话文件和 Git 的示例数据。自动化启动从各 tab 根页开始、不恢复上一张的位置，也不弹准备清单；脚本以配对目录里的 `shell-position.json` 判断外壳已起来。浮层、菜单和表单（状态浮层、搜索、任务页、全文、完整请求页、文件 / Git、筛选、细列表、空间页、长按菜单、新建、历史、飞书话题和文档、设备、机器详情、知识库详情、体验模式）仍要在页面上点开再截。示例联系人在启动假 hub 前统一匿名化；实际截图内容来自假数据。
+命令构建并安装独立测试包 `com.example.jarvis.shots`，只清理该包的数据。随后用 `scripts/mock/mock_hub.py` 在自动分配的本地端口启动假 hub，通过指定设备的 `adb reverse` 自动配对，逐页冷启动并输出深浅色 PNG。覆盖四个 tab、Agent 对话、助手对话（落在 Persona 首页的内嵌对话）、请求、终端、飞书会话、邮件详情、配对、连接诊断、通知和准备清单两个设置子页、机器监控、知识库、手机数据及组件目录。假 hub 为这些页面提供了飞书窗口 / 话题 / 文档、邮件正文、知识库、会话文件和 Git 的示例数据。自动化启动从各 tab 根页开始、不恢复上一张的位置，也不弹准备清单；脚本以配对目录里的 `shell-position.json` 判断外壳已起来。浮层、菜单和表单（状态浮层、搜索、任务页、全文、完整请求页、文件 / Git、筛选、细列表、空间页、长按菜单、新建、历史、飞书话题和文档、设备、机器详情、知识库详情、体验模式）仍要在页面上点开再截。示例联系人在启动假 hub 前统一匿名化；实际截图内容来自假数据。
 
 测试不读取用户的 hub 配对，也不连接用户 hub；自动化入口不声明可用手机工具。结束或失败时停止本次假 hub、停止测试包并移除本次端口转发。输出目录还包含假 hub 日志和夹具标识，便于排查缺页。截图等待时间只是脚本配置，不代表页面加载性能；性能未实测。手机权限、国产系统后台存活和真实终端输入法仍需真机验证。
 
@@ -544,13 +544,13 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 
 ## 主动做事（设置 › 助手 › 主动做事）
 
-用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。「设置 › 助手」拆成两块，这一块管 Jarvis 自己主动做的事：定时任务、它替自己安排的跟进、运行记录（iOS 的同名页面在 `ios/Jarvis/Views/Settings/AssistantProactiveViews.swift`）。代码在 `feature/assistant/…/proactive/`，对外只有 `AssistantProactiveScreen(onBack, onOpenConversation)`：`onOpenConversation` 打开一段助手对话（运行开出来的、跟进接着的、立即运行新开的）；接口和协程作用域默认取 Jarvis tab 宿主（`LocalAssistantHost`）里当前配对的。子页面（某个定时任务、新建、全部跟进、运行记录）和返回在页面里自己管，转场和 App 的页面一样从右边推入。
+用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。「设置 › 助手」拆成两块，这一块管 Persona 自己主动做的事：定时任务、它替自己安排的跟进、运行记录（iOS 的同名页面在 `ios/Jarvis/Views/Settings/AssistantProactiveViews.swift`）。代码在 `feature/assistant/…/proactive/`，对外只有 `AssistantProactiveScreen(onBack, onOpenConversation)`：`onOpenConversation` 打开一段助手对话（运行开出来的、跟进接着的、立即运行新开的）；接口和协程作用域默认取 Persona tab 宿主（`LocalAssistantHost`）里当前配对的。子页面（某个定时任务、新建、全部跟进、运行记录）和返回在页面里自己管，转场和 App 的页面一样从右边推入。
 
-- 入口：设置 › 助手的「主动做事」一节（在助手设置页里原地打开，打开的对话经 `ChatRoute(kind = Assistant)` 落到 Jarvis tab）；Jarvis 抽屉的「定时任务」在 Jarvis tab 里原地打开同一页，打开的对话直接显示在 Jarvis 首页。
-- 首页：Jarvis 的一句话（几个定时任务开着、下一件在什么时候）；「接下来」时间线（左边大号时刻，定时任务的下次运行和跟进混排，最多 4 件）；定时任务（规则的人话「每个工作日 上午 9:00」、下次、上次结果和开关；`created_by: "assistant"` 的头像角上有火花并写明「Jarvis 在对话里建的」，上次没跑起来的角上是红色警告）；已安排的跟进（时间、在哪台机器、接着原对话还是开新对话，⋯ 里立即运行 / 打开原对话 / 取消，取消要确认）；最近 3 次运行。右上角 ＋ 从模板新建（会前准备、周报、下班前盘点，和 iOS 同一套）或空白。长按定时任务：立即运行、编辑、删除。
+- 入口：设置 › 助手的「主动做事」一节（在助手设置页里原地打开，打开的对话经 `ChatRoute(kind = Assistant)` 落到 Persona tab）；Persona 抽屉的「定时任务」在 Persona tab 里原地打开同一页，打开的对话直接显示在 Persona 首页。
+- 首页：Persona 的一句话（几个定时任务开着、下一件在什么时候）；「接下来」时间线（左边大号时刻，定时任务的下次运行和跟进混排，最多 4 件）；定时任务（规则的人话「每个工作日 上午 9:00」、下次、上次结果和开关；`created_by: "assistant"` 的头像角上有火花并写明「Persona 在对话里建的」，上次没跑起来的角上是红色警告）；已安排的跟进（时间、在哪台机器、接着原对话还是开新对话，⋯ 里立即运行 / 打开原对话 / 取消，取消要确认）；最近 3 次运行。右上角 ＋ 从模板新建（会前准备、周报、下班前盘点，和 iOS 同一套）或空白。长按定时任务：立即运行、编辑、删除。
 - 定时任务页：名称、开关、时间（时和分两个滚轮，24 小时，TalkBack 可以像滑块一样调）、周几（一 … 日，快捷「每天 / 工作日 / 周末」，最后一天关不掉）、提示词；已有的还有立即运行（有改动先保存）、查看上次结果、历史记录（最近 5 次，更多进运行记录）、删除（要确认）。改了没保存就返回会先问。
 - 运行记录：新的在前，按天分组；已运行 / 没跑起来 / 已跳过，准时或晚了多久、手动运行、原因（hub 常见的英文错误译成中文，其余原样显示）；开出过对话的点开就是那段对话。一个定时任务的历史按 `ref_id` 过滤：`Run` 加了 `ref_id`、`due` 两个字段（hub 本来就返回）。「上次」以运行记录里最新的一次为准：hub 的立即运行不更新 `last_run`，只看定时任务自己的字段会把上一次定时运行的时间和这次手动运行的结果拼在一起。
-- 写入：`PUT /api/v1/assistant/routines` 是整表替换。每次改动（开关、编辑、新建、删除）在写之前重读整表，只改这一个定时任务，其余定时任务（包括 Jarvis 在这期间新建的）和 hub 自己的字段原样带回；编辑只写用户改过的字段，Jarvis 在这期间从对话里改的（比如时间）留着。新建的 id 在 App 里生成（`rt_` + 8 位十六进制，hub 只给空 id 分配），回包丢了再点「添加」不会建出第二个。读和写排队、一次一个，开始了的写不会因为离开页面被打断；开关先在界面上动，写失败按 hub 上的值恢复。写入或取消跟进失败先重读核对，hub 上已经是想要的样子就不算失败；正在编辑的定时任务在这期间被删了，提示「已经不在了」，不会把它写回去。
+- 写入：`PUT /api/v1/assistant/routines` 是整表替换。每次改动（开关、编辑、新建、删除）在写之前重读整表，只改这一个定时任务，其余定时任务（包括 Persona 在这期间新建的）和 hub 自己的字段原样带回；编辑只写用户改过的字段，Persona 在这期间从对话里改的（比如时间）留着。新建的 id 在 App 里生成（`rt_` + 8 位十六进制，hub 只给空 id 分配），回包丢了再点「添加」不会建出第二个。读和写排队、一次一个，开始了的写不会因为离开页面被打断；开关先在界面上动，写失败按 hub 上的值恢复。写入或取消跟进失败先重读核对，hub 上已经是想要的样子就不算失败；正在编辑的定时任务在这期间被删了，提示「已经不在了」，不会把它写回去。
 - 立即运行：定时任务 `POST …/routines/{id}/run`、跟进 `POST …/followups/{id}/run`，hub 要等对话开起来才回（它自己最多等 2 分钟），所以这两个请求的读超时是 130 秒（`HttpAssistantManagement`，和新建 Agent 一样；其他请求仍是 15 秒）。成功后打开新对话；跟进跑了就从列表里拿掉（hub 是先拿掉再跑，所以失败后也重读）。运行和取消挂在配对的作用域上，离开页面不会中断。
 - 失败提示：用户操作的失败交给 App 的统一出口（`LocalAppFeedback.notice`），没有时（调试入口）显示在页面底部；传输层在配对或线路变了时抛的取消算这次请求失败（「连接刚换过，请再试一次」），页面不会卡在「正在保存」。读取失败显示在对应的区块里，可以重试，已经读到的内容留着。相对时间每 30 秒刷新，最近的一件到点 5 秒后自动重读（按上次读取的时刻算，时钟跳动不会把这次重读取消）。
 - 时间：hub 的 `next_run` 按用户时区写、带偏移（`+08:00`）；Android 12 / 13 的 `Instant.parse` 只认 `Z`，这一页统一用 `instantOf`（先 `Instant`，再 `OffsetDateTime`）。`core:contracts` 的 `parseTime` 还是只用 `Instant.parse`，别的页面遇到带偏移的时间在这两个版本上会读不出来。hub 也接受 `9:00` 这样的一位小时，编辑页按 `09:00` 显示和写回。数字一律按 `Locale.ROOT` 格式化。
@@ -565,7 +565,7 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 
   `debug.page` 可选 `routine:<id>`、`new`、`new:<模板序号>`、`followups`、`runs`、`runs:<定时任务 id>`，不传是首页；`debug.theme`、`debug.style` 和 App 的调试参数一样。点到要打开对话的地方，调试入口只弹框说明会打开哪段对话。接进设置以后，也可以在真实外壳里直达：配对假 hub 后 `--es debug.openLink 'jarvis://open?target=settings&page=assistant' --es debug.assistantSettings proactive`。
 - 假 hub：示例数据按 UTC+8 的规则排（上次运行就是规则的上一次，截图用的模拟器设成这个时区），`next_run` 和 hub 一样带 `+08:00`；`MOCK_SCHEDULE=empty` 什么都没有（空状态）；`PUT` 和 hub 一样校验名称、提示词和 HH:MM，按 id 保留 hub 的字段、算下次运行；立即运行和取消对不存在的 id 回 404，每次立即运行记一条手动运行、更新定时任务的上次状态（不动 `last_run`）；`GET /mock/schedule` 看立即运行了哪些，`GET /mock/schedule/reset` 恢复初始数据。
-- 验证（2026-11-02）：单测 `ProactiveStoreTest`（整表 PUT 带回其他定时任务和 hub 字段、开关立即生效和失败恢复、回包丢失不算失败、编辑只写改过的字段、新建重试不重复、被删的不写回、删除、取消跟进和失败、立即运行跟进和定时任务、读取失败保留旧数据、传输层的取消算失败）、`ProactiveTextTest`（规则、时刻和偏移、倒计时、晚了多久、错误、上次运行、跟进去向、时间线和那句话、页面键）。模拟器上连假 hub 把开关、编辑保存、长按立即运行、取消跟进、立即运行跟进、模板新建、删除、未保存返回都点了一遍，hub 收到的内容都对；真实外壳里点过设置 › 助手 › 主动做事、返回、运行记录打开对话（落到 Jarvis tab）、Jarvis 抽屉「定时任务」打开和返回；三套风格 × 深浅色、手机和平板都截图看过。真机和真实 hub 没有测；页面性能未实测。
+- 验证（2026-11-02）：单测 `ProactiveStoreTest`（整表 PUT 带回其他定时任务和 hub 字段、开关立即生效和失败恢复、回包丢失不算失败、编辑只写改过的字段、新建重试不重复、被删的不写回、删除、取消跟进和失败、立即运行跟进和定时任务、读取失败保留旧数据、传输层的取消算失败）、`ProactiveTextTest`（规则、时刻和偏移、倒计时、晚了多久、错误、上次运行、跟进去向、时间线和那句话、页面键）。模拟器上连假 hub 把开关、编辑保存、长按立即运行、取消跟进、立即运行跟进、模板新建、删除、未保存返回都点了一遍，hub 收到的内容都对；真实外壳里点过设置 › 助手 › 主动做事、返回、运行记录打开对话（落到 Persona tab）、Persona 抽屉「定时任务」打开和返回；三套风格 × 深浅色、手机和平板都截图看过。真机和真实 hub 没有测；页面性能未实测。
 - 设计系统里没有时间选择和周几选择的组件：这两个件写在 `proactive/ProactiveComponents.kt` 里，只用 token（色板、字体、`shapes.chipShape` / `controlShape`、`Tokens.Space`），不按风格分支；以后设计系统有了对应组件再换过去。
 
 ## 主线旧 App 新增、待移植到新架构
@@ -583,20 +583,20 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 
 这些在主线旧 App 里已经有（PR 号这里没有逐个核对，要查就看 `git show origin/master:docs/android.md` 的对应小节）：
 
-- 配对欢迎页：扫 `jarvisd hub pair` 的二维码（`jarvis://pair?url=…&token=…`）或手填地址和 token；配对后用 `POST /api/v1/auth/tokens`（`kind: phone`）换这台手机自己的 token，旧 hub 没有时沿用配对 token。
+- 配对欢迎页：扫 `personad hub pair` 的二维码（`jarvis://pair?url=…&token=…`）或手填地址和 token；配对后用 `POST /api/v1/auth/tokens`（`kind: phone`）换这台手机自己的 token，旧 hub 没有时沿用配对 token。
 - 外壳：顶栏 ☰ ·「助手 | Agents」切换 · 圆按钮；侧边栏（横向拖出、对话历史置顶 / 最近、「新对话」药丸）；弱网时顶栏下的小药丸（等待网络 / 连接中…）。
 - Agents 列表：需要你卡片、按项目 / 状态 / 机器分组、置顶和屏蔽、左滑关闭、长按菜单、搜索和「全部 / 需要你 / 未读 / 工作中」筛选；空间页（在同一个空间开新标签）；空间标题的 ⋯（置顶、屏蔽、重命名）。
 - 对话：顶栏胶囊「空间 › tab」和会话信息（`GET …/info`，拷贝 session id 和恢复命令）；麦克风（系统语音识别器，`RecognizerIntent`，手机没有语音识别时不显示）；快捷命令（/compact、/context、/clear 等，`/clear` 先确认）；API 报错卡片（白话原因、连续计数、「重试」）；排队中的消息（撤回编辑 / 删除，`POST …/queue {keep}`）；权限模式、思考强度和 herdr 里 Claude 的模型标签（`POST …/modes`、`/model <别名>`）。
-- 对话：工作过程折叠（每轮「工具 · 思考 · 回复 · 时长」，点开逐步展开）、消息长按菜单（复制、选择、引用、分享、交给 Jarvis、作为上下文、编辑）；图片全屏查看、左右滑、保存相册、框选和画笔编辑；附件（照片、拍照、文件；文件不自动发送）。
+- 对话：工作过程折叠（每轮「工具 · 思考 · 回复 · 时长」，点开逐步展开）、消息长按菜单（复制、选择、引用、分享、交给 Persona、作为上下文、编辑）；图片全屏查看、左右滑、保存相册、框选和画笔编辑；附件（照片、拍照、文件；文件不自动发送）。
 - 对话里的实时终端：VT 子集、手机尺寸接管、键栏和 Ctrl / Alt / ⇧ 锁定、电脑尺寸只看、字号、选择文本拷贝（`docs/terminal.md`）；文件和 Git（只读：目录、查看器、分支、改动、diff、提交历史）。
 - 新开会话：选电脑、目录（最近用过）、启动器、权限模式、可选第一条消息；`async` 立即打开对话，在电脑上等 Claude 就绪再发。
 - 引擎选择（配对后为 hub 所在的机器选，`PUT /api/v1/machines/{id}/engine`，机器页的「引擎」行）；机器列表、机器页和重新连接。
-- Jarvis：资料页（定时任务、跟进、运行记录、关于我、记忆）；知识库（类型、项目分组、标签筛选、全文搜索、条目页、「问 Jarvis / 开 Agent」、打标）。
+- Persona：资料页（定时任务、跟进、运行记录、关于我、记忆）；知识库（类型、项目分组、标签筛选、全文搜索、条目页、「问 Persona / 开 Agent」、打标）。
 - 链接卡片（`ui/web/`）：铺满屏幕、下拉到 0.6 时后面的页面挤到上面 40%、`WebViewPool` 预加载、选中文字「AI 修改」「作为上下文」（`<jarvis-context kind="edit|context">`）、`LinkSafety` 的 scheme 规则、证书只认系统 CA。
 - 设置 › AI › 模型配置（按用途选模型，`/api/v1/model-config`）；语音对话（主线 `docs/android.md` 的「语音对话」一节）。
 - 系统与监控：1 / 6 / 24 小时曲线、按住读数、每个核心、系统信息；Claude Code 设置（`~/.claude/settings.json` 的白名单，同时改所有在线机器）；设备列表（撤销 token）；通知偏好（需要你时 / 做完时，`devices/{id}/prefs`）；存储空间（按类清理）。
 - 界面风格：旧版是五种（液态玻璃、Claude、黏土、Island、飞书，和 iOS 同一组，`SharedPreferences` 的 `ui.style`），新架构是三种（玻璃、晨报、看板）。两边是否对齐，待定。
-- 常驻通知、小组件、磁贴、快捷方式（`fleet/`、`widget/`、`shortcuts/`，排序规则照 hub 的 `buildFleet`）。旧版验证过：通知展开的「批准」hub 收到 `{approve:true, mode:"acceptEdits"}`，小组件和磁贴，「批准第一个待处理」，「问 Jarvis」冷启动也能进去；没验证：通知上的「允许 / 拒绝」、Live Update、真机锁屏。
+- 常驻通知、小组件、磁贴、快捷方式（`fleet/`、`widget/`、`shortcuts/`，排序规则照 hub 的 `buildFleet`）。旧版验证过：通知展开的「批准」hub 收到 `{approve:true, mode:"acceptEdits"}`，小组件和磁贴，「批准第一个待处理」，「问 Persona」冷启动也能进去；没验证：通知上的「允许 / 拒绝」、Live Update、真机锁屏。
 - 折叠屏和大屏：两栏（Agents / 空间页 / 收件箱 / 设置），`Fold.kt` 的折痕和分栏规则，`Panes.kt` 可拖的分隔条（新架构有 expanded 布局，细节待对）。
-- 界面风格的截图（旧版，2026-11-01 之后）：模拟器连 `scripts/mock/mock_hub.py`，五种风格 × 浅色 / 深色截了 Agents、两种交互卡片、Jarvis 主对话和抽屉、资料页、收件箱、设置、风格选择页、配对页（切风格可以直接写 `shared_prefs/ui.xml` 后重启 App）。
-- 旧版截图验证（2026-11-01）：Paparazzi 在 JVM 上用 layoutlib 画 Compose，连 `scripts/mock/mock_hub.py`，命令 `./scripts/app/android.sh shots`（`scripts/app/android_shots.py`）。覆盖外壳、对话、收件箱、机器、空间页、设置、知识库、Jarvis 资料页、配对、风格、语音、文件和 Git、小组件等，深浅色各拍一遍。手势、键盘、拍照、听写、真实网络、通知没在这条路上验证。
+- 界面风格的截图（旧版，2026-11-01 之后）：模拟器连 `scripts/mock/mock_hub.py`，五种风格 × 浅色 / 深色截了 Agents、两种交互卡片、Persona 主对话和抽屉、资料页、收件箱、设置、风格选择页、配对页（切风格可以直接写 `shared_prefs/ui.xml` 后重启 App）。
+- 旧版截图验证（2026-11-01）：Paparazzi 在 JVM 上用 layoutlib 画 Compose，连 `scripts/mock/mock_hub.py`，命令 `./scripts/app/android.sh shots`（`scripts/app/android_shots.py`）。覆盖外壳、对话、收件箱、机器、空间页、设置、知识库、Persona 资料页、配对、风格、语音、文件和 Git、小组件等，深浅色各拍一遍。手势、键盘、拍照、听写、真实网络、通知没在这条路上验证。

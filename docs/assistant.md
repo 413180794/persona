@@ -1,6 +1,6 @@
-# 助手（「Jarvis」tab，原「对话」）
+# 助手（「Persona」tab，原「对话」）
 
-「Jarvis」tab 的 Jarvis 是 hub 所在机器上 `~/.jarvis/assistant` 里**无头运行**的 Claude Code（`claude -p` + stream-json，见
+「Persona」tab 的 Persona 是 hub 所在机器上 `~/.persona/assistant` 里**无头运行**的 Claude Code（`claude -p` + stream-json，见
 `docs/claude-integration.md`「无头助手」）；启动器跑的是 Codex 时换成 `codex app-server`（下面「Codex」一节）；选的是能当助手的 Agent 运行时的启动器（DSH）时，由那个运行时跑（下面「Agent 运行时（DSH）」一节）。这篇讲它能做什么、怎么做到的，以及 2026-10-26 那次能力升级背后的取舍。
 
 ## 2026-10-26 之前它为什么弱（从真实对话记录里看到的）
@@ -9,32 +9,32 @@
   `No such tool available: AskUserQuestion … nobody in this session can answer it`，PreToolUse hook 根本没机会触发。
 - **大部分时间在找数据**：一段对话 33 次 `cd`/`ls`；飞书靠 `docker inspect` 抠 token；看 Agent 要 ssh 上去解析 `herdr agent list`。
   hub 手里本来就有这些数据。
-- **慢**：一轮 36–136 秒，ssh 命令多次超时（exit 124 / 137）；每段对话冷启动 claude，jarvis 工具还要先 ToolSearch。
+- **慢**：一轮 36–136 秒，ssh 命令多次超时（exit 124 / 137）；每段对话冷启动 claude，Persona 工具还要先 ToolSearch。
 - **只会被动回答**，开场时也不知道时间、谁在等他、有多少未读。
 
 ## 现在的结构
 
 | 能力 | 实现 |
 | --- | --- |
-| 在手机上问 | MCP `ask_user` → hub 建一个 `question` 交互（`tool_name: ask_user`，session 就是这段对话）→ App 里原有的提问卡片 + 推送（标题「Jarvis 在问你」）→ 答案作为工具结果返回 |
+| 在手机上问 | MCP `ask_user` → hub 建一个 `question` 交互（`tool_name: ask_user`，session 就是这段对话）→ App 里原有的提问卡片 + 推送（标题「Persona 在问你」）→ 答案作为工具结果返回 |
 | 推送 | `notify_user` → APNs（App 关着也到），点开就是这段对话；同一轮结束时不再重复推「完成」；打开了飞书机器人的「推送也发到飞书」时也发一份到飞书（`docs/bots.md`） |
 | 在飞书里聊 | 私聊飞书机器人 = 在主对话里说话，回答发回飞书，提问 / 批准在飞书里点卡片（`docs/bots.md`） |
 | 自己定时回来 | `schedule_followup`（`at` 一次；`every: "30m"` 按间隔重复）/ `list_followups` / `cancel_followup`；到点 hub 把 prompt（以「⏰」开头）发进原对话（`assistant.send` 会 `--resume`），失败就新开一段 |
-| 定时任务 | 一张表（下面「定时任务」一节），默认「早报」工作日 09:00 开、「晚间回顾」工作日 21:30 关；跑完照常推「完成」。对话里说「每天 / 每周几 X 点…」时助手用 `schedule_routine` 建（App 里标「Jarvis 建的」），`delete_routine` 删 |
+| 定时任务 | 一张表（下面「定时任务」一节），默认「早报」工作日 09:00 开、「晚间回顾」工作日 21:30 关；跑完照常推「完成」。对话里说「每天 / 每周几 X 点…」时助手用 `schedule_routine` 建（App 里标「Persona 建的」），`delete_routine` 删 |
 | 运行记录 | 每次运行（成功开起对话 / 没跑起来 / 停机错过而跳过）记进 settings `assistant.runs`（最近 200 条），`GET /api/v1/assistant/runs[?ref=]`；定时任务带上次状态 `last_status` |
 | 到点 | 调度按下一个到期时间设定时器（最长睡 30 秒，列表一改就重算），不再是 20 秒轮询；hub 停机期间错过的跟进回来后照跑一次，提示词里写明晚了多久 |
-| 后台任务 / Monitor | 助手可以用 Bash 的 `run_in_background` 和 Monitor 盯事件，然后结束这一轮；命令跑完 / 事件来时 claude 自己开新一轮（node 把它当成工作中，跑完照常推送）。node 从 stream-json 的 `system/background_tasks_changed` 知道还有哪些在跑：有任务时不回收进程（最长 12 小时），任务列表记在 `node_sessions.tasks`；jarvisd 重启（部署）会把它们连同进程一起杀掉，node 起来后给这些对话发一条说明，让助手决定要不要重开 |
-| 不用批准的工具 | 助手进程带 `--allowedTools mcp__jarvis`：Jarvis 自己的工具（notify_user、schedule_followup、agents_list、kb_*…）不再每次在手机上要批准；会替用户出面的（mail_send、手机写操作）hub 自己先问，飞书写操作由 Bash 闸门先问（见下「飞书：lark-connector skill」）。其他 Bash / Monitor 仍按会话的权限模式 |
+| 后台任务 / Monitor | 助手可以用 Bash 的 `run_in_background` 和 Monitor 盯事件，然后结束这一轮；命令跑完 / 事件来时 claude 自己开新一轮（node 把它当成工作中，跑完照常推送）。node 从 stream-json 的 `system/background_tasks_changed` 知道还有哪些在跑：有任务时不回收进程（最长 12 小时），任务列表记在 `node_sessions.tasks`；personad 重启（部署）会把它们连同进程一起杀掉，node 起来后给这些对话发一条说明，让助手决定要不要重开 |
+| 不用批准的工具 | 助手进程带 `--allowedTools mcp__jarvis`：Persona 自己的工具（notify_user、schedule_followup、agents_list、kb_*…）不再每次在手机上要批准；会替用户出面的（mail_send、手机写操作）hub 自己先问，飞书写操作由 Bash 闸门先问（见下「飞书：lark-connector skill」）。其他 Bash / Monitor 仍按会话的权限模式 |
 | Agents | `agents_list` / `agent_read` / `agent_send` / `agent_start`：直接用 hub 的会话状态（`decorated`）和 node 的 `session.items` / `session.send` / `session.start`，不走 ssh |
 | 飞书 | 主要用 lark-connector 自带的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；高频结构化的查询仍有 MCP `lark_chats` / `lark_messages` / `lark_search`（hub 的 lark-connector 客户端）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
-| 操作 Jarvis 自己 | `jarvis_settings`（先 `list`）：读写分拣规则、AI 分身规则、关于我、默认启动器，以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
+| 操作 Persona 自己 | `jarvis_settings`（先 `list`）：读写分拣规则、AI 分身规则、关于我、默认启动器，以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
 | 实时快照 | 每条发给助手的消息开头一个 `<jarvis-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
-| 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，jarvis 工具不再延迟加载 |
+| 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，Persona 工具不再延迟加载 |
 | 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex、DSH 上时读写的也是这一份（下面「Codex」「Agent 运行时（DSH）」两节），换启动器记忆不丢 |
 | 关于我 | App 里编辑后存 settings `assistant.notes`，覆盖 hub.json 的 `assistant.notes`，进 CLAUDE.md 末尾 |
 | 手机不在前台 | `phone_*` 调用时没有手机连着 → hub 发静默推送（`content-available`，`jarvis_wake`）→ App 在后台连上 WS 执行，25 秒后断开；等最多 20 秒。App 进后台时主动断开 WS，否则挂起的 socket 让 hub 以为手机在线、调用干等 2 分钟；断开后在后台什么都不会再把它打开（网络恢复、刷新结束、重连退避，`LiveConnection.suspended`，2026-11-02），只有这条静默推送（`wake()`）能连 |
 
-说明（`~/.jarvis/assistant/CLAUDE.md`）里「他的电脑本身」那一段按助手**实际所在的机器**写（2026-10-31 修，原来只认 kind local）：
+说明（`~/.persona/assistant/CLAUDE.md`）里「他的电脑本身」那一段按助手**实际所在的机器**写（2026-10-31 修，原来只认 kind local）：
 - 助手所在的那台，不管什么 kind，都写「就是你所在的这台机器，直接执行命令」。
 - `ssh_host` 是 hub 那台机器的 ssh 别名，所以只有助手跑在 hub 本机（kind local）上时，才给其他 ssh 机器写 `ssh <别名> '<命令>'`。
 - 其余情况（助手在别的电脑上，或目标是 link 机器，根本没有 ssh），不给执行不了的命令，写明不能直接执行，要做事用 `agent_start` / `agent_send`。
@@ -43,7 +43,7 @@
 用的是它启动时读到的那份，要等它下次启动才读新的：闲置 20 分钟被回收后、或那台 node 的连接重建以后，下一条消息会起新进程。
 
 只有助手能拿到这些工具：node 给助手进程的 MCP 配置是内联 JSON，带 `JARVIS_ASSISTANT=1`、`JARVIS_SESSION_ID=<对话 id>`；
-`jarvisd mcp` 把这两个值带给 hub，hub 只在 assistant 为真时列出、执行这些工具（`hub/assistant_tools.go`）。herdr 里的普通 Agent 看不到。
+`personad mcp` 把这两个值带给 hub，hub 只在 assistant 为真时列出、执行这些工具（`hub/assistant_tools.go`）。herdr 里的普通 Agent 看不到。
 
 ## 飞书：lark-connector skill（2026-10-30）
 
@@ -52,10 +52,10 @@
 - **副本**：仓库的 `skills/lark-connector/` 是 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、
   `scripts/ol.sh`；不要 `evals/` 和要 Node 的 `*.mjs`，hub 上没有 Node），来源 commit 记在 `skills/SOURCE.md`。
   同步上游：`scripts/deploy/sync_lark-connector_skill.sh <lark-connector checkout>`，看 diff 后提交。
-- **怎么到助手手里**（2026-11-02 起，`docs/hub-update.md`「skill 从二进制里拿出来」）：它**不在 jarvisd 里**（不能再分发），
-  放在跑助手那台机器的 `~/.jarvis/skills/lark-connector`（用户自己的 skill 空间），node 每次起助手进程时把它链接到 `~/.jarvis/assistant/.claude/skills/lark-connector`。
-  旧版本 jarvisd 装进去的副本，node 第一次起助手时自动搬到 `~/.jarvis/skills/`。没有这个 skill 时没有 `ol`，助手的 CLAUDE.md 也改成只用 MCP 的 `lark_*`。
-  有的话 `~/.jarvis/assistant-bin/ol` 是一行包装，放在助手进程的 PATH 最前，助手直接 `ol GET /me`。
+- **怎么到助手手里**（2026-11-02 起，`docs/hub-update.md`「skill 从二进制里拿出来」）：它**不在 personad 里**（不能再分发），
+  放在跑助手那台机器的 `~/.persona/skills/lark-connector`（用户自己的 skill 空间），node 每次起助手进程时把它链接到 `~/.persona/assistant/.claude/skills/lark-connector`。
+  旧版本 jarvisd 装进去的副本，node 第一次起助手时自动搬到 `~/.persona/skills/`。没有这个 skill 时没有 `ol`，助手的 CLAUDE.md 也改成只用 MCP 的 `lark_*`。
+  有的话 `~/.persona/assistant-bin/ol` 是一行包装，放在助手进程的 PATH 最前，助手直接 `ol GET /me`。
 - **token**：node 起进程前向 hub 要（RPC `assistant.lark`，只回给 assistant 所在的机器）：hub.json `lark.base_url` 去掉 `/agent/v1` 作为
   `lark-connector_AGENT_BASE`，`lark.token`（没写就照旧从 lark-connector 容器读）作为 `lark-connector_AGENT_TOKEN`，只放进这个进程的环境变量，不落盘、不进日志。
   ol.sh 找 token 的顺序是这个环境变量 → `lark-connector_ENV_FILE` → 所在仓库的 `.env`；副本不在仓库里，只靠环境变量（实测通）。
@@ -82,7 +82,7 @@
 - **怎么开**：hub.json `lark.cli`（`docs/config.md`），lark-cli 装在助手所在的机器上，用户自己 `lark-cli auth login --domain all` 登录一次。
   lark-connector 可以同时配着，`lark.prefer` 定提示词里谁优先。
 - **怎么到助手手里**：node 起助手进程前向 hub 要配置（RPC `assistant.lark` 多了 `cli`、`prefer`；只配 lark-cli 时不去问 lark-connector，也就没有它的 token），
-  在 `~/.jarvis/assistant-bin/lark-cli` 写一行包装：配置的那个 lark-cli（不是绝对路径时在登录 shell 里找）加上配置的 `--profile`，
+  在 `~/.persona/assistant-bin/lark-cli` 写一行包装：配置的那个 lark-cli（不是绝对路径时在登录 shell 里找）加上配置的 `--profile`，
   并把 lark-cli 所在目录放进 PATH（npm 的 lark-cli 是 `env node` 的脚本，要找得到 node）。没配 `lark.cli` 或找不到 lark-cli 就不写。
   lark-cli 的凭据留在它自己的 `~/.lark-cli`，hub 和 node 都不碰。
 - **说明书**：不往助手目录拷 skill。CLAUDE.md（`prompts/assistant/claude_md.md`）多一段，让它先 `lark-cli skills read lark-<领域>` 读 lark-cli 自带、
@@ -107,10 +107,10 @@
 提示词都在 `server/internal/prompts/assistant/`（`docs/prompts.md`）：CLAUDE.md 是 `claude_md.md`，快照是 `snapshot.md`（主对话那句在 `context.md`），定时任务到点的消息是 `task_run.md`，默认的早报 / 晚间回顾是 `routine_*.md`。
 
 
-- **主对话**：第一段对话是主对话（hub settings `assistant.main`），Jarvis tab 默认打开它；快照开头写明「这是主对话」，提示词要求接着之前聊的往下做。
+- **主对话**：第一段对话是主对话（hub settings `assistant.main`），Persona tab 默认打开它；快照开头写明「这是主对话」，提示词要求接着之前聊的往下做。
   node 的会话列表里离线会话只列 7 天内最新的 80 个，忙的机器上安静两天的主对话就被挤掉了，侧边栏没有「主对话」（2026-11-01）。
   hub 在 node 连上时、主对话换了时用 `node.configure` 的 `keep_sessions` 告诉 node，这几个会话不管多旧都列出来。
-  其他页面交给 Jarvis 的东西（Agents 长按「交给 Jarvis」、知识库「问 Jarvis」）都以 `<jarvis-context>` 发进主对话。
+  其他页面交给 Persona 的东西（Agents 长按「交给 Persona」、知识库「问 Persona」）都以 `<jarvis-context>` 发进主对话。
 - **知识库**（`docs/knowledge.md`）：工具 `kb_search` / `kb_list` / `kb_get` / `kb_update`；快照带重点项目和会话；提示词要求把对话里得出的结论写回
   （项目进展写时间线、项目代码目录写 `dirs` 让 Agents 对上项目、给 Agent 派活前先读项目档案）。
 - **AI 分身**：处理一件事时提示词附上这个会话和它前 3 个项目的档案，处理完把新结论写回项目。
@@ -131,8 +131,8 @@
   助手看到的一直是那段对话第一天的时间和未读。现在每条消息都带。
 - Go 的零时间 `0001-01-01T00:00:00Z` 会出现在 `last_run` / `next_run` 里，App 用 `Date.realDate` 当作「没有」。
 - **无人值守的运行不能卡在批准上**（2026-10-30 实测）：助手默认权限模式下，连 `notify_user`、`schedule_followup` 都要在手机上点「允许」，
-  夜里到点的跟进、Monitor 事件就停在批准那一步，推出去的只有一条「需要批准」。现在 Jarvis 自己的工具预先放行（见上表）。
-- **systemd 重启 jarvisd 会杀掉整个 cgroup**：助手的 claude 和它的后台命令、Monitor 一起没了，node 来不及做任何收尾，所以「哪些任务在跑」
+  夜里到点的跟进、Monitor 事件就停在批准那一步，推出去的只有一条「需要批准」。现在 Persona 自己的工具预先放行（见上表）。
+- **systemd 重启 hub 服务（兼容 unit `jarvisd`）会杀掉整个 cgroup**：助手的 claude 和它的后台命令、Monitor 一起没了，node 来不及做任何收尾，所以「哪些任务在跑」
   要随时落库（`node_sessions.tasks`），不能等关机时再记。
 - 中文环境下 `.hour(.twoDigits(amPM: .omitted))` 是 12 小时制（17:00 显示成「05:00」）：时刻一律用 `AssistantScheduleText.hm`（固定 `HH:mm`）。
 
@@ -146,8 +146,8 @@
 
 - Claude Code 续聊时**不用**新给的 `--append-system-prompt`，一直用对话第一次请求时记下的系统提示，压缩后才换（文档「System prompt flags in
   resumed conversations」，实测换了文字后模型答的还是第一次的暗号、缓存全读到）。所以以前的快照并没有让缓存失效，而是**一直是第一天那份**。
-- 真正让重启后读不到缓存的是**工具定义变了**：把一段 27.5 万 token 的真实助手对话复制一份（换个会话 id、放在临时目录，jarvis 工具用导出的
-  同一份定义）后重启，结果见下表。schema 里键的顺序不影响；少一个 MCP 工具就整段重写。hub 上 jarvis 的工具定义来自提示词文件（部署时改了就变）
+- 真正让重启后读不到缓存的是**工具定义变了**：把一段 27.5 万 token 的真实助手对话复制一份（换个会话 id、放在临时目录，Persona 工具用导出的
+  同一份定义）后重启，结果见下表。schema 里键的顺序不影响；少一个 MCP 工具就整段重写。hub 上 Persona 的工具定义来自提示词文件（部署时改了就变）
   和手机上报的 `phone_*`（哪台设备最后连上、授权了哪些就是哪些），所以 node 现在在每次启动时比较工具列表，变了就在日志里写
   「tools changed since its last start」，每次启动后的第一次请求也记下读到 / 重写了多少（`assistant_context.go`、`readAssistant`）。
 - 空闲超过一小时（缓存的寿命）无论如何都要重写：这时只能靠上下文小，见下面「压缩」。
@@ -220,7 +220,7 @@ App 的「定时任务」页只列前者的开关。用户让助手「每 30 分
   （排进去会连着回答两遍，第二轮只看到第一轮做了一半）。一次性的跟进照样发进去（跳过就丢了）；App 里「立即运行」碰到忙时回 409、说明原因。
   同一个任务同一时刻只会有一次在发送（`schedule.sending`），立即运行和到点撞在一起也不会叠。
 - 从对话里排的任务（`session_id`）照旧先发进原来的对话；那段对话失败时退到任务自己的对话，同样记下来，下次接着用。
-- App：定时任务页「对话」一节写「在同一个对话里运行」，点开就是这段对话（旧布局和新外壳都回到 Jarvis 的对话上）；「下次开新对话」
+- App：定时任务页「对话」一节写「在同一个对话里运行」，点开就是这段对话（旧布局和新外壳都回到 Persona 的对话上）；「下次开新对话」
   （`POST /api/v1/assistant/tasks/{id}/fresh`）清掉记下的对话，用于上下文太长或想重来，原来的对话还在「对话」里。还没跑过的任务写「第一次运行时开一段新对话」。
 
 部署：hub 和 node 要一起更新（`resume_only` 是 node 的新参数；旧 node 会忽略它，在找不到的旧 id 上开一段新对话）。
@@ -304,14 +304,14 @@ thread id 就是会话 id（Codex 自己定，新对话要先 `thread/start` 才
 | 续聊 / 重启后 | `--resume <id>` | 进程还在就接着用；没了就新起一个 `thread/resume`（hub / node 重启后实测能续上） |
 | 停止按钮 | 杀掉进程，下一条消息 `--resume` | `turn/interrupt`，进程留着；再 `thread/backgroundTerminals/clean`：`turn/interrupt` 不停正在跑的命令（实测 `sleep 120` 留在后台） |
 | 回复过程中插话 | 排队消息，被这一轮中途吸收 | `turn/steer` 进正在跑的这一轮（效果一样，实测插话在同一轮回复里生效）；这一轮刚好结束就开新一轮 |
-| Jarvis MCP 工具 | `--mcp-config` + `--allowedTools mcp__jarvis` | `-c mcp_servers.jarvis.*`；Codex 用 `mcpServer/elicitation/request`（`codex_approval_kind: mcp_tool_call`）问能不能调，node 对 jarvis 一律同意；`tool_timeout_sec` 给到一天（默认 60 秒，ask_user 等手机会超时） |
+| Persona MCP 工具 | `--mcp-config` + `--allowedTools mcp__jarvis` | `-c mcp_servers.jarvis.*`；Codex 用 `mcpServer/elicitation/request`（`codex_approval_kind: mcp_tool_call`）问能不能调，node 对兼容 MCP server `jarvis` 一律同意；`tool_timeout_sec` 给到一天（默认 60 秒，ask_user 等手机会超时） |
 | ask_user | 阻塞的 MCP 工具 | 同一个工具。MCP 进程启动时 thread 还没有 id，环境变量里给的是一个 key（`proc-…`），node 收到调用时换成会话 id（`resolveAssistantKey`） |
 | Codex 自己的提问（request_user_input） | — | `item/tool/requestUserInput` → 手机上的提问卡片，答案按题目 id 回去 |
 | 命令 / 改文件的审批 | PermissionRequest hook → 手机 | app-server 发 `item/commandExecution/requestApproval` / `item/fileChange/requestApproval` / `item/permissions/requestApproval` 给 node，node 走同一个手机确认（`ask`） |
 | 飞书写操作的确认 | Bash PreToolUse hook（`larkgate.go`） | 命令审批里先过同一个闸门（`larkCheck`，去掉 `/bin/zsh -lc '…'` 外壳再读）：读放行、写弹「飞书」卡片、碰 token 拒绝。Codex 的 decline 不带理由，拒绝的理由（手机上写的话、闸门的说明）用 `turn/steer` 交给模型，对话里会显示成一条「（没有执行）…」 |
 | 权限模式 | `--permission-mode` / 控制请求 | 每一轮 `turn/start` 带上（`codexPolicy`）：默认 / 自动接受编辑 = `untrusted` + workspace-write（开网络）；自动 = `on-request` + workspace-write（不开网络，出沙箱、上网要升级，升级请求过闸门）；计划 = `untrusted` + read-only；全部放行 = `untrusted` + danger-full-access、node 一律同意（**不用 Codex 的 never**：never 下命令不经过 node，飞书闸门就没了）。模式切换下一轮生效，审批的同意与否按当时的模式；rollout 里记的审批策略 + 沙箱能反推回模式，node 重启后不丢 |
 | 思考强度 | `--effort` / 控制请求 | `turn/start` 的 `effort`（原样传 low…max，网关认不认看模型） |
-| 图片 | base64 image 块 | 存成文件（`~/.jarvis/uploads/日期/`），`localImage`；rollout 记路径，App 当缩略图显示 |
+| 图片 | base64 image 块 | 存成文件（`~/.persona/uploads/日期/`），`localImage`；rollout 记路径，App 当缩略图显示 |
 | 指令 | `CLAUDE.md` | `AGENTS.md`（`assistant.prepare` 同时写两份，内容一样）；Codex 还会读用户自己的 `~/.codex/AGENTS.md` |
 | lark-connector skill | `.claude/skills/lark-connector` | 同一个目录作为 extra skill root（格式相同，`skills/list` 里能看到）；`ol` 在 PATH 上，token 在进程环境里（`shell_environment_policy.ignore_default_excludes=true`，否则 Codex 默认把 `*TOKEN*` 变量从命令环境里去掉） |
 | 记忆 | Claude Code 的 auto memory（助手目录专属） | **同一份**（2026-11-01 用户选的）：`developerInstructions` 里带上目录、格式（一条一个文件 + `MEMORY.md` 索引，和 Claude 一样）和当前的索引（`codexMemoryPrompt`）；目录加进沙箱的 `writableRoots`，在里面改文件（apply_patch）和只读它的命令（cat / head / rg …，`readsOnlyMemory`）不问，计划模式下写也要问。Codex 自己的记忆（`~/.codex/memories`，整台机器所有 Codex 共用一份，由它自己从 rollout 提炼）对助手关掉（`features.memories=false`） |
@@ -339,7 +339,7 @@ node 的 `server/internal/node/assistant_runtime.go` 用 runtime 协议的 `sess
 每条消息带上实时快照（`context`）、权限模式（`mode`）和记忆目录；对话内容、逐字、授权和提问走 runtime 本来的那几条（`docs/runtimes.md`「助手」）。
 这一层没有哪个运行时的代码：别的运行时声明了 `caps.assistant`、做到那份约定，也能当助手。
 
-和 Claude、Codex 一样的：实时快照、`ask_user` 和其他 Jarvis 工具（只给助手对话）、授权和提问一律先到手机、权限模式、共用的记忆
+和 Claude、Codex 一样的：实时快照、`ask_user` 和其他 Persona 工具（只给助手对话）、授权和提问一律先到手机、权限模式、共用的记忆
 （新对话第一条消息前带上目录、格式和索引：`prompts/assistant/runtime_instructions.md`）、助手目录的指令文件和 skill（`.agents/skills/`）、
 AI 分身 / 飞书 `/agent` / 定时任务（都走 `assistant.send`）。
 
@@ -355,7 +355,7 @@ DSH 的细节（权限预设的对应、要常驻 `dsh web`）见 `docs/dsh.md`�
 
 ## 资料页和头像（2026-10-30）
 
-- Jarvis tab 右上角是 Jarvis 的头像，点开是资料页（`AssistantProfileView`）：身份和运行在哪台机器、在线 / 工作中、「接下来」要做的 3 件事，
+- Persona tab 右上角是 Persona 的头像，点开是资料页（`AssistantProfileView`）：身份和运行在哪台机器、在线 / 工作中、「接下来」要做的 3 件事，
   主动做事（定时任务、运行记录）、了解你（关于我、记忆）、设置（启动器）、能访问。设置 › 助手打开的是同一页。
 - 定时任务页：「接下来」时间线（左边大号时刻，像「提醒事项」）、「定时任务」（每天 / 每隔，规则的人话「每个工作日 上午 9:00」「每 30 分钟」）、
   「一次性跟进」，每行图标、下次、不是默认时的运行方式（「claude-fast · 自动 · 思考 低」，全部放行标红）、上次结果、开关，左滑删除、长按立即运行；
@@ -364,7 +364,7 @@ DSH 的细节（权限预设的对应、要常驻 `dsh web`）见 `docs/dsh.md`�
 - 头像是 SwiftUI 画的（`JarvisAvatar`），颜色跟着主题色的强调色走，不用位图。试过四个方案（`-tab assistant -openAssistantPage avatars` 看对比）：
   **面罩**（默认：强调色圆盘 + 深色面罩里两只发光的眼睛，右上一颗火花呼应 App 图标；工作中眼睛左右看）、
   **汇流**（2026-10-31 用户从科技感图标候选里挑的 B2，11-01 定为形象里的一个可选项、不当默认：强调色深底圆里，左边三个焊盘的走线
-  汇进一个带两只眼的核心，意思是各台电脑上的 Agent 汇到 Jarvis；工作中信号沿走线流进核心）、
+  汇进一个带两只眼的核心，意思是各台电脑上的 Agent 汇到 Persona；工作中信号沿走线流进核心）、
   火花（App 图标的火花放进深色圆里，和 App 图标太像，小尺寸时像个按钮）、光环（HUD 式断开的光环 + 发光的核心，酷但冷，28pt 下细节糊成一团）。
   没放进消息旁边（助手的回复是整宽的正文，加头像要让出一列）和通知里（要做 Notification Service Extension + communication notification，另做）。
 - 2026-10-31 起头像和名字可以换成别的形象（设置 › 外观 › 形象，`docs/persona.md`；形象带的配色在主题色里选「跟随形象」才用）。面罩是默认形象，汇流在形象里紧跟其后，可以选。两个都在顶栏按状态动：
@@ -372,7 +372,7 @@ DSH 的细节（权限预设的对应、要常驻 `dsh web`）见 `docs/dsh.md`�
 
 ## Android 的入口（2026-11-02）
 
-Android 的管理都在「设置 › 助手」（`docs/android.md`「助手设置」）：设置列表里的「助手 › Jarvis」，Jarvis tab 标题菜单的「助手设置」、右上角头像、抽屉的「资料页」也打开它。内容：在哪运行（机器、启动器、工作目录，可以换机器和启动器）、数据存在哪里、了解你（关于我、记忆）、时区（默认跟随手机）、能访问；主动做事（定时任务、跟进、运行记录）另做，接好后放进这一页。
+Android 的管理都在「设置 › 助手」（`docs/android.md`「助手设置」）：设置列表里的「助手 › Persona」，Persona tab 标题菜单的「助手设置」、右上角头像、抽屉的「资料页」也打开它。内容：在哪运行（机器、启动器、工作目录，可以换机器和启动器）、数据存在哪里、了解你（关于我、记忆）、时区（默认跟随手机）、能访问；主动做事（定时任务、跟进、运行记录）另做，接好后放进这一页。
 
 和 iOS 不同，Android 能换助手所在的机器。换的时候提示「记忆和会话记录在原来那台机器上，不会跟过去」，并在同一个 `PUT /api/v1/assistant` 里带 `"main":"-"` 清掉主对话：hub 换机器时不动 `main`，而主对话的 transcript 在原来那台机器上，不清的话 App 会把 `main` 拼到新机器上，去找一个不存在的会话。
 

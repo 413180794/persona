@@ -1,7 +1,7 @@
-# 飞书机器人：在飞书里和 Jarvis 对话
+# 飞书机器人：在飞书里和 Persona 对话
 
-用户在飞书里私聊一个自建应用的机器人，就是在和 Jarvis 说话：消息进「Jarvis」tab 的主对话（或者用命令换成别的对话、
-某台电脑上的 Claude Code / Codex），这一轮的回答以机器人的身份发回飞书；Jarvis 和 Agent 要用户回答、批准的，在飞书里发卡片，
+用户在飞书里私聊一个自建应用的机器人，就是在和 Persona 说话：消息进「Persona」tab 的主对话（或者用命令换成别的对话、
+某台电脑上的 Claude Code / Codex），这一轮的回答以机器人的身份发回飞书；Persona 和 Agent 要用户回答、批准的，在飞书里发卡片，
 点一下就答了；推送和主对话在别处的回答也可以发一份到飞书。每一项单独开关，默认全关（2026-11-02 用户要求：「P1/2/3 都做吧，可选开启」，issue #322）。
 
 代码：`server/internal/feishubot`（长连接、REST、事件和消息内容、卡片）、`server/internal/hub/bots*.go`（配对、路由、跟踪回答、卡片、推送）；
@@ -44,7 +44,7 @@
 
 | 开关 | 做什么 |
 | --- | --- |
-| `main` 和 Jarvis 对话 | 消息发进主对话；`/new` 开新对话、`/list` 选最近的对话、`/main` 回主对话 |
+| `main` 和 Persona 对话 | 消息发进主对话；`/new` 开新对话、`/list` 选最近的对话、`/main` 回主对话 |
 | `cards` 提问和批准 | 飞书在驱动的对话（当前目标、在等回答的、24 小时内绑过话题的）要回答 / 批准时发卡片 |
 | `all_cards` 所有 Agent 的提问 | 各台电脑上所有 Agent 的提问和批准都发卡片（打开它会顺带打开 `cards`） |
 | `pushes` 推送也发到飞书 | `notify_user` 推到手机的同时发一份；定时任务自己那段对话的回答也发 |
@@ -56,11 +56,11 @@
 ## 一条消息怎么走
 
 1. `im.message.receive_v1` → 去重 → 不是主人 / 不是私聊就停。以 `/` 开头的先当命令（下面）；不认识的命令原样发过去（可能是 Agent 自己的，比如 `/compact`）。
-2. 目标：回复的是机器人发过的某条消息（或在它的话题里）就发给那条消息绑定的对话 / Agent（`threads`），否则发给当前目标（`current`：`main` / 某段 Jarvis 对话 / 某个 Agent）。
+2. 目标：回复的是机器人发过的某条消息（或在它的话题里）就发给那条消息绑定的对话 / Agent（`threads`），否则发给当前目标（`current`：`main` / 某段 Persona 对话 / 某个 Agent）。
 3. 内容：文字（富文本转成 Markdown，@ 换回名字）；图片（最多 4 张）作为图片附件；文件、语音、视频和多出来的图片下载后经 node 的
    `file.upload.*` 存到那台电脑的临时目录，路径写进消息；引用的消息、合并转发的聊天记录（逐条读出来，一行一条）放进 `<jarvis-context>`；
-   发给 Jarvis 的再加一段说明「回答会发回飞书，结论先行、不用 notify_user」（提示词 `bot/message.md`）。
-4. 发送：Jarvis 的对话走 `session.send`（主对话照 App 一样跟着设置 › 助手的启动器），`client_msg_id` 是 `feishu-<message_id>`，
+   发给 Persona 的再加一段说明「回答会发回飞书，结论先行、不用 notify_user」（提示词 `bot/message.md`）。
+4. 发送：Persona 的对话走 `session.send`（主对话照 App 一样跟着设置 › 助手的启动器），`client_msg_id` 是 `feishu-<message_id>`，
    和 App 共用 `sent_messages` 的去重：重发的事件不会打两遍。还没有主对话时新开一段并设为主对话。消息上点「OnIt」表情。
 5. 跟踪回答（`botRun`，存在 `bots.feishu.state`，hub 重启后接着等）：hub 像 App 打开对话那样 watch 这段对话；5 秒后还没答完就回一张进度卡
    （在做什么：运行 / 读 / 改 / 搜……最近 4 步，正在写的字，用时），3 秒最多改一次。这一轮结束（不在工作、没有在等你的卡片）时取**这条消息之后**

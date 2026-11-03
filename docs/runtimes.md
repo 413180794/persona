@@ -1,13 +1,13 @@
 # 接入 Agent 运行时（runtime）
 
-Jarvis 里的 Agent 有两种来路，接法不同：
+Persona 里的 Agent 有两种来路，接法不同：
 
 | | 宿主（host）| 运行时（runtime） |
 | --- | --- | --- |
 | 是什么 | 终端开在哪：herdr、Herdr App、Orca（`docs/engines.md`） | 自己管会话、没有终端的 Agent 运行时：DSH（`docs/dsh.md`），以后的 pi 扩展、基于 DSH 的平台…… |
 | 会话从哪来 | node 读窗格、按进程认会话，读 Claude / Codex 的 transcript | runtime 自己报会话、自己给内容 |
 | 交互（提问 / 计划 / 授权） | Claude Code 的 hook | runtime 自己问（`interaction.create`） |
-| 代码在哪 | Jarvis 里一份宿主实现（`internal/host`，`node/host*.go`） | **Jarvis 里不加代码**：runtime 那边用 SDK 实现同一个协议 |
+| 代码在哪 | Persona 里一份宿主实现（`internal/host`，`node/host*.go`） | **Persona 里不加代码**：runtime 那边用 SDK 实现同一个协议 |
 | 一台机器 | 只选一个引擎 | 任意多个，和引擎并存 |
 | App 怎么知道能做什么 | 宿主的能力（终端、按键…） | 会话带 `source_kind: "runtime"` 和 `capabilities`（和 Codex app-server 会话同一套字段），由 runtime 声明的 `caps` 算出 |
 
@@ -16,7 +16,7 @@ node 的实现是 `server/internal/node/runtimes.go`。
 
 ## 多台机器怎么汇总
 
-runtime 只连**本机**的 jarvisd node（`~/.jarvis/runtime.sock`）。多台机器的汇总不是 runtime 的事，是 Jarvis 本来的结构：
+runtime 只连**本机**的 personad node（`~/.persona/runtime.sock`）。多台机器的汇总不是 runtime 的事，是 Persona 本来的结构：
 
 ```
  手机 / 手表 / 网页 / Mac ── hub（一个，常开）── node（每台机器一个，ssh 或 tailcat）
@@ -28,7 +28,7 @@ runtime 只连**本机**的 jarvisd node（`~/.jarvis/runtime.sock`）。多台�
 runtime 不用知道 hub 在哪、不用开端口、不用鉴权（同一个系统用户的 0600 socket），网络（NAT、打洞）全由 node ↔ hub 那一段解决。
 
 连不上本机 socket 的 runtime（自己是常驻服务：别的系统用户、容器里、别的机器上）反过来接，叫 **daemon**（`docs/daemons.md`）：
-它开一个 WebSocket 端点，node 按 `~/.jarvis/daemons.json` 去连，带 token；连上以后说的还是这套协议，SDK 的 driver 一行不改
+它开一个 WebSocket 端点，node 按 `~/.persona/daemons.json` 去连，带 token；连上以后说的还是这套协议，SDK 的 driver 一行不改
 （`createRuntime(driver, {listen: {port, token}})`）。名字以配置为准、会话 id 加命名空间，daemon 碰不到本机别的会话，也没有 `mcp.*`。
 
 ## 要实现什么
@@ -122,7 +122,7 @@ runtime 之间共用、但不属于协议的，也在 SDK 里，各 runtime 直�
 （参考 `integrations/dsh/lib/map.js`）。
 
 ```js
-import { createRuntime, light } from '<Jarvis>/integrations/runtime-sdk/index.js'
+import { createRuntime, light } from '<Persona>/integrations/runtime-sdk/index.js'
 
 const rt = createRuntime({
   listSessions: async () => [...],          // 会话行
@@ -159,10 +159,10 @@ runtime 是**装在别的程序里的插件**时（DSH 的插件），那个程�
 - **加载器**：宿主加载的那个文件（DSH 的 `integrations/dsh/index.js`）只做「选版本、加载、换版本」，用 SDK 的 `createLoader`
   （`runtime-sdk/lib/loader.js`），不再改它。**实现**（`dsh/lib/plugin.js` 和它 import 的一切）每个版本放在存放目录的
   `<store>/<哈希>/` 下，加载器从那里 import：随包附带的那份也先拷进去再加载，因为宿主的模块缓存按路径记，同一个进程里重新加载插件时，
-  路径不变就还是旧代码。存放目录在 node 的 socket 旁边：`~/.jarvis/runtime-packages/<包名>/`，`current.json` 记着跑的是哪个。
+  路径不变就还是旧代码。存放目录在 node 的 socket 旁边：`~/.persona/runtime-packages/<包名>/`，`current.json` 记着跑的是哪个。
 - **包**：一组文件和它们的哈希（按路径排序，每个文件 `路径\0内容的 sha256\n`，再整体 sha256）。哪些文件算进包，Go
   （`server/internal/runtimepkg` 的 `Packages`）和 JS（`runtime-sdk/lib/package.js` 的 `PACKAGES`）各有一份清单，必须一样
-  （`TestPackagesMatchTheLoader` 守着）。jarvisd 构建前跑 `go generate ./internal/runtimepkg`，把这些文件从 `integrations/` 拷进来嵌进二进制
+  （`TestPackagesMatchTheLoader` 守着）。personad 构建前跑 `go generate ./internal/runtimepkg`，把这些文件从 `integrations/` 拷进来嵌进二进制
   （Dockerfile、`deploy.sh`、`publish.sh` 都跑），所以 node 带的总是和它同一次构建的插件。没跑生成的构建不带包，什么也不提供。
 - **流程**：hello 带 `package: {name, hash}`；node 带着同名、哈希不同的包时，回复里 `update: {name, hash, version}`；
   SDK 把它交给 `onUpdate`，加载器用 `runtime.package` 取文件，核对路径、大小和哈希，写到 `<store>/<哈希>/`（先写旁边再改名，不会有写一半的版本），
@@ -184,7 +184,7 @@ runtime 是**装在别的程序里的插件**时（DSH 的插件），那个程�
 
 ## 验收
 
-一个 runtime 接好，要能过这些（`integrations/runtime-sdk/e2e/echo.mjs` 是模板：真的 `jarvisd node`，脚本当 hub；
+一个 runtime 接好，要能过这些（`integrations/runtime-sdk/e2e/echo.mjs` 是模板：真的 `personad node`，脚本当 hub；
 `integrations/runtime-sdk/testing/node-harness.mjs` 起 node，`testing/fake-node.js` 给单元测试用）：
 
 - [ ] 连上后 `launchers.list` 里有它的启动器（如果有），会话出现在 `sessions.list`，带 `agent`、`agent_label`、`space_kind`、`source_kind: "runtime"` 和 `capabilities`，没有 `pane_id`
@@ -202,7 +202,7 @@ runtime 是**装在别的程序里的插件**时（DSH 的插件），那个程�
 
 ## 助手（可选）
 
-runtime 可以当「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定时任务的后端（它们都走 node 的 `assistant.send`），和 Claude Code、Codex 并列：
+runtime 可以当「Persona」tab 的助手、AI 分身、飞书 `/agent`、定时任务的后端（它们都走 node 的 `assistant.send`），和 Claude Code、Codex 并列：
 `createRuntime(…, {assistant: true})`（driver 要有 `start` 和 `send`）在 hello 里声明 `caps.assistant`，它的启动器在 `launchers.list` 里带
 `assistant: true`，App 的助手启动器里就有它（`Launcher.runsAssistant`），hub 也接受它做 `assistant.launcher`。助手的那一层留在 node
 （`server/internal/node/assistant_runtime.go`，代码里没有哪个 runtime 的名字）：对话的状态、每条消息开头的实时快照、权限模式、共用的记忆、
@@ -210,8 +210,8 @@ runtime 可以当「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定�
 
 | node 发 | 带的（都是可选字段，没声明 `caps.assistant` 的 runtime 收不到） |
 | --- | --- |
-| `session.start {cwd, assistant: true}` | `cwd` 是助手目录（`~/.jarvis/assistant`，里面有 `AGENTS.md` / `CLAUDE.md`、`.agents/skills/`），不带 `prompt` |
-| `session.send {session_id, text, images, client_msg_id, assistant: true, context, mode, memory_dir}` | `context`：放在用户的字前面交给模型的 `<jarvis-context>` 块（实时快照；新对话的第一条还有记忆和飞书的说明），聊天里不显示；`mode`：Jarvis 的权限模式（`default` / `acceptEdits` / `auto` / `plan` / `bypassPermissions`）；`memory_dir`：记忆目录 |
+| `session.start {cwd, assistant: true}` | `cwd` 是助手目录（`~/.persona/assistant`，里面有 `AGENTS.md` / `CLAUDE.md`、`.agents/skills/`），不带 `prompt` |
+| `session.send {session_id, text, images, client_msg_id, assistant: true, context, mode, memory_dir}` | `context`：放在用户的字前面交给模型的 `<jarvis-context>` 块（实时快照；新对话的第一条还有记忆和飞书的说明），聊天里不显示；`mode`：Persona 的权限模式（`default` / `acceptEdits` / `auto` / `plan` / `bypassPermissions`）；`memory_dir`：记忆目录 |
 | `session.interrupt` | 手机上的停止；关闭助手对话 = 停掉正在跑的这一轮，对话留在 runtime 里 |
 
 声明了 `caps.assistant` 的 runtime 要做到：
@@ -225,7 +225,7 @@ runtime 可以当「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定�
 4. `context` 放在用户的字前面交给模型，聊天里不显示（`<jarvis-context>` 不带属性的块；手机引用的上下文带属性，照常显示）。
 5. 按 `mode` 设自己的权限（计划 = 只读）；`memory_dir` 里的改动在非计划模式下不问。
 
-模型和思考强度由 runtime 自己定（DSH 在它的 Web GUI 里选），Jarvis 的模型配置对这种启动器不选具体模型。DSH 的做法见 `docs/dsh.md`「助手」，
+模型和思考强度由 runtime 自己定（DSH 在它的 Web GUI 里选），Persona 的模型配置对这种启动器不选具体模型。DSH 的做法见 `docs/dsh.md`「助手」，
 端到端 `integrations/dsh/e2e/assistant.mjs`。
 
 ## 现有的 runtime
@@ -246,4 +246,4 @@ runtime 可以当「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定�
 `session.start` 返回的是正在跑它的那个 runtime 的行。
 
 基于 DSH 二次开发、不跑 `dsh web` 的平台（多租户、容器里跑 DSH 的那种）在平台侧实现同一协议，当 daemon 接进来（`docs/daemons.md`），
-直接复用 SDK 和 `integrations/dsh/lib/map.js`，Jarvis 这边不用加代码。
+直接复用 SDK 和 `integrations/dsh/lib/map.js`，Persona 这边不用加代码。

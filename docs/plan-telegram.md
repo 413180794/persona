@@ -8,30 +8,30 @@
 
 | | gotd/td | TDLib |
 | --- | --- | --- |
-| 语言 | 纯 Go，`CGO_ENABLED=0` 能交叉编译，和现在的 jarvisd 一样四个平台一份代码 | C++ 库，要 cgo 或者带一个 `tdjson` 动态库；四个平台各编一份，jarvisd 的发布方式（publish.sh、自动更新）都得改 |
+| 语言 | 纯 Go，`CGO_ENABLED=0` 能交叉编译，和现在的 personad 一样四个平台一份代码 | C++ 库，要 cgo 或者带一个 `tdjson` 动态库；四个平台各编一份，personad 的发布方式（publish.sh、自动更新）都得改 |
 | 状态 | 自己管：会话（auth key）要我们存，更新的游标我们管 | 自带 SQLite 数据库，存在本地目录，难以加密进 Postgres |
 | 维护 | 活跃，跟 Telegram 的 layer 走；有 `tgtest` 内存服务、`auth` 登录流程、`updates` 状态机、`floodwait` | 官方，最全 |
-| 体积 | 编进 jarvisd 会多约 35 MB（实测 linux-amd64：39 → 74 MB，gzip 后 14.5 → 23.7 MB，主要是 Telegram 全部类型的生成代码），所以单独一个程序（下一节） | 二进制外再带一个几十 MB 的库 |
+| 体积 | 编进 personad 会多约 35 MB（实测 linux-amd64：39 → 74 MB，gzip 后 14.5 → 23.7 MB，主要是 Telegram 全部类型的生成代码），所以单独一个程序（下一节） | 二进制外再带一个几十 MB 的库 |
 
 选 gotd/td：只要一个 Go 依赖，不碰发布流程；会话由我们存（正好加密进 Postgres）。只用它的原始 API（`tg.Client`）、登录（`auth`）、限流（`tgerr.FloodWait`）。
 
 ## 架构：单独一个程序 `jarvisd-telegram`（用户 2026-11-03 定的 B）
 
-gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程序，jarvisd 本身不变大。
+gotd 让二进制大 35 MB，所以 Telegram 不编进 personad，单独一个程序，personad 本身不变大。
 
 - **代码**：连接器在 `server/internal/connector/telegram`（用 gotd），程序是 `server/cmd/jarvisd-telegram`，同一个 Go module、同一次构建出来。
   hub 不传任何 Telegram 的配置给它：凭据和会话都在 `connector_secrets` 里，它经 `secrets.*` 读写。
-  jarvisd 不 import 它：测试守住 `go list -deps ./cmd/jarvisd` 里没有 gotd。
-- **hub 怎么用它**：开关开着时，hub 起 `jarvisd-telegram`（和 jarvisd 放在同一个目录），用 stdin / stdout 跑现有的双向 JSON-lines RPC
+  personad 不 import 它：测试守住 `go list -deps ./cmd/jarvisd` 里没有 gotd。
+- **hub 怎么用它**：开关开着时，hub 起 `jarvisd-telegram`（和 personad 放在同一个目录），用 stdin / stdout 跑现有的双向 JSON-lines RPC
   （`internal/rpc`，hub↔node 用的那个）。hub 这边是一个通用的「子进程连接器」适配器（`connector/proc`），把 Connector 的各项能力
   （状态、登录、归档、收件箱、只读工具、事件）一一转成 RPC 调用；子进程那边一个 `connector/serve` 把任意 Go 连接器挂到 stdio 上。
   加密存储反过来：子进程调 hub 的 `secrets.load / save / delete`，会话的明文只在两边的内存里，不落子进程的磁盘。
   子进程退出了 hub 按退避重启；开关关掉就停掉它。以后别的大依赖的连接器也能这样做。
-- **版本对齐**：hub 起它之前先跑 `jarvisd-telegram version -v`，版本和 build 号必须和 jarvisd 一样，不一样就不起，状态写「jarvisd-telegram 和 hub 版本不一致」。
+- **版本对齐**：hub 起它之前先跑 `jarvisd-telegram version -v`，版本和 build 号必须和 personad 一样，不一样就不起，状态写「jarvisd-telegram 和 hub 版本不一致」。
 - **只在 hub 上**：node 不需要它，`deploy.sh` 只给 hub 那台装；Docker 镜像里也放一份（hub 在容器里跑时用）。
 - **发布和自动更新**：
   - `publish.sh` 四个平台各编一份 `jarvisd-telegram-<os>-<arch>.gz`（每个约 10 MB，在 25 MiB 以内），一起过隐私扫描和体积检查；
-  - `latest.json` 加 `programs: {"jarvisd-telegram": {"<os>-<arch>": {name, size, sha256, binary_sha256}}}`，老 hub 不认这个字段，照旧只换 jarvisd；
+  - `latest.json` 加 `programs: {"jarvisd-telegram": {"<os>-<arch>": {name, size, sha256, binary_sha256}}}`，老 hub 不认这个字段，照旧只换 personad；
   - hub 自动更新时两个一起下载、校验（`version -v`）、一起换上，旧的各留 `.prev`；新版起不来回滚时两个一起回滚。
 - **部署**：`deploy.sh` 和主会话的 `deploy-hub.sh`（写成 `.new`）在 hub 机器上多放这一个。
 
@@ -138,7 +138,7 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 jarvisd，单独一个程
 | --- | --- |
 | T1 | 框架：`Login`、`Secrets`（`connector_secrets` 表）、`SetEnabled` / `disabled`、hub 的登录 / 退出 / 开关接口（已和 ovis 对过） |
 | T2a | 子进程连接器：hub 的 `connector/proc` 和子进程的 `connector/serve`（RPC、版本对齐、退避重启、开关停起），用测试里的假子进程验证 |
-| T2b | `jarvisd-telegram`：gotd 客户端、分步登录（凭据 → 手机号 → 验证码 → 密码）、凭据和会话经 hub 加密存、退出、状态（只露 api_id）；jarvisd 不带 gotd 的测试 |
+| T2b | `jarvisd-telegram`：gotd 客户端、分步登录（凭据 → 手机号 → 验证码 → 密码）、凭据和会话经 hub 加密存、退出、状态（只露 api_id）；personad 不带 gotd 的测试 |
 | T2c | 发布和更新：`deploy.sh`、`publish.sh`（编、扫、体积、清单的 `programs`）、hub 自动更新一起换一起回滚、Docker 镜像、`deploy-hub.sh.new` |
 | T3 | T3a 知识库归档（会话增量）+ 实时踢；T3b 只读工具 + 提示词；T3c 删除已存数据（知识库、收件箱、游标） |
 | T4 | 收件箱 |

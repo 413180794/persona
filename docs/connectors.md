@@ -1,6 +1,6 @@
 # 连接器
 
-连接器是 Jarvis 接一个数据来源的统一方式：GitHub、信息（iMessage）、Telegram、飞书、邮件各是一个连接器，hub 的几条管道
+连接器是 Persona 接一个数据来源的统一方式：GitHub、信息（iMessage）、Telegram、飞书、邮件各是一个连接器，hub 的几条管道
 （助手的工具、写操作的闸门、收件箱、知识库、设置 › 连接器 的状态、实时事件）按连接器提供了什么自动接上，加一个来源不用改这些管道。
 
 这份文档分三部分：
@@ -19,7 +19,7 @@
 | id | 名字 | 怎么跑 | 知识库 | 收件箱 | 助手的工具 | 写操作 | 登录 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `github` | GitHub | hub 里（`connector/github`） | `Archive`（`updated_at` 游标） | 有，规则定档 + 降噪（`rules.go`） | `github_search/read/diff/checks` | `github_comment`、`github_review`（过闸门） | 读某台电脑上 `gh` 的登录（`credential.gh_token`） |
-| `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 jarvisd 完全磁盘访问权限） |
+| `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 personad 完全磁盘访问权限） |
 | `telegram` | Telegram | 单独的程序 `jarvisd-telegram`，hub 经 stdin / stdout 调（`connector/proc` + `connector/serve`） | `Archive` | 有 | 只读工具 | 没有 | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
 | `lark` | 飞书 | hub 里（`hub/lark_connector.go`，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | hub 自己的收件箱块（`inbox_own.go`） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
 | `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
@@ -58,7 +58,7 @@ hub 收到不认识的档就丢掉、交给模型分拣。
 ### 三种跑法
 
 - **在 hub 里**：Go 代码直接实现接口。
-- **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 jarvisd 的（Telegram 的 gotd）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
+- **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 personad 的（Telegram 的 gotd）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
   JSON-lines RPC（`internal/rpc`），方法一一对应接口（`serve.go` 的 `init`、`status`、`archive.changes`、`inbox.collect`、`tools.call`……），
   程序反过来调 hub 的 `secrets.*`。hub 注册时就给 `proc.Conn` 一份静态的清单（`proc.Config.Manifest`；Telegram 的在不依赖 gotd 的
   `connector/telegram/spec`，程序和 hub 共用），所以从没启动过、默认关着的连接器也报得出能力、能登录和退出（#666）；`init` 回的程序清单
@@ -214,7 +214,7 @@ type Batch struct {
 - **给第三方的规范**：单写 `docs/connector-protocol.md`：握手、清单、每个方法的参数和结果、错误码、版本规则，加上安全的硬性规定（写操作只能是声明过的 action、
   由 hub 过闸门后调；密钥只能存 hub 给的 `secrets`；日志不写正文和号码；`status` 不联网），以及一致性测试怎么对自己的程序跑。草案的要点就是上面几条。
 
-改动：**大**。Telegram（子进程，跟 jarvisd 一起发，同时升级，最简单）→ 信息（node 上要换实现，旧 node 照旧走 5 个方法）→ 第三方的规范和一致性测试。
+改动：**大**。Telegram（子进程，跟 personad 一起发，同时升级，最简单）→ 信息（node 上要换实现，旧 node 照旧走 5 个方法）→ 第三方的规范和一致性测试。
 飞书、邮件、GitHub 在 hub 里，只跑一致性测试。
 
 ### 5. 收件箱条目带结构化属性，合并、静音、自动关闭由 hub 统一做
@@ -291,10 +291,10 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
   注册 GitHub OAuth App（设置页和这份文档都写这几步）：
 
   1. GitHub 右上角头像 › Settings › Developer settings › OAuth Apps › New OAuth App。
-  2. Application name 随便填（如「Jarvis」）；Homepage URL 填任意一个你的网址；Authorization callback URL 设备码登录用不到，填同一个网址即可。
+  2. Application name 随便填（如「Persona」）；Homepage URL 填任意一个你的网址；Authorization callback URL 设备码登录用不到，填同一个网址即可。
   3. 创建后在这个 App 的页面勾上 **Enable Device Flow**，保存。
   4. 复制页面上的 **Client ID**（不要生成 client secret，设备码登录不需要），填进 App 的 GitHub 登录页。
-  5. 第一次登录时 GitHub 会列出 Jarvis 要的权限（和现在 `gh` 登录用到的一样：读仓库和通知，评论、review 要写权限；具体的 scope 在 V6 定，登录页照实列出），确认即可；
+  5. 第一次登录时 GitHub 会列出 Persona 要的权限（和现在 `gh` 登录用到的一样：读仓库和通知，评论、review 要写权限；具体的 scope 在 V6 定，登录页照实列出），确认即可；
      以后要撤销在 Settings › Applications › Authorized OAuth Apps。
 
 改动：**中**。hub 的登录接口、App 的通用登录页（新界面，截图给你看）、邮件的多账号、GitHub 的设备码。
@@ -307,7 +307,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 
 - 连接器的写操作都是 `Actions`，都过闸门（`github_comment`、`github_review`、`mail_send`）。
 - 飞书的写操作是例外：lark-connector skill 的 `ol` 和 lark-cli，node 的 Bash 钩子按命令判断读写（M5 后规则也写在 `connector_gate`），不管权限模式都要确认。
-- 用户自己放进 `~/.jarvis/skills` 的 skill 都会链接进助手的目录；助手调这些 skill 的脚本走 Claude Code 自己的权限流程。
+- 用户自己放进 `~/.persona/skills` 的 skill 都会链接进助手的目录；助手调这些 skill 的脚本走 Claude Code 自己的权限流程。
 
 曾经的提案是把 `larkgate.go` 的「按命令判断」推广到所有 skill（skill 在 `jarvis.json` 里声明写脚本，执行时手机上确认，#654 / #657）。
 用户的决定：skill 写操作的鉴权 Claude Code 自己已经有了，Claude 会自己判断，需要用户判断的时候会问用户，「这块千万别过度设计」。所以不做，代码没有合入。

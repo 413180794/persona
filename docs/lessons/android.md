@@ -34,6 +34,12 @@
 
 - 用 `startForegroundService` 拉起的服务，在调 `startForeground` 之前被停掉（自己 `stopSelf`、外面 `stopService`），系统直接让 App 崩在 `ForegroundServiceDidNotStartInTimeException`。负载高时这段空档变长，配对时一闪的「未配对」就会撞上：`HubService` 一律先进前台再决定去留，只在已经进了前台时才停它（`ForegroundStarts`，`docs/android.md`）。
 
+## 包名迁移与升级兼容
+
+- 产品 / Kotlin 包名改为 Persona / `persona.*` 时，不只要查显式写死的包名（2026-11-03，#277）：`kotlinx.serialization` 的 sealed 子类和导航 `NavKey` 默认类型名也可能包含包名。旧 `shell-position.json` 中的 `ChatRoute.source` 等值会因此反序列化失败。已经持久化的类型应固定旧 `@SerialName`，回归测试用旧 JSON 验证恢复，不能只测新版本自己序列化再读回。
+- WorkManager 会持久化 Worker 的 FQCN；已有 PendingIntent 和桌面启动项会记住 `ComponentName`。迁移要保留旧 Worker / receiver 包装和必要的 activity-alias，让旧组件继续到新实现；常驻服务保持单一系统组件身份，避免新旧服务同时运行。不要仅为包名改动重建、取消已有任务或要求用户重新配对。必须另测旧 APK → 新 APK 的升级、待运行任务、通知按钮、桌面启动、分享入口和已有外壳位置恢复。
+- 文档和源码静态回归不等于 Android 构建 / 真机升级验证。JDK 21 不可用时，Gradle toolchain 的 `MAC_OS/aarch64` 下载失败是环境阻塞，不能记成构建通过；以上升级场景仍需在可用的构建环境和设备上核验。
+
 ## 网络
 
 - OkHttp 对自签证书（我们按公钥钉扎、自己的 `X509TrustManager`）给的 `response.handshake.peerCertificates` 是空的，拿响应去核对「对方出示的是哪台 hub 的指纹」做不到。组内多台 hub 共用一个钉扎客户端时，在主机名校验器里按 host:port 记下实际出示的指纹，再按候选所属的 hub 核对（`HubHttpClient`，`docs/android.md`「多 hub」）。

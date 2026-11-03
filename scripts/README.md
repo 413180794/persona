@@ -1,12 +1,12 @@
 # 脚本目录
 
-脚本按用途分组，优先使用下面的正式路径。脚本从任意工作目录调用时，都能找到所属仓库；构建、部署配置仍读取 `JARVIS_CONFIG` 或用户配置文件，不在仓库中保存个人值。
+脚本按用途分组，优先使用下面的正式路径。脚本从任意工作目录调用时，都能找到所属仓库；迁移版本的构建 / 部署配置优先读取 `PERSONA_CONFIG` 或 `~/.config/persona/config.json`，兼容 `JARVIS_CONFIG` 和旧 `~/.config/jarvis/config.json`，不在仓库中保存个人值。脚本文件名和调用标识符以实际实现为准，不能按产品名盲替换；见 [配置与兼容说明](../docs/config.md#命名与兼容)。
 
 | 目录 | 内容 | 常用入口 |
 | --- | --- | --- |
-| `app/` | iOS / macOS / Android 构建、运行、截图，DEBUG runtime CLI 和场景脚本，Mac 菜单栏 App「Jarvis Link」 | `app/sim.sh`、`app/android.sh`、`app/mac_shot.sh`、`app/jarvisctl.py`、`app/mac-link.sh` |
+| `app/` | iOS / macOS / Android 构建、运行、截图，DEBUG runtime CLI 和场景脚本，Mac 菜单栏 App「Persona Link」 | `app/sim.sh`、`app/android.sh`、`app/mac_shot.sh`、`app/jarvisctl.py`、`app/mac-link.sh` |
 | `deploy/` | hub / node 部署、数据库准备、安装器、skills 同步，Linux 上连接器的 systemd 包装 | `deploy/deploy.sh`、`deploy/install.sh`、`deploy/link-systemd.sh` |
-| `release/` | App 和公开 jarvisd 发版、TestFlight、App Store Connect、签名、bundle 隐私和权限文案检查 | `release/release.sh`、`release/publish.sh`、`release/asc_testflight.py`、`release/entitlements.py` |
+| `release/` | App 和公开 personad 发版、TestFlight、App Store Connect、签名、bundle 隐私和权限文案检查 | `release/release.sh`、`release/publish.sh`、`release/asc_testflight.py`、`release/entitlements.py` |
 | `mock/` | 假 hub、运行中切换场景、体验模式数据生成 | `mock/mock_hub.py`、`mock/mock_scenarios.py`、`mock/make_demo_data.py` |
 | `assets/` | App 图标、可切换图标和形象包生成 | `assets/make_icon.py`、`assets/make_alt_icons.py`、`assets/make_persona.py` |
 | `diag/` | 推送回放、窗格诊断、transcript 脱敏及统计 | `diag/agentsync_replay.py`、`diag/pane_probe.py`、`diag/redact_transcript.py` |

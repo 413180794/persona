@@ -8,7 +8,7 @@
 ## 聊天列表与滚动
 
 - 新外壳的侧边栏菜单、会话名和正文用同一档 Dynamic Type，不给整个侧边栏套 `.shellScaled()`：它会额外放大一档（标准设置下 17pt → 19pt），
-  即使两边都写 `Theme.Font.body` 也不一样。「Jarvis」标题保留 `display` 层级，字号仍跟随系统和设置的小 / 标准 / 大。
+  即使两边都写 `Theme.Font.body` 也不一样。「Persona」标题保留 `display` 层级，字号仍跟随系统和设置的小 / 标准 / 大。
 
 - `List` 换序、上面插行或改行高后保持的是滚动偏移，不是读者看着的那一行（2026-11-02，#339）：停在 Agents 列表中间时一次推送让上面的空间换了名次，
   屏幕中间的空间整个换成了另一个，测试里那一行直接不见了。要保住就自己做：行用 `onGeometryChange` 报窗口里的位置，改数据前记下中间那一行，
@@ -37,7 +37,7 @@
   找不到 id 冻结就失效、可见内容被顶走（修前实测 319pt）。按「离开最新端时的 item 快照」重建行（`ChatView.Frozen`），验证用 `-showFreezeProbe`。
 - BeautifulUI 的组件放进聊天列表前，先看它每次出现时做了什么。懒加载列表滚动时会反复重建行，每次出现都起 `.task`、挂入场动画（`buiEntrance`）的组件，
   在长工作卡里滑动会明显掉帧：ThinkingState 原样放进 650 步的工作卡，Debug 模拟器上卡顿时长从约 11 涨到约 21 ms/s，去掉这两样后约 13.7。
-  这类问题改在 BeautifulUI 仓库里，再整个拷进 `apple/Packages/BeautifulUI`（`VENDORED.md`），不在 Jarvis 里改库代码。
+  这类问题改在 BeautifulUI 仓库里，再整个拷进 `apple/Packages/BeautifulUI`（`VENDORED.md`），不在 Persona 里改库代码。
 - 倒置聊天列表里点开 / 收起的东西要按住表头（`ChatPin`，2026-10-31）：长出来的内容会把表头和它上面的一切往上推（思考跳 40pt，工作卡跳约 440pt、第二下点到别的步骤上）。
   表头按「同一次布局里的屏幕位置 + 内容坐标」报位置（内容坐标不随滚动变），偏移 = 点下时的偏移 + 表头在内容里挪了多少；别用回报的 offset 算（晚一帧就过冲、来回跳）。
   `ScrollPosition.scrollTo(point:)` 先落在要的点、过一会儿又差一个内容边距（10pt）、再回来；存着的 `ScrollPosition`（`edge: .top`）在内容变化时会被重新套用，
@@ -55,9 +55,9 @@
   做成自己读数据的小视图放在旁边（`WaitingBadge`），装菜单的视图不读每次推送都变的东西。mock 要推 `inbox` 和 `interaction`
   （`/mock/churn?inbox=1&waiting=1`）才测得出来；新外壳是 iPhone 的默认布局，这类测试两种布局都跑（`TEST_RUNNER_JARVIS_LAYOUT=shell`）。
 - 行视图的参数里有闭包或带字符串、数组的结构体（`Item`），SwiftUI 就认为它每次都变了：对话页每次推送重算一次，屏幕上加懒加载缓冲里的每一行
-  （长的 Jarvis 主对话约 45 行）都跟着重跑 body（2026-11-01）。对话行（气泡、回复、工作行、输入框）一律 `Equatable` + `.equatable()`，只比消息本身；
+  （长的 Persona 主对话约 45 行）都跟着重跑 body（2026-11-01）。对话行（气泡、回复、工作行、输入框）一律 `Equatable` + `.equatable()`，只比消息本身；
   一直建着、平时看不见的东西（关着的侧边栏）别读 `allSessions` 这类每次推送都换的数据，看不见时用上次的值。
-  流式回复每 80 ms 来一次全文：写完的块切开各自缓存（`StreamChunks`），只重画最后一块。量法见 `docs/testing.md`「Jarvis 页（长主对话）」。
+  流式回复每 80 ms 来一次全文：写完的块切开各自缓存（`StreamChunks`），只重画最后一块。量法见 `docs/testing.md`「Persona 页（长主对话）」。
 - 列表别按「最近一次更新」排，滚动中也别让推送碰到它（2026-11-01，TestFlight 77，`docs/lanes/live-updates.md`「滚动时被迫刷新」）。
   真实 hub 每 2 秒推一次某台机器的会话，每次都带新的 `updated_at`；Agents 列表按状态加最近更新排空间，36% 的推送让空间换位置，滚动中整屏跳。
   - 排序键用不随每句输出变的时间：工作中的按开始工作的时间（`Session.sortDate`、`SpaceGroup.sortDate`）。
@@ -220,7 +220,7 @@
   仍是没下移的位置**（是 UIKit 挪的内容，SwiftUI 的布局和无障碍 frame 都不知道），以前「模拟器复现不了」就是只看了 frame：
   这种问题要按截图像素量（`AgentsListTests.drawn` 看选中的「全部」是不是真画在 frame 那里）。导航栈下面的页面顶部**别放横向 ScrollView**，筛选条放不下先收窄，
   再换行（`QuickFilterBar`，`ViewThatFits`）。`testFilterBarHugsTheTop` / `testFilterBarHugsTheTopBehindARestoredChat` 覆盖。
-- `contentMargins` 作用于它下面所有的滚动视图，包括 `safeAreaInset` 里的：Jarvis 页给悬浮顶栏留的上边距写在输入框的 inset 之后，
+- `contentMargins` 作用于它下面所有的滚动视图，包括 `safeAreaInset` 里的：Persona 页给悬浮顶栏留的上边距写在输入框的 inset 之后，
   输入框上面那行横向滚动的「权限 / 思考」也多了顶栏的高度，约 66pt 页面色挡住建议卡片，所有风格都有（2026-10-31，#114）。边距写在要它的滚动视图上、inset 之前。
 - UI 测试的「返回」别用 `navigationBars.buttons.firstMatch` 兜底：已经回到列表时导航栏上第一个按钮是「新建会话」，点了就弹出新建浮层，
   后面的查找全跑进浮层里，报的是「找不到某一行」，像是演示数据过时（2026-10-31 `DemoModeTests`）。先等目标页可点，再排除页面自己的栏按钮。
@@ -233,7 +233,7 @@
 - SwiftUI `Menu` 的 label 上挂的东西（`.overlay`、`.surface` 玻璃）都会变成菜单按钮的一部分：玻璃铺满整个 label（头像连名字套进一个大玻璃框），
   overlay 里的文字 XCUITest 也找不到（按钮只报它第一次的 label）。要临时盖在按钮上的提示放在和 Menu 并列的 ZStack 里（`AssistantTopBar.face`）。
 - 自己画的浮动顶栏要盖住状态栏的雾，背景用 GeometryReader 读 `safeAreaInsets.top` 往上偏移，直接 `ignoresSafeArea` 的背景高度会被算短。
-  整页横向拖拽（Jarvis 的侧边栏）用 UIKit pan + `gestureRecognizerShouldBegin` 在开始时判方向、让给能横向滚动的子视图，SwiftUI 的 DragGesture 做不到这种让位。
+  整页横向拖拽（Persona 的侧边栏）用 UIKit pan + `gestureRecognizerShouldBegin` 在开始时判方向、让给能横向滚动的子视图，SwiftUI 的 DragGesture 做不到这种让位。
 - `Chip` 是 `fixedSize` 的，不会缩：放进窄的网格列（空间页一行两张卡）里，长标签名会把卡片撑得比列宽，整个 `LazyVGrid` 挤出屏幕、
   第二行错位（2026-10-31）。窄处的一排 Chip 用 `ViewThatFits` 逐级去掉次要的、最后让主标签截断（`SlotCard.header`），验证用 mock 的 `MOCK_LONG_SLOTS=1`。
 - 几万行的文本别放进一个 UITextView（`MonoTextView` 整篇排版，随大小线性变慢）：文件查看器用 `CodeLinesView`，只把屏幕上的行做成 label、滚动时复用，
@@ -249,10 +249,10 @@
   外层连问都没被问（日志里什么都没有，测试时好时坏）；横向滚动的代码块在边缘也会抢去做回弹。让滚动视图的 pan 等外层先判断
   （`gestureRecognizer(_:shouldBeRequiredToFailBy:)`），外层在同样的几个点内判断完，滚动不会变晚。
 - 跟手的拖动里别切 tab 栏（`.toolbarVisibility(_, for: .tabBar)`）：它改页面的安全区，整页（导航栈、输入框、每个 UITextField）在拖动第一帧
-  重新布局一次（Jarvis 侧边栏 20–40 ms）。要让它让开就淡出：UIKit 的 tab 栏控制器会在 SwiftUI 刷新 tab 栏时把 `tabBar.alpha` 改回 1，
+  重新布局一次（Persona 侧边栏 20–40 ms）。要让它让开就淡出：UIKit 的 tab 栏控制器会在 SwiftUI 刷新 tab 栏时把 `tabBar.alpha` 改回 1，
   淡出 tab 栏外面只装着它的那层容器（`AssistantDrawer.applyToUIKit`）。
 - SwiftUI 的 `.accessibilityHidden(true)` 藏不住里面由 UIKit 承载的部分（TextField、ScrollView 和其中的行）：XCUITest 照样找得到，
-  VoiceOver 也会走进去；`opacity(0)` 也一样。一直建着、平时藏起来的大块界面（Jarvis 侧边栏）放进自己的 `UIHostingController`，用 UIKit 的
+  VoiceOver 也会走进去；`opacity(0)` 也一样。一直建着、平时藏起来的大块界面（Persona 侧边栏）放进自己的 `UIHostingController`，用 UIKit 的
   `isHidden` 藏。SwiftUI 会在每次更新时重设 representable 给它的那个视图的 frame、transform、alpha、isHidden，自己要动的是里面一层
   （`DrawerSidebarHost.Container`）；整套环境用 `.environment(\.self, context.environment)` 带进去。
   Agents 对话的顶栏（`ChromeHeader`）是同一类坑（2026-11-02）：全开的和折起的叠在一个 ZStack 里，只靠透明度和 `allowsHitTesting` 切换，
@@ -393,5 +393,5 @@
 ## 会话格子显示用，发送别用（2026-11-03，#624）
 
 `model.session(key)`（会话格子）为了少重画，故意不跟 `rev`、`updated_at`、最后一句（`docs/ios-state.md`「第 3 步」）：
-拿它显示没问题（读它的页面本来就不显示这几样），拿它**发出去**就会发旧的。点下去要把会话现在的样子发出去（交给 Jarvis 带最后一句、按 `rev` 拉 transcript）
+拿它显示没问题（读它的页面本来就不显示这几样），拿它**发出去**就会发旧的。点下去要把会话现在的样子发出去（交给 Persona 带最后一句、按 `rev` 拉 transcript）
 一律读 `model.latest(key)` 或整份列表（`allSessions`），别读格子。

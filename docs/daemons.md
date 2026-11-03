@@ -1,6 +1,6 @@
 # daemon：由 node 去连的 runtime
 
-runtime（`docs/runtimes.md`）一般是自己去连本机 node 的 `~/.jarvis/runtime.sock`。这个 socket 是 0600，所以 runtime 必须和 node 在同一台机器上、是同一个系统用户。
+runtime（`docs/runtimes.md`）一般是自己去连本机 node 的 `~/.persona/runtime.sock`。这个 socket 是 0600，所以 runtime 必须和 node 在同一台机器上、是同一个系统用户。
 
 有些 Agent 运行时做不到这一点，它们是自己有服务端口的常驻服务（daemon），比如：
 
@@ -9,13 +9,13 @@ runtime（`docs/runtimes.md`）一般是自己去连本机 node 的 `~/.jarvis/r
 - 基于 DSH 二次开发的多用户平台；
 - 别的机器上的服务。
 
-这类服务反过来接：**daemon 开一个 WebSocket 端点，node 按配置去连它**。连上以后说的就是原来那套 runtime 协议（`docs/protocol.md`「Runtime ↔ node」），数据模型不变，只是多了一种连法。hub 和 App 不用改，Jarvis 里也没有哪个具体 daemon 的代码：接入方按本文的规范在自己那边实现。
+这类服务反过来接：**daemon 开一个 WebSocket 端点，node 按配置去连它**。连上以后说的就是原来那套 runtime 协议（`docs/protocol.md`「Runtime ↔ node」），数据模型不变，只是多了一种连法。hub 和 App 不用改，Persona 里也没有哪个具体 daemon 的代码：接入方按本文的规范在自己那边实现。
 
 2026-11-02 起支持（issue #325）。node 侧的代码在 `server/internal/node/daemons.go`，JS 的 daemon 用 SDK 的监听模式（`integrations/runtime-sdk`，见下面「SDK」一节）。
 
 ```
- App ── hub ── node ──┬── ~/.jarvis/runtime.sock ◄── 本机同一用户的 runtime（DSH 插件、pi 扩展…）
-                      └── ~/.jarvis/daemons.json ──► ws(s)://<daemon>/…  daemon（别的用户 / 容器 / 机器）
+ App ── hub ── node ──┬── ~/.persona/runtime.sock ◄── 本机同一用户的 runtime（DSH 插件、pi 扩展…）
+                      └── ~/.persona/daemons.json ──► ws(s)://<daemon>/…  daemon（别的用户 / 容器 / 机器）
 ```
 
 ## 规范（daemon 要实现的）
@@ -40,14 +40,14 @@ runtime（`docs/runtimes.md`）一般是自己去连本机 node 的 `~/.jarvis/r
    - 断了以后 node 会重新连，间隔 1 秒起，逐次翻倍，最长 1 分钟；连上过 30 秒以上再断的，又从 1 秒开始。
    - node 每 30 秒发一次 ping，15 秒内没有 pong 就断开重连。
    - 同一个端点来了新连接时，daemon 关掉旧的，以新的为准（node 重启、网络断开后重连都是这种情况）。
-   - 一个端点只给一个 node 用：多个 Jarvis 用户就给每人一个 token（或一个端点）。
+   - 一个端点只给一个 node 用：多个 Persona 用户就给每人一个 token（或一个端点）。
 6. **会话 id 和交互 id 用 daemon 自己的**：
    - node 转给 hub 时会加上命名空间，转回 daemon 时再去掉，daemon 看不到加过前缀的 id。
    - 会话 id 照 runtime 的规则（`[A-Za-z0-9][A-Za-z0-9_.-]`），加上前缀以后的总长不能超过 128。
 
 ## 配置（node 那台机器上）
 
-配置文件是 `runtime.sock` 旁边的 `daemons.json`，也就是 `~/.jarvis/daemons.json`，权限 0600：
+配置文件是 `runtime.sock` 旁边的 `daemons.json`，也就是 `~/.persona/daemons.json`，权限 0600：
 
 ```json
 {
@@ -80,7 +80,7 @@ runtime（`docs/runtimes.md`）一般是自己去连本机 node 的 `~/.jarvis/r
   - 删掉的断开，它的会话从列表里消失，它的 id 不再保留。
 - 写错的项会记日志并跳过，其余照常连。同一个 `id` 出现两次时，这两项都不连。
 - 由谁去连：
-  - 有常驻 node（`jarvisd node --attach`）时由它连，hub 重连期间 daemon 的连接不断；
+  - 有常驻 node（`personad node --attach`）时由它连，hub 重连期间 daemon 的连接不断；
   - 没有常驻 node 时，由每条 hub 连接自己的 node 去连。
 - node 日志里有连上、断开和连不上的原因（token 被拒、不是 WebSocket、没回子协议）。同一个原因只记一次，不会记 token 的值。
 
@@ -103,8 +103,8 @@ daemon 不一定可信，比如多租户平台、或者容器里的东西被提�
 | 能 | 不能 |
 | --- | --- |
 | 列出、推送、翻页**自己的**会话 | 看到或认领别的会话。node 不知道一个会话归谁时会问每个 runtime，不带这个 daemon 前缀的 id 直接在 node 这边回答，daemon 收不到 |
-| 回答发消息、中断、改名、关闭、新建（按 `caps` 声明的） | 声明别的能力：只放行 start / send / interrupt / rename / close。`caps.assistant` 去掉，daemon 不能跑 Jarvis 的助手（`docs/runtimes.md`「助手」）；以后协议加的新能力也要在 `daemonCaps` 里单独放行 |
-| 问手机（提问、计划、授权），卡片上是配置里的名字 | 用 `mcp.*`（手机工具、Jarvis 工具）：`mcp.tools` 回空列表，`mcp.call` 回 `unsupported` |
+| 回答发消息、中断、改名、关闭、新建（按 `caps` 声明的） | 声明别的能力：只放行 start / send / interrupt / rename / close。`caps.assistant` 去掉，daemon 不能跑 Persona 的助手（`docs/runtimes.md`「助手」）；以后协议加的新能力也要在 `daemonCaps` 里单独放行 |
+| 问手机（提问、计划、授权），卡片上是配置里的名字 | 用 `mcp.*`（手机工具、Persona 工具）：`mcp.tools` 回空列表，`mcp.call` 回 `unsupported` |
 | | 借 `pane_id` 认领本机终端的窗格，或者借 `resume_argv` 在本机终端引擎里起命令：这两个字段丢掉，`features` 里也不告诉它有 `resume_argv` |
 | | 发消息时回 `code: handover`，让 node 把这条消息转给别的 runtime：node 这边改成 `not_running`，什么都没发；`features` 里也不告诉它有 `handover` |
 
@@ -113,7 +113,7 @@ daemon 不一定可信，比如多租户平台、或者容器里的东西被提�
 `integrations/runtime-sdk` 的 `createRuntime` 加了 `listen` 选项，driver 不用改，同一个 runtime 两种连法都能用：
 
 ```js
-import { createRuntime } from '<Jarvis>/integrations/runtime-sdk/index.js'
+import { createRuntime } from '<Persona>/integrations/runtime-sdk/index.js'
 
 // SDK 自己起端点（默认 127.0.0.1、路径 /jarvis/runtime；port 0 表示随便挑一个）：
 const rt = createRuntime(driver, { runtime: 'acme', name: 'Acme', listen: { port: 7311, token } })
@@ -149,7 +149,7 @@ server.on('upgrade', (req, socket, head) => { if (req.url === '/api/jarvis') rt2
   - 新连接替换旧连接；
   - 分片消息、消息中间夹的 ping、没有掩码的帧。
 - 端到端：
-  - `JARVISD=<jarvisd> node integrations/runtime-sdk/e2e/daemon.mjs`：用真的 `jarvisd node`，把 echo 例子当 daemon，脚本扮演 hub。覆盖：启动器名、新建、会话 id 前缀、行的字段、发消息（重发只进一次）、授权卡片、逐字输出、翻页、中断、终端调用被拒、本机 runtime 抢保留 id、同一个 runtime 在 socket 上和当 daemon 同时存在、token 错误、改配置生效、daemon 重启后重新连上、从配置里删掉、常驻 node 下 hub 重连。2026-11-02 实测 22/22 通过。
+  - `JARVISD=<jarvisd> node integrations/runtime-sdk/e2e/daemon.mjs`：用真的 `personad node`，把 echo 例子当 daemon，脚本扮演 hub。覆盖：启动器名、新建、会话 id 前缀、行的字段、发消息（重发只进一次）、授权卡片、逐字输出、翻页、中断、终端调用被拒、本机 runtime 抢保留 id、同一个 runtime 在 socket 上和当 daemon 同时存在、token 错误、改配置生效、daemon 重启后重新连上、从配置里删掉、常驻 node 下 hub 重连。2026-11-02 实测 22/22 通过。
   - `JARVIS_E2E_DAEMON=1 DSH_CHECKOUT=<编译过的 dsh 源码> JARVISD=<jarvisd> node integrations/dsh/e2e/run.mjs`：用真的 `dsh web`，DSH 插件当 daemon（配置里写 `listen`），跑完整的 runtime 验收（`conformance()`：文字回合、批准、带理由的拒绝、提问、逐字输出、中断、推送连续），外加从手机关闭（在 DSH 里归档）和「daemon 拿不到手机工具」。2026-11-02 实测 21/21 通过，原来的 socket 方式同样 21/21。
 
 一个新的 daemon 接好以后，照 `e2e/daemon.mjs` 写自己的端到端：把起 echo daemon 的那段换成起自己的服务。

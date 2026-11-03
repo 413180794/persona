@@ -1,6 +1,6 @@
 # macOS App
 
-原生 macOS 版 Jarvis（`apple/` 里的 `JarvisMac` target）：和 iOS App 同一套逻辑层（`Shared/`、`Jarvis/App`）和内容视图，
+原生 macOS 版 Persona（`apple/` 里的 `JarvisMac` target）：和 iOS App 同一套逻辑层（`Shared/`、`Jarvis/App`）和内容视图，
 外面是 Mac 自己的壳（`apple/Mac/`）：窗口、侧边栏、工具栏、菜单、快捷键、设置窗口、菜单栏。目标是 iOS App 的全部功能一个不少，
 交互按 macOS 原生的方式做，滚动和动画 60 fps 起（ProMotion 屏 120 fps）。
 
@@ -20,7 +20,7 @@
 
 - `NavigationSplitView` 三栏：**侧边栏**（来源）→ **列表** → **详情**。侧边栏可收起（⌃⌘S），列表栏宽度可拖、记住。
 - 侧边栏（`List(selection:)`，`.sidebar` 样式）分组：
-  - **Jarvis**：主对话 + 置顶的对话；「全部对话」进列表栏看按天分组的历史。
+  - **Persona**：主对话 + 置顶的对话；「全部对话」进列表栏看按天分组的历史。
   - **Agents**：全部 / 需要你 / 未读 / 工作中（带数量，需要你是红色角标）；下面是置顶的空间和各台机器（点机器 = 按机器筛）。
   - **收件箱**：全部 / 飞书 / 各个邮箱 / @我 / 私聊 / 群聊 / 邮件 / Agent。
   - **知识库**：项目 / 会话 / 人 / 文档 / 会议 / 日程。
@@ -37,11 +37,11 @@
 
 | 菜单 | 项目 |
 | --- | --- |
-| 文件 | 新建 Agent 对话 ⌘N、新建 Jarvis 对话 ⇧⌘N、在新窗口打开 ⌥⏎ / ⌘⏎（列表里）、关闭窗口 ⌘W、交给 Jarvis ⌘J |
+| 文件 | 新建 Agent 对话 ⌘N、新建 Persona 对话 ⇧⌘N、在新窗口打开 ⌥⏎ / ⌘⏎（列表里）、关闭窗口 ⌘W、交给 Persona ⌘J |
 | 编辑 | 系统的拷贝 / 粘贴 / 全选 / 查找、查找下一个 ⌘G / 上一个 ⇧⌘G；拷贝会话 ID、拷贝恢复命令 |
 | 显示 | 刷新 ⌘R、显示 / 隐藏侧边栏 ⌃⌘S、显示 Inspector ⌥⌘I、紧凑列表、分组方式（项目 / 状态 / 机器）、全部折叠 / 展开、字号放大缩小 ⌘+ ⌘- ⌘0 |
 | Agent | 发送 ⏎（输入框里，⇧⏎ 换行）、中断 ⌘.、批准当前待处理 ⇧⌘⏎、拒绝 ⇧⌘⌫、回答选项 ⌥⌘1–9、重命名、屏蔽、置顶、标为已读、清空上下文、关闭 Agent… |
-| 前往 | Jarvis ⌘1 … 机器 ⌘5（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
+| 前往 | Persona ⌘1 … 机器 ⌘5（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
 | 窗口 | 系统的；每个对话可以单独开窗口（`WindowGroup(for: SessionKey.self)`），终端也可以单独开窗口 |
 
 ### 和 iOS 的对应
@@ -62,7 +62,7 @@
 ### 细节
 
 - 输入框：⏎ 发送、⇧⏎ 换行；拖文件 / 图片进窗口就附上（图片进输入框，文件上传到那台机器）；粘贴图片同样。
-  已做（Agent 和 Jarvis 对话的输入框、Jarvis 新对话的输入框，`apple/Mac/Chat/MacComposerDrop.swift`，有测试）：从 Finder 拖进来的图片按「照片」附上（一条最多 4 张，多出的按文件传），
+  已做（Agent 和 Persona 对话的输入框、Persona 新对话的输入框，`apple/Mac/Chat/MacComposerDrop.swift`，有测试）：从 Finder 拖进来的图片按「照片」附上（一条最多 4 张，多出的按文件传），
   其余文件按「文件」传到那台机器、路径写进输入框，文件夹不传（提示拖里面的文件）。输入框获焦时 ⌘V：Finder 里 ⌘C 的文件同拖入，
   剪贴板里的图片（截图）附上，文字照常粘贴；只有当前窗口的输入框接（对话可能开在单独的窗口里）。截图：`-openDropDemo a.png,b.md`。
 - 拖放：列表里的 Agent 可以拖到侧边栏的「置顶」；文件面板里的文件可以拖出到 Finder（下载）。
@@ -83,7 +83,7 @@
 
   2026-11-02 用户反馈「点起来卡卡的」之后量的（体验模式，真窗口，cua-driver 点侧栏，`ps` 取进程 CPU 时间，`sample` 看主线程）：
   - 切侧栏分区（#390）：每次主线程约 240 ms，Debug 和 Release（`-O` 全模块）一样，不是调试版的问题。
-    `⌘1…⌘6` 轮流切、量切过去 1.2 秒内的进程 CPU（不读无障碍树，见下面量法）：设置约 400 ms、收件箱约 460、知识库约 440、Jarvis 约 560、
+    `⌘1…⌘6` 轮流切、量切过去 1.2 秒内的进程 CPU（不读无障碍树，见下面量法）：设置约 400 ms、收件箱约 460、知识库约 440、Persona 约 560、
     Agents 约 770、机器约 1100；什么都不按的 1.2 秒是 0。
     **整页重建不是大头**：`MacShell` 的 `page` 是 `switch`，换分区就整页重建，但改成系统 `TabView` 保活（去过的页留着，工具栏跟着当前页，
     macOS 26 上实测不崩、状态保留）之后六个分区合计 3750 ms，和原来的 3730 一样：机器页快了约 480 ms（Swift Charts 的迷你曲线不用重建），
@@ -100,7 +100,7 @@
     停在体验模式默认打开的收件箱是 0。来源是「需要你」圆点的呼吸圈（`StatusDot`）：iOS 用 30 Hz 的 `TimelineView` 画，
     Mac 上每一帧都让托管视图重新算约束、整个窗口重新布局。Mac 改成 Core Animation 画同一个圈（`Mac/Design/MacBreathingRing.swift`，
     同样的缓动、最多 30 帧、所有圆点同相），同一条量法降到 0.1%。只量了 App 进程；锁屏时 WindowServer 不合成窗口，它那边的开销没量。
-    同类没改的：Jarvis 形象（`JarvisAvatar`）在思考中、工作中、需要你时也是 `TimelineView(.animation)`，BeautifulUI 风格下工作中的
+    同类没改的：Persona 形象（`JarvisAvatar`）在思考中、工作中、需要你时也是 `TimelineView(.animation)`，BeautifulUI 风格下工作中的
     `SpinningArc`、`repeatForever` 动画，在 Mac 上会不会同样整窗重排，没量。
 
 ## 构建、运行、截图
@@ -132,17 +132,17 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
     还没确认是截图的问题还是真的这样，要在解锁的 Mac 上看一眼（待办）。
   - `layer.render(in:)` 上下颠倒、`dataWithPDF` 大部分文字丢失，都不如 `cacheDisplay`。
   - `-AppleInterfaceStyle Dark` 作为启动参数对 App 不生效，深浅色用 `-macAppearance`（在 `applicationWillFinishLaunching` 里、窗口建出来之前设）。
-  - 分栏的侧栏 / 列表栏浮在玻璃容器（`NSContainerConcentricGlassEffectView`）里，容器的内容层是个空 layer，`cacheDisplay` 跳过了它：Agents 顶上的快速筛选、Jarvis 的历史侧栏原来截出来是空白 / 白卡片。
+  - 分栏的侧栏 / 列表栏浮在玻璃容器（`NSContainerConcentricGlassEffectView`）里，容器的内容层是个空 layer，`cacheDisplay` 跳过了它：Agents 顶上的快速筛选、Persona 的历史侧栏原来截出来是空白 / 白卡片。
     现在截图时把容器里的视图逐个画、再叠上工具栏（`0af14af`，只在 DEBUG）。列表栏顶边和左边留着一条约 12pt 的黑边（修之前就有），只在截图里、真窗口不受影响，没再追。
-  - 2026-11-01 还画不对的，要解锁看真窗口：深色下工具栏搜索框是白色空胶囊；非激活窗口里着色的进度条（启动器额度）是灰的；白字的醒目按钮（知识库「问 Jarvis」）看不见；
-    连接详情浮层；快捷命令面板和终端键栏是深底深字；对话页顶上同空间标签的胶囊条；`-openAssistantSidebar YES` 的 Jarvis 侧栏。
+  - 2026-11-01 还画不对的，要解锁看真窗口：深色下工具栏搜索框是白色空胶囊；非激活窗口里着色的进度条（启动器额度）是灰的；白字的醒目按钮（知识库「问 Persona」）看不见；
+    连接详情浮层；快捷命令面板和终端键栏是深底深字；对话页顶上同空间标签的胶囊条；`-openAssistantSidebar YES` 的 Persona 侧栏。
   - 截图的坑：`-showMailAskClaude`、`-openMonitor` 这类 DEBUG 钩子挂在 onAppear 上，每次出现都会再触发（只在 DEBUG、只为截图，不改）；`-showWakeDrawer`、`-showMenu` 要 `DELAY` 11 秒左右；
     共享 UserDefaults 里别的运行留下的草稿（比如一个 `/`）启动时会弹出斜杠菜单；假 hub 换数据重启后缓存合并会多出一张重复的错误卡片，`-openChatsFresh` 能清掉。
 
 ## Mac 版现在的样子（阶段 0：能编、能跑）
 
-- 壳（`Mac/App/`）：窗口左边一列六项（Jarvis / Agents / 收件箱 / 知识库 / 机器 / 设置，角标同 iOS 的 tab 栏），右边是 iOS 的页面本身；
-  这一列贴着窗口左边、上下到顶（伸到红绿灯后面），侧栏底色，和页面之间一条分隔线；行和 Jarvis 页的历史列表（`AssistantSidebar`）同一套：
+- 壳（`Mac/App/`）：窗口左边一列六项（Persona / Agents / 收件箱 / 知识库 / 机器 / 设置，角标同 iOS 的 tab 栏），右边是 iOS 的页面本身；
+  这一列贴着窗口左边、上下到顶（伸到红绿灯后面），侧栏底色，和页面之间一条分隔线；行和 Persona 页的历史列表（`AssistantSidebar`）同一套：
   同样的图标框和字号，选中是同样的灰色圆角底（`MacSidebarRow`，收件箱的筛选栏也用它；2026-11-02 用户：系统的源列表放在旁边像没做过样式）。
   窗口工具栏不画底色和分隔线，也不显示页面标题（`.toolbar(removing: .title)`：系统把标题排在红绿灯旁边的按钮后面、压在这一列上，长一点就越过分隔线，
   2026-11-02 用户：文字都超出去了；在哪一页看这一列的选中，窗口标题仍在「窗口」菜单里）。标题原来占的位置换成一个 `ToolbarSpacer(.flexible)`，
@@ -151,11 +151,11 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   详情栏打开空间页、机器页（页面带自己的 ⋯ / ⓘ）时就排到了侧栏按钮前面（2026-11-02，`docs/lessons/macos.md`）。
   按钮（`themedButton`）在 Mac 上是自己画的胶囊（`Mac/Design/MacCapsuleButton.swift`）：主要的是主题色底白字，其余是主题色字配一层浅的主题色底，
   和收件箱草稿卡片上的「发送 / 修改」、筛选 chip 一样；系统的玻璃按钮在活跃窗口里会整个填成主题色（见 `docs/lessons/macos.md`）。
-  `horizontalSizeClass` 在 Mac 上恒为 `.regular`，所以 Agents、收件箱、设置、Jarvis 走的是 iPad / iPhone Duo 打开时的分栏布局。
+  `horizontalSizeClass` 在 Mac 上恒为 `.regular`，所以 Agents、收件箱、设置、Persona 走的是 iPad / iPhone Duo 打开时的分栏布局。
   外层不用 `NavigationSplitView`：页面自己是分栏，分栏套在另一个分栏的详情栏里时，里面的详情栏按外层侧栏还在前面排版，对话被挤到右边、输入框被裁掉。
   页面的分栏在 Mac 上是三栏、第一栏空着（`SplitColumns`）：macOS 26 把分栏的侧栏画成离窗口四边一点的玻璃卡片，周围露出窗口底色
   （2026-11-02 用户：像浮在背景板上，有缺口），没有关掉的 API；内容栏是贴边的，列表放在内容栏，内容栏里的 `NavigationLink(value:)` 照样推进详情栏。
-  代价：Agents、收件箱、设置的列表栏在 Mac 上不能收起（原来工具栏上的「隐藏列表」在红绿灯旁边，正好压在六项这一列上），Jarvis 页的历史列表照旧用顶栏的按钮收起。
+  代价：Agents、收件箱、设置的列表栏在 Mac 上不能收起（原来工具栏上的「隐藏列表」在红绿灯旁边，正好压在六项这一列上），Persona 页的历史列表照旧用顶栏的按钮收起。
   ⌘1…⌘6 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
   App 在后台不断开 WebSocket（Mac 应用常驻，hub 靠这条连接找到它）。
 - 兼容层（`Mac/Compat/`）：`UIKitTypes.swift`（UIColor / UIImage / UIFont / UIEdgeInsets 的别名，UIPasteboard、UIApplication.open、UIDevice（含电池）、
@@ -164,7 +164,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   `horizontalSizeClass` 恒 regular、`EditButton` 空、`ImageRenderer.uiImage`…）、`MenuCompat.swift`（`UIAction` / `UIMenu` → `NSMenu`）、`NavigationCompat.swift`。
 - 用 AppKit 重写的同名类型：终端（`Mac/Terminal/`，NSScrollView + `NSTextInputClient`，拼音、选择、⌘C/⌘V、滚轮、捏合 / ⌘± 调字号）、代码行与等宽文本
   （`Mac/Code/`，只画可见的行、可选中拷贝）、图片查看 / 缩放（`Mac/Media/`，NSScrollView 放大，←/→ 翻页）、长按菜单 → 右键、可选文本、
-  网页（`Mac/Link/`，WKWebView 右键菜单加「AI 修改 / 作为上下文」）、形象帧动画、ChatPin、邮件 HTML、Jarvis 侧边栏抽屉（窄窗口时才用，宽窗口是一栏）。
+  网页（`Mac/Link/`，WKWebView 右键菜单加「AI 修改 / 作为上下文」）、形象帧动画、ChatPin、邮件 HTML、Persona 侧边栏抽屉（窄窗口时才用，宽窗口是一栏）。
 - Mac 上没有的，及原因：
   - 实时活动 / 灵动岛：macOS 没有 ActivityKit。`LiveActivityController` 的 Mac 版只记下 hub 推来的 fleet 状态（给以后的菜单栏用），设置 › 通知里「实时活动」一节不显示，`IslandSettingsView` 不编译。
   - Apple Watch 同步：Mac 不和手表配对，`WatchSync` 是空的；设置里也不再显示「同步到 Apple Watch」（2026-11-01 前还显示，点了提示已发送）。
@@ -174,8 +174,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   - **Mac 是桌面端，不是手机**（2026-11-01 用户定：照微信「Mac 微信已登录」的做法）：以前 Mac 版也发 `register_phone`，hub 只有一个「手机」
     （`hub.phoneClient`），Mac 一直在线时 phone_* 全落到 Mac 上、hub 不再推送唤醒进了后台的 iPhone、Mac 的工具表还把 `phone_health_summary` 冲掉了。
     现在 Mac 发 `register_desktop`（`AppModel.registration`，有测试），phone_* 只认 iPhone；Mac 开着而 iPhone 不在时，Claude 拿不到手机数据，属预期。
-    设置 › 连接器 里「这台 Mac」那一行在 Mac 上去掉了（hub 不会再调它的工具），欢迎页的说法改成数据来自 iPhone 上的 Jarvis。
-    iPhone 那边：Agents 列表最上面一行「Mac 上的 Jarvis 已登录」，点开能开「手机静音」（Mac 在线时手机不推「需要你处理」「Agent 做完」，
+    设置 › 连接器 里「这台 Mac」那一行在 Mac 上去掉了（hub 不会再调它的工具），欢迎页的说法改成数据来自 iPhone 上的 Persona。
+    iPhone 那边：Agents 列表最上面一行「Mac 上的 Persona 已登录」，点开能开「手机静音」（Mac 在线时手机不推「需要你处理」「Agent 做完」，
     由 Mac 提醒；助手按你的要求发的提醒照推）、看登录时间、退出那台 Mac（吊销它的设备凭据，要重新配对）。协议见 `docs/protocol.md` 的 `desktops` / `register_desktop`。
     配对时 Mac 用配对 token 换的设备凭据现在要 kind `desktop`（`AppModel.credentialKind`，有测试），hub 存成 `other`、权限不变，设置 › 设备 里显示电脑图标。
     这次改动之前已经换过凭据的 Mac 在列表里还标成 phone，只是标签，撤销后重新配对就对了（不改）。
@@ -192,7 +192,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 - App 开着、连着 hub 时：`MacAttentionWatcher` 盯着 AppModel 的会话列表（WebSocket 一直连着），
   有 Agent 刚变成「需要你」/「完成未看」就发一条本地通知，规则和 hub 给手机推送的一样，读同一份 设置 › 通知（`NotifyPrefs`：需要你处理时、
   Agent 做完时 不推送 / 只推长任务（这一轮干了 `long_turn_seconds`，默认 60 秒以上）/ 每次都推）。不发的：App 在前台时正开着的那个对话、屏蔽了的、
-  列表里刚出现的、答完紧接着做完的（同一次停下）、Jarvis 对话做完（它问你时照发）、体验模式、WebSocket 第一次连上后 3 秒内
+  列表里刚出现的、答完紧接着做完的（同一次停下）、Persona 对话做完（它问你时照发）、体验模式、WebSocket 第一次连上后 3 秒内
   （之前的列表是上次退出时的缓存，和第一次刷新的差别是 App 关着时的旧事；按连上算，不按启动算，网络晚到也不会补发一堆）。
   通知权限在配对后 / 启动时就问（`PushRegistrar`，和 iPhone 一样：App 关着时来的远程推送只有之前答应过才显示）；还没答应时 watcher 要发通知会再问一次，答应了再发（问的时候加进去的会丢）。
   App 关着或断开时由 hub 推送，见下面「远程推送（Mac）」。屏蔽 / 取消屏蔽立刻改 Dock 角标。
@@ -201,7 +201,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 - Dock 角标：需要你的数量（不算屏蔽的），和侧边栏的角标同口径。
 - 菜单栏（`MenuBarExtra`，菜单样式，主窗口关了也在）：图标旁是需要你的数量；菜单里分「需要你」（等得最久的在前）、「正在工作」、
   「做完了，还没看」（最近 5 个）。需要你的一项是子菜单：说了什么 + 卡片上一点就能答的那几个（单个问题的选项、允许 / 拒绝、批准计划、
-  hub 读出来的终端短选项）+ 打开对话；别的点一下打开对话。最后是「打开 Jarvis」「退出 Jarvis」。
+  hub 读出来的终端短选项）+ 打开对话；别的点一下打开对话。最后是「打开 Persona」「退出 Persona」。
 
 ## 远程推送（Mac）
 
@@ -230,8 +230,8 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 
 选中的 知识库 / 机器 跨启动记住（`mac.section`；tab 由 AppModel 记）。启动参数指定了 tab / 对话（`-tab`、`-openSession`…）时以参数为准、清掉记住的选择。
 
-壳的侧边栏在 iPhone 的四个 tab 之外多两项：知识库（`KnowledgeView`，手机上在 Jarvis 里）、机器（`MachinesView`，手机上在抽屉 / Agents / 设置里），
-⌘1…⌘6 依次是 Jarvis、Agents、收件箱、知识库、机器、设置。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
+壳的侧边栏在 iPhone 的四个 tab 之外多两项：知识库（`KnowledgeView`，手机上在 Persona 里）、机器（`MachinesView`，手机上在抽屉 / Agents / 设置里），
+⌘1…⌘6 依次是 Persona、Agents、收件箱、知识库、机器、设置。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
 通知、⌘K、链接把 tab 换走（或打开对话）时清掉，回到 tab 对应的那一项（`MacSection.shown / pick`，有测试）。DEBUG：`-macSection knowledge|machines`。
 
 ## Agent 菜单（Mac）
@@ -243,11 +243,11 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 回传的答案还是原文（`MacAgentCommands.choices`，有测试；菜单栏图标的快捷回答同样改了）。多个问题、多选、要写字的还在卡片上。
 不用 ⌘1…9：⌘1…6 是侧边栏分区。`-openSession <m>/<s> -macMenuLog YES` 把 Agent 菜单当时的样子打进日志（锁屏下没有 key window，
 菜单不打开就不刷新，它先替菜单走一遍打开时的刷新）：演示里 `macbook/…0002` 的问题是「Swift Testing（推荐）⌥⌘1、XCTest ⌥⌘2」。
-交给 Jarvis ⌘J（和行菜单一样，把 Agent 的状态和最后的回复交给主对话）；重命名… / 清空上下文… / 关闭 Agent…：经 `MacShellState.chatRequest` 让对话页弹它自己的对话框
+交给 Persona ⌘J（和行菜单一样，把 Agent 的状态和最后的回复交给主对话）；重命名… / 清空上下文… / 关闭 Agent…：经 `MacShellState.chatRequest` 让对话页弹它自己的对话框
 （和 ⋯ 菜单、输入框的 /clear 是同一个），清空只对 herdr 里的 Claude 可点、关闭只对还在跑的。截图：`-openSession <m>/<s> -macAgentAsk rename|clear|close|inspector`。
 
 快捷键和清单最早写的不一样，因为撞了：⌘⏎ 是输入框的发送（`ComposerParts`），⌘⌫ 在输入框里是删到行首（菜单快捷键会抢走），
-⇧⌘N 是新建 Jarvis 对话，⌥⌘N 是收件箱的写邮件。
+⇧⌘N 是新建 Persona 对话，⌥⌘N 是收件箱的写邮件。
 清单里「在新窗口打开 ⌥⏎ / ⌘⏎（列表里）」没接：菜单快捷键在整个窗口生效，⌘⏎ 是输入框的发送，⌥⏎ 在文本框里也有用；只在列表获焦时才算数得靠列表的键盘处理，要真按键才验得了（锁屏下发不了），先只放在 Agent 菜单和行的右键菜单里。
 
 ## 对话单独开窗口（Mac）
@@ -273,7 +273,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 `apple/Mac/App/MacViewCommands.swift`（有测试）。显示 › 放大字号 ⌘+ / 缩小字号 ⌘- / 标准字号 ⌘0：在 设置 › 字号 的 小 / 标准 / 大 之间走一步，到头就停，
 和设置里改是同一个值（整棵视图按新字号重建）。前往 › 上一个 / 下一个 Agent ⌘[ ⌘]：按 Agents 列表的顺序（`AgentListOrder`：需要你 → 完成未看 → 工作中 → 已看），
-循环，不含 Jarvis 对话；没开着 Agent 时从第一个开始。
+循环，不含 Persona 对话；没开着 Agent 时从第一个开始。
 编辑 › 查找… ⌘F（`apple/Mac/App/MacFind.swift`，有测试）：当前窗口的搜索框获焦（工具栏的搜索项优先，再是页面里的；Agents、知识库用 `-macFind YES` 验过），
 没有搜索框的页面什么都不做；焦点在自带查找栏的文本视图（diff、输出）里时打开它的查找栏。
 文件查看器里的代码也走这个 ⌘F（2026-11-01，`Mac/Code/CodeFindBar.swift`，匹配逻辑 `CodeFind.swift`，有测试）：顺序是 自带查找栏的文本视图 → 响应链上的
@@ -288,19 +288,19 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 回到最新 ⌘↓ 是对话页右下角 ↓ 按钮的快捷键（悬停提示同），只在往上翻过、按钮出现时有效；其余时候 ⌘↓ 还是输入框的「移到末尾」。
 显示 › 刷新 ⌘R（2026-11-01，`MacViewCommands.swift`、`Mac/App/MacPageRefresh.swift`，`MacViewCommandsTests`）代替 iPhone 的下拉刷新，整个 App 只有这一个 ⌘R：
 自己加载数据的页面（知识库、机器和它的监控页、对话的文件 / Git 面板）用 `macRefreshes` 登记自己的加载，⌘R 刷新 key 窗口里最后登记的那个；
-没有就按分区刷新 hub 的数据（收件箱 `InboxStore.refresh`，Jarvis `refreshAssistant`，其余 `AppModel.refresh`）。收件箱、文件、Git 工具栏上的刷新按钮不再带 ⌘R。设置的子页面不在内；真按键没试过（锁屏）。
+没有就按分区刷新 hub 的数据（收件箱 `InboxStore.refresh`，Persona `refreshAssistant`，其余 `AppModel.refresh`）。收件箱、文件、Git 工具栏上的刷新按钮不再带 ⌘R。设置的子页面不在内；真按键没试过（锁屏）。
 
 ## 快速打开、新建（Mac）
 
 `apple/Mac/App/MacQuickOpen.swift`（搜索、排序，有测试）、`MacQuickOpenPanel.swift`（浮层）。
 
 - ⌘K（菜单「前往 › 快速打开…」）：窗口上方浮起一个像 Xcode「Open Quickly」的面板，焦点在搜索框，↑↓ 选、⏎ 打开、Esc 或点外面关。
-  搜 Agent（标题 / 目录 / 机器 / 空间 / 最后一句）、Jarvis 对话、收件箱（标题 / 发件人 / 预览）、窗口的四个分区、两个「新建」。
-  标题开头命中 100、包含 80、每个词都在别处出现 40；同分时需要你的在前、再按时间；分组顺序固定（Agent、Jarvis 对话、收件箱、前往、动作），
+  搜 Agent（标题 / 目录 / 机器 / 空间 / 最后一句）、Persona 对话、收件箱（标题 / 发件人 / 预览）、窗口的四个分区、两个「新建」。
+  标题开头命中 100、包含 80、每个词都在别处出现 40；同分时需要你的在前、再按时间；分组顺序固定（Agent、Persona 对话、收件箱、前往、动作），
   除非后面的组命中得更好（搜「设置」时「前往 › 设置」排在只是提到设置的 Agent 前面）。没输入时列出全部，需要你的在前。
   DEBUG：`-openQuickOpen <搜索词>`（`""` 为空）。
 - 新建 Agent 对话 ⌘N（菜单「文件」、菜单栏、⌘K）：iOS 的新对话表单放在窗口的 sheet 里，「开始对话」在 Mac 上是 sheet 底部「取消」旁边的默认按钮（⏎），
-  不是 iOS 浮在底部的大按钮；开起来后在 Agents 里打开。新建 Jarvis 对话 ⇧⌘N：切到 Jarvis 的新对话。没配对时这几条命令不可用。DEBUG：`-openNewAgent YES`。
+  不是 iOS 浮在底部的大按钮；开起来后在 Agents 里打开。新建 Persona 对话 ⇧⌘N：切到 Persona 的新对话。没配对时这几条命令不可用。DEBUG：`-openNewAgent YES`。
 - 截图里 ⌘K 面板后面透出列表：离屏截图把 `List` 的行单独再画一遍贴回原处（见上面「截图和屏幕上的差别」），盖在了浮层上面，屏幕上不会这样。
 
 ## 链接交给系统时（Mac）
@@ -337,7 +337,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - 链接面板 `.macLinkPanel($link, key:)`：详情栏右侧并排（页面变窄、不被盖住；窗口太窄放不下两边时盖在上面），宽度拖、记在 `mac.linkPanel.width`；
   头部：后退 / 前进、标题和域名、重新载入、⋯（在浏览器打开、在单独窗口打开、拷贝链接、分享）、关闭（⌘W，面板开着时先关面板）。
   网页来自 `WebViewPool`（和 iOS 同一个池，预加载、复用），右键选中文字有「AI 修改」「作为上下文」；飞书文档 / removed在面板里用原生阅读器（右上「把这篇文档作为上下文」）。
-  `key` 是对话（对话页）；收件箱、知识库里没有，「作为上下文」进 Jarvis 主对话的输入框、「AI 修改」直接问 Jarvis。
+  `key` 是对话（对话页）；收件箱、知识库里没有，「作为上下文」进 Persona 主对话的输入框、「AI 修改」直接问 Persona。
   `.macOpensLinksInPanel($link)` 把一块视图里的 `openURL` / `openLink` 接到面板上（收件箱详情用；邮件 HTML 里的链接仍交给浏览器）。对话页、知识库在 Mac 上也换成了面板（`#if os(macOS)`）。
 - 单独的窗口：`WindowGroup(id: "link", for: URL.self)`（`MacLinkWindow`）、`WindowGroup(id: "inbox-item", for: String.self)`（`MacInboxItemWindow`）。
 - DEBUG：`-openInboxFirst YES`、`-openInboxMatch <标题里的字>` 选中一件，`-showInboxAction draft|handoff` 打开弹层，`-openInboxLink <url>` 打开链接面板，`-addMail YES` 管理邮箱。
@@ -399,8 +399,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 
 ## 0. App shell / navigation
-- [x] 4 tabs with badges: Jarvis (pending assistant questions), Agents (pending interactions, excluding muted), 收件箱 (inbox action count), 设置 (「体验」 badge in demo) — Jarvis/Views/RootView.swift
-  - Mac（2026-11-01 核对）：侧边栏角标和 RootView 同口径，截图里 Agents 2、收件箱 3、设置「体验」；体验数据里没有助手的待答问题，所以 Jarvis 没有角标，是对的。
+- [x] 4 tabs with badges: Persona (pending assistant questions), Agents (pending interactions, excluding muted), 收件箱 (inbox action count), 设置 (「体验」 badge in demo) — Jarvis/Views/RootView.swift
+  - Mac（2026-11-01 核对）：侧边栏角标和 RootView 同口径，截图里 Agents 2、收件箱 3、设置「体验」；体验数据里没有助手的待答问题，所以 Persona 没有角标，是对的。
 - [x] Toast overlay (success / info-blue / error), haptics (success/warning/error) — Views/RootView.swift (ToastOverlay), App/AppModel.swift。Mac：浮层照常（拖入、链接拷贝等截图里看过），没有触感
 - [x] Rebuild whole tree when style/persona changes, keep tab + open chat — Views/RootView.swift
   - Mac（2026-11-01 核对）读代码：整棵 Mac 树和 RootView 一样挂 `.id(model.look)`，tab、打开的对话、侧栏分区都存在视图外面，重建后还在；没截换风格的图。
@@ -417,33 +417,33 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/JarvisApp.swift + views
   - Mac 上截图一直靠它们：`-tab`、`-openSession`、`-openTerminal`、`-openTerminalSettings`、`-openAssistantPage`、`-showInboxAction`、`-showNewChat`、`-addMail`、`-openWelcome`、`-showKnowledgeEntry` 都试过；Mac 自己的另见各节（`-macSection`、`-macAgentAsk`、`-openChatWindow`、`-macWindowLog`…）。
 
-## 1. Jarvis tab (assistant)
+## 1. Persona tab (assistant)
 - [x] Headless Claude assistant conversations (main conversation `assistant.main` + side branches); first launch opens main — Views/Assistant/AssistantView.swift, App/AppModel.swift (assistantMain, refreshAssistant)
   - Mac（2026-11-01 核对）截图：主对话打开，侧栏置顶「主对话」、最近里有几条分支对话；逻辑是共用的 AppModel。
 - [x] Home: greeting + available devices + 6 suggestions; launcher/model chip list; StarterComposer (or BeautifulStarterComposer) with photos — Views/Assistant/AssistantView.swift (AssistantHome, StarterComposer, StarterModelChip, AssistantToolsRow)
   - Mac 截图看过（`-tab assistant -assistant.current ""`）：问候、在线机器 + 这台 Mac、6 个建议、启动器 / 权限 / 思考 chip、输入框；图片走拖放 / 粘贴（`MacComposerFiles`）。
 - [x] First message shows bubble + 「正在准备」 immediately, session starts in background; warm assistant — AssistantView.swift, AppModel.warmAssistant
-  - Mac（2026-11-03 Mac mini 真窗口，#536 修过后）：打开新对话页时假 hub 收到 `POST /api/v1/assistant/warm`（预热）；mock 加 `MOCK_ASSISTANT_START_SECONDS=2` 时，发出后先是气泡和「Jarvis 正在准备…」；POST 回来后对话页一直是这句（`MOCK_ASSISTANT_TRANSCRIPT_SECONDS=3`，transcript 晚到也不出「还没有消息」、不重复），侧栏的新对话排「最近」第一、选中、带转圈。之前发出后是空的「还没有消息」：mock 不像 hub，App 在真 hub 上也有这个空档，见 #511。
+  - Mac（2026-11-03 Mac mini 真窗口，#536 修过后）：打开新对话页时假 hub 收到 `POST /api/v1/assistant/warm`（预热）；mock 加 `MOCK_ASSISTANT_START_SECONDS=2` 时，发出后先是气泡和「Persona 正在准备…」；POST 回来后对话页一直是这句（`MOCK_ASSISTANT_TRANSCRIPT_SECONDS=3`，transcript 晚到也不出「还没有消息」、不重复），侧栏的新对话排「最近」第一、选中、带转圈。之前发出后是空的「还没有消息」：mock 不像 hub，App 在真 hub 上也有这个空档，见 #511。
 - [x] Thinking hidden; tool calls folded into 「工具 N · 电脑、iPhone…」 — Views/Chat/ChatLines.swift, ChatView.swift
   - Mac（2026-11-01 核对）深浅色截图：没有思考块，工具调用折成回复上方的「工具 3 · 1 分 ›」。
 - [x] Floating top bar with fog, center persona dot + name capsule; connection state replaces name — Views/Assistant/AssistantTopBar.swift (AssistantTopBar, TopFog)
-  - Mac（2026-11-01 核对）截图：顶栏浮在对话上、带雾，中间是形象和「Jarvis」胶囊；`-showConnection connecting` 时胶囊换成「连接中…」。
+  - Mac（2026-11-01 核对）截图：顶栏浮在对话上、带雾，中间是形象和「Persona」胶囊；`-showConnection connecting` 时胶囊换成「连接中…」。
 - [x] Avatar menu: 知识库, 详细信息 (profile), 回到主对话, 拷贝目录 / 拷贝信息 / 拷贝会话 ID (「✓ 已拷贝」 3s), 启动器 submenu (switch launcher, applies via --resume next message), 会话信息, 中断, 连接详情 — AssistantTopBar.swift
-  - Mac（2026-11-02 Mac mini 真窗口逐项点过；11-03 执行验收的 Agent 又跑了一遍、截图复核）：标题「Jarvis · 启动器」，知识库、详细信息（档案页）、回到主对话（只在侧对话里有，点了回到主对话）、拷贝目录 / 拷贝信息（多行，含启动器）/ 拷贝会话 ID（名字胶囊「✓ 已拷贝会话 ID」）、启动器 › 下一条消息起使用（切换后菜单显示新的启动器）、会话信息（运行 / 用量 / 位置 sheet）。「中断」只在对话工作中、「连接详情」只在连接不在线时出现（`AssistantTopBar` 里的条件），空闲、在线的主对话上没有，是对的。
+  - Mac（2026-11-02 Mac mini 真窗口逐项点过；11-03 执行验收的 Agent 又跑了一遍、截图复核）：标题「Persona · 启动器」，知识库、详细信息（档案页）、回到主对话（只在侧对话里有，点了回到主对话）、拷贝目录 / 拷贝信息（多行，含启动器）/ 拷贝会话 ID（名字胶囊「✓ 已拷贝会话 ID」）、启动器 › 下一条消息起使用（切换后菜单显示新的启动器）、会话信息（运行 / 用量 / 位置 sheet）。「中断」只在对话工作中、「连接详情」只在连接不在线时出现（`AssistantTopBar` 里的条件），空闲、在线的主对话上没有，是对的。
 - [x] Left button: history sidebar; right button: new chat (disabled on new-chat page) — AssistantTopBar.swift
   - Mac（2026-11-01 核对）深色截图：左边侧栏开关、右边新对话按钮都在（浅色下玻璃按钮只剩边框）；新对话页上按钮置灰没截，和 iOS 同一份代码。
-- [ ] Sidebar: search, new chat, Jarvis card (online/offline + machine → profile), 定时任务 / 知识库 tiles, 置顶 (main pinned, long-press pin, `assistant.pinned`), day groups 今天/昨天/最近7天/更早 (8 + 查看全部), row = title + preview + time + status dot (need-you red / unread blue / working spinner), long-press 拷贝会话 ID / 结束 / 置顶, 设置 row in drawer — Views/Assistant/AssistantSidebar.swift
-  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`。行尾：需要你红点、完成未看蓝点、工作中转圈，别的行没有标记。「最近」显示 30 条，末尾「查看全部（39）」展开到全部、变成「收起」。右键一行：置顶、重命名…、归档、拷贝会话 ID（剪贴板里是会话 id）、结束…（确认 sheet「关闭这个 Agent？」，取消后还在）；主对话只有拷贝会话 ID、结束…。置顶后排在「置顶」里主对话下面，取消置顶回到按时间的位置。搜索（见 §25）、底部 Jarvis 卡片（资料页）、定时任务、知识库都点过。清单里的按天分组和磁贴是旧设计（iOS 也一样），现在一行是标题加行尾标记。还差：Jarvis 卡片离线时的样子、点「新对话」、窄窗口抽屉（`AssistantDrawer+Mac.swift`）底部的「设置」。
+- [ ] Sidebar: search, new chat, Persona card (online/offline + machine → profile), 定时任务 / 知识库 tiles, 置顶 (main pinned, long-press pin, `assistant.pinned`), day groups 今天/昨天/最近7天/更早 (8 + 查看全部), row = title + preview + time + status dot (need-you red / unread blue / working spinner), long-press 拷贝会话 ID / 结束 / 置顶, 设置 row in drawer — Views/Assistant/AssistantSidebar.swift
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`。行尾：需要你红点、完成未看蓝点、工作中转圈，别的行没有标记。「最近」显示 30 条，末尾「查看全部（39）」展开到全部、变成「收起」。右键一行：置顶、重命名…、归档、拷贝会话 ID（剪贴板里是会话 id）、结束…（确认 sheet「关闭这个 Agent？」，取消后还在）；主对话只有拷贝会话 ID、结束…。置顶后排在「置顶」里主对话下面，取消置顶回到按时间的位置。搜索（见 §25）、底部 Persona 卡片（资料页）、定时任务、知识库都点过。清单里的按天分组和磁贴是旧设计（iOS 也一样），现在一行是标题加行尾标记。还差：Persona 卡片离线时的样子、点「新对话」、窄窗口抽屉（`AssistantDrawer+Mac.swift`）底部的「设置」。
 - [ ] Drawer gesture: pan anywhere, 45° rule, yields to horizontally scrollable content, velocity/half settle, page card scale/offset, tab bar fade (UIKit host) — AssistantSidebar.swift (DrawerPan, DrawerPageMotion, DrawerSidebarHost), Views/Assistant/DrawerProbe.swift
   - Mac 上没有：窗口恒为 regular，侧栏是分栏的一列加开关按钮；窄窗口才用的抽屉（`AssistantDrawer+Mac.swift`）没有拖动，`DrawerPan` / `DrawerProbe` 只在 iOS 编译。
 - [x] Regular width: sidebar = split view left column, toggle button — AssistantView.swift, SplitNavigation.swift
-  - Mac（2026-11-01 核对）截图：Jarvis 侧栏是 NavigationSplitView 的左栏，顶部右侧有开关按钮。
-- [ ] Jarvis avatar (mask face, eyes move when working) — Views/Assistant/JarvisAvatar.swift
+  - Mac（2026-11-01 核对）截图：Persona 侧栏是 NavigationSplitView 的左栏，顶部右侧有开关按钮。
+- [ ] Persona avatar (mask face, eyes move when working) — Views/Assistant/JarvisAvatar.swift
   - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：打开工作中、还没有回复的对话（「思考中」），顶栏头像上方思考泡泡里的三个点轮流动，连拍几张各不相同；空闲的主对话上不动。还差：工作中（回复正在出）时的眼睛扫动没亲眼看到，可以用 `-showPersonaState working` 固定成工作中再看。
 - [x] Profile page: identity, machine, online/working, 「接下来」 3 items, 主动做事 (tasks, run history), 了解你 (关于我, 记忆), 设置 (launcher, 管理启动器), capabilities list — Views/Assistant/AssistantProfileView.swift (AssistantProfileView, AssistantUpcomingRow, AssistantRunsView, AssistantRunRow)
   - Mac 截图看到（1280×1500 窗口）：身份、所在机器、在线 + 下一件、接下来 3 项、主动做事（定时任务、运行记录）、了解你（关于我、记忆）、设置（启动器、管理启动器），底部的能力列表 2026-11-01 核对时也看到了。
-- [x] 「交给 Jarvis」 from other pages sends `<jarvis-context>` into main conversation — AppModel.askJarvis
-  - Mac（2026-11-01 核对）读代码：行菜单和 Agent › 交给 Jarvis ⌘J 都调共用的 `AppModel.askJarvis`（同一条 `<jarvis-context>` 路径），`MacMenuShortcutTests` 里有 ⌘J；没对真 hub 发过。
+- [x] 「交给 Persona」 from other pages sends `<jarvis-context>` into main conversation — AppModel.askJarvis
+  - Mac（2026-11-01 核对）读代码：行菜单和 Agent › 交给 Persona ⌘J 都调共用的 `AppModel.askJarvis`（同一条 `<jarvis-context>` 路径），`MacMenuShortcutTests` 里有 ⌘J；没对真 hub 发过。
 
 ## 2. Agents tab (dev list)
 - [x] Always-visible search; quick filters 全部/需要你/未读/工作中 with counts; snapshot (`kept`) semantics — Views/Chats/ChatsView.swift (QuickFilterBar, AgentsList)
@@ -461,9 +461,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-02 真窗口核对，MacBook）：点空间标题折叠 / 展开（辅助功能标签跟着变「已折叠 / 已展开」），显示 › 全部折叠后 7 个空间都折起，全部展开都展开。顺带发现折起的标题没对齐、读屏读三遍，见 #405。
 - [x] Mark all read (filter + per-space, with confirm) — ChatsView.swift, App/AppModel.swift (markSeen)
   - Mac（2026-11-02 真窗口核对，MacBook）：空间 ⋯ › 全部标为已读（2）直接标掉（不确认，和 iOS 同一份代码），未读 11 → 9；未读筛选下「全部标为已读」弹确认「把 9 个完成未看的会话标为已读？」，确认后未读 0、列表变成空状态「没有完成未看的会话」。
-- [ ] Swipe: left = pin / interrupt, right = close; long-press row menu (rename, mute/unmute, 交给 Jarvis, 拷贝恢复命令, 关闭 Agent…, stop loop) — ChatsView.swift, AgentsMenus.swift (AgentRowMenu)
+- [ ] Swipe: left = pin / interrupt, right = close; long-press row menu (rename, mute/unmute, 交给 Persona, 拷贝恢复命令, 关闭 Agent…, stop loop) — ChatsView.swift, AgentsMenus.swift (AgentRowMenu)
   - 要到 Mac 前看：右键一行逐项点（Mac 版第一项是「在新窗口打开」），再在触控板上对一行左右滑。长按在 Mac 上就是右键菜单，离屏打不开。
-  - Mac（2026-11-02 Mac mini 真窗口）：右键一行逐项点过：在新窗口打开（开出这个对话的窗口）、置顶 ↔ 取消置顶（列表顶上出现「置顶」一节）、重命名…（herdr 标签名和会话名两栏预填）、屏蔽通知 ↔ 开启通知、交给 Jarvis（切到主对话，发出带引用卡片的消息）、拷贝目录、拷贝恢复命令（`claude --resume <id>`）、关闭 Agent…（确认 sheet）；循环中的 Agent 多一项「停止循环」（对话里发出停 /loop 的消息）。还剩触控板左右滑：行上挂着对应的辅助功能动作（标为已看 / 置顶 / 关闭），但 cua 只能发滚轮事件，滑不出来，要真触控板。
+  - Mac（2026-11-02 Mac mini 真窗口）：右键一行逐项点过：在新窗口打开（开出这个对话的窗口）、置顶 ↔ 取消置顶（列表顶上出现「置顶」一节）、重命名…（herdr 标签名和会话名两栏预填）、屏蔽通知 ↔ 开启通知、交给 Persona（切到主对话，发出带引用卡片的消息）、拷贝目录、拷贝恢复命令（`claude --resume <id>`）、关闭 Agent…（确认 sheet）；循环中的 Agent 多一项「停止循环」（对话里发出停 /loop 的消息）。还剩触控板左右滑：行上挂着对应的辅助功能动作（标为已看 / 置顶 / 关闭），但 cua 只能发滚轮事件，滑不出来，要真触控板。
 - [x] Close agent confirmation sheet — DesignSystem/Components.swift (CloseAgentSheet, CloseAgentConfirmation)
   - Mac（2026-11-01 核对）截图（`-showCloseAgent YES`）：「关闭这个 Agent?」、标题、所在位置、两行说明、关闭 Agent / 取消。
 - [x] Space header ⋯ menu: 打开空间, 置顶, 屏蔽/开启通知, 重命名空间, 全部标为已读 — AgentsMenus.swift (SpaceHeaderMenu), ChatsView.swift (SpaceMenuItems, RenameSpaceAlert)
@@ -531,7 +531,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：只看到一张工具行里的图片解码显示；滚动时按需拉取、内存 / 磁盘缓存都没跑到。
 - [x] Collapsing self-drawn header (ChromeHeader: title, subtitle state·machine·space›tab, sibling row, loop/background chips), follows finger, auto-collapse after 3s idle — ChatView.swift
   - Mac（2026-11-02 Mac mini 真窗口核对）：往上滚时顶栏展开成完整版（标题、状态 · 机器 · 空间、同空间胶囊、⋯、循环 / 后台 chip），停下 3 秒收回胶囊，点胶囊展开。
-- [x] Session info sheet (run / usage / location, copy id, copy resume command) — ChatView.swift (SessionInfoSheet)。Mac：对话右侧的检查器栏（⌥⌘I / 点标题），Jarvis 页是窗口 sheet
+- [x] Session info sheet (run / usage / location, copy id, copy resume command) — ChatView.swift (SessionInfoSheet)。Mac：对话右侧的检查器栏（⌥⌘I / 点标题），Persona 页是窗口 sheet
 - [x] ⋯ menu: 终端, 文件, Git (N), 空间里的所有 Agent, 重命名…, 屏蔽, 拷贝 session id, 拷贝恢复命令, 清空上下文 /clear, 关闭 Agent… — ChatView.swift
   - Mac（2026-11-02 Mac mini 真窗口核对）：对话 ⋯：终端、Git（N）、文件、中断（工作中才有）、重命名…、屏蔽通知、拷贝恢复命令、拷贝目录、空间里的所有 Agent、关闭 Agent…；在文件 / Git 面板里多一项「回到对话」。清单写旧了：「清空上下文 /clear」现在在输入框 + › 快捷指令里（能清的时候才有），「拷贝 session id」在会话信息里（iOS 同一份代码）。和行菜单同名的几项走同一组函数，在行菜单里逐项点过（见上面 Swipe 那条）。
 - [x] Swipe left chat → Files → Git; swipe-back gesture re-enabled — Views/Session/SessionPanes.swift (SessionPane, SessionPaneBar), Views/Chat/SwipeBack.swift
@@ -570,7 +570,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-02 Mac mini 真窗口核对）：点回复里的文件 chip、工具行展开后的「查看文件」都打开文件查看器（假 hub `GET …/file`）。
 - [ ] Context reference cards in bubbles (`<jarvis-context>`) — Views/Link/LinkSheet.swift (ContextCards, ContextChips)
   - 要到 Mac 前看：在链接面板里选字「作为上下文」后发出，看气泡里的引用卡片。`-openSendMessage` 发了一条带 `<jarvis-context>` 的消息，但截图里没出现这条消息。
-  - Mac（2026-11-02 Mac mini 真窗口）：行菜单「交给 Jarvis」发出的消息气泡里有引用卡片（上下文 · Agent · 标题，机器 / 会话 / 目录）。还剩链接面板选字「作为上下文」那条路径。
+  - Mac（2026-11-02 Mac mini 真窗口）：行菜单「交给 Persona」发出的消息气泡里有引用卡片（上下文 · Agent · 标题，机器 / 会话 / 目录）。还剩链接面板选字「作为上下文」那条路径。
 - [x] Send-safety: refusal when computer input has draft → show / clear-and-send — App/SendSafety.swift
   - Mac（2026-11-01 核对）假 hub（`MOCK_SEND_REFUSE=input_draft`）截图：「电脑上的输入框里有字」对话框，先不发 / 清空并发送。
 - [ ] Frame stats / perf probes (debug) — Views/Chat/FrameStats.swift, App/PerfSignpost.swift
@@ -683,7 +683,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 ## 11. Machines / monitoring
 - [x] 机器 (one page since 2026-11-01): N/M online, per-machine card with agents (需要你 / 工作中 / 空闲), CPU/mem/net now + 1h sparklines, alert rings, version-mismatch 重新部署, what needs a look first, 10s polling — Views/Machines/MachinesView.swift (MachinesView, MachineCard, MachineConcern, DeployRow)（Mac：侧边栏「机器」⌘5，`MacMachinesPage`）
   - 合并前的「机器」列表和「机器监控」总览在 Mac 上都核对过（2026-11-01）；合并后的页面 Mac 只编译通过，没截图。
-  - Mac（2026-11-02 Mac mini 核对）真窗口 + 假 hub 离屏截图（深浅色）：N/M 台在线、用量偏高、需要你的 Agent 数；离线的排最前（带 ssh 错误），告警的那台红框 + CPU 高 / 内存紧张 / 负载高；每张卡片有需要你 / 工作中 / 空闲、CPU / 内存 / 网络和 1 小时曲线；`MOCK_NODE_MISMATCH=1` 的那台底部是「这台电脑上的 Jarvis 和 hub 不是同一次部署」+「重新部署」（没点）。⌘R 见上面 Pull to refresh。
+  - Mac（2026-11-02 Mac mini 核对）真窗口 + 假 hub 离屏截图（深浅色）：N/M 台在线、用量偏高、需要你的 Agent 数；离线的排最前（带 ssh 错误），告警的那台红框 + CPU 高 / 内存紧张 / 负载高；每张卡片有需要你 / 工作中 / 空闲、CPU / 内存 / 网络和 1 小时曲线；`MOCK_NODE_MISMATCH=1` 的那台底部是「这台电脑上的 Persona 和 hub 不是同一次部署」+「重新部署」（没点）。⌘R 见上面 Pull to refresh。
 - [ ] Machine detail: agents (open the chat), 引擎, 1/6/24h CPU/mem/net/load charts with shared scrub, per-core bars, system facts, gaps, launchers, reconnect — Views/Machines/MachineDetailView.swift, Views/Machines/MetricCharts.swift (Swift Charts)
   - 原来的监控页在 Mac 上看过 1 / 24 小时、告警卡片、CPU 和内存图（`-macSection machines -openMonitor <id>`，现在打开的是合并后的机器页）。要到 Mac 前看：往下滚看网络、负载图、每核条、系统信息、断档，用鼠标拖图看两张图一起动，点一个 Agent 进对话。
   - Mac（2026-11-02 核对）：假 hub 离屏截图（1280×1600 被屏幕截到约 970 高）：Agent 4 个、引擎 herdr、监控 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换。下面的图表、每核条、系统信息要滚动，等真窗口。
@@ -694,15 +694,15 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Kind pills (项目/会话/人/文档/会议/日程 with counts), tag filter, project sections (重点/其他进行中/已完成/不是项目) — Views/Knowledge/KnowledgeView.swift (KnowledgeView, KBKindBar, KBRow, KBAvatar, ImportanceBadge, KBPill)
 - [x] Full-text search, merged per entry, highlighted hits — KnowledgeView.swift (KBHitRow)
   - Mac（2026-11-01 核对）截图（`-showKnowledgeSearch 小组件`）：按 项目 1 / 会话 1 / 人 1 分组，一条一行带命中数（4 处、6 处），每行命中里「小组件」都加粗。
-- [ ] Detail: header, 问 Jarvis / 开 Agent, agents, timeline, profile, relations, code dirs, last 7 days messages, path; search matches — KnowledgeView.swift (KnowledgeDetailView, KBMatchRow, KBTimelineRow, KBLinkRow, KBMessageText)
-  - Mac（2026-11-01 核对）：截图里 P0 / 短期项目 / 相关 92、标签、开 Agent、在做的 Agent、时间线、档案、相关removed、搜索匹配行、目录路径都对；「问 Jarvis」按钮的位置是空白（白字加醒目玻璃底，离屏画不出），没看到，要到 Mac 前看一眼。
+- [ ] Detail: header, 问 Persona / 开 Agent, agents, timeline, profile, relations, code dirs, last 7 days messages, path; search matches — KnowledgeView.swift (KnowledgeDetailView, KBMatchRow, KBTimelineRow, KBLinkRow, KBMessageText)
+  - Mac（2026-11-01 核对）：截图里 P0 / 短期项目 / 相关 92、标签、开 Agent、在做的 Agent、时间线、档案、相关removed、搜索匹配行、目录路径都对；「问 Persona」按钮的位置是空白（白字加醒目玻璃底，离屏画不出），没看到，要到 Mac 前看一眼。
 - [ ] Day view of chat messages with prev/next — KnowledgeView.swift (KBDayView)
   - 要到 Mac 前看：点底部「‹ 前一天」，前一天加载出来、再能翻回来。`-showKnowledgeDay YES` 截图里当天 8 条消息、命中的那条高亮、前一天链接都对。
 - [ ] 打标 editor (importance, relevance, tags, project type/status) — KnowledgeView.swift (KBTagEditor)
   - 要到 Mac 前看：打开一个项目等详情加载完，点工具栏的打标按钮，看重要级 / 相关度 / 标签 / 类型状态的预填对不对，改一项保存后头部更新。`-showKBEditor` 在详情加载前就弹 sheet，预填的是占位条目（P2 / 0），只是 DEBUG 的先后问题。
 - [x] Models — Shared/Knowledge.swift
   - Mac（2026-11-01 核对）：`KnowledgeTests` 编进 JarvisMacTests 通过；列表、详情、搜索的响应在 Mac 上解出来并画出来了（截图）。
-  Mac（2026-11-01 截图）：侧栏「知识库」整页，类型胶囊、项目分组、人列表、条目详情（问 Jarvis / 开 Agent、档案、目录）都对；体验模式的搜索固定回空（DemoHub），搜索命中、日视图还没在 Mac 上看过；打标 sheet 截图看过（见上面「表单」那段的 `-showKBEditor`）。
+  Mac（2026-11-01 截图）：侧栏「知识库」整页，类型胶囊、项目分组、人列表、条目详情（问 Persona / 开 Agent、档案、目录）都对；体验模式的搜索固定回空（DemoHub），搜索命中、日视图还没在 Mac 上看过；打标 sheet 截图看过（见上面「表单」那段的 `-showKBEditor`）。
   搜索命中、条目里的匹配、日视图后来补看了（DEBUG 的编造数据 `App/DemoKBSample.swift`：`-macSection knowledge -showKnowledgeSearch 小组件`，加 `-showKnowledgeEntry chats/weather-team`，再加 `-showKnowledgeDay YES`）；日视图在 Mac 上日期显示了两次，改成标题是日期、副标题是会话名。按天翻页要点击，没试。
 
 ## 13. Inbox (收件箱)
@@ -710,7 +710,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] AI draft card (发送 / 修改), 「AI 分身正在处理」 — InboxView.swift (InboxDraftCard)
 - [x] Detail: Lark chat at first new message or mail; 已处理; action bar (摘要, AI 草拟回复, 交给 AI) — InboxView.swift (InboxDetailView), Views/Inbox/InboxActions.swift (InboxActionBar)
 - [x] Draft sheet (edit, 让 AI 改, 重写, doc status changes) — InboxActions.swift (InboxDraftSheet)
-- [x] Hand-off sheet (Jarvis new chat / one of 8 agents, presets, mark done) — InboxActions.swift (InboxHandOffSheet)
+- [x] Hand-off sheet (Persona new chat / one of 8 agents, presets, mark done) — InboxActions.swift (InboxHandOffSheet)
 - [x] Cloud doc items: doc icon, rows mentioning me, status menu writes to sheet/base, detail page — Views/Inbox/InboxDocViews.swift
 - [x] Store: cache, optimistic done, badge, unsent replies — App/InboxStore.swift; models Shared/InboxModels.swift
 
@@ -726,7 +726,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Profile card (发消息) — Views/Inbox/Lark/LarkPeople.swift
 - [x] Reaction picker, removed (Moments) card + post view — Views/Inbox/Lark/LarkReactionsMoments.swift
 - [x] Translation line under messages — LarkChatView.swift (LarkTranslationLine)
-- [x] 「让 Jarvis 总结」 action — LarkChatView.swift
+- [x] 「让 Persona 总结」 action — LarkChatView.swift
 - [x] Time / name tag — Views/Inbox/Lark/LarkTime.swift; models — Views/Inbox/Lark/LarkModels.swift
 - [x] Feishu doc reader: blocks, tables, images, files, link cards, outline, comments (resolved/unresolved), AI 摘要, 作为上下文, 在飞书中打开, share — Views/Feishu/Docs/*.swift
 - [x] Feishu raw API routing + app icon — Views/Feishu/Foundation/FeishuFoundation.swift
@@ -740,9 +740,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 ## 16. Model launchers
 - Mac（2026-11-01）：新增 / 编辑启动器是表单 sheet 大小（`-macLauncherEditor YES` 截图看过）；体验模式没有 /api/v1/launchers，列表、详情、额度、检测改用假 hub 截图（见下面各条）。
 - [x] Launcher list (Jarvis-managed + ~/.zshrc, sources, hidden) with search — Views/Settings/ModelLaunchersView.swift (ModelLaunchersView, LauncherRow)
-  - Mac（2026-11-01 核对）假 hub 截图（`-openModelLaunchers YES`）：Jarvis 管理（空的提示）、来自 ~/.zshrc 3 个（模型 chip、网关、机器）、已隐藏 ›、工具栏 + 和搜索；`-showModelSearch <词>` 筛到只剩一个。
+  - Mac（2026-11-01 核对）假 hub 截图（`-openModelLaunchers YES`）：Persona 管理（空的提示）、来自 ~/.zshrc 3 个（模型 chip、网关、机器）、已隐藏 ›、工具栏 + 和搜索；`-showModelSearch <词>` 筛到只剩一个。
 - [ ] Detail: per-machine params, function source (masked), 测试可用性, delete/hide with popover confirm, restore — ModelLaunchersView.swift (ModelLauncherDetailView, LauncherDetailSections, LauncherCheckRow)
-  - 要到 Mac 前看：在真启动器上看函数源码一节（key 打码），点「在 Jarvis 里隐藏」（Jarvis 管理的点删除）看确认浮层，再从已隐藏里恢复显示。来源 / Base URL / 模型 / 电脑、可用性检测和再测一次、恢复显示截图看过。
+  - 要到 Mac 前看：在真启动器上看函数源码一节（key 打码），点「在 Persona 里隐藏」（Persona 管理的点删除）看确认浮层，再从已隐藏里恢复显示。来源 / Base URL / 模型 / 电脑、可用性检测和再测一次、恢复显示截图看过。
 - [x] Editor (name, base URL, API key, model, small model, args) — ModelLaunchersView.swift (LauncherEditor)
   - Mac（2026-11-01 核对）sheet 截图（`-macLauncherEditor YES`）：名字、网关 + API Key、模型 + 小模型、额外参数和说明、取消和置灰的保存。
 - [ ] Quota section (pools/windows, colors ≥70/90%, refresh) — Views/Settings/LauncherQuotaViews.swift
@@ -752,9 +752,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 17. Personas & styles
 - [x] Persona picker / gallery (follow style colors), persona store (download, cache by rev, APNG frames) — Views/Settings/PersonaSettingsView.swift, Persona/PersonaStore.swift, Persona/Persona.swift, Persona/PersonaViews.swift (PersonaAvatar, PersonaDot, PersonaFramesView)
-  - Mac（2026-11-01 核对）假 hub（`MOCK_PERSONAS=demo`）截图：形象库里 Jarvis（跟随界面风格）和下载的形象包、两块配色、包里的 5 个状态帧；选中后强调色（用户气泡、工具栏图标）换成形象的颜色，顶栏头像和名字跟着换。
+  - Mac（2026-11-01 核对）假 hub（`MOCK_PERSONAS=demo`）截图：形象库里 Persona（跟随界面风格）和下载的形象包、两块配色、包里的 5 个状态帧；选中后强调色（用户气泡、工具栏图标）换成形象的颜色，顶栏头像和名字跟着换。
 - [ ] Persona dot states idle/thinking/working/needs_you/offline, reduce-motion = frame 0 — PersonaViews.swift, AssistantTopBar.swift
-  - 要到 Mac 前看：系统设置 › 辅助功能 › 显示 › 减弱动态效果 打开后，Jarvis 顶栏的形象停在第 0 帧。外观页的 5 个状态截图看过，顶栏的等你处理（红圈）和思考中（…）也截到了（`-showPersonaState`）。
+  - 要到 Mac 前看：系统设置 › 辅助功能 › 显示 › 减弱动态效果 打开后，Persona 顶栏的形象停在第 0 帧。外观页的 5 个状态截图看过，顶栏的等你处理（红圈）和思考中（…）也截到了（`-showPersonaState`）。
 - [x] UI styles 液态玻璃 / Claude / 黏土 / Island / 飞书 / BeautifulUI with preview cards — Views/Settings/SettingsView.swift (StylePicker, StyleCard), Shared/Design/StyleSpec.swift, Shared/Design/Styles/*.swift
   - Mac 截图看过（`-tab settings -openAppearance style`）：6 张风格卡片都画出来，选中的带勾；液态玻璃的说明在 Mac 上是「系统原生，简洁」（`Styles/Glass.swift`）。各风格整套界面在 Mac 上没逐个截。
 - [x] Text size 小/标准/大 over Dynamic Type — DesignSystem/TextSize.swift
@@ -790,12 +790,12 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 ## 20. Siri / App Intents
 - [ ] 问 Claude (machine param, new session, returns OpenSession) — Intents/AskClaudeIntent.swift
   - 要到 Mac 前看：在 Mac 的「快捷指令」App 里跑「问 Claude」，填一句、选机器，那台机器上开了新会话。`IntentsTests`（机器优先用记住的、退到在线的；发出去的说法）在 Mac 上通过。
-- [ ] Jarvis 状态 — Intents/JarvisStatusIntent.swift
-  - 要到 Mac 前看：在快捷指令里跑「Jarvis 状态」，读出来的数量和侧栏一致。对应的 `IntentsTests` 在 Mac 上通过。
+- [ ] Persona 状态 — Intents/JarvisStatusIntent.swift
+  - 要到 Mac 前看：在快捷指令里跑「Persona 状态」，读出来的数量和侧栏一致。对应的 `IntentsTests` 在 Mac 上通过。
 - [ ] 批准第一个待处理 — Intents/ApproveFirstIntent.swift
   - 要到 Mac 前看：有授权或计划等着时在快捷指令里跑「批准第一个待处理」，等得最久的那个被批准，回复说清做了什么。对应的 `IntentsTests` 在 Mac 上通过。
 - [ ] 打开会话 (foreground) + SessionEntity — Intents/OpenSessionIntent.swift
-  - 要到 Mac 前看：侧栏选着「机器」时从快捷指令跑「打开会话」，Jarvis 到前台、Agents 里打开那个对话。对应的 `IntentsTests` 在 Mac 上通过。
+  - 要到 Mac 前看：侧栏选着「机器」时从快捷指令跑「打开会话」，Persona 到前台、Agents 里打开那个对话。对应的 `IntentsTests` 在 Mac 上通过。
 - [ ] MachineEntity query — Intents/MachineEntity.swift
   - 要到 Mac 前看：在快捷指令里编辑「问 Claude」的机器参数，列表里是你的各台电脑并标在线 / 离线。查询要问 hub，得在快捷指令的选择器里看。
 - [x] Shortcuts phrases — Intents/JarvisShortcuts.swift; texts / picker / errors — Intents/IntentSupport.swift
@@ -838,7 +838,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 23. Pairing / credentials / watch
 - [ ] Welcome page, QR scan (VisionKit), manual entry, jarvis://pair link — Views/Settings/SettingsView.swift (WelcomeView, PairView, QRScanner)
-  - Mac（2026-11-01 核对）：欢迎页改成 Mac 的说法：链接图标、「在 hub 所在的机器上运行 `jarvisd hub pair`，拷贝它打印的链接」（截图 x-welcome2），`jarvisd hub pair` 现在会打印 `jarvis://pair` 链接（`TestPairPrintsTheLinkForTheMac`）；「连接 hub」sheet（新开关 `-openPairSheet YES`，配 `-openWelcome YES`）是粘贴配对链接 + 手动两栏。要到 Mac 前看：真配对一次：粘贴链接或 ⌘V、手动填地址和 token、从浏览器打开 `jarvis://pair` 链接。
+  - Mac（2026-11-01 核对）：欢迎页改成 Mac 的说法：链接图标、「在 hub 所在的机器上运行 `personad hub pair`，拷贝它打印的链接」（截图 x-welcome2），`personad hub pair` 现在会打印 `jarvis://pair` 链接（`TestPairPrintsTheLinkForTheMac`）；「连接 hub」sheet（新开关 `-openPairSheet YES`，配 `-openWelcome YES`）是粘贴配对链接 + 手动两栏。要到 Mac 前看：真配对一次：粘贴链接或 ⌘V、手动填地址和 token、从浏览器打开 `jarvis://pair` 链接。
 - [ ] Keychain storage — Shared/Keychain.swift
   - 要到 Mac 前看：用真链接配对，退出后不带 `-pairURL` 重开，看是否还是已配对（弹钥匙串授权就允许）。DEBUG 的截图和测试不读钥匙串（锁屏时读别的构建写的条目会卡住），离屏没碰过钥匙串。
 - [ ] Device token exchange, 设置 › 设备 list + revoke — App/DeviceCredentials.swift (DevicesView)
@@ -887,7 +887,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] 翻译 (auto translate, mail, chat picker) + Translator (NLLanguageRecognizer, batching) — Views/Settings/TranslationSettingsView.swift, App/Translator.swift
   - Mac（2026-11-01 核对）截图（`-translate.enabled YES -translate.mail YES`）：自动翻译开、目标语言、邮件勾上、飞书会话选择行；假 hub 收件箱里英文邮件显示成中文标题带翻译图标，Mac 上语言识别和翻译跑过。
 - [ ] 存储空间 (per category sizes, clear one / all, keep web logins) — Views/Settings/StorageView.swift
-  - Mac（2026-11-01）：本机 ad-hoc 签名的调试版没有沙盒，`URL.cachesDirectory` 是所有 App 共用的 `~/Library/Caches`、`libraryDirectory` 是整个 `~/Library`：页面一直「计算中…」（在遍历整个 ~/Library），而「清除全部缓存」会把别的 App 的缓存当「其他缓存」删掉。改成没沙盒时只认 Jarvis 自己写的文件夹（`StorageUsage.owned`，有测试）、临时目录只认 `lark-`、不数 Library 和 Documents；有沙盒（iOS、签了名的 Mac 版）时和原来一样。修后截图算出 127 KB；清除没在 Mac 上点过。
+  - Mac（2026-11-01）：本机 ad-hoc 签名的调试版没有沙盒，`URL.cachesDirectory` 是所有 App 共用的 `~/Library/Caches`、`libraryDirectory` 是整个 `~/Library`：页面一直「计算中…」（在遍历整个 ~/Library），而「清除全部缓存」会把别的 App 的缓存当「其他缓存」删掉。改成没沙盒时只认 Persona 自己写的文件夹（`StorageUsage.owned`，有测试）、临时目录只认 `lark-`、不数 Library 和 Documents；有沙盒（iOS、签了名的 Mac 版）时和原来一样。修后截图算出 127 KB；清除没在 Mac 上点过。
     review（2026-11-01 07:20）后又改两处：缓存目录认 `chats` / `chats-v<数字>`（`ChatCache.isFolder`）（对话缓存现在是 `chats-v3`，原来的名单漏了它）；没沙盒时临时目录一个也不碰（`$TMPDIR` 是整个用户共用的，别的程序也可能写 `lark-` 开头的文件夹）。
     已改（2026-11-01，iOS 一起）：对话缓存的目录名只在 `ChatCache.folder` 一处定义，`StorageUsage` 判断归属和分类都用 `ChatCache.isFolder`，`chats-v3` 和以后的版本都算「Agent 对话」（以前落进「其他缓存」，iOS 也一样）；`chats-vx`、`chats-v3.bak` 这类不算。有 Mac 和 iOS 两边的测试。
   - 要到 Mac 前看：清除一类、再清除全部，看大小变小、网页登录还在（2026-11-01）。截图看到总量、比例条、各类大小和「清除全部缓存」。

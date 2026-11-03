@@ -1,4 +1,4 @@
-# Jarvis Android 技术选型调研笔记
+# Persona Android 技术选型调研笔记
 
 - 调研日期：**2026-10-30**。版本号都是当天实际查到的，每节末尾附来源 URL。
 - 标记：✅ 已查证（有来源）；💭 经验判断 / 推断（未逐条查证，引用前要复核）；⏳ 待补。
@@ -6,11 +6,11 @@
 
 ---
 
-## 0. 背景：Jarvis 对 Android 端的要求（摘自 README / CLAUDE.md / docs/ios.md / docs/terminal.md / docs/protocol.md）
+## 0. 背景：Persona 对 Android 端的要求（摘自 README / CLAUDE.md / docs/ios.md / docs/terminal.md / docs/protocol.md）
 
 - 手机只连自建 hub（Go，`jarvisd hub`，默认 `:18660`），HTTP + WebSocket，Bearer token（每台设备一个 `jd_…` token，手表是 `answer` 角色）。
   hub **常在内网 / VPN 里用明文 HTTP**。JSON 字段一律 snake_case，时间 RFC3339。
-- 四个 tab：Jarvis（无头 Claude 助手，逐字流式）/ 开发（Agents 列表 + 对话页）/ 收件箱（飞书 + 邮件，飞书卡片照 lark-connector 渲染、飞书文档原生阅读器）/ 设置。
+- 四个 tab：Persona（无头 Claude 助手，逐字流式）/ 开发（Agents 列表 + 对话页）/ 收件箱（飞书 + 邮件，飞书卡片照 lark-connector 渲染、飞书文档原生阅读器）/ 设置。
 - 对话页难点：倒置聊天列表（最新在偏移 0），几百步的工作过程每步都是独立懒加载行，轮次折叠（工作行、唤醒、recap、排队消息），
   Markdown（表格、代码块）、工具卡片、红绿 diff（横滑）、图片按需加载 + 全屏查看 / 编辑、长按操作条、分享卡片、子 Agent、
   提问 / 计划 / 授权 / 终端对话框交互面板、发送中气泡 + 离线 outbox（`client_msg_id` 去重，落盘）。
@@ -99,12 +99,12 @@
 - `targetSdk` 未设时默认等于 compileSdk（建议显式写）；Java 默认 11；R8：strict keep rules（`-keep class A` 不再隐含保留无参构造）、
   优化的资源收缩默认开、只允许 `proguard-android-optimize.txt`。
 
-### 模块化（✅ Now in Android 的做法 + 💭 Jarvis 的切法）
+### 模块化（✅ Now in Android 的做法 + 💭 Persona 的切法）
 
 - Now in Android（NiA，官方样板）：`build-logic/`（included build 里的 convention plugins）+ `app`、`app-nia-catalog`（组件目录 App）、`benchmarks`（Macrobenchmark + 生成 Baseline Profile）、
   `core/*`、`feature/*`、`lint`、`sync`、`ui-test-hilt-manifest`；Hilt；不用 mock 库（全用 fake + Hilt 测试 API）；Roborazzi 截图测试（`recordRoborazziDemoDebug` / `verifyRoborazziDemoDebug`，参考图在 CI 的 Linux 上录）；
   `demo` / `prod` 两个 flavor（demo 用本地静态数据）；Compose 编译器报告 `-PenableComposeCompilerMetrics=true -PenableComposeCompilerReports=true`；根目录有 `compose_compiler_config.conf` 和 `AGENTS.md`。
-- 💭 Jarvis 建议的模块（按「多个 AI agent 并行、各改各的模块」切）：
+- 💭 Persona 建议的模块（按「多个 AI agent 并行、各改各的模块」切）：
 
 | 模块 | 内容 | 依赖 Android？ |
 | --- | --- | --- |
@@ -178,7 +178,7 @@
   - Scene / `SceneStrategy`（列表-详情、`DialogSceneStrategy`、`OverlayScene`）、共享元素、预测性返回（1.2 改进）、结果回传 `ResultEventBus`（1.2）、
     **深链（1.2，`UriDeepLinkMatcher`，可从 Intent 构造请求）**——通知点开会话、DEBUG 直达页面都走它。
   - ViewModel 按 entry 作用域：`androidx.lifecycle:lifecycle-viewmodel-navigation3`（随 Lifecycle **2.11.0**，2026-06-17 稳定）的 `rememberViewModelStoreNavEntryDecorator()`。
-  - 对 Jarvis 的好处：iOS 踩过的「视图式 / 值式 NavigationLink 混用把新页面插到下面」「搜索状态下推页面导航栏被强制显示」这类问题，在「返回栈 = 一个 list」的模型里不存在；
+  - 对 Persona 的好处：iOS 踩过的「视图式 / 值式 NavigationLink 混用把新页面插到下面」「搜索状态下推页面导航栏被强制显示」这类问题，在「返回栈 = 一个 list」的模型里不存在；
     每个 tab 自己一条返回栈（官方 recipes 有多返回栈示例），对话页 → 文件 → Git 用页内 Pager，不进返回栈。
   - 风险：API 仍在演进（1.1 弃用 `then` 链、深链工厂函数改构造器）；UI 层（`navigation3-ui`）只有 Android。
 - 备选：Navigation Compose 2.9+ 的 `@Serializable` 类型安全路由——成熟，但返回栈由库持有，做底部浮层 / 多返回栈 / 自定义转场不如 Nav3 直接。
@@ -217,14 +217,14 @@
 
 ## 4. 网络 ✅
 
-### Android 17 本地网络权限——对 Jarvis 影响最大的一条平台变化（✅）
+### Android 17 本地网络权限——对 Persona 影响最大的一条平台变化（✅）
 
 - targetSdk ≥ 37 时，访问**本地网络**要运行时权限 **`ACCESS_LOCAL_NETWORK`**（危险级，属于 `NEARBY_DEVICES` 权限组；
   用户已授过同组权限如蓝牙就不再弹）。targetSdk ≤ 36 时仍由 INTERNET 隐式授予，**且官方要求低 target 不要声明 / 申请它**。
 - 「本地网络」= 走 Wi-Fi / 以太网这类可广播接口的流量，**不含蜂窝和 VPN**；IPv4 范围：169.254/16、**100.64/10（CGNAT）**、10/8、172.16/12、192.168/16，
   外加多播、广播；IPv6 是链路本地、直连路由等。所有网络 API（OkHttp、Cronet、WebView 继承宿主权限）都受限，`.local` 解析也受限。
 - 没权限时 **TCP 表现为超时**（不是立刻拒绝），UDP 是 EPERM——看起来像「hub 连不上」。所以连接前要先检查权限并在 UI 说清楚。
-- 对 Jarvis：手机在家 / 公司 Wi-Fi 下直连 hub 的内网地址 → 需要这个权限；经 VPN（如 Tailscale）访问 → 按定义不受限（💭 需在真机实测确认）。
+- 对 Persona：手机在家 / 公司 Wi-Fi 下直连 hub 的内网地址 → 需要这个权限；经 VPN（如 Tailscale）访问 → 按定义不受限（💭 需在真机实测确认）。
   **配对流程里扫码后就申请**，被拒时连接状态显示成「需要本地网络权限」而不是「连接中…」。
 - 测试：Android 16 上 `adb shell am compat enable RESTRICT_LOCAL_NETWORK <pkg>` 后重启即可模拟。
 - ✅ **Play 政策**（2026-10-29 刚公布）：target 37+ 申请 `ACCESS_LOCAL_NETWORK` 要在 Play Console 声明「为什么设备选择器（NsdManager）不够」，2027-06 开始要求填写，**2027-08-25 起强制**。
@@ -233,7 +233,7 @@
 ### 明文 HTTP：Network Security Config（✅）
 
 - targetSdk ≥ 28 默认禁止明文；`<domain>` 只支持精确主机名（可以写单个 IP）或「主机 + 子域」，**不支持 CIDR / 通配**；`debug-overrides` 不能单独放开明文（只管信任锚）。
-- Jarvis 的 hub 地址是扫码配对时才知道的，所以只能 **`<base-config cleartextTrafficPermitted="true">`**；💭 在 App 里补一道自己的校验：
+- Persona 的 hub 地址是扫码配对时才知道的，所以只能 **`<base-config cleartextTrafficPermitted="true">`**；💭 在 App 里补一道自己的校验：
   `http://` 只允许私有 / VPN 地址（10/8、172.16/12、192.168/16、100.64/10、169.254/16、`.local`、loopback、用户明确确认过的主机名），
   否则配对时警告。不要用构建期从 `config.json` 生成 domain-config：换 hub 就得重装，且违背「不写死个人信息」的约定。
 - hub 若改成 HTTPS + 自签证书：`<trust-anchors>` 里放 `@raw/` 证书只能编进包里；扫码配对得到的证书要在代码里做（OkHttp 自定义 `X509TrustManager` / 证书固定）。
@@ -262,7 +262,7 @@
 - Network Security Config：https://developer.android.com/privacy-and-security/security-config
 - OkHttp changelog：https://square.github.io/okhttp/changelogs/changelog ，https://github.com/square/okhttp/blob/master/CHANGELOG.md
 - Ktor releases：https://github.com/ktorio/ktor/releases
-- Jarvis 协议（WebSocket 消息表）：仓库 `docs/protocol.md`
+- Persona 协议（WebSocket 消息表）：仓库 `docs/protocol.md`
 
 ### 其他 Android 17（target 37）网络相关：✅ Certificate Transparency 默认开、ECH（Network Security Config 新增 `<domainEncryption>`）。
 
@@ -320,7 +320,7 @@
 - 版本：Compose BOM 2026.09.00（Compose 1.12.1、material3 1.4.0）。Expressive 组件（SplitButton、ButtonGroup、FloatingToolbar、Flexible TopAppBar、Expressive 列表项、SearchBar…）
   在 **material3 1.5.0-beta02**（2026-10-21）才陆续去掉实验注解；1.4.0 上用要 `@OptIn(ExperimentalMaterial3ExpressiveApi::class)`。
   💭 建议先用 1.4.0 稳定版，等 1.5.0 稳定（看节奏 1–2 个月内）再切；需要的 Expressive 组件少量 opt-in。
-- 💭 结构：`MaterialTheme`（颜色 / 字体 / 形状）只负责系统组件的默认外观；Jarvis 自己的 `JarvisTheme` 用 CompositionLocal 提供
+- 💭 结构：`MaterialTheme`（颜色 / 字体 / 形状）只负责系统组件的默认外观；Persona 自己的 `JarvisTheme` 用 CompositionLocal 提供
   `AppStyle`（glass / claude / clay / island / lark）+ token（Radius 五档、Fill 三档、Font 角色、Space、Motion）+ `StatusPalette`（不随风格变）。
   页面只调 `Modifier.surface(tint, interactive, shape)`、`themedButton(prominent)`、`themedPage()` 这类封装，和 iOS `Theme` 一一对应；切风格时整棵树按风格 key 重建（同 iOS）。
 - 💭 **两端共用一份设计 token**：把 `Theme.swift` / `StatusPalette.swift` 里的色值、圆角、对比度底线抽成仓库里的一份 JSON（或 TOML），
@@ -345,7 +345,7 @@
   注意：iOS 踩过的「行 id 随轮次推进变化（答案收进工作行、多条消息合并成 `wt-`）」在 Compose 里同样会让按 key 的锚定失效——冻结快照（`ChatView.Frozen` 的做法）仍然需要。
 - 贴底跟随：`followsEnd` 时新内容到达后 `scrollToItem(0)`；用户拖动（`isScrollInProgress` + 拖动交互，而非程序滚动）就关；用 `LazyListState.layoutInfo` 判断是否在最新端。
 - 每一步都是独立行、稳定 `key` + `contentType`；`LazyLayoutCacheWindow`（1.13 稳定）控制预取范围；历史分页靠在列表尾部放一个哨兵行触发「再取两轮」。
-- **不用 Paging 3**（最新 3.5.3，2026-10-12）：Jarvis 按「轮次」分页、展示行要跨页做轮次折叠、实时推送要合并进同一个 store，PagingSource 的模型不合适；
+- **不用 Paging 3**（最新 3.5.3，2026-10-12）：Persona 按「轮次」分页、展示行要跨页做轮次折叠、实时推送要合并进同一个 store，PagingSource 的模型不合适；
   Paging 3.5 新增的 `asItemSnapshotListFlow` / `Pager.append/prepend` 适合普通列表（如 Git 提交历史），聊天用自己的 `ChatStore`。
 - 文字选择：Compose 的 `SelectionContainer` 能跨多个 `Text` 选择（1.12 拖选可自动滚动），所以 Android 上**有机会在原地选择一条消息的 Markdown**（iOS 因 SwiftUI Text 限制只能弹纯文本页）；
   跨懒加载行的选择仍不可靠，长按菜单「选择」保留纯文本页作兜底。
@@ -363,7 +363,7 @@
 
 ### 6.4 代码高亮
 
-- iOS 现状：Jarvis 自己写的轻量高亮（注释 / 字符串 / 数字 / 常见关键字，`LarkSyntax.highlight`），不依赖库。
+- iOS 现状：Persona 自己写的轻量高亮（注释 / 字符串 / 数字 / 常见关键字，`LarkSyntax.highlight`），不依赖库。
 - 💭 推荐 Android 照搬这套轻量规则（几十行，结果和 iOS 一致，便于共享 golden 测试）；需要更好效果时用 **Highlights 1.1.0**（`dev.snipme:highlights`，KMP，17 种语言、6 套主题、增量 / 异步），
   它**不支持 JSON / YAML / diff / SQL / HTML**，这些仍走轻量规则。
 
@@ -371,7 +371,7 @@
 
 - **Coil 3.6.3**（2026-09-18，**修了 AGP 9.4.0 + R8 构建失败**——AGP 9.4 必须用 ≥ 3.6.3）；3.6.0 起 Kotlin 2.4.10 / Compose 1.12 / compileSdk 37；3.5.0 起 minSdk 23。
 - 用 `coil-network-okhttp`（共用 App 的 OkHttpClient，带 Bearer token）；Coil 自己的 `DiskCache`（官方提醒别同时开 OkHttp Cache）。
-- 💭 Jarvis 的懒加载图片（`ImagePayload.ref`）：自定义 `Fetcher` / `Keyer`，按 ref 永久缓存；行里先按尺寸占位（不跳），滚到才取。
+- 💭 Persona 的懒加载图片（`ImagePayload.ref`）：自定义 `Fetcher` / `Keyer`，按 ref 永久缓存；行里先按尺寸占位（不跳），滚到才取。
 
 ### 6.6 全屏图片查看
 
@@ -448,7 +448,7 @@
 - ✅ **高优先级**：可唤醒休眠设备、给少量处理时间（「只够立刻渲染一条通知」），之后要做事用**加急 WorkManager**（高优先级消息之后有短暂豁免）；
   **高优先级消息如果没有产生用户可见的通知，会被降级为普通优先级**（按每个安装实例最近 7 天的行为判断）；通知权限关了也会被降级。
   Play 服务可代为显示部分高优先级通知（Android Q+，Beta，只对 HTTP v1）。
-- 💭 对 Jarvis：交互（需要你）用高优先级 + 立刻显示通知；「完成未看」「Live Update 刷新」也都对应用户可见的变化，不会被降级；
+- 💭 对 Persona：交互（需要你）用高优先级 + 立刻显示通知；「完成未看」「Live Update 刷新」也都对应用户可见的变化，不会被降级；
   纯后台同步（`revs`）别用高优先级推，用普通优先级或不推。
 - 通知能力对照 iOS：
   - 通知渠道：需要你（高重要性、可打断）、Agent 完成、Fleet（Live Update）、手机工具确认等，用户可在系统里单独调。
@@ -492,14 +492,14 @@
 
 - ✅ **Google Assistant 已于 2026-09-28 对手机用户关闭**（换成 Gemini）——依附 Assistant 的 **App Actions（built-in intents）基本作废**，不要投入。
 - ✅ **AppFunctions**（`androidx.appfunctions` **1.0.0-beta01**，2026-10-21；基于 Android 16 平台 API）：把 App 的功能暴露给设备上的 AI 代理（类似本地 MCP）；
-  调用方需要 `EXECUTE_APP_FUNCTIONS` 权限，Gemini 集成到 2026-05 还是「受信测试者私测」。💭 可以把「问 Claude / Jarvis 状态 / 批准第一个待处理」做成 AppFunctions，算面向未来的投入，不是现在能依赖的入口。
+  调用方需要 `EXECUTE_APP_FUNCTIONS` 权限，Gemini 集成到 2026-05 还是「受信测试者私测」。💭 可以把「问 Claude / Persona 状态 / 批准第一个待处理」做成 AppFunctions，算面向未来的投入，不是现在能依赖的入口。
 - 💭 现在就能用的入口：**动态 / 固定快捷方式**（`ShortcutManagerCompat`：长按图标「问 Claude」「批准第一个」）、**快捷设置磁贴**（`TileService`：显示状态、一键批准）、
-  **Glance 小组件**、通知按钮、**分享目标**（把文字 / 图片 / 链接分享给 Jarvis 作为上下文）、给 Tasker / 自动化 App 的显式 Intent 接口（≈ 快捷指令）。
+  **Glance 小组件**、通知按钮、**分享目标**（把文字 / 图片 / 链接分享给 Persona 作为上下文）、给 Tasker / 自动化 App 的显式 Intent 接口（≈ 快捷指令）。
 
 ### 7.7 生物识别
 
 - ✅ `androidx.biometric` 稳定版仍是 **1.1.0（2021）**；新 API（`registerForAuthenticationResult`、`AuthenticationRequest`、`biometric-compose` 的 `rememberAuthenticationLauncher`、Android 36.1 起最多 4 个自定义 fallback）在 **1.4.0-alpha07**（2026-04-22），alpha 间仍有改名。
-- 💭 Jarvis 用到的地方很少：通知「允许」用系统的解锁要求即可；App 内「全部放行」这类高风险操作可选 BiometricPrompt（用稳定版 1.1.0 或 alpha 的 Compose 版）。
+- 💭 Persona 用到的地方很少：通知「允许」用系统的解锁要求即可；App 内「全部放行」这类高风险操作可选 BiometricPrompt（用稳定版 1.1.0 或 alpha 的 Compose 版）。
 
 来源：
 - FCM 优先级：https://firebase.google.com/docs/cloud-messaging/android-message-priority
@@ -521,7 +521,7 @@
   OEM 可加额外条件。用 `NotificationManager.canPostPromotedNotifications()` 查用户是否关了，`Settings.ACTION_MANAGE_APP_PROMOTED_NOTIFICATIONS` 跳设置。
 - 状态栏 chip：小图标 + `setShortCriticalText`（≤ 6 个字符最稳，最宽 96dp）或 `when` 倒计时 / chronometer。
 - 用途规范：「ongoing、user-initiated、time-sensitive」，明确**不适合**：广告、聊天消息、提醒类 alert、日历事件、「由别人触发的活动」、环境信息。
-  Jarvis 的 Fleet（Agent 工作中、需要你）属于「用户发起的长任务」，💭 勉强符合；「需要你」的提醒更像 alert，应走普通高优先级通知。
+  Persona 的 Fleet（Agent 工作中、需要你）属于「用户发起的长任务」，💭 勉强符合；「需要你」的提醒更像 alert，应走普通高优先级通知。
 - **没有 iOS 那种 push-to-update 通道**：只能 FCM 高优先级数据消息唤醒 App，`onMessageReceived` 里重建通知、同一 id `notify()`。
 - 也会桥接到部分 Wear OS 设备。
 
@@ -539,7 +539,7 @@
 | `phone_photos_recent` / `phone_photo_get` | `MediaStore` 查询（最近照片的元数据：时间、尺寸、截图、时长、经纬度） | 需要 `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO`；Android 14+ 用户可只给部分（`READ_MEDIA_VISUAL_USER_SELECTED`，查询只返回选中的，类似 iOS limited）。✅ **Play 政策**：只有「核心功能需要广泛访问照片」的 App 能申请，否则必须用系统 Photo Picker（2025-05-28 起强制）；不上 Play 则无此限制。读位置元数据还要 `ACCESS_MEDIA_LOCATION` | 💭 自用 / 不上 Play：照做；上 Play：「最近照片」工具大概率过不了审，改成「让用户在 Photo Picker 里选」 |
 | 输入框发图片 | **Photo Picker**（`PickMultipleVisualMedia(4)`，Android 11+ 系统组件，旧机经 Play 服务回退） | 无需权限 | 用它 |
 | `phone_device_info` | `Build`、`BatteryManager`、`PowerManager`（省电模式、`currentThermalStatus`）、`StorageStatsManager` / `StatFs`、`ConnectivityManager`、时区语言 | 无 | 可做 |
-| `phone_clipboard_get` / `set` | `ClipboardManager` | ✅ Android 10+ **只有前台（有焦点）的 App 或默认输入法能读**；Android 12+ 读别的 App 复制的内容时系统弹 toast「已粘贴自剪贴板」（不是 iOS 那种要用户点允许）；写入敏感内容可标 `EXTRA_IS_SENSITIVE` | 💭 只在前台可用；hub 在 App 后台时调用要回「请打开 Jarvis」 |
+| `phone_clipboard_get` / `set` | `ClipboardManager` | ✅ Android 10+ **只有前台（有焦点）的 App 或默认输入法能读**；Android 12+ 读别的 App 复制的内容时系统弹 toast「已粘贴自剪贴板」（不是 iOS 那种要用户点允许）；写入敏感内容可标 `EXTRA_IS_SENSITIVE` | 💭 只在前台可用；hub 在 App 后台时调用要回「请打开 Persona」 |
 | `phone_notify` | `NotificationManager`；延迟用 WorkManager（可能被 Doze 推迟）或 `AlarmManager.setWindow`；精确闹钟要 `SCHEDULE_EXACT_ALARM`（Android 14 起默认不授予） | `POST_NOTIFICATIONS` | 可做（延迟不保证准点） |
 
 - 💭 **Android 独有、iOS 做不到的增强**（按需评估隐私）：`NotificationListenerService`（用户在系统设置里授权后可读所有 App 的通知内容，微信等消息也能进收件箱 / 给 AI 用）、
@@ -609,7 +609,7 @@
 - ✅ **Android 开发者验证（影响「直接发 APK」）**：2026-09-30 起在巴西、印尼、新加坡、泰国的认证设备上生效；**2027 年扩展到全球所有认证设备**。
   届时未验证开发者的 APK 只能走「advanced flow」（开发者选项开关、重启、**24 小时等待**、生物识别确认）安装。2026-08 起有**免费的有限分发账号**（学生 / 爱好者，最多 20 台设备，不要证件、不要费用），
   也可以在 Android Developer Console / Play Console 完整注册（Play 上的 App 99% 自动注册）。adb 安装不受影响。
-  💭 建议：2027 年前给 Jarvis 的包名 + 签名密钥注册一个有限分发账号（自用足够），Firebase 分发的包才能在新手机上顺利安装。
+  💭 建议：2027 年前给 Persona 的包名 + 签名密钥注册一个有限分发账号（自用足够），Firebase 分发的包才能在新手机上顺利安装。
 - 💭 构建号：`versionCode` 上限 2100000000，iOS 的 `yyyymmddHHMM`（12 位）放不下；用 `yyyymmddHH`（10 位，到 2099 年都 < 2.1e9）或 git 提交数；`versionName` 可以继续用 iOS 的格式。
 
 ### 10.2 签名

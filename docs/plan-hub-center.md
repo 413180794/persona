@@ -17,7 +17,7 @@
 - **hub**：装在一台常开的机器上（NAS、家里的服务器），全家只要这一台。它所在的机器本身也是一台电脑（本机 node）。
 - **node 服务**：其他每台电脑装一次，里面是常驻 node 加连接器，**一个安装命令或一个 App 装好**，配对后主动或被动连 hub（第 4 节）：
   - Linux：`install.sh` 选「node」，一条命令装好两样 systemd 用户服务并配对；
-  - Mac：Jarvis Link 菜单栏 App 自带 jarvisd，首次运行就装好常驻 node（不用再单独跑 `scripts/node-launchd.sh`）；
+  - Mac：Persona Link 菜单栏 App 自带 personad，首次运行就装好常驻 node（不用再单独跑 `scripts/node-launchd.sh`）；
   - Windows：#299。
 - **多台 hub 互联**（中心 + 成员）只给少数需要的场景：比如两处各有一台常开、互相连不通的机器，或者已经装了好几台 hub 想合并。
   文档、安装器、管理界面都按「一台 hub + node 服务」引导：管理界面以「添加电脑」为主，「互联」放进「高级」；
@@ -37,7 +37,7 @@
 | --- | --- |
 | **中心 hub** | 组里唯一。服务所有客户端，所有状态都在它这里（会话索引、交互、推送、设备凭据、助手、收件箱、知识库、模型配置、定时任务……），连所有电脑（直接，或经成员 hub） |
 | **成员 hub** | 只做两件事：把客户端请求原样转给中心；把它连着的电脑的 node 流转给中心。自己不再驱动 node、不再服务客户端，自己的助手 / 收件箱 / 定时任务停用（数据留着，退出组后恢复） |
-| **电脑** | 预装常驻 node（`jarvisd node`，功能都在它里面）和连接器 jarvis-link（只管发现、上报、链路，原样转给 `~/.jarvis/node-attach.sock`，不承担任何功能，沿用用户 2026-10-31 的要求） |
+| **电脑** | 预装常驻 node（`personad node`，功能都在它里面）和连接器 jarvis-link（只管发现、上报、链路，原样转给 `~/.persona/node-attach.sock`，不承担任何功能，沿用用户 2026-10-31 的要求） |
 
 只有一台 hub、没有互联时，它就是中心，一切和现在一样。
 
@@ -69,10 +69,10 @@
   | **被动**（新） | hub 拨连接器在本机监听的 TLS 端口 | 固定地址、hub 能连到的电脑（服务器、开发工作站） |
 
 - **被动模式的协议**（两路都按这个做，细节由连接器那一路补进 link.md）：
-  - 连接器监听 `listen`（默认 `:18663`），TLS 用连接器自己的 ECDSA P-256 身份密钥和自签证书（`~/.jarvis/link-tls/`，0700 / 0600），
+  - 连接器监听 `listen`（默认 `:18663`），TLS 用连接器自己的 ECDSA P-256 身份密钥和自签证书（`~/.persona/link-tls/`，0700 / 0600），
     指纹和 hub 的算法一样（SPKI DER 的 SHA-256，base64url 不带填充）。
   - `GET /api/v1/connector/info`：`{"machine": "<hub 给它的机器 id>", "version": "…"}`。
-  - `GET /api/v1/connector/stream`：WebSocket 升级后原样转给 `~/.jarvis/node-attach.sock`（permessage-deflate，两边都 ping），和主动模式的流一样。
+  - `GET /api/v1/connector/stream`：WebSocket 升级后原样转给 `~/.persona/node-attach.sock`（permessage-deflate，两边都 ping），和主动模式的流一样。
   - `POST /api/v1/connector/pair`（配对时用，唯一不要长期凭据的接口）：`{"code":"<一次性码>","token":"<hub 生成的长期凭据>","machine":"<机器 id>","hub_id":"…","hub_name":"…"}`
     → 码对就存下 token 的 hash 和 hub 信息、作废这个码，回 `{"version":"…"}`；码错或过期 401（计入限流）。已经配对过的连接器再配对会替换旧的 hub。
   - info、stream 两个接口都要 `Authorization: Bearer <hub 的凭据>`；连接器只存凭据的 hash，只认配对它的那台 hub（组里的中心；换中心时由新中心重新配对）。

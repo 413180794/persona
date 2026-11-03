@@ -1,4 +1,4 @@
-# Jarvis 客户端重设计与 Android 版：设计方案
+# Persona 客户端重设计与 Android 版：设计方案
 
 > 状态：**草案 v3，等待审阅**（2026-10-30）。到目前为止只做了调研和设计，没有改任何代码。
 > 第 12 节的问题 2026-10-30 已按建议定；hub 有没有可以做 DDNS 的域名、手头有哪些真机，等你补充。动手按第 10 节的阶段。
@@ -52,7 +52,7 @@
   - 所有有副作用的请求都带操作 id，hub 把回执落进 Postgres。
   - 「没发出去」自动重发；「发出去没收到回音」用同一个 id 重试，由 hub 去重；电脑上「打字打到一半出错」就进入「待核对」，用对话记录自动核对。
   - 这就不需要 removed 那套手机侧的持久队列和人工核对体系。
-- **交互上保留 Jarvis 的强项，补上 removed 的阅读工具和原生交互的完整度。**
+- **交互上保留 Persona 的强项，补上 removed 的阅读工具和原生交互的完整度。**
   - 保留：信息架构、倒置列表、工作行折叠、终端、推送。
   - 阅读工具：会话内搜索、任务进度、全文阅读器、折叠时也显示失败数。
   - 原生交互：拒绝原因、计划意见和批准互斥、倒计时、MCP 表单、子 Agent 来源、多个请求进收件箱。
@@ -62,8 +62,8 @@
   - 它比本方案原稿更好、直接采用的：通知不靠推送服务，用前台服务常驻 WebSocket，国内手机大多没有 Google 服务；扫码用 zxing，不依赖 Google；明文 HTTP 整体放开（network security config 不支持网段）；target 停在旧版本，绕开 Android 17 的本地网络权限；通知上能直接选提问的选项，处理完撤回通知。
   - 按本方案替换的：工具链和 SDK 级别、模块和架构、存储（token 现在明文存）、对话展示（没有工作行折叠，也不支持 `fold_work`）、Markdown、状态色（和 iOS 不一致）、通知「允许」不需要解锁。
   - 逐项对比和三张清单（保留、搬家、替换）见 [android.md](android.md) 第 1 节。
-- **Android 首版 = iOS 的 76 个 P0 功能，外加「分享到 Jarvis」、公网直连、国产系统适配和 App 内更新。**
-  - 包括：配对、连接状态和诊断、缓存、离线发送、Agents 列表、对话页、四种交互面板、Jarvis 主对话、收件箱基础功能、带按钮的通知、一套原生风格主题。
+- **Android 首版 = iOS 的 76 个 P0 功能，外加「分享到 Persona」、公网直连、国产系统适配和 App 内更新。**
+  - 包括：配对、连接状态和诊断、缓存、离线发送、Agents 列表、对话页、四种交互面板、Persona 主对话、收件箱基础功能、带按钮的通知、一套原生风格主题。
   - 终端、Live Updates（锁屏常驻通知）、手机工具放第二批；手表和语音助手不做。
 - **Android 按「手机没有 Google 服务」设计。**
   - 通知只走常驻连接：前台服务一直连着 hub 的 WebSocket，在手机上发通知。PR #84 已经在用，不做 FCM。
@@ -78,7 +78,7 @@
   - hub 新开一个 TLS 端口，用自己的密钥签证书，二维码里带公钥指纹，手机钉扎；
   - hub 自己发现能用的地址（公网 IPv6、DDNS 名字、内网、确认可达的公网 IPv4）并下发；手机错峰并发探测，证书和 `hub_id` 都对上才算连上；
   - 二维码格式不变，明文端口留给内网，现有 iOS 照常用。
-  - 门槛在家里：光猫的 IPv6 入站防火墙、家宽前缀会变、部分地区封端口。App 和 hub 解决不了，只能检测和引导（`jarvisd hub doctor`、App 的连接诊断页）。强烈建议给 hub 配一个 DDNS 名字。
+  - 门槛在家里：光猫的 IPv6 入站防火墙、家宽前缀会变、部分地区封端口。App 和 hub 解决不了，只能检测和引导（`personad hub doctor`、App 的连接诊断页）。强烈建议给 hub 配一个 DDNS 名字。
 - **执行顺序：**
   1. 先定规格：读 iOS 的实现和测试，写出夹具和 token JSON；hub 做公网直连等改动，每一步都兼容现有 iOS。
   2. Android 先在 PR #84 上升级工具链、拆出纯 Kotlin 核心并接上夹具，再换对话页、交互和通知。先验证三个最大的风险：长对话滚动性能、常驻连接的耗电与存活、手机在蜂窝网络上经公网 IPv6 连上 hub。
@@ -93,7 +93,7 @@
 
 ### 1.1 现状
 
-| | Jarvis iOS | Jarvis Android（PR #84，已合入） | removed |
+| | Persona iOS | Persona Android（PR #84，已合入） | removed |
 | --- | --- | --- | --- |
 | 规模 | 约 4.2 万行 Swift（生产约 3.76 万），单个 XcodeGen 工程，`Shared/` 以源码形式编进 App、手表、小组件三个 target | 约 2.7 千行 Kotlin，单模块 `:app`，只有 Agents 部分 | 约 17 万行 Swift（源码约 9 万 + 测试约 6.6 万）+ 主机组件（Node）约 1.3 万行；一个本地 SPM 包，39 个 target |
 | 后端 | 自己的 hub（Go + Postgres），手机只连 hub；hub 经 SSH 起各台电脑上的 node | 同一个 hub，没改服务端 | 没有中转：手机直连 lark-connector（HTTP + WS）和各台主机（SSH exec + PTY） |
@@ -103,7 +103,7 @@
 ### 1.2 目标
 
 1. **Android 版**：
-   - 核心路径（看进度、在手机上拍板、处理收件箱、和 Jarvis 对话）体验不输 iOS，达到「Play 商店榜首」的完成度；
+   - 核心路径（看进度、在手机上拍板、处理收件箱、和 Persona 对话）体验不输 iOS，达到「Play 商店榜首」的完成度；
    - 在没有 Google 服务的主流国产手机上能用；
    - 经公网直连 hub。
 2. **hub 改动**：支撑公网直连和 Android，同时现有 iOS App 不改代码也照常工作。
@@ -124,7 +124,7 @@
 
 ### 2.1 removed 值得借鉴的
 
-| # | 借什么 | 它在 removed 里是什么样 | 用到 Jarvis 哪里 |
+| # | 借什么 | 它在 removed 里是什么样 | 用到 Persona 哪里 |
 | --- | --- | --- | --- |
 | 1 | **编译期强制的分层** | 模型和窄协议放 `*Contracts`，实现放 `*Client`；`*Feature` 只依赖 Contracts、从不依赖 Client；只有 App 同时看到实现和页面，负责注入 | 两端同构的模块划分（第 4 节）；拆掉 `AppModel` 和 755 行的 `APIClient` |
 | 2 | **结果三态 + 写前日志 + 只读核对** | 写请求在传输层出错一律算「结果未知」，不自动重放；主机用「排他创建的回执文件 + 参数摘要」做持久幂等 | 改成 hub 落库的幂等回执，客户端因此可以放心自动重试（决策 D3） |
@@ -140,15 +140,15 @@
 
 ### 2.2 不借的
 
-- **手机直连 SSH 那一整套**：私钥库、主机指纹、跳板机、主机组件安装器。Jarvis 的手机只连 hub。
-- **手机侧第二套持久队列和人工核对体系**：主机 SQLite 队列、后台服务、每条消息十几种状态。removed 是因为没有常开的中转才需要这些；Jarvis 交给 hub。
-- **轮询式观察**：会话页每秒、主机列表每 8 秒轮询一次。Jarvis 已经有 WebSocket + rev 增量同步。
-- **每种操作一个手写日志类**：removed 有 31 个、共 4,088 行。Jarvis 用一个通用的操作日志。
-- **39 个过细的 target**，以及对不可信上游那种逐字段的防御式校验。Jarvis 只信任自己的 hub，校验集中在 hub 边界和契约测试。
-- **60 行 VStack 窗口渲染**：Jarvis 的倒置列表 + 独立懒加载行在性能和「输入紧跟输出」上更好。
-- **视觉 token**：removed 的设计系统只有约 300 行，字体、间距、圆角都没有 token，比 Jarvis 弱。
+- **手机直连 SSH 那一整套**：私钥库、主机指纹、跳板机、主机组件安装器。Persona 的手机只连 hub。
+- **手机侧第二套持久队列和人工核对体系**：主机 SQLite 队列、后台服务、每条消息十几种状态。removed 是因为没有常开的中转才需要这些；Persona 交给 hub。
+- **轮询式观察**：会话页每秒、主机列表每 8 秒轮询一次。Persona 已经有 WebSocket + rev 增量同步。
+- **每种操作一个手写日志类**：removed 有 31 个、共 4,088 行。Persona 用一个通用的操作日志。
+- **39 个过细的 target**，以及对不可信上游那种逐字段的防御式校验。Persona 只信任自己的 hub，校验集中在 hub 边界和契约测试。
+- **60 行 VStack 窗口渲染**：Persona 的倒置列表 + 独立懒加载行在性能和「输入紧跟输出」上更好。
+- **视觉 token**：removed 的设计系统只有约 300 行，字体、间距、圆角都没有 token，比 Persona 弱。
 
-### 2.3 Jarvis iOS 现在的主要问题
+### 2.3 Persona iOS 现在的主要问题
 
 | 问题 | 证据（详见 [research/jarvis-ios-arch.md](research/jarvis-ios-arch.md)） |
 | --- | --- |
@@ -160,7 +160,7 @@
 | 飞书会话页的问题 | 发送不幂等：hub 每次随机生成 clientId（`server/internal/lark/lark.go`）；刷新时把最新一页直接拼到末尾，两次刷新间来的消息超过一页就会缺一段；重连后已打开的会话页要等 60 秒轮询；从收件箱打开时没有新消息分界线、不先显示缓存 |
 | 大文件是并行开发的冲突源 | 一周内 `ChatView.swift` 被 38% 的 iOS 提交改到（243 个里 93 个） |
 
-### 2.4 Jarvis 更强、重设计必须保留的
+### 2.4 Persona 更强、重设计必须保留的
 
 - hub 推拉同步 + items 连续性（`history` / `from_seq` / `to_seq`，断档自愈），见 `docs/lanes/msg-render-plan.md`。
 - 推送（授权和计划能在通知上直接批准）、锁屏实时活动。
@@ -190,7 +190,7 @@
 > - 体验模式（App 内假 hub）；
 > - iPhone Duo 双栏；
 > - Agents 列表的快速筛选、细列表、折叠空间；
-> - Jarvis tab 的顶栏和侧边栏；
+> - Persona tab 的顶栏和侧边栏；
 > - 助手写飞书前在手机上确认。
 >
 > 这些已补进 [parity.md](parity.md) 第 26 节；research 笔记里的行号对应 77999ab。
@@ -350,7 +350,7 @@ App（组合根、路由、HubScope 容器、DEBUG 钩子）
   2. hub 自己发现可用的地址：公网 IPv6、DDNS 名字、内网、确认可达的公网 IPv4。鉴权后下发，变化时推送。
   3. 手机按「公网 IPv6 → 域名 → 内网 → 公网 IPv4」错峰并发探测。**证书和 `hub_id` 都对上才算连上**，因为旧前缀可能已经分给了别人。按网络记住赢家。
   4. 加固：公网来源拒绝明文；鉴权失败按 IPv6 /64 前缀限流；二维码改发短时临时 token，不再印永久有效的主 token。
-  5. 说清楚为什么连不上：hub 端用 `jarvisd hub doctor`，App 端用连接诊断页。
+  5. 说清楚为什么连不上：hub 端用 `personad hub doctor`，App 端用连接诊断页。
 - **推荐配一个 DDNS 名字**：家宽换前缀时旧连接当场断开。Android 没有 FCM 这样的旁路，人在外面就收不到新地址，只能靠域名找回。没有域名只能算降级模式。
 - **后台心跳由 hub 发起**：Android 深睡时客户端的 ping 不触发，后台心跳只能由 hub 发，按连接协商间隔。后台从 4 分钟起按网络自动调整；前台 20 秒加应用层 ping（[hub-changes.md](hub-changes.md) 1.6）。
 - **兼容现有 iOS**：
@@ -395,7 +395,7 @@ App（组合根、路由、HubScope 容器、DEBUG 钩子）
 | `SessionDirectory` | 机器、会话、索引、置顶 / 屏蔽、选择器（4、16、17） |
 | `ChatRepository` | `ChatStore` 注册表和 LRU、订阅引用计数、补洞调度、历史分页（8、9、10） |
 | `InteractionCenter` | 待处理交互、resolve、**审批策略表**（一张表定义每个入口用什么模式，5 个入口共用）（13） |
-| `MessageSender` | **唯一的发送用例**：所有入口（对话、助手首句、交给 Jarvis、飞书、收件箱、Siri、手表）都走它，统一幂等、等网和拒发处理（14） |
+| `MessageSender` | **唯一的发送用例**：所有入口（对话、助手首句、交给 Persona、飞书、收件箱、Siri、手表）都走它，统一幂等、等网和拒发处理（14） |
 | `TerminalStreams` | 终端流路由、hub 能力位（11） |
 | `AssistantService` | 助手配置、主对话、预热、换启动器（7） |
 | `PhoneToolHost` | 手机工具注册和执行、确认弹窗（12） |
@@ -461,13 +461,13 @@ App（组合根、路由、HubScope 容器、DEBUG 钩子）
   - APNs → 常驻连接（D8）。
   - 灵动岛和锁屏实时活动 → 常驻通知；Android 17 用 MetricStyle 放三个数，Android 16+ 有活动时提升为 Live Update。
   - 手表 → 首版不做，通知会自动桥接到 Wear OS，按钮也能用。
-  - Siri → 快速设置磁贴、桌面快捷方式、「分享到 Jarvis」。
+  - Siri → 快速设置磁贴、桌面快捷方式、「分享到 Persona」。
   - HealthKit → Health Connect：它要 Google Play 服务，国行的健康 App 也不往里写数据，国行手机首版不注册健康工具。
   - 提醒事项 → Android 没有系统接口，去掉这 3 个工具，或者在 hub 侧换成 Google Tasks。
   - 剪贴板 → 只能在前台读。
   - Gmail 的 Google 账号登录 → Android 上不做：Google 的登录接口依赖 Google Play 服务。邮箱账号存在 hub 上、两端共用，在 iPhone 上加一次，或者用应用专用密码走普通 IMAP。
 - **Android 独有的机会**：
-  - 「分享到 Jarvis」：任何 App 的文字、链接、图片、文件发进主对话，成本低，正合「把各处信息收到一起」的定位。建议首版就做。
+  - 「分享到 Persona」：任何 App 的文字、链接、图片、文件发进主对话，成本低，正合「把各处信息收到一起」的定位。建议首版就做。
   - 平板和折叠屏上列表、对话双栏（对应 iOS 的 iPhone Duo 双栏）。
   - 短信、通话记录、通知监听：很敏感，不做（第 12 节第 10 题）。
 - **两个平台限制**：
@@ -496,7 +496,7 @@ App（组合根、路由、HubScope 容器、DEBUG 钩子）
 
 | 级别 | 改动 |
 | --- | --- |
-| **必须**（公网直连，D9） | 新开 TLS 端口（hub 自己的密钥签证书、公钥指纹、同一把密钥续签）；地址发现和下发（`/endpoints`、`hello` 新字段、`endpoints` 事件）；二维码改发短时临时 token（格式不变）；公网来源拒绝明文、鉴权失败按 /64 限流；`hub_id`；心跳按连接协商；`jarvisd hub doctor`；DDNS（可选，推荐）；新文档 `docs/network.md` |
+| **必须**（公网直连，D9） | 新开 TLS 端口（hub 自己的密钥签证书、公钥指纹、同一把密钥续签）；地址发现和下发（`/endpoints`、`hello` 新字段、`endpoints` 事件）；二维码改发短时临时 token（格式不变）；公网来源拒绝明文、鉴权失败按 /64 限流；`hub_id`；心跳按连接协商；`personad hub doctor`；DDNS（可选，推荐）；新文档 `docs/network.md` |
 | **必须**（Android 首版） | 手机工具按设备注册和路由：现在 `register_phone` 整表覆盖，调用发给最后注册的那台，iPhone 和 Android 同时在线时互相覆盖；Android 安装包由 hub 托管，App 内检查更新；记录每台设备的连接和断开时段（后台自检和过夜实测要用） |
 | **建议**（和 Android 首版一起做） | 「做完了」等通知由 hub 判断后经 WS 下发给常驻连接的设备（`notify` 事件），手机不再自己算；应用层 ping / pong（判断弱网）；`client_hello` 和 `X-Jarvis-Client`；统一错误体 |
 | **建议**（可靠性，P3 和两端的 outbox 一起做） | `client_ops` 表 + `GET /api/v1/ops/{id}`，消息和一次性操作持久去重；飞书发送透传 clientId，消息带 `clientId` / `localState`，分页带 `syncState` |
@@ -535,7 +535,7 @@ App（组合根、路由、HubScope 容器、DEBUG 钩子）
 | --- | --- | --- |
 | **P0 定规格**（先做） | 读 iOS 写出 `spec/fixtures` 和 token JSON；hub：公网直连（TLS、多地址、短时临时 token 的二维码、限流、心跳协商、`hub doctor`）、`client_hello`、错误体、`hub_id`、应用层 ping；**Android A0**：在 PR #84 上升级工具链（target 先 36），拆出纯 Kotlin 核心模块，把 PR 的连续性、模型、行合并搬进去并接上夹具；第一批 HTML 原型 | 夹具在 Android 上全绿；PR #84 原有的真机流程（配对、发消息、通知按钮作答）照常；**现有 iOS App 不改代码连新 hub 照常工作**（跑一遍 iOS 的 UI 测试和真机配对） |
 | **A1 Android 最小可用切片** | Hilt、Navigation 3、加密存储、Room；公网直连（多地址探测、IPv6、证书钉扎）；对话页换成共用的列表引擎 + `chatLines` + `fold_work` + 状态行 + 新交互面板；通知的「允许 / 批准」要先解锁、拒绝可以带原因；状态色和 iOS 一致；debug 直达入口 | 650 条命令的长会话打开和滚动有实测数字（至少 10 个样本）；常驻连接在主流国产系统上的每小时耗电和锁屏存活有实测数字；三家运营商蜂窝网络的空闲超时有实测数字，后台心跳间隔据此定；手机走蜂窝网络经公网 IPv6 连上 hub；真机上走通「通知 → 批准 → Agent 继续」 |
-| **A2 Android 首版补齐** | 四个 tab（Jarvis、Agents 完整版、收件箱、设置）、连接状态、配对的分段进度、离线 outbox、分享到 Jarvis、国产系统准备清单；hub 的 `notify` 事件和手机工具按设备路由 | Android 首版的 P0 在 parity.md 里至少到「测试 hub 通过」；可以发给自己和测试的人日常用 |
+| **A2 Android 首版补齐** | 四个 tab（Persona、Agents 完整版、收件箱、设置）、连接状态、配对的分段进度、离线 outbox、分享到 Persona、国产系统准备清单；hub 的 `notify` 事件和手机工具按设备路由 | Android 首版的 P0 在 parity.md 里至少到「测试 hub 通过」；可以发给自己和测试的人日常用 |
 | **A3 Android 新功能和第二批** | 第 5 节的交互改进；hub 可靠性改造（`client_ops`、飞书幂等）；终端、Live Updates、手机工具、知识库、文件 / Git、链接浮层、飞书文档和卡片、机器监控、其余风格、体验模式 | 按 parity.md 逐项 |
 | （以后）iOS 跟进 | [ios-refactor.md](ios-refactor.md) | 这一轮不做 |
 
@@ -587,7 +587,7 @@ App（组合根、路由、HubScope 容器、DEBUG 钩子）
 | 4 | 分发方式 | APK 自己签名，放在 hub 上，App 内检查更新、弹系统确认安装；签名证书放配置里，不进仓库（[android.md](android.md) 第 9 节） |
 | 5 | 怎么「覆盖」PR #84 | 在它的代码上按三张清单重组（android.md 1.3），不推倒重写；A0 期间 `android/` 只由一个车道改；和 PR #84 作者的协调由你来 |
 | 6 | Android 默认风格 | 原生（Material You 动态取色），状态色改成和 iOS 一致；Claude / 黏土 / Island / 飞书四套第二批 |
-| 7 | Android 首版范围 | iOS 的 76 个 P0 + 分享到 Jarvis + 公网直连、国产系统适配、App 内更新；终端、Live Updates、手机工具放第二批 |
+| 7 | Android 首版范围 | iOS 的 76 个 P0 + 分享到 Persona + 公网直连、国产系统适配、App 内更新；终端、Live Updates、手机工具放第二批 |
 | 8 | hub 改动 | 公网直连（hub-changes.md 第 1 节）放 P0；「做完了经 WS 下发」「手机工具按设备路由」「设备连接记录」随 Android 首版做；`client_ops` 和 Android 的 outbox 一起做 |
 | 9 | 公网直连的细节 | TLS 用单独的端口（同端口识别 TLS 留作以后的选项）；PR #84 版本配对过、没有指纹的手机，在内网上经已鉴权的通道取一次指纹并钉住；hub 换身份密钥时所有设备重新扫码，`hello` 预告下一把密钥只用于计划内的轮换；开了公网直连后主 token 只收回环和内网来源；免鉴权的 `/health` 对公网来源只回 `ok`、`hub_id`、TLS 端口和指纹，内网照旧 |
 | 10 | Android 独有能力 | 短信、通话记录、读取其他 App 的通知都不做；以后要做也是单独开关、单独确认 |

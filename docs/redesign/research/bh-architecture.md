@@ -1,7 +1,7 @@
-# removed 整体架构与工程方法调研（供 Jarvis iOS 重构 + Android 新版参考）
+# removed 整体架构与工程方法调研（供 Persona iOS 重构 + Android 新版参考）
 
-> 调研对象：removed（只读）。对照对象：Jarvis 当前 worktree（只读）。
-> 证据格式：`BH:<相对路径>:<行号>` 指 removed 仓库，`JV:<相对路径>:<行号>` 指 Jarvis 仓库。
+> 调研对象：removed（只读）。对照对象：Persona 当前 worktree（只读）。
+> 证据格式：`BH:<相对路径>:<行号>` 指 removed 仓库，`JV:<相对路径>:<行号>` 指 Persona 仓库。
 > 标注：**【事实】** = 读代码/文档直接得到；**【判断】** = 我的推断或建议。
 > 隐私：不抄录任何主机名、IP、账号、个人启动器名、内部项目名、真实消息；removed 文档里出现的这类信息一律省略。
 > 性能：本文不引用任何未实测的性能数字；文中出现的 MiB / 条数都是代码或文档里写死的**上限配置**，不是实测值。
@@ -54,7 +54,7 @@
 - 文档目录树里的 `App/CompositionRoot.swift`、`App/Navigation/`、`AgentKit/AgentSession` 并不存在；组合根就是 644 行的 `removedApp` struct（`BH:docs/ARCHITECTURE.md:144-198` vs 实际 `App/` 只有 2 个 swift 文件）。文档自己声明"模块描述是目标结构"（同 7）。
 - `HerdrRuntime` target 只有 10 行、没有任何地方 import（`BH:.../HerdrKit/HerdrRuntime/HerdrRuntimeClient.swift`），运行时逻辑实际已移到主机 bridge。
 - 工作区模型膨胀：`LarkMessagingModel.swift` 3,846 行，init 约 38 个参数，持有 ≥26 个子模型；App 持有约 30 个 journal 并逐个往里传（`BH:App/removedApp.swift:46-84,298-308`）。每个子模型工厂都重复写一遍 `generation/owner` 守卫（`LarkMessagingModel.swift:287-449`）。
-- 【判断】包级边界很干净，但"一个账号作用域下的工作区"成了新的上帝对象；Jarvis 抄分层时要同时设计"作用域容器"来懒创建子模型，避免同样的膨胀。
+- 【判断】包级边界很干净，但"一个账号作用域下的工作区"成了新的上帝对象；Persona 抄分层时要同时设计"作用域容器"来懒创建子模型，避免同样的膨胀。
 
 ---
 
@@ -75,7 +75,7 @@
 - **共享观察任务（引用计数订阅者）**：多个页面 `observe()` 共用一个轮询 Task，最后一个订阅者取消时才停（`BH:.../AgentsFeature/AgentWorkspaceModel.swift:1933-1973`）。
 - **有界并发**：多主机刷新最多 3 个 SSH 任务并发，空出一个槽立刻补（`BH:.../AgentsFeature/AgentFleetModel.swift:74-100`）。
 - **生命周期**：App 层 `scenePhase == .background` 时 `pauseUpdates()`，回前台 `resumeUpdates()`（`removedApp.swift:186-191`）；按连接配置身份用 `.task(id:)` 重建运行时（同 183-185,281-311）；多主机按连接身份 diff，配置变化才停旧建新（`AgentFleetModel.swift:52-65`）。
-- **有界流**：WebSocket 事件流 `bufferingNewest(128)`，溢出当作网络错误（`BH:.../SharedKit/HTTPTransport/HTTPTransport.swift:217-229`）；实时变化流 `bufferingNewest(32)`，溢出时补发 `.connected` 让消费者整体重读（`BH:.../lark-connectorKit/Realtime/LarkRealtimeClient.swift:8-30`）。WebSocket 先启动接收循环再等首个 pong（`HTTPTransport.swift:220-246`，`BH:docs/ARCHITECTURE.md:395`）——与 Jarvis CLAUDE.md 里"sendPing 回调需要挂着 receive"的经验一致。
+- **有界流**：WebSocket 事件流 `bufferingNewest(128)`，溢出当作网络错误（`BH:.../SharedKit/HTTPTransport/HTTPTransport.swift:217-229`）；实时变化流 `bufferingNewest(32)`，溢出时补发 `.connected` 让消费者整体重读（`BH:.../lark-connectorKit/Realtime/LarkRealtimeClient.swift:8-30`）。WebSocket 先启动接收循环再等首个 pong（`HTTPTransport.swift:220-246`，`BH:docs/ARCHITECTURE.md:395`）——与 Persona CLAUDE.md 里"sendPing 回调需要挂着 receive"的经验一致。
 - **意图 + 确认 token 两步提交**：`prepareSave()` 生成带 UUID 的确认对象并记下 revision 和草稿 id；`process(confirmation)` 只在 id、revision、草稿都还是当前的时候才派发——旧确认框无法提交（`LarkDoNotDisturbModel.swift:134-181`，测试 `BH:.../Tests/removedKitTests/DoNotDisturbModelTests.swift:28-34`）。
 - 视图持有的详情模型用 `@State private var model`（16 处），避免父视图重绘反复创建加载任务（`BH:docs/ARCHITECTURE.md:579`）；其余页面 `@Bindable var model`（54 处）。
 
@@ -158,7 +158,7 @@
 - 代码现实：Sources + App 里只有一处 DEBUG-only 的 `Logger`（认证路径，`HTTPTransport.swift:127-135`）。**结构化日志基本未落地**。
 - 已落地的恢复手段：实时流指数退避 1→30 秒（`LarkRealtimeClient.swift:10-28`）；重连后读权威状态而非重放事件（`BH:docs/ARCHITECTURE.md:257`）；话题重连分批复核已加载消息（每批 32、并发 4，同 393）；"核对上次操作结果"入口 + 人工处置（`BH:README.md:145-147,157`）。
 - 隐私防护：含账号的值类型把 `description/debugDescription/customMirror` 重写成 `<redacted>`（`DoNotDisturb.swift:55-57,81-83`，Sources 中 11 个文件 30 处）。
-- 【对照】Jarvis 在日志上反而更落地：hub 每个响应带 `X-Request-Id`、App 可传 `X-Client-Request-Id`、hub 只记失败和慢请求且不记 query/body/token、App 的 5xx 提示带请求 ID（`JV:docs/server.md:95-97`）。所以日志不是要从 removed 抄的东西；可借的只有它文档里"日志字段 = 模块、连接/作用域 ID、请求 ID、阶段、耗时、错误分类"的规范，用于客户端本地诊断日志。
+- 【对照】Persona 在日志上反而更落地：hub 每个响应带 `X-Request-Id`、App 可传 `X-Client-Request-Id`、hub 只记失败和慢请求且不记 query/body/token、App 的 5xx 提示带请求 ID（`JV:docs/server.md:95-97`）。所以日志不是要从 removed 抄的东西；可借的只有它文档里"日志字段 = 模块、连接/作用域 ID、请求 ID、阶段、耗时、错误分类"的规范，用于客户端本地诊断日志。
 - 推送（主机直连 APNs，可选）：载荷只含通用文案 + 随机订阅/事件 ID，不含主机名/项目/会话 ID/正文，点开后经已认证通道取详情并核对身份；"完成"事件发出前先做只读核验（Herdr 的简略状态可能把还在等提问的会话报成 done）（`BH:docs/HERDR_PUSH.md:5-9,72-78`）。
 
 ---
@@ -196,7 +196,7 @@
 
 ---
 
-## 8. Jarvis 现状对照（只列与上面直接相关的事实）
+## 8. Persona 现状对照（只列与上面直接相关的事实）
 
 - 单 App target + `Shared/`，41.8K 行 Swift；`SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor`（`JV:ios/project.yml`）。全局单例 `AppModel.shared` 持有机器、会话、交互、每会话 ChatStore、草稿、outbox（`JV:ios/Jarvis/App/AppModel.swift:8-70`，998 行）；`APIClient` 一个 755 行大类（`JV:ios/Shared/APIClient.swift`）。
 - outbox / 草稿 / 快照都经 `StateCache` 写在 **Caches** 目录、`try?` 吞错、detached 写、解码失败当空、键名全局不分 hub（`JV:ios/Shared/StateCache.swift:3-24`；`JV:ios/Jarvis/App/Outbox.swift:73-93`；`JV:ios/Jarvis/App/SendSafety.swift:49-62`）。另有约 139 处 `UserDefaults.standard`。
@@ -209,120 +209,120 @@
 
 ---
 
-## 9. A) 强烈建议 Jarvis 借鉴（全部为【判断】，证据见括号）
+## 9. A) 强烈建议 Persona 借鉴（全部为【判断】，证据见括号）
 
-每条格式：是什么 → removed 在哪 → 迁到 Jarvis 解决什么 → Android 怎么对应。
+每条格式：是什么 → removed 在哪 → 迁到 Persona 解决什么 → Android 怎么对应。
 
 **A1. 编译期强制的分层：Contracts / Client / Feature / DesignSystem / App 组合根**
 - 是什么：领域模型和窄协议放纯 Contracts 模块；实现（HTTP/WS、DTO 映射）放 Client；页面模型+视图放 Feature，Feature 只依赖 Contracts；只有 App 同时看得到实现和页面并负责注入。跨 Feature 只走有类型的引用或 App 注入的闭包。
 - removed：`Package.swift:43-83`；`docs/ARCHITECTURE.md:45,109-121`；`App/removedApp.swift:255-270`。
-- Jarvis 解决：现在 View 和逻辑都挂在 `AppModel.shared` 单例和 755 行的 `APIClient` 上，页面模型无法脱离单例测试，也没法给 Android 一份"该有哪些接口"的清单。分层后 Contracts 本身就是 iOS/Android 共同的接口规格。
-- 粒度建议：不要照搬 39 个 target，Jarvis 8–10 个模块足够（Core 契约、Hub 客户端、存储、DesignSystem、Agents、Assistant、Inbox、Terminal、Machines、Settings）。
-- Android：Gradle 多模块；`:core:contracts` 用纯 Kotlin/JVM 模块（不依赖 Android，可直接 JVM 单测），`:core:hub`（Ktor/OkHttp + kotlinx.serialization）、`:feature:*` 只 `implementation(project(":core:contracts"))`，`:app` 组装（Hilt 或手写组合根）。导航用 Navigation Compose 的类型安全路由（`@Serializable` 路由类），对应 removed 的值式路由枚举——也顺手避开 Jarvis CLAUDE.md 里"视图式/值式 NavigationLink 混用"的坑。
+- Persona 解决：现在 View 和逻辑都挂在 `AppModel.shared` 单例和 755 行的 `APIClient` 上，页面模型无法脱离单例测试，也没法给 Android 一份"该有哪些接口"的清单。分层后 Contracts 本身就是 iOS/Android 共同的接口规格。
+- 粒度建议：不要照搬 39 个 target，Persona 8–10 个模块足够（Core 契约、Hub 客户端、存储、DesignSystem、Agents、Assistant、Inbox、Terminal、Machines、Settings）。
+- Android：Gradle 多模块；`:core:contracts` 用纯 Kotlin/JVM 模块（不依赖 Android，可直接 JVM 单测），`:core:hub`（Ktor/OkHttp + kotlinx.serialization）、`:feature:*` 只 `implementation(project(":core:contracts"))`，`:app` 组装（Hilt 或手写组合根）。导航用 Navigation Compose 的类型安全路由（`@Serializable` 路由类），对应 removed 的值式路由枚举——也顺手避开 Persona CLAUDE.md 里"视图式/值式 NavigationLink 混用"的坑。
 
 **A2. 窄能力协议 + 运行时能力探测**
 - 是什么：不是一个"全能 client"，而是 `SessionsReading`、`MessageSending`、`InteractionResolving`… 多个小协议，同一个实现类全部实现；可选能力用 `as? any XManaging` 探测，模型据此决定按钮是否出现。
 - removed：`SSHAgentBridgeClient.swift:5`；`LarkDoNotDisturbModel.swift:96,143`；`removedApp.swift:427`。
-- Jarvis 解决：拆掉 `APIClient` 大类；每个页面模型的 fake 只需实现 2–3 个方法，测试聚焦；"这个 hub 版本支持不支持某功能"也能落在同一机制里（实现类按 hub features 决定是否符合/返回 unsupported）。
+- Persona 解决：拆掉 `APIClient` 大类；每个页面模型的 fake 只需实现 2–3 个方法，测试聚焦；"这个 hub 版本支持不支持某功能"也能落在同一机制里（实现类按 hub features 决定是否符合/返回 unsupported）。
 - Android：Kotlin `interface` + 一个 `HubClient` 类实现多个接口；DI 按接口类型提供。
 
 **A3. 写操作统一"三态 + 写前日志 + 只读核对"，但用一个通用 journal**
 - 是什么：有副作用的写（发消息、新建/中断/结束会话、改模式、回答审批、发飞书/邮件回复、交给 AI）都带客户端生成的 op id；先持久化 pending（op id、目标完整身份、载荷摘要、草稿版本），再派发；回执先落盘再清；传输层错误一律 unknown；恢复只按 op id 查询；用户可"结束提醒"并留历史。
 - removed：`LarkDoNotDisturbJournal.swift:4-51,147-177`；`AgentLocalStateStore.swift:106-108,278-318`；`SSHAgentBridgeClient.swift:350-360`；`docs/ARCHITECTURE.md:259,321-325`。
-- Jarvis 解决：outbox 现在在 Caches（会被系统清）、解码失败当空、网络中断也自动重发、"是否已送达"靠文本模糊匹配；已核对的中断、切换模式等写操作出错时只弹错误（`JV:ios/Jarvis/App/AppModel.swift:717-739`），没有统一的 unknown 语义（收件箱回复、邮件/飞书发送、新建会话未逐一核对）。改为一个泛型 `OperationJournal<Op>`（removed 手写了 31 个、4,088 行，正是要避免的）。
+- Persona 解决：outbox 现在在 Caches（会被系统清）、解码失败当空、网络中断也自动重发、"是否已送达"靠文本模糊匹配；已核对的中断、切换模式等写操作出错时只弹错误（`JV:ios/Jarvis/App/AppModel.swift:717-739`），没有统一的 unknown 语义（收件箱回复、邮件/飞书发送、新建会话未逐一核对）。改为一个泛型 `OperationJournal<Op>`（removed 手写了 31 个、4,088 行，正是要避免的）。
 - Android：Room 表 `pending_ops(id, scope, kind, target_json, payload_digest, phase, created_at)` 或 `AtomicFile` 存 `filesDir`；页面用 Flow 观察；**不要**用 WorkManager 自动重放 unknown，只对"明确未发出"的 waiting 项排重试。
 
 **A4. 服务端持久幂等回执（removed 的 `once()`），让客户端可以安全自动重试**
 - 是什么：服务端以 op id 原子建回执（含 method+params 摘要）；同 id 不同摘要拒绝；未完成返回 unknown 且不再执行；已完成原样返回；只有"可证明没执行"的错误记为已完成错误；提供只读 `status(op id)`，可凭部分进度证据结案。
 - removed：`host/removed-bridge/src/controller.mjs:581-631,754-806`；`docs/ADR-001-SSH-EXEC.md:11`。
-- Jarvis 解决：node 的 `sentLog` 只在内存、10 分钟、无摘要校验，重新部署后重试可能把同一句话打两遍。Jarvis 有常开 hub + Postgres，可以把回执落库（node 侧也落盘），再加 `GET /api/v1/ops/{id}`。**这是 Jarvis 比 removed 有利的地方**：removed 改不了上游，只能"未知就不重发、让人核对"；Jarvis 能把服务端幂等做实，于是客户端可以对 unknown 自动重试同一个 op id，体验更好、也更安全。
+- Persona 解决：node 的 `sentLog` 只在内存、10 分钟、无摘要校验，重新部署后重试可能把同一句话打两遍。Persona 有常开 hub + Postgres，可以把回执落库（node 侧也落盘），再加 `GET /api/v1/ops/{id}`。**这是 Persona 比 removed 有利的地方**：removed 改不了上游，只能"未知就不重发、让人核对"；Persona 能把服务端幂等做实，于是客户端可以对 unknown 自动重试同一个 op id，体验更好、也更安全。
 - Android：同一协议，零额外设计。
 
 **A5. 作用域 + 代次（generation）贯穿凭据、缓存、草稿、日志和异步结果**
 - 是什么：连接有稳定 ID，改地址/身份就 generation+1；凭据引用 = ID + 地址摘要；所有本地数据按"连接 → 账号 → 会话"分区；每个异步结果落地前比对 generation/owner；传输层 `scopedCommands()` 拒绝跨重连的旧请求；子模型带 `isValid` 闭包。
 - removed：`Connections.swift:55-73,133-137`；`ConnectionModel.swift:67-86`；`HostTransport.swift:125-132`；`removedApp.swift:404-437`；`docs/ARCHITECTURE.md:228,317`。
-- Jarvis 解决：`StateCache` 键名全局（"dev"、"outbox"、"drafts"），重新配对到另一台 hub、或以后多 hub/多设备凭据时会串数据；hub 重装后旧快照也会冒充新数据。建议 hub 生成实例 UUID（`hub_id`），App 用 `hub_id + 配对 generation` 做所有本地数据的前缀，配对变化时整体丢弃旧作用域的任务与缓存。
+- Persona 解决：`StateCache` 键名全局（"dev"、"outbox"、"drafts"），重新配对到另一台 hub、或以后多 hub/多设备凭据时会串数据；hub 重装后旧快照也会冒充新数据。建议 hub 生成实例 UUID（`hub_id`），App 用 `hub_id + 配对 generation` 做所有本地数据的前缀，配对变化时整体丢弃旧作用域的任务与缓存。
 - Android：同样的 scope 前缀；`viewModelScope` 之外的长任务挂在"作用域对象"的 `CoroutineScope` 上，换作用域时 `cancel()`。
 
 **A6. 统一的页面模型并发规范**
 - 是什么：`@MainActor @Observable final class` 页面模型 + actor 服务；await 前捕获 revision，回来先校验；模型持有并负责取消自己的 Task；忙时刷新合并为一次补读；多个页面共享一个观察任务（引用计数）；有界并发；进后台暂停观察；有界流 + 溢出即全量重读。
 - removed：`LarkDoNotDisturbModel.swift:90-123,199-229`；`AgentWorkspaceModel.swift:1933-1973,2025-2054`；`AgentFleetModel.swift:52-100`；`LarkRealtimeClient.swift:8-30`；`docs/ARCHITECTURE.md:204-210`。
-- Jarvis 解决：Jarvis 已有很多零散经验（CLAUDE.md 里一堆"迟到结果覆盖新状态""返回页面 .task 重跑"的坑），缺的是写进模板的统一规范；新架构把这些固化成基类/辅助类型（如 `Revision`、`CoalescedRefresh`、`SharedObservation`）。
+- Persona 解决：Persona 已有很多零散经验（CLAUDE.md 里一堆"迟到结果覆盖新状态""返回页面 .task 重跑"的坑），缺的是写进模板的统一规范；新架构把这些固化成基类/辅助类型（如 `Revision`、`CoalescedRefresh`、`SharedObservation`）。
 - Android：`ViewModel` + `StateFlow`；`Job` 字段 + `cancel()`；`Mutex`/`limitedParallelism(1)` 代替 actor；`conflate()` / `buffer(n, DROP_OLDEST)` 代替 `bufferingNewest`；`repeatOnLifecycle(STARTED)` 代替 scenePhase；revision 守卫写法一致。
 
 **A7. "意图 + 确认 token"两步提交**
 - 是什么：`prepare()` 生成带 UUID 的确认对象并记下当时的 revision/草稿 id；`process(confirmation)` 发现任一已变化就不派发。旧弹窗、旧通知按钮无法提交过期决定。
 - removed：`LarkDoNotDisturbModel.swift:134-198`；测试 `DoNotDisturbModelTests.swift:28-34`。
-- Jarvis 解决：审批/计划批准、"清空并发送"（`SendSafety.swift` 的 sendRefusal）、删除排队消息、通知里的快捷按钮都是二次确认场景，都可能在弹窗期间状态已变（电脑上已处理、草稿已变）。
+- Persona 解决：审批/计划批准、"清空并发送"（`SendSafety.swift` 的 sendRefusal）、删除排队消息、通知里的快捷按钮都是二次确认场景，都可能在弹窗期间状态已变（电脑上已处理、草稿已变）。
 - Android：ViewModel 里同样的 token；Compose 对话框只持有 token。
 
 **A8. 双向能力协商 + 版本化**
 - 是什么：hello 带协议主版本（不兼容就明确提示升级，而不是表现为网络错误）、组件版本与能力；能力分主机级/会话级；**客户端在请求里声明自己理解的类型**，服务端不给旧客户端发它解不了的卡片；缺能力时只关相关功能，保留草稿并提示升级。
 - removed：`AgentRuntime.swift:3-18,38-47`；`SSHAgentBridgeClient.swift:78-86,158-164,192-226`；`docs/ARCHITECTURE.md:297-309,662,813`。
-- Jarvis 解决：目前只有 hub→App 的 features。iOS 与 Android 两个客户端、各自多个版本并存后，hub 需要知道对端能力（新交互类型、新消息块、新工具卡）才能降级（比如对旧客户端把新交互渲染成"去终端处理"）。建议 WS hello 与 HTTP 头都带 `client_platform/client_version/client_features`。
+- Persona 解决：目前只有 hub→App 的 features。iOS 与 Android 两个客户端、各自多个版本并存后，hub 需要知道对端能力（新交互类型、新消息块、新工具卡）才能降级（比如对旧客户端把新交互渲染成"去终端处理"）。建议 WS hello 与 HTTP 头都带 `client_platform/client_version/client_features`。
 - Android：同协议。
 
 **A9. 宽容解码 + 可见占位**
 - 是什么：可选增强字段坏了只丢这个字段（`try?`），不让整条消息/整页解码失败；未知块保留可见占位并能看原文。
 - removed：`AgentRuntime.swift:80-112`；`docs/ARCHITECTURE.md:281`。
-- Jarvis 解决：transcript 解析产物字段越来越多（工具结果、任务、图片），Codable 一个字段类型不符就整页报错；Android 新客户端更容易遇到"新 hub 发了新字段"。
+- Persona 解决：transcript 解析产物字段越来越多（工具结果、任务、图片），Codable 一个字段类型不符就整页报错；Android 新客户端更容易遇到"新 hub 发了新字段"。
 - Android：kotlinx.serialization `Json { ignoreUnknownKeys = true; coerceInputValues = true }`，增强字段先收 `JsonElement` 再 `runCatching { decode }`。
 
 **A10. 类型化错误 + 多维连接状态 + 真实里程碑**
 - 是什么：网络层错误归一为 DNS/拒绝/不可达/超时/认证/证书/不兼容；建连超时与请求超时分开（后者可能已执行写）；业务错误只看服务端错误码，不匹配文案；状态分"传输 / 认证 / 服务就绪 / 同步"多维，每个都有可执行入口；进度只报真实阶段。
 - removed：`Connections.swift:273-290`；`HTTPTransport.swift:137-147`；`HostTransport.swift:22-49`；`SSHConnectionFailure.swift:11-53`；`HostConnectionStage.swift:3-6`；`AgentWorkspaceModel.swift:9`；`docs/ARCHITECTURE.md:235-237,783-787`。
-- Jarvis 解决：`isTimeoutText(api.message)` 靠文案；建议 hub 所有错误统一 `{code, message, retryable, delivered}`，客户端只认 code；ConnectionStatus 之外再加按机器（node 离线/版本不匹配/herdr 未就绪/Claude 未登录）和按数据源（飞书登录过期、邮箱授权失效）的状态。
+- Persona 解决：`isTimeoutText(api.message)` 靠文案；建议 hub 所有错误统一 `{code, message, retryable, delivered}`，客户端只认 code；ConnectionStatus 之外再加按机器（node 离线/版本不匹配/herdr 未就绪/Claude 未登录）和按数据源（飞书登录过期、邮箱授权失效）的状态。
 - Android：`UnknownHostException`→DNS、`ConnectException`→拒绝、`NoRouteToHostException`→不可达、`SocketTimeoutException`→超时、`SSLHandshakeException`→证书、HTTP 401/403→认证，统一成 sealed class。
 
 **A11. 本地持久化"安全失败"规则**
 - 是什么：关键记录（journal、草稿）不可读时保留原文件、阻止新的写操作，绝不自动换成空；envelope 带版本，新版读旧版、旧版拒绝覆盖新版；原子写 + 文件保护 + 0600；只删可证明无引用的文件，遇到不可读引用就放弃 GC。
 - removed：`LarkOutgoingJournal.swift:61-72,85-87,109-114`；`AgentLocalStateStore.swift:62-73,144-263`；`docs/ARCHITECTURE.md:67,323,479`。
-- Jarvis 解决：`StateCache` 全部 `try?`、无版本号、在 Caches；草稿和 outbox 应移到 Application Support（缓存类快照仍可在 Caches）。
+- Persona 解决：`StateCache` 全部 `try?`、无版本号、在 Caches；草稿和 outbox 应移到 Application Support（缓存类快照仍可在 Caches）。
 - Android：`AtomicFile` 写 `filesDir`（关键数据）/ `cacheDir`（可丢缓存）；Room 自带事务与 migration；envelope 里带 `version`。
 
 **A12. 可测性设计：四件套测试 + 闸门式假实现 + 契约 fixture**
 - 是什么：每个能力写 Client / Journal / Model / Workspace 四类测试；假实现是 actor，用 continuation 闸门 hold/release，确定性制造迟到、取消、切账号、"已应用但回 503"，不靠 sleep；真实协议的回环集成测试；跨语言共享同一测试向量。
 - removed：第 7 节；`DoNotDisturbModelTests.swift:241-300`；`SSHIntegrationTests.swift:21-60`；`prompt-queue.test.mjs:51` ↔ `AgentPromptQueueTests.swift:53`。
-- Jarvis 解决：iOS 测试约 4.7K 行，模型绑单例难测。建议：hub 的 Go 测试产出 golden JSON（契约 fixture，放 `testdata/contract/`），Swift 和 Kotlin 测试都解码同一批文件，作为两端对齐的硬约束；`mock_hub.py` 增加"已应用但丢回执"的故障开关（对应 removed 的 `DebugAgentReplyFault`、fixture 的 `applied503`）。
+- Persona 解决：iOS 测试约 4.7K 行，模型绑单例难测。建议：hub 的 Go 测试产出 golden JSON（契约 fixture，放 `testdata/contract/`），Swift 和 Kotlin 测试都解码同一批文件，作为两端对齐的硬约束；`mock_hub.py` 增加"已应用但丢回执"的故障开关（对应 removed 的 `DebugAgentReplyFault`、fixture 的 `applied503`）。
 - Android：`kotlinx-coroutines-test` 的 `runTest` + `StandardTestDispatcher`，假实现里用 `CompletableDeferred` 当闸门；契约 fixture 放共享目录由 Gradle 测试读取。
 
 **A13. 接口 → UI 的对齐清单（由脚本生成 + 人工注释）**
 - 是什么：脚本从服务端源码枚举所有 API 入口，生成表格，再叠加人工维护的"客户端在哪里用、范围到哪"注释；未注释 = 未核查，不等于不需要。
 - removed：`docs/audits/API_UI_MAP.md:1-9`；`scripts/audit-lark-connector.mjs`；`docs/audits/ios-api-mappings.json`。
-- Jarvis 解决：复刻 Android 版最大的风险是"iOS 有、Android 漏了"。从 hub 的 Go 路由表 + WS 事件类型生成清单，每项标注 iOS / Android 的接入位置和状态，就是 Android 对齐的验收表。
+- Persona 解决：复刻 Android 版最大的风险是"iOS 有、Android 漏了"。从 hub 的 Go 路由表 + WS 事件类型生成清单，每项标注 iOS / Android 的接入位置和状态，就是 Android 对齐的验收表。
 - Android：同一张表的另一列。
 
 **A14. 敏感值防泄露的 description**
 - 是什么：含账号/令牌/正文的值类型把 `description/debugDescription/customMirror` 重写为 `<redacted>`，日志、断言失败输出、崩溃报告不会意外打印。
 - removed：`DoNotDisturb.swift:55-57,81-83`（Sources 内 11 个文件 30 处）。
-- Jarvis 解决：Jarvis 有"不提交内网/个人信息"的硬规定和隐私扫描；运行期日志也应同样防护（hub token、设备凭据、飞书/邮件正文）。
+- Persona 解决：Persona 有"不提交内网/个人信息"的硬规定和隐私扫描；运行期日志也应同样防护（hub token、设备凭据、飞书/邮件正文）。
 - Android：data class 重写 `toString()`。
 
 **A15（可选）. 推送最小载荷 + 状态跃迁核验后再通知**
 - 是什么：推送只带通用文案 + 随机 ID，点开后经认证通道拉详情并核对身份；"完成"类通知发出前做一次只读核验，防止把仍在等用户回答的会话报成完成。
 - removed：`docs/HERDR_PUSH.md:5-9,72-78`。
-- Jarvis 解决：Jarvis 推送里有会话名和回复正文（`JV:docs/ios.md:258`），锁屏可见；可做成"锁屏隐私"选项。完成判定的核验是否已有，见第 12 节待确认。
+- Persona 解决：Persona 推送里有会话名和回复正文（`JV:docs/ios.md:258`），锁屏可见；可做成"锁屏隐私"选项。完成判定的核验是否已有，见第 12 节待确认。
 - Android：FCM data message 同样只带 ID，点开后拉详情。
 
 ---
 
-## 10. B) removed 里过度设计 / 不适合 Jarvis 的地方（【判断】）
+## 10. B) removed 里过度设计 / 不适合 Persona 的地方（【判断】）
 
-前提差异：removed 手机直连不可改的上游（lark-connector）和用户的主机（SSH），没有常开中转；Jarvis 手机只连自己写的 hub，hub 常开、有 Postgres、负责推送和状态存储，且 hub/node 代码同仓可改。
+前提差异：removed 手机直连不可改的上游（lark-connector）和用户的主机（SSH），没有常开中转；Persona 手机只连自己写的 hub，hub 常开、有 Postgres、负责推送和状态存储，且 hub/node 代码同仓可改。
 
-- **B1. 手机侧第二套持久队列与人工核对体系**：removed 的手机 prompt outbox + 主机 SQLite 持久队列（queued/claimed/executing/confirming/submitted/cancelled/rejected、lease、墓碑、用户服务监督）（`docs/HERDR_PROMPT_QUEUE.md`）是因为没有中转。Jarvis 只需"把消息可靠交给 hub"（hub 落库即 accepted），排队/投递/重试/核对放 hub+node；手机端 journal 只覆盖"交给 hub 之前"这一段。
-- **B2. 每个操作一个手写 journal、一个超大工作区模型**：31 个 journal、4,088 行，App 持有约 30 个 journal，`LarkMessagingModel` 3,846 行、init 约 38 个参数（`removedApp.swift:46-84,298-308`）。Jarvis 的设置类写操作（通知偏好、置顶、模式）由 hub 存，丢回执重读即可，不需要 journal；高风险写操作用一个泛型 journal；子模型由"作用域容器"懒创建。
-- **B3. 每次写前后各读一次账号 + 写前重读比对 + 上游 oracle 测试**：因为上游没有 CAS、幂等键和原子账号绑定（`docs/ARCHITECTURE.md:430,486,511,527`）。Jarvis 能改 hub：服务端直接做 CAS（version / If-Match）、幂等键、token 绑定设备，客户端省掉多次往返。
-- **B4. SSH/PTY/私钥库/主机指纹/跳板机/vendor 补丁 Citadel/主机组件安装器与版本矩阵**：Jarvis 手机不碰 SSH（node 在 hub 侧经 SSH 接电脑），这些整块不需要；对应物只是配对 token 和设备凭据。
-- **B5. 轮询式观察**：会话列表每 5 秒、会话页每 1 秒、多主机每 8 秒轮询 + 共享轮询任务（`AgentWorkspaceModel.swift:901-905,1933`；`AgentFleetModel.swift:67-72`），是因为 SSH exec 没有推送通道（`docs/ADR-001-SSH-EXEC.md:9`）。Jarvis 已有 WebSocket + rev + after_seq 增量，不要退回轮询；只借"前台才观察、多页面共享一个订阅"的思想。
-- **B6. 每种工具一个强类型结构 + 一个专用视图**：`AgentBlock` 挂了 20 多种 `AgentRecorded*` 可选结构（`AgentRuntime.swift:49-112`），每种在 iOS 有专门视图。"解析放服务端"的原则对（Jarvis 已在 node/hub 解析 transcript），但两端各实现一遍 20 多种卡片成本翻倍；建议 hub 输出较通用的块模型（标题/键值字段/代码/差异/图片/表格），客户端用少数通用组件渲染，个别高价值卡片再特化。
-- **B7. 过细的 target 与单一超大测试 target、文档承诺未落地**：39 个 target，`HerdrRuntime` 10 行未被使用，`CompositionRoot.swift` 不存在，结构化日志基本没实现（第 1.4、5 节）。Jarvis 取 8–10 个模块，测试按模块分 target；文档只写已落地的结构。
-- **B8. 极端防御式校验**：逐字段 UTF-8 字节上限、控制字符过滤、手写时间戳解析、逐字节相等、SHA-256 scope key、fsync 目录、lstat 校验文件属主（`LarkDoNotDisturbClient.swift:90-116`；`AgentLocalStateStore.swift:197-263`）。面对不可信主机/上游合理；Jarvis 客户端只信任自己的 hub，校验集中在 hub 边界 + 契约测试，客户端保留大小/数量上限即可。
-- **B9. 文档写法**：ARCHITECTURE.md 后半 400 多行是逐功能实现细节和每轮回归数字（如 `docs/ARCHITECTURE.md:452,462,498,517,535`），架构主线被淹没。Jarvis 现在"主题文档 + CLAUDE.md 经验"的组织更好；可借的是"真实环境 / 自动化 / 隔离模拟器"三类证据分开写。
+- **B1. 手机侧第二套持久队列与人工核对体系**：removed 的手机 prompt outbox + 主机 SQLite 持久队列（queued/claimed/executing/confirming/submitted/cancelled/rejected、lease、墓碑、用户服务监督）（`docs/HERDR_PROMPT_QUEUE.md`）是因为没有中转。Persona 只需"把消息可靠交给 hub"（hub 落库即 accepted），排队/投递/重试/核对放 hub+node；手机端 journal 只覆盖"交给 hub 之前"这一段。
+- **B2. 每个操作一个手写 journal、一个超大工作区模型**：31 个 journal、4,088 行，App 持有约 30 个 journal，`LarkMessagingModel` 3,846 行、init 约 38 个参数（`removedApp.swift:46-84,298-308`）。Persona 的设置类写操作（通知偏好、置顶、模式）由 hub 存，丢回执重读即可，不需要 journal；高风险写操作用一个泛型 journal；子模型由"作用域容器"懒创建。
+- **B3. 每次写前后各读一次账号 + 写前重读比对 + 上游 oracle 测试**：因为上游没有 CAS、幂等键和原子账号绑定（`docs/ARCHITECTURE.md:430,486,511,527`）。Persona 能改 hub：服务端直接做 CAS（version / If-Match）、幂等键、token 绑定设备，客户端省掉多次往返。
+- **B4. SSH/PTY/私钥库/主机指纹/跳板机/vendor 补丁 Citadel/主机组件安装器与版本矩阵**：Persona 手机不碰 SSH（node 在 hub 侧经 SSH 接电脑），这些整块不需要；对应物只是配对 token 和设备凭据。
+- **B5. 轮询式观察**：会话列表每 5 秒、会话页每 1 秒、多主机每 8 秒轮询 + 共享轮询任务（`AgentWorkspaceModel.swift:901-905,1933`；`AgentFleetModel.swift:67-72`），是因为 SSH exec 没有推送通道（`docs/ADR-001-SSH-EXEC.md:9`）。Persona 已有 WebSocket + rev + after_seq 增量，不要退回轮询；只借"前台才观察、多页面共享一个订阅"的思想。
+- **B6. 每种工具一个强类型结构 + 一个专用视图**：`AgentBlock` 挂了 20 多种 `AgentRecorded*` 可选结构（`AgentRuntime.swift:49-112`），每种在 iOS 有专门视图。"解析放服务端"的原则对（Persona 已在 node/hub 解析 transcript），但两端各实现一遍 20 多种卡片成本翻倍；建议 hub 输出较通用的块模型（标题/键值字段/代码/差异/图片/表格），客户端用少数通用组件渲染，个别高价值卡片再特化。
+- **B7. 过细的 target 与单一超大测试 target、文档承诺未落地**：39 个 target，`HerdrRuntime` 10 行未被使用，`CompositionRoot.swift` 不存在，结构化日志基本没实现（第 1.4、5 节）。Persona 取 8–10 个模块，测试按模块分 target；文档只写已落地的结构。
+- **B8. 极端防御式校验**：逐字段 UTF-8 字节上限、控制字符过滤、手写时间戳解析、逐字节相等、SHA-256 scope key、fsync 目录、lstat 校验文件属主（`LarkDoNotDisturbClient.swift:90-116`；`AgentLocalStateStore.swift:197-263`）。面对不可信主机/上游合理；Persona 客户端只信任自己的 hub，校验集中在 hub 边界 + 契约测试，客户端保留大小/数量上限即可。
+- **B9. 文档写法**：ARCHITECTURE.md 后半 400 多行是逐功能实现细节和每轮回归数字（如 `docs/ARCHITECTURE.md:452,462,498,517,535`），架构主线被淹没。Persona 现在"主题文档 + CLAUDE.md 经验"的组织更好；可借的是"真实环境 / 自动化 / 隔离模拟器"三类证据分开写。
 
 ---
 
-## 11. 可直接用于 Jarvis 新设计的结论（【判断】）
+## 11. 可直接用于 Persona 新设计的结论（【判断】）
 
 1. 分层：`Contracts`（纯模型+窄协议，iOS 用 SPM target、Android 用纯 Kotlin 模块，两端命名一一对应）→ `HubClient`（唯一知道 HTTP/WS 的地方）→ `Store`（本地持久化）→ `Feature*`（只依赖 Contracts）→ `App`（组合根 + 作用域容器）。
 2. 作用域：`HubScope(hub_id, pairing_generation)` 持有该作用域内的 client、store、子模型与所有长任务；重新配对 = 丢弃整个 scope。
@@ -338,11 +338,11 @@
 ## 12. 没查清 / 待确认
 
 1. 没有通读 `AgentWorkspaceModel.swift`（2,539 行）、`LarkMessagingModel.swift`（3,846 行）和 `LarkSendQueue` 全部代码；发送队列状态机的细节以文档为准（`BH:docs/ARCHITECTURE.md:321-323,366-368,475-477`），代码只核对了 `LarkOutgoingJournal` 的数据结构与版本处理。
-2. 没看 TerminalUI 的"有界输入队列 + 不可逆就绪/关闭状态"实现，只有文档描述（`BH:docs/ADR-001-SSH-EXEC.md:24`）。Jarvis 手机不直连 PTY，影响小。
+2. 没看 TerminalUI 的"有界输入队列 + 不可逆就绪/关闭状态"实现，只有文档描述（`BH:docs/ADR-001-SSH-EXEC.md:24`）。Persona 手机不直连 PTY，影响小。
 3. 这些机制在真机/真实账号上的效果未知：removed 自己写明大量真机与真实账号场景仍待验收（`BH:README.md:3,157`；`BH:docs/VALIDATION.md`「尚待验收」）。本文只评价设计与代码结构。
 4. 未构建、未运行任何测试（按要求不跑 swift test / xcodebuild）；`@Test` 数量是静态计数，参数化测试实际用例会更多。
 5. 模块化对编译速度、增量构建的影响：没有实测，不给任何数字。
-6. Jarvis 侧待确认：
+6. Persona 侧待确认：
    - 收件箱"交给 AI"/回复发送、邮件与飞书发送、新建会话等写操作的重试与幂等语义没有逐一核对；
    - hub 的完成推送 `settle`（`JV:server/internal/hub/notify.go:222-255`）在最后时刻检查了 working/seen/muted/后台任务，但是否会把"TUI 里有提问/授权菜单、但没有被 hook 拦下"的会话判成完成，需要结合会话状态来源确认（removed 在 Herdr 上遇到过：简略状态把等待提问的会话报成 done，`BH:docs/HERDR_PUSH.md:72-78`）。
 7. Android 对应关系是按通用 Android 实践给出的映射（Gradle 多模块、ViewModel/StateFlow、Room/AtomicFile、Keystore、kotlinx.serialization、coroutines-test），未在任何 Android 代码上验证。

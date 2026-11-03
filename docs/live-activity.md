@@ -33,7 +33,7 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 
 ### 和其他 App 共用灵动岛（2026-11-02）
 
-用户的截图：另一个 App 也有实时活动（右边单独一个圆「8分」），Jarvis 只剩左边一截「⚙4📊⁚」，后半截被截掉。
+用户的截图：另一个 App 也有实时活动（右边单独一个圆「8分」），Persona 只剩左边一截「⚙4📊⁚」，后半截被截掉。
 
 **规则**（iOS 27；Apple 的 Displaying live data with Live Activities 和 HIG Live Activities 2026-10 更新，模拟器实测）
 
@@ -69,7 +69,7 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 - 按数量选样子，不用 `ViewThatFits`：非限宽时系统不给宽度（视图拿到的是「要多宽给多宽」），`ViewThatFits` 永远选第一个。
 - 尺寸都在 `IslandMetrics`（`apple/Shared/Design/IslandMetrics.swift`，扩展也编译）：限宽 28、图形可用 24（圆里一行字的宽度）、
   最小态 45 / 内容 35、紧凑一侧最多约 94，以及符号和数字的字号。
-- 设置页加了「和其他 App 共用时」的预览（`IslandSharedPreview`）：贴着摄像头的是 Jarvis 的图形，右边灰色的圆代表别的 App。
+- 设置页加了「和其他 App 共用时」的预览（`IslandSharedPreview`）：贴着摄像头的是 Persona 的图形，右边灰色的圆代表别的 App。
 
 **实测**（iOS 27 模拟器，每台各拍单独 / 并存 / 横屏）
 
@@ -89,8 +89,8 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 - 计时在手机本地走（`Text(timerInterval:)`），起点是 hub 记的这一轮开始时间（`turnTracker`），不为计时推送。
 - 锁屏默认只显示数量和「有个授权等你」这类不带名字的一行；设置 › 通知 › 锁屏显示详情 打开后才显示 Agent 名字和内容（按设备存，`prefs.lock_details`，
   hub 推给每台设备时填进 `details`）。灵动岛只在解锁时可见，总是显示详情。
-- 视觉：Jarvis 的状态色（不跟随界面风格，扩展读不到）；描边和「允许 / 批准」按钮是系统蓝，和 App 的主色一致。锁屏和展开态都限高约 160pt，所以最多两条。
-  左边是 Jarvis 的形象（见下面「形象」），2026-11-02 以前是 App 图标的珊瑚四角星。
+- 视觉：Persona 的状态色（不跟随界面风格，扩展读不到）；描边和「允许 / 批准」按钮是系统蓝，和 App 的主色一致。锁屏和展开态都限高约 160pt，所以最多两条。
+  左边是 Persona 的形象（见下面「形象」），2026-11-02 以前是 App 图标的珊瑚四角星。
 
 ### 形象（2026-11-02 用户要求：「像 Codex 那样」）
 
@@ -127,7 +127,7 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
   写了以后立刻 update 一次活动，不等下一次推送：内容不变，过期时间往后挪 1 秒，免得和正在显示的一模一样被系统当成没变（模拟器实测 3 秒内换过来，不用重开活动）。
   App 每次回到前台也比一次，之前没写进去的这时再写。
   没写过或读不到时画内容里的形象，形象包画默认面罩换成它的颜色；签名里没有 App Group（免费个人团队、漏了 entitlements）就是这样。
-- **形象包（hub 的 `~/.jarvis/personas`，位图）**：App 从 hub 下载了形象包以后，每个状态取一张图，用点状动画的第一帧（「减弱动态效果」时顶栏那个点停住的样子，包里是 144px），
+- **形象包（hub 的 `~/.persona/personas`，位图）**：App 从 hub 下载了形象包以后，每个状态取一张图，用点状动画的第一帧（「减弱动态效果」时顶栏那个点停住的样子，包里是 144px），
   按活动里每种形态的脸的大小各出一张 @3x：紧凑态 22pt（66px）、最小态 / 限宽 24pt（72px）、展开态和锁屏 26pt（78px），从包里的原图直接缩，用高质量插值，PNG 无损。
   不再为字节数降像素（#349：4 KB 的上限是钥匙串时期定的，那时 6 张图挤在一个条目里；build 106 上 36–42px 的图按 26pt 画「还是有点糊」）。头像只在有状态没有帧时才存，用不小于 78px 的那张头像文件缩。
   每张一个文件：`Fleet/faces/<id>_<rev>_3x/<状态>_<pt>.png`、`avatar_<pt>.png`（目录名的 `_3x`：旧版本存的 4 KB 小图会重做），只留当前这个包，换包时整个目录换掉（先写在旁边再挪进来，扩展不会读到两个包各一半）。
@@ -140,7 +140,7 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 
 #### 为什么 build 92 不跟随（2026-11-02）
 
-用户反馈「灵动岛的形象没有跟随设置」，截图是只有 Jarvis 一个活动的紧凑态（右边的「1.7B」是 Jarvis 自己的「今天的 token」，不是别的 App），左边是默认形象 + 系统蓝，也就是扩展读不到钥匙串时的样子。
+用户反馈「灵动岛的形象没有跟随设置」，截图是只有 Persona 一个活动的紧凑态（右边的「1.7B」是 Persona 自己的「今天的 token」，不是别的 App），左边是默认形象 + 系统蓝，也就是扩展读不到钥匙串时的样子。
 
 - **根因**：发 TestFlight 的流程先无签名归档（`CODE_SIGNING_ALLOWED=NO`），再 ad hoc 签名、导出时云签名。无签名时 `$(AppIdentifierPrefix)` 是空的，
   ad hoc 签名又没给扩展带 entitlements：装到手机上的小组件扩展没有任何钥匙串组，App 的组名少了 bundle id，Info.plist 里的组名少了团队前缀。
@@ -303,7 +303,7 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 - 「锁屏和灵动岛」（`prefs.live_activity`，默认开）：关掉时 App 立刻结束活动，hub 不再推这台设备。
 - 「锁屏显示详情」（`prefs.lock_details`，默认关）：改了以后 App 立刻改正在显示的活动，hub 下一次推送也按新的值填 `details`。
 - 两项都存在 hub 上按设备分开（`PUT /api/v1/devices/{id}/prefs`），App 在 UserDefaults 里留一份（`LiveActivityController.settings`），
-  每次回到前台从 hub 同步。系统设置里关掉了 Jarvis 的实时活动时，这一节提示并给「打开系统设置」。
+  每次回到前台从 hub 同步。系统设置里关掉了 Persona 的实时活动时，这一节提示并给「打开系统设置」。
 - 断开 hub（忘记服务器）时结束活动：它的按钮连的是旧 hub。
 - 没做「盯着一个 Agent」的单独活动：Fleet 已经包含每个在跑的 Agent，再开第二个活动会在锁屏上堆两条；有需要再加 `kind: agent`。
 

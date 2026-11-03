@@ -43,7 +43,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
   `security.trusted_cidrs` 或 `access: cidrs` 的 `admin.cidrs`（明确选择：这等于放行所有经端口映射进来的请求）。
   Docker Desktop / OrbStack（开发机上试 Docker 部署）这种所有连接都来自网关的环境，`lan` 下打不开管理界面，可以：
   端口只映射到 `127.0.0.1`（`127.0.0.1:18660:18660`）再把网关写进 `JARVIS_ADMIN_CIDRS`（这时能经映射进来的只有本机）；或用 host 网络；
-  或在 hub 机器上 `docker compose exec hub jarvisd hub admin …` 用命令行管。入口脚本发现像 Docker Desktop / OrbStack
+  或在 hub 机器上 `docker compose exec hub personad hub admin …` 用命令行管。入口脚本发现像 Docker Desktop / OrbStack
   （容器里能解析 `host.docker.internal`）时打印一行这个提示。
   hub 现有的 `sourceOf`（主 token、明文能不能用的判断）有同样的问题，另开 issue 复用 `containerGateway` 修。
 - **转发头只用来收紧**：hub 不靠 `X-Forwarded-For` 放行任何人（同 [network.md](network.md)）；但请求带了 `X-Forwarded-For`、`X-Real-IP` 或 `Forwarded` 时，
@@ -53,7 +53,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
   要么直接拦掉 `/admin` 和 `/api/v1/admin/`。
 - **公网来源一律要 TLS**：`cidrs` 里列了公网网段时，这些来源也只能走 TLS 端口（明文是 403 `tls_required`），密码不在公网上明文传。
 - **只能在 hub 机器上放宽**：网页里只能收窄（`any` → `lan` / `cidrs` / `loopback`，`lan` → `loopback`，`cidrs` → 更小的 `cidrs` / `loopback`）。
-  放宽用命令行 `jarvisd hub admin access <loopback|lan|cidrs|any> [--cidrs a,b]` 或部署脚本（下面「部署时选择」）。
+  放宽用命令行 `personad hub admin access <loopback|lan|cidrs|any> [--cidrs a,b]` 或部署脚本（下面「部署时选择」）。
   网页收窄后如果自己不在新范围里，要先确认（接口不带 `force` 时回 409 `would_lock_you_out`）。
 - **环境变量优先**：设了 `JARVIS_ADMIN_ACCESS`（和 `JARVIS_ADMIN_CIDRS`，逗号分隔）就以它为准、不写回 hub.json（同别的 `JARVIS_*`
   覆盖，[docker.md](docker.md)）；这时网页里不能改，显示「由部署时的 JARVIS_ADMIN_ACCESS 决定」。
@@ -63,11 +63,11 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 
 - **首次设置**：没设过密码时，范围内第一次打开显示「设置管理员密码」。只有按地址就在范围里的来源（`lan` / `cidrs` 放进来的，含本机）
   能做首次设置：`any` 下经 TLS 从公网来的人看到的是「请在 hub 所在的局域网里打开，或在 hub 机器上运行
-  `jarvisd hub admin reset-password`」，不会被抢先设密码。两个人同时设，只有先写进数据库的那个成功。
+  `personad hub admin reset-password`」，不会被抢先设密码。两个人同时设，只有先写进数据库的那个成功。
 - **从本机回环来做首次设置要一次性设置码**：同一台机器上的反向代理（nginx 默认的 `proxy_pass` 不加任何转发头）把公网请求转进来时，
   hub 看到的来源也是 `127.0.0.1`，和坐在 hub 机器前的人分不出来。所以来源是回环（看连接本身的地址，不看头）时，设第一个密码还要填
   设置码：hub 启动时没有密码就在日志里打一行 `admin: first-run setup code XXXX-XXXX`（`journalctl --user -u jarvisd`，Docker 是
-  `docker compose logs hub`），过期了以后有人从回环打开设置页时再打一个新的；也可以在 hub 机器上 `jarvisd hub admin setup-code` 现取
+  `docker compose logs hub`），过期了以后有人从回环打开设置页时再打一个新的；也可以在 hub 机器上 `personad hub admin setup-code` 现取
   （经回环 + 主 token 向运行中的 hub 要）。码是 8 个字符（不含 0 / O / 1 / I，约 40 位随机），10 分钟有效，用一次就失效，只在 hub 内存里
   （重启后作废，启动时会打新的）；填错计入登录限流。局域网来源照旧不用码；设过密码以后登录不受影响。
 - **密码**：至少 8 个字符、最多 256 字节；存 argon2id 哈希（m=19 MiB、t=2、p=1，PHC 格式）到 Postgres 的 `admin_credentials`，
@@ -80,16 +80,16 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
   `same-origin`，带了 `Origin` 时主机名和端口必须和请求的 `Host` 一致。登录、首次设置也查后两条（那时还没有会话）。
 - **限流**：登录（和设置码）失败沿用 `security` 的阈值（`auth_failures` 次 / `auth_window_seconds` 秒，封 `auth_block_seconds` 秒），
   但用一张单独的表、**局域网和本机回环也计数**（密码比设备 token 好猜得多；回环可能是同机反向代理转来的公网请求）。hub 机器的主人
-  因此被锁一会儿时，`jarvisd hub admin …` 照样能用。局域网以外的来源另外共用一个十倍阈值的总额度，防很多地址一起猜。
+  因此被锁一会儿时，`personad hub admin …` 照样能用。局域网以外的来源另外共用一个十倍阈值的总额度，防很多地址一起猜。
   被封时回 429 和 `Retry-After`。管理界面的失败不影响 App 的鉴权计数，反过来也一样。
-- **忘了密码**：在 hub 机器上 `jarvisd hub admin reset-password`：有终端时输两遍新密码（不回显），没终端时从标准输入读一行；
-  `--clear` 清掉密码，回到首次设置。两种都会让所有已登录的会话失效。Docker 里：`docker compose exec hub jarvisd hub admin reset-password`。
+- **忘了密码**：在 hub 机器上 `personad hub admin reset-password`：有终端时输两遍新密码（不回显），没终端时从标准输入读一行；
+  `--clear` 清掉密码，回到首次设置。两种都会让所有已登录的会话失效。Docker 里：`docker compose exec hub personad hub admin reset-password`。
 
 ## 改 hub.json
 
-管理界面改的东西写回 `~/.jarvis/hub.json`：
+管理界面改的东西写回 `~/.persona/hub.json`：
 
-- **原子写**：同目录写临时文件、`fsync`、`rename` 覆盖，权限一律 0600；同一时间只有一个写者（进程内的锁 + 对 `~/.jarvis` 目录加 flock，命令行和 hub 之间也互斥）。
+- **原子写**：同目录写临时文件、`fsync`、`rename` 覆盖，权限一律 0600；同一时间只有一个写者（进程内的锁 + 对 `~/.persona` 目录加 flock，命令行和 hub 之间也互斥）。
 - **保留不认识的字段和顺序**：只改要改的那几个键，别的键（包括这个版本不认识的、别的分支加的）原样保留，顺序不变，缩进统一成两个空格。
 - **环境变量的值不写回**：Docker 的 `JARVIS_PUBLIC_URL` 之类只在内存里覆盖，管理界面改的是文件里的值。
 - **生效**：
@@ -111,7 +111,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | 页面 | 路径 | 内容 |
 | --- | --- | --- |
 | 首次设置 / 登录 | `/admin` | 没设密码时设密码，否则输密码登录 |
-| 概览 | `/admin` | hub 名字（可改）、版本、运行时长、监听 / TLS / 指纹、候选地址、电脑和设备数、「运行检查」（`jarvisd hub doctor` 的结果）；除了本机没有别的电脑时，顶部引导「添加电脑」 |
+| 概览 | `/admin` | hub 名字（可改）、版本、运行时长、监听 / TLS / 指纹、候选地址、电脑和设备数、「运行检查」（`personad hub doctor` 的结果）；除了本机没有别的电脑时，顶部引导「添加电脑」 |
 | 电脑 | `/admin/machines` | 「添加电脑」放在最上面，两种：**电脑来连**（kind link：填 id / 名字，生成 jarvis-link 配对链接，给 Mac / Linux / Windows 的装法）和 **hub 来连**（kind service：粘贴那台 `jarvis-link pair --listen` 打印的链接，可改地址、填 socks5 代理）；不再添加 ssh 电脑。每台的状态（在线 / 离线 / 错误、连接方式、node 版本）和**每条路**（方式、经哪台 hub、能不能用、RTT、哪条在用，[mesh.md](mesh.md)「一台电脑多条路」）；service 电脑的连接器被配给别的 hub 时「重新配对」；重连、删除（只在成员上配的电脑不能在这里删） |
 | 设备 | `/admin/devices` | 设备凭据列表、撤销、生成手机配对二维码；成员 hub 上只提示去中心的管理界面 |
 | 网络与访问 | `/admin/network` | 公网地址 / TLS / 候选地址（可改，重启生效）、`security` 的设置（只读）、管理界面的访问范围（只能收窄）、改管理员密码 |
@@ -130,8 +130,8 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | --- | --- |
 | `GET state` | `{"password_set", "logged_in", "can_setup", "setup_code_required", "csrf", "hub_name", "version", "session_expires_at"}`；`csrf` 只在登录后有 |
 | `POST setup` `{"password", "setup_code"}` | 首次设密码并登录，回 state；409 `already_set`、403 `setup_local_only` / `setup_code_required`、401 `bad_setup_code`、400 `weak_password`、429 `rate_limited` |
-| `POST setup-code` | `jarvisd hub admin setup-code` 用：只认回环 + 主 token，回 `{"code", "expires_at"}`；设过密码 409 `already_set` |
-| `POST reload` | `jarvisd hub admin access` 写完 hub.json 后用：只认回环 + 主 token，重读 `admin` 和 `name` |
+| `POST setup-code` | `personad hub admin setup-code` 用：只认回环 + 主 token，回 `{"code", "expires_at"}`；设过密码 409 `already_set` |
+| `POST reload` | `personad hub admin access` 写完 hub.json 后用：只认回环 + 主 token，重读 `admin` 和 `name` |
 | `POST login` `{"password"}` | 回 state；401 `bad_password`、429 `rate_limited`（`retry_after` 秒） |
 | `POST logout` | 退出 |
 | `POST password` `{"current", "new"}` | 改密码，别的会话全部失效 |

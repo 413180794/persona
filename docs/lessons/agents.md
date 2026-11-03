@@ -7,10 +7,10 @@
 - Claude 输入框里的灰字（预测的下一句、新会话的 `Try "…"`）在纯文本读屏里和用户打的字一模一样：判断有没有草稿要用 ansi 读屏看 dim（SGR 2）。
   2.1.312 的信任目录对话框选项不带编号（`❯ No, exit`），认对话框靠底部的 `Enter to confirm · Esc to cancel`（`server/internal/screen`）。
 - Claude Code 的 `--settings` 只认最后一个，不合并（2026-11-02 实测：`--settings A --settings B` 时 A 的 `env` 全没了）。启动器 alias 自己带
-  `--settings`、凭据在那个文件的 `env` 里时，Jarvis 再追加一个 `--settings` 就把它顶掉，从手机起的会话和助手每条消息都回
+  `--settings`、凭据在那个文件的 `env` 里时，Persona 再追加一个 `--settings` 就把它顶掉，从手机起的会话和助手每条消息都回
   `Not logged in · Please run /login`（transcript 里是 `isApiErrorMessage` + `authentication_failed`），在 herdr 里自己敲同一个 alias 却正常。
   node 现在把两份合成一个文件再传（`docs/launchers.md`「~/.zshrc 里怎么认」）。
-- 用户自己起的 claude（启动器、profile 目录）没有 Jarvis 的 hooks，AskUserQuestion 只能靠读屏幕的卡片答。读屏卡得认得 2.1.316 的多选：`[ ]`/`[✔]` 是状态不是文字，数字只勾不交，要挪到 Submit 行按 enter 再在确认页按 1；光标在自由回答行上按数字会写进去，在 Submit 行上按数字没反应；几个键一次发会丢，一次一个（`docs/claude-integration.md`「多选提问的屏幕卡」）。
+- 用户自己起的 claude（启动器、profile 目录）没有 Persona 的 hooks，AskUserQuestion 只能靠读屏幕的卡片答。读屏卡得认得 2.1.316 的多选：`[ ]`/`[✔]` 是状态不是文字，数字只勾不交，要挪到 Submit 行按 enter 再在确认页按 1；光标在自由回答行上按数字会写进去，在 Submit 行上按数字没反应；几个键一次发会丢，一次一个（`docs/claude-integration.md`「多选提问的屏幕卡」）。
 - AskUserQuestion：PreToolUse hook 返回 `permissionDecision: allow` + `updatedInput.answers` 即可代答（2.1.310 实测）。
 - ExitPlanMode：走 PermissionRequest（不走 PreToolUse）。`allow` 必须带 `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
   才生效，单纯 `{behavior:allow}` 仍会弹 TUI 对话框；`deny` + `message` 会把反馈作为 tool_result 交给模型。
@@ -45,7 +45,7 @@
 - Codex 窗格认会话别靠「同目录最新的 rollout」（和 Claude 那条一样的坑）：终端标题是「线程名 | 目录」，按 `session_index.jsonl` 的线程名认；
   rollout 在线程开始那天的目录里一直写，按日期目录只扫近两周会漏掉老线程（2026-10-31 一个正在跑的 Codex 显示成别的会话、灰点）。
   按 id 对拍内容测不出这种错，要拿窗格的真值比（`scripts/diag/live_panes_check.py`）。
-  Claude 窗格同理：Jarvis 启动过的会话的窗格绑定存在 hub 数据库里、node 重启就载回来，可能早已过时；`sessions/<pid>.json` 优先于绑定。
+  Claude 窗格同理：Persona 启动过的会话的窗格绑定存在 hub 数据库里、node 重启就载回来，可能早已过时；`sessions/<pid>.json` 优先于绑定。
   改了认窗格的逻辑，部署（重启）后要再跑一次复核，重启前后的结果可能不一样。
 - herdr `agent.prompt` 先粘贴、约 300 ms 后才回车：同一会话的两次发送要串行，否则第二次读屏会把第一条当成输入框里的草稿。发送去重放在 hub 的 Postgres（`sent_messages`）：
   node 的内存去重在重连 / hub 重启后就没了，而 App 恰恰在这时候自动重发。会话读取和发送的完整验证、每一跳的耗时见 `docs/lanes/session-verify.md`。
@@ -68,7 +68,7 @@
 - Orca 宿主（`docs/plan-orca-support.md`「Orca 来源」）：`terminal.send` 的 `client` 必须带 `id`，只给 `type` 时每次发送都回 `invalid_argument`
   （第一版就是这样，假 runtime 没校验参数所以测试全过；现在 `orcarttest` 按 Orca 的 schema 校验）。Orca 认不出前台的 Agent 时会把「提示」原样写进
   壳层再回车，`accepted:false` 只在带 `requireAgentStatus` 时才有：发之前自己用进程表 + `terminal.agentStatus` 确认 Agent 在前台；
-  Orca 的 `agentPrompt` 只给见过在工作的 Agent 粘贴，新开的 claude 收到原样文字，多行会在第一个换行处提交：Jarvis 自己发括号粘贴再单独回车；
+  Orca 的 `agentPrompt` 只给见过在工作的 Agent 粘贴，新开的 claude 收到原样文字，多行会在第一个换行处提交：Persona 自己发括号粘贴再单独回车；
   `worktree.ps` 行上的 `state` 把子 Agent 合进去了（主 Agent 这轮结束、后台子 Agent 在跑时是 working），窗格自己的状态看 `mainAgent.state`；
   `agentIdentity` 在 Agent 退出后可能还在，「是不是 Agent」以 `ORCA_PANE_KEY` 对得上的 claude / codex 进程为准。node 的测试包把 `ORCA_USER_DATA_PATH`
   指到空目录，别让测试碰到正在用的 Orca（它的 socket 能完全控制 Orca）。
@@ -100,7 +100,7 @@
 - 往 herdr 窗格里打命令起 Codex 时，别把 alias 展开后的词打进去：alias 里可能带 Key，会上屏、进 shell 历史。启动器的词和第一条消息一起写进 0600 文件，
   窗格里只打 `jarvisd codex-start <文件>`（`codex_start.go`）。
 - **开在 Claude 桌面版（或别的终端）里的 Claude 会话**（2026-11-01，没装 herdr 的 Mac）：Claude 桌面版跑的是真的 `claude` 进程，也写
-  `~/.claude/projects` 的 transcript 和 `sessions/<pid>.json`（`entrypoint: "claude-desktop"`）。Jarvis 没有终端宿主时看不到它在跑，按 transcript
+  `~/.claude/projects` 的 transcript 和 `sessions/<pid>.json`（`entrypoint: "claude-desktop"`）。Persona 没有终端宿主时看不到它在跑，按 transcript
   列成「未运行」，从手机发消息就去 herdr 里 `claude --resume`：装了 herdr 会起第二个进程同时写同一个会话，没装就报
   「herdr is not running on this machine: herdr workspace list: exec: "herdr"…」。现在恢复前先看有没有活着的 claude 在 `sessions/<pid>.json` 里开着这个会话，
   有就拒绝（`open_elsewhere`，说是在哪开着）；引擎起不来时拒绝的话也换成人话（`engine_missing`）。列表里仍显示「未运行」，还没有「在别处开着」的状态。

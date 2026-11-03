@@ -7,13 +7,13 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 ## 实现进度
 
 - **第 1 步（一种二进制和版本清单）已做**（这一节以下的「现状」是开工前的样子）：
-  - skill 拿出二进制：`internal/assistantskills` 只放内置 skill（现在为空）；node 每次起助手时 `Sync`：链接 `~/.jarvis/skills/` 里用户的 skill，
+  - skill 拿出二进制：`internal/assistantskills` 只放内置 skill（现在为空）；node 每次起助手时 `Sync`：链接 `~/.persona/skills/` 里用户的 skill，
     删掉失效的链接，旧版本装的 lark-connector 自动搬过去（`TestSyncMovesTheOldCopy`）；`ol` 只在有 lark-connector 时出现（`TestOlOnlyWithTheSkill`）；
     助手的 CLAUDE.md 在没有 lark-connector 时只讲 MCP 的 `lark_*`（golden `assistant_claude_md.no_lark-connector`），hub 问 node 的 `skills.list`；
     `GET /api/v1/skills` 给 App 的只读列表。lark-connector 的副本挪到仓库的 `skills/lark-connector`。
   - 一种二进制：没有按 `public` 区分的文件了（`TestOneBuild`）；publish.sh 留着 `-tags public` 只当隐私扫描的标记（扫描靠它认出可以跳过的依赖常量）。
   - 渠道和 build 号：`main.channel`、`main.build`、`main.updateURL`；publish.sh、deploy.sh 打 `release`，Docker 打 `docker`；
-    `jarvisd version -v` 显示渠道和 build 号；`/api/v1/health`、`hello` 带 `channel`、`build`、`protocol`、`min_app_build`。
+    `personad version -v` 显示渠道和 build 号；`/api/v1/health`、`hello` 带 `channel`、`build`、`protocol`、`min_app_build`。
   - 版本清单：`internal/update`（清单、`CheckNext`、不降级 `TestNoDowngrade`），`jarvisd release manifest|check-next`；
     publish.sh 发 `latest.json`（各文件的 sha256），发布前检查 build 号递增、线上那版的 commit 是这次的祖先。
     第 1 步里原有 ed25519 签名，用户改主意后在第 2 步删掉（见「安全」）。
@@ -26,19 +26,19 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 ## 现状（2026-11-02 核实）
 
-- 版本：`jarvisd version` 是 `-X main.version` 写进去的字符串。
+- 版本：`personad version` 是 `-X main.version` 写进去的字符串。
   - `deploy.sh`、`publish.sh`：`git describe --always --dirty` 加上分钟级时间，形如 `v0.1.1-23-gabc1234-202611021530`；
   - Docker 镜像：推 `v*` tag 时由 CI 构建，版本就是 tag 去掉 `v`。
 - hub：
   - `GET /api/v1/health` 返回 `{ok, version, features}`，WebSocket 的 `hello` 带 `server_version`；
-  - node 版本和 hub 不同时机器列表标出来，可以「重新部署」（`hub/deploy.go`，用 hub 机器上 `~/.jarvis/bin/nodes/` 里的二进制）。
+  - node 版本和 hub 不同时机器列表标出来，可以「重新部署」（`hub/deploy.go`，用 hub 机器上 `~/.persona/bin/nodes/` 里的二进制）。
 - 完整版和公开版**唯一的区别**是 `-tags public`：
   - 完整版用 `go:embed` 把 lark-connector skill 编进二进制（`internal/assistantskills`，从上游拷来，不能再分发）；
   - node 起助手进程时把它装到助手目录的 `.claude/skills/`，并把 `ol` 放进 PATH（`node/larkgate.go`）；
   - 公开版不带。
 - 发布：`publish.sh` 构建四个平台的公开版，gzip 后连同 `SHA256SUMS`、`VERSION` 用 wrangler 发到 `publish.site_url` 的 `dl/`（Cloudflare Workers 静态资源），
   只保留最新一版。wrangler 用的是 OAuth 登录，大约一小时过期，没法无人值守。
-- `install.sh` 只放二进制（`~/.jarvis/bin/jarvisd`），不装服务；装出来的 hub 机器上没有 `~/.jarvis/bin/nodes`，所以公开版点「重新部署」会报错。
+- `install.sh` 只放二进制（`~/.persona/bin/personad`），不装服务；装出来的 hub 机器上没有 `~/.persona/bin/nodes`，所以公开版点「重新部署」会报错。
 - 我们自己的 hub 用 ssh 部署（`deploy.sh`，以及主会话的部署脚本），门槛有三条：
   - 在 hub 机器上对真实 Postgres 跑完全部测试；
   - 助手有一轮在跑就等；
@@ -57,23 +57,23 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 ## 1. skill 从二进制里拿出来
 
-- **用户的 skill 空间**：跑助手的那台机器上的 `~/.jarvis/skills/<name>/`。
-  - 每个目录是一个 skill（里面有 `SKILL.md`），用户自己放、自己改，jarvisd 只读不写；
+- **用户的 skill 空间**：跑助手的那台机器上的 `~/.persona/skills/<name>/`。
+  - 每个目录是一个 skill（里面有 `SKILL.md`），用户自己放、自己改，personad 只读不写；
   - 跑助手的通常是 hub 机器的本机 node，助手配置到别的机器时就是那台。
 - **同步到助手目录**：node 每次起助手进程（Claude 和 Codex 的助手都算，`/agent`、AI 分身用的也是助手目录）时：
-  1. 对 `~/.jarvis/skills/` 下每个 skill，在 `<助手目录>/.claude/skills/<name>` 建符号链接。
+  1. 对 `~/.persona/skills/` 下每个 skill，在 `<助手目录>/.claude/skills/<name>` 建符号链接。
      用户改了 skill，下一次起助手就生效；Claude Code 读 skill 只读文件，符号链接没问题。
-  2. 删掉指向 `~/.jarvis/skills/` 但已经没了的链接；用户直接放在 `.claude/skills/` 里的真目录不碰。
+  2. 删掉指向 `~/.persona/skills/` 但已经没了的链接；用户直接放在 `.claude/skills/` 里的真目录不碰。
   3. 二进制里自带的内置 skill（只放我们能再分发的，现在是空的）照旧按版本戳复制进去；用户空间里同名的优先。
   4. `ol` 只在装了 `lark-connector` skill 时才放进 PATH；助手的提示词（`prompts/assistant/claude_md.md`）里关于 lark-connector 的那段，也只在装了时才写进去。
 - **迁移**：两种方式，都只做一次。
-  - **自动**：node 起助手时，`~/.jarvis/skills/lark-connector` 不存在，而 `<助手目录>/.claude/skills/lark-connector` 是旧 jarvisd 装的真目录（旁边有 `.jarvis-skills` 版本戳），
-    就把它搬到 `~/.jarvis/skills/lark-connector`，原地换成符号链接，打一行日志。
+  - **自动**：node 起助手时，`~/.persona/skills/lark-connector` 不存在，而 `<助手目录>/.claude/skills/lark-connector` 是旧 personad 装的真目录（旁边有 `.jarvis-skills` 版本戳），
+    就把它搬到 `~/.persona/skills/lark-connector`，原地换成符号链接，打一行日志。
   - **手动**（我们的 hub 上，主会话执行）：
-    `mkdir -p ~/.jarvis/skills && cp -R <仓库>/skills/lark-connector ~/.jarvis/skills/lark-connector`，
+    `mkdir -p ~/.persona/skills && cp -R <仓库>/skills/lark-connector ~/.persona/skills/lark-connector`，
     或者从助手目录的 `.claude/skills/lark-connector` 拷过去。
   - 这样新版本起来时助手照常有 lark-connector。lark-connector 的副本挪到仓库的 `skills/lark-connector`（同步上游的脚本照旧，改成写那里），不进任何二进制；
-    公开版没有它也不要紧，用户把它（或自己的 skill）放进 `~/.jarvis/skills/` 就行。
+    公开版没有它也不要紧，用户把它（或自己的 skill）放进 `~/.persona/skills/` 就行。
 - **去掉 `-tags public`**：两边没有区别了，`files_public.go` / `files_bundled.go` 合成一个只放内置 skill 的 embed。
   - 发布前的隐私扫描照旧，还要检查二进制里没有 `name: lark-connector`；
   - 测试守住：内置 skill 目录里只能有登记为可再分发的 skill。
@@ -130,8 +130,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 ```
 
 - `ancestors`：这次的 commit 能到达的所有提交（`git rev-list <commit>`），每个取前 6 字节，排序后 base64（「防退回」）。
-- `programs`：和 jarvisd 一起发布、hub 在旁边跑的程序（现在只有 `jarvisd-telegram`，`docs/plan-telegram.md`「架构」）：
-  `{"jarvisd-telegram": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`。老 hub 不认这个字段，照旧只换 jarvisd。
+- `programs`：和 personad 一起发布、hub 在旁边跑的程序（现在只有 `jarvisd-telegram`，`docs/plan-telegram.md`「架构」）：
+  `{"jarvisd-telegram": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`。老 hub 不认这个字段，照旧只换 personad。
 
 - 下载的文件要同时对得上 `sha256`（压缩包）和 `binary_sha256`（解压后），新二进制的 `version -v` 还要报出清单里的版本和 build 号。
   `SHA256SUMS` 照旧给 install.sh 用。
@@ -168,7 +168,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - `TestNoDowngrade` 守住：清单的 build 号不比自己大就不装，等于也不装。
 - 也写 `commit`（`-X main.commit`，server/ 有没提交的改动时后面加 `-dirty`）：之后的公开版要包含这个提交才会自己装上（「防退回」）。
 - 主会话的部署脚本在仓库外，要在它的 `go build` 里加上同样的四个 `-X`（回报里会给出要加的那一行）。
-- hub 那台还要放 `jarvisd-telegram`（Telegram 连接器的程序，`docs/plan-telegram.md`）：`deploy.sh` 给 hub 编同一个版本、放在 jarvisd 旁边；node 不需要。
+- hub 那台还要放 `jarvisd-telegram`（Telegram 连接器的程序，`docs/plan-telegram.md`）：`deploy.sh` 给 hub 编同一个版本、放在 personad 旁边；node 不需要。
 - 不做灰度：发布后所有 hub（包括我们的）在空闲时同时更新；出了问题靠各 hub 自己的回滚和坏版本标记。
 
 ### 防退回（2026-11-02，#454）
@@ -188,12 +188,12 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - 更新记录里每个新版本记一条「没有自动装」（`result: held`），写明原因，比如「新版本（提交 b2b2b2b2）不包含这个 hub 正在运行的提交 d4d4d4d4」。
 - 自动更新关着时本来就不会自己装，不记。
 
-### 和 jarvisd 一起换的程序（2026-11-03，#533）
+### 和 personad 一起换的程序（2026-11-03，#533）
 
-- 清单里有这个 hub 平台的 `programs` 时，下载、校验（同样的 sha256 和 `version -v` 必须是这一版）后和 jarvisd 一起换上：放在 jarvisd 旁边，
+- 清单里有这个 hub 平台的 `programs` 时，下载、校验（同样的 sha256 和 `version -v` 必须是这一版）后和 personad 一起换上：放在 personad 旁边，
   原来有的留 `.prev`，原来没有的记成新装的。哪一个下载或校验不过，整次更新都不做。
-- 回滚（新版起不来、看门狗、换的时候出错）把它们和 jarvisd 一起换回去，新装的删掉（`update.RestoreAll`，`pending.json` 的 `programs`）。
-- 头一次带程序的更新：看门狗跑的是旧的 jarvisd，它不认 `programs`，回滚时只换回 jarvisd；留下的新程序和旧 hub 版本对不上，hub 不会起它
+- 回滚（新版起不来、看门狗、换的时候出错）把它们和 personad 一起换回去，新装的删掉（`update.RestoreAll`，`pending.json` 的 `programs`）。
+- 头一次带程序的更新：看门狗跑的是旧的 jarvisd，它不认 `programs`，回滚时只换回 personad；留下的新程序和旧 hub 版本对不上，hub 不会起它
   （状态写「不是同一个版本」），等下一次更新。
 
 ## 7. 检测更新
@@ -215,14 +215,14 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 ```
 
 1. **下载**：
-   - 下到 `~/.jarvis/update/<build>/`：hub 自己平台的压缩包，加上当前连着的各台机器平台的 node 二进制（node 跟着一起更新用）；
+   - 下到 `~/.persona/update/<build>/`：hub 自己平台的压缩包，加上当前连着的各台机器平台的 node 二进制（node 跟着一起更新用）；
    - 断了重下，最多 3 次；临时文件下完才改名。
 2. **校验**：
    - 两个 sha256 都对上清单才继续，不对就删掉下载、报错，现在的二进制不动；
    - 解压后跑一次 `<新> version`，必须报出清单里的版本和 `release` 渠道。
 3. **准备**：
-   - node 二进制放进 `~/.jarvis/bin/nodes/`：公开安装的 hub 也就能「重新部署」了；
-   - 写 `~/.jarvis/update/pending.json`：从哪版到哪版、上一版的路径、开始时间、重启前在线的机器、启动次数。
+   - node 二进制放进 `~/.persona/bin/nodes/`：公开安装的 hub 也就能「重新部署」了；
+   - 写 `~/.persona/update/pending.json`：从哪版到哪版、上一版的路径、开始时间、重启前在线的机器、启动次数。
    - 这是「服务端状态都进 Postgres」的唯一例外：回滚要在新版本连不上数据库、甚至起不来时也能做，所以标记放在二进制旁边，更新结束就删。
      更新记录和坏版本仍然进 Postgres。
 4. **等空闲**（每 30 秒看一次；正在重新部署某台机器时也不重启）：自动和手动一样，**助手和所有 Agent 都空闲才重启**，不限时段（用户 2026-11-02）。
@@ -230,10 +230,10 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
    - 手动更新时，App 显示「在等哪些还在忙」（哪几个对话、哪台机器），并在二级确认里给「现在就更新」：
      确认文案写明「会中断正在等 hub 的操作（助手这一轮、正在上传的文件、终端连接）；herdr 里的 Agent 不受影响，会自己连回来」。
      确认后跳过等空闲，其余步骤（校验、回滚）照旧。
-5. **替换**：现在的 `jarvisd` 复制成 `jarvisd.prev`；新的先放 `jarvisd.new`，再 `rename` 成 `jarvisd`（同一目录，原子）。
+5. **替换**：备份和临时文件仍沿用 `jarvisd.prev` / `jarvisd.new` 的兼容文件名，同目录原子替换实际启动的服务端二进制。目标路径以安装布局和运行时迁移实现为准，不因为产品名变成 Persona 就假定更新器已经改写这些文件名。
 6. **重启**：
    - 先起看门狗（见下），再 `syscall.Exec` 新的二进制，参数和环境不变；
-   - 同一个进程号重新开始：systemd、launchd 和手动 `jarvisd hub run` 都一样，不依赖服务管理器；
+   - 同一个进程号重新开始：systemd、launchd 和手动 `personad hub run` 都一样，不依赖服务管理器；
    - 本机 node 是 hub 的子进程，随之退出，新 hub 用新二进制起它。
 7. **确认**：新 hub 启动时看到 `pending.json`，满足下面三条才算成功（删 pending、写更新记录、广播「已更新到 …」）：
    - HTTP 起来；
@@ -285,10 +285,10 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
     二级确认说明会中断什么（助手这一轮、正在上传的文件、终端连接；herdr 里的 Agent 不受影响）；
     开发版说明为什么不会自己更新；Docker 显示要在 NAS 上运行的那行命令，可复制；
   - 开关「自动更新 hub」（只有发布版有，默认开）；
-  - 各台电脑上的 jarvisd：版本，和 hub 不是同一次部署的标「版本不同」，点进机器页「重新部署」；
+  - 各台电脑上的 personad：版本，和 hub 不是同一次部署的标「版本不同」，点进机器页「重新部署」；
   - 「更新记录」：最近 10 次，结果（已更新 / 已回滚 / 没更新成功 / 没有自动装）、自动的标出来、从哪版到哪版、时间、回滚和没有自动装的原因。
   - 老 hub（没有 `/api/v1/hub/update`）：说明要在 hub 所在的机器上用 install.sh 更新一次。
-- **Agents 页顶上的一行**（`HubNoticeRow`，和「Mac 上的 Jarvis 已登录」同一个位置和样子，搜索时不出现）：同一时间只有一条，最要紧的在前：
+- **Agents 页顶上的一行**（`HubNoticeRow`，和「Mac 上的 Persona 已登录」同一个位置和样子，搜索时不出现）：同一时间只有一条，最要紧的在前：
   1. App 太旧（App 的 build 号低于 hub 报的 `min_app_build`）：「App 版本太旧，配不上这个 hub：请到 TestFlight 更新」，不能关；
   2. hub 太旧（`protocol` 比 App 要的低，老 hub 不报就是 0）：「hub 版本太旧，部分功能用不了」，× 关掉后不再提示；
   3. 更新中：「hub 正在更新：等 2 个在忙的结束」之类；
@@ -343,14 +343,14 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 1. **一种二进制和版本清单**：skill 拿出来（用户空间、符号链接、迁移、`ol` 和提示词按需、只读列表的接口）、去掉 `-tags public`、
    渠道和 build 号（publish.sh、deploy.sh、Docker）、`internal/update`（清单、发布前检查）、publish.sh 发清单并做两项单调检查；
-   `/api/v1/health` 带新字段。部署前把 lark-connector 放进我们 hub 的 `~/.jarvis/skills/`（或者靠自动迁移）。
+   `/api/v1/health` 带新字段。部署前把 lark-connector 放进我们 hub 的 `~/.persona/skills/`（或者靠自动迁移）。
 2. **hub 更新和回滚**：检测、下载校验、等空闲（「现在就更新」）、替换、看门狗、坏版本、记录、不降级；node 跟着更新（补 `via` 和 tailcat）。
 3. **App**：设置的 hub 一行、第一次告知、提示条、进度、在等哪些、更新记录、不兼容提示、Skills 列表。
 4. **Docker 检测和提示**。
 
 ## 拍板（2026-11-02）
 
-1. skill 从二进制里拿出来，放进用户自己的空间（`~/.jarvis/skills/`），更新不覆盖；完整版和公开版合成一个，所有 hub 都自动更新，
+1. skill 从二进制里拿出来，放进用户自己的空间（`~/.persona/skills/`），更新不覆盖；完整版和公开版合成一个，所有 hub 都自动更新，
    我们自己的也不例外（用户：「skill 肯定是需要非常自定义的」）。ssh 部署以后只留作应急。
 2. 自动更新**默认开**；第一次要明确告诉用户并给关闭的入口；每次更新留记录；回滚过的版本不再自动重试。
 3. 不限时段：助手和 Agent 都空闲就装。有对话在跑或在等回答就不重启。
@@ -360,4 +360,4 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 6. 不做灰度，发布后所有 hub 同时更新；各 hub 自己回滚。
 9. **不签名**（用户：「Linux 服务就不签了吧，搞太复杂」）：清单只有 sha256，走 HTTPS，对上就自动装；只防传坏，不防发布站点被冒充或入侵（见「安全」）。
 7. 手动更新也等助手和 Agent 都空闲；App 显示在等哪些，二级确认里给「现在就更新」。
-8. skill 空间放在跑助手的那台机器上的 `~/.jarvis/skills/`。
+8. skill 空间放在跑助手的那台机器上的 `~/.persona/skills/`。

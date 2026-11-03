@@ -1,6 +1,6 @@
-# Jarvis hub 协议调研（为新写 Android 客户端而整理）
+# Persona hub 协议调研（为新写 Android 客户端而整理）
 
-> 范围：只读调研，未改任何仓库文件、未运行构建 / 测试。证据格式 `相对路径:行号`（相对 Jarvis 仓库根目录）或 `docs/xxx.md「章节」`。
+> 范围：只读调研，未改任何仓库文件、未运行构建 / 测试。证据格式 `相对路径:行号`（相对 Persona 仓库根目录）或 `docs/xxx.md「章节」`。
 > 隐私：文中不出现主机名、IP、域名、账号、key / 项目 ID，示例一律占位符（`<hub 地址>`、`<token>`）。
 > 性能数字：只引用文档里写明是实测的值并标样本数；其余都是代码里的常量 / 超时配置，标「常量」，不是实测。
 > 状态：已完成（第 0–12 节）。Android 平台细节标「需核实」的未联网核实。
@@ -147,7 +147,7 @@
 | POST `/api/v1/devices/{id}/live-activity` | `{push_to_start_token}` / `{activity_id, push_token}` / `{activity_id, ended:true}`（APNs 专用，`liveactivity.go:682-712`） |
 | GET `/api/v1/fleet` | 当前 Fleet 汇总（带全部 stats），App 回前台时拉 |
 
-### 3.7 助手（「Jarvis」tab）
+### 3.7 助手（「Persona」tab）
 | 方法 路径 | 用途 / 关键参数 |
 | --- | --- |
 | GET `/api/v1/assistant` | `{machine_id, launcher, timezone, notes?, main?, cwd, conversations:[Session], notes_effective}` |
@@ -292,7 +292,7 @@ protocol.md 里的 `session`（单个状态变化）在代码里**没有发送�
 - 过期（常量）：hook 交互默认 30 分钟（`hook_timeout_minutes`，`config.go:131-133`）；屏幕卡 24 小时（`hub.go:311`）；hub 代问的 `mail_send` / `lark_send` 授权 15 分钟（`hub.go:683-691`）。
 - `resolve` 返回：成功 `{ok:true}`；已不在待处理 410；屏幕卡 409 `prompt_changed`；其他转发错误 502/503。
 - 挺过重启：`resumable` 交互在 node 断开后保留 3 分钟（`hub.go:125-127`），同 id 重新挂回；App 按 id 去重即可。
-- 助手的 `ask_user` 是 `question` 交互，`tool_name:"ask_user"`，推送标题「Jarvis 在问你」（`push.go:316-318`）。
+- 助手的 `ask_user` 是 `question` 交互，`tool_name:"ask_user"`，推送标题「Persona 在问你」（`push.go:316-318`）。
 - 通知按钮语义（iOS，`ios/Jarvis/App/NotificationActions.swift`）：授权「允许 `{allow:true}` / 拒绝 `{allow:false}`」，计划「批准 `{approve:true, mode:"acceptEdits"}` /
   打回 `{approve:false, feedback:<输入>}`」；「允许」「批准」「打回修改」要先解锁设备（`.authenticationRequired`），只有授权的「拒绝」不用；提问、终端卡没有按钮（点开处理）。失败（410 已处理、连不上）发本地通知说明。
 - 文档说「没有任何 App 在线时 hook 立即放行」（`docs/architecture.md「回答提问 / 审批计划」`），但代码里 node 的 `ask` 直接调 `interaction.create` 等待到过期，
@@ -368,7 +368,7 @@ Android 能多做、iOS 做不到的（可选，取决于分发渠道：上架 G
 | --- | --- | --- | --- | --- |
 | 需要你（交互） | 新交互立即推；屏蔽的 Agent 不推 | `alert{title, subtitle:"<会话名> · <机器>", body}`，`sound`，`thread-id=<session_id>`，`category=INTERACTION_<KIND>`，`interruption-level=time-sensitive`；自定义键 `interaction_id, machine_id, session_id`；`apns-collapse-id=<interaction id>`，priority 10 | `prefs.input` | `push.go:305-340`、`hub.go:376-384` |
 | 做完了 | working → done/idle 后等 `done_delay_seconds`（60）；期间恢复工作算同一轮；看过（herdr idle 或 App `seen`）/ 屏蔽 / 助手 3 分钟内已 `notify_user` / 收件箱 Agent / 由后台任务唤醒的一轮 都不推；还有后台任务时等到它们回报那一轮结束（最多 `background_hold_minutes` 120） | `alert{title:"✅ <标题>", subtitle:"机器 · 空间 › 标签", body:<最后一条回复>}`，`thread-id`；键 `machine_id, session_id` | `prefs.done`：off / long（≥`long_turn_seconds` 60）/ always | `machine.go:500-536`、`notify.go:11-267` |
-| 助手 `notify_user` | 助手显式调用 | 同「做完了」格式，副标题「Jarvis」 | 所有设备 | `assistant_tools.go:116-125` |
+| 助手 `notify_user` | 助手显式调用 | 同「做完了」格式，副标题「Persona」 | 所有设备 | `assistant_tools.go:116-125` |
 | 静默唤醒 | 有 `phone_*` 调用而没有手机连着；30 s 内只发一次 | `{"aps":{"content-available":1},"jarvis_wake":"tool"}`，push-type background，priority 5 | 所有有 token 的设备 | `push.go:227-231`、`hub.go:722-753` |
 | 实时活动（Fleet） | 见 8.3 | push-type liveactivity，topic `<bundle>.push-type.liveactivity` | `prefs.live_activity` 且有活动 / push-to-start token | `liveactivity.go` |
 

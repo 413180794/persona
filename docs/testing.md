@@ -68,11 +68,11 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 往上翻时内容不动（`ChatView` 的冻结）：`MOCK_STREAM=1` 启动 mock（第一个会话打开后每 2 秒来一条新步骤 / 回复，共 12 次），
   `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openWork YES -showFreezeProbe YES`：App 自己往上翻，每 2 秒记一次屏幕中间那行的位置，
   结果写在 App 容器的 `Documents/freeze.txt`（`xcrun simctl get_app_container $SIM <bundle id> data`），最后一行 `RESULT:`，应为移动 0pt。
-- 新建 Jarvis 对话（#511）：mock 照 hub 的样子做，会话列表立刻推，transcript 先是空的，`MOCK_ASSISTANT_TRANSCRIPT_SECONDS`（默认 1）秒后才有第一句并推给打开的对话。
+- 新建 Persona 对话（#511）：mock 照 hub 的样子做，会话列表立刻推，transcript 先是空的，`MOCK_ASSISTANT_TRANSCRIPT_SECONDS`（默认 1）秒后才有第一句并推给打开的对话。
   App 里发出后对话页一直是这句（不出「还没有消息」）、侧栏的新对话选中、带工作中转圈。`MOCK_ASSISTANT_START_SECONDS=<秒>` 让这个 POST 晚回，
-  等待中看气泡和「Jarvis 正在准备…」。`scripts/mock/test_assistant_mock.py` 管着 mock 的这几件事。
-- Jarvis 侧栏：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`，「最近」多 36 个对话（超过显示的 30 个，出「查看全部」），前三个依次是需要你（红点）、未读（蓝点）、工作中（转圈）。
-- 跟到最新（`ChatFollowTests`，`MOCK_LONG_HISTORY=1`）：长会话打开在底部；在底部时来回复会跟到底（Jarvis 页的回复先按 `delta` 流式出）；往上翻出现「回到最新」、
+  等待中看气泡和「Persona 正在准备…」。`scripts/mock/test_assistant_mock.py` 管着 mock 的这几件事。
+- Persona 侧栏：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`，「最近」多 36 个对话（超过显示的 30 个，出「查看全部」），前三个依次是需要你（红点）、未读（蓝点）、工作中（转圈）。
+- 跟到最新（`ChatFollowTests`，`MOCK_LONG_HISTORY=1`）：长会话打开在底部；在底部时来回复会跟到底（Persona 页的回复先按 `delta` 流式出）；往上翻出现「回到最新」、
   这时来回复不拽人；点了回到底部、之后照常跟随。Agent 对话页分三种打开方式测：普通、完成未看（`-showAsUnread YES`）、停在上次的位置（`-chat.read.<会话> <行 id>`）。
   回复由 mock 的 `GET /mock/say?text=…&user=…&stream=1` 推给所有打开的对话；列表在哪由 App 的 `-showScrollState YES` 报（无障碍标签
   `chat.scrollState`：bottom / follows / frozen / arrow / newestShown / withheld…，`visible` 时画在屏幕上），XCUITest 读不准倒置列表里行的位置。
@@ -100,7 +100,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   更新在等两个在忙的 Agent、第一次告知「自动更新已开启」、Docker 的 hub 有新镜像（用 `:latest`，或钉在某个版本的标签上）；不设时 `GET /api/v1/hub/update` 是 404（老 hub，哪里都不出现）。
   `GET /mock/hub_update?mode=…` 运行中换一种并从头开始。看页面用 `-tab settings -openHubUpdate YES`、`-openSkills YES`，提示条在 Agents 页。
   UI 测试 `HubNoticeUITests`（提示条上的按钮各管各的、「现在就更新」先二级确认）要 `TEST_RUNNER_JARVIS_HUB_UPDATE_HUB=<mock 地址>`。
-- 接管的真实链路（不用部署）：在 hub 机器上编一个 darwin 的 jarvisd，本机起一个测试 hub（假 HOME、`HERDR_SOCKET_PATH` 指向真 herdr 的 socket、
+- 接管的真实链路（不用部署）：在 hub 机器上编一个 darwin 的 personad，本机起一个测试 hub（假 HOME、`HERDR_SOCKET_PATH` 指向真 herdr 的 socket、
   单独的库 `jarvis_termlab` 经 SSH 隧道、`machines` 只有一台 `kind: local`），模拟器配对它，开 lab 窗格的终端（`docs/terminal.md` 第十一节的实测就是这么量的）。
 - 终端断线：`MOCK_SCREEN_FAIL_AFTER=3:14` 启动 mock（第一次读终端 3 秒后每次都 503，再过 14 秒恢复），
   `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openPane terminal`，应先出现红色「上次更新 N 秒前 · 重试」，恢复后消失。
@@ -174,8 +174,8 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
   Mac Studio 有 36 个 Agent；`GET /mock/hits`、`/mock/reconnects`、`/mock/started`，`/mock/reset` 恢复初始状态；cwd 以 `/broken` 结尾的新会话回 502），
   再 `TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:JarvisUITests/MachinePagesTests`，
   深色再跑一遍（`simctl ui <udid> appearance dark`、`JARVIS_STYLE=dark`），每一步的截图存到 `JARVIS_SHOTS`，失败时附截图和视图树。
-- 真实接口：本机起一个测试 hub，**不要连线上 hub 做重连、新建、关闭**。在 hub 机器上 `GOOS=darwin` 编 jarvisd 拷回来；
-  `docker exec jarvis-postgres createdb -U jarvis <自己的库>`，经 `ssh -L <本地端口>:127.0.0.1:18661` 连；假 HOME 里的 `~/.jarvis/hub.json`
+- 真实接口：本机起一个测试 hub，**不要连线上 hub 做重连、新建、关闭**。在 hub 机器上 `GOOS=darwin` 编 personad 拷回来；
+  `docker exec jarvis-postgres createdb -U jarvis <自己的库>`，经 `ssh -L <本地端口>:127.0.0.1:18661` 连；假 HOME 里的 `~/.persona/hub.json`
   （0600）只放 `listen`、`token`、`database_url` 和两台机器：一台 `kind: local`，一台连不上的 ssh；`herdr --session <名字> server` 起一个独立的 herdr，
   `HERDR_SOCKET_PATH` 指向它（别指向正在用的那个）。假 HOME 里建 `code/demo`，然后
   `TEST_RUNNER_JARVIS_LIVE_MACHINES_HUB=… TEST_RUNNER_JARVIS_LIVE_MACHINES_TOKEN=… TEST_RUNNER_JARVIS_LIVE_MACHINES_CODE=<假 HOME>/code xcodebuild test … -only-testing:JarvisUITests/MachinePagesLiveTests`。
@@ -222,7 +222,7 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 ### 滚动中推送（`ScrollUnderPushTests`）
 
 手指拖着、惯性滑着的时候 hub 照推，屏幕上的东西只跟着手指和惯性走（`docs/lanes/live-updates.md`「滚动时被迫刷新」）。
-Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock 按真实 hub 的节奏推：`/mock/churn?n=10&ms=2000&inbox=1&waiting=1&real=1`，
+Agents 列表、Agent 对话、Persona 对话各拖、甩约 20 秒，同时 mock 按真实 hub 的节奏推：`/mock/churn?n=10&ms=2000&inbox=1&waiting=1&real=1`，
 每 2 秒一轮。`&real=1` 让工作中的 Agent 最后一句在一行、两行之间换（行变高变矮），并让一个 Agent 每三轮完成一次、再开工（空间换名次）。
 
 - App 以 `-perfCounts YES` 启动时，`PerfScroll` 逐帧看正在拖、正在滑的滚动视图。
@@ -273,7 +273,7 @@ Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock
 
 不用 mock hub：`TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:JarvisUITests/DemoModeTests`，深色再跑一遍。
 `testWalkThroughAndLeave` 从配对页（`-openWelcome YES`）进体验模式，走一遍 Agents（筛选、细列表、Claude 会话发消息收到演示回复、终端、提问卡片作答、
-计划卡片、Codex 会话、表格和链接）、机器页和机器的 24 小时曲线、Jarvis（主对话、侧边栏、定时任务）、收件箱（飞书会话、邮件），
+计划卡片、Codex 会话、表格和链接）、机器页和机器的 24 小时曲线、Persona（主对话、侧边栏、定时任务）、收件箱（飞书会话、邮件），
 每页断言没有「体验模式里没有这项数据」，最后从设置退出、重启后还在配对页；`testStaysAcrossLaunches` 断言体验模式重启后还在。
 跑完看模拟器日志里有没有页面要了 `DemoHub` 没有的接口：
 `xcrun simctl spawn <udid> log show --last 10m --predicate 'eventMessage CONTAINS "DemoHub miss"'`（应为空）。
@@ -319,7 +319,7 @@ TEST_RUNNER_JARVIS_HUB_A=http://127.0.0.1:18760 TEST_RUNNER_JARVIS_HUB_B=http://
   两个产物都叫 `Jarvis.app`，报「Multiple commands produce」。没有签名团队时加 `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`。
 - DEBUG 版带 `-pairURL` 启动会跳过「用配对 token 换设备 token」（`DeviceCredentials.swift`）。要验换凭据：先带 `-pairURL` 启动一次
   （配置写进 Keychain），再不带参数冷启动，App 就走真实的 `upgradeCredentials()`；查 hub 库里 `device_tokens` 有没有新行、`pair_tokens.used_at` 有没有填。
-- iOS 27 上 `simctl openurl jarvis://pair?...` 会弹「在 Jarvis 中打开？」确认框，脚本点不了，别用这条路配对。
+- iOS 27 上 `simctl openurl jarvis://pair?...` 会弹「在 Persona 中打开？」确认框，脚本点不了，别用这条路配对。
 - 模拟器的 Keychain 卸载 App 后还在：同一台模拟器上前后两次配对，第二次 App 可能先拿到上一次的凭据，要么换一台新模拟器，要么先在 App 里断开。
 
 ## herdr 联调
@@ -350,16 +350,16 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
 - 从手机新建（`docs/codex.md`「从手机新建」，`TestLiveCodexStart`）：按 `session.start` 的路子新建，第一条消息带引号、换行、`$`、反引号、中文和几千字。
   三种：`JARVIS_CODEX_DAEMON_BINS` 的每个经 `--remote` 挂在测试自己的 app-server 上（app-server 路线）、同一个带 `-c` 的（终端路线，看「连接」的说明），
   `JARVIS_CODEX_BINS` 的第一个（0.153）。每轮检查：回答在 60 秒内、带的就是这条消息开的 thread、rollout 里的第一条消息一字不差、这个窗格只有一条会话、
-  路由对、Codex 回了第一条也收到手机再发的一条；最后一个找不到命令的启动器要马上报错。新建要一个本机的 jarvisd（`codex-start`），脚本一起编。
+  路由对、Codex 回了第一条也收到手机再发的一条；最后一个找不到命令的启动器要马上报错。新建要一个本机的 personad（`codex-start`），脚本一起编。
   不跑不带参数的 0.163：它会自动启动或加入正在用的守护进程。`JARVIS_CODEX_TESTS="cards daemon start"`（默认三样都跑）挑着跑。
 - 每轮每个用例打一行 `LIVE <版本> round <n> <用例>: ok in <秒>`，失败时附上当时的屏幕；最后一行 `RESULT all: passed|FAILED`。
-  失败时屏幕上是 Codex 自己的模型服务错误（「Selected model is at capacity」之类，不是 Jarvis 的问题）就记一行 `SERVICE-RETRY` 再跑一次这个用例，
+  失败时屏幕上是 Codex 自己的模型服务错误（「Selected model is at capacity」之类，不是 Persona 的问题）就记一行 `SERVICE-RETRY` 再跑一次这个用例，
   每个 RESULT 行报重试了几次——报告稳定性时要一起报，不能当成没发生。
 
 ## 隐私扫描
 
-`python3 scripts/privacy_check.py`：整个仓库（文件内容和路径）里不能有这台机器的私有值——`~/.config/jarvis/config.json` 里的
-主机、hub 地址、机器名、Apple 的各种 ID、邮箱，`~/.config/jarvis/private-words.txt`（一行一个：内部项目名、人名、内部工具名，
+`python3 scripts/privacy_check.py`：整个仓库（文件内容和路径）里不能有这台机器的私有值——`~/.config/persona/config.json` 里的
+主机、hub 地址、机器名、Apple 的各种 ID、邮箱，`~/.config/persona/private-words.txt`（一行一个：内部项目名、人名、内部工具名，
 自己维护）和 `CLAUDE.local.md` 里反引号括起来的值；另外任何私网 IPv4（文档网段 192.0.2.0/24 等除外）和真实域名下的邮箱
 （`example.*`、公共邮箱、`site/` 里公开的联系邮箱除外）。命中只报类型不报值（免得值进日志）。
 不算私有值的：回环地址（`127.0.0.0/8`、`::1`，config 里写了也不算，比如 hub 地址是 `http://127.0.0.1:<端口>`）、`config.example.json` 里本来就有的默认值（比如外部测试群组名）、仓库自己的 Go 模块路径（里面带 GitHub 用户名）、
@@ -397,7 +397,7 @@ App 数据目录的 `Documents/frames.json`：卡顿次数（晚于半帧）、�
 2026-10-26 一轮优化的结果（长会话 `codex 需求 leader`，3 次）：每秒卡顿 149–245ms → 156–171ms，最长一帧 0.5–2.4s → 0.5–0.9s，
 主线程上我们自己代码的采样从 ~1,900 降到 ~400；剩下的是 SwiftUI / CoreText 给新出现的行量文字、画字形。
 
-### Jarvis 页（长主对话）
+### Persona 页（长主对话）
 
 mock 加 `MOCK_LONG_ASSISTANT=1`（主对话是 60 轮：每轮几个工具、一段带标题 / 列表 / 表格 / 代码块的长回复），`-app.tab assistant -showAutoScroll YES -perfCounts YES`。
 `-showAutoScroll` 现在依次量五段，每段一个 `Documents/frames-<段>.json`（每帧间隔、每帧主线程忙了多久 `busy_*`、
@@ -450,7 +450,7 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 工作页的改动：hub 把每台机器的会话列表分开推（一轮好几条），以前每条都让读会话的页面各重算一遍；现在 25 ms 内到的合成一次
 （`AppModel.applyPendingSessions`），一轮推送从约 4 次 SwiftUI 更新变成 1 次。
 
-## 侧边栏拖动（Jarvis tab）
+## 侧边栏拖动（Persona tab）
 
 量拖动时每帧主线程的耗时，不用 Instruments（这台 Mac 上 xctrace 卡在授权）：DEBUG 的 `DrawerProbe`（`-showDrawerProbe YES`）在拖动开始到松手后
 0.6 秒里，用 run loop 的 afterWaiting / beforeWaiting（排在 Core Animation 提交之后）算每一帧里主线程忙了多久，加上 CADisplayLink 的帧间隔，
@@ -461,7 +461,7 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
   每轮拖开松手、拖回、半路松手（弹回）、快甩、点页面关闭，经过和手指一样的 `AssistantDrawer.dragBegan / drag / letGo`，每个显示帧一步。
   用开了优化的 Debug 构建（`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`，单独的 derivedData）。对照组用 `git worktree`
   在旧提交上加同样的 `DrawerProbe.swift` 和三个同名方法。
-- 看主线程在忙什么：`sample <pid> 30 1`，pid 要按自己模拟器的设备目录找（`pgrep -f "Devices/<udid>/.*Jarvis.app/Jarvis"`，别的车道的模拟器也在跑 Jarvis）。
+- 看主线程在忙什么：`sample <pid> 30 1`，pid 要按自己模拟器的设备目录找（`pgrep -f "Devices/<udid>/.*Jarvis.app/Jarvis"`，别的车道的模拟器也在跑 Persona）。
 
 2026-10-31 改前（master e4fca3b）/ 改后，模拟器 iPhone 18 Pro Max（60 Hz），长对话，每种 10 次（5 轮 × 2 次启动）：
 
@@ -486,7 +486,7 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 
 改 hub 推给 App 的东西（会话列表、实时活动的节奏）之前和之后，用同一段真实推送比：
 
-1. 在 hub 机器上录：`cd server && go run ./cmd/pushrec 20m ~/push.jsonl`。它像 App 一样连 hub（用 `~/.jarvis/hub.json` 的 token，不打印），
+1. 在 hub 机器上录：`cd server && go run ./cmd/pushrec 20m ~/push.jsonl`。它像 App 一样连 hub（用 `~/.persona/hub.json` 的 token，不打印），
    不注册成手机 / 桌面、不打开对话，每条消息一行 `{"t": 毫秒, "msg": 原文}`。文件里是真实的会话（标题、最后一句），0600，**只留在那台机器上**，不拷走、不进仓库。
 2. 回放：`JARVIS_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`。打印每种消息改前（录到的）和改后（这份代码会发的）
    每分钟的条数和字节；实时活动按录到的时间把每次变化喂给合并和节流，打印 App 不开时每小时推几条、灵动岛和 hub 不一致连续最长多久，超过上限就失败。
@@ -517,5 +517,5 @@ xcrun xcresulttool export attachments --path /tmp/shots.xcresult --output-path /
 
 `JARVIS_FLEET_SAMPLE=current` 不启动 App，只拍活动现在的样子（配合真实 APNs 推送，见 `docs/live-activity.md` 验证一节）。
 和别的 App 的活动共用灵动岛：先 `scripts/app/island_peer.sh <模拟器 udid>` 装示例 App（`apple/IslandPeer`，只有一个「8分」的实时活动），
-再加 `TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer`，多拍 `-shared`（两个活动并存）和 `-landscape`（示例 App 在前台横屏，Jarvis 的活动单独在横屏的岛上）；
+再加 `TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer`，多拍 `-shared`（两个活动并存）和 `-landscape`（示例 App 在前台横屏，Persona 的活动单独在横屏的岛上）；
 `TEST_RUNNER_JARVIS_FLEET_COUNT=12` 把编造的数量都改成 12（看两位、三位数）。iPhone 18 Pro 和 17 Pro 的规则不同，两台都要拍（`docs/live-activity.md`「和其他 App 共用灵动岛」）。

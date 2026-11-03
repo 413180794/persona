@@ -1,5 +1,7 @@
 # 用 Docker 跑 hub（NAS 等）
 
+产品名是 Persona，迁移版本的二进制使用 `personad`（`jarvisd` 兼容），默认运行目录使用 `~/.persona`（`~/.jarvis` 兼容）。本文的 `.env` / compose 变量保留实际模板中的旧名；已迁移的 `PERSONA_*` 优先，`JARVIS_*` 继续兼容。镜像中的用户、数据库角色 / 库名、容器和持久化卷不能按产品名替换，见 [配置与兼容说明](config.md#命名与兼容)。
+
 hub 有两种部署方式，功能一样，按 hub 所在的机器挑一种：
 
 | 方式 | 适合 | 怎么装、怎么升级 |
@@ -7,13 +9,13 @@ hub 有两种部署方式，功能一样，按 hub 所在的机器挑一种：
 | **原生二进制**（`docs/server.md`「部署」） | 一台 Linux 服务器；hub 所在的机器自己也要跑 Agent（`kind: local`） | 开发机上 `./scripts/deploy/deploy.sh`（`systemd --user` 服务 + Postgres 容器）；或 `install.sh` 装好二进制后自己配服务。升级再跑一次 `deploy.sh` |
 | **Docker**（本文） | NAS（群晖、威联通、Unraid…）或任何只当 hub 的机器 | `docker compose up -d`（hub + Postgres 两个容器）。升级 `docker compose pull && docker compose up -d` |
 
-两种方式的 hub 是同一个 `jarvisd`，`hub.json`、数据库、协议、App 都一样；从一种换到另一种只要搬 `~/.jarvis` 和数据库。
+两种方式的 hub 是同一个 `personad`，`hub.json`、数据库、协议、App 都一样；从一种换到另一种只要搬 `~/.persona` 和数据库。
 
 ## 容器里的 hub 有什么不同
 
 镜像里没有 herdr 和 Claude Code，所以 **hub 所在的这台机器不能同时当干活的电脑**：
 - 第一次启动写的 `hub.json` 里 `"machines": []`（不是原生方式的「本机一台 `kind: local`」），每台电脑都要加进去。
-- 「Jarvis」助手跑在某台电脑上：`assistant.machine` 填它的 id（不填就用 `machines` 里的第一台）。
+- 「Persona」助手跑在某台电脑上：`assistant.machine` 填它的 id（不填就用 `machines` 里的第一台）。
 - 飞书用 `lark.token`，不能用 `lark.container`（那要在 hub 里跑 `docker inspect`）。
 - 插件（`docs/plugins.md`）是 hub 机器上的外部程序，镜像里没有，暂不支持。
 
@@ -40,12 +42,12 @@ Packages 设置里把它改成公开。Postgres 用的是 Docker Hub 上的 `pos
 里用 `JARVIS_POSTGRES_IMAGE` 换成镜像代理或本地仓库里的同一个镜像（如 `<仓库>/library/postgres:18-alpine`）。
 
 镜像里有：
-- `jarvisd`（hub 用 `linux/<架构>` 那个）和四个平台的 node 构建（`/opt/jarvis/nodes`，`JARVIS_NODE_BINARIES`）：App 里「重新部署」
+- `personad`（hub 用 `linux/<架构>` 那个）和四个平台的 node 构建（`/opt/jarvis/nodes`，`JARVIS_NODE_BINARIES`）：App 里「重新部署」
   直接从这里取，hub 和 node 永远是同一个版本；
 - 嵌进二进制的网页版（`docs/web.md`），打开 hub 的地址就是；
 - `openssh-client`、证书、时区数据。
 
-镜像里的 jarvisd 不带任何 skill（和所有二进制一样）：助手的 skill 放在跑助手那台机器的 `~/.jarvis/skills/`（`docs/hub-update.md`「skill 从二进制里拿出来」）。
+镜像里的 personad 不带任何 skill（和所有二进制一样）：助手的 skill 放在跑助手那台机器的 `~/.persona/skills/`（`docs/hub-update.md`「skill 从二进制里拿出来」）。
 镜像里的 hub 是 `docker` 渠道：不会自己换二进制，有新镜像时提示拉取（见「升级」）。构建时把镜像名（`ghcr.io/<owner>/<repo>`）写进二进制，
 compose 传进来的 `JARVIS_IMAGE` 优先。
 
@@ -57,7 +59,7 @@ compose 传进来的 `JARVIS_IMAGE` 优先。
 cp .env.example .env    # 填 JARVIS_PUBLIC_URL、JARVIS_DB_PASSWORD（openssl rand -hex 24）、PUID / PGID
 docker compose up -d
 docker compose logs -f hub
-docker compose exec hub jarvisd hub pair    # App 扫码配对
+docker compose exec hub personad hub pair    # App 扫码配对
 ```
 
 - `JARVIS_PUBLIC_URL`：手机怎么访问这台 NAS 的 18660 端口（局域网地址、VPN 地址，或 NAS 自带的反向代理给的 HTTPS 地址）。
@@ -68,15 +70,15 @@ docker compose exec hub jarvisd hub pair    # App 扫码配对
   那样入口脚本改不了用户，PUID / PGID 不生效，ssh 也跑不起来（日志里会有一行警告）。
 - `JARVIS_DB_PASSWORD`：只用字母和数字（它原样拼进数据库地址），`openssl rand -hex 24` 即可。Postgres 只在第一次建数据目录时用它，
   之后改 `.env` 会连不上库，要改得同时在库里 `ALTER USER jarvis PASSWORD '…'`。
-- hub 容器带 `init: true`：jarvisd 起的 ssh 被杀掉后，它的 ProxyCommand / ProxyJump 子进程由 init 回收，不留僵尸进程。
-- 目录：`data/` 是 hub 的 `~/.jarvis`（`hub.json`、密钥、tailcat key、知识库 `data/data`），`postgres/` 是数据库；都在 compose 旁边，
+- hub 容器带 `init: true`：personad 起的 ssh 被杀掉后，它的 ProxyCommand / ProxyJump 子进程由 init 回收，不留僵尸进程。
+- 目录：`data/` 是 hub 的 `~/.persona`（`hub.json`、密钥、tailcat key、知识库 `data/data`），`postgres/` 是数据库；都在 compose 旁边，
   NAS 的文件管理器里看得到，备份这两个目录即可。`hub.json` 和密钥文件是 0600。
 
 接一台电脑（tailcat）：
 
 ```sh
-docker compose exec hub jarvisd hub tailcat-key          # NAS 上：hub 的公钥
-~/.jarvis/bin/jarvisd node tailcat init --hub <公钥>     # 那台电脑上：打印它的地址
+docker compose exec hub personad hub tailcat-key          # NAS 上：hub 的公钥
+~/.persona/bin/personad node tailcat init --hub <公钥>     # 那台电脑上：打印它的地址
 ./scripts/deploy/node-launchd.sh install                        # 那台电脑上：常驻 node
 ```
 
@@ -92,7 +94,7 @@ docker compose exec hub jarvisd hub tailcat-key          # NAS 上：hub 的公�
 | `JARVIS_LISTEN` | hub 监听的地址（默认 `:18660`；改它要同时改 compose 的端口映射和镜像的健康检查） |
 | `JARVIS_LOCAL_NODE=0` | 第一次启动不写「本机」那台机器（镜像里已设） |
 | `JARVIS_ADMIN_ACCESS`、`JARVIS_ADMIN_CIDRS` | 管理界面（`/admin`）谁能打开：`loopback` / `lan` / `cidrs`（网段逗号分隔）/ `any`，见下面「管理界面」。没设时入口脚本打印一行提醒，按 hub.json 的 `admin.access`（没写就是 `lan`） |
-| `JARVIS_NODE_BINARIES` | 「重新部署」用的 node 构建在哪（镜像里是 `/opt/jarvis/nodes`；原生方式是 `~/.jarvis/bin/nodes`） |
+| `JARVIS_NODE_BINARIES` | 「重新部署」用的 node 构建在哪（镜像里是 `/opt/jarvis/nodes`；原生方式是 `~/.persona/bin/nodes`） |
 | `PUID` / `PGID`、`TZ` | 见上 |
 | `JARVIS_IMAGE`、`JARVIS_POSTGRES_IMAGE`、`JARVIS_PORT` | compose 用：两个镜像从哪拉、hub 映射到宿主的哪个端口。`JARVIS_IMAGE` 也传进 hub 容器：hub 查它的标签，看有没有新镜像（见下「升级」） |
 | `JARVIS_REGISTRY_TOKEN` | 镜像是私有的时候，一个能读它的 token（GitHub：`read:packages` 的 Personal Access Token），hub 拿它查新镜像；公开的镜像不用 |
@@ -137,14 +139,14 @@ docker compose pull && docker compose up -d
   里的 `Gateway`；这等于放行所有经映射进来的请求，只有端口只对本机开时才安全）。
 - **`loopback`** 在容器里是容器自己：`docker compose exec hub wget -qO- http://127.0.0.1:18660/admin` 这类用法，平时基本用不上。
 - **`any`** 要 hub 开 TLS（`data/hub.json` 的 `public.tls_listen`），并在 compose 里把 TLS 端口也映射出来。
-- 忘了密码：`docker compose exec hub jarvisd hub admin reset-password`。
+- 忘了密码：`docker compose exec hub personad hub admin reset-password`。
 - 「重启 hub」按钮在容器里可用：hub 退出后由 `restart: unless-stopped` 拉起来。
 
 ## 从原生方式迁过来
 
 1. 原来的机器上停 hub（`systemctl --user stop jarvisd`），导出数据库：
    `docker exec jarvis-postgres pg_dump -U jarvis -Fc jarvis > jarvis.dump`。
-2. 把原来的 `~/.jarvis` 拷成 NAS 上的 `data/`（`bin/` 可以不要），`hub.json` 里删掉 `kind: local` 那台（那台机器要继续跑 Agent
+2. 把原来的实际运行目录（新默认 `~/.persona`，已有部署也可能仍是兼容目录 `~/.jarvis`）拷成 NAS 上的 `data/`（`bin/` 可以不要），`hub.json` 里删掉 `kind: local` 那台（那台机器要继续跑 Agent
    的话改成 `ssh` 或 `tailcat`），`database_url` 不用管（环境变量覆盖）。
 3. `docker compose up -d postgres`，导入：`docker compose exec -T postgres pg_restore -U jarvis -d jarvis --clean --if-exists < jarvis.dump`，
    再 `docker compose up -d`。token 不变，已配对的手机只要把地址改成新的（或重新扫码）。

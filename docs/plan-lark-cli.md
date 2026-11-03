@@ -9,7 +9,7 @@
 助手的 lark-connector skill。没有 lark-connector 的 hub 就完全没有飞书。
 
 飞书官方的 [lark-cli](https://github.com/larksuite/cli)（npm `@larksuite/cli`，MIT）用开放平台应用 + 用户授权读写飞书，任何人都能装。
-目标：只装 lark-cli、不配 lark-connector 的 hub 也能给 Jarvis 和 AI 分身提供飞书上下文。lark-connector 的现有行为不变，只是多一种来源。
+目标：只装 lark-cli、不配 lark-connector 的 hub 也能给 Persona 和 AI 分身提供飞书上下文。lark-connector 的现有行为不变，只是多一种来源。
 
 不做：不为飞书做浏览页面（`docs/feishu.md`「不做第二个飞书」）；不替换 lark-connector。
 
@@ -39,7 +39,7 @@
 
 | 现在 | lark-cli | 降级 |
 | --- | --- | --- |
-| 候选会话：未读会话 + 任意处 @我（`conversations?scope=unread / mentions`，需要 feed、未读） | 每次轮询一次 `+messages-search --start <上次>`，在 hub 里筛：@ 了我、私聊、我参与的话题里的新回复（见「收件箱收什么」） | 收「@我」、私聊、我参与的话题的回复；群里不在这三类的未读不进收件箱。「处理过」照旧只记在 Jarvis 里 |
+| 候选会话：未读会话 + 任意处 @我（`conversations?scope=unread / mentions`，需要 feed、未读） | 每次轮询一次 `+messages-search --start <上次>`，在 hub 里筛：@ 了我、私聊、我参与的话题里的新回复（见「收件箱收什么」） | 收「@我」、私聊、我参与的话题的回复；群里不在这三类的未读不进收件箱。「处理过」照旧只记在 Persona 里 |
 | 条目上下文、我回过没有（`Messages` / `threads` + `isMine`） | `+chat-messages-list`、`+threads-messages-list`，发送者是我 | 能做 |
 | 文档通知：@我、评论、分享（`documents/notifications`） | 无 | 第一版不做 |
 | 文档、表格、多维表格的读写和评论回复（`documents/*`） | `docs`、`sheets`、`base`、`drive` 评论 | 能做，适配层重写 |
@@ -77,7 +77,7 @@
 
 | 现在 | lark-cli | 降级 |
 | --- | --- | --- |
-| lark-connector skill：`ol METHOD PATH` | `lark-cli <领域> <命令>`；Jarvis 内置一个短 skill 指路，细节让 Agent 用 `lark-cli skills read` 读 | 能做 |
+| lark-connector skill：`ol METHOD PATH` | `lark-cli <领域> <命令>`；Persona 内置一个短 skill 指路，细节让 Agent 用 `lark-cli skills read` 读 | 能做 |
 | 写操作过 `ol` 闸门、手机确认 | 闸门认 `lark-cli`，按它自报的风险等级判断（见下面「闸门」） | 能做 |
 | `lark_chats`（未读 / @我 / 最近） | 最近：`+chat-list`；@我：搜索 | 没有「未读」过滤 |
 | `lark_messages`、`lark_search`（消息、文档、人、日程、妙记、待办、邮件） | `+chat-messages-list`；`+messages-search`、`drive +search`、`contact`、`calendar`、`minutes`、`task`、`mail` | 能做 |

@@ -7,15 +7,15 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 
 | Tab | 内容 |
 | --- | --- |
-| Jarvis | **Jarvis 助手**（2026-10-30 从「对话」改名）：hub 机器上 `~/.jarvis/assistant` 里**无头运行**的 Claude（`claude -p` + stream-json，不进 herdr；逐字流式；
-点顶栏正中的头像（菜单里「启动器：…」）随时切换启动器 / 模型，下一条消息起用 `--resume` 换过去，同一个菜单里还有「会话信息」；首页模型标签决定新对话用哪个，默认在设置里改），CLAUDE.md 由 hub 生成，告诉它怎么访问各台电脑（ssh）、飞书等公司数据（lark-* 等 skills）、iPhone（phone_*）和邮件（mail_*）。首页是问候 + 可用设备 + 6 个建议；发出第一句立即显示气泡和「正在准备」，后台起会话。对话里隐藏思考，工具调用折成一行「工具 N · 电脑、iPhone…」。顶栏和侧边栏见下面「Jarvis 顶栏和侧边栏」；知识库（`KnowledgeView`，2026-10-31 重做：顶部一排类型胶囊（项目 / 会话 / 人 / 文档 / 会议 / 日程，选中的带数量），右上角漏斗按标签筛选；项目分「重点」（P0 / P1）「其他进行中」「已完成」，「不是项目」收起；每行是类型图块（人和会话是首字，颜色跟重要级）+ 名字 + 一句话 + P 级 / 长短期 / 相关性 / 放得下的标签；全文搜索按条目合并，一条一行，带名字和最多两处命中、加粗搜索词，点开就是那个条目。详情顶部是图块、名字、徽章、一句话、全部标签和「问 Jarvis」「开 Agent」；下面依次是在做这个项目的 Agent、竖线时间线（新的在上，默认 6 条）、档案、按类型分组的关联（每类 4 个，可展开）、代码目录、最近 7 天的消息、目录路径；右上角「打标」手动改重要级 / 相关性 / 标签 / 项目类型和状态。截图参数：`-tab assistant -openAssistantPage knowledge`，加 `-showKnowledgeEntry <kind>/<id>` 打开某条、`-showKnowledgeLower YES` 去掉头部直接看时间线、`-showKnowledgeSearch <词>` 搜索）；第一段对话就是**主对话**（`assistant.main`，历史里标「主对话」），之后的新对话是旁支；首次启动打开主对话。其他页面「交给 Jarvis」（Agents 长按菜单、知识库「问 Jarvis」）都发进主对话（`AppModel.askJarvis`，没有主对话就新建一个） |
+| Persona | **Persona 助手**（2026-10-30 从「对话」改名）：hub 机器上 `~/.persona/assistant` 里**无头运行**的 Claude（`claude -p` + stream-json，不进 herdr；逐字流式；
+点顶栏正中的头像（菜单里「启动器：…」）随时切换启动器 / 模型，下一条消息起用 `--resume` 换过去，同一个菜单里还有「会话信息」；首页模型标签决定新对话用哪个，默认在设置里改），CLAUDE.md 由 hub 生成，告诉它怎么访问各台电脑（ssh）、飞书等公司数据（lark-* 等 skills）、iPhone（phone_*）和邮件（mail_*）。首页是问候 + 可用设备 + 6 个建议；发出第一句立即显示气泡和「正在准备」，后台起会话。对话里隐藏思考，工具调用折成一行「工具 N · 电脑、iPhone…」。顶栏和侧边栏见下面「Persona 顶栏和侧边栏」；知识库（`KnowledgeView`，2026-10-31 重做：顶部一排类型胶囊（项目 / 会话 / 人 / 文档 / 会议 / 日程，选中的带数量），右上角漏斗按标签筛选；项目分「重点」（P0 / P1）「其他进行中」「已完成」，「不是项目」收起；每行是类型图块（人和会话是首字，颜色跟重要级）+ 名字 + 一句话 + P 级 / 长短期 / 相关性 / 放得下的标签；全文搜索按条目合并，一条一行，带名字和最多两处命中、加粗搜索词，点开就是那个条目。详情顶部是图块、名字、徽章、一句话、全部标签和「问 Persona」「开 Agent」；下面依次是在做这个项目的 Agent、竖线时间线（新的在上，默认 6 条）、档案、按类型分组的关联（每类 4 个，可展开）、代码目录、最近 7 天的消息、目录路径；右上角「打标」手动改重要级 / 相关性 / 标签 / 项目类型和状态。截图参数：`-tab assistant -openAssistantPage knowledge`，加 `-showKnowledgeEntry <kind>/<id>` 打开某条、`-showKnowledgeLower YES` 去掉头部直接看时间线、`-showKnowledgeSearch <词>` 搜索）；第一段对话就是**主对话**（`assistant.main`，历史里标「主对话」），之后的新对话是旁支；首次启动打开主对话。其他页面「交给 Persona」（Agents 长按菜单、知识库「问 Persona」）都发进主对话（`AppModel.askJarvis`，没有主对话就新建一个） |
 | 开发 | 搜索框打开时收起，下拉显示、上滑收起（见 `docs/lessons/ios.md`「布局与组件」）；手机上的快速筛选是列表首行、随列表滚动，宽屏分栏时仍在列表上方。快速筛选（`AgentFilter`：全部 / 需要你 / 未读 / 工作中，带计数，点一下生效，和机器筛选、搜索叠加；不记住，回来是全部）。筛选下列出选中那一刻符合的 Agent（`kept`），之后看过的不消失，留在原位（灰点），空间和行只按时间排，方便一路往下看；重选筛选或切机器才重算。未读筛选顶部「全部标为已读」（先确认）。需要你处理卡片只在全部 / 需要你下显示，选了机器就只显示那台的。左上角菜单里「卡片 / 细列表」（`dev.compact`，记住；细列表 `CompactSlotRow` 一行：状态点、标题、tab（不按项目时「空间 › tab」）、时间。
 细列表整体一套尺度 `CompactList`（2026-10-31 用户要求「整体更协调，不要一些大一些小」）：三级字号（分组标题 = 空间名 / 需要你处理 / 空闲的空间 / 状态 / 机器用 `heading`，行标题 `secondary`，
 元信息 = tab、时间、计数、空闲 tab 名用 `caption`）；每一行（Agent、「还有 N 个空闲」、「收起」、空闲的空间、全部标为已读）一样高、一样的内边距，行首记号（状态点、折叠箭头、空间图标）在同一列，标题左缘对齐；
 行右侧只放时间，所以时间右对齐成一列；空闲的 tab 名是一行小字，不用胶囊；空闲的空间是一行（名字、几个标签、时间），点开在下面列出它的 Agent，不用 DisclosureGroup（它的行高和箭头和别的行不一样）；
 空间标题的 ⋯ 是灰色 `ellipsis`，和计数一样安静；需要你处理也是一行（`CompactInteractionRow`：红色的类型图标、计划等你审批 / Claude 在问你…、会话 · 机器、时间、›，点进对话作答；卡片模式仍是带快捷按钮的卡片）。只有一行的分组是胶囊形，是 iOS 26 分组列表自己的圆角（自定义行背景也会被它裁成胶囊），和「设置」一致，用户 2026-10-31 接受）、「全部折叠 / 全部展开」。点空间标题折叠 / 展开（`dev.folded`，记住；折叠的空间是一行标题，仍显示各状态计数），按状态 / 按机器的分组标题也能折叠；空间页从标题 ⋯ 的「打开空间」进，同一个菜单有「全部标为已读（N）」。左上角菜单选分组方式（`DevGrouping`，记住）：按项目（默认，下面描述的样子）/ 按状态（需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，已看一段默认折叠，展开就是它的全部 Agent，里面没有「还有 N 个空闲」那一层（2026-10-31：原来要点两次）；「待唤醒」是没有新消息要看、但 `/loop` 还没到点或后台命令 / 子代理还在跑的 Agent，过几分钟可能有新消息）/
 按机器（每台机器一段，标题有在线状态和状态计数，段内按状态排、同状态按最后更新时间、空闲折叠）；不按项目时行末的元信息带「空间 › tab」（按状态时还带机器名）；三种分组用同一个顺序（`ChatsView.rank`）：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，同一状态按最后更新时间排（新的在上）；屏蔽了的工作中 / 完成未看 / 待唤醒的 Agent 算「已屏蔽」（需要你的照旧排第一）。按项目时：原来的会话列表（不含助手对话）：「需要你处理」卡片 → 置顶的 Agent（置顶的 Agent 只在这里出现一次、和别的行一样只靠圆点表达状态，不再出现在空间 / 状态 / 机器分组里；空间内的 Agent 按上面的状态顺序排（空间页 `SpaceView` 仍按 tab 顺序，和 herdr 一致）；手表仍按 `AgentState.priority`） → 置顶的空间 → 进行中 → 刚完成 → 屏蔽但有 Agent 在跑的空间（弱显示）→ 空闲的空间（折叠，屏蔽的空闲空间也在这里）；搜索、按机器筛选、左滑置顶 / 中断、右滑关闭（长按菜单、对话页「…」也有「关闭 Agent…」，herdr 里的任何 Agent 都能关，先从底部弹出确认卡片 `CloseAgentSheet`：哪个 Agent、在哪台机器哪个标签页、关了会怎样，「关闭 Agent」/「取消」）；空间标题 ⋯ 置顶空间。置顶存在 hub（`/api/v1/pins`）。`/loop` 驱动的 Agent 带「⟳ 下次 12:20」标记、不折进空闲；轮次结束但还有后台命令 / 子代理在跑的 Agent 带琥珀色「⚙ 后台 N」，同样不折进空闲，它所在的空间也不算空闲空间，长按可停止循环。改名（空间：标题 ⋯ / 空间页菜单「重命名空间」，同步改 herdr workspace；Agent：长按 / 对话页「…」「重命名…」，一次改 herdr tab 名和 Claude 会话名，Mac 上 herdr 和 claude --resume 看到的一致）。屏蔽（Agent：长按或对话页「…」菜单；空间：标题右侧的 ⋯，或空间页右上角菜单——列表分组标题上的长按菜单触发不了）：不再推送通知（空间屏蔽时，其中的 Agent 可以单独「开启通知」，反之亦然——每个 Agent 的开关叠在空间的设置上，`Pins.togglingMute`）；列表里弱化（状态色变灰、🔕、不透明度 0.8——比工作中的弱，不比空闲的空间淡），在跑的照常显示不折叠，屏蔽且没在跑的空间就是普通的空闲空间；Agents tab 角标不计（`/api/v1/mutes`） |
-| 收件箱 | 飞书消息和邮件在一个列表里，一行一件事（一个会话的新消息、一个邮件线程），AI 分拣，左滑已处理；筛选来源 / 账号 / 类型（`docs/inbox.md`）。点开飞书是会话页，同飞书手机版：别人的消息在左侧带头像，群聊里连续消息的第一条显示名字；自己的在右侧、不带自己的头像和名字，气泡蓝色（#D1E3FF / 深色 #133063）；点头像或名字看资料卡；点表情回应切换自己的回应；长按菜单最上面一排 6 个常用表情（hub 的 `reactions/quick`），点一下就回应并收起菜单，「☺︎」或长按「表情回复」打开常用 + 全部表情；removed分享链接渲染成卡片，点开看帖子全文、图片和评论。打开时停在这件事的第一条新消息，只把上过屏的消息上报为已读。卡片渲染等见下文「飞书消息渲染」；邮件：详情、回复、写信、「让 Claude 处理」、邮箱管理（右上角菜单），添加邮箱（也可以在 Jarvis 里说「帮我添加邮箱」，它用 `mail_account_add` 加，手机上确认） |
+| 收件箱 | 飞书消息和邮件在一个列表里，一行一件事（一个会话的新消息、一个邮件线程），AI 分拣，左滑已处理；筛选来源 / 账号 / 类型（`docs/inbox.md`）。点开飞书是会话页，同飞书手机版：别人的消息在左侧带头像，群聊里连续消息的第一条显示名字；自己的在右侧、不带自己的头像和名字，气泡蓝色（#D1E3FF / 深色 #133063）；点头像或名字看资料卡；点表情回应切换自己的回应；长按菜单最上面一排 6 个常用表情（hub 的 `reactions/quick`），点一下就回应并收起菜单，「☺︎」或长按「表情回复」打开常用 + 全部表情；removed分享链接渲染成卡片，点开看帖子全文、图片和评论。打开时停在这件事的第一条新消息，只把上过屏的消息上报为已读。卡片渲染等见下文「飞书消息渲染」；邮件：详情、回复、写信、「让 Claude 处理」、邮箱管理（右上角菜单），添加邮箱（也可以在 Persona 里说「帮我添加邮箱」，它用 `mail_account_add` 加，手机上确认） |
 | 设置 | 助手（默认启动器 / 模型；「主动做事和记忆」四页，`AssistantProactiveViews.swift`：定时任务——列表行尾开关直接启停，编辑已有的离开页面即保存，新建（＋，可选会前准备 / 周报 / Agent 巡检 / 下班前盘点模板）是带「取消 / 添加」的浮层，避免试一下模板就建出来；立即运行 / 查看上次结果切到「对话」打开那段对话；一次性跟进、按间隔重复的任务和定时任务在同一页、同一个编辑页（运行方式：模型、权限模式、思考强度，全部放行先确认）；记忆——解析 frontmatter，标题优先取 MEMORY.md 索引里的中文标题，类型标签，详情 Markdown 渲染，「编辑」改整个文件，左滑删除，索引单独一行只读；关于我——编辑 notes，离开即保存）、Claude Code 设置（各机器 `~/.claude/settings.json` 的白名单项：离开回顾 recap、思考强度、总是思考、回复语言等，可一键应用到所有机器）、机器（二级页：在线状态、会话数、版本、启动器、重连）、连接器（2026-11-01：这台 iPhone = 原来的手机数据开关和授权、邮箱 = 原来收件箱 ⋯ 里的管理邮箱、飞书 = hub 的 lark-connector 连接状态和用途，`ConnectorsViews.swift`，hub `GET /api/v1/lark/status`；
 hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加行（2026-11-02，先有 GitHub：状态、账号、「来自 <机器> 的 gh 登录」、最近一次同步，通用的 `HubConnectorView`，DEBUG `-openConnectorGitHub YES`；要在 App 里登录的连接器（Telegram，`signsInHere`）多出开关、分步登录、退出登录、删除已存的数据，`ConnectorSignInSections`，DEBUG `-openConnectorTelegram YES`））、通知、重新配对 |
 
@@ -153,7 +153,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   - 「选择」为什么不在原地选：消息是 MarkdownUI 排的一组 SwiftUI Text（段落、列表、表格各是一块），SwiftUI 的 Text 在 iOS 上
     只能整段拷贝、不能拖手柄选一段，更不能跨块；原地选要换成 UITextView 重排，表格 / 代码块的样式会丢。技术限制，保持弹出纯文本页。
   - 「分享」（`ShareCard.swift`）：把消息排成一张卡片（渐变底 + 白 / 深色卡片：Claude 或「我」、来源「app › leader」、时间、正文、
-    Jarvis 标记），浅色 / 深色可切，「保存图片」进相册（仅添加权限）、「分享图片」走系统分享，右边的按钮分享纯文字。
+    Persona 标记），浅色 / 深色可切，「保存图片」进相册（仅添加权限）、「分享图片」走系统分享，右边的按钮分享纯文字。
     `ImageRenderer` 画不出 ScrollView：卡片用单独的 Markdown 主题 `.card`（代码块折行、表格不横滑），否则表格和它后面的内容全是空白；
     渲染要设 `proposedSize` 宽度，不然高度按别的宽度量，卡片底下多出一大块空白。超过 3000 字截断。
 - 顶栏（Agents 对话页）：① 返回 / 标题 + 副标题 / …，副标题是「● 状态（工作中带这一轮的用时，按分钟）· 机器 · 空间 › tab」（2026-10-31 起「已看」「未运行」这类平静的状态不写字，只留圆点；点标题从底部弹出「会话信息」浮层：运行 / 用量 / 位置分组、拷贝 id 和恢复命令，下滑或点上方关闭，原来从标题下拉的卡片去掉了），状态字用状态色，
@@ -184,7 +184,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
     默认「手机尺寸」（设置 › 尺寸）：hub 有 `terminal_control` 时手机按自己的列 × 行接管终端，Claude 按手机宽度排版，键直接写进终端；
     表头显示「手机尺寸 45×29」，被别的程序占着先问「接管 / 只看」，被抢走后显示「只看 · 接管」。离开 tab、进后台、断线后窗格回到电脑的尺寸（`docs/terminal.md` 第十一节）。画面由 `TerminalView` 按格子画：每个字符画在自己的格子里
     （宽字符两格），框线和块字符画成线和矩形，所以中文和框线永远对齐；屏幕只画到最后一行有字的地方或光标处。默认按手机宽度折行，
-    右上角「换行 / 不换行 · 左右滑」切换（`@AppStorage("terminalWrap")`）；配色跟随浅 / 深色（`TerminalTheme`：Jarvis、Solarized、深夜），
+    右上角「换行 / 不换行 · 左右滑」切换（`@AppStorage("terminalWrap")`）；配色跟随浅 / 深色（`TerminalTheme`：Persona、Solarized、深夜），
     字号 `terminalFontSize`。长按选词、拖动扩选，菜单「拷贝 / 全选」；点 OSC 8 链接或行里的网址在 App 内打开。
     往上滑到顶附近自动加载前一段 200 行（带颜色，瀑布式，不一次取全量），
     一直到 herdr 保留的最前面。每段用「当前最上面 20 行 + 已加载行数」去服务端缓冲里定位（`POST …/screen/before`）：Claude 重绘会把同一屏幕反复推进滚动历史，同样的内容可能出现多处，取离「末尾往前已加载行数」最近的那处；终端仍在输出也不会错位；
@@ -233,7 +233,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 
 ## 新外壳（ChatGPT 式，2026-11-01）
 
-用户要求（2026-11-01）：照 ChatGPT 的 iOS App 重排 iPhone 的外壳，「聊天是 Jarvis（大改），工作是 Agents（改个入口）」，
+用户要求（2026-11-01）：照 ChatGPT 的 iOS App 重排 iPhone 的外壳，「聊天是 Persona（大改），工作是 Agents（改个入口）」，
 两页叫「助手」「Agents」（2026-11-01 用户要求，原来叫「聊天」「工作」）；新对话页和旧布局一样是欢迎页（2026-11-02 用户要回来的，原来没有待办时什么都不放，整页空白）；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
 只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变。代码在 `Jarvis/Views/Shell/`，组件在
 `DesignSystem/ShellComponents.swift`、`ShellComposerBar.swift`，颜色和尺寸是 `Theme.Shell`（各风格都用这一套中性色）。
@@ -242,18 +242,18 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 | --- | --- |
 | 底部 | 没有 tab 栏 |
 | 顶栏 | 形象的头像 · 助手 \| Agents（工作带等你的 Agent 数）· 右边按钮。助手页的是浮在对话上的 `AssistantTopBar`（壳里换成 `shellBar`）；Agents 页是 `AgentsTopBar`，盖在系统导航栏上（导航栏留着给搜索框用），两页的按钮位置一像素不差。顶栏比系统导航栏高，Agents 根页在自己的导航项上加一行空白 prompt 让位（`ShellNavigationClearance`，不动导航容器，进对话再返回列表不动，#340）；两页顶栏的按钮因此在 xxxLarge 字号封顶（`Theme.Shell.topBarLargestTypeSize`）。点了搜索，系统把搜索框升进导航栏那一行（带「取消」）：这时 `AgentsTopBar` 淡出让位、侧边栏也拉不出来，取消后再回来（从搜索结果打开会话时也不闪回来）；搜不到时写「没有找到「…」」，不再是「开始第一个开发会话」（`ShellSearchTests`）。助手页再点一下「助手」打开原来头像菜单里的东西（知识库、详细信息、启动器、会话信息、中断…） |
-| 左上角的头像 | 原来是 ☰。2026-11-01 用户要求：换成顶栏后旧布局正中的形象头像没地方放了，改成左上角的「历史对话」入口，用来展示形象。两页（和拖动时的 `ShellMovingBar`）都是同一个 `ShellPersonaButton`：当前形象的状态头像（`PersonaDot`，和旧布局正中的同一个，五个状态见 `docs/persona.md`「状态」），状态取助手页当前那条对话的（`assistantCurrent`），所以两页、拖动中都一样；点了打开抽屉。和右边的圆按钮一样大（点按区域 `Theme.Size.tapTarget`，随字号变大）。收件箱有「需要你」时右下角一个红底托盘角标（`InboxMark`）：用托盘不用圆点，不会被看成头像的状态；角标圆心在头像外框的角上再往外一点，和圆形的脸、等你处理的红圈、工作中的弧线之间留一条缝，也避开形象包画在右上角的思考气泡和 z。VoiceOver 读「历史对话」，值是「Jarvis，空闲」（形象名和状态）加「收件箱有事等你」。头像和角标读的数据（会话、交互、机器、连接、收件箱）都只在按钮自己里面读，顶栏不跟着推送重建（#178；`AgentsTopBar` 是 Equatable）。`ShellAvatarTests`；截图里没有角标用 mock 加 `MOCK_INBOX=empty` |
+| 左上角的头像 | 原来是 ☰。2026-11-01 用户要求：换成顶栏后旧布局正中的形象头像没地方放了，改成左上角的「历史对话」入口，用来展示形象。两页（和拖动时的 `ShellMovingBar`）都是同一个 `ShellPersonaButton`：当前形象的状态头像（`PersonaDot`，和旧布局正中的同一个，五个状态见 `docs/persona.md`「状态」），状态取助手页当前那条对话的（`assistantCurrent`），所以两页、拖动中都一样；点了打开抽屉。和右边的圆按钮一样大（点按区域 `Theme.Size.tapTarget`，随字号变大）。收件箱有「需要你」时右下角一个红底托盘角标（`InboxMark`）：用托盘不用圆点，不会被看成头像的状态；角标圆心在头像外框的角上再往外一点，和圆形的脸、等你处理的红圈、工作中的弧线之间留一条缝，也避开形象包画在右上角的思考气泡和 z。VoiceOver 读「历史对话」，值是「Persona，空闲」（形象名和状态）加「收件箱有事等你」。头像和角标读的数据（会话、交互、机器、连接、收件箱）都只在按钮自己里面读，顶栏不跟着推送重建（#178；`AgentsTopBar` 是 Equatable）。`ShellAvatarTests`；截图里没有角标用 mock 加 `MOCK_INBOX=empty` |
 | 两页 | 一条横条：抽屉 \| 助手 \| Agents（`ShellPager`，2026-11-01 用户要求）。助手页左拖、Agents 页右拖跟手翻到另一页，切换按钮的选中块跟着手指走；松手和抽屉一个规则（快甩就过去，否则过半），同一个弹簧。点切换按钮也是滑过去。助手（`AssistantView`）一直在，Agents（`ChatsView`）第一次切过去或拖过去时建好，之后都留着，切换不丢位置；静止时另一页透明、不接触摸。拖动中两页自己的顶栏藏起来，壳上一条 `ShellMovingBar` 顶替（头像和切换按钮不动，右边按钮从「新对话」渐变成「新建会话」）：各页的顶栏画在自己页里，会被另一页盖住一截 |
 | 横向拖动归谁 | 一个 UIKit pan（`DrawerPan`）在手指动了几个点时按实际位移定：45° 以内算横向，更陡是列表自己的滚动。助手页：右拖是抽屉（和以前一样），左拖翻到 Agents。Agents 页：右拖翻回助手；从行的中间起拖仍是行自己的右滑（置顶 / 中断 / 标为已看），从左边缘 32pt 内起拖、或者不在行上（分组标题、筛选条、空白）就翻页；左拖是行的「关闭」。Agents 页不再右拖出抽屉，点左上角的头像。能往那个方向滚的代码块、表格先滚；在正在输入的文字上拖不翻页；推出了页面（系统右滑返回）、在搜索、抽屉开着时都不翻页 |
-| 侧边栏 | 从 Jarvis tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；两页都可以点左上角的头像（Agents 页右拖是翻回助手）。内容：认识 Jarvis、收件箱（带数）、定时任务、知识库、机器，下面是对话历史，底部「新对话」药丸 + 设置 |
+| 侧边栏 | 从 Persona tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；两页都可以点左上角的头像（Agents 页右拖是翻回助手）。内容：认识 Persona、收件箱（带数）、定时任务、知识库、机器，下面是对话历史，底部「新对话」药丸 + 设置 |
 | 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
 | 设置 | 全屏浮层（`model.shellSettings`，放在 model 里：换风格会重建整棵树，浮层要回到原来那一页），右上角 × |
 | 空对话 | 和旧布局同一个欢迎页（`AssistantWelcome`：问候、开一段新对话 / 主对话的说明、在线的机器和 iPhone、六个可以问的事；液态玻璃是两列卡片，BeautifulUI 是「可以问我」列表卡片）。2026-11-01 第一版只放输入框，没有待办时整页空白，用户 2026-11-02 要回原来的设计。输入框上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`），没有就不显示；这一块和输入框垫着页面底色，欢迎页滚到它们下面，在上沿渐隐（不硬切）。行数按空间定（2026-11-02，#283，iPhone Duo 外屏上 3 行 + 输入框占了半屏、把建议卡片拦腰截断）：这一块不盖住欢迎页第一行可以问的事（`NeedsRoom`：量第一行的下沿、页面高度（键盘不算）、输入框静止时的高度），放不下就少几行，至少 1 行；普通 iPhone 的液态玻璃仍是 3 行，17e 的 BeautifulUI 是 2 行，Duo 外屏和 SE 是 1 行。收起的里面有 Agent 时那一行写「还有 N 件需要你」，只剩 Agent 时点了去 Agents 页（收件箱里没有它们）。`AssistantWelcomeTests` 守着：两种布局、从侧边栏点新对话，问候、说明、第一个建议都在屏幕上、在输入框上面；「需要你」不盖住第一个建议、聚焦输入框后行数不变（在 Duo 外屏上也跑） |
-| 输入框 | 一行：[+] 问 Jarvis [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [权限和思考强度] [麦克风] [发送]（`ShellComposerBar`）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。权限 / 思考强度从输入框上面那排挪进了量表菜单（`SessionModesMenu`、新对话的 `StarterModesMenu`，后者还能选启动器） |
-| 对话 | 用户气泡换成中性灰（`Theme.Shell.userBubble`），只在壳里的 Jarvis 对话（`\.shellChat`），Agents 的对话不变 |
+| 输入框 | 一行：[+] 问 Persona [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [权限和思考强度] [麦克风] [发送]（`ShellComposerBar`）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。权限 / 思考强度从输入框上面那排挪进了量表菜单（`SessionModesMenu`、新对话的 `StarterModesMenu`，后者还能选启动器） |
+| 对话 | 用户气泡换成中性灰（`Theme.Shell.userBubble`），只在壳里的 Persona 对话（`\.shellChat`），Agents 的对话不变 |
 | 弱网 | 顶栏下面一个小药丸（等待网络 / 连接中…），两页共用；原来的标题位被切换按钮占了 |
 
-路由不变：所有跳转仍然写 `AppModel.selectedTab`（通知、Siri、交给 Jarvis、收件箱的行…），壳把 `.assistant` / `.chats` 当成两页，
+路由不变：所有跳转仍然写 `AppModel.selectedTab`（通知、Siri、交给 Persona、收件箱的行…），壳把 `.assistant` / `.chats` 当成两页，
 `.mail` 变成「在助手页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。
 
 UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`JarvisUITests/LaunchLayout.swift`，默认带 `-ui.oldLayout YES`）；
@@ -272,13 +272,13 @@ UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`Ja
 - **不用在**：对话的消息订阅、正在生成的回复、Agent 的任务、听写、计时（工作行的秒表、终端的 250ms tick、页头自动收起）。这些不管哪一页在前台都照常跑。
 - 系统 `TabView` 下这些和摘窗的时机一致，界面和行为不变。新写的轮询和上报已读用上面这两个，别直接写 `onDisappear` / `.task`。
 
-## Jarvis 顶栏和侧边栏（2026-10-30）
+## Persona 顶栏和侧边栏（2026-10-30）
 
 参考 dot 和 ChatGPT App（用户给的截图）。代码在 `Jarvis/Views/Assistant/AssistantTopBar.swift`、`AssistantSidebar.swift`。
 
 - **顶栏**浮在对话上方，没有系统导航栏，也没有实心的栏：下面是一层由上往下渐隐的雾（`TopFog`：页面底色 + 材质，延伸到状态栏下），对话从下面滚过去。
   对话列表顶端留出 `AssistantTopBar.height`（70pt），首页用 `contentMargins(.top)` 留出同样的高度。滚动时顶栏不动（不像 Agents 的页头会折叠）。
-- 正中是 **Jarvis 头像 + 名字胶囊**（主对话和新对话页是形象的名字，默认「Jarvis」；旁支对话是对话标题）。头像是当前形象的**状态圆点**
+- 正中是 **Persona 头像 + 名字胶囊**（主对话和新对话页是形象的名字，默认「Persona」；旁支对话是对话标题）。头像是当前形象的**状态圆点**
   （`PersonaDot`）：空闲 / 思考中 / 工作中 / 等你处理 / 离线各有自己的动画，见 `docs/persona.md`「状态」。点它弹出菜单：知识库、详细信息（资料页
   `AssistantProfileView`）、回到主对话（旁支时）；拷贝目录（助手的工作目录）、拷贝信息（对话名、会话 ID、所在机器、工作目录、启动器 / 模型、
   `claude --resume` 命令，方便贴给别的 Agent，`AssistantCopyText`）、拷贝会话 ID；启动器子菜单、会话信息卡片、工作中时的「中断」。
@@ -286,7 +286,7 @@ UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`Ja
   菜单第一项变成「连接详情」。
 - 左边圆按钮 **历史对话** 打开侧边栏，右边圆按钮 **新对话**（新对话页上置灰）。两个都是纯图标。
 - **侧边栏**在主页面下面，占屏宽 82%（最宽 380pt）。主页面覆盖它，向右滑开后仍是一张等尺寸的圆角卡片（深色模式加一圈细边，否则和侧边栏分不开）；侧边栏横向固定，只在被揭开时轻微上浮 8pt（`Theme.Motion.drawerLift`），不缩放、不淡入。点卡片或往左拖关闭。
-  内容（2026-10-31 照豆包的侧边栏改，用户给的截图）：顶部是大字的形象名（「Jarvis」）和右边一个圆的搜索按钮（点了换成搜索框 + 取消）；
+  内容（2026-10-31 照豆包的侧边栏改，用户给的截图）：顶部是大字的形象名（「Persona」）和右边一个圆的搜索按钮（点了换成搜索框 + 取消）；
   下面三行要开始的事：新对话、定时任务、知识库（图标 + 字，没有卡片）；一条分隔线；「置顶」（主对话固定在这里，显示成形象的头像 +「主对话」，
   长按别的对话可置顶，存在本机 `assistant.pinned`）和「最近」（其余按时间倒序，先显示 30 个，「查看全部」展开），每段标题右边一个灰色 ⋯
   （置顶：全部取消置顶；最近：新对话、查看全部）。每行只有一个圆形标记（按会话 id 取一种淡色的对话气泡，相邻的不同色）+ 一行标题，
@@ -325,9 +325,9 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
   - 右栏第一页没有返回按钮（旁边就是列表）：目标页加 `.splitDetailPage()`；Agents 对话页自绘的返回键看 `\.splitDetail` 隐藏（保留占位，标题居中）。
   - 分栏时对话页不隐藏 tab 栏（单栏时隐藏，好让对话占满）。
   - 设置页的入口全部改成按值（`SettingsPage`），视图式的 `NavigationLink { 页面 }` 会推进左栏自己的栈，在窄栏里打开。
-- **Jarvis**：regular 下侧边栏是 `NavigationSplitView` 的左栏（没有「设置」齿轮：tab 栏一直在旁边），左上角按钮显示 / 隐藏左栏；
+- **Persona**：regular 下侧边栏是 `NavigationSplitView` 的左栏（没有「设置」齿轮：tab 栏一直在旁边），左上角按钮显示 / 隐藏左栏；
   compact 下仍是抽屉。
-- **可读宽度**：对话和 Jarvis 首页最宽 760pt（`ChatView.readableWidth`），更宽时居中，顶栏仍然铺满。
+- **可读宽度**：对话和 Persona 首页最宽 760pt（`ChatView.readableWidth`），更宽时居中，顶栏仍然铺满。
 - **不用屏幕尺寸**：两块屏尺寸、比例都不同，`UIScreen.main` 一律不用。长按消息的操作条夹在对话区域里（`MessageMenu.area`
   坐标空间），交互卡片的表单最高为所在容器的 55%（`containerRelativeFrame`），图片缩放按视图的 `traitCollection.displayScale`。
 - **工具栏按钮都要有标题和图标**（`Label("新建会话", systemImage: …)`）：竖排时只显示图标，放不下收进溢出菜单时显示标题；
@@ -335,8 +335,8 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 - **侧边竖排栏**：系统把栏竖着放到侧边时（外屏，内屏横放；`toolbarVerticalEdge` 不为 nil，iOS 27.1 起），Agents 对话页不再画自己的页头按钮，
   把返回、终端、Git、文件、⋯ 交给系统工具栏，它们排进状态栏下面那一列（`ChatView.sideBarItems`，每个都有标题和图标）；页面顶部只留一条不折叠的标题
   （点开会话信息）和同空间的 Agent、循环 / 后台任务、子 Agent（`sideHeader`）。水平栏时（普通 iPhone、内屏竖放）照旧是自绘的可折叠页头。
-  Jarvis 的顶栏仍是自绘的、在内容顶部，它下面的雾横向铺到侧边状态栏下面（`BarFog`，只铺到内容宽度时深色下有一条竖边）。
-- **外屏矮**（约 678pt）：Jarvis 新对话页输入框上面的「需要你」按剩下的空间收行数（见上面「新外壳」的「空对话」）。
+  Persona 的顶栏仍是自绘的、在内容顶部，它下面的雾横向铺到侧边状态栏下面（`BarFog`，只铺到内容宽度时深色下有一条竖边）。
+- **外屏矮**（约 678pt）：Persona 新对话页输入框上面的「需要你」按剩下的空间收行数（见上面「新外壳」的「空对话」）。
 - **在模拟器上验证**：iPhone Duo 只有 iOS 27.1 运行时（这个运行时也只支持它）。开合 / 半折只能在 Xcode 的 Device Hub 里切，
   没有命令行。截图要指定屏幕：`xcrun simctl io <udid> screenshot --display=1`（外屏）/ `--display=3`（内屏，横放时是 2853×2007），
   不指定时可能拍到熄灭的那块（全黑）；先算一下亮度确认拍到的是亮着的屏。启动参数照常用（`-tab`、`-openSession` 等）。
@@ -346,7 +346,7 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：在 iPad 上是放大按钮的手机兼容窗口。
 
 - 布局和 iPhone Duo 一样按宽度分：常规宽度（iPad 全屏、大一些的分屏）是 `SplitNavigation` 左右两栏，紧凑宽度（窄的分屏 / 侧拉）是一个栈。
-- iPad 上左栏用 `Theme.Size.sidebar`（340…480，理想 400；系统默认太窄，Agents 卡片的标题全折行），Jarvis tab 的对话列表也一样，切 tab 时左栏不跳。
+- iPad 上左栏用 `Theme.Size.sidebar`（340…480，理想 400；系统默认太窄，Agents 卡片的标题全折行），Persona tab 的对话列表也一样，切 tab 时左栏不跳。
   iPhone Duo 不设宽度（系统按折痕分栏）。
 - iPad 支持四个方向（分屏和台前调度要求）；iPhone 仍然只竖屏。
 - 欢迎页的内容宽度不超过 `Theme.Size.readable`（560），不在大屏上铺满。
@@ -483,7 +483,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   着色（某个含义的字 + 它的浅底：状态用 `.tone`、@我 红、「推荐」用 AI 的紫色）、描边（Claude / Codex 这类种类）；`CountBadge` 是计数（白字压在
   `Theme.countBadge` 灰或主色上，或者状态的字压在状态浅底上，过 99 写 99+）。能点的东西（筛选、选项卡、模式选择、子 Agent 条）是控件，不用它们。
 - BeautifulUI（`apple/Packages/BeautifulUI`，BeautifulUI 仓库拷入的副本，来源和更新方法见包里的 `VENDORED.md`，不在这里改库代码）：
-  **只在「BeautifulUI」风格下用**（`AppStyle.usesBeautifulUI`，表面同液态玻璃，颜色按主题色），其他风格的思考过程、工具行、工作卡、输入框都是 Jarvis 原来的。
+  **只在「BeautifulUI」风格下用**（`AppStyle.usesBeautifulUI`，表面同液态玻璃，颜色按主题色），其他风格的思考过程、工具行、工作卡、输入框都是 Persona 原来的。
   2026-10-30 它曾直接替换原来的界面（#93、#94），用户觉得太丑，整体 revert 后改成这个主题。这个风格下：
   - 对话页的思考过程是它的 `ThinkingState`（✦ + 首行，展开后正文在一条引导线右边）。
   - 展开的工作卡里，连续两个以上的工具调用合成一行 chip（`ChatLine.toolRun`、`ChatView.runLines`、`ToolRunRow`）。
@@ -491,7 +491,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
     点一下展开成逐条工具行（`ToolChipRow`），再点一条才看参数和输出。只有一个调用的段直接是一行工具行。
     转到后台的调用不进组，单独一行，好让它的「后台 · 已完成 / 失败」一直看得见（`ChatView.foldsIntoRun`）。
     从后台任务通知跳到某个调用时，先展开它所在的组。
-  - diff、命令和输出、Markdown 代码块仍是 Jarvis 自己的（`DiffView`、`CodeBlock`）。
+  - diff、命令和输出、Markdown 代码块仍是 Persona 自己的（`DiffView`、`CodeBlock`）。
   - 颜色、圆角、字号由 `BUITheme.jarvis(spec)`（`BeautifulUIBridge.swift`）从当前的 `StyleSpec` 生成，在 RootView 注入：
     - 库的第三级文字也用 secondaryLabel（tertiaryLabel 在卡片上只有 1.7:1）；
     - 代码关键字用 `Theme.Hue.blue`；
@@ -513,7 +513,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
     不在列表里的图标集不会打进包，加一个图标要同时改 `AppIconChoice`、这一行和脚本（`AppIconChoiceTests` 查三者一致、资源都在）。
   - 选择由系统记住，App 不存：当前是哪个读 `alternateIconName`（`AppIconModel`），换的时候系统弹自己的提示框。
   - 截图：`-tab settings -openAppearance icon`；`AppIconTests`（UI 测试，体验模式）点「气场」、接受系统提示、回主屏截图，再换回默认。
-- 品牌色：App 图标的珊瑚色（`Theme.brand`）只给 Jarvis 自己的标志：设置和对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。
+- 品牌色：App 图标的珊瑚色（`Theme.brand`）只给 Persona 自己的标志：设置和对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。
   两份 AccentColor 资源（手表的标题和 tint、系统弹窗这类读资源的地方）是系统蓝；实时活动读不到风格，描边和按钮固定用系统蓝（按钮是压深的 `#0071E3`，白字 4.7:1）。
 
 ## 数据流
@@ -556,23 +556,23 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
   （每种状态、几个空间都有）、飞书会话的消息、邮件正文、知识库条目，终端是按手机宽度排好的 Claude 屏幕（`phone_screen`，96 列的帧在手机上每行都折）。
   全是编造的；时间存成相对值（`@rel:<秒>`、`@unix:<秒>`），载入时换成「现在」附近，演示永远是新的。机器页的曲线由 `DemoHub` 现算（`mock_hub.metric_at` 的移植）。
   改了 mock 的数据就重跑脚本、提交 JSON；`DemoHubTests` 让每个接口都经 `APIClient` 解码成 App 的模型，模型改了形状会在这里挂。
-- **副作用**：给 Agent / Jarvis 发消息在本地回显，1.5 秒后「Agent」回一段「这是体验模式……」；回答提问 / 批准计划时卡片消失、Agent 接着「做」再回同一段话，
-  另弹「体验模式下不会真的发送」；Jarvis 新对话本地新建。其余会碰到电脑、飞书、邮件的操作（新建会话、中断、关闭、终端按键、发邮件、立即运行……）
+- **副作用**：给 Agent / Persona 发消息在本地回显，1.5 秒后「Agent」回一段「这是体验模式……」；回答提问 / 批准计划时卡片消失、Agent 接着「做」再回同一段话，
+  另弹「体验模式下不会真的发送」；Persona 新对话本地新建。其余会碰到电脑、飞书、邮件的操作（新建会话、中断、关闭、终端按键、发邮件、立即运行……）
   以 `APIError(code: "demo")` 失败，`AppModel.show` 把它显示成蓝色提示「体验模式下不会真的发送」而不是红色报错，页面也不会显示「已关闭会话」这类成功提示。
   只改本地状态的（已读、置顶、免打扰、定时任务开关、记忆、收件箱已处理）照常生效，退出后丢掉。
 - **标识和退出**：设置 tab 带「体验」角标；设置顶部写「体验模式 · 数据都是编造的」，下面一节「连接我的 hub」/「退出体验模式」，隐藏服务器和手表那两节。
   退出回到配对页；配对成功（扫码、手动、`jarvis://pair` 链接）自动离开体验模式。体验模式记在 `demo.on`，重启 App 仍在体验模式里，进入时总从发货时的数据重新开始。
-  进入 / 离开时清掉演示会话的草稿和对话缓存（演示的会话 id 就是 mock 的 id，UI 测试的模拟器上会撞到别的测试留下的草稿）、收件箱，Jarvis tab 打开演示的主对话。
+  进入 / 离开时清掉演示会话的草稿和对话缓存（演示的会话 id 就是 mock 的 id，UI 测试的模拟器上会撞到别的测试留下的草稿）、收件箱，Persona tab 打开演示的主对话。
 - 体验模式下不申请通知权限、不注册 APNs、不 `register_phone`、不推配对信息给手表、不换设备凭据。
 - 审核备注（`app_store.external.review.notes`）写了从配对页进体验模式。
 
 ## Mac 已登录（2026-11-01）
 
-照微信「Mac 微信已登录」：Mac 上的 Jarvis 连着 hub 时，Agents 列表最上面一行「Mac 上的 Jarvis 已登录」（几台就写几台），开了手机静音时右边带「手机静音」；
+照微信「Mac 微信已登录」：Mac 上的 Persona 连着 hub 时，Agents 列表最上面一行「Mac 上的 Persona 已登录」（几台就写几台），开了手机静音时右边带「手机静音」；
 搜索时不显示。点开是一张卡片（`Views/Settings/DesktopPresence.swift`）：
 
 - 手机静音：Mac 在线时这台 iPhone 不再收到「需要你处理」「Agent 做完」的推送，由 Mac 提醒；助手按你的要求发的提醒照推。存在这台设备的推送设置里（`mute_while_desktop`），默认关。
-- 每台 Mac 的名字和登录时间，「退出这台 Mac 上的 Jarvis」：吊销它的设备凭据，hub 立刻断开它，要重新配对才能再用。用配对凭据直接连的 Mac 不能单独退出。
+- 每台 Mac 的名字和登录时间，「退出这台 Mac 上的 Persona」：吊销它的设备凭据，hub 立刻断开它，要重新配对才能再用。用配对凭据直接连的 Mac 不能单独退出。
 
 放在 Agents 列表顶上而不是顶栏：顶栏是两页共用的，常驻一条会盖住内容；列表顶上这一行跟着滚走，和微信一样。Mac 自己登记成桌面端，不当手机（`docs/mac.md`「Mac 是桌面端，不是手机」）。
 截图：`-showDesktopSample YES`（假装有一台 Mac、手机静音开着），`-openDesktopSheet YES` 打开卡片。
@@ -591,7 +591,7 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - 网络恢复（path 从没网变成有网）立刻重连，不等退避（最长 20 秒）；切换网络（Wi-Fi ↔ 蜂窝）时马上 ping 一次，旧接口上的死连接几秒内就会显示出来。
 - hub 在自己更新（`hub_update` 的 `restarting` / `confirming`，`docs/hub-update.md`）时断开是预期的：「连接中…」换成「hub 正在更新…」，点开的说明讲是在重启。
 - 显示位置（`ConnectionTitle` / `ConnectionLabel`）：Agents 列表（平时没有标题，标题位留空）、收件箱、设置 › 机器
-  的导航栏中间（`.principal`）；「Jarvis」tab 是头像下的名字胶囊换成状态（菜单里多一项「连接详情」）；对话页展开的页头保留会话名、把副标题换成状态（Telegram 的做法），折叠后的小胶囊整个换成状态。
+  的导航栏中间（`.principal`）；「Persona」tab 是头像下的名字胶囊换成状态（菜单里多一项「连接详情」）；对话页展开的页头保留会话名、把副标题换成状态（Telegram 的做法），折叠后的小胶囊整个换成状态。
   点状态弹出说明（`ConnectionDetails`：原因、上次失败、几秒后重试、上次连上、几条消息在等、「立即重试」）。
 - 断网时的操作：
   - **发消息**：连不上时不发请求，气泡带时钟和「连上后自动发送」（点时钟可「现在重试 / 不发了」）；请求因为没网 / 超时失败也一样转成等待，
@@ -609,7 +609,7 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 会话里提到的文件、工具行里的文件、会话页「文件」里点开的文件，都在 `FileViewer` 里看（`Views/Chat/FileViewer.swift`，`Jarvis/Code/`）。
 
 **只链接真的打得开的路径。**
-- **以前的问题**：消息里识别出的路径（`FilePaths`）一律做成文件块，点开时按会话所在的机器去读。路径要是别的机器的（比如 hub 上的 `~/.jarvis/…`），或者文件早删了，点开只会看到「打不开这个文件」。
+- **以前的问题**：消息里识别出的路径（`FilePaths`）一律做成文件块，点开时按会话所在的机器去读。路径要是别的机器的（比如 hub 上的 `~/.persona/…`），或者文件早删了，点开只会看到「打不开这个文件」。
 - **现在的做法**：
   1. 消息行出现时，把它的路径交给 `FilePresence`；
   2. 一瞬间之后，按「机器 + 会话目录」批量问一次 `GET /api/v1/machines/{mid}/stat`，相对路径在会话的 cwd 里解析；
@@ -701,7 +701,7 @@ Markdown 的情况再说两点：
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES`（Jarvis tab 的侧边栏开着）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-showScrollState YES|visible`（对话列表在哪、跟不跟随，给 UI 测试读，`visible` 画出来）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openHubUpdate YES`（设置 › hub，`docs/hub-update.md`）、`-tab settings -openSkills YES`（设置 › 助手 › Skills）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/app/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES`（Persona tab 的侧边栏开着）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-showScrollState YES|visible`（对话列表在哪、跟不跟随，给 UI 测试读，`visible` 画出来）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openHubUpdate YES`（设置 › hub，`docs/hub-update.md`）、`-tab settings -openSkills YES`（设置 › 助手 › Skills）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/app/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-openFile <路径>`（打开会话后打开这个文件）、`-showFilePerf YES`（把打开文件的耗时和每秒帧数写进 Caches/file-perf.log，`-showFileAutoScroll YES` 让文件自己匀速滚，`-showFileAutoScrollSpeed 1500` 换速度）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。

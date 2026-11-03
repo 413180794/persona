@@ -8,7 +8,7 @@ node 的 `session.start`：
 
 1. 找 label 等于目录名的 herdr workspace（用户习惯一个项目一个 workspace），有就在里面 `tab create --label jarvis`，没有就
    `workspace create --label <目录名>`。都带 `--cwd <目录>`、`--no-focus`，不抢电脑上的焦点。
-2. `pane run <pane> "<启动器> --session-id <uuid> --settings ~/.jarvis/claude-settings.json --mcp-config ~/.jarvis/mcp.json"`。
+2. `pane run <pane> "<启动器> --session-id <uuid> --settings ~/.persona/claude-settings.json --mcp-config ~/.persona/mcp.json"`。
    启动器是 `~/.zshrc` 里的函数（`cc_ds`、`cc_max`、`ccc`……），它们最后都 `claude … "$@"`，所以参数能透传。恢复会话用 `--resume <id>`。
 3. `waitReady`：每 500ms 读屏幕（`pane read --source visible`）+ `agent get`：
    - 屏幕上有信任目录对话框（"trust this folder"）→ 按光标位置算 `down`/`up` + `enter` 选「Yes, I trust」。
@@ -17,7 +17,7 @@ node 的 `session.start`：
    - 其他 blocked（模型选择等）→ 直接返回，hub 会把屏幕作为 `screen` 交互推给手机。
 4. 记录 pane → session，`agent rename j-<id 前 6 位>`，发首条消息（`agent prompt`）。
 
-Jarvis 启动的会话，启动器记在 node 状态里。在电脑上手动用启动器函数开的 claude 没有这条记录，启动器靠推断
+Persona 启动的会话，启动器记在 node 状态里。在电脑上手动用启动器函数开的 claude 没有这条记录，启动器靠推断
 （`server/internal/node/sessions.go` 的 `matchLauncher`）：node 每 30 秒扫描一次运行中 claude 的环境变量（同一次扫描还读 `CLAUDE_CONFIG_DIR`，
 见 `claudedirs.go`），记下 `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL`，再用 `sessions/<pid>.json` 对到会话。匹配启动器列表（`_claude_launchers` 的函数和调用 claude 的 alias）：
 base URL 和模型都相同的启动器只有一个就是它；否则如果这个 base URL 只有一个启动器（模型是运行时选的、显示成 `(claude-choose)` 的那种）也算它；
@@ -27,7 +27,7 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
 ## 会话 id 与 transcript
 
 - mac 装了 herdr 的 claude integration，`agent list` 带 `agent_session.value`（= Claude session id）。**hub 机器没装**，拿不到 id。
-- 兜底顺序：herdr 上报 → 我们 hook 里记下的 `HERDR_PANE_ID`→`session_id`（hook 进程继承 pane 的环境变量，只有 Jarvis 启动的会话有）
+- 兜底顺序：herdr 上报 → 我们 hook 里记下的 `HERDR_PANE_ID`→`session_id`（hook 进程继承 pane 的环境变量，只有 Persona 启动的会话有）
   → **窗格里 claude 进程的 `~/.claude/sessions/<pid>.json`**（Claude Code 自己维护，含当前 `sessionId`，`/clear` 后会更新；
   pid 用 `herdr pane process-info --pane <id>` 拿，缓存一分钟）→ 标题匹配 AI 标题 → 按 cwd 推项目目录
   （cwd 里非字母数字都换成 `-`，如 `/Users/me/code/jarvis` → `-Users-me-code-jarvis`）里最新的 `.jsonl`。
@@ -40,9 +40,9 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   只显示第一次和放弃时那次；`error` 在别的行里可能是字符串，解析时按原始 JSON 取。同一条 `<task-notification>` 常同时写成 user 行和
   queued_command，内容完全相同的只显示一次（同一任务内容不同的多次通知都是真事件）。
 
-## Hooks（只注入 jarvis 启动的会话）
+## Hooks（只注入 Persona 启动的会话）
 
-`~/.jarvis/claude-settings.json`（node 启动时生成，命令是 node 二进制自身的 `hook` 模式）：
+`~/.persona/claude-settings.json`（node 启动时生成，命令是 node 二进制自身的 `hook` 模式）：
 
 | 事件 | matcher | 作用 |
 | --- | --- | --- |
@@ -101,9 +101,9 @@ hook 以退出码 0 向 stdout 输出：
 {"hookSpecificOutput":{"hookEventName":"Elicitation","action":"accept","content":{"choice":"yes"}}}
 ```
 
-拒绝、取消分别用 `"action":"decline"`、`"action":"cancel"`，不带 `content`。URL 模式接受也不带 `content`。`ElicitationResult` 输入包含 `mcp_server_name`、可选 `elicitation_id`／`mode`、`action`、可选 `content`，输出使用同名 `hookEventName`；Jarvis 只注册前置 `Elicitation`，避免把已作答的请求再问一遍。Claude 对特定服务器可能限制 hook 代答，最终行为由 Claude 自身决定。
+拒绝、取消分别用 `"action":"decline"`、`"action":"cancel"`，不带 `content`。URL 模式接受也不带 `content`。`ElicitationResult` 输入包含 `mcp_server_name`、可选 `elicitation_id`／`mode`、`action`、可选 `content`，输出使用同名 `hookEventName`；Persona 只注册前置 `Elicitation`，避免把已作答的请求再问一遍。Claude 对特定服务器可能限制 hook 代答，最终行为由 Claude 自身决定。
 
-Jarvis 的接入约定：
+Persona 的接入约定：
 
 - node 生成的普通会话和无头助手配置均注册 `Elicitation`，matcher 为 `*`。已运行的 Claude 需重启才能读到新注册项。
 - node 将原始 schema／URL 放进 `Interaction.elicitation`，透传 MCP 服务器名和子 Agent 来源。`tool_name`／`tool_use_id` 已有可选字段继续保留；只有上游提供时才透传。本机此事件的输入构造**不提供工具名、工具调用 ID 或配置来源**，不能从最近一次调用或服务器名猜。其他工具权限 hook 的 `mcp_server:{name,source}` 可以提供配置来源。
@@ -113,7 +113,7 @@ Jarvis 的接入约定：
 
 ## 多选提问的屏幕卡（2026-11-02，2.1.316 实测）
 
-用户自己用启动器起的 claude（比如 profile 目录下的 `--settings <profile>/settings.json`）不加载 Jarvis 的 hooks（上一节只注入 Jarvis 启动的会话），
+用户自己用启动器起的 claude（比如 profile 目录下的 `--settings <profile>/settings.json`）不加载 Persona 的 hooks（上一节只注入 Persona 启动的会话），
 AskUserQuestion 就弹在终端里，手机上只有屏幕卡。以前屏幕卡不认多选，把 `[ ] 甲` 当成选项文字、按数字只是勾一下、也找不到提交，所以「提交不了」。
 不替用户往他自己的配置目录里装 hooks（那是用户的文件）；改成屏幕卡认得多选、答得了。
 
@@ -145,7 +145,7 @@ node 的答法（`node/dialogmulti.go`）：每一步重读屏幕，算下一步
 ## 发消息、中断、按键
 
 - 发消息：`agent prompt <pane> <text>`（原子地粘贴 + 回车，尊重 bracketed paste）。claude 正在工作时发，会进入它的排队输入。
-- 图片：存到 `~/.jarvis/uploads/<日期>/`，消息末尾附 `<attached_images>` 标签，每行一个路径（Claude 自己会用 Read 打开；包在标签里不和用户打的字混在一起，App 把它显示成文字上方的方形缩略图）。
+- 图片：存到 `~/.persona/uploads/<日期>/`，消息末尾附 `<attached_images>` 标签，每行一个路径（Claude 自己会用 Read 打开；包在标签里不和用户打的字混在一起，App 把它显示成文字上方的方形缩略图）。
 - 中断：`pane send-keys <pane> esc`。
 - 任意 TUI 对话框：手机的终端页 / screen 交互 → `pane send-keys`（`up`/`down`/`enter`/`esc`/`tab`/`shift+tab`/`ctrl+c`/数字）、
   `pane send-text`。
@@ -248,5 +248,5 @@ hub 的 `notifyFinished` 看到就跳过；会话照样变成「完成未看」�
 
 - 解析：`server/internal/screen` 的 `ClaudeInput(...).Suggestion`（多行按空格连起来），夹具 `claude-2.1.312-suggestion-171.*`。
 - node（`node/suggestion.go`）：Claude 会话从 working / blocked 变成 idle / done 时，在 0 / 2 / 5 / 10 秒读可见屏（2.1.312 实测一般几秒内出现），
-  读到就停、记在会话上（`proto.Session.Suggestion`）；有草稿就停；再 working、或者从 Jarvis 发消息 / 按键时清掉。不额外高频读屏。
+  读到就停、记在会话上（`proto.Session.Suggestion`）；有草稿就停；再 working、或者从 Persona 发消息 / 按键时清掉。不额外高频读屏。
 - 一条简短的回答（「ok」）后不一定有建议；给出几个下一步的回答后基本都有（实测「add all three to the README」）。

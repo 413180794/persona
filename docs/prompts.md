@@ -1,6 +1,6 @@
 # 提示词
 
-jarvisd 写给模型的每一段提示词都在 `server/internal/prompts/`：一个提示词一个文件，Go `text/template` 语法，`//go:embed` 编进二进制。
+personad 写给模型的每一段提示词都在 `server/internal/prompts/`：一个提示词一个文件，Go `text/template` 语法，`//go:embed` 编进二进制。
 调用方只准备数据（机器列表、主人称呼、收集到的上下文……），调这个包里带类型的渲染函数拿到文字；Go 代码里不再用 `fmt` / `+` 拼提示词。
 `prompts` 不依赖 `hub`、`kb`、`node`，数据结构定义在 `prompts` 里，调用方把自己的类型转过来。
 
@@ -12,17 +12,17 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 
 | 文件 | 是什么 | 谁用 |
 | --- | --- | --- |
-| `assistant/claude_md.md` | 助手目录 `~/.jarvis/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `hub/assistant.go` `assistantClaudeMD` |
+| `assistant/claude_md.md` | 助手目录 `~/.persona/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `hub/assistant.go` `assistantClaudeMD` |
 | `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `hub/assistant_snapshot.go` |
 | `assistant/turn_context.md` | 消息开头的 `<jarvis-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
 | `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `hub/assistant_schedule.go` `taskPrompt` |
 | `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
-| `assistant/lost_tasks.md` | jarvisd 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
+| `assistant/lost_tasks.md` | personad 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
 | `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<jarvis-context>`：共用的记忆（目录、格式、当前索引），有 lark-connector skill 时说明飞书走 `lark-connector` 工具 | `node/assistant_runtime.go` |
-| `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Jarvis 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `hub/bots_chat.go` `botSend`（`docs/bots.md`） |
+| `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Persona 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `hub/bots_chat.go` `botSend`（`docs/bots.md`） |
 | `lark/chat_agent.md`、`doc_agent.md` | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | `hub/lark_agent.go`、`lark_agent_docs.go` |
 | `lark/chat_context.md`、`doc_context.md`、`line.md` | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
 | `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `hub/inbox_triage.go` |

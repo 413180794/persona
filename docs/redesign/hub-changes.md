@@ -29,9 +29,9 @@ Go 对通配地址开的是双栈 socket，IPv6 本来就能连进来；能不�
 - **端口**：新开一个 TLS 端口，可配。避开 80 / 443 / 8080 / 8443（部分地区家宽封这些端口），也避开 18661（Postgres 占用）。明文 `listen` 保留，给内网、VPN 和现有 iOS。
   - 已定用两个端口（README 第 12 节第 9 题）。同端口嗅探（第一个字节是 `0x16` 就走 TLS）留作以后的选项：用户只需在路由器上放行一个端口，代价是约 100 行自己写的接收循环。
 - **证书**：
-  - hub 的身份密钥是 ECDSA P-256，0600，放 `~/.jarvis/tls/`，不进数据库（CLAUDE.md「密钥绝不入库」）。
+  - hub 的身份密钥是 ECDSA P-256，0600，放 `~/.persona/tls/`，不进数据库（CLAUDE.md「密钥绝不入库」）。
   - 用它签自签证书；证书快到期时用**同一把密钥**重签，所以指纹不变。
-  - 指纹是 SPKI 的 SHA-256，打印进 `jarvisd hub pair`，也放进二维码。
+  - 指纹是 SPKI 的 SHA-256，打印进 `personad hub pair`，也放进二维码。
   - 换密钥时所有设备重新扫码（已定）；计划内的轮换可以在 `hello` 里提前预告下一把密钥的指纹（`fp_next`）。
 - **有域名时（可选）**：用 ACME DNS-01，以同一把密钥换公共 CA 签的通配证书。通配证书避免具体的名字出现在 CT 日志里被扫描。客户端照样钉公钥。
 - **不做 IP 地址证书**：Let's Encrypt 的 IP 证书 2026-01 才正式提供，有效期只有 6 天，而且只能用 HTTP-01 / TLS-ALPN-01 验证，要开 80 / 443。
@@ -65,7 +65,7 @@ Go 对通配地址开的是双栈 socket，IPv6 本来就能连进来；能不�
 
 ### 1.3 配对：二维码改发短时临时 token（格式不变）
 
-- `jarvisd hub pair` 默认不再打印主 token。它经本机回环调运行中的 hub，生成一个**高熵、短时有效（比如 10 分钟）、只能换一次**的临时 token，落库（hub 的内存状态会被部署清掉，所以必须落库），二维码格式不变：
+- `personad hub pair` 默认不再打印主 token。它经本机回环调运行中的 hub，生成一个**高熵、短时有效（比如 10 分钟）、只能换一次**的临时 token，落库（hub 的内存状态会被部署清掉，所以必须落库），二维码格式不变：
 
   `jarvis://pair?url=<内网明文地址>&token=<临时 token>&hub=<hub_id>&fp=<指纹>&tls=<TLS 端口>&alt=<一两个外部候选>`
 
@@ -121,7 +121,7 @@ Go 对通配地址开的是双栈 socket，IPv6 本来就能连进来；能不�
 - **发布规则**：只发布 1.2 规则选出的稳定地址；A 记录只在确认外部可达时发布；DNS 令牌和 ACME 共用，权限收窄到一个 zone。
 - **手机怎么用**：国内两家 DNS 免费版的 TTL 最低 600 秒，所以手机优先用 hub 下发的字面地址，DNS 名字只用来找回 hub。
 
-### 1.8 `jarvisd hub doctor`
+### 1.8 `personad hub doctor`
 
 一条自检命令，列出：
 - 监听的端口；
@@ -154,11 +154,11 @@ Go 对通配地址开的是双栈 socket，IPv6 本来就能连进来；能不�
 
 没有 Play 商店，Android 的安装包由 hub 托管（[android.md](android.md) 第 9 节）。
 
-- **存放**：`~/.jarvis/apps/android/` 下放 APK 和一份 `latest.json`（`version_code`、`version_name`、`sha256`、`size`、`min_sdk`、`notes`）。发布脚本签好 APK 后经 SSH 传上去，不进数据库。
+- **存放**：`~/.persona/apps/android/` 下放 APK 和一份 `latest.json`（`version_code`、`version_name`、`sha256`、`size`、`min_sdk`、`notes`）。发布脚本签好 APK 后经 SSH 传上去，不进数据库。
 - **接口**（都要鉴权，走 TLS 端口或内网）：
   - `GET /api/v1/app/android/latest`：回 `latest.json`；
   - `GET /api/v1/app/android/apk`：下载，支持 Range（断点续传）。
-- **首次安装**：手机上还没有 App 时没有设备 token。`jarvisd hub pair --android` 在二维码旁边再打印一个内网下载链接，带同一个临时 token（10 分钟），用手机浏览器打开下载；装好后再扫配对二维码。也可以用 adb 或别的方式把 APK 传到手机上。
+- **首次安装**：手机上还没有 App 时没有设备 token。`personad hub pair --android` 在二维码旁边再打印一个内网下载链接，带同一个临时 token（10 分钟），用手机浏览器打开下载；装好后再扫配对二维码。也可以用 adb 或别的方式把 APK 传到手机上。
 - 能力位：`features` 加 `android_update`。
 
 ## 3. 建议（可靠性和兼容，和 Android 一起做）
@@ -273,7 +273,7 @@ Go 对通配地址开的是双栈 socket，IPv6 本来就能连进来；能不�
 | 4.7 | ~~UnifiedPush~~：不做。Android 只走常驻连接 | — |
 | 4.8 | **目标实例指纹**：针对某个 Agent 的写操作带「机器 + pane + 进程启动标识 + session id」，node 执行前核对，不一致就返回 `stale_session` | `node/*`、`proto` |
 | 4.9 | **屏幕卡用完整命令**：herdr 报 blocked、对话记录里正好有一个没完成的 tool_use 时，把完整的 tool_input 附到屏幕卡上，免得显示被截断的屏幕文字 | `server/internal/screen`、`node` |
-| 4.10 | **提示词模板下沉**：「交给 Jarvis」「飞书总结」「停止循环」这几段提示词现在写在客户端（`KnowledgeView`、`LarkChatView`、`AppModel`），挪到 hub，两端就不用各维护一份 | 新接口或助手配置 |
+| 4.10 | **提示词模板下沉**：「交给 Persona」「飞书总结」「停止循环」这几段提示词现在写在客户端（`KnowledgeView`、`LarkChatView`、`AppModel`），挪到 hub，两端就不用各维护一份 | 新接口或助手配置 |
 | 4.11 | **会话全文搜索**：`GET /api/v1/sessions/{m}/{s}/search?q=`，node 在对话记录里搜，返回 seq 和摘要；客户端连续向前加载到那里 | `node`、`transcript` |
 | 4.12 | **文档对齐**：`docs/protocol.md` 补上漏写的接口（`queue`、`info`、`seen`、`file`、知识库、`lark/raw` 等）和事件（`assistant_schedule`、`hook_event`、`error`、客户端发的 `seen`），删掉代码里没有的 `session` / `ping` / `pong`；核对 `docs/architecture.md` 里「没有 App 在线时 hook 立即放行」（代码里没找到这段逻辑） | 文档 |
 | 4.13 | **协议样本导出**：Go 测试把典型的线上 JSON（会话、items 各种类型、交互四种、Fleet、收件箱、飞书消息）写到 `spec/fixtures/wire/`（`-update` 刷新），两端的解码测试读同一批 | `server/internal/proto` 测试 |

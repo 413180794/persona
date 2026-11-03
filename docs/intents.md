@@ -6,7 +6,7 @@
 | Intent | 标题 | 作用 | 运行模式 |
 | --- | --- | --- | --- |
 | `AskClaudeIntent` | 问 Claude | 给某台机器上最近的活会话发一条消息，或按记住的目录/启动器新开一个 | 后台 |
-| `JarvisStatusIntent` | Jarvis 状态 | 「N 个在工作，M 个等你处理」+ 第一个待处理的内容 | 后台 |
+| `JarvisStatusIntent` | Persona 状态 | 「N 个在工作，M 个等你处理」+ 第一个待处理的内容 | 后台 |
 | `ApproveFirstIntent` | 批准第一个待处理 | 允许最早的一条工具授权，或批准计划（`bypassPermissions`） | 后台 |
 | `OpenSessionIntent` | 打开会话 | 把 App 切到对话页并跳到该会话（`AppModel.shared.openChat`） | 前台 |
 
@@ -37,7 +37,7 @@
 - 待处理按 `created_at` 从早到晚取第一条。
 - `permission` → `{allow:true}`；`plan` → `{approve:true, mode:"bypassPermissions"}`（和 App 里「批准并自动执行」一样，
   见 `docs/claude-integration.md`）。
-- `question` / `screen` 需要看屏幕，只回一句「需要打开 Jarvis 处理」，不落任何决议。
+- `question` / `screen` 需要看屏幕，只回一句「需要打开 Persona 处理」，不落任何决议。
 
 ## 错误文案
 
@@ -45,12 +45,12 @@
 
 | 情况 | 文案 |
 | --- | --- |
-| 没配对 | 还没配对。先打开 Jarvis 扫 `jarvisd hub pair` 的二维码。 |
-| 401 / 403 | 配对已失效，打开 Jarvis 重新配对。 |
+| 没配对 | 还没配对。先打开 Persona 扫 `personad hub pair` 的二维码。 |
+| 401 / 403 | 配对已失效，打开 Persona 重新配对。 |
 | 410 | 这个已经处理过了。 |
 | 网络 / 超时 | 连不上 hub（`hub` 地址），手机要在公司网络或 removed 上。 |
-| 没有机器 | 现在没有在线的机器。看看 hub 机器上的 jarvisd 和 SSH 隧道。 |
-| 该机器没活会话 | `<机器>` 上没有运行中的会话。打开 Jarvis 新建一个，或者说「新会话」。 |
+| 没有机器 | 现在没有在线的机器。看看 hub 机器上的 personad 和 SSH 隧道。 |
+| 该机器没活会话 | `<机器>` 上没有运行中的会话。打开 Persona 新建一个，或者说「新会话」。 |
 | 没有待处理 | 没有等你处理的事。 |
 
 hub 是公司内网的明文 HTTP：intent 用 `.background` 模式，不会因为网络不可达把 App 拉到前台。
@@ -59,9 +59,9 @@ hub 是公司内网的明文 HTTP：intent 用 `.background` 模式，不会因�
 
 `JarvisShortcuts` 里三个快捷指令（Spotlight / Siri / 快捷指令 App 都能看到）：
 
-- 「用 Jarvis 问 Claude」「Jarvis 问 Claude」「用 Jarvis 问一下 Claude」
-- 「Jarvis 状态」「Jarvis 现在怎么样」「用 Jarvis 看进度」
-- 「用 Jarvis 批准第一个」「Jarvis 批准待处理」
+- 「用 Persona 问 Claude」「Persona 问 Claude」「用 Persona 问一下 Claude」
+- 「Persona 状态」「Persona 现在怎么样」「用 Persona 看进度」
+- 「用 Persona 批准第一个」「Persona 批准待处理」
 
 规则（App Intents 的硬要求）：
 

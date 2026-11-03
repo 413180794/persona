@@ -8,7 +8,7 @@
 | node 发送 | `server/internal/node/metrics.go` |
 | hub 存储、降采样、清理、API | `server/internal/hub/metrics.go`、`server/internal/db/metrics.go`、迁移 `0051_machine_metrics.sql` |
 | App | `apple/Jarvis/Views/Machines/`（`MachinesView` 机器页、`MachineDetailView` 机器详情、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
-| 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个），最后一行是每次采集耗时和 jarvisd 的 CPU |
+| 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个），最后一行是每次采集耗时和 personad 的 CPU |
 
 ## 系统信息
 
@@ -58,7 +58,7 @@ macOS 为什么起两个常驻进程：构建是 `CGO_ENABLED=0`，拿不到 `ho
 
 ### 开销（2026-10-30 实测，`jarvisd sysmon 30`）
 
-| 机器 | 每次采集耗时 | jarvisd CPU | 另外 |
+| 机器 | 每次采集耗时 | personad CPU | 另外 |
 | --- | --- | --- | --- |
 | Mac Studio（M1 Ultra，20 核，macOS 26） | 0.55–0.70 ms | 51 ms / 5 分钟 = 0.017% | iostat + vm_stat 两个进程 2 小时 21 分钟共 0.34 s CPU（0.004%） |
 | Linux 虚拟机（32 核，Ubuntu 24.04，6 块网卡） | 0.76 ms | 46 ms / 5 分钟 = 0.015% | 不起进程 |
@@ -100,7 +100,7 @@ hub 收到样本：最新一个留在内存（Dashboard 的「现在」，超过
   Mac 侧边栏的「机器」（⌘5）。项目页 / 机器的项目页右上角 ⓘ 进机器详情（`MachineDetailRoute`）。
 - **机器页**（`MachinesView`）：顶部一行「N/M 台在线 · K 台用量偏高 · J 个 Agent 需要你」。每台一张卡（`MachineCard`）：系统图标、名字、系统 · 核数 · 内存、
   在线 / 离线（离线显示最后在线时间和 ssh 的错误）；告警标签（下面「异常」）；Agent 数「需要你 / 工作中 / 空闲」（空闲 = 完成未看 + 已看 + 未知，
-  只算活着的、不含助手的对话，和 Agents 列表一致）；CPU / 内存 / 网络的当前值和最近 1 小时的迷你曲线；jarvisd 和 hub 不是同一次部署时的「重新部署」。
+  只算活着的、不含助手的对话，和 Agents 列表一致）；CPU / 内存 / 网络的当前值和最近 1 小时的迷你曲线；personad 和 hub 不是同一次部署时的「重新部署」。
   iPad / Mac 上卡片按宽度排成多列。点卡片进机器详情。
 - **排序**（`MachineConcern`）：需要注意的在前，依次是 离线 → 严重告警 → 注意告警 → 有 Agent 需要你 → 版本不一致；同一类和其余的按 hub 配置里的顺序，
   只有卡片上显示的东西变了才会换位置（换位置有动画）。

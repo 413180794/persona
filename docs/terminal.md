@@ -32,7 +32,7 @@
 
 ## 二、方案
 
-**herdr 就是那个「真终端仿真器」**：程序的原始字节进的是 herdr 的仿真器，Jarvis 镜像它算好的网格（observe 流），
+**herdr 就是那个「真终端仿真器」**：程序的原始字节进的是 herdr 的仿真器，Persona 镜像它算好的网格（observe 流），
 在窗格尺寸上原样还原，再决定手机上怎么摆（换行 / 不换行）。不另起 PTY、不 attach、不改窗格尺寸。
 
 ```
@@ -87,9 +87,9 @@ herdr 窗格 ──observe(窗格尺寸)──▶ node（每窗格一个 observe
   App `apple/Jarvis/Views/Session/Terminal/`（`TerminalGrid` 解析、`TerminalFeed` 订阅 / 续传 / 回退、`TerminalView` 渲染、`TerminalWrap` 折行、
   `TerminalInput` 直接打字、`BoxDrawing`、`TerminalTheme`）。
 - 配色默认「墨黑」（近黑底 0x0C0C0E，不随 App 浅色 / 深色变；对照 Moshi 默认纯黑）。终端卡片里的按钮、键栏、键盘都按配色的底色取深 / 浅外观。
-  另有深夜（深灰）、Jarvis、Solarized（后两套跟随系统）。
-- herdr 把反显（SGR 7）直接换成**它自己主题**的前景 / 背景真彩色发出来（`38;2;40;44;52;48;2;255;255;255`），手机上看到的是 herdr 的反显色，不随 Jarvis 主题变。
-  普通的 16 / 256 色保持索引，由 Jarvis 主题决定。
+  另有深夜（深灰）、Persona、Solarized（后两套跟随系统）。
+- herdr 把反显（SGR 7）直接换成**它自己主题**的前景 / 背景真彩色发出来（`38;2;40;44;52;48;2;255;255;255`），手机上看到的是 herdr 的反显色，不随 Persona 主题变。
+  普通的 16 / 256 色保持索引，由 Persona 主题决定。
 - 框线字符（U+2500–257F）和块字符（U+2580–259F）不用字体画：回退字体的这些字形比格子窄，框线会变成虚线。按格子画线（圆角用二次曲线），
   同一格的几段合成一条路径一次描边，否则半透明（dim）的颜色在交叠处会更亮、看起来还是虚线。
 - 有 emoji 形式的符号（⏺ ⏵ 等，Claude Code 常用）画的时候加 U+FE0E 要文字形式，否则会画成彩色 emoji，不是格子的颜色。

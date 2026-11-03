@@ -36,9 +36,9 @@
 
 去重要知道「两台 hub 连的是同一台电脑」。机器 id（`hub.json` 的 `machines[].id`）是各 hub 自己起的名字，不能用。
 
-- node 第一次运行时生成 `~/.jarvis/machine-uid`（UUIDv4，0600），之后一直用它；`node.info` 带 `machine_uid`。
+- node 第一次运行时生成 `~/.persona/machine-uid`（UUIDv4，0600），之后一直用它；`node.info` 带 `machine_uid`。
 - 旧 node 没有这个字段：这台电脑不参与去重，按「hub_id + 机器 id」当成独立的一台。
-- 克隆出来的虚拟机会带着同一个文件：`jarvisd node reset-uid` 重新生成，文档里写明。
+- 克隆出来的虚拟机会带着同一个文件：`personad node reset-uid` 重新生成，文档里写明。
 
 ## 2. hub 互联（服务端）
 
@@ -51,7 +51,7 @@
 
 ### 2.2 配对和信任
 
-- 在 hub B 上生成**互联码**（管理界面「互联 › 生成互联码」，或 `jarvisd hub pair --peer`）：一次性、10 分钟有效，链接里带 B 的地址候选、`hub_id`、`fp`。
+- 在 hub B 上生成**互联码**（管理界面「互联 › 生成互联码」，或 `personad hub pair --peer`）：一次性、10 分钟有效，链接里带 B 的地址候选、`hub_id`、`fp`。
 - 在 hub A 的管理界面粘贴互联码：A 按 `fp` 钉扎连 B，用码换取 B 发给 A 的互联凭据，同时把 A 的 `fp` 和 A 发给 B 的互联凭据交给 B。
   结果是**双向钉扎、双向凭据**，两边都能主动拨号。
 - 互联凭据是设备凭据的一种：kind `peer`、role `peer`，绑定对端 `hub_id`，只能开 `/api/v1/peer*`，别的接口一律 403；
@@ -113,7 +113,7 @@ hub 把组里别的 hub 的电脑当成自己的机器列出来，客户端对�
 - **推送**：设备的推送注册一律落在签发它凭据的 hub（在别的 hub 上调 `POST /api/v1/devices` 时转给签发方）；组里任何 hub 上的交互、完成事件
   经互联链路转到那台 hub 再推。一个设备只收一份推送。推送内容（直推的 APNs payload 和经中继密封的那份）顶层带 `hub_id`：发这条推送的 hub
   （即签发方）的 hub_id，客户端据此认出是哪一组；里面的机器 id 是这台 hub 视角下的组内 id。
-- **不跨 hub 合并的**：Jarvis 助手主对话、知识库、收件箱、邮箱、形象、模型配置、连接器都是每台 hub 自己的，客户端连哪台就显示哪台的；
+- **不跨 hub 合并的**：Persona 助手主对话、知识库、收件箱、邮箱、形象、模型配置、连接器都是每台 hub 自己的，客户端连哪台就显示哪台的；
   客户端里这类「hub 级」页面按组 / hub 选。
 
 ### 2.7 管理接口（管理界面的「互联」页按这个开发）
@@ -139,7 +139,7 @@ hub 把组里别的 hub 的电脑当成自己的机器列出来，客户端对�
   - **Linux headless**：`jarvis-link` 不依赖图形界面，一条命令装好（`jarvis-link install`：写 systemd 用户服务，提示 `loginctl enable-linger`；
     没有 systemd 时给出替代做法），`status` / `logs` / `uninstall`，`pair` 支持从标准输入读链接；服务器、NAS、树莓派上能跑。
   - **Mac 状态栏**：菜单里显示连着哪台 hub（`hub_name`）、所在互联组有几台 hub；其余不变。
-  - **Windows 托盘**：移交给 Windows 环境的会话做（#299）。jarvisd 现在在 Windows 上编译不过，herdr 也没有 Windows 版，那边先定方案。
+  - **Windows 托盘**：移交给 Windows 环境的会话做（#299）。personad 现在在 Windows 上编译不过，herdr 也没有 Windows 版，那边先定方案。
 - link 只连它配对的那台 hub；那台 hub 挂了时转到组里别的 hub，**不在这一轮**。
 
 ## 4. 客户端多 hub（iOS #256、Android）
@@ -152,7 +152,7 @@ hub 把组里别的 hub 的电脑当成自己的机器列出来，客户端对�
 - **数据**：会话键要能区分组（iOS 给 `SessionKey` 加组 id，`ChatCache` 目录版本号加一；Android 给非主组的机器 id 加稳定的 `~<组 id>` 后缀，由门面在发给 hub 前去掉）。**主组**（旧的单份配对迁移来的组，或第一次配对的组）的键和现在逐字节一样；主组断开后别的组保持原样，不提拔新主组。
 - **选中组**只决定 hub 级页面用哪一组，不影响任何会话键、机器 id：切换选中组时，打开着的页面、通知深链、草稿 / 置顶 / 缓存都不能错位。
 - **界面**：Agents、机器、交互等列表把各组合在一起显示，每条标明来自哪一组，可以按组筛选；**只有一组时界面一像素不变**。
-  hub 级页面（Jarvis 助手、收件箱、hub 相关的设置）按组切换。设置里新增「hub」列表：添加、改名、断开某一组 / 某一台。
+  hub 级页面（Persona 助手、收件箱、hub 相关的设置）按组切换。设置里新增「hub」列表：添加、改名、断开某一组 / 某一台。
   设置里进 hub 列表的那一行只有一组时也显示（要从这里添加第二台），这是只有一组时**唯一**允许的像素变化。
 - **iOS 还要**：推送、通知操作、实时活动、手表、Siri / 快捷指令都带上组 / hub 标识，路由到对应的 hub（#256 的方案）。
 - 体验模式照常：它是一个假的组。
@@ -171,9 +171,9 @@ hub 把组里别的 hub 的电脑当成自己的机器列出来，客户端对�
 
   范围外的请求（页面和接口）一律 404，不暴露管理界面的存在。放宽到 `any` 只能在 hub 机器上用命令行或部署脚本改，网页里只能收窄。
 - **首次设置**：范围内第一次打开时设管理员密码，之后用密码登录（HttpOnly、Secure 的会话 cookie，有效期是配置值）；登录失败按 `security` 现有规矩限流。
-  忘了密码在 hub 机器上 `jarvisd hub admin reset-password`。管理员凭据存 Postgres（迁移 **0161**）。
+  忘了密码在 hub 机器上 `personad hub admin reset-password`。管理员凭据存 Postgres（迁移 **0161**）。
 - **来源不可信的两种情况**：容器里，本容器的网关地址（经 docker-proxy 进来的连接，可能来自公网）不算局域网，除非写进 `admin.cidrs` / `security.trusted_cidrs`；
-  来源是回环时（同机反向代理不加转发头时，公网请求也来自回环），首次设置要输一次性设置码（启动日志里有，`jarvisd hub admin setup-code` 现取）。
+  来源是回环时（同机反向代理不加转发头时，公网请求也来自回环），首次设置要输一次性设置码（启动日志里有，`personad hub admin setup-code` 现取）。
 - **部署时提醒选择**：`scripts/deploy.sh`、公开版 `install.sh`、Docker（`.env` 的 `JARVIS_ADMIN_ACCESS`，没设时入口脚本打印提醒并用默认值）都要让用户选访问范围；
   有终端时交互式询问，没有终端时用参数 / 环境变量，没给就用 `lan` 并打印一行提醒。
 - **页面**：
@@ -187,7 +187,7 @@ hub 把组里别的 hub 的电脑当成自己的机器列出来，客户端对�
 
 ## 6. 网页操作页
 
-- 现有 `web/`（[web.md](web.md)）已有 Agents、Jarvis 助手、个人 Agent、机器、设置。先列出和手机端（以 iOS 为准，Android 参考）的差距表，写进 web.md，再按表补齐。
+- 现有 `web/`（[web.md](web.md)）已有 Agents、Persona 助手、个人 Agent、机器、设置。先列出和手机端（以 iOS 为准，Android 参考）的差距表，写进 web.md，再按表补齐。
 - 网页由一台 hub 托管，连的就是这台 hub，互联后天然看到整个组；机器、会话标明所属 hub（`hub_name`，只有一台 hub 时不显示）。网页里不做多组。
 - 不重复别人在 master 上开着的 PR：#241（设置里扫码连新设备）、#254（终端引擎切换和 Orca 启动器）。
 

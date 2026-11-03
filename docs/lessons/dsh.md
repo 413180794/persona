@@ -8,7 +8,7 @@
 - **`user/message` 不全是人说的**：只有 `source.kind = user` 是用户的输入；`time-context`、`skill-catalog`、`runtime-context`、
   `agent-instructions` 是 DSH 每轮注入的上下文，`agent-message` / `subagent-settled` 是子 Agent 的消息。`agent/inbox/spliced` 里排队的消息
   进这一轮时会再记一条 `user/message`，两处都显示就重复了。
-- **DSH 的 seq 从 0 开始**，Jarvis 的 seq 0 表示「什么都还没有」（`since_seq` / `before_seq` 的零值）：映射成 DSH seq + 1。
+- **DSH 的 seq 从 0 开始**，Persona 的 seq 0 表示「什么都还没有」（`since_seq` / `before_seq` 的零值）：映射成 DSH seq + 1。
 - **DSH 的会话日志是一串独立的 zstd 帧**（每批写入一帧），`zlib.zstdDecompressSync` 整个文件只解出第一帧，看起来像「日志只有一行」。
   手工看日志要按帧头魔数 `28 b5 2f fd` 切开逐帧解。插件不读日志，走 `sessionController.page`。
 - **没有 herdr 的机器以前从不推会话列表**：`pollAgents` 在宿主（herdr）没响应时直接 `continue`，runtime 的会话（和助手以外的一切）只在连上时列一次。
@@ -37,7 +37,7 @@
   它的重试又退避到 30 秒，合计一分半，期间打开 DSH 会话报 transcript not found。现在 socket 和 runtime 连接归常驻 node 进程（`RuntimeHost`），
   hub 换连接时不断；SDK 在 socket 文件还在时每秒重试。端到端 `runtime-sdk/e2e/resident.mjs`（真的 `--attach`，断开再连 hub、重启常驻 node）。
 - **pi-web 只在有会话打开时才加载扩展**（2026-11-01，接 pi 时实测）：一个 pi-web 进程跑所有会话，扩展模块加载一次、每个会话调一次工厂函数，
-  但第一个会话打开之前一次都不加载。只靠扩展的话，pi-web 重启后 Jarvis 一个 pi 会话都看不到。所以 pi 另有一个伴随进程负责磁盘上的会话
+  但第一个会话打开之前一次都不加载。只靠扩展的话，pi-web 重启后 Persona 一个 pi 会话都看不到。所以 pi 另有一个伴随进程负责磁盘上的会话
   （`docs/pi.md`），两个 runtime 列同一个会话时 node 选正在跑它的那个：pi 的会话文件没有锁，「后连上的说了算」会让手机的消息落到第二个写它的进程上。
 - **SDK 的定时器不撑进程，独立跑的 runtime 要自己撑**（2026-11-01，pi 伴随进程）：SDK 的重连、推送定时器都 `unref()`，因为它一般寄生在 DSH、pi 的进程里，
   不该替宿主拖住退出。pi-web 伴随进程是只有 runtime 的独立进程，一断开（node 还没起、在重启、太旧）事件循环就空了，进程 `exit 0`，launchd 反复拉起。

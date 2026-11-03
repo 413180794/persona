@@ -1,16 +1,18 @@
 # 形象（persona）
 
-一个形象 = Jarvis 的**名字**、**头像**、Jarvis 顶栏里**会动的状态圆点**，可以再带一套**配色**。设置 › 外观 › 形象里选，选了以后这几样一起换：
+这里的 `persona` 仍指形象（名字 / 头像 / 状态圆点），不因产品改名 Persona 而重命名。内置形象 ID `jarvis` / `jarvis-circuit`、`persona.json`、协议字段和缓存身份保持兼容；新默认包目录 `~/.persona/personas`，旧 `~/.jarvis/personas` 继续兼容，见 [命名与兼容](config.md#命名与兼容)。
+
+一个形象 = Persona 的**名字**、**头像**、Persona 顶栏里**会动的状态圆点**，可以再带一套**配色**。设置 › 外观 › 形象里选，选了以后这几样一起换：
 顶栏的脸和名字（新外壳里只有脸，在左上角）、侧边栏的卡片、资料页、输入框的「问 xxx…」。
 
 **形象不改 App 的颜色**（2026-10-31 用户要求：「形象、主题色和 UI 组件的选择」分开）。设置里是三个互不影响的选择：
 形象（这一篇）、主题色（`ThemeColor`）、界面风格（`AppStyle`，只管组件的画法），见 `docs/ios.md`「设计语言」。
 形象带的配色只在主题色选「跟随形象」时用上；以前选了形象就会盖掉界面风格的颜色（选了黏土再选奶娃，紫色就没了）。
 
-- **内置形象**：App 自己画的（`JarvisAvatar`），画成当前主题色，不带配色，名字都是 Jarvis。仓库里只有它们：
+- **内置形象**：App 自己画的（`JarvisAvatar`），画成当前主题色，不带配色，名字都是 Persona。仓库里只有它们：
   - **默认形象**（id `jarvis`）：面罩。
   - **汇流**（id `jarvis-circuit`，2026-11-01 用户定为可选项、不当默认）：三条走线汇进一个带两只眼的核心。选它不用下载，卡片上写「汇流」。
-- **其他形象**：放在 hub 机器的 `~/.jarvis/personas/<id>/`，手机选中时下载并缓存。
+- **其他形象**：放在 hub 机器的 `~/.persona/personas/<id>/`，手机选中时下载并缓存。
 - 体验模式只有默认形象（`AppModel.persona`）。
 
 ## 为什么形象放 hub、不进仓库和 App 包
@@ -26,7 +28,7 @@
 ## 包格式（format 1）
 
 ```
-~/.jarvis/personas/doudou/
+~/.persona/personas/doudou/
   persona.json
   avatar/64.png  avatar/128.png  avatar/256.png  avatar/512.png
   dot/idle.png  dot/thinking.png  dot/working.png  dot/needs_you.png  dot/offline.png   # APNG
@@ -79,7 +81,7 @@
 
 ## 状态（顶栏的圆点）
 
-旧布局里在 Jarvis 顶栏正中（名字胶囊上面）；iPhone 的新外壳里是两页左上角打开抽屉的按钮（`ShellPersonaButton`，docs/ios.md「新外壳」）。
+旧布局里在 Persona 顶栏正中（名字胶囊上面）；iPhone 的新外壳里是两页左上角打开抽屉的按钮（`ShellPersonaButton`，docs/ios.md「新外壳」）。
 
 | 状态 | `dot.states` 键 | 什么时候（`AppModel.personaState`） | 生成脚本的动画 |
 | --- | --- | --- | --- |
@@ -87,7 +89,7 @@
 | 思考中 | `thinking` | 对话在跑，还没写字也没调工具：最后一条是用户消息或 thinking | 托腮抬眼、轻轻摇摆，右上角的思考气泡里三个点轮流亮 |
 | 工作中 | `working` | 对话在跑，已经在写或在调工具 | 两拍动作交替加上下颠，主色的弧线沿边转圈 |
 | 等你处理 | `needs_you` | 这条对话有待处理的交互（提问、批准） | 两拍挥手，外圈一圈「需要你」的红色在呼吸 |
-| 离线 | `offline` | hub 连不上，或者 Jarvis 所在的机器离线 | 睡着、整体褪成灰色，右上角飘 z |
+| 离线 | `offline` | hub 连不上，或者 Persona 所在的机器离线 | 睡着、整体褪成灰色，右上角飘 z |
 
 动画上的约定：
 
@@ -187,7 +189,7 @@
    - 包在 `<work>/package/doudou/`，先看 `preview.png`：五个状态的帧、浅色和深色下的颜色。
    - 位置不对时，在 `<work>/framing.json` 里按姿势微调，例如 `{"think": {"scale": 1.05, "dx": 0.02, "dy": -0.01}}`（单位是边长的比例）。
    - 颜色不对就用 `--primary`、`--accent-light`、`--accent-dark`。
-5. **装到 hub**：`python3 scripts/assets/make_persona.py install ~/personas/doudou/package/doudou`。会先解到旁边，再整个换上去；hub 机器默认读 `~/.config/jarvis/config.json`。
+5. **装到 hub**：`python3 scripts/assets/make_persona.py install ~/personas/doudou/package/doudou`。会先解到旁边，再整个换上去；hub 机器默认读 `~/.config/persona/config.json`。
 6. **手机上选**：设置 › 外观 › 形象。
 
 一步做完生成和打包：`make_persona.py new --id doudou --name 豆豆 a.jpg b.jpg c.jpg`。不用 AI 也行：把自己画的 8 张透明 PNG 按上面的名字放进 `<work>/poses/`，直接 `build`。只有 `avatar` 是必须的，缺的姿势用它代替。
@@ -220,7 +222,7 @@
 | --- | --- |
 | `server/internal/hub/persona_test.go` | 只列出完整的包；rev 跟着内容变；文件不出包目录；没有令牌拿不到 |
 | `apple/JarvisTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；作为主题色「跟随形象」时用形象的主色、气泡和飞书链接（飞书风格也是），没给的用风格自己的；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
-| `apple/JarvisUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Jarvis 又变回来 |
+| `apple/JarvisUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Persona 又变回来 |
 
 截图和录屏用的 DEBUG 启动参数：
 

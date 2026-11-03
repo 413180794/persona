@@ -6,7 +6,7 @@
 
 ## hub.json 网络配置
 
-在 hub 机器的 `~/.jarvis/hub.json` 合并以下字段，保留已有 token、数据库和机器配置，再重启 hub：
+在 hub 机器的 `~/.persona/hub.json` 合并以下字段，保留已有 token、数据库和机器配置，再重启 hub：
 
 ```json
 {
@@ -59,14 +59,14 @@
 
 ## TLS 与公钥钉扎
 
-未指定证书文件时，hub 在 `~/.jarvis/tls/` 创建 ECDSA P-256 身份密钥 `hub.key` 和自签证书 `hub.crt`。目录权限 0700，文件权限 0600。证书只带 `<hub_id>.jarvis.invalid`，不带本机主机名或内网地址。TLS 最低版本是 1.2。
+未指定证书文件时，hub 在 `~/.persona/tls/` 创建 ECDSA P-256 身份密钥 `hub.key` 和自签证书 `hub.crt`。目录权限 0700，文件权限 0600。证书只带 `<hub_id>.jarvis.invalid`，不带本机主机名或内网地址。TLS 最低版本是 1.2。
 
 自动证书有效期为 365 天，剩余不足约 30 天时以同一把密钥重签；证书尚未生效或 SAN 不符时也会重签。hub 的证书刷新定时器设为 2 分钟，属于调度配置，**未实测实际刷新延迟**。自带证书会重新读取，但 hub 不替它申请或续签；当前没有自动 ACME 流程。
 
 在 hub 机器运行：
 
 ```sh
-~/.jarvis/bin/jarvisd hub pair
+~/.persona/bin/personad hub pair
 ```
 
 TLS 已开启时，输出中的「公钥指纹」就是钉扎值 `fp`：证书 SubjectPublicKeyInfo DER 的 SHA-256，再用不带填充的 base64url 编码，长度 43 字符。二维码也携带它。`hub pair` 会生成一个新临时 token，链接和二维码都应当按凭据保管；它不是只读查看指纹的命令。
@@ -127,7 +127,7 @@ hub 只信任连接的来源地址和本地接收地址，**不读取 `X-Forward
 
 ## 网络排查
 
-先在 hub 机器上跑 `jarvisd hub doctor`。它只读不改：检查 hub.json 的明文 `listen`、`public.tls_listen`、`security.allow_public_plaintext` 和 TLS 证书，向正在运行的 hub 要候选地址，列出本机每个 IPv6 是可发布还是被排除（附原因），在 Linux 上看去往公网 IPv6 的路由是否走 TUN / 虚拟网卡、读 ufw / nft 规则，最后给出下一步：只放行哪个 TLS 端口、用手机蜂窝网络打开哪个地址测一次。它**不做外部可达性探测**：本机连自己的地址走环回，证明不了公网能进来。
+先在 hub 机器上跑 `personad hub doctor`。它只读不改：检查 hub.json 的明文 `listen`、`public.tls_listen`、`security.allow_public_plaintext` 和 TLS 证书，向正在运行的 hub 要候选地址，列出本机每个 IPv6 是可发布还是被排除（附原因），在 Linux 上看去往公网 IPv6 的路由是否走 TUN / 虚拟网卡、读 ufw / nft 规则，最后给出下一步：只放行哪个 TLS 端口、用手机蜂窝网络打开哪个地址测一次。它**不做外部可达性探测**：本机连自己的地址走环回，证明不了公网能进来。
 
 TUN 代理开启自动路由后，公网连接的回包可能被送进代理，表现为外部连接超时或握手中断。**此风险未实测**。在获准排查的 hub 上查看到手机来源地址的 IPv6 路由，结合物理网卡和 TUN 网卡抓包判断：请求是否到达、回复是否从正确网卡出去。可临时停用 TUN 做对照；若确认有关，在代理 / 策略路由中为入站连接的回复保留直连路径，不要靠给 hub 加 `trusted_cidrs` 修复回程路由。
 

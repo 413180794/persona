@@ -25,13 +25,13 @@
 | 话题里的消息（请求在话题里时），否则请求之前的 40 条（`context_messages`） | lark-connector `messages/:id/thread`、`conversations/:feedId/messages?beforePosition=` |
 | 请求引用的那条消息 | 消息的 `replyTo` |
 | 请求、引用和最近 10 条消息里链接到的飞书文档（最多 3 个，每个 8000 字） | `documents/read?format=markdown` |
-| 这个会话的档案、它关联的前 3 个项目的档案 | 知识库 `~/.jarvis/data` |
+| 这个会话的档案、它关联的前 3 个项目的档案 | 知识库 `~/.persona/data` |
 
 聊天记录每行「月-日 时:分 名字：文字」，请求那行标「← 请求」，总长 3 万字以内（留最新的）。不够的 Agent 自己查（lark_*、kb_*、读文档、看 Agent）。
 
 ## 怎么跑
 
-- 和收件箱的 AI 分身一样是助手目录里的无头 Agent（`assistant.send`），所以有助手的全部工具；当前模型在 **设置 › 模型配置 › 飞书 /agent** 里统一选择（`docs/model-config.md`）。没有用途覆盖时保留 `lark_agent.launcher` 的旧默认，不写就用助手的。对话出现在「Jarvis」tab 的历史里，可以点进去看它查了什么；跑完不推「完成」通知（结果就是飞书里的回复）。
+- 和收件箱的 AI 分身一样是助手目录里的无头 Agent（`assistant.send`），所以有助手的全部工具；当前模型在 **设置 › 模型配置 › 飞书 /agent** 里统一选择（`docs/model-config.md`）。没有用途覆盖时保留 `lark_agent.launcher` 的旧默认，不写就用助手的。对话出现在「Persona」tab 的历史里，可以点进去看它查了什么；跑完不推「完成」通知（结果就是飞书里的回复）。
 - 收到请求先给那条消息点「OnIt」表情，回复后换成「DONE」。
 - Agent 用 MCP 工具 `lark_agent_reply` 交答案（只认为请求启动的那个对话），hub 用 lark-connector `POST /messages/:id/replies` 发出去
   （`editorType: markdown`，话题里 `replyMode: thread`）。Agent 这一轮结束却没调它，hub 把它最后一段回复发出去；
@@ -65,6 +65,6 @@
 
 ## 还没做
 
-（想在飞书里随时和 Jarvis 主对话聊、在飞书里点卡片回答提问：那是飞书机器人，`docs/bots.md`。）
+（想在飞书里随时和 Persona 主对话聊、在飞书里点卡片回答提问：那是飞书机器人，`docs/bots.md`。）
 
 - 别人发的 `/agent`（替别人答）：要先想清楚权限（lark-connector 替身模式那样的访客模式），现在一律不认。

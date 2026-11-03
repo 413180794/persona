@@ -2,9 +2,9 @@
 
 ## 范围与结论
 
-2026-11-01。目标是让 Jarvis 收进一台机器上的**多个已有 app-server、每个 server 中的多个 Agent / thread**，电脑上的桌面 App 继续正常使用，手机能查看、发消息、处理提问与批准。app-server 是 Agent 的协议入口，不是新的终端引擎；不能让用户为了用它把整台机器从 herdr 切走。
+2026-11-01。目标是让 Persona 收进一台机器上的**多个已有 app-server、每个 server 中的多个 Agent / thread**，电脑上的桌面 App 继续正常使用，手机能查看、发消息、处理提问与批准。app-server 是 Agent 的协议入口，不是新的终端引擎；不能让用户为了用它把整台机器从 herdr 切走。
 
-研究阶段只做源码研究，没有接管、重启现有 app-server，没有发送真实消息、改变权限或安装第三方服务。2026-11-02 的第一版实现与验收边界见文末；前面的源码行号仍固定在研究基线。`repos/` 已被 `.gitignore` 忽略，上游代码不进入 Jarvis 的提交；所有个人目录 / endpoint 都应来自配置或发现结果，不写在代码里。
+研究阶段只做源码研究，没有接管、重启现有 app-server，没有发送真实消息、改变权限或安装第三方服务。2026-11-02 的第一版实现与验收边界见文末；前面的源码行号仍固定在研究基线。`repos/` 已被 `.gitignore` 忽略，上游代码不进入 Persona 的提交；所有个人目录 / endpoint 都应来自配置或发现结果，不写在代码里。
 
 ### 研究版本
 
@@ -12,15 +12,15 @@
 | --- | --- | --- |
 | 上游源码 | `openai/codex` main，`67f0994b532b8740f14b5b738af7b7b2a915b1d6`（2026-10-31） | `repos/codex/`，只读，未构建 / 执行源码 |
 | 桌面 App 协议对照 | `rust-v0.163.0-alpha.10.2`，`d9151c94a70013f176ff370fa93da02734662e41` | 用 Git 读取少量启动 / 协议资料，不在用户进程里试验 |
-| Jarvis 现有文档基线 | codex-cli `0.159.3`（`docs/assistant.md`） | 不能把新 main 的全部能力当成现有客户端已有 |
-| Jarvis 研究基线 | `7d44afae9de547078627e3f4b77fafa7230a7153` | 本文 Jarvis 行号对应这一版 |
+| Persona 现有文档基线 | codex-cli `0.159.3`（`docs/assistant.md`） | 不能把新 main 的全部能力当成现有客户端已有 |
+| Persona 研究基线 | `7d44afae9de547078627e3f4b77fafa7230a7153` | 本文 Persona 行号对应这一版 |
 
 下文 `codex-rs/…` 均相对于 `repos/codex/` 的固定 main commit；版本 tag 证据会单独写出。源码链接可以用 `https://github.com/openai/codex/blob/<固定提交>/<相对路径>#L<行号>`，不依赖会移动的 main。
 
 ### 已确认的核心判断
 
-1. **能接入，但前提是拥有可连接入口**：上游支持单 server 多连接、多 thread；已经开启的 Unix/WebSocket server 可以让桌面和 Jarvis 各自连接。一个普通 stdio 进程没有“第二客户端 attach”口。
-2. **Unix socket 里面也是 WebSocket**，不是换行 JSON。不能直接复用 Jarvis 的 unix JSON-lines RPC 客户端去拨它。
+1. **能接入，但前提是拥有可连接入口**：上游支持单 server 多连接、多 thread；已经开启的 Unix/WebSocket server 可以让桌面和 Persona 各自连接。一个普通 stdio 进程没有“第二客户端 attach”口。
+2. **Unix socket 里面也是 WebSocket**，不是换行 JSON。不能直接复用 Persona 的 unix JSON-lines RPC 客户端去拨它。
 3. **不能新起 app-server、resume 同一 thread 来模拟接管**：同 home 的 writer 文件锁会拒绝第二个写者；锁不提供 owner endpoint，不是抢占协议。不要删除锁或尝试强行 resume。
 4. **没有通用无副作用订阅 RPC**：read/list 不加载 thread；实时订阅由 start/resume/fork 建立，resume 可能冷启动、重配或派发已有队列。发现历史时不要顺手 resume。
 5. **同一审批可以送给多个订阅者**，先响应的 callback 被消费；response/error 都可能消费请求。`serverRequest/resolved` 只证明请求已结束，不包含“批准”结论。手机必须撤下已在电脑回答的卡片，不得据通知制造授权。
@@ -47,11 +47,11 @@
 | Unix | 推荐的本机受保护入口。默认路径为 `<CODEX_HOME>/app-server-control/app-server-control.sock`；使用 WebSocket upgrade/frames，每条连接独立。长路径还有安全 rendezvous 处理，不凭字符串猜 socket。 | `app-server-transport/src/transport/mod.rs:56–73`；`codex-rs/app-server-transport/src/transport/unix_socket.rs:148–245` |
 | TCP WebSocket | 每连接独立握手和响应；node 可拨 loopback。main 拒绝带 Origin 的 HTTP 请求，非 loopback 无认证不能启动；不要让浏览器 / 手机直接拨裸 Codex 服务。认证在 upgrade 检查，撤销后不能假设存量连接即时失效。 | `codex-rs/app-server-transport/src/transport/websocket.rs:99–127,160–184`；`websocket-auth/src/lib.rs:286–318` |
 | managed daemon | daemon 启动 `app-server --listen unix://`，默认实例按 home 分开；不是把已运行的桌面 stdio 进程自动收编。连接现有 daemon 和“确保 daemon 存在、必要时启动”是两种操作，发现阶段只能前者。 | `app-server-daemon/src/backend/pid.rs:392–405`；`app-server-daemon/src/lib.rs:793–840` |
-| OpenAI remote-control | 另一个账户 / relay 授权体系，不是 local WebSocket 的别名。依赖 ChatGPT 账户、backend/managed requirements 等；不作为 Jarvis 自动发现的捷径。`remoteControl/enable` 改的是已存在 controller 的状态，不给外部 stdio 进程添加本地 listener。 | `app-server-transport/src/transport/remote_control/auth.rs:100–143`；`app-server/src/request_processors/remote_control_processor.rs:41–60` |
+| OpenAI remote-control | 另一个账户 / relay 授权体系，不是 local WebSocket 的别名。依赖 ChatGPT 账户、backend/managed requirements 等；不作为 Persona 自动发现的捷径。`remoteControl/enable` 改的是已存在 controller 的状态，不给外部 stdio 进程添加本地 listener。 | `app-server-transport/src/transport/remote_control/auth.rs:100–143`；`app-server/src/request_processors/remote_control_processor.rs:41–60` |
 
-Unix socket 文件模式为 0600，目录与 rendezvous 也做所有者/权限检查（`codex-rs/app-server-transport/src/transport/unix_socket.rs:79–98,325–340,497–503`）。Jarvis 不能为了连接去放宽权限。源码查到的本地 transport 是启动时选择，未发现运行中新增本地 listener 的 RPC。
+Unix socket 文件模式为 0600，目录与 rendezvous 也做所有者/权限检查（`codex-rs/app-server-transport/src/transport/unix_socket.rs:79–98,325–340,497–503`）。Persona 不能为了连接去放宽权限。源码查到的本地 transport 是启动时选择，未发现运行中新增本地 listener 的 RPC。
 
-**当前桌面是 stdio 时的落地办法**：在桌面应用支持的前提下，让下一次正常启动使用可共享的官方 Unix/daemon 通道，桌面和 node 同连原 server；这需要桌面端确实支持相应连接设置。不能只给旧桌面启动命令加 `--listen unix://`，却还让它继续向 stdin 写请求。若桌面端没有共享连接配置，需在桌面端/启动集成里增加合作式通道；普通 TCP 字节转发不能代替多客户端 JSON-RPC 路由、一次初始化、响应/事件/审批分发。没有这种合作时，Jarvis 明确只读，不承诺已“接手”。
+**当前桌面是 stdio 时的落地办法**：在桌面应用支持的前提下，让下一次正常启动使用可共享的官方 Unix/daemon 通道，桌面和 node 同连原 server；这需要桌面端确实支持相应连接设置。不能只给旧桌面启动命令加 `--listen unix://`，却还让它继续向 stdin 写请求。若桌面端没有共享连接配置，需在桌面端/启动集成里增加合作式通道；普通 TCP 字节转发不能代替多客户端 JSON-RPC 路由、一次初始化、响应/事件/审批分发。没有这种合作时，Persona 明确只读，不承诺已“接手”。
 
 ## thread、状态与发送语义
 
@@ -76,7 +76,7 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 
 因此多个 app-server 可以共用一个 home 管不同 thread，但不能让两个进程同时拥有同 thread 的 writer。`codex-rs/app-server/tests/suite/v2/thread_resume.rs:321–326` 专门覆盖：另一进程有 active writer 时第二进程 resume 失败；原进程 shutdown 后才可成功。这个锁不提供 owner 的 socket，不用它探测路由、不删除它、不把换 home 或重命名 thread 当绕过方式。
 
-不同 home 不共享锁命名空间，path alias、外部 rollout 或非 LocalThreadStore 的行为本次未实测。Jarvis 仍需自己的 owner 冲突检测和 fail-closed，不把上游锁当作覆盖一切的安全网。
+不同 home 不共享锁命名空间，path alias、外部 rollout 或非 LocalThreadStore 的行为本次未实测。Persona 仍需自己的 owner 冲突检测和 fail-closed，不把上游锁当作覆盖一切的安全网。
 
 ## 审批、提问和跨客户端收尾
 
@@ -84,11 +84,11 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 - `outgoing_message.rs:657–685` 在锁里消费 callback，**先 response/error 的客户端获胜，不是“先批准”获胜**。HumanCommand 和 user verification 有额外资格/owner 条件；普通审批不能套用这些特殊规则，订阅不是只读 ACL。
 - `serverRequest/resolved` 只有 threadId/requestId，没有批准结果（`codex-rs/app-server-protocol/src/protocol/v2/notification.rs:71–76`）。监听器排序后向当前订阅者发出（`thread_lifecycle.rs:1314–1328`）；手机只撤卡，不能据此伪造 Allow/Approve 或提升权限。
 - connect/initialize 不直接回放审批。resume 后回放**仍 pending** 的请求且保持原 ID（`thread_lifecycle.rs:1230–1259`、`outgoing_message.rs:525–560,688–701`）；user verification 不重放，原 owner 断开则取消。恢复后的卡片需去重，已回答 / 已过期的旧卡不能回到可批准状态。
-- 只读观察者不能自动对未知 server request 回 error 或 decline：那也可能抢先消费共享 callback、使桌面端失去回答机会。现有 Jarvis 单 owner 的 unsupported-method 错误路径（`assistant_codex.go:802`）不能直接照搬到共享连接。dynamic tool 等只交给真正具有 handler 的客户端；普通手机审批只有用户明确点了才回复。
-- `connection_cleanup.rs:19–39` 关闭 admission 后异步清理连接；非 stdio 的 server 不因最后客户端断开立刻退出，thread 无订阅且不活跃达到超时才 unload（`thread_lifecycle.rs:56–60`）。stdio 的 stdin 关闭则退出主循环（`app-server/src/lib.rs:1196–1218`）。断开 Jarvis 不能自动杀外部进程，但也不能承诺最后 observer 离开对其生命周期完全无影响。
+- 只读观察者不能自动对未知 server request 回 error 或 decline：那也可能抢先消费共享 callback、使桌面端失去回答机会。现有 Persona 单 owner 的 unsupported-method 错误路径（`assistant_codex.go:802`）不能直接照搬到共享连接。dynamic tool 等只交给真正具有 handler 的客户端；普通手机审批只有用户明确点了才回复。
+- `connection_cleanup.rs:19–39` 关闭 admission 后异步清理连接；非 stdio 的 server 不因最后客户端断开立刻退出，thread 无订阅且不活跃达到超时才 unload（`thread_lifecycle.rs:56–60`）。stdio 的 stdin 关闭则退出主循环（`app-server/src/lib.rs:1196–1218`）。断开 Persona 不能自动杀外部进程，但也不能承诺最后 observer 离开对其生命周期完全无影响。
 - WS 慢客户端会被断开；stdio 队列满会等待（`app-server/src/transport.rs:141–178,219–241`）。在 node 回调线程上解码、按 thread 限队列、后台处理分页/磁盘，不在收消息处等待手机审批。
 
-## Jarvis 已经有什么，缺什么
+## Persona 已经有什么，缺什么
 
 | 现状 | 证据 | 接入时的含义 |
 | --- | --- | --- |
@@ -103,7 +103,7 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 | 审批归属使用单进程 `p.id`；ID 哈希不含机器 / 连接代际 | `assistant_codex.go:690`、`:948` | 必须按真正的 request/thread/turn 路由，不能把其他 Agent 的请求给当前助手批准 |
 | steer 任意错误都会 fallback start；interrupt 之后清理后台终端 | `assistant_codex.go:377`、`:408` | 外部 server 不沿用这两个默认：只有确定本轮结束的错误才允许改走 start；停止轮次与清理所有后台命令要分开 |
 
-可借用目录发现、realpath 去重与落库机制：`server/internal/node/claudedirs.go:176`、`server/internal/hub/claudedirs.go:19`。只提取 allowlist 中的环境字段（如 `CODEX_HOME`），不把进程全部环境变量、token、账号配置发到 hub 或打印日志。Codex 自己的 `find_codex_home` 会规范化显式 home（`codex-rs/core/src/config/mod.rs:5239`），Jarvis 也应按规范化目录去重。
+可借用目录发现、realpath 去重与落库机制：`server/internal/node/claudedirs.go:176`、`server/internal/hub/claudedirs.go:19`。只提取 allowlist 中的环境字段（如 `CODEX_HOME`），不把进程全部环境变量、token、账号配置发到 hub 或打印日志。Codex 自己的 `find_codex_home` 会规范化显式 home（`codex-rs/core/src/config/mod.rs:5239`），Persona 也应按规范化目录去重。
 
 ## 协议内容不能只支持文本
 
@@ -116,7 +116,7 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 ## 接入调用顺序（设计示例，未对真实会话执行）
 
 1. 在 node 上发现所有允许访问的 app-server 进程：只记录 pid/启动时间、可执行文件、`CODEX_HOME`、已配置/已开启的 endpoint。home 规范化去重，进程与 endpoint 不按“同目录最新”猜；持久化已知 home，离线后历史仍能找回。
-2. 对**已有且许可的** Unix/WS endpoint 建立独立连接。Unix 先完成 WebSocket handshake，stdio 仅用于 Jarvis 自己创建并拥有的 server。每条连接 `initialize` 一次（clientInfo / 所需且支持的 capabilities）再 `initialized`，保留返回的 codexHome 和版本/能力信息。
+2. 对**已有且许可的** Unix/WS endpoint 建立独立连接。Unix 先完成 WebSocket handshake，stdio 仅用于 Persona 自己创建并拥有的 server。每条连接 `initialize` 一次（clientInfo / 所需且支持的 capabilities）再 `initialized`，保留返回的 codexHome 和版本/能力信息。
 3. 每实例调用 `thread/loaded/list` 取完整分页，建立 owner 路由。每 home 的历史另取 `thread/list`；处理默认 provider/source/archive 过滤，不把磁盘历史误认为 loaded runtime。`sourceKinds` 在 main 包含 cli/vscode/exec/appServer/subAgent 等（`codex-rs/app-server-protocol/src/protocol/v2/thread.rs:1552`），子 Agent 来源和父子关系也要收进来。
 4. 先 `thread/read {threadId, includeTurns:false}` 取摘要/状态，打开对话时才分页取历史；长对话采用版本支持的 turns/items 分页或本地 rollout 窗口，不对每个 Agent 全量 read(includeTurns:true)。metadata-only 对 fresh/ephemeral 的限制用可见状态说明，不能当作不存在。
 5. 用户选择实时接入/处理时，先核对 thread 仍在原实例的 loaded/list，再无配置覆盖地 `thread/resume {threadId, excludeTurns:true}` 加入该 runtime；收到响应/快照后接收事件和仍 pending 的审批。若 thread 已 unloaded，只降为可读历史；需要明确续聊才能 cold resume，不能失败后偷偷改到另一个 server。
@@ -124,14 +124,14 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 7. 收到 server request 后按 `(instance, generation, requestId)` 登记手机交互；用户真正回答时才返回该 request ID。收到 `serverRequest/resolved` 立即撤卡，保留“别处已结束”的历史，不合成批准。只观察模式不响应动态工具请求，不默认发送错误抢占桌面的处理。
 8. 断线后清理连接本地 pending/临时 delta，不杀 external process，不清用户后台任务。重新连接→initialize→owner确认→授权范围内warm resume→快照/历史收敛。server/generation变化时旧请求失效，不能复用整数 ID；最后订阅者离开后的上游 unload 行为要对 UI 说明。
 
-若想由 Jarvis **新建自己的**共享服务，官方启动形式可以是 `CODEX_HOME=<已配置目录> codex app-server --listen unix://`，或显式私有 Unix socket。该操作与“接入已经运行的桌面 server”不同，需要独立的启动/续聊授权；不能执行一遍这个命令就声称接管了原 stdio 进程。
+若想由 Persona **新建自己的**共享服务，官方启动形式可以是 `CODEX_HOME=<已配置目录> codex app-server --listen unix://`，或显式私有 Unix socket。该操作与“接入已经运行的桌面 server”不同，需要独立的启动/续聊授权；不能执行一遍这个命令就声称接管了原 stdio 进程。
 
 ## 推荐数据模型
 
 以下是待实现的设计，不代表已经存在的接口。
 
 - `CodexHome`：machine + 规范化 home，存历史来源 / 已知目录，文件为原始记录，不写第三方 SQLite。
-- `CodexServer`：machine + 配置 / 注册实例 ID；含 owner（Jarvis 管理 / 外部）、home、transport、endpoint、能力、连接状态。PID + 进程启动时间仅是当前运行代际，不能当永远稳定的主键。
+- `CodexServer`：machine + 配置 / 注册实例 ID；含 owner（Persona 管理 / 外部）、home、transport、endpoint、能力、连接状态。PID + 进程启动时间仅是当前运行代际，不能当永远稳定的主键。
 - `CodexThread`：conversation identity = machine + home/source + 原始 thread ID；运行路由另带 server + connection generation，不把 PID 塞进永久对话 ID。
 - 同 home、同 thread 在两个 server 加载：同一份历史可以去重，但运行 route 必须都保留；未验证 owner 时禁止自动挑任意 server 写入。不同 home 的相同 thread ID 不能合并。
 - Interaction identity：machine + server/generation + 原始 server request ID（支持数字和字符串）+ thread；附 turn/item/approval ID，回答必须回到提出它的连接。断连后的旧 response 不能送到重启后的新连接。
@@ -165,7 +165,7 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 
 ## 上游测试证据与仍待验证的部分
 
-这些测试**只阅读了源码，没有执行**；它们说明上游哪些行为有回归约束，不能代替 Jarvis 接入后的实测。
+这些测试**只阅读了源码，没有执行**；它们说明上游哪些行为有回归约束，不能代替 Persona 接入后的实测。
 
 | 测试 | main 位置 | 证明的范围 |
 | --- | --- | --- |
@@ -179,13 +179,13 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 | `queue_start_while_active_returns_busy_and_preserves_the_queue` | `thread_queue.rs:701` | busy 时不能误消费持久队列 |
 | `verification_cancels_when_its_owner_disconnects` | `app-server/src/user_verification_ownership_tests.rs:84` | 用户验证 owner 与普通审批重放不能混用 |
 
-未证明：双订阅者同时发相反决定的完整 Jarvis UI 竞态；任意旧事件精确重放；跨进程队列的崩溃 exactly-once；外部 rollout / 网络文件系统的 writer 锁；当前桌面前端是否支持改用共享 endpoint。这些必须用独立测试实例验证，不能在用户活跃会话上试探。
+未证明：双订阅者同时发相反决定的完整 Persona UI 竞态；任意旧事件精确重放；跨进程队列的崩溃 exactly-once；外部 rollout / 网络文件系统的 writer 锁；当前桌面前端是否支持改用共享 endpoint。这些必须用独立测试实例验证，不能在用户活跃会话上试探。
 
 ## 研究阶段验证状态
 
 - 已直接 `git clone` 到 `repos/codex`；`git check-ignore repos/codex` 通过，上游工作区保持干净。
 - 已核对 main 实现和上游回归源码，并抽查当前桌面 tag 的 transport、writer 锁、warm resume、持久队列和审批重放；没有宣称跑过上游测试。
-- 已核对 Jarvis 现有客户端 / 目录 / 路由源码，研究不是完整实现，尚未新增运行中的 server 接入。
+- 已核对 Persona 现有客户端 / 目录 / 路由源码，研究不是完整实现，尚未新增运行中的 server 接入。
 - 未编译或运行上游源码、未进行真实多客户端写入测试，未部署、未发布 TestFlight。
 
 ## 第一版实现（2026-11-02）

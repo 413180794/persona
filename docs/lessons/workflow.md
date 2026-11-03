@@ -42,6 +42,8 @@
 
 ## 临时的测试 hub
 
+- 产品改名不等于运行时契约改名（2026-11-03，#277）：文档的产品名写 Persona，但历史路径、签名 profile、数据库 / 数据卷、协议字段、包 ID、缓存键和源码证据不能盲替换。文档展示 `personad` / `~/.persona` 时明确旧 `jarvisd` / `~/.jarvis` 兼容，环境变量只为已经实现的新入口写优先级；独立文案 PR 不作为运行时迁移已经完成的证明。
+
 - 要在真实机器上验证、又不能动生产 hub：在 hub 机器上用另一个 HOME（`HOME=/tmp/x jarvisd hub`，hub.json 里换 listen 端口、
   单独建一个库）起一份，`kind: local` 的机器就是同一份二进制起的 node，HOME 不同所以碰不到生产 node 的 socket 和配置。用完删库、删目录。
 - `ssh -L` 前先看本地端口有没有被占：别的车道可能已经在同一个端口上开着到生产 hub 的隧道，`ExitOnForwardFailure` 报错之前的请求会打到生产 hub。

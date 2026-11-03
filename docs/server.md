@@ -1,4 +1,6 @@
-# 服务端 jarvisd
+# 服务端 personad
+
+`personad` 是新名称，`jarvisd` 继续作为兼容别名；新默认运行目录 `~/.persona`，旧 `~/.jarvis` 继续兼容。本文的 systemd / launchd、数据库 / 容器 / 数据卷及发布文件名保留现有身份，不随产品改名强行重建。迁移版本与旧版本的区别见 [配置与兼容说明](config.md#命名与兼容)。
 
 Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`，协议见 `docs/protocol.md`。
 
@@ -16,10 +18,10 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 | `internal/netaddr` | 本机地址、Linux netlink 标志和地址变化通知；不证明公网可达 |
 | `internal/db` | Postgres：连接池、内嵌 SQL 迁移（`migrations/NNNN_*.sql`）、各表读写 |
 | `internal/mail` | IMAP/SMTP、加密账号存储、邮件 HTTP 接口和 MCP 工具（`docs/mail.md`） |
-| `internal/mcpserver` | `jarvisd mcp`：给 claude 的 stdio MCP server |
+| `internal/mcpserver` | `personad mcp`：给 claude 的 stdio MCP server |
 | `internal/apns` | APNs 客户端（.p8 key、provider token、发一条推送）：hub 直连和推送中继共用 |
 | `internal/pushcrypto` | 推送正文用手机公钥加密（HPKE），`docs/push-relay.md` |
-| `internal/relay` | `jarvisd relay`：推送中继，发布方运行，`docs/push-relay.md` |
+| `internal/relay` | `personad relay`：推送中继，发布方运行，`docs/push-relay.md` |
 | `internal/tunnel` | tailcat：node 的 key 文件和端点、hub 的拨号、经 tailcat 收发新二进制（下面「tailcat 打洞」） |
 
 ## 和 herdr 的连接
@@ -57,22 +59,22 @@ Orca 没开时立刻答「没有终端」，不记日志。映射和第一期不
 ## 部署
 
 hub 有两种部署方式，功能一样：**原生二进制**（下面，`systemd --user` 服务 + Postgres 容器）和 **Docker**（hub + Postgres 两个容器，
-适合 NAS 或只当 hub 的机器，`docs/docker.md`）。各台电脑上的 node 不管 hub 怎么部署，都是 `~/.jarvis/bin/jarvisd`。
+适合 NAS 或只当 hub 的机器，`docs/docker.md`）。各台电脑上的 node 不管 hub 怎么部署，都是 `~/.persona/bin/personad`。
 
 ```sh
 ./scripts/deploy/deploy.sh                    # 编译 linux/amd64 + darwin/arm64，装到所有机器，重启 hub
 ./scripts/deploy/deploy.sh <机器 id> <机器 id> # 只装部分机器
 ```
 
-- 二进制：每台机器 `~/.jarvis/bin/jarvisd`。node 由 hub 经 `ssh <别名> ~/.jarvis/bin/jarvisd node --stdio` 拉起，Mac 上不用常驻服务。
+- 二进制：每台机器 `~/.persona/bin/personad`。node 由 hub 经 `ssh <别名> ~/.persona/bin/personad node --stdio` 拉起，Mac 上不用常驻服务。
 - hub：hub 机器上的 `systemd --user` 服务 `jarvisd`，HTTP `listen` 默认 `:18660`，另用 `public.tls_listen` 开启 TLS（如 `:18662`）。公网只放行 TLS 端口，IPv6 入站、主机防火墙和 TUN 回包排查见 [网络文档](network.md)。`journalctl --user -u jarvisd -f` 看日志。
   Docker 部署的 hub 不归 `deploy.sh` 管（它的配置里别把 hub 机器写进 `machines`，或只部署各台电脑：`deploy.sh <机器 id>`），
   升级是拉新镜像；「重新部署」用镜像里带的 node 构建。
 - 换了 node 二进制后 hub 不会自动重连旧连接；`deploy.sh <hub 机器 id>` 会重启 hub，或在 App「机器」页点「重新连接」。
 - 管理界面（`<hub 地址>/admin`，[admin.md](admin.md)）的访问范围：`deploy.sh --admin-access <loopback|lan|cidrs|any>`（`cidrs` 加
   `--admin-cidrs a,b`）设到 hub 上；不给时，hub 上从没选过就在终端里问，没终端用默认的 `lan` 并打印一行提醒。之后在 hub 机器上
-  `jarvisd hub admin access` 看 / 改，`jarvisd hub admin reset-password` 重设管理员密码；在 hub 机器本机上做首次设置要的一次性设置码在
-  hub 日志里（`admin: first-run setup code …`），或 `jarvisd hub admin setup-code` 现取（[admin.md](admin.md)「首次设置」）。
+  `personad hub admin access` 看 / 改，`personad hub admin reset-password` 重设管理员密码；在 hub 机器本机上做首次设置要的一次性设置码在
+  hub 日志里（`admin: first-run setup code …`），或 `personad hub admin setup-code` 现取（[admin.md](admin.md)「首次设置」）。
 
 ### 轻量 hub 与部署前检查
 
@@ -94,7 +96,9 @@ Linux 的 systemd 用户服务要在退出 SSH 后持续运行，需由管理员
 Windows PowerShell 通过管道传 shell 脚本时，末尾可能额外带 CR，导致远端报 `$'\r': command not found`；
 使用 UTF-8 文件上传，或先编码为 base64 再在远端解码执行，避免依赖管道的换行编码。
 
-## NAS（docker）部署与升级
+## NAS（docker）部署与升级（兼容部署示例）
+
+本节记录已有部署的操作：`~/.jarvis`、`jarvisd`、容器 / 镜像名和备份文件名按旧兼容身份保留，不是新装的默认名称。升级 / 回退要使用实际部署的路径和服务名，不应把这些命令全文替换后直接运行。
 
 另一种装法是 `deploy/docker` 的 compose（[docker.md](docker.md)）；这里记的是现在这台 NAS 上手工跑的两个容器。
 
@@ -272,8 +276,8 @@ sudo /usr/local/bin/docker restart jarvisd    # 改了 hub.json 以后
 
 ## hub 连不进去的电脑（jarvis-link）
 
-笔记本这类网络经常变的电脑，hub.json 里 kind 写 `link`：hub 不 ssh 它，等它上面的 jarvis-link（Mac 上是菜单栏 App「Jarvis Link」）
-主动连上 TLS 端口，再在这条链路上开流连它的常驻 node（所以这台要装常驻 node，见下一节）。配对：`jarvisd hub pair --machine <id>`，
+笔记本这类网络经常变的电脑，hub.json 里 kind 写 `link`：hub 不 ssh 它，等它上面的 jarvis-link（Mac 上是菜单栏 App「Persona Link」）
+主动连上 TLS 端口，再在这条链路上开流连它的常驻 node（所以这台要装常驻 node，见下一节）。配对：`personad hub pair --machine <id>`，
 NAS 上是 `sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine <id>`。全部细节见 [link.md](link.md)。
 
 ## hub 来连（kind service）
@@ -285,31 +289,31 @@ ssh 电脑照常能用，但不再推荐、管理界面不再添加，迁移见 
 
 ## hub 互联
 
-推荐只装一台 hub，其他电脑装 node 服务。确实要几台 hub 时，配对后连成一组（`jarvisd hub pair --peer` / `jarvisd hub peer add`，或管理界面
+推荐只装一台 hub，其他电脑装 node 服务。确实要几台 hub 时，配对后连成一组（`personad hub pair --peer` / `personad hub peer add`，或管理界面
 「高级 › 互联」）：组里有且只有一台**中心**，服务所有 App、连所有电脑；其余是**成员**，把 App 的请求转给中心、把自己的电脑交给中心连
-（`jarvisd hub peer list` 看谁是中心，`jarvisd hub peer center` 换中心）。同一台电脑只出现一次，用最好的那条路。互联只走 TLS 端口。
+（`personad hub peer list` 看谁是中心，`personad hub peer center` 换中心）。同一台电脑只出现一次，用最好的那条路。互联只走 TLS 端口。
 设计、协议和怎么验证见 [mesh.md](mesh.md)。
 
 ## 常驻 node（Mac，`scripts/deploy/node-launchd.sh`）
 
-hub 通过 ssh 起 node（`jarvisd node --stdio`），node 再起助手的 claude。ssh 会话读不了 macOS 的**登录钥匙串**，所以 API key 存在钥匙串里的
+hub 通过 ssh 起 node（`personad node --stdio`），node 再起助手的 claude。ssh 会话读不了 macOS 的**登录钥匙串**，所以 API key 存在钥匙串里的
 claude（`apiKeyHelper` 用 `security find-generic-password` 取）在助手里会报 401；herdr 里的 Agent 没这个问题，因为 herdr 跑在登录会话里。
 
-- `scripts/deploy/node-launchd.sh install`（在那台 Mac 上跑）：装一个 launchd 用户任务 `com.jarvis.node`，登录后常驻 `jarvisd node --attach`，
-  监听 `~/.jarvis/node-attach.sock`。
-- hub 照旧 ssh 起 `jarvisd node --stdio`；它发现有常驻 node 在听，就只把 ssh 的输入输出转给它（`internal/node/attach.go` 的 `Relay`），
+- `scripts/deploy/node-launchd.sh install`（在那台 Mac 上跑）：装一个 launchd 用户任务 `com.jarvis.node`，登录后常驻 `personad node --attach`，
+  监听 `~/.persona/node-attach.sock`。
+- hub 照旧 ssh 起 `personad node --stdio`；它发现有常驻 node 在听，就只把 ssh 的输入输出转给它（`internal/node/attach.go` 的 `Relay`），
   由常驻 node 处理这条连接。node 起的东西（助手的 claude、它的 key helper）都在登录会话里，能读钥匙串。hub 不用改，也分不出区别。
 - 没有常驻 node（没装、退出了、socket 是残留的）时 `--stdio` 自己处理连接，和以前一样。
 - 一次只服务一条连接：新连接进来（hub 重连）时旧的那条的 node 退出，等着的 hook 会去问新的（同 ssh 起的 node 被替换时）。同时只能有一个常驻 node。
 - `deploy.sh` 换了二进制后会 `node-launchd.sh restart`（ssh 进来也能操作登录会话的 launchd）；hub 要重连一次才会用上新的 node（重启 hub，或 App 里「重新连接」）。
-- Agent 运行时的 `~/.jarvis/runtime.sock` 是常驻 node 进程的，不是某一条 hub 连接的（`node/runtimehost.go`）：常驻 node 一起来就开着，
+- Agent 运行时的 `~/.persona/runtime.sock` 是常驻 node 进程的，不是某一条 hub 连接的（`node/runtimehost.go`）：常驻 node 一起来就开着，
   DSH 插件这类 runtime 不用等 hub；hub 换连接时它们不断开，新的连接一上来就列出它们的会话（`docs/protocol.md`「Runtime ↔ node」）。
-- `scripts/deploy/node-launchd.sh uninstall` 回到 ssh 起 node。日志：`~/.jarvis/node-attach.log`。
+- `scripts/deploy/node-launchd.sh uninstall` 回到 ssh 起 node。日志：`~/.persona/node-attach.log`。
 
 ## tailcat 打洞（`internal/tunnel`，`hub/tailcat.go`）
 
 hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）经 [tailcat](https://github.com/tailscale/tailcat) 接入：Tailscale 的数据面
-（WireGuard + DERP 中继 + 打洞），不用它的控制面，不需要 Tailscale 账号、root、TUN 或开端口，全在 jarvisd 进程里（用户态 netstack）。
+（WireGuard + DERP 中继 + 打洞），不用它的控制面，不需要 Tailscale 账号、root、TUN 或开端口，全在 personad 进程里（用户态 netstack）。
 
 - **退避顺序**：配了 `ssh_host` 又配了 `tailcat_addr` 的机器每次连接先试 ssh（`ConnectTimeout=15`），失败立刻试 tailcat；
   ssh 失败后 5 分钟内的重连先试 tailcat，不再干等 ssh 超时。走 tailcat 期间每 5 分钟 `ssh <host> true` 检查一次，ssh 恢复就断开
@@ -321,12 +325,12 @@ hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）�
   每 32 KB 发出去一段）就算活着、不 ping：慢中继上一个大页面要传很久，ping 排在它后面会误判。ping 在单独的 goroutine 里等，
   卡在死连接的写上也不耽误判断；判定断线时直接关掉底层连接，卡住的写随之失败。
 - **node 侧**：只有常驻 node（`scripts/deploy/node-launchd.sh install`，Mac 是 launchd，Linux 是 systemd 用户服务）会开 tailcat：
-  有 `~/.jarvis/tailcat.json` 时，在自己的 tailcat 地址上听 `18662`（node 协议，和 ssh 转过来的连接共用「一次服务一条，新的替换旧的」）
+  有 `~/.persona/tailcat.json` 时，在自己的 tailcat 地址上听 `18662`（node 协议，和 ssh 转过来的连接共用「一次服务一条，新的替换旧的」）
   和 `18663`（接收新二进制）。起不来（没网、DERP 连不上）就在后台退避重试，ssh 转发照常服务。
-- **配对**：hub 机器上 `jarvisd hub tailcat-key` 打印 hub 的公钥（第一次生成 `~/.jarvis/tailcat-hub.json`）；那台电脑上
-  `jarvisd node tailcat init --hub <公钥>` 生成 `~/.jarvis/tailcat.json`（node 私钥、预共享密钥、选定的 DERP 区域、允许的 hub 公钥）
+- **配对**：hub 机器上 `personad hub tailcat-key` 打印 hub 的公钥（第一次生成 `~/.persona/tailcat-hub.json`）；那台电脑上
+  `personad node tailcat init --hub <公钥>` 生成 `~/.persona/tailcat.json`（node 私钥、预共享密钥、选定的 DERP 区域、允许的 hub 公钥）
   并打印地址，填进 hub.json 的 `tailcat_addr`；重启那台的常驻 node 和 hub。再跑一次 `init` 可以加别的 hub，地址不变；
-  `jarvisd node tailcat addr` 再打印一遍。
+  `personad node tailcat addr` 再打印一遍。
 - **安全**：node 只回应 `tailcat.json` 里列出的 hub 公钥（tailcat 在列表为空时放所有人进来，所以没有 hub 公钥的文件直接拒绝加载），
   其他 key 连握手都没有；只放行 18662–18663 两个端口。地址里有预共享密钥，和 hub token 一样是密钥：只放 hub.json，日志里不打印。
   两个 key 文件都是 0600（读到权限更宽的会改回 0600）。
@@ -339,7 +343,7 @@ hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）�
   大小和 sha256、确认新二进制在本机跑得起来（`version`）后才替换自己，回 `{"ok"}` 再退出，由 launchd / systemd 拉起新版本。
   一次只收一个（同时来的第二个立即回「正在上传」）；60 秒没收到数据就放弃，hub 中途重启不会把下一次部署卡住。
   `deploy.sh` 首次安装仍要能 ssh 到那台（或手动放二进制）。
-- **代价**：jarvisd 从约 19 MB 变成约 36 MB（gzip 后 8 MB → 15 MB）；冷启动约 7 秒（拉 DERP map、选区域），第一次拨通约 6.5 秒。
+- **代价**：personad 从约 19 MB 变成约 36 MB（gzip 后 8 MB → 15 MB）；冷启动约 7 秒（拉 DERP map、选区域），第一次拨通约 6.5 秒。
   公共中继没有 SLA、走中继时限速，可以用 `--derp-map-url` / hub.json 的 `tailcat.derp_map_url` 换成自建的 derper（见下一条）。tailcat 不承诺 API 稳定，
   升级依赖时跑一遍下面的联调。
 - **自建中继（derper）**：内容本来就是 WireGuard 端到端加密的，但公共中继看得到哪两个 key 在通信、双方 IP 和流量大小；
@@ -352,12 +356,12 @@ hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）�
   4. DERP map：derper 不发 map，tailcat 是用 HTTP GET 取的，另起一个静态服务（例如 `python3 -I -m http.server <端口> --bind <内网 IP> --directory <目录>`）
      发 `derpmap.json`：一个区域（id 用 900–999，留给自定义区域的段），一个节点，`HostName` / `IPv4` 是内网 IP，`IPv6: "none"`，加上 `CertName`、`DERPPort`、`STUNPort`。
      发出去之前在每台电脑上取一次 map、用 `openssl s_client` 拿到证书算 sha256，和 `CertName` 对一下。
-  5. 切换：hub.json 写 `tailcat.derp_map_url`；每台电脑跑 `jarvisd node tailcat init --hub <公钥> --derp-map-url <map 地址>`。密钥不变，但会在新 map 里重新选区域，
+  5. 切换：hub.json 写 `tailcat.derp_map_url`；每台电脑跑 `personad node tailcat init --hub <公钥> --derp-map-url <map 地址>`。密钥不变，但会在新 map 里重新选区域，
      地址因此变了，要把新地址换进 hub.json 那台的 `tailcat_addr`，再重启那台的常驻 node 和 hub。改了 map（换证书、换端口）也要重启两边。
-  6. 验证：机器列表的 `tailcat_path` 还是 `direct`；node 的日志是 `DERP region 9xx`；两边的 jarvisd 只连到 derper 的端口，没有到公共中继的连接（`ss -tnp` / `lsof -i`）。
+  6. 验证：机器列表的 `tailcat_path` 还是 `direct`；node 的日志是 `DERP region 9xx`；两边的 personad 只连到 derper 的端口，没有到公共中继的连接（`ss -tnp` / `lsof -i`）。
 - **只管 hub ↔ node**：手机 / 网页到 hub 仍然需要一个能访问到的入口（`public_url`）。
 - 联调（要外网）：`JARVIS_TEST_TAILCAT=1 go test ./internal/tunnel -run EndToEnd`（真实中继上的拨号、鉴权、上传），以及
-  `internal/hub/tailcat_e2e_test.go` 顶部注释里的命令（两版真实 jarvisd：ssh 不通 → 走 tailcat 上线 → 经 tailcat 部署新版本并重连）。
+  `internal/hub/tailcat_e2e_test.go` 顶部注释里的命令（两版真实 personad：ssh 不通 → 走 tailcat 上线 → 经 tailcat 部署新版本并重连）。
   `JARVIS_TAILCAT_DEBUG=1` 打开 tailscale 的日志（默认静音，打洞期间每秒好几行）。
 
 ## 数据库（Postgres）
@@ -376,8 +380,8 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | `live_activities` | 每台设备的实时活动：活动 token、push-to-start token、开始时间（`docs/live-activity.md`） |
 | `devices` | 推送设备（APNs token），APNs 返回 410 / BadDeviceToken 时自动删除；`prefs`（jsonb）是这台设备要哪些推送（App 设置 › 通知），注册时不覆盖 |
 | `phone_tools` | iPhone 最近一次声明的 phone_* 工具（手机离线时 Claude 也能看到） |
-| `node_sessions` | 每台机器上 Jarvis 启动过的会话：pane、启动器、目录（node 经 hub RPC `state.load` / `state.put` 读写，Mac 不直连数据库） |
-| `mail_accounts` | 邮箱账号：非敏感字段 jsonb + AES-GCM 密文；密钥 `~/.jarvis/secret.key` 不进数据库 |
+| `node_sessions` | 每台机器上 Persona 启动过的会话：pane、启动器、目录（node 经 hub RPC `state.load` / `state.put` 读写，Mac 不直连数据库） |
+| `mail_accounts` | 邮箱账号：非敏感字段 jsonb + AES-GCM 密文；密钥 `~/.persona/secret.key` 不进数据库 |
 | `interactions` | 每次提问 / 计划 / 授权 / 终端交互及结局（resolved / dismissed / expired / cancelled）；hub 重启时把残留的 pending 标成 cancelled |
 | `settings` | App 里改的全局设置（如助手的启动器），以及持久化的 `hub_id` |
 | `pair_tokens` | 临时配对 token 的哈希、到期和兑换记录，重启后仍有效 |
@@ -389,7 +393,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 旧版的 `phone_tools.json`、`devices.json`、`mail_accounts.json`、`sessions.json` 首次启动时自动导入，改名为 `*.migrated`。
 
-## 配置（hub 机器 `~/.jarvis/`，0600，不入库）
+## 配置（hub 机器 `~/.persona/`，0600，不入库）
 
 | 文件 | 内容 |
 | --- | --- |
@@ -398,9 +402,9 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | `secret.key` | 邮箱凭据的加密密钥（32 字节） |
 | `apns.json`、`apns_key.p8` | 推送配置和 key；有就直连 APNs，没有就经每台手机登记的推送中继（`docs/push-relay.md`），手机也没登记中继就不推 |
 
-每台机器 `~/.jarvis/` 下还有 node 生成的 `claude-settings.json`（hooks）、`mcp.json`、`node.sock`、`uploads/`。
+每台机器 `~/.persona/` 下还有 node 生成的 `claude-settings.json`（hooks）、`mcp.json`、`node.sock`、`uploads/`。
 
-配对：hub 机器上 `~/.jarvis/bin/jarvisd hub pair` 通过 HTTP 回环调用运行中的 hub，打印临时配对链接、二维码、到期时间，以及已开启 TLS 时的公钥指纹。`listen` 必须能接受 IPv4 回环连接。临时 token 有效期 10 分钟，只能兑换一次设备 token，兑换后最多宽限 2 分钟（均为协议策略）。`--legacy` 离线打印主 token 和旧格式二维码，不用于公网。二维码新参数见 [协议](protocol.md#临时配对)。
+配对：hub 机器上 `~/.persona/bin/personad hub pair` 通过 HTTP 回环调用运行中的 hub，打印临时配对链接、二维码、到期时间，以及已开启 TLS 时的公钥指纹。`listen` 必须能接受 IPv4 回环连接。临时 token 有效期 10 分钟，只能兑换一次设备 token，兑换后最多宽限 2 分钟（均为协议策略）。`--legacy` 离线打印主 token 和旧格式二维码，不用于公网。二维码新参数见 [协议](protocol.md#临时配对)。
 
 ## 推送策略（`hub/push.go`、`hub/notify.go`）
 
@@ -454,9 +458,9 @@ App 开着时连着 hub 的 WebSocket，hub 把各种变化广播给它；真实
 ## 自己更新（`hub/selfupdate.go`，`docs/hub-update.md`）
 
 发布版（`channel=release`）的 hub 每 6 小时看一次发布站点的 `latest.json`，有更新的版本、助手和 Agent 都空闲时自己换二进制、重启，起不来就回到上一版。
-- 文件都在 `~/.jarvis/update/`：`<build>/` 是下载（node 二进制在 `nodes/`，确认后放进 `~/.jarvis/bin/nodes/`）；`pending.json` 是进行中的更新（确认完就删）；
+- 文件都在 `~/.persona/update/`：`<build>/` 是下载（node 二进制在 `nodes/`，确认后放进 `~/.persona/bin/nodes/`）；`pending.json` 是进行中的更新（确认完就删）；
   `rolledback.json` 是刚回滚的那次（旧版本起来后记进更新记录、标成坏版本再删）；`watch.log` 是看门狗的输出，没有服务管理器时回滚后起的 hub 输出在 `hub.log`。
-- 上一版在 `~/.jarvis/bin/jarvisd.prev`。手动退回：`cp ~/.jarvis/bin/jarvisd.prev ~/.jarvis/bin/jarvisd && systemctl --user restart jarvisd`（launchd 下 `launchctl kickstart -k`），
+- 上一版在 `~/.persona/bin/jarvisd.prev`。手动退回：`cp ~/.persona/bin/jarvisd.prev ~/.persona/bin/personad && systemctl --user restart jarvisd`（launchd 下 `launchctl kickstart -k`），
   再在 App 里关掉自动更新，免得又装回去（回滚过的版本本来就不会自动再装）。
 - 关掉自动更新：App 设置里的开关，或 `PUT /api/v1/hub/update/settings {"auto": false}`。
 - 通知：自动更新确认后推「hub 已更新到 X」，回滚的那次记进更新记录时推「hub 更新没成功」和原因（`updater.notify`，所有设备，thread `hub_update`）；手动点的更新不另推。
@@ -470,7 +474,7 @@ App 开着时连着 hub 的 WebSocket，hub 把各种变化广播给它；真实
   否则会一直保留已关闭的 peer 和过期的在线状态。`TestMachineReconnectReplacesClosedPeer` 用真实子进程覆盖此场景。
 - 手动调接口：内网可用 `curl -H "Authorization: Bearer $TOKEN" http://<hub 地址>:18660/api/v1/machines`；公网使用设备 token、HTTPS 和公钥钉扎，完整命令见 [网络文档](network.md#命令行验证)。
 - 公网鉴权失败含 WS 握手失败，单独记 `auth source=… path=… status=… code=… failures=… suppressed=…`；来源按 IPv4 /24、IPv6 /64 打码，日志路径只保留固定 API 路径，不记录 token。限流返回 429 和 `Retry-After`；日志节流由 `security.auth_log_interval_seconds` 控制。
-- 网络问题先在 hub 机器上跑 `jarvisd hub doctor`（只读不改），见 [网络排查](network.md#网络排查)。
+- 网络问题先在 hub 机器上跑 `personad hub doctor`（只读不改），见 [网络排查](network.md#网络排查)。
 - 管理界面登录失败记一行 `admin: wrong password from <打码的来源>`；设密码、改密码、改访问范围、加删电脑、撤销设备、生成配对码各记一行 `admin: …`，
   不记密码和配对码。管理界面的 401 / 404 也按上面的规则记请求 ID。
 - 请求 ID：每个响应带 `X-Request-Id`（App 发了 `X-Client-Request-Id` 就沿用它）。hub 只记失败（≥400）和慢（>2 秒）的请求，

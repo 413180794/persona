@@ -211,7 +211,7 @@ Registry ──┬─ ChatSources / Streams / Backfiller / Attachments → kb.En
 
 ### 内置（Go，在 hub 里）
 
-飞书、removed、邮件、GitHub。直接实现上面的接口，跟 jarvisd 一起发布，提示词在本仓库、受 golden 测试管。
+飞书、removed、邮件、GitHub。直接实现上面的接口，跟 personad 一起发布，提示词在本仓库、受 golden 测试管。
 
 ### 外部进程（沿用插件机制，代码在别的仓库）
 
@@ -239,7 +239,7 @@ Registry ──┬─ ChatSources / Streams / Backfiller / Attachments → kb.En
 - 代价：hub 要多一个 MCP 客户端（`tools/list`、`tools/call` 两个方法，几百行）；外部连接器的工具描述不在本仓库的 `prompts/mcp/`，不受 golden 管，
   这是「提示词一律放 `prompts/`」的一个明文例外（只适用于不在本仓库的代码）。
 - 现在没有第一个外部连接器，**这一形态先只定协议，等真有一个再实现**（见「需要用户拍板」）。
-- **第一方的子进程形态（已做，#533）**：本仓库里、只是依赖太大不想编进 jarvisd 的连接器（Telegram 的 gotd），用 `connector/serve`（程序那头）
+- **第一方的子进程形态（已做，#533）**：本仓库里、只是依赖太大不想编进 personad 的连接器（Telegram 的 gotd），用 `connector/serve`（程序那头）
   和 `connector/proc`（hub 这头）：hub 起程序，stdin / stdout 上跑 hub↔node 那套 JSON-lines RPC，Connector 的各项能力一一对应成方法，
   程序启动时报 manifest（id、name、能力，`Capabler`），加密存储反过来由程序调 hub 的 `secrets.*`（hub 绑定到这个连接器）。和上面给第三方的 HTTP + MCP 不冲突。
 
@@ -272,7 +272,7 @@ node → hub 事件：`connector.changed {id, scope}`。
 - **新增的对照测试**（第 M0 步先写，用旧代码生成基线）：假 lark-connector + 假邮箱（合成数据）跑一轮归档 + 收件箱采集，
   把结果（知识库目录树和每个文件的内容、`InboxItem` 的 JSON）存成 golden；之后每步都必须一致。
 - **真实数据对照**（只读、只打印数字）：`jarvisd dev connector-diff`（只在 DEBUG 构建 / 测试里），在 hub 机器上用真实的 lark-connector 和邮箱，
-  旧代码和新代码各跑一轮，写到两个临时目录（不碰 `~/.jarvis/data`、不写库、不标已读），比较：每个会话的行数和内容哈希、收件箱条目的 id / kind / 线程归属。
+  旧代码和新代码各跑一轮，写到两个临时目录（不碰 `~/.persona/data`、不写库、不标已读），比较：每个会话的行数和内容哈希、收件箱条目的 id / kind / 线程归属。
   只打印「一致 / 第几个会话不一致、差几行」，不打印内容。对照完删掉临时目录。
 
 | 步 | 做什么 | 验收（除了上面那组） |
@@ -304,7 +304,7 @@ M1–M6 合完、部署后在 hub 上看一天日志（归档行数、收件箱�
 | 其余（`subscribed`、`state_change`、`comment` 等） | 不进收件箱，只在知识库里（如果这个线程已经在） | — |
 
 - 自己在 GitHub 上回了（线程最新一条评论是我、在这件事之后）→ `done_by=replied`；PR 合了 / 关了、review 请求撤了 → `done_by=read`（不是「需要你」的直接算处理完）。
-- **已处理只记在 Jarvis，不回写 GitHub 的已读**（和飞书、邮件的规则一致；要不要改见「需要用户拍板」）。
+- **已处理只记在 Persona，不回写 GitHub 的已读**（和飞书、邮件的规则一致；要不要改见「需要用户拍板」）。
 - 回复：在 PR / issue 下发评论（`POST /repos/{o}/{r}/issues/{n}/comments`）；`reply_to` 写「评论到 example-org/example-repo#12（仓库可见的人都能看到）」。
 - App 行：GitHub 标志（`Theme.Brand.github`，要加官方标志资源）、标签（「请你 review」「@我」「CI 失败」「分配给你」）、标题是 PR / issue 标题，
   第二行 ✦ 摘要，第三行「仓库 #号 · 最新评论人：内容」。点开是通用详情：这件事的上下文（hub 的 `Context`：描述、最近的评论 / review、失败的检查名）
@@ -349,7 +349,7 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
 - **取 token**：node 加一个 RPC `credential.gh_token {host}` → `{token}`：在那台机器上非交互地跑 `gh auth token [-h <host>]`。
   - 只有 hub 能调：它是 hub → node 的 RPC，走 hub 和 node 之间的 ssh 通道；不开 REST 接口，hook / MCP 的 `node.sock` 不认这个方法，助手和 Agent 拿不到。
   - `gh` 把登录存在 `~/.config/gh/hosts.yml` 时 ssh 里能读；存在钥匙串里时，ssh 会话打不开钥匙串，报「那台机器的 gh 登录在钥匙串里，经 ssh 读不到」，
-    给出两条路：那台机器上 `gh auth login --insecure-storage`，或者改用手动粘贴。旧 node 不认这个方法，报「<机器> 的 jarvisd 太旧」。
+    给出两条路：那台机器上 `gh auth login --insecure-storage`，或者改用手动粘贴。旧 node 不认这个方法，报「<机器> 的 personad 太旧」。
 - **token 只在 hub 的内存里**：不落库、不写日志、不进任何响应和错误信息（错误里出现 token 样式的串先抹掉）；也不放进助手 / Agent 的环境变量。
   - 请求回 401：重新向那台机器取一次（那边可能刚重新登录过），还是 401 就是 `not_signed_in`：「<机器> 上的 gh 登录失效了，在那台机器上运行 gh auth login」。
   - 那台机器离线：用内存里上次取到的；hub 重启后它还离线、内存里又没有，状态是「GitHub 未授权（<机器> 离线）」，它连上时自动再取。
@@ -379,12 +379,12 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
 
 `chat.db` 受 TCC 保护，权限算在**负责进程**（responsible process）头上，不是读文件的那个二进制：
 
-- node 是 hub 经 `ssh … jarvisd node --stdio` 起的，负责进程是 `sshd-keygen-wrapper`。给它完全磁盘访问权限 = **任何 ssh 登录这台 Mac 的会话都有**，
-  不只是 jarvisd。这几台现在就是这样（为了读「桌面」「文稿」早就打开了）。
-- 直接给 `jarvisd` 本身授权没用：经 ssh 起的子进程仍算在 sshd 头上；而且 jarvisd 每次部署都换二进制、ad-hoc 签名，授权会失效。
+- node 是 hub 经 `ssh … personad node --stdio` 起的，负责进程是 `sshd-keygen-wrapper`。给它完全磁盘访问权限 = **任何 ssh 登录这台 Mac 的会话都有**，
+  不只是 personad。这几台现在就是这样（为了读「桌面」「文稿」早就打开了）。
+- 直接给 `personad` 本身授权没用：经 ssh 起的子进程仍算在 sshd 头上；而且 personad 每次部署都换二进制、ad-hoc 签名，授权会失效。
 - 最小、最稳的做法是一个**独立的小帮手**：`jarvisd messages-helper`，由用户的 LaunchAgent（`launchd` 起，负责进程是它自己）运行，
   只在本机 unix socket 上提供「读 chat.db / 通讯录、拿附件」，node 连这个 socket。授权只给它一个；签名要稳定（Developer ID，按团队 ID 认，换版本不掉授权），
-  所以它不随 jarvisd 每次部署更新，单独发版。
+  所以它不随 personad 每次部署更新，单独发版。
 - 建议：**第一期用现成的 ssh 授权**（已经打开、零配置，`connector.list` 读不了时报 `no_permission` 并给出说明），
   帮手放到后面、和发送（要「自动化」权限，也得在图形会话里授权）一起做。这条要用户拍板。
 
@@ -392,17 +392,17 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
 
 交给 AI（#528，用户 2026-11-03：「iMessage 的文字可以交给 AI，和飞书一样」）：node 的 `connector.changes` 按 ROWID 增量给新消息（第一次从 30 天前开始），`connector.search` 给助手搜；
 默认只给成员里有通讯录里的人、或者我说过话的会话（验证码、银行、快递这类没人存的短号码不给），交出去的文字里验证码打码，App 自己看的不打码。
-hub 一侧（`connector/imessage/jarvis.go`）：开关「交给 Jarvis」（hub 设置 `imessage.ai`，默认开）开着时实现 `Archive`（知识库的会话 `imessage-<会话哈希>`、人 `imessage-<号码哈希>`）、
-`Inbox`（每 2 分钟看最近的会话：有未读的进收件箱，私聊需要你、群聊知悉即可，在别处读了或我回了就结束；「在信息里回复」是 `sms:` 链接，Jarvis 不发）、
+hub 一侧（`connector/imessage/jarvis.go`）：开关「交给 Persona」（hub 设置 `imessage.ai`，默认开）开着时实现 `Archive`（知识库的会话 `imessage-<会话哈希>`、人 `imessage-<号码哈希>`）、
+`Inbox`（每 2 分钟看最近的会话：有未读的进收件箱，私聊需要你、群聊知悉即可，在别处读了或我回了就结束；「在信息里回复」是 `sms:` 链接，Persona 不发）、
 `ReadTools`（`imessage_chats` / `imessage_read` / `imessage_search`）；关掉后都不给，已存的另外删：`DELETE /api/v1/imessage/data`（关着时才行）调 `kb.Engine.ForgetSource("imessage")`
 删会话、人、项目里的引用和它们写的时间线、游标（项目标成待重写，摘要按剩下的重写），再删索引行和收件箱条目；正在压缩的会话删了以后不会被写回。
 
 已实现（#449，`server/internal/connector/imessage`，node 的 `connector.*` RPC 见 `docs/protocol.md`）：会话按人合并（一个号码在 iMessage / 短信 / RCS 上的几个 `chat` 是一个会话，群按 `guid`），
 id 是哈希；通讯录按号码后 10 位对，对不上再按后 7 位（只有一个人有时）；没有权限时 `connector.list` 按 node 怎么跑给出两种说法：经 ssh 起的打开「远程登录 › 允许远程用户完全访问磁盘」，
-launchd 常驻的 node（`scripts/deploy/node-launchd.sh`）给 jarvisd 本身授权（jarvisd 每次部署换二进制，授权可能要重开，帮手那一步解决）。
+launchd 常驻的 node（`scripts/deploy/node-launchd.sh`）给 personad 本身授权（personad 每次部署换二进制，授权可能要重开，帮手那一步解决）。
 测试数据是 `testdata/home`（合成的 `chat.db` 和通讯录，表结构是 macOS 26 的；`testdata/gen` 下的 `blobs.swift` + `make.py` 生成），读真数据只用 `TestRealMessagesCounts` 打印条数。
 
-- 只读打开：`sqlite3 -readonly -json`（macOS 自带的 `/usr/bin/sqlite3`，jarvisd 是 `CGO_ENABLED=0` 交叉编译的，不引入 SQLite 驱动；
+- 只读打开：`sqlite3 -readonly -json`（macOS 自带的 `/usr/bin/sqlite3`，personad 是 `CGO_ENABLED=0` 交叉编译的，不引入 SQLite 驱动；
   `attributedBody` 用 `hex()` 取出来）。不加 `immutable=1`（会读不到还在 WAL 里的新消息）。不复制、不缓存整个库。
 - 用到的表：`message`（`ROWID`、`guid`、`text`、`attributedBody`、`handle_id`、`is_from_me`、`date`、`date_read`、`is_read`、`cache_has_attachments`、
   `associated_message_type` / `associated_message_guid`（点按回应）、`thread_originator_guid`（行内回复）、`date_edited`、`date_retracted`、`item_type`（群事件））、

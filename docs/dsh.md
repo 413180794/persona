@@ -12,12 +12,12 @@ DSH 侧是插件 `integrations/dsh/`，建在通用的 `integrations/runtime-sdk
 
 DSH 没有 TUI、不发 OSC 7501，会话日志默认 zstd 压缩，它的 Claude Code 兼容 hooks 也答不了提问和计划审批，
 所以「herdr 窗格 + transcript + hooks」接不了，也不该做成一个宿主（宿主是终端开在哪，`docs/engines.md`）。它是一个 **runtime**：
-自己管会话、没有终端，连 node 的 `~/.jarvis/runtime.sock`，自己报会话、推内容、问手机（规范 `docs/runtimes.md`，协议 `docs/protocol.md`「Runtime ↔ node」）。
+自己管会话、没有终端，连 node 的 `~/.persona/runtime.sock`，自己报会话、推内容、问手机（规范 `docs/runtimes.md`，协议 `docs/protocol.md`「Runtime ↔ node」）。
 DSH 这边是一个装进 `dsh web` 的插件，用的是 Web GUI 自己用的那套服务，DSH 核心一行不改。
 
 ```
  App ── hub ── node ──┬── herdr（Claude / Codex / TRAEX）
-                      └── ~/.jarvis/runtime.sock ◄── jarvis-dsh-runtime 插件（dsh web 进程里）
+                      └── ~/.persona/runtime.sock ◄── jarvis-dsh-runtime 插件（dsh web 进程里）
                                                     ├─ sessionController：list / page / prompt / cancel / create / rename
                                                     ├─ session/event、agent/assistant-stream、api-session/*
                                                     ├─ approval/request、user-questions/request 两条应答链
@@ -32,7 +32,7 @@ DSH 这边是一个装进 `dsh web` 的插件，用的是 Web GUI 自己用的�
 
 - **装进 profile**（长期用）：在 DSH 里装 `integrations/dsh` 这个 bundle（Web GUI 的插件管理，或让 DSH 的 Agent 用 `plugin_manager` 的
   `install_bundle`，target 写这个目录的绝对路径）。bundle 自带 `cordis.patch.yml`，装上就插入 `jarvis-dsh-runtime` 一行。
-  插件按相对路径用仓库里的 `integrations/runtime-sdk/`，所以从 Jarvis 仓库的检出目录装（本地目录安装是链接，不拷贝），别单独拷走 `integrations/dsh`。
+  插件按相对路径用仓库里的 `integrations/runtime-sdk/`，所以从 Persona 仓库的检出目录装（本地目录安装是链接，不拷贝），别单独拷走 `integrations/dsh`。
 - **之后的更新是自动的**：`index.js` 只是加载器，插件的代码由 node 带来（下面「自动更新」）。装好（或从没有加载器的老版本换上来）时在 DSH 里重新加载一次，
   以后 hub 更新、node 跟着更新时插件自己换上，不用再去 DSH 里点。
 - **不装、先试**：`dsh --profile web --patch <文件>`，文件里插一行，`name` 写 `index.js` 的绝对路径：
@@ -40,7 +40,7 @@ DSH 这边是一个装进 `dsh web` 的插件，用的是 Web GUI 自己用的�
   ```yaml
   - insert:
       - id: jarvis-dsh-runtime
-        name: /<Jarvis 仓库>/integrations/dsh/index.js
+        name: /<Persona 仓库>/integrations/dsh/index.js
         config:
           interactions: auto
   ```
@@ -53,10 +53,10 @@ DSH 这边是一个装进 `dsh web` 的插件，用的是 Web GUI 自己用的�
 
 ### DSH 没在运行时（伴随进程）
 
-插件跟着 `dsh web` 进程走：DSH 没在跑，它的会话就不在 Jarvis 里。要一直看得到，在同一台电脑上常驻伴随进程（launchd / systemd 保活，和 pi 的一样）：
+插件跟着 `dsh web` 进程走：DSH 没在跑，它的会话就不在 Persona 里。要一直看得到，在同一台电脑上常驻伴随进程（launchd / systemd 保活，和 pi 的一样）：
 
 ```
-node <Jarvis 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录或编译过的检出目录> [--home <DSH_HOME>] [--wake '<启动 DSH 的命令>']
+node <Persona 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录或编译过的检出目录> [--home <DSH_HOME>] [--wake '<启动 DSH 的命令>']
 ```
 
 - 用 DSH 自己的会话存储（`@deepseek-ai/dsh-session-persistence-jsonl`，从 `--dsh` 那个 DSH 里加载）**只读**地列出 `$DSH_HOME/sessions` 里最近的会话
@@ -72,21 +72,21 @@ node <Jarvis 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录�
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
-| `interactions` | `auto` | 授权和提问先给谁：`phone` 一律先给手机；`browser` 从不给手机（Jarvis 只看、只发）；`auto` 见下 |
-| `socket` | `~/.jarvis/runtime.sock` | node 的 runtime socket；环境变量 `JARVIS_RUNTIME_SOCKET` 也行 |
+| `interactions` | `auto` | 授权和提问先给谁：`phone` 一律先给手机；`browser` 从不给手机（Persona 只看、只发）；`auto` 见下 |
+| `socket` | `~/.persona/runtime.sock` | node 的 runtime socket；环境变量 `JARVIS_RUNTIME_SOCKET` 也行 |
 | `listDays` | `7` | 列出最近几天动过的会话（正在跑、在等人的总会列出） |
 | `maxSessions` | `80` | 最多列多少个；手机发过消息、新建过的会话（最近 50 个）不受这两条限制，一直列着 |
-| `runtime` / `name` / `launcher` | `dsh` / `DSH` / `dsh` | 这个 DSH 在 Jarvis 里的 runtime id、叫法、启动器名。同一台电脑的第二个 DSH 要另配；改了 id 的会话仍按 DSH 的 Agent 显示（`agent: "dsh"`） |
+| `runtime` / `name` / `launcher` | `dsh` / `DSH` / `dsh` | 这个 DSH 在 Persona 里的 runtime id、叫法、启动器名。同一台电脑的第二个 DSH 要另配；改了 id 的会话仍按 DSH 的 Agent 显示（`agent: "dsh"`） |
 | `phoneTools` | `true` | 把 hub 的工具（`phone_*`、`mail_*`）给 DSH 的 Agent；`false` 不给 |
-| `assistant` | `true` | DSH 的启动器能当 Jarvis 的助手（下面「助手」）；`false` 不提供 |
-| `presets` | 见「助手」 | 助手对话里 Jarvis 的权限模式对应 DSH 的哪个权限预设，比如 `{default: workspace-write, plan: read-only}` |
+| `assistant` | `true` | DSH 的启动器能当 Persona 的助手（下面「助手」）；`false` 不提供 |
+| `presets` | 见「助手」 | 助手对话里 Persona 的权限模式对应 DSH 的哪个权限预设，比如 `{default: workspace-write, plan: read-only}` |
 | `autoUpdate` | `true`（当 daemon 时 `false`） | 接受 node 带来的插件版本（「自动更新」） |
 | `listen` | 不填 | 当 daemon（`docs/daemons.md`）：`{port, host?, path?, token \| token_file}`，不连 `socket`，开一个 WebSocket 端点让 node 来连（默认 `127.0.0.1`、路径 `/jarvis/runtime`）。DSH 跑在别的系统用户下、容器里或别的机器上时用；node 那边在 `daemons.json` 里写同一个地址和 token，名字、启动器以那边为准；当 daemon 时没有手机工具，也不能当助手 |
 
 ### 自动更新
 
 插件分两层（通用做法见 `docs/runtimes.md`「自动更新」）：DSH 加载的 `index.js` 是加载器，不再改；插件的代码（`lib/plugin.js`、`lib/dsh.js`…和
-`runtime-sdk`）每个版本放在 `~/.jarvis/runtime-packages/jarvis-dsh-runtime/<哈希>/`，加载器从那里 import。jarvisd 构建时把这些文件打进二进制；
+`runtime-sdk`）每个版本放在 `~/.persona/runtime-packages/jarvis-dsh-runtime/<哈希>/`，加载器从那里 import。personad 构建时把这些文件打进二进制；
 插件连上 node 时报自己的哈希，node 带的不一样就让它来取，插件核对后等手机上没有它的卡片，停掉旧的、换上新的，DSH 的会话和 Web GUI 不受影响
 （插件只是旁观者，换的几秒里手机上的列表停一下）。整个过程不经过 DSH 的插件管理和热加载：链接安装的插件不在热加载的监视目录里，换文件不会生效；
 插件管理在被手机驱动的会话里还会报 `HMR transactions cannot be nested`（插件在插件管理的事务里启动时，事务的上下文跟着它的连接走了，DSH 的问题）。
@@ -98,7 +98,7 @@ node <Jarvis 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录�
 
 ## 映射
 
-| Jarvis | DSH |
+| Persona | DSH |
 | --- | --- |
 | 会话列表 | `sessionController.list`；去掉已归档的（`workspaceRegistry.archivedSessionIds`）和还没开始的空会话（手机上新建的除外）。子 Agent 的会话不单列，挂在父会话的 `subagents` 里（见「子 Agent 和后台任务」）。标题用 `title` 投影，没有就用目录名；空间 = 目录 |
 | 状态 | 有授权 / 提问等着（插件挂着的，或 `userQuestions` 投影里还开着的）→ `blocked`；在跑 → `working`；其余 `done`（hub 按看没看过分「完成未看 / 已看」） |
@@ -137,7 +137,7 @@ hub 连着时（hello 之后、`runtime.hub` 说 hub 回来时，之后每 5 分
 
 ## 助手
 
-「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定时任务都能跑在 DSH 上：在 设置 › 助手（或顶栏、定时任务、模型配置）选 DSH 的启动器 `dsh`
+「Persona」tab 的助手、AI 分身、飞书 `/agent`、定时任务都能跑在 DSH 上：在 设置 › 助手（或顶栏、定时任务、模型配置）选 DSH 的启动器 `dsh`
 （DSH 连着时才有，`launchers.list` 带 `assistant: true`）。按 runtime 的通用助手约定接入（`docs/runtimes.md`「助手」），node 侧是
 `server/internal/node/assistant_runtime.go`，没有 DSH 专用的代码；DSH 这边是插件的助手模式（`config.assistant`，默认开）。
 
@@ -149,13 +149,13 @@ hub 连着时（hello 之后、`runtime.hub` 说 hub 回来时，之后每 5 分
 | 续聊 / 重启后 | 对话是 DSH 的会话（`session-<uuid>`），DSH 持久化；node 重启不影响（会话按目录认出是助手的），DSH 重启后下一条消息自动恢复 |
 | 停止 | `session.interrupt` → `sessionController.cancel`；关闭对话只停正在跑的这一轮，会话留在 DSH 里 |
 | 回复过程中插话 | 插件已有：工作中 steer 进这一轮 |
-| Jarvis MCP 工具 | hub 的助手工具（`ask_user`、`notify_user`、`schedule_*`、`agents_*`、`kb_*`…）注册成 `mcp__jarvis__<名字>`，只给助手对话（`tools.register` 的 `when`）；调用经 node 带上「是助手」，node 核对会话归 DSH、是助手对话 |
+| Persona MCP 工具 | hub 的助手工具（`ask_user`、`notify_user`、`schedule_*`、`agents_*`、`kb_*`…）注册成 `mcp__jarvis__<名字>`，只给助手对话（`tools.register` 的 `when`）；调用经 node 带上「是助手」，node 核对会话归 DSH、是助手对话 |
 | ask_user | 同一个工具，会话 id 本来就知道 |
 | DSH 自己的提问 / 计划 | 插件已有：提问链，含计划卡片和迟到的回答；助手对话一律先给手机 |
 | 命令 / 改文件的审批 | `approval/request` 链，助手对话一律先给手机（DSH 只在出沙箱这类情况才问） |
 | 飞书写操作的确认 | 工具 `lark-connector`：参数就是 `ol` 后面的词，node 先过飞书闸门（`larkCheck`：读放行、写在手机上确认、配置的规则拒绝），再在 node 上带 token 跑 lark-connector skill 的 `ol.sh`；token 不进 DSH。shell 里直接跑 `ol` 被 `tools/pre-execute` 拦下并说明 |
 | 权限模式 | 每条消息带上，插件设 DSH 的权限预设（`permissionPresets.set`）：默认 / 自动接受编辑 / 自动 → `workspace-write`，计划 → `read-only`，全部放行 → `danger-full-access`（飞书闸门仍在：它在 node 上，不靠 DSH 的授权）；`config.presets` 可以改 |
-| 思考强度、模型 | 在 DSH 里选（Web GUI，或 DSH 的默认模型）；Jarvis 的模型配置对 `dsh` 不选具体模型 |
+| 思考强度、模型 | 在 DSH 里选（Web GUI，或 DSH 的默认模型）；Persona 的模型配置对 `dsh` 不选具体模型 |
 | 图片 | 插件已有：base64 图片块 |
 | 指令 | DSH 读助手目录的 `AGENTS.md` / `CLAUDE.md`（`assistant.prepare` 两份都写，内容一样时只加载一份），加上用户自己的 `$DSH_HOME/AGENTS.md` |
 | lark-connector skill | 助手目录的 `.agents/skills/`（DSH 读这里），飞书经 `lark-connector` 工具 |
@@ -172,7 +172,7 @@ DSH 的授权只有「允许一次」，飞书闸门的「本会话总是允许�
 DSH 的 Agent 常把活交出去再结束这一轮：后台子 Agent（`subagent` 工具，跑完把结果送回父会话叫醒它）、workflow、后台跑的命令。
 这一轮结束后父会话本身是「完成」，但事情还没完。插件把这些挂在父会话那一行上，用 Claude 会话同样的字段（`docs/runtimes.md`「子 Agent 和后台任务」）：
 
-| Jarvis | DSH |
+| Persona | DSH |
 | --- | --- |
 | `subagents` | 父会话的子会话：`sessionController.list` 里 `parentSessionId` 是它的（子 Agent、workflow 派出的 Agent）。`id` = 子会话 id，`running` = 子会话在跑（列表的 `running`、`api-session/status`），`description` = 委派时的 `description`（父会话的 `subagent/catalog`，workflow 的是 `tool-workflow/agent-start` 的 `label`），`tool_use_id` = 启动它的那次 `subagent` 调用（结果「started subagent <id>」），`started_at` / `updated_at`、`last_text`。在跑的全列，其余列最近的，最多 20 个。插件启动前就有的子 Agent，名字和调用从父会话的 `subagentCatalog` 投影和事件里补（每个父会话 5 分钟最多读一次） |
 | `background` | 父会话名下还在跑的 DSH 后台任务：`job/registered` / `job/settled` 事件，插件启动前就有的从 `ctx.jobs.list(会话)` 补。工具调用还在等结果的不算（那是前台在跑）；`kind`：`bash` → `shell`（`command` 是命令），其余（workflow…）→ `agent` |
@@ -205,7 +205,7 @@ hub 的「完成」推送等这些跑完、父会话被叫醒的那一轮结束�
   子 Agent 和后台任务的行、`<会话>@<子>` 的调用和推送归父会话的 runtime：`TestRuntimeSubagentsAndBackground`；daemon 前缀：`TestDaemonSubagentIDs`）。
   插件这边：子 Agent / workflow / 后台任务进行、结束，按父会话地址翻页和 watch，子 Agent 的授权和提问挂在父会话上，插件之前就有的从目录和任务表补（`dsh.test.js` 最后三个）。
 - 端到端：`DSH_CHECKOUT=<编译过的 dsh 源码> JARVISD=<jarvisd> node integrations/dsh/e2e/run.mjs`。在一个临时目录里起真的 `dsh web`
-  （独立的 `DSH_HOME`，模型由 DSH 自带的 `llm-mock-server` 扮演）、真的 `jarvisd node --stdio`，脚本自己当 hub：从「手机」新建会话、发消息、
+  （独立的 `DSH_HOME`，模型由 DSH 自带的 `llm-mock-server` 扮演）、真的 `personad node --stdio`，脚本自己当 hub：从「手机」新建会话、发消息、
   看思考和回复、翻历史、批准一条命令（真的执行）、回答一个提问、看逐字、中断，核对推送的连续性，再让 DSH 的 Agent 调一个手机工具（hub 收到调用和会话、
   结果回到 Agent）、交给一个后台子 Agent（父会话这一轮结束、它在 `subagents` 里在跑且带着启动它的调用、不单列、按 `<父>@<子>` 翻页和 watch、
   跑完后列表说它完了、父会话被叫醒）、后台跑一条命令（这一轮结束后列在 `background` 里，退出后离开），最后从手机关闭会话（离开列表、DSH 的归档里有它）。
@@ -218,7 +218,7 @@ hub 的「完成」推送等这些跑完、父会话被叫醒的那一轮结束�
 - DSH 没在运行时：`node integrations/dsh/e2e/files.mjs`（同样两个环境变量）。真的 `dsh web` 跑一轮后停掉，伴随进程把这个会话从磁盘列成 offline、翻出内容，
   前后 `DSH_HOME` 里没有任何文件变化；从「手机」再发一条，伴随进程用唤醒脚本起 DSH，node 把消息交给插件，回复回来，会话回到插件手里。2026-11-02 实测 7/7 通过。
 
-- 自动更新：`node integrations/dsh/e2e/update.mjs`（同样两个环境变量）。node 的包来自一个目录（`JARVIS_RUNTIME_PACKAGES`），这样不用另编一个 jarvisd：
+- 自动更新：`node integrations/dsh/e2e/update.mjs`（同样两个环境变量）。node 的包来自一个目录（`JARVIS_RUNTIME_PACKAGES`），这样不用另编一个 personad：
   node 带的和插件一样时什么都不提供，插件从存放目录跑随包附带的那份；换成带新版本插件的 node（就像 hub 更新了它），插件被提供、取文件、自己换上，
   新会话从「手机」发消息照常回复；DSH 重启后直接跑 node 给的那个，不再取。2026-11-02 实测 7/7 通过。加载器本身：`cd integrations/runtime-sdk && npm test`
   （`loader.test.js`：换版本、哈希不对不换、起不来回旧的、等手机上的卡、手动装的优先、daemon 不换）。
@@ -230,7 +230,7 @@ hub 的「完成」推送等这些跑完、父会话被叫醒的那一轮结束�
 ## 以后
 
 基于 DSH 二次开发、不跑 `dsh web` 的平台，可以在自己那边用同一个 SDK（`integrations/runtime-sdk`）实现 runtime、复用 `integrations/dsh/lib/map.js` 的映射，
-当 daemon 接进来（`docs/daemons.md`），Jarvis 这边不用再加代码。
+当 daemon 接进来（`docs/daemons.md`），Persona 这边不用再加代码。
 
 当 daemon 的端到端：`JARVIS_E2E_DAEMON=1` 跑同一个 `e2e/run.mjs`（插件配 `listen`，node 从 `daemons.json` 去连）。检查不变，只有两处不同：会话 id 带 `dsh.` 前缀；手机工具一项换成「daemon 拿不到手机工具，调用到不了 hub」。
 2026-11-02 实测 21/21 通过（socket 方式同样 21/21）。

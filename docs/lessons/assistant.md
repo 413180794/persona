@@ -4,7 +4,7 @@
 
 - 无头 `claude -p` 里 AskUserQuestion 不可用（不是 hook 没接上，是工具本身被禁用）：要在手机上问用户，给它一个会阻塞等答案的 MCP 工具
   （`ask_user`，`docs/assistant.md`）。模型会把它和别的工具并行调用，有副作用的工具要自己在 hub 里批准。
-- 无头助手（`claude -p`）默认权限模式下，连 Jarvis 自己的 MCP 工具（notify_user、schedule_followup）都要在手机上批准：夜里到点的跟进、
+- 无头助手（`claude -p`）默认权限模式下，连 Persona 自己的 MCP 工具（notify_user、schedule_followup）都要在手机上批准：夜里到点的跟进、
   Monitor 事件就卡在批准上（2026-10-30 实测）。助手进程带 `--allowedTools mcp__jarvis`，会替用户出面的工具由 hub 自己再问（`docs/assistant.md`）。
 - 助手的后台任务和 Monitor 是 claude 进程的子进程：回收空闲进程、systemd 重启 jarvisd（杀整个 cgroup）都会把它们一起杀掉，对话永远等不到通知。
   node 从 stream-json 的 `system/background_tasks_changed` 知道还有什么在跑，有任务就不回收，任务列表随时落库，重启后告诉对话丢了什么。

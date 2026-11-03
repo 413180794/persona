@@ -35,7 +35,7 @@ hooks（PreToolUse / PermissionRequest）▶ interaction ───────�
   `ChatBlock.build` 把 item 组成「轮」（工作行 + 答案）。
 
 和 Ovis 的根本差异：Ovis 每次**整页重读**最新一页（turn/part，没有 id），WS 只推「变了」的信号，靠 ETag/304 省流量，
-靠 `history_id`（文件 dev-ino + 改写代数 + clear/fork 后缀）发现历史变化后整体丢弃旧页；Jarvis 是**按 seq 增量流式追加**，
+靠 `history_id`（文件 dev-ino + 改写代数 + clear/fork 后缀）发现历史变化后整体丢弃旧页；Persona 是**按 seq 增量流式追加**，
 没有历史身份、没有连续性校验，任何一次漏发都是永久的。
 
 ---
@@ -66,7 +66,7 @@ hooks（PreToolUse / PermissionRequest）▶ interaction ───────�
 | B3 | **【确认，范围修正】同一条后台任务通知显示两次**：同一个 `<task-notification>` 会同时写成 user 记录和 `attachment(queued_command, commandMode=task-notification)`，每处都变成一条 notice。**但同一个 task-id 也会有多次内容不同的真通知**（子 Agent 先报「还在等后台任务」、再报「完成」，阶段 0 的 `claude-notifications.jsonl`），所以不能像 Ovis 那样按 task-id 去重，只合并内容完全相同的 | `transcript.go:242-245`、`321-327`、`353-357`；本机样本 95 个 task-id 出现多次（2026-10-29 Claude Code 自动清理了 30 天前的 transcript，原样本已无法逐条区分哪些是真重复） |
 | B4 | **【确认】`system/scheduled_task_fire`（/loop 到点唤醒）不显示**：用户看不到这一轮为什么开始 | `transcript.go:298`；本机样本 6 条 |
 | B5 | **【确认】Codex `Extension`（web.search 等）不显示**，FileChange 遍历 Go map 编号，**同一 rollout 两次解析 id ↔ 文件的对应关系不同**（node 重启后 id 指向别的文件） | `transcript/codex.go:260-272`；本机样本 Extension 20 条 |
-| B6 | **【确认，低】`continued-in` 不跟随**：会话续写到另一个 session id 时，Ovis 读末尾 64 KiB 跟过去；Jarvis 停在旧文件 | 本机样本 1 条 |
+| B6 | **【确认，低】`continued-in` 不跟随**：会话续写到另一个 session id 时，Ovis 读末尾 64 KiB 跟过去；Persona 停在旧文件 | 本机样本 1 条 |
 | B7 | **【确认，低】/rewind、Esc 后重发产生的分叉两支都显示**。Ovis 沿 `parentUuid` 跟当前分支，被放弃的那段隐藏 | 本机样本 1 处 |
 | B8 | **【确认，覆盖缺口】解析测试全是手写字符串，没有真实样本 fixture**；Claude Code 版本迭代很快（本机样本里已经有 `atis-latch`、`mode`、`api-request-blob`、`cost-state` 等新类型），没有回归保护 | `transcript/transcript_test.go`、`codex_test.go` |
 
@@ -86,7 +86,7 @@ hooks（PreToolUse / PermissionRequest）▶ interaction ───────�
 ### D. 状态判断
 
 状态来自 herdr（`agent_status`）+ hook 交互 + hub 的「看过」（`hub/state.go`），机制和 Ovis 一致（Ovis 也以 herdr 为主，另加 CompletionTracker）。
-**提问 / 计划 / 授权走 hook 是 Jarvis 比 Ovis 强的地方**（Ovis 全靠屏幕识别 + 模拟按键），保留。没有发现确认的状态错误，记几个风险：
+**提问 / 计划 / 授权走 hook 是 Persona 比 Ovis 强的地方**（Ovis 全靠屏幕识别 + 模拟按键），保留。没有发现确认的状态错误，记几个风险：
 
 - D1【怀疑】`quickMeta` 只读尾部 384 KB 且跳过大于 8 KB 的 user 行（`node/sessions.go:157-176`）：一轮的最后一件事是大工具结果时
   `UpdatedAt` 比真实结束时间早，「看过」判断（`state.go:24`）会把「在它真正结束前看过」算成看过，该是「完成未看」的显示成「已看」。阶段 1 用 fixture 验证。

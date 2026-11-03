@@ -125,7 +125,7 @@ android/
   - feature 只依赖 `core:contracts`、`core:domain`、`core:designsystem`，以及 `feature:readers`；
   - feature 不依赖 `core:hub`、`core:data`，服务通过接口注入。
 - **纯 Kotlin 模块**（`contracts` / `domain` / `terminal`）用 `jarvis.jvm.library` 插件，不依赖 `android.*`。在 JVM 上跑 `spec/fixtures` 夹具测试，几秒钟出结果；以后转 KMP 只改插件。
-- **配置**沿用 PR #84：`~/.config/jarvis/config.json` 的 `android.application_id`（没写就用 `app.bundle_id`）。新增两项，写进 `docs/config.md` 和 `config.example.json`，不进仓库：
+- **配置**沿用 PR #84：`~/.config/persona/config.json` 的 `android.application_id`（没写就用 `app.bundle_id`）。新增两项，写进 `docs/config.md` 和 `config.example.json`，不进仓库：
   - `android.signing`：keystore 路径、别名，口令从钥匙串或环境变量读；
   - `android.avd`：截图用的 AVD 名。
 - **脚本**：
@@ -297,7 +297,7 @@ android/
 
 通知规则：
 
-- **通知渠道**：需要你（高）、做完了（默认）、Jarvis（助手的 `notify_user`）、实时状态（低）。用户可以在系统设置里分别调。
+- **通知渠道**：需要你（高）、做完了（默认）、Persona（助手的 `notify_user`）、实时状态（低）。用户可以在系统设置里分别调。
   - 渠道的级别建好以后 App 就改不了，只有用户能改。PR #84 的「后台连接」渠道是 `IMPORTANCE_MIN`，按规则不能提升成 Live Update（5.10）。重组时新建一个 `IMPORTANCE_LOW` 的「实时状态」渠道（不响、能提升），删掉旧渠道。
   - 常驻通知用 `setForegroundServiceBehavior(FOREGROUND_SERVICE_IMMEDIATE)`：Android 12 起系统默认最多等 10 秒才显示前台服务的通知。
   - Android 14 起用户可以划掉前台服务的通知，服务本身不受影响。被划掉后，下次状态变化时重发。
@@ -369,20 +369,20 @@ android/
 | 工具 | Android | 说明 |
 | --- | --- | --- |
 | 通讯录 | `ContactsContract` | 要 `READ_CONTACTS`；系统的 Contact Picker 不支持关键词搜索，用不上 |
-| 日历（读、建） | `CalendarContract` | 新建时要选一个可写的日历。没有 Google 账号时可能一个可写的都没有：用 sync adapter 身份建一个「Jarvis」本地日历；各家日历 App 显不显示它要真机看 |
+| 日历（读、建） | `CalendarContract` | 新建时要选一个可写的日历。没有 Google 账号时可能一个可写的都没有：用 sync adapter 身份建一个「Persona」本地日历；各家日历 App 显不显示它要真机看 |
 | 提醒事项 | **不注册** | Android 没有系统级的提醒事项接口 |
 | 位置 | `LocationManagerCompat.getCurrentLocation`，按 `getProviders(true)` 选：12+ 先试平台的 `fused`，再 GPS、网络（不用依赖 Google 服务的 Fused Location），带超时；`Geocoder` 先 `isPresent()` | 国行的网络定位靠厂商服务，可能拿不到；`Geocoder` 可能没有后端，只回坐标。结果写明坐标系（GPS 是 WGS-84，国内地图用 GCJ-02） |
 | 健康 | Health Connect，**国行手机首版不注册** | Health Connect 要 Google Play 服务；国行的健康 App（OPPO 健康等）不往里写数据，华为用自己的 Health Kit。先 `HealthConnectClient.getSdkStatus()`，不可用就不注册这个工具 |
 | 照片 | `MediaStore`（最近的元数据）+ 取图缩放 | Android 14+ 可以只授权部分照片 |
 | 选图（发消息时） | AndroidX `PickVisualMedia` | 33+ 用系统照片选择器；31–32（含鸿蒙 4）系统选择器要 Google 系统更新推送的模块，国行大多没有，自动退回文件选择器，能用但界面不同 |
 | 设备信息 | `Build`、`BatteryManager`、`PowerManager` 等 | — |
-| 剪贴板 | `ClipboardManager` | **只能在前台读**，后台调用时回「请打开 Jarvis」；小米、ColorOS 还有自己的剪贴板权限，读到空时提示去系统设置里看 |
+| 剪贴板 | `ClipboardManager` | **只能在前台读**，后台调用时回「请打开 Persona」；小米、ColorOS 还有自己的剪贴板权限，读到空时提示去系统设置里看 |
 | 通知 | `NotificationManager` + WorkManager / AlarmManager | 延迟发送不保证准点 |
 
 - 工具名和参数和 iOS 保持一致；说明文字按 Android 写。
 - 写操作照 iOS：执行前先确认。在前台弹卡片；在后台就发一条高优先级通知，带「允许 / 拒绝」按钮。
 - hub 要按设备注册和路由工具（[hub-changes.md](hub-changes.md) 2.1），否则会和 iPhone 互相覆盖。
-- 常驻连接模式下，后台定位要 `ACCESS_BACKGROUND_LOCATION`，或者前台服务带 `location` 类型，要评估：默认只在前台定位，后台调用时回「请打开 Jarvis」。
+- 常驻连接模式下，后台定位要 `ACCESS_BACKGROUND_LOCATION`，或者前台服务带 `location` 类型，要评估：默认只在前台定位，后台调用时回「请打开 Persona」。
 
 ### 5.13 主题（P0）
 
@@ -480,7 +480,7 @@ iOS 已经有「体验模式」：App 内一个假的 hub，数据来自 `script
 
 | 能力 | 建议 |
 | --- | --- |
-| **分享到 Jarvis** | **首版就做（P0）**：任何 App 的文字、链接、图片、文件，「分享 → Jarvis」后选发进主对话还是某个 Agent，作为 `<jarvis-context>` 或附件带上。实现是 `ACTION_SEND` 的 intent-filter，成本低，正合「把各处信息收到一起交给 AI」 |
+| **分享到 Persona** | **首版就做（P0）**：任何 App 的文字、链接、图片、文件，「分享 → Persona」后选发进主对话还是某个 Agent，作为 `<jarvis-context>` 或附件带上。实现是 `ACTION_SEND` 的 intent-filter，成本低，正合「把各处信息收到一起交给 AI」 |
 | 常驻连接 | 已经是默认（5.8） |
 | 快捷设置磁贴、小组件 | 第二批 |
 | 大屏 / 折叠屏双栏 | P2（5.17） |
@@ -494,14 +494,14 @@ iOS 已经有「体验模式」：App 内一个假的 hub，数据来自 `script
 | --- | --- | --- |
 | **A0 工程升级**（不改行为） | 升级工具链（target 先 36）；加 `build-logic`、版本目录、daemon JVM 规范；拆出三个纯 Kotlin 模块（contracts / domain / terminal 先空着），把 PR 的 `Models`、`ChatStore` 连续性、`Pairing.parse`、`Rows` 搬进去，接上 `spec/fixtures` 跑夹具；`scripts/android.sh` 加 `lint` 和 `shots` | PR #84 的 10 个测试 + 夹具测试全绿；在真机上配对、发消息、通知按钮作答都和升级前一样 |
 | **A1 最小可用切片** | Hilt、Navigation 3、`HubScope`、加密存储、Room 的 items / outbox；**公网直连**：多地址探测、TLS 钉扎、`client_hello` 和心跳协商、连接诊断页（5.1、5.9）；对话页换成共用的列表引擎 + `chatLines` + `fold_work` + 状态行 + 新交互面板 + mikepenz Markdown；通知改成「允许 / 批准」要解锁 + 拒绝原因；生成的 token（状态色和 iOS 一致）；debug 直达入口 + mock hub 截图 | 650 条命令的长会话打开流畅（实测打开到首屏的耗时和滚动掉帧，至少 10 个样本）；手机在蜂窝网络上经公网 IPv6 连上 hub；三家运营商的空闲超时、常驻连接每小时耗电和锁屏存活有实测数字；真机上走通「通知 → 在通知或 App 里批准 → 看到 Agent 继续」 |
-| **A2 首版补齐** | 四个 tab：Jarvis（首页、主对话、历史）、Agents（三种分组、筛选、置顶 / 屏蔽、长按菜单、关闭、新建会话）、收件箱（飞书基础渲染 + 回复、邮件详情）、设置；连接状态（四态 + 本地网络权限 + 证书变了 + 配对失效，这一步升 target 37）；配对的分段进度和准备清单（含国产系统，5.18）；离线 outbox；分享到 Jarvis；APK 的 App 内更新（第 9 节）；hub 侧「做完了」改为经 WS 下发 | parity.md 里所有 Android P0 至少到「测试 hub 通过」；可以发给自己和测试的人日常用 |
+| **A2 首版补齐** | 四个 tab：Persona（首页、主对话、历史）、Agents（三种分组、筛选、置顶 / 屏蔽、长按菜单、关闭、新建会话）、收件箱（飞书基础渲染 + 回复、邮件详情）、设置；连接状态（四态 + 本地网络权限 + 证书变了 + 配对失效，这一步升 target 37）；配对的分段进度和准备清单（含国产系统，5.18）；离线 outbox；分享到 Persona；APK 的 App 内更新（第 9 节）；hub 侧「做完了」改为经 WS 下发 | parity.md 里所有 Android P0 至少到「测试 hub 通过」；可以发给自己和测试的人日常用 |
 | A3 第二批 | 终端、Live Updates、手机工具、知识库、文件 / Git、链接浮层、飞书文档和卡片、机器监控、其余风格、体验模式 | 按 parity.md 逐项 |
 
 PR #84 对首版 P0 的覆盖（重组时用来判断哪些不用从零写）：
 
 | 已有 | 部分有 | 没有 |
 | --- | --- | --- |
-| 配对（扫码、深链、手动）、换设备 token、明文 HTTP、历史分页、补洞、拒发处理、交互卡片四种 + 屏幕卡、「看过」的门禁、通知按钮作答、点通知打开会话、断开配对、动态取色 | WS（没有连接状态四态和弱网判断）、Agents 列表（只有按状态这一种分组）、对话页（倒置列表有，定位、冻结、回到底部都没有）、工具行（没有 diff 配色）、图片（懒加载有，缓存和占位没有）、输入框（只能发文字）、草稿（只在页面内保留，不持久）、「做完了」通知（手机自己判断） | 四个 tab、Jarvis tab、收件箱、飞书、邮件、置顶 / 屏蔽、新建会话、工作行折叠、outbox、本地缓存、链接在 App 内打开、token 和组件库、debug 直达入口 |
+| 配对（扫码、深链、手动）、换设备 token、明文 HTTP、历史分页、补洞、拒发处理、交互卡片四种 + 屏幕卡、「看过」的门禁、通知按钮作答、点通知打开会话、断开配对、动态取色 | WS（没有连接状态四态和弱网判断）、Agents 列表（只有按状态这一种分组）、对话页（倒置列表有，定位、冻结、回到底部都没有）、工具行（没有 diff 配色）、图片（懒加载有，缓存和占位没有）、输入框（只能发文字）、草稿（只在页面内保留，不持久）、「做完了」通知（手机自己判断） | 四个 tab、Persona tab、收件箱、飞书、邮件、置顶 / 屏蔽、新建会话、工作行折叠、outbox、本地缓存、链接在 App 内打开、token 和组件库、debug 直达入口 |
 
 ## 8. 测试与工具
 
@@ -536,13 +536,13 @@ PR #84 对首版 P0 的覆盖（重组时用来判断哪些不用从零写）：
 - **开发期**：`scripts/android.sh install`，用 adb 直接装（USB 或无线调试）。PR #84 的小米经验：要先在开发者选项里打开「USB 安装」，还要打开「USB 调试（安全设置）」；手机上的确认框几秒不点就自动拒绝。
 - **给自己和测试的人**：签名的 APK 放在 hub 上（[hub-changes.md](hub-changes.md) 2.2）。
 - **首次安装**：手机上还没有 App，没有设备 token。
-  - `jarvisd hub pair --android` 在二维码旁边再打印一个内网下载链接（带同一个临时 token），用手机浏览器打开下载；也可以用 adb 或别的方式把 APK 传过去。
+  - `personad hub pair --android` 在二维码旁边再打印一个内网下载链接（带同一个临时 token），用手机浏览器打开下载；也可以用 adb 或别的方式把 APK 传过去。
   - 各家都会拦一下：所有 Android 8+ 都要给浏览器或文件管理器授权「安装未知应用」；澎湃 OS 的「安全守护」要验证身份才能关；鸿蒙 4 开着「纯净模式」的增强防护时只能装华为应用市场检测过的 App；鸿蒙 5+ 只能「用卓易通打开」。
   - 下载页写一份按品牌的安装说明，讲清为什么会提示风险（没上架应用商店）。首次安装只有一次，可以接受。
 - **App 内更新**（parity.md N71）：
   - App 在前台时问 hub 有没有新版本（`/api/v1/app/android/latest`），设置里显示「有新版本」和更新说明；
   - 经 TLS 下载（钉同一个公钥），先校验 SHA-256，系统还会校验签名必须和已装的一致；
-  - 要用户给 Jarvis 打开「安装未知应用」（`canRequestPackageInstalls()` 可查，没给就跳 `ACTION_MANAGE_UNKNOWN_APP_SOURCES`）；
+  - 要用户给 Persona 打开「安装未知应用」（`canRequestPackageInstalls()` 可查，没给就跳 `ACTION_MANAGE_UNKNOWN_APP_SOURCES`）；
   - 用 `PackageInstaller` 会话安装，**默认弹系统确认**（`USER_ACTION_REQUIRED`）：澎湃 OS 上请求静默更新会直接以 `INSTALL_FAILED_ABORTED` 失败、不弹任何框，要把它当成单独的错误，不能当成用户取消。静默更新只在原生系统上试；要处理 `STATUS_PENDING_USER_ACTION`（拉起系统确认页）。
   - `setRequestUpdateOwnership` 只在首次安装时生效，是给应用商店用的，对自更新没用。
   - 更新会杀掉进程：常驻服务靠 `MY_PACKAGE_REPLACED` 重新拉起（它在后台启动前台服务的豁免里；国产系统上收不收得到可能受自启动开关影响，要实测）。
@@ -558,7 +558,7 @@ PR #84 对首版 P0 的覆盖（重组时用来判断哪些不用从零写）：
 | --- | --- |
 | 常驻连接的耗电和存活 | A1 在主流国产系统的真机上实测：每小时耗电、锁屏 8 小时后连接还在不在、被系统杀掉后多久拉起；按结果调后台心跳间隔和准备清单 |
 | 本地网络权限（target 37） | 升 target 前完成 5.1；在家里连同一个 /64 的公网 IPv6、经 VPN 的行为都要真机实测 |
-| 公网直连在用户家里走不通（光猫 IPv6 防火墙、封端口、hub 机器的 TUN 代理） | `jarvisd hub doctor` 自检；App 的诊断页说清原因；推荐 DDNS（[README.md](README.md) D9） |
+| 公网直连在用户家里走不通（光猫 IPv6 防火墙、封端口、hub 机器的 TUN 代理） | `personad hub doctor` 自检；App 的诊断页说清原因；推荐 DDNS（[README.md](README.md) D9） |
 | 运营商 NAT 和防火墙的空闲超时（4G / 5G 没有公开数据） | A1 实测三家运营商；后台心跳按网络自动调整（5.9） |
 | 长会话性能 | A1 用 650 条命令的样本会话实测打开耗时和滚动掉帧 |
 | 两端漂移 | 夹具是硬约束；改规则先改夹具 |

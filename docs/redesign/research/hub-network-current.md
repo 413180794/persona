@@ -1,6 +1,6 @@
 # hub 网络现状核查（公网直连 / IPv6 优先 / TLS / 配对）
 
-> 调研对象：Jarvis worktree（master，ec11652 之后），只读核查。
+> 调研对象：Persona worktree（master，ec11652 之后），只读核查。
 > 约定：**[事实]** = 直接读代码 / 文档得到，带 `相对路径:行号`；**[判断]** = 基于事实的推断或建议。
 > 隐私：本文不出现任何真实主机名、IP、域名、账号、token，一律用占位符（`<hub 地址>`、`<token>`）。
 
@@ -440,7 +440,7 @@ TLS 指纹本身也能标识 hub，但内网明文连接没有指纹，数据作
 ## 8. 兼容旧客户端要注意什么
 
 1. **旧 App 连不上自签 TLS** [事实 + 判断]：iOS 的三个 URLSession 都没有 delegate（`ios/Shared/APIClient.swift:89`、`:93-98`，`ios/Shared/LiveConnection.swift:174`），Android 用系统 CA（`network_security.xml` 没有 trust-anchors）。所以明文 listener 必须留着给内网 / VPN 的旧设备，`public_url` 的语义（单个、旧 App 能用的地址）也别改。
-2. **二维码格式**：旧 iOS 的 `ServerConfig(pairURL:)` 和旧 Android 的 `PairingStore.parse()` 都**要求有 `token=`**（`APIClient.swift:12`、`Pairing.kt:28`）。只带 `code=` 的新二维码，旧 iOS 扫了没反应，旧 Android 提示「不是 Jarvis 的配对二维码」。所以 `hub pair --legacy` 要保留老格式；新 App 也要继续认老格式（`mock_hub.py`、`sim.sh`、所有 UI 测试都用 `http://127.0.0.1…&token=mock`）。
+2. **二维码格式**：旧 iOS 的 `ServerConfig(pairURL:)` 和旧 Android 的 `PairingStore.parse()` 都**要求有 `token=`**（`APIClient.swift:12`、`Pairing.kt:28`）。只带 `code=` 的新二维码，旧 iOS 扫了没反应，旧 Android 提示「不是 Persona 的配对二维码」。所以 `hub pair --legacy` 要保留老格式；新 App 也要继续认老格式（`mock_hub.py`、`sim.sh`、所有 UI 测试都用 `http://127.0.0.1…&token=mock`）。
 3. **多个 `url=`**：旧客户端取第一个（iOS `queryItems.first`，`APIClient.swift:11`；Android `getQueryParameter` 也是第一个）。如果想让旧 App 也能扫新码，第一个 `url=` 必须是它能用的明文内网地址，而且还得带 `token=`（主 token），这就和「二维码里不放主 token」冲突。结论：新旧二维码分开。
 4. **已配对的新版 App 怎么升级到 TLS**：hello 里下发 `tls_pin` + `endpoints`，App 在现有的已鉴权通道上记下指纹。这是在内网明文 / VPN 上「首次信任」（同一局域网里的攻击者能塞假指纹）；更严格的做法是要求重新扫码。**要拍板**。
 5. **WS 新字段 / 新事件**：旧 iOS 对未知 `type` 返回 nil 丢掉（`LiveConnection.swift:130`），旧 Android 的 `when` 没有 else（`data/Hub.kt:145-211`），都能忽略。但 iOS 是先把整条消息解成 `Envelope`（`LiveConnection.swift:42-85`）：**新字段名不能和里面已有的键撞名且类型不同**（`error`、`id`、`state`、`data`、`name`、`status`、`text` 等都是字符串），否则整条消息解码失败、被丢掉（比如 hello 里加一个对象型的 `error` 就会把 hello 弄丢）。

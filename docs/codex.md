@@ -50,13 +50,13 @@ UserMessage 里 Codex 自己的 XML（2026-10-26 扫了本机和 hub 机器的�
 
 `response_item` 是同样内容的模型线格式，跳过。Extension 里的 `web.search` 显示成 `WebSearch`（搜索，输入是查询词）/ `WebFetch`（`action.type=openPage`，输入是网址），结果每条「标题  网址」；SubAgentActivity、其他 Extension（生图）、CollabAgentToolCall 保留为可识别的事件提示，完整内容仍以原始会话记录为准。
 
-Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `codex app-server`，见 `docs/assistant.md`「Codex」。
+Persona 助手（「Persona」tab）也能用 Codex 的启动器，走的是 `codex app-server`，见 `docs/assistant.md`「Codex」。
 
 一台电脑多个已有 app-server（桌面 App、独立 `CODEX_HOME`、多客户端读写和审批）已接入现有 Agents 列表，源码研究、配置和能力边界见 [`codex-app-server.md`](codex-app-server.md)。发现历史不需要 herdr；只有提供受保护 Unix/回环 WebSocket 入口的实例能实时接入和控制，外部 stdio 明确只读。
 
 ## 守护进程上的会话（app-server 路线）
 
-2026-11-02 起，跑在共享 app-server 守护进程上的 Codex 窗格，Jarvis 作为第二个客户端接进它的 thread，提问、审批、发消息都走协议，
+2026-11-02 起，跑在共享 app-server 守护进程上的 Codex 窗格，Persona 作为第二个客户端接进它的 thread，提问、审批、发消息都走协议，
 不再读屏幕、不再往终端里打字。接不上的照旧走下面「提问和审批」的终端路线（#214）。
 
 - **为什么能接**：0.163 起裸 `codex` 默认自动启动或加入共享守护进程（`<CODEX_HOME>/app-server-control/app-server-control.sock`），
@@ -84,7 +84,7 @@ Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `code
   socket 已经在时才自动连）、TRAEX：照旧终端路线。
 - **守护进程重启、断开、换版本**：连接断了，接入状态跟着没了，这些窗格立刻退回终端路线（屏幕卡片、打字），卡片撤掉；TUI 自己显示
   「Reconnecting to server…」并在新的守护进程起来后重连、重新加载 thread，node 隔 2–5 秒重连新的守护进程，重新接入，挂着的请求会重放（新的卡）。
-  Jarvis 不会让 TUI 卡住：请求同时发给 TUI，电脑上随时可以答。
+  Persona 不会让 TUI 卡住：请求同时发给 TUI，电脑上随时可以答。
 - **看得出走哪条路**：会话带 `codex_route`（`app_server` / `terminal`）和 `codex_route_note`（为什么是终端），App 的「会话信息」显示「连接：app-server（结构化）」
   或「终端（读屏幕）」加原因；node 日志有每次接入成功 / 失败。
 - **测试**：`node/codex_daemon_test.go`（合成 app-server 上的自动接入、发消息、async 回答、审批卡、拒绝理由、接入失败重试、socket 别名）；
@@ -231,7 +231,7 @@ TRAEX（`traex`，公司内部基于 Codex 的分支）2026-10-28 起支持，�
 
 - **TUI 能连 app-server，而且本来就是 app-server 的客户端**（源码）：TUI 只和 app-server 说话，进程内、本机守护进程或远端三选一
   （`tui/src/lib.rs`）。`codex`、`resume`、`fork` 都有 `--remote ws://|wss://|unix://`，不用 feature flag。守护进程是 `codex app-server --listen unix://`，
-  socket 在 `$CODEX_HOME/app-server-control/app-server-control.sock`，上面跑的是 WebSocket，不是按行的 JSON：Jarvis 现在助手用的 stdio 客户端
+  socket 在 `$CODEX_HOME/app-server-control/app-server-control.sock`，上面跑的是 WebSocket，不是按行的 JSON：Persona 现在助手用的 stdio 客户端
   不能直接复用（`codex app-server proxy` 只是转字节），node 要一个走 unix socket 的 WebSocket 客户端。
 - **0.163 默认就在守护进程上**（源码）：`daemon_auto_start` 是 Stable、默认开，裸 `codex` 自动启动或加入共享守护进程（`--no-daemon` 关掉）。
   带 `-c`、`--profile`、`--enable/--disable`、`--oss` 等参数时退回进程内——`docs/assistant.md` 里那种带 `-c model_provider=…` 的启动器起的会话不在守护进程上。

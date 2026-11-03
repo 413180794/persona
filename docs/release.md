@@ -4,6 +4,8 @@ TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及�
 
 ## 账号与标识
 
+产品名为 Persona（原 Jarvis），但已有 Bundle ID、App Group、钥匙串组、签名 profile 名称和 App Store Connect App 记录不变；不要因改名重新创建 App。下文的「Jarvis App Store」「Jarvis Watch App Store」以及 archive / `.app` / target 名称是实际签名或构建标识，保留兼容 / 历史引用。新默认配置和 `personad` / `jarvisd` 的兼容见 [命名与兼容](config.md#命名与兼容)。
+
 都在构建配置里（`docs/config.md`）：`app.bundle_id` / `app.team_id`、`app_store.key_id` / `issuer_id` / `key_path`（API key 文件只放在
 仓库外，比如 `~/.appstoreconnect/`）、`app_store.app_id`（App 记录的数字 ID）、`app_store.testers`、`app_store.feedback_email`。
 
@@ -20,7 +22,7 @@ API key 的角色是 App Manager，用不了 cloud-managed signing（`-allowProv
 
 ## 首次准备（顺序）
 
-1. 填好 `~/.config/jarvis/config.json`（`app`、`app_store` 的 key 部分）。
+1. 填好 `~/.config/persona/config.json`（`app`、`app_store` 的 key 部分）。
 2. `python3 scripts/release/asc_signing.py`：注册两个 Bundle ID、给 iOS 打开推送和 HealthKit、建两个 App Store 描述文件并装到本机。幂等，能力变了随时重跑。
 3. **网页创建 App 记录**（API 不能建）：App Store Connect › App › 新建 App：iOS、名称、主要语言、Bundle ID、SKU、完全访问权限。
    把 App ID 填进配置的 `app_store.app_id`。
@@ -100,7 +102,7 @@ App 和灵动岛扩展（JarvisWidgets）靠 App Group 容器里的文件交形�
 - 所以换一个账号或 bundle id 时，**先在网站上做完，再构建带 App Group entitlements 的包**。
 
 开发者网站上的步骤（developer.apple.com › Account › Certificates, IDs & Profiles，账户持有人或管理员）：
-1. Identifiers › 「+」› 选 **App Groups** › Continue › Description 填 `Jarvis`，Identifier 填 `group.<bundle id>`（和配置的 `app.app_group` 一致）› Continue › Register。
+1. Identifiers › 「+」› 选 **App Groups** › Continue › Description 填 `Persona`，Identifier 填 `group.<bundle id>`（和配置的 `app.app_group` 一致）› Continue › Register。
 2. Identifiers › 右上角的筛选换回 App IDs › 点 `<bundle id>` › Capabilities 里勾 **App Groups** › 点它旁边的 Configure（已经勾过的是 Edit）›
    勾上 `group.<bundle id>` › Continue › Save › 弹窗里 Confirm（改了能力，这个 App ID 现有的描述文件会失效）。
 3. 对灵动岛扩展的 App ID `<bundle id>.liveactivity` 同样做第 2 步。手表和通知扩展不用。
@@ -128,7 +130,7 @@ App 和灵动岛扩展（JarvisWidgets）靠 App Group 容器里的文件交形�
 ## 推送（APNs）
 
 - 在 developer.apple.com 建一个 APNs key（Sandbox & Production，Team Scoped），Key ID 和 .p8 文件都不进仓库。
-- 文件：hub 机器的 `~/.jarvis/apns_key.p8`（配置 `~/.jarvis/apns.json`），另存一份到密码管理器。key 只能下载一次，丢了就重建。
+- 文件：hub 机器的 `~/.persona/apns_key.p8`（配置 `~/.persona/apns.json`），另存一份到密码管理器。key 只能下载一次，丢了就重建。
 - 页面提示《Apple Developer Program 许可协议》已更新，要账户持有人在 developer.apple.com 接受（不影响建 App 和传 TestFlight）。
 
 ## 外部测试（公开链接）
@@ -195,30 +197,30 @@ Mac App（`JarvisMac`）和 iPhone 用同一个 bundle id，所以是 App Store 
 - **自动发布**：发完 iPhone 构建后，这次的提交里有 Mac App 用到的改动（`apple/Mac`、`apple/Shared`、`apple/Jarvis` 除了只属于 iOS 的
   几个文件、`apple/Packages`、`project.yml`、`Package.resolved`）就用同一个号接着发 Mac；Mac 的结果另外报，失败不影响 iPhone 那次。
 
-## 发布 jarvisd（`scripts/release/publish.sh`，2026-10-31）
+## 发布 personad（`scripts/release/publish.sh`，2026-10-31）
 
-让别人不拿源代码也能装服务端：编好的 `jarvisd` 和安装脚本放在 `site/` 那个 worker 上（配置的 `publish.site_url`）。
+让别人不拿源代码也能装服务端：编好的 `personad` 和安装脚本放在 `site/` 那个 worker 上（配置的 `publish.site_url`）。
 
 ```sh
-curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd，按 SHA256SUMS 校验，不对就不装
+curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.persona/bin/personad，按 SHA256SUMS 校验，不对就不装
 ```
 
-- 装好 `jarvisd` 后，这台电脑上找不到 herdr（PATH 和 node 会找的 `~/.local/bin` 等目录）就用 herdr 官方安装器（`https://herdr.dev/install.sh`）
-  一起装上：首次安装完 Agents 里就能看到会话。装不上只打一行警告，不影响 `jarvisd`；用 Orca / Herdr App 的电脑 `JARVIS_SKIP_HERDR=1` 跳过。
-  `deploy.sh` 往每台电脑装 `jarvisd` 时做同样的事（`scripts/deploy/ensure-herdr.sh`，两处的步骤保持一致）。
+- 装好 `personad` 后，这台电脑上找不到 herdr（PATH 和 node 会找的 `~/.local/bin` 等目录）就用 herdr 官方安装器（`https://herdr.dev/install.sh`）
+  一起装上：首次安装完 Agents 里就能看到会话。装不上只打一行警告，不影响 `personad`；用 Orca / Herdr App 的电脑 `JARVIS_SKIP_HERDR=1` 跳过。
+  `deploy.sh` 往每台电脑装 `personad` 时做同样的事（`scripts/deploy/ensure-herdr.sh`，两处的步骤保持一致）。
 
 - `release.sh` 传完 TestFlight 后接着跑它，版本号是 `<提交>-<构建号>`，和这一版 TestFlight 对得上；`NO_PUBLISH=1` 只发 TestFlight，
   配置里没有 `publish.site_url` 也不发。单独跑：`./scripts/release/publish.sh`，`NO_DEPLOY=1` 只编译和检查（产物在 `build-publish/`）。
 - 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`，写进 `channel=release`、build 号（UTC `YYYYMMDDHHMM`）和 `updateURL`：
-  - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.jarvis/web` 时就用二进制里的；有就照旧用目录里的。
-  - **不带任何 skill**：lark-connector 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.jarvis/skills/`，
+  - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.persona/web` 时就用二进制里的；有就照旧用目录里的。
+  - **不带任何 skill**：lark-connector 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.persona/skills/`，
     所以只有一种二进制，我们自己的 hub 也用它（`docs/hub-update.md`）。脚本会确认二进制里没有 lark-connector。
     `-tags public` 不改变任何代码（`TestOneBuild`），只是给隐私扫描的标记。
   - **版本清单** `dl/latest.json`（各平台压缩包和解压后的 sha256、build 号、commit），不签名（用户的决定，取舍见 `docs/hub-update.md`「安全」）；
     发布前检查 build 号比线上的大、线上那版的 commit 是这次的祖先，server/、web/ 没有没提交的改动。清单带着这次包含的所有提交（`ancestors`）：
     各 hub 读它自动更新，但只在它包含自己正在运行的提交时才自己装（`docs/hub-update.md`「防退回」）。
-  - **一起发布的程序**：`jarvisd-telegram`（Telegram 连接器，单独一个程序，`docs/plan-telegram.md`）四个平台各编一份，和 jarvisd 同一套
-    `-X`、同一次隐私扫描和体积检查，`version -v` 必须和 jarvisd 的一样；清单的 `programs` 列出它们，hub 自动更新时一起换。
+  - **一起发布的程序**：`jarvisd-telegram`（Telegram 连接器，单独一个程序，`docs/plan-telegram.md`）四个平台各编一份，和 personad 同一套
+    `-X`、同一次隐私扫描和体积检查，`version -v` 必须和 personad 的一样；清单的 `programs` 列出它们，hub 自动更新时一起换。
   - 上传前跑 `check_bundle_privacy.py --whole-short`：二进制里不能有配置里的任何值（Go 的模块路径除外；四个字以内的值按整词比，
     Unicode 表和压缩过的 JS 里到处是短的字母组合）。公开依赖中的少量协议名、官方联系链接和标准网络常量按精确上下文分类，不放行域名或私网段；
     要求二进制的 `public` 标记、未 replace 的依赖及 checksum 与 `server/go.sum` 一致，构建前 `go mod verify`。已登记的个人值始终优先拦截，见 `docs/lessons/testing.md`。
@@ -229,7 +231,7 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
 - 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
   报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION`、`dl/SHA256SUMS`、`dl/latest.json` 确认上去的就是刚编的。
   推送中继在同一个 Worker 里（`/relay/*`），每次发布会把它一起重新部署。
-- 推送中继已部署（2026-11-02）：常驻 `jarvisd relay` + Cloudflare Tunnel + 官网 Worker 转发，公网健康、源站保护、登记和鉴权已验证。
+- 推送中继已部署（2026-11-02）：常驻 `personad relay` + Cloudflare Tunnel + 官网 Worker 转发，公网健康、源站保护、登记和鉴权已验证。
   发版配置需填 `app.push_relay`，安装带通知扩展的新 TestFlight 才会登记；真实设备上的通知解密仍要单独验收，见 `docs/push-relay.md`。
 - 还没有的（别人能装但还不顺手，见 `docs/config.md`）：一键 `jarvisd setup`（现在 hub 要自己准备 Postgres、`hub.json`）、
   macOS 二进制的 Developer ID 公证（用浏览器下载会被 Gatekeeper 拦，`curl` 不会）。
@@ -246,7 +248,7 @@ git tag v1.2.0 && git push origin v1.2.0   # -> ghcr.io/<owner>/<repo>:1.2.0 和
 
 - 不打 tag 想要一个当前分支的镜像：Actions 里手动运行 hub image（`edge`、`sha-<提交>`）。
 - PR 上只冒烟，不推（推送那一步才有 `packages: write`）。
-- 镜像里的 jarvisd 用 tag 去掉 `v` 当版本（`jarvisd version`）；node 跟它不一样时 App 提示「重新部署」，用的是镜像里带的 node 构建。
-- 镜像里的 jarvisd 是 `docker` 渠道：不带 skill（和所有二进制一样），不自己更新，有新镜像时提示拉取（`docs/hub-update.md`）。
+- 镜像里的 personad 用 tag 去掉 `v` 当版本（`personad version`）；node 跟它不一样时 App 提示「重新部署」，用的是镜像里带的 node 构建。
+- 镜像里的 personad 是 `docker` 渠道：不带 skill（和所有二进制一样），不自己更新，有新镜像时提示拉取（`docs/hub-update.md`）。
 - 仓库私有时包也私有，NAS 要 `docker login ghcr.io`（`docs/docker.md`「镜像」）。
 

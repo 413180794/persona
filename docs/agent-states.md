@@ -2,10 +2,10 @@
 
 ## 统一状态
 
-App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计算）。来源是宿主（目前是 herdr）的状态，加上 Jarvis 自己知道的两件事：
+App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计算）。来源是宿主（目前是 herdr）的状态，加上 Persona 自己知道的两件事：
 有没有待处理的交互、用户有没有在 App 里看过。
 
-| 状态 | 含义 | 来自 herdr | Jarvis 补充 | 颜色 |
+| 状态 | 含义 | 来自 herdr | Persona 补充 | 颜色 |
 | --- | --- | --- | --- | --- |
 | `needs_you` 需要你 | 卡在需要人参与的地方 | `blocked`（TUI 里的提问 / 确认框） | 有待处理的提问、计划、授权、终端交互（hook 拦下来时 herdr 还显示 working） | 红，呼吸 |
 | `working` 工作中 | 正在跑 | `working` | — | 琥珀，呼吸 |
@@ -21,7 +21,7 @@ Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点�
 
 ### 「看过」
 
-- herdr 的看过 = 在电脑上聚焦那个 tab（CLI 读取不算）。Jarvis **不会**为了标已看去聚焦 tab（会抢电脑上的焦点），所以手机上看过之后，
+- herdr 的看过 = 在电脑上聚焦那个 tab（CLI 读取不算）。Persona **不会**为了标已看去聚焦 tab（会抢电脑上的焦点），所以手机上看过之后，
   电脑上 herdr 侧边栏的绿点仍在。
 - App 的看过：打开对话页、在对话页里看着它完成、在列表里左滑「标为已看」、手表打开会话。App 发 WS `{"type":"seen"}`（或
   `POST /api/v1/sessions/{mid}/{sid}/seen`），hub 存进 Postgres `session_views`。

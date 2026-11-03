@@ -93,7 +93,7 @@
   来源：https://www.v2ex.com/t/1017699 ；https://zhangshuqiao.org/2026-07/XG-140G-TF%E5%85%89%E7%8C%AB%E5%90%AF%E7%94%A8IPv6%20PD%E5%89%8D%E7%BC%80%E5%88%86%E5%8F%91/ （查于 2026-10-30）。
 - 【未查到】运营商官方的前缀长度政策。
 
-**对 Jarvis 的影响【判断】**：hub 只需要**自己一台机器的一个全局地址**，不需要子网，所以前缀长度和 PD 是否下发到二级路由都不影响「有没有地址」；影响的是**防火墙在哪一层、能不能放行**（见 1.4）。
+**对 Persona 的影响【判断】**：hub 只需要**自己一台机器的一个全局地址**，不需要子网，所以前缀长度和 PD 是否下发到二级路由都不影响「有没有地址」；影响的是**防火墙在哪一层、能不能放行**（见 1.4）。
 
 ### 1.3 前缀多久变一次
 
@@ -349,7 +349,7 @@
   来源：https://android.googlesource.com/platform/packages/modules/Connectivity/+/refs/tags/android-17.0.0_r1/bpf/progs/netd.c （查于 2026-10-30）。
 - 【事实】排查命令：`adb shell dumpsys connectivity trafficcontroller` 会列出每个接口被标成本地的前缀（sing-box issue 里的用法）。来源：https://github.com/SagerNet/sing-box/issues/4676 （查于 2026-10-30）。
 
-### 5.3 对 Jarvis 的结论【判断，基于 5.1 原文 + 5.2 源码；必须真机验证】
+### 5.3 对 Persona 的结论【判断，基于 5.1 原文 + 5.2 源码；必须真机验证】
 
 | 场景（target 37，没给权限） | 是否算本地网络 | 依据 |
 | --- | --- | --- |
@@ -361,7 +361,7 @@
 | 蜂窝网络，连 hub 的任何公网地址 | 不算 | 定义排除 WWAN |
 | 经 VPN（如 Tailscale 100.x）连 hub | 定义排除 VPN；源码只把 VPN 接口自己的 on-link 前缀算本地——Tailscale 地址若是 /32 就只含自己，**若某 VPN 把地址配成 /10 之类，整个网段都会被当本地**【未实测】 | 定义 + 源码推断 |
 
-- **要点**：「改连公网 IPv6 就能绕开本地网络权限」**在家里不成立**——同一 /64 里的全局地址照样算本地。所以 target 37 的 Android 版**必须走权限流程**（android.md 5.1 已有设计：扫码后先申请，被拒显示「需要允许 Jarvis 访问本地网络」）。
+- **要点**：「改连公网 IPv6 就能绕开本地网络权限」**在家里不成立**——同一 /64 里的全局地址照样算本地。所以 target 37 的 Android 版**必须走权限流程**（android.md 5.1 已有设计：扫码后先申请，被拒显示「需要允许 Persona 访问本地网络」）。
 - **被拒时的兜底**（【判断】）：
   1. 若 hub 有公网 IPv4 且路由器支持回环，用它（不算本地）；
   2. 若 hub 在另一个 /64，用全局 IPv6；
@@ -414,7 +414,7 @@
   来源：https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability ；https://letsencrypt.org/docs/profiles/ （查于 2026-10-30）。
 - 【事实】IP 证书「you can't use the DNS challenge method」「only the http-01 and tls-alpn-01 methods can be used」；HTTP-01「can only be done on port 80」，TLS-ALPN-01 走 **443**。
   来源：https://letsencrypt.org/2025/07/01/issuing-our-first-ip-address-certificate ；https://letsencrypt.org/docs/challenge-types/ （查于 2026-10-30）。
-- 【判断】**不适合 Jarvis**：
+- 【判断】**不适合 Persona**：
   - 要从公网验证 80 或 443——国内家宽这两个端口经常被封（1.5 节），而且还要再对外开一个端口；
   - 证书绑定 IP，前缀一天变几次时每次都要重签；6 天有效期意味着验证端口要一直开着；
   - hub 换前缀到证书重签之间的这段时间，手机看到的是不匹配的证书。

@@ -9,15 +9,15 @@
 
 | | 玻璃（默认） | 晨报 | 看板 |
 | --- | --- | --- | --- |
-| 一句话 | 一层磨砂玻璃浮在「状态光」上 | Jarvis 先开口：白纸墨字，一支荧光笔 | 塔台的进程单：每个 Agent 一条 |
+| 一句话 | 一层磨砂玻璃浮在「状态光」上 | Persona 先开口：白纸墨字，一支荧光笔 | 塔台的进程单：每个 Agent 一条 |
 | 背景 | 夜蓝 `#060A14` / 晨雾 `#E9EEF6`，上面是随状态变化的光 | 白纸 `#FFFFFF` / 墨夜 `#0E1117` | 看板灰 `#E6E9ED` / 石墨 `#0E1114` |
-| 强调色 | 琥珀 = 等你，蓝 = 在跑，薄荷 = 做完 / 已连接 | 只有荧光笔 `#FFE15A`，只标 Jarvis 的建议和等你的事 | 进程单左边的色块就是状态：琥珀 / 蓝 / 绿 / 灰 |
+| 强调色 | 琥珀 = 等你，蓝 = 在跑，薄荷 = 做完 / 已连接 | 只有荧光笔 `#FFE15A`，只标 Persona 的建议和等你的事 | 进程单左边的色块就是状态：琥珀 / 蓝 / 绿 / 灰 |
 | 主按钮 | 白色实心（深色）/ 墨色实心（浅色），胶囊形 | 墨色实心胶囊，深色模式反白 | 墨色实心，8dp 小圆角 |
 | 字体（拉丁和数字） | Sora（大标题、数字） | Manrope（全部） | Barlow Semi Condensed（数字、字段、计数） |
 | 形状 | 卡片 28dp，浮层 30–36dp 胶囊 | 卡片 24dp，其余是无底色的行 | 10dp 小圆角加 1dp 描边 |
 | 动效 | 弹簧；状态光约 1 秒渐变 | 平缓的 240ms 过渡 | 干脆的 160ms |
-| 导航（四个 tab 一样：Jarvis、Agents、收件箱、设置，图标加常显的文字） | 底部悬浮的玻璃坞 | 贴底的纸面底栏，顶上一道细线 | 底栏四格，选中的一格顶上一道横线 |
-| 要你定的事 | 列表里是玻璃卡片；对话里是浮起的玻璃面板，边缘琥珀色 | 列表里是浅灰卡片，Jarvis 的建议用荧光笔划出；对话里是贴底的决定面板 | 琥珀色块里的进程单，点一下就地展开；对话里是琥珀横线下的放行条 |
+| 导航（四个 tab 一样：Persona、Agents、收件箱、设置，图标加常显的文字） | 底部悬浮的玻璃坞 | 贴底的纸面底栏，顶上一道细线 | 底栏四格，选中的一格顶上一道横线 |
+| 要你定的事 | 列表里是玻璃卡片；对话里是浮起的玻璃面板，边缘琥珀色 | 列表里是浅灰卡片，Persona 的建议用荧光笔划出；对话里是贴底的决定面板 | 琥珀色块里的进程单，点一下就地展开；对话里是琥珀横线下的放行条 |
 | 根页面标题 | 大标题随内容滚走，顶栏只剩悬浮的圆形按钮，滚动后出现标题胶囊 | 首页是一句问候和一句总结（「早上好，有 3 件事等你定。」），其余页面是大标题 | 紧凑的标题栏，标题一直在栏里 |
 
 深浅色仍然跟随系统，和风格互不影响。中文一律用手机自己的系统字体，拉丁字母和数字用打包的字体（OFL，许可证在 `core/designsystem/src/main/assets/licenses/`）。
@@ -42,9 +42,9 @@
 只有浮在滚动内容上的件（顶栏、悬浮坞、输入框、决定面板）用折射或模糊；页面里的卡片是半透明填充加渐变描边，不做实时模糊，滚动时没有额外开销。
 顶栏和底部浮层（悬浮坞、输入框）所在的整段高度下面各有一条「滚动边缘」：滑进去的内容在浮层区域里全程模糊并洗向背景，只在靠内容的最后 28dp 渐隐，
 浮层之间的空隙（标题胶囊和任务条之间、状态行和输入框之间）不会露出清楚的字。洗的是页面自己的那层背景（同一层状态光，`PageBackdrop`），不是一块纯色：
-下面没有内容时边缘看不出来，空页面（比如 Jarvis 里刚新建的对话）的顶部和底部不会出现一条色带（2026-11-01 用户指出的硬切）。
+下面没有内容时边缘看不出来，空页面（比如 Persona 里刚新建的对话）的顶部和底部不会出现一条色带（2026-11-01 用户指出的硬切）。
 列表页只在内容真的滑到浮层下面时才画边缘（停在顶上时不画，省一块模糊）；没有顶栏的页面（嵌在链接卡片里的文档）不画顶部边缘。不透明档不模糊，把内容从浓到淡地洗向背景。
-嵌在另一页里的页面（Jarvis 页里的对话）铺满整页，从宿主的顶栏和悬浮坞下面滑过：宿主经 `ChromeInsets(top, bottom)` 告诉它留多少，边缘由它自己画（宿主用 `JPage(edges = false)`）。
+嵌在另一页里的页面（Persona 页里的对话）铺满整页，从宿主的顶栏和悬浮坞下面滑过：宿主经 `ChromeInsets(top, bottom)` 告诉它留多少，边缘由它自己画（宿主用 `JPage(edges = false)`）。
 实现上要注意：Compose 的 `Canvas` 默认不裁剪，按窗口排布的光圈中心常常落在本页之外，`AmbientLight` 必须 `clipToBounds()`，否则会画到旁边那一栏上。
 模糊的输入是四分之一分辨率（`JarvisTheme` 里 `LocalHazePerformanceMode` = `Performance`）：手机实测全分辨率时对话页帧时间翻倍，降下来看不出差别。
 性能实测见第 5 节。
@@ -57,7 +57,7 @@
 | --- | --- |
 | `JarvisTheme.style` | 当前风格 `AppStyle` |
 | `JarvisTheme.palette` | `JarvisPalette`：background、surface（玻璃里半透明）、surfaceOpaque、surfaceStrong、sunken、line、ink / ink2 / ink3、action / onAction、accent、marker、各状态的 `StatusColors(dot, text, tint, onDot)`、diff 和终端色 |
-| `JarvisTheme.type` | `JarvisType`：largeTitle、title、headline、body、bodyStrong、callout、caption、micro（等宽数字）、label、labelSmall、number、voice（Jarvis 说话的那句）、code |
+| `JarvisTheme.type` | `JarvisType`：largeTitle、title、headline、body、bodyStrong、callout、caption、micro（等宽数字）、label、labelSmall、number、voice（Persona 说话的那句）、code |
 | `JarvisTheme.shapes` | 卡片、面板、控件、chip、按钮、底部面板的圆角 |
 | `JarvisTheme.motion` | 时长和曲线（玻璃是弹簧） |
 | `JarvisTheme.glass` | 玻璃的实际渲染级别 |
@@ -70,7 +70,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 | 组件 | 用途 |
 | --- | --- |
 | `JPage` | 自定义内容的页面。把它给的 `PaddingValues` 作为滚动容器的 contentPadding：玻璃里顶栏、输入框、悬浮坞都浮在内容上，要靠这个留出空间 |
-| `JListPage` | 列表页面（根页面和大多数二级页面）。自带大标题、下拉刷新、内容边距；`summary` 是 Jarvis 对这一页的一句话，`greet` 加日期和问候（只给首页） |
+| `JListPage` | 列表页面（根页面和大多数二级页面）。自带大标题、下拉刷新、内容边距；`summary` 是 Persona 对这一页的一句话，`greet` 加日期和问候（只给首页） |
 | `JTopBar` | 页面顶栏；`JPage` / `JListPage` 已经包含，单独用于特殊页面。玻璃里大标题还在屏幕上时（`showTitle = false`），返回和操作各自是浮着的圆形按钮，大标题滚走后才合成带标题的胶囊 |
 | `JFullScreen` | 盖在当前页面上的整页（会话内搜索、全文阅读、任务进度、空间、历史会话）：铺满系统栏、状态栏图标随深浅色。不要直接用 Compose 的 `Dialog` 做整页 |
 | `JBottomBar` | 页面底部的一排操作（翻页、加载更多）：玻璃是浮起的胶囊，晨报和看板是贴底的栏 |
@@ -90,20 +90,20 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 | `JBadge` / `JTag` | 等你的计数、静态小标签（草稿、体验） |
 | `JStatusDot` / `JStatusMark` / `StatusLabel` / `StatusLine` / `PendingBadge` | 状态：小点、会话行前的标记（玻璃发光、晨报转圈和对勾、看板方块）、状态文字、对话里那一行状态 |
 | `JAvatar` | 人、群、来源；角标标出飞书 / 邮件 |
-| `JSwipeActions` | 行的左右滑动操作（收件箱：右滑已处理，左滑交给 Jarvis） |
+| `JSwipeActions` | 行的左右滑动操作（收件箱：右滑已处理，左滑交给 Persona） |
 | `JCodeBlock` | 命令和代码 |
 | `JSheet` / `JActionSheet` / `JMenu` / `JDialog` | 底部面板、长按操作面板（代替长下拉菜单）、锚点小菜单、确认对话框 |
 | `DecisionCard` | 列表里「要你定的事」 |
 | `DecisionDock` | 对话里待处理的请求，代替输入框 |
-| `DecisionOption` / `DecisionButtons` / `DecisionAdvice` | 选项（推荐的那个在三种风格里各有突出方式）、回答按钮、Jarvis 的建议 |
+| `DecisionOption` / `DecisionButtons` / `DecisionAdvice` | 选项（推荐的那个在三种风格里各有突出方式）、回答按钮、Persona 的建议 |
 | `MachineChip` | Agents 页顶部的电脑芯片（全部机器 + 每台电脑）：该风格的筛选 chip，设备图标的角上一个在线点，名字后面是计数 |
 | `AgentTreeHeader` / `AgentSpaceHeader` / `AgentRow` / `AgentIdleRow` | Agents 树（见 2.4 节）：第一层（电脑，也用于置顶、按状态、历史项目这些段）、空间、会话行（玻璃和晨报是背景上的一行，看板是进程单；行上的标记 `RowFlag`、事实 `RowFact`）、「还有 N 个空闲」。栏头上的小图标按钮（仪表、空间的 `⋯`）是 `HeadingAction`。Agents 页、空间页、组件目录和界面风格的预览用的都是这一套，不另写 |
 | `UserBubbleFrame` / `UserBubble` / `WorkGroup` / `WorkStep` / `TimelineMark` | 对话：用户消息、折叠的工作过程、每一步、分隔线 |
 | `ComposerFrame` / `ComposerTextField` / `SendButton` / `JumpToLatest` | 输入框的外框、输入、发送 / 停止、回到最新 |
-| `MessageItem` / `DraftPreview` | 收件箱的一项、Jarvis 拟好的回复 |
+| `MessageItem` / `DraftPreview` | 收件箱的一项、Persona 拟好的回复 |
 | `HubCard` | 设置页顶部的 hub 状态 |
 | `AppNavigation` / `HubAvatar` / `JarvisOrb` | App 外壳的导航（由 `:app` 使用） |
-| `PageBackdrop` | 页面、栏、外壳共用的一层背景：页面底色，玻璃里再加按整个窗口排布的状态光。挨着的栏、套着的页面和它们之间的空隙画出来是同一块，页面脚手架和外壳已经用了；自己要画底色的地方（比如宽屏 Jarvis 的对话列表）也用它，不要另铺 `surface` 一类的底板 |
+| `PageBackdrop` | 页面、栏、外壳共用的一层背景：页面底色，玻璃里再加按整个窗口排布的状态光。挨着的栏、套着的页面和它们之间的空隙画出来是同一块，页面脚手架和外壳已经用了；自己要画底色的地方（比如宽屏 Persona 的对话列表）也用它，不要另铺 `surface` 一类的底板 |
 | `AmbientLight` / `floatingSurface` / `glassSource` | 玻璃的状态光（`inWindow` 按窗口排布，缩略预览按自己的框）、浮层、浮层采样的内容（由页面脚手架处理，页面一般不直接用） |
 
 ### 2.3 写页面的规矩
@@ -113,7 +113,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 3. 页面结构：根页面 `JListPage`（不传 `onBack`，自动大标题）；二级页面 `JListPage(onBack = …)`；内容不是列表的页面（对话、终端、阅读器）用 `JPage`。
 4. 一定要把 `JPage` 给的 padding 用作滚动容器的 contentPadding，不能只给外层套 padding（那样玻璃里内容不会从浮层下面滑过）。
 5. 分组用 `JGroupItem(GroupPosition.of(i, n))` 或带 `position` 参数的行组件，一行一个 lazy item；不要把很多行包进一个 item（长列表会卡）。
-6. 「要你定的事」：列表里 `DecisionCard`，对话里 `DecisionDock`，选项 `DecisionOption`（推荐项传 `recommended = true`），按钮 `DecisionButtons`，Jarvis 的建议 `DecisionAdvice`。
+6. 「要你定的事」：列表里 `DecisionCard`，对话里 `DecisionDock`，选项 `DecisionOption`（推荐项传 `recommended = true`），按钮 `DecisionButtons`，Persona 的建议 `DecisionAdvice`。
 7. 长按菜单用 `JActionSheet`，两三项的锚点菜单用 `JMenu`。盖住整个屏幕的页面用 `JFullScreen`，底部的操作栏用 `JBottomBar`，不要让文字按钮直接浮在内容上。
 8. 元信息不用「·」拼字符串：机器、目录、Agent 种类、循环、后台这些交给组件参数（`machine`、`folder`、`agent`、`facts`）。
 9. 页面里不写 `if (JarvisTheme.style == …)`。需要按风格变化的东西放进组件；组件缺参数时在报告里写明，由设计系统负责人加。
@@ -138,7 +138,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 
 `app/…/ui/Root.kt`：
 
-- 底部固定四个 tab：Jarvis / Agents / 收件箱 / 设置，三套风格顺序相同，每个都是图标加常显的文字；dock / 底栏的样子各按各的风格（`AppNavigation`）。
+- 底部固定四个 tab：Persona / Agents / 收件箱 / 设置，三套风格顺序相同，每个都是图标加常显的文字；dock / 底栏的样子各按各的风格（`AppNavigation`）。
   设置就是第四个 tab，没有藏在别处的入口；没有不带文字的按钮。
 - 每个 tab 有自己的返回栈和角标。访问过的 tab 一直保持组合：切走时只是不放置（不绘制、不接收触摸），返回键也对它关闭
   （`rememberNavigationEventDispatcherOwner(enabled = false)`），切回来时页面原样还在，不会重建、重新加载、闪出空状态或加载圈。
@@ -146,8 +146,8 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
   返回时 dock 跟着根页面一起出现，不会先出现在正在退出的对话页上。玻璃里每一页采样自己的内容，不会模糊到别的页面。
 - 转场：推入时新页面整页不透明地从右边滑入，旧页面留在下面；返回时上面的页面滑走，露出下面的页面。不做淡入淡出（两页同时半透明会叠字），
   切 tab 不做动画。
-- 在 Agents、收件箱、设置的第一页按返回，回到 Jarvis tab；在 Jarvis 首页再按返回才离开 App（2026-11-01 用户改为：返回到 Jarvis，再按退出）。
-  Jarvis 里开着一个对话时，返回先回到 Jarvis 首页（助手页自己的处理），再按一次才退出。
+- 在 Agents、收件箱、设置的第一页按返回，回到 Persona tab；在 Persona 首页再按返回才离开 App（2026-11-01 用户改为：返回到 Persona，再按退出）。
+  Persona 里开着一个对话时，返回先回到 Persona 首页（助手页自己的处理），再按一次才退出。
 - 玻璃的悬浮坞浮在根页面上，通过 `LocalChromeInsets` 告诉页面它占了多高，`JPage` / `JListPage` 自动把这段高度加进内容边距；晨报和看板的底栏占自己的位置。
 - 背景只有一层（2026-11-01 用户要求：背景是一整块，靠上面的业务卡片分割）：外壳、每一页、详情占位都画 `PageBackdrop`，玻璃的状态光按整个窗口排布，
   各页在同一位置画出同样的像素，所以栏与栏、页面与嵌在里面的页面之间看不出接缝，也不再各有一块底板；分隔靠会话卡、消息卡、设置分组这些卡片。
@@ -170,11 +170,11 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 - expanded 用左侧导航栏：起初是我们替用户定的（用户明确要的是 compact / medium 保持底部 dock），2026-11-01 用户确认保持这样。以后要改回底部 dock，只改 `Root.kt` 里 `expanded` 时的分支。
 - 两栏用 Navigation 3 的 list-detail 场景（`rememberListDetailSceneStrategy`），哪页是列表、哪页是详情由外壳统一给（`Root.kt` 的 `paneMetadata`）：
   Agents 的「电脑 → 空间 → 会话」树 | 对话（终端接管也在右栏）；收件箱列表 | 飞书会话 / 邮件；设置分类 | 设置子页（设置子页因此都走导航）。
-  Jarvis 主对话不分栏。右栏没选东西时是占位页。
+  Persona 主对话不分栏。右栏没选东西时是占位页。
 - 各栏共用外壳的那一层背景（第 3 节）：左侧导航栏没有自己的面板（玻璃不再是浮起的胶囊柱，晨报和看板也没有竖线和白底），
-  栏与栏之间只留 8dp 空隙（`horizontalPartitionSpacerSize`），不画分隔线、不垫第二层底板；右栏的占位页、宽屏 Jarvis 的对话列表也画同一层背景。
+  栏与栏之间只留 8dp 空隙（`horizontalPartitionSpacerSize`），不画分隔线、不垫第二层底板；右栏的占位页、宽屏 Persona 的对话列表也画同一层背景。
 - 双栏时右栏正在显示的那一项在左边的卡片上高亮（`LocalDetailKey` + 组件的 `selected`），由外壳按路由算（`detailOf`），点左栏、深链、通知、调试入口和返回都同步；单栏和双栏之间切换用的是同一个返回栈，选中的不变；
-  双栏里返回键先关掉右栏的详情，回到「列表 + 占位」，再按才回到 Jarvis。list-detail 场景的返回方式要用 `PopUntilContentChange`：
+  双栏里返回键先关掉右栏的详情，回到「列表 + 占位」，再按才回到 Persona。list-detail 场景的返回方式要用 `PopUntilContentChange`：
   默认的 `PopUntilScaffoldValueChange` 要等到栏的布局变了才停，而双栏里关掉详情后占位页还在、布局不变，于是整个返回栈被弹空，按一次返回就退出了 App（2026-11-01 修）。
 - 正文限宽：`pagePadding` 带上 `LocalReadingInset`，宽窗格里内容居中、最宽 `ReadingWidth`（760dp），对话、长文、列表都一样；
   输入框、按键栏这些底部浮层也跟着限宽。图片和表格按内容宽度排。

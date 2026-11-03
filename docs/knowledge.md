@@ -1,25 +1,25 @@
-# 知识库（`~/.jarvis/data`）
+# 知识库（`~/.persona/data`）
 
-Jarvis 和 AI 分身要「代替我上班」，前提是它们知道的和我一样多：谁是谁、哪个群在干什么、每个项目进展到哪、哪些事和我有关。
-这篇讲 hub 怎么把飞书和邮件里的东西沉淀成一份**文件为主、数据库做索引**的知识库，以及 Jarvis、AI 分身、Agents 怎么共用它。
+Persona 和 AI 分身要「代替我上班」，前提是它们知道的和我一样多：谁是谁、哪个群在干什么、每个项目进展到哪、哪些事和我有关。
+这篇讲 hub 怎么把飞书和邮件里的东西沉淀成一份**文件为主、数据库做索引**的知识库，以及 Persona、AI 分身、Agents 怎么共用它。
 （2026-10-30 用户定的方向：所有数据最终沉淀在 `.jarvis` 目录；文件为主，库做索引；文字保留 365 天，附件 30 天。）
 
 ## 额外的笔记目录（`kb.extra_dirs`）
 
 hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目录（例如一个记事实、经验、决定的 git 仓库，由它自己的工具同步）。
 `kb_search` 在知识库之后也搜这些目录里的 `.md`（跳过 `.git` 等点开头的目录），命中的路径是绝对路径；助手的 CLAUDE.md 列出这些目录，
-并让它读写前先看目录里的 AGENTS.md / CLAUDE.md。Jarvis 不往里写、不同步，也不建索引。
+并让它读写前先看目录里的 AGENTS.md / CLAUDE.md。Persona 不往里写、不同步，也不建索引。
 
 ## 为什么是文件
 
-- Claude Code 读文件、grep 最顺手：助手、AI 分身、herdr 里的 Agent 不用学新接口，`rg 关键词 ~/.jarvis/data` 就能查。
+- Claude Code 读文件、grep 最顺手：助手、AI 分身、herdr 里的 Agent 不用学新接口，`rg 关键词 ~/.persona/data` 就能查。
 - 人也能直接看、直接改（改了的 `summary.md` 下次压缩会被当成已有上下文）。
 - Postgres 只放「要排序、要筛选」的索引（`kb_entities`：类型、名称、重要级、相关性、标签、路径、更新时间），丢了可以从文件重建。
 
 ## 目录
 
 ```
-~/.jarvis/data/
+~/.persona/data/
   README.md                 # 本目录的说明（hub 生成），给 AI 看
   chats/<chat id>/          # 一个会话一个目录：飞书 lark-<feedId>，邮件 mail-<账号>-<对方地址>
     meta.json               # 名称、类型（dm / group / bot / mail）、成员、关联的人和项目、打标、归档游标
@@ -174,7 +174,7 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
 
 ## 谁在用
 
-- **Jarvis（主对话和其他对话）**：CLAUDE.md 里写明目录结构和「让上下文流动」的要求；MCP 工具 `kb_search`（全文）/ `kb_list`（排好序的列表）/
+- **Persona（主对话和其他对话）**：CLAUDE.md 里写明目录结构和「让上下文流动」的要求；MCP 工具 `kb_search`（全文）/ `kb_list`（排好序的列表）/
   `kb_get`（档案 + 最近 7 天消息）/ `kb_update`（建项目、改档案、打标、建关联、记时间线；手动打的标会锁住，压缩不再覆盖）；
   实时快照里带最重要的 6 个项目、8 个会话。
 - **主对话**：hub settings `assistant.main` 记着它的会话 id（`POST /api/v1/assistant/conversations` 带 `main: true` 时设上，
@@ -184,7 +184,7 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
 - **Agent 做完**：herdr 里的 Agent 一轮结束（推送判定之前），它的目录属于哪个项目，就把它最后说的话记进那个项目的时间线
   （「Agent · 标题 · 机器」，同一个 Agent 30 分钟内只记一次），项目随后会重写摘要。
 - **Agents**：项目 `dirs` 记着 `<机器>:<路径>`；`GET /api/v1/kb/projects/<slug>` 带回在这些目录里跑的 Agent。App 里从项目开 Agent、
-  问 Jarvis 时把项目档案作为上下文带上。
+  问 Persona 时把项目档案作为上下文带上。
 
 ## 配置
 

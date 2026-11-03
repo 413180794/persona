@@ -1,6 +1,6 @@
-# 飞书在 Jarvis 里的定位
+# 飞书在 Persona 里的定位
 
-**Jarvis 不是第二个飞书。** App 的出发点是把生活和工作里的信息收到一起、交给 AI 去处理；飞书只是信息来源之一。
+**Persona 不是第二个飞书。** App 的出发点是把生活和工作里的信息收到一起、交给 AI 去处理；飞书只是信息来源之一。
 （2026-10-27 用户纠正：之前照着飞书 iOS 客户端做了一整套「工作台」——搜索、云文档、日历、会议、妙记、任务、审批、OKR、通讯录、
 removed feed、飞书邮箱、收藏、话题、会话信息、今日——全部删除。）以后不要再在 App 里做「浏览飞书」的页面。
 
@@ -14,7 +14,7 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
 | removed里和我有关的 | 收件箱（`hub/inbox_moments.go`）、知识库 | 评论我的帖子、回复我、@ 我：一个帖子一件事，AI 分拣、起草评论，点发送评论回去（`docs/inbox.md`「removed」） |
 | 其他飞书链接 | `LinkSheet` 的 WebView | 妙记、日程、任务、审批等链接在 App 内的网页卡片里打开 |
 | AI 的飞书能力 | hub（`server/internal/lark`、助手的 `lark_api` 工具） | 搜索 / 读取消息、文档、removed、日程、妙记…… 全部只读，作为 AI 的上下文 |
-| 在飞书里找 Jarvis | 飞书机器人（`docs/bots.md`） | 私聊自建应用的机器人 = 和主对话说话；不是飞书功能的搬运，是 Jarvis 多一个入口 |
+| 在飞书里找 Persona | 飞书机器人（`docs/bots.md`） | 私聊自建应用的机器人 = 和主对话说话；不是飞书功能的搬运，是 Persona 多一个入口 |
 
 链接分流在 `FeishuLinks.route(_:)`：文档 → `.doc`，removed分享（`…/client/moments/detail?postId=`）→ `.momentsPost`，其余返回 nil 走网页。
 `FeishuRoute` 只剩 chat / doc / profile / momentsPost 四种，都是「从一条消息或一个链接点进去」的落点。
@@ -23,7 +23,7 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
 
 - `GET /api/v1/lark/raw/<path>` = lark-connector `GET /agent/v1/<path>`（只读；JSON 里的 `/api/...` 媒体路径已改写回 hub）。
   `POST` 只放行 `search/page`、`search/mention-history`（只读搜索，POST 是因为 body 大）。助手的 `lark_*` MCP 工具走同一套白名单（`lark.Read`）。
-- **助手自己调 lark-connector**（2026-10-30）：用 lark-connector 自带的 lark-connector skill（仓库里的副本 `skills/lark-connector`，装在跑助手那台机器的 `~/.jarvis/skills/`），
+- **助手自己调 lark-connector**（2026-10-30）：用 lark-connector 自带的 lark-connector skill（仓库里的副本 `skills/lark-connector`，装在跑助手那台机器的 `~/.persona/skills/`），
   `ol METHOD PATH [JSON]` 直连 lark-connector 的 agent API，读写都能做；写操作先过 node 的闸门（会被别人看到的在手机上确认）。
   详见 `docs/assistant.md`「飞书：lark-connector skill」。下面的接口速查是这边实测的补充，lark-connector 的 references 更全，以它和 `ol GET /` 为准。
 - 会话、消息、已读、发消息、表情回复、卡片按钮走 hub 的专用路由（`docs/protocol.md` 飞书 API）。
@@ -50,7 +50,7 @@ hub 从容器环境读 `lark-connector_AGENT_TOKEN`；容器重建换了 token�
 
 401 有两种，要分开（2026-10-31 踩过）：lark-connector 自己掉了飞书登录时回 401 + `AUTH_SESSION_EXPIRED` 等 `AUTH_*` 错误码，
 token 是好的；以前 hub 把所有 401 都当 token 错，丢掉配置里的 token 去 `docker inspect` 一个默认容器，之后所有飞书请求和实时事件
-一直失败到 jarvisd 重启。现在 `AUTH_*` 报「lark-connector 未登录飞书」（`lark.ErrNotLoggedIn`，日志、收件箱和 App 的报错里都能看到），
+一直失败到 personad 重启。现在 `AUTH_*` 报「lark-connector 未登录飞书」（`lark.ErrNotLoggedIn`，日志、收件箱和 App 的报错里都能看到），
 配置的 token 永远不丢，实时事件按退避（最长 1 分钟）重连、同一个错误只记一次日志，用户重新登录后自己恢复。
 
 `hub.json` 的 `lark.account` 可选择默认账号（整数 `1` 为主账号，`2` 为第二账号，省略或 `0` 默认主账号），

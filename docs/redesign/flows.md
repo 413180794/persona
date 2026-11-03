@@ -20,7 +20,7 @@
 | 10 | [发消息：outbox 和结果三态](#10-发消息outbox-和结果三态) | ux.md 5.2，README D3 |
 | 11 | [打开对话：同步和连续性](#11-打开对话同步和连续性) | README D4，`docs/protocol.md`「items 的连续性」「折叠的工作」 |
 | 12 | [收件箱和 AI 分身](#12-收件箱和-ai-分身) | ux.md 3.6，`docs/inbox.md` |
-| 13 | [分享到 Jarvis](#13-分享到-jarvis) | android.md 6.3 |
+| 13 | [分享到 Persona](#13-分享到-persona) | android.md 6.3 |
 | 14 | [首次准备清单（国产系统）](#14-首次准备清单国产系统) | ux.md 3.7，android.md 5.18 |
 | 15 | [App 内更新](#15-app-内更新) | android.md 第 9 节 |
 
@@ -30,11 +30,11 @@ Android 只连 hub：在外面经公网（优先 IPv6）走 TLS 端口并钉公�
 
 ```mermaid
 flowchart LR
-  A["Android App<br/>前台服务常驻 WebSocket"] -- "HTTPS / WSS<br/>TLS 端口 · 钉公钥<br/>优先公网 IPv6" --> H["jarvisd hub<br/>家里常开的机器"]
+  A["Android App<br/>前台服务常驻 WebSocket"] -- "HTTPS / WSS<br/>TLS 端口 · 钉公钥<br/>优先公网 IPv6" --> H["personad hub<br/>家里常开的机器"]
   I["现有 iOS App（这一轮不改）<br/>推送走 APNs"] -- "HTTP / WS<br/>明文端口<br/>内网或 VPN" --> H
   H --- P[("Postgres")]
-  H -- "SSH" --> N1["jarvisd node<br/>电脑 A"]
-  H -- "SSH" --> N2["jarvisd node<br/>电脑 B"]
+  H -- "SSH" --> N1["personad node<br/>电脑 A"]
+  H -- "SSH" --> N2["personad node<br/>电脑 B"]
   N1 --> C1["herdr 里的<br/>Claude Code / Codex"]
   N2 --> C2["herdr 里的<br/>Claude Code / Codex"]
   H --> X["飞书（lark-connector）<br/>邮箱（IMAP / SMTP）"]
@@ -48,7 +48,7 @@ flowchart LR
 sequenceDiagram
   autonumber
   actor U as 你
-  participant CLI as jarvisd hub pair<br/>（hub 机器上）
+  participant CLI as personad hub pair<br/>（hub 机器上）
   participant H as hub
   participant A as Android App
   participant O as 已配对的其他设备
@@ -79,7 +79,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
   S["扫码 / 粘贴配对链接"] --> P{"能解析？"}
-  P -- "否" --> E0["不是 Jarvis 的配对二维码"]
+  P -- "否" --> E0["不是 Persona 的配对二维码"]
   P -- "是" --> V{"带 fp 和 tls？"}
   V -- "否（旧格式 / 旧 hub）" --> LAN["只用内网明文地址<br/>设置里提示：hub 太旧，不能公网直连"]
   V -- "是" --> R["探测全部候选（流程 4）"]
@@ -202,7 +202,7 @@ sequenceDiagram
 sequenceDiagram
   autonumber
   participant C as Claude Code（电脑上）
-  participant N as jarvisd node
+  participant N as personad node
   participant H as hub
   participant S as Android 前台服务
   actor U as 你
@@ -315,15 +315,15 @@ flowchart TD
   E --> S
 ```
 
-## 13. 分享到 Jarvis
+## 13. 分享到 Persona
 
-Android 独有的入口：任何 App 的文字、链接、图片、文件发进 Jarvis，正合「把各处信息收到一起交给 AI」。
+Android 独有的入口：任何 App 的文字、链接、图片、文件发进 Persona，正合「把各处信息收到一起交给 AI」。
 
 ```mermaid
 flowchart LR
-  X["任意 App 的分享菜单"] --> J["Jarvis（分享目标）"]
+  X["任意 App 的分享菜单"] --> J["Persona（分享目标）"]
   J --> P{"发到哪里"}
-  P -- "默认" --> M["Jarvis 主对话"]
+  P -- "默认" --> M["Persona 主对话"]
   P -- "选一个" --> AG["某个 Agent 会话"]
   M --> OB["走 outbox：先存再发<br/>带 client_msg_id（流程 10）"]
   AG --> OB
@@ -356,7 +356,7 @@ flowchart TD
 
 ## 15. App 内更新
 
-没有 Play 商店。APK 放在 hub 上，经 TLS 下载（钉同一个公钥），用系统安装器升级。澎湃 OS 上请求静默安装会直接失败（`INSTALL_FAILED_ABORTED`，不弹任何框），所以国产系统一律弹系统确认。第一次安装没有设备 token，用 `jarvisd hub pair --android` 打印的内网下载链接，或 adb。
+没有 Play 商店。APK 放在 hub 上，经 TLS 下载（钉同一个公钥），用系统安装器升级。澎湃 OS 上请求静默安装会直接失败（`INSTALL_FAILED_ABORTED`，不弹任何框），所以国产系统一律弹系统确认。第一次安装没有设备 token，用 `personad hub pair --android` 打印的内网下载链接，或 adb。
 
 ```mermaid
 flowchart TD

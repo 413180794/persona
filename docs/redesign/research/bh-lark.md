@@ -1,4 +1,4 @@
-# removed 的 lark-connector 飞书客户端：对 Jarvis 收件箱 / 飞书会话页（及 Agents 对话页）可迁移的模式
+# removed 的 lark-connector 飞书客户端：对 Persona 收件箱 / 飞书会话页（及 Agents 对话页）可迁移的模式
 
 调研日期 2026-10-30。只读调研，未改任何仓库文件。
 
@@ -8,7 +8,7 @@
   - `MF/` = removed `Packages/removedKit/Sources/Features/MessagingFeature/`
   - `OLK/` = removed `Packages/removedKit/Sources/lark-connectorKit/`
   - `BH-docs/` = removed `docs/`
-  - `J/` = Jarvis 仓库根（worktree）
+  - `J/` = Persona 仓库根（worktree）
   - `OL/` = 上游 lark-connector 源码（本机 zoekt 索引里的 `lark-connector` 仓库，即 github.com/Eric-2369/lark-connector）
 - 标记：**【事实】** = 代码 / 文档里直接看到的（带出处）；**【判断】** = 我的推断或建议；**【未查清】** = 没有证据下结论。
 - 性能数字只引用文档里写明的实测值；没有实测的一律不写数字。
@@ -23,11 +23,11 @@
   - 草稿 / 发送：`LarkDraftStore`、`LarkDraftImageStore`、`LarkSendQueue`、`LarkOutgoingJournal`、`PendingSendReviewView`、`ConversationPreviewPresentation`、`LarkScheduleQueue/Journal`（定时消息）、`LarkPostEditorModel`（多图图文）
   - 渲染：`RichMessageContentView`、`InlineMessageTextView`、`MessageVersionContentView`（编辑历史）、`MergedForwardView`、`ReceivedGroupCardView`、`VideoMessageViews`、`AudioMessageCard`、`ChatFileViews`、`MessageImageGallery`
   - 话题：`LarkThread*`（ListModel / ReaderModel / ReadingModel / ComposerModel / ControlsModel / RealtimeHub / VisibilityModel）、`ThreadViews`
-  - 大量「飞书功能对齐」：标签、分组设置、置顶、标记、收藏、加急、定时、翻译、表情库 / 贴纸、群管理、群日历 / 任务 / Tab / 机器人、扫码、加密、语音转文字……（对 Jarvis 基本都不该搬，见 §4）
+  - 大量「飞书功能对齐」：标签、分组设置、置顶、标记、收藏、加急、定时、翻译、表情库 / 贴纸、群管理、群日历 / 任务 / Tab / 机器人、扫码、加密、语音转文字……（对 Persona 基本都不该搬，见 §4）
 - `lark-connectorKit` 分层：`Messaging/Contracts`（领域模型 + 窄协议）、`Messaging/Client`（`LarkMessagingClient` + `LarkMessagingResponseCache`）、`Realtime/LarkRealtimeClient`、`Media/`（下载 + 磁盘缓存）、`ResourceUI/`（图片加载器、头像、图集、动图）、`Resources/Contracts`、`Transport/`（认证传输）。另有 `People/`、`Search/`、`Approval/`、`Workplace/`、`Auth/`。
 - 设计原则（`BH-docs/ARCHITECTURE.md:69-121`）：每个业务域自有模型 / 窄接口 / 缓存 / 失败恢复，不共用全局 Store；Feature 只注入需要的小协议（`any LarkMessaging`、`LarkMessagingCaching`、`LarkThreadReading`…），能力用 `messaging is any XxxProtocol` 动态判断。
 
-【判断】removed 的价值不在功能面（它的目标是「飞书移动端完全对齐」，和 Jarvis 方向相反），而在**聊天列表的正确性工程**：阅读位置、只报真正看过的已读、发送的写前日志与未知结果核对、窗口完整性校验、迟到结果隔离（代次 / revision）。这些可以抽象成与「飞书」无关的聊天基础设施，Jarvis 的飞书会话页和 Agents 对话页都能用。
+【判断】removed 的价值不在功能面（它的目标是「飞书移动端完全对齐」，和 Persona 方向相反），而在**聊天列表的正确性工程**：阅读位置、只报真正看过的已读、发送的写前日志与未知结果核对、窗口完整性校验、迟到结果隔离（代次 / revision）。这些可以抽象成与「飞书」无关的聊天基础设施，Persona 的飞书会话页和 Agents 对话页都能用。
 
 ## 2. 逐专题
 
@@ -55,7 +55,7 @@ removed【事实】
   - 不替换 scroll view 的 delegate，也不同时用两个滚动位置所有者（Bridge :5-6；`BH-docs/LARK_CHAT_UI_REVIEW.md:19`）。
 - 文档里的实测 / 验收（`BH-docs/LARK_CHAT_UI_REVIEW.md:17-31`）：复现了「上方正文变高后跳进旧消息」「补历史页跳到新插入首行」两个 bug；修复后「80 行增高及三张同时延迟图片完成后保持同一文字位置」；但快速拖动仍有中间空白帧，真机 / 帧率未验。`BH-docs/FEISHU_PARITY.md:62`：「保留消息级锚点，不承诺长消息内部像素偏移恢复」。
 
-Jarvis 现状【事实】
+Persona 现状【事实】
 - 飞书会话页 `J/ios/Jarvis/Views/Inbox/Lark/LarkChatView.swift`：**非倒置** `ScrollView + LazyVStack + ScrollPosition`（:54-89），`defaultScrollAnchor` 按「是否打开到某条」选 top / bottom（:89）。
 - 不保存阅读位置：每次按 `focus`（收件箱这件事的第一条，`J/ios/Jarvis/App/InboxStore.swift:114-123`）或 `readPosition+1` 打开（:254-276）。
 - 跳到某条用**固定等待**：`sleep 80ms → scrollTo → sleep 250ms → scrollTo`（:293-298）。removed 明确把这种做法换成了实测完成（`BH-docs/LARK_CHAT_UI_REVIEW.md:19`「替代固定等待时间」）。
@@ -63,7 +63,7 @@ Jarvis 现状【事实】
 
 【判断】
 - 飞书会话页应改成和 Agents 对话页同一套列表引擎（倒置列表、最新端偏移 0），而不是继续维护第二套非倒置实现；两边共用「锚点 = (消息 id, 行内偏移)」的阅读位置存储，键为 `hub / 账号 / 会话（/ 话题）`。
-- removed 的「UIKit 标记视图实测行坐标 + 只在非手势时修正」是在**非倒置 LazyVStack** 上解决前插 / 变高漂移的方案；Jarvis 已用倒置列表规避了大部分问题（`J/CLAUDE.md` 倒置列表若干条经验）。可借鉴的是它的**纪律**：修正只在 idle、同一轮读坐标、≤0.75pt 忽略、手势 / 跳转 / 后台 / 换会话使旧修正失效、锚点被懒加载回收时最多重新实例化一次。
+- removed 的「UIKit 标记视图实测行坐标 + 只在非手势时修正」是在**非倒置 LazyVStack** 上解决前插 / 变高漂移的方案；Persona 已用倒置列表规避了大部分问题（`J/CLAUDE.md` 倒置列表若干条经验）。可借鉴的是它的**纪律**：修正只在 idle、同一轮读坐标、≤0.75pt 忽略、手势 / 跳转 / 后台 / 换会话使旧修正失效、锚点被懒加载回收时最多重新实例化一次。
 - 对收件箱场景，「上次读到哪」不如「这件事从哪开始」重要：入口仍按 `start_position` 打开，但**同一会话在件之外再次打开**（从链接 / 资料卡「发消息」进入）时用本机锚点恢复。
 
 ### 2.2 未读分界线
@@ -75,7 +75,7 @@ removed【事实】
 - 每批行只算一次分界和 Pin 集合，避免逐行搜索（`BH-docs/LARK_CHAT_UI_REVIEW.md:39`）。
 - 局限（`BH-docs/ARCHITECTURE.md:374`）：上游没有精确的服务端已读位置，**不能据 unreadCount 推断跨端未读分界**。
 
-Jarvis 现状【事实】
+Persona 现状【事实】
 - 分界 = 打开时冻结的 `anchor = readPosition`（`LarkChatView.swift:38-39, 263-265, 207-211`），文案「以下为新消息」。
 - **从收件箱打开（focus 路径）时不设 anchor → 没有分界线**（:257-260 只在 `else if opensAtMessage` 分支设 anchor）；收件箱打开的会话都带 focus（`InboxStore.swift:121`），所以实际最常见的入口没有分界线。
 - 分组判断按 `senderName` 而不是 sender id（`LarkChatView.swift:221-225`），且分界不打断分组。
@@ -92,7 +92,7 @@ removed【事实】
 - **统一导航按钮**（`BH-docs/FEISHU_PARITY.md:683-701`；代码 `MF/LarkMessagingModel.swift:2493-2521, 2446-2464`；`MF/LarkUnreadMentionIndex.swift`）：右下角只有一个按钮，未看过的 Pin 与 @我 按 position 排序、同一消息去重，全部看过后才变成「回到最新」；目标真正出现在屏幕上才算看过（点按本身不消耗）。上游的 `unreadFeedMentions` 每类只给最新一条，所以另建「未读 @ 索引」：从未读分界向后逐页读（每次按钮最多 5 页，显示「继续查找未读提醒」），**不往主列表插行、不滚动、不上报已读**；只有服务端 `syncState == complete` 的页才推进覆盖范围（`LarkUnreadMentionIndex.swift:56-85`）。
 - Pin 横幅（`MessagingView.swift:1406-1423`）与 Pin 列表——飞书功能，见 §4。
 
-Jarvis 现状【事实】
+Persona 现状【事实】
 - 「回到最新」数字 = `conversation.unread − 已看过的未读条数`（`LarkChatView.swift:166-170`），即用服务端 unread 计数推算；`hasNewer || !atBottom` 时显示（:172-191）。
 - 「有人@你」只有一个目标：`conversation.mentionPosition`（:266）；focus 路径不设（:257-260）。跳转用固定 sleep（:346-354）。
 
@@ -109,7 +109,7 @@ removed【事实】（`MF/LarkMessagingModel.swift:2659-2748`，视图 `MF/Messa
 - 450 ms 合并（:2708-2716）；**本机阅读位置任何时候都存**，**服务端已读回执**只在窗口是新鲜核对过的（不是缓存快照、不在补洞同步中）时才发（:2718-2727 注释 :2719-2720）；发之前再核一次当前账号（:2737）；慢回执期间的新请求合并为一次补发（:2729-2734）；只发「比已上报更靠后」的位置（:2736）；回执成功后推进本机 readPosition 高水位（:2741-2742）。
 - 上报内容 `POST read-position {maxPosition, messageIds}`（`OLK/Messaging/Client/LarkMessagingClient.swift:218-221`），messageIds 只含别人发的、可用的可见消息（`LarkMessagingModel.swift:2678`）。
 
-Jarvis 现状【事实】
+Persona 现状【事实】
 - 每行 `.onAppear { markSeen }`，400 ms 后 flush（`LarkChatView.swift:78, 378-388`）；`onDisappear` 再 flush（:140）；上报最高位置 + 该条 badge_count + 其间别人的未读 id（:390-400；协议 `J/docs/protocol.md:408`）。
 - 话题群不上报（:381, :391）。
 - **focus 路径把 `readCursor` 设成窗口最后一条**（:257-259），flush 只报「比 readCursor 新」的位置（:392-394）→ 从收件箱打开时，初始窗口里的消息不会被上报为已读，只有之后加载的更新页会。和 `J/docs/ios.md:14`「只把上过屏的消息上报为已读」的描述不一致。是否有意（比如故意不让「打开件」改飞书已读）**【未查清】**；`J/docs/inbox.md:64` 只说「已处理不回写飞书已读」，没说打开不回写。
@@ -128,7 +128,7 @@ removed【事实】
 - 解码失败把原文件移成 `.unreadable-<uuid>` 备份再从空开始，并给出提示（`LarkDraftStore.swift:77-82`）；版本号白名单 1–8，旧 App 遇到更高版本拒绝覆盖（:69；`ARCHITECTURE.md:67`）。
 - 列表行显示 `[草稿]` 前缀；已经提交出去的那一版草稿不再显示为草稿（`MF/ConversationPreviewPresentation.swift:62-64`）。
 
-Jarvis 现状【事实】飞书会话页输入框是 `@State text`，不持久化（`LarkChatView.swift:34, 143-161`）；Agents 输入框有草稿持久化（`J/CLAUDE.md`「UI 测试里草稿会跨次运行保留」），细节不在本次范围。
+Persona 现状【事实】飞书会话页输入框是 `@State text`，不持久化（`LarkChatView.swift:34, 143-161`）；Agents 输入框有草稿持久化（`J/CLAUDE.md`「UI 测试里草稿会跨次运行保留」），细节不在本次范围。
 
 【判断】飞书会话页 / 收件箱「AI 草拟回复」浮层的编辑内容都应持久化，键 `hub / 账号 / feedID（/ 话题根）`，带版本 UUID + 单调序号；收件箱行在有草稿时显示「草稿」标记（这是收件箱自己的状态，不是飞书功能）。
 
@@ -152,7 +152,7 @@ removed【事实】
 - `GET /api/outbox/:clientId`（查状态）**只在 owner UI 的 `/api` 上，`/agent/v1` 没有**（`OL/src/server/routes/api.ts:1396-1415` 注释）；`POST .../outbox/:clientId/retry` 注册在通用域 API 里，`/agent/v1` 也有（:3810-3838）。
 - 消息视图带 `clientId`（可选）和 `localState: synced | pending | failed`（`OL/src/shared/contracts/index.ts:776, 807`）。
 
-Jarvis 现状【事实】
+Persona 现状【事实】
 - 飞书会话页发送：`await api.larkSend`，成功才清空输入框，失败弹错（`LarkChatView.swift:402-416`）；请求体只有 `text`（`J/ios/Jarvis/Views/Inbox/Lark/LarkModels.swift:258-259`）；无出站气泡、无持久化。
 - hub **每次调用都新生成一个随机 clientId**（`J/server/internal/lark/lark.go:497-504`），所以手机超时后重试 = 新 clientId = 可能发两遍。
 - hub 投影的消息不带 `clientId` / `localState`（`lark.go:122-143`）。
@@ -161,7 +161,7 @@ Jarvis 现状【事实】
 【判断】
 - 飞书发送直接复用 Agents 的 Outbox 模型：手机生成 clientId（UUID）并持久化 → hub 把它原样透传给 lark-connector（改 `lark.Send` 签名）→ 上游按 clientId 幂等，「等网络恢复后自动重发」就安全了（已 sent 的直接返回原 id）。
 - hub 把 `clientId`、`localState` 透传进 `LarkMessage`，App 用它精确消掉出站气泡（不按文字比）。上游 agent 面没有 outbox 状态查询，必要时 hub 可以在发送时自己记 clientId → messageId，或用「最新页里有没有这个 clientId」核对。
-- removed 的「unknown 绝不自动重发、只读核对」是因为它直连、没有可依赖的幂等保证；Jarvis 如果打通了 clientId 幂等，可以比它简单：unknown 也能用同一个 clientId 自动补发。附件（图片 / 文件）不在 Jarvis 飞书页范围内。
+- removed 的「unknown 绝不自动重发、只读核对」是因为它直连、没有可依赖的幂等保证；Persona 如果打通了 clientId 幂等，可以比它简单：unknown 也能用同一个 clientId 自动补发。附件（图片 / 文件）不在 Persona 飞书页范围内。
 - 收件箱 `POST /api/v1/inbox/{id}/reply` 同理需要幂等键（hub 内部是否也走 `lark.Send` 待确认，见 §6）。
 
 ### 2.7 媒体
@@ -174,13 +174,13 @@ removed【事实】
 - 视频：认证下载到私有文件后播放，**不支持 Range 流式**；AVURLAsset 禁止外部引用（`BH-docs/ARCHITECTURE.md:356`）。语音：下载后用自封装的 Ogg Opus / CAF 播放器，所有播放器共享音频焦点，离开 / 后台暂停（`ARCHITECTURE.md:65, 360`）。文件：100 MiB 上限、同源下载、系统分享 / 预览（`FEISHU_PARITY.md:81`）。
 - 大图集：图片用 `fullScreenCover`，其他附件用 sheet，同一个呈现所有者（`MF/ImagePresentation.swift:3-36`）。
 
-Jarvis 现状【事实】
+Persona 现状【事实】
 - 已有尺寸预留：`metadata.width/height` → 240×300 内等比，无尺寸时 200×150（`J/ios/Jarvis/Views/Inbox/Lark/LarkMessageContent.swift:366-399`）；视频用 posterWidth/Height（:479-492）；贴纸先 80×80 占位、加载后按实际比例（:401-415，会引起一次重排）。
 - `LarkMedia`（`J/ios/Jarvis/Views/Inbox/Lark/LarkMedia.swift`）：Caches/lark-media 磁盘缓存（sha256(url#size)），ImageIO 降采样（:100-106），NSCache 120 MB（:29），hub 缩略图 24px 步进 ≤624（:183-187）；**落盘前不校验能否解码**（:59-63）；`LarkRemoteImage` 失败一次就显示坏图标，重新出现才重试（:156-181）。视频 / 语音用带 Bearer 头的 AVURLAsset 直接流（:277-306，hub 转发 Range，`J/CLAUDE.md`），文件用 Quick Look（:309-332）。
 
 【判断】
-- Jarvis 在解码（降采样）、视频流式播放上比 removed 好，保留。
-- 值得搬：①落盘前完整解码校验、坏字节只驱逐这一项；②按错误类型决定是否重试 + 有限退避；③贴纸也用尺寸元数据预留（若上游有）；④自定义 Layout 处理 infinity proposal（Jarvis 已在 `J/CLAUDE.md` 记过这个坑）。
+- Persona 在解码（降采样）、视频流式播放上比 removed 好，保留。
+- 值得搬：①落盘前完整解码校验、坏字节只驱逐这一项；②按错误类型决定是否重试 + 有限退避；③贴纸也用尺寸元数据预留（若上游有）；④自定义 Layout 处理 infinity proposal（Persona 已在 `J/CLAUDE.md` 记过这个坑）。
 
 ### 2.8 富文本 / 卡片渲染
 
@@ -193,9 +193,9 @@ removed【事实】
 - **互动卡片基本没做**：机器人菜单、互动 / 应用 / 投票卡片「待实现；未知内容仅作可读回退」（`BH-docs/FEISHU_PARITY.md:103`），气泡里未知 part 显示成「[kind 消息]」标签（`MessagingView.swift:1898`）。
 - 损坏的可选摘要字段（`textPreview`、引用 / 编辑历史摘要）独立容错，不能连累有效正文（`BH-docs/FEISHU_PARITY.md:1086-1101`）。
 
-Jarvis 现状【事实】已照搬 lark-connector 网页渲染器：富文本块树、代码块轻量高亮、系统消息、完整卡片元素（column_set 窄屏重排、table、collapsible_panel、chart、按钮回调……）、合并转发 / 名片 / 日程等摘要卡（`J/docs/ios.md:307-326`）。
+Persona 现状【事实】已照搬 lark-connector 网页渲染器：富文本块树、代码块轻量高亮、系统消息、完整卡片元素（column_set 窄屏重排、table、collapsible_panel、chart、按钮回调……）、合并转发 / 名片 / 日程等摘要卡（`J/docs/ios.md:307-326`）。
 
-【判断】卡片渲染 Jarvis 明显领先，不需要向 removed 学。可搬的是：①解析预算 + 超限分页回退（防止超大消息卡死主线程，和 Jarvis「行 body 反复求值要缓存」的经验一致）；②可选展示字段独立容错（坏的 preview 不应让整条消息变占位）；③长文本折叠。
+【判断】卡片渲染 Persona 明显领先，不需要向 removed 学。可搬的是：①解析预算 + 超限分页回退（防止超大消息卡死主线程，和 Persona「行 body 反复求值要缓存」的经验一致）；②可选展示字段独立容错（坏的 preview 不应让整条消息变占位）；③长文本折叠。
 
 ### 2.9 表情回应
 
@@ -205,9 +205,9 @@ removed【事实】
 - 实时：`reaction.updated` 映射为 `messageUpdated`（`OLK/Realtime/LarkRealtimeClient.swift:65-68`）。
 - 切换回应是否乐观更新：走 `perform(.reaction(...))`（`MessagingView.swift:901`），实现细节见 §7 补充。
 
-Jarvis 现状【事实】乐观切换 + 失败回滚（`LarkChatView.swift:359-373`）；回应 chip 整体是一个按钮（点了切换），显示 ≤3 个名字否则数字（:700-723）；长按菜单前 4 个常用表情 + 「表情回复」（:540-560）。
+Persona 现状【事实】乐观切换 + 失败回滚（`LarkChatView.swift:359-373`）；回应 chip 整体是一个按钮（点了切换），显示 ≤3 个名字否则数字（:700-723）；长按菜单前 4 个常用表情 + 「表情回复」（:540-560）。
 
-【判断】Jarvis 的乐观更新体验更好，保留。「看谁回应了」属于飞书浏览功能，不搬；但 chip 上「名字」和「切换」分开触点这一点可以不做（Jarvis 不提供人员列表，就没必要分）。
+【判断】Persona 的乐观更新体验更好，保留。「看谁回应了」属于飞书浏览功能，不搬；但 chip 上「名字」和「切换」分开触点这一点可以不做（Persona 不提供人员列表，就没必要分）。
 
 ### 2.10 话题
 
@@ -218,9 +218,9 @@ removed【事实】（`BH-docs/ARCHITECTURE.md:364-393`）
 - 实时：`LarkThreadRealtimeHub` 复用工作区的同一 WebSocket，每个页面一个 `bufferingNewest(64)` 流；**订阅时先发一次 `.connected` 让页面自己重读一次**；缓冲溢出也转成 `.connected`（`MF/LarkThreadRealtimeHub.swift:12-33`）。
 - 断线重连：分批复核已加载的原消息（每批最多 32、并发最多 4），修复撤回 / 删除 / 回应；删除墓碑防止旧请求复活已删消息；新尾页与旧窗口有缺口时保留旧窗口，用户点「查看新回复」才替换（:391-393）。
 
-Jarvis 现状【事实】话题群显示话题列表；「N 条回复」打开 sheet，**一次读回复，只读最新一页（limit 60），没有往前翻**（`LarkChatView.swift:675-679`；`LarkModels.swift:255-257`）；话题不上报已读（:381）。
+Persona 现状【事实】话题群显示话题列表；「N 条回复」打开 sheet，**一次读回复，只读最新一页（limit 60），没有往前翻**（`LarkChatView.swift:675-679`；`LarkModels.swift:255-257`）；话题不上报已读（:381）。
 
-【判断】话题回复 sheet 至少要能往前翻（否则长话题只看到后 60 条）；话题已读 / 话题阅读位置是飞书细节，Jarvis 的收件箱以「件」为单位，暂不需要。
+【判断】话题回复 sheet 至少要能往前翻（否则长话题只看到后 60 条）；话题已读 / 话题阅读位置是飞书细节，Persona 的收件箱以「件」为单位，暂不需要。
 
 ### 2.11 实时同步与断线补洞
 
@@ -232,7 +232,7 @@ removed【事实】
 - 补洞（`revalidateMessageWindow`，:3177-3279）：上游**没有可回放的事件序号 / 游标**，position 也不是编辑版本（`BH-docs/FEISHU_PARITY.md:1005`），所以重连后以当前锚点为中心 `around` 读，向两侧翻页直到覆盖原来显示的区间（预算 8–200 页，游标必须单调、不能循环）；**只有每页 `syncState == complete` 才用核对结果替换原区间（缺的行视为已删）**；不完整就保留旧窗口 + 「消息记录尚未同步完整」+ 禁止已读回执；403 / 404 撤下该会话缓存，超时 / 503 不撤（:3266-3277）。后台刷新时不把 around 读到的更早上下文插进来（会移动视口，:3236-3240）。
 - 实测（`BH-docs/FEISHU_PARITY.md:1009`）：隔离环境里「返回重进聊天的消息请求数 1→1」（在线复用不重复读），断线期间被静默编辑 / 删除的消息在重连后正确更新 / 消失。
 
-Jarvis 现状【事实】
+Persona 现状【事实】
 - hub 跟随 lark-connector `/agent/v1/events`，每 400 ms 最多推一次 `lark{feed_ids}`（`J/docs/protocol.md:160`）；App 端 `LarkSync`（`J/ios/Jarvis/App/LarkSync.swift`）：每个监听者 `bufferingNewest(1)`（:34-40）；收到就让对应会话页 `refreshLatest`，并在后台给收件箱里的会话取最新一页进缓存（并发 2、同一会话 3 s 内最多一次，:11-15, :83-103）。
 - **重连时只通知 feed == nil 的监听者（收件箱），已打开的会话页不收到**（:60-61），后台补拉又跳过打开着的会话（:73-81）→ 打开着的会话页要等 60 s 轮询兜底（`LarkChatView.swift:132-135`）。
 - **`refreshLatest` 取最新一页（limit 40）并把「比当前最后一条新」的直接拼到末尾**（`LarkChatView.swift:300-312`）：两次刷新之间来了超过一页的新消息时，中间会**静默缺一段**，没有缺口检测。
@@ -240,7 +240,7 @@ Jarvis 现状【事实】
 
 【判断】
 - 修三处：①重连后通知打开着的会话页做一次核对；②刷新改为 `after(最后一条)` 逐页追平（超过 N 页就整窗换成 latest 并给「有更多新消息」提示），绝不拼接不连续的页；③hub 透传 `syncState`（以及被删除行的墓碑），App 只在完整时删除本地行。
-- 事件流做成「变化通知 + 溢出即全量核对」两种语义，和 removed 一样；Jarvis 已有的 `revs` 增量协议（Agents 用）证明了推拉结合的路子是对的，飞书侧缺的只是缺口检测。
+- 事件流做成「变化通知 + 溢出即全量核对」两种语义，和 removed 一样；Persona 已有的 `revs` 增量协议（Agents 用）证明了推拉结合的路子是对的，飞书侧缺的只是缺口检测。
 
 ### 2.12 缓存与离线
 
@@ -250,7 +250,7 @@ removed【事实】
 - 缓存显示不确认发送成功、不当成服务端已读（`BH-docs/FEISHU_PARITY.md:1003`）；退出账号清除。
 - 离线冷启动：绑定原凭据 / 证书 / 连接代次的「最近验证过的 owner」，冷启动在网络核对完成前就能只读打开缓存会话；只读模式没有发送 / 回执 / 远程下载（`BH-docs/FEISHU_PARITY.md:1104-1112`；`BH-docs/LARK_CHAT_UI_REVIEW.md:51-53`）。实测：打开缓存正文前后 API 请求数不变、0 变更（文档原话，未给样本分布）。
 
-Jarvis 现状【事实】`StateCache`（Caches/state）存每个飞书会话最近 80 条（`J/docs/ios.md:94-95`）；冷启动 / 断网 / 切 tab 先画缓存（同上）；但**飞书会话页只有在 `focus == nil` 时才用缓存先画**（`LarkChatView.swift:121-130`），而收件箱入口总带 focus → 收件箱打开的会话不用缓存先画，`LarkSync` 预取的缓存对这个入口基本用不上（`J/docs/ios.md:33-34` 写的「未读会话的缓存覆盖到第一条未读时也直接用缓存打开」只覆盖非 focus 路径）。
+Persona 现状【事实】`StateCache`（Caches/state）存每个飞书会话最近 80 条（`J/docs/ios.md:94-95`）；冷启动 / 断网 / 切 tab 先画缓存（同上）；但**飞书会话页只有在 `focus == nil` 时才用缓存先画**（`LarkChatView.swift:121-130`），而收件箱入口总带 focus → 收件箱打开的会话不用缓存先画，`LarkSync` 预取的缓存对这个入口基本用不上（`J/docs/ios.md:33-34` 写的「未读会话的缓存覆盖到第一条未读时也直接用缓存打开」只覆盖非 focus 路径）。
 
 【判断】
 - 缓存命中规则改成「缓存里包含要打开的那条（start_position）就先画」，和 removed「包含锚点的窗口」一致。
@@ -265,9 +265,9 @@ removed【事实】（`BH-docs/LARK_INBOX_UI_REVIEW.md`、`BH-docs/FEISHU_PARITY
 - 离线：本机只读首页，明确显示「上次账号、本机只读、可能过时」（`FEISHU_PARITY.md:1108`）。
 - 角标三位数、红点 / 灰数字、标记红旗、置顶网格、筛选吸顶、下拉展开置顶……全是飞书首页对齐。
 
-【判断】Jarvis 的收件箱是 AI 分拣后的「件」列表，和飞书 feed 不是一回事。可搬的只有：①行上显示本机状态（草稿 / 发送中 / 发送失败）；②离线时标题位提示「本机数据」（Jarvis 已有连接状态标题，`J/docs/ios.md:273-297`）；③汇总数字只用服务端口径。
+【判断】Persona 的收件箱是 AI 分拣后的「件」列表，和飞书 feed 不是一回事。可搬的只有：①行上显示本机状态（草稿 / 发送中 / 发送失败）；②离线时标题位提示「本机数据」（Persona 已有连接状态标题，`J/docs/ios.md:273-297`）；③汇总数字只用服务端口径。
 
-## 3. Jarvis 现状中发现的疑似问题（证据汇总）
+## 3. Persona 现状中发现的疑似问题（证据汇总）
 
 | # | 现象 | 证据 | 性质 |
 | --- | --- | --- | --- |
@@ -287,7 +287,7 @@ removed【事实】（`BH-docs/LARK_INBOX_UI_REVIEW.md`、`BH-docs/FEISHU_PARITY
 
 ### 补 2.9：removed 的表情回应不是乐观更新
 【事实】`LarkChatModel.perform(.reaction…)`（`MF/LarkMessagingModel.swift:2230-2252`）：先按消息权限 `allows("reaction")` 拦截，`isPerformingAction` 期间一次只做一个动作，**等服务端返回后**才提示「已回应 / 已取消回应」，成功后才把这个表情记进最近使用（`recordConfirmedUse`）；界面靠后续刷新 / `reaction.updated` 事件更新。
-【判断】Jarvis 的乐观切换 + 失败回滚（`LarkChatView.swift:359-373`）体验更好，保留；可以学的是「最近使用」只记成功的。
+【判断】Persona 的乐观切换 + 失败回滚（`LarkChatView.swift:359-373`）体验更好，保留；可以学的是「最近使用」只记成功的。
 
 ### 补 2.6：收件箱回复同样不幂等
 【事实】`POST /api/v1/inbox/{id}/reply` → `replyInbox` → `h.lark.Send(ctx, feedID, text)`（`J/server/internal/hub/inbox_triage.go:213-230`）；会话页发送（`J/server/internal/hub/lark.go:120`）、助手工具 `lark_send`（`J/server/internal/hub/assistant_tools.go:679`）也都走 `lark.Send`，每次随机 clientId（`J/server/internal/lark/lark.go:497-504`）。
@@ -301,7 +301,7 @@ removed【事实】（`BH-docs/LARK_INBOX_UI_REVIEW.md`、`BH-docs/FEISHU_PARITY
 
 **搬进飞书会话页 / 收件箱（都是「聊天体验 / 同步 / 可靠发送」，不是飞书功能）**
 
-| 优先级 | 模式 | removed 出处 | 落在 Jarvis 哪里 |
+| 优先级 | 模式 | removed 出处 | 落在 Persona 哪里 |
 | --- | --- | --- | --- |
 | P0 | 发送幂等：客户端 clientId 透传到 lark-connector；出站气泡 + 持久化 + 断网等待；按 clientId / remoteId 精确消气泡，不按文字比 | §2.6 | App Outbox 复用；hub `lark.Send` 加 clientId 参数；`LarkMessage` 透传 `client_id` / `local_state` |
 | P0 | 刷新不拼缺口：`after(最后一条)` 追平，追不上就整窗换 latest + 提示；重连通知打开着的会话 | §2.11 | `LarkChatView.refreshLatest`、`LarkSync.reconnected` |
@@ -322,9 +322,9 @@ removed【事实】（`BH-docs/LARK_INBOX_UI_REVIEW.md`、`BH-docs/FEISHU_PARITY
 - 首页：飞书 feed 本身、置顶网格 / 展开、消息 / 未读 / 标记筛选、标签与分组设置、稍后处理 / 已完成 / 会话盒子、自动免打扰、三位数角标规则、事件中心（`BH-docs/FEISHU_PARITY.md:32-55`；`BH-docs/LARK_INBOX_UI_REVIEW.md`）。
 - 通讯录（PeopleFeature 67 个文件：组织树、好友申请、拉黑、联系人隐私、我的联系人链接、个人状态、勿扰、登录设备……）、全局搜索页（SearchFeature 4 个文件）、审批（ApprovalFeature 28 个文件：列表、同意 / 拒绝、评论草稿、常用意见、流程图、抄送已读、扩展操作）、工作台（WorkplaceFeature 6 个文件：应用目录、常用管理、服务台）——这些能力只放在 hub / AI 侧（`J/docs/feishu.md:15` 的 `lark_api`）。
 - 消息操作：Pin 横幅 / 列表、标记、收藏、转发 / 合并转发 / 多选批量、加急、定时消息、翻译 / 图片翻译、已读人员列表、回应人员列表、编辑 / 撤回 / 删除、群管理、群 Tab / 日历 / 任务 / 机器人。
-- 输入：四种行内样式、post 标题、多图图文编辑器、@成员选择器、表情包 / 贴纸库管理、语音录制、视频拍摄与发送、文件发送（Jarvis 飞书页只回文字；需要附件时交给 AI）。
+- 输入：四种行内样式、post 标题、多图图文编辑器、@成员选择器、表情包 / 贴纸库管理、语音录制、视频拍摄与发送、文件发送（Persona 飞书页只回文字；需要附件时交给 AI）。
 - 话题已读 / 话题阅读位置 / 话题管理（关注、关闭）。
-- 离线冷启动的「原凭据 / 证书代次绑定」那一整套（Jarvis 是配对 token + 自己的 hub，已经能缓存先画）。
+- 离线冷启动的「原凭据 / 证书代次绑定」那一整套（Persona 是配对 token + 自己的 hub，已经能缓存先画）。
 - 可能保留但需用户决定（【判断】，不是硬性结论）：引用回复（在群里回答某条具体问题，对「处理一件事」有用）。
 
 ## 5. 对 Agents 对话页（同样是聊天列表）的启发
@@ -336,14 +336,14 @@ removed【事实】（`BH-docs/LARK_INBOX_UI_REVIEW.md`、`BH-docs/FEISHU_PARITY
   2. 修正的纪律：只在 idle 修正、≤0.75pt 忽略、用户手势 / 跳转 / 后台 / 换会话使旧修正作废（removed `LarkChatViewportBridge.correct` 拒绝在 tracking / dragging / decelerating 时改 offset）。
   3. 状态分「提交中 / 已受理待确认 / 未知 / 失败」四档，而不是「发送中 / 失败」两档；「未知」只核对不盲重发（Agents 有 hub 幂等保证时可以自动补发，但 UI 上要能看出「结果待确认」）。
   4. 迟到结果隔离：所有异步回写都带 revision / windowRevision / messageRevision 代次（removed 几乎每个 await 之后都校验，例 `MF/LarkMessagingModel.swift:2547, 2563, 2584`），切会话、跳转、后台都递增代次。
-  5. 事件流「溢出即全量核对」：缓冲满了不默默丢，转成一次 catch-up（removed `LarkRealtimeClient` / `LarkThreadRealtimeHub`）。Jarvis 的 WebSocket 自己有 `since_seq` 补发，这条主要用在 App 内部的事件分发（`AsyncStream` 缓冲策略）。
+  5. 事件流「溢出即全量核对」：缓冲满了不默默丢，转成一次 catch-up（removed `LarkRealtimeClient` / `LarkThreadRealtimeHub`）。Persona 的 WebSocket 自己有 `since_seq` 补发，这条主要用在 App 内部的事件分发（`AsyncStream` 缓冲策略）。
 
 ## 6. Android 上实现这些聊天列表模式的要点
 
-【判断】（Jarvis 目前没有 Android 代码；以下是基于 Compose 官方行为的设计建议，未在设备上实测，具体 API 版本需在实现时核对）
-- **列表方向**：`LazyColumn(reverseLayout = true)`，数据按「新 → 旧」排，最新消息是 index 0。对应 Jarvis iOS 的倒置列表：跳到最新永远是 `scrollToItem(0)`，精确、不依赖估算高度；加载更早的历史是在列表远端追加，不推动当前视口。
+【判断】（Persona 目前没有 Android 代码；以下是基于 Compose 官方行为的设计建议，未在设备上实测，具体 API 版本需在实现时核对）
+- **列表方向**：`LazyColumn(reverseLayout = true)`，数据按「新 → 旧」排，最新消息是 index 0。对应 Persona iOS 的倒置列表：跳到最新永远是 `scrollToItem(0)`，精确、不依赖估算高度；加载更早的历史是在列表远端追加，不推动当前视口。
 - **位置保持基本是框架默认行为**：LazyColumn 以「第一个可见项的 key + 偏移」为锚，数据变化后按 key 找回该项；不可见项（含上方 / 远端）的高度变化不会移动视口。removed 在 SwiftUI 上用 UIKit 标记视图实测行坐标才解决的「前插历史跳位」「上方图片变高推走正文」，在 Compose 上大部分不需要自己写。剩下要处理的是**锚点项自身变高**——靠图片尺寸预留解决。
-  - 反过来，「贴底跟随」需要自己做：在 reverse 布局里新消息插在 index 0，框架会保持原来那条可见，所以只在 `followsLatest` 为真时显式 `scrollToItem(0)`；不在底部时什么都不做，正好就是 Jarvis 的「看历史时新行不打扰」。`followsLatest` 只在 `isScrollInProgress` 且由用户拖动时改变（可用 `interactionSource` / `NestedScrollConnection` 区分用户拖动和程序滚动）。
+  - 反过来，「贴底跟随」需要自己做：在 reverse 布局里新消息插在 index 0，框架会保持原来那条可见，所以只在 `followsLatest` 为真时显式 `scrollToItem(0)`；不在底部时什么都不做，正好就是 Persona 的「看历史时新行不打扰」。`followsLatest` 只在 `isScrollInProgress` 且由用户拖动时改变（可用 `interactionSource` / `NestedScrollConnection` 区分用户拖动和程序滚动）。
 - **稳定 key + contentType**：`items(rows, key = { it.id }, contentType = { it.kind })`；分界线、日期头、「加载更多」都是独立的 item（各自稳定 key，如 `"unread-boundary"`），不要把一组消息包成一个 item（对应 `J/CLAUDE.md`「长列表里不要把一组可能很多的行包成一个子视图」）。
 - **窗口而非 Paging 3**：建议自己维护「消息窗口」（`olderCursor / newerCursor`，跳到某条 = 整窗换成 `around(position)`，跳最新 = 整窗换成 latest，刷新 = `after(最后一条)` 追平），状态放 ViewModel 的 `StateFlow<List<Row>>`，磁盘缓存用 Room（按 hub / 账号 / 会话存连续窗口）。Paging 3 的 `PagingSource` 也能做双向分页，但「整窗替换 + 缺口检测 + 出站行合并」用自定义窗口更直接。
 - **初次定位到某条（第一条未读 / 这件事的起点）**：两步——先 `scrollToItem(index)` 到大致位置，等一帧后读 `layoutInfo.visibleItemsInfo` 里该项的实际 offset，再 `scrollBy(差值)` 把它放到视口顶部（removed「先 scrollTo，再按实测修正」的同构做法）；不要用固定延时。

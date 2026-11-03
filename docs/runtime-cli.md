@@ -210,7 +210,7 @@ App：DEBUG 包用启动参数 `-runtimeCLIHub YES` 启动（Xcode 的 scheme �
 
 ```sh
 export JARVISCTL_VIA_HUB=<hub 地址>          # 或每条命令带 --via-hub <hub 地址>
-export JARVISCTL_HUB_TOKEN_FILE=<存着设备令牌的文件>   # 或 JARVISCTL_HUB_TOKEN；在 hub 那台机器上默认读 ~/.jarvis/hub.json；不会打印
+export JARVISCTL_HUB_TOKEN_FILE=<存着设备令牌的文件>   # 或 JARVISCTL_HUB_TOKEN；在 hub 那台机器上默认读 ~/.persona/hub.json；不会打印
 scripts/app/jarvisctl.py state
 scripts/app/jarvisctl.py settle --pixels 600
 scripts/app/jarvisctl.py tree --id-prefix agents. --visible

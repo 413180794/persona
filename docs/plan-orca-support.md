@@ -5,7 +5,7 @@
 
 ## 背景
 
-Jarvis 目前只能驱动开在 herdr 里的 Agent。开在别处（Orca 的终端、普通终端）的 Claude Code 正在跑，App 里也只显示「未运行」：
+Persona 目前只能驱动开在 herdr 里的 Agent。开在别处（Orca 的终端、普通终端）的 Claude Code 正在跑，App 里也只显示「未运行」：
 看得到对话记录，看不到状态，发消息会在 herdr 里再起一个 `claude --resume`，和原来的进程同时写同一个会话。
 
 想接入 Orca，又不想到处加 `if orca`：先抽出一层「宿主」，herdr 和 Orca 各实现一份，以后接 tmux 之类也只是再实现一份。
@@ -69,7 +69,7 @@ type Controller interface { CanControl() bool
   node 里的窗格一律存这个字符串（`n.panes`、`Agent.PaneID`），调用时由 `Registry.Pane` 解析出宿主和 id。
 - **会话模型**：node 内部是 `map[string]host.Agent`（字段和原来的 herdr Agent 一样，`PaneID` 是 `PaneRef` 字符串），宿主返回的
   `Agent`、`Created` 里的窗格都已经是本宿主的 `PaneRef`。
-- **按键名**：沿用 App 现在发的 herdr 写法（`shift+tab`、`ctrl+c`、`enter`……）作为 Jarvis 统一的按键名。herdr 原样转发，
+- **按键名**：沿用 App 现在发的 herdr 写法（`shift+tab`、`ctrl+c`、`enter`……）作为 Persona 统一的按键名。herdr 原样转发，
   Orca 换成字节（如 `shift+tab` → `\x1b[Z`）。
 - **错误**：宿主用 `host.Mark` 给自己的错误加上 `ErrNoAgent` / `ErrAttachBusy` / `ErrTakenOver`（`errors.Is` 判断），错误文本不变；宿主缺某个能力时 node 返回 `ErrUnsupported`，文本以 `unsupported` 开头（hub 按这个前缀退回读屏）。
 - **布局 `Layout`**：空间、槽位、能认出的 Agent 窗格、所有窗格。宿主知道的话顺带给出 Agent 类型、状态、会话 id（herdr 集成的 `agent_session`）。
@@ -83,7 +83,7 @@ type Controller interface { CanControl() bool
 
 | 公共层 | 做什么 |
 | --- | --- |
-| 认会话 | 宿主给出会话 id 的优先用；否则扫 claude / codex 进程的环境变量，按各宿主的 `PaneEnv()` 找到窗格，再读 `sessions/<pid>.json`（Codex 按线程名，TRAEX 按 owner 文件）。`jarvisd hook` 同时读各宿主的窗格变量 |
+| 认会话 | 宿主给出会话 id 的优先用；否则扫 claude / codex 进程的环境变量，按各宿主的 `PaneEnv()` 找到窗格，再读 `sessions/<pid>.json`（Codex 按线程名，TRAEX 按 owner 文件）。`personad hook` 同时读各宿主的窗格变量 |
 | 定状态 | 宿主报了状态就用，没报就按屏幕判断（现在 TRAEX 的做法），已有的纠正（`codexTurnOver` 等）照旧，最后由 hub 换算成统一状态（`docs/agent-states.md`） |
 | 发送前检查 | 宿主能读带颜色的屏幕：完整的草稿 / 灰字判断和补回车（`checkPane`、`ensureSubmitted`）；只能读纯文本：按 Codex 现在的方式降级，只查对话框 |
 | 能力上报 | 每个会话带上宿主支持哪些能力（实时终端、接管、新建、改名、关闭），App 据此隐藏做不到的按钮 |
@@ -134,7 +134,7 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
 
 ### 映射对照
 
-| Jarvis 要的 | Orca 怎么做 | 第一期 |
+| Persona 要的 | Orca 怎么做 | 第一期 |
 | --- | --- | --- |
 | 列出窗格 | `terminal.list {includeVisualLayouts, includePreview:false}`（布局按上面「没有推送」的规则才要）：只取本机的（`executionHostId` 是 `local`，SSH 目标上的终端那边没有 node 能管）、不是 `orphaned` 的 | ✅ |
 | 是不是 Agent | 窗格里有**在前台**的 claude / codex 进程（进程环境变量 `ORCA_PANE_KEY` 等于这个 pane key，缺了看 `ORCA_AGENT_PANE`）才算：没被挂起（`ps` 的 stat 不以 `T` 开头）、在终端的前台进程组（stat 带 `+`；Linux 比 `/proc/<pid>/stat` 的 pgrp 和 tpgid），不带 `HERDR_PANE_ID` / `HC_TERMINAL_ID`（套在 Orca 终端里的 herdr / herdr-core 里的 claude 继承了外面的 `ORCA_PANE_KEY`，但它归那个宿主）。Orca 的 `agentIdentity` 和 Agent 行在 Agent 退出后可能还留着，所以单看它们不算；只有扫不了进程表时列表才退回「`agentIdentity` 和一条 `hasLivePty` 的同类 Agent 行都在」（这时写一律拒绝） | ✅ |
@@ -149,12 +149,12 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
 | 什么都没输入 | 上面的前台检查不过；`terminal.send` 回 `accepted:false`（`permission` 回 `dialog_open`，其余 `not_delivered`）；`terminal_handle_stale`（含 incarnation 对不上）、`terminal_not_writable`、`terminal_gone`、`terminal_exited`、`invalid_argument`、`runtime_busy`、`request_too_large` 这类写之前就拒绝的错误也回 `not_delivered`（都是 `delivered:none`，可以重发）。`runtime_error` 之类不确定写没写的照常报错 | ✅ |
 | 关闭 | 和 herdr 一样先按两次 ctrl+c（`\x03`），再 `terminal.close`（Orca 关掉窗格，只剩它时关掉标签页）。已经不在的终端算关好了 | ✅ |
 | 改名 | 工作区和标签页的名字归 Orca 管：`RenameSpace` / `RenameSlot` 报 `unsupported`（「Orca 里的工作区和标签页暂时不能从手机改名」） | ❌ |
-| 认 hook 的窗格 | `jarvisd hook` 在没有 `HERDR_PANE_ID`、`HC_TERMINAL_ID` 时读 `ORCA_PANE_KEY`（缺了 `ORCA_AGENT_PANE`），报 `orca:<tabId>:<leafId>`；node 只在引擎是 Orca 的机器上记下这种窗格（herdr 机器和以前一样，不认 Orca 的窗格）。Orca 里开的 claude 一般不带 Jarvis 的 hook（只有 Jarvis 自己启动时用 `--settings` 带上） | ✅ |
+| 认 hook 的窗格 | `personad hook` 在没有 `HERDR_PANE_ID`、`HC_TERMINAL_ID` 时读 `ORCA_PANE_KEY`（缺了 `ORCA_AGENT_PANE`），报 `orca:<tabId>:<leafId>`；node 只在引擎是 Orca 的机器上记下这种窗格（herdr 机器和以前一样，不认 Orca 的窗格）。Orca 里开的 claude 一般不带 Persona 的 hook（只有 Persona 自己启动时用 `--settings` 带上） | ✅ |
 | 新建会话、切模式 / 思考强度 | `terminal.create` 普通路径忽略 `cwd`；模式菜单要先确认纯文本够不够认 | 第二期 |
 | 实时终端、带颜色读屏、接管尺寸 | 只在配对的加密 WebSocket 上有，hub 退回读屏 | 第三期 |
 | 推送变化 | socket 上没有（所有 `*.subscribe` 都是流式方法） | — |
 
-第三期两条路：给 Orca 提一个 socket 上就能调的「带颜色读屏」方法（倾向这条），或者在 Jarvis 里实现 Orca 的配对和加密 WebSocket。
+第三期两条路：给 Orca 提一个 socket 上就能调的「带颜色读屏」方法（倾向这条），或者在 Persona 里实现 Orca 的配对和加密 WebSocket。
 
 ### 查清的几件事
 
@@ -164,8 +164,8 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
   这两种只在带 `requireAgentStatus:"sendable"` 时出现，不带时 Orca 照写不误。`requireAgentStatus` 和「文字 + 回车」一起用时 Orca 直接拒绝
   （它要求分两步：先写文字、再回车），而分两步就没有括号粘贴，所以「Agent 在前台」只能由我们发之前用 `terminal.agentStatus` 查。
 - **括号粘贴的条件**：`agentPrompt`、有文字、`enter`、`client.type` 是 `desktop`、前台是 Orca 认得**并且见过在工作**的 Agent，都满足才粘贴，
-  回复带 `send.prompt` 回执；新开、还没干过活的 claude 不算，Orca 原样写文字再写 `\r`。所以 Jarvis 自己做括号粘贴（见「发消息」）。
-  不带 `enter` 的文字原样写。`client` 要带 `id`（Jarvis 用 `"jarvis"`，和 Orca 命令行一样带上），只有 `type` 时 Orca 回 `invalid_argument`。
+  回复带 `send.prompt` 回执；新开、还没干过活的 claude 不算，Orca 原样写文字再写 `\r`。所以 Persona 自己做括号粘贴（见「发消息」）。
+  不带 `enter` 的文字原样写。`client` 要带 `id`（Persona 用 `"jarvis"`，和 Orca 命令行一样带上），只有 `type` 时 Orca 回 `invalid_argument`。
 - **默认读屏会换源**：不带 `screen` 的 `terminal.read` 读的是输出流的尾巴（`source: stream`），所以一律带 `screen:true`。
 
 ### 注意
@@ -174,7 +174,7 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
   客户端从不打印 token；测试里查日志里没有 token。
 - `ORCA_TERMINAL_HANDLE` 不一定有（只在预先分配了 handle 时设），认窗格只靠 `ORCA_PANE_KEY`（缺了退回 `ORCA_AGENT_PANE`，这个名字不会被 Claude Code 清掉）。
 - Orca 会往全局的 `~/.claude/settings.json` 装它自己的 hook。不在 Orca 里开的 claude 也会执行，只是脚本发现没有 Orca 的变量就退出。
-  Jarvis 不碰这些 hook。
+  Persona 不碰这些 hook。
 - `~/Library/Application Support/orca/agent-hooks/last-status.json` 里也有每个窗格的会话 id（`entries[paneKey].providerSession.id`），
   但这是 Orca 的内部文件，不用。
 - TRAEX 开在 Orca 里：能列出来（按 `ORCA_PANE_KEY` 认窗格），但第一期发消息会被拒绝（宿主只给它认得进程的 claude / codex 发）。
@@ -224,7 +224,7 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
 
 ### 映射对照
 
-| Jarvis 要的 | herdr-core 怎么做 | 第一期 |
+| Persona 要的 | herdr-core 怎么做 | 第一期 |
 | --- | --- | --- |
 | 列出窗格 | `terminal.list`：只取本机（地址不带 `/`）、`state` 为 `live` 的终端 | ✅ |
 | Agent 类型 | `status.app`（程序自己用 OSC 7501 报的词，原样）：`claude-code` → claude，`codex` → codex，其余不算 Agent（留给 TRAEX 认）。还没报过状态时看前台进程 `argv[0]` 是不是 `claude` / `codex`。前台是 shell、经典 herdr 或没有前台进程时不算 Agent：Agent 退出后 herdr-core 会把它最后的状态留在终端上，直到终端自己的程序结束 | ✅ |
@@ -233,9 +233,9 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
 | 空间 / 槽位 | Herdr 打开的终端带标签 `herdr.space`、`herdr.tab`（就是布局文档 `doc.get {name:"herdr-app"}` 里空间和标签页的 id）和 `where`（「空间 / 标签页」显示名）。名字取文档里的名字，空的取 `where`，再空取文件夹名 / 序号；序号按文档顺序。不是 Herdr 开的（`hc run`）按目录归成一个空间 `dir:<目录>`，槽位留空 | ✅ |
 | 读屏 | `terminal.read {terminal, lines:0}`：只有纯文本，软换行已接回，只读当前屏。要历史时 herdr-core 会用滚轮事件去滚全屏程序、期间扣住用户的按键，所以 `recent` 也只给当前屏，没有往前翻 | ✅ 纯文本、无历史 |
 | 发消息 | 先 `terminal.get` 确认 Agent 还在（退出了就拒绝，免得壳层把消息当命令跑），再 `terminal.send {terminal, text}`：粘贴再回车（程序开了括号粘贴就用），等电脑上 3 秒没人打字。herdr-core 拒收时什么都没输入：`blocked` 回 `dialog_open`，`status_mismatch` / `unavailable` / `finished` / `not_found` 回 `not_delivered`（都是 `delivered:none`，可以重发） | ✅ |
-| 特殊按键 | `terminal.keys`：按键名和 Jarvis 的写法一样（`enter`、`esc`、`shift+tab`、`ctrl+u`、`up`……），原样转发 | ✅ |
+| 特殊按键 | `terminal.keys`：按键名和 Persona 的写法一样（`enter`、`esc`、`shift+tab`、`ctrl+u`、`up`……），原样转发 | ✅ |
 | 只输入不回车 | 做不到，见下。「文字 + 回车」和 `/effort` 改走 `terminal.send`；别的输入文字（包括要先按键打开输入框的对话框选项）在按任何键之前拒绝（`cannot_type`，中文提示） | 部分 |
-| 认 hook 的窗格 | 终端里的进程都有 `HC_TERMINAL_ID`（就是地址）；`jarvisd hook` 在没有 `HERDR_PANE_ID` 时报 `herdr-core:<地址>` | ✅ |
+| 认 hook 的窗格 | 终端里的进程都有 `HC_TERMINAL_ID`（就是地址）；`personad hook` 在没有 `HERDR_PANE_ID` 时报 `herdr-core:<地址>` | ✅ |
 | 推送变化 | `events.subscribe` 一条连接管所有终端，任何变化（大小、keep 和别的机器的除外）都马上取一次快照 | ✅ |
 | 实时终端 | 不做，见下；hub 退回读屏 | ❌ |
 | 关闭 | 和 herdr 一样先按两次 ctrl+c，再 `terminal.kill`（挂断 → 终止 → 强杀，最多约 3 秒后返回终端当时的样子）。Herdr App 自己关窗格也只调 `terminal.kill`，终端以 `killed` 结束后 App 自己把窗格（只剩它时是标签页）去掉，不调 `terminal.rm`，所以我们也只 kill、留下已结束的记录。已结束或已不存在（`not_found`）的终端算关好了；kill 后还是 `live` 报错 | ✅ |
@@ -267,7 +267,7 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
 ### 注意
 
 - herdr-core 没有 hook，状态只来自程序自己发的 OSC 7501（Claude Code 会发）；不发的程序没有状态。
-- herdr-core 不会丢掉调用方已经放弃的 `terminal.send` / `terminal.keys`：它们要等电脑上 3 秒没人打字，Jarvis 超时后仍可能晚些送到。
+- herdr-core 不会丢掉调用方已经放弃的 `terminal.send` / `terminal.keys`：它们要等电脑上 3 秒没人打字，Persona 超时后仍可能晚些送到。
   按键的超时缩到 8 秒让这段窗口小一点；对话框回答没有在送达前再核对一次版本。
 - 已知的小差别（暂不处理）：`config.toml` 写坏时我们的解析和 `hc` 的不一定一致；一次快照最慢约 4 秒（`terminal.list` + `doc.get`，
   只影响选了 herdr-core 的机器）；窗格 id 不带 core 的身份，清空状态后地址从 `t1` 重来（认会话先看进程，影响小）。

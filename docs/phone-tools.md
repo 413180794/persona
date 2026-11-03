@@ -2,7 +2,7 @@
 
 `apple/Jarvis/PhoneTools/`：把 iPhone 能力包装成 MCP 工具，让 Claude 在电脑上操作手机数据。开关和授权在 设置 › 连接器 › 这台 iPhone（2026-11-01 以前叫「手机数据」）。
 
-链路：Claude 调 `phone_*` 工具 → `jarvisd mcp` → node.sock → hub → 在线的 iPhone（WebSocket `tool_call`）→
+链路：Claude 调 `phone_*` 工具 → `personad mcp` → node.sock → hub → 在线的 iPhone（WebSocket `tool_call`）→
 App 在本地查询/写入 → `tool_result` 原路返回。
 
 工具的描述和 schema 由 App 注册（iOS `apple/Jarvis/PhoneTools/`，Android `android/.../phone/PhoneTools.kt`），不在服务端的 `server/internal/prompts/mcp/`（`docs/prompts.md`「MCP 工具」）。
@@ -90,7 +90,7 @@ Claude 再调一次会再问一次。
 - **没有 API 读短信 / iMessage / 通话记录**（`MessageUI` 只能写不能读）。
 - **没有 API 读备忘录、微信、其他 App 的数据**。要读只能靠「截图 + `phone_photo_get` 看图片」或用户手动贴到剪贴板。
 - **App 必须在线**：hub 只能把 `tool_call` 发给已 `register_phone` 的 iPhone。App 在前台或刚切到后台时 WebSocket
-  还在，能收到；被系统挂起后收不到，hub 会返回「iPhone 不在线，请打开 Jarvis」。
+  还在，能收到；被系统挂起后收不到，hub 会返回「iPhone 不在线，请打开 Persona」。
 - **后台定位不可用**：只有「使用期间」权限，App 不在前台时定位会失败。
 - **剪贴板会弹系统提示**：读别的 App 复制的内容时，iOS 会问「允许粘贴吗」，用户必须点允许。
 - **健康数据只能按天汇总**：没有逐条记录查询；步数/能量是累计值，心率是当天平均/最小/最大，睡眠是每天睡着时长

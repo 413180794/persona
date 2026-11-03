@@ -1,6 +1,6 @@
-# Jarvis iOS 客户端现状架构与技术债调研（重设计起点）
+# Persona iOS 客户端现状架构与技术债调研（重设计起点）
 
-> 调研对象：Jarvis worktree（只读）`ios/`、`docs/ios.md`、`docs/protocol.md`、`docs/agent-states.md`、`docs/terminal.md`、`CLAUDE.md`「经验」。
+> 调研对象：Persona worktree（只读）`ios/`、`docs/ios.md`、`docs/protocol.md`、`docs/agent-states.md`、`docs/terminal.md`、`CLAUDE.md`「经验」。
 > 方法：zoekt / git ls-files / rg（限定子目录）/ Read。**没有构建、没有跑任何测试或脚本**。
 > 标注约定：**【事实】** 后面带 `相对路径:行号` 证据；**【判断】** 是我的推断 / 建议，未经运行验证。
 > 性能数字只引用代码注释或文档里记载的实测值并注明出处；凡是我自己推断的都写「未实测」。
@@ -212,7 +212,7 @@ Widgets：FleetLiveActivity 只吃 FleetState / StatusPalette
 
 **【事实】绕过 Outbox 的发送路径**（没有 `client_msg_id`、断网直接失败）：
 - `AppModel.send`（用于 `/clear`，`AppModel.swift:672-682, 642-652`）；
-- `AppModel.askJarvis`（其他页面「交给 Jarvis」，`AppModel.swift:207-223`）；
+- `AppModel.askJarvis`（其他页面「交给 Persona」，`AppModel.swift:207-223`）；
 - `AssistantView.start`（助手新对话首句，`ios/Jarvis/Views/Assistant/AssistantView.swift:101-123`）；
 - `LarkChatView.send`（飞书回复，`LarkChatView.swift:402-416`）、`InboxStore.send`（AI 分身草稿）；
 - Siri `AskClaudeIntent.deliver`（`ios/Jarvis/Intents/AskClaudeIntent.swift:67-77`）；手表 `WatchModel.send`（`ios/JarvisWatch/JarvisWatchApp.swift:107-116`）。
@@ -248,7 +248,7 @@ Widgets：FleetLiveActivity 只吃 FleetState / StatusPalette
 ### 2.9 Siri / 快捷指令【事实】
 - 3 个 AppShortcut + `OpenSessionIntent`（`ios/Jarvis/Intents/JarvisShortcuts.swift`），后台 intent 直接 `Keychain.serverConfig` + `APIClient`（`IntentSupport.swift:133-144`）。
 - 纯逻辑抽在 `IntentText / IntentPhrases / IntentFailure / IntentPicker`（`IntentSupport.swift:8-165`），有 14 个单测（`IntentsTests.swift`）——这是全仓「逻辑 / 视图分离」做得最好的一块。
-- `OpenSessionIntent.perform` 无条件 `selectedTab = .chats`（`OpenSessionIntent.swift:68-74`），而 `AppModel.open` 会把助手会话路由到 Jarvis tab（`AppModel.swift:243-251`）；`InboxView.open` 又复制了一份路由（`InboxView.swift:186-194`）。
+- `OpenSessionIntent.perform` 无条件 `selectedTab = .chats`（`OpenSessionIntent.swift:68-74`），而 `AppModel.open` 会把助手会话路由到 Persona tab（`AppModel.swift:243-251`）；`InboxView.open` 又复制了一份路由（`InboxView.swift:186-194`）。
 - `JarvisStatusIntent` 用 `status == .working` 计数（`JarvisStatusIntent.swift:24`），UI 用 `AgentState`。
 
 ### 2.10 手表【事实】
@@ -336,7 +336,7 @@ Widgets：FleetLiveActivity 只吃 FleetState / StatusPalette
 | 屏幕卡作答（option / preKeys / keys） | `InteractionViews.swift:700-705` | UI 测试 `SendSafetyTests` |
 | 手机宽度 / 双指切换会话的空间顺序 | `SessionPanes.swift:567-584` | 无 |
 | 助手新对话、改名、/clear 后跟随新会话 | `AssistantView.swift:101-123`、`AppModel.swift:642-652` | 无 |
-| 提示词模板（交给 Jarvis、飞书总结、停止 /loop、斜杠命令） | `KnowledgeView.swift:465-474`、`LarkChatView.swift:418-428`、`AppModel.swift:914-917`、`ChatView.swift:1908-1914` | 无 |
+| 提示词模板（交给 Persona、飞书总结、停止 /loop、斜杠命令） | `KnowledgeView.swift:465-474`、`LarkChatView.swift:418-428`、`AppModel.swift:914-917`、`ChatView.swift:1908-1914` | 无 |
 
 ### 4.3 同一规则多份实现 / 已不一致【事实】
 1. **状态排序**：`AgentState.priority` = 需要你 → 完成未看 → 工作中 → 已看 → 未知 → 未运行（`Models.swift:312-324`）；`ChatsView.rank` 另加「待唤醒 / 已屏蔽」（`ChatsView.swift:313-322`）；
@@ -436,7 +436,7 @@ Widgets：FleetLiveActivity 只吃 FleetState / StatusPalette
 | B7 | 机器监控告警阈值、格式化、OS 识别 | `MachineMetrics.swift:30-54, 133-198` | ≈90 | 低 | 有（5） | 视图里重复的阈值要删掉 |
 | B8 | 助手日程文案（周几规则、24 小时制、即将运行合并） | `Views/Settings/AssistantProactiveViews.swift:9-126` | ≈120 | 低 | 有（4） | |
 | B9 | 权限模式 / 思考强度表 | `Views/Chat/SessionModes.swift:4-45` | ≈45 | 低 | 间接 | 与 `node/modes.go` 对齐 |
-| B10 | 客户端里的提示词模板（交给 Jarvis、飞书总结、停 /loop、快捷指令文本） | `KnowledgeView.swift:465-474`、`LarkChatView.swift:418-428`、`AppModel.swift:914-917`、`ChatView.swift:1908-1914` | ≈60 | 低 | 无 | 【判断】应下沉到 hub（一个端点），避免两端各维护一份 prompt |
+| B10 | 客户端里的提示词模板（交给 Persona、飞书总结、停 /loop、快捷指令文本） | `KnowledgeView.swift:465-474`、`LarkChatView.swift:418-428`、`AppModel.swift:914-917`、`ChatView.swift:1908-1914` | ≈60 | 低 | 无 | 【判断】应下沉到 hub（一个端点），避免两端各维护一份 prompt |
 
 ### C. 文本 / 消息标签解析
 
@@ -496,10 +496,10 @@ removed 的做法【事实】：本地 SPM 包 `Packages/removedKit/Package.swif
 建议吸收的：①纯类型与传输分开；②Feature 只依赖契约，便于用假实现测试 / 预览；③单测跑在包里，不需要宿主 App；④每个 Feature 一个 target，消除单命名空间撞名。
 
 不照搬的：
-1. removed 对接 lark-connector 的十几个领域，每个领域三件套（约 30 个 target）；Jarvis 只有一个后端（hub），**一个 Contracts target 按目录分领域**即可，整体控制在 10 个左右的 target。
-2. removed 的组合根把 40 多个 journal / store 作为 `App` struct 的字段（`removed/App/removedApp.swift:30-90`），自身又成了大文件；Jarvis 用一个普通的 `AppContainer` 类集中构造、按 Feature 注入。
-3. removed 的终端用 SwiftTerm；Jarvis 已论证自写 VT 子集更合适（`docs/terminal.md:58-78`），保留并独立成 `TerminalCore`——它也是最容易逐行移植到 Kotlin 的部分。
-4. Jarvis 的契约有三个消费方（Go hub、iOS、Android），所以 Contracts 除了 Swift 类型还要产出**语言无关的 JSON 夹具 / 规格**，这是 removed 没有的需求。
+1. removed 对接 lark-connector 的十几个领域，每个领域三件套（约 30 个 target）；Persona 只有一个后端（hub），**一个 Contracts target 按目录分领域**即可，整体控制在 10 个左右的 target。
+2. removed 的组合根把 40 多个 journal / store 作为 `App` struct 的字段（`removed/App/removedApp.swift:30-90`），自身又成了大文件；Persona 用一个普通的 `AppContainer` 类集中构造、按 Feature 注入。
+3. removed 的终端用 SwiftTerm；Persona 已论证自写 VT 子集更合适（`docs/terminal.md:58-78`），保留并独立成 `TerminalCore`——它也是最容易逐行移植到 Kotlin 的部分。
+4. Persona 的契约有三个消费方（Go hub、iOS、Android），所以 Contracts 除了 Swift 类型还要产出**语言无关的 JSON 夹具 / 规格**，这是 removed 没有的需求。
 
 ### 6.2 目标模块
 

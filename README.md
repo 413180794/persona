@@ -1,7 +1,9 @@
-# Jarvis
+# Persona
 
-Jarvis 是一个 iPhone + Apple Watch 助手：在手机上用聊天的方式，看着、指挥你各台电脑上正在干活的 Claude Code 和 Codex，
+Persona 是一个 iPhone + Apple Watch 助手：在手机上用聊天的方式，看着、指挥你各台电脑上正在干活的 Claude Code 和 Codex，
 还有一个能读你的邮件、飞书消息和手机数据的 AI 助手。
+
+产品现名 **Persona**（原 Jarvis），仓库是 [`nwverse/persona`](https://github.com/nwverse/persona)。迁移版本优先使用服务端 `personad`、运行目录 `~/.persona`、构建配置 `~/.config/persona/config.json` 和 `PERSONA_*` 环境变量；`jarvisd`、`~/.jarvis`、`~/.config/jarvis/config.json` 与 `JARVIS_*` 继续兼容。本文使用新默认名称，升级前先核对 [配置与兼容说明](docs/config.md#命名与兼容)。现有配对、签名、数据库身份及公开安装 / 中继地址不因产品改名而改变。
 
 Claude Code 始终跑在你自己的电脑上（[herdr](https://herdr.dev) 里的一个普通会话）。手机只是另一块屏幕：
 出门时在手机上回答它的提问、批准计划，回到电脑前打开 herdr，接着用的还是同一个会话。
@@ -38,9 +40,9 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 
 ## 它是怎么工作的
 
-- **hub**（`jarvisd hub`）跑在一台常开的 Linux 机器上，是手机唯一连接的地方：转发对话、管理需要你回答的问题、
+- **hub**（`personad hub`）跑在一台常开的 Linux 机器上，是手机唯一连接的地方：转发对话、管理需要你回答的问题、
   运行 AI 助手、收邮件和飞书消息，状态都存在本机的 Postgres 里。App 关着的时候，它通过 Apple 推送提醒你。
-- **各台电脑**不用装常驻服务。hub 通过 SSH 连上去，临时启动 `jarvisd node`，由它驱动 herdr、读取 Claude Code 的对话记录，
+- **各台电脑**不用装常驻服务。hub 通过 SSH 连上去，临时启动 `personad node`，由它驱动 herdr、读取 Claude Code 的对话记录，
   并把 Claude 的提问和权限请求（hooks）、手机工具调用（MCP）转给 hub。连接断了会自动重连。
 - **手机**上的 App 用 token 连接 hub，实时收发；Claude 调用手机工具时，请求经 node → hub 到达 iPhone，在手机本地执行后原路返回。
 
@@ -62,24 +64,24 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 
 完整步骤见 [docs/config.md](docs/config.md)，大致是：
 
-1. **写配置**：把 `config.example.json` 复制到 `~/.config/jarvis/config.json`，填上你的 bundle id、开发者团队、hub 在哪台机器、
-   要接入哪些电脑。仓库里没有写死任何人的机器和账号，所有个人设置都在这份配置和 hub 的 `~/.jarvis/hub.json` 里。
-2. **部署服务端**：`./scripts/deploy/deploy.sh`。它会编译 `jarvisd`，装到每台电脑上（没有 herdr 的顺便装上），在 hub 机器上启动 Postgres 和 hub 服务。
-   hub 想放在 NAS 上的话改用 Docker：`deploy/docker/compose.yaml`（[docs/docker.md](docs/docker.md)），`deploy.sh` 只用来往各台电脑装 `jarvisd`。
-3. **告诉 hub 接入哪些电脑**：在 hub 机器的 `~/.jarvis/hub.json` 里填上各台电脑和手机访问用的地址：`public_url` 保留旧 App 可访问的地址，公网入口配置 `public.tls_listen` 和 `public.advertise`，然后重启 hub（[网络配置](docs/network.md)）。
+1. **写配置**：把 `config.example.json` 复制到 `~/.config/persona/config.json`，填上你的 bundle id、开发者团队、hub 在哪台机器、
+   要接入哪些电脑。仓库里没有写死任何人的机器和账号，所有个人设置都在这份配置和 hub 的 `~/.persona/hub.json` 里。
+2. **部署服务端**：`./scripts/deploy/deploy.sh`。它会编译 `personad`，装到每台电脑上（没有 herdr 的顺便装上），在 hub 机器上启动 Postgres 和 hub 服务。
+   hub 想放在 NAS 上的话改用 Docker：`deploy/docker/compose.yaml`（[docs/docker.md](docs/docker.md)），`deploy.sh` 只用来往各台电脑装 `personad`。
+3. **告诉 hub 接入哪些电脑**：在 hub 机器的 `~/.persona/hub.json` 里填上各台电脑和手机访问用的地址：`public_url` 保留旧 App 可访问的地址，公网入口配置 `public.tls_listen` 和 `public.advertise`，然后重启 hub（[网络配置](docs/network.md)）。
 4. **安装 App**：模拟器上跑 `./scripts/app/sim.sh`；装到真机就用 Xcode 打开生成的工程，或者用 `./scripts/release/release.sh` 发到你自己的
    TestFlight（[docs/release.md](docs/release.md)）。
-5. **配对**：在 hub 机器上运行 `~/.jarvis/bin/jarvisd hub pair`，用 App 扫描它打印的二维码。默认是有效期 10 分钟、只能兑换一次设备凭据的临时 token；hub 必须正在运行。现有 iOS 可在内网照常扫码，`--legacy` 仅供确需主 token 的场景。
+5. **配对**：在 hub 机器上运行 `~/.persona/bin/personad hub pair`，用 App 扫描它打印的二维码。默认是有效期 10 分钟、只能兑换一次设备凭据的临时 token；hub 必须正在运行。现有 iOS 可在内网照常扫码，`--legacy` 仅供确需主 token 的场景。
 
 配好以后，在「设置 › 机器」里每台电脑都应该显示在线，「Agents」里能看到它们 herdr 里的会话。
 
 ## 数据和安全
 
 - 手机只和你自己的 hub 通信，中间没有别的服务器；只有通知经过 Apple 的推送服务（APNs）。
-- hub 的 token、数据库密码只在 hub 机器的 `~/.jarvis/hub.json` 里（权限 0600）；邮箱凭据加密后存进数据库。
+- hub 的 token、数据库密码只在 hub 机器的 `~/.persona/hub.json` 里（权限 0600）；邮箱凭据加密后存进数据库。
 - 公网入口使用显式配置的 TLS 端口（自签证书 + 支持钉扎的客户端），优先 IPv6。旧 HTTP 监听保留给内网 / VPN；默认拒绝公网明文 API，健康检查除外。公网鉴权失败会限流，主 token 仅接受本地来源。
 - 现有 iOS / Watch 继续使用内网 / VPN 地址；服务端支持 TLS 不代表旧 App 已支持自签证书钉扎。放行端口和配对方法见 [公网直连](docs/network.md)。
-- Jarvis 只给自己启动的 Claude 会话注入 hooks，不改你的全局 Claude Code 设置；你自己开的会话也能在手机上看、发消息。
+- Persona 只给自己启动的 Claude 会话注入 hooks，不改你的全局 Claude Code 设置；你自己开的会话也能在手机上看、发消息。
 
 ## 目前的限制
 

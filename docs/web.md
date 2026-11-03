@@ -1,6 +1,6 @@
 # 网页版（`web/`）
 
-浏览器里用的 Jarvis：总览、Agents（各台电脑上 herdr 里的 Claude Code / Codex，连同终端、文件、Git）、Jarvis 助手（定时任务、记忆、知识库）、
+浏览器里用的 Persona：总览、Agents（各台电脑上 herdr 里的 Claude Code / Codex，连同终端、文件、Git）、Persona 助手（定时任务、记忆、知识库）、
 收件箱、机器监控和设置，功能和手机端基本一致（差距见文末「和手机端的差距」，#297、#433 两轮补齐）。视觉和交互照
 [Beautiful UI](https://www.beautifului.dev/)（MIT，许可见 `THIRD_PARTY_NOTICES.md`）：设计 token（`--ink` / `--surface` / `--line`…，浅色 / 深色两套）、
 关键帧、组件语法（Thinking 的展开轨迹、Tool Chips、Approval Card、Prompt Bar、Sidebar Nav 的滑动高亮、Search、Task Rows、Insight Cards）。
@@ -8,7 +8,7 @@
 
 ## 怎么跑
 
-- **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.jarvis/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
+- **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.persona/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
   同源，所以没有 CORS，WebSocket 和图片也用同一个 token。没有这个目录时非 `/api/` 路径照旧 404。
   不是文件的路径都回 `index.html`（前端路由：`/`、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/history`、`/inbox`、`/inbox/<件>`、`/routines`、
   `/kb`、`/kb/<类型>/<条目>`、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`）；
@@ -19,7 +19,7 @@
 
 ## 登录
 
-第一次打开要贴 hub 的 token（`jarvisd hub pair` 打印的那个）。网页先用它换一个自己的设备 token（`POST /api/v1/auth/tokens`，`kind: web`，
+第一次打开要贴 hub 的 token（`personad hub pair` 打印的那个）。网页先用它换一个自己的设备 token（`POST /api/v1/auth/tokens`，`kind: web`，
 hub 存为 `other`，角色 full），之后只用自己的，配对 token 不留在浏览器里；手机「设置 › 设备」能单独撤销。也可以直接贴一个 `jd_` 设备 token。
 **链接直接登录**（2026-10-31）：打开 `<hub 地址>/?token=<hub token>`（任意页面路径都行，也认 `#token=`，后者不会发到服务器）就直接进，不用贴。
 页面一加载先把 token 从地址栏抹掉（`history.replaceState`，在 React 渲染之前），浏览历史、书签、复制出去的链接里都没有它；然后照常换成这个浏览器自己的
@@ -33,8 +33,8 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
 ## 页面
 
-- **侧边栏**（宽屏常驻，窄屏是抽屉）：连接状态和在线电脑数、⌘K 搜索、新建 Agent、总览 / Jarvis / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 / 设置、
-  Jarvis 的对话（主对话在最前，末尾「全部对话」）。
+- **侧边栏**（宽屏常驻，窄屏是抽屉）：连接状态和在线电脑数、⌘K 搜索、新建 Agent、总览 / Persona / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 / 设置、
+  Persona 的对话（主对话在最前，末尾「全部对话」）。
   Agents 标题右侧可切换「按项目 / 按状态 / 按机器 / 按待办」，默认按项目，选择和各组折叠状态保存在当前浏览器。
   - **按项目**保留原来的 herdr 顺序（机器 → workspace → tab），没有动静的空间收进「空闲的空间」；有 loop、后台工作、运行中子 Agent 的空间不会被收起。
   - **按状态**对齐 iOS `AgentListOrder`：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，只显示非空组，已看默认折叠。
@@ -49,9 +49,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     计数同 iOS（屏蔽的未读 / 工作中不算，屏蔽的需要你算）；选中时匹配的记下来，点开的未读变已看不会从筛选里跳走，再点胶囊才重算。有筛选时「最近」不显示、空闲的空间不折。
   - **全部标为已读**（iOS `AppModel.markSeen`）：筛「未读」时列表最上面一行、空间标题的菜单、总览「做完了，还没看」右侧，都先确认；本地立刻改成已看（WS `seen`，断线时 `POST …/seen`）。
   - **置顶**（`GET / PUT /pins`，key 同 iOS：`机器/空间名`、`机器/会话 id`）：最上面一段「置顶」，置顶的空间在按项目分组里排最前、空闲也不折；先改本地、失败恢复。
-  - **行菜单 / 空间菜单**（iOS `AgentRowMenu` / `SpaceMenuItems`，`src/views/AgentMenus.tsx`）：Agent 行悬停的 ⋯ 或右键：置顶、重命名、屏蔽通知、交给 Jarvis、拷贝目录 / 恢复命令；
+  - **行菜单 / 空间菜单**（iOS `AgentRowMenu` / `SpaceMenuItems`，`src/views/AgentMenus.tsx`）：Agent 行悬停的 ⋯ 或右键：置顶、重命名、屏蔽通知、交给 Persona、拷贝目录 / 恢复命令；
     空间标题的 ⋯：全部标为已读、重命名空间、置顶空间、屏蔽这个空间。悬停时行尾的提示和角标让开，不被 ⋯ 盖住一半。
-    「交给 Jarvis」（iOS `AgentHandoff`）把这个 Agent 的情况作为上下文卡片发进主对话，走跨页的待发消息（见下面「Jarvis」），跳过去就看到气泡。
+    「交给 Persona」（iOS `AgentHandoff`）把这个 Agent 的情况作为上下文卡片发进主对话，走跨页的待发消息（见下面「Persona」），跳过去就看到气泡。
 - **待办**（`/todos`，`src/views/Todos.tsx`）：左侧列表右侧详情。列表按未完成（等你 > 待查看 > 进行中 > 待跟进 > 未开始）和创建时间排序，已完成收在底部；每行显示状态、关联 Agent 数和最要紧 Agent 的最后一句。详情可就地修改标题和说明，列出当前关联的 Agents（点击进对话、启动失败可移除）与参与过的历史；可「交给 Agent」（新开一个或交给已有的，带待办上下文卡片和 `todo_id`）、「完成 / 重新打开」或删除。对话页 ⋯ 菜单和会话信息展示「待办：X」；hub 不支持待办接口（404）时隐藏入口。
 - **新建 Agent**：首条消息支持选择、粘贴、拖入图片或文件，附件先在本地预览并可移除；图片随消息发送，其他文件后台上传到所选电脑后把路径带入消息。
   点击「启动」即关闭弹窗并打开本地会话，首条文字和附件立即可见；用 `async:true` 创建真实会话后再发 `/messages`，不等待远程启动完成才跳转。
@@ -95,7 +95,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     Codex、TRAEX、runtime 的会话和助手没有。
   - 发送中的气泡把 `<jarvis-context>` 显示成引用卡片，和记录里的一样（以前会露出原始标签）。
   - 打开页面、页面回到前台时发 `seen`。
-- **Jarvis**：`/j` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。
+- **Persona**：`/j` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。
   - **形象**（#433，`lib/persona.ts`、`views/assistant/Persona.tsx`，`docs/persona.md`）：hub 的 `/personas` 形象包，选哪个存在当前浏览器；用在新对话页的大图标、对话顶栏标题左边随状态变的圆点
     （状态同 iOS `personaState`，APNG 由浏览器自己播，减弱动态效果时用 canvas 画第一帧）、设置 › 助手的头部、「问 xxx…」占位符。选默认形象（或旧 hub、没有包）时每处都是原来的样子；
     形象的配色不改网页的 token。选择在设置 › 通用 › 形象和资料页。
@@ -103,7 +103,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     入口：新对话页右上角「资料」、对话 ⋯ 菜单「详细信息」（⋯ 菜单还有知识库、回到主对话、拷贝信息）。
   - **对话里切换启动器**（`lib/assistant-chat.ts`、`AssistantChat.tsx`）：输入框下方启动器胶囊，菜单「下一条消息起使用」列出助手所在电脑能跑助手的启动器（同 iOS `runsAssistant`），
     之后这段对话每条消息带 `launcher`；选择只在这个页面里（iOS 也只在内存里）。新对话页的胶囊选新对话用哪个。
-  - **跨页的待发消息**（`lib/outbox.ts`，store 的 `outbox`，照 iOS 的 outbox）：知识库「问 Jarvis」、收件箱「交给 AI」、Agents「交给 Jarvis」、新对话页的第一条消息，先跳过去、马上显示气泡，
+  - **跨页的待发消息**（`lib/outbox.ts`，store 的 `outbox`，照 iOS 的 outbox）：知识库「问 Persona」、收件箱「交给 AI」、Agents「交给 Persona」、新对话页的第一条消息，先跳过去、马上显示气泡，
     等记录里出现同一条才消失（已送达的最多等 60 秒）；失败的留着写原因，给「重试」（同一个 `client_msg_id`）/「删除」，电脑输入框有字能清空时给「清空并发送」。
 - **全部对话**（`/history`，`src/views/assistant/History.tsx`）：助手的全部对话，主对话置顶，其余按今天 / 昨天 / 最近 7 天 / 更早分组，搜标题和最后一句；
   行菜单重命名、拷贝 ID、归档 / 取消归档（主对话不能归档），「已归档」一段默认收起（`GET /assistant?archived=1`）。
@@ -117,7 +117,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   AI 分身草拟好的行下面是草稿卡片（发送 / 修改），处理中写「AI 分身正在处理：…」。宽时左列表右详情，窄时详情盖住列表；按页面自己的宽度切（容器查询），开着侧边面板也不挤。
   详情：飞书会话只读（停在第一条新消息，「以下是新消息」分隔，可加载更早 / 更新，`lark` 推送命中时刷新；不做表情、资料卡、群设置——不做第二个飞书）；
   邮件的 HTML 放在不允许脚本的沙箱 iframe 里（`allow-same-origin` 只为量高度、拦链接）；云文档列出提到我的行和状态菜单（`/doc/status`）；removed是帖子和评论。
-  操作条：✦ 摘要、「AI 草拟回复」（起草、「让 AI 改」重写、发送走 `/reply`）、「交给 AI」（Jarvis 新对话或最近 8 个在跑的 Agent，默认同时标已处理）。
+  操作条：✦ 摘要、「AI 草拟回复」（起草、「让 AI 改」重写、发送走 `/reply`）、「交给 AI」（Persona 新对话或最近 8 个在跑的 Agent，默认同时标已处理）。
   侧边栏角标 = 未处理里需要你（含还没分拣的）的件数；`inbox` 推送和重连时重拉。
   - **飞书可见即读**（#433，`lib/lark-read.ts`，照 iOS `LarkPager.readReport`）：消息至少一半在列表里、页面在前台、首屏定位好了、没有对话框盖着才算看到，最后一条看到后 450 ms 合并上报
     （`POST /lark/conversations/{id}/read`：位置 + `badge_count` + 别人未读的消息 id），切后台 / 离开时立刻报；只往前报，失败退回下次重报，话题群不报。
@@ -129,7 +129,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     设置里选中的飞书会话，别人发的外语消息下面一行译文（`POST /translate`，攒批）。语言判断按书写系统 + 常用词（浏览器没有 iOS 的 NaturalLanguage），拉丁语系之间可能判错。
 - **知识库**（`/kb`、`/kb/<类型>`、`/kb/<类型>/<条目>`，`src/views/knowledge/`，`src/lib/kb.ts`，`docs/knowledge.md`）：类型胶囊、按标签筛选、项目分重点 / 其他进行中 / 已完成 / 不是项目，
   全文搜索按条目合并（最多两处命中、加粗）；条目页：在做它的 Agent、时间线、档案、关联、代码目录、最近 7 天消息（某一天在弹窗里看）、目录路径，
-  「打标」改重要级 / 相关性 / 标签 / 项目类型和状态，「问 Jarvis」发进主对话（没有就新开）。宽窄同收件箱，条目页盖住列表时列表不卸载，滚动和搜索都留着。
+  「打标」改重要级 / 相关性 / 标签 / 项目类型和状态，「问 Persona」发进主对话（没有就新开）。宽窄同收件箱，条目页盖住列表时列表不卸载，滚动和搜索都留着。
   `<jarvis-context>` 的属性按 `kind`、`title`、`url` 的顺序写：iOS 的解析要求这个顺序，否则手机上不显示卡片。
 - **个人 Agent**（`/a`、`/a/<整个 id 编码>`，`src/lib/agents.ts`、`src/views/agents/`）：lark-connector 配对的个人 Agent（`/api/v1/agents/*`，
   `docs/protocol.md`）。侧边栏「个人 Agent」按 provider 分组、组内按最近排序，带未读数，会话多于 6 个时可筛选；`/a` 是带搜索的全量列表。
@@ -140,14 +140,14 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   ![网页版侧边栏的个人 Agent：按来源分组，带头像、未读数、搜索和筛选按钮](screenshots/web-personal-agents.png)
 
 - **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：九个分类，和 App 的设置同一套接口。
-  「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Jarvis 助手的运行位置和统一模型配置入口、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
+  「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Persona 助手的运行位置和统一模型配置入口、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
   「助手」（`settings/AssistantSettings.tsx`）：主动做事（进定时任务）、关于我（`PUT /assistant {notes}`，点保存或离开时存）、
   记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、运行在哪（只读）；
   「Claude Code」「Codex」（`settings/AgentSettings.tsx`）：选一台在线电脑，白名单设置（开关 / 下拉 / 文字）改了立即 `PUT`，「同时改所有在线机器」默认开，
   每行「⋯」恢复默认（文字项清空也是 null）、推到所有在线机器，失败回滚；
   「连接器」（`settings/Connectors.tsx`）：邮箱（列表、添加 IMAP / 飞书邮箱、删除；Gmail 只能在手机上加：它的 Google 授权客户端是 iOS 类型，回调是只有 App 能接的自定义 scheme）、
   飞书（`/lark/status` 只读）；「这台 iPhone」只在手机上有；
-  「模型供应商」是全部接入（搜索；Jarvis 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
+  「模型供应商」是全部接入（搜索；Persona 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
   测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses）；
   「模型配置」按 hub 的真实用途目录分组/搜索，编辑供应商、具体模型和支持的思考强度，显示继承与当前生效值。保存失败保留草稿，revision 冲突需重新加载（`docs/model-config.md`）；
   「翻译」（`settings/TranslationSettings.tsx`，`?tab=translate`）：自动翻译、翻译模型（跳到模型配置的 `translate` 用途）、目标语言、翻译范围（邮件、选中的飞书会话），
@@ -199,7 +199,7 @@ CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App�
 - **其他网页**：新标签页。大多数站点用 X-Frame-Options / CSP 禁止被嵌进 iframe，页面又判断不出被拦了，嵌进面板只会是白屏。
 - **`jarvis://session/…`**：在页面内跳到那个会话。⌘ / Ctrl / 中键点任何链接都交给浏览器开新标签页。
 - **选中文字**：阅读器里选中后浮出「作为上下文」「AI 修改」。前者在当前活动的输入框上方加一个上下文胶囊（随下一条消息作为 `<jarvis-context>` 发出），
-  后者填要求后立即发出（`<jarvis-context kind="edit">` + 要求，正文格式同 iOS）。活动的输入框是最近挂载或获得焦点、能发送的那个；页面上没有时转到 Jarvis 主对话。
+  后者填要求后立即发出（`<jarvis-context kind="edit">` + 要求，正文格式同 iOS）。活动的输入框是最近挂载或获得焦点、能发送的那个；页面上没有时转到 Persona 主对话。
   代码在 `src/lib/links.ts`、`src/views/link/`、`src/views/chat/Composer.tsx`（胶囊和拼装）。
 
 ### 互联（多台 hub）
@@ -244,7 +244,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | 空间页、机器页（MachineSpacesView） | 部分 | #297 | 机器页按空间列出这台的 Agent，没有单独的空间页 |
 | 卡片 / 细列表、全部折叠、按机器筛选 | 没有 | — | 侧边栏只有一种密度；按机器看用「按机器」分组 |
 | 新建 Agent（机器、目录、启动器、首条消息和附件） | 有 | — | 互联时电脑旁写 hub 名 |
-| 「交给 Jarvis」（Agents 长按菜单） | 有 | #433 | 行菜单，经跨页的待发消息发进主对话 |
+| 「交给 Persona」（Agents 长按菜单） | 有 | #433 | 行菜单，经跨页的待发消息发进主对话 |
 | 对话展示（工作行、折叠、轨迹、diff、图片、待办） | 有 | — | |
 | 展示逻辑对齐 `ChatLines`：合并的交换、工作中插入、已中断、来自 X、循环唤醒 | 有 | #433 | `chatLines()` / `buildBlocks()` |
 | 交互卡片（提问 / 计划 / 授权 / 终端对话框、Codex） | 有 | — | |
@@ -266,7 +266,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | 端口转发（回答里的 localhost 链接） | 没有 | — | 手机是本机监听再经 hub 转发；浏览器不能监听端口，要 hub 做 HTTP 反向代理，安全边界要重新定（`docs/ports.md`），单独评估 |
 | 听写 | 不适用 | — | 用系统输入法 / 浏览器自带的听写 |
 
-### Jarvis 助手
+### Persona 助手
 
 | 手机端的功能 | 网页 | 轮次 | 说明 |
 | --- | --- | --- | --- |
@@ -275,10 +275,10 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | 对话里切换启动器 / 模型 | 有 | #433 | 输入框下方的启动器胶囊；选择不跨刷新（iOS 也只在内存里） |
 | 定时任务、一次性跟进、运行记录 | 有 | #297 | `/routines` |
 | 记忆、关于我 | 有 | #297 | 设置 › 助手 |
-| 知识库（类型、标签、搜索、条目、打标、问 Jarvis） | 有 | #297 | |
+| 知识库（类型、标签、搜索、条目、打标、问 Persona） | 有 | #297 | |
 | 知识库条目的「开 Agent」 | 有 | #433 | 项目条目；比 iOS 多一步：项目有代码目录、那台电脑在线时把电脑和目录也填好。首条消息是原样的 `<jarvis-context>`（同 iOS） |
 | 形象（名字、头像、状态动画）、资料页 | 有 | #433 | `/assistant`；iOS 内置的两个画出来的形象（面罩、汇流）没移植，网页的默认形象是原来的星形标志；形象的配色不进网页的颜色（网页没有主题色）；侧边栏没有资料卡 |
-| 「问 Jarvis」后在对话里看到发送中的气泡 | 有 | #433 | 跨页的待发消息（store `outbox`），收件箱「交给 AI」、Agents「交给 Jarvis」、新对话页同样 |
+| 「问 Persona」后在对话里看到发送中的气泡 | 有 | #433 | 跨页的待发消息（store `outbox`），收件箱「交给 AI」、Agents「交给 Persona」、新对话页同样 |
 
 ### 收件箱
 
@@ -321,5 +321,5 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 ### 手机专属（不适用）
 
 手机数据工具（`phone_*`，「这台 iPhone」连接器）、实时活动 / 灵动岛、Apple Watch、推送通知和通知上的操作、手机 / 手表录音和转写、
-Siri / 快捷指令 / Spotlight、拍照、相册保存、iPad / iPhone Duo 的布局、「Mac 上的 Jarvis 已登录」：都依赖系统能力或硬件，浏览器里没有对应的东西。
+Siri / 快捷指令 / Spotlight、拍照、相册保存、iPad / iPhone Duo 的布局、「Mac 上的 Persona 已登录」：都依赖系统能力或硬件，浏览器里没有对应的东西。
 体验模式（没有 hub 也能看）网页不做：网页由 hub 托管，打得开就有 hub。

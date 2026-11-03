@@ -64,7 +64,7 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 | Agents 列表 | 旧布局 | 4 | 4 | 同上，没有侧栏 |
 | Agent 对话 | 新外壳 | 5 | 5 | `ChatView`、`ChromeHeader`、`SessionModeBar`、`Composer`、`AssistantSidebar` |
 | Agent 对话 | 旧布局 | 4 | 4 | 同上，没有侧栏 |
-| Jarvis 对话 | 两种 | 1 | 1 | `AssistantSidebar`（助手的会话侧栏，读全部会话；新外壳里在 Agents 页上它也在） |
+| Persona 对话 | 两种 | 1 | 1 | `AssistantSidebar`（助手的会话侧栏，读全部会话；新外壳里在 Agents 页上它也在） |
 
 读法：
 - 只数打了 `PerfTrace.body` 的视图，`List` 里的 cell、系统控件不在里面，实际更多；
@@ -92,7 +92,7 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 | --- | --- | --- | --- | --- |
 | Agents 列表 | 两种 | 1–1.6 | 2–2.6 | `rev`：只有那一行的时间 `AgentTimeText`；`last`：那一行 `SlotRow` 和它的时间；跨整分钟那次列表重排一次（0.6） |
 | Agent 对话 | 两种 | 0 | 4 | `last`：`ChatView`、`ChromeHeader`、`SessionModeBar`、`Composer`（这个会话的最后一句变了，`SessionCell` 发布） |
-| Jarvis 对话 | 两种 | 0 | 0 | |
+| Persona 对话 | 两种 | 0 | 0 | |
 
 - 「7 个气泡」是测试量早了：每页第一个量的是 `rev`，App 刚启动、对话还在加载历史和排版，气泡的 body 算在了第一次推送头上。
   现在 `RenderBudgetTests` 先等计数 1 秒不变再量，两种布局各两次都是 0。
@@ -105,7 +105,7 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 | --- | --- | --- | --- | --- |
 | Agents 列表 | 两种 | 1 | 2 | `rev`：那一行的时间 `AgentTimeText`；`last`：那一行 `SlotRow` 和它的时间；跨整分钟不再重排 |
 | Agent 对话 | 两种 | 0 | 0 | |
-| Jarvis 对话 | 两种 | 0 | 0 | |
+| Persona 对话 | 两种 | 0 | 0 | |
 
 到这里一次只改一个会话一个字段的推送，重算的只剩显示这个字段的叶子视图：第 1–3 步的目标达到了。
 
@@ -159,13 +159,13 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 ### 第 3 步：派生数据进模型层
 
 - 对话页不跟着最后一句重算：会话格子（`AppModel.session(_:)`）把最后一句也当成「没变」（`Session.sameForItsPage`），和 `rev`、`updated_at` 一样，
-  对话页、顶栏、菜单都不显示它。要发出「这个会话现在怎样」的动作（交给 Jarvis 带上最后一句）点下去时读 `AppModel.latest(_:)`：
+  对话页、顶栏、菜单都不显示它。要发出「这个会话现在怎样」的动作（交给 Persona 带上最后一句）点下去时读 `AppModel.latest(_:)`：
   不观察、直接取模型里最新的整个会话。格子里的值就是可能旧的，**显示用格子，发送用 `latest`**；
 - 列表不跟着时间重排：`AgentsFeed.shape` 不再把时间按分钟算进结构，改成比较时间决定的顺序（`Shape.byTime`：按 `sortDate` 排好的 id）。
   行和空间的先后只由这个顺序决定，一分钟过去、顺序没变时列表 body 不跑；干活的 Agent 按开始干活的时间排，它的每一步都不改顺序。
   列表里的会话的 `updatedAt` 于是可能是旧的：唯一显示它的空闲空间那一行（`QuietSpaceRow`、`QuietSpaceCardHead`、`CompactQuietSpaceRow`）
   从各行的时间（`AgentsFeed.time`，经环境拿到 feed）取最新的；
-- 角标在模型里算：`AppModel.badges`（`TabBadges`：Jarvis、Agents 两个数）在待处理、会话、屏蔽变了时数一遍，数字变了才发布；
+- 角标在模型里算：`AppModel.badges`（`TabBadges`：Persona、Agents 两个数）在待处理、会话、屏蔽变了时数一遍，数字变了才发布；
   `RootView`、`MacRootView` 和新外壳的 `WaitingBadge` 只读这两个数。`LiveUpdateTests.testTheAgentsBadgeIsTheHubs` 核对角标和 hub 一致、
   来一个提问 2 s 内加一、答掉减一。
 - 原计划把 `AgentListOrder` 整个搬进 `AgentsFeed`；量下来列表 body 已经只在结构变了时跑，搬过去只是让那一次便宜一点，没有做。

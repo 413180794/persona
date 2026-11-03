@@ -1,12 +1,14 @@
 # CLAUDE.md
 
-Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访问个人和工作数据的 AI 助手（hub 机器上一个专用目录里的 Claude，有一个常驻的主对话），
-知识库 `~/.jarvis/data` 把各处的聊天、人、群、项目沉淀下来给它和 AI 分身用，
+Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能访问个人和工作数据的 AI 助手（hub 机器上一个专用目录里的 Claude，有一个常驻的主对话），
+知识库 `~/.persona/data` 把各处的聊天、人、群、项目沉淀下来给它和 AI 分身用，
 「Agents」tab 是在手机上用聊天的方式驱动各台电脑上 herdr 里的 Claude Code / Codex（实时流式看过程、
 在手机上回答提问 / 审批计划 / 批准工具），并让 Claude 读写 iPhone 本地数据（通讯录、日历、提醒、照片、健康、位置……）和邮箱
-（Gmail / 任意 IMAP+SMTP）。服务端 `jarvisd`（Go）的 hub 跑在一台常开的机器上，经 SSH 接入其他电脑。通过 TestFlight 分发。
+（Gmail / 任意 IMAP+SMTP）。服务端 `personad`（Go）的 hub 跑在一台常开的机器上，经 SSH 接入其他电脑。通过 TestFlight 分发。
 
 **这台开发机、这个人的具体情况（机器、地址、账号、个人工作方式）在 `CLAUDE.local.md`**（不提交）；没有它就先看 `docs/config.md` 配好。
+
+**名称与兼容**：产品 Persona（原 Jarvis），服务端 `personad`（`jarvisd` 兼容别名），迁移版本的新默认目录是 `~/.persona`、构建配置是 `~/.config/persona/config.json`；`PERSONA_*` 优先，`JARVIS_*` 及旧目录继续兼容，见 `docs/config.md`「命名与兼容」。下文的源码路径、target / scheme、签名 profile、数据库 / 容器身份、协议和持久化键按实际实现保留，不按产品名盲替换；形象的 `persona` 术语不变。
 
 ## 约定（必须遵守）
 
@@ -27,18 +29,18 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 ### 隐私和密钥
 
 - **配置化，不写死个人的东西**：机器名、域名、账号、邮箱、路径、启动器、公司内部工具、个人偏好一律走配置
-  （构建 / 部署：`~/.config/jarvis/config.json`；运行：hub 的 `~/.jarvis/hub.json`；见 `docs/config.md`），代码、脚本、
+  （构建 / 部署：`~/.config/persona/config.json`；运行：hub 的 `~/.persona/hub.json`；见 `docs/config.md`），代码、脚本、
   界面文案、测试、文档、本文件里都不出现具体某个人的值（内网域名 / IP、主机名、内部项目名、个人账号、各种 key 的 ID 也算）；界面说「hub 所在的机器」「你的各台电脑」。本机的具体情况写 `CLAUDE.local.md`。
 - **公网直连**（2026-10-30 用户要求）：手机经公网直连 hub 要能通，优先探测和使用 IPv6；VPN 由用户自己配置。公网用 TLS，内网兼容现有客户端，见 `docs/network.md`。
 - **不提交任何内网信息或个人信息**（2026-10-28 用户要求；`scripts/privacy_check.py` 自动查，见 `docs/testing.md`「隐私扫描」）：代码、测试数据、文档、截图、提交信息里都不能有内网域名 / IP / URL、
   主机名、内部项目 / 仓库名、真实的公司或个人数据（消息、文档链接、人名），以及个人账号、邮箱、各种 key / 项目的 ID。示例一律用占位符
-  （`<hub 地址>`、`me@example.com`）；具体值只写配置或 `CLAUDE.local.md`。Jarvis 支持的产品 / 工具名（飞书、TRAEX、removed 等）不算。
-- **密钥绝不入库**：hub token、数据库密码只存在 hub 机器的 `~/.jarvis/hub.json`（0600）；邮箱凭据 AES-GCM 加密后存 Postgres，密钥文件不进数据库。
+  （`<hub 地址>`、`me@example.com`）；具体值只写配置或 `CLAUDE.local.md`。Persona 支持的产品 / 工具名（飞书、TRAEX、removed 等）不算。
+- **密钥绝不入库**：hub token、数据库密码只存在 hub 机器的 `~/.persona/hub.json`（0600）；邮箱凭据 AES-GCM 加密后存 Postgres，密钥文件不进数据库。
 
 ### 服务端和数据
 
-- **服务端状态全部在 hub 机器的 Postgres 容器** `jarvis-postgres`（`docs/server.md`），不要再往 `~/.jarvis/` 写 JSON 状态文件。
-  例外是知识库 `~/.jarvis/data`：所有数据最终沉淀在 `.jarvis`，文件为主、库做索引（`docs/knowledge.md`）。
+- **服务端状态全部在 hub 机器的 Postgres 容器** `jarvis-postgres`（`docs/server.md`），不要再往 `~/.persona/` 写 JSON 状态文件。
+  例外是知识库 `~/.persona/data`：所有数据最终沉淀在 `.persona`，文件为主、库做索引（`docs/knowledge.md`）。
 - **提示词一律放 `server/internal/prompts/`**（含 MCP 工具的描述和参数说明，在 `mcp/`）：一个提示词一个文件（按场景分子目录），同一个 Agent 的几段用模板组合，不在 Go 代码里 fmt / + 提示词；调用方只准备数据。改了提示词要更新 golden 测试并看 diff，见 `docs/prompts.md`。
 
 ### 产品和界面
@@ -138,7 +140,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   `Chip`、`CountBadge`、`EmptyStateView`、`Monogram`、`Loadable`。不直接写 `glassEffect` / `.glass`，不在页面里拼一个同样的小组件。
 - **缺什么先加**：先在设计系统里加一个有名字的 token 或组件，再用。加风格就是写一个 `ComponentSpec` 加一个 `AppStyle` case，加主题色就是写一个 `ColorSpec` 加一个 `ThemeColor` case，
   别处只读 `StyleSpec.current`、不 `switch AppStyle` / `ThemeColor`。
-  换视觉风格只能做成新风格（见上面「不许直接改已有界面的样子」）；BeautifulUI 的组件只在 BeautifulUI 风格下用，库代码不在 Jarvis 里改。
+  换视觉风格只能做成新风格（见上面「不许直接改已有界面的样子」）；BeautifulUI 的组件只在 BeautifulUI 风格下用，库代码不在 Persona 里改。
   做法：视图里按 `AppStyle.current.usesBeautifulUI` 二选一，原来的画法原样留着（`plain`）。能放进设计系统组件的就放在组件里，
   页面不用各自判断：`Chip`、`.card()`、`EmptyStateView`、`LoadableContent` 在 BeautifulUI 风格下画 `BUIPill`、BUI 卡片、`BUIEmptyState`、`LoadingState`。
 - **检查**（JarvisTests 扫源码）：`TypeScaleTests`（字号级别、强调、竖向间距在网格上）、`IconVocabularyTests`（图标登记）、
@@ -155,13 +157,13 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 | 路径 | 内容 |
 | --- | --- |
-| `server/` | Go 服务端 `jarvisd`（hub / node / hook / mcp 四种模式），见 `docs/server.md` |
-| `apple/` | XcodeGen 工程：iOS App `Jarvis`、macOS App `JarvisMac`（`Mac/`，`docs/mac.md`）、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
+| `server/` | Go 服务端 `personad`（hub / node / hook / mcp 四种模式），见 `docs/server.md` |
+| `apple/` | XcodeGen 工程：Persona 的 iOS / macOS / 手表 App；兼容 target 名 `Jarvis`、`JarvisMac`（`Mac/`，`docs/mac.md`）、`JarvisWatch`，共享代码 `Shared/`、单元测试 |
 | `android/` | Kotlin + Compose 多模块：`:app` 装配，`core` 承载协议 / 网络 / 存储 / 列表 / 设计系统，`feature` 承载页面，`platform` 承载通知和手机工具；部分扩展模块尚未接入 App，见 `docs/android.md` |
-| `mac/` | Mac 菜单栏 App「Jarvis Link」（和 `apple/` 里的 Mac App `JarvisMac` 是两个东西）：装着 jarvis-link（`server/cmd/jarvis-link`）和 jarvisd，这台 Mac 的 node 服务（主动连 hub 或让 hub 来连），见 `docs/link.md` |
+| `mac/` | Mac 菜单栏 App「Persona Link」（和 `apple/` 里的 Mac App `JarvisMac` 是两个东西）：装着 jarvis-link（`server/cmd/jarvis-link`）和 personad，这台 Mac 的 node 服务（主动连 hub 或让 hub 来连），见 `docs/link.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
 | `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md` |
-| `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 jarvisd（`deploy/publish.sh`、`deploy/install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock/mock_hub.py`） |
+| `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 personad（`deploy/publish.sh`、`deploy/install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock/mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
 | `deploy/docker/` | hub 的 Docker 部署：`compose.yaml`、`.env.example`、镜像的入口脚本（镜像是仓库根的 `Dockerfile`，`.github/workflows/hub-image.yml` 构建推到 ghcr），见 `docs/docker.md` |
@@ -183,17 +185,17 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 | 文档 | 内容 |
 | --- | --- |
-| `docs/server.md` | jarvisd 各模式、配置、部署、运维 |
+| `docs/server.md` | personad 各模式、配置、部署、运维 |
 | `docs/docker.md` | hub 的两种部署方式（原生二进制 / Docker）、用 Docker 跑 hub（NAS）：compose、镜像标签、PUID / PGID、环境变量、迁移 |
 | `docs/hub-update.md` | hub 的版本、检测更新和自动更新（方案）：skill 从二进制拿出来、一种二进制、签名的版本清单、自动发布和灰度、下载 → 校验 → 等空闲 → 重启 → 回滚、App 里怎么显示 |
-| `docs/push-relay.md` | 推送中继（端到端加密）：没有 APNs key 的 hub 经发布方的 `jarvisd relay` 推送，正文用手机公钥加密、通知服务扩展解密；谁知道什么、防滥用、接口、部署 |
-| `docs/plugins.md` | hub 插件：hub 跑 / 转发外部进程，`/api/v1/plugins`，语音插件和 App 之间的契约；内置的 GPT-Live 语音插件 `jarvisd voice`（上游、两种方言、交给主对话、断线重连） |
+| `docs/push-relay.md` | 推送中继（端到端加密）：没有 APNs key 的 hub 经发布方的 `personad relay` 推送，正文用手机公钥加密、通知服务扩展解密；谁知道什么、防滥用、接口、部署 |
+| `docs/plugins.md` | hub 插件：hub 跑 / 转发外部进程，`/api/v1/plugins`，语音插件和 App 之间的契约；内置的 GPT-Live 语音插件 `personad voice`（上游、两种方言、交给主对话、断线重连） |
 | `docs/ports.md` | 端口转发：node 找出 Agent 在监听的端口、App 认出回答里的 localhost 链接，手机本地监听 + WebSocket 经 hub 转到那台机器，取舍和安全边界 |
 | `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、App 的「机器」页（Agent 和监控合在一起）和机器详情 |
 | `docs/admin.md` | hub 管理界面（`/admin`）：访问范围 `admin.access`（loopback / lan / cidrs / any）和来源判断、管理员密码 / 会话 / CSRF / 限流、改 hub.json、页面和接口、部署时怎么选 |
 | `docs/mesh.md` | hub 互联（单中心）：互联码配对、链路、中心和任期（加入组、设为中心、中心不可达）、成员把 App 请求和电脑交给中心、凭据交接、一台电脑多条路的去重和选路、kind service（hub 拨连接器）、ssh 迁移、管理接口和命令行、怎么验证 |
-| `docs/link.md` | 连接器 jarvis-link 和 node 服务：一条命令 / 一个 App 装好常驻 node + 连接器；主动模式（电脑连 hub 的链路）和被动模式（hub 连电脑：监听、配对码、接口、限流、安全边界）；Mac 菜单栏 App「Jarvis Link」；Linux headless 的 `jarvis-link install / status / mode / node / logs / uninstall` |
+| `docs/link.md` | 连接器 jarvis-link 和 node 服务：一条命令 / 一个 App 装好常驻 node + 连接器；主动模式（电脑连 hub 的链路）和被动模式（hub 连电脑：监听、配对码、接口、限流、安全边界）；Mac 菜单栏 App「Persona Link」；Linux headless 的 `jarvis-link install / status / mode / node / logs / uninstall` |
 
 ### Agent、运行时和终端
 
@@ -208,24 +210,24 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/agent-states.md` | 统一的 Agent 状态（需要你 / 工作中 / 完成未看 / 已看）和 herdr 的对应，空间 / 槽位模型 |
 | `docs/engines.md` | 终端引擎（herdr / Herdr App / Orca）：一机一引擎，怎么切换、切换后会怎样、各引擎能做什么、选不了时查什么 |
 | `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由 |
-| `docs/launchers.md` | 启动器与「设置 › 模型供应商」：~/.zshrc 自动同步 / 隐藏、Jarvis 管理的接入（Key 加密存 hub）、直接 API 与启动器、接口 |
+| `docs/launchers.md` | 启动器与「设置 › 模型供应商」：~/.zshrc 自动同步 / 隐藏、Persona 管理的接入（Key 加密存 hub）、直接 API 与启动器、接口 |
 | `docs/model-config.md` | 统一模型配置：按用途选择供应商、具体模型和选项，继承、持久化、下一次运行生效、任务与插件边界 |
 
 ### 助手、数据源和知识库
 
 | 文档 | 内容 |
 | --- | --- |
-| `docs/assistant.md` | 「Jarvis」tab 的助手（主对话、知识库工具）：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
+| `docs/assistant.md` | 「Persona」tab 的助手（主对话、知识库工具）：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
 | `docs/todos.md` | 待办：记下要做的事并分工给多个 Agent，在待办中看各 Agent 进展，Agents 页按待办分组；状态派生、关联管理与接口 |
-| `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
+| `docs/knowledge.md` | 知识库 `~/.persona/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Persona / AI 分身 / Agents 怎么共用 |
 | `docs/connectors.md` | 连接器：现在的结构（接口、三种跑法、闸门、收件箱、知识库、设置页、怎么加一个），v2 设计（能力清单、统一的增量、有版本号的协议、收件箱的结构化属性、身份线索、网页授权登录、写操作只走工具和闸门）、迁移顺序 V1–V7 和拍板结果 |
 | `docs/inbox.md` | 收件箱：飞书和邮件合成一个列表，一行一件事，AI 分拣、已处理、交给 AI；AI 分身（分拣 → 判断 → Agent 处理并草拟回复，点一下发送） |
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（使用 Google 账号登录，OAuth2 + XOAUTH2）、飞书邮箱（固定 larkoffice.com 服务器）、凭据存储 |
-| `docs/feishu.md` | 飞书在 Jarvis 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
-| `docs/bots.md` | 飞书机器人：私聊机器人就是和 Jarvis 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
+| `docs/feishu.md` | 飞书在 Persona 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
+| `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
-| `docs/recording.md` | 手机和 Apple Watch 录音作为 Jarvis 上下文：分段、本机转写、可靠回传、确认发送与验证边界 |
+| `docs/recording.md` | 手机和 Apple Watch 录音作为 Persona 上下文：分段、本机转写、可靠回传、确认发送与验证边界 |
 
 ### 客户端
 
@@ -234,9 +236,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/ios.md` | iOS / watchOS App：信息架构、设计语言、手机数据工具 |
 | `docs/ios-state.md` | App 的状态和重绘：推送怎么走到屏幕、一次推送的代价、根因、分步根治；真实性 / 及时性的标准和探针（`ScreenProbe`） |
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
-| `docs/siri.md` | Siri 深度集成：问 Jarvis（助手主对话）、让个人 Agent 去做、未读、控制中心 / 操作按钮、Spotlight 索引 |
+| `docs/siri.md` | Siri 深度集成：问 Persona（助手主对话）、让个人 Agent 去做、未读、控制中心 / 操作按钮、Spotlight 索引 |
 | `docs/live-activity.md` | 锁屏 / 灵动岛实时活动（Fleet）：显示什么、和其他 App 共用灵动岛（限宽 / 最小态）、ContentState、hub 的 liveactivity 推送和 push-to-start、怎么在模拟器上验证 |
-| `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
+| `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.persona/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 | `docs/multi-hub.md` | 一台设备连多组 hub：配对注册表和迁移、按 mesh 分组、每组一条连接和选路、按组的键（默认组不变）、合并显示和按组筛选、推送 / 实时活动 / 手表 / Siri 按组路由 |
 | `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`apple/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |
 | `docs/android.md` | Android App：模块职责与依赖、入口接线、常驻连接通知、多 hub（分组、组后缀的会话键、组内换线路）、构建 / 测试 / 假 hub 截图命令 |

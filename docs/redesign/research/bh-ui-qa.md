@@ -1,9 +1,9 @@
-# removed 的界面设计语言、原型评审与测试验收（对照 Jarvis）
+# removed 的界面设计语言、原型评审与测试验收（对照 Persona）
 
 调研日期：2026-10-30。只读调研，没有运行任何构建、测试或脚本。
 
 约定：
-- 路径前缀：`BH:` = removed 仓库根目录，`JV:` = Jarvis 仓库根目录。证据格式为 `前缀:相对路径:行号`，或者写文档的章节名。
+- 路径前缀：`BH:` = removed 仓库根目录，`JV:` = Persona 仓库根目录。证据格式为 `前缀:相对路径:行号`，或者写文档的章节名。
 - **【事实】** 指代码或文档里能直接查到的内容；**【判断】** 是我的推断或建议。
 - 隐私处理：原文里出现的主机名、IP、账号、群名、内部项目名、评审人一律不抄，用占位符代替。性能数字只引用文档里写明是实测的值，并注明出处。文中的 grep 计数是本次统计的「出现次数」，不是性能数据。
 
@@ -15,7 +15,7 @@
   ① 一套「先做 HTML 可点原型 → 写评审文档 → 用户认可后原生落地 → 写验收记录」的流程；
   ② 对「结果待确认 / 待核对」这类不确定状态有统一的文案和图标，并且整个流程里都不做假成功、不偷偷自动重发；
   ③ 首次接入拆成几步：表单、密钥库、分段连接进度、逐跳核对指纹、可跳过的组件安装。每一步都说明会做什么、跳过会少什么。
-- Jarvis 的 token 体系比 removed 完整：有风格 × 语义色、状态色表、圆角、间距、字体角色和动效。问题在于没用起来：`Theme.Font` 在视图里只出现 1 次，`Theme.Space` 也只出现 1 次。重设计时 token 应该从一份 JSON 生成 Swift 和 Kotlin 两端代码，再用脚本或测试守住采用率和对比度。
+- Persona 的 token 体系比 removed 完整：有风格 × 语义色、状态色表、圆角、间距、字体角色和动效。问题在于没用起来：`Theme.Font` 在视图里只出现 1 次，`Theme.Space` 也只出现 1 次。重设计时 token 应该从一份 JSON 生成 Swift 和 Kotlin 两端代码，再用脚本或测试守住采用率和对比度。
 
 ---
 
@@ -95,7 +95,7 @@
 - **详情页**用系统导航栏，并且明确保留系统返回键，注释写「Keep the system back item so UIKit owns edge/content gestures and cancellation」（`BH:.../AgentNavigationBar.swift:5`）。还有一组宿主测试专门检查边缘手势和内容手势的 delegate 没有被换掉（`BH:Packages/removedKit/Tests/removedKitTests/AgentNavigationBarTests.swift`）。
 - **底栏**：自绘的 5 个入口，选中时换填充图标、文字加粗。未读角标超过 999 显示「…」，但无障碍标签读完整数字（`BH:App/removedApp.swift:473-503`；规则见 `BH:docs/LARK_INBOX_UI_REVIEW.md:96`）。
 - **主机层级下沉**：评审之后，Herdr 首页改成「任务优先」。主机压成一条「主机 x/y 已连接」的连接条（`AgentFleetView.swift:310-325`），主机大卡、连接详情、密钥和外观都收进一个独立的面板 sheet（`:326-352`）。点任务直接推进同一个 NavigationStack，返回一次就回到首页（`BH:docs/HERDR_CINDY_REVIEW.md:83-89`）。
-- 【对照】Jarvis 的 Agents 对话页隐藏了系统导航栏，用自绘的 `ChromeHeader`（跟手收起），再用 `SwipeBack.swift` 把 `interactivePopGestureRecognizer` 重新打开（`JV:docs/ios.md:131-139`）。removed 走的是另一条路：详情页保留系统返回键，再写测试守住。
+- 【对照】Persona 的 Agents 对话页隐藏了系统导航栏，用自绘的 `ChromeHeader`（跟手收起），再用 `SwipeBack.swift` 把 `interactivePopGestureRecognizer` 重新打开（`JV:docs/ios.md:131-139`）。removed 走的是另一条路：详情页保留系统返回键，再写测试守住。
 
 ### 1.5 无障碍（动态字体、辅助字号下的布局）
 
@@ -122,11 +122,11 @@
 | 破坏性确认 | `confirmationDialog`，正文写清后果和范围（「同时删除此连接保存的登录凭据。主机上的服务和会话会继续运行。」） | `ConnectionsView.swift:170-183`；`SSHKeyDetailView.swift:124-129`（列出这把密钥在哪些主机上用） |
 | **待确认 / 待核对** | 词汇固定成「…结果待确认」「待核对」「核对…结果」。图标固定：`clock.badge.questionmark`、`clock.badge.exclamationmark`、`exclamationmark.circle`。颜色用橙色。只提供只读的核对操作，**不自动重发** | 设置行尾的「待核对」橙字（`ConnectionsView.swift:54`、`:91`、`:102`、`:113`）；任务行的「状态待核对」（`AgentFleetView.swift:518`）；工作区里的「待核对操作」列表（「发送结果待确认 · 会话名」等，`AgentsView.swift:191-202`）；「核对会话启动结果」「已在主机核对启动结果…」（`:203-218`）；待发队列的 10 种状态，每种有固定文案和图标（`AgentPromptQueueView.swift:168-187`）；README 原则：「发送结果未知时不自动重发」（`BH:README.md:37`） |
 
-【判断】removed 最值得学的是：每种「结果不确定」都有名字、有文案、有图标、有只读的核对入口。代价是文案很长、术语偏工程化，比如「主机接收结果待确认」「核对结论待确认」。Jarvis 的用户就是作者自己，可以借这套结构，但文案要压短。
+【判断】removed 最值得学的是：每种「结果不确定」都有名字、有文案、有图标、有只读的核对入口。代价是文案很长、术语偏工程化，比如「主机接收结果待确认」「核对结论待确认」。Persona 的用户就是作者自己，可以借这套结构，但文案要压短。
 
 ### 1.7 小结【判断】
 
-- 视觉 token：removed 比 Jarvis 弱。字体、间距、圆角都没有 token，字面量多；两套调色板也没有统一的语义层。
+- 视觉 token：removed 比 Persona 弱。字体、间距、圆角都没有 token，字面量多；两套调色板也没有统一的语义层。
 - 组件：靠系统控件加少量自定义件，散在各 Feature 里。
 - 强项：信息架构改版有评审依据；状态和恢复的表达统一；无障碍有具体的布局切换手段；对「什么算通过」有明确的分级。
 
@@ -177,7 +177,7 @@
    - README 强调：网络问题不需要重新导入私钥（`BH:README.md:72`）。
 7. 这套流程**先在 HTML 原型里定稿**（`BH:prototypes/herdr-onboarding/`，01 新建连接 → 02 安装引导 → 03 安装与验证 → 04 开始工作，另外有跳过、旧版本、上传中断、缺依赖四种异常场景），用户确认后才做原生（`BH:prototypes/herdr-onboarding/README.md:1-38`）。
 
-### 2.2 Jarvis 配对的现状【事实】
+### 2.2 Persona 配对的现状【事实】
 
 - `WelcomeView`：App 图标、口号、四条特性介绍、「连接 hub」按钮，下面一行提示「在 hub 所在的机器上运行 `jarvisd hub pair` 显示二维码」（`JV:ios/Jarvis/Views/Settings/SettingsView.swift:220-274`）。
 - `PairView`：
@@ -185,7 +185,7 @@
   - 失败只有一句：「连接失败：…确认手机能访问这个地址（比如在同一个网络或 VPN 上）。」（`:333`）。
 - 配对后，App 用配对 token 换一个本设备专用的 token，之后只用这个；hub 只存哈希（`JV:docs/protocol.md:8-14`）。
 
-### 2.3 Jarvis 可以借鉴的【判断】
+### 2.3 Persona 可以借鉴的【判断】
 
 1. **扫码之后显示分段进度，不要只转圈**：解析二维码 → 连上 hub（DNS / TCP / TLS）→ 校验 token → 换本设备 token → 读取机器列表 → 就绪。每段失败给分类过的提示：
    - DNS 失败：「找不到这个地址」。
@@ -274,7 +274,7 @@
   - 验收记录太长、太密，VALIDATION.md 有 1 MB，查找成本高；
   - 证据放在本机忽略目录里，换台机器就看不到。这次在本机就没找到 `.local-services/`，QA.md 的模板只能从文档里倒推；
   - 原型的 token 是手抄的。
-- 【判断】Jarvis 用的话，每次评审一个 md 加一个原型目录就够；验收记录压成「分级表 + 每条一段」；证据目录不进仓库，但要固定路径约定，写进 `CLAUDE.local.md`。
+- 【判断】Persona 用的话，每次评审一个 md 加一个原型目录就够；验收记录压成「分级表 + 每条一段」；证据目录不进仓库，但要固定路径约定，写进 `CLAUDE.local.md`。
 
 ---
 
@@ -314,7 +314,7 @@
 - **故障注入**：`DebugAgentReplyFault` 只在模拟器、只对回环主机、只在显式参数下生效，只触发一次，丢掉一次「已提交」回执来制造「结果未知」（`BH:App/DebugAgentFixture.swift:8-60`）。
 - **固定上游**：协议依据钉在上游的某个提交，接口清单用 AST 扫描生成（`BH:docs/FEISHU_PARITY.md`「核查基线」；`BH:scripts/audit-lark-connector.mjs`）。
 
-### 4.3 Jarvis 的对应物【事实】
+### 4.3 Persona 的对应物【事实】
 
 - 单测：`JV:ios/JarvisTests` 下 24 个 Swift 文件，外加录制的终端帧 `terminal-*.jsonl`；服务端用 Go 测试，transcript 有脱敏样本做 golden 和语料对比（`JV:docs/testing.md:5-15`、`JV:docs/lanes/msg-render-verification.md`）。
 - UI 测试：`JV:ios/JarvisUITests` 下 16 个 XCUITest 文件，例如 `MessageMenuTests`、`SendSafetyTests`、`ConnectionTests`、`TerminalKeysTests`、`MachinePagesTests`、`LiveActivityShots`。
@@ -327,9 +327,9 @@
 
 ---
 
-## 5. Jarvis 设计系统现状，以及和 removed 的逐项对照
+## 5. Persona 设计系统现状，以及和 removed 的逐项对照
 
-### 5.1 Jarvis 现状【事实】
+### 5.1 Persona 现状【事实】
 
 - **风格 × 语义色**：5 套界面风格 `AppStyle`（液态玻璃 / Claude / 黏土 / Island / 飞书）（`JV:ios/Shared/Theme.swift:5-54`）。
   - 按风格取值的颜色：`accent`、`userBubble`、`userBubbleText`、`pageBackground`、`card`、`cardStroke`（`:66-77`、`:219-269`）。
@@ -372,25 +372,25 @@
 
 ### 5.2 逐项对照
 
-| 维度 | removed | Jarvis | 【判断】谁更好 / 借鉴点 |
+| 维度 | removed | Persona | 【判断】谁更好 / 借鉴点 |
 | --- | --- | --- | --- |
-| 颜色 token | 两套调色板（飞书蓝灰、Herdr 森林绿），没有统一的语义层 | 5 风格 × 语义色，状态色单独成表，对比度规则写成文字 | Jarvis 更完整；缺的是一份机器可读的唯一来源，以及自动的对比度检查 |
-| 字体 | 没有 token；框架部分固定字号，正文用文本样式 | 有角色 token，但几乎没人用；固定字号很少 | Jarvis 方向对，要把角色真正用起来，并用 lint 守住 |
+| 颜色 token | 两套调色板（飞书蓝灰、Herdr 森林绿），没有统一的语义层 | 5 风格 × 语义色，状态色单独成表，对比度规则写成文字 | Persona 更完整；缺的是一份机器可读的唯一来源，以及自动的对比度检查 |
+| 字体 | 没有 token；框架部分固定字号，正文用文本样式 | 有角色 token，但几乎没人用；固定字号很少 | Persona 方向对，要把角色真正用起来，并用 lint 守住 |
 | 间距 / 圆角 | 全是字面量，圆角约 8 档 | 有 token，部分采用 | 两边都需要「token + 检查」 |
-| 组件 | 薄；同一功能有重复实现（两份状态行） | `Chip` 和 `CountBadge` 各只有一种画法，规则写进文档（`JV:docs/ios.md:244-246`） | Jarvis 的「一种东西只有一种画法」值得保留，并扩到状态件和表单件 |
+| 组件 | 薄；同一功能有重复实现（两份状态行） | `Chip` 和 `CountBadge` 各只有一种画法，规则写进文档（`JV:docs/ios.md:244-246`） | Persona 的「一种东西只有一种画法」值得保留，并扩到状态件和表单件 |
 | 导航 | 根页面自绘紧凑顶栏，详情页保留系统返回，用宿主测试守手势 | 对话页自绘可收起的顶栏，再手动恢复边缘返回 | Android 应该交给系统的预测性返回，不要自绘手势 |
 | 无障碍 | 辅助字号下切布局（28 处），减少动态效果，计数角标读完整值 | 文本样式和图标上限做得好，但辅助字号下没有切布局 | 借 removed 的「辅助字号 → 竖排 / 隐藏装饰 / 放开行数」三招 |
 | 空 / 错 / 载 | `ServiceStatusView` 加系统 `ContentUnavailableView`；错误就近显示加重试 | `EmptyStateView` 加系统组件；取消和离线类错误不显示；先画缓存、不转圈 | 合成一个「页面状态」组件族，两端同名同参数 |
-| 待确认 | 词汇、图标、只读核对入口统一，从不自动重发 | Outbox 自动重发，靠 `client_msg_id` 幂等；一次性操作不排队 | 前提不同：Jarvis 有 hub 能保证幂等，所以可以自动重发。但 removed 那种「有名字的不确定状态」可以收成一个组件，比如「发送中 / 连上后发送 / 未生效」 |
+| 待确认 | 词汇、图标、只读核对入口统一，从不自动重发 | Outbox 自动重发，靠 `client_msg_id` 幂等；一次性操作不排队 | 前提不同：Persona 有 hub 能保证幂等，所以可以自动重发。但 removed 那种「有名字的不确定状态」可以收成一个组件，比如「发送中 / 连上后发送 / 未生效」 |
 | 原型 | HTML 原型加 README（边界、验证记录） | 没有（只有 `docs/screenshots`） | 引入 |
 | 评审 | 借鉴评审 / 同机对照 / 修复清单三种文档 | 「车道」文档偏数据链路（`JV:docs/lanes/`） | 引入 UI 评审模板 |
 | 验收分级 | 已开发 → 协议 → 模拟器 → 真实账号 → 真机 | 没有分级；界面清单 5 行 | 引入分级和每页清单（两端各一列） |
-| UI 自动化 | 没有 XCUITest；用进程内宿主测试，加隔离 QA 模拟器和 CUA 截图 | 16 个 XCUITest 加 mock hub，逐步截图，深浅色各一遍 | Jarvis 更自动化；可以补进程内的组件快照 |
-| fixture | 合成服务、`/__fixture` 控制接口、请求统计、故障开关、魔法输入、固定上游契约 | `mock_hub.py`、`MOCK_*` 开关、`/mock/*` 读回、真实样本脱敏后做 golden | 两边思路接近。Jarvis 可以补：mock 的契约要和真实 hub 一起测，比如在 Go 测试里校验 mock 响应的 schema |
+| UI 自动化 | 没有 XCUITest；用进程内宿主测试，加隔离 QA 模拟器和 CUA 截图 | 16 个 XCUITest 加 mock hub，逐步截图，深浅色各一遍 | Persona 更自动化；可以补进程内的组件快照 |
+| fixture | 合成服务、`/__fixture` 控制接口、请求统计、故障开关、魔法输入、固定上游契约 | `mock_hub.py`、`MOCK_*` 开关、`/mock/*` 读回、真实样本脱敏后做 golden | 两边思路接近。Persona 可以补：mock 的契约要和真实 hub 一起测，比如在 Go 测试里校验 mock 响应的 schema |
 
 ---
 
-## 6. 对 Jarvis 重设计和 Android 复刻的建议【全部是判断】
+## 6. 对 Persona 重设计和 Android 复刻的建议【全部是判断】
 
 ### 6.1 设计 token：一份 JSON，生成 Swift / Kotlin / CSS
 
@@ -414,7 +414,7 @@
   - `prototypes/_tokens.css`：给 HTML 原型用，解决 removed 原型手抄色值的问题；
   - `docs/design-tokens.md`：自动生成的色板和尺寸表；
   - 一个 `--check` 模式：重新生成后和仓库里的文件比对，加上对比度检查，接进 pre-commit 或发版脚本。
-  - 另一个选择是 Style Dictionary（Node），它有 Swift 和 Compose 的输出，但要多引入一套 Node 工具链。Jarvis 的工具都是 Python，所以我倾向自己写生成器，几百行以内。
+  - 另一个选择是 Style Dictionary（Node），它有 Swift 和 Compose 的输出，但要多引入一套 Node 工具链。Persona 的工具都是 Python，所以我倾向自己写生成器，几百行以内。
 - **守住采用率**：用简单的 grep 规则，配一个白名单文件，挂在 pre-commit 或 CI 上，禁止在 token 文件之外出现：
   - `Color(red:` / `Color(light:`、直接用 `.orange` / `.red` 这类系统色；
   - `cornerRadius: <非零字面量>`；
@@ -439,7 +439,7 @@
 
 ### 6.3 导航和无障碍的跨端规则
 
-- 根页面可以用紧凑的自绘顶栏，连接状态放标题位（Jarvis 已有）。详情页用系统导航和返回：
+- 根页面可以用紧凑的自绘顶栏，连接状态放标题位（Persona 已有）。详情页用系统导航和返回：
   - iOS 维持现状；新页面尽量像 removed 那样保留系统返回，用宿主测试守住手势。
   - Android 用系统的预测性返回加 Navigation Compose，不自绘边缘手势。
 - 「辅助字号」规则写进组件规格，两端同一份：
@@ -461,9 +461,9 @@
 | 人工验收 | 每页清单加分级 | 同一个 | 见 6.5 |
 
 - 截图评审：每个 UI 改动跑一遍截图集（浅深色 × 字号 × 两端），拼成一张对照图给用户看；用户认可后再更新基线。截图只来自 mock，真实数据的截图只放在本机被忽略的目录里，和 removed 一样。
-- 沿用 Jarvis 已有的好规矩：先写会失败的 UI 测试；DEBUG 参数直达页面（Android 对应 `adb shell am start` 加 extras 或 debug deep link）；隐私扫描要覆盖 Android 目录。
+- 沿用 Persona 已有的好规矩：先写会失败的 UI 测试；DEBUG 参数直达页面（Android 对应 `adb shell am start` 加 extras 或 debug deep link）；隐私扫描要覆盖 Android 目录。
 
-### 6.5 评审和验收流程（给 Jarvis 定的模板）
+### 6.5 评审和验收流程（给 Persona 定的模板）
 
 1. **原型**：`prototypes/<主题>/`，用 `_tokens.css`；手机框做 iPhone 393 和 Android 约 360dp 两种；深浅色；窄屏；减少动态效果；把异常场景做成按钮；README 写四块：范围、可体验、和原生的边界、验证记录。
 2. **评审文档**：`docs/reviews/<日期>-<主题>.md`。
@@ -486,9 +486,9 @@
 - 没有在浏览器里运行 removed 的 HTML 原型，没看实际效果，也没截图，只读了源码和 README。
 - removed 在 iOS 27.1 上的自适应 tab（依赖 `toolbarVerticalEdge`）没有实际验证，只依据代码和 VALIDATION「Duo 主 Tab」一节的记录。
 - 没有深入看 removed 的 `MessagingFeature` 聊天正文组件（气泡、富文本），也没看 PeopleFeature 等飞书页面的视觉细节。
-- Jarvis 文档提到的 themes-fix 对比度报告（`JV:docs/ios.md:223`）不在仓库里，对比度数字没有复核。
+- Persona 文档提到的 themes-fix 对比度报告（`JV:docs/ios.md:223`）不在仓库里，对比度数字没有复核。
 - Android 截图工具（Roborazzi / Paparazzi / Compose Preview Screenshot Testing）的版本和成熟度只做了一次网页搜索；第三方的速度对比结论互相矛盾，**没有实测**，不引用任何速度数字。DTCG 规范和 Style Dictionary 的现状也没有核实。
-- 没有看 Jarvis 手表端和实时活动的设计细节，只知道它们共用 `StatusPalette`。
+- 没有看 Persona 手表端和实时活动的设计细节，只知道它们共用 `StatusPalette`。
 
 ## 附：外部参考（网页搜索，2026-10-30）
 
