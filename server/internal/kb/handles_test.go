@@ -2,6 +2,8 @@ package kb
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,10 +45,22 @@ func TestHashHandle(t *testing.T) {
 	if HashHandle([]byte("another key, also 32 bytes long!"), Handle{HandleEmail, "a@b"}) == HashHandle(key, Handle{HandleEmail, "a@b"}) {
 		t.Error("the key does not matter")
 	}
+	for _, vector := range []struct {
+		hint Handle
+		want string
+	}{
+		{Handle{HandlePhone, handleTestPhone}, handleTestPhoneHash},
+		{Handle{HandlePhone, handleTestPhoneE164}, handleTestPhoneHash},
+		{Handle{HandleEmail, handleTestEmail}, handleTestEmailHash},
+	} {
+		if got := HashHandle(key, vector.hint); got != vector.want {
+			t.Errorf("HMAC differs from independently calculated vector: %q", got)
+		}
+	}
 }
 
-// A sender's hints are kept hashed in handles.json, the same address from two sources hashing the same; the raw
-// address or number is written nowhere, and meta.json (what kb_get and search show) has none of them.
+// Only exact HMACs belong in handles.json. Full raw/normalized hints and handle structures must not be exposed in
+// any other file or kb_get output; legitimate timestamps containing the old short sentinels must remain valid.
 func TestPeopleKeepHashedHandles(t *testing.T) {
 	st, err := NewStore(t.TempDir())
 	if err != nil {
@@ -54,54 +68,131 @@ func TestPeopleKeepHashedHandles(t *testing.T) {
 	}
 	e := &Engine{Store: st, HandleKey: []byte("0123456789abcdef0123456789abcdef")}
 	ctx := context.Background()
-	at := time.Now().Add(-time.Hour)
-	// iMessage: the id is a hash already; the hint is the raw number and address.
+	// Preserve the timestamp collision that used to produce four false positives, without aging out retention.
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second).Add(555019900 * time.Nanosecond)
+	started := time.Now().UTC()
+	imID, mailID := PersonID("imessage", "0a1b2c"), PersonID("mail", "sender-2")
+	// Source IDs are opaque so a legitimate identity cannot mask a leaked email hint.
 	if _, err := e.Ingest(ctx, named("imessage"), SourceChat{ID: "c1", Name: "示例"}, []SourceMessage{
 		{ID: "1", SenderID: "0a1b2c", SenderName: "张三", Text: "在吗", At: at, Type: "TEXT",
-			SenderHandles: []Handle{{HandlePhone, "+1 555 010 0199"}, {HandleEmail, "Zhang@Example.com"}}},
+			SenderHandles: []Handle{{HandlePhone, handleTestPhone}, {HandleEmail, handleTestEmail}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// mail: the same address.
-	if _, err := e.Ingest(ctx, named("mail"), SourceChat{ID: "acc-zhang", Name: "张三 · 邮件"}, []SourceMessage{
-		{ID: "2", SenderID: "zhang@example.com", SenderName: "张三", Text: "附件", At: at, Type: "TEXT",
-			SenderHandles: []Handle{{HandleEmail, "zhang@example.com"}}},
+	if _, err := e.Ingest(ctx, named("mail"), SourceChat{ID: "acc-2", Name: "张三 · 邮件"}, []SourceMessage{
+		{ID: "2", SenderID: "sender-2", SenderName: "张三", Text: "附件", At: at, Type: "TEXT",
+			SenderHandles: []Handle{{HandleEmail, strings.ToLower(handleTestEmail)}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	im, ml := st.PersonHandles(PersonID("imessage", "0a1b2c")), st.PersonHandles(PersonID("mail", "zhang@example.com"))
-	if len(im) != 2 || len(ml) != 1 || !strings.Contains(strings.Join(im, " "), ml[0]) {
-		t.Fatalf("imessage %v, mail %v", im, ml)
+	// Seen again with different formatting: neither a duplicate nor a different hash may be added.
+	if _, err := e.Ingest(ctx, named("mail"), SourceChat{ID: "acc-2", Name: "张三 · 邮件"}, []SourceMessage{
+		{ID: "3", SenderID: "sender-2", SenderName: "张三", Text: "再发一次", At: at.Add(time.Minute), Type: "TEXT",
+			SenderHandles: []Handle{{HandleEmail, strings.ToUpper(handleTestEmail)}}},
+	}); err != nil {
+		t.Fatal(err)
 	}
-	// Seen again: nothing added.
-	_, _ = e.Ingest(ctx, named("mail"), SourceChat{ID: "acc-zhang", Name: "张三 · 邮件"}, []SourceMessage{
-		{ID: "3", SenderID: "zhang@example.com", SenderName: "张三", Text: "再发一次", At: at.Add(time.Minute), Type: "TEXT",
-			SenderHandles: []Handle{{HandleEmail, "ZHANG@example.com"}}}})
-	if got := st.PersonHandles(PersonID("mail", "zhang@example.com")); len(got) != 1 {
-		t.Fatalf("added again: %v", got)
+	if _, err := e.Ingest(ctx, named("imessage"), SourceChat{ID: "c1", Name: "示例"}, []SourceMessage{
+		{ID: "4", SenderID: "0a1b2c", SenderName: "张三", Text: "再发一次", At: at, Type: "TEXT",
+			SenderHandles: []Handle{{HandlePhone, handleTestPhoneE164}}},
+	}); err != nil {
+		t.Fatal(err)
 	}
-	_ = filepath.WalkDir(st.Dir, func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+	for id, want := range map[string][]string{imID: {handleTestPhoneHash, handleTestEmailHash}, mailID: {handleTestEmailHash}} {
+		raw, err := json.Marshal(st.PersonHandles(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := checkStoredHandles(raw, want); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+	for id, wantAt := range map[string]time.Time{ChatID("imessage", "c1"): at, ChatID("mail", "acc-2"): at.Add(time.Minute)} {
+		chat, ok := st.Chat(id)
+		if !ok || !chat.LastAt.Equal(wantAt) || chat.Created.Before(started) || chat.Created.After(time.Now().UTC()) {
+			t.Fatalf("%s has invalid timestamp metadata: %+v", id, chat)
+		}
+	}
+	for _, id := range []string{imID, mailID} {
+		person, ok := st.Person(id)
+		if !ok || !person.LastSeen.Equal(at) {
+			t.Fatalf("%s did not preserve the legitimate fractional timestamp: %+v", id, person)
+		}
+	}
+	// Without a key no handle file may exist, not even an empty one.
+	e.HandleKey = nil
+	noKeyID := PersonID("github", "sender-3")
+	if _, err := e.Ingest(ctx, named("github"), SourceChat{ID: "pr1", Name: "PR"}, []SourceMessage{
+		{ID: "5", SenderID: "sender-3", SenderName: "alice", Text: "LGTM", At: at, Type: "TEXT",
+			SenderHandles: []Handle{{HandleGitHub, "alice"}, {HandlePhone, handleTestPhone}, {HandleEmail, handleTestEmail}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(st.Path(KindPerson, noKeyID, "handles.json")); !os.IsNotExist(err) {
+		t.Fatalf("handle file exists without a key, or lookup failed: %v", err)
+	}
+	wantFiles := map[string][]string{
+		filepath.Join(KindPerson, imID, "handles.json"):   {handleTestPhoneHash, handleTestEmailHash},
+		filepath.Join(KindPerson, mailID, "handles.json"): {handleTestEmailHash},
+	}
+	seenFiles := 0
+	if err := filepath.WalkDir(st.Dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
 			return err
 		}
-		raw, _ := os.ReadFile(p)
-		if strings.Contains(string(raw), "555") || strings.Contains(string(raw), "0199") {
-			t.Errorf("%s holds the number", p)
+		if d.IsDir() {
+			return nil
 		}
-		if filepath.Base(p) == "meta.json" && strings.Contains(string(raw), "email:") {
-			t.Errorf("%s holds a hint", p)
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(st.Dir, p)
+		if err != nil {
+			return err
+		}
+		if filepath.Base(p) == "handles.json" {
+			want, ok := wantFiles[rel]
+			if !ok {
+				return fmt.Errorf("unexpected handle file %s", rel)
+			}
+			seenFiles++
+			return checkStoredHandles(raw, want)
+		}
+		if err := checkHandleText(rel); err != nil {
+			return fmt.Errorf("%s: %w", rel, err)
+		}
+		if filepath.Ext(p) == ".json" {
+			err = checkHandleJSON(raw)
+		} else {
+			err = checkHandleText(string(raw))
+		}
+		if err != nil {
+			return fmt.Errorf("%s: %w", rel, err)
 		}
 		return nil
-	})
-	d, err := e.Get(KindPerson, PersonID("imessage", "0a1b2c"), 1000)
-	if err != nil || strings.Contains(string(d.Meta), "email:") || strings.Contains(string(d.Meta), "phone:") {
-		t.Fatalf("kb_get shows hints: %v %s", err, d.Meta)
+	}); err != nil {
+		t.Fatal(err)
 	}
-	// Without the hub's key nothing is kept.
-	e.HandleKey = nil
-	_, _ = e.Ingest(ctx, named("github"), SourceChat{ID: "pr1", Name: "PR"}, []SourceMessage{
-		{ID: "4", SenderID: "alice", SenderName: "alice", Text: "LGTM", At: at, Type: "TEXT", SenderHandles: []Handle{{HandleGitHub, "alice"}}}})
-	if got := st.PersonHandles(PersonID("github", "alice")); got != nil {
-		t.Fatalf("kept without a key: %v", got)
+	if seenFiles != len(wantFiles) {
+		t.Fatalf("checked %d handle files, want %d", seenFiles, len(wantFiles))
+	}
+	for kind, ids := range map[string][]string{
+		KindPerson: {imID, mailID, noKeyID},
+		KindChat:   {ChatID("imessage", "c1"), ChatID("mail", "acc-2"), ChatID("github", "pr1")},
+	} {
+		for _, id := range ids {
+			detail, err := e.Get(kind, id, 1000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := json.Marshal(detail)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := checkHandleJSON(raw); err != nil {
+				t.Fatalf("kb_get %s/%s: %v", kind, id, err)
+			}
+		}
 	}
 }
