@@ -231,9 +231,10 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorBot") { p.append(SettingsPage.feishuBot) }
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
-        else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | icon | layout
+        else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | icon | layout | scheme
             p.append(a == "color" ? SettingsPage.themeColor : a == "style" ? SettingsPage.style
-                     : a == "icon" ? SettingsPage.appIcon : a == "layout" ? SettingsPage.layout : SettingsPage.persona)
+                     : a == "icon" ? SettingsPage.appIcon : a == "layout" ? SettingsPage.layout
+                     : a == "scheme" ? SettingsPage.colorScheme : SettingsPage.persona)
         }
         else if d.bool(forKey: "openModelConfiguration") {
             p.append(SettingsPage.modelConfiguration)
@@ -278,7 +279,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case persona, themeColor, style, appIcon, layout, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
+    case persona, themeColor, style, appIcon, layout, colorScheme, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
     /// 设置 › hub: the hubs paired, by group (docs/multi-hub.md).
     case hubs
     case hub, skills
@@ -315,8 +316,9 @@ private struct SettingsDestinations: ViewModifier {
         #endif
         #if os(iOS)
         case .layout: LayoutSettingsPage()
+        case .colorScheme: ColorSchemeSettingsPage()
         #else
-        case .layout: EmptyView()
+        case .layout, .colorScheme: EmptyView()
         #endif
         case .assistant: AssistantProfileView()
         case .claude: ClaudeSettingsView()

@@ -44,6 +44,10 @@ struct RootView: View {
         // List and sheet below. UIKit scroll views (MonoTextView, the terminal, web views) turn theirs off themselves.
         .scrollIndicators(.hidden)
         .overlay(alignment: .top) { ToastOverlay() }
+        #if os(iOS)
+        // 设置 › 外观 › 深浅色 on this scene's window (and any other open one) as it first shows.
+        .onAppear { model.colorScheme.apply() }
+        #endif
         #if DEBUG
         .overlay(alignment: .bottomTrailing) { PerfCountProbe() }
         .screenProbe("connection", ConnectionShown(shown: "\(model.connection.shown)", network: model.connection.networkUp))

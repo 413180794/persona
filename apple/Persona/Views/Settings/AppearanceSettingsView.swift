@@ -26,6 +26,11 @@ struct AppearanceSection: View {
                 }
                 .accessibilityIdentifier("settings-style")
                 #if os(iOS)
+                NavigationLink(value: SettingsPage.colorScheme) {
+                    SettingsRow(title: "深浅色", symbol: Theme.Icon.colorScheme, tint: Theme.Hue.indigo,
+                                value: model.colorScheme.title, look: .oneLine)
+                }
+                .accessibilityIdentifier("settings-scheme")
                 if model.appIcon.available {
                     NavigationLink(value: SettingsPage.appIcon) {
                         SettingsRow(title: "App 图标", symbol: Theme.Icon.appIcon, tint: Theme.Hue.orange,
@@ -170,6 +175,54 @@ struct LayoutSettingsPage: View {
 #endif
 
 #if os(iOS)
+#if DEBUG
+/// `probe.scheme` (`-probes YES`): the choice and the look the page is actually drawn in (ColorSchemeIconTests).
+private struct SchemeProbe: ViewModifier {
+    let choice: ColorSchemeChoice
+    @Environment(\.colorScheme) private var shown
+
+    func body(content: Content) -> some View {
+        content.screenProbe("scheme", Value(choice: choice.rawValue, shown: shown == .dark ? "dark" : "light"))
+    }
+
+    struct Value: Encodable, Equatable {
+        var choice: String
+        var shown: String
+    }
+}
+#endif
+
+/// 设置 › 外观 › 深浅色: 跟随系统 / 浅色 / 深色 (`ColorSchemeChoice`), the system's own inline picker.
+struct ColorSchemeSettingsPage: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        List {
+            Section {
+                Picker("深浅色", selection: Binding(get: { model.colorScheme }, set: { model.colorScheme = $0 })) {
+                    ForEach(ColorSchemeChoice.allCases) { c in
+                        Label { Text(c.title).lineLimit(1) } icon: { Image(systemName: c.symbol) }
+                            .tag(c)
+                            .accessibilityIdentifier("scheme-\(c.rawValue)")
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            } footer: {
+                Text("跟随系统时，手机换深浅色 App 跟着换。选了浅色或深色，App 里的界面就一直是那样；App 图标是纸色（默认）或蜜桃时，主屏上的图标也换成浅色或深色那张（系统会提示一次）。灵动岛、锁屏的实时活动、小组件和手表仍跟随系统。")
+            }
+        }
+        .themedGroupedPage()
+        #if DEBUG
+        .modifier(SchemeProbe(choice: model.colorScheme))
+        #endif
+        .navigationTitle("深浅色")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+#endif
+
+#if os(iOS)
 /// 设置 › 外观 › App 图标: the home screen icon, each choice drawn as it looks on the home screen now (light or dark).
 /// The system confirms a switch with its own alert.
 struct AppIconSettingsPage: View {
@@ -194,13 +247,25 @@ struct AppIconSettingsPage: View {
                 if let failure = icons.failure {
                     Text(failure).foregroundStyle(Theme.danger)
                 } else {
-                    Text("只换主屏上的图标，App 里的颜色和形象不变。深色模式和「着色」主屏的图标跟着系统换。")
+                    Text("只换主屏上的图标，App 里的颜色和形象不变。深色模式和「着色」主屏的图标跟着系统换；纸色和蜜桃还跟着 设置 › 外观 › 深浅色：选了浅色或深色，就一直是那一张。")
                 }
             }
         }
         .themedGroupedPage()
         .navigationTitle("App 图标")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The look the home screen shows a choice in: 纸色 / 蜜桃 under 浅色 / 深色 take that look (#710); the others, and
+    /// 跟随系统, the system's. Read off the screen: the window carries the app's own 深浅色.
+    private func homeScreenLook(_ c: AppIconChoice) -> ColorScheme {
+        switch (c.followsScheme, model.colorScheme) {
+        case (true, .light): return .light
+        case (true, .dark): return .dark
+        default:
+            let screen = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
+            return screen?.traitCollection.userInterfaceStyle == .dark ? .dark : .light
+        }
     }
 
     private func tile(_ c: AppIconChoice, icons: AppIconModel) -> some View {
@@ -210,13 +275,14 @@ struct AppIconSettingsPage: View {
         return Button {
             guard !selected else { return }
             Haptics.tap()
-            Task { await icons.select(c) }
+            Task { await icons.select(c, scheme: model.colorScheme) }
         } label: {
             VStack(spacing: Theme.Space.s) {
                 Image(c.preview)
                     .resizable()
                     .interpolation(.high)
                     .frame(width: side, height: side)
+                    .environment(\.colorScheme, homeScreenLook(c))
                     .clipShape(shape)
                     .overlay(shape.stroke(Theme.cardStroke, lineWidth: Theme.Size.line))
                     .overlay {

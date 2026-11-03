@@ -383,6 +383,8 @@ nonisolated enum Theme {
         static let orange = Color(light: 0xB35400, dark: 0xFF9F0A)
         static let green = Color(light: 0x1D7A4C, dark: 0x4CC38A)
         static let purple = Color(light: 0x7A5AF8, dark: 0x9D8BFF)
+        /// System indigo.
+        static let indigo = Color(light: 0x5856D6, dark: 0x5E5CE6)
         /// A quiet mark: a list row's tile that is information, not a place to go.
         static let gray = Color(light: 0x8E8E93, dark: 0x636366)
     }

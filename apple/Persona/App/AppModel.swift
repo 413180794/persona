@@ -1546,6 +1546,20 @@ final class AppModel {
         didSet { UserDefaults.standard.set(textSize.rawValue, forKey: "ui.textSize") }
     }
 
+    /// 跟随系统 / 浅色 / 深色 (设置 › 外观 › 深浅色), on the app's windows; RootView puts it on a new window. Nothing is
+    /// rebuilt (`look` stays): the tokens are dynamic colors and follow the window's style. The app icons that follow it
+    /// (`AppIconChoice.followsScheme`: 纸色, the default, and 蜜桃) switch to that look too.
+    var colorScheme: ColorSchemeChoice = ColorSchemeChoice.current {
+        didSet {
+            UserDefaults.standard.set(colorScheme.rawValue, forKey: ColorSchemeChoice.key)
+            #if os(iOS)
+            colorScheme.apply()
+            // 纸色 / 蜜桃 on the home screen take the same look.
+            Task { await appIcon.follow(colorScheme) }
+            #endif
+        }
+    }
+
     // MARK: Snapshot
 
     nonisolated private struct DevSnapshot: Codable, Sendable {

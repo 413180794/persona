@@ -414,7 +414,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - 检查（JarvisTests，扫源码）：`TypeScaleTests`（不写系统字号、不写死字号、强调用 `labelStrong` 这类 token 而不是在级别上 `.weight(`、
     竖向间距在网格上）、`IconVocabularyTests`、`TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；
     减少后删掉 `TokenBaseline.json` 重跑一次记下新的基线）、`StyleSpecTests`。Debug 编译对超过 150ms 的类型检查报警告（发版机器会超时）。
-- 设置 › 外观（2026-11-01 用户要求，照「连接器」的样子）：设置首页一组四行「形象」「主题色」「界面风格」「布局」（布局只在 iPhone），右边是当前值，每行点进去是自己的配置页（`AppearanceSettingsView.swift`）。
+- 设置 › 外观（2026-11-01 用户要求，照「连接器」的样子）：设置首页一组「形象」「主题色」「界面风格」「深浅色」「App 图标」「布局」（深浅色和 App 图标只在 iPhone / iPad，布局只在 iPhone），右边是当前值，每行点进去是自己的配置页（`AppearanceSettingsView.swift`）。
 - 外观是设置 › 外观里三个互不影响的选择（2026-10-31 用户要求：「形象，主题色和 UI 组件的选择」分开；以前一个界面风格同时管颜色和组件，
   形象又盖掉主色，选了黏土再选奶娃紫色就没了，想要 Claude 的珊瑚橙配 Island 的卡片也做不到）：
   - **形象**（`PersonaPicker`，`docs/persona.md`）：名字、头像、顶栏的状态圆点和动画，不改颜色。
@@ -453,6 +453,29 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   （`LarkColor.blue` 链接 / 选中 / 新消息线、自己的气泡）跟着主题色走（主题色「飞书蓝」是 lark-connector 自己的那套），卡片底和描边跟着风格走，卡片内容的飞书具名色板不变。
   调试：`-ui.style glass|clay|island|lark|beautiful`、`-ui.color style|persona|blue|coral|lavender|teal|lark`（UserDefaults 参数域，Release 也认，不算 DEBUG 开关；
   `-ui.style claude` 仍当液态玻璃 + 珊瑚橙）。
+- **深浅色**（2026-11-03，#710）：设置 › 外观 › 深浅色，跟随系统（默认，和以前一样）/ 浅色 / 深色（`ColorSchemeChoice`，存 `ui.scheme`，只在 iPhone / iPad）。
+  - 生效在窗口上：`overrideUserInterfaceStyle`（`ColorSchemeChoice.apply`，所有场景的所有窗口），换选项时由 `AppModel.colorScheme` 套上，新窗口（启动、
+    iPad 另开一个场景）由 RootView 的 `onAppear` 套上。sheet、弹窗、键盘、WebView 里的网页（`prefers-color-scheme`）跟着窗口走。
+    不用 `preferredColorScheme`：它设回 nil 时，开着的 sheet 不一定回到系统的样子；而窗口的 `.unspecified` 就是交还给系统。
+  - 不整棵重建（`look` 不变）：token 都是按 trait 取值的动态颜色，窗口的 trait 一变就重画；只读 `@Environment(\.colorScheme)` 的视图也跟着变。
+    自己强制深浅色的地方不受影响（图片编辑器、消息菜单是深色，分享卡片、终端按自己的设置）。
+  - 系统画的东西仍跟随系统：灵动岛和锁屏的实时活动、小组件、手表、通知，以及 App 启动时的启动屏（`LaunchBackground`）。
+  - App 图标跟着走（2026-11-03 用户要求：浅色用浅色那张，深色用深色那张）：主屏图标用哪一面由系统按主屏的外观选，App 改不了，
+    所以纸色（默认图标）和蜜桃各多两套备用图标集：`AppIcon-PaperLight|PeachLight` 两种外观都是浅色那张、`…Dark` 都是深色那张（着色照旧），
+    `make_alt_icons.py` 从 `AppIcon` / `AppIcon-Peach` 的图写出来，不进设置页的格子。选了浅色 / 深色时 `AppIconModel.follow` 换到那一套，
+    跟随系统换回两面都有的那套（纸色就是主图标）；选图标时也按当前的深浅色挑（`AppIconChoice.iconName(for:)`）。
+    每次换系统都会弹「已更改图标」的提示（换图标的 API 就是这样，绕不过）；p.、气场只有一套，不动。
+    `AppIconModel` 记着最新的深浅色：切换还在进行时（系统的提示框还没点）又改了深浅色，这次切完会再核对一遍、接着切到最新的那套，
+    不会停在错的上面（geminiwen 对 #714 的评审）；App 每次回到前台也 `follow` 一次（启动参数给的深浅色、被系统打断的切换都能对上），
+    已经对上就什么都不做、不弹提示。系统里记着这一版已经删掉的图标（余烬 / 薄荷 / 石墨）时不动它：主屏本来就显示主图标，
+    回到前台自己去切会凭空弹提示。
+    App 图标页的预览按主屏实际显示的那一面画：纸色、蜜桃在浅色 / 深色下画那一面，其他和跟随系统画系统的那一面（读屏幕的 trait，
+    窗口的已经被 App 的深浅色盖住了）。调试命令 `set-appearance` 也走 `AppModel.colorScheme`（会存下来）。
+    UI 测试 `ColorSchemeIconTests`（体验模式）用 `probe.scheme` 查页面真的画成了那一面，失败时 tearDown 换回跟随系统；
+    iOS 26.0.1 模拟器不支持备用图标（`supportsAlternateIcons` 为 false），主屏图标的切换要真机看。
+  - 第一步先在液态玻璃下检查（列表、玻璃表面、玻璃按钮、sheet）；其他风格本来就适配系统深色，机制相同。Mac 和 Android 还没有这个选项：
+    Mac 上只设 `NSApp.appearance` 时 List 的行仍是浅色的颜色（`MacSnapshot.colorScheme` 的注释），每个窗口还要 `preferredColorScheme`，另做。
+  - 调试：`-ui.scheme light|dark|system`（UserDefaults 参数域，和 `-ui.style` 一样）；`-tab settings -openAppearance scheme` 打开这一页。
 - 状态色不随风格变，只有一张表 `Shared/StatusPalette.swift`（App、手表、实时活动都编译它）：需要你红、工作中琥珀、完成未看绿、已看灰、未运行浅灰，和 herdr 侧边栏一致（`docs/agent-states.md`）。每种状态三个值：`dot`（圆点、图标、填充）、`text`（同色相加深，小字对白底 ≥ 4.5:1）、`tint`（浅底）；界面用 `AgentState.tone`。提问 / 计划 / 授权 / 终端对话框都算需要你，一律用红；工作中的转圈用琥珀，旁边的字用次要灰。不是 Agent 状态的东西不借状态色，用 `Theme` 里各自的 token：`Theme.Diff`（diff 和 Git 的 ± 符号、计数、浅底，正文保持黑字）、`caution`（连接中、过期、截断、版本不一致这类提醒，配三角图标，不画成圆点）、`ai`（✦ AI 摘要）、`loop`（循环和待唤醒）、`positive`（成功、已连接、在线、做完的待办）、`Hue`（只用来区分类别，比如记忆类型）。权限模式标签是中性的，只有「全部放行」用红。
 - Agents 列表的一行（`SlotRow`）：状态点 + 标题 + 时间；最新一句；元信息一行「需要你 · Claude · 空间 › tab · 机器」，普通字体、次要灰。只有需要你写成字（红），其余状态只看圆点（完成未看另把标题加粗）；以前 tab 名着色胶囊、状态字、描边的 Agent 种类挤在第一行，把状态说了三遍。空间标题的状态计数是彩色圆点 + 次要灰数字。
 - Token（`Theme.swift`，页面只引用）：圆角 `Theme.Radius` 五档（badge 6 / control 10 / card 14 / bubble 20 / panel 22，外加胶囊和圆）；
@@ -519,6 +542,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - 2026-11-03 去掉了「余烬」「薄荷」「石墨」（原默认图标的换色变体）和原默认图标本身（用户：太丑）。选过它们的人，系统找不到那个图标集，
     主屏回到默认图标；`AppIconChoice(iconName:)` 把认不出的名字读成默认，设置页里也显示纸色，再选一次别的就好。
   - 蜜桃和纸色一样是挑定的 PNG：`AppIcon-Peach.appiconset` 的 `icon.png`、`icon-dark.png` 是素材，`make_alt_icons.py` 派生着色那张和预览。
+    纸色和蜜桃还跟着 设置 › 外观 › 深浅色（只有浅色 / 只有深色的 `…Light` / `…Dark` 四套，见上面「深浅色」）。
   - 资源：`scripts/assets/make_alt_icons.py` 画出 `AppIcon-Didot`、`AppIcon-Aura` 两个图标集（any / dark / tinted），给蜜桃派生着色那张，
     再从每个图标集（含默认的）缩出设置页用的预览 `AppIcons/app-icon-*`（any / dark），改了画法重跑脚本。
     这个脚本每次重画 Didot，深色那张的字节会变（图一样）：只为刷新预览跑的话，只提交自己改的文件。

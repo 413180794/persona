@@ -97,6 +97,12 @@ extension Theme {
         static let appIcon = "app.badge"
         /// 设置 › 外观 › 布局 (the shell or the old tabs).
         static let layout = "rectangle.topthird.inset.filled"
+        /// 设置 › 外观 › 深浅色, and its 跟随系统.
+        static let colorScheme = "circle.lefthalf.filled"
+        /// 深浅色 › 浅色.
+        static let lightMode = "sun.max"
+        /// 深浅色 › 深色.
+        static let darkMode = "moon"
         /// Open the thing the row points at (a sub-Agent, a card's link).
         static let open = "arrow.up.right"
         /// Open a file or a document in its viewer.

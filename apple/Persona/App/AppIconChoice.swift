@@ -56,10 +56,37 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// 纸色 (the default) and 蜜桃 follow 设置 › 外观 › 深浅色 (#710). The system picks a set's look by the home screen's
+    /// appearance, not the app's, so each also has a set with only its light picture and one with only its dark
+    /// picture (`AppIcon-PaperLight` / `…Dark`, `AppIcon-PeachLight` / `…Dark`); the other choices are one set whatever
+    /// the app is.
+    private var fixedLooks: (light: String, dark: String)? {
+        switch self {
+        case .standard: ("AppIcon-PaperLight", "AppIcon-PaperDark")
+        case .peach: ("AppIcon-PeachLight", "AppIcon-PeachDark")
+        case .didot, .aura: nil
+        }
+    }
+
+    var followsScheme: Bool { fixedLooks != nil }
+
+    /// The icon set for the app's 深浅色: 跟随系统 is the set with both looks (nil: the primary icon).
+    func iconName(for scheme: ColorSchemeChoice) -> String? {
+        guard let fixed = fixedLooks else { return iconName }
+        switch scheme {
+        case .system: return iconName
+        case .light: return fixed.light
+        case .dark: return fixed.dark
+        }
+    }
+
+    /// The alternate icon sets the choice can be on (all of them ship); the primary icon is not one.
+    var iconNames: [String] { [iconName, fixedLooks?.light, fixedLooks?.dark].compactMap { $0 } }
+
     /// The choice an icon name stands for; an unknown name (an icon a later build dropped: 余烬, 薄荷, 石墨 went in #709)
     /// reads as the default.
     init(iconName: String?) {
-        self = Self.allCases.first { $0.iconName == iconName } ?? .standard
+        self = iconName.flatMap { name in Self.allCases.first { $0.iconNames.contains(name) } } ?? .standard
     }
 }
 
@@ -89,16 +116,54 @@ extension UIApplication: AppIconSetting {}
         current = AppIconChoice(iconName: system?.alternateIconName)
     }
 
-    func select(_ choice: AppIconChoice) async {
+    /// The app's 深浅色 the icon should match (#710): the latest `follow` or `select` gave it.
+    @ObservationIgnored private var scheme: ColorSchemeChoice = .system
+
+    /// Puts the choice on, in the set for the app's 深浅色 (`scheme`, else the last one given).
+    func select(_ choice: AppIconChoice, scheme: ColorSchemeChoice? = nil) async {
+        if let scheme { self.scheme = scheme }
         guard let system, available, choice != current, switching == nil else { return }
         switching = choice
         failure = nil
-        defer { switching = nil }
         do {
-            try await system.setAlternateIconName(choice.iconName)
+            try await system.setAlternateIconName(choice.iconName(for: self.scheme))
             current = choice
+            switching = nil
         } catch {
+            switching = nil
             failure = "没换成：\(error.localizedDescription)"
+            return
+        }
+        await settle(system) // 深浅色 may have changed while the system was asking
+    }
+
+    /// 深浅色 changed, or the app came to the front: an icon that follows it moves to that look's set (the system
+    /// confirms with its alert, as for any switch); the others stay as they are, and an icon already right is left
+    /// alone (no alert). A change while a switch is in flight is not lost: that switch settles on the latest when it ends.
+    func follow(_ scheme: ColorSchemeChoice) async {
+        self.scheme = scheme
+        guard let system, available, switching == nil else { return }
+        await settle(system)
+    }
+
+    /// Switches until the icon is on the set for the latest `scheme`. Not when the system has a set this build no
+    /// longer ships (余烬 / 薄荷 / 石墨): the home screen already shows the primary icon, and a switch on its own would
+    /// pop the system's alert at launch.
+    private func settle(_ system: AppIconSetting) async {
+        while current.followsScheme, switching == nil {
+            if let name = system.alternateIconName, !AppIconChoice.allCases.contains(where: { $0.iconNames.contains(name) }) { return }
+            let name = current.iconName(for: scheme)
+            guard name != system.alternateIconName else { return }
+            switching = current
+            failure = nil
+            do {
+                try await system.setAlternateIconName(name)
+                switching = nil
+            } catch {
+                switching = nil
+                failure = "没换成：\(error.localizedDescription)"
+                return
+            }
         }
     }
 }

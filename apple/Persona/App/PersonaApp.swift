@@ -35,6 +35,9 @@ struct PersonaApp: App {
                 model.retryRegistry() // launched in the background before the first unlock: the pairing reads now
                 model.resumeLinks()
                 LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces }
+                // The home screen icon in step with 深浅色 (a scheme from a launch argument, a switch the system cut short);
+                // nothing happens when it already is, so no alert.
+                Task { await model.appIcon.follow(model.colorScheme) }
                 if old != new { Task { await model.refresh() } }
             } else if new == .background {
                 // A suspended app's socket looks alive to the hub until it times out, and phone_* calls sent to it hang.

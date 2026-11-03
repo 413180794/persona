@@ -89,6 +89,8 @@ ICONS = {
 # rewrites the set. 蜜桃 is the default icon's hand-drawn helper (#709) on peach: picked from generated art, so
 # replacing it is replacing those two PNGs and rerunning.
 KEPT = ["AppIcon-Peach"]
+# The icons that follow the app's 深浅色 (AppIconChoice.fixedLooks): set-name prefix → the set the pictures come from.
+FIXED_LOOKS = {"AppIcon-Paper": "AppIcon", "AppIcon-Peach": "AppIcon-Peach"}
 
 
 def kept(name):
@@ -148,6 +150,12 @@ def main():
         write_icon_set(name, *draw())
     for name in KEPT:
         write_icon_set(name, *kept(name))
+    # 设置 › 外观 › 深浅色 set to 浅色 / 深色 (#710): for the icons that follow it, a set with only that look whatever the
+    # home screen is (tinted as usual).
+    for prefix, source in FIXED_LOOKS.items():
+        light, dark, tinted = kept(source)
+        write_icon_set(prefix + "Light", light, light, tinted)
+        write_icon_set(prefix + "Dark", dark, dark, tinted)
     os.makedirs(PREVIEWS, exist_ok=True)
     write_json(os.path.join(PREVIEWS, "Contents.json"), {"info": {"author": "xcode", "version": 1}})
     for name, icon_set in PREVIEW_OF.items():
