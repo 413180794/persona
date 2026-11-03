@@ -77,6 +77,9 @@ func TestCodexCardsFollowTheNodesList(t *testing.T) {
 	h.interactions["scr_server_s1"] = &pending{ix: proto.Interaction{ID: "scr_server_s1", MachineID: "server", SessionID: "s1", Kind: proto.IxScreen},
 		local: func(proto.Resolution) error { return nil }}
 	h.mu.Unlock()
+	h.bots.mu.Lock()
+	h.bots.cards = map[string]botCard{"scr_server_s1": {}}
+	h.bots.mu.Unlock()
 	q := proto.Interaction{ID: "cxq_1", SessionID: "s1", Kind: proto.IxQuestion, Agent: "codex", ExpiresAt: time.Now().Add(time.Hour),
 		Questions: []proto.Question{{Question: "Which color?", Options: []proto.QuestionOption{{Label: "Red"}}}}}
 	a := proto.Interaction{ID: "cxa_1", SessionID: "s2", Kind: proto.IxPermission, Agent: "codex", Summary: "curl -sI https://example.com",
@@ -84,6 +87,12 @@ func TestCodexCardsFollowTheNodesList(t *testing.T) {
 	listCodex(h, m, q, a)
 	if got := pendingIDs(h); len(got) != 2 || got["cxq_1"] != proto.IxQuestion || got["cxa_1"] != proto.IxPermission {
 		t.Fatalf("pending %v", got)
+	}
+	h.bots.mu.Lock()
+	_, card := h.bots.cards["scr_server_s1"]
+	h.bots.mu.Unlock()
+	if card {
+		t.Fatal("the bot's card for the replaced screen card was never closed")
 	}
 	// The same list again changes nothing; one no longer listed (answered at the computer) ends.
 	listCodex(h, m, q, a)

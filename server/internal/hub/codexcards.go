@@ -36,7 +36,8 @@ func (h *Hub) syncCodexInteractions(m *Machine, params json.RawMessage) {
 		listed[ix.ID] = ix
 	}
 	h.mu.Lock()
-	var gone, screens []string
+	var gone []string
+	var screens []*pending
 	for id, pd := range h.interactions {
 		if !pd.codex || pd.ix.MachineID != m.cfg.ID {
 			continue
@@ -58,7 +59,7 @@ func (h *Hub) syncCodexInteractions(m *Machine, params json.RawMessage) {
 		for id, old := range h.interactions {
 			if coversScreen(p) && old.ix.Kind == proto.IxScreen && old.ix.MachineID == ix.MachineID && old.ix.SessionID == ix.SessionID {
 				delete(h.interactions, id)
-				screens = append(screens, id)
+				screens = append(screens, old)
 			}
 		}
 		h.interactions[ix.ID] = p
@@ -81,10 +82,9 @@ func (h *Hub) syncCodexInteractions(m *Machine, params json.RawMessage) {
 		h.codexAnnounced[ix.ID] = now
 	}
 	h.mu.Unlock()
-	for _, id := range screens {
-		h.recordEnd(id, "cancelled", nil)
-		h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
-		h.push.clear(id)
+	for _, old := range screens {
+		h.recordEnd(old.ix.ID, "cancelled", nil)
+		h.finished(old)
 	}
 	for _, id := range gone {
 		h.recordEnd(id, "cancelled", nil)

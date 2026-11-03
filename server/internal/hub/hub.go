@@ -638,18 +638,18 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 	h.mu.Lock()
 	// A screen interaction for the same session was a premature guess; the hook knows better.
 	// Tell the app now: the wait below can last until the hook times out.
-	var dropped []string
+	var dropped []*pending
 	for id, old := range h.interactions {
 		if old.ix.Kind == proto.IxScreen && old.ix.MachineID == ix.MachineID && old.ix.SessionID == ix.SessionID {
 			delete(h.interactions, id)
-			dropped = append(dropped, id)
+			dropped = append(dropped, old)
 		}
 	}
 	h.interactions[ix.ID] = p
 	h.mu.Unlock()
-	for _, id := range dropped { // as codexcards.go withdraws a screen card
-		h.recordEnd(id, "cancelled", nil)
-		h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
+	for _, old := range dropped { // as codexcards.go withdraws a screen card
+		h.recordEnd(old.ix.ID, "cancelled", nil)
+		h.finished(old)
 	}
 	h.record(ix)
 	h.announce(ix)

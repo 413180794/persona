@@ -407,6 +407,10 @@ func TestWaitInteractionReplacesScreenGuess(t *testing.T) {
 	h.mu.Lock()
 	h.interactions[scr.ID] = &pending{ix: scr, done: make(chan proto.Resolution, 1)}
 	h.mu.Unlock()
+	// The Feishu bot posted a card for the guess.
+	h.bots.mu.Lock()
+	h.bots.cards = map[string]botCard{scr.ID: {}}
+	h.bots.mu.Unlock()
 
 	ix := proto.Interaction{ID: "ix_hook", MachineID: "server", SessionID: "s1", Kind: proto.IxPermission,
 		ExpiresAt: time.Now().Add(time.Hour)}
@@ -442,6 +446,12 @@ func TestWaitInteractionReplacesScreenGuess(t *testing.T) {
 	}
 	if s, _, _ := st.InteractionOutcome(context.Background(), scr.ID); s != "cancelled" {
 		t.Fatalf("screen guess status %q, want cancelled", s)
+	}
+	h.bots.mu.Lock()
+	_, card := h.bots.cards[scr.ID]
+	h.bots.mu.Unlock()
+	if card {
+		t.Fatal("the bot's card for the screen guess was never closed")
 	}
 	_ = h.resolve("ix_hook", proto.Resolution{})
 	<-done
