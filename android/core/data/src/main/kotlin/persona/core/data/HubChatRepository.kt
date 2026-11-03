@@ -28,6 +28,8 @@ class HubChatRepository(
     private val foreground: StateFlow<Boolean> = MutableStateFlow(true),
     private val now: () -> Instant = Instant::now,
     private val seen: (suspend (SessionKey) -> Unit)? = null,
+    /** Told the session's transcript whenever it gains items (the outbox finds the messages sent from here in it). */
+    private val transcript: (suspend (SessionKey, List<Item>) -> Unit)? = null,
 ) : ChatRepository {
     private class Entry(val key: SessionKey, val scope: CoroutineScope) {
         val reducer = ContinuityReducer()
@@ -53,6 +55,7 @@ class HubChatRepository(
         var durationAfterSeq: Int = 0
         var lastUserId: String? = null
         var eventError: String? = null
+        var observedLast: String? = null
     }
 
     private val entries = LinkedHashMap<SessionKey, Entry>(64, 0.75f, true)
@@ -534,6 +537,17 @@ class HubChatRepository(
             ended = runtime.ended || it.ended, replaced = runtime.replaced || it.replaced,
             stopping = runtime.stopping, turnDurationSeconds = runtime.turnDurationSeconds,
             recordedTurnDurations = durations.mapValues { it.value.seconds }) }
+        // However the items came (an event, a page, a catch-up), a message sent from here that is in them is shown.
+        val last = entry.reducer.items.lastOrNull()?.id
+        if (transcript != null && last != null && last != entry.observedLast) {
+            entry.observedLast = last
+            val observed = entry.reducer.items
+            entry.scope.launch {
+                try { transcript.invoke(entry.key, observed) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { entry.observedLast = null }
+            }
+        }
     }
 
     private fun envelope(type: String, session: SessionKey) = buildJsonObject {

@@ -10,7 +10,6 @@ import persona.core.data.HubCredentials
 import persona.core.data.ScopedHubData
 import persona.core.data.StoredGroup
 import persona.core.hub.*
-import java.time.Instant
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.JsonElement
@@ -139,7 +138,7 @@ class GroupRuntime internal constructor(
                     listener.onHello(this@GroupRuntime, event)
                 }
                 listener.onEvent(this@GroupRuntime, event)
-                if (event is ItemsEvent) confirmDelivered(data, event)
+                if (event is ItemsEvent) data.messages.observeTranscript(SessionKey(event.machineId, event.sessionId), event.items)
             }
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -161,19 +160,6 @@ class GroupRuntime internal constructor(
         // Before the network is known, so the first route selection already honours the stored route choices.
         mutableEndpointSettings.value = HubEndpointSettings(connection, data.endpoints.value, data.endpoints::update,
             scope, SystemClock::elapsedRealtime, System::currentTimeMillis)
-    }
-
-    private suspend fun confirmDelivered(data: ScopedHubData, event: ItemsEvent) {
-        val pendingIds = data.messages.outbox.value.filter {
-            it.state in setOf(DeliveryState.Sending, DeliveryState.Unknown, DeliveryState.Verifying,
-                DeliveryState.Sent, DeliveryState.NeedsConfirmation)
-        }.map { it.clientMessageId }.toSet()
-        if (pendingIds.isNotEmpty()) event.items.filter { it.role == "user" && it.kind == "text" }.forEach { item ->
-            val observed = item.ts?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-            if (item.id in pendingIds || observed != null) data.messages.confirmDelivered(
-                SessionKey(event.machineId, event.sessionId), item.id.takeIf { it in pendingIds },
-                item.text, observed ?: 0)
-        }
     }
 
     /** A new registry entry for the same group: names, mesh hubs and the other paired hubs. */

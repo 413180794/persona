@@ -80,6 +80,11 @@ class HttpMessageTransportTest {
                     assertEquals("/api/v1/ops/stable-id", withTimeout(5000) { requests.receive() }.path)
                     assertTrue(withTimeout(5000) { requests.receive() }.path!!.startsWith(
                         "/api/v1/sessions/machine/session%2Fencoded/items?"))
+                    // Claude Code keeps its own id for the message: the transcript's copy is found by its words (#895).
+                    responses.send(MockResponse().setBody("""{"state":"done","result":{"status":200,"body":"$storedBody"}}"""))
+                    responses.send(MockResponse().setBody("""{"items":[{"id":"claude-uuid","role":"user","kind":"text","text":"hello","ts":"2026-11-03T09:00:00Z"}]}"""))
+                    assertEquals(MessageEvidence.Shown, transport.reconcile(message, 0))
+                    repeat(2) { withTimeout(5000) { requests.receive() } }
 
                     val results = listOf(
                         MockResponse().setBody("""{"ok":true}""") to MessageTransportResult.Accepted,

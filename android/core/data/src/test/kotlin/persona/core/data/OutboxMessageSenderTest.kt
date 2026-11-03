@@ -1,6 +1,7 @@
 package persona.core.data
 
 import persona.core.contracts.HubScope
+import persona.core.contracts.Item
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.MessageRequest
 import persona.core.contracts.api.MessageEvidence
@@ -167,7 +168,7 @@ class OutboxMessageSenderTest {
         sender.send(session, "next", "message-b", null)
         runCurrent()
         assertEquals(OutboxState.Verifying, store.state("message-b"))
-        sender.confirmDelivered(session, "message-b", null, 101)
+        sender.observeTranscript(session, listOf(Item("message-b", 1, role = "user", kind = "text", text = "next")))
         runCurrent()
         assertEquals(OutboxState.Shown, store.state("message-b"))
         assertEquals(OutboxState.Unknown, OutboxMessageSender.classify(MessageTransportResult.HubError()))
@@ -283,6 +284,57 @@ class OutboxMessageSenderTest {
         }
         assertTrue(store.transitions.contains(OutboxState.Unknown to OutboxState.Sending))
         second.close()
+    }
+
+    @Test fun transcriptCopyWithTheAgentsOwnIdShowsTheMessage() = runTest {
+        // Claude Code keeps its own uuid for the user's message: the client message id never comes back (#895).
+        val store = FakeStore()
+        val transport = FakeTransport(online = true, supportsClientOps = true)
+        val sentAt = java.time.Instant.parse("2026-11-03T09:00:00Z")
+        var clock = sentAt.toEpochMilli()
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope, now = { clock })
+        fun user(id: String, text: String, at: java.time.Instant) =
+            Item(id, 1, at.toString(), role = "user", kind = "text", text = text)
+
+        transport.answers += MessageTransportResult.Accepted
+        sender.send(session, "可以删的都删掉吧", "first")
+        runCurrent()
+        assertEquals(OutboxState.Sent, store.state("first"))
+        // An older message with the same words is not this one.
+        sender.observeTranscript(session, listOf(user("old-uuid", "可以删的都删掉吧", sentAt.minusSeconds(3600))))
+        runCurrent()
+        assertEquals(OutboxState.Sent, store.state("first"))
+        // The computer's clock is a little behind and Claude wrapped the text differently.
+        sender.observeTranscript(session, listOf(user("claude-uuid", "可以删的都删掉吧\n", sentAt.minusSeconds(30))))
+        runCurrent()
+        assertEquals(OutboxState.Shown, store.state("first"))
+
+        // Two identical messages: one transcript item shows one of them, seen again it does not show the other.
+        clock += 60_000
+        transport.answers += MessageTransportResult.Accepted
+        transport.answers += MessageTransportResult.Accepted
+        sender.send(session, "继续", "again-1")
+        sender.send(session, "继续", "again-2")
+        runCurrent()
+        val again = user("claude-again-1", "继续", sentAt.plusSeconds(61))
+        sender.observeTranscript(session, listOf(again))
+        sender.observeTranscript(session, listOf(again))
+        runCurrent()
+        assertEquals(OutboxState.Shown, store.state("again-1"))
+        assertEquals(OutboxState.Sent, store.state("again-2"))
+        sender.observeTranscript(session, listOf(again, user("claude-again-2", "继续", sentAt.plusSeconds(62))))
+        runCurrent()
+        assertEquals(OutboxState.Shown, store.state("again-2"))
+
+        // A message still waiting for the network is not taken for the same words typed on the computer.
+        transport.readyToSend.value = false
+        runCurrent()
+        sender.send(session, "看看状态", "offline")
+        runCurrent()
+        sender.observeTranscript(session, listOf(user("typed-there", "看看状态", sentAt.plusSeconds(70))))
+        runCurrent()
+        assertEquals(OutboxState.WaitingForNetwork, store.state("offline"))
+        sender.close()
     }
 
     private class FakeTransport(online: Boolean, override val supportsClientOps: Boolean = false) : MessageTransport {

@@ -1,6 +1,8 @@
 package persona.core.data
 
 import persona.core.contracts.HubScope
+import persona.core.contracts.Item
+import persona.core.contracts.MessageEcho
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.MessageEvidence
 import persona.core.contracts.api.MessageRequest
@@ -53,6 +55,8 @@ class OutboxMessageSender(
     private val initialized = CompletableDeferred<Unit>()
     private val reconcilers = mutableListOf<OutboxReconciler>()
     @Volatile private var mainResolver: MainConversationResolver? = null
+    /** Transcript items that already showed a message (observeTranscript): the same item never shows a second. */
+    private val claimed = mutableSetOf<Pair<SessionKey, String>>()
 
     override val outbox = store.entries.map { entries ->
         entries.filter { it.state !in hidden }.map {
@@ -181,21 +185,28 @@ class OutboxMessageSender(
         Unit
     }
 
-    /** Call with authoritative transcript evidence, never with an optimistic local echo. */
-    suspend fun confirmDelivered(session: SessionKey, clientMessageId: String?, text: String?, observedAt: Long) = lifecycle.withLock {
-        check(job.isActive) { "Pairing scope is closed" }
-        if (clientMessageId == null && transport.supportsClientOps) return@withLock
-        val entries = store.entries.first()
-        for (entry in entries) {
-            if (entry.session != session || entry.state !in reconcilable) continue
-            val matched = if (clientMessageId != null) clientMessageId == entry.clientMessageId
-                else text == entry.text && observedAt >= entry.createdAt &&
-                    entries.count { it.session == session && it.text == text && it.createdAt <= observedAt } == 1
-            if (matched) {
-                store.transition(entry.clientMessageId, reconcilable, OutboxState.Shown)
-                wake.trySend(Unit)
-                // A text-only observation proves at most one identical pending message.
-                if (clientMessageId == null) break
+    /**
+     * The session's transcript holds [items]: authoritative (from the hub), never an optimistic local echo. A message
+     * sent from here that is among them is shown, and its bubble goes. Claude Code keeps its own id for the message,
+     * so it is found by its words ([MessageEcho]) unless the runtime kept the client message id. One transcript item
+     * shows one message (the oldest it can be), so a second identical message stays until its own copy arrives.
+     */
+    suspend fun observeTranscript(session: SessionKey, items: List<Item>) {
+        if (outbox.value.none { it.session == session && it.state in awaitingTranscript }) return
+        lifecycle.withLock {
+            check(job.isActive) { "Pairing scope is closed" }
+            val pending = store.entries.first().filter { it.session == session && it.state in reconcilable }
+                .sortedBy { it.createdAt }.toMutableList()
+            for (item in items) {
+                if (pending.isEmpty()) break
+                if (item.role != "user" || item.kind != "text" || (session to item.id) in claimed) continue
+                val entry = pending.firstOrNull { it.clientMessageId == item.id }
+                    ?: pending.firstOrNull { MessageEcho.arrived(it.text, it.createdAt, item) } ?: continue
+                pending.remove(entry)
+                if (store.transition(entry.clientMessageId, reconcilable, OutboxState.Shown)) {
+                    claimed += session to item.id
+                    wake.trySend(Unit)
+                }
             }
         }
     }
@@ -304,6 +315,7 @@ class OutboxMessageSender(
         private val reconcilable = uncertain + setOf(OutboxState.Sent, OutboxState.NeedsConfirmation)
         private val dispatchable = setOf(OutboxState.Queued, OutboxState.WaitingForNetwork)
         private val hidden = setOf(OutboxState.Cancelled, OutboxState.Shown)
+        private val awaitingTranscript = reconcilable.map { it.delivery }.toSet()
         private val refusals = setOf("input_draft", "dialog_open", "op_id_reused", "invalid", "stale_session")
 
         fun classify(result: MessageTransportResult): OutboxState = when (result) {

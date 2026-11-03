@@ -3,6 +3,8 @@ package persona.core.data
 import android.content.Context
 import androidx.room.Room
 import persona.core.contracts.HubScope
+import persona.core.contracts.Item
+import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ChatTransport
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.HubPreferencesTransport
@@ -21,6 +23,7 @@ class ChatDataRepositories private constructor(
     preferenceTransport: HubPreferencesTransport?,
     private val ownedDatabase: ItemsDatabase? = null,
     private val legacyDirectory: File? = null,
+    transcript: (suspend (SessionKey, List<Item>) -> Unit)? = null,
 ) {
     /** Reuses the pairing's database and lifetime; closing a view never discards its cache. */
     constructor(
@@ -30,7 +33,7 @@ class ChatDataRepositories private constructor(
         foreground: StateFlow<Boolean>,
         preferenceTransport: HubPreferencesTransport? = null,
     ) : this(data.items, File(data.noBackupDirectory, "lists"), transport, connection, data.coroutineScope,
-        foreground, preferenceTransport) {
+        foreground, preferenceTransport, transcript = data.messages::observeTranscript) {
         data.checkActive()
         data.openWindowReconciliation.register(scope, chats::reconcileOpened)
     }
@@ -72,7 +75,7 @@ class ChatDataRepositories private constructor(
     }
     val interactions = HubInteractionCenter(transport, connection, scope, snapshots)
     val chats = HubChatRepository(transport, connection, items, sessions, scope,
-        foreground, seen = preferenceTransport?.let { remote -> { key -> remote.seen(key) } })
+        foreground, seen = preferenceTransport?.let { remote -> { key -> remote.seen(key) } }, transcript = transcript)
 
     suspend fun close(discard: Boolean = false) = withContext(NonCancellable + Dispatchers.IO) {
         job.cancelAndJoin()

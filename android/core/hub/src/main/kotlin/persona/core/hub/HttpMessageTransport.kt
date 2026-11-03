@@ -3,6 +3,7 @@ package persona.core.hub
 import persona.core.contracts.Hello
 import persona.core.contracts.HubScope
 import persona.core.contracts.JsonCodec
+import persona.core.contracts.MessageEcho
 import persona.core.contracts.api.ItemsQuery
 import persona.core.contracts.api.MessageEvidence
 import persona.core.contracts.api.ConnectionState
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
-import java.time.Instant
 import java.util.Base64
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -74,8 +74,9 @@ class HttpMessageTransport(
                 if (status != null && body != null) {
                     val result = decodeResult(status, String(Base64.getDecoder().decode(body), Charsets.UTF_8))
                     if (result != MessageTransportResult.Accepted) return MessageEvidence.Receipt(result)
-                    // A successful receipt still needs the transcript to replace the local bubble.
-                    val shown = transcriptEvidence(request, createdAt, allowTextMatch = false)
+                    // A successful receipt still needs the transcript to replace the local bubble. Claude Code keeps its
+                    // own id for the message, so the transcript's copy is found by its words.
+                    val shown = transcriptEvidence(request, createdAt, allowTextMatch)
                     return shown ?: MessageEvidence.Receipt(result)
                 }
             }
@@ -87,9 +88,7 @@ class HttpMessageTransport(
         val items = HubChatTransport(connection).items(request.session, ItemsQuery()).items
         val shown = items.any { item ->
             item.role == "user" && item.kind == "text" && (item.id == request.clientMessageId ||
-                allowTextMatch && item.text == request.text && item.ts?.let {
-                    runCatching { Instant.parse(it).toEpochMilli() >= createdAt }.getOrDefault(false)
-                } == true)
+                allowTextMatch && MessageEcho.arrived(request.text, createdAt, item))
         }
         return MessageEvidence.Shown.takeIf { shown }
     }
