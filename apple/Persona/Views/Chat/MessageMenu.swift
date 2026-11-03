@@ -8,7 +8,7 @@ import UIKit
 @Observable
 final class MessageMenu {
     var selected: String?
-    /// Where the press landed, in the pressed view's coordinates.
+    /// Where the press landed, in the message row's coordinates (`MessageMenu.row`), where the bar is placed.
     var anchor: CGPoint = .zero
     /// Text shown in the "select text" sheet.
     var selecting: SelectableText?
@@ -29,6 +29,9 @@ final class MessageMenu {
     @ObservationIgnored var areaWidth: CGFloat = 0
     /// The chat's coordinate space, set by the chat on its panes.
     static let area = "message-menu-area"
+    /// A message row's coordinate space (`messageActionBar`): the press is reported in it, where the bar is placed, not
+    /// in the pressed bubble's, which sits at the right of the row for your own messages (#501).
+    static let row = "message-menu-row"
     @ObservationIgnored private var pressing = false
     @ObservationIgnored private var pressEnded = Date.distantPast
 
@@ -85,7 +88,8 @@ struct SwipeTo: UIGestureRecognizerRepresentable {
     }
 }
 
-/// UIKit long press: SwiftUI's own gesture does not say where the finger is.
+/// UIKit long press: SwiftUI's own gesture does not say where the finger is. Reports it in the enclosing
+/// `messageActionBar` row's coordinates (`MessageMenu.row`), so use it inside one.
 struct LongPressAt: UIGestureRecognizerRepresentable {
     var changed: (UIGestureRecognizer.State) -> Void = { _ in }
     var action: (CGPoint) -> Void
@@ -98,7 +102,7 @@ struct LongPressAt: UIGestureRecognizerRepresentable {
 
     func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
         changed(recognizer.state)
-        if recognizer.state == .began { action(context.converter.localLocation) }
+        if recognizer.state == .began { action(context.converter.location(in: .named(MessageMenu.row))) }
     }
 }
 #endif
@@ -141,6 +145,7 @@ private struct MessageActionBarHost: ViewModifier {
     func body(content: Content) -> some View {
         if let menu {
             content
+                .coordinateSpace(.named(MessageMenu.row))
                 .overlay(alignment: .topLeading) {
                     if menu.selected == id {
                         GeometryReader { geo in

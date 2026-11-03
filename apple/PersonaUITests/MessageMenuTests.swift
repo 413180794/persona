@@ -5,6 +5,7 @@ import XCTest
 ///   TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests
 final class MessageMenuTests: XCTestCase {
     private let answer = "PR #42 看完了"
+    private let question = "看一下 PR #42"
 
     @MainActor private func launch() throws -> XCUIApplication {
         guard let mock = ProcessInfo.processInfo.environment["JARVIS_MOCK_URL"] else {
@@ -20,8 +21,10 @@ final class MessageMenuTests: XCTestCase {
 
     /// The answer's bubble. Rows of the flipped chat list report flipped frames, so press by its centre in the
     /// window rather than through the element.
-    @MainActor private func answerPoint(_ app: XCUIApplication) -> XCUICoordinate {
-        let text = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", answer)).firstMatch
+    @MainActor private func answerPoint(_ app: XCUIApplication) -> XCUICoordinate { point(of: answer, in: app) }
+
+    @MainActor private func point(of message: String, in app: XCUIApplication) -> XCUICoordinate {
+        let text = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", message)).firstMatch
         XCTAssertTrue(text.waitForExistence(timeout: 15), "the chat did not open")
         sleep(2) // let the list settle at the newest message
         let window = app.windows.firstMatch.frame
@@ -54,5 +57,20 @@ final class MessageMenuTests: XCTestCase {
         let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
         from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)))
         XCTAssertTrue(copy.waitForNonExistence(timeout: 2), "scrolling did not close the bar")
+    }
+
+    /// The bar opens over the press, also on a short message of your own at the right edge (#501): the press is
+    /// reported in the row's coordinates, where the bar is placed, not in the bubble's.
+    @MainActor func testBarOpensAtThePress() throws {
+        let app = try launch()
+        let point = point(of: question, in: app)
+        point.press(forDuration: 0.5)
+        let copy = app.buttons["复制"]
+        XCTAssertTrue(copy.waitForExistence(timeout: 2), "the bar did not open")
+        // Sideways only: the flipped list reports flipped heights, not flipped widths.
+        let bar = ["复制", "选择", "引用", "分享", "编辑"].map { app.buttons[$0] }.filter(\.exists)
+            .map(\.frame).reduce(copy.frame) { $0.union($1) }
+        let x = point.screenPoint.x
+        XCTAssertTrue(bar.minX <= x && x <= bar.maxX, "the bar (\(bar.minX)–\(bar.maxX)) is not over the press at x \(x)")
     }
 }

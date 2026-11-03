@@ -45,7 +45,8 @@ struct SwipeTo: NSGestureRecognizerRepresentable {
 }
 
 /// A long press on iOS is a secondary click on a Mac (right click, two-finger click, control-click): it reports
-/// where the pointer is and the press's phases, so the message action bar opens at the click.
+/// where the pointer is (in the enclosing `messageActionBar` row's coordinates, `MessageMenu.row`) and the press's
+/// phases, so the message action bar opens at the click.
 struct LongPressAt: NSGestureRecognizerRepresentable {
     var changed: (PressPhase) -> Void = { _ in }
     var action: (CGPoint) -> Void
@@ -54,7 +55,7 @@ struct LongPressAt: NSGestureRecognizerRepresentable {
 
     func handleNSGestureRecognizerAction(_ recognizer: SecondaryClickRecognizer, context: Context) {
         changed(PressPhase(recognizer.state))
-        if recognizer.state == .began { action(context.converter.localLocation) }
+        if recognizer.state == .began { action(context.converter.location(in: .named(MessageMenu.row))) }
     }
 }
 
@@ -70,10 +71,31 @@ final class SecondaryClickRecognizer: NSGestureRecognizer {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    override func rightMouseDown(with event: NSEvent) { state = .began }
+    /// Where the press went down, in window coordinates. AppKit tracks the location only for its own recognizers: one
+    /// that handles the events itself reports (0, 0), the window's bottom-left corner, which put the action bar there
+    /// (#501). SwiftUI's coordinate converter reads it through `location(in:)`.
+    private var downAt: NSPoint?
+
+    override func location(in view: NSView?) -> NSPoint {
+        guard let downAt else { return super.location(in: view) }
+        return view?.convert(downAt, from: nil) ?? downAt
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        downAt = event.locationInWindow
+        state = .began
+    }
     override func rightMouseUp(with event: NSEvent) { finish() }
-    override func mouseDown(with event: NSEvent) { state = event.modifierFlags.contains(.control) ? .began : .failed }
+    override func mouseDown(with event: NSEvent) {
+        downAt = event.locationInWindow
+        state = event.modifierFlags.contains(.control) ? .began : .failed
+    }
     override func mouseUp(with event: NSEvent) { finish() }
+
+    override func reset() {
+        downAt = nil
+        super.reset()
+    }
 
     private func finish() {
         if state == .began || state == .changed { state = .ended } else { state = .failed }

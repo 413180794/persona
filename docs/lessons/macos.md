@@ -88,3 +88,7 @@
   （空间页的 ⋯、机器页的 ⓘ，放在什么位置都一样），SwiftUI 重排整个工具栏，列表那项就排到了壳那项前面（#483，2026-11-02）。
   要固定顺序就放进同一个 `ToolbarItemGroup`：Mac 上过滤菜单由壳画在侧栏按钮后面（`MacShellState.agentsList`），ChatsView 自己那项只留给 iOS。
   离屏截图看得出这个顺序（`scripts/app/mac_shot.sh … -openSession <对话> -openSpaceFromChat YES`），菜单本身只能在真窗口里点开。
+- 自己处理鼠标事件的 `NSGestureRecognizer` 子类（覆盖 `rightMouseDown` 等直接改 `state`）不会记录事件位置：`location(in:)` 一直是 (0, 0)，
+  即窗口左下角，SwiftUI 的 `context.converter` 也是从它换算的。Mac 上消息右键的操作条就这样被摆到左下角、压在输入框底下看不见（#501，2026-11-03）。
+  子类要在事件里记下 `event.locationInWindow`，覆盖 `location(in:)` 返回它（`SecondaryClickRecognizer`）。单元测试要经 `window.sendEvent(_:)` 发事件：
+  直接调 `rightMouseDown(with:)` 时 AppKit 不认状态变化，`state` 停在 `.possible`；按住 Control 的左键在测试里送不到识别器（窗口不是 key，视图 `acceptsFirstMouse` 返回 true 也一样），所以单测只测了右键，Control 点击在真窗口里验。
