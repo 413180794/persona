@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""jarvisctl: drive a running DEBUG Jarvis in the simulator through its runtime CLI (docs/runtime-cli.md).
+"""personactl: drive a running DEBUG Persona in the simulator through its runtime CLI (docs/runtime-cli.md).
 
   jarvisctl.py launch --hub http://127.0.0.1:18760 [-- <more launch args>]   terminate, launch with the channel, wait
   jarvisctl.py ping | state
@@ -33,13 +33,13 @@
 
 A DEBUG build on a real phone, through the hub (docs/runtime-cli.md「经 hub 连真机」): --via-hub <hub url> (or
 $JARVISCTL_VIA_HUB) sends every command to POST /api/v1/phone/runtime-cli; the hub's token comes from $JARVISCTL_HUB_TOKEN,
-the file $JARVISCTL_HUB_TOKEN_FILE, or ~/.jarvis/hub.json on the hub's machine, and is never printed. state, settle, tree,
+the file $JARVISCTL_HUB_TOKEN_FILE, or hub.json in the selected state root on the hub's machine, and is never printed. state, settle, tree,
 find, wait, tap (accessibility activation only), scroll, type, snapshot and screenshot work that way; launch, reset and
 the idb gestures do not (install the DEBUG build with Xcode or devicectl and open it yourself, with -runtimeCLIHub YES).
 
 Element filters: --id, --id-prefix, --label, --label-contains, --label-prefix, --trait button|text|header|selected…,
 --visible (a touch at its middle reaches it), --on-screen (its frame is on screen, covered or not), --index n (else the
-first match a touch reaches). The simulator is $JARVISCTL_UDID (or --udid, default "booted"); the app is $JARVISCTL_BUNDLE / $JARVIS_BUNDLE_ID.
+first match a touch reaches). The simulator is $JARVISCTL_UDID (or --udid, default "booted"); the app is $JARVISCTL_BUNDLE / $PERSONA_BUNDLE_ID (legacy $JARVIS_BUNDLE_ID).
 `launch` picks a one-time token and keeps it, with the port, in ~/.cache/jarvisctl/<udid>.json for the later
 commands. Standard library only; scripts can `from jarvisctl import Ctl`.
 """
@@ -55,6 +55,9 @@ import time
 import urllib.parse
 import urllib.error
 import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from persona_identity import data_dir, env_value, service_environment
 
 STATE_DIR = os.path.expanduser("~/.cache/jarvisctl")
 DEFAULT_PORT = 18950
@@ -77,7 +80,7 @@ def hub_token():
         with open(os.path.expanduser(path)) as f:
             return f.read().strip()
     try:
-        with open(os.path.expanduser("~/.jarvis/hub.json")) as f:
+        with open(os.path.join(data_dir(environment=service_environment(role="hub")), "hub.json")) as f:
             return json.load(f).get("token", "")
     except (OSError, ValueError):
         raise CtlError("--via-hub needs the hub's token: $JARVISCTL_HUB_TOKEN or $JARVISCTL_HUB_TOKEN_FILE")
@@ -87,7 +90,7 @@ class Ctl:
     def __init__(self, udid=None, bundle=None, port=None, via_hub=None):
         self.via_hub = (via_hub or os.environ.get("JARVISCTL_VIA_HUB") or "").rstrip("/") or None
         self.udid = udid or os.environ.get("JARVISCTL_UDID") or "booted"
-        self.bundle = bundle or os.environ.get("JARVISCTL_BUNDLE") or os.environ.get("JARVIS_BUNDLE_ID") or "com.example.jarvis"
+        self.bundle = bundle or os.environ.get("JARVISCTL_BUNDLE") or env_value("PERSONA_BUNDLE_ID") or "com.example.jarvis"
         saved = self._load()
         self.port = port or saved.get("port") or DEFAULT_PORT
         self.token = saved.get("token", "")

@@ -5,7 +5,9 @@
 #   ./scripts/deploy/link-systemd.sh uninstall   # = ~/.jarvis/bin/jarvis-link uninstall
 #   ./scripts/deploy/link-systemd.sh status      # = ~/.jarvis/bin/jarvis-link status
 set -euo pipefail
-BIN="$HOME/.jarvis/bin/jarvis-link"
+ROOT=$(python3 "$(dirname "${BASH_SOURCE[0]}")/../persona_identity.py" --service link)
+export PERSONA_HOME="$ROOT" JARVIS_HOME="$ROOT"
+BIN="$ROOT/bin/jarvis-link"
 [ -x "$BIN" ] || { echo "no $BIN: build it (cd server && go build -o ~/.jarvis/bin/jarvis-link ./cmd/jarvis-link)" >&2; exit 1; }
 [ $# -gt 0 ] || set -- install
 case "$1" in

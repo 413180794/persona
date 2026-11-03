@@ -38,13 +38,17 @@ VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD"
 TARGETS=("$@")
 [ ${#TARGETS[@]} -eq 0 ] && read -ra TARGETS <<< "$JARVIS_MACHINES"
 
-# The web client: built here, served by the hub from ~/.jarvis/web (swapped in whole, so a page never sees half).
+# The web client is replaced atomically within the hub's selected state root.
 deploy_web() {
   [ -f ../web/package.json ] || return 0
   (cd ../web && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build) >/dev/null
   # COPYFILE_DISABLE: macOS tar would add a ._<name> AppleDouble entry per file, which GNU tar unpacks as files.
-  COPYFILE_DISABLE=1 tar -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" 'set -e; rm -rf ~/.jarvis/web.new; mkdir -p ~/.jarvis/web.new; tar -xzf - -C ~/.jarvis/web.new; rm -rf ~/.jarvis/web.old; [ -d ~/.jarvis/web ] && mv ~/.jarvis/web ~/.jarvis/web.old; mv ~/.jarvis/web.new ~/.jarvis/web; rm -rf ~/.jarvis/web.old'
-  echo "web: deployed to $JARVIS_HUB_SSH:~/.jarvis/web"
+  local root script
+  root=$(python3 ../scripts/persona_identity.py --service hub --prepare --prefix -)
+  script="$root
+"'set -e; root=$PERSONA_HOME; rm -rf "$root/web.new"; mkdir -p "$root/web.new"; tar -xzf - -C "$root/web.new"; rm -rf "$root/web.old"; [ ! -d "$root/web" ] || mv "$root/web" "$root/web.old"; mv "$root/web.new" "$root/web"; rm -rf "$root/web.old"'
+  COPYFILE_DISABLE=1 tar -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" "$script"
+  echo "web: deployed to the hub state root"
 }
 if [ "${TARGETS[*]}" = web ]; then deploy_web; exit 0; fi
 HUB="$JARVIS_HUB_MACHINE"
@@ -55,6 +59,13 @@ for t in "${TARGETS[@]}"; do [ "$t" = "$HUB" ] && ORDERED+=("$t"); done
 TARGETS=("${ORDERED[@]}")
 # machine <id> <field>: a field of a machine in the config (ssh host, os, hostnames).
 field() { python3 ../scripts/jarvis_config.py machine "$1" | python3 -c "import json,sys;v=json.load(sys.stdin).get('$2','');print(' '.join(v) if isinstance(v,list) else v)"; }
+state_root() { python3 ../scripts/persona_identity.py --service "${1:-hub}" --prepare; }
+state_prefix() { python3 ../scripts/persona_identity.py --service "${1:-hub}" --prepare --prefix -; }
+remote_state() {
+  local host=$1 command=$2 role=${3:-hub}
+  ssh -o ConnectTimeout=10 "$host" "$(state_prefix "$role")
+$command"
+}
 mkdir -p bin
 # The commit it is built from, "-dirty" after it with changes in server/ not committed: a release installs itself over
 # this build only when its code contains that commit (docs/hub-update.md「防退回」).
@@ -74,28 +85,28 @@ is_here() {
 }
 
 install_bin() { # machine-id binary
-  local id=$1 bin=$2 host
+  local id=$1 bin=$2 host via root command role=node
+  [ "$id" != "$HUB" ] || role=hub
   host=$(field "$id" ssh); host=${host:-$id}
-  # This machine (listed by host name in the config): copy instead of going through ssh.
   via=$(field "$id" via)
   if is_here "$id"; then
-    mkdir -p ~/.jarvis/bin && cp "$bin" ~/.jarvis/bin/jarvisd.new && mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd
-    [ ! -d ~/.jarvis/bin/personad ] && ln -sfn jarvisd ~/.jarvis/bin/personad
-    restart_resident
-  elif [ -n "$via" ]; then
-    # Only reachable from another machine of the config (keys or routes this one lacks): copy through it; `ssh` is
-    # then its name there.
-    local vh tmp=".jarvis/bin/jarvisd.for-$id"
-    vh=$(field "$via" ssh); vh=${vh:-$via}
-    ssh -o ConnectTimeout=10 "$vh" 'mkdir -p ~/.jarvis/bin' && scp -q "$bin" "$vh:$tmp" &&
-      ssh "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host 'mkdir -p ~/.jarvis/bin' &&
-        scp -q ~/$tmp $host:.jarvis/bin/jarvisd.new &&
-        ssh -o BatchMode=yes $host 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd && [ ! -d ~/.jarvis/bin/personad ] && ln -sfn jarvisd ~/.jarvis/bin/personad'; rc=\$?; rm -f ~/$tmp; exit \$rc"
+    root=$(state_root "$role")
+    mkdir -p "$root/bin"
+    cp "$bin" "$root/bin/jarvisd.new" && mv "$root/bin/jarvisd.new" "$root/bin/jarvisd"
+    [ ! -d "$root/bin/personad" ] && ln -sfn jarvisd "$root/bin/personad"
+    PERSONA_HOME="$root" JARVIS_HOME="$root" restart_resident
   else
-    ssh -o ConnectTimeout=10 "$host" 'mkdir -p ~/.jarvis/bin' &&
-      scp -q "$bin" "$host:.jarvis/bin/jarvisd.new" &&
-      ssh "$host" 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd && [ ! -d ~/.jarvis/bin/personad ] && ln -sfn jarvisd ~/.jarvis/bin/personad' &&
-      ssh "$host" 'bash -s restart' < ../scripts/deploy/node-launchd.sh 2>/dev/null || true
+    command='mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/jarvisd.new" && chmod 755 "$PERSONA_HOME/bin/jarvisd.new" && mv "$PERSONA_HOME/bin/jarvisd.new" "$PERSONA_HOME/bin/jarvisd" && [ ! -d "$PERSONA_HOME/bin/personad" ] && ln -sfn jarvisd "$PERSONA_HOME/bin/personad"'
+    if [ -n "$via" ]; then
+      local vh quoted
+      vh=$(field "$via" ssh); vh=${vh:-$via}
+      quoted=$(python3 -c 'import shlex,sys; print(shlex.quote(sys.argv[1]))' "$(state_prefix "$role")
+$command")
+      ssh -o ConnectTimeout=10 "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host $quoted" < "$bin"
+    else
+      remote_state "$host" "$command" "$role" < "$bin" || return 1
+      python3 ../scripts/persona_identity.py --service node --prefix ../scripts/deploy/node-launchd.sh | ssh "$host" 'bash -s restart' 2>/dev/null || true
+    fi
   fi
 }
 
@@ -106,11 +117,13 @@ install_telegram() {
   bin="bin/jarvisd-telegram-$plat"
   GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" ./cmd/personad-telegram || return 1
   if is_here "$id"; then
-    cp "$bin" ~/.jarvis/bin/jarvisd-telegram.new && mv ~/.jarvis/bin/jarvisd-telegram.new ~/.jarvis/bin/jarvisd-telegram
-    [ ! -d ~/.jarvis/bin/personad-telegram ] && ln -sfn jarvisd-telegram ~/.jarvis/bin/personad-telegram
+    local root
+    root=$(state_root)
+    mkdir -p "$root/bin"
+    cp "$bin" "$root/bin/jarvisd-telegram.new" && mv "$root/bin/jarvisd-telegram.new" "$root/bin/jarvisd-telegram"
+    [ ! -d "$root/bin/personad-telegram" ] && ln -sfn jarvisd-telegram "$root/bin/personad-telegram"
   else
-    scp -q "$bin" "$JARVIS_HUB_SSH:.jarvis/bin/jarvisd-telegram.new" &&
-      ssh "$JARVIS_HUB_SSH" 'chmod 755 ~/.jarvis/bin/jarvisd-telegram.new && mv ~/.jarvis/bin/jarvisd-telegram.new ~/.jarvis/bin/jarvisd-telegram && [ ! -d ~/.jarvis/bin/personad-telegram ] && ln -sfn jarvisd-telegram ~/.jarvis/bin/personad-telegram'
+    remote_state "$JARVIS_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/jarvisd-telegram.new" && chmod 755 "$PERSONA_HOME/bin/jarvisd-telegram.new" && mv "$PERSONA_HOME/bin/jarvisd-telegram.new" "$PERSONA_HOME/bin/jarvisd-telegram" && [ ! -d "$PERSONA_HOME/bin/personad-telegram" ] && ln -sfn jarvisd-telegram "$PERSONA_HOME/bin/personad-telegram"' < "$bin"
   fi
 }
 
@@ -139,15 +152,15 @@ restart_resident() { ../scripts/deploy/node-launchd.sh restart || true; }
 hub_admin_access() {
   local current out cmd
   if [ -z "$ADMIN_ACCESS" ]; then
-    current=$(ssh "$JARVIS_HUB_SSH" '.jarvis/bin/jarvisd hub admin access --get' 2>/dev/null || true)
+    current=$(remote_state "$JARVIS_HUB_SSH" '"$PERSONA_HOME/bin/jarvisd" hub admin access --get' 2>/dev/null || true)
     [ -n "$current" ] && return 0
     ask_admin_access || { admin_access_reminder; return 0; }
   fi
   # Both were checked against fixed shapes (admin_access_valid) before they get into a remote command line.
-  cmd=".jarvis/bin/jarvisd hub admin access '$ADMIN_ACCESS'"
-  [ "$ADMIN_ACCESS" = cidrs ] && cmd=".jarvis/bin/jarvisd hub admin access cidrs --cidrs '$ADMIN_CIDRS'"
+  cmd='"$PERSONA_HOME/bin/jarvisd" hub admin access '"'$ADMIN_ACCESS'"
+  [ "$ADMIN_ACCESS" = cidrs ] && cmd='"$PERSONA_HOME/bin/jarvisd" hub admin access cidrs --cidrs '"'$ADMIN_CIDRS'"
   # shellcheck disable=SC2029
-  if out=$(ssh "$JARVIS_HUB_SSH" "$cmd" 2>/dev/null); then
+  if out=$(remote_state "$JARVIS_HUB_SSH" "$cmd" 2>/dev/null); then
     echo "hub: ${out%%$'\n'*}"
   else
     echo "hub: could not set the admin UI's scope (jarvisd hub admin access on the hub machine)" >&2
@@ -157,39 +170,16 @@ hub_admin_access() {
 for t in "${TARGETS[@]}"; do
   case "$t" in
     "$HUB")
-      ssh "$JARVIS_HUB_SSH" 'bash -s' < ../scripts/deploy/db.sh
-      # Every node binary of this build stays on the hub machine: the app's 重新部署 sends a machine whose node is not
-      # the hub's build its own (server/internal/hub/deploy.go).
-      ssh "$JARVIS_HUB_SSH" 'mkdir -p ~/.jarvis/bin/nodes' &&
-        scp -q bin/jarvisd-linux-amd64 bin/jarvisd-darwin-arm64 "$JARVIS_HUB_SSH:.jarvis/bin/nodes/"
+      python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/db.sh | ssh "$JARVIS_HUB_SSH" 'bash -s'
+      for node in bin/jarvisd-linux-amd64 bin/jarvisd-darwin-arm64; do
+        remote_state "$JARVIS_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin/nodes"; cat > "$PERSONA_HOME/bin/nodes/'"${node##*/}"'"' < "$node"
+      done
       hub_plat="$(field "$t" os)-$( [ "$(field "$t" os)" = darwin ] && echo arm64 || echo amd64)"
       install_bin "$t" "bin/jarvisd-$hub_plat"
       install_telegram "$t" "$hub_plat"
       ensure_herdr "$t"
       hub_admin_access
-      ssh "$JARVIS_HUB_SSH" 'bash -s' <<'EOF'
-set -e
-mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/jarvisd.service <<'UNIT'
-[Unit]
-Description=Jarvis hub (jarvisd)
-After=network-online.target
-
-[Service]
-ExecStart=%h/.jarvis/bin/jarvisd hub
-Restart=always
-RestartSec=3
-Environment=PATH=%h/.local/bin:%h/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
-
-[Install]
-WantedBy=default.target
-UNIT
-systemctl --user daemon-reload
-systemctl --user enable jarvisd >/dev/null 2>&1
-systemctl --user restart jarvisd
-sleep 1
-systemctl --user is-active jarvisd
-EOF
+      python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/hub-systemd.sh | ssh "$JARVIS_HUB_SSH" 'bash -s'
       echo "$t: hub restarted"
       deploy_web ;;
     *)

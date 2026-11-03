@@ -328,7 +328,7 @@ printf '%s|%s\n' "${JARVIS_RUNTIME_SOCKET}" "${JARVIS_ASSISTANT}"
                 self.assertIsInstance(query['root'], str)
                 self.assertEqual(list(home.iterdir()), [])
 
-    def concurrent_install(self, home):
+    def concurrent_install(self, home, include_python=False):
         helper = self.ensure_go_helper()
         self.require_node()
         gate = home / 'start.gate'
@@ -342,8 +342,33 @@ printf '%s|%s\n' "${JARVIS_RUNTIME_SOCKET}" "${JARVIS_ASSISTANT}"
             processes.append(subprocess.Popen([self.node, '--input-type=module', '-e', NODE_INSTALL],
                                               env=node_env, stdout=subprocess.PIPE,
                                               stderr=subprocess.PIPE, text=True))
+            ready = [go_ready, node_ready]
+            if include_python:
+                python_ready = home / 'python.ready'
+                code = r'''
+import importlib.util, json, os, pathlib, time
+spec = importlib.util.spec_from_file_location('identity', os.environ['EDGE_PYTHON_IDENTITY'])
+identity = importlib.util.module_from_spec(spec); spec.loader.exec_module(identity)
+cached = identity.data_dir()
+pathlib.Path(os.environ['EDGE_READY']).write_text('ready')
+deadline = time.monotonic() + 10
+while not pathlib.Path(os.environ['EDGE_GATE']).exists():
+    if time.monotonic() > deadline: raise RuntimeError('gate timeout')
+    time.sleep(.001)
+try:
+    root = identity.prepare_dir()
+    pathlib.Path(root, 'python-state.fixture').write_text('python-payload')
+    print(json.dumps({'cached': cached, 'root': root, 'query': identity.data_dir()}))
+except OSError as error:
+    print(json.dumps({'cached': cached, 'query': identity.data_dir(), 'error': str(error)}))
+'''
+                processes.append(subprocess.Popen([sys.executable, '-I', '-c', code],
+                    env=self.clean_env(home, EDGE_PYTHON_IDENTITY=str(ROOT / 'scripts/persona_identity.py'),
+                                       EDGE_GATE=str(gate), EDGE_READY=str(python_ready)),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True))
+                ready.append(python_ready)
             deadline = time.monotonic() + 15
-            while not (go_ready.exists() and node_ready.exists()):
+            while not all(path.exists() for path in ready):
                 self.assertTrue(all(p.poll() is None for p in processes), 'initializer exited before gate')
                 self.assertLess(time.monotonic(), deadline, 'initializer readiness timeout')
                 time.sleep(0.005)
@@ -387,6 +412,29 @@ printf '%s|%s\n' "${JARVIS_RUNTIME_SOCKET}" "${JARVIS_ASSISTANT}"
                         self.assertEqual((installed / 'pi/index.js').read_bytes(), b'export const fixture = true;\n')
                         self.assert_same_directory(installed, installed.parent / 'current')
                     if seed is not None:
+                        self.assertEqual((seed / 'existing.fixture').read_text(), 'existing-payload')
+
+    def test_actual_go_sdk_and_script_initializers_share_one_store(self):
+        for initial in ('fresh', 'current', 'legacy'):
+            for trial in range(6):
+                with self.subTest(initial=initial, trial=trial), tempfile.TemporaryDirectory(dir=self.base) as directory:
+                    home = Path(directory)
+                    if initial != 'fresh':
+                        seed = home / ('.persona' if initial == 'current' else '.jarvis')
+                        seed.mkdir()
+                        (seed / 'existing.fixture').write_text('existing-payload')
+                    results = self.concurrent_install(home, include_python=True)
+                    self.assertEqual(len(results), 3)
+                    self.assert_same_directory(home / '.persona', home / '.jarvis')
+                    for result in results:
+                        if 'error' in result:
+                            self.assertIn('initialization', result['error'])
+                        else:
+                            for key in ('cached', 'root', 'query'):
+                                self.assert_same_directory(result[key], home / '.persona')
+                    if 'error' not in results[2]:
+                        self.assertEqual((home / '.persona/python-state.fixture').read_text(), 'python-payload')
+                    if initial != 'fresh':
                         self.assertEqual((seed / 'existing.fixture').read_text(), 'existing-payload')
 
     def test_dot_prefixed_dangling_default_alias_is_restored(self):

@@ -5,8 +5,9 @@
 set -euo pipefail
 NAME=jarvis-postgres
 PORT=18661
-CFG="$HOME/.jarvis/hub.json"
-mkdir -p "$HOME/.jarvis" && chmod 700 "$HOME/.jarvis"
+ROOT="${_PERSONA_STATE_DIR:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/../persona_identity.py" --service hub --prepare)}"
+CFG="$ROOT/hub.json"
+mkdir -p "$ROOT" && chmod 700 "$ROOT"
 
 url() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("database_url",""))' "$CFG" 2>/dev/null || true; }
 

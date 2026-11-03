@@ -6,7 +6,9 @@ cd "$(dirname "$0")/../.."
 eval "$(python3 scripts/jarvis_config.py env)"
 python3 scripts/jarvis_config.py xcconfig
 SIM="${SIM:-$JARVIS_SIM}"
-TOKEN=$(ssh "$JARVIS_HUB_SSH" 'python3 -c "import json,os;print(json.load(open(os.path.expanduser(\"~/.jarvis/hub.json\")))[\"token\"])"')
+RESOLVER=$(python3 scripts/persona_identity.py --service hub --prefix -)
+TOKEN=$(ssh "$JARVIS_HUB_SSH" "$RESOLVER
+python3 -c 'import json,os;print(json.load(open(os.path.join(os.environ[\"PERSONA_HOME\"],\"hub.json\")))[\"token\"])'")
 URL=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$JARVIS_HUB_URL")
 SESSION="${1:-}"
 if [ -z "$SESSION" ]; then

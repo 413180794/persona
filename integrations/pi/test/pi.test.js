@@ -278,6 +278,11 @@ test('tells pi-web\'s server from a terminal pi by its process', () => {
   assert.deepEqual(piWebOf(['node', '/x/@agegr/pi-web/node_modules/next/dist/bin/next', 'start', '-p', '30199', '-H', '127.0.0.1'], {}), { port: 30199, host: '127.0.0.1', password: undefined })
   assert.equal(piWebOf(['node', '/opt/homebrew/bin/pi'], {}), undefined)
   assert.equal(piWebOf(['node', 'pi'], { JARVIS_PI_HOST: 'web', PORT: '4000', PI_WEB_HOSTNAME: '0.0.0.0' }).host, '127.0.0.1')
+  assert.equal(piWebOf(['node', 'pi'], { PERSONA_PI_HOST: 'web', JARVIS_PI_HOST: 'cli' }).host, '127.0.0.1')
+  assert.equal(piWebOf(['node', 'pi'], { PERSONA_PI_HOST: '', JARVIS_PI_HOST: 'web' }), undefined)
+  const webArgv = ['node', '/x/@agegr/pi-web/node_modules/next/dist/bin/next', 'start']
+  assert.equal(piWebOf(webArgv, { PERSONA_PI_HOST: 'cli', JARVIS_PI_HOST: 'web' }), undefined)
+  assert.equal(piWebOf(webArgv, { PERSONA_PI_HOST: '', JARVIS_PI_HOST: 'cli' }).host, '127.0.0.1')
 })
 
 test('the companion stays off a node that does not let the running runtime answer for a session', async (t) => {

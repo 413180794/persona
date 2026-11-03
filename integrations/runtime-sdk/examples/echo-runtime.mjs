@@ -116,9 +116,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const opts = { answerFirst: 'phone', log: (m) => console.error(m) }
   if (i > 0) opts.socketPath = process.argv[i + 1]
   if (l > 0) {
-    const token = process.env.JARVIS_DAEMON_TOKEN
+    const token = process.env.PERSONA_DAEMON_TOKEN ?? process.env.JARVIS_DAEMON_TOKEN
     if (!token) {
-      console.error('set JARVIS_DAEMON_TOKEN (the token daemons.json gives for this daemon)')
+      console.error('set PERSONA_DAEMON_TOKEN (JARVIS_DAEMON_TOKEN is also supported; the token daemons.json gives for this daemon)')
       process.exit(2)
     }
     opts.listen = { port: Number(process.argv[l + 1]), token }

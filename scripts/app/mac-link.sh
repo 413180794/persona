@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT=$PWD
-ID=${JARVIS_LINK_BUNDLE_ID:-$(python3 scripts/jarvis_config.py get mac.link_bundle_id 2>/dev/null || true)}
+ID=${PERSONA_LINK_BUNDLE_ID-${JARVIS_LINK_BUNDLE_ID:-$(python3 scripts/jarvis_config.py get mac.link_bundle_id 2>/dev/null || true)}}
 ID=${ID:-com.example.jarvis.link}
 OUT="$ROOT/mac/build"
 APP="$OUT/Jarvis Link.app"

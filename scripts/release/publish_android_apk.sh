@@ -7,7 +7,7 @@ if [ "$#" -eq 0 ]; then
   echo "用法：$0 <apk> [--version-code <整数>] [--version-name <版本>] [--min-sdk <整数>] [--notes <说明>]" >&2
   exit 2
 fi
-CONFIG_ENV=$(python3 "$SCRIPT_DIR/jarvis_config.py" env) || {
+CONFIG_ENV=$(python3 "$SCRIPT_DIR/../persona_config.py" env) || {
   echo "无法读取发布配置，请先配置 hub.machine 和对应机器的 SSH 地址。" >&2
   exit 1
 }
@@ -107,7 +107,7 @@ PY
 
 # Stage each upload separately, then expose the complete release by renaming its manifest.
 REMOTE_STAGE=".upload-$(basename "$STAGING")"
-ssh -- "$JARVIS_HUB_SSH" "umask 077; mkdir -p .jarvis/apps/android/$REMOTE_STAGE"
-scp -- "$STAGING/"*.apk "$STAGING/latest.json" "$JARVIS_HUB_SSH:.jarvis/apps/android/$REMOTE_STAGE/"
-ssh -- "$JARVIS_HUB_SSH" "set -e; cd .jarvis/apps/android; mv $REMOTE_STAGE/*.apk .; mv $REMOTE_STAGE/latest.json latest.json; rmdir $REMOTE_STAGE"
+RESOLVER=$(python3 "$SCRIPT_DIR/../persona_identity.py" --service hub --prepare --prefix -)
+COPYFILE_DISABLE=1 tar -C "$STAGING" -czf - . | ssh -- "$JARVIS_HUB_SSH" "$RESOLVER
+set -e; stage=\"\$PERSONA_HOME/apps/android/$REMOTE_STAGE\"; umask 077; mkdir -p \"\$stage\"; tar -xzf - -C \"\$stage\"; cd \"\$PERSONA_HOME/apps/android\"; mv \"\$stage\"/*.apk .; mv \"\$stage/latest.json\" latest.json; rmdir \"\$stage\""
 echo "Android 安装包已发布。"

@@ -551,7 +551,8 @@ export function createPiHost(deps, options = {}) {
  * undefined when this process is not pi-web's server.
  */
 export function piWebOf(argv = process.argv, env = process.env) {
-  const isWeb = env.JARVIS_PI_HOST === 'web' || (env.JARVIS_PI_HOST !== 'cli' && argv.some((a) => a.includes('pi-web')) && argv.includes('start'))
+  const hostKind = env.PERSONA_PI_HOST ?? env.JARVIS_PI_HOST
+  const isWeb = hostKind === 'web' || (hostKind !== 'cli' && argv.some((a) => a.includes('pi-web')) && argv.includes('start'))
   if (!isWeb) return undefined
   const i = argv.indexOf('-p')
   const port = Number(i >= 0 ? argv[i + 1] : env.PORT) || 30141

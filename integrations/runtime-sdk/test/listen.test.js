@@ -3,6 +3,12 @@ import assert from 'node:assert/strict'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createRuntime, Peer, SUBPROTOCOL } from '../index.js'
 import { until } from '../testing/fake-node.js'
 
@@ -75,6 +81,51 @@ function toy(extra = {}) {
   }
   return { driver, sent }
 }
+
+test('the echo daemon CLI honors current, legacy and explicitly empty token environments', async (t) => {
+  for (const [name, values, accepted] of [
+    ['legacy', { JARVIS_DAEMON_TOKEN: 'legacy-fixture-token' }, 'legacy-fixture-token'],
+    ['current', { PERSONA_DAEMON_TOKEN: 'current-fixture-token', JARVIS_DAEMON_TOKEN: 'ignored-fixture-token' }, 'current-fixture-token'],
+    ['empty', { PERSONA_DAEMON_TOKEN: '', JARVIS_DAEMON_TOKEN: 'ignored-fixture-token' }, undefined],
+  ]) {
+    await t.test(name, async (t) => {
+      const home = mkdtempSync(join(tmpdir(), 'persona-echo-cli-'))
+      const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('PERSONA_') && !key.startsWith('JARVIS_')))
+      const child = spawn(process.execPath, [fileURLToPath(new URL('../examples/echo-runtime.mjs', import.meta.url)), '--listen', '0'],
+        { env: { ...env, HOME: home, ...values }, stdio: ['ignore', 'ignore', 'pipe'] })
+      const exited = once(child, 'exit')
+      t.after(async () => {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
+        await exited
+        rmSync(home, { recursive: true, force: true })
+      })
+      let log = ''
+      child.stderr.setEncoding('utf8')
+      child.stderr.on('data', (part) => { log += part })
+      if (!accepted) {
+        const [code] = await Promise.race([exited, new Promise((_, reject) => {
+          const timer = setTimeout(() => reject(new Error('echo CLI exit timeout')), 5000)
+          exited.finally(() => clearTimeout(timer))
+        })])
+        assert.equal(code, 2)
+        assert.match(log, /PERSONA_DAEMON_TOKEN/)
+        assert.ok(!log.includes(values.JARVIS_DAEMON_TOKEN))
+        return
+      }
+      await until('echo CLI ready or exited', () => /echo daemon: ws:/.test(log) || child.exitCode !== null, 5000)
+      const url = log.match(/echo daemon: (ws:\/\/\S+);/)?.[1]
+      assert.ok(url, 'the daemon must listen rather than exit')
+      assert.ok(!log.includes(accepted), 'the token must not appear in logs')
+      if (values.JARVIS_DAEMON_TOKEN !== accepted) {
+        assert.equal(await refusedStatus(url, { token: values.JARVIS_DAEMON_TOKEN }), 401)
+      }
+      const node = dialNode(url, { token: accepted })
+      t.after(() => node.ws.close())
+      await until('echo CLI hello', () => node.hello, 3000)
+      assert.equal(node.hello.runtime, 'echo')
+    })
+  }
+})
 
 test('a listening runtime serves its endpoint: the node dials in with the token and the protocol runs as on the socket', async (t) => {
   const { driver, sent } = toy()
