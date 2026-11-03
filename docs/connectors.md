@@ -298,33 +298,20 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 
 改动：**中**。hub 的登录接口、App 的通用登录页（新界面，截图给你看）、邮件的多账号、GitHub 的设备码。
 
-### 8. 写操作只以工具提供、必须过闸门；skill 里声明为写的命令要确认
+### 8. 写操作只以工具提供、必须过闸门；skill 不加额外闸门
 
-**同意原则；做法是两层，并写清楚做不到的地方。skill 闸门默认放行，只拦声明为写的命令，只管助手（已拍板）。**
+**连接器的写操作照旧以工具过 `connector_gate`；skill 不加额外闸门，交给 Claude Code 自己的权限判断（2026-11-03 拍板，V2 不做）。**
 
-现状：
+现状（不变）：
 
 - 连接器的写操作都是 `Actions`，都过闸门（`github_comment`、`github_review`、`mail_send`）。
 - 飞书的写操作是例外：lark-connector skill 的 `ol` 和 lark-cli，node 的 Bash 钩子按命令判断读写（M5 后规则也写在 `connector_gate`），不管权限模式都要确认。
-- **用户自己放进 `~/.jarvis/skills` 的 skill 都会链接进助手的目录**（`node/larkgate.go:599`），但 Bash 钩子（`node/hooks.go:232`）只认 `ol` 和 lark-cli。
-  一个带 `send` 脚本的 Telegram skill，助手调它时只走普通的 Bash 批准；权限模式是「全部放行」时不问就发了。另外这个钩子只管助手的会话，
-  同一台电脑上的 Agent 用这个 skill 时也不经过它。
+- 用户自己放进 `~/.jarvis/skills` 的 skill 都会链接进助手的目录；助手调这些 skill 的脚本走 Claude Code 自己的权限流程。
 
-方案：
+曾经的提案是把 `larkgate.go` 的「按命令判断」推广到所有 skill（skill 在 `jarvis.json` 里声明写脚本，执行时手机上确认，#654 / #657）。
+用户的决定：skill 写操作的鉴权 Claude Code 自己已经有了，Claude 会自己判断，需要用户判断的时候会问用户，「这块千万别过度设计」。所以不做，代码没有合入。
 
-1. **规定**：Jarvis 自己带的、推荐的 skill 不带写脚本；要写就做成连接器的 action（Telegram 的发送在 Telegram 连接器的第二期做成 `telegram_send`，过闸门，卡片写明发给谁、全文）。
-   飞书保留命令闸门（lark-connector 的写接口太多，逐个做成工具不现实），这是唯一的例外，写进规范。
-2. **兜底：skill 的命令闸门**。把 `larkgate.go` 的「按命令判断」推广到所有 skill：
-   - 命令里执行了某个 skill 目录下的脚本（或它声明的命令），就算这个 skill 的调用；
-   - skill 在自己的 `jarvis.json` 里声明哪些命令是写（`{"write": ["scripts/send.py", "scripts/post.sh"]}`）；**声明为写的手机上确认**，不管权限模式，
-     卡片写 skill 名和整条命令；**没声明的默认放行**（照旧走普通的 Bash 批准），所以没有 `jarvis.json` 的 skill 行为不变；
-   - 规则照样写在 `connector_gate`：`{"connector": "skill:<名字>", "action": "CLI scripts/send.py", "decision": "allow"}`，可以把某条写命令改成放行或拒绝；
-   - 范围：**只管助手的会话**；同一台电脑上 Agent 的会话跟着默认放行，不经过这个闸门。
-   - Jarvis 推荐的、用户自己放的 skill 里有写脚本的（比如带 `send` 的 Telegram skill），由 Jarvis 在文档里给出要加的 `jarvis.json`。
-3. **做不到的**：没声明写的脚本照样放行（默认放行的代价，换来不多打扰）；而且钩子看的是命令行。模型如果不调 skill 的脚本，而是照着 skill 的说明自己写一段代码直接调对方的接口，钩子认不出来。
-   真正的保证只有「写的凭据不在助手手里」：凭据只给连接器（hub 里的、加密存的），skill 只拿只读的。这一条写进规范，现有的 skill 逐个检查。
-
-改动：**中**。node 的钩子（从 `larkgate.go` 抽出通用部分）、规则读取、卡片；Telegram 的发送另算（Telegram 计划的第二期）。
+要写就做成连接器的 action 这条照旧：Telegram 的发送在 Telegram 连接器的第二期做成 `telegram_send`，过闸门，卡片写明发给谁、全文。
 
 ## 三、迁移顺序
 
@@ -333,7 +320,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 | 步 | 内容 | 对应 | 大小 | 动哪些 | 兼容 |
 | --- | --- | --- | --- | --- | --- |
 | V1 ✓ | 清单（`Manifest`）+ 按清单分派（`As`、`Check`）；档、scope 的常量；`Capabler`、`Hosts`、`Poller`、`AgentTools`、`Validator`、`InboxReplier` 并掉；种类在清单里声明并对照提示词。可选接口从 19 个减到 11 个能力接口加 `Runner`、`Machines`。**没做的**：`Runner` + `Events` + `Machines` 并成 `Run(ctx, Host)`（会把 hub 的 `Watch` 退避重启搬进各连接器，对外有变化，和 V5 的协议一起做）；`ReadTools` + `Actions` 两个能力保留（清单分得开读写，合并没有好处）；`Settle` 在 V3 改，知识库的三种在 V7 并 | 1、3 | 小到中 | 5 个都动（机械） | 对外不变：`GET /api/v1/connectors` 的能力和 MCP 工具的 golden 一致，真实 hub 的列表前后对照 |
-| V2 | skill 的命令闸门 | 8 | 中 | node；不碰连接器 | 默认放行：没声明写命令的 skill 不受影响，声明了的多了确认；只管助手 |
+| ~~V2~~ | ~~skill 的命令闸门~~：**不做**（2026-11-03 用户决定：交给 Claude Code 自己的权限判断，见第 8 条；#654 关闭） | 8 | — | — | — |
 | V3 | 收件箱的 `Group`、`From`、`Tags`、`Supersedes`，hub 统一合并、静音、收尾；GitHub 先改，Telegram、信息跟上 | 5 | 中 | GitHub、Telegram、信息、hub 收件箱 | 老的 `github.inbox` 自动转成静音规则；App 新增「静音」菜单另一个 PR |
 | V4 | 身份线索（只记录） | 6 | 小到中 | 5 个都动一点、知识库 | 新字段，老数据不动 |
 | V5 | 协议 v2：Telegram 先换，信息的 node 侧再换，一致性测试 | 4 | 大 | Telegram、信息、node、hub | 子进程一个版本里两种都认；旧 node 照旧走 5 个方法 |
@@ -341,7 +328,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 | V7 | 进知识库统一成 `Changes`：先 4 个已经是 `Archive` 的，再 `Items`，最后飞书的会话 | 2 | 中到大 | 全部，飞书最后 | 对外不变：游标文件不变；过 M0 基线（golden）和真实数据对照 |
 | — | 第三方规范 `docs/connector-protocol.md`，等第一个外部连接器再实现 WebSocket 传输 | 4 | — | — | — |
 
-顺序的理由：V1 便宜、后面都要用；V2 是安全上的缺口，不依赖别的，越早越好；V3 是用户最能感觉到的（每个来源都能静音、降噪）；
+顺序的理由：V1 便宜、后面都要用；V3 是用户最能感觉到的（每个来源都能静音、降噪）；
 V5–V7 大而收益在内部，放后面，飞书的会话最后。
 
 ## 四、拍板结果（2026-11-03）
@@ -352,4 +339,4 @@ V5–V7 大而收益在内部，放后面，飞书的会话最后。
 4. **第 5 条**：收件箱每一行的菜单加「静音这个仓库 / 会话 / 发件人」，所有来源一样。是新界面，做的时候先给截图。
 5. **第 6 条**：身份线索只存 HMAC 哈希，不给模型看，只用来认人。
 6. **第 7 条**：GitHub 设备码登录用户自己填 client ID（和 Telegram、Outlook 的凭据一样由用户自己填，不写进程序），注册步骤见第 7 条。
-7. **第 8 条**：skill 闸门默认放行，只拦 skill 里明确声明为写操作的命令；只管助手的会话，同一台电脑上 Agent 的会话不管。
+7. **第 8 条**：先定的是「skill 闸门默认放行，只拦声明为写的命令，只管助手」；随后改为**不做 skill 闸门**：skill 写操作交给 Claude Code 自己的权限判断，Claude 会自己判断、需要时问用户，不要过度设计。连接器的写操作照旧以工具过 `connector_gate`。
