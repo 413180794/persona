@@ -221,6 +221,7 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 - `-openAgentsFresh YES` 启动时清掉列表记住的样子（机器筛选、分组、细列表、折叠）：这些值测试里要在界面上改，不能用启动参数固定（启动参数会盖过 App 写进去的值）。
 - 列表行（`NavigationLink`）上的 `accessibilityIdentifier` 在视图树里出现两次（cell 和里面的 button），数行数、取第 n 行用 `app.buttons.matching(identifier:)`。
 - `SearchOpenTests` 以前不带 `-dev.openChat ""`：上一次测试留下打开的对话，启动后恢复进去，右滑返回回不到列表，两个用例都挂（master 上也一样）。
+- `SearchOpenTests` 两个用例在 master 上找不到 weather 的分组头和「给天气」那一行（#1051）：mock 的待处理多到 5 条后，「需要你处理」的卡片占满第一屏，懒加载的列表还没建它们。先 `bringAboveTabBar` 滚到它们，搜索前再滚回顶上；返回后用那一行判断回到了列表（列表停在原处，顶上的筛选条不在树里）。
 - `ShellAvatarTests` 以前也不带 `-dev.openChat ""`：模拟器上之前跑过的测试在 Agents 留下打开的对话，切到 Agents 时恢复进去，列表的顶栏不在，找不到 Agents 页的头像（master 上也挂）。
 - 细列表截图（`CompactListShots`，不用 mock，用体验模式的数据）：全部（空间多）、Mac Studio（未读多、空闲的空间）、未读筛选、需要你筛选、Mac mini（全部空闲）、
   按状态分组、卡片对照，每种三档字号（`-ui.textSize small|standard|large`；`TEST_RUNNER_JARVIS_TEXT_SIZES=standard` 只拍一档）。
