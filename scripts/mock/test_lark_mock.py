@@ -68,6 +68,17 @@ class LarkChatListTests(unittest.TestCase):
         self.check(MOCK_LARK="1")
 
 
+class LarkDeliveryProofTests(unittest.TestCase):
+    def test_exact_message_read_preserves_identity_and_ownership(self):
+        hub = MockHub()
+        self.addCleanup(hub.stop)
+        messages = hub.get("/api/v1/lark/conversations/f2/messages")["messages"]
+        for mine in (False, True):
+            message = next(m for m in messages if m["is_mine"] == mine)
+            proof = hub.get("/api/v1/lark/raw/messages/" + message["id"])["item"]
+            self.assertEqual(proof, {"id": message["id"], "feedId": "f2", "isMine": mine, "localState": "synced"})
+
+
 class LarkMeasuringTests(unittest.TestCase):
     """The switches docs/testing.md「卡顿测量」 measures the Feishu pages with (#674)."""
 

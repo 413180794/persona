@@ -412,6 +412,8 @@ final class AppModel {
 
     /// 退出 everything: every group, every hub (设置 › 断开 with one group, a revoked credential of this device).
     func unpair() {
+        LarkChatOutbox.forget()
+        LarkDrafts.shared.forget()
         pairingEngineMachine = nil
         if isDemo { leaveDemo() }
         for link in links { link.live.disconnect() }
@@ -1587,6 +1589,7 @@ final class AppModel {
     /// What the app holds about groups that are no longer there.
     func forgetGroups(_ gone: Set<String>, keepingPushKeys: Bool = false) {
         guard !gone.isEmpty else { return }
+        if !keepingPushKeys { LarkChatOutbox.forget(groups: gone) }
         machines = machines.filter { !gone.contains($0.group) }
         sessionsByMachine = sessionsByMachine.filter { !gone.contains($0.key.group) }
         interactions = interactions.filter { !gone.contains($0.value.group) }

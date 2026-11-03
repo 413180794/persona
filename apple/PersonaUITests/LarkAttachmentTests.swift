@@ -13,7 +13,9 @@ final class LarkAttachmentFlowTests: XCTestCase {
         app.launchPinned()
         let chat = app.staticTexts["设计评审"].firstMatch
         XCTAssertTrue(chat.waitForExistence(timeout: 20)); chat.tapCenter()
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除 ")).firstMatch.waitForExistence(timeout: 15))
+        if !["corrupt", "legacy"].contains(draft) {
+            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除 ")).firstMatch.waitForExistence(timeout: 15))
+        }
         return app
     }
 
@@ -23,6 +25,106 @@ final class LarkAttachmentFlowTests: XCTestCase {
         if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
+    }
+
+    @MainActor private func relaunchWithoutDraft(_ app: XCUIApplication) {
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+        app.terminate()
+        if let i = app.launchArguments.firstIndex(of: "-showLarkAttachmentDraft") {
+            app.launchArguments.removeSubrange(i...i + 1)
+        }
+        app.launchPinned()
+        let chat = app.staticTexts["设计评审"].firstMatch
+        XCTAssertTrue(chat.waitForExistence(timeout: 20)); chat.tapCenter()
+    }
+
+    @MainActor func testPhotoDraftSurvivesTerminationWithoutFixtureReinjection() throws {
+        let app = try open("photo")
+        let field = app.textFields["lark.box"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tapCenter(); field.typeText("Keep my photo draft")
+        let complete = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Keep my photo draft"), object: field)
+        XCTAssertEqual(XCTWaiter.wait(for: [complete], timeout: 5), .completed,
+                       "confirm the keyboard delivered the complete draft before terminating")
+        shot(app, "lark-draft-before-restart")
+        // The restart path deliberately has no fixture: both text and bytes must come from disk.
+        relaunchWithoutDraft(app)
+        XCTAssertTrue(app.buttons["移除 照片.jpg"].waitForExistence(timeout: 10))
+        XCTAssertEqual(field.value as? String, "Keep my photo draft")
+        shot(app, "lark-draft-restored")
+        app.buttons["预览 照片.jpg"].tapCenter()
+        XCTAssertTrue(app.buttons["关闭"].waitForExistence(timeout: 8))
+        shot(app, "lark-restored-photo-preview")
+        app.buttons["关闭"].tapCenter()
+        XCTAssertTrue(app.buttons["移除 照片.jpg"].waitForExistence(timeout: 5))
+        app.buttons["移除 照片.jpg"].tapCenter()
+        app.buttons["发送"].tapCenter()
+        XCTAssertTrue(app.buttons["lark.send"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch.waitForNonExistence(timeout: 15))
+        relaunchWithoutDraft(app)
+        XCTAssertTrue(app.buttons["添加附件"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["移除 照片.jpg"].exists)
+        XCTAssertEqual(field.value as? String, "回复 设计评审")
+        app.terminate()
+    }
+
+    @MainActor func testFailedFileSurvivesTerminationAndRetry() throws {
+        let app = try open("fail")
+        app.buttons["发送"].tapCenter()
+        let failed = app.buttons["lark.outgoing.failed"]
+        XCTAssertTrue(failed.waitForExistence(timeout: 15))
+        relaunchWithoutDraft(app)
+        XCTAssertTrue(failed.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["预览 retry-once.txt"].exists)
+        shot(app, "lark-failure-restored")
+        failed.tapCenter()
+        app.buttons["重发"].tapCenter()
+        XCTAssertTrue(failed.waitForNonExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["预览 retry-once.txt"].waitForNonExistence(timeout: 15))
+        relaunchWithoutDraft(app)
+        XCTAssertTrue(app.buttons["添加附件"].waitForExistence(timeout: 10))
+        XCTAssertFalse(failed.exists)
+        XCTAssertFalse(app.buttons["预览 retry-once.txt"].exists)
+        shot(app, "lark-retry-restored-once")
+        app.terminate()
+    }
+
+    @MainActor func testLostFileReceiptOffersCheckingAndRestartReconciles() throws {
+        let app = try open("receipt")
+        app.buttons["发送"].tapCenter()
+        let unknown = app.buttons["lark.outgoing.unconfirmed"]
+        XCTAssertTrue(unknown.waitForExistence(timeout: 15))
+        shot(app, "lark-file-unconfirmed")
+        unknown.tapCenter()
+        XCTAssertTrue(app.buttons["检查发送结果"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["重发"].exists)
+        XCTAssertFalse(app.buttons["放回输入框"].exists)
+        shot(app, "lark-file-check-only")
+        relaunchWithoutDraft(app)
+        XCTAssertTrue(app.buttons["添加附件"].waitForExistence(timeout: 10))
+        XCTAssertTrue(unknown.waitForNonExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["预览 lost-receipt.txt"].exists)
+        app.terminate()
+    }
+
+    @MainActor func testUnreadableDraftRecoveryReturnsToUsableComposer() throws {
+        let app = try open("corrupt")
+        XCTAssertTrue(app.buttons["恢复输入"].waitForExistence(timeout: 12))
+        shot(app, "lark-draft-unreadable")
+        app.buttons["恢复输入"].tapCenter()
+        XCTAssertTrue(app.buttons["清除草稿并重新开始"].waitForExistence(timeout: 5))
+        shot(app, "lark-draft-recovery-confirm")
+        app.buttons["清除草稿并重新开始"].tapCenter()
+        XCTAssertTrue(app.buttons["恢复输入"].waitForNonExistence(timeout: 8))
+        let input = app.textFields["lark.box"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertTrue(input.isEnabled)
+        input.tapCenter(); input.typeText("Recovered draft")
+        XCTAssertTrue(app.buttons["lark.send"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["lark.send"].isEnabled)
+        shot(app, "lark-draft-recovered")
+        app.terminate()
     }
 
     @MainActor func testPhotoPreviewPullDownRemoveAndPicker() throws {
@@ -97,6 +199,47 @@ final class LarkAttachmentFlowTests: XCTestCase {
         XCTAssertTrue(failed.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.buttons["预览 retry-once.txt"].waitForNonExistence(timeout: 10))
         shot(app, "lark-file-retried")
+        app.terminate()
+    }
+
+    @MainActor func testAcceptedFileWithoutIDCanRemoveOnlyLocalReceipt() throws {
+        let app = try open("idless")
+        app.buttons["发送"].tapCenter()
+        let receipt = app.buttons["lark.outgoing.sentReceipt"]
+        XCTAssertTrue(receipt.waitForExistence(timeout: 15))
+        relaunchWithoutDraft(app)
+        XCTAssertTrue(receipt.waitForExistence(timeout: 15))
+        receipt.tapCenter()
+        XCTAssertTrue(app.buttons["移除本机记录"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["重发"].exists)
+        shot(app, "lark-idless-file-receipt")
+        app.buttons["移除本机记录"].tapCenter()
+        XCTAssertTrue(receipt.waitForNonExistence(timeout: 8))
+        relaunchWithoutDraft(app)
+        XCTAssertTrue(app.buttons["添加附件"].waitForExistence(timeout: 10))
+        XCTAssertFalse(receipt.exists)
+        app.terminate()
+    }
+
+    @MainActor func testLegacyDraftRequiresAccountConfirmationThenSurvivesRestart() throws {
+        let app = try open("legacy")
+        XCTAssertTrue(app.staticTexts["发现旧版草稿"].waitForExistence(timeout: 12))
+        XCTAssertFalse(app.buttons["移除 legacy-draft.txt"].exists)
+        app.buttons["恢复"].tapCenter()
+        XCTAssertTrue(app.buttons["确认属于当前账号，恢复"].waitForExistence(timeout: 5))
+        shot(app, "lark-legacy-draft-confirm")
+        app.buttons["确认属于当前账号，恢复"].tapCenter()
+        XCTAssertTrue(app.buttons["移除 legacy-draft.txt"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.textFields["lark.box"].value as? String, "Legacy draft")
+        XCTAssertFalse(app.buttons["lark.outgoing.sending"].exists)
+        relaunchWithoutDraft(app)
+        XCTAssertTrue(app.buttons["移除 legacy-draft.txt"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["发现旧版草稿"].exists)
+        XCTAssertEqual(app.textFields["lark.box"].value as? String, "Legacy draft")
+        shot(app, "lark-legacy-draft-restored")
+        app.buttons["移除 legacy-draft.txt"].tapCenter()
+        app.buttons["发送"].tapCenter()
+        XCTAssertTrue(app.buttons["lark.send"].waitForNonExistence(timeout: 5))
         app.terminate()
     }
 }

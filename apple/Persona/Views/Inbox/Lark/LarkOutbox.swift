@@ -2,8 +2,8 @@ import SwiftUI
 
 /// A message typed in a Feishu chat on its way out: on screen the moment 发送 is tapped, sent in the background in the
 /// order written, and replaced by Feishu's own copy when that arrives (LarkChatView).
-struct LarkOutgoing: Identifiable, Equatable {
-    enum State: Equatable { case sending, sent, failed(String) }
+nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
+    enum State: Codable, Equatable, Sendable { case sending, sent, failed(String), unconfirmed }
 
     var id = UUID()
     var text: String
@@ -15,6 +15,10 @@ struct LarkOutgoing: Identifiable, Equatable {
     var thread = false
     var attachment: LarkAttachment?
     var messageID: String?
+    /// Persisted before the first network write; queued rows remain safely retryable after a restart.
+    var attempted = false
+    /// Direct file uploads have no server outbox replay contract. An uncertain upload is check-only.
+    var canRetry: Bool { state != .sent && (attachment?.kind != .file || state != .unconfirmed) }
     /// Who Feishu notifies (the @ picker), kept for 重发 and 放回输入框.
     var mentions: [LarkMention] = []
 
@@ -24,6 +28,7 @@ struct LarkOutgoing: Identifiable, Equatable {
     /// 重发: on its way again, as the same message.
     mutating func retry(at now: Date = .now) {
         state = .sending
+        attempted = false
         at = now
     }
 
@@ -143,7 +148,8 @@ struct LarkOutgoingRow: View {
 
     var body: some View {
         LarkMessageRow(message: message, grouped: grouped, isGroup: isGroup,
-                       sending: LarkSendMark(state: outgoing.state, retry: retry, edit: edit, discard: discard),
+                       sending: LarkSendMark(state: outgoing.state, retry: retry, edit: edit, discard: discard,
+                                             canRetry: outgoing.canRetry, canRemoveSent: outgoing.attachment != nil && outgoing.messageID == nil),
                        localAttachment: outgoing.attachment)
             .environment(\.larkReact, nil) // not in Feishu yet: nothing to react to
     }
@@ -156,6 +162,8 @@ struct LarkSendMark {
     var retry: () -> Void
     var edit: () -> Void
     var discard: () -> Void
+    var canRetry = true
+    var canRemoveSent = false
 }
 
 struct LarkSendMarkView: View {
@@ -169,23 +177,51 @@ struct LarkSendMarkView: View {
                 .accessibilityLabel("发送中")
                 .accessibilityIdentifier("lark.outgoing.sending")
         case .sent:
-            EmptyView()
-        case .failed(let why):
+            if mark.canRemoveSent {
+                Menu {
+                    Button(role: .destructive, action: mark.discard) {
+                        Label("移除本机记录", systemImage: Theme.Icon.delete).lineLimit(1)
+                    }
+                } label: {
+                    Image(systemName: Theme.Icon.done)
+                        .font(Theme.Font.label).foregroundStyle(.secondary)
+                        .scaledFrame(width: Theme.Size.iconL, height: Theme.Size.tapTarget)
+                        .contentShape(.rect)
+                }
+                .accessibilityLabel("已发送，管理本机记录")
+                .accessibilityHint("仅移除此处的发送记录，不撤回飞书消息")
+                .accessibilityIdentifier("lark.outgoing.sentReceipt")
+            }
+        case .failed, .unconfirmed:
             Menu {
-                Button(action: mark.retry) { Label("重发", systemImage: Theme.Icon.retry) }
-                Button(action: mark.edit) { Label("放回输入框", systemImage: Theme.Icon.undo) }
-                Button(role: .destructive, action: mark.discard) { Label("删除", systemImage: Theme.Icon.delete) }
+                Button(action: mark.retry) { Label(retryTitle, systemImage: Theme.Icon.retry).lineLimit(1) }
+                if mark.state != .unconfirmed {
+                    Button(action: mark.edit) { Label("放回输入框", systemImage: Theme.Icon.undo).lineLimit(1) }
+                }
+                Button(role: .destructive, action: mark.discard) {
+                    Label(mark.state == .unconfirmed ? "移除本机记录" : "删除", systemImage: Theme.Icon.delete).lineLimit(1)
+                }
             } label: {
                 Image(systemName: Theme.Icon.errorFilled)
                     .font(Theme.Font.body)
-                    .foregroundStyle(Theme.danger)
+                    .foregroundStyle(mark.state == .unconfirmed ? Theme.caution : Theme.danger)
                     // As wide as the icon (close to the bubble), as tall as a tap target.
                     .scaledFrame(width: Theme.Size.iconL, height: Theme.Size.tapTarget)
                     .contentShape(.rect)
             }
-            .accessibilityLabel("没发出去，点按重发")
-            .accessibilityHint(why)
-            .accessibilityIdentifier("lark.outgoing.failed")
+            .accessibilityLabel(mark.state == .unconfirmed ? "发送结果待确认" : "没发出去，点按重发")
+            .accessibilityHint(hint)
+            .accessibilityIdentifier(mark.state == .unconfirmed ? "lark.outgoing.unconfirmed" : "lark.outgoing.failed")
         }
+    }
+
+    private var hint: String {
+        if case .failed(let why) = mark.state { return why }
+        return mark.canRetry ? "连接中断，尚未确认发送结果。重试前会先检查已有消息。" : "尚未确认文件是否发出。只检查发送结果，不重复上传。"
+    }
+
+    private var retryTitle: String {
+        guard mark.state == .unconfirmed else { return "重发" }
+        return mark.canRetry ? "检查并重试" : "检查发送结果"
     }
 }

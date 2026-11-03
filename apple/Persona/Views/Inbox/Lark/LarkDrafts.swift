@@ -64,4 +64,10 @@ final class LarkDrafts {
     func flush() {
         store(drafts)
     }
+
+    /// Legacy records have no group/account key, so a complete unpair removes them together.
+    func forget() {
+        drafts.removeAll()
+        flush()
+    }
 }

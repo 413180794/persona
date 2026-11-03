@@ -75,16 +75,21 @@ import Testing
 
     @Test func queueDoesNotWaitForEchoBeforeSendingNextAndSurvivesReopening() async throws {
         let hub = FakeHub(), path = "/api/v1/lark/conversations/123/messages"
+        hub.on("GET", "/api/v1/lark/raw/accounts", json: #"{"activeId":"1","accounts":[{"id":"1","userId":"fixture-account","signedIn":true}]}"#)
         hub.on("POST", path, json: #"{"message_id":"999"}"#)
-        let queue = LarkChatOutbox.shared(config: hub.client.config, feed: "123")
-        queue.items = [LarkOutgoing(text: "first"), LarkOutgoing(text: "second")]
+        let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = LarkChatOutbox.shared(identity: .init(group: "", account: "fixture-account"), feed: "123", base: root)
+        try await queue.prepare()
+        try await queue.enqueue([LarkOutgoing(text: "first"), LarkOutgoing(text: "second")])
         for item in queue.items { queue.deliver(item.id, using: hub.client, feed: "123") {} }
         for _ in 0..<100 where hub.sent("POST", path).count < 2 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(hub.sent("POST", path).count == 2)
-        #expect(queue === LarkChatOutbox.shared(config: hub.client.config, feed: "123"))
-        var other = hub.client.config; other.token = "other-user"
-        #expect(LarkChatOutbox.shared(config: other, feed: "123").items.isEmpty)
-        queue.items = []
+        #expect(queue === LarkChatOutbox.shared(identity: .init(group: "", account: "fixture-account"), feed: "123", base: root))
+        let another = LarkChatOutbox.shared(identity: .init(group: "", account: "other-account"), feed: "123", base: root)
+        try await another.prepare()
+        #expect(another.items.isEmpty)
+        for item in queue.items { try await queue.discard(item.id) }
     }
 
     @Test func queuePreservesQuoteRoutingAndAcknowledgement() async throws {
@@ -93,7 +98,7 @@ import Testing
         let quote = LarkReplyTo(id: "source", senderName: "Sender", text: "Question")
         let item = LarkOutgoing(text: "Answer", replyTo: quote)
         let queue = LarkChatOutbox()
-        queue.items = [item]
+        try await queue.enqueue([item])
         queue.deliver(item.id, using: hub.client, feed: "123") {}
         for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
         #expect(queue.items.first?.state == .sent)
@@ -117,23 +122,77 @@ import Testing
         #expect(LarkOutbox.remaining([outgoing], messages: [echo]).isEmpty)
     }
 
-    @Test func failedSendRetainsAttachmentAndRetryKeepsClientID() async throws {
+    @Test func timedOutFileRetainsAttachmentWithoutAllowingAnotherUpload() async throws {
         let source = try file()
         defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
         let attachment = try await LarkAttachment.stageFile(source)
         let queue = LarkChatOutbox(), hub = FakeHub(), path = "/api/v1/lark/conversations/123/files"
         hub.on("POST", path) { _ in throw URLError(.timedOut) }
         let item = LarkOutgoing(text: "", attachment: attachment)
-        queue.items = [item]; queue.deliver(item.id, using: hub.client, feed: "123") {}
+        try await queue.enqueue([item]); queue.deliver(item.id, using: hub.client, feed: "123") {}
         for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
-        guard case .failed = queue.items.first?.state else { Issue.record("Expected a failed upload"); return }
+        guard case .unconfirmed = queue.items.first?.state else { Issue.record("Expected an unconfirmed upload after timeout"); return }
         #expect(FileManager.default.fileExists(atPath: attachment.file.path))
+        await #expect(throws: (any Error).self) { try await queue.retry(item.id) }
+        #expect(hub.sent("POST", path).count == 1)
+    }
+
+    @Test func rejectedFileCanRetryWithItsOriginalID() async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        let attachment = try await LarkAttachment.stageFile(source)
+        let queue = LarkChatOutbox(), hub = FakeHub(), path = "/api/v1/lark/conversations/123/files"
+        let item = LarkOutgoing(text: "", state: .failed("rejected"), attachment: attachment)
+        try await queue.enqueue([item])
         hub.on("POST", path, json: #"{"message_id":"999"}"#)
-        queue.items[0].retry(); queue.deliver(item.id, using: hub.client, feed: "123") {}
+        try await queue.retry(item.id); queue.deliver(item.id, using: hub.client, feed: "123") {}
         for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
         #expect(queue.items.first?.state == .sent)
         #expect(hub.sent("POST", path).allSatisfy { $0.query["client_id"] == item.clientID })
     }
+
+    @Test(arguments: [#"{"message_id":"local:pending"}"#])
+    func unusableFileReceiptIsUnconfirmedAndCannotUploadAgain(_ response: String) async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        let queue = LarkChatOutbox(), hub = FakeHub(), path = "/api/v1/lark/conversations/123/files"
+        hub.on("POST", path, json: response)
+        let item = LarkOutgoing(text: "", attachment: try await .stageFile(source))
+        try await queue.enqueue([item]); queue.deliver(item.id, using: hub.client, feed: "123") {}
+        for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(queue.items.first?.state == .unconfirmed)
+        await #expect(throws: (any Error).self) { try await queue.retry(item.id) }
+        #expect(hub.sent("POST", path).count == 1)
+    }
+    @Test(arguments: [#"{}"#, #"{"message_id":""}"#])
+    func acceptedFileWithoutMessageIDIsSentAndCannotRetry(_ response: String) async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        let queue = LarkChatOutbox(), hub = FakeHub(), path = "/api/v1/lark/conversations/123/files"
+        hub.on("POST", path, json: response)
+        let item = LarkOutgoing(text: "", attachment: try await .stageFile(source))
+        try await queue.enqueue([item]); queue.deliver(item.id, using: hub.client, feed: "123") {}
+        for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(queue.items.first?.state == .sent)
+        await #expect(throws: (any Error).self) { try await queue.retry(item.id) }
+        #expect(hub.sent("POST", path).count == 1)
+    }
+
+    @Test(arguments: [URLError.Code.notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed])
+    func fileThatCouldNotReachServerRemainsRetryable(_ code: URLError.Code) async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        let queue = LarkChatOutbox(), hub = FakeHub(), path = "/api/v1/lark/conversations/123/files"
+        hub.on("POST", path) { _ in throw URLError(code) }
+        let item = LarkOutgoing(text: "", attachment: try await .stageFile(source))
+        try await queue.enqueue([item]); queue.deliver(item.id, using: hub.client, feed: "123") {}
+        for _ in 0..<100 where queue.items.first?.state == .sending { try await Task.sleep(for: .milliseconds(10)) }
+        guard case .failed = queue.items.first?.state else { Issue.record("Expected an explicit offline failure"); return }
+        #expect(queue.items.first?.canRetry == true)
+        try await queue.retry(item.id)
+        #expect(queue.items.first?.attempted == false)
+    }
+
     @Test func abandonedStagingIsSweptOnceWithoutRemovingCurrentFilesOrDurableMedia() throws {
         let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

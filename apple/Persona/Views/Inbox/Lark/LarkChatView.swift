@@ -29,6 +29,7 @@ struct LarkChatView: View {
     @Environment(AppModel.self) private var model
     /// Polled and reported only while its page is in front: a hidden chat reports nothing to Feishu (TabActivity.swift).
     @Environment(\.tabIsActive) private var tabActive
+    @Environment(\.scenePhase) private var scenePhase
     var conversation: LarkConversation
     @State private var pager = LarkPager()
     /// The hub answered with a topic group's topics for a chat opened without `isTopic` (from a profile, an old inbox item).
@@ -52,6 +53,15 @@ struct LarkChatView: View {
     @State private var showPhotos = false
     @State private var showFiles = false
     @State private var preparingAttachment = false
+    @State private var savingOutgoing = false
+    @State private var checkingOutgoing: Set<UUID> = []
+    @State private var draftLoaded = false
+    @State private var confirmDraftRecovery = false
+    @State private var chatLink: HubLink?
+    @State private var accountProblem: String?
+    @State private var legacyDraft: LarkOutboxSnapshot?
+    @State private var legacyStore: LarkOutboxStore?
+    @State private var confirmLegacyDraft = false
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var fileRequest: (url: String, name: String)?
     /// Read position when the chat was opened: the divider sits above the first message after it. Frozen for the visit.
@@ -73,12 +83,16 @@ struct LarkChatView: View {
 
     init(conversation: LarkConversation) {
         self.conversation = conversation
-        // The draft left here last time, quote and all.
-        let draft = LarkDrafts.shared[.chat(conversation.id)]
-        _text = State(initialValue: draft.text)
-        _replyTo = State(initialValue: draft.replyTo)
+        // Restore only after binding the composer to its Hub credential.
+        _text = State(initialValue: "")
+        _replyTo = State(initialValue: nil)
+        _mentions = State(initialValue: [])
         _following = State(initialValue: !Self.opensAtMessage(conversation) && !Self.debugTop)
-        _mentions = State(initialValue: draft.mentions ?? [])
+    }
+
+    private var chatAPI: APIClient? {
+        guard let chatLink, model.link(chatLink.group) === chatLink else { return nil }
+        return model.api(chatLink.group)
     }
 
     private var isTopic: Bool { conversation.isTopic == true || foundTopic }
@@ -89,6 +103,69 @@ struct LarkChatView: View {
     private static func opensAtMessage(_ c: LarkConversation) -> Bool { c.focus != nil || (c.isTopic != true && c.unread > 0) }
 
     var body: some View {
+        chatContent
+        .themedPage()
+        .navigationTitle(conversation.name)
+        .navigationSubtitle(isTopic ? "飞书话题群" : "飞书")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { Task { await askJarvis() } } label: { Label("让 Persona 总结", systemImage: Theme.Icon.ai) }
+            }
+        }
+        .task {
+            if chatLink == nil { chatLink = model.hub }
+            async let restored: Void = restoreDraft()
+            LarkMedia.shared.loadEmojiCatalog()
+            // The last messages seen here paint at once (offline too); the network only brings them up to date.
+            // Background sync (LarkSync) keeps this cache current, so it is usually already the latest. An unread chat
+            // opens at its first unread message: the cache serves when it reaches back that far.
+            if pager.messages.isEmpty, conversation.focus == nil,
+               let cached = StateCache.load("lark-chat-\(conversation.id)", as: [LarkMessage].self), !cached.isEmpty,
+               !opensAtMessage || cached.first.map({ !LarkPosition.less(LarkPosition.next(conversation.readPosition ?? "0"), $0.position) }) == true {
+                pager.messages = cached
+                pager.hasOlder = true
+                pager.olderCursor = cached.first?.position
+                pager.newerCursor = cached.last?.position
+                let read = conversation.readPosition ?? "0"
+                if opensAtMessage, let first = cached.first(where: { LarkPosition.less(read, $0.position) }) { await scroll(to: first.id) }
+            }
+            await load()
+            await restored
+            #if DEBUG
+            if attachments.isEmpty { attachments = await LarkAttachmentFixture.load(config: chatAPI?.config) }
+            #endif
+            if let api = chatAPI, (try? await outbox.checkAccount(using: api)) != nil {
+                try? await outbox.settle(pager.messages)
+                await outbox.verifyAcknowledged(using: api, feed: conversation.id)
+            }
+            if !outbox.items.isEmpty {
+                try? await Task.sleep(for: .milliseconds(60))
+                position.scrollTo(edge: .bottom)
+            }
+        }
+        // A fallback: changes arrive as pushes (below). It polls only while the chat's page is in front.
+        .tabActiveTask {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                await refreshLatest()
+                askReceiptsAgain()
+            }
+        }
+        .task {
+            for await _ in LarkSync.shared.changes(of: conversation.id) {
+                await refreshLatest()
+                askReceiptsAgain()
+            }
+        }
+        // Back in front: what came on screen while it was in the back is reported now.
+        .onTabVisibility(appear: reportSoon, disappear: flushRead)
+        .onChange(of: anchor) { pager.seen.formUnion(book.seen) }
+        .onChange(of: mention) { pager.seen.formUnion(book.seen) }
+    }
+
+    @ViewBuilder private var chatContent: some View {
         let messages = visibleMessages
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -149,67 +226,64 @@ struct LarkChatView: View {
         .sheet(isPresented: Binding(get: { debugPost != nil }, set: { if !$0 { debugPost = nil } })) {
             if let id = debugPost { LarkMomentsPostView(postID: id) }
         }
-        .safeAreaInset(edge: .bottom) { composer }
-        .onChange(of: LarkDraft(text: text, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)) { _, draft in
-            LarkDrafts.shared.set(draft, for: .chat(conversation.id))
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: Theme.Space.s) {
+                if legacyDraft != nil {
+                    HStack(spacing: Theme.Space.s) {
+                        Text("发现旧版草稿").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Button("恢复") { confirmLegacyDraft = true }.lineLimit(1)
+                    }
+                    .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
+                    .frame(maxWidth: .infinity).background(Theme.pageBackground)
+                }
+                if let problem = accountProblem ?? outbox.preparationProblem {
+                    HStack(spacing: Theme.Space.s) {
+                        Text(problem).font(Theme.Font.label).foregroundStyle(.secondary)
+                        if outbox.canRecover {
+                            Button("恢复输入") { confirmDraftRecovery = true }.lineLimit(1)
+                        } else {
+                            Button("重试") { Task { await restoreDraft() } }.lineLimit(1)
+                        }
+                    }
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.s)
+                    .frame(maxWidth: .infinity)
+                    .background(Theme.pageBackground)
+                }
+                composer
+            }
         }
-        .onDisappear { LarkDrafts.shared.flush() }
+        .confirmationDialog("重新开始编辑？", isPresented: $confirmDraftRecovery, titleVisibility: .visible) {
+            Button("清除草稿并重新开始", role: .destructive) {
+                Task {
+                    do {
+                        try await outbox.recover()
+                        applyDraft()
+                    } catch { model.toast = Toast("未能恢复，请检查本机存储空间后重试", style: .error) }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将清除此会话的本机草稿、待发送记录及附件。已发出的飞书消息不受影响。")
+        }
+        .confirmationDialog("恢复到当前飞书账号？", isPresented: $confirmLegacyDraft, titleVisibility: .visible) {
+            Button("确认属于当前账号，恢复") { restoreLegacyDraft() }.lineLimit(1)
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("旧版草稿没有记录所属账号。确认后恢复到当前会话，待发送内容不会自动发送。")
+        }
+        .onChange(of: LarkDraft(text: text, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)) { _, _ in saveDraft() }
+        .onChange(of: attachments) { _, _ in saveDraft(immediately: true) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { saveDraft(immediately: true) }
+            else { Task { await restoreDraft() } }
+        }
+        .onChange(of: outbox.storageProblem) { _, problem in
+            if let problem { model.toast = Toast(problem, style: .error) }
+        }
+        .onDisappear { saveDraft(immediately: true) }
         .modifier(LarkAttachmentPicker(attachments: $attachments, photos: $showPhotos, files: $showFiles, preparing: $preparingAttachment))
         .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
-        .themedPage()
-        .navigationTitle(conversation.name)
-        .navigationSubtitle(isTopic ? "飞书话题群" : "飞书")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { Task { await askJarvis() } } label: { Label("让 Persona 总结", systemImage: Theme.Icon.ai) }
-            }
-        }
-        .task {
-            if let config = model.api?.config { outbox = .shared(config: config, feed: conversation.id) }
-            #if DEBUG
-            if attachments.isEmpty { attachments = await LarkAttachmentFixture.load(config: model.api?.config) }
-            #endif
-            LarkMedia.shared.loadEmojiCatalog()
-            // The last messages seen here paint at once (offline too); the network only brings them up to date.
-            // Background sync (LarkSync) keeps this cache current, so it is usually already the latest. An unread chat
-            // opens at its first unread message: the cache serves when it reaches back that far.
-            if pager.messages.isEmpty, conversation.focus == nil,
-               let cached = StateCache.load("lark-chat-\(conversation.id)", as: [LarkMessage].self), !cached.isEmpty,
-               !opensAtMessage || cached.first.map({ !LarkPosition.less(LarkPosition.next(conversation.readPosition ?? "0"), $0.position) }) == true {
-                pager.messages = cached
-                pager.hasOlder = true
-                pager.olderCursor = cached.first?.position
-                pager.newerCursor = cached.last?.position
-                let read = conversation.readPosition ?? "0"
-                if opensAtMessage, let first = cached.first(where: { LarkPosition.less(read, $0.position) }) { await scroll(to: first.id) }
-            }
-            await load()
-            if !outbox.items.isEmpty {
-                try? await Task.sleep(for: .milliseconds(60))
-                position.scrollTo(edge: .bottom)
-            }
-        }
-        // A fallback: changes arrive as pushes (below). It polls only while the chat's page is in front.
-        .tabActiveTask {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
-                await refreshLatest()
-                askReceiptsAgain()
-            }
-        }
-        .task {
-            for await _ in LarkSync.shared.changes(of: conversation.id) {
-                await refreshLatest()
-                askReceiptsAgain()
-            }
-        }
-        // Back in front: what came on screen while it was in the back is reported now.
-        .onTabVisibility(appear: reportSoon, disappear: flushRead)
-        // What the jump buttons count is set once the page is in: rows already on screen (the cached page) count.
-        .onChange(of: anchor) { pager.seen.formUnion(book.seen) }
-        .onChange(of: mention) { pager.seen.formUnion(book.seen) }
     }
 
     private var composer: some View {
@@ -250,6 +324,7 @@ struct LarkChatView: View {
                           mentionFeed: conversation.isGroup ? conversation.id : nil,
                           me: pager.messages.last(where: \.isMine)?.senderID, mentions: $mentions, send: send)
         }
+        .disabled(savingOutgoing || !draftLoaded || outbox.invalidated)
         .padding(.top, !attachments.isEmpty || preparingAttachment ? Theme.Space.s : 0)
         .background {
             if !attachments.isEmpty || preparingAttachment {
@@ -353,7 +428,7 @@ struct LarkChatView: View {
             loading = false
             landed = true
         }
-        guard let api = model.api else { return }
+        guard let api = chatAPI else { return }
         do {
             if let focus = conversation.focus {
                 apply(try await api.larkMessages(conversation.id, around: focus))
@@ -402,7 +477,7 @@ struct LarkChatView: View {
 
     /// Polls the tail while it is loaded: new messages append, cards that changed (alert status…) update in place.
     private func refreshLatest() async {
-        guard !pager.hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) else { return }
+        guard !pager.hasNewer, let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic) else { return }
         problem = nil // it answers again (lark-connector signed in again, the network is back)
         let fresh = pager.refresh(with: r)
         guard !fresh.isEmpty else { return }
@@ -411,7 +486,7 @@ struct LarkChatView: View {
     }
 
     private func loadOlder() async {
-        guard let api = model.api, let cursor = pager.olderRequest, !loadingOlder else { return }
+        guard let api = chatAPI, let cursor = pager.olderRequest, !loadingOlder else { return }
         loadingOlder = true
         defer { loadingOlder = false }
         guard let r = try? await api.larkMessages(conversation.id, before: cursor, topic: isTopic) else { return }
@@ -419,7 +494,7 @@ struct LarkChatView: View {
     }
 
     private func loadNewer() async {
-        guard let api = model.api, let cursor = pager.newerRequest, !loadingNewer, pager.hasNewer else { return }
+        guard let api = chatAPI, let cursor = pager.newerRequest, !loadingNewer, pager.hasNewer else { return }
         loadingNewer = true
         defer { loadingNewer = false }
         guard let r = try? await api.larkMessages(conversation.id, after: cursor) else { return }
@@ -428,7 +503,7 @@ struct LarkChatView: View {
 
     /// 回到最新: the latest page; the new-messages line goes away.
     private func jumpToLatest() async {
-        if pager.hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) {
+        if pager.hasNewer, let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic) {
             apply(r)
             anchor = nil
         }
@@ -443,7 +518,7 @@ struct LarkChatView: View {
             withAnimation(Theme.Motion.standard) { position.scrollTo(id: m.id, anchor: .top) }
             return
         }
-        guard let api = model.api, let r = try? await api.larkMessages(conversation.id, around: target) else { return }
+        guard let api = chatAPI, let r = try? await api.larkMessages(conversation.id, around: target) else { return }
         apply(r)
         if let m = pager.messages.first(where: { $0.position == target }) { await scroll(to: m.id) }
     }
@@ -459,7 +534,7 @@ struct LarkChatView: View {
         Haptics.tap()
         Task {
             do {
-                try await model.api?.larkReact(m.id, key: key, remove: remove)
+                try await chatAPI?.larkReact(m.id, key: key, remove: remove)
             } catch {
                 model.show(error)
                 if let j = pager.messages.firstIndex(where: { $0.id == m.id }) { pager.messages[j] = m }
@@ -490,7 +565,7 @@ struct LarkChatView: View {
 
     private func flushRead() {
         if !book.seen.isSubset(of: pager.seen) { pager.seen.formUnion(book.seen) }
-        guard !isTopic, let api = model.api, let report = pager.readReport() else { return }
+        guard !isTopic, let api = chatAPI, let report = pager.readReport() else { return }
         let feed = conversation.id
         Task { try? await api.larkRead(feed, report) }
     }
@@ -512,7 +587,7 @@ struct LarkChatView: View {
     /// One request at a time, no sooner than LarkReadReceipts.minGap after the last; rows that come on screen
     /// together go in one request.
     private func askReceipts() {
-        guard book.receiptTask == nil, let wait = book.receipts.wait(now: .now), let api = model.api else { return }
+        guard book.receiptTask == nil, let wait = book.receipts.wait(now: .now), let api = chatAPI else { return }
         let feed = conversation.id
         let book = book
         book.receiptTask = Task {
@@ -556,61 +631,213 @@ struct LarkChatView: View {
         }
     }
 
-    /// On screen at once; Feishu gets it in the background, after what was written before it.
+    private func restoreDraft() async {
+        guard let link = chatLink, let api = chatAPI else { return }
+        await LarkChatOutbox.waitForCleanup()
+        guard model.link(link.group) === link else { return }
+        let revision = await LarkOutboxAccounts.shared.revision
+        if !draftLoaded, let cached = await LarkOutboxAccounts.shared.cached(group: link.group, base: .applicationSupportDirectory) {
+            await bindDraft(account: cached, link: link)
+        }
+        do {
+            let account = try await api.larkAccountID()
+            guard model.link(link.group) === link else { return }
+            try await LarkOutboxAccounts.shared.remember(account, group: link.group, base: .applicationSupportDirectory, expectedRevision: revision)
+            guard model.link(link.group) === link else { return }
+            if outbox.identity?.account != account || !draftLoaded {
+                if draftLoaded {
+                    saveDraft(immediately: true)
+                    await outbox.flushDraft()
+                    model.toast = Toast("飞书账号已切换，草稿按账号分别保留")
+                }
+                await bindDraft(account: account, link: link)
+            }
+            accountProblem = nil
+            await findLegacyDraft(link: link)
+        } catch {
+            if !draftLoaded { accountProblem = "暂时无法确认飞书账号，请检查连接后重试" }
+        }
+    }
+
+    private func findLegacyDraft(link: HubLink) async {
+        guard let identity = outbox.identity, model.link(link.group) === link else { return }
+        legacyDraft = nil; legacyStore = nil
+        for config in Set([link.config, link.fallback]) {
+            let old = LarkOutboxStore(identity: identity, feed: conversation.id, legacyConfig: config)
+            if let saved = try? await old.load(), !saved.isEmpty {
+                guard model.link(link.group) === link else { return }
+                legacyDraft = saved; legacyStore = old
+                return
+            }
+        }
+        let draft = LarkDrafts.shared[.chat(conversation.id)]
+        if !draft.isEmpty { legacyDraft = LarkOutboxSnapshot(draft: draft) }
+    }
+
+    private func restoreLegacyDraft() {
+        guard let legacyDraft, let api = chatAPI, !savingOutgoing else { return }
+        let queue = outbox, oldStore = legacyStore
+        Task {
+            do {
+                try await queue.checkAccount(using: api)
+                guard outbox === queue, text.isEmpty, replyTo == nil, attachments.isEmpty, queue.items.isEmpty else {
+                    model.toast = Toast("请先发送或清空当前草稿，再恢复旧版草稿"); return
+                }
+                savingOutgoing = true
+                defer { savingOutgoing = false }
+                try await queue.importLegacy(legacyDraft)
+                applyDraft()
+                try await oldStore?.removeImportedLegacy()
+                LarkDrafts.shared.set(LarkDraft(), for: .chat(conversation.id))
+                LarkDrafts.shared.flush()
+                self.legacyDraft = nil; legacyStore = nil
+            } catch { model.toast = Toast("旧版草稿尚未恢复，请检查账号和本机存储空间后重试", style: .error) }
+        }
+    }
+
+    private func bindDraft(account: String, link: HubLink) async {
+        guard model.link(link.group) === link else { return }
+        let identity = LarkOutboxIdentity(group: link.group, account: account)
+        let queue = LarkChatOutbox.shared(identity: identity, feed: conversation.id)
+        outbox = queue
+        draftLoaded = false
+        #if DEBUG
+        await LarkAttachmentFixture.breakDraft(config: link.config, identity: identity, feed: conversation.id)
+        #endif
+        do {
+            try await queue.prepare()
+            guard model.link(link.group) === link, outbox === queue else { return }
+            applyDraft()
+        } catch { /* The recovery row offers a retry or an explicit discard. */ }
+    }
+
+    private func applyDraft() {
+        let composer = outbox.composer
+        text = composer.draft.text
+        replyTo = composer.draft.replyTo
+        mentions = composer.draft.mentions ?? []
+        attachments = composer.attachments
+        draftLoaded = true
+    }
+
+    private func saveDraft(immediately: Bool = false) {
+        guard draftLoaded, !savingOutgoing else { return }
+        let draft = LarkDraft(text: text, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)
+        outbox.scheduleDraft(draft, attachments: attachments, immediately: immediately)
+    }
+
+    /// The durable composer-to-outbox transaction finishes before the input clears and sending starts.
     private func send() {
-        guard model.api != nil else { model.toast = Toast("请先连接 Hub", style: .error); return }
+        guard let api = chatAPI, outbox.identity != nil else {
+            model.toast = Toast("请重新打开此会话后发送", style: .error); return
+        }
+        let queue = outbox
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !preparingAttachment, !t.isEmpty || (!attachments.isEmpty && replyTo == nil) else { return }
+        guard draftLoaded, !savingOutgoing, !preparingAttachment,
+              !t.isEmpty || (!attachments.isEmpty && replyTo == nil) else { return }
         var batch: [LarkOutgoing] = []
         if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
         batch += attachments.map { LarkOutgoing(text: "", attachment: $0) }
-        text = ""
-        replyTo = nil
-        mentions = []
-        attachments = []
-        withAnimation(Theme.Motion.standard) { outbox.items += batch }
-        Haptics.tap()
-        for item in batch { deliver(item.id) }
-        // The row shows right above the box (and the quote bar going away): larkFollowsEnd.
-        if pager.hasNewer { Task { await jumpToLatest() } } else { following = true }
+        savingOutgoing = true
+        Task {
+            do { try await queue.enqueue(batch) }
+            catch {
+                savingOutgoing = false
+                model.toast = Toast("消息未发送，无法保存到本机，请检查存储空间", style: .error); return
+            }
+            if outbox === queue {
+                text = ""
+                replyTo = nil
+                mentions = []
+                attachments = []
+            }
+            savingOutgoing = false
+            Haptics.tap()
+            for item in batch { deliver(item.id, using: api, queue: queue) }
+            if pager.hasNewer { Task { await jumpToLatest() } } else { following = true }
+        }
     }
 
     private func resend(_ id: UUID) {
-        guard let i = outbox.items.firstIndex(where: { $0.id == id }) else { return }
-        outbox.items[i].retry()
-        deliver(id)
+        guard !checkingOutgoing.contains(id), let api = chatAPI, outbox.identity != nil else { return }
+        let queue = outbox
+        checkingOutgoing.insert(id)
+        Task {
+            defer { checkingOutgoing.remove(id) }
+            do {
+                try await queue.checkAccount(using: api)
+                // Check with the original account even if the user switches Hub while this request runs.
+                let latest = try await api.larkMessages(conversation.id, topic: isTopic)
+                try await queue.settle(latest.messages)
+                guard let item = queue.items.first(where: { $0.id == id }) else { return }
+                guard item.canRetry else {
+                    model.toast = Toast("尚未确认文件是否发出，请稍后再检查", style: .error)
+                    return
+                }
+                try await queue.retry(id)
+                deliver(id, using: api, queue: queue)
+            } catch { model.toast = Toast("暂时无法重试，请检查连接和本机存储空间", style: .error) }
+        }
     }
 
     private func discard(_ id: UUID) {
-        withAnimation(Theme.Motion.standard) { outbox.items.removeAll { $0.id == id } }
+        Task {
+            do { try await outbox.discard(id) }
+            catch { model.toast = Toast("未能删除，请检查本机存储空间", style: .error) }
+        }
     }
 
     private func restore(_ outgoing: LarkOutgoing) {
+        guard !savingOutgoing else { return }
+        let queue = outbox
+        var draft = LarkDraft(text: text, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions), files = attachments
         if let attachment = outgoing.attachment {
-            guard attachments.count < LarkAttachment.selectionLimit else {
+            guard files.count < LarkAttachment.selectionLimit else {
                 model.toast = Toast("请先移除一个附件，再放回输入框", style: .error)
                 return
             }
-            attachments.append(attachment)
+            files.append(attachment)
         } else {
-            text = text.isEmpty ? outgoing.text : text + "\n" + outgoing.text
-            if replyTo == nil { replyTo = outgoing.replyTo }
-            mentions += outgoing.mentions
+            draft.text = draft.text.isEmpty ? outgoing.text : draft.text + "\n" + outgoing.text
+            if draft.replyTo == nil { draft.replyTo = outgoing.replyTo }
+            draft.mentions = (draft.mentions ?? []) + outgoing.mentions
         }
-        discard(outgoing.id)
+        savingOutgoing = true
+        Task {
+            defer { savingOutgoing = false }
+            do {
+                try await queue.restore(outgoing.id, draft: draft, attachments: files)
+                if outbox === queue { applyDraft() }
+            } catch { model.toast = Toast("未能放回输入框，请检查本机存储空间", style: .error) }
+        }
     }
 
-    private func deliver(_ id: UUID) {
-        guard let api = model.api else { return }
-        outbox.deliver(id, using: api, feed: conversation.id) { await refreshLatest(); settleOutgoing(pager.messages) }
+    private func deliver(_ id: UUID, using api: APIClient, queue: LarkChatOutbox) {
+        let link = chatLink
+        queue.deliver(id, client: {
+            guard let link, model.link(link.group) === link else { return nil }
+            return model.api(link.group)
+        }, feed: conversation.id) {
+            guard let link, model.link(link.group) === link, outbox === queue else { return }
+            await refreshLatest()
+            settleOutgoing(pager.messages)
+        }
     }
 
     private func settleOutgoing(_ messages: [LarkMessage]) {
-        outbox.settle(messages)
+        guard let api = chatAPI, !outbox.items.isEmpty else { return }
+        let queue = outbox
+        Task {
+            guard (try? await queue.checkAccount(using: api)) != nil else { return }
+            do {
+                try await queue.settle(messages)
+            }
+            catch { model.toast = Toast("发送结果尚未保存，请检查本机存储空间", style: .error) }
+        }
     }
 
     private func askJarvis() async {
-        guard let api = model.api else { return }
+        guard let api = chatAPI else { return }
         let prompt = "读取我飞书会话「\(conversation.name)」（lark-connector feedId \(conversation.id)）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。"
         do {
             let s = try await api.startConversation(prompt: prompt)

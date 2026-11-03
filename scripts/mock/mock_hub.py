@@ -5206,6 +5206,17 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/bots/feishu":  # 设置 › 连接器 › 飞书机器人
             st = dict(FEISHU_BOT, last_event_at=int(time.time()) - 40 if FEISHU_BOT["connected"] else None)
             return self.send_json({k: v for k, v in st.items() if v is not None})
+        if p == "/api/v1/lark/raw/accounts":
+            return self.send_json({"activeId": "1", "accounts": [{"id": "1", "active": True,
+                "signedIn": not bool(os.environ.get("MOCK_LARK_LOGGED_OUT")), "userId": "mock-lark-account"}]})
+        if p.startswith("/api/v1/lark/raw/messages/"):
+            mid = p.rsplit("/", 1)[-1]
+            for feed, messages in LARK_MESSAGES.items():
+                for message in messages:
+                    if message["id"] == mid:
+                        return self.send_json({"item": {"id": mid, "feedId": feed,
+                            "isMine": message.get("is_mine", False), "localState": message.get("local_state", "synced")}})
+            return self.send_json({"error": "消息不存在"}, 404)
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
         lark_read = p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") or (
@@ -5696,13 +5707,15 @@ class H(BaseHTTPRequestHandler):
             time.sleep(float(os.environ.get("MOCK_LARK_SEND_SECONDS", "2")))
             LARK_UPLOAD_ATTEMPTS[key] = LARK_UPLOAD_ATTEMPTS.get(key, 0) + 1
             if body.get("name") == "retry-once.txt" and LARK_UPLOAD_ATTEMPTS[key] == 1:
-                return self.send_json({"error": "网络暂时不可用，请重试"}, 502)
+                return self.send_json({"error": "请求过于频繁，请稍后重试"}, 429)
             feed = p.split("/")[5]
             msgs = LARK_MESSAGES.setdefault(feed, [])
             pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
             m = _lm(pos, "我", body.get("name", "附件"), mine=True, mins=0)
             m["type"] = "IMAGE" if image else "FILE"
             m["client_id"], m["local_state"] = key, "synced"
+            if body.get("name") == "idless-receipt.txt":
+                m.pop("client_id", None)
             m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             media_key = "upload-" + key
             LARK_UPLOAD_BYTES[media_key] = (base64.b64decode(body["data"]) if image else self.last_body, body.get("mime", "application/octet-stream"))
@@ -5710,6 +5723,10 @@ class H(BaseHTTPRequestHandler):
                            "url": "/api/v1/lark/media/" + media_key, "metadata": {"size": len(self.last_body), **({"width": 1024, "height": 1024} if image else {})}}]
             msgs.append(m)
             LARK_UPLOADS[key] = m["id"]
+            if body.get("name") == "lost-receipt.txt":
+                return self.send_json([])  # Accepted, but the client cannot decode the response as a receipt.
+            if body.get("name") == "idless-receipt.txt":
+                return self.send_json({"message_id": ""})
             return self.send_json({"message_id": m["id"]})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # 飞书发消息: lark-connector takes a moment
             body, feed = json.loads(self.last_body or b"{}"), p.split("/")[5]

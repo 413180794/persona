@@ -3,7 +3,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 /// Owns a private snapshot: picker access can end and the original can change without affecting a retry.
-/// The last draft/outbox reference releases only this snapshot, never the user's original file.
+/// Temporary snapshots follow their last reference; durable copies are collected by LarkOutboxStore.
 nonisolated final class LarkAttachment: Identifiable, Equatable, Sendable {
     static let fileLimit = 100 << 20
     static let imageLimit = 15 << 19
@@ -11,20 +11,23 @@ nonisolated final class LarkAttachment: Identifiable, Equatable, Sendable {
     static let staging = LarkAttachmentStaging()
     /// Allow a bounded file upload on a slow uplink, with one minute for the response.
     static func uploadTimeout(bytes: Int) -> TimeInterval { max(180, TimeInterval(min(max(bytes, 0), fileLimit) / (128 << 10)) + 60) }
-    enum Kind: Sendable { case image, file }
-    let id = UUID()
+    enum Kind: String, Codable, Sendable { case image, file }
+    let id: UUID
     let kind: Kind
     let file: URL
     let name: String
     let mime: String
     let size: Int
     let thumbnail: Data?
+    private let temporary: Bool
 
-    private init(kind: Kind, file: URL, name: String, mime: String, size: Int, thumbnail: Data? = nil) {
+    init(id: UUID = UUID(), kind: Kind, file: URL, name: String, mime: String, size: Int, thumbnail: Data? = nil,
+         temporary: Bool = true) {
+        self.id = id; self.temporary = temporary
         self.kind = kind; self.file = file; self.name = name; self.mime = mime; self.size = size; self.thumbnail = thumbnail
     }
     static func == (lhs: LarkAttachment, rhs: LarkAttachment) -> Bool { lhs.id == rhs.id }
-    deinit { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    deinit { if temporary { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) } }
 
     enum Failure: String, LocalizedError {
         case invalid = "无法读取附件，请重新选择"
@@ -102,22 +105,36 @@ nonisolated final class LarkAttachment: Identifiable, Equatable, Sendable {
 nonisolated struct LarkSendReceipt: Decodable, Sendable {
     var messageID: String?
     enum CodingKeys: String, CodingKey { case messageID = "message_id" }
+
+    enum Failure: LocalizedError {
+        case missing
+        var errorDescription: String? { "尚未收到有效的发送结果，请稍后检查" }
+    }
 }
 
 extension APIClient {
     func larkSendAttachment(_ feed: String, attachment: LarkAttachment, clientID: String) async throws -> LarkSendReceipt {
         let root = "/api/v1/lark/conversations/\(feed)"
+        var receipt: LarkSendReceipt
         switch attachment.kind {
         case .image:
             struct Body: Encodable { var client_id: String; var name: String; var mime: String; var data: Data }
             let bytes = try Data(contentsOf: attachment.file)
-            return try await post(root + "/images", body: Body(client_id: clientID, name: attachment.name, mime: attachment.mime, data: bytes), timeout: 180)
+            receipt = try await post(root + "/images", body: Body(client_id: clientID, name: attachment.name, mime: attachment.mime, data: bytes), timeout: 180)
         case .file:
             let data = try await uploadBytes(file: attachment.file, path: root + "/files",
                                             query: ["client_id": clientID, "name": attachment.name, "mime": attachment.mime],
                                             timeout: LarkAttachment.uploadTimeout(bytes: attachment.size))
-            return try JSON.decoder.decode(LarkSendReceipt.self, from: data)
+            receipt = try JSON.decoder.decode(LarkSendReceipt.self, from: data)
         }
+        // A successful file upload may omit message_id. It is already accepted and must never be offered for retry.
+        if attachment.kind == .file, receipt.messageID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            receipt.messageID = nil
+            return receipt
+        }
+        guard let id = receipt.messageID, !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              attachment.kind != .file || !id.hasPrefix("local:") else { throw LarkSendReceipt.Failure.missing }
+        return receipt
     }
 }
 
