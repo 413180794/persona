@@ -70,6 +70,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines/{mid}/git/status", h.proxy("git.status", func(r *http.Request) any {
 		return map[string]any{"cwd": r.URL.Query().Get("cwd")}
 	}))
+	api.HandleFunc("POST /api/v1/machines/{mid}/git/pull", h.proxyBody("git.pull"))
 	api.HandleFunc("GET /api/v1/machines/{mid}/git/diff", h.proxy("git.diff", func(r *http.Request) any {
 		q := r.URL.Query()
 		return map[string]any{"cwd": q.Get("cwd"), "path": q.Get("path"), "staged": q.Get("staged") == "1"}

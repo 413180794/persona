@@ -425,6 +425,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | 会话里提到的路径在这台机器上在不在：`paths` 一行一个（也收 `path=a&path=b`），最多 200 个 → `{"stats":[{"path"(原样),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`。`denied` 是 macOS 不让 personad 读的文件夹（打开时会说怎么授权）；相对路径没有 `cwd`、iCloud 里的路径一律 `missing`。手机只给 file / dir / denied 的路径做可点的文件块 |
 | GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud |
 | GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[最近 30 条]}`（只读，`GIT_OPTIONAL_LOCKS=0`） |
+| POST | `/api/v1/machines/{mid}/git/pull` | `{"cwd"}` → `{"status": GitStatus, "updated": bool}`；只允许有上游的普通分支与干净工作区，执行 `git pull --ff-only --no-rebase --no-autostash --no-recurse-submodules`。分叉、未提交改动、无上游、认证失败或超时均报错，不自动 stash / 合并 / 变基；pull 命令最多 60 秒，node 总计 75 秒、hub 90 秒。仅 full 角色可调用 |
 | GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`；未跟踪文件对 /dev/null 出 diff，最多 512 KB |
 | GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
 | GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
@@ -795,6 +796,7 @@ hub → node 请求：
 | `session.interrupt` | `{session_id}` |
 | `session.screen` | `{session_id, lines, source, format?}` → `{text, status}`（`format: "ansi"` 带颜色） |
 | `terminal.watch` / `terminal.unwatch` | `{session_id, control?: {cols, rows, takeover}}`；watch → `{cols, rows, control}`，之后 node 推 `terminal.frame`；已经在推时 watch 会重开一条流（新 epoch、从整帧开始）。herdr 没有 observe 时报 `unsupported: …`。带 `control` 时 node 用 `herdr terminal session control` 接管（回包 `control: true`；旧 node 没有这个字段），槽位被占着又没 `takeover` 时报错 `code: attach_busy` |
+| `git.pull` | `{cwd}` → `{status, updated}`，同 REST 的安全拉取 |
 | `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |
 | `file.read` | `{path, cwd, offset}` → 同 REST 的 `file`（旧 node 不认 `offset`，回包也没有 `offset` / `next`） |
 | `fs.stat` | `{paths, cwd}` → `{stats}`，同 REST 的 `stat`（旧 node 报 unknown method，手机就不链接任何路径） |

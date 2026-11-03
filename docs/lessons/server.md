@@ -85,6 +85,14 @@
 - `docker build` 的 `FROM <镜像 id>` 会去 registry 找名叫这个 id 的镜像（报 `registry-1.docker.io … EOF`）：先 `docker tag <id> <名字>` 再 `FROM <名字>`。
   注意给悬空镜像打的标签删掉时镜像也跟着删了。
 
+## Git 面板的安全拉取（2026-11-03，#684）
+
+- `git status` 的落后计数只看本机已缓存的远端引用，显示已同步不代表远端没有新提交；已同步时也要保留拉取入口。
+- `git pull --ff-only` 仍要显式禁止变基和自动 stash，避免用户的 `pull.rebase`、`branch.<name>.rebase`、`merge.autoStash` / `rebase.autoStash` 改变行为；干净工作区检查加上 Git 自己的保护，不使用 reset、自动 stash 或合并。
+- 新的网络命令不要复用默认 15 秒的只读命令超时：pull 60 秒、node 全程 75 秒、hub 90 秒、客户端 100 秒，禁用终端凭据询问并限制取消后的管道等待。测试用本地 bare 远端与隔离 Git 配置，不操作用户的真实仓库。
+- Git 的「无上游」原来用了不存在的 SF Symbol `cloud.slash`，登记到设计系统后 `everyNameIsASymbol` 才发现；正确的带斜线云朵符号是 `icloud.slash`。图标登记与有效性检查不要豁免。
+- 直接测试 node 的 RPC `handle` 时，最小 fixture 也要初始化 `state: newState()`；方法分发之前会查询会话状态，仅有 `home` 会在进入 Git 方法前空指针崩溃。
+
 ## Cloudflare Tunnel 推送中继（2026-11-02）
 
 - `systemctl --user` 的 `active` 只表示 cloudflared 进程在运行，不表示已经连上边缘或加载远程 ingress。验收要看 Tunnel 连接、

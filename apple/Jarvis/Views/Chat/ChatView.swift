@@ -982,7 +982,7 @@ struct ChatView: View {
     @ViewBuilder private var jumpArrow: some View {
             if !atBottom && settled {
                 Button(action: jumpToEnd) {
-                    Image(systemName: "arrow.down").font(Theme.Font.bodyStrong).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
+                    Image(systemName: Theme.Icon.down).font(Theme.Font.bodyStrong).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
                 }
                 .accessibilityLabel("回到最新")
                 #if os(macOS)

@@ -14,6 +14,8 @@ struct GitPane: View {
     @State private var loadingMore = false
     @State private var diff: GitDiffTarget?
     @State private var commit: GitCommit?
+    @State private var pullModel = GitPullModel()
+    @State private var revision = 0
 
     var body: some View {
         List {
@@ -25,7 +27,7 @@ struct GitPane: View {
                 ContentUnavailableView("读不到 Git 状态", systemImage: Theme.Icon.error, description: Text(error))
                     .listRowBackground(Color.clear)
             } else if status?.isRepo == false {
-                ContentUnavailableView("不是 Git 仓库", systemImage: "arrow.triangle.branch", description: Text(cwd))
+                ContentUnavailableView("不是 Git 仓库", systemImage: Theme.Icon.gitBranch, description: Text(cwd))
                     .listRowBackground(Color.clear)
             } else {
                 HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear)
@@ -60,18 +62,18 @@ struct GitPane: View {
     private func header(_ s: GitStatus) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: Theme.Space.s) {
-                Image(systemName: "arrow.triangle.branch").foregroundStyle(Theme.accent)
+                Image(systemName: Theme.Icon.gitBranch).foregroundStyle(Theme.accent)
                 Text(s.branch ?? "分离的 HEAD").font(Theme.Font.heading).lineLimit(1)
-                Spacer(minLength: 4)
-                if s.ahead > 0 { sync("arrow.up", s.ahead, .secondary) }
-                if s.behind > 0 { sync("arrow.down", s.behind, Theme.cautionText) }
+                Spacer(minLength: Theme.Space.xs)
+                if s.ahead > 0 { sync(Theme.Icon.send, s.ahead, .secondary) }
+                if s.upstream != nil { pullButton(s) }
             }
             HStack(spacing: Theme.Space.sm) {
                 if let up = s.upstream {
-                    Label(up, systemImage: "cloud").lineLimit(1)
+                    Label(up, systemImage: Theme.Icon.gitUpstream).lineLimit(1)
                     if s.ahead == 0 && s.behind == 0 { Text("· 已同步") }
                 } else {
-                    Label("没有上游分支", systemImage: "cloud.slash").lineLimit(1)
+                    Label("没有上游分支", systemImage: Theme.Icon.gitNoUpstream).lineLimit(1)
                 }
                 if s.stashes > 0 { Text("· 暂存 \(s.stashes)") }
             }
@@ -80,8 +82,37 @@ struct GitPane: View {
             if let root = s.root {
                 Text(Fmt.path(root, home: nil)).font(Theme.Font.label.monospaced()).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head)
             }
+            if let message = pullModel.message {
+                Label(message, systemImage: pullModel.failed ? Theme.Icon.error : Theme.Icon.success)
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(pullModel.failed ? Theme.danger : Theme.positive)
+                    .accessibilityIdentifier("git-pull-result")
+            }
         }
         .padding(.vertical, Theme.Space.xxs)
+    }
+
+    private func pullButton(_ s: GitStatus) -> some View {
+        Button {
+            Task { await pull() }
+        } label: {
+            HStack(spacing: Theme.Space.xs) {
+                if pullModel.isPulling { ProgressView().controlSize(.mini) }
+                Chip(text: pullModel.isPulling ? "拉取中" : s.behind > 0 ? "拉取 \(s.behind)" : "拉取",
+                     symbol: pullModel.isPulling ? nil : Theme.Icon.down,
+                     look: .tint(s.behind > 0 ? Theme.cautionText : Theme.accent))
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+            .padding(.vertical, Theme.Space.s)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+        .disabled(pullModel.isPulling || loadingMore || s.branch == nil)
+        .accessibilityIdentifier("git-pull")
+        .accessibilityLabel("拉取最新代码")
+        .accessibilityValue(pullModel.isPulling ? "拉取中" : "落后 \(s.behind) 个提交")
+        .help("安全拉取上游最新代码，不自动合并或覆盖本地改动")
     }
 
     private func sync(_ symbol: String, _ n: Int, _ color: Color) -> some View {
@@ -135,10 +166,27 @@ struct GitPane: View {
         }
     }
 
+    private func pull() async {
+        guard let api = model.api(group), !cwd.isEmpty, !pullModel.isPulling else { return }
+        revision += 1
+        if let fresh = await pullModel.pull(machine: machineID, cwd: cwd, deps: .init(api: api)) {
+            status = fresh
+            older = []
+            noMore = false
+            error = nil
+            Haptics.success()
+        } else {
+            await load()
+        }
+    }
+
     private func load() async {
-        guard let api = model.api(group), !cwd.isEmpty else { return }
+        guard let api = model.api(group), !cwd.isEmpty, !pullModel.isPulling else { return }
+        let started = revision
         do {
-            status = try await api.gitStatus(machine: machineID, cwd: cwd)
+            let fresh = try await api.gitStatus(machine: machineID, cwd: cwd)
+            guard started == revision else { return }
+            status = fresh
             older = []
             noMore = false
             error = nil
@@ -148,7 +196,7 @@ struct GitPane: View {
     }
 
     private func loadMore(after skip: Int) async {
-        guard let api = model.api(group) else { return }
+        guard let api = model.api(group), !pullModel.isPulling else { return }
         loadingMore = true
         defer { loadingMore = false }
         if let more = try? await api.gitLog(machine: machineID, cwd: cwd, skip: skip) {

@@ -714,6 +714,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.listDir(p.Path, p.Cwd)
 	case "git.status":
 		return n.gitStatus(ctx, p.Cwd)
+	case "git.pull":
+		return n.gitPull(ctx, p.Cwd)
 	case "git.diff":
 		return n.gitDiff(ctx, p.Cwd, p.Path, p.Staged)
 	case "git.show":

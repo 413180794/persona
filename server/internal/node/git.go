@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Read-only git views for the phone's Git tab: status, history, diffs. Everything runs `git -C <cwd>` with a timeout.
+// Git 面板的状态、历史、diff 和安全拉取；所有命令都有超时。
 
 const maxDiffBytes = 512 << 10
 
@@ -50,6 +50,11 @@ type GitStatus struct {
 	Commits  []GitCommit `json:"commits"`
 }
 
+type GitPullResult struct {
+	Status  *GitStatus `json:"status"`
+	Updated bool       `json:"updated"`
+}
+
 type GitShow struct {
 	Commit    GitCommit `json:"commit"`
 	Files     []GitFile `json:"files"`
@@ -58,13 +63,22 @@ type GitShow struct {
 }
 
 func git(ctx context.Context, dir string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	return gitTimed(ctx, dir, 15*time.Second, args...)
+}
+
+func gitTimed(ctx context.Context, dir string, timeout time.Duration, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir, "-c", "core.quotepath=off", "--no-pager"}, args...)...)
-	cmd.Env = append(cmd.Environ(), "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C") // never take index.lock away from the user's git
+	cmd.Env = append(cmd.Environ(), "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C",
+		"GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=/usr/bin/false", "SSH_ASKPASS=/usr/bin/false", "GCM_INTERACTIVE=never")
+	cmd.WaitDelay = time.Second
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return out.String(), fmt.Errorf("Git 操作超时或已取消：%w", ctx.Err())
+		}
 		msg := strings.TrimSpace(errb.String())
 		if msg == "" {
 			msg = err.Error()
@@ -151,6 +165,38 @@ func (n *Node) gitStatus(ctx context.Context, cwd string) (*GitStatus, error) {
 		}
 	}
 	return st, nil
+}
+
+func (n *Node) gitPull(ctx context.Context, cwd string) (*GitPullResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 75*time.Second)
+	defer cancel()
+	before, err := n.gitStatus(ctx, cwd)
+	if err != nil {
+		return nil, err
+	}
+	if !before.IsRepo {
+		return nil, fmt.Errorf("不是 Git 仓库")
+	}
+	if before.Branch == "" {
+		return nil, fmt.Errorf("当前是分离的 HEAD，请先切换到分支")
+	}
+	if before.Upstream == "" {
+		return nil, fmt.Errorf("没有上游分支，请先在电脑上设置上游")
+	}
+	if len(before.Files) > 0 {
+		return nil, fmt.Errorf("工作区有未提交的改动，请先在电脑上提交或 stash 后再拉取")
+	}
+	if _, err := gitTimed(ctx, before.Root, 60*time.Second,
+		"-c", "pull.rebase=false", "-c", "merge.autoStash=false", "-c", "rebase.autoStash=false",
+		"pull", "--ff-only", "--no-rebase", "--no-autostash", "--no-recurse-submodules"); err != nil {
+		return nil, fmt.Errorf("拉取失败（不会自动合并、变基或覆盖本地改动）：%w", err)
+	}
+	after, err := n.gitStatus(ctx, before.Root)
+	if err != nil {
+		return nil, fmt.Errorf("拉取已执行，但刷新状态失败：%w", err)
+	}
+	updated := before.Head != nil && after.Head != nil && before.Head.Hash != after.Head.Hash
+	return &GitPullResult{Status: after, Updated: updated}, nil
 }
 
 // parseStatusV2 reads `git status --porcelain=v2 --branch -z`.

@@ -1,6 +1,6 @@
 import Foundation
 
-// Read-only views of a session's project for the Git and Files tabs (hub → node `git.*` / `fs.list`).
+// 会话项目的 Git / Files 模型和接口（hub → node `git.*` / `fs.list`）。
 
 nonisolated struct GitCommit: Codable, Identifiable, Hashable, Sendable {
     var hash: String
@@ -67,6 +67,11 @@ nonisolated struct GitStatus: Codable, Hashable, Sendable {
     }
 }
 
+nonisolated struct GitPullResult: Codable, Hashable, Sendable {
+    var status: GitStatus
+    var updated: Bool
+}
+
 nonisolated struct GitDiff: Codable, Hashable, Sendable {
     var path: String
     var diff: String
@@ -100,6 +105,10 @@ extension APIClient {
 
     func gitStatus(machine: String, cwd: String) async throws -> GitStatus {
         try await get(mp(machine) + "/git/status", query: ["cwd": cwd])
+    }
+    private struct GitPullRequest: Encodable { var cwd: String }
+    func gitPull(machine: String, cwd: String) async throws -> GitPullResult {
+        try await post(mp(machine) + "/git/pull", body: GitPullRequest(cwd: cwd), timeout: 100)
     }
     func gitDiff(machine: String, cwd: String, path: String, staged: Bool) async throws -> GitDiff {
         try await get(mp(machine) + "/git/diff", query: ["cwd": cwd, "path": path, "staged": staged ? "1" : "0"])

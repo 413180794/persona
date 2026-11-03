@@ -3434,6 +3434,9 @@ def mock_size(v):
     return 0 if v is None else len(base64.b64decode(v[1])) if isinstance(v, tuple) else len(v.encode())
 
 
+GIT_PULL_STATE = {"behind": 28, "mode": "success", "pulls": 0}
+
+
 def mock_files(p, q):
     """(json, status) for the files / Git endpoints, or None when p is not one of them."""
     parts = p.split("/")
@@ -3466,6 +3469,14 @@ def mock_files(p, q):
     if not (cwd == root or cwd.startswith(root + "/")):
         return ({"is_repo": False, "files": [], "commits": []}, 200) if what == "git/status" else ({"error": "not a git repository"}, 502)
     if what == "git/status":
+        if os.environ.get("MOCK_GIT_PULL"):
+            commits = MOCK_COMMITS[:30]
+            if GIT_PULL_STATE["behind"] == 0:
+                latest = dict(MOCK_COMMITS[0], hash="f" * 40, short="fffffff", subject="更新示例代码")
+                commits = [latest] + commits[:29]
+            files = [{"path": "Sources/App/main.swift", "index": ".", "worktree": "M", "added": 2, "deleted": 1}] if GIT_PULL_STATE["mode"] == "error" else []
+            return {"is_repo": True, "root": root, "branch": "main", "head": commits[0], "upstream": "origin/main",
+                    "ahead": 0, "behind": GIT_PULL_STATE["behind"], "stashes": 1, "commits": commits, "files": files}, 200
         return {"is_repo": True, "root": root, "branch": "main", "head": MOCK_COMMITS[0], "upstream": "origin/main",
                 "ahead": 1, "behind": 0, "stashes": 1, "commits": MOCK_COMMITS[:30], "files": [
                     {"path": "Sources/App/main.swift", "index": "M", "worktree": "M", "added": 2, "deleted": 1, "binary": False},
@@ -3856,6 +3867,10 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if net_control(p, q): return self.send_json({"ok": True, **NET})
+        if p == "/mock/git-pull" and os.environ.get("MOCK_GIT_PULL"):
+            if "mode" in q:
+                GIT_PULL_STATE.update(behind=28, mode=q["mode"][0], pulls=0)
+            return self.send_json(GIT_PULL_STATE)
         if p == "/mock/churn":
             CHURN["rounds"] = 0
             threading.Thread(target=churn, args=(int(q.get("n", ["20"])[0]), int(q.get("ms", ["300"])[0]),
@@ -4240,6 +4255,19 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "无法生成 TLS 证书", "code": "internal"}, 500)
             return self.send_json({"ok": True})
         if self.bad_network(): return
+        if os.environ.get("MOCK_GIT_PULL") and p.endswith("/git/pull") and self.command == "POST":
+            body = json.loads(self.last_body or b"{}")
+            status, code = mock_files(p[:-4] + "status", {"cwd": [body.get("cwd", "")]})
+            if code != 200 or not status.get("is_repo"):
+                return self.send_json({"error": "不是 Git 仓库"}, 502)
+            GIT_PULL_STATE["pulls"] += 1
+            time.sleep(1)
+            if GIT_PULL_STATE["mode"] == "error":
+                return self.send_json({"error": "工作区有未提交的改动，请先在电脑上提交或 stash 后再拉取"}, 502)
+            updated = GIT_PULL_STATE["behind"] > 0
+            GIT_PULL_STATE["behind"] = 0
+            status, code = mock_files(p[:-4] + "status", {"cwd": [body.get("cwd", "")]})
+            return self.send_json({"status": status, "updated": updated}, code)
         if p.startswith("/api/v1/hub/update") and HUB_UPDATE_MODE:
             s, body = hub_update_state(), json.loads(self.last_body or b"{}")
             if p == "/api/v1/hub/update/settings" and self.command == "PUT":
