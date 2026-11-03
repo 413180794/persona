@@ -321,8 +321,13 @@ func (m rawMessage) normalize() Message {
 	return out
 }
 
-// lark-connector serves media at /api/media/<key> and /api/messages/<id>/media/<key>; the hub proxies both under /api/v1/lark.
-var mediaRewriter = strings.NewReplacer(`"/api/media/`, `"/api/v1/lark/media/`, `"/api/messages/`, `"/api/v1/lark/messages/`)
+// lark-connector serves media under /agent/v1 (or legacy /api); the hub proxies both under /api/v1/lark.
+var mediaRewriter = strings.NewReplacer(
+	`"/agent/v1/media/`, `"/api/v1/lark/media/`,
+	`"/agent/v1/messages/`, `"/api/v1/lark/messages/`,
+	`"/api/media/`, `"/api/v1/lark/media/`,
+	`"/api/messages/`, `"/api/v1/lark/messages/`,
+)
 
 func rewriteMedia(raw json.RawMessage) json.RawMessage {
 	if len(raw) == 0 || string(raw) == "null" {
@@ -333,6 +338,12 @@ func rewriteMedia(raw json.RawMessage) json.RawMessage {
 
 // MediaURL maps one lark-connector media URL to the hub's proxy; other URLs pass through.
 func MediaURL(u string) string {
+	if s, ok := strings.CutPrefix(u, "/agent/v1/media/"); ok {
+		return "/api/v1/lark/media/" + s
+	}
+	if s, ok := strings.CutPrefix(u, "/agent/v1/messages/"); ok {
+		return "/api/v1/lark/messages/" + s
+	}
 	if s, ok := strings.CutPrefix(u, "/api/media/"); ok {
 		return "/api/v1/lark/media/" + s
 	}
@@ -780,8 +791,15 @@ type Read struct {
 	MessageIDs []string `json:"message_ids,omitempty"`
 }
 
-// rawRewriter points every lark-connector /api/... path in a JSON body at the hub's read-only proxy.
-var rawRewriter = strings.NewReplacer(`"/api/media/`, `"/api/v1/lark/media/`, `"/api/messages/`, `"/api/v1/lark/messages/`, `"/api/`, `"/api/v1/lark/raw/`)
+// rawRewriter points lark-connector /agent/v1/... and legacy /api/... paths at the hub's read-only proxy.
+var rawRewriter = strings.NewReplacer(
+	`"/agent/v1/media/`, `"/api/v1/lark/media/`,
+	`"/agent/v1/messages/`, `"/api/v1/lark/messages/`,
+	`"/agent/v1/`, `"/api/v1/lark/raw/`,
+	`"/api/media/`, `"/api/v1/lark/media/`,
+	`"/api/messages/`, `"/api/v1/lark/messages/`,
+	`"/api/`, `"/api/v1/lark/raw/`,
+)
 
 // Read-only POST routes (lark-connector's READ_ONLY_POST_ROUTES subset the app needs): they only POST because the body is large.
 var rawPostAllowed = map[string]bool{"/search/page": true, "/search/mention-history": true}

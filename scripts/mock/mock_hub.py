@@ -2698,6 +2698,53 @@ for _c in LARK_CHATS + FS_CONVS:
         _c.setdefault(_k, False)
 
 
+# MOCK_LARK_RICH=1 (docs/testing.md「卡顿测量」): f3's history is heavier, like a busy work group's: every third message
+# before the unread ones is a card, a picture or a rich post instead of a line of chatter.
+if os.environ.get("MOCK_LARK_RICH"):
+    for _i, _m in enumerate(m for m in LARK_MESSAGES["f3"] if int(m["position"]) < 300 and not m.get("is_mine")):
+        if _i % 9 == 0:
+            _m.update(type="CARD", text="v2.3 发布检查通过", sender_id="bot-build", sender_name="构建机器人", sender_type="bot",
+                      parts=[copy.deepcopy(FS_CARD)])
+        elif _i % 9 == 3:
+            _m.update(type="IMAGE", text="[图片]", parts=[{"kind": "image", "url": "/api/v1/lark/media/trail-photo",
+                                                       "metadata": {"width": 480, "height": 320}}])
+        elif _i % 9 == 6:
+            _m.update(type="POST", parts=[
+                {"kind": "text", "text": "这周的安排", "metadata": {"blocks": _fsblk(("h", "heading-2"))}},
+                {"kind": "text", "text": "周六爬北坡", "metadata": {"blocks": _fsblk(("l", "ordered-list"), ("i1", "list-item"))}},
+                {"kind": "text", "text": "周日休息", "metadata": {"blocks": _fsblk(("l", "ordered-list"), ("i2", "list-item"))}},
+                {"kind": "text", "text": "装备清单见上面", "metadata": {"marks": ["italic"], "blocks": _fsblk(("q", "quote"))}}])
+
+# GET /mock/lark_churn?feed=f3&n=16&ms=500: n rounds, ms apart, of the hub relaying lark-connector's realtime events for one
+# chat ({"type":"lark"}, lark_events.go). &new=1: someone writes in the chat first each round (a busy group); &inbox=1:
+# the chat's inbox item changes too and `inbox` is pushed, as the hub's collection after the event does.
+# GET /mock/lark_churned tells how many rounds have gone out. Without MOCK_LARK (the chats of LARK_MESSAGES).
+LARK_CHURN = {"rounds": 0}
+
+
+def lark_churn(feed, rounds, ms, new=False, inbox=False):
+    for k in range(rounds):
+        time.sleep(ms / 1000)
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        if new:
+            msgs = LARK_MESSAGES.setdefault(feed, [])
+            pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
+            m = _lm(pos, "小周", "第 %d 轮：我到地铁站了，你们到哪了" % (k + 1), mins=0)
+            m["created_at"] = now
+            msgs.append(m)
+        if inbox:
+            for it in INBOX:
+                if it["id"].startswith("lark:%s:" % feed):
+                    it.update(preview="第 %d 轮：我到地铁站了，你们到哪了" % (k + 1), updated_at=now, count=it.get("count", 1) + 1)
+        for send, _ in list(LIVE):
+            try:
+                send({"type": "lark", "feed_ids": [feed]})
+                if inbox: send({"type": "inbox"})
+            except Exception:
+                pass
+        LARK_CHURN["rounds"] = k + 1
+
+
 def fs_page(feed, q):
     msgs = sorted(FS_MESSAGES.get(feed, []), key=lambda m: int(m["position"]))
     limit = int((q.get("limit") or ["40"])[0] or 40)
@@ -4770,6 +4817,12 @@ class H(BaseHTTPRequestHandler):
                                                  q.get("real", ["0"])[0] == "1"), daemon=True).start()
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
+        if p == "/mock/lark_churn":
+            LARK_CHURN["rounds"] = 0
+            threading.Thread(target=lark_churn, args=(q.get("feed", ["f3"])[0], int(q.get("n", ["16"])[0]), int(q.get("ms", ["500"])[0]),
+                                                      q.get("new", ["0"])[0] == "1", q.get("inbox", ["0"])[0] == "1"), daemon=True).start()
+            return self.send_json({"ok": True})
+        if p == "/mock/lark_churned": return self.send_json(LARK_CHURN)
         if p == "/mock/truth": return self.send_json(truth())
         if p == "/mock/bump": return self.send_json(bump(q.get("what", ["last"])[0], q.get("session", [None])[0]))
         if p == "/mock/mark": return self.send_json({"ok": True})  # a test's marker in the request log (explore)

@@ -465,6 +465,26 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 工作页的改动：hub 把每台机器的会话列表分开推（一轮好几条），以前每条都让读会话的页面各重算一遍；现在 25 ms 内到的合成一次
 （`AppModel.applyPendingSessions`），一轮推送从约 4 次 SwiftUI 更新变成 1 次。
 
+### 飞书页（会话页、收件箱，#674）
+
+同样用 `-showPagePerf YES -perfCounts YES`。mock 加 `MOCK_LARK_RICH=1`：f3 的历史里每 3 条有 1 条换成卡片、图片或富文本，像一个忙的工作群。
+会话页用 `-tab mail -openInboxItem lark:f3:300`，收件箱用 `-tab mail`。脚本看到 `page-idle-started` 后推
+`GET /mock/lark_churn?feed=f3&n=14&ms=500&new=1`：按 hub 的方式推 `{"type":"lark"}`，每轮先加一条别人发的消息；收件箱那页加 `&inbox=1`。
+`GET /mock/lark_churned` 返回已经推了几轮。
+
+2026-11-03 P-19（打开的会话每次推送都重拉最新一页，并在主线程解码 40 条消息）。iPhone 17 模拟器，同一段时间里改前、改后各跑 3 次：
+
+| 段 | 指标 | 改前 | 改后 |
+| --- | --- | --- | --- |
+| idle（14 轮推送，每轮一条新消息） | 主线程超过 16 ms 的帧 | 2 / 4 / 0 | 0 / 1 / 0 |
+| idle | 主线程超过 8 ms 的帧 | 16 / 13 / 12 | 4 / 8 / 7 |
+| idle | 掉帧（晚于 1.5 帧） | 3 / 0 / 0 | 0 / 1 / 0 |
+| idle | 主线程上解码 `LarkMessages` 的采样数（`sample`，1 ms 一次） | 43 | 0 |
+| glide | 掉帧 | 8 / 7 / 13 | 7 / 9 / 8（这次没改滑动） |
+
+改了什么：会话和话题的消息页改在后台线程解码（`APIClient.getDecodedOffMain`）；
+打开的会话最多每秒收到一次自己的变化通知（`LarkSync.chatGap`、`LarkChangeGate`），一阵推送合成一次，安静之后的第一条立刻送到。
+
 ## 侧边栏拖动（Persona tab）
 
 量拖动时每帧主线程的耗时，不用 Instruments（这台 Mac 上 xctrace 卡在授权）：DEBUG 的 `DrawerProbe`（`-showDrawerProbe YES`）在拖动开始到松手后

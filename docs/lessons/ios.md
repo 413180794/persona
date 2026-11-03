@@ -298,6 +298,9 @@
   `JSONSerialization` 碰到它就抛 `Invalid type in JSON write (__SwiftValue)`，App 直接崩。`FrameStats.stop` 因此在 Xcode 26.0 的构建里每次都崩，
   `-showPagePerf` 一轮都量不出来（2026-11-03，#674）。#343 用新版 Xcode（27.x）量的时候没遇到。放进 `Any` 的值先赋给有类型的常量
   （`let busyMax: Double = busy.last ?? 0`），`FrameStatsTests` 检查写出来的 JSON。
+- App 开了 `SWIFT_APPROACHABLE_CONCURRENCY`：`APIClient` 是 nonisolated，但它的 async 方法跑在调用方的 actor 上，
+  所以在视图里 `await api.get(…)` 时 JSON 解码在主线程上。飞书会话每次推送都重拉 40 条带卡片的消息，sample 里主线程解码占了 43 个采样
+  （2026-11-03，#674 P-19）。大的回复用 `getDecodedOffMain`，或者像 `items` 那样先拿 `Data` 再 `Task.detached` 解码；返回的类型要是 `Sendable`。
 ### 最低兼容编译器
 
 - **最低兼容的编译器是 Xcode 26.0（Swift 6.2），固定不动**（2026-11-02）：本机和不少开发机还在 26.0，master 必须在它上面编得过（iOS、Mac、手表、各扩展）；发版机器的 Xcode 更新（Swift 6.3.x），能编不代表 26.0 能编。

@@ -208,6 +208,13 @@ nonisolated struct APIClient: Sendable {
         try JSON.decoder.decode(T.self, from: try await request("GET", path, query: query))
     }
 
+    /// `get` for answers big enough to show in a frame: `get` decodes on the caller's actor (the main one, for a view),
+    /// this one off it.
+    func getDecodedOffMain<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
+        let data = try await request("GET", path, query: query)
+        return try await Task.detached(priority: .userInitiated) { try JSON.decoder.decode(T.self, from: data) }.value
+    }
+
     func post<T: Decodable>(_ path: String, body: (any Encodable)? = nil, timeout: TimeInterval = 30, as: T.Type = T.self) async throws -> T {
         try JSON.decoder.decode(T.self, from: try await request("POST", path, body: body ?? [String: String](), timeout: timeout))
     }

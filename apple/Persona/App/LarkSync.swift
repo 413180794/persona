@@ -14,7 +14,12 @@ final class LarkSync {
     /// On (re)connect, how many of the most recent conversations are brought up to date.
     static let reconnectCount = 20
 
+    /// An open chat (a listener of one conversation) hears of its changes at most this often: each one has it fetch
+    /// and decode its latest page, and a busy group changes more often than that (#674).
+    static let chatGap: Duration = .seconds(1)
+
     private var listeners: [UUID: (feed: String?, cont: AsyncStream<Void>.Continuation)] = [:]
+    private var gates: [UUID: LarkChangeGate] = [:]
     /// Conversations from the inbox list: a topic group needs its own kind of page, and only listed ones are fetched.
     private var known: [String: LarkConversation] = [:]
     /// The `updatedAt` each conversation had when its page was cached; kept across launches.
@@ -30,12 +35,16 @@ final class LarkSync {
         fetched = StateCache.load(Self.stateName, as: [String: Date].self) ?? [:]
     }
 
-    /// Fires on every relayed change (`feed` nil), or on those touching one conversation. Bursts collapse into one.
+    /// Fires on every relayed change (`feed` nil), or on those touching one conversation (at most once per `chatGap`).
+    /// Bursts collapse into one.
     func changes(of feed: String? = nil) -> AsyncStream<Void> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont in
             let id = UUID()
             listeners[id] = (feed, cont)
-            cont.onTermination = { _ in Task { @MainActor in LarkSync.shared.listeners[id] = nil } }
+            cont.onTermination = { _ in Task { @MainActor in
+                LarkSync.shared.listeners[id] = nil
+                LarkSync.shared.gates[id] = nil
+            } }
         }
     }
 
@@ -52,8 +61,32 @@ final class LarkSync {
 
     /// The hub's `lark` event.
     func received(_ feedIDs: [String]) {
-        for l in listeners.values where l.feed == nil || feedIDs.contains(l.feed!) { l.cont.yield() }
+        for (id, l) in listeners {
+            guard let feed = l.feed else { l.cont.yield(); continue }
+            if feedIDs.contains(feed) { tell(id) }
+        }
         enqueue(feedIDs.filter { known[$0] != nil })
+    }
+
+    /// One conversation's listener: told now, or once `chatGap` since it was last told is up.
+    private func tell(_ id: UUID) {
+        var gate = gates[id] ?? LarkChangeGate(gap: Self.chatGap)
+        let now = ContinuousClock.now
+        switch gate.arrive(at: now) {
+        case .now:
+            listeners[id]?.cont.yield()
+        case .later(let at):
+            Task {
+                try? await Task.sleep(until: at)
+                guard var g = self.gates[id] else { return }
+                g.fired(at: .now)
+                self.gates[id] = g
+                self.listeners[id]?.cont.yield()
+            }
+        case .pending:
+            break
+        }
+        gates[id] = gate
     }
 
     /// The socket came (back) up: whatever happened while away is pulled now.
@@ -100,5 +133,32 @@ final class LarkSync {
                 if dirty.remove(id) != nil { enqueue([id]) }
             }
         }
+    }
+}
+
+/// When a change reaches a listener that wants at most one per `gap`: at once after a quiet spell, else once the gap
+/// since the last one is up, the changes meanwhile folded into that one. A value; `LarkChangeGateTests`.
+nonisolated struct LarkChangeGate {
+    enum When: Equatable { case now, later(ContinuousClock.Instant), pending }
+    let gap: Duration
+    private var last: ContinuousClock.Instant?
+    private var waiting = false
+
+    init(gap: Duration) { self.gap = gap }
+
+    mutating func arrive(at now: ContinuousClock.Instant) -> When {
+        if waiting { return .pending }
+        if let last, now < last + gap {
+            waiting = true
+            return .later(last + gap)
+        }
+        last = now
+        return .now
+    }
+
+    /// The delayed one went out.
+    mutating func fired(at now: ContinuousClock.Instant) {
+        waiting = false
+        last = now
     }
 }

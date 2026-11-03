@@ -179,7 +179,7 @@ extension APIClient {
         var nextCursor: String?
         enum CodingKeys: String, CodingKey { case conversations; case nextCursor = "next_cursor" }
     }
-    struct LarkMessages: Decodable {
+    nonisolated struct LarkMessages: Decodable, Sendable {
         var messages: [LarkMessage]
         var hasOlder: Bool
         var hasNewer: Bool?
@@ -249,13 +249,14 @@ extension APIClient {
     }
     /// A page of a chat: the latest (no cursor), older than `before`, newer than `after`, or around `around`;
     /// a topic group's threads with `topic`.
+    /// Decoded off the main thread: an open chat asks again on every change in it, and a page of cards takes a few ms.
     func larkMessages(_ id: String, before: String? = nil, after: String? = nil, around: String? = nil, topic: Bool = false) async throws -> LarkMessages {
-        try await get("/api/v1/lark/conversations/\(id)/messages",
-                      query: ["before": before ?? "", "after": after ?? "", "around": around ?? "", "limit": "40", "topic": topic ? "1" : ""])
+        try await getDecodedOffMain("/api/v1/lark/conversations/\(id)/messages",
+                                    query: ["before": before ?? "", "after": after ?? "", "around": around ?? "", "limit": "40", "topic": topic ? "1" : ""])
     }
-    /// Replies in one message's thread.
+    /// Replies in one message's thread (decoded off the main thread, like `larkMessages`).
     func larkThread(_ messageID: String, before: String? = nil) async throws -> LarkMessages {
-        try await get("/api/v1/lark/messages/\(messageID)/thread", query: ["before": before ?? "", "limit": "60"])
+        try await getDecodedOffMain("/api/v1/lark/messages/\(messageID)/thread", query: ["before": before ?? "", "limit": "60"])
     }
     struct LarkText: Encodable {
         var text: String

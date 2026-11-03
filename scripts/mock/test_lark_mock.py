@@ -68,5 +68,28 @@ class LarkChatListTests(unittest.TestCase):
         self.check(MOCK_LARK="1")
 
 
+class LarkMeasuringTests(unittest.TestCase):
+    """The switches docs/testing.md「卡顿测量」 measures the Feishu pages with (#674)."""
+
+    def test_rich_history_has_cards_pictures_and_posts(self):
+        hub = MockHub(MOCK_LARK_RICH="1")
+        self.addCleanup(hub.stop)
+        kinds = {m["type"] for m in hub.get("/api/v1/lark/conversations/f3/messages?around=300")["messages"]}
+        self.assertTrue({"CARD", "IMAGE", "POST", "TEXT"} <= kinds, kinds)
+
+    def test_lark_churn_adds_messages_round_by_round(self):
+        hub = MockHub()
+        self.addCleanup(hub.stop)
+        before = hub.get("/api/v1/lark/conversations/f3/messages")["messages"][-1]["position"]
+        hub.get("/mock/lark_churn?feed=f3&n=3&ms=50&new=1")
+        for _ in range(50):
+            if hub.get("/mock/lark_churned")["rounds"] == 3:
+                break
+            time.sleep(0.05)
+        self.assertEqual(hub.get("/mock/lark_churned")["rounds"], 3)
+        after = hub.get("/api/v1/lark/conversations/f3/messages")["messages"][-1]["position"]
+        self.assertEqual(int(after), int(before) + 3)
+
+
 if __name__ == "__main__":
     unittest.main()
