@@ -396,9 +396,14 @@ func TestWaitInteractionCancelledDismisses(t *testing.T) {
 
 func TestWaitInteractionReplacesScreenGuess(t *testing.T) {
 	h := newTestHub(t)
+	st := newMemStore()
+	h.store = st
+	c := &client{out: make(chan []byte, 32)}
+	h.clients[c] = struct{}{}
 	// A screen interaction (a guess from a blocked agent) is already pending for the session.
 	scr := proto.Interaction{ID: "scr_server_s1", MachineID: "server", SessionID: "s1", Kind: proto.IxScreen,
 		ExpiresAt: time.Now().Add(time.Hour)}
+	h.record(scr)
 	h.mu.Lock()
 	h.interactions[scr.ID] = &pending{ix: scr, done: make(chan proto.Resolution, 1)}
 	h.mu.Unlock()
@@ -422,6 +427,21 @@ func TestWaitInteractionReplacesScreenGuess(t *testing.T) {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+	// While the hook still waits, the app hears the guess is gone and the history no longer has it pending.
+	resolved := false
+	for deadline := time.Now().Add(time.Second); !resolved && time.Now().Before(deadline); {
+		select {
+		case b := <-c.out:
+			resolved = strings.Contains(string(b), `"type":"interaction_resolved"`) && strings.Contains(string(b), scr.ID)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if !resolved {
+		t.Fatal("the app never heard the screen guess was withdrawn")
+	}
+	if s, _, _ := st.InteractionOutcome(context.Background(), scr.ID); s != "cancelled" {
+		t.Fatalf("screen guess status %q, want cancelled", s)
 	}
 	_ = h.resolve("ix_hook", proto.Resolution{})
 	<-done

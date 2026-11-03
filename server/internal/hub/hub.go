@@ -647,7 +647,8 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 	}
 	h.interactions[ix.ID] = p
 	h.mu.Unlock()
-	for _, id := range dropped {
+	for _, id := range dropped { // as codexcards.go withdraws a screen card
+		h.recordEnd(id, "cancelled", nil)
 		h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 	}
 	h.record(ix)
