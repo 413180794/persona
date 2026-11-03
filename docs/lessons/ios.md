@@ -40,6 +40,13 @@
 - 聊天列表用 `ScrollPosition.scrollTo(y:)` 会把横向偏移也归零：左右边距是 `contentMargins(.horizontal)`，整页会贴到屏幕边。
   竖向跳转用 `scrollTo(point:)` 带上当前的 x（`ChatView.scrollList`）。`scrollTo(id:anchor:)` 跳到没画过的行只按估算高度落点，
   要精确停在某处就跳过去后按实测位置再修正一两次。倒置列表里的行，XCUITest 拿到的 frame 不对（报在屏幕外），量位置用 App 内的 DEBUG 探针。
+- 正着放、输入框在 `safeAreaInset(edge: .bottom)` 里的聊天列表（飞书会话页、话题浮层，2026-11-03，#672）：输入框的 inset 是算进去了的，挡住最后一条的是这几件事：
+  - 打开在某条消息时用的是 `defaultScrollAnchor(.top)`，键盘、引用条把底部空间占掉时 offset 不动，最后一屏压到输入框下面。
+  - 发送后 `scrollTo(id: 新行, anchor: .bottom)` 对齐的是行顶处一个约 7pt 高的框，不是整行：56pt 和 78pt 的行停在同一个 offset。
+  - `ScrollPosition.scrollTo(y:)` 从内容顶部算起，`ScrollGeometry.contentOffset` 从 inset 顶部算起（顶部是 −上 inset），两者差一个上 inset。
+  - 键盘改 inset 的同时发起的带动画 `scrollTo` 会被吞掉：phase 进了 `.animating`，offset 却不动。
+  - `LazyVStack` 报的内容高度在两个估计值之间来回跳（实测差 39pt），按它算出来的 offset 会差一截。
+  - 做法（`LarkFollow.swift`）：跟随时用 `defaultScrollAnchor(.bottom, for: .sizeChanges)`，滚动视图自己知道行的真实高度；不在底部时补一个不带动画的 `scrollTo(edge: .bottom)`。原来的锚点按 role 拆开（`.initialOffset`、`.alignment` 不变）。
 - 倒置聊天列表往上翻时的「冻结」不能按行 id 截：行 id 会随轮次推进变（答案收进工作行、多条消息的轮合并成 `wt-`），
   找不到 id 冻结就失效、可见内容被顶走（修前实测 319pt）。按「离开最新端时的 item 快照」重建行（`ChatView.Frozen`），验证用 `-showFreezeProbe`。
 - BeautifulUI 的组件放进聊天列表前，先看它每次出现时做了什么。懒加载列表滚动时会反复重建行，每次出现都起 `.task`、挂入场动画（`buiEntrance`）的组件，

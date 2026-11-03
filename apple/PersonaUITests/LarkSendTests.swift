@@ -34,6 +34,25 @@ final class LarkSendTests: XCTestCase {
         app.buttons["发送"].tap()
     }
 
+    /// `element` is the end of the list, whole and right above the box (and the quote bar over it), not under them
+    /// and not left further up. The list glides there, so this waits for it a moment.
+    @MainActor private func assertAtEnd(_ app: XCUIApplication, _ element: XCUIElement, box boxID: String = "lark.box",
+                                        _ what: String, file: StaticString = #filePath, line: UInt = #line) {
+        let box = app.textFields[boxID]
+        let bar = app.descendants(matching: .any).matching(identifier: "lark.replyBar").firstMatch
+        var gap: CGFloat = .infinity
+        let deadline = Date().addingTimeInterval(3)
+        repeat {
+            if element.exists, box.exists {
+                let floor = bar.exists ? bar.frame.minY : box.frame.minY
+                gap = floor - element.frame.maxY
+                if gap >= 0 && gap < 100 { return }
+            }
+            usleep(100_000)
+        } while Date() < deadline
+        XCTFail("\(what): \(gap) pt between it and the box (under it when negative)", file: file, line: line)
+    }
+
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let a = XCTAttachment(screenshot: app.screenshot())
         a.name = name
@@ -51,6 +70,8 @@ final class LarkSendTests: XCTestCase {
         let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
         XCTAssertTrue(sending.waitForExistence(timeout: 1), "the message is not on screen while it goes")
         XCTAssertTrue(app.staticTexts[text].exists)
+        assertAtEnd(app, sending, "the sending mark shows right above the box")
+        assertAtEnd(app, app.staticTexts[text], "the sending message shows right above the box")
         let field = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH %@", "回复")).firstMatch
         XCTAssertNotEqual(field.value as? String, text, "the box is cleared at once")
         shot(app, "lark-sending")
@@ -59,6 +80,44 @@ final class LarkSendTests: XCTestCase {
         shot(app, "lark-sent")
         let copies = app.staticTexts.matching(NSPredicate(format: "label == %@", text))
         XCTAssertEqual(copies.count, 1, copies.debugDescription)
+    }
+
+    /// The last message stays whole above the box as the keyboard comes up and as the quote bar comes up
+    /// (#672: the keyboard and the quote bar used to cover it).
+    /// In the chat with 韩梅梅, which no test sends to: its last message stays the mock's.
+    @MainActor func testLastMessageStaysAboveKeyboardAndQuoteBar() {
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f1:100"]
+        app.launchPinned()
+        XCTAssertTrue(app.staticTexts["能赶上，下午三点前给你确认"].waitForExistence(timeout: 20), "the 韩梅梅 chat did not open")
+        // The list's own row, not the quote bar's summary of it (the bar is outside the list).
+        let list = app.scrollViews.containing(NSPredicate(format: "label == %@", "能赶上，下午三点前给你确认")).firstMatch
+        list.swipeUp() // at the end, as after reading the unread ones
+        sleep(1)
+        let last = list.staticTexts["新包发你了"]
+        XCTAssertTrue(last.waitForExistence(timeout: 5), "the chat's last message is there")
+        let field = app.textFields["lark.box"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        // Typing brings the soft keyboard up (a tap alone can leave it off screen); no text is left as a draft.
+        field.typeText("好" + XCUIKeyboardKey.delete.rawValue)
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5), "the keyboard comes up")
+        sleep(1) // it slides up
+        XCTAssertLessThan(keyboard.frame.minY, app.frame.maxY - 100, "the keyboard is on screen")
+        assertAtEnd(app, last, "with the keyboard up the last message shows above the box")
+        shot(app, "lark-keyboard-last")
+        last.press(forDuration: 1.2)
+        let reply = app.buttons["回复"]
+        XCTAssertTrue(reply.waitForExistence(timeout: 3), "the long-press menu has 回复")
+        reply.tap()
+        XCTAssertTrue(app.staticTexts["回复 我"].waitForExistence(timeout: 3), "the quote bar is up")
+        sleep(1) // and the keyboard with it
+        assertAtEnd(app, last, "the quote bar does not cover the last message")
+        shot(app, "lark-keyboard-quote")
+        // The quote stays as the chat's draft: the next run quotes the same message. (The bar going away as the
+        // reply is sent: testQuotedReplyShowsTheQuoteWhileItGoes.)
     }
 
     @MainActor func testFailedMessageOffersRetry() {
@@ -135,10 +194,12 @@ final class LarkSendTests: XCTestCase {
         shot(app, "lark-reply-bar")
         let text = "我来改 " + UUID().uuidString.prefix(8)
         send(app, text)
-        // The mock takes 2 s to send: what shows within a second is the local row. (Its spinner can sit under the
-        // keyboard, so the row is checked by its text and quote.)
-        XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 1), "the reply is not on screen while it goes")
+        // The mock takes 2 s to send: what shows within a second is the local row, with its spinner.
+        let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
+        XCTAssertTrue(sending.waitForExistence(timeout: 1), "the reply is not on screen while it goes")
+        XCTAssertTrue(app.staticTexts[text].exists)
         XCTAssertTrue(bar.waitForNonExistence(timeout: 2), "the quote bar goes with the message")
+        assertAtEnd(app, app.staticTexts[text], "the sending reply shows right above the box")
         let quotes = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "李雷：我先看了一下"))
         XCTAssertTrue(quotes.firstMatch.exists, "the sending row quotes the message")
         shot(app, "lark-reply-sending")
@@ -287,7 +348,10 @@ final class LarkSendTests: XCTestCase {
         field.typeText(text)
         shot(app, "lark-thread-box")
         app.buttons["lark.thread.send"].tap()
-        XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 1), "the reply is not on screen while it goes")
+        let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
+        XCTAssertTrue(sending.waitForExistence(timeout: 1), "the reply is not on screen while it goes")
+        XCTAssertTrue(app.staticTexts[text].exists)
+        assertAtEnd(app, app.staticTexts[text], box: "lark.thread.box", "the sending reply shows right above the thread's box")
         shot(app, "lark-thread-sending")
         sleep(6) // sent, and the newest page brings its copy in its place
         XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", text)).count, 1)

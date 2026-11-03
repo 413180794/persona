@@ -28,6 +28,8 @@ struct LarkThreadView: View {
     @State private var outgoing: [LarkOutgoing] = []
     @State private var sendChain: Task<Void, Never>?
     @State private var position = ScrollPosition()
+    /// The list stays at its newest reply as it changes (larkFollowsEnd): after sending, or once scrolled to the end.
+    @State private var following = false
 
     private var replies: [LarkMessage] { pager.messages }
 
@@ -59,6 +61,7 @@ struct LarkThreadView: View {
                 .padding(Theme.Space.m)
             }
             .scrollPosition($position)
+            .larkFollowsEnd($position, following: $following, active: !loading)
             .safeAreaInset(edge: .bottom) {
                 LarkComposer(placeholder: "回复话题", text: $text, focused: $boxFocused, boxID: "lark.thread.box", sendID: "lark.thread.send",
                              mentionFeed: isGroup ? feedID : nil, me: (replies + [root]).last(where: \.isMine)?.senderID,
@@ -148,11 +151,7 @@ struct LarkThreadView: View {
         withAnimation(Theme.Motion.standard) { outgoing.append(o) }
         Haptics.tap()
         deliver(o.id)
-        Task {
-            // After the row is laid out: scrolling in the same update lands above it.
-            try? await Task.sleep(for: .milliseconds(60))
-            withAnimation(Theme.Motion.standard) { position.scrollTo(id: o.id, anchor: .bottom) }
-        }
+        following = true // the reply shows right above the box (larkFollowsEnd)
     }
 
     private func resend(_ id: UUID) {

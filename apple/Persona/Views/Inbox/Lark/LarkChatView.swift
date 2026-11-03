@@ -56,6 +56,11 @@ struct LarkChatView: View {
     /// Highest position already reported as read.
     @State private var reportTask: Task<Void, Never>?
     @State private var atBottom = true
+    /// The list stays at its newest end as it changes (larkFollowsEnd): on opening at the latest, after sending,
+    /// after 回到最新; off once the user scrolls up or the page opens at a message.
+    @State private var following: Bool
+    /// The first load has put the page where it opens; until then nothing moves it to the end.
+    @State private var landed = false
     @State private var mention: String?
     @State private var person: LarkPersonRef?
     @State private var debugPick: LarkMessage?
@@ -70,12 +75,15 @@ struct LarkChatView: View {
         let draft = LarkDrafts.shared[.chat(conversation.id)]
         _text = State(initialValue: draft.text)
         _replyTo = State(initialValue: draft.replyTo)
+        _following = State(initialValue: !Self.opensAtMessage(conversation) && !Self.debugTop)
         _mentions = State(initialValue: draft.mentions ?? [])
     }
 
     private var isTopic: Bool { conversation.isTopic == true || foundTopic }
     /// Opens at a message (first unread / a flagged message) rather than at the bottom.
-    private var opensAtMessage: Bool { conversation.focus != nil || (!isTopic && conversation.unread > 0) }
+    private var opensAtMessage: Bool { Self.opensAtMessage(conversation) }
+    private var openingAnchor: UnitPoint { Self.debugTop || opensAtMessage ? .top : .bottom }
+    private static func opensAtMessage(_ c: LarkConversation) -> Bool { c.focus != nil || (c.isTopic != true && c.unread > 0) }
 
     var body: some View {
         ScrollView {
@@ -111,7 +119,10 @@ struct LarkChatView: View {
             .padding(.vertical, Theme.Space.m)
         }
         .scrollPosition($position)
-        .defaultScrollAnchor(Self.debugTop || opensAtMessage ? .top : .bottom)
+        // Where it opens and how it aligns; size changes (the keyboard, the box, new rows) are larkFollowsEnd's.
+        .larkFollowsEnd($position, following: $following, resting: openingAnchor, active: landed)
+        .defaultScrollAnchor(openingAnchor, for: .initialOffset)
+        .defaultScrollAnchor(openingAnchor, for: .alignment)
         // The visible part ends above the composer (bottom inset); containerSize leaves out both insets, so it can't be added to
         // contentOffset: under a tall top bar (opened from the inbox) that never reached the end and the arrow never went away.
         .onScrollGeometryChange(for: Bool.self) { g in
@@ -283,7 +294,10 @@ struct LarkChatView: View {
     }
 
     private func load() async {
-        defer { loading = false }
+        defer {
+            loading = false
+            landed = true
+        }
         guard let api = model.api else { return }
         do {
             if let focus = conversation.focus {
@@ -300,6 +314,7 @@ struct LarkChatView: View {
                 if let first = pager.messages.first(where: { LarkPosition.less(read, $0.position) }) {
                     await scroll(to: first.id)
                 } else {
+                    following = true
                     position.scrollTo(edge: .bottom)
                 }
             } else {
@@ -323,6 +338,7 @@ struct LarkChatView: View {
 
     /// Scrolls once the rows exist (the lazy stack lays them out after the data lands).
     private func scroll(to id: String) async {
+        following = false
         try? await Task.sleep(for: .milliseconds(80))
         position.scrollTo(id: id, anchor: .top)
         try? await Task.sleep(for: .milliseconds(250))
@@ -335,9 +351,8 @@ struct LarkChatView: View {
         problem = nil // it answers again (lark-connector signed in again, the network is back)
         let fresh = pager.refresh(with: r)
         guard !fresh.isEmpty else { return }
-        let follow = atBottom
+        if atBottom { following = true } // near the end: the new ones come into view (larkFollowsEnd)
         withAnimation(Theme.Motion.standard) { pager.add(fresh) }
-        if follow { position.scrollTo(edge: .bottom) }
     }
 
     private func loadOlder() async {
@@ -362,11 +377,13 @@ struct LarkChatView: View {
             apply(r)
             anchor = nil
         }
+        following = true
         withAnimation(Theme.Motion.standard) { position.scrollTo(edge: .bottom) }
     }
 
     /// 有人@你: to the mention, loading the page around it if needed.
     private func jump(to target: String) async {
+        following = false
         if let m = pager.messages.first(where: { $0.position == target }) {
             withAnimation(Theme.Motion.standard) { position.scrollTo(id: m.id, anchor: .top) }
             return
@@ -488,12 +505,8 @@ struct LarkChatView: View {
         withAnimation(Theme.Motion.standard) { outgoing.append(o) }
         Haptics.tap()
         deliver(o.id)
-        Task {
-            if pager.hasNewer { await jumpToLatest() }
-            // After the row is laid out: scrolling in the same update lands above it.
-            try? await Task.sleep(for: .milliseconds(60))
-            withAnimation(Theme.Motion.standard) { position.scrollTo(id: o.id, anchor: .bottom) }
-        }
+        // The row shows right above the box (and the quote bar going away): larkFollowsEnd.
+        if pager.hasNewer { Task { await jumpToLatest() } } else { following = true }
     }
 
     private func resend(_ id: UUID) {
