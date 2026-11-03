@@ -10,6 +10,7 @@ import SwiftUI
 
     /// iOS starts the list with its search drawer folded away; a Mac's toolbar search field has nothing to fold.
     func foldOnce() {}
+    func refold() {}
 }
 
 /// Nothing to find on a Mac (see `SearchCloseWatcher`).

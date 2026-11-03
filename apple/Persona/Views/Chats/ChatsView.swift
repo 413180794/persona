@@ -287,6 +287,7 @@ private struct AgentsList: View {
     var menuActions: AgentsListMenu.Actions
 
     @State private var searchClose = SearchCloseWatcher()
+    @Environment(\.tabIsActive) private var tabIsActive
     @AppStorage("dev.machineFilter") private var machineFilter = ""
     /// Several groups of hubs: the one the list shows ("" = all; `HubFilter`).
     @AppStorage(HubFilter.key) private var hubFilter = ""
@@ -609,6 +610,9 @@ private struct AgentsList: View {
         .navigationBarTitleDisplayMode(.inline)
         .background { SearchCloseProbe(watcher: searchClose) }
         .onAppear { searchClose.foldOnce() } // the search field starts folded away; a pull shows it
+        // Back in front (its tab picked again, the shell's Agents): folded again too (#740). Not on the way back from a
+        // chat, which keeps the list as it was: that changes the view's appearance, not the tab.
+        .onChange(of: tabIsActive) { _, active in if active { searchClose.refold() } }
         #if (DEBUG || PERF_SIGNPOST) && os(iOS)
         .background { if ScreenProbe.enabled { AgentsScrollProbe(page: shell == nil ? nil : "agents") } }
         #endif
@@ -2193,6 +2197,14 @@ private struct TopBar<Bar: View>: ViewModifier {
     }
 
     private weak var foundList: UIScrollView?
+
+    /// The page came back to the front: it starts with the search folded away again, as on its first appearance, when
+    /// the list still sits at its very top with the field out and not in use (#740). Scrolled down, or searching,
+    /// nothing moves. A short list's added bottom room is counted in its inset already, so none is added twice.
+    func refold() {
+        folded = false
+        foldOnce()
+    }
 
     /// The list's scroll view: the largest collection view in the page the probe is in (List is one). Kept once found
     /// while it is in a window (`ReaderAnchor` asks on every push).

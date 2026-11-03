@@ -362,7 +362,8 @@ final class AgentsListTests: XCTestCase {
         return tinted * 2 > w * h
     }
 
-    private func backToList() {
+    /// Back from a chat to the list; `atTop`: the list was at its top, so its filters are on screen again.
+    private func backToList(atTop: Bool = true) {
         _ = app.buttons["返回"].firstMatch.waitForExistence(timeout: 3)
         // The chat's own header (its back button is not in a navigation bar), full or folded.
         if let back = app.buttons.matching(NSPredicate(format: "label IN %@", ["返回", "Back"])).allElementsBoundByIndex
@@ -371,7 +372,7 @@ final class AgentsListTests: XCTestCase {
             w.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
                 .press(forDuration: 0.05, thenDragTo: w.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)))
         }
-        see(filter("all"), "the list again")
+        see(atTop ? filter("all") : app.collectionViews.firstMatch, "the list again")
         sleep(1)
     }
 
@@ -403,8 +404,11 @@ final class AgentsListTests: XCTestCase {
         sleep(1)
         XCTAssertLessThan(gapAboveFilters("refreshed", searchShown: true), limit)
         shot("filters-refreshed")
-        row(0).tap()
-        backToList()
+        // 需要你处理's cards can fill the screen above the first row: scroll to it, and back to the top after the chat
+        // (the list keeps its place on the way back, #382).
+        reach(row(0), "the first row").tap()
+        backToList(atTop: false)
+        returnToTop()
         XCTAssertLessThan(gapAboveFilters("chat-back", searchShown: true), limit)
         app.collectionViews.firstMatch.swipeUp(velocity: .slow)
         filtersScrolledAway("chat-back-scrolled")
