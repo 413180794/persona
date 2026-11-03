@@ -135,12 +135,14 @@ struct MachinesView: View {
         let ordered = MachineConcern.ordered(machines) { m in
             MachineConcern.of(m, alert: alerts[m.ref] ?? .normal, waiting: tallies[m.ref]?.needsYou ?? 0)
         }
-        // Top-aligned: an offline card is shorter than its neighbour and would float in the middle of the row.
+        // The cards of a row are as tall as its tallest (`fillsRow`): a card with more alert chips or a two-line
+        // subtitle left its neighbours short and their charts at another height (#905).
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Size.cardColumn), spacing: Theme.Space.m, alignment: .top)],
                          spacing: Theme.Space.m) {
             ForEach(ordered, id: \.ref) { m in
                 NavigationLink(value: MachineDetailRoute(m.ref)) {
-                    MachineCard(machine: m, tally: tallies[m.ref], metrics: metrics[m.ref], showsMetrics: !unmonitoredGroups.contains(m.group))
+                    MachineCard(machine: m, tally: tallies[m.ref], metrics: metrics[m.ref], showsMetrics: !unmonitoredGroups.contains(m.group),
+                                fillsRow: true)
                 }
                 .buttonStyle(.plain)
             }
@@ -231,6 +233,9 @@ struct MachineCard: View {
     /// Its latest values (and for 机器 the last hour); nil until they come, or from a hub without machine monitoring.
     var metrics: MachineMetrics?
     var showsMetrics = true
+    /// In 机器's grid: as tall as the row, an online card's counts and charts at the bottom so they line up across it
+    /// (an offline card keeps its words at the top). At the top of a machine's page it is as tall as its content.
+    var fillsRow = false
 
     var body: some View {
         let system = machine.system ?? metrics?.system
@@ -238,25 +243,33 @@ struct MachineCard: View {
         let alerts = sample.map { MetricAlert.of($0, cores: system?.cores) } ?? []
         let worst = alerts.first?.level ?? .normal
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: Theme.Space.m) {
-                OSBadge(system: system, fallback: machine.symbol, size: Theme.Size.avatarM, online: machine.online)
-                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    // Color.primary / Color.secondary, not .primary / .secondary: the hierarchical styles come out a step
-                    // lighter where the card sits in a section header.
-                    Text(machine.name).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
-                    Text(Self.subtitle(machine, system: system)).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                HStack(spacing: Theme.Space.m) {
+                    OSBadge(system: system, fallback: machine.symbol, size: Theme.Size.avatarM, online: machine.online)
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        // Color.primary / Color.secondary, not .primary / .secondary: the hierarchical styles come out a step
+                        // lighter where the card sits in a section header.
+                        Text(machine.name).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
+                        Text(Self.subtitle(machine, system: system)).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
+                    }
+                    Spacer(minLength: Theme.Space.sm)
+                    status
                 }
-                Spacer(minLength: Theme.Space.sm)
-                status
-            }
-            if !alerts.isEmpty {
-                FlowLayoutRow {
-                    ForEach(alerts, id: \.label) { a in AlertChip(alert: a) }
+                if !alerts.isEmpty {
+                    FlowLayoutRow {
+                        ForEach(alerts, id: \.label) { a in AlertChip(alert: a) }
+                    }
                 }
             }
+            .frame(maxHeight: fillsRow && machine.online ? .infinity : nil, alignment: .top)
             if machine.online {
-                AgentCounts(tally: tally ?? AgentTally(MachineDetailView.agents(model, machine.ref)))
-                if showsMetrics { metricsRow(sample) }
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    AgentCounts(tally: tally ?? AgentTally(MachineDetailView.agents(model, machine.ref)))
+                    if showsMetrics { metricsRow(sample) }
+                }
+                // Sized before the stretching part above: second in line, the values (which may shrink to fit) came
+                // out smaller than in a card of their own.
+                .layoutPriority(1)
             } else if let err = machine.error, !err.isEmpty {
                 Text(err).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
             }
@@ -264,6 +277,7 @@ struct MachineCard: View {
                 DeployRow(machine: machine)
             }
         }
+        .frame(maxHeight: fillsRow ? .infinity : nil, alignment: .top)
         .card(padding: 14)
         .overlay {
             if worst > .normal {
