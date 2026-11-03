@@ -41,9 +41,3 @@ type Secrets interface {
 	Save(ctx context.Context, data []byte) error
 	Delete(ctx context.Context) error
 }
-
-// Capabler is a connector that says itself which capabilities it has (Capabilities' names): one that answers for a
-// program it runs (connector/proc) implements every method and has only some of them for real.
-type Capabler interface {
-	Capabilities() []string
-}

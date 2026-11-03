@@ -26,22 +26,22 @@ func (m *replyMail) Send(_ context.Context, r mail.SendRequest) error {
 	return nil
 }
 
-// replierConnector answers with ReplyItem and records it.
+// replierConnector records the replies it gets.
 type replierConnector struct{ got []connector.InboxReply }
 
 func (*replierConnector) ID() string                                              { return "example" }
 func (*replierConnector) Name() string                                            { return "Example" }
 func (*replierConnector) Collect(context.Context) ([]connector.InboxThing, error) { return nil, nil }
-func (*replierConnector) Reply(context.Context, string, string) error {
-	panic("ReplyItem should be used")
+func (*replierConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox}}
 }
-func (c *replierConnector) ReplyItem(_ context.Context, r connector.InboxReply) error {
+func (c *replierConnector) Reply(_ context.Context, r connector.InboxReply) error {
 	c.got = append(c.got, r)
 	return nil
 }
 
 // Replies go to the connector an item belongs to: mail's to mail (only document items move a status), an item
-// nobody owns cannot be answered, a connector with ReplyItem gets the move it answers.
+// nobody owns cannot be answered, a connector gets the move it answers.
 func TestInboxRepliesGoToTheirConnector(t *testing.T) {
 	ctx := context.Background()
 	h := newTestHub(t)

@@ -43,7 +43,7 @@ func TestWritesDescribeTheCardAndPost(t *testing.T) {
 	}
 
 	comment := json.RawMessage(`{"repo":"example-org/example-repo","number":12,"body":"看过了，可以合。"}`)
-	act, card := c.Describe(ctx, "github_comment", comment)
+	act, card, _ := c.Describe(ctx, "github_comment", comment)
 	if card != "在 GitHub 上评论 example-org/example-repo#12「Add the example」：\n\n看过了，可以合。" ||
 		act.Visible != "example-org/example-repo 仓库能看到的所有人（公开仓库是所有人）" {
 		t.Fatalf("card %q, visible %q", card, act.Visible)
@@ -53,7 +53,7 @@ func TestWritesDescribeTheCardAndPost(t *testing.T) {
 	}
 
 	approve := json.RawMessage(`{"repo":"example-org/example-repo","number":12,"event":"APPROVE"}`)
-	if _, card := c.Describe(ctx, "github_review", approve); !strings.HasPrefix(card, "【批准】在 GitHub 上批准（approve）这个 PR：example-org/example-repo#12") {
+	if _, card, _ := c.Describe(ctx, "github_review", approve); !strings.HasPrefix(card, "【批准】在 GitHub 上批准（approve）这个 PR：example-org/example-repo#12") {
 		t.Fatalf("approve card %q", card)
 	}
 	if _, err := c.Do(ctx, "github_review", approve); err != nil {
@@ -66,7 +66,7 @@ func TestWritesDescribeTheCardAndPost(t *testing.T) {
 
 	// Offline (GitHub does not answer the title): the card still says where and what.
 	other := json.RawMessage(`{"repo":"example-org/other","number":3,"event":"REQUEST_CHANGES","body":"请补测试"}`)
-	if _, card := c.Describe(ctx, "github_review", other); card != "在 GitHub 上要求修改（request changes）example-org/other#3：\n\n请补测试" {
+	if _, card, _ := c.Describe(ctx, "github_review", other); card != "在 GitHub 上要求修改（request changes）example-org/other#3：\n\n请补测试" {
 		t.Fatalf("card %q", card)
 	}
 }

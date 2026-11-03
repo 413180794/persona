@@ -22,8 +22,12 @@ type mailConnector struct{ h *Hub }
 func (mailConnector) ID() string   { return "mail" }
 func (mailConnector) Name() string { return "邮件" }
 
-// NextPoll: IMAP is slow and Gmail goes through a proxy.
-func (mailConnector) NextPoll() time.Duration { return kbMailPoll }
+// Manifest: the coding agents get mail too; IMAP is slow and Gmail goes through a proxy, so it is asked for changes
+// less often.
+func (mailConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapTools, connector.CapActions, connector.CapArchive},
+		AgentTools: []string{"mail_*"}, Poll: kbMailPoll}
+}
 
 // Changes is inbox mail newer than the last UID archived per account, oldest first, one chat per account and
 // correspondent (mail-<account>-<address>); at most 10 full texts a run, the rest their snippet; subject + text,
@@ -102,25 +106,14 @@ func (c mailConnector) Actions() []proto.Tool {
 	return nil
 }
 
-// ForAgents: the coding agents get mail too.
-func (mailConnector) ForAgents() bool { return true }
-
 func (c mailConnector) Call(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	return toolText(c.h.mail.Call(ctx, name, args, nil))
 }
 
-// Validate refuses a mail_send that could not be sent before the user is asked.
-func (mailConnector) Validate(name string, args json.RawMessage) error {
-	if name != mail.ToolSend {
-		return nil
-	}
-	_, err := mail.SendSummary(args)
-	return err
-}
-
-func (mailConnector) Describe(_ context.Context, name string, args json.RawMessage) (connector.Action, string) {
-	summary, _ := mail.SendSummary(args)
-	return connector.Action{Name: name}, summary
+// Describe refuses a mail_send that could not be sent before the user is asked.
+func (mailConnector) Describe(_ context.Context, name string, args json.RawMessage) (connector.Action, string, error) {
+	summary, err := mail.SendSummary(args)
+	return connector.Action{Name: name}, summary, err
 }
 
 // Do sends it (the gate let it through).

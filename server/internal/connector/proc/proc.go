@@ -1,6 +1,6 @@
 // Package proc is a connector that runs in a program of its own (connector/serve): the hub starts the program while
 // the connector runs, talks to it over its stdin / stdout (internal/rpc) and answers for it in the hub. It implements
-// every capability and says which the program has (connector.Capabler); what the program lacks answers empty.
+// every capability and declares what the program said it has (a proxy's manifest): the hub uses only those.
 // jarvisd-telegram is one: its dependencies would double jarvisd's size (docs/plan-telegram.md).
 package proc
 
@@ -55,7 +55,7 @@ var (
 // Conn is the connector of one program.
 type Conn struct {
 	cfg    Config
-	events chan string // scopes the program reported, for Watch
+	events chan connector.Scope // scopes the program reported, for Watch
 
 	mu     sync.Mutex
 	peer   *rpc.Peer // nil while the program is not running
@@ -69,7 +69,7 @@ func New(cfg Config) *Conn {
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
-	return &Conn{cfg: cfg, events: make(chan string, 16),
+	return &Conn{cfg: cfg, events: make(chan connector.Scope, 16),
 		man:    serve.Manifest{ID: cfg.ID, Name: cfg.Name},
 		status: connector.Status{State: connector.StateError, Error: cfg.Name + " 进程还没启动"}}
 }
@@ -82,19 +82,12 @@ func (c *Conn) Name() string {
 	return c.man.Name
 }
 
-// Capabilities are what the program said it has.
-func (c *Conn) Capabilities() []string {
+// Manifest is what the program said it has (nothing while it has not started); its status is always the hub's
+// answer for it (connector.StatusOf asks a proxy's).
+func (c *Conn) Manifest() connector.Manifest {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return slices.Clone(c.man.Capabilities)
-}
-
-func (c *Conn) has(capability string) bool { return slices.Contains(c.Capabilities(), capability) }
-
-func (c *Conn) Hosts() []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return slices.Clone(c.man.Hosts)
+	return c.man.Of()
 }
 
 // Status answers from memory: the program's last status, or why it is not running.
@@ -313,17 +306,22 @@ func (c *Conn) onEvent(event string, params json.RawMessage) {
 		return
 	}
 	var e serve.ChangedEvent
-	if json.Unmarshal(params, &e) != nil || e.Scope == "" {
+	if json.Unmarshal(params, &e) != nil {
+		return
+	}
+	scope := connector.Scope(e.Scope)
+	if !scope.Known() {
+		c.cfg.Logf("connector %s: unknown scope %q changed", c.cfg.ID, e.Scope)
 		return
 	}
 	select {
-	case c.events <- e.Scope:
+	case c.events <- scope:
 	default: // the hub has a kick pending already
 	}
 }
 
 // Watch passes the program's changes on until ctx ends; the hub restarts it like any connector's.
-func (c *Conn) Watch(ctx context.Context, changed func(scope string)) error {
+func (c *Conn) Watch(ctx context.Context, changed func(connector.Scope)) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -381,9 +379,6 @@ func (c *Conn) Logout(ctx context.Context) error {
 }
 
 func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connector.ChatBatch, string, bool, error) {
-	if !c.has("archive") {
-		return nil, cursor, false, nil
-	}
 	var out serve.ChangesResult
 	err := c.call(ctx, serve.MChanges, serve.ChangesParams{Cursor: cursor, Limit: limit}, &out)
 	if err != nil {
@@ -393,19 +388,13 @@ func (c *Conn) Changes(ctx context.Context, cursor string, limit int) ([]connect
 }
 
 func (c *Conn) Collect(ctx context.Context) ([]connector.InboxThing, error) {
-	if !c.has("inbox") {
-		return nil, nil
-	}
 	var out serve.CollectResult
 	err := c.call(ctx, serve.MCollect, struct{}{}, &out)
 	return out.Things, err
 }
 
-func (c *Conn) Reply(ctx context.Context, thread, text string) error {
-	if !c.has("inbox") {
-		return fmt.Errorf("%s cannot reply", c.cfg.Name)
-	}
-	return c.call(ctx, serve.MReply, serve.ReplyParams{Thread: thread, Text: text}, nil)
+func (c *Conn) Reply(ctx context.Context, r connector.InboxReply) error {
+	return c.call(ctx, serve.MReply, r, nil)
 }
 
 // Tools answers from memory: what the program listed when it was last asked.
@@ -435,6 +424,4 @@ var (
 	_ connector.ReadTools = (*Conn)(nil)
 	_ connector.Events    = (*Conn)(nil)
 	_ connector.Runner    = (*Conn)(nil)
-	_ connector.Hosts     = (*Conn)(nil)
-	_ connector.Capabler  = (*Conn)(nil)
 )

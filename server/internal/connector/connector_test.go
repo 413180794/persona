@@ -19,24 +19,30 @@ type fake struct {
 	id     string
 	status Status
 	did    []string
-	watch  func(ctx context.Context, changed func(string)) error
+	watch  func(ctx context.Context, changed func(Scope)) error
+}
+
+func (f *fake) Manifest() Manifest {
+	return Manifest{Capabilities: []Capability{CapStatus, CapTools, CapActions, CapEvents}, Hosts: []string{"example.com"}}
 }
 
 func (f *fake) ID() string                    { return f.id }
 func (f *fake) Name() string                  { return "Example" }
 func (f *fake) Status(context.Context) Status { return f.status }
-func (f *fake) Hosts() []string               { return []string{"example.com"} }
 func (f *fake) Tools() []proto.Tool           { return []proto.Tool{{Name: f.id + "_read"}, {Name: "x_read"}} }
 func (f *fake) Actions() []proto.Tool         { return []proto.Tool{{Name: f.id + "_comment"}} }
 
-func (f *fake) Watch(ctx context.Context, changed func(string)) error { return f.watch(ctx, changed) }
+func (f *fake) Watch(ctx context.Context, changed func(Scope)) error { return f.watch(ctx, changed) }
 
 func (f *fake) Call(_ context.Context, name string, args json.RawMessage) (string, error) {
 	return "read " + string(args), nil
 }
 
-func (f *fake) Describe(_ context.Context, name string, args json.RawMessage) (Action, string) {
-	return Action{Name: name, Visible: "example-org/example-repo#12 的所有参与者"}, "评论 example-org/example-repo#12"
+func (f *fake) Describe(_ context.Context, name string, args json.RawMessage) (Action, string, error) {
+	if string(args) == `{"bad":true}` {
+		return Action{}, "", errors.New("bad arguments")
+	}
+	return Action{Name: name, Visible: "example-org/example-repo#12 的所有参与者"}, "评论 example-org/example-repo#12", nil
 }
 
 func (f *fake) Do(_ context.Context, name string, args json.RawMessage) (string, error) {
@@ -47,8 +53,9 @@ func (f *fake) Do(_ context.Context, name string, args json.RawMessage) (string,
 // plain has no capability at all.
 type plain struct{}
 
-func (plain) ID() string   { return "plain" }
-func (plain) Name() string { return "Plain" }
+func (plain) ID() string         { return "plain" }
+func (plain) Name() string       { return "Plain" }
+func (plain) Manifest() Manifest { return Manifest{} }
 
 func TestRegistryRejectsBadAndDuplicateIDs(t *testing.T) {
 	r := NewRegistry(nil)
@@ -117,6 +124,10 @@ func TestActionsGoThroughTheGate(t *testing.T) {
 	}
 	if res := r.Call(ctx, "example_comment", nil, yes); res.IsError || len(c.did) != 1 {
 		t.Fatalf("allowed but did not run: %+v", res)
+	}
+	asked = ""
+	if res := r.Call(ctx, "example_comment", json.RawMessage(`{"bad":true}`), yes); !res.IsError || !contains(res, "bad arguments") || asked != "" || len(c.did) != 1 {
+		t.Fatalf("arguments Describe refuses were asked about or ran: %+v, asked %q", res, asked)
 	}
 
 	// Rules: the first match decides, fields narrow a rule.
@@ -200,7 +211,7 @@ func TestWatchRestartsAfterAFailure(t *testing.T) {
 	watchBackoffFirst = time.Millisecond
 	t.Cleanup(func() { watchBackoffFirst = 5 * time.Second })
 	var runs atomic.Int32
-	c := &fake{id: "example", watch: func(ctx context.Context, changed func(string)) error {
+	c := &fake{id: "example", watch: func(ctx context.Context, changed func(Scope)) error {
 		changed(ScopeInbox)
 		if runs.Add(1) < 3 {
 			return errors.New("socket closed")
@@ -214,7 +225,7 @@ func TestWatchRestartsAfterAFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	kicks := make(chan string, 10)
-	r.Start(ctx, func(id, scope string) { kicks <- id + " " + scope }, func(string, ...any) {})
+	r.Start(ctx, func(id string, scope Scope) { kicks <- id + " " + string(scope) }, func(string, ...any) {})
 	for i := 0; i < 3; i++ {
 		select {
 		case k := <-kicks:

@@ -19,6 +19,11 @@ type larkConnector struct{ h *Hub }
 func (larkConnector) ID() string   { return "lark" }
 func (larkConnector) Name() string { return "飞书" }
 
+// Manifest: its inbox and its status stay the hub's own (inbox_own.go, /api/v1/lark/status).
+func (larkConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapTools, connector.CapChats, connector.CapItems}}
+}
+
 // ChatSources: Feishu's chats (lark-…) and the removed posts I am part of (moments-…), in this order.
 func (c larkConnector) ChatSources() []kb.Source {
 	return []kb.Source{&larkSource{c: c.h.lark}, &momentsSource{c: c.h.lark}}

@@ -32,7 +32,7 @@ type Registry struct {
 
 type starter struct {
 	ctx     context.Context
-	changed func(id, scope string)
+	changed func(id string, scope Scope)
 	logf    func(string, ...any)
 }
 
@@ -84,11 +84,14 @@ func (r *Registry) Enabled(id string) bool {
 	return !r.off[id]
 }
 
-// Add registers a connector; its ID must be new and look like one.
+// Add registers a connector; its ID must be new and look like one, its manifest pass Check.
 func (r *Registry) Add(c Connector) error {
 	id := c.ID()
 	if !validID.MatchString(id) {
 		return fmt.Errorf("connector id %q: lowercase letters and digits only", id)
+	}
+	if err := Check(c); err != nil {
+		return err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -131,15 +134,20 @@ func (r *Registry) Owner(tool string) Connector {
 // ToolNames are the names of every read tool and action a connector offers, whatever its status.
 func ToolNames(c Connector) []string {
 	var out []string
-	if t, ok := c.(ReadTools); ok {
-		for _, tl := range t.Tools() {
-			out = append(out, tl.Name)
-		}
+	for _, tl := range allTools(c) {
+		out = append(out, tl.Name)
 	}
-	if a, ok := c.(Actions); ok {
-		for _, tl := range a.Actions() {
-			out = append(out, tl.Name)
-		}
+	return out
+}
+
+// allTools are c's read tools, then its actions.
+func allTools(c Connector) []proto.Tool {
+	var out []proto.Tool
+	if t, ok := As[ReadTools](c); ok {
+		out = append(out, t.Tools()...)
+	}
+	if a, ok := As[Actions](c); ok {
+		out = append(out, a.Actions()...)
 	}
 	return out
 }
@@ -151,25 +159,21 @@ func (r *Registry) Offers(name string) bool {
 	return c != nil && slices.Contains(ToolNames(c), name)
 }
 
-func forAgents(c Connector) bool {
-	a, ok := c.(AgentTools)
-	return ok && a.ForAgents()
-}
-
-// ForAgents says whether the tool name is a connector's that the coding agents get too.
+// ForAgents says whether the tool name is a connector's that the coding agents get too (Manifest.AgentTools).
 func (r *Registry) ForAgents(name string) bool {
 	c := r.Owner(name)
-	return c != nil && forAgents(c)
+	return c != nil && c.Manifest().ForAgents(name)
 }
 
-// StatusOf is a connector's status: StateDisabled when the user switched it off; one without Accounts is always ok.
+// StatusOf is a connector's status: StateDisabled when the user switched it off; one without a status is always ok.
 func StatusOf(ctx context.Context, c Connector) Status {
 	if c != nil && reflect.TypeOf(c).Comparable() {
 		if _, off := switchedOff.Load(c); off {
 			return Status{State: StateDisabled}
 		}
 	}
-	if a, ok := c.(Accounts); ok {
+	// A proxy's status is always its own: it answers for a program while the program does not run.
+	if a, ok := c.(Accounts); ok && (c.Manifest().Has(CapStatus) || c.Manifest().Proxy) {
 		return a.Status(ctx)
 	}
 	return Status{State: StateOK}
@@ -180,19 +184,19 @@ func (r *Registry) Tools(ctx context.Context) []proto.Tool {
 	return append(r.ToolsFor(ctx, true), r.ToolsFor(ctx, false)...)
 }
 
-// ToolsFor are the tools of the connectors that are ok and whose tools go to the agents too (agents), or only to
-// the assistant (!agents), in the order added.
+// ToolsFor are the tools of the connectors that are ok that go to the agents too (agents), or only to the
+// assistant (!agents), in the order added.
 func (r *Registry) ToolsFor(ctx context.Context, agents bool) []proto.Tool {
 	var out []proto.Tool
 	for _, c := range r.All() {
-		if forAgents(c) != agents || StatusOf(ctx, c).State != StateOK {
+		if StatusOf(ctx, c).State != StateOK {
 			continue
 		}
-		if t, ok := c.(ReadTools); ok {
-			out = append(out, owned(c, t.Tools())...)
-		}
-		if a, ok := c.(Actions); ok {
-			out = append(out, owned(c, a.Actions())...)
+		m := c.Manifest()
+		for _, t := range owned(c, allTools(c)) {
+			if m.ForAgents(t.Name) == agents {
+				out = append(out, t)
+			}
 		}
 	}
 	return out
@@ -224,17 +228,12 @@ func (r *Registry) Call(ctx context.Context, name string, args json.RawMessage, 
 		}
 		return proto.TextResult(fmt.Sprintf("%s is not available: %s", c.Name(), why), true)
 	}
-	if t, ok := c.(ReadTools); ok && has(t.Tools(), name) {
+	if t, ok := As[ReadTools](c); ok && has(t.Tools(), name) {
 		return result(t.Call(ctx, name, args))
 	}
-	a, ok := c.(Actions)
+	a, ok := As[Actions](c)
 	if !ok || !has(a.Actions(), name) {
 		return proto.TextResult("unknown tool "+name, true)
-	}
-	if v, ok := c.(Validator); ok {
-		if err := v.Validate(name, args); err != nil {
-			return proto.TextResult(err.Error(), true)
-		}
 	}
 	r.mu.RLock()
 	rules := r.rules
@@ -287,10 +286,10 @@ func (r *Registry) Infos(ctx context.Context) []Info {
 		st := StatusOf(ctx, c)
 		info := Info{ID: c.ID(), Name: c.Name(), Status: st.State, Account: st.Account, Via: st.Via, Error: st.Error, Guide: st.Guide,
 			LastSync: when(st.LastSync), LastEvent: when(st.LastEvent), Capabilities: Capabilities(c), Enabled: r.Enabled(c.ID())}
-		if h, ok := c.(Hosts); ok {
-			info.Hosts = h.Hosts()
+		if hosts := c.Manifest().Hosts; len(hosts) > 0 {
+			info.Hosts = hosts
 		}
-		if o, ok := c.(Options); ok {
+		if o, ok := As[Options](c); ok {
 			info.Options = o.Options()
 		}
 		out = append(out, info)
@@ -303,40 +302,4 @@ func when(t time.Time) *time.Time {
 		return nil
 	}
 	return &t
-}
-
-// Capabilities names the optional interfaces a connector implements, or the ones it says it has (Capabler).
-func Capabilities(c Connector) []string {
-	if cp, ok := c.(Capabler); ok {
-		return append([]string{}, cp.Capabilities()...)
-	}
-	out := []string{}
-	add := func(name string, ok bool) {
-		if ok {
-			out = append(out, name)
-		}
-	}
-	_, status := c.(Accounts)
-	_, tools := c.(ReadTools)
-	_, actions := c.(Actions)
-	_, events := c.(Events)
-	_, hosts := c.(Hosts)
-	_, inbox := c.(Inbox)
-	_, archive := c.(Archive)
-	_, chats := c.(Chats)
-	_, items := c.(Items)
-	_, login := c.(Login)
-	add("status", status)
-	add("tools", tools)
-	add("actions", actions)
-	add("events", events)
-	add("hosts", hosts)
-	add("inbox", inbox)
-	add("archive", archive)
-	add("chats", chats)
-	add("items", items)
-	add("login", login)
-	_, options := c.(Options)
-	add("options", options)
-	return out
 }

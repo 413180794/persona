@@ -123,6 +123,15 @@ func newConn(secrets connector.Secrets, dial dialer) *Conn {
 func (*Conn) ID() string   { return "telegram" }
 func (*Conn) Name() string { return "Telegram" }
 
+// Manifest: read-only, so no actions (docs/plan-telegram.md).
+func (*Conn) Manifest() connector.Manifest {
+	return connector.Manifest{
+		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapEvents, connector.CapInbox,
+			connector.CapArchive, connector.CapLogin},
+		Kinds: []string{"dm", "mention"},
+	}
+}
+
 // Status answers from memory; a flood wait that is over is over here (the hub reads only an ok connector).
 func (c *Conn) Status(context.Context) connector.Status {
 	c.mu.Lock()

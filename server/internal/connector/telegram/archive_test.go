@@ -144,7 +144,7 @@ func TestWatchKicks(t *testing.T) {
 	got := make(chan string, 8)
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go c.Watch(wctx, func(scope string) { got <- scope })
+	go c.Watch(wctx, func(scope connector.Scope) { got <- string(scope) })
 	f.mu.Lock()
 	updated := f.updated
 	f.mu.Unlock()
@@ -161,7 +161,7 @@ func TestWatchKicks(t *testing.T) {
 		}
 	}
 	slices.Sort(scopes)
-	if !slices.Equal(scopes, []string{connector.ScopeChats, connector.ScopeInbox}) {
+	if !slices.Equal(scopes, []string{string(connector.ScopeChats), string(connector.ScopeInbox)}) {
 		t.Fatalf("kicks %v", scopes)
 	}
 	select {

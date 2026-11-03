@@ -47,6 +47,11 @@ type exampleProgram struct {
 func (*exampleProgram) ID() string   { return "example" }
 func (*exampleProgram) Name() string { return "Example" }
 
+func (*exampleProgram) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapEvents,
+		connector.CapArchive, connector.CapLogin}, AgentTools: []string{"example_chats"}, Poll: 3 * time.Minute}
+}
+
 func (p *exampleProgram) Status(ctx context.Context) connector.Status {
 	if p.exitSoon {
 		p.once.Do(func() { go func() { time.Sleep(50 * time.Millisecond); os.Exit(3) }() })
@@ -88,7 +93,7 @@ func (*exampleProgram) Call(_ context.Context, name string, _ json.RawMessage) (
 	return name + ": 2 chats", nil
 }
 
-func (*exampleProgram) Watch(ctx context.Context, changed func(string)) error {
+func (*exampleProgram) Watch(ctx context.Context, changed func(connector.Scope)) error {
 	changed(connector.ScopeChats)
 	<-ctx.Done()
 	return nil
@@ -157,14 +162,14 @@ func TestProgram(t *testing.T) {
 	}
 	go c.Run(ctx)
 	waitUntil(t, "the program's status", func() bool { return c.Status(ctx).State == connector.StateNotSignedIn })
-	if caps := c.Capabilities(); !slices.Contains(caps, "login") || !slices.Contains(caps, "archive") || slices.Contains(caps, "inbox") {
-		t.Fatalf("capabilities %v", caps)
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "events", "archive", "login"}) {
+		t.Fatalf("the registry lists %v", got)
 	}
-	if got := connector.Capabilities(c); !slices.Equal(got, c.Capabilities()) {
-		t.Fatalf("the registry lists %v, the program said %v", got, c.Capabilities())
+	if m := c.Manifest(); !m.Proxy || !m.ForAgents("example_chats") || m.Poll != 3*time.Minute {
+		t.Fatalf("manifest %+v", m)
 	}
-	if things, err := c.Collect(ctx); things != nil || err != nil {
-		t.Fatalf("no inbox, yet collect gave %v %v", things, err)
+	if _, ok := connector.As[connector.Inbox](c); ok {
+		t.Fatal("no inbox, yet the hub would collect it")
 	}
 
 	p, err := c.LoginStep(ctx, "", nil)
@@ -197,9 +202,9 @@ func TestProgram(t *testing.T) {
 	if out, err := c.Call(ctx, "example_chats", json.RawMessage(`{}`)); err != nil || out != "example_chats: 2 chats" {
 		t.Fatalf("call %q %v", out, err)
 	}
-	got := make(chan string, 4)
+	got := make(chan connector.Scope, 4)
 	wctx, wcancel := context.WithCancel(ctx)
-	go c.Watch(wctx, func(scope string) { got <- scope })
+	go c.Watch(wctx, func(scope connector.Scope) { got <- scope })
 	select {
 	case s := <-got:
 		if s != connector.ScopeChats {

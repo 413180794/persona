@@ -213,14 +213,14 @@ func TestReplyComments(t *testing.T) {
 	f := &fakeNotifications{prs: map[string]string{}, comments: map[string]string{}}
 	f.notifications = "[]"
 	c := f.server(t)
-	if err := c.Reply(context.Background(), "example-org/example-repo#12", "看过了"); err != nil {
+	if err := c.Reply(context.Background(), connector.InboxReply{Thread: "example-org/example-repo#12", Text: "看过了"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.posted) != 1 || f.posted[0] != `/repos/example-org/example-repo/issues/12/comments {"body":"看过了"}` {
 		t.Fatalf("%v", f.posted)
 	}
 	for _, bad := range []string{"notification:3", "../x#1", "example-org/example-repo#x"} {
-		if err := c.Reply(context.Background(), bad, "x"); err == nil {
+		if err := c.Reply(context.Background(), connector.InboxReply{Thread: bad, Text: "x"}); err == nil {
 			t.Errorf("%s was replied to", bad)
 		}
 	}

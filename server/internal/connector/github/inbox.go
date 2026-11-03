@@ -53,7 +53,7 @@ type notification struct {
 }
 
 // Watch polls the notifications until ctx ends, saying ScopeInbox when a thing changed.
-func (c *Connector) Watch(ctx context.Context, changed func(scope string)) error {
+func (c *Connector) Watch(ctx context.Context, changed func(connector.Scope)) error {
 	for {
 		wait := pollDefault
 		if c.signedIn() {
@@ -409,8 +409,9 @@ func (c *Connector) Collect(context.Context) ([]connector.InboxThing, error) {
 
 var threadRef = regexp.MustCompile(`^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#(\d+)$`)
 
-// Reply comments text on the PR / issue (the user pressed send on it).
-func (c *Connector) Reply(ctx context.Context, thread, text string) error {
+// Reply comments the text on the PR / issue (the user pressed send on it).
+func (c *Connector) Reply(ctx context.Context, r connector.InboxReply) error {
+	thread, text := r.Thread, r.Text
 	m := threadRef.FindStringSubmatch(thread)
 	if m == nil || !validRepo(m[1]) {
 		return fmt.Errorf("%s cannot be replied to", thread)
@@ -430,7 +431,7 @@ func (c *Connector) Reply(ctx context.Context, thread, text string) error {
 
 // tierOf is the tier the rules give a PR / issue notification (reason) by who made the newest move, "" when they
 // cannot tell (a person's ordinary comment on my PR: the model decides).
-func tierOf(reason string, author user, moves []move) (tier, why string) {
+func tierOf(reason string, author user, moves []move) (tier connector.Tier, why string) {
 	var last *move
 	if len(moves) > 0 {
 		last = &moves[len(moves)-1]
@@ -442,28 +443,28 @@ func tierOf(reason string, author user, moves []move) (tier, why string) {
 	switch reason {
 	case "review_requested":
 		if isBot(author) {
-			return "fyi", "规则：机器人的 PR 请你 review"
+			return connector.TierFYI, "规则：机器人的 PR 请你 review"
 		}
-		return "action", "规则：请你 review"
+		return connector.TierAction, "规则：请你 review"
 	case "mention":
 		if byBot {
-			return "fyi", "规则：机器人 @ 了你"
+			return connector.TierFYI, "规则：机器人 @ 了你"
 		}
-		return "action", "规则：真人 @ 了你"
+		return connector.TierAction, "规则：真人 @ 了你"
 	case "assign":
-		return "action", "规则：分配给你"
+		return connector.TierAction, "规则：分配给你"
 	case "team_mention":
-		return "fyi", "规则：@ 的是你所在的团队"
+		return connector.TierFYI, "规则：@ 的是你所在的团队"
 	case "author":
 		switch {
 		case last == nil:
 			return "", ""
 		case last.bot:
-			return "fyi", "规则：机器人在你的 PR / issue 上留言"
+			return connector.TierFYI, "规则：机器人在你的 PR / issue 上留言"
 		case last.state == "CHANGES_REQUESTED":
-			return "action", "规则：要求修改"
+			return connector.TierAction, "规则：要求修改"
 		case last.state == "APPROVED":
-			return "fyi", "规则：批准了"
+			return connector.TierFYI, "规则：批准了"
 		}
 	}
 	return "", ""

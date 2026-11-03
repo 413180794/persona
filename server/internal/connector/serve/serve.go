@@ -43,12 +43,15 @@ const (
 	EChanged       = "changed" // ChangedEvent
 )
 
-// Manifest is who the connector is and what it can do (connector.Capabilities' names).
+// Manifest is who the connector is and its connector.Manifest, on the wire.
 type Manifest struct {
 	ID           string   `json:"id"`
 	Name         string   `json:"name"`
 	Capabilities []string `json:"capabilities"`
 	Hosts        []string `json:"hosts,omitempty"`
+	AgentTools   []string `json:"agent_tools,omitempty"`
+	PollSeconds  int      `json:"poll_seconds,omitempty"`
+	Kinds        []string `json:"kinds,omitempty"`
 }
 
 type (
@@ -67,9 +70,10 @@ type (
 		More    bool
 	}
 	CollectResult struct{ Things []connector.InboxThing }
-	ReplyParams   struct{ Thread, Text string }
-	ToolsResult   struct{ Tools []proto.Tool }
-	CallParams    struct {
+	// ReplyParams is the reply as the connector gets it.
+	ReplyParams = connector.InboxReply
+	ToolsResult struct{ Tools []proto.Tool }
+	CallParams  struct {
 		Name string
 		Args json.RawMessage
 	}
@@ -128,7 +132,7 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 	case MStatus:
 		return connector.StatusOf(ctx, c), nil
 	case MLoginStep:
-		l, ok := c.(connector.Login)
+		l, ok := connector.As[connector.Login](c)
 		if !ok {
 			return nil, noCapability(c, "login")
 		}
@@ -138,13 +142,13 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		}
 		return l.LoginStep(ctx, p.Step, p.Values)
 	case MLogout:
-		l, ok := c.(connector.Login)
+		l, ok := connector.As[connector.Login](c)
 		if !ok {
 			return nil, noCapability(c, "login")
 		}
 		return struct{}{}, l.Logout(ctx)
 	case MChanges:
-		a, ok := c.(connector.Archive)
+		a, ok := connector.As[connector.Archive](c)
 		if !ok {
 			return nil, noCapability(c, "archive")
 		}
@@ -155,14 +159,14 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		b, next, more, err := a.Changes(ctx, p.Cursor, p.Limit)
 		return ChangesResult{Batches: b, Next: next, More: more}, err
 	case MCollect:
-		in, ok := c.(connector.Inbox)
+		in, ok := connector.As[connector.Inbox](c)
 		if !ok {
 			return nil, noCapability(c, "inbox")
 		}
 		things, err := in.Collect(ctx)
 		return CollectResult{Things: things}, err
 	case MReply:
-		in, ok := c.(connector.Inbox)
+		in, ok := connector.As[connector.Inbox](c)
 		if !ok {
 			return nil, noCapability(c, "inbox")
 		}
@@ -170,15 +174,15 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, err
 		}
-		return struct{}{}, in.Reply(ctx, p.Thread, p.Text)
+		return struct{}{}, in.Reply(ctx, p)
 	case MTools:
-		t, ok := c.(connector.ReadTools)
+		t, ok := connector.As[connector.ReadTools](c)
 		if !ok {
 			return ToolsResult{}, nil
 		}
 		return ToolsResult{Tools: t.Tools()}, nil
 	case MCall:
-		t, ok := c.(connector.ReadTools)
+		t, ok := connector.As[connector.ReadTools](c)
 		if !ok {
 			return nil, noCapability(c, "tools")
 		}
@@ -203,6 +207,9 @@ func (s *server) init(config json.RawMessage) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
+	if err := connector.Check(c); err != nil {
+		return Manifest{}, err
+	}
 	s.c = c
 	if r, ok := c.(connector.Runner); ok {
 		go r.Run(s.ctx)
@@ -218,7 +225,7 @@ func (s *server) watch(e connector.Events) {
 	wait := watchFirst
 	for s.ctx.Err() == nil {
 		start := time.Now()
-		err := e.Watch(s.ctx, func(scope string) { _ = s.peer.Notify(EChanged, ChangedEvent{Scope: scope}) })
+		err := e.Watch(s.ctx, func(scope connector.Scope) { _ = s.peer.Notify(EChanged, ChangedEvent{Scope: string(scope)}) })
 		if s.ctx.Err() != nil {
 			return
 		}
@@ -235,13 +242,25 @@ func (s *server) watch(e connector.Events) {
 	}
 }
 
-// ManifestOf is c's manifest.
+// ManifestOf is c's manifest on the wire.
 func ManifestOf(c connector.Connector) Manifest {
-	m := Manifest{ID: c.ID(), Name: c.Name(), Capabilities: connector.Capabilities(c)}
-	if h, ok := c.(connector.Hosts); ok {
-		m.Hosts = h.Hosts()
+	cm := c.Manifest()
+	m := Manifest{ID: c.ID(), Name: c.Name(), Capabilities: []string{}, Hosts: cm.Hosts, AgentTools: cm.AgentTools,
+		PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds}
+	for _, cp := range cm.Capabilities {
+		m.Capabilities = append(m.Capabilities, string(cp))
 	}
 	return m
+}
+
+// Of is the connector.Manifest a program sent (a proxy's: it answers for the program).
+func (m Manifest) Of() connector.Manifest {
+	out := connector.Manifest{Hosts: m.Hosts, AgentTools: m.AgentTools, Poll: time.Duration(m.PollSeconds) * time.Second,
+		Kinds: m.Kinds, Proxy: true}
+	for _, cp := range m.Capabilities {
+		out.Capabilities = append(out.Capabilities, connector.Capability(cp))
+	}
+	return out
 }
 
 func noCapability(c connector.Connector, what string) error {

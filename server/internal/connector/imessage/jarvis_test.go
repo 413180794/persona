@@ -118,7 +118,7 @@ func TestTheInboxSeesUnreadConversations(t *testing.T) {
 	ctx := context.Background()
 	c, n := jarvisRemote(t, map[string]string{"connector.chats": chatsPage(time.Now()), "connector.older": olderPage})
 	var scopes []string
-	changed := func(s string) { scopes = append(scopes, s) }
+	changed := func(s connector.Scope) { scopes = append(scopes, string(s)) }
 	c.look(ctx, changed)
 	things, _ := c.Collect(ctx)
 	if len(things) != 4 || strings.Join(scopes, ",") != "chats,inbox" {
@@ -149,7 +149,7 @@ func TestTheInboxSeesUnreadConversations(t *testing.T) {
 	if things, _ := c.Collect(ctx); len(things) != 0 {
 		t.Errorf("off: %d things", len(things))
 	}
-	if err := c.Reply(ctx, "imessage-000000000001", "好"); err == nil {
+	if err := c.Reply(ctx, connector.InboxReply{Thread: "imessage-000000000001", Text: "好"}); err == nil {
 		t.Error("Jarvis sent a message")
 	}
 }

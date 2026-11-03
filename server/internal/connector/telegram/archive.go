@@ -174,7 +174,7 @@ func (c *Conn) updated() {
 }
 
 // Watch kicks the hub's archive and inbox when Telegram tells of something new (connector.Events).
-func (c *Conn) Watch(ctx context.Context, changed func(scope string)) error {
+func (c *Conn) Watch(ctx context.Context, changed func(connector.Scope)) error {
 	for {
 		select {
 		case <-ctx.Done():

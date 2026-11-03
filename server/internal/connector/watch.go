@@ -17,7 +17,7 @@ var (
 // changed with the connector's id and the scope; a Watch that returns is started again after a backoff (its error is
 // logged as the connector wrote it — connectors keep secrets out of their errors). Each runs under its own context:
 // switching it off cancels it, switching it on starts it again (SetEnabled).
-func (r *Registry) Start(ctx context.Context, changed func(id, scope string), logf func(string, ...any)) {
+func (r *Registry) Start(ctx context.Context, changed func(id string, scope Scope), logf func(string, ...any)) {
 	r.mu.Lock()
 	r.run = &starter{ctx: ctx, changed: changed, logf: logf}
 	r.mu.Unlock()
@@ -46,11 +46,11 @@ func (r *Registry) startOne(c Connector) {
 	}
 }
 
-func watchOne(ctx context.Context, id string, e Events, changed func(id, scope string), logf func(string, ...any)) {
+func watchOne(ctx context.Context, id string, e Events, changed func(id string, scope Scope), logf func(string, ...any)) {
 	wait := watchBackoffFirst
 	for ctx.Err() == nil {
 		start := time.Now()
-		err := e.Watch(ctx, func(scope string) { changed(id, scope) })
+		err := e.Watch(ctx, func(scope Scope) { changed(id, scope) })
 		if ctx.Err() != nil {
 			return
 		}

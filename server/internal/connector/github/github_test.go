@@ -72,7 +72,7 @@ func TestSignedInThroughTheMachine(t *testing.T) {
 	if m.fetched != 1 {
 		t.Fatalf("the token was fetched %d times, not kept in memory", m.fetched)
 	}
-	if got := c.Hosts(); len(got) != 1 || got[0] != "github.com" {
+	if got := c.Manifest().Hosts; len(got) != 1 || got[0] != "github.com" {
 		t.Fatalf("hosts %v", got)
 	}
 }

@@ -235,19 +235,19 @@ func (c *Connector) describeCI(ctx context.Context, n notification, run ciRun, m
 	pr := 0
 	switch {
 	case run.branch == def:
-		t.Tier, t.Why = "action", "规则：默认分支的 CI 失败"
+		t.Tier, t.Why = connector.TierAction, "规则：默认分支的 CI 失败"
 	case o.ci() == CIDefaultBranch:
 		return t, false, nil
 	case o.ci() == CIAll:
-		t.Tier, t.Why = "action", "规则：CI 失败（设置为全部提醒）"
+		t.Tier, t.Why = connector.TierAction, "规则：CI 失败（设置为全部提醒）"
 	default: // mine
 		if pr, err = c.myOpenPR(ctx, repo, run.branch, me); err != nil {
 			return t, false, err
 		}
 		if pr > 0 {
-			t.Tier, t.Why = "action", "规则：你开着的 PR 的 CI 失败"
+			t.Tier, t.Why = connector.TierAction, "规则：你开着的 PR 的 CI 失败"
 		} else {
-			t.Tier, t.Why = "fyi", "规则：功能分支的 CI 失败"
+			t.Tier, t.Why = connector.TierFYI, "规则：功能分支的 CI 失败"
 		}
 	}
 	where := run.branch + " 分支"

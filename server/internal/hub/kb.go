@@ -126,7 +126,7 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 func (h *Hub) kbSources() []kb.Source {
 	var out []kb.Source
 	for _, c := range h.connectors.All() {
-		if cs, ok := c.(connector.Chats); ok {
+		if cs, ok := connector.As[connector.Chats](c); ok {
 			out = append(out, cs.ChatSources()...)
 		}
 	}
@@ -138,7 +138,7 @@ func (h *Hub) kbCollectItems(ctx context.Context) {
 	e := h.kb.eng
 	any := false
 	for _, c := range h.connectors.All() {
-		if is, ok := c.(connector.Items); ok {
+		if is, ok := connector.As[connector.Items](c); ok {
 			any = true
 			if err := e.CollectItems(ctx, is.ItemSource()); err != nil {
 				h.logf("kb: items: %v", err)

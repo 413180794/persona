@@ -72,6 +72,10 @@ type signInConnector struct {
 
 func (*signInConnector) ID() string   { return "example" }
 func (*signInConnector) Name() string { return "Example" }
+func (*signInConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions,
+		connector.CapLogin}}
+}
 
 func (c *signInConnector) LoginStep(ctx context.Context, step string, v map[string]string) (connector.Prompt, error) {
 	phone := connector.Prompt{Step: "phone", Fields: []connector.Field{{Name: "phone", Label: "手机号", Placeholder: "+1 555 0100"}}}

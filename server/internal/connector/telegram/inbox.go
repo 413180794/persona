@@ -57,7 +57,7 @@ func (c *Conn) Collect(context.Context) ([]connector.InboxThing, error) {
 		}
 		key := d.Peer.key()
 		t := connector.InboxThing{Thread: key, Title: d.Name, Sender: d.TopFrom, Preview: d.TopText, At: d.TopAt,
-			OpenURL: openURL(d), Tier: "action", Context: c.box.contexts[key].text}
+			OpenURL: openURL(d), Tier: connector.TierAction, Context: c.box.contexts[key].text}
 		switch d.Kind {
 		case "dm":
 			t.Kind, t.Label, t.Last = "dm", "私聊", strconv.Itoa(d.Top)
@@ -81,7 +81,7 @@ func (c *Conn) Collect(context.Context) ([]connector.InboxThing, error) {
 }
 
 // Reply: the connector only reads. The app shows 「在 Telegram 里回复」 (OpenURL) instead.
-func (c *Conn) Reply(context.Context, string, string) error {
+func (c *Conn) Reply(context.Context, connector.InboxReply) error {
 	return errors.New("Telegram 是只读的：在 Telegram 里回复")
 }
 

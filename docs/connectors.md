@@ -24,21 +24,34 @@
 | `lark` | 飞书 | hub 里（`hub/lark_connector.go`，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | hub 自己的收件箱块（`inbox_own.go`） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
 | `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
 
-### 接口：一个必选，其余按需实现
+### 接口：一份清单，按清单分派
 
-`server/internal/connector/connector.go`：`Connector` 只有 `ID()`、`Name()`；其余都是可选能力，hub 用类型断言找。
+`server/internal/connector/connector.go`：`Connector` 有 `ID()`、`Name()`、`Manifest()`。清单（`manifest.go`，v2 · V1 起）一处写明它能做什么：
 
-| 能力 | 干什么 | 谁有 |
-| --- | --- | --- |
-| `Accounts` | `Status()`：状态、账号、出错时给人看的一句话和 `Guide` | 除飞书、邮件外都有（没有就当 `ok`） |
-| `ReadTools` / `Actions` | 只读工具；写操作（`Describe` 出卡片上的话，`Do` 真去做） | 见上表 |
-| `Validator`、`AgentTools` | 写之前先查参数；工具也给 Agent（不只给助手） | 邮件 |
-| `Options` | 连接器自己的设置（JSON），App 里改 | GitHub |
-| `Events`、`Runner`、`Machines`、`Poller` | 实时事件；自己的循环；某台电脑连上了；多久问一次 | 各有各的 |
-| `Hosts` | 链接所在的主机名（App 认链接） | GitHub |
-| `Archive`、`Chats`、`Items` | 进知识库的三种形状 | 见上表 |
-| `Inbox`、`InboxReplier`、`InboxSettler` | 收件箱的候选、回复、按规则收掉旧的 | GitHub、信息、Telegram |
-| `Login`、`Capabler` | 分步登录；自己报能力（子进程形态用） | Telegram |
+| 清单的字段 | 意思 |
+| --- | --- |
+| `Capabilities` | 有类型的能力（`CapStatus`、`CapTools`、`CapActions`、`CapEvents`、`CapInbox`、`CapSettle`、`CapArchive`、`CapChats`、`CapItems`、`CapLogin`、`CapOptions`），每个对应一个接口 |
+| `Hosts` | 链接所在的主机名（App 认链接） |
+| `AgentTools` | 哪些工具也给 Agent（不只给助手），按名字的通配（邮件是 `mail_*`） |
+| `Poll` | 多久问一次 `Archive`（0 是 hub 的默认；邮件 6 分钟） |
+| `Kinds` | 收件箱条目的种类；每个种类在 `prompts/inbox/kinds/<id>.md` 里要有自己的说明（`connector.CheckKinds`，各连接器的 `TestKindsAreDescribed`），收到没声明的种类记一行日志 |
+| `Proxy` | 它替一个程序回答（子进程的 `proc.Conn`）：实现了全部接口，只有声明的那些是真的 |
+
+hub 只用 `connector.As[接口](c)` 找能力：清单声明了才去断言。`Registry.Add` 用 `connector.Check` 检查清单：声明了没实现、实现了没声明（`Proxy` 除外）、
+不认识的能力、种类却没有收件箱，都在注册时报错。各能力的接口：
+
+| 能力 | 接口 | 干什么 | 谁有 |
+| --- | --- | --- | --- |
+| `status` | `Accounts` | `Status()`：状态、账号、出错时给人看的一句话和 `Guide` | 除飞书、邮件外都有（没有就当 `ok`；`Proxy` 的状态总是问它自己） |
+| `tools` / `actions` | `ReadTools` / `Actions` | 只读工具；写操作（`Describe` 出卡片上的话、参数不对时返回错误不弹卡片，`Do` 真去做） | 见上表 |
+| `options` | `Options` | 连接器自己的设置（JSON），App 里改 | GitHub |
+| `events` | `Events` | 实时事件，`changed(Scope)`；`Scope` 是有类型的常量，子进程报来的先校验 | 各有各的 |
+| `archive`、`chats`、`items` | `Archive`、`Chats`、`Items` | 进知识库的三种形状 | 见上表 |
+| `inbox`、`settle` | `Inbox`、`InboxSettler` | 收件箱的候选和回复（`Reply` 拿到整条 `InboxReply`：会话、条目、回的是哪一步、正文）；按规则收掉旧的 | GitHub、信息、Telegram；`settle` 只有 GitHub |
+| `login` | `Login` | 分步登录 | Telegram |
+
+`Runner`（自己的循环）、`Machines`（某台电脑连上了）是怎么跑的，不是能力，照旧按类型断言。收件箱的档是 `connector.Tier`（`TierAction`、`TierFYI`、`TierNoise`），
+hub 收到不认识的档就丢掉、交给模型分拣。
 
 `Registry`（`registry.go`）持有全部连接器：按状态发工具（只有 `ok` 的给）、按前缀分发调用、开关（`SetEnabled`）、启动 `Run` / `Watch`（失败退避重启）。
 
@@ -47,7 +60,8 @@
 - **在 hub 里**：Go 代码直接实现接口。
 - **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 jarvisd 的（Telegram 的 gotd）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
   JSON-lines RPC（`internal/rpc`），方法一一对应接口（`serve.go` 的 `init`、`status`、`archive.changes`、`inbox.collect`、`tools.call`……），
-  程序反过来调 hub 的 `secrets.*`。程序必须和 hub 同一次构建（`version -v` 一字不差），所以协议没有版本号。
+  程序反过来调 hub 的 `secrets.*`。`init` 回的是程序的清单（`serve.Manifest`，线上的字段是 snake_case），hub 侧的 `proc.Conn` 照它声明（`Proxy`）；
+  程序没起来时什么能力都不报。程序必须和 hub 同一次构建（`version -v` 一字不差），所以协议没有版本号。
 - **node 中转**：数据只在某台 Mac 上（`chat.db`）。node 上有一个读本地数据的 `Reader`，hub 经 node 的 RPC（`connector.list/chats/older/changes/search`，
   `node/node.go` 里写死的 5 个方法）去读，hub 一侧的 `imessage.Remote` 才是连接器。
 
@@ -78,7 +92,8 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
 
 ### 加一个连接器（v1 的做法）
 
-1. `connector/<id>` 一个包，实现 `Connector` 和需要的能力；工具的描述放 `prompts/mcp/<id>/`，收件箱的种类说明放 `prompts/inbox/kinds/<id>.md`。
+1. `connector/<id>` 一个包，实现 `Connector`（含 `Manifest()`）和清单里声明的能力；工具的描述放 `prompts/mcp/<id>/`，收件箱的种类说明放
+   `prompts/inbox/kinds/<id>.md`，种类写进清单，加一个 `TestKindsAreDescribed`。
 2. hub.json 加一节配置，`hub/connectors.go` 的 `registerConnectors` 里注册。
 3. 写操作只做成 `Actions`，`Describe` 的卡片写明谁会看到。
 4. 状态 `Status` 只从内存回答（每次列工具都要问），出错时 `Error` 一句话、能自己修的给 `Guide`。
@@ -317,7 +332,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 
 | 步 | 内容 | 对应 | 大小 | 动哪些 | 兼容 |
 | --- | --- | --- | --- | --- | --- |
-| V1 | 清单 + 接口合并成 7 组；档、scope 的常量；`InboxReplier`、`AgentTools`、`Validator`、`Poller` 并掉；种类在清单里声明 | 1、3 | 小到中 | 5 个都动（机械） | 对外不变，golden 逐字节一致，真实数据只读对照 |
+| V1 ✓ | 清单（`Manifest`）+ 按清单分派（`As`、`Check`）；档、scope 的常量；`Capabler`、`Hosts`、`Poller`、`AgentTools`、`Validator`、`InboxReplier` 并掉；种类在清单里声明并对照提示词。可选接口从 19 个减到 11 个能力接口加 `Runner`、`Machines`。**没做的**：`Runner` + `Events` + `Machines` 并成 `Run(ctx, Host)`（会把 hub 的 `Watch` 退避重启搬进各连接器，对外有变化，和 V5 的协议一起做）；`ReadTools` + `Actions` 两个能力保留（清单分得开读写，合并没有好处）；`Settle` 在 V3 改，知识库的三种在 V7 并 | 1、3 | 小到中 | 5 个都动（机械） | 对外不变：`GET /api/v1/connectors` 的能力和 MCP 工具的 golden 一致，真实 hub 的列表前后对照 |
 | V2 | skill 的命令闸门 | 8 | 中 | node；不碰连接器 | 默认放行：没声明写命令的 skill 不受影响，声明了的多了确认；只管助手 |
 | V3 | 收件箱的 `Group`、`From`、`Tags`、`Supersedes`，hub 统一合并、静音、收尾；GitHub 先改，Telegram、信息跟上 | 5 | 中 | GitHub、Telegram、信息、hub 收件箱 | 老的 `github.inbox` 自动转成静音规则；App 新增「静音」菜单另一个 PR |
 | V4 | 身份线索（只记录） | 6 | 小到中 | 5 个都动一点、知识库 | 新字段，老数据不动 |

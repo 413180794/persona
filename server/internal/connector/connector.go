@@ -1,9 +1,10 @@
 // Package connector is how a source of the user's information (GitHub, iMessage, later Feishu and mail) plugs into
 // the hub: one connector per source, and each pipe the hub has — the assistant's tools, writes behind a gate, the
 // settings page's status, realtime kicks — picks up what the connector implements, so adding a source does not
-// touch those pipes (docs/plan-connectors.md).
+// touch those pipes (docs/connectors.md).
 //
-// A connector implements Connector; everything else is an optional capability the hub finds with a type assertion.
+// A connector implements Connector, whose Manifest declares its capabilities; the hub finds each declared one's
+// interface with As. Runner, Events and Machines are how it runs, found by type assertion.
 package connector
 
 import (
@@ -22,6 +23,8 @@ type Connector interface {
 	ID() string
 	// Name is for people: GitHub, 信息.
 	Name() string
+	// Manifest is what it declares (Check holds it to that).
+	Manifest() Manifest
 }
 
 // States of a connector (Status.State).
@@ -76,8 +79,10 @@ type Action struct {
 type Actions interface {
 	Actions() []proto.Tool
 	// Describe turns the arguments into what the phone's card says (the conversation, the object, the full text to
-	// send). It works offline: what it cannot look up it lists as given.
-	Describe(ctx context.Context, name string, args json.RawMessage) (Action, string)
+	// send). It works offline: what it cannot look up it lists as given. An error refuses a call that could not run
+	// before the user is asked.
+	Describe(ctx context.Context, name string, args json.RawMessage) (Action, string, error)
+	// Do runs it (the gate let it through), refusing arguments it cannot use as Describe does.
 	Do(ctx context.Context, name string, args json.RawMessage) (string, error)
 }
 
@@ -89,29 +94,24 @@ type Options interface {
 	SetOptions(json.RawMessage) error
 }
 
-// AgentTools is a connector whose tools also go to the coding agents (mail), not only to the assistant.
-type AgentTools interface {
-	ForAgents() bool
-}
-
-// Validator checks an action's arguments before the gate asks the user: a call that cannot run is refused without
-// a card.
-type Validator interface {
-	Validate(name string, args json.RawMessage) error
-}
-
 // Events are changes the connector hears about as they happen (a realtime socket, a file that changed). Watch runs
 // until ctx ends, calling changed with what changed; the hub restarts it with a backoff when it returns an error.
 type Events interface {
-	Watch(ctx context.Context, changed func(scope string)) error
+	Watch(ctx context.Context, changed func(Scope)) error
 }
 
-// Scopes of a change (Events): the knowledge base's chats or items, or the inbox.
+// Scope is what changed (Events).
+type Scope string
+
+// Scopes of a change: the knowledge base's chats or items, or the inbox.
 const (
-	ScopeChats = "chats"
-	ScopeItems = "items"
-	ScopeInbox = "inbox"
+	ScopeChats Scope = "chats"
+	ScopeItems Scope = "items"
+	ScopeInbox Scope = "inbox"
 )
+
+// Known says whether s is one of the scopes: one from a program or a machine is checked before the hub acts on it.
+func (s Scope) Known() bool { return s == ScopeChats || s == ScopeItems || s == ScopeInbox }
 
 // Runner is a connector with work of its own (checking its sign-in, polling): the hub runs it until ctx ends.
 type Runner interface {
@@ -122,17 +122,6 @@ type Runner interface {
 // hub tells it when one connects.
 type Machines interface {
 	MachineOnline(id string)
-}
-
-// Hosts are the web hosts a connector's links live on (github.com, or an Enterprise host only the config knows):
-// the app uses them for the link card's icon and 「在 GitHub 打开」.
-type Hosts interface {
-	Hosts() []string
-}
-
-// Poller is a connector the hub asks for changes (Archive) at its own pace rather than the hub's default.
-type Poller interface {
-	NextPoll() time.Duration
 }
 
 // Chats is a connector whose conversations the knowledge base reads chat by chat, each with its own cursor

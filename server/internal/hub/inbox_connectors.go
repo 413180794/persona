@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
@@ -28,7 +30,7 @@ type InboxConnector struct {
 func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 	var changed []*InboxItem
 	for _, c := range h.connectors.All() {
-		in, ok := c.(connector.Inbox)
+		in, ok := connector.As[connector.Inbox](c)
 		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK && connector.StatusOf(ctx, c).State != connector.StateRateLimited {
 			continue
 		}
@@ -37,15 +39,36 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 			h.logf("inbox: %s: %v", c.ID(), err)
 			continue
 		}
+		h.vetThings(c, things)
 		h.inbox.mu.Lock()
 		changed = append(changed, h.inbox.applyConnector(c.ID(), c.Name(), things, time.Now())...)
 		h.inbox.mu.Unlock()
-		if s, ok := c.(connector.InboxSettler); ok {
+		if s, ok := connector.As[connector.InboxSettler](c); ok {
 			changed = append(changed, h.settleConnector(ctx, c.ID(), s)...)
 		}
 	}
 	return changed
 }
+
+// vetThings holds a connector's things to its manifest: a tier the inbox does not know is dropped (the model
+// decides), a kind it did not declare is logged once (prompts/inbox/kinds/<id>.md may not say what it means).
+func (h *Hub) vetThings(c connector.Connector, things []connector.InboxThing) {
+	kinds := c.Manifest().Kinds
+	for i := range things {
+		t := &things[i]
+		if t.Tier != "" && !t.Tier.Known() {
+			h.logf("inbox: %s: unknown tier %q", c.ID(), t.Tier)
+			t.Tier = ""
+		}
+		if t.Kind != "" && !slices.Contains(kinds, t.Kind) {
+			if _, logged := undeclaredKinds.LoadOrStore(c.ID()+"\x00"+t.Kind, true); !logged {
+				h.logf("inbox: %s: kind %q is not in its manifest", c.ID(), t.Kind)
+			}
+		}
+	}
+}
+
+var undeclaredKinds sync.Map
 
 // settleConnector files the connector's open items its rules now leave out (made under older rules, a muted
 // source…) as done, with why; nothing is deleted.
@@ -105,7 +128,7 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 				open.Count++
 				fillConnectorItem(open, t)
 				changed = append(changed, open)
-			} else if t.Tier != "" && (open.Tier != t.Tier || open.Reason != t.Why) {
+			} else if t.Tier != "" && (open.Tier != string(t.Tier) || open.Reason != t.Why) {
 				// The rules decide this one now (an item tiered before, or under other options).
 				setRuleTier(open, t)
 				changed = append(changed, open)
@@ -138,7 +161,7 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 func fillConnectorItem(it *InboxItem, t connector.InboxThing) {
 	it.Kind, it.Title, it.Sender, it.Preview, it.Context = t.Kind, t.Title, t.Sender, t.Preview, t.Context
 	it.UpdatedAt, it.Last = t.At, t.Last
-	it.Connector = &InboxConnector{Thread: t.Thread, Label: t.Label, URL: t.URL, OpenURL: t.OpenURL, ReplyTo: t.ReplyTo, CanReply: t.CanReply, RuleTier: t.Tier}
+	it.Connector = &InboxConnector{Thread: t.Thread, Label: t.Label, URL: t.URL, OpenURL: t.OpenURL, ReplyTo: t.ReplyTo, CanReply: t.CanReply, RuleTier: string(t.Tier)}
 	if t.Tier != "" {
 		setRuleTier(it, t)
 	}
@@ -147,9 +170,9 @@ func fillConnectorItem(it *InboxItem, t connector.InboxThing) {
 // setRuleTier gives an item the tier its connector's rules decided: triage leaves it alone (it is triaged at this
 // move), the reason is the rule.
 func setRuleTier(it *InboxItem, t connector.InboxThing) {
-	it.Tier, it.Reason, it.TriagedAt = t.Tier, t.Why, it.Last
+	it.Tier, it.Reason, it.TriagedAt = string(t.Tier), t.Why, it.Last
 	if it.Connector != nil {
-		it.Connector.RuleTier = t.Tier
+		it.Connector.RuleTier = string(t.Tier)
 	}
 }
 
@@ -162,8 +185,8 @@ func containsItem(list []*InboxItem, it *InboxItem) bool {
 	return false
 }
 
-// replyConnectorItem sends the user's reply to a connector's item, to its thread through the connector
-// (InboxReplier when it has it); the same text on an item already replied to went out already.
+// replyConnectorItem sends the user's reply to a connector's item, to its thread through the connector; the same
+// text on an item already replied to went out already.
 func (h *Hub) replyConnectorItem(ctx context.Context, r inboxReplyReq) (already bool, err error) {
 	c := r.item
 	h.inbox.mu.Lock()
@@ -173,16 +196,11 @@ func (h *Hub) replyConnectorItem(ctx context.Context, r inboxReplyReq) (already 
 		return true, nil
 	}
 	conn := h.connectors.Get(c.Source)
-	in, ok := conn.(connector.Inbox)
+	in, ok := connector.As[connector.Inbox](conn)
 	if !ok || !c.Connector.CanReply {
 		return false, errCannotReply
 	}
-	if rp, ok := conn.(connector.InboxReplier); ok {
-		err = rp.ReplyItem(ctx, connector.InboxReply{Thread: c.Connector.Thread, ItemID: c.ID, Last: c.Last, Text: r.text})
-	} else {
-		err = in.Reply(ctx, c.Connector.Thread, r.text)
-	}
-	if err != nil {
+	if err = in.Reply(ctx, connector.InboxReply{Thread: c.Connector.Thread, ItemID: c.ID, Last: c.Last, Text: r.text}); err != nil {
 		return false, err
 	}
 	r.once.clientID = r.text

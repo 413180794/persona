@@ -19,11 +19,14 @@ type inboxConnector struct {
 
 func (*inboxConnector) ID() string   { return "example" }
 func (*inboxConnector) Name() string { return "Example" }
+func (*inboxConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox}, Kinds: []string{"review_requested"}}
+}
 func (c *inboxConnector) Collect(context.Context) ([]connector.InboxThing, error) {
 	return c.things, nil
 }
-func (c *inboxConnector) Reply(_ context.Context, thread, text string) error {
-	c.replies = append(c.replies, thread+": "+text)
+func (c *inboxConnector) Reply(_ context.Context, r connector.InboxReply) error {
+	c.replies = append(c.replies, r.Thread+": "+r.Text)
 	return nil
 }
 
@@ -162,6 +165,11 @@ func TestConnectorItemsListAndReply(t *testing.T) {
 type settlingConnector struct {
 	inboxConnector
 	opts json.RawMessage
+}
+
+func (*settlingConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox, connector.CapSettle, connector.CapOptions},
+		Kinds: []string{"review_requested"}}
 }
 
 func (*settlingConnector) Settle(_ context.Context, threads []string) map[string]string {

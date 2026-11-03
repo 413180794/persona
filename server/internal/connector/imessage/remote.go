@@ -66,6 +66,15 @@ func NewRemote(cfg Config, machine string, call Caller) *Remote {
 func (c *Remote) ID() string   { return ID }
 func (c *Remote) Name() string { return "信息" }
 
+// Manifest: it reads one Mac's Messages through the node; nothing is sent and nothing signed in to from the app.
+func (c *Remote) Manifest() connector.Manifest {
+	return connector.Manifest{
+		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapEvents, connector.CapInbox,
+			connector.CapArchive},
+		Kinds: []string{"dm", "group"},
+	}
+}
+
 func (c *Remote) Status(context.Context) connector.Status {
 	c.mu.Lock()
 	defer c.mu.Unlock()

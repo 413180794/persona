@@ -88,7 +88,7 @@ func TestInbox(t *testing.T) {
 		t.Fatalf("a later mention %+v", g)
 	}
 
-	if err := c.Reply(context.Background(), "u1", "示例回复"); err == nil {
+	if err := c.Reply(context.Background(), connector.InboxReply{Thread: "u1", Text: "示例回复"}); err == nil {
 		t.Fatal("replied: the connector only reads")
 	}
 }

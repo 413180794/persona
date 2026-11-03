@@ -109,9 +109,18 @@ func New(cfg Config, machine string, fetch TokenSource) *Connector {
 		status: connector.Status{State: connector.StateNotSignedIn, Error: "正在读取 " + machine + " 上的 gh 登录…"}, poke: make(chan struct{}, 1)}
 }
 
-func (c *Connector) ID() string      { return "github" }
-func (c *Connector) Name() string    { return "GitHub" }
-func (c *Connector) Hosts() []string { return []string{c.cfg.host()} }
+func (c *Connector) ID() string   { return "github" }
+func (c *Connector) Name() string { return "GitHub" }
+
+// Manifest: everything but signing in from the app (it reads a computer's gh login) and chats of their own.
+func (c *Connector) Manifest() connector.Manifest {
+	return connector.Manifest{
+		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions, connector.CapEvents,
+			connector.CapInbox, connector.CapSettle, connector.CapArchive, connector.CapOptions},
+		Hosts: []string{c.cfg.host()},
+		Kinds: []string{"review_requested", "mention", "team_mention", "assign", "author", "ci_failed"},
+	}
+}
 
 func (c *Connector) Status(context.Context) connector.Status {
 	c.mu.Lock()

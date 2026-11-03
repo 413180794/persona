@@ -104,7 +104,7 @@ func TestCIFailuresPerBranchAndTier(t *testing.T) {
 		"ci:example-org/example-repo@feat/y": {"fyi", "规则：功能分支的 CI 失败"},
 	} {
 		th := got[thread]
-		if th.Tier != want[0] || th.Why != want[1] || th.Kind != "ci_failed" || th.CanReply || th.Title == "" {
+		if string(th.Tier) != want[0] || th.Why != want[1] || th.Kind != "ci_failed" || th.CanReply || th.Title == "" {
 			t.Errorf("%s: %+v", thread, th)
 		}
 	}
@@ -215,7 +215,7 @@ func TestTierOfPeopleAndBots(t *testing.T) {
 		{"author", alice, []move{{who: "ci-bot[bot] (bot)", bot: true}}, "fyi"},
 		{"author", alice, []move{{who: "bob"}}, ""},
 	} {
-		if tier, _ := tierOf(tc.reason, tc.author, tc.moves); tier != tc.tier {
+		if tier, _ := tierOf(tc.reason, tc.author, tc.moves); string(tier) != tc.tier {
 			t.Errorf("%s %+v: %q, want %q", tc.reason, tc.moves, tier, tc.tier)
 		}
 	}

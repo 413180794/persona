@@ -67,15 +67,17 @@ func TestArchiveConnectorIngestsAndKeepsTheCursor(t *testing.T) {
 // pollFake is an archive that asks to be polled every minute and counts the calls.
 type pollFake struct{ calls int }
 
-func (*pollFake) ID() string              { return "example" }
-func (*pollFake) Name() string            { return "Example" }
-func (*pollFake) NextPoll() time.Duration { return time.Minute }
+func (*pollFake) ID() string   { return "example" }
+func (*pollFake) Name() string { return "Example" }
+func (*pollFake) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapArchive}, Poll: time.Minute}
+}
 func (f *pollFake) Changes(_ context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {
 	f.calls++
 	return nil, cursor, false, nil
 }
 
-// A connector is asked when it is due (its NextPoll), not on every loop of the knowledge base.
+// A connector is asked when it is due (its manifest's Poll), not on every loop of the knowledge base.
 func TestKBConnectorsWhenDue(t *testing.T) {
 	h := newTestHub(t)
 	st, _ := kb.NewStore(t.TempDir())

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +12,10 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/github"
+	"github.com/chyroc/jarvis/server/internal/connector/imessage"
+	"github.com/chyroc/jarvis/server/internal/connector/proc"
+	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/chyroc/jarvis/server/internal/mail"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -19,6 +24,9 @@ type exampleConnector struct{ commented []string }
 
 func (*exampleConnector) ID() string   { return "example" }
 func (*exampleConnector) Name() string { return "Example" }
+func (*exampleConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions}}
+}
 func (*exampleConnector) Status(context.Context) connector.Status {
 	return connector.Status{State: connector.StateOK, Account: "alice"}
 }
@@ -27,8 +35,8 @@ func (*exampleConnector) Call(context.Context, string, json.RawMessage) (string,
 	return "example-org/example-repo#12", nil
 }
 func (*exampleConnector) Actions() []proto.Tool { return []proto.Tool{{Name: "example_comment"}} }
-func (*exampleConnector) Describe(context.Context, string, json.RawMessage) (connector.Action, string) {
-	return connector.Action{Visible: "example-org/example-repo 的所有人"}, "评论 example-org/example-repo#12：示例回复"
+func (*exampleConnector) Describe(context.Context, string, json.RawMessage) (connector.Action, string, error) {
+	return connector.Action{Visible: "example-org/example-repo 的所有人"}, "评论 example-org/example-repo#12：示例回复", nil
 }
 func (c *exampleConnector) Do(_ context.Context, name string, _ json.RawMessage) (string, error) {
 	c.commented = append(c.commented, name)
@@ -37,8 +45,9 @@ func (c *exampleConnector) Do(_ context.Context, name string, _ json.RawMessage)
 
 type namedConnector string
 
-func (c namedConnector) ID() string   { return string(c) }
-func (c namedConnector) Name() string { return string(c) }
+func (c namedConnector) ID() string                 { return string(c) }
+func (c namedConnector) Name() string               { return string(c) }
+func (namedConnector) Manifest() connector.Manifest { return connector.Manifest{} }
 
 // toolConnector offers the tools named.
 type toolConnector struct {
@@ -48,6 +57,9 @@ type toolConnector struct {
 
 func (c toolConnector) ID() string   { return c.id }
 func (c toolConnector) Name() string { return c.id }
+func (toolConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapTools}}
+}
 func (c toolConnector) Tools() []proto.Tool {
 	var out []proto.Tool
 	for _, n := range c.tools {
@@ -165,6 +177,43 @@ func TestConnectorsEndpoint(t *testing.T) {
 	list := out["connectors"].([]any)
 	if len(list) != 1 || list[0].(map[string]any)["account"] != "alice" || list[0].(map[string]any)["status"] != "ok" {
 		t.Fatalf("%v", out)
+	}
+}
+
+// What GET /api/v1/connectors?all=1 says each built-in connector can do, as listed before the manifests (v2 · V1):
+// the app goes by these names, so they must not move. Telegram's program is not running here: a proxy lists
+// nothing until it says.
+func TestConnectorsListTheSameCapabilities(t *testing.T) {
+	h := newTestHub(t)
+	h.mail = (*mail.Service)(nil)
+	h.lark = lark.New(lark.Config{BaseURL: "http://127.0.0.1:1", Token: "t"})
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors()
+	for _, c := range []connector.Connector{github.New(github.Config{}, "Mac", nil), imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil),
+		proc.New(proc.Config{ID: "telegram", Name: "Telegram", Path: "/nonexistent"})} {
+		if err := h.addConnector(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []string
+	for _, info := range h.listedConnectors(context.Background(), true) {
+		got = append(got, fmt.Sprintf("%s %s hosts=%v options=%v", info.ID, strings.Join(info.Capabilities, ","), info.Hosts, info.Options != nil))
+	}
+	want := []string{
+		"lark tools,chats,items hosts=[] options=false",
+		"mail tools,actions,archive hosts=[] options=false",
+		"github status,tools,actions,events,hosts,inbox,archive,options hosts=[github.com] options=true",
+		"imessage status,tools,events,inbox,archive hosts=[] options=false",
+		"telegram  hosts=[] options=false",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	// The coding agents get mail's tools, mail_send among them, and nobody else's.
+	for name, want := range map[string]bool{"mail_send": true, "mail_search": true, "github_read": false, "lark_search": false} {
+		if h.connectors.ForAgents(name) != want {
+			t.Errorf("%s for agents: %v", name, !want)
+		}
 	}
 }
 

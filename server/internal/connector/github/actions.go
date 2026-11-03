@@ -57,10 +57,10 @@ func parseWrite(name string, args json.RawMessage) (writeArgs, error) {
 
 // Describe is the phone's card: the action, the PR / issue (with its title when GitHub answers quickly), the full
 // text. Arguments it cannot read are listed as they are.
-func (c *Connector) Describe(ctx context.Context, name string, args json.RawMessage) (connector.Action, string) {
+func (c *Connector) Describe(ctx context.Context, name string, args json.RawMessage) (connector.Action, string, error) {
 	a, err := parseWrite(name, args)
 	if err != nil {
-		return connector.Action{Name: name}, name + " " + string(args)
+		return connector.Action{Name: name}, name + " " + string(args), nil
 	}
 	where := a.ref()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -84,9 +84,9 @@ func (c *Connector) Describe(ctx context.Context, name string, args json.RawMess
 		head = "在 GitHub 上评审（comment）" + where
 	}
 	if a.Body == "" {
-		return act, head
+		return act, head, nil
 	}
-	return act, head + "：\n\n" + a.Body
+	return act, head + "：\n\n" + a.Body, nil
 }
 
 // Do posts it (only once the gate let it through).

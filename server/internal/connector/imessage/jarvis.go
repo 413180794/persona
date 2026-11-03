@@ -143,7 +143,7 @@ func (c *Remote) Collect(context.Context) ([]connector.InboxThing, error) {
 var errNoReply = errors.New("在「信息」里回复：Jarvis 不替你发信息")
 
 // Reply: Jarvis does not send messages (the item's 在信息里回复 opens Messages with the number).
-func (c *Remote) Reply(context.Context, string, string) error { return errNoReply }
+func (c *Remote) Reply(context.Context, connector.InboxReply) error { return errNoReply }
 
 // How often Watch looks at the Mac for new messages, how many conversations it looks at, and how many of a
 // conversation's last messages go to the inbox (triage, the AI 分身).
@@ -156,7 +156,7 @@ var (
 // Watch is connector.Events: every couple of minutes it lists the newest conversations, keeps the inbox's things
 // from them and kicks the knowledge base when anything came in. A Mac that does not answer is waited for (the
 // status says why), so the hub does not restart and log this every few minutes.
-func (c *Remote) Watch(ctx context.Context, changed func(scope string)) error {
+func (c *Remote) Watch(ctx context.Context, changed func(connector.Scope)) error {
 	for {
 		if c.AI() && c.Status(ctx).State == connector.StateOK {
 			c.look(ctx, changed)
@@ -169,7 +169,7 @@ func (c *Remote) Watch(ctx context.Context, changed func(scope string)) error {
 	}
 }
 
-func (c *Remote) look(ctx context.Context, changed func(scope string)) {
+func (c *Remote) look(ctx context.Context, changed func(connector.Scope)) {
 	var page ChatsPage
 	if err := c.read(ctx, "connector.chats", map[string]any{"id": ID, "limit": watchChats, "keep": KeepContacts}, &page); err != nil {
 		return
@@ -207,9 +207,9 @@ func (c *Remote) look(ctx context.Context, changed func(scope string)) {
 func (c *Remote) thing(ctx context.Context, chat Chat) connector.InboxThing {
 	last := strconv.FormatInt(chat.Last.UnixNano(), 10)
 	t := connector.InboxThing{Thread: chat.ID, Kind: "dm", Title: chat.Name, Sender: chat.Name, Preview: MaskCodes(chat.Preview),
-		At: chat.Last, Last: last, ReplyTo: "在「信息」里回复（Jarvis 不替你发）", Tier: "action"}
+		At: chat.Last, Last: last, ReplyTo: "在「信息」里回复（Jarvis 不替你发）", Tier: connector.TierAction}
 	if chat.Group {
-		t.Kind, t.Label, t.Tier = "group", "群聊", "fyi"
+		t.Kind, t.Label, t.Tier = "group", "群聊", connector.TierFYI
 		if s, _, ok := strings.Cut(t.Preview, "："); ok {
 			t.Sender = s
 		}

@@ -17,7 +17,7 @@ import (
 // any chat.
 
 const (
-	kbConnectorPoll  = 10 * time.Minute // how often a connector is asked for changes, unless it says (connector.Poller)
+	kbConnectorPoll  = 10 * time.Minute // how often a connector is asked for changes, unless its manifest says (Poll)
 	kbConnectorPages = 3                // calls per connector and run
 	kbConnectorLimit = 20               // conversations per call
 )
@@ -34,18 +34,18 @@ func (kbConnectorSource) Messages(context.Context, kb.SourceChat, string, int) (
 	return nil, "", false, nil
 }
 
-// kbConnectors archives what moved in every signed-in connector with an archive that is due (its NextPoll, else
+// kbConnectors archives what moved in every signed-in connector with an archive that is due (its manifest's Poll, else
 // kbConnectorPoll, since it was last asked).
 func (h *Hub) kbConnectors(ctx context.Context) {
 	e := h.kb.eng
 	for _, c := range h.connectors.All() {
-		a, ok := c.(connector.Archive)
+		a, ok := connector.As[connector.Archive](c)
 		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK || ctx.Err() != nil {
 			continue
 		}
 		every := kbConnectorPoll
-		if p, ok := c.(connector.Poller); ok {
-			every = p.NextPoll()
+		if p := c.Manifest().Poll; p > 0 {
+			every = p
 		}
 		h.kb.mu.Lock()
 		if h.kb.archivedAt == nil {

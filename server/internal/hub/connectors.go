@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
@@ -48,7 +47,7 @@ func (h *Hub) builtinTools() []string {
 }
 
 // connectorChanged is a connector's realtime event: collect the inbox or archive soon.
-func (h *Hub) connectorChanged(id, scope string) {
+func (h *Hub) connectorChanged(id string, scope connector.Scope) {
 	switch scope {
 	case connector.ScopeInbox:
 		h.kickInbox()
@@ -220,8 +219,8 @@ func (h *Hub) connectorLogin(w http.ResponseWriter, id string) (connector.Login,
 		writeErr(w, http.StatusNotFound, fmt.Errorf("no connector %q", id))
 		return nil, false
 	}
-	l, ok := c.(connector.Login)
-	if !ok || !slices.Contains(connector.Capabilities(c), "login") {
+	l, ok := connector.As[connector.Login](c)
+	if !ok {
 		writeErr(w, http.StatusConflict, fmt.Errorf("%s has no sign-in", c.Name()))
 		return nil, false
 	}
@@ -240,7 +239,7 @@ type connectorSettings struct {
 // setConnectorOptions gives a connector the user's settings and keeps them for the next start; the inbox is
 // collected again under them.
 func (h *Hub) setConnectorOptions(ctx context.Context, id string, raw json.RawMessage) error {
-	o, ok := h.connectors.Get(id).(connector.Options)
+	o, ok := connector.As[connector.Options](h.connectors.Get(id))
 	if !ok {
 		return fmt.Errorf("%s has no settings", id)
 	}
@@ -294,7 +293,7 @@ func (h *Hub) restoreConnectorSwitches(ctx context.Context) {
 	}
 	for _, c := range h.connectors.All() {
 		if raw, ok := cs.Options[c.ID()]; ok {
-			if o, ok := c.(connector.Options); ok {
+			if o, ok := connector.As[connector.Options](c); ok {
 				if err := o.SetOptions(raw); err != nil {
 					h.logf("connectors: %s settings: %v", c.ID(), err)
 				}

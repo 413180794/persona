@@ -109,7 +109,11 @@ func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string
 		res := proto.TextResult("The hub's rules (connector_gate) do not allow "+name+".", true)
 		return &res
 	case Confirm:
-		act, summary := a.Describe(ctx, name, args)
+		act, summary, err := a.Describe(ctx, name, args)
+		if err != nil {
+			res := proto.TextResult(err.Error(), true)
+			return &res
+		}
 		if act.Visible != "" {
 			summary += "\n\n谁会看到：" + act.Visible
 		}
