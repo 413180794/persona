@@ -296,7 +296,7 @@
 - **最低兼容的编译器是 Xcode 26.0（Swift 6.2），固定不动**（2026-11-02）：本机和不少开发机还在 26.0，master 必须在它上面编得过（iOS、Mac、手表、各扩展）；发版机器的 Xcode 更新（Swift 6.3.x），能编不代表 26.0 能编。
   踩过三次：#216 `isDynamicIslandLimitedInWidth`（iOS 27 SDK，#217 修）、`toolbarVerticalEdge`（iOS 27.1 SDK）、#164 `ShowsSnippetView` / `view:`（#430 修）。
 - 新 SDK 才有的符号用 `#if compiler(>=6.3)` 包起来，`#else` 走旧行为（旧 SDK 上功能退回去，不要空着）；`#available` / `@available` 只管运行时，符号编译时找不到照样报错。
-- 改了用到新 API 的代码，合入前在 Xcode 26.0 上编一遍（`eval "$(python3 scripts/jarvis_config.py env)"` 取 `DEVELOPER_DIR`），PR 里写明编过；编不了新 SDK 的分支，在 PR 里写明没编。
+- 改了用到新 API 的代码，有可用 Xcode 26.0 环境时合入前编一遍（`eval "$(python3 scripts/jarvis_config.py env)"` 取 `DEVELOPER_DIR`）。**没有该环境时不强制实编、不因此阻塞合并或发布**（2026-11-03 用户明确要求）：用现有工具链完成构建和测试，PR 写明实际版本及「26.0 未验证」，不用逐次询问豁免；兼容目标和新 SDK 的编译保护仍要保留。
 - 要抬高最低版本是产品决定：先问用户，同步改 `CLAUDE.md` 的那一条和这一节。
 
 - 发版机器的 Swift（6.3.3）和别的开发机不一样，Release 归档会报「unable to type-check this expression in reasonable time」：

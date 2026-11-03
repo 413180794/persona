@@ -78,8 +78,10 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 5. **做**：在独立分支 / worktree 上改，分支名带 issue 号（如 `fix/123-xxx`）。做不下去要放弃时，在 issue 里评论「放弃：」说明做到哪一步。
 6. **提 PR**：一个 PR 对应一个 issue，标题和正文用英文（会变成 master 上的 commit），正文写 `Closes #<号>`（fix 写 `Fixes #<号>`，只关联不关闭写 `Refs #<号>`），
    合并时 GitHub 自动关闭 issue。描述里没有关联 issue 的 PR 会被 Action（`.github/workflows/pr-needs-issue.yml`）评论并关闭，补上后自动重新打开。
-7. **自行合并**：不需要别人 review，**质量自己保证**：按「构建与验证」跑过测试，界面改动看过截图，CI 通过后
+7. **自行合并**：不需要别人 review，**质量自己保证**：按「构建与验证」跑过测试，界面改动看过截图，正常情况下等 CI 通过后
    `gh pr merge <号> --squash --delete-branch`，确认 issue 已经关闭。
+   **CI 环境异常时，本地验证通过即可合并**（如 runner、付款 / 额度或服务故障导致 CI 无法正常运行），不必另等 CI 恢复或逐次询问豁免；
+   PR 中写明异常原因、本地验证命令和结果、未运行项，不能把 CI 未运行写成通过。代码或测试本身失败仍须修复，不能按环境异常跳过。
 
 ## 构建与验证
 
@@ -114,10 +116,11 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - 按来源地址判断信任时：容器里经端口映射进来的连接常常都显示成网桥网关（私网地址，公网来的也是），同机反向代理让公网请求像回环；网关用 `containerGateway` 排除，转发头只用来收紧。（`server.md`「管理界面」）
 - Claude Code 的配置目录不一定是 `~/.claude`（`CLAUDE_CONFIG_DIR`），同一会话 id 可能在两个目录各有一份，按 id 找一律取最近修改的。（`agents.md`）
 - 改 transcript 解析或同步协议用真实语料验证；改了 item 结构把 App 的 `ChatCache` 目录版本号加一。（`transcript.md`）
-- **最低兼容编译器是 Xcode 26.0（Swift 6.2），固定不动**：master 必须能在 Xcode 26.0 上编过 iOS、Mac、手表和扩展，新 Xcode 能编不算数。
+- **最低兼容编译器仍是 Xcode 26.0（Swift 6.2）**：保留 iOS、Mac、手表和扩展的兼容目标，新 Xcode 编过不能宣称已验证 26.0。
   只有新 SDK 才有的 API（`isDynamicIslandLimitedInWidth`、`toolbarVerticalEdge`、`ShowsSnippetView` / `view:` 都踩过）用 `#if compiler(>=6.3)` 包起来、`#else` 走旧行为；
-  `#available` / `@available` 只管运行时，符号编译时找不到照样报错。合入前用 Xcode 26.0 编一遍（`DEVELOPER_DIR` 见 `jarvis_config.py env`），PR 里写明编过；
-  要抬高最低版本是产品决定，先问用户，并同步改这一条和 `docs/lessons/ios.md`。（`ios.md`「最低兼容编译器」）
+  `#available` / `@available` 只管运行时，符号编译时找不到照样报错。**有可用的 Xcode 26.0 环境时合入前编一遍；没有该环境时不强制实编，不因此阻塞合并或发布**，
+  用现有工具链完成构建与测试，PR 中注明实际 Xcode 版本和「26.0 未验证」，不必逐次询问豁免（`DEVELOPER_DIR` 见 `jarvis_config.py env`）；
+  要抬高最低版本仍是产品决定，先问用户，并同步改这一条和 `docs/lessons/ios.md`。（`ios.md`「最低兼容编译器」）
 - 手表 App 最低 watchOS 10（不少旧表停在 10.6，2026-11-02 用户的表装不上），`Shared/` 整个编进手表：里面只能用 watchOS 10 就有的 API，
   新的要 `#available` 兜底（`Color.mix` 是 watchOS 11，用 `Color.blended`）。
 
