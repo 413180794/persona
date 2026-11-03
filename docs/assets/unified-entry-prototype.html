@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Persona · 统一入口 原型</title>
+<style>
+:root{
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, monospace;
+}
+[data-theme=light]{
+  --page:#eceef2; --page-ink:#1d1d1f; --page-sub:#5f6168; --page-card:#ffffff; --page-line:#dcdfe5;
+  --bg:#ffffff; --ink:#111113; --sub:#6c6c72; --faint:#a1a1a8; --line:rgba(0,0,0,.08);
+  --card:#f3f3f6; --card2:#ffffff; --raise:0 1px 2px rgba(0,0,0,.05), 0 6px 20px rgba(0,0,0,.06);
+  --bubble:#ececf0; --accent:#5856d6; --accent-soft:rgba(88,86,214,.12);
+  --orange:#f28a00; --orange-soft:rgba(255,149,0,.14); --green:#2fb350; --green-soft:rgba(52,199,89,.14);
+  --blue:#2f7bf6; --red:#ff3b30; --glass:rgba(255,255,255,.78); --fog:linear-gradient(#fff 55%, rgba(255,255,255,0));
+  --dim:rgba(0,0,0,.18);
+}
+[data-theme=dark]{
+  --page:#0d0e11; --page-ink:#f2f2f4; --page-sub:#9a9ca4; --page-card:#17181c; --page-line:#2a2c32;
+  --bg:#000000; --ink:#f4f4f6; --sub:#9a9aa2; --faint:#5e5e66; --line:rgba(255,255,255,.1);
+  --card:#1c1c1f; --card2:#232327; --raise:0 0 0 1px rgba(255,255,255,.06);
+  --bubble:#2a2a2e; --accent:#8e8cff; --accent-soft:rgba(142,140,255,.16);
+  --orange:#ff9f0a; --orange-soft:rgba(255,159,10,.17); --green:#30d158; --green-soft:rgba(48,209,88,.16);
+  --blue:#4c8dff; --red:#ff453a; --glass:rgba(28,28,31,.8); --fog:linear-gradient(#000 55%, rgba(0,0,0,0));
+  --dim:rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--page);color:var(--page-ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.ic{width:1em;height:1em;flex:none;display:inline-block;vertical-align:-.14em}
+
+/* ---------- page layout ---------- */
+.wrap{max-width:1320px;margin:0 auto;padding:28px 32px 80px;display:grid;grid-template-columns:430px 1fr;gap:48px}
+.left{position:sticky;top:16px;align-self:start}
+.right{min-width:0}
+.hero{margin-bottom:28px}
+.hero h1{font-size:28px;letter-spacing:-.02em}
+.hero p{color:var(--page-sub);margin-top:8px;font-size:15px;line-height:1.65;max-width:860px}
+.hero .tools{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+.pbtn{padding:7px 14px;border-radius:999px;background:var(--page-card);border:1px solid var(--page-line);font-size:13px;white-space:nowrap}
+.pbtn.primary{background:var(--accent);border-color:transparent;color:#fff}
+.pbtn:disabled{opacity:.4;cursor:default}
+
+/* ---------- phone ---------- */
+.phone{width:410px;height:870px;border-radius:62px;padding:10px;background:#111;box-shadow:0 0 0 2px #2b2b2e, 0 30px 80px rgba(0,0,0,.25);margin:0 auto;position:relative}
+.screen{width:100%;height:100%;border-radius:52px;background:var(--bg);color:var(--ink);overflow:hidden;position:relative;display:flex;flex-direction:column;font-size:15px}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:120px;height:34px;border-radius:20px;background:#000;z-index:50}
+.status{height:52px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 34px 0 40px;font-weight:600;font-size:15px;z-index:20;position:relative}
+.status .r{display:flex;gap:6px;align-items:center;font-size:12px}
+.batt{width:24px;height:12px;border:1.5px solid currentColor;border-radius:4px;position:relative;opacity:.9}
+.batt::after{content:"";position:absolute;inset:1.5px;right:6px;background:currentColor;border-radius:1.5px}
+
+.topbar{flex:none;display:flex;align-items:center;gap:10px;padding:4px 14px 8px;position:relative;z-index:20}
+.circle{width:38px;height:38px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-size:18px;position:relative}
+.avatar{width:38px;height:38px;border-radius:50%;background:conic-gradient(from 200deg,#7b6cff,#4fb3ff,#7bffcb,#7b6cff);position:relative;flex:none}
+.avatar::after{content:"";position:absolute;inset:3px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 9%,transparent 10%),radial-gradient(circle at 65% 30%,#fff 0 9%,transparent 10%),linear-gradient(160deg,#8a7dff,#5aa7ff)}
+.avatar.sm{width:24px;height:24px}
+.avatar.sm::after{inset:2px}
+.tb-mid{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center}
+.switch{display:flex;background:var(--card);border-radius:999px;padding:3px}
+.switch button{padding:6px 16px;border-radius:999px;font-size:14px;font-weight:600;color:var(--sub);white-space:nowrap}
+.switch button.on{background:var(--card2);color:var(--ink);box-shadow:var(--raise)}
+[data-theme=dark] .switch button.on{background:#3a3a3e}
+.tb-sub{margin-top:3px}
+.agents{position:absolute;inset:0;top:100px;background:var(--bg);z-index:15;display:none;padding:30px 28px;text-align:center;color:var(--sub);font-size:14px;line-height:1.7}
+.agents.on{display:block}
+.agents b{display:block;color:var(--ink);font-size:17px;margin-bottom:8px}
+.tb-name{font-weight:650;font-size:16px}
+.tb-sub{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px}
+.tb-sub .o{color:var(--orange);font-weight:600}
+.badge{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--orange);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
+
+.stream{flex:1;overflow-y:auto;padding:6px 16px 18px;scrollbar-width:none}
+.stream::-webkit-scrollbar{display:none}
+.it{margin-top:14px;animation:rise .35s ease both}
+.it.old{animation:none}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.day{text-align:center;font-size:12px;color:var(--faint);margin-top:6px}
+.user{display:flex;flex-direction:column;align-items:flex-end}
+.user .b{background:var(--bubble);padding:9px 13px;border-radius:20px;max-width:82%;line-height:1.45}
+.to{font-size:11.5px;color:var(--accent);margin-bottom:4px;display:flex;align-items:center;gap:4px;font-weight:550}
+.ai{display:flex;gap:9px;line-height:1.55}
+.ai .t{flex:1;min-width:0}
+.ai .t b{font-weight:600}
+.meta{font-size:11.5px;color:var(--faint);margin-top:4px}
+
+/* cards */
+.card{background:var(--card);border-radius:18px;padding:12px 14px}
+.card-h{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub);font-weight:550;margin-bottom:8px}
+.card-h .ic{font-size:15px}
+.row{display:flex;align-items:center;gap:10px;padding:7px 0}
+.row + .row{border-top:1px solid var(--line)}
+.row .ri{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:15px;flex:none}
+.row .rt{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.row .rs{font-size:12px;color:var(--sub)}
+.mini{font-size:12.5px;padding:5px 10px;border-radius:999px;background:var(--card2);box-shadow:var(--raise);white-space:nowrap;font-weight:550}
+[data-theme=dark] .mini{background:#2c2c30}
+.btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.btn{padding:8px 14px;border-radius:12px;font-size:14px;font-weight:600;white-space:nowrap;background:var(--card2);box-shadow:var(--raise)}
+[data-theme=dark] .btn{background:#2c2c30}
+.btn.pri{background:var(--accent);color:#fff;box-shadow:none}
+.btn.warn{background:var(--orange);color:#fff;box-shadow:none}
+.btn.ghost{background:transparent;box-shadow:none;color:var(--sub)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;background:var(--card2);font-size:12px;white-space:nowrap;box-shadow:var(--raise)}
+[data-theme=dark] .chip{background:#2c2c30}
+.chip .ic{font-size:12px;color:var(--sub)}
+.chip.edit::after{content:"⌄";color:var(--faint);margin-left:1px;font-size:11px}
+.why{font-size:12px;color:var(--sub);margin-top:6px;line-height:1.45}
+.ptask{padding:10px 0}
+.ptask + .ptask{border-top:1px solid var(--line)}
+.ptask .pt{font-weight:600;font-size:14.5px;display:flex;gap:7px;align-items:center}
+.num{width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;display:grid;place-items:center;flex:none}
+
+/* status marks */
+.st{width:16px;height:16px;border-radius:50%;flex:none;position:relative;display:inline-block}
+.st.working{border:2px solid var(--accent-soft);border-top-color:var(--accent);animation:spin 1s linear infinite}
+.st.needs{background:var(--orange)}
+.st.needs::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--orange);opacity:.5;animation:pulse 1.4s ease-out infinite}
+.st.done{background:var(--green);display:grid;place-items:center;color:#fff}
+.st.done::after{content:"";width:6px;height:3.5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+.st.planned{border:2px dashed var(--faint)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{from{transform:scale(.7);opacity:.7}to{transform:scale(1.5);opacity:0}}
+
+.task{background:var(--card);border-radius:18px;padding:12px 14px;cursor:pointer;transition:background .2s}
+.task.needs{box-shadow:inset 0 0 0 1.5px var(--orange)}
+.task .th{display:flex;align-items:center;gap:8px}
+.task .tt{flex:1;font-weight:600;font-size:14.5px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task .te{font-size:12px;color:var(--faint)}
+.task .tw{font-size:12px;color:var(--sub);margin-top:3px;padding-left:24px}
+.task .tl{margin-top:8px;margin-left:24px;font-size:13px;color:var(--ink);background:var(--card2);border-radius:10px;padding:7px 10px;display:flex;gap:7px;align-items:flex-start;line-height:1.4}
+[data-theme=dark] .task .tl{background:#26262a}
+.task .tl .ic{color:var(--sub);margin-top:2px}
+.task .tl.ok{color:var(--green)}
+.task .tl.wait{color:var(--orange)}
+.task .tf{display:flex;gap:12px;margin:9px 0 0 24px;font-size:12.5px;color:var(--sub)}
+.task .tf button{color:var(--accent);font-weight:600;font-size:12.5px;white-space:nowrap}
+.steps{display:flex;gap:3px;margin:9px 0 0 24px}
+.steps i{height:3px;flex:1;border-radius:2px;background:var(--line)}
+.steps i.on{background:var(--accent)}
+.task.done .steps i.on{background:var(--green)}
+.livedots::after{content:"";animation:dots 1.4s steps(4) infinite}
+@keyframes dots{0%{content:""}25%{content:"·"}50%{content:"··"}75%{content:"···"}}
+.auto{font-size:11px;padding:2px 6px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-weight:600;white-space:nowrap}
+
+.ask{background:var(--orange-soft);border-radius:18px;padding:12px 14px;position:relative}
+.ask .from{font-size:12px;color:var(--orange);font-weight:650;display:flex;gap:6px;align-items:center}
+.ask .q{font-size:14.5px;margin-top:6px;line-height:1.45;font-weight:550}
+.code{font-family:var(--mono);font-size:12px;background:var(--card2);border-radius:9px;padding:8px 10px;margin-top:8px;overflow-x:auto;white-space:nowrap}
+[data-theme=dark] .code{background:#1a1a1d}
+.opt{display:block;width:100%;text-align:left;background:var(--card2);border-radius:12px;padding:9px 12px;margin-top:7px;font-size:13.5px;line-height:1.4;box-shadow:var(--raise)}
+[data-theme=dark] .opt{background:#2c2c30}
+.opt b{color:var(--accent);margin-right:6px}
+.ask.answered{background:var(--card);padding:9px 14px}
+.ask.answered .from{color:var(--sub)}
+.flash{animation:flash 1s ease 2}
+@keyframes flash{50%{box-shadow:0 0 0 3px var(--orange)}}
+
+.inbox .src{display:flex;align-items:center;gap:8px;font-size:13px}
+.lark{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#3370ff,#00d6b9);display:grid;place-items:center;color:#fff;font-size:12px;flex:none}
+.quote{margin-top:8px;padding:8px 11px;border-left:3px solid var(--blue);background:var(--card2);border-radius:4px 10px 10px 4px;font-size:14px;line-height:1.45}
+[data-theme=dark] .quote{background:#26262a}
+.link{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12.5px;color:var(--sub);background:var(--card2);padding:7px 10px;border-radius:10px}
+[data-theme=dark] .link{background:#26262a}
+.draft{margin-top:9px;font-size:14px;padding:9px 12px;border-radius:14px;background:var(--accent-soft);line-height:1.45}
+.draft small{display:block;color:var(--accent);font-size:11.5px;font-weight:600;margin-bottom:3px}
+
+.echo{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:16px;background:var(--green-soft)}
+.echo .et{flex:1;font-size:14px;line-height:1.45}
+.echo .et b{font-weight:650}
+.echo .es{font-size:12.5px;color:var(--sub);margin-top:2px}
+.quick{display:flex;gap:10px;align-items:center;padding:10px 13px;border-radius:16px;background:var(--card)}
+.quick .ri{width:30px;height:30px;border-radius:9px;background:var(--orange-soft);color:var(--orange);display:grid;place-items:center;font-size:16px}
+.quick .qt{flex:1;font-size:14px;line-height:1.35}
+.quick .qt small{display:block;font-size:12px;color:var(--sub)}
+
+/* dock + composer */
+.bottom{flex:none;position:relative;z-index:20;padding:0 0 26px;background:var(--bg)}
+.bottom::before{content:"";position:absolute;left:0;right:0;top:-22px;height:22px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
+.dock{display:flex;gap:7px;overflow-x:auto;padding:4px 14px 8px;scrollbar-width:none}
+.dock::-webkit-scrollbar{display:none}
+.pill{display:flex;align-items:center;gap:7px;padding:7px 11px 7px 9px;border-radius:999px;background:var(--card);font-size:13px;white-space:nowrap;flex:none;font-weight:550;transition:background .25s}
+.pill.needs{background:var(--orange-soft);color:var(--orange)}
+.pill.done{color:var(--sub)}
+.pill .st{width:14px;height:14px}
+.pill.all{color:var(--sub);gap:5px}
+.route{display:flex;align-items:center;gap:6px;margin:0 16px 6px;font-size:12.5px}
+.route .rc{display:inline-flex;gap:5px;align-items:center;padding:4px 6px 4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+.route .rc.auto{padding-right:10px;background:var(--card);color:var(--sub);font-weight:500}
+.route .rc button{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:11px}
+.composer{margin:0 12px;display:flex;align-items:flex-end;gap:8px;background:var(--card);border-radius:24px;padding:6px 6px 6px 8px}
+.composer .cb{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:19px;color:var(--sub);flex:none}
+.composer textarea{flex:1;border:0;outline:0;background:none;resize:none;font:inherit;color:var(--ink);padding:7px 2px;height:34px;max-height:90px;line-height:20px}
+.composer textarea::placeholder{color:var(--faint)}
+.send{width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:17px;flex:none}
+.home{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--ink);opacity:.85;z-index:40}
+
+.mention{position:absolute;left:12px;right:12px;bottom:100%;margin-bottom:6px;background:var(--glass);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.18), 0 0 0 1px var(--line);padding:6px;z-index:30;animation:rise .2s ease}
+.mention h6{font-size:11.5px;color:var(--faint);font-weight:600;padding:6px 10px 2px}
+.mention button{display:flex;width:100%;align-items:center;gap:9px;padding:8px 10px;border-radius:12px;font-size:14px;text-align:left}
+.mention button:hover{background:var(--card)}
+.mention button small{color:var(--sub);font-size:12px;margin-left:auto}
+
+/* sheets */
+.scrim{position:absolute;inset:0;background:var(--dim);z-index:60;opacity:0;pointer-events:none;transition:opacity .3s}
+.scrim.on{opacity:1;pointer-events:auto}
+.scrim.mid{background:transparent;pointer-events:none}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:61;background:var(--bg);border-radius:30px 30px 0 0;box-shadow:0 -10px 50px rgba(0,0,0,.22), 0 0 0 1px var(--line);transform:translateY(100%);transition:transform .38s cubic-bezier(.2,.9,.25,1), height .38s cubic-bezier(.2,.9,.25,1);display:flex;flex-direction:column;height:93%}
+.sheet.on{transform:none}
+.sheet.mid{height:60%}
+.grab{flex:none;padding:8px 0 4px;display:grid;place-items:center;cursor:pointer}
+.grab i{width:38px;height:5px;border-radius:3px;background:var(--faint);opacity:.6}
+.sh-h{flex:none;padding:6px 18px 10px;display:flex;align-items:flex-start;gap:10px}
+.sh-h .tt{font-size:18px;font-weight:700;line-height:1.3}
+.sh-body{flex:1;overflow-y:auto;padding:0 18px 18px;scrollbar-width:none}
+.sh-body::-webkit-scrollbar{display:none}
+.seg{display:flex;background:var(--card);border-radius:11px;padding:3px;margin:0 18px 10px;flex:none}
+.seg button{flex:1;padding:6px 0;border-radius:9px;font-size:13px;font-weight:600;color:var(--sub)}
+.seg button.on{background:var(--card2);color:var(--ink);box-shadow:var(--raise)}
+[data-theme=dark] .seg button.on{background:#3a3a3e}
+.log{position:relative;padding-left:24px}
+.log::before{content:"";position:absolute;left:6px;top:8px;bottom:8px;width:2px;background:var(--line)}
+.lg{position:relative;padding:7px 0;font-size:14px;line-height:1.45}
+.lg::before{content:"";position:absolute;left:-18px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--bg);border:2px solid var(--faint)}
+.lg.ok::before{border-color:var(--green);background:var(--green)}
+.lg.you::before{border-color:var(--orange);background:var(--orange)}
+.lg small{display:block;font-size:11.5px;color:var(--faint)}
+.lg.you{color:var(--orange)}
+.sec{font-size:12.5px;color:var(--sub);font-weight:650;margin:16px 0 6px;display:flex;justify-content:space-between}
+.brow{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-radius:14px;margin-top:6px;font-size:14px;cursor:pointer}
+.brow .bt{flex:1;min-width:0}
+.brow .bt small{display:block;color:var(--sub);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brow .chev{color:var(--faint)}
+.sh-foot{flex:none;padding:8px 12px 28px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center}
+.sh-foot .composer{flex:1;margin:0}
+.diff{font-family:var(--mono);font-size:12px;border-radius:12px;overflow:hidden;background:var(--card);margin-top:8px}
+.diff div{padding:2px 10px;white-space:pre}
+.diff .a{background:var(--green-soft)} .diff .d{background:rgba(255,59,48,.12)}
+.diff .f{padding:7px 10px;font-weight:600;font-family:var(--font);font-size:12.5px;border-bottom:1px solid var(--line)}
+
+/* ---------- doc ---------- */
+.doc{min-width:0}
+.doc h2{font-size:20px;margin:36px 0 12px;letter-spacing:-.01em}
+.doc h2:first-child{margin-top:0}
+.layers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.layer{background:var(--page-card);border:1px solid var(--page-line);border-radius:16px;padding:14px 16px}
+.layer h3{font-size:15px;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+.layer p{font-size:13.5px;color:var(--page-sub);line-height:1.6}
+.stepdoc{border:1px solid var(--page-line);background:var(--page-card);border-radius:16px;padding:14px 18px;margin-top:10px;cursor:pointer;transition:border-color .2s, box-shadow .2s}
+.stepdoc:hover{border-color:var(--accent)}
+.stepdoc.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.stepdoc h3{font-size:15.5px;display:flex;gap:10px;align-items:baseline}
+.stepdoc h3 span{font-size:12px;color:var(--accent);font-weight:700;min-width:22px}
+.stepdoc p{font-size:13.5px;color:var(--page-sub);line-height:1.7;margin-top:6px}
+.stepdoc p b{color:var(--page-ink);font-weight:600}
+.stepdoc .hint{font-size:12px;color:var(--accent);margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--page-card);border-radius:14px;overflow:hidden;border:1px solid var(--page-line)}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--page-line);vertical-align:top;line-height:1.6}
+th{font-size:12.5px;color:var(--page-sub);font-weight:650}
+tr:last-child td{border-bottom:0}
+td code,p code{font-family:var(--mono);font-size:12px;background:var(--accent-soft);padding:1px 5px;border-radius:5px}
+.qa{background:var(--page-card);border:1px solid var(--page-line);border-radius:16px;padding:14px 18px;margin-top:10px}
+.qa h3{font-size:15px}
+.qa p{font-size:13.5px;color:var(--page-sub);line-height:1.7;margin-top:6px}
+.qa p b{color:var(--page-ink)}
+.ctl{display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+.stepname{text-align:center;margin-top:10px;font-size:13px;color:var(--page-sub);min-height:20px}
+
+@media (max-width:1000px){
+  .wrap{grid-template-columns:1fr;padding:20px 16px 60px}
+  .left{position:static}
+  .layers{grid-template-columns:1fr}
+}
+@media (max-width:480px){
+  .wrap{padding:0 0 40px;gap:24px}
+  .hero{padding:16px 16px 0}
+  .phone{width:100vw;height:calc(100svh - 20px);border-radius:0;padding:0;box-shadow:none;background:none}
+  .screen{border-radius:0}
+  .island{display:none}
+  .doc{padding:0 16px}
+}
+</style>
+</head>
+<body data-theme="light">
+<div class="wrap">
+  <div class="left">
+    <div class="phone"><div class="screen" id="screen">
+      <div class="island"></div>
+      <div class="status"><span id="clock">9:12</span><span class="r">●●●● <span class="batt"></span></span></div>
+      <div class="topbar">
+        <button class="avatar" title="历史对话 / 侧边栏"></button>
+        <div class="tb-mid"><div class="switch"><button class="on" id="swA">助手</button><button id="swB">Agents</button></div><div class="tb-sub" id="tbSub"></div></div>
+        <button class="circle" title="新对话"><span id="newIc"></span></button>
+      </div>
+      <div class="stream" id="stream"></div>
+      <div class="agents" id="agentsPage"><b>Agents</b>现有的 Agents 页，原样不动。<br>从主对话开的任务就是普通的 Agent 会话，<br>照常出现在这里，两边是同一份数据。<br><br><button class="btn" onclick="showAgents(false)">回到助手</button></div>
+      <div class="bottom" id="bottom">
+        <div id="mention"></div>
+        <div class="dock" id="dock"></div>
+        <div id="route"></div>
+        <div class="composer">
+          <button class="cb" id="plusIc"></button>
+          <textarea id="input" rows="1" placeholder="说点什么，或 @ 一个任务"></textarea>
+          <button class="send" id="sendBtn"></button>
+        </div>
+      </div>
+      <div class="home"></div>
+      <div class="scrim" id="scrim"></div>
+      <div class="sheet" id="sheet"></div>
+    </div></div>
+    <div class="stepname" id="stepName"></div>
+    <div class="ctl">
+      <button class="pbtn" id="prevBtn">上一步</button>
+      <button class="pbtn primary" id="nextBtn">下一步</button>
+    </div>
+  </div>
+
+  <div class="right">
+  <div class="hero">
+    <h1>Persona · 统一入口</h1>
+    <p>Agents 页保持现状；在它之外，让主对话也能完成所有事：在助手里说你要什么，不用先去 Agents 页挑项目、挑电脑、挑模型、开会话。Persona 把话拆成任务，派给合适的 Agent，盯着它们，只在需要你的时候打断你。左边的手机可以直接点（按钮、输入框、<b>@</b>、坞里的胶囊、坞最右边的「全部」）；也可以点「下一步」按剧本走，或点右边任何一节跳过去。</p>
+    <div class="tools">
+      <button class="pbtn" id="themeBtn">切换深色 / 浅色</button>
+      <button class="pbtn" id="autoBtn">自动播放</button>
+      <button class="pbtn" id="resetBtn">从头开始</button>
+    </div>
+  </div>
+
+  <div class="doc" id="doc"></div>
+  </div>
+</div>
+
+<script>
+/* ---------------- icons ---------------- */
+const P = {
+  check:'<path d="M20 6 9 17l-5-5"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>', plus:'<path d="M12 5v14M5 12h14"/>',
+  up:'<path d="m5 12 7-7 7 7M12 19V5"/>', chev:'<path d="m9 18 6-6-6-6"/>',
+  laptop:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/>',
+  server:'<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
+  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>',
+  mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>',
+  term:'<path d="m4 17 6-6-6-6M12 19h8"/>', at:'<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  spark:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',
+  bubble:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  alert:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+  pr:'<circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v12M13 6h3a2 2 0 0 1 2 2v7"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>', clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  moon:'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>', cpu:'<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  hand:'<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+  reply:'<path d="M9 17 4 12l5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>', link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  repeat:'<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  phone:'<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>',
+};
+const ic = (n, s='') => `<svg class="ic" ${s} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
+const st = s => `<span class="st ${s}"></span>`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------------- state ---------------- */
+let S;
+function fresh(){
+  S = { items:[], tasks:{}, order:[], route:null, sheet:null, seg:'过程', clock:'9:12', step:-1, nid:1, seen:new Set(), mention:false };
+}
+const TASKS = {
+  t0:{ title:'归档昨天的 4 场会议纪要', short:'归档纪要', where:['hub','知识库','Persona'], icon:'server' },
+  t1:{ title:'修复 iPad 横屏时登录页崩溃', short:'登录崩溃', where:['公司 Mac','jarvis','Claude Opus 5.5'], icon:'laptop', total:6 },
+  t2:{ title:'处理 PR #842 的 review 意见', short:'#842 review', where:['公司 Mac','jarvis','Codex'], icon:'laptop', total:5 },
+  t3:{ title:'准备 15:00 设计评审的材料', short:'评审材料', where:['hub','知识库 + 飞书文档','Persona'], icon:'server', total:3, auto:'自动开始 · 只读' },
+};
+function addTask(id, status='working'){
+  const d = TASKS[id];
+  S.tasks[id] = { id, ...d, status, log:[], live:'', done:0, pending:[], elapsed:'刚开始' };
+  S.order.push(id);
+}
+function prog(id, text, opt={}){ // push a progress line
+  const t = S.tasks[id];
+  t.log.push({ text, time:S.clock, kind:opt.kind||'' });
+  if(!opt.noStep) t.done = Math.min((t.total||5), t.done+1);
+  t.live = text;
+  if(opt.elapsed) t.elapsed = opt.elapsed;
+}
+const add = it => { it.key = 'k'+(S.nid++); S.items.push(it); return it; };
+const find = id => S.items.find(i => i.id === id);
+
+/* ---------------- scenario ---------------- */
+const STEPS = [
+ { name:'早上打开：Persona 先开口', apply(){
+    S.clock='9:12';
+    add({k:'day', text:'今天 · 11 月 3 日 周一'});
+    addTask('t0','done'); S.tasks.t0.elapsed='夜里 2:10 完成'; S.tasks.t0.seenDone=true;
+    add({k:'brief'});
+ }},
+ { name:'说意图，不选项目', apply(){
+    S.clock='9:14';
+    add({k:'user', text:'登录页在 iPad 横屏会崩，帮我修一下。顺便把 #842 的 review 意见处理掉'});
+    add({k:'plan', id:'p1', tasks:['t1','t2'], state:'open'});
+ }},
+ { name:'任务开始：卡片原地更新，坞里看全局', trigger:'start:p1', apply(){
+    startPlan('p1');
+ }},
+ { name:'接着说别的：秒办 / 自动开始', apply(){
+    S.clock='9:20';
+    prog('t1','在 iPad 模拟器上复现：横屏旋转时 sheet 高度算成 0',{elapsed:'6 分钟'});
+    prog('t2','6 条评论，第 1、2 条已改',{elapsed:'6 分钟'});
+    add({k:'user', text:'周六上午提醒我给爸妈打电话。还有下午那个评审，帮我把材料准备好'});
+    add({k:'quick', id:'r1', text:'已加到提醒', sub:'周六 10:00 · 给爸妈打电话', icon:'bell'});
+    add({k:'ai', html:'评审材料我来整理，只读不改东西，所以直接开始了。'});
+    addTask('t3'); prog('t3','搜知识库「设计评审」，找到 3 篇相关文档',{elapsed:'刚开始'});
+    add({k:'task', tid:'t3'});
+ }},
+ { name:'需要你：浮到最底下，原地作答', apply(){
+    S.clock='9:31';
+    prog('t1','改 LoginView.swift：旋转时用容器高度兜底',{elapsed:'17 分钟'});
+    prog('t2','第 3 条：loadSession 要不要改成 async',{noStep:true, elapsed:'17 分钟'});
+    prog('t3','读完 3 篇文档，整理要点',{elapsed:'11 分钟'});
+    S.tasks.t1.status='needs'; S.tasks.t1.live='想运行一条命令，等你批准';
+    add({k:'ask', id:'a1', tid:'t1', type:'approve', q:'想在 iPad 模拟器上跑一遍测试', code:"xcodebuild test -scheme Persona -destination 'iPad Air'"});
+ }},
+ { name:'几件事同时等你：一个答完，下一个接上', trigger:'answer:a1', apply(){
+    S.clock='9:33';
+    answer('a1','批准了 · 本任务内同类命令不再问');
+    S.tasks.t1.status='working'; prog('t1','跑测试 42 个',{elapsed:'19 分钟'});
+    S.tasks.t3.status='done'; prog('t3','整理成 1 页要点 + 3 个链接',{elapsed:'13 分钟'});
+    add({k:'echo', tid:'t3', text:'<b>评审材料好了</b>', sub:'1 页要点 · 引用 3 篇文档 · 2 个待决问题', acts:['打开','发到会议群']});
+    S.tasks.t2.status='needs'; S.tasks.t2.live='有个改法要你选';
+    add({k:'ask', id:'a2', tid:'t2', type:'question', q:'第 3 条评论建议把 loadSession 改成 async。怎么改？',
+      opts:[['A','只改调用方，包一层 Task（2 个文件）'],['B','整条链路改成 async（8 个文件，更干净）'],['C','不改，回复评论说明原因']]});
+ }},
+ { name:'信息和任务互相认得', trigger:'answer:a2', apply(){
+    S.clock='9:40';
+    answer('a2','选了 B · 整条链路改成 async');
+    S.tasks.t2.status='working'; prog('t2','把 loadSession 及 5 个调用方改成 async',{elapsed:'26 分钟'});
+    prog('t1','测试通过 42 / 42',{elapsed:'26 分钟', kind:'ok'});
+    add({k:'inbox', id:'m1', state:'open'});
+ }},
+ { name:'完成回执：做了什么、下一步', trigger:'send:m1', apply(){
+    S.clock='9:52';
+    const m = find('m1'); m.state='sent';
+    S.tasks.t1.status='done'; prog('t1','提了 PR #901',{elapsed:'38 分钟', kind:'ok'});
+    add({k:'echo', tid:'t1', text:'<b>修复 iPad 横屏时登录页崩溃</b> 完成', sub:'改 2 个文件 · 测试 42/42 通过 · PR #901', acts:['看改动','合并','告诉陈晓']});
+    prog('t2','第 3、4 条已改，跑测试中',{elapsed:'38 分钟'});
+ }},
+ { name:'指向谁：@ 一个任务直接对它说', apply(){
+    S.clock='9:55';
+    sendText('也把第 5 条一起处理了，那条说得对', 't2');
+ }},
+ { name:'下钻不离开：任务详情从底部浮起', trigger:'open:t1', apply(){
+    openTask('t1');
+ }},
+ { name:'任务板：所有任务一页看完', trigger:'board', apply(){
+    S.sheet = {type:'board', detent:'full'};
+ }},
+];
+
+/* ---------------- actions ---------------- */
+function startPlan(pid){
+  const p = find(pid); if(!p || p.state!=='open') return;
+  p.state='started';
+  p.tasks.forEach(id => { if(!S.tasks[id]) addTask(id); });
+  if(pid==='p1'){
+    prog('t1','读 LoginView.swift 和最近的崩溃日志',{elapsed:'刚开始'});
+    prog('t2','读 PR #842 上的 6 条评论',{elapsed:'刚开始'});
+  } else {
+    p.tasks.forEach(id => prog(id, '开始，先看看相关代码',{elapsed:'刚开始'}));
+  }
+  p.tasks.forEach(id => add({k:'task', tid:id}));
+  add({k:'ai', html:'开始了，我盯着。要你批准或回答的时候会叫你，你可以接着说别的。'});
+}
+function answer(aid, text){ const a = find(aid); if(a){ a.answered = text; } }
+function openTask(tid){ S.sheet = {type:'task', tid, detent:'full'}; S.seg='过程'; }
+function sendText(text, to){
+  text = text.trim(); if(!text) return;
+  add({k:'user', text, to});
+  if(to){
+    const t = S.tasks[to];
+    t.log.push({text:'你：'+text, time:S.clock, kind:'you'});
+    if(t.status==='done'){ t.status='working'; }
+    t.live = '收到你的话：'+text.slice(0,18)+(text.length>18?'…':'');
+    add({k:'ai', html:`已转给「${esc(t.title)}」，它会接着做。`, small:true});
+  } else if(/修|改|做|查|跑|写|整理|部署|发|找|看看/.test(text)){
+    const id = 'tx'+S.nid;
+    TASKS[id] = { title:text.length>18? text.slice(0,18)+'…' : text, short:text.slice(0,6), where:['公司 Mac','jarvis','Claude Opus 5.5'], icon:'laptop', total:5 };
+    add({k:'plan', id:'p'+id, tasks:[id], state:'open'});
+  } else {
+    add({k:'ai', html:'好的，记下了。'});
+  }
+  S.route = null;
+}
+function act(kind, arg){
+  const nx = STEPS[S.step+1];
+  if(nx && nx.trigger === kind+':'+arg || (nx && nx.trigger===kind && !arg)){ next(); return; }
+  switch(kind){
+    case 'start': startPlan(arg); break;
+    case 'answer': answer(arg,'已回答'); { const a=find(arg); const t=S.tasks[a.tid]; t.status='working'; t.live='接着做'; } break;
+    case 'send': find(arg).state='sent'; break;
+    case 'open': openTask(arg); break;
+    case 'board': S.sheet = {type:'board', detent:'full'}; break;
+    case 'say': S.route = arg; document.getElementById('input').focus(); break;
+    case 'undo': find(arg).undone = true; break;
+  }
+  render();
+}
+
+/* ---------------- render ---------------- */
+const $ = id => document.getElementById(id);
+function render(scroll=true){
+  $('clock').textContent = S.clock;
+  const ts = S.order.map(id => S.tasks[id]);
+  const needs = ts.filter(t => t.status==='needs'), working = ts.filter(t => t.status==='working');
+  $('tbSub').innerHTML = needs.length
+    ? `<span class="o">${needs.length} 件等你</span> · ${working.length} 个在做`
+    : working.length ? `${working.length} 个任务在做` : '';
+
+  // stream
+  const html = S.items.map(renderItem).join('');
+  const el = $('stream');
+  el.innerHTML = html;
+  S.items.forEach(i => S.seen.add(i.key));
+  if(scroll){ el.scrollTop = el.scrollHeight; requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; }); }
+
+  // dock
+  const rank = {needs:0, working:1, done:2};
+  const docked = ts.filter(t => !(t.status==='done' && t.seenDone)).sort((a,b) => rank[a.status]-rank[b.status]);
+  const doneCount = ts.filter(t => t.status==='done').length;
+  $('dock').innerHTML = docked.map(t => `<button class="pill ${t.status}" onclick="pillTap('${t.id}')">${st(t.status)}${esc(t.status==='needs' ? t.short+' · 等你' : t.short)}</button>`).join('')
+    + (ts.length ? `<button class="pill all" onclick="act('board')">${ic('grid')} 全部 ${ts.length}${doneCount?` · ${doneCount} 完成`:''}</button>` : '');
+  $('dock').style.display = ts.length ? '' : 'none';
+
+  // route chip
+  const txt = $('input').value.trim();
+  $('route').innerHTML = S.route
+    ? `<div class="route"><span class="rc">${ic('reply')} 对「${esc(S.tasks[S.route].short)}」说 <button onclick="S.route=null;render(false)">${ic('x')}</button></span></div>`
+    : txt && !S.mention ? `<div class="route"><span class="rc auto">${ic('spark')} Persona 决定交给谁</span></div>` : '';
+
+  // mention
+  $('mention').innerHTML = S.mention ? `<div class="mention">
+      <h6>任务</h6>${ts.filter(t=>t.status!=='done'||!t.seenDone).map(t=>`<button onclick="pickMention('${t.id}')">${st(t.status)} ${esc(t.title)}<small>${esc(t.where[0])}</small></button>`).join('')}
+      <h6>电脑 · 项目 · 人</h6>
+      <button>${ic('laptop')} 公司 Mac<small>电脑</small></button>
+      <button>${ic('folder')} jarvis<small>项目</small></button>
+      <button>${ic('bubble')} 陈晓<small>飞书</small></button>
+    </div>` : '';
+
+  renderSheet();
+  renderDoc();
+  $('prevBtn').disabled = S.step<=0;
+  $('nextBtn').disabled = S.step>=STEPS.length-1;
+  $('stepName').textContent = S.step>=0 ? `第 ${S.step+1} / ${STEPS.length} 步 · ${STEPS[S.step].name}` : '';
+}
+function cls(i){ return S.seen.has(i.key) ? 'it old' : 'it'; }
+
+function renderItem(i){
+  const c = cls(i);
+  switch(i.k){
+  case 'day': return `<div class="${c} day">${i.text}</div>`;
+  case 'user': return `<div class="${c} user">${i.to?`<div class="to">${ic('reply')} 对「${esc(S.tasks[i.to].short)}」说</div>`:''}<div class="b">${esc(i.text)}</div></div>`;
+  case 'ai': return `<div class="${c} ai"><span class="avatar sm"></span><div class="t" ${i.small?'style="color:var(--sub);font-size:14px"':''}>${i.html}</div></div>`;
+  case 'brief': return `<div class="${c} ai"><span class="avatar sm"></span><div class="t">早上好。今天要知道的：
+      <div class="card" style="margin-top:9px">
+        <div class="row"><span class="ri" style="background:var(--green-soft);color:var(--green)">${ic('moon')}</span><div class="rt">夜里完成 1 个任务<div class="rs">归档了昨天的 4 场会议纪要</div></div><button class="mini" onclick="act('open','t0')">看看</button></div>
+        <div class="row"><span class="ri" style="background:var(--accent-soft);color:var(--accent)">${ic('cal')}</span><div class="rt">15:00 设计评审 · 16:30 1:1<div class="rs">评审还没有材料</div></div><button class="mini">准备材料</button></div>
+        <div class="row"><span class="ri" style="background:rgba(51,112,255,.13);color:var(--blue)">${ic('bubble')}</span><div class="rt">飞书 5 条 @我<div class="rs">2 条像是要你回</div></div><button class="mini">过一遍</button></div>
+        <div class="row"><span class="ri" style="background:var(--orange-soft);color:var(--orange)">${ic('mail')}</span><div class="rt">信用卡账单 11 月 8 日到期<div class="rs">邮件 · 招商银行</div></div><button class="mini">提醒我</button></div>
+        <div class="row"><span class="ri" style="background:var(--card2);color:var(--sub)">${ic('bell')}</span><div class="rt">18:00 取快递<div class="rs">提醒</div></div></div>
+      </div></div></div>`;
+  case 'plan': {
+    if(i.state==='started') return `<div class="${c} ai"><span class="avatar sm"></span><div class="t" style="color:var(--sub);font-size:14px">${ic('check')} 开了 ${i.tasks.length} 个任务</div></div>`;
+    return `<div class="${c} ai"><span class="avatar sm"></span><div class="t">${i.tasks.length>1?`拆成 ${i.tasks.length} 件事，这样开：`:'这样开：'}
+      <div class="card" style="margin-top:9px;padding:4px 14px 12px">
+      ${i.tasks.map((id,n) => { const d=TASKS[id]; return `<div class="ptask"><div class="pt"><span class="num">${n+1}</span>${esc(d.title)}</div>
+        <div class="chips"><span class="chip edit">${ic('laptop')}${d.where[0]}</span><span class="chip edit">${ic('folder')}${d.where[1]}</span><span class="chip edit">${ic('cpu')}${d.where[2]}</span><span class="chip edit">可以改文件</span></div>
+        <div class="why">${id==='t1'?'jarvis 在公司 Mac 上最近 3 天都有 Agent 在干活；这类 iOS 修复你上次也用 Opus。':id==='t2'?'同一个仓库，另开一个 worktree，不和上一个打架；review 类你常用 Codex。':'按你的习惯和知识库里的项目推断的。'}</div></div>`; }).join('')}
+      <div class="btns"><button class="btn pri" onclick="act('start','${i.id}')">开始${i.tasks.length>1?` ${i.tasks.length} 个任务`:''}</button><button class="btn">改一下</button></div>
+      </div></div></div>`;
+  }
+  case 'task': return renderTask(S.tasks[i.tid], c);
+  case 'quick': return `<div class="${c} quick" ${i.undone?'style="opacity:.5"':''}><span class="ri">${ic(i.icon)}</span><div class="qt">${i.undone?'已撤销':i.text}<small>${i.sub}</small></div>${i.undone?'':`<button class="mini" onclick="act('undo','${i.id}')">撤销</button>`}</div>`;
+  case 'ask': {
+    const t = S.tasks[i.tid];
+    if(i.answered) return `<div class="${c} ask answered" id="${i.id}"><div class="from">${ic('check')} ${esc(t.short)} · ${esc(i.answered)}</div></div>`;
+    return `<div class="${c} ask" id="${i.id}"><div class="from">${ic('hand')} ${esc(t.title)}</div>
+      <div class="q">${esc(i.q)}</div>
+      ${i.code?`<div class="code">${esc(i.code)}</div>`:''}
+      ${i.type==='approve'
+        ? `<div class="btns"><button class="btn warn" onclick="act('answer','${i.id}')">批准</button><button class="btn" onclick="act('answer','${i.id}')">本任务都允许</button><button class="btn ghost">拒绝…</button></div>`
+        : i.opts.map(o=>`<button class="opt" onclick="act('answer','${i.id}')"><b>${o[0]}</b>${esc(o[1])}</button>`).join('') + `<div class="meta" style="margin-top:8px">也可以直接打字回答，发出去就是给它的</div>`}
+      </div>`;
+  }
+  case 'inbox': return `<div class="${c} ai"><span class="avatar sm"></span><div class="t">飞书里有人在问，和正在修的那个有关：
+      <div class="card inbox" style="margin-top:9px">
+        <div class="src"><span class="lark">${ic('bubble')}</span><b>陈晓</b><span style="color:var(--sub)">· 客户端发版群 · @你</span></div>
+        <div class="quote">登录那个崩溃今天能修好吗？下午想发一版 TestFlight</div>
+        <div class="link" onclick="act('open','t1')">${st(S.tasks.t1.status)}<span style="flex:1">修复 iPad 横屏时登录页崩溃 · ${esc(S.tasks.t1.live)}</span>${ic('chev')}</div>
+        ${i.state==='sent'
+          ? `<div class="draft" style="background:var(--green-soft)"><small style="color:var(--green)">${ic('check')} 已以你的名义回复</small>测试已经过了，十点前提 PR，下午发版来得及。</div>`
+          : `<div class="draft"><small>按任务进度起草的回复</small>测试已经过了，十点前提 PR，下午发版来得及。</div>
+             <div class="btns"><button class="btn pri" onclick="act('send','m1')">发送</button><button class="btn">改一下</button><button class="btn ghost">稍后</button></div>`}
+      </div></div></div>`;
+  case 'echo': return `<div class="${c} echo">${st('done')}<div class="et">${i.text}<div class="es">${i.sub}</div>
+      <div class="btns" style="margin-top:8px">${i.acts.map((a,n)=>`<button class="mini" onclick="${a==='看改动'||a==='打开'?`act('open','${i.tid}')`:''}">${a}</button>`).join('')}</div></div></div>`;
+  }
+  return '';
+}
+function renderTask(t, c){
+  const total = t.total||5;
+  const bars = Array.from({length:total},(_,n)=>`<i class="${n<t.done?'on':''}"></i>`).join('');
+  const lineCls = t.status==='done'?'ok':t.status==='needs'?'wait':'';
+  const lineIc = t.status==='done'?'check':t.status==='needs'?'hand':'term';
+  return `<div class="${c} task ${t.status}" onclick="act('open','${t.id}')">
+    <div class="th">${st(t.status)}<div class="tt">${esc(t.title)}</div><span class="te">${esc(t.elapsed)}</span></div>
+    <div class="tw">${t.where.join(' · ')} ${t.auto?`<span class="auto">${t.auto}</span>`:''}</div>
+    <div class="tl ${lineCls}">${ic(lineIc)}<span class="${t.status==='working'?'livedots':''}">${esc(t.live)}</span></div>
+    <div class="steps">${bars}</div>
+    ${t.status!=='done'?`<div class="tf"><span>第 ${Math.max(1,t.done)} / ${total} 步</span><span style="flex:1"></span><button onclick="event.stopPropagation();act('say','${t.id}')">说一句</button><button onclick="event.stopPropagation()">停下</button></div>`:''}
+  </div>`;
+}
+function renderSheet(){
+  const sh = $('sheet'), sc = $('scrim');
+  if(!S.sheet){ sh.classList.remove('on'); sc.className='scrim'; return; }
+  sh.className = 'sheet on' + (S.sheet.detent==='mid'?' mid':'');
+  sc.className = 'scrim on' + (S.sheet.detent==='mid'?' mid':'');
+  if(S.sheet.type==='task'){
+    const t = S.tasks[S.sheet.tid];
+    const segs = ['过程','改动','终端'];
+    let body = '';
+    if(S.seg==='过程'){
+      body = `<div class="chips" style="margin:0 0 12px">${t.where.map((w,n)=>`<span class="chip">${ic(['laptop','folder','cpu'][n])}${w}</span>`).join('')}<span class="chip">${ic('clock')}${esc(t.elapsed)}</span></div>
+        <div class="log">${t.log.map(l=>`<div class="lg ${l.kind}">${esc(l.text)}<small>${l.time}</small></div>`).join('')}
+        ${t.status==='working'?`<div class="lg"><span class="livedots">进行中</span></div>`:''}</div>`;
+    } else if(S.seg==='改动'){
+      body = t.id==='t1' ? `<div class="diff"><div class="f">LoginView.swift  <span style="color:var(--green)">+6</span> <span style="color:var(--red)">−2</span></div>
+<div>  GeometryReader { proxy in</div><div class="d">-   let h = proxy.size.height * 0.6</div><div class="a">+   let h = max(proxy.size.height, container.height) * 0.6</div><div class="a">+   guard h > 0 else { return EmptyView() }</div><div>    LoginSheet(height: h)</div></div>
+        <div class="diff"><div class="f">LoginViewTests.swift  <span style="color:var(--green)">+18</span></div><div class="a">+ func testRotateOnIPad() { … }</div></div>
+        <div class="btns"><button class="btn pri">合并 PR #901</button><button class="btn">让它再改改</button></div>`
+        : `<div class="why" style="font-size:14px">还没有改动</div>`;
+    } else {
+      body = `<div class="code" style="white-space:pre;line-height:1.6;padding:12px">$ xcodebuild test -scheme Persona \\
+    -destination 'iPad Air'
+Test Suite 'All tests' started
+…
+Executed 42 tests, with 0 failures
+** TEST SUCCEEDED **</div><div class="why">就是这台电脑上 herdr 里那个窗格，和原来的终端页一样。</div>`;
+    }
+    sh.innerHTML = `<div class="grab" onclick="toggleDetent()"><i></i></div>
+      <div class="sh-h">${st(t.status)}<div style="flex:1"><div class="tt">${esc(t.title)}</div><div class="meta">${t.status==='done'?'完成':t.status==='needs'?'等你':'在做'} · 从主对话开的</div></div><button class="circle" onclick="closeSheet()">${ic('x')}</button></div>
+      <div class="seg">${segs.map(s=>`<button class="${s===S.seg?'on':''}" onclick="S.seg='${s}';render(false)">${s}</button>`).join('')}</div>
+      <div class="sh-body">${body}</div>
+      <div class="sh-foot"><div class="composer"><button class="cb">${ic('plus')}</button><textarea rows="1" placeholder="对这个任务说…"></textarea><button class="send">${ic('up')}</button></div><button class="circle" title="在电脑上接管">${ic('term')}</button></div>`;
+  } else {
+    const ts = S.order.map(id=>S.tasks[id]);
+    const group = (name, list) => list.length ? `<div class="sec"><span>${name}</span><span>${list.length}</span></div>` + list.map(t=>`<div class="brow" onclick="openTask('${t.id}');render(false)">${st(t.status)}<div class="bt">${esc(t.title)}<small>${esc(t.where.join(' · '))} · ${esc(t.status==='done'?t.elapsed:t.live)}</small></div><span class="chev">${ic('chev')}</span></div>`).join('') : '';
+    sh.innerHTML = `<div class="grab" onclick="toggleDetent()"><i></i></div>
+      <div class="sh-h"><div style="flex:1"><div class="tt">任务</div><div class="meta">今天从主对话开的，和定时的</div></div><button class="circle" onclick="closeSheet()">${ic('x')}</button></div>
+      <div class="sh-body">
+        ${group('等你', ts.filter(t=>t.status==='needs'))}
+        ${group('在做', ts.filter(t=>t.status==='working'))}
+        ${group('今天完成', ts.filter(t=>t.status==='done'))}
+        <div class="sec"><span>定时</span><span>2</span></div>
+        <div class="brow">${ic('repeat','style="color:var(--accent)"')}<div class="bt">早报<small>工作日 09:00 · 今天已跑</small></div><span class="chev">${ic('chev')}</span></div>
+        <div class="brow">${ic('repeat','style="color:var(--faint)"')}<div class="bt">晚间回顾<small>工作日 21:30 · 关</small></div><span class="chev">${ic('chev')}</span></div>
+      </div>`;
+  }
+}
+function toggleDetent(){ S.sheet.detent = S.sheet.detent==='mid'?'full':'mid'; render(false); }
+function closeSheet(){ S.sheet = null; render(false); }
+function pillTap(id){
+  const t = S.tasks[id];
+  if(t.status==='needs'){
+    const a = [...S.items].reverse().find(i => i.k==='ask' && i.tid===id && !i.answered);
+    if(a){ const el = document.getElementById(a.id); el.scrollIntoView({behavior:'smooth', block:'center'}); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); return; }
+  }
+  act('open', id);
+}
+function pickMention(id){
+  const inp = $('input'); inp.value = inp.value.replace(/@\S*$/, ''); S.route = id; S.mention = false; render(false); inp.focus();
+}
+
+/* ---------------- doc ---------------- */
+const DOC = [
+ ['早上打开：Persona 先开口', `每天第一屏是 Persona 给的「今天」：夜里做完的任务、日程、飞书 / 邮件里要你回的、提醒。<b>生活和工作在同一张卡里，不分 tab</b>。每行一个动作，点了就是替你说一句话。<br>为什么：统一入口的前提是这里信息最全。现在每条消息带的实时快照（<code>&lt;jarvis-context&gt;</code>）已经有这些数据，只是没给人看。`],
+ ['说意图，不选项目', `一句话两件事，Persona 拆成两个任务，<b>自动填好在哪台电脑、哪个项目、用什么模型、什么权限</b>，并写一行为什么这么选（知识库里项目和目录的对应、哪台电脑最近在这个仓库干活、你过去的习惯）。每个都是可以点开改的标签。<br>为什么：现在累的是「选」，不是「说」。推断错了改一个标签，比每次从零开始选便宜得多。`],
+ ['任务开始：卡片原地更新，坞里看全局', `计划卡收起，变成两张<b>任务卡</b>：当前一步在做什么、第几步、用了多久。任务的进展<b>只更新这张卡，不往对话里刷消息</b>。<br>同时输入框上方出现<b>任务坞</b>：每个任务一个胶囊，转圈是在做、橙点是等你、绿勾是完成。不管对话滚到哪，此刻有几件事在跑一眼就知道。`],
+ ['接着说别的：秒办 / 自动开始', `不用等，接着说。按代价分三档：<b>秒办</b>（手机上一个工具调用就完成：加提醒、建日程，结果卡带撤销）→ <b>自动开始</b>（只读、不改东西：查资料、整理材料，卡片上标「自动开始 · 只读」）→ <b>先给计划</b>（会改代码、开多个 Agent、第一次碰这个项目）。<br>生活的事和工作的事在同一个输入框里，Persona 自己判断走哪档。`],
+ ['需要你：浮到最底下，原地作答', `任务要批准命令、要你回答时，问题卡出现在<b>对话最底下</b>（就是你正在看的地方），对应的任务卡描橙边，坞里的胶囊变橙，顶栏写「1 件等你」。<b>点橙色胶囊直接跳到那张问题卡</b>。<br>就是现在 App 里的提问 / 批准卡片，只是不用再进那个 Agent 的对话页去找。`],
+ ['几件事同时等你：一个答完，下一个接上', `答完的问题卡收成一行（留着记录你选了什么）。几个任务同时卡住时，问题卡按到达顺序排在底部，顶栏数着还有几件。<br>只读的任务做完了，底部出一行绿色的<b>回执</b>，带下一步动作（打开、发到会议群）。`],
+ ['信息和任务互相认得', `飞书里有人问「登录那个崩溃今天能修好吗」，Persona 认出它和「修复 iPad 横屏时登录页崩溃」是一件事，<b>带上任务此刻的进度起草回复</b>，你点发送就行；消息卡里挂着那个任务，点进去看过程。<br>收件箱的消息、日程、邮件和任务互相引用：这就是「交互所有信息」和「交互所有 Agent」放在同一个入口的价值。`],
+ ['完成回执：做了什么、下一步', `任务完成：任务卡变成完成态，底部回执写清楚做了什么（改了几个文件、测试、PR），附下一步：看改动、合并、告诉刚才问你的人。<br>坞里的胶囊打勾，看过以后退到「全部」里，不占地方。`],
+ ['指向谁：@ 一个任务直接对它说', `默认你说的话交给 Persona，它决定自己答、开新任务还是转给已有的任务（输入时上方显示「Persona 决定交给谁」）。<br>想直接对某个任务说：<b>输入 @ 选任务</b>，或在任务卡上点「说一句」。输入框上方出现路由标签「对「#842 review」说」，发出去的气泡也带着这个标签，回复由 Persona 转给那个 Agent。试试在手机里打一个 @。`],
+ ['下钻不离开：任务详情从底部浮起', `点任务卡、坞里的胶囊或回执里的「看改动」，任务详情从底部浮起（和链接卡片同一种交互：打开即铺满，<b>点顶上的把手降到 0.6，还能看见、滚动主对话</b>）。<br>里面就是现在的 Agent 对话页拆成三段：过程、改动、终端；底下能直接对这个 Agent 说话，或在电脑上接管。`],
+ ['任务板：所有任务一页看完', `点坞最右边的「全部」，从主对话开的任务按<b>等你 / 在做 / 今天完成 / 定时</b>分组。<br>顶栏的「助手 | Agents」和 Agents 页都不变：这些任务本身就是普通的 Agent 会话，在 Agents 页里照常能看到、能操作，两边是同一份数据。任务板只是主对话这一侧的视图。`],
+];
+function renderDoc(){
+  const d = $('doc');
+  if(!d.dataset.built){
+    d.dataset.built = 1;
+    d.innerHTML = `<h2>三层结构</h2>
+      <div class="layers">
+        <div class="layer"><h3>${ic('bubble')} 对话流</h3><p>你只和 Persona 说话。回答、任务卡、问题卡、回执都按时间排在这里。任务的进展原地更新，不刷屏。</p></div>
+        <div class="layer"><h3>${ic('grid')} 任务坞</h3><p>输入框上方一排胶囊：从主对话开的、此刻在做和等你的任务。不管对话滚到哪都在，点开就下钻。</p></div>
+        <div class="layer"><h3>${ic('hand')} 需要你</h3><p>任何任务卡住要你批准或回答，问题卡浮到对话最底下，原地作答。坞和顶栏同时变橙。</p></div>
+      </div>
+      <h2>按剧本走一遍（点任意一节跳过去）</h2>
+      ${DOC.map((x,n)=>`<div class="stepdoc" id="sd${n}" onclick="goTo(${n})"><h3><span>${String(n+1).padStart(2,'0')}</span>${x[0]}</h3><p>${x[1]}</p>${STEPS[n].trigger?`<div class="hint">在手机里点${({'start:p1':'「开始 2 个任务」','answer:a1':'「批准」','answer:a2':'一个选项','send:m1':'「发送」','open:t1':'「看改动」或任务卡','board':'坞最右边的「全部」'})[STEPS[n].trigger]}也会走到这一步</div>`:''}</div>`).join('')}
+
+      <h2>和现在的实现怎么对上</h2>
+      <table>
+        <tr><th>原型里的</th><th>现在已有的</th><th>要补的</th></tr>
+        <tr><td>统一入口</td><td>主对话 <code>assistant.main</code>；其他页「交给 Persona」都发进主对话</td><td>只改助手页；顶栏「助手 | Agents」和 Agents 页不动</td></tr>
+        <tr><td>派发计划 / 任务</td><td><code>agent_start</code> / <code>agent_send</code>；待办（<code>todos</code> + <code>todo_agents</code>，含派生跟随）</td><td>一个任务 = 一个待办 + 挂的 Agent；助手用新工具 <code>task_plan</code> 出计划卡（结构化，App 渲染），推断机器 / 项目 / 模型</td></tr>
+        <tr><td>任务卡原地更新</td><td>hub 的会话状态（decorated）、node 的 <code>session.items</code></td><td>主对话里的一种新 item（引用 task id），App 按 task 状态渲染，不是文字消息</td></tr>
+        <tr><td>需要你</td><td>提问 / 批准交互（question、approval 卡片）、推送</td><td>在主对话里渲染任务的交互；坞和顶栏的计数来自同一份</td></tr>
+        <tr><td>回执</td><td>到点跟进把「⏰」消息发进原对话</td><td>任务完成 / 失败时 hub 往主对话追加回执 item，并让助手看到（可以接着提建议）</td></tr>
+        <tr><td>信息关联任务</td><td>收件箱分拣、AI 分身草拟回复、实时快照</td><td>消息 ↔ 任务的关联（知识库里的项目 / 人做桥）</td></tr>
+        <tr><td>任务详情</td><td>Agent 对话页、终端、文件 / diff 查看器；链接卡片的底部浮起交互</td><td>把 Agent 页装进底部卡片，分「过程 / 改动 / 终端」</td></tr>
+      </table>
+
+      <h2>需要你拍板的</h2>
+      <div class="qa"><h3>1. 自动开始的边界</h3><p>原型是三档：秒办 / 只读自动开始 / 会改东西先给计划。<b>建议</b>：计划卡上加「这类以后直接开」，按「项目 × 操作类型」记住，信任逐步放开。</p></div>
+      <div class="qa"><h3>2. 任务和待办是不是一个东西</h3><p><b>建议</b>：是。待办已经能挂多个 Agent、跟随派生、看进展，任务就是「从对话里建的待办」。待办页并入任务板。</p></div>
+      <div class="qa"><h3>3. 主对话会越来越长</h3><p><b>建议</b>：按天分段（顶上的日期），任务进展不进对话只更新卡片；旧的任务卡折成一行，上下文交给助手自己的压缩和知识库。旁支对话保留，但入口弱化。</p></div>
+      <div class="qa"><h3>4. 手表 / 锁屏</h3><p><b>建议</b>：只放任务坞和「需要你」：实时活动显示在做几个、等你几个；手表上能批准、选选项。</p></div>`;
+  }
+  document.querySelectorAll('.stepdoc').forEach((e,n)=>e.classList.toggle('on', n===S.step));
+}
+
+/* ---------------- navigation ---------------- */
+function goTo(n){
+  fresh();
+  for(let i=0;i<=n;i++){ S.step=i; S.sheet=null; STEPS[i].apply(); }
+  S.items.forEach(i => S.seen.add(i.key));
+  render();
+  const el = document.getElementById('sd'+n);
+  if(el && window.innerWidth>1000) el.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function next(){
+  if(S.step>=STEPS.length-1) return;
+  S.step++; S.sheet=null; STEPS[S.step].apply(); render();
+  const el = document.getElementById('sd'+S.step);
+  if(el && window.innerWidth>1000) el.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+let autoT = null;
+function auto(){
+  if(autoT){ clearInterval(autoT); autoT=null; $('autoBtn').textContent='自动播放'; return; }
+  if(S.step>=STEPS.length-1) goTo(0);
+  $('autoBtn').textContent='停止播放';
+  autoT = setInterval(()=>{ if(S.step>=STEPS.length-1){ auto(); return; } next(); }, 3200);
+}
+
+/* ---------------- wiring ---------------- */
+$('newIc').innerHTML = ic('plus');
+function showAgents(on){ $('agentsPage').classList.toggle('on',on); $('swA').classList.toggle('on',!on); $('swB').classList.toggle('on',on); }
+$('swA').onclick=()=>showAgents(false); $('swB').onclick=()=>showAgents(true);
+$('plusIc').innerHTML = ic('plus');
+$('sendBtn').innerHTML = ic('up');
+$('nextBtn').onclick = next;
+$('prevBtn').onclick = () => goTo(Math.max(0,S.step-1));
+$('resetBtn').onclick = () => goTo(0);
+$('autoBtn').onclick = auto;
+$('scrim').onclick = closeSheet;
+$('themeBtn').onclick = () => { document.body.dataset.theme = document.body.dataset.theme==='light'?'dark':'light'; };
+const inp = $('input');
+inp.addEventListener('input', () => { S.mention = /(^|\s)@\S*$/.test(inp.value); render(false); });
+inp.addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); doSend(); } });
+$('sendBtn').onclick = doSend;
+function doSend(){
+  const v = inp.value; if(!v.trim()) return;
+  if(S.step===7 && !S.route){ /* stay on free mode */ }
+  inp.value=''; S.mention=false; sendText(v, S.route); render();
+}
+function fit(){ const ph=document.querySelector('.phone'); if(innerWidth<=480){ph.style.zoom='';return;} const z=Math.min(1,(innerHeight-120)/870); ph.style.zoom=z; }
+addEventListener('resize',fit); fit();
+if(matchMedia('(prefers-color-scheme: dark)').matches) document.body.dataset.theme='dark';
+(function(){
+  const h = new URLSearchParams(location.hash.slice(1));
+  if(h.get('theme')) document.body.dataset.theme = h.get('theme');
+  goTo(Math.min(STEPS.length-1, +(h.get('step')||1)-1));
+  if(h.get('mid') && S.sheet) { S.sheet.detent='mid'; render(false); }
+  if(h.get('mention')) { $('input').value='@'; S.mention=true; render(false); }
+})();
+</script>
+</body>
+</html>
