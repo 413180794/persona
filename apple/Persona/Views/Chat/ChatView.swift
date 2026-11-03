@@ -2279,7 +2279,7 @@ struct Composer: View, Equatable {
     /// The @ menu: files this chat's tools touched, then other agents' sessions.
     private func mentions() -> [PromptSource] {
         PromptItems.files(model.chat(key).items, cwd: model.session(key)?.cwd ?? "")
-            + PromptItems.sessions(model.allSessions, except: key)
+            + PromptItems.sessions(model.sessionsNow, except: key)
     }
 
     /// Claude's suggested next message, while the box is empty and the agent waits.
@@ -2355,7 +2355,7 @@ struct Composer: View, Equatable {
                                    }
                                },
                                onMention: { source in
-                                   guard let ref = PromptItems.quote(source, in: model.allSessions) else { return false }
+                                   guard let ref = PromptItems.quote(source, in: model.sessionsNow) else { return false }
                                    contexts.wrappedValue.append(ref)
                                    return true
                                },

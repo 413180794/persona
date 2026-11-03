@@ -3,8 +3,8 @@ import XCTest
 /// What one push costs (docs/ios-state.md「一次推送的代价」): on each page at rest, pushes that change one field of one
 /// agent, as the real hub sends them (the machine's whole session list), and the view bodies they make run
 /// (`-perfCounts YES`), per push. `rev`: the transcript grew, nothing shown changed (most of the real hub's pushes);
-/// `last`: one agent's last line. Reports for now (PERF lines, attachments); the budget it will hold to comes with the
-/// steps of docs/ios-state.md.
+/// `last`: one agent's last line. Reports them (PERF lines, attachments) and fails over the budget (docs/ios-state.md
+/// 「第 5 步」): after steps 1–3 such a push draws only the leaf views that show the field that changed.
 ///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/RenderBudgetTests
 final class RenderBudgetTests: XCTestCase {
@@ -13,6 +13,15 @@ final class RenderBudgetTests: XCTestCase {
     private static let widget = "macbook/a1f3c2d4-0000-4000-8000-000000000001"
     private static let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004"
     private static let pushes = 5
+    /// Bodies per push each page may run, by push: what steps 1–3 left (the Agents list: the row's time, and for a
+    /// last line the row; the chats: nothing).
+    private static let budget: [String: [String: Double]] = [
+        "Agents list": ["rev": 1, "last": 2],
+        "Agent chat": ["rev": 0, "last": 0],
+        "Persona chat": ["rev": 0, "last": 0],
+    ]
+    /// One stray body in the five pushes (a row's time ticking over while measured) is not a regression; two are.
+    private static let slack = 0.25
 
     override func setUpWithError() throws {
         guard let h = ProcessInfo.processInfo.environment["JARVIS_CHURN_HUB"] else {
@@ -87,6 +96,8 @@ final class RenderBudgetTests: XCTestCase {
         att.name = "budget \(page) \(what)"
         att.lifetime = .keepAlways
         add(att)
+        guard let limit = Self.budget[page]?[what] else { return XCTFail("no budget for \(page) / \(what)") }
+        XCTAssertLessThanOrEqual(total, limit + Self.slack, "\(page): one `\(what)` push draws \(text); budget \(limit)")
     }
 
     func testAgentsList() {

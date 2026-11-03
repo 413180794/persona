@@ -640,7 +640,7 @@ struct BeautifulStarterComposer: View {
             PromptComposer(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused,
                            hasAttachments: !images.isEmpty || !quotes.isEmpty, disabled: disabled,
                            attach: PromptItems.attachments(camera: false),
-                           mentions: { PromptItems.sessions(model.allSessions, except: nil) },
+                           mentions: { PromptItems.sessions(model.sessionsNow, except: nil) },
                            models: models,
                            modelID: currentLauncher,
                            pickModel: { id in
@@ -655,7 +655,7 @@ struct BeautifulStarterComposer: View {
                                }
                            },
                            onMention: { source in
-                               guard let ref = PromptItems.quote(source, in: model.allSessions) else { return false }
+                               guard let ref = PromptItems.quote(source, in: model.sessionsNow) else { return false }
                                quotes.append(ref)
                                return true
                            },

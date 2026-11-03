@@ -46,6 +46,7 @@ final class AppModel {
     private(set) var sessionsByMachine: [MachineRef: [Session]] = [:] {
         didSet {
             allSessions = sessionsByMachine.values.flatMap { $0 }
+            sessionsNow = allSessions
             var index: [SessionKey: Session] = [:]
             for (machine, sessions) in sessionsByMachine {
                 for session in sessions {
@@ -60,6 +61,10 @@ final class AppModel {
         }
     }
     private(set) var allSessions: [Session] = []
+    /// `allSessions` without watching it: for an action when it is tapped (the @ menu, the next agent), not for a view.
+    /// A view reading `allSessions` is drawn again by every push about any agent; only the lists of agents may
+    /// (`AllSessionsReadersTests`).
+    @ObservationIgnored private(set) var sessionsNow: [Session] = []
     @ObservationIgnored private var sessionIndex: [SessionKey: Session] = [:]
     /// One observable cell per session a view has looked up (`session(_:)`): a view showing one session is drawn again
     /// when that session changes, not on every push about any of them (the open chat and the tab badges were redrawn

@@ -87,7 +87,7 @@ struct MacAgentMenu: Commands {
             .disabled(choices.isEmpty || current?.canApprove != true)
             Divider()
             Button("下一个需要你的") {
-                if let next = MacAgentCommands.nextNeedsYou(after: key, in: model.allSessions, muted: { model.isMuted($0) }) {
+                if let next = MacAgentCommands.nextNeedsYou(after: key, in: model.sessionsNow, muted: { model.isMuted($0) }) {
                     MacShellState.shared.open(next, model)
                     // The chat shows in the main window: bring it up (a chat window may be the key one, or none open).
                     MacShellState.shared.showMain()

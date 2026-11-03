@@ -128,8 +128,8 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 | 1（#338，已合） | Agents 列表的结构和行分开发布（见下「第 1 步」）：每行跟着自己的 Agent（`AgentsFeed.Row`），列表只在结构变了时重排 | 只改一个会话一个字段的推送：重算的视图数 ≤ 读这个会话的叶子视图 + 1；列表 body 0 次（结构没变时） |
 | 2（#620，已合） | 易变字段拆出去：`rev`、`updated_at`、token、端口放进单独的小对象，只给显示它的叶子视图（相对时间、最后一句）读，照 `WaitingBadge` 的做法 | `rev` / `updated_at` 抖动的推送：除了显示时间的那个 `Text`，0 个视图重算 |
 | 3（#639，已合） | 派生数据进模型层：排序、分组、筛选计数、角标在模型里算，结果真变了才发布（`AgentListOrder` 搬进 `AgentsFeed`） | 列表 body 只在顺序 / 分组 / 计数变了时跑；角标只在数字变了时跑 |
-| 4（本 PR） | 「用户正在操作」做成模型层统一策略：拖动、惯性、菜单开着、键盘在输入时，非关键更新合并、延后；关键的立刻；最长延迟有上限。`AgentsFeed` 的扣留抽成通用的 `Hold`，各页登记自己的状态 | 现有的 `LiveUpdateTests`、`ScrollUnderPushTests`、`ScreenTruthTests` 全绿；页面里不再有各自的扣留代码（源码检查） |
-| 5 | 护栏：性能测试「一次只改一个会话一个字段的推送，最多 N 个视图重算」，超了就失败；源码检查「列表以外的视图不读 `allSessions`」 | 两个检查进 `JarvisTests` / UI 测试 |
+| 4（#880，已合） | 「用户正在操作」做成模型层统一策略：拖动、惯性、菜单开着、键盘在输入时，非关键更新合并、延后；关键的立刻；最长延迟有上限。`AgentsFeed` 的扣留抽成通用的 `Hold`，各页登记自己的状态 | 现有的 `LiveUpdateTests`、`ScrollUnderPushTests`、`ScreenTruthTests` 全绿；页面里不再有各自的扣留代码（源码检查） |
+| 5（本 PR） | 护栏：性能测试「一次只改一个会话一个字段的推送，最多 N 个视图重算」，超了就失败；源码检查「列表以外的视图不读 `allSessions`」 | 两个检查进 `JarvisTests` / UI 测试 |
 | 6（要改 hub，先算收益） | hub 只在语义变化时推（`rev`、`updated_at` 抖动不推，改走 `revs`），或者推增量 | 用录下的 10 分钟推送回放：推送条数、App 主线程耗时的改前改后 |
 
 ### 第 1 步：列表的结构和行分开
@@ -186,6 +186,19 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 - 对话页的 `frozen` 不是扣留：往上读历史时新内容不插进来，是读者的位置（回到最新处才放进来，期间有 ↓），不归 `Hold`。
 - 检查：`HoldTests`（静止才放、5 s 上限、看不见不计上限）；`HoldSourceTests` 扫源码：`.onScrollPhaseChange` 里不许自己等（`Task.sleep`、`asyncAfter`），
   `Views/` 里跟着模型的 feed（`withObservationTracking`）不许有计时器。
+
+### 第 5 步：护栏
+
+第 1–3 步的结果用两个检查守住，回退了测试就红：
+- `RenderBudgetTests` 从只报数改成超了就失败：页面静止时只改一个会话一个字段的推送（各 5 次取平均），每次重算的视图数不能超过预算。
+  预算就是第 1–3 步之后的数：Agents 列表 `rev` 1（那一行的时间）、`last` 2（那一行和它的时间），Agent 对话、Jarvis 对话都是 0；
+  允许 5 次里多出 1 次（0.2，某一行的时间正好跨过刷新），多 2 次就算回退。
+- `AllSessionsReadersTests`（JarvisTests，扫源码）：`Jarvis/Views` 和 `Mac` 里只有列 Agent 的视图能读 `allSessions`，每个文件读几次、为什么都登记在测试里，
+  多一处、少一处都要改登记：
+  - 只显示一个会话的读格子 `model.session(_:)`；
+  - 点下去才要全部会话的动作（@ 菜单、引用另一个会话、下一个 / 上一个 Agent、终端换空间）读 `model.sessionsNow`：和 `allSessions` 同一份，不被观察，
+    和第 3 步的 `latest(_:)` 一样，**显示用观察的，动作用不观察的**；
+  - 新的列表要读，在登记里加一行写清楚为什么。
 
 每步都要过本文「真实性与及时性」的测试，用户看得到的交互不变。和 live 车道的 `ShellState`（当前页唯一来源）对齐：第 4 步的「用户正在操作」读它的页状态，不自己再存一份。
 

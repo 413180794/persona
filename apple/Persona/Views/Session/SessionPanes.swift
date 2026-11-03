@@ -586,7 +586,7 @@ struct TerminalPanel: View {
             guard let i = list.firstIndex(of: key), list.count > 1 else { return }
             target = list[(i + (d == .left ? 1 : list.count - 1)) % list.count]
         default:
-            let live = model.allSessions.filter { $0.machineID == key.machineID && $0.state.isLive && $0.spaceKey != nil }
+            let live = model.sessionsNow.filter { $0.machineID == key.machineID && $0.state.isLive && $0.spaceKey != nil }
             let spaces = Array(Set(live.compactMap(\.spaceKey))).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
             guard let here = model.session(key)?.spaceKey, let i = spaces.firstIndex(of: here), spaces.count > 1 else { return }
             let next = spaces[(i + (d == .up ? 1 : spaces.count - 1)) % spaces.count]
