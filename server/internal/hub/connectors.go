@@ -113,6 +113,8 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 		var body struct {
 			Enabled *bool           `json:"enabled"`
 			Options json.RawMessage `json:"options"` // the connector's own settings (connector.Options)
+			Archive *bool           `json:"archive"` // 进知识库
+			Inbox   *bool           `json:"inbox"`   // 进收件箱
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -120,6 +122,15 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 		}
 		if len(body.Options) > 0 && string(body.Options) != "null" {
 			if err := h.setConnectorOptions(r.Context(), id, body.Options); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
+		}
+		for f, on := range map[connector.Feed]*bool{connector.FeedArchive: body.Archive, connector.FeedInbox: body.Inbox} {
+			if on == nil {
+				continue
+			}
+			if err := h.setConnectorFeed(r.Context(), id, f, *on); err != nil {
 				writeErr(w, http.StatusBadRequest, err)
 				return
 			}
@@ -158,6 +169,28 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 		h.logf("connector %s: deleted %d chat(s), %d person(s), %d inbox item(s)", id, res.Chats, res.People, res.Inbox)
 		writeJSON(w, res)
 	})
+	// 删除已存的知识库内容: 进知识库 turned off first (and kept off: on, the next round would bring it back), then the
+	// knowledge base's chats and people of it go. The connector keeps running: the inbox and the tools are untouched.
+	api.HandleFunc("DELETE /api/v1/connectors/{id}/archive", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if h.connectors.Get(id) == nil {
+			writeErr(w, http.StatusNotFound, fmt.Errorf("no connector %q", id))
+			return
+		}
+		if err := h.setConnectorFeed(r.Context(), id, connector.FeedArchive, false); err != nil {
+			writeErr(w, http.StatusConflict, err)
+			return
+		}
+		var res sourceForgotten
+		var err error
+		if res.Chats, res.People, err = h.forgetArchive(r.Context(), id); err != nil {
+			h.logf("connector %s: delete the archive: %v", id, err)
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		h.logf("connector %s: deleted %d chat(s), %d person(s) from the knowledge base", id, res.Chats, res.People)
+		writeJSON(w, res)
+	})
 	h.imessageRoutes(api)
 }
 
@@ -173,23 +206,39 @@ type sourceForgotten struct {
 // their index rows, their places in projects, the cursor) and the inbox's items. The caller stops the source first.
 func (h *Hub) forgetSource(ctx context.Context, source string) (sourceForgotten, error) {
 	var out sourceForgotten
-	if h.kb.eng != nil {
-		f, err := h.kb.eng.ForgetSource(source)
-		if err != nil {
-			return out, err
+	var err error
+	if out.Chats, out.People, err = h.forgetArchive(ctx, source); err != nil {
+		return out, err
+	}
+	out.Inbox, err = h.forgetInbox(ctx, source)
+	return out, err
+}
+
+// forgetArchive removes a source's chats and people from the knowledge base, with their index rows, their places in
+// projects and the cursor; it says how many chats and people went.
+func (h *Hub) forgetArchive(ctx context.Context, source string) (int, int, error) {
+	if h.kb.eng == nil {
+		return 0, 0, nil
+	}
+	f, err := h.kb.eng.ForgetSource(source)
+	if err != nil {
+		return 0, 0, err
+	}
+	if idx, ok := h.store.(interface {
+		DeleteKBEntities(ctx context.Context, kind string, ids []string) error
+	}); ok {
+		if err := idx.DeleteKBEntities(ctx, kb.KindChat, f.Chats); err != nil {
+			return 0, 0, err
 		}
-		out.Chats, out.People = len(f.Chats), len(f.People)
-		if idx, ok := h.store.(interface {
-			DeleteKBEntities(ctx context.Context, kind string, ids []string) error
-		}); ok {
-			if err := idx.DeleteKBEntities(ctx, kb.KindChat, f.Chats); err != nil {
-				return out, err
-			}
-			if err := idx.DeleteKBEntities(ctx, kb.KindPerson, f.People); err != nil {
-				return out, err
-			}
+		if err := idx.DeleteKBEntities(ctx, kb.KindPerson, f.People); err != nil {
+			return 0, 0, err
 		}
 	}
+	return len(f.Chats), len(f.People), nil
+}
+
+// forgetInbox removes a source's inbox items; it says how many went.
+func (h *Hub) forgetInbox(ctx context.Context, source string) (int, error) {
 	h.inbox.mu.Lock()
 	var ids []string
 	for id, it := range h.inbox.items {
@@ -200,18 +249,17 @@ func (h *Hub) forgetSource(ctx context.Context, source string) (sourceForgotten,
 		}
 	}
 	h.inbox.mu.Unlock()
-	out.Inbox = len(ids)
 	if del, ok := h.store.(interface {
 		DeleteInboxItems(ctx context.Context, ids []string) error
 	}); ok && len(ids) > 0 {
 		if err := del.DeleteInboxItems(ctx, ids); err != nil {
-			return out, err
+			return 0, err
 		}
 	}
 	if len(ids) > 0 {
 		h.broadcast(map[string]any{"type": "inbox"})
 	}
-	return out, nil
+	return len(ids), nil
 }
 
 // connectorLogin is connector id's sign-in, or writes why there is none.
@@ -229,13 +277,24 @@ func (h *Hub) connectorLogin(w http.ResponseWriter, id string) (connector.Login,
 	return l, true
 }
 
-// connectorSettingsKey holds the user's switch per connector and their own settings: {"switch": {"telegram":
-// true}, "options": {"github": {"ci": "mine"}}}.
+// connectorSettingsKey holds the user's switch per connector, their own settings and the feeds turned off:
+// {"switch": {"telegram": true}, "options": {"github": {"ci": "mine"}}, "archive": {"telegram": false}}.
 const connectorSettingsKey = "connectors"
 
 type connectorSettings struct {
 	Switch  map[string]bool            `json:"switch,omitempty"`
 	Options map[string]json.RawMessage `json:"options,omitempty"`
+	// Archive and Inbox are its feeds the user turned on or off (connector.SetFeed); one not here is on.
+	Archive map[string]bool `json:"archive,omitempty"`
+	Inbox   map[string]bool `json:"inbox,omitempty"`
+}
+
+// feeds is the settings' map for feed f.
+func (cs *connectorSettings) feeds(f connector.Feed) *map[string]bool {
+	if f == connector.FeedInbox {
+		return &cs.Inbox
+	}
+	return &cs.Archive
 }
 
 // setConnectorOptions gives a connector the user's settings and keeps them for the next start; the inbox is
@@ -295,6 +354,34 @@ func (h *Hub) setConnectorEnabled(ctx context.Context, id string, on bool) error
 	return h.store.PutSetting(ctx, connectorSettingsKey, cs)
 }
 
+// setConnectorFeed turns one of a connector's feeds on or off and keeps the choice for the next start; turned on, the
+// inbox or the archive goes again soon.
+func (h *Hub) setConnectorFeed(ctx context.Context, id string, f connector.Feed, on bool) error {
+	if err := h.connectors.SetFeed(id, f, on); err != nil {
+		return err
+	}
+	if h.store != nil {
+		var cs connectorSettings
+		if _, err := h.store.Setting(ctx, connectorSettingsKey, &cs); err != nil {
+			return err
+		}
+		m := cs.feeds(f)
+		if *m == nil {
+			*m = map[string]bool{}
+		}
+		(*m)[id] = on
+		if err := h.store.PutSetting(ctx, connectorSettingsKey, cs); err != nil {
+			return err
+		}
+	}
+	if on && f == connector.FeedInbox {
+		h.kickInbox()
+	} else if on {
+		h.kbKick()
+	}
+	return nil
+}
+
 // restoreConnectorSwitches applies the user's switches before the connectors start. One the user never switched is
 // on, unless it was added to start off (addConnectorOff: Telegram waits for the user to turn it on and sign in).
 func (h *Hub) restoreConnectorSwitches(ctx context.Context) {
@@ -309,6 +396,13 @@ func (h *Hub) restoreConnectorSwitches(ctx context.Context) {
 			if o, ok := connector.As[connector.Options](c); ok {
 				if err := o.SetOptions(raw); err != nil {
 					h.logf("connectors: %s settings: %v", c.ID(), err)
+				}
+			}
+		}
+		for _, f := range []connector.Feed{connector.FeedArchive, connector.FeedInbox} {
+			if on, ok := (*cs.feeds(f))[c.ID()]; ok && !on {
+				if err := h.connectors.SetFeed(c.ID(), f, false); err != nil {
+					h.logf("connectors: %s %s: %v", c.ID(), f, err)
 				}
 			}
 		}

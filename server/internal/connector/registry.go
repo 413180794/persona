@@ -25,6 +25,8 @@ type Registry struct {
 	list  []Connector
 	rules []Rule
 	off   map[string]bool // switched off by the user (SetEnabled)
+	// feedsOff are the feeds the user turned off, by connector (SetFeed).
+	feedsOff map[string]map[Feed]bool
 	// run is what Start was given, to start a connector switched on later; stop cancels a running one's Run / Watch.
 	run  *starter
 	stop map[string]context.CancelFunc
@@ -38,7 +40,7 @@ type starter struct {
 
 // NewRegistry holds no connector yet; rules are the write gate's (hub.json connector_gate, ValidateRules).
 func NewRegistry(rules []Rule) *Registry {
-	return &Registry{rules: rules, off: map[string]bool{}, stop: map[string]context.CancelFunc{}}
+	return &Registry{rules: rules, off: map[string]bool{}, feedsOff: map[string]map[Feed]bool{}, stop: map[string]context.CancelFunc{}}
 }
 
 // switchedOff are the connectors switched off, by instance: StatusOf answers StateDisabled for them, so every pipe
@@ -82,6 +84,51 @@ func (r *Registry) Enabled(id string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return !r.off[id]
+}
+
+// Feed is where a connector's things go besides the assistant's tools: each is on until the user turns it off
+// (设置 › 连接器's 进知识库 and 进收件箱), while the connector itself keeps running.
+type Feed string
+
+const (
+	FeedArchive Feed = "archive" // its conversations into the knowledge base (Archive)
+	FeedInbox   Feed = "inbox"   // its things into the inbox (Inbox)
+)
+
+// feedCaps is the capability a feed needs.
+var feedCaps = map[Feed]Capability{FeedArchive: CapArchive, FeedInbox: CapInbox}
+
+// SetFeed turns one of a connector's feeds on or off. The hub keeps the choice (it calls this before Start).
+func (r *Registry) SetFeed(id string, f Feed, on bool) error {
+	c := r.Get(id)
+	if c == nil {
+		return fmt.Errorf("no connector %q", id)
+	}
+	cp, ok := feedCaps[f]
+	if !ok {
+		return fmt.Errorf("no feed %q", f)
+	}
+	if !c.Manifest().Has(cp) {
+		return fmt.Errorf("%s has no %s", c.Name(), cp)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if on {
+		delete(r.feedsOff[id], f)
+	} else {
+		if r.feedsOff[id] == nil {
+			r.feedsOff[id] = map[Feed]bool{}
+		}
+		r.feedsOff[id][f] = true
+	}
+	return nil
+}
+
+// Feeds says whether a connector's feed is on (every one is, until SetFeed says otherwise).
+func (r *Registry) Feeds(id string, f Feed) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return !r.feedsOff[id][f]
 }
 
 // Add registers a connector; its ID must be new and look like one, its manifest pass Check.
@@ -266,6 +313,9 @@ type Info struct {
 	Hosts        []string   `json:"hosts,omitempty"`
 	// Enabled: switched on (SetEnabled); off, Status is "disabled".
 	Enabled bool `json:"enabled"`
+	// Archive and Inbox: its feeds are on (SetFeed); only there when it has an archive, an inbox.
+	Archive *bool `json:"archive,omitempty"`
+	Inbox   *bool `json:"inbox,omitempty"`
 	// Options are its own settings (Options), as it gives them.
 	Options json.RawMessage `json:"options,omitempty"`
 }
@@ -291,6 +341,12 @@ func (r *Registry) Infos(ctx context.Context) []Info {
 		}
 		if o, ok := As[Options](c); ok {
 			info.Options = o.Options()
+		}
+		if c.Manifest().Has(CapArchive) {
+			info.Archive = new(r.Feeds(c.ID(), FeedArchive))
+		}
+		if c.Manifest().Has(CapInbox) {
+			info.Inbox = new(r.Feeds(c.ID(), FeedInbox))
 		}
 		out = append(out, info)
 	}

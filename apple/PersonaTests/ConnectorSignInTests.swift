@@ -73,6 +73,26 @@ struct ConnectorSignInTests {
         #expect(hub.sent("POST", "/api/v1/connectors/telegram/logout").count == 1)
     }
 
+    /// 进知识库 / 进收件箱 go to the hub as one field each; 删除已存的知识库内容 says what went.
+    @Test func feedsAndTheArchive() async throws {
+        let hub = FakeHub()
+        hub.on("PUT", "/api/v1/connectors/telegram/settings",
+               json: #"{"id":"telegram","name":"Telegram","status":"ok","enabled":true,"archive":false,"inbox":true,"capabilities":["status","login","archive","inbox"]}"#)
+        hub.on("DELETE", "/api/v1/connectors/telegram/archive", json: #"{"chats":3,"people":5,"inbox":0}"#)
+        let m = model(hub)
+        let c = await m.setFeed(.archive, on: false)
+        #expect(c?.archive == false)
+        #expect(c?.inbox == true)
+        let body = hub.sent("PUT", "/api/v1/connectors/telegram/settings").first?.body ?? Data()
+        #expect(String(decoding: body, as: UTF8.self) == #"{"archive":false}"#)
+        await m.deleteArchive()
+        #expect(m.archiveDeleted == "已删除：知识库里 3 个会话、5 个人。")
+        #expect(m.deleted == nil)
+        // A connector without an archive or an inbox, or a hub from before the switches: no toggles.
+        let gh = try JSON.decoder.decode(HubConnector.self, from: Data(#"{"id":"github","name":"GitHub","status":"ok","capabilities":["status"]}"#.utf8))
+        #expect(gh.archive == nil && gh.inbox == nil)
+    }
+
     @Test func aConnectorWithoutSignIn() throws {
         let gh = try JSON.decoder.decode(HubConnector.self, from: Data(#"{"id":"github","name":"GitHub","status":"ok","capabilities":["status","hosts"]}"#.utf8))
         #expect(!gh.signsInHere)

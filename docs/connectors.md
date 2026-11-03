@@ -88,7 +88,8 @@ hub（`hub/inbox_connectors.go` 的 `applyConnector`）把同一个 `Thread` 的
 
 ### 设置 › 连接器
 
-`GET /api/v1/connectors?all=1`（不带 `all` 时不列飞书和邮件，给 M6 以前的 App），一项是 `{id, name, status, account, via, error, guide, capabilities, hosts, enabled, options}`。
+`GET /api/v1/connectors?all=1`（不带 `all` 时不列飞书和邮件，给 M6 以前的 App），一项是 `{id, name, status, account, via, error, guide, capabilities, hosts, enabled, options, archive, inbox}`。
+`archive` / `inbox` 是「进知识库」「进收件箱」两个开关（`Registry.SetFeed`，默认开，存在 hub 设置里）：关掉「进知识库」后 hub 不再调 `Archive`，「删除已存的知识库内容」（`DELETE …/{id}/archive`）只删知识库里它的会话和人；关掉「进收件箱」后不再 `Collect`，已有的条目不动。连接器本身照常跑，工具照常给。
 App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读各自的接口），信息有自己的页，其余走通用的连接器页。接口细节见 `docs/protocol.md`「连接器 API」。
 
 ### 加一个连接器（v1 的做法）

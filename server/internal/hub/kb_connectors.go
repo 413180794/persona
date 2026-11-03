@@ -35,12 +35,12 @@ func (kbConnectorSource) Messages(context.Context, kb.SourceChat, string, int) (
 }
 
 // kbConnectors archives what moved in every signed-in connector with an archive that is due (its manifest's Poll, else
-// kbConnectorPoll, since it was last asked).
+// kbConnectorPoll, since it was last asked), unless the user turned its 进知识库 off: then it is not asked at all.
 func (h *Hub) kbConnectors(ctx context.Context) {
 	e := h.kb.eng
 	for _, c := range h.connectors.All() {
 		a, ok := connector.As[connector.Archive](c)
-		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK || ctx.Err() != nil {
+		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK || !h.connectors.Feeds(c.ID(), connector.FeedArchive) || ctx.Err() != nil {
 			continue
 		}
 		every := kbConnectorPoll

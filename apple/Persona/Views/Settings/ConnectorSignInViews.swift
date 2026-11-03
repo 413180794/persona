@@ -22,6 +22,8 @@ struct ConnectorDeps {
     private(set) var busy = false
     /// What the last delete removed, said for people.
     private(set) var deleted: String?
+    /// What the last 删除已存的知识库内容 removed, said for people.
+    private(set) var archiveDeleted: String?
     @ObservationIgnored private let deps: ConnectorDeps
 
     init(id: String, deps: ConnectorDeps = .live) {
@@ -113,6 +115,28 @@ struct ConnectorDeps {
             deps.report(error)
         }
     }
+
+    func setFeed(_ feed: ConnectorFeed, on: Bool) async -> HubConnector? {
+        guard let api = deps.api() else { return nil }
+        do {
+            return try await api.setConnector(id, feed: feed, on: on)
+        } catch {
+            deps.report(error)
+            return nil
+        }
+    }
+
+    func deleteArchive() async {
+        guard let api = deps.api() else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            let r = try await api.deleteConnectorArchive(id)
+            archiveDeleted = "已删除：知识库里 \(r.chats ?? 0) 个会话、\(r.people ?? 0) 个人。"
+        } catch {
+            deps.report(error)
+        }
+    }
 }
 
 /// The sections of a connector the user signs in to here, under its status on `HubConnectorView`.
@@ -142,6 +166,7 @@ struct ConnectorSignInSections: View {
                 }
             }
         }
+        ConnectorFeedsSection(connector: connector, model: model, reload: reload)
         ConnectorDataSection(connector: connector, model: model, reload: reload, showsLogout: true)
     }
 }
@@ -172,6 +197,67 @@ struct ConnectorSwitchSection: View {
             Text(connector.isEnabled ? "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。"
                  : connector.id == "telegram" ? "打开后才能登录，登录后它的私聊和群进知识库和收件箱，助手也能查。"
                  : "打开后才能登录，登录后它的内容进知识库和收件箱，助手也能查。")
+        }
+    }
+}
+
+/// 进知识库 and 进收件箱, for a connector that has them (the hub lists `archive`, `inbox`), and 删除已存的知识库内容.
+struct ConnectorFeedsSection: View {
+    var connector: HubConnector
+    var model: ConnectorSignInModel
+    var reload: () async -> Void
+    @State private var confirmDelete = false
+
+    var body: some View {
+        if connector.archive != nil || connector.inbox != nil {
+            Section {
+                if let on = connector.archive {
+                    toggle("进知识库", on: on, feed: .archive).accessibilityIdentifier("connector.archive")
+                }
+                if let on = connector.inbox {
+                    toggle("进收件箱", on: on, feed: .inbox).accessibilityIdentifier("connector.inbox")
+                }
+                if connector.archive != nil {
+                    Button(role: .destructive) { confirmDelete = true } label: { Text("删除已存的知识库内容").lineLimit(1) }
+                        .disabled(model.busy)
+                        .accessibilityIdentifier("connector.deleteArchive")
+                }
+            } footer: {
+                Text(model.archiveDeleted ?? footer)
+            }
+            .confirmationDialog("删除 \(connector.name) 存进知识库的内容？", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("删除", role: .destructive) {
+                    Task {
+                        await model.deleteArchive()
+                        await reload()
+                    }
+                }
+            } message: {
+                Text("知识库里从 \(connector.name) 来的会话和人都会删掉，「进知识库」会关掉。收件箱和助手查 \(connector.name) 不受影响。")
+            }
+        }
+    }
+
+    private var footer: String {
+        var lines: [String] = []
+        if connector.archive != nil {
+            lines.append(connector.archive == true ? "进知识库：\(connector.name) 的内容存进知识库，助手和 AI 分身都能查。关掉后不再存新的，已存的留着。"
+                         : "不进知识库：不再存新的内容。收件箱和助手查 \(connector.name) 照常。")
+        }
+        if connector.inbox == false {
+            lines.append("不进收件箱：不再收新的，已有的条目留着。")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func toggle(_ title: String, on: Bool, feed: ConnectorFeed) -> some View {
+        Toggle(isOn: Binding(get: { on }, set: { value in
+            Task {
+                _ = await model.setFeed(feed, on: value)
+                await reload()
+            }
+        })) {
+            Text(title).lineLimit(1)
         }
     }
 }

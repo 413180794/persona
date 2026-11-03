@@ -28,12 +28,14 @@ type InboxConnector struct {
 	Tags []connector.Tag `json:"tags,omitempty"`
 }
 
-// collectConnectors applies the things of every signed-in connector with an inbox.
+// collectConnectors applies the things of every signed-in connector with an inbox, unless the user turned its 进收件箱
+// off: then its items stay as they are and nothing new comes.
 func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 	var changed []*InboxItem
 	for _, c := range h.connectors.All() {
 		in, ok := connector.As[connector.Inbox](c)
-		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK && connector.StatusOf(ctx, c).State != connector.StateRateLimited {
+		if !ok || !h.connectors.Feeds(c.ID(), connector.FeedInbox) ||
+			connector.StatusOf(ctx, c).State != connector.StateOK && connector.StatusOf(ctx, c).State != connector.StateRateLimited {
 			continue
 		}
 		things, err := in.Collect(ctx)

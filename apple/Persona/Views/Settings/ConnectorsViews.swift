@@ -109,9 +109,12 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     var options: JSONValue?
     /// Switched on in 设置 (nil: a hub from before the switch, always on).
     var enabled: Bool?
+    /// 进知识库 and 进收件箱 (nil: it has no archive, no inbox, or the hub is from before these switches).
+    var archive: Bool?
+    var inbox: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, status, account, via, error, guide, capabilities, hosts, options, enabled
+        case id, name, status, account, via, error, guide, capabilities, hosts, options, enabled, archive, inbox
         case lastSync = "last_sync"
         case lastEvent = "last_event"
     }
@@ -155,7 +158,12 @@ nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
     var isDeviceCode: Bool { kind == "device_code" && userCode != nil }
 }
 
-/// What deleting a connector's data removed (DELETE /api/v1/connectors/{id}/data).
+/// Where a hub connector's things go besides the assistant's tools, each switched on its page.
+nonisolated enum ConnectorFeed: String, Sendable {
+    case archive, inbox
+}
+
+/// What deleting a connector's data removed (DELETE /api/v1/connectors/{id}/data, …/archive).
 nonisolated struct ConnectorDataDeleted: Codable, Sendable {
     var chats: Int?
     var people: Int?
@@ -178,6 +186,16 @@ extension APIClient {
 
     func deleteConnectorData(_ id: String) async throws -> ConnectorDataDeleted {
         try JSON.decoder.decode(ConnectorDataDeleted.self, from: try await request("DELETE", "/api/v1/connectors/\(id)/data"))
+    }
+
+    /// Turns 进知识库 (`ConnectorFeed.archive`) or 进收件箱 on or off.
+    func setConnector(_ id: String, feed: ConnectorFeed, on: Bool) async throws -> HubConnector {
+        try JSON.decoder.decode(HubConnector.self, from: try await request("PUT", "/api/v1/connectors/\(id)/settings", body: [feed.rawValue: on]))
+    }
+
+    /// 删除已存的知识库内容: the knowledge base's chats and people of it; 进知识库 is turned off with it.
+    func deleteConnectorArchive(_ id: String) async throws -> ConnectorDataDeleted {
+        try JSON.decoder.decode(ConnectorDataDeleted.self, from: try await request("DELETE", "/api/v1/connectors/\(id)/archive"))
     }
 
     /// The hub's connectors; `all` takes Feishu and mail too (a hub from before M6 leaves them out anyway).

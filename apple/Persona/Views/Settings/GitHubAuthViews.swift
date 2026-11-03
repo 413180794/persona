@@ -70,6 +70,7 @@ struct GitHubConnectorSections: View {
         if let auth, let missing = auth.missing, !missing.isEmpty, connector.isSignedIn {
             scopeSection(auth, missing)
         }
+        ConnectorFeedsSection(connector: connector, model: model, reload: reload)
         ConnectorDataSection(connector: connector, model: model, reload: reload, showsLogout: false)
     }
 

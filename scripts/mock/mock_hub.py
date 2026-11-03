@@ -2314,7 +2314,8 @@ TELEGRAM_MODE = os.environ.get("MOCK_TELEGRAM", "")
 TELEGRAM = {"enabled": TELEGRAM_MODE not in ("", "off"), "creds": TELEGRAM_MODE in ("signed_in", "limited"),
             "signed_in": TELEGRAM_MODE in ("signed_in", "limited"), "limited": TELEGRAM_MODE == "limited",
             "two_fa": TELEGRAM_MODE == "2fa" or bool(os.environ.get("MOCK_TELEGRAM_2FA")),
-            "ran": TELEGRAM_MODE not in ("", "off"), "started": 0.0}
+            "ran": TELEGRAM_MODE not in ("", "off"), "started": 0.0,
+            "archive": os.environ.get("MOCK_TELEGRAM_FEEDS") != "off", "inbox": os.environ.get("MOCK_TELEGRAM_FEEDS") != "off"}
 TELEGRAM_START = 1.5
 TELEGRAM_VIA = "api_id 1234567 · api_hash ••••cd9f"
 TELEGRAM_GUIDE = ("去 my.telegram.org，用你的 Telegram 账号登录，进 API development tools 建一个应用，把 api_id 和 api_hash 填到这里。"
@@ -2334,6 +2335,8 @@ def telegram_connector():
     described = telegram_described()
     c = {"id": "telegram", "name": "Telegram", "enabled": t["enabled"],
          "capabilities": ["status", "login", "archive", "inbox", "tools", "events"] if described else []}
+    if described:  # 进知识库 / 进收件箱 (#989)
+        c.update(archive=t["archive"], inbox=t["inbox"])
     if not t["enabled"]:
         c.update(status="disabled")
     elif not described:
@@ -2407,11 +2410,17 @@ def telegram_area(h, method, p, raw):
         t.update(creds=False, signed_in=False)
         return h.send_json({"ok": True}) or True
     if what == "settings" and method == "PUT":
+        for feed in ("archive", "inbox"):
+            if feed in body:
+                t[feed] = bool(body[feed])
         if "enabled" in body:
             if body["enabled"] and not t["enabled"]:
                 t["started"] = time.monotonic()
             t["enabled"] = bool(body["enabled"])
         return h.send_json(telegram_connector()) or True
+    if what == "archive" and method == "DELETE":  # 删除已存的知识库内容: 进知识库 off with it
+        t["archive"] = False
+        return h.send_json({"chats": 3, "people": 5, "inbox": 0}) or True
     if what == "data" and method == "DELETE":
         t["enabled"] = False
         gone = [x for x in INBOX if x.get("source") == "telegram"]
