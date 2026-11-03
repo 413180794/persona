@@ -16,8 +16,8 @@ data class Pairing(
         /** `jarvis://pair?url=…&token=…`, with optional public-route metadata. */
         fun parse(text: String): Pairing? {
             val link = text.trim().substringBefore('#')
-            if (!link.startsWith("jarvis://")) return null
-            val authority = link.removePrefix("jarvis://").substringBefore('/').substringBefore('?')
+            val prefix = listOf("persona://", "jarvis://").firstOrNull(link::startsWith) ?: return null
+            val authority = link.removePrefix(prefix).substringBefore('/').substringBefore('?')
             if (decode(authority.substringAfterLast('@').substringBefore(':')) != "pair") return null
             val query = link.substringAfter('?', "").split('&').map {
                 it.substringBefore('=') to decode(it.substringAfter('=', ""))

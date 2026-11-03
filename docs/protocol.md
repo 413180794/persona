@@ -449,6 +449,8 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | GET | `/api/v1/assistant/memory` | `{"files":[{name,content,updated_at}],"dir"}` |
 | PUT / DELETE | `/api/v1/assistant/memory/{name}` | `{"content"}`；删除时顺带删 MEMORY.md 里的索引行 |
 | GET / PUT | `/api/v1/machines/{mid}/claude-settings` | 白名单的 Claude Code 设置；PUT `{"key","value"}`（value 为 null 恢复默认） |
+| GET | `/api/v1/machines/{mid}/claude-dirs` | 这台机器的 Claude Code 配置目录和屏蔽规则：`{"dirs":[{"path","default"?,"blocked"?,"blocked_by"?,"source","running","sessions"?}],"blocked":[…],"home","live"}`（`docs/claude-integration.md`「屏蔽配置目录」） |
+| PUT | `/api/v1/machines/{mid}/claude-dirs/blocked` | 整份替换屏蔽规则 `{"blocked":["~/.automation/*", …]}`（路径或通配，以 `/` 或 `~/` 开头，否则 400）；回同 GET 的状态 |
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
 | POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution |

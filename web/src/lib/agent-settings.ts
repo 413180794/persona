@@ -82,6 +82,78 @@ export function valueText(v: SettingValue): string {
   return v;
 }
 
+// ── Claude Code › 屏蔽的配置目录 (GET /machines/{mid}/claude-dirs, docs/claude-integration.md「屏蔽配置目录」) ──
+
+/** One config directory of a computer (CLAUDE_CONFIG_DIR), as the hub lists it. */
+export interface ClaudeDir {
+  path: string;
+  default?: boolean;
+  blocked?: boolean;
+  blocked_by?: string;
+  source: "default" | "config" | "found" | string;
+  running: number;
+  sessions?: number;
+}
+
+export interface ClaudeDirsState {
+  dirs: ClaudeDir[];
+  blocked: string[];
+  home?: string;
+  live: boolean;
+}
+
+/** The path as the user reads it: the computer's home as ~. */
+export function shortPath(path: string, home?: string): string {
+  if (home && (path === home || path.startsWith(home + "/"))) return "~" + path.slice(home.length);
+  return path;
+}
+
+/** What a row says under the path: where it came from, how many sessions, how many claudes run from it. */
+export function dirMeta(d: ClaudeDir, home?: string): string {
+  const parts: string[] = [];
+  if (d.default) parts.push("默认目录，不能屏蔽");
+  else if (d.source === "config") parts.push("hub.json 里配的");
+  else parts.push("自动发现");
+  if (d.sessions) parts.push(`${d.sessions} 个会话`);
+  if (d.running) parts.push(`${d.running} 个正在运行`);
+  if (d.blocked && d.blocked_by && !samePath(d.blocked_by, d.path, home)) parts.push(`由规则 ${d.blocked_by} 屏蔽`);
+  return parts.join(" · ");
+}
+
+/** The patterns after a row's 屏蔽 / 取消屏蔽: blocking adds the directory's own path; unblocking lifts the rule that
+ *  blocks it (a glob lifts every directory it covers — the row says which rule). */
+export function toggledPatterns(state: ClaudeDirsState, d: ClaudeDir): string[] {
+  if (!d.blocked) return state.blocked.includes(d.path) ? state.blocked : [...state.blocked, shortPath(d.path, state.home)];
+  const rule = d.blocked_by ?? d.path;
+  return state.blocked.filter((p) => p !== rule);
+}
+
+/** Why a typed pattern cannot be added ("" = it can). */
+export function patternError(input: string, existing: string[]): string {
+  const p = input.trim().replace(/\/+$/, "");
+  if (!p) return "填一个目录或通配，例如 ~/.automation/*";
+  if (!p.startsWith("/") && !p.startsWith("~/")) return "要以 / 或 ~/ 开头（~ 是那台电脑的家目录）";
+  if (p === "~" || p === "/") return "不能屏蔽整个家目录或根目录";
+  if (existing.includes(p)) return "已经屏蔽了";
+  return "";
+}
+
+/** The patterns with a typed one added (trimmed, no trailing /). */
+export function withPattern(existing: string[], input: string): string[] {
+  return [...existing, input.trim().replace(/\/+$/, "")];
+}
+
+/** Rules that block none of the listed directories (a glob nothing matches yet, a directory not seen): listed on
+ *  their own so they can be deleted; the others are lifted from the rows they block. */
+export function looseRules(state: ClaudeDirsState): string[] {
+  return state.blocked.filter((p) => !state.dirs.some((d) => d.blocked && (d.blocked_by === p || samePath(p, d.path, state.home))));
+}
+
+/** A pattern written as this directory's path, with ~ or without. */
+function samePath(pattern: string, path: string, home?: string): boolean {
+  return pattern === path || pattern === shortPath(path, home);
+}
+
 // ── 连接器 › 邮箱 › 添加 ──
 
 export type MailKind = "gmail" | "feishu" | "imap";

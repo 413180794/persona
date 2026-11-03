@@ -398,9 +398,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"engine": n.engine()}, nil
 	case "node.configure":
 		var c struct {
-			ClaudeDirs []string           `json:"claude_dirs"`
-			Codex      *proto.CodexConfig `json:"codex"`
-			MachineID  string             `json:"machine_id"`
+			ClaudeDirs []string `json:"claude_dirs"`
+			// ClaudeDirsBlocked: patterns of config directories kept out (claudedirs.go); nil leaves them as they are.
+			ClaudeDirsBlocked *[]string          `json:"claude_dirs_blocked"`
+			Codex             *proto.CodexConfig `json:"codex"`
+			MachineID         string             `json:"machine_id"`
 			// Keep: sessions always listed, however old or crowded out (the assistant's main conversation).
 			Keep *[]string `json:"keep_sessions"`
 		}
@@ -409,6 +411,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if c.ClaudeDirs != nil || c.Keep == nil { // a call that only changes what is kept leaves the directories
 			n.setKnownClaudeDirs(c.ClaudeDirs)
+		}
+		if c.ClaudeDirsBlocked != nil {
+			n.setBlockedClaudeDirs(*c.ClaudeDirsBlocked)
 		}
 		if c.Codex != nil {
 			n.configureCodex(*c.Codex)
@@ -675,6 +680,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		list, err := n.getCodexSettings()
 		return map[string]any{"settings": list}, err
+	case "claude.dirs.list": // every config directory the node knows, blocked ones too (claudedirs.go)
+		return map[string]any{"dirs": n.listClaudeDirs()}, nil
 	case "claude.settings":
 		list, err := n.getClaudeSettings()
 		return map[string]any{"settings": list}, err

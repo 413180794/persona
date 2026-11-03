@@ -40,6 +40,31 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   只显示第一次和放弃时那次；`error` 在别的行里可能是字符串，解析时按原始 JSON 取。同一条 `<task-notification>` 常同时写成 user 行和
   queued_command，内容完全相同的只显示一次（同一任务内容不同的多次通知都是真事件）。
 
+## 屏蔽配置目录（#676）
+
+有的机器上跑着自动化脚本，用单独的 `CLAUDE_CONFIG_DIR` 起 claude，每隔几分钟一条新会话。node 每 30 秒扫描运行中 claude 的环境变量，
+会把这些目录找出来上报，hub 记进 `settings` 的 `claude_dirs/<机器 id>`，于是 Agents 里堆满离线的自动化会话；手动删记录没用（下次扫描又找回来），
+免打扰（`/api/v1/mutes`）按空间 / 单个会话，管不到这种没有空间、数量不停增长的会话。所以按机器**屏蔽**配置目录：
+
+- 规则存在 hub 的 `settings`：`claude_dirs_blocked/<机器 id>`，一个字符串数组。每条是路径或 `filepath.Match` 通配（`~/.automation/*`），
+  必须以 `/` 或 `~/` 开头（`~` 是那台机器的家目录）；匹配的是目录本身或它的上级（屏蔽 `~/.automation` 也屏蔽它下面的）。匹配函数在
+  `proto.ClaudeDirBlocked`，hub 和 node 共用。
+- node（`node/claudedirs.go`）：`node.configure` 带 `claude_dirs_blocked`。`claudeConfigDirs()` 跳过匹配的目录（原路径和真实路径都比），
+  所有按目录找东西的地方（离线会话列表、按 id 找 transcript、用量、记忆、设置页）都经过它，所以屏蔽的目录不会被读；扫描到的目录照样记在内存里（取消屏蔽立刻生效），
+  但**不上报**；取消屏蔽时把之前压着的目录补报一次。node 自己的默认目录（`$CLAUDE_CONFIG_DIR` 或 `~/.claude`）永远不屏蔽：Persona 启动的会话在那里。
+- hub（`hub/claudedirs.go`）：发给 node 的 `claude_dirs`（hub.json 配的 + 记住的）先去掉屏蔽的；`claude.dirs` 上报里屏蔽的不记（旧 node 照样会报）；
+  改规则时删掉记录里被屏蔽的，再对在线的 node 重新 `node.configure` 并拉一次 `sessions.list`，App 随会话列表的广播更新。不在线就等下次连上时的 configure。
+- 只是不显示，**不删文件**。取消屏蔽后会话按原来的规则（最近 7 天、最多 80 个离线会话）回到列表。
+- 局限：herdr 窗格里正在跑的 claude 即使配置目录被屏蔽，窗格本身照样在列表里（那是你正在用的终端）；旧版 node 不认 `claude_dirs_blocked`，
+  只能靠 hub 不记、不下发，扫描到的照样列出来，部署新 node 后才完整生效。知识库里已经归档的会话不动。
+- 接口：`GET /api/v1/machines/{mid}/claude-dirs`（node 的 `claude.dirs.list`：每个目录、来源、会话数、正在运行的数量、被哪条规则屏蔽；
+  机器不在线或 node 较旧时用 hub 的记录，`live: false`），`PUT /api/v1/machines/{mid}/claude-dirs/blocked {"blocked": [...]}`（整份替换，回新的状态）。
+- 界面：设置 › Claude Code（iOS `ClaudeDirsSection`、网页 `settings/ClaudeDirs.tsx`）的「屏蔽的配置目录」：每个目录一行「屏蔽 / 取消屏蔽」，
+  被通配屏蔽的行写「由规则 … 屏蔽」，取消就是删掉那条规则（它盖住的目录一起恢复）；下面可以手填规则。助手用 `jarvis_settings` 的
+  `agents.blocked_claude_dirs`（get / add / remove，改之前手机确认）。
+- 为什么不在 Agents 列表里对单个会话「屏蔽此目录」：会话没有带配置目录（要给 `proto.Session` 加字段、各端都改），而且要屏蔽的往往是整批
+  会话的来源，在设置里按目录看得更清楚（会话数、是否在跑）。以后需要可以在会话菜单里加一个入口，复用同一个接口。
+
 ## Hooks（只注入 Persona 启动的会话）
 
 `~/.persona/claude-settings.json`（node 启动时生成，命令是 node 二进制自身的 `hook` 模式）：

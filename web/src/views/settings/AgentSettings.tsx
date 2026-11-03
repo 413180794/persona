@@ -21,6 +21,7 @@ import { api, enc, errorText } from "../../lib/api";
 import { machineWithHub } from "../../lib/mesh";
 import { useStore } from "../../lib/store";
 import { Button, cx, EASE, IconButton, Loading, Menu, Spinner, toast, useMenu } from "../../ui/atoms";
+import { ClaudeDirs } from "./ClaudeDirs";
 import { Group, Switch } from "./SettingsParts";
 
 const MACHINE_KEY = "jarvis.agentSettings.machine";
@@ -163,6 +164,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
           ))
         )}
       </Group>
+      {agent === "claude" && <ClaudeDirs key={shown} mid={shown} name={name(shown)} />}
     </>
   );
 }

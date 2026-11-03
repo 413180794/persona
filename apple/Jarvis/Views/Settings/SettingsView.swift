@@ -759,6 +759,7 @@ struct ClaudeSettingsView: View {
             Section {
                 ForEach(settings) { s in row(s) }
             }
+            if agent == .claude, !machineID.isEmpty { ClaudeDirsSection(ref: ref) }
         }
         .themedPage()
         .navigationTitle(agent.title)

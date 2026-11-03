@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Claude Code keeps everything (projects/<cwd>/<session>.jsonl, sessions/<pid>.json, settings.json) under its config
@@ -22,6 +24,9 @@ import (
 //   - the hub's list: hub.json machines[].claude_config_dirs plus directories scanned earlier (node.configure), so a
 //     profile's past sessions stay listed when none of its claudes runs.
 // Directories are compared by their real path: ~/.claude/projects symlinked into a profile is the same directory.
+// Directories the user blocked for this machine (node.configure claude_dirs_blocked, proto.ClaudeDirBlocked) are left
+// out of all of it: not looked in, not reported, their sessions not listed. The node's default directory is never
+// blocked (what Jarvis starts runs there).
 
 // claudeScanEvery is how often running claude processes are scanned for their config directory.
 const claudeScanEvery = 30 * time.Second
@@ -29,6 +34,7 @@ const claudeScanEvery = 30 * time.Second
 type claudeDirs struct {
 	mu        sync.Mutex
 	known     []string           // from the hub: configured and remembered
+	blocked   []string           // from the hub: patterns of directories kept out (proto.ClaudeDirBlocked)
 	found     []string           // seen in running claude processes, in order of discovery
 	byPID     map[int]string     // live claude pid -> its config directory
 	bySession map[string]procEnv // session a live claude runs (its sessions/<pid>.json) -> that claude's environment
@@ -68,11 +74,14 @@ func (n *Node) claudeConfigDirs() []string {
 		d.mu.Unlock()
 	}
 	var out, seen []string
-	for _, c := range cands {
+	for i, c := range cands {
 		c = expandHome(c, n.home)
 		real, err := filepath.EvalSymlinks(c)
 		if err != nil {
 			continue // missing
+		}
+		if i > 0 && n.claudeDirBlocked(c, real) {
+			continue
 		}
 		if !slices.Contains(seen, real) {
 			seen = append(seen, real)
@@ -162,6 +171,73 @@ func (n *Node) primaryClaudeDir() string {
 	return best
 }
 
+// claudeDirBlocked: dir (or its real path) matches a blocked pattern. The default directory never does.
+func (n *Node) claudeDirBlocked(dir, real string) bool {
+	d := n.cdirs
+	if d == nil {
+		return false
+	}
+	d.mu.Lock()
+	blocked := d.blocked
+	d.mu.Unlock()
+	return n.blockedBy(dir, real, blocked)
+}
+
+func (n *Node) blockedBy(dir, real string, patterns []string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	def := expandHome(n.defaultClaudeDir(), n.home)
+	if dir = expandHome(dir, n.home); filepath.Clean(dir) == filepath.Clean(def) {
+		return false
+	}
+	if real != "" {
+		if defReal, err := filepath.EvalSymlinks(def); err == nil && real == defReal {
+			return false
+		}
+	}
+	return proto.ClaudeDirBlocked(dir, n.home, patterns) || (real != "" && proto.ClaudeDirBlocked(real, n.home, patterns))
+}
+
+// reportableDirs: the found directories the hub may remember, those patterns do not block.
+func (n *Node) reportableDirs(found, patterns []string) []string {
+	var out []string
+	for _, dir := range found {
+		real, _ := filepath.EvalSymlinks(expandHome(dir, n.home))
+		if !n.blockedBy(dir, real, patterns) {
+			out = append(out, dir)
+		}
+	}
+	return out
+}
+
+// setBlockedClaudeDirs takes the hub's blocked patterns (node.configure). The session list is rebuilt on its next
+// read; directories found while blocked are reported once unblocked, so the hub remembers them again.
+func (n *Node) setBlockedClaudeDirs(patterns []string) {
+	d := n.cdirs
+	if d == nil {
+		return
+	}
+	patterns = proto.CleanClaudeDirPatterns(patterns)
+	d.mu.Lock()
+	before := d.blocked
+	d.blocked = patterns
+	found, report := slices.Clone(d.found), d.report
+	d.mu.Unlock()
+	if slices.Equal(before, patterns) {
+		return
+	}
+	offlineCache.Lock()
+	offlineCache.at = time.Time{}
+	offlineCache.Unlock()
+	if report == nil {
+		return
+	}
+	if now := n.reportableDirs(found, patterns); len(now) > len(n.reportableDirs(found, before)) {
+		report(now)
+	}
+}
+
 // setKnownClaudeDirs takes the hub's list (node.configure).
 func (n *Node) setKnownClaudeDirs(dirs []string) {
 	if n.cdirs == nil {
@@ -208,17 +284,23 @@ func (n *Node) refreshClaudeDirs() {
 	}
 	d.mu.Lock()
 	d.bySession = bySession
-	added := false
+	var added []string
 	for _, dir := range byPID {
 		if !slices.Contains(d.found, dir) {
 			d.found = append(d.found, dir)
-			added = true
+			added = append(added, dir)
 		}
 	}
 	found, report := slices.Clone(d.found), d.report
 	d.mu.Unlock()
-	if added && report != nil {
-		report(found)
+	// A blocked directory is kept in found (unblocking it lists it again at once) but never reported.
+	if report != nil {
+		d.mu.Lock()
+		blocked := d.blocked
+		d.mu.Unlock()
+		if len(n.reportableDirs(added, blocked)) > 0 {
+			report(n.reportableDirs(found, blocked))
+		}
 	}
 }
 
@@ -331,4 +413,45 @@ func isClaudeCmd(argv []string) bool {
 		return len(argv) > 1 && strings.Contains(argv[1], "claude")
 	}
 	return false
+}
+
+// listClaudeDirs: every config directory the node knows of (default, found in running claudes, from the hub),
+// existing, each once, blocked ones marked: what the settings page offers to block and unblock.
+func (n *Node) listClaudeDirs() []proto.ClaudeDir {
+	n.refreshClaudeDirs()
+	type cand struct{ dir, source string }
+	cands := []cand{{n.defaultClaudeDir(), "default"}}
+	running := map[string]int{}
+	if d := n.cdirs; d != nil {
+		d.mu.Lock()
+		for _, f := range d.found {
+			cands = append(cands, cand{f, "found"})
+		}
+		for _, k := range d.known {
+			cands = append(cands, cand{k, "found"}) // the hub tells config ones apart
+		}
+		for _, dir := range d.byPID {
+			if real, err := filepath.EvalSymlinks(expandHome(dir, n.home)); err == nil {
+				running[real]++
+			}
+		}
+		d.mu.Unlock()
+	}
+	var out []proto.ClaudeDir
+	var seen []string
+	for i, c := range cands {
+		real, err := filepath.EvalSymlinks(expandHome(c.dir, n.home))
+		if err != nil || slices.Contains(seen, real) {
+			continue
+		}
+		seen = append(seen, real)
+		files, _ := filepath.Glob(filepath.Join(real, "projects", "*", "*.jsonl"))
+		r := running[real]
+		if i == 0 {
+			r = 0 // claudes without CLAUDE_CONFIG_DIR are not scanned: unknown
+		}
+		out = append(out, proto.ClaudeDir{Path: c.dir, Default: i == 0, Blocked: i > 0 && n.claudeDirBlocked(c.dir, real),
+			Source: c.source, Running: r, Sessions: len(files)})
+	}
+	return out
 }

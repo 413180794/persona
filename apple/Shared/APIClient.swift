@@ -748,6 +748,38 @@ nonisolated struct APIClient: Sendable {
             body: SetSetting(key: key, value: value))).settings
     }
 
+    /// One Claude Code config directory of a machine (CLAUDE_CONFIG_DIR), as 设置 › Claude Code › 屏蔽的配置目录 lists it.
+    struct ClaudeDir: Codable, Identifiable, Sendable, Equatable {
+        var path: String
+        var isDefault: Bool?
+        var blocked: Bool?
+        /// The rule that blocks it, as written (a glob, or its own path).
+        var blockedBy: String?
+        /// "default", "config" (hub.json), "found" (a running claude used it).
+        var source: String
+        var running: Int
+        var sessions: Int?
+        var id: String { path }
+        enum CodingKeys: String, CodingKey {
+            case path, isDefault = "default", blocked, blockedBy = "blocked_by", source, running, sessions
+        }
+    }
+    struct ClaudeDirsState: Codable, Sendable, Equatable {
+        var dirs: [ClaudeDir]
+        var blocked: [String]
+        var home: String?
+        /// false: the hub's own record (the machine is offline or its node is older).
+        var live: Bool
+    }
+    struct SetBlockedClaudeDirs: Encodable { var blocked: [String] }
+    func claudeDirs(machine: String) async throws -> ClaudeDirsState {
+        try await get("/api/v1/machines/\(machine)/claude-dirs", as: ClaudeDirsState.self)
+    }
+    func setBlockedClaudeDirs(machine: String, blocked: [String]) async throws -> ClaudeDirsState {
+        try JSON.decoder.decode(ClaudeDirsState.self, from: try await request("PUT", "/api/v1/machines/\(machine)/claude-dirs/blocked",
+            body: SetBlockedClaudeDirs(blocked: blocked)))
+    }
+
     func interactions() async throws -> [Interaction] {
         stamp(try await get("/api/v1/interactions", as: InteractionsResponse.self).interactions)
     }

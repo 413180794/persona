@@ -1476,6 +1476,37 @@ def _codex_settings():  # 设置 › Codex 设置: the node's whitelist (server/
 
 CLAUDE_SETTINGS = {}  # machine id → its settings, made on first use
 CODEX_SETTINGS = {}
+
+# 设置 › Claude Code › 屏蔽的配置目录 (server/internal/hub/claudedirs.go): machine id → blocked patterns; the directories
+# every machine has (home written as ~ here, expanded with the machine's home).
+CLAUDE_DIRS_BLOCKED = {}
+_CLAUDE_DIRS = [("~/.claude", "default", 0, 86), ("~/.config/claude/work", "config", 2, 41),
+                ("~/.automation/claude-model-a", "found", 1, 132), ("~/.automation/claude-model-b", "found", 0, 97),
+                ("~/.automation/claude-relay", "found", 1, 18)]
+
+
+def _claude_dirs_state(mid):
+    import fnmatch
+    home = next((m.get("home") for m in MACHINES if m["id"] == mid), "") or "/home/me"
+    pats = CLAUDE_DIRS_BLOCKED.get(mid, [])
+    exp = lambda x: home + x[1:] if x.startswith("~/") else x
+    def by(path):
+        for pat in pats:
+            c = exp(path)
+            while c not in ("", "/"):
+                if fnmatch.fnmatchcase(c, exp(pat)):
+                    return pat
+                c = os.path.dirname(c)
+        return ""
+    dirs = []
+    for path, source, running, sessions in _CLAUDE_DIRS:
+        d = {"path": exp(path), "source": source, "running": running, "sessions": sessions}
+        if source == "default":
+            d["default"] = True
+        elif by(path):
+            d["blocked"], d["blocked_by"] = True, by(path)
+        dirs.append(d)
+    return {"dirs": dirs, "blocked": pats, "home": home, "live": machine_online(mid)}
 KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /mock/keys)
 UPLOADS = []  # files received (GET /mock/uploads)
 SENT = []  # bodies of sends, one per client_msg_id (GET /mock/sent)
@@ -4236,6 +4267,8 @@ class H(BaseHTTPRequestHandler):
                                                  {"name": "codex", "model": "gpt-5.5", "agent": "codex"}]})  # Codex: 从手机新建
         if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings"):
             return self.send_json({"settings": CLAUDE_SETTINGS.setdefault(p.split("/")[4], _claude_settings())})
+        if p.startswith("/api/v1/machines/") and p.endswith("/claude-dirs"):
+            return self.send_json(_claude_dirs_state(p.split("/")[4]))
         if p.startswith("/api/v1/machines/") and p.endswith("/codex-settings"):
             return self.send_json({"settings": CODEX_SETTINGS.setdefault(p.split("/")[4], _codex_settings())})
         if p.startswith("/api/v1/sessions/") and p.endswith("/items"):
@@ -4959,6 +4992,17 @@ class H(BaseHTTPRequestHandler):
                                        "code": "prompt_changed", "delivered": "none"}, 409)
             resolve_mock_interaction(p.split("/")[4], json.loads(self.last_body or b"{}"))
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/machines/") and p.endswith("/claude-dirs/blocked") and self.command == "PUT":
+            body, mid = json.loads(self.last_body or b"{}"), p.split("/")[4]
+            pats = []
+            for x in body.get("blocked") or []:
+                x = x.strip().rstrip("/")
+                if x and x not in ("~", "/") and x not in pats:
+                    if not (x.startswith("/") or x.startswith("~/")):
+                        return self.send_json({"error": "bad pattern %r: a path or glob starting with / or ~/" % x}, 400)
+                    pats.append(x)
+            CLAUDE_DIRS_BLOCKED[mid] = pats
+            return self.send_json(_claude_dirs_state(mid))
         if p.startswith("/api/v1/machines/") and (p.endswith("/claude-settings") or p.endswith("/codex-settings")) and self.command == "PUT":
             body, mid = json.loads(self.last_body or b"{}"), p.split("/")[4]
             if not machine_online(mid):

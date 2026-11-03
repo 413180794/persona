@@ -18,7 +18,7 @@ data class NotificationRoute(val tab: AppTab?, val chat: ChatRoute? = null) {
         )
 
         fun parse(uri: Uri): NotificationRoute? {
-            if (uri.scheme != "jarvis" || uri.host != "open") return null
+            if (uri.scheme !in setOf("persona", "jarvis") || uri.host != "open") return null
             val tab = when (uri.getQueryParameter("tab")) {
                 "jarvis" -> AppTab.Jarvis
                 "agents" -> AppTab.Agents

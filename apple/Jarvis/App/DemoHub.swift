@@ -28,6 +28,8 @@ final class DemoHub {
     private var lark: [String: [JSONValue]] = [:]
     private var tasks: [JSONValue] = []
     private var modelBindings: [String: JSONValue] = [:]
+    /// 设置 › Claude Code › 屏蔽的配置目录: machine id → the rules typed in the demo (it has no other directories).
+    private var blockedClaudeDirs: [String: [JSONValue]] = [:]
     private var memory: [JSONValue] = []
     private var prefs: JSONValue = .object([:])
     private var pins: JSONValue = .object([:])
@@ -105,6 +107,12 @@ final class DemoHub {
         load()
         let out = try route(req)
         return try JSON.encoder.encode(out)
+    }
+
+    private func claudeDirsState(_ id: String) -> JSONValue {
+        let home = machines.first(where: { $0["id"]?.string == id })?["home"]?.string ?? "/Users/demo"
+        let dir: JSONValue = ["path": .string(home + "/.claude"), "default": true, "source": "default", "running": 0]
+        return ["dirs": [dir], "blocked": .array(blockedClaudeDirs[id] ?? []), "home": .string(home), "live": true]
     }
 
     private func body(_ req: LocalRequest) -> JSONValue {
@@ -193,6 +201,7 @@ final class DemoHub {
                 guard online(id) else { throw APIError(status: 503, message: "\(id): machine is offline") }
                 return data["dirs"] ?? .object([:])
             case "claude-settings", "codex-settings": return ["settings": .array([])]
+            case "claude-dirs": return claudeDirsState(id)
             #if os(macOS)
             case "file": // the Mac's file viewer (and its ⌘F find): one made-up source file, whatever is asked for
                 let path = q["path"] ?? "Sources/Forecast.swift"
@@ -372,6 +381,9 @@ final class DemoHub {
                 return .object(o)
             }
             return ["ok": true]
+        case ("machines", 4) where p[2] == "claude-dirs" && p[3] == "blocked" && method == "PUT":
+            blockedClaudeDirs[p[1]] = body["blocked"]?.array ?? []
+            return claudeDirsState(p[1])
         case ("machines", 3) where p[2] == "engine" && method == "PUT":
             guard let i = machines.firstIndex(where: { $0["id"]?.string == p[1] }), case .object(var machine) = machines[i] else { throw notFound() }
             guard let raw = body["engine"]?.string,

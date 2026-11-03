@@ -78,6 +78,9 @@ func (h *Hub) selfSettings() []selfSetting {
 			get:   h.getAssistantLauncher,
 			set:   h.setAssistantLauncher},
 	}
+	if h.store != nil {
+		out = append(out, h.blockedClaudeDirsSetting())
+	}
 	if h.mail != nil {
 		out = append(out, selfSetting{key: "mail.accounts", title: "邮箱",
 			about: "the user's mail accounts: Jarvis reads them in the inbox and mail_* use them. add connects (IMAP and SMTP) before saving; " +

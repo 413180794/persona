@@ -70,6 +70,23 @@ class RouterTest {
         assertNull(router.parseDebug(mapOf("debug.openRequest" to "request")))
     }
 
+    @Test fun personaDeepLinksPreserveLegacyRoutesAndTransientCredentials() {
+        for (suffix in listOf("open?machine=machine&session=assistant", "open?machine=machine&session=agent",
+            "open?target=inbox&item=item", "open?target=settings&page=notifications")) {
+            val legacy = router.parse(RouteInput.DeepLink("jarvis://$suffix"))!!
+            assertRoute(router.parse(RouteInput.DeepLink("persona://$suffix")), legacy.tab, legacy.key)
+        }
+        val pair = "persona://pair?url=https%3A%2F%2Fhub.example.com&token=fixture"
+        val route = router.parse(RouteInput.DeepLink(pair))
+        assertRoute(route, AppTab.Settings, PairingRoute)
+        assertEquals(pair, route?.pairingLink)
+        assertRoute(router.parseDebug(mapOf("debug.openPairing" to pair)), AppTab.Settings, PairingRoute)
+        for (suffix in listOf("open/path?machine=machine&session=agent", "open?machine=machine&session=",
+            "open?machine=machine&session=agent&session=assistant", "open?machine=machine&session=%ZZ", "open#fragment")) {
+            assertNull(router.parse(RouteInput.DeepLink("persona://$suffix")))
+        }
+    }
+
     @Test fun restoredIdentityReusesExistingEntriesAndKeepsSourcesSerializable() {
         val stacks = AppTab.entries.associateWith { mutableListOf(tabRoot(it)) }
         val sources = listOf(RouteSource.InboxItem("item"), RouteSource.LarkConversation("chat"),

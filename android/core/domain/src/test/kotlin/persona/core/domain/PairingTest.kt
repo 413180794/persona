@@ -5,6 +5,15 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PairingTest {
+    @Test fun personaLinksPreserveTheLegacyPairingRules() {
+        val old = "jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=fixture&hub=example-hub&tls=18661" +
+            "&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D%3A18661&token=ignored"
+        assertEquals(Pairing.parse(old), Pairing.parse(old.replaceFirst("jarvis://", "persona://")))
+        for (suffix in listOf("pair?url=https://hub.example.com", "other?url=https://hub.example.com&token=fixture",
+            "pair?url=ftp://hub.example.com&token=fixture", "pair?url=https://hub.example.com&token=+")) {
+            assertNull(Pairing.parse("persona://$suffix"))
+        }
+    }
     @Test fun legacyLinkKeepsItsUrlAndToken() {
         assertEquals(Pairing("http://192.0.2.1:18660/", "mock"), Pairing.parse(
             "  jarvis://pair?url=http%3A%2F%2F192.0.2.1%3A18660%2F&token=mock  ",

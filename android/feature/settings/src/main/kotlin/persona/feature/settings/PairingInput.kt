@@ -8,7 +8,7 @@ import javax.net.ssl.SSLException
 object PairingInput {
     fun parse(link: String): PairingRequest {
         val uri = runCatching { URI(link.trim()) }.getOrNull()
-        if (uri?.scheme != "jarvis" || uri.rawAuthority != "pair") invalid()
+        if (uri?.scheme !in setOf("persona", "jarvis") || uri?.rawAuthority != "pair") invalid()
         val parsed = Pairing.parse(link) ?: invalid()
         val keys = uri.rawQuery.orEmpty().split('&').map { it.substringBefore('=') }
         if (keys.filter { it != "alt" }.groupingBy { it }.eachCount().any { it.value > 1 }) invalid()
@@ -17,7 +17,8 @@ object PairingInput {
     }
 
     fun manual(address: String, token: String): PairingRequest =
-        if (address.trim().startsWith("jarvis:")) parse(address) else validate(PairingRequest(address.trim(), token.trim()))
+        if (listOf("persona:", "jarvis:").any(address.trim()::startsWith)) parse(address)
+        else validate(PairingRequest(address.trim(), token.trim()))
 
     private fun validate(request: PairingRequest): PairingRequest {
         if (request.token.isBlank() || request.tls?.let { it !in 1..65535 } == true) invalid()

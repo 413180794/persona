@@ -63,6 +63,19 @@ class ShellRoutesTest {
         assertNull(inboxDestination(InboxRoute, records, true))
     }
 
+    @Test fun personaTerminalLinksRetainTheLegacyStack() {
+        val link = "persona://open?target=terminal&machine=mac%20mini&session=a%2Bb"
+        val route = terminalLink(link)!!
+        val old = terminalLink(link.replaceFirst("persona://", "jarvis://"))!!
+        assertEquals(old.key, route.key)
+        assertEquals(old.tab, route.tab)
+        val stacks = stacks()
+        assertEquals(AppTab.Agents, route.open(stacks))
+        assertEquals(listOf(AgentsRoute, ChatRoute("mac mini", "a+b", ConversationKind.Agent), TerminalRoute("mac mini", "a+b")),
+            stacks.getValue(AppTab.Agents))
+        assertNull(terminalLink("persona://open?target=terminal&machine=m&session=s&session=t"))
+    }
+
     @Test fun terminalNotificationLinksOpenTheTerminalAboveItsConversation() {
         val route = terminalLink("jarvis://open?target=terminal&machine=mac%20mini&session=a%2Bb")!!
         assertEquals(TerminalRoute("mac mini", "a+b"), route.key)

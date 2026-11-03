@@ -13,7 +13,14 @@ import {
   textValue,
   valueText,
   withValue,
+  dirMeta,
+  looseRules,
+  patternError,
+  shortPath,
+  toggledPatterns,
+  withPattern,
   type AgentSetting,
+  type ClaudeDirsState,
 } from "./agent-settings";
 
 const recap: AgentSetting = { key: "awaySummaryEnabled", title: "离开回顾", detail: "", type: "bool", default: true, value: null };
@@ -110,5 +117,43 @@ describe("mail account form", () => {
     expect(mailSummary([])).toBe("未添加");
     expect(mailSummary([{ id: "a", email: "x", status: "error" }, { id: "b", email: "y" }])).toBe("2 个 · 有错误");
     expect(mailSummary([{ id: "a", email: "x" }])).toBe("1 个账户");
+  });
+});
+
+describe("blocked claude dirs", () => {
+  const state: ClaudeDirsState = {
+    home: "/home/me",
+    live: true,
+    blocked: ["~/.automation/*", "/opt/x"],
+    dirs: [
+      { path: "/home/me/.claude", default: true, source: "default", running: 0, sessions: 40 },
+      { path: "/home/me/.automation/a", blocked: true, blocked_by: "~/.automation/*", source: "found", running: 1, sessions: 120 },
+      { path: "/home/me/.config/cc/work", source: "config", running: 0 },
+    ],
+  };
+  it("reads paths and rows", () => {
+    expect(shortPath("/home/me/.automation/a", "/home/me")).toBe("~/.automation/a");
+    expect(shortPath("/home/user/x", "/home/me")).toBe("/home/user/x");
+    expect(dirMeta(state.dirs[0])).toBe("默认目录，不能屏蔽 · 40 个会话");
+    expect(dirMeta(state.dirs[1])).toBe("自动发现 · 120 个会话 · 1 个正在运行 · 由规则 ~/.automation/* 屏蔽");
+    expect(dirMeta(state.dirs[2])).toBe("hub.json 里配的");
+  });
+  it("blocks a directory by its path and lifts the rule that blocks one", () => {
+    expect(toggledPatterns(state, state.dirs[2])).toEqual(["~/.automation/*", "/opt/x", "~/.config/cc/work"]);
+    expect(toggledPatterns(state, state.dirs[1])).toEqual(["/opt/x"]);
+    expect(looseRules(state)).toEqual(["/opt/x"]); // the glob is lifted from the row it blocks
+    // A directory blocked by its own path, written with ~: one row, no separate rule, no "由规则".
+    const own: ClaudeDirsState = { ...state, blocked: ["~/.automation/a"], dirs: [{ ...state.dirs[1], blocked_by: "~/.automation/a" }] };
+    expect(looseRules(own)).toEqual([]);
+    expect(dirMeta(own.dirs[0], own.home)).toBe("自动发现 · 120 个会话 · 1 个正在运行");
+    expect(toggledPatterns(own, own.dirs[0])).toEqual([]);
+  });
+  it("checks typed patterns", () => {
+    expect(patternError("", [])).not.toBe("");
+    expect(patternError("relative", [])).toContain("开头");
+    expect(patternError("~", [])).not.toBe("");
+    expect(patternError("/opt/x/", ["/opt/x"])).toBe("已经屏蔽了");
+    expect(patternError(" ~/.bots/* ", [])).toBe("");
+    expect(withPattern(["/a"], " ~/.bots/ ")).toEqual(["/a", "~/.bots"]);
   });
 });

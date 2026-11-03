@@ -1,0 +1,96 @@
+package hub
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// jarvis_settings agents.blocked_claude_dirs: the Claude Code config directories kept out of Agents, per machine
+// (claudedirs.go). Same as the machine settings page (PUT /api/v1/machines/{mid}/claude-dirs/blocked).
+
+func (h *Hub) blockedClaudeDirsSetting() selfSetting {
+	return selfSetting{key: "agents.blocked_claude_dirs", title: "屏蔽的 Claude 配置目录",
+		about: "per machine, Claude Code config directories (CLAUDE_CONFIG_DIR) whose sessions are kept out of Agents: " +
+			"not scanned, not remembered, their sessions not listed (for automations that run claude with a directory of " +
+			"their own). get lists each machine's directories and patterns",
+		value: `add: {"machine": machine id, "pattern": a path or glob starting with / or ~/ (~ is that machine's home), ` +
+			`e.g. "~/.automation/*"}; remove: "<machine id>:<pattern>"`,
+		get: h.getBlockedClaudeDirs, add: h.addBlockedClaudeDir, remove: h.removeBlockedClaudeDir}
+}
+
+func (h *Hub) getBlockedClaudeDirs(ctx context.Context) (string, error) {
+	var b strings.Builder
+	for _, m := range h.machinesNow() {
+		st := m.claudeDirsState(ctx)
+		fmt.Fprintf(&b, "%s (%s): blocked %s\n", m.cfg.ID, m.cfg.Name, orNone(strings.Join(st.Blocked, ", ")))
+		for _, d := range st.Dirs {
+			state := "listed"
+			switch {
+			case d.Default:
+				state = "default, never blocked"
+			case d.Blocked:
+				state = "blocked"
+			}
+			fmt.Fprintf(&b, "  - %s (%s; %d sessions, %d running)\n", d.Path, state, d.Sessions, d.Running)
+		}
+	}
+	if b.Len() == 0 {
+		return "No machines.", nil
+	}
+	return b.String(), nil
+}
+
+func (h *Hub) addBlockedClaudeDir(ctx context.Context, v json.RawMessage) (*selfChange, error) {
+	var a struct {
+		Machine string `json:"machine"`
+		Pattern string `json:"pattern"`
+	}
+	if err := json.Unmarshal(v, &a); err != nil {
+		return nil, errors.New(`value must be {"machine", "pattern"}`)
+	}
+	m := h.localMachine(a.Machine)
+	if m == nil {
+		return nil, fmt.Errorf("no machine %q", a.Machine)
+	}
+	p := strings.TrimSuffix(strings.TrimSpace(a.Pattern), "/")
+	if len(proto.CleanClaudeDirPatterns([]string{p})) == 0 || !proto.ValidClaudeDirPattern(p) {
+		return nil, fmt.Errorf("bad pattern %q: a path or glob starting with / or ~/", a.Pattern)
+	}
+	now := m.blockedClaudeDirs(ctx)
+	if slices.Contains(now, p) {
+		return &selfChange{summary: p + " is already blocked on " + m.cfg.ID + "."}, nil
+	}
+	return &selfChange{summary: fmt.Sprintf("在 %s 上屏蔽 Claude 配置目录 %s（里面的会话不再出现在 Agents，文件不动）", m.cfg.Name, p),
+		apply: func(ctx context.Context, _ map[string]string) (string, error) {
+			if err := m.setBlockedClaudeDirs(ctx, append(m.blockedClaudeDirs(ctx), p)); err != nil {
+				return "", err
+			}
+			return "Blocked " + p + " on " + m.cfg.ID + ".", nil
+		}}, nil
+}
+
+func (h *Hub) removeBlockedClaudeDir(ctx context.Context, id string) (*selfChange, error) {
+	mid, p, ok := strings.Cut(id, ":")
+	m := h.localMachine(strings.TrimSpace(mid))
+	if !ok || m == nil {
+		return nil, fmt.Errorf("remove takes \"<machine id>:<pattern>\", got %q", id)
+	}
+	p = strings.TrimSuffix(strings.TrimSpace(p), "/")
+	if !slices.Contains(m.blockedClaudeDirs(ctx), p) {
+		return nil, fmt.Errorf("%s is not blocked on %s (get lists the patterns)", p, m.cfg.ID)
+	}
+	return &selfChange{summary: fmt.Sprintf("在 %s 上取消屏蔽 Claude 配置目录 %s（里面的会话重新出现在 Agents）", m.cfg.Name, p),
+		apply: func(ctx context.Context, _ map[string]string) (string, error) {
+			rest := slices.DeleteFunc(m.blockedClaudeDirs(ctx), func(s string) bool { return s == p })
+			if err := m.setBlockedClaudeDirs(ctx, rest); err != nil {
+				return "", err
+			}
+			return "Unblocked " + p + " on " + m.cfg.ID + ".", nil
+		}}, nil
+}

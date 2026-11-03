@@ -36,6 +36,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="jarvis" android:host="pair" />
                 <data android:scheme="jarvis" android:host="open" />
+                <data android:scheme="persona" android:host="pair" />
+                <data android:scheme="persona" android:host="open" />
             </intent-filter>
         </activity>
 

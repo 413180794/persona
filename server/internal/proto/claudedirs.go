@@ -1,0 +1,101 @@
+package proto
+
+import (
+	"path/filepath"
+	"strings"
+)
+
+// Blocked Claude Code config directories (docs/claude-integration.md「屏蔽配置目录」): per machine, patterns the user
+// keeps out of Jarvis — the node neither looks in nor reports a matching directory, the hub does not remember it, and
+// its sessions are not listed. Both the hub and the node match with ClaudeDirBlocked.
+
+// CleanClaudeDirPatterns trims, drops empty ones and duplicates, and keeps the order.
+func CleanClaudeDirPatterns(in []string) []string {
+	var out []string
+	for _, p := range in {
+		p = strings.TrimSpace(p)
+		if p == "" || p == "~" || p == "/" {
+			continue // would block everything
+		}
+		p = strings.TrimSuffix(p, "/")
+		if !containsString(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// ValidClaudeDirPattern: a pattern filepath.Match understands, rooted at / or ~/.
+func ValidClaudeDirPattern(p string) bool {
+	if !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "~/") {
+		return false
+	}
+	_, err := filepath.Match(p, "")
+	return err == nil
+}
+
+// ClaudeDirBlocked: dir (a CLAUDE_CONFIG_DIR value, "~/…" or absolute) matches a pattern, or sits under a directory
+// that does. A pattern is a path or a filepath.Match glob ("~/.automation/*"); "~" in both stands for home, the
+// home directory on the machine the directory is on. With home unknown ("") only patterns and directories written
+// the same way match.
+func ClaudeDirBlocked(dir, home string, patterns []string) bool {
+	return ClaudeDirBlockedBy(dir, home, patterns) != ""
+}
+
+// ClaudeDirBlockedBy is the first pattern that blocks dir ("" when none does), as the user wrote it.
+func ClaudeDirBlockedBy(dir, home string, patterns []string) string {
+	if dir == "" || len(patterns) == 0 {
+		return ""
+	}
+	d := filepath.Clean(expandTilde(dir, home))
+	for _, raw := range patterns {
+		p := filepath.Clean(expandTilde(raw, home))
+		for c := d; ; {
+			if ok, _ := filepath.Match(p, c); ok {
+				return raw
+			}
+			parent := filepath.Dir(c)
+			if parent == c || parent == "." || parent == "/" || parent == "~" {
+				break
+			}
+			c = parent
+		}
+	}
+	return ""
+}
+
+func expandTilde(p, home string) string {
+	if home == "" {
+		return p
+	}
+	if p == "~" {
+		return home
+	}
+	if strings.HasPrefix(p, "~/") {
+		return filepath.Join(home, p[2:])
+	}
+	return p
+}
+
+func containsString(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// ClaudeDir is one config directory of a machine as the settings page lists it (GET /api/v1/machines/{mid}/claude-dirs).
+type ClaudeDir struct {
+	Path    string `json:"path"`              // as Claude Code was given it ("~/…" or absolute)
+	Default bool   `json:"default,omitempty"` // the node's own default (~/.claude): never blocked
+	Blocked bool   `json:"blocked,omitempty"`
+	// BlockedBy: the pattern that blocks it, as written (a glob, or its own path).
+	BlockedBy string `json:"blocked_by,omitempty"`
+	// Source: "default"; "config" (hub.json machines[].claude_config_dirs); "found" (a running claude used it, now or
+	// before: remembered by the hub).
+	Source   string `json:"source"`
+	Running  int    `json:"running"`            // claudes running from it now (0 when the node did not say)
+	Sessions int    `json:"sessions,omitempty"` // transcripts in it (projects/*/*.jsonl)
+}

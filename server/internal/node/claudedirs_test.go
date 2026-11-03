@@ -228,3 +228,66 @@ func TestTheNewestCopyOfATranscriptWins(t *testing.T) {
 		t.Fatalf("after the move back: %s", p)
 	}
 }
+
+// A blocked directory (an automation's own CLAUDE_CONFIG_DIR, a new session every few minutes) is not looked in, not
+// reported to the hub however often a claude runs from it, and its sessions are not listed; unblocked, they are back
+// and the hub hears about it again.
+func TestBlockedDirsAreLeftOut(t *testing.T) {
+	n, profile := claudeHome(t)
+	bot := filepath.Join(n.home, ".automation", "claude-a")
+	const botID = "dddddddd-0000-0000-0000-000000000004"
+	p := filepath.Join(bot, "projects", "-src-bot")
+	_ = os.MkdirAll(p, 0o700)
+	_ = os.WriteFile(filepath.Join(p, botID+".jsonl"), []byte("{}\n"), 0o600)
+	n.cdirs.scan = func() map[int]procEnv { return map[int]procEnv{4242: {ConfigDir: profile}, 4343: {ConfigDir: bot}} }
+	var reports [][]string
+	n.cdirs.report = func(d []string) { reports = append(reports, d) }
+	n.setBlockedClaudeDirs([]string{"~/.automation/*"})
+	n.setKnownClaudeDirs([]string{bot}) // remembered by an older hub: blocked all the same
+
+	dirs := n.claudeConfigDirs()
+	if slices.Contains(dirs, bot) || !slices.Contains(dirs, profile) {
+		t.Fatalf("config dirs %v", dirs)
+	}
+	if n.transcriptPath(botID) != "" {
+		t.Fatal("a blocked directory's transcript is found")
+	}
+	if len(reports) != 1 || !slices.Equal(reports[0], []string{profile}) {
+		t.Fatalf("reported %v", reports)
+	}
+	// Another scan, the same claudes: nothing new to report.
+	n.cdirs.scanned = time.Time{}
+	n.claudeConfigDirs()
+	if len(reports) != 1 {
+		t.Fatalf("reported again: %v", reports)
+	}
+
+	n.setBlockedClaudeDirs(nil)
+	if !slices.Contains(n.claudeConfigDirs(), bot) || n.transcriptPath(botID) == "" {
+		t.Fatal("unblocked, the directory is searched again")
+	}
+	if len(reports) != 2 || !slices.Contains(reports[1], bot) {
+		t.Fatalf("unblocking reports the directory: %v", reports)
+	}
+}
+
+func TestDefaultDirIsNeverBlocked(t *testing.T) {
+	n, _ := claudeHome(t)
+	n.setBlockedClaudeDirs([]string{"~/.claude", "~/.config/cc/*"})
+	if dirs := n.claudeConfigDirs(); len(dirs) != 1 || dirs[0] != filepath.Join(n.home, ".claude") {
+		t.Fatalf("dirs %v", dirs)
+	}
+}
+
+// claude.dirs.list shows every directory, the blocked ones marked, with their sessions and running claudes.
+func TestListClaudeDirs(t *testing.T) {
+	n, profile := claudeHome(t)
+	n.setBlockedClaudeDirs([]string{"~/.config/cc/*"})
+	if slices.Contains(n.claudeConfigDirs(), profile) {
+		t.Fatal("blocked directory still searched")
+	}
+	dirs := n.listClaudeDirs()
+	if len(dirs) != 2 || !dirs[0].Default || dirs[0].Blocked || dirs[1].Path != profile || !dirs[1].Blocked || dirs[1].Running != 1 || dirs[1].Sessions != 1 {
+		t.Fatalf("dirs %+v", dirs)
+	}
+}

@@ -62,7 +62,7 @@ class Router(
     private fun deepLink(url: String): ResolvedRoute? {
         val uri = try { URI(url) } catch (_: IllegalArgumentException) { return null }
             catch (_: java.net.URISyntaxException) { return null }
-        if (uri.scheme != "jarvis" || uri.rawAuthority !in setOf("open", "pair") ||
+        if (uri.scheme !in setOf("persona", "jarvis") || uri.rawAuthority !in setOf("open", "pair") ||
             !uri.rawPath.isNullOrEmpty() || uri.rawFragment != null) return null
         if (uri.host == "pair") {
             // PairingInput remains responsible for validating credentials and transport policy.
