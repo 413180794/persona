@@ -42,7 +42,8 @@ TARGETS=("$@")
 deploy_web() {
   [ -f ../web/package.json ] || return 0
   (cd ../web && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build) >/dev/null
-  tar -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" 'set -e; rm -rf ~/.jarvis/web.new; mkdir -p ~/.jarvis/web.new; tar -xzf - -C ~/.jarvis/web.new; rm -rf ~/.jarvis/web.old; [ -d ~/.jarvis/web ] && mv ~/.jarvis/web ~/.jarvis/web.old; mv ~/.jarvis/web.new ~/.jarvis/web; rm -rf ~/.jarvis/web.old'
+  # COPYFILE_DISABLE: macOS tar would add a ._<name> AppleDouble entry per file, which GNU tar unpacks as files.
+  COPYFILE_DISABLE=1 tar -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" 'set -e; rm -rf ~/.jarvis/web.new; mkdir -p ~/.jarvis/web.new; tar -xzf - -C ~/.jarvis/web.new; rm -rf ~/.jarvis/web.old; [ -d ~/.jarvis/web ] && mv ~/.jarvis/web ~/.jarvis/web.old; mv ~/.jarvis/web.new ~/.jarvis/web; rm -rf ~/.jarvis/web.old'
   echo "web: deployed to $JARVIS_HUB_SSH:~/.jarvis/web"
 }
 if [ "${TARGETS[*]}" = web ]; then deploy_web; exit 0; fi
