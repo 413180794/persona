@@ -15,7 +15,7 @@ minSdk 31（Android 12），compileSdk 37，targetSdk 36。界面中文。
 | 配对 | 扫码、手填、配对深链，临时 token 换设备 token；TLS 公钥钉扎、候选探测和重新配对；完成后进入准备清单 |
 | Persona | 首页、主对话、历史抽屉和共用对话页；主对话首句可先进入持久 outbox，恢复连接后解析目标；助手身份确定后保留在 Persona tab |
 | Agents | 页面最上面是搜索框，下面一排电脑芯片（全部机器 + 每台电脑，带在线状态和计数，可横滑），再下面是快速筛选；默认按电脑 → 空间（herdr workspace）→ 会话三层树，靠缩进、字号字重和细线分层，不给每层垫底板（`docs/android-design.md` 2.4 节），电脑和空间都能折叠、栏头带计数；全是已看会话的空闲空间留在所属电脑下面、排在有动静的空间后面，默认收起、样式弱一点，收起时标出会话数；也可按状态分组；置顶 / 屏蔽、请求卡和作答；会话重命名（标签名走 herdr，会话名走 Claude 的 /rename，入口在会话行菜单、空间页和对话页菜单）和空间重命名（空间栏头菜单）发出后列表、空间页、对话页标题立即更新，失败回滚；置顶、屏蔽、重命名、关闭由 App 的 `AgentsWiringModule` 接到 hub |
-| 对话 | 连续性补洞、历史分页、实时 delta、折叠工作过程、Markdown、diff、待办、图片缓存、阅读锚点、待发气泡及人工核对；附件和会话控制需要补齐服务注入 |
+| 对话 | 连续性补洞、历史分页、实时 delta、折叠工作过程、Markdown、diff、待办、图片缓存、阅读锚点、待发气泡及人工核对；输入框见「输入框」，会话控制、来源和能力见「会话控制、会话来源和能力」 |
 | 收件箱 | 飞书和邮件事项统一列表、筛选持久化、AI 操作、回复日志；飞书有窗口缓存、事件刷新、可见已读和基础消息渲染；邮件正文页已有，但 MailTransport 尚未接到 App |
 | 设置 | 配对、准备清单、后台引导、关于和更新；连接诊断里可以手动添加 / 编辑 / 删除 hub 地址、停用候选、拖动排序（列表顺序就是尝试顺序）、逐条测试（见「连接地址」）；设备管理与通知偏好页已有，但 DeviceSettings 尚未注入 |
 | 扩展模块 | 终端、文件、机器监控、知识库、手机工具和体验模式已接入 App，入口见「外壳」一节；体验模式没有示例数据的页面显示说明，不连真实 hub |
@@ -63,6 +63,39 @@ Android 使用 `:platform:notify` 的前台服务共用 hub WebSocket，不依�
 代码：校验、规范写法、类型和顺序在 `core/hub/.../HubEndpoints.kt`；竞速在 `HubRouteSelector`，复查在 `OkHttpHubConnection`；设置页的控制器 `HubEndpointSettings`（实现 `core:contracts` 的 `ConnectionEndpoints`），由 `ConnectionRuntime.endpoints` 交给设置（`PairingModule`）；存储 `core/data/.../EndpointOverridesStore.kt`；页面 `feature/settings/.../EndpointsSection.kt`、`EndpointEditorState.kt` 和拖动 `EndpointDrag.kt`（候选行用 `JRow` 的插槽写法，三套风格的边距自动对齐）。体验模式没有这份服务，连接诊断保持只读。
 
 截图：`MOCK_ENDPOINTS=1 python3 scripts/mock/mock_hub.py --tls-port 0` 让假 hub 额外下发两条连不上的文档地址（`[2001:db8::10]` 和 `hub.example.com`），用来看失败的测试和停用；带指纹配对要用 `jarvis://pair?url=…&token=mock&hub=<hub_id>&fp=<fp>&tls=<TLS 端口>`，`hub_id` 读假 hub 的 `/api/v1/health`，`fp` 和端口看它启动时打印的「TLS 端口=… fp=…」（`debug.mockAddress` 只配明文地址，没有指纹就加不了 https 地址）。
+
+## 输入框（附件、拍照、听写、「/」命令、排队条、被拒消息）
+
+2026-11-02 从主线旧 App 移植（盘点 C1–C4、D1、D7）。对话页和 Persona 的输入框都是 `feature/chat` 的 `ChatComposer`，下面的行为两处一样（排队条只在 Agents 的对话里）。
+
+- 照片和文件：「+ › 照片」最多 4 张，选中立刻上传到那台电脑（`POST /api/v1/machines/{mid}/files`），长边缩到 1600、JPEG 质量 75（和 iOS 一样）。照片在输入框上方排成一行 64dp 方形缩略图（设计系统 `AttachmentThumb`，在后台按缩略图尺寸解码），右上角 ✕「移除这张」；上传中压暗加转圈，失败描红边、标「重试」，点一下重传，原因在缩略图下面写一行；读不出来、或「撤回编辑」恢复的只在电脑上的照片显示占位图标。文件仍一行一个（名字、状态、重试、✕）。选文件时按 `OpenableColumns.SIZE` 预检，超过 200 MB 直接标成失效「「名字」超过 200 MB，传不了」，不拷贝也不上传；读不到大小的照旧边拷边数。只有照片、没有字也没有文件时，发出去的正文是「请看图片」，照片照旧写成 `<attached_images>` 标签。从相机、文件选择器回来时连接常还在补拉，上传先等 `readyToSend` 最多 15 秒（`UPLOAD_READY_WAIT_MILLIS`，配置值，未实测），再报「连接恢复后重试上传」。离线时照片不随消息排队（已拍板不做）。
+- 拍照：App 为扫码配对声明了 CAMERA，安卓规定这时要先授权才能拉起别的相机 App。「+ › 拍照」先查授权，没有就 `RequestPermission`；拒绝（含「不再询问」）弹「需要相机权限」，说明可以到系统设置 › 应用 › {App 名} › 权限里打开，「去设置」打开本 App 的系统设置详情页。没有相机 App 时提示「这台手机上没有能拍照的应用」。拍的原图在 `cache/chat-captures`（FileProvider `${applicationId}.chat.files`），只在它离开所属草稿时删除（✕ 移除，或发出后输入框清空）：输入框按附件 id 盯着自己草稿的变化删，从不扫目录（别的会话的草稿可能还引用同一目录里的文件）。代码 `ComposerCamera.kt`。
+- 听写：没东西可发时，发送键的位置是麦克风（「听写」）；Agent 工作中且没内容时麦克风在「停止」左边；有内容时是发送。点了打开手机自带的语音输入（`RecognizerIntent.ACTION_RECOGNIZE_SPEECH`，`LANGUAGE_MODEL_FREE_FORM`、`zh-CN`、提示「说吧，说完会放进输入框」），哪家的识别都行，不依赖 Google 服务，App 不录音、不要麦克风权限。没有识别器时不显示按钮（`feature/chat` 的 manifest 声明了 `<queries>`，安卓 11+ 不声明查不到），启动失败提示「这台手机上没有语音输入」。听到的字接在草稿末尾、光标放末尾，不按选区插入（`withDictation`：先去掉草稿尾部空白；草稿末尾是 ASCII 字母数字、且听到的第一个字也是 ASCII 时中间加一个空格，中文直接接上）。代码 `Dictation.kt`。
+- 「/」快捷命令：命令表 `SlashCommand`（和 iOS 同一组：继续 `/继续`、`/compact`、`/context`、提交并推送 `/提交`、汇报进展 `/汇报`）加「清空上下文 /clear」。「+」浮层一点即发。输入框里只有一个「/词」（以 `/` 开头、没有空格和换行）时，字段正上方按前缀（不分大小写）列出命令（设计系统 `ComposerSuggestions`：词加粗、右边说明，/clear 用危险色）；点一条把它的文字放进输入框（不发、光标在末尾），草稿正好是唯一匹配的词时列表收起；点 /clear 清空输入框并弹确认。/clear 只给终端引擎窗格里的 Claude（正向判断 `canTypeClaudeCommands`：Claude、能发送、有终端、有窗格、不是 Persona），而且没在工作、没在清时才出现（列表和「+」都是）。确认框：「{Agent} 会开一个新会话，这段对话留在历史里；新会话出现后页面会跳过去。手机里没发出的输入会保留。」，「清空」是危险按钮。发出后最多等 20 秒（`CLEAR_WAIT_MILLIS`），同一窗格出现另一个在跑的会话就打开它；超时提示「已发送 /clear，新会话出现后在列表里打开」并重新给出 /clear（这条 /clear 还没发出去或被拒时不提示，气泡上自己写着）；请求失败立即停止等待。
+- 排队条：工作时发的、还没被取走的消息（会话的 `queued`）显示在输入框正上方（iOS `QueueStrip`），只在输入框显示时出现，只在 Agents 的对话里。标题「排队中 N 条，{Agent} 忙完会依次处理」，每条带编号、最多两行，条数多时限高可滚（设计系统 `QueueStrip`）。点一条弹 `JActionSheet`（标题是这条消息）：「撤回编辑」「拷贝」「删除」（危险色）。撤回和删除都走 `ChatActions.editQueue`（`POST …/queue {keep: 除这一条外的全部序号}`；node 把排队的全拉回、再按顺序放回要留的，回原队列；空列表也照发）。撤回编辑取回包里对应序号的原文放回输入框（草稿空就是它，否则换行接在后面，带的照片恢复成附件），提示「已撤回到输入框，改好再发送」；删除「已从队列删除」；拷贝「已拷贝」；失败「没改成：原因」。改的时候转圈、整条不可点，直到会话刷新完；菜单开着时队列变了就关掉。只有能发送的会话（`session.canSend`）可操作。代码 `ChatQueueStrip.kt`。
+- 被拒的待发消息：被电脑拒绝（`input_draft`、`dialog_open`…）或人工确认没送达的消息什么都没打进电脑，气泡下的按钮行（`OutboxStatus`，会话状态浮层也用它）多一个「删除」（`DeliveryAction.Delete` → `sender.cancel`，`OutboxMessageSender.cancel` 现在也接受 Refused）；「编辑」放回输入框并删掉原气泡。结果不明的仍要先核对，不能直接删。
+- 只读会话：`ChatComposer(enabled = false)` 时「+」和发送不可用，不显示麦克风和「/」列表，占位文字用传入的 `placeholder`；`canInterrupt = false` 时工作中也不给「停止」（见下一节）。
+- 组件目录（调试版）有「附件」「输入框建议」「排队条」三节和一个「听写 + 停止」的输入框样例。单测：`SlashCommandsTest`、`DictationTest`、`ChatComposerStateTest`、`ComposerCameraTest`、`ChatDeliveryStateTest`、`ChatQueueStripTest`，`core:designsystem` 的 `ComposerPartsTest`；`core:data` 的 `OutboxMessageSenderTest`（被拒的能删、发出的不能）。
+- 截图：`MOCK_QUEUE=1`（工作中的会话 `macbook/a1f3c2d4-…0001` 带两条排队，`POST …/queue` 按 keep 改，`GET /mock/queue_edits` 看记录）、`MOCK_SEND_REFUSE=input_draft`（被拒气泡）、`MOCK_UPLOAD_KBPS=8`（上传中）、`MOCK_UPLOAD_OLD_NODE=1`（上传失败）。草稿按配对存、跨 `am force-stop` 保留：在一个会话里打一次字或加一次附件，再按风格 × 深浅色冷启动轮着截。
+
+## 会话控制、会话来源和能力
+
+2026-11-02 从主线旧 App 移植（盘点 C5–C7、C9、D2–D5）。规则和 iOS 一致；逻辑在 `core:domain` 的 `sort/SessionSource.kt`（能力、来源文案、恢复命令）、`sort/AgentClose.kt`（关闭确认）、`answer/RequestPresentation.kt`（「总是允许」）。
+
+- 会话来源与能力（`docs/protocol.md`「Codex 来源与能力」）：`Session` 带 `source_kind`（`codex_app_server` / `codex_history` / `identity_conflict` / `runtime`）、`source_thread_id`、`read_only_reason`、`capabilities`（read / send / interrupt / approve / terminal / attach）、`attached`、`agent_label`。没有 `source_kind` 的旧会话什么都能做；有来源的只认明确为 true 的能力（缺字段即拒绝）；`canAttach` = 有来源、`attach` 为 true、还没 `attached`。会话元数据还没到时手机不拦（hub / node 照样会拒），只读和能力判断都按已知的元数据。
+  - 对话页：不能发送时输入框禁用、占位「此会话仅可查看」，上方一行写来源（`JTag`）和原因（node 写的「仅查看：」前缀不会叠两遍）；网页卡片的「作为上下文 / AI 修改」也不收。没有终端能力时不给终端按钮和入口，不能中断时不给「停止」和菜单「中断」，不能审批时交互面板照常显示请求、但一个按钮都不能按（「交给电脑处理」也不行），说明写「实时接入以后才能在手机上处理这个请求…」（能实时接入时）或「这个会话不允许在手机上审批，请到电脑上处理」。顶栏副标题先写来源（「Codex 实时 / 服务器 / 目录」）。
+  - ⋯ 菜单：「实时接入」（`canAttach`，`ChatAction.Attach` → `POST …/attach`，结果不明时按会话列表的 `attached` 核对；接入后 node 允许它审批），「重命名」「关闭 Agent」要有终端，「复制恢复命令」只给有终端的会话（Codex 用 `codex resume <source_thread_id>`）。
+  - Agents 列表：有来源的行在事实里写来源（「Codex 实时 / codex-desk」），只读时再加一个「仅查看」；App 不认识的 Agent 显示 hub 给的 `agent_label`（「DSH」），不再一律叫 Claude。长按菜单多「实时接入」（`AgentOperations.attachSession`），重命名、关闭、恢复命令要有终端，「停止循环」要能发送。请求卡、请求详情和 `AgentsViewModel.answer` 不替不能审批的会话作答，请求详情没有终端时不给「打开终端」。来源会话在「历史」里打开时不给「继续这个会话」，写明只读原因。
+  - 通知：通知上的允许 / 批准先查这条请求所属会话（冷启动时先刷新一次会话列表），会话不能审批就不回传，提示「不能在手机上审批」（`NotificationActionResult.ReadOnly`）；查不到会话时交给 hub 判断。
+- Agent 运行时（DSH）：`Session.agentLabel` 按 iOS：Codex 来源 → Codex、`traex` → TRAEX、空或 `claude` → Claude，其余用 `agent_label`（没有就用 `agent` 原文）；`isClaude` 是正向判断，Claude 专属的控件（模式、`/model`、`/clear`）只给它。`Interaction` 带 `agent` / `agent_label` / `always_label` / `reason`：别的 Agent 的卡标题写它的名字（「Codex 请求使用 Bash」「DSH 有问题等你回答」），授权卡先写它自己说的理由。「本会话总是允许」只给 Claude 的卡；别的 Agent 的卡只有带 `always_label` 才给「总是同意」，按钮下面写「总是同意会放行：…」（`ApprovalPolicy` 的 `always_offered` 要求，共享夹具 `spec/fixtures/approval/unified.json`、`answer/unified.json`）。
+- 权限模式和思考强度（`ChatModes.kt`）：输入框左边的「模式」按钮给所有能发送、在运行的 Claude 会话，Persona 的对话也有（助手进程不在时从下一条消息起生效），Codex / TRAEX / runtime 不显示。浮层「文件权限」四项（手动确认 / 自动改文件 / 只做计划 / 自动，各带一行说明）；在跑的会话不能选「全部放行」，但当前就是它（或这个版本不认识的模式，显示原值）时照样列出来并选中，「模式」按钮用危险色。「思考强度」五项（低 / 中 / 高 / 很高 / 最高）。改的是 `POST …/modes`。
+- 模型（`/model`）：终端引擎窗格里的 Claude（不是 Persona）在同一个浮层里多一节「模型」：默认（账号默认）/ Opus（最强）/ Sonnet（均衡）/ Haiku（最快），当前项按会话的 `model` 名字里含 opus / sonnet / haiku 判断（网关模型、没有模型算「默认」）。选了别的就单独发一条 `/model <别名>`（和快捷命令同一条路，输入框里的内容留着）。对话已有缓存时 Claude 会先问「Switch model?」，那是电脑上的对话框，手机上变成一张待处理卡片。
+- 会话信息（`ChatSessionInfoSheet.kt`）：⋯「会话信息」（`GET …/info`）：标题、「状态 / 机器 / 空间」；运行（模型、启动器、Claude Code / Codex 的版本、权限、思考强度）、用量（上下文 N tokens、压缩 N 次（只在 > 0 时）、对话 N 轮、共生成 N tokens、开始时间）、位置（目录、分支，点一下拷贝）、拷贝（session id、恢复命令，只给有终端的会话）。tokens 写法 950 / 12.3k / 1.20M。读不到时说原因、可重试。点标题仍是新版的「会话状态」浮层（送达、排队、循环、后台任务、恢复），两个入口分工：状态看「现在怎样」，信息看「它是什么、跑在哪」。
+- 关闭 Agent：长按菜单、列表行左滑（只对在运行、有终端、不是 Persona 的会话；行弹回原位再弹确认；`SwipeAction(destructive = true)` 画危险色，收件箱的不变）和对话页 ⋯（不给 Persona 的对话）用同一份确认：「关闭这个 Agent？」+「「标题」/ 机器 / 空间 › 标签」+ 会退出哪台机器上的哪个 Agent、关掉哪个标签页、正在做的事会中断、对话记录还在「历史」里。确认时再查一次，别处已经关了就直接收起。
+- 对话页标题位的连接状态：连不上 hub 时，顶栏标题下那一行换成「等待网络 / 连接中… / 更新中…」（连接中和更新中标题旁转圈），恢复后立刻换回会话状态；1.5 秒的延迟和 8 秒的补拉上限在 `OkHttpHubConnection` / `ConnectionRuntime` 里，和其他页的标题一致。
+- 交互面板细节：提问的选项带编号，问题的 header 和「可多选」显示成标签；终端对话框的 header 显示在问题上方、选项带终端的键，转回对话的那个选项（hub 标成 `kind: chat`，比如「Chat about this」）变成「改在对话里说」按钮（选它就是把这个选项发给终端）。
+- 假 hub：`MOCK_SOURCES=1` 多三个会话：「整理部署脚本」（Codex 实时，能发送、能实时接入，没接入前不能审批，带一张有 `always_label` 的 Codex 授权卡）、「迁移日志采集」（Codex 历史，只读，带 `read_only_reason`）、「生成季度报表」（DSH runtime，`agent_label: DSH`，没有终端，带一张没有 `always_label` 的授权卡）；`POST …/attach` 把 `attached` 置真并放开审批，对不能接入的回 403 `codex_read_only`。`/info` 对 Codex 会话回 Codex 的模型和版本。`MOCK_SCREEN_CHAT=1` 多一个带 header（「计划模式」）和转回对话选项的终端对话框（「照片同步脚本支持 HEIC」），看交互面板的标签、编号和「改在对话里说」。想看「全部放行」时的模式按钮，可以直接 `POST /api/v1/sessions/{mid}/{sid}/modes {"permission_mode":"bypassPermissions"}` 给假 hub。
+- 单测：`core:domain` 的 `SessionSourceTest`（旧 `SessionSourcesTest` 的用例 + runtime、恢复命令）、`AgentCloseTest`、`AlwaysOfferTest` 和 answer / approval 夹具；`core:contracts` 的 `ModelsTest`（新字段、`agentLabel`、`SessionInfo`）；`core:hub` 的 `HttpChatActionsTest`（attach、queue、info）、`HttpAgentOperationsTest`（attach）；`feature:chat` 的 `SessionModesTest`（旧 `SessionModesTest`、`ModelPickerTest`）、`ChatSessionInfoTest`（旧 `SessionInfoTest`）、`InteractionOptionsTest`；`feature:agents` 的 `AgentsListInfoTest`；`platform:notify` 的 `NotificationExecutionTest`（不能审批的会话不回传）。
 
 ## 多 hub（同时连接多组 hub）
 
@@ -170,7 +203,7 @@ plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-
 - 明文 HTTP 仅用于本地或受信任网络；公网使用 HTTPS / WSS 和配对指纹钉扎，优先 IPv6。实际目标由 `HubHttpClient` 校验，见 [network.md](network.md)。
 - App 图标和 iOS 是同一张（`apple/Jarvis/Resources/Assets.xcassets/AppIcon.appiconset/icon.png`）：自适应图标的前景是这张图缩进到 108 dp 画布中间的 72 dp 安全区
   （`drawable/ic_launcher_fg.xml` 内缩 18 dp，图在 `drawable-nodpi/ic_launcher_art.png`），背景是图边缘的深棕 `#1B110D`，桌面裁成圆形还是圆角方形都不会切到圆环；
-  主题图标（Android 13+）用 iOS 的 tinted 版当遮罩。通知栏小图标 `ic_stat` 是同一个标志（圆环 + 四角星）的白色剪影。iOS 换图标时这两张 PNG 要重新导出。
+  主题图标（Android 13+）用 iOS 的 tinted 版当遮罩。通知栏小图标 `ic_stat` 是同一个标志（圆环 + 四角星）的白色剪影，放在 `core/designsystem/src/main/res/drawable/`，所有通知（常驻、需要你、做完了、手机工具、锁屏测试）和磁贴都用它。iOS 换图标时这两张 PNG 要重新导出。
 - 装到真机：手机开 USB 调试连上电脑跑 `./scripts/app/android.sh`，或者把 APK 发到手机上直接装。
 
 ## 缓存体积预算
@@ -207,7 +240,7 @@ python3 scripts/app/test_android_token_baseline.py
 
 | 模块 | 职责 | 直接依赖 |
 | --- | --- | --- |
-| `:app` | 应用入口、四 tab、Hilt 装配、配对生命周期、作用域桥接、系统分享和锁屏测试 | `:core:contracts`、`:core:domain`、`:core:terminal`、`:core:navigation`、`:core:hub`、`:core:data`、`:core:chatlist`、`:core:designsystem`、`:core:demo`、`:feature:chat`、`:feature:agents`、`:feature:assistant`、`:feature:inbox`、`:feature:settings`、`:feature:terminal`、`:feature:machines`、`:feature:files`、`:feature:knowledge`、`:platform:notify`、`:platform:phonetools` |
+| `:app` | 应用入口、四 tab、Hilt 装配、配对生命周期、作用域桥接、系统分享和锁屏测试 | `:core:contracts`、`:core:domain`、`:core:terminal`、`:core:navigation`、`:core:hub`、`:core:data`、`:core:chatlist`、`:core:designsystem`、`:core:demo`、`:feature:chat`、`:feature:agents`、`:feature:assistant`、`:feature:inbox`、`:feature:settings`、`:feature:terminal`、`:feature:machines`、`:feature:files`、`:feature:knowledge`、`:platform:notify`、`:platform:phonetools`、`:platform:shortcuts` |
 | `:core:chatlist` | 倒置聊天列表、冻结、回最新、阅读锚点及分页效果；当前主要由 Agent / 助手对话消费 | 无仓库内模块依赖 |
 | `:core:contracts` | 纯 JVM：线上模型、事件解码、HubScope、仓储和传输接口 | 无仓库内模块依赖 |
 | `:core:data` | Room items / outbox / 草稿、DataStore / Tink 凭据、作用域、缓存及真实仓储 | `:core:contracts`、`:core:domain`、`:feature:inbox` |
@@ -219,15 +252,16 @@ python3 scripts/app/test_android_token_baseline.py
 | `:core:terminal` | 纯 JVM：VT 网格、Unicode 宽度、折行和终端输入编码 | 无仓库内模块依赖 |
 | `:feature:agents` | 电脑 → 空间 → 会话的列表、请求卡、新建与关闭确认、空间页、会话和空间的重命名（本地立即生效） | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
 | `:feature:assistant` | 首页、历史抽屉、主对话发送、资料与定时任务页；管理服务和专用聊天样式仍待装配 | `:core:contracts`、`:core:data`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
-| `:feature:chat` | 共用对话、Markdown、工具 / diff / 待办、交互面板、附件组件和应用内链接阅读 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:chatlist`、`:core:navigation` |
-| `:feature:files` | 文件树、文本 / 图片预览和路径插入；从 Agent 对话 ⋯ 菜单进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
+| `:feature:chat` | 共用对话、Markdown、工具 / diff / 待办、照片和文件标签、长按菜单、报错卡、看图和标注、交互面板、附件组件和应用内链接阅读 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:chatlist`、`:core:navigation` |
+| `:feature:files` | 文件树、文本 / 图片 / Markdown / PDF 预览、Git 和提交详情、路径插入；从 Agent 对话 ⋯ 菜单和消息里的文件标签进入 | `:core:contracts`、`:core:hub`、`:core:designsystem`、`:core:navigation` |
 | `:feature:inbox` | 统一收件箱、飞书会话、邮件详情、AI 操作和回复组件；邮件传输仍待装配 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
 | `:feature:knowledge` | 知识库列表、阅读和导航；从 Persona 抽屉进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
 | `:feature:machines` | 机器 Dashboard、详情和指标图；从 Agents 机器菜单进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
 | `:feature:settings` | 配对、准备清单、诊断、设备与通知偏好、关于和 APK 安装；设备设置服务仍待装配 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
 | `:feature:terminal` | 终端 Canvas、流式帧消费、接管和输入；从对话页和通知的终端兜底进入 | `:core:contracts`、`:core:terminal`、`:core:designsystem`、`:core:navigation` |
-| `:platform:notify` | 前台服务、通知策略和按钮、操作日志、开机接收与连接保活 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
+| `:platform:notify` | 前台服务、常驻汇总通知（`FleetFeed`）、通知策略和按钮、操作日志、开机接收与连接保活 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
 | `:platform:phonetools` | 手机工具目录、注册、权限与写入确认，通讯录 / 日历 / 照片 / 位置等实现；设置 › 手机数据进入 | `:core:contracts`、`:core:navigation`、`:core:designsystem` |
+| `:platform:shortcuts` | 主屏小组件（Glance）、快速设置磁贴、长按图标快捷方式和「批准待处理」对话框，见「常驻通知和桌面入口」 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation`、`:core:hub`、`:platform:notify` |
 
 依赖的主要方向为 `:app → feature / platform / core`，功能层通过 `:core:contracts` 使用接口，由 App 的 Hilt 模块装配真实实现。当前仍有两处跨层依赖：`:core:data → :feature:inbox`、`:feature:assistant → :core:data`，这是现有构建图，尚未完全符合设计中的单向分层。`:core:domain → :core:contracts`，`:core:hub → :core:contracts`；`:core:terminal` 不依赖其他项目模块。
 
@@ -357,6 +391,86 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - 主动做事：「在哪运行」下面一节，一行「定时任务、跟进和运行记录」打开 `AssistantProactiveScreen`（在这一页里原地打开，返回回到这一页），见下文「主动做事」。Persona 抽屉的「定时任务」在 Persona tab 里原地打开同一页；旧的资料页 `AssistantProfile` 已删掉。
 - 截图：`debug.assistantSettings` 直达页内一部分（notes、memory、memory-file、memory-edit、memory-delete、machine、launcher、timezone、move 即换机器确认框，proactive 即主动做事），和 `debug.openLink 'jarvis://open?target=settings&page=assistant'` 一起传。假 hub 支持 `PUT /api/v1/assistant` 和 `PUT` / `DELETE /api/v1/assistant/memory/{name}`；`MOCK_MACHINES=1` 多一台离线机器，可以看离线的样子。
 - 单测：`AssistantSettingsStateTest`（读写配置、换机器的提示和清主对话、启动器缺失、跟随手机的时区、关于我、记忆的读取 / 修改 / 删除）、`AssistantConfigTest`（`PUT` 只带改了的字段，空的关于我也发）。
+
+## 收件箱的 AI 草拟、交给 AI，知识库的六类、条目页和打标
+
+2026-11-02 从主线旧 App（`81dc6928`）按行为移植，iOS 的同名功能对照着做（`apple/Persona/Views/Inbox/InboxActions.swift`、`KnowledgeView.swift`）。
+
+收件箱（`feature/inbox`）：
+
+- **AI 草拟 / AI 改**（`InboxAiDraft.kt`）：一行「要求」加按钮，没有草稿时叫「AI 草拟」（占位「要怎么回（可以不填）」），有草稿时叫「AI 改」（占位「让 AI 改：…」）。请求 `POST /api/v1/inbox/{id}/draft {"instruction"}`，instruction 是「要求」和「在这版上改：<当前草稿>」两行（都可缺，`draftInstruction`）；hub 等模型写完才回，所以这个请求单独用 120 秒的读超时（配置值，未实测，`HttpInboxActionsTransport.DRAFT_READ_TIMEOUT_SECONDS`）。结果换掉回复的草稿（新的 `client_id`，`ReplyComposer.replaceWithAi`）；回复在发送中或结果待核对时不换。失败写「没草拟出来：<原因>」（hub 自己给了原因就用 hub 的话，连接问题用统一的操作反馈）。入口：飞书会话页输入框上方的「AI 草拟」（打开 `InboxDraftSheet`，和 AI 分身草稿卡的「改一改」是同一个浮层）、邮件页的「回复」浮层里、底部按钮的「AI 草拟」。原来的「总结 / 拟回复」两个快捷钮去掉了：总结是「交给 AI」的第一个预设，拟回复换成在原地草拟（iOS 也是这两个动作）。
+- **AI 写的草稿发送前一律确认**（已拍板）：草稿带 `ReplyDraft.ai` 标记（AI 分身的草稿、AI 草拟 / AI 改的结果；在上面改几个字仍算，删空后重写就是自己的话），记进回复日志（`InboxStoredDraft.ai`）。发送 AI 草稿先弹「以你的身份发送？」，写明「发到飞书「<标题>」」或「回复邮件「<标题>」」和全文（`SendAsYouDialog`，`InboxSendConfirm.kt`），列表行内的草稿卡、草稿浮层都一样；自己手打的回复（飞书会话页底部的输入框）照打的发，不另外确认。邮件回复本来就要确认，文案统一成同一个对话框，并写明发给谁、回复对象变了时提醒。结果待核对时按钮是「核对结果」，只核对、不再确认。
+- **草稿卡**（`AgentDraftCard.kt`）：AI 分身在处理 / 排队时一行状态，失败时一句「AI 分身处理失败，你可以直接回复」，有 AI 草稿时一张卡（「改一改」「发送」）。列表行只在 AI 分身拟好了、或者有存着的 AI 草稿时才建回复编辑器（每行都建会一次读所有草稿）；自己手打的草稿仍在行里写「草稿 · …」。飞书会话页和邮件页的卡片在页面一打开就建好，AI 草拟的结果马上出现在卡上。从深链先进了邮件页、列表还没来时，AI 分身的草稿等事项到了再填进去（只填没动过、也没存过草稿的回复，`offerAiDraft`）。
+- **邮件页**：元信息下面是 AI 摘要（`JNotice`，标题「AI 摘要」）和 AI 分身的草稿卡；卡上的「改一改」打开回复浮层，「发送」走邮件自己的确认和回复对象核对，都会先切回最新一封。回复浮层里有 AI 分身的依据（草稿还是它那版时）和 AI 草拟那一行。
+- **交给 AI**（`InboxHandOffSheet.kt`，逻辑在 `InboxHandOff.kt`）：列表行左滑和长按菜单、飞书会话页、邮件页的「交给 AI」打开同一个浮层：「要它做什么」（空着用第一个预设）和三个预设「总结一下，告诉我要做什么，给出建议的回复」「查清楚背景再告诉我」「直接帮我处理，回复前先问我」；「交给谁」：Persona（主对话，已拍板）或最近活跃的 8 个在线 Agent（不含助手和离线的，新的在前；B 组的能力字段合进来以后再排除只读会话），每行写机器名；没有在线 Agent 时说一句；「同时标为已处理」默认开（已处理的事项不显示）。消息和 iOS 一样：`<jarvis-context kind="context" title="飞书 · <标题>|邮件 · <标题>" url="">` + 正文（hub 的事项上下文，没有就「发件人：预览」；邮件页用整封信的头和正文）+ 飞书 feedId 或邮件 account_id / mailbox / uid 的注记 + 空行 + 要求；属性转义，正文里的 `</jarvis-context>` 去掉。给 Persona 走 `MainConversationSender.sendToMain`，给 Agent 走和 Agents 同一个 outbox 的 `MessageSender.send`（`InboxModule` 注入 `data.messages`）；同样的文字发同一个目标时沿用操作 ID（`HandOffAttempt`），重试不会排两份。入队以后关掉浮层、标已处理（失败只提示），切到 Persona tab 或打开那个 Agent 的对话；对话里这条消息是一张上下文卡片加要求的气泡。失败写「没交过去：<原因>」，浮层留着。
+- **列表**：类型标签按旧 App：@ 所有人的写「@所有人」（`lark.at_all`），只抄送给我的邮件写「抄送」（hub 省掉的 `mail.direct` 就是 false）。空状态三种：「收件箱是空的」（配好飞书或加邮箱的说明）、搜索无结果「没有找到」、筛选后为空「都看完了」。
+- 浮层里放 `ComposerFrame` 时把 `LocalGlassSource` 置空（见「经验」）。
+
+知识库（`feature/knowledge`）：
+
+- **六类**：「项目 / 会话 / 人 / 文档 / 会议 / 日程」，横排 chip，选中的一类带件数；会话包括私聊（旧 App、iOS、`docs/redesign/parity.md` 3.1 都是全部会话；原来只列群聊）。搜索时 chip 收起（搜的是全部类）。项目分「重点 / 其他进行中（没有重点时叫进行中）/ 已完成 / 不是项目」，「不是项目」默认收起，下面写为什么在这、怎么恢复；其他类一段「按重要级和相关性」（带标签时段名是 #标签）。重读同一个视图（下拉、刷新、打标保存后）时先留着旧内容，不闪成加载圈。
+- **搜索结果**：按条目合并，`docs/<id>.json` 这种也认得出条目；同一句只出现一次，档案和时间线在资料前；按类分段；每条最多两处命中：来源（档案 / 时间线 / 资料 / 聊天记录 · 日期）和去掉列表符、JSON 键和引号的那一行，查询的每个词加粗；超过两处写「N 处」。列表里没见过的条目先用类名当名字（后台读那一类的列表补上）。
+- **条目页**：头部是重要级、项目的短期 / 长期和状态、相关性、全部标签，一句话，「问 Persona」（原有）和项目才有的「开 Agent」；「在做这个项目的 Agent」（hub 的 `agents`，只留在线、非助手的，`AgentRow`，点开进那个 Agent 的对话）；时间线新的在前，每行「时间 · 来源」一行、内容一行，最新一条用强调色，先 6 条，「显示全部 N 条 / 收起」；档案去掉标题行、和一句话重复的行、「重要级 … 相关性」那行，去完是空的就不显示；关联按类分段（关联的项目 / 会话 / 人 / …），每类先 4 个，「全部 N 个 / 收起」；代码目录写路径末几级和机器；「最近 7 天的消息」折叠；「目录」加一句「Persona、AI 分身和各台电脑上的 Agent 都能直接读这个目录。」
+- **打标**（`KnowledgeTagEditor.kt`）：右上 # 打开「打标 · <名字>」：重要级 P0–P3（P0、P1 带状态色点）、「与我相关 N」滑杆（0–100，步长 5，设计系统新组件 `JSlider`）、标签（空格分隔）、项目还有类型「短期（需求）/ 长期（使命）」和状态「进行中 / 暂停 / 已完成 / 不是项目」，说明「手动打的标会锁住，hub 自动整理时不再覆盖。」保存 `PUT /api/v1/kb/{kind}/{id}`，只发设置了的字段（空标签列表要发）；保存中「正在保存…」，失败「没有保存：<原因>」留在浮层里；成功后重读条目，列表也重读（`KnowledgeEdits`）。相关性在动滑杆之前保持原值（不按 5 取整），只改别的字段不会改掉它。
+- **开 Agent**：给项目条目，带第一个代码目录（`<机器>:<路径>`）和「项目背景 + 空行」作为第一条消息（`KnowledgeAgentStart`）。`knowledgeEntries(…, onNewAgent = …)` 由外壳接到新建 Agent 的预填入口（E 组的 `NewAgentRoute`）；没接时退而求其次：把项目背景放进剪贴板、切到 Agents，并提示在新建会话里粘贴。
+
+假 hub：`MOCK_DRAFT_SECONDS`（AI 草拟要等多久，默认 1.5 秒）、`MOCK_DRAFT_FAIL=1`（草拟失败，502）、`GET /mock/inbox_drafts`（每次草拟的 instruction）；`MOCK_INBOX_LABELS=1` 多一条 @所有人 的群消息，并给一封邮件（周二分享那封）加上 AI 分身的草稿和依据；`MOCK_NO_LIVE_AGENTS=1` 所有 Agent 离线（交给 AI 只剩 Persona）；`MOCK_KB_SAVE_FAIL=1` 打标保存失败（502）；`MOCK_KB_MANY_LINKS=1` 让「天气 App」关联 6 个人（看「全部 6 个 / 收起」）。知识库原有数据里「日程」是空的，可以看空状态；`GET /mock/kb_updates` 看打标发了什么。
+
+单测：`feature/inbox` 的 `InboxHandOffTest`（和 iOS 一样的交接消息、最近在线 Agent、操作 ID、行标签）、`InboxDraftTest`（instruction 拼法、AI 标记的来去、发送中不换草稿、AI 分身草稿只填没动过的回复、确认文案）；`core/data` 的 `InboxHandOffRepositoryTest`（`at_all` / `mail` / `direct` 的解析、AI 草稿和手打草稿的行状态、交给 Persona 和交给 Agent 走哪个 outbox、草拟走 actions）；`core/hub` 的 `InboxActionsTransportTest`（draft 的路径、请求体、空草稿和失败）、`KnowledgeRepositoryTest`（agents 只留在线非助手、PUT 只发设置了的字段）；`feature/knowledge` 的 `KnowledgePresentationTest`（项目分段、六类、命中的条目 / 来源 / 文本、按条目合并、逐词加粗、时间线、档案去重、代码目录、开 Agent 的预填、打标表单和请求体）、`KnowledgeTaggingFlowTest`（保存失败留在浮层、保存后条目和列表都重读、Agent 只留在线非助手）；`core:designsystem` 的 `SliderTest`。
+
+## 常驻通知和桌面入口（2026-11-02 从主线旧 App 移植）
+
+iPhone 的实时活动、小组件和快捷指令在 Android 上的对应物。四处说同样的话：文案和挑选规则在 `core:domain` 的 `FleetSummary` / `FleetText`（照 iOS `FleetText` 和 hub `buildFleet`），数据都来自 `:platform:notify` 的 `FleetFeed`。
+
+- **数据**：`FleetFeed` 收 WS 的 `fleet` 事件，连接每次连上后再 `GET /api/v1/fleet` 一次（hub 只在变化时推），最后一份按配对存在 SharedPreferences `fleet`，进程没跑时小组件和磁贴照样能画；取消配对清掉，换了配对不显示上一个 hub 的。HTTP 和配对标识由 App 的 `FleetModule` 提供（`FleetSource`）。
+- **常驻汇总通知**（前台服务那条，`OngoingStatus` / `Notifier.ongoing`）：标题「N 个需要你 / 在工作 / 做完了」，副标题其余数量；「锁屏显示详情」开着时正文是第一个 Agent「名字 · 在做什么」，展开最多三行带「机器 · 空间 › 标签」再加「+N 个」；只剩工作中时走计时；第一个授权「拒绝 / 允许」、第一个计划「查看 / 批准」（`acceptEdits`，允许和批准要解锁，按钮走 `ActionReceiver` + `NotificationActionExecutor`）；只有一个 Agent 时点通知直达它，否则进 Agents。没东西、只剩做完未看满 5 分钟、没连上时退回连接行。「锁屏显示详情」关着（默认）时，正文和展开列表也只用泛化文字（「4 个需要你」「有个授权等你」「2 个授权等你」「1 个在工作」），不放 Agent 名字、位置和请求详情，即使系统设成「锁屏显示全部内容」锁屏上也看不到名字；按钮照旧。细节见 `platform/notify/README.md`。
+- **主屏小组件**（`PersonaWidget`，Glance 1.2.0）：「Persona」标志行，带状态色点的标题，其余数量，按高度画 0（< 140dp）/ 1（< 190dp）/ 2（< 240dp）/ 3 个 Agent（色点 + 名字 +「在做什么 · 机器 · 空间」）和「+N 个」（旧 App 在 150dp 高时画两个，会被切掉）；没东西「没有 Agent 需要你」，没配对「还没配对 / 打开 Persona 扫 hub 的二维码」。点某个 Agent 进它的对话，点别处和磁贴一样（唯一的 Agent 或 Agents）；只导航，不能在小组件上批准。尺寸 110×100 / 250×150 / 250×200 / 250×260，最小 110×100dp、默认 3×2 格、可横竖缩放、不定时刷新（`updatePeriodMillis=0`），汇总变化时 `SurfacesRuntime` 让它重画。配色和字号取自设计系统（`SystemSurfaces`：用户选的界面风格的色板和字号，浅色 / 深色一对交给 Glance 跟着系统换），圆角用系统的小组件圆角。
+- **快速设置磁贴**（`PersonaTileService`）：标签「Persona」，副标题是汇总标题（「都处理完了」「还没配对」）；需要你或工作中时点亮，没配对不可用；点了和小组件一样打开。
+- **长按图标快捷方式**（`ShortcutPublisher`，运行时发布，静态快捷方式要写死 application id）：「问 Persona」打开 Persona tab 并把光标放进输入框、弹出键盘（`jarvis://open?target=tab&tab=jarvis&focus=composer`，冷启动和 App 开着都生效；在内嵌对话里时回到首页的输入框，发出去照样进主对话）；「批准待处理」；后面跟最近活跃的 2 个在线 Agent（不含 Persona 自己，按更新时间），点了直达对话，变了才重发，取消配对时去掉。
+- **批准待处理**（`ApproveFirstActivity`，不导出、透明、只显示设计系统的对话框）：从 hub 现拉待处理，取最早的一条。授权问「允许 <摘要>？」，计划问「批准这个计划？」并说明「批准后自动接受编辑，命令仍会先问你」（`ApprovalPolicy` 的快捷入口：计划只用 `acceptEdits`，要先解锁）；下面一行「会话 · 机器」。提问和终端对话框说明要打开 Persona 并给「打开 Persona」（进那个对话）；另有加载中、没有待处理、没配对、出错几种。按钮在发送时不可点，发送结果不明时说「结果待确认」而不是让人重试；成功后 Toast「已允许 Bash」/「已批准计划，开始执行」。
+
+和旧 App 的差异：常驻通知的连接行和汇总共用一个「实时状态」频道（旧 App 连接行另有一个最低优先级频道）；「锁屏显示详情」关着时连通知正文也不放名字（旧 App 只靠公开版本，系统设成显示全部内容时锁屏上会有名字）；数据不再在手机上自己算，而是 hub 算好的 `fleet`；快捷方式批准计划用 `acceptEdits`（旧 App 和 iOS 是 `bypassPermissions`，按统一规格改）；最近 Agent 的快捷方式换成终端提示符图标。
+
+调试（只在 debug 包里）：
+
+```sh
+# 「批准待处理」的各个状态：loading、nothing、unpaired、question、screen、permission、plan、sending、error
+adb shell am start -n <包名>/persona.platform.shortcuts.ApproveFirstPreviewActivity --es debug.approveState plan --es debug.style board --es debug.theme dark
+# 小组件的三种尺寸，像启动器一样托管在壁纸上；先给一次绑定权限
+adb shell appwidget grantbind --package <包名> --user 0
+adb shell am start -n <包名>/persona.platform.shortcuts.WidgetPreviewActivity
+# 磁贴放进快速设置
+adb shell cmd statusbar add-tile <包名>/persona.platform.shortcuts.PersonaTileService
+# 问 Jarvis
+adb shell "am start -a android.intent.action.VIEW -d 'jarvis://open?target=tab&tab=jarvis&focus=composer' <包名>"
+```
+
+假 hub：`MOCK_FLEET=1`（或 `all`）连上就推 `fleet`、每次作答后再推，`GET /api/v1/fleet` 总是有；`MOCK_FLEET=permission` 只留授权（第一个请求带「拒绝 / 允许」），`working` 只有工作中和做完未看（计时），`done` 只有做完未看，`one` 只有一个工作中的 Agent（点了直达），`empty` 什么都没有（连接行）。默认数据下第一个请求是计划（「查看 / 批准」）。
+
+验证状态（2026-11-02）：单测 `FleetSummaryTest`、`OngoingStatusTest`、`ShortcutTextTest`、`ApproveFirstModelTest`、`ComposerFocusRequestsTest`、`RouterTest` 和 `:app:assembleDebug` 在车道里跑过一轮；之后几处小改动（小组件按高度排行数、对话框等列表刷新、连接行的通知类别、`FleetState` 存盘往返的单测）没再编译。通知、小组件、磁贴、快捷方式和对话框都还没在模拟器或真机上看过（按协调者要求统一截图验证），Live Update 胶囊要 Android 16 以上的设备。
+
+## 手机数据工具和 iOS 对齐（2026-11-02）
+
+Claude 调 `phone_*` 时 hub 把同名工具合并成一份定义（说明更长的那份），调用可能发给任一台声明了它的手机，所以 Android 的工具和 iOS 逐字一样：名字、英文说明、参数（类型、说明、范围）、必填项都照 `apple/Persona/PhoneTools/*.swift`；数字超范围夹到范围内、多余参数忽略；返回结构用 iOS 的键名；拒绝回 `The user declined on the phone.`，确认 90 秒没人答算拒绝。`phone_notifications_list` 是 Android 自己的工具，保留。对齐用的夹具由 `python3 scripts/assets/export_ios_phone_tools.py` 从 iOS 源码导出（`--check` 检查是否过期），`PhoneToolCatalogTest` 逐个比。有意保留的差异（剪贴板和定位只在前台、视频取图给预览帧、没有可写日历时建本地日历）和全部规则见 `platform/phonetools/README.md`。
+
+照片取图的图片块以前写成 `mimeType`，hub 只认 `mime_type`，图到不了 Claude：已改，`PhotoContentTest` 守着。
+
+假 hub：`GET /mock/tool_call?name=phone_device_info&args=<JSON>` 给声明了这个工具的手机发一次调用（像 hub 那样），`GET /mock/phone` 看手机注册了什么、答了什么。验证状态：单测通过；真机 / 模拟器上的工具往返、权限弹窗、确认对话框和日历写入还没测。
+
+## 看图和标注
+
+对话里的图片全屏看，标注以后作为照片放进输入框（主线旧 App d2d484ef 的移植，2026-11-02）。查看器和编辑器是设计系统的组件（`core:designsystem` 的 `ImageViewer.kt`、`ImageEditor.kt`），收件箱、文件页以后可以直接用；对话的组装在 `feature:chat` 的 `media/`（`ChatImageViewer`、`MediaShare`）。
+
+- 入口：对话页点图片（Agent 的图、工具截图、你发的照片、附图缩略图）打开 `ChatImageViewer(images, initialIndex, onDismiss, onEdited, photoLimitReached)`，由对话页接线，图片按对话里的顺序排。组件本身是 `ImageViewer(images, initialIndex, onDismiss, actions)` 和 `ImageEditor(source, onCancel, onDone)`；一张图是 `ViewerImage(key, description, width, height, load)`，`load` 返回编码后的字节，抛错或空字节算失败；动作是 `ViewerAction(label, icon, onClick)`，`onClick` 拿到页码和原始字节，返回要在查看器里显示的提示（null 不提示）。
+- 样子：整页（`JFullScreen`），始终深色，状态栏、导航栏图标是浅色；顶部 ✕ 和「n / m」（多于一张才有）；底部一排动作，玻璃里是浮起的胶囊（玻璃取样的是图片），晨报和看板是贴底的栏；按钮文字单行，放不下先只留第一个（保存）的文字，再放不下全换成图标。读图时转圈（知道宽高时先画一块同比例的底），失败时「图片加载失败」和「重试」。
+- 手势：左右滑看别的图；双指 1–6 倍，以两指中间为中心；双击在手指处放大到 2.5 倍，再双击复原；放大后单指拖动，图的边不会拖进画面；单击显示 / 隐藏按钮；1 倍时竖着拖把图拉走，背景跟着变淡，超过 120dp 松手关闭，不够就弹回去。返回键和 ✕ 关闭。
+- 解码：在后台线程用 `ImageDecoder`（按 EXIF 方向转正，`BitmapFactory` 不管方向），按 2 的幂降采样到屏幕长边的两倍以内（1024–4096）；原始字节留给动作；最近 8 张的字节留在内存里，来回滑不再读。
+- 动作（`ChatImageViewer`）：保存（MediaStore 写进 `Pictures/Jarvis`，不要权限：「已保存到相册」/「保存失败」）、编辑（对话把结果接进输入框时才有）、分享（字节写到 `cache/shared/`，经 `<包名>.chat.files` 的 FileProvider 交给系统分享，失败「分享失败」；超过一天的旧文件顺手删掉）、拷贝（同样的文件以 content URI 放剪贴板：「已拷贝图片」/「拷贝失败」）。这些结果显示在查看器自己的提示条里：`JFullScreen` 是一个对话框窗口，App 统一的提示（`LocalAppFeedback`）画在下面的窗口里，会被盖住。
+- 编辑：框选 / 画笔、红黄绿蓝白黑六色（`MarkupColors`，固定的，不随风格变）、撤销、清除。完成时按原图分辨率把标注画进去，笔粗是屏幕上看到的粗细换算成图片像素（`ImageMath.strokeInImage`），画出来什么样，发出去就什么样。结果按长边 1600、JPEG 75 写进 `cache/chat-captures/`（透明的地方先铺白），做成 `ComposerAttachment(image = true)` 交给对话的 `onEdited`，再用 `LocalAppFeedback` 提示「已加到输入框，补一句话就能发」并关掉查看器；输入框里已经有 4 张照片时只提示「一次最多 4 张」。编辑用的图按不小于 1600 的长边解码（成品最多 1600）。
+- 纯计算在 `ImageMath`（适配框、屏幕点到图片像素、笔粗、降采样、缩放、缩放和平移、拉走时的透明度、图片类型 PNG / JPEG / GIF / WebP / HEIC / AVIF），单测是 `core:designsystem` 的 `ImageMathTest`；动作的顺序、文案和「最多 4 张」在 `feature:chat` 的 `ChatImageViewerTest`。
+- 统一验证时的截图（三套风格 × 深浅色，`debug.style`、`debug.theme`）：
+  - 组件目录（`debug.openCatalog true`）拉到最后一节「看图」。「看图（3 张）」打开查看器：每张图要等 0.6 秒，能拍到转圈和同比例的底；第一张横图、第二张竖图（看「n / m」），第三张故意读不出来（失败页）；单击隐藏按钮、双击放大、拉到一半（背景变淡、按钮收起；用 `adb shell input motionevent DOWN / MOVE` 按住不放再截，`input swipe` 会直接松手）；点保存 / 分享 / 拷贝看查看器里的提示条（示例不会真的执行）；「编辑」在查看器上打开编辑器。「标注编辑」直接打开编辑器：框选、画笔、换颜色、撤销以后、点完成。底部四个按钮按估算在 411dp 宽的手机上都放得下文字，窄一些（`adb shell wm density` 调大）就只有「保存」带文字、其余是图标（估算，未上设备看），两种都要截一次。
+  - 对话里（对话页接线以后）：假 hub 带 `MOCK_CHAT_IMAGES=1`，「博客迁移」那段对话有两张图（工具截图、回复前的图），点开看多张；编辑完回到输入框，看附件那一行和提示。
 
 ## 经验
 
@@ -508,6 +622,25 @@ adb -s emulator-5600 exec-out screencap -p > /tmp/jarvis-state-offline-dark.png
 
 Debug 包的设置页底部另有一行「组件目录（调试版）」，自动化启动（`debug.automation`）时隐藏。组件目录的路由和页面只在 `src/debug/` 编译，Release 包里没有。兼容 `--es openSession machine/session`。通知、公开深链和 debug 参数最终汇入同一个路由器；旧通知需要等待会话元数据加载后再分流。
 
+## 对话内容：照片、文件、长按菜单、工具详情、报错卡
+
+主线旧 App（d2d484ef、4588285d）对话部分的移植（2026-11-02），按新设计系统重画；行为和 iOS 对齐。看图和标注见上文「看图和标注」，文件页见下文「对话里的文件和 Git」。
+
+- 你发的照片：消息里 `<attached_images>` 的路径（以及更早版本附在文末的「相关图片：…」「（我从手机发来了图片，请用 Read 查看：…）」两种说明）画成气泡里的方形缩略图（一张大、多张小，放不下换行），文字里去掉这些说明和 Claude Code 的 `[Image #N]`；只有照片时气泡里只有照片。缩略图从会话所在那台电脑读（`GET /api/v1/machines/{mid}/file`，`AttachedPhotos`，字节和缩略图各在内存里留 40 张），读的时候转圈，读不到（文件没了、不是图片、超过 2 MB 被截断）显示「加载失败」，点一下重试；点开进查看器，翻这条消息的几张。以前 `cleanText` 把整段标签换成「[图片]」，手机发出的照片在历史里只剩「[图片]」；现在只有一行预览（`cleanText`）还写「[图片]」。Persona 的对话也显示（`ChatAppBindings.files`），会话没有目录时用 `~` 去读（路径是绝对路径）。
+- 文件路径：消息和回复里像路径的字（`FilePaths`：`~/x`、`/x/y`、带目录和扩展名的相对路径，最多 6 个，链接和 `deepseek/v4.1-flash` 这种模型名不算）在下面画成一排可点的标签（文件名 + 类型图标），点了在文件页里直接打开（`ChatChromeBindings.onOpenPath` → `SessionFilesScreen(initialPath)`，相对路径按会话目录补全）。工具卡片里改动上面的文件头、Read 的路径也能点。只在能打开文件的对话里有：Agent 对话（有会话目录时）；Persona 自己的对话没有文件页，不显示标签。
+- 离开期间回顾：Claude Code 每次闲置后被看一眼就写一条回顾，画成一行「离开期间回顾 · 21 分钟前 ›」，连着几条合成一行（「离开期间回顾 3 条 · …」，`foldRecaps`，和 iOS 一样）；点开是底部面板，新的在前，每条写「写于 …」和 Markdown 全文（可以选字）。
+- 被截断的回复：hub 把超过 24 KB 的文字截断（`full_size`），回复显示截断前的部分（去掉 hub 加的「…（已截断」那一行）和「看全文（N KB）」，点了取全文（`GET …/items/{id}/full`）原地换上；「加载中…」，失败「加载失败，点一下重试」。
+- 长按菜单：长按（鼠标右键也行）你的消息、Agent 的回复（包括工作过程里的中间回复）、别的会话发来的消息，被按的那条变淡，弹出操作面板（`JActionSheet`）：复制、选择（全屏的纯文本，可以任意选中，右上角复制全文）、引用（每行加 `> ` 放到输入框开头，已有的草稿接在后面）、分享、交给 Persona（消息作为 `<jarvis-context>` 加「看看这条消息，告诉我该怎么处理。」交给主对话，切到 Persona tab，主对话确定后打开它；Persona 自己的对话里没有这一项）、作为上下文（放到本对话输入框上方，随下一条消息发出）、编辑（只在你的消息上：文字回到输入框，照片作为已上传的附件一起回来）。为了让长按到得了菜单，消息正文不再包 `SelectionContainer`；思考和回顾还能直接选字。只读的对话（子 Agent、历史）没有引用、作为上下文、编辑（`messageMenuWrites`；B 组给会话加上能力字段后，「不能发送」的会话也在这里关掉）。
+- 工具详情：Codex 的文件改动（hub 把 FileChange 写成只带 `diff` 的 `Edit`）按 unified diff 画，带新旧行号，`@@` 和「\ No newline at end of file」这类行变淡；新建、删除的文件 hub 发来的是整份内容（没有 `@@`），画成全部新增 / 全部删除。改动上面一行文件头（文件名、目录、+N −N，能点就打开文件）。计划（ExitPlanMode）按 Markdown 画，提问（AskUserQuestion）列出每个问题的标题、可多选和选项，子任务（Task / Agent）显示类型和说明的前 8 行（长的「看全文」），其余工具照旧是「键: 值」。改文件的工具只在出错时显示它的输出（成功时那句「已更新」没有信息）。
+- 图片：对话里的图（Agent 的图、工具截图、你发的照片）保持比例、最高 280dp（`ChatPictureFrame`），竖长截图不会铺满好几屏；点开查看器，左右滑看这段对话的全部图片；读不到「加载失败，点一下重试」。
+- API 报错卡片（D6）：Claude Code 放弃时写的「API Error: …」回复（包括「Failed to authenticate. API Error: 401 …」这种前面一句话的）和 hub 的「API 错误：…」通知（在顶层时；工作过程里的仍是一步）画成报错卡（`ErrorCard`）：白话原因（和 iOS 同一套：GPU、过载、登录过期、限流、超时、连不上、参数错、5xx…）、状态码、「临时故障」或「要处理」、同一个错误中间只隔着「继续 / 重试 / continue…」时合并成一张写「连续 N 次」（`foldApiErrors`）；点开看请求 ID 和 Session（可复制）、时间、原文（可选中、可复制）。「重试」只在这张卡是对话的最后一行、Agent 没在工作、没有待发的消息、错误不是「要处理」（登录过期、参数错）时出现，点了发「继续」（走 outbox）。Agent 对话和 Persona 对话都适用。
+- 进行中那一轮：工作行在「正在运行 swift test，第 5 步」后面接每秒走的用时（「，1 分 20 秒」，R1）。
+- Claude 给的下一条建议（会话的 `suggestion`）：会话空闲、输入框为空、没有附加上下文时，在输入框上方显示一个标签，点一下填进输入框（X1）。
+- 代码：`core/domain` 的 `MessageText.kt`（`messageText`、`imagePaths`、`FilePaths`）、`lines/ApiErrors.kt`（`ApiErrorInfo`、`foldApiErrors`、`foldRecaps`；`ChatLine.ApiError` / `ChatLine.Recaps` 在 `LineModels.kt`，`chatLines` 最后做这两步）；`feature/chat` 的 `ChatRowActions.kt`（对话页给每一行的能力：全文、打开路径、照片、查看器、菜单、重试，经 `LocalChatRowActions`）、`AttachedPhotos.kt`、`MessageMenu.kt`、`MessageHandoff.kt`（`handToJarvis`、`rememberHandToJarvis`）、`ToolDetails.kt`、`ApiErrorCard.kt`（报错卡和回顾行）、`MessageExtras.kt`（看全文、相对时间、建议）、`ContentPresentation.kt`（`messageModel`、`patchDiff`、`unifiedDiffLines`）；设计系统的 `ChatParts.kt`（`ChatPictureFrame`、`PhotoThumbnail`、`PhotoRow`、`PathChip`、`ChatNoteChip`、`ErrorCard`、`DetailField`，组件目录「对话里的附件和报错」一节）。App 只在 `ShellChat.kt` 传 `files`、`onOpenPath`、`onHandToJarvis`，在 `ChatWiringModule.kt` 给 `ChatAppBindings.files`。
+- 单测：`core/domain` 的 `MessageTextTest`、`lines/ApiErrorsTest`（旧 `ApiErrorTest` 的用例）、`LinesFixtureTest`（新的两种行）；`feature/chat` 的 `MessageContentTest`（照片、文件、Codex diff、提问、走动的用时、截断）、`MessageMenuTest`（菜单项、引用、交给 Persona、重试条件、报错标签、相对时间、建议）、`ChatPicturesTest`（从电脑读照片、查看器的图片列表）。
+- 假 hub：`MOCK_CHAT_CONTENT=1` 加一个「看图、文件和计划」会话（MacBook，`/Users/me/code/weather`）：两张照片（一张读不到）、只有照片的消息、带路径的回复、计划 / 提问 / 子任务、一条被截断的长回复；「排查 /orders 接口变慢」（Codex，在跑）多两个文件改动（一个 patch、一个新文件）；Persona 的「帮我约周五和韩梅梅吃饭」多一张照片（服务器上的照片只在不开 `MOCK_FILES` 时读得到）。报错卡用 `MOCK_API_ERRORS=1`（Persona 首页对话连续 3 次 502 带重试，「检查 PR #42」最后是登录过期），回顾用 `MOCK_RECAPS=1`，建议用 `MOCK_SUGGESTION=1`（「检查 PR #42」），对话里的图用 `MOCK_CHAT_IMAGES=1`。
+- 统一验证时要截（三套风格 × 深浅色，`debug.style`、`debug.theme`，`debug.openSession <机器>/<会话>` 直达）：带两张照片（一张失败）和只有照片的消息、文件标签和点开后的文件页、计划 / 提问 / 子任务的详情、Codex 的 patch 和新文件、看全文前后、回顾一行和面板、长按你的消息 / Agent 的回复 / 工作过程里的中间回复的菜单、「选择文本」页、作为上下文后输入框上方的卡片、交给 Persona 后落到 Persona tab、报错卡（连续 3 次带重试、登录过期没有重试、展开详情）、跑着的工作行在走的用时、输入框上方的建议标签；组件目录「对话里的附件和报错」一节。
+
 ## 假 hub 批量截图
 
 先启动专用 Android 模拟器，再指定序列号和输出目录：
@@ -568,6 +701,136 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 - 验证（2026-11-02）：单测 `ProactiveStoreTest`（整表 PUT 带回其他定时任务和 hub 字段、开关立即生效和失败恢复、回包丢失不算失败、编辑只写改过的字段、新建重试不重复、被删的不写回、删除、取消跟进和失败、立即运行跟进和定时任务、读取失败保留旧数据、传输层的取消算失败）、`ProactiveTextTest`（规则、时刻和偏移、倒计时、晚了多久、错误、上次运行、跟进去向、时间线和那句话、页面键）。模拟器上连假 hub 把开关、编辑保存、长按立即运行、取消跟进、立即运行跟进、模板新建、删除、未保存返回都点了一遍，hub 收到的内容都对；真实外壳里点过设置 › 助手 › 主动做事、返回、运行记录打开对话（落到 Persona tab）、Persona 抽屉「定时任务」打开和返回；三套风格 × 深浅色、手机和平板都截图看过。真机和真实 hub 没有测；页面性能未实测。
 - 设计系统里没有时间选择和周几选择的组件：这两个件写在 `proactive/ProactiveComponents.kt` 里，只用 token（色板、字体、`shapes.chipShape` / `controlShape`、`Tokens.Space`），不按风格分支；以后设计系统有了对应组件再换过去。
 
+## 终端与链接（主线旧 App 移植，2026-11-02）
+
+主线旧 App（单模块）在终端和链接上的功能按新架构补齐，交互和取舍以 iOS 为准。代码在 `feature/terminal`（`README.md`）、`core/terminal`、`feature/chat`（`LINKS.md`）和外壳的 `app/…/ui/ShellLinks.kt`。
+
+终端：
+
+- 键栏多一个「⇧Tab」（Claude Code 切模式，一个键而不是 ⇧ 再 Tab）。所有键是设计系统的 `JKeyCap`：Ctrl / Alt / ⇧ 点一下只管下一个键（着色加描边），按住时实底，快速双击锁住（实底加下划线），和 iOS 一样。
+- 接管 / 只读记在手机上（SharedPreferences `jarvis-terminal`，不跟配对走），下次打开沿用；「接管终端？」弹框里选只读只管这一次。
+- 只看和读屏降级时也能按键（2026-11-02 拍板）：键栏、键盘、粘贴走 `POST /api/v1/sessions/{m}/{s}/keys`，同一时间一个请求，在途时打的字攒进下一个（先文本后键），发完立刻再读一次屏幕；发失败时丢掉排着的键并提示「按键没有发出去」。滚轮和点击仍只在接管时有。
+- 接管时滚出屏幕顶的行攒在手机上（最多 3000 行，`ScrollbackGrid`）：「选择文本」里能看到，node 不支持 `terminal_scroll` 时手指滑动在这些行里本地翻。键盘收起、窗格变高后程序重画出的行会从攒下的里去掉。只看时视图贴着最后一行（以前从第 0 行画，长的镜像屏幕先看到最上面的旧内容）。
+- 字形：框线（含圆角、虚线、半线）逐格画，⏺ ⏸ ⏵ ⏹ ⏴ ● ■ ▶ ◀ 按形状画（打包的 JetBrains Mono 没有这几个，系统回落到 emoji 字体会画成两格宽的彩色图），✔ ✳ 等加 U+FE0E，OSC 8 链接画半透明下划线（点了仍是终端单击，iOS 会打开链接，这里没做）。
+- 选择文本：顶栏拷贝按钮，整页纯文本，等宽不折行、横竖滑、「全部拷贝」。没做 iOS 那样在格子上直接选。
+- 显示面板（顶栏右边）：字号 7–20、步长 0.5、默认 15，单位 dp（不跟系统字体大小，接管时列数稳定），存在手机上；接管时换字号就是换网格。自动换行开关从顶栏挪到了这里。
+- 接管中、只看改在标题下的一行说明（「正在接管…」「电脑 172×45」「每秒读一次屏幕」），不再在终端上方放提示卡：提示卡出现和消失会改终端高度，接管时窗格因此多重排两次。
+
+链接：
+
+- 预加载只取最后 40 条里 15 分钟内 Agent 回复的前 3 个链接，主机没有点的不算；池最多 4 个页面。
+- WebView 渲染进程崩溃 / 被杀只丢掉那一页（卡片里「重新载入」），第三方 Cookie 打开，内存紧张时销毁不在屏幕上的页面，看过的页面先用磁盘缓存；⋯ 菜单加「分享」；选中菜单的项在 `onPrepareActionMode` 里加，排在「复制」前面。
+- 对话以外的网页（外壳的卡片：知识库、Persona 首页之外的页面；收件箱打开的网页）选中文字只有「交给 Persona」：写一句要它做什么（可空），进 Persona 主对话并切到 Persona tab。收件箱网页经 `feature/inbox` 的 `LocalInboxWebSelection` 由外壳提供。
+- 对话里的 `jarvis://session|tab|assistant|inbox` 在 App 内跳转（外壳经 `LocalChatAppLinks` 接到导航），`jarvis://pair`、`jarvis://open` 不认；`mailto:` / `tel:` / 其他 App 的链接先确认再交给系统，`intent:` 按旧规则清洗；危险协议不打开。
+- `<jarvis-context>` 和 iOS 逐字一致（正文不转义，只去掉 `</jarvis-context>`；多个之间一个换行），只带上下文时正文「参考上面的内容。」，「AI 修改」没写要求时「按上面选中的内容修改。」，「交给 Persona」没写时「看看上面这段。」。
+
+验证：单测 `core:terminal` 的 `BoxDrawingTest`、`ScrollbackGridTest`（iOS 的录制帧 `apple/PersonaTests/Fixtures/terminal-control-scroll.jsonl`），`feature:terminal` 的 `TerminalPortTest`、`TerminalCriticalPathTest`，`core:hub` 的 `HubTerminalTransportTest`，`feature:chat` 的 `ChatLinksTest`。假 hub：
+
+```sh
+# 接管、攒行（每 0.7 秒写一行）、键盘；只看时的 /keys 记在 GET /mock/keys
+MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_SCROLL=1 MOCK_TERMINAL_INTERVAL=0.7 PORT=<端口> python3 scripts/mock/mock_hub.py
+# 只看时镜像真实的 Claude Code 帧（圆角输入框、⏺、⏵⏵）
+MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe-permission.jsonl MOCK_TERMINAL_INTERVAL=0.2 PORT=<端口> python3 scripts/mock/mock_hub.py
+# 各种协议的链接（第一个 Agent 对话最后一条回复）和 Jarvis 主对话 / 收件箱里的链接
+MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
+```
+
+终端页直达：`--es debug.openLink 'jarvis://open?target=terminal&machine=macbook&session=<会话 id>'`。2026-11-02 在模拟器上用上面两个终端开关看过接管 / 只读、修饰键三态、选择文本、显示面板、字号 7 / 15 / 20、只看时键盘走 `/keys`，三套风格 × 深浅色；链接部分没在模拟器上看（各车道停止构建后才写完），选中菜单的实际顺序、渲染进程崩溃后的恢复、拼音输入要在设备上确认。
+
+## 机器、引擎、模型配置与新建 Agent
+
+2026-11-02 从主线旧 App（单模块）按行为移植过来（分组 E：机器页、引擎、Claude Code 设置、模型配置、异步新建、预填的新建页、设备页的已撤销分组）。
+
+- **机器页**（Agents › 列表设置 › 机器监控 › 点一台，或树里电脑栏头的仪表按钮；`MachinesRoute` / `MachineDetailRoute`）：
+  - 卡片上的部署行：在线且 `node_mismatch` 或 `deploying` 时出现，「重新部署」= `POST /api/v1/machines/{id}/deploy`；进行中、上次失败（`deploy_error`）跟着 `machines` 推送变，发出失败提示「部署失败：原因」（409 的原因原样显示）。列表和详情是同一张卡片。
+  - 「引擎与连接」一组：「引擎」打开引擎选择（`EngineRoute`）；「重新连接」= `POST …/reconnect`，之后最多等 15 秒看这台变成在线，等的时候每 3 秒读一次机器列表（推送丢了也能等到），提示「已连上」「还没连上：<机器的 error>」「重新连接失败：原因」。脚注写接入方式（hub 所在的机器 / hub 通过 ssh <别名> 接入）。
+  - 「启动器 N」：`GET …/launchers`，名字等宽、模型取路径最后一段；机器离线不读，上线后自动重读，读失败显示原因。
+  - 历史曲线多一张磁盘图（历史里是已用字节，按最新一次的磁盘总量算成百分比，总量未知时不画）；系统信息多开机于、herdr、Claude Code、Persona node 版本。hub 上已经没有这台机器时页面写明。
+  - 代码：`feature/machines` 的 `MachineActions.kt`（重连 / 部署 / 启动器，有单测）、`MachineManagementSections.kt`；接口 `core:contracts` 的 `MachineManagement`，实现 `core:hub` 的 `HttpMachineManagement`（走配对连接的 `request`），`app/…/di/MachineManagementModule.kt` 每次调用取当前配对。体验模式没有这些操作。
+- **引擎**（[engines.md](engines.md)）：
+  - 配对完成后、准备清单之前插入必选的一步（`PairingScreen`）：hub 所在的机器（`kind: local`，没有就第一台）报了 `engines` 才有；没有返回键、不能跳过，保存失败（「保存失败：原因」+「必须选一个引擎才能继续……」）停在本页；预选现在的引擎（没选过是 herdr），不按检测结果猜，推送更新会跟着动，直到用户自己改过。
+  - 进程被杀后能恢复：配对时把要问的机器记在 `ReadinessRecords`（`engine-pending`），App 重启后 `OnboardingScreen` 先显示这一步再进准备清单；读不到那台机器时可以重试或「先继续」。
+  - 机器页的「引擎」打开同一页（`EngineSelectionScreen`，`EngineRoute` 由 `settingsDetailEntries` 注册）；成功提示「已切换引擎」/「已保存，连上后生效」，返回的 Machine 立刻替换列表里那台（`SessionsRepository.applyMachine`）。规则（选项、能不能选、检测文案、脚注）在 `core:domain` 的 `engines/Engines.kt`。
+- **Claude Code 设置**（设置 › 电脑 › Claude Code 设置，`SettingsPage.ClaudeCode`，深链 `page=claudecode`）：选一台在线机器（第一次是 hub 所在那台，离线了退回第一台在线的）和「同时改所有在线机器」（默认开），两项记在本机；开关 / 选项 / 文本三种行，没设过标「默认」，文本清空 = 发 JSON null 回到默认；同时改时逐台写，全部成功提示「已应用到 N 台机器」，有失败逐台列出并重读。
+- **模型配置**（设置 › AI › 模型配置，`SettingsPage.ModelConfig`，深链 `page=modelconfig`）：hub 的用途目录按分组列出、可搜索（名称、分组、id、模型），每行写生效的供应商和模型、状态或继承来源；一个用途一页（`ModelPurposeRoute(purposeId)`，语音页可以直接打开 `plugin.<id>`）：当前生效、供应商选择（隐藏的标「已隐藏」，引用了不可用的标「当前引用不可用」，换供应商清掉模型和思考强度）、具体模型、思考强度（Messages API 的供应商不显示）、恢复继承；保存是带 revision 的 PATCH，空值发 null，409 时保留编辑、提示「配置已在别处修改……」并只给「重新加载（丢弃编辑）」。旧 hub（路由 404、没有 JSON 错误）提示先更新服务器，hub 有配置但没有这个用途时说没有。插件用途的「具体模型」暂时是文本框：语音插件的模型目录接口随语音模块（G 组）接入后再换成选择。
+- **新建 Agent**：
+  - Claude 一律异步新建（`async: true`）：hub 立刻回一个 `starting` 的会话，先并进会话列表（`SessionsRepository.adopt`），对话页马上打开；第一条消息不放 `prompt`，改带 `name_hint` 起标签名，消息本身当普通消息走待发队列，它的 id 和启动的操作 ID 一起存在启动记录里（`AgentCreationStore`），回执丢了、进程重启后核对时用同一个 id 入队，只发一次。Codex 照旧同步新建、第一条消息放 `prompt`（必填）。
+  - hub 有「新建 Agent」用途（`agent.new`）时默认「跟随模型配置」（发空 launcher），不再自动带上次的启动器；在「本次启动器」里手选一个是这一次的覆盖。旧 hub 照旧选启动器；读不到这个用途时提示原因，要先选启动器或重新加载。
+  - 对话页输入框上方：「正在启动 Claude，消息会在它就绪后发出」/「没有启动起来：原因」（`ChatStartingNote`）。
+  - `NewAgentRoute(machineId, cwd, prompt)` 是同一张表单的页面版，给知识库的「开 Agent」：那台机器在线时预选机器和目录（都能改），不在线就选别的并写明；开好后页面关掉，对话在 Agents 打开。
+- **设备**（设置 › 设备）：已撤销的凭据单独一组（灰，「撤销于 …」），没用过的设备显示「添加于」，写明凭据的意思；hub 不支持设备凭据（404）、没有数据库（503）时直接说明。
+- 调试直达：`--es debug.openPage machine:<机器 id>`、`engine:<机器 id>`、`purpose:<用途 id>`、`new-agent` 或 `new-agent:<机器 id>:<目录>`（预填）。配对后的引擎一步要用配对链接走配对页（`debug.mockAddress` 是静默配对，看不到这一步）。
+- 假 hub 开关：`MOCK_NODE_MISMATCH=1`（Mac Studio 的 jarvisd 不是 hub 这一版）、`MOCK_DEPLOY_ERROR=<原因>`（重新部署失败）、`MOCK_ENGINE_ERROR=1`（保存引擎 503）、`MOCK_MODEL_CONFLICT=1`（保存模型配置 409）、`MOCK_START_SECONDS=<秒>`（新会话「正在启动」多久）、`MOCK_START_ERROR=<原因>`（到时间后启动失败，对话页显示「没有启动起来」）、`MOCK_MACHINES=1`（离线的实验室主机，重新连接后上线）。
+- 单测：`core:contracts` 的 `MachineManagementContractTest`；`core:hub` 的 `HttpMachineManagementTest`、`HttpModelConfigurationTest`、`AgentCreationModelTest`、`DeviceCredentialsTest`；`core:data` 的 `SessionsAdoptTest`；`core:domain` 的 `EnginesTest`；`feature:machines` 的 `MachineActionsTest`；`feature:settings` 的 `SettingsMachinesTest`（引擎选择、Claude Code 设置、模型配置）、`DeviceCredentialsStateTest`；`feature:agents` 的 `NewAgentAsyncTest`（第一条消息只发一次、跟随模型配置、Codex、预填）；`feature:chat` 的 `ChatStartingNoteTest`。
+
+## 语音对话（hub 语音插件）
+
+和 hub 上的语音插件全双工对话（契约见 [plugins.md](plugins.md)「语音」）：页面开着就一直听，Persona 说话时直接开口就能打断。代码在 `feature/voice`，传输在 `core/hub` 的 `HttpVoicePlugins`，契约 `core/contracts` 的 `VoicePlugins`，路由 `VoiceRoute(pluginId, title)`。
+
+- 入口：模块对外只有两样。`voiceEntries(navigator, plugins, identity, onModelConfiguration = null)`（回调参数是用途 id） 注册 `VoiceRoute`（`Root.kt` 里和机器监控同样写法，体验模式没有这份服务，打开是说明页）；`rememberVoicePlugin(plugins, active)` 在 `active` 为真时取一次 hub 上第一个 `kind == voice && status == running` 的插件（404、失败都当没有，配对换了重取），宿主据此决定出不出现「语音对话」入口（Persona 标题菜单，由宿主接）。服务是 `ShellSession.voice`，和 `metrics` 一样每次调用按当前选路、钉扎的客户端和 token 建 `HttpVoicePlugins`，配对换了就取消。
+- 权限：第一次进页面申请 `RECORD_AUDIO`（另声明 `MODIFY_AUDIO_SETTINGS`）。没给时是空状态「语音对话要用麦克风 / 只在这一页打开时听，离开就结束，不在后台录音。」，拒绝后「没有麦克风权限 / 语音对话用不了。可以在系统设置里给 Persona 打开麦克风。」，按钮「允许使用麦克风」：系统还会问就再申请一次，已经不再问（拒绝两次）就打开系统里这个 App 的设置页，回来时重新检查。
+- 模型：读模型配置的用途 `plugin.<id>`（`VoicePlugins.modelChoice`）和插件的 `/models`。状态（`status`）有值且不是「未验证」：「语音模型不可用」加原因；配置的模型不在插件目录里：「配置的语音模型不在插件目录中，请在模型配置里重新选择。」；旧 hub（404）用插件默认模型（`/models` 的 `default`，没有就不带 model）；别的读取失败显示「读不到语音模型配置」和原因，只能重试，不当成没有配置（[model-config.md](model-config.md)「生效边界」）。模型只在开始或重新开始时读。模型配置页不在这个模块：宿主传了 `onModelConfiguration(purposeId)`（参数是用途 id `plugin.<插件 id>`，`voicePurposeId`；宿主接到模型配置单项页）才有「模型配置」入口（右上角菜单和「模型不可用」页的按钮），没传时右上角直接是「音色」按钮，「模型不可用」页只有「重试」。
+- 音色：右上角「音色」打开浮层，列出这个模型的音色（「女声 / 男声 · 中文、英文 · 默认」），当前的打勾，点一下选中并关闭；拿不到列表时「音色列表没拿到：…」，对话照常用上次选的音色。选择按配对存在本机（配对目录 `hub-data/<配对>/voice.json`，每个插件一份，取消配对时随目录删掉）；插件已经没有这个音色时用默认的，但记录不删（换回别的模型可能还有）。换了音色或模型就重开一次对话。
+- 页面：顶栏插件名、副标题「模型 · 音色」；中间的光球（设计系统 `VoiceOrb`：说话时快跳，听时慢呼吸并跟着音量放大，连接中转圈，静音和结束变灰；玻璃是一颗发光的球，晨报是墨色圆盘、说话时荧光笔圈住，看板是状态色方块加五格电平）；状态行（`VoiceStatus`）「正在连接… / 在听 / 正在说，直接开口就能打断 / 已静音 / <工具>… / 对话已结束」，出错时下面一行红字；字幕（`VoiceCaption`）自己的在右边气泡，Persona 的是正文，没定稿时变淡，跟着滚到最新；底部三个带字圆按钮（`VoiceControl`）「静音 / 取消静音」「打断」（只在正在说时可点）「挂断」，结束后左边换成「重新开始」。玻璃的背景光跟着对话变：听时蓝，说时薄荷绿。
+- 协议（`VoiceProtocol.kt`，有单测）：连上发 `{"type":"start","model":…,"voice":…}`（选了才带）；`ready` 之后才开录音和播放，采样率以 `ready` 为准（缺省 16000 / 24000，不合理的值也按缺省）；上行 20 ms 一帧 PCM16 单声道二进制，静音时照送全零；下行二进制立即播；`transcript` 同 id 原地替换、空白的新行不加；`tool` 可以同时开几个，显示最新未完成的；`clear` 清掉没播完的；`error` 显示，`fatal` 结束；「打断」发 `{"type":"interrupt"}` 并清播放。WebSocket 没有读超时、15 秒 ping。
+- 结束和出错：离开页面、挂断、App 进后台（`ON_STOP`）都结束对话，不在后台录音；对话期间屏幕常亮，结束后放开。关闭码 1001（插件重启）或对话中断线：「连接断了（语音服务可能刚重启，或网络不稳），点下面的按钮重新开始」；升级被拒 404：「hub 上没有语音插件」；开始前连不上：「连不上语音服务：<原因>」（原因按 HTTP 状态和网络错误说成中文：403 是只读设备，5xx 是语音服务没有响应）；麦克风打不开或中途没了：「麦克风打不开」；插件带原因的其他关闭码显示原因。
+- 音频（`AndroidVoiceAudio`）：`VOICE_COMMUNICATION` 音源 + 系统回声消除 / 降噪（外放时模型不会听到自己），`MODE_IN_COMMUNICATION`，有线 / 蓝牙 / USB / LE 耳机或助听器优先，否则外放扬声器（不是听筒）；申请通话类的短暂音频焦点（别的 App 的音乐会暂停）；结束时还原音频模式、通信设备和焦点。音频硬件在 `VoiceAudio` 接口后面，状态机（`VoiceSession`）和页面逻辑（`VoicePage`）在 JVM 单测里用假音频、假插件测。
+- 和旧 App 的差别：进后台就结束对话（旧 App 页面还在就一直录）；申请音频焦点；助听器也算耳机；拒绝过两次后按钮去系统设置；音色按配对存在配对目录（旧 App 是全局 SharedPreferences）；旧 hub 不再读本机的旧模型选择（新 App 从来没有）；没有模型配置入口时右上角直接是「音色」，不放只有一项的菜单。
+
+截图：假 hub 的 `MOCK_VOICE=1` 提供一个运行中的语音插件、它的音色和模型、模型配置里的 `plugin.voice`，以及按脚本说话的 WebSocket（ready 后 1.5 秒用户字幕、4 秒工具「查日程」、7 秒 Persona 开始说并持续发静音音频、11 秒工具结束、30 秒说完，收到 interrupt 回 `clear`）。别的模式：`drop`（14 秒时用 1001 关闭）、`bad-model`（模型配置说不可用）、`missing-model`（配置的模型不在目录里）、`old-hub`（没有 `plugin.voice`，404）、`error`（ready 后来一个 fatal 错误）、`off`（插件不在运行，WebSocket 404）、`slow`（start 之后 8 秒才 ready，一直「正在连接…」）。`GET /mock/voice?mode=<模式>` 运行中切换模式（重启假 hub 会换 hub_id，配对就失效了），`GET /mock/voice` 看 App 发过的 start、interrupt 和音频帧数。模拟器按规矩用 `-no-audio` 启动，没有麦克风可开，调试包加 `--es debug.voiceAudio fake` 让语音页用假音频（静音上行、丢弃下行、电平是一个缓慢变化的假值），正式包没有这个入口：
+
+```sh
+MOCK_VOICE=1 PORT=<端口> python3 scripts/mock/mock_hub.py
+adb -s <模拟器> reverse tcp:<端口> tcp:<端口>
+# 配对见上文「App 外壳与页面直达」（debug.mockAddress），之后：
+adb -s <模拟器> shell pm grant <包名> android.permission.RECORD_AUDIO
+adb -s <模拟器> shell am start -n <包名>/persona.android.debug.DebugEntryActivity \
+  --es debug.openPage voice --es debug.voiceAudio fake --es debug.style glass --es debug.theme dark
+```
+
+`debug.openPage voice` 打开插件 id 为 `voice` 的语音页（落在 Persona tab）。组件目录（调试版）有「语音对话」一节，几种光球、状态行、字幕和按钮都在。
+
+验证（2026-11-02）：单测 `VoiceProtocolTest`（旧 App 的 `VoiceTest` 全部改写过来，加上采样率、缺字段的帧、工具、电平）、`VoiceTextTest`（状态行、光球、音色说明、各种失败的文案、模型规则、声音路由）、`VoiceSessionTest`（ready 之前不录不播、start 只发一次、静音照送全零、字幕和工具、clear 和打断、非致命和致命错误、1001 和断线、开始前失败、麦克风打不开、正常关闭、停了以后什么都不认）、`VoicePageTest`（旧 hub 用插件默认模型、不可用不换别的模型、读不到配置不当成没有、音色按配对保存并重开、插件没有的音色不发、音色列表拿不到照常对话、重新开始重读配置、进后台结束）、`VoicePrefsTest`，`core:hub` 的 `HttpVoicePluginsTest`（MockWebServer：插件列表、音色、模型、模型配置、配对换了取消、WebSocket 双向、关闭只报一次、升级被拒带状态码）。模拟器（API 35，`-no-audio`，假音频）连 `MOCK_VOICE` 假 hub：三套风格 × 深浅色截了没有权限、被拒、连接中、在听、用户字幕、工具、正在说（带字幕和工具）、说完、已静音、音色浮层、断线结束、模型不可用，玻璃深色另有配置的模型不在目录、致命错误、没有语音插件、旧 hub；点过打断（假 hub 收到 interrupt、播放清空）、选音色（新开对话带上音色、`voice.json` 写进配对目录）、进后台再回来（对话已结束）、重新开始、挂断，对话中窗口带 `KEEP_SCREEN_ON`，挂断后去掉。真机才能验的：真实录音和回声消除（外放时模型会不会听到自己）、耳机 / 蓝牙的切换、音频焦点、和真实语音插件的延迟和打断手感；这些都没测，延迟未实测。
+
+## Persona 页（现在要你处理的事、对话历史、交接对话的标题）
+
+2026-11-02 从主线旧 App（和 iOS 的 `ShellNeedsYou`）移植过来。代码在 `feature/assistant`：`NeedsYou.kt`、`AssistantData.kt`、`AssistantScreen.kt`；宿主的数据和跳转在 `app/…/ui/Root.kt`、`app/…/navigation/NeedsYouLinks.kt`。
+
+- 现在要你处理的事：Persona 首页（新对话页）的问候下面、建议卡上面（已拍板：和建议卡并存）。先列等你的 Agent（待处理的提问、计划、授权、终端对话框；不算 Persona 自己的对话，按 hub 的屏蔽规则去掉被屏蔽的会话和空间，空间里单独放行的照样算），按 hub 给的顺序；再列收件箱「需要你」里没处理的事，新的在前。最多 3 行，多出来的写成一行「还有 N 件在收件箱」（N 也算多出来的 Agent，和 iOS 一样），点了去收件箱；一件都没有就整节不出现。每行：左边一个标记（Agent 按请求的种类、用「需要你」的颜色；收件箱按飞书 / 邮件 / 文档、灰色），标题是会话名（没有就目录最后一段，再没有「Agent」）或消息标题，副标题是请求的一句话或消息的摘要（没有摘要用预览），都是单行。点 Agent 的一行打开它的对话（落在 Agents tab），点收件箱的一行打开收件箱列表会打开的那一页（飞书会话或邮件）。纯函数 `needsYou(...)`，单测 `NeedsYouTest`、`NeedsYouLinksTest`。
+- 对话历史（抽屉、宽屏的侧栏）：每一行的 ⋯ 和长按是同一个菜单：「置顶 / 取消置顶」（主对话没有）、「拷贝会话 ID」、在跑的对话还有「结束对话」。置顶存在 hub 的 pins（已拍板，和 Agents 共用一份，所以 iOS / 旧 App 存本机的做法没搬）；「置顶」组标题的 ⋯ 里有「全部取消置顶」，只取消 Persona 自己的对话，不动 Agents 的置顶。「最近」组先列 30 个，其余收成一行「查看全部 N 个」（N 是这一组的总数），点开后全部列出；搜索时列出全部结果。
+- 标题菜单（点标题「Persona」）：助手设置、知识库、语音对话（hub 有运行中的语音插件时，见上文「语音对话」；每次切到 Persona tab 且连着 hub 时问一次 `GET /api/v1/plugins`）、会话信息，打开着对话时再加一条「拷贝会话 ID」。拷贝后提示「已拷贝会话 ID」。
+- 交接对话的标题：从「交给 Persona」开出来的对话，第一句是 `<jarvis-context … title="X">` 标签，hub 按它起标题；历史里显示「交给 Persona：X」（解码 `&quot; &lt; &gt; &amp;`），标签没有 title 时显示「交给 Persona」。没有标题时取最后一句的第一行，先认标签再截到 30 个字（旧 App 先截断，长标题的标签就认不出来了）。单测在 `AssistantTest`。
+- 截图：假 hub 默认就有 5 个等你的请求和几件「需要你」的收件箱（三行 + 还有 N 件）；`MOCK_NEEDS=two` 两行、`MOCK_NEEDS=none` 整节不出现；`MOCK_HISTORY=1` 让历史很长（最近 30 个 + 查看全部）、多一段交接对话和一个置顶，并且保存 App 写的置顶。Persona tab 默认打开主对话，要看首页：点左上角「对话列表」→「返回首页」。
+
+## 大屏两栏：可拖的分隔条、空间页、横放的左右留白
+
+2026-11-01 用户要求「两栏中间能拖、右栏别太小」「别只针对我的机型」，旧 App 做过（`ui/shell/Fold.kt`、`Panes.kt`）；2026-11-02 移植到新外壳。
+
+- 接法：material3-adaptive 1.3.0 的 Navigation 3 list-detail 场景（`rememberListDetailSceneStrategy`）带 `paneExpansionState` 和 `paneExpansionDragHandle` 两个参数，每个 tab 一份（`app/…/ui/PaneDividers.kt` 的 `rememberShellListDetail`）。库自带的 `paneExpansionDraggable` 松手时只会吸到锚点（有锚点就一定吸到最近的一个），做不到「离折痕 28dp 以内才吸，否则停在松手处」，所以拖动是自己写的：把手的 `draggable` 每一帧直接写 `PaneExpansionState.setFirstPaneWidth`，只重排两栏、不重组页面。
+- 规则（纯函数在 `app/…/navigation/PaneSplit.kt`，单测 `PaneSplitTest`，数值照旧 App）：最窄左栏 280dp、右栏 320dp；没拖过时左栏约 38%，夹在 320～420dp，右栏能留 400dp 就留（771dp 的内屏是 320 / 451，平板横放 1280dp 是 420 / 860；原来是 Material 的固定宽度）；拖的时候左栏跟手，经过平放的折痕轻震一下，松手时离平放折痕 28dp 以内吸上去，否则停在松手处；位置按「占宽度的比例」每个 tab 存一份（SharedPreferences `jarvis-panes` 的 `split.<tab>`，存在本机、不跟配对走，和界面风格一样），窗口宽度变了按比例换算再夹回最窄宽度。
+- 收起左栏：只有 Agents，而且旁边开着东西（对话、空间页）时，往左拖过左栏最窄宽度 64dp 以上松手就收起，右栏铺满；把手留在左边缘（变成强调色），拖回来或点一下就展开；右栏关掉（返回）时列表自动回来。收件箱和设置不收（和旧 App 一样）。
+- 分开的折痕（书本式半折、双屏有缝）：两栏固定分在折痕处、不出把手（交还给库的 hinge 避让：expansion state 一旦设了宽度就会盖过 `excludedBounds`，所以这时要 `clear()`）；放平后回到拖过的位置。离边太近的折痕不算。
+- 把手（设计系统 `PaneDivider`，组件目录「两栏分隔条」一节）：线上一颗小把手，左右各伸出 8dp 都能按住拖；鼠标 / 触控板悬停是左右箭头光标；拖动中变宽变深，快要收起时和收起后是强调色。玻璃是一颗半透明的墨色药丸，晨报是一道细墨线，看板是带描边的小格。TalkBack：「调整左右两栏的宽度」，自定义操作「左栏变宽 / 左栏变窄」（每次 64dp）、可以收起时「收起左栏」、收起后「展开左栏」。
+- 空间页进右栏：空间页从盖住整个窗口的 `JFullScreen` 改成路由页 `SpaceRoute(spaceId)`（`feature/agents/…/SpaceEntries.kt`，`ShellPanes.isDetailDestination` 把它算作详情）：宽屏在列表右边打开，手机推入；在空间页里点的会话压在它上面，返回回到空间页。空间页自己建一份 `AgentsViewModel` 和新建会话的 `NewAgentViewModel`（按目的地各一份，菜单和对话框沿用列表的）。
+- 横放时的左右留白：手机横放时摄像头挖孔或三键导航条在左边 / 右边，edge-to-edge 下外壳会画到它们下面。外壳的内容（导航栏、两栏、悬浮坞）按 `WindowInsets.safeDrawing` 的左右两边留白，背景（`PageBackdrop`）照样铺满；用 `windowInsetsPadding` 留白会把左右两边消耗掉，页面里再用 `navigationBarsPadding()` 不会重复留。
+- 截图要看：书本式折叠屏内屏平放（默认位置、拖到折痕附近吸附、拖到最左收起、收起后点一下展开）、半折（`debug.posture book`，固定在折痕、没有把手）、三折屏、平板横放、横放手机，三套风格 × 深浅色；手机横放挖孔在左 / 在右、三键导航条在侧边。拖动手感要在折叠屏 / 平板模拟器上手试。
+
+## 对话里的文件和 Git
+
+Agent 对话页 ⋯「文件」「Git · N」打开会话目录的文件和 Git（只读，`feature/files`）。它是对话页里的一层，不是导航页：返回键先关预览，再在文件夹里逐级往上（只到面包屑的顶），最后回到对话；顶栏左边的返回直接回对话。助手对话没有这些入口。接口是 hub 转给那台机器 node 的 `GET /api/v1/machines/{mid}/fs|file|git/status|git/diff|git/log|git/show`（`core/hub/.../HubSessionFiles.kt`）。
+
+- 按路径直接打开：`SessionFilesScreen(..., initialPath = 路径)`（参数表最后一个，可选）。给消息里的文件标签、工具卡片的路径和 diff 文件头用：相对路径按会话目录补全，`~` 开头的原样交给 hub（只有 hub 知道 home 在哪）。是文件就直接打开预览，返回直接回对话、不先退到目录列表；路径以 `/` 结尾，或者 hub 回 `is_dir`，就在浏览器里打开那个文件夹，它就是面包屑的顶，从那里返回也回对话。会话目录还没到时，绝对路径和 `~` 路径也能打开。
+- 浏览：面包屑是一排 chip（当前一级实心），进去时自动滚到最后；⋯「上一级文件夹」可以一直走到 `/`，面包屑的顶跟着往上；「显示隐藏文件」存在本机（SharedPreferences `jarvis-files`，不跟配对走），隐藏文件的名字变淡；目录在前，大小和相对时间（刚刚 / N 分钟前 / N 小时前 / N 天前 / 日期），文件是 Git 字母、文件夹是「有改动」（里面有冲突时是琥珀色）；去过的文件夹先显示上次的列表再刷新。读不出来时显示 node 自己的原因（macOS 不让 jarvisd 读「桌面」时，说明要在哪里授权），网络问题才说「连不上 hub」；刷新失败时保留上次的列表。
+- 预览：Markdown 默认渲染（README 里的 `<img>` `<a>` `<br>` `<p>` 先转成 Markdown，裸链接在第一个非 ASCII 字符处结束），⋯ 切「查看源文件 / 渲染 Markdown」；Markdown 里指向同一台机器上文件的链接在文件页里打开，图片经 hub 读那台机器上的文件（网页图片不取，App 没有图片的网络栈）。长文档按块懒加载。代码和文本等宽带行号、两个方向滑；图片可以缩放；PDF 逐页渲染（`PdfRenderer`，按显示宽度在后台画）；其他「无法预览」并写明类型和大小。顶部一行是大小，超过 2 MB 时写「只显示前 2 MB」。
+- ⋯ 菜单：拷贝路径、拷贝内容、分享、刷新。分享：文本按文本分享（超过 10 万字符改成文件，选择器经 binder 传，太大会崩）；图片、PDF 等写进 `cache/files-share/`，经 `FilesShareProvider`（authority `${applicationId}.files.share`）分享；截断了的二进制文件不给分享（打不开）。拷贝都经 `LocalAppFeedback` 提示「已拷贝路径」等。
+- Git：分支卡（上游、已同步 / ↑↓、贮藏 N、仓库根）；「改动」标题右边是 +N −N 合计，每行文件名、文件夹（改名时「← 原路径」）、字母、暂存状态、± 或「二进制」，点开看 diff（两半都有时「未暂存 / 已暂存」切换）；「提交历史」每行两行标题、短哈希、作者、相对时间、「HEAD」和分支 / 标签 chip（本地分支突出，远端分支和 tag 是中性的；远端名取自上游，`feat/x` 这种带斜杠的本地分支也认得出），30 条之后「加载更早的提交」。
+- 提交详情：标题、说明、作者、完整日期「yyyy年M月d日 HH:mm」、完整提交号（点了拷贝，提示「已拷贝提交号」），「N 个文件」列表，点一个文件看它那一段 diff（`git show` 每个提交只取一次，按 `diff --git` 拆开，路径从行尾取、空格保留，改名按新旧两个名字都找）。整个提交的 diff 超过 512 KB 被截断时，截断之后的文件说「改动太大，没有带回来」，被截在中间的那个文件写「改动太大，只显示了前 512 KB」。diff 页不再显示 `diff --git` / `index` / `---` / `+++` 这几行文件头（标题已经说了是哪个文件；hunk 里以 `---` 开头的是被删的行，照常显示）。
+- 时间：node 发的时间带机器自己的时区偏移（`2026-10-31T13:58:40.205893083+08:00`），Android 12 / 13 的 `Instant.parse` 不认，这里统一用 `fileTime`（`OffsetDateTime`）；Go 的零时间（`0001-…`）当没有。
+- 代码：`feature/files/src/main/kotlin/jarvis/feature/files/`：`FilesScreen.kt`（入口和浏览器）、`FilesState.kt`（`FilesController`：绝对路径的浏览、页面栈、返回、提交缓存）、`FilePreview.kt`、`FileMarkdown.kt` / `FileMarkdownText.kt`、`PdfPages.kt`、`FileShare.kt`、`GitPages.kt` / `GitText.kt`、`FilesPaths.kt`（路径、大小、时间）、`FilesErrors.kt`、`FilesPreferences.kt`。模块依赖多了 `:core:hub`（`FilesErrors.kt` 读 `HubFailure` 里 node 给的原因）、Markdown 渲染库和 `androidx.core`（FileProvider）。单测：`FilesControllerTest`、`FilesPathsTest`、`GitModelsTest`（按真实 node 回包的形状：带偏移的时间、零时间、refs、改名 / 冲突 / 未跟踪的字母）、`FilesCriticalPathTest`。
+- 假 hub（`scripts/mock/mock_hub.py`）：浏览树（`MOCK_TREE`，一直有）里有 `docs/guide.pdf`（两页，脚本里生成）、第三个提交带 tag；home 以上的文件夹（`/`、`/Users`）能列出来；`~/Desktop` 回 node 的 macOS 授权说明（看加载失败）。`MOCK_FILES=1` 时 `…/file` 先由大文件集合回答，不在里面的回落到浏览树（PDF、图片、文件夹也能打开）。`MOCK_TIME_OFFSET=+08:00` 让文件和提交的时间带这个偏移（和真实 node 一样），默认是 `Z`。
+- 截图：起假 hub（`PORT=<端口> MOCK_FILES=1 MOCK_TIME_OFFSET=+08:00 python3 scripts/mock/mock_hub.py`），`adb reverse` 后用 `DebugEntryActivity` 的 `debug.mockAddress` 自动配对，`debug.openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`（会话目录 `/Users/me/code/weather`）打开对话，⋯ 里点「文件」。三套风格和深浅色用 `debug.style` / `debug.theme`；按文字点控件用 `uiautomator dump`（属性值里可能有 `>`，用 XML 解析，别用正则截 `<node …>`）。
+- 验证（2026-11-02，模拟器 API 35 连假 hub）：上面的路径都点过一遍（隐藏文件开关、走到 `/` 再回来、加载失败、Markdown 渲染和源文件、README 里的图和指向别的文件的链接、分享文本 / 大文本 / PDF、PDF、图片、代码、Git、历史、提交、单文件 diff、拷贝提交号），三套风格 × 深浅色的手机尺寸和平板双栏都截图看过。`initialPath` 是在本地临时让对话页传路径点的（文件、`~` 路径、不带斜杠的文件夹、带斜杠的文件夹、读不到的文件，返回都回到对话），对话页的入口不在这个模块里。真机和真实 hub 没有测；PDF 渲染和长 Markdown 的性能未实测。
+
 ## 主线旧 App 新增、待移植到新架构
 
 主线（`origin/master`）在 `81dc6928` 之后给旧单模块 App 加的功能和改动。本分支已经用多模块新架构重做了 Android，下面这些新架构还没有对应实现，逐项待移植，不混进上面的新架构描述。PR 号来自 `git log 81dc6928..origin/master --format='%h %s' -- android docs/android.md`。
@@ -578,25 +841,3 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 - 手机数据：Health Connect 的 `phone_health_summary`（#278）：读每日汇总（七种指标，按本地自然日切分），权限走 Health Connect 授权框，缺的指标列在结果的 `not_granted` 里；依赖 `connect-client:1.1.0-alpha08`，Android 8–13 要装 Health Connect App。
 - 收件箱：在别处已经读过的事项不再标成 @all / 未读（#246）。
 - 脚本目录调整（#505）：`scripts/` 按用途分了子目录，本文档统一写成 `scripts/app/android.sh`、`scripts/mock/mock_hub.py`。
-
-### 旧版已有、新架构文档还没逐项写的
-
-这些在主线旧 App 里已经有（PR 号这里没有逐个核对，要查就看 `git show origin/master:docs/android.md` 的对应小节）：
-
-- 配对欢迎页：扫 `personad hub pair` 的二维码（`jarvis://pair?url=…&token=…`）或手填地址和 token；配对后用 `POST /api/v1/auth/tokens`（`kind: phone`）换这台手机自己的 token，旧 hub 没有时沿用配对 token。
-- 外壳：顶栏 ☰ ·「助手 | Agents」切换 · 圆按钮；侧边栏（横向拖出、对话历史置顶 / 最近、「新对话」药丸）；弱网时顶栏下的小药丸（等待网络 / 连接中…）。
-- Agents 列表：需要你卡片、按项目 / 状态 / 机器分组、置顶和屏蔽、左滑关闭、长按菜单、搜索和「全部 / 需要你 / 未读 / 工作中」筛选；空间页（在同一个空间开新标签）；空间标题的 ⋯（置顶、屏蔽、重命名）。
-- 对话：顶栏胶囊「空间 › tab」和会话信息（`GET …/info`，拷贝 session id 和恢复命令）；麦克风（系统语音识别器，`RecognizerIntent`，手机没有语音识别时不显示）；快捷命令（/compact、/context、/clear 等，`/clear` 先确认）；API 报错卡片（白话原因、连续计数、「重试」）；排队中的消息（撤回编辑 / 删除，`POST …/queue {keep}`）；权限模式、思考强度和 herdr 里 Claude 的模型标签（`POST …/modes`、`/model <别名>`）。
-- 对话：工作过程折叠（每轮「工具 · 思考 · 回复 · 时长」，点开逐步展开）、消息长按菜单（复制、选择、引用、分享、交给 Persona、作为上下文、编辑）；图片全屏查看、左右滑、保存相册、框选和画笔编辑；附件（照片、拍照、文件；文件不自动发送）。
-- 对话里的实时终端：VT 子集、手机尺寸接管、键栏和 Ctrl / Alt / ⇧ 锁定、电脑尺寸只看、字号、选择文本拷贝（`docs/terminal.md`）；文件和 Git（只读：目录、查看器、分支、改动、diff、提交历史）。
-- 新开会话：选电脑、目录（最近用过）、启动器、权限模式、可选第一条消息；`async` 立即打开对话，在电脑上等 Claude 就绪再发。
-- 引擎选择（配对后为 hub 所在的机器选，`PUT /api/v1/machines/{id}/engine`，机器页的「引擎」行）；机器列表、机器页和重新连接。
-- Persona：资料页（定时任务、跟进、运行记录、关于我、记忆）；知识库（类型、项目分组、标签筛选、全文搜索、条目页、「问 Persona / 开 Agent」、打标）。
-- 链接卡片（`ui/web/`）：铺满屏幕、下拉到 0.6 时后面的页面挤到上面 40%、`WebViewPool` 预加载、选中文字「AI 修改」「作为上下文」（`<jarvis-context kind="edit|context">`）、`LinkSafety` 的 scheme 规则、证书只认系统 CA。
-- 设置 › AI › 模型配置（按用途选模型，`/api/v1/model-config`）；语音对话（主线 `docs/android.md` 的「语音对话」一节）。
-- 系统与监控：1 / 6 / 24 小时曲线、按住读数、每个核心、系统信息；Claude Code 设置（`~/.claude/settings.json` 的白名单，同时改所有在线机器）；设备列表（撤销 token）；通知偏好（需要你时 / 做完时，`devices/{id}/prefs`）；存储空间（按类清理）。
-- 界面风格：旧版是五种（液态玻璃、Claude、黏土、Island、飞书，和 iOS 同一组，`SharedPreferences` 的 `ui.style`），新架构是三种（玻璃、晨报、看板）。两边是否对齐，待定。
-- 常驻通知、小组件、磁贴、快捷方式（`fleet/`、`widget/`、`shortcuts/`，排序规则照 hub 的 `buildFleet`）。旧版验证过：通知展开的「批准」hub 收到 `{approve:true, mode:"acceptEdits"}`，小组件和磁贴，「批准第一个待处理」，「问 Persona」冷启动也能进去；没验证：通知上的「允许 / 拒绝」、Live Update、真机锁屏。
-- 折叠屏和大屏：两栏（Agents / 空间页 / 收件箱 / 设置），`Fold.kt` 的折痕和分栏规则，`Panes.kt` 可拖的分隔条（新架构有 expanded 布局，细节待对）。
-- 界面风格的截图（旧版，2026-11-01 之后）：模拟器连 `scripts/mock/mock_hub.py`，五种风格 × 浅色 / 深色截了 Agents、两种交互卡片、Persona 主对话和抽屉、资料页、收件箱、设置、风格选择页、配对页（切风格可以直接写 `shared_prefs/ui.xml` 后重启 App）。
-- 旧版截图验证（2026-11-01）：Paparazzi 在 JVM 上用 layoutlib 画 Compose，连 `scripts/mock/mock_hub.py`，命令 `./scripts/app/android.sh shots`（`scripts/app/android_shots.py`）。覆盖外壳、对话、收件箱、机器、空间页、设置、知识库、Persona 资料页、配对、风格、语音、文件和 Git、小组件等，深浅色各拍一遍。手势、键盘、拍照、听写、真实网络、通知没在这条路上验证。

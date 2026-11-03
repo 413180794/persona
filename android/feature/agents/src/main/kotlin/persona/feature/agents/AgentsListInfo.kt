@@ -58,12 +58,16 @@ internal fun visibleAgentRequests(
     }.sortedWith(compareBy<Interaction> { parseTime(it.expiresAt) ?: Instant.MAX }.thenBy { it.id })
 }
 
-internal val Interaction.cardTitle: String get() = when (kind) {
-    "question" -> "有问题等你回答"
-    "permission" -> "请求使用 ${toolName ?: "工具"}"
-    "plan" -> "计划等你批准"
-    "screen" -> "终端里有对话框等你处理"
-    else -> "需要你处理"
+/** Another agent's card (Codex, TRAEX, a runtime's) says who asks; Claude's reads as before. */
+internal val Interaction.cardTitle: String get() {
+    val who = agentDisplayName?.let { "$it " }.orEmpty()
+    return when (kind) {
+        "question" -> "${who}有问题等你回答"
+        "permission" -> "${who}请求使用 ${toolName ?: "工具"}"
+        "plan" -> "计划等你批准"
+        "screen" -> "终端里有对话框等你处理"
+        else -> "需要你处理"
+    }
 }
 
 /** Preserve the full supplied summary; use type-specific content when older hubs omit it. */

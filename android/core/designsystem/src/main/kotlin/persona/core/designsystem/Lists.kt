@@ -396,9 +396,12 @@ fun JAvatar(
     }
 }
 
-/** A swipe gesture on a row. The row springs back; the data change removes it. */
+/**
+ * A swipe gesture on a row. The row springs back; the data change removes it. [destructive] ones (关闭) are drawn in the
+ * danger colour instead of the status's.
+ */
 @Immutable
-data class SwipeAction(val label: String, val icon: PhIcon, val status: Status, val onTrigger: () -> Unit)
+data class SwipeAction(val label: String, val icon: PhIcon, val status: Status, val onTrigger: () -> Unit, val destructive: Boolean = false)
 
 @Composable
 fun JSwipeActions(
@@ -430,7 +433,7 @@ fun JSwipeActions(
                 SwipeToDismissBoxValue.Settled -> null
             }
             if (action != null) {
-                val tone = palette.status(action.status)
+                val tone = if (action.destructive) palette.danger else palette.status(action.status)
                 Row(
                     Modifier.fillMaxSize().clip(PersonaTheme.shapes.cardShape).background(tone.dot).padding(horizontal = 24.dp),
                     horizontalArrangement = if (state.dismissDirection == SwipeToDismissBoxValue.EndToStart) Arrangement.End else Arrangement.Start,

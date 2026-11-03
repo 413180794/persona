@@ -102,6 +102,7 @@ object AnswerBuilder {
                 } != true
                 AnswerRequirement.PlainDialogOption -> action != AnswerAction.ScreenOption ||
                     screenOptions(interaction).firstOrNull { it.key == draft.option }?.kind != ScreenOptionKind.Plain
+                AnswerRequirement.AlwaysOffered -> !interaction.offersAlways
             }
         }) return blocked()
 

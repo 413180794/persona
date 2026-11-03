@@ -13,6 +13,15 @@ fun Interaction.requestSourceLabel(): String? = listOfNotNull(
     if (kind == "screen") "这个请求来自终端：请不要同时在电脑上处理" else null,
 ).takeIf { it.isNotEmpty() }?.joinToString("\n")
 
+/**
+ * "Always allow" for this card: Claude's offers it (本会话总是允许); another agent's card (Codex, TRAEX, a runtime's)
+ * only when its TUI names what it would allow ([Interaction.alwaysLabel]), as on iOS.
+ */
+val Interaction.offersAlways: Boolean get() = agentDisplayName == null || !alwaysLabel.isNullOrBlank()
+
+/** The button for it: Claude's 本会话总是允许, another agent's 总是同意 (what it allows is shown beside it). */
+val Interaction.alwaysActionLabel: String get() = if (agentDisplayName == null) "本会话总是允许" else "总是同意"
+
 data class RequestCommand(val requestId: String, val toolUseId: String, val command: String)
 
 /** Match the exact tool use ID within this request's session, never a nearby command. */

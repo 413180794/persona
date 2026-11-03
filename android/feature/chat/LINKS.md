@@ -1,19 +1,33 @@
 # 会话内链接
 
-`ChatScreen` 已接入 `ChatLinkHost`。网页从底部铺满，拖动标题栏或把手可停在六成，再下拉关闭；右侧按钮也能切换档位。六成时给会话和输入框留出空间，无遮罩，网页内容区保留自己的滚动手势。
+`ChatScreen` 已接入 `ChatLinkHost`。网页从底部铺满，拖动标题栏或把手可停在六成，再下拉关闭；右侧按钮也能切换档位。六成时给会话和输入框留出空间，无遮罩，网页内容区保留自己的滚动手势。标题栏是设计系统的件：返回（网页后退，到头了就关闭）、标题和网址、收起 / 铺满、⋯（复制链接、重新加载、在浏览器打开、分享）、关闭。
 
-裸链接、Markdown、用户消息、工具代码和交互正文统一使用 App 内入口。链接按项目约定在中文、空白处结束，去掉尾部标点和不成对的括号。网页新窗口回到当前 WebView；不自动唤起外部 App，仅菜单中的「在浏览器打开」主动外跳。
+裸链接、Markdown、用户消息、工具代码和交互正文统一使用 App 内入口。链接按项目约定在中文、空白处结束，去掉尾部标点和不成对的括号。网页新窗口回到当前 WebView。
 
-选区菜单提供「AI 修改」和「作为上下文」。修改提示连同选区交给现有 `MessageSender`；上下文在输入区可移除，出站消息落入 outbox 后才清理。引用使用已有 `<jarvis-context>` 协议并转义 XML，历史用户消息显示引用卡。未新增 HTTP 或 WebSocket 接口。
+## 链接协议（2026-11-02 按主线旧 App 补齐，`ChatLinks.kind`）
 
-WebView 池随会话页面释放，使用 LRU 淘汰、系统 HTTP 缓存和 DOM 存储。列表停止滚动后预启动引擎并预加载近期链接，支持时调用预渲染 API，否则普通加载；后台页面暂停并在支持时静音。API 说明见 [Android WebViewCompat](https://developer.android.com/reference/androidx/webkit/WebViewCompat)。池容量和等待时间是实现配置，性能未实测。
+- `http(s)`：在卡片里打开。
+- `jarvis://session/<机器>/<会话>`、`jarvis://tab/jarvis|agents|inbox`（`assistant` 当 jarvis）、`jarvis://assistant`、`jarvis://inbox`：只做跳转（打开那个对话 / 切 tab，开着的卡片先收起），由外壳经 `LocalChatAppLinks` 接到导航。`jarvis://pair`、`jarvis://open` 在对话里点了不认（外部打开时才配对 / 直达）。
+- `mailto:`、`tel:`、其他 App 的协议、`intent:`：先确认（「写邮件？」「拨打电话？」「用其他 App 打开？」），再交给系统；`intent:` 去掉 component、selector、clip data 和所有 URI 授权标志，数据是 `jarvis:` / `intent:` / `content:` / `file:` 等或目标是本 App 的一律丢掉（`externalIntent`）。没有能打开的 App 时提示。
+- `content:` `file:` `javascript:` `data:` `about:` `blob:` `vbscript:`：不打开，弹「无法打开链接」。
+- 网页里的非 http 跳转：只有用户真点了、页面在屏幕上时才走上面的确认（预加载的页面和脚本拉不起 App），`jarvis:` 链接不从网页进来。
+
+## 选中文字
+
+对话里选区菜单最前面是「AI 修改」和「作为上下文」；没有对话的地方（外壳的卡片：知识库、Persona 首页之外的页面；收件箱打开的网页）只有「交给 Persona」：写一句要它做什么（可以不写，默认「看看上面这段。」），进 Persona 主对话并切到 Persona tab。菜单项在 `onPrepareActionMode` 里加、`SHOW_AS_ACTION_ALWAYS`、放在 Chromium 那一组的最小序号，才排在「复制」前面（旧 App 的经验）。
+
+「AI 修改」可以不写要求（默认「按上面选中的内容修改。」）；「作为上下文」放进输入区，出站消息落入 outbox 后才清理，只有上下文时正文是「参考上面的内容。」。引用标签和 iOS 的 `ContextRef` 逐字一样：属性转义 `& " < >`，正文不转义、只去掉 `</jarvis-context>`；多个上下文之间一个换行，正文前空一行。读回时按 iOS 的规则解码实体，以前转义过正文的消息也读得回来。
+
+## WebView 池
+
+池随会话页面释放，最多 4 个页面（屏幕上的一个 + 最多 3 个预加载），LRU 淘汰，系统 HTTP 缓存、DOM 存储和第三方 Cookie（页面里嵌的登录要用）；第一次加载先用磁盘缓存（看过的页面直接出来），加载完改回默认。只预加载 15 分钟内 Agent 回复里的前 3 个链接（最后 40 条里，主机没有点的不算），列表停止滚动后预启动引擎，支持时调用预渲染 API，否则普通加载；后台页面暂停并在支持时静音。渲染进程崩溃或被杀只丢掉那一个页面（`onRenderProcessGone`），卡片显示「网页意外退出了」和「重新载入」；系统内存紧张（`onTrimMemory`）时销毁不在屏幕上的页面。池容量和等待时间是实现配置，性能未实测。API 说明见 [Android WebViewCompat](https://developer.android.com/reference/androidx/webkit/WebViewCompat)。
 
 ## 当前 App 接线
 
-`ShellChat` 与助手内嵌入口均使用已带 ChatLinkHost 的 ChatScreen，飞书会话挂 LarkLinkHost，外壳也为知识库等页面提供应用内链接入口。会话内选区上下文和 AI 修改已走现有草稿／发送器，随会话隔离；真实手势和完整链接覆盖仍待验收。
+`ShellChat` 与助手内嵌入口均使用已带 ChatLinkHost 的 ChatScreen，飞书会话挂 LarkLinkHost，外壳（`app/…/ui/ShellLinks.kt` 的 `ShellLinkHost`）为知识库等页面提供应用内链接入口，同时提供 `jarvis://` 的跳转和收件箱网页的「交给 Persona」（`feature/inbox` 的 `LocalInboxWebSelection`）。会话内选区上下文和 AI 修改已走现有草稿／发送器，随会话隔离。
 
 ## 验证与边界
 
-运行 `:feature:chat:compileDebugKotlin` 和 `:feature:chat:testDebugUnitTest --tests jarvis.feature.chat.ChatLinksTest`。两条关键测试覆盖中文链接边界、Markdown 保护、非网页协议拒绝，以及上下文和修改请求的 XML 往返。
+`ChatLinksTest` 覆盖中文链接边界、Markdown 保护、和 iOS 逐字对照的标签与默认文字、读回旧格式、预加载的新鲜度和主机、协议分类、`jarvis://` 解析（含拒绝 pair / open）、外跳确认文案和 intent 目标的拒绝规则。
 
-当前 App 已完成上述接线，飞书文档也已有原生阅读器和网页降级；网页登录状态来自 WebView，不注入 hub 凭据。限制内嵌登录的 OAuth 站点需用户从菜单打开浏览器，尚未接 Custom Tabs。网页跨 iframe 的选区、真机拖动、键盘、深浅色截图和性能均未实测。
+网页登录状态来自 WebView，不注入 hub 凭据。限制内嵌登录的 OAuth 站点需用户从菜单打开浏览器，尚未接 Custom Tabs。选中菜单的实际顺序、渲染进程崩溃后的恢复要在真机 / 模拟器上确认（Chromium 每个版本填菜单的方式可能不同）；跨 iframe 的选区、性能未实测。

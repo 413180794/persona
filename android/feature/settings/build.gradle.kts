@@ -15,6 +15,8 @@ dependencies {
     implementation(libs.compose.icons)
     implementation(libs.compose.preview)
     testImplementation(libs.junit)
+    testImplementation(project(":core:hub"))
+    testImplementation(libs.coroutines.test)
     implementation(project(":core:contracts"))
     implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))

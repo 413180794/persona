@@ -7,9 +7,16 @@ data class PairedDevice(
     val role: String,
     val lastSeen: String? = null,
     val platform: String? = null,
+    val createdAt: String? = null,
+    /** Set on credentials that were revoked; they can no longer connect or be revoked again. */
+    val revokedAt: String? = null,
 )
 
-data class PairedDevices(val devices: List<PairedDevice>, val currentId: String?)
+/** [devices] are the credentials in use; [revoked] the ones already revoked, kept by the hub for reference. */
+data class PairedDevices(val devices: List<PairedDevice>, val currentId: String?, val revoked: List<PairedDevice> = emptyList())
+
+/** The hub cannot list device credentials: too old a version (404), or no database (503). [message] says which. */
+class DeviceCredentialsUnavailable(message: String) : Exception(message)
 
 enum class DoneNotification(val wire: String) { Off("off"), Long("long"), Always("always") }
 

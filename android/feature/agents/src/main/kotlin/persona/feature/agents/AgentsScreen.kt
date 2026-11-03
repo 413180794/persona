@@ -52,14 +52,12 @@ internal fun AgentsScreen(
     val feedback = persona.core.designsystem.LocalAppFeedback.current
     var menu by remember { mutableStateOf(false) }
     var newAgent by rememberSaveable { mutableStateOf(false) }
-    var spaceId by rememberSaveable { mutableStateOf<String?>(null) }
     var historyMachine by rememberSaveable { mutableStateOf<String?>(null) }
     var historySession by rememberSaveable { mutableStateOf<String?>(null) }
     val creation = creationModel?.state?.collectAsStateWithLifecycle()?.value
     LaunchedEffect(creation?.created) {
         creation?.created?.let { session ->
             newAgent = false
-            spaceId = null
             historyMachine = null
             historySession = null
             navigator.navigate(ChatRoute(session.machineId, session.sessionId))
@@ -99,7 +97,7 @@ internal fun AgentsScreen(
         if (!row.session.isLive) {
             historyMachine = row.session.machineId
             historySession = row.session.sessionId
-        } else { model.opened(row); spaceId = null; open(row.session.key) }
+        } else { model.opened(row); open(row.session.key) }
     }
     fun newSession(space: AgentSpacePreset? = null) { creationModel?.startIn(space); newAgent = true }
     val spaces = remember(page.sessions, page.preferences) { agentSpaces(page.sessions.map { it.listSession(page.preferences) }) }
@@ -114,7 +112,9 @@ internal fun AgentsScreen(
                     navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = ConversationKind.Assistant))
                 })
             },
-            onClose = { operationDialog = AgentOperationDialog.Close(row.session) })
+            onClose = { operationDialog = AgentOperationDialog.Close(row.session) },
+            // A Codex app-server thread the phone may join live (iOS 实时接入).
+            onAttach = if (row.session.canAttach) ({ model.attach(row.session) }) else null)
     }
     // In the list the space menu also opens the space page; the space page itself puts it in its bar.
     val spaceMenu: @Composable (AgentSpace, Boolean) -> Unit = { space, inList ->
@@ -124,7 +124,7 @@ internal fun AgentsScreen(
             operations.busy, onPin = { model.spacePin(session) }, onMute = { model.spaceMute(session) },
             onRename = { operationDialog = AgentOperationDialog.RenameSpace(session) },
             onMarkRead = unread.takeIf { it.isNotEmpty() }?.let { rows -> { model.markRead(rows) } },
-            onOpen = if (inList) ({ spaceId = space.id }) else null, compact = inList)
+            onOpen = if (inList) ({ navigator.navigate(SpaceRoute(space.id, space.name)) }) else null, compact = inList)
     }
     val tree = remember(page.list, page.settings.machineFilter) { agentTreeEntries(page.list, page.settings.machineFilter) }
     val spacesById = remember(spaces, page.preferences.grouping) {
@@ -173,9 +173,10 @@ internal fun AgentsScreen(
             if (page.preferences.range != AgentRange.History && requests.isNotEmpty()) {
                 item("requests-title") { JSectionHeader("等你定", count = requests.size) }
                 items(requests.take(3), key = { "request:${it.id}" }) { request ->
+                    val owner = page.sessions.firstOrNull { it.key == request.sessionKey }
                     RequestCard(request, names[request.machineId], metadata, now, connection == ConnectionState.Online,
                         delivery[request.id], { requestDetail = request }, model::answer,
-                        space = page.sessions.firstOrNull { it.key == request.sessionKey }?.spaceName?.takeIf { it.isNotBlank() })
+                        space = owner?.spaceName?.takeIf { it.isNotBlank() }, approvable = owner?.canApprove ?: true)
                 }
                 if (requests.size > 3) item("more-requests") {
                     JButton("还有 ${requests.size - 3} 个", { allRequests = true }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
@@ -223,7 +224,8 @@ internal fun AgentsScreen(
                         SlotRow(row, names[row.session.machineId], infoWithDelivery, now, page.preferences.compact,
                             row.id in page.preferences.pins.sessions, page.preferences.mutes.mutes(row),
                             depth = entry.depth, position = GroupPosition(entry.first, entry.last), located = entry.located,
-                            onOpen = { openRow(row) }, menuItems = { rowMenu(row) })
+                            onOpen = { openRow(row) }, menuItems = { rowMenu(row) },
+                            onClose = closeSwipe(row, operations.busy) { operationDialog = AgentOperationDialog.Close(row.session) })
                     }
                     is TreeIdleEntry -> item(entry.key, contentType = "idle") {
                         AgentIdleRow(entry.hidden, onClick = { model.showIdle(entry.group) }, depth = entry.depth)
@@ -250,7 +252,10 @@ internal fun AgentsScreen(
                 historyFooter = {
                     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                         creation?.error?.let { Text(it, style = PersonaTheme.type.caption) }
-                        JButton(if (creation?.pending?.request?.resumeSessionId == historySession) "核对继续结果" else "继续这个会话",
+                        // A Codex history thread or a runtime's session is not resumed in a terminal from the phone.
+                        val sourced = target?.takeIf { it.hasSource }
+                        if (sourced != null) Text(sourced.readOnlyNotice, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                        else JButton(if (creation?.pending?.request?.resumeSessionId == historySession) "核对继续结果" else "继续这个会话",
                             loading = creation?.starting == true,
                             enabled = creationModel != null && creation?.initialized == true && creation.starting != true &&
                                 target != null && (creation.pending != null ||
@@ -266,16 +271,7 @@ internal fun AgentsScreen(
                 })
         }
     }
-    spaceId?.let { id ->
-        val space = spaces.firstOrNull { it.id == id }
-        val workspace = space?.members?.first()?.session?.operationWorkspaceId
-        SpaceScreen(space, page.machines, pending, page.preferences, operations.busy,
-            canStart = workspace != null && page.machines.any { it.id == space?.machineId && it.online }, snackbar = snackbar, now = now,
-            onDismiss = { spaceId = null }, onOpen = ::openRow,
-            onNewTab = { newSession(AgentSpacePreset(it.machineId, requireNotNull(workspace), it.cwd, it.name)) },
-            spaceMenu = { spaceMenu(it, false) }, sessionMenu = rowMenu)
-    }
-    operationDialog?.let { AgentOperationDialog(it, model) { operationDialog = null } }
+    operationDialog?.let { AgentOperationDialog(it, model, names[it.session.machineId]) { operationDialog = null } }
     if (newAgent) {
         if (creationModel != null) NewAgentDialog(creationModel, page.machines, connection == ConnectionState.Online) { newAgent = false }
         else JDialog(onDismiss = { newAgent = false }, title = "新建会话",
@@ -296,10 +292,12 @@ internal fun AgentsScreen(
                 requestDetail = null
                 open(it.sessionKey)
             }, onAnswer = model::answer, readOnly = current == null || delivery[request.id] == RequestDelivery.Sent,
-            onTerminal = {
+            onTerminal = if (page.sessions.firstOrNull { it.key == request.sessionKey }?.canTerminal == false) null else ({
                 requestDetail = null
                 navigator.navigate(TerminalRoute(request.machineId, request.sessionId))
-            }, machine = page.machines.firstOrNull { it.id == request.machineId })
+            }), machine = page.machines.firstOrNull { it.id == request.machineId },
+            blockedReason = page.sessions.firstOrNull { it.key == request.sessionKey }?.takeIf { !it.canApprove }
+                ?.let { "这个会话不允许在手机上审批，请打开会话或到电脑上处理。" })
     }
 }
 
@@ -327,17 +325,25 @@ internal fun SlotRow(
     row: AgentSession, machine: String?, metadata: AgentRowMetadata, now: Instant, compact: Boolean, pinned: Boolean, muted: Boolean,
     depth: Int, position: GroupPosition, located: Boolean, onOpen: () -> Unit, menuItems: @Composable () -> List<JAction>,
     slotLabel: String? = null, requestCount: Int = 0,
+    /** Swiping the row left offers 关闭 (iOS); null where the agent cannot be closed from here ([closeSwipe]). */
+    onClose: (() -> Unit)? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     val session = row.session
+    val source = session.source
+    JSwipeActions(end = onClose?.let { SwipeAction("关闭", PhIcons.X, Status.NeedsYou, it, destructive = true) }) {
     AgentRow(
         title = session.displayTitle, status = row.state.designStatus, depth = depth, position = position,
         onClick = onOpen, onLongClick = { menu = true }, compact = compact, muted = muted,
         selected = isSessionSelected(LocalDetailKey.current, session.key),
         preview = session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(row.updatedAt, now),
-        agent = session.agentLabel.takeIf { session.agent == "codex" || session.agent == "traex" },
+        // Codex, TRAEX or what the hub calls a runtime's agent ("DSH"); a session with a source names it in its facts instead.
+        agent = session.agentLabel.takeIf { !session.isClaude && source == null },
         statusText = row.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label,
         facts = buildList {
+            // Where a Codex thread or a runtime's session comes from, and when the phone can only read it.
+            source?.let { add(RowFact(listOfNotNull(it.label, it.agentName).joinToString(" / "))) }
+            if (source?.readOnly == true) add(RowFact("仅查看", caution = true))
             if (located) listOfNotNull(machine, session.spaceName?.takeIf { it.isNotBlank() } ?: session.folderName.takeIf { it.isNotBlank() })
                 .joinToString(" / ").takeIf { it.isNotBlank() }?.let { add(RowFact(it)) }
             slotLabel?.let { add(RowFact(it)) }
@@ -359,8 +365,13 @@ internal fun SlotRow(
             if (muted) add(RowFlag("已屏蔽", PhIcons.Prohibit))
         },
     )
+    }
     if (menu) JActionSheet(menuItems(), { menu = false }, title = session.displayTitle)
 }
+
+/** Swiping a row left closes the agent (iOS): only a live agent in a terminal pane, while nothing else is being saved. */
+internal fun closeSwipe(row: AgentSession, busy: Boolean, close: () -> Unit): (() -> Unit)? =
+    close.takeIf { row.session.isLive && row.session.canTerminal && !row.session.assistant && !busy }
 
 /** The session actions are shared by the home list and the space page. */
 @Suppress("DEPRECATION")
@@ -369,20 +380,24 @@ internal fun AgentSessionMenuItems(
     row: AgentSession, pinned: Boolean, muted: Boolean, busy: Boolean,
     onOpen: () -> Unit, onPin: () -> Unit, onMute: () -> Unit, onRead: () -> Unit,
     onRename: () -> Unit, onStopLoop: () -> Unit, onHandoff: () -> Unit, onClose: () -> Unit,
+    onAttach: (() -> Unit)? = null,
 ): List<JAction> {
     val clipboard = LocalClipboardManager.current
     val session = row.session
     return buildList {
         add(JAction(if (pinned) "取消置顶" else "置顶", PhIcons.PushPin, enabled = !busy, onClick = onPin))
         add(JAction(if (muted) "取消屏蔽" else "屏蔽", PhIcons.Prohibit, enabled = !busy, onClick = onMute))
-        add(JAction("重命名", PhIcons.NotePencil, enabled = !busy, onClick = onRename))
-        if (session.loop != null) add(JAction("停止循环", enabled = !busy, onClick = onStopLoop))
+        onAttach?.let { add(JAction("实时接入", PhIcons.PlugsConnected, enabled = !busy, onClick = it)) }
+        // Renaming changes the terminal tab and Claude's /rename; a session without a terminal has neither.
+        if (session.canTerminal) add(JAction("重命名", PhIcons.NotePencil, enabled = !busy, onClick = onRename))
+        if (session.loop != null && session.canSend) add(JAction("停止循环", enabled = !busy, onClick = onStopLoop))
         add(JAction("交给 Persona", onClick = onHandoff))
         if (row.state == AgentState.Unread) add(JAction("标为已读", PhIcons.Check, onClick = onRead))
-        add(JAction("拷贝恢复命令", onClick = { clipboard.setText(AnnotatedString(session.recoveryCommand())) }))
+        // Only a session in a terminal resumes there; a Codex thread by its own thread id.
+        session.resumeCommand()?.let { command -> add(JAction("拷贝恢复命令", onClick = { clipboard.setText(AnnotatedString(command)) })) }
         add(JAction("拷贝目录", enabled = session.cwd.isNotBlank(), onClick = { clipboard.setText(AnnotatedString(session.cwd)) }))
         add(JAction("打开会话", onClick = onOpen))
-        if (session.isLive) add(JAction("关闭 Agent", destructive = true, enabled = !busy, onClick = onClose))
+        if (session.isLive && session.canTerminal) add(JAction("关闭 Agent", destructive = true, enabled = !busy, onClick = onClose))
     }
 }
 

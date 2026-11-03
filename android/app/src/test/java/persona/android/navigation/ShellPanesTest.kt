@@ -69,4 +69,16 @@ class ShellPanesTest {
         assertNull(detailOf(emptyList()))
         assertNull(detailOf(listOf(AssistantRoute, ConnectionSettingsRoute)))
     }
+
+    @Test fun aSpacePageOpensBesideTheListAndChatsGoOnTopOfIt() {
+        val space = SpaceRoute("machine/space")
+        selected = AppTab.Agents
+        navigator.navigate(space)
+        assertEquals(listOf(AgentsRoute, space), stacks.getValue(AppTab.Agents))
+        assertEquals(space, marked(AppTab.Agents))
+        navigator.navigate(ChatRoute("machine", "session", ConversationKind.Agent))
+        assertEquals(ChatRoute("machine", "session", ConversationKind.Agent), marked(AppTab.Agents))
+        navigator.back()
+        assertEquals("back returns to the space page", space, marked(AppTab.Agents))
+    }
 }

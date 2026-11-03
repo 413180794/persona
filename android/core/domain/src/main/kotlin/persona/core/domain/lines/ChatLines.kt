@@ -20,7 +20,8 @@ fun chatLines(items: List<LineItem>, options: LineOptions = LineOptions()): Chat
             is Block.Turn -> builder.turnLines(it.turn)
         }
     }
-    return ChatSnapshot(builder.unfold(lines), blocks.filterIsInstance<Block.Turn>().map { it.turn },
+    // As iOS does: API errors become cards and recaps in a row one line, before open work lines unfold.
+    return ChatSnapshot(builder.unfold(foldRecaps(foldApiErrors(lines))), blocks.filterIsInstance<Block.Turn>().map { it.turn },
         TaskIndex.build(source), options.pendingInteractionIds?.let(::ChatFooter))
 }
 

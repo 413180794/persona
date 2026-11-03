@@ -23,13 +23,18 @@ interface KnowledgeSendingEntryPoint {
     fun mainConversationSender(): MainConversationSender
 }
 
-/** The host must route links to its in-app reader, never to an external ACTION_VIEW intent. */
+/**
+ * The host must route links to its in-app reader, never to an external ACTION_VIEW intent. [onNewAgent] opens
+ * 新建会话 with a project's directory and context filled in (开 Agent); without it the page copies the context and
+ * switches to Agents, where the user starts the session.
+ */
 fun EntryProviderScope<NavKey>.knowledgeEntries(
     navigator: Navigator,
     connection: KnowledgeConnection,
     @Suppress("UNUSED_PARAMETER") assistant: AssistantConversations,
     sender: MessageSender,
     openLinkInApp: (String) -> Unit,
+    onNewAgent: ((KnowledgeAgentStart) -> Unit)? = null,
 ) {
     entry<KnowledgeRoute> {
         val model = viewModel { KnowledgeViewModel(connection) }
@@ -45,6 +50,6 @@ fun EntryProviderScope<NavKey>.knowledgeEntries(
         val model = viewModel(key = "knowledge/${route.kind.wire}/${route.id}") {
             KnowledgeDetailViewModel(route.kind, route.id, connection, mainSender)
         }
-        KnowledgeDetailScreen(model, navigator, openLinkInApp)
+        KnowledgeDetailScreen(model, navigator, openLinkInApp, onNewAgent)
     }
 }

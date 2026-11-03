@@ -82,25 +82,39 @@ class Notifier @Inject constructor(
     }
 
     fun ongoing(state: ConnectionState, fleet: FleetState = FleetState()): Notification =
-        ongoing(OngoingStatus.from(state, fleet))
+        ongoing(OngoingStatus.from(state, fleet, details = showLockDetails))
 
     internal fun ongoing(status: OngoingStatus): Notification {
-        val public = NotificationCompat.Builder(context, CH_STATUS).setSmallIcon(R.drawable.notify_status)
-            .setContentTitle(status.title).setContentText(status.lockScreenText(false))
+        val icon = persona.core.designsystem.R.drawable.ic_stat
+        // Locked, without 锁屏显示详情: counts and 「有个授权等你」 only, never an agent's name or what it asks. (Without it the
+        // private version is just as plain, see OngoingStatus.from: a phone may show that one on its lock screen too.)
+        val public = NotificationCompat.Builder(context, CH_STATUS).setSmallIcon(icon)
+            .setContentTitle(status.title).setContentText(status.publicText)
             .setShowWhen(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).build()
-        val notification = base(CH_STATUS)
+        val builder = NotificationCompat.Builder(context, CH_STATUS).setSmallIcon(icon)
             .setContentTitle(status.title)
-            .setContentText(status.counts)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(status.lockScreenText(showLockDetails)))
+            .setContentText(status.text)
+            .setSubText(status.subText)
+            .apply { status.lines?.let { setStyle(NotificationCompat.BigTextStyle().bigText(it)) } }
+            .setVisibility(if (showLockDetails) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_PRIVATE)
             .apply { if (!showLockDetails) setPublicVersion(public) }
+            .setCategory(when {
+                status.needsYou > 0 -> NotificationCompat.CATEGORY_STATUS
+                status.summary -> NotificationCompat.CATEGORY_PROGRESS
+                else -> NotificationCompat.CATEGORY_SERVICE
+            })
             .setOngoing(true)
             .setSilent(true)
             .setOnlyAlertOnce(true)
-            .setShowWhen(false)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setContentIntent(open(null))
-            .build()
+            // One agent: straight to it. Several: the Agents list.
+            .setContentIntent(open(status.open))
+        val since = status.workingSince
+        // The clock runs on the phone from when the longest turn started (iOS Text(timerInterval:)).
+        if (since != null) builder.setWhen(since).setShowWhen(true).setUsesChronometer(true) else builder.setShowWhen(false)
+        status.action?.let { request -> request.buttons.forEach { builder.addAction(ongoingAction(request, it)) } }
+        val notification = builder.build()
         val enabled = preferences.preferences.value?.liveActivity == true
         if (Build.VERSION.SDK_INT < 36 || !enabled) return notification
         // Promotion is optional: OEM policy or user settings must never break the foreground service.
@@ -117,13 +131,39 @@ class Notifier @Inject constructor(
                             .addMetric(Notification.Metric(Notification.Metric.FixedInt(status.working), Status.Working.label))
                             .addMetric(Notification.Metric(Notification.Metric.FixedInt(status.unread), Status.Unread.label))
                             .setCriticalMetric(if (status.needsYou > 0) 0 else if (status.working > 0) 1 else 2))
-                        setContentText(status.lockScreenText(showLockDetails))
                     }
                 }
                 .build()
         } catch (_: RuntimeException) {
             notification
         }
+    }
+
+    /**
+     * A button of the ongoing notification. Answers go through ActionReceiver and NotificationActionExecutor like the
+     * 需要你处理 notification's (refresh, expiry, unlock, one durable claim per request); 查看 opens the conversation.
+     * Each PendingIntent is immutable and told apart by its data URI, so a later redraw can never point a token the
+     * system holds while the user unlocks at another request.
+     */
+    private fun ongoingAction(request: OngoingAction, button: OngoingButton): NotificationCompat.Action {
+        val key = button.key
+            ?: return NotificationCompat.Action.Builder(0, button.label, open(request.session)).build()
+        val intent = Intent(context, ActionReceiver::class.java).apply {
+            this.action = ActionReceiver.RESOLVE
+            data = Uri.Builder().scheme("jarvis-notify").authority("ongoing")
+                .appendPath(request.interaction).appendPath(key).build()
+            request.session?.let { session ->
+                putExtra(ActionReceiver.EXTRA_MACHINE, session.machineId)
+                putExtra(ActionReceiver.EXTRA_SESSION, session.sessionId)
+                isAssistant(session)?.let { putExtra(ActionReceiver.EXTRA_ASSISTANT, it) }
+            }
+            putExtra(ActionReceiver.EXTRA_ID, request.interaction)
+            putExtra(ActionReceiver.EXTRA_ACTION, key)
+            putExtra(ActionReceiver.EXTRA_QUIET, true)
+        }
+        val pending = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        return NotificationCompat.Action.Builder(0, button.label, pending)
+            .setAuthenticationRequired(button.authenticationRequired).build()
     }
 
     fun updateOngoing(state: ConnectionState, fleet: FleetState) = post(null, ONGOING_ID, ongoing(state, fleet))
@@ -249,11 +289,11 @@ class Notifier @Inject constructor(
     fun dismissStopped() = manager.cancel("stopped", EVENT_ID)
 
     private fun base(channel: String) = NotificationCompat.Builder(context, channel)
-        .setSmallIcon(R.drawable.notify_status)
+        .setSmallIcon(persona.core.designsystem.R.drawable.ic_stat)
         .setVisibility(if (showLockDetails) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_PRIVATE)
         .apply {
             if (!showLockDetails) setPublicVersion(NotificationCompat.Builder(context, channel)
-                .setSmallIcon(R.drawable.notify_status).setContentTitle("Persona 有新消息")
+                .setSmallIcon(persona.core.designsystem.R.drawable.ic_stat).setContentTitle("Persona 有新消息")
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).build())
         }
 

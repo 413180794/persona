@@ -18,6 +18,8 @@ interface AgentOperations {
     suspend fun renameSession(key: SessionKey, title: String?, tabName: String?)
     suspend fun renameSpace(machineId: String, workspaceId: String, name: String)
     suspend fun closeSession(key: SessionKey)
+    /** Join a Codex app-server thread live (POST …/attach); only for a session whose capabilities offer it. */
+    suspend fun attachSession(key: SessionKey): Unit = throw UnsupportedOperationException("实时接入尚未接入")
 }
 
 /** An ambiguous write must be verified before repeating a one-shot action. */

@@ -102,7 +102,9 @@ internal suspend fun createChatWiring(
             DraftSessionVersion(chat.history, session?.let {
                 listOfNotNull(it.paneId, it.tabId).takeIf { ids -> ids.isNotEmpty() }?.joinToString("|")
             }, replaced = chat.replaced)
-        }.distinctUntilChanged() })
+        }.distinctUntilChanged() },
+        // The photos sent with messages load from the session's machine (Persona' own conversations too).
+        files = HubSessionFiles(connection))
 }
 
 /** Resolve each operation against the current route and reject late replies from a previous route. */

@@ -22,7 +22,10 @@ fun EntryProviderScope<NavKey>.terminalEntries(navigator: Navigator, transport: 
     entry<TerminalRoute> { route ->
         val context = LocalContext.current.applicationContext
         val services = remember(context, transport) { if (transport == null) EntryPointAccessors.fromApplication(context, TerminalServices::class.java) else null }
-        val model = viewModel { TerminalViewModel(SessionKey(route.machineId, route.sessionId), transport ?: requireNotNull(services).terminal()) }
+        val model = viewModel {
+            TerminalViewModel(SessionKey(route.machineId, route.sessionId), transport ?: requireNotNull(services).terminal(),
+                preferences = SharedTerminalPreferences(context))
+        }
         TerminalScreen(model, navigator::back, title(model.key) ?: model.key.sessionId)
     }
 }

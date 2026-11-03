@@ -74,7 +74,9 @@ class ChatComposerState(initial: ChatComposerDraft = ChatComposerDraft()) {
         check(ready)
         val images = attachments.filter { it.image }.mapNotNull { it.path }
         val files = attachments.filterNot { it.image }.mapNotNull { it.path }.map(::quoteComposerPath)
-        val text = (listOf(value.text) + files).filter(String::isNotBlank).joinToString(" ")
+        // Photos alone still say something to the agent (iOS and the old app send 「请看图片」).
+        val words = if (value.text.isBlank() && files.isEmpty() && images.isNotEmpty()) PHOTOS_ONLY_TEXT else value.text
+        val text = (listOf(words) + files).filter(String::isNotBlank).joinToString(" ")
         return text + if (images.isEmpty()) "" else "\n\n<attached_images>\n${images.joinToString("\n")}\n</attached_images>"
     }
 
@@ -101,6 +103,23 @@ class ChatComposerState(initial: ChatComposerDraft = ChatComposerDraft()) {
         attachments = attachments + restored.attachments.filter { item -> attachments.none { it.id == item.id } }
     }
 
+    /**
+     * A queued message pulled back (排队条「撤回编辑」): the draft if empty, else after it on a new line (iOS); photos it
+     * carried come back as attachments rather than as their tag.
+     */
+    internal fun restoreQueued(text: String) {
+        beginEdit()
+        val restored = ChatComposerState().apply { editMessage(text) }
+        val words = restored.value.text
+        val combined = when {
+            value.text.isEmpty() -> words
+            words.isEmpty() -> value.text
+            else -> value.text + "\n" + words
+        }
+        value = TextFieldValue(combined, TextRange(combined.length))
+        attachments = attachments + restored.attachments.filter { item -> attachments.none { it.id == item.id } }
+    }
+
     companion object {
         val Saver = listSaver<ChatComposerState, String>(
             save = { state -> listOf(state.value.text, JsonCodec.encodeToString(state.draft.storedAttachments()),
@@ -123,6 +142,9 @@ fun rememberChatComposerState(initial: ChatComposerDraft = ChatComposerDraft()):
 
 internal fun quoteComposerPath(path: String): String =
     if (path.any { it.isWhitespace() || it in "'\"\\\$`;&|<>()[]{}*?!" }) "'${path.replace("'", "'\\''")}'" else path
+
+/** The words sent with photos when nothing else was typed. */
+internal const val PHOTOS_ONLY_TEXT = "请看图片"
 
 private val composerImageTags = Regex("<attached_images>([\\s\\S]*?)</attached_images>")
 internal fun composerMessagePreview(text: String): String = text.replace(composerImageTags, "[图片]").trim()

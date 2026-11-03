@@ -143,7 +143,7 @@ class MainActivity : ComponentActivity() {
             shell.automation = input.automation
             shell.posture.value = input.posture
             input.style?.let { (application as PersonaApp).appearance.setStyle(it) }
-            openNavigation.value = input.resolve
+            openNavigation.value = focusing(input.resolve)
             input.prepare?.let { prepare -> lifecycleScope.launch {
                 try { prepare(shell) }
                 catch (cancelled: CancellationException) { throw cancelled }
@@ -172,9 +172,14 @@ class MainActivity : ComponentActivity() {
         val link = uri.toString()
         val notification = notificationRoute(uri)
         val terminal = terminalLink(link)
-        openNavigation.value = { router ->
+        openNavigation.value = focusing { router ->
             terminal ?: notification?.let { router.open(it) } ?: router.parse(RouteInput.DeepLink(link))
         }
+    }
+
+    /** 「问 Persona」 (`focus=composer`): the Persona page focuses its composer once the link is applied. */
+    private fun focusing(resolve: (Router) -> ResolvedRoute?): (Router) -> ResolvedRoute? = { router ->
+        resolve(router)?.also { if (it.focusComposer) persona.feature.assistant.AssistantComposerFocus.request() }
     }
 
     companion object {

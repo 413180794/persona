@@ -15,8 +15,14 @@ sealed interface RouteInput {
     data class Internal(val key: NavKey) : RouteInput
 }
 
-/** Pairing credentials are transient input, never a serialized back-stack key. */
-class ResolvedRoute(val tab: AppTab, val key: NavKey, val pairingLink: String? = null)
+/**
+ * Pairing credentials are transient input, never a serialized back-stack key. [focusComposer]: the Persona tab opens
+ * with its composer focused and the keyboard up ([AskPersonaLink]).
+ */
+class ResolvedRoute(val tab: AppTab, val key: NavKey, val pairingLink: String? = null, val focusComposer: Boolean = false)
+
+/** The launcher's 「问 Persona」: the Persona tab with the cursor in its composer, cold start or not. */
+const val AskPersonaLink = "jarvis://open?target=tab&tab=jarvis&focus=composer"
 
 class Router(
     private val conversationKind: (machineId: String, sessionId: String) -> ConversationKind? = { _, _ -> null },
@@ -96,7 +102,11 @@ class Router(
             "tab" -> tabRoot(AppTab.entries.firstOrNull { it.name.equals(parameters["tab"], ignoreCase = true) } ?: return null)
             else -> return null
         }
-        return resolve(key)
+        val resolved = resolve(key) ?: return null
+        // Only the Persona tab has a composer to focus; elsewhere the parameter means nothing.
+        return if (parameters["focus"] == "composer" && resolved.key == AssistantRoute) {
+            ResolvedRoute(resolved.tab, resolved.key, resolved.pairingLink, focusComposer = true)
+        } else resolved
     }
 }
 

@@ -20,5 +20,6 @@ internal fun actionResultCopy(result: NotificationActionResult): Pair<String, St
     NotificationActionResult.Locked -> "请先解锁" to "解锁后再提交你的选择。"
     NotificationActionResult.Invalid -> "操作不可用" to "请打开会话查看最新请求。"
     NotificationActionResult.Duplicate -> PendingStatus.Unconfirmed.label to "已记录这次操作，请打开会话核对结果，不要重复提交。"
+    NotificationActionResult.ReadOnly -> "不能在手机上审批" to "这个会话只能查看，请打开会话或到电脑上处理。"
     NotificationActionResult.Submitted -> null
 }

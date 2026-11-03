@@ -31,14 +31,19 @@ class KnowledgeFlowTest {
             assertEquals(listOf("old"), repository.searches)
             list.query("new")
             advanceTimeBy(300); runCurrent()
-            assertEquals("project", list.page.value.groups.single().entry.id)
-            assertEquals(1, list.page.value.groups.single().hits.size)
+            // A document's json is its entry too; the invalid path is no result. Unlisted entries are named by their kind.
+            assertEquals(listOf("project", "other"), list.page.value.groups.map { it.id })
+            assertEquals(1, list.page.value.groups.first().hits.size)
+            assertEquals("示例项目", list.page.value.groups.first().entry.name)
+            assertEquals("文档", list.page.value.groups.last().entry.name)
+            assertFalse(list.page.value.groups.last().named)
             assertTrue(repository.oldCancelled)
             repository.old.complete(listOf(KnowledgeHit("people/old/summary.md", "过时结果")))
             runCurrent()
-            assertEquals("project", list.page.value.groups.single().entry.id)
+            assertEquals("project", list.page.value.groups.first().entry.id)
+            // Conversations are all of them, private ones too.
             list.query(""); list.kind(KnowledgeKind.Chats); runCurrent()
-            assertEquals(listOf("group"), list.page.value.entries.map { it.id })
+            assertEquals(listOf("group", "dm"), list.page.value.entries.map { it.id })
 
             val sender = FakeSender()
             val detail = KnowledgeDetailViewModel(KnowledgeKind.Projects, "project", connection, sender)
@@ -78,6 +83,70 @@ class KnowledgeFlowTest {
             runCurrent()
             Dispatchers.resetMain()
         }
+    }
+}
+
+class KnowledgeTaggingFlowTest {
+    @Test fun savedTaggingReloadsTheEntryAndTheListAndFailuresStayInTheSheet() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = ViewModelStore()
+        try {
+            val repository = TaggingKnowledge()
+            val connection = object : KnowledgeConnection { override val current = MutableStateFlow<KnowledgeRepository?>(repository) }
+            val list = KnowledgeViewModel(connection, StandardTestDispatcher(testScheduler))
+            val detail = KnowledgeDetailViewModel(KnowledgeKind.Projects, "weather", connection, FakeSender())
+            store.put("list", list); store.put("detail", detail)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { list.page.collect() }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { detail.page.collect() }
+            runCurrent()
+            assertEquals("P2", list.page.value.entries.single().importance)
+            assertEquals("P2", detail.page.value.detail?.entry()?.importance)
+            // Only live Agents that are not Persona are said to work on the project.
+            assertEquals(listOf("s1"), detail.page.value.agents.map { it.sessionId })
+
+            repository.fail = true
+            detail.saveTags(KnowledgeUpdate("P0", 90, listOf("iOS")))
+            runCurrent()
+            assertTrue(detail.tagging.value.error.orEmpty().startsWith("没有保存："))
+            assertEquals(0, detail.tagging.value.saved)
+            assertEquals("P2", list.page.value.entries.single().importance)
+
+            repository.fail = false
+            detail.saveTags(KnowledgeUpdate("P0", 90, listOf("iOS")))
+            runCurrent()
+            assertEquals(1, detail.tagging.value.saved)
+            assertNull(detail.tagging.value.error)
+            assertEquals(KnowledgeUpdate("P0", 90, listOf("iOS")), repository.saved.single())
+            assertEquals("P0", detail.page.value.detail?.entry()?.importance)
+            assertEquals("P0", list.page.value.entries.single().importance)
+        } finally {
+            backgroundScope.cancel()
+            store.clear()
+            runCurrent()
+            Dispatchers.resetMain()
+        }
+    }
+}
+
+private class TaggingKnowledge : KnowledgeRepository {
+    override val scope = HubScope("demo", "tagging")
+    var importance = "P2"
+    var fail = false
+    val saved = mutableListOf<KnowledgeUpdate>()
+    override suspend fun list(kind: KnowledgeKind, tag: String?) = KnowledgeList(
+        if (kind == KnowledgeKind.Projects) listOf(KnowledgeEntry("projects", "weather", "天气 App", importance = importance)) else emptyList())
+    override suspend fun detail(kind: KnowledgeKind, id: String) = KnowledgeDetail(kind.wire, id, "data/projects/$id",
+        meta = buildJsonObject { put("name", "天气 App"); put("importance", importance) })
+    override suspend fun entry(kind: KnowledgeKind, id: String) = KnowledgeDetailResponse(detail(kind, id), listOf(
+        persona.core.contracts.Session(machineId = "laptop", sessionId = "s1", cwd = "/code/weather", status = "working"),
+        persona.core.contracts.Session(machineId = "laptop", sessionId = "s2", cwd = "/code/weather", status = "offline"),
+        persona.core.contracts.Session(machineId = "server", sessionId = "jarvis", assistant = true, status = "idle"),
+    ))
+    override suspend fun search(query: String) = emptyList<KnowledgeHit>()
+    override suspend fun update(kind: KnowledgeKind, id: String, update: KnowledgeUpdate) {
+        if (fail) throw IOException("HTTP 502")
+        saved += update
+        update.importance?.let { importance = it }
     }
 }
 

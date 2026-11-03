@@ -1,19 +1,27 @@
 package persona.platform.notify
 
 import persona.core.contracts.Interaction
+import persona.core.contracts.Session
+import persona.core.contracts.SessionKey
 import persona.core.contracts.api.InteractionCenter
 import persona.core.contracts.api.InteractionGoneException
 import persona.core.designsystem.PendingStatus
 import persona.core.domain.answer.RequestExpiry
+import persona.core.domain.sort.canApprove
 import java.time.Instant
 
-internal enum class NotificationActionResult { Submitted, Expired, Gone, Locked, Invalid, Duplicate }
+internal enum class NotificationActionResult { Submitted, Expired, Gone, Locked, Invalid, Duplicate, ReadOnly }
 
 /** Claim immediately before sending; a lost response must never cause another resolve. */
 internal class NotificationActionExecutor(
     private val center: InteractionCenter,
     private val claim: (String) -> Boolean,
     private val now: () -> Instant = Instant::now,
+    /**
+     * The session a request belongs to, when known. One whose source does not let the phone approve (a Codex thread not
+     * joined live) is answered on the computer; an unknown one is left to the hub, which refuses the same.
+     */
+    private val session: suspend (SessionKey) -> Session? = { null },
 ) {
     suspend fun execute(
         id: String,
@@ -34,6 +42,7 @@ internal class NotificationActionExecutor(
         val ix = center.pending.value.firstOrNull { it.id == id } ?: return NotificationActionResult.Gone
         onInteraction(ix)
         if (NotificationPolicy.expired(ix, now())) return NotificationActionResult.Expired
+        if (session(ix.sessionKey)?.canApprove == false) return NotificationActionResult.ReadOnly
         val spec = NotificationPolicy.actions(ix).firstOrNull { it.key == key } ?: return NotificationActionResult.Invalid
         if (spec.authenticationRequired && locked()) return NotificationActionResult.Locked
         val resolution = NotificationPolicy.resolution(ix, key, reply) ?: return NotificationActionResult.Invalid

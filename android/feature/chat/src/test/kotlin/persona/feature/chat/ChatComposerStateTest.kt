@@ -66,4 +66,59 @@ class ChatComposerStateTest {
         state.clearIfUnchanged(state.draft)
         assertFalse(state.hasContent)
     }
+
+    @Test fun photosAloneSayPleaseLookAndKeepTheirTag() {
+        val photo = ComposerAttachment("photo", "photo.jpg", "content://example.com/photo", true, "/tmp/photo.jpg",
+            uploadState = DraftUploadState.Uploaded)
+        val tag = "\n\n<attached_images>\n/tmp/photo.jpg\n</attached_images>"
+        assertEquals("请看图片$tag", ChatComposerState(ChatComposerDraft("", listOf(photo))).message())
+        assertEquals("请看图片$tag", ChatComposerState(ChatComposerDraft("  \n", listOf(photo))).message())
+        assertEquals("看这里$tag", ChatComposerState(ChatComposerDraft("看这里", listOf(photo))).message())
+        // A file is something to say already; nothing but text is unchanged.
+        val file = ComposerAttachment("file", "notes.txt", "content://example.com/file", false, "/tmp/notes.txt",
+            uploadState = DraftUploadState.Uploaded)
+        assertEquals("/tmp/notes.txt$tag", ChatComposerState(ChatComposerDraft("", listOf(file, photo))).message())
+        assertEquals("只有字", ChatComposerState(ChatComposerDraft("只有字")).message())
+        // Editing it again keeps the same message, words and photo.
+        val sent = ChatComposerState(ChatComposerDraft("", listOf(photo))).message()
+        val restored = ChatComposerState().apply { editMessage(sent) }
+        assertEquals("请看图片", restored.value.text)
+        assertEquals(sent, restored.message())
+    }
+
+    @Test fun filesOverTheLimitAreRefusedWhenPicked() {
+        assertEquals("「录屏.mov」超过 200 MB，传不了", oversizeReason("录屏.mov", MAX_COMPOSER_FILE_BYTES + 1))
+        assertNull(oversizeReason("录屏.mov", MAX_COMPOSER_FILE_BYTES))
+        // An unknown size is counted while the file is staged instead.
+        assertNull(oversizeReason("录屏.mov", null))
+    }
+
+    @Test fun thumbnailsCoverTheirSquareWithoutEnlarging() {
+        assertEquals(176.0 / 3000, thumbnailScale(4000, 3000, 176), 1e-9)
+        assertEquals(176.0 / 1000, thumbnailScale(1000, 4000, 176), 1e-9)
+        assertEquals(1.0, thumbnailScale(120, 80, 176), 0.0)
+        assertEquals(1.0, thumbnailScale(0, 80, 176), 0.0)
+    }
+
+    @Test fun photoThumbnailsShowWhereTheUploadIs() {
+        val photo = ComposerAttachment("photo", "photo.jpg", "content://example.com/photo", true)
+        val service = object : ChatComposerService {
+            override val deliveries = kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, ComposerDelivery>())
+            override suspend fun upload(session: SessionKey, name: String, file: java.io.File) = "/tmp/$name"
+            override suspend fun interrupt(session: SessionKey) = Unit
+            override suspend fun retryRefused(clientMessageId: String, clearDraft: Boolean) = ComposerDelivery(DeliveryState.Sending)
+        }
+        assertEquals(persona.core.designsystem.AttachmentState.Uploading, photo.thumbnailState(service))
+        assertEquals(persona.core.designsystem.AttachmentState.Waiting, photo.thumbnailState(null))
+        assertEquals(persona.core.designsystem.AttachmentState.Uploading,
+            photo.copy(uploadState = DraftUploadState.Uploading).thumbnailState(null))
+        assertEquals(persona.core.designsystem.AttachmentState.Ready,
+            photo.copy(path = "/tmp/photo.jpg", uploadState = DraftUploadState.Uploaded).thumbnailState(service))
+        assertEquals(persona.core.designsystem.AttachmentState.Failed,
+            photo.copy(error = "上传失败", uploadState = DraftUploadState.Failed).thumbnailState(service))
+        assertEquals(persona.core.designsystem.AttachmentState.Invalid,
+            photo.copy(error = "附件已失效", uploadState = DraftUploadState.Invalid).thumbnailState(service))
+        // Restored from a sent message: only on the computer, nothing left to upload.
+        assertEquals(persona.core.designsystem.AttachmentState.Ready, photo.copy(uri = "", path = "/tmp/photo.jpg").thumbnailState(service))
+    }
 }

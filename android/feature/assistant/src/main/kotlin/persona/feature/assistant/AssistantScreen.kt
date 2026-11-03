@@ -49,6 +49,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import java.time.LocalTime
 import java.util.UUID
 
@@ -74,6 +75,17 @@ fun AssistantScreen(
     draftRepository: DraftRepository? = LocalAssistantHost.current?.drafts,
     draftScope: CoroutineScope? = LocalAssistantHost.current?.coroutineScope,
     composerService: ChatComposerService? = assistantComposerService(),
+    /** The launcher's 「问 Persona」: put the cursor in the composer and bring up the keyboard. */
+    composerFocus: ComposerFocusRequests = AssistantComposerFocus,
+    /** 现在要你处理的事 over the home's suggestions; [onOpenNeed] opens a line where it lives (none: not shown). */
+    needsYou: NeedsYou = NeedsYou(),
+    onOpenNeed: ((NeedsYouLine) -> Unit)? = null,
+    /** 「还有 N 件在收件箱」: the inbox tab when not given. */
+    onOpenInbox: (() -> Unit)? = null,
+    /** Pins or unpins a conversation (the hub's pins); none: the history offers no pinning. */
+    onTogglePin: (suspend (SessionKey) -> Unit)? = null,
+    /** 语音对话 in the title menu, when the hub runs a voice plugin. */
+    onVoice: (() -> Unit)? = null,
 ) = PersonaTheme {
     val snapshot by repository.assistant.collectAsStateWithLifecycle()
     val outbox by (mainConversationSender?.outbox ?: messageSender.outbox).collectAsStateWithLifecycle()
@@ -113,6 +125,30 @@ fun AssistantScreen(
     val hasChat = chatContent != null || assistantChatContent != null
     var menu by remember { mutableStateOf(false) }
     var info by rememberSaveable { mutableStateOf<String?>(null) }
+    var showAllRecent by rememberSaveable { mutableStateOf(false) }
+    var pinning by remember { mutableStateOf(false) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    fun say(message: String) {
+        if (feedback?.notice(message) != true) scope.launch { snackbar.showSnackbar(message) }
+    }
+    fun copyId(key: SessionKey) {
+        clipboard.setText(androidx.compose.ui.text.AnnotatedString(key.sessionId))
+        say("已拷贝会话 ID")
+    }
+    // Pins live on the hub (the Agents list shares them); one change at a time, a failure goes to the usual place.
+    fun togglePins(keys: List<SessionKey>) {
+        val toggle = onTogglePin ?: return
+        if (pinning || keys.isEmpty()) return
+        pinning = true
+        scope.launch {
+            try { keys.forEach { toggle(it) } }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (feedback?.failure(error) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(error).message)
+            }
+            finally { pinning = false }
+        }
+    }
     val active = activeSession?.let { SessionKey(activeMachine.orEmpty(), it) }
     val groups = remember(snapshot, query, pinnedConversations, ended) {
         conversationGroups(snapshot.copy(conversations = snapshot.conversations.map {
@@ -233,6 +269,23 @@ fun AssistantScreen(
             initial?.let(::openConversation)
         }
     }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusTarget by rememberUpdatedState(composer)
+    LaunchedEffect(composerFocus) {
+        composerFocus.requests.collect { at ->
+            if (at == null || !composerFocus.take(at)) return@collect
+            // The home's composer (an embedded conversation keeps its composer inside the shared chat page); what is
+            // sent there goes to the main conversation, as from any home entry.
+            proactiveOpen = false; settingsOpen = false; drawerOpen = false
+            if (activeSession != null && hasChat && !demo) newConversation()
+            // After the tab's first layout and the saved draft: the text field has to be attached (the old app waited 300 ms).
+            kotlinx.coroutines.withTimeoutOrNull(3_000) { snapshotFlow { draftEditor == null || savedComposer != null }.first { it } }
+            kotlinx.coroutines.delay(300)
+            focusTarget.focusRequest++
+            kotlinx.coroutines.delay(100)
+            keyboard?.show()
+        }
+    }
     BackHandler(drawerOpen || active != null || viewingMainQueue) {
         if (drawerOpen) scope.launch { drawerOpen = false } else newConversation()
     }
@@ -255,6 +308,14 @@ fun AssistantScreen(
             onNew = ::startNewConversation,
             onHome = { newConversation() },
             onSettings = { scope.launch { drawerOpen = false }; navigator.selectTab(AppTab.Settings) },
+            onPin = if (onTogglePin != null) ({ session -> togglePins(listOf(session.key)) }) else null,
+            // The hub's pins also hold the Agents list's sessions: only Persona's own conversations are unpinned here.
+            onUnpinAll = if (onTogglePin != null) ({
+                togglePins(snapshot.conversations.map { it.key }.distinct().filter { it in pinnedConversations && it != snapshot.mainSession })
+            }) else null,
+            onCopy = { copyId(it.key) },
+            showAllRecent = showAllRecent,
+            onShowAllRecent = { showAllRecent = true },
         )
     }
     val body: @Composable (Boolean) -> Unit = { wide ->
@@ -326,7 +387,8 @@ fun AssistantScreen(
                     onSuggestion = {
                         composer.value = androidx.compose.ui.text.input.TextFieldValue(it, androidx.compose.ui.text.TextRange(it.length))
                         submit()
-                    })
+                    }, needsYou = needsYou, onNeed = onOpenNeed,
+                    onMore = onOpenInbox ?: { navigator.selectTab(AppTab.Inbox) })
             }
         }
     }
@@ -369,12 +431,17 @@ fun AssistantScreen(
     }
     if (menu) JActionSheet(
         title = "Persona", onDismiss = { menu = false },
-        actions = listOf("助手设置", "知识库", "会话信息").map { label ->
-            JAction(label, onClick = {
-                if (label == "知识库" && onKnowledge != null) onKnowledge()
-                else if (label == "助手设置" && management != null) settingsOpen = true
-                else info = label
-            })
+        actions = buildList {
+            listOf("助手设置", "知识库").forEach { label ->
+                add(JAction(label, onClick = {
+                    if (label == "知识库" && onKnowledge != null) onKnowledge()
+                    else if (label == "助手设置" && management != null) settingsOpen = true
+                    else info = label
+                }))
+            }
+            onVoice?.let { open -> add(JAction("语音对话", onClick = open)) }
+            add(JAction("会话信息", onClick = { info = "会话信息" }))
+            active?.let { key -> add(JAction("拷贝会话 ID", separatorBefore = true, onClick = { copyId(key) })) }
         },
     )
     ending?.let { session ->
@@ -424,6 +491,7 @@ private val suggestions = listOf(
 private fun AssistantHome(
     enabled: Boolean, machines: List<Machine>, phoneToolsAvailable: Boolean?, contentPadding: PaddingValues,
     demo: Boolean, onSuggestion: (String) -> Unit,
+    needsYou: NeedsYou = NeedsYou(), onNeed: ((NeedsYouLine) -> Unit)? = null, onMore: () -> Unit = {},
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(),
@@ -438,6 +506,10 @@ private fun AssistantHome(
                 Text("消息、日程和手头的事，都可以交给我。", style = PersonaTheme.type.voice, color = PersonaTheme.palette.ink2)
                 Text("发出的内容会进入主对话，离线时先保存在本机。", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
             }
+        }
+        // What waits on the user comes before what Persona could do: the suggestions stay under it.
+        if (onNeed != null && !needsYou.isEmpty) item(key = "needs-you", span = { GridItemSpan(2) }) {
+            NeedsYouSection(needsYou, onNeed, onMore)
         }
         items(suggestions) { suggestion ->
             JCard(Modifier.fillMaxWidth().heightIn(min = 144.dp), padding = 16.dp,
@@ -476,6 +548,8 @@ private fun AssistantDrawer(
     onEnd: ((Session) -> Unit)?,
     onMain: () -> Unit, onOpen: (SessionKey) -> Unit, onInfo: (String) -> Unit,
     onNew: () -> Unit, onHome: () -> Unit, onSettings: () -> Unit,
+    onPin: ((Session) -> Unit)? = null, onUnpinAll: (() -> Unit)? = null, onCopy: (Session) -> Unit = {},
+    showAllRecent: Boolean = false, onShowAllRecent: () -> Unit = {},
 ) {
     Column(Modifier.fillMaxHeight().padding(horizontal = 12.dp)) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
@@ -489,19 +563,43 @@ private fun AssistantDrawer(
             item { JSearchField(query, onQuery, "搜索对话") }
             item { JSectionHeader("主对话") }
             if (groups.main != null) item {
+                // The main conversation is always first: it has no pin of its own.
                 ConversationRow(groups.main, main = true, selected = groups.main.key == active,
-                    onOpen = { onOpen(groups.main.key) }, onEnd = onEnd?.let { action -> { action(groups.main) } })
+                    onOpen = { onOpen(groups.main.key) }, onEnd = onEnd?.let { action -> { action(groups.main) } },
+                    onCopy = { onCopy(groups.main) })
             } else if (query.isBlank()) item {
                 JGroupItem(GroupPosition.Single) {
                     DrawerItem(if (hasMain) "回主对话" else "开始主对话", PhIcons.ChatCircle, onMain)
                 }
             }
-            listOf("置顶" to groups.pinned, "最近" to groups.recent).forEach { (title, sessions) ->
-                if (sessions.isNotEmpty()) item { JSectionHeader(title, count = sessions.size) }
-                itemsIndexed(sessions, key = { _, session -> session.key.path }) { index, session ->
-                    ConversationRow(session, main = false, selected = session.key == active,
-                        position = GroupPosition.of(index, sessions.size),
-                        onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } })
+            if (groups.pinned.isNotEmpty()) item(key = "pinned-header") {
+                var pinMenu by remember { mutableStateOf(false) }
+                JSectionHeader("置顶", count = groups.pinned.size, action = if (onUnpinAll != null) ({
+                    JIconButton(PhIcons.DotsThree, "置顶操作", { pinMenu = true })
+                }) else null)
+                if (pinMenu && onUnpinAll != null) JActionSheet(
+                    listOf(JAction("全部取消置顶", PhIcons.PushPin, onClick = onUnpinAll)), { pinMenu = false }, title = "置顶",
+                )
+            }
+            itemsIndexed(groups.pinned, key = { _, session -> session.key.path }) { index, session ->
+                ConversationRow(session, main = false, selected = session.key == active,
+                    position = GroupPosition.of(index, groups.pinned.size),
+                    onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } },
+                    pinned = true, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) })
+            }
+            // The most recent 30, then one row for the rest (a search shows everything it finds).
+            val recent = recentRows(groups.recent, query, showAllRecent)
+            val recentCount = recent.shown.size + if (recent.hidden > 0) 1 else 0
+            if (groups.recent.isNotEmpty()) item(key = "recent-header") { JSectionHeader("最近", count = groups.recent.size) }
+            itemsIndexed(recent.shown, key = { _, session -> session.key.path }) { index, session ->
+                ConversationRow(session, main = false, selected = session.key == active,
+                    position = GroupPosition.of(index, recentCount),
+                    onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } },
+                    pinned = false, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) })
+            }
+            if (recent.hidden > 0) item(key = "recent-all") {
+                JGroupItem(GroupPosition.of(recentCount - 1, recentCount)) {
+                    DrawerItem("查看全部 ${groups.recent.size} 个", PhIcons.ChatsCircle, onShowAllRecent)
                 }
             }
             if (groups.main == null && groups.pinned.isEmpty() && groups.recent.isEmpty()) {
@@ -523,31 +621,42 @@ private fun AssistantDrawer(
     }
 }
 
+/**
+ * One conversation of the history. Its menu (⋯, or a long press) pins or unpins it ([onPin]; the main conversation
+ * has none), copies its session id, and ends it while it runs ([onEnd]).
+ */
 @Composable
 private fun ConversationRow(
     session: Session, main: Boolean, selected: Boolean, onOpen: () -> Unit, onEnd: (() -> Unit)?,
     position: GroupPosition = GroupPosition.Single,
+    pinned: Boolean = false, onPin: (() -> Unit)? = null, onCopy: () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
     JGroupItem(position) {
-        JRow(session.conversationTitle(), onClick = onOpen,
+        JRow(session.conversationTitle(), onClick = onOpen, onLongClick = { menu = true },
             subtitle = session.lastText?.takeIf { it.isNotBlank() }, value = conversationTime(session.updated),
             leading = { JIcon(if (selected) PhIcons.CheckCircle else PhIcons.ChatCircle, null,
                 selected = selected, tint = if (selected) PersonaTheme.palette.accent else PersonaTheme.palette.ink2) },
-            trailing = if (onEnd != null && session.isLive) ({
-                JIconButton(PhIcons.DotsThree, "对话操作", { menu = true })
-            }) else null, chevron = false)
+            trailing = { JIconButton(PhIcons.DotsThree, "对话操作", { menu = true }) }, chevron = false)
         Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (main) JTag("主对话")
             StatusLabel(session.conversationStatus())
         }
     }
-    if (menu && onEnd != null) JActionSheet(
+    if (menu) JActionSheet(
         title = session.conversationTitle(), onDismiss = { menu = false },
-        actions = listOf(JAction("结束对话", PhIcons.Stop, destructive = true, onClick = onEnd)),
+        actions = conversationActions(pinned, session.isLive, onPin, onCopy, onEnd),
     )
 }
+
+/** The history row's menu: 置顶 / 取消置顶 (when it can be pinned), 拷贝会话 ID, then 结束对话 while it runs. */
+internal fun conversationActions(pinned: Boolean, live: Boolean, onPin: (() -> Unit)?, onCopy: () -> Unit, onEnd: (() -> Unit)?): List<JAction> =
+    buildList {
+        onPin?.let { add(JAction(if (pinned) "取消置顶" else "置顶", PhIcons.PushPin, onClick = it)) }
+        add(JAction("拷贝会话 ID", PhIcons.Copy, onClick = onCopy))
+        if (onEnd != null && live) add(JAction("结束对话", PhIcons.Stop, destructive = true, separatorBefore = true, onClick = onEnd))
+    }
 
 @Composable
 private fun DrawerItem(title: String, icon: PhIcon, onClick: () -> Unit) {

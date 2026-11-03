@@ -1,9 +1,10 @@
 package persona.feature.chat
 
 import persona.core.contracts.Item
-import persona.core.domain.cleanText
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.lines.WorkItem
+import persona.core.domain.messageText
+import java.time.Instant
 import kotlinx.serialization.json.*
 
 /** Presentation options can be supplied by either chat host without changing wire items. */
@@ -30,28 +31,61 @@ internal sealed interface MessagePart {
 private val messageTag = Regex("<(jarvis-context|cross-session-message)\\b([^>]*)>([\\s\\S]*?)</\\1>")
 private val attribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
 
-internal fun messageParts(text: String, from: String? = null): List<MessagePart> = buildList {
-    var offset = 0
-    fun plain(value: String) {
-        cleanText(value).takeIf { it.isNotBlank() }?.let { add(MessagePart.Text(it)) }
-    }
-    messageTag.findAll(text).forEach { match ->
-        plain(text.substring(offset, match.range.first))
-        val attributes = attribute.findAll(match.groupValues[2]).associate {
-            it.groupValues[1] to decodeEntities(it.groupValues[2].ifEmpty { it.groupValues[3] })
+/**
+ * A message as a row draws it: its [parts] in order, the photos it carries (`<attached_images>` and the older notes,
+ * thumbnails above the text; never 「[图片]」, R3), and the file paths in its text (chips under it, at most six).
+ */
+internal data class MessageModel(val parts: List<MessagePart>, val images: List<String>, val files: List<String>) {
+    /** What it says without its context cards: what the long-press menu copies, shares and quotes. */
+    val plain: String get() = parts.mapNotNull {
+        when (it) {
+            is MessagePart.Text -> it.text
+            is MessagePart.Source -> it.text.takeIf(String::isNotBlank)
+            is MessagePart.Reference -> null
         }
-        val body = decodeEntities(match.groupValues[3]).trim()
-        if (match.groupValues[1] == "jarvis-context") {
-            add(MessagePart.Reference(attributes["title"].orEmpty().ifBlank { "引用内容" },
-                attributes["kind"].orEmpty(), attributes["url"]?.takeIf { it.isNotBlank() }, body))
-        } else add(MessagePart.Source(attributes["from-name"].orEmpty().ifBlank { "其他会话" }, body))
-        offset = match.range.last + 1
-    }
-    plain(text.substring(offset))
-}.let { parts ->
-    if (!from.isNullOrBlank() && parts.none { it is MessagePart.Source })
-        listOf(MessagePart.Source(from, "")) + parts else parts
+    }.joinToString("\n\n")
 }
+
+internal fun messageModel(text: String, from: String? = null): MessageModel {
+    val images = mutableListOf<String>()
+    val files = mutableListOf<String>()
+    val parts = buildList {
+        var offset = 0
+        fun plain(value: String) {
+            val shown = messageText(value)
+            images += shown.images
+            files += shown.files
+            shown.text.takeIf { it.isNotBlank() }?.let { add(MessagePart.Text(it)) }
+        }
+        messageTag.findAll(text).forEach { match ->
+            plain(text.substring(offset, match.range.first))
+            val attributes = attribute.findAll(match.groupValues[2]).associate {
+                it.groupValues[1] to decodeEntities(it.groupValues[2].ifEmpty { it.groupValues[3] })
+            }
+            val body = decodeEntities(match.groupValues[3]).trim()
+            if (match.groupValues[1] == "jarvis-context") {
+                add(MessagePart.Reference(attributes["title"].orEmpty().ifBlank { "引用内容" },
+                    attributes["kind"].orEmpty(), attributes["url"]?.takeIf { it.isNotBlank() }, body))
+            } else add(MessagePart.Source(attributes["from-name"].orEmpty().ifBlank { "其他会话" }, body))
+            offset = match.range.last + 1
+        }
+        plain(text.substring(offset))
+    }.let { parts ->
+        if (!from.isNullOrBlank() && parts.none { it is MessagePart.Source })
+            listOf(MessagePart.Source(from, "")) + parts else parts
+    }
+    val photos = images.distinct()
+    return MessageModel(parts, photos, files.distinct().filterNot { it in photos }.take(6))
+}
+
+internal fun messageParts(text: String, from: String? = null): List<MessagePart> = messageModel(text, from).parts
+
+/**
+ * What 编辑 puts back in the composer for a message: its words, and its photos as `<attached_images>` again, which the
+ * composer turns back into (already uploaded) attachments.
+ */
+internal fun MessageModel.editText(): String =
+    if (images.isEmpty()) plain else plain + "\n\n<attached_images>\n" + images.joinToString("\n") + "\n</attached_images>"
 
 private fun decodeEntities(value: String): String = value
     .replace("&quot;", "\"").replace("&apos;", "'")
@@ -67,8 +101,15 @@ private fun JsonObject.string(key: String) = (get(key) as? JsonPrimitive)?.conte
 private fun contentLines(text: String): List<String> =
     if (text.isEmpty()) emptyList() else text.removeSuffix("\n").split('\n')
 
+/** The file an edit or a write changed (for the header above its diff). */
+internal fun toolPath(item: Item): String? = (item.toolInput as? JsonObject)?.let { input ->
+    (input.string("file_path") ?: input.string("notebook_path"))?.takeIf { it.isNotBlank() }
+}
+
 internal fun toolDiff(item: Item): ToolDiff? {
     val input = item.toolInput as? JsonObject ?: return null
+    // Codex's file changes come as an Edit with the patch (docs/codex.md): no old / new strings.
+    if (item.toolName == "Edit") input.string("diff")?.let { return patchDiff(it, input.string("change")) }
     val edits = when (item.toolName) {
         "Edit" -> listOf(input)
         "MultiEdit" -> (input["edits"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
@@ -95,6 +136,47 @@ internal fun toolDiff(item: Item): ToolDiff? {
         }
     }
     return ToolDiff(lines)
+}
+
+private val hunkHeader = Regex("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@.*")
+
+/**
+ * A Codex file change (R2): a unified diff, numbered with the old and new lines; a new or deleted file the hub sends as
+ * its whole content (no hunks) is all added, or all removed when [change] is `delete`.
+ */
+internal fun patchDiff(patch: String, change: String?): ToolDiff {
+    if (patch.lineSequence().any { it.startsWith("@@") }) return ToolDiff(unifiedDiffLines(patch))
+    val lines = contentLines(patch)
+    return if (change == "delete") ToolDiff(lines.mapIndexed { index, line -> DiffLine(line, '-', index + 1, null) })
+    else ToolDiff(lines.mapIndexed { index, line -> DiffLine(line, '+', null, index + 1) })
+}
+
+/**
+ * The lines of a unified diff with their old / new line numbers (the old App's `DiffText.parse`). Hunk headers and
+ * notes (`\ No newline at end of file`, `Binary files …`) are kept as quiet lines, signed `@`; file headers are dropped.
+ */
+internal fun unifiedDiffLines(diff: String): List<DiffLine> = buildList {
+    var old = 0
+    var new = 0
+    for (raw in diff.split('\n')) {
+        val line = raw.removeSuffix("\r")
+        when {
+            line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("--- ") || line.startsWith("+++ ") -> Unit
+            line.startsWith("@@") -> {
+                hunkHeader.matchEntire(line)?.let {
+                    old = it.groupValues[1].toInt()
+                    new = it.groupValues[2].toInt()
+                }
+                add(DiffLine(line, '@', null, null))
+            }
+            line.startsWith("+") -> add(DiffLine(line.drop(1), '+', null, new++))
+            line.startsWith("-") -> add(DiffLine(line.drop(1), '-', old++, null))
+            line.startsWith(" ") -> add(DiffLine(line.drop(1), ' ', old++, new++))
+            line.startsWith("\\") || line.startsWith("Binary") || line.startsWith("new file") || line.startsWith("deleted file") ||
+                line.startsWith("similarity") || line.startsWith("rename ") || line.startsWith("old mode") || line.startsWith("new mode") ->
+                add(DiffLine(line, '@', null, null))
+        }
+    }
 }
 
 internal data class TodoEntry(val content: String, val status: String, val activeForm: String?)
@@ -144,7 +226,11 @@ internal fun toolPresentation(item: Item): ToolPresentation {
     } }, verb, mono = name == "Bash")
 }
 
-internal fun workSummary(line: ChatLine.Work, recordedDuration: Long?): String {
+/**
+ * The words on a work line. A running one says what it is doing and, given [now], how long it has run (R1, ticking
+ * every second like iOS's 「正在工作 39 秒」).
+ */
+internal fun workSummary(line: ChatLine.Work, recordedDuration: Long?, now: Instant? = null): String {
     val count = line.steps.sumOf { if (it is WorkItem.Folded) it.item.fold?.items ?: 1 else 1 }
     if (line.live) {
         val current = line.steps.lastOrNull()
@@ -154,7 +240,9 @@ internal fun workSummary(line: ChatLine.Work, recordedDuration: Long?): String {
             is WorkItem.Thought -> if (current.item.kind == "thinking") "正在思考" else "正在工作"
             else -> "正在工作"
         }
-        return if (count > 0) "$action，第 $count 步" else action
+        val running = if (count > 0) "$action，第 $count 步" else action
+        val elapsed = now?.let { line.durationText(it) }.orEmpty()
+        return if (elapsed.isEmpty()) running else "$running，$elapsed"
     }
     val seconds = recordedDuration?.takeIf { it >= 0 }
     val duration = seconds?.let { when {

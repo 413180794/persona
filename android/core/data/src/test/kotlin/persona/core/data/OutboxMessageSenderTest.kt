@@ -238,6 +238,28 @@ class OutboxMessageSenderTest {
         sender.close()
     }
 
+    @Test fun refusedMessagesCanBeDiscardedButSentOnesCannot() = runTest {
+        val store = FakeStore()
+        val transport = FakeTransport(online = true)
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope)
+        transport.answers += MessageTransportResult.HubError(code = "input_draft", delivered = "none")
+        transport.answers += MessageTransportResult.Accepted
+        sender.send(session, "refused", "refused")
+        runCurrent()
+        assertEquals(OutboxState.Refused, store.state("refused"))
+        sender.send(session, "sent", "sent")
+        runCurrent()
+        assertEquals(OutboxState.Sent, store.state("sent"))
+        // Nothing of a refused message reached the agent, so deleting it is safe; a sent one stays to be confirmed.
+        assertTrue(sender.cancel("refused"))
+        assertTrue(!sender.cancel("sent"))
+        assertEquals(OutboxState.Cancelled, store.state("refused"))
+        runCurrent()
+        assertTrue(sender.outbox.value.none { it.clientMessageId == "refused" })
+        assertEquals(listOf("refused", "sent"), transport.requests.map { it.clientMessageId })
+        sender.close()
+    }
+
     @Test fun interruptedAndUnknownRequestsOnlyRetryWithDurableHubDeduplication() = runTest {
         val store = FakeStore()
         store.enqueue(OutboxEntry("message-a", session, "hello", state = OutboxState.Sending, createdAt = 100))

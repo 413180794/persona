@@ -42,4 +42,18 @@ class HttpAgentOperationsTest {
             assertEquals(5, server.requestCount)
         }
     }
+
+    @Test fun attachPostsToTheSessionAndRefusalsAreNotUncertain() = runBlocking {
+        MockWebServer().use { server ->
+            val api = HttpAgentOperations("scope", server.url("/").toString(), "test-token", OkHttpClient())
+            server.enqueue(MockResponse().setBody("{}"))
+            api.attachSession(SessionKey("server", "c0de-thread"))
+            val attach = server.takeRequest()
+            assertEquals("POST", attach.method)
+            assertEquals("/api/v1/sessions/server/c0de-thread/attach", attach.path)
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error":"这个会话不能实时接入","code":"codex_read_only","delivered":"none"}"""))
+            try { api.attachSession(SessionKey("server", "history")); fail("Attach must fail") }
+            catch (e: AgentOperationFailure) { assertFalse(e.uncertain) }
+        }
+    }
 }

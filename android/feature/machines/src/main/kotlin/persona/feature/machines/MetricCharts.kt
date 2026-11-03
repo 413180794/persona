@@ -23,17 +23,18 @@ import persona.core.designsystem.PersonaPalette
 import persona.core.designsystem.PersonaTheme
 import kotlin.math.max
 
-internal enum class MetricKind(val label: String) {
-    Cpu("CPU"), Memory("内存"), Rx("下行"), Tx("上行"), Load("负载");
+/** [percent] kinds are drawn against a fixed 0–100 axis. Disk points carry a percentage ([diskPercentPoints]). */
+internal enum class MetricKind(val label: String, val percent: Boolean = false) {
+    Cpu("CPU", percent = true), Memory("内存"), Rx("下行"), Tx("上行"), Load("负载"), Disk("磁盘", percent = true);
     fun color(palette: PersonaPalette) = when (this) {
         Cpu -> palette.working.dot; Memory -> palette.done.dot
-        Rx -> palette.needsYou.dot; Tx -> palette.accent; Load -> palette.ink2
+        Rx -> palette.needsYou.dot; Tx -> palette.accent; Load -> palette.ink2; Disk -> palette.ink3
     }
     fun value(point: MetricPoint): Double? = when (this) {
-        Cpu -> point.cpu; Memory -> point.mem; Rx -> point.rx; Tx -> point.tx; Load -> point.load
+        Cpu -> point.cpu; Memory -> point.mem; Rx -> point.rx; Tx -> point.tx; Load -> point.load; Disk -> point.disk
     }
     fun format(value: Double?): String = when (this) {
-        Cpu -> MetricFormat.percent(value)
+        Cpu, Disk -> MetricFormat.percent(value)
         Memory -> MetricFormat.bytes(value)
         Rx, Tx -> MetricFormat.rate(value)
         Load -> MetricFormat.number(value)
@@ -80,7 +81,7 @@ internal fun Plot(
 ) {
     val runs = remember(points, kinds, step) { kinds.map { kind -> segments(points, step, kind::value) } }
     val start = end - span
-    val maximum = if (kinds == listOf(MetricKind.Cpu)) 100.0 else max(1.0,
+    val maximum = if (kinds.all { it.percent }) 100.0 else max(1.0,
         max(reference ?: 0.0, runs.flatten().flatten().filter { it.t in start..end }.maxOfOrNull { it.value } ?: 0.0) * 1.1)
     val palette = PersonaTheme.palette
     val axis = PersonaTheme.palette.ink3

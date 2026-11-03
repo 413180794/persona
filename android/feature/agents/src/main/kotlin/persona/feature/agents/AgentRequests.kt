@@ -23,8 +23,10 @@ internal fun RequestCard(
     request: Interaction, machine: String?, metadata: AgentsMetadata, now: Instant, online: Boolean,
     delivery: RequestDelivery?, onOpen: () -> Unit, onAnswer: AnswerRequest,
     readOnly: Boolean = false, space: String? = null,
+    /** False when the session's source does not let the phone approve (a Codex thread not joined live). */
+    approvable: Boolean = true,
 ) {
-    val enabled = online && !readOnly && !request.expired(now) && delivery == null
+    val enabled = online && !readOnly && approvable && !request.expired(now) && delivery == null
     val question = request.quickQuestion()
     val source = listOfNotNull(machine, space ?: request.cwd?.trimEnd('/')?.substringAfterLast('/')?.takeIf { it.isNotBlank() }).joinToString(" / ")
     val answer: (AnswerAction) -> Unit = { onAnswer(request, it, AnswerDraft(), false) }
@@ -63,6 +65,8 @@ internal fun RequestCard(
                         maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
                 request.sourceLabel(metadata)?.let { Text(it.replaceFirst("来自子 Agent · ", "来自子 Agent，"), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
+                if (!approvable && !readOnly) Text("这个会话不允许在手机上审批，请打开会话或到电脑上处理。",
+                    style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText)
                 delivery?.let { RequestDeliveryStatus(it) }
             }
         },
@@ -71,7 +75,8 @@ internal fun RequestCard(
                 "permission" -> DecisionButtons(
                     primary = JAction("允许", enabled = enabled, onClick = { answer(AnswerAction.Allow) }),
                     secondary = JAction("拒绝", enabled = enabled, onClick = { answer(AnswerAction.Deny) }),
-                    more = listOf(JAction("本会话总是允许", enabled = enabled && request.sessionId.isNotEmpty(), onClick = { answer(AnswerAction.Always) })))
+                    more = if (request.offersAlways) listOf(JAction(request.alwaysActionLabel,
+                        enabled = enabled && request.sessionId.isNotEmpty(), onClick = { answer(AnswerAction.Always) })) else emptyList())
                 // The full editor owns feedback, draft persistence and the plan-read gate.
                 "plan" -> DecisionButtons(JAction("查看并批准", enabled = enabled, onClick = onOpen),
                     secondary = JAction("打回", enabled = enabled, onClick = onOpen))
@@ -129,7 +134,9 @@ internal fun RequestsDialog(
 internal fun RequestDetail(
     request: Interaction, metadata: AgentsMetadata, now: Instant, online: Boolean, delivery: RequestDelivery?,
     onDismiss: () -> Unit, onOpenChat: (Interaction) -> Unit, onAnswer: AnswerRequest,
-    readOnly: Boolean = false, onTerminal: () -> Unit, machine: Machine? = null,
+    readOnly: Boolean = false, onTerminal: (() -> Unit)?, machine: Machine? = null,
+    /** Why this session's requests cannot be answered from the phone (its source does not approve). */
+    blockedReason: String? = null,
 ) {
     var linkVisible by remember(request) { mutableStateOf(false) }
     val feedback = LocalAppFeedback.current
@@ -146,11 +153,13 @@ internal fun RequestDetail(
                     Box(Modifier.weight(1f)) {
                         persona.feature.chat.RequestEditor(request, machine, busy = delivery != null, uncertain = delivery == RequestDelivery.Unknown,
                             online = online, readOnly = readOnly, onTerminal = onTerminal, linkVisible = linkVisible,
+                            blockedReason = blockedReason,
                             onAnswer = { action, draft, read -> if (!readOnly) onAnswer(request, action, draft, read) })
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         JButton("打开会话", { onOpenChat(request) }, Modifier.weight(1f), kind = JButtonKind.Secondary)
-                        JButton("打开终端", onTerminal, Modifier.weight(1f), kind = JButtonKind.Secondary)
+                        // A session without a terminal (a Codex thread, an agent runtime's) has none to open.
+                        onTerminal?.let { JButton("打开终端", it, Modifier.weight(1f), kind = JButtonKind.Secondary) }
                     }
                 }
             }

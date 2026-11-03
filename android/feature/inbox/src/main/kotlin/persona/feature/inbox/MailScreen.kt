@@ -20,7 +20,10 @@ import persona.core.navigation.Navigator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** The app opens the assistant with this context; it must not send a mail automatically. */
+/**
+ * Heard after a mail was handed to Persona (交给 AI): the host may show the assistant with it. The message is already
+ * queued, so the host must not send it again, nor send any mail.
+ */
 data class MailAiContext(val itemId: String, val message: MailMessage, val text: String)
 
 @Composable
@@ -59,7 +62,9 @@ private fun MailDetail(
     var error by remember { mutableStateOf<String?>(null) }
     var replying by rememberSaveable { mutableStateOf(false) }
     var confirmSend by remember { mutableStateOf(false) }
-    val composer = rememberReplyComposers(repository).get(ReplyTarget.Inbox(route.itemId))
+    var handingOff by remember { mutableStateOf(false) }
+    val composers = rememberReplyComposers(repository)
+    val composer = composers.get(ReplyTarget.Inbox(route.itemId))
     val reply by composer.state.collectAsStateWithLifecycle()
 
     suspend fun syncInbox() {
@@ -117,13 +122,12 @@ private fun MailDetail(
         refreshing = loading, onRefresh = { if (!busy && !reply.sending && transport != null) reload++ },
         bottomBar = {
             message?.let { mail ->
-                InboxAiActions(repository, route.itemId, mailAiText(mail), navigator,
+                val canReply = !busy && !loading && mail.uid == reference?.uids?.lastOrNull()
+                InboxAiActions(onDraft = { replyTarget = loadedTarget; replying = true }, onHandOff = { handingOff = true },
                     modifier = Modifier.imePadding().padding(Tokens.Space.m),
-                    onHandoffQueued = { onAskAi?.invoke(MailAiContext(route.itemId, mail, mailAiText(mail))) },
-                    primaryAction = JAction("回复", PhIcons.ArrowBendUpLeft,
-                        enabled = !busy && !loading && mail.uid == reference?.uids?.lastOrNull()) {
+                    primaryAction = JAction("回复", PhIcons.ArrowBendUpLeft, enabled = canReply) {
                         replyTarget = loadedTarget; replying = true
-                    })
+                    }, draftEnabled = canReply)
             }
         }) {
         item("status") {
@@ -148,6 +152,16 @@ private fun MailDetail(
                         }
                     }
                 }
+            }
+            // The hub's AI summary and the AI 分身's draft come first: they are what to act on.
+            record?.item?.summary?.takeIf { it.isNotBlank() }?.let { summary ->
+                item("summary") { JNotice(summary, Modifier.padding(top = Tokens.Space.m), title = "AI 摘要", icon = PhIcons.Sparkle) }
+            }
+            // The draft answers the newest message: editing or sending it shows that one first (selected = null).
+            if (record != null && !record.item.isDone) item("agent-draft") {
+                AgentDraftCard(record, composers, navigator, repository = repository, keepComposer = true,
+                    onEdit = { selected = null; replyTarget = loadedTarget; replying = true },
+                    onSend = { selected = null; replyTarget = loadedTarget; confirmSend = true })
             }
             if (ref.uids.size > 1) item("messages") {
                 Row(Modifier.padding(vertical = Tokens.Space.s).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -211,6 +225,8 @@ private fun MailDetail(
         }
     }
     if (replying) JSheet(onDismiss = { if (!reply.sending) replying = false }, title = "回复最新一封邮件") {
+        // The sheet is opaque: the composer must not sample (and show) the page behind it as glass.
+        CompositionLocalProvider(LocalGlassSource provides null) {
         Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
             Text("收件人：${message?.from?.display().orEmpty()}", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink)
             Text("发送成功后，此事项会标为已处理", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
@@ -219,21 +235,53 @@ private fun MailDetail(
                 Text("最新主题：${message?.subject.orEmpty()}", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink)
                 JButton("查看最新邮件", { replying = false }, kind = JButtonKind.Secondary, enabled = !loading)
             }
+            record?.agent?.takeIf { it.state == "drafted" && it.basis.isNotBlank() && it.draft == reply.draft.text }?.let {
+                Text("AI 分身的依据：${it.basis}", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+            }
             ReplyComposerField(reply, composer::update, onSend = {
                 if (reply.delivery in setOf(ReplyDelivery.Unknown, ReplyDelivery.Verifying, ReplyDelivery.NeedsConfirmation)) composer.send(replyTarget)
                 else confirmSend = true
-            }, placeholder = "回复内容", sendEnabled = !loading &&
+            }, placeholder = "自己写，或者让 AI 草拟", sendEnabled = !loading &&
                 (!reply.targetChanged || (loadedTarget != null && message?.uid == loadedTarget?.uid && error == null)))
+            InboxAiDraftRow(repository, route.itemId, composer)
+        }
         }
     }
-    if (confirmSend) JDialog(onDismiss = { confirmSend = false }, title = "确认发送回复",
-        text = if (reply.targetChanged) "回复对象已变化。确认发送给最新邮件的发件人 ${message?.from?.display().orEmpty()}？" else "发送给 ${message?.from?.display().orEmpty()}。",
-        confirm = "确认发送" to {
+    // Mail replies always asked first; the wording is now the one every send in the user's name uses.
+    if (confirmSend) SendAsYouDialog(
+        mailSendConfirmation(message?.subject.orEmpty(), message?.from?.display().orEmpty(), reply.draft.text, reply.targetChanged),
+        onSend = {
             confirmSend = false
             if (reply.targetChanged) replyTarget = loadedTarget
             composer.send(replyTarget)
-        }, confirmEnabled = !loading && !reply.sending)
+        }, onDismiss = { confirmSend = false }, enabled = !loading && !reply.sending)
+    val mail = message
+    if (handingOff && mail != null) InboxHandOffSheet(repository, record ?: mailRecord(route.itemId, mail), navigator,
+        onDismiss = { handingOff = false }, context = mailContextText(mail),
+        onHandedOff = { target -> if (target == null) onAskAi?.invoke(MailAiContext(route.itemId, mail, mailAiText(mail))) })
 }
+
+/** An item opened before the list had it: enough of one, from the message itself, to hand it to AI. */
+internal fun mailRecord(itemId: String, mail: MailMessage) = InboxRecord(
+    persona.core.domain.inbox.InboxItem(itemId, account = mail.accountId, kind = "mail", title = mail.subject, sender = mail.from.display(),
+        preview = mail.text.ifBlank { mailPlainText(mail.html) }.take(200)),
+    source = "mail", mail = InboxMailRef(mail.accountId, mail.mailbox, listOf(mail.uid)),
+)
+
+/** The message as 交给 AI's context: its headers, its text and what is attached (never the attachments themselves). */
+internal fun mailContextText(mail: MailMessage): String = buildString {
+    appendLine("主题：${mail.subject}")
+    appendLine("发件人：${mail.from.display()}")
+    appendLine("收件人：${mail.to.joinToString("、") { it.display() }}")
+    if (mail.cc.isNotEmpty()) appendLine("抄送：${mail.cc.joinToString("、") { it.display() }}")
+    if (mail.date.isNotBlank()) appendLine("时间：${mail.date}")
+    appendLine()
+    appendLine(mail.text.ifBlank { mailPlainText(mail.html) }.trim())
+    if (mail.attachments.isNotEmpty()) {
+        appendLine()
+        append("附件：${mail.attachments.joinToString("、") { it.filename }}")
+    }
+}.trim()
 
 @Composable
 private fun MailHeaderRow(label: String, value: String) {

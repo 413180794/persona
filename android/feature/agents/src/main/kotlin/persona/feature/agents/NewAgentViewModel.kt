@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import persona.core.contracts.Machine
 import persona.core.contracts.Session
 import persona.core.contracts.api.*
+import persona.core.designsystem.failureReason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -15,6 +16,24 @@ import java.util.UUID
 
 /** A new tab in an existing herdr workspace: machine and directory are fixed. */
 internal data class AgentSpacePreset(val machineId: String, val workspaceId: String, val cwd: String, val name: String)
+
+/**
+ * What a caller fills in ahead (the knowledge base's 开 Agent): [machineId] and [cwd] are picked when that machine is
+ * online, [prompt] starts the first message; all of it can still be changed.
+ */
+internal data class NewAgentPrefill(val machineId: String? = null, val cwd: String? = null, val prompt: String? = null)
+
+/** The hub's 新建 Agent model use (docs/model-config.md), read once per form. */
+internal sealed interface NewAgentModelConfig {
+    /** Still reading. */
+    data object Unknown : NewAgentModelConfig
+    /** An older hub: a launcher is picked here as before. */
+    data object Unsupported : NewAgentModelConfig
+    /** New agents follow [detail] unless a launcher is picked for this start. */
+    data class Follow(val detail: ModelPurposeDetail) : NewAgentModelConfig
+    /** The hub has it but it could not be read: a launcher must be picked, or the options reloaded. */
+    data class Failed(val reason: String) : NewAgentModelConfig
+}
 
 internal data class NewAgentState(
     val initialized: Boolean = false,
@@ -32,14 +51,30 @@ internal data class NewAgentState(
     val pending: AgentStartOperation? = null,
     val created: Session? = null,
     val error: String? = null,
+    val modelConfig: NewAgentModelConfig = NewAgentModelConfig.Unknown,
+    /** The prefilled machine was not online, so another one was picked (named here for the form to say so). */
+    val prefillOffline: String? = null,
 ) {
     val locked get() = !initialized || starting || pending != null || created != null
+    val follow: ModelPurposeDetail? get() = (modelConfig as? NewAgentModelConfig.Follow)?.detail
+    /** An empty launcher follows the model configuration, when the hub has one. */
+    val following: Boolean get() = follow != null && selection.launcher.isEmpty()
+    /** The launcher the 新建 Agent configuration resolves to on this machine, when it is one of its launchers. */
+    val configuredLauncher: AgentLauncher? get() = follow?.purpose?.effective?.provider?.removePrefix("launcher.")
+        ?.let { name -> launchers.firstOrNull { it.name == name } }
+    val agentType: String get() = if (following) configuredLauncher?.agentType ?: "claude"
+        else launchers.firstOrNull { it.name == selection.launcher }?.agentType ?: "claude"
 }
 
 internal class NewAgentViewModel(
     private val service: AgentCreationService,
     private val store: AgentCreationStore,
     private val machines: StateFlow<List<Machine>>,
+    /** Sends the first message as an ordinary one once the hub answered an async start; null keeps it in `prompt`. */
+    private val sender: MessageSender? = null,
+    /** Lists a started session at once, so its chat has metadata before the next `sessions` push. */
+    private val adopt: suspend (Session) -> Unit = {},
+    private val prefill: NewAgentPrefill? = null,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(NewAgentState())
     val state = mutable.asStateFlow()
@@ -53,15 +88,23 @@ internal class NewAgentViewModel(
                     val r = pending.request
                     mutable.value = NewAgentState(initialized = true, machineId = r.machineId,
                         selection = AgentDefaults(r.cwd, r.launcher, r.permissionMode.orEmpty(), r.effort.orEmpty()),
-                        prompt = r.prompt.orEmpty(), pending = pending, error = "上次启动的结果待确认，请核对结果")
+                        prompt = pending.firstMessage ?: r.prompt.orEmpty(), pending = pending, error = "上次启动的结果待确认，请核对结果")
                 } else {
                     val last = store.lastMachine(service.scope)
-                    mutable.update { it.copy(initialized = true) }
+                    mutable.update { it.copy(initialized = true, prompt = prefill?.prompt.orEmpty()) }
                     machines.collect { list ->
                         if (state.value.machineId.isEmpty() && !state.value.locked) {
                             val space = state.value.space
-                            (if (space != null) list.firstOrNull { it.id == space.machineId && it.online }
-                            else list.firstOrNull { it.id == last && it.online } ?: list.firstOrNull { it.online })?.let { selectMachine(it.id) }
+                            val wanted = prefill?.machineId?.takeIf { it.isNotBlank() }
+                            val pick = if (space != null) list.firstOrNull { it.id == space.machineId && it.online }
+                                else (wanted?.let { id -> list.firstOrNull { it.id == id && it.online } }
+                                    ?: list.firstOrNull { it.id == last && it.online } ?: list.firstOrNull { it.online })
+                            if (pick != null) {
+                                if (space == null && wanted != null && pick.id != wanted) {
+                                    mutable.update { it.copy(prefillOffline = list.firstOrNull { m -> m.id == wanted }?.displayName ?: wanted) }
+                                }
+                                selectMachine(pick.id)
+                            }
                         }
                     }
                 }
@@ -91,18 +134,27 @@ internal class NewAgentViewModel(
         machineJob = viewModelScope.launch {
             try {
                 val defaults = store.defaults(service.scope, id)
-                val (launchers, dirs) = coroutineScope {
+                val known = state.value.modelConfig.takeIf { it is NewAgentModelConfig.Follow || it is NewAgentModelConfig.Unsupported }
+                val (launchers, dirs, config) = coroutineScope {
                     val l = async { service.launchers(id) }
                     val d = async { service.directories(id) }
-                    l.await() to d.await()
+                    // The 新建 Agent configuration is the hub's, not the machine's: read once per form.
+                    val c = async { known ?: modelConfig() }
+                    Triple(l.await(), d.await(), c.await())
                 }
-                mutable.update { it.copy(loading = false, launchers = launchers, recent = dirs.recent.take(6),
-                    selection = defaults.copy(cwd = it.space?.cwd ?: defaults.cwd.ifEmpty { dirs.recent.firstOrNull()?.path ?: dirs.path },
-                        launcher = defaults.launcher.takeIf { name -> launchers.any { l -> l.name == name } } ?: launchers.firstOrNull()?.name.orEmpty())) }
+                val prefilledCwd = prefill?.cwd?.takeIf { prefill.machineId == id && it.isNotBlank() }
+                mutable.update { it.copy(loading = false, launchers = launchers, recent = dirs.recent.take(6), modelConfig = config,
+                    selection = defaults.copy(cwd = it.space?.cwd ?: prefilledCwd ?: defaults.cwd.ifEmpty { dirs.recent.firstOrNull()?.path ?: dirs.path },
+                        launcher = defaultLauncher(config, defaults, launchers)),
+                    error = (config as? NewAgentModelConfig.Failed)?.let { failed -> "读不到新 Agent 模型配置：${failed.reason}" }) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { mutable.update { it.copy(loading = false, error = "未能加载目录和启动器，请重试") } }
         }
     }
+    private suspend fun modelConfig(): NewAgentModelConfig = try {
+        service.newAgentModel()?.let { NewAgentModelConfig.Follow(it) } ?: NewAgentModelConfig.Unsupported
+    } catch (e: CancellationException) { throw e }
+    catch (error: Exception) { NewAgentModelConfig.Failed(failureReason(error)) }
     fun selection(value: AgentDefaults) {
         if (!state.value.locked && !state.value.loading) mutable.update { it.copy(selection = value, error = null) }
     }
@@ -163,24 +215,37 @@ internal class NewAgentViewModel(
         val current = state.value
         if (!current.initialized || current.starting || current.loading || current.created != null) return
         val previous = current.pending
-        val agentType = current.launchers.firstOrNull { it.name == current.selection.launcher }?.agentType ?: "claude"
-        if (previous == null && (current.selection.cwd.isBlank() || current.selection.launcher.isBlank() ||
+        val agentType = current.agentType
+        if (previous == null && (current.selection.cwd.isBlank() || (current.selection.launcher.isBlank() && !current.following) ||
                 machines.value.none { it.id == current.machineId && it.online } ||
                 (current.space != null && current.space.machineId != current.machineId))) return
         mutable.update { it.copy(starting = true, error = null) }
         viewModelScope.launch {
             try {
-                val operation = previous ?: AgentStartOperation(UUID.randomUUID().toString(), AgentStartRequest(
-                    current.machineId, current.selection.cwd, current.selection.launcher,
-                    current.prompt.trim().takeIf { it.isNotEmpty() }, current.selection.mode.takeIf { it.isNotEmpty() && agentType == "claude" },
-                    current.selection.effort.takeIf { it.isNotEmpty() && agentType == "claude" }, current.space?.workspaceId,
-                    agentType.takeIf { it != "claude" },
-                ))
+                val operation = previous ?: newOperation(current, agentType)
                 execute(operation, fresh = previous == null)
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { mutable.update { it.copy(error = if (it.pending == null) "启动记录未保存，请重试" else "未收到启动结果，请重试核对；不会重复创建") } }
             finally { mutable.update { it.copy(starting = false) } }
         }
+    }
+    /**
+     * Claude starts in the background (docs/protocol.md「新建会话」): the hub answers with a starting session, which
+     * opens at once, and the first message goes as an ordinary message (on screen at once, sent once Claude is ready),
+     * its id kept with the operation so it is sent once whatever happens to this process. Codex takes its first message
+     * with the start, and so does any start without a sender.
+     */
+    private fun newOperation(current: NewAgentState, agentType: String): AgentStartOperation {
+        val first = current.prompt.trim().takeIf { it.isNotEmpty() }
+        val async = sender != null && agentType == "claude"
+        val request = AgentStartRequest(
+            current.machineId, current.selection.cwd, current.selection.launcher,
+            first.takeUnless { async }, current.selection.mode.takeIf { it.isNotEmpty() && agentType == "claude" },
+            current.selection.effort.takeIf { it.isNotEmpty() && agentType == "claude" }, current.space?.workspaceId,
+            agentType.takeIf { it != "claude" }, async = true.takeIf { async }, nameHint = first.takeIf { async },
+        )
+        return AgentStartOperation(UUID.randomUUID().toString(), request,
+            firstMessage = first.takeIf { async }, firstMessageId = UUID.randomUUID().toString().takeIf { async && first != null })
     }
     private suspend fun execute(operation: AgentStartOperation, fresh: Boolean) {
         if (fresh) {
@@ -192,11 +257,24 @@ internal class NewAgentViewModel(
             is AgentStartResult.Created -> {
                 require(result.session.machineId == operation.request.machineId && result.session.sessionId.isNotBlank())
                 val request = operation.request
+                val session = result.session
+                try { adopt(session) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                val first = operation.firstMessage
+                val firstId = operation.firstMessageId
+                if (first != null && firstId != null) {
+                    val queued = try { checkNotNull(sender).send(session.key, first, firstId); true }
+                        catch (e: CancellationException) { throw e } catch (_: Exception) { false }
+                    if (!queued) {
+                        // The record stays: checking again queues the same message under the same id, never a second one.
+                        mutable.update { it.copy(error = "会话已经开好，第一条消息还没放进待发队列，请再核对一次") }
+                        return
+                    }
+                }
                 // A tab in an existing space must not replace the machine's remembered directory.
                 if (request.workspaceId == null && request.resumeSessionId == null) store.saveDefaults(service.scope, request.machineId, AgentDefaults(request.cwd,
                     request.launcher, request.permissionMode.orEmpty(), request.effort.orEmpty()))
                 // Keep the receipt until navigation is acknowledged, including across process death.
-                mutable.update { it.copy(created = result.session) }
+                mutable.update { it.copy(created = session) }
             }
             is AgentStartResult.Rejected -> {
                 store.pending(service.scope, null)
@@ -207,12 +285,24 @@ internal class NewAgentViewModel(
         }
     }
     fun opened() {
-        viewModelScope.launch {
-            try {
-                store.pending(service.scope, null)
-                mutable.update { it.copy(pending = null, created = null, prompt = "") }
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { mutable.update { it.copy(error = "启动记录未清理，下次会先核对结果") } }
-        }
+        viewModelScope.launch { acknowledge() }
     }
+    /** The new chat is open: the start's record goes. For a page about to leave, which takes its scope with it. */
+    suspend fun acknowledge() {
+        try {
+            store.pending(service.scope, null)
+            mutable.update { it.copy(pending = null, created = null, prompt = "") }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { mutable.update { it.copy(error = "启动记录未清理，下次会先核对结果") } }
+    }
+}
+
+/**
+ * The launcher a machine starts with: none (follow the 新建 Agent configuration) when the hub has one, so a remembered
+ * launcher never overrides it (docs/model-config.md); nothing when that configuration could not be read; otherwise the
+ * machine's remembered launcher or its first.
+ */
+internal fun defaultLauncher(config: NewAgentModelConfig, defaults: AgentDefaults, launchers: List<AgentLauncher>): String = when (config) {
+    is NewAgentModelConfig.Follow, is NewAgentModelConfig.Failed -> ""
+    else -> defaults.launcher.takeIf { name -> launchers.any { it.name == name } } ?: launchers.firstOrNull()?.name.orEmpty()
 }

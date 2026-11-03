@@ -56,7 +56,8 @@ fun JSheet(
         scrimColor = palette.scrim, tonalElevation = 0.dp,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(palette.ink3.copy(alpha = 0.5f))) },
     ) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalReadingInset provides 0.dp) {
+        // Opaque over a scrim: glass inside the sheet must not sample (and show through) the page behind it.
+        androidx.compose.runtime.CompositionLocalProvider(LocalReadingInset provides 0.dp, LocalGlassSource provides null) {
         Column(Modifier.fillMaxWidth().then(if (scrollable) Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()) else Modifier).padding(horizontal = pagePadding).padding(bottom = 16.dp)) {
             title?.let {
                 Text(it, style = PersonaTheme.type.title, color = palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)

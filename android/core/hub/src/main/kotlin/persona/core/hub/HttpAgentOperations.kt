@@ -70,4 +70,7 @@ class HttpAgentOperations(
     override suspend fun closeSession(key: SessionKey) {
         request("POST", listOf("sessions", key.machineId, key.sessionId, "close"))
     }
+    override suspend fun attachSession(key: SessionKey) {
+        request("POST", listOf("sessions", key.machineId, key.sessionId, "attach"))
+    }
 }

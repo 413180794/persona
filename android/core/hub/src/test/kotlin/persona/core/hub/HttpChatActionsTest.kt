@@ -53,4 +53,69 @@ class HttpChatActionsTest {
             assertEquals(5, server.requestCount)
         }
     }
+
+    private fun actions(server: MockWebServer): HttpChatActions {
+        val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
+        return HttpChatActions { path, method, body ->
+            http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
+        }
+    }
+
+    @Test fun attachPostsToTheSessionAndVerifiesTheAttachedFlag() = runBlocking {
+        MockWebServer().use { server ->
+            val actions = actions(server)
+            val session = Session(machineId = "m", sessionId = "opaque", sourceKind = "codex_app_server",
+                capabilities = SessionCapabilities(read = true, send = true, attach = true))
+            server.enqueue(MockResponse().setBody("{}"))
+            assertEquals(ChatActionResult.Done, actions.execute(session, ChatAction.Attach))
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("/api/v1/sessions/m/opaque/attach", request.path)
+            // A lost answer is verified against the session list, not sent again.
+            server.enqueue(MockResponse().setResponseCode(502).setBody("""{"delivered":"unknown"}"""))
+            assertEquals(ChatActionResult.Unknown, actions.execute(session, ChatAction.Attach))
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"sessions":[{"machine_id":"m","session_id":"opaque","attached":true}]}"""))
+            assertEquals(ChatActionResult.Done, actions.verify(session, ChatAction.Attach))
+            assertEquals("GET", server.takeRequest().method)
+            assertEquals(3, server.requestCount)
+        }
+    }
+
+    @Test fun queueEditsSendEveryIndexKeptAndReturnWhatWasQueued() = runBlocking {
+        MockWebServer().use { server ->
+            val actions = actions(server)
+            val session = Session(machineId = "m", sessionId = "s/1")
+            server.enqueue(MockResponse().setBody("""{"queue":["先跑测试","再提交",1]}"""))
+            assertEquals(listOf("先跑测试", "再提交"), actions.editQueue(session, listOf(1)))
+            val edit = server.takeRequest()
+            assertEquals("POST", edit.method)
+            assertEquals("/api/v1/sessions/m/s%2F1/queue", edit.path)
+            assertEquals("""{"keep":[1]}""", edit.body.readUtf8())
+            // Deleting the only queued message keeps nothing: the empty list goes out.
+            server.enqueue(MockResponse().setBody("""{"queue":["只有一条"]}"""))
+            actions.editQueue(session, emptyList())
+            assertEquals("""{"keep":[]}""", server.takeRequest().body.readUtf8())
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"队列已经被取走","code":"queue_changed","delivered":"none"}"""))
+            val failure = runCatching { actions.editQueue(session, emptyList()) }.exceptionOrNull() as HubFailure
+            assertEquals("queue_changed", failure.code)
+            assertEquals(3, server.requestCount)
+        }
+    }
+
+    @Test fun infoReadsTheSessionRoute() = runBlocking {
+        MockWebServer().use { server ->
+            val actions = actions(server)
+            server.enqueue(MockResponse().setBody("""{"session_id":"s","model":"claude-opus","context_tokens":48200,"turns":6}"""))
+            val info = actions.info(Session(machineId = "m", sessionId = "s"))
+            assertEquals("claude-opus", info.model)
+            assertEquals(48200L, info.contextTokens)
+            assertEquals(6, info.turns)
+            val request = server.takeRequest()
+            assertEquals("GET", request.method)
+            assertEquals("/api/v1/sessions/m/s/info", request.path)
+            server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"session not found"}"""))
+            assertEquals(404, (runCatching { actions.info(Session(machineId = "m", sessionId = "gone")) }.exceptionOrNull() as HubFailure).status)
+        }
+    }
 }

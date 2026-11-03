@@ -1,0 +1,152 @@
+package persona.feature.machines
+
+import androidx.lifecycle.viewModelScope
+import persona.core.contracts.*
+import persona.core.contracts.api.*
+import persona.core.hub.HubError
+import persona.core.hub.HubFailure
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.*
+import kotlinx.serialization.json.JsonElement
+import org.junit.Assert.*
+import org.junit.Test
+import java.time.ZoneOffset
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class MachineActionsTest {
+    private class Sessions(machines: List<Machine>) : SessionsRepository {
+        override val machines = MutableStateFlow(machines)
+        override val sessions = MutableStateFlow(emptyList<Session>())
+        var refreshes = 0
+        var onRefresh: () -> Unit = {}
+        override suspend fun refresh() { refreshes++; onRefresh() }
+    }
+
+    private open class Management : MachineManagement {
+        val calls = mutableListOf<String>()
+        var failure: Exception? = null
+        var onReconnect: () -> Unit = {}
+        override suspend fun launchers(machineId: String): List<AgentLauncher> {
+            calls += "launchers:$machineId"; failure?.let { throw it }
+            return listOf(AgentLauncher("claude", model = "anthropic/claude-opus-5"), AgentLauncher("plain"))
+        }
+        override suspend fun reconnect(machineId: String) { calls += "reconnect:$machineId"; failure?.let { throw it }; onReconnect() }
+        override suspend fun deploy(machineId: String) { calls += "deploy:$machineId"; failure?.let { throw it } }
+        override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId, engine = engine)
+        override suspend fun claudeSettings(machineId: String) = emptyList<ClaudeSetting>()
+        override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()
+    }
+
+    private fun <T> test(block: suspend TestScope.() -> T) = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try { block() } finally { Dispatchers.resetMain() }
+    }
+
+    @Test fun reconnectWaitsForTheMachineToComeOnlineAndSaysSo() = test {
+        val sessions = Sessions(listOf(Machine("lab", online = false, error = "ssh: connection refused")))
+        val management = Management().apply { onReconnect = { sessions.machines.value = listOf(Machine("lab", online = true)) } }
+        val model = MachineActionsViewModel(management, sessions)
+        try {
+            model.reconnect("lab")
+            model.reconnect("lab")
+            runCurrent()
+            assertEquals(listOf("reconnect:lab"), management.calls)
+            assertEquals("已连上", model.notices.first())
+            assertFalse(model.state.value.reconnecting)
+        } finally { model.viewModelScope.cancel() }
+    }
+
+    @Test fun reconnectReadsTheListWhenNoPushSaysTheMachineIsBack() = test {
+        val sessions = Sessions(listOf(Machine("lab", online = false)))
+        // The hub has it back, but no machines push arrives: the next read of the list shows it.
+        sessions.onRefresh = { sessions.machines.value = listOf(Machine("lab", online = true)) }
+        val model = MachineActionsViewModel(Management(), sessions)
+        try {
+            model.reconnect("lab")
+            runCurrent()
+            assertTrue(model.state.value.reconnecting)
+            advanceTimeBy(3_001)
+            runCurrent()
+            assertEquals("已连上", model.notices.first())
+            assertEquals(1, sessions.refreshes)
+            advanceTimeBy(30_000)
+            runCurrent()
+            assertEquals(1, sessions.refreshes)
+        } finally { model.viewModelScope.cancel() }
+    }
+
+    @Test fun reconnectGivesUpAfterTheWaitWithTheMachinesError() = test {
+        val sessions = Sessions(listOf(Machine("lab", online = false, error = "ssh: connection refused")))
+        val model = MachineActionsViewModel(Management(), sessions, reconnectWaitMillis = 15_000)
+        try {
+            model.reconnect("lab")
+            runCurrent()
+            assertTrue(model.state.value.reconnecting)
+            advanceTimeBy(15_001)
+            runCurrent()
+            assertEquals("还没连上：ssh: connection refused", model.notices.first())
+            assertFalse(model.state.value.reconnecting)
+            val refused = Management().apply { failure = HubFailure(HubError.Server, "machine is offline", 503) }
+            val other = MachineActionsViewModel(refused, sessions)
+            try {
+                other.reconnect("lab")
+                runCurrent()
+                assertEquals("重新连接失败：machine is offline", other.notices.first())
+            } finally { other.viewModelScope.cancel() }
+        } finally { model.viewModelScope.cancel() }
+    }
+
+    @Test fun deployRefreshesTheListAndReportsTheHubsReason() = test {
+        val sessions = Sessions(listOf(Machine("mac", online = true, nodeMismatch = true)))
+        val management = Management()
+        val model = MachineActionsViewModel(management, sessions)
+        try {
+            model.deploy("mac")
+            assertEquals(setOf("mac"), model.state.value.deployStarting)
+            runCurrent()
+            assertEquals(listOf("deploy:mac"), management.calls)
+            assertEquals(1, sessions.refreshes)
+            assertTrue(model.state.value.deployStarting.isEmpty())
+            management.failure = HubFailure(HubError.Server, "这台电脑已经是 hub 这一版", 409)
+            model.deploy("mac")
+            runCurrent()
+            assertEquals("部署失败：这台电脑已经是 hub 这一版", model.notices.first())
+        } finally { model.viewModelScope.cancel() }
+    }
+
+    @Test fun launchersAreReadOnlyOnlineAndFailuresSayWhy() = test {
+        val management = Management()
+        val model = MachineActionsViewModel(management, Sessions(emptyList()))
+        try {
+            model.loadLaunchers("mac", online = false)
+            runCurrent()
+            assertTrue(management.calls.isEmpty())
+            assertNull(model.state.value.launchers)
+            model.loadLaunchers("mac", online = true)
+            runCurrent()
+            assertEquals(listOf("claude", "plain"), model.state.value.launchers?.map { it.name })
+            assertEquals(listOf("claude-opus-5", null), model.state.value.launchers?.map(::launcherModel))
+            management.failure = HubFailure(HubError.Server, "mac: machine is offline", 503)
+            model.loadLaunchers("mac", online = true)
+            runCurrent()
+            assertEquals("读不到启动器：mac: machine is offline", model.state.value.launchersError)
+            // What was read before stays listed.
+            assertEquals(2, model.state.value.launchers?.size)
+        } finally { model.viewModelScope.cancel() }
+    }
+
+    @Test fun deployLineDiskShareAndBootTime() {
+        assertTrue(showsDeploy(Machine("a", nodeMismatch = true)))
+        assertTrue(showsDeploy(Machine("a", deploying = true)))
+        assertFalse(showsDeploy(Machine("a")))
+        assertFalse(showsDeploy(null))
+        val points = listOf(MetricPoint(1, disk = 50.0), MetricPoint(2, gap = true), MetricPoint(3))
+        assertEquals(listOf(25.0, null, null), diskPercentPoints(points, 200).map { it.disk })
+        assertTrue(diskPercentPoints(points, null).all { it.disk == null })
+        assertEquals("2026年11月2日 08:30", MetricFormat.boot(1_793_579_400.0, ZoneOffset.ofHours(8)))
+        assertNull(MetricFormat.boot(0.0))
+        assertTrue(MetricKind.Disk.percent && MetricKind.Cpu.percent && !MetricKind.Memory.percent)
+    }
+}

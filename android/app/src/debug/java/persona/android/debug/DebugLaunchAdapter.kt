@@ -24,6 +24,7 @@ private val pages = mapOf(
     "knowledge" to ResolvedRoute(AppTab.Jarvis, KnowledgeRoute),
     "phone" to ResolvedRoute(AppTab.Settings, PhoneToolsRoute),
     "catalog" to ResolvedRoute(AppTab.Settings, ComponentCatalogRoute),
+    "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),
 )
 
 class DebugLaunchAdapter : LaunchAdapter {
@@ -55,9 +56,11 @@ class DebugLaunchAdapter : LaunchAdapter {
         // App-only pages and links are resolved here instead of by the shared parser.
         val catalog = arguments.remove("debug.openCatalog") == "true"
         val link = arguments.remove("debug.openLink")
-        val page = arguments.remove("debug.openPage")?.let { requireNotNull(pages[it]) { "Unknown debug page" } }
+        val page = arguments.remove("debug.openPage")?.let { requireNotNull(pages[it] ?: managementPage(it)) { "Unknown debug page" } }
         // 设置 › 助手 opens one of its parts for captures: notes, memory, memory-file, memory-edit, memory-delete, machine, launcher, timezone, move.
         arguments.remove("debug.assistantSettings")?.let { persona.feature.assistant.settings.AssistantSettingsPreview.open = it }
+        // 语音对话 on an emulator without audio (-no-audio): silence up, nothing played, a made-up level for the orb.
+        if (arguments.remove("debug.voiceAudio") == "fake") persona.feature.voice.VoiceDebug.useFakeAudio()
         return LaunchInput(
             resolve = { router ->
                 when {

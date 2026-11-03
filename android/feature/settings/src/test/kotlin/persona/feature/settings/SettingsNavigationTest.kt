@@ -16,6 +16,8 @@ class SettingsNavigationTest {
             SettingsPage.About to "about",
             SettingsPage.Pairing to "pair",
             SettingsPage.Assistant to "assistant",
+            SettingsPage.ClaudeCode to "claude",
+            SettingsPage.ModelConfig to "models",
             SettingsPage.Hubs to "hubs",
         )
         assertEquals(SettingsPage.entries.toSet(), pages.keys)

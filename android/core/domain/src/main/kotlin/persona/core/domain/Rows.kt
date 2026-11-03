@@ -39,13 +39,16 @@ fun buildRows(items: List<Item>): List<Row> {
     return rows
 }
 
-/** Strips what the hub / Claude Code wrap around typed text (docs/protocol.md「消息里的标签」). */
-fun cleanText(s: String): String = s
-    .replace(Regex("<attached_images>[\\s\\S]*?</attached_images>"), "[图片]")
-    .replace(Regex("</?pasted_content[^>]*>"), "")
-    .replace(Regex("<jarvis-context[^>]*>([\\s\\S]*?)</jarvis-context>"), "「$1」\n")
-    .replace(Regex("<cross-session-message[^>]*>([\\s\\S]*?)</cross-session-message>"), "$1")
-    .trim()
+/**
+ * A message as one plain text for previews (docs/protocol.md「消息里的标签」): what the hub / Claude Code wrap around
+ * typed text unwrapped, photos as 「[图片]」. A conversation row draws photos as thumbnails instead ([messageText]).
+ */
+fun cleanText(s: String): String {
+    val shown = messageText(s
+        .replace(Regex("<jarvis-context[^>]*>([\\s\\S]*?)</jarvis-context>"), "「$1」\n")
+        .replace(Regex("<cross-session-message[^>]*>([\\s\\S]*?)</cross-session-message>"), "$1"), files = false)
+    return if (shown.images.isEmpty()) shown.text else ("[图片]\n" + shown.text).trim()
+}
 
 fun toolVerb(name: String?): String = when (name) {
     "Bash" -> "运行"

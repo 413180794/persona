@@ -28,9 +28,38 @@
 - Compose 里给容器加 `height(IntrinsicSize.Min)`（为了让左边的色块撑满高度），里面一旦有懒加载列表或 `BoxWithConstraints` 就直接崩
   （「Asking for intrinsic measurements of SubcomposeLayout layouts is not supported」，看板风格的飞书会话踩过）：贴边的色块用 `drawBehind` 画（`Modifier.holder`）。
 - Haze 的 `GlassStyle.regular` 跟随**系统**深浅色，不看 App 自己的深浅色：调试固定深浅色时要连 `LocalConfiguration` 的 uiMode 一起改（`MainActivity.AppearanceOverride`），否则深色页面上出现浅色玻璃。
+- 玻璃风格的 `ComposerFrame`（`floatingSurface`）按 `LocalGlassSource` 采样它下面的内容：放进 `JSheet` 时 `LocalGlassSource` 还是页面的，输入框里透出浮层后面那一页的字（收件箱的「改一改」、邮件回复浮层都这样）。浮层是不透明的，内容外面套 `CompositionLocalProvider(LocalGlassSource provides null)`，输入框就画成实心（`InboxDraftSheet`）。以后要在 `JSheet` 里统一处理可以在组件里置空。
 - `SwipeToDismissBox` 的 `backgroundContent` 不滑动时也在画：玻璃风格的半透明行下面会透出滑动操作的颜色（收件箱整行发绿），只在 `dismissDirection` 不是 `Settled` 时画（`JSwipeActions`）。
+- Phosphor 线条图标（`X` 等）的 fill 字重是「实心方块里镂空一个 X」：看板风格里 `JIcon(selected = true)` 取 fill，照片角上的移除叉号画成了白方块。叉号这类别给 `selected`，看板自动用 bold。
+- Compose 测试里 `Modifier.clickable(enabled = false)` 仍带 OnClick 语义动作，`assertHasNoClickAction()` 断言不了「不可点」，要用 `assertIsNotEnabled()`（`ComposerPartsTest`）。
+
+- 匿名 `BaseInputConnection` 里写 `override fun getEditable() = editable`，外层类的字段也叫 `editable`：Kotlin 先找到的是这个对象自己的 `getEditable()`（Java getter 对应的属性），于是自己调自己，输入法一连上（`finishComposingText` → `getEditable`）就栈溢出崩溃（终端键盘，2026-11-02）。外层字段别和框架 getter 同名（改叫 `buffer`）；这种问题 JVM 单测测不出，要在模拟器上真点一次键盘。
+- 终端页上方的提示卡（「正在接管…」）一出现、一消失都会改终端的高度，接管时窗格因此多重排两次，攒下的滚出行还会重复：会来回变的状态写在标题下的一行里，终端的高度只随键盘变。
+
+## 终端与假 hub
+
+- 假 hub 的「只看」订阅以前不停掉接管时的那条流：两个 epoch 的帧交错到达，App 每次都判成缺帧重订，假 hub 每次重订又从头放一遍录制，帧越来越多，几十秒后 App OOM（`MOCK_TERMINAL_INTERVAL=0.05` 时很快）。真 hub 一个会话只有一条订阅，新订阅取代旧的；假 hub 现在也这样（`drive.clear()`）。
+- 换了假 hub 进程（`HUB_ID` 每次随机），已配对的 App 健康检查对不上 hub 身份，一直「连不上 hub」：重启假 hub 后要 `pm clear` 再走一次 `debug.mockAddress` 配对。
+- `./gradlew --stop` 停的是这台机器上同一 Gradle 版本的所有 daemon，几条车道（worktree）共用时会把别人的构建一起停掉；只停自己的构建用 Ctrl-C 或 kill 自己那条命令。
+
+## 测试
+
+- `RealInboxRepository` 构造时在作用域里起一个收集当前配对的协程，它第一次运行会把列表清空（换配对时的清场）。`runTest` 里构造完直接 `refresh()`，清场排在第一次挂起之后跑，刚读到的列表又被清掉：先等 `snapshot.first { it.contentSource != null }` 再刷新（`InboxHandOffRepositoryTest`）。
+- `RealInboxRepository` 的测试用尾随 lambda 传最后一个参数 `download`：新加的构造参数要放在它前面（带默认值），否则尾随 lambda 对不上。
+
+- Navigation 3 的页面级 ViewModel（`rememberViewModelStoreNavEntryDecorator`）在页面出栈时随 ViewModelStore 一起清掉：页面里 `viewModelScope.launch` 的收尾（比如清掉新建 Agent 的启动记录）如果排在 `navigator.back()` 之后，常常还没跑就被取消，下次打开又说「上次启动的结果待确认」。要先在 `LaunchedEffect` 里把收尾做完（挂起函数），再离开页面（`NewAgentDestination` 的 `acknowledge()`）。
+
+- `JFullScreen` 是一个 Compose `Dialog`，有自己的窗口：App 统一的提示（`LocalAppFeedback` → `Root.kt` 的 `SnackbarHost`）画在 Activity 的窗口里，整页弹层开着时会被盖住，用户看不到。弹层里操作的结果要在弹层自己的窗口里提示（看图的查看器、`SpaceScreen` 都自带 `SnackbarHost`）；只有弹层随即关掉时的那一条（「已加到输入框，补一句话就能发」）走 `LocalAppFeedback`。读代码确认，2026-11-02 写看图时没有上设备看。
+- `JFullScreen` 先铺一层不透明的页面背景，弹层里把内容拉走时透不出下面的页面：查看器给它一个 `background` 透明的色板（`LocalPalette`），在里面换回原色板、自己画会变淡的背景。弹层里的玻璃浮层要有自己的 `HazeState`（`LocalGlassSource`），否则用的是从下面那页继承来的，采样的是另一个窗口的内容。
+- Compose 的 `Modifier.border(0.dp, …)` 不是没有边：`0.dp` 就是 `Dp.Hairline`，照样画一像素的线（`BorderModifierNode` 里写明的）。「有时有边」要按条件加这个修饰符（编辑器的选色圈）。
+- 图片解码用 `ImageDecoder`（按 EXIF 方向转正）而不是 `BitmapFactory`（不管方向，相机原图会横着显示）；要往里画、重新编码的位图用 `ALLOCATOR_SOFTWARE`，硬件位图不能画进软件 Canvas。存 JPEG 前把透明的地方铺白：JPEG 没有透明通道，编码器会把透明处变成黑色（`jpegBytes`）。
+- `Offset` 是值类，按位比较：`coerceIn(-0f, 0f)` 会得到 `-0f`，和 `Offset.Zero` 不相等；没有余地时直接给 `0f`（`ImageMath.clampPan`），测试里比较算出来的浮点偏移用容差。
 
 ## 系统能力
+
+- hub 的 `fleet` 只在变化时推（`liveactivity.go` 和上次广播的比较），刚连上的客户端什么都收不到：常驻通知、小组件会一直是 0，直到哪个 Agent 状态变了。连接每次连上都要 `GET /api/v1/fleet` 一次（`FleetFeed`）。
+- 一个 PendingIntent 是不是「同一个」只看 action、data、组件和类别，不看 extras 和 flags：常驻通知上的「允许」如果和「需要你处理」通知上的用同一个 data URI，系统会把它们当成一个（一个可变带回复框、一个不可变），后创建的覆盖先创建的。常驻通知的按钮用自己的 `jarvis-notify://ongoing/…`。
+- 手机工具：hub 把各台手机同名的工具合并成一份定义（取说明更长的），调用却可能发给任一台声明了它的手机（`phoneClient`）。Android 的定义只要和 iOS 不一样，Claude 就会按 iOS 的参数调用 Android（新版曾经把超范围的 `limit` 当错误拒绝）：工具定义逐字照 iOS，用导出的夹具守着（`PhoneToolCatalogTest`）。
 
 - 用 `startForegroundService` 拉起的服务，在调 `startForeground` 之前被停掉（自己 `stopSelf`、外面 `stopService`），系统直接让 App 崩在 `ForegroundServiceDidNotStartInTimeException`。负载高时这段空档变长，配对时一闪的「未配对」就会撞上：`HubService` 一律先进前台再决定去留，只在已经进了前台时才停它（`ForegroundStarts`，`docs/android.md`）。
 
@@ -39,6 +68,14 @@
 - 产品 / Kotlin 包名改为 Persona / `persona.*` 时，不只要查显式写死的包名（2026-11-03，#277）：`kotlinx.serialization` 的 sealed 子类和导航 `NavKey` 默认类型名也可能包含包名。旧 `shell-position.json` 中的 `ChatRoute.source` 等值会因此反序列化失败。已经持久化的类型应固定旧 `@SerialName`，回归测试用旧 JSON 验证恢复，不能只测新版本自己序列化再读回。
 - WorkManager 会持久化 Worker 的 FQCN；已有 PendingIntent 和桌面启动项会记住 `ComponentName`。迁移要保留旧 Worker / receiver 包装和必要的 activity-alias，让旧组件继续到新实现；常驻服务保持单一系统组件身份，避免新旧服务同时运行。不要仅为包名改动重建、取消已有任务或要求用户重新配对。必须另测旧 APK → 新 APK 的升级、待运行任务、通知按钮、桌面启动、分享入口和已有外壳位置恢复。
 - 文档和源码静态回归不等于 Android 构建 / 真机升级验证。JDK 21 不可用时，Gradle toolchain 的 `MAC_OS/aarch64` 下载失败是环境阻塞，不能记成构建通过；以上升级场景仍需在可用的构建环境和设备上核验。
+
+- 从相机、文件选择器这类整页的系统 Activity 回来，hub 连接常还在恢复（`readyToSend` 为 false），这时上传附件会立刻报「连接恢复后重试上传」，拍完照每次都失败。上传前先等 `readyToSend`（`ChatComposer`，最多 15 秒，配置值）。
+- 上传别走共用 OkHttp 客户端的超时（读 15 秒、写默认 10 秒）：慢链路上 hub 已经收全了文件，客户端等回包超时，照片照样标「上传失败」（假 hub `MOCK_UPLOAD_KBPS=3` 复现，约 90 KB 的两张都这样）。现在上传单独给 10 分钟（`HttpChatComposerService`，和旧 App 一样）。
+
+## 契约与装配
+
+- 给接口加带默认实现的方法（`ChatActions.editQueue` / `info`、`AgentOperations.attachSession`）时，`by delegate` 的包装会自动转发，手写的转发对象不会：`core:data` 的 `trackActions`、App 的 `AgentsWiringModule` 里那个匿名 `AgentOperations` 都是逐个方法写的，漏一行新方法就悄悄走默认实现（「尚未接入」），编译不报错。加方法时 `git grep ': ChatActions\b\|object : AgentOperations'` 把手写的转发都补上。
+- 来源会话的 `read_only_reason` 有的 node 自己就以「仅查看：」开头，客户端再拼「 · 仅查看：原因」会出现两遍（iOS 也是这样拼的）：`SessionSource` 先去掉这个前缀。
 
 ## 网络
 
@@ -50,6 +87,42 @@
 ## 模拟器与真机
 
 - 模拟器在充电状态下 `settings put global low_power 1` 不生效（省电模式开不了）：先 `dumpsys battery unplug`，测完 `dumpsys battery reset`。
+- 平板 AVD 拍手机布局：`wm size 1080x2400`、`wm density 420`，再 `settings put system accelerometer_rotation 0`、`user_rotation 0` 固定竖屏。这些写进 AVD 的数据、重启还在，用完要 `wm size reset`、`wm density reset` 并恢复旋转设置。
+- `scripts/mock/mock_hub.py` 每次启动的 `HUB_ID` 都是新的：换 `MOCK_*` 开关重启假 hub 后原配对失效，要 `pm clear` 再配对（草稿随配对目录一起没了）。`adb reverse --remove` 断不掉已建好的连接（OkHttp 复用连接），模拟不了上传途中断网。
 - `adb shell am start … --es k "jarvis://open?a=1&b=2"`：adb 把参数拼成一行交给设备上的 shell，`&` 会把命令截断，链接要再套一层单引号（`scripts/android.sh` 的 shots）。
 - ColorOS 上 `adb install` 要在手机上点确认「USB 安装」：手机熄屏或没人点时 adb 一直卡住，几分钟后报失败。装到用户手机上要先让用户在手机旁边。
+- `debug.mockAddress` 是静默配对（`platformPairing.pair`，不经过配对页），配对完成之后的步骤（选择引擎、准备清单）都看不到：要看这些就用 `jarvis://pair?url=…&token=mock` 链接打开配对页，再点「确认配对」。
+- 想让一次保存失败，别靠 `adb reverse --remove` 断掉假 hub：App 的 OkHttp 连接池里已经建好的长连接照样能用，请求还是成功了。用假 hub 的失败开关（`MOCK_ENGINE_ERROR`、`MOCK_MODEL_CONFLICT`、`MOCK_DEPLOY_ERROR`）。
+
+
+## 语音对话
+
+- OkHttp 的 WebSocket 收到对方的关闭帧后只调 `onClosing`，监听器自己不 `close()` 的话连接一直半关着，`onClosed` 永远不来；MockWebServer 也因此关不掉（「Gave up waiting for queue to shut down」）。`onClosing` 里要回一个 `close`（`HttpVoicePlugins`），关闭码用 1000：1005 这类保留码传给 `close` 会抛异常。
+- 模拟器按规矩用 `-no-audio` 启动，`AudioRecord` 开不了，语音页只会显示「麦克风打不开」：截图用调试参数 `debug.voiceAudio fake`（假音频只在 debug 源码集里）。
+- 假 hub 每次启动都换一个 hub_id，重启后 App 的配对按 hub 身份校验就失败了：要换假 hub 的行为，用运行中能切的开关（`/mock/voice?mode=…`），别重启它。
+- 模拟器上玻璃一帧上百毫秒，状态变了以后颜色动画要过一两秒才走完：按时间截图时离状态变化留 2 秒以上，否则截到的是上一个状态的颜色。`uiautomator dump` 每次要一两秒，也算进去。
+- `uiautomator dump` 只看得到最上面那个窗口：底部浮层（ModalBottomSheet）开着时，下面页面的按钮都找不到，先关浮层。
+- Phosphor 的 fill 粗细不全是「实心的同一个图形」：`waveform` 的 fill 是一个圆角方块里挖出波形，放在实心圆盘上像多了一个白方块。圆盘里的图标用 regular。
+
+## 宽屏两栏和 Persona 页
+
+- material3-adaptive 1.3.0 的 Navigation 3 list-detail 场景（`rememberListDetailSceneStrategy`）可以接分隔条：传 `paneExpansionState` 和 `paneExpansionDragHandle`。但库的 `Modifier.paneExpansionDraggable` 松手时调 `settleToAnchorIfNeeded`：有锚点就一定吸到最近的锚点，没锚点就停在松手处，做不到「离折痕 28dp 以内才吸」，`firstPaneWidth` 等读数又是 internal 的。要自定吸附和收起，就自己写把手的 `draggable`，每帧 `setFirstPaneWidth(px)`（只触发两栏重新测量，不重组页面），松手后用 `animate` 一帧帧写。另外 expansion state 一旦设了宽度（不是 unspecified），就盖过 `PaneScaffoldDirective.excludedBounds` 的折痕避让：分开的折痕要 `clear()` 并且不传把手，交还给库按折痕分栏（源码 `ThreePaneScaffold.kt` 的 measure）。读这类库的行为直接下 Google Maven 的 `-sources.jar` 看源码最快。
+- `setFirstPaneWidth(0)` 时库只摆第二栏（列表还在组合里、大小为 0），把手放在左边缘（离边 `horizontalPartitionSpacerSize / 2`），所以收起后把手还在，可以拖回来。
+- hub 的 pins（`/api/v1/pins` 的 sessions）同时装着 Agents 的置顶会话和 Persona 的置顶对话：Persona 历史里「全部取消置顶」只能取消 Persona 自己的对话，不能把整份 pins 清掉。
+- 交接对话的标题要先认 `<jarvis-context … title="X">` 再截断：旧 App 先把最后一句截到 30 个字再认标签，长标题的标签被截断后就认不出来，历史里露出半截原始标签。
+
+
+## 文件和 Git
+
+- `JSectionHeader` 的 `trailing` / `action` 落在行的中间，不在最右：标题是 `weight(1f, fill = false)`，后面的 Spacer 也是 `weight(1f)`，剩余空间一家一半，标题短时右边的东西就停在中线附近。要放在最右，外面套一个 `Row`，标题给 `Modifier.weight(1f).alignByBaseline()`，右边的字 `alignByBaseline()`（Git 页「改动」的 +N −N）。
+- 两个模块都在清单里声明 `androidx.core.content.FileProvider` 会在合并时撞名（provider 按 `android:name` 合并）：每个模块用自己的子类（`FilesShareProvider`、`InboxFileProvider`），authority 各起一个。
+- mikepenz Markdown 的 `LazyMarkdownSuccess` 自己建 LazyColumn，前面加不了别的行：长文档要在 `Markdown(success = { … })` 里自己写 LazyColumn，每个顶层块一行 `MarkdownElement(node, components, content, includeSpacer = index > 0)`。三个坑：`MarkdownElement` 把块间距画成自己前面的一个兄弟 Spacer，外面包 `Box` 会把两者叠在一起（间距全没了），要包 `Column`；顶层子节点里的 EOL / 空白和链接引用定义（`[api]: https://…`，什么都不画）要先滤掉，否则平白多出空隙；`ImageTransformer.intrinsicSize` 按像素给，README 里的图会按像素大小画（高密度屏上很小），乘上 density 才和浏览器一样按 dp 显示。
+- `PdfRenderer` 只能读文件描述符（base64 先写进 cache），而且同一时间只能开一页：渲染要加锁，关掉之后别再画（`PdfDocument`）。
+- 跨模块的属性不能 smart cast（`SessionFileContent.mime` 在 `core:contracts`）：先赋给局部变量再判空。
+
+## 对话内容
+
+- Codex 的文件改动在 hub 里变成只带 `diff` 的 `Edit`（`server/internal/transcript/codex.go`），但 `diff` 不一定是 unified diff：FileChange 没有 `unified_diff` 时（新建文件）hub 放的是整份文件内容，没有 `@@`。按 unified diff 解析会把整份内容丢光（不以 `+` `-` 空格开头的行都被当成文件头跳过），所以先看有没有 `@@`，没有就按 `change` 画成全部新增或全部删除（`patchDiff`）。
+- 对话页给每一行的能力（`LocalChatRowActions`）要在流式更新时保持同一个对象：读它的行（几乎每一行）会在它换对象时全部重组。会随消息变的东西（这段对话的图片列表）做成打开时才读的函数，不要放进 `remember` 的键（`ChatScreen` 里的 `pictures`）。
+
 - 逐像素截图（`android.sh shots` 的 `SHOTS_*`，`docs/android.md`「改前改后逐像素比对」）：Android 15 的 SystemUI 演示模式隐藏移动网络后约 5 秒会冒出一个卫星图标，演示命令和 `icon_blacklist` 都去不掉，只能等它出现后再截（每张图都带着它）；`adb root` 会重启 adbd，之前的 `adb reverse` 跟着没了，要先 root 再转发；macOS 的 `sips -Z` 直接改原图，看图前先拷一份；macOS 自带 bash 3.2 在 `set -u` 下展开空数组报错，写成 `${arr[@]+"${arr[@]}"}`。

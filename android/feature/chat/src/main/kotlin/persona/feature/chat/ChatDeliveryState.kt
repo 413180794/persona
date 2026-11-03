@@ -20,10 +20,16 @@ internal val DeliveryState.pendingStatus: PendingStatus?
         DeliveryState.Sent -> null
     }
 
-internal enum class DeliveryAction { Cancel, Edit, Retry, ConfirmDelivered, ConfirmNotDelivered }
+internal enum class DeliveryAction { Cancel, Edit, Retry, Delete, ConfirmDelivered, ConfirmNotDelivered }
 
+/**
+ * Cancel and edit are for what has not gone out yet; a refused message (refused by the computer, or confirmed as never
+ * delivered) reached nothing either, so it can be edited (back into the box, the bubble gone) or deleted outright.
+ */
 internal fun DeliveryState.allows(action: DeliveryAction): Boolean = when (action) {
-    DeliveryAction.Cancel, DeliveryAction.Edit -> this == DeliveryState.Queued || this == DeliveryState.WaitingForNetwork
+    DeliveryAction.Cancel -> this == DeliveryState.Queued || this == DeliveryState.WaitingForNetwork
+    DeliveryAction.Edit -> this == DeliveryState.Queued || this == DeliveryState.WaitingForNetwork || this == DeliveryState.Refused
+    DeliveryAction.Delete -> this == DeliveryState.Refused
     DeliveryAction.Retry -> this == DeliveryState.Refused || this == DeliveryState.Rejected || this == DeliveryState.NeedsConfirmation
     DeliveryAction.ConfirmDelivered, DeliveryAction.ConfirmNotDelivered -> resultUnknown
 }
@@ -40,7 +46,7 @@ internal class ChatDeliveryActions(private val sender: MessageSender) {
         busyIds = busyIds + id
         try {
             val changed = when (action) {
-                DeliveryAction.Cancel, DeliveryAction.Edit -> sender.cancel(id)
+                DeliveryAction.Cancel, DeliveryAction.Edit, DeliveryAction.Delete -> sender.cancel(id)
                 DeliveryAction.Retry -> sender.retry(id)
                 DeliveryAction.ConfirmDelivered -> sender.confirm(id, delivered = true)
                 DeliveryAction.ConfirmNotDelivered -> sender.confirm(id, delivered = false)

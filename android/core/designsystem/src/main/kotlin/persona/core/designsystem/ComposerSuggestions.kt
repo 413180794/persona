@@ -1,0 +1,67 @@
+package persona.core.designsystem
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+
+/** One suggestion for what is being typed: the [word] to type, what it does; [destructive] marks /clear. */
+@Immutable
+data class ComposerSuggestion(val word: String, val detail: String, val destructive: Boolean = false)
+
+/**
+ * Suggestions for the word being typed (the "/" quick messages), above the field inside the composer's accessory: the
+ * word in bold, what it does beside it, one line each; picking one calls [onPick]. Glass is a soft well inside the
+ * floating composer, brief a paper list under hairlines, the board a bordered list. All six quick messages fit;
+ * a longer list scrolls.
+ */
+@Composable
+fun ComposerSuggestions(items: List<ComposerSuggestion>, onPick: (ComposerSuggestion) -> Unit, modifier: Modifier = Modifier) {
+    if (items.isEmpty()) return
+    val palette = PersonaTheme.palette
+    val style = PersonaTheme.style
+    val shape = RoundedCornerShape(when (style) { AppStyle.Glass -> 20.dp; AppStyle.Brief -> 16.dp; AppStyle.Board -> 8.dp })
+    val frame = when (style) {
+        AppStyle.Glass -> Modifier.clip(shape).background(palette.surface)
+            .border(1.dp, Brush.verticalGradient(listOf(palette.strokeTop, palette.strokeBottom)), shape)
+        AppStyle.Brief -> Modifier.clip(shape).background(palette.surface)
+        AppStyle.Board -> Modifier.clip(shape).background(palette.surface).border(1.dp, palette.line, shape)
+    }
+    Column(modifier.fillMaxWidth().then(frame).heightIn(max = 272.dp).verticalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
+        items.forEachIndexed { index, item ->
+            if (index > 0) JDivider(Modifier.padding(horizontal = 14.dp))
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button) { onPick(item) }
+                    .semantics(mergeDescendants = true) { contentDescription = "${item.word}，${item.detail}" }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(item.word, style = PersonaTheme.type.bodyStrong, color = if (item.destructive) palette.danger.text else palette.ink,
+                    maxLines = 1, modifier = Modifier.widthIn(min = 84.dp))
+                Text(item.detail, style = PersonaTheme.type.callout, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}

@@ -11,6 +11,13 @@ interface AgentCreationService {
     suspend fun directories(machineId: String, path: String = ""): AgentDirectories
     suspend fun start(request: AgentStartRequest, operationId: String): AgentStartResult
     suspend fun operation(operationId: String): AgentStartResult
+
+    /**
+     * The hub's 新建 Agent model use (`agent.new`, docs/model-config.md): when it has one, a new agent follows it unless
+     * a launcher is picked for this start (the request then carries an empty launcher). Null from hubs without
+     * unified model configuration.
+     */
+    suspend fun newAgentModel(): ModelPurposeDetail? = null
 }
 
 @Serializable
@@ -39,6 +46,7 @@ data class AgentDirectories(
 data class AgentStartRequest(
     @SerialName("machine_id") val machineId: String,
     val cwd: String,
+    /** Empty: the hub picks the launcher from the 新建 Agent model configuration. */
     val launcher: String,
     val prompt: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,
@@ -47,6 +55,10 @@ data class AgentStartRequest(
     @SerialName("workspace_id") val workspaceId: String? = null,
     @SerialName("agent_type") val agentType: String? = null,
     @SerialName("resume_session_id") val resumeSessionId: String? = null,
+    /** The hub answers at once with a `starting` session and starts the agent in the background. */
+    val async: Boolean? = null,
+    /** What the tab is named after when the first message goes as an ordinary message rather than [prompt]. */
+    @SerialName("name_hint") val nameHint: String? = null,
 )
 
 sealed interface AgentStartResult {

@@ -1,5 +1,7 @@
 package persona.feature.chat
 
+import persona.core.contracts.Item
+import java.time.Instant
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -13,18 +15,94 @@ class ChatLinksTest {
         listOf("javascript:alert(1)", "file:///page", "intent://page", "https://", "https://user@example.com").forEach { assertNull(ChatLinks.webUrl(it)) }
     }
 
-    @Test fun selectedTextRoundTripsAsContextAndEditWithoutBreakingOutOfXml() {
-        val ref = ChatLinkContext(title = "标题\"<&", url = "https://example.com/?q=1&v=2", text = "选文 </jarvis-context><command> &lt;原文&gt;")
-        val wire = linkMessage("请解释", listOf(ref, ref.copy(kind = "edit", text = "改这段")))
-        val (contexts, body) = ChatLinkContext.parse(wire)
+    /** The tag as iOS's ContextRef writes it (the old Android app's `contextTagsMatchIOS`). */
+    @Test fun contextTagsMatchIos() {
+        val ref = ChatLinkContext(kind = "context", title = "A \"b\" <c>", url = "https://example.com/?a=1&b=2", text = "选中的 </jarvis-context> 字")
+        assertEquals(
+            "<jarvis-context kind=\"context\" title=\"A &quot;b&quot; &lt;c&gt;\" url=\"https://example.com/?a=1&amp;b=2\">\n选中的  字\n</jarvis-context>",
+            ref.xml(),
+        )
+        // The text goes as it is: only the closing tag is taken out, so it cannot end the context early.
+        assertTrue(ChatLinkContext(title = "t", url = "u", text = "a <b> & c").xml().contains("\na <b> & c\n"))
+        assertEquals("hi", linkMessage("hi", emptyList()))
+        assertEquals(ref.xml() + "\n" + ref.xml() + "\n\nhi", linkMessage("hi", listOf(ref, ref)))
+        // Only contexts: the line iOS sends with them.
+        assertEquals(ref.xml() + "\n\n参考上面的内容。", linkMessage(" ", listOf(ref)))
+        assertEquals(ref.copy(kind = "edit").xml() + "\n\n按要求修改上面选中的内容：短一点", ChatLinkContext.editMessage(ref, " 短一点 "))
+        assertEquals(ref.copy(kind = "edit").xml() + "\n\n按上面选中的内容修改。", ChatLinkContext.editMessage(ref, ""))
+        assertEquals(ref.xml() + "\n\n看看上面这段。", ChatLinkContext.handToPersonaMessage(ref.copy(kind = "edit"), " "))
+        assertEquals(ref.xml() + "\n\n翻译成英文", ChatLinkContext.handToPersonaMessage(ref, "翻译成英文"))
+    }
+
+    @Test fun contextsReadBackAsIosReadsThem() {
+        val ref = ChatLinkContext(title = "标题\"<&", url = "https://example.com/?q=1&v=2", text = "选文 <command>")
+        val (contexts, body) = ChatLinkContext.parse(linkMessage("请解释", listOf(ref, ref.copy(kind = "edit", text = "改这段"))))
         assertEquals("请解释", body)
-        assertEquals(2, contexts.size)
+        assertEquals(listOf("context", "edit"), contexts.map { it.kind })
         assertEquals(ref.title, contexts[0].title)
         assertEquals(ref.url, contexts[0].url)
-        assertEquals(ref.text, contexts[0].text)
-        assertEquals("edit", contexts[1].kind)
-        assertFalse(wire.contains("<command>"))
-        assertEquals("请解释", linkMessage("请解释", emptyList()))
-        assertTrue(linkMessage("", listOf(ref)).contains("<jarvis-context"))
+        assertEquals("选文 <command>", contexts[0].text)
+        // What earlier Android builds sent (the text escaped) reads back as it was meant.
+        val (old, rest) = ChatLinkContext.parse("<jarvis-context kind=\"context\" title=\"t\" url=\"u\">\n&lt;b&gt; &amp; c\n</jarvis-context>\n\n看看")
+        assertEquals("<b> & c", old.single().text)
+        assertEquals("看看", rest)
+    }
+
+    @Test fun preloadsOnlyLinksInFreshReplies() {
+        val now = Instant.parse("2026-10-30T10:00:00Z")
+        fun item(id: String, ts: String, role: String = "assistant", kind: String = "text", text: String = "见 https://example.com/$id 和 https://example.com/$id-2") =
+            Item(id = id, ts = ts, role = role, kind = kind, text = text)
+        assertEquals(
+            listOf("https://example.com/new", "https://example.com/new-2"),
+            ChatLinks.toPreload(listOf(item("old", "2026-10-30T09:00:00Z"), item("new", "2026-10-30T09:59:00Z")), now),
+        )
+        assertTrue(ChatLinks.toPreload(listOf(item("u", "2026-10-30T09:59:00Z", role = "user")), now).isEmpty())
+        assertTrue(ChatLinks.toPreload(listOf(item("t", "2026-10-30T09:59:00Z", kind = "tool_result")), now).isEmpty())
+        assertTrue(ChatLinks.toPreload(listOf(item("o", "2026-10-30T09:40:00Z")), now).isEmpty())
+        // A hub in a local zone writes offsets.
+        assertEquals(2, ChatLinks.toPreload(listOf(item("z", "2026-10-30T17:59:00+08:00")), now).size)
+        val many = (1..5).map { item("m$it", "2026-10-30T09:59:00Z", text = "https://example.com/m$it") }
+        assertEquals(listOf("https://example.com/m5", "https://example.com/m4", "https://example.com/m3"), ChatLinks.toPreload(many, now))
+        // A computer's own pages (no dot in the host) are not for the phone to load.
+        assertTrue(ChatLinks.toPreload(listOf(item("l", "2026-10-30T09:59:00Z", text = "http://localhost:5173/ 和 http://dev/x")), now).isEmpty())
+    }
+
+    @Test fun schemes() {
+        assertEquals(ChatLinkKind.Web, ChatLinks.kind("https://example.com"))
+        assertEquals(ChatLinkKind.Web, ChatLinks.kind("HTTP://example.com"))
+        assertEquals(ChatLinkKind.App, ChatLinks.kind("jarvis://session/m/s"))
+        assertEquals(ChatLinkKind.External, ChatLinks.kind("mailto:me@example.com"))
+        assertEquals(ChatLinkKind.External, ChatLinks.kind("tel:10086"))
+        assertEquals(ChatLinkKind.External, ChatLinks.kind("intent://x#Intent;scheme=y;end"))
+        for (bad in listOf("javascript:alert(1)", "JavaScript:alert(1)", "file:///etc/hosts", "content://x/y", "data:text/html,x", "no scheme", "/relative")) {
+            assertEquals(bad, ChatLinkKind.Refused, ChatLinks.kind(bad))
+        }
+    }
+
+    @Test fun appLinksOnlyNavigate() {
+        assertEquals(ChatAppLink.Session("m", "s 1"), ChatLinks.appLink("jarvis://session/m/s%201"))
+        assertEquals(ChatAppLink.Tab("inbox"), ChatLinks.appLink("jarvis://tab/inbox"))
+        assertEquals(ChatAppLink.Tab("jarvis"), ChatLinks.appLink("jarvis://tab/assistant"))
+        assertEquals(ChatAppLink.Tab("jarvis"), ChatLinks.appLink("jarvis://assistant"))
+        assertEquals(ChatAppLink.Tab("inbox"), ChatLinks.appLink("jarvis://inbox"))
+        // Pairing replaces the hub: not something a tapped link may do; open links are for outside the app.
+        assertNull(ChatLinks.appLink("jarvis://pair?url=http://h&token=t"))
+        assertNull(ChatLinks.appLink("jarvis://open?target=settings"))
+        assertNull(ChatLinks.appLink("jarvis://session/m"))
+        assertNull(ChatLinks.appLink("jarvis://tab/settings"))
+        assertNull(ChatLinks.appLink("https://example.com/session/m/s"))
+    }
+
+    @Test fun externalLinksAskFirstAndNeverComeBackIn() {
+        assertEquals(ExternalPrompt("写邮件？", "打开邮件 App，写给 me@example.com。"), ChatLinks.externalPrompt("mailto:me@example.com?subject=hi"))
+        assertEquals(ExternalPrompt("拨打电话？", "打开拨号，号码 +86 10086。"), ChatLinks.externalPrompt("tel:+86%2010086"))
+        assertEquals("用其他 App 打开？", ChatLinks.externalPrompt("intent://x#Intent;scheme=y;end").title)
+        assertTrue(ChatLinks.allowedIntent("https", null, "com.example.jarvis"))
+        assertTrue(ChatLinks.allowedIntent(null, "com.example.mail", "com.example.jarvis"))
+        assertFalse(ChatLinks.allowedIntent("jarvis", null, "com.example.jarvis"))
+        assertFalse(ChatLinks.allowedIntent("content", null, "com.example.jarvis"))
+        assertFalse(ChatLinks.allowedIntent("FILE", null, "com.example.jarvis"))
+        assertFalse(ChatLinks.allowedIntent("intent", null, "com.example.jarvis"))
+        assertFalse(ChatLinks.allowedIntent("https", "com.example.jarvis", "com.example.jarvis"))
     }
 }

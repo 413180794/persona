@@ -191,6 +191,8 @@ class HubChatRepository(
             recordAction(session, action, result, verified = true)
             return result
         }
+        override suspend fun editQueue(session: Session, keep: List<Int>) = delegate.editQueue(session, keep)
+        override suspend fun info(session: Session) = delegate.info(session)
     }
 
     /** The composer shares interruption state with menu actions. Failed requests leave it unchanged. */

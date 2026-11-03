@@ -1,0 +1,81 @@
+package persona.core.domain.sort
+
+import persona.core.contracts.Session
+
+/*
+ * Where a session comes from and what the phone may do with it (docs/protocol.md「Codex 来源与能力」, the same rules
+ * as iOS `Session`). Older sources carry no source_kind and can do everything; a session with a source only gets
+ * what its capabilities explicitly allow, so a missing field is a refusal. The hub and the node refuse the same
+ * operations: these only keep the phone from offering what would fail.
+ */
+
+val Session.hasSource: Boolean get() = !sourceKind.isNullOrEmpty()
+val Session.canRead: Boolean get() = !hasSource || capabilities?.read == true
+val Session.canSend: Boolean get() = !hasSource || capabilities?.send == true
+val Session.canInterrupt: Boolean get() = !hasSource || capabilities?.interrupt == true
+val Session.canApprove: Boolean get() = !hasSource || capabilities?.approve == true
+/** A pane in a terminal engine: the terminal and its keys, closing the pane, renaming the tab. */
+val Session.canTerminal: Boolean get() = !hasSource || capabilities?.terminal == true
+/** Join a Codex app-server thread live: offered until it is attached. */
+val Session.canAttach: Boolean get() = hasSource && capabilities?.attach == true && !attached
+
+/** Permission mode and effort change on a running Claude session the phone may write to, Persona's included. */
+val Session.canChangeModes: Boolean get() = isLive && isClaude && canSend
+/** /model and /clear are typed into Claude's pane: Claude in a terminal engine, not Persona's conversations. */
+val Session.canTypeClaudeCommands: Boolean get() = canChangeModes && !assistant && !paneId.isNullOrBlank() && canTerminal
+
+/** A session's source as the app names it: its label, the agent's name there, and why it is read-only. */
+data class SessionSourceInfo(
+    val label: String,
+    val agentName: String? = null,
+    /** Set only when the phone cannot send: the source's reason, or a generic one. */
+    val readOnlyReason: String? = null,
+) {
+    val readOnly: Boolean get() = readOnlyReason != null
+}
+
+val Session.source: SessionSourceInfo?
+    get() {
+        val label = when (sourceKind) {
+            "codex_app_server" -> "Codex 实时"
+            "codex_history" -> "Codex 历史"
+            "identity_conflict" -> "身份冲突"
+            // An agent runtime's session (docs/runtimes.md): its own name, "DSH".
+            "runtime" -> agentLabel
+            else -> sourceKind?.takeIf(String::isNotEmpty)
+        } ?: return null
+        // The node writes some reasons with their own "仅查看：", which the subtitle adds already.
+        val reason = readOnlyReason?.removePrefix(READ_ONLY_PREFIX)?.trim()?.takeIf(String::isNotEmpty)
+        return SessionSourceInfo(label,
+            agentName.takeIf { sourceKind != "identity_conflict" }?.takeIf(String::isNotEmpty),
+            if (canSend) null else reason ?: NO_SEND_REASON)
+    }
+
+/** "Codex 历史 · <agent> · 仅查看：<reason>", as iOS writes it, for notices that are one line of text. */
+val Session.sourceSubtitle: String?
+    get() = source?.let { source ->
+        val named = listOfNotNull(source.label, source.agentName).joinToString(" · ")
+        source.readOnlyReason?.let { "$named · $READ_ONLY_PREFIX$it" } ?: named
+    }
+
+/** Why nothing can be typed: what the composer and refused operations say. */
+val Session.readOnlyNotice: String get() = sourceSubtitle?.takeIf { !canSend } ?: READ_ONLY
+
+/**
+ * What picks the conversation up again in a terminal on that computer, or null where there is no terminal (an agent
+ * runtime's sessions are picked up in its own UI). A Codex thread resumes by its own thread id, not the hub's id.
+ */
+fun Session.resumeCommand(cwd: String = this.cwd, id: String = sourceThreadId?.takeIf(String::isNotBlank) ?: sessionId): String? {
+    if (!canTerminal) return null
+    fun quote(value: String) = "'" + value.replace("'", "'\"'\"'") + "'"
+    val command = when {
+        isCodex -> "codex resume"
+        agent == "traex" -> "traex resume"
+        else -> "claude --resume"
+    }
+    return (cwd.takeIf(String::isNotBlank)?.let { "cd -- ${quote(it)} && " } ?: "") + "$command ${quote(id)}"
+}
+
+const val READ_ONLY = "此会话仅可查看"
+private const val READ_ONLY_PREFIX = "仅查看："
+private const val NO_SEND_REASON = "此来源尚未允许发送"

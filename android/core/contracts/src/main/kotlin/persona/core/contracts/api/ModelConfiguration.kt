@@ -1,0 +1,146 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
+package persona.core.contracts.api
+
+import persona.core.contracts.WireSerializer
+import kotlinx.serialization.KeepGeneratedSerializer
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
+/**
+ * 设置 › 模型配置 (docs/model-config.md「接口」): the hub owns the catalog of model uses ("purposes"); a purpose is a
+ * real model consumer, never something the app invents. Bound to the active pairing.
+ */
+interface ModelConfiguration {
+    /** `GET /api/v1/model-config`; [ModelConfigurationUnsupported] from hubs without it. */
+    suspend fun catalog(): ModelCatalog
+
+    /** `GET /api/v1/model-config/purposes/{id}`; [ModelPurposeNotFound] for an id the hub does not have. */
+    suspend fun purpose(id: String): ModelPurposeDetail
+
+    /** `PATCH /api/v1/model-config/purposes/{id}` with the purpose's revision; another device's edit is a [ModelPurposeSave.Conflict]. */
+    suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave
+}
+
+/** The hub predates unified model configuration (its routes answer 404 without an error body). */
+class ModelConfigurationUnsupported : Exception("这个 hub 还不支持统一模型配置，请先更新服务器。")
+
+/** The hub has model configuration but not this purpose (a task that was deleted, a plugin that went away). */
+class ModelPurposeNotFound(message: String) : Exception(message)
+
+sealed interface ModelPurposeSave {
+    data class Saved(val detail: ModelPurposeDetail) : ModelPurposeSave
+    /** The revision moved on (another device saved first); the draft is kept and nothing was written. */
+    data object Conflict : ModelPurposeSave
+}
+
+@KeepGeneratedSerializer
+@Serializable(with = ModelBindingSerializer::class)
+data class ModelBinding(
+    @SerialName("provider") val provider: String? = null,
+    @SerialName("model") val model: String? = null,
+    @SerialName("effort") val effort: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = ModelProviderSerializer::class)
+data class ModelProvider(
+    @SerialName("id") val id: String,
+    @SerialName("name") val name: String = "",
+    /** launcher | api | plugin. */
+    @SerialName("kind") val kind: String = "launcher",
+    /** messages | responses, for API providers. */
+    @SerialName("api") val api: String? = null,
+    @SerialName("model") val model: String? = null,
+    @SerialName("machines") val machines: List<String> = emptyList(),
+    @SerialName("hidden") val hidden: Boolean = false,
+    @SerialName("has_key") val hasKey: Boolean = false,
+) {
+    val displayName: String get() = name.ifBlank { id }
+}
+
+@KeepGeneratedSerializer
+@Serializable(with = ModelPurposeSerializer::class)
+data class ModelPurpose(
+    @SerialName("id") val id: String,
+    @SerialName("name") val name: String = "",
+    @SerialName("group") val group: String = "",
+    /** launcher | api | plugin. */
+    @SerialName("kind") val kind: String = "launcher",
+    @SerialName("parent") val parent: String? = null,
+    @SerialName("machine_id") val machineId: String? = null,
+    @SerialName("override") val override: ModelBinding = ModelBinding(),
+    @SerialName("effective") val effective: ModelBinding = ModelBinding(),
+    @SerialName("revision") val revision: Long = 0,
+    @SerialName("inherited_from") val inheritedFrom: String? = null,
+    /** The hub's own sentence when something is wrong (offline, protocol mismatch, missing provider). */
+    @SerialName("status") val status: String? = null,
+    /** The fields this purpose takes; hubs that leave it out take provider and model. */
+    @SerialName("fields") val fields: List<String>? = null,
+    /** The providers it can use; without the list, the providers of the same kind. */
+    @SerialName("provider_ids") val providerIds: List<String>? = null,
+) {
+    val displayName: String get() = name.ifBlank { id }
+
+    fun supports(field: String): Boolean = field in (fields ?: listOf("provider", "model"))
+
+    /** What is in effect, piece by piece: the provider's name, the model, the effort. Empty when nothing is configured. */
+    fun summaryParts(providers: List<ModelProvider> = emptyList()): List<String> = listOfNotNull(
+        effective.provider?.takeIf { it.isNotBlank() }?.let { id -> providers.firstOrNull { it.id == id }?.displayName ?: id },
+        effective.model?.takeIf { it.isNotBlank() },
+        effective.effort?.takeIf { it.isNotBlank() }?.let { "思考 $it" },
+    )
+
+    /** The providers to offer: the hub's list (or the same kind), hidden ones only while this purpose refers to them. */
+    fun providersFrom(providers: List<ModelProvider>): List<ModelProvider> = providers.filter {
+        (providerIds?.contains(it.id) ?: (it.kind == kind)) &&
+            (!it.hidden || it.id == override.provider || it.id == effective.provider)
+    }
+}
+
+@KeepGeneratedSerializer
+@Serializable(with = ModelCatalogSerializer::class)
+data class ModelCatalog(
+    @SerialName("purposes") val purposes: List<ModelPurpose> = emptyList(),
+    @SerialName("providers") val providers: List<ModelProvider> = emptyList(),
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = ModelPurposeDetailSerializer::class)
+data class ModelPurposeDetail(
+    @SerialName("purpose") val purpose: ModelPurpose,
+    @SerialName("providers") val providers: List<ModelProvider> = emptyList(),
+)
+
+/**
+ * The edit of one purpose. An empty field means "inherit", never an empty override; switching providers drops the
+ * model and effort chosen for the old one.
+ */
+data class ModelConfigurationDraft(val provider: String = "", val model: String = "", val effort: String = "") {
+    fun choosingProvider(id: String): ModelConfigurationDraft = if (id == provider) this else ModelConfigurationDraft(provider = id)
+
+    /** The PATCH body: the revision, and only the fields [purpose] takes; blank ones go as null (restore inheritance). */
+    fun patch(purpose: ModelPurpose): JsonObject = buildJsonObject {
+        put("revision", purpose.revision)
+        for ((key, value) in listOf("provider" to provider, "model" to model, "effort" to effort)) {
+            if (purpose.supports(key)) put(key, value.trim().takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
+        }
+    }
+
+    companion object {
+        fun from(purpose: ModelPurpose) = ModelConfigurationDraft(
+            purpose.override.provider.orEmpty(), purpose.override.model.orEmpty(), purpose.override.effort.orEmpty(),
+        )
+    }
+}
+
+object ModelBindingSerializer : WireSerializer<ModelBinding>(ModelBinding.generatedSerializer())
+object ModelProviderSerializer : WireSerializer<ModelProvider>(ModelProvider.generatedSerializer())
+object ModelPurposeSerializer : WireSerializer<ModelPurpose>(ModelPurpose.generatedSerializer())
+object ModelCatalogSerializer : WireSerializer<ModelCatalog>(ModelCatalog.generatedSerializer())
+object ModelPurposeDetailSerializer : WireSerializer<ModelPurposeDetail>(ModelPurposeDetail.generatedSerializer())

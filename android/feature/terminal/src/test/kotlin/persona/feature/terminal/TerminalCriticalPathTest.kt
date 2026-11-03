@@ -46,13 +46,16 @@ class TerminalCriticalPathTest {
             TerminalWheel(20f, at).move(65f, model::wheel)
             assertEquals(listOf(3), transport.inputs.map { it.scroll }) // one message for the move, not one a line
             assertTrue(transport.inputs.all { it.at == at })
-            model.watch(); model.press("enter")
+            model.watch(); model.press("enter"); runCurrent()
             assertEquals(1, transport.inputs.size)
+            // Watching, keys go through /keys instead of the stream.
+            assertEquals(listOf(FakeTerminal.Keys(listOf("enter"), "")), transport.keys)
             transport.events.emit(TerminalControlEvent("machine", "session", "busy")); runCurrent()
             assertEquals(TerminalControl.Busy, model.state.value.control)
             model.takeOver(true); assertTrue(transport.subscriptions.last().takeover)
             transport.events.emit(TerminalControlEvent("machine", "session", "taken")); runCurrent()
-            model.type("不得发送"); assertEquals(1, transport.inputs.size)
+            model.type("只看时走 keys"); runCurrent(); assertEquals(1, transport.inputs.size)
+            assertEquals(FakeTerminal.Keys(emptyList(), "只看时走 keys"), transport.keys.last())
             run.cancelAndJoin()
             assertEquals(1, transport.unsubscribes)
         } finally { Dispatchers.resetMain() }
@@ -83,14 +86,16 @@ class TerminalCriticalPathTest {
     }
 }
 
-private class FakeTerminal : TerminalTransport {
+internal class FakeTerminal : TerminalTransport {
     override val connection = MutableStateFlow(ConnectionState.Online)
     override val features = MutableStateFlow(setOf("terminal_stream", "terminal_control", "terminal_scroll", "terminal_click"))
     override val events = MutableSharedFlow<ServerEvent>()
     data class Subscription(val epoch: String?, val after: Int, val size: TerminalSize?, val takeover: Boolean)
     data class Input(val text: String, val scroll: Int, val at: TerminalCellPosition?)
+    data class Keys(val keys: List<String>, val text: String)
     val subscriptions = mutableListOf<Subscription>()
     val inputs = mutableListOf<Input>()
+    val keys = mutableListOf<Keys>()
     var unsubscribes = 0
     override fun subscribe(key: SessionKey, epoch: String?, after: Int, size: TerminalSize?, takeover: Boolean): Boolean {
         subscriptions += Subscription(epoch, after, size, takeover); return true
@@ -99,5 +104,14 @@ private class FakeTerminal : TerminalTransport {
     override fun input(key: SessionKey, text: String, size: TerminalSize?, scroll: Int, at: TerminalCellPosition?, click: TerminalCellPosition?): Boolean {
         inputs += Input(text, scroll, at); return true
     }
-    override suspend fun screen(key: SessionKey) = TerminalScreen("只读屏幕")
+    override suspend fun screen(key: SessionKey): TerminalScreen { screens++; return TerminalScreen("只读屏幕") }
+    /** Holds each /keys request until completed; [failKeys] makes them fail. */
+    var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    var failKeys = false
+    var screens = 0
+    override suspend fun keys(key: SessionKey, keys: List<String>, text: String) {
+        this.keys += Keys(keys, text)
+        gate?.await()
+        if (failKeys) throw java.io.IOException("hub unreachable")
+    }
 }

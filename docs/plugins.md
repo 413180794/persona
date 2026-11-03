@@ -96,7 +96,8 @@ App → 插件：
 
 ### App
 
-- Android：「Persona」tab 顶栏的麦克风（只在有 `running` 的 voice 插件时出现）进入语音页；页面右上角的菜单选模型和音色。
+- Android：点「Persona」tab 的标题，菜单里的「语音对话」（只在有 `running` 的 voice 插件时出现）进入语音页；页面右上角是「音色」
+  （宿主接上模型配置页后是「模型配置 / 音色」菜单），模型读模型配置的用途 `plugin.<id>`，旧 hub 用插件自己的默认模型。
   录音用 `VOICE_COMMUNICATION` 音源 + 系统回声消除（外放时模型不会听到自己），见 `docs/android.md`。
 
 ## 内置语音插件（`personad voice`）

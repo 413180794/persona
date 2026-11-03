@@ -35,6 +35,16 @@ internal fun conversationGroups(
         matches.filter { it.key != snapshot.mainSession && it.key !in pinned })
 }
 
+/** How many recent conversations the history lists before folding the rest into 「查看全部 N 个」. */
+internal const val RecentShown = 30
+
+internal data class RecentRows(val shown: List<Session>, val hidden: Int)
+
+/** The recent group as the history shows it: the first [limit], unless all were asked for or a search is on. */
+internal fun recentRows(recent: List<Session>, query: String, showAll: Boolean, limit: Int = RecentShown): RecentRows =
+    if (showAll || query.isNotBlank() || recent.size <= limit) RecentRows(recent, 0)
+    else RecentRows(recent.take(limit), recent.size - limit)
+
 internal fun greeting(hour: Int): String = when (hour) {
     in 5..10 -> "早上好"
     in 11..13 -> "中午好"
@@ -87,8 +97,28 @@ internal class DemoAssistantRepository : AssistantRepository, MessageSender, Mai
 }
 
 
-internal fun Session.conversationTitle(): String = title.takeIf { it.isNotBlank() && it != "Claude Code" }
-    ?: lastText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()?.take(30) ?: "对话"
+/**
+ * A conversation's name in the history: its title, else the first line of its last message (30 characters), else
+ * 对话. A conversation started from 交给 Persona begins with a `<jarvis-context … title="X">` tag, and Claude names it
+ * after that message: it reads 「交给 Persona：X」 instead of the raw tag.
+ */
+internal fun Session.conversationTitle(): String {
+    title.takeIf { it.isNotBlank() && it != "Claude Code" }?.let { return handoffTitle(it) ?: it }
+    val line = lastText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim() ?: return "对话"
+    return handoffTitle(line) ?: line.take(30)
+}
+
+private val handoffTag = Regex("""<jarvis-context\b[^>]*?\btitle="([^"]*)"""")
+
+/** 「交给 Persona：X」 for text that is a `<jarvis-context title="X">` tag (attributes decoded), null for any other text. */
+internal fun handoffTitle(text: String): String? {
+    handoffTag.find(text)?.let { match ->
+        val title = match.groupValues[1].replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">")
+            .replace("&amp;", "&").trim()
+        return if (title.isEmpty()) "交给 Persona" else "交给 Persona：$title"
+    }
+    return if (text.trimStart().startsWith("<jarvis-context")) "交给 Persona" else null
+}
 
 internal fun Session.conversationStatus(): Status = when (agentState) {
     AgentState.NeedsYou -> Status.NeedsYou

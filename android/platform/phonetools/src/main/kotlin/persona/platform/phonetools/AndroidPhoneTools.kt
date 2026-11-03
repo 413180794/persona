@@ -19,47 +19,86 @@ class AndroidPhoneTools(context: Context, private val foreground: () -> Boolean)
             "phone_calendar_create_event" -> CalendarTools(context).create(args)
             "phone_photos_recent" -> PhotosTool(context).recent(args)
             "phone_photo_get" -> PhotosTool(context).get(args)
-            "phone_location_current" -> { check(foreground()) { "请打开 Persona 后获取位置。" }; LocationTool(context).current() }
+            "phone_location_current" -> {
+                if (!foreground()) PhoneToolText.needsForeground() else LocationTool(context).current()
+            }
             "phone_device_info" -> device()
             "phone_clipboard_get", "phone_clipboard_set" -> withContext(Dispatchers.Main.immediate) {
-                check(foreground()) { "请打开 Persona 后访问剪贴板。" }
+                if (!foreground()) return@withContext PhoneToolText.needsForeground()
                 val clipboard = context.getSystemService(ClipboardManager::class.java)
                 if (name == "phone_clipboard_set") {
-                    clipboard.setPrimaryClip(ClipData.newPlainText("Persona", requireNotNull(args.string("text"))))
-                    PhoneToolResult.text("剪贴板已更新。")
+                    // An empty string is a request too: it clears the clipboard (iOS keeps it writable).
+                    val text = args.raw("text") ?: invalid("text is required")
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Persona", text))
+                    PhoneToolResult.text(buildJsonObject { put("ok", true); put("characters", text.characters()) }.toString())
                 } else {
-                    val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+                    val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
                     PhoneToolResult.text(buildJsonObject {
-                        put("text", text.orEmpty()); if (text.isNullOrEmpty()) put("note", "剪贴板没有文字；若刚复制过内容，请检查系统的剪贴板权限。")
+                        if (text.isNullOrEmpty()) {
+                            put("text", JsonNull); put("note", "The clipboard is empty or does not hold text.")
+                        } else { put("text", text); put("characters", text.characters()) }
                     }.toString())
                 }
             }
             "phone_notify" -> PhoneNotifications(context).schedule(args)
-            "phone_notifications_list" -> PhoneNotifications(context).list(args.int("limit", 50))
-            else -> PhoneToolResult.text("手机不支持这个工具。", true)
+            "phone_notifications_list" -> PhoneNotifications(context).list(args.int("limit", 50, 1, 100))
+            else -> PhoneToolText.unknownTool(name, emptyList())
         }
     }
+
+    /** iOS DeviceTool's keys; android_version and sdk stand where iOS has ios_version. */
     private fun device(): PhoneToolResult {
         val battery = context.getSystemService(BatteryManager::class.java)
         val power = context.getSystemService(PowerManager::class.java)
-        val storage = StatFs(context.filesDir.absolutePath)
+        val storage = StatFs(Environment.getDataDirectory().path)
         val network = context.getSystemService(ConnectivityManager::class.java)
-        val capabilities = network.getNetworkCapabilities(network.activeNetwork)
-        val kind = when {
-            capabilities == null -> "offline"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "vpn"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
-            else -> "other"
-        }
+        val level = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val status = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS)
+        val locale = Locale.getDefault()
         return PhoneToolResult.text(buildJsonObject {
-            put("model", Build.MODEL); put("manufacturer", Build.MANUFACTURER)
-            put("system", "Android"); put("version", Build.VERSION.RELEASE); put("sdk", Build.VERSION.SDK_INT)
-            put("battery_percent", battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)); put("charging", battery.isCharging)
-            put("low_power_mode", power.isPowerSaveMode); put("thermal_state", power.currentThermalStatus)
-            put("storage_total_bytes", storage.totalBytes); put("storage_available_bytes", storage.availableBytes)
-            put("network", kind); put("timezone", ZoneId.systemDefault().id); put("language", Locale.getDefault().toLanguageTag())
+            put("model", Build.MODEL)
+            put("model_name", listOf(Build.MANUFACTURER, Build.MODEL).filter { it.isNotBlank() }.joinToString(" "))
+            put("system", "Android ${Build.VERSION.RELEASE}")
+            put("android_version", Build.VERSION.RELEASE); put("sdk", Build.VERSION.SDK_INT)
+            if (level in 0..100) put("battery_percent", level) else put("battery_percent", "unknown")
+            put("battery_state", batteryState(status))
+            put("low_power_mode", power.isPowerSaveMode)
+            put("storage_free_bytes", storage.availableBytes); put("storage_total_bytes", storage.totalBytes)
+            put("network", networkType(network.getNetworkCapabilities(network.activeNetwork)))
+            val zone = ZoneId.systemDefault()
+            put("timezone", zone.id); put("utc_offset_seconds", zone.rules.getOffset(java.time.Instant.now()).totalSeconds)
+            put("locale", if (locale.country.isEmpty()) locale.language else "${locale.language}_${locale.country}")
+            put("preferred_languages", buildJsonArray {
+                val languages = LocaleList.getDefault()
+                for (i in 0 until languages.size()) add(languages[i].toLanguageTag())
+            })
+            put("thermal_state", thermalState(power.currentThermalStatus))
         }.toString())
     }
+
+    private fun networkType(capabilities: NetworkCapabilities?): String = when {
+        capabilities == null -> "offline"
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "wired"
+        else -> "other"
+    }
 }
+
+internal fun batteryState(status: Int): String = when (status) {
+    BatteryManager.BATTERY_STATUS_CHARGING -> "charging"
+    BatteryManager.BATTERY_STATUS_FULL -> "full"
+    BatteryManager.BATTERY_STATUS_DISCHARGING, BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "unplugged"
+    else -> "unknown"
+}
+
+/** iOS ProcessInfo.ThermalState's names over Android's seven levels. */
+internal fun thermalState(status: Int): String = when (status) {
+    PowerManager.THERMAL_STATUS_NONE -> "nominal"
+    PowerManager.THERMAL_STATUS_LIGHT, PowerManager.THERMAL_STATUS_MODERATE -> "fair"
+    PowerManager.THERMAL_STATUS_SEVERE -> "serious"
+    else -> if (status > PowerManager.THERMAL_STATUS_SEVERE) "critical" else "unknown"
+}
+
+/** Characters as people count them (code points), not UTF-16 units. */
+internal fun String.characters(): Int = codePointCount(0, length)

@@ -88,6 +88,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     }.filter { it.first.isNotEmpty() }.distinctBy { it.first }
     var showFilters by remember { mutableStateOf(false) }
     var filterPage by remember { mutableStateOf<String?>(null) }
+    var handingOff by remember { mutableStateOf<String?>(null) }
 
     fun refresh(collectNow: Boolean = true) {
         if (refreshing) return
@@ -163,9 +164,15 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             if (preferenceError) item("preference-error") { StatusText("筛选条件未能保存，请重试", isError = true) }
             if (groups.isEmpty() && !snapshot.loading) item("empty") {
                 val filtered = query.isNotEmpty() || source.isNotEmpty() || kind.isNotEmpty() || section.isNotEmpty()
-                if (!filtered && failedEmpty) JEmptyState("收件箱没能加载", "检查连接后再试一次。", action = {
-                    JButton("重试", { refresh() }, enabled = !refreshing, kind = JButtonKind.Secondary)
-                }) else JEmptyState(if (filtered) "没有符合条件的事项" else "暂时没有新事项", "可以切换筛选，或下拉刷新。")
+                when {
+                    !filtered && failedEmpty -> JEmptyState("收件箱没能加载", "检查连接后再试一次。", action = {
+                        JButton("重试", { refresh() }, enabled = !refreshing, kind = JButtonKind.Secondary)
+                    })
+                    query.isNotBlank() -> JEmptyState("没有找到", "没有和「${query.trim()}」匹配的消息或邮件。", icon = PhIcons.MagnifyingGlass)
+                    snapshot.records.isEmpty() && snapshot.interactions.isEmpty() -> JEmptyState("收件箱是空的",
+                        "hub 配好飞书（lark-connector）或在设置里加了邮箱后，需要你看的消息和邮件会出现在这里。", icon = PhIcons.Tray)
+                    else -> JEmptyState("都看完了", "这个筛选下没有东西。", icon = PhIcons.CheckCircle)
+                }
             }
             groups.forEach { group ->
                 item("section:${group.id}", contentType = "section") {
@@ -196,28 +203,31 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                     } else records[row.id]?.let { record ->
                         val done = pending[record.item.id] ?: record.item.isDone
                         InboxItemRow(record, repository, navigator, composers, position, done, record.item.id in pending,
-                            onDone = { markDone(record.item.id, !done) })
+                            onDone = { markDone(record.item.id, !done) }, onHandOff = { handingOff = record.item.id })
                     }
                 }
             }
         }
+    }
+    handingOff?.let { id -> records[id] }?.let { record ->
+        InboxHandOffSheet(repository, record, navigator, onDismiss = { handingOff = null })
     }
 }
 
 @Composable
 private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navigator: Navigator,
     composers: ReplyComposers, position: GroupPosition, done: Boolean, busy: Boolean, onDone: () -> Unit,
+    onHandOff: () -> Unit,
 ) {
     val item = record.item
     var menu by remember { mutableStateOf(false) }
-    val handoff = rememberInboxAiButton(repository, item.id, InboxAiAction.Handoff, "交给 Persona", null, navigator)
     if (menu) JActionSheet(title = item.title, onDismiss = { menu = false }, actions = listOf(
         JAction(if (done) "移回收件箱" else "已处理", PhIcons.Check, enabled = !busy, onClick = onDone),
-        JAction("交给 Persona", PhIcons.Sparkle, enabled = handoff.enabled, onClick = handoff.onClick),
+        JAction("交给 AI", PhIcons.Robot, onClick = onHandOff),
     ))
     JSwipeActions(
         start = if (busy) null else SwipeAction(if (done) "移回收件箱" else "已处理", PhIcons.Check, Status.Unread, onDone),
-        end = if (handoff.enabled) SwipeAction("交给 Persona", PhIcons.Sparkle, Status.Working, handoff.onClick) else null,
+        end = SwipeAction("交给 AI", PhIcons.Robot, Status.Working, onHandOff),
     ) {
         MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = item.title,
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
@@ -227,7 +237,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
             time = item.updatedAt?.let(::displayTime), preview = item.summary?.takeIf { it.isNotBlank() } ?: item.preview,
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
-            tags = listOfNotNull(kindLabel(item.kind).takeIf { it.isNotBlank() }, record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") },
+            tags = listOfNotNull(kindLabel(record).takeIf { it.isNotBlank() }, record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") },
                 "${record.count} 条消息".takeIf { record.count > 0 }),
             onClick = {
                 record.feedId?.let { navigator.navigate(LarkRoute(it, item.id, record.startPosition)) }
@@ -235,8 +245,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             }, onLongClick = { menu = true }, extra = {
                 record.localDelivery?.pendingStatus()?.let { PendingBadge(it) }
                     ?: record.localStatus?.let { InboxLocalStatus(it) }
-                handoff.pending?.let { JNotice(if (handoff.failed) "请求保存失败，请重试" else it.label, status = if (handoff.failed) Status.NeedsYou else Status.Working) }
-                if (!done) AgentDraftCard(record, composers, navigator)
+                if (!done) AgentDraftCard(record, composers, navigator, repository = repository)
             })
     }
 }
@@ -253,6 +262,13 @@ internal fun StatusText(text: String, isError: Boolean = false) {
 
 private fun kindLabel(kind: String) = when (kind) {
     "mention" -> "@我"; "dm" -> "私聊"; "group" -> "群聊"; "bot" -> "机器人"; "mail" -> "邮件"; else -> ""
+}
+
+/** The row's kind: an @ of everyone is 「@所有人」, a mail the user was only copied on is 「抄送」 (the old app's labels). */
+internal fun kindLabel(record: InboxRecord): String = when {
+    record.item.kind == "mention" && record.atAll -> "@所有人"
+    record.item.kind == "mail" && record.mail?.direct == false -> "抄送"
+    else -> kindLabel(record.item.kind)
 }
 
 private fun displayTime(value: String): String = runCatching {

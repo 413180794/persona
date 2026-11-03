@@ -20,7 +20,9 @@ import kotlinx.coroutines.CompletableDeferred
 
 /** Owned by one chat host; never retains a departed activity or a different account. */
 internal class ChatWebViewPool(private val context: Context) {
-    private val pages = LinkedHashMap<String, ChatSelectionWebView>(3, 0.75f, true)
+    /** At most this many pages live (each is a renderer): the one on screen and up to three preloaded links. */
+    private val limit = 4
+    private val pages = LinkedHashMap<String, ChatSelectionWebView>(limit, 0.75f, true)
     private var active: ChatSelectionWebView? = null
     private val speculative = mutableSetOf<String>()
     private val popups = mutableSetOf<WebView>()
@@ -72,7 +74,7 @@ internal class ChatWebViewPool(private val context: Context) {
 
     fun release(view: ChatSelectionWebView) {
         if (view !in pages.values) return
-        view.onPick = null
+        view.onPick = null; view.onExternal = null
         mute(view, true)
         (view.parent as? ViewGroup)?.removeView(view)
         view.onPause()
@@ -80,12 +82,31 @@ internal class ChatWebViewPool(private val context: Context) {
     }
 
     private fun trim() {
-        while (pages.size > 3) {
+        while (pages.size > limit) {
             val entry = pages.entries.firstOrNull { it.value !== active } ?: return
             pages.remove(entry.key)
             speculative.remove(entry.key)
             entry.value.destroy()
         }
+    }
+
+    /**
+     * Memory is short (the app went to the background, or the system asks): every page not on screen goes. Each one
+     * is a live renderer; opening its link again loads it anew.
+     */
+    fun trimMemory() {
+        val drop = pages.entries.filter { it.value !== active && it.value.parent == null }
+        drop.forEach { (url, view) -> pages.remove(url); speculative.remove(url); view.destroy() }
+    }
+
+    /** A renderer that crashed or was killed takes only its page with it: forgotten here, shown as gone, made anew on reopening. */
+    private fun dropGone(view: ChatSelectionWebView) {
+        pages.entries.firstOrNull { it.value === view }?.let { pages.remove(it.key); speculative.remove(it.key) }
+        if (active === view) active = null
+        view.gone = true
+        view.onPick = null; view.onExternal = null
+        (view.parent as? ViewGroup)?.removeView(view)
+        view.destroy()
     }
 
     @Suppress("SetJavaScriptEnabled")
@@ -95,16 +116,24 @@ internal class ChatWebViewPool(private val context: Context) {
         settings.allowFileAccess = false
         settings.allowContentAccess = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        settings.cacheMode = WebSettings.LOAD_DEFAULT
+        // A page seen before paints from the disk cache at once (iOS returnCacheDataElseLoad); later loads are normal.
+        settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
         settings.setSupportMultipleWindows(true)
         settings.javaScriptCanOpenWindowsAutomatically = false
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
         }
+        // Logins embedded in a page (a sign-in frame from another site) need its cookies; every page shares the store.
+        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+        val page = this
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                if (ChatLinks.webUrl(request.url.toString()) != null) return false
-                if (request.isForMainFrame) failure = "此链接无法在网页中打开"
+                val target = request.url.toString()
+                if (ChatLinks.webUrl(target) != null) return false
+                // Another app's link (mailto:, tel:, intent:): only for a tap on a page that is on screen, and only after
+                // asking. Preloaded pages and scripts cannot start apps; this app's own jarvis: links never come from a page.
+                if (ChatLinks.kind(target) == ChatLinkKind.External && request.hasGesture() && view.parent != null) page.onExternal?.invoke(target)
+                else if (request.isForMainFrame) failure = "此链接无法在网页中打开"
                 return true
             }
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
@@ -112,6 +141,11 @@ internal class ChatWebViewPool(private val context: Context) {
             }
             override fun onPageFinished(view: WebView, url: String?) {
                 currentUrl = url.orEmpty(); pageTitle = view.title.orEmpty(); loadProgress = 100
+                view.settings.cacheMode = WebSettings.LOAD_DEFAULT
+            }
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                this@ChatWebViewPool.dropGone(page)
+                return true
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) failure = "网页未能载入，请重试"
@@ -151,34 +185,47 @@ internal class ChatWebViewPool(private val context: Context) {
     fun destroy() { popups.forEach { it.destroy() }; popups.clear(); pages.values.forEach { (it.parent as? ViewGroup)?.removeView(it); it.destroy() }; pages.clear(); speculative.clear(); active = null; startupExecutor.shutdown() }
 }
 
+/** What text picked on a page can become: in a conversation AI 修改 and 作为上下文, elsewhere 交给 Persona. */
+internal enum class ChatLinkPick(val label: String) { Edit("AI 修改"), Context("作为上下文"), HandToPersona("交给 Persona") }
+
 internal class ChatSelectionWebView(context: Context) : WebView(context) {
-    var onPick: ((ChatLinkContext) -> Unit)? = null
+    /** The items put first in the text selection menu, in this order. */
+    var picks: List<ChatLinkPick> = listOf(ChatLinkPick.Edit, ChatLinkPick.Context)
+    var onPick: ((ChatLinkPick, ChatLinkContext) -> Unit)? = null
+    /** A tapped link for another app (mailto:, tel:, intent:): the host asks before it leaves. */
+    var onExternal: ((String) -> Unit)? = null
     var currentUrl by mutableStateOf("")
     var pageTitle by mutableStateOf("")
     var failure by mutableStateOf<String?>(null)
     var loadProgress by mutableIntStateOf(0)
+    /** Its renderer crashed or was killed: the view is destroyed, the host offers to load the page again. */
+    var gone by mutableStateOf(false)
 
     override fun startActionMode(callback: ActionMode.Callback): ActionMode? = super.startActionMode(wrap(callback))
     override fun startActionMode(callback: ActionMode.Callback, type: Int): ActionMode? = super.startActionMode(wrap(callback), type)
 
     private fun wrap(delegate: ActionMode.Callback) = object : ActionMode.Callback2() {
-        override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-            if (!delegate.onCreateActionMode(mode, menu)) return false
-            if (menu.findItem(CONTEXT) == null) {
-                menu.add(Menu.NONE, EDIT, Menu.NONE, "AI 修改")
-                menu.add(Menu.NONE, CONTEXT, Menu.NONE, "作为上下文")
-            }
+        override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean = delegate.onCreateActionMode(mode, menu)
+        // Chromium fills the menu here, each time the selection changes, with items that ask to be action buttons (the
+        // floating toolbar puts those first). Ours ask the same in Chromium's group with the lowest order, so they come
+        // before 复制, as on iOS; added in onCreateActionMode they ended up after it or in the overflow.
+        override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
+            val changed = delegate.onPrepareActionMode(mode, menu)
+            ChatLinkPick.entries.forEach { menu.removeItem(it.id) }
+            if (onPick == null) return changed
+            val group = (0 until menu.size()).map { menu.getItem(it) }.minByOrNull { it.order }?.groupId ?: Menu.NONE
+            picks.forEach { menu.add(group, it.id, 0, it.label).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS) }
             return true
         }
-        override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = delegate.onPrepareActionMode(mode, menu)
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-            if (item.itemId != EDIT && item.itemId != CONTEXT) return delegate.onActionItemClicked(mode, item)
+            val pick = ChatLinkPick.entries.firstOrNull { it.id == item.itemId } ?: return delegate.onActionItemClicked(mode, item)
             val sourceUrl = url.orEmpty()
             val sourceTitle = title.orEmpty()
+            // Read the selection before closing the menu: finishing first clears it, and the script runs later.
             evaluateJavascript("(function(){var e=document.activeElement;return e&&(e.tagName==='TEXTAREA'||e.tagName==='INPUT')&&e.type!=='password'&&typeof e.selectionStart==='number'?e.value.substring(e.selectionStart,e.selectionEnd):window.getSelection().toString();})()") { result ->
                 val selected = runCatching { JSONTokener(result).nextValue() as? String }.getOrNull().orEmpty()
-                if (selected.isNotBlank() && url == sourceUrl) onPick?.invoke(ChatLinkContext(
-                    if (item.itemId == EDIT) "edit" else "context", sourceTitle, sourceUrl, selected))
+                if (selected.isNotBlank() && url == sourceUrl) onPick?.invoke(pick, ChatLinkContext(
+                    if (pick == ChatLinkPick.Edit) "edit" else "context", sourceTitle, sourceUrl, selected))
                 mode.finish()
             }
             return true
@@ -190,8 +237,5 @@ internal class ChatSelectionWebView(context: Context) : WebView(context) {
         }
     }
 
-    companion object {
-        private const val EDIT = 0x6a0101
-        private const val CONTEXT = 0x6a0102
-    }
+    private val ChatLinkPick.id: Int get() = 0x6a0101 + ordinal
 }

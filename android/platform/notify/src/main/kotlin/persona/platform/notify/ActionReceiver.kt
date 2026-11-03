@@ -30,16 +30,27 @@ open class ActionReceiver : BroadcastReceiver() {
                 intent.getStringExtra(EXTRA_SESSION)?.let { persona.core.contracts.SessionKey(machine, it) }
             }
             val assistant = if (intent.hasExtra(EXTRA_ASSISTANT)) intent.getBooleanExtra(EXTRA_ASSISTANT, false) else null
+            // Taps on the ongoing notification: no 核对中 / 发送中 notice of its own (that would pop a new heads-up when no
+            // 需要你处理 notification is showing); results and failures still get one.
+            val quiet = intent.getBooleanExtra(EXTRA_QUIET, false)
             try {
                 // A bounded receiver lifetime is a timeout, not a delivery guarantee.
                 withTimeout(8_000) {
+                    val sessions = dependencies.sessions()
                     val result = NotificationActionExecutor(
                         dependencies.interactions(), dependencies.actionJournal()::claim,
+                        session = { key ->
+                            // A cold start may not have the list yet: one refresh, then the hub decides.
+                            sessions.sessions.value.firstOrNull { it.key == key } ?: run {
+                                try { sessions.refresh() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                                sessions.sessions.value.firstOrNull { it.key == key }
+                            }
+                        },
                     ).execute(id, action, reply,
                         locked = { context.getSystemService(KeyguardManager::class.java).isDeviceLocked },
                         onInteraction = { session = it.sessionKey },
                         expiresAt = intent.getStringExtra(EXTRA_EXPIRES_AT),
-                        onProgress = { dependencies.notifier().pending(id, session, it, assistant) },
+                        onProgress = { if (!quiet) dependencies.notifier().pending(id, session, it, assistant) },
                     )
                     if (result != NotificationActionResult.Locked) dependencies.notifier().retract(id)
                     if (result != NotificationActionResult.Submitted) {
@@ -65,5 +76,6 @@ open class ActionReceiver : BroadcastReceiver() {
         internal const val EXTRA_ACTION = "resolution_action"
         internal const val EXTRA_REPLY = "resolution_reply"
         internal const val EXTRA_EXPIRES_AT = "expires_at"
+        internal const val EXTRA_QUIET = "quiet"
     }
 }

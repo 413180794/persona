@@ -1,0 +1,115 @@
+package persona.feature.settings
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import persona.core.contracts.api.ClaudeSetting
+import persona.core.contracts.api.MachineManagement
+import persona.core.contracts.api.SessionsRepository
+import persona.core.designsystem.*
+import persona.core.designsystem.icons.PhIcons
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+
+/** 设置 › Claude Code 设置: the common options of each computer's Claude Code, written to one or all online machines. */
+@Composable
+internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: MachineManagement?, onBack: () -> Unit) {
+    if (management == null) {
+        JListPage(title = "Claude Code 设置", onBack = onBack) { item { JNotice("体验模式没有电脑上的 Claude Code 设置。") } }
+        return
+    }
+    val context = LocalContext.current
+    val model = remember(management) { ClaudeSettingsModel(management, StoredClaudeSettingsChoices(context)) }
+    val state by model.state.collectAsState()
+    val machines by sessions.machines.collectAsState()
+    val online = machines.filter { it.online }
+    val scope = rememberCoroutineScope()
+    val feedback = LocalAppFeedback.current
+    var picking by remember { mutableStateOf(false) }
+    var choosing by remember { mutableStateOf<ClaudeSetting?>(null) }
+    val drafts = remember { mutableStateMapOf<String, String>() }
+    LaunchedEffect(online.map { it.id }) { model.follow(online) }
+    LaunchedEffect(state.machineId) { drafts.clear(); model.load() }
+    fun set(key: String, value: JsonElement) {
+        scope.launch { model.set(key, value, online)?.let { feedback?.notice(it) } }
+    }
+    JListPage(title = "Claude Code 设置", onBack = onBack, actions = {
+        JIconButton(PhIcons.ArrowClockwise, "刷新", { scope.launch { model.load() } }, enabled = !state.loading && state.machineId.isNotBlank())
+    }) {
+        item("target") {
+            JGroupItem(GroupPosition.of(0, 2), Modifier.padding(top = Tokens.Space.s)) {
+                JRow("机器", leadingIcon = PhIcons.Laptop, value = machines.firstOrNull { it.id == state.machineId }?.displayName
+                    ?: if (online.isEmpty()) "没有在线的机器" else null, enabled = online.isNotEmpty(), onClick = { picking = true })
+            }
+        }
+        item("apply-all") {
+            JGroupItem(GroupPosition.of(1, 2)) {
+                JSwitchRow("同时改所有在线机器", state.applyAll, model::applyAll, leadingIcon = PhIcons.Stack)
+            }
+        }
+        item("target-note") {
+            SettingsCaption("改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。",
+                Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
+        }
+        state.error?.let { error -> item("error") { JInlineStatus(error, Modifier.padding(vertical = Tokens.Space.s), tone = InlineTone.Failed) } }
+        when {
+            online.isEmpty() -> item("none") { JEmptyState("没有在线的机器", "机器连上 hub 后再来改。", icon = PhIcons.Laptop) }
+            state.settings.isEmpty() && state.loading -> item("loading") { JLoading() }
+        }
+        itemsIndexed(state.settings, key = { _, it -> "setting-${it.key}" }) { index, setting ->
+            JGroupItem(GroupPosition.of(index, state.settings.size), if (index == 0) Modifier.padding(top = Tokens.Space.m) else Modifier) {
+                when (setting.type) {
+                    "bool" -> JRow(onClick = { set(setting.key, JsonPrimitive(!setting.boolValue)) }, chevron = false,
+                        trailing = { JSwitch(setting.boolValue, null) }) { SettingTitle(setting) }
+                    "enum" -> JRow(onClick = { choosing = setting }, trailing = {
+                        Text(setting.stringValue, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink3, maxLines = 1)
+                    }, chevron = true) { SettingTitle(setting) }
+                    else -> Column(Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                        SettingTitle(setting)
+                        val focus = LocalFocusManager.current
+                        fun commit() {
+                            focus.clearFocus()
+                            val value = drafts.remove(setting.key)?.trim() ?: return
+                            // Emptied: back to Claude Code's default (the node removes the key).
+                            if (value != setting.stringValue) set(setting.key, if (value.isEmpty()) JsonNull else JsonPrimitive(value))
+                        }
+                        JTextField(drafts[setting.key] ?: setting.stringValue, { drafts[setting.key] = it }, Modifier.fillMaxWidth(),
+                            placeholder = setting.placeholder, singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { commit() }))
+                    }
+                }
+            }
+        }
+    }
+    if (picking) JActionSheet(online.map { machine ->
+        JAction(machine.displayName, PhIcons.Laptop, checked = machine.id == state.machineId, onClick = { model.choose(machine.id) })
+    }, { picking = false }, title = "选一台在线的机器")
+    choosing?.let { setting ->
+        JActionSheet(setting.options.orEmpty().map { option ->
+            JAction(option, checked = option == setting.stringValue, onClick = { if (option != setting.stringValue) set(setting.key, JsonPrimitive(option)) })
+        }, { choosing = null }, title = setting.title.ifBlank { setting.key })
+    }
+}
+
+/** An option's title, 默认 while it is unset, and what it does. */
+@Composable
+private fun SettingTitle(setting: ClaudeSetting) {
+    Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            Text(setting.title.ifBlank { setting.key }, Modifier.weight(1f, fill = false), style = PersonaTheme.type.body,
+                color = PersonaTheme.palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (setting.isDefault) JTag("默认")
+        }
+        if (setting.detail.isNotBlank()) Text(setting.detail, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+    }
+}

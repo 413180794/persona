@@ -31,6 +31,11 @@ internal fun machineSessions(sessions: List<Session>, machineId: String): List<S
     .filter { it.machineId == machineId && !it.assistant && it.isLive }
     .sortedWith(compareBy<Session> { it.agentState.priority }.thenByDescending { it.updated })
 
+/** History keeps the disk's used bytes; the chart shows them as a share of [total] (gaps stay gaps). */
+internal fun diskPercentPoints(points: List<MetricPoint>, total: Long?): List<MetricPoint> =
+    if (total == null || total <= 0) points.map { it.copy(disk = null) }
+    else points.map { point -> point.copy(disk = point.disk?.let { it * 100 / total }) }
+
 internal data class PlotPoint(val t: Long, val value: Double)
 
 /** A separate path per run also breaks missing values for an individual measure. */
@@ -74,6 +79,10 @@ internal object MetricFormat {
     fun lastSeen(value: String?): String = parseTime(value)?.let {
         DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(it)
     } ?: "未知"
+    /** When the machine started, as 2026年11月2日 08:30 in the phone's zone. */
+    fun boot(boot: Double?, zone: ZoneId = ZoneId.systemDefault()): String? = boot?.takeIf { it.isFinite() && it > 0 }?.let {
+        DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm").withZone(zone).format(Instant.ofEpochSecond(it.toLong()))
+    }
     fun uptime(boot: Double?, now: Long): String? = boot?.takeIf { it.isFinite() && it > 0 && it <= now }?.let {
         val minutes = (now - it.toLong()) / 60
         when {

@@ -44,6 +44,10 @@ class ShellSession(
     val phone: PhoneToolsRuntime? = null,
     val demo: DemoHub? = null,
     val agentsWiring: persona.feature.agents.AgentsWiring = persona.feature.agents.AgentsWiring.Empty,
+    /** Launchers, 重新连接, 重新部署 and the engine of the hub's machines; null in 体验模式. */
+    val machines: MachineManagement? = null,
+    /** The hub's voice plugins (语音对话); null in demo mode. */
+    val voice: VoicePlugins? = null,
     /** The phone's hub groups; a demo has none. */
     val groups: HubGroups = HubGroups.None,
 ) {
@@ -71,6 +75,7 @@ class AppServices @Inject constructor(
     private val inbox: persona.feature.inbox.InboxRepository,
     private val preferences: AgentsPreferences,
     private val agentsWiring: persona.feature.agents.AgentsWiring,
+    private val machineManagement: MachineManagement,
     private val stacks: persona.android.di.GroupStacks,
     private val hubGroups: HubGroups,
 ) {
@@ -106,6 +111,19 @@ class AppServices @Inject constructor(
                 val knowledgeState = MutableStateFlow<KnowledgeRepository?>(null)
                 val knowledgeConnection = object : KnowledgeConnection { override val current = knowledgeState.asStateFlow() }
                 fun current() = app.hub.value === hub
+                // Like metrics: each call follows the live route with the pairing's pinned client and token.
+                val voice = object : VoicePlugins {
+                    private fun api(): VoicePlugins {
+                        if (!current()) throw CancellationException("Pairing changed")
+                        val address = socket.route.value?.endpoint?.url ?: throw HubFailure(HubError.NoNetwork)
+                        return HttpVoicePlugins(address, hub.api.token, socket.http.client, ::current)
+                    }
+                    override suspend fun voicePlugin() = api().voicePlugin()
+                    override suspend fun voices(pluginId: String, model: String?) = api().voices(pluginId, model)
+                    override suspend fun models(pluginId: String) = api().models(pluginId)
+                    override suspend fun modelChoice(pluginId: String) = api().modelChoice(pluginId)
+                    override fun connect(pluginId: String, listener: VoiceSocketListener) = api().connect(pluginId, listener)
+                }
                 val phoneTransport = data.credentials.deviceId?.let { HubPhoneToolsTransport(socket) }
                 val phone = phoneTransport?.let {
                     PhoneToolsRuntime(app, data.scope, requireNotNull(data.credentials.deviceId), socket, it, data.coroutineScope,
@@ -122,7 +140,7 @@ class AppServices @Inject constructor(
                 // Files, chat actions and machine metrics go to the group of the machine they name (one group: this hub).
                 mutableSession.value = ShellSession(data.scope.path, runtime, sessions, chats, boundInteractions, sender,
                     assistant, inbox, preferences, HubTerminalTransport(socket), shell.files, mergedMetrics,
-                    knowledgeConnection, shell.actions, phone, agentsWiring = agentsWiring, groups = hubGroups)
+                    knowledgeConnection, shell.actions, phone, agentsWiring = agentsWiring, machines = machineManagement, voice = voice, groups = hubGroups)
                 try {
                     coroutineScope {
                         launch {
@@ -188,7 +206,8 @@ class AppServices @Inject constructor(
             File(directory, "lists.preferences_pb")
         }
         val localInbox = RealInboxRepository(demo.inboxConnection, journal, local.sessions, local.interactions, scope,
-            snapshots = snapshots, hubPreferences = localPreferences, download = { _, _ -> error("体验模式里没有这项数据") })
+            snapshots = snapshots, hubPreferences = localPreferences, mainConversationSender = messages, messageSender = messages,
+            download = { _, _ -> error("体验模式里没有这项数据") })
         val conversations = RealAssistantRepository(demo.inboxConnection, local.sessions, scope, snapshots, localPreferences)
         mode.edit().putBoolean("demo", true).apply()
         mutableSession.value = ShellSession(demo.hubScope.path, demo, local.sessions, local.chats, local.interactions,
@@ -232,6 +251,8 @@ class AppServices @Inject constructor(
         override fun input(key: SessionKey, text: String, size: TerminalSize?, scroll: Int, at: TerminalCellPosition?, click: TerminalCellPosition?) =
             routed(key).let { (terminal, plain) -> terminal.input(plain, text, size, scroll, at, click) }
         override suspend fun screen(key: SessionKey) = routed(key).let { (terminal, plain) -> terminal.screen(plain) }
+        override suspend fun keys(key: SessionKey, keys: List<String>, text: String) =
+            routed(key).let { (terminal, plain) -> terminal.keys(plain, keys, text) }
     }
 }
 

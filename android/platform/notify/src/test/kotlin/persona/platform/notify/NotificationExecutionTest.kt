@@ -105,6 +105,23 @@ class NotificationExecutionTest {
         assertEquals(3, center.writes)
     }
 
+    @Test fun aSessionThatCannotApproveIsAnsweredOnTheComputer() = runBlocking {
+        val center = Center(request)
+        val history = Session(machineId = "machine", sessionId = "session", sourceKind = "codex_app_server",
+            capabilities = SessionCapabilities(read = true, send = true, attach = true))
+        val notJoined = NotificationActionExecutor(center, { true }, { now }, session = { history })
+        assertEquals(NotificationActionResult.ReadOnly, notJoined.execute(request.id, "allow", null, { false }))
+        assertEquals(0, center.writes)
+        assertNotNull(actionResultCopy(NotificationActionResult.ReadOnly))
+        // Joined live, the thread's approvals can be answered; an unknown session is left to the hub.
+        val joined = history.copy(attached = true, capabilities = history.capabilities!!.copy(approve = true))
+        assertEquals(NotificationActionResult.Submitted,
+            NotificationActionExecutor(center, { true }, { now }, session = { joined }).execute(request.id, "allow", null, { false }))
+        assertEquals(NotificationActionResult.Submitted,
+            NotificationActionExecutor(center, { true }, { now }).execute(request.id, "allow", null, { false }))
+        assertEquals(2, center.writes)
+    }
+
     @Test fun onlyHubApprovedAlertsAreDeliveredAndRoutesKeepTheirTab() = runBlocking {
         val center = Center(request)
         val sessions = object : SessionsRepository {

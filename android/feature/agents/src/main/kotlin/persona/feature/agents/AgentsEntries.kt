@@ -19,6 +19,7 @@ import persona.core.designsystem.PlaceholderScreen
 import persona.core.navigation.AgentsRoute
 import persona.core.navigation.ConnectionSettingsRoute
 import persona.core.navigation.Navigator
+import persona.core.navigation.NewAgentRoute
 import persona.core.domain.answer.requestSourceLabel
 import kotlinx.coroutines.flow.flowOf
 
@@ -103,7 +104,8 @@ fun EntryProviderScope<NavKey>.agentsEntries(
             val creationModel = creationService?.let { service ->
                 viewModel(key = "new-agent:${service.scope}:${System.identityHashCode(service)}") {
                     NewAgentViewModel(service, wiring.creationPreferences?.let { AgentCreationPreferences(context, it) }
-                        ?: AgentCreationPreferences(context), dependencies.sessions().machines)
+                        ?: AgentCreationPreferences(context), dependencies.sessions().machines,
+                        sender = dependencies.sender(), adopt = dependencies.sessions()::adopt)
                 }
             }
             val groups by dependencies.groups().groups.collectAsStateWithLifecycle()
@@ -111,4 +113,5 @@ fun EntryProviderScope<NavKey>.agentsEntries(
         }
     }
     entry<ConnectionSettingsRoute> { connectionSettingsContent() }
+    entry<NewAgentRoute> { NewAgentDestination(it, navigator, dependenciesOverride) }
 }

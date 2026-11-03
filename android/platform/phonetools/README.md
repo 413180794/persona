@@ -4,6 +4,16 @@
 
 Android 没有统一的系统提醒事项接口，故不注册 `phone_reminders_*`。不注册健康工具，不申请通知监听权限，不读取其他 App 的通知。`phone_notifications_list` 是 Android 新增工具，只返回本应用当前显示的通知，不包含操作确认通知。
 
+## 和 iOS 对齐（2026-11-02）
+
+hub 把各台手机同名的工具合并成一份定义（`server/internal/hub/hub.go` 的 `mcpTools` 取说明更长的那份），调用却可能发给任一台声明了它的手机（`phoneClient`）。所以除 `phone_notifications_list` 外，每个工具的名字、英文说明、参数（类型、说明、最小 / 最大值）和必填项都照 `apple/Persona/PhoneTools/*.swift` 逐字写（`PhoneToolCatalog`），连 iOS 说明里的「iOS version」「Allow Paste?」也不改。`PhoneToolCatalogTest` 拿 `src/test/resources/ios-phone-tools.json` 逐个比，夹具由 `python3 scripts/assets/export_ios_phone_tools.py` 从 iOS 源码导出（`--check` 只检查是否过期；iOS 独有的提醒事项、健康不导出）。
+
+- 参数照 iOS 读：数字超出范围夹到范围内，不是数字的当没传、用默认值；多余参数忽略；字符串去掉首尾空白，空的当没传（剪贴板写入除外，空字符串就是清空）。必填项由各工具自己检查，缺了回「参数错误 / Invalid argument: title is required」这样的句子。
+- 返回结构和 iOS 一样：通讯录 `{query, count, results:[{id, name, nickname, company, job_title, phones[{label, number}], emails[{label, email}], birthday}]}`（没结果带英文 `note`，空查询按通讯录自己的顺序取前几个）；日程 `{start, end, count, truncated, events:[{id, title, start, end, all_day, calendar, location, notes 前 300 字, attendees[{name, role, status, is_current_user}]}]}`，`query` 同时查标题、地点和备注；照片 `{count, access: full|limited, assets:[{id, created, type, width, height, favorite, subtypes:["screenshot"], duration_seconds}]}`（没结果带 `note`，不传 `days` 不限时间）；取图是一段文字（`id, created, width, height, returned_width, returned_height, bytes`）加一个 `{"type":"image","data":…,"mime_type":"image/jpeg"}`；设备信息、剪贴板、通知、定位的键名也照 iOS（Android 用 `android_version` / `sdk` 代替 `ios_version`，定位多带 `provider` 和坐标系说明）。空字段不输出。时间一律是带偏移、到秒的 ISO 8601；只给日期或不带偏移的时间按手机时区读。
+- 和 iOS 不同、有意保留的：剪贴板和定位只在 App 在前台时声明和执行（Android 后台读不到剪贴板）；视频取图返回预览帧（iOS 报错）；没有可写日历时建一个本地的 Persona 日历（iOS 报错）。
+- 拒绝时回 iOS 的原句 `The user declined on the phone.`；确认 90 秒没人答算拒绝（iOS 跟着 hub 等，hub 2 分钟后放弃这台手机，所以要在那之前答复）。其余失败照 iOS 写成中英双语，设置路径换成「Persona › 设置 › 手机数据」。
+- `register_phone` 的 `device_name` 是「厂商 型号」；调用里 `args` 缺省或为 null 当成空对象。
+
 ## 当前 App 接线
 
 App 已依赖 `:platform:phonetools`；`AppServices` 按配对及同一 device_id 创建 runtime／transport，将原始 tool_call 回调挂到唯一活动 socket，并转发应用前后台和常驻服务实际状态。`Root` 已注册手机工具页和全局确认浮层，配对结束撤下处理器并关闭 runtime／transport；旧配对缺 device_id 时不供给工具，需重新配对。
@@ -28,6 +38,6 @@ App 已依赖 `:platform:phonetools`；`AppServices` 按配对及同一 device_i
 
 ## 验证
 
-关键单元测试覆盖开关、权限、前后台、schema 校验，以及日历拒绝、批准、重复调用和批准后状态变化。静态接线完成，仍需验证真实 WebSocket 往返、授权弹窗、后台通知解锁确认、深浅色页面及国产系统日历显示。
+单元测试：`PhoneToolCatalogTest`（工具集合、每个工具的说明和 schema 与 iOS 夹具逐字一致、只有新建日程要确认、前台限定的工具、参数读取和夹取、时间解析和确认摘要、照片 id 和截图判断）、`PhoneToolRegistryTest`（开关、权限、前后台、离线、未知工具、超范围不拒绝、重复调用只执行一次、日历的拒绝原句 / 批准 / 批准后状态变化 / 参数错误不打扰用户）、`PhotoContentTest`（图片块用 `mime_type`），`core:hub` 的 `HubPhoneToolsTransportTest`（`args` 缺省或 null 当空对象）。2026-11-02 跑过 `:platform:phonetools:testDebugUnitTest`、`:core:hub:test` 和 `:app:assembleDebug`。
 
-本车道已通过 `:platform:phonetools:assembleDebug`、`:platform:phonetools:testDebugUnitTest`（2 个测试）和 `:core:hub:compileKotlin`。构建使用 Android Studio 自带的 JDK 21，并指定 `-Pkotlin.compiler.execution.strategy=in-process --no-watch-fs`，避免沙箱外 Kotlin daemon 目录及文件监听限制。未改仓库工具链配置。
+仍需在设备上验证：真实 WebSocket 往返（假 hub 的 `GET /mock/tool_call` 和 `GET /mock/phone`）、授权弹窗、前台确认对话框和后台通知的解锁确认、国产系统日历显示。

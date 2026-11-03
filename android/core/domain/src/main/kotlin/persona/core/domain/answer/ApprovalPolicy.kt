@@ -22,6 +22,8 @@ enum class AnswerRequirement(val wire: String) {
     FullPlanRead("full_plan_read"), FeedbackEmpty("feedback_empty"), ReasonEmpty("reason_empty"),
     SessionPresent("session_present"), SingleQuestionSingleChoice("single_question_single_choice"),
     PlainDialogOption("plain_dialog_option"),
+    /** Claude's card, or another agent's that names what "always" allows (always_label), as on iOS. */
+    AlwaysOffered("always_offered"),
 }
 
 data class AvailableAction(
@@ -70,7 +72,7 @@ object ApprovalPolicy {
                     allow.copy(requirements = listOf(AnswerRequirement.ReasonEmpty)),
                     action(ApprovalAction.Deny),
                     action(ApprovalAction.Always, requirements = listOf(
-                        AnswerRequirement.SessionPresent, AnswerRequirement.ReasonEmpty)), dismiss)
+                        AnswerRequirement.SessionPresent, AnswerRequirement.ReasonEmpty, AnswerRequirement.AlwaysOffered)), dismiss)
                 "question" -> listOf(action(ApprovalAction.Answer), dismiss)
                 "screen" -> listOf(action(ApprovalAction.ScreenAnswer), dismiss)
                 else -> emptyList()

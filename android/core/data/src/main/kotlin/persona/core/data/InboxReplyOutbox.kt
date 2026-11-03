@@ -4,8 +4,9 @@ import persona.feature.inbox.ReplyRequest
 import persona.feature.inbox.ReplyTarget
 import kotlinx.serialization.Serializable
 
+/** [ai]: AI wrote the text (sending it asks first); omitted on disk when false, so older journals read the same. */
 @Serializable
-internal data class InboxStoredDraft(val text: String, val clientId: String, val version: String? = null)
+internal data class InboxStoredDraft(val text: String, val clientId: String, val version: String? = null, val ai: Boolean = false)
 
 @Serializable
 internal data class InboxPendingReply(

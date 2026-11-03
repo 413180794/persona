@@ -37,6 +37,15 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     }
     suspend fun askPersona(request: InboxPersonaRequest) = askPersona(request.itemId, request.action)
     suspend fun personaContext(itemId: String): String? = null
+
+    /**
+     * A reply in the user's voice drafted by the hub (`POST /api/v1/inbox/{id}/draft`); [instruction] may be empty.
+     * The text only fills the reply for the user to edit: sending it is a separate, confirmed step.
+     */
+    suspend fun draftReply(itemId: String, instruction: String): String = error("AI 草拟尚未接入")
+
+    /** 交给 AI: the item as context with what to do, queued for Persona's main conversation or a running Agent. */
+    suspend fun handOff(request: InboxHandOffRequest): Unit = error("交给 AI 尚未接入")
     fun replyUpdates(target: ReplyTarget): Flow<Unit> = kotlinx.coroutines.flow.emptyFlow()
     suspend fun replyStatus(target: ReplyTarget, clientId: String): ReplyDelivery = ReplyDelivery.Ready
     suspend fun verifyReply(target: ReplyTarget, clientId: String): ReplyDelivery = ReplyDelivery.Unknown
@@ -69,6 +78,8 @@ data class InboxSnapshot(
     val loading: Boolean = false,
     val error: String? = null,
     val contentSource: LarkContentSource? = null,
+    /** Machine names by id, for saying where an Agent runs. */
+    val machines: Map<String, String> = emptyMap(),
 )
 
 data class InboxRecord(
@@ -80,6 +91,24 @@ data class InboxRecord(
     val agent: InboxAgent? = null,
     val localStatus: String? = null,
     val localDelivery: persona.core.contracts.api.DeliveryState? = null,
+    /** lark | mail (also lark for documents and posts without a chat). */
+    val source: String = "",
+    /** A Feishu mention of everyone (@所有人) rather than of the user. */
+    val atAll: Boolean = false,
+    val mail: InboxMailRef? = null,
+    /** A saved reply that AI wrote (AI 草拟): its row shows it as a draft card, not as 「草稿 · …」. */
+    val aiDraft: Boolean = false,
+) {
+    val isLark: Boolean get() = feedId != null || source == "lark"
+}
+
+/** Where a mail item's messages are: what 交给 AI tells the agent so it can read them with its mail tools. */
+data class InboxMailRef(
+    val accountId: String,
+    val mailbox: String = "INBOX",
+    val uids: List<Long> = emptyList(),
+    /** False when the user was only copied. */
+    val direct: Boolean = true,
 )
 
 @Serializable
@@ -102,8 +131,9 @@ sealed interface ReplyTarget {
 data class ReplyRequest(val text: String, @SerialName("client_id") val clientId: String,
     val mailTarget: persona.core.contracts.api.MailReplyTarget? = null)
 
+/** [ai]: the text came from AI (the AI 分身, or AI 草拟); sending it asks first, sending the user's own words does not. */
 @Serializable
-data class ReplyDraft(val text: String, val clientId: String = UUID.randomUUID().toString())
+data class ReplyDraft(val text: String, val clientId: String = UUID.randomUUID().toString(), val ai: Boolean = false)
 
 data class LarkConversation(
     val title: String = "飞书会话",
@@ -179,3 +209,16 @@ data class InboxPersonaRequest(
 )
 @Serializable
 enum class ReplyDelivery { Ready, Queued, WaitingForNetwork, Sending, Unknown, Verifying, Refused, NeedsConfirmation, Sent }
+
+/**
+ * One 交给 AI. No [machineId] / [sessionId]: Persona's main conversation. [operationId] stays the same while the same
+ * text goes to the same place, so a retry after an unclear failure is not queued twice.
+ */
+@Serializable
+data class InboxHandOffRequest(
+    val itemId: String,
+    val text: String,
+    val machineId: String? = null,
+    val sessionId: String? = null,
+    val operationId: String = UUID.randomUUID().toString(),
+)

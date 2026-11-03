@@ -5,32 +5,39 @@ import persona.core.terminal.*
 import java.util.Base64
 
 internal class TerminalFrames {
-    private val grid = TerminalGrid(1, 1)
+    private val screen = ScrollbackGrid()
     var epoch: String? = null
         private set
     var seq = 0
         private set
-    val lines get() = grid.lines
-    val cols get() = grid.cols
-    val rows get() = grid.rows
-    val cursor get() = if (grid.cursorVisible) TerminalCursor(grid.cursorRow, grid.cursorCol) else null
+
+    /** What the page draws: rows that scrolled off while the phone drove the terminal, then the live screen. */
+    data class View(val lines: List<TermRow>, val screenStart: Int, val cols: Int, val rows: Int, val cursor: TerminalCursor?)
+
+    @Synchronized fun view(): View {
+        val kept = screen.scrollback
+        return View(kept + screen.screen, kept.size, screen.cols, screen.rows,
+            screen.cursor?.let { TerminalCursor(it.row + kept.size, it.col) })
+    }
 
     enum class Result { Applied, Duplicate, Gap }
-    @Synchronized fun apply(frame: TerminalEvent): Result {
+    /** [keep]: the phone drives the terminal, so rows moving up off the screen are kept ([ScrollbackGrid]). */
+    @Synchronized fun apply(frame: TerminalEvent, keep: Boolean = false): Result {
         val frameEpoch = frame.epoch.orEmpty()
         val frameSeq = frame.seq?.takeIf { it in 0..Int.MAX_VALUE }?.toInt() ?: -1
         if (frameEpoch.isEmpty() || frameSeq < 0 || frame.cols !in 1..1000 || frame.rows !in 1..1000) return gap()
         if (!frame.full) {
             if (frameEpoch == epoch && frameSeq <= seq) return Result.Duplicate
-            if (frameEpoch != epoch || frameSeq != seq + 1 || frame.cols != cols || frame.rows != rows) return gap()
+            if (frameEpoch != epoch || frameSeq != seq + 1 || frame.cols != screen.cols || frame.rows != screen.rows) return gap()
         }
         val bytes = try { Base64.getDecoder().decode(frame.data.orEmpty()) } catch (_: IllegalArgumentException) { return gap() }
-        if (frame.full) grid.reset(frame.cols, frame.rows)
-        grid.feed(bytes)
+        screen.apply(frame.full, frame.cols, frame.rows, bytes, keep)
         epoch = frameEpoch; seq = frameSeq
         return Result.Applied
     }
     @Synchronized fun forget() { epoch = null; seq = 0 }
+    /** Back to watching the pane at the computer's size: the rows kept while driving it go. */
+    @Synchronized fun forgetScrollback() { screen.forgetScrollback() }
     private fun gap(): Result { forget(); return Result.Gap }
 }
 

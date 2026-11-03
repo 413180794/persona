@@ -26,9 +26,8 @@ import androidx.compose.material3.adaptive.layout.PaneScaffoldDirective
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
-import androidx.compose.material3.adaptive.navigation.BackNavigationBehavior
-import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.window.core.layout.WindowSizeClass
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
@@ -39,6 +38,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import persona.android.MainActivity
 import persona.android.data.Hub
 import persona.android.navigation.*
@@ -51,6 +52,7 @@ import androidx.compose.foundation.background
 import persona.core.domain.inbox.buildInboxList
 import persona.core.navigation.*
 import persona.feature.agents.agentsEntries
+import persona.feature.agents.spaceEntries
 import persona.feature.agents.AgentsDependencies
 import persona.feature.agents.AgentsPreferencesSnapshot
 import persona.feature.agents.AgentsWiring
@@ -63,6 +65,7 @@ import persona.feature.knowledge.*
 import persona.feature.machines.machinesEntries
 import persona.feature.settings.*
 import persona.feature.terminal.terminalEntries
+import persona.feature.voice.voiceEntries
 import persona.platform.notify.Notify
 import persona.platform.phonetools.*
 import kotlinx.coroutines.CancellationException
@@ -112,7 +115,7 @@ fun PersonaRoot(
                     else PairingScreen(services.pairing, services.sessions, initialLink = link,
                         onReady = { MainActivity.pendingPairLink.value = null; entering = false; onPaired() },
                         onDiagnostics = { diagnostics = true }, diagnostics = services.diagnostics,
-                        onCredentialsSaved = { MainActivity.pendingPairLink.value = null },
+                        onCredentialsSaved = { MainActivity.pendingPairLink.value = null }, machines = services.machines,
                         footer = {
                             if (hub == null) JTextButton("没有 hub？先体验一下", onClick = { scope.launch {
                                 try { shell.enterDemo(); MainActivity.pendingPairLink.value = null }
@@ -277,8 +280,16 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     val inboxNeeds = buildInboxList(inbox.records.map { it.item }, inbox.interactions, inbox.sessions, inbox.mutes)
         .groups.firstOrNull { it.id == "action" }?.count ?: 0
     val badges = mapOf(AppTab.Agents to agentNeeds, AppTab.Jarvis to assistantRequests.size, AppTab.Inbox to inboxNeeds)
-    ChatLinkHost(onContext = { shell.feedback.notice("请在对话中打开链接后选取上下文") },
-        onEdit = { _, _ -> shell.feedback.notice("请在对话中修改选中的内容") }) { _ ->
+    // 现在要你处理的事 on the Persona home: the agents waiting (not Persona's own, not muted), then the inbox's 需要你.
+    val needsYou = remember(agentRequests, sessions, preferences.mutes, inbox.records) {
+        persona.feature.assistant.needsYou(agentRequests, sessions, preferences.mutes,
+            inbox.records.map { persona.feature.assistant.NeedsYouMessage(it.item, lark = it.feedId != null) })
+    }
+    // 语音对话 is offered while the hub runs a voice plugin: asked each time the Persona tab shows while connected.
+    val voicePlugin = persona.feature.voice.rememberVoicePlugin(session.voice,
+        active = selected == AppTab.Jarvis && connection == ConnectionState.Online)
+    // Links over the whole shell, jarvis:// links from conversations, 交给 Persona from pages (ShellLinks.kt).
+    ShellLinkHost(session, navigator, shell.feedback) {
         val uriHandler = LocalUriHandler.current
         // Each page shows the connection state in its own title, so the shell adds no banner above it.
         val style = PersonaTheme.style
@@ -319,9 +330,17 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                 )
             }
         val wide = expanded || directive.maxHorizontalPartitions > 1
-        // Back closes the detail and leaves the list with its placeholder. The default (pop until the panes change)
-        // emptied the whole stack in two panes, where the placeholder keeps the panes as they were: back left the app.
-        val listDetail = rememberListDetailSceneStrategy<NavKey>(backNavigationBehavior = BackNavigationBehavior.PopUntilContentChange, directive = directive)
+        // Each tab's list-detail scene (rememberShellListDetail) keeps its own divider. Back there closes the detail and
+        // leaves the list with its placeholder: the default (pop until the panes change) emptied the whole stack in two
+        // panes, where the placeholder keeps the panes as they were, and back left the app.
+        val paneStore = remember { PaneSplitStore(context) }
+        var paneAreaLeft by remember { mutableFloatStateOf(0f) }
+        val paneDensity = LocalDensity.current.density
+        // The vertical folds across the panes' area, in dp from its left edge: snap points for the divider, or (when
+        // the two sides are apart) where the split is fixed.
+        val paneHinges = adaptive.windowPosture.hingeList.filter { it.isVertical }.map { hinge ->
+            PaneHinge((hinge.bounds.left - paneAreaLeft) / paneDensity, (hinge.bounds.right - paneAreaLeft) / paneDensity, hinge.isSeparating)
+        }
         val expandedState = rememberUpdatedState(expanded)
         val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val dockInsets = if (style == AppStyle.Glass) ChromeInsets(bottom = DockHeight + 10.dp + navigationInset, handlesNavigationBar = true)
@@ -356,9 +375,14 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                 AssistantScreen(assistantNavigator, session.assistant, session.sender, session.assistant::startConversation,
                     pins, connectionLabel = connection.title(),
                     hubOnline = connection == ConnectionState.Online || connection == ConnectionState.Updating, demo = session.demo != null,
-                    requestedSession = assistantRequest, onKnowledge = { navigator.navigate(KnowledgeRoute) })
+                    requestedSession = assistantRequest, onKnowledge = { navigator.navigate(KnowledgeRoute) },
+                    needsYou = needsYou, onOpenNeed = { line -> selected = openResolved(needsYouRoute(line)) },
+                    onOpenInbox = { navigator.selectTab(AppTab.Inbox) },
+                    onTogglePin = { key -> session.preferences.togglePin(key.path) },
+                    onVoice = voicePlugin?.let { plugin -> { navigator.navigate(VoiceRoute(plugin.id, plugin.name)) } })
             }
             agentsEntries(navigator, agents, machine, { machine = it })
+            spaceEntries(navigator, agents)
             chatEntries(navigator) { ShellChat(it, session, navigator, shell.feedback, onSessionClosed = navigator::sessionClosed) }
             entry<InteractionRoute> { ShellChat(it.chat, session, navigator, shell.feedback, it.requestId, navigator::sessionClosed) }
             inboxEntries(navigator, session.inbox)
@@ -377,14 +401,17 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                 ?: UnavailablePage("当前模式没有可用的手机工具", navigator) }
             session.terminal?.let { terminalEntries(navigator, it) { key -> sessions.firstOrNull { s -> s.key == key }?.displayTitle } }
                 ?: run { entry<TerminalRoute> { UnavailablePage("体验模式没有终端数据", navigator) } }
-            session.metrics?.let { machinesEntries(navigator, it, session.sessions) } ?: run {
+            session.metrics?.let { machinesEntries(navigator, it, session.sessions, session.machines) } ?: run {
                 entry<MachinesRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
                 entry<MachineDetailRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
             }
-            session.knowledge?.let { knowledgeEntries(navigator, it, session.assistant, session.sender, uriHandler::openUri) } ?: run {
+            session.knowledge?.let { knowledgeEntries(navigator, it, session.assistant, session.sender, uriHandler::openUri,
+                onNewAgent = { start -> navigator.navigate(NewAgentRoute(start.machineId, start.cwd, start.prompt)) }) } ?: run {
                 entry<KnowledgeRoute> { UnavailablePage("体验模式没有知识库数据", navigator) }
                 entry<KnowledgeDetailRoute> { UnavailablePage("体验模式没有知识库数据", navigator) }
             }
+            settingsDetailEntries(navigator, services)
+            session.voice?.let { voiceEntries(navigator, it, session.identity, onModelConfiguration = { purpose -> navigator.navigate(ModelPurposeRoute(purpose)) }) } ?: run { entry<VoiceRoute> { UnavailablePage("体验模式没有语音对话", navigator) } }
             tools?.run { register(navigator) }
         }
         val panes: (NavKey) -> NavEntry<NavKey> = { key ->
@@ -398,20 +425,29 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         // Back on the first page of Agents, 收件箱 or 设置 goes to Persona; back on the Persona home leaves the app
         // (2026-11-01, the user's call; it used to go back through the tabs shown before).
         BackHandler(selected != AppTab.Jarvis && stacks.getValue(selected).size <= 1) { navigator.selectTab(AppTab.Jarvis) }
+        // Turned on its side, a phone's camera cutout or its three-button navigation bar sits on the left or right: the
+        // shell keeps clear of them, while the background still runs under them (2026-11-02, the old app's shell did so).
+        val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+        val sideRoom = sides.getLeft(LocalDensity.current, LocalLayoutDirection.current) > 0 ||
+            sides.getRight(LocalDensity.current, LocalLayoutDirection.current) > 0
         CompositionLocalProvider(LocalAmbience provides ambience, LocalWindowLayout provides windowLayout) {
           Box(Modifier.fillMaxSize().background(PersonaTheme.palette.background)) {
             // One background for the window. Pages paint the same light at the same place (PageBackdrop), so in wide
             // windows the rail, the panes and the room between them read as one surface; cards are what separate them.
-            if (wide) PageBackdrop()
-            Row(Modifier.fillMaxSize()) {
+            // The strips beside a cutout or a side navigation bar show it too.
+            if (wide || sideRoom) PageBackdrop()
+            Row(Modifier.fillMaxSize().windowInsetsPadding(sides)) {
               if (expanded) AppNavigationRail(items, selected.name, onSelect = { key -> navigator.selectTab(AppTab.valueOf(key)) })
-              Box(Modifier.weight(1f).fillMaxHeight()) {
+              BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { paneAreaLeft = it.positionInWindow().x }) {
                 AppTab.entries.forEach { tab ->
                     if (tab == selected || tab in visited) key(tab) {
                         val shown = tab == selected
                         val back = rememberNavigationEventDispatcherOwner(enabled = shown)
                         // The row of what the detail pane shows is marked in the list, however the page was opened.
                         val detail = detailOf(stacks.getValue(tab))
+                        // Agents may close its list beside an open conversation; 收件箱 and 设置 keep theirs (as the old app did).
+                        val listDetail = rememberShellListDetail(tab, directive, maxWidth, paneHinges, detailOpen = detail != null,
+                            store = paneStore, collapsible = tab == AppTab.Agents)
                         CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides back, LocalDetailKey provides detail) {
                             NavDisplay(backStack = stacks.getValue(tab), modifier = Modifier.fillMaxSize().then(if (shown) Modifier else Modifier.unplaced()),
                                 onBack = navigator::back, entryDecorators = decorators.getValue(tab) + chrome,
@@ -489,7 +525,7 @@ private fun ShellSettings(services: SettingsServices, navigator: Navigator, shel
     // Every settings page is its own destination, so a wide window shows it beside the list of settings.
     SettingsScreen(services, initialPage = page, onPhoneData = { navigator.navigate(PhoneToolsRoute) },
         onExitDemo = shell::exitDemo, onOpen = { navigator.navigate(SettingsPageRoute(it)) },
-        onBack = if (page == "settings") null else navigator::back)
+        onBack = if (page == "settings") null else navigator::back, onNavigate = navigator::navigate)
 }
 
 /** Inbox deep links wait for the item list, then become the page the inbox list would open. */

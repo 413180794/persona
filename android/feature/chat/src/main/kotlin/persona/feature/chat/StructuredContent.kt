@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,13 +27,23 @@ import persona.core.designsystem.WorkStep as TimelineStep
 import persona.core.designsystem.icons.PhIcons
 
 
+/**
+ * An agent's words (a reply, or narration inside a work line): Markdown, its file paths as chips, a long press for the
+ * message menu. A text the hub cut (`full_size`) shows the part the page carries and 「看全文（N KB）」, which loads the
+ * rest in place (R3).
+ */
 @Composable
 internal fun MessageContent(item: Item, user: Boolean, update: ChatTextUpdate? = null) {
-    val text = update?.text ?: item.text.orEmpty()
-    val parts = remember(text, item.from) { messageParts(text, item.from) }
-    MessageParts(parts, user, item.id)
-    ReaderEntry(text)
-    if (update?.streaming == true) StreamingCursor()
+    var whole by remember(item.id) { mutableStateOf<String?>(null) }
+    val cut = item.fullSize != null && whole == null && update?.streaming != true
+    val text = whole ?: update?.text ?: item.text.orEmpty().let { if (item.fullSize != null) cutText(it) else it }
+    val model = remember(text, item.from) { messageModel(text, item.from) }
+    Column(Modifier.fillMaxWidth().messageMenu(MessageTarget(item.id, model.plain, user, model.editText()))) {
+        MessageParts(model.parts, user, item.id)
+        if (cut) FullTextButton(item) { whole = it } else ReaderEntry(text)
+        if (update?.streaming == true) StreamingCursor()
+        FileChips(model.files, alignEnd = user)
+    }
 }
 
 @Composable
@@ -56,7 +65,7 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
                     if (index == parts.lastIndex && layout.lineCount > 0)
                         onLastLine?.invoke((layout.size.height - layout.getLineTop(layout.lineCount - 1)).toInt() + bottomPadding)
                 })
-                else ChatMarkdown(part.text, "$id/$index")
+                else ChatMarkdown(part.text, "$id/$index", selectable = false)
             is MessagePart.Reference -> ReferenceCard(part)
             is MessagePart.Source -> JGroupItem(GroupPosition.Single) {
                 Column(Modifier.fillMaxWidth().padding(10.dp)) {
@@ -87,22 +96,41 @@ private fun ReferenceCard(reference: MessagePart.Reference) {
     }
 }
 
+/**
+ * Your message (several queued ones read as one): the photos it carries above its text (`<attached_images>`, read from
+ * the session's machine, R3), its file paths as chips under the bubble, a long press for the message menu.
+ */
 @Composable
 internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUpdate> = emptyMap(),
-    onLastLine: ((Int) -> Unit)? = null, images: (@Composable () -> Unit)? = null) {
-    val parts = remember(items, updates) { items.flatMap { messageParts(updates[it.id]?.text ?: it.text.orEmpty(), it.from) } }
+    onLastLine: ((Int) -> Unit)? = null, images: (@Composable () -> Unit)? = null, menu: Boolean = true) {
+    val models = remember(items, updates) { items.map { messageModel(updates[it.id]?.text ?: it.text.orEmpty(), it.from) } }
+    val parts = remember(models) { models.flatMap { it.parts } }
+    val photos = remember(models) { models.flatMap { it.images }.distinct() }
+    val files = remember(models) { models.flatMap { it.files }.distinct().take(6) }
+    val target = remember(models, items) {
+        MessageTarget(items.firstOrNull()?.id.orEmpty(), models.joinToString("\n\n") { it.plain }.trim(), true,
+            models.joinToString("\n\n") { it.editText() }.trim())
+    }
     val timestamp = items.lastOrNull()?.ts
     val time = remember(timestamp) { timestamp?.let {
         runCatching { java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-            .withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.parse(it)) }.getOrNull()
+            .withZone(java.time.ZoneId.systemDefault()).format(requireNotNull(persona.core.contracts.parseTime(it))) }.getOrNull()
     } }
-    UserBubbleFrame(footer = time?.let { { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) } }) {
+    val footer: (@Composable () -> Unit)? = if (time == null && files.isEmpty()) null else ({
+        Column(horizontalAlignment = Alignment.End) {
+            FileChips(files, alignEnd = true)
+            time?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
+        }
+    })
+    UserBubbleFrame(Modifier.messageMenu(target.takeIf { menu }), footer = footer) {
         images?.invoke()
-        SelectionContainer {
-            Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                MessageParts(parts, true, items.firstOrNull()?.id.orEmpty(), onLastLine)
-                if (items.any { updates[it.id]?.streaming == true }) StreamingCursor()
-            }
+        if (photos.isNotEmpty()) {
+            AttachedPhotoRow(photos)
+            if (parts.isNotEmpty()) Spacer(Modifier.height(Tokens.Space.s))
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            MessageParts(parts, true, items.firstOrNull()?.id.orEmpty(), onLastLine)
+            if (items.any { updates[it.id]?.streaming == true }) StreamingCursor()
         }
     }
 }
@@ -174,10 +202,12 @@ internal fun DiffView(diff: ToolDiff, id: String) {
                         }), verticalAlignment = Alignment.CenterVertically) {
                             Text("${line.old ?: ""}  ${line.new ?: ""}", Modifier.width(64.dp),
                                 style = style, color = PersonaTheme.palette.ink2, maxLines = 1)
-                            Text(line.sign.toString(), Modifier.width(Tokens.Space.xl), style = style,
+                            // A hunk header or a note of a unified diff ('@') reads quietly, with no sign.
+                            Text(if (line.sign == '@') " " else line.sign.toString(), Modifier.width(Tokens.Space.xl), style = style,
                                 color = when (line.sign) { '+' -> palette.diffAdd; '-' -> palette.diffDel; else -> PersonaTheme.palette.ink2 })
                             Box(Modifier.weight(1f).horizontalScroll(horizontal)) {
-                                Text(line.text.replace("\t", "    "), Modifier.width(codeWidth), style = style, softWrap = false)
+                                Text(line.text.replace("\t", "    "), Modifier.width(codeWidth), style = style, softWrap = false,
+                                    color = if (line.sign == '@') palette.ink3 else palette.ink)
                             }
                         }
                     }

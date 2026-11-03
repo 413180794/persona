@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug builds only: the 「批准第一个待处理」 dialog in a fixed state, for captures (ApproveFirstPreviewActivity.kt). -->
+        <activity
+            android:name="persona.platform.shortcuts.ApproveFirstPreviewActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Jarvis.Shortcut" />
+        <!-- Debug builds only: the home-screen widget at its three sizes over the wallpaper (WidgetPreviewActivity.kt). -->
+        <activity
+            android:name="persona.platform.shortcuts.WidgetPreviewActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Jarvis.WidgetPreview" />
+    </application>
+</manifest>

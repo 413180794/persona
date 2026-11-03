@@ -26,8 +26,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import persona.core.contracts.api.*
+import persona.core.domain.engines.Engines
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -42,6 +45,8 @@ fun PairingScreen(
     onCredentialsSaved: () -> Unit = {},
     onBack: (() -> Unit)? = null,
     footer: @Composable () -> Unit = {},
+    /** Saves the engine of the hub's machine, the step between pairing and the checklist (docs/engines.md). */
+    machines: MachineManagement? = null,
     /** Start at the connect step instead of the welcome page (adding another hub). */
     skipWelcome: Boolean = false,
 ) {
@@ -50,6 +55,8 @@ fun PairingScreen(
     val paired by pairing.isPaired.collectAsState()
     val records = remember(context) { ReadinessRecords(context) }
     var readiness by rememberSaveable { mutableStateOf(paired && needsOnboardingReadiness(context)) }
+    // The machine whose engine must be chosen first; kept on disk so a restarted app asks again rather than skipping.
+    var engineStep by rememberSaveable { mutableStateOf(if (paired && machines != null) records.enginePending() else null) }
     var welcome by rememberSaveable { mutableStateOf(initialLink == null && !skipWelcome) }
     var credentialsSaved by remember { mutableStateOf(false) }
     var lastRequest by remember { mutableStateOf<PairingRequest?>(null) }
@@ -107,7 +114,14 @@ fun PairingScreen(
                     notice = "已经连上 hub，机器列表稍后会自动刷新。"
                 }
                 record(PairingProgress(PairingStage.Complete))
-                token = ""; metadata = null; lastRequest = null; readiness = true
+                token = ""; metadata = null; lastRequest = null; manual = false
+                // Hubs that report engines ask which one the hub's machine uses before the checklist. The list may
+                // reach the shared repository a moment after the refresh (or come with the first push): wait a little.
+                val listed: List<persona.core.contracts.Machine> = if (machines == null) emptyList()
+                    else withTimeoutOrNull(3_000) { sessions.machines.first { it.isNotEmpty() } } ?: sessions.machines.value
+                val engine = Engines.pairingStep(listed)
+                records.enginePending(engine?.id)
+                if (engine != null) engineStep = engine.id else readiness = true
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
                 // Exception messages may contain pairing links or credentials: log only types and frames.
@@ -158,10 +172,15 @@ fun PairingScreen(
         if (value.isNullOrBlank()) notice = "剪贴板里没有配对链接。" else accept(value)
     }
     fun edit() { credentialsSaved = false; lastRequest = null; confirm = null; failure = null; progress = emptyList(); manual = true }
-    BackHandler(!readiness && !running && (confirm != null || manual || failure != null)) {
+    BackHandler(!readiness && engineStep == null && !running && (confirm != null || manual || failure != null)) {
         confirm = null; manual = false; failure = null; progress = emptyList(); notice = null
     }
-    if (readiness) {
+    val step = engineStep
+    if (step != null) {
+        EngineSelectionScreen(step, sessions, machines, pairing = true, onDone = {
+            records.enginePending(null); engineStep = null; readiness = true
+        })
+    } else if (readiness) {
         ReadinessScreen(sessions, diagnostics, notificationsOnly = false,
             onDiagnostics = onDiagnostics, onDone = { records.pending(false); onReady() }, onBack = onBack ?: onReady, footer = footer)
     } else JListPage(title = "配对", onBack = onBack, largeTitle = false) {

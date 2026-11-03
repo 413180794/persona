@@ -116,7 +116,8 @@
         "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
         "docs/redesign/ux.md §3.4、§5.3",
         "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/redesign/README.md §2.3、§4.2",
+        "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm"
       ],
       "input": {
         "profile": "unified",
@@ -148,7 +149,8 @@
             "available_now": true,
             "requirements": [
               "session_present",
-              "reason_empty"
+              "reason_empty",
+              "always_offered"
             ]
           },
           {
@@ -168,7 +170,8 @@
         "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
         "docs/redesign/ux.md §3.4、§5.3",
         "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/redesign/README.md §2.3、§4.2",
+        "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm"
       ],
       "input": {
         "profile": "unified",
@@ -200,7 +203,8 @@
             "available_now": false,
             "requirements": [
               "session_present",
-              "reason_empty"
+              "reason_empty",
+              "always_offered"
             ]
           },
           {

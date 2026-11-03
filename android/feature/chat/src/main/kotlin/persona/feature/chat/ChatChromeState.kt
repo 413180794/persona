@@ -21,12 +21,6 @@ internal fun spaceCompanions(session: Session?, sessions: List<Session>): List<S
     }.sortedWith(compareBy<Session> { it.agentState.priority }.thenBy { it.slotIndex ?: Int.MAX_VALUE }.thenBy { it.sessionId })
 }
 
-internal fun resumeCommand(session: Session): String {
-    fun quote(value: String) = "'" + value.replace("'", "'\"'\"'") + "'"
-    val command = when (session.agent) { "codex" -> "codex resume"; "traex" -> "traex resume"; else -> "claude --resume" }
-    return (session.cwd.takeIf(String::isNotBlank)?.let { "cd -- ${quote(it)} && " } ?: "") + "$command ${quote(session.sessionId)}"
-}
-
 internal fun connectionTitle(state: ConnectionState?): String? = when (state) {
     null, ConnectionState.Online -> null
     ConnectionState.Connecting -> "连接中…"
@@ -36,9 +30,6 @@ internal fun connectionTitle(state: ConnectionState?): String? = when (state) {
     ConnectionState.CertificateMismatch -> "hub 的证书变了"
     ConnectionState.Revoked -> "配对已失效"
 }
-
-internal val permissionLabels = linkedMapOf("default" to "手动确认", "acceptEdits" to "自动改文件", "plan" to "只做计划", "auto" to "自动")
-internal val effortLabels = linkedMapOf("low" to "低", "medium" to "中", "high" to "高", "xhigh" to "很高", "max" to "最高")
 
 internal class ChatChromeState(
     private val actions: ChatActions?, private val scope: CoroutineScope,
@@ -66,6 +57,10 @@ internal class ChatChromeState(
         }
     }
 
+    /** 会话信息 (GET …/info); fails when the actions are not wired, which the sheet says. */
+    suspend fun info(session: Session): SessionInfo =
+        actions?.info(session) ?: throw UnsupportedOperationException("会话信息尚未接入")
+
     suspend fun loadMute(session: Session) {
         try { muted = actions?.isMuted(session) }
         catch (error: CancellationException) { throw error }
@@ -87,6 +82,7 @@ internal class ChatChromeState(
                             is ChatAction.Mute -> if (action.muted) "已屏蔽通知" else "已开启通知"
                             is ChatAction.Modes -> "已更新设置"
                             ChatAction.Close -> "已关闭 Agent"
+                            ChatAction.Attach -> "已实时接入"
                         }
                         if (action is ChatAction.Mute) muted = action.muted
                         if (action == ChatAction.Close) onClosed()

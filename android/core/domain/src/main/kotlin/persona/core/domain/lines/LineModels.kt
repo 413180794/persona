@@ -110,6 +110,7 @@ sealed interface ChatLine {
     fun holds(messageId: String?): Boolean = messageId != null && when (this) {
         is Row -> row.id == messageId
         is MergedUsers -> users.firstOrNull()?.id == messageId
+        is ApiError -> item.id == messageId
         else -> false
     }
 
@@ -152,6 +153,17 @@ sealed interface ChatLine {
     }
     data class Wakes(val turn: ChatTurn, val live: Boolean, val drawer: List<ChatLine>) : ChatLine {
         override val id get() = "wk-" + turn.id
+    }
+    /**
+     * An answer or a notice that is a model API error, drawn as a card ([foldApiErrors]); [count] is how many times
+     * the same error came in a row, the user's 「继续」 between them folded in. Keeps the first error's id.
+     */
+    data class ApiError(val item: LineItem, val info: ApiErrorInfo, val count: Int) : ChatLine {
+        override val id get() = item.id
+    }
+    /** Two or more away recaps in a row, as one line ([foldRecaps]). */
+    data class Recaps(val items: List<LineItem>) : ChatLine {
+        override val id get() = "rc-" + items.first().id
     }
 }
 

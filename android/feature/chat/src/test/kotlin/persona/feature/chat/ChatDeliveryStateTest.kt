@@ -53,6 +53,37 @@ class ChatDeliveryStateTest {
         assertTrue(actions.busyIds.isEmpty())
     }
 
+    @Test fun refusedMessagesCanBeDeletedOrEditedAwayAndNothingElse() = runTest {
+        val sender = FakeSender()
+        val actions = ChatDeliveryActions(sender)
+        val composer = ChatComposerState(ChatComposerDraft("草稿"))
+        // Refused by the computer: deleting drops it and leaves the draft alone.
+        sender.outbox.value = listOf(sender.message.copy(state = DeliveryState.Refused, error = "input_draft"))
+        assertTrue(actions.perform("message", DeliveryAction.Delete, composer::restoreMessage))
+        assertEquals(listOf("cancel:message"), sender.calls)
+        assertEquals("草稿", composer.value.text)
+        assertTrue(sender.outbox.value.isEmpty())
+        // Editing a refused message puts its words back and drops the bubble as well.
+        sender.outbox.value = listOf(sender.message.copy(state = DeliveryState.Refused))
+        assertTrue(actions.perform("message", DeliveryAction.Edit, composer::restoreMessage))
+        assertEquals("草稿\n\n原消息", composer.value.text)
+        assertTrue(sender.outbox.value.isEmpty())
+        // Whatever may have reached the computer, or is still on its way, is not deleted this way.
+        DeliveryState.entries.filter { it != DeliveryState.Refused }.forEach { state ->
+            assertFalse("$state", state.allows(DeliveryAction.Delete))
+            sender.outbox.value = listOf(sender.message.copy(state = state))
+            assertFalse("$state", actions.perform("message", DeliveryAction.Delete, composer::restoreMessage))
+        }
+        assertEquals(listOf("cancel:message", "cancel:message"), sender.calls)
+        // Confirmed as never delivered becomes refused, and so can be deleted.
+        sender.outbox.value = listOf(sender.message.copy(state = DeliveryState.NeedsConfirmation))
+        assertTrue(actions.perform("message", DeliveryAction.ConfirmNotDelivered, composer::restoreMessage))
+        assertTrue(DeliveryState.Refused.allows(DeliveryAction.Delete))
+        assertTrue(actions.perform("message", DeliveryAction.Delete, composer::restoreMessage))
+        assertTrue(sender.outbox.value.isEmpty())
+        assertTrue(actions.busyIds.isEmpty())
+    }
+
     @Test fun unknownStatesUseSharedVocabularyAndSessionPriority() {
         val session = Session(sessionId = "session", status = "working")
         val snapshot = ChatSnapshot(loading = false, turnDurationSeconds = 42)

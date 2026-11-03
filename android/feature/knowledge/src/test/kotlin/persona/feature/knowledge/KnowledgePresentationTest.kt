@@ -1,0 +1,168 @@
+package persona.feature.knowledge
+
+import persona.core.contracts.JsonCodec
+import persona.core.contracts.api.*
+import kotlinx.serialization.json.*
+import org.junit.Assert.*
+import org.junit.Test
+import java.time.LocalDate
+
+/** The rules the old app and iOS use to show the knowledge base (`Shared/Knowledge.swift`), on the new types. */
+class KnowledgePresentationTest {
+    private val projects = JsonCodec.decodeFromString<KnowledgeList>(
+        """{"items":[
+        {"kind":"projects","id":"a","name":"A","importance":"P0","relevance":90,"tags":["x"],"updated":"2026-10-30T10:00:00Z","extra":"short · active"},
+        {"kind":"projects","id":"b","name":"B","importance":"P2","relevance":40,"extra":"long · active"},
+        {"kind":"projects","id":"c","name":"C","importance":"P1","extra":"short · done"},
+        {"kind":"projects","id":"d","name":"D","importance":"P1","extra":"short · ignored"},
+        {"kind":"projects","id":"e","name":"E","importance":"P1","extra":"short · paused","unknown":1}],
+        "tags":["x","y"]}""",
+    ).items
+
+    @Test fun projectsGroupLikeIos() {
+        val sections = projectSections(projects)
+        assertEquals(listOf("重点", "其他进行中", "已完成", "不是项目"), sections.map { it.title })
+        assertEquals(listOf("a", "e"), sections[0].entries.map { it.id })
+        assertEquals(listOf("b"), sections[1].entries.map { it.id })
+        assertEquals(listOf("c"), sections[2].entries.map { it.id })
+        assertEquals(listOf("d"), sections[3].entries.map { it.id })
+        assertTrue(sections[3].collapsed)
+        assertNotNull(sections[3].note)
+        // Without anything important the rest is just 进行中.
+        assertEquals("进行中", projectSections(projects.filter { it.id == "b" }).single().title)
+        assertEquals("long", projects[1].projectKind)
+        assertEquals("short", projects[0].projectKind)
+        assertEquals("暂停", projects[4].projectStatusLabel)
+        assertNull(projects[0].projectStatusLabel)
+        assertEquals("active", KnowledgeEntry("projects", "x", "X").projectStatus)
+        assertEquals(listOf("#iOS"), kindSections(listOf(KnowledgeEntry("people", "p", "P")), "iOS").map { it.title })
+        assertTrue(kindSections(emptyList(), null).isEmpty())
+    }
+
+    @Test fun allSixKindsAndEveryConversationAreShown() {
+        assertEquals(listOf("项目", "会话", "人", "文档", "会议", "日程"), KnowledgeKind.entries.map { it.title })
+        assertEquals(listOf("projects", "chats", "people", "docs", "meetings", "events"), KnowledgeKind.entries.map { it.wire })
+        assertTrue(KnowledgeEntry("chats", "dm", "私聊", extra = "dm").inScope())
+        assertTrue(KnowledgeEntry("events", "e", "日程").inScope())
+        assertFalse(KnowledgeEntry("moments", "m", "帖子").inScope())
+    }
+
+    @Test fun hitsFindTheirEntryAndRead() {
+        assertEquals(KnowledgeKind.Chats to "lark-1", KnowledgeHit("chats/lark-1/messages/2026-10-30.md", "").reference())
+        assertEquals(KnowledgeKind.Docs to "d1", KnowledgeHit("docs/d1.json", "").reference())
+        assertEquals(KnowledgeKind.Projects to "p", KnowledgeHit("/projects/p/log.md", "").reference())
+        assertNull(KnowledgeHit("README.md", "").reference())
+        assertNull(KnowledgeHit("other/x/y.md", "").reference())
+        assertNull(KnowledgeHit("projects/../summary.md", "").reference())
+        assertEquals("聊天记录 · 2026-10-30", KnowledgeHit("chats/lark-1/messages/2026-10-30.md", "").source)
+        assertEquals("档案", KnowledgeHit("chats/c/summary.md", "").source)
+        assertEquals("时间线", KnowledgeHit("projects/p/log.md", "").source)
+        assertEquals("资料", KnowledgeHit("docs/d1.json", "").source)
+        assertEquals("天气 App", KnowledgeHit("p", "  \"name\": \"天气 App\",").text)
+        assertEquals("进展", KnowledgeHit("p", "- 进展").text)
+        assertEquals("标题", KnowledgeHit("p", "## 标题").text)
+    }
+
+    @Test fun searchGroupsByEntryProfileFirst() {
+        val known = mapOf("chats/c" to KnowledgeEntry("chats", "c", "项目群"))
+        val groups = searchGroups(listOf(
+            KnowledgeHit("projects/p/meta.json", "\"tags\": \"x\""),
+            KnowledgeHit("chats/c/summary.md", "- 一"),
+            KnowledgeHit("projects/p/summary.md", "- 档案行"),
+            KnowledgeHit("projects/p/log.md", "- 档案行"), // the same words: once
+            KnowledgeHit("README.md", "x"),
+        ), known)
+        assertEquals(listOf("projects/p", "chats/c"), groups.map { it.key })
+        assertEquals(listOf("档案", "资料"), groups[0].hits.map { it.source })
+        assertEquals("项目", groups[0].entry.name)
+        assertFalse(groups[0].named)
+        assertEquals("项目群", groups[1].entry.name)
+        assertTrue(groups[1].named)
+        assertTrue(searchGroups(listOf(KnowledgeHit("README.md", "# Persona 知识库")), emptyMap()).isEmpty())
+        // Results go by kind in the list's order.
+        assertEquals(listOf(KnowledgeKind.Projects, KnowledgeKind.Chats), searchSections(groups).map { it.first })
+        // An empty knowledge base (a hub that has not archived anything yet) decodes.
+        assertTrue(JsonCodec.decodeFromString<KnowledgeList>("""{"items":[],"tags":[]}""").items.isEmpty())
+    }
+
+    @Test fun everyWordOfTheQueryIsMarked() {
+        assertEquals(listOf(0..1, 8..9), queryRanges("天气 App 的天气", "天气"))
+        assertEquals(listOf(3..5, 8..9), queryRanges("天气 App 小组件", "app  组件"))
+        assertEquals(listOf(0..3), queryRanges("abcd", "ab cd"))
+        assertTrue(queryRanges("abc", "  ").isEmpty())
+        assertTrue(queryRanges("", "a").isEmpty())
+    }
+
+    @Test fun timelineLines() {
+        val line = KnowledgeLogLine.parse("- 2026-10-30 23:16 · Agent · 标题 · 机器 · 说了什么")
+        assertEquals("2026-10-30 23:16", line.whenText)
+        assertEquals("Agent · 标题 · 机器", line.source)
+        assertEquals("说了什么", line.text)
+        assertEquals("10-30 23:16", line.shortWhen(LocalDate.of(2026, 1, 1)))
+        assertEquals("2026-10-30 23:16", line.shortWhen(LocalDate.of(2027, 1, 1)))
+        assertEquals(KnowledgeLogLine("10-28", "", "数据层"), KnowledgeLogLine.parse("- 10-28 · 数据层"))
+        assertEquals(KnowledgeLogLine("", "", "没有时间 · 的行"), KnowledgeLogLine.parse("没有时间 · 的行"))
+        assertEquals(listOf("新", "旧"), timeline(listOf("- 10-01 · 旧", "- 10-02 · 新")).map { it.text })
+    }
+
+    @Test fun profileDropsWhatTheHeaderShows() {
+        assertEquals("正文", profile("# A\n重要级 P0 · 与我相关性 95 · x\n一句话\n正文", "一句话"))
+        assertEquals("", profile("# A\n一句话", "一句话"))
+        assertEquals("", profile(null, null))
+        assertEquals("## 小节\n内容", profile("## 小节\n内容", null))
+        assertEquals(listOf("a", "b"), parseTags("  a \n b  "))
+        assertTrue(parseTags("   ").isEmpty())
+    }
+
+    @Test fun directoriesAndTheAgentStart() {
+        assertEquals("laptop" to "/code/a", firstDir(listOf("nocolon", "laptop:/code/a", "server:/srv")))
+        assertNull(firstDir(listOf("nocolon", "laptop:")))
+        assertEquals("laptop" to "…/b/c/d", dirParts("laptop:/a/b/c/d"))
+        assertEquals(null to "/a/b", dirParts("/a/b"))
+        val detail = KnowledgeDetail("projects", "weather", "/data/projects/weather",
+            meta = buildJsonObject { put("name", "天气 App"); put("dirs", buildJsonArray { add("laptop:/code/weather") }) },
+            summary = "档案", log = listOf("- 10-30 · 进展"))
+        val start = agentStart(detail)
+        assertEquals("laptop", start.machineId)
+        assertEquals("/code/weather", start.cwd)
+        assertTrue(start.prompt.startsWith("<jarvis-context kind=\"context\" title=\"项目 · 天气 App\" url=\"\">"))
+        // The cursor lands after the context, on a line of its own.
+        assertTrue(start.prompt.endsWith("</jarvis-context>\n\n"))
+        assertNull(agentStart(detail.copy(meta = buildJsonObject { put("name", "X") })).machineId)
+    }
+
+    @Test fun detailMetaMakesTheEntry() {
+        val detail = JsonCodec.decodeFromString<KnowledgeDetailResponse>(
+            """{"detail":{"kind":"projects","id":"a","path":"/data/projects/a","summary":"# A\n\n正文",
+            "meta":{"name":"甲","importance":"P1","relevance":70,"tags":["t1","t2"],"kind":"long","status":"done","dirs":["mac:/code/a","bad"]}},
+            "agents":[{"machine_id":"mac","session_id":"s1","title":"t","cwd":"/code/a"}]}""",
+        )
+        val entry = detail.detail.entry()
+        assertEquals("甲", entry.name)
+        assertEquals("P1", entry.importance)
+        assertEquals(70, entry.relevance)
+        assertEquals(listOf("t1", "t2"), entry.tags)
+        assertEquals("long · done", entry.extra)
+        assertEquals("已完成", entry.projectStatusLabel)
+        assertEquals(1, detail.agents?.size)
+        // A project the hub has not given a kind or status reads as short and active.
+        assertEquals("short · active", KnowledgeDetail("projects", "b", "x", meta = buildJsonObject { }).entry().extra)
+        assertEquals("b", KnowledgeDetail("projects", "b", "x").entry().name)
+    }
+
+    @Test fun taggingSendsOnlyWhatIsSet() {
+        assertEquals("""{"importance":"P1","relevance":55,"tags":[]}""",
+            JsonCodec.encodeToString(KnowledgeUpdate.serializer(), KnowledgeUpdate("P1", 55, emptyList())))
+        assertEquals("""{"importance":"P0","relevance":0,"tags":["a"],"status":"done","project_kind":"long"}""",
+            JsonCodec.encodeToString(KnowledgeUpdate.serializer(), KnowledgeUpdate("P0", 0, listOf("a"), "done", "long")))
+        val project = KnowledgeEntry("projects", "p", "P", importance = "P1", relevance = 92, tags = listOf("a", "b"), extra = "long · paused")
+        val form = KnowledgeTagForm.of(project)
+        assertEquals(KnowledgeTagForm("P1", 92, "a b", "long", "paused"), form)
+        assertEquals(KnowledgeUpdate("P1", 92, listOf("a", "b"), "paused", "long"), form.update(isProject = true))
+        // People and other kinds have no project kind or status; an unranked entry starts at P2.
+        val person = KnowledgeTagForm.of(KnowledgeEntry("people", "x", "X", relevance = 140))
+        assertEquals("P2", person.importance)
+        assertEquals(100, person.relevance)
+        assertEquals(KnowledgeUpdate("P2", 100, emptyList()), person.update(isProject = false))
+    }
+}

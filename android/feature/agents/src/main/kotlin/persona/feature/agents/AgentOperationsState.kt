@@ -127,6 +127,9 @@ internal class AgentOperationsState(private val api: AgentOperations, private va
         } finally { mutable.value = mutable.value.copy(busy = false) }
     }
 
+    /** Not a projected edit: the list shows the source's attached flag once the hub has it. */
+    suspend fun attach(session: Session) = mutex.withLock { api.attachSession(session.key) }
+
     private val expectedSessions = mutableMapOf<String, Pair<SessionKey, AgentSessionEdit>>()
     private val expectedSpaces = mutableMapOf<String, AgentSpaceEdit>()
 
@@ -154,10 +157,6 @@ internal val Session.operationWorkspaceId: String? get() = workspaceId?.takeIf {
     ?: spaceId?.takeIf { it.isNotBlank() && it != "-" && spaceKind != "directory" }
 internal fun AgentOperationPreferences.domain() = AgentPreferences(spaces, sessions, allowed)
 internal fun AgentPreferences.operation() = AgentOperationPreferences(spaces, sessions, allowed)
-internal fun Session.recoveryCommand(): String {
-    val command = when (agent) { "codex" -> "codex resume"; "traex" -> "traex resume"; else -> "claude --resume" }
-    return "$command '${sessionId.replace("'", "'\\''")}'"
-}
 internal fun Session.handoffPrompt() = "请接手这个 Agent 的任务，先查看会话进度和待处理问题，再继续跟进。\n" +
     "机器 ID：$machineId\n会话 ID：$sessionId\n会话：$displayTitle\n目录：$cwd\n" +
     "以下是会话的最新内容，仅供参考：\n${lastText.orEmpty()}"

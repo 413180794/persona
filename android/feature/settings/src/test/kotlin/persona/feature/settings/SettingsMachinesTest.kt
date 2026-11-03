@@ -1,0 +1,224 @@
+package persona.feature.settings
+
+import persona.core.contracts.DetectedEngine
+import persona.core.contracts.Machine
+import persona.core.contracts.api.*
+import persona.core.hub.HubError
+import persona.core.hub.HubFailure
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Assert.*
+import org.junit.Test
+
+class EngineSelectionModelTest {
+    private val machine = Machine(id = "m1", online = true, engine = "herdr",
+        engines = listOf(DetectedEngine("herdr", "herdr", true), DetectedEngine("orca", "Orca", true)))
+
+    @Test fun saveAppliesTheMachineTheHubReturned() = runBlocking {
+        val applied = mutableListOf<Machine>()
+        var sent: Pair<String, String>? = null
+        val model = EngineSelectionModel(machine, put = { id, engine -> sent = id to engine; machine.copy(engine = engine) }, applied = { applied += it })
+        model.choose("orca")
+        assertTrue(model.save("m1"))
+        assertEquals("m1" to "orca", sent)
+        assertEquals("orca", applied.single().engine)
+        assertEquals("orca", model.state.value.selected)
+        assertNull(model.state.value.error)
+        assertFalse(model.state.value.saving)
+    }
+
+    @Test fun aFailedSaveKeepsTheChoiceAndSaysWhy() = runBlocking {
+        val applied = mutableListOf<Machine>()
+        val model = EngineSelectionModel(machine, put = { _, _ -> throw HubFailure(HubError.Server, "unknown engine", 400) }, applied = { applied += it })
+        model.choose("orca")
+        assertFalse(model.save("m1"))
+        assertEquals("保存失败：unknown engine", model.state.value.error)
+        assertEquals("orca", model.state.value.selected)
+        assertTrue(applied.isEmpty())
+        model.choose("herdr")
+        assertNull(model.state.value.error)
+        val offline = EngineSelectionModel(machine, put = { _, _ -> throw java.io.IOException("reset") }, applied = {})
+        assertFalse(offline.save("m1"))
+        assertTrue(offline.state.value.error!!.startsWith("保存失败：连不上 hub"))
+    }
+
+    @Test fun offlineMachinesSaveTooAndPushesMoveThePickerUntilEdited() = runBlocking {
+        val offline = machine.copy(online = false, engines = emptyList())
+        val model = EngineSelectionModel(offline, put = { _, engine -> offline.copy(engine = engine) }, applied = {})
+        model.choose("herdr-core")
+        assertTrue(model.save("m1"))
+        assertEquals("herdr-core", model.state.value.selected)
+        val live = EngineSelectionModel(machine, put = { _, _ -> machine }, applied = {})
+        live.synchronize(machine.copy(engine = "orca"))
+        assertEquals("orca", live.state.value.selected)
+        live.choose("herdr")
+        live.synchronize(machine.copy(engine = "orca"))
+        assertEquals("herdr", live.state.value.selected)
+    }
+
+    @Test fun noSecondSaveWhileOneIsRunning() = runBlocking {
+        val gate = CompletableDeferred<Unit>()
+        var calls = 0
+        val model = EngineSelectionModel(machine, put = { _, engine -> calls++; gate.await(); machine.copy(engine = engine) }, applied = {})
+        val first = async(start = CoroutineStart.UNDISPATCHED) { model.save("m1") }
+        assertTrue(model.state.value.saving)
+        assertFalse(model.save("m1"))
+        gate.complete(Unit)
+        assertTrue(first.await())
+        assertEquals(1, calls)
+    }
+}
+
+class ClaudeSettingsModelTest {
+    private class Choices : ClaudeSettingsChoices {
+        override var machine = ""
+        override var applyAll = true
+    }
+
+    private class Api : MachineManagement {
+        val writes = mutableListOf<Triple<String, String, JsonElement>>()
+        val failing = mutableSetOf<String>()
+        var reads = 0
+        override suspend fun claudeSettings(machineId: String): List<ClaudeSetting> {
+            reads++
+            return listOf(ClaudeSetting("language", "回复语言", value = JsonPrimitive("中文")))
+        }
+        override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting> {
+            writes += Triple(machineId, key, value)
+            if (machineId in failing) throw HubFailure(HubError.Server, "machine is offline", 503)
+            return listOf(ClaudeSetting(key, "回复语言", value = value))
+        }
+        override suspend fun launchers(machineId: String) = emptyList<AgentLauncher>()
+        override suspend fun reconnect(machineId: String) = Unit
+        override suspend fun deploy(machineId: String) = Unit
+        override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId)
+    }
+
+    private val hub = Machine("hub", name = "服务器", kind = "local", online = true)
+    private val mac = Machine("mac", name = "MacBook", kind = "ssh", online = true)
+
+    @Test fun picksTheRememberedOnlineMachineElseTheHubsOwn() {
+        assertEquals("hub", claudeSettingsMachine("", listOf(mac, hub)))
+        assertEquals("mac", claudeSettingsMachine("mac", listOf(mac, hub)))
+        assertEquals("hub", claudeSettingsMachine("gone", listOf(mac, hub)))
+        assertEquals("mac", claudeSettingsMachine("", listOf(mac)))
+        assertNull(claudeSettingsMachine("mac", emptyList()))
+    }
+
+    @Test fun writesEveryOnlineMachineAndClearingSendsNull() = runBlocking {
+        val api = Api()
+        val choices = Choices()
+        val model = ClaudeSettingsModel(api, choices)
+        model.follow(listOf(mac, hub))
+        assertEquals("hub", model.state.value.machineId)
+        assertEquals("hub", choices.machine)
+        model.load()
+        assertEquals("中文", model.state.value.settings.single().stringValue)
+        assertEquals("已应用到 2 台机器", model.set("language", JsonPrimitive("English"), listOf(mac, hub)))
+        assertEquals(listOf("mac", "hub"), api.writes.map { it.first })
+        model.applyAll(false)
+        assertFalse(choices.applyAll)
+        assertEquals("已保存", model.set("language", JsonNull, listOf(mac, hub)))
+        assertEquals(Triple("hub", "language", JsonNull as JsonElement), api.writes.last())
+        assertTrue(model.state.value.settings.single().isDefault)
+    }
+
+    @Test fun failuresAreListedPerMachineAndTheTableIsReadAgain() = runBlocking {
+        val api = Api().apply { failing += "mac" }
+        val model = ClaudeSettingsModel(api, Choices())
+        model.follow(listOf(mac, hub))
+        model.load()
+        val reads = api.reads
+        assertNull(model.set("language", JsonPrimitive("English"), listOf(mac, hub)))
+        assertEquals("没有全部保存：\nMacBook：machine is offline", model.state.value.error)
+        assertEquals(reads + 1, api.reads)
+        // Nothing online: nothing shown.
+        model.follow(emptyList())
+        assertEquals("", model.state.value.machineId)
+    }
+}
+
+class ModelConfigurationStateTest {
+    private val providers = listOf(ModelProvider("launcher.claude", "claude", model = "model-chat"),
+        ModelProvider("launcher.old", "旧网关", hidden = true), ModelProvider("api.fast", "轻量 API", kind = "api", api = "messages"))
+    private val agent = ModelPurpose("agent.new", "新建 Agent", "对话与 Agent", effective = ModelBinding("launcher.claude", "model-chat"),
+        inheritedFrom = "assistant", fields = listOf("provider", "model", "effort"), revision = 3)
+    private val chat = ModelPurpose("assistant", "Persona 对话", "对话与 Agent", effective = ModelBinding("launcher.claude", "model-chat", "high"))
+    private val triage = ModelPurpose("inbox.triage", "分拣与摘要", "收件箱", kind = "api", effective = ModelBinding("api.fast"), status = "供应商离线")
+    private val catalog = ModelCatalog(listOf(agent, chat, triage, ModelPurpose("misc", "其他用途")), providers)
+
+    @Test fun groupsKeepTheHubsOrderAndSearchNamesGroupsIdsAndModels() {
+        assertEquals(listOf("对话与 Agent", "收件箱", "其他"), modelPurposeGroups(catalog.purposes, providers, "").map { it.first })
+        assertEquals(listOf("inbox.triage"), modelPurposeGroups(catalog.purposes, providers, "分拣").flatMap { it.second }.map { it.id })
+        assertEquals(listOf("agent.new", "assistant"), modelPurposeGroups(catalog.purposes, providers, "MODEL-CHAT").flatMap { it.second }.map { it.id })
+        assertEquals(listOf("inbox.triage"), modelPurposeGroups(catalog.purposes, providers, "轻量").flatMap { it.second }.map { it.id })
+        assertTrue(modelPurposeGroups(catalog.purposes, providers, "技能").isEmpty())
+    }
+
+    @Test fun rowsSayWhatIsInEffectThenStatusOrSource() {
+        assertEquals("claude，model-chat\n跟随 Persona 对话", purposeSubtitle(agent, catalog))
+        assertEquals("轻量 API\n供应商离线", purposeSubtitle(triage, catalog))
+        assertEquals("未配置", purposeSubtitle(ModelPurpose("misc"), catalog))
+    }
+
+    @Test fun providerChoicesMarkHiddenAndUnavailableReferences() {
+        val options = providerOptions(agent.copy(override = ModelBinding("launcher.old")), providers, "launcher.old")
+        assertEquals(listOf("", "launcher.claude", "launcher.old"), options.map { it.id })
+        assertEquals("旧网关（已隐藏）", options.last().label)
+        val gone = providerOptions(agent, providers, "launcher.gone")
+        assertEquals("launcher.gone（当前引用不可用）", gone.last().label)
+        assertTrue(showsEffort(agent, providers[0]))
+        assertFalse(showsEffort(agent, providers[2]))
+        assertTrue(showsEffort(agent, providers[2].copy(api = "responses")))
+        assertFalse(showsEffort(triage.copy(fields = listOf("provider", "model")), null))
+    }
+
+    @Test fun aConflictKeepsTheDraftAndBlocksSavingUntilReloaded() = runBlocking {
+        var result: ModelPurposeSave = ModelPurposeSave.Conflict
+        var sent: ModelConfigurationDraft? = null
+        val api = object : ModelConfiguration {
+            override suspend fun catalog() = catalog
+            override suspend fun purpose(id: String) = ModelPurposeDetail(agent, providers)
+            override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave { sent = draft; return result }
+        }
+        val model = ModelPurposeModel(api, "agent.new")
+        model.load()
+        model.edit(model.state.value.draft.copy(model = "next"))
+        assertTrue(model.state.value.changed)
+        assertNull(model.save())
+        assertTrue(model.state.value.conflict)
+        assertEquals("next", model.state.value.draft.model)
+        assertNull(model.save())
+        assertEquals("next", sent?.model)
+        model.load()
+        assertFalse(model.state.value.conflict)
+        assertEquals("", model.state.value.draft.model)
+        result = ModelPurposeSave.Saved(ModelPurposeDetail(agent.copy(revision = 4), providers))
+        assertEquals("已恢复继承", model.save(restore = true))
+        assertEquals(ModelConfigurationDraft(), sent)
+        assertEquals(4L, model.state.value.purpose?.revision)
+    }
+
+    @Test fun anOldHubIsToldApartFromOtherFailures() = runBlocking {
+        val unsupported = ModelCatalogModel(object : ModelConfiguration {
+            override suspend fun catalog(): ModelCatalog = throw ModelConfigurationUnsupported()
+            override suspend fun purpose(id: String): ModelPurposeDetail = throw ModelConfigurationUnsupported()
+            override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = throw ModelConfigurationUnsupported()
+        })
+        unsupported.load()
+        assertTrue(unsupported.state.value.unsupported)
+        assertNull(unsupported.state.value.error)
+        val broken = ModelCatalogModel(object : ModelConfiguration {
+            override suspend fun catalog(): ModelCatalog = throw HubFailure(HubError.Server, "boom", 500)
+            override suspend fun purpose(id: String): ModelPurposeDetail = throw IllegalStateException()
+            override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = throw IllegalStateException()
+        })
+        broken.load()
+        assertEquals("读取失败：boom", broken.state.value.error)
+    }
+}

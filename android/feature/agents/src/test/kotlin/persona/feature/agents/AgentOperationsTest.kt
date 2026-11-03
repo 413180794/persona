@@ -3,6 +3,7 @@ package persona.feature.agents
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.*
+import persona.core.domain.sort.resumeCommand
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -72,7 +73,8 @@ class AgentOperationsTest {
         assertEquals(listOf("machine/新空间"), operations.state.value.pins?.spaces)
         assertEquals(listOf("machine/新空间"), operations.state.value.mutes?.spaces)
         assertEquals("新空间", operations.state.value.project(listOf(session)).single().spaceName)
-        assertEquals("codex resume 'a'\\''b'", session.copy(agent = "codex", sessionId = "a'b").recoveryCommand())
+        // The list copies the same resume command as the chat (core:domain), with the folder.
+        assertEquals("codex resume 'a'\"'\"'b'", session.copy(agent = "codex", sessionId = "a'b", cwd = "").resumeCommand())
     }
 
     private class FakeOperations : AgentOperations {

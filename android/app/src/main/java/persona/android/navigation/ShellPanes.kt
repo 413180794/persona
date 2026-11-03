@@ -12,7 +12,10 @@ import persona.platform.phonetools.PhoneToolsRoute
  */
 internal fun isDetailDestination(key: NavKey): Boolean = when (key) {
     is ChatRoute, is InteractionRoute, is TerminalRoute, is LarkRoute, is MailRoute, is InboxItemRoute, is LarkChatRoute,
-    is SettingsPageRoute, PairingRoute, PhoneToolsRoute, MachinesRoute, is MachineDetailRoute -> true
+    is SettingsPageRoute, PairingRoute, PhoneToolsRoute, MachinesRoute, is MachineDetailRoute,
+    is EngineRoute, is ModelPurposeRoute -> true
+    // A space's page opens beside the Agents list too; a conversation opened from it goes on top of it.
+    is SpaceRoute -> true
     else -> false
 }
 

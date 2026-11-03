@@ -11,7 +11,7 @@
 | `decisions.json` | 计划、授权、通知作答和交回终端 | `PlanForm`、`PermissionForm`、`NotificationActions` |
 | `screen.json` | 新旧 hub 的终端选项、自由输入、步骤栏 | `ScreenForm`、`ScreenParser`、Go `screen.ParseDialog` |
 | `transport.json` | 断网、成功、410、提示变化和失败后的卡片处理 | `AppModel.resolve` |
-| `unified.json` | 设计新增的意见互斥、全文阅读门禁、状态门禁、原因长度和 MCP 协议缺口 | `ux.md` 3.4、5.3 |
+| `unified.json` | 设计新增的意见互斥、全文阅读门禁、状态门禁、原因长度和 MCP 协议缺口；「总是允许」只给 Claude 的卡或带 `always_label` 的卡 | `ux.md` 3.4、5.3；iOS `AgentPermissionForm` |
 
 `ios_current` 是现状断言；`unified` 是待落地的设计断言。实现统一版时，沿用现状用例中没有被明确替代的规则，并应用 `unified.json` 与 [审批策略表](../approval/README.md) 的覆盖规则。不要要求两个 profile 对冲突场景同时成立。
 

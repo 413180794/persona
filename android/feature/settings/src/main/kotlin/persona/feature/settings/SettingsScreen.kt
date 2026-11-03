@@ -48,8 +48,10 @@ fun SettingsScreen(
     onExitDemo: (() -> Unit)? = null,
     onOpen: ((SettingsPage) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
+    /** Opens a page by key (one AI use of 模型配置); without it such pages open inside this one. */
+    onNavigate: ((androidx.navigation3.runtime.NavKey) -> Unit)? = null,
 ) {
-    SettingsContent(services.bound(), initialPage, onPhoneData, onDemo, onExitDemo, onOpen, onBack)
+    SettingsContent(services.bound(), initialPage, onPhoneData, onDemo, onExitDemo, onOpen, onBack, onNavigate)
 }
 
 @Composable
@@ -61,8 +63,10 @@ private fun SettingsContent(
     onExitDemo: (() -> Unit)?,
     onOpen: ((SettingsPage) -> Unit)?,
     onBack: (() -> Unit)?,
+    onNavigate: ((androidx.navigation3.runtime.NavKey) -> Unit)?,
 ) {
     var page by rememberSaveable(initialPage) { mutableStateOf(initialPage) }
+    var purpose by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val connection by services.connection.state.collectAsState()
@@ -105,7 +109,12 @@ private fun SettingsContent(
     when (page) {
         "pair" -> PairingScreen(services.pairing, services.sessions, onReady = back,
             onDiagnostics = { open(SettingsPage.Diagnostics) }, diagnostics = services.diagnostics, onBack = back,
-            footer = { onDemo?.let { Action("没有 hub？先体验一下", onClick = it) }; deviceFeedback() })
+            footer = { onDemo?.let { Action("没有 hub？先体验一下", onClick = it) }; deviceFeedback() },
+            machines = services.machines.takeUnless { services.demo })
+        "claude" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back)
+        "models" -> purpose?.let { id -> ModelPurposePage(services.models.takeUnless { services.demo }, id, onBack = { purpose = null }) }
+            ?: ModelConfigurationPage(services.models.takeUnless { services.demo }, back,
+                onPurpose = { id -> onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute(id)) ?: run { purpose = id } })
         "ready", "notify" -> {
             val preferences: LazyListScope.() -> Unit =
                 if (page == "notify") NotificationPreferences(deviceController, paired && services.deviceSettings != null) else ({})
@@ -164,6 +173,10 @@ private fun SettingsContent(
                 item { JSectionHeader("助手") }
                 item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Assistant), title = "Persona", leadingIcon = PhIcons.Sparkle, subtitle = "在哪台机器上运行、关于我、记忆和时区", onClick = { open(SettingsPage.Assistant) }) } }
             }
+            item { JSectionHeader("AI") }
+            item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = "模型配置", leadingIcon = PhIcons.Brain, subtitle = "对话、分拣、翻译和各项 AI 功能统一选择模型", onClick = { open(SettingsPage.ModelConfig) }) } }
+            item { JSectionHeader("电脑") }
+            item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = "Claude Code 设置", leadingIcon = PhIcons.TerminalWindow, subtitle = "各台电脑上的常用选项，可以一起改", onClick = { open(SettingsPage.ClaudeCode) }) } }
             item { JSectionHeader("交给 AI 的手机数据") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.PhoneData), title = "手机数据", leadingIcon = PhIcons.AddressBook, subtitle = "通讯录、日历、照片、位置和剪贴板", onClick = { if (onOpen == null && onPhoneData != null) onPhoneData() else open(SettingsPage.PhoneData) }) } }
             item { JSectionHeader("外观") }
@@ -208,6 +221,8 @@ private fun SettingsContent(
     }
     // Register after child pages so routed back also takes precedence over the pairing wizard's local steps.
     if (onBack != null) BackHandler(page != "settings", onBack = onBack)
+    // An AI use opened inside 模型配置 (no navigation host) closes before the page does.
+    BackHandler(page == "models" && purpose != null) { purpose = null }
     BackHandler(page == "hubs-add") { page = "hubs" }
     if (confirmDisconnect) JDialog(
         onDismiss = { confirmDisconnect = false }, title = "断开配对？",
@@ -371,6 +386,16 @@ fun OnboardingScreen(services: SettingsServices, onDone: () -> Unit) {
 
 @Composable
 private fun OnboardingContent(services: SettingsServices, onDone: () -> Unit) {
+    val context = LocalContext.current
+    val records = remember(context) { ReadinessRecords(context) }
+    // The app stopped during the engine step after pairing: that step comes back before the checklist.
+    var engine by rememberSaveable { mutableStateOf(records.enginePending()?.takeIf { services.machines != null }) }
+    engine?.let { machine ->
+        EngineSelectionScreen(machine, services.sessions, services.machines, pairing = true, onDone = {
+            records.enginePending(null); engine = null
+        })
+        return
+    }
     var diagnostics by rememberSaveable { mutableStateOf(false) }
     BackHandler { if (diagnostics) diagnostics = false else onDone() }
     if (diagnostics) {

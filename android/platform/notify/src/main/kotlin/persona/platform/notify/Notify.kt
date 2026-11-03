@@ -16,6 +16,7 @@ import persona.core.contracts.SessionKey
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.InteractionCenter
 import persona.core.contracts.api.PairingService
+import persona.core.contracts.api.SessionsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -72,6 +73,7 @@ object Notify {
 internal interface NotifyDependencies {
     fun connection(): HubConnection
     fun interactions(): InteractionCenter
+    fun sessions(): SessionsRepository
     fun pairing(): PairingService
     fun notifier(): Notifier
     fun actionJournal(): NotificationActionJournal
@@ -85,6 +87,7 @@ class NotificationRuntime @Inject constructor(
     private val pairing: PairingService,
     private val journal: ExitJournal,
     private val notifier: Notifier,
+    private val fleet: FleetFeed,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var started = false
@@ -93,6 +96,7 @@ class NotificationRuntime @Inject constructor(
         if (started) return
         started = true
         journal.capture()
+        fleet.start()
         scope.launch {
             pairing.isPaired.collect { paired ->
                 if (paired) {

@@ -95,6 +95,8 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     var thread by remember(route.feedId) { mutableStateOf<LarkMessage?>(null) }
     var more by remember { mutableStateOf(false) }
     var editingDraft by remember { mutableStateOf(false) }
+    var drafting by remember { mutableStateOf(false) }
+    var handingOff by remember { mutableStateOf(false) }
     var readPosition by remember { mutableStateOf(navigation.readPosition) }
     var error by remember { mutableStateOf<String?>(null) }
     var markingDone by remember { mutableStateOf(false) }
@@ -105,7 +107,8 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     val latestConversation by rememberUpdatedState(conversation)
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val focused = LocalWindowInfo.current.isWindowFocused
-    val occluded = LocalLarkReadOccluded.current || thread != null || more || editingDraft || chatList.programmaticScroll
+    val occluded = LocalLarkReadOccluded.current || thread != null || more || editingDraft || drafting || handingOff ||
+        chatList.programmaticScroll
     val dragged by scroll.interactionSource.collectIsDraggedAsState()
     var interacted by remember(route) { mutableStateOf(false) }
     var viewport by remember { mutableStateOf(Rect.Zero) }
@@ -186,6 +189,12 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         }
     }
     thread?.let { root -> LarkThreadSheet(root, repository, onDismiss = { thread = null }) }
+    // AI 草拟 writes the reply to the item (sent with POST …/reply, confirmed first); the composer below stays the
+    // user's own words for the chat, sent as typed.
+    if (drafting && record != null) InboxDraftSheet(repository, record,
+        composers.get(ReplyTarget.Inbox(record.item.id), record.agent?.takeIf { it.state == "drafted" }?.draft.orEmpty()),
+        navigator, onDismiss = { drafting = false })
+    if (handingOff && record != null) InboxHandOffSheet(repository, record, navigator, onDismiss = { handingOff = false })
     val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
     fun refreshConversation() {
         if (refreshing) return
@@ -222,9 +231,10 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     }, bottomBar = {
         ReplyComposerField(reply, composer::update, composer::send, "回复 ${conversation.title}",
             modifier = Modifier.imePadding(), accessory = {
-                record?.let { InboxAiActions(repository, it.item.id) }
+                record?.let { InboxAiActions(onDraft = { drafting = true }, onHandOff = { handingOff = true }) }
                 record?.item?.summary?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-                if (record != null && !record.item.isDone) AgentDraftCard(record, composers, navigator, onEditingChange = { editingDraft = it })
+                if (record != null && !record.item.isDone) AgentDraftCard(record, composers, navigator, onEditingChange = { editingDraft = it },
+                    repository = repository, onEdit = { drafting = true }, keepComposer = true)
                 if (conversation.loading || refreshing || conversation.loadingNewer) JChip("正在加载消息", status = Status.Working)
                 (error ?: conversation.error)?.let { message ->
                     JNotice(message, status = Status.NeedsYou, actionLabel = "重试", onAction = { refreshConversation() })

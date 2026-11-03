@@ -541,6 +541,118 @@
         "resolution": null
       },
       "design_change": true
+    },
+    {
+      "name": "always_claude_card_offered",
+      "description": "Claude 的授权卡（agent 为 claude）可以本会话总是允许。",
+      "source": [
+        "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm",
+        "docs/protocol.md：Interaction（agent、always_label）"
+      ],
+      "input": {
+        "profile": "unified",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission",
+          "agent": "claude"
+        },
+        "operation": {
+          "action": "always"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true,
+          "always": true
+        }
+      },
+      "design_change": true
+    },
+    {
+      "name": "always_codex_card_without_label_blocked",
+      "description": "Codex 的授权卡没有 always_label 时不能总是同意。",
+      "source": [
+        "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm",
+        "docs/protocol.md：Interaction（agent、always_label）"
+      ],
+      "input": {
+        "profile": "unified",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission",
+          "agent": "codex"
+        },
+        "operation": {
+          "action": "always"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "resolution": null
+      },
+      "design_change": true
+    },
+    {
+      "name": "always_codex_card_with_label",
+      "description": "Codex 的授权卡带 always_label 时可以总是同意。",
+      "source": [
+        "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm",
+        "docs/protocol.md：Interaction（agent、always_label）"
+      ],
+      "input": {
+        "profile": "unified",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission",
+          "agent": "codex",
+          "always_label": "以后不再问以 curl -s 开头的命令"
+        },
+        "operation": {
+          "action": "always"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "resolution": {
+          "allow": true,
+          "always": true
+        }
+      },
+      "design_change": true
+    },
+    {
+      "name": "always_runtime_card_without_label_blocked",
+      "description": "Agent 运行时（DSH）的授权卡没有 always_label 时不能总是同意。",
+      "source": [
+        "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm",
+        "docs/protocol.md：Interaction（agent、always_label）"
+      ],
+      "input": {
+        "profile": "unified",
+        "interaction": {
+          "id": "example_request",
+          "machine_id": "example_machine",
+          "session_id": "example_session",
+          "kind": "permission",
+          "agent": "dsh",
+          "agent_label": "DSH"
+        },
+        "operation": {
+          "action": "always"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "resolution": null
+      },
+      "design_change": true
     }
   ]
 }

@@ -41,6 +41,10 @@ data class SettingsServices(
     val binding: kotlinx.coroutines.flow.StateFlow<SettingsBinding?>? = null,
     /** Manual candidates and route choices; null where the connection cannot change them (体验模式). */
     val endpoints: ConnectionEndpoints? = connection as? ConnectionEndpoints,
+    /** Engine choice and Claude Code settings on the paired hub's machines; null in 体验模式. */
+    val machines: MachineManagement? = null,
+    /** 设置 › 模型配置 on the paired hub; null in 体验模式. */
+    val models: ModelConfiguration? = null,
     /** The phone's hub groups (settings › hub); null where there is no real pairing (体验模式). */
     val hubs: HubGroups? = null,
     /** Pairs one more hub instead of replacing the pairing (settings › hub › 添加 hub). */

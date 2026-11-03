@@ -46,7 +46,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.WorkStep as TimelineStep
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.lines.*
-import persona.core.domain.toolDetail
+import androidx.compose.runtime.key
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okio.FileSystem
@@ -67,14 +67,25 @@ internal class ChatMarkdownCache {
 
 internal val LocalChatMarkdownCache = staticCompositionLocalOf<ChatMarkdownCache?> { null }
 
+/**
+ * Markdown in a conversation. A message's words pass [selectable] false: a long press on a message opens its menu (whose
+ * 选择 shows the text to select from), and a SelectionContainer would take the press (docs/android.md, the old App's
+ * lessons). Text without that menu (thinking, a plan, a recap) stays selectable.
+ */
 @Composable
 internal fun ChatMarkdown(text: String, id: String = text,
-    bodyStyle: TextStyle = PersonaTheme.type.body, color: Color = PersonaTheme.palette.ink) {
+    bodyStyle: TextStyle = PersonaTheme.type.body, color: Color = PersonaTheme.palette.ink, selectable: Boolean = true) {
+    if (selectable) SelectionContainer { ChatMarkdownBody(text, id, bodyStyle, color) }
+    else ChatMarkdownBody(text, id, bodyStyle, color)
+}
+
+@Composable
+private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, color: Color) {
     val cache = LocalChatMarkdownCache.current ?: remember { ChatMarkdownCache() }
     val parsed by produceState(cache.cached(id, text), id, text, cache) { value = cache.parse(id, text) }
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
-    SelectionContainer {
+    run {
         if (parsed == null) ChatLinkText(text, Modifier.fillMaxWidth(), bodyStyle.copy(color = color))
         else Markdown(parsed!!, modifier = Modifier.fillMaxWidth(),
             colors = markdownColor(text = color, codeBackground = palette.sunken,
@@ -148,15 +159,23 @@ internal fun chatImageLoader(context: android.content.Context, repository: ChatR
         })
     }.build()
 
+/**
+ * A picture of the conversation (R5): it keeps its shape while it loads, at most [ChatPictureMaxHeight] tall; a tap opens
+ * the image viewer on all the conversation's pictures, a failed one retries.
+ */
 @Composable
-internal fun ChatPicture(session: SessionKey, item: Item, loader: ImageLoader) {
+internal fun ChatPicture(session: SessionKey, item: Item, loader: ImageLoader, alignEnd: Boolean = false) {
     val image = item.image ?: return
-    val ratio = if ((image.width ?: 0) > 0 && (image.height ?: 0) > 0) image.width!!.toFloat() / image.height!! else 1f
+    val actions = LocalChatRowActions.current
+    val ratio = if ((image.width ?: 0) > 0 && (image.height ?: 0) > 0) image.width!!.toFloat() / image.height!! else null
     var failed by remember(item.id) { mutableStateOf(false) }
-    Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(PersonaTheme.shapes.controlShape).background(PersonaTheme.palette.sunken)) {
-        AsyncImage(ChatImage(session, item), "对话图片", imageLoader = loader,
-            modifier = Modifier.fillMaxSize(), onError = { failed = true }, onSuccess = { failed = false })
-        if (failed) Text("图片未能载入", Modifier.padding(Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+    var attempt by remember(item.id) { mutableIntStateOf(0) }
+    ChatPictureFrame(ratio, failed, onClick = actions?.let { rowActions -> { rowActions.openPicture(item) } },
+        onRetry = { failed = false; attempt++ }, description = "对话图片", alignEnd = alignEnd) {
+        key(attempt) {
+            AsyncImage(ChatImage(session, item), "对话图片", imageLoader = loader,
+                modifier = Modifier.fillMaxSize(), onError = { failed = true }, onSuccess = { failed = false })
+        }
     }
 }
 
@@ -180,22 +199,29 @@ internal fun ChatLineContent(
         is ChatLine.Row -> when (line.row.type) {
             "user" -> line.row.item?.item?.let {
                 MergedUserBubble(listOf(it), textUpdates, onLastLine.takeIf { line.row.id == lastUserId },
-                    images = { userImages.forEach { image -> ChatPicture(session, image, loader) } })
+                    images = { userImages.forEach { image -> ChatPicture(session, image, loader, alignEnd = true) } })
             }
             "reply" -> line.row.item?.item?.let { MessageContent(it, false, textUpdates[it.id]) }
             "thinking" -> if (!style.hideThoughts) ThoughtContent(line.row.item?.text.orEmpty(), line.id, style.collapseThoughts)
             "image" -> line.row.item?.item?.let { ChatPicture(session, it, loader) }
+            "recap" -> line.row.item?.item?.let { RecapLine(listOf(it)) }
             else -> ChatSystemLine(line.row.item?.text.orEmpty(), line.row.item?.task?.failed == true)
         }
+        is ChatLine.Recaps -> RecapLine(line.items.map { it.item })
+        is ChatLine.ApiError -> ApiErrorLine(line)
         is ChatLine.UserImages -> if (!imagesInUserBubble) UserBubbleFrame {
-            line.images.forEach { ChatPicture(session, it.item, loader) }
+            line.images.forEach { ChatPicture(session, it.item, loader, alignEnd = true) }
         }
         is ChatLine.MergedUsers -> MergedUserBubble(line.users.mapNotNull { it.item?.item }, textUpdates,
             onLastLine.takeIf { line.users.any { it.id == lastUserId } },
-            images = { userImages.forEach { image -> ChatPicture(session, image, loader) } })
+            images = { userImages.forEach { image -> ChatPicture(session, image, loader, alignEnd = true) } })
         is ChatLine.SplitHeader -> JTextButton("合并 ${line.count} 条输入", { onToggle(line.groupId) })
-        is ChatLine.Work -> WorkGroup(workSummary(line, recordedDuration), line.open,
-            { onToggle(line.id) }, running = line.live) {}
+        is ChatLine.Work -> {
+            // The running line counts its time up every second (R1); a finished one is still.
+            val now by rememberNow(1_000, enabled = line.live)
+            WorkGroup(workSummary(line, recordedDuration, now.takeIf { line.live }), line.open,
+                { onToggle(line.id) }, running = line.live) {}
+        }
         is ChatLine.Step -> WorkStep(line.step, session, loader, onFold, folding, foldErrors, onFullText, style, textUpdates, workRunning, lastWorkStep)
         is ChatLine.End -> TimelineMark("收起 ${line.count} 步",
             Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { onToggle(line.groupId) })
@@ -248,10 +274,12 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                 }
                 if (open) Column(Modifier.fillMaxWidth().padding(start = Tokens.Space.m),
                     verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                    if (diff != null) DiffView(diff, call.id)
-                    else if (todos == null) CodeText(toolDetail(call.use.item), "工具详情")
-                    // A truncated output opens in full from 原始输出 below.
-                    call.result?.item?.let { result -> if (todos == null) CodeText(result.text.orEmpty(), "输出") }
+                    if (diff != null) {
+                        toolPath(call.use.item)?.let { DiffHeader(it, diff.added, diff.removed) }
+                        DiffView(diff, call.id)
+                    } else if (todos == null) ToolInputDetail(call.use.item)
+                    // A truncated output opens in full from 原始输出 below. An edit's own result only says it worked.
+                    call.result?.item?.let { result -> if (todos == null && (diff == null || call.failed)) CodeText(result.text.orEmpty(), "输出") }
                     call.images.forEach { ChatPicture(session, it.item, loader) }
                     ToolReaderActions(call.use.item.toolInput?.toString(), call.result?.text,
                         call.result?.item?.takeIf { it.fullSize != null }?.let { result -> { onFullText(result) } })
@@ -267,9 +295,10 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
     }
 }
 
+/** A message not in the transcript yet (the outbox): no long-press menu, its own status line has the actions. */
 @Composable
 internal fun UserBubble(text: String) {
-    MergedUserBubble(listOf(Item("pending", text = text)))
+    MergedUserBubble(listOf(Item("pending", text = text)), menu = false)
 }
 
 @Composable

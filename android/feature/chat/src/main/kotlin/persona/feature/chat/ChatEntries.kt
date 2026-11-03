@@ -48,6 +48,8 @@ data class ChatAppBindings(
     val assistantManagement: AssistantManagement,
     val mainSender: MainConversationSender,
     val draftVersions: (SessionKey) -> Flow<DraftSessionVersion> = { emptyFlow() },
+    /** Read-only access to the machines (the photos sent with messages load from them); null where there is none. */
+    val files: SessionFiles? = null,
 )
 
 interface ChatWiringSource {
@@ -147,6 +149,7 @@ fun ChatDestination(
     val style = renderStyle ?: if (route.kind == persona.core.navigation.ConversationKind.Assistant ||
         metadata.any { it.key == session && it.assistant }) ChatRenderStyle.Assistant else ChatRenderStyle.Agent
     val editor = rememberChatDraftEditor(if (historyReadOnly) null else wiring, session)
+    val handToPersona = rememberHandToPersona(wiring?.mainSender?.takeIf { style != ChatRenderStyle.Assistant }, navigator)
     val composer by (editor?.composer ?: remember { MutableStateFlow<ChatComposerState?>(null) }).collectAsStateWithLifecycle()
     val error by (editor?.error ?: remember { MutableStateFlow<String?>(null) }).collectAsStateWithLifecycle()
     if (editor != null && composer == null) return
@@ -155,7 +158,8 @@ fun ChatDestination(
         onTerminal = onTerminal ?: { navigator.navigate(TerminalRoute(it.machineId, it.sessionId)) },
         chrome = ChatChromeBindings(actions = wiring?.actions.takeUnless { historyReadOnly }, connection = wiring?.connection,
             onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
-            onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) }),
+            onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) },
+            files = wiring?.files, onHandToPersona = handToPersona),
         renderStyle = style,
         embedded = embedded, showTopBar = showTopBar,
         historyReadOnly = historyReadOnly, historyFooter = historyFooter,

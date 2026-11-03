@@ -96,7 +96,9 @@ class OutboxMessageSender(
         Unit
     }
 
-    override suspend fun cancel(clientMessageId: String): Boolean = change(clientMessageId, dispatchable, OutboxState.Cancelled)
+    /** Not sent yet, or refused (by the computer, or confirmed as never delivered): nothing reached the agent. */
+    override suspend fun cancel(clientMessageId: String): Boolean =
+        change(clientMessageId, dispatchable + OutboxState.Refused, OutboxState.Cancelled)
 
     override suspend fun retry(clientMessageId: String): Boolean = change(
         clientMessageId, setOf(OutboxState.Refused, OutboxState.NeedsConfirmation), OutboxState.Queued)

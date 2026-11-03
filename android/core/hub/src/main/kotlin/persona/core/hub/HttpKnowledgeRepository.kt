@@ -12,7 +12,9 @@ import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class HttpKnowledgeRepository(
     override val scope: HubScope,
@@ -58,11 +60,26 @@ class HttpKnowledgeRepository(
         }.build(),
     )
 
-    override suspend fun detail(kind: KnowledgeKind, id: String): KnowledgeDetail {
+    override suspend fun detail(kind: KnowledgeKind, id: String): KnowledgeDetail = entry(kind, id).detail
+
+    override suspend fun entry(kind: KnowledgeKind, id: String): KnowledgeDetailResponse {
         require(id.isNotBlank() && id != "." && id != "..")
-        val detail = get<KnowledgeDetailResponse>(url("kb", kind.wire, id)).detail
-        if (detail.kind != kind.wire || detail.id != id) throw HubFailure(HubError.Protocol)
-        return detail
+        val response = get<KnowledgeDetailResponse>(url("kb", kind.wire, id))
+        if (response.detail.kind != kind.wire || response.detail.id != id) throw HubFailure(HubError.Protocol)
+        // The hub lists live, non-assistant sessions; keep that promise even if an older hub sends more.
+        return response.copy(agents = response.agents?.filter { !it.assistant && it.isLive })
+    }
+
+    override suspend fun update(kind: KnowledgeKind, id: String, update: KnowledgeUpdate) {
+        require(id.isNotBlank() && id != "." && id != "..")
+        checkScope()
+        val body = JsonCodec.encodeToString(KnowledgeUpdate.serializer(), update)
+        val request = Request.Builder().url(url("kb", kind.wire, id)).header("Authorization", "Bearer $token")
+            .put(body.toRequestBody("application/json".toMediaType())).build()
+        http.newCall(request).awaitResponse().use { response ->
+            checkScope()
+            if (!response.isSuccessful) throw HubFailure.from(response)
+        }
     }
 
     override suspend fun search(query: String): List<KnowledgeHit> {

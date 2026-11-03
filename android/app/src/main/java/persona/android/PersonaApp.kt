@@ -28,6 +28,8 @@ class PersonaApp : Application() {
     @Inject lateinit var connection: HubConnection
     @Inject lateinit var pairingService: WiredPairingService
     @Inject lateinit var platform: persona.android.platform.PlatformRuntime
+    /** The widget, the Quick Settings tile and the launcher shortcuts (platform/shortcuts). */
+    @Inject lateinit var surfaces: persona.platform.shortcuts.SurfacesRuntime
     val pairingReady = MutableStateFlow(false)
     val pairingRestoreError = MutableStateFlow(false)
 
@@ -43,6 +45,7 @@ class PersonaApp : Application() {
         Notify.install(this, connection.events)
         runtime.start()
         platform.start()
+        surfaces.start()
         restorePairing()
     }
 

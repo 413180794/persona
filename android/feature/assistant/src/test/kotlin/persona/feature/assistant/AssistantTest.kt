@@ -32,6 +32,44 @@ class AssistantTest {
         assertNull(conversationTime(null))
     }
 
+    @Test fun handoffConversationTitle() {
+        // From the old app's InboxTest: the hub names a hand-off after its first message, a <jarvis-context> tag.
+        val s = Session(machineId = "m", sessionId = "x", title = "<jarvis-context kind=\"context\" title=\"飞书 · 发布群\">(feed_id=f2)")
+        assertEquals("交给 Persona：飞书 · 发布群", s.conversationTitle())
+        val escaped = Session(machineId = "m", sessionId = "z", title = "<jarvis-context kind=\"context\" title=\"飞书 · a&quot;b &lt;c&gt; &amp;amp;\" url=\"\">")
+        assertEquals("交给 Persona：飞书 · a\"b <c> &amp;", escaped.conversationTitle())
+        assertEquals("早报", Session(machineId = "m", sessionId = "y", title = "早报").conversationTitle())
+        // No title on the tag, or an empty one: still a hand-off, not the raw tag.
+        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "a", title = "<jarvis-context kind=\"context\">").conversationTitle())
+        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "b", title = "<jarvis-context title=\"\" url=\"\">").conversationTitle())
+        // Untitled: the last message's first line, read before it is cut to 30 characters.
+        val untitled = Session(machineId = "m", sessionId = "c", title = "Claude Code",
+            lastText = "\n<jarvis-context kind=\"context\" title=\"项目 · 一个名字很长很长很长很长很长很长的项目\" url=\"\">\n正文")
+        assertEquals("交给 Persona：项目 · 一个名字很长很长很长很长很长很长的项目", untitled.conversationTitle())
+        assertEquals("a".repeat(30), Session(machineId = "m", sessionId = "d", lastText = "a".repeat(40)).conversationTitle())
+        assertNull(handoffTitle("早报 <jarvis-context"))
+    }
+
+    @Test fun theRecentGroupShowsThirtyThenTheRest() {
+        val recent = (1..45).map { Session(machineId = "m", sessionId = "s$it", title = "对话 $it") }
+        val folded = recentRows(recent, query = "", showAll = false)
+        assertEquals(recent.take(30), folded.shown)
+        assertEquals(15, folded.hidden)
+        assertEquals(recent, recentRows(recent, query = "", showAll = true).shown)
+        assertEquals("a search lists everything it finds", 0, recentRows(recent, query = "对话", showAll = false).hidden)
+        assertEquals(0, recentRows(recent.take(30), query = "", showAll = false).hidden)
+    }
+
+    @Test fun theHistoryRowMenu() {
+        fun labels(pinned: Boolean, live: Boolean, pin: Boolean, end: Boolean) =
+            conversationActions(pinned, live, if (pin) ({}) else null, {}, if (end) ({}) else null).map { it.label }
+        assertEquals(listOf("置顶", "拷贝会话 ID", "结束对话"), labels(pinned = false, live = true, pin = true, end = true))
+        assertEquals(listOf("取消置顶", "拷贝会话 ID"), labels(pinned = true, live = false, pin = true, end = true))
+        assertEquals("the main conversation has no pin", listOf("拷贝会话 ID", "结束对话"), labels(pinned = false, live = true, pin = false, end = true))
+        assertEquals(listOf("拷贝会话 ID"), labels(pinned = false, live = true, pin = false, end = false))
+        assertTrue(conversationActions(false, true, null, {}, {}).last().destructive)
+    }
+
     @Test fun firstConversationBecomesMainAndSendUsesOutbox() = runTest {
         val repository = DemoAssistantRepository()
         val main = repository.start()

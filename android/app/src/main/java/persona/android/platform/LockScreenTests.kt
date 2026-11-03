@@ -121,7 +121,7 @@ class LockScreenTests @Inject constructor(
         val content = PendingIntent.getActivity(application, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return try {
             manager.notify(event.testId, 0, NotificationCompat.Builder(application, CHANNEL)
-                .setSmallIcon(R.drawable.ic_stat).setContentTitle(event.title).setContentText(event.body)
+                .setSmallIcon(persona.core.designsystem.R.drawable.ic_stat).setContentTitle(event.title).setContentText(event.body)
                 .setContentIntent(content).setAutoCancel(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH).build())
             true

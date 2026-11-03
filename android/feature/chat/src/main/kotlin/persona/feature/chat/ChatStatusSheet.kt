@@ -20,6 +20,7 @@ import persona.core.contracts.api.OutboxMessage
 import persona.core.contracts.resultUnknown
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.core.domain.sort.resumeCommand
 
 @Composable
 internal fun ChatStatusSheet(
@@ -75,7 +76,10 @@ internal fun ChatStatusSheet(
                                 else if (session.launcher.isNullOrBlank() || session.cwd.isBlank())
                                     Text("缺少原启动器或目录，请到电脑上恢复。", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             }
-                            StatusSecondaryButton("复制恢复命令", { clipboard.setText(AnnotatedString(resumeCommand(session))) })
+                            // Only a session in a terminal resumes there (an agent runtime's in its own UI).
+                            session.resumeCommand()?.let { command ->
+                                StatusSecondaryButton("复制恢复命令", { clipboard.setText(AnnotatedString(command)) })
+                            }
                         }
                         if (state.machineOffline) {
                             Text("电脑恢复连接后会自动更新状态。", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)

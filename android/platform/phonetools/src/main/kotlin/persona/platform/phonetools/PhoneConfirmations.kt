@@ -26,7 +26,7 @@ class PhoneConfirmations(context: Context) : AutoCloseable {
         _pending.value = PendingPhoneConfirmation(token, summary)
         return try {
             if (!foreground && !showNotification()) return false
-            withTimeoutOrNull(45_000) { deferred.await() } ?: false
+            withTimeoutOrNull(TIMEOUT_MILLIS) { deferred.await() } ?: false
         } finally {
             callbacks.remove(token); manager.cancel(token, 0); _pending.value = null; answer = null
         }
@@ -55,10 +55,10 @@ class PhoneConfirmations(context: Context) : AutoCloseable {
                 return Notification.Action.Builder(null, if (allowed) "允许" else "拒绝", pendingIntent)
                     .setAuthenticationRequired(allowed).build()
             }
-            val builder = Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.phone_tool_notification)
+            val builder = Notification.Builder(context, CHANNEL).setSmallIcon(persona.core.designsystem.R.drawable.ic_stat)
                 .setContentTitle("请确认手机操作").setContentText(current.summary)
                 .setStyle(Notification.BigTextStyle().bigText(current.summary)).setVisibility(Notification.VISIBILITY_PRIVATE)
-                .setCategory(Notification.CATEGORY_RECOMMENDATION).setTimeoutAfter(45_000)
+                .setCategory(Notification.CATEGORY_RECOMMENDATION).setTimeoutAfter(TIMEOUT_MILLIS)
                 .addAction(action(false)).addAction(action(true))
             context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { intent ->
                 builder.setContentIntent(PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
@@ -68,6 +68,11 @@ class PhoneConfirmations(context: Context) : AutoCloseable {
     }
     override fun close() { answer?.complete(false); _pending.value?.let { callbacks.remove(it.token); manager.cancel(it.token, 0) } }
     companion object {
+        /**
+         * Unanswered for this long counts as no (the old Android app's 90 s). iOS waits as long as the hub does; the hub
+         * gives up on a phone after 2 minutes, so the phone's answer has to come before that.
+         */
+        internal const val TIMEOUT_MILLIS = 90_000L
         internal const val CHANNEL = "phone_tools_confirmation"
         internal val callbacks = ConcurrentHashMap<String, (Boolean) -> Unit>()
     }

@@ -87,6 +87,19 @@ class RouterTest {
         }
     }
 
+    @Test fun askPersonaFocusesTheComposerOfThePersonaTabOnly() {
+        val ask = router.parse(RouteInput.DeepLink(AskPersonaLink))
+        assertRoute(ask, AppTab.Jarvis, AssistantRoute)
+        assertTrue(ask!!.focusComposer)
+        assertFalse(router.parse(RouteInput.DeepLink("jarvis://open?target=tab&tab=jarvis"))!!.focusComposer)
+        // Elsewhere, or with another value, the parameter is ignored rather than refusing the link.
+        val agents = router.parse(RouteInput.DeepLink("jarvis://open?target=tab&tab=agents&focus=composer"))
+        assertRoute(agents, AppTab.Agents, AgentsRoute)
+        assertFalse(agents!!.focusComposer)
+        assertFalse(router.parse(RouteInput.DeepLink("jarvis://open?target=tab&tab=jarvis&focus=search"))!!.focusComposer)
+        assertNull(router.parse(RouteInput.DeepLink("$AskPersonaLink&focus=composer")))
+    }
+
     @Test fun restoredIdentityReusesExistingEntriesAndKeepsSourcesSerializable() {
         val stacks = AppTab.entries.associateWith { mutableListOf(tabRoot(it)) }
         val sources = listOf(RouteSource.InboxItem("item"), RouteSource.LarkConversation("chat"),

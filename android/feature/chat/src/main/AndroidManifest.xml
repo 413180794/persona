@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 语音输入: Android 11+ only sees the phone's speech recognizer when the app declares it wants to. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
     <application>
         <provider
             android:name="androidx.core.content.FileProvider"

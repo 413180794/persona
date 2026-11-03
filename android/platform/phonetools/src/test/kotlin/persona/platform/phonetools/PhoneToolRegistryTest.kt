@@ -7,7 +7,9 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PhoneToolRegistryTest {
-    @Test fun registrationAndStaleCallsRespectAvailabilityPermissionsAndSchemas() = runTest {
+    private fun text(result: PhoneToolResult) = result.content.single().jsonObject.getValue("text").jsonPrimitive.content
+
+    @Test fun registrationAndStaleCallsRespectAvailabilityPermissionsAndSources() = runTest {
         var online = true
         var foreground = true
         var permission = true
@@ -20,20 +22,34 @@ class PhoneToolRegistryTest {
         assertTrue(registry.all.all { it.inputSchema["type"]?.jsonPrimitive?.content == "object" })
         foreground = false
         assertFalse(registry.enabledSpecs().any { it.name == "phone_clipboard_get" || it.name == "phone_location_current" })
-        assertTrue(registry.call(PhoneToolCall("background", "phone_clipboard_get", buildJsonObject {})).isError)
+        val background = registry.call(PhoneToolCall("background", "phone_clipboard_get", buildJsonObject {}))
+        assertTrue(background.isError)
+        assertTrue(text(background).contains("open on screen"))
         sources = emptySet()
         assertTrue(registry.enabledSpecs().isEmpty())
-        assertTrue(registry.call(PhoneToolCall("disabled", "phone_device_info", buildJsonObject {})).isError)
+        val off = registry.call(PhoneToolCall("disabled", "phone_device_info", buildJsonObject {}))
+        assertTrue(off.isError)
+        assertEquals("“设备信息” 已在手机上关闭 / The device data source is turned off on the phone. " +
+            "The user can enable it in Persona › 设置 › 手机数据.", text(off))
         sources = PhoneSource.entries.toSet()
         permission = false
         assertTrue(registry.enabledSpecs().isEmpty())
+        assertTrue(text(registry.call(PhoneToolCall("denied", "phone_contacts_search", buildJsonObject {}))).startsWith("没有权限：通讯录"))
         permission = true
         online = false
         assertTrue(registry.enabledSpecs().isEmpty())
         online = true
-        assertTrue(registry.call(PhoneToolCall("bad", "phone_contacts_search", buildJsonObject { put("query", "test"); put("limit", 0) })).isError)
+        val unknown = registry.call(PhoneToolCall("unknown", "phone_teleport", buildJsonObject {}))
+        assertTrue(unknown.isError)
+        assertTrue(text(unknown).startsWith("未知工具 / Unknown tool: phone_teleport."))
+        // Out-of-range numbers and unknown arguments are no reason to refuse (iOS clamps and ignores them).
+        assertFalse(registry.call(PhoneToolCall("clamped", "phone_contacts_search",
+            buildJsonObject { put("query", "test"); put("limit", 0); put("extra", true) })).isError)
         assertFalse(registry.call(PhoneToolCall("valid", "phone_device_info", buildJsonObject {})).isError)
-        assertEquals(1, executions)
+        assertEquals(2, executions)
+        // The same call delivered twice runs once.
+        assertFalse(registry.call(PhoneToolCall("valid", "phone_device_info", buildJsonObject {})).isError)
+        assertEquals(2, executions)
     }
 
     @Test fun calendarWritesRequireOneLocalDecisionAndRecheckStateAfterApproval() = runTest {
@@ -44,7 +60,7 @@ class PhoneToolRegistryTest {
         var executions = 0
         val registry = PhoneToolRegistry({ if (enabled) setOf(PhoneSource.Calendar) else emptySet() }, { true }, { true }, { _, _ -> true },
             { summary ->
-                assertTrue(summary.contains("测试日程")); assertTrue(summary.contains("2026-11-01T10:00+08:00"))
+                assertTrue(summary.startsWith("新建日程「测试日程」\n")); assertTrue(summary.contains(" → "))
                 confirmations++
                 if (revokeOnConfirm) enabled = false
                 allow
@@ -52,7 +68,10 @@ class PhoneToolRegistryTest {
         val args = buildJsonObject {
             put("title", "测试日程"); put("start", "2026-11-01T10:00:00+08:00"); put("end", "2026-11-01T11:00:00+08:00")
         }
-        assertTrue(registry.call(PhoneToolCall("refused", "phone_calendar_create_event", args)).isError)
+        val refused = registry.call(PhoneToolCall("refused", "phone_calendar_create_event", args))
+        assertTrue(refused.isError)
+        // Word for word what the iOS app answers.
+        assertEquals("The user declined on the phone.", text(refused))
         assertEquals(0, executions)
         allow = true
         val call = PhoneToolCall("accepted", "phone_calendar_create_event", args)
@@ -64,8 +83,12 @@ class PhoneToolRegistryTest {
         assertTrue(registry.call(PhoneToolCall("revoked", call.name, args)).isError)
         assertEquals(1, executions)
         enabled = true
-        val invalid = JsonObject(args + ("end" to JsonPrimitive("2026-11-01T09:00:00+08:00")))
-        assertTrue(registry.call(PhoneToolCall("invalid", call.name, invalid)).isError)
+        // Arguments that cannot be shown are refused without asking anyone.
+        val invalid = registry.call(PhoneToolCall("invalid", call.name, JsonObject(args + ("end" to JsonPrimitive("2026-11-01T09:00:00+08:00")))))
+        assertTrue(invalid.isError)
+        assertEquals("参数错误 / Invalid argument: end must be after start", text(invalid))
+        assertEquals(3, confirmations)
+        assertTrue(text(registry.call(PhoneToolCall("untitled", call.name, JsonObject(args - "title")))).contains("title is required"))
         assertEquals(3, confirmations)
     }
 }

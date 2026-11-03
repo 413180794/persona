@@ -22,6 +22,7 @@ import persona.core.contracts.Interaction
 import persona.core.contracts.Machine
 import persona.core.contracts.Resolution
 import persona.core.designsystem.*
+import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.answer.*
 import java.time.Instant
 import kotlinx.coroutines.delay
@@ -32,6 +33,8 @@ internal fun InteractionPanel(
     onResolve: (Interaction, Resolution) -> Unit, onTerminal: (() -> Unit)?, onOverlay: (Boolean) -> Unit,
     linkVisible: Boolean = false,
     collapsed: Boolean = false, onCollapsedChange: (Boolean) -> Unit = {},
+    /** Set when the session's source does not let the phone answer: everything is shown, nothing can be sent. */
+    blockedReason: String? = null,
 ) {
     var selected by rememberSaveable { mutableStateOf(0) }
     var full by rememberSaveable { mutableStateOf(false) }
@@ -46,7 +49,7 @@ internal fun InteractionPanel(
     val body: @Composable (Boolean) -> Unit = { complete ->
         key(request.id, request.dialog?.rev, complete) {
             RequestEditor(request, machine, busyId != null, request.id in uncertainIds, complete,
-                onTerminal = onTerminal, onExpand = { full = true }, linkVisible = linkVisible) { action, value, planRead ->
+                onTerminal = onTerminal, onExpand = { full = true }, linkVisible = linkVisible, blockedReason = blockedReason) { action, value, planRead ->
                 AnswerBuilder.build(request, action, value, AnswerContext(fullPlanRead = planRead)).resolution?.let {
                     onResolve(request, it)
                 }
@@ -95,6 +98,7 @@ internal fun InteractionForm(
     items: List<persona.core.contracts.Item> = emptyList(),
     readOnly: Boolean = false,
     linkVisible: Boolean = false,
+    blockedReason: String? = null,
 ) {
     val scroll = rememberScrollState()
     var planRead by rememberSaveable(interaction.id, interaction.plan) { mutableStateOf(false) }
@@ -122,9 +126,11 @@ internal fun InteractionForm(
     }
     val expired = RequestExpiry.expired(interaction.expiresAt, now)
     LaunchedEffect(expired, uncertain) { if (expired || uncertain) password = "" }
-    val context = AnswerContext(state = if (expired || uncertain || readOnly || linkVisible) "unknown" else "pending", sending = busy,
+    // A session whose source cannot approve (blockedReason) shows the request but answers nothing, not even 交给电脑处理.
+    val blocked = blockedReason != null
+    val context = AnswerContext(state = if (expired || uncertain || readOnly || linkVisible || blocked) "unknown" else "pending", sending = busy,
         fullPlanRead = planRead)
-    val editable = !busy && !expired && !uncertain && !readOnly && !linkVisible
+    val editable = !busy && !expired && !uncertain && !readOnly && !linkVisible && !blocked
     fun act(action: AnswerAction, value: AnswerDraft = draft) {
         if (RequestExpiry.expired(interaction.expiresAt, Instant.now())) return
         val result = AnswerBuilder.build(interaction, action, value, context)
@@ -148,11 +154,18 @@ internal fun InteractionForm(
     } ?: fallback?.options.orEmpty()
     val actions: @Composable () -> Unit = {
         when (interaction.kind) {
-            "permission" -> DecisionButtons(
-                primary = JAction("允许", enabled = enabled(AnswerAction.Allow)) { act(AnswerAction.Allow) },
-                secondary = JAction("拒绝", enabled = enabled(AnswerAction.Deny)) { act(AnswerAction.Deny) },
-                more = listOf(JAction("本会话总是允许", enabled = enabled(AnswerAction.Always)) { act(AnswerAction.Always) }),
-            )
+            "permission" -> {
+                // "Always" is Claude's, or another agent's when its TUI says what it would allow (as on iOS).
+                DecisionButtons(
+                    primary = JAction("允许", enabled = enabled(AnswerAction.Allow)) { act(AnswerAction.Allow) },
+                    secondary = JAction("拒绝", enabled = enabled(AnswerAction.Deny)) { act(AnswerAction.Deny) },
+                    more = if (interaction.offersAlways) listOf(JAction(interaction.alwaysActionLabel,
+                        enabled = enabled(AnswerAction.Always)) { act(AnswerAction.Always) }) else emptyList(),
+                )
+                interaction.alwaysLabel?.takeIf { interaction.agentDisplayName != null && it.isNotBlank() }?.let {
+                    Text("总是同意会放行：$it", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                }
+            }
             "plan" -> {
                 DecisionButtons(
                     primary = JAction("批准编辑", enabled = enabled(AnswerAction.ApproveEdits)) { act(AnswerAction.ApproveEdits) },
@@ -176,11 +189,16 @@ internal fun InteractionForm(
                     enabled = editable && password.isNotEmpty())
             } else options.forEach { option ->
                 val value = draft.copy(option = option.key)
-                val display = AnswerBuilder.display(option.label)
-                DecisionOption(display.text, { act(AnswerAction.ScreenOption, value) }, detail = option.detail,
-                    recommended = display.recommended, selected = draft.option == option.key,
-                    enabled = option.kind != ScreenOptionKind.Unknown &&
-                        AnswerBuilder.build(interaction, AnswerAction.ScreenOption, value, context).allowed)
+                val allowed = option.kind != ScreenOptionKind.Unknown &&
+                    AnswerBuilder.build(interaction, AnswerAction.ScreenOption, value, context).allowed
+                // The terminal's "chat about this" hands the question back to the conversation (iOS 改在对话里说).
+                if (option.kind == ScreenOptionKind.Chat) JButton("改在对话里说", { act(AnswerAction.ScreenOption, value) },
+                    kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ChatCircle, enabled = allowed)
+                else {
+                    val display = AnswerBuilder.display(option.label)
+                    DecisionOption(numberedOption(option.key, display.text), { act(AnswerAction.ScreenOption, value) },
+                        detail = option.detail, recommended = display.recommended, selected = draft.option == option.key, enabled = allowed)
+                }
             }
         }
     }
@@ -188,6 +206,7 @@ internal fun InteractionForm(
         // In the conversation's dock the session is the page itself and the countdown is in the dock's header.
         if (full) Text(interactionSource(interaction, machine), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         interaction.requestSourceLabel()?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
+        blockedReason?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.cautionText) }
         if (uncertain) PendingBadge(PendingStatus.Unconfirmed)
         if (full || readOnly || uncertain || busy) Text(when {
             readOnly -> "已处理或已撤回，仅查看历史"
@@ -198,6 +217,10 @@ internal fun InteractionForm(
         Spacer(Modifier.height(Tokens.Space.s))
         when (interaction.kind) {
             "permission" -> {
+                // Another agent's card says why it asks, in its own words.
+                interaction.reason?.takeIf { interaction.agentDisplayName != null && it.isNotBlank() }?.let {
+                    ChatLinkText(it, style = PersonaTheme.type.callout.copy(color = PersonaTheme.palette.ink2))
+                }
                 PermissionRequestSummary(interaction)
                 interaction.toolInput?.let { input ->
                     var showInput by remember(interaction) { mutableStateOf(false) }
@@ -229,10 +252,13 @@ internal fun InteractionForm(
                     }
                 }
             } else if (question != null) {
+                // The question's header and 可多选, numbered options: as the terminal shows them (iOS QuestionForm).
+                val tags = listOfNotNull(question.header?.takeIf(String::isNotBlank), "可多选".takeIf { question.multiSelect })
+                if (tags.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) { tags.forEach { JTag(it) } }
                 ChatLinkText(question.question, style = PersonaTheme.type.body)
                 question.options.forEachIndexed { index, option ->
                     val display = AnswerBuilder.display(option.label)
-                    DecisionOption(display.text, { act(AnswerAction.PickOption, draft.copy(optionIndex = index)) },
+                    DecisionOption(numberedOption("${index + 1}", display.text), { act(AnswerAction.PickOption, draft.copy(optionIndex = index)) },
                         detail = option.description, recommended = display.recommended,
                         selected = option.label in draft.picks[question.question].orEmpty(), enabled = editable)
                 }
@@ -252,6 +278,7 @@ internal fun InteractionForm(
                     singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = editable)
                 Text("密码不会保存；收起面板或离开页面后清空", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             } else {
+                interaction.dialog?.header?.takeIf(String::isNotBlank)?.let { JTag(it) }
                 ChatLinkText(interaction.dialog?.question ?: fallback?.question ?: interaction.headline)
                 val command = interaction.requestCommand(items)
                 if (command != null) {
@@ -291,6 +318,10 @@ internal fun InteractionForm(
     }
     if (terminalHelp) TerminalHelpDialog { terminalHelp = false }
 }
+
+/** "1. 选项": the number or key the terminal shows beside an option, when it is a short one. */
+internal fun numberedOption(key: String, text: String): String =
+    if (key.length in 1..2 && key.all(Char::isLetterOrDigit) && !text.startsWith("$key.")) "$key. $text" else text
 
 @Composable
 internal fun TerminalHelpDialog(onDismiss: () -> Unit) {

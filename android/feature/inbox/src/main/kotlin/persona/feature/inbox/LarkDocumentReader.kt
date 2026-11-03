@@ -170,8 +170,9 @@ private fun LarkDocumentWebView(url: String, modifier: Modifier) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var failed by remember(url) { mutableStateOf(false) }
+    val pick = LocalInboxWebSelection.current
     val web = remember(url) {
-        WebView(context).apply {
+        InboxSelectionWebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = false
@@ -197,6 +198,8 @@ private fun LarkDocumentWebView(url: String, modifier: Modifier) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer); web.stopLoading(); web.destroy() }
     }
+    // Text picked on the page can go to Persona (the app shell supplies it; LocalInboxWebSelection).
+    SideEffect { web.onPick = pick }
     BackHandler(enabled = web.canGoBack()) { web.goBack() }
     Column(modifier) {
         if (failed) Row(verticalAlignment = Alignment.CenterVertically) {

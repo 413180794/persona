@@ -30,6 +30,13 @@ internal fun mergedSessions(stacks: GroupStacks): SessionsRepository = object : 
         s.mapped(s.repositories.sessions.sessions) { list -> list.map(::session) }
     }) { it.flatten() }
     override suspend fun refresh() = stacks.forEach { it.repositories.sessions.refresh() }
+    // A session just started (async start) and a machine whose engine changed go to their own group, in its plain ids.
+    override suspend fun adopt(session: Session) = stacks.use(GroupKeys.namespaceOf(session.machineId)) {
+        it.repositories.sessions.adopt(it.names.rawSession(session))
+    }
+    override suspend fun applyMachine(machine: Machine) = stacks.use(GroupKeys.namespaceOf(machine.id)) {
+        it.repositories.sessions.applyMachine(if (it.names.plain) machine else machine.copy(id = GroupKeys.raw(machine.id)))
+    }
 }
 
 internal fun mergedInteractions(stacks: GroupStacks): InteractionCenter = object : InteractionCenter {
@@ -108,6 +115,8 @@ internal class MergedShellServices(private val stacks: GroupStacks) {
         override suspend fun isMuted(session: Session) = of(session).isMuted(session)
         override suspend fun execute(session: Session, action: ChatAction) = of(session).execute(session, action)
         override suspend fun verify(session: Session, action: ChatAction) = of(session).verify(session, action)
+        override suspend fun editQueue(session: Session, keep: List<Int>) = of(session).editQueue(session, keep)
+        override suspend fun info(session: Session) = of(session).info(session)
     }
 
     /** Every group's dashboard in one; [plain] builds the API of one group's connection (null while it has no route). */
@@ -185,6 +194,7 @@ internal fun mergedAgentsState(list: List<GroupNames>, states: List<AgentsWiring
         override suspend fun renameSpace(machineId: String, workspaceId: String, name: String) =
             operationsFor(machineId).renameSpace(machineId, workspaceId, name)
         override suspend fun closeSession(key: SessionKey) = operationsFor(key.machineId).closeSession(key)
+        override suspend fun attachSession(key: SessionKey) = operationsFor(key.machineId).attachSession(key)
     }
     val assistant = states[chosen].operations?.assistant ?: states.firstNotNullOfOrNull { it.operations?.assistant }
     val creations = states.map { it.creation }
@@ -201,6 +211,8 @@ internal fun mergedAgentsState(list: List<GroupNames>, states: List<AgentsWiring
             return creation(index).start(request, operationId)
         }
         override suspend fun operation(operationId: String) = creation(started[operationId] ?: chosen).operation(operationId)
+        // 跟随模型配置 reads the selected group's agent.new purpose.
+        override suspend fun newAgentModel() = creations.getOrNull(chosen)?.newAgentModel()
     }
     return AgentsWiringState(
         scope = scope,

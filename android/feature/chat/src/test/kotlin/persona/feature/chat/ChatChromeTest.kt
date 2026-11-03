@@ -6,6 +6,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import persona.core.domain.sort.SessionRenamer
 import persona.core.domain.sort.SessionRename
+import persona.core.domain.sort.resumeCommand
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,9 +66,9 @@ class ChatChromeTest {
         assertEquals(listOf(peer), spaceCompanions(current, listOf(current, peer,
             peer.copy(machineId = "other"), peer.copy(spaceId = "other"), peer.copy(assistant = true))))
         assertTrue(spaceCompanions(current.copy(spaceId = null), listOf(peer.copy(spaceId = null))).isEmpty())
-        assertEquals("cd -- '/workspace/project' && codex resume 'session'", resumeCommand(current.copy(agent = "codex", sessionId = "session")))
+        assertEquals("cd -- '/workspace/project' && codex resume 'session'", current.copy(agent = "codex", sessionId = "session").resumeCommand())
         assertEquals("cd -- '/workspace/it'\"'\"'s' && claude --resume 'session'\"'\"'id'",
-            resumeCommand(current.copy(cwd = "/workspace/it's", sessionId = "session'id")))
+            current.copy(cwd = "/workspace/it's", sessionId = "session'id").resumeCommand())
         assertEquals("配对已失效", connectionTitle(ConnectionState.Revoked))
         assertNull(connectionTitle(ConnectionState.Online))
     }

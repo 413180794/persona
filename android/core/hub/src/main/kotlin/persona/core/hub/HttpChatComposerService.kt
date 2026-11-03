@@ -20,6 +20,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /** Decorates the existing transport's readiness gate without changing the outbox payload format. */
 class HttpChatComposerService internal constructor(
@@ -39,7 +40,11 @@ class HttpChatComposerService internal constructor(
             if (!isCurrent()) throw CancellationException("Pairing changed")
             val route = connection.route.value ?: throw HubFailure(HubError.NoNetwork)
             val url = route.endpoint.baseUrl().resolve(path) ?: throw HubFailure(HubError.Protocol)
-            connection.http.client.newCall(Request.Builder().url(url).header("Authorization", "Bearer $token")
+            // A file goes up in one request that the hub answers once the computer has all of it: on a slow link that
+            // takes minutes (the old app allowed 10), not the 15 s every other call gets.
+            val client = if (path.contains("/files?")) connection.http.client.newBuilder()
+                .writeTimeout(10, TimeUnit.MINUTES).readTimeout(10, TimeUnit.MINUTES).build() else connection.http.client
+            client.newCall(Request.Builder().url(url).header("Authorization", "Bearer $token")
                 .apply { headers.forEach { (name, value) -> header(name, value) } }.post(body).build()).awaitResponse().also {
                     if (!isCurrent()) {
                         it.close()

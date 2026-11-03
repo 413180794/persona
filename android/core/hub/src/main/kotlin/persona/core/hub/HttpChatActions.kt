@@ -69,6 +69,23 @@ class HttpChatActions internal constructor(
         }
     }
 
+    override suspend fun editQueue(session: Session, keep: List<Int>): List<String> {
+        // An empty keep list is meaningful (delete the only queued message), so the body is written out explicitly.
+        val body = buildJsonObject { put("keep", JsonArray(keep.map(::JsonPrimitive))) }
+        return request(api("sessions", session.machineId, session.sessionId, "queue"), "POST",
+            body.toString().toRequestBody("application/json; charset=utf-8".toMediaType())).use {
+            if (!it.isSuccessful) throw HubFailure.from(it)
+            (JsonCodec.parseToJsonElement(it.body!!.string()).jsonObject["queue"] as? JsonArray).orEmpty()
+                .mapNotNull { item -> (item as? JsonPrimitive)?.takeIf { value -> value.isString }?.content }
+        }
+    }
+
+    override suspend fun info(session: Session): SessionInfo =
+        request(api("sessions", session.machineId, session.sessionId, "info"), "GET", null).use {
+            if (!it.isSuccessful) throw HubFailure.from(it)
+            JsonCodec.decodeFromString<SessionInfo>(it.body!!.string())
+        }
+
     override suspend fun verify(session: Session, action: ChatAction): ChatActionResult = lock.withLock {
         verifyLocked(session, uncertain[session.key to kind(action)] ?: action)
     }
@@ -88,6 +105,7 @@ class HttpChatActions internal constructor(
                         (action.effort == null || current.effort == action.effort)
                     ChatAction.Close -> current == null || !current.isLive
                     ChatAction.Interrupt -> current != null && current.status in listOf("idle", "done", "offline")
+                    ChatAction.Attach -> current?.attached == true
                     else -> false
                 }
             }
@@ -112,6 +130,7 @@ class HttpChatActions internal constructor(
         is ChatAction.Mute -> "mutes"
         is ChatAction.Modes -> "modes"
         ChatAction.Close -> "close"
+        ChatAction.Attach -> "attach"
     }
     private fun api(vararg segments: String) = HttpUrl.Builder().scheme("https").host("example.com")
         .addPathSegment("api").addPathSegment("v1").apply { segments.forEach(::addPathSegment) }.build().encodedPath

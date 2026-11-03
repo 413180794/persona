@@ -5,6 +5,8 @@ import persona.core.contracts.SessionKey
 import persona.core.contracts.api.*
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class HubTerminalTransport(private val hub: OkHttpHubConnection) : TerminalTransport {
     override val connection = hub.state
@@ -38,10 +40,25 @@ class HubTerminalTransport(private val hub: OkHttpHubConnection) : TerminalTrans
         }
     }
 
+    override suspend fun keys(key: SessionKey, keys: List<String>, text: String) {
+        val (path, body) = keysRequest(key, keys, text)
+        hub.request(path, "POST", body.toString().toRequestBody("application/json".toMediaType())).close()
+    }
+
     private fun message(type: String, key: SessionKey, body: JsonObjectBuilder.() -> Unit = {}) = buildJsonObject {
         put("type", type); put("machine_id", key.machineId); put("session_id", key.sessionId); body()
     }
     private fun JsonObjectBuilder.grid(size: TerminalSize) = putJsonObject("control") {
         put("cols", size.cols); put("rows", size.rows)
+    }
+}
+
+/** `POST /api/v1/sessions/{m}/{s}/keys`: the path (segments encoded) and `{"keys":[…],"text":"…"}`. */
+internal fun keysRequest(key: SessionKey, keys: List<String>, text: String): Pair<String, JsonObject> {
+    val url = HttpUrl.Builder().scheme("https").host("example.com").addPathSegment("api").addPathSegment("v1")
+        .addPathSegment("sessions").addPathSegment(key.machineId).addPathSegment(key.sessionId).addPathSegment("keys").build()
+    return url.encodedPath to buildJsonObject {
+        putJsonArray("keys") { keys.forEach { add(it) } }
+        put("text", text)
     }
 }

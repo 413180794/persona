@@ -3,9 +3,6 @@ package persona.feature.chat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -17,6 +14,12 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.SessionRename
+import persona.core.domain.sort.canAttach
+import persona.core.domain.sort.canInterrupt
+import persona.core.domain.sort.canTerminal
+import persona.core.domain.sort.closeConfirmation
+import persona.core.domain.sort.resumeCommand
+import persona.core.domain.sort.source
 
 @Composable
 internal fun ChatHeader(
@@ -39,15 +42,19 @@ internal fun ChatHeader(
     val linkTitle = connectionTitle(connection)
     val online = connection == null || connection == ConnectionState.Online
     val canAct = state.available && online && machine?.online != false && !readOnly && session != null
-    val canRename = state.canRename && online && machine?.online != false && !readOnly && session != null
+    // Renaming changes the terminal tab and Claude's /rename: a session without a terminal has neither.
+    val canRename = state.canRename && online && machine?.online != false && !readOnly && session != null && session.canTerminal
     LaunchedEffect(session?.key, menu) { if (session != null && menu) state.loadMute(session) }
     LaunchedEffect(menu, dialog) { onOverlay(menu || dialog != null) }
     DisposableEffect(Unit) { onDispose { onOverlay(false) } }
     val line = resolveStatusLine(statusState)
     val status = line?.status ?: Status.entries.firstOrNull { it.name == session?.agentState?.name } ?: Status.Unknown
+    // While the hub is out of reach the status line under the title says so (等待网络 / 连接中… / 更新中…) instead of
+    // the session's state, which may be stale; it is back the moment the connection is.
     ChatTopBar(
         title = session?.displayTitle ?: "对话", onBack = onBack,
-        status = status, statusText = when (line?.kind) {
+        status = if (linkTitle != null) null else status,
+        statusText = linkTitle ?: when (line?.kind) {
             StatusLineKind.Ended -> if (statusState.replaced) "已换会话" else "已结束"
             StatusLineKind.MachineOffline -> "电脑离线"
             StatusLineKind.Submitting -> "回传中"
@@ -56,7 +63,9 @@ internal fun ChatHeader(
             StatusLineKind.Stopping -> "中断中"
             else -> status.label
         },
-        source = listOfNotNull(machine?.displayName, session?.cwd?.takeIf(String::isNotBlank)).joinToString(" / ").takeIf(String::isNotBlank),
+        // A session from a Codex app-server, Codex history or an agent runtime names its source first.
+        source = listOfNotNull(session?.source?.label, machine?.displayName, session?.cwd?.takeIf(String::isNotBlank))
+            .joinToString(" / ").takeIf(String::isNotBlank),
         busy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
         onTitleClick = onDetails,
     ) {
@@ -68,22 +77,34 @@ internal fun ChatHeader(
         onFiles?.let { add(JAction("文件", PhIcons.FolderSimple, onClick = it)) }
         onGit?.let { add(JAction(gitLabel, onClick = it)) }
         add(JAction("会话详情", onClick = onDetails))
+        add(JAction("会话信息", PhIcons.Info, enabled = session != null) { dialog = "info" })
+        // A Codex app-server thread the phone may join live (iOS 实时接入); joined, it can answer its approvals.
+        session?.takeIf { it.canAttach }?.let { target ->
+            add(JAction("实时接入", PhIcons.PlugsConnected, enabled = canAct) { state.run(target, ChatAction.Attach) })
+        }
         add(JAction("同伴 ${peers.size}", enabled = session != null) { dialog = "peers" })
         add(JAction("换会话", enabled = session != null) { dialog = "peers" })
         children.forEach { child -> add(JAction("子 Agent：${child.description?.takeIf(String::isNotBlank) ?: child.type}",
             enabled = onOpenSession != null) { onOpenSession?.invoke(SessionKey(session!!.machineId, child.sessionId)) }) }
         if (linkTitle != null) add(JAction(linkTitle) { dialog = "connection" })
-        add(JAction("中断", enabled = canAct && session?.status in listOf("working", "blocked")) { state.run(session!!, ChatAction.Interrupt) })
+        add(JAction("中断", enabled = canAct && session?.status in listOf("working", "blocked") && session?.canInterrupt != false) {
+            state.run(session!!, ChatAction.Interrupt)
+        })
         add(JAction("重命名", PhIcons.NotePencil, enabled = canRename) {
             title = session!!.title; tabName = session.slotName.orEmpty(); dialog = "rename"
         })
         add(JAction(if (state.muted == true) "开启通知" else "屏蔽通知", enabled = canAct && state.muted != null) {
             state.run(session!!, ChatAction.Mute(state.muted != true))
         })
-        add(JAction("复制恢复命令", enabled = session != null && !readOnly) {
-            clipboard.setText(AnnotatedString(resumeCommand(session!!))); state.notice = "已复制恢复命令"
-        })
-        add(JAction("关闭 Agent", destructive = true, enabled = canAct && session?.isLive == true) { dialog = "close" })
+        // Only a session in a terminal resumes there; a Codex thread by its own thread id.
+        session?.resumeCommand()?.let { command ->
+            add(JAction("复制恢复命令", enabled = !readOnly) {
+                clipboard.setText(AnnotatedString(command)); state.notice = "已复制恢复命令"
+            })
+        }
+        // Persona's conversations are not agents in a pane, and a session without a terminal has no pane to close.
+        if (session?.assistant != true && session?.canTerminal != false)
+            add(JAction("关闭 Agent", destructive = true, enabled = canAct && session?.isLive == true) { dialog = "close" })
     })
     val feedback = LocalAppFeedback.current
     LaunchedEffect(state.notice) {
@@ -107,9 +128,13 @@ internal fun ChatHeader(
                     JTextField(title, { title = it }, label = "会话名", singleLine = true)
                 }
             })
-        "close" -> JDialog(onDismiss = { dialog = null }, title = "关闭 Agent？",
-            text = "将退出「${session?.displayTitle.orEmpty()}」并关闭它的窗格。正在进行的工作会中断，对话记录会保留。",
-            confirm = "关闭 Agent" to { dialog = null; state.run(session!!, ChatAction.Close) }, destructive = true, confirmEnabled = canAct)
+        // The same words as the Agents list's long press and swipe (core:domain closeConfirmation).
+        "close" -> session?.let { target ->
+            val confirmation = target.closeConfirmation(machine?.displayName)
+            JDialog(onDismiss = { dialog = null }, title = confirmation.title, text = confirmation.message,
+                confirm = "关闭 Agent" to { dialog = null; state.run(target, ChatAction.Close) }, destructive = true, confirmEnabled = canAct)
+        }
+        "info" -> session?.let { target -> ChatSessionInfoSheet(target, machine, state, onDismiss = { dialog = null }) }
         "peers" -> JSheet(onDismiss = { dialog = null }, title = "同空间的 Agent") {
             if (peers.isEmpty()) JEmptyState("没有同伴会话", "这个空间暂时没有其他 Agent。")
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 400.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -128,39 +153,6 @@ internal fun ChatHeader(
         }, confirm = (if (onConnectionDetails != null) "连接诊断" else "知道了") to { dialog = null; onConnectionDetails?.invoke() }, dismiss = null)
     }
 }
-
-@Composable
-internal fun ChatModeBar(session: Session?, state: ChatChromeState, online: Boolean, onOverlay: (Boolean) -> Unit = {}) {
-    var open by remember { mutableStateOf(false) }
-    LaunchedEffect(open) { onOverlay(open) }
-    DisposableEffect(Unit) { onDispose { onOverlay(false) } }
-    val editable = session != null && state.available && online && session.isLive &&
-        (session.agent == null || session.agent == "claude") && !session.assistant
-    JIconButton(PhIcons.SlidersHorizontal, "模式", { open = true })
-    if (open) JSheet(onDismiss = { open = false }, title = "对话模式") {
-        Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (!editable) Text("当前会话暂时不能调整模式", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-            if (session != null) {
-                Text("文件权限", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-                permissionLabels.forEach { (value, label) ->
-                    DecisionOption(label, { open = false; if (value != session.permissionMode) state.run(session, ChatAction.Modes(permissionMode = value)) },
-                        selected = value == session.permissionMode, enabled = editable)
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("思考强度", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-                effortLabels.forEach { (value, label) ->
-                    JRow(label, trailing = { JRadio(value == session.effort, null) }, enabled = editable,
-                        onClick = { open = false; if (value != session.effort) state.run(session, ChatAction.Modes(effort = value)) })
-                }
-            }
-        }
-    }
-}
-
-internal fun chatModeHint(session: Session?): String? = listOfNotNull(
-    session?.permissionMode?.takeIf { it != "default" }?.let { permissionLabels[it] ?: if (it == "bypassPermissions") "全部放行" else it },
-    session?.effort?.takeIf { it != "high" }?.let { "思考${effortLabels[it] ?: it}" },
-).takeIf { it.isNotEmpty() }?.joinToString("，")
 
 /** A scrollable sheet until JActionSheet supports long action lists. */
 @Composable

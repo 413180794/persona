@@ -38,16 +38,25 @@ class HttpDeviceSettings(
     }
 
     override suspend fun devices(): PairedDevices {
-        val data = request("auth", "tokens")
+        val data = try { request("auth", "tokens") } catch (failure: HubFailure) {
+            throw when (failure.status) {
+                404 -> DeviceCredentialsUnavailable("这个 hub 版本还不支持设备凭据。")
+                503 -> DeviceCredentialsUnavailable("hub 没有数据库，不支持设备凭据。")
+                else -> failure
+            }
+        }
         val rows = when (val value = data["tokens"]) {
             JsonNull -> JsonArray(emptyList())
             is JsonArray -> value
             else -> throw HubFailure(HubError.Protocol)
         }
-        return PairedDevices(rows.map { it.jsonObject }.filter { it.text("revoked_at").isNullOrBlank() }.map { item ->
+        val all = rows.map { it.jsonObject }.map { item ->
             PairedDevice(item.getValue("id").jsonPrimitive.content, item.text("name").orEmpty(),
-                item.text("kind").orEmpty(), item.text("role").orEmpty(), item.text("last_seen"), item.text("platform"))
-        }, data.text("current")?.takeIf(String::isNotBlank))
+                item.text("kind").orEmpty(), item.text("role").orEmpty(), item.text("last_seen"), item.text("platform"),
+                item.text("created_at"), item.text("revoked_at")?.takeIf(String::isNotBlank))
+        }
+        return PairedDevices(all.filter { it.revokedAt == null }, data.text("current")?.takeIf(String::isNotBlank),
+            all.filter { it.revokedAt != null })
     }
 
     override suspend fun revoke(credentialId: String) {

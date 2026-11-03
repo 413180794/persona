@@ -169,6 +169,11 @@ internal class AgentsViewModel(
         it.session(session, AgentSessionEdit(closed = true))
         bindings?.onSessionClosed?.invoke(session.key)
     }
+    /** Still running in a terminal pane (not closed elsewhere since a confirmation opened). */
+    fun closable(session: Session): Boolean = page.value.sessions.firstOrNull { it.key == session.key }
+        ?.let { it.isLive && it.canTerminal } ?: page.value.sessions.isEmpty()
+    /** 实时接入: join a Codex app-server thread live; the list refreshes after it. */
+    fun attach(session: Session) = change("已实时接入") { it.attach(session) }
     fun stopLoop(session: Session) = sendOperation("loop:${session.key.path}") {
         if (connection.state.value != ConnectionState.Online) { _notice.value = "连上 hub 后才能停止循环"; return@sendOperation }
         sendOnce("loop:${session.key.path}", session.key, STOP_LOOP_PROMPT)
@@ -282,6 +287,10 @@ internal class AgentsViewModel(
     fun answer(interaction: Interaction, action: AnswerAction, draft: AnswerDraft = AnswerDraft(), fullPlanRead: Boolean = false) {
         val latest = interactions.pending.value.firstOrNull { it.id == interaction.id } ?: return
         if (latest != interaction || latest.expired(Instant.now()) || interaction.id in _delivery.value) return
+        // A session whose source does not approve (a Codex thread not joined live) is answered on the computer.
+        if (page.value.sessions.firstOrNull { it.key == latest.sessionKey }?.canApprove == false) {
+            _notice.value = "这个会话不允许在手机上审批"; return
+        }
         if (connection.state.value != ConnectionState.Online) { _notice.value = "连上 hub 后才能回传选择"; return }
         val result = AnswerBuilder.build(latest, action, draft, AnswerContext(fullPlanRead = fullPlanRead))
         val resolution = result.resolution ?: return

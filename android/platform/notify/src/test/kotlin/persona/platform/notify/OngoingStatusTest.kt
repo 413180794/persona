@@ -3,6 +3,7 @@ package persona.platform.notify
 import persona.core.contracts.FleetItem
 import persona.core.contracts.FleetState
 import persona.core.contracts.FleetStats
+import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ConnectionState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,37 +16,125 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OngoingStatusTest {
-    @Test fun summaryIgnoresMetricsAndPromotionFallsBackWhenUnavailableOrIdle() {
-        val fleet = FleetState(needsYou = 2, working = 3, unread = 1, items = listOf(
-            FleetItem("machine/session", title = "示例任务", detail = "允许执行？", interaction = "request"),
-        ))
-        val status = OngoingStatus.from(ConnectionState.Online, fleet)
-        assertEquals("需要你 2 · 工作中 3 · 完成未看 1", status.counts)
-        assertEquals("示例任务：允许执行？", status.detail)
-        assertEquals("💬2", status.criticalText)
-        assertFalse(status.counts.contains("示例任务"))
+    private val permission = FleetItem("mac/tests", "补齐网络层的单元测试", "MacBook · weather › tests", "permission",
+        "Bash: swift test", "ix_build", 100.0)
+    private val plan = FleetItem("studio/photos", "照片同步脚本支持 HEIC", "Mac Studio · photo-sync", "plan", "支持 HEIC", "ix_photos", 90.0)
+    private val question = FleetItem("macbook/q", "问题", "MacBook", "question", "用哪个框架？", "ix_q", 120.0)
+    private val working = FleetItem("server/orders", "排查 /orders 接口变慢", "服务器 · shop-api › perf", "working", since = 1_700.0)
+
+    @Test fun summarizesTheFleetLikeTheLiveActivity() {
+        val fleet = FleetState("needsYou", needsYou = 4, working = 2, unread = 1, items = listOf(plan, permission, question))
+        val status = OngoingStatus.from(ConnectionState.Online, fleet, details = true)
+        assertEquals("4 个需要你", status.title)
+        assertEquals("照片同步脚本支持 HEIC · 计划：支持 HEIC", status.text)
+        assertEquals("2 个在工作 · 1 个做完了", status.subText)
+        assertEquals(listOf(
+            "照片同步脚本支持 HEIC · 计划：支持 HEIC（Mac Studio · photo-sync）",
+            "补齐网络层的单元测试 · 授权：Bash: swift test（MacBook · weather › tests）",
+            "问题 · 用哪个框架？（MacBook）",
+            "+4 个",
+        ).joinToString("\n"), status.lines)
+        // The lock screen never gets names or content.
+        assertEquals("有个计划等你批准 · 2 个在工作 · 1 个做完了", status.publicText)
+        assertFalse(status.publicText!!.contains("HEIC"))
+        assertEquals("💬4", status.criticalText)
+        assertNull(status.workingSince)
+        assertNull(status.open)
+        // The first plan gets 查看 / 批准; approving needs an unlocked phone, looking does not.
+        val action = status.action!!
+        assertEquals("ix_photos", action.interaction)
+        assertEquals(SessionKey("studio", "photos"), action.session)
+        assertEquals(listOf(OngoingButton("查看", null, false), OngoingButton("批准", "approve_edits", true)), action.buttons)
+        // Stats, the island's sides and the assistant are not drawn: they must not cause redraws.
         assertEquals(status, OngoingStatus.from(ConnectionState.Online, fleet.copy(
-            stats = FleetStats(tpm = 1234), workingSince = 100.0, assistant = true,
-        )))
+            stats = FleetStats(tpm = 1234), assistant = true, left = "tpm"), details = true))
+    }
+
+    @Test fun permissionsGetDenyAndAllowAndOneAgentOpensItself() {
+        val fleet = FleetState("needsYou", needsYou = 1, items = listOf(permission))
+        val status = OngoingStatus.from(ConnectionState.Online, fleet, details = true)
+        assertEquals(SessionKey("mac", "tests"), status.open)
+        assertNull(status.subText)
+        assertEquals("补齐网络层的单元测试 · 授权：Bash: swift test（MacBook · weather › tests）", status.lines)
+        assertEquals(listOf(OngoingButton("拒绝", "deny", false), OngoingButton("允许", "allow", true)), status.action!!.buttons)
+        // A question has no buttons here: it needs the conversation.
+        assertNull(OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 1, items = listOf(question))).action)
+    }
+
+    @Test fun onlyWorkingRunsTheClockAndQuietOrEmptyFallsBackToTheConnectionLine() {
+        val fleet = FleetState("working", working = 1, items = listOf(working), workingSince = 1_700.0)
+        val status = OngoingStatus.from(ConnectionState.Online, fleet, details = true)
+        assertEquals("1 个在工作", status.title)
+        assertEquals("排查 /orders 接口变慢 · 工作中", status.text)
+        assertEquals(1_700_000L, status.workingSince)
+        assertEquals("⚙1", status.criticalText)
+        assertNull(status.action)
+        // A clock only while nothing needs the user.
+        assertNull(OngoingStatus.from(ConnectionState.Online, fleet.copy(phase = "needsYou", needsYou = 1,
+            items = listOf(permission, working))).workingSince)
+
+        val connected = OngoingStatus(ongoingTitle(ConnectionState.Online))
+        assertEquals(connected, OngoingStatus.from(ConnectionState.Online, FleetState()))
+        val done = FleetState("done", unread = 2, items = listOf(FleetItem("a/b", "博客迁移", kind = "unread", detail = "迁移完成")))
+        assertEquals("2 个做完了", OngoingStatus.from(ConnectionState.Online, done).title)
+        assertEquals("●2", OngoingStatus.from(ConnectionState.Online, done).criticalText)
+        assertEquals(connected, OngoingStatus.from(ConnectionState.Online, done, quiet = true))
+        assertFalse(connected.summary)
+        assertNull(connected.text)
+
+        // A disconnected snapshot must not look like current work or expose an old request.
+        val offline = OngoingStatus.from(ConnectionState.WaitingForNetwork, fleet)
+        assertEquals("等待网络", offline.title)
+        assertNull(offline.text)
+        assertNull(offline.lines)
+        assertNull(offline.action)
+        assertEquals(listOf(0, 0, 0), listOf(offline.needsYou, offline.working, offline.unread))
+        assertFalse(offline.shouldPromote(36, true))
+    }
+
+    @Test fun withoutLockScreenDetailsNoNameOrRequestShowsAnywhere() {
+        // A phone set to show all notification content on its lock screen shows the private version there: with
+        // 锁屏显示详情 off (the default) it says what kind of thing waits and how many, nothing more.
+        val fleet = FleetState("needsYou", needsYou = 4, working = 2, unread = 1, items = listOf(plan, permission, question))
+        val status = OngoingStatus.from(ConnectionState.Online, fleet)
+        assertEquals("4 个需要你", status.title)
+        assertEquals("有个计划等你批准", status.text)
+        assertEquals("2 个在工作 · 1 个做完了", status.subText)
+        assertEquals("有个计划等你批准\n有个授权等你\n有个提问等你回答\n+1 个", status.lines)
+        val shown = listOfNotNull(status.title, status.text, status.subText, status.lines, status.publicText).joinToString("\n")
+        for (item in fleet.items) {
+            for (secret in listOf(item.title, item.place, item.detail)) assertFalse(secret, shown.contains(secret))
+        }
+        assertFalse(shown.contains("MacBook"))
+        // The buttons stay: 查看 / 批准 say nothing about the request.
+        assertEquals(listOf(OngoingButton("查看", null, false), OngoingButton("批准", "approve_edits", true)), status.action!!.buttons)
+        // Requests of one kind are counted, not listed.
+        val two = OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 2,
+            items = listOf(permission, permission.copy(id = "studio/other", interaction = "ix_other"))))
+        assertEquals("有个授权等你", two.text)
+        assertEquals("2 个授权等你", two.lines)
+        // Working or finished only: the title and the counts say it all; the clock still runs.
+        val busy = OngoingStatus.from(ConnectionState.Online, FleetState("working", working = 2, unread = 1,
+            items = listOf(working, working.copy(id = "server/b")), workingSince = 1_700.0))
+        assertEquals("2 个在工作", busy.title)
+        assertNull(busy.text)
+        assertNull(busy.lines)
+        assertEquals("1 个做完了", busy.subText)
+        assertEquals(1_700_000L, busy.workingSince)
+        assertTrue(busy.summary)
+        // One request alone has no list to expand.
+        assertNull(OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 1, items = listOf(question))).lines)
+    }
+
+    @Test fun promotionNeedsAndroid16PermissionAndSomethingToShow() {
+        val status = OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 2, items = listOf(permission)))
         assertFalse(status.shouldPromote(35, true))
         assertFalse(status.shouldPromote(36, false))
         assertTrue(status.shouldPromote(36, true))
         assertFalse(status.shouldPromote(36, true, enabled = false))
-        assertFalse(status.shouldPromote(37, true, enabled = false))
         assertTrue(status.shouldPromote(37, true, enabled = true))
-        assertEquals(status.counts, status.lockScreenText(false))
-        assertEquals("${status.counts}\n示例任务：允许执行？", status.lockScreenText(true))
-        assertEquals(listOf(2, 3, 1), listOf(status.needsYou, status.working, status.unread))
         assertFalse(OngoingStatus.from(ConnectionState.Online, FleetState()).shouldPromote(36, true))
-        assertEquals("⚙999+", OngoingStatus.from(ConnectionState.Online, FleetState(working = 1000)).criticalText)
-        assertEquals("●1", OngoingStatus.from(ConnectionState.Online, FleetState(unread = 1)).criticalText)
-        val offline = OngoingStatus.from(ConnectionState.WaitingForNetwork, fleet)
-        assertEquals("等待网络", offline.title)
-        assertEquals("", offline.counts)
-        assertEquals("", offline.detail)
-        assertEquals("", offline.lockScreenText(true))
-        assertEquals(listOf(0, 0, 0), listOf(offline.needsYou, offline.working, offline.unread))
-        assertFalse(offline.shouldPromote(36, true))
+        assertEquals("⚙999+", OngoingStatus.from(ConnectionState.Online, FleetState("working", working = 1000)).criticalText)
     }
 
     @Test fun continuousChangesAreConflatedAndFinalValueIsDeliveredWithoutDuplicates() = runTest {

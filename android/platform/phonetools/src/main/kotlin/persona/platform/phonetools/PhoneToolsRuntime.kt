@@ -12,6 +12,9 @@ class PhoneToolsRuntime(
     private val connection: HubConnection, private val transport: PhoneToolsTransport,
     parentScope: CoroutineScope, private val simulator: Boolean = false,
     private val automation: Boolean = false,
+    /** What the hub and settings call this phone (register_phone device_name): 「厂商 型号」, as the old app sent. */
+    private val deviceName: String = listOf(android.os.Build.MANUFACTURER, android.os.Build.MODEL)
+        .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Android" },
 ) : AutoCloseable {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(parentScope.coroutineContext + job + Dispatchers.Main.immediate)
@@ -32,13 +35,13 @@ class PhoneToolsRuntime(
             connection.state.collectLatest { state ->
                 transport.discardPending()
                 if (state != ConnectionState.Online) {
-                    transport.register(deviceId, "Android", simulator, emptyList())
+                    transport.register(deviceId, deviceName, simulator, emptyList())
                     return@collectLatest
                 }
                 coroutineScope {
                     launch {
                         combine(settings.enabled, visibility, resident, permissionRevision) { _, _, _, _ -> registry.enabledSpecs() }
-                            .distinctUntilChanged().collect { specs -> transport.register(deviceId, "Android", simulator, specs) }
+                            .distinctUntilChanged().collect { specs -> transport.register(deviceId, deviceName, simulator, specs) }
                     }
                     transport.calls.collect { call ->
                         // Cancellation retracts the confirmation when a connection or active scope ends.
@@ -57,7 +60,7 @@ class PhoneToolsRuntime(
                                 val result = try { execution.await() }
                                 catch (cancelled: CancellationException) {
                                     currentCoroutineContext().ensureActive()
-                                    PhoneToolResult.text("手机工具已停用或 App 已进入后台。", true)
+                                    PhoneToolText.interrupted()
                                 }
                                 transport.result(call.callId, result)
                             } finally { watcher.cancel() }
@@ -73,7 +76,7 @@ class PhoneToolsRuntime(
     fun setResidentConnection(value: Boolean) { resident.value = value }
     fun refreshPermissions() { permissionRevision.value += 1 }
     override fun close() {
-        transport.register(deviceId, "Android", simulator, emptyList())
+        transport.register(deviceId, deviceName, simulator, emptyList())
         confirmations.close(); job.cancel(); transport.discardPending()
     }
 }

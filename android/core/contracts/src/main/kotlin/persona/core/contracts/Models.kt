@@ -49,9 +49,28 @@ data class Machine(
     @SerialName("node_version") val nodeVersion: String? = null,
     val system: MachineSystem? = null,
     @SerialName("node_mismatch") val nodeMismatch: Boolean? = null,
+    /** The terminal engine chosen for this machine (docs/engines.md); hubs send it always, herdr when never chosen. */
+    @SerialName("engine") val engine: String = "herdr",
+    /** What the node found there; empty from older hubs and nodes, and while the machine is offline. */
+    @SerialName("engines") val engines: List<DetectedEngine> = emptyList(),
+    /** The hub is installing its own jarvisd build there (重新部署). */
+    @SerialName("deploying") val deploying: Boolean = false,
+    /** Why the last 重新部署 did not work. */
+    @SerialName("deploy_error") val deployError: String? = null,
 ) {
     val displayName: String get() = name.ifEmpty { id }
 }
+
+/** One engine the node looked for on its machine (docs/protocol.md「引擎」); [name] and [note] are shown as given. */
+@KeepGeneratedSerializer
+@Serializable(with = DetectedEngineSerializer::class)
+data class DetectedEngine(
+    @SerialName("id") val id: String,
+    @SerialName("name") val name: String = "",
+    @SerialName("available") val available: Boolean = false,
+    @SerialName("version") val version: String? = null,
+    @SerialName("note") val note: String? = null,
+)
 
 /** Unified agent state computed by the hub (docs/agent-states.md). */
 enum class AgentState(val wire: String, val priority: Int) {
@@ -94,6 +113,18 @@ data class BackgroundTask(
     @WireTime @SerialName("started_at") val startedAt: String? = null,
 )
 
+/** What a session with a [Session.sourceKind] allows; a missing field is a refusal (docs/protocol.md「Codex 来源与能力」). */
+@KeepGeneratedSerializer
+@Serializable(with = SessionCapabilitiesSerializer::class)
+data class SessionCapabilities(
+    val read: Boolean = false,
+    val send: Boolean = false,
+    val interrupt: Boolean = false,
+    val approve: Boolean = false,
+    val terminal: Boolean = false,
+    val attach: Boolean = false,
+)
+
 @KeepGeneratedSerializer
 @Serializable(with = SessionSerializer::class)
 data class Session(
@@ -115,6 +146,23 @@ data class Session(
     val subagents: List<Subagent>? = null,
     @SerialName("pane_id") val paneId: String? = null,
     @SerialName("agent") val agent: String? = null,
+    /** What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md). */
+    @SerialName("agent_label") val agentLabelHint: String? = null,
+    /**
+     * Where a session comes from when it is not an agent in a terminal engine: codex_app_server, codex_history,
+     * identity_conflict, runtime (docs/protocol.md「Codex 来源与能力」). Absent on older sources, which can do everything;
+     * a session with a source can only do what [capabilities] explicitly allows (core:domain SessionSource).
+     */
+    @SerialName("source_kind") val sourceKind: String? = null,
+    /** The source's own thread id (Codex): what `codex resume` takes, never the hub's opaque session id. */
+    @SerialName("source_thread_id") val sourceThreadId: String? = null,
+    @SerialName("source_instance_id") val sourceInstanceId: String? = null,
+    @SerialName("parent_thread_id") val parentThreadId: String? = null,
+    /** Why the source only lets the phone read this session. */
+    @SerialName("read_only_reason") val readOnlyReason: String? = null,
+    val capabilities: SessionCapabilities? = null,
+    /** A Codex app-server thread the user already joined live (POST …/attach). */
+    val attached: Boolean = false,
     @SerialName("launcher") val launcher: String? = null,
     @SerialName("model") val model: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,
@@ -134,12 +182,26 @@ data class Session(
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,
     @SerialName("rev") val rev: Long? = null,
     @SerialName("suggestion") val suggestion: String? = null,
+    /** Persona is still opening its tab and starting the agent (docs/protocol.md「新建会话」); sends wait for it. */
+    @SerialName("starting") val starting: Boolean = false,
+    /** Why starting it failed; the session is offline and sends get the same error. */
+    @SerialName("start_error") val startError: String? = null,
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)
     val folderName: String get() = cwd.trimEnd('/').substringAfterLast('/')
     val displayTitle: String get() = if (title.isEmpty() || title == "Claude Code") folderName.ifEmpty { sessionId.take(8) } else title
-    val agentLabel: String get() = when (agent) { "codex" -> "Codex"; "traex" -> "TRAEX"; else -> "Claude" }
+    /** Codex in a terminal, or a thread from a Codex app-server / Codex history. */
+    val isCodex: Boolean get() = agent == "codex" || sourceKind == "codex_app_server" || sourceKind == "codex_history"
+    /** Claude Code, or an older hub that does not name the agent: what Claude-only controls (modes, /model, /clear) need. */
+    val isClaude: Boolean get() = !isCodex && (agent.isNullOrEmpty() || agent == "claude")
+    /** Who the user talks to: Claude, Codex, TRAEX, or what the hub calls a runtime's agent ("DSH"). */
+    val agentLabel: String get() = when {
+        isCodex -> "Codex"
+        agent == "traex" -> "TRAEX"
+        isClaude -> "Claude"
+        else -> agentLabelHint?.takeIf(String::isNotBlank) ?: agent.orEmpty()
+    }
     val isLive: Boolean get() = status != "offline"
     val updated: Instant? get() = parseTime(updatedAt)
 }
@@ -250,16 +312,34 @@ data class Interaction(
     @SerialName("mcp_server_name") val mcpServerName: String? = null,
     @SerialName("mcp_config_source") val mcpConfigSource: String? = null,
     val elicitation: Elicitation? = null,
+    /** Who asks when it is not Claude Code: "codex", "traex", or an agent runtime's agent ("dsh"; docs/runtimes.md). */
+    val agent: String? = null,
+    /** What the hub calls an agent this app does not know ("DSH"). */
+    @SerialName("agent_label") val agentLabelHint: String? = null,
+    /** What "always allow" allows here; a card from another agent offers it only with this (as on iOS). */
+    @SerialName("always_label") val alwaysLabel: String? = null,
+    /** Why the agent asks for this permission, in its own words (Codex). */
+    val reason: String? = null,
 ) {
     val sessionKey: SessionKey get() = SessionKey(machineId, sessionId)
+
+    /** The agent's name on a card not from Claude Code ("Codex", "TRAEX", "DSH"); null for Claude's. */
+    val agentDisplayName: String?
+        get() = when (agent) {
+            "codex" -> "Codex"
+            "traex" -> "TRAEX"
+            null, "", "claude" -> null
+            else -> agentLabelHint?.takeIf(String::isNotBlank) ?: agent
+        }
 
     /** One line for a notification or a list row. */
     val headline: String
         get() = when (kind) {
-            "question" -> questions?.firstOrNull()?.question ?: "Claude 有问题问你"
+            "question" -> questions?.firstOrNull()?.question ?: "${agentDisplayName ?: "Claude"} 有问题问你"
             "elicitation" -> "MCP 表单等你填写"
             "plan" -> "计划等你批准"
-            "permission" -> "请求使用 ${toolName ?: "工具"}" + (summary?.takeIf { it.isNotBlank() }?.let { "：$it" } ?: "")
+            "permission" -> (agentDisplayName?.let { "$it " }.orEmpty()) + "请求使用 ${toolName ?: "工具"}" +
+                (summary?.takeIf { it.isNotBlank() }?.let { "：$it" } ?: "")
             "screen" -> dialog?.question?.takeIf { it.isNotBlank() } ?: "终端里有对话框等你处理"
             else -> "需要你处理"
         }
@@ -287,8 +367,10 @@ data class Resolution(
 data class Launcher(@SerialName("name") val name: String, @SerialName("base_url") val baseUrl: String? = null, @SerialName("model") val model: String? = null)
 
 object MachineSerializer : WireSerializer<Machine>(Machine.generatedSerializer())
+object DetectedEngineSerializer : WireSerializer<DetectedEngine>(DetectedEngine.generatedSerializer())
 object LoopInfoSerializer : WireSerializer<LoopInfo>(LoopInfo.generatedSerializer())
 object BackgroundTaskSerializer : WireSerializer<BackgroundTask>(BackgroundTask.generatedSerializer())
+object SessionCapabilitiesSerializer : WireSerializer<SessionCapabilities>(SessionCapabilities.generatedSerializer())
 object SessionSerializer : WireSerializer<Session>(Session.generatedSerializer())
 object ImagePayloadSerializer : WireSerializer<ImagePayload>(ImagePayload.generatedSerializer())
 object ItemSerializer : WireSerializer<Item>(Item.generatedSerializer())

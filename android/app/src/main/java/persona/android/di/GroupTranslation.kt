@@ -129,6 +129,8 @@ internal fun ChatActions.inGroup(names: GroupNames): ChatActions {
         override suspend fun isMuted(session: Session) = source.isMuted(names.rawSession(session))
         override suspend fun execute(session: Session, action: ChatAction) = source.execute(names.rawSession(session), action)
         override suspend fun verify(session: Session, action: ChatAction) = source.verify(names.rawSession(session), action)
+        override suspend fun editQueue(session: Session, keep: List<Int>) = source.editQueue(names.rawSession(session), keep)
+        override suspend fun info(session: Session) = source.info(names.rawSession(session))
     }
 }
 
@@ -220,6 +222,7 @@ internal fun AgentOperations.inGroup(names: GroupNames): AgentOperations {
         override suspend fun renameSpace(machineId: String, workspaceId: String, name: String) =
             source.renameSpace(names.rawMachine(machineId), workspaceId, name)
         override suspend fun closeSession(key: SessionKey) = source.closeSession(names.raw(key))
+        override suspend fun attachSession(key: SessionKey) = source.attachSession(names.raw(key))
     }
 }
 
@@ -234,6 +237,7 @@ internal fun AgentCreationService.inGroup(names: GroupNames): AgentCreationServi
         override suspend fun start(request: AgentStartRequest, operationId: String) =
             result(source.start(request.copy(machineId = names.rawMachine(request.machineId)), operationId))
         override suspend fun operation(operationId: String) = result(source.operation(operationId))
+        override suspend fun newAgentModel() = source.newAgentModel()
     }
 }
 

@@ -34,6 +34,9 @@ class RealInboxRepository(
     private val lookupReply: suspend (ReplyTarget, String) -> InboxReplyReceipt? = { _, _ -> null },
     private val classifyReplyFailure: (Exception) -> OutboxState = { OutboxState.Unknown },
     private val sendThread: (suspend (String, ReplyRequest) -> JsonObject)? = null,
+    /** The ordinary sessions' outbox (the one Agents uses): 交给 AI to an Agent queues its message there. */
+    private val messageSender: MessageSender? = null,
+    // Last, so existing callers that pass it as a trailing lambda keep compiling.
     private val download: suspend (InboxAssistantTransport, LarkPart.File) -> String,
 ) : persona.feature.inbox.InboxRepository {
     override val supportsThreadOutbox: Boolean get() = sendThread != null
@@ -134,6 +137,9 @@ class RealInboxRepository(
                         agents.firstOrNull { agent -> agent.key == it.sessionKey }?.displayTitle.orEmpty(), it.summary, it.headline)
                 }
             }.collect { (agents, waiting) -> current.update { it.copy(sessions = agents, interactions = waiting) } }
+        }
+        scope.launch {
+            sessions.machines.collect { machines -> current.update { it.copy(machines = machines.associate { machine -> machine.id to machine.displayName }) } }
         }
         hubConnection?.let { hub ->
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -241,7 +247,7 @@ class RealInboxRepository(
         fun restored(text: String, clientId: String) =
             if (document.outbox.any { it.request.clientId == clientId && it.state == "target_changed" }) ReplyDraft(text)
             else ReplyDraft(text, clientId)
-        return document.drafts[target.storageKey()]?.let { restored(it.text, it.clientId) }
+        return document.drafts[target.storageKey()]?.let { restored(it.text, it.clientId).copy(ai = it.ai) }
             ?: document.outbox.lastOrNull { it.target == target && it.state != "sent" }?.let {
                 restored(it.request.text, it.request.clientId)
             }
@@ -250,9 +256,28 @@ class RealInboxRepository(
         val transport = requireTransport()
         val version = refreshLock.withLock { (target as? ReplyTarget.Inbox)?.let { versions[it.itemId] } }
         val saved = journal.update(transport.scope) {
-            it.copy(drafts = it.drafts + (target.storageKey() to InboxStoredDraft(draft.text, draft.clientId, version)))
+            it.copy(drafts = it.drafts + (target.storageKey() to InboxStoredDraft(draft.text, draft.clientId, version, draft.ai)))
         }
         if (owns(transport)) publishLocal(saved)
+    }
+
+    override suspend fun draftReply(itemId: String, instruction: String): String {
+        val transport = requireTransport()
+        val text = checkNotNull(actions) { "这个连接不能草拟回复" }.draft(itemId, instruction)
+        if (!owns(transport)) throw CancellationException("Pairing changed")
+        return text
+    }
+
+    override suspend fun handOff(request: InboxHandOffRequest) {
+        require(request.itemId.isNotBlank() && request.text.isNotBlank() && request.operationId.isNotBlank())
+        scope.coroutineContext.ensureActive()
+        val machine = request.machineId
+        val session = request.sessionId
+        // Both outboxes commit before returning and deduplicate by the operation ID, so a retry is not queued twice.
+        if (machine.isNullOrBlank() || session.isNullOrBlank()) checkNotNull(mainConversationSender) { "主对话发送服务尚未接入" }
+            .sendToMain(request.text, request.operationId)
+        else checkNotNull(messageSender) { "Agent 消息发送服务尚未接入" }
+            .send(persona.core.contracts.SessionKey(machine, session), request.text, request.operationId)
     }
 
     override suspend fun reply(target: ReplyTarget, request: ReplyRequest) = sendLock.withLock {
@@ -749,6 +774,7 @@ class RealInboxRepository(
         val pending = saved.outbox.lastOrNull {
             (it.target == target || record.feedId != null && it.feedId == record.feedId) && it.state !in setOf("sent", "target_changed")
         }
+        val draft = saved.drafts[target.storageKey()]?.takeIf { it.text.isNotBlank() }
         val status = when {
             pending?.state == "sending" -> "发送中"
             pending?.outboxState == OutboxState.WaitingForNetwork -> "连上后自动发送"
@@ -756,14 +782,16 @@ class RealInboxRepository(
             pending?.state == "verifying" -> "正在核对"
             pending?.state == "refused" -> "没有发出"
             pending != null -> "发送失败"
-            saved.drafts[target.storageKey()]?.text?.isNotBlank() == true -> "草稿 · ${saved.drafts.getValue(target.storageKey()).text}"
+            // An AI draft shows as its card; only the user's own words read 「草稿 · …」.
+            draft != null && !draft.ai -> "草稿 · ${draft.text}"
             else -> null
         }
-        return record.copy(localStatus = status, localDelivery = pending?.outboxState?.delivery)
+        return record.copy(localStatus = status, localDelivery = pending?.outboxState?.delivery, aiDraft = draft?.ai == true)
     }
     private fun record(data: JsonObject): InboxRecord {
         val lark = data.obj("lark")
         val agent = data.obj("agent")
+        val mail = data.obj("mail")
         return InboxRecord(
             InboxItem(data.string("id"), data.string("account"), data.string("kind"), data.string("title"),
                 data.optional("sender"), data.string("preview"), data.optional("summary"), data.optional("tier"),
@@ -772,6 +800,14 @@ class RealInboxRepository(
             feedId = lark?.optional("feed_id"), startPosition = lark?.number("start_position"), count = data.number("count")?.toInt() ?: 0,
             agent = agent?.let { InboxAgent(it.string("state"), it.string("draft"), it.optional("note") ?: it.string("reason"),
                 it.string("task"), it.optional("machine_id"), it.optional("session_id")) },
+            source = data.string("source"),
+            atAll = lark?.flag("at_all") == true,
+            mail = mail?.let {
+                InboxMailRef(it.string("account_id"), it.optional("mailbox") ?: "INBOX",
+                    it.array("uids").mapNotNull { uid -> (uid as? JsonPrimitive)?.longOrNull },
+                    // The hub omits direct when false: a mail the user was only copied on (or got through a list).
+                    direct = it.flag("direct"))
+            },
         )
     }
     private fun message(data: JsonObject, window: Window): LarkMessage {

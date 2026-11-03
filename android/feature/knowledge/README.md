@@ -1,6 +1,6 @@
 # Android 知识库
 
-本模块提供项目、人和群聊档案的浏览、标签筛选、全文搜索和详情。项目按重点、进行中、已完成分组，「不是项目」默认收起。搜索按实体归并命中，展示原文和路径，点击进入详情。群聊依据知识库条目的 `extra == "group"` 筛选。
+本模块提供项目、会话、人、文档、会议、日程六类档案的浏览、标签筛选、全文搜索、详情和打标。项目按重点、进行中、已完成分组，「不是项目」默认收起。搜索按条目归并命中，显示来源和清理过的命中行（查询词加粗），点击进入详情。会话包括私聊和群聊。条目页、打标和「开 Agent」见 `docs/android.md`「收件箱的 AI 草拟、交给 AI，知识库的六类、条目页和打标」。
 
 详情支持可选择的 Markdown、最近时间线、关联档案、代码目录及折叠的聊天记录。用户填写问题后点击「问 Jarvis」，档案和最近时间线以 `<jarvis-context>` 附到消息中，经 `MainConversationSender.sendToMain` 先持久入队，成功后切到 Jarvis tab，由发送器在联网后绑定主对话。入队失败保留原操作 ID，重试沿用同一标识。网络排队、结果待核对和重试由现有 data 层处理。
 
@@ -12,7 +12,7 @@ App 已依赖 `:feature:knowledge`，Jarvis 入口跳转 `KnowledgeRoute`，`Roo
 
 ## 范围与验证
 
-没有修改 `android/app/`、iOS 或 Go 服务端。contracts 和 hub 的新增内容均为新文件，settings 只增加本模块的 include 行。文档、会议、日程分类、打标和创建 Agent 不属于本次任务。
+没有修改 `android/app/`、iOS 或 Go 服务端。contracts 和 hub 的新增内容均为新文件，settings 只增加本模块的 include 行。文档、会议、日程分类、打标和「开 Agent」在 2026-11-02 的移植里补上（「开 Agent」要外壳接上新建 Agent 的预填入口，见 `knowledgeEntries` 的 `onNewAgent`）。
 
 已通过 `:feature:knowledge:assembleDebug`、`:feature:knowledge:testDebugUnitTest` 和 `:core:hub:test --tests jarvis.core.hub.KnowledgeRepositoryTest`。两条关键测试覆盖 HTTP 编码与旧响应、凭据不随重定向发送、退役配对拒绝请求、搜索取消和归并、群聊筛选、上下文封装、无主对话入队、入队后跳转与重试消息标识。
 

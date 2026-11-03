@@ -1,0 +1,80 @@
+package persona.feature.inbox
+
+import persona.core.contracts.Session
+import persona.core.domain.sort.canSend
+import java.time.Instant
+
+/** What to ask for, as iOS and the old app offer it; an empty request means the first. */
+val HANDOFF_PRESETS = listOf("总结一下，告诉我要做什么，给出建议的回复", "查清楚背景再告诉我", "直接帮我处理，回复前先问我")
+
+/** Where a mail is, so the agent can read and answer it with its own mail tools. */
+data class HandOffMail(val accountId: String, val mailbox: String, val uid: Long)
+
+/** What 交给 AI tells about an item: its title, its text (the hub's context, else who said what) and where it lives. */
+data class HandOffItem(
+    val lark: Boolean,
+    val title: String,
+    val context: String? = null,
+    val sender: String? = null,
+    val preview: String = "",
+    val feedId: String? = null,
+    val mail: HandOffMail? = null,
+)
+
+fun handOffItem(record: InboxRecord, context: String?): HandOffItem = HandOffItem(
+    lark = record.isLark, title = record.item.title, context = context, sender = record.item.sender,
+    preview = record.item.preview, feedId = record.feedId,
+    mail = record.mail?.let { mail -> mail.uids.lastOrNull()?.let { HandOffMail(mail.accountId, mail.mailbox, it) } },
+)
+
+/**
+ * The item as a `<jarvis-context>` tag the chat shows as a card, then the request (iOS `InboxHandOffSheet.message`):
+ * attributes escaped, and the item's text can't close the tag early.
+ */
+fun handoffPrompt(item: HandOffItem, ask: String = HANDOFF_PRESETS[0]): String {
+    val title = (if (item.lark) "飞书 · " else "邮件 · ") + item.title
+    var text = item.context?.takeIf { it.isNotBlank() }
+        ?: listOfNotNull(item.sender, item.preview).filter { it.isNotBlank() }.joinToString("：")
+    item.feedId?.takeIf { it.isNotBlank() }?.let { text += "\n\n（飞书会话 feedId $it，可用飞书工具读更多上下文或回复）" }
+    item.mail?.let { text += "\n\n（邮件 account_id ${it.accountId}，mailbox ${it.mailbox}，uid ${it.uid}，可用 mail_read 读全文、mail_send 回复）" }
+    return contextTag(title, text) + "\n\n" + ask.trim().ifEmpty { HANDOFF_PRESETS[0] }
+}
+
+/** `<jarvis-context kind="context" title="…" url="">`, as iOS `ContextRef.xml` writes it. */
+internal fun contextTag(title: String, text: String, url: String = ""): String {
+    fun escape(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    return "<jarvis-context kind=\"context\" title=\"${escape(title)}\" url=\"${escape(url)}\">\n" +
+        text.replace("</jarvis-context>", "") + "\n</jarvis-context>"
+}
+
+/** An agent 交给 AI can send to: the most recently active live ones, never Persona itself (iOS: eight). */
+data class HandOffTarget(val machineId: String, val sessionId: String, val title: String, val machine: String) {
+    val key: String get() = "$machineId/$sessionId"
+}
+
+/**
+ * Live, non-assistant sessions, newest first, at most [limit]. Sessions that cannot take a message (read-only ones
+ * from other runtimes) drop out once sessions say so; until then being live is the test.
+ */
+fun handOffTargets(sessions: List<Session>, machines: Map<String, String> = emptyMap(), limit: Int = 8): List<HandOffTarget> =
+    // Only agents that take messages: a read-only session (Codex 历史, an attached source without send) is left out.
+    sessions.filter { !it.assistant && it.isLive && it.canSend }
+        .sortedWith(compareByDescending<Session> { it.updated ?: Instant.EPOCH }.thenBy { it.key.path })
+        .take(limit)
+        .map { HandOffTarget(it.machineId, it.sessionId, it.displayTitle, machines[it.machineId]?.takeIf { name -> name.isNotBlank() } ?: it.machineId) }
+
+/**
+ * The operation ID of a hand-off: kept while the same text goes to the same place (a retry after an unclear failure
+ * reuses it, so the outbox does not queue it twice), new for anything else.
+ */
+class HandOffAttempt {
+    private var last: Pair<String, String>? = null
+
+    fun operationId(text: String, target: HandOffTarget?): String {
+        val key = (target?.key ?: "jarvis") + "\n" + text
+        last?.takeIf { it.first == key }?.let { return it.second }
+        return java.util.UUID.randomUUID().toString().also { last = key to it }
+    }
+
+    fun done() { last = null }
+}

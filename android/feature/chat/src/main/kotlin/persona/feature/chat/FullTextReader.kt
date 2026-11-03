@@ -22,9 +22,12 @@ import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** The opening value is retained until dismissal, independently of streaming updates. */
+/**
+ * The opening value is retained until dismissal, independently of streaming updates. [plain] sets it as body text
+ * rather than code (a message to select from: the long-press menu's 「选择」).
+ */
 @Composable
-internal fun FullTextReader(text: String, onDismiss: () -> Unit, title: String = "全文") {
+internal fun FullTextReader(text: String, onDismiss: () -> Unit, title: String = "全文", plain: Boolean = false) {
     val frozen = remember { text }
     val snapshot by produceState<ReaderSnapshot?>(null) {
         value = withContext(Dispatchers.Default) { ReaderSnapshot(frozen) }
@@ -36,12 +39,12 @@ internal fun FullTextReader(text: String, onDismiss: () -> Unit, title: String =
         if (ready == null) JPage(title, onBack = onDismiss) { padding ->
             LazyColumn(contentPadding = PaddingValues(start = pagePadding, end = pagePadding,
                 top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { item { JLoading() } }
-        } else ReaderPages(ready, Modifier.fillMaxSize().imePadding(), title, onDismiss, copy)
+        } else ReaderPages(ready, Modifier.fillMaxSize().imePadding(), title, onDismiss, copy, plain)
     }
 }
 
 @Composable
-private fun ReaderPages(snapshot: ReaderSnapshot, modifier: Modifier, title: String, onBack: () -> Unit, onCopy: () -> Unit) {
+private fun ReaderPages(snapshot: ReaderSnapshot, modifier: Modifier, title: String, onBack: () -> Unit, onCopy: () -> Unit, plain: Boolean = false) {
     var page by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var onlyPage by rememberSaveable { mutableStateOf(true) }
@@ -122,9 +125,9 @@ private fun ReaderPages(snapshot: ReaderSnapshot, modifier: Modifier, title: Str
             item {
                 SelectionContainer {
                     Text(if (body.isEmpty()) AnnotatedString("没有内容") else annotated,
-                        style = PersonaTheme.type.code, color = palette.ink, onTextLayout = { layout = it },
-                        modifier = Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape)
-                            .background(palette.sunken).padding(Tokens.Space.m))
+                        style = if (plain) PersonaTheme.type.body else PersonaTheme.type.code, color = palette.ink, onTextLayout = { layout = it },
+                        modifier = if (plain) Modifier.fillMaxWidth().padding(vertical = Tokens.Space.m)
+                            else Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape).background(palette.sunken).padding(Tokens.Space.m))
                 }
             }
         }

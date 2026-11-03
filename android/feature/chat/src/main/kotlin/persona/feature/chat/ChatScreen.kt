@@ -24,6 +24,14 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.lines.ChatLine
+import persona.core.domain.sort.READ_ONLY
+import persona.core.domain.sort.canApprove
+import persona.core.domain.sort.canChangeModes
+import persona.core.domain.sort.canInterrupt
+import persona.core.domain.sort.canSend
+import persona.core.domain.sort.canTerminal
+import persona.core.domain.sort.canTypeClaudeCommands
+import persona.feature.chat.media.ChatImageViewer
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.internal.GeneratedComponentManager
 import androidx.compose.ui.platform.LocalContext
@@ -119,6 +127,11 @@ private fun ChatPage(
             queued = null, loop = null, background = null, pendingInteractions = 0)
     } ?: lastSession
     SideEffect { if (session != null) lastSession = session }
+    // What the session's source lets the phone do (docs/protocol.md「Codex 来源与能力」). Older sessions, and one whose
+    // metadata has not arrived, can do everything: the hub and the node refuse what is not allowed anyway.
+    val canSend = session?.canSend ?: true
+    val canApprove = session?.canApprove ?: true
+    val canTerminal = session?.canTerminal ?: true
     val connection = chrome.connection?.state?.collectAsStateWithLifecycle()?.value
     val controls = remember(key, chrome.actions, renamer) { ChatChromeState(chrome.actions, scope, sessions::refresh, onBack, renamer) }
     var headerOverlay by remember { mutableStateOf(false) }
@@ -167,6 +180,15 @@ private fun ChatPage(
                 else notice = "上下文已清空，请从会话列表打开新会话"
             }
         }
+    }
+    // The new session gets 20 seconds to show up in the same pane; after that the list has to do, and /clear is offered again.
+    LaunchedEffect(clearingPane) {
+        if (clearingPane == null) return@LaunchedEffect
+        delay(CLEAR_WAIT_MILLIS)
+        clearingPane = null
+        // A /clear still waiting to go out, or refused, says so on its own bubble.
+        if (allMessages.none { it.session == key && it.text == SlashCommand.CLEAR && it.state != DeliveryState.Sent })
+            notice = "已发送 /clear，新会话出现后在列表里打开"
     }
     var sending by remember { mutableStateOf(false) }
     var overlay by remember { mutableStateOf(false) }
@@ -226,11 +248,9 @@ private fun ChatPage(
     val context = androidx.compose.ui.platform.LocalContext.current
     val loader = remember(context, repository, readingKey?.scope) { chatImageLoader(context.applicationContext, repository) }
     val markdownCache = remember { ChatMarkdownCache() }
+    // Only fresh Agent replies preload their links (ChatLinks.toPreload): paging old history never does.
     val preloadUrls by produceState(emptyList<String>(), snapshot.items) {
-        value = withContext(Dispatchers.Default) {
-            snapshot.items.asReversed().asSequence().take(20).flatMap { ChatLinks.matches(it.text.orEmpty()).asSequence() }
-                .map { it.url }.distinct().take(1).toList()
-        }
+        value = withContext(Dispatchers.Default) { ChatLinks.toPreload(snapshot.items, java.time.Instant.now()) }
     }
     LaunchedEffect(snapshot.items) {
         // Replies render each text part under "<item id>/<part index>" (MessageContent), so prewarm those keys.
@@ -246,7 +266,7 @@ private fun ChatPage(
     DisposableEffect(loader) { onDispose { loader.shutdown() } }
     var folding by remember { mutableStateOf(emptySet<String>()) }
     var foldErrors by remember { mutableStateOf(emptyMap<String, String>()) }
-    val terminal: (() -> Unit)? = if (readOnly) null else onTerminal?.let { action -> { action(key) } }
+    val terminal: (() -> Unit)? = if (readOnly || !canTerminal) null else onTerminal?.let { action -> { action(key) } }
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
 
     fun followEnd() {
@@ -273,7 +293,7 @@ private fun ChatPage(
             ?.filterIsInstance<persona.core.domain.lines.WorkItem.Folded>()?.forEach { expand(it.item.item) }
     }
     fun send(command: String? = null) {
-        if (readOnly) return
+        if (readOnly || !canSend) return
         if (sending || submittedDraft != null) return
         if (command == null && ((!composer.hasContent && linkContexts.isEmpty()) || !composer.ready)) return
         val draft = composer.draft
@@ -289,10 +309,27 @@ private fun ChatPage(
             catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 submittedDraft = null; submittedContexts = emptyList()
+                if (command == SlashCommand.CLEAR) clearingPane = null
                 if (feedback?.failure(e) != true) notice = operationFeedback(e).message
             }
             finally { sending = false }
         }
+    }
+    // Chat content (group A): the message menu, the image viewer, photos and paths in messages, the API error retry.
+    val messageMenu = remember { MessageMenuState() }
+    var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
+    val photos = remember(chrome.files, key, session?.cwd) { chrome.files?.let { AttachedPhotos(it, key.machineId, session?.cwd.orEmpty()) } }
+    // A 「继续」 already on its way counts as working: the card offers no second one.
+    val retryId = retryLine(projection.lines, session?.status == "working" || messages.isNotEmpty(), !readOnly && canSend)
+    val currentOpenPath by rememberUpdatedState(chrome.onOpenPath)
+    val currentSend by rememberUpdatedState<(String) -> Unit>({ send(it) })
+    // Stays the same object while the conversation streams: rows read it, and a new one would redraw them all.
+    val rowActions = remember(key, repository, photos, retryId, chrome.onOpenPath != null) {
+        ChatRowActions(key, fullText = { item -> repository.fullText(key, item.id) },
+            openPath = if (chrome.onOpenPath != null) ({ path -> currentOpenPath?.invoke(path) }) else null,
+            photos = photos, pictures = { chatViewerImages(key, currentItems, repository) },
+            openImages = { images, index -> viewer = ViewerRequest(images, index) },
+            menu = messageMenu, retryLineId = retryId, onRetry = { currentSend("继续") })
     }
     LaunchedEffect(allMessages, submittedDraft) {
         submittedDraft?.let { (id, draft) ->
@@ -335,7 +372,7 @@ private fun ChatPage(
         if (chrome.covered || search.visible || search.pending || search.returning || !chatList.restored || chatList.programmaticScroll || overlay || chromeOverlay || fullText != null || linkVisible || statusSheet || terminalHelp || taskPageVisible || lifecycle != Lifecycle.State.RESUMED || !snapshot.verified) return@LaunchedEffect
         snapshotFlow {
             if (list.isScrollInProgress) null else list.layoutInfo.visibleItemsInfo.mapNotNull { visible ->
-                (currentLines.getOrNull(visible.index - currentMessageCount) as? ChatLine.Row)?.row?.item?.item
+                currentLines.getOrNull(visible.index - currentMessageCount)?.seenItem()
             }.maxWithOrNull(chatItemOrder)
         }.debounce(450).distinctUntilChanged().collect { item ->
             if (item != null && (reportedSeen == null || chatItemOrder.compare(item, reportedSeen!!) > 0)) try {
@@ -349,15 +386,15 @@ private fun ChatPage(
     val replacement = if (snapshot.replaced) sessionList.firstOrNull { candidate ->
         session != null && candidate.key != key && SessionRuntimeState.map(session, listOf(candidate), true).replaced
     } else null
-    CompositionLocalProvider(LocalChatMarkdownCache provides markdownCache,
+    CompositionLocalProvider(LocalChatMarkdownCache provides markdownCache, LocalChatRowActions provides rowActions,
         LocalContentColor provides PersonaTheme.palette.ink) {
         ChatLinkHost(Modifier.fillMaxSize().background(PersonaTheme.palette.background)
             .then(if (embedded) Modifier else Modifier.imePadding()), preloadUrls, list.isScrollInProgress,
-            onContext = { if (readOnly) notice = "当前对话只读，不能附加上下文" else linkContexts = linkContexts + it },
+            onContext = { if (readOnly || !canSend) notice = "当前对话只读，不能附加上下文" else linkContexts = linkContexts + it },
             onEdit = { selection, instruction ->
-                if (readOnly) notice = "当前对话只读，不能发送修改要求"
+                if (readOnly || !canSend) notice = "当前对话只读，不能发送修改要求"
                 else {
-                    sender.send(key, linkMessage("按要求修改上面选中的内容：$instruction", listOf(selection)), selection.id)
+                    sender.send(key, ChatLinkContext.editMessage(selection, instruction), selection.id)
                     followEnd()
                 }
             }, onVisibilityChanged = { linkVisible = it; if (it) { fullText = null; statusSheet = false } }) { linkInset ->
@@ -372,7 +409,8 @@ private fun ChatPage(
                                 onFiles = chrome.onFiles, onGit = chrome.onGit, gitLabel = chrome.gitLabel,
                                 statusState = status, onDetails = { statusSheet = true },
                                 onSearch = { search.open(chatList) { timeline.freeze(currentItems, currentLive); timelineVersion++ } }) {
-                                if (!readOnly && renderStyle != ChatRenderStyle.Assistant) JIconButton(PhIcons.TerminalWindow, if (terminal != null) "打开终端" else "终端处理说明",
+                                // A session without a terminal (a Codex thread, an agent runtime's) has nothing to open or explain.
+                                if (!readOnly && canTerminal && renderStyle != ChatRenderStyle.Assistant) JIconButton(PhIcons.TerminalWindow, if (terminal != null) "打开终端" else "终端处理说明",
                                     terminal ?: { terminalHelp = true })
                             }
 
@@ -410,27 +448,39 @@ private fun ChatPage(
                                     }
                                 }
                             }, terminal, { overlay = it }, linkVisible = linkVisible,
-                                collapsed = requestCollapsed, onCollapsedChange = { requestCollapsed = it })
+                                collapsed = requestCollapsed, onCollapsedChange = { requestCollapsed = it },
+                                blockedReason = if (canApprove) null else approvalBlockedReason(session))
                             (if (feedback == null) notice ?: snapshot.error else snapshot.error)?.let {
                                 Text(it, Modifier.padding(horizontal = Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             }
+                            if (!historyReadOnly && !readOnly) ChatStartingNote(session)
                             if (historyReadOnly) historyFooter?.invoke()
                             else if (readOnly) Text("子 Agent 对话只读", Modifier.padding(Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             else {
+                                // What waits in the agent's queue sits right above the composer, while the composer shows (Agents only, as iOS).
+                                if (renderStyle != ChatRenderStyle.Assistant && (requests.isEmpty() || requestCollapsed))
+                                    ChatQueueStrip(session, chrome.actions, composer, { notice = it }, sessions::refresh)
+                                // A source that only lets the phone read says so where the typing would be.
+                                if (!canSend && session != null && (requests.isEmpty() || requestCollapsed)) ChatSourceNote(session)
                                 ChatComposer(key, composer, session?.status == "working", sending || submittedDraft != null,
-                                    canClear = clearingPane == null && session?.paneId != null && session.agent !in setOf("codex", "traex") && !session.assistant,
+                                    // /clear and /model type into Claude's pane: Claude in a terminal engine only (positive check).
+                                    canClear = clearingPane == null && session?.canTypeClaudeCommands == true,
                                     service = composerService, onSend = { send() }, onCommand = { send(it) }, onNotice = { notice = it },
                                     extraContent = linkContexts.isNotEmpty(), visible = requests.isEmpty() || requestCollapsed,
-                                    leading = if (renderStyle != ChatRenderStyle.Assistant) ({
+                                    enabled = canSend, placeholder = if (canSend) "输入消息" else READ_ONLY,
+                                    // Permission mode and effort for Claude's sessions, Persona's included; the model for Claude in a pane.
+                                    leading = if (session?.canChangeModes == true) ({
                                         ChatModeBar(session, controls, connection == null || connection == ConnectionState.Online,
-                                            onOverlay = { modeOverlay = it })
+                                            onOverlay = { modeOverlay = it }, onPickModel = { model -> send("/model $model") })
                                     }) else null,
-                                    modeHint = if (renderStyle != ChatRenderStyle.Assistant) chatModeHint(session) else null,
+                                    modeHint = if (session?.canChangeModes == true) chatModeHint(session) else null,
                                     accessory = {
+                                        if (linkContexts.isEmpty()) ComposerSuggestion(session, composer)
                                         if (linkContexts.isNotEmpty()) Column(Modifier.heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {
                                             linkContexts.forEach { ref -> ChatContextCard(ref) { linkContexts = linkContexts.filterNot { it.id == ref.id } } }
                                         }
-                                    }, onOverlay = { composerOverlay = it })
+                                    }, onOverlay = { composerOverlay = it }, agentName = session?.agentLabel ?: "Claude",
+                                    canInterrupt = session?.canInterrupt ?: true)
                             }
                         }
                     },
@@ -457,8 +507,9 @@ private fun ChatPage(
                                             onAction = if (readOnly) null else { action -> deliveryAction(message, action) },
                                             onDetails = { statusSheet = true })
                                         if (!readOnly && (deliveryState == DeliveryState.Rejected || deliveryState == DeliveryState.Refused)) {
+                                            // Edit puts the words back in the box and drops the refused bubble (nothing reached the computer).
                                             ComposerRefusalActions(message, composerService, delivery, terminal,
-                                                edit = { composer.restoreMessage(message.text) }, notice = { notice = it })
+                                                edit = { deliveryAction(message, DeliveryAction.Edit) }, notice = { notice = it })
                                         }
                                     }
                                 }
@@ -515,6 +566,18 @@ private fun ChatPage(
                 recovery = recovery, machine = machine, draftSaveError = statusBindings.draftSaveError, readOnly = readOnly,
                 onOpenSession = chrome.onOpenSession?.let { open -> { target -> statusSheet = false; open(target) } })
             fullText?.let { FullTextReader(it, onDismiss = { fullText = null }) }
+            val menuTitle = session?.displayTitle ?: "对话"
+            MessageMenuSheet(messageMenu, messageMenuWrites(readOnly, session),
+                onQuote = composer::quote, onEdit = composer::edit,
+                onContext = { text -> linkContexts = linkContexts + messageContext(menuTitle, text); notice = "已作为上下文，随下一条消息发送" },
+                onHandToPersona = chrome.onHandToPersona?.takeIf { renderStyle != ChatRenderStyle.Assistant }
+                    ?.let { hand -> { text: String -> hand(handoffMessage(menuTitle, text)) } },
+                onNotice = { notice = it })
+            viewer?.let { request ->
+                ChatImageViewer(request.images, request.index, onDismiss = { viewer = null },
+                    onEdited = if (readOnly) null else ({ attachment -> composer.beginEdit(); composer.attachments += attachment }),
+                    photoLimitReached = composer.attachments.count { it.image } >= 4)
+            }
         }
     }
 }

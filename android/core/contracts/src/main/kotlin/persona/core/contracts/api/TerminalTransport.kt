@@ -24,4 +24,12 @@ interface TerminalTransport {
     fun input(key: SessionKey, text: String = "", size: TerminalSize? = null,
               scroll: Int = 0, at: TerminalCellPosition? = null, click: TerminalCellPosition? = null): Boolean
     suspend fun screen(key: SessionKey): TerminalScreen
+
+    /**
+     * The key endpoint every hub and node has (`POST …/keys`): [text] first, then [keys] by herdr's names. What the
+     * phone types while it only watches the pane or reads its screen goes here, not into the stream. Throws when the
+     * hub did not take it.
+     */
+    suspend fun keys(key: SessionKey, keys: List<String>, text: String = ""): Unit =
+        throw UnsupportedOperationException("This terminal transport cannot send keys")
 }

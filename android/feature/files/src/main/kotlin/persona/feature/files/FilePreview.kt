@@ -5,111 +5,139 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import persona.core.contracts.api.SessionFileContent
+import persona.core.contracts.api.SessionFiles
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Base64
 
+/**
+ * A file or a working-tree diff over the browser: Markdown rendered (or its source), code and text with line numbers,
+ * images to zoom, PDFs page by page, anything else described. ⋯ copies, shares and reloads.
+ */
 @Composable
-internal fun FilePreview(state: FilesState, controller: FilesController, insert: (String) -> Unit, back: () -> Unit) {
+internal fun FilePreview(state: FilesState, controller: FilesController, images: MarkdownImages, insert: (String) -> Unit, back: () -> Unit) {
     val selection = state.selection ?: return
     val context = LocalContext.current
+    val feedback = LocalAppFeedback.current
+    val scope = rememberCoroutineScope()
     var menu by remember(selection) { mutableStateOf(false) }
-    var expanded by remember(selection) { mutableStateOf(false) }
+    val file = state.content
+    val markdown = file?.text != null && FilesPaths.isMarkdown(file.name)
+    var source by rememberSaveable(selection.toString()) { mutableStateOf(false) }
     val path = when (selection) {
-        is FileSelection.File -> state.content?.path ?: selection.path
+        is FileSelection.File -> file?.path?.ifEmpty { null } ?: selection.path
         is FileSelection.Diff -> joinRemotePath(state.git?.root ?: controller.cwd, selection.file.path)
-        is FileSelection.Commit -> null
+        else -> null
     }
-    val title = path?.substringAfterLast('/') ?: state.commit?.commit?.subject ?: "提交详情"
+    val title = when (selection) {
+        is FileSelection.Diff -> selection.file.name
+        else -> file?.name?.ifEmpty { null } ?: path?.let(FilesPaths::name) ?: "文件"
+    }
     JPage(title, subtitle = path, onBack = back, actions = {
         if (path != null) JTextButton("插入路径", { insert(path) })
         JIconButton(PhIcons.DotsThree, "预览选项", { menu = true })
     }) { padding ->
+        val diff = state.diff
+        val error = state.previewError
         val header: LazyListScope.() -> Unit = {
             if (selection is FileSelection.Diff && selection.file.staged && selection.file.unstaged) item("staging") {
                 JSegmented(listOf(JSegment("未暂存"), JSegment("已暂存")), if (selection.staged) 1 else 0,
-                    { controller.preview(selection.copy(staged = it == 1)) }, Modifier.padding(16.dp))
+                    { controller.preview(selection.copy(staged = it == 1)) }, Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s))
             }
-            state.content?.let { file -> item("size") { Notice("${fileSize(file.size)}${if (file.truncated) "，内容过长，只显示前面部分" else ""}") } }
-            if (state.diff?.truncated == true || state.commit?.truncated == true) item("truncated") { Notice("改动较多，只显示前面部分。") }
-            state.commit?.let { commit ->
-                item("commit") {
-                    Notice("${commit.commit.short}，${commit.commit.author}，修改了 ${commit.files.size} 个文件")
-                    commit.commit.body?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, Modifier.padding(horizontal = 16.dp), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink,
-                            maxLines = if (expanded) 8 else 2, overflow = TextOverflow.Ellipsis)
-                        JTextButton(if (expanded) "收起说明" else "展开说明", { expanded = !expanded })
-                    }
-                }
-            }
+            if (file != null) item("size") { FileMeta(file.size, file.truncated) }
+            if (diff?.truncated == true) item("truncated") { Notice("改动太大，只显示了前 512 KB") }
         }
-        val file = state.content
-        val diff = state.diff
-        val commit = state.commit
         when {
-            state.previewError -> LazyColumn(contentPadding = padding) { item { RetryState("无法打开预览", "文件可能已移动，或连接暂时不可用。") { controller.preview(selection) } } }
-            file != null -> key(file.path) {
-                when {
-                    file.isDir -> LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
-                        header()
-                        if (file.entries.isEmpty()) item { JEmptyState("空文件夹", "这里没有文件。") }
-                        items(file.entries, key = { it }, contentType = { "directory" }) { entry ->
-                            JRow(entry, leadingIcon = PhIcons.File, onClick = { controller.preview(FileSelection.File(joinRemotePath(file.path, entry))) })
-                        }
-                    }
-                    file.mime?.startsWith("image/") == true && file.data != null -> Column(Modifier.fillMaxSize().padding(padding)) {
-                        Notice("${fileSize(file.size)}${if (file.truncated) "，内容过长，只显示前面部分" else ""}")
-                        FileImage(file, Modifier.weight(1f))
-                    }
-                    file.text != null || file.size == 0L -> FileText(file.text.orEmpty(), contentPadding = padding, header = header)
-                    else -> LazyColumn(contentPadding = padding) {
-                        header()
-                        item { JEmptyState("无法预览这个文件", "${file.mime ?: "二进制文件"}，可以把路径插入对话。") }
-                    }
-                }
+            error != null -> LazyColumn(contentPadding = padding) {
+                item { RetryState(if (selection is FileSelection.Diff) "读不到改动" else "打不开这个文件", error, controller::reload) }
             }
+            file != null -> key(file.path) { FileBody(file, markdown && !source, padding, header, controller, images) }
             diff != null -> key(selection) {
                 if (diff.diff.isBlank()) LazyColumn(contentPadding = padding) {
-                    header(); item { JEmptyState("没有可显示的文本差异", "文件可能是二进制，或改动已经更新。") }
+                    header(); item { JEmptyState("没有文本改动", "可能是二进制文件、只改了权限，或者改动已被撤销。") }
                 } else FileText(diff.diff, diff = true, contentPadding = padding, header = header)
-            }
-            commit != null -> {
-                if (commit.diff.isBlank()) LazyColumn(contentPadding = padding) {
-                    header(); item { JEmptyState("没有文本差异", "这个提交没有可显示的文本改动。") }
-                } else FileText(commit.diff, diff = true, contentPadding = padding, header = header)
             }
             else -> LazyColumn(contentPadding = padding) { item { Loading() } }
         }
     }
     if (menu) JActionSheet(buildList {
-        if (path != null) add(JAction("拷贝路径") { copyPath(context, path) })
-        val text = state.content?.text ?: state.diff?.diff ?: state.commit?.diff
-        if (text != null) add(JAction("拷贝内容") { copyPath(context, text) })
-        add(JAction("刷新") { controller.preview(selection) })
-    }, { menu = false }, "预览选项")
+        if (markdown) add(JAction(if (source) "渲染 Markdown" else "查看源文件", if (source) PhIcons.FileText else PhIcons.Code) { source = !source })
+        if (path != null) add(JAction("拷贝路径", PhIcons.Copy) { copyText(context, path, feedback, "已拷贝路径") })
+        file?.text?.let { text -> add(JAction("拷贝内容", PhIcons.Copy) { copyText(context, text, feedback, "已拷贝内容") }) }
+        state.diff?.diff?.takeIf { it.isNotEmpty() }?.let { text -> add(JAction("拷贝 diff", PhIcons.Copy) { copyText(context, text, feedback, "已拷贝 diff") }) }
+        if (file != null && FileShare.canShare(file)) add(JAction("分享", PhIcons.ShareNetwork) {
+            scope.launch {
+                val shared = runCatching { FileShare.share(context, file) }.getOrDefault(false)
+                if (!shared) feedback?.notice("这个文件分享不了")
+            }
+        })
+        add(JAction("刷新", PhIcons.ArrowClockwise, separatorBefore = true) { controller.reload() })
+    }, { menu = false }, title)
+}
+
+@Composable
+private fun FileBody(file: SessionFileContent, rendered: Boolean, padding: PaddingValues, header: LazyListScope.() -> Unit,
+    controller: FilesController, images: MarkdownImages) {
+    val text = file.text
+    val mime = file.mime.orEmpty()
+    when {
+        text != null && rendered -> FileMarkdown(text, FilesPaths.parent(file.path) ?: controller.cwd, padding,
+            onOpenPath = { controller.push(FileSelection.File(it)) }, loadImage = images::load, header = header)
+        text != null || file.size == 0L -> FileText(text.orEmpty(), contentPadding = padding, header = header)
+        file.data != null && mime.startsWith("image/") -> Column(Modifier.fillMaxSize().padding(padding)) {
+            FileMeta(file.size, file.truncated)
+            FileImage(file, Modifier.weight(1f))
+        }
+        file.data != null && mime.substringBefore(';').trim() == "application/pdf" -> PdfPages(file, padding, header)
+        else -> LazyColumn(contentPadding = padding) {
+            header()
+            item { JEmptyState("无法预览", "${mime.ifEmpty { "二进制文件" }}，${fileSize(file.size)}。可以插入路径或分享。") }
+        }
+    }
+}
+
+/** The size line above a file's content: the size, and that only the first 2 MB came when the file is bigger. */
+@Composable
+internal fun FileMeta(size: Long, truncated: Boolean) {
+    Notice(fileSize(size) + if (truncated) "，只显示前 2 MB" else "")
+}
+
+/** Reads images a Markdown file names from the same machine (the hub's file read, base64 bytes). */
+internal class MarkdownImages(private val api: SessionFiles, private val machineId: String, private val cwd: String) {
+    private val cache = object : LinkedHashMap<String, ByteArray>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?) = size > 12
+    }
+
+    suspend fun load(path: String): ByteArray? {
+        synchronized(cache) { cache[path] }?.let { return it }
+        val file = runCatching { api.file(machineId, cwd, path) }.getOrNull() ?: return null
+        val mime = file.mime.orEmpty()
+        if (file.data == null || !mime.startsWith("image/") || mime.startsWith("image/svg")) return null
+        val bytes = withContext(Dispatchers.Default) { runCatching { Base64.getMimeDecoder().decode(file.data) }.getOrNull() } ?: return null
+        synchronized(cache) { cache[path] = bytes }
+        return bytes
+    }
 }
 
 @Composable
 private fun FileImage(file: SessionFileContent, modifier: Modifier) {
     val bytes by produceState<ByteArray?>(null, file.data) {
         value = withContext(Dispatchers.Default) {
-            try { Base64.getDecoder().decode(file.data) } catch (_: IllegalArgumentException) { byteArrayOf() }
+            try { Base64.getMimeDecoder().decode(file.data) } catch (_: IllegalArgumentException) { byteArrayOf() }
         }
     }
     var scale by remember(file.path) { mutableFloatStateOf(1f) }

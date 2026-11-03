@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launcher icon's background (app/src/main/res/values/colors.xml launcher_bg): the shortcut icons sit on it. -->
+    <color name="shortcut_background">#FF1B110D</color>
+</resources>

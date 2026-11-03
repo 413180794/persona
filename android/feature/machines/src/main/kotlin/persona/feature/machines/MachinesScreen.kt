@@ -17,11 +17,19 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.*
 
 @Composable
-internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, navigator: Navigator) {
+internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, navigator: Navigator, actions: MachineActionsViewModel? = null) {
     val state by model.state.collectAsStateWithLifecycle()
     val machines by model.sessions.machines.collectAsStateWithLifecycle()
     val sessions by model.sessions.sessions.collectAsStateWithLifecycle()
     val machine = machines.firstOrNull { it.id == machineId }
+    val acting = actions?.state?.collectAsStateWithLifecycle()?.value ?: MachineActionsState()
+    // An offline machine has no launchers; they are read again when it comes online (after 重新连接).
+    if (actions != null && machineId != null) LaunchedEffect(actions, machineId, machine?.online) {
+        actions.loadLaunchers(machineId, machine?.online == true)
+    }
+    val deployLine: @Composable (Machine?) -> Unit = { info ->
+        if (info != null && showsDeploy(info)) MachineDeployLine(info, info.id in acting.deployStarting, actions?.let { { it.deploy(info.id) } })
+    }
     var selection by rememberSaveable(machineId, state.range) { mutableStateOf<Long?>(null) }
     val metrics = state.dashboard?.machines.orEmpty().associateBy { it.machineId }
     val ids = (machines.map { it.id } + metrics.keys).distinct()
@@ -43,7 +51,7 @@ internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, naviga
             items(ids, key = { it }, contentType = { "machine" }) { id ->
                 val info = machines.firstOrNull { it.id == id }
                 val metric = metrics[id] ?: MachineMetrics(id, info?.online ?: false, info?.system)
-                MachineCard(info, metric, machineSessions(sessions, id), state.now, state.dashboard?.step ?: 60) {
+                MachineCard(info, metric, machineSessions(sessions, id), state.now, state.dashboard?.step ?: 60, deploy = deployLine) {
                     navigator.navigate(MachineDetailRoute(id))
                 }
             }
@@ -52,7 +60,10 @@ internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, naviga
             val system = metric.system ?: machine?.system
             val current = metric.current(state.now)
             val agents = machineSessions(sessions, machineId)
-            item("machine") { MachineCard(machine, metric, agents, state.now, state.history?.step ?: state.range.step) }
+            item("machine") { MachineCard(machine, metric, agents, state.now, state.history?.step ?: state.range.step, deploy = deployLine) }
+            if (machine == null && machines.isNotEmpty()) item("gone") { JNotice("hub 上没有这台机器了。") }
+            if (machine != null && actions != null) machineControls(machine, acting.reconnecting,
+                onEngine = { navigator.navigate(EngineRoute(machine.id)) }, onReconnect = { actions.reconnect(machine.id) })
             item("now") {
                 JSectionHeader("现在", trailing = MetricFormat.uptime(system?.bootTime, state.now)?.takeIf { metric.online }?.let { "已运行 $it" })
             }
@@ -76,12 +87,18 @@ internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, naviga
                 Text("长按曲线查看同一时刻的数值", Modifier.padding(vertical = 8.dp), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
             }
             if (selection != null) item("selection") { JTextButton("回到现在", { selection = null }) }
-            val chartKinds = listOf(listOf(MetricKind.Cpu), listOf(MetricKind.Memory), listOf(MetricKind.Rx, MetricKind.Tx), listOf(MetricKind.Load))
+            // Disk history is in bytes; the chart reads it against the disk's size, so only when that is known.
+            val diskTotal = (current?.diskTotal ?: metric.latest?.diskTotal)?.takeIf { it > 0 }
+            val chartKinds = listOf(listOf(MetricKind.Cpu), listOf(MetricKind.Memory), listOf(MetricKind.Rx, MetricKind.Tx), listOf(MetricKind.Load)) +
+                listOfNotNull(listOf(MetricKind.Disk).takeIf { diskTotal != null })
             items(chartKinds, key = { "chart-${it.first()}" }, contentType = { "chart" }) { kinds ->
-                MetricChart(if (kinds.size == 2) "网络" else kinds.first().label, metric.points, kinds,
+                val disk = kinds.first() == MetricKind.Disk
+                MetricChart(when { kinds.size == 2 -> "网络"; disk -> "磁盘（共 ${MetricFormat.bytes(diskTotal)}）"; else -> kinds.first().label },
+                    if (disk) diskPercentPoints(metric.points, diskTotal) else metric.points, kinds,
                     kinds.map { kind -> when (kind) {
                         MetricKind.Cpu -> current?.cpu; MetricKind.Memory -> current?.memUsed?.toDouble()
                         MetricKind.Rx -> current?.netRx; MetricKind.Tx -> current?.netTx; MetricKind.Load -> current?.load
+                        MetricKind.Disk -> percent(current?.diskUsed, current?.diskTotal)
                     } }, state.now, state.range.seconds, state.history?.step ?: state.range.step, selection, { selection = it },
                     reference = system?.cores?.takeIf { kinds.first() == MetricKind.Load && it > 0 }?.toDouble())
             }
@@ -100,12 +117,15 @@ internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, naviga
                     Text(session.cwd, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
+            if (machine != null && actions != null) machineLaunchers(machine.online, acting)
             item("system") { JSectionHeader("系统信息") }
             val systemValues = listOf(
                 "系统" to system?.name, "版本" to system?.version, "内核" to system?.kernel, "架构" to system?.arch,
                 "型号" to system?.model, "处理器" to system?.cpu, "核心" to system?.cores?.takeIf { it > 0 }?.toString(),
                 "内存" to MetricFormat.bytes(system?.memory?.takeIf { it > 0 }),
                 "接入方式" to if (machine?.kind == "local") "hub 所在的机器" else if (machine?.kind == "ssh") "经 SSH 接入" else null,
+                "开机于" to MetricFormat.boot(system?.bootTime),
+                "herdr" to machine?.herdrVersion, "Claude Code" to machine?.claudeVersion, "Persona node" to machine?.nodeVersion,
             )
             itemsIndexed(systemValues, key = { _, it -> "system-${it.first}" }, contentType = { _, _ -> "value" }) { index, value ->
                 JGroupItem(GroupPosition.of(index, systemValues.size)) { JRow(value.first, value = value.second?.takeIf { it.isNotBlank() } ?: "—") }
@@ -118,7 +138,10 @@ internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, naviga
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MachineCard(machine: Machine?, metrics: MachineMetrics, sessions: List<Session>, now: Long, step: Int, onClick: (() -> Unit)? = null) {
+private fun MachineCard(
+    machine: Machine?, metrics: MachineMetrics, sessions: List<Session>, now: Long, step: Int,
+    deploy: (@Composable (Machine?) -> Unit)? = null, onClick: (() -> Unit)? = null,
+) {
     val current = metrics.current(now)
     val system = metrics.system ?: machine?.system
     val alerts = alerts(current, system?.cores)
@@ -146,7 +169,8 @@ private fun MachineCard(machine: Machine?, metrics: MachineMetrics, sessions: Li
                 Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
             }
         }
-        if (machine?.nodeMismatch == true) Warning("这台电脑上的 Persona 和 hub 不是同一次部署")
+        if (deploy != null && showsDeploy(machine)) deploy(machine)
+        else if (machine?.nodeMismatch == true) Warning("这台电脑上的 Persona 和 hub 不是同一次部署")
         alerts.forEach { Warning(it.label) }
         val groups = listOf(listOf(MetricKind.Cpu), listOf(MetricKind.Memory), listOf(MetricKind.Rx, MetricKind.Tx))
         groups.forEach { kinds ->

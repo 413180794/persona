@@ -39,3 +39,5 @@ include(
 )
 include(":feature:terminal")
 include(":platform:phonetools")
+include(":platform:shortcuts")
+include(":feature:voice")

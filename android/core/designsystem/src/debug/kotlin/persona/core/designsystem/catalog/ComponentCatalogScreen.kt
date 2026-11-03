@@ -10,7 +10,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.LinearGradientShader
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import persona.core.designsystem.*
@@ -27,6 +32,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
     var ready by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf("示例操作只在本页展示，不会发出请求。") }
     var chip by remember { mutableStateOf("") }
+    var relevance by remember { mutableFloatStateOf(65f) }
     val palette = PersonaTheme.palette
     JListPage(
         title = "组件目录", subtitle = "当前风格：${PersonaTheme.style.label}", onBack = onBack,
@@ -72,6 +78,24 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 JSwitch(toggled, { toggled = it }); JCheckbox(toggled, { toggled = it }); JRadio(toggled, { toggled = !toggled })
             }
+        }
+        // The terminal's key bar: a modifier for the next key only, one held down, one locked by a double tap.
+        section("终端键栏") {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                JKeyCap("Ctrl", state = KeyCapState.Once, onClick = { feedback = "Ctrl：下一个键" })
+                JKeyCap("Alt", state = KeyCapState.Held, onClick = { feedback = "Alt：按住" })
+                JKeyCap("⇧", state = KeyCapState.Locked, onClick = { feedback = "⇧：锁定" })
+                JKeyCap("Esc", onClick = { feedback = "Esc" })
+                JKeyCap("⇧Tab", onClick = { feedback = "⇧Tab" })
+                JKeyCap("粘贴", onClick = { feedback = "粘贴" })
+            }
+            Text("一次：着色加描边；按住、锁定：实底；锁定另有下划线", style = PersonaTheme.type.caption, color = palette.ink3)
+        }
+        // A stepped slider (知识库 › 打标: 与我相关 0–100 in steps of 5), enabled and not.
+        section("滑杆") {
+            Text("与我相关 ${relevance.toInt()}", style = PersonaTheme.type.callout, color = palette.ink2)
+            JSlider(relevance, { relevance = it }, valueRange = 0f..100f, step = 5f, contentDescription = "与我相关")
+            JSlider(40f, {}, valueRange = 0f..100f, step = 5f, enabled = false)
         }
         item { JSectionHeader("快速筛选") }
         item {
@@ -173,6 +197,23 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
                 }
             }
         }
+        // Swipe left to close (danger colour), and the rows of sessions from a Codex app-server / Codex history.
+        item("agents-swipe") {
+            JSwipeActions(end = SwipeAction("关闭", PhIcons.X, Status.NeedsYou, { feedback = "左滑：关闭 Agent" }, destructive = true)) {
+                AgentRow(
+                    "整理部署脚本", Status.Working, onClick = { feedback = "向左滑这一行" }, position = GroupPosition(first = true, last = false),
+                    preview = "三个环境的变量合到一个 env 文件里了", time = "刚刚", statusText = Status.Working.label,
+                    facts = listOf(RowFact("Codex 实时 / codex-desk")),
+                )
+            }
+        }
+        item("agents-read-only") {
+            AgentRow(
+                "迁移日志采集", Status.Offline, onClick = { feedback = "只读的 Codex 历史" }, position = GroupPosition(first = false, last = true),
+                preview = "日志采集改成按天切分", time = "5 小时前",
+                facts = listOf(RowFact("Codex 历史"), RowFact("仅查看", caution = true)),
+            )
+        }
         item { JSectionHeader("对话") }
         item { UserBubble("给天气 App 加一个主屏幕小组件：显示当前温度和接下来 6 小时的降雨概率。", time = "08:01") }
         item {
@@ -191,6 +232,83 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
                 ComposerTextField(text, { text = it }, "补充说明，这一步做完就发给它")
             }
         }
+        // Photos waiting in the composer: ready, uploading, failed (tap retries), a placeholder, waiting, gone.
+        section("附件") {
+            val photos = remember { listOf(samplePhoto(0xFF7DB2FF, 0xFF3CD9AE), samplePhoto(0xFFFFB547, 0xFFFF6B6B), samplePhoto(0xFF9B8CFF, 0xFF5A95FF)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AttachmentThumb(photos[0], "照片 1", onRemove = { feedback = "移除照片 1" })
+                AttachmentThumb(photos[1], "照片 2", state = AttachmentState.Uploading, onRemove = { feedback = "移除照片 2" })
+                AttachmentThumb(photos[2], "照片 3", state = AttachmentState.Failed, onRemove = { feedback = "移除照片 3" }, onRetry = { feedback = "重试照片 3" })
+                AttachmentThumb(null, "照片 4", onRemove = { feedback = "移除照片 4" })
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AttachmentThumb(photos[0], "照片", state = AttachmentState.Waiting)
+                AttachmentThumb(photos[1], "照片", state = AttachmentState.Invalid, onRemove = { feedback = "移除失效的照片" })
+            }
+        }
+        // A draft that is one "/" word lists the quick messages above the field; /clear in the danger colour.
+        section("输入框建议") {
+            ComposerSuggestions(
+                listOf(ComposerSuggestion("/compact", "压缩上下文"), ComposerSuggestion("/context", "查看上下文"),
+                    ComposerSuggestion("/clear", "清空上下文，开新会话", destructive = true)),
+                onPick = { feedback = "选了 ${it.word}" },
+            )
+        }
+        // Nothing typed while the agent works: dictation left of stop.
+        item {
+            ComposerFrame(leading = { JIconButton(PhIcons.Plus, "附件", {}) }, trailing = {
+                JIconButton(PhIcons.Microphone, "听写", { feedback = "听写" })
+                SendButton({ feedback = "停止" }, kind = SendKind.Stop)
+            }) { ComposerTextField("", {}, "补充说明（会排队发送）") }
+        }
+        // What waits in the agent's queue, above the composer; busy while an edit runs.
+        section("排队条") {
+            QueueStrip(
+                "排队中 2 条，Claude 忙完会依次处理",
+                listOf("顺便把 README 里的截图也换成新的小组件", "改完以后跑一遍 UI 测试，把失败的截图发给我，顺手看看深色模式下小组件的对比度够不够"),
+                onItem = { feedback = "第 ${it + 1} 条：撤回编辑、拷贝、删除" },
+            )
+            QueueStrip("排队中 1 条，Codex 忙完会依次处理", listOf("先别提交，等我看完 diff"), onItem = {}, busy = true)
+        }
+        // 语音对话: the orb in each state, the status under it, captions and the controls (feature:voice).
+        section("语音对话") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf(VoiceOrbMode.Connecting to "连接中", VoiceOrbMode.Listening to "在听", VoiceOrbMode.Speaking to "正在说",
+                    VoiceOrbMode.Muted to "已静音", VoiceOrbMode.Ended to "已结束").forEach { (mode, label) ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        VoiceOrb(mode, Modifier.size(64.dp), level = { 0.5f })
+                        Text(label, style = PersonaTheme.type.micro, color = palette.ink3)
+                    }
+                }
+            }
+            VoiceStatus("正在说，直接开口就能打断")
+            VoiceStatus("对话已结束", error = "连接断了（语音服务可能刚重启，或网络不稳），点下面的按钮重新开始")
+            VoiceCaption("今天下午有什么会？", fromUser = true, final = true)
+            VoiceCaption("下午有两个会：三点的周会，五点和设计组对一下图标", fromUser = false, final = false)
+            VoiceControlBar {
+                VoiceControl(PhIcons.Microphone, "静音", { feedback = "静音" })
+                VoiceControl(PhIcons.HandPalm, "打断", {}, enabled = false)
+                VoiceControl(PhIcons.PhoneDisconnect, "挂断", { feedback = "挂断" }, kind = VoiceControlKind.Danger)
+            }
+            VoiceControlBar {
+                VoiceControl(PhIcons.MicrophoneSlash, "取消静音", { feedback = "取消静音" }, kind = VoiceControlKind.Filled)
+                VoiceControl(PhIcons.ArrowClockwise, "重新开始", { feedback = "重新开始" }, kind = VoiceControlKind.Filled)
+            }
+        }
+        // The divider between a list and its detail in a wide window (the shell's two panes).
+        section("两栏分隔条") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf(PaneDividerState.Idle to "静止", PaneDividerState.Moving to "拖动中", PaneDividerState.Closing to "松手收起",
+                    PaneDividerState.Collapsed to "已收起").forEach { (state, label) ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        PaneDividerPreview(state)
+                        Text(label, style = PersonaTheme.type.micro, color = palette.ink3)
+                    }
+                }
+            }
+        }
+        // Photos, pictures, file chips, the recap line and the API error card of a conversation (ChatPartsSamples.kt).
+        section("对话里的附件和报错") { ChatPartsSamples { feedback = it } }
         item { JSectionHeader("收件箱") }
         item {
             MessageItem(
@@ -236,6 +354,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             StepProgress(listOf(ProgressStep("连接 hub", StepState.Complete), ProgressStep("核对身份", StepState.Active), ProgressStep("同步会话")))
             JEmptyState("还没有会话", "连接电脑后，就可以在这里开始对话。", icon = PhIcons.Robot, action = { JButton("新建会话", {}) })
         }
+        inlineStatusSamples { feedback = it }
         section("状态色") {
             Status.entries.forEach { status ->
                 Row(
@@ -249,6 +368,8 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
                 }
             }
         }
+        // The image viewer and the markup editor on pictures drawn on the phone (ImageViewerSamples.kt).
+        section("看图") { ImageViewerSamples { feedback = it } }
     }
 }
 
@@ -265,6 +386,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(title: String
             content()
         }
     }
+}
+
+/** A stand-in photo for the attachment samples: a two-colour diagonal gradient. */
+private fun samplePhoto(from: Long, to: Long): ImageBitmap {
+    val bitmap = ImageBitmap(128, 128)
+    val paint = Paint().apply { shader = LinearGradientShader(Offset.Zero, Offset(128f, 128f), listOf(Color(from), Color(to))) }
+    Canvas(bitmap).drawRect(0f, 0f, 128f, 128f, paint)
+    return bitmap
 }
 
 /** Kept for previews in other debug code: a transparent spacer the size of the old catalog controls. */

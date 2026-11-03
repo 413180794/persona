@@ -13,6 +13,8 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.About -> "about"
     SettingsPage.Pairing -> "pair"
     SettingsPage.Assistant -> "assistant"
+    SettingsPage.ClaudeCode -> "claude"
+    SettingsPage.ModelConfig -> "models"
     SettingsPage.Hubs -> "hubs"
 }
 

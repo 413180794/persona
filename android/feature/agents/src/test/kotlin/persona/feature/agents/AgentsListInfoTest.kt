@@ -72,6 +72,14 @@ class AgentsListInfoTest {
         assertEquals("屏幕问题\n完整说明", question.copy(kind = "screen", dialog = ScreenDialog(question = "屏幕问题", detail = "完整说明")).cardSummary)
     }
 
+    @Test fun anotherAgentsCardSaysWhoAsks() {
+        val claude = Interaction("ix", kind = "permission", toolName = "Bash")
+        assertEquals("请求使用 Bash", claude.cardTitle)
+        assertEquals("Codex 请求使用 Bash", claude.copy(agent = "codex").cardTitle)
+        assertEquals("DSH 有问题等你回答", claude.copy(kind = "question", agent = "dsh", agentLabelHint = "DSH").cardTitle)
+        assertEquals("有问题等你回答", claude.copy(kind = "question", agent = "claude").cardTitle)
+    }
+
     @Test fun requestCardsPreviewPlansWithoutMarkdownSyntax() {
         assertEquals("支持 HEIC\n1. 用 sips 转成 JPEG\n加粗说明", markdownPreview("## 支持 HEIC\n\n1. 用 `sips` 转成 JPEG\n**加粗**说明\n"))
         assertEquals("普通文字", markdownPreview("普通文字"))

@@ -23,6 +23,15 @@ internal fun ChatLine.lastItem(): Item? = when (this) {
     is ChatLine.Work -> steps.mapNotNull { it.lastItem() }.maxWithOrNull(chatItemOrder)
     is ChatLine.Step -> step.lastItem()
     is ChatLine.Wakes -> turn.wakes.lastOrNull()?.item
+    is ChatLine.ApiError -> item.item
+    is ChatLine.Recaps -> items.lastOrNull()?.item
+    else -> null
+}
+
+/** The transcript item a visible line stands for when read receipts count it: a row, or the answer an error card is. */
+internal fun ChatLine.seenItem(): Item? = when (this) {
+    is ChatLine.Row -> row.item?.item
+    is ChatLine.ApiError -> item.item
     else -> null
 }
 
@@ -107,6 +116,8 @@ internal fun ChatLine.contentType(): String = when (this) {
     is ChatLine.SplitHeader -> "split_header"
     is ChatLine.UserImages -> "images"
     is ChatLine.Wakes -> "wakes"
+    is ChatLine.ApiError -> "api_error"
+    is ChatLine.Recaps -> "recaps"
 }
 
 internal fun interactionSource(interaction: Interaction, machine: Machine?): String = listOfNotNull(

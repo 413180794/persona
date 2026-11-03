@@ -1,0 +1,182 @@
+{
+ "phone_calendar_create_event": {
+  "description": "Create a calendar event. `start` and `end` are ISO 8601 with a timezone (e.g. 2026-10-24T14:00:00+08:00). For an all-day event pass all_day=true and dates at 00:00. The user must approve the event on the phone before it is saved. Returns the new event's identifier.",
+  "properties": {
+   "all_day": {
+    "description": "Mark the event as all-day. Default false.",
+    "type": "boolean"
+   },
+   "calendar": {
+    "description": "Calendar name (title) to put the event in. Default: the default calendar for new events.",
+    "type": "string"
+   },
+   "end": {
+    "description": "End time, ISO 8601 with a timezone. Must be after start.",
+    "type": "string"
+   },
+   "location": {
+    "description": "Optional location.",
+    "type": "string"
+   },
+   "notes": {
+    "description": "Optional notes.",
+    "type": "string"
+   },
+   "start": {
+    "description": "Start time, ISO 8601 with a timezone.",
+    "type": "string"
+   },
+   "title": {
+    "description": "Event title.",
+    "type": "string"
+   }
+  },
+  "required": [
+   "title",
+   "start",
+   "end"
+  ],
+  "source": "calendar"
+ },
+ "phone_calendar_events": {
+  "description": "List calendar events in a time window. Defaults to the next 7 days starting at 00:00 today. Times are ISO 8601 with a timezone offset (e.g. 2026-10-24T14:00:00+08:00). Returns each event's id, title, start, end, all-day flag, calendar name, location, the first 300 characters of notes and the attendees. Use it to check whether the user is free.",
+  "properties": {
+   "end": {
+    "description": "Window end, ISO 8601. Default: 7 days after start.",
+    "type": "string"
+   },
+   "limit": {
+    "description": "Maximum number of events to return, default 50, max 200.",
+    "maximum": 200,
+    "minimum": 1,
+    "type": "integer"
+   },
+   "query": {
+    "description": "Only return events whose title, location or notes contain this text.",
+    "type": "string"
+   },
+   "start": {
+    "description": "Window start, ISO 8601 (e.g. 2026-10-24T00:00:00+08:00). Default: 00:00 today.",
+    "type": "string"
+   }
+  },
+  "required": [],
+  "source": "calendar"
+ },
+ "phone_clipboard_get": {
+  "description": "Read the phone's clipboard as text. iOS may show an \"Allow Paste?\" prompt the first time, which the user has to confirm. Returns \"text\" and its character count, or text: null when the clipboard is empty or holds something that is not text.",
+  "properties": {},
+  "required": [],
+  "source": "clipboard"
+ },
+ "phone_clipboard_set": {
+  "description": "Replace the phone's clipboard with the given text, for example a link or a draft the user asked for. Overwrites whatever was there.",
+  "properties": {
+   "text": {
+    "description": "Text to place on the clipboard.",
+    "type": "string"
+   }
+  },
+  "required": [
+   "text"
+  ],
+  "source": "clipboard"
+ },
+ "phone_contacts_search": {
+  "description": "Search the phone's contacts by name, company, job title, email or phone number. Returns up to `limit` people with their name, company, job title, phone numbers (with labels such as mobile/work), email addresses and birthday (yyyy-MM-dd). Use this to look up a colleague's number before calling or drafting a message.",
+  "properties": {
+   "limit": {
+    "description": "Maximum number of contacts to return, default 10, max 50.",
+    "maximum": 50,
+    "minimum": 1,
+    "type": "integer"
+   },
+   "query": {
+    "description": "Text to match against name, company, job title, email or phone number. Matching is case-insensitive and looks for the text anywhere in the field; a phone number matches with or without spaces and dashes. Pass an empty string to get the first contacts in the address book's own order.",
+    "type": "string"
+   }
+  },
+  "required": [
+   "query"
+  ],
+  "source": "contacts"
+ },
+ "phone_device_info": {
+  "description": "Describe the phone: model identifier and name, iOS version, battery percentage and charging state, low power mode, free and total storage in bytes, current network type (wifi/cellular/wired/offline), timezone and locale. Cheap and safe to call when you need context about the device.",
+  "properties": {},
+  "required": [],
+  "source": "device"
+ },
+ "phone_location_current": {
+  "description": "Get the phone's current location. Returns latitude, longitude, horizontal accuracy in meters, altitude, the reverse-geocoded address (country, province, city, district, street, formatted address), the device timezone and the timestamp of the fix (ISO 8601). Waits at most 15 seconds for a fix. Only call this when the user asks something that needs their location.",
+  "properties": {},
+  "required": [],
+  "source": "location"
+ },
+ "phone_notify": {
+  "description": "Post a notification on the phone. Use it to tell the user about something that happened while they were not looking (a long task finished, a build failed). delay_seconds schedules it a few seconds or minutes later; omit it to notify immediately. The first call asks for notification permission. Returns whether the notification was scheduled.",
+  "properties": {
+   "body": {
+    "description": "Notification body.",
+    "type": "string"
+   },
+   "delay_seconds": {
+    "description": "Seconds from now to deliver it. Default 0 (immediately), max 86400.",
+    "maximum": 86400,
+    "minimum": 0,
+    "type": "integer"
+   },
+   "title": {
+    "description": "Notification title, short.",
+    "type": "string"
+   }
+  },
+  "required": [
+   "title",
+   "body"
+  ],
+  "source": "notifications"
+ },
+ "phone_photo_get": {
+  "description": "Get one photo as an image so you can look at it (read a screenshot, describe a photo, transcribe a whiteboard). Pass the id from phone_photos_recent. The image is JPEG, at most max_size pixels on the long edge (default 1280, max 2048), quality 0.7. Returns the image plus a short text description.",
+  "properties": {
+   "id": {
+    "description": "Photos local identifier from phone_photos_recent.",
+    "type": "string"
+   },
+   "max_size": {
+    "description": "Longest edge in pixels, default 1280, max 2048.",
+    "maximum": 2048,
+    "minimum": 256,
+    "type": "integer"
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "source": "photos"
+ },
+ "phone_photos_recent": {
+  "description": "List recent photos and videos, newest first. Each row has the Photos local identifier, creation date (ISO 8601), media type (image/video), pixel width and height, whether it is a screenshot, whether it is a favorite, duration in seconds for videos, and the latitude/longitude where the photo was taken when it is geotagged. Pass an id to phone_photo_get to actually see the image.",
+  "properties": {
+   "days": {
+    "description": "Only assets from the last N days. Default: no limit.",
+    "maximum": 3650,
+    "minimum": 1,
+    "type": "integer"
+   },
+   "limit": {
+    "description": "Maximum number of assets, default 20, max 100.",
+    "maximum": 100,
+    "minimum": 1,
+    "type": "integer"
+   },
+   "screenshots_only": {
+    "description": "Only screenshots. Default false.",
+    "type": "boolean"
+   }
+  },
+  "required": [],
+  "source": "photos"
+ }
+}

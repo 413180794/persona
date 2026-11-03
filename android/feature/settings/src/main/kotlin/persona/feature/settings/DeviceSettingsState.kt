@@ -19,7 +19,12 @@ class DeviceSettingsState(private val api: DeviceSettings?, private val unpair: 
     val state = mutable.asStateFlow()
 
     suspend fun loadDevices() = perform("设备列表读取失败，请重试。") {
-        mutable.value = mutable.value.copy(devices = requireNotNull(api).devices())
+        try {
+            mutable.value = mutable.value.copy(devices = requireNotNull(api).devices())
+        } catch (unavailable: DeviceCredentialsUnavailable) {
+            // Not a passing failure: say why this hub has no list (an older version, no database).
+            mutable.value = mutable.value.copy(message = unavailable.message)
+        }
     }
 
     suspend fun loadPreferences() = perform("通知偏好读取失败，请重试。") {
@@ -43,7 +48,8 @@ class DeviceSettingsState(private val api: DeviceSettings?, private val unpair: 
     suspend fun revoke(device: PairedDevice) = perform("撤销未完成，请刷新设备列表后重试。") {
         val devices = requireNotNull(mutable.value.devices)
         requireNotNull(api).revoke(device.id)
-        mutable.value = mutable.value.copy(devices = devices.copy(devices = devices.devices.filterNot { it.id == device.id }))
+        mutable.value = mutable.value.copy(devices = devices.copy(devices = devices.devices.filterNot { it.id == device.id },
+            revoked = listOf(device.copy(revokedAt = java.time.Instant.now().toString())) + devices.revoked))
         if (device.id == devices.currentId) cleanup()
     }
 

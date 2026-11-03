@@ -48,7 +48,8 @@ class HttpAgentCreationService(
     ))
     override suspend fun start(request: AgentStartRequest, operationId: String): AgentStartResult {
         UUID.fromString(operationId)
-        require(request.machineId.isNotBlank() && request.cwd.isNotBlank() && request.launcher.isNotBlank())
+        // An empty launcher follows the hub's 新建 Agent model configuration (docs/model-config.md).
+        require(request.machineId.isNotBlank() && request.cwd.isNotBlank())
         val body = JsonCodec.encodeToString(request).toRequestBody("application/json".toMediaType())
         // A lost response must be reconciled through operation(), never by posting again.
         val result = try {
@@ -83,6 +84,12 @@ class HttpAgentCreationService(
             "failed" -> AgentStartResult.Rejected(body["error"]?.jsonPrimitive?.content ?: "启动被拒绝，请检查选择")
             else -> AgentStartResult.Unknown
         }
+    }
+    override suspend fun newAgentModel(): ModelPurposeDetail? = try {
+        JsonCodec.decodeFromJsonElement<ModelPurposeDetail>(read(request("api", "v1", "model-config", "purposes", "agent.new").build()))
+    } catch (failure: HubFailure) {
+        // Hubs without unified model configuration: the launcher is picked here as before.
+        if (failure.status == 404) null else throw failure
     }
     private fun outcome(body: JsonObject): AgentStartResult {
         val session = body["session"] as? JsonObject

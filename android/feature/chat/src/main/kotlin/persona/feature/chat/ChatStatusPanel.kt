@@ -31,6 +31,9 @@ internal fun OutboxStatus(
             if (message.state.allows(DeliveryAction.Retry)) JButton(kind = JButtonKind.Secondary, size = JButtonSize.Small, text = "重试", onClick = {
                 if (message.state.resultUnknown) retryConfirmation = true else onAction(DeliveryAction.Retry)
             }, enabled = !busy)
+            // Nothing of a refused message reached the computer: it can simply go.
+            if (message.state.allows(DeliveryAction.Delete))
+                JButton(kind = JButtonKind.Secondary, size = JButtonSize.Small, text = "删除", onClick = { onAction(DeliveryAction.Delete) }, enabled = !busy)
             if (message.state.resultUnknown && onDetails != null)
                 JButton(kind = JButtonKind.Secondary, size = JButtonSize.Small, text = "核对消息", onClick = onDetails, enabled = !busy)
         }

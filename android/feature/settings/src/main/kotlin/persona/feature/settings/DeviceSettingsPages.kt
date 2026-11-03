@@ -3,6 +3,7 @@ package persona.feature.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -37,12 +38,26 @@ internal fun DevicesPage(
                     JRow(device.name.ifBlank { "未命名设备" }, leadingIcon = PhIcons.DeviceMobile,
                         value = if (current) "本机" else null,
                         subtitle = "${device.platformLabel(current)}，${when (device.role) { "full" -> "完整权限"; "answer" -> "只能回答"; else -> "角色未提供" }}")
-                    SettingsCaption("最近使用：${lastUsed(device.lastSeen)}", Modifier.padding(horizontal = Tokens.Space.m))
+                    SettingsCaption(if (device.lastSeen.isNullOrBlank() && !device.createdAt.isNullOrBlank()) "添加于：${lastUsed(device.createdAt)}"
+                        else "最近使用：${lastUsed(device.lastSeen)}", Modifier.padding(horizontal = Tokens.Space.m))
                     JButton(if (current) "撤销本机" else "撤销", { pending = device }, Modifier.padding(Tokens.Space.m),
                         kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = !state.busy && !state.needsCleanup)
                 }
             }
             item { Action(if (state.busy) "正在处理" else "刷新设备", enabled = !state.busy && !state.needsCleanup) { scope.launch { controller.loadDevices() } } }
+            // Revoked credentials stay listed, greyed, for reference; they cannot connect or be revoked again.
+            val revoked = state.devices?.revoked.orEmpty()
+            if (revoked.isNotEmpty()) item("revoked-title") { JSectionHeader("已撤销", count = revoked.size) }
+            itemsIndexed(revoked, key = { _, device -> "revoked-${device.id}" }) { index, device ->
+                JGroupItem(GroupPosition.of(index, revoked.size)) {
+                    JRow(device.name.ifBlank { "未命名设备" }, leadingIcon = PhIcons.DeviceMobile, enabled = false,
+                        subtitle = "撤销于 ${lastUsed(device.revokedAt)}")
+                }
+            }
+            if (state.devices != null) item("credentials-note") {
+                SettingsCaption("每台设备有自己的凭据，丢了哪台就撤销哪台，其他设备不受影响。手表只能看和回答，不能改设置、开关 Agent。",
+                    Modifier.padding(vertical = Tokens.Space.m))
+            }
         }
         item { footer() }
     }
@@ -130,6 +145,7 @@ private fun PairedDevice.platformLabel(current: Boolean): String = when {
 
 private fun lastUsed(value: String?): String {
     if (value.isNullOrBlank()) return "尚无记录"
-    return runCatching { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(value)) }
-        .getOrDefault("时间未提供")
+    // parseTime also reads offsets (+08:00), which Instant.parse rejects on Android 12 and 13.
+    return persona.core.contracts.parseTime(value)?.let { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(it) }
+        ?: "时间未提供"
 }

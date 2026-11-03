@@ -12,8 +12,6 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.AndroidEntryPoint
-import persona.core.contracts.FleetEvent
-import persona.core.contracts.FleetState
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.PairingService
@@ -25,13 +23,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import persona.core.domain.fleet.FleetSummary
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 open class HubService : Service() {
     @Inject lateinit var connection: HubConnection
     @Inject lateinit var pairing: PairingService
@@ -40,9 +46,9 @@ open class HubService : Service() {
     @Inject lateinit var interactions: InteractionCenter
     @Inject lateinit var sessions: SessionsRepository
     @Inject lateinit var notificationPreferences: NotificationPreferencesSource
+    @Inject lateinit var fleet: FleetFeed
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val fleet = MutableStateFlow(FleetState())
     private var observing = false
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -53,7 +59,7 @@ open class HubService : Service() {
         // Promote before deciding anything: stopping first (not paired, stopped by the user, or a stop that came while
         // this start was pending) is what crashed the app (ForegroundStarts). stopSelf(startId) leaves a newer start alone.
         try {
-            ServiceCompat.startForeground(this, Notifier.ONGOING_ID, notifier.ongoing(connection.state.value, fleet.value),
+            ServiceCompat.startForeground(this, Notifier.ONGOING_ID, notifier.ongoing(connection.state.value, fleet.state.value),
                 if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
         } catch (failure: RuntimeException) {
             Log.w(TAG, "Foreground promotion failed: ${failure.javaClass.simpleName}")
@@ -69,14 +75,25 @@ open class HubService : Service() {
         if (!observing) {
             observing = true
             scope.launch {
+                fleet.start()
+                // Only finished agents left for a while: back to the connection line (the hub's fleet stays as it is).
+                val quiet = fleet.state.map { FleetSummary.phase(it) == FleetSummary.DONE }.distinctUntilChanged()
+                    .transformLatest { done ->
+                        emit(false)
+                        if (done) { delay(FleetSummary.DONE_LINGER_MILLIS); emit(true) }
+                    }.stateIn(this, SharingStarted.Eagerly, false)
+                // 锁屏显示详情 decides whether names show at all (OngoingStatus.from); any other preference may change how
+                // the same content is drawn (visibility, promotion), so a change redraws.
                 launch {
-                    notificationPreferences.preferences.collect {
-                        notifier.updateOngoing(connection.state.value, fleet.value)
+                    notificationPreferences.preferences.collect { preferences ->
+                        notifier.updateOngoing(OngoingStatus.from(connection.state.value, fleet.state.value, quiet.value,
+                            details = preferences?.lockDetails == true))
                     }
                 }
-                var displayed = OngoingStatus.from(connection.state.value, fleet.value)
-                combine(connection.state, fleet) { state, snapshot ->
-                    OngoingStatus.from(state, snapshot)
+                var displayed = OngoingStatus.from(connection.state.value, fleet.state.value,
+                    details = notificationPreferences.preferences.value?.lockDetails == true)
+                combine(connection.state, fleet.state, quiet, notificationPreferences.preferences) { state, snapshot, done, preferences ->
+                    OngoingStatus.from(state, snapshot, done, details = preferences?.lockDetails == true)
                 }.throttleOngoing().collect { status ->
                     if (status != displayed) {
                         notifier.updateOngoing(status)
@@ -89,7 +106,6 @@ open class HubService : Service() {
                     notifier::postInteraction, notifier::postNotify, notifier::retract,
                     notificationPreferences::refreshPreferences)
                 Notify.events.collect { event ->
-                    if (event is FleetEvent) fleet.value = event.fleet
                     try {
                         // Bound refresh work without terminating observation on a transient HTTP failure.
                         withTimeout(8_000) { delivery.accept(event) }

@@ -104,6 +104,8 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 | `HubCard` | 设置页顶部的 hub 状态 |
 | `AppNavigation` / `HubAvatar` / `JarvisOrb` | App 外壳的导航（由 `:app` 使用） |
 | `PageBackdrop` | 页面、栏、外壳共用的一层背景：页面底色，玻璃里再加按整个窗口排布的状态光。挨着的栏、套着的页面和它们之间的空隙画出来是同一块，页面脚手架和外壳已经用了；自己要画底色的地方（比如宽屏 Persona 的对话列表）也用它，不要另铺 `surface` 一类的底板 |
+| `PaneDivider` | 宽屏两栏之间的把手：玻璃是半透明的墨色药丸，晨报是细墨线，看板是带描边的小格；拖动、悬停光标、TalkBack 的「左栏变宽 / 变窄 / 收起 / 展开」，外壳用（见 3.1 节） |
+| `VoiceOrb` / `VoiceStatus` / `VoiceCaption` / `VoiceControl` / `VoiceControlBar` | 语音对话页：光球（连接中、在听、正在说、静音、结束）、状态行、字幕、底部带字圆按钮（`feature:voice` 用，`docs/android.md`「语音对话」） |
 | `AmbientLight` / `floatingSurface` / `glassSource` | 玻璃的状态光（`inWindow` 按窗口排布，缩略预览按自己的框）、浮层、浮层采样的内容（由页面脚手架处理，页面一般不直接用） |
 
 ### 2.3 写页面的规矩
@@ -176,6 +178,9 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 - 双栏时右栏正在显示的那一项在左边的卡片上高亮（`LocalDetailKey` + 组件的 `selected`），由外壳按路由算（`detailOf`），点左栏、深链、通知、调试入口和返回都同步；单栏和双栏之间切换用的是同一个返回栈，选中的不变；
   双栏里返回键先关掉右栏的详情，回到「列表 + 占位」，再按才回到 Persona。list-detail 场景的返回方式要用 `PopUntilContentChange`：
   默认的 `PopUntilScaffoldValueChange` 要等到栏的布局变了才停，而双栏里关掉详情后占位页还在、布局不变，于是整个返回栈被弹空，按一次返回就退出了 App（2026-11-01 修）。
+- 两栏中间的分隔条可以拖（`PaneDivider`，`app/…/ui/PaneDividers.kt`）：左栏跟手，经过平放的折痕轻震、松手在 28dp 内吸上去；最窄左 280dp、右 320dp；没拖过时左栏约 38%（320～420dp，右栏尽量留 400dp）；每个 tab 按宽度比例记住位置；Agents 旁边开着东西时拖到最左收起列表。分开的折痕固定分栏、没有把手。细节见 `docs/android.md`「大屏两栏」。
+- Agents 的空间页是详情（`SpaceRoute`）：宽屏在列表右边打开，不再盖住两栏。
+- 横放时外壳按左右安全区（挖孔、侧边的导航条）留白，背景照样铺满。
 - 正文限宽：`pagePadding` 带上 `LocalReadingInset`，宽窗格里内容居中、最宽 `ReadingWidth`（760dp），对话、长文、列表都一样；
   输入框、按键栏这些底部浮层也跟着限宽。图片和表格按内容宽度排。
 - 折叠屏书本姿态（竖向半折）：两栏按铰链分开，内容和按钮不压在铰链上（list-detail 场景按 `HingePolicy` 处理）。
@@ -186,6 +191,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 ## 4. 截图和验证
 
 - 每个页面三种风格、深浅色都要截图检查；调试启动参数 `debug.style` 和 `debug.theme` 直达。
+- 可读性底线（`core:designsystem` 的 `StyleContrastTest`，WCAG 对比度，玻璃的半透明底先叠到页面背景上再算）：正文（ink、ink2）在页面、卡片、面板、浅底、深底上 ≥ 4.5，主按钮的字、荧光笔上的字、角标数字 ≥ 4.5，强调色当链接 ≥ 3，自己的气泡里的字 ≥ 4.5，这些没有例外。状态字、第三级的字（ink3）、状态色块上的字和看板的色块字形也有门槛，但现在有 18 处差一点（主要是浅色下「完成」的绿字、离线的灰字、ink3，深色下危险按钮上的白字），记在测试的 `known` 里；只能减少，改色板时把对应的条目删掉。
 - 验证玻璃时看：浮层下的文字是否可读、内容是否被悬浮坞或输入框挡住、折射有没有把背后的文字扭成碎片、浮层之间的空隙有没有露出清楚的字、整页弹层的状态栏和手势条区域是不是一条灰带。
 
 ## 5. 性能

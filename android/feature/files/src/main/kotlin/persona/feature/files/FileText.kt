@@ -32,7 +32,9 @@ internal fun fileLines(text: String, diff: Boolean): List<FileTextLine> {
     var new = 0
     var inHunk = false
     val header = Regex("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@.*")
-    return text.split('\n').map { raw ->
+    // A file's header (diff --git, index, ---, +++) only repeats the page's title; inside a hunk "--- x" is a removed line.
+    val fileHeader = listOf("diff --git ", "index ", "--- ", "+++ ")
+    return text.split('\n').mapNotNull { raw ->
         val line = raw.removeSuffix("\r").replace("\t", "    ")
         val match = header.matchEntire(line)
         when {
@@ -40,7 +42,8 @@ internal fun fileLines(text: String, diff: Boolean): List<FileTextLine> {
                 old = match.groupValues[1].toInt(); new = match.groupValues[2].toInt(); inHunk = true
                 FileTextLine(line, kind = FileLineKind.Info)
             }
-            line.startsWith("diff --git ") -> { inHunk = false; FileTextLine(line, kind = FileLineKind.Info) }
+            line.startsWith("diff --git ") -> { inHunk = false; null }
+            !inHunk && fileHeader.any { line.startsWith(it) } -> null
             inHunk && line.startsWith('+') -> FileTextLine(line.drop(1), new = new++, kind = FileLineKind.Add)
             inHunk && line.startsWith('-') -> FileTextLine(line.drop(1), old = old++, kind = FileLineKind.Delete)
             inHunk && line.startsWith(' ') -> FileTextLine(line.drop(1), old = old++, new = new++, kind = FileLineKind.Context)

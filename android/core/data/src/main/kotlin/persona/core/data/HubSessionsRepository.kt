@@ -108,6 +108,30 @@ class HubSessionsRepository(
             persist()
         }
     }
+
+    override suspend fun adopt(session: Session) {
+        if (session.machineId.isBlank() || session.sessionId.isBlank()) return
+        restored.await()
+        lock.withLock {
+            // A push or refresh that already has it is newer than the start's answer.
+            if (mutableSessions.value.any { it.key == session.key }) return@withLock
+            // Newer than a refresh already in flight, which must not drop it.
+            sessionChanges[session.machineId] = ++revision
+            mutableSessions.value = mutableSessions.value + session
+            persist()
+        }
+    }
+
+    override suspend fun applyMachine(machine: Machine) {
+        if (machine.id.isBlank()) return
+        restored.await()
+        lock.withLock {
+            machinesChanged = ++revision
+            val list = mutableMachines.value
+            mutableMachines.value = if (list.any { it.id == machine.id }) list.map { if (it.id == machine.id) machine else it } else list + machine
+            persist()
+        }
+    }
 }
 
 internal suspend inline fun quietly(block: () -> Unit) {

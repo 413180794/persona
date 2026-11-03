@@ -9,6 +9,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.Session
 import persona.core.domain.sort.SessionRename
+import persona.core.domain.sort.closeConfirmation
 
 internal sealed interface AgentOperationDialog {
     val session: Session
@@ -18,14 +19,21 @@ internal sealed interface AgentOperationDialog {
 }
 
 @Composable
-internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsViewModel, dismiss: () -> Unit) {
+internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsViewModel, machineName: String? = null, dismiss: () -> Unit) {
     val session = dialog.session
     when (dialog) {
-        is AgentOperationDialog.Close -> JDialog(
-            onDismiss = dismiss, title = "关闭 Agent？", destructive = true,
-            text = "将退出「${session.displayTitle}」并关闭它的终端窗格，正在进行的任务会中断。历史对话仍可恢复。",
-            confirm = "关闭 Agent" to { model.close(session); dismiss() },
-        )
+        // The same words as the chat's menu (core:domain closeConfirmation); long press and swipe both land here.
+        is AgentOperationDialog.Close -> {
+            val confirmation = session.closeConfirmation(machineName)
+            JDialog(
+                onDismiss = dismiss, title = confirmation.title, destructive = true, text = confirmation.message,
+                confirm = "关闭 Agent" to {
+                    // It may have been closed elsewhere since the dialog opened: then there is nothing left to do.
+                    if (model.closable(session)) model.close(session)
+                    dismiss()
+                },
+            )
+        }
         else -> {
             val space = dialog is AgentOperationDialog.RenameSpace
             var name by rememberSaveable(session.key.path, space) { mutableStateOf(if (space) session.spaceName.orEmpty() else session.title) }

@@ -1,0 +1,113 @@
+package persona.feature.chat
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import persona.core.contracts.Machine
+import persona.core.contracts.Session
+import persona.core.contracts.SessionInfo
+import persona.core.contracts.parseTime
+import persona.core.designsystem.*
+import persona.core.designsystem.icons.PhIcons
+import persona.core.domain.sort.resumeCommand
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlinx.coroutines.CancellationException
+
+/** 950, 12.3k, 1.20M (iOS SessionInfoSheet.tokens). */
+internal fun formatTokens(count: Long): String = when {
+    count >= 1_000_000 -> String.format(Locale.ROOT, "%.2fM", count / 1_000_000.0)
+    count >= 1_000 -> String.format(Locale.ROOT, "%.1fk", count / 1_000.0)
+    else -> "$count"
+}
+
+/** One fact of 会话信息; a null value reads as —. [copy] names what tapping it copies. */
+internal data class SessionInfoRow(val label: String, val value: String?, val copy: String? = null)
+internal data class SessionInfoSection(val title: String, val rows: List<SessionInfoRow>)
+
+/**
+ * 会话信息 (iOS SessionInfoSheet), from GET …/info: what it runs, how far it has got, where its files are, and what to
+ * copy. The resume command only for a session in a terminal (an agent runtime's is picked up in its own UI); a Codex
+ * thread resumes by its own thread id.
+ */
+internal fun sessionInfoSections(session: Session, info: SessionInfo, zone: ZoneId = ZoneId.systemDefault()): List<SessionInfoSection> {
+    fun String?.orSession(fallback: String?) = this?.takeIf(String::isNotBlank) ?: fallback?.takeIf(String::isNotBlank)
+    val cwd = info.cwd.orSession(session.cwd)
+    val id = info.sessionId.ifBlank { session.sessionId }
+    return listOf(
+        SessionInfoSection("运行", listOf(
+            SessionInfoRow("模型", info.model.orSession(session.model)),
+            SessionInfoRow("启动器", info.launcher.orSession(session.launcher)),
+            SessionInfoRow(if (session.isClaude) "Claude Code" else session.agentLabel, info.version.orSession(null)),
+            SessionInfoRow("权限", SessionModes.modeLabel(info.permissionMode.orSession(session.permissionMode))),
+            SessionInfoRow("思考强度", SessionModes.effortLabel(info.effort.orSession(session.effort))),
+        )),
+        SessionInfoSection("用量", buildList {
+            add(SessionInfoRow("上下文", "${formatTokens(info.contextTokens)} tokens"))
+            if (info.compactions > 0) add(SessionInfoRow("压缩", "${info.compactions} 次"))
+            add(SessionInfoRow("对话", "${info.turns} 轮"))
+            add(SessionInfoRow("共生成", "${formatTokens(info.outputTokens)} tokens"))
+            parseTime(info.startedAt)?.let {
+                add(SessionInfoRow("开始", DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.ROOT).format(it.atZone(zone))))
+            }
+        }),
+        SessionInfoSection("位置", listOfNotNull(
+            SessionInfoRow("目录", cwd, copy = cwd?.let { "目录" }),
+            info.gitBranch.orSession(null)?.let { SessionInfoRow("分支", it, copy = "分支") },
+        )),
+        SessionInfoSection("拷贝", listOfNotNull(
+            SessionInfoRow("session id", id, copy = "session id"),
+            session.resumeCommand(cwd = cwd.orEmpty())?.let { SessionInfoRow("恢复命令", it, copy = "恢复命令") },
+        )),
+    )
+}
+
+@Composable
+internal fun ChatSessionInfoSheet(session: Session, machine: Machine?, state: ChatChromeState, onDismiss: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    val feedback = LocalAppFeedback.current
+    var info by remember(session.key) { mutableStateOf<SessionInfo?>(null) }
+    var error by remember(session.key) { mutableStateOf<String?>(null) }
+    var attempt by remember(session.key) { mutableIntStateOf(0) }
+    LaunchedEffect(session.key, attempt) {
+        error = null
+        try { info = state.info(session) }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { error = "读不到会话信息：" + ((e as? UnsupportedOperationException)?.message ?: operationFeedback(e).message) }
+    }
+    JSheet(onDismiss = onDismiss, title = "会话信息", scrollable = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+            Text(session.displayTitle, style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink, maxLines = 2,
+                overflow = TextOverflow.Ellipsis)
+            val status = Status.entries.firstOrNull { it.name == session.agentState.name }
+            Text(listOfNotNull(status?.label, machine?.displayName ?: session.machineId, session.spaceName?.takeIf(String::isNotBlank))
+                .joinToString(" / "), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+        }
+        val loaded = info
+        when {
+            loaded != null -> sessionInfoSections(session, loaded).filter { it.rows.isNotEmpty() }.forEach { section ->
+                JSectionHeader(section.title)
+                section.rows.forEachIndexed { index, row ->
+                    JGroupItem(GroupPosition.of(index, section.rows.size)) {
+                        val value = row.value ?: "—"
+                        val copy = row.copy?.takeIf { row.value != null }
+                        if (copy != null) JRow(row.label, subtitle = value, subtitleLines = 4,
+                            trailing = { JIcon(PhIcons.Copy, "拷贝$copy", tint = PersonaTheme.palette.ink2) }, onClick = {
+                                clipboard.setText(AnnotatedString(value)); feedback?.notice("已拷贝$copy")
+                            })
+                        else JRow(row.label, value = value)
+                    }
+                }
+            }
+            error != null -> JNotice(error.orEmpty(), Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou,
+                icon = PhIcons.WarningCircle, actionLabel = "重试", onAction = { attempt++ })
+            else -> JLoading()
+        }
+    }
+}

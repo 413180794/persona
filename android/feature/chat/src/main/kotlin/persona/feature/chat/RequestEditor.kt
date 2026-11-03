@@ -86,6 +86,8 @@ fun RequestEditor(
     full: Boolean = true, online: Boolean = true, onTerminal: (() -> Unit)? = null, onExpand: () -> Unit = {},
     readOnly: Boolean = false,
     linkVisible: Boolean = false,
+    /** Why this session's requests cannot be answered from the phone (its source does not approve). */
+    blockedReason: String? = null,
     onAnswer: (AnswerAction, AnswerDraft, Boolean) -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
@@ -121,5 +123,5 @@ fun RequestEditor(
             storageScope?.let { store.clear(it, request) }
             transient = AnswerDraft()
             onAnswer(action, submitted, read)
-        }, onTerminal, onExpand, items.items, readOnly, linkVisible)
+        }, onTerminal, onExpand, items.items, readOnly, linkVisible, blockedReason = blockedReason)
 }

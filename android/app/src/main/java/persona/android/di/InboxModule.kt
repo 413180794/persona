@@ -96,7 +96,9 @@ class InboxDataOwner @Inject constructor(
                     }
                 },
                 sendThread = { root, request -> transport.replyInThread(root, request.text, request.clientId) },
-                download = media::download)
+                download = media::download,
+                // 交给 AI to an Agent uses the same outbox as the Agents tab.
+                messageSender = data.messages)
             val lark = socket.route.map { route -> route?.let {
                 HttpLarkConversationTransport(transport, it.endpoint.url, data.credentials.deviceToken,
                     socket.http.client) { isCurrent() && socket.route.value == route }
@@ -176,6 +178,8 @@ class InboxDataOwner @Inject constructor(
         override suspend fun askPersona(itemId: String, action: InboxAiAction) = use { it.inbox.askPersona(itemId, action) }
         override suspend fun askPersona(request: InboxPersonaRequest) = use { it.inbox.askPersona(request) }
         override suspend fun personaContext(itemId: String) = use { it.inbox.personaContext(itemId) }
+        override suspend fun draftReply(itemId: String, instruction: String) = use { it.inbox.draftReply(itemId, instruction) }
+        override suspend fun handOff(request: InboxHandOffRequest) = use { it.inbox.handOff(request) }
     }
     val assistant = object : AssistantConversations {
         override val assistant = observe(AssistantSnapshot()) { it.assistant.assistant }
