@@ -4,12 +4,20 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-RUNTIME_PREFIXES = ("PERSONA_", "JARVIS_")
+RUNTIME_PREFIXES = ("PERSONA_", "JARVIS_", "PG")
+# Test-only inputs may configure TLS and connection behavior, never a second target or external credential source.
+DATABASE_QUERY_KEYS = {
+    "sslmode", "sslrootcert", "sslcert", "sslkey", "sslpassword", "sslsni", "sslnegotiation",
+    "connect_timeout", "target_session_attrs", "application_name",
+}
+# pgx uses os/user's home for defaults, not the sandbox HOME. Override implicit profile-file reads explicitly.
+DATABASE_QUERY_DEFAULTS = {"passfile": "", "sslcert": "", "sslkey": "", "sslrootcert": ""}
 PROFILE_VARIABLES = {
     "CLAUDE_CONFIG_DIR", "CODEX_HOME", "CODEX_CONFIG_DIR",
     "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
@@ -21,14 +29,25 @@ def test_database_url(config_file):
     with open(config_file) as source:
         config = json.load(source)
     value = config.get("database_url", "")
-    if not isinstance(value, str):
+    if not isinstance(value, str) or any(ord(character) <= 32 or ord(character) == 127 for character in value):
         raise ValueError("hub database_url must be a Postgres URL")
     parsed = urlsplit(value)
     if parsed.scheme not in {"postgres", "postgresql"} or not parsed.netloc or parsed.fragment:
         raise ValueError("hub database_url must be a Postgres URL")
     if parsed.path != "/jarvis":
         raise ValueError("server tests require the production jarvis database configuration")
-    test_url = urlunsplit(parsed._replace(path="/jarvis_test"))
+    # Go's URL query parser decodes keys and picks the first value; validating the path alone misses overrides.
+    if ";" in parsed.query or re.search(r"%(?![0-9A-Fa-f]{2})", parsed.query):
+        raise ValueError("invalid server test database query")
+    pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True, errors="strict")
+    settings = {}
+    for key, setting in pairs:
+        if key not in DATABASE_QUERY_KEYS or key in settings:
+            raise ValueError("unsupported or repeated server test database query option")
+        settings[key] = setting
+    for key, setting in DATABASE_QUERY_DEFAULTS.items():
+        settings.setdefault(key, setting)
+    test_url = urlunsplit(parsed._replace(path="/jarvis_test", query=urlencode(settings)))
     if test_url == value:
         raise ValueError("server test database must differ from the production database")
     return test_url
