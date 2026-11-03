@@ -107,8 +107,10 @@ struct LarkChatView: View {
         }
         .scrollPosition($position)
         .defaultScrollAnchor(Self.debugTop || opensAtMessage ? .top : .bottom)
+        // The visible part ends above the composer (bottom inset); containerSize leaves out both insets, so it can't be added to
+        // contentOffset: under a tall top bar (opened from the inbox) that never reached the end and the arrow never went away.
         .onScrollGeometryChange(for: Bool.self) { g in
-            g.contentOffset.y + g.containerSize.height >= g.contentSize.height - g.contentInsets.bottom - 80
+            g.visibleRect.maxY - g.contentInsets.bottom >= g.contentSize.height - 80
         } action: { _, v in atBottom = v }
         .overlay { placeholder }
         .overlay(alignment: .bottomTrailing) { jumpToLatestButton }
@@ -204,6 +206,7 @@ struct LarkChatView: View {
                 .padding(.horizontal, n > 0 ? 12 : 0)
                 .scaledFrame(minWidth: Theme.Size.wellXL, minHeight: Theme.Size.wellXL)
                 .surface(interactive: true, in: .capsule)
+                .contentShape(.capsule) // the glass is drawn but not hit-tested: without this only the chevron takes a touch
             }
             .buttonStyle(.plain)
             .padding(.trailing, Theme.Space.l)
@@ -220,6 +223,7 @@ struct LarkChatView: View {
                     .foregroundStyle(LarkColor.hue("red"))
                     .padding(.horizontal, Theme.Space.m).scaledFrame(minHeight: Theme.Size.wellM)
                     .surface(interactive: true, in: .capsule)
+                    .contentShape(.capsule)
             }
             .buttonStyle(.plain)
             .padding(.trailing, Theme.Space.l)
