@@ -106,3 +106,42 @@ func TestNewMailIsTranslatedBeforeItIsOpened(t *testing.T) {
 		t.Fatal("still a target")
 	}
 }
+
+func TestTranslationPassOutlivesTheRefreshRequest(t *testing.T) {
+	h := newTestHub(t)
+	h.inbox.init()
+	model, _ := mutableModel(t, `{"subject":"设计评审能改期吗？","text":"你好，周四我要出差。"}`)
+	h.triageAI = model
+	h.mail = fakeInboxMail{msgs: map[uint32]*mail.MailMessage{
+		7: {MailSummary: mail.MailSummary{Subject: "Can we move the design review?"}, Text: "Hi, I'm travelling on Thursday, so I won't make the review."},
+	}}
+	prefs := defaultPrefs()
+	prefs.Translate = TranslatePrefs{Enabled: true, Target: "zh-Hans", Mail: true}
+	if err := h.push.setPrefs("dev1", prefs); err != nil {
+		t.Fatal(err)
+	}
+	en := &InboxItem{ID: "mail:a:t:7", Source: "mail", Kind: KindMail, Title: "Can we move the design review?",
+		Preview: "Hi, I'm travelling on Thursday, so I won't make the review.", Last: "7", BodyOf: "7", UpdatedAt: time.Now(),
+		Mail: &InboxMail{AccountID: "a", Mailbox: "INBOX", UIDs: []uint32{7}}}
+	h.inbox.items[en.ID] = en
+
+	// The refresh request has already answered by the time the pass runs.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	h.translateInbox(ctx)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		h.inbox.mu.Lock()
+		done := en.Translations["zh-Hans"] != nil
+		h.inbox.mu.Unlock()
+		if done {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	h.inbox.translating.Lock()
+	h.inbox.translating.Unlock()
+	if tr := en.Translations["zh-Hans"]; tr == nil || tr.Subject != "设计评审能改期吗？" {
+		t.Fatalf("pass stopped with the request: %+v", tr)
+	}
+}

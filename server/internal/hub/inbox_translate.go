@@ -76,6 +76,8 @@ type translateJob struct {
 
 // translateInbox translates what needs it, in the background, one pass at a time.
 func (h *Hub) translateInbox(ctx context.Context) {
+	// Like triageInbox: the pass outlives the caller, since a pull to refresh answers before it is done.
+	ctx = context.WithoutCancel(ctx)
 	targets := h.push.mailTargets()
 	if len(targets) == 0 || h.mail == nil || h.translateModel() != nil || !h.inbox.translating.TryLock() {
 		return
