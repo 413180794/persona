@@ -266,3 +266,56 @@ func TestLogoutWhileStopped(t *testing.T) {
 		t.Fatal("still signed in")
 	}
 }
+
+// A connector whose program never ran (switched off from the start) answers with the manifest it was registered
+// with: the capabilities are listed, signing in says to switch it on, signing out runs the program for that (#666).
+func TestNeverStartedDeclaresItsManifest(t *testing.T) {
+	ctx := context.Background()
+	sec := &memSecrets{data: []byte("example session")}
+	cfg := program(t, sec)
+	cfg.Manifest = (&exampleProgram{}).Manifest()
+	c := New(cfg)
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "events", "archive", "login"}) {
+		t.Fatalf("before it ever ran: %v", got)
+	}
+	l, ok := connector.As[connector.Login](c)
+	if !ok {
+		t.Fatal("no sign-in before it ever ran")
+	}
+	if p, err := l.LoginStep(ctx, "", nil); err != nil || !strings.Contains(p.Error, "先打开") {
+		t.Fatalf("login: %+v %v", p, err)
+	}
+	if err := l.Logout(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := sec.get(); d != nil {
+		t.Fatal("still signed in")
+	}
+}
+
+// The program declaring something else than the hub registered it with is logged; the hub's declaration stays.
+func TestProgramDeclaringOtherwiseIsLogged(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := program(t, &memSecrets{})
+	cfg.Manifest = connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapLogin}}
+	var mu sync.Mutex
+	var logged []string
+	cfg.Logf = func(f string, a ...any) { mu.Lock(); logged = append(logged, fmt.Sprintf(f, a...)); mu.Unlock() }
+	c := New(cfg)
+	go c.Run(ctx)
+	waitUntil(t, "the program's status", func() bool { return c.Status(ctx).State == connector.StateNotSignedIn })
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.ContainsFunc(logged, func(l string) bool { return strings.Contains(l, "the hub registered it with") }) {
+		t.Fatalf("not logged: %q", logged)
+	}
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "login"}) {
+		t.Fatalf("listed %v", got)
+	}
+	// The same declaration in another order is the same.
+	if !sameManifest(connector.Manifest{Capabilities: []connector.Capability{connector.CapLogin, connector.CapStatus}},
+		connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapLogin}, Proxy: true}) {
+		t.Fatal("order matters")
+	}
+}

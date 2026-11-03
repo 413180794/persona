@@ -60,8 +60,9 @@ hub 收到不认识的档就丢掉、交给模型分拣。
 - **在 hub 里**：Go 代码直接实现接口。
 - **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 jarvisd 的（Telegram 的 gotd）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
   JSON-lines RPC（`internal/rpc`），方法一一对应接口（`serve.go` 的 `init`、`status`、`archive.changes`、`inbox.collect`、`tools.call`……），
-  程序反过来调 hub 的 `secrets.*`。`init` 回的是程序的清单（`serve.Manifest`，线上的字段是 snake_case），hub 侧的 `proc.Conn` 照它声明（`Proxy`）；
-  程序没起来时什么能力都不报。程序必须和 hub 同一次构建（`version -v` 一字不差），所以协议没有版本号。
+  程序反过来调 hub 的 `secrets.*`。hub 注册时就给 `proc.Conn` 一份静态的清单（`proc.Config.Manifest`；Telegram 的在不依赖 gotd 的
+  `connector/telegram/spec`，程序和 hub 共用），所以从没启动过、默认关着的连接器也报得出能力、能登录和退出（#666）；`init` 回的程序清单
+  （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。程序必须和 hub 同一次构建（`version -v` 一字不差），所以协议没有版本号。
 - **node 中转**：数据只在某台 Mac 上（`chat.db`）。node 上有一个读本地数据的 `Reader`，hub 经 node 的 RPC（`connector.list/chats/older/changes/search`，
   `node/node.go` 里写死的 5 个方法）去读，hub 一侧的 `imessage.Remote` 才是连接器。
 

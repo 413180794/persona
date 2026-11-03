@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/connector"
+	"github.com/chyroc/jarvis/server/internal/connector/telegram/spec"
 )
 
 // stored is what the hub keeps for the connector, sealed.
@@ -120,17 +121,11 @@ func newConn(secrets connector.Secrets, dial dialer) *Conn {
 		status: connector.Status{State: connector.StateNotSignedIn, Error: "还没填 Telegram 的 API 凭据"}}
 }
 
-func (*Conn) ID() string   { return "telegram" }
-func (*Conn) Name() string { return "Telegram" }
+func (*Conn) ID() string   { return spec.ID }
+func (*Conn) Name() string { return spec.Name }
 
-// Manifest: read-only, so no actions (docs/plan-telegram.md).
-func (*Conn) Manifest() connector.Manifest {
-	return connector.Manifest{
-		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapEvents, connector.CapInbox,
-			connector.CapArchive, connector.CapLogin},
-		Kinds: []string{"dm", "mention"},
-	}
-}
+// Manifest is spec's: the hub registers the program with the same before it runs.
+func (*Conn) Manifest() connector.Manifest { return spec.Manifest() }
 
 // Status answers from memory; a flood wait that is over is over here (the hub reads only an ok connector).
 func (c *Conn) Status(context.Context) connector.Status {

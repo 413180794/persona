@@ -13,6 +13,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/github"
 	"github.com/chyroc/jarvis/server/internal/connector/proc"
+	"github.com/chyroc/jarvis/server/internal/connector/telegram/spec"
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
@@ -427,12 +428,17 @@ func (h *Hub) addTelegram() {
 	if path == "" {
 		return
 	}
-	c := proc.New(proc.Config{ID: "telegram", Name: "Telegram", Path: path, Secrets: h.secretsFor("telegram"), Logf: h.logf,
-		Version:     fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number),
-		SettingsNow: h.telegramSettings})
-	if err := h.addConnectorOff(c); err != nil {
+	if err := h.addConnectorOff(h.telegramConnector(path)); err != nil {
 		h.logf("telegram connector: %v", err)
 	}
+}
+
+// telegramConnector is the program at path as the hub's connector, with what it declares (spec) known before it
+// ever runs: switched off, it still lists its capabilities and signs in and out.
+func (h *Hub) telegramConnector(path string) *proc.Conn {
+	return proc.New(proc.Config{ID: spec.ID, Name: spec.Name, Manifest: spec.Manifest(), Path: path, Secrets: h.secretsFor(spec.ID), Logf: h.logf,
+		Version:     fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number),
+		SettingsNow: h.telegramSettings})
 }
 
 // telegramSettings is what jarvisd-telegram gets at each start: the user's time zone by name, for the times the

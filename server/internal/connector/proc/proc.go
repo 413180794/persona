@@ -29,6 +29,10 @@ import (
 type Config struct {
 	// ID and Name are the connector's before the program says (while it starts, or cannot).
 	ID, Name string
+	// Manifest is what the program declares, known before it ever runs: a connector switched off from the start
+	// still lists its capabilities and can be signed in to and out of. The program's own (at init) is checked against
+	// it, a difference logged; this one is used. Without capabilities here, the program's is used once it runs.
+	Manifest connector.Manifest
 	Path     string // the program (next to jarvisd)
 	Args     []string
 	Env      []string // added to the hub's environment
@@ -82,12 +86,30 @@ func (c *Conn) Name() string {
 	return c.man.Name
 }
 
-// Manifest is what the program said it has (nothing while it has not started); its status is always the hub's
-// answer for it (connector.StatusOf asks a proxy's).
+// Manifest is the one Config declares, as a proxy's; without one, what the program said at init (nothing before).
+// Its status is always the hub's answer for it (connector.StatusOf asks a proxy's).
 func (c *Conn) Manifest() connector.Manifest {
+	if len(c.cfg.Manifest.Capabilities) > 0 {
+		m := c.cfg.Manifest
+		m.Proxy = true
+		return m
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.man.Of()
+}
+
+// sameManifest says whether the program declares what Config does (capabilities in any order).
+func sameManifest(declared, said connector.Manifest) bool {
+	norm := func(m connector.Manifest) connector.Manifest {
+		m.Capabilities = slices.Clone(m.Capabilities)
+		slices.Sort(m.Capabilities)
+		m.Proxy = false
+		return m
+	}
+	a, b := norm(declared), norm(said)
+	return slices.Equal(a.Capabilities, b.Capabilities) && slices.Equal(a.Hosts, b.Hosts) && slices.Equal(a.AgentTools, b.AgentTools) &&
+		a.Poll == b.Poll && slices.Equal(a.Kinds, b.Kinds)
 }
 
 // Status answers from memory: the program's last status, or why it is not running.
@@ -264,6 +286,9 @@ func (c *Conn) spawn(ctx context.Context) (*child, error) {
 	if man.ID != c.cfg.ID {
 		ch.stop()
 		return nil, fmt.Errorf("the program says it is %q, not %q", man.ID, c.cfg.ID)
+	}
+	if d := c.cfg.Manifest; len(d.Capabilities) > 0 && !sameManifest(d, man.Of()) {
+		c.cfg.Logf("connector %s: the program declares %v, the hub registered it with %v (the hub's is used)", c.cfg.ID, man.Of(), d)
 	}
 	c.mu.Lock()
 	c.man = man

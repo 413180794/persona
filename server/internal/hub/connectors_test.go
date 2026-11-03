@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -13,7 +14,6 @@ import (
 	"github.com/chyroc/jarvis/server/internal/connector"
 	"github.com/chyroc/jarvis/server/internal/connector/github"
 	"github.com/chyroc/jarvis/server/internal/connector/imessage"
-	"github.com/chyroc/jarvis/server/internal/connector/proc"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
 	"github.com/chyroc/jarvis/server/internal/proto"
@@ -180,9 +180,8 @@ func TestConnectorsEndpoint(t *testing.T) {
 	}
 }
 
-// What GET /api/v1/connectors?all=1 says each built-in connector can do, as listed before the manifests (v2 · V1):
-// the app goes by these names, so they must not move. Telegram's program is not running here: a proxy lists
-// nothing until it says.
+// What GET /api/v1/connectors?all=1 says each built-in connector can do (the app goes by these names). Telegram's
+// program has never run here: it lists what it declares (#666).
 func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	h := newTestHub(t)
 	h.mail = (*mail.Service)(nil)
@@ -190,7 +189,7 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
 	for _, c := range []connector.Connector{github.New(github.Config{}, "Mac", nil), imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil),
-		proc.New(proc.Config{ID: "telegram", Name: "Telegram", Path: "/nonexistent"})} {
+		h.telegramConnector("/nonexistent")} {
 		if err := h.addConnector(c); err != nil {
 			t.Fatal(err)
 		}
@@ -204,7 +203,7 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 		"mail tools,actions,archive hosts=[] options=false",
 		"github status,tools,actions,events,hosts,inbox,archive,options hosts=[github.com] options=true",
 		"imessage status,tools,events,inbox,archive hosts=[] options=false",
-		"telegram  hosts=[] options=false",
+		"telegram status,tools,events,inbox,archive,login hosts=[] options=false",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -214,6 +213,35 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 		if h.connectors.ForAgents(name) != want {
 			t.Errorf("%s for agents: %v", name, !want)
 		}
+	}
+}
+
+// Telegram switched off from the start, its program never run: it can still be signed in to (the hub says to switch
+// it on first) and out of (the program would run just for that; here it is not there), never "has no sign-in" (#666).
+func TestSwitchedOffProgramSignsInAndOut(t *testing.T) {
+	h := newTestHub(t)
+	h.connectors = connector.NewRegistry(nil)
+	if err := h.addConnectorOff(h.telegramConnector("/nonexistent/jarvisd-telegram")); err != nil {
+		t.Fatal(err)
+	}
+	h.restoreConnectorSwitches(context.Background())
+	if h.connectors.Enabled("telegram") {
+		t.Fatal("telegram is on")
+	}
+	mux := h.routes()
+	code, out := call(t, mux, "POST", "/api/v1/connectors/telegram/login", h.cfg.Token, `{"step":""}`)
+	if code != 200 || !strings.Contains(fmt.Sprint(out["error"]), "先打开") {
+		t.Fatalf("login: %d %v", code, out)
+	}
+	code, out = call(t, mux, "POST", "/api/v1/connectors/telegram/logout", h.cfg.Token, `{}`)
+	if code == http.StatusConflict || !strings.Contains(fmt.Sprint(out["error"]), "没有找到") {
+		t.Fatalf("logout: %d %v", code, out)
+	}
+	_, out = call(t, mux, "GET", "/api/v1/connectors", h.cfg.Token, "")
+	list := out["connectors"].([]any)
+	if len(list) != 1 || fmt.Sprint(list[0].(map[string]any)["capabilities"]) != "[status tools events inbox archive login]" ||
+		list[0].(map[string]any)["status"] != "disabled" {
+		t.Fatalf("listed %v", list)
 	}
 }
 
