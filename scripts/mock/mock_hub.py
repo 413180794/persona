@@ -2363,12 +2363,12 @@ MAIL_TRANSLATIONS = {
                   "还没定的两个问题是标签栏和空状态。\n\n谢谢，\nLucy"},
 }
 
-# The Feishu chats (GET /api/v1/lark/conversations; 设置 › 翻译 picks chats to translate from them).
-LARK_CHATS = [{"id": "f2", "name": "设计评审", "is_group": True, "unread": 3, "at_me": True, "muted": False, "preview": "@你 新版图标放在这里了",
+# The 设计评审 chat (inbox f2): a few messages, some in English (设置 › 翻译 picks chats to translate).
+LARK_CHATS = [{"id": "f2", "is_mine": False, "name": "设计评审", "is_group": True, "unread": 3, "at_me": True, "muted": False, "preview": "@你 新版图标放在这里了",
                "updated_at": ago(minutes=55)},
-              {"id": "f3", "name": "周末徒步群", "is_group": True, "unread": 12, "at_me": False, "muted": False, "preview": "周六早上 8 点地铁站集合",
+              {"id": "f3", "is_mine": False, "name": "周末徒步群", "is_group": True, "unread": 12, "at_me": False, "muted": False, "preview": "周六早上 8 点地铁站集合",
                "preview_sender": "Tom", "read_position": "299", "updated_at": ago(minutes=30)},
-              {"id": "f1", "name": "韩梅梅", "is_group": False, "unread": 2, "at_me": False, "muted": False, "preview": "新包发你了",
+              {"id": "f1", "is_mine": False, "name": "韩梅梅", "is_group": False, "unread": 2, "at_me": False, "muted": False, "preview": "新包发你了",
                "read_position": "99", "updated_at": ago(minutes=2)}]
 def _lm(pos, who, text, mine=False, mins=60):
     return {"id": "m" + pos, "position": pos, "sender_id": "u-" + who, "sender_name": who, "is_mine": mine, "type": "TEXT", "text": text,

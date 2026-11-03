@@ -58,6 +58,11 @@ struct RootView: View {
             Text(c.summary)
         }
         .sendRefusalAlert(model)
+        #if os(iOS)
+        .onChange(of: LarkHomePreference.shared.enabled) { _, enabled in
+            if !enabled, model.selectedTab == .feishu { model.selectedTab = .assistant }
+        }
+        #endif
     }
 }
 
@@ -72,6 +77,9 @@ struct RootView: View {
         TabView(selection: $model.selectedTab) {
             AssistantRootTab()
             AgentsRootTab()
+            #if os(iOS)
+            if LarkHomePreference.shared.enabled { FeishuRootTab() }
+            #endif
             InboxRootTab()
             SettingsRootTab()
         }
@@ -207,5 +215,15 @@ struct ToastOverlay: View {
 nonisolated struct ConnectionShown: Encodable, Equatable {
     var shown: String
     var network: Bool
+}
+#endif
+
+#if os(iOS)
+@MainActor private struct FeishuRootTab: TabContent {
+    var body: some TabContent<AppTab> {
+        Tab("消息", systemImage: Theme.Icon.feishuChats, value: AppTab.feishu) {
+            TabPage { LarkConversationsView().modifier(TabActivityScope(tab: .feishu)) }.equatable()
+        }
+    }
 }
 #endif

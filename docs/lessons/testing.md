@@ -247,3 +247,5 @@
 - `scripts/test/test-server.sh` 只同步了 `server/`，#630 带进来的 `spec/fixtures` 测试（`TestWireSamples`、续传、resolution）读 `../../../spec` 和 `apple/` 的 Swift 源码，
   在 hub 上全量跑必挂（`open ../../../spec/fixtures/wire: no such file`），看着像自己的改动坏了。现在脚本连 `spec/` 和 `apple/**/*.swift` 一起同步（#642）；
   再有测试读 `server/` 以外的文件，同样要加进脚本（2026-11-03）。
+
+- 三页外壳的右滑回归要在消息行的同一高度结束手势，不能从顶部一行拖到窗口中心。顶栏布局变化后这条轨迹可能超过 45°，实际是在测试垂直滚动；改为行内水平轨迹，再验证目标页，不能把这种失败当成缺少翻页能力。

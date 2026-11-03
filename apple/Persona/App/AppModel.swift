@@ -1836,6 +1836,9 @@ final class AppModel {
 
 enum AppTab: String, Hashable {
     case assistant, chats, mail, settings
+    #if os(iOS)
+    case feishu
+    #endif
 }
 
 struct PhoneConfirmation: Identifiable {

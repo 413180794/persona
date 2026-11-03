@@ -68,6 +68,10 @@ EXTRA += [(mid, space, sidx, title, "done", "idle", mins, last) for mid, space, 
     ("mini", "router", 3, "路由器配置备份", 60 * 50, "配置导出到备份盘，保留最近 10 份。"),
 ]]
 sessions = list(m.SESSIONS)
+# A standalone release session was added beside the background-task demo.
+release = next(s for s in sessions if s["session_id"] == m.RELEASE)
+m.ITEMS[m.RELEASE] = [m.it("user", "text", 10, text=release["title"]),
+                      m.it("assistant", "text", 3, text=release["last_text"])]
 for n, (mid, space, sidx, title, status, state, minutes, last) in enumerate(EXTRA):
     sid = "c7e9f1a3-0000-4000-8000-%012d" % (n + 1)
     slot = 10 + n
@@ -113,6 +117,18 @@ MAIL = {
             "from": {"name": "Weekly Digest", "email": "news@example.com"}, "to": [{"email": "me@example.com"}], "date": m.ago(hours=8),
             "seen": True, "text": "这周我们整理了 10 个 SwiftUI 的小技巧：从列表性能到动画曲线……"},
 }
+
+# Mirror the mock's mail fallback so new inbox fixtures also open in the bundled demo.
+for item in m.INBOX:
+    mail = item.get("mail")
+    if not mail:
+        continue
+    for uid in mail["uids"]:
+        MAIL.setdefault(str(uid), m.MAIL_MESSAGES.get(uid) or {
+            "account_id": mail["account_id"], "mailbox": mail.get("mailbox", "INBOX"), "uid": uid,
+            "subject": item["title"], "from": mail["from"], "to": [{"name": "Me", "email": "me@example.com"}],
+            "date": item["updated_at"], "text": m.MAIL_BODIES.get(uid, item["preview"]), "seen": False,
+        })
 
 
 def kb(kind, id, name, one_line, tags, minutes, extra=None):
@@ -175,6 +191,7 @@ data = {
     "mail_accounts": m.MAIL_ACCOUNTS,
     "mail": MAIL,
     "lark": LARK,
+    "lark_conversations": m.LARK_CHATS,
     "kb": KB,
     "screen": m.TERMINAL,
     "terminal_frames": phone_frames(),

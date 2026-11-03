@@ -10,6 +10,12 @@ import SwiftUI
 @MainActor @Observable final class ShellPager {
     /// 0 = 助手 in full, 1 = Agents in full; in between while dragging or settling.
     private(set) var position: CGFloat = 0
+    private(set) var pageCount = 2
+
+    func setPageCount(_ count: Int) {
+        pageCount = max(1, count)
+        slide(to: min(page, pageCount - 1), animated: false)
+    }
     /// A drag or a settle is under way: both pages are on screen until it ends.
     private(set) var moving = false
     /// The strip came to rest under a finger already down: the moving bar stays in its place until the finger lets go,
@@ -31,7 +37,7 @@ import SwiftUI
     @ObservationIgnored var began: () -> Void = {}
 
     /// The page at rest (or nearest).
-    var page: Int { position < 0.5 ? 0 : 1 }
+    var page: Int { min(pageCount - 1, max(0, Int(position.rounded()))) }
 
     /// A finger came down on the window, or the last one let go.
     func fingers(down: Bool) {
@@ -70,7 +76,8 @@ import SwiftUI
     /// the value, no animation; a little resistance past either end.
     func drag(_ x: CGFloat) {
         var p = dragStart - x / max(width, 1)
-        if p < 0 { p /= 3 } else if p > 1 { p = 1 + (p - 1) / 3 }
+        let end = CGFloat(pageCount - 1)
+        if p < 0 { p /= 3 } else if p > end { p = end + (p - end) / 3 }
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) { position = p }
@@ -80,10 +87,11 @@ import SwiftUI
     /// the system's back swipe, a flick goes its way, otherwise past half way.
     func letGo(velocity: CGFloat) {
         let from = dragStart.rounded()
-        let toward = from == 0 ? 1.0 : 0.0
-        // How far along towards the other page, and the finger's speed in that direction.
-        let along = abs(position - from)
-        let speed = from == 0 ? -velocity : velocity
+        // A reversal cancels a partial drag rather than skipping to the other neighbor.
+        let direction: CGFloat = position == from ? (velocity < 0 ? 1 : -1) : (position > from ? 1 : -1)
+        let toward = min(CGFloat(pageCount - 1), max(0, from + direction))
+        let along = max(0, (position - from) * direction)
+        let speed = -velocity * direction
         let goes = SwipeRelease.goes(progress: along, velocity: speed, width: max(width, 1))
         let target = goes ? toward : from
         if goes { Haptics.tap() }
@@ -98,7 +106,7 @@ import SwiftUI
     /// rests there or is already on its way (a drag that settled there, the same tap twice); a slide the other way
     /// that has not started yet is replaced, one under way turns around.
     func slide(to page: Int, animated: Bool = true) {
-        let target = CGFloat(page)
+        let target = CGFloat(min(pageCount - 1, max(0, page)))
         #if DEBUG
         ShellTrace.shared.note("slide \(page) pos=\(String(format: "%.2f", position)) moving=\(moving)")
         #endif

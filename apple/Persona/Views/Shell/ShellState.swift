@@ -21,7 +21,7 @@ import SwiftUI
     /// The status row's link state and toasts (`ShellStatusRow`).
     let notices = ShellNotices()
     #endif
-    /// The page in front: 0 = 助手, 1 = Agents.
+    /// The page in front: 0 = 助手, 1 = Agents, 2 = optional 消息.
     private(set) var page = 0
     /// Agents is built the first time it is selected or dragged in (TabView builds a tab when shown), then kept. Not
     /// before: hidden, its controls are still in the accessibility tree (its glass and list are UIKit).
@@ -29,6 +29,8 @@ import SwiftUI
     /// 助手 likewise. Built while the app opened on Agents, its conversation appeared there unseen: subscribed, shown,
     /// marked seen, and whatever hangs off `onAppear` ran a second time at launch (2026-11-02, `ShellLaunchTests`).
     private(set) var assistantBuilt = false
+    private(set) var feishuBuilt = false
+    var feishuAtRoot = true
     /// What the drawer or the home page asked the 助手 page to show; `serial` makes the same request count twice.
     private(set) var request: (page: ShellPage, serial: Int)?
     /// Each page says whether it is at its root: the drawer's drag only opens there (pushed pages swipe back).
@@ -51,17 +53,41 @@ import SwiftUI
     @ObservationIgnored private var routed = false
 
     /// `page`: where the app opens (its tab), so the page that is not in front is not built at launch.
-    init(page: Int = 0) {
+    init(page: Int = 0, pageCount: Int = 2) {
+        let page = min(max(0, page), max(1, pageCount) - 1)
         self.page = page
+        pager.setPageCount(pageCount)
+        feishuBuilt = page == 2
         agentsBuilt = page == 1
         assistantBuilt = page == 0
         pager.slide(to: page, animated: false)
         pager.settled = { [unowned self] p in select(p) }
-        pager.began = { [unowned self] in agentsBuilt = true; assistantBuilt = true }
+        pager.began = { [unowned self] in
+            agentsBuilt = true; assistantBuilt = true
+            if pager.pageCount > 2 { feishuBuilt = true }
+        }
     }
 
     /// The page in front, with the root of the page in front (pushed pages swipe back instead of opening the drawer).
-    var atRoot: Bool { page == 1 ? workAtRoot : chatAtRoot }
+    var atRoot: Bool { page == 2 ? feishuAtRoot : page == 1 ? workAtRoot : chatAtRoot }
+
+    func setPageCount(_ count: Int) {
+        pager.setPageCount(count)
+        if page >= pager.pageCount { select(0, animated: false) }
+    }
+
+    static func tab(for page: Int) -> AppTab {
+        #if os(iOS)
+        if page == 2 { return .feishu }
+        #endif
+        return page == 1 ? .chats : .assistant
+    }
+    static func index(for tab: AppTab) -> Int {
+        #if os(iOS)
+        if tab == .feishu { return 2 }
+        #endif
+        return tab == .chats ? 1 : 0
+    }
 
     func show(_ page: ShellPage) {
         request = (page, (request?.serial ?? 0) + 1)
@@ -94,7 +120,8 @@ import SwiftUI
     /// `p` in front (0 = 助手, 1 = Agents): the switch, a drag that settled there, a route. The strip slides there and
     /// the app's tab says so. Taps that come while the strip still moves are not lost: the last one is where it ends.
     func select(_ p: Int, animated: Bool = true) {
-        if p == 1 { agentsBuilt = true } else { assistantBuilt = true }
+        let p = min(max(0, p), pager.pageCount - 1)
+        if p == 2 { feishuBuilt = true } else if p == 1 { agentsBuilt = true } else { assistantBuilt = true }
         if page != p {
             page = p
             #if DEBUG
@@ -103,7 +130,7 @@ import SwiftUI
         }
         pager.slide(to: p, animated: animated && routed)
         routed = true
-        let tab: AppTab = p == 1 ? .chats : .assistant
+        let tab = Self.tab(for: p)
         if let model, model.selectedTab != tab { model.selectedTab = tab }
     }
 
@@ -119,6 +146,9 @@ import SwiftUI
         switch t {
         case .assistant: select(0)
         case .chats: select(1)
+        #if os(iOS)
+        case .feishu: select(pager.pageCount > 2 ? 2 : 0)
+        #endif
         case .mail:
             show(.inbox)
             select(0)

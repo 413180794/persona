@@ -304,6 +304,9 @@ private struct ConnectorRowLabel: View {
 /// itself is signed in on the hub's machine (docs/feishu.md), not here.
 struct FeishuConnectorView: View {
     @Environment(AppModel.self) private var model
+    #if os(iOS)
+    @Bindable private var larkHome = LarkHomePreference.shared
+    #endif
     @State private var status: LarkStatus?
     @State private var loading = true
     @State private var failure: String?
@@ -337,8 +340,17 @@ struct FeishuConnectorView: View {
             } footer: {
                 Text(status?.configured == false
                      ? "hub 还没接飞书：在 hub 所在的机器上运行 lark-connector，并在 hub.json 的 lark 里填上它（docs/feishu.md）。"
-                     : "飞书账号在 hub 所在机器的 lark-connector 里登录，这里只看连接状态。")
+                     : "飞书账号在 hub 所在机器的 lark-connector 里登录，会话与收件箱共用这个账号，无需再次登录。")
             }
+
+            #if os(iOS)
+            Section {
+                Toggle("首页显示消息", isOn: $larkHome.enabled)
+                .accessibilityIdentifier("feishu-home-enabled")
+            } footer: {
+                Text("在首页增加「消息」入口，查看全部私聊和群聊。与收件箱共用账号和聊天记录。")
+            }
+            #endif
 
             Section("Persona 用飞书做什么") {
                 use(Theme.Icon.inbox, "收件箱", "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复")

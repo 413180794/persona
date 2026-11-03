@@ -379,7 +379,7 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             if let pager, Self.pages(pager: pager, dx: dx) {
                 if Self.sidewaysScroller(at: start, in: view, towardsRight: dx < 0) { return refused("sideways scroller") }
                 if Self.typing(at: start, in: view) { return refused("typing") }
-                if dx > 0, start.x > DrawerPan.edge, Self.onRow(at: start, in: view) { return refused("a row's swipe") }
+                if pager.page == 1, dx > 0, start.x > DrawerPan.edge, Self.onRow(at: start, in: view) { return refused("a row's swipe") }
                 mode = .pager
                 return true
             }
@@ -389,9 +389,9 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             return Self.sidewaysScroller(at: start, in: view, towardsRight: false) ? refused("sideways scroller") : true
         }
 
-        /// Whether a drag `dx` points to the other page of the strip: to the left on 助手, to the right on Agents.
+        /// Whether a drag `dx` points toward an existing neighbor on the page strip.
         static func pages(pager: ShellPager, dx: CGFloat) -> Bool {
-            pager.page == 0 ? dx < 0 : dx > 0
+            (dx < 0 && pager.page < pager.pageCount - 1) || (dx > 0 && pager.page > 0)
         }
 
         /// Scroll views under the page wait for the drawer to decide, which it does within the same few points they

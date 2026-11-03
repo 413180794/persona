@@ -50,7 +50,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     /// The page the switch shows as chosen: the shell's, or `tab` outside it.
     private var chosen: AppTab {
         guard let shell else { return tab }
-        return shell.page == 1 ? .chats : .assistant
+        return ShellState.tab(for: shell.page)
     }
 
     /// Whether the chosen segment opens its menu: not while the strip slides (a tap then picks a page). Only `moving`,
@@ -86,6 +86,11 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
                 }
                 WaitingBadge()
             }
+            #if os(iOS)
+            if LarkHomePreference.shared.enabled {
+                button("消息", .feishu, id: "shell-feishu")
+            }
+            #endif
         }
         .background(alignment: .leading) {
             if let shell { PagerPill(shell: shell, follows: follows) }
@@ -100,7 +105,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
             if let shell {
                 // Also while the strip slides: the last tap is where it ends.
                 if chosen != value { Haptics.tap() }
-                shell.select(value == .chats ? 1 : 0)
+                shell.select(ShellState.index(for: value))
             } else if tab != value {
                 Haptics.tap()
                 tab = value
@@ -163,8 +168,8 @@ private struct PagerPill: View {
 
     var body: some View {
         GeometryReader { g in
-            let half = g.size.width / 2
-            let at = follows ? min(1, max(0, shell.pager.position)) : CGFloat(shell.page)
+            let half = g.size.width / CGFloat(shell.pager.pageCount)
+            let at = follows ? min(CGFloat(shell.pager.pageCount - 1), max(0, shell.pager.position)) : CGFloat(shell.page)
             if AppStyle.current.usesBeautifulUI {
                 // BeautifulUI's segmented control: the chosen segment is a raised capsule.
                 Color.clear.buiSurface(Capsule(), fill: theme.colors.surface, elevation: .button)
@@ -183,17 +188,23 @@ private struct PagerPill: View {
 /// (an agent asks, another is answered), and only this badge is drawn again.
 private struct WaitingBadge: View {
     @Environment(AppModel.self) private var model
+    private var offset: CGSize {
+        #if os(iOS)
+        if LarkHomePreference.shared.enabled { return CGSize(width: -Theme.Space.s, height: -Theme.Space.l) }
+        #endif
+        return CGSize(width: Theme.Space.s, height: -Theme.Space.sm)
+    }
 
     var body: some View {
         let waiting = model.agentsWaiting
         if waiting > 0, AppStyle.current.usesBeautifulUI {
             BUIPill(waiting > 99 ? "99+" : "\(waiting)", tone: .custom(ink: .white, fill: Theme.needsYou))
-                .offset(x: Theme.Space.s, y: -Theme.Space.sm)
+                .offset(offset)
                 .allowsHitTesting(false)
                 .accessibilityLabel("\(waiting) 个在等你")
         } else if waiting > 0 {
             CountBadge(count: waiting, look: .solid(Theme.needsYou))
-                .offset(x: Theme.Space.s, y: -Theme.Space.sm)
+                .offset(offset)
                 .allowsHitTesting(false)
                 .accessibilityLabel("\(waiting) 个在等你")
         }

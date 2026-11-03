@@ -11,7 +11,8 @@ import SwiftUI
 struct ShellView: View {
     @Environment(AppModel.self) private var model
     /// Opens on the app's tab: the page behind is built when it is first selected or dragged in.
-    @State private var shell = ShellState(page: AppModel.shared.selectedTab == .chats ? 1 : 0)
+    @State private var shell = ShellState(page: ShellState.index(for: AppModel.shared.selectedTab),
+                                          pageCount: LarkHomePreference.shared.enabled ? 3 : 2)
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -27,6 +28,9 @@ struct ShellView: View {
                 SettingsView()
                     .environment(\.shell, shell)
                     .id(model.look)
+            }
+            .onChange(of: LarkHomePreference.shared.enabled, initial: true) { _, enabled in
+                shell.setPageCount(enabled ? 3 : 2)
             }
             // The shell takes the app's tab as it is set (`ShellState.route`): not an onChange here, which was skipped now
             // and then (docs/shell.md).
@@ -66,6 +70,10 @@ struct ShellView: View {
                 if shell.agentsBuilt {
                     ChatsView()
                         .modifier(ShellPageSlide(shell: shell, index: 1))
+                }
+                if LarkHomePreference.shared.enabled, shell.feishuBuilt {
+                    LarkConversationsView()
+                        .modifier(ShellPageSlide(shell: shell, index: 2))
                 }
             }
             .frame(width: g.size.width, height: g.size.height)
@@ -117,7 +125,7 @@ private struct ShellPagerProbe: View {
 
     var body: some View {
         let pager = shell.pager
-        let page = pager.moving ? "moving" : pager.page == 1 ? "agents" : "assistant"
+        let page = pager.moving ? "moving" : pager.page == 2 ? "feishu" : pager.page == 1 ? "agents" : "assistant"
         let tab = model.selectedTab == .chats ? "agents" : model.selectedTab == .assistant ? "assistant" : model.selectedTab.rawValue
         let n = shell.notices
         let status = switch n.shown { case .toast: "toast"; case .link: "link"; case nil: "none" }
@@ -126,7 +134,7 @@ private struct ShellPagerProbe: View {
             .frame(width: Theme.Size.line, height: Theme.Size.line)
             .accessibilityElement()
             .accessibilityIdentifier("shell-pager-probe")
-            .accessibilityValue("\(page) selected=\(shell.page == 1 ? "agents" : "assistant") tab=\(tab)"
+            .accessibilityValue("\(page) selected=\(shell.page == 2 ? "feishu" : shell.page == 1 ? "agents" : "assistant") tab=\(tab)"
                 + " position=\(String(format: "%.2f", pager.position)) drawer=\(shell.drawer.isOpen ? 1 : 0)"
                 + " chatRoot=\(shell.chatAtRoot ? 1 : 0) workRoot=\(shell.workAtRoot ? 1 : 0)" + row)
             .accessibilityLabel(ShellTrace.shared.events.joined(separator: " | "))
@@ -146,21 +154,23 @@ private struct ShellMovingBar: View {
 
     var body: some View {
         if pager.moving || pager.lingering {
-            let p = min(1, max(0, pager.position))
+            let p = Double(min(CGFloat(pager.pageCount - 1), max(0, pager.position)))
             HStack(alignment: .top, spacing: Theme.Space.s) {
                 ShellPersonaButton(id: "shell-moving-sidebar") {}
                 Spacer(minLength: 0)
                 ZStack {
                     // 新对话 is dimmed on an empty chat (AssistantTopBar).
                     ShellCircleButton(symbol: Theme.Icon.compose, label: "新对话", id: "shell-moving-new") {}
-                        .opacity((1 - p) * (model.assistantCurrent == nil ? 0.4 : 1))
+                        .opacity(max(0, 1 - p) * (model.assistantCurrent == nil ? 0.4 : 1))
                     ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "shell-moving-agents-new") {}
-                        .opacity(p)
+                        .opacity(max(0, 1 - abs(p - 1)))
+                    ShellCircleButton(symbol: Theme.Icon.settings, label: "飞书设置", id: "shell-moving-feishu-settings") {}
+                        .opacity(max(0, p - 1))
                 }
             }
             .allowsHitTesting(false)
             .overlay(alignment: .top) {
-                ShellSwitch(tab: .constant(pager.page == 1 ? .chats : .assistant)) { EmptyView() } workMenu: { EmptyView() }
+                ShellSwitch(tab: .constant(ShellState.tab(for: pager.page))) { EmptyView() } workMenu: { EmptyView() }
                     .environment(\.shellPillFollowsStrip, true)
             }
             .padding(.horizontal, Theme.Space.l)
@@ -168,7 +178,7 @@ private struct ShellMovingBar: View {
             .shellTopBarScaled()
             .background(alignment: .top) {
                 BarFog(solid: AssistantTopBar.height - Theme.Space.sm, fade: AssistantTopBar.fade)
-                    .opacity(1 - p)
+                    .opacity(max(0, 1 - p))
                     .allowsHitTesting(false)
             }
             .accessibilityHidden(true)

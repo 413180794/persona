@@ -56,12 +56,17 @@ import Testing
         _ = try await api.deviceTokens()
 
         let inbox = try await api.inbox()
-        #expect(inbox.count == 6)
+        #expect(inbox.count >= 6)
         for item in inbox {
             if let c = item.larkConversation { #expect(!(try await api.larkMessages(c.id)).messages.isEmpty) }
             if let m = item.mailSummary {
                 _ = try await api.mailMessage(account: m.accountID, uid: m.uid, mailbox: m.mailbox ?? "INBOX")
             }
+        }
+        let conversations = try await api.larkConversations()
+        #expect(conversations.conversations.count >= 2)
+        for c in conversations.conversations {
+            #expect(!(try await api.larkMessages(c.id)).messages.isEmpty)
         }
         _ = try await api.mailAccounts()
     }

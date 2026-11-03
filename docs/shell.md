@@ -79,7 +79,7 @@ XCUITest 能点到它（`ShellSwitchTests` 曾因此点到隐藏的切换段）�
      读 position 的：药丸、两页滑动的位置、顶栏在滑动中让位
 ```
 
-- **一个来源**：`ShellState.page`（0 助手、1 Agents）。改它只有两个方法：`select`（切换段、拖动 settle）和 `route`（任何地方写了 `AppModel.selectedTab`）。
+- **一个来源**：`ShellState.page`（0 助手、1 Agents、2 为用户开启后的消息）。改它只有两个方法：`select`（切换段、拖动 settle）和 `route`（任何地方写了 `AppModel.selectedTab`）。
   两个都是**当场**做完，不等视图重画：`AppModel.selectedTab` 的 `didSet` 直接调 `tabRouter`（外壳出现时 `attach`，消失时 `detach`），
   不再用 `onChange`。`.mail` 推收件箱回到助手页，`.settings` 开设置浮层、tab 回到在前的那页；打开「旧布局」时外壳不再接路由，交给 tab 栏。
 - **横条跟着 page 走**：`ShellPager.slide(to:)` 记着要去哪（`goal`），同一个目标再来一次什么都不做；还没开始的滑动被新的替换，进行中的掉头；
@@ -177,3 +177,7 @@ DEBUG：`-showConnectionCycle connecting:7:4`（第 7 秒起显示连接中… 4
 
 切换段一律用 `ShellFinger`（`PersonaUITests/ShellPageProbe.swift`）点：启动时从助手页的切换段读一次两个段的位置，之后都点这两个坐标，
 点完断言三项一致和时限；失败时打印探针和最近的 `ShellTrace`。
+
+### 可选的消息页（#392）
+
+飞书设置的「首页显示消息」默认关闭，打开后外壳增加第三页，复用同一个 `ShellState.page`、路由器、顶栏切换和拖动模型。消息页首次选中或拖入才创建；设置浮层不会把当前消息页切回助手。关闭开关时如果正在消息页，立即回到助手，过期的 `.feishu` 路由也回到助手，不留下不可见页面。`lark-connectorShellTests` 覆盖三页往返、拖动反向取消、关闭与重新开启、消息页启动及设置返回。

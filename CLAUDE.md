@@ -47,6 +47,8 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 
 - **不做第二个飞书**：App 是把各处信息收到一起交给 AI，不是把飞书的功能页面搬过来。飞书只保留
   消息（进收件箱）、链接在 App 内渲染（文档、removed单帖），其余能力只做在 hub / AI 侧（搜索、读取作为上下文），见 `docs/feishu.md`。
+  用户明确允许的窄例外（#392）：飞书设置里默认关闭的「首页显示消息」开关，开启后增加「消息」页，浏览全部私聊和群聊；
+  复用收件箱的账号、聊天页、发件箱和同步，不另做客户端，不恢复通讯录、工作台等页面。见 `docs/lark-connector-migration.md`。
   别的数据源同理：不要为某个来源做一套浏览页面。
 - **链接在 App 内打开**：会话里出现的任何链接（飞书文档、removed、网页……）都在当前 App 里打开，参考 Telegram：
   底部浮起的卡片，打开即铺满屏幕（不是半屏），下拉到 0.6 时不挡 Agent 的操作（对话照常滚动、输入），再下拉关闭。打开速度和顺滑优先，不在乎本地空间：预加载、本地缓存、
@@ -227,6 +229,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/connector-protocol.md` | 连接器协议 v2：子进程 / 第三方连接器和 hub 之间的一行一条 JSON：握手和清单、每个方法的参数和结果、程序调 hub 的 `secrets.*` 和 `changed`、错误码、硬性规定、版本规则、一致性测试 |
 | `docs/inbox.md` | 收件箱：飞书和邮件合成一个列表，一行一件事，AI 分拣、已处理、交给 AI；AI 分身（分拣 → 判断 → Agent 处理并草拟回复，点一下发送） |
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（使用 Google 账号登录，OAuth2 + XOAUTH2）、飞书邮箱（固定 larkoffice.com 服务器）、凭据存储 |
+| `docs/lark-connector-migration.md` | 飞书迁移的授权范围：可选消息页与现有收件箱共用能力 |
 | `docs/feishu.md` | 飞书在 Persona 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
 | `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
