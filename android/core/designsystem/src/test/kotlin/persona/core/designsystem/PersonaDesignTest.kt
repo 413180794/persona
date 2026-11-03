@@ -6,9 +6,23 @@ import org.junit.Test
 
 class PersonaDesignTest {
     @Test fun storedIdsMatchIosAndUnknownFallsBackToTheDefault() {
-        assertEquals(listOf("jarvis", "jarvis-circuit"), PersonaDesign.entries.map { it.id })
+        assertEquals(listOf("persona", "jarvis", "jarvis-circuit"), PersonaDesign.entries.map { it.id })
         PersonaDesign.entries.forEach { assertEquals(it, PersonaDesign.fromId(it.id)) }
-        listOf(null, "", "doudou", "JARVIS").forEach { assertEquals(PersonaDesign.Visor, PersonaDesign.fromId(it)) }
+        listOf(null, "", "doudou", "JARVIS").forEach { assertEquals(PersonaDesign.Mochi, PersonaDesign.fromId(it)) }
+    }
+
+    /** 团子 became the default on 2026-11-03: nothing saved means it; a saved 面罩 (`jarvis`) stays 面罩. */
+    @Test fun mochiIsTheDefaultAndASavedVisorStays() {
+        assertEquals(PersonaDesign.Mochi, PersonaDesign.Default)
+        assertEquals(PersonaDesign.Visor, PersonaDesign.fromId("jarvis"))
+        assertEquals("团子", PersonaDesign.Default.title)
+    }
+
+    @Test fun mochiIsTracedInsideTheDisc() {
+        (Mochi.eyes + Mochi.lines.flatMap { listOf(it.first, it.second) } + Mochi.p(168f, 672f) + Mochi.p(262f, 778f)).forEach {
+            val d = (it - Offset(0.5f, 0.5f)).getDistance()
+            assert(d < 0.5f) { "$it is outside the disc" }
+        }
     }
 
     @Test fun circuitLightsRunFromThePadIntoTheCore() {

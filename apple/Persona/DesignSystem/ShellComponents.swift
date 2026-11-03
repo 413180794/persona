@@ -243,11 +243,11 @@ struct ShellCircleButton: View {
 /// The top bar's left button on both pages (2026-11-01 user request, in place of ☰): the persona's face in Persona's
 /// state, as the old layout's bar shows it in the middle (`PersonaDot`, docs/persona.md「状态」), opening the drawer
 /// (历史对话, 收件箱…). The state is that of Persona's conversation on 助手 (`assistantCurrent`), on Agents too, so the
-/// face stays the same while the strip slides. A tray mark sits beside the face's lower right while the inbox has
-/// something for the user: a tray, not a dot, so it does not read as the face's state; its bottom level with the face's
-/// (2026-11-02: hung below the frame it lay over Agents' search field, so nothing of the bar reaches below the face
-/// now, on every page), as far right as clears the round face and its rings (needs-you, working) by a gap, away from
-/// the corner the packages draw in (the thought bubble and the z are top right). The button reads all of it itself:
+/// face stays the same while the strip slides. While the inbox has something for the user a small soft red dot sits
+/// on the face's lower right (2026-11-04 user request, in place of a red tray beside it: smaller, paler, overlapping
+/// the face so it takes no room and does not draw the eye), inside the round face so nothing reaches past it (it once
+/// hung below the frame over Agents' search field), away from the corner the packages draw in (the thought bubble and
+/// the z are top right). A ring in the page's color sets it apart from the face. The button reads all of it itself:
 /// the bars around it are not drawn again with each push (#178).
 struct ShellPersonaButton: View {
     @Environment(AppModel.self) private var model
@@ -255,13 +255,12 @@ struct ShellPersonaButton: View {
     var id: String
     var action: () -> Void
 
-    /// How far right of the face's lower right corner the mark goes (its bottom level with the face's) so that it
-    /// clears the round face by `gap`: the centers `face / 2 + mark / 2 + gap` apart.
-    nonisolated static func markShift(face: CGFloat, mark: CGFloat, gap: CGFloat) -> CGFloat {
-        let r = face / 2, m = mark / 2
-        let down = r - m // the mark's center below the face's
-        let across = ((r + m + gap) * (r + m + gap) - down * down).squareRoot()
-        return across - (r - m) // from bottomTrailing, where the mark's center is r - m right of the face's
+    /// How far up and left of the face frame's lower right corner the dot goes so that it lies on the face's rim at
+    /// 45°, just inside the round face: its center `face / 2 - dot / 2` from the face's, down and right.
+    nonisolated static func dotShift(face: CGFloat, dot: CGFloat) -> CGFloat {
+        let r = face / 2, d = dot / 2
+        let along = (r - d) / 2.squareRoot() // the dot's center right of (and below) the face's
+        return along - (r - d) // from bottomTrailing, where the dot's center is r - d right of the face's; negative
     }
 
     var body: some View {
@@ -270,7 +269,7 @@ struct ShellPersonaButton: View {
         let inbox = InboxStore.shared.actionCount > 0
         // As big as the bar's round buttons (ShellCircleButton's frame): the tap target, growing with the text size.
         let k = Theme.sizeScale(typeSize)
-        let mark = Theme.Size.badge * k
+        let dot = Theme.Size.dotXL * k
         Button {
             Haptics.tap()
             action()
@@ -281,8 +280,8 @@ struct ShellPersonaButton: View {
         .buttonStyle(.plain)
         .overlay(alignment: .bottomTrailing) {
             if inbox {
-                InboxMark(size: mark)
-                    .offset(x: Self.markShift(face: Theme.Size.tapTarget * k, mark: mark, gap: Theme.Space.xxs))
+                let shift = Self.dotShift(face: Theme.Size.tapTarget * k, dot: dot)
+                InboxDot(size: dot).offset(x: shift, y: shift)
             }
         }
         .accessibilityLabel("历史对话")
@@ -293,19 +292,16 @@ struct ShellPersonaButton: View {
     }
 }
 
-/// The inbox's mark on the persona's face: a tray on the 需要你 red, ringed in the page's color to stand apart from the face.
-private struct InboxMark: View {
+/// The inbox's dot on the persona's face: soft red, no number or symbol, ringed inside its size in the page's color so
+/// it stands apart from the face without growing past it.
+private struct InboxDot: View {
     var size: CGFloat
 
     var body: some View {
-        Image(systemName: Theme.Icon.inbox)
-            .font(Theme.Font.labelHeavy)
-            .imageScale(.small)
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            .foregroundStyle(.white)
+        Circle()
+            .fill(Theme.inboxDot)
+            .overlay(Circle().strokeBorder(Theme.pageBackground, lineWidth: Theme.Size.lineMedium))
             .frame(width: size, height: size)
-            .background(Theme.needsYou, in: .circle)
-            .overlay(Circle().stroke(Theme.pageBackground, lineWidth: Theme.Size.lineMedium))
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

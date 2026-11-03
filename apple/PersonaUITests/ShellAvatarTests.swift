@@ -1,7 +1,7 @@
 import XCTest
 
 /// The shell's top-left button is the persona's face (docs/ios.md「新外壳」): it opens the drawer on 助手 and on Agents,
-/// and carries the inbox's mark while the inbox has something for the user (体验模式's has). The old layout keeps its ☰
+/// and carries the inbox's dot while the inbox has something for the user (体验模式's has). The old layout keeps its ☰
 /// and the face in the middle of the bar. The empty-inbox case needs scripts/mock/mock_hub.py started with
 /// MOCK_INBOX=empty (JARVIS_EMPTY_INBOX_HUB).
 final class ShellAvatarTests: XCTestCase {
@@ -16,6 +16,11 @@ final class ShellAvatarTests: XCTestCase {
         // probe.shell; no chat restored from an earlier run: Agents opened on it, with no face to tap (2026-11-03).
         app.launchArguments = arguments + ["-probes", "YES", "-dev.openChat", ""]
         app.launchPinned()
+        // A fresh install asks for notifications first; while the alert is up the app stays inactive and the inbox
+        // is not fetched, so the face would carry no dot.
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "允许"])).firstMatch
+        if allow.waitForExistence(timeout: 3) { allow.tap() }
     }
 
     @MainActor private func value(_ e: XCUIElement) -> String { e.value as? String ?? "" }

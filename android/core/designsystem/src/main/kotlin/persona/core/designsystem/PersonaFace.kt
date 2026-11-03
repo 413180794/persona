@@ -42,6 +42,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.lerp
@@ -74,14 +77,17 @@ enum class PersonaState(val wire: String, val label: String) {
 
 /**
  * The built-in faces (docs/persona.md「内置形象」), chosen in 设置 › 外观 › 形象; [id] is the persona id iOS and the
- * hub use. Neither is a download and both are drawn in the theme's colour.
+ * hub use. None is a download. 团子 ([Mochi], the default since 2026-11-03) keeps the app icon's colours; 面罩 (the
+ * default before, id `jarvis`) and 汇流 are drawn in the theme's colour. The choice is only saved when one is tapped,
+ * so a phone that never chose gets the default and one that chose 面罩 keeps it ([AppStyleStore.personaId]).
  */
 enum class PersonaDesign(val id: String, val title: String, val summary: String) {
-    Visor("jarvis", "面罩", "默认形象，颜色随主题色"),
+    Mochi("persona", "团子", "App 图标的配色"),
+    Visor("jarvis", "面罩", "颜色随主题色"),
     Circuit("jarvis-circuit", "汇流", "走线汇进核心，颜色随主题色");
 
     companion object {
-        val Default = Visor
+        val Default = Mochi
         fun fromId(id: String?): PersonaDesign = entries.firstOrNull { it.id == id } ?: Default
     }
 }
@@ -90,8 +96,9 @@ enum class PersonaDesign(val id: String, val title: String, val summary: String)
 val LocalPersonaDesign = compositionLocalOf { PersonaDesign.Default }
 
 /**
- * The persona's face (iOS `PersonaFace`), drawn in the theme's accent so it follows the style and stays sharp at any
- * size. 面罩 ([PersonaDesign.Visor], the default) is an accent disc with a dark visor, two bright eyes and the brand's
+ * The persona's face (iOS `PersonaFace`), drawn from shapes so it stays sharp at any size. 团子 ([PersonaDesign.Mochi],
+ * the default) is the app icon's white blob waving on its paper disc (a dark disc in the dark), in the icon's colours;
+ * the others are in the theme's accent. 面罩 ([PersonaDesign.Visor]) is an accent disc with a dark visor, two bright eyes and the brand's
  * sparkle on top; 汇流 ([PersonaDesign.Circuit]) is three traces running into a core with two dark eyes, a light
  * running along each trace while it works. It moves for [state] like iOS: a blink every few seconds (空闲), eyes up under a thought bubble (思考中),
  * eyes scanning (工作中), a breathing ring in 需要你's red (等你处理), gray (离线). Reduce Motion holds each
@@ -144,18 +151,21 @@ fun PersonaFace(
 
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
     val rect = remember { RectF() }
+    val dark = PersonaTheme.darkTheme
     Box(modifier.size(size).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val t = if (moving) time else 0f
             when (design) {
+                PersonaDesign.Mochi -> mochi(state, dark, t, moving, blink.value, size < Mochi.COMPACT_BELOW, paint)
                 PersonaDesign.Visor -> visor(state, accent, t, moving, blink.value, paint, rect)
                 PersonaDesign.Circuit -> circuit(state, accent, t, moving, blink.value)
             }
             if (state == PersonaState.NeedsYou) needsYouRing(ring, t, moving)
         }
         if (state == PersonaState.Thinking) {
-            ThoughtBubble(size, accent, if (moving) time else 0f, moving,
-                Modifier.align(Alignment.Center).offset(x = size * 0.25f, y = -size * 0.3f))
+            val mochi = design == PersonaDesign.Mochi
+            ThoughtBubble(size, if (mochi) Mochi.cheek else accent, if (moving) time else 0f, moving,
+                Modifier.align(Alignment.Center).offset(x = size * 0.25f, y = -size * (if (mochi) 0.29f else 0.3f)))
         } else if (design == PersonaDesign.Visor) {
             JIcon(PhIcons.Sparkle, null, Modifier.align(Alignment.Center).offset(x = size * 0.25f, y = -size * 0.27f),
                 size = size * 0.22f, tint = Color.White.copy(alpha = if (state == PersonaState.Offline) 0.5f else 0.92f), selected = true)
@@ -227,6 +237,141 @@ private fun DrawScope.visor(
 
     val rim = max(0.5.dp.toPx(), s * 0.015f)
     drawCircle(Color.White.copy(alpha = 0.18f), radius = (s - rim) / 2, style = Stroke(rim))
+}
+
+/**
+ * Draws 团子 at time t (iOS `PersonaFace.mochi`, the same geometry traced from the 1024 px icon): the disc, the body's
+ * soft shadow, the outlined body, the cheek, the gloss and the motion lines (not when [compact]), and the eyes.
+ * 思考中 hides the lines (the bubble is there) and lifts the eyes; 工作中 scans the eyes, bobs, lights the lines in turn
+ * and runs an orange arc around the rim; 等你处理 rocks the body (a wave); 离线 is gray with closed eyes.
+ */
+private fun DrawScope.mochi(state: PersonaState, dark: Boolean, t: Float, moving: Boolean, open: Float, compact: Boolean, paint: Paint) {
+    val s = this.size.minDimension
+    val offline = state == PersonaState.Offline
+    val ink = if (offline) Mochi.sleepInk else Mochi.ink
+    drawCircle(Brush.verticalGradient(if (dark) Mochi.discDark else Mochi.discLight, startY = 0f, endY = s))
+    val circle = Path().apply { addOval(androidx.compose.ui.geometry.Rect(0f, 0f, s, s)) }
+    clipPath(circle) {
+        if (state == PersonaState.Working) {
+            val w = max(RING_MIN.toPx(), s * RING_SHARE)
+            val turn = if (moving) (t / 1.6f % 1f) * 360f else 300f
+            drawArc(Mochi.cheek, turn - 90f, 0.28f * 360f, false, Offset(w / 2, w / 2), Size(s - w, s - w), style = Stroke(w, cap = StrokeCap.Round))
+        }
+        val rock = if (state == PersonaState.NeedsYou && moving) sin(t * 7f) * 5f else 0f
+        val bob = if (state == PersonaState.Working && moving) -abs(sin(t * 5f)) * s * 0.02f else 0f
+        translate(top = bob) {
+            rotate(rock, Mochi.p(500f, 780f) * s) {
+                val lw = max(Mochi.STROKE_MIN.toPx(), s * Mochi.STROKE)
+                // The soft shadow under the body.
+                paint.clearShadowLayer()
+                paint.style = Paint.Style.FILL
+                paint.color = Color.Black.copy(alpha = if (dark) 0.45f else 0.14f).toArgb()
+                paint.maskFilter = android.graphics.BlurMaskFilter(s * 0.02f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+                val c = Mochi.p(490f, 800f) * s
+                drawIntoCanvas { it.nativeCanvas.drawOval(c.x - 0.3f * s, c.y - 0.022f * s, c.x + 0.3f * s, c.y + 0.022f * s, paint) }
+                paint.maskFilter = null
+                val body = Mochi.body(s)
+                drawPath(body, Brush.linearGradient(if (offline) Mochi.sleepBody else Mochi.bodyColors,
+                    start = Offset(0.4f * s, 0.3f * s), end = Offset(0.5f * s, 0.82f * s)))
+                drawPath(body, if (offline) Mochi.sleepInk else if (dark) Mochi.outlineDark else Mochi.ink,
+                    style = Stroke(lw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                val k = if (compact) Mochi.COMPACT_FEATURES else 1f
+                val cheek = Mochi.p(312f, 556f) * s
+                val cr = Mochi.CHEEK_RADIUS * k * s
+                drawOval(if (offline) Mochi.sleepCheek else Mochi.cheek, Offset(cheek.x - cr, cheek.y - cr * 0.9f), Size(cr * 2, cr * 1.8f))
+                if (!compact) {
+                    drawPath(Mochi.gloss(s), Color.White, style = Stroke(lw * 0.6f, cap = StrokeCap.Round))
+                    val lit = when (state) {
+                        PersonaState.Idle, PersonaState.NeedsYou -> floatArrayOf(1f, 1f, 1f)
+                        PersonaState.Working -> {
+                            val on = if (moving) (t * 4f).toInt() % 3 else 0
+                            FloatArray(3) { if (it == on) 1f else 0.35f }
+                        }
+                        else -> FloatArray(0)
+                    }
+                    val motion = if (dark) Mochi.motionDark else Mochi.ink
+                    lit.forEachIndexed { i, a ->
+                        val (from, to) = Mochi.lines[i]
+                        drawLine(motion.copy(alpha = a), from * s, to * s, lw * 0.85f, StrokeCap.Round)
+                    }
+                }
+                val er = Mochi.EYE_RADIUS * k * s
+                if (offline) {
+                    for (e in Mochi.eyes) {
+                        val c2 = e * s
+                        val lid = Path().apply { moveTo(c2.x - er, c2.y); quadraticTo(c2.x, c2.y + er * 0.7f, c2.x + er, c2.y) }
+                        drawPath(lid, ink, style = Stroke(lw * 0.8f, cap = StrokeCap.Round))
+                    }
+                } else {
+                    val look = when (state) {
+                        PersonaState.Thinking -> Offset(s * 0.022f, -s * 0.03f)
+                        PersonaState.Working -> Offset(s * (if (moving) sin(t * 1.8f) * 0.028f else -0.024f), s * 0.012f)
+                        else -> Offset.Zero
+                    }
+                    val eh = er * (if (state == PersonaState.Idle) open else 1f)
+                    for (e in Mochi.eyes) {
+                        val c2 = e * s + look
+                        drawOval(ink, Offset(c2.x - er, c2.y - eh), Size(er * 2, eh * 2))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 团子's geometry in shares of the face's side and its colours (iOS `Mochi` / `MochiInk`): icon pixels into the disc. */
+internal object Mochi {
+    private const val SCALE = 1.16f
+    /** Below this the motion lines and the gloss go and the eyes and cheek grow, so the face still reads. */
+    val COMPACT_BELOW = 36.dp
+    const val COMPACT_FEATURES = 1.3f
+    const val EYE_RADIUS = 29f / 1024f * SCALE
+    const val CHEEK_RADIUS = 37f / 1024f * SCALE
+    const val STROKE = 30f / 1024f * SCALE
+    val STROKE_MIN = 1.3.dp
+
+    val cheek = Color(0xFFF2703C)
+    val ink = Color(0xFF1D1816)
+    val outlineDark = Color(0xFF0E0B0A)
+    val motionDark = Color(0xFFD6D1CD)
+    val discLight = listOf(Color(0xFFF4EADF), Color(0xFFE7D7C4))
+    val discDark = listOf(Color(0xFF332A26), Color(0xFF1D1816))
+    val bodyColors = listOf(Color.White, Color(0xFFE9E3DE))
+    val sleepBody = listOf(Color(0xFFD9D4D0), Color(0xFFBDB6B1))
+    val sleepInk = Color(0xFF6E6763)
+    val sleepCheek = Color(0xFFA59D98)
+
+    fun p(x: Float, y: Float) = Offset(0.5f + (x - 545f) / 1024f * SCALE, 0.5f + (y - 548f) / 1024f * SCALE)
+
+    val eyes = listOf(p(397f, 497f), p(553f, 480f))
+    val lines = listOf(p(792f, 352f) to p(818f, 298f), p(838f, 384f) to p(884f, 340f), p(864f, 428f) to p(924f, 408f))
+
+    fun body(s: Float): Path {
+        fun q(x: Float, y: Float) = p(x, y) * s
+        fun Path.c(c1: Offset, c2: Offset, to: Offset) = cubicTo(c1.x, c1.y, c2.x, c2.y, to.x, to.y)
+        return Path().apply {
+            val start = q(262f, 778f)
+            moveTo(start.x, start.y)
+            c(q(420f, 792f), q(600f, 790f), q(702f, 772f))
+            c(q(742f, 764f), q(752f, 700f), q(760f, 640f))
+            c(q(800f, 598f), q(828f, 562f), q(826f, 502f))
+            c(q(825f, 446f), q(795f, 418f), q(764f, 428f))
+            c(q(736f, 440f), q(722f, 468f), q(712f, 494f))
+            c(q(690f, 440f), q(650f, 350f), q(560f, 304f))
+            c(q(470f, 260f), q(330f, 288f), q(254f, 382f))
+            c(q(184f, 462f), q(158f, 582f), q(168f, 672f))
+            c(q(176f, 742f), q(206f, 772f), start)
+            close()
+        }
+    }
+
+    /** The icon's highlight on the top left of the head. */
+    fun gloss(s: Float): Path = Path().apply {
+        val a = p(312f, 380f) * s; val c = p(352f, 346f) * s; val b = p(412f, 334f) * s
+        moveTo(a.x, a.y); quadraticTo(c.x, c.y, b.x, b.y)
+        val d = p(288f, 414f) * s; val e = p(290f, 411f) * s
+        moveTo(d.x, d.y); lineTo(e.x, e.y)
+    }
 }
 
 /** 需要你: a ring inside the edge, breathing while moving. */

@@ -371,18 +371,18 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 ## 形象（Persona 的脸）
 
-照 iOS（`docs/persona.md`）复刻两个内置形象，默认的「面罩」和可选的「汇流」（#638）：`core/designsystem` 的 `PersonaFace` 用 Canvas 画，几何、配色比例和动作取自 iOS 的 `PersonaFace.swift`，按当前主题色着色，任意尺寸都清楚，不用位图。
+照 iOS（`docs/persona.md`）复刻三个内置形象，默认的「团子」（#1021）和可选的「面罩」「汇流」（#638）：`core/designsystem` 的 `PersonaFace` 用 Canvas 画，几何、配色比例和动作取自 iOS 的 `PersonaFace.swift`，任意尺寸都清楚，不用位图；团子用 App 图标的配色，面罩、汇流按当前主题色着色。
 
 - 用在：Persona 页顶栏左上角（`JPersonaButton`，替换原来的「对话列表」图标，点它照旧打开对话列表；读屏读「对话列表」和「Persona，<状态>」），对话列表顶部（原来的字母头像，宽屏常驻的侧栏也是它）。两处显示同一个状态。
 - 五个状态：空闲（每 3.6 秒眨眼）、思考中（眼睛看右上，思考气泡三个点轮流亮）、工作中（眼睛左右扫）、等你处理（呼吸的环）、离线（灰，眼睛闭成线）。只有后三个每帧动（约 12 帧/秒），空闲只在眨眼时动；「减少动画」或省电模式时每个状态停在静止的一帧（同 iOS 的低电量模式）。
 - 状态的取法（`feature/assistant` 的 `personaState`，规则同 iOS `AppModel.personaState`）：hub 连不上（连接中、等待网络等，「更新中」不算）或这段对话的机器离线是离线；对话等你（`needs_you` 或有待处理的交互）是等你处理；正在跑一轮是工作中；其他空闲。看的是当前打开的对话；新对话页没有对话，只看 Persona 所在的机器在不在线，其他时候空闲。
-- 和 iOS 的差别：这一页拿不到对话的最后一条，分不出思考中和工作中，跑着的一轮都显示工作中；等你处理的环用 Android 设计系统的「需要你」色（橙），不是 iOS 的红；晨报风格的主题色就是墨色（近黑 / 近白），面罩和星标会糊掉，所以晨报里脸用次级墨色（中灰），不给这个风格加颜色；iOS 在收件箱有事时给脸挂托盘标记，Android 的收件箱是底部的独立 tab、自带提醒，脸上不再挂。
-- 选哪个：设置 › 外观 › 形象（`feature/settings` 的 `PersonaSettings`），内置的两张卡片、hub 上的包，加选中那个的五种状态，马上生效。选择存在手机上（`AppStyleStore.personaId`，和界面风格同一份偏好，记的是 iOS 同款 id：内置的 `jarvis` / `jarvis-circuit`，或者包的 id），换 hub、重新配对都不丢；`LocalPersonaDesign` 把它传给每个 `PersonaFace`。体验模式只有默认形象（面罩）。iOS 和网页 2026-11-03 起默认是团子（id `persona`，`docs/persona.md`），Android 还没跟上，默认仍是面罩。
+- 和 iOS 的差别：这一页拿不到对话的最后一条，分不出思考中和工作中，跑着的一轮都显示工作中；等你处理的环用 Android 设计系统的「需要你」色（橙），不是 iOS 的红；晨报风格的主题色就是墨色（近黑 / 近白），面罩和星标会糊掉，所以晨报里脸用次级墨色（中灰），不给这个风格加颜色；iOS 在收件箱有事时在脸的右下角叠一个小淡红点，Android 的收件箱是底部的独立 tab、自带提醒，脸上不再挂。
+- 选哪个：设置 › 外观 › 形象（`feature/settings` 的 `PersonaSettings`），内置的三张卡片（团子、面罩、汇流）、hub 上的包，加选中那个的五种状态，马上生效。选择存在手机上（`AppStyleStore.personaId`，和界面风格同一份偏好，记的是 iOS 同款 id：内置的 `persona` / `jarvis` / `jarvis-circuit`，或者包的 id），换 hub、重新配对都不丢；`LocalPersonaDesign` 把它传给每个 `PersonaFace`。体验模式只有默认形象。2026-11-04 起和 iOS、网页一样默认是团子（id `persona`，App 图标里招手的团子，照图标的配色画、不跟主题色，`docs/persona.md`「内置形象」），面罩、汇流是可选项；选择只有点了才存，没选过的手机落到团子，存过 `jarvis` 的照旧是面罩。
 - 汇流：深色圆底上三条走线汇进带两只眼的核心，工作中每条线上有一个光点跑进核心；没有星标。几何同 iOS 的 `Circuit`。
 - hub 上的形象包（`docs/persona.md`「包格式」，规则同 iOS 的 `PersonaStore`）：`core/designsystem` 的 `PersonaStore`，全机一份，不跟 hub 走。
   - 列表：每次连上 hub 和打开形象页时各取一次 `GET /api/v1/personas`（`core/hub` 的 `HttpPersonaPacks`），存进 `files/personas/index.json`，下次启动先显示。手机端再查一遍 hub 的检查规则（`PersonaManifest.problem`）；旧 hub 没有这个接口时提示「这个 hub 还不能放形象：更新 hub 后再看」。
   - 下载：选中时才下整个包，先写到 `files/personas/<id>/.<rev>.part`，全部到齐再整个改名成 `<rev>`，所以不会用到半个包；没选的包只下一张头像当卡片的缩略图。rev 变了就下新的，新的没下下来就接着用旧的；没人用的旧 rev 和缩略图在刷新后删掉。rev 必须是 hub 给的 16 位十六进制（它当目录名用）。下载中又选了别的，以后选的为准。
-  - 选中的包在手机上就直接从磁盘显示，不等 hub（断网启动也是它）；hub 上没有了就用内置面罩，但保留选择（`AppStyleStore.personaId`），包回来了就恢复。
+  - 选中的包在手机上就直接从磁盘显示，不等 hub（断网启动也是它）；hub 上没有了就用默认的团子，但保留选择（`AppStyleStore.personaId`），包回来了就恢复。
   - 播放：Android 只解 PNG 的第一帧，所以 `decodeApng` 自己拆 APNG：每帧的数据包成一张单独的 PNG 交给 `BitmapFactory`，再按帧的偏移、dispose 和 blend 合到画布上（生成脚本写的 APNG 只有第 0 帧是整张，后面都是局部帧）。只解当前用到的状态，最多缓存 6 个；帧按文件里的时长轮换，没写时长用 `fps`；「减少动画」或省电模式时停在第 0 帧。状态色画在帧里，App 不再叠环。
   - 选了包以后，Persona 页顶栏、对话列表顶部、菜单里的名字和输入框的「问 xxx…」换成包的 `name`（`LocalPersonaName`）；底部 tab、启动器快捷方式这些产品入口仍叫 Persona。
   - 和 iOS 的差别：Android 没有主题色「跟随形象」，包里的 `colors` 不读。

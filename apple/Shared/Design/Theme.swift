@@ -464,6 +464,10 @@ nonisolated enum Theme {
     static var needsYou: Color { StatusPalette.needsYou.dot }
     static var busy: Color { StatusPalette.working.dot }
     static var unread: Color { StatusPalette.unread.dot }
+    /// The inbox's dot on the persona's face (`ShellPersonaButton`): a soft red that says "something's there" without
+    /// calling like 需要你's red (2026-11-04 user request: smaller, paler, not drawing the eye). Visible on every built-in
+    /// face's disc (团子's paper, 面罩's accent, 汇流's dark) in both appearances, ringed in the page's color.
+    static let inboxDot = Color(light: 0xEE8E8E, dark: 0xC9706F)
 }
 
 extension AgentState {
