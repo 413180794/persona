@@ -8,7 +8,7 @@ import re
 
 MODULE = Path(__file__).resolve().parents[1]
 ROOT = MODULE.parents[2]
-source = ROOT / "apple/Jarvis/Resources/Demo.json"
+source = ROOT / "apple/Persona/Resources/Demo.json"
 data = json.loads(source.read_text())
 
 # Derive replacements from identity fields instead of duplicating fictional names in source.

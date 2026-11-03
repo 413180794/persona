@@ -190,7 +190,7 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	add("connection", "revs_changed_sessions", "版本事件只携带发生变化的会话及其版本。", "event",
 		ws(map[string]any{"type": "revs", "machine_id": "m1", "revs": map[string]int64{"s1": 120, "s2": 7}}),
 		map[string]any{"/type": "revs", "/machine_id": "m1", "/revs": map[string]int64{"s1": 120, "s2": 7}},
-		"server/internal/hub/machine.go: Machine.onEvent", "apple/JarvisTests/SyncEventTests.swift: decodesRevs")
+		"server/internal/hub/machine.go: Machine.onEvent", "apple/PersonaTests/SyncEventTests.swift: decodesRevs")
 	files["connection"][2].Derived = false
 	files["connection"][2].FromTest = "SyncEventTests.decodesRevs"
 
@@ -574,7 +574,7 @@ func wireCompatibility(t *testing.T, files map[string][]wireSample, add wireAdde
 	add("compatibility", "item_unknown_kind", "未知内容块类型降级为 unknown。", "compat_event", ws(map[string]any{"type": "items", "machine_id": "m1", "session_id": "s1", "items": []proto.Item{{ID: "entry_future#0", Seq: 1, TS: now, Role: "assistant", Kind: "future_kind"}}}), map[string]any{"/items/0/kind": "unknown"}, "apple/Shared/Models.swift: ItemKind.init(from:)")
 	add("compatibility", "fleet_bad_optional_stats", "Fleet 的可选统计字段类型错误时只丢弃统计字段。", "compat_event", ws(map[string]any{"type": "fleet", "fleet": map[string]any{"phase": "working", "working": 1, "stats": "invalid"}}), map[string]any{"/fleet/phase": "working", "/fleet/working": 1, "/fleet/stats": nil}, "apple/Shared/FleetState.swift: FleetState.init(from:)")
 	add("compatibility", "fleet_unknown_values", "未知 Fleet 阶段变为空阶段，未知条目类型变为 screen。", "compat_event", ws(map[string]any{"type": "fleet", "fleet": map[string]any{"phase": "later", "items": []any{map[string]any{"id": "a/b", "kind": "teleport"}}}}),
-		map[string]any{"/fleet/phase": "", "/fleet/items/0/kind": "screen"}, "apple/JarvisTests/FleetStateTests.swift: lenientDecoding")
+		map[string]any{"/fleet/phase": "", "/fleet/items/0/kind": "screen"}, "apple/PersonaTests/FleetStateTests.swift: lenientDecoding")
 	files["compatibility"][len(files["compatibility"])-1].Derived = false
 	files["compatibility"][len(files["compatibility"])-1].FromTest = "FleetStateTests.lenientDecoding"
 	for _, bad := range []struct {

@@ -504,7 +504,7 @@ func firstDiff(got, want []proto.Item) string {
 
 var dumpDir = flag.String("dumpitems", "", "write each -corpus file's items (as pages carry them) to <dir>/<n>.json")
 
-// TestCorpusDumpItems writes real sessions' items for the app's rebuild benchmark (apple/JarvisTests/RebuildTests.swift).
+// TestCorpusDumpItems writes real sessions' items for the app's rebuild benchmark (apple/PersonaTests/RebuildTests.swift).
 func TestCorpusDumpItems(t *testing.T) {
 	if *dumpDir == "" {
 		t.Skip("-dumpitems")

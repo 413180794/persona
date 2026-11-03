@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run the UI tests (apple/JarvisUITests) in the simulator against the configured hub (docs/config.md).
+# Run the UI tests (apple/PersonaUITests) in the simulator against the configured hub (docs/config.md).
 #   ./scripts/app/ui-test.sh [machine/session to open]   # default: the newest session of the hub's machine
 set -euo pipefail
 cd "$(dirname "$0")/../.."

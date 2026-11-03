@@ -52,7 +52,7 @@ func TestPublicKeyRejectsGarbage(t *testing.T) {
 	}
 }
 
-// vector is shared with apple/JarvisTests/PushCryptoTests.swift: CryptoKit must open what Go sealed.
+// vector is shared with apple/PersonaTests/PushCryptoTests.swift: CryptoKit must open what Go sealed.
 var vector = struct{ priv, sealed, plain string }{
 	"el2PlP5fa1q1OuNd1M8/leos7rSG4OzZEtfcyKlg6+c=",
 	"BCggIsspkEoE9Iv+kSeqwGyPHxVNL0Cuto0IV/ZcubpAjXlNzTrF6T60wHSyaJiGj9b4udL2LnPDJEydaRAUnm/4syS2NCzzS/iffzfQTIx+WpKnYO5yqff6oDa/z7t7ow2jocpUOakeY4YKHS7ExN0Vwf5lnqWtOl282TY2JPHGUhI1ZKSiwB0RM8CzPIEzgHF0NWJldVg2pWRuHMGetwweyi8TUM2Zq0AzFPWvfbp8XWjshd1QjOQtoarB/ICzOKNLgXgpyJumYwxSvLw8m1+A6IZpF7Xl8UQwOK1Ytf/OoXJWgenoHY1XmFXBTr66RK0A3QgkM/1scEeQIvyL28MeDJzHdDO5u6n5Em3BuZLvaB8OSehyZHbPHPeMlabYso/z/lTsI4mPA0cP+6vNd+I5M6yUAPmi",

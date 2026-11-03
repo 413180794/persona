@@ -4,7 +4,7 @@ import UIKit
 @testable import Jarvis
 
 /// SF Symbols go through `Theme.Icon` (Shared/Design/Icons.swift): one meaning, one symbol. These read the sources next to
-/// this file (apple/Persona, apple/JarvisWatch, apple/Shared) and look at what is passed as `systemName:`, `systemImage:` or
+/// this file (apple/Persona, apple/PersonaWatch, apple/Shared) and look at what is passed as `systemName:`, `systemImage:` or
 /// `symbol:`. A line ending in `// icon: <why>` is left alone (another product's icon names, drawn as it draws them).
 struct IconVocabularyTests {
     /// Symbols that used to stand for an error next to the triangle; the vocabulary has one.

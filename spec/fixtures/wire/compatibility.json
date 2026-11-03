@@ -201,7 +201,7 @@
     "name": "fleet_unknown_values",
     "description": "未知 Fleet 阶段变为空阶段，未知条目类型变为 screen。",
     "source": [
-      "apple/JarvisTests/FleetStateTests.swift: lenientDecoding"
+      "apple/PersonaTests/FleetStateTests.swift: lenientDecoding"
     ],
     "from_test": "FleetStateTests.lenientDecoding",
     "decoder": "compat_event",

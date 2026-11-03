@@ -203,7 +203,7 @@
     "description": "版本事件只携带发生变化的会话及其版本。",
     "source": [
       "server/internal/hub/machine.go: Machine.onEvent",
-      "apple/JarvisTests/SyncEventTests.swift: decodesRevs"
+      "apple/PersonaTests/SyncEventTests.swift: decodesRevs"
     ],
     "from_test": "SyncEventTests.decodesRevs",
     "decoder": "event",
