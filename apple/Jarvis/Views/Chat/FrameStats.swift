@@ -72,6 +72,9 @@ final class FrameStats: NSObject {
         let hitchTime = late.reduce(0) { $0 + ($1 - expected) }
         let sorted = deltas.sorted()
         func pct(_ p: Double) -> Double { sorted.isEmpty ? 0 : sorted[min(sorted.count - 1, Int(Double(sorted.count) * p))] * 1000 }
+        // Typed: in the `Any` literal below Swift 6.2 (Xcode 26.0) took `busy.last` for `last(where:)`, a closure
+        // JSONSerialization throws on.
+        let busyMax: Double = busy.last ?? 0
         let result: [String: Any] = [
             "label": label,
             "frames": deltas.count,
@@ -80,7 +83,7 @@ final class FrameStats: NSObject {
             "hitch_ms_per_s": total > 0 ? hitchTime * 1000 / total : 0,
             "p50_ms": pct(0.5), "p95_ms": pct(0.95), "p99_ms": pct(0.99),
             "max_ms": (sorted.last ?? 0) * 1000,
-            "busy_p50_ms": bpct(0.5), "busy_p95_ms": bpct(0.95), "busy_max_ms": busy.last ?? 0,
+            "busy_p50_ms": bpct(0.5), "busy_p95_ms": bpct(0.95), "busy_max_ms": busyMax,
             // When the long frames came (seconds from the start) and how long they were (ms).
             "long": zip(deltas.indices, deltas).filter { $0.1 > 0.05 }.map { i, d in
                 [Double(deltas[..<i].reduce(0, +)), d * 1000] },

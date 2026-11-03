@@ -287,6 +287,10 @@
   `fetchReminders`、`PHImageManager`、`WCSession.sendMessage` 的 reply / error……），SDK 没标 Sendable 的，编译器不报错，闭包被当成主线程代码，
   运行时隔离检查一失败就崩（`dispatch_assert_queue_fail`，2026-10-31 保存图片必崩）。这类闭包一律写成 `{ @Sendable … in`，`BackgroundCallbackTests` 按源码检查；
   SDK 已标 `NS_SWIFT_SENDABLE` 的（HealthKit 查询、URLSession）和在主线程回调的代理不用管。真点系统功能的 UI 测试（`PhotoSaveTests`）才测得出来。
+- `[String: Any]` 字面量里写 `arr.last ?? 0`，Swift 6.2（Xcode 26.0）会把 `arr.last` 当成方法 `last(where:)`，存进去的是一个闭包；
+  `JSONSerialization` 碰到它就抛 `Invalid type in JSON write (__SwiftValue)`，App 直接崩。`FrameStats.stop` 因此在 Xcode 26.0 的构建里每次都崩，
+  `-showPagePerf` 一轮都量不出来（2026-11-03，#674）。#343 用新版 Xcode（27.x）量的时候没遇到。放进 `Any` 的值先赋给有类型的常量
+  （`let busyMax: Double = busy.last ?? 0`），`FrameStatsTests` 检查写出来的 JSON。
 ### 最低兼容编译器
 
 - **最低兼容的编译器是 Xcode 26.0（Swift 6.2），固定不动**（2026-11-02）：本机和不少开发机还在 26.0，master 必须在它上面编得过（iOS、Mac、手表、各扩展）；发版机器的 Xcode 更新（Swift 6.3.x），能编不代表 26.0 能编。
