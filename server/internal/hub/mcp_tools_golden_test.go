@@ -35,6 +35,7 @@ func TestGoldenMCPTools(t *testing.T) {
 	golden(t, "mcp_tools.assistant", show(h.mcpTools(true)))
 	golden(t, "mcp_tools.agent", show(h.mcpTools(false)))
 	// With GitHub signed in: its read tools after the hub's own, for the assistant only.
+	withoutGitHub(h) // every hub registers a GitHub, signed out until the user signs in
 	if err := h.addConnector(signedInGitHub{github.New(github.Config{}, "Mac", nil)}); err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +48,17 @@ func TestGoldenMCPTools(t *testing.T) {
 	}
 	golden(t, "mcp_tools.assistant_with_imessage", show(h.mcpTools(true)))
 	golden(t, "mcp_tools.agent", show(h.mcpTools(false)))
+}
+
+// withoutGitHub leaves the registered connectors but GitHub (the test adds one of its own).
+func withoutGitHub(h *Hub) {
+	r := connector.NewRegistry(nil)
+	for _, c := range h.connectors.All() {
+		if c.ID() != "github" {
+			_ = r.Add(c)
+		}
+	}
+	h.connectors = r
 }
 
 type readableIMessage struct{ *imessage.Remote }

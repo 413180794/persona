@@ -188,7 +188,7 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	h.lark = lark.New(lark.Config{BaseURL: "http://127.0.0.1:1", Token: "t"})
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
-	for _, c := range []connector.Connector{github.New(github.Config{}, "Mac", nil), imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil),
+	for _, c := range []connector.Connector{imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil),
 		h.telegramConnector("/nonexistent")} {
 		if err := h.addConnector(c); err != nil {
 			t.Fatal(err)
@@ -201,7 +201,7 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	want := []string{
 		"lark tools,chats,items hosts=[] options=false",
 		"mail tools,actions,archive hosts=[] options=false",
-		"github status,tools,actions,events,hosts,inbox,archive,options hosts=[github.com] options=true",
+		"github status,tools,actions,events,hosts,inbox,archive,login,options hosts=[github.com] options=true",
 		"imessage status,tools,events,inbox,archive hosts=[] options=false",
 		"telegram status,tools,events,inbox,archive,login hosts=[] options=false",
 	}

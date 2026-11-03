@@ -77,6 +77,20 @@ type Connector struct {
 
 	inbox inboxState   // inbox.go
 	opts  InboxOptions // rules.go
+
+	// Where the token comes from (source.go): a computer's gh login (machineID, through fetch) or the device flow.
+	source    string
+	machineID string
+	// scopes: what the token in use may do (X-OAuth-Scopes), known once GitHub answered with them.
+	scopes      []string
+	scopesKnown bool
+
+	// The device flow's sign-in (login.go): GitHub's web host, the hub's store, what it keeps, a code waiting.
+	web       string
+	secrets   connector.Secrets
+	dev       deviceLogin
+	devLoaded bool
+	pending   *devicePending
 }
 
 // noteRate records how many requests GitHub still allows this hour.
@@ -105,8 +119,13 @@ func New(cfg Config, machine string, fetch TokenSource) *Connector {
 	if h := cfg.host(); h != "github.com" {
 		api = "https://" + h + "/api/v3"
 	}
-	return &Connector{cfg: cfg, machine: machine, fetch: fetch, api: api, client: &http.Client{Timeout: 30 * time.Second}, opts: cfg.Inbox,
-		status: connector.Status{State: connector.StateNotSignedIn, Error: "正在读取 " + machine + " 上的 gh 登录…"}, poke: make(chan struct{}, 1)}
+	waiting, source := "正在读取 "+machine+" 上的 gh 登录…", SourceMachine
+	if fetch == nil {
+		waiting, source = notSignedIn, SourceDevice
+	}
+	return &Connector{cfg: cfg, machine: machine, machineID: cfg.Auth.FromMachine, fetch: fetch, source: source, api: api,
+		web: "https://" + cfg.host(), client: &http.Client{Timeout: 30 * time.Second}, opts: cfg.Inbox,
+		status: connector.Status{State: connector.StateNotSignedIn, Error: waiting}, poke: make(chan struct{}, 1)}
 }
 
 func (c *Connector) ID() string   { return "github" }
@@ -116,7 +135,7 @@ func (c *Connector) Name() string { return "GitHub" }
 func (c *Connector) Manifest() connector.Manifest {
 	return connector.Manifest{
 		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions, connector.CapEvents,
-			connector.CapInbox, connector.CapSettle, connector.CapArchive, connector.CapOptions},
+			connector.CapInbox, connector.CapSettle, connector.CapArchive, connector.CapLogin, connector.CapOptions},
 		Hosts: []string{c.cfg.host()},
 		Kinds: []string{"review_requested", "mention", "team_mention", "assign", "author", "ci_failed"},
 	}
@@ -126,7 +145,12 @@ func (c *Connector) Status(context.Context) connector.Status {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	st := c.status
-	st.Via = "来自 " + c.machine + " 的 gh 登录"
+	switch {
+	case c.source == SourceDevice && c.dev.Token != "":
+		st.Via = "设备码登录"
+	case c.source == SourceMachine && c.fetch != nil:
+		st.Via = "来自 " + c.machine + " 的 gh 登录"
+	}
 	if st.State == connector.StateOK && c.rateLow && time.Now().Before(c.rateReset) {
 		st.State = connector.StateRateLimited
 		// minutes, not a clock time: the hub's clock is not in the user's time zone
@@ -144,7 +168,10 @@ func (c *Connector) signedIn() bool {
 
 // MachineOnline: the machine the token comes from just connected, so a token that was missing may be there now.
 func (c *Connector) MachineOnline(id string) {
-	if id != c.cfg.Auth.FromMachine {
+	c.mu.Lock()
+	mine := c.source == SourceMachine && id == c.machineID
+	c.mu.Unlock()
+	if !mine {
 		return
 	}
 	select {
@@ -181,20 +208,28 @@ func (c *Connector) check(ctx context.Context) {
 	var user struct {
 		Login string `json:"login"`
 	}
-	_, err := c.Get(ctx, "/user", &user)
+	h, err := c.Get(ctx, "/user", &user)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err == nil {
+		c.scopes, c.scopesKnown = scopesOf(h)
 		c.status = connector.Status{State: connector.StateOK, Account: user.Login, LastSync: time.Now().UTC(), LastEvent: c.status.LastEvent}
 		return
 	}
 	c.status.State, c.status.Error = c.explain(err)
 }
 
+// notSignedIn is the status of a GitHub with neither a device sign-in nor a computer's gh login.
+const notSignedIn = "还没登录 GitHub：在下面选一台电脑上的 gh 登录，或者用设备码登录"
+
 // explain turns an error into a state and one sentence for people.
 func (c *Connector) explain(err error) (string, string) {
 	m := c.machine
 	switch {
+	case errors.Is(err, errUnauthorized) && c.source == SourceDevice:
+		return connector.StateNotSignedIn, "设备码登录失效了（在 GitHub 上撤销了授权？）：重新登录"
+	case errors.Is(err, errNoDeviceLogin):
+		return connector.StateNotSignedIn, notSignedIn
 	case errors.Is(err, ErrNoMachine):
 		return connector.StateNotConfigured, "hub.json 的 github.auth.from_machine 不是 hub.json 里的机器"
 	case errors.Is(err, ErrOffline):
@@ -223,7 +258,23 @@ func (c *Connector) currentToken(ctx context.Context, refresh bool) (string, err
 	if tok != "" && !refresh {
 		return tok, nil
 	}
-	fresh, err := c.fetch(ctx, c.cfg.host())
+	c.mu.Lock()
+	source, fetch := c.source, c.fetch
+	c.mu.Unlock()
+	if source == SourceDevice {
+		d := c.deviceState(ctx)
+		if d.Token == "" {
+			return "", errNoDeviceLogin
+		}
+		c.mu.Lock()
+		c.token = d.Token
+		c.mu.Unlock()
+		return d.Token, nil
+	}
+	if fetch == nil {
+		return "", ErrNoMachine
+	}
+	fresh, err := fetch(ctx, c.cfg.host())
 	if err != nil {
 		return "", err
 	}

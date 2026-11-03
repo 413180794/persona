@@ -1689,6 +1689,102 @@ LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilit
 # of inbox items. As a hub from before #669 (the harder case for the app): its program has not run while off since the
 # hub started, so it lists no capabilities (and has no sign-in, 409) until switched on and started (TELEGRAM_START
 # seconds; meanwhile 进程还没启动). A hub from #669 on lists Telegram's declared capabilities from the start.
+# MOCK_GITHUB=device: GitHub signed in neither way, its device-flow sign-in from the app (connector/github/login.go):
+# client ID Ov23liExample, code ABCD-1234; the code is entered after two asks (one second apart).
+GITHUB_DEVICE = {"client_id": "", "polls": 0}
+if os.environ.get("MOCK_GITHUB_LOGIN") or os.environ.get("MOCK_GITHUB") == "scopes":
+    # a hub from V6 on: GitHub signed in through a computer's gh, and it can sign in here
+    GITHUB_CONNECTOR["capabilities"] = GITHUB_CONNECTOR["capabilities"] + ["login"]
+    GITHUB_CONNECTOR["enabled"] = True
+# GET/PUT /api/v1/connectors/github/auth: where GitHub's token comes from (a computer's gh, or the device flow) and
+# each computer's gh login. MOCK_GITHUB=scopes: MacBook's gh lacks repo and notifications.
+GH_FULL = ["gist", "read:org", "repo", "workflow"]
+GH_MISSING = [{"scope": "repo", "affects": ["私有仓库的 PR、issue、评论、代码搜索读不到", "私有仓库的 CI 失败和日志读不到", "评论和 review 发不了"]},
+              {"scope": "notifications", "affects": ["收件箱收不到 GitHub 的通知"]}]
+GH_NARROW = os.environ.get("MOCK_GITHUB") == "scopes"
+GH_MACHINES = [
+    {"id": "mbp", "name": "MacBook", "state": "signed_in", "account": "alice", "scopes": ["read:org"] if GH_NARROW else GH_FULL,
+     **({"missing": GH_MISSING} if GH_NARROW else {})},
+    {"id": "studio", "name": "Mac Studio", "state": "not_signed_in"},
+    {"id": "server", "name": "服务器", "state": "offline"},
+]
+GITHUB_AUTH = {"source": "device" if os.environ.get("MOCK_GITHUB") == "device" else "machine",
+               "machine": None if os.environ.get("MOCK_GITHUB") == "device" else "mbp"}
+
+
+def github_auth_view():
+    v = {"source": GITHUB_AUTH["source"], "machines": GH_MACHINES, "scopes_known": False}
+    if GITHUB_AUTH["source"] == "machine":
+        v["machine"] = GITHUB_AUTH["machine"]
+        m = next((x for x in GH_MACHINES if x["id"] == GITHUB_AUTH["machine"]), {})
+        if m.get("state") == "signed_in":
+            v.update(scopes=m["scopes"], scopes_known=True)
+            if m.get("missing"): v["missing"] = m["missing"]
+    elif GITHUB_CONNECTOR.get("status") == "ok":
+        v.update(scopes=["repo"], scopes_known=True)
+    return v
+
+
+def set_github_auth(body):
+    global GITHUB_CONNECTOR
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    for k in ("account", "via", "error", "last_sync"): GITHUB_CONNECTOR.pop(k, None)
+    if body.get("source") == "device":
+        GITHUB_AUTH.update(source="device", machine=None)
+        GITHUB_DEVICE["polls"] = 0
+        GITHUB_CONNECTOR.update(status="not_signed_in", error="还没登录 GitHub：在下面选一台电脑上的 gh 登录，或者用设备码登录")
+        return True
+    m = next((x for x in GH_MACHINES if x["id"] == body.get("machine")), None)
+    if not m: return False
+    GITHUB_AUTH.update(source="machine", machine=m["id"])
+    if m["state"] == "signed_in":
+        GITHUB_CONNECTOR.update(status="ok", account=m["account"], via="来自 %s 的 gh 登录" % m["name"], last_sync=now)
+    else:
+        GITHUB_CONNECTOR.update(status="not_signed_in", via="来自 %s 的 gh 登录" % m["name"],
+                                error={"not_signed_in": "%s 上的 gh 没有登录 github.com" % m["name"], "offline": "GitHub 未授权（%s 离线）：它连上后会自动再读" % m["name"]}.get(m["state"], m["state"]))
+    return True
+if os.environ.get("MOCK_GITHUB") == "device":
+    GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "not_signed_in", "enabled": True,
+                        "error": "还没登录 GitHub：在这里用设备码登录（要你自己的 GitHub OAuth App 的 Client ID）",
+                        "capabilities": ["status", "tools", "actions", "events", "hosts", "inbox", "archive", "login", "options"],
+                        "hosts": ["github.com"], "options": {"ci": "mine", "muted_repos": [], "ignore_branches": ["train/*"]}}
+
+
+def github_area(h, method, p, raw):
+    """GitHub's device-flow sign-in (MOCK_GITHUB=device); True when it answered."""
+    if p == "/api/v1/connectors/github/auth" and (os.environ.get("MOCK_GITHUB") in ("device", "scopes") or os.environ.get("MOCK_GITHUB_LOGIN")):
+        if method == "PUT" and not set_github_auth(json.loads(raw or b"{}")):
+            return h.send_json({"error": "unknown machine"}, 400) or True
+        return h.send_json(github_auth_view()) or True
+    if os.environ.get("MOCK_GITHUB") != "device" or method != "POST" or p not in ("/api/v1/connectors/github/login", "/api/v1/connectors/github/logout"):
+        return False
+    global GITHUB_CONNECTOR
+    if p.endswith("/logout"):
+        GITHUB_CONNECTOR.update(status="not_signed_in", error="还没登录 GitHub：在这里用设备码登录（要你自己的 GitHub OAuth App 的 Client ID）")
+        GITHUB_CONNECTOR.pop("account", None); GITHUB_CONNECTOR.pop("via", None)
+        return h.send_json({"ok": True}) or True
+    body = json.loads(raw or b"{}")
+    step, v, d = body.get("step") or "", body.get("values") or {}, GITHUB_DEVICE
+    client = {"step": "client_id", "fields": [{"name": "client_id", "label": "Client ID", "placeholder": "你的 OAuth App 的 Client ID"}],
+              "hint": "在 GitHub 的 Settings › Developer settings › OAuth Apps 注册一个 OAuth App，勾上 Enable Device Flow，把它的 Client ID 填在这里（不用 client secret）。"}
+    device = {"step": "device", "kind": "device_code", "url": "https://github.com/login/device", "user_code": "ABCD-1234", "interval": 1,
+              "hint": "在 GitHub 的验证页输入这个验证码并授权；授权后这里会自动继续。"}
+    if step == "client_id":
+        if (v.get("client_id") or "").strip() != "Ov23liExample":
+            return h.send_json(dict(client, error="GitHub 不认这个 Client ID，或者这个 OAuth App 没有勾上 Enable Device Flow")) or True
+        d["client_id"], d["polls"] = "Ov23liExample", 0
+        return h.send_json(device) or True
+    if step == "device":
+        d["polls"] += 1
+        if d["polls"] < 3 or os.environ.get("MOCK_GITHUB_WAIT"):
+            return h.send_json(device) or True
+        GITHUB_CONNECTOR.update(status="ok", account="example-user", via="设备码登录",
+                                last_sync=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+        GITHUB_CONNECTOR.pop("error", None)
+        return h.send_json({"done": True, "account": "example-user"}) or True
+    return h.send_json(client if not d["client_id"] else device) or True
+
+
 TELEGRAM_MODE = os.environ.get("MOCK_TELEGRAM", "")
 TELEGRAM = {"enabled": TELEGRAM_MODE not in ("", "off"), "creds": TELEGRAM_MODE == "signed_in", "signed_in": TELEGRAM_MODE == "signed_in",
             "two_fa": TELEGRAM_MODE == "2fa" or bool(os.environ.get("MOCK_TELEGRAM_2FA")),
@@ -4072,6 +4168,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"error": "邮件不存在"}, 404)
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
+        if github_area(self, "GET", p, b""): return
         if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
             listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}] + ([telegram_connector()] if TELEGRAM_MODE else [])
             return self.send_json({"connectors": (LEGACY_CONNECTORS if q.get("all") == ["1"] else []) + listed})
@@ -4311,6 +4408,7 @@ class H(BaseHTTPRequestHandler):
                 s.update(state="restarting" if body.get("now") else "waiting_idle")
             return self.send_json(s)
         if telegram_area(self, self.command, p, self.last_body): return
+        if github_area(self, self.command, p, self.last_body): return
         if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
         if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page
         if p == "/api/v1/todos" and self.command == "POST":

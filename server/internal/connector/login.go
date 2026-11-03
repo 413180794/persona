@@ -11,10 +11,20 @@ type Field struct {
 	Placeholder string `json:"placeholder,omitempty"`
 }
 
+// PromptDeviceCode is a step that shows a code to enter on a web page (URL) and is asked again every Interval
+// seconds until the user has (GitHub's device flow).
+const PromptDeviceCode = "device_code"
+
 // Prompt is where a sign-in stands: the step to fill in next, or Done.
 type Prompt struct {
 	Step   string  `json:"step,omitempty"`
 	Fields []Field `json:"fields,omitempty"`
+	// Kind is "" for fields to fill in, PromptDeviceCode for a code: UserCode to enter at URL; the app sends the
+	// same step (no values) every Interval seconds until the answer is another step or Done.
+	Kind     string `json:"kind,omitempty"`
+	URL      string `json:"url,omitempty"`
+	UserCode string `json:"user_code,omitempty"`
+	Interval int    `json:"interval,omitempty"`
 	// Hint is for people: where the code went (「验证码发到了你别的 Telegram 设备上」), the password's hint.
 	Hint string `json:"hint,omitempty"`
 	// Error is what was wrong with the values just given (「验证码不对」), for people: the same step is asked again.

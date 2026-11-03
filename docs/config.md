@@ -262,7 +262,9 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `github`（可选）：GitHub 连接器。`{"auth": {"from_machine": "<机器 id>"}}`：用那台机器上 `gh` 的登录（hub 经 node 跑 `gh auth token`，
   token 只在 hub 内存里，不落库、不写日志、不给 App 和助手）。那台机器要保持 `gh` 登录，而且登录存在 `~/.config/gh/hosts.yml`
   （钥匙串里的经 ssh 读不到：`gh auth login --insecure-storage`）。`auth.host` 默认 `github.com`，GitHub Enterprise 的主机名写这里（还没做）。
-  状态看 设置 › 连接器 › GitHub。
+  状态看 设置 › 连接器 › GitHub。这里的 `from_machine` 只是默认值：每个 hub 都有 GitHub，在 设置 › 连接器 › GitHub 的「从哪里登录」里
+  可以换一台电脑的 gh 登录，或者用设备码登录（要你自己注册的 GitHub OAuth App 的 Client ID，步骤见 `docs/connectors.md`「二 · 7」）；
+  App 里选过以后以 App 的为准（存在 hub 的设置里）。连接器要 `repo` 权限：gh 的默认登录就有，少了时页面会提示 `gh auth refresh -s repo`。
   `github.inbox`（可选）是收件箱的默认规则（App 里改过以 App 为准，`docs/inbox.md`「降噪」）：`ci`（`off` / `default_branch` / `mine`（默认）/ `all`）、
   `muted_repos`（`["owner/name"]`）、`ignore_branches`（不提醒的分支，`path.Match` 模式，默认 `["train/*"]`）。
 - `imessage`（可选）：信息连接器。`{"machine": "<机器 id>"}`：App 里能看哪台 Mac 的「信息」（经那台 Mac 的 node 只读 `~/Library/Messages/chat.db`，

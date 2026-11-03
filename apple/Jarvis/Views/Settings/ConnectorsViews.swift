@@ -140,6 +140,19 @@ nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
     var error: String?
     var done: Bool?
     var account: String?
+    /// "device_code": show `userCode` to enter at `url`; the same step is sent again every `interval` seconds.
+    var kind: String?
+    var url: String?
+    var userCode: String?
+    var interval: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case step, fields, hint, error, done, account, kind, url, interval
+        case userCode = "user_code"
+    }
+
+    /// A code to enter on a web page (GitHub's device flow), asked again until the user has.
+    var isDeviceCode: Bool { kind == "device_code" && userCode != nil }
 }
 
 /// What deleting a connector's data removed (DELETE /api/v1/connectors/{id}/data).
@@ -378,8 +391,9 @@ struct FeishuConnectorView: View {
 }
 
 /// 设置 › 连接器 › GitHub (any connector of the hub's, GET /api/v1/connectors): whether it is signed in, as whom, where
-/// the sign-in comes from, what is wrong. GitHub's sign-in is set up on the hub's side (docs/config.md); one the user
-/// signs in to here (Telegram) also gets its switch, sign-in, sign-out and delete (ConnectorSignInSections).
+/// the sign-in comes from, what is wrong. One the user signs in to here (Telegram; GitHub with its device flow, or a
+/// computer's gh login set up on the hub's side) also gets its switch, sign-in, sign-out and delete
+/// (ConnectorSignInSections).
 struct HubConnectorView: View {
     var id: String
     @Environment(AppModel.self) private var model
@@ -422,7 +436,9 @@ struct HubConnectorView: View {
                 }
             }
             // Telegram switched off lists nothing until it runs: its switch is here all the same.
-            if let connector, connector.signsInHere || connector.undescribed {
+            if id == "github", let connector, connector.signsInHere {
+                GitHubConnectorSections(connector: connector, reload: { await load() })
+            } else if let connector, connector.signsInHere || connector.undescribed {
                 ConnectorSignInSections(connector: connector, reload: { await load() })
             }
             if connector?.status != "ok", let guide = connector?.guide, !guide.isEmpty {

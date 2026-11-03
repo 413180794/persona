@@ -66,6 +66,7 @@ func (h *Hub) callConnector(ctx context.Context, machineID, name string, args js
 }
 
 func (h *Hub) connectorRoutes(api *http.ServeMux) {
+	h.githubAuthRoutes(api)
 	api.HandleFunc("GET /api/v1/connectors", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"connectors": h.listedConnectors(r.Context(), r.URL.Query().Get("all") == "1")})
 	})
@@ -382,6 +383,7 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 func (h *Hub) startConnectors(ctx context.Context) {
 	h.registerConnectors()
 	h.restoreConnectorSwitches(ctx)
+	h.restoreGitHubSource(ctx)
 	h.githubMutes(ctx)
 	h.connectors.Start(ctx, h.connectorChanged, h.logf)
 }
@@ -399,14 +401,25 @@ func (h *Hub) registerConnectors() {
 			h.logf("mail connector: %v", err)
 		}
 	}
-	if gh := h.cfg.GitHub; gh.Configured() {
+	// GitHub on every hub: hub.json's github.auth.from_machine reads that computer's gh login; without it (or
+	// before it) the user signs in from the app with the device flow (connector/github/login.go).
+	gh := github.Config{}
+	if h.cfg.GitHub != nil {
+		gh = *h.cfg.GitHub
+	}
+	var ghc *github.Connector
+	if gh.Configured() {
 		name := gh.Auth.FromMachine
 		if m := h.localMachine(name); m != nil {
 			name = m.cfg.Name
 		}
-		if err := h.addConnector(github.New(*gh, name, h.ghToken(gh.Auth.FromMachine))); err != nil {
-			h.logf("github connector: %v", err)
-		}
+		ghc = github.New(gh, name, h.ghToken(gh.Auth.FromMachine))
+	} else {
+		ghc = github.New(gh, "", nil)
+	}
+	ghc.UseSecrets(h.secretsFor("github"))
+	if err := h.addConnector(ghc); err != nil {
+		h.logf("github connector: %v", err)
 	}
 	if im := h.cfg.IMessage; im.Configured() {
 		if err := h.addIMessage(*im); err != nil {

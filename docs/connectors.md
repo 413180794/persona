@@ -294,7 +294,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
   2. Application name 随便填（如「Persona」）；Homepage URL 填任意一个你的网址；Authorization callback URL 设备码登录用不到，填同一个网址即可。
   3. 创建后在这个 App 的页面勾上 **Enable Device Flow**，保存。
   4. 复制页面上的 **Client ID**（不要生成 client secret，设备码登录不需要），填进 App 的 GitHub 登录页。
-  5. 第一次登录时 GitHub 会列出 Persona 要的权限（和现在 `gh` 登录用到的一样：读仓库和通知，评论、review 要写权限；具体的 scope 在 V6 定，登录页照实列出），确认即可；
+  5. 第一次登录时 GitHub 会列出 Persona 要的权限：只有 `repo`（读写仓库，包括私有仓库的 PR、issue、评论、review、CI 和日志，也包括通知），确认即可；
      以后要撤销在 Settings › Applications › Authorized OAuth Apps。
 
 改动：**中**。hub 的登录接口、App 的通用登录页（新界面，截图给你看）、邮件的多账号、GitHub 的设备码。
@@ -325,7 +325,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 | V3 ✓ | 收件箱的静音由 hub 统一做（#670）：`InboxThing.Tags`（`repo`、`chat`、`sender`、`branch`），所有来源（飞书、邮件、GitHub、信息、Telegram）按「来源 + 标签 + 值」静音，收集时收掉被覆盖的；App 每一行的长按菜单「静音这个仓库 / 会话 / 发件人」和「更多 › 已静音」；GitHub 的 `muted_repos` 变成静音（启动时搬过去，设置页照旧）。**没做**：`Group`、`From`、`Supersedes`——按 `Thread` 合并本来就是 hub 统一做的，GitHub 的 CI 后来成功、分支删了、PR 合了也已经由它自己报 `Done`，等有连接器真要用再加，不过度设计 | 5 | 中 | GitHub、Telegram、信息、hub 收件箱、App | 新字段和新接口；老 App 不画菜单、GitHub 设置页照旧；条目多了 `mutes`，连接器块多了 `tags`（wire 样例已更新） |
 | V4 ✓ | 身份线索（只记录，#687）：连接器在消息上带发送者的原始线索（只在内存），知识库用 hub 的密钥（`~/.jarvis/handles.key`）做 HMAC 后存进人的 `handles.json`，不进 `meta.json`、模型看不到；5 个连接器都给（邮件地址、信息的邮箱 / 号码、GitHub 登录名、Telegram 用户、飞书用户 id）。**没做**：收件箱条目上的 `From.Handles`（还没有用的地方）、飞书的邮箱（要额外权限） | 6 | 小 | 5 个都动一点、知识库 | 新文件，老数据不动；`meta.json` 和 golden 不变 |
 | V5 ✓ | 协议 v2（#699）：线上字段一律 snake_case，`init` 和清单带 `protocol`（现在是 2，不一致就停），固定的错误码（`not_initialized`、`no_capability`、`unknown_method`、`wrong_protocol`）；规范写在 `docs/connector-protocol.md`；一致性测试 `connector/conformance` 把 GitHub、信息、Telegram 放到协议的程序一侧，逐个能力比直接调和经协议调的结果，`TestWireTypesAreTagged` 检查线上字段都有名字。**没做**：信息的 node 侧换成协议 v2（node 上照旧是写死的 5 个方法，能用，等要动 node 时再换）、常驻服务的 WebSocket 传输（等第一个外部连接器） | 4 | 中 | Telegram、hub 的子进程接法、测试 | 子进程和 hub 同一次构建一起升级；node 不动 |
-| V6 | 通用登录（`open_url`、`device_code`）、App 的通用登录页；邮件多账号；GitHub 设备码（用户自己填 client ID） | 7 | 中 | Telegram、邮件、GitHub、App | 老的邮件 OAuth 接口保留 |
+| V6 ✓ | GitHub 的登录在 App 里选（#704）：**从哪里登录**——列出各台电脑和它们 gh 的登录（账号、权限），用户选一台；或者**设备码登录**（不依赖电脑，填一次自己 OAuth App 的 Client ID，App 显示验证码、自动等授权）。选择存在 hub 设置里（`github_auth`），hub.json 的 `github.auth.from_machine` 只是默认值；换一个就是退出上一个（选电脑时忘掉设备码的 token），所以 GitHub 没有单独的退出登录。**权限**：连接器只用 `repo`（读私有仓库的 PR / issue / 评论 / CI 和日志、搜索、评论和 review，也包括通知；不碰组织和团队，所以不要 `read:org`），设备码登录只申请 `repo`；用的 token 少了 scope（GitHub 的 `X-OAuth-Scopes`）时页面写明少了什么、怎么补（`gh auth refresh -s repo` 或改用设备码）、哪些功能受影响。登录步骤多一种 `device_code`。**没做**：`open_url` 步骤（现在没人用，邮件的 OAuth 照旧）、邮件多账号 | 7 | 中 | GitHub、hub、App | hub.json 照旧生效（没选过时）；老 App 看不到选择区 |
 | V7 | 进知识库统一成 `Changes`：先 4 个已经是 `Archive` 的，再 `Items`，最后飞书的会话 | 2 | 中到大 | 全部，飞书最后 | 对外不变：游标文件不变；过 M0 基线（golden）和真实数据对照 |
 | — | 第三方规范 `docs/connector-protocol.md`，等第一个外部连接器再实现 WebSocket 传输 | 4 | — | — | — |
 

@@ -38,9 +38,21 @@ struct ConnectorDeps {
     func start() async { await send(step: "", values: [:]) }
 
     /// Sends the step on screen; the answer is the next one, the same one with what was wrong, or done.
-    func next() async {
-        guard let step = prompt?.step else { return }
-        await send(step: step, values: values)
+    @discardableResult
+    func next() async -> Bool {
+        guard let step = prompt?.step else { return false }
+        return await send(step: step, values: values)
+    }
+
+    /// A code on screen (GitHub's device flow): asks again every interval the hub gave until the user has entered it
+    /// (true: signed in) or the step changes; cancelled with the page.
+    func waitForDeviceCode() async -> Bool {
+        while let p = prompt, p.isDeviceCode, !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(max(p.interval ?? 5, 1)))
+            if Task.isCancelled || prompt?.step != p.step { return false }
+            if await send(step: p.step ?? "", values: [:]) { return true }
+        }
+        return false
     }
 
     func cancel() {
@@ -108,8 +120,6 @@ struct ConnectorSignInSections: View {
     var connector: HubConnector
     var reload: () async -> Void
     @State private var model: ConnectorSignInModel
-    @State private var confirmLogout = false
-    @State private var confirmDelete = false
 
     init(connector: HubConnector, reload: @escaping () async -> Void, deps: ConnectorDeps = .live) {
         self.connector = connector
@@ -117,12 +127,39 @@ struct ConnectorSignInSections: View {
         _model = State(initialValue: ConnectorSignInModel(id: connector.id, deps: deps))
     }
 
-    private var enabled: Bool { connector.enabled ?? true }
-    private var signedIn: Bool { connector.status == "ok" || connector.status == "rate_limited" }
+    var body: some View {
+        ConnectorSwitchSection(connector: connector, model: model, reload: reload)
+        if connector.isEnabled && !connector.isSignedIn {
+            if connector.signsInHere {
+                ConnectorSignInSteps(connector: connector, model: model, reload: reload,
+                                     footer: connector.id == "telegram" ? "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。"
+                                         : "登录状态加密存在 hub 上，退出登录时删掉。")
+            } else {
+                // Just switched on: its program has not started yet (the page asks again every second).
+                Section {
+                    Text("\(connector.name) 启动后就能登录。").foregroundStyle(.secondary)
+                        .accessibilityIdentifier("connector.starting")
+                }
+            }
+        }
+        ConnectorDataSection(connector: connector, model: model, reload: reload, showsLogout: true)
+    }
+}
+
+extension HubConnector {
+    var isEnabled: Bool { enabled ?? true }
+    var isSignedIn: Bool { status == "ok" || status == "rate_limited" }
+}
+
+/// 同步 <name>: a connector's switch.
+struct ConnectorSwitchSection: View {
+    var connector: HubConnector
+    var model: ConnectorSignInModel
+    var reload: () async -> Void
 
     var body: some View {
         Section {
-            Toggle(isOn: Binding(get: { enabled }, set: { on in
+            Toggle(isOn: Binding(get: { connector.isEnabled }, set: { on in
                 Task {
                     _ = await model.setEnabled(on)
                     await reload()
@@ -132,22 +169,25 @@ struct ConnectorSignInSections: View {
             }
             .accessibilityIdentifier("connector.enabled")
         } footer: {
-            Text(enabled ? "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。"
-                 : "打开后才能登录，登录后它的私聊和群进知识库和收件箱，助手也能查。")
+            Text(connector.isEnabled ? "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。"
+                 : connector.id == "telegram" ? "打开后才能登录，登录后它的私聊和群进知识库和收件箱，助手也能查。"
+                 : "打开后才能登录，登录后它的内容进知识库和收件箱，助手也能查。")
         }
-        if enabled && !signedIn {
-            if connector.signsInHere {
-                signInSection
-            } else {
-                // Just switched on: its program has not started yet (the page asks again every second).
-                Section {
-                    Text("\(connector.name) 启动后就能登录。").foregroundStyle(.secondary)
-                        .accessibilityIdentifier("connector.starting")
-                }
-            }
-        }
+    }
+}
+
+/// 退出登录 (when it shows) and 删除已存的数据.
+struct ConnectorDataSection: View {
+    var connector: HubConnector
+    var model: ConnectorSignInModel
+    var reload: () async -> Void
+    var showsLogout: Bool
+    @State private var confirmLogout = false
+    @State private var confirmDelete = false
+
+    var body: some View {
         Section {
-            if signedIn || connector.via != nil {
+            if showsLogout && (connector.isSignedIn || connector.via != nil) {
                 Button(role: .destructive) { confirmLogout = true } label: { Text("退出登录").lineLimit(1) }
                     .disabled(model.busy)
                     .accessibilityIdentifier("connector.logout")
@@ -183,10 +223,19 @@ struct ConnectorSignInSections: View {
             Text("知识库里从 \(connector.name) 来的会话和人、收件箱里它的条目都会删掉，同步会关掉。项目的总结在下次更新时不再包含它们。")
         }
     }
+}
 
-    @ViewBuilder private var signInSection: some View {
-        Section {
-            if let p = model.prompt {
+/// Signing in a step at a time (the hub says what each step asks for): the step's card, then its button on its own
+/// under the card (下一步, or the page to enter a code on), so the card keeps its rounded corners.
+struct ConnectorSignInSteps: View {
+    var connector: HubConnector
+    var model: ConnectorSignInModel
+    var reload: () async -> Void
+    var footer: String
+
+    var body: some View {
+        if let p = model.prompt {
+            Section {
                 if let hint = p.hint, !hint.isEmpty {
                     Text(hint).font(Theme.Font.secondary).foregroundStyle(.secondary)
                 }
@@ -195,22 +244,48 @@ struct ConnectorSignInSections: View {
                     Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger)
                         .accessibilityIdentifier("connector.signInError")
                 }
-                ForEach(p.fields ?? []) { f in
-                    field(f)
-                }
-                Button {
-                    Task {
-                        await model.next()
-                        await reload() // the status above follows (credentials saved: api_id shown; signed in)
+                if p.isDeviceCode {
+                    deviceCode(p)
+                } else {
+                    ForEach(p.fields ?? []) { f in
+                        field(f)
                     }
-                } label: {
-                    Text(model.busy ? "正在验证…" : "下一步").lineLimit(1).frame(maxWidth: .infinity)
                 }
-                .themedButton(prominent: true)
-                .disabled(!model.canSend)
-                .listRowBackground(Color.clear)
-                .accessibilityIdentifier("connector.next")
-            } else {
+            } header: {
+                SettingsHeading("登录")
+            }
+            .task(id: p.isDeviceCode ? p.userCode : nil) {
+                if await model.waitForDeviceCode() { await reload() }
+            }
+            Section {
+                if p.isDeviceCode {
+                    if let s = p.url, let url = URL(string: s) {
+                        Link(destination: url) {
+                            Label("打开 \(connector.name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1).frame(maxWidth: .infinity)
+                        }
+                        .themedButton(prominent: true)
+                        .listRowBackground(Color.clear)
+                        .accessibilityIdentifier("connector.openVerification")
+                    }
+                } else {
+                    Button {
+                        Task {
+                            await model.next()
+                            await reload() // the status above follows (credentials saved: api_id shown; signed in)
+                        }
+                    } label: {
+                        Text(model.busy ? "正在验证…" : "下一步").lineLimit(1).frame(maxWidth: .infinity)
+                    }
+                    .themedButton(prominent: true)
+                    .disabled(!model.canSend)
+                    .listRowBackground(Color.clear)
+                    .accessibilityIdentifier("connector.next")
+                }
+            } footer: {
+                Text(footer)
+            }
+        } else {
+            Section {
                 Button {
                     Task { await model.start() }
                 } label: {
@@ -220,11 +295,34 @@ struct ConnectorSignInSections: View {
                 .disabled(model.busy)
                 .listRowBackground(Color.clear)
                 .accessibilityIdentifier("connector.signIn")
+            } header: {
+                SettingsHeading("登录")
+            } footer: {
+                Text(footer)
             }
-        } header: {
-            SettingsHeading("登录")
-        } footer: {
-            Text("API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。")
+        }
+    }
+
+    /// The code to enter on the sign-in page (GitHub's device flow): large, copyable; the page asks the hub again on
+    /// its own until the user has entered it.
+    @ViewBuilder private func deviceCode(_ p: ConnectorPrompt) -> some View {
+        HStack {
+            Text(p.userCode ?? "").font(Theme.Font.display).monospaced().textSelection(.enabled).lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .accessibilityIdentifier("connector.userCode")
+            Spacer(minLength: Theme.Space.s)
+            Button {
+                UIPasteboard.general.string = p.userCode
+                Haptics.success()
+            } label: {
+                Label("复制", systemImage: Theme.Icon.copy).labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("复制验证码")
+        }
+        HStack(spacing: Theme.Space.s) {
+            ProgressView()
+            Text("等你在 \(connector.name) 上授权…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 
