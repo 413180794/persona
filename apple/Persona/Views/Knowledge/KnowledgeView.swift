@@ -26,16 +26,22 @@ struct KnowledgeView: View {
 
     private var list: KBList? { lists[kind] }
 
+    private var kindBar: some View {
+        KBKindBar(kind: $kind, counts: lists.mapValues { $0.items.count })
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+    }
+
     var body: some View {
         List {
             // Search covers every kind: the chips (one of them lit) would say otherwise.
             if query.isEmpty {
-                Section {
-                    KBKindBar(kind: $kind, counts: lists.mapValues { $0.items.count })
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
-                }
-                .listSectionSpacing(.compact)
+                #if os(macOS)
+                kindBar // not in a section: the Mac's inset list gave it an empty header band and a rule (#830)
+                #else
+                Section { kindBar }
+                    .listSectionSpacing(.compact)
+                #endif
             }
             if !query.isEmpty {
                 searchResults
@@ -52,10 +58,13 @@ struct KnowledgeView: View {
         .navigationTitle("知识库")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            #if os(macOS)
+            MacToolbarMiddle() // the menu by the search field, clear of the title row's 知识库 (#830)
+            #endif
             ToolbarItem(placement: .topBarTrailing) { tagMenu }
         }
         // Always shown: the drawer that hides on scroll folded away as soon as results replaced the list (the chips
-        // section goes), taking the typed text out of sight (2026-10-31).
+        // row goes), taking the typed text out of sight (2026-10-31).
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索档案和聊天记录")
         .task(id: query) { await search() }
         .task(id: "\(kind.rawValue)|\(tag ?? "")") { await load() }

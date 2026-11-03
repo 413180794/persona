@@ -16,7 +16,7 @@ struct MacInboxFilters: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                MacSidebarHeading(title: "收件箱")
+                MacSidebarHeading(title: "来源") // the page's title says 收件箱 above it (#830)
                 ForEach(state.sources) { row($0) }
                 MacSidebarHeading(title: "类型")
                 ForEach(state.kinds) { row($0) }
@@ -117,6 +117,7 @@ struct MacInboxList: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        MacToolbarMiddle() // at the narrowest window these buttons covered 收件箱 (#830)
         ToolbarItemGroup(placement: .primaryAction) {
             // ⌘R is 显示 › 刷新's, which refreshes the inbox while it is on screen.
             Button { Task { await store.refresh() } } label: { Label("刷新", systemImage: Theme.Icon.retry) }

@@ -154,9 +154,20 @@ private struct MacShell: View {
         #endif
         HStack(spacing: 0) {
             // 显示 › 隐藏侧边栏 folds it away; ⌘1…6 still move between the sections.
-            if !sidebarHidden { sections; Divider() }
+            // The divider runs up into the title bar's row too: stopping under it, the page's white showed past the
+            // column's edge there, a step the user saw as a white bump (#830).
+            if !sidebarHidden { sections; Divider().ignoresSafeArea(.container, edges: .top) }
             page
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // The section's title in the title bar's row, at this column's edge (not over the sections column):
+                // the row was left empty when the system's title went (#830). Persona's page puts its own header there.
+                .overlay(alignment: .topLeading) {
+                    if shown != .assistant {
+                        MacPageTitle(title: shown.title, leading: sidebarHidden ? Theme.Size.macTitleAfterControls : Theme.Space.l)
+                    }
+                }
+                // Pages that draw their own header in that row (Persona's) start it here.
+                .environment(\.macTitleRowLeading, sidebarHidden ? Theme.Size.macTitleAfterControls : 0)
                 // The connection state lives at the sidebar's foot; folded away, it comes to the page's (only while
                 // the hub is out of reach: 知识库 and 机器 have no title spot of their own that says so).
                 .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -186,6 +197,9 @@ private struct MacShell: View {
                     AgentsListMenu(actions: actions)
                 }
             }
+            // A plain glyph beside the traffic lights: in the system's glass circle it stood out of the sections column as
+            // a white bump (2026-11-03 user).
+            .sharedBackgroundVisibility(.hidden)
             // What the title's room did: the pages' actions stay at the trailing end, by the search field (without
             // it they lined up at the leading edge, over this column).
             ToolbarSpacer(.flexible)
@@ -242,13 +256,38 @@ private struct MacShell: View {
 
     @ViewBuilder private var page: some View {
         switch shown {
-        case .assistant: AssistantView()
+        case .assistant: AssistantView() // its own headers are the title bar's row (#830, `AssistantView`)
         case .agents: ChatsView()
         case .inbox: MacInboxPage()
         case .knowledge: NavigationStack { KnowledgeView() }
         case .machines: MacMachinesPage()
         case .settings: SettingsView()
         }
+    }
+}
+
+extension EnvironmentValues {
+    /// Where a page's own header in the title bar's row may start (#830): past the traffic lights and the toolbar's
+    /// buttons when the sections column is hidden and the page is at the window's edge, else 0.
+    @Entry var macTitleRowLeading: CGFloat = 0
+}
+
+/// A section's title in the title bar's row, over the page's leading edge (#830): a label, so the row still drags the
+/// window.
+private struct MacPageTitle: View {
+    let title: String
+    let leading: CGFloat
+
+    var body: some View {
+        Text(title)
+            .font(Theme.Font.title)
+            .foregroundStyle(Theme.macLabel)
+            .lineLimit(1)
+            .padding(.leading, leading)
+            .frame(height: Theme.Size.macToolbarHeight)
+            .ignoresSafeArea(.container, edges: .top)
+            .allowsHitTesting(false)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

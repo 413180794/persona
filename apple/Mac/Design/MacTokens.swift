@@ -16,6 +16,9 @@ extension Theme.Size {
     static let macWindowHeight: CGFloat = 820
     /// A window's title bar with a unified toolbar: where the shell's sections start, whatever the page's toolbar holds.
     static let macToolbarHeight: CGFloat = 52
+    /// Where a page's title starts in the title bar's row when the sections column is hidden: after the traffic lights
+    /// and the toolbar's buttons beside them (#830).
+    static let macTitleAfterControls: CGFloat = 200
     /// The shell's sidebar column (Persona / Agents / 收件箱 / 设置).
     static let macSidebarMin: CGFloat = 180
     static let macSidebarIdeal: CGFloat = 210

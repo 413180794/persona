@@ -48,6 +48,9 @@ struct AssistantView: View {
                 SplitColumns.noSidebar
             } content: {
                 sidebar(column: true).modifier(SidebarWidth())
+                    // The list's name and search are the title bar's row, beside the traffic lights: the row stood
+                    // empty above them (#830). Nothing of the window's toolbar sits over this column.
+                    .ignoresSafeArea(.container, edges: .top)
             } detail: {
                 stack
             }
@@ -141,7 +144,15 @@ struct AssistantView: View {
                                 newConversation: newConversation,
                                 openKnowledge: { showKnowledge = true },
                                 openProfile: { showProfile = true })
+                #if os(macOS)
+                // At the window's edge only with the history list folded away too (#830).
+                .transformEnvironment(\.macTitleRowLeading) { if columns != .detailOnly { $0 = 0 } }
+                #endif
             }
+            #if os(macOS)
+            // The bar is the title bar's row, as the list beside it (#830); pushed pages keep their own.
+            .ignoresSafeArea(.container, edges: .top)
+            #endif
             .navigationDestination(isPresented: $showProfile) { AssistantProfileView() }
             .navigationDestination(isPresented: $showKnowledge) { KnowledgeView() }
             .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }

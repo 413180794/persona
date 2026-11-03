@@ -662,6 +662,10 @@ struct AssistantSidebar: View {
     private var isShell: Bool { openInbox != nil }
     @State private var query = ""
     @State private var searchOpen = false
+    #if os(macOS)
+    /// Its header is in the title bar's row (#830): past the traffic lights when the window's sections column is hidden.
+    @Environment(\.macTitleRowLeading) private var titleRowLeading
+    #endif
     @State private var showAll = false
     @State private var ending: Session?
     @State private var renaming: Session?
@@ -692,8 +696,14 @@ struct AssistantSidebar: View {
         VStack(spacing: 0) {
             topBar
                 .padding(.horizontal, Theme.Space.xl)
+                #if os(macOS)
+                .padding(.leading, max(0, titleRowLeading - Theme.Space.xl))
+                // The title bar's row: centred on it as the other sections' titles are, so it does not jump (#830).
+                .frame(height: Theme.Size.macToolbarHeight)
+                #else
                 .padding(.top, Theme.Space.s)
                 .padding(.bottom, Theme.Space.s)
+                #endif
             // A list (not a stack in a scroll view) for its rows' own swipe: a conversation swipes left to 归档.
             List {
                 Group {

@@ -22,6 +22,9 @@ struct AssistantTopBar: View {
     @State private var launchers: [Launcher] = []
     /// A copy's confirmation, in the name pill for a moment (a toast would sit right on the face).
     @State private var hint: String?
+    #if os(macOS)
+    @Environment(\.macTitleRowLeading) private var titleRowLeading
+    #endif
 
     /// The bar's height below the status bar: what the conversation leaves free at its top so nothing hides under it.
     static let height: CGFloat = 70
@@ -112,6 +115,11 @@ struct AssistantTopBar: View {
             }
         }
         .padding(.horizontal, Theme.Space.l)
+        #if os(macOS)
+        // In the title bar's row, past the traffic lights when the bar is at the window's edge (#830); the fog under
+        // it stays the whole width.
+        .padding(.leading, max(0, titleRowLeading - Theme.Space.l))
+        #endif
         .padding(.top, Theme.Space.xxs)
         .frame(height: Self.height, alignment: .top)
         .background(alignment: .top) {

@@ -66,6 +66,11 @@
   层级样式（`.primary`、`.secondary`）就跟着它走、不再变白；但子视图里写死的 `Color.primary` 还是会变白，要改成 `.primary`（iOS 上两者一样）。
 - `.toolbar(removing: .title)` 之后，`.primaryAction` 的按钮排到工具栏最左边（Mac 上它本来就靠前，原来是标题把它们推到了右边）：
   去掉标题的同时补一个 `ToolbarSpacer(.flexible)`。
+- 去掉工具栏的标题以后，那一行只剩按钮，页面上面就是一条空带（2026-11-03，#830）：自己画的分栏外壳（不是 `NavigationSplitView`）里系统不知道页面从哪一栏开始，
+  标题只会排在红绿灯旁边、压在侧栏上。做法：壳在页面那一栏左上角叠一个不接点击的标题，`ignoresSafeArea(.container, edges: .top)` 放进标题栏那一行。
+  对一个容器加 `ignoresSafeArea` 不会让 `NavigationSplitView` 里各栏的内容跟着上移，要加在每一栏自己的根视图上（Persona 页的列表栏和对话栈的根）；
+  推进去的页面不加，它们照旧在标题栏下面。只有 `.primaryAction` 的工具栏，按钮会停在中间偏左，窄窗口里盖住左边的标题：加一个空的 `.principal` 项占住中间。
+  Mac 的 `.inset` 列表给第一个 `Section` 留一条空的分组头和一条分隔线，放在最上面的 chip 行不要包 `Section`。
 - 一直在动的 `TimelineView(.animation)` 在 Mac 上可能很贵（实测的只有 `StatusDot` 这一处）：每一帧都让 `NSHostingView` 申请更新约束，
   一路报到窗口，整个窗口重新布局，锁屏时也照跑。「需要你」圆点的呼吸圈这样让 Agents 页空闲占一个核的 14%（2026-11-02；iOS 上没量过）。
   Mac 上一直重复的动画交给 Core Animation（`NSViewRepresentable` 里的 `CAShapeLayer` + 无限重复的 `CAAnimationGroup`，`MacBreathingRing`），

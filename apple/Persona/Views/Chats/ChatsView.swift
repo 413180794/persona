@@ -172,7 +172,12 @@ struct ChatsView: View {
                         ToolbarItem(placement: .principal) { Color.clear.frame(width: Theme.Size.hairline) }
                             .sharedBackgroundVisibility(.hidden)
                     } else {
+                        #if os(macOS)
+                        // Empty while connected: its glass drew a thin line in the middle of the title bar's row (#830).
+                        ToolbarItem(placement: .principal) { ConnectionTitle() }.sharedBackgroundVisibility(.hidden)
+                        #else
                         ToolbarItem(placement: .principal) { ConnectionTitle() }
+                        #endif
                         #if os(iOS)
                         // On the Mac the shell shows it, next to its sidebar button (MacShell).
                         ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }

@@ -103,7 +103,14 @@ struct MachinesView: View {
         // Large wherever it is pushed (the Agents list's stack would make it inline, and the principal item below would
         // then hide the title); the bar's middle is only for 连接中… and the like.
         .navigationBarTitleDisplayMode(.large)
-        .toolbar { ToolbarItem(placement: .principal) { ConnectionTitle() } }
+        .toolbar {
+            #if os(macOS)
+            // Empty while connected: its glass drew a thin line in the middle of the title bar's row (#830).
+            ToolbarItem(placement: .principal) { ConnectionTitle() }.sharedBackgroundVisibility(.hidden)
+            #else
+            ToolbarItem(placement: .principal) { ConnectionTitle() }
+            #endif
+        }
         .refreshable {
             await model.refresh()
             await loadMetrics()
