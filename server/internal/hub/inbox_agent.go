@@ -88,6 +88,7 @@ func (h *Hub) handInbox(ctx context.Context) {
 	if !cfg.Enabled || h.judgeModel() == nil || !h.inbox.handing.TryLock() {
 		return
 	}
+	ctx = context.WithoutCancel(ctx) // like triageInbox: the pass outlives the caller
 	go func() {
 		defer h.inbox.handing.Unlock()
 		h.sweepInboxAgents(ctx, cfg, time.Now())

@@ -50,6 +50,8 @@ func (h *Hub) triageInbox(ctx context.Context) {
 		h.handInbox(ctx)
 		return
 	}
+	// The pass outlives the caller: a pull to refresh answers before it is done.
+	ctx = context.WithoutCancel(ctx)
 	go func() {
 		defer h.inbox.triaging.Unlock()
 		sem := make(chan struct{}, triageConcurrency)
