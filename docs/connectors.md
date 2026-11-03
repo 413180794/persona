@@ -62,7 +62,7 @@ hub 收到不认识的档就丢掉、交给模型分拣。
   JSON-lines RPC（`internal/rpc`），方法一一对应接口（`serve.go` 的 `init`、`status`、`archive.changes`、`inbox.collect`、`tools.call`……），
   程序反过来调 hub 的 `secrets.*`。hub 注册时就给 `proc.Conn` 一份静态的清单（`proc.Config.Manifest`；Telegram 的在不依赖 gotd 的
   `connector/telegram/spec`，程序和 hub 共用），所以从没启动过、默认关着的连接器也报得出能力、能登录和退出（#666）；`init` 回的程序清单
-  （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。程序必须和 hub 同一次构建（`version -v` 一字不差），所以协议没有版本号。
+  （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。程序必须和 hub 同一次构建（`version -v` 一字不差）；协议有版本号（v2，`docs/connector-protocol.md`）。
 - **node 中转**：数据只在某台 Mac 上（`chat.db`）。node 上有一个读本地数据的 `Reader`，hub 经 node 的 RPC（`connector.list/chats/older/changes/search`，
   `node/node.go` 里写死的 5 个方法）去读，hub 一侧的 `imessage.Remote` 才是连接器。
 
@@ -324,7 +324,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 | ~~V2~~ | ~~skill 的命令闸门~~：**不做**（2026-11-03 用户决定：交给 Claude Code 自己的权限判断，见第 8 条；#654 关闭） | 8 | — | — | — |
 | V3 ✓ | 收件箱的静音由 hub 统一做（#670）：`InboxThing.Tags`（`repo`、`chat`、`sender`、`branch`），所有来源（飞书、邮件、GitHub、信息、Telegram）按「来源 + 标签 + 值」静音，收集时收掉被覆盖的；App 每一行的长按菜单「静音这个仓库 / 会话 / 发件人」和「更多 › 已静音」；GitHub 的 `muted_repos` 变成静音（启动时搬过去，设置页照旧）。**没做**：`Group`、`From`、`Supersedes`——按 `Thread` 合并本来就是 hub 统一做的，GitHub 的 CI 后来成功、分支删了、PR 合了也已经由它自己报 `Done`，等有连接器真要用再加，不过度设计 | 5 | 中 | GitHub、Telegram、信息、hub 收件箱、App | 新字段和新接口；老 App 不画菜单、GitHub 设置页照旧；条目多了 `mutes`，连接器块多了 `tags`（wire 样例已更新） |
 | V4 ✓ | 身份线索（只记录，#687）：连接器在消息上带发送者的原始线索（只在内存），知识库用 hub 的密钥（`~/.jarvis/handles.key`）做 HMAC 后存进人的 `handles.json`，不进 `meta.json`、模型看不到；5 个连接器都给（邮件地址、信息的邮箱 / 号码、GitHub 登录名、Telegram 用户、飞书用户 id）。**没做**：收件箱条目上的 `From.Handles`（还没有用的地方）、飞书的邮箱（要额外权限） | 6 | 小 | 5 个都动一点、知识库 | 新文件，老数据不动；`meta.json` 和 golden 不变 |
-| V5 | 协议 v2：Telegram 先换，信息的 node 侧再换，一致性测试 | 4 | 大 | Telegram、信息、node、hub | 子进程一个版本里两种都认；旧 node 照旧走 5 个方法 |
+| V5 ✓ | 协议 v2（#699）：线上字段一律 snake_case，`init` 和清单带 `protocol`（现在是 2，不一致就停），固定的错误码（`not_initialized`、`no_capability`、`unknown_method`、`wrong_protocol`）；规范写在 `docs/connector-protocol.md`；一致性测试 `connector/conformance` 把 GitHub、信息、Telegram 放到协议的程序一侧，逐个能力比直接调和经协议调的结果，`TestWireTypesAreTagged` 检查线上字段都有名字。**没做**：信息的 node 侧换成协议 v2（node 上照旧是写死的 5 个方法，能用，等要动 node 时再换）、常驻服务的 WebSocket 传输（等第一个外部连接器） | 4 | 中 | Telegram、hub 的子进程接法、测试 | 子进程和 hub 同一次构建一起升级；node 不动 |
 | V6 | 通用登录（`open_url`、`device_code`）、App 的通用登录页；邮件多账号；GitHub 设备码（用户自己填 client ID） | 7 | 中 | Telegram、邮件、GitHub、App | 老的邮件 OAuth 接口保留 |
 | V7 | 进知识库统一成 `Changes`：先 4 个已经是 `Archive` 的，再 `Items`，最后飞书的会话 | 2 | 中到大 | 全部，飞书最后 | 对外不变：游标文件不变；过 M0 基线（golden）和真实数据对照 |
 | — | 第三方规范 `docs/connector-protocol.md`，等第一个外部连接器再实现 WebSocket 传输 | 4 | — | — | — |

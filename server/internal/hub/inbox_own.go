@@ -14,9 +14,8 @@ import (
 
 // ownInbox is a connector of the hub's own with inbox items.
 type ownInbox interface {
-	// collectInbox reads what is new; full also reads the sources polled slowly (mail: every inboxMailPoll, and on
-	// a refresh).
-	collectInbox(ctx context.Context, full bool) []*InboxItem
+	// collectInbox reads what is new in the sources the round reads (inboxRound).
+	collectInbox(ctx context.Context, round inboxRound) []*InboxItem
 	// replyInbox sends the user's reply to one of its items; already: the same reply went out before (nothing sent,
 	// the item stays as it is).
 	replyInbox(ctx context.Context, r inboxReplyReq) (already bool, err error)
@@ -49,7 +48,8 @@ func (h *Hub) ownInboxFor(it InboxItem) ownInbox {
 	return own
 }
 
-func (c larkConnector) collectInbox(ctx context.Context, _ bool) []*InboxItem {
+// collectInbox: the chats every round; document and removed notices on a poll (an event round is about chats).
+func (c larkConnector) collectInbox(ctx context.Context, round inboxRound) []*InboxItem {
 	h := c.h
 	var changed []*InboxItem
 	ch, err := h.collectLark(ctx)
@@ -57,6 +57,9 @@ func (c larkConnector) collectInbox(ctx context.Context, _ bool) []*InboxItem {
 		h.logf("inbox: feishu: %v", err)
 	}
 	changed = append(changed, ch...)
+	if round == roundChats {
+		return changed
+	}
 	docs, err := h.collectDocs(ctx)
 	if err != nil {
 		h.logf("inbox: feishu docs: %v", err)
@@ -112,8 +115,8 @@ func (c larkConnector) replyInbox(ctx context.Context, r inboxReplyReq) (bool, e
 }
 
 // collectInbox: mail only on a full round (IMAP is slow; Gmail goes through a proxy).
-func (c mailConnector) collectInbox(ctx context.Context, full bool) []*InboxItem {
-	if !full {
+func (c mailConnector) collectInbox(ctx context.Context, round inboxRound) []*InboxItem {
+	if round != roundFull {
 		return nil
 	}
 	return c.h.collectMail(ctx)

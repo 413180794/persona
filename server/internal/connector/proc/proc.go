@@ -279,9 +279,13 @@ func (c *Conn) spawn(ctx context.Context) (*child, error) {
 		settings = c.cfg.SettingsNow()
 	}
 	var man serve.Manifest
-	if err := peer.Call(ictx, serve.MInit, serve.InitParams{Config: settings}, &man); err != nil {
+	if err := peer.Call(ictx, serve.MInit, serve.InitParams{Protocol: serve.Protocol, Config: settings}, &man); err != nil {
 		ch.stop()
 		return nil, fmt.Errorf("%s 的程序没准备好：%v", c.cfg.Name, err)
+	}
+	if man.Protocol != serve.Protocol {
+		ch.stop()
+		return nil, fmt.Errorf("%s 的程序用的协议版本是 %d，hub 要 %d", c.cfg.Name, man.Protocol, serve.Protocol)
 	}
 	if man.ID != c.cfg.ID {
 		ch.stop()

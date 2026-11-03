@@ -574,7 +574,7 @@ func TestConnectorBaseline(t *testing.T) {
 	h.registerConnectors()
 	ctx := context.Background()
 
-	h.collectInbox(ctx, true)
+	h.collectInbox(ctx, roundFull)
 	// Triage runs in the background; with no model it gives every item its rule tier (and logs why).
 	h.inbox.triaging.Lock()
 	h.inbox.triaging.Unlock()

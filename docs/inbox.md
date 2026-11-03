@@ -157,8 +157,9 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 
 ## 生命周期
 
-- hub 后台采集（`server/internal/hub/inbox.go`）：飞书实时事件来了 3 秒后采一次，否则每 2 分钟；邮件每 3 分钟。下拉刷新
-  （`POST /api/v1/inbox/refresh`）立刻采。有变化就存库（`inbox_items`）并推 `{"type":"inbox"}`，App 再拉列表。
+- hub 后台采集（`server/internal/hub/inbox.go`）：飞书实时事件来了 3 秒后采一次，这一轮只读飞书会话；每 2 分钟一轮再读文档通知、
+  removed和其它连接器（连接器自己的事件、改设置也触发这种轮）；邮件每 3 分钟。以前每个飞书事件都把这些全读一遍（#674）。下拉刷新
+  （`POST /api/v1/inbox/refresh`）立刻采全部。有变化就存库（`inbox_items`）并推 `{"type":"inbox"}`，App 再拉列表。
 - **已处理**只记在 Persona（`done_at`，`done_by=user`），不回写飞书已读、不改邮件的已读。已处理的保留 3 天（列表底部可移回），
   8 天后从库里删掉（期间用来挡住「飞书里一直未读」的旧消息重新冒出来）。
 - 在别处看过（飞书里读了、别的邮件客户端读了）：标 `read`；不是「需要你」的直接算处理完（`done_by=read`），「需要你」的留着，但未读数清零、不再标 @我 / @所有人（已经不是未读的 @ 了）。

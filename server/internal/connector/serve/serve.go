@@ -9,7 +9,6 @@ package serve
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -43,8 +42,13 @@ const (
 	EChanged       = "changed" // ChangedEvent
 )
 
+// Protocol is the version of this protocol (docs/connector-protocol.md): the hub sends it with init, the program
+// answers with its own in the manifest, and the hub refuses a program of another version.
+const Protocol = 2
+
 // Manifest is who the connector is and its connector.Manifest, on the wire.
 type Manifest struct {
+	Protocol     int      `json:"protocol"`
 	ID           string   `json:"id"`
 	Name         string   `json:"name"`
 	Capabilities []string `json:"capabilities"`
@@ -55,31 +59,52 @@ type Manifest struct {
 }
 
 type (
-	InitParams  struct{ Config json.RawMessage }
+	InitParams struct {
+		Protocol int             `json:"protocol"`
+		Config   json.RawMessage `json:"config,omitempty"`
+	}
 	LoginParams struct {
-		Step   string
-		Values map[string]string
+		Step   string            `json:"step,omitempty"`
+		Values map[string]string `json:"values,omitempty"`
 	}
 	ChangesParams struct {
-		Cursor string
-		Limit  int
+		Cursor string `json:"cursor,omitempty"`
+		Limit  int    `json:"limit,omitempty"`
 	}
 	ChangesResult struct {
-		Batches []connector.ChatBatch
-		Next    string
-		More    bool
+		Batches []connector.ChatBatch `json:"batches,omitempty"`
+		Next    string                `json:"next,omitempty"`
+		More    bool                  `json:"more,omitempty"`
 	}
-	CollectResult struct{ Things []connector.InboxThing }
+	CollectResult struct {
+		Things []connector.InboxThing `json:"things,omitempty"`
+	}
 	// ReplyParams is the reply as the connector gets it.
 	ReplyParams = connector.InboxReply
-	ToolsResult struct{ Tools []proto.Tool }
-	CallParams  struct {
-		Name string
-		Args json.RawMessage
+	ToolsResult struct {
+		Tools []proto.Tool `json:"tools,omitempty"`
 	}
-	CallResult   struct{ Text string }
-	SecretData   struct{ Data []byte } // nil: nothing stored
-	ChangedEvent struct{ Scope string }
+	CallParams struct {
+		Name string          `json:"name"`
+		Args json.RawMessage `json:"args,omitempty"`
+	}
+	CallResult struct {
+		Text string `json:"text,omitempty"`
+	}
+	SecretData struct {
+		Data []byte `json:"data,omitempty"` // nil: nothing stored
+	}
+	ChangedEvent struct {
+		Scope string `json:"scope"`
+	}
+)
+
+// Error codes a program answers with (rpc.Error.Code), for callers that act on the kind of failure.
+const (
+	CodeNotInitialized = "not_initialized"
+	CodeNoCapability   = "no_capability"
+	CodeUnknownMethod  = "unknown_method"
+	CodeWrongProtocol  = "wrong_protocol"
 )
 
 // Build makes the connector once the hub has sent its configuration (hub.json's section for it); secrets is the
@@ -103,10 +128,23 @@ func Main(ctx context.Context, in io.Reader, out io.Writer, build Build) error {
 	return peer.Serve(ctx, in)
 }
 
+// Serve serves c, built and running already (its Run and Watch are the caller's), on in / out: what a test holds a
+// connector to the protocol with (connector/conformance). Its secrets are its own.
+func Serve(ctx context.Context, in io.Reader, out io.Writer, c connector.Connector) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	peer := rpc.New("c", out)
+	s := &server{peer: peer, ctx: ctx, c: c, running: true}
+	peer.OnRequest = s.handle
+	return peer.Serve(ctx, in)
+}
+
 type server struct {
 	peer  *rpc.Peer
 	build Build
 	ctx   context.Context
+	// running: c was handed over built and running (Serve); init only answers its manifest.
+	running bool
 
 	mu sync.Mutex
 	c  connector.Connector
@@ -118,13 +156,16 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, err
 		}
+		if p.Protocol != Protocol {
+			return nil, &rpc.Error{Code: CodeWrongProtocol, Message: fmt.Sprintf("protocol %d, not %d", p.Protocol, Protocol)}
+		}
 		return s.init(p.Config)
 	}
 	s.mu.Lock()
 	c := s.c
 	s.mu.Unlock()
 	if c == nil {
-		return nil, errors.New("not initialized")
+		return nil, &rpc.Error{Code: CodeNotInitialized, Message: "not initialized"}
 	}
 	switch method {
 	case MManifest:
@@ -193,7 +234,7 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		text, err := t.Call(ctx, p.Name, p.Args)
 		return CallResult{Text: text}, err
 	}
-	return nil, fmt.Errorf("unknown method %s", method)
+	return nil, &rpc.Error{Code: CodeUnknownMethod, Message: "unknown method " + method}
 }
 
 // init builds the connector the first time and starts its Run and Watch; a second init answers the same.
@@ -201,6 +242,9 @@ func (s *server) init(config json.RawMessage) (Manifest, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.c != nil {
+		if s.running {
+			return ManifestOf(s.c), connector.Check(s.c)
+		}
 		return ManifestOf(s.c), nil
 	}
 	c, err := s.build(config, secrets{s.peer})
@@ -245,7 +289,7 @@ func (s *server) watch(e connector.Events) {
 // ManifestOf is c's manifest on the wire.
 func ManifestOf(c connector.Connector) Manifest {
 	cm := c.Manifest()
-	m := Manifest{ID: c.ID(), Name: c.Name(), Capabilities: []string{}, Hosts: cm.Hosts, AgentTools: cm.AgentTools,
+	m := Manifest{Protocol: Protocol, ID: c.ID(), Name: c.Name(), Capabilities: []string{}, Hosts: cm.Hosts, AgentTools: cm.AgentTools,
 		PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds}
 	for _, cp := range cm.Capabilities {
 		m.Capabilities = append(m.Capabilities, string(cp))
@@ -264,7 +308,7 @@ func (m Manifest) Of() connector.Manifest {
 }
 
 func noCapability(c connector.Connector, what string) error {
-	return fmt.Errorf("%s has no %s", c.Name(), what)
+	return &rpc.Error{Code: CodeNoCapability, Message: fmt.Sprintf("%s has no %s", c.Name(), what)}
 }
 
 // secrets is the hub's store for this program's connector, over the pipe.

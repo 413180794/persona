@@ -24,7 +24,8 @@ const (
 
 // Handle is a raw hint as a connector gives it, in memory only: hashed before it is written.
 type Handle struct {
-	Kind, Value string
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
 }
 
 // normalize is the form two sources agree on: an address in lower case, a number as + and digits, the rest trimmed

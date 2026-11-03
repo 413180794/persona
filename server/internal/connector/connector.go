@@ -41,17 +41,17 @@ const (
 
 // Status is how a connector is doing, for 设置 › 连接器 and the assistant: only an ok connector offers tools.
 type Status struct {
-	State string
+	State string `json:"state"`
 	// Account is the account it reads as, for display (a GitHub login, 「这台 Mac 上的信息」).
-	Account string
+	Account string `json:"account,omitempty"`
 	// Via says where the sign-in comes from (「来自 <机器> 的 gh 登录」).
-	Via string
+	Via string `json:"via,omitempty"`
 	// Error is one sentence for people when State is not ok (「<机器> 上的 gh 登录失效了…」); never a secret.
-	Error string
+	Error string `json:"error,omitempty"`
 	// Guide is how to fix it, a step a sentence, when the user can (「打开系统设置 › …」); shown under Error.
-	Guide     []string
-	LastSync  time.Time
-	LastEvent time.Time
+	Guide     []string  `json:"guide,omitempty"`
+	LastSync  time.Time `json:"last_sync,omitempty"`
+	LastEvent time.Time `json:"last_event,omitempty"`
 }
 
 // Accounts is a connector that knows how it is doing. Status answers from memory (it is called on every tool list

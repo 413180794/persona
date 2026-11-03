@@ -8,8 +8,8 @@ import (
 
 // ChatBatch is one conversation's new messages, oldest first.
 type ChatBatch struct {
-	Chat     kb.SourceChat
-	Messages []kb.SourceMessage
+	Chat     kb.SourceChat      `json:"chat,omitempty"`
+	Messages []kb.SourceMessage `json:"messages,omitempty"`
 }
 
 // Archive is a connector whose conversations go into the knowledge base by one cursor for the whole account

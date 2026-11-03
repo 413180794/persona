@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/lark"
@@ -183,6 +184,7 @@ type inbox struct {
 	mu          sync.Mutex
 	items       map[string]*InboxItem
 	kick        chan struct{}
+	wide        atomic.Bool // a kick asked for more than the Feishu chats (kickInbox)
 	once        sync.Once
 	running     sync.Mutex  // one collection at a time
 	triaging    sync.Mutex  // one triage pass at a time (inbox_triage.go)
@@ -201,11 +203,42 @@ func (b *inbox) init() {
 	})
 }
 
-// kickInbox asks for a Feishu collection soon (a realtime event arrived).
+// inboxRound is what one collection reads.
+type inboxRound int
+
+const (
+	// roundChats follows a Feishu realtime event: the Feishu chats only. Document and removed notices and the other
+	// connectors wait for the next poll; reading them on every event was most of the hub's lark-connector calls in a
+	// busy group (#674).
+	roundChats inboxRound = iota
+	roundPoll             // every inboxPoll and on a connector's kick: every source but the slow ones
+	roundFull             // at start, every inboxMailPoll and on a refresh: mail too
+)
+
+// kickInbox asks for a collection of every source soon (a connector's realtime event, its settings changed).
 func (h *Hub) kickInbox() {
 	h.inbox.init()
+	h.inbox.wide.Store(true)
+	h.inbox.signal()
+}
+
+// kickLarkChats asks for a collection of the Feishu chats soon (a Feishu realtime event arrived).
+func (h *Hub) kickLarkChats() {
+	h.inbox.init()
+	h.inbox.signal()
+}
+
+// kickedRound is the round a kick asks for: the Feishu chats, unless something else asked for every source too.
+func (b *inbox) kickedRound() inboxRound {
+	if b.wide.Swap(false) {
+		return roundPoll
+	}
+	return roundChats
+}
+
+func (b *inbox) signal() {
 	select {
-	case h.inbox.kick <- struct{}{}:
+	case b.kick <- struct{}{}:
 	default:
 	}
 }
@@ -214,12 +247,13 @@ func (h *Hub) inboxLoop(ctx context.Context) {
 	h.inbox.init()
 	h.loadInbox(ctx)
 	if !h.isMember() {
-		h.collectInbox(ctx, true)
+		h.collectInbox(ctx, roundFull)
 	}
 	lastMail := time.Now()
 	t := time.NewTicker(inboxPoll)
 	defer t.Stop()
 	for {
+		round := roundPoll
 		select {
 		case <-ctx.Done():
 			return
@@ -230,15 +264,16 @@ func (h *Hub) inboxLoop(ctx context.Context) {
 				return
 			case <-time.After(inboxDebounce):
 			}
+			round = h.inbox.kickedRound()
 		}
 		if h.isMember() { // the center keeps the group's inbox; this one's stays as it was (mesh_group.go)
 			continue
 		}
-		withMail := time.Since(lastMail) >= inboxMailPoll
-		if withMail {
+		if time.Since(lastMail) >= inboxMailPoll {
 			lastMail = time.Now()
+			round = roundFull
 		}
-		h.collectInbox(ctx, withMail)
+		h.collectInbox(ctx, round)
 	}
 }
 
@@ -283,18 +318,20 @@ func (b *inbox) acceptsAccount(it *InboxItem) bool {
 	return account == selected
 }
 
-// collectInbox reads Feishu (and mail) once and applies what changed.
-func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
+// collectInbox reads the sources of one round once and applies what changed.
+func (h *Hub) collectInbox(ctx context.Context, round inboxRound) {
 	h.inbox.running.Lock()
 	defer h.inbox.running.Unlock()
 	var changed []*InboxItem
 	// The hub's own connectors (Feishu, then mail) in the order registered, then the others' generic things.
 	for _, c := range h.connectors.All() {
 		if own, ok := c.(ownInbox); ok {
-			changed = append(changed, own.collectInbox(ctx, withMail)...)
+			changed = append(changed, own.collectInbox(ctx, round)...)
 		}
 	}
-	changed = append(changed, h.collectConnectors(ctx)...)
+	if round != roundChats {
+		changed = append(changed, h.collectConnectors(ctx)...)
+	}
 	h.inbox.mu.Lock()
 	for id, it := range h.inbox.items {
 		if it.DoneAt != nil && time.Since(*it.DoneAt) > inboxForget {
@@ -870,7 +907,7 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 		}
 	})
 	api.HandleFunc("POST /api/v1/inbox/refresh", func(w http.ResponseWriter, r *http.Request) {
-		h.collectInbox(r.Context(), true)
+		h.collectInbox(r.Context(), roundFull)
 		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all")})
 	})
 }

@@ -29,36 +29,37 @@ const (
 // happens to an item afterwards (triage, the AI 分身, done, kept for a while) is the hub's, the same for every source.
 type InboxThing struct {
 	// Thread is the connector's stable key of the thread ("example-org/example-repo#12").
-	Thread string
+	Thread string `json:"thread"`
 	// Kind is the connector's kind of thing ("review_requested"): prompts/inbox/kinds/<id>.md tells the models
 	// what it means; Label is the row's tag for people (「请你 review」).
-	Kind, Label string
-	Title       string
-	Sender      string // who made the newest move
-	Preview     string // the newest move in a line
-	Context     string // the thread as text, for triage, drafting and the AI 分身
+	Kind    string `json:"kind"`
+	Label   string `json:"label,omitempty"`
+	Title   string `json:"title,omitempty"`
+	Sender  string `json:"sender,omitempty"`  // who made the newest move
+	Preview string `json:"preview,omitempty"` // the newest move in a line
+	Context string `json:"context,omitempty"` // the thread as text, for triage, drafting and the AI 分身
 	// At is when the newest move happened; Last marks it, and a different Last adds to the open item.
-	At   time.Time
-	Last string
-	URL  string // the thread on the web, opened in the app
+	At   time.Time `json:"at,omitempty"`
+	Last string    `json:"last,omitempty"`
+	URL  string    `json:"url,omitempty"` // the thread on the web, opened in the app
 	// OpenURL is a link the system opens instead (sms:…: 在信息里回复), kept apart from URL.
-	OpenURL string
+	OpenURL string `json:"open_url,omitempty"`
 	// ReplyTo says where a reply goes and who sees it (「评论到 example-org/example-repo#12（仓库可见的人都能看到）」);
 	// CanReply: Reply works for this thread.
-	ReplyTo  string
-	CanReply bool
+	ReplyTo  string `json:"reply_to,omitempty"`
+	CanReply bool   `json:"can_reply,omitempty"`
 	// Tier is the tier the connector's rules decide (action, fyi, noise): the item gets it without a model. "" leaves it
 	// to the model (a human's ordinary comment). Why says which rule, for people (「规则：真人 @ 你」).
-	Tier Tier
-	Why  string
+	Tier Tier   `json:"tier,omitempty"`
+	Why  string `json:"why,omitempty"`
 	// Done ends the open item (DoneRead, DoneReplied): the thread is over; Why says how when it is not obvious
 	// (「GitHub：后来成功了」).
-	Done string
+	Done string `json:"done,omitempty"`
 	// Read: seen somewhere else (the notification read on GitHub); an item that does not need the user is done.
-	Read bool
+	Read bool `json:"read,omitempty"`
 	// Tags are what the thing is about, for muting and rules: its repository, chat, sender (TagRepo, TagChat,
 	// TagSender: the row's menu offers to mute those), a CI failure's branch. The hub mutes by them for every source.
-	Tags []Tag
+	Tags []Tag `json:"tags,omitempty"`
 }
 
 // Tag is one thing an inbox thing is about: Key (TagRepo…), the Value it matches by (an id), the Name people read.
@@ -86,10 +87,10 @@ type Inbox interface {
 
 // InboxReply is a reply to one of a connector's inbox items.
 type InboxReply struct {
-	Thread string
-	ItemID string // the hub's inbox item
-	Last   string // the newest move the item holds (InboxThing.Last): what the reply answers
-	Text   string
+	Thread string `json:"thread"`
+	ItemID string `json:"item_id,omitempty"` // the hub's inbox item
+	Last   string `json:"last,omitempty"`    // the newest move the item holds (InboxThing.Last): what the reply answers
+	Text   string `json:"text,omitempty"`
 }
 
 // InboxSettler is an inbox whose rules can close items the hub still has open (made under older rules, or of a
