@@ -20,6 +20,9 @@ final class TasksStore {
     var showBoard = false
     /// A task picked on the board, opened when the board has gone down.
     var openAfterBoard: String?
+    /// Message cards (inbox item ids) put off with 稍后, and the ones sent from their card.
+    private(set) var laterMessages: Set<String> = []
+    private(set) var sentMessages: Set<String> = []
     /// Quick results (QuickResult.callID) the user took back with 撤销.
     private(set) var undone: Set<String> = []
     /// Plans being started or dismissed (their card shows it and takes no second tap).
@@ -156,6 +159,31 @@ final class TasksStore {
     }
 
     // MARK: Actions
+
+    /// 发送 on a message card: the draft (as edited) goes out through the inbox, which files the item as done.
+    func sendMessage(_ itemID: String, text: String) async {
+        let inbox = InboxStore.shared
+        if let item = inbox.items.first(where: { $0.id == itemID }) {
+            if await inbox.send(item, text: text) { sentMessages.insert(itemID) }
+            return
+        }
+        guard let api = AppModel.shared.api else { return }
+        do {
+            try await api.inboxReply(itemID, text: text)
+            sentMessages.insert(itemID)
+            Haptics.success()
+            inbox.reload()
+        } catch {
+            AppModel.shared.toast = Toast("回复没发出去：\(error.localizedDescription)", style: .error)
+        }
+    }
+
+    func later(_ itemID: String) { laterMessages.insert(itemID) }
+
+    /// Whether the card's message was answered: sent from the card, or replied / filed in the inbox.
+    func messageSettled(_ itemID: String) -> Bool {
+        sentMessages.contains(itemID) || InboxStore.shared.items.first { $0.id == itemID }?.isDone == true
+    }
 
     /// 撤销 on a quick result: the reminder or event comes off the phone.
     func undo(_ result: QuickResult) async {

@@ -1326,6 +1326,10 @@ if MOCK_TASKS:
               {"title": "整理发布说明", "state": "done", "machine": "MacBook",
                "summary": "整理好了：这周合并了 7 个 PR，分成新功能、修复和其他三组，写在 docs/release-notes.md 里，等你过目。",
                "pr": "https://github.com/example/weather/pull/43"}),
+        _feed("feed_m7b", 12, "message", "lark:mock-task-msg", {
+            "todo_id": "todo_task_widget", "source": "lark", "account": "飞书", "chat": "客户端发版群", "sender": "韩梅梅",
+            "text": "小组件横屏崩溃今天能修好吗？下午想发一版 TestFlight",
+            "draft": "在修了，测试已经过了，十点前提 PR，下午发版来得及。"}),
         _feed("feed_m8", 10, "routed", "todo_task_tests", {"text": "Mock 用协议注入，不要用单例"}),
         _feed("feed_m9", 1.8, "plan", "plan_mock_3"),
     ]

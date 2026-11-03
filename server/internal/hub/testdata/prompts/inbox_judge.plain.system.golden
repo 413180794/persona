@@ -8,7 +8,9 @@
 
 task：交给它时写给 Agent 的具体指令，一两句：要查什么、回复要回答什么。比如「查 1013 分支是否已合入 codex 的改动，回复对方结论和合入的 MR」。
 reason：不超过 12 个字，为什么这么定。
+task_id：输入里列了用户正在做的任务时，如果这件事问的、说的就是其中某一个（比如问那个修复什么时候好、那份材料准备得怎样），填它的 id；
+没有列、或者都不相关，填空字符串。只在确实是同一件事时才填。
 
-回复 JSON：{"handle":true,"task":"…","reason":"…"}
+回复 JSON：{"handle":true,"task":"…","reason":"…","task_id":""}
 
 Reply with a single JSON object only, no prose, no code fences.

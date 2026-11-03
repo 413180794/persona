@@ -53,7 +53,7 @@ nonisolated struct TaskPlan: Codable, Hashable, Identifiable, Sendable {
 /// An item the hub inserted into an assistant conversation; drawn among the transcript's lines by `at`.
 nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case plan, task, answered, receipt, routed, today, unknown
+        case plan, task, answered, receipt, routed, today, message, unknown
         init(from decoder: Decoder) throws {
             self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
         }
@@ -83,8 +83,14 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     var summary: String? { string("summary") }
     var pr: String? { string("pr") }
     var machine: String? { string("machine") }
-    /// `routed`: what the user said straight to the task.
+    /// `routed`: what the user said straight to the task; `message`: the message itself.
     var text: String? { string("text") }
+    /// `message`: a message about a task with the AI 分身's draft reply; `ref` is the inbox item.
+    var todoID: String? { string("todo_id") }
+    var source: String? { string("source") }
+    var chat: String? { string("chat") }
+    var sender: String? { string("sender") }
+    var draft: String? { string("draft") }
 
     /// `today`: the day's card (TodayBody).
     var today: TodayBody? {

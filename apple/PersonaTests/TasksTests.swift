@@ -137,5 +137,14 @@ struct TasksTests {
         #expect(item.kind == .today && body.done?.first?.title == "博客迁移" && body.working == 2 && body.meetings?.first?.title == "设计评审")
         #expect(body.atMe?.first?.name == "发布群" && body.unread == 4 && body.waiting == nil)
     }
+
+    @Test func messageCardDecodes() throws {
+        let item = try decode(#"""
+        {"id":"f","conversation":"c1","at":"2026-11-03T10:00:00Z","kind":"message","ref":"lark:f1:12",
+         "body":{"todo_id":"t1","source":"lark","account":"飞书","chat":"发版群","sender":"陈晓","text":"能修好吗？","draft":"测试过了"}}
+        """#, as: FeedItem.self)
+        #expect(item.kind == .message && item.ref == "lark:f1:12" && item.todoID == "t1" && item.chat == "发版群")
+        #expect(item.sender == "陈晓" && item.text == "能修好吗？" && item.draft == "测试过了" && item.source == "lark")
+    }
 }
 

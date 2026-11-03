@@ -47,6 +47,13 @@ func RenderInboxJudge(j InboxJudge) string { return render("inbox/judge", j) }
 type InboxJudgeInput struct {
 	Summary string
 	Item    InboxItem
+	Tasks   []InboxTask // the user's tasks going on (docs/unified-entry.md), for the judge to link the item to one
+}
+
+// InboxTask is a task the user started from the assistant's conversation: a todo and where its agents are.
+type InboxTask struct {
+	ID, Title, State string
+	Last             string // what its latest agent said last, in a line
 }
 
 func RenderInboxJudgeInput(in InboxJudgeInput) string { return render("inbox/judge_input", in) }
@@ -54,10 +61,12 @@ func RenderInboxJudgeInput(in InboxJudgeInput) string { return render("inbox/jud
 // InboxAgent is the first message of the AI 分身's conversation for an item (inbox/agent). At most one of Lark, Doc,
 // Moment and Mail is set: where the item came from.
 type InboxAgent struct {
-	Owner  string
-	Title  string
-	Item   InboxItem
-	Task   string // the judge's instruction
+	Owner string
+	Title string
+	Item  InboxItem
+	Task  string // the judge's instruction
+	// Linked: the user's task the item is about (the judge's task_id), its progress for the reply.
+	Linked *InboxTask
 	Lark   *InboxAgentLark
 	Doc    *InboxAgentDoc
 	Moment *InboxAgentMoment

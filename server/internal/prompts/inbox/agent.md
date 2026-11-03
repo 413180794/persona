@@ -6,7 +6,10 @@
 </jarvis-context>
 
 要做的：{{.Task}}
-
+{{with .Linked}}
+这件事说的是{{$.Owner}}正在做的任务「{{.Title}}」（{{.ID}}）：现在{{.State}}{{with .Last}}，它最近说：{{.}}{{end}}。
+回复里照实说这个任务的进度（做到哪了、大概什么时候好）；要更多细节用 agents_list / agent_read 看它的 Agent。
+{{end}}
 - 先用工具把需要的信息查清楚（lark_messages 读更早的上下文、lark_search 或 lark-connector skill 的「ol GET …」查文档和日程、agents_list / agent_read 看各台电脑上的 Agent、
   读代码、mail_* 读邮件、上网）。只做只读的调查，不改任何东西。
 - **不要自己发送**（不用 ol 发飞书、不调用 mail_send、github_comment、github_review、agent_send），也不要用 ask_user / notify_user 打扰{{.Owner}}。

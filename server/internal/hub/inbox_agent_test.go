@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // fakeModel answers every Messages API call with reply.
@@ -220,5 +221,60 @@ func TestInboxModelsLive(t *testing.T) {
 	t.Logf("model 2 (%s): %+v", time.Since(start).Round(time.Millisecond), *it.Agent)
 	if it.Agent.State != AgentQueued {
 		t.Fatalf("not handed over: %+v", it.Agent)
+	}
+}
+
+// An item about one of the user's tasks (docs/unified-entry.md): the judge sees the tasks and links the item; the AI
+// 分身 is told the task's progress; its draft puts a card into the task's conversation.
+func TestInboxItemAboutATask(t *testing.T) {
+	ctx := context.Background()
+	h := agentHub(t)
+	h.initTodos(ctx)
+	todo, err := h.createTodo(ctx, "修登录崩溃", "", "conv1", "plan_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, calls := captureModel(t, `{"handle":true,"task":"回复修复进度","reason":"问进度","task_id":"`+todo.ID+`"}`)
+	h.triageAI = model
+	it := actionItem("lark:f1:12", time.Now())
+	it.Title, it.Sender, it.Preview, it.Source, it.AccountName = "客户端发版群", "陈晓", "登录那个崩溃今天能修好吗？", "lark", "飞书"
+	h.inbox.items[it.ID] = it
+	if !h.judgeOne(ctx, it) {
+		t.Fatal("not judged")
+	}
+	if c := onlyCall(t, calls()); !strings.Contains(c.User, todo.ID+"：修登录崩溃") {
+		t.Fatalf("the judge was not shown the task:\n%s", c.User)
+	}
+	if it.Agent == nil || it.Agent.TodoID != todo.ID {
+		t.Fatalf("agent = %+v", it.Agent)
+	}
+	linked := &prompts.InboxTask{ID: todo.ID, Title: "修登录崩溃", State: "在做", Last: "测试通过"}
+	if p := inboxAgentPromptFor(it, "示例用户", nil, linked); !strings.Contains(p, "正在做的任务「修登录崩溃」") || !strings.Contains(p, "测试通过") {
+		t.Fatalf("the agent is not told the task:\n%s", p)
+	}
+
+	// A task id it was not shown is not taken.
+	model2, _ := captureModel(t, `{"handle":true,"task":"x","reason":"r","task_id":"todo_made_up"}`)
+	h.triageAI = model2
+	other := actionItem("lark:f2:12", time.Now())
+	h.inbox.items[other.ID] = other
+	h.judgeOne(ctx, other)
+	if other.Agent == nil || other.Agent.TodoID != "" {
+		t.Fatalf("made-up task linked: %+v", other.Agent)
+	}
+
+	// The draft: the card goes into the task's conversation.
+	it.Agent.State, it.Agent.SessionID = AgentRunning, "s_agent"
+	if _, err := h.toolInboxDraft(ctx, "s_agent", json.RawMessage(`{"text":"测试已经过了，十点前提 PR"}`)); err != nil {
+		t.Fatal(err)
+	}
+	items, _, _ := h.feed(ctx, "conv1", time.Time{})
+	if len(items) != 1 || items[0].Kind != feedMessage || items[0].Ref != it.ID {
+		t.Fatalf("feed = %+v", items)
+	}
+	var mb messageBody
+	_ = json.Unmarshal(items[0].Body, &mb)
+	if mb.TodoID != todo.ID || mb.Draft != "测试已经过了，十点前提 PR" || mb.Sender != "陈晓" || mb.Chat != "客户端发版群" {
+		t.Fatalf("card = %+v", mb)
 	}
 }

@@ -148,6 +148,8 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
   最新一条早于 `max_age_hours`（默认 24）的事不交，打开开关时不会给积压的旧事一口气开一堆 Agent。
 - Agent 的提示词禁止它自己发（`lark_send` / `mail_send` / `agent_send`）和用 `ask_user` / `notify_user` 打扰用户；`lark_send`、`mail_send` 本来也要手机批准。
   `inbox_draft` 只认「为某件事启动的那个对话」，普通助手对话调用会报错。
+- **和任务有关的事**（[unified-entry.md](unified-entry.md)）：模型 2 的输入里列出用户从助手对话开的、还在进行的任务，消息说的是其中某一个时回
+  `task_id`，记在 `agent.todo_id`；模型 3 的第一条消息带上这个任务的进度，草稿照实说做到哪了；草稿交上来时往开这个任务的那段对话里插一张消息卡（`message` 条目）。
 - 它的对话出现在「对话」tab（可以点进去看它查了什么），但跑完不推「完成」（`notifyFinished` 跳过）：结果就是收件箱里的草稿。
 - App：行下面一张「AI 分身草拟的回复」卡片，**点「发送」直接发**（`POST /reply`，发完标已处理）；「修改」打开草拟浮层（已填好草稿，
   上方是 Agent 的依据和「查看 AI 分身的处理过程」）。处理中的行显示「AI 分身正在处理：<task>」。详情页操作条的按钮变成「查看草稿」。

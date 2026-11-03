@@ -1025,12 +1025,14 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
            "error":""}]}                 // Agent 没开起来的原因
 
 // FeedItem：hub 插进助手对话的条目，不在 transcript 里；客户端按 at 和 transcript 合在一起画
-{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today","ref":"plan_…、todo_… 或日期",
+{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message","ref":"plan_…、todo_…、日期或收件箱条目 id",
  "body":{…}}
 // plan：ref 是计划 id，没有 body；task：ref 是待办 id，没有 body
 // answered：{"question":"使用 Bash","answer":"批准了 · 以后同类不再问"}
 // receipt：{"title":"…","state":"done|failed","summary":"Agent 最后一段话","pr":"https://github.com/…/pull/N","machine":"…"}
 // routed：{"text":"…"}
+// message：ref 是收件箱条目 id；AI 分身给一条和任务有关的消息起草了回复：
+//         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"原话（截断）","draft":"草稿"}；发送走收件箱的发送接口
 // today：ref 是用户那天的日期；{"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"working":2,
 //         "meetings":[{"start","end","title"}],"at_me":[{"name","unread","preview"}],"unread":5}（飞书没回应的那几项不带）
 ```

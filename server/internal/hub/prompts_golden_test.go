@@ -560,3 +560,12 @@ func TestGoldenBotMessage(t *testing.T) {
 		Forward: "11-02 10:00 张三：构建挂了\n11-02 10:01 李四：我看下", Files: []string{"/tmp/jarvis-uploads/build.log"}}))
 	golden(t, "bot_message.only_files", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Files: []string{"/tmp/a.pdf", "/tmp/b.png"}}))
 }
+
+// An item about one of the user's tasks: the judge's input lists the tasks, the AI 分身 is told the linked one.
+func TestGoldenInboxTask(t *testing.T) {
+	items := goldenItems()
+	task := prompts.InboxTask{ID: "todo_1", Title: "修登录崩溃", State: "在做", Last: "测试通过 42/42"}
+	golden(t, "inbox_judge_input.with_task", prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: "张三问修复进度",
+		Item: promptItem(items["dm"]), Tasks: []prompts.InboxTask{task}}))
+	golden(t, "inbox_agent.with_task", inboxAgentPromptFor(items["dm"], "示例用户", nil, &task))
+}

@@ -72,6 +72,7 @@ const (
 	feedAnswered = "answered" // ref: the todo id; body: question, answer
 	feedReceipt  = "receipt"  // ref: the todo id; body: title, state, summary, pr, machine
 	feedRouted   = "routed"   // ref: the todo id; body: text
+	feedMessage  = "message"  // ref: the inbox item id; body: messageBody (a message about a task, with its draft reply)
 )
 
 const trustSetting = "tasks.trust"
@@ -712,6 +713,58 @@ func (h *Hub) routeToTask(ctx context.Context, conversation, todoID, text string
 		return FeedItem{}, err
 	}
 	return h.appendFeed(ctx, conversation, feedRouted, todoID, map[string]string{"text": text})
+}
+
+// ---- messages about a task ----
+
+// messageBody is a message the inbox's AI 分身 drafted a reply to, about one of the user's tasks: what the card shows
+// until the item is sent or done (the app sends the draft through the inbox, by the item's id).
+type messageBody struct {
+	TodoID  string `json:"todo_id"`
+	Source  string `json:"source"`            // lark | mail | …
+	Account string `json:"account,omitempty"` // 飞书 / the mail address
+	Chat    string `json:"chat"`              // the chat's name / the mail's subject
+	Sender  string `json:"sender,omitempty"`
+	Text    string `json:"text"` // the message, clipped
+	Draft   string `json:"draft"`
+}
+
+// messageCardOf is the card for an item whose draft is about a task; nil when it is about none. The inbox is locked.
+func messageCardOf(it *InboxItem) *messageBody {
+	if it.Agent == nil || it.Agent.TodoID == "" || it.Agent.Draft == "" {
+		return nil
+	}
+	return &messageBody{TodoID: it.Agent.TodoID, Source: it.Source, Account: it.AccountName, Chat: it.Title, Sender: it.Sender,
+		Text: clip(strings.TrimSpace(it.Preview), 400), Draft: it.Agent.Draft}
+}
+
+// messageCard puts the card into the conversation that opened the task (none when the task is gone or done).
+func (h *Hub) messageCard(ctx context.Context, itemID string, body messageBody) {
+	h.todos.mu.RLock()
+	t := h.todos.todos[body.TodoID]
+	origin := ""
+	if t != nil && t.DoneAt == nil {
+		origin = t.Origin
+	}
+	h.todos.mu.RUnlock()
+	if origin == "" {
+		return
+	}
+	if _, err := h.appendFeed(ctx, origin, feedMessage, itemID, body); err != nil {
+		h.logf("task %s: message card: %v", body.TodoID, err)
+	}
+}
+
+// inboxTasks are the tasks going on, as the inbox's judge and AI 分身 see them.
+func (h *Hub) inboxTasks() []prompts.InboxTask {
+	var out []prompts.InboxTask
+	for _, t := range h.snapshotTasks() {
+		if t.State == taskStateLabel("done") {
+			continue
+		}
+		out = append(out, prompts.InboxTask{ID: t.ID, Title: t.Title, State: t.State, Last: t.Last})
+	}
+	return out
 }
 
 // ---- what the assistant sees ----

@@ -365,6 +365,8 @@ struct FeedLine: View {
             }
         case .today:
             if let body = item.today { TodayCard(item: item, body: body) }
+        case .message:
+            if let id = item.ref, !store.laterMessages.contains(id) { MessageCard(item: item, itemID: id) }
         case .answered: answered
         case .receipt: ReceiptCard(item: item)
         case .routed: routed
@@ -403,6 +405,92 @@ struct FeedLine: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, Theme.Space.xxl)
+    }
+}
+
+/// A message about one of the conversation's tasks, with the reply the AI 分身 drafted from the task's progress
+/// (docs/unified-entry.md「信息和任务互相认得」): who said what, the task (live), the draft, 发送 / 改一下 / 稍后.
+struct MessageCard: View {
+    var item: FeedItem
+    var itemID: String
+    @State private var editing = false
+    @State private var text = ""
+    @State private var sending = false
+    private var store: TasksStore { .shared }
+
+    var body: some View {
+        let settled = store.messageSettled(itemID)
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: item.source == "mail" ? Theme.Icon.mail : Theme.Icon.groupChat)
+                    .font(Theme.Font.labelStrong)
+                    .foregroundStyle(Theme.loop)
+                Text([item.sender, item.chat].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · "))
+                    .font(Theme.Font.captionStrong).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Text(item.text ?? "")
+                .font(Theme.Font.body)
+                .lineLimit(4)
+                .padding(.leading, Theme.Space.m)
+                .overlay(alignment: .leading) { Capsule().fill(Theme.loop).frame(width: Theme.Size.bar) }
+            if let id = item.todoID, let todo = store.todos[id] {
+                let state = store.state(todo)
+                Button { store.detailTask = id } label: {
+                    HStack(spacing: Theme.Space.s) {
+                        TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
+                        Text(todo.title).font(Theme.Font.captionStrong).lineLimit(1)
+                        Text(store.leadSession(todo)?.lastText ?? state.label)
+                            .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.s)
+                    .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Label(settled ? "已以你的名义回复" : "按任务进度起草的回复", systemImage: settled ? Theme.Icon.done : Theme.Icon.draftReply)
+                    .font(Theme.Font.captionStrong)
+                    .foregroundStyle(settled ? Theme.positive : Theme.accent)
+                    .lineLimit(1)
+                if editing {
+                    TextField("回复", text: $text, axis: .vertical)
+                        .font(Theme.Font.body)
+                        .lineLimit(2...8)
+                } else {
+                    Text(text.isEmpty ? (item.draft ?? "") : text).font(Theme.Font.body)
+                }
+            }
+            .padding(Theme.Space.m)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background((settled ? Theme.positive : Theme.accent).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+            if !settled {
+                HStack(spacing: Theme.Space.s) {
+                    Button {
+                        sending = true
+                        Task {
+                            await store.sendMessage(itemID, text: text.isEmpty ? (item.draft ?? "") : text)
+                            sending = false
+                            editing = false
+                        }
+                    } label: { Text("发送").lineLimit(1).frame(maxWidth: .infinity) }
+                        .themedButton(prominent: true)
+                    Button {
+                        if text.isEmpty { text = item.draft ?? "" }
+                        withAnimation(Theme.Motion.state) { editing.toggle() }
+                    } label: { Text(editing ? "改好了" : "改一下").lineLimit(1) }
+                        .themedButton()
+                    Button { withAnimation(Theme.Motion.state) { store.later(itemID) } } label: { Text("稍后").lineLimit(1) }
+                        .themedButton()
+                }
+                .disabled(sending)
+            }
+        }
+        .card(padding: Theme.Space.l)
+        .animation(Theme.Motion.state, value: settled)
     }
 }
 

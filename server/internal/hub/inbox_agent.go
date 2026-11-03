@@ -70,11 +70,14 @@ type InboxAgent struct {
 	Draft     string `json:"draft,omitempty"`
 	Note      string `json:"note,omitempty"` // what the agent found, for the user to check the draft against
 	// Changes are the status moves the agent proposes with its draft (document items); 发送 makes them.
-	Changes   []DocChange `json:"changes,omitempty"`
-	Error     string      `json:"error,omitempty"`
-	Of        string      `json:"of,omitempty"` // the item's Last the work answers
-	StartedAt *time.Time  `json:"started_at,omitempty"`
-	DraftedAt *time.Time  `json:"drafted_at,omitempty"`
+	Changes []DocChange `json:"changes,omitempty"`
+	Error   string      `json:"error,omitempty"`
+	Of      string      `json:"of,omitempty"` // the item's Last the work answers
+	// TodoID: the user's task the item is about (model 2's task_id, docs/unified-entry.md): the draft tells its
+	// progress, and the task's conversation gets a card for it.
+	TodoID    string     `json:"todo_id,omitempty"`
+	StartedAt *time.Time `json:"started_at,omitempty"`
+	DraftedAt *time.Time `json:"drafted_at,omitempty"`
 }
 
 func (h *Hub) judgeModel() *ai.Client {
@@ -118,14 +121,16 @@ func (b *inbox) toJudge(since time.Time) []*InboxItem {
 
 // judgeOne asks model 2 about one item. A model failure leaves it unjudged, so the next pass tries again.
 func (h *Hub) judgeOne(ctx context.Context, it *InboxItem) bool {
+	tasks := h.inboxTasks() // before the inbox lock: it reads the todos and the machines' sessions
 	h.inbox.mu.Lock()
-	last, input := it.Last, prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: it.Summary, Item: promptItem(it)})
+	last, input := it.Last, prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: it.Summary, Item: promptItem(it), Tasks: tasks})
 	h.inbox.mu.Unlock()
 	system := prompts.RenderInboxJudge(prompts.InboxJudge{Owner: h.ownerName(), Rules: h.inboxAgentRules(ctx)})
 	var out struct {
 		Handle bool   `json:"handle"`
 		Task   string `json:"task"`
 		Reason string `json:"reason"`
+		TaskID string `json:"task_id"`
 	}
 	cctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	err := h.judgeModel().JSON(cctx, system, input, &out)
@@ -148,6 +153,11 @@ func (h *Hub) judgeOne(ctx context.Context, it *InboxItem) bool {
 	}
 	if out.Handle {
 		it.Agent = &InboxAgent{State: AgentQueued, Task: clip(oneLine(task), 300), Reason: clip(oneLine(out.Reason), 30), Of: last}
+		for _, t := range tasks { // only a task it was shown
+			if t.ID == strings.TrimSpace(out.TaskID) {
+				it.Agent.TodoID = t.ID
+			}
+		}
 	} else {
 		it.Agent = &InboxAgent{State: AgentSkipped, Reason: clip(oneLine(out.Reason), 30), Of: last}
 	}
@@ -156,6 +166,10 @@ func (h *Hub) judgeOne(ctx context.Context, it *InboxItem) bool {
 
 // startInboxAgents starts queued items, newest first, while fewer than the configured number are running.
 func (h *Hub) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
+	linked := map[string]*prompts.InboxTask{} // read before the inbox lock (todos and sessions)
+	for _, t := range h.inboxTasks() {
+		linked[t.ID] = &t
+	}
 	h.inbox.mu.Lock()
 	running := 0
 	var queued []*InboxItem
@@ -180,7 +194,7 @@ func (h *Hub) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	now := time.Now().UTC()
 	for _, it := range queued {
 		it.Agent.State, it.Agent.StartedAt = AgentRunning, &now
-		jobs = append(jobs, job{it, inboxAgentPrompt(it, h.ownerName(), h.kbContextFor(it))})
+		jobs = append(jobs, job{it, inboxAgentPromptFor(it, h.ownerName(), h.kbContextFor(it), linked[it.Agent.TodoID])})
 	}
 	h.inbox.mu.Unlock()
 	for _, j := range jobs {
@@ -272,7 +286,12 @@ func (h *Hub) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, now ti
 
 // inboxAgentPrompt is the AI 分身's first message for an item (prompts/inbox/agent.md).
 func inboxAgentPrompt(it *InboxItem, owner string, kbc *prompts.KBContext) string {
-	a := prompts.InboxAgent{Owner: owner, Title: it.Title, Item: promptItem(it), Task: it.Agent.Task, KB: kbc}
+	return inboxAgentPromptFor(it, owner, kbc, nil)
+}
+
+// inboxAgentPromptFor is inboxAgentPrompt for an item about one of the user's tasks (linked: its progress).
+func inboxAgentPromptFor(it *InboxItem, owner string, kbc *prompts.KBContext, linked *prompts.InboxTask) string {
+	a := prompts.InboxAgent{Owner: owner, Title: it.Title, Item: promptItem(it), Task: it.Agent.Task, KB: kbc, Linked: linked}
 	switch {
 	case it.Lark != nil:
 		a.Lark = &prompts.InboxAgentLark{FeedID: it.Lark.FeedID}
@@ -364,7 +383,11 @@ func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.Ra
 	now := time.Now().UTC()
 	it.Agent.State, it.Agent.Error, it.Agent.Changes = AgentDrafted, "", changes
 	it.Agent.Draft, it.Agent.Note, it.Agent.DraftedAt = strings.TrimSpace(a.Text), clip(strings.TrimSpace(a.Note), 600), &now
+	card := messageCardOf(it)
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, []*InboxItem{it})
+	if card != nil {
+		h.messageCard(ctx, it.ID, *card)
+	}
 	return "The draft is in the user's inbox; they will send it. You're done.", nil
 }
