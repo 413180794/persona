@@ -156,6 +156,8 @@ func ListenCandidates(listen string) ([]string, error) {
 // tunnelOrBridge: interfaces whose addresses another computer cannot use to reach this one (by their usual names).
 func tunnelOrBridge(name string) bool {
 	name = strings.ToLower(name)
+	// Keep the vendor prefix in display case, as netaddr.virtualName does: Go packs string constants together, so
+	// unrelated neighboring text must not manufacture a configured machine name in the raw binary. Matching stays lowercase.
 	for _, prefix := range []string{"lo", "docker", "veth", "br-", "virbr", "bridge", "tun", "tap", "utun", "tailscale", "wg", "zt",
 		"ipsec", "vmnet", "VBoxNet", "awdl", "llw", "anpi", "gif", "stf"} {
 		if strings.HasPrefix(name, strings.ToLower(prefix)) {
