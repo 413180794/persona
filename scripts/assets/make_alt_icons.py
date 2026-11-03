@@ -11,6 +11,8 @@ import random
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from make_icon import tinted_from
+
 S = 1024
 PREVIEW = 384
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -82,11 +84,23 @@ ICONS = {
     ),
 }
 
-# Preview image set: the icon set it shows.
-# Ember / Mint / Graphite are not drawn here: they are the default icon recoloured, kept as plain PNGs in their icon sets
-# (docs/ios.md「App 图标」); this script only refreshes their previews, so swapping their art is: replace the PNGs, rerun.
-PREVIEW_OF = {"app-icon-default": "AppIcon", "app-icon-didot": "AppIcon-Didot", "app-icon-aura": "AppIcon-Aura",
-              "app-icon-ember": "AppIcon-Ember", "app-icon-mint": "AppIcon-Mint", "app-icon-graphite": "AppIcon-Graphite"}
+# Drawn elsewhere and kept as PNGs: the icon set's icon.png (light) and icon-dark.png are the art (1024, RGB, no
+# alpha); this script only derives the tinted one from the dark one (make_icon.tinted_from, as for the app icon) and
+# rewrites the set. 蜜桃 is the default icon's hand-drawn helper (#709) on peach: picked from generated art, so
+# replacing it is replacing those two PNGs and rerunning.
+KEPT = ["AppIcon-Peach"]
+
+
+def kept(name):
+    folder = os.path.join(ASSETS, f"{name}.appiconset")
+    light = Image.open(os.path.join(folder, "icon.png")).convert("RGB")
+    dark = Image.open(os.path.join(folder, "icon-dark.png")).convert("RGB")
+    return light, dark, tinted_from(dark)
+
+
+# Preview image set: the icon set it shows. The default's is read from the app icon (scripts/assets/make_icon.py).
+PREVIEW_OF = {"app-icon-default": "AppIcon", "app-icon-peach": "AppIcon-Peach", "app-icon-didot": "AppIcon-Didot",
+              "app-icon-aura": "AppIcon-Aura"}
 
 
 def write_json(path, data):
@@ -132,11 +146,13 @@ def write_preview(name, icon_set):
 def main():
     for name, draw in ICONS.items():
         write_icon_set(name, *draw())
+    for name in KEPT:
+        write_icon_set(name, *kept(name))
     os.makedirs(PREVIEWS, exist_ok=True)
     write_json(os.path.join(PREVIEWS, "Contents.json"), {"info": {"author": "xcode", "version": 1}})
     for name, icon_set in PREVIEW_OF.items():
         write_preview(name, icon_set)
-    print("wrote", ", ".join(ICONS), "and", len(PREVIEW_OF), "previews")
+    print("wrote", ", ".join(list(ICONS) + KEPT), "and", len(PREVIEW_OF), "previews")
 
 
 if __name__ == "__main__":

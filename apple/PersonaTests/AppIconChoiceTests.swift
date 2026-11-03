@@ -33,7 +33,9 @@ import UIKit
 
     @Test func startsOnWhatTheSystemHas() {
         #expect(AppIconModel(system: FakeSystem("AppIcon-Aura")).current == .aura)
-        #expect(AppIconModel(system: FakeSystem("AppIcon-Graphite")).current == .graphite)
+        #expect(AppIconModel(system: FakeSystem("AppIcon-Peach")).current == .peach)
+        // An icon this build dropped (余烬 / 薄荷 / 石墨, #709) reads as the default.
+        #expect(AppIconModel(system: FakeSystem("AppIcon-Graphite")).current == .standard)
         #expect(AppIconModel(system: FakeSystem()).current == .standard)
         #expect(!AppIconModel(system: nil).available)
     }

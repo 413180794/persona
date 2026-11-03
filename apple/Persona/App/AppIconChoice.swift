@@ -3,20 +3,18 @@ import SwiftUI
 import UIKit
 #endif
 
-// 设置 › 外观 › App 图标 (docs/ios.md「App 图标」): the home screen icon. The default is the app's own `AppIcon`; the others
-// are alternate icon sets in the asset catalog (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`): Didot and Aura drawn by
-// scripts/assets/make_alt_icons.py, Ember / Mint / Graphite recoloured from the default's art (plain PNGs, replaceable).
-// The system remembers the choice itself, so there is nothing to store: what is set now is
-// `alternateIconName`. iPhone and iPad only: the watch and the Mac keep their one icon.
+// 设置 › 外观 › App 图标 (docs/ios.md「App 图标」): the home screen icon. The default is the app's own `AppIcon` (纸色,
+// the hand-drawn helper on paper, #709); the others are alternate icon sets in the asset catalog
+// (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`): 蜜桃 the same helper on peach (kept PNGs), Didot and Aura drawn by
+// scripts/assets/make_alt_icons.py. The system remembers the choice itself, so there is nothing to store: what is set
+// now is `alternateIconName`. iPhone and iPad only: the watch and the Mac keep their one icon.
 
 /// One icon the user can pick.
 nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     case standard
+    case peach
     case didot
     case aura
-    case ember
-    case mint
-    case graphite
 
     var id: String { rawValue }
 
@@ -24,11 +22,9 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     var iconName: String? {
         switch self {
         case .standard: nil
+        case .peach: "AppIcon-Peach"
         case .didot: "AppIcon-Didot"
         case .aura: "AppIcon-Aura"
-        case .ember: "AppIcon-Ember"
-        case .mint: "AppIcon-Mint"
-        case .graphite: "AppIcon-Graphite"
         }
     }
 
@@ -36,37 +32,32 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     var preview: String {
         switch self {
         case .standard: "app-icon-default"
+        case .peach: "app-icon-peach"
         case .didot: "app-icon-didot"
         case .aura: "app-icon-aura"
-        case .ember: "app-icon-ember"
-        case .mint: "app-icon-mint"
-        case .graphite: "app-icon-graphite"
         }
     }
 
     var title: String {
         switch self {
-        case .standard: "默认"
+        case .standard: "纸色"
+        case .peach: "蜜桃"
         case .didot: "p."
         case .aura: "气场"
-        case .ember: "余烬"
-        case .mint: "薄荷"
-        case .graphite: "石墨"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .standard: "星芯"
+        case .standard: "默认"
+        case .peach: "手绘小助手"
         case .didot: "刊头"
         case .aura: "光晕"
-        case .ember: "暖红"
-        case .mint: "青绿"
-        case .graphite: "黑白"
         }
     }
 
-    /// The choice an icon name stands for; an unknown name (an icon a later build dropped) reads as the default.
+    /// The choice an icon name stands for; an unknown name (an icon a later build dropped: 余烬, 薄荷, 石墨 went in #709)
+    /// reads as the default.
     init(iconName: String?) {
         self = Self.allCases.first { $0.iconName == iconName } ?? .standard
     }

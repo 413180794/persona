@@ -478,15 +478,15 @@ private struct SourceIcon: View {
 struct AppGlyph: View {
     var size: CGFloat
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
-            .fill(LinearGradient(colors: [Color(hex: 0x2A1810), Color(hex: 0x120B08)], startPoint: .top, endPoint: .bottom))
+        // Persona's mark beside its name (设置's header, the welcome page) is the app icon itself, in the screen's look:
+        // the default icon's preview (any / dark), so it changes with the icon (#709).
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.appIcon(size), style: .continuous)
+        Image(AppIconChoice.standard.preview)
+            .resizable()
+            .interpolation(.high)
             .frame(width: size, height: size)
-            .overlay {
-                Image(systemName: Theme.Icon.jarvis)
-                    .font(.system(size: size * 0.48, weight: .semibold))
-                    .foregroundStyle(LinearGradient(colors: [Color(hex: 0xFFB08A), Theme.brand], startPoint: .top, endPoint: .bottom))
-            }
-            .shadow(color: Theme.brand.opacity(0.25), radius: size * 0.15, y: size * 0.05)
+            .clipShape(shape)
+            .overlay(shape.stroke(Theme.cardStroke, lineWidth: Theme.Size.line))
     }
 }
 

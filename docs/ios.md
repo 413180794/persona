@@ -508,22 +508,26 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
     - 字号 ×1.2（库是桌面字号），代码保持 ×1；
     - 入场动画关掉。
 - 触感：发出 / 回答成功 success，新交互 warning，出错 error。
-- 图标：夜色背景 + 珊瑚光环 + 四角星（`scripts/assets/make_icon.py`，含 dark / tinted）。
+- 图标：「纸色」（#709，2026-11-03 用户在几轮方案里选定，换掉了原来的夜色背景 + 珊瑚光环 + 四角星）：一个手绘的白色小家伙在挥手，
+  粗黑描边、珊瑚色腮红，像 Manus 那种手绘图标，暖米白底（比官网的纸色深一点，浅色主屏上图标的边更清楚）；深色是同一个小家伙放在暖炭黑底上，
+  着色是黑底灰度。iPhone、手表、Mac 同一张。图是生成后挑定的，不是脚本画的：`AppIcon.appiconset` 的 `icon.png`（浅色）、`icon-dark.png`（深色）
+  就是素材，`scripts/assets/make_icon.py` 从它们算出 `icon-tinted.png`（灰度、四周的底拉到纯黑）、手表的图标（浅色那张，系统裁成圆）、
+  Mac 的各个尺寸和 `docs/icon-preview.png`；换图标就覆盖这两张再跑它和 `make_alt_icons.py`（设置页的预览）。
 - **App 图标可以换**（设置 › 外观 › App 图标，iPhone / iPad；手表和 Mac 只有一个图标）：
-  - 选项：默认（上面这个）、「p.」（Didot 小写 p 加红色句号，米白纸底，深色是墨底米白字）、「气场」（珊瑚、紫、青绿的光晕加颗粒，不画物体）。
-    都是按新名字 Persona 设计的第二轮方案里挑的，只在用户选了时生效。
-  - 配色变体「余烬」（暖红）、「薄荷」（青绿）、「石墨」（黑白）：默认图标原样换色，图形一像素不动，只对颜色做一次通道混合
-    （余烬：色相 -14° 再加饱和、偏暖；薄荷：色相 +150°；石墨：去饱和、略偏冷），any / dark 用同一个变换，tinted 只留灰度（系统给它上色）。
-    仓库里存的是生成好的 PNG，不是画法：换素材就直接覆盖 `AppIcon-Ember|Mint|Graphite.appiconset` 里的 `icon.png`、`icon-dark.png`、
-    `icon-tinted.png`（1024×1024、RGB、不带 alpha，tinted 用黑底灰度），再跑一次 `scripts/assets/make_alt_icons.py` 刷新预览，`AppIconChoiceTests` 查尺寸和 alpha。
-  - 资源：`scripts/assets/make_alt_icons.py` 画出 `AppIcon-Didot`、`AppIcon-Aura` 两个图标集（any / dark / tinted），
+  - 选项：纸色（默认，上面这个）、「蜜桃」（同一个小家伙放在蜜桃底上，深色是深棕红底）、「p.」（Didot 小写 p 加红色句号，米白纸底，
+    深色是墨底米白字）、「气场」（珊瑚、紫、青绿的光晕加颗粒，不画物体）。后两个是按新名字 Persona 设计的第二轮方案里挑的。
+  - 2026-11-03 去掉了「余烬」「薄荷」「石墨」（原默认图标的换色变体）和原默认图标本身（用户：太丑）。选过它们的人，系统找不到那个图标集，
+    主屏回到默认图标；`AppIconChoice(iconName:)` 把认不出的名字读成默认，设置页里也显示纸色，再选一次别的就好。
+  - 蜜桃和纸色一样是挑定的 PNG：`AppIcon-Peach.appiconset` 的 `icon.png`、`icon-dark.png` 是素材，`make_alt_icons.py` 派生着色那张和预览。
+  - 资源：`scripts/assets/make_alt_icons.py` 画出 `AppIcon-Didot`、`AppIcon-Aura` 两个图标集（any / dark / tinted），给蜜桃派生着色那张，
     再从每个图标集（含默认的）缩出设置页用的预览 `AppIcons/app-icon-*`（any / dark），改了画法重跑脚本。
     这个脚本每次重画 Didot，深色那张的字节会变（图一样）：只为刷新预览跑的话，只提交自己改的文件。
   - 工程：iOS 目标的 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` 列出备用图标集，构建时写进 Info.plist 的 `CFBundleAlternateIcons`；
     不在列表里的图标集不会打进包，加一个图标要同时改 `AppIconChoice`、这一行和脚本（`AppIconChoiceTests` 查三者一致、资源都在）。
   - 选择由系统记住，App 不存：当前是哪个读 `alternateIconName`（`AppIconModel`），换的时候系统弹自己的提示框。
   - 截图：`-tab settings -openAppearance icon`；`AppIconTests`（UI 测试，体验模式）点「气场」、接受系统提示、回主屏截图，再换回默认。
-- 品牌色：App 图标的珊瑚色（`Theme.brand`）只给 Persona 自己的标志：设置和对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。
+- 设置页顶部和欢迎页名字旁边的标志就是 App 图标本身（`AppGlyph` 显示默认图标的预览 `app-icon-default`，浅色 / 深色跟着屏幕），换图标它跟着变（#709；以前是代码画的夜色底珊瑚星）。
+- 品牌色：珊瑚色（`Theme.brand`）只给 Persona 自己的标志：对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。
   两份 AccentColor 资源（手表的标题和 tint、系统弹窗这类读资源的地方）是系统蓝；实时活动读不到风格，描边和按钮固定用系统蓝（按钮是压深的 `#0071E3`，白字 4.7:1）。
 
 ## 数据流
