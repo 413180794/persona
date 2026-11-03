@@ -183,7 +183,7 @@ extension Theme {
         static let list = "list.bullet.rectangle"
         static let text = "text.alignleft"
         static let machines = "macbook.and.iphone"
-        /// 个人 Agent: the lark-connector personal agents' page (the Agents list's toolbar on iOS, its ≡ menu on the Mac).
+        /// 个人 Agent: the lark-connector personal agents' page (the Agents list's toolbar).
         static let personalAgents = "person.crop.circle.badge.checkmark"
         /// A computer whose kind is not known.
         static let machine = "desktopcomputer"

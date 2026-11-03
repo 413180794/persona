@@ -37,22 +37,19 @@ struct AgentsListMenu: View {
         /// Not `openMonitor` / `openMachines`: a stored property's name is in the Release binary, and those are DEBUG
         /// launch arguments the release check looks for (TestFlight 50 stopped on one).
         private var onMachines: () -> Void = {}
-        private var onPersonalAgents: () -> Void = {}
 
         /// `sections`: the fold ids of what the list shows now.
         func update(sections: [String], foldAll: @escaping ([String]) -> Void, unfoldAll: @escaping () -> Void,
-                    onMachines: @escaping () -> Void, onPersonalAgents: @escaping () -> Void) {
+                    onMachines: @escaping () -> Void) {
             self.sections = sections
             self.foldAll = foldAll
             self.unfoldAll = unfoldAll
             self.onMachines = onMachines
-            self.onPersonalAgents = onPersonalAgents
         }
 
         func collapse() { foldAll(sections) }
         func expand() { unfoldAll() }
         func machinesPage() { onMachines() }
-        func personalAgentsPage() { onPersonalAgents() }
     }
 
     @AppStorage("dev.machineFilter") private var machineFilter = ""
@@ -115,12 +112,6 @@ struct AgentsListMenu: View {
                 Button { actions.machinesPage() } label: {
                     Label("机器", systemImage: Theme.Icon.machines)
                 }
-                #if os(macOS)
-                // Its toolbar button went (#907): the page stays here, by 机器.
-                Button { actions.personalAgentsPage() } label: {
-                    Label("个人 Agent", systemImage: Theme.Icon.personalAgents)
-                }
-                #endif
             }
     }
 

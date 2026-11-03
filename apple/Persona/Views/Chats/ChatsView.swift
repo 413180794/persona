@@ -180,11 +180,10 @@ struct ChatsView: View {
                         ToolbarItem(placement: .principal) { ConnectionTitle() }
                         // On the Mac the shell shows it, next to its sidebar button (MacShell).
                         ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
-                        // On the Mac it is in the ≡ menu (#907: the toolbar button was seldom used).
+                        #endif
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { openFromList(PersonalAgentsRoute()) } label: { Label("个人 Agent", systemImage: Theme.Icon.personalAgents) }
                         }
-                        #endif
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
                         }
@@ -409,8 +408,7 @@ private struct AgentsList: View {
         let _ = menuActions.update(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned),
                                    foldAll: { setFolded(folding($0, true, in: folded)); expandedQuiet = [] },
                                    unfoldAll: { setFolded(Set(Self.foldedByDefault.map { "!" + $0 })) },
-                                   onMachines: { openFromList(MachineListRoute()) },
-                                   onPersonalAgents: { openFromList(PersonalAgentsRoute()) })
+                                   onMachines: { openFromList(MachineListRoute()) })
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
 
         let list = List {
