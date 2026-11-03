@@ -524,6 +524,15 @@ final class AppModel {
         sessionsByMachine[s.machineRef, default: []].append(s)
     }
 
+    /// A Persona conversation this app just started with `text` as its first message: listed at once (`adopt`) and
+    /// opened on that message as sent (`showSent`), not on 还没有消息 until claude has written it (#511, #527). Every
+    /// place that starts one goes through here.
+    func began(_ s: Session, text: String, images: [ImagePayload] = []) {
+        adopt(s)
+        // Matched to the transcript's copy by its words: not for a message of images only.
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { showSent(s.key, text: text, images: images) }
+    }
+
     func machine(_ ref: MachineRef) -> Machine? { machines.first { $0.id == ref.id && $0.group == ref.group } }
     /// A machine of the hub-level group (the assistant's, a hub setting's).
     func hubRef(_ id: String) -> MachineRef { MachineRef(group: hub?.group ?? "", id: id) }
@@ -600,6 +609,7 @@ final class AppModel {
                 try await api.send(main, text: text)
             } else {
                 let s = try await api.startConversation(prompt: text, main: true)
+                began(s, text: text)
                 assistantCurrent = s.key
                 await refreshAssistant()
             }

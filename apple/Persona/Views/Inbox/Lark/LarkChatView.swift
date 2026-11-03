@@ -844,6 +844,7 @@ struct LarkChatView: View {
         let prompt = "读取我飞书会话「\(conversation.name)」（lark-connector feedId \(conversation.id)）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。"
         do {
             let s = try await api.startConversation(prompt: prompt)
+            model.began(s, text: prompt)
             model.assistantCurrent = s.key
             model.selectedTab = .assistant
         } catch {

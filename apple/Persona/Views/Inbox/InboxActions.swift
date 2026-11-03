@@ -328,6 +328,7 @@ struct InboxHandOffSheet: View {
                 model.selectedTab = .chats
             } else {
                 let s = try await api.startConversation(prompt: text)
+                model.began(s, text: text)
                 model.assistantCurrent = s.key
                 model.selectedTab = .assistant
             }

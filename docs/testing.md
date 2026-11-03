@@ -163,6 +163,10 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 点终端对话框的选项，确认 hub 收到的是 `option` 而不是按键、并提示「对话框已经变了」；电脑上有草稿时点「清空并发送」，确认重发带
 `clear_draft` 且 `client_msg_id` 不变（`GET /mock/resolved`、`GET /mock/sent`）。截图：`-openSendMessage <文字>` 打开会话 3 秒后发一条（`-openSendDelay <秒>` 改这个等待）。
 
+从别的页面新建 Persona 对话（`NewConversationEntryTests`，#527）：收件箱「交给 AI」发出后，对话页立刻是这条已发送的消息，不是「还没有消息」；
+transcript 晚到以后只显示一次。连 mock 并让第一行晚写：`PORT=18927 MOCK_ASSISTANT_TRANSCRIPT_SECONDS=8 python3 scripts/mock/mock_hub.py &`，
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18927 xcodebuild test … -only-testing:PersonaUITests/NewConversationEntryTests`（新外壳和旧布局各一个用例）。
+
 弱网 / 断网（`ConnectionTests`，`docs/ios.md`「连接状态」）连普通 mock：`PORT=18760 python3 scripts/mock/mock_hub.py &`，
 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/ConnectionTests`：hub 断 10 秒标题变「连接中…」、
 恢复后换回；断 0.2 秒（重连约一秒）标题完全不变；断网时发的消息显示「连上后自动发送」，恢复后 hub 只收到一次：
