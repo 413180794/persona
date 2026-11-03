@@ -21,13 +21,17 @@ val JsonCodec = Json {
 
 /**
  * RFC3339 from the hub; D5 treats dates before 2000, including Go zero time, as unset. A hub running in a local zone
- * sends offsets (`+08:00`), and [Instant.parse] on Android 12 and 13 accepts only `Z`, so offsets go through [OffsetDateTime].
+ * sends offsets (`+08:00`), and [Instant.parse] before Android 14 accepts only `Z`, so everything goes through
+ * [OffsetDateTime], which takes both: trying [Instant.parse] first threw on every offset, and sorting the inbox by time
+ * on the main thread took most of every frame on Android 13 and older (#932).
  */
 fun parseTime(s: String?): Instant? {
     if (s.isNullOrEmpty()) return null
-    val instant = runCatching { Instant.parse(s) }.recoverCatching { OffsetDateTime.parse(s).toInstant() }.getOrNull()
-    return instant?.takeUnless { it.isBefore(Instant.parse("2000-01-01T00:00:00Z")) }
+    val instant = runCatching { OffsetDateTime.parse(s).toInstant() }.recoverCatching { Instant.parse(s) }.getOrNull()
+    return instant?.takeUnless { it.isBefore(EarliestTime) }
 }
+
+private val EarliestTime: Instant = Instant.parse("2000-01-01T00:00:00Z")
 
 @KeepGeneratedSerializer
 @Serializable(with = MachineSerializer::class)

@@ -27,6 +27,10 @@ class ModelsTest {
         assertEquals(java.time.Instant.parse("2026-11-02T00:30:00Z"), parseTime("2026-11-02T08:30:00+08:00"))
         assertEquals(java.time.Instant.parse("2026-11-02T00:30:00.5Z"), parseTime("2026-11-02T08:30:00.5+08:00"))
         assertNull(parseTime("0001-01-01T08:05:43+08:05"))
+        // What a node sends (nanoseconds and the machine's own offset), and Z with nanoseconds: both one parse (#932).
+        assertEquals(java.time.Instant.parse("2026-10-31T05:58:40.205893083Z"), parseTime("2026-10-31T13:58:40.205893083+08:00"))
+        assertEquals(java.time.Instant.parse("2026-10-31T05:58:40.205893083Z"), parseTime("2026-10-31T05:58:40.205893083Z"))
+        assertNull(parseTime("not a time"))
     }
 
     @Test fun resolutionOmitsUnsetFields() {

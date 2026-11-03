@@ -1,5 +1,6 @@
 package persona.core.domain.inbox
 
+import java.time.Instant
 import persona.core.contracts.parseTime
 import persona.core.domain.sort.AgentPreferences
 import persona.core.domain.sort.AgentSession
@@ -62,15 +63,24 @@ data class InboxListResult(
     val filterCounts: Map<String, Int> = emptyMap(),
 )
 
-fun orderHubInbox(items: List<InboxItem>): List<InboxItem> = items.sortedWith(
-    compareByDescending<InboxItem> { parseTime(it.updatedAt) }.thenBy { it.id },
-)
+fun orderHubInbox(items: List<InboxItem>): List<InboxItem> = items.byTime(newestFirst = true, { it.updatedAt }, { it.id })
+
+/**
+ * Sorted by [time] (unset times last when newest first, first otherwise, as `compareBy` puts nulls), then by [id]. Each
+ * time is parsed once up front, not twice per comparison: the inbox is sorted on the main thread (#932).
+ */
+private fun <T> List<T>.byTime(newestFirst: Boolean, time: (T) -> String?, id: (T) -> String): List<T> {
+    val keyed = map { it to parseTime(time(it)) }
+    val byInstant = if (newestFirst) compareByDescending<Pair<T, Instant?>> { it.second } else compareBy { it.second }
+    return keyed.sortedWith(byInstant.thenBy { id(it.first) }).map { it.first }
+}
 
 /** Preserve cached ordering across different timestamps; sort only members sharing a real timestamp. */
 private fun breakUpdateTies(items: List<InboxItem>): List<InboxItem> {
-    val ties = items.filter { parseTime(it.updatedAt) != null }.groupBy { parseTime(it.updatedAt) }
-        .mapValues { (_, members) -> members.sortedBy { it.id }.iterator() }
-    return items.map { item -> ties[parseTime(item.updatedAt)]?.next() ?: item }
+    val times = items.map { parseTime(it.updatedAt) }
+    val ties = items.indices.filter { times[it] != null }.groupBy { times[it] }
+        .mapValues { (_, members) -> members.map { items[it] }.sortedBy { it.id }.iterator() }
+    return items.mapIndexed { i, item -> ties[times[i]]?.next() ?: item }
 }
 
 fun buildInboxList(
@@ -92,7 +102,7 @@ fun buildInboxList(
         interactions.filter {
             !mutes.mutes(it.sessionKey, bySession[it.sessionKey]?.spacePreferenceKey) &&
                 matchesText(it.sessionTitle, it.summary, it.title)
-        }.sortedWith(compareBy<InboxInteraction> { parseTime(it.createdAt) }.thenBy { it.id })
+        }.byTime(newestFirst = false, { it.createdAt }, { it.id })
     } else emptyList()
     val groups = mutableListOf<InboxGroup>()
     fun addGroup(id: String, title: String, rows: List<InboxRow>) {
@@ -107,7 +117,7 @@ fun buildInboxList(
         addGroup(tier.wire, tier.title, agents + rows)
     }
     val done = shown.filter { it.isDone }
-        .sortedWith(compareByDescending<InboxItem> { parseTime(it.doneAt) }.thenBy { it.id })
+        .byTime(newestFirst = true, { it.doneAt }, { it.id })
         .map { InboxRow(InboxRowType.Item, it.id) }
     addGroup("done", "已处理", done)
     return InboxListResult(groups, items.count { !it.isDone && it.triage == InboxTier.Action })

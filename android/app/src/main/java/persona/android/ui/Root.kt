@@ -285,8 +285,13 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         val space = sessions.firstOrNull { it.key == key }?.spaceName?.let { "${key.machineId}/$it" }
         !preferences.mutes.mutes(key.path, space)
     }
-    val inboxNeeds = buildInboxList(inbox.records.map { it.item }, inbox.interactions, inbox.sessions, inbox.mutes)
-        .groups.firstOrNull { it.id == "action" }?.count ?: 0
+    // Only when what the count reads changed: the shell recomposes on every push, and the whole list is built to count
+    // one group. Of the sessions it reads only which space each is in (for mutes), not their state or activity.
+    val inboxSpaces = inbox.sessions.map { it.id to it.spacePreferenceKey }
+    val inboxNeeds = remember(inbox.records, inbox.interactions, inboxSpaces, inbox.mutes) {
+        buildInboxList(inbox.records.map { it.item }, inbox.interactions, inbox.sessions, inbox.mutes)
+            .groups.firstOrNull { it.id == "action" }?.count ?: 0
+    }
     val badges = mapOf(AppTab.Agents to agentNeeds, AppTab.Jarvis to assistantRequests.size, AppTab.Inbox to inboxNeeds)
     // 现在要你处理的事 on the Persona home: the agents waiting (not Persona's own, not muted), then the inbox's 需要你.
     val needsYou = remember(agentRequests, sessions, preferences.mutes, inbox.records) {
