@@ -99,3 +99,6 @@
   `LC_BUILD_VERSION` 里的 sdk 记成了部署目标（`vtool -show-build` 看到 `sdk 15.0`），虽然实际用的是 Xcode 27 的 SDK；直接 `swiftc` 编同样的 target 是对的。
   系统按这个 sdk 版本决定给不给新外观，记成 15.0 就一直是老样子，离屏截图（`mac-link.sh snapshot`）看不出来，因为截的只是内容不是窗口。
   `scripts/app/mac-link.sh` 编完用 `vtool -set-build-version macos <最低版本> <SDK 版本> -replace` 改回真实的 SDK（胖二进制两个架构一起改），再签名，并检查改对了。
+- Mac 的 sheet 没有导航栏，只画底栏那一排动作（2026-11-04，#743，`mac_shot.sh` 离屏实测）：`.topBarLeading`（兼容层映射成 `.navigation`）画不出来；
+  `.confirmationAction` 只画一个按钮，放两个 `ToolbarItem` 或一个 `ToolbarItemGroup` 都只出第一个，另一个消失。
+  要两个按钮时，「完成」放 `.cancellationAction`（Esc 关闭），另一个放 `.primaryAction`，两个都画在底栏右侧、都不是回车的默认按钮（文件查看器、「工具输出」都这样）。

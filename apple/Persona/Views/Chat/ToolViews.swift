@@ -664,12 +664,23 @@ struct FullOutputSheet: View {
             .navigationTitle("工具输出")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                #if os(macOS)
+                // A Mac sheet has no navigation bar: only its bottom row of actions is drawn, and the leading item that
+                // maps to `.navigation` never showed (#743). 拷贝全文 goes in that row, before 完成.
+                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.lineLimit(1) }
+                if let text {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { UIPasteboard.general.string = text } label: { Text("拷贝全文").lineLimit(1) }
+                    }
+                }
+                #else
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
                 if let text {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { UIPasteboard.general.string = text } label: { Label("拷贝全文", systemImage: Theme.Icon.copy) }
                     }
                 }
+                #endif
             }
             #if os(macOS)
             // Sized to its bars a Mac sheet was 470 × 113, the text squeezed to nothing (#508): a reader wants the room.
