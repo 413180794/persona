@@ -26,7 +26,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     @Environment(\.buiTheme) private var theme
 
     /// The icons' ink: the text color, or in the BeautifulUI style its quieter second ink.
-    private var ink: Color { AppStyle.current.usesBeautifulUI ? theme.colors.ink2 : Color.primary }
+    private var ink: Color { ComposerInk.icon(theme) }
 
     /// How far the send button's tap area sits from the card's right and bottom edges. In the BeautifulUI style the
     /// button's circle is concentric with the card's corner: its gap to both edges is the card's radius less its own,
@@ -124,53 +124,20 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         .accessibilityIdentifier("shell-composer-add")
     }
 
-    /// Speech to text into the field: what is heard goes after what was typed; a second tap ends it.
-    private var mic: some View {
-        Button(action: toggleDictation) {
-            Image(systemName: dictation.isListening ? Theme.Icon.dictating : Theme.Icon.dictate)
-                .font(Theme.Font.heading)
-                .fontWeight(.medium)
-                .foregroundStyle(dictation.isListening ? Theme.danger : ink)
-                .symbolEffect(.pulse, isActive: dictation.isListening)
-                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-                .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(dictation.isListening ? "停止听写" : "听写")
-        .accessibilityIdentifier("shell-composer-mic")
-    }
+    /// Speech to text into the field (`ComposerMicButton`, shared with an agent's composer).
+    private var mic: some View { ComposerMicButton(dictation: dictation, text: $text, id: "shell-composer-mic") }
 
     private func stopButton(_ stop: @escaping () -> Void) -> some View {
-        round(Theme.Icon.interrupt, label: "中断", id: "shell-composer-stop", action: stop)
+        ComposerRoundButton.stop(id: "shell-composer-stop") { endDictation(then: stop) }
     }
 
     private func round(_ symbol: String, label: String, id: String, action: @escaping () -> Void) -> some View {
-        Button {
-            if dictation.isListening { dictation.stop() }
-            action()
-        } label: {
-            Image(systemName: symbol)
-                .font(Theme.Font.bodyHeavy)
-                .foregroundStyle(AppStyle.current.usesBeautifulUI ? theme.colors.canvas : Theme.Shell.inkText)
-                .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
-                .background(AppStyle.current.usesBeautifulUI ? theme.colors.ink : Theme.Shell.ink, in: .circle)
-                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-                .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier(id)
-        .transition(.scale.combined(with: .opacity))
+        ComposerRoundButton(symbol: symbol, label: label, id: id) { endDictation(then: action) }
     }
 
-    private func toggleDictation() {
-        if dictation.isListening { dictation.stop(); return }
-        let base = text.isEmpty || text.hasSuffix(" ") ? text : text + " "
-        Task {
-            if let problem = await dictation.start(update: { heard in text = base + heard }) {
-                AppModel.shared.toast = Toast(problem, style: .error)
-            }
-        }
+    private func endDictation(then action: () -> Void) {
+        if dictation.isListening { dictation.stop() }
+        action()
     }
 }
 

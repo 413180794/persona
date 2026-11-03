@@ -134,11 +134,17 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   做成一个整块 VStack 时整页卡住、空白好几秒。
 - 取消不是错误：离开页面 / 新请求替换旧请求造成的取消（iOS 文案「已取消」）一律不提示（`Error.shown` / `isCancellation`）。
 - 输入框：Agent 对话（`Composer`）和助手的新对话（`StarterComposer`）共用 `ComposerRow`：+（照片 / 拍照 / 文件 / 快捷指令）、玻璃胶囊输入框、
-  发送（没东西可发时淡掉），Agent 工作中且没打字时是红色的中断。
+  听写、发送（没东西可发时淡掉），Agent 工作中且没打字时是中断。
+- **听写和中断按钮全 App 只有一份**（#1079）：`DesignSystem/ComposerButtons.swift` 的 `ComposerMicButton`（线条麦克风，听写中变实心、红色、脉动）和
+  `ComposerRoundButton.stop`（墨色实心圆里的停止），44pt 点按区域，随外壳放大一档（`shellScaled`）。新外壳的 `ShellComposerBar`、`ComposerRow`、
+  `PromptComposer` 在 iOS 上都用它们，Agent 对话页和助手对话页的这两个按钮因此一模一样；改样子只改这一个文件。Mac 没有新外壳，
+  仍是原来的（`ComposerRow` 红色中断、没有听写；`PromptComposer` 用库自己的）。
 - 「BeautifulUI」风格（设置 › 外观 › 界面风格，`AppStyle.beautiful`，2026-10-30）下，输入框换成 `PromptComposer`（助手新对话是 `BeautifulStarterComposer`），
   是 BeautifulUI 的 Prompt Bar（`layout: .stacked`）。其他风格完全是上面的样子（CLAUDE.md：新样子做成新主题）：
-  上面一个圆角框里是多行输入，下面一行工具栏：+（照片 / 拍照 / 文件）、@、/、模型、听写，右边发送；Agent 工作中且没打字时发送换成红色的中断。
-  底色是当前风格的 `.surface`（库自己不画），按钮 34pt。待发的图片条是 `ComposerImages`。草稿、发送安全检查、上传都还在各自的 composer 里。
+  上面一个圆角框里是多行输入，下面一行工具栏：+（照片 / 拍照 / 文件）、@、/、模型、听写，右边发送；Agent 工作中且没打字时发送换成中断。
+  底色是当前风格的 `.surface`（库自己不画），按钮 34pt。iOS 上听写和中断是上面共用的按钮：库自带的麦克风关掉（`showsDictation = false`），
+  不给 `onStop`，在库画发送的位置叠上共用的按钮；中断出现时用一个偶奇填充的遮罩（`SendCutout`）把库的发送挖掉，遮罩往外伸得很远，
+  所以从输入框上方弹出的菜单不会被裁（库代码不改，见 `apple/Packages/BeautifulUI/VENDORED.md`）。待发的图片条是 `ComposerImages`。草稿、发送安全检查、上传都还在各自的 composer 里。
   - 草稿：输入框直接编辑 `model.drafts`（`Options.text`），不要让 bar 和宿主互相回写，否则拼音输入法正在拼的字会被提前上屏。
   - 「@」：本会话的工具读写过的文件（最近 12 个，打 `@相对路径`，Claude Code 和 Codex 都认），再是其他会话（最近活跃的 8 个，选中后作为一段
     `<jarvis-context>` 引用附在消息前，显示成输入框上方的引用胶囊）。只列已载入的步骤里的文件：长会话里收起的工作卡没展开过就没有。

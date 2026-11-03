@@ -5,7 +5,9 @@ import SwiftUI
 
 /// The composer's box, shared by an agent's chat (`Composer`) and a new assistant conversation (`StarterComposer`):
 /// BeautifulUI's prompt bar laid out as a toolbar. The draft is on top; under it + (photos, camera, files), @, /, the
-/// model, the mic, and send — or, while the agent works and nothing is typed, a red stop.
+/// model, the mic, and send — or, while the agent works and nothing is typed, stop.
+/// On iOS the mic and stop are the shell composer's (`ComposerMicButton`, `ComposerRoundButton`, #1079), drawn over the
+/// bar where its own would be; the Mac keeps the bar's.
 /// The callers keep their own state: the chat's drafts, SendSafety and uploads stay in `Composer`.
 struct PromptComposer: View {
     var placeholder: String
@@ -38,6 +40,16 @@ struct PromptComposer: View {
     @State private var mentionRows: [PromptSource] = []
     @State private var dictation = Dictation()
 
+    /// `PromptBar`'s control side, and how far its controls sit in from its edges (its composer's padding): where it
+    /// draws send, which the shared buttons line up with.
+    private static let control: CGFloat = 34
+    private static let barInset: CGFloat = 6
+
+    /// The bar would show its stop: the agent works and there is nothing to send. Ours stands in send's place.
+    private var stopping: Bool {
+        stop != nil && !hasAttachments && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("PromptComposer")
@@ -47,7 +59,7 @@ struct PromptComposer: View {
         o.attachSources = attach
         o.showsMentionButton = true
         o.showsCommandButton = !commands.isEmpty
-        o.controlSize = 34
+        o.controlSize = Self.control
         o.inputSize = Theme.Level.body.size / 1.2 // body size once the theme's ×1.2 applies
         o.cornerRadius = Theme.Radius.panel
         o.drawsSurface = false // the style's own surface (glass, paper…), below
@@ -55,8 +67,12 @@ struct PromptComposer: View {
         o.text = $text
         o.selection = $selection
         o.focus = focused
+        #if os(iOS)
+        o.showsDictation = false // the shared mic and stop, over the bar (`sharedButtons`)
+        #else
         o.onStop = stop
         o.onDictation = toggleDictation
+        #endif
         o.onAttachSource = onAttach
         o.onPickSource = onMention
         o.onPickCommand = onCommand
@@ -68,6 +84,10 @@ struct PromptComposer: View {
             }
             PromptBar(model: bar, sources: mentionRows, commands: commands, models: models, placeholder: placeholder,
                       options: o, onSend: { _ in if !disabled { stopDictation(); send() } })
+                #if os(iOS)
+                .mask { SendCutout(cut: stopping, control: Self.control, inset: Self.barInset).fill(style: FillStyle(eoFill: true)) }
+                .overlay(alignment: .bottomTrailing) { sharedButtons }
+                #endif
         }
             .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
             .onAppear { bar.selectedModelID = modelID }
@@ -81,6 +101,46 @@ struct PromptComposer: View {
             #endif
     }
 
+    #if os(iOS)
+    /// The shell composer's mic and stop, where the bar draws its send: the stop's circle in send's corner (the same gap
+    /// to the bar's edges; it is a little larger), the mic on the toolbar's middle line, as far before the stop as in
+    /// the shell's composer.
+    private var sharedButtons: some View {
+        Color.clear
+            .frame(width: Self.control, height: Self.control)
+            .overlay(alignment: .bottomTrailing) {
+                ZStack {
+                    if let stop, stopping {
+                        ComposerRoundButton.stop {
+                            stopDictation()
+                            stop()
+                        }
+                    }
+                }
+                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                .shellScaled()
+                // The circle's edges, not its tap area's, on send's.
+                .alignmentGuide(.trailing) { $0[.trailing] - Self.wellMargin($0.width) }
+                .alignmentGuide(.bottom) { $0[.bottom] - Self.wellMargin($0.height) }
+                .animation(Theme.Motion.state, value: stopping)
+            }
+            .overlay(alignment: .trailing) {
+                ComposerMicButton(dictation: dictation, text: $text)
+                    // Its middle a tap area and `xs` before the stop's, as in the shell's composer.
+                    .alignmentGuide(.trailing) { d in
+                        d[.trailing] + d.width / 2 + d.width * Theme.Size.wellL / Theme.Size.tapTarget / 2 + Theme.Space.xs
+                    }
+            }
+            .padding(Self.barInset)
+    }
+
+    /// Between a round button's tap area (`side` wide) and its circle.
+    private static func wellMargin(_ side: CGFloat) -> CGFloat {
+        side * (Theme.Size.tapTarget - Theme.Size.wellL) / Theme.Size.tapTarget / 2
+    }
+    #endif
+
+    #if !os(iOS)
     private func toggleDictation() {
         if dictation.isListening { stopDictation(); return }
         let base = text.isEmpty || text.last?.isWhitespace == true ? text : text + " "
@@ -90,6 +150,7 @@ struct PromptComposer: View {
             }
         }
     }
+    #endif
 
     private func stopDictation() { if dictation.isListening { dictation.stop() } }
 
@@ -285,3 +346,22 @@ final class Dictation {
         }
     }
 }
+
+#if os(iOS)
+/// What of `PromptBar` shows: all of it but, while the shared stop stands in its place, the bar's own send. The menus
+/// hang above the bar, so the shape reaches far past its edges.
+private nonisolated struct SendCutout: Shape {
+    var cut: Bool
+    var control: CGFloat
+    var inset: CGFloat
+    private static let reach: CGFloat = 4000
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path(rect.insetBy(dx: -Self.reach, dy: -Self.reach))
+        if cut {
+            p.addRect(CGRect(x: rect.maxX - inset - control, y: rect.maxY - inset - control, width: control, height: control))
+        }
+        return p
+    }
+}
+#endif
