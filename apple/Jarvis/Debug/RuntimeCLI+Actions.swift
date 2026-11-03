@@ -49,14 +49,15 @@ extension RuntimeCLI {
                 "frame": [f.minX, f.minY, f.width, f.height].map { Double($0) }]
     }
 
+    nonisolated(unsafe) fileprivate static var responder: UIResponder?
+
+    /// Whatever UIKit says has focus: an action sent to no target goes to the first responder, which records itself
+    /// (`rtcliRecordFirstResponder`). Walking the windows' subviews missed a search bar's field in the navigation bar.
     private static func firstResponder() -> UIResponder? {
-        func find(_ v: UIView) -> UIResponder? {
-            if v.isFirstResponder { return v }
-            for s in v.subviews { if let r = find(s) { return r } }
-            return nil
-        }
-        for w in windows { if let r = find(w) { return r } }
-        return nil
+        responder = nil
+        UIApplication.shared.sendAction(#selector(UIResponder.rtcliRecordFirstResponder(_:)), to: nil, from: nil, for: nil)
+        defer { responder = nil }
+        return responder
     }
 
     /// Types `text` into the field that has focus; with element filters, focuses that element first: accessibility
@@ -107,6 +108,13 @@ extension RuntimeCLI {
             return ["path": p, "bytes": png.count]
         }
         return ["png": png.base64EncodedString(), "format": jpeg ? "jpeg" : "png"] // "png" is the key for either
+    }
+}
+
+extension UIResponder {
+    /// RuntimeCLI.firstResponder's probe: the first responder answers the nil-targeted action.
+    @objc fileprivate func rtcliRecordFirstResponder(_ sender: Any?) {
+        RuntimeCLI.responder = self
     }
 }
 #endif
