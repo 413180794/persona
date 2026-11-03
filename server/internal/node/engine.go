@@ -68,7 +68,9 @@ func (n *Node) startWhenConfigured(ctx context.Context) {
 }
 
 // engineHosts are the hosts of an engine: herdr at its default socket (what every node had before engines),
-// herdr-core at the socket hc would use, or Orca's runtime. Each logs when it becomes unreachable and reachable again.
+// herdr-core at the socket hc would use, Orca's runtime, or herdr and herdr-core together (EngineHerdrBoth): the
+// hosts stay isolated from each other — their refreshes run in parallel and each watcher only refreshes its own host
+// (sessions.go, herdrevents.go).
 func engineHosts(engine string, logf func(format string, args ...any)) []host.Host {
 	switch engine {
 	case proto.EngineHerdrCore:
@@ -79,10 +81,25 @@ func engineHosts(engine string, logf func(format string, args ...any)) []host.Ho
 		c := orcart.New()
 		c.Log = logf
 		return []host.Host{newOrcaHost(c)}
+	case proto.EngineHerdrBoth:
+		hc := herdr.New()
+		hc.Log = logf
+		cc := herdrcore.New()
+		cc.Log = logf
+		return []host.Host{&herdrHost{c: hc}, &herdrCoreHost{c: cc}}
 	}
 	c := herdr.New()
 	c.Log = logf
 	return []host.Host{&herdrHost{c: c}}
+}
+
+// defaultHostKind is the host that pane-less operations (starting and resuming sessions, renaming, mode menus) go to:
+// the engine itself, except for the combined engine, whose full-capability host is classic herdr.
+func defaultHostKind(engine string) string {
+	if engine == proto.EngineHerdrBoth {
+		return host.Herdr
+	}
+	return engine
 }
 
 // engine is the engine in use.
@@ -115,13 +132,17 @@ func (n *Node) startWatchLocked() {
 	}
 	ctx, cancel := context.WithCancel(n.eng.base)
 	n.eng.stop = cancel
-	if n.eng.name == "" || n.eng.name == proto.EngineHerdr {
-		go n.watchHerdr(ctx)
-		return
-	}
+	// Each registered watcher gets its own stream: herdr's pane-aware subscription, every other host's whole-host
+	// stream (watchHost). The combined engine starts both; one host's events never refresh the other host.
 	for _, h := range n.hosts.All() {
-		if w, ok := h.(host.Watcher); ok {
-			go n.watchHost(ctx, w)
+		w, ok := h.(host.Watcher)
+		if !ok {
+			continue
+		}
+		if h.Kind() == host.Herdr {
+			go n.watchHerdr(ctx)
+		} else {
+			go n.watchHost(ctx, w, n.hostSig[h.Kind()]) // resetSignals built one for every Watcher host
 		}
 	}
 }
@@ -143,6 +164,7 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 	}
 	n.eng.mu.Lock()
 	n.hosts.Set(engineHosts(engine, n.logf)...)
+	n.resetSignals()
 	n.eng.name = engine
 	n.mu.Lock()
 	n.engEpoch++
@@ -208,11 +230,11 @@ func (n *Node) logf(format string, args ...any) {
 }
 
 // engines is what node.info reports of each engine on this machine. herdr is available when it answers, its socket
-// file is there or its binary is on PATH — when herdr is not the engine it is not asked: its version comes from
-// `herdr --version`. herdr-core when its socket answers hello (the one herdr-core call a node on herdr makes, once per
-// connection). Orca when its runtime metadata is there and its socket answers status.get with a protocol Jarvis speaks
-// (Note says why not when it answers with another). herdrVersion is what the herdr host already said ("" when not
-// asked).
+// file is there or its binary is on PATH — when herdr is not a registered host it is not asked: its version comes from
+// `herdr --version`. herdr-core when its socket answers hello (the one herdr-core call a node without it makes, once
+// per connection). The combined engine when both are there. Orca when its runtime metadata is there and its socket
+// answers status.get with a protocol Jarvis speaks (Note says why not when it answers with another). herdrVersion is
+// what the registered herdr host already said ("" when not registered).
 func (n *Node) engines(ctx context.Context, herdrVersion string) []proto.Engine {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -223,10 +245,14 @@ func (n *Node) engines(ctx context.Context, herdrVersion string) []proto.Engine 
 	_, statErr := os.Stat(herdr.SocketPath())
 	_, pathErr := exec.LookPath("herdr")
 	hcv := herdrcore.New().Version(ctx)
+	herdrAvailable := hv != "" || statErr == nil || pathErr == nil
+	coreAvailable := hcv != ""
 	return []proto.Engine{
-		{ID: proto.EngineHerdr, Name: proto.EngineNames[proto.EngineHerdr], Available: hv != "" || statErr == nil || pathErr == nil,
-			Version: hv},
-		{ID: proto.EngineHerdrCore, Name: proto.EngineNames[proto.EngineHerdrCore], Available: hcv != "", Version: hcv},
+		{ID: proto.EngineHerdr, Name: proto.EngineNames[proto.EngineHerdr], Available: herdrAvailable, Version: hv},
+		{ID: proto.EngineHerdrCore, Name: proto.EngineNames[proto.EngineHerdrCore], Available: coreAvailable, Version: hcv},
+		// The combined choice is selectable only when both runtimes are there; its version is left out (the picker
+		// already shows each runtime's version on its own row).
+		{ID: proto.EngineHerdrBoth, Name: proto.EngineNames[proto.EngineHerdrBoth], Available: herdrAvailable && coreAvailable},
 		orcaEngine(ctx, orcaClient()),
 	}
 }

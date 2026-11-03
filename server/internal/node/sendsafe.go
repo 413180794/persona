@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/chyroc/jarvis/server/internal/proto"
 	"regexp"
 	"strings"
 	"sync"
@@ -376,6 +375,6 @@ func (n *Node) notRunningRefusal(ctx context.Context, id string) error {
 			}
 		}
 	}
-	name := proto.EngineNames[n.engine()]
+	name := n.defaultEngineName()
 	return refusal(notRunning, fmt.Sprintf("这个会话现在没有在运行（可能被挂起或已退出），%s 里的会话要在电脑上重新打开，这次没有发送。", name), nil)
 }

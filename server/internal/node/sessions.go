@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -715,49 +716,74 @@ type layout struct {
 	slots  map[string]host.Slot
 }
 
-// refreshHosts takes one snapshot of every host: agents plus the space / slot names shown as space / slot. It fails
-// only when no host answered; a host that did not answer keeps the agents it gave last. A host that is not running
-// (host.ErrNotRunning: herdr-core without its socket) answered: it has no agents. A node registers one host, its engine
-// (engine.go), so hosts are asked in turn.
-func (n *Node) refreshHosts(ctx context.Context) error {
+// refreshHosts takes one snapshot of every host, or of only the hosts given: agents plus the space / slot names shown
+// as space / slot. The hosts are asked concurrently, each bounded by its own client's timeouts, so a slow host never
+// holds up the other host of a combined engine. It fails only when no host answered; a host that did not answer keeps
+// the agents it gave last. A host that is not running (host.ErrNotRunning: herdr-core without its socket) answered: it
+// has no agents.
+func (n *Node) refreshHosts(ctx context.Context, only ...host.Host) error {
 	n.mu.Lock()
 	epoch := n.engEpoch // a refresh that outlives an engine switch must not bring the old engine's agents back
 	n.mu.Unlock()
-	if len(n.hosts.All()) == 0 {
+	all := n.hosts.All()
+	if len(all) == 0 {
 		return errNoHost
 	}
-	var all []host.Agent
-	var firstErr error
-	answered, snapped := false, false
-	for _, h := range n.hosts.All() {
-		agents, full, err := n.lookAt(ctx, h, epoch)
-		n.mu.Lock()
-		if n.engEpoch != epoch {
-			n.mu.Unlock()
-			return errEngineChanged
-		}
-		if n.hostAgents == nil {
-			n.hostAgents = map[string][]host.Agent{}
-		}
-		if err != nil && errors.Is(err, host.ErrNotRunning) {
-			err, agents = nil, nil // an answer: nothing runs there
-		}
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			agents = n.hostAgents[h.Kind()]
-		} else {
-			answered, snapped = true, snapped || full
-			n.hostAgents[h.Kind()] = agents
-		}
-		n.mu.Unlock()
-		all = append(all, agents...)
+	targets := only
+	if len(targets) == 0 {
+		targets = all
 	}
+	type outcome struct {
+		kind   string
+		agents []host.Agent
+		full   bool
+		err    error
+	}
+	outs := make([]outcome, len(targets))
+	var wg sync.WaitGroup
+	for i, h := range targets {
+		wg.Add(1)
+		go func(i int, h host.Host) {
+			defer wg.Done()
+			agents, full, err := n.lookAt(ctx, h, epoch)
+			outs[i] = outcome{kind: h.Kind(), agents: agents, full: full, err: err}
+		}(i, h)
+	}
+	wg.Wait()
+
+	n.mu.Lock()
+	if n.engEpoch != epoch {
+		n.mu.Unlock()
+		return errEngineChanged
+	}
+	if n.hostAgents == nil {
+		n.hostAgents = map[string][]host.Agent{}
+	}
+	answered, snapped, firstErr := false, false, error(nil)
+	for _, o := range outs {
+		if o.err != nil && errors.Is(o.err, host.ErrNotRunning) {
+			o.err, o.agents = nil, nil // an answer: nothing runs there
+		}
+		if o.err != nil {
+			if firstErr == nil {
+				firstErr = o.err
+			}
+			o.agents = n.hostAgents[o.kind]
+		} else {
+			answered, snapped = true, snapped || o.full
+			n.hostAgents[o.kind] = o.agents
+		}
+	}
+	union := make([]host.Agent, 0)
+	for _, agents := range n.hostAgents { // hosts not in this partial refresh keep what they gave last
+		union = append(union, agents...)
+	}
+	n.mu.Unlock()
+
 	if !answered {
 		return firstErr
 	}
-	if !n.setAgentsAt(all, epoch) {
+	if !n.setAgentsAt(union, epoch) {
 		return errEngineChanged
 	}
 	if snapped {
@@ -1043,30 +1069,54 @@ func (n *Node) agent(id string) (host.Agent, bool) {
 	return a, ok
 }
 
-// pollAgents refreshes herdr state every second and pushes sessions.changed when anything visible changes.
+// pollAgents refreshes the hosts' state every second (only the ones due) and pushes sessions.changed when anything
+// visible changes. Each watcher host is snapshotted on its own stream's changes and at most every slowSnapshot while
+// its stream is live, independently of the other hosts (the combined engine): a herdr-core event never snapshots
+// herdr and vice versa.
 func (n *Node) pollAgents(ctx context.Context) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	var snapped, listed time.Time
+	last := map[string]time.Time{} // host kind → its last snapshot
+	var listed time.Time
 	for {
-		kicked := false
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		case <-n.events.kick:
-			// herdr said something changed: one snapshot for the whole burst (a new tab sends several events), and
-			// at most one list rebuild a second however busy the agents are (as when it polled every second).
-			time.Sleep(max(50*time.Millisecond, time.Until(listed.Add(time.Second))))
-			kicked = true
+		sigs := n.signalSnapshot()
+		cases := []reflect.SelectCase{
+			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ctx.Done())},
+			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(t.C)},
 		}
-		// Every tick still checks the transcripts (revs); herdr only when it said something changed (herdrevents.go).
-		// A host that does not answer (herdr not installed or not running) does not stop the list: runtimes, the
-		// assistant and the transcripts do not need it (it used to skip the whole push, so such a machine never
-		// updated its list). Its agents stay as last seen (refreshHosts).
-		if kicked || n.snapshotDue(snapped) {
-			_ = n.refreshHosts(ctx)
-			snapped = time.Now()
+		for _, sig := range sigs {
+			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sig.kick)})
+		}
+		if chosen, _, _ := reflect.Select(cases); chosen == 0 {
+			return
+		}
+		// Collect every pending change marker (one per host): the select consumed one, drain the rest.
+		kicked := map[string]bool{}
+		for kind, sig := range sigs {
+			if sig.drained() {
+				kicked[kind] = true
+			}
+		}
+		if len(kicked) > 0 {
+			// One snapshot for the whole burst (a new tab sends several events), and at most one list rebuild a
+			// second however busy the agents are (as when it polled every second).
+			time.Sleep(max(50*time.Millisecond, time.Until(listed.Add(time.Second))))
+		}
+		var due []host.Host
+		for _, h := range n.hosts.All() {
+			if n.hostDue(h.Kind(), last[h.Kind()], kicked[h.Kind()]) {
+				due = append(due, h)
+			}
+		}
+		// The transcripts (revs) are checked every tick regardless; a host that does not answer (not installed or not
+		// running) does not stop the list: runtimes, the assistant and the transcripts do not need it. Its agents stay
+		// as last seen (refreshHosts).
+		if len(due) > 0 {
+			_ = n.refreshHosts(ctx, due...)
+			now := time.Now()
+			for _, h := range due {
+				last[h.Kind()] = now
+			}
 		}
 		list := n.sessionList(ctx, false)
 		listed = time.Now()

@@ -103,7 +103,7 @@ func (n *Node) resumeInEngine(ctx context.Context, h *runtimeConn, id string, ar
 	}
 	launch, err := hostCap[host.Launcher](n)
 	if err != nil {
-		name := proto.EngineNames[n.engine()]
+		name := n.defaultEngineName()
 		return nil, refusal(engineMissing, fmt.Sprintf("这个会话是在 %s 里跑的，要在 %s 里接着它，可这台电脑上的 %s 没在运行（或没装），这次没有发送。", name, name, name), nil)
 	}
 	ws, err := n.workspaceFor(ctx, launch, cwd)

@@ -78,7 +78,11 @@ struct EngineSelectionView: View {
                     Text("引擎")
                     #endif
                 } footer: {
-                    Text(machine.online ? "只显示所选引擎里的会话，随时可在设置 › 机器里修改。" : "机器离线，选择会在连接后生效。只显示所选引擎里的会话。")
+                    if selection.selected == .herdrBoth {
+                        Text(machine.online ? "同时显示 herdr 和 Herdr App 里的会话；从手机新建的会话仍开在 herdr 里。随时可在设置 › 机器里修改。" : "机器离线，选择会在连接后生效。同时显示两个引擎里的会话。")
+                    } else {
+                        Text(machine.online ? "只显示所选引擎里的会话，随时可在设置 › 机器里修改。" : "机器离线，选择会在连接后生效。只显示所选引擎里的会话。")
+                    }
                 }
                 if let error = selection.error {
                     Section {

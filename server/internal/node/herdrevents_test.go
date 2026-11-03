@@ -37,21 +37,46 @@ func TestPanesChangedResubscribes(t *testing.T) {
 	}
 }
 
-func TestSnapshotDue(t *testing.T) {
-	n := &Node{agents: map[string]host.Agent{"s1": {Agent: "claude", PaneID: "w1:p1"}}, events: newHerdrEvents()}
+func TestHostDue(t *testing.T) {
+	herdrSig := newWatcherSignals()
+	coreSig := newWatcherSignals()
+	n := &Node{
+		agents:  map[string]host.Agent{"s1": {Agent: "claude", PaneID: "w1:p1"}},
+		hostSig: map[string]*watcherSignals{host.Herdr: herdrSig, host.HerdrCore: coreSig},
+	}
 	now := time.Now()
-	if !n.snapshotDue(now) {
+	// Without a live stream every host is polled every tick.
+	if !n.hostDue(host.Herdr, now, false) {
 		t.Fatal("without an event stream herdr is polled every tick")
 	}
-	n.events.setLive(n.events.watcherID())
-	if n.snapshotDue(now) {
+	herdrSig.setLive(herdrSig.watcherID())
+	coreSig.setLive(coreSig.watcherID())
+	if n.hostDue(host.Herdr, now, false) {
 		t.Fatal("with events, a fresh snapshot is enough")
 	}
-	if !n.snapshotDue(now.Add(-slowSnapshot)) {
+	if !n.hostDue(host.Herdr, now.Add(-slowSnapshot), false) {
 		t.Fatal("the slow snapshot still runs")
 	}
-	n.agents["t1"] = host.Agent{Agent: traexAgent, PaneID: "w1:p2"}
-	if !n.snapshotDue(now) {
-		t.Fatal("TRAEX state is in the title spinner, which sends no event")
+	// herdr-core announcing a change schedules only herdr-core, not herdr (the combined engine's isolation).
+	if n.hostDue(host.Herdr, now, false) {
+		t.Fatal("herdr-core's event must not snapshot herdr")
+	}
+	if !n.hostDue(host.HerdrCore, now, true) {
+		t.Fatal("the kicked host is due")
+	}
+	// TRAEX state lives in the title spinner, which sends no event: its own host stays due, the other one not.
+	n.agents["t1"] = host.Agent{Agent: traexAgent, PaneID: "herdr-core:t9"}
+	if n.hostDue(host.Herdr, now, false) {
+		t.Fatal("TRAEX in herdr-core must not make herdr poll")
+	}
+	if !n.hostDue(host.HerdrCore, now, false) {
+		t.Fatal("TRAEX in herdr-core keeps it polling")
+	}
+}
+
+func TestHostWithoutWatcherAlwaysDue(t *testing.T) {
+	n := &Node{} // Orca has no Watcher: hostDue is true on every tick
+	if !n.hostDue(host.Orca, time.Now(), false) {
+		t.Fatal("a host without an event stream is polled every tick")
 	}
 }

@@ -158,13 +158,15 @@ nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseItera
     init(rawValue: String) { self.rawValue = rawValue }
     static let herdr = Self(rawValue: "herdr")
     static let herdrApp = Self(rawValue: "herdr-core")
+    static let herdrBoth = Self(rawValue: "herdr-both")
     static let orca = Self(rawValue: "orca")
-    static let allCases: [Self] = [.herdr, .herdrApp, .orca]
+    static let allCases: [Self] = [.herdr, .herdrApp, .herdrBoth, .orca]
     var id: String { rawValue }
     var name: String {
         switch self {
         case .herdr: "herdr"
         case .herdrApp: "Herdr App"
+        case .herdrBoth: "herdr + Herdr App"
         case .orca: "Orca"
         default: rawValue
         }
@@ -173,6 +175,7 @@ nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseItera
         switch self {
         case .herdr: "终端里的 herdr"
         case .herdrApp: "桌面 App 里开的终端"
+        case .herdrBoth: "终端和桌面 App 的会话都显示"
         case .orca: "Orca 里的终端"
         default: nil
         }

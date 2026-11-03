@@ -192,12 +192,13 @@ herdr-core（命令 `hc`）是 Herdr 桌面版背后的终端运行时，和 her
 
 ### 一机一引擎
 
-每台机器只用一个宿主，叫这台机器的「引擎」：herdr（默认）、herdr-core 或 orca（见上面「Orca 来源」），用户在 App 里按机器选（配对时、设置 › 机器）。
+每台机器选一个「引擎」（一组宿主）：herdr（默认，单个宿主）、herdr-core、orca（见上面「Orca 来源」），以及 2026-11-03 加的
+`herdr-both`（herdr + herdr-core 两个宿主并列，见下面「并列引擎」）。用户在 App 里按机器选（配对时、设置 › 机器）。
 hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储见 `docs/protocol.md`「引擎」，node 侧 `server/internal/node/engine.go`）。
 
-- **为什么不并列**：最初两个宿主同时注册，评审发现这会拖累 herdr：herdr-core 慢时 herdr 的刷新和发送跟着慢（最多约 4 秒）；
+- **为什么默认不并列**：最初两个宿主同时注册，评审发现这会拖累 herdr：herdr-core 慢时 herdr 的刷新和发送跟着慢（最多约 4 秒）；
   herdr 挂了而 herdr-core 在时，herdr 的旧 Agent 一直显示在线；herdr-core 的事件引出多余的 herdr 快照；herdr-core 里有 TRAEX 时
-  herdr 被迫每秒轮询。只注册选中的那个，这些都不存在。
+  herdr 被迫每秒轮询。单选时只注册选中的那个，这些都不存在。并列引擎是显式选项，下面四条用并行 + 按宿主隔离逐个解决。
 - **选 herdr**：node 的宿主表、刷新、轮询、事件流和原来完全一样，不建 herdr-core 客户端、不订阅它的事件；唯一的例外是 `node.info`
   问一次 herdr-core 在不在（填 `engines`）。
 - **连接时**：hub 对存过选择的机器第一个调用就发 `engine.use`；node 等引擎定下来（`engine.use`、或 hub 直接列会话、或最多 3 秒）
@@ -205,9 +206,26 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
   选了 herdr-core 时 `node.info` 也不问 herdr，herdr 的版本取 `herdr --version`。
 - **运行时切换**：`engine.use` 换掉宿主表，丢掉旧引擎的 Agent、空间名、进程缓存（切换前开始的刷新结果作废），结束所有终端流
   （推 `terminal.end`），停掉旧事件流、起新的，再推一次会话列表。每个事件流有自己的「在线」标记，停掉的旧流不会清掉新流的状态。
-- **不带宿主的操作**：新建会话、改空间名这类不从窗格认宿主的操作找这台机器的引擎（`defaultHost`）：选了 herdr-core 时就是 herdr-core，
-  它做不到的报 `unsupported`，而不是「这台机器没有 herdr」。选 herdr 的机器不变。
+- **不带宿主的操作**：新建会话、改空间名这类不从窗格认宿主的操作找默认宿主（`defaultHost` / `defaultHostKind`）：选了 herdr-core 时就是 herdr-core，
+  它做不到的报 `unsupported`，而不是「这台机器没有 herdr」；并列时固定是经典 herdr。选 herdr 的机器不变。
 - **嵌套的 herdr**：选了 herdr-core 时，前台是经典 herdr 客户端的终端不算 Agent，即使里面 claude 的 OSC 7501 透了出来。
+  并列时这种终端注册在 herdr-core 宿主下（Agent 为空），里面的 claude 归 herdr 宿主的窗格，不会被算两次。
+
+### 并列引擎（herdr-both，2026-11-03）
+
+起因：Herdr App 可以 remote 连到另一台机器开终端（`herdr remote-client-bridge`），于是同一台机器上经典 herdr（本地终端用）和
+herdr-core（Herdr App remote 进来用）同时活着，单选哪个都会藏掉另一边的会话。`herdr-both` 让 node 同时注册两个宿主，
+把上面「为什么默认不并列」的四条逐个隔离掉：
+
+- **刷新不互相等**：`refreshHosts` 从顺序改成按宿主并行，每个调用受宿主客户端自己的超时约束（herdr-core 的 list 2 秒），
+  一个卡住不挡另一个；部分刷新只替换自己那个宿主的 Agent 缓存，另一个保留上次结果。
+- **事件不互相引**：每个 watcher 宿主有自己的 `watcherSignals`（live 标记 + kick 通道，`herdrevents.go`）。轮询循环 select 所有 kick，
+  谁的事件只把谁加进本轮 due 列表；没有事件的宿主仍按自己的 slow snapshot（10 秒）节奏。herdr-core 的事件不再引出 herdr 快照。
+- **在线状态按宿主分开**：Agent 缓存是 `map[hostKind][]Agent`；某个宿主返回 `not_running` 只清自己那组。
+- **TRAEX 不连累对方**：`hostHasTraex(kind)` 只数该宿主窗格里的 TRAEX，决定的是这个宿主要不要每秒快照。
+- **默认宿主是 herdr**：新建 / 继续 / 改名走 herdr；窗格操作照旧按 PaneRef 的 kind 路由，herdr-core 窗格的能力限制（无颜色、不能只打字、
+  无实时终端）和单选 herdr-core 时完全一样。
+- Orca 不进并列：它没有事件流、每秒轮询、模型最重；要并以后单独做。
 
 ### 连接方式
 
@@ -287,7 +305,7 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
 2. [x] **Orca 第一期**（2026-11-01 合并；在 Orca 里开临时终端实测过列出会话、单行 / 多行发送、挂起时拒绝、关闭）：发现、状态、发消息、按键、纯文本读屏、读屏回答对话框、关闭，作为第三种引擎（见上面「Orca 来源」）。
    用假的 Orca socket（`orcarttest`，按 Orca 的参数规则校验请求）写测试；对正在用的 Orca 做过只读核对（会话 id 都和 `sessions/<pid>.json` 一致）。
    另一个宿主：[x] **herdr-core 第一期**（2026-11-01 合并，一机一引擎）：见上面「herdr-core 宿主」。关闭已支持（2026-11-01）；改名不做（归 Herdr App 管）。之后：只粘贴不回车（等上游加方法）、实时终端、新建。
-   宿主表仍能放多个宿主（`PaneRef` 解析、以后的 Orca），但 node 只注册一个引擎，刷新按顺序问；真要并列多个宿主时，要先让刷新不等最慢的那个。
+   [x] **herdr + herdr-core 并列**（2026-11-03，`herdr-both`，见上面「并列引擎」）：宿主表放多个宿主，刷新改为并行、不再等最慢的那个。
 3. [ ] **App**：引擎选择已做（配对时、设置 › 机器，选项按 hub 的 `engines` 显示，2026-11-01）；按能力隐藏按钮、通用文案还没做。
 4. [ ] 之后：Orca 第二期（新建、模式）、第三期（实时终端）。
 

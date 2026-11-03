@@ -50,22 +50,23 @@ type Node struct {
 	// lastPanes: the pane each session was last seen live in (it is no longer live when its agent exits or is
 	// suspended), to tell the two apart when a send finds it gone on a host that cannot resume it.
 	lastPanes map[string]string
-	panes     map[string]string         // pane id -> session id (learned from hooks)
-	layouts   map[string]layout         // host kind -> space / slot names from its last snapshot
-	procs     map[string]*assistantProc // headless assistant conversations (assistant.go)
-	spare     *assistantProc            // warm process waiting for the next new conversation
-	akeys     map[string]*assistantProc // the key a Codex conversation's MCP server reports until its thread exists
-	lastList  string                    // serialized last sessions.changed payload
-	lastRevs  map[string]int64          // session id -> rev as last pushed (sessions.changed or sessions.revs)
-	metas     map[string]quickMeta      // transcript path -> cached meta
-	bgScans   map[string]*bgScan        // transcript path -> incremental background-task scan
-	panePIDs  map[string]panePID        // pane -> its claude pid (machines without herdr's claude integration)
-	modes     map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
-	terms     map[string]*termStream    // session id -> its terminal streaming to the hub (terminal.go)
-	suggests  map[string]*suggestState  // session id -> Claude's suggested next message (suggestion.go)
-	driving   map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
-	events    *herdrEvents              // herdr's event stream (herdrevents.go)
-	cdirs     *claudeDirs               // Claude Code config directories in use (claudedirs.go)
+	panes     map[string]string          // pane id -> session id (learned from hooks)
+	layouts   map[string]layout          // host kind -> space / slot names from its last snapshot
+	procs     map[string]*assistantProc  // headless assistant conversations (assistant.go)
+	spare     *assistantProc             // warm process waiting for the next new conversation
+	akeys     map[string]*assistantProc  // the key a Codex conversation's MCP server reports until its thread exists
+	lastList  string                     // serialized last sessions.changed payload
+	lastRevs  map[string]int64           // session id -> rev as last pushed (sessions.changed or sessions.revs)
+	metas     map[string]quickMeta       // transcript path -> cached meta
+	bgScans   map[string]*bgScan         // transcript path -> incremental background-task scan
+	panePIDs  map[string]panePID         // pane -> its claude pid (machines without herdr's claude integration)
+	modes     map[string]sessionModes    // session id -> mode / effort set from the app (modes.go)
+	terms     map[string]*termStream     // session id -> its terminal streaming to the hub (terminal.go)
+	suggests  map[string]*suggestState   // session id -> Claude's suggested next message (suggestion.go)
+	driving   map[string]bool            // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
+	events    *herdrEvents               // herdr's event stream (herdrevents.go)
+	hostSig   map[string]*watcherSignals // change signals of the registered watcher hosts, by host kind (herdrevents.go)
+	cdirs     *claudeDirs                // Claude Code config directories in use (claudedirs.go)
 	codices   *codexRegistry
 	machineID string
 	sends     sentLog         // recent client_msg_ids (sendsafe.go)
@@ -162,6 +163,7 @@ func New(version string) (*Node, error) {
 	}
 	n.configureCodex(proto.CodexConfig{})
 	n.hosts = host.NewRegistry(engineHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
+	n.resetSignals()
 	n.state = newState()
 	n.ports.kick = make(chan struct{}, 1)
 	return n, nil

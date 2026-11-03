@@ -8,6 +8,7 @@
   报「对话没加载」）：起 mock 前 `lsof -nP -iTCP:<端口> -sTCP:LISTEN` 看一眼，失败要看 mock 的日志，别只看测试报错。
   停自己的 mock 按端口停（`kill $(lsof -t -iTCP:<端口> -sTCP:LISTEN)`），别 `pkill -f mock_hub.py`：会把别的车道正在用的 mock 一起杀掉（2026-10-31 踩过）。
   经 ssh 远程 `pkill -f <路径>` 也会匹配到 ssh 起的那个 `bash -c '…'` 自己（命令行里有同一个路径），把这次 ssh 连同后面的命令一起杀掉：按记下的 pid / 进程组停。
+- 脚本要在 macOS 自带的 Python 3.9 上跑（2026-11-03，#579）：新版 Python 上写的 `def f(x: str | None = None)` 在 3.9 上一 import 就 `TypeError: unsupported operand type(s) for |`，Mac mini 上发不了 TestFlight，而在新版 Python 上测试全过。注解里用 `X | None` 就在文件开头加 `from __future__ import annotations`；`isinstance(x, int | str)`、`A = int | None` 这种不在注解里的它也救不了，改用元组 / `Optional`。`datetime.fromisoformat` 在 3.9 上只认 3 或 6 位小数秒，Go 写的 RFC 3339 时间有 0–9 位，先补齐到 6 位再解析（`redact_transcript.py` 的 `ts`）。`scripts/test/test_script_layout.py` 按源码查注解里的 `X | Y` 和 3.9 以后才有的语法，不在注解里的 `|` 查不到。
 - 多个 agent 同时往 master 推：rebase 冲突时不要用自己的旧副本整文件覆盖别人的改动（2026-10-25 一次 rebase 把浅蓝气泡、通知跳转修复整个盖回去了）；
   解决冲突只改冲突块，push 前 `git diff origin/master...HEAD --stat` 看看有没有动到不是自己的文件。打 TestFlight 前确认 master 是修好的那一版。
 - 多个 agent 并行改同一仓库（飞书工作台 6 个 worker，见 `docs/feishu.md`）：每人独立 worktree + 独立克隆模拟器；新增类型带领域前缀

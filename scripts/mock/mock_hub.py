@@ -3801,6 +3801,7 @@ for _m in MACHINES:
     _m["engine"] = "herdr"
     _m["engines"] = ([{"id": "herdr", "name": "herdr", "available": True, "version": "0.9.5"},
                        {"id": "herdr-core", "name": "Herdr App", "available": _m["id"] == "macbook"},
+                       {"id": "herdr-both", "name": "herdr + Herdr App", "available": _m["id"] == "macbook"},
                        {"id": "orca", "name": "Orca", "available": _m["id"] == "studio", "version": "1.0",
                         **({"note": "Orca 协议版本不兼容，请先更新 Orca。"} if _m["id"] == "server" else {})}]
                       if _m.get("online") else [])

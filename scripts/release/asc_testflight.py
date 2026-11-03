@@ -20,6 +20,8 @@ public_link_limit people), and/or get an email invitation when listed in app_sto
 public link only those emails can join. The first build of a version goes through Beta App Review, which needs the
 contact in app_store.external.review (docs/release.md). The App ID comes from app_store.app_id in the config (docs/config.md).
 """
+from __future__ import annotations
+
 import os
 import sys
 import time

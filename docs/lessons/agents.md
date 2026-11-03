@@ -107,3 +107,9 @@
 - Codex / TRAEX 的子 Agent 会在主对话旁边写自己的 rollout，同一个目录、同一个 cwd，而且更新；TRAEX 执行工具前的自动批准评估（guardian）
   由同一个进程写，还有自己的 owner 文件。按「最新的 rollout / 最新的 owner 文件」认会话，App 显示的是审核对话，和终端里看到的不一样（2026-11-01）。
   认会话一律看 `session_meta` 的 `thread_source` / `source.subagent`，子 Agent 用 `session_id` 换成它的主对话（`docs/codex.md`）。
+- **经典 herdr 和 Herdr App 是两套不互通的运行时，可能同时活在一台机器上**（2026-11-03）：Herdr App 从别的电脑 remote 连过来时，
+  本机跑的是 `herdr-core serve`（socket 在 `$XDG_RUNTIME_DIR/herdr-core/<session>.sock`，状态在 `~/.local/state/herdr-core/`），
+  旁边还有 `herdr remote-client-bridge` 进程和 `peers.json`；终端标签在 `doc.get("herdr-app")` 里。它和终端里的 `herdr server`
+  （`~/.config/herdr/herdr.sock`）互不可见。「App remote 连到本机开的会话找不到」时先看 herdr-core 的 `terminal.list`，别只查经典 socket。
+  一台机器两套都用时引擎选 `herdr-both`：node 并行刷两个宿主、事件按宿主隔离（`watcherSignals`），新建 / 恢复会话固定走经典 herdr
+  （`docs/engines.md`「并列」、`docs/plan-orca-support.md`「并列引擎」）。别再退回「刷新顺序问所有宿主」——herdr-core 慢 2 秒会拖慢 herdr。

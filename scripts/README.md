@@ -30,9 +30,10 @@ python3 -B -m unittest discover -s scripts/test -p 'test_*.py'
 python3 -B -m unittest discover -s scripts/release -p 'test_*.py'
 python3 -B -m unittest discover -s scripts/deploy -p 'test_*.py'
 python3 -B -m unittest discover -s scripts/mock -p 'test_*.py'
+python3 -B -m unittest discover -s scripts/diag -p 'test_*.py'
 node scripts/test/pr_needs_issue_test.mjs
 python3 scripts/privacy_check.py
 ./scripts/test/test-server.sh
 ```
 
-目录回归测试检查兼容入口转发、配置 import、根目录推算、shell / Python 语法，以及 mock hub 的真实启动。新增脚本放到对应功能目录，回归测试也放在同目录；不要再往顶层增加功能脚本。
+目录回归测试检查兼容入口转发、配置 import、根目录推算、shell / Python 语法，以及 mock hub 的真实启动。Python 脚本要能在 macOS 自带的 Python 3.9 上跑：语法按 3.9 检查，注解里写 `X | None` 的文件要加 `from __future__ import annotations`（3.9 运行到 def 时就求值注解，`str | None` 会 TypeError，#579）；`datetime.fromisoformat` 在 3.9 上只认 3 或 6 位小数秒，解析 Go 写的时间先补齐到 6 位。新增脚本放到对应功能目录，回归测试也放在同目录；不要再往顶层增加功能脚本。

@@ -249,7 +249,8 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  // 找到的（离线时为空数组）。旧 hub 没有这两个字段
  "engine":"herdr",
  "engines":[{"id":"herdr","name":"herdr","available":true,"version":"0.9.3"},
-            {"id":"herdr-core","name":"Herdr App","available":false}],
+            {"id":"herdr-core","name":"Herdr App","available":false},
+            {"id":"herdr-both","name":"herdr + Herdr App","available":false}],
  // 系统信息（docs/machines.md）：node 最近一次连上时报的，存在 hub 的数据库里，离线也有；旧 node 没有这个字段
  "system":{"os":"darwin","distro":"macos","like":"","name":"macOS 26.1","version":"26.1","build":"25B78",
            "kernel":"Darwin 25.1.0","arch":"arm64","model":"MacBook Pro","cpu":"Apple M4 Pro","cores":14,
@@ -385,7 +386,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | --- | --- | --- |
 | GET | `/api/v1/machines` | `{"machines":[Machine]}` |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
-| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"orca"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
+| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
 | GET | `/api/v1/machines/{mid}/launchers` | `{"launchers":[Launcher]}` |
 | GET | `/api/v1/todos` | 全部待办（新建的在前）：`{"todos":[Todo]}`，每个待办带 `agents`（当前的在前按 `linked_at` 降序，然后是参与过的按 `released_at` 降序） |
 | POST | `/api/v1/todos` | 新建待办 `{"title","notes"?}` → 200 `{"todo":Todo}`；`title` 不能为空（400）；只读设备 403 |
@@ -750,8 +751,12 @@ Android 按关联消息定位已加载历史中的用户轮次或后台唤醒段
 
 ## 引擎
 
-每台机器的 node 只驱动一个终端宿主，叫这台机器的「引擎」：`herdr`（经典的 herdr 命令行，默认，原来的机器不受影响）、
-`herdr-core`（Herdr 桌面版背后的运行时，显示名「Herdr App」）或 `orca`（Orca 桌面版的 runtime，显示名「Orca」，`docs/plan-orca-support.md`「Orca 来源」）。几个不同时用：同时跑会互相拖慢刷新（见 `docs/plan-orca-support.md`「herdr-core 宿主」）。
+每台机器的 node 驱动一个「引擎」，即一组终端宿主：`herdr`（经典的 herdr 命令行，默认，原来的机器不受影响）、
+`herdr-core`（Herdr 桌面版背后的运行时，显示名「Herdr App」）、`orca`（Orca 桌面版的 runtime，显示名「Orca」，`docs/plan-orca-support.md`「Orca 来源」），
+以及 `herdr-both`（显示名「herdr + Herdr App」）：node **同时注册 herdr 和 herdr-core 两个宿主**，两边会话合并显示，
+给「本地用 herdr、Herdr App 再 remote 连到同一台机器」的场景用。单选时几个宿主不同时用：同时跑会互相拖慢刷新；
+并列时刷新并行、事件按宿主隔离，不会互相拖慢（实现见 `node/engine.go`、`node/sessions.go` 的 `refreshHosts`、`node/herdrevents.go`，
+取舍见 `docs/plan-orca-support.md`「herdr-core 宿主」）。
 
 - 用户在 App 里按机器选（配对时、设置 › 机器），`PUT /api/v1/machines/{mid}/engine`。hub 存在 Postgres 的 settings 里
   （一个键 `machine_engines`：机器 id → 引擎），不写 hub.json。
@@ -761,9 +766,12 @@ Android 按关联消息定位已加载历史中的用户轮次或后台唤醒段
   最多等 3 秒，之后按 herdr 开始。所以选了 herdr-core 的机器连接时不会闪出 herdr 的会话，也不会去问 herdr。
 - `engine` 是存下的选择。node 拒绝 `engine.use`（太旧）时 hub 记一行日志，PUT 照样回 200，选择照样存着，等 node 更新后生效。
 - `engines` 来自 `node.info`，每项 `{id, name, available, version?, note?}`：herdr 能用 = 它答话，或者 socket 文件在，或者 PATH 上有 `herdr`；herdr-core 能用 = 它的 socket 答 `hello`
-  （用 herdr 的 node 只在 `node.info` 时这样问一次 herdr-core，别的时候不碰它）；Orca 能用 = `orca-runtime.json` 在、它的 socket 答 `status.get`
+  （用 herdr 的 node 只在 `node.info` 时这样问一次 herdr-core，别的时候不碰它）；`herdr-both` 能用 = 前两个都能用（不带 version）；
+  Orca 能用 = `orca-runtime.json` 在、它的 socket 答 `status.get`
   且协议版本兼容（不兼容时 `available` 为 false，`note` 是给用户看的一句中文原因，`version` 照样带；同样只在 `node.info` 时问一次）。
   `version` 是各自报的版本，没有就不带。旧 node 只报前两个。
+- 并列时没有窗格的操作（新建、继续会话、改名）固定走经典 herdr（node 的 `defaultHost` / `defaultHostKind`）；
+  每个窗格的操作（读屏、发送、按键、关闭）按窗格 id 的 host kind 路由，herdr-core 的窗格只受 herdr-core 能力限制。
 
 ## hub ↔ node RPC
 

@@ -235,7 +235,7 @@ func (n *Node) workspaceFor(ctx context.Context, launch host.Launcher, cwd strin
 	if err != nil {
 		// Nothing was started or typed: say so, and what to do, instead of herdr's own words (the app showed
 		// "herdr workspace list: exec: \"herdr\": executable file not found").
-		name := proto.EngineNames[n.engine()]
+		name := n.defaultEngineName()
 		return "", refusal(engineMissing, fmt.Sprintf("这台电脑上的 %s 没在运行（或没装），不能在这里新开或接着会话，这次没有发送。"+
 			"要从手机接着电脑上开着的会话，在那边继续；要从手机新开，先在这台电脑上装好并打开 %s。", name, name),
 			map[string]any{"detail": "herdr is not running on this machine: " + err.Error()})

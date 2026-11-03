@@ -31,6 +31,19 @@ func TestEngineHostsOfHerdrAreHerdrOnly(t *testing.T) {
 	if _, ok := hs[0].(*herdrCoreHost); len(hs) != 1 || !ok {
 		t.Fatalf("herdr-core hosts %v", hs)
 	}
+	hs = engineHosts(proto.EngineHerdrBoth, nil)
+	if len(hs) != 2 {
+		t.Fatalf("combined hosts %v", hs)
+	}
+	if _, ok := hs[0].(*herdrHost); !ok {
+		t.Fatalf("the combined engine's first host is %T, want herdr (new sessions start there)", hs[0])
+	}
+	if _, ok := hs[1].(*herdrCoreHost); !ok {
+		t.Fatalf("the combined engine's second host is %T, want herdr-core", hs[1])
+	}
+	if defaultHostKind(proto.EngineHerdrBoth) != host.Herdr || defaultHostKind(proto.EngineHerdrCore) != host.HerdrCore {
+		t.Fatal("pane-less operations of the combined engine must go to classic herdr")
+	}
 }
 
 // A node on herdr (the default) makes no herdr-core call while it lists, polls, watches, sends, reads and presses keys,
@@ -164,6 +177,68 @@ func TestEngineUseSwitches(t *testing.T) {
 	}
 }
 
+// The combined engine lists both hosts' sessions at once and drives each pane through its own host.
+func TestEngineBothListsBothHosts(t *testing.T) {
+	n, f, home := herdrNode(t)
+	hc := newFakeHC(t)
+	t.Setenv("HC_SOCKET", hc.sock)
+	t.Setenv("HERDR_SOCKET_PATH", f.sock)
+	writeClaudePID(t, home, 4242, sidB)
+	writeTranscript(t, home, hcCwd, sidB, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"b"}`)
+	hc.setTerminals(hcTerminal("t1", "claude-code", "working", 4242, "claude", hcCwd, "", "", ""))
+	seedAgents(t, n, f, claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/s", ""))
+	pushes, _ := pollNode(t, n)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	n.watchEngine(ctx)
+
+	if _, err := request(t, n, "engine.use", map[string]any{"engine": proto.EngineHerdrBoth}); err != nil {
+		t.Fatal(err)
+	}
+	waitPushed(t, pushes, func(m map[string]proto.Session) bool { return live(m, sidA) && live(m, sidB) })
+	got := byID(listSessions(t, n))
+	a, b := got[sidA], got[sidB]
+	if a.PaneID != "w1:p1" || b.PaneID != "herdr-core:t1" || b.Status != proto.StatusWorking {
+		t.Fatalf("combined sessions: %+v / %+v", a, b)
+	}
+	if kinds := hostKinds(n); strings.Join(kinds, ",") != host.Herdr+","+host.HerdrCore {
+		t.Errorf("hosts %v", kinds)
+	}
+	if n.defaultHost().Kind() != host.Herdr {
+		t.Error("new sessions of the combined engine must start on classic herdr")
+	}
+	// Both watchers run: herdr-core's stream is subscribed to, herdr's stays on its own.
+	select {
+	case <-hc.subbed:
+	case <-time.After(3 * time.Second):
+		t.Error("herdr-core's events not subscribed to in the combined engine")
+	}
+}
+
+// waitPushed reads sessions.changed pushes until want matches or the test times out.
+func waitPushed(t *testing.T, pushes <-chan hubPush, want func(map[string]proto.Session) bool) map[string]proto.Session {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case p := <-pushes:
+			if p.Event != "sessions.changed" {
+				continue
+			}
+			var v struct {
+				Sessions []proto.Session `json:"sessions"`
+			}
+			_ = json.Unmarshal(p.Params, &v)
+			if m := byID(v.Sessions); want(m) {
+				return m
+			}
+		case <-deadline:
+			t.Fatal("no matching sessions.changed")
+			return nil
+		}
+	}
+}
+
 // node.info reports every engine: available, with their versions, when they answer.
 func TestEngineDetection(t *testing.T) {
 	n, f, _ := herdrNode(t)
@@ -178,16 +253,18 @@ func TestEngineDetection(t *testing.T) {
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	n.hosts.Set(engineHosts(proto.EngineHerdrCore, nil)...) // herdr not the engine: its CLI says the version
 	got := n.engines(context.Background(), "")
-	if len(got) != 3 || got[0] != (proto.Engine{ID: "herdr", Name: "herdr", Available: true, Version: "0.9.3"}) ||
+	if len(got) != 4 || got[0] != (proto.Engine{ID: "herdr", Name: "herdr", Available: true, Version: "0.9.3"}) ||
 		got[1] != (proto.Engine{ID: "herdr-core", Name: "Herdr App", Available: true, Version: "0.1.16"}) ||
-		got[2] != (proto.Engine{ID: "orca", Name: "Orca"}) { // no Orca here (TestMain): listed, not available
+		got[2] != (proto.Engine{ID: "herdr-both", Name: "herdr + Herdr App", Available: true}) ||
+		got[3] != (proto.Engine{ID: "orca", Name: "Orca"}) { // no Orca here (TestMain): listed, not available
 		t.Errorf("engines %+v", got)
 	}
 	if tr := f.trace(); len(tr) != 0 {
 		t.Errorf("herdr asked while not the engine: %v", tr)
 	}
 	t.Setenv("HC_SOCKET", "/tmp/jarvis-no-such-dir/c.sock")
-	if got := n.engines(context.Background(), "0.9.3"); got[1].Available || got[0].Version != "0.9.3" {
+	got = n.engines(context.Background(), "0.9.3")
+	if got[1].Available || got[0].Version != "0.9.3" || got[2].Available {
 		t.Errorf("without herdr-core: %+v", got)
 	}
 }

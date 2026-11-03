@@ -251,10 +251,11 @@ func TestHerdrCoreHasNoTerminalStream(t *testing.T) {
 // another machine's.
 func TestHerdrCoreEventsKickARefresh(t *testing.T) {
 	n, _, hc, _ := hcNode(t)
-	n.events = newHerdrEvents()
+	sig := newWatcherSignals()
+	n.hostSig = map[string]*watcherSignals{host.HerdrCore: sig}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go n.watchHost(ctx, n.hosts.Get(host.HerdrCore).(host.Watcher))
+	go n.watchHost(ctx, n.hosts.Get(host.HerdrCore).(host.Watcher), sig)
 	select {
 	case <-hc.subbed:
 	case <-time.After(3 * time.Second):
@@ -262,7 +263,7 @@ func TestHerdrCoreEventsKickARefresh(t *testing.T) {
 	}
 	kicked := func() bool {
 		select {
-		case <-n.events.kick:
+		case <-sig.kick:
 			return true
 		case <-time.After(300 * time.Millisecond):
 			return false

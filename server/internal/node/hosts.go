@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 // The node drives every terminal through the host its pane belongs to (internal/host). Panes are kept as PaneRef
@@ -91,15 +92,26 @@ func (n *Node) hostPrompt(ctx context.Context, pane, text string) error {
 }
 
 // defaultHost is where new sessions start and where spaces without a host kind live: the machine's engine (engine
-// names are host kinds), herdr unless herdr-core was chosen.
-func (n *Node) defaultHost() host.Host { return n.hosts.Get(n.engine()) }
+// names are host kinds), herdr unless herdr-core was chosen; the combined engine (herdr-both) starts on classic herdr,
+// its full-capability host.
+func (n *Node) defaultHost() host.Host { return n.hosts.Get(defaultHostKind(n.engine())) }
+
+// defaultEngineName names the runtime pane-less operations run on, for user-facing messages: the combined engine
+// starts and resumes on classic herdr, so it says herdr, not "herdr + Herdr App".
+func (n *Node) defaultEngineName() string {
+	if name := proto.EngineNames[defaultHostKind(n.engine())]; name != "" {
+		return name
+	}
+	return n.engine()
+}
 
 // hostCap is the default host as capability C.
 func hostCap[C any](n *Node) (C, error) {
 	var none C
-	h := n.defaultHost()
+	kind := defaultHostKind(n.engine())
+	h := n.hosts.Get(kind)
 	if h == nil {
-		return none, fmt.Errorf("no %s host on this machine", n.engine())
+		return none, fmt.Errorf("no %s host on this machine", kind)
 	}
 	c, ok := h.(C)
 	if !ok {

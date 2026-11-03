@@ -11,6 +11,8 @@ are remapped, timestamps shifted to 2026-01-01, paths moved under /work/project,
 After running it, review the output by hand (`--words` lists every word that survived as is) before committing:
 no internal domains / IPs, host names, people, emails, repository names or tokens.
 """
+from __future__ import annotations
+
 import argparse
 import datetime as dt
 import json
@@ -105,6 +107,8 @@ class Redactor:
         return self.ids[addr]
 
     def ts(self, s: str) -> str:
+        # Go writes 0–9 fraction digits; fromisoformat takes only 3 or 6 before Python 3.11.
+        s = re.sub(r"\.(\d+)", lambda m: "." + m.group(1)[:6].ljust(6, "0"), s)
         t = dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
         if self.shift is None:
             self.shift = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc) - t.replace(microsecond=0)

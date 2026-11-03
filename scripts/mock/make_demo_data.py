@@ -157,6 +157,7 @@ machines = m.MACHINES + [MINI]
 MINI["engine"] = "herdr-core"
 MINI["engines"] = [{"id": "herdr", "name": "herdr", "available": False},
                    {"id": "herdr-core", "name": "Herdr App", "available": True},
+                   {"id": "herdr-both", "name": "herdr + Herdr App", "available": False},
                    {"id": "orca", "name": "Orca", "available": True}]
 
 data = {

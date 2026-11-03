@@ -32,7 +32,18 @@ import Testing
         #expect(!EngineSelectionModel.canSelect(future, on: m))
         m.engines = []
         #expect(!EngineSelectionModel.canSelect(future, on: m))
-        #expect(EngineSelectionModel.options(m).map(\.id) == ["herdr", "herdr-core", "orca"])
+        #expect(EngineSelectionModel.options(m).map(\.id) == ["herdr", "herdr-core", "herdr-both", "orca"])
+    }
+
+    @Test func combinedEngineIsAKnownChoice() throws {
+        let both = MachineEngine.herdrBoth
+        #expect(both.rawValue == "herdr-both" && both.name == "herdr + Herdr App")
+        #expect(both.detail == "终端和桌面 App 的会话都显示")
+        #expect(EngineSelectionModel.canSelect(both, on: try machine()))
+        var m = try machine(",\"engine\":\"herdr-both\"")
+        #expect(m.engine == .herdrBoth)
+        m.engines = [.init(id: "herdr-both", name: "herdr + Herdr App", available: true)]
+        #expect(EngineSelectionModel.options(m).contains { $0.id == "herdr-both" })
     }
 
     @Test func pairingTargetAndPreselection() throws {

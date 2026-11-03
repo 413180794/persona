@@ -57,14 +57,42 @@ class ScriptLayoutTests(unittest.TestCase):
             if not path.is_file() or "__pycache__" in path.parts:
                 continue
             with self.subTest(script=str(path.relative_to(ROOT))):
-                if path.suffix == ".py":
-                    ast.parse(path.read_text(), filename=str(path))
+                if path.suffix == ".py":  # no syntax newer than macOS's own Python 3.9, even when run on a newer one
+                    ast.parse(path.read_text(), filename=str(path), feature_version=(3, 9))
                 elif path.suffix == ".sh" or path.parent.name == "hooks":
                     shell = "zsh" if path.read_text().splitlines()[0].endswith("zsh") else "bash"
                     if not shutil.which(shell):
                         continue
                     result = subprocess.run([shell, "-n", str(path)], capture_output=True, text=True, timeout=10)
                     self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_annotations_run_on_the_macs_own_python(self):
+        # macOS ships Python 3.9, which evaluates annotations when it runs a def or an annotated assignment: an
+        # `X | None` there raises TypeError (#579) unless the module postpones them. Checked from the source, so it
+        # fails on a newer Python too.
+        def has_union(node):
+            return any(isinstance(n, ast.BinOp) and isinstance(n.op, ast.BitOr) for n in ast.walk(node))
+
+        for path in SCRIPTS.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            tree = ast.parse(path.read_text(), filename=str(path))
+            postponed = any(isinstance(n, ast.ImportFrom) and n.module == "__future__"
+                            and any(a.name == "annotations" for a in n.names) for n in tree.body)
+            annotations = []
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    args = node.args
+                    annotations += [x.annotation for x in
+                                    args.posonlyargs + args.args + args.kwonlyargs + [args.vararg, args.kwarg]
+                                    if x is not None and x.annotation is not None]
+                    annotations += [node.returns] if node.returns is not None else []
+                elif isinstance(node, ast.AnnAssign):
+                    annotations.append(node.annotation)
+            lines = sorted(n.lineno for n in annotations if has_union(n))
+            with self.subTest(script=str(path.relative_to(ROOT))):
+                self.assertTrue(postponed or not lines,
+                                f"`X | Y` annotations on lines {lines} need `from __future__ import annotations`")
 
     def test_generators_and_entitlements_resolve_the_repository_root(self):
         for name in ("assets/make_icon.py", "assets/make_alt_icons.py", "assets/make_persona.py", "release/entitlements.py"):

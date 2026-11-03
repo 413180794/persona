@@ -3,17 +3,22 @@
 **一机一引擎**：Persona 通过「引擎」看到并驱动电脑上的 Claude Code / Codex。每台电脑选一个引擎，Agents 里只显示这个引擎里开着的会话；
 别处开的会话（其他引擎、普通终端）只显示成「未运行」的对话记录。默认是 herdr，以前的机器不选也照旧工作。
 
+例外是 **「herdr + Herdr App（并列）」**：一台电脑同时在用经典 herdr 和 Herdr App（典型场景：人在电脑本地用终端里的 herdr，
+另一台电脑上的 Herdr App 通过 remote 连到这台机器开终端）时选它，两边的会话合并显示。下文「并列」一节有它的边界。
+
 下文的「引擎」都指这个选择；接口、存储和 node 怎么切换见 `docs/protocol.md`「引擎」，设计和取舍见 `docs/plan-orca-support.md`。
 
-## 三个引擎
+## 引擎
 
 | 引擎 | 在 App 里叫 | 你的 Claude 开在哪 | 怎么认出来 |
 | --- | --- | --- | --- |
 | `herdr` | herdr | 终端里运行 `herdr`，在它的窗格里开 `claude` / `codex` | herdr 的 socket 能连上，或装了 `herdr` 命令 |
 | `herdr-core` | Herdr App | Herdr 桌面 App 里开的终端（App 背后的 herdr-core） | herdr-core 的 socket 有回应 |
+| `herdr-both` | herdr + Herdr App | 上面两个同时在用 | 两个运行时都检测得到 |
 | `orca` | Orca | Orca 桌面 App 里开的终端 | Orca 在运行，而且它的版本 Persona 认得 |
 
-herdr 和 Herdr App 是同一家的两个产品，但互不相通：在 Herdr App 里开的会话 herdr 看不到，反过来也一样，所以要按你实际在哪开 Claude 来选。
+herdr 和 Herdr App 是同一家的两个产品，但互不相通：在 Herdr App 里开的会话 herdr 看不到，反过来也一样。只装 / 只用一个时按实际选；
+两个都在用、想在手机上同时看到，选「herdr + Herdr App（并列）」。
 
 ## 怎么切换
 
@@ -48,10 +53,25 @@ iOS 和 Android App 都有这两处入口（Android 在设置 › 电脑 › 机
 做不到的操作会直接提示，不会只做一半。Herdr App 和 Orca 里，Claude 不在前台（被挂起、已退出）时发消息会被拒绝、什么都不输入，
 提示「Claude 不在前台（可能被挂起），没有发送」或者要你在电脑上重新打开那个会话。
 
+## 并列：herdr + Herdr App
+
+选 `herdr-both` 后，node 同时挂 herdr 和 herdr-core 两个宿主：
+
+- Agents 合并两边的会话；空间 / 标签页、状态、读屏、发消息、按键、关闭都按会话所在的窗格各走各的宿主，和单选那个引擎时一样。
+- **从手机新建会话、继续未运行的会话、空间改名走经典 herdr**（能力完整的那个）。在 Herdr App 里退出的会话从手机「接着」时，
+  会在 herdr 里开一个新窗格 `--resume`（同一个 Claude 会话 id，对话记录连续，只是换了窗口）；herdr-core 窗格里的实时终端画面、手机接管仍不可用。
+- 两边互不拖慢：两个宿主的快照并行拉取（各自有自己的超时，一个卡住不挡另一个）；herdr-core 的事件只刷 herdr-core，
+  herdr 的事件只刷 herdr；一边挂了只清自己一边的在线状态。
+- 检测：只有 herdr 和 herdr-core 都「检测到可用」时这个选项才标可用（也可以在离线机器上预选，连上后生效；只有一边在时，
+  在的一边照常工作，另一边的会话为空）。
+- Orca 不进并列（它每秒轮询、开销最大），要和 Orca 并用以后再做。
+
 ## 选不了某个引擎时
 
 - **显示「没检测到」**：这个引擎在那台电脑上没运行。herdr 要先在终端里运行一次 `herdr`；Herdr App、Orca 要打开 App。打开后过一会儿，
   或者在 App 里对那台机器「重新连接」，检测结果会刷新。
+- **「herdr + Herdr App」显示「没检测到」**：两个运行时没有都在跑（herdr 要在终端里运行过，Herdr App 要打开、它的 remote 要连着这台机器）。
+  只有一边在用时直接选那一边就行。
 - **Orca 显示「这个版本的 Orca 和 Persona 不兼容」**：Orca 和 personad 的版本对不上，把两边都更新到最新版。
 - **选了引擎却看不到会话**：确认 Claude 真的开在这个引擎里（比如开在普通终端或另一个 App 里，Persona 只会把它显示成「未运行」）。
 - **hub 机器上的 node 是旧版本**（机器信息里提示版本不一致）：旧 node 不认识引擎切换，照旧只用 herdr；先更新那台电脑的 personad。
