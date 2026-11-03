@@ -52,6 +52,22 @@ struct TasksTests {
         #expect(TaskState.needsYou.priority < TaskState.working.priority && TaskState.working.priority < TaskState.done.priority)
     }
 
+    /// A task whose agent did not start ends failed (#1077): never going on, removable, out of the done ones.
+    @Test func aTaskWhoseAgentDidNotStartIsFailed() throws {
+        let t = try decode(#"""
+        {"id":"todo_3","title":"对齐按钮","done_at":"2026-11-04T10:00:05Z","origin":"c1","plan_id":"plan_1",
+         "start_error":"rpc: connection closed","agents":[]}
+        """#, as: TodoItem.self)
+        #expect(t.failedToStart && t.startError == "rpc: connection closed")
+        let state = TaskState(todo: t, agents: [])
+        #expect(state == .failed && state.isSettled && state.isRemovable)
+        #expect(!TaskState.working.isRemovable && !TaskState.needsYou.isRemovable)
+        #expect(TaskState.unread.isRemovable && TaskState.followup.isRemovable && TaskState.done.isRemovable)
+        #expect(TaskState.notStarted.isRemovable) // a start the hub never reported back on must not stay for good
+        let plain = try decode(#"{"id":"todo_4","title":"手动的","done_at":"2026-11-04T10:00:05Z","agents":[]}"#, as: TodoItem.self)
+        #expect(!plain.failedToStart && TaskState(todo: plain, agents: []) == .done)
+    }
+
     private func user(_ seq: Int, _ minutesAgo: Double) -> ChatLine {
         .row(.user(Item(id: "\(seq)#0", seq: seq, ts: Date(timeIntervalSinceNow: -minutesAgo * 60), role: "user", kind: .text,
                         text: "m\(seq)", toolUseID: nil, toolName: nil, toolInput: nil, isError: nil, image: nil)))

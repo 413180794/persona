@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +24,8 @@ type taskNode struct {
 	starts []map[string]any
 	sends  []map[string]any
 	n      int
+	// failStart: session.start answers this error instead of a session.
+	failStart error
 }
 
 func (tn *taskNode) calls() (starts, sends []map[string]any) {
@@ -47,6 +51,9 @@ func connectTaskNode(t *testing.T, h *Hub, id string) *taskNode {
 		switch method {
 		case "session.start":
 			tn.starts = append(tn.starts, p)
+			if tn.failStart != nil {
+				return nil, tn.failStart
+			}
 			tn.n++
 			sid := "s" + string(rune('0'+tn.n))
 			return map[string]any{"session": proto.Session{SessionID: sid, Cwd: p["cwd"].(string), Agent: "claude"}}, nil
@@ -133,6 +140,128 @@ func TestTaskPlanReadOnlyStartsAtOnce(t *testing.T) {
 	p, _ := h.loadPlan(context.Background(), todo.PlanID)
 	if p.State != planStarted || p.Tasks[0].TodoID != todo.ID {
 		t.Fatalf("plan = %+v", p)
+	}
+}
+
+// failedStart checks a task whose agent did not start: its todo is done with why and no agent, the snapshot and the
+// conversation's live counts see it as ended (#1077), the plan keeps the error and the conversation has a failed receipt.
+func failedStart(t *testing.T, h *Hub, want string) Todo {
+	t.Helper()
+	waitFor(t, "the todo to end", func() bool { ts := taskTodos(h); return len(ts) == 1 && ts[0].DoneAt != nil })
+	todo := taskTodos(h)[0]
+	if !strings.Contains(todo.StartError, want) || len(todo.Agents) != 0 {
+		t.Fatalf("todo = %+v", todo)
+	}
+	if st := taskState(todo, h.taskAgents(todo)); st != "failed" {
+		t.Fatalf("taskState = %q", st)
+	}
+	snap := h.snapshotTasks()
+	if len(snap) != 1 || snap[0].State != "没开起来" {
+		t.Fatalf("snapshot = %+v", snap)
+	}
+	if got := h.inboxTasks(); len(got) != 0 {
+		t.Fatalf("the inbox still sees a failed task: %+v", got)
+	}
+	waitFor(t, "the receipt", func() bool { return strings.Contains(strings.Join(feedKinds(h, "conv1"), ","), "receipt") })
+	items, _, _ := h.feed(context.Background(), "conv1", time.Time{})
+	var rb receiptBody
+	_ = json.Unmarshal(items[len(items)-1].Body, &rb)
+	if rb.State != "failed" || !strings.Contains(rb.Summary, want) {
+		t.Fatalf("receipt = %+v", rb)
+	}
+	waitFor(t, "the plan's error", func() bool {
+		p, _ := h.loadPlan(context.Background(), todo.PlanID)
+		return p != nil && strings.Contains(p.Tasks[0].Error, want)
+	})
+	return todo
+}
+
+// A task whose agent the node refuses to start ends at once (no retry): no todo stays open without an agent.
+func TestTaskStartFailedEndsTheTodo(t *testing.T) {
+	h, tn := newTaskHub(t)
+	tn.failStart = errors.New("launcher not found")
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	todo := failedStart(t, h, "launcher not found")
+	if starts, _ := tn.calls(); len(starts) != 1 {
+		t.Fatalf("a refused start was retried: %d starts", len(starts))
+	}
+	if _, ok := h.taskOf("box", "s1"); ok {
+		t.Fatal("a failed task still follows an agent")
+	}
+	// Reopening it by hand clears the failure.
+	mux := h.routes()
+	r := todoRequest("PATCH", "/api/v1/todos/"+todo.ID, strings.NewReader(`{"done":false}`))
+	r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("reopen: %d %s", w.Code, w.Body)
+	}
+	if got := taskTodos(h)[0]; got.DoneAt != nil || got.StartError != "" {
+		t.Fatalf("reopened todo = %+v", got)
+	}
+}
+
+// A dropped link is retried once: the machine back by then, the task starts as usual; still down, the task ends.
+func TestTaskStartRetriesADroppedLink(t *testing.T) {
+	old := taskStartRetryDelay
+	taskStartRetryDelay = 300 * time.Millisecond
+	t.Cleanup(func() { taskStartRetryDelay = old })
+
+	h, tn := newTaskHub(t)
+	m := h.byID["box"]
+	m.mu.Lock()
+	peer := m.peer
+	m.peer = nil // offline when the task starts
+	m.mu.Unlock()
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		m.mu.Lock()
+		m.peer = peer
+		m.mu.Unlock()
+	}()
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the retried start to link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
+	if todo := taskTodos(h)[0]; todo.DoneAt != nil || todo.StartError != "" {
+		t.Fatalf("todo = %+v", todo)
+	}
+	if starts, _ := tn.calls(); len(starts) != 1 {
+		t.Fatalf("%d starts", len(starts))
+	}
+
+	h2, tn2 := newTaskHub(t)
+	m2 := h2.byID["box"]
+	m2.mu.Lock()
+	m2.peer = nil // and it stays down
+	m2.mu.Unlock()
+	if _, err := h2.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	failedStart(t, h2, "offline")
+	if starts, _ := tn2.calls(); len(starts) != 0 {
+		t.Fatalf("%d starts reached a machine that was down", len(starts))
+	}
+}
+
+func TestTransientStartErr(t *testing.T) {
+	for _, c := range []struct {
+		err  error
+		want bool
+	}{
+		{rpc.ErrClosed, true},
+		{fmt.Errorf("box: %w", errOffline), true},
+		{fmt.Errorf("wrapped: %w", rpc.ErrClosed), true},
+		{&rpc.Error{Message: "rpc: connection closed"}, true}, // a link further on dropped
+		{&rpc.Error{Message: "session.start: no such launcher"}, false},
+		{errors.New("launcher not found"), false},
+	} {
+		if got := transientStartErr(c.err); got != c.want {
+			t.Errorf("transientStartErr(%v) = %v", c.err, got)
+		}
 	}
 }
 

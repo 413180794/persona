@@ -436,6 +436,9 @@ func (s *meshStore) CreateTodo(context.Context, db.TodoRow) error               
 func (s *meshStore) UpdateTodo(context.Context, string, *string, *string, *bool, time.Time) (*db.TodoRow, error) {
 	return nil, nil
 }
+func (s *meshStore) FailTodo(context.Context, string, string, time.Time) (*db.TodoRow, error) {
+	return nil, db.ErrTodoNotFound
+}
 func (s *meshStore) DeleteTodo(context.Context, string) error             { return nil }
 func (s *meshStore) CreateTaskPlan(context.Context, db.TaskPlanRow) error { return nil }
 func (s *meshStore) TaskPlan(context.Context, string) (*db.TaskPlanRow, error) {

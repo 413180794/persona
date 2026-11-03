@@ -1270,6 +1270,10 @@ if MOCK_TASKS:
                    "/Users/me/code/weather", 30, "plan_mock_2"),
         _task_todo("todo_task_blog", "博客迁移到 Astro", "把博客从 Hexo 迁到 Astro。", "studio", BLOG,
                    "/Users/me/code/blog", 60 * 26, "plan_mock_0"),
+        # A task whose agent did not start (#1077): the hub ended it, done with why and no agent.
+        dict(_task_todo("todo_task_align", "设置页按钮对齐", "设置页底部两个按钮和上面的列表对齐。", "macbook", "",
+                        "/Users/me/code/weather", 8, "plan_mock_4"),
+             done_at=ago(minutes=7.9), start_error="rpc: connection closed", agents=[]),
     ]
     TODOS = copy.deepcopy(TODOS_INIT)
 
@@ -1292,6 +1296,8 @@ if MOCK_TASKS:
             _ptask("补齐网络层的单元测试", False, "同一个仓库另开一个 Agent，和上一个互不打扰。", "todo_task_tests")]),
         "plan_mock_2": _plan("plan_mock_2", "started", 30, [
             _ptask("整理发布说明", True, "只读：只看这周合并的 PR。", "todo_task_release")]),
+        "plan_mock_4": _plan("plan_mock_4", "started", 8, [
+            dict(_ptask("设置页按钮对齐", False, "weather 在 MacBook 上。", "todo_task_align"), error="rpc: connection closed")]),
         "plan_mock_3": _plan("plan_mock_3", "open", 2, [
             _ptask("处理 PR #42 的 review 意见", False, "PR #42 在 weather 仓库；review 类的活你常用 Codex。")]),
     })
@@ -1331,6 +1337,10 @@ if MOCK_TASKS:
             "text": "小组件横屏崩溃今天能修好吗？下午想发一版 TestFlight",
             "draft": "在修了，测试已经过了，十点前提 PR，下午发版来得及。"}),
         _feed("feed_m8", 10, "routed", "todo_task_tests", {"text": "Mock 用协议注入，不要用单例"}),
+        _feed("feed_m8a", 8, "plan", "plan_mock_4"),
+        _feed("feed_m8b", 7.95, "task", "todo_task_align"),
+        _feed("feed_m8c", 7.9, "receipt", "todo_task_align",
+              {"title": "设置页按钮对齐", "state": "failed", "summary": "没开起来：rpc: connection closed"}),
         _feed("feed_m9", 1.8, "plan", "plan_mock_3"),
     ]
     ITEMS[ASK1] = (
@@ -1343,6 +1353,8 @@ if MOCK_TASKS:
         + [it("user", "text", 30, text="这周的发布说明也整理一下")]
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Started 1 task(s) without asking.", 30)
         + [it("assistant", "text", 29.6, text="发布说明我来整理。只读、不改东西，所以直接开始了。")]
+        + [it("user", "text", 8.2, text="设置页底部的按钮和列表对齐一下")]
+        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Started 1 task(s) without asking.", 8.1)
         + [it("user", "text", 5, text="周六上午提醒我给爸妈打电话")]
         + tool("mcp__jarvis__phone_reminders_create", {"title": "给爸妈打电话", "due": "周六 10:00"},
                json.dumps({"id": "mock-reminder-1", "title": "给爸妈打电话", "due": later(hours=60), "completed": False,

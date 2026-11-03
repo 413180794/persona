@@ -154,15 +154,17 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var updatedAt: Date?
     var origin: String?
     var planID: String?
+    /// The task's agent did not start, and why: the hub ended the todo there (it is done, #1077).
+    var startError: String?
     var agents: [Agent]
 
     enum CodingKeys: String, CodingKey {
         case id, title, notes, origin, agents
-        case doneAt = "done_at", createdAt = "created_at", updatedAt = "updated_at", planID = "plan_id"
+        case doneAt = "done_at", createdAt = "created_at", updatedAt = "updated_at", planID = "plan_id", startError = "start_error"
     }
 
     init(id: String, title: String, notes: String? = nil, doneAt: Date? = nil, createdAt: Date? = nil, updatedAt: Date? = nil,
-         origin: String? = nil, planID: String? = nil, agents: [Agent] = []) {
+         origin: String? = nil, planID: String? = nil, startError: String? = nil, agents: [Agent] = []) {
         self.id = id
         self.title = title
         self.notes = notes
@@ -171,6 +173,7 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         self.updatedAt = updatedAt
         self.origin = origin
         self.planID = planID
+        self.startError = startError
         self.agents = agents
     }
 
@@ -184,17 +187,21 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         origin = try c.decodeIfPresent(String.self, forKey: .origin)
         planID = try c.decodeIfPresent(String.self, forKey: .planID)
+        startError = try c.decodeIfPresent(String.self, forKey: .startError)
         agents = try c.decodeIfPresent([Agent].self, forKey: .agents) ?? []
     }
 
     var activeAgents: [Agent] { agents.filter(\.isActive) }
+    /// The hub ended it because its agent did not start.
+    var failedToStart: Bool { !(startError ?? "").isEmpty }
 }
 
 /// Where a task is, from its todo and its agents' states (docs/todos.md「状态计算规则」, the hub's taskState).
 nonisolated enum TaskState: String, Sendable, CaseIterable {
-    case needsYou, working, unread, followup, notStarted, done
+    case needsYou, working, unread, followup, notStarted, done, failed
 
     init(todo: TodoItem, agents: [AgentState]) {
+        if todo.failedToStart { self = .failed; return }
         if todo.doneAt != nil { self = .done; return }
         let has = Set(agents)
         if has.contains(.needsYou) { self = .needsYou }
@@ -210,7 +217,7 @@ nonisolated enum TaskState: String, Sendable, CaseIterable {
         case .needsYou: .needsYou
         case .working, .notStarted: .working
         case .unread, .done: .unread
-        case .followup: .idle
+        case .followup, .failed: .idle
         }
     }
 
@@ -221,12 +228,16 @@ nonisolated enum TaskState: String, Sendable, CaseIterable {
         case .working, .notStarted: 1
         case .unread: 2
         case .followup: 3
-        case .done: 4
+        case .done, .failed: 4
         }
     }
 
-    /// The task finished its work (its last turn ended and nothing waits).
-    var isSettled: Bool { self == .unread || self == .followup || self == .done }
+    /// The task finished its work (its last turn ended and nothing waits), or never began it.
+    var isSettled: Bool { self == .unread || self == .followup || self == .done || self == .failed }
+
+    /// Nothing of the task runs (it ended, stopped, or its agent never started; `notStarted` stays when the hub never
+    /// said how the start went): the user may take it out of the conversation.
+    var isRemovable: Bool { self != .working && self != .needsYou }
 }
 
 // MARK: - Endpoints

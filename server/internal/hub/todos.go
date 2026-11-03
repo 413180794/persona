@@ -45,10 +45,12 @@ type Todo struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 	// Origin: the assistant conversation that opened it as a task; PlanID: the plan it came from (#930,
 	// docs/unified-entry.md). Empty for a todo made by hand.
-	Origin string      `json:"origin,omitempty"`
-	PlanID string      `json:"plan_id,omitempty"`
-	Spaces []TodoSpace `json:"spaces"`
-	Agents []TodoAgent `json:"agents"`
+	Origin string `json:"origin,omitempty"`
+	PlanID string `json:"plan_id,omitempty"`
+	// StartError: a task whose agent did not start ends done with why (#1077); reopening clears it.
+	StartError string      `json:"start_error,omitempty"`
+	Spaces     []TodoSpace `json:"spaces"`
+	Agents     []TodoAgent `json:"agents"`
 }
 
 type todosState struct {
@@ -140,16 +142,17 @@ func (h *Hub) loadTodosLocked(ctx context.Context) error {
 
 	for _, tr := range tlist {
 		tmap[tr.ID] = &Todo{
-			ID:        tr.ID,
-			Title:     tr.Title,
-			Notes:     tr.Notes,
-			DoneAt:    tr.DoneAt,
-			CreatedAt: tr.CreatedAt,
-			UpdatedAt: tr.UpdatedAt,
-			Origin:    tr.Origin,
-			PlanID:    tr.PlanID,
-			Spaces:    make([]TodoSpace, 0),
-			Agents:    make([]TodoAgent, 0),
+			ID:         tr.ID,
+			Title:      tr.Title,
+			Notes:      tr.Notes,
+			DoneAt:     tr.DoneAt,
+			CreatedAt:  tr.CreatedAt,
+			UpdatedAt:  tr.UpdatedAt,
+			Origin:     tr.Origin,
+			PlanID:     tr.PlanID,
+			StartError: tr.StartError,
+			Spaces:     make([]TodoSpace, 0),
+			Agents:     make([]TodoAgent, 0),
 		}
 	}
 
@@ -423,6 +426,9 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 					updatedRow.DoneAt = nil
 				}
 			}
+			if updatedRow.DoneAt != nil {
+				updatedRow.StartError = cur.StartError
+			}
 		}
 
 		affectedMachines := make(map[string]bool)
@@ -431,6 +437,7 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 			t.Title = updatedRow.Title
 			t.Notes = updatedRow.Notes
 			t.DoneAt = updatedRow.DoneAt
+			t.StartError = updatedRow.StartError
 			t.UpdatedAt = updatedRow.UpdatedAt
 			for _, a := range t.Agents {
 				if a.ReleasedAt == nil && a.DismissedAt == nil {

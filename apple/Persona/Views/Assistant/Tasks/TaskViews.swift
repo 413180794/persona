@@ -10,7 +10,12 @@ struct TaskMark: View {
     var size: CGFloat = Theme.Size.dotL
 
     var body: some View {
-        if state == .done || state == .unread {
+        if state == .failed {
+            Image(systemName: Theme.Icon.errorFilled)
+                .font(Theme.Font.labelStrong)
+                .foregroundStyle(Theme.danger)
+                .accessibilityLabel("没开起来")
+        } else if state == .done || state == .unread {
             Image(systemName: Theme.Icon.successFilled)
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(state == .done ? Color.secondary : Theme.positive)
@@ -30,6 +35,55 @@ extension TaskState {
         case .followup: "停着"
         case .notStarted: "正在开"
         case .done: "完成"
+        case .failed: "没开起来"
+        }
+    }
+
+    /// The color of the task's state label: its agent state's, red when it never started.
+    var labelColor: Color { self == .failed ? Theme.danger : agentState.tone.text }
+}
+
+// MARK: - Removing a task
+
+/// 移除 for a task that does not run, like the Agents page's 关闭 for an agent: a task whose agents ran asks first (their
+/// chats stay on the Agents page), one whose agent never started goes at once.
+struct TaskRemoval: ViewModifier {
+    @Binding var pending: TodoItem?
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(pending.map { "移除「\($0.title)」？" } ?? "",
+                                   isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
+                                   titleVisibility: .visible, presenting: pending) { todo in
+            Button("移除", role: .destructive) { Task { await TasksStore.shared.remove(todo) } }
+            Button("取消", role: .cancel) {}
+        } message: { _ in
+            Text("任务从这段对话里拿掉；它的 Agent 和对话记录还在 Agents 页。")
+        }
+    }
+}
+
+extension View {
+    func confirmTaskRemoval(_ pending: Binding<TodoItem?>) -> some View { modifier(TaskRemoval(pending: pending)) }
+}
+
+extension TasksStore {
+    /// Removes a task at once when no agent of it ever ran, else asks first (through `pending`).
+    func askRemove(_ todo: TodoItem, pending: Binding<TodoItem?>) {
+        if todo.agents.isEmpty { Task { await remove(todo) } } else { pending.wrappedValue = todo }
+    }
+}
+
+/// The 移除任务 of a task's menus (long press on its card, line or pill), when nothing of it runs.
+struct TaskRemoveMenuItem: View {
+    var todo: TodoItem
+    var state: TaskState
+    var pending: Binding<TodoItem?>
+
+    var body: some View {
+        if state.isRemovable {
+            Button(role: .destructive) { TasksStore.shared.askRemove(todo, pending: pending) } label: {
+                Label("移除任务", systemImage: Theme.Icon.delete)
+            }
         }
     }
 }
@@ -59,6 +113,10 @@ enum TaskPlace {
         if let a = todo.activeAgents.first ?? todo.agents.first {
             parts.append(machineName(a.machineID))
             if let cwd = a.cwd, !cwd.isEmpty { parts.append((cwd as NSString).lastPathComponent) }
+        } else if let planned = todo.planID.flatMap({ TasksStore.shared.plans[$0] })?.tasks.first(where: { $0.todoID == todo.id }) {
+            // No agent (yet, or ever): where the plan meant it to run.
+            parts.append(machineName(planned.machine))
+            if !planned.project.isEmpty { parts.append(planned.project) }
         }
         if let lead { parts.append(lead.agentLabel) }
         return parts.joined(separator: " · ")
@@ -240,6 +298,7 @@ struct PlanEditSheet: View {
 struct TaskCard: View {
     var todoID: String
     var conversation: String
+    @State private var removing: TodoItem?
     private var store: TasksStore { .shared }
 
     var body: some View {
@@ -254,7 +313,7 @@ struct TaskCard: View {
                         TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
                         Text(todo.title).font(Theme.Font.bodyStrong).lineLimit(1)
                         Spacer(minLength: Theme.Space.s)
-                        if let t = TaskClock.since(todo.createdAt), state != .done {
+                        if let t = TaskClock.since(todo.createdAt), state != .done, state != .failed {
                             Text(t).font(Theme.Font.caption).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
                         }
                     }
@@ -263,16 +322,28 @@ struct TaskCard: View {
                     TaskNowLine(todo: todo, state: state, lead: lead)
                     if state != .done {
                         HStack(spacing: Theme.Space.l) {
-                            Text(state.label).font(Theme.Font.captionMedium).foregroundStyle(state.agentState.tone.text)
+                            Text(state.label).font(Theme.Font.captionMedium).foregroundStyle(state.labelColor).lineLimit(1)
                             Spacer()
-                            Button {
-                                store.routes[conversation] = todo.id
-                            } label: {
-                                Label("说一句", systemImage: Theme.Icon.routeToTask).lineLimit(1)
+                            if state == .failed {
+                                // Nothing to say a word to: the way out is on the card.
+                                Button {
+                                    store.askRemove(todo, pending: $removing)
+                                } label: {
+                                    Label("移除", systemImage: Theme.Icon.delete).lineLimit(1)
+                                }
+                                .font(Theme.Font.captionStrong)
+                                .foregroundStyle(Theme.danger)
+                                .buttonStyle(.plain)
+                            } else {
+                                Button {
+                                    store.routes[conversation] = todo.id
+                                } label: {
+                                    Label("说一句", systemImage: Theme.Icon.routeToTask).lineLimit(1)
+                                }
+                                .font(Theme.Font.captionStrong)
+                                .foregroundStyle(Theme.accent)
+                                .buttonStyle(.plain)
                             }
-                            .font(Theme.Font.captionStrong)
-                            .foregroundStyle(Theme.accent)
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -286,6 +357,9 @@ struct TaskCard: View {
                         .stroke(state.agentState.color, lineWidth: Theme.Size.lineMedium)
                 }
             }
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .contextMenu { TaskRemoveMenuItem(todo: todo, state: state, pending: $removing) }
+            .confirmTaskRemoval($removing)
             .animation(Theme.Motion.state, value: state)
         }
     }
@@ -297,20 +371,27 @@ struct TaskNowLine: View {
     var state: TaskState
     var lead: Session?
 
+    private var store: TasksStore { .shared }
+
     var body: some View {
         let text: String = {
             if state == .needsYou { return "有事等你回答" }
+            if state == .failed { return "没开起来：\(store.startFailure(todo) ?? "原因不明")" }
             if let s = lead?.lastText?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { return s }
             if let e = todo.agents.first?.startError, !e.isEmpty { return "没开起来：\(e)" }
             return state == .notStarted ? "正在开 Agent" : "还没有动静"
         }()
+        let tint: Color? = state == .needsYou ? state.agentState.tone.text : state == .failed ? Theme.danger : nil
+        // What the agent says starts at the well's edge; only a question for the user keeps its mark.
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
-            Image(systemName: state == .needsYou ? Theme.Icon.askFirst : Theme.Icon.terminal)
-                .font(Theme.Font.label)
-                .foregroundStyle(state == .needsYou ? state.agentState.tone.text : .secondary)
+            if state == .needsYou {
+                Image(systemName: Theme.Icon.askFirst)
+                    .font(Theme.Font.label)
+                    .foregroundStyle(state.agentState.tone.text)
+            }
             Text(text)
                 .font(Theme.Font.secondary)
-                .foregroundStyle(state == .needsYou ? state.agentState.tone.text : .primary)
+                .foregroundStyle(tint ?? .primary)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -323,6 +404,7 @@ struct TaskNowLine: View {
 /// A task of another day, folded: one line; a tap opens its detail.
 struct TaskLine: View {
     var todoID: String
+    @State private var removing: TodoItem?
     private var store: TasksStore { .shared }
 
     var body: some View {
@@ -333,7 +415,7 @@ struct TaskLine: View {
                     TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
                     Text(todo.title).font(Theme.Font.secondaryMedium).lineLimit(1)
                     Spacer(minLength: Theme.Space.s)
-                    Text(state.label).font(Theme.Font.caption).foregroundStyle(state.agentState.tone.text).lineLimit(1).fixedSize()
+                    Text(state.label).font(Theme.Font.caption).foregroundStyle(state.labelColor).lineLimit(1).fixedSize()
                     Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
                 }
                 .padding(.horizontal, Theme.Space.m)
@@ -342,6 +424,9 @@ struct TaskLine: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+            .contextMenu { TaskRemoveMenuItem(todo: todo, state: state, pending: $removing) }
+            .confirmTaskRemoval($removing)
         }
     }
 }
@@ -565,6 +650,7 @@ struct TaskQuestions: View {
 /// The dock: a pill for each task going on (waiting for the user first), then 全部 for the board.
 struct TaskDock: View {
     var conversation: String
+    @State private var removing: TodoItem?
     private var store: TasksStore { .shared }
 
     var body: some View {
@@ -591,6 +677,7 @@ struct TaskDock: View {
             }
             .scrollIndicators(.hidden)
             .animation(Theme.Motion.layout, value: dock.map(\.id))
+            .confirmTaskRemoval($removing)
         }
     }
 
@@ -613,6 +700,8 @@ struct TaskDock: View {
             .scaledFrame(maxWidth: Theme.Size.box200)
         }
         .buttonStyle(.plain)
+        .contentShape(.contextMenuPreview, .capsule)
+        .contextMenu { TaskRemoveMenuItem(todo: todo, state: state, pending: $removing) }
         .transition(.scale.combined(with: .opacity))
     }
 }
@@ -655,7 +744,7 @@ struct TaskMentionList: View {
     private var store: TasksStore { .shared }
 
     var body: some View {
-        let tasks = store.tasks(of: conversation).filter { store.state($0) != .done }
+        let tasks = store.tasks(of: conversation).filter { store.state($0) != .done && store.state($0) != .failed }
         VStack(alignment: .leading, spacing: 0) {
             Text(tasks.isEmpty ? "这段对话还没有任务" : "对一个任务说")
                 .font(Theme.Font.sectionHeader)

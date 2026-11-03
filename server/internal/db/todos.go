@@ -24,6 +24,8 @@ type TodoRow struct {
 	// for a todo made by hand.
 	Origin string `json:"origin"`
 	PlanID string `json:"plan_id"`
+	// StartError: the task's agent did not start, and why; such a todo is done (#1077). Empty otherwise.
+	StartError string `json:"start_error"`
 }
 
 type TodoSpaceRow struct {
@@ -50,7 +52,7 @@ type TodoAgentRow struct {
 
 // ListTodos returns all todos ordered by created_at DESC.
 func (d *DB) ListTodos(ctx context.Context) ([]TodoRow, error) {
-	rows, err := d.pool.Query(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id FROM todos ORDER BY created_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error FROM todos ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +60,7 @@ func (d *DB) ListTodos(ctx context.Context) ([]TodoRow, error) {
 	var out []TodoRow
 	for rows.Next() {
 		var r TodoRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID); err != nil {
+		if err := rows.Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -105,8 +107,8 @@ func (d *DB) ListAllTodoAgents(ctx context.Context) ([]TodoAgentRow, error) {
 // GetTodo returns one todo by id, or ErrTodoNotFound.
 func (d *DB) GetTodo(ctx context.Context, id string) (*TodoRow, error) {
 	var r TodoRow
-	err := d.pool.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id FROM todos WHERE id = $1`, id).
-		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID)
+	err := d.pool.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error FROM todos WHERE id = $1`, id).
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTodoNotFound
 	}
@@ -118,8 +120,8 @@ func (d *DB) GetTodo(ctx context.Context, id string) (*TodoRow, error) {
 
 // CreateTodo inserts a new todo.
 func (d *DB) CreateTodo(ctx context.Context, t TodoRow) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO todos (id, title, notes, done_at, created_at, updated_at, origin, plan_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		t.ID, t.Title, t.Notes, t.DoneAt, t.CreatedAt, t.UpdatedAt, t.Origin, t.PlanID)
+	_, err := d.pool.Exec(ctx, `INSERT INTO todos (id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		t.ID, t.Title, t.Notes, t.DoneAt, t.CreatedAt, t.UpdatedAt, t.Origin, t.PlanID, t.StartError)
 	return err
 }
 
@@ -134,8 +136,8 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 	var updated TodoRow
 	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
 		var cur TodoRow
-		err := tx.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id FROM todos WHERE id = $1 FOR UPDATE`, id).
-			Scan(&cur.ID, &cur.Title, &cur.Notes, &cur.DoneAt, &cur.CreatedAt, &cur.UpdatedAt, &cur.Origin, &cur.PlanID)
+		err := tx.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error FROM todos WHERE id = $1 FOR UPDATE`, id).
+			Scan(&cur.ID, &cur.Title, &cur.Notes, &cur.DoneAt, &cur.CreatedAt, &cur.UpdatedAt, &cur.Origin, &cur.PlanID, &cur.StartError)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTodoNotFound
 		}
@@ -156,12 +158,13 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 				}
 			} else {
 				cur.DoneAt = nil
+				cur.StartError = "" // reopened: no longer failed
 			}
 		}
 		cur.UpdatedAt = updatedAt
 
-		_, err = tx.Exec(ctx, `UPDATE todos SET title = $2, notes = $3, done_at = $4, updated_at = $5 WHERE id = $1`,
-			cur.ID, cur.Title, cur.Notes, cur.DoneAt, cur.UpdatedAt)
+		_, err = tx.Exec(ctx, `UPDATE todos SET title = $2, notes = $3, done_at = $4, updated_at = $5, start_error = $6 WHERE id = $1`,
+			cur.ID, cur.Title, cur.Notes, cur.DoneAt, cur.UpdatedAt, cur.StartError)
 		if err != nil {
 			return err
 		}
@@ -172,6 +175,21 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 		return nil, err
 	}
 	return &updated, nil
+}
+
+// FailTodo ends a todo whose agent did not start: done (unless it already was) with why (#1077).
+func (d *DB) FailTodo(ctx context.Context, id, startError string, at time.Time) (*TodoRow, error) {
+	var r TodoRow
+	err := d.pool.QueryRow(ctx, `UPDATE todos SET done_at = COALESCE(done_at, $2), start_error = $3, updated_at = $2 WHERE id = $1
+		RETURNING id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error`, id, at, startError).
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTodoNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 // DeleteTodo deletes a todo by id. Cascading deletes remove its todo_agents.

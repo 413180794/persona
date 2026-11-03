@@ -82,6 +82,29 @@ func TestTodos(t *testing.T) {
 		t.Fatalf("expected DoneAt to be nil, got %+v", up)
 	}
 
+	// FailTodo: an agent that did not start ends the todo with why (#1077); reopening clears it.
+	failTime := now.Add(4*time.Minute + 30*time.Second)
+	failed, err := d.FailTodo(ctx, "t1", "rpc: connection closed", failTime)
+	if err != nil {
+		t.Fatalf("FailTodo: %v", err)
+	}
+	if failed.DoneAt == nil || !failed.DoneAt.Equal(failTime) || failed.StartError != "rpc: connection closed" {
+		t.Fatalf("failed todo = %+v", failed)
+	}
+	if got, _ := d.GetTodo(ctx, "t1"); got.StartError != "rpc: connection closed" || got.DoneAt == nil {
+		t.Fatalf("stored failed todo = %+v", got)
+	}
+	if _, err := d.FailTodo(ctx, "nope", "x", failTime); err != ErrTodoNotFound {
+		t.Fatalf("FailTodo on a missing todo: %v", err)
+	}
+	up, err = d.UpdateTodo(ctx, "t1", nil, nil, &doneFalse, reopenTime)
+	if err != nil {
+		t.Fatalf("UpdateTodo reopen after failure: %v", err)
+	}
+	if up.DoneAt != nil || up.StartError != "" {
+		t.Fatalf("reopened todo kept its failure: %+v", up)
+	}
+
 	// 4. LinkTodoAgent and transfer
 	l1Time := now.Add(5 * time.Minute)
 	_, err = d.LinkTodoAgent(ctx, "t1", "macbook", "s1", "测试 Agent", "/code/weather", "claude", "", l1Time)

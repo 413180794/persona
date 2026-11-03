@@ -303,6 +303,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 {"id":"todo_…","title":"天气 App 发 1.3 版","notes":"说明","done_at":null,
  "created_at":"...","updated_at":"...",
  "origin":"<助手对话 id>","plan_id":"plan_…",   // 只有从助手对话开的任务才有（docs/unified-entry.md）
+ "start_error":"rpc: connection closed",         // 任务的 Agent 没开起来：hub 同时写 done_at，任务到此结束；重新打开时清空（#1077）
  "spaces":[{"machine_id":"…","space":"group/alpha","linked_at":"..."}],
  "agents":[{"machine_id":"…","session_id":"…","linked_at":"...","released_at":null,
            "title":"…","cwd":"…","agent":"claude","start_error":"","source":"manual|space|spawned","via":""}]}

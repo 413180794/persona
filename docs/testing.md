@@ -63,7 +63,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   要拍对话 tab 就先卸载重装（新装默认在对话 tab）。
 - 首页问候按模拟器的真实时间（「晚上好」），状态栏时间也用当前时间，别固定成 9:41。
 - 深色：`xcrun simctl ui $SIM appearance dark`。
-- 主对话统一入口（docs/unified-entry.md）：`MOCK_TASKS=1` 启动 mock，主对话里有开始了的计划、在做 / 等你 / 做完的三个任务、
+- 主对话统一入口（docs/unified-entry.md）：`MOCK_TASKS=1` 启动 mock，主对话里有开始了的计划、在做 / 等你 / 做完的三个任务、一个 Agent 没开起来的任务（红色卡片和回执，#1077）、
   答过的问题、回执、直接对任务说的话和最后一张待开始的计划卡；`MOCK_TASKS_AT=<分钟>` 把对话截到那么多分钟以前（更新的条目不要），
   不用滑动就能在屏幕底部看到更早的部分。`MOCK_TASKS_NO_ASKS=1` 让任务的 Agent 不提问，输入框上方不再被问题卡占住。`-showTaskDetail <待办 id>`（如 `todo_task_widget`）打开任务详情，`-showTaskBoard YES` 打开任务板。
 - 截断的长输出：`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openWork YES -showFullOutput card`（展开「运行」卡片，

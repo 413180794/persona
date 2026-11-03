@@ -7,6 +7,7 @@ struct TaskDetailSheet: View {
     var todoID: String
     @State private var detent: PresentationDetent = .large
     @State private var picked: SessionKey?
+    @State private var removing: TodoItem?
     @Environment(\.dismiss) private var dismiss
     private var store: TasksStore { .shared }
 
@@ -22,6 +23,7 @@ struct TaskDetailSheet: View {
             // The agent's page hides the bar (it draws its own header): the sheet's close is in the task's header.
             .toolbarVisibility(.hidden, for: .navigationBar)
         }
+        .confirmTaskRemoval($removing)
         .presentationDetents([.fraction(0.6), .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.6)))
@@ -40,10 +42,11 @@ struct TaskDetailSheet: View {
                 if let key {
                     ChatView(key: key, style: .dev)
                         .id(key)
+                } else if let failure = store.startFailure(todo) ?? todo.agents.first?.startError {
+                    EmptyStateView(symbol: Theme.Icon.errorFilled, title: "Agent 没开起来", message: failure,
+                                   action: (title: "移除任务", run: { store.askRemove(todo, pending: $removing) }))
                 } else {
-                    EmptyStateView(symbol: Theme.Icon.working,
-                                   title: todo.agents.first?.startError.map { _ in "Agent 没开起来" } ?? "正在开 Agent",
-                                   message: todo.agents.first?.startError ?? "开好以后这里就是它的对话。")
+                    EmptyStateView(symbol: Theme.Icon.working, title: "正在开 Agent", message: "开好以后这里就是它的对话。")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -60,6 +63,17 @@ struct TaskDetailSheet: View {
                 TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
                 Text(todo.title).font(Theme.Font.heading).lineLimit(2)
                 Spacer(minLength: Theme.Space.s)
+                if state.isRemovable {
+                    Menu {
+                        TaskRemoveMenuItem(todo: todo, state: state, pending: $removing)
+                    } label: {
+                        Image(systemName: Theme.Icon.more).font(Theme.Font.secondaryStrong)
+                            .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
+                    }
+                    .themedButton()
+                    .clipShape(.circle)
+                    .accessibilityLabel("更多")
+                }
                 Button { dismiss() } label: {
                     Image(systemName: Theme.Icon.close).font(Theme.Font.secondaryStrong)
                         .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
@@ -99,6 +113,7 @@ struct TaskDetailSheet: View {
 /// 全部: the conversation's tasks by where they are — waiting for the user, going on, done, stopped.
 struct TaskBoardSheet: View {
     var conversation: String
+    @State private var removing: TodoItem?
     @Environment(\.dismiss) private var dismiss
     private var store: TasksStore { .shared }
 
@@ -115,6 +130,7 @@ struct TaskBoardSheet: View {
                 section("做完了", rows.filter { $0.state == .unread })
                 section("停着", rows.filter { $0.state == .followup })
                 section("已完成", rows.filter { $0.state == .done })
+                section("没开起来", rows.filter { $0.state == .failed })
             }
             .themedGroupedPage()
             .navigationTitle("任务")
@@ -126,6 +142,7 @@ struct TaskBoardSheet: View {
                 }
             }
         }
+        .confirmTaskRemoval($removing)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
@@ -150,6 +167,16 @@ struct TaskBoardSheet: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
+                    // The Agents page's 关闭, for a task: swiped from the trailing edge, only when nothing of it runs.
+                    .swipeActions(edge: .trailing) {
+                        if row.state.isRemovable {
+                            Button { store.askRemove(row.todo, pending: $removing) } label: {
+                                Label("移除", systemImage: Theme.Icon.delete)
+                            }
+                            .tint(Theme.danger)
+                        }
+                    }
+                    .contextMenu { TaskRemoveMenuItem(todo: row.todo, state: row.state, pending: $removing) }
                 }
             } header: {
                 Text("\(title) · \(rows.count)")
@@ -160,6 +187,7 @@ struct TaskBoardSheet: View {
     private func subtitle(_ todo: TodoItem) -> String {
         let lead = store.leadSession(todo)
         let place = TaskPlace.line(todo, lead: lead)
+        if let failure = store.startFailure(todo) { return place.isEmpty ? failure : place + " · " + failure }
         guard let last = lead?.lastText?.trimmingCharacters(in: .whitespacesAndNewlines), !last.isEmpty else { return place }
         return place + " · " + last
     }

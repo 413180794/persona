@@ -14,6 +14,7 @@ nonisolated extension TaskState {
         case .working: "进行中"
         case .followup: "待跟进"
         case .notStarted: "未开始"
+        case .failed: "没开起来"
         }
     }
 
@@ -25,6 +26,7 @@ nonisolated extension TaskState {
         case .followup: 3
         case .notStarted: 4
         case .done: 5
+        case .failed: 6
         }
     }
 
@@ -36,6 +38,7 @@ nonisolated extension TaskState {
         case .working: StatusPalette.working
         case .followup: StatusPalette.idle
         case .notStarted: StatusPalette.idle
+        case .failed: StatusPalette.idle
         }
     }
 }

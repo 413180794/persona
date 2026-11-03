@@ -16,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Tasks dispatched from an assistant conversation (docs/unified-entry.md, #930). The assistant hands the hub a plan
@@ -427,12 +428,21 @@ func applyPlanEdit(t *PlanTask, e PlanTask) {
 	}
 }
 
-// startPlanTask starts one task's agent and links it to the task's todo; a failure is a receipt in the conversation
-// (the todo has no agent to show it) and stays on the plan.
+// startPlanTask starts one task's agent and links it to the task's todo. A failure ends the task: the todo is done
+// with why (so nothing shows it as going on, #1077), the plan keeps the error, and the conversation gets a receipt.
 func (h *Hub) startPlanTask(planID, conversation string, i int, t PlanTask) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 	sid, err := h.startTaskAgent(ctx, t)
+	if err != nil && transientStartErr(err) && ctx.Err() == nil {
+		// The machine's link dropped (a node restarting, a tunnel blinking): try once more after a moment.
+		h.logf("task %s: start: %v; retrying", t.TodoID, err)
+		select {
+		case <-time.After(taskStartRetryDelay):
+			sid, err = h.startTaskAgent(ctx, t)
+		case <-ctx.Done():
+		}
+	}
 	if err == nil {
 		m := h.machineByName(t.Machine)
 		err = h.linkTodoAgent(ctx, t.TodoID, m.cfg.ID, sid, t.Title, t.Cwd, "", "")
@@ -441,6 +451,10 @@ func (h *Hub) startPlanTask(planID, conversation string, i int, t PlanTask) {
 		return
 	}
 	h.logf("task %s: start: %v", t.TodoID, err)
+	reason := clip(oneLine(err.Error()), 200)
+	if ferr := h.failTodo(ctx, t.TodoID, reason); ferr != nil {
+		h.logf("task %s: fail: %v", t.TodoID, ferr)
+	}
 	if p, lerr := h.loadPlan(ctx, planID); lerr == nil && i < len(p.Tasks) {
 		p.Tasks[i].Error = err.Error()
 		_, _ = h.movePlan(ctx, p, planStarted)
@@ -450,7 +464,65 @@ func (h *Hub) startPlanTask(planID, conversation string, i int, t PlanTask) {
 	h.tasks.receipted[t.TodoID] = time.Now()
 	h.tasks.mu.Unlock()
 	_, _ = h.appendFeed(ctx, conversation, feedReceipt, t.TodoID, receiptBody{Title: t.Title, State: "failed",
-		Summary: "没开起来：" + clip(oneLine(err.Error()), 200)})
+		Summary: "没开起来：" + reason})
+}
+
+// taskStartRetryDelay is how long a task waits before its one retry after a dropped link (tests shorten it).
+var taskStartRetryDelay = 3 * time.Second
+
+// transientStartErr: the agent did not start because a link on the way was down or dropped (this hub's to the
+// machine, or one further on that answered with the same words: a member hub, a connector), not because the node
+// refused; worth one retry.
+func transientStartErr(err error) bool {
+	var re *rpc.Error
+	return errors.Is(err, rpc.ErrClosed) || errors.Is(err, errOffline) ||
+		errors.As(err, &re) && re.Message == rpc.ErrClosed.Error()
+}
+
+// failTodo ends a todo whose agent did not start: done, with why, and its agents no longer count for it.
+func (h *Hub) failTodo(ctx context.Context, id, reason string) error {
+	if err := h.ensureTodosLoaded(ctx); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	doneAt := now
+	if h.store != nil {
+		row, err := h.store.FailTodo(ctx, id, reason, now)
+		if err != nil {
+			return err
+		}
+		if row.DoneAt != nil {
+			doneAt = *row.DoneAt
+		}
+	}
+	affected := map[string]bool{}
+	h.todos.mu.Lock()
+	t := h.todos.todos[id]
+	if t != nil {
+		if t.DoneAt == nil {
+			t.DoneAt = &doneAt
+		}
+		t.StartError = reason
+		t.UpdatedAt = now
+		for _, a := range t.Agents {
+			key := [2]string{a.MachineID, a.SessionID}
+			if h.todos.activeBySession[key] == id {
+				delete(h.todos.activeBySession, key)
+				affected[a.MachineID] = true
+			}
+		}
+	}
+	h.todos.mu.Unlock()
+	if t == nil {
+		return db.ErrTodoNotFound
+	}
+	for mid := range affected {
+		if m := h.localMachine(mid); m != nil {
+			h.sessionsChanged(m)
+		}
+	}
+	h.broadcast(map[string]any{"type": "todos"})
+	return nil
 }
 
 // startTaskAgent starts the agent for t on its machine and answers its session id.
@@ -759,7 +831,7 @@ func (h *Hub) messageCard(ctx context.Context, itemID string, body messageBody) 
 func (h *Hub) inboxTasks() []prompts.InboxTask {
 	var out []prompts.InboxTask
 	for _, t := range h.snapshotTasks() {
-		if t.State == taskStateLabel("done") {
+		if t.State == taskStateLabel("done") || t.State == taskStateLabel("failed") {
 			continue
 		}
 		out = append(out, prompts.InboxTask{ID: t.ID, Title: t.Title, State: t.State, Last: t.Last})
@@ -808,6 +880,9 @@ func (h *Hub) snapshotTasks() []prompts.SnapshotTask {
 
 // taskState follows docs/todos.md「状态计算规则」(clients compute the same).
 func taskState(t Todo, agents []proto.Session) string {
+	if t.DoneAt != nil && t.StartError != "" {
+		return "failed"
+	}
 	if t.DoneAt != nil {
 		return "done"
 	}
@@ -829,7 +904,7 @@ func taskState(t Todo, agents []proto.Session) string {
 }
 
 func taskStateLabel(st string) string {
-	return map[string]string{"done": "已完成", "needs_you": "等用户", "unread": "做完了（用户还没看）", "working": "在做",
+	return map[string]string{"done": "已完成", "failed": "没开起来", "needs_you": "等用户", "unread": "做完了（用户还没看）", "working": "在做",
 		"followup": "停着", "not_started": "还没开始"}[st]
 }
 

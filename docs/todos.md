@@ -146,6 +146,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 | 优先级 | 状态 | 条件 |
 | :--- | :--- | :--- |
+| 0 | 没开起来 | 从对话开的任务 Agent 没启动起来，hub 把待办结束掉（`done_at` + `start_error`，#1077）；客户端显示失败、能移除，不算进行中 |
 | 1 | 已完成 | 用户点击了完成（`done_at != null`） |
 | 2 | 等你 | 有挂着的活跃 Agent 处于 `needs_you` 状态（等待用户回答提问、审批计划或授权） |
 | 3 | 待查看 | 有挂着的活跃 Agent 处于 `unread` 状态（任务完成，用户尚未查看） |

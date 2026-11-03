@@ -121,7 +121,22 @@ final class TasksStore {
     }
 
     func state(_ todo: TodoItem) -> TaskState {
-        TaskState(todo: todo, agents: sessions(todo).map(\.state))
+        let state = TaskState(todo: todo, agents: sessions(todo).map(\.state))
+        // A hub from before #1077 leaves the todo open when the agent did not start; its plan still says why.
+        if state == .notStarted, todo.agents.isEmpty, planError(todo) != nil { return .failed }
+        return state
+    }
+
+    /// Why the task's agent did not start: the todo's own word, else its plan's (nil while it may still start).
+    func startFailure(_ todo: TodoItem) -> String? {
+        if let e = todo.startError, !e.isEmpty { return e }
+        return todo.agents.isEmpty ? planError(todo) : nil
+    }
+
+    private func planError(_ todo: TodoItem) -> String? {
+        guard let plan = todo.planID.flatMap({ plans[$0] }),
+              let error = plan.tasks.first(where: { $0.todoID == todo.id })?.error, !error.isEmpty else { return nil }
+        return error
     }
 
     /// The task's agent to open first: the one that waits for the user, then the one working, then the latest.
@@ -140,7 +155,7 @@ final class TasksStore {
     /// The dock: the conversation's tasks still going on, or finished and not looked at; what waits first.
     func dock(_ conversation: String) -> [TodoItem] {
         let rows: [(todo: TodoItem, state: TaskState)] = tasks(of: conversation).map { ($0, state($0)) }
-        let going = rows.filter { $0.state != .done && $0.state != .followup }
+        let going = rows.filter { $0.state != .done && $0.state != .followup && $0.state != .failed }
         let sorted = going.sorted { a, b in
             if a.state.priority != b.state.priority { return a.state.priority < b.state.priority }
             return (a.todo.createdAt ?? .distantPast) > (b.todo.createdAt ?? .distantPast)
@@ -210,6 +225,21 @@ final class TasksStore {
         } catch {
             self.error = error.localizedDescription
             AppModel.shared.toast = Toast("没开起来：\(error.localizedDescription)", style: .error)
+        }
+    }
+
+    /// 移除 on a task that does not run: the todo goes (its agents and their chats stay on the Agents page), and with
+    /// it the task's card, pill and line.
+    func remove(_ todo: TodoItem) async {
+        guard let api = AppModel.shared.api else { return }
+        do {
+            try await api.deleteTodo(id: todo.id)
+            todos[todo.id] = nil
+            for (conversation, id) in routes where id == todo.id { routes[conversation] = nil }
+            if detailTask == todo.id { detailTask = nil }
+            Haptics.success()
+        } catch {
+            AppModel.shared.toast = Toast("没移除：\(error.localizedDescription)", style: .error)
         }
     }
 
